@@ -73,7 +73,7 @@
 依存は [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md) のグラフに従う。禁じた依存は「レビューで気をつけること」ではなく
 **import できないこと**でなければならない。循環は許さない。
 
-- 機械強制: **planned** → `eng/targets.cmake`（configure で宣言外の依存と OS ライブラリを拒否）＋ `eng/conformance.py --build-dir`（File API の実グラフ・相対 include）。製品モジュールが生まれて実ターゲットが揃ったときに active
+- 機械強制: **active** → `eng/targets.cmake`（configure で宣言外の依存と OS ライブラリを拒否）＋ `eng/conformance.py --build-dir`（File API の実グラフ・相対 include）。2026-09-15・Issue #3 で実ターゲット 6 つに対して結線。全ての include / マクロ迂回を塞ぐ証明は未完了
 
 ### ARC-003 — 中核はプラットフォームから独立している
 
@@ -83,7 +83,7 @@
 🔑 標準ライブラリに同梱される枠組み（`std::filesystem`・`std::locale`・`<windows.h>` を含む SDK）は、依存を宣言しなくても include できてしまう。
 その場合はビルドグラフでは塞げず、リンカ段のシンボル検査（`__std_fs_*` / `?_Init@locale@std@@…` / `__imp_*`）と字句検査層が塞ぐ。
 
-- 機械強制: **planned** → `eng/symbols.py --require core application`（`llvm-nm` ＋ `eng/symbol-allowlist.json`）＋ 字句検査。中核の静的ライブラリが生まれて `--require` を結線したときに active
+- 機械強制: **active** → `eng/symbols.py --require core application`（`llvm-nm` ＋ `eng/symbol-allowlist.json`）＋ 字句検査。2026-09-15・Issue #3 で結線し、実ライブラリの反例で発火を確認
 
 ### ARC-004 — 状態には唯一の所有者がいる
 
@@ -133,7 +133,7 @@ SIMD の実装の選択（ADR 0006）とワーカーの起動（ADR 0004）も�
 これらはポートか明示的な引数から入る。読んでよいのは **`src/adapters/win32` ただ 1 区画**であり、
 そのことは「レビューの約束」ではなく、**その区画だけ禁止を適用しない**というビルド設定の差分として残す。
 
-- 機械強制: **planned** → `eng/symbols.py` の `nondeterministic` 分類（`_Xtime_get_ticks` / `_Query_perf_counter` / `_Random_device` / `getenv` / `__imp_GetTickCount` 等。L1 / L2）＋ 字句検査。中核の静的ライブラリが生まれたときに active
+- 機械強制: **active** → `eng/symbols.py` の `nondeterministic` 分類（`_Xtime_get_ticks` / `_Query_perf_counter` / `_Random_device` / `getenv` / `__imp_GetTickCount` 等。L1 / L2）＋ 字句検査。2026-09-15・Issue #3。文字列・コメント・マクロ経由は字句では見ない
 - 補足: テストソースにも同じ禁止を適用する。**テストが実時刻を読むことも決定性の破壊である。**
 
 ### ARC-008 — 境界は一度だけ検証する

@@ -22,3 +22,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0004](0004-ui-thread-plus-one-worker.md) | 並行性は「UI スレッド＋固定ワーカー 1 系統」で、やり取りはメッセージだけ | 受理 |
 | [0005](0005-own-vim-engine-verified-against-real-vim.md) | Vim は自前実装で、本物の Vim との差分テストで再現度を担保する | 受理 |
 | [0006](0006-speed-gate-simd-and-table-driven-dispatch.md) | 速さはゲートで見張り、SIMD は区画に閉じ、Vim の分岐は表で書く | 受理 |
+| [0007](0007-first-slice-frameless-window-direct2d-line.md) | 最初の縦切り: 枠なし窓に Direct2D で 1 行描き、OS のライト／ダークに従う | 受理 |

@@ -70,6 +70,18 @@ MSVC STL の `optional` は `operator*` を clang-tidy が見ない（Phase 0 �
 
 60 分岐の `switch` は関数長 60 行で落ち、`constexpr` の表は通る（T8）。Vim のキー列 → 動作は表（CPP-012）。
 
+### 公開 aggregate に `= default` の `operator==` を書かない
+
+`RgbColor` / `Palette` のような公開 aggregate はメソッドを 1 つでも持つと lint が落ちる（Issue #3）。比較は非メンバーで書く（CPP-003）。
+
+### `reinterpret_cast` は書けない。`std::bit_cast` と `ComPtr<IUnknown>` ＋ `As()`
+
+clang-tidy が一律に拒否する。HWND ↔ `this` と `LPARAM` の読み替えは `std::bit_cast`、`IUnknown**` を要求する API は `ComPtr<IUnknown>` で受けて `As()`（CPP-009）。
+
+### `.cpp` の無名名前空間の `struct` も 1 ファイル 1 型に数える
+
+ローカルの補助は自由関数と `using` 別名で書く（CPP-011）。
+
 ### md4c はまだ入っていない
 
 Markdown プレビュー（FR-007）の Issue で、別 target に `/W4 /WX` だけを当てて tag と SHA-256 で固定して入れる（ADR 0003）。厳格集合を当てると 20 件超で落ちる。
@@ -122,7 +134,7 @@ Waivers: none | WVR-NNNN
 
 現在のタスクは [docs/todo/current.md](docs/todo/current.md)。GitHub Issue が正で、そこは要約。
 
-2026-09-15: Issue #1（Phase 0〜2）。Phase 0 の実測 114 記録は `docs/quality/phase0-results.json`。製品コードは無い。
+2026-09-15: Issue #1（Phase 0〜2・PR #2）を統合し、Issue #3（ADR 0007）で最初の縦切りを通した。起動すると枠なし窓に Direct2D で 1 行描き、OS のライト／ダーク（ダークは茄子色 D11）に従う。5 層すべてに正典経路があり、ARC-002 / ARC-003 / ARC-007 / CPP-013 / QLT-009 / CNF-007 が active。編集・Vim・タブ・Mica・IME はまだ無い。
 
 ---
 

@@ -10,8 +10,7 @@
 
 ## 1. 承認されたモジュール
 
-置換後に同じモジュールになる区画（時刻と永続化のアダプタ）は 1 つに畳んである。**Issue #1 の時点で実ターゲットがあるのは `tests/build` だけ**で、
-製品モジュールは Phase 3 の縦切りで最初の具体的な責務が生まれたときに作る（空の将来用モジュールは作らない・ADR 0003）。
+置換後に同じモジュールになる区画（時刻と永続化のアダプタ）は 1 つに畳んである。Issue #3（ADR 0007）で 5 層すべてに実ターゲットができた。空の将来用モジュールは作らない（ADR 0003）。
 
 ```text
 src/app（wWinMain）
@@ -108,8 +107,8 @@ application が作った表示値を Direct2D / DirectWrite で描き、キー�
 
 | 種類 | 置き場 |
 | --- | --- |
-| production | `src/core` / `src/application` / `src/adapters/win32` / `src/ui/win32` / `src/app`（Issue #1 では空。Phase 3 で作る） |
-| テスト | `tests/build`（C++23 基盤のスモーク）/ `tests/unit`（OS 非依存の中核。ASan / UBSan 付き。Vim の fixture もここ）/ `tests/conformance`（検査器自身の正例・反例。規約検査の対象外だが決定性の禁止は適用する） |
+| production | `src/core` / `src/application` / `src/adapters/win32` / `src/ui/win32` / `src/app`（2026-09-15 の最初の縦切りで全層を作った。ADR 0007。Win32 の版 metadata だけを `src/app` の template から build 下へ生成する） |
+| テスト | `tests/build`（C++23 基盤のスモーク）/ `tests/unit`（OS 非依存の中核。ASan / UBSan 付き。`--coverage-negative` で失敗系を省く反例。Vim の fixture もここ）/ `tests/conformance`（検査器自身の正例・反例。規約検査の対象外だが決定性の禁止は適用する） |
 | 検査設定 | `.clang-format` / `.clang-tidy` / `eng/*.json`。参照の一覧は `eng/config-bindings.json`（CNF-007） |
 | 実測と証明 | `eng/measure-language.ps1` ＋ `eng/probes/language.json`（Phase 0）/ `eng/prove-gates.py`（毎回のゲート）。結果は `docs/quality/` |
 | 生成物 | `build/`（CMake・オブジェクト・検証 exe）/ `out/`（Phase 0 の実測・証明 fixture・測定ビルド・出力）。製品 C++ コードの生成は未採用 |

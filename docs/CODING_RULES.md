@@ -34,7 +34,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 公開フィールドを持たない。可変コレクション・配列・可変ビルダを外へ返さない。`const_cast` と `mutable` を書かない。
 外から受け取った可変データは防御的に複製して所有する。
 
-- 機械強制: **planned** → private への代入はコンパイルエラー（M2-private-clang）。C スタイルキャストは `-Wold-style-cast`（M2-cstyle-cast-clang）。`const_cast` は clang-tidy `cppcoreguidelines-pro-type-const-cast`（T4）。公開 aggregate はメソッドを持てば clang-tidy `misc-non-private-member-variables-in-classes`（T1-tidy-public-with-method）が拒否するが、メソッドの無い aggregate（T1-tidy-aggregate-hole）と `mutable`（M2-mutable-hole）は言語でも lint でも通る。`mutable` は CNF の字句検査で拒否する予定
+- 機械強制: **planned** → private への代入はコンパイルエラー（M2-private-clang）。C スタイルキャストは `-Wold-style-cast`（M2-cstyle-cast-clang）。`const_cast` は clang-tidy `cppcoreguidelines-pro-type-const-cast`（T4）。公開 aggregate はメソッドを持てば clang-tidy `misc-non-private-member-variables-in-classes`（T1-tidy-public-with-method）が拒否するが、メソッドの無い aggregate（T1-tidy-aggregate-hole）と `mutable`（M2-mutable-hole）は言語でも lint でも通る。`mutable` は CNF の字句検査で拒否する予定。公開 aggregate（`RgbColor` / `Palette`）に `= default` の `operator==` をメンバーで書くと lint が落ちるので、比較は非メンバーで書く（Issue #3 で実測）
 
 ### CPP-004 — `null` の意味は一つ
 
@@ -80,7 +80,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 
 関数風マクロ・`reinterpret_cast`・`dynamic_cast` と RTTI・`goto`・インラインアセンブリ・`#pragma`・`setjmp` / `longjmp`・
 可変長引数関数の新設・ビルド時コード生成を禁じる（使うなら ADR）。オブジェクト風マクロは `#define` より `constexpr` / `enum class` を使う。
-COM の `__uuidof` / `IID_PPV_ARGS` と `reinterpret_cast<IUnknown**>` は `src/ui/win32` と `src/adapters/win32` の境界でだけ許す。
+COM の `__uuidof` / `IID_PPV_ARGS` は `src/ui/win32` と `src/adapters/win32` の境界でだけ許す。`IUnknown**` を要求する API（`DWriteCreateFactory`）は `ComPtr<IUnknown>` で受けて `As()` で問い合わせ、`reinterpret_cast` を書かない。HWND と `this` の対応や `LPARAM` の読み替えは `std::bit_cast`（Issue #3 で実測。clang-tidy が `reinterpret_cast` を一律に拒否する）。
 
 - 機械強制: **planned** → `reinterpret_cast` は clang-tidy `cppcoreguidelines-pro-type-reinterpret-cast`（T5）。`#pragma` は CNF-003。それ以外は CNF の字句検査で拒否する予定
 
@@ -100,6 +100,7 @@ COM の `__uuidof` / `IID_PPV_ARGS` と `reinterpret_cast<IUnknown**>` は `src/
 
 ファイルは 1 つの主要な型とその周辺に閉じる。ファイル名は主要型名と一致させる（`TextBuffer.hpp` ↔ `class TextBuffer`）。
 名前空間は `nenenib` の下にモジュール名（`core` / `application` / `adapters::win32` / `ui::win32`）。寄せ集めのファイルを作らない。
+**実装ファイルの無名名前空間に置く小さな `struct` も数える**（CNF-002 は名前空間の深さを見ない）。ローカルの補助は自由関数と `using` 別名で書く（Issue #3 で実測）。
 
 - 機械強制: **planned** → CNF-002
 
@@ -127,8 +128,9 @@ Vim のキー列 → 動作のような大きな分岐は `constexpr` の**表**
 スレッドは UI スレッドと、`src/adapters/win32` が所有する**固定のワーカー 1 本**だけ（[ADR 0004](adr/0004-ui-thread-plus-one-worker.md)）。
 application はワーカーへ不変の要求値を渡し、完了は UI スレッドの意図として受ける。core / application / ui / app は
 `std::thread` / `std::async` / `std::mutex` / `std::atomic` / `CreateThread` / `_beginthreadex` / 同期原始を書かない。共有可変状態を持たない。
+flip model の frame latency waitable object を `WaitForSingleObjectEx` で待つのは提示経路の一部であって並行性の導入ではない（スレッドも共有可変状態も作らない。`src/ui/win32` の `Direct2DRenderer::render` だけが行う・ADR 0007）。
 
-- 機械強制: **planned** → `eng/symbols.py` の `concurrency` 分類（`_beginthreadex` / `_Mtx_*` / `_Cnd_*` / `_Thrd_*` / `__imp_CreateThread` 等。TH1）が core / application で落ちる。`std::atomic` はリンカに見えない（TH2）ので CNF-009 が並行性ヘッダの include を `src/adapters/win32` 以外の `src/` で拒否する
+- 機械強制: **active** → `eng/symbols.py --require core application` の `concurrency` 分類（`_beginthreadex` / `_Mtx_*` / `_Cnd_*` / `_Thrd_*` / `__imp_CreateThread` 等。TH1）が core / application の実ライブラリで落ちる（2026-09-15・Issue #3）。ui / app はシンボル検査の対象外で、CNF-009 の字句検査だけが見る。`std::atomic` はリンカに見えない（TH2）ので CNF-009 が並行性ヘッダの include を `src/adapters/win32` 以外の `src/` で拒否する
 
 ### CPP-014 — 日時・数値・文字集合の扱いを一つに固定する
 

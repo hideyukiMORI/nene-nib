@@ -72,7 +72,7 @@ Vim の振る舞いは oracle から生成した fixture が期待値である�
 中核の分岐カバレッジ下限を 90% とする。閾値は上げてよいが下げてはならない。下げるには ADR が要る。
 **置いていない層は「置いていない」と書く。**
 
-- 機械強制: **planned**（`eng/coverage.py` / `eng/coverage-policy.json`。clang-cl の C++ で `llvm-cov` が動くことは実測した（V1）が、測る中核がまだ無い。Phase 3 で結線）
+- 機械強制: **active**（`eng/coverage.py` / `eng/coverage-policy.json`。core / application の全 `.cpp` を測定ビルドで計装し、LLVM の分岐 90% 下限。対象欠落・空の集計も拒否。テストを省いた反例が落ちることを毎回確かめる。2026-09-15・Issue #3。CPP-002 に従って `default` を書かないため、llvm-cov が数える「どの `case` にも当たらない辺」は到達不能のまま残る）
 
 ### QLT-010 — ゲートの弱体化はアーキテクチャ変更
 
@@ -165,7 +165,7 @@ CI では同じ CI 機での相対退行だけを見て、絶対値の目標は�
 `eng/config-bindings.json` の設定と参照先を照合する。文字列参照だけでは実行を証明しないため、整形・lint・CMake・リンカ検査は実ツールの反例も実行する（`eng/prove-gates.py`）。
 
 - 対応する規則: QLT-007
-- 機械強制: **planned**（`eng/conformance.py`）
+- 機械強制: **active**（`eng/conformance.py`。`version_metadata_checks` が固定 manifest と版リテラルを拒否し、正例 1・反例 2 が `tests/conformance` にある。実ツールの反例は `eng/prove-gates.py`。2026-09-15・Issue #3）
 
 ### CNF-008 — TODO と FIXME に Issue 番号
 
@@ -197,12 +197,12 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 規則 | 状態 | 機械強制の実体 |
 | --- | --- | --- |
 | ARC-001 | planned | レビュー事項（CNF-001 が温床を減らす） |
-| ARC-002 | planned | eng/targets.cmake（configure）＋ eng/conformance.py --build-dir。製品ターゲットが揃ってから |
-| ARC-003 | planned | eng/symbols.py（llvm-nm ＋ eng/symbol-allowlist.json）＋ 字句検査。中核のライブラリが生まれてから |
+| ARC-002 | active | eng/targets.cmake（configure で宣言外の依存と OS ライブラリを拒否）＋ eng/conformance.py --build-dir（File API の実グラフ・include）。実ターゲット 6 つ |
+| ARC-003 | active | eng/symbols.py --require core application（llvm-nm ＋ eng/symbol-allowlist.json）＋ 字句検査 |
 | ARC-004 | planned | |
 | ARC-005 | planned | clang-tidy avoid-non-const-global-variables（可変グローバルのみ） |
 | ARC-006 | planned | |
-| ARC-007 | planned | eng/symbols.py の nondeterministic 分類（src/adapters/win32 だけ対象外）＋ 字句検査 |
+| ARC-007 | active | eng/symbols.py の nondeterministic 分類（src/adapters/win32 だけ対象外）＋ 字句検査 |
 | ARC-008 | planned | レビュー事項 |
 | ARC-009 | planned | |
 | ARC-010 | planned | `[[nodiscard]]`＋`-Wunused-result` |
@@ -220,7 +220,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CPP-010 | planned | CNF-001 |
 | CPP-011 | planned | CNF-002 |
 | CPP-012 | planned | clang-tidy readability-* |
-| CPP-013 | planned | eng/symbols.py の concurrency 分類 ＋ CNF-009 |
+| CPP-013 | active | eng/symbols.py の concurrency 分類（core / application の実ライブラリ）＋ CNF-009 |
 | CPP-014 | planned | eng/symbols.py（setlocale / locale） |
 | CPP-015 | planned | CNF-003 ＋ CNF-004 |
 | CPP-016 | planned | `-Werror=vla-cxx-extension`・clang-tidy NewDeleteLeaks / use-after-move・ASan / UBSan |
@@ -238,7 +238,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-006 | planned | |
 | QLT-007 | planned | |
 | QLT-008 | planned | レビュー事項 |
-| QLT-009 | planned | eng/coverage.py（未結線） |
+| QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
 | QLT-010 | 不能 | PR の手続き |
 | QLT-011 | planned | eng/toolchain.ps1 |
 | QLT-012 | planned | |
@@ -250,7 +250,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-004 | planned | eng/conformance.py / tests/conformance |
 | CNF-005 | planned | eng/conformance.py / tests/conformance |
 | CNF-006 | active | eng/conformance.py / tests/conformance |
-| CNF-007 | planned | eng/conformance.py / tests/conformance |
+| CNF-007 | active | eng/conformance.py / tests/conformance |
 | CNF-008 | active | eng/conformance.py / tests/conformance |
 | CNF-009 | active | eng/conformance.py / tests/conformance |
 
@@ -262,13 +262,13 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | --- | --- | --- |
 | コンパイル | 型安全・網羅性・警告ゼロ | clang-cl（C++23）・`eng/targets.cmake` の警告集合 |
 | 整形 | 文字列としての正本 | clang-format / .clang-format |
-| API 禁止 | 時刻・乱数・環境・OS import・並行性・宣言外の外部シンボル | `eng/symbols.py`（`llvm-nm` ＋ `eng/symbol-allowlist.json`。アーカイブ内と宣言済み依存で解決してから照合。ライブラリが 0 個の間は何も守っていない）。字句検査は補助 |
+| API 禁止 | 時刻・乱数・環境・OS import・並行性・宣言外の外部シンボル | `eng/symbols.py --require core application`（`llvm-nm` ＋ `eng/symbol-allowlist.json`。アーカイブ内と宣言済み依存で解決してから照合）。字句検査は補助 |
 | 静的解析 | null 逆参照・未初期化・new/delete・optional・キャスト・可変グローバル・複雑度 | clang-tidy / .clang-tidy |
 | アーキテクチャ | 宣言グラフ・実ターゲット・ソース所有 | targets.cmake / architecture.json / CMake File API |
 | 規約検査 | NeNe Nib 固有 | `eng/conformance.py` |
 | 検査自身のテスト | 規約検査・シンボル検査・カバレッジ判定・実ツールの正例・反例 | unittest / eng/prove-gates.py |
-| 単体テスト | C++23 基盤のスモーク（製品の単体テストは Phase 3 から） | CTest / tests/build（ASan / UBSan 付き・`-fno-sanitize-recover=all`） |
-| カバレッジ | 中核の検証密度 | 未結線（QLT-009 planned） |
+| 単体テスト | C++23 基盤のスモークと中核の振る舞い | CTest / tests/build・tests/unit（ASan / UBSan 付き・`-fno-sanitize-recover=all`。OS 資源と表示は使わない） |
+| カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
 | 速さ | 3 本のベンチの退行 | 未結線（QLT-014 planned） |
 | 依存 | 道具の版と実行時依存 0 | tool-versions.json / architecture.json / `/MT`（R1） |
 
