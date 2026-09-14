@@ -1,20 +1,29 @@
 #include "Palette.hpp"
 
+#include "BuiltinTheme.hpp"
+
 #include <utility>
 
 namespace nenenib::core
 {
-Palette palette_for(Appearance appearance) noexcept
+namespace
+{
+// OS の外観 → 組み込みテーマ。テーマファイルが入るまでは対応は 1 対 1（ADR 0008）。
+[[nodiscard]] constexpr BuiltinTheme theme_for(Appearance appearance) noexcept
 {
     switch (appearance)
     {
     case Appearance::light:
-        return Palette{RgbColor{0xF4, 0xF5, 0xF7}, RgbColor{0x1B, 0x1F, 0x24}};
-    // dark は Ubuntu 端末の深い茄子色（#300A24）と淡い灰（#EEEEEC）。施主 hide
-    // の決定（2026-09-15）。
+        return BuiltinTheme::neutral_light;
     case Appearance::dark:
-        return Palette{RgbColor{0x30, 0x0A, 0x24}, RgbColor{0xEE, 0xEE, 0xEC}};
+        return BuiltinTheme::ubuntu_aubergine;
     }
     std::unreachable();
+}
+} // namespace
+
+Palette palette_for(Appearance appearance) noexcept
+{
+    return palette_of(theme_for(appearance));
 }
 } // namespace nenenib::core
