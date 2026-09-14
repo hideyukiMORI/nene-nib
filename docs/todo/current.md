@@ -29,6 +29,6 @@
 ## 次の 1 手
 
 Issue #3 の実装をフルゲート・実機確認（`eng/verify-window.py`）・CI で通し、ARC-002 / ARC-003 / ARC-007 / CPP-013 / QLT-009 / CNF-007 を active にして squash merge する。
-見た目の縦切り Issue #5（採用案は `docs/design/2026-09-15-look.md`・ADR 0008）はフルゲートと実機確認を通し、PR で統合する。
-次の縦切りは編集（piece table・キー入力で本文が変わる・Ctrl+S）で、その前に `/design` で見せる画は無い（見た目は採用案のまま）。
+見た目の縦切り Issue #5（ADR 0008・PR #6）は main へ統合済み。
+編集の縦切り Issue #7（ADR 0009）はフルゲートと実機確認を通し、PR で統合する。その次はファイルの開閉と保存（Ctrl+O / Ctrl+S・D8 の文字コード判別・改行の保持）で、`/design` は挟まない。
 カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1〜C4 の順で、C1（テーマの模型と組み込み 9 テーマ・core だけ）はいつでも着手できる。

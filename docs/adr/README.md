@@ -24,3 +24,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0006](0006-speed-gate-simd-and-table-driven-dispatch.md) | 速さはゲートで見張り、SIMD は区画に閉じ、Vim の分岐は表で書く | 受理 |
 | [0007](0007-first-slice-frameless-window-direct2d-line.md) | 最初の縦切り: 枠なし窓に Direct2D で 1 行描き、OS のライト／ダークに従う | 受理 |
 | [0008](0008-adopted-look-tabs-titlebar-statusbar-mica.md) | 採用した見た目: タブのタイトルバー・モードトグルのステータスバー・Mica・茄子色と橙 | 受理 |
+| [0009](0009-editing-slice-piece-table-and-editing-states.md) | 編集の縦切り: piece table の本文・UTF-8 の内部表現・undo の単位・編集中の状態の見た目 | 受理 |

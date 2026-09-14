@@ -1,0 +1,65 @@
+#pragma once
+
+#include "LineNumber.hpp"
+#include "Offset.hpp"
+#include "Piece.hpp"
+#include "TextFailure.hpp"
+#include "TextPosition.hpp"
+
+#include <cstddef>
+#include <expected>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace nenenib::core
+{
+// 本文の正本（piece table・ADR 0009 の決定 1）。公開状態は不変で、編集は次の本文を返す（ARC-005）。
+// original（読んだ本文）と add（入力）の 2 本は shared_ptr で共有し、複製するのは piece の列だけ。
+// 生成経路は empty と from_utf8 の 2 つだけで、どちらも不変条件（正しい UTF-8）を守る（CPP-007）。
+class TextBuffer final
+{
+  public:
+    [[nodiscard]] static TextBuffer empty();
+    [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(std::string_view text);
+
+    [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
+    [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;
+
+    [[nodiscard]] std::size_t size_bytes() const noexcept;
+    [[nodiscard]] std::size_t line_count() const noexcept;
+    [[nodiscard]] std::size_t piece_count() const noexcept;
+
+    [[nodiscard]] std::string text() const;
+    [[nodiscard]] std::string text_range(Offset begin, Offset end) const;
+    // 行の文字列。piece をまたぐので string_view では返せない（ADR 0009）。末尾の改行は含まない。
+    [[nodiscard]] std::string line_text(LineNumber line) const;
+
+    // 行の先頭と、行の内容の終わり（'\r\n' の '\r' も含めない）のバイト位置。
+    [[nodiscard]] Offset line_start(LineNumber line) const noexcept;
+    [[nodiscard]] Offset line_end(LineNumber line) const noexcept;
+    // 次の行の先頭（最終行では本文の末尾）。改行そのものを含む半開区間の端。
+    [[nodiscard]] Offset line_terminator_end(LineNumber line) const noexcept;
+
+    [[nodiscard]] Offset offset_of(const TextPosition &position) const;
+    [[nodiscard]] TextPosition position_of(Offset at) const;
+
+  private:
+    using Buffer = std::shared_ptr<const std::string>;
+
+    TextBuffer(Buffer original, Buffer add, std::vector<Piece> pieces);
+    [[nodiscard]] std::string_view view_of(const Piece &piece) const noexcept;
+    [[nodiscard]] TextBuffer replaced(Offset begin, Offset end, std::string_view text) const;
+    void collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const;
+    [[nodiscard]] Piece clipped(const Piece &piece, std::size_t from, std::size_t length) const;
+    [[nodiscard]] std::size_t newline_offset(std::size_t index) const noexcept;
+    [[nodiscard]] std::size_t newlines_before(std::size_t at) const noexcept;
+
+    Buffer original_;
+    Buffer add_;
+    std::vector<Piece> pieces_;
+    std::size_t size_bytes_;
+    std::size_t newline_count_;
+};
+} // namespace nenenib::core

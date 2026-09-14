@@ -67,6 +67,9 @@ class SymbolTests(unittest.TestCase):
                     "__std_exception_destroy", "_invoke_watson", "memcpy", "memmove", "memset"}
         self.assertEqual([], symbols.classify(baseline, "core", ALLOWLIST))
 
+    def test_stl_vectorized_search_is_allowed(self):
+        self.assertEqual([], symbols.classify({"__std_find_trivial_1", "__std_mismatch_1"}, "core", ALLOWLIST))
+
     def test_time_is_arc007(self):
         findings = symbols.classify({"_Xtime_get_ticks"}, "core", ALLOWLIST)
         self.assertEqual(1, len(findings))

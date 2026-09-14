@@ -1,10 +1,9 @@
 // 合成ルート（ARC-006）。ポートに実装を結び、窓を作り、メッセージループを回し、終了コードを返す。
 // 端末出力の代わりは「起動できなかった理由 1 行」の MessageBoxW だけで、ログには使わない。
-#include "DisplayText.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
-#include "TextFailure.hpp"
 #include "Win32AppearanceAdapter.hpp"
+#include "Win32ClipboardAdapter.hpp"
 #include "WindowFailure.hpp"
 
 #include <windows.h>
@@ -14,22 +13,6 @@
 namespace
 {
 constexpr wchar_t product_name[] = L"NeNe Nib";
-
-const wchar_t *reason_of(nenenib::core::TextFailure failure) noexcept
-{
-    switch (failure)
-    {
-    case nenenib::core::TextFailure::empty:
-        return L"表示する文字列が空です。";
-    case nenenib::core::TextFailure::control_character:
-        return L"表示する文字列に制御文字が含まれています。";
-    case nenenib::core::TextFailure::invalid_utf8:
-        return L"表示する文字列が正しい UTF-8 ではありません。";
-    case nenenib::core::TextFailure::too_long:
-        return L"表示する文字列が長すぎます。";
-    }
-    std::unreachable();
-}
 
 const wchar_t *reason_of(nenenib::ui::win32::WindowFailure failure) noexcept
 {
@@ -54,18 +37,16 @@ int report(const wchar_t *reason) noexcept
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
 {
-    const auto text = nenenib::core::DisplayText::parse(NENENIB_DISPLAY_TEXT);
-    if (!text)
-    {
-        return report(reason_of(text.error()));
-    }
     nenenib::adapters::win32::Win32AppearanceAdapter appearance;
-    nenenib::application::EditorController controller(appearance, text.value());
+    nenenib::adapters::win32::Win32ClipboardAdapter clipboard;
+    nenenib::application::EditorController controller(appearance, clipboard);
     const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller);
     if (!window)
     {
         return report(reason_of(window.error()));
     }
+    // OpenClipboard に要る HWND は窓ができてから渡す（ADR 0009 の決定 5）。
+    clipboard.bind(window.value()->handle());
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {

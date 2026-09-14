@@ -30,7 +30,9 @@ inline constexpr Palette ubuntu_aubergine_palette{
     .toggle = RgbColor{0x4A, 0x1E, 0x3D},
     .on_accent = RgbColor{0xFF, 0xFF, 0xFF},
     .panel = RgbColor{0x3B, 0x14, 0x30},
-    .panel_border = RgbColor{0x5A, 0x2A, 0x4C}};
+    .panel_border = RgbColor{0x5A, 0x2A, 0x4C},
+    .search = RgbaColor{RgbColor{0xF0, 0xA4, 0x7A}, 89},
+    .ime = RgbColor{0xD7, 0xC4, 0xE5}};
 
 inline constexpr Palette neutral_light_palette{
     .background = RgbColor{0xF4, 0xF5, 0xF7},
@@ -46,7 +48,9 @@ inline constexpr Palette neutral_light_palette{
     .toggle = RgbColor{0xDF, 0xE3, 0xE8},
     .on_accent = RgbColor{0xFF, 0xFF, 0xFF},
     .panel = RgbColor{0xFF, 0xFF, 0xFF},
-    .panel_border = RgbColor{0xD5, 0xD9, 0xE0}};
+    .panel_border = RgbColor{0xD5, 0xD9, 0xE0},
+    .search = RgbaColor{RgbColor{0xF0, 0xA4, 0x7A}, 77},
+    .ime = RgbColor{0x5E, 0x27, 0x50}};
 
 [[nodiscard]] constexpr Palette palette_of(BuiltinTheme theme) noexcept
 {

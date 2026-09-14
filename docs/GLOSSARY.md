@@ -15,6 +15,10 @@
 | 反映（render） | 表示値を Direct2D の描画へ写す操作。UI 状態を変えてよい唯一の場所 | `render*`（ui/win32） |
 | 隔離区画 | 可変性を許した唯一の場所 | ARC-005 の表 |
 | テキスト正本 | 開いているバッファの本文の唯一の所有物。piece table で持ち、通常モードと Vim モードが同じものを編集する | `TextBuffer`（core）/ `EditorState`（application） |
+| 本文（piece table） | 開いているバッファの正本。original と add の 2 バッファと piece の列。不変で、編集は次の本文を返す | `TextBuffer`（core・ADR 0009） |
+| 位置 | バイトの `Offset`（0 始まり）・行の `LineNumber`（1 始まり）・code point の `Column`（1 始まり） | core |
+| 選択 | anchor と caret の 2 つの位置。Shift+移動が anchor を固定する | `Selection`（core） |
+| 編集履歴 | undo / redo の列。連続した文字入力は 1 単位 | `EditHistory`（core） |
 | 編集モード | 通常 / Vim の 2 つ。トグルで入れ替わるのはキー割り当てとマウス規則だけ | `EditMode`（core・閉じた集合） |
 | Vim エンジン | Vim の振る舞い（モード・カーソル・レジスタ・オペレータ・テキストオブジェクト・`.`・マクロ）を純関数で持つ自前実装 | `Vim*`（core） |
 | キーマップの表 | キー列 → 動作の `constexpr` の表。巨大な `switch` を書かない | `KeyBinding`（core） |

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "BodyLayout.hpp"
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
+#include "LineView.hpp"
 #include "RenderFailure.hpp"
 #include "RgbColor.hpp"
 #include "RgbaColor.hpp"
@@ -11,6 +13,7 @@
 
 #include <windows.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <d2d1_3.h>
 #include <d3d11.h>
@@ -34,6 +37,9 @@ class Direct2DRenderer final
                                                                                std::uint32_t dpi);
     [[nodiscard]] std::expected<void, RenderFailure> render(const application::EditorFrame &frame);
     [[nodiscard]] std::expected<void, RenderFailure> resize(UINT width, UINT height);
+    // 本文のクリックを桁へ写す唯一の経路。DirectWrite の当たり判定は描く側が持つ（ARC-011）。
+    [[nodiscard]] core::Column column_at(std::string_view text, const core::BodyLayout &body,
+                                         std::int32_t x);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
     void set_backdrop(TitleBarBackdrop backdrop) noexcept;
 
@@ -41,6 +47,7 @@ class Direct2DRenderer final
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。
     using WaitableHandle = std::unique_ptr<void, decltype(&::CloseHandle)>;
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
+    using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
     Direct2DRenderer() = default;
     [[nodiscard]] std::expected<void, RenderFailure> initialize(HWND window);
@@ -63,7 +70,19 @@ class Direct2DRenderer final
     void draw_title_bar(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
-    void draw_body(const application::EditorFrame &frame, const core::LayoutRect &area);
+    [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
+    void fill_runs(IDWriteTextLayout *text, const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
+    void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                             const core::LayoutRect &area, const application::LineView &line);
+    void draw_bar_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                        const core::LayoutRect &area, UINT32 position);
+    void draw_block_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                          const core::LayoutRect &area, UINT32 position);
+    void draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                    const core::LayoutRect &area, std::string_view line);
+    void draw_line(const application::EditorFrame &frame, const core::BodyLayout &body,
+                   std::size_t index);
+    void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
     void draw_status_bar(const application::EditorFrame &frame,
                          const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
@@ -87,6 +106,7 @@ class Direct2DRenderer final
     TextFormat gutter_format_;
     TextFormat code_format_;
     WaitableHandle latency_{nullptr, &::CloseHandle};
+    std::int32_t caret_width_ = 2;
     std::uint32_t dpi_ = 96;
     TitleBarBackdrop backdrop_ = TitleBarBackdrop::opaque;
 };

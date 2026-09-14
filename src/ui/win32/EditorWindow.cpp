@@ -1,16 +1,25 @@
 #include "EditorWindow.hpp"
 
+#include "BodyLayout.hpp"
+#include "CaretMotion.hpp"
 #include "DevicePixels.hpp"
+#include "EditMode.hpp"
 #include "EditorIntent.hpp"
+#include "KeyMotion.hpp"
+#include "SelectionAnchoring.hpp"
 #include "StatusBarLayout.hpp"
 #include "TitleBarLayout.hpp"
 
 #include <dwmapi.h>
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
+#include <string>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -22,6 +31,61 @@ constexpr std::int32_t design_width_dips = 640;
 constexpr std::int32_t design_height_dips = 360;
 constexpr std::int32_t resize_border_dips = 8;
 constexpr std::size_t single_tab = 1;
+constexpr std::int32_t wheel_lines = 3;
+constexpr SHORT key_down_mask = static_cast<SHORT>(0x8000);
+constexpr wchar_t first_high_surrogate = 0xD800;
+constexpr wchar_t first_low_surrogate = 0xDC00;
+constexpr wchar_t last_low_surrogate = 0xDFFF;
+constexpr wchar_t first_printable = 0x20;
+constexpr wchar_t delete_character = 0x7F;
+// キー → キャレットの移動は表で引く（CPP-012）。Ctrl の有無は表そのものを分けて表す。
+constexpr std::array<KeyMotion, 8> plain_motions{{{VK_LEFT, core::CaretMotion::previous_character},
+                                                  {VK_RIGHT, core::CaretMotion::next_character},
+                                                  {VK_UP, core::CaretMotion::previous_line},
+                                                  {VK_DOWN, core::CaretMotion::next_line},
+                                                  {VK_HOME, core::CaretMotion::line_start},
+                                                  {VK_END, core::CaretMotion::line_end},
+                                                  {VK_PRIOR, core::CaretMotion::page_up},
+                                                  {VK_NEXT, core::CaretMotion::page_down}}};
+constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion::previous_word},
+                                                    {VK_RIGHT, core::CaretMotion::next_word},
+                                                    {VK_HOME, core::CaretMotion::document_start},
+                                                    {VK_END, core::CaretMotion::document_end}}};
+
+[[nodiscard]] bool held(int key) noexcept
+{
+    return (GetKeyState(key) & key_down_mask) != 0;
+}
+
+[[nodiscard]] std::optional<core::CaretMotion> motion_for(std::span<const KeyMotion> table,
+                                                          WPARAM key) noexcept
+{
+    for (const KeyMotion entry : table)
+    {
+        if (entry.key == key)
+        {
+            return entry.motion;
+        }
+    }
+    return std::nullopt;
+}
+
+// UTF-16 の入力を UTF-8 の意図へ。変換は境界のここでだけ起きる（CPP-014 / ADR 0009 の決定 2）。
+[[nodiscard]] std::string narrow(std::wstring_view wide)
+{
+    const auto units = static_cast<int>(wide.size());
+    const int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), units,
+                                          nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0)
+    {
+        return {};
+    }
+    std::string utf8(static_cast<std::size_t>(bytes), '\0');
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), units, utf8.data(), bytes,
+                        nullptr, nullptr);
+    return utf8;
+}
+
 // 縁のヒットテストは 3 行 3 列の表で引く。分岐で書くと CPP-012 の認知的複雑度を越える。
 constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
                                               HTTOP,     HTTOPLEFT,    HTTOPRIGHT,
@@ -53,6 +117,18 @@ constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
     const std::size_t row = point.y < margin ? 1U : (point.y >= client.bottom - margin ? 2U : 0U);
     const std::size_t column = point.x < margin ? 1U : (point.x >= client.right - margin ? 2U : 0U);
     return border_codes.at(row * 3U + column);
+}
+
+// クリックした y から見えている行の並びの何番目か。行より下は最も近い（最後の）行に寄せる。
+[[nodiscard]] std::size_t row_index(const core::BodyLayout &body, std::int32_t y,
+                                    std::size_t count) noexcept
+{
+    if (y <= body.content.top)
+    {
+        return 0;
+    }
+    const auto row = static_cast<std::size_t>((y - body.content.top) / body.line_height);
+    return std::min(row, count - 1);
 }
 
 [[nodiscard]] LRESULT caption_code(core::TitleBarHit hit) noexcept
@@ -167,7 +243,7 @@ std::expected<void, WindowFailure> EditorWindow::start_rendering()
     }
     renderer_ = std::make_unique<Direct2DRenderer>(std::move(renderer).value());
     renderer_->set_backdrop(backdrop_);
-    if (!renderer_->render(controller_.frame()))
+    if (!renderer_->render(controller_.apply(application::VisibleLines{body_lines()})))
     {
         return std::unexpected(WindowFailure::render);
     }
@@ -234,10 +310,13 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
         ValidateRect(window_, nullptr);
         return 0;
     case WM_KEYDOWN:
-        if (word == VK_ESCAPE)
-        {
-            DestroyWindow(window_);
-        }
+        press_key(word);
+        return 0;
+    case WM_CHAR:
+        type_character(word);
+        return 0;
+    case WM_MOUSEWHEEL:
+        turn_wheel(word);
         return 0;
     case WM_SETTINGCHANGE:
         refresh_appearance();
@@ -337,20 +416,48 @@ void EditorWindow::click_client(LPARAM data)
     {
     // 意図は「どちらを選んだか」。同じ側を押しても controller が同じ表示値を返すだけ（ARC-011）。
     case core::StatusBarHit::toggle_ordinary:
-        present(controller_.apply(application::EditorIntent::select_ordinary_mode));
+        send(application::SelectEditMode{core::EditMode::ordinary});
         return;
     case core::StatusBarHit::toggle_vim:
-        present(controller_.apply(application::EditorIntent::select_vim_mode));
+        send(application::SelectEditMode{core::EditMode::vim});
         return;
     case core::StatusBarHit::none:
+        break;
+    }
+    const auto body = core::body_layout(client.right, client.bottom, dpi_);
+    if (core::contains(body.band, low_word_of(data), high_word_of(data)))
+    {
+        place_caret(data);
+    }
+}
+
+void EditorWindow::place_caret(LPARAM data)
+{
+    if (renderer_ == nullptr)
+    {
         return;
     }
+    RECT client{};
+    GetClientRect(window_, &client);
+    const auto body = core::body_layout(client.right, client.bottom, dpi_);
+    const auto frame = controller_.frame();
+    if (frame.lines.empty())
+    {
+        return;
+    }
+    // 行番号の欄や行より左のクリックは行頭に寄せる（最も近い位置）。
+    const auto &line = frame.lines.at(row_index(body, high_word_of(data), frame.lines.size()));
+    const auto column =
+        renderer_->column_at(line.text, body, std::max(low_word_of(data), body.content.left));
+    const auto anchoring =
+        held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
+    send(application::PlaceCaret{core::TextPosition{line.number, column}, anchoring});
 }
 
 void EditorWindow::refresh_appearance()
 {
     // 状態遷移は controller だけが行い、窓は返ってきた表示値を写す（ARC-011）。
-    const auto frame = controller_.apply(application::EditorIntent::refresh_appearance);
+    const auto frame = controller_.apply(application::RefreshAppearance{});
     apply_backdrop(frame);
     if (renderer_ != nullptr)
     {
@@ -372,7 +479,124 @@ void EditorWindow::resize()
         abandon();
         return;
     }
-    present(controller_.frame());
+    // 何行入るかは application が持つ。窓は寸法から数えた行数を意図として渡すだけ（ADR 0009）。
+    send(application::VisibleLines{body_lines()});
+}
+
+std::size_t EditorWindow::body_lines() const
+{
+    RECT client{};
+    GetClientRect(window_, &client);
+    return core::body_layout(client.right, client.bottom, dpi_).visible_lines;
+}
+
+void EditorWindow::send(const application::EditorIntent &intent)
+{
+    present(controller_.apply(intent));
+}
+
+void EditorWindow::type_character(WPARAM word)
+{
+    const auto unit = static_cast<wchar_t>(word);
+    if (unit >= first_high_surrogate && unit < first_low_surrogate)
+    {
+        pending_high_surrogate_ = unit;
+        return;
+    }
+    const wchar_t pending = std::exchange(pending_high_surrogate_, 0);
+    const bool low = unit >= first_low_surrogate && unit <= last_low_surrogate;
+    // 制御文字は WM_KEYDOWN が扱う。対になっていない下位サロゲートと一緒にここで捨てる。
+    if (unit < first_printable || unit == delete_character || (low && pending == 0))
+    {
+        return;
+    }
+    std::wstring wide;
+    if (low)
+    {
+        wide.push_back(pending);
+    }
+    wide.push_back(unit);
+    send(application::InsertText{narrow(wide)});
+}
+
+void EditorWindow::press_key(WPARAM word)
+{
+    const bool control = held(VK_CONTROL);
+    const auto table = control ? std::span<const KeyMotion>(control_motions)
+                               : std::span<const KeyMotion>(plain_motions);
+    const auto motion = motion_for(table, word);
+    if (motion)
+    {
+        const auto anchoring =
+            held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
+        send(application::MoveCaret{motion.value(), anchoring});
+        return;
+    }
+    if (control)
+    {
+        press_control_key(word);
+        return;
+    }
+    press_plain_key(word);
+}
+
+void EditorWindow::press_plain_key(WPARAM word)
+{
+    // OS の仮想キーは開いた集合なので、既定分岐を書いてよい唯一の場所（CPP-017）。
+    switch (word)
+    {
+    case VK_BACK:
+        send(application::DeleteText{core::DeleteDirection::backward});
+        return;
+    case VK_DELETE:
+        send(application::DeleteText{core::DeleteDirection::forward});
+        return;
+    case VK_RETURN:
+        send(application::NewLine{});
+        return;
+    case VK_TAB:
+        send(application::InsertText{std::string("\t")});
+        return;
+    case VK_ESCAPE:
+        // Esc は窓を閉じない。通常モードでは選択を解くだけ（Issue #7）。
+        send(application::CancelSelection{});
+        return;
+    default:
+        break;
+    }
+}
+
+void EditorWindow::press_control_key(WPARAM word)
+{
+    switch (word)
+    {
+    case 'A':
+        send(application::SelectAll{});
+        return;
+    case 'C':
+        send(application::ClipboardAction{application::ClipboardOperation::copy});
+        return;
+    case 'X':
+        send(application::ClipboardAction{application::ClipboardOperation::cut});
+        return;
+    case 'V':
+        send(application::ClipboardAction{application::ClipboardOperation::paste});
+        return;
+    case 'Z':
+        send(application::HistoryAction{core::HistoryDirection::undo});
+        return;
+    case 'Y':
+        send(application::HistoryAction{core::HistoryDirection::redo});
+        return;
+    default:
+        break;
+    }
+}
+
+void EditorWindow::turn_wheel(WPARAM word)
+{
+    const auto delta = static_cast<std::int16_t>(HIWORD(word));
+    send(application::ScrollLines{delta > 0 ? -wheel_lines : wheel_lines});
 }
 
 void EditorWindow::change_dpi(WPARAM word, LPARAM data)
@@ -419,5 +643,10 @@ void EditorWindow::abandon()
 bool EditorWindow::rendering_failed() const noexcept
 {
     return rendering_failed_;
+}
+
+HWND EditorWindow::handle() const noexcept
+{
+    return window_;
 }
 } // namespace nenenib::ui::win32
