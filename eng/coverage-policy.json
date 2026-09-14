@@ -1,0 +1,6 @@
+{
+  "comment": "QLT-009: 中核（core / application）の分岐カバレッジ下限。下げるには ADR が要る。",
+  "modules": ["core", "application"],
+  "minimumBranchPercent": 90,
+  "testModule": "unit_tests"
+}

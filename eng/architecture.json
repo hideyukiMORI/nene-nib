@@ -1,0 +1,13 @@
+{
+  "modules": {
+    "core": {"path": "src/core", "dependencies": []},
+    "application": {"path": "src/application", "dependencies": ["core"]},
+    "adapters_win32": {"path": "src/adapters/win32", "dependencies": ["application", "core"]},
+    "ui_win32": {"path": "src/ui/win32", "dependencies": ["application", "core"]},
+    "app": {"path": "src/app", "dependencies": ["core", "application", "adapters_win32", "ui_win32"]},
+    "verification": {"path": "tests/build", "dependencies": []},
+    "unit_tests": {"path": "tests/unit", "dependencies": ["core", "application"]}
+  },
+  "runtimeDependencies": [],
+  "platformLibraries": {"adapters_win32": ["kernel32", "shell32", "advapi32", "ole32"], "ui_win32": ["user32", "d2d1", "dwrite", "dxgi", "d3d11", "dcomp", "dwmapi", "imm32"], "app": ["user32"]}
+}

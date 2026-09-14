@@ -1,0 +1,10 @@
+Checks: '-*,clang-analyzer-core.CallAndMessage,clang-analyzer-core.NullDereference,clang-analyzer-core.uninitialized.Assign,clang-analyzer-core.uninitialized.Branch,clang-analyzer-core.uninitialized.UndefReturn,clang-analyzer-cplusplus.NewDelete,clang-analyzer-cplusplus.NewDeleteLeaks,bugprone-unchecked-optional-access,bugprone-use-after-move,cppcoreguidelines-pro-type-const-cast,cppcoreguidelines-pro-type-reinterpret-cast,cppcoreguidelines-pro-type-cstyle-cast,cppcoreguidelines-avoid-non-const-global-variables,misc-non-private-member-variables-in-classes,readability-function-cognitive-complexity,readability-function-size'
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'
+CheckOptions:
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: false
+  misc-non-private-member-variables-in-classes.IgnorePublicMemberVariables: false
+  readability-function-cognitive-complexity.Threshold: 10
+  readability-function-size.LineThreshold: 60
+  readability-function-size.NestingThreshold: 3
+  readability-function-size.ParameterThreshold: 4
