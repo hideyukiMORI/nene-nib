@@ -217,6 +217,39 @@ def prove_symbols(root: Path, evidence: list) -> None:
     print("ARC-003: a required module without a static library is rejected; the present module passes")
 
 
+# ADR 0007: --require を結線したので、負の証明を probe.obj ではなく**実ライブラリ**でも取り直す。
+# 中核の正典ソースに非決定入力を足して実際に nenenib_core.lib を作り、それが落ちることを見る。
+REAL_LIBRARY_PROBE = (
+    "\nnamespace nenenib::core\n{\nlong long nenenib_probe_ticks();\n"
+    "long long nenenib_probe_ticks()\n{\n"
+    "    return std::chrono::system_clock::now().time_since_epoch().count();\n}\n} // namespace nenenib::core\n"
+)
+
+
+def prove_real_libraries(root: Path, configure: list[str], evidence: list) -> None:
+    query = root / "build/.cmake/api/v1/query"
+    query.mkdir(parents=True, exist_ok=True)
+    (query / "codemodel-v2").write_text("", encoding="utf-8")
+    run(configure, root, True)
+    build = ["cmake", "--build", "build", "--target", "nenenib_core", "nenenib_application"]
+    run(build, root, True)
+    symbols = ["python", str(root / "eng/symbols.py"), "--root", str(root),
+               "--build-dir", str(root / "build"), "--require", "core", "application"]
+    run(symbols, root, True, "Symbols: 2 libraries checked, 0 violation(s)")
+    source = root / "src/core/Palette.cpp"
+    original = source.read_text(encoding="utf-8")
+    source.write_text("#include <chrono>\n" + original + REAL_LIBRARY_PROBE, encoding="utf-8")
+    run(build, root, True)
+    diagnostic = "ARC-007: core: non-deterministic input symbol _Xtime_get_ticks"
+    result = run(symbols, root, False, diagnostic)
+    source.write_text(original, encoding="utf-8")
+    run(build, root, True)
+    restoration = run(symbols, root, True)
+    evidence.append({"rule": "ARC-007", "diagnostic": diagnostic + " (real static library)",
+                     "negative": result, "restorationExit": restoration["exitCode"]})
+    print("ARC-007: the real nenenib_core.lib is checked and rejected; the restored library passed")
+
+
 def main() -> None:
     output_root = (ROOT / "out/proofs").resolve()
     output_root.mkdir(parents=True, exist_ok=True)
@@ -236,6 +269,7 @@ def main() -> None:
         prove_formatting(root, source, original, evidence)
         prove_architecture(root, configure, build, evidence)
         prove_symbols(root, evidence)
+        prove_real_libraries(root, configure, evidence)
     (output_root / "results.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
                                               encoding="utf-8")
     print(f"Gate proofs passed: {len(evidence)} real-tool proofs")

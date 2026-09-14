@@ -259,6 +259,36 @@ def configuration_checks(root: Path, paths: list[Path], rules: dict) -> list[Fin
     return findings
 
 
+def version_metadata_checks(root: Path) -> list[Finding]:
+    """CNF-007: the manifest and VERSIONINFO come from project(... VERSION) and nowhere else."""
+    findings = []
+    cmake_path = root / "CMakeLists.txt"
+    manifest_path = root / "src/app/NeNeNib.manifest.in"
+    header_path = root / "src/app/NeNeNibVersion.h.in"
+    fixed_manifest = root / "src/app/NeNeNib.manifest"
+    if any(not path.is_file() for path in (cmake_path, manifest_path, header_path)):
+        return [Finding("CNF-007", "CMakeLists.txt", "canonical version metadata input is missing")]
+    cmake = cmake_path.read_text(encoding="utf-8")
+    manifest = manifest_path.read_text(encoding="utf-8")
+    header = header_path.read_text(encoding="utf-8")
+    if fixed_manifest.exists():
+        findings.append(Finding("CNF-007", "src/app/NeNeNib.manifest", "fixed manifest version is forbidden"))
+    for template in ("src/app/NeNeNib.manifest.in", "src/app/NeNeNibVersion.h.in"):
+        if f"configure_file({template}" not in cmake:
+            findings.append(Finding("CNF-007", template, "version template is not configured by CMake"))
+    manifest_version = "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.0"
+    if f'version="{manifest_version}"' not in manifest:
+        findings.append(Finding("CNF-007", manifest_path.relative_to(root).as_posix(), "manifest version is not derived from PROJECT_VERSION"))
+    required_header_values = (
+        "@PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@, 0",
+        '"@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.0\\0"',
+        '"@PROJECT_VERSION@\\0"',
+    )
+    if any(value not in header for value in required_header_values):
+        findings.append(Finding("CNF-007", header_path.relative_to(root).as_posix(), "VERSIONINFO is not derived from PROJECT_VERSION"))
+    return findings
+
+
 def architecture_checks(root: Path, paths: list[Path], build_dir: Path | None) -> list[Finding]:
     findings = []
     graph = json.loads((root / "eng/architecture.json").read_text(encoding="utf-8"))
@@ -333,6 +363,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings, waivers = waiver_checks(root, paths, today)
     findings.extend(document_checks(root, paths, rules))
     findings.extend(configuration_checks(root, paths, rules))
+    findings.extend(version_metadata_checks(root))
     findings.extend(architecture_checks(root, paths, build_dir))
     for path in paths:
         if path.suffix in rules["cppExtensions"]:

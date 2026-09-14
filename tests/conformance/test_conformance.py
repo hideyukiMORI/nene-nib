@@ -247,6 +247,37 @@ class RepositoryChecks(unittest.TestCase):
         self.write("src/Color.cpp", "// FIXME: implement color")
         self.assertIn("CNF-008", self.config_ids())
 
+    def seed_version_metadata(self):
+        self.write(
+            "CMakeLists.txt",
+            "configure_file(src/app/NeNeNib.manifest.in generated/NeNeNib.manifest @ONLY)\n"
+            "configure_file(src/app/NeNeNibVersion.h.in generated/NeNeNibVersion.h @ONLY)\n",
+        )
+        self.write(
+            "src/app/NeNeNib.manifest.in",
+            '<assemblyIdentity version="@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.0"/>',
+        )
+        self.write(
+            "src/app/NeNeNibVersion.h.in",
+            "@PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@, 0\n"
+            '"@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.0\\0"\n'
+            '"@PROJECT_VERSION@\\0"\n',
+        )
+
+    def test_cnf007_version_metadata_positive(self):
+        self.seed_version_metadata()
+        self.assertFalse(cnf.version_metadata_checks(self.root))
+
+    def test_cnf007_fixed_manifest_negative(self):
+        self.seed_version_metadata()
+        self.write("src/app/NeNeNib.manifest", '<assemblyIdentity version="0.1.0.0"/>')
+        self.assertTrue(cnf.version_metadata_checks(self.root))
+
+    def test_cnf007_literal_manifest_version_negative(self):
+        self.seed_version_metadata()
+        self.write("src/app/NeNeNib.manifest.in", '<assemblyIdentity version="0.1.0.0"/>')
+        self.assertTrue(cnf.version_metadata_checks(self.root))
+
     def seed_docs(self):
         self.write("docs/QUALITY_GATES.md", "### CNF-006 — documents\n- 機械強制: **active**\n\n## 3. 強制マトリクス\n| CNF-006 | active | checker |\n\n## 4. Gates\n")
         self.write("docs/quality/gate-proofs.md", "| CNF-006 | test | passed |")

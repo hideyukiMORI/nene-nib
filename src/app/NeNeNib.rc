@@ -1,0 +1,34 @@
+#include "NeNeNibVersion.h"
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION NENENIB_VERSION_COMMA
+ PRODUCTVERSION NENENIB_VERSION_COMMA
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "NeNe Nib\0"
+            VALUE "FileVersion", NENENIB_VERSION_TEXT
+            VALUE "InternalName", "NeNeNib\0"
+            VALUE "LegalCopyright", "Copyright (c) 2026 Hideyuki Mori\0"
+            VALUE "OriginalFilename", "NeNeNib.exe\0"
+            VALUE "ProductName", "NeNe Nib\0"
+            VALUE "ProductVersion", NENENIB_PRODUCT_VERSION_TEXT
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

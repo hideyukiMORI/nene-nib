@@ -27,12 +27,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'QLT-002: compilation or clang-tidy failed.' }
     & python eng/conformance.py --build-dir build
     if ($LASTEXITCODE -ne 0) { throw 'ARC-002: actual build graph failed.' }
-    # --require は Phase 3 の縦切りで core / application を結線するときに足す。今は守る対象が無い
-    # （0 libraries checked）。「在ること」ではなく「落ちること」が検査なので、ここは planned のまま。
-    & python eng/symbols.py --build-dir build
+    # Issue #3 で core / application の静的ライブラリが生まれたので --require を結線する（ADR 0007）。
+    # 中核のライブラリが消えたらここが落ちる＝検査が対象を失ったことに気づける。
+    & python eng/symbols.py --build-dir build --require core application
     if ($LASTEXITCODE -ne 0) { throw 'ARC-003 / ARC-007 / CPP-013: undefined symbols outside the allowlist.' }
     & ctest --test-dir build --output-on-failure --no-tests=error
     if ($LASTEXITCODE -ne 0) { throw 'C++ verification failed.' }
+    & python eng/coverage.py
+    if ($LASTEXITCODE -ne 0) { throw 'QLT-009: branch coverage or its negative proof failed.' }
     & python eng/prove-gates.py
     if ($LASTEXITCODE -ne 0) { throw 'QLT-007: gate proofs failed.' }
     & git diff --check

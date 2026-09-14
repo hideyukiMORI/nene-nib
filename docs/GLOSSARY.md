@@ -24,6 +24,13 @@
 | 要求（request）/ 完了（completion） | ワーカーへ渡す不変の値と、UI スレッドへ返る版番号付きの値 | application |
 | 版番号 | 状態の世代。古い完了を捨てる唯一の判断材料 | application |
 | 速さの基準値 | ベンチ 3 本の参照値。退行でゲートが落ちる。「baseline」とは呼ばない | `eng/perf-reference.json`（ADR 0006） |
+| 表示文字列 | 検証済み（空・制御文字・不正 UTF-8・256 バイト超を拒否）の UTF-8 文字列。窓に描く 1 行の正本 | `DisplayText`（core） |
+| 外観 | OS のライト／ダーク設定に対応する閉じた集合 | `Appearance`（core） |
+| 配色 | 外観ごとの背景と文字の色。純関数 `palette_for` の結果 | `Palette` / `RgbColor`（core） |
+| 外観ポート | OS の外観を読む唯一の窓口。実装は adapters/win32（レジストリの `AppsUseLightTheme`） | `AppearancePort` / `Win32AppearanceAdapter` |
+| エディタ状態 | 表示文字列と外観の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |
+| エディタフレーム | 表示文字列と配色の表示値。UI はこれを写すだけ | `EditorFrame`（application） |
+| レンダラ | D3D11 → DXGI（flip・waitable・composition）→ DirectComposition → Direct2D の提示経路。`render` だけが描く | `Direct2DRenderer`（ui/win32） |
 | 規約検査（conformance） | NeNe Nib 固有の自作ゲート | `eng/conformance.py`（CNF-NNN） |
 | シンボル検査 | 中核の静的ライブラリの未定義シンボルを許可リストと照合する検査 | `eng/symbols.py`（ARC-003 / ARC-007 / CPP-013） |
 | waiver | 1 つの規則に対する期限付きの狭い例外 | `docs/waivers/WVR-NNNN-*.md` |

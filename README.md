@@ -3,8 +3,9 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-09-15):** Issue #1 only. The language was measured, the rules and the single gate are in place,
-> and there is no product code yet. Nothing to download (Phase 4).
+> **Status (2026-09-15):** first vertical slice. The app starts, shows a frameless window, draws one line with
+> Direct2D / DirectWrite through a flip-model composition swap chain, and follows the OS light / dark setting
+> (dark is an Ubuntu-like aubergine). No editing, no Vim, no tabs yet. Nothing to download yet (Phase 4).
 
 ## What it will be
 
