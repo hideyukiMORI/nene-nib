@@ -94,6 +94,14 @@ clang-tidy が一律に拒否する。HWND ↔ `this` と `LPARAM` の読み替�
 
 libm のシンボルが core の外へ出て ARC-003 が落ちる。DIP → 物理画素は整数演算（ADR 0008 決定 5）。
 
+### `std::string_view::find` などの STL の検索は許可シンボルに載っている
+
+MSVC STL は `__std_find_trivial_*` 等の純関数を core の外へ出す（Issue #7 で実測）。`eng/symbol-allowlist.json` に足してある。他の `__std_*` が出たら「時刻・OS・スレッドに触れないか」を確かめてから足す。
+
+### 意図は `std::variant` の閉じた和型
+
+`EditorIntent` は `std::visit` で写し、選択肢が増えたらコンパイルが落ちる（ADR 0009）。方向や操作の種類は閉じた `enum` を持つ型に畳む。
+
 ### md4c はまだ入っていない
 
 Markdown プレビュー（FR-007）の Issue で、別 target に `/W4 /WX` だけを当てて tag と SHA-256 で固定して入れる（ADR 0003）。厳格集合を当てると 20 件超で落ちる。
@@ -146,8 +154,10 @@ Waivers: none | WVR-NNNN
 
 現在のタスクは [docs/todo/current.md](docs/todo/current.md)。GitHub Issue が正で、そこは要約。
 
-2026-09-15: Issue #1（Phase 0〜2・PR #2）、Issue #3（最初の縦切り・ADR 0007・PR #4）、Issue #5（見た目・ADR 0008）。起動すると枠なし窓（Snap と影は OS のまま）に Mica のタイトルバー、タブ 1 本と窓の操作、本文 1 行、ステータスバーの「通常 | Vim」トグルを Direct2D で描き、OS のライト／ダーク（ダークは茄子色 D11・アクセントは橙 D12）に従う。
-見た目の正本は `docs/design/2026-09-15-look.md`。カラーテーマとフォントサイズの計画は `docs/plans/2026-09-15-colorschemes.md`（D13 / D14）。編集・Vim エンジン・複数タブ・Ctrl+P・IME・設定の保存はまだ無い。
+2026-09-15: Issue #1（Phase 0〜2）、#3（最初の縦切り・ADR 0007）、#5（見た目・ADR 0008）、#7（編集・ADR 0009）。起動すると枠なし窓（Snap と影は OS のまま）に Mica のタイトルバー、タブ 1 本と窓の操作、
+piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl+Z/Y・クリックでキャレット）、ステータスバーの「通常 | Vim」トグルを Direct2D で描き、OS のライト／ダーク（茄子色 D11・橙 D12）に従う。
+見た目の正本は `docs/design/2026-09-15-look.md` と `docs/design/2026-09-15-editing-look.md`。カラーテーマとフォントサイズの計画は `docs/plans/2026-09-15-colorschemes.md`（D13 / D14）。
+ファイルの開閉と保存・IME・Vim エンジン・複数タブ・Ctrl+P・設定の保存はまだ無い。
 
 ---
 

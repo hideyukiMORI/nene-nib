@@ -13,14 +13,16 @@ namespace
     return DisplayText::parse(text).value();
 }
 
-[[nodiscard]] std::string caret_position(std::size_t line, std::size_t column)
+[[nodiscard]] std::string caret_position(const TextPosition &caret)
 {
-    return "行 " + std::to_string(line) + ", 桁 " + std::to_string(column);
+    return "行 " + std::to_string(caret.line.value) + ", 桁 " + std::to_string(caret.column.value);
 }
 } // namespace
 
-std::array<DisplayText, status_item_count> status_items_for(std::size_t line, std::size_t column)
+std::array<DisplayText, status_item_count> status_items_for(const TextPosition &caret,
+                                                            LineEnding ending)
 {
-    return {fixed(caret_position(line, column)), fixed("UTF-8"), fixed("CRLF")};
+    return {fixed(caret_position(caret)), fixed("UTF-8"),
+            fixed(std::string(line_ending_label(ending)))};
 }
 } // namespace nenenib::core

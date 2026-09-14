@@ -1,26 +1,46 @@
 #pragma once
 
 #include "Appearance.hpp"
-#include "DisplayText.hpp"
+#include "EditHistory.hpp"
 #include "EditMode.hpp"
+#include "LineEnding.hpp"
+#include "ScrollState.hpp"
+#include "Selection.hpp"
+#include "TextBuffer.hpp"
 
 namespace nenenib::application
 {
-// 表示文字列・外観・編集モードの唯一の所有者（ARC-004）。公開値は不変で、次状態を返す（ARC-005）。
+// 本文・選択・履歴・スクロール・改行・外観・編集モードの唯一の所有者（ARC-004）。
+// 公開値は不変で、次状態を返す（ARC-005 / CPP-003）。生成経路は create ただ 1 つ（CPP-007）。
 class EditorState final
 {
   public:
-    [[nodiscard]] static EditorState create(core::DisplayText text, core::Appearance appearance,
-                                            core::EditMode mode);
-    [[nodiscard]] const core::DisplayText &text() const noexcept;
+    [[nodiscard]] static EditorState create(core::Appearance appearance, core::EditMode mode);
+
+    [[nodiscard]] const core::TextBuffer &text() const noexcept;
+    [[nodiscard]] const core::Selection &selection() const noexcept;
+    [[nodiscard]] const core::EditHistory &history() const noexcept;
+    [[nodiscard]] const ScrollState &scroll() const noexcept;
+    [[nodiscard]] core::LineEnding line_ending() const noexcept;
     [[nodiscard]] core::Appearance appearance() const noexcept;
     [[nodiscard]] core::EditMode mode() const noexcept;
+
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
+    [[nodiscard]] EditorState with_selection(const core::Selection &selection) const;
+    [[nodiscard]] EditorState with_scroll(const ScrollState &scroll) const;
+    // 本文と選択と履歴は 1 つの編集で必ず一緒に動くので、まとめて次状態にする。
+    [[nodiscard]] EditorState with_edit(core::TextBuffer text, const core::Selection &selection,
+                                        core::EditHistory history) const;
 
   private:
-    EditorState(core::DisplayText text, core::Appearance appearance, core::EditMode mode);
-    core::DisplayText text_;
+    EditorState(core::Appearance appearance, core::EditMode mode);
+
+    core::TextBuffer text_;
+    core::Selection selection_;
+    core::EditHistory history_;
+    ScrollState scroll_;
+    core::LineEnding line_ending_;
     core::Appearance appearance_;
     core::EditMode mode_;
 };

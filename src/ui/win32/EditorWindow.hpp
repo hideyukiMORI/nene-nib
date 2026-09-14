@@ -3,6 +3,7 @@
 #include "Direct2DRenderer.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorIntent.hpp"
 #include "StatusBarHit.hpp"
 #include "TitleBarBackdrop.hpp"
 #include "TitleBarHit.hpp"
@@ -10,6 +11,7 @@
 
 #include <windows.h>
 
+#include <cstddef>
 #include <expected>
 #include <memory>
 
@@ -29,6 +31,8 @@ class EditorWindow final
     EditorWindow &operator=(EditorWindow &&) = delete;
 
     [[nodiscard]] bool rendering_failed() const noexcept;
+    // クリップボードの OpenClipboard に渡す所有者。合成ルートが adapters へ結ぶためだけの口。
+    [[nodiscard]] HWND handle() const noexcept;
 
   private:
     EditorWindow(HINSTANCE instance, application::EditorController &controller);
@@ -43,14 +47,24 @@ class EditorWindow final
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);
+    void place_caret(LPARAM data);
     void present(const application::EditorFrame &frame);
     void abandon();
     void refresh_appearance();
     void resize();
     void change_dpi(WPARAM word, LPARAM data);
+    void send(const application::EditorIntent &intent);
+    void type_character(WPARAM word);
+    void press_key(WPARAM word);
+    void press_plain_key(WPARAM word);
+    void press_control_key(WPARAM word);
+    void turn_wheel(WPARAM word);
+    [[nodiscard]] std::size_t body_lines() const;
 
     HINSTANCE instance_;
     application::EditorController &controller_;
+    // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
+    wchar_t pending_high_surrogate_ = 0;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
     ATOM class_ = 0;

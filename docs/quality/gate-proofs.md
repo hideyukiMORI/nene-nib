@@ -196,3 +196,20 @@ OS の「アプリのモード」はダーク（`AppsUseLightTheme` = 0）。
 - 最初に見えた窓の矩形は `[1520, 825, 2320, 1275]`（配置後に表示。(0,0) 起点でない）。`WM_CLOSE` で終了 0
 - 最大化（使い捨ての probe で `HTMAXBUTTON` を送信）: `IsZoomed` true、client 3840×2100 は作業領域と一致、最大化中も閉じるのヒットは 20、復元後の矩形は元どおり
 - 見ていないもの: `WM_DPICHANGED`（DPI の違うモニタ間の移動）・96 DPI・Mica 非対応環境の fallback・Snap Layouts のホバー・ライトの外観。この機は Segoe UI Variable Text と Cascadia Code を両方持つのでフォントの fallback は未実行
+
+### 5-d. 編集の縦切り（Issue #7・ADR 0009・2026-09-15）
+
+環境: 5-b と同じ（Windows 11 build 26200・120 DPI・実 GPU・ダーク）。client 800×450 物理画素・本文の最初の行の上端 65・行高 30・行番号の欄 70・見えている行 11。
+
+手順（`python eng/verify-window.py`。`WM_CHAR` / `WM_KEYDOWN` / `WM_LBUTTONDOWN` を `PostMessageW` で送る。実ポインタ・実キーボードは操作しない）:
+`a` `b` `c` と Enter → 2 行目の行頭にキャレット、行番号 2 の描画、ステータスの変化 / Backspace 2 回 → 1 行に戻る / Vim へトグル → ブロックのキャレット、通常へ戻す → バー /
+Enter 200 回 → 1 行目が見えなくなる、PgUp 30 回 → 1 行目が上端、PgDn 1 回 → 見えなくなる / Esc → 窓は閉じない / 2 行目の行頭へクリック → キャレットが 2 行目 / `WM_CLOSE` → 終了 0。
+
+結果（`out/window-verification/editing-slice*.json` / `.bmp`）:
+
+- キャレットの画素は `accent` (233,84,32)。Enter で 2 行目へ移り、2 行目の面が `current_line` (62,26,50)、1 行目が `background` に戻った。「abc」の字形画素 136、行番号 2 の帯の画素 49、ステータスの画素数 218 → 221
+- Backspace 2 回で 1 行に戻り「ab」（画素 92）が残った。Vim へトグルするとキャレットの脇が `accent`（ブロック）、通常へ戻すと `current_line`（バー）
+- Enter 200 回のあと 1 行目は見えず、PgUp 30 回で上端に戻り、PgDn 1 回で再び見えなくなった。撮影時点（6 秒後）では 181 行までしか進んでいなかった＝1 打鍵 1 フレームで流れる
+- `WM_CLOSE` で終了 0
+- **測れないもの**: Ctrl の組み合わせ（Ctrl+A / C / X / V / Z / Y）と Shift の選択。`GetKeyState` は生入力キューを通った鍵しか見ないので `PostMessageW` では駆動できない。undo / redo・選択・クリップボードは単体テスト（偽の `ClipboardPort`）で表示値として測った（427 チェック）
+- 手元の計測（`/O2`・使い捨て・QLT-014 の本測定ではない）: 1 MB の挿入 0.62 ms、1 万行 CRLF の読み込み 1.93 ms、1.22 MB の中央への 1000 挿入 47.5 ms

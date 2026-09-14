@@ -39,8 +39,10 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
-    src/core/DisplayText.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
-    src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/TitleBarLayout.cpp)
+    src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/DisplayText.cpp
+    src/core/EditHistory.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
+    src/core/ScrollBounds.cpp src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
+    src/core/TextBuffer.cpp src/core/TitleBarLayout.cpp src/core/Utf8.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/EditorController.cpp src/application/EditorState.cpp)
@@ -52,11 +54,13 @@ nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
 
 nenenib_target(nenenib_adapters adapters_win32 STATIC
-    src/adapters/win32/Win32AppearanceAdapter.cpp)
+    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32ClipboardAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
 nenenib_system_link(nenenib_adapters advapi32)
+# クリップボード（OpenClipboard / SetClipboardData）は user32。Issue #7 で足した唯一の OS 依存。
+nenenib_system_link(nenenib_adapters user32)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp)
@@ -67,7 +71,6 @@ foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi)
 endforeach()
 
 nenenib_target(NeNeNib app EXECUTABLE src/app/Main.cpp src/app/NeNeNib.rc)
-target_compile_definitions(NeNeNib PRIVATE "NENENIB_DISPLAY_TEXT=\"NeNe Nib ${PROJECT_VERSION}\"")
 set_source_files_properties("${NENENIB_MANIFEST}" PROPERTIES GENERATED TRUE)
 target_sources(NeNeNib PRIVATE "${NENENIB_MANIFEST}")
 target_include_directories(NeNeNib PRIVATE "${NENENIB_GENERATED_DIR}")

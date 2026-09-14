@@ -30,6 +30,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D10 | トグルは 1 キー＋ステータスバーのボタン。鍵は試作で触って決める | — |
 | D11 | ダークの配色は Ubuntu をイメージした深い茄子色（施主決定 2026-09-15） | 背景は Ubuntu 端末の #300A24、文字は淡い灰 #EEEEEC。ライトは中立の明るい灰（#F4F5F7 / #1B1F24） |
 | D13 | 有名なカラーテーマ（Solarized 系・Monokai・Dracula・One Dark・Night Owl など）を `:colorscheme <name>` で選べるようにする（施主決定 2026-09-15） | 計画は [docs/plans/2026-09-15-colorschemes.md](docs/plans/2026-09-15-colorschemes.md)。既定は OS 追従（茄子色のダーク・中立のライト）。明示的に選んだテーマは OS の切り替えで変わらない |
+| D15 | 編集中の状態の見た目（キャレットの形・選択・検索の当たり・IME・`:` の行）は [採用案](docs/design/2026-09-15-editing-look.md)。`:` の行は案 A（ステータスバーの左側が置き換わる）（施主決定 2026-09-15） | ADR 0009 |
 | D14 | フォントサイズを変更できるようにする（施主決定 2026-09-15） | Ctrl+`+` / Ctrl+`-` / Ctrl+`0`（既定に戻す）と Ctrl+ホイール、Vim では `:set fontsize=<pt>`（`:set guifont` の書式も受ける）。値は設定に保存。計画は docs/plans/2026-09-15-colorschemes.md 第 6 節 |
 | D12 | 見た目は `/design` で起こした案（[採用案](docs/design/2026-09-15-look.md)・[ADR 0008](docs/adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md)）を採用。アクセントは Ubuntu 橙 #E95420（施主承認 2026-09-15） | 見た目の判断は実装の前に `/design` で画を作って施主が選ぶ（施主指示 2026-09-15） |
 
