@@ -157,7 +157,7 @@ Waivers: none | WVR-NNNN
 2026-09-15: Issue #1（Phase 0〜2）、#3（最初の縦切り・ADR 0007）、#5（見た目・ADR 0008）、#7（編集・ADR 0009）。起動すると枠なし窓（Snap と影は OS のまま）に Mica のタイトルバー、タブ 1 本と窓の操作、
 piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl+Z/Y・クリックでキャレット）、ステータスバーの「通常 | Vim」トグルを Direct2D で描き、OS のライト／ダーク（茄子色 D11・橙 D12）に従う。
 見た目の正本は `docs/design/2026-09-15-look.md` と `docs/design/2026-09-15-editing-look.md`。カラーテーマとフォントサイズの計画は `docs/plans/2026-09-15-colorschemes.md`（D13 / D14）。
-ファイルの開閉と保存・IME・Vim エンジン・複数タブ・Ctrl+P・設定の保存はまだ無い。
+ファイルの開閉と保存・IME・Vim エンジン・複数タブ・Ctrl+P・設定の保存はまだ無い。最新は [日報](docs/reports/2026-09-15.md) / [引き継ぎ](docs/handoffs/2026-09-15.md)。
 
 ---
 
