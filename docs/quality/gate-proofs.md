@@ -123,11 +123,18 @@ CPP-013: core: concurrency symbol outside the worker adapter _Mtx_lock
 
 | 設定 | 値 | 確認日 |
 | --- | --- | --- |
-| PR 必須 | 未設定 | |
-| 必須 check | | |
-| strict up-to-date | 未設定 | |
-| force push / ブランチ削除の禁止 | 未設定 | |
-| squash のみ | リポジトリ設定 `allow_squash_merge` のみ true・`delete_branch_on_merge` true（`gh api repos/hideyukiMORI/nene-nib` で読み戻し） | 2026-09-15 |
+| PR 必須 | ruleset `main`（id 23337476・active・対象 `~DEFAULT_BRANCH`）の `pull_request`。承認 0・スレッド解決必須・`allowed_merge_methods: [squash]`・bypass actor 無し | 2026-09-15 |
+| 必須 check | 同 ruleset の `required_status_checks`: context `check` | 2026-09-15 |
+| strict up-to-date | 同 ruleset `strict_required_status_checks_policy: true` | 2026-09-15 |
+| force push / ブランチ削除の禁止 | 同 ruleset の `non_fast_forward` と `deletion` | 2026-09-15 |
+| squash のみ | リポジトリ設定 `allow_squash_merge` のみ true・`delete_branch_on_merge` true ＋ ruleset の `allowed_merge_methods` | 2026-09-15 |
+
+読み戻し: `gh api repos/hideyukiMORI/nene-nib/rulesets/23337476`（2026-09-15）。
+
+最初の [CI 実行](https://github.com/hideyukiMORI/nene-nib/actions/runs/34873383824) は PR #2 を Ready にした直後にコミット `6a51021` で
+成功した（1 分 18 秒）。ローカルと同じ単一コマンドで規約検査 0 件、検査器 83 テスト、CTest 1 件、`Symbols: 0 libraries checked`、
+実ツールの反例 25 本と復帰を実行した。Ready 後の head 更新を自動で Draft へ戻す処理と、Git 規約の全条件の反例証明は未実装なので、
+GIT と QLT-012 の規則全体は planned を維持する。
 
 🔴 **設定していないものを「必須になっている」と書かない。** 設定したら `gh api` で読み戻して記録する。
 
