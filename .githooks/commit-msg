@@ -1,0 +1,2 @@
+#!/bin/sh
+exec pwsh -NoProfile -File eng/validate-commit-message.ps1 -MessageFile "$1"

@@ -1,0 +1,1238 @@
+[
+  {
+    "output": "cl 19.44.35228.0 / clang version 19.1.5 / SDK 10.0.26100.0\\",
+    "tool": "versions",
+    "exitCode": 0,
+    "id": "toolchain"
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M1-w4.cpp",
+    "id": "M1-w4",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "M1-exhaustive.cpp\r\n<probe>\\M1-exhaustive.cpp(2): error C4062: 列挙型 'Mode' の switch 中の列挙子 'Mode::hex' はハンドルされません\r\n<probe>\\M1-exhaustive.cpp(1): note: 'Mode' の宣言を確認してください",
+    "id": "M1-exhaustive",
+    "flags": [
+      "/we4061",
+      "/we4062"
+    ],
+    "exitCode": 2
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "M1-default.cpp\r\n<probe>\\M1-default.cpp(2): error C4061: 列挙型 'Mode' の switch 中の列挙子 'Mode::hex' は case ラベルによって明示的にハンドルされません。\r\n<probe>\\M1-default.cpp(1): note: 'Mode' の宣言を確認してください",
+    "id": "M1-default",
+    "flags": [
+      "/we4061",
+      "/we4062"
+    ],
+    "exitCode": 2
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M1-valid.cpp",
+    "id": "M1-valid",
+    "flags": [
+      "/we4061",
+      "/we4062"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M1-out-of-range-hole.cpp",
+    "id": "M1-out-of-range-hole",
+    "flags": [
+      "/we4061",
+      "/we4062"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\M1-clang-missing-case.cpp(3,38): error: enumeration value 'hex' not handled in switch [-Werror,-Wswitch]\r\n    3 | int select_mode(Mode mode) { switch (mode) { case Mode::rgb: return 1; } return 0; }\r\n      |                                      ^~~~\r\n1 error generated.",
+    "id": "M1-clang-missing-case",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\M1-clang-covered-default.cpp(3,98): error: default label in switch which covers all enumeration values [-Werror,-Wcovered-switch-default]\r\n    3 | int select_mode(Mode mode) { switch (mode) { case Mode::rgb: return 1; case Mode::hex: return 2; default: return 0; } }\r\n      |                                                                                                  ^\r\n1 error generated.",
+    "id": "M1-clang-covered-default",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M1-clang-valid",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M1-clang-out-of-range-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M2-public.cpp",
+    "id": "M2-public",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M2-public-method.cpp",
+    "id": "M2-public-method",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "M2-private.cpp\r\n<probe>\\M2-private.cpp(2): error C2248: 'Sample::value': private メンバー (クラス 'Sample' で宣言されている) にアクセスできません。\r\n<probe>\\M2-private.cpp(1): note: 'Sample::value' の宣言を確認してください\r\n<probe>\\M2-private.cpp(1): note: 'Sample' の宣言を確認してください",
+    "id": "M2-private",
+    "flags": [],
+    "exitCode": 2
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\M2-private-clang.cpp(3,38): error: 'value' is a private member of 'Sample'\r\n    3 | int mutate() { Sample sample; sample.value = 2; return 0; }\r\n      |                                      ^\r\n<probe>\\M2-private-clang.cpp(1,20): note: implicitly declared private here\r\n    1 | class Sample { int value = 1; };\r\n      |                    ^",
+    "id": "M2-private-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M2-const-cast-hole.cpp",
+    "id": "M2-const-cast-hole",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M2-const-cast-clang-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\M2-cstyle-cast-clang.cpp(3,37): error: use of old-style cast [-Werror,-Wold-style-cast]\r\n    3 | int mutate(const Sample& sample) { ((Sample&)sample).value = 2; return sample.value; }\r\n      |                                     ^        ~~~~~~\r\n<probe>\\M2-cstyle-cast-clang.cpp(3,46): error: cast from 'const Sample' to 'Sample &' drops const qualifier [-Werror,-Wcast-qual]\r\n    3 | int mutate(const Sample& sample) { ((Sample&)sample).value = 2; return sample.value; }\r\n      |                                              ^",
+    "id": "M2-cstyle-cast-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M2-mutable-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M3-null-hole.cpp",
+    "id": "M3-null-hole",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "M3-null-analyze.cpp\r\n<probe>\\M3-null-analyze.cpp(1): error C2220: 次の警告はエラーとして処理されます\r\n<probe>\\M3-null-analyze.cpp(1) : warning C6011: NULL ポインター 'pointer' を逆参照しています。: Lines: 1",
+    "id": "M3-null-analyze",
+    "flags": [
+      "/analyze"
+    ],
+    "exitCode": 2
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M3-null-clang-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "M3-uninitialized.cpp\r\n<probe>\\M3-uninitialized.cpp(1) : error C2220: 次の警告はエラーとして処理されます\r\n<probe>\\M3-uninitialized.cpp(1) : warning C4700: 初期化されていないローカル変数 'value' が使用されます",
+    "id": "M3-uninitialized",
+    "flags": [],
+    "exitCode": 2
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\M3-uninitialized-clang.cpp(2,32): error: variable 'value' is uninitialized when used here [-Werror,-Wuninitialized]\r\n    2 | int read() { int value; return value; }\r\n      |                                ^~~~~\r\n<probe>\\M3-uninitialized-clang.cpp(2,23): note: initialize the variable 'value' to silence this warning\r\n    2 | int read() { int value; return value; }\r\n      |                       ^",
+    "id": "M3-uninitialized-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M3-optional-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M3-value-init-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "M4-private.cpp\r\n<probe>\\M4-private.cpp(2): error C2248: 'Value::Value': private メンバー (クラス 'Value' で宣言されている) にアクセスできません。\r\n<probe>\\M4-private.cpp(1): note: 'Value::Value' の宣言を確認してください\r\n<probe>\\M4-private.cpp(1): note: 'Value' の宣言を確認してください",
+    "id": "M4-private",
+    "flags": [],
+    "exitCode": 2
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\M4-private-clang.cpp(3,23): error: calling a private constructor of class 'Value'\r\n    3 | Value read() { return Value{}; }\r\n      |                       ^\r\n<probe>\\M4-private-clang.cpp(1,15): note: implicitly declared private here\r\n    1 | class Value { Value() = default; };\r\n      |               ^",
+    "id": "M4-private-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M4-copy.cpp",
+    "id": "M4-copy",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M4-forge-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M5-time.cpp",
+    "id": "M5-time",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M5-time-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M6-win32.cpp",
+    "id": "M6-win32",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M6-win32-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M7-suppression-hole.cpp",
+    "id": "M7-suppression-hole",
+    "flags": [
+      "/we4062"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "M7-suppression-clang-hole",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "M8-push-zero.cpp\r\n<probe>\\M8-push-zero.cpp(3): error C4062: 列挙型 'Mode' の switch 中の列挙子 'Mode::hex' はハンドルされません\r\n<probe>\\M8-push-zero.cpp(2): note: 'Mode' の宣言を確認してください",
+    "id": "M8-push-zero",
+    "flags": [
+      "/we4062"
+    ],
+    "exitCode": 2
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "M8-file-suppression-hole.cpp",
+    "id": "M8-file-suppression-hole",
+    "flags": [
+      "/we4061",
+      "/we4062"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-expected-msvc.cpp",
+    "id": "K1-expected-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-expected-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-deducing-this-msvc.cpp",
+    "id": "K1-deducing-this-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-deducing-this-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-if-consteval-msvc.cpp",
+    "id": "K1-if-consteval-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-if-consteval-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-static-operator-call-msvc.cpp",
+    "id": "K1-static-operator-call-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-static-operator-call-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-multidim-subscript-msvc.cpp",
+    "id": "K1-multidim-subscript-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-multidim-subscript-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "K1-auto-cast-msvc-hole.cpp\r\n<probe>\\K1-auto-cast-msvc-hole.cpp(2): error C3537: 'auto' を含む型にキャストすることはできません\r\n<probe>\\K1-auto-cast-msvc-hole.cpp(2): error C3536: 'copy': 初期化前に使用することはできません",
+    "id": "K1-auto-cast-msvc-hole",
+    "flags": [],
+    "exitCode": 2
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-auto-cast-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-print-msvc.cpp",
+    "id": "K1-print-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-print-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-ranges-fold-msvc.cpp",
+    "id": "K1-ranges-fold-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-ranges-fold-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-to-underlying-unreachable-msvc.cpp",
+    "id": "K1-to-underlying-unreachable-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-to-underlying-unreachable-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-size-literal-msvc.cpp",
+    "id": "K1-size-literal-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-size-literal-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "K1-constexpr-unique-ptr-msvc.cpp",
+    "id": "K1-constexpr-unique-ptr-msvc",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "K1-constexpr-unique-ptr-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": false,
+    "output": "K1-format-string-checked-msvc.cpp\r\n<probe>\\K1-format-string-checked-msvc.cpp(2): error C7595: 'std::basic_format_string<char,int>::basic_format_string': 即時関数への呼び出しは定数式ではありません\r\nC:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\include\\__msvc_ranges_tuple_formatter.hpp(141): note: エラーの原因は未定義関数の呼び出しまたは 'constexpr' が宣言されていない呼び出しです\r\nC:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\include\\__msvc_ranges_tuple_formatter.hpp(141): note: 'std::_You_see_this_error_because_arg_id_is_out_of_range' の使用量を参照してください\r\n<probe>\\K1-format-string-checked-msvc.cpp(2): note: 評価の呼び出し履歴 (最初に最も古い呼び出し) は\r\n<probe>\\K1-format-string-checked-msvc.cpp(2): note: 関数 'std::basic_format_string<char,int>::basic_format_string<char[6]>(const _Ty (&))' の評価中",
+    "id": "K1-format-string-checked-msvc",
+    "flags": [],
+    "exitCode": 2
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\K1-format-string-checked-clang.cpp(3,51): error: call to consteval function 'std::basic_format_string<char, int>::basic_format_string<char[6]>' is not a constant expression\r\n    3 | int probe() { return static_cast<int>(std::format(\"{} {}\", 1).size()); }\r\n      |                                                   ^\r\nC:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\include\\__msvc_ranges_tuple_formatter.hpp(141,17): note: non-constexpr function '_You_see_this_error_because_arg_id_is_out_of_range' cannot be used in a constant expression\r\n  141 |                 _You_see_this_error_because_arg_id_is_out_of_range();\r\n      |                 ^",
+    "id": "K1-format-string-checked-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\S1-avx2-without-target-clang.cpp(3,27): error: always_inline function '_mm256_set1_epi32' requires target feature 'avx', but would be inlined into function 'probe' that is compiled without support for 'avx'\r\n    3 | int probe() { __m256i a = _mm256_set1_epi32(1); __m256i b = _mm256_add_epi32(a, a); return _mm256_extract_epi32(b, 0); }\r\n      |                           ^\r\n<probe>\\S1-avx2-without-target-clang.cpp(3,61): error: always_inline function '_mm256_add_epi32' requires target feature 'avx2', but would be inlined into function 'probe' that is compiled without support for 'avx2'\r\n    3 | int probe() { __m256i a = _mm256_set1_epi32(1); __m256i b = _mm256_add_epi32(a, a); return _mm256_extract_epi32(b, 0); }\r\n      |                                                             ^",
+    "id": "S1-avx2-without-target-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "S2-avx2-with-arch-clang",
+    "flags": [
+      "@clangStrict",
+      "/arch:AVX2"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "msvc",
+    "expectedCompiles": true,
+    "output": "S3-avx2-without-arch-msvc-hole.cpp",
+    "id": "S3-avx2-without-arch-msvc-hole",
+    "flags": [],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "S4-avx2-function-target-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\C1-vla-clang.cpp(2,33): error: variable length arrays in C++ are a Clang extension [-Werror,-Wvla-cxx-extension]\r\n    2 | int sum(int count) { int values[count]; values[0] = 1; return values[0]; }\r\n      |                                 ^~~~~\r\n<probe>\\C1-vla-clang.cpp(2,33): note: function parameter 'count' with unknown value cannot be used in a constant expression\r\n<probe>\\C1-vla-clang.cpp(2,13): note: declared here\r\n    2 | int sum(int count) { int values[count]; values[0] = 1; return values[0]; }",
+    "id": "C1-vla-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\C2-narrowing-clang.cpp(2,38): error: implicit conversion loses integer precision: 'long long' to 'int' [-Werror,-Wshorten-64-to-32]\r\n    2 | int narrow(long long value) { return value; }\r\n      |                               ~~~~~~ ^~~~~\r\n1 error generated.",
+    "id": "C2-narrowing-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\C3-sign-compare-clang.cpp(2,44): error: comparison of integers of different signs: 'int' and 'unsigned int' [-Werror,-Wsign-compare]\r\n    2 | bool compare(int a, unsigned b) { return a < b; }\r\n      |                                          ~ ^ ~\r\n1 error generated.",
+    "id": "C3-sign-compare-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\C4-fallthrough-clang.cpp(3,71): error: unannotated fall-through between switch labels [-Werror,-Wimplicit-fallthrough]\r\n    3 | int tally(Mode mode, int x) { switch (mode) { case Mode::rgb: x += 1; case Mode::hex: x += 2; } return x; }\r\n      |                                                                       ^\r\n<probe>\\C4-fallthrough-clang.cpp(3,71): note: insert '[[fallthrough]];' to silence this warning\r\n    3 | int tally(Mode mode, int x) { switch (mode) { case Mode::rgb: x += 1; case Mode::hex: x += 2; } return x; }\r\n      |                                                                       ^",
+    "id": "C4-fallthrough-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\C5-shadow-clang.cpp(2,38): error: declaration shadows a local variable [-Werror,-Wshadow]\r\n    2 | int shadow(int a) { int b = a; { int b = 2; return b; } }\r\n      |                                      ^\r\n<probe>\\C5-shadow-clang.cpp(2,25): note: previous declaration is here\r\n    2 | int shadow(int a) { int b = a; { int b = 2; return b; } }\r\n      |                         ^",
+    "id": "C5-shadow-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\C6-zero-as-null-clang.cpp(2,22): error: zero as null pointer constant [-Werror,-Wzero-as-null-pointer-constant]\r\n    2 | int* none() { return 0; }\r\n      |                      ^\r\n      |                      nullptr\r\n1 error generated.",
+    "id": "C6-zero-as-null-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\C7-nodiscard-clang.cpp(4,14): error: ignoring return value of function declared with 'nodiscard' attribute [-Werror,-Wunused-result]\r\n    4 | int call() { must(); return 0; }\r\n      |              ^~~~\r\n1 error generated.",
+    "id": "C7-nodiscard-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": false,
+    "output": "<probe>\\W1-uuidof-under-pedantic.cpp(4,36): error: extension used [-Werror,-Wlanguage-extension-token]\r\n    4 | const GUID& unknown_iid() { return __uuidof(IUnknown); }\r\n      |                                    ^\r\n1 error generated.",
+    "id": "W1-uuidof-under-pedantic",
+    "flags": [
+      "@clangStrict",
+      "-Wlanguage-extension-token"
+    ],
+    "exitCode": 1
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "W1-uuidof-named-switch",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clangcl",
+    "expectedCompiles": true,
+    "output": "",
+    "id": "C8-strict-clean-clang",
+    "flags": [
+      "@clangStrict"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "_Xtime_get_ticks"
+    ],
+    "expectedSymbol": "_Xtime_get_ticks",
+    "id": "L1-system-clock",
+    "undefined": [
+      "_Xtime_get_ticks",
+      "__security_check_cookie",
+      "__security_cookie"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "_Query_perf_counter"
+    ],
+    "expectedSymbol": "_Query_perf_counter",
+    "id": "L1-steady-clock",
+    "undefined": [
+      "_Query_perf_counter",
+      "_Query_perf_frequency",
+      "__security_check_cookie",
+      "__security_cookie"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "?_Random_device@std@@YAIXZ"
+    ],
+    "expectedSymbol": "Random_device",
+    "id": "L1-random-device",
+    "undefined": [
+      "?_Random_device@std@@YAIXZ",
+      "__security_check_cookie",
+      "__security_cookie"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "getenv"
+    ],
+    "expectedSymbol": "^getenv$",
+    "id": "L1-getenv",
+    "undefined": "getenv",
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "__std_fs_code_page",
+      "__std_fs_convert_narrow_to_wide",
+      "__std_fs_convert_wide_to_narrow_replace_chars",
+      "__std_fs_get_stats"
+    ],
+    "expectedSymbol": "__std_fs_",
+    "id": "L1-filesystem",
+    "undefined": [
+      "??2@YAPEAX_K@Z",
+      "??3@YAXPEAX_K@Z",
+      "??_7type_info@@6B@",
+      "?_Syserror_map@std@@YAPEBDH@Z",
+      "?_Winerror_map@std@@YAHH@Z",
+      "?_Xlength_error@std@@YAXPEBD@Z",
+      "_CxxThrowException",
+      "__CxxFrameHandler3",
+      "__security_check_cookie",
+      "__security_cookie",
+      "__std_exception_copy",
+      "__std_exception_destroy",
+      "__std_fs_code_page",
+      "__std_fs_convert_narrow_to_wide",
+      "__std_fs_convert_wide_to_narrow_replace_chars",
+      "__std_fs_get_stats",
+      "__std_system_error_allocate_message",
+      "__std_system_error_deallocate_message",
+      "__std_terminate",
+      "_invoke_watson",
+      "memcpy",
+      "memmove",
+      "memset",
+      "strlen"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "?_Init@locale@std@@CAPEAV_Locimp@12@_N@Z"
+    ],
+    "expectedSymbol": "locale@std@@",
+    "id": "L1-locale",
+    "undefined": [
+      "??2@YAPEAX_K@Z",
+      "??3@YAXPEAX_K@Z",
+      "??_7type_info@@6B@",
+      "?_Init@locale@std@@CAPEAV_Locimp@12@_N@Z",
+      "?_Xlength_error@std@@YAXPEBD@Z",
+      "_CxxThrowException",
+      "__CxxFrameHandler3",
+      "__security_check_cookie",
+      "__security_cookie",
+      "__std_exception_copy",
+      "__std_exception_destroy",
+      "__std_terminate",
+      "_invoke_watson",
+      "memcpy",
+      "memset",
+      "strlen"
+    ],
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "__imp_GetTickCount"
+    ],
+    "expectedSymbol": "__imp_GetTickCount",
+    "id": "L2-win32-tick",
+    "undefined": "__imp_GetTickCount",
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-cl+llvm-nm",
+    "matched": [
+      "__imp_CreateFileW"
+    ],
+    "expectedSymbol": "__imp_CreateFileW",
+    "id": "L2-win32-create-file",
+    "undefined": "__imp_CreateFileW",
+    "exitCode": 0
+  },
+  {
+    "undefined": [
+      "??2@YAPEAX_K@Z",
+      "??3@YAXPEAX_K@Z",
+      "??_7type_info@@6B@",
+      "?_Xlength_error@std@@YAXPEBD@Z",
+      "_CxxThrowException",
+      "__CxxFrameHandler3",
+      "__security_check_cookie",
+      "__security_cookie",
+      "__std_exception_copy",
+      "__std_exception_destroy",
+      "_invoke_watson",
+      "memcpy",
+      "memmove",
+      "memset"
+    ],
+    "tool": "clang-cl+llvm-nm",
+    "exitCode": 0,
+    "id": "L3-stl-baseline-undefined"
+  },
+  {
+    "undefined": [
+      "_Asan_string_should_annotate",
+      "_Asan_vector_should_annotate",
+      "__asan_handle_no_return",
+      "__asan_init",
+      "__asan_memcpy",
+      "__asan_memmove",
+      "__asan_memset",
+      "__asan_option_detect_stack_use_after_return",
+      "__asan_report_load1",
+      "__asan_report_load4",
+      "__asan_report_load8",
+      "__asan_report_store1",
+      "__asan_report_store4",
+      "__asan_report_store8",
+      "__asan_set_shadow_f5",
+      "__asan_shadow_memory_dynamic_address",
+      "__asan_stack_malloc_0",
+      "__asan_stack_malloc_1",
+      "__asan_stack_malloc_2",
+      "__asan_stack_malloc_4",
+      "__asan_version_mismatch_check_v8",
+      "__chkstk",
+      "__sanitizer_annotate_contiguous_container",
+      "__ubsan_handle_add_overflow",
+      "__ubsan_handle_builtin_unreachable",
+      "__ubsan_handle_divrem_overflow",
+      "__ubsan_handle_load_invalid_value",
+      "__ubsan_handle_mul_overflow",
+      "__ubsan_handle_out_of_bounds",
+      "__ubsan_handle_pointer_overflow",
+      "__ubsan_handle_shift_out_of_bounds",
+      "__ubsan_handle_sub_overflow",
+      "__ubsan_handle_type_mismatch_v1"
+    ],
+    "tool": "clang-cl+llvm-nm",
+    "exitCode": 0,
+    "id": "L3-stl-baseline-sanitizer-undefined"
+  },
+  {
+    "undefined": [
+      "??0task_continuation_context@Concurrency@@AEAA@XZ",
+      "??2@YAPEAX_K@Z",
+      "??3@YAXPEAX_K@Z",
+      "??_7type_info@@6B@",
+      "?GetCurrentThreadId@platform@details@Concurrency@@YAJXZ",
+      "?ReportUnhandledError@_ExceptionHolder@details@Concurrency@@AEAAXXZ",
+      "?_CallInContext@_ContextCallback@details@Concurrency@@QEBAXV?$function@$$A6AXXZ@std@@_N@Z",
+      "?_Capture@_ContextCallback@details@Concurrency@@AEAAXXZ",
+      "?_LogCancelTask@_TaskEventLogger@details@Concurrency@@QEAAXXZ",
+      "?_LogScheduleTask@_TaskEventLogger@details@Concurrency@@QEAAX_N@Z",
+      "?_LogTaskCompleted@_TaskEventLogger@details@Concurrency@@QEAAXXZ",
+      "?_LogTaskExecutionCompleted@_TaskEventLogger@details@Concurrency@@QEAAXXZ",
+      "?_LogWorkItemCompleted@_TaskEventLogger@details@Concurrency@@QEAAXXZ",
+      "?_LogWorkItemStarted@_TaskEventLogger@details@Concurrency@@QEAAXXZ",
+      "?_Release_chore@details@Concurrency@@YAXPEAU_Threadpool_chore@12@@Z",
+      "?_ReportUnobservedException@details@Concurrency@@YAXXZ",
+      "?_Reset@_ContextCallback@details@Concurrency@@AEAAXXZ",
+      "?_Schedule_chore@details@Concurrency@@YAHPEAU_Threadpool_chore@12@@Z",
+      "?_Syserror_map@std@@YAPEBDH@Z",
+      "?_Throw_Cpp_error@std@@YAXH@Z",
+      "?_Xbad_function_call@std@@YAXXZ",
+      "?_Xlength_error@std@@YAXPEBD@Z",
+      "?__ExceptionPtrAssign@@YAXPEAXPEBX@Z",
+      "?__ExceptionPtrCopy@@YAXPEAXPEBX@Z",
+      "?__ExceptionPtrCreate@@YAXPEAX@Z",
+      "?__ExceptionPtrCurrentException@@YAXPEAX@Z",
+      "?__ExceptionPtrDestroy@@YAXPEAX@Z",
+      "?__ExceptionPtrRethrow@@YAXPEBX@Z",
+      "?__ExceptionPtrToBool@@YA_NPEBX@Z",
+      "_Cnd_broadcast",
+      "_Cnd_do_broadcast_at_thread_exit",
+      "_Cnd_register_at_thread_exit",
+      "_Cnd_signal",
+      "_Cnd_unregister_at_thread_exit",
+      "_Cnd_wait",
+      "_CxxThrowException",
+      "_Init_thread_epoch",
+      "_Init_thread_footer",
+      "_Init_thread_header",
+      "_Mtx_lock",
+      "_Mtx_unlock",
+      "_Thrd_id",
+      "_Thrd_join",
+      "__CxxFrameHandler3",
+      "__imp_CloseHandle",
+      "__imp_CreateThread",
+      "__security_check_cookie",
+      "__security_cookie",
+      "__std_atomic_notify_all_direct",
+      "__std_atomic_wait_direct",
+      "__std_exception_copy",
+      "__std_exception_destroy",
+      "__std_init_once_begin_initialize_clr",
+      "__std_init_once_complete_clr",
+      "__std_init_once_link_alternate_names_and_abort",
+      "__std_terminate",
+      "_beginthreadex",
+      "_invoke_watson",
+      "_purecall",
+      "_tls_index",
+      "abort",
+      "atexit",
+      "memcpy",
+      "memmove",
+      "memset",
+      "strlen",
+      "terminate"
+    ],
+    "tool": "clang-cl+llvm-nm",
+    "exitCode": 0,
+    "id": "TH1-thread-symbols"
+  },
+  {
+    "note": "inline atomics leave no symbol; shared mutable state cannot be seen by the linker",
+    "undefined": [
+      "__security_check_cookie",
+      "__security_cookie"
+    ],
+    "tool": "clang-cl+llvm-nm",
+    "exitCode": 0,
+    "id": "TH2-atomic-symbols-hole"
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "",
+    "id": "T1-tidy-aggregate-hole",
+    "checks": "misc-non-private-member-variables-in-classes",
+    "expectedReject": false,
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\M2-public-method.cpp:1:21: error: member variable 'value' has public visibility [misc-non-private-member-variables-in-classes,-warnings-as-errors]\r\n    1 | struct Sample { int value; int read() const { return value; } };\r\n      |                     ^",
+    "id": "T1-tidy-public-with-method",
+    "checks": "misc-non-private-member-variables-in-classes",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\M3-null-clang-hole.cpp:2:45: error: Dereference of null pointer (loaded from variable 'pointer') [clang-analyzer-core.NullDereference,-warnings-as-errors]\r\n    2 | int read() { int* pointer = nullptr; return *pointer; }\r\n      |                                             ^~~~~~~~",
+    "id": "T2-tidy-null-dereference",
+    "checks": "clang-analyzer-core.NullDereference",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "",
+    "id": "T3-tidy-unchecked-optional-local-hole",
+    "checks": "bugprone-unchecked-optional-access",
+    "expectedReject": false,
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\T3-optional-parameter.cpp:3:45: error: unchecked access to optional value [bugprone-unchecked-optional-access,-warnings-as-errors]\r\n    3 | int read(std::optional<int> value) { return value.value(); }\r\n      |                                             ^",
+    "id": "T3-tidy-unchecked-optional-value",
+    "checks": "bugprone-unchecked-optional-access",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "",
+    "id": "T3-tidy-unchecked-optional-star-hole",
+    "checks": "bugprone-unchecked-optional-access",
+    "expectedReject": false,
+    "exitCode": 0
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\M2-const-cast-clang-hole.cpp:3:36: error: do not use const_cast to remove const qualifier [cppcoreguidelines-pro-type-const-cast,-warnings-as-errors]\r\n    3 | int mutate(const Sample& sample) { const_cast<Sample&>(sample).value = 2; return sample.value; }\r\n      |                                    ^",
+    "id": "T4-tidy-const-cast",
+    "checks": "cppcoreguidelines-pro-type-const-cast",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\T5-reinterpret.cpp:2:40: error: do not use reinterpret_cast [cppcoreguidelines-pro-type-reinterpret-cast,-warnings-as-errors]\r\n    2 | int forge(long long address) { return *reinterpret_cast<int*>(address); }\r\n      |                                        ^",
+    "id": "T5-tidy-reinterpret-cast",
+    "checks": "cppcoreguidelines-pro-type-reinterpret-cast",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\T6-global.cpp:1:5: error: variable 'counter' is non-const and globally accessible, consider making it const [cppcoreguidelines-avoid-non-const-global-variables,-warnings-as-errors]\r\n    1 | int counter = 0;\r\n      |     ^",
+    "id": "T6-tidy-mutable-global",
+    "checks": "cppcoreguidelines-avoid-non-const-global-variables",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\T7-complexity.cpp:2:5: error: function 'deep' has cognitive complexity of 48 (threshold 10) [readability-function-cognitive-complexity,-warnings-as-errors]\r\n    2 | int deep(int a, int b) {\r\n      |     ^",
+    "id": "T7-tidy-cognitive-complexity",
+    "checks": "readability-function-cognitive-complexity",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "1 warning generated.\r\n<probe>\\T8-switch.cpp:2:5: error: function 'dispatch' exceeds recommended size/complexity thresholds [readability-function-size,-warnings-as-errors]\r\n    2 | int dispatch(int key) {\r\n      |     ^",
+    "id": "T8-tidy-switch-60-cases",
+    "checks": "readability-function-cognitive-complexity,readability-function-size",
+    "expectedReject": true,
+    "exitCode": 1
+  },
+  {
+    "tool": "clang-tidy",
+    "output": "141 warnings generated.\r\nSuppressed 141 warnings (141 in non-user code).\r\nUse -header-filter=.* to display errors from all non-system headers. Use -system-headers to display errors from system headers as well.",
+    "id": "T8-tidy-table-60-entries",
+    "checks": "readability-function-cognitive-complexity,readability-function-size",
+    "expectedReject": false,
+    "exitCode": 0
+  },
+  {
+    "output": "A1-asan.cpp\r\n=================================================================\r\n==41880==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x11e043fa0240 at pc 0x7ff7dcbe1095 bp 0x00c4358ffce0 sp 0x00c4358ffce8\r\nWRITE of size 4 at 0x11e043fa0240 thread T0",
+    "tool": "cl+asan",
+    "exitCode": 1,
+    "id": "A1-asan-heap-overflow-cl"
+  },
+  {
+    "output": "ライブラリ <probe>\\A1-clang-cl.lib とオブジェクト <probe>\\A1-clang-cl.exp を作成中\r\n==43868==interception_win: unhandled instruction at 0x7ff681881f64: 0f 29 74 24 30 0f 28 f0\r\n=================================================================\r\n==43868==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x12d0c9c20220 at pc 0x7ff6817f106a bp 0x00e3a179f880 sp 0x00e3a179f8c8",
+    "tool": "clang-cl+asan",
+    "exitCode": 1,
+    "id": "A1-asan-heap-overflow-clang-cl"
+  },
+  {
+    "output": "<probe>\\A2-ubsan.cpp:1:52: runtime error: signed integer overflow: 2147483647 + 1 cannot be represented in type 'int'\r\nSUMMARY: UndefinedBehaviorSanitizer: undefined-behavior <probe>\\A2-ubsan.cpp:1:52",
+    "tool": "clang-cl+ubsan",
+    "exitCode": 1,
+    "id": "A2-ubsan-signed-overflow"
+  },
+  {
+    "output": "<probe>\\M1-w4.cpp:1:16: error: code should be clang-formatted [-Wclang-format-violations]\r\nenum class Mode { rgb, hex };",
+    "tool": "clang-format",
+    "exitCode": 1,
+    "id": "F1-clang-format-rejects"
+  },
+  {
+    "output": "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\r\r\nTOTAL                                                       8                 2    75.00%           2                 0   100.00%           2                 0   100.00%           4                 2    50.00%",
+    "tool": "clang-cl+llvm-cov",
+    "exitCode": 0,
+    "id": "V1-llvm-cov-branches"
+  },
+  {
+    "imports": [
+      "KERNEL32.dll"
+    ],
+    "tool": "llvm-readobj",
+    "exitCode": 0,
+    "id": "R1-static-crt-imports"
+  },
+  {
+    "imports": [
+      "d2d1.dll",
+      "DWrite.dll",
+      "dxgi.dll",
+      "d3d11.dll",
+      "dcomp.dll",
+      "dwmapi.dll",
+      "KERNEL32.dll"
+    ],
+    "output": "",
+    "tool": "clang-cl+llvm-readobj",
+    "exitCode": 0,
+    "id": "D1-directx-static-clang-cl"
+  },
+  {
+    "imports": [
+      "d2d1.dll",
+      "DWrite.dll",
+      "dxgi.dll",
+      "d3d11.dll",
+      "dcomp.dll",
+      "dwmapi.dll",
+      "KERNEL32.dll"
+    ],
+    "output": "D1-directx.cpp",
+    "tool": "cl+llvm-readobj",
+    "exitCode": 0,
+    "id": "D1-directx-static-cl"
+  },
+  {
+    "exitCode": 0,
+    "output": "",
+    "id": "MD1-md4c-clang-cl-w4",
+    "sha256": {
+      "src/md4c.c": "CFB0B3D7F64CCAC7BDE45668704389440DF826BDCFC82C9B309200A23AA2DE72",
+      "LICENSE.md": "99C752062BA497C41B5C3A9015278C20AD30B7D0FB8B4E5C8F4057D303F37102",
+      "src/md4c.h": "346C3A1D13A09FEF413D93910DE0299D0BE88384F875517C6B79CF5522D0300F"
+    },
+    "commit": "729e6b8b320caa96328968ab27d7db2235e4fb47",
+    "tag": "release-0.5.2",
+    "tool": "clang-cl",
+    "diagnostics": []
+  },
+  {
+    "exitCode": 1,
+    "output": "<probe>\\md4c\\src\\md4c.c(798,71): error: implicit conversion changes signedness: 'int' to 'unsigned int' [-Werror,-Wsign-conversion]\r\n  798 |                 const unsigned* codepoints = FOLD_MAP_LIST[i].data + (index * n_codepoints);\r\n      |                                                                       ^~~~~ ~\r\n<probe>\\md4c\\src\\md4c.c(1433,44): error: implicit conversion changes signedness: 'int' to 'unsigned long long' [-Werror,-Wsign-conversion]",
+    "id": "MD1-md4c-clang-cl-strict",
+    "sha256": {
+      "src/md4c.c": "CFB0B3D7F64CCAC7BDE45668704389440DF826BDCFC82C9B309200A23AA2DE72",
+      "LICENSE.md": "99C752062BA497C41B5C3A9015278C20AD30B7D0FB8B4E5C8F4057D303F37102",
+      "src/md4c.h": "346C3A1D13A09FEF413D93910DE0299D0BE88384F875517C6B79CF5522D0300F"
+    },
+    "commit": "729e6b8b320caa96328968ab27d7db2235e4fb47",
+    "tag": "release-0.5.2",
+    "tool": "clang-cl",
+    "diagnostics": [
+      "-Werror,-Wcast-qual",
+      "-Werror,-Wsign-conversion",
+      "20 errors generated.",
+      "fatal error: too many errors emitted, stopping now [-ferror-limit=]"
+    ]
+  },
+  {
+    "exitCode": 2,
+    "output": "md4c.c\r\n<probe>\\md4c\\src\\md4c.c(1695): error C2220: 次の警告はエラーとして処理されます\r\n<probe>\\md4c\\src\\md4c.c(1695): warning C4200: 非標準の拡張機能が使用されています: 構造体または共用体中にサイズが 0 の配列があります。\r\n<probe>\\md4c\\src\\md4c.c(3081): warning C4244: '=': 'unsigned int' から 'unsigned char' への変換です。データが失われる可能性があります。",
+    "id": "MD1-md4c-cl-w4",
+    "sha256": {
+      "src/md4c.c": "CFB0B3D7F64CCAC7BDE45668704389440DF826BDCFC82C9B309200A23AA2DE72",
+      "LICENSE.md": "99C752062BA497C41B5C3A9015278C20AD30B7D0FB8B4E5C8F4057D303F37102",
+      "src/md4c.h": "346C3A1D13A09FEF413D93910DE0299D0BE88384F875517C6B79CF5522D0300F"
+    },
+    "commit": "729e6b8b320caa96328968ab27d7db2235e4fb47",
+    "tag": "release-0.5.2",
+    "tool": "cl",
+    "diagnostics": [
+      "C2220",
+      "C4127",
+      "C4200",
+      "C4244"
+    ]
+  },
+  {
+    "tool": "clang-cl",
+    "prefix": "Note: including file: ",
+    "id": "H1-showincludes-prefix-clang-cl",
+    "asciiPrefix": true,
+    "vslang": "1033",
+    "exitCode": 0
+  },
+  {
+    "tool": "cl",
+    "prefix": "メモ: インクルード ファイル:  ",
+    "id": "H1-showincludes-prefix-cl",
+    "asciiPrefix": false,
+    "vslang": "1033",
+    "exitCode": 0
+  },
+  {
+    "tool": "cmake",
+    "buildExit": 0,
+    "output": "-- The CXX compiler identification is Clang 19.1.5 with MSVC-like command-line\r\n-- Detecting CXX compiler ABI info\r\n-- Detecting CXX compiler ABI info - done\r\n-- Check for working CXX compiler: C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/Llvm/x64/bin/clang-cl.exe - skipped\r\n-- Detecting CXX compile features\r\n-- Detecting CXX compile features - done",
+    "id": "CM1-cmake-cxx23-clang-cl",
+    "standardFlag": "-clang:-std=c++23",
+    "exitCode": 0
+  },
+  {
+    "tool": "vim",
+    "version": "VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)",
+    "output": "beta\ngalpha amma\ncursor=2,7\nreg=alpha ",
+    "id": "V2-vim-headless-oracle",
+    "identicalRuns": true,
+    "exitCode": 0
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "typeSuffixes": ["manager", "helper", "util", "utils", "common"],
+  "moduleNames": ["utils", "helpers", "managers", "misc", "common"],
+  "suppressionPragmaPattern": "#\\s*pragma\\s+(warning|clang\\s+diagnostic|GCC\\s+diagnostic)|\\b(?:__pragma|_Pragma)\\s*\\(",
+  "broadSuppressionPattern": "\\bNOLINT(?:BEGIN|END)?\\b",
+  "lineSuppressionToken": "NOLINTNEXTLINE",
+  "lineSuppressionPattern": "NOLINTNEXTLINE\\([A-Za-z0-9,.-]+\\)",
+  "taskMarkerPattern": "\\b(?:TODO|FIXME)\\b",
+  "forbiddenFileWords": ["baseline", "suppressions"],
+  "disabledGatePatterns": ["(?i)/W[0-3](?![0-9])", "(?i)/WX-", "(?i)/wd[0-9]+", "(?<![\\w-])-Wno-error(?:=|\\b)", "(?<![\\w-])-w(?![\\w-])", "(?i)\\bignoreFailures\\s*[:=]\\s*true", "(?i)continue-on-error\\s*:\\s*true", "(?i)--exit-zero\\b", "(?i)--line-filter", "(?i)--exclude-header-filter", "(?i)WarningsAsErrors:\\s*['\"]{2}"],
+  "nondeterministicNames": ["system_clock", "steady_clock", "high_resolution_clock", "random_device", "rand", "rand_s", "srand", "getenv", "getenv_s", "_wgetenv", "_dupenv_s", "time", "timespec_get", "clock", "setlocale", "locale", "_Xtime_get_ticks", "_Query_perf_counter", "GetLocalTime", "GetSystemTime", "GetSystemTimeAsFileTime", "GetSystemTimePreciseAsFileTime", "GetTickCount", "GetTickCount64", "QueryPerformanceCounter", "GetEnvironmentVariableA", "GetEnvironmentVariableW", "BCryptGenRandom", "GetCursorPos"],
+  "platformHeaders": ["windows.h", "Windows.h", "winuser.h", "wingdi.h", "fileapi.h", "processthreadsapi.h", "winsock2.h", "shlobj.h", "d2d1.h", "d2d1_1.h", "d2d1_3.h", "dwrite.h", "dwrite_3.h", "dxgi.h", "dxgi1_6.h", "d3d11.h", "dcomp.h", "dwmapi.h", "imm32.h", "imm.h", "cstdio", "iostream", "fstream", "filesystem", "ctime", "clocale", "locale"],
+  "concurrencyHeaders": ["thread", "jthread", "mutex", "shared_mutex", "condition_variable", "future", "atomic", "semaphore", "latch", "barrier", "stop_token", "process.h", "synchapi.h"],
+  "concurrencyAllowedPath": "src/adapters/win32/",
+  "simdHeaders": ["immintrin.h", "intrin.h", "xmmintrin.h", "emmintrin.h", "pmmintrin.h", "tmmintrin.h", "smmintrin.h", "nmmintrin.h", "wmmintrin.h", "ammintrin.h", "arm_neon.h"],
+  "simdModulePath": "src/core/simd/",
+  "cppExtensions": [".cpp", ".hpp", ".h", ".cc", ".cxx", ".hxx"],
+  "configurationExtensions": [".ps1", ".cmake", ".yml", ".yaml"],
+  "normativeFiles": ["docs/ARCHITECTURE_CONSTITUTION.md", "docs/CODING_RULES.md", "docs/COMMIT_CONVENTIONS.md", "docs/QUALITY_GATES.md"]
+}

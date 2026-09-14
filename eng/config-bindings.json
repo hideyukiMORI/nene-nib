@@ -1,0 +1,11 @@
+{
+  ".clang-format": ["eng/check.ps1", "eng/prove-gates.py"],
+  ".clang-tidy": ["CMakeLists.txt", "eng/prove-gates.py"],
+  "eng/tool-versions.json": ["eng/toolchain.ps1"],
+  "eng/probes/language.json": ["eng/measure-language.ps1"],
+  "eng/architecture.json": ["eng/targets.cmake", "eng/conformance.py", "eng/symbols.py", "eng/coverage.py"],
+  "eng/symbol-allowlist.json": ["eng/symbols.py"],
+  "eng/coverage-policy.json": ["eng/coverage.py"],
+  "eng/conformance-rules.json": ["eng/conformance.py"],
+  "eng/config-bindings.json": ["eng/conformance.py"]
+}
