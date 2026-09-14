@@ -38,7 +38,9 @@ nenenib_target(toolchain_smoke verification EXECUTABLE tests/build/ToolchainSmok
 add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
-nenenib_target(nenenib_core core STATIC src/core/DisplayText.cpp src/core/Palette.cpp)
+nenenib_target(nenenib_core core STATIC
+    src/core/DisplayText.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
+    src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/TitleBarLayout.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/EditorController.cpp src/application/EditorState.cpp)
@@ -60,7 +62,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
-foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp)
+foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi)
     nenenib_system_link(nenenib_window ${library})
 endforeach()
 

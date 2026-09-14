@@ -1,10 +1,11 @@
-"""Interactive Windows verification of the first slice, separate from the unit tests (QLT-013).
+"""Interactive Windows verification of the window slices, separate from the unit tests (QLT-013).
 
 Starts build/NeNeNib.exe with an isolated environment, finds its window by class name, records the
-geometry and DPI, reads the composed pixels back from the screen device context, and closes the
-window with WM_CLOSE. It never moves the real pointer and never generates keyboard input.
-Requires an unlocked interactive Windows session with DWM running; eng/check.ps1 and CI do not
-call it, because a gate must not need a display (QLT-013).
+geometry and DPI, asks the window procedure where the caption and the close button are, reads the
+composed pixels back from the screen device context, drives the mode toggle with posted messages,
+and closes the window with WM_CLOSE. It never moves the real pointer and never generates keyboard
+input. Requires an unlocked interactive Windows session with DWM running; eng/check.ps1 and CI do
+not call it, because a gate must not need a display (QLT-013).
 Python standard library and ctypes only.
 """
 
@@ -19,6 +20,7 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import time
 import winreg
@@ -57,6 +59,7 @@ api(user, "GetDpiForWindow", w.UINT, w.HWND)
 api(user, "ClientToScreen", w.BOOL, w.HWND, c.POINTER(w.POINT))
 api(user, "SetWindowPos", w.BOOL, w.HWND, w.HWND, c.c_int, c.c_int, c.c_int, c.c_int, w.UINT)
 api(user, "PostMessageW", w.BOOL, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
+api(user, "SendMessageW", w.LPARAM, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 api(user, "GetDC", w.HDC, w.HWND)
 api(user, "ReleaseDC", c.c_int, w.HWND, w.HDC)
 api(gdi, "CreateCompatibleDC", w.HDC, w.HDC)
@@ -70,14 +73,33 @@ api(gdi, "GdiFlush", w.BOOL)
 
 WINDOW_CLASS = "NeNeNib.Editor"
 WM_CLOSE = 0x0010
+WM_NCHITTEST = 0x0084
+WM_LBUTTONDOWN = 0x0201
+WM_LBUTTONUP = 0x0202
+HTCAPTION = 2
+HTCLOSE = 20
 SRCCOPY = 0x00CC0020
 HWND_TOPMOST = c.c_void_p(-1)
 SWP_NOMOVE_NOSIZE_SHOW = 0x0003 | 0x0040
 GWL_STYLE = -16
 WS_POPUP = 0x80000000
 WS_VISIBLE = 0x10000000
-# src/core/Palette.cpp の正本と同じ値。ここが食い違ったら、どちらかが間違っている。
+WS_THICKFRAME = 0x00040000
+WS_CAPTION = 0x00C00000
+# Mica（DWMWA_SYSTEMBACKDROP_TYPE）は Windows 11 22H2 以降でだけ掛かる（ADR 0008）。
+MICA_BUILD = 22621
+# src/core/BuiltinTheme.hpp の正本と同じ値。ここが食い違ったら、どちらかが間違っている。
 PALETTE = {"light": (0xF4, 0xF5, 0xF7), "dark": (0x30, 0x0A, 0x24)}
+ACCENT = (0xE9, 0x54, 0x20)
+TOGGLE = {"light": (0xDF, 0xE3, 0xE8), "dark": (0x4A, 0x1E, 0x3D)}
+# src/core/TitleBarLayout.cpp / StatusBarLayout.cpp の DIP。同じ整数丸めで物理画素へ直す。
+TITLE_BAR_DIPS = 40
+CAPTION_BUTTON_DIPS = 46
+STATUS_BAR_DIPS = 28
+STATUS_PADDING_DIPS = 12
+TOGGLE_PADDING_DIPS = 2
+SEGMENT_WIDTH_DIPS = 44
+SEGMENT_HEIGHT_DIPS = 20
 
 
 def expected_appearance() -> str:
@@ -99,7 +121,8 @@ def rectangle(window, getter) -> list[int]:
     return [bounds.left, bounds.top, bounds.right, bounds.bottom]
 
 
-def start(executable: Path, environment: dict) -> tuple[subprocess.Popen, int]:
+def start(executable: Path, environment: dict) -> tuple[subprocess.Popen, int, list[int]]:
+    """Return the process, its window, and the window rectangle as first seen (within 0.2 s)."""
     process = subprocess.Popen([str(executable)], env=environment)
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
@@ -108,7 +131,7 @@ def start(executable: Path, environment: dict) -> tuple[subprocess.Popen, int]:
             owner = w.DWORD()
             user.GetWindowThreadProcessId(window, c.byref(owner))
             if owner.value == process.pid:
-                return process, window
+                return process, window, rectangle(window, user.GetWindowRect)
         if process.poll() is not None:
             raise AssertionError(f"NeNeNib exited before showing a window: {process.returncode}")
         time.sleep(0.05)
@@ -159,6 +182,46 @@ def write_bitmap(path: Path, pixels: bytes, width: int, height: int) -> None:
     path.write_bytes(header + info + body)
 
 
+def to_pixels(dips: int, dpi: int) -> int:
+    """The same integer rounding as core::to_pixels (src/core/DevicePixels.hpp)."""
+    return (dips * dpi + 48) // 96
+
+
+def toggle_points(width: int, height: int, dpi: int) -> dict:
+    """The centres of the two toggle halves, mirroring core::status_bar_layout."""
+    band = to_pixels(STATUS_BAR_DIPS, dpi)
+    padding = to_pixels(TOGGLE_PADDING_DIPS, dpi)
+    segment = to_pixels(SEGMENT_WIDTH_DIPS, dpi)
+    segment_height = to_pixels(SEGMENT_HEIGHT_DIPS, dpi)
+    band_top = max(height - band, 0)
+    box_height = segment_height + padding * 2
+    box_top = band_top + ((height - band_top) - box_height) // 2
+    left = to_pixels(STATUS_PADDING_DIPS, dpi)
+    ordinary_left = left + padding
+    vim_left = ordinary_left + segment + padding
+    middle = box_top + padding + segment_height // 2
+    return {
+        "ordinary": [ordinary_left + segment // 2, middle],
+        "vim": [vim_left + segment // 2, middle],
+        "vimGround": [vim_left + to_pixels(5, dpi), middle],
+        "ordinaryGround": [ordinary_left + to_pixels(5, dpi), middle],
+    }
+
+
+def ask_hit(window, x: int, y: int) -> int:
+    """Ask the window procedure what is at a client point, without moving the real pointer."""
+    point = w.POINT(x, y)
+    assert user.ClientToScreen(window, c.byref(point))
+    return int(user.SendMessageW(window, WM_NCHITTEST, 0, (point.y << 16) | (point.x & 0xFFFF)))
+
+
+def click(window, x: int, y: int) -> None:
+    """Post a left click at a client point; the real pointer is never touched."""
+    packed = (y << 16) | (x & 0xFFFF)
+    assert user.PostMessageW(window, WM_LBUTTONDOWN, 1, packed)
+    assert user.PostMessageW(window, WM_LBUTTONUP, 0, packed)
+
+
 def verify(window, appearance: str, output: Path) -> dict:
     assert user.SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE_NOSIZE_SHOW)
     time.sleep(0.4)
@@ -167,13 +230,43 @@ def verify(window, appearance: str, output: Path) -> dict:
     width, height = client[2] - client[0], client[3] - client[1]
     dpi = user.GetDpiForWindow(window)
     style = user.GetWindowLongPtrW(window, GWL_STYLE)
+    title_bar = to_pixels(TITLE_BAR_DIPS, dpi)
+    button = to_pixels(CAPTION_BUTTON_DIPS, dpi)
+    toggle = toggle_points(width, height, dpi)
     pixels = capture(window, width, height)
-    write_bitmap(output / "first-slice.bmp", pixels, width, height)
+    write_bitmap(output / "look-slice.bmp", pixels, width, height)
     expected = list(PALETTE[appearance])
     centre = pixel(pixels, width, width // 2, height // 2)
-    corner = pixel(pixels, width, 8, 8)
+    title_pixel = pixel(pixels, width, width // 2, title_bar // 2)
+    resting_vim = pixel(pixels, width, toggle["vimGround"][0], toggle["vimGround"][1])
+    resting_ordinary = pixel(pixels, width, toggle["ordinaryGround"][0], toggle["ordinaryGround"][1])
+    mica_expected = sys.getwindowsversion().build >= MICA_BUILD
+    hits = {"close": ask_hit(window, width - button // 2, title_bar // 2),
+            "caption": ask_hit(window, width // 2, title_bar // 2)}
     assert centre == expected, f"centre pixel {centre} is not the {appearance} background {expected}"
-    assert corner == expected, f"pixel (8,8) {corner} is not the {appearance} background {expected}"
+    assert not (style & WS_POPUP), "the window must not be a WS_POPUP any more"
+    assert style & WS_THICKFRAME, "WS_THICKFRAME must stay for Snap and the resize border"
+    assert hits["close"] == HTCLOSE, f"the close button answered {hits['close']}"
+    assert hits["caption"] == HTCAPTION, f"the empty title bar answered {hits['caption']}"
+    assert resting_ordinary == list(ACCENT), f"the 通常 half starts on the accent: {resting_ordinary}"
+    assert resting_vim == list(TOGGLE[appearance]), f"the resting Vim half is {resting_vim}"
+    if mica_expected:
+        assert title_pixel != centre, "the title bar is not showing a backdrop behind the tint"
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    time.sleep(0.5)
+    switched = capture(window, width, height)
+    write_bitmap(output / "look-slice-vim.bmp", switched, width, height)
+    vim_pixel = pixel(switched, width, toggle["vimGround"][0], toggle["vimGround"][1])
+    ordinary_after = pixel(switched, width, toggle["ordinaryGround"][0],
+                           toggle["ordinaryGround"][1])
+    assert vim_pixel == list(ACCENT), f"the Vim half {vim_pixel} did not become the accent"
+    assert ordinary_after == list(TOGGLE[appearance]), f"the 通常 half is still {ordinary_after}"
+    # 意図は「どちらを選んだか」なので、同じ側をもう一度押しても状態は変わらない（ADR 0008 の決定 4）。
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    time.sleep(0.5)
+    repeated = capture(window, width, height)
+    vim_repeat = pixel(repeated, width, toggle["vimGround"][0], toggle["vimGround"][1])
+    assert vim_repeat == vim_pixel, f"selecting Vim twice changed the toggle to {vim_repeat}"
     return {
         "windowClass": WINDOW_CLASS,
         "windowRect": window_bounds,
@@ -181,13 +274,26 @@ def verify(window, appearance: str, output: Path) -> dict:
         "clientSize": [width, height],
         "dpi": dpi,
         "expectedClientSize": [640 * dpi // 96, 360 * dpi // 96],
-        "framelessPopup": bool(style & WS_POPUP) and not bool(style & 0x00C00000),
+        "framelessOverlapped": bool(style & WS_THICKFRAME) and not bool(style & WS_POPUP),
+        "osDrawnCaption": bool(style & WS_CAPTION),
         "visible": bool(style & WS_VISIBLE),
         "appearance": appearance,
         "expectedBackground": expected,
         "centrePixel": centre,
-        "cornerPixel": corner,
-        "capture": "first-slice.bmp",
+        "titleBarPixel": title_pixel,
+        "titleBarDiffersFromBody": title_pixel != centre,
+        "micaExpected": mica_expected,
+        "windowsBuild": sys.getwindowsversion().build,
+        "hitTest": hits,
+        "togglePoints": toggle,
+        "toggleOrdinaryPixelBefore": resting_ordinary,
+        "toggleVimPixelBefore": resting_vim,
+        "toggleVimPixelAfterClick": vim_pixel,
+        "toggleOrdinaryPixelAfterClick": ordinary_after,
+        "toggleVimPixelAfterSecondClick": vim_repeat,
+        "expectedAccent": list(ACCENT),
+        "capture": "look-slice.bmp",
+        "captureAfterToggle": "look-slice-vim.bmp",
     }
 
 
@@ -204,9 +310,12 @@ def main() -> None:
     assert isolated.is_relative_to(output.resolve())
     environment = dict(os.environ, LOCALAPPDATA=str(isolated), APPDATA=str(isolated))
     assert user.SetProcessDpiAwarenessContext(c.c_void_p(-4))
-    process, window = start(executable, environment)
+    process, window, first_rect = start(executable, environment)
     try:
         result = verify(window, expected_appearance(), output)
+        result["firstSeenWindowRect"] = first_rect
+        result["shownAfterPlacement"] = first_rect[:2] != [0, 0]
+        assert result["shownAfterPlacement"], f"the window was shown at {first_rect[:2]}"
         assert user.PostMessageW(window, WM_CLOSE, 0, 0)
         result["closeExitCode"] = process.wait(timeout=5)
         assert result["closeExitCode"] == 0, result["closeExitCode"]
@@ -214,8 +323,8 @@ def main() -> None:
         if process.poll() is None:
             process.terminate()
             process.wait(timeout=5)
-    (output / "first-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
-                                                     encoding="utf-8")
+    (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
+                                                    encoding="utf-8")
     print(json.dumps(result, indent=2))
 
 

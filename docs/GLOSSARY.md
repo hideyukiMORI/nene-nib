@@ -30,6 +30,8 @@
 | 外観ポート | OS の外観を読む唯一の窓口。実装は adapters/win32（レジストリの `AppsUseLightTheme`） | `AppearancePort` / `Win32AppearanceAdapter` |
 | エディタ状態 | 表示文字列と外観の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |
 | エディタフレーム | 表示文字列と配色の表示値。UI はこれを写すだけ | `EditorFrame`（application） |
+| 見た目のトークン | 採用案の寸法と配色。`core::Palette` が持ち、UI が写す | `docs/design/2026-09-15-look.md`（ADR 0008） |
+| タイトルバーの配置 | タブ・「＋」・窓の操作の矩形とヒットテストを座標から決める純関数 | `TitleBarLayout`（ui/win32） |
 | レンダラ | D3D11 → DXGI（flip・waitable・composition）→ DirectComposition → Direct2D の提示経路。`render` だけが描く | `Direct2DRenderer`（ui/win32） |
 | 規約検査（conformance） | NeNe Nib 固有の自作ゲート | `eng/conformance.py`（CNF-NNN） |
 | シンボル検査 | 中核の静的ライブラリの未定義シンボルを許可リストと照合する検査 | `eng/symbols.py`（ARC-003 / ARC-007 / CPP-013） |
