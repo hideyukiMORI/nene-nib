@@ -154,11 +154,12 @@ Waivers: none | WVR-NNNN
 
 現在のタスクは [docs/todo/current.md](docs/todo/current.md)。GitHub Issue が正で、そこは要約。
 
-2026-09-15: Issue #1（Phase 0〜2）、#3（最初の縦切り・ADR 0007）、#5（見た目・ADR 0008）、#7（編集・ADR 0009）、#11（ファイル・ADR 0010）。起動すると枠なし窓（Snap と影は OS のまま）に Mica のタイトルバー、タブ 1 本と窓の操作、
+2026-09-15: Issue #1（Phase 0〜2）、#3（最初の縦切り・ADR 0007）、#5（見た目・ADR 0008）、#7（編集・ADR 0009）、#11（ファイル・ADR 0010）。2026-09-16: #13（UTF-16 の変換を core に 1 本化）、#16（速さ・ADR 0011）。起動すると枠なし窓（Snap と影は OS のまま）に Mica のタイトルバー、タブ 1 本と窓の操作、
 piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl+Z/Y・クリックでキャレット）、ステータスバーの「通常 | Vim」トグルを Direct2D で描き、OS のライト／ダーク（茄子色 D11・橙 D12）に従う。
 Ctrl+O / Ctrl+S / Ctrl+Shift+S と起動引数でファイルを開いて保存し、UTF-8 / UTF-8 BOM / Shift_JIS と CRLF / LF を読んだ形のまま保ち、未保存の印「● 」と「保存しますか」を出す。
+速さは `eng/measure-speed.py` が Release の exe で 3 本のベンチを測り、`eng/perf-reference.json` の機械ごとの基準値と比べてゲートで落とす（QLT-014・施主の実機で active。実機: 起動 191 ms・1 打鍵 0.9 ms・16 MiB 250 ms）。描画は `WM_PAINT` で 1 フレームに 1 回。
 見た目の正本は `docs/design/2026-09-15-look.md` と `docs/design/2026-09-15-editing-look.md`。カラーテーマとフォントサイズの計画は `docs/plans/2026-09-15-colorschemes.md`（D13 / D14）。
-IME・Vim エンジン・複数タブ・Ctrl+P・設定の保存・速さのゲート（QLT-014）はまだ無い。最新は [日報](docs/reports/2026-09-15.md) / [引き継ぎ](docs/handoffs/2026-09-15.md)。
+IME・Vim エンジン・複数タブ・Ctrl+P・設定の保存はまだ無い。起動 190 ms の内訳は Issue #19。最新は [日報](docs/reports/2026-09-16.md) / [引き継ぎ](docs/handoffs/2026-09-16.md)。
 
 ---
 

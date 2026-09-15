@@ -57,4 +57,15 @@
 
 ## CI
 
-CI の機械には指紋の一致する基準値が無いので記録だけで終了 0（`Speed: no reference for this machine; recorded only`）。窓が作れなければ `window unavailable` を記録して終了 0。CI の基準値は同じ CI 機の値が数回たまってから別の Issue で決める（ADR 0006 の決定 1・ADR 0011 の決定 4）。
+CI の機械には指紋の一致する基準値が無いので記録だけで終了 0（`Speed: no reference for this machine; recorded only`）。窓が作れなければ `window unavailable` を記録して終了 0。
+
+PR #18（run 35002057290）で GitHub の Windows ランナーでも窓が作れてベンチが動いた。指紋 `e7a87d5b6ac1e14b`（AMD EPYC 7763 / Microsoft Hyper-V Video＝WARP / 96 DPI）:
+
+| ベンチ | 中央値 | 5 回の幅 |
+| --- | --- | --- |
+| startup-first-frame | 20.4 ms | 20.0〜258.9（1 回目だけ遅い） |
+| key-to-frame-single | 1.344 ms | 1.304〜1.995 |
+| key-to-frame-burst-200 | 2.700 ms | 2.564〜7.982 |
+| open-large-file-16mib | 70.1 ms | 69.9〜75.6 |
+
+**実機（RTX 3090）との差は起動と 16 MiB のどちらも約 170 ms。** ファイルの読み込みではなく、実機の最初のフレームに GPU / DWM 側の固定費が乗っていると読める。内訳は Issue #19 で節目を足して測る。CI の基準値は同じ CI 機の値が数回たまってから別の Issue で決める（ADR 0006 の決定 1・ADR 0011 の決定 4）。
