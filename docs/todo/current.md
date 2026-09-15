@@ -5,8 +5,8 @@
 
 ## 現在の Issue
 
-次の焦点 Issue はまだ無い（推しは速さの基準値・QLT-014）。[Issue #13](https://github.com/hideyukiMORI/nene-nib/issues/13)（UTF-8 ↔ UTF-16 の refactor）は起票済み・未着手。
-Issue #1 / #3 / #5 / #7 / #9 / #11 は main へ統合済み（[日報](../reports/2026-09-15.md)）。main は `36ea911`。
+[Issue #16](https://github.com/hideyukiMORI/nene-nib/issues/16) — 速さの縦切り（`TimingPort` の節目・ベンチ 3 本・機械ごとの基準値・`WM_PAINT` で 1 フレームにまとめる描画）。ADR 0011。ブランチ `feat/16-speed-baseline`。
+Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 は main へ統合済み（[日報](../reports/2026-09-15.md)）。main は `810bb68`。
 
 ## 段階
 
@@ -15,7 +15,7 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 は main へ統合済み（[日報](../report
 | Phase 0 言語の実測 | ✅ 2026-09-15（114 記録・`docs/quality/phase0-results.json`） |
 | Phase 1 文書とゲートの足場 | ✅ 2026-09-15（Issue #1・PR #2） |
 | Phase 2 negative proof | ✅ 2026-09-15（26 反例・`docs/quality/gate-proofs.md`） |
-| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → **速さの基準値（QLT-014）** → IME か Vim |
+| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → **#16 速さ（ADR 0011）** → IME か Vim |
 | Phase 4 公開 | 🔲 |
 
 ## 動くもの（main `36ea911`）
@@ -29,5 +29,5 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 は main へ統合済み（[日報](../report
 
 ## 次の 1 手
 
-速さの基準値（QLT-014）を最初に測る縦切りの焦点 Issue を立て、ADR 0011 を書いて実装リナに渡す。続いて IME（FR-012）か Vim エンジンの最初の縦切り（ADR 0005）。Issue #13 は空き時間で。
+Issue #16 をフルゲート・CI で通して squash merge する。続いて IME（FR-012）か Vim エンジンの最初の縦切り（ADR 0005）。
 カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1（core だけ）がいつでも着手できる。

@@ -57,7 +57,7 @@ add_test(NAME nib_unit COMMAND nib_tests)
 nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/AbsolutePath.cpp src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
-    src/adapters/win32/Win32FileAdapter.cpp)
+    src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。

@@ -40,6 +40,7 @@ Phase 0 の言語の実測（114 記録）は [phase0-results.json](phase0-resul
 | CPP-013 | 中核相当で `std::thread` / `std::mutex` / `CreateThread` を使う | eng/prove-gates.py（`eng/symbols.py --object`） | `CPP-013: core: concurrency symbol outside the worker adapter _beginthreadex` / `_Mtx_lock` / `__imp_CreateThread` で非 0（P19）。実ライブラリ 2 本は 0 件（Issue #3） |
 | QLT-009 | 失敗系の単体テストを省いて実行（`--coverage-negative`） | eng/coverage.py / 同一 exe の別プロファイル | 39.06% で `QLT-009: branch coverage 39.06% < 90%`。全テストへ復帰すると 61/64 分岐＝95.31% で成功（P25・Issue #3） |
 | CNF-007 | 固定 manifest を置く・manifest の版をリテラルで書く・どこからも読み込まれない設定ファイル | tests/conformance の configuration_checks / version_metadata_checks 正例・反例 | 固定 `NeNeNib.manifest` と版リテラルを CNF-007、正例（`@PROJECT_VERSION_*@` から導出）は指摘 0（P11・P26・Issue #3） |
+| QLT-014 | 基準値の複製を 1 本だけ厳しくして `eng/measure-speed.py --check --reference <複製> --values <測った値>` | eng/prove-gates.py（`prove_speed_reference`。exe も窓も要らない経路） | `QLT-014: startup-first-frame: 100.000 ms exceeds 12.500 ms` で非 0、戻した複製は 0（P27・Issue #16・2026-09-16）。実機の `--check` は `Speed: 4 benches checked, 0 regression(s)` |
 
 ### 1-b. 反例の一覧（planned の部分証明を含む）
 
@@ -231,3 +232,23 @@ Shift_JIS LF 2 行（「日本語」「二行目」）→ 描画・ステータ�
 - 存在しない経路: 理由の箱が出て（`reported: true`）、閉じると `無題 - NeNe Nib`、確認なしで終了 0
 - 単体テスト（偽の `FilePort` / `CodePagePort`）: 判別 16 件・改行 8 件・`FilePath` 10 件・題名 9 件・開く失敗 8 件・保存の失敗と保存状態の遷移。adapter テスト `nib_adapters`（実ファイル・ビルドディレクトリ配下の固定名フォルダ）: UTF-8 / BOM / Shift_JIS の往復、置換、`not_found`、フォルダ → `unreadable`、上限 4 バイトで `too_large`、1 MiB の書き戻し、CP932 の `unencodable`（😀）
 - **測れないもの**: Ctrl+O・Ctrl+Shift+S・`IFileOpenDialog` / `IFileSaveDialog`（既定の拡張子 `.txt` を含む）・「保存しますか」の はい／キャンセル はモーダルで自動検査に載っていない。32 MiB 超の分割書き込みの 2 周目以降。`ReplaceFileW` の別ボリューム・同期フォルダでの失敗
+
+### 5-f. 速さの縦切り（Issue #16・ADR 0011・2026-09-16）
+
+環境: 5-b と同じ機械（Intel Core i9-10850K / NVIDIA GeForce RTX 3090 / 120 DPI / Windows 11 build 26200・ダーク）。指紋 `bc8a356f37c68491`。**Release 構成の `build-release/NeNeNib.exe`** を測る（Debug は ASan / UBSan の数字になる）。
+
+手順（`python eng/measure-speed.py --record`。`eng/window_driver.py` で起動し、節目は exe が `--measure` で書く JSON から読む）:
+① 引数なしで起動 → 最初の `frame_presented` / ② 窓を前景にして暖機の 1 打鍵を捨て、1 打鍵と、窓のスレッドを止めてから 200 打鍵をまとめて post → 節目の差 / ③ 16,800,000 バイト・200,000 行の UTF-8 CRLF を起動引数で開く → 最初の `frame_presented`。各 5 回の中央値。
+
+結果（`docs/quality/speed-reference.md` に詳細。`eng/perf-reference.json` に採用）:
+
+| ベンチ | 中央値 | 5 回の幅 | 2 回目の中央値 |
+| --- | --- | --- | --- |
+| startup-first-frame | 191.5 ms | 185.4〜197.6 | 198.7 |
+| key-to-frame-single | 0.906 ms | 0.888〜1.056 | 0.999 |
+| key-to-frame-burst-200 | 2.695 ms | 2.324〜2.754 | 2.450 |
+| open-large-file-16mib | 249.8 ms | 234.9〜250.5 | 263.0 |
+
+- `WM_PAINT` への集約の効果（Debug で前後比較）: 200 打鍵の合計 6631 ms → 29.9 ms、1 打鍵 3.53 → 3.55 ms（変わらない）
+- `--check` は実機で約 33 秒。フルゲート全体は Release の差分ビルドを含めて 2 分 19 秒
+- **測れないもの・揺れ**: 画面が光るまで（`Present` が返るまでを測る）。200 打鍵は post する側が負けて「まとめて」届かない回があり、節目の到着幅が 50 ms を越えた試行は最大 3 回測り直す。それでも残った回は数百 ms として記録され、中央値が守る。CI では窓が作れるかをこの PR で初めて見る（指紋が無いので記録だけ）

@@ -20,19 +20,23 @@ Vim エンジンと IME の縦切りに入る前に、いまの速さを測っ�
 1. **節目は `core::Milestone` の閉じた enum**（`input_received` / `frame_presented`。最初の `frame_presented` が「最初の描画」）。application が `TimingPort`（`void mark(core::Milestone) noexcept` ただ 1 つ）を宣言し、
    窓は節目を打つだけで時刻を知らない（ARC-007 / ARC-011）。`input_received` は `WM_CHAR` / `WM_KEYDOWN` の受信、`frame_presented` は `Present` が返った直後
 2. **実装は `Win32TimingAdapter`（adapters/win32）だけ**が `QueryPerformanceCounter` と `GetProcessTimes`（プロセス生成時刻）を読む。合成ルートが `--measure <out.json>` を受け取ったときだけ記録し、
-   終了時に JSON（プロセス生成 → 最初の `frame_presented` の ms、節目の列と µs）を書く。無指定なら記録しない実装（同じ型の「記録しない」状態。ポートの実装は 1 つ）
+   終了時に JSON（プロセス生成 → 最初の `frame_presented` の ms、節目の列と µs）を書く。無指定なら記録しない実装（同じ型の「記録しない」状態。ポートの実装は 1 つ。`bind(path)` を呼ぶまで何も積まない。
+   `mark` を本物の `noexcept` にするため `bind` で 4096 件ぶん確保し、以後は割り当てない。溢れた節目は捨てる）
 3. **ベンチ 3 本**（ADR 0006 の決定 1 の名前を保つ）:
    ① `startup-first-frame`: プロセス生成時刻 → 最初の `frame_presented`
    ② `key-to-frame`: 1 打鍵の `input_received` → 次の `frame_presented`（中央値）と、200 打鍵をまとめて post したときの最初の `input_received` → 最後の `frame_presented`（合計）
    ③ `open-large-file`: 16 MiB・20 万行の UTF-8 CRLF を起動引数で開いて最初の `frame_presented` まで（**1 GB はメモリマップの縦切りで置き換える**。名前はそのままで、大きさは基準値に記録する）
-   各 5 回の中央値を値とし、5 回のばらつき（最小・最大）も記録する
+   各 5 回の中央値を値とし、5 回のばらつき（最小・最大）も記録する。基準値の鍵は `startup-first-frame` / `key-to-frame-single` / `key-to-frame-burst-200` / `open-large-file-16mib` の 4 つ（③は 200,000 行 × 84 バイト＝16.02 MiB）。
+   **測るのは Release 構成の exe**（`build-release/NeNeNib.exe`）。Debug 構成は ASan / UBSan の計装（ADR 0003）で数字がサニタイザのものになる。`verify-window.py` は今までどおり Debug の exe で動かす
 4. **基準値は `eng/perf-reference.json` に機械の指紋ごと**（CPU 名・GPU アダプタの説明・DPI の組）。項目ごとに中央値と許容退行（% と絶対値の下限 ms。小さな値の揺れを % だけで見ない）。
    `--adopt` が現在の機械の値を書き、`--check` が比べる。**指紋の一致する基準値が無い機械では値を記録して終了 0**（CI を含む。CI の基準値は同じ CI 機での値が数回たまってから別の Issue で決める）
-5. **ゲート**: `eng/check.ps1` の CTest の後に `python eng/measure-speed.py --check`。施主の実機では基準値との比較で落ちる。**基準値を緩める（中央値を上げる・許容退行を広げる）のは ADR**（QLT-014）。
-   初期の許容退行は 25%・絶対値の下限 2 ms とし、施主の実機の 5 回のばらつきを見て設計リナが確定する（この ADR の「結果」に記録）
+5. **ゲート**: `eng/check.ps1` の CTest の後に Release 構成の `NeNeNib` target だけを build し（tidy はそのまま掛かる。tidy を外す option は作らない）、`python eng/measure-speed.py --check`。施主の実機では基準値との比較で落ちる。**基準値を緩める（中央値を上げる・許容退行を広げる）のは ADR**（QLT-014）。
+   許容退行は 25%・絶対値の下限 2 ms（施主の実機の 2 回 × 5 回のばらつきを見て確定。中央値どうしの差は最大 5%、5 回の幅は ±7% に収まり、1 ms 未満の項目は下限 2 ms が守る）
 6. **描画は `WM_PAINT` で 1 回**: 意図を適用したら `InvalidateRect(nullptr, FALSE)` だけ行い、`WM_PAINT` で `controller_.frame()` を描いて `Present`。Windows は入力メッセージが残っている間 `WM_PAINT` を出さないので、
    まとめて来た入力は 1 フレームで描ける。1 打鍵のときは入力の直後に `WM_PAINT` が来るので遅延は変わらない（ベンチ②で確かめる）。`WM_SIZE` / `WM_DPICHANGED` / 外観の変更も同じ経路
-7. **計測の窓の駆動は `eng/verify-window.py` と同じ道具**（起動・`PostMessageW`・窓の検出）を共有モジュールに出して使う。第 2 の駆動器を書かない（ARC-001 / ARC-012）
+   （`WM_DPICHANGED` の後に再描画していなかった穴もここで塞がる）。`WM_PAINT` では `BeginPaint` / `EndPaint` ではなく `ValidateRect` を使う（device lost で `present` → `abandon` → `DestroyWindow` が `BeginPaint` と `EndPaint` の間で走るのを避ける）
+7. **計測の窓の駆動は `eng/verify-window.py` と同じ道具**（起動・`PostMessageW`・窓の検出）を共有モジュール `eng/window_driver.py` に出して使う。第 2 の駆動器を書かない（ARC-001 / ARC-012）。
+   反例（QLT-014）は `--check --reference <path> --values <path>` の経路で「基準値の複製を 1 本だけ厳しくすると終了 1」を示し、証明用ツリーで exe も窓も要らない
 8. **測るのは `Present` が返るまで**で、実際のスキャンアウト（光るまで）ではない。waitable swap chain（最大遅延 1）なので、画面に出るのは最大 1 vsync 後。ETW / PresentMon は使わない
 
 ## 強制
@@ -40,15 +44,19 @@ Vim エンジンと IME の縦切りに入る前に、いまの速さを測っ�
 - QLT-014: **施主の実機（指紋の一致する機械）で active**。`check.ps1` の `measure-speed.py --check` が基準値との比較で落ちる。反例は「基準値の複製を 1 本だけ厳しくして `--check` が終了 1」。**CI では planned**（指紋が無いので記録だけ。同じ CI 機での相対退行の判定は基準値が貯まってから）
 - ARC-007 / CPP-013: `src/core` / `src/application` から `QueryPerformanceCounter` / `GetProcessTimes` / `_Xtime_get_ticks` が出ないことを `eng/symbols.py` が見る — **active**（既存）
 - CPP-002: `Milestone` の `switch` に `default` を書かない — **active**（既存の clang-tidy）
-- QLT-013: 実機の値は `docs/quality/speed-baseline.md` に環境つきで記録する — **active**（記録の場所として）
+- QLT-013: 実機の値は `docs/quality/speed-reference.md` に環境つきで記録する — **active**（記録の場所として）
 
 ## 結果
 
 - 得られるもの: いまの速さの数字。退行が施主の実機で機械的に見える。まとめて来た入力が 1 フレームで描ける。Vim・IME・シンタックスハイライトの縦切りが「遅くなったか」を測れる
-- 失うもの: CI での退行判定はまだ無い（記録だけ）。ベンチはローカルのゲートを十数秒延ばす。③は 16 MiB であって 1 GB ではない
+- 失うもの: CI での退行判定はまだ無い（記録だけ）。ベンチと Release の build はローカルのゲートを約 1〜2 分延ばす（`--check` だけで約 65 秒: 4 ベンチ × 5 回の起動）。③は 16 MiB であって 1 GB ではない
 - 正直に記録しておくこと: 計測は `Present` が返るまでで光るまでではない。5 回の中央値は同じ機械でも負荷で揺れるので、許容退行はばらつきを見て決める。
   CI の Windows ランナーで窓と WARP の描画が動くかはこの PR の CI で初めて分かる。動かなければ `measure-speed.py` は「窓を作れない」を記録して終了 0 にし、その事実をここに追記する。
-  施主の実機の最初の値: （実測後に設計リナが追記する）
+  施主の実機の最初の値（Release・2026-09-16・`docs/quality/speed-reference.md`）: 起動 → 最初の描画 191.5 ms、1 打鍵 0.906 ms、200 打鍵 2.695 ms、16 MiB を開く 249.8 ms。
+  `WM_PAINT` への集約で 200 打鍵は Debug 計測で 6631 ms → 29.9 ms（1 打鍵は 3.53 → 3.55 ms で変わらない）。
+  Debug（ASan / UBSan）の exe で測ると 16 MiB が 4.2 秒になる。最初の実装は Debug を測っていて、設計レビューで Release に直した。
+  Release で測ると計測器の 3 つの癖が出た: 隠れた窓は合成器が提示を間引く（前景にして測る）、最初の 1 枚は交換鎖の暖機で遅い（暖機の 1 打鍵を捨てる）、
+  Python の `PostMessageW` より editor がキューを空にするのが速く「まとめて post」が成立しない（窓のスレッドを止めてから post し、節目の到着幅が 50 ms を越えた試行は測り直す）。製品コードは計測のために変えていない
 
 ## 却下した選択肢
 

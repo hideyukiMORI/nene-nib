@@ -250,6 +250,35 @@ def prove_real_libraries(root: Path, configure: list[str], evidence: list) -> No
     print("ARC-007: the real nenenib_core.lib is checked and rejected; the restored library passed")
 
 
+# QLT-014 (ADR 0011): 基準値の複製を 1 本だけ厳しくすると eng/measure-speed.py --check が落ちる。
+# 証明用ツリーには exe が無いので、既に測った値と基準値だけで判定する経路で見る（窓は開かない）。
+def prove_speed_reference(root: Path, evidence: list) -> None:
+    reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
+    names = list(reference["benches"])
+    identity = {"fingerprint": "proof-machine", "cpu": "proof", "gpu": "proof", "dpi": 96}
+    record = {"recordedAt": "proof", "repetitions": 5, "machine": identity,
+              "values": {name: {"medianMs": 100.0, "minimumMs": 100.0, "maximumMs": 100.0}
+                         for name in names}}
+    values_file = root / "speed-values.json"
+    values_file.write_text(json.dumps(record), encoding="utf-8")
+    reference["machines"] = {"proof-machine": dict(identity, recordedAt="proof",
+                                                   values={name: {"medianMs": 100.0}
+                                                           for name in names})}
+    reference_file = root / "speed-reference.json"
+    command = ["python", str(ROOT / "eng/measure-speed.py"), "--check",
+               "--reference", str(reference_file), "--values", str(values_file)]
+    reference["machines"]["proof-machine"]["values"][names[0]] = {"medianMs": 10.0}
+    reference_file.write_text(json.dumps(reference), encoding="utf-8")
+    diagnostic = f"QLT-014: {names[0]}"
+    result = run(command, root, False, diagnostic)
+    reference["machines"]["proof-machine"]["values"][names[0]] = {"medianMs": 100.0}
+    reference_file.write_text(json.dumps(reference), encoding="utf-8")
+    restoration = run(command, root, True, "0 regression(s)")
+    evidence.append({"rule": "QLT-014", "diagnostic": diagnostic + " (reference tightened by one bench)",
+                     "negative": result, "restorationExit": restoration["exitCode"]})
+    print("QLT-014: a reference tightened on one bench is rejected; the untouched copy passed")
+
+
 def main() -> None:
     output_root = (ROOT / "out/proofs").resolve()
     output_root.mkdir(parents=True, exist_ok=True)
@@ -270,6 +299,7 @@ def main() -> None:
         prove_architecture(root, configure, build, evidence)
         prove_symbols(root, evidence)
         prove_real_libraries(root, configure, evidence)
+        prove_speed_reference(root, evidence)
     (output_root / "results.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
                                               encoding="utf-8")
     print(f"Gate proofs passed: {len(evidence)} real-tool proofs")

@@ -1,0 +1,44 @@
+{
+  "comment": "QLT-014 / ADR 0011: 速さのゲートの正本。eng/measure-speed.py が --adopt で書き、--check で比べる。機械ごとに持つのは、実機と CI で数倍違うから（決定 4）。中央値を上げる・許容退行を広げるのは ADR の判断であって、落ちたときの修理ではない（決定 5）。値はすべてミリ秒で、Release 構成の build-release/NeNeNib.exe を測ったもの（Debug の exe は ASan / UBSan が掛かっていて製品の速さではない）。",
+  "benches": {
+    "startup-first-frame": "プロセス生成時刻から最初の frame_presented まで。引数なしで起動する",
+    "key-to-frame-single": "1 つの WM_CHAR の input_received から次の frame_presented まで",
+    "key-to-frame-burst-200": "200 の WM_CHAR をまとめて post したときの、最初の input_received から最後の打鍵を描き終えた frame_presented まで",
+    "open-large-file-16mib": "16,800,000 バイト・200,000 行の UTF-8 CRLF を起動引数で開いて最初の frame_presented まで（1 GB はメモリマップの縦切りで置き換える・決定 3）"
+  },
+  "tolerance": {
+    "percent": 25,
+    "floorMs": 2
+  },
+  "machines": {
+    "bc8a356f37c68491": {
+      "cpu": "Intel(R) Core(TM) i9-10850K CPU @ 3.60GHz",
+      "gpu": "NVIDIA GeForce RTX 3090",
+      "dpi": 120,
+      "recordedAt": "2026-09-15T17-18-51Z",
+      "repetitions": 5,
+      "values": {
+        "startup-first-frame": {
+          "medianMs": 191.4883,
+          "minimumMs": 185.4319,
+          "maximumMs": 197.6237
+        },
+        "key-to-frame-single": {
+          "medianMs": 0.906,
+          "minimumMs": 0.888,
+          "maximumMs": 1.056
+        },
+        "key-to-frame-burst-200": {
+          "medianMs": 2.695,
+          "minimumMs": 2.324,
+          "maximumMs": 2.754
+        },
+        "open-large-file-16mib": {
+          "medianMs": 249.7833,
+          "minimumMs": 234.8633,
+          "maximumMs": 250.5002
+        }
+      }
+    }
+  }
+}
