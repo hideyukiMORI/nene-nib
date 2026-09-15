@@ -413,7 +413,7 @@ void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
          frame.palette.accent);
     const auto close_width = core::to_pixels(tab_close_dips, dpi_);
     const auto right = tab.right - core::to_pixels(tab_padding_right_dips, dpi_);
-    write(frame.tab_title.text(), tab_format_.Get(),
+    write(frame.document.title.text(), tab_format_.Get(),
           core::LayoutRect{tab.left + core::to_pixels(tab_padding_left_dips, dpi_), tab.top,
                            right - close_width, tab.bottom},
           frame.palette.text);

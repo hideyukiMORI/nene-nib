@@ -4,6 +4,7 @@
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
+#include "FilePath.hpp"
 #include "StatusBarHit.hpp"
 #include "TitleBarBackdrop.hpp"
 #include "TitleBarHit.hpp"
@@ -14,6 +15,7 @@
 #include <cstddef>
 #include <expected>
 #include <memory>
+#include <string>
 
 namespace nenenib::ui::win32
 {
@@ -58,11 +60,22 @@ class EditorWindow final
     void press_key(WPARAM word);
     void press_plain_key(WPARAM word);
     void press_control_key(WPARAM word);
+    void open_document();
+    void save_document();
+    void save_document_as();
+    void close_window();
+    // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
+    [[nodiscard]] bool confirm_discard();
+    void update_title(const application::EditorFrame &frame);
+    void announce(const application::EditorFrame &frame);
+    void offer_utf8(const core::FilePath &path);
     void turn_wheel(WPARAM word);
     [[nodiscard]] std::size_t body_lines() const;
 
     HINSTANCE instance_;
     application::EditorController &controller_;
+    // 題名は変わったときだけ OS へ渡す。毎フレーム SetWindowTextW を呼ばない（決定 13）。
+    std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
     wchar_t pending_high_surrogate_ = 0;
     std::unique_ptr<Direct2DRenderer> renderer_;

@@ -6,8 +6,9 @@
     "ui_win32": {"path": "src/ui/win32", "dependencies": ["application", "core"]},
     "app": {"path": "src/app", "dependencies": ["core", "application", "adapters_win32", "ui_win32"]},
     "verification": {"path": "tests/build", "dependencies": []},
-    "unit_tests": {"path": "tests/unit", "dependencies": ["core", "application"]}
+    "unit_tests": {"path": "tests/unit", "dependencies": ["core", "application"]},
+    "adapter_tests": {"path": "tests/adapters", "dependencies": ["core", "application", "adapters_win32"]}
   },
   "runtimeDependencies": [],
-  "platformLibraries": {"adapters_win32": ["kernel32", "shell32", "advapi32", "ole32", "user32"], "ui_win32": ["user32", "d2d1", "dwrite", "dxgi", "d3d11", "dcomp", "dwmapi", "imm32"], "app": ["user32"]}
+  "platformLibraries": {"adapters_win32": ["kernel32", "shell32", "advapi32", "ole32", "user32"], "ui_win32": ["user32", "d2d1", "dwrite", "dxgi", "d3d11", "dcomp", "dwmapi", "imm32", "ole32"], "app": ["user32", "ole32", "shell32"]}
 }

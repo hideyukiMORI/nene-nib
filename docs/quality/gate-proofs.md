@@ -213,3 +213,21 @@ Enter 200 回 → 1 行目が見えなくなる、PgUp 30 回 → 1 行目が上
 - `WM_CLOSE` で終了 0
 - **測れないもの**: Ctrl の組み合わせ（Ctrl+A / C / X / V / Z / Y）と Shift の選択。`GetKeyState` は生入力キューを通った鍵しか見ないので `PostMessageW` では駆動できない。undo / redo・選択・クリップボードは単体テスト（偽の `ClipboardPort`）で表示値として測った（427 チェック）
 - 手元の計測（`/O2`・使い捨て・QLT-014 の本測定ではない）: 1 MB の挿入 0.62 ms、1 万行 CRLF の読み込み 1.93 ms、1.22 MB の中央への 1000 挿入 47.5 ms
+
+### 5-e. ファイルの縦切り（Issue #11・ADR 0010・2026-09-15）
+
+環境: 5-b と同じ（Windows 11 build 26200・120 DPI・実 GPU・ダーク）。client 800×450 物理画素。ステータスバー右の文字コードの項目は 72 DIP。
+
+手順（`python eng/verify-window.py` の `documents` 部。一時ファイルを作り、**起動引数**で開く。`WM_CHAR` は `PostMessageW`、Ctrl+S だけは `AttachThreadInput` で前面を取ってから `SendInput`。実ポインタ・実キーボードは操作しない）:
+UTF-8 CRLF 3 行（「一行目」「二行目」「三行目」）→ 3 行の描画・題名・ステータス / 1 文字打つ → 題名に「● 」 / Ctrl+S → ファイルの大きさと題名 / `WM_CLOSE` /
+Shift_JIS LF 2 行（「日本語」「二行目」）→ 描画・ステータス / 1 文字打つ → 「● 」 / `WM_CLOSE` → 「保存しますか」に いいえ（`WM_COMMAND(IDNO)`）/
+存在しない経路 → `MessageBoxW`（`#32770`）が出て、`WM_CLOSE` で閉じると「無題 - NeNe Nib」で続き、未保存の確認は出ない。
+
+結果（`out/window-verification/file-slice-*.bmp`）:
+
+- UTF-8 CRLF: 題名 `utf8-crlf.txt - NeNe Nib`、3 行の字形画素 165 / 174 / 184（4 行目 0）、行番号の帯 38 / 49 / 46、ステータスの `UTF-8` 171・`CRLF` 150。1 文字打つと `● utf8-crlf.txt - NeNe Nib`
+- **Ctrl+S は `SendInput` で駆動できた**: ファイルが 31 → 32 バイトに変わり、題名から「● 」が消え、保存済みなので `WM_CLOSE` で確認は出なかった（終了 0）
+- Shift_JIS LF: 題名 `sjis-lf.txt - NeNe Nib`、2 行の字形画素 255 / 174（3 行目 0）、`Shift_JIS` 260・`LF` 57（UTF-8 側と別の画）。1 文字打つと「● 」、`WM_CLOSE` の確認に いいえ で終了 0
+- 存在しない経路: 理由の箱が出て（`reported: true`）、閉じると `無題 - NeNe Nib`、確認なしで終了 0
+- 単体テスト（偽の `FilePort` / `CodePagePort`）: 判別 16 件・改行 8 件・`FilePath` 10 件・題名 9 件・開く失敗 8 件・保存の失敗と保存状態の遷移。adapter テスト `nib_adapters`（実ファイル・ビルドディレクトリ配下の固定名フォルダ）: UTF-8 / BOM / Shift_JIS の往復、置換、`not_found`、フォルダ → `unreadable`、上限 4 バイトで `too_large`、1 MiB の書き戻し、CP932 の `unencodable`（😀）
+- **測れないもの**: Ctrl+O・Ctrl+Shift+S・`IFileOpenDialog` / `IFileSaveDialog`（既定の拡張子 `.txt` を含む）・「保存しますか」の はい／キャンセル はモーダルで自動検査に載っていない。32 MiB 超の分割書き込みの 2 周目以降。`ReplaceFileW` の別ボリューム・同期フォルダでの失敗

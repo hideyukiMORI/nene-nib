@@ -58,6 +58,11 @@ std::expected<Edit, HistoryFailure> EditHistory::redo() const
     return edits_.at(position_);
 }
 
+EditHistory EditHistory::sealed() const
+{
+    return EditHistory(edits_, position_, EditBoundary::separate);
+}
+
 EditHistory EditHistory::undone() const
 {
     // 履歴を動かしたら単位は閉じる。戻したあとの入力が、戻す前の入力に混ざらないようにする。

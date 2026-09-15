@@ -14,10 +14,14 @@
 #include "ClipboardFailure.hpp"
 #include "ClipboardOperation.hpp"
 #include "ClipboardPort.hpp"
+#include "CodePageFailure.hpp"
+#include "CodePagePort.hpp"
 #include "Column.hpp"
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayText.hpp"
+#include "Document.hpp"
+#include "DocumentView.hpp"
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditHistory.hpp"
@@ -25,6 +29,10 @@
 #include "EditorController.hpp"
 #include "EditorIntent.hpp"
 #include "EditorState.hpp"
+#include "EncodingFailure.hpp"
+#include "FileFailure.hpp"
+#include "FilePath.hpp"
+#include "FilePort.hpp"
 #include "HistoryDirection.hpp"
 #include "HistoryFailure.hpp"
 #include "LayoutRect.hpp"
@@ -33,11 +41,14 @@
 #include "ModeLabel.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "OpenDocument.hpp"
 #include "Palette.hpp"
 #include "PieceSource.hpp"
 #include "PlaceCaret.hpp"
 #include "RgbColor.hpp"
 #include "RgbaColor.hpp"
+#include "SaveDocument.hpp"
+#include "SaveState.hpp"
 #include "ScrollBounds.hpp"
 #include "ScrollState.hpp"
 #include "Selection.hpp"
@@ -47,7 +58,9 @@
 #include "StatusBarHit.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusItems.hpp"
+#include "TabTitle.hpp"
 #include "TextBuffer.hpp"
+#include "TextEncoding.hpp"
 #include "TextFailure.hpp"
 #include "TextPosition.hpp"
 #include "TitleBarHit.hpp"
@@ -58,6 +71,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -72,15 +86,23 @@ using nenenib::application::ClipboardAction;
 using nenenib::application::ClipboardFailure;
 using nenenib::application::ClipboardOperation;
 using nenenib::application::ClipboardPort;
+using nenenib::application::CodePageFailure;
+using nenenib::application::CodePagePort;
 using nenenib::application::DeleteText;
+using nenenib::application::Document;
 using nenenib::application::EditorController;
 using nenenib::application::EditorState;
+using nenenib::application::FileFailure;
+using nenenib::application::FilePort;
 using nenenib::application::HistoryAction;
 using nenenib::application::InsertText;
 using nenenib::application::MoveCaret;
 using nenenib::application::NewLine;
+using nenenib::application::OpenDocument;
 using nenenib::application::PlaceCaret;
 using nenenib::application::RefreshAppearance;
+using nenenib::application::save_state_of;
+using nenenib::application::SaveDocument;
 using nenenib::application::ScrollLines;
 using nenenib::application::ScrollState;
 using nenenib::application::SelectAll;
@@ -90,6 +112,7 @@ using nenenib::core::Appearance;
 using nenenib::core::body_layout;
 using nenenib::core::body_line_rect;
 using nenenib::core::BuiltinTheme;
+using nenenib::core::byte_order_mark;
 using nenenib::core::CaretMotion;
 using nenenib::core::CaretShape;
 using nenenib::core::code_point_count;
@@ -97,11 +120,16 @@ using nenenib::core::collapsed_at;
 using nenenib::core::Column;
 using nenenib::core::contains;
 using nenenib::core::DeleteDirection;
+using nenenib::core::detect_encoding;
+using nenenib::core::detect_line_ending;
 using nenenib::core::DisplayText;
 using nenenib::core::Edit;
 using nenenib::core::EditBoundary;
 using nenenib::core::EditHistory;
 using nenenib::core::EditMode;
+using nenenib::core::encoding_label;
+using nenenib::core::EncodingFailure;
+using nenenib::core::FilePath;
 using nenenib::core::first_visible_for_caret;
 using nenenib::core::first_visible_within;
 using nenenib::core::has_control_character;
@@ -127,6 +155,7 @@ using nenenib::core::palette_of;
 using nenenib::core::previous_code_point;
 using nenenib::core::RgbaColor;
 using nenenib::core::RgbColor;
+using nenenib::core::SaveState;
 using nenenib::core::Selection;
 using nenenib::core::selection_range;
 using nenenib::core::SelectionAnchoring;
@@ -136,7 +165,9 @@ using nenenib::core::status_bar_layout;
 using nenenib::core::status_items_for;
 using nenenib::core::StatusBarHit;
 using nenenib::core::tab_rect;
+using nenenib::core::tab_title_for;
 using nenenib::core::TextBuffer;
+using nenenib::core::TextEncoding;
 using nenenib::core::TextFailure;
 using nenenib::core::TextPosition;
 using nenenib::core::title_bar_hit;
@@ -146,8 +177,11 @@ using nenenib::core::to_pixels;
 using nenenib::core::toggled;
 using nenenib::core::validate_utf8;
 using nenenib::core::width_of;
+using nenenib::core::without_byte_order_mark;
 using Reading = std::expected<Appearance, AppearanceReadFailure>;
 using Content = std::expected<std::string, ClipboardFailure>;
+using Bytes = std::expected<std::string, FileFailure>;
+using Converted = std::expected<std::string, CodePageFailure>;
 
 // 可変グローバルは置けない（ARC-005 / clang-tidy）。計数は関数局所の静的値で持つ。
 std::size_t &failure_count()
@@ -237,6 +271,107 @@ class ScriptedClipboard final : public ClipboardPort
   private:
     Content content_{std::unexpected(ClipboardFailure::empty)};
     bool writable_ = true;
+};
+
+// 偽のファイル。OS に触れずに「読めた」「読めない」「書けない」を作り分ける（ARC-007）。
+class ScriptedFiles final : public FilePort
+{
+  public:
+    void hold(Bytes content)
+    {
+        content_ = std::move(content);
+    }
+
+    void refuse_writes(FileFailure failure)
+    {
+        write_failure_ = failure;
+    }
+
+    [[nodiscard]] const std::string &written() const noexcept
+    {
+        return written_;
+    }
+
+    [[nodiscard]] const std::string &written_path() const noexcept
+    {
+        return written_path_;
+    }
+
+    [[nodiscard]] const std::string &read_path() const noexcept
+    {
+        return read_path_;
+    }
+
+    // application が渡してきた上限。値の正本が 1 つであることをテストが見る（ARC-001）。
+    [[nodiscard]] std::size_t read_limit() const noexcept
+    {
+        return read_limit_;
+    }
+
+    [[nodiscard]] Bytes read(const FilePath &path, std::size_t maximum_bytes) override
+    {
+        read_path_ = std::string(path.text());
+        read_limit_ = maximum_bytes;
+        return content_;
+    }
+
+    [[nodiscard]] std::expected<void, FileFailure> write(const FilePath &path,
+                                                         std::string_view bytes) override
+    {
+        if (write_failure_.has_value())
+        {
+            return std::unexpected(write_failure_.value());
+        }
+        written_path_ = std::string(path.text());
+        written_ = std::string(bytes);
+        return {};
+    }
+
+  private:
+    Bytes content_{std::unexpected(FileFailure::not_found)};
+    std::optional<FileFailure> write_failure_;
+    std::string written_;
+    std::string written_path_;
+    std::string read_path_;
+    std::size_t read_limit_ = 0;
+};
+
+// 偽の CP932。実際の表は持たず、台本の答えを返すだけ（ADR 0010 の決定 2 の境界を測る）。
+class ScriptedCodePages final : public CodePagePort
+{
+  public:
+    void decode_to(Converted decoded)
+    {
+        decoded_ = std::move(decoded);
+    }
+
+    void encode_to(Converted encoded)
+    {
+        encoded_ = std::move(encoded);
+    }
+
+    [[nodiscard]] const std::string &encoded_from() const noexcept
+    {
+        return encoded_from_;
+    }
+
+    [[nodiscard]] Converted to_utf8(std::string_view cp932) override
+    {
+        decoded_from_ = std::string(cp932);
+        return decoded_;
+    }
+
+    [[nodiscard]] Converted from_utf8(std::string_view utf8) override
+    {
+        encoded_from_ = std::string(utf8);
+        return encoded_;
+    }
+
+  private:
+    Converted decoded_{std::string{}};
+    Converted encoded_{std::string{}};
+    std::string decoded_from_;
+    std::string encoded_from_;
 };
 
 DisplayText fixed_text(std::string_view text)
@@ -624,6 +759,11 @@ void verify_history_coalescing()
     expect(removed.size() == 2, "a deletion never joins the unit before it");
     const auto after_removal = removed.pushed(Edit{Offset{3}, "", "y"}, EditBoundary::coalesce);
     expect(after_removal.size() == 3, "an insert after a deletion starts its own unit");
+    const auto sealed = history.sealed();
+    expect(sealed.size() == 1 && sealed.position() == 1, "sealing keeps the edits and the place");
+    const auto after_seal = sealed.pushed(Edit{Offset{3}, "", "d"}, EditBoundary::coalesce);
+    expect(after_seal.size() == 2 && after_seal.position() == 2,
+           "a sealed unit does not take the next keystroke");
     const auto first =
         EditHistory::empty().pushed(Edit{Offset{0}, "", "a"}, EditBoundary::coalesce);
     expect(first.size() == 1, "the first edit has nothing to join");
@@ -807,14 +947,20 @@ void verify_edit_mode()
 
 void verify_status_items()
 {
-    const auto items = status_items_for(TextPosition{LineNumber{1}, Column{1}}, LineEnding::crlf);
+    const auto items = status_items_for(TextPosition{LineNumber{1}, Column{1}}, TextEncoding::utf8,
+                                        LineEnding::crlf);
     expect(items.at(0).text() == "行 1, 桁 1", "the caret position is the first item");
-    expect(items.at(1).text() == "UTF-8", "the encoding is fixed for now");
+    expect(items.at(1).text() == "UTF-8", "the encoding follows the document");
     expect(items.at(2).text() == "CRLF", "the line ending follows the buffer");
-    const auto moved = status_items_for(TextPosition{LineNumber{9}, Column{24}}, LineEnding::lf);
+    const auto moved = status_items_for(TextPosition{LineNumber{9}, Column{24}},
+                                        TextEncoding::utf8_bom, LineEnding::lf);
     expect(moved.at(0).text() == "行 9, 桁 24", "the caret position is formatted from the numbers");
     expect(moved.at(0).code_point_count() == 9, "the formatted position counts code points");
+    expect(moved.at(1).text() == "UTF-8 BOM", "a file with a BOM says so");
     expect(moved.at(2).text() == "LF", "an LF buffer says LF");
+    const auto japanese = status_items_for(TextPosition{LineNumber{1}, Column{1}},
+                                           TextEncoding::shift_jis, LineEnding::crlf);
+    expect(japanese.at(1).text() == "Shift_JIS", "an old Japanese file says Shift_JIS");
 }
 
 void verify_device_pixels()
@@ -911,8 +1057,8 @@ void verify_status_bar_rectangles()
     expect(layout.toggle_ordinary == LayoutRect{14, 336, 58, 356}, "the ordinary half");
     expect(layout.toggle_vim == LayoutRect{60, 336, 104, 356}, "the Vim half");
     expect(layout.mode == LayoutRect{122, 332, 194, 360}, "the mode label follows the toggle");
-    expect(layout.items.at(0) == LayoutRect{420, 332, 516, 360}, "the caret position item");
-    expect(layout.items.at(1) == LayoutRect{532, 332, 576, 360}, "the encoding item");
+    expect(layout.items.at(0) == LayoutRect{392, 332, 488, 360}, "the caret position item");
+    expect(layout.items.at(1) == LayoutRect{504, 332, 576, 360}, "the encoding item is 72 DIP");
     expect(layout.items.at(2) == LayoutRect{592, 332, 628, 360}, "the line ending item");
     expect(layout.corner_radius == 6 && layout.segment_radius == 4, "the toggle radii");
 }
@@ -945,7 +1091,7 @@ void verify_status_bar_hits()
 class Editing final
 {
   public:
-    Editing() : controller_(appearance_, clipboard_) {}
+    Editing() : controller_(appearance_, clipboard_, files_, code_pages_) {}
 
     [[nodiscard]] EditorController &controller() noexcept
     {
@@ -962,9 +1108,21 @@ class Editing final
         return appearance_;
     }
 
+    [[nodiscard]] ScriptedFiles &files() noexcept
+    {
+        return files_;
+    }
+
+    [[nodiscard]] ScriptedCodePages &code_pages() noexcept
+    {
+        return code_pages_;
+    }
+
   private:
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
     ScriptedClipboard clipboard_;
+    ScriptedFiles files_;
+    ScriptedCodePages code_pages_;
     EditorController controller_;
 };
 
@@ -988,11 +1146,13 @@ void verify_controller_initial_appearance()
 {
     ScriptedAppearance light{Reading{Appearance::light}};
     ScriptedClipboard board;
-    const EditorController from_light(light, board);
+    ScriptedFiles files;
+    ScriptedCodePages code_pages;
+    const EditorController from_light(light, board, files, code_pages);
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
     ScriptedAppearance dark{Reading{Appearance::dark}};
-    const EditorController from_dark(dark, board);
+    const EditorController from_dark(dark, board, files, code_pages);
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
 }
@@ -1001,11 +1161,13 @@ void verify_controller_read_failures()
 {
     const Palette dark = palette_for(Appearance::dark);
     ScriptedClipboard board;
+    ScriptedFiles files;
+    ScriptedCodePages code_pages;
     for (const auto failure :
          {AppearanceReadFailure::unavailable, AppearanceReadFailure::unreadable})
     {
         ScriptedAppearance port{Reading{std::unexpect, failure}};
-        const EditorController controller(port, board);
+        const EditorController controller(port, board, files, code_pages);
         expect(controller.frame().palette.background == dark.background,
                "an unreadable setting falls back to dark");
     }
@@ -1015,7 +1177,9 @@ void verify_controller_refresh()
 {
     ScriptedAppearance port{Reading{Appearance::light}};
     ScriptedClipboard board;
-    EditorController controller(port, board);
+    ScriptedFiles files;
+    ScriptedCodePages code_pages;
+    EditorController controller(port, board, files, code_pages);
     port.script(Reading{Appearance::dark});
     const auto frame = controller.apply(RefreshAppearance{});
     expect(frame.palette.background == RgbColor{0x30, 0x0A, 0x24},
@@ -1265,7 +1429,7 @@ void verify_controller_frame()
     expect(frame.lines.at(0).text.empty(), "the only line is empty");
     expect(frame.lines.at(0).selection.presence == SelectionPresence::absent,
            "nothing is selected");
-    expect(frame.tab_title.text() == "無題", "the only tab is titled 無題");
+    expect(frame.document.title.text() == "無題", "the only tab is titled 無題");
     expect(frame.first_visible == LineNumber{1} && frame.total_lines == 1, "the window is at rest");
     expect(frame.status_items.at(2).text() == "CRLF", "a new buffer writes CRLF");
     expect(frame.caret == CaretView{TextPosition{LineNumber{1}, Column{1}}, CaretShape::bar},
@@ -1289,6 +1453,342 @@ void verify_controller_mode_selection()
     expect(ordinary.mode == EditMode::ordinary, "select ordinary returns to ordinary");
     expect(ordinary.palette.background == RgbColor{0x30, 0x0A, 0x24},
            "the palette survives the mode change");
+}
+
+// ---------------------------------------------------------------- 文字コードと改行
+
+void verify_encoding_labels()
+{
+    expect(encoding_label(TextEncoding::utf8) == "UTF-8", "the plain label");
+    expect(encoding_label(TextEncoding::utf8_bom) == "UTF-8 BOM", "the BOM label");
+    expect(encoding_label(TextEncoding::shift_jis) == "Shift_JIS", "the Japanese label");
+    expect(byte_order_mark() == "\xEF\xBB\xBF", "the BOM is three bytes");
+    expect(without_byte_order_mark("abc") == "abc", "text without a BOM is unchanged");
+    expect(without_byte_order_mark(std::string(byte_order_mark()) + "abc") == "abc",
+           "the BOM is dropped from the front");
+    expect(without_byte_order_mark("\xEF\xBB").size() == 2, "half a BOM is not a BOM");
+}
+
+void verify_encoding_detection()
+{
+    expect(detect_encoding("").value() == TextEncoding::utf8, "an empty file is UTF-8");
+    expect(detect_encoding("plain ASCII\r\n").value() == TextEncoding::utf8, "ASCII is UTF-8");
+    expect(detect_encoding("日本語").value() == TextEncoding::utf8, "valid UTF-8 always wins");
+    expect(detect_encoding(std::string(byte_order_mark()) + "日本語").value() ==
+               TextEncoding::utf8_bom,
+           "a BOM in front of valid UTF-8 is UTF-8 BOM");
+    expect(detect_encoding(std::string(byte_order_mark())).value() == TextEncoding::utf8_bom,
+           "a BOM on its own is UTF-8 BOM");
+    // BOM の後ろが壊れていれば BOM とは見なさない。残りが CP932 でもなければ開かない（決定 3）。
+    expect(detect_encoding(std::string(byte_order_mark()) + "\xFF").error() ==
+               EncodingFailure::undecodable,
+           "a BOM followed by bytes that are neither is rejected");
+    expect(!detect_encoding(std::string(byte_order_mark()) + "\x93\xFA").has_value(),
+           "a BOM is a label: the body after it never falls through to CP932");
+    expect(detect_encoding("\x93\xFA\x96\x7B").value() == TextEncoding::shift_jis,
+           "日本 in CP932 is Shift_JIS");
+    expect(detect_encoding("\x81\x40").value() == TextEncoding::shift_jis,
+           "a CP932 pair with a low trail byte");
+    expect(detect_encoding("\xB1\xB2\xB3").value() == TextEncoding::shift_jis,
+           "half width katakana are single CP932 bytes");
+    expect(detect_encoding("abc\x93\xFA").value() == TextEncoding::shift_jis,
+           "ASCII mixed with CP932 pairs");
+    expect(!detect_encoding("\x93").has_value(), "a lead byte at the end of the file");
+    expect(!detect_encoding("\x81\x20").has_value(), "a trail byte below the range");
+    expect(!detect_encoding("\x81\x7F").has_value(), "a trail byte in the gap");
+    expect(!detect_encoding("\xA0").has_value(), "0xA0 is neither a single byte nor a lead byte");
+    expect(!detect_encoding("\xFF\xFE\x00\x41").has_value(), "UTF-16 is neither");
+}
+
+void verify_line_ending_detection()
+{
+    expect(detect_line_ending("一行目\r\n二行目") == LineEnding::crlf, "CRLF is seen");
+    expect(detect_line_ending("一行目\n二行目") == LineEnding::lf, "LF is seen");
+    expect(detect_line_ending("一行だけ") == LineEnding::crlf, "no newline means CRLF");
+    expect(detect_line_ending("") == LineEnding::crlf, "an empty file means CRLF");
+    expect(detect_line_ending("a\r\nb\nc") == LineEnding::crlf, "the first newline decides");
+    expect(detect_line_ending("a\nb\r\nc") == LineEnding::lf, "the first newline decides, again");
+    expect(detect_line_ending("\na") == LineEnding::lf, "a newline at the very start is LF");
+    expect(detect_line_ending("a\rb") == LineEnding::crlf, "a lone CR is not a newline");
+}
+
+// ---------------------------------------------------------------- 経路と題名
+
+void verify_file_path()
+{
+    const auto windows = FilePath::parse("C:\\work\\note.txt");
+    expect(windows.has_value() && windows.value().text() == "C:\\work\\note.txt",
+           "a Windows path is kept as it came");
+    expect(windows.value().file_name() == "note.txt", "the name is what follows the last slash");
+    expect(FilePath::parse("/home/hide/note.md").value().file_name() == "note.md",
+           "a forward slash separates too");
+    expect(FilePath::parse("note.txt").value().file_name() == "note.txt",
+           "a bare name is its own file name");
+    expect(FilePath::parse("C:\\work\\").value().file_name().empty(),
+           "a path that ends in a separator has no name");
+    expect(FilePath::parse("").error() == TextFailure::empty, "the empty path is rejected");
+    expect(FilePath::parse("a\nb").error() == TextFailure::control_character,
+           "a control character is rejected");
+    expect(FilePath::parse("\xFF").error() == TextFailure::invalid_utf8,
+           "a path that is not UTF-8 is rejected");
+    expect(windows.value() == FilePath::parse("C:\\work\\note.txt").value(),
+           "paths compare on the text");
+    expect(!(windows.value() == FilePath::parse("C:\\work\\other.txt").value()),
+           "different paths do not compare equal");
+}
+
+void verify_tab_titles()
+{
+    expect(tab_title_for(std::nullopt, SaveState::saved).text() == "無題",
+           "no path at all is 無題");
+    expect(tab_title_for(std::nullopt, SaveState::modified).text() == "● 無題",
+           "an unsaved buffer carries the mark");
+    const auto path = FilePath::parse("C:\\work\\note.txt").value();
+    expect(tab_title_for(path, SaveState::saved).text() == "note.txt", "a saved file is its name");
+    expect(tab_title_for(path, SaveState::modified).text() == "● note.txt",
+           "an unsaved file carries the mark before the name");
+    expect(tab_title_for(FilePath::parse("C:\\").value(), SaveState::saved).text() == "C:\\",
+           "a path without a name falls back to the path");
+    const auto clipped =
+        tab_title_for(FilePath::parse(std::string(300, 'a')).value(), SaveState::saved);
+    expect(clipped.text().size() <= DisplayText::maximum_bytes, "a long name is clipped");
+    expect(clipped.text().ends_with("…"), "the clipped name says it was clipped");
+    std::string wide_name;
+    for (std::size_t index = 0; index < 100; ++index)
+    {
+        wide_name += "あ";
+    }
+    const auto wide_clipped =
+        tab_title_for(FilePath::parse(wide_name).value(), SaveState::modified);
+    expect(wide_clipped.text().size() <= DisplayText::maximum_bytes, "wide names are clipped too");
+    expect(validate_utf8(wide_clipped.text()).has_value(),
+           "the clip lands on a code point boundary");
+    expect(wide_clipped.text().starts_with("● "), "the mark survives the clip");
+}
+
+void verify_save_state_of_document()
+{
+    const Document untouched{std::nullopt, TextEncoding::utf8, std::size_t{0}};
+    expect(save_state_of(untouched, 0) == SaveState::saved, "the start of a new buffer is saved");
+    expect(save_state_of(untouched, 1) == SaveState::modified, "one edit away is modified");
+    const Document adrift{std::nullopt, TextEncoding::utf8, std::nullopt};
+    expect(save_state_of(adrift, 0) == SaveState::modified,
+           "a buffer with no save point is always modified");
+}
+
+// ---------------------------------------------------------------- ファイルの縦切り
+
+FilePath sample_path()
+{
+    auto parsed = FilePath::parse("C:\\work\\note.txt");
+    expect(parsed.has_value(), "the sample path parses");
+    return std::move(parsed).value();
+}
+
+void verify_document_open()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(std::string("一行目\r\n二行目"));
+    const auto frame = controller.apply(OpenDocument{sample_path()});
+    expect(editing.files().read_path() == "C:\\work\\note.txt", "the path went through the port");
+    expect(editing.files().read_limit() == 64U * 1024U * 1024U,
+           "the 64 MiB limit is handed to the port, not measured after the read");
+    expect(frame.document.title.text() == "note.txt", "the tab takes the file name");
+    expect(frame.document.encoding == TextEncoding::utf8, "plain UTF-8 is detected");
+    expect(frame.document.save_state == SaveState::saved, "a freshly opened file is saved");
+    expect(!frame.document.last_failure.has_value(), "opening left no failure behind");
+    expect(frame.total_lines == 2, "both lines came in");
+    expect(frame.lines.at(0).text == "一行目", "the first line is the first line of the file");
+    expect(frame.caret.position == TextPosition{LineNumber{1}, Column{1}},
+           "the caret starts at the top");
+    expect(frame.first_visible == LineNumber{1}, "so does the window");
+    expect(frame.status_items.at(1).text() == "UTF-8", "the status bar shows the encoding");
+    expect(frame.status_items.at(2).text() == "CRLF", "and the line ending that was read");
+}
+
+void verify_document_open_encodings()
+{
+    Editing with_bom;
+    with_bom.files().hold(std::string(byte_order_mark()) + "本文\nつづき");
+    const auto bom = with_bom.controller().apply(OpenDocument{sample_path()});
+    expect(bom.document.encoding == TextEncoding::utf8_bom, "the BOM is remembered");
+    expect(bom.lines.at(0).text == "本文", "the BOM is not part of the body");
+    expect(bom.status_items.at(2).text() == "LF", "an LF file keeps LF");
+    Editing japanese;
+    japanese.files().hold(std::string("\x93\xFA\x96\x7B"));
+    japanese.code_pages().decode_to(std::string("日本"));
+    const auto read = japanese.controller().apply(OpenDocument{sample_path()});
+    expect(read.document.encoding == TextEncoding::shift_jis, "CP932 bytes open as Shift_JIS");
+    expect(read.lines.at(0).text == "日本", "the port turned them into UTF-8");
+    expect(read.status_items.at(1).text() == "Shift_JIS", "the status bar says so");
+    // 開いてもモードは保たれる（決定 8）。
+    Editing vim;
+    vim.files().hold(std::string("x"));
+    static_cast<void>(vim.controller().apply(SelectEditMode{EditMode::vim}));
+    const auto kept = vim.controller().apply(OpenDocument{sample_path()});
+    expect(kept.mode == EditMode::vim, "opening a file keeps the editing mode");
+}
+
+void expect_open_failure(Bytes content, FileFailure expected, const char *description)
+{
+    Editing editing;
+    editing.files().hold(std::move(content));
+    const auto frame = editing.controller().apply(OpenDocument{sample_path()});
+    expect(frame.document.last_failure.has_value() &&
+               frame.document.last_failure.value() == expected,
+           description);
+    expect(frame.document.title.text() == "無題", "a failed open does not change the tab");
+    expect(frame.total_lines == 1 && frame.lines.at(0).text.empty(),
+           "a failed open does not change the body");
+}
+
+void verify_document_open_failures()
+{
+    expect_open_failure(std::unexpected(FileFailure::not_found), FileFailure::not_found,
+                        "a missing file is reported as not_found");
+    expect_open_failure(std::unexpected(FileFailure::access_denied), FileFailure::access_denied,
+                        "a refused file is reported as access_denied");
+    expect_open_failure(std::unexpected(FileFailure::unreadable), FileFailure::unreadable,
+                        "an unreadable file is reported as unreadable");
+    expect_open_failure(std::unexpected(FileFailure::unwritable), FileFailure::unwritable,
+                        "the port may also report unwritable");
+    expect_open_failure(std::unexpected(FileFailure::too_large), FileFailure::too_large,
+                        "a file past the limit is refused by the port before it is read");
+    expect_open_failure(std::string("\xFF\xFE\x00\x41", 4), FileFailure::undecodable,
+                        "bytes that are neither UTF-8 nor CP932 are undecodable");
+    Editing refused;
+    refused.files().hold(std::string("\x93\xFA"));
+    refused.code_pages().decode_to(std::unexpected(CodePageFailure::unencodable));
+    const auto frame = refused.controller().apply(OpenDocument{sample_path()});
+    expect(frame.document.last_failure.has_value() &&
+               frame.document.last_failure.value() == FileFailure::unencodable,
+           "the code page port carries its own reason out");
+    Editing broken;
+    broken.files().hold(std::string("\x93\xFA"));
+    broken.code_pages().decode_to(std::string("\xFF"));
+    const auto invalid = broken.controller().apply(OpenDocument{sample_path()});
+    expect(invalid.document.last_failure.has_value() &&
+               invalid.document.last_failure.value() == FileFailure::undecodable,
+           "a port that returns broken UTF-8 is undecodable");
+}
+
+void verify_document_save()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, InsertText{"あ"});
+    expect(controller.frame().document.save_state == SaveState::modified,
+           "typing marks it unsaved");
+    expect(controller.frame().document.title.text() == "● 無題", "the mark is on the tab");
+    const auto saved = controller.apply(SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "あ", "the body went to the port as UTF-8");
+    expect(editing.files().written_path() == "C:\\work\\note.txt", "to the path in the intent");
+    expect(saved.document.save_state == SaveState::saved, "saving clears the mark");
+    expect(saved.document.title.text() == "note.txt", "and the tab takes the name");
+    expect(saved.document.encoding == TextEncoding::utf8, "the encoding is the one that was asked");
+    expect(saved.caret.position == TextPosition{LineNumber{1}, Column{2}},
+           "saving does not move the caret");
+    expect(!saved.document.last_failure.has_value(), "a good save reports nothing");
+}
+
+void verify_document_save_encodings()
+{
+    Editing with_bom;
+    applied(with_bom.controller(), InsertText{"あ"});
+    static_cast<void>(
+        with_bom.controller().apply(SaveDocument{sample_path(), TextEncoding::utf8_bom}));
+    expect(with_bom.files().written() == std::string(byte_order_mark()) + "あ",
+           "a BOM file keeps its BOM");
+    Editing japanese;
+    applied(japanese.controller(), InsertText{"日"});
+    japanese.code_pages().encode_to(std::string("\x93\xFA"));
+    const auto frame =
+        japanese.controller().apply(SaveDocument{sample_path(), TextEncoding::shift_jis});
+    expect(japanese.code_pages().encoded_from() == "日", "the body went through the code page");
+    expect(japanese.files().written() == "\x93\xFA", "the CP932 bytes are what is written");
+    expect(frame.document.save_state == SaveState::saved, "the save took");
+}
+
+void verify_document_save_failures()
+{
+    Editing refused;
+    applied(refused.controller(), InsertText{"😀"});
+    refused.code_pages().encode_to(std::unexpected(CodePageFailure::unencodable));
+    const auto frame =
+        refused.controller().apply(SaveDocument{sample_path(), TextEncoding::shift_jis});
+    expect(frame.document.last_failure.has_value() &&
+               frame.document.last_failure.value() == FileFailure::unencodable,
+           "a character CP932 cannot hold is unencodable");
+    expect(frame.document.save_state == SaveState::modified, "the body is still unsaved");
+    expect(!frame.document.path.has_value(), "the document did not adopt the path");
+    expect(refused.files().written().empty(), "nothing was written");
+    Editing unwritable;
+    applied(unwritable.controller(), InsertText{"a"});
+    unwritable.files().refuse_writes(FileFailure::unwritable);
+    const auto failed =
+        unwritable.controller().apply(SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(failed.document.last_failure.has_value() &&
+               failed.document.last_failure.value() == FileFailure::unwritable,
+           "a port that cannot write says so");
+    expect(failed.document.save_state == SaveState::modified, "a failed save stays unsaved");
+    expect(failed.document.title.text() == "● 無題", "and the tab does not take the name");
+    expect(failed.lines.at(0).text == "a", "the body is untouched either way");
+}
+
+void verify_save_state_transitions()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    expect(controller.frame().document.save_state == SaveState::saved,
+           "an untouched new buffer counts as saved");
+    applied(controller, InsertText{"a"});
+    expect(controller.frame().document.save_state == SaveState::modified, "one keystroke: unsaved");
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    expect(controller.frame().document.save_state == SaveState::saved,
+           "undo back to the start clears the mark");
+    applied(controller, InsertText{"a"});
+    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(controller.frame().document.save_state == SaveState::saved, "saved again");
+    // sealed() が無いと、この 1 打鍵が保存時点の単位に混ざって位置が動かない（決定 7）。
+    applied(controller, InsertText{"b"});
+    expect(controller.frame().document.save_state == SaveState::modified,
+           "the keystroke after a save opens its own unit");
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    expect(controller.frame().document.save_state == SaveState::saved,
+           "undoing that keystroke returns to the save point");
+}
+
+void verify_unreachable_save_point()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, InsertText{"a"});
+    applied(controller, NewLine{});
+    applied(controller, InsertText{"b"});
+    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    expect(controller.frame().document.save_state == SaveState::modified,
+           "undoing past the save point is unsaved");
+    applied(controller, InsertText{"c"});
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    expect(controller.frame().document.save_state == SaveState::modified,
+           "a new edit cut the redo list, so the save point is gone for good");
+}
+
+void verify_document_failure_clearing()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(std::unexpected(FileFailure::not_found));
+    const auto failed = controller.apply(OpenDocument{sample_path()});
+    expect(failed.document.last_failure.has_value(), "the failure is on the frame that made it");
+    const auto next = controller.apply(InsertText{"a"});
+    expect(!next.document.last_failure.has_value(), "the next intent clears the failure");
+    expect(!controller.frame().document.last_failure.has_value(),
+           "and reading the frame again does not bring it back");
 }
 
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。
@@ -1316,6 +1816,12 @@ void verify_text_and_caret()
     verify_caret_words();
     verify_history_coalescing();
     verify_history_travel();
+    verify_encoding_labels();
+    verify_encoding_detection();
+    verify_line_ending_detection();
+    verify_file_path();
+    verify_tab_titles();
+    verify_save_state_of_document();
     verify_scroll_bounds();
     verify_body_layout();
 }
@@ -1336,6 +1842,15 @@ void verify_controller_intents()
     verify_controller_scrolling();
     verify_controller_frame();
     verify_controller_mode_selection();
+    verify_document_open();
+    verify_document_open_encodings();
+    verify_document_open_failures();
+    verify_document_save();
+    verify_document_save_encodings();
+    verify_document_save_failures();
+    verify_save_state_transitions();
+    verify_unreachable_save_point();
+    verify_document_failure_clearing();
 }
 
 void verify_look()

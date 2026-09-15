@@ -5,9 +5,15 @@
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
+#include "FileDialog.hpp"
+#include "FileFailure.hpp"
 #include "KeyMotion.hpp"
+#include "OpenDocument.hpp"
+#include "SaveDocument.hpp"
+#include "SaveState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StatusBarLayout.hpp"
+#include "TextEncoding.hpp"
 #include "TitleBarLayout.hpp"
 
 #include <dwmapi.h>
@@ -27,6 +33,9 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr wchar_t class_name[] = L"NeNeNib.Editor";
+constexpr wchar_t product_name[] = L"NeNe Nib";
+constexpr wchar_t title_suffix[] = L" - NeNe Nib";
+constexpr wchar_t untitled_file[] = L"無題.txt";
 constexpr std::int32_t design_width_dips = 640;
 constexpr std::int32_t design_height_dips = 360;
 constexpr std::int32_t resize_border_dips = 8;
@@ -84,6 +93,44 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
     WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), units, utf8.data(), bytes,
                         nullptr, nullptr);
     return utf8;
+}
+
+// UTF-8 の表示値を Win32 の UTF-16 へ。題名とダイアログの既定名だけが通る（CPP-014）。
+[[nodiscard]] std::wstring widen(std::string_view utf8)
+{
+    const auto bytes = static_cast<int>(utf8.size());
+    const int length =
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, nullptr, 0);
+    if (length <= 0)
+    {
+        return {};
+    }
+    std::wstring wide(static_cast<std::size_t>(length), L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, wide.data(), length);
+    return wide;
+}
+
+// 失敗の理由は 1 行だけ出す。本文は変わらない（ADR 0010 の決定 9）。
+[[nodiscard]] const wchar_t *reason_of(application::FileFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case application::FileFailure::not_found:
+        return L"ファイルが見つかりませんでした。";
+    case application::FileFailure::access_denied:
+        return L"ファイルを開く権限がありません。";
+    case application::FileFailure::unreadable:
+        return L"ファイルを読み取れませんでした。";
+    case application::FileFailure::unwritable:
+        return L"ファイルを保存できませんでした。元のファイルは変わっていません。";
+    case application::FileFailure::too_large:
+        return L"64 MiB を超えるファイルはまだ開けません。";
+    case application::FileFailure::undecodable:
+        return L"文字コードを判別できませんでした。";
+    case application::FileFailure::unencodable:
+        return L"この文字コードでは保存できない文字があります。";
+    }
+    std::unreachable();
 }
 
 // 縁のヒットテストは 3 行 3 列の表で引く。分岐で書くと CPP-012 の認知的複雑度を越える。
@@ -209,14 +256,21 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     SetWindowLongPtrW(window_, GWLP_USERDATA, std::bit_cast<LONG_PTR>(this));
     dpi_ = GetDpiForWindow(window_);
     place_at_screen_centre();
-    apply_backdrop(controller_.frame());
+    // 起動引数の結果を先に控える。最初の描画が出す VisibleLines の意図で last_failure は消える
+    // （ADR 0010 の決定 9）。
+    const auto opened = controller_.frame();
+    apply_backdrop(opened);
     const auto rendering = start_rendering();
     if (!rendering)
     {
         return rendering;
     }
+    // 題名は起動引数で開いた文書にも追従する（ADR 0010 の決定 13）。
+    update_title(controller_.frame());
     // 配置してから見せる。生成時に (0,0) で見せない（ADR 0008 の決定 7）。
     ShowWindow(window_, SW_SHOW);
+    // 開けなかった理由も 1 行出す。窓が出てから出すので、利用者は空の無題で作業を続けられる。
+    announce(opened);
     return {};
 }
 
@@ -327,6 +381,9 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_DPICHANGED:
         change_dpi(word, data);
         return 0;
+    case WM_CLOSE:
+        close_window();
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -403,7 +460,8 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
     }
     if (word == HTCLOSE)
     {
-        DestroyWindow(window_);
+        // 閉じる経路は WM_CLOSE 1 本（ARC-001）。未保存の確認もそこで 1 度だけ起きる。
+        SendMessageW(window_, WM_CLOSE, 0, 0);
     }
 }
 
@@ -492,7 +550,117 @@ std::size_t EditorWindow::body_lines() const
 
 void EditorWindow::send(const application::EditorIntent &intent)
 {
-    present(controller_.apply(intent));
+    const auto frame = controller_.apply(intent);
+    present(frame);
+    update_title(frame);
+    announce(frame);
+}
+
+void EditorWindow::update_title(const application::EditorFrame &frame)
+{
+    std::wstring title = widen(frame.document.title.text()) + title_suffix;
+    if (title == window_title_)
+    {
+        return;
+    }
+    window_title_ = std::move(title);
+    SetWindowTextW(window_, window_title_.c_str());
+}
+
+void EditorWindow::announce(const application::EditorFrame &frame)
+{
+    if (!frame.document.last_failure.has_value())
+    {
+        return;
+    }
+    const auto failure = frame.document.last_failure.value();
+    if (failure == application::FileFailure::unencodable && frame.document.path.has_value())
+    {
+        offer_utf8(frame.document.path.value());
+        return;
+    }
+    MessageBoxW(window_, reason_of(failure), product_name, MB_OK | MB_ICONWARNING);
+}
+
+void EditorWindow::offer_utf8(const core::FilePath &path)
+{
+    const int answer = MessageBoxW(
+        window_, L"この文字コードでは保存できない文字があります。UTF-8 で保存しますか。",
+        product_name, MB_YESNO | MB_ICONWARNING);
+    if (answer != IDYES)
+    {
+        return;
+    }
+    send(application::SaveDocument{path, core::TextEncoding::utf8});
+}
+
+void EditorWindow::open_document()
+{
+    if (!confirm_discard())
+    {
+        return;
+    }
+    const auto chosen = choose_file_to_open(window_);
+    if (!chosen.has_value())
+    {
+        return;
+    }
+    send(application::OpenDocument{chosen.value()});
+}
+
+void EditorWindow::save_document()
+{
+    const auto frame = controller_.frame();
+    if (!frame.document.path.has_value())
+    {
+        save_document_as();
+        return;
+    }
+    send(application::SaveDocument{frame.document.path.value(), frame.document.encoding});
+}
+
+void EditorWindow::save_document_as()
+{
+    const auto frame = controller_.frame();
+    const std::wstring suggested = frame.document.path.has_value()
+                                       ? widen(frame.document.path.value().file_name())
+                                       : std::wstring(untitled_file);
+    const auto chosen = choose_file_to_save(window_, suggested);
+    if (!chosen.has_value())
+    {
+        return;
+    }
+    send(application::SaveDocument{chosen.value(), frame.document.encoding});
+}
+
+bool EditorWindow::confirm_discard()
+{
+    if (controller_.frame().document.save_state == core::SaveState::saved)
+    {
+        return true;
+    }
+    const int answer = MessageBoxW(window_, L"変更が保存されていません。保存しますか。",
+                                   product_name, MB_YESNOCANCEL | MB_ICONWARNING);
+    if (answer == IDNO)
+    {
+        return true;
+    }
+    if (answer != IDYES)
+    {
+        return false;
+    }
+    // 保存に失敗したか取り消したときは、まだ未保存のままなので続けない。
+    save_document();
+    return controller_.frame().document.save_state == core::SaveState::saved;
+}
+
+void EditorWindow::close_window()
+{
+    if (!confirm_discard())
+    {
+        return;
+    }
+    DestroyWindow(window_);
 }
 
 void EditorWindow::type_character(WPARAM word)
@@ -587,6 +755,17 @@ void EditorWindow::press_control_key(WPARAM word)
         return;
     case 'Y':
         send(application::HistoryAction{core::HistoryDirection::redo});
+        return;
+    case 'O':
+        open_document();
+        return;
+    case 'S':
+        if (held(VK_SHIFT))
+        {
+            save_document_as();
+            return;
+        }
+        save_document();
         return;
     default:
         break;
