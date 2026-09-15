@@ -1,5 +1,7 @@
 #include "FileDialog.hpp"
 
+#include "Utf16.hpp"
+
 #include <windows.h>
 
 #include <objbase.h>
@@ -20,21 +22,8 @@ using Microsoft::WRL::ComPtr;
 constexpr std::array<COMDLG_FILTERSPEC, 2> file_types{
     {{L"テキスト ファイル", L"*.txt;*.md;*.markdown"}, {L"すべてのファイル", L"*.*"}}};
 
-[[nodiscard]] std::string narrow(std::wstring_view wide)
-{
-    const auto units = static_cast<int>(wide.size());
-    const int bytes =
-        WideCharToMultiByte(CP_UTF8, 0, wide.data(), units, nullptr, 0, nullptr, nullptr);
-    if (bytes <= 0)
-    {
-        return {};
-    }
-    std::string utf8(static_cast<std::size_t>(bytes), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, wide.data(), units, utf8.data(), bytes, nullptr, nullptr);
-    return utf8;
-}
-
 // COM が返した UTF-16 の経路を検証済みの core::FilePath へ。解放はここで閉じる（CPP-016）。
+// 変換は core::to_utf8 ただ 1 本で、変換できない経路は空になり parse が拒む（Issue #13）。
 [[nodiscard]] std::optional<core::FilePath> path_of(IShellItem &item)
 {
     PWSTR wide = nullptr;
@@ -42,7 +31,8 @@ constexpr std::array<COMDLG_FILTERSPEC, 2> file_types{
     {
         return std::nullopt;
     }
-    auto parsed = core::FilePath::parse(narrow(std::wstring_view(wide)));
+    auto parsed =
+        core::FilePath::parse(core::to_utf8(std::wstring_view(wide)).value_or(std::string{}));
     CoTaskMemFree(wide);
     if (!parsed)
     {

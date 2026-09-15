@@ -1,6 +1,7 @@
 #include "Win32FileAdapter.hpp"
 
 #include "FileHandle.hpp"
+#include "Utf16.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -15,19 +16,11 @@ using Failure = application::FileFailure;
 constexpr std::size_t write_chunk_bytes = 32U * 1024U * 1024U;
 constexpr wchar_t temporary_suffix[] = L".nib-tmp";
 
-// UTF-8 の経路を Win32 の UTF-16 へ。変換はこの境界でだけ起きる（CPP-014）。
+// UTF-8 の経路を Win32 の UTF-16 へ。変換そのものは core::to_utf16 ただ 1 本（CPP-014）。
+// 変換できない経路は空になり、呼び出し側が not_found / unwritable で断る（Issue #13）。
 [[nodiscard]] std::wstring widen(std::string_view utf8)
 {
-    const auto bytes = static_cast<int>(utf8.size());
-    const int length =
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, nullptr, 0);
-    if (length <= 0)
-    {
-        return {};
-    }
-    std::wstring wide(static_cast<std::size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, wide.data(), length);
-    return wide;
+    return core::to_utf16(utf8).value_or(std::wstring{});
 }
 
 [[nodiscard]] Failure failure_of(DWORD error, Failure fallback) noexcept

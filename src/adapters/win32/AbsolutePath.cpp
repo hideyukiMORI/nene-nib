@@ -1,31 +1,15 @@
 #include "AbsolutePath.hpp"
 
+#include "Utf16.hpp"
+
 #include <windows.h>
 
-#include <cstddef>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace nenenib::adapters::win32
 {
-namespace
-{
-[[nodiscard]] std::string narrow(std::wstring_view wide)
-{
-    const auto units = static_cast<int>(wide.size());
-    const int bytes =
-        WideCharToMultiByte(CP_UTF8, 0, wide.data(), units, nullptr, 0, nullptr, nullptr);
-    if (bytes <= 0)
-    {
-        return {};
-    }
-    std::string utf8(static_cast<std::size_t>(bytes), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, wide.data(), units, utf8.data(), bytes, nullptr, nullptr);
-    return utf8;
-}
-} // namespace
-
 std::optional<core::FilePath> absolute_file_path(const std::wstring &path)
 {
     const DWORD length = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
@@ -39,7 +23,9 @@ std::optional<core::FilePath> absolute_file_path(const std::wstring &path)
     {
         return std::nullopt;
     }
-    auto parsed = core::FilePath::parse(narrow(std::wstring_view(buffer.data(), written)));
+    // 変換できない経路（対にならないサロゲート）は空になり、FilePath::parse が拒む。
+    auto parsed = core::FilePath::parse(
+        core::to_utf8(std::wstring_view(buffer.data(), written)).value_or(std::string{}));
     if (!parsed)
     {
         return std::nullopt;

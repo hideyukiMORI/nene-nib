@@ -65,12 +65,14 @@
 #include "TextPosition.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
+#include "Utf16.hpp"
 #include "Utf8.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <expected>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -115,6 +117,7 @@ using nenenib::core::BuiltinTheme;
 using nenenib::core::byte_order_mark;
 using nenenib::core::CaretMotion;
 using nenenib::core::CaretShape;
+using nenenib::core::code_point_at;
 using nenenib::core::code_point_count;
 using nenenib::core::collapsed_at;
 using nenenib::core::Column;
@@ -174,6 +177,8 @@ using nenenib::core::title_bar_hit;
 using nenenib::core::title_bar_layout;
 using nenenib::core::TitleBarHit;
 using nenenib::core::to_pixels;
+using nenenib::core::to_utf16;
+using nenenib::core::to_utf8;
 using nenenib::core::toggled;
 using nenenib::core::validate_utf8;
 using nenenib::core::width_of;
@@ -470,6 +475,66 @@ void verify_utf8_walking()
     expect(previous_code_point(text, Offset{4}) == Offset{1}, "back over the Japanese glyph");
     expect(previous_code_point(text, Offset{1}) == Offset{0}, "back over the ASCII byte");
     expect(previous_code_point(text, Offset{0}) == Offset{0}, "the start does not move");
+}
+
+// ---------------------------------------------------------------- Utf16
+
+// UTF-16 の期待値はソースの文字コードに頼らず、単位の値から組み立てる（Issue #13）。
+[[nodiscard]] std::wstring wide_of(std::initializer_list<unsigned int> units)
+{
+    std::wstring wide;
+    for (const unsigned int unit : units)
+    {
+        wide.push_back(static_cast<wchar_t>(unit));
+    }
+    return wide;
+}
+
+void verify_utf16_encoding()
+{
+    expect(to_utf16("").value().empty(), "the empty string has no units");
+    expect(to_utf16("ab").value() == wide_of({0x61U, 0x62U}), "ASCII is one unit per byte");
+    expect(to_utf16("\xC2\xA9").value() == wide_of({0xA9U}), "two UTF-8 bytes are one BMP unit");
+    expect(to_utf16("\xE6\x97\xA5").value() == wide_of({0x65E5U}),
+           "three UTF-8 bytes are one BMP unit");
+    expect(to_utf16("\xF0\x9F\x98\x80").value() == wide_of({0xD83DU, 0xDE00U}),
+           "the emoji becomes a surrogate pair");
+    expect(to_utf16("a\xF0\x9F\x98\x80\xE6\x97\xA5").value() ==
+               wide_of({0x61U, 0xD83DU, 0xDE00U, 0x65E5U}),
+           "widths mix inside one string");
+}
+
+void verify_utf16_rejects()
+{
+    expect(to_utf16("\x80").error() == TextFailure::invalid_utf8,
+           "a lone continuation byte does not convert");
+    expect(to_utf16("\xE6\x97").error() == TextFailure::invalid_utf8,
+           "a truncated sequence does not convert");
+    expect(to_utf16("\xED\xA0\x80").error() == TextFailure::invalid_utf8,
+           "a surrogate spelled in UTF-8 does not convert");
+    expect(to_utf8(wide_of({0xD83DU})).error() == TextFailure::invalid_utf16,
+           "a high surrogate at the end is rejected");
+    expect(to_utf8(wide_of({0xDE00U})).error() == TextFailure::invalid_utf16,
+           "a low surrogate on its own is rejected");
+    expect(to_utf8(wide_of({0xD83DU, 0x61U})).error() == TextFailure::invalid_utf16,
+           "a high surrogate followed by a letter is rejected");
+    expect(to_utf8(wide_of({0xD83DU, 0xD83DU})).error() == TextFailure::invalid_utf16,
+           "two high surrogates are rejected");
+}
+
+void verify_utf16_round_trip()
+{
+    expect(to_utf8(std::wstring{}).value().empty(), "nothing converts back to nothing");
+    const std::string mixed = "a\xC2\xA9\xE6\x97\xA5\xEF\xBC\xA1\xF0\x9F\x98\x80";
+    expect(to_utf8(to_utf16(mixed).value()).value() == mixed, "UTF-8 survives the round trip");
+    // 0xFF21 はサロゲートの範囲より上の BMP。合成にも分解にもならない側を通す。
+    const std::wstring units = wide_of({0x61U, 0xA9U, 0x65E5U, 0xFF21U, 0xD83DU, 0xDE00U});
+    expect(to_utf16(to_utf8(units).value()).value() == units, "UTF-16 survives the round trip");
+    expect(code_point_at(mixed, Offset{0}) == U'a', "the ASCII code point is read back");
+    expect(code_point_at(mixed, Offset{1}) == 0xA9U, "the two-byte code point is read back");
+    expect(code_point_at(mixed, Offset{3}) == 0x65E5U, "the three-byte code point is read back");
+    expect(code_point_at(mixed, Offset{9}) == 0x1F600U, "the four-byte code point is read back");
+    expect(code_point_at(mixed, Offset{mixed.size()}) == 0U, "past the end there is no code point");
 }
 
 // ---------------------------------------------------------------- TextBuffer
@@ -1800,6 +1865,9 @@ void verify_text_and_caret()
     verify_utf8_validation();
     verify_utf8_counting();
     verify_utf8_walking();
+    verify_utf16_encoding();
+    verify_utf16_rejects();
+    verify_utf16_round_trip();
     verify_buffer_creation();
     verify_buffer_insertion();
     verify_buffer_erasure();

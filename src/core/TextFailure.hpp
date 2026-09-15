@@ -9,6 +9,7 @@ enum class TextFailure : std::uint8_t
     empty,
     control_character,
     invalid_utf8,
+    invalid_utf16,
     too_long
 };
 } // namespace nenenib::core
