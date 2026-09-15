@@ -5,31 +5,30 @@
 
 ## 現在の Issue
 
-[Issue #3](https://github.com/hideyukiMORI/nene-nib/issues/3) — 起動して枠なし窓に Direct2D で 1 行描き、OS のライト／ダークに従う（最初の縦切り）。ADR 0007。
-[Issue #1](https://github.com/hideyukiMORI/nene-nib/issues/1) は PR #2 で main へ統合済み。
+[Issue #11](https://github.com/hideyukiMORI/nene-nib/issues/11) — ファイルを開いて保存し、UTF-8 / Shift_JIS と改行の形を保ち、未保存の印を出す（ファイルの縦切り）。ADR 0010。ブランチ `feat/11-file-open-save`。
+Issue #1 / #3 / #5 / #7 / #9 は main へ統合済み（[日報](../reports/2026-09-15.md)）。
 
 ## 段階
 
 | 段階 | 状態 |
 | --- | --- |
-| Phase 0 言語の実測 | ✅ 2026-09-15（114 記録・`docs/quality/phase0-results.json`。Loupe の 19 ケースを再現し、clang-cl・C++23・SIMD・並行性・DirectX・md4c・Vim を足した） |
-| Phase 1 文書とゲートの足場 | ✅ 2026-09-15（Issue #1・PR #2・フルゲートと CI 緑） |
-| Phase 2 negative proof | ✅ 2026-09-15（25 反例・`docs/quality/gate-proofs.md`。ruleset と CI の実行証拠は PR #2 で取った） |
-| Phase 3 縦切り 1 本 | 🔲 進行中（Issue #3・ADR 0007。枠なし窓に Direct2D で 1 行・OS のライト／ダーク） |
+| Phase 0 言語の実測 | ✅ 2026-09-15（114 記録・`docs/quality/phase0-results.json`） |
+| Phase 1 文書とゲートの足場 | ✅ 2026-09-15（Issue #1・PR #2） |
+| Phase 2 negative proof | ✅ 2026-09-15（26 反例・`docs/quality/gate-proofs.md`） |
+| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → **#11 ファイル（ADR 0010）** → 速さの基準値（QLT-014）→ IME か Vim |
 | Phase 4 公開 | 🔲 |
 
-## 動くもの
+## 動くもの（main `82aa30e`）
 
-（まだ無い。検査基盤の緑は Nib が動くことを示さない）
+枠なし窓（Snap と影は OS のまま）・Mica のタイトルバーにタブ 1 本と窓の操作・piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl+Z/Y・クリックでキャレット）・
+ステータスバーの「通常 | Vim」トグル・OS のライト／ダーク（茄子色 D11・橙 D12）。
 
 ## 動かないもの
 
-（製品コードが無い）
+ファイルの開閉と保存（#11 で実装中。**未保存の本文は終了で消える**）・IME・Vim エンジン・複数タブ・Ctrl+P・設定の保存・カラーテーマ（C1〜C4）・フォントサイズ・折り返し・横スクロール・ドラッグ選択。
 
 ## 次の 1 手
 
-Issue #3 の実装をフルゲート・実機確認（`eng/verify-window.py`）・CI で通し、ARC-002 / ARC-003 / ARC-007 / CPP-013 / QLT-009 / CNF-007 を active にして squash merge する。
-見た目の縦切り Issue #5（ADR 0008・PR #6）は main へ統合済み。
-編集の縦切り Issue #7（ADR 0009・PR #8）は main `82aa30e` へ統合済み。2026-09-15 の [日報](../reports/2026-09-15.md) と [引き継ぎ書](../handoffs/2026-09-15.md) を参照。
-次の縦切りはファイルの開閉と保存（Ctrl+O / Ctrl+S・D8 の文字コード判別・改行の保持）で、`/design` は挟まない。
-カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1〜C4 の順で、C1（テーマの模型と組み込み 9 テーマ・core だけ）はいつでも着手できる。
+Issue #11 をフルゲート・adapter テスト・実機（起動引数で開く）・CI で通して squash merge する。
+その次は速さの基準値（QLT-014）を最初に測る縦切り、続いて IME（FR-012）か Vim エンジンの最初の縦切り（ADR 0005）。
+カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1（core だけ）がいつでも着手できる。

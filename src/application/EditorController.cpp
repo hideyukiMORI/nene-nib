@@ -10,10 +10,12 @@
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
+#include "TabTitle.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -22,9 +24,21 @@ namespace nenenib::application
 {
 namespace
 {
-// タブの題名はファイルの縦切りが入るまで固定（ADR 0008 の「正直に記録しておくこと」）。
-constexpr char untitled[] = "無題";
 constexpr std::size_t single_page_line = 1;
+// 同期で読むのはここまで（ADR 0010 の決定 12）。1 GB はメモリマップの縦切りで別に決める。
+constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
+
+[[nodiscard]] FileFailure file_failure_of(CodePageFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case CodePageFailure::undecodable:
+        return FileFailure::undecodable;
+    case CodePageFailure::unencodable:
+        return FileFailure::unencodable;
+    }
+    std::unreachable();
+}
 
 // 読めない理由（unavailable / unreadable）は区別せず既定の dark を選ぶ（ADR 0007）。
 [[nodiscard]] core::Appearance appearance_or_dark(const AppearancePort &port)
@@ -102,17 +116,25 @@ constexpr std::size_t single_page_line = 1;
 }
 } // namespace
 
-EditorController::EditorController(const AppearancePort &appearance, ClipboardPort &clipboard)
-    : appearance_(appearance), clipboard_(clipboard),
+EditorController::EditorController(const AppearancePort &appearance, ClipboardPort &clipboard,
+                                   FilePort &files, CodePagePort &code_pages)
+    : appearance_(appearance), clipboard_(clipboard), files_(files), code_pages_(code_pages),
       state_(EditorState::create(appearance_or_dark(appearance), core::EditMode::ordinary))
 {
 }
 
 EditorFrame EditorController::apply(const EditorIntent &intent)
 {
+    // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
+    state_ = state_.with_failure(std::nullopt);
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
+}
+
+void EditorController::fail(FileFailure failure)
+{
+    state_ = state_.with_failure(failure);
 }
 
 void EditorController::replace(const core::OffsetRange &range, std::string_view text,
@@ -126,8 +148,10 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     auto next = state_.text().erase(range.begin, range.end).insert(range.begin, text);
     const core::Edit edit{range.begin, std::move(removed), std::string(text)};
     const core::Offset caret{range.begin.value + text.size()};
-    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret),
-                              state_.history().pushed(edit, boundary));
+    const std::size_t before = state_.history().position();
+    const auto edited = state_.with_edit(std::move(next), core::collapsed_at(caret),
+                                         state_.history().pushed(edit, boundary));
+    state_ = edited.with_document(after_edit_at(edited.document(), before));
     follow_caret();
 }
 
@@ -333,6 +357,99 @@ void EditorController::accept(const RefreshAppearance &)
     state_ = state_.with_appearance(appearance_or_dark(appearance_));
 }
 
+std::expected<std::string, FileFailure> EditorController::decoded(core::TextEncoding encoding,
+                                                                  std::string_view bytes)
+{
+    switch (encoding)
+    {
+    case core::TextEncoding::utf8:
+        return std::string(bytes);
+    case core::TextEncoding::utf8_bom:
+        return std::string(core::without_byte_order_mark(bytes));
+    case core::TextEncoding::shift_jis:
+        break;
+    }
+    auto converted = code_pages_.to_utf8(bytes);
+    if (!converted)
+    {
+        return std::unexpected(file_failure_of(converted.error()));
+    }
+    return std::move(converted).value();
+}
+
+std::expected<std::string, FileFailure> EditorController::encoded(core::TextEncoding encoding,
+                                                                  std::string_view utf8)
+{
+    switch (encoding)
+    {
+    case core::TextEncoding::utf8:
+        return std::string(utf8);
+    case core::TextEncoding::utf8_bom:
+        return std::string(core::byte_order_mark()) + std::string(utf8);
+    case core::TextEncoding::shift_jis:
+        break;
+    }
+    auto converted = code_pages_.from_utf8(utf8);
+    if (!converted)
+    {
+        return std::unexpected(file_failure_of(converted.error()));
+    }
+    return std::move(converted).value();
+}
+
+void EditorController::accept(const OpenDocument &intent)
+{
+    // 上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは大きいファイルを先に抱える。
+    const auto bytes = files_.read(intent.path, maximum_file_bytes);
+    if (!bytes)
+    {
+        fail(bytes.error());
+        return;
+    }
+    const auto encoding = core::detect_encoding(bytes.value());
+    if (!encoding)
+    {
+        fail(FileFailure::undecodable);
+        return;
+    }
+    const auto utf8 = decoded(encoding.value(), bytes.value());
+    if (!utf8)
+    {
+        fail(utf8.error());
+        return;
+    }
+    auto text = core::TextBuffer::from_utf8(utf8.value());
+    if (!text)
+    {
+        fail(FileFailure::undecodable);
+        return;
+    }
+    state_ = state_.with_opened(std::move(text).value(), core::detect_line_ending(utf8.value()),
+                                Document{intent.path, encoding.value(), std::size_t{0}});
+}
+
+void EditorController::accept(const SaveDocument &intent)
+{
+    const auto bytes = encoded(intent.encoding, state_.text().text());
+    if (!bytes)
+    {
+        fail(bytes.error());
+        return;
+    }
+    // 書けなかったときは本文も文書も変えない。元のファイルも adapters が守る（決定 6）。
+    const auto written = files_.write(intent.path, bytes.value());
+    if (!written)
+    {
+        fail(written.error());
+        return;
+    }
+    // 保存の直後に単位を閉じる。続く入力が保存時点の単位に混ざらない（決定 7）。
+    const auto history = state_.history().sealed();
+    const std::size_t position = history.position();
+    state_ = state_.with_history(history).with_document(
+        Document{intent.path, intent.encoding, position});
+}
+
 std::vector<LineView> EditorController::visible_lines() const
 {
     const ScrollState scroll = state_.scroll();
@@ -353,6 +470,8 @@ std::vector<LineView> EditorController::visible_lines() const
 EditorFrame EditorController::frame() const
 {
     const auto caret = state_.text().position_of(state_.selection().caret);
+    const auto &document = state_.document();
+    const auto save_state = save_state_of(document, state_.history().position());
     return EditorFrame{visible_lines(),
                        CaretView{caret, caret_shape_for(state_.mode())},
                        state_.scroll().first_visible,
@@ -361,7 +480,8 @@ EditorFrame EditorController::frame() const
                        core::palette_for(state_.appearance()),
                        state_.mode(),
                        core::mode_label(state_.mode()),
-                       core::DisplayText::parse(untitled).value(),
-                       core::status_items_for(caret, state_.line_ending())};
+                       DocumentView{core::tab_title_for(document.path, save_state), document.path,
+                                    document.encoding, save_state, state_.last_failure()},
+                       core::status_items_for(caret, document.encoding, state_.line_ending())};
 }
 } // namespace nenenib::application

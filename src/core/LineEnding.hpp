@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <utility>
@@ -23,6 +24,22 @@ enum class LineEnding : std::uint8_t
         return "\n";
     }
     std::unreachable();
+}
+
+// 読んだ本文の改行の形（ADR 0010 の決定 4）。最初の LF の直前が CR なら CRLF、
+// そうでなければ LF、LF がまったく無ければ CRLF。本文のバイト列は変えない。
+[[nodiscard]] constexpr LineEnding detect_line_ending(std::string_view text) noexcept
+{
+    const std::size_t first = text.find('\n');
+    if (first == std::string_view::npos)
+    {
+        return LineEnding::crlf;
+    }
+    if (first > 0 && text[first - 1] == '\r')
+    {
+        return LineEnding::crlf;
+    }
+    return LineEnding::lf;
 }
 
 [[nodiscard]] constexpr std::string_view line_ending_label(LineEnding ending) noexcept

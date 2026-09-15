@@ -19,10 +19,10 @@ namespace
 }
 } // namespace
 
-std::array<DisplayText, status_item_count> status_items_for(const TextPosition &caret,
-                                                            LineEnding ending)
+std::array<DisplayText, status_item_count>
+status_items_for(const TextPosition &caret, TextEncoding encoding, LineEnding ending)
 {
-    return {fixed(caret_position(caret)), fixed("UTF-8"),
+    return {fixed(caret_position(caret)), fixed(std::string(encoding_label(encoding))),
             fixed(std::string(line_ending_label(ending)))};
 }
 } // namespace nenenib::core

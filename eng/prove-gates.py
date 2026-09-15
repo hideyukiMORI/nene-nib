@@ -26,7 +26,7 @@ def run(command: list[str], cwd: Path, succeeds: bool, diagnostic: str = "") -> 
 def copy_repository_files(root: Path) -> None:
     files = ["CMakeLists.txt", "eng/targets.cmake", "eng/architecture.json", "eng/symbol-allowlist.json",
              "eng/symbols.py", ".clang-tidy", ".clang-format", "tests/build/ToolchainSmoke.cpp"]
-    for folder in ["src", "tests/unit"]:
+    for folder in ["src", "tests/unit", "tests/adapters"]:
         if (ROOT / folder).is_dir():
             files += [p.relative_to(ROOT).as_posix() for p in (ROOT / folder).rglob("*") if p.is_file()]
     for path in files:

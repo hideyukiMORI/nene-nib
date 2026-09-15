@@ -40,9 +40,10 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
     src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/DisplayText.cpp
-    src/core/EditHistory.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
+    src/core/EditHistory.cpp src/core/FilePath.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
     src/core/ScrollBounds.cpp src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
-    src/core/TextBuffer.cpp src/core/TitleBarLayout.cpp src/core/Utf8.cpp)
+    src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
+    src/core/TitleBarLayout.cpp src/core/Utf8.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/EditorController.cpp src/application/EditorState.cpp)
@@ -54,7 +55,9 @@ nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
 
 nenenib_target(nenenib_adapters adapters_win32 STATIC
-    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32ClipboardAdapter.cpp)
+    src/adapters/win32/AbsolutePath.cpp src/adapters/win32/Win32AppearanceAdapter.cpp
+    src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
+    src/adapters/win32/Win32FileAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
@@ -62,11 +65,20 @@ nenenib_system_link(nenenib_adapters advapi32)
 # クリップボード（OpenClipboard / SetClipboardData）は user32。Issue #7 で足した唯一の OS 依存。
 nenenib_system_link(nenenib_adapters user32)
 
+# QLT-013: adapters/win32 のファイル読み書きは、ビルドディレクトリ配下の一時ファイルで往復させる
+# （ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
+nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp)
+nenenib_link(nib_adapter_tests nenenib_core)
+nenenib_link(nib_adapter_tests nenenib_application)
+nenenib_link(nib_adapter_tests nenenib_adapters)
+add_test(NAME nib_adapters COMMAND nib_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 nenenib_target(nenenib_window ui_win32 STATIC
-    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp)
+    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
-foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi)
+# ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
+foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi ole32)
     nenenib_system_link(nenenib_window ${library})
 endforeach()
 
@@ -79,4 +91,7 @@ nenenib_link(NeNeNib nenenib_application)
 nenenib_link(NeNeNib nenenib_adapters)
 nenenib_link(NeNeNib nenenib_window)
 nenenib_system_link(NeNeNib user32)
+# ole32: CoInitializeEx（合成ルートで 1 回）。shell32: CommandLineToArgvW（ADR 0010 の決定 10・11）。
+nenenib_system_link(NeNeNib ole32)
+nenenib_system_link(NeNeNib shell32)
 set_property(TARGET NeNeNib PROPERTY WIN32_EXECUTABLE TRUE)

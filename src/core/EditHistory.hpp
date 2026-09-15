@@ -20,6 +20,9 @@ class EditHistory final
     [[nodiscard]] EditHistory pushed(const Edit &edit, EditBoundary boundary) const;
     [[nodiscard]] std::expected<Edit, HistoryFailure> undo() const;
     [[nodiscard]] std::expected<Edit, HistoryFailure> redo() const;
+    // 末尾の単位を閉じた次の履歴。保存の直後に呼ぶと、続く入力が保存時点の単位に混ざらない
+    // （ADR 0010 の決定 7）。位置は動かさない。
+    [[nodiscard]] EditHistory sealed() const;
     [[nodiscard]] EditHistory undone() const;
     [[nodiscard]] EditHistory redone() const;
     [[nodiscard]] std::size_t size() const noexcept;

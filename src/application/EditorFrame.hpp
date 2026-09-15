@@ -2,7 +2,7 @@
 
 #include "Appearance.hpp"
 #include "CaretView.hpp"
-#include "DisplayText.hpp"
+#include "DocumentView.hpp"
 #include "EditMode.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
@@ -28,7 +28,7 @@ struct EditorFrame
     core::Palette palette;
     core::EditMode mode;
     std::string_view mode_label;
-    core::DisplayText tab_title;
+    DocumentView document;
     std::array<core::DisplayText, core::status_item_count> status_items;
 };
 } // namespace nenenib::application

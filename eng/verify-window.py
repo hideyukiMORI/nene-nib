@@ -11,6 +11,14 @@ Posted messages cannot carry modifier state: GetKeyState only follows keys that 
 the raw input queue, so Ctrl+A / C / X / V / Z / Y cannot be driven from here without touching the
 real keyboard. Those live in the unit tests (Issue #7); this script drives WM_CHAR, Enter,
 Backspace, Esc, PgUp, PgDn and a posted click in the body, which need no modifier.
+
+Issue #11 adds the file slice: two temporary files (UTF-8 CRLF and Shift_JIS LF) are written under
+out/window-verification, opened with the startup argument, and the drawn rows, the window title
+and the two status items are read back. Ctrl+S is the one chord this script does try to drive with
+SendInput, after bringing the window to the foreground; when the session refuses the foreground the
+run records that instead of failing (ADR 0010). The unsaved confirmation on WM_CLOSE is answered
+with IDNO, because the script types into the buffer before it closes the window. A startup argument
+that names no file must say so in one line and then carry on with an empty 無題 buffer.
 Python standard library and ctypes only.
 """
 
@@ -32,6 +40,7 @@ import winreg
 
 user = c.WinDLL("user32", use_last_error=True)
 gdi = c.WinDLL("gdi32", use_last_error=True)
+kernel = c.WinDLL("kernel32", use_last_error=True)
 
 
 def api(dll, name, result, *arguments):
@@ -53,6 +62,21 @@ class BITMAPINFO(c.Structure):
     _fields_ = [("bmiHeader", BITMAPINFOHEADER), ("bmiColors", w.DWORD * 3)]
 
 
+class KEYBDINPUT(c.Structure):
+    _fields_ = [
+        ("wVk", w.WORD), ("wScan", w.WORD), ("dwFlags", w.DWORD),
+        ("dwTime", w.DWORD), ("dwExtraInfo", c.POINTER(w.ULONG)),
+    ]
+
+
+class INPUTPAYLOAD(c.Union):
+    _fields_ = [("ki", KEYBDINPUT), ("padding", c.c_ubyte * 32)]
+
+
+class INPUT(c.Structure):
+    _fields_ = [("kind", w.DWORD), ("payload", INPUTPAYLOAD)]
+
+
 api(user, "SetProcessDpiAwarenessContext", w.BOOL, w.HANDLE)
 api(user, "FindWindowW", w.HWND, w.LPCWSTR, w.LPCWSTR)
 api(user, "GetWindowThreadProcessId", w.DWORD, w.HWND, c.POINTER(w.DWORD))
@@ -65,6 +89,14 @@ api(user, "GetDpiForWindow", w.UINT, w.HWND)
 api(user, "ClientToScreen", w.BOOL, w.HWND, c.POINTER(w.POINT))
 api(user, "SetWindowPos", w.BOOL, w.HWND, w.HWND, c.c_int, c.c_int, c.c_int, c.c_int, w.UINT)
 api(user, "PostMessageW", w.BOOL, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
+api(user, "FindWindowExW", w.HWND, w.HWND, w.HWND, w.LPCWSTR, w.LPCWSTR)
+api(user, "GetWindowTextW", c.c_int, w.HWND, w.LPWSTR, c.c_int)
+api(user, "SetForegroundWindow", w.BOOL, w.HWND)
+api(user, "GetForegroundWindow", w.HWND)
+api(user, "SendInput", w.UINT, w.UINT, c.c_void_p, c.c_int)
+api(user, "AttachThreadInput", w.BOOL, w.DWORD, w.DWORD, w.BOOL)
+api(user, "BringWindowToTop", w.BOOL, w.HWND)
+api(kernel, "GetCurrentThreadId", w.DWORD)
 api(user, "SendMessageW", w.LPARAM, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 api(user, "GetDC", w.HDC, w.HWND)
 api(user, "ReleaseDC", c.c_int, w.HWND, w.HDC)
@@ -78,7 +110,10 @@ api(gdi, "GetDIBits", c.c_int, w.HDC, w.HBITMAP, w.UINT, w.UINT, w.LPVOID, c.POI
 api(gdi, "GdiFlush", w.BOOL)
 
 WINDOW_CLASS = "NeNeNib.Editor"
+DIALOG_CLASS = "#32770"
 WM_CLOSE = 0x0010
+WM_COMMAND = 0x0111
+IDNO = 7
 WM_NCHITTEST = 0x0084
 WM_KEYDOWN = 0x0100
 WM_CHAR = 0x0102
@@ -89,6 +124,10 @@ VK_BACK = 0x08
 VK_ESCAPE = 0x1B
 VK_PRIOR = 0x21
 VK_NEXT = 0x22
+VK_CONTROL = 0x11
+VK_S = 0x53
+INPUT_KEYBOARD = 1
+KEYEVENTF_KEYUP = 0x0002
 HTCAPTION = 2
 HTCLOSE = 20
 SRCCOPY = 0x00CC0020
@@ -116,7 +155,8 @@ TOGGLE_PADDING_DIPS = 2
 SEGMENT_WIDTH_DIPS = 44
 SEGMENT_HEIGHT_DIPS = 20
 STATUS_ITEM_GAP_DIPS = 16
-STATUS_ITEM_WIDTH_DIPS = (96, 44, 36)
+# 文字コードの項目は「UTF-8 BOM」「Shift_JIS」が入る 72 DIP（ADR 0010 の決定 14）。
+STATUS_ITEM_WIDTH_DIPS = (96, 72, 36)
 # src/core/BodyLayout.cpp の DIP。行の帯とキャレットの位置はここから同じ整数丸めで出す。
 BODY_TOP_DIPS = 12
 BODY_LINE_HEIGHT_DIPS = 24
@@ -144,9 +184,10 @@ def rectangle(window, getter) -> list[int]:
     return [bounds.left, bounds.top, bounds.right, bounds.bottom]
 
 
-def start(executable: Path, environment: dict) -> tuple[subprocess.Popen, int, list[int]]:
+def start(executable: Path, environment: dict,
+          arguments: list[str] | None = None) -> tuple[subprocess.Popen, int, list[int]]:
     """Return the process, its window, and the window rectangle as first seen (within 0.2 s)."""
-    process = subprocess.Popen([str(executable)], env=environment)
+    process = subprocess.Popen([str(executable), *(arguments or [])], env=environment)
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
         window = user.FindWindowW(WINDOW_CLASS, None)
@@ -255,6 +296,221 @@ def write_text(window, text: str) -> None:
     """Post WM_CHAR for each UTF-16 unit, the way TranslateMessage would."""
     for character in text:
         assert user.PostMessageW(window, WM_CHAR, ord(character), 1)
+
+
+def window_title(window) -> str:
+    """The タスクバー title, which is "<tab title> - NeNe Nib" (ADR 0010 decision 13)."""
+    buffer = c.create_unicode_buffer(512)
+    user.GetWindowTextW(window, buffer, len(buffer))
+    return buffer.value
+
+
+def owned_dialog(pid: int) -> int:
+    """The visible MessageBoxW of that process, if one is up."""
+    child = None
+    while True:
+        child = user.FindWindowExW(None, child, DIALOG_CLASS, None)
+        if not child:
+            return 0
+        owner = w.DWORD()
+        user.GetWindowThreadProcessId(child, c.byref(owner))
+        if owner.value == pid and user.IsWindowVisible(child):
+            return child
+
+
+def await_dialog(process, seconds: float = 2.5) -> int:
+    """The MessageBox that process puts up within the window, or 0 if it puts none up."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        dialog = owned_dialog(process.pid)
+        if dialog:
+            return dialog
+        if process.poll() is not None:
+            return 0
+        time.sleep(0.05)
+    return 0
+
+
+def dialog_closed(dialog, seconds: float = 3.0) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if not user.IsWindow(dialog) or not user.IsWindowVisible(dialog):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def dismiss_dialog(process, button: int, seconds: float = 2.5) -> bool:
+    """Press one button of the unsaved confirmation; the real keyboard is never touched."""
+    dialog = await_dialog(process, seconds)
+    if not dialog:
+        return False
+    assert user.PostMessageW(dialog, WM_COMMAND, button, 0)
+    assert dialog_closed(dialog), "the confirmation did not take the answer"
+    return True
+
+
+def acknowledge_dialog(process, seconds: float = 2.5) -> bool:
+    """A MessageBox with one button has one answer, so closing it is that answer."""
+    dialog = await_dialog(process, seconds)
+    if not dialog:
+        return False
+    assert user.PostMessageW(dialog, WM_CLOSE, 0, 0)
+    assert dialog_closed(dialog), "the reported reason could not be dismissed"
+    return True
+
+
+def key_input(key: int, flags: int) -> INPUT:
+    record = INPUT()
+    record.kind = INPUT_KEYBOARD
+    record.payload.ki = KEYBDINPUT(key, 0, flags, 0, None)
+    return record
+
+
+def take_foreground(window) -> bool:
+    """SetForegroundWindow is refused unless we share the input queue of the current foreground."""
+    if user.GetForegroundWindow() == window:
+        return True
+    foreground = user.GetForegroundWindow()
+    theirs = user.GetWindowThreadProcessId(foreground, None) if foreground else 0
+    ours = kernel.GetCurrentThreadId()
+    attached = bool(theirs) and bool(user.AttachThreadInput(ours, theirs, True))
+    user.BringWindowToTop(window)
+    user.SetForegroundWindow(window)
+    if attached:
+        user.AttachThreadInput(ours, theirs, False)
+    time.sleep(0.5)
+    return user.GetForegroundWindow() == window
+
+
+def press_chord(window, modifier: int, key: int) -> bool:
+    """Ctrl+key through the raw input queue; posted messages cannot carry the modifier."""
+    if not take_foreground(window):
+        return False
+    records = (INPUT * 4)(key_input(modifier, 0), key_input(key, 0),
+                          key_input(key, KEYEVENTF_KEYUP),
+                          key_input(modifier, KEYEVENTF_KEYUP))
+    return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
+
+
+def write_documents(output: Path) -> dict:
+    """Two files the editor must open from the command line: UTF-8 CRLF and Shift_JIS LF."""
+    folder = output / "documents"
+    folder.mkdir(parents=True, exist_ok=True)
+    utf8 = folder / "utf8-crlf.txt"
+    utf8.write_bytes("一行目\r\n二行目\r\n三行目".encode("utf-8"))
+    shift_jis = folder / "sjis-lf.txt"
+    shift_jis.write_bytes("日本語\n二行目".encode("cp932"))
+    return {"utf8": utf8, "shiftJis": shift_jis}
+
+
+def measure_document(window, appearance: str, rows: int, output: Path, name: str) -> dict:
+    """Rows drawn, the window title, and the two status items of an opened file."""
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    body = body_points(width, height, dpi)
+    grounds = [list(PALETTE[appearance]), list(CURRENT_LINE[appearance]), list(ACCENT)]
+    band = [list(STATUS_BAND[appearance])]
+    pixels = capture(window, width, height)
+    write_bitmap(output / f"file-slice-{name}.bmp", pixels, width, height)
+    return {
+        "title": window_title(window),
+        "rowInk": [ink(pixels, width, content_box(body, index, dpi), grounds)
+                   for index in range(rows + 1)],
+        "gutterInk": [ink(pixels, width, gutter_box(body, index, dpi), grounds)
+                      for index in range(rows + 1)],
+        "encodingInk": ink(pixels, width, status_item_box(width, height, dpi, 1), band),
+        "endingInk": ink(pixels, width, status_item_box(width, height, dpi, 2), band),
+        "capture": f"file-slice-{name}.bmp",
+    }
+
+
+def try_saving(window, path: Path) -> dict:
+    """Ctrl+S with SendInput; a session that refuses the foreground is recorded, not failed."""
+    before = path.read_bytes()
+    if not press_chord(window, VK_CONTROL, VK_S):
+        return {"driven": False,
+                "note": "the window could not take the foreground; Ctrl+S stays in the unit tests"}
+    time.sleep(1.2)
+    after = path.read_bytes()
+    saved = {"driven": True, "bytesChanged": after != before, "title": window_title(window),
+             "bytesBefore": len(before), "bytesAfter": len(after)}
+    assert saved["bytesChanged"], "Ctrl+S did not change the file on disk"
+    assert not saved["title"].startswith("● "), f"the unsaved mark survived the save: {saved}"
+    return saved
+
+
+def verify_document(executable: Path, environment: dict, appearance: str, output: Path,
+                    plan: dict) -> dict:
+    """Open one file with the startup argument and read the result back from the screen."""
+    path = plan["path"]
+    process, window, _ = start(executable, environment, [str(path)])
+    try:
+        assert user.SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE_NOSIZE_SHOW)
+        time.sleep(0.6)
+        measured = measure_document(window, appearance, plan["rows"], output, path.stem)
+        measured["file"] = path.name
+        assert measured["title"] == f"{path.name} - NeNe Nib", measured["title"]
+        for index in range(plan["rows"]):
+            assert measured["rowInk"][index] > 0, f"row {index + 1} was not drawn: {measured}"
+            assert measured["gutterInk"][index] > 0, f"line number {index + 1} is missing"
+        assert measured["gutterInk"][plan["rows"]] == 0, "one line too many was drawn"
+        assert measured["encodingInk"] > 0, "the encoding item is empty"
+        assert measured["endingInk"] > 0, "the line ending item is empty"
+        write_text(window, "X")
+        time.sleep(0.6)
+        measured["titleAfterTyping"] = window_title(window)
+        assert measured["titleAfterTyping"] == f"● {path.name} - NeNe Nib", measured
+        if plan["save"]:
+            measured["save"] = try_saving(window, path)
+        assert user.PostMessageW(window, WM_CLOSE, 0, 0)
+        measured["confirmationDismissed"] = dismiss_dialog(process, IDNO)
+        measured["exitCode"] = process.wait(timeout=5)
+        assert measured["exitCode"] == 0, measured["exitCode"]
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+    return measured
+
+
+def verify_missing_document(executable: Path, environment: dict, output: Path) -> dict:
+    """A startup argument that is not there is reported in one line, and the editor carries on."""
+    missing = output / "documents" / "not-there.txt"
+    missing.unlink(missing_ok=True)
+    process, window, _ = start(executable, environment, [str(missing)])
+    reported = False
+    try:
+        reported = acknowledge_dialog(process)
+        assert reported, "a missing startup argument was opened in silence"
+        time.sleep(0.5)
+        result = {"reported": reported, "title": window_title(window)}
+        assert result["title"] == "無題 - NeNe Nib", result["title"]
+        assert user.PostMessageW(window, WM_CLOSE, 0, 0)
+        # 本文は空のままなので、閉じるときに未保存の確認は出ない。
+        result["confirmationAsked"] = bool(await_dialog(process, 1.5))
+        assert not result["confirmationAsked"], "an untouched buffer asked about saving"
+        result["exitCode"] = process.wait(timeout=5)
+        assert result["exitCode"] == 0, result["exitCode"]
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+    return result
+
+
+def verify_documents(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
+    documents = write_documents(output)
+    utf8 = verify_document(executable, environment, appearance, output,
+                           {"path": documents["utf8"], "rows": 3, "save": True})
+    shift_jis = verify_document(executable, environment, appearance, output,
+                                {"path": documents["shiftJis"], "rows": 2, "save": False})
+    # 同じ幅の枠に違う語が入る。UTF-8 と Shift_JIS、CRLF と LF が同じ画なら何かが固定されている。
+    assert utf8["encodingInk"] != shift_jis["encodingInk"], "the encoding item never changed"
+    assert utf8["endingInk"] != shift_jis["endingInk"], "the line ending item never changed"
+    missing = verify_missing_document(executable, environment, output)
+    return {"utf8": utf8, "shiftJis": shift_jis, "missing": missing}
 
 
 def body_points(width: int, height: int, dpi: int) -> dict:
@@ -588,12 +844,16 @@ def main() -> None:
         result["shownAfterPlacement"] = first_rect[:2] != [0, 0]
         assert result["shownAfterPlacement"], f"the window was shown at {first_rect[:2]}"
         assert user.PostMessageW(window, WM_CLOSE, 0, 0)
+        # この検査は本文を打ち替えたあとなので、閉じるときは未保存の確認が出る（ADR 0010 の決定 10）。
+        result["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
+        assert result["closeConfirmationDismissed"], "WM_CLOSE did not ask about the unsaved body"
         result["closeExitCode"] = process.wait(timeout=5)
         assert result["closeExitCode"] == 0, result["closeExitCode"]
     finally:
         if process.poll() is None:
             process.terminate()
             process.wait(timeout=5)
+    result["documents"] = verify_documents(executable, environment, appearance, output)
     (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                     encoding="utf-8")
     print(json.dumps(result, indent=2))
