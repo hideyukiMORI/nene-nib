@@ -1,41 +1,14 @@
 #include "Win32ClipboardAdapter.hpp"
 
+#include "Utf16.hpp"
+
 #include <cstring>
-#include <vector>
 
 namespace nenenib::adapters::win32
 {
 namespace
 {
 using Failure = application::ClipboardFailure;
-
-[[nodiscard]] std::wstring widen(std::string_view utf8)
-{
-    const auto bytes = static_cast<int>(utf8.size());
-    const int length =
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, nullptr, 0);
-    if (length <= 0)
-    {
-        return {};
-    }
-    std::wstring wide(static_cast<std::size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, wide.data(), length);
-    return wide;
-}
-
-[[nodiscard]] std::string narrow(std::wstring_view wide)
-{
-    const auto units = static_cast<int>(wide.size());
-    const int bytes =
-        WideCharToMultiByte(CP_UTF8, 0, wide.data(), units, nullptr, 0, nullptr, nullptr);
-    if (bytes <= 0)
-    {
-        return {};
-    }
-    std::string utf8(static_cast<std::size_t>(bytes), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, wide.data(), units, utf8.data(), bytes, nullptr, nullptr);
-    return utf8;
-}
 
 // CF_UNICODETEXT は NUL で終わる。長さは終端までを数える。
 [[nodiscard]] std::wstring_view text_of(const wchar_t *memory) noexcept
@@ -73,7 +46,8 @@ std::expected<void, Failure> Win32ClipboardAdapter::write(std::string_view utf8)
     {
         return std::unexpected(Failure::unavailable);
     }
-    const std::wstring wide = widen(utf8);
+    // 変換できない本文は空になる。利用者の既存のクリップボードは下で置き換えるまで残る。
+    const std::wstring wide = core::to_utf16(utf8).value_or(std::wstring{});
     // 確保と複写を先に済ませる。ここで失敗しても利用者の既存のクリップボードは消さない。
     const std::size_t bytes = (wide.size() + 1) * sizeof(wchar_t);
     HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
@@ -130,7 +104,7 @@ std::expected<std::string, Failure> Win32ClipboardAdapter::read()
         CloseClipboard();
         return std::unexpected(Failure::read_failed);
     }
-    std::string utf8 = narrow(text_of(memory));
+    std::string utf8 = core::to_utf8(text_of(memory)).value_or(std::string{});
     GlobalUnlock(handle);
     CloseClipboard();
     return utf8;

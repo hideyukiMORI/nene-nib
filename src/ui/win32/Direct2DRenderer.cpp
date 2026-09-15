@@ -1,6 +1,7 @@
 #include "Direct2DRenderer.hpp"
 
 #include "DevicePixels.hpp"
+#include "Utf16.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -72,19 +73,11 @@ constexpr float full_channel = 255.0F;
                          static_cast<float>(area.top + area.bottom) / 2.0F);
 }
 
-// UTF-8 の表示値を DirectWrite の UTF-16 へ移す唯一の場所（CPP-014）。
+// UTF-8 の表示値を DirectWrite の UTF-16 へ。変換そのものは core::to_utf16 ただ 1 本
+// （CPP-014 / Issue #13）。表示値は検証済みなので、空になるのは本当に空のときだけ。
 [[nodiscard]] std::wstring widen(std::string_view text)
 {
-    const auto bytes = static_cast<int>(text.size());
-    const int length =
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), bytes, nullptr, 0);
-    if (length <= 0)
-    {
-        return {};
-    }
-    std::wstring wide(static_cast<std::size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), bytes, wide.data(), length);
-    return wide;
+    return core::to_utf16(text).value_or(std::wstring{});
 }
 
 [[nodiscard]] UINT extent_of(LONG value) noexcept

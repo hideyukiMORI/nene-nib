@@ -59,6 +59,18 @@ constexpr unsigned char delete_character = 0x7F;
            (value < first_surrogate || value > last_surrogate);
 }
 
+// 長さの分かっている列を値へ。継続バイトの形は呼び出し側が確かめてから来る。
+[[nodiscard]] constexpr char32_t decode(std::string_view text, std::size_t index,
+                                        std::size_t length) noexcept
+{
+    char32_t value = lead_value(byte_at(text, index), length);
+    for (std::size_t offset = 1; offset < length; ++offset)
+    {
+        value = (value << 6U) | static_cast<char32_t>(byte_at(text, index + offset) & 0x3FU);
+    }
+    return value;
+}
+
 [[nodiscard]] std::expected<std::size_t, TextFailure> scan(std::string_view text,
                                                            std::size_t index) noexcept
 {
@@ -68,17 +80,14 @@ constexpr unsigned char delete_character = 0x7F;
     {
         return std::unexpected(TextFailure::invalid_utf8);
     }
-    char32_t value = lead_value(lead, length);
     for (std::size_t offset = 1; offset < length; ++offset)
     {
-        const unsigned char byte = byte_at(text, index + offset);
-        if (!continuation(byte))
+        if (!continuation(byte_at(text, index + offset)))
         {
             return std::unexpected(TextFailure::invalid_utf8);
         }
-        value = (value << 6U) | static_cast<char32_t>(byte & 0x3FU);
     }
-    if (!encodable(value, length))
+    if (!encodable(decode(text, index, length), length))
     {
         return std::unexpected(TextFailure::invalid_utf8);
     }
@@ -117,6 +126,15 @@ bool has_control_character(std::string_view text) noexcept
                                    const auto byte = static_cast<unsigned char>(value);
                                    return byte < first_control || byte == delete_character;
                                });
+}
+
+char32_t code_point_at(std::string_view text, Offset at) noexcept
+{
+    if (at.value >= text.size())
+    {
+        return 0;
+    }
+    return decode(text, at.value, sequence_length(byte_at(text, at.value)));
 }
 
 bool is_boundary(std::string_view text, Offset at) noexcept

@@ -43,7 +43,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/EditHistory.cpp src/core/FilePath.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
     src/core/ScrollBounds.cpp src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
-    src/core/TitleBarLayout.cpp src/core/Utf8.cpp)
+    src/core/TitleBarLayout.cpp src/core/Utf16.cpp src/core/Utf8.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/EditorController.cpp src/application/EditorState.cpp)

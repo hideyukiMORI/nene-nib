@@ -15,6 +15,7 @@
 #include "StatusBarLayout.hpp"
 #include "TextEncoding.hpp"
 #include "TitleBarLayout.hpp"
+#include "Utf16.hpp"
 
 #include <dwmapi.h>
 
@@ -79,35 +80,11 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
     return std::nullopt;
 }
 
-// UTF-16 の入力を UTF-8 の意図へ。変換は境界のここでだけ起きる（CPP-014 / ADR 0009 の決定 2）。
-[[nodiscard]] std::string narrow(std::wstring_view wide)
-{
-    const auto units = static_cast<int>(wide.size());
-    const int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), units,
-                                          nullptr, 0, nullptr, nullptr);
-    if (bytes <= 0)
-    {
-        return {};
-    }
-    std::string utf8(static_cast<std::size_t>(bytes), '\0');
-    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), units, utf8.data(), bytes,
-                        nullptr, nullptr);
-    return utf8;
-}
-
 // UTF-8 の表示値を Win32 の UTF-16 へ。題名とダイアログの既定名だけが通る（CPP-014）。
+// 変換そのものは core::to_utf16 ただ 1 本で、表示値は検証済みなので失敗しない（Issue #13）。
 [[nodiscard]] std::wstring widen(std::string_view utf8)
 {
-    const auto bytes = static_cast<int>(utf8.size());
-    const int length =
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, nullptr, 0);
-    if (length <= 0)
-    {
-        return {};
-    }
-    std::wstring wide(static_cast<std::size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, wide.data(), length);
-    return wide;
+    return core::to_utf16(utf8).value_or(std::wstring{});
 }
 
 // 失敗の理由は 1 行だけ出す。本文は変わらない（ADR 0010 の決定 9）。
@@ -684,7 +661,9 @@ void EditorWindow::type_character(WPARAM word)
         wide.push_back(pending);
     }
     wide.push_back(unit);
-    send(application::InsertText{narrow(wide)});
+    // 合成した 1 文字を UTF-8 の意図へ（CPP-014 / ADR 0009 の決定 2）。変換は core::to_utf8
+    // ただ 1 本で、対にならないサロゲートはここまでに捨ててあるので空にはならない（Issue #13）。
+    send(application::InsertText{core::to_utf8(wide).value_or(std::string{})});
 }
 
 void EditorWindow::press_key(WPARAM word)

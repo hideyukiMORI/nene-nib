@@ -22,6 +22,10 @@ namespace nenenib::core
 // 検証済みの本文では生バイトを見るだけで足りる。
 [[nodiscard]] bool has_control_character(std::string_view text) noexcept;
 
+// 検証済みの本文の at にある code point の値。at は code point の先頭でなければならない。
+// 末尾以降は 0 を返す。UTF-8 を読み解くのはここだけで、Utf16.cpp はこの値を写すだけ（ARC-001）。
+[[nodiscard]] char32_t code_point_at(std::string_view text, Offset at) noexcept;
+
 // at が code point の先頭（または末尾の直後）か。
 [[nodiscard]] bool is_boundary(std::string_view text, Offset at) noexcept;
 
