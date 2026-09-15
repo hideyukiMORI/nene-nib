@@ -33,6 +33,17 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'ARC-003 / ARC-007 / CPP-013: undefined symbols outside the allowlist.' }
     & ctest --test-dir build --output-on-failure --no-tests=error
     if ($LASTEXITCODE -ne 0) { throw 'C++ verification failed.' }
+    # 速さは製品の速さで測る。Debug の exe は ASan / UBSan が掛かっているので、サニタイザを
+    # 当てていない Release 構成の NeNeNib だけをここで作る（ADR 0006 / 0011）。警告集合と
+    # clang-tidy は同じものが掛かる（迂回路は作らない）。差分ビルドなので --fresh は当てない。
+    & cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+    if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed for the Release measurement build.' }
+    & cmake --build build-release --target NeNeNib
+    if ($LASTEXITCODE -ne 0) { throw 'QLT-002: the Release measurement build failed.' }
+    # ADR 0011: 3 本のベンチを測って eng/perf-reference.json の指紋ごとの基準値と比べる。
+    # 基準値の無い機械（CI を含む）と窓を作れない機械は、値を記録して通る。
+    & python eng/measure-speed.py --check
+    if ($LASTEXITCODE -ne 0) { throw 'QLT-014: speed regression.' }
     & python eng/coverage.py
     if ($LASTEXITCODE -ne 0) { throw 'QLT-009: branch coverage or its negative proof failed.' }
     & python eng/prove-gates.py

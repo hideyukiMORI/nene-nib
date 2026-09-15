@@ -38,6 +38,7 @@
 #include "LayoutRect.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
+#include "Milestone.hpp"
 #include "ModeLabel.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -146,6 +147,8 @@ using nenenib::core::LayoutRect;
 using nenenib::core::line_ending_label;
 using nenenib::core::LineEnding;
 using nenenib::core::LineNumber;
+using nenenib::core::Milestone;
+using nenenib::core::milestone_name;
 using nenenib::core::mode_label;
 using nenenib::core::moved_caret;
 using nenenib::core::newline_of;
@@ -1008,6 +1011,17 @@ void verify_edit_mode()
     expect(toggled(toggled(EditMode::ordinary)) == EditMode::ordinary, "two toggles return");
     expect(mode_label(EditMode::ordinary) == "通常", "the ordinary label is 通常");
     expect(mode_label(EditMode::vim) == "NORMAL", "the vim label is NORMAL until the engine lands");
+}
+
+// 節目は閉じた選択肢で、名前は計測 JSON の正本である（ADR 0011 の決定 1）。
+void verify_milestone()
+{
+    expect(milestone_name(Milestone::input_received) == "input_received",
+           "the input milestone names itself for the measurement file");
+    expect(milestone_name(Milestone::frame_presented) == "frame_presented",
+           "the presented milestone names itself for the measurement file");
+    expect(milestone_name(Milestone::input_received) != milestone_name(Milestone::frame_presented),
+           "the two milestones never share a name");
 }
 
 void verify_status_items()
@@ -1928,6 +1942,7 @@ void verify_look()
     verify_dark_palette_tokens();
     verify_light_palette_tokens();
     verify_edit_mode();
+    verify_milestone();
     verify_status_items();
     verify_device_pixels();
     verify_rect_geometry();

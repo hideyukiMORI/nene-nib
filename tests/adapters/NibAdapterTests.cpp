@@ -6,9 +6,11 @@
 #include "EncodingFailure.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
+#include "Milestone.hpp"
 #include "TextEncoding.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
+#include "Win32TimingAdapter.hpp"
 
 #include <windows.h>
 
@@ -23,19 +25,26 @@ namespace
 using nenenib::adapters::win32::absolute_file_path;
 using nenenib::adapters::win32::Win32CodePageAdapter;
 using nenenib::adapters::win32::Win32FileAdapter;
+using nenenib::adapters::win32::Win32TimingAdapter;
 using nenenib::application::CodePageFailure;
 using nenenib::application::FileFailure;
 using nenenib::core::byte_order_mark;
 using nenenib::core::detect_encoding;
 using nenenib::core::FilePath;
+using nenenib::core::Milestone;
 using nenenib::core::TextEncoding;
 
 // application が渡す上限と同じ値（ADR 0010 の決定 12）。正本は EditorController にある。
 constexpr std::size_t read_limit = 64U * 1024U * 1024U;
 constexpr wchar_t folder[] = L"nib-adapter-files";
-constexpr std::array<const wchar_t *, 4> file_names{
-    L"nib-adapter-files/utf8.txt", L"nib-adapter-files/bom.txt", L"nib-adapter-files/sjis.txt",
-    L"nib-adapter-files/replaced.txt"};
+constexpr wchar_t recorded_marks[] = L"nib-adapter-files/timing.json";
+constexpr wchar_t unrecorded_marks[] = L"nib-adapter-files/silent.json";
+constexpr std::array<const wchar_t *, 6> file_names{L"nib-adapter-files/utf8.txt",
+                                                    L"nib-adapter-files/bom.txt",
+                                                    L"nib-adapter-files/sjis.txt",
+                                                    L"nib-adapter-files/replaced.txt",
+                                                    recorded_marks,
+                                                    unrecorded_marks};
 
 std::size_t &failure_count()
 {
@@ -154,6 +163,44 @@ void verify_code_pages(Win32CodePageAdapter &code_pages)
            "bytes that are not CP932 are undecodable");
 }
 
+// 節目を積むのは bind のあとだけで、JSON はデストラクタが 1 度だけ書く（ADR 0011 の決定 2）。
+void verify_timing_marks(Win32FileAdapter &files)
+{
+    {
+        Win32TimingAdapter timing;
+        timing.bind(recorded_marks);
+        timing.mark(Milestone::input_received);
+        timing.mark(Milestone::frame_presented);
+    }
+    {
+        Win32TimingAdapter silent;
+        silent.mark(Milestone::input_received);
+    }
+    const auto recorded = absolute_file_path(recorded_marks);
+    const auto unrecorded = absolute_file_path(unrecorded_marks);
+    expect(recorded.has_value() && unrecorded.has_value(), "both measurement paths resolve");
+    if (!recorded.has_value() || !unrecorded.has_value())
+    {
+        return;
+    }
+    const auto bytes = files.read(recorded.value(), read_limit);
+    expect(bytes.has_value(), "the bound adapter wrote its measurement file");
+    const std::string_view text = bytes.has_value() ? std::string_view(bytes.value()) : "";
+    expect(text.find("\"processCreationToFirstFrameMs\"") != std::string_view::npos,
+           "the report opens with the process creation to first frame value");
+    expect(text.find("\"qpcFrequency\"") != std::string_view::npos,
+           "the report records the counter frequency");
+    expect(text.find("\"input_received\"") != std::string_view::npos,
+           "the input milestone is in the report");
+    expect(text.find("\"frame_presented\"") != std::string_view::npos,
+           "the presented milestone is in the report");
+    expect(text.find("\"qpcMicroseconds\"") != std::string_view::npos,
+           "each milestone carries its counter reading");
+    const auto missing = files.read(unrecorded.value(), read_limit);
+    expect(!missing.has_value() && missing.error() == FileFailure::not_found,
+           "an adapter that was never bound writes nothing");
+}
+
 void verify_absolute_path()
 {
     const auto absolute = absolute_file_path(L"nib-adapter-files/utf8.txt");
@@ -178,6 +225,7 @@ int main()
     verify_replacement(files);
     verify_failures(files);
     verify_code_pages(code_pages);
+    verify_timing_marks(files);
     verify_absolute_path();
     if (failure_count() != 0)
     {

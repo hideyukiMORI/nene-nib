@@ -8,6 +8,7 @@
 #include "FileDialog.hpp"
 #include "FileFailure.hpp"
 #include "KeyMotion.hpp"
+#include "Milestone.hpp"
 #include "OpenDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -176,8 +177,9 @@ constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
 }
 } // namespace
 
-EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller)
-    : instance_(instance), controller_(controller)
+EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
+                           application::TimingPort &timing)
+    : instance_(instance), controller_(controller), timing_(timing)
 {
 }
 
@@ -195,9 +197,10 @@ EditorWindow::~EditorWindow()
 }
 
 std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
-EditorWindow::create(HINSTANCE instance, application::EditorController &controller)
+EditorWindow::create(HINSTANCE instance, application::EditorController &controller,
+                     application::TimingPort &timing)
 {
-    auto window = std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller));
+    auto window = std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, timing));
     const auto ready = window->initialize();
     if (!ready)
     {
@@ -274,7 +277,7 @@ std::expected<void, WindowFailure> EditorWindow::start_rendering()
     }
     renderer_ = std::make_unique<Direct2DRenderer>(std::move(renderer).value());
     renderer_->set_backdrop(backdrop_);
-    if (!renderer_->render(controller_.apply(application::VisibleLines{body_lines()})))
+    if (!draw_frame(controller_.apply(application::VisibleLines{body_lines()})))
     {
         return std::unexpected(WindowFailure::render);
     }
@@ -338,12 +341,14 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_ERASEBKGND:
         return 1;
     case WM_PAINT:
-        ValidateRect(window_, nullptr);
+        paint();
         return 0;
     case WM_KEYDOWN:
+        timing_.mark(core::Milestone::input_received);
         press_key(word);
         return 0;
     case WM_CHAR:
+        timing_.mark(core::Milestone::input_received);
         type_character(word);
         return 0;
     case WM_MOUSEWHEEL:
@@ -498,7 +503,7 @@ void EditorWindow::refresh_appearance()
     {
         renderer_->set_backdrop(backdrop_);
     }
-    present(frame);
+    invalidate();
 }
 
 void EditorWindow::resize()
@@ -528,9 +533,25 @@ std::size_t EditorWindow::body_lines() const
 void EditorWindow::send(const application::EditorIntent &intent)
 {
     const auto frame = controller_.apply(intent);
-    present(frame);
+    // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
+    invalidate();
     update_title(frame);
     announce(frame);
+}
+
+void EditorWindow::invalidate() noexcept
+{
+    if (window_ != nullptr)
+    {
+        InvalidateRect(window_, nullptr, FALSE);
+    }
+}
+
+void EditorWindow::paint()
+{
+    // 無効領域を先に消してから描く。描いている間に来た変更は次の WM_PAINT が拾う。
+    ValidateRect(window_, nullptr);
+    present(controller_.frame());
 }
 
 void EditorWindow::update_title(const application::EditorFrame &frame)
@@ -767,7 +788,20 @@ void EditorWindow::change_dpi(WPARAM word, LPARAM data)
     if (renderer_ != nullptr && !renderer_->set_dpi(dpi_))
     {
         abandon();
+        return;
     }
+    invalidate();
+}
+
+std::expected<void, RenderFailure> EditorWindow::draw_frame(const application::EditorFrame &frame)
+{
+    const auto drawn = renderer_->render(frame);
+    if (drawn)
+    {
+        // Present が返った直後の 1 点だけが「描けた」節目（ADR 0011 の決定 1・8）。
+        timing_.mark(core::Milestone::frame_presented);
+    }
+    return drawn;
 }
 
 void EditorWindow::present(const application::EditorFrame &frame)
@@ -776,7 +810,7 @@ void EditorWindow::present(const application::EditorFrame &frame)
     {
         return;
     }
-    const auto drawn = renderer_->render(frame);
+    const auto drawn = draw_frame(frame);
     if (drawn)
     {
         return;

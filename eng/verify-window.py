@@ -32,21 +32,20 @@ import os
 from pathlib import Path
 import shutil
 import struct
-import subprocess
 import sys
 import tempfile
 import time
 import winreg
 
-user = c.WinDLL("user32", use_last_error=True)
+# 窓の駆動（起動・検出・PostMessageW・確認ダイアログ・終了）は 1 本しかない（ADR 0011 の決定 7）。
+from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, become_dpi_aware,
+                           click, close, dismiss_dialog, GWL_STYLE, HTCAPTION, HTCLOSE,
+                           HWND_TOPMOST, IDNO, press, press_chord, rectangle, start, stop,
+                           SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_NEXT,
+                           VK_PRIOR, VK_RETURN, VK_S, window_title, WINDOW_CLASS, write_text,
+                           WS_CAPTION, WS_POPUP, WS_THICKFRAME, WS_VISIBLE)
+
 gdi = c.WinDLL("gdi32", use_last_error=True)
-kernel = c.WinDLL("kernel32", use_last_error=True)
-
-
-def api(dll, name, result, *arguments):
-    function = getattr(dll, name)
-    function.restype, function.argtypes = result, arguments
-    return function
 
 
 class BITMAPINFOHEADER(c.Structure):
@@ -62,44 +61,6 @@ class BITMAPINFO(c.Structure):
     _fields_ = [("bmiHeader", BITMAPINFOHEADER), ("bmiColors", w.DWORD * 3)]
 
 
-class KEYBDINPUT(c.Structure):
-    _fields_ = [
-        ("wVk", w.WORD), ("wScan", w.WORD), ("dwFlags", w.DWORD),
-        ("dwTime", w.DWORD), ("dwExtraInfo", c.POINTER(w.ULONG)),
-    ]
-
-
-class INPUTPAYLOAD(c.Union):
-    _fields_ = [("ki", KEYBDINPUT), ("padding", c.c_ubyte * 32)]
-
-
-class INPUT(c.Structure):
-    _fields_ = [("kind", w.DWORD), ("payload", INPUTPAYLOAD)]
-
-
-api(user, "SetProcessDpiAwarenessContext", w.BOOL, w.HANDLE)
-api(user, "FindWindowW", w.HWND, w.LPCWSTR, w.LPCWSTR)
-api(user, "GetWindowThreadProcessId", w.DWORD, w.HWND, c.POINTER(w.DWORD))
-api(user, "IsWindowVisible", w.BOOL, w.HWND)
-api(user, "IsWindow", w.BOOL, w.HWND)
-api(user, "GetWindowRect", w.BOOL, w.HWND, c.POINTER(w.RECT))
-api(user, "GetClientRect", w.BOOL, w.HWND, c.POINTER(w.RECT))
-api(user, "GetWindowLongPtrW", c.c_ssize_t, w.HWND, c.c_int)
-api(user, "GetDpiForWindow", w.UINT, w.HWND)
-api(user, "ClientToScreen", w.BOOL, w.HWND, c.POINTER(w.POINT))
-api(user, "SetWindowPos", w.BOOL, w.HWND, w.HWND, c.c_int, c.c_int, c.c_int, c.c_int, w.UINT)
-api(user, "PostMessageW", w.BOOL, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
-api(user, "FindWindowExW", w.HWND, w.HWND, w.HWND, w.LPCWSTR, w.LPCWSTR)
-api(user, "GetWindowTextW", c.c_int, w.HWND, w.LPWSTR, c.c_int)
-api(user, "SetForegroundWindow", w.BOOL, w.HWND)
-api(user, "GetForegroundWindow", w.HWND)
-api(user, "SendInput", w.UINT, w.UINT, c.c_void_p, c.c_int)
-api(user, "AttachThreadInput", w.BOOL, w.DWORD, w.DWORD, w.BOOL)
-api(user, "BringWindowToTop", w.BOOL, w.HWND)
-api(kernel, "GetCurrentThreadId", w.DWORD)
-api(user, "SendMessageW", w.LPARAM, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
-api(user, "GetDC", w.HDC, w.HWND)
-api(user, "ReleaseDC", c.c_int, w.HWND, w.HDC)
 api(gdi, "CreateCompatibleDC", w.HDC, w.HDC)
 api(gdi, "CreateCompatibleBitmap", w.HBITMAP, w.HDC, c.c_int, c.c_int)
 api(gdi, "SelectObject", w.HGDIOBJ, w.HDC, w.HGDIOBJ)
@@ -109,35 +70,7 @@ api(gdi, "BitBlt", w.BOOL, w.HDC, c.c_int, c.c_int, c.c_int, c.c_int, w.HDC, c.c
 api(gdi, "GetDIBits", c.c_int, w.HDC, w.HBITMAP, w.UINT, w.UINT, w.LPVOID, c.POINTER(BITMAPINFO), w.UINT)
 api(gdi, "GdiFlush", w.BOOL)
 
-WINDOW_CLASS = "NeNeNib.Editor"
-DIALOG_CLASS = "#32770"
-WM_CLOSE = 0x0010
-WM_COMMAND = 0x0111
-IDNO = 7
-WM_NCHITTEST = 0x0084
-WM_KEYDOWN = 0x0100
-WM_CHAR = 0x0102
-WM_LBUTTONDOWN = 0x0201
-WM_LBUTTONUP = 0x0202
-VK_RETURN = 0x0D
-VK_BACK = 0x08
-VK_ESCAPE = 0x1B
-VK_PRIOR = 0x21
-VK_NEXT = 0x22
-VK_CONTROL = 0x11
-VK_S = 0x53
-INPUT_KEYBOARD = 1
-KEYEVENTF_KEYUP = 0x0002
-HTCAPTION = 2
-HTCLOSE = 20
 SRCCOPY = 0x00CC0020
-HWND_TOPMOST = c.c_void_p(-1)
-SWP_NOMOVE_NOSIZE_SHOW = 0x0003 | 0x0040
-GWL_STYLE = -16
-WS_POPUP = 0x80000000
-WS_VISIBLE = 0x10000000
-WS_THICKFRAME = 0x00040000
-WS_CAPTION = 0x00C00000
 # Mica（DWMWA_SYSTEMBACKDROP_TYPE）は Windows 11 22H2 以降でだけ掛かる（ADR 0008）。
 MICA_BUILD = 22621
 # src/core/BuiltinTheme.hpp の正本と同じ値。ここが食い違ったら、どちらかが間違っている。
@@ -176,32 +109,6 @@ def expected_appearance() -> str:
     if kind != winreg.REG_DWORD:
         return "dark"
     return "dark" if value == 0 else "light"
-
-
-def rectangle(window, getter) -> list[int]:
-    bounds = w.RECT()
-    assert getter(window, c.byref(bounds))
-    return [bounds.left, bounds.top, bounds.right, bounds.bottom]
-
-
-def start(executable: Path, environment: dict,
-          arguments: list[str] | None = None) -> tuple[subprocess.Popen, int, list[int]]:
-    """Return the process, its window, and the window rectangle as first seen (within 0.2 s)."""
-    process = subprocess.Popen([str(executable), *(arguments or [])], env=environment)
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        window = user.FindWindowW(WINDOW_CLASS, None)
-        if window and user.IsWindowVisible(window):
-            owner = w.DWORD()
-            user.GetWindowThreadProcessId(window, c.byref(owner))
-            if owner.value == process.pid:
-                return process, window, rectangle(window, user.GetWindowRect)
-        if process.poll() is not None:
-            raise AssertionError(f"NeNeNib exited before showing a window: {process.returncode}")
-        time.sleep(0.05)
-    process.terminate()
-    process.wait(timeout=5)
-    raise AssertionError("NeNeNib did not create its window within 5 seconds")
 
 
 def capture(window, width: int, height: int) -> bytes:
@@ -270,127 +177,6 @@ def toggle_points(width: int, height: int, dpi: int) -> dict:
         "vimGround": [vim_left + to_pixels(5, dpi), middle],
         "ordinaryGround": [ordinary_left + to_pixels(5, dpi), middle],
     }
-
-
-def ask_hit(window, x: int, y: int) -> int:
-    """Ask the window procedure what is at a client point, without moving the real pointer."""
-    point = w.POINT(x, y)
-    assert user.ClientToScreen(window, c.byref(point))
-    return int(user.SendMessageW(window, WM_NCHITTEST, 0, (point.y << 16) | (point.x & 0xFFFF)))
-
-
-def click(window, x: int, y: int) -> None:
-    """Post a left click at a client point; the real pointer is never touched."""
-    packed = (y << 16) | (x & 0xFFFF)
-    assert user.PostMessageW(window, WM_LBUTTONDOWN, 1, packed)
-    assert user.PostMessageW(window, WM_LBUTTONUP, 0, packed)
-
-
-def press(window, key: int, times: int = 1) -> None:
-    """Post WM_KEYDOWN; no modifier state is involved, so no real key is ever pressed."""
-    for _ in range(times):
-        assert user.PostMessageW(window, WM_KEYDOWN, key, 1)
-
-
-def write_text(window, text: str) -> None:
-    """Post WM_CHAR for each UTF-16 unit, the way TranslateMessage would."""
-    for character in text:
-        assert user.PostMessageW(window, WM_CHAR, ord(character), 1)
-
-
-def window_title(window) -> str:
-    """The タスクバー title, which is "<tab title> - NeNe Nib" (ADR 0010 decision 13)."""
-    buffer = c.create_unicode_buffer(512)
-    user.GetWindowTextW(window, buffer, len(buffer))
-    return buffer.value
-
-
-def owned_dialog(pid: int) -> int:
-    """The visible MessageBoxW of that process, if one is up."""
-    child = None
-    while True:
-        child = user.FindWindowExW(None, child, DIALOG_CLASS, None)
-        if not child:
-            return 0
-        owner = w.DWORD()
-        user.GetWindowThreadProcessId(child, c.byref(owner))
-        if owner.value == pid and user.IsWindowVisible(child):
-            return child
-
-
-def await_dialog(process, seconds: float = 2.5) -> int:
-    """The MessageBox that process puts up within the window, or 0 if it puts none up."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        dialog = owned_dialog(process.pid)
-        if dialog:
-            return dialog
-        if process.poll() is not None:
-            return 0
-        time.sleep(0.05)
-    return 0
-
-
-def dialog_closed(dialog, seconds: float = 3.0) -> bool:
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        if not user.IsWindow(dialog) or not user.IsWindowVisible(dialog):
-            return True
-        time.sleep(0.05)
-    return False
-
-
-def dismiss_dialog(process, button: int, seconds: float = 2.5) -> bool:
-    """Press one button of the unsaved confirmation; the real keyboard is never touched."""
-    dialog = await_dialog(process, seconds)
-    if not dialog:
-        return False
-    assert user.PostMessageW(dialog, WM_COMMAND, button, 0)
-    assert dialog_closed(dialog), "the confirmation did not take the answer"
-    return True
-
-
-def acknowledge_dialog(process, seconds: float = 2.5) -> bool:
-    """A MessageBox with one button has one answer, so closing it is that answer."""
-    dialog = await_dialog(process, seconds)
-    if not dialog:
-        return False
-    assert user.PostMessageW(dialog, WM_CLOSE, 0, 0)
-    assert dialog_closed(dialog), "the reported reason could not be dismissed"
-    return True
-
-
-def key_input(key: int, flags: int) -> INPUT:
-    record = INPUT()
-    record.kind = INPUT_KEYBOARD
-    record.payload.ki = KEYBDINPUT(key, 0, flags, 0, None)
-    return record
-
-
-def take_foreground(window) -> bool:
-    """SetForegroundWindow is refused unless we share the input queue of the current foreground."""
-    if user.GetForegroundWindow() == window:
-        return True
-    foreground = user.GetForegroundWindow()
-    theirs = user.GetWindowThreadProcessId(foreground, None) if foreground else 0
-    ours = kernel.GetCurrentThreadId()
-    attached = bool(theirs) and bool(user.AttachThreadInput(ours, theirs, True))
-    user.BringWindowToTop(window)
-    user.SetForegroundWindow(window)
-    if attached:
-        user.AttachThreadInput(ours, theirs, False)
-    time.sleep(0.5)
-    return user.GetForegroundWindow() == window
-
-
-def press_chord(window, modifier: int, key: int) -> bool:
-    """Ctrl+key through the raw input queue; posted messages cannot carry the modifier."""
-    if not take_foreground(window):
-        return False
-    records = (INPUT * 4)(key_input(modifier, 0), key_input(key, 0),
-                          key_input(key, KEYEVENTF_KEYUP),
-                          key_input(modifier, KEYEVENTF_KEYUP))
-    return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
 
 
 def write_documents(output: Path) -> dict:
@@ -464,14 +250,12 @@ def verify_document(executable: Path, environment: dict, appearance: str, output
         assert measured["titleAfterTyping"] == f"● {path.name} - NeNe Nib", measured
         if plan["save"]:
             measured["save"] = try_saving(window, path)
-        assert user.PostMessageW(window, WM_CLOSE, 0, 0)
+        close(window)
         measured["confirmationDismissed"] = dismiss_dialog(process, IDNO)
         measured["exitCode"] = process.wait(timeout=5)
         assert measured["exitCode"] == 0, measured["exitCode"]
     finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=5)
+        stop(process)
     return measured
 
 
@@ -487,16 +271,14 @@ def verify_missing_document(executable: Path, environment: dict, output: Path) -
         time.sleep(0.5)
         result = {"reported": reported, "title": window_title(window)}
         assert result["title"] == "無題 - NeNe Nib", result["title"]
-        assert user.PostMessageW(window, WM_CLOSE, 0, 0)
+        close(window)
         # 本文は空のままなので、閉じるときに未保存の確認は出ない。
         result["confirmationAsked"] = bool(await_dialog(process, 1.5))
         assert not result["confirmationAsked"], "an untouched buffer asked about saving"
         result["exitCode"] = process.wait(timeout=5)
         assert result["exitCode"] == 0, result["exitCode"]
     finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=5)
+        stop(process)
     return result
 
 
@@ -767,26 +549,42 @@ def verify_backspace(window, ground: dict) -> dict:
     return erased
 
 
+def await_ink(window, size: tuple, box: tuple, grounds: list, wanted: bool,
+              seconds: float = 8.0) -> tuple[bytes, int]:
+    """Capture until a box has ink (or has none), or until the deadline says it never will.
+
+    Drawing is coalesced into one WM_PAINT after the posted messages drain (ADR 0011 decision 6),
+    so the picture arrives when the queue is empty rather than after a fixed sleep. Waiting for the
+    expected state and then asserting it is the same check with a deadline instead of a guess.
+    """
+    width, height = size
+    deadline = time.monotonic() + seconds
+    while True:
+        pixels = capture(window, width, height)
+        amount = ink(pixels, width, box, grounds)
+        if (amount > 0) == wanted or time.monotonic() > deadline:
+            return pixels, amount
+        time.sleep(0.1)
+
+
 def verify_scrolling(window, ground: dict, output: Path) -> dict:
     """200 Enters, then PgUp back to the top and PgDn away from it again."""
     width, height, dpi, body = ground["size"]
     grounds = [ground["background"], ground["current"], list(ACCENT)]
+    size, box = (width, height), content_box(body, 0, dpi)
     press(window, VK_RETURN, TYPED_LINES)
-    time.sleep(6.0)
-    bottom = capture(window, width, height)
+    bottom, bottom_ink = await_ink(window, size, box, grounds, False)
     write_bitmap(output / "editing-slice-scrolled.bmp", bottom, width, height)
     press(window, VK_PRIOR, PAGE_KEYS)
-    time.sleep(2.5)
-    top = capture(window, width, height)
+    _, top_ink = await_ink(window, size, box, grounds, True)
     press(window, VK_NEXT)
-    time.sleep(0.5)
-    paged = capture(window, width, height)
+    _, paged_ink = await_ink(window, size, box, grounds, False)
     scrolled = {
         "typedLines": TYPED_LINES,
         "visibleLines": body["visibleLines"],
-        "rowOneInkAtBottom": ink(bottom, width, content_box(body, 0, dpi), grounds),
-        "rowOneInkAtTop": ink(top, width, content_box(body, 0, dpi), grounds),
-        "rowOneInkAfterPageDown": ink(paged, width, content_box(body, 0, dpi), grounds),
+        "rowOneInkAtBottom": bottom_ink,
+        "rowOneInkAtTop": top_ink,
+        "rowOneInkAfterPageDown": paged_ink,
         "capture": "editing-slice-scrolled.bmp",
     }
     assert scrolled["rowOneInkAtBottom"] == 0, "the first line is still visible after 200 Enters"
@@ -834,7 +632,7 @@ def main() -> None:
     isolated = Path(tempfile.mkdtemp(prefix="profile-", dir=output)).resolve()
     assert isolated.is_relative_to(output.resolve())
     environment = dict(os.environ, LOCALAPPDATA=str(isolated), APPDATA=str(isolated))
-    assert user.SetProcessDpiAwarenessContext(c.c_void_p(-4))
+    become_dpi_aware()
     process, window, first_rect = start(executable, environment)
     try:
         appearance = expected_appearance()
@@ -843,16 +641,14 @@ def main() -> None:
         result["firstSeenWindowRect"] = first_rect
         result["shownAfterPlacement"] = first_rect[:2] != [0, 0]
         assert result["shownAfterPlacement"], f"the window was shown at {first_rect[:2]}"
-        assert user.PostMessageW(window, WM_CLOSE, 0, 0)
+        close(window)
         # この検査は本文を打ち替えたあとなので、閉じるときは未保存の確認が出る（ADR 0010 の決定 10）。
         result["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
         assert result["closeConfirmationDismissed"], "WM_CLOSE did not ask about the unsaved body"
         result["closeExitCode"] = process.wait(timeout=5)
         assert result["closeExitCode"] == 0, result["closeExitCode"]
     finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=5)
+        stop(process)
     result["documents"] = verify_documents(executable, environment, appearance, output)
     (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                     encoding="utf-8")

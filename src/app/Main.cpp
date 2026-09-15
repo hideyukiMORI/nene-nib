@@ -8,6 +8,7 @@
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
+#include "Win32TimingAdapter.hpp"
 #include "WindowFailure.hpp"
 
 #include <windows.h>
@@ -18,7 +19,9 @@
 #include <cstddef>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -44,34 +47,89 @@ int report(const wchar_t *reason) noexcept
     return 1;
 }
 
-// NeNeNib.exe <path> で開く（ADR 0010 の決定 11）。最初の描画より前に意図として渡す。
-void open_first_argument(nenenib::application::EditorController &controller)
+// 速さの計測の出力先。付いていれば Win32TimingAdapter が記録状態で動く（ADR 0011 の決定 2）。
+constexpr wchar_t measure_option[] = L"--measure";
+
+// 引数は 1 度だけ取り出して持ち回る。CommandLineToArgvW を呼ぶ場所はここだけ（ARC-001）。
+[[nodiscard]] std::vector<std::wstring> command_arguments()
 {
     int count = 0;
     wchar_t **arguments = CommandLineToArgvW(GetCommandLineW(), &count);
-    if (arguments == nullptr || count < 2)
+    if (arguments == nullptr || count < 1)
     {
         LocalFree(arguments);
-        return;
+        return {};
     }
     const std::span<wchar_t *> given(arguments, static_cast<std::size_t>(count));
-    const auto path = nenenib::adapters::win32::absolute_file_path(std::wstring(given[1]));
+    std::vector<std::wstring> result;
+    for (const wchar_t *argument : given.subspan(1))
+    {
+        result.emplace_back(argument);
+    }
+    LocalFree(arguments);
+    return result;
+}
+
+[[nodiscard]] std::wstring option_value(const std::vector<std::wstring> &given,
+                                        std::wstring_view name)
+{
+    for (std::size_t index = 0; index + 1 < given.size(); ++index)
+    {
+        if (given[index] == name)
+        {
+            return given[index + 1];
+        }
+    }
+    return {};
+}
+
+// 選択肢とその値を飛ばした最初の引数がファイル（ADR 0010 の決定 11）。
+[[nodiscard]] std::wstring first_file(const std::vector<std::wstring> &given)
+{
+    std::size_t index = 0;
+    while (index < given.size())
+    {
+        if (given[index] != measure_option)
+        {
+            return given[index];
+        }
+        index += 2;
+    }
+    return {};
+}
+
+// NeNeNib.exe <path> で開く（ADR 0010 の決定 11）。最初の描画より前に意図として渡す。
+void open_first_file(nenenib::application::EditorController &controller,
+                     const std::wstring &argument)
+{
+    if (argument.empty())
+    {
+        return;
+    }
+    const auto path = nenenib::adapters::win32::absolute_file_path(argument);
     if (path.has_value())
     {
         static_cast<void>(controller.apply(nenenib::application::OpenDocument{path.value()}));
     }
-    LocalFree(arguments);
 }
 
 int run(HINSTANCE instance)
 {
+    const std::vector<std::wstring> given = command_arguments();
+    // 節目の受け手は常に居る。--measure が無ければ何も積まない状態のまま（決定 2）。
+    nenenib::adapters::win32::Win32TimingAdapter timing;
+    const std::wstring measure = option_value(given, measure_option);
+    if (!measure.empty())
+    {
+        timing.bind(measure);
+    }
     nenenib::adapters::win32::Win32AppearanceAdapter appearance;
     nenenib::adapters::win32::Win32ClipboardAdapter clipboard;
     nenenib::adapters::win32::Win32FileAdapter files;
     nenenib::adapters::win32::Win32CodePageAdapter code_pages;
     nenenib::application::EditorController controller(appearance, clipboard, files, code_pages);
-    open_first_argument(controller);
-    const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller);
+    open_first_file(controller, first_file(given));
+    const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing);
     if (!window)
     {
         return report(reason_of(window.error()));

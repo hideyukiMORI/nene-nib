@@ -1,5 +1,6 @@
 # ビルド出力（CMake / clang-cl）。アンカーして誤爆を防ぐ
 /build/
+/build-release/
 /out/
 /.vs/
 *.user

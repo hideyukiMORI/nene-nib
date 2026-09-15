@@ -108,7 +108,8 @@ head が動いたら Draft に戻して再度 Ready にする。古い成功 SHA
 退行でゲートを落とす（[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。許容退行を広げる（基準値を下げる）には ADR が要る。
 CI では同じ CI 機での相対退行だけを見て、絶対値の目標は施主の実機で記録する。
 
-- 機械強制: **planned**（ベンチも基準値もまだ無い。Phase 3 の縦切りで最初の値を測ってから結線する）
+- 機械強制: **active**（施主の実機。CI は記録だけで、退行判定は基準値が貯まってから。[ADR 0011](adr/0011-speed-measurement-timing-port-and-paint-coalescing.md)・Issue #16。`eng/check.ps1` が Release の exe で `eng/measure-speed.py --check` を走らせ、
+  `eng/perf-reference.json` に指紋の一致する機械では基準値との比較で落ちる。指紋の無い機械（CI）では記録だけ。CI の基準値は同じ CI 機の値が数回たまってから別の Issue で決める）
 
 ---
 
@@ -243,7 +244,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-011 | planned | eng/toolchain.ps1 |
 | QLT-012 | planned | |
 | QLT-013 | planned | |
-| QLT-014 | planned | eng/perf-reference.json（未作成） |
+| QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py |
 | CNF-001 | planned | eng/conformance.py / tests/conformance |
 | CNF-002 | planned | eng/conformance.py / tests/conformance |
 | CNF-003 | planned | eng/conformance.py / tests/conformance |
@@ -269,7 +270,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 検査自身のテスト | 規約検査・シンボル検査・カバレッジ判定・実ツールの正例・反例 | unittest / eng/prove-gates.py |
 | 単体テスト | C++23 基盤のスモークと中核の振る舞い | CTest / tests/build・tests/unit（ASan / UBSan 付き・`-fno-sanitize-recover=all`。OS 資源と表示は使わない） |
 | カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
-| 速さ | 3 本のベンチの退行 | 未結線（QLT-014 planned） |
+| 速さ | 3 本のベンチの退行 | `eng/measure-speed.py --check`（施主の実機で基準値と比較。CI は記録だけ・QLT-014） |
 | 依存 | 道具の版と実行時依存 0 | tool-versions.json / architecture.json / `/MT`（R1） |
 
 ---

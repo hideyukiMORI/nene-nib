@@ -5,7 +5,10 @@
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "FilePath.hpp"
+#include "Milestone.hpp"
+#include "RenderFailure.hpp"
 #include "StatusBarHit.hpp"
+#include "TimingPort.hpp"
 #include "TitleBarBackdrop.hpp"
 #include "TitleBarHit.hpp"
 #include "WindowFailure.hpp"
@@ -21,11 +24,14 @@ namespace nenenib::ui::win32
 {
 // 枠なしの編集窓。操作は意図として controller へ渡し、描画は EditorFrame を写すだけ（ARC-011 /
 // CPP-017）。タイトルバーとステータスバーの位置は core のレイアウト純関数が決める（ADR 0008）。
+// 描画は WM_PAINT の 1 か所に集める。意図を適用したら無効化するだけで、まとめて来た入力は
+// 1 フレームで描かれる（ADR 0011 の決定 6）。節目は打つだけで、時刻は知らない（決定 1）。
 class EditorWindow final
 {
   public:
     [[nodiscard]] static std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
-    create(HINSTANCE instance, application::EditorController &controller);
+    create(HINSTANCE instance, application::EditorController &controller,
+           application::TimingPort &timing);
     ~EditorWindow();
     EditorWindow(const EditorWindow &) = delete;
     EditorWindow(EditorWindow &&) = delete;
@@ -37,7 +43,8 @@ class EditorWindow final
     [[nodiscard]] HWND handle() const noexcept;
 
   private:
-    EditorWindow(HINSTANCE instance, application::EditorController &controller);
+    EditorWindow(HINSTANCE instance, application::EditorController &controller,
+                 application::TimingPort &timing);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
     void apply_backdrop(const application::EditorFrame &frame);
@@ -50,6 +57,12 @@ class EditorWindow final
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);
     void place_caret(LPARAM data);
+    // 描く唯一の口。Present が返った直後に frame_presented を打つ（ADR 0011 の決定 1）。
+    [[nodiscard]] std::expected<void, RenderFailure>
+    draw_frame(const application::EditorFrame &frame);
+    void paint();
+    // 意図の適用で変わった見た目は、次の WM_PAINT でまとめて描く（決定 6）。
+    void invalidate() noexcept;
     void present(const application::EditorFrame &frame);
     void abandon();
     void refresh_appearance();
@@ -74,6 +87,7 @@ class EditorWindow final
 
     HINSTANCE instance_;
     application::EditorController &controller_;
+    application::TimingPort &timing_;
     // 題名は変わったときだけ OS へ渡す。毎フレーム SetWindowTextW を呼ばない（決定 13）。
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。

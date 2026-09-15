@@ -7,6 +7,7 @@
   "eng/symbol-allowlist.json": ["eng/symbols.py"],
   "eng/coverage-policy.json": ["eng/coverage.py"],
   "eng/conformance-rules.json": ["eng/conformance.py"],
+  "eng/perf-reference.json": ["eng/measure-speed.py", "eng/prove-gates.py"],
   "eng/config-bindings.json": ["eng/conformance.py"],
   "src/app/NeNeNib.manifest.in": ["CMakeLists.txt"],
   "src/app/NeNeNibVersion.h.in": ["CMakeLists.txt"]
