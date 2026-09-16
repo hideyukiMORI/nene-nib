@@ -86,6 +86,53 @@ CI（PR #23・run 35104611209・AMD EPYC 7763 / Hyper-V Video＝WARP / 96 DPI）
 
 記録した JSON: `out/speed/2026-09-16T13-40-14Z.json`（git 対象外）。
 
+## `D3D11CreateDevice` の実験（Issue #24・段 1）
+
+**30 ms 以上縮んだ実験は無い。** 実験 a・b・c・d はどれも対照の ±6 ms に収まり（ばらつきの幅の中）、
+`device_created` の 159 ms を `D3D11CreateDevice` の呼び方で削る道は見つからなかった。
+削れたのは WARP を強制した補足 e だけで、これは NVIDIA のユーザーモードドライバを読まないという意味であって、直し方ではない。
+
+実測: 2026-09-17・同じ機械（指紋 `bc8a356f37c68491`・RTX 3090 / 120 DPI・ドライバ 32.0.16.1088）・Release の exe。
+各実験は `src/ui/win32/Direct2DRenderer.cpp` の `create_device` を一時的に変え、
+`cmake --build build-release --target NeNeNib` の後に `python eng/measure-speed.py --record` を 1 回（5 回の中央値）。
+6 本を続けて測ったので、機械の状態は 6 本で同じである。**基準値・`eng/perf-reference.json`・ゲートは変えていない。**
+
+| 実験 | 変えたこと | `device_created` 中央値 | 最小 | 最大 | 起動全体の中央値 | 対照との差 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0（対照） | 変えない | 159.0 ms | 155.5 | 173.1 | 185.8 ms | — |
+| a | `D3D_FEATURE_LEVEL` の配列 `{11_1, 11_0}` を渡す（いまは `nullptr, 0`） | 161.8 ms | 156.3 | 184.9 | 192.4 ms | **+2.8 ms** |
+| b | `CreateDXGIFactory2` → `EnumAdapters1(0)` の adapter を `D3D_DRIVER_TYPE_UNKNOWN` に渡す | 164.6 ms | 156.0 | 166.7 | 188.8 ms | **+5.6 ms** |
+| c | flags に `D3D11_CREATE_DEVICE_SINGLETHREADED` を足す | 158.2 ms | 155.5 | 162.0 | 183.6 ms | **-0.8 ms** |
+| d | 変えずに `--record` を連続 2 回走らせた 2 回目 | 159.5 ms | 156.6 | 171.6 | 184.8 ms | **+0.5 ms** |
+| e（補足） | `D3D_DRIVER_TYPE_WARP` を強制（製品には入れない） | 9.5 ms | 9.1 | 11.7 | 37.6 ms | **-149.5 ms** |
+
+所見:
+
+- **a（機能レベルの配列）**: 縮まない。むしろ 2.8 ms 増えたが、対照の最大 173.1 ms との幅を見れば差とは言えない。既定の全機能レベルの試行は費用ではない
+- **b（adapter を明示）**: 縮まない。この列の `device_created` には `CreateDXGIFactory2` と `EnumAdapters1` も入るので +5.6 ms のうち数 ms はそれ自身の費用である。`D3D_DRIVER_TYPE_HARDWARE` の内部の adapter 列挙は重複の費用になっていない
+- **c（SINGLETHREADED）**: 縮まない（-0.8 ms）。ロックの初期化は費用ではない。なお製品に入れるなら ADR 0004 の「UI スレッド＋1 本」との整合を別に見る必要があり、0.8 ms のために足す理由は無い
+- **d（連続 2 回）**: 1 回目 159.0 ms → 2 回目 159.5 ms で動かない。**ドライバ DLL のファイルキャッシュは効いていない**。5 回の起動を 2 回繰り返しても値が同じなので、159 ms はコールドスタートの読み込み費用ではなく、毎回必ず払う初期化である
+- **e（WARP）**: 9.5 ms。CI（Hyper-V Video＝WARP）の 3.6 ms と桁が合う（CI は 96 DPI・別 CPU）。起動全体も 37.6 ms まで落ちる。**159 ms はまるごと NVIDIA のユーザーモードドライバの初期化である**ことが実機でも確かめられた
+
+`device_created` の区間で読まれているもの（`tasklist /m nv*`。ADR 0011 の決定 8 により Process Monitor / ETW は使わない）:
+`nvwgf2umx.dll`（D3D11 のユーザーモードドライバ・**86.3 MiB**）・`nvldumdx.dll`・`nvgpucomp64.dll`・`NvMemMapStoragex.dll`・`nvppex.dll`。
+86 MiB の DLL の読み込みと初期化が d でキャッシュに効かない以上、**呼び方を変える道は閉じている**と読める。残るのは「いつ払うか」（順番・並行）を変える道だけである。
+
+記録した JSON（git 対象外）:
+
+| 実験 | パス |
+| --- | --- |
+| 0（対照） | `out/speed/2026-09-16T15-32-16Z.json` |
+| d（連続 2 回目） | `out/speed/2026-09-16T15-33-07Z.json` |
+| a | `out/speed/2026-09-16T15-34-10Z.json` |
+| b | `out/speed/2026-09-16T15-35-15Z.json` |
+| c | `out/speed/2026-09-16T15-36-11Z.json` |
+| e | `out/speed/2026-09-16T15-37-11Z.json` |
+
+（ファイル名の刻は機械の時計。実験は 0 → d → a → b → c → e の順に続けて走らせた。）
+
+製品コードは実験のあと `git checkout -- src/` で戻し、`build-release` を戻した src で build し直した。この節の変更は docs だけである。
+
 ## `WM_PAINT` への集約の効果（Debug の exe・同じ機械・前後比較）
 
 | | 200 打鍵の合計 | 1 打鍵 |
