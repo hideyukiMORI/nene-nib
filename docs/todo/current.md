@@ -5,7 +5,7 @@
 
 ## 現在の Issue
 
-次の焦点 Issue は [#28](https://github.com/hideyukiMORI/nene-nib/issues/28)（IME・FR-012・ADR 0014）。#24（起動）は ADR 0013 で窓を先に見せる順に変え、窓は約 35 ms で見える（`D3D11CreateDevice` の 160 ms は毎回払うドライバの固定費で呼び方では縮まない）。その次は Vim の 2 本目。
+焦点 Issue は [#28](https://github.com/hideyukiMORI/nene-nib/issues/28)（IME・ADR 0014）。実装済みで **PR #32 が draft**（設計リナのフルゲート → Ready → CI → merge が次回の最初の作業）。その次は [#31](https://github.com/hideyukiMORI/nene-nib/issues/31)（タブの帯・D16・小さい）→ [#30](https://github.com/hideyukiMORI/nene-nib/issues/30)（計測器の揺れ）→ Vim の 2 本目。
 Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 / #19 / #22 は main へ統合済み（[日報 09-17](../reports/2026-09-17.md)）。main は `f35439c`。
 
 ## 段階
@@ -15,7 +15,7 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 / #19 / #22 は main へ統
 | Phase 0 言語の実測 | ✅ 2026-09-15（114 記録・`docs/quality/phase0-results.json`） |
 | Phase 1 文書とゲートの足場 | ✅ 2026-09-15（Issue #1・PR #2） |
 | Phase 2 negative proof | ✅ 2026-09-15（26 反例・`docs/quality/gate-proofs.md`） |
-| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → #22 Vim の最初の縦切り（ADR 0012）✅ → #24 窓を先に見せる（ADR 0013）✅ → **#28 IME（ADR 0014）** → Vim の 2 本目 |
+| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → #22 Vim の最初の縦切り（ADR 0012）✅ → #24 窓を先に見せる（ADR 0013）✅ → **#28 IME（ADR 0014・PR #32 draft）** → #31 タブの帯（D16）→ #30 → Vim の 2 本目 |
 | Phase 4 公開 | 🔲 |
 
 ## 動くもの（main `f35439c`）
@@ -29,5 +29,5 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 / #19 / #22 は main へ統
 
 ## 次の 1 手
 
-IME（#28・ADR 0014）の依頼書を実装リナに渡す。Vim の 2 本目（`c y p` / VISUAL / オペレータ側の回数 / Home・End）は fixture を足す形で。CI のベンチの値が数回たまったら CI の基準値の Issue。
+PR #32（IME）を設計リナがフルゲート（起動の内訳で IME が起動に費用を足していないか見る）→ Ready → CI → merge。次に #31（タブの帯を不透明の深い茄子色に・D16）を実装リナに渡す。Vim の 2 本目（`c y p` / VISUAL / オペレータ側の回数 / Home・End）は fixture を足す形で。CI のベンチの値が数回たまったら CI の基準値の Issue。
 カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1（core だけ）がいつでも着手できる。
