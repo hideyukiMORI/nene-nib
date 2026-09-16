@@ -159,7 +159,7 @@ piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl
 Ctrl+O / Ctrl+S / Ctrl+Shift+S と起動引数でファイルを開いて保存し、UTF-8 / UTF-8 BOM / Shift_JIS と CRLF / LF を読んだ形のまま保ち、未保存の印「● 」と「保存しますか」を出す。
 速さは `eng/measure-speed.py` が Release の exe で 3 本のベンチを測り、`eng/perf-reference.json` の機械ごとの基準値と比べてゲートで落とす（QLT-014・施主の実機で active。実機: 起動 191 ms・1 打鍵 0.9 ms・16 MiB 250 ms）。描画は `WM_PAINT` で 1 フレームに 1 回。
 見た目の正本は `docs/design/2026-09-15-look.md` と `docs/design/2026-09-15-editing-look.md`。カラーテーマとフォントサイズの計画は `docs/plans/2026-09-15-colorschemes.md`（D13 / D14）。
-Vim は NORMAL / INSERT の最初の範囲（`h j k l 0 $ w b`・回数・`x`・`d`・`dd`・`i a I A`・Esc・`u`）だけで、再現度は本物の Vim 9.1 の oracle が生成した fixture（`tests/vim/`・`eng/vim-oracle.py --regenerate`）を CTest が再生して守る。IME・VISUAL・複数タブ・Ctrl+P・設定の保存はまだ無い。起動 184 ms のうち 160 ms は `D3D11CreateDevice`（Issue #24 で直す）。最新は [日報](docs/reports/2026-09-16.md) / [引き継ぎ](docs/handoffs/2026-09-16.md)。
+Vim は NORMAL / INSERT の最初の範囲（`h j k l 0 $ w b`・回数・`x`・`d`・`dd`・`i a I A`・Esc・`u`）だけで、再現度は本物の Vim 9.1 の oracle が生成した fixture（`tests/vim/`・`eng/vim-oracle.py --regenerate`）を CTest が再生して守る。IME・VISUAL・複数タブ・Ctrl+P・設定の保存はまだ無い。起動 184 ms のうち 160 ms は `D3D11CreateDevice`（Issue #24 で直す）。最新は [日報](docs/reports/2026-09-17.md) / [引き継ぎ](docs/handoffs/2026-09-17.md)。
 
 ---
 

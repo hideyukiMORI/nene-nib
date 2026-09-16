@@ -5,8 +5,8 @@
 
 ## 現在の Issue
 
-焦点 Issue は [#22](https://github.com/hideyukiMORI/nene-nib/issues/22)（Vim エンジンの最初の縦切り・ADR 0012。実装済み・PR 準備中）。次は [#24](https://github.com/hideyukiMORI/nene-nib/issues/24)（起動 184 ms のうち `D3D11CreateDevice` の 160 ms。実験 4 つ → ADR）か IME（FR-012）。
-Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 は main へ統合済み（[日報 09-16](../reports/2026-09-16.md)）。main は `33390d4`。
+次の焦点 Issue は [#24](https://github.com/hideyukiMORI/nene-nib/issues/24)（起動 184 ms のうち `D3D11CreateDevice` の 160 ms。実験 4 つ → ADR）。その次は IME（FR-012・ADR 0013）か Vim の 2 本目。#22（Vim の最初の縦切り）は PR #25 で main に入った。
+Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 / #19 / #22 は main へ統合済み（[日報 09-17](../reports/2026-09-17.md)）。main は `f35439c`。
 
 ## 段階
 
@@ -15,10 +15,10 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 は main へ統合済み（
 | Phase 0 言語の実測 | ✅ 2026-09-15（114 記録・`docs/quality/phase0-results.json`） |
 | Phase 1 文書とゲートの足場 | ✅ 2026-09-15（Issue #1・PR #2） |
 | Phase 2 negative proof | ✅ 2026-09-15（26 反例・`docs/quality/gate-proofs.md`） |
-| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → **#22 Vim の最初の縦切り（ADR 0012）** → #24 起動の device 生成 / IME |
+| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → #22 Vim の最初の縦切り（ADR 0012）✅ → **#24 起動の device 生成** → IME |
 | Phase 4 公開 | 🔲 |
 
-## 動くもの（main `33390d4` ＋ #22 のブランチ）
+## 動くもの（main `f35439c`）
 
 枠なし窓（Snap と影は OS のまま）・Mica のタイトルバーにタブ 1 本と窓の操作・piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl+Z/Y・クリックでキャレット）・
 ステータスバーの「通常 | Vim」トグル・OS のライト／ダーク（茄子色 D11・橙 D12）・ファイルの開閉と保存（Ctrl+O / Ctrl+S / Ctrl+Shift+S・起動引数・UTF-8 / BOM / Shift_JIS・CRLF / LF・一時ファイルからの置換・未保存の印と確認）・速さのゲート（Release の exe で 3 本のベンチ・実機の基準値・起動の内訳・`WM_PAINT` で 1 フレームに 1 回の描画）・Vim の最初の範囲（NORMAL / INSERT・`h j k l 0 $ w b`・回数・`x`・`d`＋移動・`dd`・`i a I A`・Esc・`u` / Ctrl-r。本物の Vim 9.1 の oracle が生成した fixture 87 件を CTest が再生）。
@@ -29,5 +29,5 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 は main へ統合済み（
 
 ## 次の 1 手
 
-#22 を PR → CI → merge。次は #24（起動の `D3D11CreateDevice` 160 ms: 実験 4 つ → 縮まなければ窓を先に見せる案 A を ADR）か IME（FR-012）。Vim の 2 本目（`c y p` / VISUAL / オペレータ側の回数 / Home・End）は fixture を足す形で。CI のベンチの値が数回たまったら CI の基準値の Issue。
+#24（起動の `D3D11CreateDevice` 160 ms: 実験 4 つ → 縮まなければ窓を先に見せる案 A を ADR）か IME（FR-012）。Vim の 2 本目（`c y p` / VISUAL / オペレータ側の回数 / Home・End）は fixture を足す形で。CI のベンチの値が数回たまったら CI の基準値の Issue。
 カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1（core だけ）がいつでも着手できる。
