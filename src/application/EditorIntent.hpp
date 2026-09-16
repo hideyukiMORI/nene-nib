@@ -14,6 +14,7 @@
 #include "ScrollLines.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
+#include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 
 #include <variant>
@@ -26,5 +27,5 @@ namespace nenenib::application
 using EditorIntent =
     std::variant<InsertText, MoveCaret, PlaceCaret, DeleteText, NewLine, SelectAll, CancelSelection,
                  ClipboardAction, HistoryAction, ScrollLines, VisibleLines, SelectEditMode,
-                 RefreshAppearance, OpenDocument, SaveDocument>;
+                 VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument>;
 } // namespace nenenib::application

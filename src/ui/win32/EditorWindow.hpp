@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Direct2DRenderer.hpp"
+#include "EditMode.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "FilePath.hpp"
+#include "HistoryDirection.hpp"
 #include "Milestone.hpp"
 #include "RenderFailure.hpp"
 #include "StatusBarHit.hpp"
@@ -72,7 +74,11 @@ class EditorWindow final
     void type_character(WPARAM word);
     void press_key(WPARAM word);
     void press_plain_key(WPARAM word);
+    void press_vim_key(WPARAM word);
     void press_control_key(WPARAM word);
+    // Ctrl+Z / Ctrl+Y は Vim では u / Ctrl-r に譲り、Ctrl+R は Vim のときだけ意味を持つ。
+    void send_history(core::HistoryDirection direction);
+    void send_vim_redo();
     void open_document();
     void save_document();
     void save_document_as();
@@ -92,6 +98,8 @@ class EditorWindow final
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
     wchar_t pending_high_surrogate_ = 0;
+    // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
+    core::EditMode mode_ = core::EditMode::ordinary;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
     ATOM class_ = 0;

@@ -8,6 +8,7 @@
 #include "FileDialog.hpp"
 #include "FileFailure.hpp"
 #include "KeyMotion.hpp"
+#include "KeyVimSpecial.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
 #include "SaveDocument.hpp"
@@ -17,6 +18,11 @@
 #include "TextEncoding.hpp"
 #include "TitleBarLayout.hpp"
 #include "Utf16.hpp"
+#include "Utf8.hpp"
+#include "VimCharacter.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
+#include "VimSpecialKey.hpp"
 
 #include <dwmapi.h>
 
@@ -62,6 +68,15 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
                                                     {VK_RIGHT, core::CaretMotion::next_word},
                                                     {VK_HOME, core::CaretMotion::document_start},
                                                     {VK_END, core::CaretMotion::document_end}}};
+// Vim モードの仮想キー → 特別な鍵。通常モードの表と入れ替えて引く（ADR 0012 の決定 4）。
+constexpr std::array<KeyVimSpecial, 7> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
+                                                     {VK_RETURN, core::VimSpecialKey::enter},
+                                                     {VK_BACK, core::VimSpecialKey::backspace},
+                                                     {VK_LEFT, core::VimSpecialKey::arrow_left},
+                                                     {VK_RIGHT, core::VimSpecialKey::arrow_right},
+                                                     {VK_UP, core::VimSpecialKey::arrow_up},
+                                                     {VK_DOWN, core::VimSpecialKey::arrow_down}}};
+constexpr char32_t tab_character = U'\t';
 
 [[nodiscard]] bool held(int key) noexcept
 {
@@ -79,6 +94,23 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] std::optional<core::VimSpecialKey> vim_special_for(WPARAM key) noexcept
+{
+    for (const KeyVimSpecial entry : vim_specials)
+    {
+        if (entry.key == key)
+        {
+            return entry.special;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] core::SelectionAnchoring anchoring_now() noexcept
+{
+    return held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
 }
 
 // UTF-8 の表示値を Win32 の UTF-16 へ。題名とダイアログの既定名だけが通る（CPP-014）。
@@ -535,6 +567,7 @@ std::size_t EditorWindow::body_lines() const
 void EditorWindow::send(const application::EditorIntent &intent)
 {
     const auto frame = controller_.apply(intent);
+    mode_ = frame.mode;
     // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
     invalidate();
     update_title(frame);
@@ -686,32 +719,61 @@ void EditorWindow::type_character(WPARAM word)
     wide.push_back(unit);
     // 合成した 1 文字を UTF-8 の意図へ（CPP-014 / ADR 0009 の決定 2）。変換は core::to_utf8
     // ただ 1 本で、対にならないサロゲートはここまでに捨ててあるので空にはならない（Issue #13）。
-    send(application::InsertText{core::to_utf8(wide).value_or(std::string{})});
+    std::string utf8 = core::to_utf8(wide).value_or(std::string{});
+    switch (mode_)
+    {
+    case core::EditMode::vim:
+        send(application::VimKeyPress{
+            core::VimKey{core::VimCharacter{core::code_point_at(utf8, core::Offset{0})}}});
+        return;
+    case core::EditMode::ordinary:
+        break;
+    }
+    send(application::InsertText{std::move(utf8)});
 }
 
 void EditorWindow::press_key(WPARAM word)
 {
-    const bool control = held(VK_CONTROL);
-    const auto table = control ? std::span<const KeyMotion>(control_motions)
-                               : std::span<const KeyMotion>(plain_motions);
-    const auto motion = motion_for(table, word);
-    if (motion)
-    {
-        const auto anchoring =
-            held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
-        send(application::MoveCaret{motion.value(), anchoring});
-        return;
-    }
-    if (control)
+    if (held(VK_CONTROL))
     {
         press_control_key(word);
         return;
     }
+    switch (mode_)
+    {
+    case core::EditMode::vim:
+        press_vim_key(word);
+        return;
+    case core::EditMode::ordinary:
+        break;
+    }
     press_plain_key(word);
+}
+
+// Vim モードの窓は鍵を写すだけで、何が起きるかは知らない（ARC-011 / ADR 0012 の決定 4）。
+// Tab は INSERT の水平タブとして文字の鍵で渡す（WM_CHAR の 0x09 は制御文字として捨てられる）。
+void EditorWindow::press_vim_key(WPARAM word)
+{
+    if (word == VK_TAB)
+    {
+        send(application::VimKeyPress{core::VimKey{core::VimCharacter{tab_character}}});
+        return;
+    }
+    const auto special = vim_special_for(word);
+    if (special)
+    {
+        send(application::VimKeyPress{core::VimKey{special.value()}});
+    }
 }
 
 void EditorWindow::press_plain_key(WPARAM word)
 {
+    const auto motion = motion_for(std::span<const KeyMotion>(plain_motions), word);
+    if (motion)
+    {
+        send(application::MoveCaret{motion.value(), anchoring_now()});
+        return;
+    }
     // OS の仮想キーは開いた集合なので、既定分岐を書いてよい唯一の場所（CPP-017）。
     switch (word)
     {
@@ -738,6 +800,12 @@ void EditorWindow::press_plain_key(WPARAM word)
 
 void EditorWindow::press_control_key(WPARAM word)
 {
+    const auto motion = motion_for(std::span<const KeyMotion>(control_motions), word);
+    if (motion)
+    {
+        send(application::MoveCaret{motion.value(), anchoring_now()});
+        return;
+    }
     switch (word)
     {
     case 'A':
@@ -753,10 +821,13 @@ void EditorWindow::press_control_key(WPARAM word)
         send(application::ClipboardAction{application::ClipboardOperation::paste});
         return;
     case 'Z':
-        send(application::HistoryAction{core::HistoryDirection::undo});
+        send_history(core::HistoryDirection::undo);
         return;
     case 'Y':
-        send(application::HistoryAction{core::HistoryDirection::redo});
+        send_history(core::HistoryDirection::redo);
+        return;
+    case 'R':
+        send_vim_redo();
         return;
     case 'O':
         open_document();
@@ -772,6 +843,31 @@ void EditorWindow::press_control_key(WPARAM word)
     default:
         break;
     }
+}
+
+void EditorWindow::send_history(core::HistoryDirection direction)
+{
+    switch (mode_)
+    {
+    case core::EditMode::vim:
+        // Vim では u と Ctrl-r が履歴を動かす。Ctrl+Z / Ctrl+Y はそちらに譲る。
+        return;
+    case core::EditMode::ordinary:
+        break;
+    }
+    send(application::HistoryAction{direction});
+}
+
+void EditorWindow::send_vim_redo()
+{
+    switch (mode_)
+    {
+    case core::EditMode::ordinary:
+        return;
+    case core::EditMode::vim:
+        break;
+    }
+    send(application::VimKeyPress{core::VimKey{core::VimSpecialKey::control_r}});
 }
 
 void EditorWindow::turn_wheel(WPARAM word)

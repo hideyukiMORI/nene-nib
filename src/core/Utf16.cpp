@@ -16,48 +16,6 @@ constexpr char32_t last_low_surrogate = 0xDFFF;
 constexpr char32_t first_supplementary = 0x10000;
 constexpr unsigned int surrogate_shift = 10U;
 constexpr char32_t low_surrogate_mask = 0x3FF;
-constexpr unsigned int continuation_shift = 6U;
-constexpr char32_t continuation_mask = 0x3F;
-
-// UTF-8 の継続バイト（10xxxxxx）を 1 つ作る。
-[[nodiscard]] constexpr char continuation_byte(char32_t value, unsigned int shift) noexcept
-{
-    return static_cast<char>(0x80U | ((value >> shift) & continuation_mask));
-}
-
-[[nodiscard]] constexpr char lead_byte(char32_t value, unsigned int shift,
-                                       unsigned int marker) noexcept
-{
-    return static_cast<char>(marker | (value >> shift));
-}
-
-// 検証済みの code point を UTF-8 の 1〜4 バイトへ。閉じた選択肢ではなく値の範囲なので
-// 早期 return で並べる（CPP-002 の `else` 禁止はここには掛からない）。
-void append_utf8(std::string &utf8, char32_t value)
-{
-    if (value < 0x80U)
-    {
-        utf8.push_back(static_cast<char>(value));
-        return;
-    }
-    if (value < 0x800U)
-    {
-        utf8.push_back(lead_byte(value, continuation_shift, 0xC0U));
-        utf8.push_back(continuation_byte(value, 0U));
-        return;
-    }
-    if (value < first_supplementary)
-    {
-        utf8.push_back(lead_byte(value, 2U * continuation_shift, 0xE0U));
-        utf8.push_back(continuation_byte(value, continuation_shift));
-        utf8.push_back(continuation_byte(value, 0U));
-        return;
-    }
-    utf8.push_back(lead_byte(value, 3U * continuation_shift, 0xF0U));
-    utf8.push_back(continuation_byte(value, 2U * continuation_shift));
-    utf8.push_back(continuation_byte(value, continuation_shift));
-    utf8.push_back(continuation_byte(value, 0U));
-}
 
 // 検証済みの code point を UTF-16 の 1〜2 単位へ。U+10000 以上だけがサロゲートペアになる。
 void append_utf16(std::wstring &utf16, char32_t value)

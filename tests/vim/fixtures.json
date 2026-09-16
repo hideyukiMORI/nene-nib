@@ -1,0 +1,524 @@
+[
+  {
+    "name": "h-at-the-line-start-stays",
+    "text": "alpha",
+    "keys": "h",
+    "settings": []
+  },
+  {
+    "name": "h-with-a-count",
+    "text": "alpha",
+    "keys": "$3h",
+    "settings": []
+  },
+  {
+    "name": "l-does-not-pass-the-last-character",
+    "text": "abc",
+    "keys": "lll",
+    "settings": []
+  },
+  {
+    "name": "l-with-a-count-clamps",
+    "text": "hello",
+    "keys": "5l",
+    "settings": []
+  },
+  {
+    "name": "zero-goes-to-the-line-start",
+    "text": "  abc",
+    "keys": "$0",
+    "settings": []
+  },
+  {
+    "name": "dollar-goes-to-the-last-character",
+    "text": "  abc",
+    "keys": "$",
+    "settings": []
+  },
+  {
+    "name": "w-crosses-punctuation",
+    "text": "alpha, beta; gamma",
+    "keys": "www",
+    "settings": []
+  },
+  {
+    "name": "w-crosses-the-line",
+    "text": "alpha beta\ngamma",
+    "keys": "ww",
+    "settings": []
+  },
+  {
+    "name": "w-stops-on-the-last-word",
+    "text": "alpha beta",
+    "keys": "ww",
+    "settings": []
+  },
+  {
+    "name": "w-stops-on-an-empty-line",
+    "text": "abc\n\ndef",
+    "keys": "w",
+    "settings": []
+  },
+  {
+    "name": "w-with-a-count",
+    "text": "one two three",
+    "keys": "2w",
+    "settings": []
+  },
+  {
+    "name": "b-crosses-punctuation",
+    "text": "alpha, beta",
+    "keys": "$bb",
+    "settings": []
+  },
+  {
+    "name": "b-crosses-the-line",
+    "text": "abc\ndef",
+    "keys": "jb",
+    "settings": []
+  },
+  {
+    "name": "b-at-the-start-of-the-buffer-stays",
+    "text": "abc",
+    "keys": "b",
+    "settings": []
+  },
+  {
+    "name": "b-with-a-count",
+    "text": "one two three",
+    "keys": "$2b",
+    "settings": []
+  },
+  {
+    "name": "j-with-a-count-clamps-to-the-last-line",
+    "text": "one\ntwo",
+    "keys": "3j",
+    "settings": []
+  },
+  {
+    "name": "k-with-a-count-clamps-to-the-first-line",
+    "text": "one\ntwo",
+    "keys": "j3k",
+    "settings": []
+  },
+  {
+    "name": "the-wanted-column-survives-a-short-line",
+    "text": "abcdef\nxy\nabcdefgh",
+    "keys": "4ljj",
+    "settings": []
+  },
+  {
+    "name": "dollar-sticks-to-the-line-end",
+    "text": "abcdef\nxy\nabcdefgh",
+    "keys": "$jj",
+    "settings": []
+  },
+  {
+    "name": "the-wanted-column-comes-back-up",
+    "text": "abcdef\nxy\nabcdefgh",
+    "keys": "$jjk",
+    "settings": []
+  },
+  {
+    "name": "motions-do-nothing-in-an-empty-buffer",
+    "text": "",
+    "keys": "w",
+    "settings": []
+  },
+  {
+    "name": "x-removes-the-character-under-the-caret",
+    "text": "hello",
+    "keys": "x",
+    "settings": []
+  },
+  {
+    "name": "x-at-the-line-end-pulls-the-caret-back",
+    "text": "abc",
+    "keys": "$x",
+    "settings": []
+  },
+  {
+    "name": "x-does-nothing-on-an-empty-line",
+    "text": "abc\n\ndef",
+    "keys": "jx",
+    "settings": []
+  },
+  {
+    "name": "x-with-a-count",
+    "text": "abcd",
+    "keys": "2x",
+    "settings": []
+  },
+  {
+    "name": "x-with-a-count-clamps-to-the-line-end",
+    "text": "abc\ndef",
+    "keys": "l3x",
+    "settings": []
+  },
+  {
+    "name": "dw-removes-the-word-and-its-blanks",
+    "text": "alpha beta",
+    "keys": "dw",
+    "settings": []
+  },
+  {
+    "name": "dw-stops-at-punctuation",
+    "text": "alpha, beta",
+    "keys": "dw",
+    "settings": []
+  },
+  {
+    "name": "dw-does-not-join-the-next-line",
+    "text": "alpha\nbeta",
+    "keys": "dw",
+    "settings": []
+  },
+  {
+    "name": "dw-on-the-last-word-of-a-line",
+    "text": "alpha beta\ngamma",
+    "keys": "wdw",
+    "settings": []
+  },
+  {
+    "name": "dw-on-an-empty-line-removes-the-newline",
+    "text": "abc\n\ndef",
+    "keys": "jdw",
+    "settings": []
+  },
+  {
+    "name": "dw-with-a-count",
+    "text": "alpha, beta",
+    "keys": "2dw",
+    "settings": []
+  },
+  {
+    "name": "d-dollar-removes-to-the-line-end",
+    "text": "alpha beta",
+    "keys": "ld$",
+    "settings": []
+  },
+  {
+    "name": "d-zero-removes-to-the-line-start",
+    "text": "alpha beta",
+    "keys": "$d0",
+    "settings": []
+  },
+  {
+    "name": "dl-removes-the-character-under-the-caret",
+    "text": "abc",
+    "keys": "$dl",
+    "settings": []
+  },
+  {
+    "name": "dh-does-nothing-at-the-line-start",
+    "text": "abc",
+    "keys": "dh",
+    "settings": []
+  },
+  {
+    "name": "dh-with-a-count",
+    "text": "hello",
+    "keys": "$d2h",
+    "settings": []
+  },
+  {
+    "name": "db-removes-back-to-the-word-start",
+    "text": "hello world",
+    "keys": "$db",
+    "settings": []
+  },
+  {
+    "name": "d-then-a-key-that-is-not-a-motion-is-dropped",
+    "text": "abc",
+    "keys": "dx",
+    "settings": []
+  },
+  {
+    "name": "escape-drops-a-pending-operator",
+    "text": "abc",
+    "keys": "d<Esc>x",
+    "settings": []
+  },
+  {
+    "name": "escape-drops-a-pending-count",
+    "text": "abc",
+    "keys": "2<Esc>x",
+    "settings": []
+  },
+  {
+    "name": "dd-removes-the-line",
+    "text": "one\ntwo\nthree",
+    "keys": "jdd",
+    "settings": []
+  },
+  {
+    "name": "dd-on-the-last-line",
+    "text": "one\ntwo\nthree",
+    "keys": "jjdd",
+    "settings": []
+  },
+  {
+    "name": "dd-goes-to-the-first-non-blank",
+    "text": "  one\n  two\n  three",
+    "keys": "jdd",
+    "settings": []
+  },
+  {
+    "name": "dd-with-a-count",
+    "text": "one\ntwo\nthree",
+    "keys": "2dd",
+    "settings": []
+  },
+  {
+    "name": "dd-removes-the-only-line",
+    "text": "one",
+    "keys": "dd",
+    "settings": []
+  },
+  {
+    "name": "dj-removes-the-line-below-too",
+    "text": "one\ntwo\nthree",
+    "keys": "dj",
+    "settings": []
+  },
+  {
+    "name": "dk-removes-the-line-above-too",
+    "text": "one\ntwo\nthree",
+    "keys": "jjdk",
+    "settings": []
+  },
+  {
+    "name": "i-inserts-before-the-caret",
+    "text": "hello",
+    "keys": "llix<Esc>",
+    "settings": []
+  },
+  {
+    "name": "a-inserts-after-the-caret",
+    "text": "hello",
+    "keys": "llax<Esc>",
+    "settings": []
+  },
+  {
+    "name": "a-at-the-line-end-appends",
+    "text": "alpha",
+    "keys": "$a!<Esc>",
+    "settings": []
+  },
+  {
+    "name": "capital-i-goes-to-the-first-non-blank",
+    "text": "  hello",
+    "keys": "Ix<Esc>",
+    "settings": []
+  },
+  {
+    "name": "capital-i-after-a-tab",
+    "text": "\tindented",
+    "keys": "Ix<Esc>",
+    "settings": []
+  },
+  {
+    "name": "capital-a-appends-at-the-line-end",
+    "text": "hello",
+    "keys": "Ax<Esc>",
+    "settings": []
+  },
+  {
+    "name": "escape-moves-one-left",
+    "text": "hello",
+    "keys": "ihi<Esc>",
+    "settings": []
+  },
+  {
+    "name": "escape-at-the-line-start-does-not-move",
+    "text": "hello",
+    "keys": "i<Esc>",
+    "settings": []
+  },
+  {
+    "name": "enter-splits-the-line",
+    "text": "hello",
+    "keys": "lli<CR><Esc>",
+    "settings": []
+  },
+  {
+    "name": "enter-at-the-line-end-opens-a-line",
+    "text": "hello",
+    "keys": "A<CR>world<Esc>",
+    "settings": []
+  },
+  {
+    "name": "backspace-joins-the-lines",
+    "text": "one\ntwo",
+    "keys": "ji<BS>x<Esc>",
+    "settings": []
+  },
+  {
+    "name": "backspace-reaches-before-the-insert",
+    "text": "hello",
+    "keys": "lllia<BS><BS>z<Esc>",
+    "settings": []
+  },
+  {
+    "name": "insert-into-an-empty-buffer",
+    "text": "",
+    "keys": "ix<Esc>",
+    "settings": []
+  },
+  {
+    "name": "undo-takes-back-one-insert",
+    "text": "hello",
+    "keys": "ix<Esc>u",
+    "settings": []
+  },
+  {
+    "name": "redo-puts-the-insert-back",
+    "text": "hello",
+    "keys": "ix<Esc>u<C-r>",
+    "settings": []
+  },
+  {
+    "name": "undo-takes-back-one-x",
+    "text": "hello",
+    "keys": "llxu",
+    "settings": []
+  },
+  {
+    "name": "undo-takes-back-one-line",
+    "text": "one\ntwo\nthree",
+    "keys": "jddu",
+    "settings": []
+  },
+  {
+    "name": "japanese-x-removes-one-code-point",
+    "text": "あいう",
+    "keys": "lx",
+    "settings": []
+  },
+  {
+    "name": "japanese-at-the-line-end-appends",
+    "text": "abcあ",
+    "keys": "A!<Esc>",
+    "settings": []
+  },
+  {
+    "name": "japanese-word-classes-split-the-line",
+    "text": "あいう、カタ abc",
+    "keys": "www",
+    "settings": []
+  },
+  {
+    "name": "japanese-dw-takes-one-class",
+    "text": "漢字かな",
+    "keys": "dw",
+    "settings": []
+  },
+  {
+    "name": "japanese-x-at-the-line-end",
+    "text": "abcあ",
+    "keys": "$x",
+    "settings": []
+  },
+  {
+    "name": "japanese-dollar-is-the-last-code-point",
+    "text": "あいう abc",
+    "keys": "$",
+    "settings": []
+  },
+  {
+    "name": "w-crosses-digits-and-underscore",
+    "text": "abc 123_x",
+    "keys": "ww",
+    "settings": []
+  },
+  {
+    "name": "w-on-letters-outside-the-class-table",
+    "text": "ＡＢ abc",
+    "keys": "w",
+    "settings": []
+  },
+  {
+    "name": "b-over-the-blanks-at-the-buffer-start",
+    "text": "  abc",
+    "keys": "wb",
+    "settings": []
+  },
+  {
+    "name": "b-stops-on-an-empty-line",
+    "text": "abc\n\ndef",
+    "keys": "jjb",
+    "settings": []
+  },
+  {
+    "name": "d-with-a-count-before-the-motion",
+    "text": "alpha beta gamma",
+    "keys": "d3w",
+    "settings": []
+  },
+  {
+    "name": "x-with-a-count-past-the-line",
+    "text": "abc",
+    "keys": "9x",
+    "settings": []
+  },
+  {
+    "name": "j-in-a-single-line-buffer",
+    "text": "abc",
+    "keys": "lj",
+    "settings": []
+  },
+  {
+    "name": "dj-at-the-last-line-does-nothing",
+    "text": "one\ntwo\nthree",
+    "keys": "jjdj",
+    "settings": []
+  },
+  {
+    "name": "dk-at-the-first-line-does-nothing",
+    "text": "one\ntwo",
+    "keys": "dk",
+    "settings": []
+  },
+  {
+    "name": "dd-with-a-count-past-the-end",
+    "text": "one\ntwo",
+    "keys": "j2dd",
+    "settings": []
+  },
+  {
+    "name": "undo-with-nothing-to-undo",
+    "text": "abc",
+    "keys": "u",
+    "settings": []
+  },
+  {
+    "name": "redo-with-nothing-to-redo",
+    "text": "abc",
+    "keys": "<C-r>",
+    "settings": []
+  },
+  {
+    "name": "dw-with-a-count-over-punctuation",
+    "text": "a.b c",
+    "keys": "3dw",
+    "settings": []
+  },
+  {
+    "name": "capital-a-on-an-empty-line",
+    "text": "\nabc",
+    "keys": "A0<Esc>",
+    "settings": []
+  },
+  {
+    "name": "capital-i-on-an-empty-line",
+    "text": "\nabc",
+    "keys": "I0<Esc>",
+    "settings": []
+  },
+  {
+    "name": "b-with-a-count-over-an-empty-line",
+    "text": "abc\n\ndef",
+    "keys": "jj2b",
+    "settings": []
+  }
+]

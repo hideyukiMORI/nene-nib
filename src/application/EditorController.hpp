@@ -14,6 +14,8 @@
 #include "OffsetRange.hpp"
 #include "SelectionAnchoring.hpp"
 #include "TextEncoding.hpp"
+#include "VimEffect.hpp"
+#include "VimState.hpp"
 
 #include <expected>
 #include <string>
@@ -31,6 +33,9 @@ class EditorController final
                      CodePagePort &code_pages);
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
     [[nodiscard]] EditorFrame frame() const;
+    // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
+    // （ADR 0012 の決定 7）。状態を変える口はここには無い。
+    [[nodiscard]] const core::VimState &vim_state() const noexcept;
 
   private:
     void accept(const InsertText &intent);
@@ -45,13 +50,28 @@ class EditorController final
     void accept(const ScrollLines &intent);
     void accept(const VisibleLines &intent);
     void accept(const SelectEditMode &intent);
+    void accept(const VimKeyPress &intent);
     void accept(const RefreshAppearance &);
     void accept(const OpenDocument &intent);
     void accept(const SaveDocument &intent);
 
+    // VimEffect の写し先。選択肢が増えたら std::visit がここで足りずコンパイルが落ちる
+    // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
+    void perform(const core::VimNoEffect &);
+    void perform(const core::VimMoveTo &effect);
+    void perform(const core::VimRemoveRange &effect);
+    void perform(const core::VimRemoveLines &effect);
+    void perform(const core::VimInsertString &effect);
+    void perform(const core::VimNewLine &);
+    void perform(const core::VimUndo &);
+    void perform(const core::VimRedo &);
+
     void replace(const core::OffsetRange &range, std::string_view text,
                  core::EditBoundary boundary);
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring);
+    // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
+    // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
+    void settle_vim_caret();
     void follow_caret();
     void undo_edit();
     void redo_edit();

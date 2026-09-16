@@ -9,12 +9,14 @@
 #include "ScrollState.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
+#include "VimState.hpp"
 
 #include <optional>
 
 namespace nenenib::application
 {
-// 本文・選択・履歴・スクロール・改行・外観・編集モード・文書の唯一の所有者（ARC-004）。
+// 本文・選択・履歴・スクロール・改行・外観・編集モード・Vim の状態・文書の唯一の所有者
+// （ARC-004）。Vim の状態は値型で、次の状態を決めるのは core の純関数（ADR 0012 の決定 1）。
 // 公開値は不変で、次状態を返す（ARC-005 / CPP-003）。生成経路は create ただ 1 つ（CPP-007）。
 class EditorState final
 {
@@ -28,11 +30,13 @@ class EditorState final
     [[nodiscard]] core::LineEnding line_ending() const noexcept;
     [[nodiscard]] core::Appearance appearance() const noexcept;
     [[nodiscard]] core::EditMode mode() const noexcept;
+    [[nodiscard]] const core::VimState &vim() const noexcept;
     [[nodiscard]] const Document &document() const noexcept;
     [[nodiscard]] std::optional<FileFailure> last_failure() const noexcept;
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
+    [[nodiscard]] EditorState with_vim(core::VimState vim) const;
     [[nodiscard]] EditorState with_selection(const core::Selection &selection) const;
     [[nodiscard]] EditorState with_scroll(const ScrollState &scroll) const;
     // 本文と選択と履歴は 1 つの編集で必ず一緒に動くので、まとめて次状態にする。
@@ -56,6 +60,7 @@ class EditorState final
     core::LineEnding line_ending_;
     core::Appearance appearance_;
     core::EditMode mode_;
+    core::VimState vim_;
     Document document_;
     std::optional<FileFailure> last_failure_;
 };
