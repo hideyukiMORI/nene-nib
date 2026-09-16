@@ -5,7 +5,7 @@
 
 ## 現在の Issue
 
-次の焦点 Issue は [#19](https://github.com/hideyukiMORI/nene-nib/issues/19)（起動 190 ms の内訳を節目で測る。小さい）。その次は IME（FR-012）か Vim エンジン（ADR 0005）。
+次の焦点 Issue は [#22](https://github.com/hideyukiMORI/nene-nib/issues/22)（Vim エンジンの最初の縦切り・ADR 0012）。#19（起動の内訳）は PR #23 で測り終えた: 起動 184 ms のうち `D3D11CreateDevice` が 160 ms。直すのは別 Issue。その次は IME（FR-012）。
 Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 は main へ統合済み（[日報 09-16](../reports/2026-09-16.md)）。main は `e592adc`。
 
 ## 段階
@@ -15,7 +15,7 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 は main へ統合済み（
 | Phase 0 言語の実測 | ✅ 2026-09-15（114 記録・`docs/quality/phase0-results.json`） |
 | Phase 1 文書とゲートの足場 | ✅ 2026-09-15（Issue #1・PR #2） |
 | Phase 2 negative proof | ✅ 2026-09-15（26 反例・`docs/quality/gate-proofs.md`） |
-| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → **#19 起動の内訳** → IME か Vim |
+| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → **#22 Vim の最初の縦切り（ADR 0012）** → IME |
 | Phase 4 公開 | 🔲 |
 
 ## 動くもの（main `e592adc`）
@@ -29,5 +29,5 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 は main へ統合済み（
 
 ## 次の 1 手
 
-Issue #19 の依頼書を実装リナに渡し、起動の内訳を測って記録する。続いて IME（FR-012）か Vim エンジンの最初の縦切り（ADR 0005）。CI のベンチの値が数回たまったら CI の基準値の Issue。
+ADR 0012 をリポに置き、Issue #22（Vim の最初の縦切り）の依頼書を実装リナに渡す。起動 160 ms の `D3D11CreateDevice` を最初の描画の後ろへ回すか（窓を先に見せる・worker で先に作る）は別 Issue で ADR。続いて IME（FR-012）。CI のベンチの値が数回たまったら CI の基準値の Issue。
 カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1（core だけ）がいつでも着手できる。

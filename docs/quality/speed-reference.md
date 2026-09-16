@@ -39,31 +39,31 @@
 
 | 区間 | 中央値 | 最小 | 最大 | その区間が含むもの | CI |
 | --- | --- | --- | --- | --- | --- |
-| `origin` | 11.6 ms | 11.0 | 17.5 | プロセス生成 → `bind`（loader・CRT・`CoInitializeEx`・引数の取り出し） | PR の CI ログから |
-| `document_opened` | 0.0 ms | 0.0 | 0.1 | adapters の構築・`EditorController` の生成（起動引数のファイルは無い） | PR の CI ログから |
-| `window_created` | 2.8 ms | 2.8 | 3.4 | `RegisterClassExW`・`CreateWindowExW`（`WM_NCCALCSIZE` 等） | PR の CI ログから |
-| `backdrop_applied` | 0.6 ms | 0.6 | 1.1 | `GetDpiForWindow`・`SetWindowPos` で中央寄せ・`controller_.frame()`・`DwmSetWindowAttribute` × 2 | PR の CI ログから |
-| `device_created` | **159.6 ms** | 156.9 | 190.4 | `D3D11CreateDevice(HARDWARE)`・`As(dxgi_device_)` | PR の CI ログから |
-| `swap_chain_created` | 1.6 ms | 1.5 | 1.8 | `CreateDXGIFactory2`・`CreateSwapChainForComposition`・待機可能オブジェクト | PR の CI ログから |
-| `composition_bound` | 0.8 ms | 0.7 | 0.9 | `DCompositionCreateDevice`・target・visual・`Commit` | PR の CI ログから |
-| `context_created` | 0.6 ms | 0.6 | 0.8 | `D2D1CreateFactory`・D2D device / context・ターゲットの結び付け | PR の CI ログから |
-| `text_formats_created` | 0.8 ms | 0.8 | 0.9 | `DWriteCreateFactory`・`GetSystemFontCollection` × 2・`CreateTextFormat` × 6 | PR の CI ログから |
-| `frame_presented` | 4.7 ms | 4.1 | 5.6 | `VisibleLines` の適用・最初の layout・描画・`Present` が返るまで | PR の CI ログから |
+| `origin` | 11.6 ms | 11.0 | 17.5 | プロセス生成 → `bind`（loader・CRT・`CoInitializeEx`・引数の取り出し） | 9.4 ms |
+| `document_opened` | 0.0 ms | 0.0 | 0.1 | adapters の構築・`EditorController` の生成（起動引数のファイルは無い） | 0.0 ms |
+| `window_created` | 2.8 ms | 2.8 | 3.4 | `RegisterClassExW`・`CreateWindowExW`（`WM_NCCALCSIZE` 等） | 1.1 ms |
+| `backdrop_applied` | 0.6 ms | 0.6 | 1.1 | `GetDpiForWindow`・`SetWindowPos` で中央寄せ・`controller_.frame()`・`DwmSetWindowAttribute` × 2 | 0.6 ms |
+| `device_created` | **159.6 ms** | 156.9 | 190.4 | `D3D11CreateDevice(HARDWARE)`・`As(dxgi_device_)` | 3.6 ms |
+| `swap_chain_created` | 1.6 ms | 1.5 | 1.8 | `CreateDXGIFactory2`・`CreateSwapChainForComposition`・待機可能オブジェクト | 0.8 ms |
+| `composition_bound` | 0.8 ms | 0.7 | 0.9 | `DCompositionCreateDevice`・target・visual・`Commit` | 0.4 ms |
+| `context_created` | 0.6 ms | 0.6 | 0.8 | `D2D1CreateFactory`・D2D device / context・ターゲットの結び付け | 0.4 ms |
+| `text_formats_created` | 0.8 ms | 0.8 | 0.9 | `DWriteCreateFactory`・`GetSystemFontCollection` × 2・`CreateTextFormat` × 6 | 0.6 ms |
+| `frame_presented` | 4.7 ms | 4.1 | 5.6 | `VisibleLines` の適用・最初の layout・描画・`Present` が返るまで | 3.8 ms |
 
 ### open-large-file-16mib（中央値 235.9 ms）
 
 | 区間 | 中央値 | 最小 | 最大 | startup との違い | CI |
 | --- | --- | --- | --- | --- | --- |
-| `origin` | 12.5 ms | 12.1 | 13.6 | 同じ | PR の CI ログから |
-| `document_opened` | 47.5 ms | 46.9 | 74.3 | ここだけが違う。16.0 MiB・20 万行の読み込み・符号の判別・復号・piece table の構築 | PR の CI ログから |
-| `window_created` | 3.4 ms | 3.1 | 5.0 | 同じ | PR の CI ログから |
-| `backdrop_applied` | 0.8 ms | 0.7 | 1.8 | 同じ | PR の CI ログから |
-| `device_created` | **161.4 ms** | 157.3 | 223.3 | 同じ | PR の CI ログから |
-| `swap_chain_created` | 1.6 ms | 1.5 | 1.8 | 同じ | PR の CI ログから |
-| `composition_bound` | 0.7 ms | 0.7 | 0.9 | 同じ | PR の CI ログから |
-| `context_created` | 0.7 ms | 0.6 | 0.8 | 同じ | PR の CI ログから |
-| `text_formats_created` | 0.8 ms | 0.8 | 1.0 | 同じ | PR の CI ログから |
-| `frame_presented` | 6.4 ms | 5.8 | 8.5 | 20 万行のうち見える行だけを描くので startup とほぼ同じ | PR の CI ログから |
+| `origin` | 12.5 ms | 12.1 | 13.6 | 同じ | 9.4 ms |
+| `document_opened` | 47.5 ms | 46.9 | 74.3 | ここだけが違う。16.0 MiB・20 万行の読み込み・符号の判別・復号・piece table の構築 | 60.0 ms |
+| `window_created` | 3.4 ms | 3.1 | 5.0 | 同じ | 1.6 ms |
+| `backdrop_applied` | 0.8 ms | 0.7 | 1.8 | 同じ | 0.6 ms |
+| `device_created` | **161.4 ms** | 157.3 | 223.3 | 同じ | 4.1 ms |
+| `swap_chain_created` | 1.6 ms | 1.5 | 1.8 | 同じ | 0.8 ms |
+| `composition_bound` | 0.7 ms | 0.7 | 0.9 | 同じ | 0.4 ms |
+| `context_created` | 0.7 ms | 0.6 | 0.8 | 同じ | 0.4 ms |
+| `text_formats_created` | 0.8 ms | 0.8 | 1.0 | 同じ | 0.6 ms |
+| `frame_presented` | 6.4 ms | 5.8 | 8.5 | 20 万行のうち見える行だけを描くので startup とほぼ同じ | 5.8 ms |
 
 ### 170 ms はどこに乗っているか
 
@@ -77,6 +77,8 @@
 - DirectComposition は 0.8 ms、Mica の `DwmSetWindowAttribute` × 2 を含む `backdrop_applied` は 0.6 ms。どちらも 1 ms 未満
 - プロセス生成 → `wWinMain` の loader（`origin`）は 11.6 ms で、3 番目に大きいが桁が違う
 - 16 MiB の読み込み（`document_opened` 47.5 ms）は 2 番目に大きい。CI の 16 MiB が 70.1 ms だったことと矛盾しない
+
+CI（PR #23・run 35104611209・AMD EPYC 7763 / Hyper-V Video＝WARP / 96 DPI）の列も同じ形で取った。CI の起動 21.5 ms に対して `device_created` は 3.6 ms、実機は 159.6 ms。**差 156 ms がそのまま実機と CI の差（約 170 ms）を説明する。** CI の 16 MiB の読み込みは 60.0 ms で実機（47.5 ms）より遅く、ここは CPU の差。CI の起動は 5 回のうち 1 回目だけ 303.5 ms（exe の初回読み込み）で、中央値は動かない。
 
 **直すのは別 Issue（ADR は直すときに起こす。番号は受理順）。** この Issue は測って記録するところまでで、経路は変えていない。
 遅延できそうな候補は 2 つだけ挙げておく（設計はしない）: ①窓を見せてから device を作る（最初のフレームより前に `ShowWindow` する順に変える）、
