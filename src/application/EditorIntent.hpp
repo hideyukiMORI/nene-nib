@@ -1,7 +1,10 @@
 #pragma once
 
+#include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "ClipboardAction.hpp"
+#include "CommitText.hpp"
+#include "ComposeText.hpp"
 #include "DeleteText.hpp"
 #include "HistoryAction.hpp"
 #include "InsertText.hpp"
@@ -27,5 +30,6 @@ namespace nenenib::application
 using EditorIntent =
     std::variant<InsertText, MoveCaret, PlaceCaret, DeleteText, NewLine, SelectAll, CancelSelection,
                  ClipboardAction, HistoryAction, ScrollLines, VisibleLines, SelectEditMode,
-                 VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument>;
+                 VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument, ComposeText,
+                 CommitText, CancelComposition>;
 } // namespace nenenib::application

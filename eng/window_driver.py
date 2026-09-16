@@ -92,6 +92,9 @@ VK_PRIOR = 0x21
 VK_NEXT = 0x22
 VK_CONTROL = 0x11
 VK_S = 0x53
+VK_SPACE = 0x20
+# ローマ字で「にほんご」を打つ鍵（ADR 0014 の実機の節）。仮想キーは英字の大文字の符号。
+VK_NIHONGO = [0x4E, 0x49, 0x48, 0x4F, 0x4E, 0x47, 0x4F]
 INPUT_KEYBOARD = 1
 KEYEVENTF_KEYUP = 0x0002
 HTCAPTION = 2
@@ -298,6 +301,23 @@ def take_foreground(window, attempts: int = FOREGROUND_ATTEMPTS) -> bool:
             user.AttachThreadInput(ours, theirs, False)
         time.sleep(0.5)
     return user.GetForegroundWindow() == window
+
+
+def send_keys(window, keys: list[int]) -> bool:
+    """Real keystrokes through the raw input queue, so an IME can process them (ADR 0014).
+
+    Posted messages never reach the IME: the window manager offers a key to ImmProcessKey only for
+    input the queue really carried, so WM_IME_COMPOSITION cannot be provoked with PostMessageW.
+    The pointer is never touched and the foreground is taken the same way press_chord takes it;
+    when the session refuses the foreground this returns False and the caller records that.
+    """
+    if not take_foreground(window):
+        return False
+    records = (INPUT * (2 * len(keys)))()
+    for index, key in enumerate(keys):
+        records[2 * index] = key_input(key, 0)
+        records[2 * index + 1] = key_input(key, KEYEVENTF_KEYUP)
+    return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
 
 
 def press_chord(window, modifier: int, key: int) -> bool:

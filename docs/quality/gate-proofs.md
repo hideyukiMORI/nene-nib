@@ -276,3 +276,37 @@ Shift_JIS LF 2 行（「日本語」「二行目」）→ 描画・ステータ�
 - トグルで Vim に入り、`i` でステータスバーのモード名の画素が変わり（INSERT）、`hello` の字形画素 218、Esc でモード名の画素が NORMAL の絵に戻る
 - キャレット: 1 桁目の升の橙の画素は INSERT で 72、NORMAL で 202（ブロックはバーの 2 倍より広い）。1 文字の上に載るとブロックの中に字形が乗るので、画素 1 点ではなく升の中の橙の数で見る
 - `0x` で字形画素が 218 → 196（`h` が 1 つ消えた）、`u` を 2 回で 0（`x` と挿入 1 回ぶんが別の単位に閉じている）
+
+### 5-h. IME（IMM32）の縦切り（Issue #28・ADR 0014・2026-09-17）
+
+環境: 5-g と同じ機械（Windows 11 Pro 10.0.26200・120 DPI・実 GPU・ダーク）。`build/NeNeNib.exe`（Debug 構成＝ASan / UBSan 付き）。
+IME は **Microsoft IME**（日本語・`HKCU\Keyboard Layout\Preload` は `00000411` と `00000409`・`InputMethod\JPN` は 10.0.26100.1・`imm32.dll` 10.0.26100.9278）で、入力方式はローマ字・変換は既定。
+Google 日本語入力・ATOK は**この機械に無いので測っていない**（ADR 0014 の「不能」のとおり。`GCS_COMPATTR` の癖は利用者の報告で拾う）。
+
+手順（`python eng/verify-window.py` の `verify_ime`。**別の 1 回の起動**で測る）:
+
+1. 隔離した `LOCALAPPDATA` / `APPDATA` で exe を起動して最前面にし、窓のスレッドの `GetKeyboardLayout` が `0x0411` であることと `ImmGetDefaultIMEWnd` が窓を返すことを確かめる。どちらかが欠ければ「この機械に日本語 IME が無い」と記録して節を飛ばす
+2. **開閉（決定 5）**: 既定 IME 窓へ `WM_IME_CONTROL` の `IMC_SETOPENSTATUS` / `IMC_GETOPENSTATUS` を送る。これは**外から読み書きできる**ので、この節はキーボードに触らずに測れる。IME を on にしてから、通常モードで 1 文字 → Vim トグル（NORMAL）→ `i`（INSERT）→ Esc（NORMAL）→ 通常トグル、と**投げたメッセージだけ**で動かして、各段の開閉を読む
+3. **変換（決定 2・3・7）**: 投げたメッセージは IME に届かない（`ImmProcessKey` は入力キューが本当に運んだ鍵にしか掛からない）ので、ここだけ前景を取ってから `SendInput` で本物の鍵を打つ。`n i h o n g o` → 画素 → Space → 画素 → Enter → 画素
+4. 最後に**見つけたときの開閉に戻す**。前景が取れない・IME が変換しない環境では、その旨を記録して落とさない
+
+結果（2026-09-17 の実測・`out/window-verification/look-slice-results.json` の `ime`）:
+
+- **開閉**: on にして `1` → 通常モードで打っても `1`（**通常モードは IME に触らない**）→ Vim の NORMAL で `0` → `i` で `1`（控えた値が戻る）→ Esc で `0` → 通常モードへ戻して `1`。機械の開閉は見つけたときの `0` に戻した。ここは 7 つとも**表明**（落ちたらゲートが赤くなる）
+- **変換**: 前景が取れた。`nihongo` で本文の行に「にほんご」が出て、字形の画素 344・`ime`（#D7C4E5）の下線の画素 **111**・橙の画素 72（変換中のキャレットのバー）。
+  Space で注目文節が付き、橙の画素が **72 → 135**（`accent` の 2 DIP の下線と `selection` と同じ面）・その面を含む画素が 1306。
+  Enter で本文に「日本語」が入り、字形の画素 306・`ime` の下線の画素 **0**（変換中の下線が消えて本文の字色になった）。画は `ime-slice.bmp` / `ime-slice-converted.bmp` / `ime-slice-committed.bmp`
+- 変換中の「にほんご」は `TextBuffer` に入っていない（`EditorState` の `std::optional<Composition>`）。**本文と履歴が変わらないこと・確定 1 回が undo 1 単位であることは単体テストの側**で測る（`verify_composition_ordinary` / `verify_composition_state`）。画素では「本文に無い」ことを直接は測れない
+- **手で確かめたもの（画面全体の写真で。ゲートは見ていない）**: 候補窓は別プロセス（TextInputHost）の窓なので、窓のクライアント領域の画素には写らない。画面全体を撮って目で見た。
+  Vim の INSERT で `nihongo` を打つと、変換中の「にほんご」の行の**直下・変換中の文字列の左端に寄った位置**に Microsoft IME の候補の一覧（1 日本語 / 2 日本語フォント / …）が出た
+  ＝ `ImmSetCandidateWindow(CFS_CANDIDATEPOS)` にキャレットの左下を渡した結果である（決定 6）。写真は `out/window-verification/ime-manual-candidate-window.png`（git の対象外）
+- **手で確かめたもの**: 変換中の Esc は変換だけを取り消し、**Vim の INSERT のまま**である（決定 5）。上と同じ場面で Esc を打つと、変換中の文字列が消えて本文は `abcdef` のまま・
+  ステータスバーは `INSERT` のまま・桁も 6 のままだった（Esc は IME が食ったので Vim の鍵にならなかった）。写真は `ime-manual-escape-in-insert.png`
+- 同じ写真で、**Vim の INSERT で日本語が打てる**ことも確かめた（引き継ぎ 09-17 の「未確認」に挙がっていた項目）
+- **Space に対する IME の答えは一定しない**: 予測候補の一覧がもう出ていると、Space は変換に入らずその候補を確定することがある（5 回のうち 1 回）。
+  そのため注目文節の橙の増加は**表明していない**（`spaceOpenedATargetClause` に記録するだけ）。変換中の `ime` の下線と、確定で下線が消えて本文に字が入ることは毎回表明する
+- **実行のばらつき**: `python eng/verify-window.py` を 8 回走らせて 6 回は終了 0。落ちた 2 回のうち 1 回は上の Space（この版で記録に変えた）、
+  もう 1 回は IME とは無関係の `verify_missing_document`（起動引数のファイルが無い節）で、題名が `● 無題` になっていた＝空の本文に鍵が 1 つ入っていた。
+  この節の前に走る `try_saving` が `SendInput` で本物の Ctrl+S を打つので、離鍵を取りこぼすと次の窓に鍵が流れ込む見立て。**同じ並びを 3 回再現しても出なかった**ので原因は確定していない。
+  IME の節を足す前からある `SendInput` の経路の話で、この Issue の変更とは切り離して見るべきもの（設計リナへの申し送り）
+- **測っていないもの**: ライトの外観での `ime`（#5E2750）の下線。96 DPI。Google 日本語入力・ATOK。IME の既定の変換窓に頼る古い IME（ADR 0014 の「正直に」のとおり）

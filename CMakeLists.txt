@@ -39,7 +39,8 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
-    src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/DisplayText.cpp
+    src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/Composition.cpp
+    src/core/DisplayText.cpp
     src/core/EditHistory.cpp src/core/FilePath.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
     src/core/ScrollBounds.cpp src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
@@ -79,7 +80,8 @@ nenenib_target(nenenib_window ui_win32 STATIC
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
-foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi ole32)
+# imm32: IMM32 の変換文字列と候補窓（ADR 0014 の決定 1）。IME は窓への入力なので ui/win32 に置く。
+foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32)
     nenenib_system_link(nenenib_window ${library})
 endforeach()
 

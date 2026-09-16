@@ -2,6 +2,7 @@
 
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
+#include "Composition.hpp"
 #include "DeleteDirection.hpp"
 #include "Edit.hpp"
 #include "ModeLabel.hpp"
@@ -11,7 +12,10 @@
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
 #include "TabTitle.hpp"
+#include "Utf8.hpp"
 #include "VimCaret.hpp"
+#include "VimCharacter.hpp"
+#include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimStep.hpp"
 
@@ -378,6 +382,8 @@ void EditorController::accept(const VisibleLines &intent)
 
 void EditorController::accept(const SelectEditMode &intent)
 {
+    // モードが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
+    state_ = state_.with_composition(std::nullopt);
     // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
     core::VimState vim = core::vim_resting_state(state_.vim().unnamed_register);
     state_ = state_.with_mode(intent.mode).with_vim(std::move(vim));
@@ -533,6 +539,8 @@ std::expected<std::string, FileFailure> EditorController::encoded(core::TextEnco
 
 void EditorController::accept(const OpenDocument &intent)
 {
+    // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
+    state_ = state_.with_composition(std::nullopt);
     // 上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは大きいファイルを先に抱える。
     const auto bytes = files_.read(intent.path, maximum_file_bytes);
     if (!bytes)
@@ -584,6 +592,85 @@ void EditorController::accept(const SaveDocument &intent)
         Document{intent.path, intent.encoding, position});
 }
 
+// ---------------------------------------------------------------- IME（ADR 0014）
+
+bool EditorController::composition_ignored() const noexcept
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return false;
+    case core::EditMode::vim:
+        break;
+    }
+    switch (state_.vim().mode)
+    {
+    case core::VimMode::insert:
+        return false;
+    case core::VimMode::normal:
+        return true;
+    }
+    std::unreachable();
+}
+
+void EditorController::accept(const ComposeText &intent)
+{
+    if (composition_ignored())
+    {
+        return;
+    }
+    // 変換中は本文も履歴もスクロールも動かない。置き換わるのは変換中の文字列だけ（ARC-004）。
+    state_ = state_.with_composition(intent.composition);
+}
+
+void EditorController::type_as_vim_keys(std::string_view utf8)
+{
+    core::Offset at{0};
+    while (at.value < utf8.size())
+    {
+        accept(VimKeyPress{core::VimKey{core::VimCharacter{core::code_point_at(utf8, at)}}});
+        at = core::next_code_point(utf8, at);
+    }
+}
+
+void EditorController::accept(const CommitText &intent)
+{
+    const bool ignored = composition_ignored();
+    // 確定したら変換は終わる。本文に入るかどうかに関わらず、変換中の文字列は先に消す。
+    state_ = state_.with_composition(std::nullopt);
+    if (ignored)
+    {
+        return;
+    }
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        // 通常モードは InsertText と同じ 1 本。確定 1 回が 1 つの undo 単位（決定 4）。
+        accept(InsertText{intent.utf8});
+        return;
+    case core::EditMode::vim:
+        break;
+    }
+    type_as_vim_keys(intent.utf8);
+}
+
+void EditorController::accept(const CancelComposition &)
+{
+    state_ = state_.with_composition(std::nullopt);
+}
+
+std::optional<CompositionView> EditorController::composed() const
+{
+    const auto &composition = state_.composition();
+    if (!composition.has_value())
+    {
+        return std::nullopt;
+    }
+    return CompositionView{composition.value().utf8,
+                           core::composition_underlines(composition.value()),
+                           composition.value().cursor};
+}
+
 std::vector<LineView> EditorController::visible_lines() const
 {
     const ScrollState scroll = state_.scroll();
@@ -613,7 +700,9 @@ EditorFrame EditorController::frame() const
                        state_.appearance(),
                        core::palette_for(state_.appearance()),
                        state_.mode(),
+                       state_.vim().mode,
                        core::mode_label(state_.mode(), state_.vim().mode),
+                       composed(),
                        DocumentView{core::tab_title_for(document.path, save_state), document.path,
                                     document.encoding, save_state, state_.last_failure()},
                        core::status_items_for(caret, document.encoding, state_.line_ending())};

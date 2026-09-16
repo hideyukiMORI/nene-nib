@@ -29,7 +29,7 @@ FR-012 は「日本語入力（IMM32 / TSF）。変換中は Vim の鍵を奪わ
 
 - CPP-002 / コンパイル: `EditorIntent` の写し先・`ClauseEmphasis` の `switch` — **active**（既存）
 - ARC-004: `ComposeText` の間 `TextBuffer` と `EditHistory` が変わらないことを単体テストで — **active**（この Issue で）
-- QLT-013: 実機の IME（変換・確定・候補窓の位置・NORMAL で切れる・変換中の Esc）は `eng/verify-window.py` の節（`SendInput` で IME を on にして打つ）か、取れなければ gate-proofs 5-h の手動確認 — **active**（記録の場所として）
+- QLT-013: 実機の IME（開閉 7 つの表明・変換・確定・変換中の Esc・候補窓の位置）は `eng/verify-window.py` の `verify_ime`（IME の開閉は既定 IME 窓への `WM_IME_CONTROL` で読み書きし、変換は前景を取って `SendInput`）と gate-proofs 5-h に記録する。**規則 QLT-013 の状態は QUALITY_GATES の表のまま planned**（実機を要する確認は機械強制にならない。ここは記録の場所を指すだけ）
 - **不能**: IME ごとの `GCS_COMPATTR` の癖（Google 日本語入力・ATOK）。Microsoft IME で実測し、他は利用者の報告で
 
 ## 結果

@@ -1,7 +1,13 @@
 #include "EditorWindow.hpp"
 
 #include "BodyLayout.hpp"
+#include "CancelComposition.hpp"
 #include "CaretMotion.hpp"
+#include "ClauseEmphasis.hpp"
+#include "CommitText.hpp"
+#include "ComposeText.hpp"
+#include "Composition.hpp"
+#include "CompositionClause.hpp"
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
@@ -10,6 +16,8 @@
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
 #include "Milestone.hpp"
+#include "Offset.hpp"
+#include "OffsetRange.hpp"
 #include "OpenDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -22,9 +30,11 @@
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimMode.hpp"
 #include "VimSpecialKey.hpp"
 
 #include <dwmapi.h>
+#include <imm.h>
 
 #include <algorithm>
 #include <array>
@@ -35,6 +45,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -186,6 +197,157 @@ constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
     }
     const auto row = static_cast<std::size_t>((y - body.content.top) / body.line_height);
     return std::min(row, count - 1);
+}
+
+// ---------------------------------------------------------------- IMM32（ADR 0014）
+
+// 長さを先に取ってからバッファに読む。ImmGetCompositionStringW はバイト数を返す。
+[[nodiscard]] std::wstring composition_string(HIMC context, DWORD kind, DWORD flags)
+{
+    if ((flags & kind) == 0)
+    {
+        return {};
+    }
+    const LONG bytes = ImmGetCompositionStringW(context, kind, nullptr, 0);
+    if (bytes <= 0)
+    {
+        return {};
+    }
+    std::wstring wide(static_cast<std::size_t>(bytes) / sizeof(wchar_t), L'\0');
+    ImmGetCompositionStringW(context, kind, wide.data(), static_cast<DWORD>(bytes));
+    return wide;
+}
+
+[[nodiscard]] std::vector<std::uint8_t> composition_bytes(HIMC context, DWORD kind)
+{
+    const LONG bytes = ImmGetCompositionStringW(context, kind, nullptr, 0);
+    if (bytes <= 0)
+    {
+        return {};
+    }
+    std::vector<std::uint8_t> read(static_cast<std::size_t>(bytes), 0);
+    ImmGetCompositionStringW(context, kind, read.data(), static_cast<DWORD>(bytes));
+    return read;
+}
+
+// GCS_COMPCLAUSE は DWORD の並び（UTF-16 の単位で、先頭は 0・末尾は長さ）。バイト列から
+// DWORD へ戻すのは std::bit_cast（reinterpret_cast は書けない・CPP-009）。
+[[nodiscard]] std::vector<std::size_t> composition_boundaries(HIMC context)
+{
+    const auto bytes = composition_bytes(context, GCS_COMPCLAUSE);
+    std::vector<std::size_t> boundaries;
+    for (std::size_t at = 0; at + sizeof(DWORD) <= bytes.size(); at += sizeof(DWORD))
+    {
+        std::array<std::uint8_t, sizeof(DWORD)> word{};
+        std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(at), word.size(), word.begin());
+        boundaries.push_back(static_cast<std::size_t>(std::bit_cast<DWORD>(word)));
+    }
+    return boundaries;
+}
+
+// UTF-16 の単位の位置 → UTF-8 のバイト位置の表。文節の境界も属性も GCS_CURSORPOS も
+// どれも UTF-16 の単位なので、写しはこの 1 本を通す（CPP-014 / Issue #13）。
+[[nodiscard]] std::vector<std::size_t> byte_offsets(std::wstring_view wide)
+{
+    // 先頭は必ず 0 で始める（空の prefix を変換しに行かない）。
+    std::vector<std::size_t> offsets{0};
+    offsets.reserve(wide.size() + 1);
+    for (std::size_t units = 1; units <= wide.size(); ++units)
+    {
+        // サロゲートの途中で切った prefix は変換できないので、直前の値を伸ばさずに使う。
+        const auto converted = core::to_utf8(wide.substr(0, units));
+        offsets.push_back(converted.has_value() ? converted.value().size() : offsets.back());
+    }
+    return offsets;
+}
+
+[[nodiscard]] std::size_t byte_at(const std::vector<std::size_t> &offsets, std::size_t unit)
+{
+    if (offsets.empty())
+    {
+        return 0;
+    }
+    return offsets.at(std::min(unit, offsets.size() - 1));
+}
+
+// 文節の強さは文節の先頭の属性が決める（ADR 0014 の決定 7）。属性の集合は IME が決める
+// 開いた集合なので、閉じた enum に畳むのはここ 1 か所だけ。
+[[nodiscard]] core::ClauseEmphasis emphasis_at(const std::vector<std::uint8_t> &attributes,
+                                               std::size_t unit) noexcept
+{
+    if (unit >= attributes.size())
+    {
+        return core::ClauseEmphasis::other;
+    }
+    const std::uint8_t attribute = attributes.at(unit);
+    if (attribute == ATTR_TARGET_CONVERTED || attribute == ATTR_TARGET_NOTCONVERTED)
+    {
+        return core::ClauseEmphasis::target;
+    }
+    return core::ClauseEmphasis::other;
+}
+
+[[nodiscard]] std::vector<core::CompositionClause>
+clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::uint8_t> &attributes,
+           const std::vector<std::size_t> &offsets)
+{
+    std::vector<core::CompositionClause> clauses;
+    for (std::size_t index = 0; index + 1 < boundaries.size(); ++index)
+    {
+        const std::size_t from = boundaries.at(index);
+        const std::size_t to = boundaries.at(index + 1);
+        clauses.push_back(
+            core::CompositionClause{core::OffsetRange{core::Offset{byte_at(offsets, from)},
+                                                      core::Offset{byte_at(offsets, to)}},
+                                    emphasis_at(attributes, from)});
+    }
+    return clauses;
+}
+
+[[nodiscard]] core::Composition composition_of(const std::wstring &wide,
+                                               const std::vector<std::uint8_t> &attributes,
+                                               const std::vector<std::size_t> &boundaries,
+                                               LONG cursor)
+{
+    const auto offsets = byte_offsets(wide);
+    // 変換中の文字列は IME が作った正しい UTF-16 なので、空になるのは本当に空のときだけ。
+    std::string utf8 = core::to_utf8(wide).value_or(std::string{});
+    const std::size_t unit = cursor < 0 ? wide.size() : static_cast<std::size_t>(cursor);
+    return core::Composition{std::move(utf8), clauses_of(boundaries, attributes, offsets),
+                             core::Offset{byte_at(offsets, unit)}};
+}
+
+// GCS_COMPSTR が立っていなければ変換中の文字列は変わっていない（確定だけのメッセージ）。
+[[nodiscard]] std::optional<core::Composition> composition_in(HIMC context, DWORD flags)
+{
+    if ((flags & GCS_COMPSTR) == 0)
+    {
+        return std::nullopt;
+    }
+    const std::wstring wide = composition_string(context, GCS_COMPSTR, flags);
+    return composition_of(wide, composition_bytes(context, GCS_COMPATTR),
+                          composition_boundaries(context),
+                          ImmGetCompositionStringW(context, GCS_CURSORPOS, nullptr, 0));
+}
+
+// Vim の NORMAL でだけ IME を切る。通常モードの開閉には触らない（ADR 0014 の決定 5）。
+[[nodiscard]] bool ime_blocked(core::EditMode mode, core::VimMode vim) noexcept
+{
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return false;
+    case core::EditMode::vim:
+        break;
+    }
+    switch (vim)
+    {
+    case core::VimMode::insert:
+        return false;
+    case core::VimMode::normal:
+        return true;
+    }
+    std::unreachable();
 }
 
 [[nodiscard]] LRESULT caption_code(core::TitleBarHit hit) noexcept
@@ -388,6 +550,10 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
         timing_.mark(core::Milestone::input_received);
         type_character(word);
         return 0;
+    case WM_IME_STARTCOMPOSITION:
+    case WM_IME_COMPOSITION:
+    case WM_IME_ENDCOMPOSITION:
+        return compose_message(message, word, data);
     case WM_MOUSEWHEEL:
         turn_wheel(word);
         return 0;
@@ -567,9 +733,141 @@ std::size_t EditorWindow::body_lines() const
     return core::body_layout(client.right, client.bottom, dpi_).visible_lines;
 }
 
+// ---------------------------------------------------------------- IMM32（ADR 0014）
+
+// IMM32 の 3 通（決定 3）。WM_IME_STARTCOMPOSITION と WM_IME_COMPOSITION は DefWindowProcW に
+// 渡さない＝ IME の既定の変換窓を出さず、確定文字を WM_CHAR に流さない。WM_IME_ENDCOMPOSITION は
+// 残った変換を捨ててから OS にも見せる。変換中の鍵は IME が食い、WM_KEYDOWN は VK_PROCESSKEY で
+// 来る＝ vim_specials の表に無いので Vim の鍵にならない（決定 5・既存の形のまま）。
+LRESULT EditorWindow::compose_message(UINT message, WPARAM word, LPARAM data)
+{
+    switch (message)
+    {
+    case WM_IME_STARTCOMPOSITION:
+        place_candidate_window();
+        return 0;
+    case WM_IME_COMPOSITION:
+        compose(data);
+        return 0;
+    // OS のメッセージ番号は開いた集合なので、既定分岐だけは許される（CPP-017）。
+    default:
+        break;
+    }
+    end_composition();
+    return DefWindowProcW(window_, message, word, data);
+}
+
+void EditorWindow::compose(LPARAM data)
+{
+    const auto flags = static_cast<DWORD>(data);
+    const HIMC context = ImmGetContext(window_);
+    if (context == nullptr)
+    {
+        return;
+    }
+    // 確定と変換中は 1 通のメッセージに同居しうるので、文脈を離す前に両方を読む（決定 3）。
+    const std::string committed =
+        core::to_utf8(composition_string(context, GCS_RESULTSTR, flags)).value_or(std::string{});
+    const auto composing = composition_in(context, flags);
+    ImmReleaseContext(window_, context);
+    if (!committed.empty())
+    {
+        send(application::CommitText{committed});
+    }
+    if (composing.has_value())
+    {
+        send_composition(composing.value());
+    }
+    place_candidate_window();
+}
+
+void EditorWindow::send_composition(const core::Composition &composition)
+{
+    // 空の変換文字列は「変換をやめた」の合図（決定 3）。
+    if (composition.utf8.empty())
+    {
+        send(application::CancelComposition{});
+        return;
+    }
+    send(application::ComposeText{composition});
+}
+
+void EditorWindow::end_composition()
+{
+    if (!controller_.frame().composition.has_value())
+    {
+        return;
+    }
+    send(application::CancelComposition{});
+}
+
+// 候補窓はキャレットの直下。ImmSetCompositionWindow は使わない（変換文字列は自前で描く・決定 6）。
+void EditorWindow::place_candidate_window()
+{
+    if (renderer_ == nullptr)
+    {
+        return;
+    }
+    const HIMC context = ImmGetContext(window_);
+    if (context == nullptr)
+    {
+        return;
+    }
+    const RECT caret = renderer_->caret_rectangle();
+    CANDIDATEFORM form{};
+    form.dwStyle = CFS_CANDIDATEPOS;
+    form.ptCurrentPos = POINT{caret.left, caret.bottom};
+    ImmSetCandidateWindow(context, &form);
+    ImmReleaseContext(window_, context);
+}
+
+void EditorWindow::follow_ime(const application::EditorFrame &frame)
+{
+    if (ime_blocked(frame.mode, frame.vim_mode))
+    {
+        close_ime();
+        return;
+    }
+    restore_ime();
+}
+
+void EditorWindow::close_ime()
+{
+    // 控えが在る＝すでに切ってある。切る前の値を上書きしない（決定 5）。
+    if (ime_open_ != ImeOpenState::unrecorded)
+    {
+        return;
+    }
+    const HIMC context = ImmGetContext(window_);
+    if (context == nullptr)
+    {
+        return;
+    }
+    ime_open_ = ImmGetOpenStatus(context) != FALSE ? ImeOpenState::open : ImeOpenState::closed;
+    ImmSetOpenStatus(context, FALSE);
+    ImmReleaseContext(window_, context);
+}
+
+void EditorWindow::restore_ime()
+{
+    if (ime_open_ == ImeOpenState::unrecorded)
+    {
+        return;
+    }
+    const HIMC context = ImmGetContext(window_);
+    if (context == nullptr)
+    {
+        return;
+    }
+    ImmSetOpenStatus(context, ime_open_ == ImeOpenState::open ? TRUE : FALSE);
+    ime_open_ = ImeOpenState::unrecorded;
+    ImmReleaseContext(window_, context);
+}
+
 void EditorWindow::send(const application::EditorIntent &intent)
 {
     const auto frame = controller_.apply(intent);
+    follow_ime(frame);
     mode_ = frame.mode;
     // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
     invalidate();

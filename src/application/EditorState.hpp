@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "Composition.hpp"
 #include "Document.hpp"
 #include "EditHistory.hpp"
 #include "EditMode.hpp"
@@ -32,6 +33,8 @@ class EditorState final
     [[nodiscard]] core::EditMode mode() const noexcept;
     [[nodiscard]] const core::VimState &vim() const noexcept;
     [[nodiscard]] const Document &document() const noexcept;
+    // 変換中の文字列は本文の外にある（ADR 0014 の決定 2）。変換していない間は空。
+    [[nodiscard]] const std::optional<core::Composition> &composition() const noexcept;
     [[nodiscard]] std::optional<FileFailure> last_failure() const noexcept;
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
@@ -44,6 +47,7 @@ class EditorState final
                                         core::EditHistory history) const;
     [[nodiscard]] EditorState with_history(core::EditHistory history) const;
     [[nodiscard]] EditorState with_document(Document document) const;
+    [[nodiscard]] EditorState with_composition(std::optional<core::Composition> composition) const;
     [[nodiscard]] EditorState with_failure(std::optional<FileFailure> failure) const;
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
@@ -62,6 +66,7 @@ class EditorState final
     core::EditMode mode_;
     core::VimState vim_;
     Document document_;
+    std::optional<core::Composition> composition_;
     std::optional<FileFailure> last_failure_;
 };
 } // namespace nenenib::application

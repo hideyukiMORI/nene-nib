@@ -7,16 +7,23 @@
 #include "AppearanceReadFailure.hpp"
 #include "BodyLayout.hpp"
 #include "BuiltinTheme.hpp"
+#include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
+#include "ClauseEmphasis.hpp"
 #include "ClipboardFailure.hpp"
 #include "ClipboardOperation.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePageFailure.hpp"
 #include "CodePagePort.hpp"
 #include "Column.hpp"
+#include "CommitText.hpp"
+#include "ComposeText.hpp"
+#include "Composition.hpp"
+#include "CompositionClause.hpp"
+#include "CompositionView.hpp"
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayText.hpp"
@@ -101,6 +108,7 @@ namespace
 {
 using nenenib::application::AppearancePort;
 using nenenib::application::AppearanceReadFailure;
+using nenenib::application::CancelComposition;
 using nenenib::application::CancelSelection;
 using nenenib::application::CaretView;
 using nenenib::application::ClipboardAction;
@@ -109,6 +117,8 @@ using nenenib::application::ClipboardOperation;
 using nenenib::application::ClipboardPort;
 using nenenib::application::CodePageFailure;
 using nenenib::application::CodePagePort;
+using nenenib::application::CommitText;
+using nenenib::application::ComposeText;
 using nenenib::application::DeleteText;
 using nenenib::application::Document;
 using nenenib::application::EditorController;
@@ -138,10 +148,14 @@ using nenenib::core::BuiltinTheme;
 using nenenib::core::byte_order_mark;
 using nenenib::core::CaretMotion;
 using nenenib::core::CaretShape;
+using nenenib::core::ClauseEmphasis;
 using nenenib::core::code_point_at;
 using nenenib::core::code_point_count;
 using nenenib::core::collapsed_at;
 using nenenib::core::Column;
+using nenenib::core::Composition;
+using nenenib::core::composition_underlines;
+using nenenib::core::CompositionClause;
 using nenenib::core::contains;
 using nenenib::core::DeleteDirection;
 using nenenib::core::detect_encoding;
@@ -2264,6 +2278,199 @@ void verify_vim_caret_placement()
            "INSERT may sit past the last character");
 }
 
+// ---------------------------------------------------------------- IME（ADR 0014）
+
+// 文節の列を書くのはここだけ。utf8 は「あい」「うえ」のような 3 バイトの列で数える。
+[[nodiscard]] Composition composed_of(std::string utf8, std::vector<CompositionClause> clauses,
+                                      std::size_t cursor)
+{
+    return Composition{std::move(utf8), std::move(clauses), Offset{cursor}};
+}
+
+[[nodiscard]] CompositionClause clause_of(std::size_t begin, std::size_t end,
+                                          ClauseEmphasis emphasis)
+{
+    return CompositionClause{OffsetRange{Offset{begin}, Offset{end}}, emphasis};
+}
+
+// 変換中の表示値を 1 本の文字列にする。「utf8@キャレット|(T|O)開始-終了…」で、
+// 変換していないときは "-"。optional は value() で読む（CPP-004）。
+[[nodiscard]] std::string composed_summary(const EditorFrame &frame)
+{
+    if (!frame.composition.has_value())
+    {
+        return "-";
+    }
+    const auto &view = frame.composition.value();
+    std::string summary = view.utf8 + "@" + std::to_string(view.cursor.value);
+    for (const CompositionClause &clause : view.underlines)
+    {
+        summary += clause.emphasis == ClauseEmphasis::target ? "|T" : "|O";
+        summary +=
+            std::to_string(clause.range.begin.value) + "-" + std::to_string(clause.range.end.value);
+    }
+    return summary;
+}
+
+// 文節 → 下線の純関数（決定 7）。何が来ても変換中の文字列の全体を隙間なく覆う。
+void verify_composition_underlines()
+{
+    expect(composition_underlines(composed_of("", {}, 0)).empty(),
+           "an empty composition draws no underline");
+    const auto plain = composition_underlines(composed_of("abcd", {}, 0));
+    expect(plain.size() == 1 && plain.at(0) == clause_of(0, 4, ClauseEmphasis::other),
+           "an IME that reports no clause still gets one underline over everything");
+    const auto two = composition_underlines(composed_of(
+        "abcd", {clause_of(0, 2, ClauseEmphasis::other), clause_of(2, 4, ClauseEmphasis::target)},
+        2));
+    expect(two.size() == 2 && two.at(1) == clause_of(2, 4, ClauseEmphasis::target),
+           "clauses that already cover everything are kept as they are");
+    const auto gapped =
+        composition_underlines(composed_of("abcd", {clause_of(1, 2, ClauseEmphasis::target)}, 0));
+    expect(gapped.size() == 3 && gapped.at(0) == clause_of(0, 1, ClauseEmphasis::other) &&
+               gapped.at(1) == clause_of(1, 2, ClauseEmphasis::target) &&
+               gapped.at(2) == clause_of(2, 4, ClauseEmphasis::other),
+           "the gaps before and after a clause are covered as other");
+    const auto clamped =
+        composition_underlines(composed_of("abcd", {clause_of(0, 9, ClauseEmphasis::target)}, 0));
+    expect(clamped.size() == 1 && clamped.at(0) == clause_of(0, 4, ClauseEmphasis::target),
+           "a clause past the end of the composition is clamped to it");
+    const auto empty_range =
+        composition_underlines(composed_of("ab", {clause_of(1, 1, ClauseEmphasis::target)}, 0));
+    expect(empty_range.size() == 2 && empty_range.at(0) == clause_of(0, 1, ClauseEmphasis::other) &&
+               empty_range.at(1) == clause_of(1, 2, ClauseEmphasis::other),
+           "an empty clause draws no underline of its own and the string stays covered");
+    const auto reversed =
+        composition_underlines(composed_of("ab", {clause_of(2, 1, ClauseEmphasis::target)}, 0));
+    expect(reversed.size() == 1 && reversed.at(0) == clause_of(0, 2, ClauseEmphasis::other),
+           "a reversed clause is dropped rather than drawn backwards");
+    const auto overlap = composition_underlines(composed_of(
+        "abcd", {clause_of(0, 3, ClauseEmphasis::target), clause_of(1, 4, ClauseEmphasis::other)},
+        0));
+    expect(overlap.size() == 2 && overlap.at(0) == clause_of(0, 3, ClauseEmphasis::target) &&
+               overlap.at(1) == clause_of(3, 4, ClauseEmphasis::other),
+           "overlapping clauses never draw two underlines over the same byte");
+}
+
+// 変換中は本文も履歴も動かない（ARC-004 / 決定 2）。EditorState の側で先に測る。
+void verify_composition_state()
+{
+    const auto state = EditorState::create(Appearance::dark, EditMode::ordinary)
+                           .with_edit(buffer_of("hi"), collapsed_at(Offset{2}),
+                                      EditHistory::empty().pushed(Edit{Offset{0}, "", "hi"},
+                                                                  EditBoundary::separate));
+    expect(!state.composition().has_value(), "a state starts without a composition");
+    const auto composing = state.with_composition(composed_of("あ", {}, 0));
+    const auto &held = composing.composition();
+    expect(held.has_value() && held.value().utf8 == "あ",
+           "with_composition returns the next state");
+    expect(!state.composition().has_value(), "with_composition leaves the source alone");
+    expect(composing.text().text() == "hi", "the buffer does not change while composing");
+    expect(composing.history().size() == state.history().size() &&
+               composing.history().position() == state.history().position(),
+           "the history does not change while composing");
+    expect(composing.selection().caret == state.selection().caret,
+           "the caret does not move while composing");
+    expect(!composing.with_composition(std::nullopt).composition().has_value(),
+           "with_composition also takes the composition away");
+}
+
+// 通常モード: 変換中は表示値にだけ載り、確定 1 回が 1 つの undo 単位になる（決定 4）。
+void verify_composition_ordinary()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{10});
+    applied(controller, InsertText{"a"});
+    const auto composing = controller.apply(ComposeText{composed_of(
+        "にほん", {clause_of(0, 3, ClauseEmphasis::other), clause_of(3, 9, ClauseEmphasis::target)},
+        3)});
+    expect(composing.lines.at(0).text == "a", "the buffer does not carry the composed text");
+    expect(composed_summary(composing) == "にほん@3|O0-3|T3-9",
+           "the frame carries the composition, its caret and the folded underlines instead");
+    expect(applied(controller, HistoryAction{HistoryDirection::undo}) == "",
+           "undo while composing still only sees the typed 'a'");
+    applied(controller, HistoryAction{HistoryDirection::redo});
+    const auto committed = controller.apply(CommitText{"日本"});
+    expect(committed.lines.at(0).text == "a日本", "the commit lands in the buffer");
+    expect(!committed.composition.has_value(), "and the composition is gone");
+    expect(applied(controller, HistoryAction{HistoryDirection::undo}) == "a",
+           "one undo takes back the whole commit");
+    expect(applied(controller, HistoryAction{HistoryDirection::redo}) == "a日本",
+           "and redo puts it back");
+}
+
+// 変換をやめる 3 つの口: CancelComposition・モードの切り替え・ファイルを開く（決定 3）。
+void verify_composition_cancelling()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    const auto composing = controller.apply(ComposeText{composed_of("あ", {}, 0)});
+    expect(composing.composition.has_value(), "the composition is on the frame");
+    expect(!controller.apply(CancelComposition{}).composition.has_value(),
+           "CancelComposition takes it away");
+    expect(!controller.apply(CancelComposition{}).composition.has_value(),
+           "and cancelling again does nothing");
+    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 0)}));
+    expect(!controller.apply(SelectEditMode{EditMode::vim}).composition.has_value(),
+           "changing the editing mode drops the composition");
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 0)}));
+    editing.files().hold(Bytes{std::string("x")});
+    expect(!controller.apply(OpenDocument{sample_path()}).composition.has_value(),
+           "opening a file drops the composition");
+}
+
+// Vim の NORMAL では IME を切ってあるので変換は来ないが、来たら捨てる（決定 4）。
+void verify_composition_vim_normal()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{10});
+    applied(controller, InsertText{"abc"});
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    const auto composing = controller.apply(ComposeText{composed_of("に", {}, 0)});
+    expect(!composing.composition.has_value(), "NORMAL drops the composition");
+    expect(composing.vim_mode == VimMode::normal, "the frame carries the Vim mode for the window");
+    const auto committed = controller.apply(CommitText{"日本"});
+    expect(committed.lines.at(0).text == "abc", "NORMAL drops the committed text too");
+    expect(controller.vim_state().mode == VimMode::normal, "and stays in NORMAL");
+}
+
+// Vim の INSERT では確定した文字列が code point ごとの打鍵として engine を通る（決定 4）。
+void verify_composition_vim_insert()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{10});
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimCharacter{U'i'}}}));
+    const auto composing = controller.apply(ComposeText{composed_of("にほん", {}, 9)});
+    expect(composed_summary(composing) == "にほん@9|O0-9",
+           "INSERT shows the composition like ordinary mode");
+    expect(composing.vim_mode == VimMode::insert, "the frame says INSERT");
+    expect(composing.lines.at(0).text.empty(), "the buffer is still empty while composing");
+    const auto committed = controller.apply(CommitText{"日本語"});
+    expect(committed.lines.at(0).text == "日本語", "the commit goes through the Vim engine");
+    expect(!committed.composition.has_value(), "and the composition is gone");
+    expect(controller.vim_state().mode == VimMode::insert, "INSERT is still INSERT afterwards");
+    expect(committed.caret.position.column == Column{4}, "the caret sits past the three glyphs");
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::escape}}));
+    vim_replay(controller, "x");
+    expect(controller.frame().lines.at(0).text == "日本",
+           "Vim sees the committed text as characters it typed itself");
+}
+
+void verify_composition()
+{
+    verify_composition_underlines();
+    verify_composition_state();
+    verify_composition_ordinary();
+    verify_composition_cancelling();
+    verify_composition_vim_normal();
+    verify_composition_vim_insert();
+}
+
 void verify_vim_engine()
 {
     verify_vim_word_motions();
@@ -2344,6 +2551,7 @@ void verify_controller_intents()
     verify_unreachable_save_point();
     verify_document_failure_clearing();
     verify_vim_engine();
+    verify_composition();
 }
 
 void verify_look()
