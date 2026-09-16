@@ -28,3 +28,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0010](0010-file-slice-fileport-encoding-detection-atomic-save.md) | ファイルの縦切り: `FilePort` と `CodePagePort`・文字コードと改行の判別・一時ファイルからの置換・未保存の印 | 受理 |
 | [0011](0011-speed-measurement-timing-port-and-paint-coalescing.md) | 速さの縦切り: `TimingPort` の節目・ベンチ 3 本と機械ごとの基準値・`WM_PAINT` で 1 フレームにまとめる描画 | 受理 |
 | [0012](0012-vim-engine-first-slice-and-oracle-fixtures.md) | Vim エンジンの最初の縦切り: core の純関数 `vim_step`・閉じた和型の鍵と効果・oracle が生成した fixture の再生 | 受理 |
+| [0013](0013-startup-shows-the-window-before-the-device.md) | 起動は窓を先に見せてから D3D の device を作り、「窓が見えるまで」を第 2 の起動の値として基準値に載せる | 受理 |
