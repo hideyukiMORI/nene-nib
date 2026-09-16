@@ -8,6 +8,7 @@
 #include "RgbColor.hpp"
 #include "RgbaColor.hpp"
 #include "StatusBarLayout.hpp"
+#include "TimingPort.hpp"
 #include "TitleBarBackdrop.hpp"
 #include "TitleBarLayout.hpp"
 
@@ -33,8 +34,9 @@ namespace nenenib::ui::win32
 class Direct2DRenderer final
 {
   public:
-    [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure> create(HWND window,
-                                                                               std::uint32_t dpi);
+    // 起動の節目は initialize の中で打つので、計測器は create からそのまま通す（Issue #19）。
+    [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
+    create(HWND window, std::uint32_t dpi, application::TimingPort &timing);
     [[nodiscard]] std::expected<void, RenderFailure> render(const application::EditorFrame &frame);
     [[nodiscard]] std::expected<void, RenderFailure> resize(UINT width, UINT height);
     // 本文のクリックを桁へ写す唯一の経路。DirectWrite の当たり判定は描く側が持つ（ARC-011）。
@@ -50,7 +52,8 @@ class Direct2DRenderer final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
     Direct2DRenderer() = default;
-    [[nodiscard]] std::expected<void, RenderFailure> initialize(HWND window);
+    [[nodiscard]] std::expected<void, RenderFailure> initialize(HWND window,
+                                                                application::TimingPort &timing);
     [[nodiscard]] std::expected<void, RenderFailure> create_device();
     [[nodiscard]] std::expected<void, RenderFailure> create_swap_chain(HWND window);
     [[nodiscard]] std::expected<void, RenderFailure> bind_composition(HWND window);

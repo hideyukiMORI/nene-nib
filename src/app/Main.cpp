@@ -3,6 +3,7 @@
 #include "AbsolutePath.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
+#include "Milestone.hpp"
 #include "OpenDocument.hpp"
 #include "Win32AppearanceAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
@@ -129,6 +130,9 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32CodePageAdapter code_pages;
     nenenib::application::EditorController controller(appearance, clipboard, files, code_pages);
     open_first_file(controller, first_file(given));
+    // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
+    // 復号が済んでいる（Issue #19）。
+    timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing);
     if (!window)
     {
