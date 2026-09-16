@@ -274,6 +274,11 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     const auto opened = controller_.frame();
     apply_backdrop(opened);
     timing_.mark(core::Milestone::backdrop_applied);
+    // 配置してから見せる。生成時に (0,0) で見せない（ADR 0008 の決定 7）。device の生成は
+    // ドライバの初期化で 160 ms 掛かるので、その前に Mica の面だけの窓を見せる（ADR 0013）。
+    ShowWindow(window_, SW_SHOW);
+    timing_.mark(core::Milestone::window_shown);
+    // 最初のフレームまで renderer_ は無い。来た入力は門が捨てる（ADR 0013 の決定 5）。
     const auto rendering = start_rendering();
     if (!rendering)
     {
@@ -281,8 +286,6 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     }
     // 題名は起動引数で開いた文書にも追従する（ADR 0010 の決定 13）。
     update_title(controller_.frame());
-    // 配置してから見せる。生成時に (0,0) で見せない（ADR 0008 の決定 7）。
-    ShowWindow(window_, SW_SHOW);
     // 開けなかった理由も 1 行出す。窓が出てから出すので、利用者は空の無題で作業を続けられる。
     announce(opened);
     return {};

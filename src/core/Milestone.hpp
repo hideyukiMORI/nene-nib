@@ -10,11 +10,13 @@ namespace nenenib::core
 // 窓は節目を打つだけで時刻を知らない。最初の frame_presented が「最初の描画」で、
 // 時刻を与えるのは adapters だけ（ARC-007）。document_opened から text_formats_created までは
 // 起動の経路の正典順で、各段が返った直後に 1 つずつ打つ。
+// window_shown は ShowWindow が返った直後＝窓が見えるまで。device の生成より前に打つ（ADR 0013）。
 enum class Milestone : std::uint8_t
 {
     document_opened,
     window_created,
     backdrop_applied,
+    window_shown,
     device_created,
     swap_chain_created,
     composition_bound,
@@ -35,6 +37,8 @@ enum class Milestone : std::uint8_t
         return "window_created";
     case Milestone::backdrop_applied:
         return "backdrop_applied";
+    case Milestone::window_shown:
+        return "window_shown";
     case Milestone::device_created:
         return "device_created";
     case Milestone::swap_chain_created:

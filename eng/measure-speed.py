@@ -1,4 +1,4 @@
-"""Measure the three speed benches and compare them with this machine's reference (QLT-014).
+"""Measure the five speed benches and compare them with this machine's reference (QLT-014).
 
 ADR 0011: the editor marks milestones (Issue #19 added the eight startup stages to the original
 input_received / frame_presented), the Win32 timing adapter turns them into a measurement file when
@@ -6,9 +6,15 @@ the process is started with --measure <out.json>, and this script starts the edi
 through eng/window_driver.py, and reads the file back.
 
   startup-first-frame       process creation -> first frame_presented
+  startup-window-shown      process creation -> first window_shown (ADR 0013: the window is shown
+                            before the device is created, so this is what "startup" feels like)
   key-to-frame-single       one WM_CHAR -> the next frame_presented
   key-to-frame-burst-200    200 WM_CHAR posted at once -> the frame that finishes them
   open-large-file-16mib     the same startup measurement with a 16 MiB, 200,000 line argument
+
+--adopt writes the medians of every bench into this machine's reference; --adopt --bench <name>
+writes that one key and leaves the other reference values and recordedAt untouched, which is how a
+new bench joins a machine that already has references (ADR 0013 decision 3).
 
 --record also writes and prints the startup breakdown of the two startup benches: the segment that
 ends at each startup milestone, plus the "origin" segment (process creation -> the timing adapter's
@@ -67,14 +73,14 @@ LARGE_SECONDS = 60.0
 MICROSECONDS_PER_MILLISECOND = 1000.0
 DISPLAY_ADAPTERS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000"
 CENTRAL_PROCESSOR = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
-BENCHES = ("startup-first-frame", "key-to-frame-single", "key-to-frame-burst-200",
-           "open-large-file-16mib")
+BENCHES = ("startup-first-frame", "startup-window-shown", "key-to-frame-single",
+           "key-to-frame-burst-200", "open-large-file-16mib")
 # 起動の節目の正典順（Issue #19 / core::Milestone と同じ綴り）。区間名は「到達する節目の名前」で、
 # 最初の区間 "origin" だけはプロセス生成 -> bind（loader・CRT・COM・引数）を指す。
 ORIGIN_SEGMENT = "origin"
-STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "device_created",
-                      "swap_chain_created", "composition_bound", "context_created",
-                      "text_formats_created", "frame_presented")
+STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "window_shown",
+                      "device_created", "swap_chain_created", "composition_bound",
+                      "context_created", "text_formats_created", "frame_presented")
 # 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
 STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib")
 
@@ -178,7 +184,11 @@ def bench_startup(executable: Path, environment: dict, folder: Path) -> tuple[di
     finally:
         stop(process)
     measured = read_report(report)
-    return ({"startup-first-frame": float(measured["processCreationToFirstFrameMs"])},
+    # 窓が見えるまで（ADR 0013 の決定 3）。原点までの区間に window_shown の読みを足す。
+    shown = (float(measured["processCreationToOriginMs"])
+             + first_reading(measured["marks"], "window_shown") / MICROSECONDS_PER_MILLISECOND)
+    return ({"startup-first-frame": float(measured["processCreationToFirstFrameMs"]),
+             "startup-window-shown": shown},
             {"startup-first-frame": breakdown(measured)})
 
 
@@ -336,6 +346,27 @@ def compare(reference: dict, values: dict, recorded: dict) -> list[str]:
     return findings
 
 
+def adopt_one(reference_path: Path, record: dict, name: str) -> None:
+    """Write one bench into a machine that already has references; nothing else is touched.
+
+    Adding a bench must not move the four medians that were adopted earlier, because a reference
+    that moves stops being the thing the gate compares against (ADR 0011 decision 5 / ADR 0013).
+    """
+    reference = json.loads(reference_path.read_text(encoding="utf-8"))
+    identity = record["machine"]
+    recorded = reference["machines"].get(identity["fingerprint"])
+    if recorded is None:
+        raise SystemExit(f"Speed: {identity['fingerprint']} has no reference yet;"
+                         " adopt every bench once before adopting one of them")
+    measured = record["values"][name]
+    recorded["values"][name] = {"medianMs": measured["medianMs"],
+                                "minimumMs": measured["minimumMs"],
+                                "maximumMs": measured["maximumMs"]}
+    reference_path.write_text(json.dumps(reference, ensure_ascii=False, indent=2) + "\n",
+                              encoding="utf-8")
+    print(f"Speed: adopted {name} for {identity['fingerprint']} into {reference_path}")
+
+
 def adopt(reference_path: Path, record: dict) -> None:
     reference = json.loads(reference_path.read_text(encoding="utf-8"))
     identity = record["machine"]
@@ -386,6 +417,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--record", action="store_true", help="measure and write out/speed")
     parser.add_argument("--adopt", action="store_true", help="write the medians into the reference")
+    parser.add_argument("--bench", choices=BENCHES, help="with --adopt: write this one bench only")
     parser.add_argument("--check", action="store_true", help="compare with this machine's reference")
     parser.add_argument("--executable", type=Path, default=ROOT / RELEASE_EXECUTABLE)
     parser.add_argument("--reference", type=Path, help="a reference file other than the canonical one")
@@ -397,7 +429,9 @@ def main() -> int:
     if arguments.check:
         return check(arguments)
     record = gather(arguments)
-    if arguments.adopt:
+    if arguments.adopt and arguments.bench is not None:
+        adopt_one(arguments.reference or REFERENCE, record, arguments.bench)
+    elif arguments.adopt:
         adopt(arguments.reference or REFERENCE, record)
     return 0
 

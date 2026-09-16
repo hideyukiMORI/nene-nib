@@ -16,6 +16,12 @@ Issue #22 adds the Vim slice: the toggle enters NORMAL, `ihello<Esc>` types into
 `0x` removes the first character, and `uu` puts the buffer back. Every one of those keys arrives as
 WM_CHAR or as Esc, so the whole check runs on posted messages too.
 
+Issue #24 adds the first-paint record: ADR 0013 shows the window before the device is created,
+so the client area is the Mica backdrop alone for about 160 ms. This script starts one more editor
+with --measure, samples the centre of the client area every 10 ms until the body background
+appears, and records the pixels it saw in between; a black or a white one is the ADR's rejection
+condition, so it is an assertion here rather than a note.
+
 Issue #11 adds the file slice: two temporary files (UTF-8 CRLF and Shift_JIS LF) are written under
 out/window-verification, opened with the startup argument, and the drawn rows, the window title
 and the two status items are read back. Ctrl+S is the one chord this script does try to drive with
@@ -73,8 +79,20 @@ api(gdi, "DeleteDC", w.BOOL, w.HDC)
 api(gdi, "BitBlt", w.BOOL, w.HDC, c.c_int, c.c_int, c.c_int, c.c_int, w.HDC, c.c_int, c.c_int, w.DWORD)
 api(gdi, "GetDIBits", c.c_int, w.HDC, w.HBITMAP, w.UINT, w.UINT, w.LPVOID, c.POINTER(BITMAPINFO), w.UINT)
 api(gdi, "GdiFlush", w.BOOL)
+api(gdi, "GetPixel", w.DWORD, w.HDC, c.c_int, c.c_int)
+# 画素を読む点が本当にこの窓の上かを確かめる（他の窓が被っていたら、その面を測ってしまう）。
+api(user, "WindowFromPoint", w.HWND, w.POINT)
 
 SRCCOPY = 0x00CC0020
+CLR_INVALID = 0xFFFFFFFF
+# ADR 0013: 窓は device の生成より前に見える。その間のクライアント領域は DWM の Mica の面で、
+# 黒か白が見えたら決定そのものが却下になるので、起動直後の画素の列をここに記録する。
+FIRST_PAINT_SAMPLES = 150
+FIRST_PAINT_INTERVAL = 0.01
+# 「1 段の差」。最初のフレームの本文背景とこれ以上離れた面が見えていたら数字を報告に残す。
+FIRST_PAINT_STEP = 32
+BLACK = [0, 0, 0]
+WHITE = [255, 255, 255]
 # Mica（DWMWA_SYSTEMBACKDROP_TYPE）は Windows 11 22H2 以降でだけ掛かる（ADR 0008）。
 MICA_BUILD = 22621
 # src/core/BuiltinTheme.hpp の正本と同じ値。ここが食い違ったら、どちらかが間違っている。
@@ -286,6 +304,90 @@ def verify_missing_document(executable: Path, environment: dict, output: Path) -
         assert result["exitCode"] == 0, result["exitCode"]
     finally:
         stop(process)
+    return result
+
+
+def screen_pixel(window, x: int, y: int) -> list[int]:
+    """One composed pixel at a client point, read without capturing the whole client area."""
+    point = w.POINT(x, y)
+    assert user.ClientToScreen(window, c.byref(point))
+    screen = user.GetDC(None)
+    try:
+        value = int(gdi.GetPixel(screen, point.x, point.y))
+    finally:
+        user.ReleaseDC(None, screen)
+    assert value != CLR_INVALID, "the screen device context has no pixel at that point"
+    return [value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF]
+
+
+def sample_first_paint(window, centre: tuple, background: list) -> list:
+    """The centre pixel every 10 ms from the moment the window is visible until the body shows."""
+    started = time.monotonic()
+    samples = []
+    for _ in range(FIRST_PAINT_SAMPLES):
+        point = w.POINT(centre[0], centre[1])
+        assert user.ClientToScreen(window, c.byref(point))
+        samples.append({"atMs": round((time.monotonic() - started) * 1000.0, 1),
+                        "pixel": screen_pixel(window, centre[0], centre[1]),
+                        "ours": int(user.WindowFromPoint(point)) == int(window)})
+        if samples[-1]["pixel"] == background and samples[-1]["ours"]:
+            break
+        time.sleep(FIRST_PAINT_INTERVAL)
+    return samples
+
+
+def judge_first_paint(samples: list, background: list) -> dict:
+    """Everything seen before the body background arrived, judged by ADR 0013's condition."""
+    arrived = [index for index, entry in enumerate(samples)
+               if entry["pixel"] == background and entry["ours"]]
+    # `ours` が偽の列だけが返ったときは、別の窓が中央を覆っている（その面を測っても意味が無い）。
+    assert arrived, (f"the body background {background} never reached the centre of the window;"
+                     f" is another window covering it? last samples: {samples[-3:]}")
+    before = [entry for entry in samples[:arrived[0]] if entry["ours"]]
+    distances = [max(abs(value - ground) for value, ground in zip(entry["pixel"], background))
+                 for entry in before]
+    return {"samples": samples, "backgroundAtSample": arrived[0],
+            "beforeFirstFrame": before,
+            "blackSeen": [entry for entry in before if entry["pixel"] == BLACK],
+            "whiteSeen": [entry for entry in before if entry["pixel"] == WHITE],
+            "maxChannelDistance": max(distances, default=0),
+            "withinOneStep": all(distance <= FIRST_PAINT_STEP for distance in distances)}
+
+
+def verify_first_paint(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
+    """ADR 0013: between window_shown and the first frame only the Mica backdrop is on screen."""
+    marks = output / "first-paint-marks.json"
+    marks.unlink(missing_ok=True)
+    background = list(PALETTE[appearance])
+    process, window, _ = start(executable, environment, ["--measure", str(marks)])
+    try:
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        centre = (width // 2, height // 2)
+        result = judge_first_paint(sample_first_paint(window, centre, background), background)
+        pixels = capture(window, width, height)
+        write_bitmap(output / "first-paint.bmp", pixels, width, height)
+        result["centrePixelAfterFirstFrame"] = pixel(pixels, width, centre[0], centre[1])
+        close(window)
+        # 本文は打っていないので未保存の確認は出ない。
+        result["exitCode"] = process.wait(timeout=5)
+        assert result["exitCode"] == 0, result["exitCode"]
+    finally:
+        stop(process)
+    measured = json.loads(marks.read_text(encoding="utf-8"))
+    # 最初の読みだけを見る（frame_presented は描くたびに打たれる。eng/measure-speed.py と同じ立場）。
+    readings: dict = {}
+    for entry in measured["marks"]:
+        readings.setdefault(entry["milestone"], int(entry["qpcMicroseconds"]))
+    result["processCreationToWindowShownMs"] = round(
+        float(measured["processCreationToOriginMs"]) + readings["window_shown"] / 1000.0, 3)
+    result["windowShownToFirstFrameMs"] = round(
+        (readings["frame_presented"] - readings["window_shown"]) / 1000.0, 3)
+    result["expectedBackground"] = background
+    result["capture"] = "first-paint.bmp"
+    # ADR 0013 の却下の条件。ここが落ちたら、直す先はコードではなく ADR そのもの。
+    assert not result["blackSeen"], f"black before the first frame: {result['blackSeen']}"
+    assert not result["whiteSeen"], f"white before the first frame: {result['whiteSeen']}"
     return result
 
 
@@ -747,6 +849,8 @@ def main() -> None:
     finally:
         stop(process)
     result["documents"] = verify_documents(executable, environment, appearance, output)
+    # ADR 0013 の却下の条件は、窓が見えてから最初のフレームまでの面。別の 1 回の起動で記録する。
+    result["firstPaint"] = verify_first_paint(executable, environment, appearance, output)
     (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                     encoding="utf-8")
     print(json.dumps(result, indent=2))

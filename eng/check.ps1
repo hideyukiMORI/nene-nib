@@ -40,7 +40,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed for the Release measurement build.' }
     & cmake --build build-release --target NeNeNib
     if ($LASTEXITCODE -ne 0) { throw 'QLT-002: the Release measurement build failed.' }
-    # ADR 0011: 3 本のベンチを測って eng/perf-reference.json の指紋ごとの基準値と比べる。
+    # ADR 0011 / 0013: 4 本のベンチ（基準値の鍵は 5 つ）を測って eng/perf-reference.json の
+    # 指紋ごとの基準値と比べる。
     # 基準値の無い機械（CI を含む）と窓を作れない機械は、値を記録して通る。
     & python eng/measure-speed.py --check
     if ($LASTEXITCODE -ne 0) { throw 'QLT-014: speed regression.' }
