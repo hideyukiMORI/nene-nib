@@ -118,8 +118,12 @@ std::int64_t Win32TimingAdapter::first_frame_ticks() const noexcept
 
 std::string Win32TimingAdapter::report() const
 {
+    // プロセス生成 → bind の区間（loader・CRT・COM・引数）は節目を打てないので、ここで出す
+    // （Issue #19）。bind より前に mark を積まない設計は変えない（ADR 0011 の決定 2）。
     std::string text =
         "{\"processCreationToFirstFrameMs\": " + milliseconds_text(first_frame_ticks()) +
+        ", \"processCreationToOriginMs\": " +
+        milliseconds_text(origin_file_time_ - creation_file_time_) +
         ", \"qpcFrequency\": " + std::to_string(frequency_) + ", \"marks\": [";
     const char *separator = "";
     for (const Mark entry : marks_)

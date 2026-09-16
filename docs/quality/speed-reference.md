@@ -1,6 +1,6 @@
 # 速さの記録 — 施主の実機の基準値（QLT-014 / ADR 0011）
 
-> Status: 記録 / 最終実測 2026-09-16（Issue #16）。正本の値は `eng/perf-reference.json`（`eng/measure-speed.py --adopt` が書く）。ここは環境・手順・ばらつきの記録。
+> Status: 記録 / 最終実測 2026-09-16（Issue #16・起動の内訳は Issue #19）。正本の値は `eng/perf-reference.json`（`eng/measure-speed.py --adopt` が書く）。ここは環境・手順・ばらつきの記録。
 > 中央値を上げる・許容退行を広げるのは ADR の判断であって、落ちたときの修理ではない（QLT-014）。
 
 ## 環境
@@ -25,6 +25,64 @@
 | open-large-file-16mib | 16,800,000 バイト・200,000 行の UTF-8 CRLF を起動引数で開く → 最初の `frame_presented` | 249.8 ms | 234.9 | 250.5 | 312.2 ms |
 
 同日の 2 回目の `--record`（採用しない。中央値の一致を見るため）: 198.7 / 0.999 / 2.450 / 263.0 ms。2 回目は 200 打鍵の 5 回のうち 1 回が 3 度測り直しても「まとめて」届かず 384.8 ms として残った（中央値には効かない）。
+
+## 起動の内訳（Issue #19）
+
+`core::Milestone` に起動の節目を 8 つ足し、`eng/measure-speed.py --record` が区間ごとの中央値を出す。
+最初の区間 `origin` だけは節目ではなく、`Win32TimingAdapter` が JSON に書く `processCreationToOriginMs`
+（プロセス生成 → `bind`）である。区間名は「その区間の終わりに打つ節目の名前」で、値は 5 回の中央値。
+
+実測: 2026-09-16・同じ機械（指紋 `bc8a356f37c68491`・RTX 3090 / 120 DPI）・Release の exe・`--record` 1 回。
+この回のベンチの中央値は 184.2 / 0.914 / 2.504 / 235.9 ms（採用値は上の表のまま。**基準値は変えていない**）。
+
+### startup-first-frame（中央値 184.2 ms）
+
+| 区間 | 中央値 | 最小 | 最大 | その区間が含むもの | CI |
+| --- | --- | --- | --- | --- | --- |
+| `origin` | 11.6 ms | 11.0 | 17.5 | プロセス生成 → `bind`（loader・CRT・`CoInitializeEx`・引数の取り出し） | PR の CI ログから |
+| `document_opened` | 0.0 ms | 0.0 | 0.1 | adapters の構築・`EditorController` の生成（起動引数のファイルは無い） | PR の CI ログから |
+| `window_created` | 2.8 ms | 2.8 | 3.4 | `RegisterClassExW`・`CreateWindowExW`（`WM_NCCALCSIZE` 等） | PR の CI ログから |
+| `backdrop_applied` | 0.6 ms | 0.6 | 1.1 | `GetDpiForWindow`・`SetWindowPos` で中央寄せ・`controller_.frame()`・`DwmSetWindowAttribute` × 2 | PR の CI ログから |
+| `device_created` | **159.6 ms** | 156.9 | 190.4 | `D3D11CreateDevice(HARDWARE)`・`As(dxgi_device_)` | PR の CI ログから |
+| `swap_chain_created` | 1.6 ms | 1.5 | 1.8 | `CreateDXGIFactory2`・`CreateSwapChainForComposition`・待機可能オブジェクト | PR の CI ログから |
+| `composition_bound` | 0.8 ms | 0.7 | 0.9 | `DCompositionCreateDevice`・target・visual・`Commit` | PR の CI ログから |
+| `context_created` | 0.6 ms | 0.6 | 0.8 | `D2D1CreateFactory`・D2D device / context・ターゲットの結び付け | PR の CI ログから |
+| `text_formats_created` | 0.8 ms | 0.8 | 0.9 | `DWriteCreateFactory`・`GetSystemFontCollection` × 2・`CreateTextFormat` × 6 | PR の CI ログから |
+| `frame_presented` | 4.7 ms | 4.1 | 5.6 | `VisibleLines` の適用・最初の layout・描画・`Present` が返るまで | PR の CI ログから |
+
+### open-large-file-16mib（中央値 235.9 ms）
+
+| 区間 | 中央値 | 最小 | 最大 | startup との違い | CI |
+| --- | --- | --- | --- | --- | --- |
+| `origin` | 12.5 ms | 12.1 | 13.6 | 同じ | PR の CI ログから |
+| `document_opened` | 47.5 ms | 46.9 | 74.3 | ここだけが違う。16.0 MiB・20 万行の読み込み・符号の判別・復号・piece table の構築 | PR の CI ログから |
+| `window_created` | 3.4 ms | 3.1 | 5.0 | 同じ | PR の CI ログから |
+| `backdrop_applied` | 0.8 ms | 0.7 | 1.8 | 同じ | PR の CI ログから |
+| `device_created` | **161.4 ms** | 157.3 | 223.3 | 同じ | PR の CI ログから |
+| `swap_chain_created` | 1.6 ms | 1.5 | 1.8 | 同じ | PR の CI ログから |
+| `composition_bound` | 0.7 ms | 0.7 | 0.9 | 同じ | PR の CI ログから |
+| `context_created` | 0.7 ms | 0.6 | 0.8 | 同じ | PR の CI ログから |
+| `text_formats_created` | 0.8 ms | 0.8 | 1.0 | 同じ | PR の CI ログから |
+| `frame_presented` | 6.4 ms | 5.8 | 8.5 | 20 万行のうち見える行だけを描くので startup とほぼ同じ | PR の CI ログから |
+
+### 170 ms はどこに乗っているか
+
+**`device_created` の 159.6 ms（起動 184.2 ms の 87%）である。** この区間には `D3D11CreateDevice(D3D_DRIVER_TYPE_HARDWARE)` と
+`device_.As(&dxgi_device_)` しか無い。16 MiB でも同じ 161.4 ms が乗り、CI（WARP / 96 DPI）の起動が全部で 20.4 ms だったことと合わせて、
+**実機と CI の約 170 ms の差は NVIDIA のユーザーモードドライバを読み込む `D3D11CreateDevice` そのもの**だと読める（設計の予想どおり）。
+
+予想が外れた所も記録する。
+
+- `GetSystemFontCollection`（実機はフォントが多い）は `text_formats_created` の 0.8 ms に収まっていて、疑う余地が無い
+- DirectComposition は 0.8 ms、Mica の `DwmSetWindowAttribute` × 2 を含む `backdrop_applied` は 0.6 ms。どちらも 1 ms 未満
+- プロセス生成 → `wWinMain` の loader（`origin`）は 11.6 ms で、3 番目に大きいが桁が違う
+- 16 MiB の読み込み（`document_opened` 47.5 ms）は 2 番目に大きい。CI の 16 MiB が 70.1 ms だったことと矛盾しない
+
+**直すのは別 Issue（ADR は直すときに起こす。番号は受理順）。** この Issue は測って記録するところまでで、経路は変えていない。
+遅延できそうな候補は 2 つだけ挙げておく（設計はしない）: ①窓を見せてから device を作る（最初のフレームより前に `ShowWindow` する順に変える）、
+②`D3D11CreateDevice` を adapters の worker で先に走らせる（ADR 0004 の「UI スレッド＋1 本」の枠内に収まるか要検討）。
+
+記録した JSON: `out/speed/2026-09-16T13-40-14Z.json`（git 対象外）。
 
 ## `WM_PAINT` への集約の効果（Debug の exe・同じ機械・前後比較）
 
@@ -68,4 +126,4 @@ PR #18（run 35002057290）で GitHub の Windows ランナーでも窓が作れ
 | key-to-frame-burst-200 | 2.700 ms | 2.564〜7.982 |
 | open-large-file-16mib | 70.1 ms | 69.9〜75.6 |
 
-**実機（RTX 3090）との差は起動と 16 MiB のどちらも約 170 ms。** ファイルの読み込みではなく、実機の最初のフレームに GPU / DWM 側の固定費が乗っていると読める。内訳は Issue #19 で節目を足して測る。CI の基準値は同じ CI 機の値が数回たまってから別の Issue で決める（ADR 0006 の決定 1・ADR 0011 の決定 4）。
+**実機（RTX 3090）との差は起動と 16 MiB のどちらも約 170 ms。** ファイルの読み込みではなく、実機の最初のフレームに GPU / DWM 側の固定費が乗っていると読める。内訳は「起動の内訳（Issue #19）」の節で測った（`device_created` に 159.6 ms）。CI の基準値は同じ CI 機の値が数回たまってから別の Issue で決める（ADR 0006 の決定 1・ADR 0011 の決定 4）。

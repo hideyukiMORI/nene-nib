@@ -188,6 +188,9 @@ void verify_timing_marks(Win32FileAdapter &files)
     const std::string_view text = bytes.has_value() ? std::string_view(bytes.value()) : "";
     expect(text.find("\"processCreationToFirstFrameMs\"") != std::string_view::npos,
            "the report opens with the process creation to first frame value");
+    // プロセス生成 → bind は節目で測れないので、計測器はこの値を最初の区間に使う（Issue #19）。
+    expect(text.find("\"processCreationToOriginMs\"") != std::string_view::npos,
+           "the report carries the process creation to origin value");
     expect(text.find("\"qpcFrequency\"") != std::string_view::npos,
            "the report records the counter frequency");
     expect(text.find("\"input_received\"") != std::string_view::npos,

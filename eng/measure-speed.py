@@ -1,13 +1,19 @@
 """Measure the three speed benches and compare them with this machine's reference (QLT-014).
 
-ADR 0011: the editor marks two milestones (input_received / frame_presented), the Win32 timing
-adapter turns them into a measurement file when the process is started with --measure <out.json>,
-and this script starts the editor, drives it through eng/window_driver.py, and reads the file back.
+ADR 0011: the editor marks milestones (Issue #19 added the eight startup stages to the original
+input_received / frame_presented), the Win32 timing adapter turns them into a measurement file when
+the process is started with --measure <out.json>, and this script starts the editor, drives it
+through eng/window_driver.py, and reads the file back.
 
   startup-first-frame       process creation -> first frame_presented
   key-to-frame-single       one WM_CHAR -> the next frame_presented
   key-to-frame-burst-200    200 WM_CHAR posted at once -> the frame that finishes them
   open-large-file-16mib     the same startup measurement with a 16 MiB, 200,000 line argument
+
+--record also writes and prints the startup breakdown of the two startup benches: the segment that
+ends at each startup milestone, plus the "origin" segment (process creation -> the timing adapter's
+bind, which the loader, the CRT, CoInitializeEx and the arguments live in). The breakdown is
+recorded and shown only; BENCHES and the reference values are untouched (Issue #19).
 
 The exe under measurement is the Release one (build-release/NeNeNib.exe). The Debug exe carries
 ASan and UBSan (eng/targets.cmake instruments the Debug configuration only), and an instrumented
@@ -63,6 +69,14 @@ DISPLAY_ADAPTERS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-
 CENTRAL_PROCESSOR = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 BENCHES = ("startup-first-frame", "key-to-frame-single", "key-to-frame-burst-200",
            "open-large-file-16mib")
+# 起動の節目の正典順（Issue #19 / core::Milestone と同じ綴り）。区間名は「到達する節目の名前」で、
+# 最初の区間 "origin" だけはプロセス生成 -> bind（loader・CRT・COM・引数）を指す。
+ORIGIN_SEGMENT = "origin"
+STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "device_created",
+                      "swap_chain_created", "composition_bound", "context_created",
+                      "text_formats_created", "frame_presented")
+# 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
+STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib")
 
 
 def registry_text(key: str, name: str, fallback: str) -> str:
@@ -123,6 +137,27 @@ def read_report(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def first_reading(marks: list, milestone: str) -> int:
+    """The first qpcMicroseconds of that milestone; device lost re-marks, so later ones are noise."""
+    for entry in marks:
+        if entry["milestone"] == milestone:
+            return int(entry["qpcMicroseconds"])
+    raise AssertionError(f"the measured exe never marked {milestone}"
+                         " (an exe built before Issue #19?)")
+
+
+def breakdown(report: dict) -> dict:
+    """One run's startup segments in ms, in the canonical order, each ending at its milestone."""
+    marks = report["marks"]
+    segments = {ORIGIN_SEGMENT: float(report["processCreationToOriginMs"])}
+    previous = 0
+    for milestone in STARTUP_MILESTONES:
+        reading = first_reading(marks, milestone)
+        segments[milestone] = (reading - previous) / MICROSECONDS_PER_MILLISECOND
+        previous = reading
+    return segments
+
+
 def frame_after(marks: list, index: int) -> int:
     for entry in marks[index + 1:]:
         if entry["milestone"] == "frame_presented":
@@ -134,7 +169,7 @@ def input_indexes(marks: list) -> list[int]:
     return [index for index, entry in enumerate(marks) if entry["milestone"] == "input_received"]
 
 
-def bench_startup(executable: Path, environment: dict, folder: Path) -> dict:
+def bench_startup(executable: Path, environment: dict, folder: Path) -> tuple[dict, dict]:
     report = report_path(folder, "startup")
     process, window, _ = start(executable, environment, ["--measure", str(report)])
     try:
@@ -142,10 +177,12 @@ def bench_startup(executable: Path, environment: dict, folder: Path) -> dict:
         process.wait(timeout=EXIT_SECONDS)
     finally:
         stop(process)
-    return {"startup-first-frame": float(read_report(report)["processCreationToFirstFrameMs"])}
+    measured = read_report(report)
+    return ({"startup-first-frame": float(measured["processCreationToFirstFrameMs"])},
+            {"startup-first-frame": breakdown(measured)})
 
 
-def bench_keys(executable: Path, environment: dict, folder: Path) -> dict:
+def bench_keys(executable: Path, environment: dict, folder: Path) -> tuple[dict, dict]:
     """One keystroke, then 200 posted at once: Windows holds WM_PAINT until the queue drains.
 
     A trial only measures coalescing if the 200 messages really were in the queue together. When
@@ -159,7 +196,7 @@ def bench_keys(executable: Path, environment: dict, folder: Path) -> dict:
             break
         print(f"Speed: the 200 keystrokes reached the window over {span:.1f} ms,"
               f" not together; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
-    return {"key-to-frame-single": single, "key-to-frame-burst-200": burst}
+    return ({"key-to-frame-single": single, "key-to-frame-burst-200": burst}, {})
 
 
 def keys_trial(executable: Path, environment: dict, folder: Path) -> tuple[float, float, float]:
@@ -201,7 +238,8 @@ def keys_trial(executable: Path, environment: dict, folder: Path) -> tuple[float
             span / MICROSECONDS_PER_MILLISECOND)
 
 
-def bench_large_file(executable: Path, environment: dict, folder: Path, document: Path) -> dict:
+def bench_large_file(executable: Path, environment: dict, folder: Path,
+                     document: Path) -> tuple[dict, dict]:
     report = report_path(folder, "large")
     process, window, _ = start(executable, environment,
                                ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
@@ -210,7 +248,17 @@ def bench_large_file(executable: Path, environment: dict, folder: Path, document
         process.wait(timeout=EXIT_SECONDS)
     finally:
         stop(process)
-    return {"open-large-file-16mib": float(read_report(report)["processCreationToFirstFrameMs"])}
+    measured = read_report(report)
+    return ({"open-large-file-16mib": float(measured["processCreationToFirstFrameMs"])},
+            {"open-large-file-16mib": breakdown(measured)})
+
+
+def spread(samples: dict) -> dict:
+    """Median and range per startup segment; the samples themselves stay out (5 x 10 numbers)."""
+    return {name: {"medianMs": round(statistics.median(values), 4),
+                   "minimumMs": round(min(values), 4),
+                   "maximumMs": round(max(values), 4)}
+            for name, values in samples.items()}
 
 
 def summarise(samples: dict) -> dict:
@@ -226,16 +274,22 @@ def measure(build: Path, repetitions: int) -> dict:
     executable, environment, folder = prepare(build)
     document = large_document(folder)
     samples: dict = {name: [] for name in BENCHES}
+    # 起動の内訳は区間ごとに 5 回ぶん貯めて、値と同じように中央値を出す（Issue #19）。
+    segments: dict = {name: {} for name in STARTUP_BENCHES}
     for _ in range(repetitions):
-        for result in (bench_startup(executable, environment, folder),
-                       bench_keys(executable, environment, folder),
-                       bench_large_file(executable, environment, folder, document)):
-            for name, value in result.items():
+        for values, parts in (bench_startup(executable, environment, folder),
+                              bench_keys(executable, environment, folder),
+                              bench_large_file(executable, environment, folder, document)):
+            for name, value in values.items():
                 samples[name].append(value)
+            for name, run in parts.items():
+                for segment, value in run.items():
+                    segments[name].setdefault(segment, []).append(value)
     return {"recordedAt": stamp(), "repetitions": repetitions, "machine": machine(),
             "document": {"path": document.name, "bytes": document.stat().st_size,
                          "lines": LARGE_LINES},
-            "values": summarise(samples)}
+            "values": summarise(samples),
+            "breakdown": {name: spread(segments[name]) for name in STARTUP_BENCHES}}
 
 
 def write_record(record: dict) -> Path:
@@ -254,6 +308,15 @@ def describe(record: dict) -> str:
         lines.append(f"  {name}: median {value['medianMs']:.3f} ms"
                      f" (min {value['minimumMs']:.3f}, max {value['maximumMs']:.3f})"
                      f" samples {value['samples']}")
+    # 内訳は CI のログからしか読めないので、必ず 1 行で出す（Issue #19）。
+    for name in STARTUP_BENCHES:
+        parts = record.get("breakdown", {}).get(name)
+        if parts is None:
+            continue
+        written = " | ".join(f"{segment} {parts[segment]['medianMs']:.1f}"
+                             for segment in (ORIGIN_SEGMENT, *STARTUP_MILESTONES)
+                             if segment in parts)
+        lines.append(f"  {name} breakdown (median ms): {written}")
     return "\n".join(lines)
 
 

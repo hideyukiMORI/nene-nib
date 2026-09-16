@@ -69,12 +69,14 @@
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <expected>
 #include <initializer_list>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1013,15 +1015,41 @@ void verify_edit_mode()
     expect(mode_label(EditMode::vim) == "NORMAL", "the vim label is NORMAL until the engine lands");
 }
 
-// 節目は閉じた選択肢で、名前は計測 JSON の正本である（ADR 0011 の決定 1）。
+// 節目の名前は計測スクリプトの区間名でもあるので、重なったら内訳が読めなくなる。
+[[nodiscard]] bool repeats_earlier_name(std::span<const std::string_view> names, std::size_t index)
+{
+    for (std::size_t earlier = 0; earlier < index; ++earlier)
+    {
+        if (names[earlier] == names[index])
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 節目は閉じた選択肢で、名前は計測 JSON の正本である（ADR 0011 の決定 1・Issue #19）。
+// 並びは起動の経路の正典順で、eng/measure-speed.py の STARTUP_MILESTONES と同じ。
 void verify_milestone()
 {
-    expect(milestone_name(Milestone::input_received) == "input_received",
-           "the input milestone names itself for the measurement file");
-    expect(milestone_name(Milestone::frame_presented) == "frame_presented",
-           "the presented milestone names itself for the measurement file");
-    expect(milestone_name(Milestone::input_received) != milestone_name(Milestone::frame_presented),
-           "the two milestones never share a name");
+    constexpr std::array<Milestone, 10> ordered{
+        Milestone::document_opened, Milestone::window_created,       Milestone::backdrop_applied,
+        Milestone::device_created,  Milestone::swap_chain_created,   Milestone::composition_bound,
+        Milestone::context_created, Milestone::text_formats_created, Milestone::input_received,
+        Milestone::frame_presented};
+    constexpr std::array<std::string_view, 10> expected_names{
+        "document_opened",    "window_created",    "backdrop_applied", "device_created",
+        "swap_chain_created", "composition_bound", "context_created",  "text_formats_created",
+        "input_received",     "frame_presented"};
+    std::array<std::string_view, 10> seen{};
+    for (std::size_t index = 0; index < ordered.size(); ++index)
+    {
+        seen[index] = milestone_name(ordered[index]);
+        expect(seen[index] == expected_names[index],
+               "each milestone names itself for the measurement file");
+        expect(!repeats_earlier_name(std::span<const std::string_view>(seen), index),
+               "no two milestones share a name");
+    }
 }
 
 void verify_status_items()

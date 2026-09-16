@@ -1,6 +1,7 @@
 #include "Direct2DRenderer.hpp"
 
 #include "DevicePixels.hpp"
+#include "Milestone.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 
@@ -126,12 +127,12 @@ constexpr float full_channel = 255.0F;
 }
 } // namespace
 
-std::expected<Direct2DRenderer, RenderFailure> Direct2DRenderer::create(HWND window,
-                                                                        std::uint32_t dpi)
+std::expected<Direct2DRenderer, RenderFailure>
+Direct2DRenderer::create(HWND window, std::uint32_t dpi, application::TimingPort &timing)
 {
     Direct2DRenderer renderer;
     renderer.dpi_ = dpi;
-    const auto ready = renderer.initialize(window);
+    const auto ready = renderer.initialize(window, timing);
     if (!ready)
     {
         return std::unexpected(ready.error());
@@ -139,29 +140,42 @@ std::expected<Direct2DRenderer, RenderFailure> Direct2DRenderer::create(HWND win
     return renderer;
 }
 
-std::expected<void, RenderFailure> Direct2DRenderer::initialize(HWND window)
+// 段ごとに節目を打つ（Issue #19）。device lost で作り直すと同じ節目が再び積まれるが、
+// 計測器は最初の出現だけを読むので起動の内訳は濁らない。
+std::expected<void, RenderFailure> Direct2DRenderer::initialize(HWND window,
+                                                                application::TimingPort &timing)
 {
     const auto device = create_device();
     if (!device)
     {
         return device;
     }
+    timing.mark(core::Milestone::device_created);
     const auto chain = create_swap_chain(window);
     if (!chain)
     {
         return chain;
     }
+    timing.mark(core::Milestone::swap_chain_created);
     const auto bound = bind_composition(window);
     if (!bound)
     {
         return bound;
     }
+    timing.mark(core::Milestone::composition_bound);
     const auto context = create_context();
     if (!context)
     {
         return context;
     }
-    return create_text_formats();
+    timing.mark(core::Milestone::context_created);
+    const auto formats = create_text_formats();
+    if (!formats)
+    {
+        return formats;
+    }
+    timing.mark(core::Milestone::text_formats_created);
+    return {};
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::create_device()

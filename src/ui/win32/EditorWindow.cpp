@@ -234,12 +234,14 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     }
     // 窓プロシージャから this に戻る経路はここだけ（GWLP_USERDATA）。
     SetWindowLongPtrW(window_, GWLP_USERDATA, std::bit_cast<LONG_PTR>(this));
+    timing_.mark(core::Milestone::window_created);
     dpi_ = GetDpiForWindow(window_);
     place_at_screen_centre();
     // 起動引数の結果を先に控える。最初の描画が出す VisibleLines の意図で last_failure は消える
     // （ADR 0010 の決定 9）。
     const auto opened = controller_.frame();
     apply_backdrop(opened);
+    timing_.mark(core::Milestone::backdrop_applied);
     const auto rendering = start_rendering();
     if (!rendering)
     {
@@ -270,7 +272,7 @@ void EditorWindow::apply_backdrop(const application::EditorFrame &frame)
 
 std::expected<void, WindowFailure> EditorWindow::start_rendering()
 {
-    auto renderer = Direct2DRenderer::create(window_, dpi_);
+    auto renderer = Direct2DRenderer::create(window_, dpi_, timing_);
     if (!renderer)
     {
         return std::unexpected(WindowFailure::render);
