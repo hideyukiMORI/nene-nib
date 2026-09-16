@@ -1,6 +1,6 @@
 # 速さの記録 — 施主の実機の基準値（QLT-014 / ADR 0011）
 
-> Status: 記録 / 最終実測 2026-09-16（Issue #16・起動の内訳は Issue #19）。正本の値は `eng/perf-reference.json`（`eng/measure-speed.py --adopt` が書く）。ここは環境・手順・ばらつきの記録。
+> Status: 記録 / 最終実測 2026-09-17（Issue #16・起動の内訳は Issue #19・窓を先に見せる Issue #24）。正本の値は `eng/perf-reference.json`（`eng/measure-speed.py --adopt` が書く）。ここは環境・手順・ばらつきの記録。
 > 中央値を上げる・許容退行を広げるのは ADR の判断であって、落ちたときの修理ではない（QLT-014）。
 
 ## 環境
@@ -23,6 +23,7 @@
 | key-to-frame-single | 1 つの `WM_CHAR` の `input_received` → 次の `frame_presented` | 0.906 ms | 0.888 | 1.056 | 2.906 ms |
 | key-to-frame-burst-200 | 200 の `WM_CHAR` をまとめて post → 最後の `frame_presented` | 2.695 ms | 2.324 | 2.754 | 4.695 ms |
 | open-large-file-16mib | 16,800,000 バイト・200,000 行の UTF-8 CRLF を起動引数で開く → 最初の `frame_presented` | 249.8 ms | 234.9 | 250.5 | 312.2 ms |
+| startup-window-shown | プロセス生成 → 最初の `window_shown`（2026-09-17・Issue #24 の段 2 で足した 5 本目の鍵） | 34.9 ms | 32.2 | 38.0 | 43.7 ms |
 
 同日の 2 回目の `--record`（採用しない。中央値の一致を見るため）: 198.7 / 0.999 / 2.450 / 263.0 ms。2 回目は 200 打鍵の 5 回のうち 1 回が 3 度測り直しても「まとめて」届かず 384.8 ms として残った（中央値には効かない）。
 
@@ -132,6 +133,87 @@ CI（PR #23・run 35104611209・AMD EPYC 7763 / Hyper-V Video＝WARP / 96 DPI）
 （ファイル名の刻は機械の時計。実験は 0 → d → a → b → c → e の順に続けて走らせた。）
 
 製品コードは実験のあと `git checkout -- src/` で戻し、`build-release` を戻した src で build し直した。この節の変更は docs だけである。
+
+## 窓を先に見せる（Issue #24・段 2・ADR 0013）
+
+`ShowWindow(SW_SHOW)` を `start_rendering`（device の生成）より**前**に出し、`core::Milestone::window_shown` を打つ順に変えた。
+**窓は 30〜35 ms で見える**（採用した基準値は 34.9 ms）。`startup-first-frame` の定義と基準値は変えていない（ADR 0013 の決定 4）。
+
+実測: 2026-09-17・同じ機械（指紋 `bc8a356f37c68491`・RTX 3090 / 120 DPI）・Release の exe・`--record` 1 回（各 5 回の中央値）。
+記録した JSON: `out/speed/2026-09-16T15-51-02Z.json`（git 対象外。名前の刻は UTC）。
+
+| ベンチ | 中央値 | 最小 | 最大 | 基準値 | 許容上限 | 判定 |
+| --- | --- | --- | --- | --- | --- | --- |
+| startup-first-frame | 212.9 ms | 200.1 | 226.0 | 191.5 ms | 239.4 ms | 許容内（+21.4 ms・+11%） |
+| **startup-window-shown** | **34.9 ms** | 32.2 | 38.0 | 採用（この回） | 43.7 ms | 新規 |
+| key-to-frame-single | 0.889 ms | 0.821 | 0.978 | 0.906 ms | 2.906 ms | 許容内 |
+| key-to-frame-burst-200 | 2.348 ms | 2.270 | 3.120 | 2.695 ms | 4.695 ms | 許容内 |
+| open-large-file-16mib | 268.3 ms | 258.6 | 296.7 | 249.8 ms | 312.2 ms | 許容内 |
+
+5 回の `startup-window-shown`: 38.04 / 32.20 / **34.93** / 34.43 / 37.62 ms（太字が中央値）。
+`eng/measure-speed.py --adopt --bench startup-window-shown` で施主の実機にこの 1 本だけを足した。**既存 4 本の中央値は動かしていない。**
+
+採用のあとに `--check` を 3 回走らせた。3 回とも `Speed: 5 benches checked, 0 regression(s)`。
+
+| `--check` | 機械の状態 | startup-first-frame | startup-window-shown | 1 打鍵 | 200 打鍵 | 16 MiB |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 回目（採用直後のフルゲート） | build の直後で忙しい | 217.6 ms | 38.2 ms | 0.981 | 2.493 | 283.3 |
+| 2 回目 | 静か | **195.9 ms** | **30.3 ms** | 1.023 | 2.425 | 251.5 |
+| 3 回目（最後のフルゲート） | 静か | 201.6 ms | 32.5 ms | 0.845 | 2.443 | 261.8 |
+
+**採用した 34.9 ms は忙しい機械で測った値で、静かな機械では 30.3〜32.5 ms。** 許容上限 43.7 ms との余裕は
+他の 4 本より狭い（忙しい回には 50.1 ms の試行が 1 つ出た）。基準値を動かすのは ADR の判断なので、ここでは記録だけする。
+
+### 順番の前後の内訳（`startup-first-frame`・中央値 ms）
+
+| 区間 | 前（段 1 の対照・2026-09-17） | 後（この回） | 読み |
+| --- | --- | --- | --- |
+| `origin` | 11.6 | 12.4 | 同じ |
+| `document_opened` | 0.0 | 0.0 | 同じ |
+| `window_created` | 2.8 | 3.9 | 同じ（幅の中） |
+| `backdrop_applied` | 0.6 | 0.8 | 同じ |
+| **`window_shown`** | —（最後に居た） | **16.9** | `ShowWindow(SW_SHOW)` が返るまで。ここまでで窓が見える |
+| `device_created` | 159.6 | 166.0 | `D3D11CreateDevice`。順番を変えても縮まない（段 1 のとおり） |
+| `swap_chain_created` | 1.6 | 1.5 | 同じ |
+| `composition_bound` | 0.8 | 0.8 | 同じ |
+| `context_created` | 0.6 | 0.7 | 同じ |
+| `text_formats_created` | 0.8 | 0.8 | 同じ |
+| `frame_presented` | 4.7 | 4.5 | 同じ |
+
+`open-large-file-16mib` も同じ形: `origin` 15.6 | `document_opened` 51.5 | `window_created` 3.5 | `backdrop_applied` 1.0 |
+**`window_shown` 17.3** | `device_created` 164.9 | `swap_chain_created` 1.5 | `composition_bound` 0.8 | `context_created` 0.7 |
+`text_formats_created` 0.9 | `frame_presented` 6.0。
+
+正直に書く: `startup-first-frame` は**増えた**（許容内なのでゲートは通る）。
+増分は「`ShowWindow` が返るまで」の 15.3〜19.6 ms で、これは順番を変える前は最初のフレームより**後**に払っていた費用が
+測る区間の中に入ってきたものである。`device_created` は 156.0〜172.1 ms で、段 1 の対照の幅（155.5〜173.1 ms）の中にある。
+上の `--record` の 212.9 ms と最初のフルゲートの 217.6 ms は build の直後の忙しい機械の値で、
+静かな機械では **195.9〜201.6 ms**（基準値 191.5 ms に対して +4〜10 ms）である。
+**窓が見えるまでは 185.8 ms → 30〜35 ms**（体感の起動は 5 分の 1 以下）。基準値を動かすのは次の ADR の仕事で、ここでは記録だけする。
+
+### 窓が見えてから最初のフレームまでの画素（ADR 0013 の強制・却下の条件）
+
+`eng/verify-window.py` の `verify_first_paint` が、`--measure` 付きで起動した exe のクライアント領域の中央を
+`GetPixel` で約 15 ms ごとに読み、本文の背景が出るまでの列を記録する（`out/window-verification/look-slice-results.json` の `firstPaint`）。
+
+実測: 2026-09-17・同じ機械・**Debug の exe**（`build/NeNeNib.exe`。この検査の既定）・OS はダーク。
+経過は `start()` が窓を見つけた時刻からで、約 15 ms ごとに 1 点（`Sleep` の粒度）。
+
+| 経過 | 画素 (R,G,B) | 何が見えているか |
+| --- | --- | --- |
+| 0 / 15 / 31 / 46 / 62 / 78 / 93 / 109 / 125 / 140 / 156 / 171 / 187 ms | (32, 32, 32) | DWM の Mica の面だけ（13 回とも同じ） |
+| 203 ms | (48, 10, 36) | 最初のフレーム＝本文の背景（茄子色 `#300A24`・D11） |
+
+- **黒 (0,0,0) は 1 度も出ない。白 (255,255,255) も 1 度も出ない** → ADR 0013 の却下の条件に当たらない
+- 最初のフレームの背景との最大の差は **22**（`FIRST_PAINT_STEP` の 32 以内・「1 段の差」に収まる）
+- この回の節目（節目は最初の読みだけを見る）: プロセス生成 → `window_shown` **45.3 ms**、
+  `window_shown` → 最初の `frame_presented` **204.2 ms**（Debug の exe なので Release の 15 / 156 ms より遅い）
+- 画は `out/window-verification/first-paint.bmp`（git 対象外）
+- この節は**画面中央に他の窓が被っていると測れない**（被った画素は `ours` が偽になり判定に使わない）。
+  走らせる前に画面の中央を空けておく。覆われていたら「背景が中央に届かなかった」と言って落ちる（黒や白と間違えない）
+
+見えているのはダークの Mica の面で、本文の茄子色そのものではない（DWM が壁紙を暗く畳んだ灰）。
+利用者が見るのは「暗い面 → 本文」の 2 段で、黒や白の閃きは無い。
 
 ## `WM_PAINT` への集約の効果（Debug の exe・同じ機械・前後比較）
 

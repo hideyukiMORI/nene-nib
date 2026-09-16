@@ -2,6 +2,7 @@
   "comment": "QLT-014 / ADR 0011: 速さのゲートの正本。eng/measure-speed.py が --adopt で書き、--check で比べる。機械ごとに持つのは、実機と CI で数倍違うから（決定 4）。中央値を上げる・許容退行を広げるのは ADR の判断であって、落ちたときの修理ではない（決定 5）。値はすべてミリ秒で、Release 構成の build-release/NeNeNib.exe を測ったもの（Debug の exe は ASan / UBSan が掛かっていて製品の速さではない）。",
   "benches": {
     "startup-first-frame": "プロセス生成時刻から最初の frame_presented まで。引数なしで起動する",
+    "startup-window-shown": "プロセス生成時刻から最初の window_shown（ShowWindow が返った直後）まで。同じ 1 回の起動から取る第 2 の値で、device の生成より前に窓が見えるまでを測る（ADR 0013）",
     "key-to-frame-single": "1 つの WM_CHAR の input_received から次の frame_presented まで",
     "key-to-frame-burst-200": "200 の WM_CHAR をまとめて post したときの、最初の input_received から最後の打鍵を描き終えた frame_presented まで",
     "open-large-file-16mib": "16,800,000 バイト・200,000 行の UTF-8 CRLF を起動引数で開いて最初の frame_presented まで（1 GB はメモリマップの縦切りで置き換える・決定 3）"
@@ -37,6 +38,11 @@
           "medianMs": 249.7833,
           "minimumMs": 234.8633,
           "maximumMs": 250.5002
+        },
+        "startup-window-shown": {
+          "medianMs": 34.9327,
+          "minimumMs": 32.1952,
+          "maximumMs": 38.0386
         }
       }
     }

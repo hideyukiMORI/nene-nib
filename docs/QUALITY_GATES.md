@@ -104,7 +104,8 @@ head が動いたら Draft に戻して再度 Ready にする。古い成功 SHA
 
 ### QLT-014 — 速さの退行はゲートが落とす
 
-ベンチ 3 本（起動→最初の描画 / キー→画面 / 1 GB を開く）を `eng/` の計測スクリプトで測り、`eng/perf-reference.json` の基準値からの
+ベンチ 4 本（起動→最初の描画 / キー→画面 / 200 打鍵 / 16 MiB を開く。基準値の鍵は 5 つで、起動の 1 回から
+「窓が見えるまで」（`startup-window-shown`・[ADR 0013](adr/0013-startup-shows-the-window-before-the-device.md)）も取る）を `eng/` の計測スクリプトで測り、`eng/perf-reference.json` の基準値からの
 退行でゲートを落とす（[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。許容退行を広げる（基準値を下げる）には ADR が要る。
 CI では同じ CI 機での相対退行だけを見て、絶対値の目標は施主の実機で記録する。
 
@@ -270,7 +271,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 検査自身のテスト | 規約検査・シンボル検査・カバレッジ判定・実ツールの正例・反例 | unittest / eng/prove-gates.py |
 | 単体テスト | C++23 基盤のスモークと中核の振る舞い | CTest / tests/build・tests/unit（ASan / UBSan 付き・`-fno-sanitize-recover=all`。OS 資源と表示は使わない） |
 | カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
-| 速さ | 3 本のベンチの退行 | `eng/measure-speed.py --check`（施主の実機で基準値と比較。CI は記録だけ・QLT-014） |
+| 速さ | 4 本のベンチ（基準値の鍵 5 つ）の退行 | `eng/measure-speed.py --check`（施主の実機で基準値と比較。CI は記録だけ・QLT-014） |
 | 依存 | 道具の版と実行時依存 0 | tool-versions.json / architecture.json / `/MT`（R1） |
 
 ---
