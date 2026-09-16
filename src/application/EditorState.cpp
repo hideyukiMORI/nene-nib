@@ -1,6 +1,7 @@
 #include "EditorState.hpp"
 
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace nenenib::application
@@ -18,6 +19,7 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode)
       history_(core::EditHistory::empty()),
       scroll_(ScrollState{core::LineNumber{first_line}, initial_visible_lines}),
       line_ending_(core::LineEnding::crlf), appearance_(appearance), mode_(mode),
+      vim_(core::vim_resting_state(std::string{})),
       document_(Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}})
 {
 }
@@ -62,6 +64,11 @@ core::EditMode EditorState::mode() const noexcept
     return mode_;
 }
 
+const core::VimState &EditorState::vim() const noexcept
+{
+    return vim_;
+}
+
 const Document &EditorState::document() const noexcept
 {
     return document_;
@@ -83,6 +90,13 @@ EditorState EditorState::with_mode(core::EditMode mode) const
 {
     EditorState next(*this);
     next.mode_ = mode;
+    return next;
+}
+
+EditorState EditorState::with_vim(core::VimState vim) const
+{
+    EditorState next(*this);
+    next.vim_ = std::move(vim);
     return next;
 }
 

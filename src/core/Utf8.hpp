@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <string>
 #include <string_view>
 
 namespace nenenib::core
@@ -28,6 +29,10 @@ namespace nenenib::core
 
 // at が code point の先頭（または末尾の直後）か。
 [[nodiscard]] bool is_boundary(std::string_view text, Offset at) noexcept;
+
+// 検証済みの code point を UTF-8 の 1〜4 バイトにして末尾に足す。UTF-8 を組み立てるのは
+// ここだけで、Utf16.cpp（UTF-16 → UTF-8）も Vim エンジン（打たれた 1 文字）もこれを呼ぶ。
+void append_utf8(std::string &utf8, char32_t value);
 
 // at の次／前の code point の先頭。末尾・先頭では動かない。
 [[nodiscard]] Offset next_code_point(std::string_view text, Offset at) noexcept;

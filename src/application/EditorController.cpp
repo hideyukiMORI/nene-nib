@@ -11,6 +11,9 @@
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
 #include "TabTitle.hpp"
+#include "VimCaret.hpp"
+#include "VimMode.hpp"
+#include "VimStep.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -51,14 +54,37 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return current.value();
 }
 
-[[nodiscard]] core::CaretShape caret_shape_for(core::EditMode mode) noexcept
+// NORMAL だけがブロック。INSERT は通常モードと同じバー（採用案 第 1 節・D15）。
+[[nodiscard]] core::CaretShape caret_shape_for(core::EditMode mode, core::VimMode vim) noexcept
 {
     switch (mode)
     {
     case core::EditMode::ordinary:
         return core::CaretShape::bar;
     case core::EditMode::vim:
+        break;
+    }
+    switch (vim)
+    {
+    case core::VimMode::normal:
         return core::CaretShape::block;
+    case core::VimMode::insert:
+        return core::CaretShape::bar;
+    }
+    std::unreachable();
+}
+
+// Vim の NORMAL に選択は無いので、クリックと Ctrl+矢印は Shift ごと畳む
+// （SelectEditMode{vim} が選択を畳むのと同じ理屈・ADR 0012 の決定 10）。
+[[nodiscard]] core::SelectionAnchoring anchoring_in(core::EditMode mode,
+                                                    core::SelectionAnchoring anchoring) noexcept
+{
+    switch (mode)
+    {
+    case core::EditMode::vim:
+        return core::SelectionAnchoring::collapse;
+    case core::EditMode::ordinary:
+        return anchoring;
     }
     std::unreachable();
 }
@@ -182,12 +208,15 @@ void EditorController::accept(const MoveCaret &intent)
 {
     const core::Offset caret = core::moved_caret(state_.text(), state_.selection().caret,
                                                  intent.motion, state_.scroll().visible_lines);
-    move_caret_to(caret, intent.anchoring);
+    move_caret_to(caret, anchoring_in(state_.mode(), intent.anchoring));
+    settle_vim_caret();
 }
 
 void EditorController::accept(const PlaceCaret &intent)
 {
-    move_caret_to(state_.text().offset_of(intent.position), intent.anchoring);
+    move_caret_to(state_.text().offset_of(intent.position),
+                  anchoring_in(state_.mode(), intent.anchoring));
+    settle_vim_caret();
 }
 
 void EditorController::accept(const CancelSelection &)
@@ -349,7 +378,112 @@ void EditorController::accept(const VisibleLines &intent)
 
 void EditorController::accept(const SelectEditMode &intent)
 {
-    state_ = state_.with_mode(intent.mode);
+    // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
+    core::VimState vim = core::vim_resting_state(state_.vim().unnamed_register);
+    state_ = state_.with_mode(intent.mode).with_vim(std::move(vim));
+    switch (intent.mode)
+    {
+    case core::EditMode::ordinary:
+        return;
+    case core::EditMode::vim:
+        break;
+    }
+    // NORMAL のキャレットは文字の上にあるので、行末を越えていたら 1 つ左へ寄せる。
+    move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
+                  core::SelectionAnchoring::collapse);
+}
+
+void EditorController::accept(const VimKeyPress &intent)
+{
+    const core::VimMode before = state_.vim().mode;
+    const auto step =
+        core::vim_step(state_.vim(), state_.text(), state_.selection().caret, intent.key);
+    state_ = state_.with_vim(step.next);
+    // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
+    if (before != step.next.mode)
+    {
+        state_ = state_.with_history(state_.history().sealed());
+    }
+    // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
+    std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    settle_vim_caret();
+}
+
+void EditorController::settle_vim_caret()
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return;
+    case core::EditMode::vim:
+        break;
+    }
+    switch (state_.vim().mode)
+    {
+    case core::VimMode::insert:
+        return;
+    case core::VimMode::normal:
+        break;
+    }
+    move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
+                  core::SelectionAnchoring::collapse);
+}
+
+void EditorController::perform(const core::VimNoEffect &) {}
+
+void EditorController::perform(const core::VimMoveTo &effect)
+{
+    move_caret_to(effect.caret, core::SelectionAnchoring::collapse);
+}
+
+void EditorController::perform(const core::VimRemoveRange &effect)
+{
+    replace(effect.range, std::string_view{}, core::EditBoundary::separate);
+}
+
+void EditorController::perform(const core::VimRemoveLines &effect)
+{
+    replace(effect.range, std::string_view{}, core::EditBoundary::separate);
+    // 行を消したあとの Vim のキャレットは、その位置に来た行の最初の非空白。
+    move_caret_to(core::vim_first_non_blank(state_.text(), effect.range.begin),
+                  core::SelectionAnchoring::collapse);
+}
+
+void EditorController::perform(const core::VimInsertString &effect)
+{
+    replace(core::selection_range(state_.selection()), effect.utf8, core::EditBoundary::coalesce);
+}
+
+void EditorController::perform(const core::VimNewLine &)
+{
+    replace(core::selection_range(state_.selection()), core::newline_of(state_.line_ending()),
+            core::EditBoundary::coalesce);
+}
+
+void EditorController::perform(const core::VimUndo &)
+{
+    // Vim は戻したあと、変わったところの先頭にキャレットを置く（Issue #22 で実測）。
+    const auto edit = state_.history().undo();
+    undo_edit();
+    if (edit.has_value())
+    {
+        move_caret_to(edit.value().at, core::SelectionAnchoring::collapse);
+    }
+}
+
+void EditorController::perform(const core::VimRedo &)
+{
+    const auto edit = state_.history().redo();
+    redo_edit();
+    if (edit.has_value())
+    {
+        move_caret_to(edit.value().at, core::SelectionAnchoring::collapse);
+    }
+}
+
+const core::VimState &EditorController::vim_state() const noexcept
+{
+    return state_.vim();
 }
 
 void EditorController::accept(const RefreshAppearance &)
@@ -473,13 +607,13 @@ EditorFrame EditorController::frame() const
     const auto &document = state_.document();
     const auto save_state = save_state_of(document, state_.history().position());
     return EditorFrame{visible_lines(),
-                       CaretView{caret, caret_shape_for(state_.mode())},
+                       CaretView{caret, caret_shape_for(state_.mode(), state_.vim().mode)},
                        state_.scroll().first_visible,
                        state_.text().line_count(),
                        state_.appearance(),
                        core::palette_for(state_.appearance()),
                        state_.mode(),
-                       core::mode_label(state_.mode()),
+                       core::mode_label(state_.mode(), state_.vim().mode),
                        DocumentView{core::tab_title_for(document.path, save_state), document.path,
                                     document.encoding, save_state, state_.last_failure()},
                        core::status_items_for(caret, document.encoding, state_.line_ending())};

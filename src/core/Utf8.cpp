@@ -12,6 +12,21 @@ constexpr char32_t last_surrogate = 0xDFFF;
 constexpr char32_t last_code_point = 0x10FFFF;
 constexpr unsigned char first_control = 0x20;
 constexpr unsigned char delete_character = 0x7F;
+constexpr char32_t first_supplementary = 0x10000;
+constexpr unsigned int continuation_shift = 6U;
+constexpr char32_t continuation_mask = 0x3F;
+
+// UTF-8 の継続バイト（10xxxxxx）を 1 つ作る。
+[[nodiscard]] constexpr char continuation_byte(char32_t value, unsigned int shift) noexcept
+{
+    return static_cast<char>(0x80U | ((value >> shift) & continuation_mask));
+}
+
+[[nodiscard]] constexpr char lead_byte(char32_t value, unsigned int shift,
+                                       unsigned int marker) noexcept
+{
+    return static_cast<char>(marker | (value >> shift));
+}
 
 [[nodiscard]] constexpr unsigned char byte_at(std::string_view text, std::size_t index) noexcept
 {
@@ -94,6 +109,33 @@ constexpr unsigned char delete_character = 0x7F;
     return length;
 }
 } // namespace
+
+// 閉じた選択肢ではなく値の範囲なので早期 return で並べる（CPP-002 の else 禁止は掛からない）。
+void append_utf8(std::string &utf8, char32_t value)
+{
+    if (value < 0x80U)
+    {
+        utf8.push_back(static_cast<char>(value));
+        return;
+    }
+    if (value < 0x800U)
+    {
+        utf8.push_back(lead_byte(value, continuation_shift, 0xC0U));
+        utf8.push_back(continuation_byte(value, 0U));
+        return;
+    }
+    if (value < first_supplementary)
+    {
+        utf8.push_back(lead_byte(value, 2U * continuation_shift, 0xE0U));
+        utf8.push_back(continuation_byte(value, continuation_shift));
+        utf8.push_back(continuation_byte(value, 0U));
+        return;
+    }
+    utf8.push_back(lead_byte(value, 3U * continuation_shift, 0xF0U));
+    utf8.push_back(continuation_byte(value, 2U * continuation_shift));
+    utf8.push_back(continuation_byte(value, continuation_shift));
+    utf8.push_back(continuation_byte(value, 0U));
+}
 
 std::expected<std::size_t, TextFailure> validate_utf8(std::string_view text) noexcept
 {

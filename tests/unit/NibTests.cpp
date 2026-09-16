@@ -68,6 +68,20 @@
 #include "TitleBarLayout.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
+#include "VimCaret.hpp"
+#include "VimCharacter.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
+#include "VimMode.hpp"
+#include "VimNewLine.hpp"
+#include "VimNoEffect.hpp"
+#include "VimSpecialKey.hpp"
+#include "VimState.hpp"
+#include "VimStep.hpp"
+#include "VimWordMotion.hpp"
+#include "VimWordStop.hpp"
+
+#include "../vim/VimFixtures.hpp"
 
 #include <array>
 #include <cstddef>
@@ -80,6 +94,8 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace
 {
@@ -96,6 +112,7 @@ using nenenib::application::CodePagePort;
 using nenenib::application::DeleteText;
 using nenenib::application::Document;
 using nenenib::application::EditorController;
+using nenenib::application::EditorFrame;
 using nenenib::application::EditorState;
 using nenenib::application::FileFailure;
 using nenenib::application::FilePort;
@@ -112,6 +129,7 @@ using nenenib::application::ScrollLines;
 using nenenib::application::ScrollState;
 using nenenib::application::SelectAll;
 using nenenib::application::SelectEditMode;
+using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
 using nenenib::core::Appearance;
 using nenenib::core::body_layout;
@@ -186,8 +204,22 @@ using nenenib::core::to_utf16;
 using nenenib::core::to_utf8;
 using nenenib::core::toggled;
 using nenenib::core::validate_utf8;
+using nenenib::core::vim_first_non_blank;
+using nenenib::core::vim_next_word;
+using nenenib::core::vim_previous_word;
+using nenenib::core::vim_resting_caret;
+using nenenib::core::vim_step;
+using nenenib::core::VimCharacter;
+using nenenib::core::VimKey;
+using nenenib::core::VimMode;
+using nenenib::core::VimNewLine;
+using nenenib::core::VimNoEffect;
+using nenenib::core::VimSpecialKey;
+using nenenib::core::VimState;
+using nenenib::core::VimWordStop;
 using nenenib::core::width_of;
 using nenenib::core::without_byte_order_mark;
+using nenenib::tests::VimFixture;
 using Reading = std::expected<Appearance, AppearanceReadFailure>;
 using Content = std::expected<std::string, ClipboardFailure>;
 using Bytes = std::expected<std::string, FileFailure>;
@@ -1011,8 +1043,6 @@ void verify_edit_mode()
     expect(toggled(EditMode::ordinary) == EditMode::vim, "ordinary toggles to vim");
     expect(toggled(EditMode::vim) == EditMode::ordinary, "vim toggles back to ordinary");
     expect(toggled(toggled(EditMode::ordinary)) == EditMode::ordinary, "two toggles return");
-    expect(mode_label(EditMode::ordinary) == "通常", "the ordinary label is 通常");
-    expect(mode_label(EditMode::vim) == "NORMAL", "the vim label is NORMAL until the engine lands");
 }
 
 // 節目の名前は計測スクリプトの区間名でもあるので、重なったら内訳が読めなくなる。
@@ -1451,9 +1481,13 @@ void verify_controller_cancel_selection()
            "Esc with nothing selected changes nothing");
     applied(controller, SelectAll{});
     applied(controller, SelectEditMode{EditMode::vim});
+    expect(controller.frame().lines.at(0).selection.presence == SelectionPresence::absent,
+           "entering Vim drops the selection and puts the caret on a character");
+    expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{4}},
+           "and the caret does not stay past the last character");
     applied(controller, CancelSelection{});
-    expect(controller.frame().lines.at(0).selection.presence == SelectionPresence::present,
-           "Esc in Vim mode is ignored until the Vim engine lands");
+    expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{4}},
+           "in Vim mode Esc arrives as a VimKeyPress, so CancelSelection does nothing");
 }
 
 void verify_controller_clipboard()
@@ -1898,6 +1932,354 @@ void verify_document_failure_clearing()
            "and reading the frame again does not bring it back");
 }
 
+// ---------------------------------------------------------------- Vim エンジン（ADR 0012）
+
+// fixture の記法（<Esc> <CR> <BS> <C-r>）と鍵の対応。写す場所は eng/vim-oracle.py とここの
+// 2 つで、どちらも「fixture の書き方」という 1 つの約束の両端である（ARC-012）。
+struct VimKeyName
+{
+    std::string_view text;
+    VimSpecialKey key;
+};
+
+constexpr std::array<VimKeyName, 4> vim_key_names{{{"<Esc>", VimSpecialKey::escape},
+                                                   {"<CR>", VimSpecialKey::enter},
+                                                   {"<BS>", VimSpecialKey::backspace},
+                                                   {"<C-r>", VimSpecialKey::control_r}}};
+// fixture はどれも数行なので、全部の行が表示値に載る高さで再生する。
+constexpr std::size_t vim_visible_lines = 64;
+
+[[nodiscard]] std::optional<VimKeyName> vim_key_name_at(std::string_view keys, std::size_t index)
+{
+    for (const VimKeyName name : vim_key_names)
+    {
+        if (keys.substr(index).starts_with(name.text))
+        {
+            return name;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::vector<VimKey> vim_keys_of(std::string_view keys)
+{
+    std::vector<VimKey> result;
+    std::size_t index = 0;
+    while (index < keys.size())
+    {
+        const auto name = vim_key_name_at(keys, index);
+        if (name.has_value())
+        {
+            result.emplace_back(name.value().key);
+            index += name.value().text.size();
+            continue;
+        }
+        result.emplace_back(VimCharacter{code_point_at(keys, Offset{index})});
+        index = next_code_point(keys, Offset{index}).value;
+    }
+    return result;
+}
+
+// 表示値だけから本文を組み立てる（ARC-011）。行でつなぐので Vim の getline(1, '$') と同じ形。
+[[nodiscard]] std::string vim_body(const EditorFrame &frame)
+{
+    std::string joined;
+    for (std::size_t index = 0; index < frame.lines.size(); ++index)
+    {
+        if (index > 0)
+        {
+            joined += "\n";
+        }
+        joined += frame.lines.at(index).text;
+    }
+    return joined;
+}
+
+// キャレットの桁をバイトで測り直す。Vim の col('.') はバイト位置で、表示値の桁は code point。
+[[nodiscard]] std::size_t vim_byte_column(const std::string &body, const TextPosition &caret)
+{
+    const auto text = TextBuffer::from_utf8(body);
+    expect(text.has_value(), "the replayed body is valid UTF-8");
+    if (!text.has_value())
+    {
+        return 0;
+    }
+    return text.value().offset_of(caret).value - text.value().line_start(caret.line).value + 1;
+}
+
+void vim_replay(EditorController &controller, std::string_view keys)
+{
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+}
+
+// fixture を 1 件再生する。本文・キャレット・無名レジスタの 3 つを本物の Vim と突き合わせる。
+void verify_vim_fixture(const VimFixture &fixture)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string(fixture.text)});
+    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, fixture.keys);
+    const auto frame = controller.frame();
+    const std::string name(fixture.name);
+    const std::string body = vim_body(frame);
+    expect(frame.first_visible == LineNumber{1}, name.c_str());
+    expect(body == fixture.expected_text, (name + ": body").c_str());
+    expect(frame.caret.position.line.value == static_cast<std::size_t>(fixture.line),
+           (name + ": line").c_str());
+    expect(vim_byte_column(body, frame.caret.position) == static_cast<std::size_t>(fixture.column),
+           (name + ": column").c_str());
+    expect(controller.vim_state().unnamed_register == fixture.register_text,
+           (name + ": register").c_str());
+}
+
+void verify_vim_fixtures()
+{
+    expect(nenenib::tests::vim_fixtures.size() >= 30,
+           "the oracle wrote at least the 30 fixtures the Issue asks for");
+    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    {
+        verify_vim_fixture(fixture);
+    }
+}
+
+void verify_vim_key_notation()
+{
+    const auto keys = vim_keys_of("i<Esc><CR><BS><C-r>あ");
+    expect(keys.size() == 6, "every name and every code point becomes one key");
+    expect(std::get<VimCharacter>(keys.at(0)) == VimCharacter{U'i'}, "a plain letter");
+    expect(std::get<VimSpecialKey>(keys.at(1)) == VimSpecialKey::escape, "<Esc>");
+    expect(std::get<VimSpecialKey>(keys.at(2)) == VimSpecialKey::enter, "<CR>");
+    expect(std::get<VimSpecialKey>(keys.at(3)) == VimSpecialKey::backspace, "<BS>");
+    expect(std::get<VimSpecialKey>(keys.at(4)) == VimSpecialKey::control_r, "<C-r>");
+    expect(std::get<VimCharacter>(keys.at(5)) == VimCharacter{U'あ'},
+           "a multibyte code point is one key");
+}
+
+void verify_vim_mode_labels()
+{
+    expect(mode_label(EditMode::ordinary, VimMode::normal) == "通常", "the ordinary label");
+    expect(mode_label(EditMode::ordinary, VimMode::insert) == "通常",
+           "the Vim mode does not show through in ordinary mode");
+    expect(mode_label(EditMode::vim, VimMode::normal) == "NORMAL", "the NORMAL label");
+    expect(mode_label(EditMode::vim, VimMode::insert) == "INSERT", "the INSERT label");
+}
+
+void verify_vim_caret_shapes()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    const auto vim = controller.apply(SelectEditMode{EditMode::vim});
+    expect(vim.caret.shape == CaretShape::block, "NORMAL draws a block");
+    expect(vim.mode_label == "NORMAL", "NORMAL names itself on the status bar");
+    const auto inserting = controller.apply(VimKeyPress{VimKey{VimCharacter{U'i'}}});
+    expect(inserting.caret.shape == CaretShape::bar, "INSERT draws a bar");
+    expect(inserting.mode_label == "INSERT", "INSERT names itself on the status bar");
+    const auto back = controller.apply(VimKeyPress{VimKey{VimSpecialKey::escape}});
+    expect(back.caret.shape == CaretShape::block, "Esc brings the block back");
+    const auto ordinary = controller.apply(SelectEditMode{EditMode::ordinary});
+    expect(ordinary.caret.shape == CaretShape::bar && ordinary.mode_label == "通常",
+           "the ordinary mode takes its own caret and label back");
+}
+
+// Vim に入るときのキャレットは文字の上へ寄る。通常へ戻ると保留中の回数とオペレータは消える。
+void verify_vim_mode_entry()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("abc")});
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(
+        controller.apply(MoveCaret{CaretMotion::line_end, SelectionAnchoring::collapse}));
+    const auto entered = controller.apply(SelectEditMode{EditMode::vim});
+    expect(entered.caret.position.column == Column{3},
+           "entering Vim pulls the caret back onto the last character");
+    vim_replay(controller, "2d");
+    expect(controller.vim_state().count.has_value() && controller.vim_state().pending.has_value(),
+           "the count and the operator wait for the motion");
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
+    expect(!controller.vim_state().count.has_value() && !controller.vim_state().pending.has_value(),
+           "leaving Vim drops what was pending");
+    expect(controller.vim_state().mode == VimMode::normal, "and the mode goes back to NORMAL");
+}
+
+// oracle の :normal! は 1 回の実行をまるごと 1 つの undo の単位にするので、i a I A の出入りが
+// 単位を閉じることは fixture では測れない。ここだけ手で測る（ADR 0012 の決定 6）。
+void verify_vim_undo_boundaries()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("hello")});
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, "iab<Esc>ic<Esc>");
+    expect(vim_body(controller.frame()) == "acbhello", "two inserts land where Vim puts them");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == "abhello", "one undo takes back one insert");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == "hello", "the second undo takes back the first insert");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == "hello", "undo at the end of the history does nothing");
+}
+
+// fixture は LF だけ（Vim が CRLF を fileformat=dos として落とすので oracle に流せない）。
+// CRLF の本文で CR が本文に残らないことは、保存したバイト列で手で測る（ADR 0012 の決定 9）。
+void verify_vim_crlf()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("one\r\ntwo\r\nthree")});
+    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, "$");
+    expect(controller.frame().caret.position.column == Column{3},
+           "$ stops on the last character, not on the CR");
+    vim_replay(controller, "x");
+    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "on\r\ntwo\r\nthree", "x left the CRLF alone");
+    vim_replay(controller, "jdd");
+    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "on\r\nthree", "dd took the whole CRLF with the line");
+    vim_replay(controller, "jdd");
+    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(editing.files().written() == "on", "dd on the last line took the CRLF before it");
+}
+
+// 窓が送れる鍵のうち、fixture の記法に無いもの（Tab・矢印）と、NORMAL では効かない鍵。
+void verify_vim_other_keys()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("one\ntwo")});
+    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::enter}}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::backspace}}));
+    expect(vim_body(controller.frame()) == "one\ntwo", "Enter and Backspace do nothing in NORMAL");
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
+    expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{2}},
+           "the arrows move like j and l");
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_up}}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
+    expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{1}},
+           "the arrows move like k and h");
+    vim_replay(controller, "i");
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimCharacter{U'\t'}}}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::control_r}}));
+    expect(vim_body(controller.frame()) == "\tone\ntwo", "Tab inserts a tab and Ctrl-r is ignored");
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
+    expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{3}},
+           "the arrows still move in INSERT");
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_up}}));
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
+    expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{2}},
+           "and up and left too");
+}
+
+// core の純関数を直に測る。fixture は EditorController を通るので、端の値はここで押さえる。
+void verify_vim_word_motions()
+{
+    const auto text = TextBuffer::from_utf8("alpha beta\n\ngamma");
+    expect(text.has_value(), "the sample buffer parses");
+    const auto &buffer = text.value();
+    expect(vim_next_word(buffer, Offset{0}, 2, VimWordStop::across_lines) == Offset{11},
+           "two w land on the empty line, which is a word of its own");
+    expect(vim_next_word(buffer, Offset{6}, 1, VimWordStop::at_line_end) == Offset{10},
+           "an operator's w stops at the end of the line it started on");
+    expect(vim_next_word(buffer, Offset{12}, 3, VimWordStop::across_lines) == Offset{17},
+           "w runs out at the end of the buffer");
+    expect(vim_previous_word(buffer, Offset{12}, 2) == Offset{6},
+           "two b walk back over the empty line");
+    expect(vim_previous_word(buffer, Offset{0}, 1) == Offset{0},
+           "b at the start of the buffer stays");
+}
+
+void verify_vim_caret_rules()
+{
+    const auto text = TextBuffer::from_utf8("  alpha\n\n\t ");
+    expect(text.has_value(), "the indented buffer parses");
+    const auto &buffer = text.value();
+    expect(vim_resting_caret(buffer, Offset{3}) == Offset{3}, "a caret on a character stays");
+    expect(vim_resting_caret(buffer, Offset{7}) == Offset{6},
+           "the position past the last character rests on it");
+    expect(vim_resting_caret(buffer, Offset{8}) == Offset{8}, "an empty line rests at its start");
+    expect(vim_first_non_blank(buffer, Offset{5}) == Offset{2}, "the indent is skipped");
+    expect(vim_first_non_blank(buffer, Offset{8}) == Offset{8}, "an empty line has no non-blank");
+    expect(vim_first_non_blank(buffer, Offset{9}) == Offset{10},
+           "a line of blanks rests on its last character");
+}
+
+void verify_vim_step_edges()
+{
+    const auto text = TextBuffer::from_utf8("ab");
+    expect(text.has_value(), "the two character buffer parses");
+    const auto &buffer = text.value();
+    VimState inserting = nenenib::core::vim_resting_state(std::string{});
+    inserting.mode = VimMode::insert;
+    const auto newline = vim_step(inserting, buffer, Offset{1}, VimKey{VimCharacter{U'\n'}});
+    expect(std::holds_alternative<VimNewLine>(newline.effect),
+           "a newline typed as a character becomes the buffer's own line ending");
+    const auto at_start = vim_step(inserting, buffer, Offset{0}, VimKey{VimSpecialKey::backspace});
+    expect(std::holds_alternative<VimNoEffect>(at_start.effect),
+           "Backspace at the start of the buffer does nothing");
+    const VimState resting = nenenib::core::vim_resting_state(std::string{});
+    const auto unbound = vim_step(resting, buffer, Offset{0}, VimKey{VimCharacter{U'z'}});
+    expect(std::holds_alternative<VimNoEffect>(unbound.effect), "an unbound key does nothing");
+    expect(unbound.next.mode == VimMode::normal, "and it leaves NORMAL alone");
+}
+
+// Vim モードではクリックと Ctrl+矢印のあとも文字の上へ寄る（Vim も行末より右のクリックは
+// 最後の文字に置く）。INSERT は行末の右に居てよいので寄せない。
+void verify_vim_caret_placement()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("alpha\nbeta")});
+    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{1}, Column{99}}, SelectionAnchoring::extend}));
+    expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{5}},
+           "a click past the line end lands on the last character");
+    expect(controller.frame().lines.at(0).selection.presence == SelectionPresence::absent,
+           "Shift does not open a selection in Vim mode");
+    static_cast<void>(
+        controller.apply(MoveCaret{CaretMotion::document_end, SelectionAnchoring::extend}));
+    expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{4}},
+           "Ctrl+End settles onto the last character too");
+    vim_replay(controller, "i");
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{2}, Column{99}}, SelectionAnchoring::collapse}));
+    expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{5}},
+           "INSERT may sit past the last character");
+}
+
+void verify_vim_engine()
+{
+    verify_vim_word_motions();
+    verify_vim_caret_rules();
+    verify_vim_step_edges();
+    verify_vim_key_notation();
+    verify_vim_mode_labels();
+    verify_vim_caret_shapes();
+    verify_vim_mode_entry();
+    verify_vim_caret_placement();
+    verify_vim_undo_boundaries();
+    verify_vim_crlf();
+    verify_vim_other_keys();
+    verify_vim_fixtures();
+}
+
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。
 void verify_text_and_caret()
 {
@@ -1961,6 +2343,7 @@ void verify_controller_intents()
     verify_save_state_transitions();
     verify_unreachable_save_point();
     verify_document_failure_clearing();
+    verify_vim_engine();
 }
 
 void verify_look()

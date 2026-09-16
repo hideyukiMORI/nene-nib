@@ -27,3 +27,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0009](0009-editing-slice-piece-table-and-editing-states.md) | 編集の縦切り: piece table の本文・UTF-8 の内部表現・undo の単位・編集中の状態の見た目 | 受理 |
 | [0010](0010-file-slice-fileport-encoding-detection-atomic-save.md) | ファイルの縦切り: `FilePort` と `CodePagePort`・文字コードと改行の判別・一時ファイルからの置換・未保存の印 | 受理 |
 | [0011](0011-speed-measurement-timing-port-and-paint-coalescing.md) | 速さの縦切り: `TimingPort` の節目・ベンチ 3 本と機械ごとの基準値・`WM_PAINT` で 1 フレームにまとめる描画 | 受理 |
+| [0012](0012-vim-engine-first-slice-and-oracle-fixtures.md) | Vim エンジンの最初の縦切り: core の純関数 `vim_step`・閉じた和型の鍵と効果・oracle が生成した fixture の再生 | 受理 |

@@ -12,6 +12,10 @@ the raw input queue, so Ctrl+A / C / X / V / Z / Y cannot be driven from here wi
 real keyboard. Those live in the unit tests (Issue #7); this script drives WM_CHAR, Enter,
 Backspace, Esc, PgUp, PgDn and a posted click in the body, which need no modifier.
 
+Issue #22 adds the Vim slice: the toggle enters NORMAL, `ihello<Esc>` types into the empty buffer,
+`0x` removes the first character, and `uu` puts the buffer back. Every one of those keys arrives as
+WM_CHAR or as Esc, so the whole check runs on posted messages too.
+
 Issue #11 adds the file slice: two temporary files (UTF-8 CRLF and Shift_JIS LF) are written under
 out/window-verification, opened with the startup argument, and the drawn rows, the window title
 and the two status items are read back. Ctrl+S is the one chord this script does try to drive with
@@ -90,6 +94,9 @@ SEGMENT_HEIGHT_DIPS = 20
 STATUS_ITEM_GAP_DIPS = 16
 # 文字コードの項目は「UTF-8 BOM」「Shift_JIS」が入る 72 DIP（ADR 0010 の決定 14）。
 STATUS_ITEM_WIDTH_DIPS = (96, 72, 36)
+# トグルの幅と、その右のモード名（通常 / NORMAL / INSERT）の幅。core::status_bar_layout と同じ。
+TOGGLE_WIDTH_DIPS = TOGGLE_PADDING_DIPS * 3 + SEGMENT_WIDTH_DIPS * 2
+MODE_LABEL_WIDTH_DIPS = 72
 # src/core/BodyLayout.cpp の DIP。行の帯とキャレットの位置はここから同じ整数丸めで出す。
 BODY_TOP_DIPS = 12
 BODY_LINE_HEIGHT_DIPS = 24
@@ -340,6 +347,34 @@ def content_box(body: dict, index: int, dpi: int) -> tuple:
     top = body["firstRowTop"] + body["lineHeight"] * index
     left = body["gutter"] + to_pixels(4, dpi)
     return (left, top, left + to_pixels(60, dpi), top + body["lineHeight"])
+
+
+def mode_label_box(width: int, height: int, dpi: int) -> tuple:
+    """The box that holds 通常 / NORMAL / INSERT, mirroring core::status_bar_layout."""
+    band_top = max(height - to_pixels(STATUS_BAR_DIPS, dpi), 0)
+    left = to_pixels(STATUS_PADDING_DIPS + TOGGLE_WIDTH_DIPS + STATUS_ITEM_GAP_DIPS, dpi)
+    return (left, band_top, left + to_pixels(MODE_LABEL_WIDTH_DIPS, dpi), height)
+
+
+def box_pixels(pixels: bytes, width: int, box: tuple) -> list:
+    """Every pixel inside a box, so two captures of the same box can be compared exactly."""
+    left, top, right, bottom = box
+    return [pixel(pixels, width, x, y) for y in range(top, bottom) for x in range(left, right)]
+
+
+def accent_count(pixels: bytes, width: int, box: tuple) -> int:
+    """How many pixels in a box are the accent; a block caret fills far more of a cell than a bar.
+
+    A single pixel cannot tell the two shapes apart once a glyph sits under the caret, because the
+    glyph is painted on top of the block in the background colour (Issue #22).
+    """
+    return sum(1 for value in box_pixels(pixels, width, box) if value == list(ACCENT))
+
+
+def first_cell_box(body: dict, index: int, dpi: int) -> tuple:
+    """The cell the caret covers in column one of a row."""
+    top = body["firstRowTop"] + body["lineHeight"] * index
+    return (body["gutter"], top, body["gutter"] + to_pixels(10, dpi), top + body["lineHeight"])
 
 
 def status_item_box(width: int, height: int, dpi: int, index: int) -> tuple:
@@ -593,6 +628,66 @@ def verify_scrolling(window, ground: dict, output: Path) -> dict:
     return scrolled
 
 
+def verify_vim(window, ground: dict, output: Path) -> dict:
+    """Issue #22: the toggle enters NORMAL, ihello<Esc> types hello, 0x leaves ello.
+
+    The buffer is empty when this runs and two undos put it back, so the editing checks that
+    follow still start from an empty 無題 buffer. Vim needs no modifier for any of these keys.
+    """
+    width, height, dpi, body = ground["size"]
+    grounds = [ground["background"], ground["current"], list(ACCENT)]
+    toggle = toggle_points(width, height, dpi)
+    label = mode_label_box(width, height, dpi)
+    cell = first_cell_box(body, 0, dpi)
+    size, content = (width, height), content_box(body, 0, dpi)
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    time.sleep(0.5)
+    normal = capture(window, width, height)
+    write_text(window, "i")
+    time.sleep(0.5)
+    inserting = capture(window, width, height)
+    write_text(window, "hello")
+    typed, typed_ink = await_ink(window, size, content, grounds, True)
+    write_bitmap(output / "vim-slice.bmp", typed, width, height)
+    press(window, VK_ESCAPE)
+    time.sleep(0.5)
+    write_text(window, "0")
+    time.sleep(0.5)
+    back = capture(window, width, height)
+    write_text(window, "x")
+    time.sleep(0.5)
+    shortened = capture(window, width, height)
+    write_text(window, "uu")
+    time.sleep(0.5)
+    # ブロックのキャレットは本文の枠に掛かるので、字形が消えたことは通常モードに戻してから測る。
+    click(window, toggle["ordinary"][0], toggle["ordinary"][1])
+    ordinary, cleared_ink = await_ink(window, size, content, grounds, False)
+    result = {
+        "inkAfterTyping": typed_ink,
+        "inkAfterRemoving": ink(shortened, width, content, grounds),
+        "inkAfterUndoing": cleared_ink,
+        "insertChangedTheModeLabel":
+            box_pixels(inserting, width, label) != box_pixels(normal, width, label),
+        "escapeBroughtTheNormalLabelBack":
+            box_pixels(back, width, label) == box_pixels(normal, width, label),
+        "ordinaryLabelDiffers":
+            box_pixels(ordinary, width, label) != box_pixels(normal, width, label),
+        "accentInTheInsertCell": accent_count(inserting, width, cell),
+        "accentInTheNormalCell": accent_count(back, width, cell),
+        "capture": "vim-slice.bmp",
+    }
+    assert result["inkAfterTyping"] > 0, "ihello did not draw anything"
+    assert result["insertChangedTheModeLabel"], "the status bar did not say INSERT"
+    assert result["escapeBroughtTheNormalLabelBack"], "Esc did not bring NORMAL back"
+    assert result["ordinaryLabelDiffers"], "the ordinary label looks like NORMAL"
+    assert result["accentInTheInsertCell"] > 0, "the INSERT caret was not drawn"
+    assert result["accentInTheNormalCell"] > 2 * result["accentInTheInsertCell"], \
+        "the NORMAL caret is not wider than the INSERT bar"
+    assert 0 < result["inkAfterRemoving"] < result["inkAfterTyping"], "0x did not remove one glyph"
+    assert result["inkAfterUndoing"] == 0, f"two undos did not empty the line: {result}"
+    return result
+
+
 def verify_editing(window, process, appearance: str, output: Path) -> dict:
     """Drive the editing keys with posted messages and read the result back as pixels."""
     client = rectangle(window, user.GetClientRect)
@@ -609,6 +704,8 @@ def verify_editing(window, process, appearance: str, output: Path) -> dict:
         "status": list(STATUS_BAND[appearance]),
     }
     result = {"body": body_points(width, height, dpi)}
+    # Vim の鍵は本文が空のうちに測り、u で空へ戻してから通常モードの編集を測る（Issue #22）。
+    result["vim"] = verify_vim(window, ground, output)
     result["typing"] = verify_typing(window, ground, output)
     result["caretShapes"] = verify_block_caret(window, ground)
     result["escape"] = verify_escape(window, process, ground)

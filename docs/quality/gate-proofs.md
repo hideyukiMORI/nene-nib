@@ -252,3 +252,27 @@ Shift_JIS LF 2 行（「日本語」「二行目」）→ 描画・ステータ�
 - `WM_PAINT` への集約の効果（Debug で前後比較）: 200 打鍵の合計 6631 ms → 29.9 ms、1 打鍵 3.53 → 3.55 ms（変わらない）
 - `--check` は実機で約 33 秒。フルゲート全体は Release の差分ビルドを含めて 2 分 19 秒
 - **測れないもの・揺れ**: 画面が光るまで（`Present` が返るまでを測る）。200 打鍵は post する側が負けて「まとめて」届かない回があり、節目の到着幅が 50 ms を越えた試行は最大 3 回測り直す。それでも残った回は数百 ms として記録され、中央値が守る。CI では窓が作れるかをこの PR で初めて見る（指紋が無いので記録だけ）
+
+### 5-g. Vim エンジンの最初の縦切り（Issue #22・ADR 0012・2026-09-16）
+
+環境: 5-f と同じ機械（Windows 11 build 26200・120 DPI・実 GPU・ダーク）。oracle は `C:\Program Files\Vim\vim91\vim.exe`
+＝ `VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)`・適用済パッチ 1-4。`where vim` が返す Git 同梱の 9.0 は使わない。版は `eng/tool-versions.json` の `"vim"`。CI に Vim は無い。
+
+手順（`python eng/vim-oracle.py --regenerate`）: `tests/vim/fixtures.json` の各項目について、`text` を `input.txt` に UTF-8 で書き、
+`set nocompatible` / `set backspace=indent,eol,start` と項目の `settings`・`call cursor(1, 1)`・`execute "normal! …"`・`writefile(getline(1,'$') + cursor + reg)` を書いた `probe.vim` を
+`-u NONE -i NONE -N -n -es -S probe.vim input.txt` で走らせる（Phase 0 の V2 と同じ呼び方）。結果を `tests/vim/VimFixtures.hpp`（`constexpr` の配列）に書く。
+
+結果（2026-09-16 の実測）:
+
+- **fixture 87 件**。`--regenerate` を 2 回走らせて生成物は 1 バイトも変わらない（SHA-256 `457e5495a55ff2f320ff7817572dc689baf9ad222b64decc44e8fa83c3b0ab57`）。3 回目も同じ
+- `nib_unit` が 87 件すべてを再生し、本文・キャレットの行とバイト桁・無名レジスタが全部一致した（全体で 1298 件の検査）。テストは Vim を要らない
+- `&encoding` は `-u NONE` でも `utf-8` だった（この Vim 9.1 の Windows 版の既定）。`set encoding=utf-8` は既定の設定に**足していない**（ADR 0012 の決定 8 のまま）
+- oracle の作法として機械が拒むもの: `text` が改行で終わる項目（Vim の行数とこちらの行数がずれる）と、NORMAL で終わらない `keys`（同じ鍵の末尾に `<Esc>` を 1 つ足した実行と結果が一致しなければ落とす）
+- **oracle で測れないもの**: `:normal!` の 1 回の実行はまるごと 1 つの undo の単位になるので、`xxu` は Vim では `hello` に戻る（対話の Vim なら `ello`）。undo の区切りの fixture は「1 回の変更 → `u`」に限り、`i a I A` の出入りが単位を閉じることは手書きの単体テストで測る。
+  また `:normal!` は失敗した鍵のあとの鍵を捨てることがある（`hx` は `h` が行頭で失敗するので `x` が効かない）ので、失敗する鍵は列の最後にだけ置く。CRLF の本文は Vim が `fileformat=dos` として CR を落とすので流せない（決定 9・手書きの単体テスト 1 本）
+
+実機の窓（`python eng/verify-window.py`。終了 0・`out/window-verification/look-slice-results.json` の `editing.vim`）:
+
+- トグルで Vim に入り、`i` でステータスバーのモード名の画素が変わり（INSERT）、`hello` の字形画素 218、Esc でモード名の画素が NORMAL の絵に戻る
+- キャレット: 1 桁目の升の橙の画素は INSERT で 72、NORMAL で 202（ブロックはバーの 2 倍より広い）。1 文字の上に載るとブロックの中に字形が乗るので、画素 1 点ではなく升の中の橙の数で見る
+- `0x` で字形画素が 218 → 196（`h` が 1 つ消えた）、`u` を 2 回で 0（`x` と挿入 1 回ぶんが別の単位に閉じている）
