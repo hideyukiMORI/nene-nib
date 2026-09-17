@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Composition.hpp"
 #include "Direct2DRenderer.hpp"
 #include "EditMode.hpp"
 #include "EditorController.hpp"
@@ -7,6 +8,7 @@
 #include "EditorIntent.hpp"
 #include "FilePath.hpp"
 #include "HistoryDirection.hpp"
+#include "ImeOpenState.hpp"
 #include "Milestone.hpp"
 #include "RenderFailure.hpp"
 #include "StatusBarHit.hpp"
@@ -76,6 +78,17 @@ class EditorWindow final
     void press_plain_key(WPARAM word);
     void press_vim_key(WPARAM word);
     void press_control_key(WPARAM word);
+    // IMM32（ADR 0014）。WM_IME_STARTCOMPOSITION / WM_IME_COMPOSITION は DefWindowProcW へ
+    // 渡さないので、IME の既定の変換窓は出ず、確定文字も WM_CHAR には流れない（決定 3）。
+    [[nodiscard]] LRESULT compose_message(UINT message, WPARAM word, LPARAM data);
+    void compose(LPARAM data);
+    void send_composition(const core::Composition &composition);
+    void end_composition();
+    void place_candidate_window();
+    // NORMAL では IME を切り、INSERT と通常モードでは切る前の開閉に戻す（決定 5）。
+    void follow_ime(const application::EditorFrame &frame);
+    void close_ime();
+    void restore_ime();
     // Ctrl+Z / Ctrl+Y は Vim では u / Ctrl-r に譲り、Ctrl+R は Vim のときだけ意味を持つ。
     void send_history(core::HistoryDirection direction);
     void send_vim_redo();
@@ -100,6 +113,8 @@ class EditorWindow final
     wchar_t pending_high_surrogate_ = 0;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
+    // Vim の NORMAL に入る前の IME の開閉。控えが在ることが「いま切ってある」でもある（決定 5）。
+    ImeOpenState ime_open_ = ImeOpenState::unrecorded;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
     ATOM class_ = 0;

@@ -74,6 +74,11 @@ const Document &EditorState::document() const noexcept
     return document_;
 }
 
+const std::optional<core::Composition> &EditorState::composition() const noexcept
+{
+    return composition_;
+}
+
 std::optional<FileFailure> EditorState::last_failure() const noexcept
 {
     return last_failure_;
@@ -135,6 +140,13 @@ EditorState EditorState::with_document(Document document) const
 {
     EditorState next(*this);
     next.document_ = std::move(document);
+    return next;
+}
+
+EditorState EditorState::with_composition(std::optional<core::Composition> composition) const
+{
+    EditorState next(*this);
+    next.composition_ = std::move(composition);
     return next;
 }
 

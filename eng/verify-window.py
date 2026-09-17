@@ -22,6 +22,13 @@ with --measure, samples the centre of the client area every 10 ms until the body
 appears, and records the pixels it saw in between; a black or a white one is the ADR's rejection
 condition, so it is an assertion here rather than a note.
 
+Issue #28 adds the IME slice (ADR 0014): the open status of the editor's input context is
+readable from outside through its default IME window, so "Vim NORMAL turns the IME off and INSERT
+brings it back" is checked with posted messages alone. The composed text itself needs keystrokes
+the IME can see, so that part generates real input after taking the foreground and records what it
+found rather than failing when the session has no Japanese IME or refuses the foreground. The
+machine is left with the IME open status it was found in.
+
 Issue #11 adds the file slice: two temporary files (UTF-8 CRLF and Shift_JIS LF) are written under
 out/window-verification, opened with the startup argument, and the drawn rows, the window title
 and the two status items are read back. Ctrl+S is the one chord this script does try to drive with
@@ -50,12 +57,14 @@ import winreg
 # 窓の駆動（起動・検出・PostMessageW・確認ダイアログ・終了）は 1 本しかない（ADR 0011 の決定 7）。
 from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, become_dpi_aware,
                            click, close, dismiss_dialog, GWL_STYLE, HTCAPTION, HTCLOSE,
-                           HWND_TOPMOST, IDNO, press, press_chord, rectangle, start, stop,
-                           SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_NEXT,
-                           VK_PRIOR, VK_RETURN, VK_S, window_title, WINDOW_CLASS, write_text,
-                           WS_CAPTION, WS_POPUP, WS_THICKFRAME, WS_VISIBLE)
+                           HWND_TOPMOST, IDNO, press, press_chord, rectangle, send_keys, start,
+                           stop, SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE,
+                           VK_NEXT, VK_NIHONGO, VK_PRIOR, VK_RETURN, VK_S, VK_SPACE, window_title,
+                           WINDOW_CLASS, write_text, WS_CAPTION, WS_POPUP, WS_THICKFRAME,
+                           WS_VISIBLE)
 
 gdi = c.WinDLL("gdi32", use_last_error=True)
+imm = c.WinDLL("imm32", use_last_error=True)
 
 
 class BITMAPINFOHEADER(c.Structure):
@@ -82,6 +91,9 @@ api(gdi, "GdiFlush", w.BOOL)
 api(gdi, "GetPixel", w.DWORD, w.HDC, c.c_int, c.c_int)
 # 画素を読む点が本当にこの窓の上かを確かめる（他の窓が被っていたら、その面を測ってしまう）。
 api(user, "WindowFromPoint", w.HWND, w.POINT)
+# IME の開閉は、その窓の既定 IME 窓に WM_IME_CONTROL を送れば外から読める（ADR 0014 の決定 5）。
+api(user, "GetKeyboardLayout", c.c_ssize_t, w.DWORD)
+api(imm, "ImmGetDefaultIMEWnd", w.HWND, w.HWND)
 
 SRCCOPY = 0x00CC0020
 CLR_INVALID = 0xFFFFFFFF
@@ -121,6 +133,14 @@ BODY_LINE_HEIGHT_DIPS = 24
 BODY_GUTTER_DIPS = 56
 TYPED_LINES = 200
 PAGE_KEYS = 30
+# IME（ADR 0014）。ime トークンは src/core/BuiltinTheme.hpp の正本と同じ値。
+IME_TOKEN = {"light": (0x5E, 0x27, 0x50), "dark": (0xD7, 0xC4, 0xE5)}
+WM_IME_CONTROL = 0x0283
+IMC_GETOPENSTATUS = 0x0005
+IMC_SETOPENSTATUS = 0x0006
+JAPANESE_LANGUAGE = 0x0411
+# IME が鍵を食べて変換文字列を作るまで待つ。押した鍵は 7 つで、描画は WM_PAINT に畳まれる。
+IME_SETTLE_SECONDS = 1.5
 
 
 def expected_appearance() -> str:
@@ -388,6 +408,169 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
     # ADR 0013 の却下の条件。ここが落ちたら、直す先はコードではなく ADR そのもの。
     assert not result["blackSeen"], f"black before the first frame: {result['blackSeen']}"
     assert not result["whiteSeen"], f"white before the first frame: {result['whiteSeen']}"
+    return result
+
+
+def ime_window(window) -> int:
+    """The default IME window of the editor; its WM_IME_CONTROL answers for that input context."""
+    return int(imm.ImmGetDefaultIMEWnd(window) or 0)
+
+
+def ime_open(ime: int) -> int:
+    return int(user.SendMessageW(ime, WM_IME_CONTROL, IMC_GETOPENSTATUS, 0))
+
+
+def set_ime_open(ime: int, on: bool) -> None:
+    user.SendMessageW(ime, WM_IME_CONTROL, IMC_SETOPENSTATUS, 1 if on else 0)
+
+
+def colour_count(pixels: bytes, width: int, box: tuple, colour: tuple) -> int:
+    """How many pixels inside a box are exactly one palette token (the underlines are opaque)."""
+    return sum(1 for value in box_pixels(pixels, width, box) if value == list(colour))
+
+
+def drive_ime_modes(window, ime: int, width: int, height: int, dpi: int) -> dict:
+    """ADR 0014 decision 5: NORMAL turns the IME off, INSERT and the ordinary mode bring it back.
+
+    The open status of the editor's own input context is readable from outside, so this needs no
+    keyboard at all: the toggle and `i` and Esc all arrive as posted messages.
+    """
+    toggle = toggle_points(width, height, dpi)
+    set_ime_open(ime, True)
+    result = {"openAfterTurningItOn": ime_open(ime)}
+    write_text(window, "a")
+    time.sleep(0.5)
+    result["openInOrdinaryMode"] = ime_open(ime)
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    time.sleep(0.5)
+    result["openInVimNormal"] = ime_open(ime)
+    write_text(window, "i")
+    time.sleep(0.5)
+    result["openInVimInsert"] = ime_open(ime)
+    press(window, VK_ESCAPE)
+    time.sleep(0.5)
+    result["openBackInVimNormal"] = ime_open(ime)
+    click(window, toggle["ordinary"][0], toggle["ordinary"][1])
+    time.sleep(0.5)
+    result["openBackInOrdinaryMode"] = ime_open(ime)
+    press(window, VK_BACK)
+    time.sleep(0.3)
+    return result
+
+
+def drive_composition(window, ime: int, ground: dict, output: Path) -> dict:
+    """Try a real composition: にほんご, Space to convert, Enter to commit (ADR 0014).
+
+    Posted messages cannot reach the IME, so this is the one place that generates real keystrokes
+    after taking the foreground. When the session refuses the foreground, or when the IME does not
+    compose (another input mode, another IME), the run records that instead of failing; the manual
+    check is written down in docs/quality/gate-proofs.md 5-h.
+    """
+    width, height, dpi, body = ground["size"]
+    grounds = [ground["background"], ground["current"], list(ACCENT)]
+    box = content_box(body, 0, dpi)
+    set_ime_open(ime, True)
+    if not send_keys(window, VK_NIHONGO):
+        return {"foreground": False, "reason": "the session refused the foreground"}
+    time.sleep(IME_SETTLE_SECONDS)
+    composing = capture(window, width, height)
+    write_bitmap(output / "ime-slice.bmp", composing, width, height)
+    result = {
+        "foreground": True,
+        "inkWhileComposing": ink(composing, width, box, grounds),
+        "imeUnderlinePixels": colour_count(composing, width, box, ground["ime"]),
+        "accentPixelsWhileComposing": accent_count(composing, width, box),
+        "capture": "ime-slice.bmp",
+    }
+    send_keys(window, [VK_SPACE])
+    time.sleep(IME_SETTLE_SECONDS)
+    converted = capture(window, width, height)
+    write_bitmap(output / "ime-slice-converted.bmp", converted, width, height)
+    result["inkAfterSpace"] = ink(converted, width, box, grounds)
+    result["accentPixelsAfterSpace"] = accent_count(converted, width, box)
+    result["captureAfterSpace"] = "ime-slice-converted.bmp"
+    send_keys(window, [VK_RETURN])
+    time.sleep(IME_SETTLE_SECONDS)
+    committed = capture(window, width, height)
+    write_bitmap(output / "ime-slice-committed.bmp", committed, width, height)
+    result["inkAfterEnter"] = ink(committed, width, box, grounds)
+    result["imeUnderlinePixelsAfterEnter"] = colour_count(committed, width, box, ground["ime"])
+    result["captureAfterEnter"] = "ime-slice-committed.bmp"
+    return result
+
+
+def judge_composition(composed: dict) -> None:
+    """Assert only what the IME actually produced; a session that never composed is recorded."""
+    if not composed.get("foreground") or composed["inkWhileComposing"] == 0:
+        composed["checked"] = "the IME did not compose in this session; see gate-proofs 5-h"
+        return
+    # 変換中は本文の行に ime の下線が出る（採用案 D15・決定 7）。
+    assert composed["imeUnderlinePixels"] > 0, \
+        f"no ime-coloured underline under the composed text: {composed}"
+    # Space に対する IME の答えは一定しない: 変換に入って注目文節が accent になることも、
+    # すでに出ている予測候補をそのまま確定することもある。前者だったときだけ注目文節を測る。
+    converted = composed["accentPixelsAfterSpace"] > composed["accentPixelsWhileComposing"]
+    composed["spaceOpenedATargetClause"] = converted
+    # 確定すると本文に字が入り、下線は消える（本文は TextBuffer の側にある・決定 2）。
+    assert composed["inkAfterEnter"] > 0, f"the committed text is not in the body: {composed}"
+    assert composed["imeUnderlinePixelsAfterEnter"] == 0, \
+        f"the underline survived the commit: {composed}"
+    composed["checked"] = ("composed, converted and committed with real keystrokes" if converted
+                           else "composed and committed with real keystrokes; Space took the "
+                                "predicted candidate instead of opening a target clause")
+
+
+def verify_ime(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
+    """Issue #28 / ADR 0014. A fresh editor, because this one drives the real keyboard."""
+    thread_layout = user.GetKeyboardLayout(0)
+    process, window, _ = start(executable, environment)
+    try:
+        assert user.SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE_NOSIZE_SHOW)
+        time.sleep(0.4)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        dpi = user.GetDpiForWindow(window)
+        thread = user.GetWindowThreadProcessId(window, None)
+        language = user.GetKeyboardLayout(thread) & 0xFFFF
+        ime = ime_window(window)
+        result = {"keyboardLanguage": hex(language), "defaultImeWindow": bool(ime),
+                  "verifierKeyboardLanguage": hex(thread_layout & 0xFFFF)}
+        if not ime or language != JAPANESE_LANGUAGE:
+            result["checked"] = "no Japanese IME on this machine; see gate-proofs 5-h"
+            close(window)
+            result["exitCode"] = process.wait(timeout=5)
+            return result
+        was_open = ime_open(ime)
+        result["openStatusAsFound"] = was_open
+        ground = {
+            "size": (width, height, dpi, body_points(width, height, dpi)),
+            "background": list(PALETTE[appearance]),
+            "current": list(CURRENT_LINE[appearance]),
+            "ime": IME_TOKEN[appearance],
+        }
+        try:
+            result["modes"] = drive_ime_modes(window, ime, width, height, dpi)
+            result["composition"] = drive_composition(window, ime, ground, output)
+        finally:
+            # この機械の IME は見つけたとおりに返す（ADR 0014 の実機の節の約束）。
+            set_ime_open(ime, bool(was_open))
+            result["openStatusRestored"] = ime_open(ime)
+        modes = result["modes"]
+        assert modes["openAfterTurningItOn"] == 1, "the IME could not be turned on from outside"
+        assert modes["openInOrdinaryMode"] == 1, "the ordinary mode must not touch the IME"
+        assert modes["openInVimNormal"] == 0, "Vim NORMAL must turn the IME off (decision 5)"
+        assert modes["openInVimInsert"] == 1, "INSERT must bring the recorded status back"
+        assert modes["openBackInVimNormal"] == 0, "Esc must turn the IME off again"
+        assert modes["openBackInOrdinaryMode"] == 1, "leaving Vim must restore the status"
+        assert result["openStatusRestored"] == was_open, "the machine kept the IME it was found in"
+        judge_composition(result["composition"])
+        close(window)
+        # 本文を打ち替えたので未保存の確認が出る。破棄して閉じる。
+        result["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
+        result["exitCode"] = process.wait(timeout=5)
+        assert result["exitCode"] == 0, result["exitCode"]
+    finally:
+        stop(process)
     return result
 
 
@@ -849,6 +1032,8 @@ def main() -> None:
     finally:
         stop(process)
     result["documents"] = verify_documents(executable, environment, appearance, output)
+    # ADR 0014: IME の開閉は外から読め、変換そのものは本物の鍵が要るので別の 1 回の起動で測る。
+    result["ime"] = verify_ime(executable, environment, appearance, output)
     # ADR 0013 の却下の条件は、窓が見えてから最初のフレームまでの面。別の 1 回の起動で記録する。
     result["firstPaint"] = verify_first_paint(executable, environment, appearance, output)
     (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",

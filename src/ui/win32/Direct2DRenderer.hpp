@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BodyLayout.hpp"
+#include "ClauseEmphasis.hpp"
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
@@ -23,6 +24,7 @@
 #include <dxgi1_6.h>
 #include <expected>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <wrl/client.h>
 
@@ -44,6 +46,9 @@ class Direct2DRenderer final
                                          std::int32_t x);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
     void set_backdrop(TitleBarBackdrop backdrop) noexcept;
+    // 最後に描いたキャレットの物理画素。窓が IME の候補窓をその直下に置く（ADR 0014 の決定 6）。
+    // 変換中は変換中のキャレット（GCS_CURSORPOS の位置）になる。
+    [[nodiscard]] RECT caret_rectangle() const noexcept;
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。
@@ -74,7 +79,17 @@ class Direct2DRenderer final
     void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
+    // 1 行の中の範囲の当たり矩形。折り返さないので数は少なく、上限を超えた分は描かない。
+    [[nodiscard]] std::size_t runs_of(IDWriteTextLayout *text, const core::LayoutRect &area,
+                                      DWRITE_TEXT_RANGE range,
+                                      std::span<DWRITE_HIT_TEST_METRICS> runs);
     void fill_runs(IDWriteTextLayout *text, const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
+    // 範囲の下端に太さ thickness の帯を引く（IME の文節の下線・ADR 0014 の決定 7）。
+    void underline_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
+                        DWRITE_TEXT_RANGE range, std::int32_t thickness);
+    // 範囲の字だけを別の色で描き直す。切り抜きの中に行の layout をもう一度通す。
+    void tint_runs(IDWriteTextLayout *text, const core::LayoutRect &area, DWRITE_TEXT_RANGE range,
+                   core::RgbColor color);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
     void draw_bar_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
@@ -83,6 +98,19 @@ class Direct2DRenderer final
                           const core::LayoutRect &area, UINT32 position);
     void draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                     const core::LayoutRect &area, std::string_view line);
+    // 注目文節は accent の 2 DIP の下線と selection と同じ面、他の文節は ime の 1 DIP の
+    // 下線と ime の字色（ADR 0014 の決定 7・採用案 D15）。
+    void draw_target_clause(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                            const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
+    void draw_other_clause(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                           const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
+    void draw_clauses(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                      const core::LayoutRect &area, std::string_view shown);
+    // 変換中の文字列をキャレットの位置に差し込んだ 1 行。TextBuffer は触らない（ARC-004）。
+    void draw_composed_line(const application::EditorFrame &frame, const core::BodyLayout &body,
+                            const core::LayoutRect &area, const application::LineView &line);
+    void draw_plain_line(const application::EditorFrame &frame, const core::BodyLayout &body,
+                         const core::LayoutRect &area, const application::LineView &line);
     void draw_line(const application::EditorFrame &frame, const core::BodyLayout &body,
                    std::size_t index);
     void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
@@ -109,6 +137,7 @@ class Direct2DRenderer final
     TextFormat gutter_format_;
     TextFormat code_format_;
     WaitableHandle latency_{nullptr, &::CloseHandle};
+    RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;
     std::uint32_t dpi_ = 96;
     TitleBarBackdrop backdrop_ = TitleBarBackdrop::opaque;

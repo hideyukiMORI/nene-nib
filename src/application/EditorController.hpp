@@ -3,6 +3,7 @@
 #include "AppearancePort.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
+#include "CompositionView.hpp"
 #include "EditBoundary.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
@@ -18,6 +19,7 @@
 #include "VimState.hpp"
 
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,6 +56,11 @@ class EditorController final
     void accept(const RefreshAppearance &);
     void accept(const OpenDocument &intent);
     void accept(const SaveDocument &intent);
+    // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
+    // 触らず、CommitText だけが既存の 1 本（replace / vim_step）を通って本文に入る。
+    void accept(const ComposeText &intent);
+    void accept(const CommitText &intent);
+    void accept(const CancelComposition &);
 
     // VimEffect の写し先。選択肢が増えたら std::visit がここで足りずコンパイルが落ちる
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
@@ -79,6 +86,11 @@ class EditorController final
     void cut_selection();
     void paste_clipboard();
     [[nodiscard]] std::vector<LineView> visible_lines() const;
+    [[nodiscard]] std::optional<CompositionView> composed() const;
+    // Vim の NORMAL では IME を切ってあるので変換は来ないはずだが、来たら捨てる（決定 4）。
+    [[nodiscard]] bool composition_ignored() const noexcept;
+    // 確定した文字列を Vim の打鍵として流す。`.` の再生とマクロが後で自然に載る（決定 4）。
+    void type_as_vim_keys(std::string_view utf8);
     void fail(FileFailure failure);
     // バイト列 ↔ UTF-8 の本文。BOM の着脱はここ、CP932 の変換はポートの向こう（決定 2・5）。
     [[nodiscard]] std::expected<std::string, FileFailure> decoded(core::TextEncoding encoding,
