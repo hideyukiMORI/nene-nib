@@ -54,6 +54,8 @@ api(user, "IsWindowVisible", w.BOOL, w.HWND)
 api(user, "IsWindow", w.BOOL, w.HWND)
 api(user, "GetWindowRect", w.BOOL, w.HWND, c.POINTER(w.RECT))
 api(user, "GetClientRect", w.BOOL, w.HWND, c.POINTER(w.RECT))
+# 窓の面が本当に見えているかを確かめる（別の窓が覆っていたら、測るのはその窓の面になる）。
+api(user, "WindowFromPoint", w.HWND, w.POINT)
 api(user, "GetWindowLongPtrW", c.c_ssize_t, w.HWND, c.c_int)
 api(user, "GetDpiForWindow", w.UINT, w.HWND)
 api(user, "GetDpiForSystem", w.UINT)
@@ -222,6 +224,23 @@ def window_title(window) -> str:
     buffer = c.create_unicode_buffer(512)
     user.GetWindowTextW(window, buffer, len(buffer))
     return buffer.value
+
+
+def covered_by(window) -> str | None:
+    """The title of the window that owns the centre of this one's client area, or None if it is ours.
+
+    Both scripts that read something back through the screen need the same question answered: is
+    the surface under the centre of the client area really this window? eng/verify-window.py reads
+    pixels there, and eng/measure-speed.py measures a window the compositor must not be throttling
+    (Issue #30). Nothing here judges; the caller decides what a covered window means for it.
+    """
+    client = rectangle(window, user.GetClientRect)
+    point = w.POINT((client[2] - client[0]) // 2, (client[3] - client[1]) // 2)
+    assert user.ClientToScreen(window, c.byref(point))
+    other = int(user.WindowFromPoint(point))
+    if other == int(window):
+        return None
+    return window_title(other) if other else "no window at that point"
 
 
 def owned_dialog(pid: int) -> int:

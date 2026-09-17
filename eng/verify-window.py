@@ -60,7 +60,8 @@ import winreg
 
 # 窓の駆動（起動・検出・PostMessageW・確認ダイアログ・終了）は 1 本しかない（ADR 0011 の決定 7）。
 from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, become_dpi_aware,
-                           click, close, dismiss_dialog, GWL_STYLE, HTCAPTION, HTCLOSE,
+                           click, close, covered_by, dismiss_dialog, GWL_STYLE, HTCAPTION,
+                           HTCLOSE,
                            HWND_TOPMOST, IDNO, press, press_chord, rectangle, send_keys, start,
                            stop, SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE,
                            VK_NEXT, VK_NIHONGO, VK_PRIOR, VK_RETURN, VK_S, VK_SPACE, window_title,
@@ -93,8 +94,6 @@ api(gdi, "BitBlt", w.BOOL, w.HDC, c.c_int, c.c_int, c.c_int, c.c_int, w.HDC, c.c
 api(gdi, "GetDIBits", c.c_int, w.HDC, w.HBITMAP, w.UINT, w.UINT, w.LPVOID, c.POINTER(BITMAPINFO), w.UINT)
 api(gdi, "GdiFlush", w.BOOL)
 api(gdi, "GetPixel", w.DWORD, w.HDC, c.c_int, c.c_int)
-# 画素を読む点が本当にこの窓の上かを確かめる（他の窓が被っていたら、その面を測ってしまう）。
-api(user, "WindowFromPoint", w.HWND, w.POINT)
 # IME の開閉は、その窓の既定 IME 窓に WM_IME_CONTROL を送れば外から読める（ADR 0014 の決定 5）。
 api(user, "GetKeyboardLayout", c.c_ssize_t, w.DWORD)
 api(imm, "ImmGetDefaultIMEWnd", w.HWND, w.HWND)
@@ -369,11 +368,9 @@ def sample_first_paint(window, centre: tuple, background: list) -> list:
     started = time.monotonic()
     samples = []
     for _ in range(FIRST_PAINT_SAMPLES):
-        point = w.POINT(centre[0], centre[1])
-        assert user.ClientToScreen(window, c.byref(point))
         samples.append({"atMs": round((time.monotonic() - started) * 1000.0, 1),
                         "pixel": screen_pixel(window, centre[0], centre[1]),
-                        "ours": int(user.WindowFromPoint(point)) == int(window)})
+                        "ours": covered_by(window) is None})
         if samples[-1]["pixel"] == background and samples[-1]["ours"]:
             break
         time.sleep(FIRST_PAINT_INTERVAL)

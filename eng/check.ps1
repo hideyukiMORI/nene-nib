@@ -43,8 +43,12 @@ try {
     # ADR 0011 / 0013: 4 本のベンチ（基準値の鍵は 5 つ）を測って eng/perf-reference.json の
     # 指紋ごとの基準値と比べる。
     # 基準値の無い機械（CI を含む）と窓を作れない機械は、値を記録して通る。
+    # 終了 2 は「退行」ではなく「刺激が窓に届かず測れなかった」（Issue #30）。どちらでもゲートは落ちるが、
+    # 直す先が違う（コードの速さ / 計測中の机の状態）ので別の言葉で言う。
     & python eng/measure-speed.py --check
-    if ($LASTEXITCODE -ne 0) { throw 'QLT-014: speed regression.' }
+    $speed = $LASTEXITCODE
+    if ($speed -eq 2) { throw 'QLT-014: speed could not be measured (the stimulus did not reach the window; see the lines above). Not a regression.' }
+    if ($speed -ne 0) { throw 'QLT-014: speed regression.' }
     & python eng/coverage.py
     if ($LASTEXITCODE -ne 0) { throw 'QLT-009: branch coverage or its negative proof failed.' }
     & python eng/prove-gates.py
