@@ -108,6 +108,8 @@ head が動いたら Draft に戻して再度 Ready にする。古い成功 SHA
 「窓が見えるまで」（`startup-window-shown`・[ADR 0013](adr/0013-startup-shows-the-window-before-the-device.md)）も取る）を `eng/` の計測スクリプトで測り、`eng/perf-reference.json` の基準値からの
 退行でゲートを落とす（[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。許容退行を広げる（基準値を下げる）には ADR が要る。
 CI では同じ CI 機での相対退行だけを見て、絶対値の目標は施主の実機で記録する。
+刺激が窓に届かなかった試行は値にせず**欠測**として記録し、有効な試行が 3 本に満たないベンチは「退行」ではなく**計測不能**として
+退行と別の終了コード 2 でゲートを落とす（Issue #30。どちらでも落ちるが、直す先が違うので別の文で言う）。
 
 - 機械強制: **active**（施主の実機。CI は記録だけで、退行判定は基準値が貯まってから。[ADR 0011](adr/0011-speed-measurement-timing-port-and-paint-coalescing.md)・Issue #16。`eng/check.ps1` が Release の exe で `eng/measure-speed.py --check` を走らせ、
   `eng/perf-reference.json` に指紋の一致する機械では基準値との比較で落ちる。指紋の無い機械（CI）では記録だけ。CI の基準値は同じ CI 機の値が数回たまってから別の Issue で決める）

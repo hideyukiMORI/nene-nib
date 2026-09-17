@@ -26,6 +26,14 @@ ASan and UBSan (eng/targets.cmake instruments the Debug configuration only), and
 run is not the speed of the product that ADR 0006 gates. eng/verify-window.py keeps driving the
 Debug exe, because running the sanitizers against the real window is the point there.
 
+A trial whose stimulus did not reach the window as specified is not a value: the 200 keystrokes
+are repeated BURST_ATTEMPTS times and, when none of them arrives complete and together, that trial
+of key-to-frame-burst-200 is recorded as missing instead (Issue #30). "values" carries the count in
+"missing", the median comes from the valid trials alone, and a bench with fewer than
+MIN_VALID_SAMPLES of them is not judged at all. --check then leaves with 1 for a regression and
+with 2 for a bench that could not be measured, which are different things and say so in different
+words; eng/check.ps1 fails on both.
+
 Every bench runs five times; the value is the median and the spread is recorded with it. References
 live in eng/perf-reference.json per machine fingerprint (CPU name, display adapter, system DPI),
 because the same numbers on a shared CI runner mean nothing (ADR 0006). A machine without a
@@ -48,9 +56,9 @@ import statistics
 import time
 import winreg
 
-from window_driver import (become_dpi_aware, close, dismiss_dialog, IDNO, post_together,
-                           raise_window, start, stop, take_foreground, user, WindowUnavailable,
-                           write_text)
+from window_driver import (become_dpi_aware, close, covered_by, dismiss_dialog, IDNO,
+                           post_together, raise_window, start, stop, take_foreground, user,
+                           WindowUnavailable, write_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "eng/perf-reference.json"
@@ -66,6 +74,8 @@ BURST_SECONDS = 4.0
 # 200 打鍵が「まとめて」届いたと言える幅。これを越えた試行は刺激が仕様どおりでないので測り直す。
 BURST_SPAN_LIMIT_MS = 50.0
 BURST_ATTEMPTS = 3
+# 5 試行のうちこれだけ有効な値が無いベンチは「遅くなった」ではなく「測れなかった」（Issue #30）。
+MIN_VALID_SAMPLES = 3
 EXIT_SECONDS = 15.0
 LARGE_LINES = 200_000
 LARGE_LINE_BYTES = 84
@@ -164,11 +174,12 @@ def breakdown(report: dict) -> dict:
     return segments
 
 
-def frame_after(marks: list, index: int) -> int:
+def frame_after(marks: list, index: int) -> int | None:
+    """The first frame presented after that input, or None when the run ended before one was."""
     for entry in marks[index + 1:]:
         if entry["milestone"] == "frame_presented":
             return int(entry["qpcMicroseconds"])
-    raise AssertionError("no frame was presented after that input")
+    return None
 
 
 def input_indexes(marks: list) -> list[int]:
@@ -197,20 +208,53 @@ def bench_keys(executable: Path, environment: dict, folder: Path) -> tuple[dict,
 
     A trial only measures coalescing if the 200 messages really were in the queue together. When
     the posting process is starved the editor reads them as they arrive and the number becomes the
-    poster's speed, which shows up as a burst whose inputs span hundreds of milliseconds. That is a
-    stimulus that was not delivered as specified, so the trial is repeated rather than recorded.
+    poster's speed, which shows up as a burst whose inputs span hundreds of milliseconds; a window
+    that is covered or starved can end up measuring fewer of them than were posted. Both are a
+    stimulus that was not delivered as specified, so the trial is repeated rather than recorded,
+    and when BURST_ATTEMPTS of them fail in a row the burst of that trial is missing rather than a
+    value (Issue #30). The single keystroke is a stimulus of its own: it stays a value whenever
+    that keystroke and the frame that answered it were measured.
     """
+    single = None
     for attempt in range(BURST_ATTEMPTS):
-        single, burst, span = keys_trial(executable, environment, folder)
-        if span <= BURST_SPAN_LIMIT_MS:
-            break
-        print(f"Speed: the 200 keystrokes reached the window over {span:.1f} ms,"
-              f" not together; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
-    return ({"key-to-frame-single": single, "key-to-frame-burst-200": burst}, {})
+        single, burst, span, delivered = keys_trial(executable, environment, folder)
+        reason = burst_failure(burst, span, delivered)
+        if reason is None:
+            return ({"key-to-frame-single": single, "key-to-frame-burst-200": burst}, {})
+        print(f"Speed: {reason}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
+    print(f"Speed: the 200 keystrokes did not reach the window as specified in {BURST_ATTEMPTS}"
+          " attempts; this trial of key-to-frame-burst-200 is missing")
+    return ({"key-to-frame-single": single, "key-to-frame-burst-200": None}, {})
 
 
-def keys_trial(executable: Path, environment: dict, folder: Path) -> tuple[float, float, float]:
-    """One trial: (single keystroke ms, 200 keystroke ms, how long the 200 took to arrive)."""
+def burst_failure(burst: float | None, span: float, delivered: int) -> str | None:
+    """Why this trial's burst is not a value, in one phrase, or None when the stimulus arrived."""
+    if delivered < BURST_KEYS + 2:
+        return f"only {delivered} of {BURST_KEYS + 2} keystrokes were measured by the window"
+    if burst is None:
+        return "no frame was presented after the 200 keystrokes"
+    if span > BURST_SPAN_LIMIT_MS:
+        return f"the 200 keystrokes reached the window over {span:.1f} ms, not together"
+    return None
+
+
+def measured_single(marks: list, inputs: list) -> float | None:
+    """inputs[1] and the frame that answered it in ms, or None when the pair was not measured."""
+    if len(inputs) < 2:
+        return None
+    frame = frame_after(marks, inputs[1])
+    if frame is None:
+        return None
+    return (frame - int(marks[inputs[1]]["qpcMicroseconds"])) / MICROSECONDS_PER_MILLISECOND
+
+
+def keys_trial(executable: Path, environment: dict,
+               folder: Path) -> tuple[float | None, float | None, float, int]:
+    """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
+
+    Either value is None when its own stimulus did not reach the window, and the caller repeats or
+    records the trial as missing (Issue #30); the count is what the caller says in that line.
+    """
     report = report_path(folder, "keys")
     process, window, _ = start(executable, environment, ["--measure", str(report)])
     try:
@@ -219,6 +263,10 @@ def keys_trial(executable: Path, environment: dict, folder: Path) -> tuple[float
         raise_window(window)
         if not take_foreground(window):
             print("Speed: the bench window did not take the foreground")
+        # 覆われた窓は合成器に間引かれ、刺激が届いても値にならない。判定はしないが印は残す（#30）。
+        covering = covered_by(window)
+        if covering is not None:
+            print(f"Speed: another window covers the bench window ({covering})")
         time.sleep(SETTLE_SECONDS)
         # 最初の 1 打鍵は捨てる。交換鎖が定常になる前の 1 枚は合成器の都合で何十 vsync も遅れる。
         write_text(window, "w")
@@ -236,16 +284,18 @@ def keys_trial(executable: Path, environment: dict, folder: Path) -> tuple[float
         stop(process)
     marks = read_report(report)["marks"]
     inputs = input_indexes(marks)
-    assert len(inputs) >= BURST_KEYS + 2, f"only {len(inputs)} keystrokes reached the window"
+    single = measured_single(marks, inputs)
+    if len(inputs) < BURST_KEYS + 2:
+        return single, None, 0.0, len(inputs)
     # inputs[0] は捨てる暖機の 1 打鍵。測るのは inputs[1] の 1 打鍵と、そのあとの 200 打鍵ちょうど
     # （実キーが紛れ込んでも数え間違えないように、後ろからではなく先頭から 200 を取る）。
     keys = inputs[2:2 + BURST_KEYS]
     started = int(marks[keys[0]]["qpcMicroseconds"])
-    single = frame_after(marks, inputs[1]) - int(marks[inputs[1]]["qpcMicroseconds"])
-    burst = frame_after(marks, keys[-1]) - started
-    span = int(marks[keys[-1]]["qpcMicroseconds"]) - started
-    return (single / MICROSECONDS_PER_MILLISECOND, burst / MICROSECONDS_PER_MILLISECOND,
-            span / MICROSECONDS_PER_MILLISECOND)
+    finished = frame_after(marks, keys[-1])
+    span = (int(marks[keys[-1]]["qpcMicroseconds"]) - started) / MICROSECONDS_PER_MILLISECOND
+    if finished is None:
+        return single, None, span, len(inputs)
+    return single, (finished - started) / MICROSECONDS_PER_MILLISECOND, span, len(inputs)
 
 
 def bench_large_file(executable: Path, environment: dict, folder: Path,
@@ -271,12 +321,36 @@ def spread(samples: dict) -> dict:
             for name, values in samples.items()}
 
 
-def summarise(samples: dict) -> dict:
-    return {name: {"samples": [round(value, 4) for value in values],
-                   "medianMs": round(statistics.median(values), 4),
-                   "minimumMs": round(min(values), 4),
-                   "maximumMs": round(max(values), 4)}
-            for name, values in samples.items()}
+def summarise(samples: dict, missing: dict) -> dict:
+    """The valid trials of each bench, with the number of trials that delivered no stimulus.
+
+    A bench with no valid trial keeps its place with samples [] and a null median, because the
+    record must say "not measured" rather than leave the reader to notice an absence (Issue #30).
+    """
+    summary = {}
+    for name, values in samples.items():
+        gone = missing.get(name, 0)
+        if not values:
+            summary[name] = {"samples": [], "medianMs": None, "minimumMs": None,
+                             "maximumMs": None, "missing": gone}
+            continue
+        summary[name] = {"samples": [round(value, 4) for value in values],
+                         "medianMs": round(statistics.median(values), 4),
+                         "minimumMs": round(min(values), 4),
+                         "maximumMs": round(max(values), 4),
+                         "missing": gone}
+    return summary
+
+
+def judged_samples(measured: dict) -> int | None:
+    """How many trials of that bench became values, or None when the record lists no trials.
+
+    A record written before Issue #30 lists its samples and has no "missing" key, so it reads as
+    five valid trials. The small records eng/prove-gates.py writes to test the reference itself
+    carry medians alone; those say nothing about delivery and are judged on the median.
+    """
+    samples = measured.get("samples")
+    return None if samples is None else len(samples)
 
 
 def measure(build: Path, repetitions: int) -> dict:
@@ -284,6 +358,8 @@ def measure(build: Path, repetitions: int) -> dict:
     executable, environment, folder = prepare(build)
     document = large_document(folder)
     samples: dict = {name: [] for name in BENCHES}
+    # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
+    missing: dict = {name: 0 for name in BENCHES}
     # 起動の内訳は区間ごとに 5 回ぶん貯めて、値と同じように中央値を出す（Issue #19）。
     segments: dict = {name: {} for name in STARTUP_BENCHES}
     for _ in range(repetitions):
@@ -291,14 +367,17 @@ def measure(build: Path, repetitions: int) -> dict:
                               bench_keys(executable, environment, folder),
                               bench_large_file(executable, environment, folder, document)):
             for name, value in values.items():
-                samples[name].append(value)
+                if value is None:
+                    missing[name] += 1
+                else:
+                    samples[name].append(value)
             for name, run in parts.items():
                 for segment, value in run.items():
                     segments[name].setdefault(segment, []).append(value)
     return {"recordedAt": stamp(), "repetitions": repetitions, "machine": machine(),
             "document": {"path": document.name, "bytes": document.stat().st_size,
                          "lines": LARGE_LINES},
-            "values": summarise(samples),
+            "values": summarise(samples, missing),
             "breakdown": {name: spread(segments[name]) for name in STARTUP_BENCHES}}
 
 
@@ -315,9 +394,14 @@ def describe(record: dict) -> str:
              f" / {record['machine']['dpi']} dpi)"]
     for name in BENCHES:
         value = record["values"][name]
+        gone = value.get("missing", 0)
+        note = f" (missing {gone} of {len(value['samples']) + gone})" if gone else ""
+        if value["medianMs"] is None:
+            lines.append(f"  {name}: no trial delivered the stimulus{note}")
+            continue
         lines.append(f"  {name}: median {value['medianMs']:.3f} ms"
                      f" (min {value['minimumMs']:.3f}, max {value['maximumMs']:.3f})"
-                     f" samples {value['samples']}")
+                     f" samples {value['samples']}{note}")
     # 内訳は CI のログからしか読めないので、必ず 1 行で出す（Issue #19）。
     for name in STARTUP_BENCHES:
         parts = record.get("breakdown", {}).get(name)
@@ -330,12 +414,24 @@ def describe(record: dict) -> str:
     return "\n".join(lines)
 
 
-def compare(reference: dict, values: dict, recorded: dict) -> list[str]:
+def compare(reference: dict, values: dict, recorded: dict) -> tuple[list[str], list[str]]:
+    """The regressions, and separately the benches too few trials measured to judge (Issue #30).
+
+    A median of one or two trials is not the bench, it is whatever the two trials that survived
+    happened to be, so it is never called a regression. The caller turns the two lists into two
+    exit codes, because "slower" and "not measured" are repaired in different places.
+    """
     tolerance = reference["tolerance"]
-    findings = []
+    findings, unmeasurable = [], []
     for name in BENCHES:
         against = recorded.get(name)
         if against is None:
+            continue
+        valid = judged_samples(values[name])
+        if valid is not None and valid < MIN_VALID_SAMPLES:
+            trials = valid + values[name].get("missing", 0)
+            unmeasurable.append(f"QLT-014: {name}: only {valid} of {trials} trials delivered the"
+                                " stimulus; not judged")
             continue
         allowed = against["medianMs"] * (1.0 + tolerance["percent"] / 100.0)
         measured = values[name]["medianMs"]
@@ -343,7 +439,7 @@ def compare(reference: dict, values: dict, recorded: dict) -> list[str]:
             findings.append(f"QLT-014: {name}: {measured:.3f} ms exceeds {allowed:.3f} ms"
                             f" (reference {against['medianMs']:.3f} ms"
                             f" + {tolerance['percent']}% or {tolerance['floorMs']} ms)")
-    return findings
+    return findings, unmeasurable
 
 
 def adopt_one(reference_path: Path, record: dict, name: str) -> None:
@@ -359,6 +455,9 @@ def adopt_one(reference_path: Path, record: dict, name: str) -> None:
         raise SystemExit(f"Speed: {identity['fingerprint']} has no reference yet;"
                          " adopt every bench once before adopting one of them")
     measured = record["values"][name]
+    if measured["medianMs"] is None:
+        raise SystemExit(f"Speed: {name} has no valid trial in this record; a reference is never"
+                         " adopted from a bench that could not be measured")
     recorded["values"][name] = {"medianMs": measured["medianMs"],
                                 "minimumMs": measured["minimumMs"],
                                 "maximumMs": measured["maximumMs"]}
@@ -370,6 +469,10 @@ def adopt_one(reference_path: Path, record: dict, name: str) -> None:
 def adopt(reference_path: Path, record: dict) -> None:
     reference = json.loads(reference_path.read_text(encoding="utf-8"))
     identity = record["machine"]
+    unmeasured = [name for name in BENCHES if record["values"][name]["medianMs"] is None]
+    if unmeasured:
+        raise SystemExit(f"Speed: {', '.join(unmeasured)} had no valid trial in this record;"
+                         " a reference is never adopted from a bench that could not be measured")
     reference["machines"][identity["fingerprint"]] = {
         "cpu": identity["cpu"], "gpu": identity["gpu"], "dpi": identity["dpi"],
         "recordedAt": record["recordedAt"], "repetitions": record["repetitions"],
@@ -406,11 +509,19 @@ def check(arguments) -> int:
     if recorded is None:
         print("Speed: no reference for this machine; recorded only")
         return 0
-    findings = compare(reference, record["values"], recorded["values"])
-    for finding in findings:
-        print(finding)
-    print(f"Speed: {len(BENCHES)} benches checked, {len(findings)} regression(s)")
-    return int(bool(findings))
+    findings, unmeasurable = compare(reference, record["values"], recorded["values"])
+    for line in [*findings, *unmeasurable]:
+        print(line)
+    print(f"Speed: {len(BENCHES)} benches checked, {len(findings)} regression(s),"
+          f" {len(unmeasurable)} unmeasurable")
+    return exit_code(findings, unmeasurable)
+
+
+def exit_code(findings: list, unmeasurable: list) -> int:
+    """1 is a regression, 2 is a bench the machine could not measure, 0 is neither (Issue #30)."""
+    if findings:
+        return 1
+    return 2 if unmeasurable else 0
 
 
 def main() -> int:

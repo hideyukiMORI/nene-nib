@@ -237,8 +237,39 @@ CI（PR #23・run 35104611209・AMD EPYC 7763 / Hyper-V Video＝WARP / 96 DPI）
 
 - 隠れた窓は合成器が提示を間引き、1 打鍵に 200 ms 超の外れ値が出る。窓を最前面・前景にしてから測る
 - 窓を出して最初に提示する 1 枚は交換鎖の暖機で数十 vsync 遅れる。測らない暖機の 1 打鍵を先に打つ
-- Release の editor は Python の `PostMessageW` より速くキューを空にするので、「200 打鍵をまとめて post」が成立しない回がある。窓のスレッドを止めてから post し、節目の到着幅が 50 ms を越えた試行は最大 3 回測り直す。3 回とも駄目なら最後の値をそのまま記録して 1 行出す（中央値が守る）
+- Release の editor は Python の `PostMessageW` より速くキューを空にするので、「200 打鍵をまとめて post」が成立しない回がある。窓のスレッドを止めてから post し、届いた打鍵が 202 に満たない試行と到着幅が 50 ms を越えた試行は最大 3 回測り直す。**3 回とも刺激が届かなければ、その試行は値にせず欠測として記録する**（Issue #30。前は 3 回目の値をそのまま記録していた）
 - 測るのは `Present` が返るまでで、画面が光るまでではない（waitable swap chain・最大遅延 1 なので最大 1 vsync 後）
+
+### 欠測と「測れなかった」（Issue #30）
+
+**「遅くなった」と「測れなかった」は直す先が違うので、別の言葉と別の終了コードで言う。**
+
+再現（2026-09-17・PR #32 のフルゲート 1 回目・記録 `out/speed/2026-09-17T10-02-41Z.json`）:
+`key-to-frame-burst-200` の 5 試行が [1175.4, 2.6, 4.6, 1104.9, 6.0] ms で、ログは
+`Speed: the 200 keystrokes reached the window over 809.0 / 1323.8 / 1174.4 ms, not together; repeating the trial (1/3 … 3/3)`。
+**3 回とも 809〜1330 ms で揃わなかった試行がそのまま値として記録され**、中央値 6.045 ms が上限 3.369 ms を越えて退行と判定された。
+送る側の Python が starve しただけで、単独で測り直すと 2.343 ms（5 回とも 2.2〜2.7）、直後のフルゲートも 2.45 ms で終了 0。
+
+いまの決まり（`eng/measure-speed.py`）:
+
+- 欠測の条件は打鍵ベンチだけ。届いた打鍵が 202 未満・到着幅が 50 ms 超・200 打鍵に答えるフレームが無い、のどれかなら、`BURST_ATTEMPTS`（3 回）の中で測り直し、3 回とも駄目ならその試行は欠測
+- `key-to-frame-single` は別の刺激なので、burst が欠測でも 1 打鍵とそれに答えたフレームが取れていれば値にする
+- 記録の形: `values[<bench>]` に `missing`（欠測の試行数）が入る。`samples` は有効な値だけで、中央値・最小・最大も有効な値から出す。有効な値が 0 本なら `samples: []`・`medianMs: null`。`missing` の無い古い記録も `--check --values` で読める
+- 判定: 有効な値が `MIN_VALID_SAMPLES`（3 本）以上ならいままでどおり中央値で退行を見る。3 本未満のベンチは**計測不能**で、退行と別に `QLT-014: <name>: only N of 5 trials delivered the stimulus; not judged` を出す
+- 終了コード: 退行があれば 1、退行が無く計測不能があれば 2、どちらも無ければ 0。まとめの行は `Speed: 5 benches checked, R regression(s), U unmeasurable`。`eng/check.ps1` は 2 を `QLT-014: speed could not be measured (the stimulus did not reach the window; …). Not a regression.` と言う。**ゲートは 1 でも 2 でも落ちる**（落ちないのは基準値の無い機械と窓を作れない機械だけで、いままでと同じ）
+- 覆いの印: `take_foreground` が効かないとき、またはクライアント中央の `WindowFromPoint` が自分の窓でないとき `Speed: another window covers the bench window (<その窓のタイトル>)` を 1 行出す。判定はしない。`eng/verify-window.py` の `ours` と同じ `window_driver.covered_by` を使う
+
+手で確かめたこと（2026-09-17・同じ機械・Release の exe）。**覆いは印であって原因ではない**とわかった:
+
+| 手で作った状態 | 出た行 | 欠測 | 終了 | 記録 |
+| --- | --- | --- | --- | --- |
+| 何もしない | 無し | 0 | 0 | `2026-09-17T11-07-37Z.json` |
+| 画面中央を別の窓（topmost）で 5 試行とも覆う | `did not take the foreground` と `another window covers the bench window (Issue #30 cover window)` が 5 回 | 0 | 0 | `2026-09-17T11-09-42Z.json` |
+| 覆ったうえで窓のスレッドを刻む・高優先度の負荷を掛ける | `not together; repeating the trial (1/3)` が 1 回（到着幅 67.9 ms / 2688.5 ms） | 0 | 1（値が荒れて退行） | `2026-09-17T11-18-47Z.json`・`2026-09-17T11-20-56Z.json` |
+
+- **覆いだけでは刺激は止まらない**。ベンチの窓は `raise_window` で最前面に居て、`PostMessageW` は前景でなくても届く。覆いは印として出るだけで、欠測は 0 のまま終了 0 だった
+- 机を荒らすと**値**は荒れる（4719 / 2447 ms）が、`post_together` が窓のスレッドを止めてから post するので**到着幅**は 50 ms 以内のままのことが多く、3 回連続の失敗（＝欠測）はこの机では作れなかった。2026-09-17 の記録の 809〜1330 ms は、送る側と窓のスレッドの両方が同時に痩せたときの姿である
+- そのため欠測の記録と終了コードは、欠測入りの記録を作って `--check --values` で確かめた: 有効 3 本 → 退行 0・終了 0、有効 2 本 → `only 2 of 5 trials delivered the stimulus; not judged`・終了 2、有効 0 本 → 同じ文・終了 2。純関数の判定は `tests/conformance/test_speed.py`（23 件）がゲートで守る
 
 ## 所要時間
 
