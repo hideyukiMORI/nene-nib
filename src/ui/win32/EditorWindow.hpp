@@ -13,7 +13,6 @@
 #include "RenderFailure.hpp"
 #include "StatusBarHit.hpp"
 #include "TimingPort.hpp"
-#include "TitleBarBackdrop.hpp"
 #include "TitleBarHit.hpp"
 #include "WindowFailure.hpp"
 
@@ -119,7 +118,6 @@ class EditorWindow final
     HWND window_ = nullptr;
     ATOM class_ = 0;
     UINT dpi_ = 96;
-    TitleBarBackdrop backdrop_ = TitleBarBackdrop::opaque;
     bool rendering_failed_ = false;
 };
 } // namespace nenenib::ui::win32

@@ -154,12 +154,12 @@ Waivers: none | WVR-NNNN
 
 現在のタスクは [docs/todo/current.md](docs/todo/current.md)。GitHub Issue が正で、そこは要約。
 
-2026-09-15: Issue #1（Phase 0〜2）、#3（最初の縦切り・ADR 0007）、#5（見た目・ADR 0008）、#7（編集・ADR 0009）、#11（ファイル・ADR 0010）。2026-09-16: #13（UTF-16 の変換を core に 1 本化）、#16（速さ・ADR 0011）、#19（起動の内訳）、#22（Vim の最初の縦切り・ADR 0012）。2026-09-17: #24（窓を先に見せる起動・ADR 0013）。起動すると枠なし窓（Snap と影は OS のまま）に Mica のタイトルバー、タブ 1 本と窓の操作、
+2026-09-15: Issue #1（Phase 0〜2）、#3（最初の縦切り・ADR 0007）、#5（見た目・ADR 0008）、#7（編集・ADR 0009）、#11（ファイル・ADR 0010）。2026-09-16: #13（UTF-16 の変換を core に 1 本化）、#16（速さ・ADR 0011）、#19（起動の内訳）、#22（Vim の最初の縦切り・ADR 0012）。2026-09-17: #24（窓を先に見せる起動・ADR 0013）、#28（IME・ADR 0014）。起動すると枠なし窓（Snap と影は OS のまま）に Mica のタイトルバー、タブ 1 本と窓の操作、
 piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl+Z/Y・クリックでキャレット）、ステータスバーの「通常 | Vim」トグルを Direct2D で描き、OS のライト／ダーク（茄子色 D11・橙 D12）に従う。
 Ctrl+O / Ctrl+S / Ctrl+Shift+S と起動引数でファイルを開いて保存し、UTF-8 / UTF-8 BOM / Shift_JIS と CRLF / LF を読んだ形のまま保ち、未保存の印「● 」と「保存しますか」を出す。
-速さは `eng/measure-speed.py` が Release の exe で 3 本のベンチを測り、`eng/perf-reference.json` の機械ごとの基準値と比べてゲートで落とす（QLT-014・施主の実機で active。実機: 起動 191 ms・窓が見えるまで 35 ms・1 打鍵 0.9 ms・16 MiB 250 ms）。描画は `WM_PAINT` で 1 フレームに 1 回。
+速さは `eng/measure-speed.py` が Release の exe で 5 本のベンチを測り、`eng/perf-reference.json` の機械ごとの基準値と比べてゲートで落とす（QLT-014・施主の実機で active。実機: 起動 191 ms・窓が見えるまで 35 ms・1 打鍵 0.9 ms・16 MiB 250 ms）。描画は `WM_PAINT` で 1 フレームに 1 回。
 見た目の正本は `docs/design/2026-09-15-look.md` と `docs/design/2026-09-15-editing-look.md`。カラーテーマとフォントサイズの計画は `docs/plans/2026-09-15-colorschemes.md`（D13 / D14）。
-Vim は NORMAL / INSERT の最初の範囲（`h j k l 0 $ w b`・回数・`x`・`d`・`dd`・`i a I A`・Esc・`u`）だけで、再現度は本物の Vim 9.1 の oracle が生成した fixture（`tests/vim/`・`eng/vim-oracle.py --regenerate`）を CTest が再生して守る。IME・VISUAL・複数タブ・Ctrl+P・設定の保存はまだ無い。起動は窓が約 35 ms で見え、本文は `D3D11CreateDevice`（NVIDIA のドライバ初期化 160 ms・呼び方では縮まない）の後に約 200 ms で出る（ADR 0013）。最新は [日報](docs/reports/2026-09-17.md) / [引き継ぎ](docs/handoffs/2026-09-17.md)。
+Vim は NORMAL / INSERT の最初の範囲（`h j k l 0 $ w b`・回数・`x`・`d`・`dd`・`i a I A`・Esc・`u`）だけで、再現度は本物の Vim 9.1 の oracle が生成した fixture（`tests/vim/`・`eng/vim-oracle.py --regenerate`）を CTest が再生して守る。IME は IMM32 を ui/win32 が受け、変換中の文字列は本文の外（`core::Composition`）に持って renderer がキャレットの行に差し込んで描き、確定は 1 意図（通常モードは undo 1 単位・Vim INSERT は打鍵として engine へ）。Vim NORMAL では IME を切り INSERT で戻す（ADR 0014）。VISUAL・複数タブ・Ctrl+P・設定の保存はまだ無い。起動は窓が約 35 ms で見え、本文は `D3D11CreateDevice`（NVIDIA のドライバ初期化 160 ms・呼び方では縮まない）の後に約 200 ms で出る（ADR 0013）。最新は [日報](docs/reports/2026-09-17.md) / [引き継ぎ](docs/handoffs/2026-09-17.md)。
 
 ---
 

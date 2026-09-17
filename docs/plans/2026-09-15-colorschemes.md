@@ -11,7 +11,7 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 
 | 層 | 内容 | 所有 |
 | --- | --- | --- |
-| **UI トークン** | 採用案の 12 個（`background` `text` `muted` `gutter` `current_line` `titlebar_tint` `tab_active` `status` `accent` `selection` `toggle` `panel` / `panel_border`） | `core::Palette`（今ある） |
+| **UI トークン** | 採用案の 12 個（`background` `text` `muted` `gutter` `current_line` `title_bar` `tab_active` `status` `accent` `selection` `toggle` `panel` / `panel_border`） | `core::Palette`（今ある） |
 | **本文トークン** | `foreground` `background` `cursor` `selection` `current_line` `line_number` `comment` `keyword` `string` `number` `type` `function` `constant` `operator` `error` `warning`（16 個。base16 の 16 色を Nib の役割名で持つ） | `core::SyntaxPalette`（ハイライトの縦切りで足す） |
 | **テーマ** | 名前・明暗（`dark` / `light`）・UI トークン・本文トークン・出典と許諾 | `core::Theme` |
 | **導出** | 有名テーマは本文トークン（背景・前景・アクセント・コメント）しか定義しないものが多い。UI トークンは**決定的な導出関数** `derive_ui(background, foreground, accent, appearance)` で作り、必要なテーマだけ個別に上書きする | `core::ThemeDerivation`（純関数・単体テスト） |

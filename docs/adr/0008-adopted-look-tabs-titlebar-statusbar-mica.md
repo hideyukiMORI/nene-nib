@@ -21,7 +21,9 @@ DWM が扱う top-level 窓の背景なので、枠を自分で消した `WS_OVE
    最大化時のはみ出しは `WM_NCCALCSIZE` で縁の分だけ内側へ寄せる。`WM_NCACTIVATE` は自分で答え、非アクティブ化で OS に枠を描かせない（Folio ADR 0014 の教訓）
 3. **自前のタイトルバー（40 DIP）は Mica を透かす。** `DwmSetWindowAttribute(DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_MAINWINDOW)` を掛け、Direct2D はタイトルバー領域をアルファ 0 で描く
    （DirectComposition の premultiplied swap chain なので透明が通る）。本文とステータスバーは不透明。`WM_NCHITTEST` は自前: タブと「＋」と窓の操作は `HTCLIENT` / `HTMINBUTTON` / `HTMAXBUTTON` / `HTCLOSE`、
-   残りのタイトルバーは `HTCAPTION`、縁 8 DIP は `HTLEFT` 等
+   残りのタイトルバーは `HTCAPTION`、縁 8 DIP は `HTLEFT` 等。
+   **2026-09-17 追記（D16・Issue #31）**: 帯は不透明の `title_bar` で塗る（ダーク #1E0516・ライト #E1E4E9）。アクティブなタブは `tab_active`（＝各テーマの `background`）で本文に繋がる。
+   Mica の属性（決定 9）は起動の面（ADR 0013）と非クライアントの明暗の判定のために掛けたままだが、帯が不透明になったので透けは無くなる
 4. **編集モード（通常 / Vim）は application の状態**（`EditMode`・ARC-004）で、トグルの意図は `select_ordinary_mode` / `select_vim_mode` の 2 つ（窓は controller の状態を読んで判断しない。
    選択中の側を押しても状態は変わらない）。鍵によるトグル（FR-004）は後の縦切りで `toggle_edit_mode` を足す。UI は `EditorFrame` の値（トグルの選択側・モードの文字列）を写すだけ。
    Vim エンジンが無い間、Vim 側のモード表示は `NORMAL` 固定
@@ -32,7 +34,8 @@ DWM が扱う top-level 窓の背景なので、枠を自分で消した `WS_OVE
 7. 窓は配置してから `ShowWindow` する。生成時に (0,0) で見せない
 9. **Mica を透かすのに要った 2 つの属性（Issue #5 で実測）。** `WS_EX_NOREDIRECTIONBITMAP` が無いと HWND の再描画面が残ってアルファ 0 のタイトルバーに Mica が透けない。
    `DWMWA_USE_IMMERSIVE_DARK_MODE` を外観に合わせて渡さないと、ダークの本文に対して Mica が明るいまま（タイトルバー画素 (244,244,244)）になる。渡すと (42,42,42)。
-   そのため `EditorFrame` は `appearance` を持ち、窓は外観が変わるたびに DWM へ伝える
+   そのため `EditorFrame` は `appearance` を持ち、窓は外観が変わるたびに DWM へ伝える。
+   帯が不透明になった後（D16）も 2 属性は要る（`DWMWA_USE_IMMERSIVE_DARK_MODE` は非クライアントの明暗・`WS_EX_NOREDIRECTIONBITMAP` は窓が見えてから最初のフレームまでの面・ADR 0013）
 8. **テーマは拡張できる形にしておく（施主の問い 2026-09-15）。** `Palette` は「テーマ 1 つ分のトークンの値型」で、組み込みテーマ（`ubuntu_aubergine` / `neutral_light`）は
    `constexpr` の表から `Palette` を返す。ui/win32 は `Palette` 以外の色の定数を持たない。利用者のテーマファイルは**まだ作らない**（設定の保存形式と版を決める
    縦切りで、adapters が版付きのファイルを読んで同じ `Palette` を作る・ARC-009）。今の段階でファイル形式を決めないのは、設定全体（テーマ・フォント・鍵）の形を 1 回で決めるため
