@@ -29,5 +29,5 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 / #19 / #22 / #24 / #28 / #
 
 ## 次の 1 手
 
-hide が実機で #31 の帯を見て C の絵と同じか確かめる（結果を gate-proofs 5-i に 1 行）。Vim の 2 本目は fixture を足して `python eng/vim-oracle.py --regenerate`。#36 は eng だけで小さい。Vim の 2 本目（`c y p` / VISUAL / オペレータ側の回数 / Home・End）は fixture を足す形で。CI のベンチの値が数回たまったら CI の基準値の Issue。
+#31 の帯は hide が実機で確認済み（ダーク・ライト・IME）。Vim の 2 本目は fixture を足して `python eng/vim-oracle.py --regenerate`。#36 は eng だけで小さい。Vim の 2 本目（`c y p` / VISUAL / オペレータ側の回数 / Home・End）は fixture を足す形で。CI のベンチの値が数回たまったら CI の基準値の Issue。
 カラーテーマ（D13）は `docs/plans/2026-09-15-colorschemes.md` の C1（core だけ）がいつでも着手できる。
