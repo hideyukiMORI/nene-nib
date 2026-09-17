@@ -7,10 +7,8 @@
 #include "LineView.hpp"
 #include "RenderFailure.hpp"
 #include "RgbColor.hpp"
-#include "RgbaColor.hpp"
 #include "StatusBarLayout.hpp"
 #include "TimingPort.hpp"
-#include "TitleBarBackdrop.hpp"
 #include "TitleBarLayout.hpp"
 
 #include <windows.h>
@@ -45,7 +43,6 @@ class Direct2DRenderer final
     [[nodiscard]] core::Column column_at(std::string_view text, const core::BodyLayout &body,
                                          std::int32_t x);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
-    void set_backdrop(TitleBarBackdrop backdrop) noexcept;
     // 最後に描いたキャレットの物理画素。窓が IME の候補窓をその直下に置く（ADR 0014 の決定 6）。
     // 変換中は変換中のキャレット（GCS_CURSORPOS の位置）になる。
     [[nodiscard]] RECT caret_rectangle() const noexcept;
@@ -70,7 +67,6 @@ class Direct2DRenderer final
                                       DWRITE_FONT_WEIGHT weight, TextFormat &format);
     [[nodiscard]] float scaled(float dips) const noexcept;
     void fill(const core::LayoutRect &area, core::RgbColor color);
-    void fill_translucent(const core::LayoutRect &area, core::RgbaColor color);
     void fill_rounded(const core::LayoutRect &area, core::RgbColor color, float radius);
     void write(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
                core::RgbColor color);
@@ -140,6 +136,5 @@ class Direct2DRenderer final
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;
     std::uint32_t dpi_ = 96;
-    TitleBarBackdrop backdrop_ = TitleBarBackdrop::opaque;
 };
 } // namespace nenenib::ui::win32

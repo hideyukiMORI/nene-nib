@@ -36,6 +36,10 @@ SendInput, after bringing the window to the foreground; when the session refuses
 run records that instead of failing (ADR 0010). The unsaved confirmation on WM_CLOSE is answered
 with IDNO, because the script types into the buffer before it closes the window. A startup argument
 that names no file must say so in one line and then carry on with an empty 無題 buffer.
+
+Issue #31 adds the title bar's own ground (D16): the band is the opaque title_bar token and the
+active tab is the body ground, so both are read back as exact colours instead of as "the band
+differs from the body behind the tint".
 Python standard library and ctypes only.
 """
 
@@ -109,6 +113,9 @@ WHITE = [255, 255, 255]
 MICA_BUILD = 22621
 # src/core/BuiltinTheme.hpp の正本と同じ値。ここが食い違ったら、どちらかが間違っている。
 PALETTE = {"light": (0xF4, 0xF5, 0xF7), "dark": (0x30, 0x0A, 0x24)}
+# タブの帯は不透明の title_bar で塗り、アクティブなタブは本文の地と同じ tab_active（D16）。
+TITLE_BAR = {"light": (0xE1, 0xE4, 0xE9), "dark": (0x1E, 0x05, 0x16)}
+TAB_ACTIVE = {"light": (0xF4, 0xF5, 0xF7), "dark": (0x30, 0x0A, 0x24)}
 ACCENT = (0xE9, 0x54, 0x20)
 TOGGLE = {"light": (0xDF, 0xE3, 0xE8), "dark": (0x4A, 0x1E, 0x3D)}
 CURRENT_LINE = {"light": (0xE6, 0xE8, 0xEC), "dark": (0x3E, 0x1A, 0x32)}
@@ -116,6 +123,12 @@ STATUS_BAND = {"light": (0xE9, 0xEB, 0xEF), "dark": (0x26, 0x07, 0x1D)}
 # src/core/TitleBarLayout.cpp / StatusBarLayout.cpp の DIP。同じ整数丸めで物理画素へ直す。
 TITLE_BAR_DIPS = 40
 CAPTION_BUTTON_DIPS = 46
+# タブの左上と高さ（src/core/TitleBarLayout.cpp）と、題名までの左余白
+# （src/ui/win32/Direct2DRenderer.cpp の tab_padding_left_dips）。面だけを読む点を出すのに要る。
+TAB_LEFT_DIPS = 8
+TAB_TOP_DIPS = 8
+TAB_HEIGHT_DIPS = 32
+TAB_PADDING_LEFT_DIPS = 14
 STATUS_BAR_DIPS = 28
 STATUS_PADDING_DIPS = 12
 TOGGLE_PADDING_DIPS = 2
@@ -222,6 +235,17 @@ def toggle_points(width: int, height: int, dpi: int) -> dict:
         "vimGround": [vim_left + to_pixels(5, dpi), middle],
         "ordinaryGround": [ordinary_left + to_pixels(5, dpi), middle],
     }
+
+
+def active_tab_point(dpi: int) -> list:
+    """A point inside the active tab's fill, mirroring core::tab_rect and draw_tab.
+
+    It sits half way into the title's left padding and at half the tab's height, so it is clear of
+    the rounded corner, of the glyphs and of the accent underline along the bottom.
+    """
+    padding = to_pixels(TAB_PADDING_LEFT_DIPS, dpi)
+    return [to_pixels(TAB_LEFT_DIPS, dpi) + padding // 2,
+            to_pixels(TAB_TOP_DIPS, dpi) + to_pixels(TAB_HEIGHT_DIPS, dpi) // 2]
 
 
 def write_documents(output: Path) -> dict:
@@ -685,14 +709,19 @@ def verify(window, appearance: str, output: Path) -> dict:
     title_bar = to_pixels(TITLE_BAR_DIPS, dpi)
     button = to_pixels(CAPTION_BUTTON_DIPS, dpi)
     toggle = toggle_points(width, height, dpi)
+    tab = active_tab_point(dpi)
     pixels = capture(window, width, height)
     write_bitmap(output / "look-slice.bmp", pixels, width, height)
     expected = list(PALETTE[appearance])
     centre = pixel(pixels, width, width // 2, height // 2)
+    # 帯の地は「タブでも ＋ でも窓の操作でもない場所」。下の hitTest の HTCAPTION がそれを示す。
     title_pixel = pixel(pixels, width, width // 2, title_bar // 2)
+    tab_pixel = pixel(pixels, width, tab[0], tab[1])
     resting_vim = pixel(pixels, width, toggle["vimGround"][0], toggle["vimGround"][1])
     resting_ordinary = pixel(pixels, width, toggle["ordinaryGround"][0], toggle["ordinaryGround"][1])
     mica_expected = sys.getwindowsversion().build >= MICA_BUILD
+    expected_band = list(TITLE_BAR[appearance])
+    expected_tab = list(TAB_ACTIVE[appearance])
     hits = {"close": ask_hit(window, width - button // 2, title_bar // 2),
             "caption": ask_hit(window, width // 2, title_bar // 2)}
     assert centre == expected, f"centre pixel {centre} is not the {appearance} background {expected}"
@@ -702,8 +731,12 @@ def verify(window, appearance: str, output: Path) -> dict:
     assert hits["caption"] == HTCAPTION, f"the empty title bar answered {hits['caption']}"
     assert resting_ordinary == list(ACCENT), f"the 通常 half starts on the accent: {resting_ordinary}"
     assert resting_vim == list(TOGGLE[appearance]), f"the resting Vim half is {resting_vim}"
-    if mica_expected:
-        assert title_pixel != centre, "the title bar is not showing a backdrop behind the tint"
+    # D16: 帯は Mica の有無に関わらず不透明の title_bar、アクティブなタブは本文の地。
+    assert title_pixel == expected_band, (f"the title bar band {title_pixel} is not the"
+                                          f" {appearance} title_bar {expected_band}")
+    assert tab_pixel == expected_tab, (f"the active tab {tab_pixel} is not the {appearance}"
+                                       f" tab_active {expected_tab}")
+    assert expected_tab == expected, "the active tab must carry the body ground (D16)"
     click(window, toggle["vim"][0], toggle["vim"][1])
     time.sleep(0.5)
     switched = capture(window, width, height)
@@ -733,7 +766,11 @@ def verify(window, appearance: str, output: Path) -> dict:
         "expectedBackground": expected,
         "centrePixel": centre,
         "titleBarPixel": title_pixel,
+        "expectedTitleBar": expected_band,
         "titleBarDiffersFromBody": title_pixel != centre,
+        "tabPoint": tab,
+        "activeTabPixel": tab_pixel,
+        "expectedActiveTab": expected_tab,
         "micaExpected": mica_expected,
         "windowsBuild": sys.getwindowsversion().build,
         "hitTest": hits,

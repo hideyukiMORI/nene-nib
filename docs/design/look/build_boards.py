@@ -5,14 +5,14 @@ HERE = Path(__file__).resolve().parent
 
 DARK = dict(
     bg="#300A24", text="#EEEEEC", muted="#B8A9B3", gutter="#7A6675", line="#3E1A32",
-    titlebar="rgba(255,255,255,0.045)", tab_active="#3B1430", tab_hover="rgba(255,255,255,0.06)",
+    titlebar="#1E0516", tab_active="#300A24", tab_hover="rgba(255,255,255,0.06)",
     status="#26071D", accent="#E95420", caret="#E95420", selection="rgba(233,84,32,0.28)",
     keyword="#F0A47A", string="#D7C4E5", comment="#8E7A88", panel="#3B1430", panel_border="#5A2A4C",
     toggle_bg="#4A1E3D", toggle_fg="#EEEEEC", scrim="rgba(20,4,15,0.55)",
 )
 LIGHT = dict(
     bg="#F4F5F7", text="#1B1F24", muted="#5C6570", gutter="#9AA3AD", line="#E6E8EC",
-    titlebar="rgba(0,0,0,0.035)", tab_active="#FFFFFF", tab_hover="rgba(0,0,0,0.05)",
+    titlebar="#E1E4E9", tab_active="#F4F5F7", tab_hover="rgba(0,0,0,0.05)",
     status="#E9EBEF", accent="#E95420", caret="#E95420", selection="rgba(233,84,32,0.22)",
     keyword="#B23A0F", string="#5E2750", comment="#7A828C", panel="#FFFFFF", panel_border="#D5D9E0",
     toggle_bg="#DFE3E8", toggle_fg="#1B1F24", scrim="rgba(40,44,52,0.35)",
@@ -78,7 +78,7 @@ def editor(c, mode_vim=True, dim=False):
     mode_label = "NORMAL" if mode_vim else "通常"
     toggle_left = f'background: {"transparent" if mode_vim else c["accent"]}; color: {c["muted"] if mode_vim else "#FFFFFF"};'
     toggle_right = f'background: {c["accent"] if mode_vim else "transparent"}; color: {"#FFFFFF" if mode_vim else c["muted"]};'
-    scrim = f'<div style="position: absolute; inset: 0; background: {c["scrim"]};"></div>' if dim else ''
+    scrim = f'  <div style="position: absolute; inset: 0; background: {c["scrim"]};"></div>' if dim else ''
     return f'''
 <div style="position: relative; width: 1280px; height: 800px; overflow: hidden; border-radius: 8px; background: {c["bg"]}; color: {c["text"]}; font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Noto Sans JP', system-ui, sans-serif; box-shadow: 0 24px 64px rgba(0,0,0,0.35);">
   <div style="display: flex; align-items: flex-end; height: 40px; padding: 0 0 0 8px; background: {c["titlebar"]}; backdrop-filter: blur(24px);">
@@ -108,7 +108,7 @@ def editor(c, mode_vim=True, dim=False):
     <span>C++</span>
     <span>空白 4</span>
   </div>
-  {scrim}
+{scrim}
 </div>'''
 
 

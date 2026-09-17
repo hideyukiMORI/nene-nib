@@ -2,6 +2,7 @@
 
 #include "DevicePixels.hpp"
 #include "Milestone.hpp"
+#include "RgbaColor.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 
@@ -377,12 +378,6 @@ void Direct2DRenderer::fill(const core::LayoutRect &area, core::RgbColor color)
     context_->FillRectangle(to_rect(area), brush_.Get());
 }
 
-void Direct2DRenderer::fill_translucent(const core::LayoutRect &area, core::RgbaColor color)
-{
-    brush_->SetColor(to_color(color));
-    context_->FillRectangle(to_rect(area), brush_.Get());
-}
-
 void Direct2DRenderer::fill_rounded(const core::LayoutRect &area, core::RgbColor color,
                                     float radius)
 {
@@ -447,12 +442,9 @@ void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
                                       const core::TitleBarLayout &layout)
 {
-    // Mica が掛かった環境ではアルファ 0 のまま淡い面だけを載せ、掛からない環境は地の色で塗る。
-    if (backdrop_ == TitleBarBackdrop::opaque)
-    {
-        fill(layout.band, frame.palette.background);
-    }
-    fill_translucent(layout.band, frame.palette.titlebar_tint);
+    // 帯は D16 で不透明。Mica は DWM 側に掛けたままだが、この面で隠れる（最初のフレームまでの
+    // 面と非クライアントの明暗の判定に要るので外さない・ADR 0013 / ADR 0008 の決定 9）。
+    fill(layout.band, frame.palette.title_bar);
     draw_tab(frame, layout);
     brush_->SetColor(to_color(frame.palette.muted));
     const auto plus = centre_of(layout.add_tab);
@@ -876,11 +868,6 @@ std::expected<void, RenderFailure> Direct2DRenderer::set_dpi(std::uint32_t dpi)
     dpi_ = dpi;
     // 文字の大きさは書式に焼かれているので、DPI が変わったら作り直す（ADR 0008 の決定 6）。
     return create_text_formats();
-}
-
-void Direct2DRenderer::set_backdrop(TitleBarBackdrop backdrop) noexcept
-{
-    backdrop_ = backdrop;
 }
 
 RECT Direct2DRenderer::caret_rectangle() const noexcept

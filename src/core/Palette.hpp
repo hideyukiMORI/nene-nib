@@ -17,7 +17,7 @@ struct Palette
     RgbColor muted;
     RgbColor gutter;
     RgbColor current_line;
-    RgbaColor titlebar_tint;
+    RgbColor title_bar;
     RgbColor tab_active;
     RgbColor status;
     RgbColor accent;

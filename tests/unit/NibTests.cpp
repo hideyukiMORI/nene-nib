@@ -969,9 +969,10 @@ void verify_dark_palette_tokens()
     expect(dark.muted == RgbColor{0xB8, 0xA9, 0xB3}, "dark muted");
     expect(dark.gutter == RgbColor{0x7A, 0x66, 0x75}, "dark gutter");
     expect(dark.current_line == RgbColor{0x3E, 0x1A, 0x32}, "dark current line");
-    expect(dark.titlebar_tint == RgbaColor{RgbColor{0xFF, 0xFF, 0xFF}, 11},
-           "dark title bar tint is white at 4.5 percent");
-    expect(dark.tab_active == RgbColor{0x3B, 0x14, 0x30}, "dark active tab");
+    expect(dark.title_bar == RgbColor{0x1E, 0x05, 0x16},
+           "dark title bar band is the deep aubergine (D16)");
+    expect(dark.tab_active == RgbColor{0x30, 0x0A, 0x24}, "dark active tab");
+    expect(dark.tab_active == dark.background, "the dark active tab carries the body ground (D16)");
     expect(dark.status == RgbColor{0x26, 0x07, 0x1D}, "dark status band");
     expect(dark.selection == RgbaColor{RgbColor{0xE9, 0x54, 0x20}, 71},
            "dark selection is orange at 28 percent");
@@ -992,9 +993,11 @@ void verify_light_palette_tokens()
     expect(light.muted == RgbColor{0x5C, 0x65, 0x70}, "light muted");
     expect(light.gutter == RgbColor{0x9A, 0xA3, 0xAD}, "light gutter");
     expect(light.current_line == RgbColor{0xE6, 0xE8, 0xEC}, "light current line");
-    expect(light.titlebar_tint == RgbaColor{RgbColor{0x00, 0x00, 0x00}, 9},
-           "light title bar tint is black at 3.5 percent");
-    expect(light.tab_active == RgbColor{0xFF, 0xFF, 0xFF}, "light active tab");
+    expect(light.title_bar == RgbColor{0xE1, 0xE4, 0xE9},
+           "light title bar band is one step deeper than the body (D16)");
+    expect(light.tab_active == RgbColor{0xF4, 0xF5, 0xF7}, "light active tab");
+    expect(light.tab_active == light.background,
+           "the light active tab carries the body ground (D16)");
     expect(light.status == RgbColor{0xE9, 0xEB, 0xEF}, "light status band");
     expect(light.selection == RgbaColor{RgbColor{0xE9, 0x54, 0x20}, 56},
            "light selection is orange at 22 percent");

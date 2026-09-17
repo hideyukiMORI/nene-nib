@@ -22,8 +22,8 @@ inline constexpr Palette ubuntu_aubergine_palette{
     .muted = RgbColor{0xB8, 0xA9, 0xB3},
     .gutter = RgbColor{0x7A, 0x66, 0x75},
     .current_line = RgbColor{0x3E, 0x1A, 0x32},
-    .titlebar_tint = RgbaColor{RgbColor{0xFF, 0xFF, 0xFF}, 11},
-    .tab_active = RgbColor{0x3B, 0x14, 0x30},
+    .title_bar = RgbColor{0x1E, 0x05, 0x16},
+    .tab_active = RgbColor{0x30, 0x0A, 0x24},
     .status = RgbColor{0x26, 0x07, 0x1D},
     .accent = RgbColor{0xE9, 0x54, 0x20},
     .selection = RgbaColor{RgbColor{0xE9, 0x54, 0x20}, 71},
@@ -32,7 +32,8 @@ inline constexpr Palette ubuntu_aubergine_palette{
     .panel = RgbColor{0x3B, 0x14, 0x30},
     .panel_border = RgbColor{0x5A, 0x2A, 0x4C},
     .search = RgbaColor{RgbColor{0xF0, 0xA4, 0x7A}, 89},
-    .ime = RgbColor{0xD7, 0xC4, 0xE5}};
+    .ime = RgbColor{0xD7, 0xC4, 0xE5},
+};
 
 inline constexpr Palette neutral_light_palette{
     .background = RgbColor{0xF4, 0xF5, 0xF7},
@@ -40,8 +41,8 @@ inline constexpr Palette neutral_light_palette{
     .muted = RgbColor{0x5C, 0x65, 0x70},
     .gutter = RgbColor{0x9A, 0xA3, 0xAD},
     .current_line = RgbColor{0xE6, 0xE8, 0xEC},
-    .titlebar_tint = RgbaColor{RgbColor{0x00, 0x00, 0x00}, 9},
-    .tab_active = RgbColor{0xFF, 0xFF, 0xFF},
+    .title_bar = RgbColor{0xE1, 0xE4, 0xE9},
+    .tab_active = RgbColor{0xF4, 0xF5, 0xF7},
     .status = RgbColor{0xE9, 0xEB, 0xEF},
     .accent = RgbColor{0xE9, 0x54, 0x20},
     .selection = RgbaColor{RgbColor{0xE9, 0x54, 0x20}, 56},
@@ -50,7 +51,8 @@ inline constexpr Palette neutral_light_palette{
     .panel = RgbColor{0xFF, 0xFF, 0xFF},
     .panel_border = RgbColor{0xD5, 0xD9, 0xE0},
     .search = RgbaColor{RgbColor{0xF0, 0xA4, 0x7A}, 77},
-    .ime = RgbColor{0x5E, 0x27, 0x50}};
+    .ime = RgbColor{0x5E, 0x27, 0x50},
+};
 
 [[nodiscard]] constexpr Palette palette_of(BuiltinTheme theme) noexcept
 {

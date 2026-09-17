@@ -457,14 +457,14 @@ void EditorWindow::apply_backdrop(const application::EditorFrame &frame)
 {
     // Mica の明暗は DWM が持つので、表示値の外観をそのまま伝える。色は渡さない（ADR 0008）。
     const BOOL dark = frame.appearance == core::Appearance::dark ? TRUE : FALSE;
-    const HRESULT themed = DwmSetWindowAttribute(window_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
-                                                 static_cast<DWORD>(sizeof(dark)));
-    // Mica は Windows 11 22H2 以降。掛からない環境は結果で分かるので例外にしない（ARC-010）。
+    DwmSetWindowAttribute(window_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
+                          static_cast<DWORD>(sizeof(dark)));
+    // Mica は Windows 11 22H2 以降。掛からない環境でも帯は不透明の title_bar で塗るので（D16）、
+    // 掛かったかどうかは誰も読まない。2 属性は最初のフレームまでの面（ADR 0013）と
+    // 非クライアントの明暗（ADR 0008 の決定 9）のために掛け続ける。
     constexpr DWM_SYSTEMBACKDROP_TYPE mica = DWMSBT_MAINWINDOW;
-    const HRESULT applied = DwmSetWindowAttribute(window_, DWMWA_SYSTEMBACKDROP_TYPE, &mica,
-                                                  static_cast<DWORD>(sizeof(mica)));
-    backdrop_ =
-        SUCCEEDED(themed) && SUCCEEDED(applied) ? TitleBarBackdrop::mica : TitleBarBackdrop::opaque;
+    DwmSetWindowAttribute(window_, DWMWA_SYSTEMBACKDROP_TYPE, &mica,
+                          static_cast<DWORD>(sizeof(mica)));
 }
 
 std::expected<void, WindowFailure> EditorWindow::start_rendering()
@@ -475,7 +475,6 @@ std::expected<void, WindowFailure> EditorWindow::start_rendering()
         return std::unexpected(WindowFailure::render);
     }
     renderer_ = std::make_unique<Direct2DRenderer>(std::move(renderer).value());
-    renderer_->set_backdrop(backdrop_);
     if (!draw_frame(controller_.apply(application::VisibleLines{body_lines()})))
     {
         return std::unexpected(WindowFailure::render);
@@ -702,10 +701,6 @@ void EditorWindow::refresh_appearance()
     // 状態遷移は controller だけが行い、窓は返ってきた表示値を写す（ARC-011）。
     const auto frame = controller_.apply(application::RefreshAppearance{});
     apply_backdrop(frame);
-    if (renderer_ != nullptr)
-    {
-        renderer_->set_backdrop(backdrop_);
-    }
     invalidate();
 }
 
