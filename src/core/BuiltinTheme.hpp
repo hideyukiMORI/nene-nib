@@ -3,19 +3,27 @@
 #include "Palette.hpp"
 
 #include <cstdint>
-#include <utility>
 
 namespace nenenib::core
 {
-// 組み込みテーマの閉じた一覧。将来のテーマファイルは同じ Palette を作る別の経路になる（ADR 0008）。
+// 組み込みテーマの閉じた一覧（ADR 0017 の決定 6）。並びは BuiltinThemes.hpp の表の添字そのもの。
+// 利用者のテーマファイル（C4）は同じ Theme を作る別の経路になる（ADR 0008）。
 enum class BuiltinTheme : std::uint8_t
 {
     ubuntu_aubergine,
-    neutral_light
+    neutral_light,
+    solarized_dark,
+    solarized_light,
+    monokai,
+    dracula,
+    one_dark,
+    night_owl,
+    night_owl_light
 };
 
 // 採用案の表（docs/design/2026-09-15-look.md 第 3 節）をそのまま写した唯一の場所。
 // ダークの茄子色は施主決定 D11、アクセントの Ubuntu 橙は施主承認（2026-09-15）。
+// この 2 つの UI トークンは derive_ui では導かず、値を 1 バイトも変えない（ADR 0017 の決定 5）。
 inline constexpr Palette ubuntu_aubergine_palette{
     .background = RgbColor{0x30, 0x0A, 0x24},
     .text = RgbColor{0xEE, 0xEE, 0xEC},
@@ -53,16 +61,4 @@ inline constexpr Palette neutral_light_palette{
     .search = RgbaColor{RgbColor{0xF0, 0xA4, 0x7A}, 77},
     .ime = RgbColor{0x5E, 0x27, 0x50},
 };
-
-[[nodiscard]] constexpr Palette palette_of(BuiltinTheme theme) noexcept
-{
-    switch (theme)
-    {
-    case BuiltinTheme::ubuntu_aubergine:
-        return ubuntu_aubergine_palette;
-    case BuiltinTheme::neutral_light:
-        return neutral_light_palette;
-    }
-    std::unreachable();
-}
 } // namespace nenenib::core

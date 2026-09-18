@@ -7,6 +7,7 @@
 #include "AppearanceReadFailure.hpp"
 #include "BodyLayout.hpp"
 #include "BuiltinTheme.hpp"
+#include "BuiltinThemes.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
@@ -66,11 +67,15 @@
 #include "StatusBarHit.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusItems.hpp"
+#include "SyntaxPalette.hpp"
 #include "TabTitle.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "TextFailure.hpp"
 #include "TextPosition.hpp"
+#include "Theme.hpp"
+#include "ThemeDerivation.hpp"
+#include "ThemeSource.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
 #include "Utf16.hpp"
@@ -94,6 +99,7 @@
 #include "../vim/VimFixtures.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -148,6 +154,7 @@ using nenenib::core::absorbed;
 using nenenib::core::Appearance;
 using nenenib::core::body_layout;
 using nenenib::core::body_line_rect;
+using nenenib::core::builtin_themes;
 using nenenib::core::BuiltinTheme;
 using nenenib::core::byte_order_mark;
 using nenenib::core::CaretMotion;
@@ -162,6 +169,7 @@ using nenenib::core::composition_underlines;
 using nenenib::core::CompositionClause;
 using nenenib::core::contains;
 using nenenib::core::DeleteDirection;
+using nenenib::core::derive_ui;
 using nenenib::core::detect_encoding;
 using nenenib::core::detect_line_ending;
 using nenenib::core::DisplayText;
@@ -195,7 +203,6 @@ using nenenib::core::Offset;
 using nenenib::core::OffsetRange;
 using nenenib::core::Palette;
 using nenenib::core::palette_for;
-using nenenib::core::palette_of;
 using nenenib::core::previous_code_point;
 using nenenib::core::RgbaColor;
 using nenenib::core::RgbColor;
@@ -208,12 +215,16 @@ using nenenib::core::status_bar_hit;
 using nenenib::core::status_bar_layout;
 using nenenib::core::status_items_for;
 using nenenib::core::StatusBarHit;
+using nenenib::core::SyntaxPalette;
 using nenenib::core::tab_rect;
 using nenenib::core::tab_title_for;
 using nenenib::core::TextBuffer;
 using nenenib::core::TextEncoding;
 using nenenib::core::TextFailure;
 using nenenib::core::TextPosition;
+using nenenib::core::Theme;
+using nenenib::core::theme_named;
+using nenenib::core::theme_of;
 using nenenib::core::title_bar_hit;
 using nenenib::core::title_bar_layout;
 using nenenib::core::TitleBarHit;
@@ -1008,7 +1019,7 @@ void verify_palette()
 // 採用案の配色表（docs/design/2026-09-15-look.md 第 3 節と編集の採用案 第 2 節）の全トークン。
 void verify_dark_palette_tokens()
 {
-    const auto dark = palette_of(BuiltinTheme::ubuntu_aubergine);
+    const auto dark = theme_of(BuiltinTheme::ubuntu_aubergine).ui;
     expect(palette_for(Appearance::dark).background == dark.background,
            "dark maps to the aubergine theme");
     expect(dark.muted == RgbColor{0xB8, 0xA9, 0xB3}, "dark muted");
@@ -1032,7 +1043,7 @@ void verify_dark_palette_tokens()
 
 void verify_light_palette_tokens()
 {
-    const auto light = palette_of(BuiltinTheme::neutral_light);
+    const auto light = theme_of(BuiltinTheme::neutral_light).ui;
     expect(palette_for(Appearance::light).background == light.background,
            "light maps to the neutral theme");
     expect(light.muted == RgbColor{0x5C, 0x65, 0x70}, "light muted");
@@ -1053,6 +1064,143 @@ void verify_light_palette_tokens()
     expect(light.search == RgbaColor{RgbColor{0xF0, 0xA4, 0x7A}, 77},
            "light search hit is pale orange at 30 percent");
     expect(light.ime == RgbColor{0x5E, 0x27, 0x50}, "light IME underline is the deep aubergine");
+}
+
+// ---------------------------------------------------------------- テーマ（ADR 0017）
+
+// WCAG 2.x の相対輝度。浮動小数と std::pow は tests 側にだけ置く（core は整数だけ・決定 7）。
+double channel_luminance(std::uint8_t value)
+{
+    const double level = static_cast<double>(value) / 255.0;
+    return level <= 0.03928 ? level / 12.92 : std::pow((level + 0.055) / 1.055, 2.4);
+}
+
+double relative_luminance(RgbColor color)
+{
+    return 0.2126 * channel_luminance(color.red) + 0.7152 * channel_luminance(color.green) +
+           0.0722 * channel_luminance(color.blue);
+}
+
+double contrast_ratio(RgbColor first, RgbColor second)
+{
+    const double one = relative_luminance(first) + 0.05;
+    const double other = relative_luminance(second) + 0.05;
+    return one > other ? one / other : other / one;
+}
+
+bool channel_within(std::uint8_t left, std::uint8_t right, int tolerance)
+{
+    const int difference = static_cast<int>(left) - static_cast<int>(right);
+    return difference <= tolerance && -difference <= tolerance;
+}
+
+bool within(RgbColor left, RgbColor right, int tolerance)
+{
+    return channel_within(left.red, right.red, tolerance) &&
+           channel_within(left.green, right.green, tolerance) &&
+           channel_within(left.blue, right.blue, tolerance);
+}
+
+// 背景そのものを除いた本文トークン 15 個。どれかが背景と同じなら埋め忘れである。
+std::array<RgbColor, 15> body_filled_tokens(const SyntaxPalette &body)
+{
+    return {body.foreground, body.cursor,   body.selection, body.current_line, body.line_number,
+            body.comment,    body.keyword,  body.string,    body.number,       body.type,
+            body.function,   body.constant, body.operators, body.error,        body.warning};
+}
+
+// 背景そのものと、背景と同じであることが決まっている tab_active（D16）を除いた UI トークン
+// 14 個。selection / search は α を除いて色だけを見る。
+std::array<RgbColor, 14> ui_filled_tokens(const Palette &ui)
+{
+    return {ui.text,         ui.muted,     ui.gutter,
+            ui.current_line, ui.title_bar, ui.status,
+            ui.accent,       ui.toggle,    ui.selection.color,
+            ui.on_accent,    ui.panel,     ui.panel_border,
+            ui.search.color, ui.ime};
+}
+
+// ADR 0017 の決定 7: 9 テーマ全部で本文と UI の前景／背景が 4.5:1 以上。
+void verify_theme_contrast()
+{
+    for (const Theme &theme : builtin_themes)
+    {
+        const std::string name{theme.name};
+        expect(contrast_ratio(theme.body.foreground, theme.body.background) >= 4.5,
+               (name + ": the body foreground clears 4.5:1 over its background").c_str());
+        expect(contrast_ratio(theme.ui.text, theme.ui.background) >= 4.5,
+               (name + ": the UI text clears 4.5:1 over its background").c_str());
+    }
+}
+
+void verify_theme_tokens_filled()
+{
+    for (const Theme &theme : builtin_themes)
+    {
+        const std::string name{theme.name};
+        expect(!theme.source.author.empty() && !theme.source.license.empty() &&
+                   !theme.source.url.empty(),
+               (name + ": the source names an author, a licence and a URL").c_str());
+        for (const RgbColor token : body_filled_tokens(theme.body))
+        {
+            expect(!(token == theme.body.background),
+                   (name + ": every body token differs from the background").c_str());
+        }
+        for (const RgbColor token : ui_filled_tokens(theme.ui))
+        {
+            expect(!(token == theme.ui.background),
+                   (name + ": every UI token differs from the background").c_str());
+        }
+    }
+}
+
+// 名前の表と enum は同じ添字で引く（決定 6）。最初に一致した行が自分の行なら重複は無い。
+void verify_theme_names()
+{
+    for (std::size_t index = 0; index < builtin_themes.size(); ++index)
+    {
+        const auto theme = static_cast<BuiltinTheme>(index);
+        const auto found = theme_named(theme_of(theme).name);
+        const std::string name{theme_of(theme).name};
+        expect(found.has_value() && static_cast<std::size_t>(found.value()) == index,
+               (name + ": the name round-trips to its own row").c_str());
+    }
+    expect(builtin_themes.size() == 9, "the built-in table holds the nine themes of decision 6");
+}
+
+void verify_theme_name_spellings()
+{
+    expect(theme_named("solarized_dark") == std::optional{BuiltinTheme::solarized_dark},
+           "an underscore spells the same name as a hyphen");
+    expect(theme_named("night_owl_light") == std::optional{BuiltinTheme::night_owl_light},
+           "every underscore is normalised, not just the first");
+    expect(theme_named("ubuntu-aubergine") == std::optional{BuiltinTheme::ubuntu_aubergine},
+           "the hyphen spelling is the name itself");
+    expect(!theme_named("gruvbox").has_value(), "an unknown name selects no theme");
+    expect(!theme_named("").has_value(), "the empty name selects no theme");
+    expect(!theme_named("Dracula").has_value(), "the names are lowercase only");
+    expect(!theme_named("dracula-dark").has_value(), "a longer name does not match a prefix");
+}
+
+// derive_ui は constexpr に評価でき、採用案のダークを掛けると地・文字・アクセント・タブが
+// 一致する。title_bar は表の近似なのでチャンネルあたり 8 まで（決定 4 の「値ではなく規則」）。
+void verify_theme_derivation()
+{
+    constexpr Palette derived = derive_ui(RgbColor{0x30, 0x0A, 0x24}, RgbColor{0xEE, 0xEE, 0xEC},
+                                          RgbColor{0xE9, 0x54, 0x20}, Appearance::dark);
+    static_assert(derived.background == RgbColor{0x30, 0x0A, 0x24}, "the ground is the ground");
+    static_assert(derived.text == RgbColor{0xEE, 0xEE, 0xEC}, "the text is the foreground");
+    static_assert(derived.accent == RgbColor{0xE9, 0x54, 0x20}, "the accent passes through");
+    static_assert(derived.tab_active == derived.background, "the active tab carries the ground");
+    static_assert(derived.on_accent == RgbColor{0xFF, 0xFF, 0xFF}, "white sits on the orange");
+    const Palette adopted = theme_of(BuiltinTheme::ubuntu_aubergine).ui;
+    expect(derived.background == adopted.background && derived.text == adopted.text &&
+               derived.accent == adopted.accent && derived.tab_active == adopted.tab_active,
+           "the rule reproduces the adopted ground, text, accent and active tab");
+    expect(derived.selection == adopted.selection,
+           "the rule reproduces the adopted selection opacity");
+    expect(within(derived.title_bar, adopted.title_bar, 8),
+           "the derived title bar stays within eight per channel of the adopted band");
 }
 
 void verify_rgba_equality()
@@ -2720,6 +2868,11 @@ void verify_look()
     verify_rgba_equality();
     verify_dark_palette_tokens();
     verify_light_palette_tokens();
+    verify_theme_contrast();
+    verify_theme_tokens_filled();
+    verify_theme_names();
+    verify_theme_name_spellings();
+    verify_theme_derivation();
     verify_edit_mode();
     verify_milestone();
     verify_status_items();

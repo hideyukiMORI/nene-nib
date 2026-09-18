@@ -28,7 +28,8 @@ src/application
 
 src/core
     値・不変条件・閉じた選択肢。piece table・Vim エンジン・キーマップの表・Ctrl+P の順位付け・文字コード判別・行索引。
-    配色トークン（Palette・組み込みテーマの表）と、タイトルバー／ステータスバーの配置とヒットテストの純関数（DIP と物理画素の幾何・ADR 0008）。
+    配色トークン（UI の Palette・本文の SyntaxPalette・Theme と組み込み 9 テーマの表・整数の derive_ui・ADR 0017）と、
+    タイトルバー／ステータスバーの配置とヒットテストの純関数（DIP と物理画素の幾何・ADR 0008）。
     標準ライブラリ以外に依存しない純関数層。src/core/simd だけが SIMD の組み込み関数を書ける（CPP-018）
 ```
 
