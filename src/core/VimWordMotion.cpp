@@ -192,6 +192,49 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
     return skipped_blanks(text, point, stop);
 }
 
+// e の走査（Vim の skip_chars）。同じ種類の文字を進み、本文の終わりで尽きたら偽。
+[[nodiscard]] bool skipped_to_the_end(const TextBuffer &text, VimScanPoint &point,
+                                      std::uint32_t group)
+{
+    while (class_at(point) == group)
+    {
+        if (step_forward(text, point) == stepped_past_end)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 語の末尾へ 1 つ（Vim の end_word の 1 周）。stay_in_this_word なら、もう語の末尾に
+// いたときに次の語へ渡らない（cw の特例）。行の内容の終わりは空白として素通りする。
+[[nodiscard]] bool forward_word_end(const TextBuffer &text, VimScanPoint &point,
+                                    VimWordEndStop stop)
+{
+    const std::uint32_t group = class_at(point);
+    if (step_forward(text, point) == stepped_past_end)
+    {
+        return false;
+    }
+    if (class_at(point) == group && group != blank_group)
+    {
+        if (!skipped_to_the_end(text, point, group))
+        {
+            return false;
+        }
+    }
+    else if (stop == VimWordEndStop::enter_the_next_word || group == blank_group)
+    {
+        if (!skipped_to_the_end(text, point, blank_group) ||
+            !skipped_to_the_end(text, point, class_at(point)))
+        {
+            return false;
+        }
+    }
+    static_cast<void>(step_backward(text, point));
+    return true;
+}
+
 [[nodiscard]] int retreated_over_blanks(const TextBuffer &text, VimScanPoint &point)
 {
     while (class_at(point) == blank_group)
@@ -243,6 +286,22 @@ Offset vim_next_word(const TextBuffer &text, Offset caret, std::size_t count, Vi
         {
             break;
         }
+    }
+    return offset_of(text, point);
+}
+
+Offset vim_word_end(const TextBuffer &text, Offset caret, std::size_t count, VimWordEndStop stop)
+{
+    VimScanPoint point = scan_point(text, caret);
+    VimWordEndStop limit = stop;
+    for (std::size_t step = 0; step < count; ++step)
+    {
+        if (!forward_word_end(text, point, limit))
+        {
+            break;
+        }
+        // 止まる特例が効くのは最初の 1 回だけ（Vim の end_word の stop = FALSE）。
+        limit = VimWordEndStop::enter_the_next_word;
     }
     return offset_of(text, point);
 }

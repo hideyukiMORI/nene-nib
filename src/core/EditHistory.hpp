@@ -6,10 +6,16 @@
 
 #include <cstddef>
 #include <expected>
+#include <optional>
 #include <vector>
 
 namespace nenenib::core
 {
+// 直前の Edit に edit を畳んだ結果（ADR 0015 の決定 5）。隣り合っていなければ空を返す。
+// 畳めるのは 3 つの形だけ: inserted の直後の挿入・inserted の末尾を消す削除・
+// 挿入を始めた位置より前を消す削除。Vim の INSERT 1 回が undo 1 単位になるのはこの関数である。
+[[nodiscard]] std::optional<Edit> absorbed(const Edit &previous, const Edit &edit);
+
 // undo / redo の履歴（ADR 0009 の決定 3）。所有者は application の EditorState（ARC-004）。
 // 公開状態は不変なので、履歴の位置を動かす undone / redone は次の履歴を返す（ARC-005）。
 // undo / redo は「戻すべき編集」を見るだけで位置を動かさない。2 つを組で使う。

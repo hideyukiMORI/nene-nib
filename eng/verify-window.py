@@ -13,8 +13,9 @@ real keyboard. Those live in the unit tests (Issue #7); this script drives WM_CH
 Backspace, Esc, PgUp, PgDn and a posted click in the body, which need no modifier.
 
 Issue #22 adds the Vim slice: the toggle enters NORMAL, `ihello<Esc>` types into the empty buffer,
-`0x` removes the first character, and `uu` puts the buffer back. Every one of those keys arrives as
-WM_CHAR or as Esc, so the whole check runs on posted messages too.
+`0x` removes the first character, `yyp` (Issue #43) puts the line below itself, and `uuu` puts the
+buffer back. Every one of those keys arrives as WM_CHAR or as Esc, so the whole check runs on
+posted messages too.
 
 Issue #24 adds the first-paint record: ADR 0013 shows the window before the device is created,
 so the client area is the Mica backdrop alone for about 160 ms. This script starts one more editor
@@ -950,8 +951,10 @@ def verify_scrolling(window, ground: dict, output: Path) -> dict:
 def verify_vim(window, ground: dict, output: Path) -> dict:
     """Issue #22: the toggle enters NORMAL, ihello<Esc> types hello, 0x leaves ello.
 
-    The buffer is empty when this runs and two undos put it back, so the editing checks that
-    follow still start from an empty 無題 buffer. Vim needs no modifier for any of these keys.
+    Issue #43 adds the second slice: yyp yanks the line and puts it below, so the body grows a
+    second row. The buffer is empty when this runs and three undos put it back (the insert, the
+    x and the put are one unit each), so the editing checks that follow still start from an empty
+    無題 buffer. Vim needs no modifier for any of these keys.
     """
     width, height, dpi, body = ground["size"]
     grounds = [ground["background"], ground["current"], list(ACCENT)]
@@ -976,7 +979,12 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     write_text(window, "x")
     time.sleep(0.5)
     shortened = capture(window, width, height)
-    write_text(window, "uu")
+    # Issue #43: yy puts the line in the unnamed register and p opens a second row below it.
+    write_text(window, "yyp")
+    second_row = content_box(body, 1, dpi)
+    put, put_ink = await_ink(window, size, second_row, grounds, True)
+    write_bitmap(output / "vim-put.bmp", put, width, height)
+    write_text(window, "uuu")
     time.sleep(0.5)
     # ブロックのキャレットは本文の枠に掛かるので、字形が消えたことは通常モードに戻してから測る。
     click(window, toggle["ordinary"][0], toggle["ordinary"][1])
@@ -993,7 +1001,10 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
             box_pixels(ordinary, width, label) != box_pixels(normal, width, label),
         "accentInTheInsertCell": accent_count(inserting, width, cell),
         "accentInTheNormalCell": accent_count(back, width, cell),
+        "inkInTheSecondRowAfterPutting": put_ink,
+        "inkInTheSecondRowBeforePutting": ink(shortened, width, second_row, grounds),
         "capture": "vim-slice.bmp",
+        "capturePut": "vim-put.bmp",
     }
     assert result["inkAfterTyping"] > 0, "ihello did not draw anything"
     assert result["insertChangedTheModeLabel"], "the status bar did not say INSERT"
@@ -1003,7 +1014,9 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     assert result["accentInTheNormalCell"] > 2 * result["accentInTheInsertCell"], \
         "the NORMAL caret is not wider than the INSERT bar"
     assert 0 < result["inkAfterRemoving"] < result["inkAfterTyping"], "0x did not remove one glyph"
-    assert result["inkAfterUndoing"] == 0, f"two undos did not empty the line: {result}"
+    assert result["inkInTheSecondRowBeforePutting"] == 0, "the buffer had a second row already"
+    assert result["inkInTheSecondRowAfterPutting"] > 0, "yyp did not put a second line"
+    assert result["inkAfterUndoing"] == 0, f"three undos did not empty the line: {result}"
     return result
 
 

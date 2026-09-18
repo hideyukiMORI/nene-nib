@@ -1,5 +1,6 @@
 #include "EditHistory.hpp"
 
+#include <cstddef>
 #include <utility>
 
 namespace nenenib::core
@@ -13,7 +14,53 @@ namespace
     return previous.removed.empty() && edit.removed.empty() &&
            previous.at.value + previous.inserted.size() == edit.at.value;
 }
+
+// 区切り方ごとの畳み方。separate は畳まない＝新しい単位を開く（ADR 0009 / ADR 0015）。
+[[nodiscard]] std::optional<Edit> folded(const Edit &previous, const Edit &edit,
+                                         EditBoundary boundary)
+{
+    switch (boundary)
+    {
+    case EditBoundary::separate:
+        return std::nullopt;
+    case EditBoundary::coalesce:
+        if (!joinable(previous, edit))
+        {
+            return std::nullopt;
+        }
+        return Edit{previous.at, previous.removed, previous.inserted + edit.inserted};
+    case EditBoundary::absorb:
+        return absorbed(previous, edit);
+    }
+    std::unreachable();
+}
 } // namespace
+
+std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
+{
+    const std::size_t end = previous.at.value + previous.inserted.size();
+    if (edit.removed.empty() && edit.at.value == end)
+    {
+        return Edit{previous.at, previous.removed, previous.inserted + edit.inserted};
+    }
+    if (!edit.inserted.empty())
+    {
+        return std::nullopt;
+    }
+    const std::size_t erased = edit.at.value + edit.removed.size();
+    if (erased == end && edit.at.value >= previous.at.value)
+    {
+        // 入れたばかりの文字の末尾を消した。入れた文字列が縮むだけで、単位はそのまま続く。
+        return Edit{previous.at, previous.removed,
+                    previous.inserted.substr(0, edit.at.value - previous.at.value)};
+    }
+    if (erased == previous.at.value)
+    {
+        // 挿入を始めた位置より前を消した。単位の頭が前へ動き、消した本文が removed の先頭に付く。
+        return Edit{edit.at, edit.removed + previous.removed, previous.inserted};
+    }
+    return std::nullopt;
+}
 
 EditHistory::EditHistory(std::vector<Edit> edits, std::size_t position, EditBoundary tail)
     : edits_(std::move(edits)), position_(position), tail_(tail)
@@ -28,12 +75,14 @@ EditHistory EditHistory::empty()
 EditHistory EditHistory::pushed(const Edit &edit, EditBoundary boundary) const
 {
     std::vector<Edit> next(edits_.begin(), edits_.begin() + static_cast<std::ptrdiff_t>(position_));
-    const bool joins = boundary == EditBoundary::coalesce && tail_ == EditBoundary::coalesce &&
-                       !next.empty() && joinable(next.back(), edit);
-    if (joins)
+    if (tail_ == boundary && !next.empty())
     {
-        next.back().inserted += edit.inserted;
-        return EditHistory(std::move(next), position_, boundary);
+        const auto merged = folded(next.back(), edit, boundary);
+        if (merged.has_value())
+        {
+            next.back() = merged.value();
+            return EditHistory(std::move(next), position_, boundary);
+        }
     }
     next.push_back(edit);
     const std::size_t size = next.size();

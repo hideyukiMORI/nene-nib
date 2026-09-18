@@ -2,11 +2,11 @@
 
 #include "VimCount.hpp"
 #include "VimMode.hpp"
-#include "VimOperator.hpp"
+#include "VimPendingOperator.hpp"
+#include "VimRegister.hpp"
 #include "VimWantedColumn.hpp"
 
 #include <optional>
-#include <string>
 #include <utility>
 
 namespace nenenib::core
@@ -18,14 +18,14 @@ struct VimState
 {
     VimMode mode;
     std::optional<VimCount> count;
-    std::optional<VimOperator> pending;
+    std::optional<VimPendingOperator> pending;
     std::optional<VimWantedColumn> wanted_column;
-    std::string unnamed_register;
+    VimRegister unnamed_register;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。
 // Vim モードに入るときも、通常モードへ戻して保留を捨てるときも、この 1 つの形に寄せる。
-[[nodiscard]] inline VimState vim_resting_state(std::string unnamed_register)
+[[nodiscard]] inline VimState vim_resting_state(VimRegister unnamed_register)
 {
     return VimState{VimMode::normal, std::nullopt, std::nullopt, std::nullopt,
                     std::move(unnamed_register)};

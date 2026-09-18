@@ -50,6 +50,17 @@ INSERT にいる間の編集は `EditBoundary::absorb` で直前の `Edit` に�
 失うもの: `Edit` は 1 つの連続した置換なので、INSERT の中で矢印で動いてから打った文字は別の単位になる（Vim も同じ）。レジスタを LF に正規化するので、CR だけの改行（`fileformat=mac`）の文書は最初から扱っていない。
 正直に: `cw` の特例・`p` のキャレット・`yk` の行き先は oracle の結果に合わせる（実装の前に規則を書き切らない）。`e` の語の切れ目は `w` と同じ表（ハングル・絵文字は未測のまま）。
 
+2026-09-18 に oracle で実測して分かったこと（Issue #43 の実装は下に合わせてある。詳細と SHA は `docs/quality/gate-proofs.md` 5-g）:
+
+- **`ia<Left>b<Esc>u` は oracle では `hello` になる**（この実装は決定 5 のとおり 2 単位で `ahello`）。これは `:normal!` の 1 回がまるごと 1 つの undo 単位になるという
+  **oracle の限界**であって、対話の Vim の振る舞いではない。対話の Vim は `:help ins-special-special` のとおり矢印・Home / End で単位を切る
+  （"The changes (inserted or deleted characters) before and after these keys can be undone separately"）＝決定 5 のまま。
+  fixture には置けない（置けば oracle の限界のほうに落ちる）ので、単体テスト `verify_vim_insert_motion_breaks_the_unit` が「切れること」を守る
+- 行単位のオペレータと `j` `k` の回数は、**最終行（最初の行）にいるときだけ**失敗し、そうでなければ本文の端で止まる（Vim の `cursor_down` / `cursor_up`）。`5dd` は 3 行の本文を全部消す
+- 範囲の規則は 3 つで同じ 1 本（決定 2）だが、Vim には**オペレータで違う 2 つの後処理**がある: exclusive な移動の言い換え（`:help exclusive`。`d` `c` `y` 共通）と、
+  複数行にまたがる文字単位の削除だけが行単位になる `op_delete` の規則（`c` と `y` には無い）。`dw` が空行を丸ごと消すのも `2D` が行単位になるのもこれで、レジスタの種類は `V` になる
+- `$` は回数を取る（`2$` は 1 行下の行末）。`D` `C` はその `$` に回数を渡す＝決定 6 の「`D` は `d$`」は回数つきでも成り立つ
+
 ## 却下した選択肢
 
 | 選択肢 | 却下の理由 |

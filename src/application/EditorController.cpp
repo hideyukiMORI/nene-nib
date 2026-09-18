@@ -124,6 +124,35 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     std::unreachable();
 }
 
+// LF だけの本文を文書の改行に直す（ARC-009。改行の形を決めるのは controller の 1 か所）。
+// Vim のレジスタは「行の列」なので LF で持ち、本文に入る瞬間にだけ文書の形になる（ADR 0015）。
+[[nodiscard]] std::string with_document_newlines(std::string_view utf8, std::string_view newline)
+{
+    std::string result;
+    result.reserve(utf8.size());
+    for (const char byte : utf8)
+    {
+        if (byte == '\n')
+        {
+            result.append(newline);
+            continue;
+        }
+        result.push_back(byte);
+    }
+    return result;
+}
+
+// engine のキャレットは LF で数えた位置なので、直したあとの本文の上へずらす
+// （CRLF は改行 1 つにつき 1 バイト長い）。数えるのは貼る位置からキャレットまでの改行だけ。
+[[nodiscard]] core::Offset caret_after_put(const core::VimPutString &effect,
+                                           std::size_t newline_bytes)
+{
+    const auto inside = static_cast<std::ptrdiff_t>(effect.caret.value - effect.at.value);
+    const auto newlines = static_cast<std::size_t>(
+        std::count(effect.utf8.begin(), effect.utf8.begin() + inside, '\n'));
+    return core::Offset{effect.caret.value + newlines * (newline_bytes - 1)};
+}
+
 // 1 行ぶんの選択の面。行をまたぐ選択はその行の内容の終わりから 1 桁ぶんはみ出して改行を示す。
 [[nodiscard]] core::SelectionSpan span_of(const core::TextBuffer &text,
                                           const core::Selection &selection, core::LineNumber line)
@@ -435,6 +464,21 @@ void EditorController::settle_vim_caret()
                   core::SelectionAnchoring::collapse);
 }
 
+// Vim の効果を本文に写すときの undo の区切り（ADR 0015 の決定 5）。INSERT にいるあいだの編集は
+// 直前の Edit に吸収して 1 単位にし、NORMAL の編集（x d p）は単位を切る。
+// 決めるのは効果ではなくモードで、効果に境界を持たせない。
+core::EditBoundary EditorController::vim_boundary() const noexcept
+{
+    switch (state_.vim().mode)
+    {
+    case core::VimMode::insert:
+        return core::EditBoundary::absorb;
+    case core::VimMode::normal:
+        return core::EditBoundary::separate;
+    }
+    std::unreachable();
+}
+
 void EditorController::perform(const core::VimNoEffect &) {}
 
 void EditorController::perform(const core::VimMoveTo &effect)
@@ -444,7 +488,7 @@ void EditorController::perform(const core::VimMoveTo &effect)
 
 void EditorController::perform(const core::VimRemoveRange &effect)
 {
-    replace(effect.range, std::string_view{}, core::EditBoundary::separate);
+    replace(effect.range, std::string_view{}, vim_boundary());
 }
 
 void EditorController::perform(const core::VimRemoveLines &effect)
@@ -457,13 +501,22 @@ void EditorController::perform(const core::VimRemoveLines &effect)
 
 void EditorController::perform(const core::VimInsertString &effect)
 {
-    replace(core::selection_range(state_.selection()), effect.utf8, core::EditBoundary::coalesce);
+    replace(core::selection_range(state_.selection()), effect.utf8, vim_boundary());
 }
 
 void EditorController::perform(const core::VimNewLine &)
 {
     replace(core::selection_range(state_.selection()), core::newline_of(state_.line_ending()),
-            core::EditBoundary::coalesce);
+            vim_boundary());
+}
+
+// p / P（ADR 0015 の決定 4）。engine が決めた LF の本文を文書の改行に直して入れるだけ。
+void EditorController::perform(const core::VimPutString &effect)
+{
+    const std::string_view newline = core::newline_of(state_.line_ending());
+    replace(core::OffsetRange{effect.at, effect.at}, with_document_newlines(effect.utf8, newline),
+            core::EditBoundary::separate);
+    move_caret_to(caret_after_put(effect, newline.size()), core::SelectionAnchoring::collapse);
 }
 
 void EditorController::perform(const core::VimUndo &)

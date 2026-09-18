@@ -19,7 +19,8 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode)
       history_(core::EditHistory::empty()),
       scroll_(ScrollState{core::LineNumber{first_line}, initial_visible_lines}),
       line_ending_(core::LineEnding::crlf), appearance_(appearance), mode_(mode),
-      vim_(core::vim_resting_state(std::string{})),
+      vim_(core::vim_resting_state(
+          core::VimRegister{std::string{}, core::VimRegisterKind::characters})),
       document_(Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}})
 {
 }

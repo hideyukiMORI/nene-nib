@@ -281,6 +281,40 @@ Shift_JIS LF 2 行（「日本語」「二行目」）→ 描画・ステータ�
 - キャレット: 1 桁目の升の橙の画素は INSERT で 72、NORMAL で 202（ブロックはバーの 2 倍より広い）。1 文字の上に載るとブロックの中に字形が乗るので、画素 1 点ではなく升の中の橙の数で見る
 - `0x` で字形画素が 218 → 196（`h` が 1 つ消えた）、`u` を 2 回で 0（`x` と挿入 1 回ぶんが別の単位に閉じている）
 
+#### Vim の 2 本目（Issue #43・ADR 0015・2026-09-18）
+
+oracle も機械も 5-g と同じ（Vim 9.1・同じ呼び方）。報告に `getregtype('"')` を足し、`KEY_NAMES` に `<Home>` `<End>` を足した。
+
+- **fixture 87 → 195 件**（足したのは 108 件。`c` `y` `p` `P`・回数の掛け算・`e` `^` `D` `C` `Y`・`<Home>` `<End>`・
+  行単位と文字単位の貼り分け・日本語）。`--regenerate` を **3 回**走らせて生成物は 1 バイトも変わらない
+  （生成物の SHA-256 `b6302dc5b361f6c105f8f44c9ac354d3259be2ff1c61f6c6307d4c5ceea1918e`・`fixtures.json` の SHA-256
+  `392af23f22fe2749a53d14b4f0fdcfd14740e0bba78605173d28b3ba86576f25`。CNF-010 の 1 行もこの値を名乗る）
+- `nib_unit` が 195 件すべてを再生し、本文・キャレット・無名レジスタの**本文と種類**（`v` / `V` / 未使用の空）が全部一致（全体で 2335 件の検査）
+- **oracle に実装を合わせた点**（規則を実装の前に書き切らず、答えに合わせたもの）:
+  1. `dd` `yy` `cc` と `dj` `dk` の回数は、**最終行（最初の行）にいるときだけ**失敗して何も起きず、そうでなければ本文の端で止まる
+     （Vim の `cursor_down` / `cursor_up`）。`5dd` は 3 行の本文を全部消し、`j2dd` は最終行では何もしない。#22 の実装は「はみ出したら何もしない」だったので直した
+  2. **exclusive な移動の 2 つの言い換え**（`:help exclusive`）: 行頭で終わる `w` `b` の範囲は 1 つ前の行の末尾までになり、
+     始まりが行の字下げの中なら**行単位**になる。`dw` が空行を丸ごと消すのも `db` が上の行を消すのも `cw` が空行で行単位になるのもこれで、
+     レジスタの種類が `V` になることは `getregtype` を足して初めて見えた
+  3. **`op_delete` の「奇妙な Vi の振る舞い」**: 複数行にまたがる文字単位の**削除だけ**は、終わりの後ろが空白だけかつ始まりが字下げの中なら行単位になる（`2D`・`de` の行またぎ）。`c` と `y` には無い
+  4. `$` は回数を取る（`2$` は 1 行下の行末）。`D` `C` はその `$` に回数を渡すので、`2D` が「行末まで ＋ 次の行」になり、3 の規則で行単位になる
+  5. `cw` の特例は「キャレットの下に**空白でない文字がある**とき」で、空行（NUL）では効かない（Vim の `gchar_cursor() != NUL && !VIM_ISWHITE`）。
+     語の最後の文字の上では `ce` と違って**その 1 文字だけ**を変える（`end_word` の `stop`）
+  6. 行単位の `y` のキャレットは範囲の最初の行の**同じ桁**（短い行では最後の文字へ寄る）。文字単位の `y` は範囲の先頭。`yy` と `yj` は動かない
+  7. 空の文字単位の範囲（空行の `D`・行頭の `d0`・`c0`）は**無名レジスタを書き換えない**。`c` は範囲が空でも INSERT に入る
+- **oracle で測れないものが増えた**: `:normal!` の 1 回が丸ごと 1 単位なので、`xxu` は Vim では `hello` に戻る（対話の Vim なら `ello`）ことを 2026-09-18 に測り直した。
+  そのため `dd` → `p` → `u` のような**変更が 2 回ある fixture は置けない**（いったん置いた `undo-takes-back-a-put` は外した）。undo の単位は手書きの単体テスト
+  （`verify_vim_insert_undo_unit` / `verify_vim_change_undo_unit` / `verify_vim_insert_motion_breaks_the_unit` / `verify_history_absorbing`）で測る
+- **矢印で undo の単位が切れることも oracle では測れない**: `ia<Left>b<Esc>u` は oracle では `hello` に戻る（実測）が、これは上と同じ `:normal!` の限界であって対話の Vim の振る舞いではない。
+  対話の Vim は `:help ins-special-special` のとおり矢印・Home / End で単位を切る（"The changes … before and after these keys can be undone separately"）＝ ADR 0015 の決定 5 のまま。
+  **fixture には置けない**（置けば oracle の限界のほうに落ちる）ので、単体テスト `verify_vim_insert_motion_breaks_the_unit` が守る
+- CRLF の文書のレジスタと `p`（レジスタは LF・貼った本文は CRLF・キャレットは CR のぶんずれる）は oracle に流せないので手書きの単体テスト（`verify_vim_put_line_endings`）
+- 分岐カバレッジ（`python eng/coverage.py`）: 全体 92.20 %（1180 分岐中 1088・下限 90 %）。`src/core/VimStep.cpp` は 91.62 %（358 中 328）
+
+実機の窓（`python eng/verify-window.py`・2026-09-18・終了 0・同じ機械）: `verify_vim` に `yyp` を 1 つ足した。
+`0x` のあとの本文は 1 行（2 行目の字形画素 **0**）で、`yyp` で 2 行目に字形画素 **196** が出る（1 行目の `ello` と同じ数＝同じ行が貼られた）。
+`u` は 3 回（挿入 1 回・`x`・`p` がそれぞれ 1 単位）で本文が空に戻る。画は `vim-put.bmp`。
+
 ### 5-h. IME（IMM32）の縦切り（Issue #28・ADR 0014・2026-09-17）
 
 環境: 5-g と同じ機械（Windows 11 Pro 10.0.26200・120 DPI・実 GPU・ダーク）。`build/NeNeNib.exe`（Debug 構成＝ASan / UBSan 付き）。
