@@ -28,11 +28,14 @@ Debug exe, because running the sanitizers against the real window is the point t
 
 A trial whose stimulus did not reach the window as specified is not a value: the 200 keystrokes
 are repeated BURST_ATTEMPTS times and, when none of them arrives complete and together, that trial
-of key-to-frame-burst-200 is recorded as missing instead (Issue #30). "values" carries the count in
-"missing", the median comes from the valid trials alone, and a bench with fewer than
-MIN_VALID_SAMPLES of them is not judged at all. --check then leaves with 1 for a regression and
-with 2 for a bench that could not be measured, which are different things and say so in different
-words; eng/check.ps1 fails on both.
+of key-to-frame-burst-200 is recorded as missing instead (Issue #30). A trial that could not be
+observed at all -- the unsaved confirmation never came up, or the editor left no finished
+measurement file -- is the same kind of thing and joins the same repetition through
+TrialNotObserved, instead of ending the run with a traceback the gate reads as a regression
+(Issue #36). "values" carries the count in "missing", the median comes from the valid trials alone,
+and a bench with fewer than MIN_VALID_SAMPLES of them is not judged at all. --check then leaves
+with 1 for a regression and with 2 for a bench that could not be measured, which are different
+things and say so in different words; eng/check.ps1 fails on both.
 
 Every bench runs five times; the value is the median and the spread is recorded with it. References
 live in eng/perf-reference.json per machine fingerprint (CPU name, display adapter, system DPI),
@@ -95,6 +98,16 @@ STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "
 STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib")
 
 
+class TrialNotObserved(RuntimeError):
+    """One trial of the keystroke bench was not observed; the caller repeats it or records missing.
+
+    WindowUnavailable means this machine could not put a window on a desktop, which the gate records
+    and passes (ADR 0011 decision 4). A trial whose unsaved confirmation never came up, or whose
+    measurement file is absent or unfinished, says nothing about the machine, so it never borrows
+    that meaning: it is one trial that delivered no observation (Issue #36).
+    """
+
+
 def registry_text(key: str, name: str, fallback: str) -> str:
     try:
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key) as handle:
@@ -151,6 +164,30 @@ def read_report(path: Path) -> dict:
     if not path.is_file():
         raise WindowUnavailable(f"the editor wrote no measurement file at {path}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def marks_of(text: str) -> list | None:
+    """A measurement file's marks, or None when the text is not a finished measurement file.
+
+    The keystroke bench reads its file this way rather than through read_report, because a trial
+    that ends in its own failure is killed by stop(), which leaves either nothing at all or a file
+    that stops in the middle of an object. That is one unobserved trial, not a machine without a
+    window, so it must not become WindowUnavailable (Issue #36).
+    """
+    try:
+        report = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    marks = report.get("marks") if isinstance(report, dict) else None
+    return marks if isinstance(marks, list) else None
+
+
+def observed_marks(path: Path) -> list:
+    """The marks of a trial's measurement file; an absent or unfinished one ends the trial."""
+    marks = marks_of(path.read_text(encoding="utf-8")) if path.is_file() else None
+    if marks is None:
+        raise TrialNotObserved(f"the editor left no finished measurement file ({path.name})")
+    return marks
 
 
 def first_reading(marks: list, milestone: str) -> int:
@@ -214,16 +251,25 @@ def bench_keys(executable: Path, environment: dict, folder: Path) -> tuple[dict,
     and when BURST_ATTEMPTS of them fail in a row the burst of that trial is missing rather than a
     value (Issue #30). The single keystroke is a stimulus of its own: it stays a value whenever
     that keystroke and the frame that answered it were measured.
+
+    A trial can also deliver no observation at all (TrialNotObserved), and that is repeated in the
+    same place and for the same reason; a trial that ended there measured neither keystroke, so its
+    single is None too and the record says "missing" rather than carrying an older trial's number
+    (Issue #36).
     """
     single = None
     for attempt in range(BURST_ATTEMPTS):
-        single, burst, span, delivered = keys_trial(executable, environment, folder)
-        reason = burst_failure(burst, span, delivered)
-        if reason is None:
-            return ({"key-to-frame-single": single, "key-to-frame-burst-200": burst}, {})
+        try:
+            single, burst, span, delivered = keys_trial(executable, environment, folder)
+        except TrialNotObserved as unobserved:
+            single, reason = None, str(unobserved)
+        else:
+            reason = burst_failure(burst, span, delivered)
+            if reason is None:
+                return ({"key-to-frame-single": single, "key-to-frame-burst-200": burst}, {})
         print(f"Speed: {reason}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
-    print(f"Speed: the 200 keystrokes did not reach the window as specified in {BURST_ATTEMPTS}"
-          " attempts; this trial of key-to-frame-burst-200 is missing")
+    print(f"Speed: no trial delivered the stimulus as specified in {BURST_ATTEMPTS} attempts;"
+          " this trial of key-to-frame-burst-200 is missing")
     return ({"key-to-frame-single": single, "key-to-frame-burst-200": None}, {})
 
 
@@ -254,6 +300,7 @@ def keys_trial(executable: Path, environment: dict,
 
     Either value is None when its own stimulus did not reach the window, and the caller repeats or
     records the trial as missing (Issue #30); the count is what the caller says in that line.
+    TrialNotObserved leaves instead when the trial produced nothing to read at all (Issue #36).
     """
     report = report_path(folder, "keys")
     process, window, _ = start(executable, environment, ["--measure", str(report)])
@@ -278,11 +325,13 @@ def keys_trial(executable: Path, environment: dict,
         time.sleep(BURST_SECONDS)
         close(window)
         # 本文を打ち替えたので閉じるときに未保存の確認が出る（ADR 0010 の決定 10）。
-        assert dismiss_dialog(process, IDNO), "the unsaved confirmation never came up"
+        # 痩せた机では 2.5 秒で出ないことがある。その試行は観測できていないので測り直す（#36）。
+        if not dismiss_dialog(process, IDNO):
+            raise TrialNotObserved("the unsaved confirmation never came up")
         process.wait(timeout=EXIT_SECONDS)
     finally:
         stop(process)
-    marks = read_report(report)["marks"]
+    marks = observed_marks(report)
     inputs = input_indexes(marks)
     single = measured_single(marks, inputs)
     if len(inputs) < BURST_KEYS + 2:
