@@ -253,6 +253,8 @@ CI（PR #23・run 35104611209・AMD EPYC 7763 / Hyper-V Video＝WARP / 96 DPI）
 いまの決まり（`eng/measure-speed.py`）:
 
 - 欠測の条件は打鍵ベンチだけ。届いた打鍵が 202 未満・到着幅が 50 ms 超・200 打鍵に答えるフレームが無い、のどれかなら、`BURST_ATTEMPTS`（3 回）の中で測り直し、3 回とも駄目ならその試行は欠測
+- **観測できなかった試行も同じ欠測**（Issue #36）。未保存の確認が 2.5 秒で出ない試行と、計測ファイルが無い／途中で終わっている試行は `TrialNotObserved` で同じ測り直しに合流し、3 回とも観測できなければその試行は 200 打鍵も 1 打鍵も欠測（`single` も `None`）。前はこの 2 つだけ `assert` と `read_report` の例外で終了 1 になり、ゲートが「退行」と言っていた
+- `WindowUnavailable`（窓を作れない機械 → 記録だけで終了 0）は打鍵ベンチの試行には使わない。`keys_trial` は純関数 `marks_of(text)` で自分の計測ファイルを読む。**起動ベンチ・16 MiB ベンチの `read_report` の意味は変えていない**
 - `key-to-frame-single` は別の刺激なので、burst が欠測でも 1 打鍵とそれに答えたフレームが取れていれば値にする
 - 記録の形: `values[<bench>]` に `missing`（欠測の試行数）が入る。`samples` は有効な値だけで、中央値・最小・最大も有効な値から出す。有効な値が 0 本なら `samples: []`・`medianMs: null`。`missing` の無い古い記録も `--check --values` で読める
 - 判定: 有効な値が `MIN_VALID_SAMPLES`（3 本）以上ならいままでどおり中央値で退行を見る。3 本未満のベンチは**計測不能**で、退行と別に `QLT-014: <name>: only N of 5 trials delivered the stimulus; not judged` を出す
@@ -269,7 +271,14 @@ CI（PR #23・run 35104611209・AMD EPYC 7763 / Hyper-V Video＝WARP / 96 DPI）
 
 - **覆いだけでは刺激は止まらない**。ベンチの窓は `raise_window` で最前面に居て、`PostMessageW` は前景でなくても届く。覆いは印として出るだけで、欠測は 0 のまま終了 0 だった
 - 机を荒らすと**値**は荒れる（4719 / 2447 ms）が、`post_together` が窓のスレッドを止めてから post するので**到着幅**は 50 ms 以内のままのことが多く、3 回連続の失敗（＝欠測）はこの机では作れなかった。2026-09-17 の記録の 809〜1330 ms は、送る側と窓のスレッドの両方が同時に痩せたときの姿である
-- そのため欠測の記録と終了コードは、欠測入りの記録を作って `--check --values` で確かめた: 有効 3 本 → 退行 0・終了 0、有効 2 本 → `only 2 of 5 trials delivered the stimulus; not judged`・終了 2、有効 0 本 → 同じ文・終了 2。純関数の判定は `tests/conformance/test_speed.py`（23 件）がゲートで守る
+- そのため欠測の記録と終了コードは、欠測入りの記録を作って `--check --values` で確かめた: 有効 3 本 → 退行 0・終了 0、有効 2 本 → `only 2 of 5 trials delivered the stimulus; not judged`・終了 2、有効 0 本 → 同じ文・終了 2。純関数の判定は `tests/conformance/test_speed.py`（Issue #36 で 34 件）がゲートで守る
+
+観測できなかった試行の再現（2026-09-18・Issue #36・同じ機械・Release の exe）。`eng/measure-speed.py` の `bench_keys` を実機で走らせ、**外側の条件だけ**（確認を押せるか・計測ファイルを書ける場所か）を差し替えた。判定は製品の経路のまま:
+
+| 手で作った状態 | 出た行 | 値 |
+| --- | --- | --- |
+| 未保存の確認が 2.5 秒で出ない（`dismiss_dialog` が偽） | `the unsaved confirmation never came up; repeating the trial (1/3 … 3/3)` → `no trial delivered the stimulus as specified in 3 attempts; this trial of key-to-frame-burst-200 is missing` | 200 打鍵・1 打鍵とも欠測（**traceback は出ない**） |
+| 計測ファイルが書けない（`--measure` の親フォルダが無い） | `the editor left no finished measurement file (marks-keys.json); repeating the trial (1/3 … 3/3)` → 同じ `missing` の行 | 同上 |
 
 ## 所要時間
 

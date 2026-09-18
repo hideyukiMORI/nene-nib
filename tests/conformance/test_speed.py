@@ -1,14 +1,19 @@
 """Positive and negative inputs for the speed record and its judgement (QLT-007 / QLT-014).
 
 Issue #30: a trial whose stimulus did not reach the window is missing rather than a value, and a
-bench with too few valid trials is "not measured" rather than "slower". Everything here is a pure
-function of a record: no window is opened, no editor is started, and no clock is read.
+bench with too few valid trials is "not measured" rather than "slower". Issue #36: a trial that
+could not be observed at all joins that same path. Everything here is a pure function of a record
+or of a scripted trial: no window is opened, no editor is started, and no clock is read.
 """
 
+import contextlib
 import importlib.util
+import io
+import json
 from pathlib import Path
 import sys
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "eng"))
@@ -120,6 +125,13 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual([], unmeasurable)
         self.assertEqual(len(speed.BENCHES), len(findings))
 
+    def test_a_single_keystroke_bench_without_a_trial_is_unmeasurable(self):
+        """Issue #36: an unobserved trial leaves key-to-frame-single missing the same way."""
+        findings, unmeasurable = self.judge({"key-to-frame-single": ([], 5)})
+        self.assertEqual([], findings)
+        self.assertEqual(["QLT-014: key-to-frame-single: only 0 of 5 trials delivered the"
+                          " stimulus; not judged"], unmeasurable)
+
     def test_an_old_record_with_too_few_samples_is_unmeasurable(self):
         values = record({"key-to-frame-burst-200": ([2.0, 3.0], 0)})["values"]
         del values["key-to-frame-burst-200"]["missing"]
@@ -170,6 +182,81 @@ class TrialTests(unittest.TestCase):
         entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
                    {"milestone": "input_received", "qpcMicroseconds": 2000}]
         self.assertIsNone(speed.measured_single(entries, speed.input_indexes(entries)))
+
+
+class MeasurementFileTests(unittest.TestCase):
+    """A trial's own reading of its measurement file: absent or unfinished is not a machine (#36)."""
+
+    def test_a_finished_measurement_file_gives_its_marks(self):
+        entries = marks(2)
+        written = json.dumps({"processCreationToFirstFrameMs": 1.0, "marks": entries})
+        self.assertEqual(entries, speed.marks_of(written))
+
+    def test_a_file_that_was_never_written_is_not_observed(self):
+        self.assertIsNone(speed.marks_of(""))
+
+    def test_a_file_that_stops_in_the_middle_is_not_observed(self):
+        self.assertIsNone(speed.marks_of('{"marks": [{"milestone": "input_rece'))
+
+    def test_a_json_without_marks_is_not_observed(self):
+        self.assertIsNone(speed.marks_of('{"processCreationToFirstFrameMs": 1.0}'))
+
+    def test_a_json_whose_marks_are_not_a_list_is_not_observed(self):
+        self.assertIsNone(speed.marks_of('{"marks": null}'))
+
+    def test_a_json_that_is_not_an_object_is_not_observed(self):
+        self.assertIsNone(speed.marks_of("[]"))
+
+
+class RepeatedTrialTests(unittest.TestCase):
+    """bench_keys against scripted trials; keys_trial is replaced, so nothing is started (#36)."""
+
+    def bench(self, trials: list) -> tuple[dict, str]:
+        outcomes = iter(trials)
+
+        def scripted(executable, environment, folder):
+            outcome = next(outcomes)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        written = io.StringIO()
+        with mock.patch.object(speed, "keys_trial", scripted), \
+                contextlib.redirect_stdout(written):
+            values, _ = speed.bench_keys(Path("exe"), {}, Path("folder"))
+        return values, written.getvalue()
+
+    def delivered(self, single: float, burst: float) -> tuple:
+        return (single, burst, 1.0, speed.BURST_KEYS + 2)
+
+    def test_three_unobserved_trials_leave_both_keystroke_benches_missing(self):
+        unobserved = speed.TrialNotObserved("the unsaved confirmation never came up")
+        values, written = self.bench([unobserved] * speed.BURST_ATTEMPTS)
+        self.assertIsNone(values["key-to-frame-burst-200"])
+        self.assertIsNone(values["key-to-frame-single"])
+        self.assertIn("Speed: the unsaved confirmation never came up; repeating the trial (1/3)",
+                      written)
+        self.assertIn("this trial of key-to-frame-burst-200 is missing", written)
+
+    def test_a_trial_after_an_unobserved_one_is_the_value(self):
+        values, written = self.bench([speed.TrialNotObserved("the editor left no finished"
+                                                             " measurement file (marks-keys.json)"),
+                                      self.delivered(0.9, 2.5)])
+        self.assertEqual({"key-to-frame-single": 0.9, "key-to-frame-burst-200": 2.5}, values)
+        self.assertIn("no finished measurement file (marks-keys.json); repeating the trial (1/3)",
+                      written)
+        self.assertNotIn("missing", written)
+
+    def test_an_unobserved_last_trial_does_not_keep_an_earlier_single(self):
+        values, _ = self.bench([(0.9, None, 0.0, 7), (0.8, None, 0.0, 7),
+                                speed.TrialNotObserved("the unsaved confirmation never came up")])
+        self.assertIsNone(values["key-to-frame-single"])
+        self.assertIsNone(values["key-to-frame-burst-200"])
+
+    def test_a_single_keystroke_of_a_failed_burst_is_still_a_value(self):
+        values, _ = self.bench([(0.9, None, 0.0, 7)] * speed.BURST_ATTEMPTS)
+        self.assertEqual(0.9, values["key-to-frame-single"])
+        self.assertIsNone(values["key-to-frame-burst-200"])
 
 
 if __name__ == "__main__":
