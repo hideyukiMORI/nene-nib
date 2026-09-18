@@ -45,6 +45,41 @@
           "maximumMs": 38.0386
         }
       }
+    },
+    "e7a87d5b6ac1e14b": {
+      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "gpu": "Microsoft Hyper-V Video",
+      "dpi": 96,
+      "recordedAt": "2026-09-18T14-11-26Z",
+      "repetitions": 5,
+      "note": "ADR 0016: GitHub Actions の windows-2022 ランナー。1 run の --adopt で書いた値ではない。#24（ADR 0013）以降・同じ指紋の 7 run（35121845572 / 35208906192 / 35209555298 / 35216632797 / 35217895642 / 35219937347 / 35354289264）の、run ごとの中央値の中央値。minimumMs / maximumMs はその 7 つの中央値の最小・最大で、1 run の 5 試行の幅ではない。recordedAt は最新の出典 run の日時、repetitions は 1 run あたりの試行数。小数 3 桁は出典が CI のログの表示行だから。",
+      "values": {
+        "startup-first-frame": {
+          "medianMs": 36.516,
+          "minimumMs": 34.403,
+          "maximumMs": 37.986
+        },
+        "startup-window-shown": {
+          "medianMs": 26.788,
+          "minimumMs": 24.825,
+          "maximumMs": 27.651
+        },
+        "key-to-frame-single": {
+          "medianMs": 1.396,
+          "minimumMs": 1.293,
+          "maximumMs": 1.514
+        },
+        "key-to-frame-burst-200": {
+          "medianMs": 2.683,
+          "minimumMs": 2.62,
+          "maximumMs": 2.947
+        },
+        "open-large-file-16mib": {
+          "medianMs": 87.349,
+          "minimumMs": 85.585,
+          "maximumMs": 108.886
+        }
+      }
     }
   }
 }

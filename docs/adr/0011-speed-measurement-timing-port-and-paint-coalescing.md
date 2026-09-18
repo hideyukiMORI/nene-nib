@@ -41,7 +41,7 @@ Vim エンジンと IME の縦切りに入る前に、いまの速さを測っ�
 
 ## 強制
 
-- QLT-014: **施主の実機（指紋の一致する機械）で active**。`check.ps1` の `measure-speed.py --check` が基準値との比較で落ちる。反例は「基準値の複製を 1 本だけ厳しくして `--check` が終了 1」。**CI では planned**（指紋が無いので記録だけ。同じ CI 機での相対退行の判定は基準値が貯まってから）
+- QLT-014: **施主の実機（指紋の一致する機械）で active**。`check.ps1` の `measure-speed.py --check` が基準値との比較で落ちる。反例は「基準値の複製を 1 本だけ厳しくして `--check` が終了 1」。**CI は [ADR 0016](0016-ci-speed-reference-per-host-fingerprint.md) で指紋 1 つ（`e7a87d5b6ac1e14b`・AMD EPYC 7763）が active**（他の指紋の host は記録だけで、そのことを 1 行で言う。打鍵 2 本は floor 2 ms に飲まれて判定にならない）
 - ARC-007 / CPP-013: `src/core` / `src/application` から `QueryPerformanceCounter` / `GetProcessTimes` / `_Xtime_get_ticks` が出ないことを `eng/symbols.py` が見る — **active**（既存）
 - CPP-002: `Milestone` の `switch` に `default` を書かない — **active**（既存の clang-tidy）
 - QLT-013: 実機の値は `docs/quality/speed-reference.md` に環境つきで記録する — **active**（記録の場所として）

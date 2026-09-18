@@ -30,3 +30,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0012](0012-vim-engine-first-slice-and-oracle-fixtures.md) | Vim エンジンの最初の縦切り: core の純関数 `vim_step`・閉じた和型の鍵と効果・oracle が生成した fixture の再生 | 受理 |
 | [0013](0013-startup-shows-the-window-before-the-device.md) | 起動は窓を先に見せてから D3D の device を作り、「窓が見えるまで」を第 2 の起動の値として基準値に載せる | 受理 |
 | [0014](0014-ime-imm32-composition-outside-the-buffer.md) | 日本語入力は IMM32 を ui/win32 が直接受け、変換中の文字列は本文の外に持って描き、Vim の NORMAL では IME を切る | 受理 |
+| [0016](0016-ci-speed-reference-per-host-fingerprint.md) | CI の速さの基準値は host の指紋ごとに持ち、基準値の無い host では記録だけにして黙らず、記録を artifact で残す | 受理 |
