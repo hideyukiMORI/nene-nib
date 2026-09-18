@@ -35,3 +35,12 @@ jobs:
       - name: Full gate
         shell: pwsh
         run: pwsh -NoProfile -File ./eng/check.ps1
+      # ADR 0016 の決定 4: 速さの記録は out/speed に残るが .gitignore の中なので、artifact で上げないと
+      # 消える。他の指紋の基準値をためる道はこれだけで、落ちた run の記録こそ要るので if: always()。
+      - name: Upload speed records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: speed-records
+          path: out/speed/*.json
+          retention-days: 90

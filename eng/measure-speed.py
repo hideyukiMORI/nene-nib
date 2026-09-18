@@ -39,9 +39,11 @@ things and say so in different words; eng/check.ps1 fails on both.
 
 Every bench runs five times; the value is the median and the spread is recorded with it. References
 live in eng/perf-reference.json per machine fingerprint (CPU name, display adapter, system DPI),
-because the same numbers on a shared CI runner mean nothing (ADR 0006). A machine without a
-reference records its numbers and passes; so does a machine that cannot put a window on a desktop.
-Widening a reference is an ADR decision, not a repair.
+because the same numbers on another machine mean nothing (ADR 0006); the shared CI runners are
+several hosts whose CPU generations differ by more than the tolerance, so they get one entry per
+fingerprint as well (ADR 0016). A machine without a reference records its numbers and passes, and
+says in one line which host was not judged rather than passing in silence; so does a machine that
+cannot put a window on a desktop. Widening a reference is an ADR decision, not a repair.
 
 Python standard library and ctypes only.
 """
@@ -556,7 +558,13 @@ def check(arguments) -> int:
         return 0
     recorded = reference["machines"].get(record["machine"]["fingerprint"])
     if recorded is None:
-        print("Speed: no reference for this machine; recorded only")
+        # 基準値の無い host は記録だけで通るが、どの host を判定しなかったかを言う（ADR 0016 の決定 3）。
+        identity = record["machine"]
+        # ダッシュは ASCII の -- で書く。この行は施主の cp932 の机でも CI でも出るが、U+2014 は
+        # cp932 に無く（0x815C は U+2015）、print が UnicodeEncodeError で落ちてゲートが
+        # 「退行」と言ってしまう。ファイル内の他の出力と docstring も同じ綴りを使っている。
+        print(f"Speed: no reference for {identity['fingerprint']} ({identity['cpu']});"
+              " recorded only -- QLT-014 is not judged on this host")
         return 0
     findings, unmeasurable = compare(reference, record["values"], recorded["values"])
     for line in [*findings, *unmeasurable]:

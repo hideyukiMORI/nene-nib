@@ -42,13 +42,17 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'QLT-002: the Release measurement build failed.' }
     # ADR 0011 / 0013: 4 本のベンチ（基準値の鍵は 5 つ）を測って eng/perf-reference.json の
     # 指紋ごとの基準値と比べる。
-    # 基準値の無い機械（CI を含む）と窓を作れない機械は、値を記録して通る。
+    # 基準値の無い機械と窓を作れない機械は、値を記録して通る（CI は指紋ごとに持つので、
+    # 基準値のある host では落ちる。ADR 0016）。
     # 終了 2 は「退行」ではなく「刺激が窓に届かず測れなかった」（Issue #30）。どちらでもゲートは落ちるが、
     # 直す先が違う（コードの速さ / 計測中の机の状態）ので別の言葉で言う。
-    & python eng/measure-speed.py --check
+    & python eng/measure-speed.py --check | Tee-Object -Variable speedLines
     $speed = $LASTEXITCODE
     if ($speed -eq 2) { throw 'QLT-014: speed could not be measured (the stimulus did not reach the window; see the lines above). Not a regression.' }
     if ($speed -ne 0) { throw 'QLT-014: speed regression.' }
+    # ADR 0016 の決定 3: 基準値の無い host は記録だけで通る。通ったことと「速さを判定していないこと」は
+    # 別なので、その 1 行をまとめにも出して黙らない（終了コードは変えない）。
+    $unjudgedSpeed = @($speedLines | Where-Object { $_ -like 'Speed: no reference for *' })
     & python eng/coverage.py
     if ($LASTEXITCODE -ne 0) { throw 'QLT-009: branch coverage or its negative proof failed.' }
     & python eng/prove-gates.py
@@ -56,5 +60,6 @@ try {
     & git diff --check
     if ($LASTEXITCODE -ne 0) { throw 'Whitespace verification failed.' }
     Write-Host 'NeNe Nib full gate passed (UI hardware checks are recorded separately).'
+    foreach ($line in $unjudgedSpeed) { Write-Host $line }
 }
 finally { Pop-Location }
