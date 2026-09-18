@@ -315,6 +315,37 @@ oracle も機械も 5-g と同じ（Vim 9.1・同じ呼び方）。報告に `ge
 `0x` のあとの本文は 1 行（2 行目の字形画素 **0**）で、`yyp` で 2 行目に字形画素 **196** が出る（1 行目の `ello` と同じ数＝同じ行が貼られた）。
 `u` は 3 回（挿入 1 回・`x`・`p` がそれぞれ 1 単位）で本文が空に戻る。画は `vim-put.bmp`。
 
+#### Vim の 3 本目・VISUAL（Issue #53・ADR 0018・2026-09-19）
+
+oracle も機械も 5-g と同じ（Vim 9.1・同じ呼び方・記法の追加は無し）。`v` `V` `o` は普通の文字なので `KEY_NAMES` は増えていない。
+
+- **fixture 195 → 256 件**（足したのは 61 件。`v` / `V` の出入りと切り替え・`h j k l 0 $ ^ w b e` と `<Home>` `<End>` での広げ方・`o`・
+  回数・`d x y c`・空行・日本語・行単位と文字単位のレジスタ・`u`）。`--regenerate` を **3 回**走らせて生成物は 1 バイトも変わらない
+  （生成物の SHA-256 `7370ca5546a4371628ded3732f6d027568a03b32afc3fcc8e23dd25d114a3d0e`・`fixtures.json` の SHA-256
+  `b24311a61e7e9d36bf7a3a33eb3f4577744b1bf9d583c2d4a71b5ba9076ddec4`。CNF-010 の 1 行もこの値を名乗る）
+- `nib_unit` が 256 件すべてを再生し、本文・キャレット・無名レジスタの本文と種類が全部一致（全体で 2862 件の検査）
+- **oracle に実装を合わせた点**:
+  1. **VISUAL のキャレットは行の内容の終わり（Vim が NUL を置く桁）に載る。** `v$d` は改行まで消して次の行と繋がり（`"abc\ndef"` → `"def"`・レジスタ `"abc\n"` の `v`）、
+     `llvld` も `"abdef"` になる。Vim の `coladvance` の `one_more` が `VIsual_active` で立つのと同じ。`vim_resting_caret` を当てるかどうかをモードで分けた（`rested_in`）。
+     `$` の欲しい列（`at_line_end`）を持ったまま `j` で降りても NUL の桁に載る（`v$jd` は 2 行とも消える）
+  2. **`op_delete` の「奇妙な Vi の振る舞い」（5-g の 3）は VISUAL には掛からない**（Vim の条件が `!oap->is_VIsual`）。`"  abc\n   "` の `vjd` は
+     行単位にならず `"  abc\n "` を文字単位で消す。`whole_lines_for_delete` を通さない入口（`removed_exactly`）を分けた
+  3. **`3v` は 3 文字・`3V` は 3 行を選ぶ**（ADR 0018 の草稿の決定 7 は「VISUAL に入る前の回数は捨てる」だった）。`:help v` が
+     「前の Visual の操作が無ければ `[count]` 文字を選ぶ。カーソルを右へ N × `[count]` 動かすのと同じで、`'selection'` が `"exclusive"` でなければ 1 つ少ない」、
+     `:help V` が同じく「`[count]` 行を選ぶ」と書いている。**実装は Vim に合わせた**（入った直後に `count - 1` だけ `v` は右へ・`V` は下へ）。ADR の決定 7 の括弧は次の改訂で直す
+- **oracle で測れないもの**: `p` `u` `~` `>` `<` `J` `r` `I` `A` と `X` `D` `C` `Y` は本物の VISUAL では効く（`p` は選択を置き換え・`u` は小文字化・`D` は行削除…）が、
+  この縦切りでは**何もしない**（ADR 0018 の決定 7・8）。同じ鍵の fixture を置くと oracle と食い違うので**置いていない**＝この差は機械が見張っていない。手書きの単体テスト
+  `verify_vim_visual_step_edges` が「何もしないこと」だけを測る
+- 表示の範囲と操作の範囲が同じであることは fixture では見えない（fixture は本文とレジスタしか見ない）ので、単体テスト
+  `verify_vim_visual_selection_and_clipboard` が `EditorFrame` の選択スパンと Ctrl+C の中身を `vim_visual_range` と突き合わせる
+- 分岐カバレッジ（`python eng/coverage.py`）: 全体 **91.29 %**（1354 分岐中 1236・下限 90 %）。`src/core/VimStep.cpp` は 89.88 %（494 中 444）、
+  `src/core/VimVisualRange.cpp` は 91.67 %（12 中 11）。VISUAL の `switch` には届かない枝（表から引ける移動しか来ない `motion_for` の失敗側・
+  `widened` の NORMAL / INSERT）があり、そのぶん #43 の 92.20 % から下がった
+
+実機の窓（`python eng/verify-window.py`・2026-09-19・終了 0・同じ機械。`out/window-verification/look-slice-results.json` の `editing.vim`）:
+`verify_vim` に `V` → `d` を足した。`yyp` で 2 行目に字形画素 **196** が出たあと、`V` でモード名の画素が NORMAL と変わり（VISUAL LINE）、
+`d` で 2 行目の字形画素が **0** に戻る（行がまるごと消えた）。`u` は 4 回（挿入 1 回・`x`・`p`・`Vd` がそれぞれ 1 単位）で本文が空に戻る。
+
 ### 5-h. IME（IMM32）の縦切り（Issue #28・ADR 0014・2026-09-17）
 
 環境: 5-g と同じ機械（Windows 11 Pro 10.0.26200・120 DPI・実 GPU・ダーク）。`build/NeNeNib.exe`（Debug 構成＝ASan / UBSan 付き）。

@@ -31,6 +31,11 @@ enum class VimAction : std::uint8_t
     insert_at_line_start,
     insert_at_line_end,
     undo,
-    redo
+    redo,
+    // VISUAL の 3 つ（ADR 0018 の決定 7）。表は NORMAL と同じ 1 つで、動作ごとに「VISUAL では
+    // どうするか」を分ける。`o` は NORMAL では何もしない（行を開くのはこの縦切りに無い）。
+    visual,
+    visual_line,
+    swap_visual_ends
 };
 } // namespace nenenib::core

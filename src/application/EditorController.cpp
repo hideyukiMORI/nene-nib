@@ -18,6 +18,7 @@
 #include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimStep.hpp"
+#include "VimVisualRange.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -58,7 +59,7 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return current.value();
 }
 
-// NORMAL だけがブロック。INSERT は通常モードと同じバー（採用案 第 1 節・D15）。
+// INSERT だけがバー。NORMAL と VISUAL はブロック（採用案 第 1 節・D15 / ADR 0018 の決定 1）。
 [[nodiscard]] core::CaretShape caret_shape_for(core::EditMode mode, core::VimMode vim) noexcept
 {
     switch (mode)
@@ -71,6 +72,8 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     switch (vim)
     {
     case core::VimMode::normal:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
         return core::CaretShape::block;
     case core::VimMode::insert:
         return core::CaretShape::bar;
@@ -154,10 +157,10 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 }
 
 // 1 行ぶんの選択の面。行をまたぐ選択はその行の内容の終わりから 1 桁ぶんはみ出して改行を示す。
+// 範囲は呼ぶ側が決める（通常モードは選択そのまま・VISUAL は Vim の規則。ADR 0018 の決定 5）。
 [[nodiscard]] core::SelectionSpan span_of(const core::TextBuffer &text,
-                                          const core::Selection &selection, core::LineNumber line)
+                                          const core::OffsetRange &range, core::LineNumber line)
 {
-    const auto range = core::selection_range(selection);
     const core::Offset start = text.line_start(line);
     const core::Offset content_end = text.line_end(line);
     const std::size_t begin = std::max(range.begin.value, start.value);
@@ -304,9 +307,23 @@ void EditorController::accept(const ClipboardAction &intent)
     std::unreachable();
 }
 
+// 描く選択と Ctrl+C / Ctrl+X が覆う本文。VISUAL のあいだだけ Vim の規則で決まり、
+// 表示と操作が同じ 1 本の範囲を使う（ADR 0018 の決定 5）。
+core::OffsetRange EditorController::highlighted_range() const
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return core::selection_range(state_.selection());
+    case core::EditMode::vim:
+        break;
+    }
+    return core::vim_visual_range(state_.text(), state_.selection(), state_.vim().mode).range;
+}
+
 void EditorController::copy_selection()
 {
-    const auto range = core::selection_range(state_.selection());
+    const auto range = highlighted_range();
     if (core::is_empty(range))
     {
         return;
@@ -320,7 +337,7 @@ void EditorController::copy_selection()
 
 void EditorController::cut_selection()
 {
-    const auto range = core::selection_range(state_.selection());
+    const auto range = highlighted_range();
     if (core::is_empty(range))
     {
         return;
@@ -431,8 +448,7 @@ void EditorController::accept(const SelectEditMode &intent)
 void EditorController::accept(const VimKeyPress &intent)
 {
     const core::VimMode before = state_.vim().mode;
-    const auto step =
-        core::vim_step(state_.vim(), state_.text(), state_.selection().caret, intent.key);
+    const auto step = core::vim_step(state_.vim(), state_.text(), state_.selection(), intent.key);
     state_ = state_.with_vim(step.next);
     // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
     if (before != step.next.mode)
@@ -455,7 +471,11 @@ void EditorController::settle_vim_caret()
     }
     switch (state_.vim().mode)
     {
+    // VISUAL のキャレットは行の内容の終わりにも載る。寄せるのは NORMAL へ戻るときだけ
+    // （ADR 0018 の決定 6）。選択も畳まない。
     case core::VimMode::insert:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
         return;
     case core::VimMode::normal:
         break;
@@ -474,6 +494,8 @@ core::EditBoundary EditorController::vim_boundary() const noexcept
     case core::VimMode::insert:
         return core::EditBoundary::absorb;
     case core::VimMode::normal:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
         return core::EditBoundary::separate;
     }
     std::unreachable();
@@ -484,6 +506,13 @@ void EditorController::perform(const core::VimNoEffect &) {}
 void EditorController::perform(const core::VimMoveTo &effect)
 {
     move_caret_to(effect.caret, core::SelectionAnchoring::collapse);
+}
+
+// VISUAL の選択（決定 3）。engine が決めた両端をそのまま置く。範囲にするのは表示と操作の側。
+void EditorController::perform(const core::VimSelect &effect)
+{
+    state_ = state_.with_selection(effect.selection);
+    follow_caret();
 }
 
 void EditorController::perform(const core::VimRemoveRange &effect)
@@ -661,6 +690,8 @@ bool EditorController::composition_ignored() const noexcept
     case core::VimMode::insert:
         return false;
     case core::VimMode::normal:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
         return true;
     }
     std::unreachable();
@@ -731,12 +762,13 @@ std::vector<LineView> EditorController::visible_lines() const
     const std::size_t first = std::min(scroll.first_visible.value, total);
     const std::size_t last =
         std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
+    const core::OffsetRange range = highlighted_range();
     std::vector<LineView> lines;
     for (std::size_t number = first; number <= last; ++number)
     {
         const core::LineNumber line{number};
-        lines.push_back(LineView{line, state_.text().line_text(line),
-                                 span_of(state_.text(), state_.selection(), line)});
+        lines.push_back(
+            LineView{line, state_.text().line_text(line), span_of(state_.text(), range, line)});
     }
     return lines;
 }

@@ -19,6 +19,10 @@ std::string_view mode_label(EditMode mode, VimMode vim) noexcept
         return "NORMAL";
     case VimMode::insert:
         return "INSERT";
+    case VimMode::visual:
+        return "VISUAL";
+    case VimMode::visual_line:
+        return "VISUAL LINE";
     }
     std::unreachable();
 }

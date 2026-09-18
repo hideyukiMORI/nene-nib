@@ -14,6 +14,8 @@
 #include "VimPutSide.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimSelect.hpp"
+#include "VimVisualRange.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
@@ -40,7 +42,7 @@ constexpr char32_t control_r_character = 0x12;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 25> normal_bindings{{{U'h', VimAction::move_left},
+constexpr std::array<VimBinding, 28> normal_bindings{{{U'h', VimAction::move_left},
                                                       {U'j', VimAction::move_down},
                                                       {U'k', VimAction::move_up},
                                                       {U'l', VimAction::move_right},
@@ -64,7 +66,10 @@ constexpr std::array<VimBinding, 25> normal_bindings{{{U'h', VimAction::move_lef
                                                       {U'I', VimAction::insert_at_line_start},
                                                       {U'A', VimAction::insert_at_line_end},
                                                       {U'u', VimAction::undo},
-                                                      {control_r_character, VimAction::redo}}};
+                                                      {control_r_character, VimAction::redo},
+                                                      {U'v', VimAction::visual},
+                                                      {U'V', VimAction::visual_line},
+                                                      {U'o', VimAction::swap_visual_ends}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 10> motion_bindings{
@@ -189,16 +194,34 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return VimWantedColumn{VimColumnWish::at_column, text.position_of(caret).column};
 }
 
+// 動いた先のキャレットの置き所。NORMAL / INSERT は文字の上に寄せ、VISUAL は行の内容の終わり
+// （Vim が NUL を置く桁）にも載せる（ADR 0018 の決定 6）。Vim の coladvance の one_more が
+// VIsual_active で立つのと同じで、`v$d` が改行まで消し、`vl` が行末に届くのはこれ（Issue #53
+// で実測）。
+[[nodiscard]] Offset rested_in(const TextBuffer &text, Offset caret, VimMode mode)
+{
+    switch (mode)
+    {
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return caret;
+    case VimMode::normal:
+    case VimMode::insert:
+        return vim_resting_caret(text, caret);
+    }
+    std::unreachable();
+}
+
 // 欲しい列（curswant）で別の行へ。$ が貼り付けた「行末」はその行の最後の文字になる。
 [[nodiscard]] Offset caret_on_line(const TextBuffer &text, const VimWantedColumn &wanted,
-                                   LineNumber line)
+                                   LineNumber line, VimMode mode)
 {
     switch (wanted.wish)
     {
     case VimColumnWish::at_line_end:
-        return vim_resting_caret(text, text.line_end(line));
+        return rested_in(text, text.line_end(line), mode);
     case VimColumnWish::at_column:
-        return vim_resting_caret(text, text.offset_of(TextPosition{line, wanted.column}));
+        return rested_in(text, text.offset_of(TextPosition{line, wanted.column}), mode);
     }
     std::unreachable();
 }
@@ -224,27 +247,30 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimMotion::left:
         return backward_characters(text, caret, count);
     case VimMotion::right:
-        return vim_resting_caret(text, forward_characters(text, caret, count));
+        return rested_in(text, forward_characters(text, caret, count), state.mode);
     case VimMotion::up:
-        return caret_on_line(text, wanted_column_of(text, state, caret), line_above(line, count));
+        return caret_on_line(text, wanted_column_of(text, state, caret), line_above(line, count),
+                             state.mode);
     case VimMotion::down:
         return caret_on_line(text, wanted_column_of(text, state, caret),
-                             line_below(text, line, count));
+                             line_below(text, line, count), state.mode);
     case VimMotion::line_start:
         return text.line_start(line);
     case VimMotion::first_non_blank:
         return vim_first_non_blank(text, caret);
     case VimMotion::line_end:
-        return vim_resting_caret(text, text.line_end(line_below(text, line, count - single_step)));
+        return rested_in(text, text.line_end(line_below(text, line, count - single_step)),
+                         state.mode);
     case VimMotion::next_word:
-        return vim_resting_caret(text,
-                                 vim_next_word(text, caret, count, VimWordStop::across_lines));
+        return rested_in(text, vim_next_word(text, caret, count, VimWordStop::across_lines),
+                         state.mode);
     case VimMotion::previous_word:
         return vim_previous_word(text, caret, count);
     case VimMotion::word_end:
     case VimMotion::word_end_for_change:
-        return vim_resting_caret(
-            text, vim_word_end(text, caret, count, VimWordEndStop::enter_the_next_word));
+        return rested_in(text,
+                         vim_word_end(text, caret, count, VimWordEndStop::enter_the_next_word),
+                         state.mode);
     }
     std::unreachable();
 }
@@ -494,19 +520,26 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return OffsetRange{begin, text.line_terminator_end(last)};
 }
 
+// 範囲をそのまま消す。VISUAL の `d` `x` はここへ直接来る（Vim の op_delete の「奇妙な Vi の
+// 振る舞い」は `!oap->is_VIsual` で守られていて、選択からの削除には掛からない。Issue #53 で実測）。
+[[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
+                                      const VimMotionRange &range)
+{
+    VimState next = vim_resting_state(register_after(state, text, range));
+    switch (range.kind)
+    {
+    case VimRegisterKind::characters:
+        return VimStep{std::move(next), VimRemoveRange{range.range}};
+    case VimRegisterKind::lines:
+        return VimStep{std::move(next), VimRemoveLines{removed_lines_range(text, range)}};
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] VimStep removed(const VimState &state, const TextBuffer &text,
                               const VimMotionRange &range)
 {
-    const VimMotionRange whole = whole_lines_for_delete(text, range);
-    VimState next = vim_resting_state(register_after(state, text, whole));
-    switch (whole.kind)
-    {
-    case VimRegisterKind::characters:
-        return VimStep{std::move(next), VimRemoveRange{whole.range}};
-    case VimRegisterKind::lines:
-        return VimStep{std::move(next), VimRemoveLines{removed_lines_range(text, whole)}};
-    }
-    std::unreachable();
+    return removed_exactly(state, text, whole_lines_for_delete(text, range));
 }
 
 // c。効果は削除そのままで、次の状態が INSERT（決定 2）。行単位でも改行は残す＝行が 1 本残る。
@@ -519,6 +552,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 }
 
 // y のあとのキャレット。文字単位は範囲の先頭、行単位は範囲の最初の行の同じ桁（実測）。
+// y は VISUAL を終わらせるので、置き所は NORMAL の規則で寄せる。
 [[nodiscard]] Offset yanked_caret(const TextBuffer &text, const VimState &state, Offset caret,
                                   const VimMotionRange &range)
 {
@@ -528,7 +562,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return range.range.begin;
     case VimRegisterKind::lines:
         return caret_on_line(text, wanted_column_of(text, state, caret),
-                             line_of(text, range.range.begin));
+                             line_of(text, range.range.begin), VimMode::normal);
     }
     std::unreachable();
 }
@@ -714,31 +748,69 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         characters_between(caret, forward_characters(text, caret, count_of(state.count))));
 }
 
+// 表から引ける移動は 1 本にまとめる（表に無い動作はここへ来ない）。
+[[nodiscard]] VimStep moved_step(const VimState &state, const TextBuffer &text, Offset caret,
+                                 VimAction action)
+{
+    const auto motion = motion_for(action);
+    if (!motion.has_value())
+    {
+        return cancelled(state);
+    }
+    return motion_step(state, text, caret, motion.value());
+}
+
+// v / V で VISUAL に入る。回数があると入った直後にその広さぶんを選ぶ（Vim の nv_visual は
+// count1 - 1 だけ v なら右へ・V なら下へ動かす。`3v` は 3 文字・`3V` は 3 行。Issue #53 で実測）。
+[[nodiscard]] Offset widened(const TextBuffer &text, Offset caret, std::size_t steps, VimMode mode)
+{
+    switch (mode)
+    {
+    case VimMode::visual:
+        return forward_characters(text, caret, steps);
+    case VimMode::visual_line:
+        return caret_on_line(
+            text, VimWantedColumn{VimColumnWish::at_column, text.position_of(caret).column},
+            line_below(text, line_of(text, caret), steps), mode);
+    case VimMode::normal:
+    case VimMode::insert:
+        return caret;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep entered_visual(const VimState &state, const TextBuffer &text, Offset caret,
+                                     VimMode mode)
+{
+    VimState next = vim_resting_state(state.unnamed_register);
+    next.mode = mode;
+    const Offset moved = widened(text, caret, count_of(state.count) - single_step, mode);
+    return VimStep{std::move(next), VimSelect{Selection{caret, moved}}};
+}
+
 [[nodiscard]] VimStep commanded(const VimState &state, const TextBuffer &text, Offset caret,
                                 VimAction action)
 {
     switch (action)
     {
     case VimAction::move_left:
-        return motion_step(state, text, caret, VimMotion::left);
     case VimAction::move_down:
-        return motion_step(state, text, caret, VimMotion::down);
     case VimAction::move_up:
-        return motion_step(state, text, caret, VimMotion::up);
     case VimAction::move_right:
-        return motion_step(state, text, caret, VimMotion::right);
     case VimAction::move_line_start:
-        return motion_step(state, text, caret, VimMotion::line_start);
     case VimAction::move_line_end:
-        return motion_step(state, text, caret, VimMotion::line_end);
     case VimAction::move_next_word:
-        return motion_step(state, text, caret, VimMotion::next_word);
     case VimAction::move_previous_word:
-        return motion_step(state, text, caret, VimMotion::previous_word);
     case VimAction::move_word_end:
-        return motion_step(state, text, caret, VimMotion::word_end);
     case VimAction::move_first_non_blank:
-        return motion_step(state, text, caret, VimMotion::first_non_blank);
+        return moved_step(state, text, caret, action);
+    case VimAction::visual:
+        return entered_visual(state, text, caret, VimMode::visual);
+    case VimAction::visual_line:
+        return entered_visual(state, text, caret, VimMode::visual_line);
+    case VimAction::swap_visual_ends:
+        // NORMAL の `o`（行を開く）はこの縦切りに無い。保留と回数を捨てるだけ（決定 7）。
+        return cancelled(state);
     case VimAction::remove_character:
         return removed_character(state, text, caret);
     case VimAction::remove_operator:
@@ -878,6 +950,164 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     std::unreachable();
 }
 
+// ---------------------------------------------------------------- VISUAL（ADR 0018）
+
+// 鍵を 1 つ食べ終わったあとの VISUAL。回数とオペレータは捨て、モードと無名レジスタだけ残る。
+[[nodiscard]] VimState visual_resting(const VimState &state, VimMode mode)
+{
+    VimState next = vim_resting_state(state.unnamed_register);
+    next.mode = mode;
+    return next;
+}
+
+// VISUAL で効かない鍵。選択もキャレットも本文も動かない（決定 7）。
+[[nodiscard]] VimStep visual_unchanged(const VimState &state)
+{
+    return VimStep{visual_resting(state, state.mode), VimNoEffect{}};
+}
+
+// VISUAL から出る（Esc・同じ鍵）。選択は畳み、キャレットはその場に残す（決定 3）。
+[[nodiscard]] VimStep left_visual(const VimState &state, const Selection &selection)
+{
+    return VimStep{vim_resting_state(state.unnamed_register), VimMoveTo{selection.caret}};
+}
+
+// 同じ鍵なら出る、違う鍵なら選択を保ったまま種類を切り替える。
+[[nodiscard]] VimStep visual_switched(const VimState &state, const Selection &selection,
+                                      VimMode mode)
+{
+    if (state.mode == mode)
+    {
+        return left_visual(state, selection);
+    }
+    return VimStep{visual_resting(state, mode), VimSelect{selection}};
+}
+
+// VISUAL の移動。anchor はそのままで caret だけ動く（決定 3）。欲しい列は NORMAL と同じ。
+[[nodiscard]] VimStep visual_moved(const VimState &state, const TextBuffer &text,
+                                   const Selection &selection, VimAction action)
+{
+    const auto motion = motion_for(action);
+    if (!motion.has_value())
+    {
+        return visual_unchanged(state);
+    }
+    const VimWantedColumn wanted = wanted_column_of(text, state, selection.caret);
+    const Offset moved = moved_by(text, state, selection.caret, motion.value());
+    VimState next = visual_resting(state, state.mode);
+    next.wanted_column = wanted_after(text, wanted, moved, motion.value());
+    return VimStep{std::move(next), VimSelect{Selection{selection.anchor, moved}}};
+}
+
+// `d x y c`。選択を範囲に変えて #43 と同じ経路へ流す（決定 5）。オペレータは VISUAL を終わらせる。
+[[nodiscard]] VimStep visual_operated(const VimState &state, const TextBuffer &text,
+                                      const Selection &selection, VimOperator operation)
+{
+    const VimMotionRange range = vim_visual_range(text, selection, state.mode);
+    switch (operation)
+    {
+    case VimOperator::remove:
+        return removed_exactly(state, text, range);
+    case VimOperator::change:
+        return changed(state, text, range);
+    case VimOperator::yank:
+        return yanked(state, text, selection.caret, range);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep visual_acted(const VimState &state, const TextBuffer &text,
+                                   const Selection &selection, VimAction action)
+{
+    switch (action)
+    {
+    case VimAction::move_left:
+    case VimAction::move_down:
+    case VimAction::move_up:
+    case VimAction::move_right:
+    case VimAction::move_line_start:
+    case VimAction::move_line_end:
+    case VimAction::move_next_word:
+    case VimAction::move_previous_word:
+    case VimAction::move_word_end:
+    case VimAction::move_first_non_blank:
+        return visual_moved(state, text, selection, action);
+    // VISUAL の x は d と同じ（決定 7）。
+    case VimAction::remove_character:
+    case VimAction::remove_operator:
+        return visual_operated(state, text, selection, VimOperator::remove);
+    case VimAction::change_operator:
+        return visual_operated(state, text, selection, VimOperator::change);
+    case VimAction::yank_operator:
+        return visual_operated(state, text, selection, VimOperator::yank);
+    case VimAction::swap_visual_ends:
+        return VimStep{visual_resting(state, state.mode),
+                       VimSelect{Selection{selection.caret, selection.anchor}}};
+    case VimAction::visual:
+        return visual_switched(state, selection, VimMode::visual);
+    case VimAction::visual_line:
+        return visual_switched(state, selection, VimMode::visual_line);
+    // この縦切りの範囲の外の鍵は何もしない（決定 7・決定 8）。
+    case VimAction::put_after:
+    case VimAction::put_before:
+    case VimAction::remove_to_line_end:
+    case VimAction::change_to_line_end:
+    case VimAction::yank_line:
+    case VimAction::insert_before:
+    case VimAction::insert_after:
+    case VimAction::insert_at_line_start:
+    case VimAction::insert_at_line_end:
+    case VimAction::undo:
+    case VimAction::redo:
+        return visual_unchanged(state);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep visual_character(const VimState &state, const TextBuffer &text,
+                                       const Selection &selection, VimCharacter key)
+{
+    if (counts_as_digit(state, key.code))
+    {
+        return counted(state, key.code);
+    }
+    const auto action = action_for(key.code);
+    if (!action.has_value())
+    {
+        return visual_unchanged(state);
+    }
+    return visual_acted(state, text, selection, action.value());
+}
+
+// VISUAL の特別な鍵。Esc で出て、矢印と Home / End は NORMAL と同じ動作を引く。
+// Enter / Backspace / Ctrl-r はこの縦切りに無い（決定 7）。
+[[nodiscard]] VimStep visual_special(const VimState &state, const TextBuffer &text,
+                                     const Selection &selection, VimSpecialKey key)
+{
+    switch (key)
+    {
+    case VimSpecialKey::escape:
+        return left_visual(state, selection);
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::control_r:
+        return visual_unchanged(state);
+    case VimSpecialKey::arrow_left:
+        return visual_acted(state, text, selection, VimAction::move_left);
+    case VimSpecialKey::arrow_right:
+        return visual_acted(state, text, selection, VimAction::move_right);
+    case VimSpecialKey::arrow_up:
+        return visual_acted(state, text, selection, VimAction::move_up);
+    case VimSpecialKey::arrow_down:
+        return visual_acted(state, text, selection, VimAction::move_down);
+    case VimSpecialKey::home:
+        return visual_acted(state, text, selection, VimAction::move_line_start);
+    case VimSpecialKey::end:
+        return visual_acted(state, text, selection, VimAction::move_line_end);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] VimStep insert_moved(const VimState &state, const TextBuffer &text, Offset caret,
                                    CaretMotion motion)
 {
@@ -958,16 +1188,30 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     }
     return insert_special(state, text, caret, std::get<VimSpecialKey>(key));
 }
+
+[[nodiscard]] VimStep visual_step(const VimState &state, const TextBuffer &text,
+                                  const Selection &selection, VimKey key)
+{
+    if (std::holds_alternative<VimCharacter>(key))
+    {
+        return visual_character(state, text, selection, std::get<VimCharacter>(key));
+    }
+    return visual_special(state, text, selection, std::get<VimSpecialKey>(key));
+}
 } // namespace
 
-VimStep vim_step(const VimState &state, const TextBuffer &text, Offset caret, VimKey key)
+VimStep vim_step(const VimState &state, const TextBuffer &text, const Selection &selection,
+                 VimKey key)
 {
     switch (state.mode)
     {
     case VimMode::normal:
-        return normal_step(state, text, caret, key);
+        return normal_step(state, text, selection.caret, key);
     case VimMode::insert:
-        return insert_step(state, text, caret, key);
+        return insert_step(state, text, selection.caret, key);
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return visual_step(state, text, selection, key);
     }
     std::unreachable();
 }

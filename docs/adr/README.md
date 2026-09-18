@@ -33,3 +33,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0015](0015-vim-operators-register-kind-and-insert-undo-unit.md) | Vim のオペレータは自分の回数を持ち、レジスタは種類を持つ LF の本文、INSERT の編集は 1 つの `Edit` に吸収する | 受理 |
 | [0016](0016-ci-speed-reference-per-host-fingerprint.md) | CI の速さの基準値は host の指紋ごとに持ち、基準値の無い host では記録だけにして黙らず、記録を artifact で残す | 受理 |
 | [0017](0017-theme-model-and-builtin-colorschemes.md) | テーマは core の値型 `Theme`（UI・本文・出典）で、有名テーマの UI トークンは整数演算の `derive_ui` から導き、組み込み 9 テーマと名前の表は 1 か所 | 受理 |
+| [0018](0018-vim-visual-selection-as-range.md) | VISUAL は `VimMode` の 2 値で、engine は `Selection` を読み、選択を範囲に変える純関数 1 つでオペレータの経路に流す | 受理 |

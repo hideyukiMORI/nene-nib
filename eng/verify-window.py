@@ -952,9 +952,10 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     """Issue #22: the toggle enters NORMAL, ihello<Esc> types hello, 0x leaves ello.
 
     Issue #43 adds the second slice: yyp yanks the line and puts it below, so the body grows a
-    second row. The buffer is empty when this runs and three undos put it back (the insert, the
-    x and the put are one unit each), so the editing checks that follow still start from an empty
-    無題 buffer. Vim needs no modifier for any of these keys.
+    second row. Issue #53 adds the third: V names VISUAL LINE on the status bar and d takes that
+    row away again. The buffer is empty when this runs and four undos put it back (the insert, the
+    x, the put and the Vd are one unit each), so the editing checks that follow still start from an
+    empty 無題 buffer. Vim needs no modifier for any of these keys.
     """
     width, height, dpi, body = ground["size"]
     grounds = [ground["background"], ground["current"], list(ACCENT)]
@@ -984,7 +985,14 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     second_row = content_box(body, 1, dpi)
     put, put_ink = await_ink(window, size, second_row, grounds, True)
     write_bitmap(output / "vim-put.bmp", put, width, height)
-    write_text(window, "uuu")
+    # Issue #53: V は行を選んで VISUAL LINE を名乗り、d はその行をまるごと消す（本文が 1 行に戻る）。
+    write_text(window, "V")
+    time.sleep(0.5)
+    visual = capture(window, width, height)
+    write_text(window, "d")
+    time.sleep(0.5)
+    unput = capture(window, width, height)
+    write_text(window, "uuuu")
     time.sleep(0.5)
     # ブロックのキャレットは本文の枠に掛かるので、字形が消えたことは通常モードに戻してから測る。
     click(window, toggle["ordinary"][0], toggle["ordinary"][1])
@@ -1003,6 +1011,9 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
         "accentInTheNormalCell": accent_count(back, width, cell),
         "inkInTheSecondRowAfterPutting": put_ink,
         "inkInTheSecondRowBeforePutting": ink(shortened, width, second_row, grounds),
+        "visualLineChangedTheModeLabel":
+            box_pixels(visual, width, label) != box_pixels(normal, width, label),
+        "inkInTheSecondRowAfterVisualDelete": ink(unput, width, second_row, grounds),
         "capture": "vim-slice.bmp",
         "capturePut": "vim-put.bmp",
     }
@@ -1016,7 +1027,9 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     assert 0 < result["inkAfterRemoving"] < result["inkAfterTyping"], "0x did not remove one glyph"
     assert result["inkInTheSecondRowBeforePutting"] == 0, "the buffer had a second row already"
     assert result["inkInTheSecondRowAfterPutting"] > 0, "yyp did not put a second line"
-    assert result["inkAfterUndoing"] == 0, f"three undos did not empty the line: {result}"
+    assert result["visualLineChangedTheModeLabel"], "the status bar did not say VISUAL LINE"
+    assert result["inkInTheSecondRowAfterVisualDelete"] == 0, "Vd did not take the line away"
+    assert result["inkAfterUndoing"] == 0, f"four undos did not empty the line: {result}"
     return result
 
 
