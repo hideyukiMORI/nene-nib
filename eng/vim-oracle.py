@@ -21,11 +21,18 @@ Two rules keep the fixture and the editor comparable, and the script refuses inp
 
 Two runs of `--regenerate` must produce the same file; that equality is the record in
 docs/quality/gate-proofs.md section 5. Python standard library only.
+
+The header also records the SHA-256 of the fixtures file it came from and how many fixtures that
+file held. CI has no Vim and cannot regenerate, so that one line is what CNF-010 in
+eng/conformance.py compares against tests/vim/fixtures.json to see that the two have not drifted
+apart (Issue #44). The digest covers the bytes of the file as they are stored; .gitattributes
+keeps them LF, so nothing is normalised here.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -108,7 +115,7 @@ def literal(value: str) -> str:
     return f'"{escaped}"'
 
 
-def header(records: list[dict], version: str) -> str:
+def header(records: list[dict], version: str, digest: str) -> str:
     rows = []
     for record in records:
         rows.append("    {%s, %s, %s, %s, %d, %d, %s},"
@@ -122,6 +129,7 @@ def header(records: list[dict], version: str) -> str:
             f"{BANNER}\n"
             f"// oracle: {VIM} — {version}\n"
             f"// 既定の設定（ADR 0012 の決定 8）: {settings}\n"
+            f"// fixtures.json: sha256 {digest} / {len(records)} fixtures\n"
             "#pragma once\n"
             "\n"
             '#include "VimFixture.hpp"\n'
@@ -145,7 +153,8 @@ def main() -> int:
     arguments = parser.parse_args()
     source = root / "tests/vim/fixtures.json"
     target = root / "tests/vim/VimFixtures.hpp"
-    fixtures = json.loads(source.read_text(encoding="utf-8"))
+    content = source.read_bytes()
+    fixtures = json.loads(content.decode("utf-8"))
     names = [fixture["name"] for fixture in fixtures]
     if len(set(names)) != len(names):
         raise ValueError("fixture names must be unique")
@@ -161,7 +170,8 @@ def main() -> int:
     finally:
         shutil.rmtree(work, ignore_errors=True)
     # 生成物も LF で書く（.gitattributes の eol=lf）。
-    target.write_text(header(records, version), encoding="utf-8", newline="\n")
+    target.write_text(header(records, version, hashlib.sha256(content).hexdigest()),
+                      encoding="utf-8", newline="\n")
     print(f"Vim oracle: {len(records)} fixture(s) from {version} written to {target}")
     return 0
 

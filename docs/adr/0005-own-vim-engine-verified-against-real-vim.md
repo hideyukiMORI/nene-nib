@@ -33,7 +33,7 @@ Phase 0 で oracle の実現性を実測した（[phase0-results.json](../qualit
 ## 強制
 
 - **active**（Issue #22・ADR 0012）: fixture の再生は単体テスト `nib_unit` が `tests/vim/VimFixtures.hpp`（`eng/vim-oracle.py` が本物の Vim から生成）の全項目を再生し、QLT-009 の分岐カバレッジの対象。oracle スクリプトの実行は
-  QLT-013 の環境依存の確認として `docs/quality/gate-proofs.md` 5-g に記録する（CI に Vim は無い。生成物と `fixtures.json` の一致の検査は ADR 0012 で planned）
+  QLT-013 の環境依存の確認として `docs/quality/gate-proofs.md` 5-g に記録する（CI に Vim は無い。生成物と `fixtures.json` の一致の検査は CNF-010 で active・Issue #44）
 - **不能**: 「Vim のコードを写していない」こと自体。レビューと、Vim の版を上げても fixture 以外に変更が要らないことで担保する
 
 ## 結果

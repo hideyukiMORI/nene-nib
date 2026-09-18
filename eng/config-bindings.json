@@ -11,5 +11,5 @@
   "eng/config-bindings.json": ["eng/conformance.py"],
   "src/app/NeNeNib.manifest.in": ["CMakeLists.txt"],
   "src/app/NeNeNibVersion.h.in": ["CMakeLists.txt"],
-  "tests/vim/fixtures.json": ["eng/vim-oracle.py"]
+  "tests/vim/fixtures.json": ["eng/vim-oracle.py", "eng/conformance.py"]
 }

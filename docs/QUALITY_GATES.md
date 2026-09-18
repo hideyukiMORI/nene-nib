@@ -188,6 +188,16 @@ Interlocked 系の組み込みや `volatile` は見ない。tests/ は対象外�
 - 対応する規則: CPP-013 / CPP-018
 - 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` がゲートで回る。ヘッダ名の字句だけを見る）
 
+### CNF-010 — 生成した fixture と `fixtures.json` の一致
+
+`eng/vim-oracle.py` が生成物 `tests/vim/VimFixtures.hpp` の先頭に書いた 1 行（`fixtures.json` の SHA-256 と fixture の本数）を、
+実際の `tests/vim/fixtures.json` のバイト列の SHA-256 と配列の長さと突き合わせる。記述が無い・SHA が違う・本数が違う、のいずれも CNF-010（[ADR 0012](adr/0012-vim-engine-first-slice-and-oracle-fixtures.md) の決定 7・Issue #44）。
+SHA はファイルのバイト列そのままで、改行は正規化しない（`.gitattributes` の `eol=lf` が正本）。Vim を要らないので CI でも回る。
+**期待値そのものが本物の Vim の答えかは見ない**（それは Vim のある機械での `--regenerate` と QLT-013 の記録）。
+
+- 対応する規則: QLT-013
+- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` がゲートで回る。正例は oracle の `header()` が書いた行をそのまま読ませる）
+
 🔴 **検出語は検査器のソースに直書きしない**（検査器が自分自身を違反として報告する。前例: xi-tools 初版で 7 件の自己検出）。
 🔴 **テストソースは検査対象から外す**（テストは意図的な違反を書く場所）。
 
@@ -257,6 +267,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-007 | active | eng/conformance.py / tests/conformance |
 | CNF-008 | active | eng/conformance.py / tests/conformance |
 | CNF-009 | active | eng/conformance.py / tests/conformance |
+| CNF-010 | active | eng/conformance.py / tests/conformance |
 
 ---
 
