@@ -520,5 +520,653 @@
     "text": "abc\n\ndef",
     "keys": "jj2b",
     "settings": []
+  },
+  {
+    "name": "d-with-a-count-on-both-sides",
+    "text": "alpha beta gamma delta",
+    "keys": "2d3w",
+    "settings": []
+  },
+  {
+    "name": "dd-with-a-count-on-both-sides",
+    "text": "a\nb\nc\nd\ne\nf\ng",
+    "keys": "2d3d",
+    "settings": []
+  },
+  {
+    "name": "dd-with-a-count-clamps-to-the-last-line",
+    "text": "a\nb\nc",
+    "keys": "5dd",
+    "settings": []
+  },
+  {
+    "name": "dd-with-a-count-clamps-from-the-middle",
+    "text": "a\nb\nc\nd\ne",
+    "keys": "j5dd",
+    "settings": []
+  },
+  {
+    "name": "dj-with-a-count-clamps-to-the-last-line",
+    "text": "a\nb\nc",
+    "keys": "5dj",
+    "settings": []
+  },
+  {
+    "name": "dk-with-a-count-clamps-to-the-first-line",
+    "text": "a\nb\nc",
+    "keys": "jj5dk",
+    "settings": []
+  },
+  {
+    "name": "cw-takes-the-word-like-ce",
+    "text": "alpha beta gamma",
+    "keys": "cwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cw-from-the-middle-of-a-word",
+    "text": "alpha beta gamma",
+    "keys": "llcwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cw-on-the-last-character-of-a-word",
+    "text": "alpha beta gamma",
+    "keys": "4lcwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cw-on-blanks-behaves-like-dw",
+    "text": "alpha  beta",
+    "keys": "5lcwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cw-with-a-count",
+    "text": "alpha beta gamma",
+    "keys": "2cwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cw-at-the-end-of-the-last-word",
+    "text": "alpha beta",
+    "keys": "$cwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "ce-goes-on-to-the-next-word",
+    "text": "alpha beta gamma",
+    "keys": "4lceX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "ce-empties-the-only-word",
+    "text": "alpha",
+    "keys": "ce<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cc-keeps-the-line",
+    "text": "one\ntwo\nthree",
+    "keys": "jccX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cc-drops-the-indent",
+    "text": "  one\ntwo",
+    "keys": "ccX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cc-on-the-only-line",
+    "text": "one",
+    "keys": "ccX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cc-with-a-count-leaves-one-line",
+    "text": "one\ntwo\nthree",
+    "keys": "2ccX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cj-changes-two-lines",
+    "text": "one\ntwo\nthree",
+    "keys": "cjX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "ck-changes-the-line-above",
+    "text": "one\ntwo\nthree",
+    "keys": "jjckX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "c-zero-at-the-line-start-only-inserts",
+    "text": "alpha beta",
+    "keys": "c0X<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cb-across-the-line-becomes-linewise",
+    "text": "  abc\ndef",
+    "keys": "jcbX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cb-inside-the-line",
+    "text": "alpha beta",
+    "keys": "wcbX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "cw-on-an-empty-line-becomes-linewise",
+    "text": "abc\n\ndef",
+    "keys": "jcwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "yy-does-not-move-the-caret",
+    "text": "alpha beta",
+    "keys": "llyy",
+    "settings": []
+  },
+  {
+    "name": "yw-keeps-the-caret",
+    "text": "alpha beta",
+    "keys": "yw",
+    "settings": []
+  },
+  {
+    "name": "yb-moves-to-the-range-start",
+    "text": "alpha beta",
+    "keys": "$yb",
+    "settings": []
+  },
+  {
+    "name": "y-dollar-keeps-the-caret",
+    "text": "alpha beta",
+    "keys": "ly$",
+    "settings": []
+  },
+  {
+    "name": "yj-yanks-two-lines",
+    "text": "one\ntwo\nthree",
+    "keys": "lyj",
+    "settings": []
+  },
+  {
+    "name": "yk-moves-up-to-the-first-line",
+    "text": "one\ntwo\nthree",
+    "keys": "jjlyk",
+    "settings": []
+  },
+  {
+    "name": "yk-clamps-the-column-on-a-short-line",
+    "text": "abcdefgh\nxy\nabcdefgh",
+    "keys": "jj5lyk",
+    "settings": []
+  },
+  {
+    "name": "yy-with-a-count-clamps-to-the-last-line",
+    "text": "a\nb\nc",
+    "keys": "5yy",
+    "settings": []
+  },
+  {
+    "name": "yy-with-a-count-on-the-last-line-does-nothing",
+    "text": "abc",
+    "keys": "2Y",
+    "settings": []
+  },
+  {
+    "name": "y-with-a-count-on-both-sides",
+    "text": "a\nb\nc\nd\ne",
+    "keys": "2y3y",
+    "settings": []
+  },
+  {
+    "name": "yw-on-an-empty-line-is-linewise",
+    "text": "abc\n\ndef",
+    "keys": "jyw",
+    "settings": []
+  },
+  {
+    "name": "yb-across-the-line-is-linewise",
+    "text": "abc\ndef",
+    "keys": "jyb",
+    "settings": []
+  },
+  {
+    "name": "capital-d-removes-to-the-line-end",
+    "text": "alpha beta",
+    "keys": "lD",
+    "settings": []
+  },
+  {
+    "name": "capital-d-on-an-empty-line-does-nothing",
+    "text": "\nabc",
+    "keys": "D",
+    "settings": []
+  },
+  {
+    "name": "capital-d-with-a-count-takes-the-next-line",
+    "text": "one\ntwo\nthree",
+    "keys": "j2D",
+    "settings": []
+  },
+  {
+    "name": "capital-d-with-a-count-on-the-last-line-does-nothing",
+    "text": "alpha beta",
+    "keys": "2D",
+    "settings": []
+  },
+  {
+    "name": "capital-c-changes-to-the-line-end",
+    "text": "alpha beta",
+    "keys": "lCx<Esc>",
+    "settings": []
+  },
+  {
+    "name": "capital-y-yanks-the-line",
+    "text": "one\ntwo",
+    "keys": "Y",
+    "settings": []
+  },
+  {
+    "name": "capital-y-with-a-count",
+    "text": "one\ntwo",
+    "keys": "2Y",
+    "settings": []
+  },
+  {
+    "name": "capital-y-on-the-last-line-with-a-count-does-nothing",
+    "text": "one\ntwo",
+    "keys": "j2Y",
+    "settings": []
+  },
+  {
+    "name": "p-puts-the-character-after-the-caret",
+    "text": "abcdef",
+    "keys": "ylp",
+    "settings": []
+  },
+  {
+    "name": "p-at-the-line-end",
+    "text": "abcdef",
+    "keys": "y2l$p",
+    "settings": []
+  },
+  {
+    "name": "p-with-a-count",
+    "text": "abcdef",
+    "keys": "y2l3p",
+    "settings": []
+  },
+  {
+    "name": "capital-p-puts-before-the-caret",
+    "text": "abcdef",
+    "keys": "yllP",
+    "settings": []
+  },
+  {
+    "name": "p-puts-the-line-below",
+    "text": "one\ntwo\nthree",
+    "keys": "yyjp",
+    "settings": []
+  },
+  {
+    "name": "capital-p-puts-the-line-above",
+    "text": "one\ntwo\nthree",
+    "keys": "yyjP",
+    "settings": []
+  },
+  {
+    "name": "p-of-a-line-goes-to-the-first-non-blank",
+    "text": "  one\ntwo",
+    "keys": "yyjp",
+    "settings": []
+  },
+  {
+    "name": "p-of-a-line-on-the-last-line",
+    "text": "one\ntwo",
+    "keys": "jyyp",
+    "settings": []
+  },
+  {
+    "name": "p-of-a-line-with-a-count",
+    "text": "one\ntwo\nthree",
+    "keys": "yy2p",
+    "settings": []
+  },
+  {
+    "name": "capital-p-of-a-line-on-the-first-line",
+    "text": "one\ntwo\nthree",
+    "keys": "yyP",
+    "settings": []
+  },
+  {
+    "name": "x-then-p-swaps-two-characters",
+    "text": "abc",
+    "keys": "xp",
+    "settings": []
+  },
+  {
+    "name": "x-then-capital-p-puts-it-back",
+    "text": "abc",
+    "keys": "xP",
+    "settings": []
+  },
+  {
+    "name": "x-at-the-line-end-then-p",
+    "text": "abc",
+    "keys": "$xp",
+    "settings": []
+  },
+  {
+    "name": "dd-then-p-moves-the-line-down",
+    "text": "abc\ndef",
+    "keys": "ddp",
+    "settings": []
+  },
+  {
+    "name": "dd-then-capital-p-puts-the-line-back",
+    "text": "abc\ndef",
+    "keys": "ddP",
+    "settings": []
+  },
+  {
+    "name": "dd-of-the-only-line-then-p",
+    "text": "one",
+    "keys": "ddp",
+    "settings": []
+  },
+  {
+    "name": "dd-then-p-with-a-count",
+    "text": "one\ntwo\nthree",
+    "keys": "dd2p",
+    "settings": []
+  },
+  {
+    "name": "dj-then-p",
+    "text": "one\ntwo\nthree",
+    "keys": "djp",
+    "settings": []
+  },
+  {
+    "name": "dw-then-capital-p-puts-the-word-back",
+    "text": "alpha beta",
+    "keys": "dwP",
+    "settings": []
+  },
+  {
+    "name": "dw-on-an-empty-line-then-p",
+    "text": "abc\n\ndef",
+    "keys": "jdwp",
+    "settings": []
+  },
+  {
+    "name": "y-dollar-then-p",
+    "text": "alpha",
+    "keys": "y$p",
+    "settings": []
+  },
+  {
+    "name": "yb-then-capital-p",
+    "text": "alpha beta",
+    "keys": "wybP",
+    "settings": []
+  },
+  {
+    "name": "japanese-p-after-a-code-point",
+    "text": "あいう",
+    "keys": "ylp",
+    "settings": []
+  },
+  {
+    "name": "japanese-p-of-a-line",
+    "text": "あいう",
+    "keys": "yyp",
+    "settings": []
+  },
+  {
+    "name": "e-goes-to-the-end-of-the-word",
+    "text": "alpha beta gamma",
+    "keys": "e",
+    "settings": []
+  },
+  {
+    "name": "e-twice-crosses-the-blank",
+    "text": "alpha beta gamma",
+    "keys": "ee",
+    "settings": []
+  },
+  {
+    "name": "e-stops-on-punctuation",
+    "text": "alpha, beta",
+    "keys": "ee",
+    "settings": []
+  },
+  {
+    "name": "e-crosses-the-line",
+    "text": "alpha\nbeta",
+    "keys": "$e",
+    "settings": []
+  },
+  {
+    "name": "e-with-a-count",
+    "text": "alpha beta",
+    "keys": "2e",
+    "settings": []
+  },
+  {
+    "name": "e-with-a-count-across-the-line",
+    "text": "alpha beta\ngamma",
+    "keys": "3e",
+    "settings": []
+  },
+  {
+    "name": "e-skips-an-empty-line",
+    "text": "alpha\n\nbeta",
+    "keys": "je",
+    "settings": []
+  },
+  {
+    "name": "japanese-e-stops-at-the-class-boundary",
+    "text": "あいう",
+    "keys": "e",
+    "settings": []
+  },
+  {
+    "name": "de-takes-the-word-inclusive",
+    "text": "alpha beta",
+    "keys": "de",
+    "settings": []
+  },
+  {
+    "name": "de-on-the-last-character-takes-one",
+    "text": "alpha beta",
+    "keys": "$de",
+    "settings": []
+  },
+  {
+    "name": "de-with-a-count",
+    "text": "alpha beta gamma",
+    "keys": "d2e",
+    "settings": []
+  },
+  {
+    "name": "japanese-de-takes-one-class",
+    "text": "漢字かな",
+    "keys": "de",
+    "settings": []
+  },
+  {
+    "name": "caret-goes-to-the-first-non-blank",
+    "text": "  alpha beta",
+    "keys": "$^",
+    "settings": []
+  },
+  {
+    "name": "caret-on-a-line-of-blanks",
+    "text": "  \nabc",
+    "keys": "^",
+    "settings": []
+  },
+  {
+    "name": "caret-on-an-empty-line",
+    "text": "\nabc",
+    "keys": "^",
+    "settings": []
+  },
+  {
+    "name": "d-caret-removes-back-to-the-first-non-blank",
+    "text": "  alpha beta",
+    "keys": "$d^",
+    "settings": []
+  },
+  {
+    "name": "d-caret-on-an-empty-line-does-nothing",
+    "text": "\nabc",
+    "keys": "d^",
+    "settings": []
+  },
+  {
+    "name": "home-goes-to-the-line-start",
+    "text": "  alpha",
+    "keys": "$<Home>",
+    "settings": []
+  },
+  {
+    "name": "end-goes-to-the-last-character",
+    "text": "  alpha",
+    "keys": "<End>",
+    "settings": []
+  },
+  {
+    "name": "d-with-end-removes-to-the-line-end",
+    "text": "  alpha",
+    "keys": "d<End>",
+    "settings": []
+  },
+  {
+    "name": "d-with-home-at-the-line-start-does-nothing",
+    "text": "abc",
+    "keys": "d<Home>",
+    "settings": []
+  },
+  {
+    "name": "c-with-home-removes-to-the-line-start",
+    "text": "  abc",
+    "keys": "$c<Home>X<Esc>",
+    "settings": []
+  },
+  {
+    "name": "end-in-insert-goes-past-the-last-character",
+    "text": "hello",
+    "keys": "lli<End>X<Esc>",
+    "settings": []
+  },
+  {
+    "name": "home-in-insert-goes-to-the-line-start",
+    "text": "hello",
+    "keys": "$i<Home>X<Esc>",
+    "settings": []
+  },
+  {
+    "name": "end-in-insert-on-an-empty-buffer",
+    "text": "",
+    "keys": "i<End>X<Esc>",
+    "settings": []
+  },
+  {
+    "name": "db-across-the-line-becomes-linewise",
+    "text": "abc\ndef",
+    "keys": "jdb",
+    "settings": []
+  },
+  {
+    "name": "db-across-the-line-keeps-the-indent",
+    "text": "  abc\ndef",
+    "keys": "jdb",
+    "settings": []
+  },
+  {
+    "name": "db-inside-the-line-is-characterwise",
+    "text": "alpha beta",
+    "keys": "wdb",
+    "settings": []
+  },
+  {
+    "name": "db-across-the-line-outside-the-indent-stays-characterwise",
+    "text": "abc def\nghi",
+    "keys": "jdb",
+    "settings": []
+  },
+  {
+    "name": "yb-across-the-line-outside-the-indent-stays-characterwise",
+    "text": "abc def\nghi",
+    "keys": "jyb",
+    "settings": []
+  },
+  {
+    "name": "de-across-the-line-with-text-after-it-stays-characterwise",
+    "text": "alpha\nbeta gamma",
+    "keys": "$de",
+    "settings": []
+  },
+  {
+    "name": "de-across-the-line-outside-the-indent-stays-characterwise",
+    "text": "abc def\nghi",
+    "keys": "$de",
+    "settings": []
+  },
+  {
+    "name": "undo-takes-back-a-change",
+    "text": "hello",
+    "keys": "cwbye<Esc>u",
+    "settings": []
+  },
+  {
+    "name": "undo-takes-back-an-insert-with-a-backspace",
+    "text": "hello",
+    "keys": "ia<BS>b<Esc>u",
+    "settings": []
+  },
+  {
+    "name": "japanese-cw-takes-one-class",
+    "text": "あいう、カタ",
+    "keys": "cwX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "c-then-a-key-that-is-not-a-motion-is-dropped",
+    "text": "abc",
+    "keys": "cx",
+    "settings": []
+  },
+  {
+    "name": "y-then-a-key-that-is-not-a-motion-is-dropped",
+    "text": "abc",
+    "keys": "yx",
+    "settings": []
+  },
+  {
+    "name": "d-then-another-operator-is-dropped",
+    "text": "abc",
+    "keys": "dy",
+    "settings": []
+  },
+  {
+    "name": "y-then-another-operator-is-dropped",
+    "text": "abc",
+    "keys": "yd",
+    "settings": []
+  },
+  {
+    "name": "c-then-another-operator-is-dropped",
+    "text": "abc\ndef",
+    "keys": "cdX<Esc>",
+    "settings": []
   }
 ]

@@ -80,13 +80,15 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
                                                     {VK_HOME, core::CaretMotion::document_start},
                                                     {VK_END, core::CaretMotion::document_end}}};
 // Vim モードの仮想キー → 特別な鍵。通常モードの表と入れ替えて引く（ADR 0012 の決定 4）。
-constexpr std::array<KeyVimSpecial, 7> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
+constexpr std::array<KeyVimSpecial, 9> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
                                                      {VK_RETURN, core::VimSpecialKey::enter},
                                                      {VK_BACK, core::VimSpecialKey::backspace},
                                                      {VK_LEFT, core::VimSpecialKey::arrow_left},
                                                      {VK_RIGHT, core::VimSpecialKey::arrow_right},
                                                      {VK_UP, core::VimSpecialKey::arrow_up},
-                                                     {VK_DOWN, core::VimSpecialKey::arrow_down}}};
+                                                     {VK_DOWN, core::VimSpecialKey::arrow_down},
+                                                     {VK_HOME, core::VimSpecialKey::home},
+                                                     {VK_END, core::VimSpecialKey::end}}};
 constexpr char32_t tab_character = U'\t';
 
 [[nodiscard]] bool held(int key) noexcept

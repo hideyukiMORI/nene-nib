@@ -2,7 +2,8 @@
 
 The fixtures in tests/vim/fixtures.json name a buffer, a key sequence and the extra settings that
 belong to that case. This script feeds each one to a headless Vim 9.1 and writes what came back
-(the buffer, the cursor as line and byte column, and the unnamed register) into a constexpr array.
+(the buffer, the cursor as line and byte column, and the unnamed register with its type) into a
+constexpr array.
 The unit tests replay that header; they never need Vim, so the gate runs on machines without it.
 
 Vim is started exactly the way the Phase 0 probe V2 did, from its full path, because `where vim`
@@ -44,7 +45,8 @@ VIM = Path(r"C:\Program Files\Vim\vim91\vim.exe")
 # INSERT の Backspace が挿入開始位置より前を消せず、利用者が触る「既定の Vim」と違う。
 DEFAULT_SETTINGS = ["set nocompatible", "set backspace=indent,eol,start"]
 # fixture の記法 → Vim の二重引用符つき文字列の記法。写すのはここ 1 か所だけ（C++ 側は別の 1 か所）。
-KEY_NAMES = {"<Esc>": "\\<Esc>", "<CR>": "\\<CR>", "<BS>": "\\<BS>", "<C-r>": "\\<C-r>"}
+KEY_NAMES = {"<Esc>": "\\<Esc>", "<CR>": "\\<CR>", "<BS>": "\\<BS>", "<C-r>": "\\<C-r>",
+             "<Home>": "\\<Home>", "<End>": "\\<End>"}
 BANNER = "// 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）"
 
 
@@ -63,7 +65,10 @@ def vim_keys(keys: str) -> str:
 
 
 def probe_script(settings: list[str], keys: str) -> str:
+    # getregtype は "v"（文字単位）/ "V"（行単位）/ 一度も使っていないレジスタでは空を返す
+    # (ADR 0015 decision 3). p の貼り方はその種類で決まるので、本文だけでは fixture が足りない。
     report = ("call writefile(getline(1, '$') + ['cursor=' . line('.') . ',' . col('.')]"
+              " + ['regtype=' . getregtype('\"')]"
               " + ['reg=' . getreg('\"')], 'out.txt')")
     # Ex モードで開いた直後のカーソルは先頭ではないので、毎回 (1, 1) に置いてから鍵を流す。
     lines = [*DEFAULT_SETTINGS, *settings, "call cursor(1, 1)",
@@ -71,7 +76,8 @@ def probe_script(settings: list[str], keys: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_vim(work: Path, text: str, keys: str, settings: list[str]) -> tuple[str, int, int, str]:
+def run_vim(work: Path, text: str, keys: str,
+            settings: list[str]) -> tuple[str, int, int, str, str]:
     (work / "input.txt").write_bytes(text.encode("utf-8"))
     (work / "probe.vim").write_text(probe_script(settings, keys), encoding="utf-8")
     output = work / "out.txt"
@@ -86,8 +92,9 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str]) -> tuple[str,
         lines.pop()
     # writefile は文字列の中の改行を NUL で書くので、レジスタの改行をここで戻す。
     register = lines.pop().removeprefix("reg=").replace("\x00", "\n")
+    kind = lines.pop().removeprefix("regtype=")
     line, column = (int(part) for part in lines.pop().removeprefix("cursor=").split(","))
-    return "\n".join(lines), line, column, register
+    return "\n".join(lines), line, column, register, kind
 
 
 def measure(work: Path, fixture: dict) -> dict:
@@ -101,9 +108,9 @@ def measure(work: Path, fixture: dict) -> dict:
     # NORMAL で終わっていれば、もう 1 つ Esc を足しても何も変わらない（上の注記）。
     if run_vim(work, text, keys + "<Esc>", settings) != measured:
         raise ValueError(f"{name}: the keys do not leave Vim in NORMAL mode; end them with <Esc>")
-    body, line, column, register = measured
+    body, line, column, register, kind = measured
     return {"name": name, "text": text, "keys": keys, "expected": body,
-            "line": line, "column": column, "register": register}
+            "line": line, "column": column, "register": register, "register_kind": kind}
 
 
 def literal(value: str) -> str:
@@ -118,10 +125,10 @@ def literal(value: str) -> str:
 def header(records: list[dict], version: str, digest: str) -> str:
     rows = []
     for record in records:
-        rows.append("    {%s, %s, %s, %s, %d, %d, %s},"
+        rows.append("    {%s, %s, %s, %s, %d, %d, %s, %s},"
                     % (literal(record["name"]), literal(record["text"]), literal(record["keys"]),
                        literal(record["expected"]), record["line"], record["column"],
-                       literal(record["register"])))
+                       literal(record["register"]), literal(record["register_kind"])))
     body = "\n".join(rows)
     settings = " / ".join(DEFAULT_SETTINGS)
     # 生成物にも clang-format は掛かるので、ファイルまるごと整形の対象から外す（QLT-004）。

@@ -14,6 +14,8 @@ enum class VimSpecialKey : std::uint8_t
     arrow_right,
     arrow_up,
     arrow_down,
-    control_r
+    control_r,
+    home,
+    end
 };
 } // namespace nenenib::core

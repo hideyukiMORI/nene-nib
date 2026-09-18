@@ -286,7 +286,8 @@ class RepositoryChecks(unittest.TestCase):
     # 正例は oracle の header() が書いた行をそのまま検査器に読ませる（書き方と読み方を機械で結ぶ）。
     def vim_records(self, count):
         return [{"name": f"fixture-{number}", "text": "ab", "keys": "x", "expected": "b",
-                 "line": 1, "column": 1, "register": "a"} for number in range(count)]
+                 "line": 1, "column": 1, "register": "a", "register_kind": "v"}
+                for number in range(count)]
 
     def seed_vim_fixtures(self, sources=1, recorded=None):
         source = [{key: record[key] for key in ("name", "text", "keys")} for record in self.vim_records(sources)]
