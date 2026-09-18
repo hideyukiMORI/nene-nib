@@ -5,7 +5,8 @@
 
 ## 現在の Issue
 
-次の焦点は **カラーテーマ C1**（core だけ・`docs/plans/2026-09-15-colorschemes.md`）と **Vim の 3 本目**（VISUAL・画面の高さが要る移動）。どちらも Issue はまだ切っていない。
+**Issue #53（Vim の 3 本目・VISUAL・ADR 0018）を実装中**（枝 `feat/53-vim-visual`・フルゲートはまだ）。並行して **カラーテーマ C1 / #52**（`docs/plans/2026-09-15-colorschemes.md`・ADR 0017）。
+VISUAL のあとに残るのは **画面の高さが要る移動**（PgUp / PgDn・`Ctrl-d/u`・`H M L`）と `Ctrl-v`・テキストオブジェクト。
 Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 / #19 / #22 / #24 / #28 / #30 / #31 / #36 / #43 / #44 / #47 は main へ統合済み（[日報 09-18](../reports/2026-09-18.md)）。main は `f3b132d`。
 
 ## 段階
@@ -26,10 +27,12 @@ Issue #1 / #3 / #5 / #7 / #9 / #11 / #13 / #14 / #16 / #19 / #22 / #24 / #28 / #
 ## 動かないもの
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
-Vim の VISUAL（`v V Ctrl-v`）/ 画面の高さが要る移動（PgUp / PgDn・`Ctrl-d/u`・`H M L`）/ テキストオブジェクト / `.` / 名前つきレジスタ / `> <` / `J r s S X` / 検索 / `:`・
+Vim の `Ctrl-v`（矩形）/ VISUAL の `p u ~ > < J r I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL /
+画面の高さが要る移動（PgUp / PgDn・`Ctrl-d/u`・`H M L`）/ テキストオブジェクト / `.` / 名前つきレジスタ / `J r s S` / 検索 / `:`・
 複数タブ・Ctrl+P・設定の保存・カラーテーマ（C1〜C4）・フォントサイズ・折り返し・横スクロール・ドラッグ選択。
 
 ## 次の 1 手
 
-**C1**（カラーテーマの模型と組み込み 9 テーマ・core だけ・コントラスト比のテスト。`Palette::title_bar` の列から）と **Vim の 3 本目**（VISUAL を「範囲を決める」の 1 本に選択として渡す・画面の高さを engine に渡す形を決めてから PgUp / PgDn と `H M L`）。順は引き継ぎ書。
+**#53 の PR**（VISUAL・ADR 0018。フルゲートと `eng/verify-window.py` を通してから Draft → Ready）と **C1 / #52**（カラーテーマの模型と組み込み 9 テーマ・core だけ・コントラスト比のテスト）。
+そのあとが **Vim の 4 本目**（画面の高さを engine に渡す形を決めてから PgUp / PgDn と `H M L`・`Ctrl-d/u`）。順は引き継ぎ書。
 CI の他の指紋の基準値は artifact `speed-records` がたまってから項を足す。

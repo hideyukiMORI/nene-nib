@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Offset.hpp"
+#include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
@@ -16,6 +16,8 @@ struct VimStep
 };
 
 // Vim エンジンの唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
-[[nodiscard]] VimStep vim_step(const VimState &state, const TextBuffer &text, Offset caret,
-                               VimKey key);
+// 選択をまるごと受け取る（ADR 0018 の決定 2）。NORMAL / INSERT は anchor == caret で caret しか
+// 読まず、VISUAL だけが anchor を範囲の片端として読む。
+[[nodiscard]] VimStep vim_step(const VimState &state, const TextBuffer &text,
+                               const Selection &selection, VimKey key);
 } // namespace nenenib::core

@@ -332,7 +332,8 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
                           ImmGetCompositionStringW(context, GCS_CURSORPOS, nullptr, 0));
 }
 
-// Vim の NORMAL でだけ IME を切る。通常モードの開閉には触らない（ADR 0014 の決定 5）。
+// Vim の INSERT でだけ IME を開けておく。通常モードの開閉には触らない（ADR 0014 の決定 5）。
+// VISUAL は鍵が命令なので NORMAL と同じく切る（ADR 0018 の決定 1）。
 [[nodiscard]] bool ime_blocked(core::EditMode mode, core::VimMode vim) noexcept
 {
     switch (mode)
@@ -347,6 +348,8 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
     case core::VimMode::insert:
         return false;
     case core::VimMode::normal:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
         return true;
     }
     std::unreachable();

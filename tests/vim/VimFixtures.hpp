@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 392af23f22fe2749a53d14b4f0fdcfd14740e0bba78605173d28b3ba86576f25 / 195 fixtures
+// fixtures.json: sha256 b24311a61e7e9d36bf7a3a33eb3f4577744b1bf9d583c2d4a71b5ba9076ddec4 / 256 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 195> vim_fixtures{{
+constexpr std::array<VimFixture, 256> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", ""},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", ""},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", ""},
@@ -207,6 +207,67 @@ constexpr std::array<VimFixture, 195> vim_fixtures{{
     {"d-then-another-operator-is-dropped", "abc", "dy", "abc", 1, 1, "", ""},
     {"y-then-another-operator-is-dropped", "abc", "yd", "abc", 1, 1, "", ""},
     {"c-then-another-operator-is-dropped", "abc\ndef", "cdX<Esc>", "abc\ndef", 1, 1, "", ""},
+    {"v-then-esc-changes-nothing", "alpha", "v<Esc>", "alpha", 1, 1, "", ""},
+    {"v-then-v-leaves-visual", "alpha", "vlvx", "apha", 1, 2, "l", "v"},
+    {"v-then-V-switches-to-linewise", "abc\ndef", "vVd", "def", 1, 1, "abc\n", "V"},
+    {"V-then-v-switches-to-characterwise", "abc\ndef", "Vvd", "bc\ndef", 1, 1, "a", "v"},
+    {"V-then-V-leaves-visual", "abc\ndef", "VVx", "bc\ndef", 1, 1, "a", "v"},
+    {"a-count-before-v-is-ignored", "abcdef", "3vd", "def", 1, 1, "abc", "v"},
+    {"V-then-esc-changes-nothing", "abc\ndef", "V<Esc>x", "bc\ndef", 1, 1, "a", "v"},
+    {"v-d-removes-one-character", "alpha", "vd", "lpha", 1, 1, "a", "v"},
+    {"v-x-is-the-same-as-d", "alpha", "vx", "lpha", 1, 1, "a", "v"},
+    {"v-l-d-removes-two-characters", "alpha", "vld", "pha", 1, 1, "al", "v"},
+    {"v-with-a-count-on-the-motion", "abcdefgh", "v3ld", "efgh", 1, 1, "abcd", "v"},
+    {"v-y-yanks-the-selection", "alpha", "vly", "alpha", 1, 1, "al", "v"},
+    {"v-c-changes-the-selection", "alpha", "vlcXY<Esc>", "XYpha", 1, 2, "al", "v"},
+    {"v-h-selects-backwards", "alpha", "$vhd", "alp", 1, 3, "ha", "v"},
+    {"v-dollar-d-takes-the-newline", "abc\ndef", "v$d", "def", 1, 1, "abc\n", "v"},
+    {"v-dollar-y-takes-the-newline", "abc\ndef", "v$y", "abc\ndef", 1, 1, "abc\n", "v"},
+    {"v-zero-d", "  abc", "$v0d", "", 1, 1, "  abc", "v"},
+    {"v-caret-d", "  abc", "$v^d", "  ", 1, 2, "abc", "v"},
+    {"v-w-d", "alpha beta", "vwd", "eta", 1, 1, "alpha b", "v"},
+    {"v-w-at-the-last-word", "alpha beta", "wvwd", "alpha ", 1, 6, "beta", "v"},
+    {"v-b-d", "alpha beta", "$vbd", "alpha ", 1, 6, "beta", "v"},
+    {"v-e-d", "alpha beta", "ved", " beta", 1, 1, "alpha", "v"},
+    {"v-home-d", "  abc", "$v<Home>d", "", 1, 1, "  abc", "v"},
+    {"v-end-d", "abc\ndef", "v<End>d", "def", 1, 1, "abc\n", "v"},
+    {"v-j-d-across-lines", "abc\ndef", "vjd", "ef", 1, 1, "abc\nd", "v"},
+    {"v-j-y-across-lines", "abc\ndef", "vjy", "abc\ndef", 1, 1, "abc\nd", "v"},
+    {"v-k-selects-upwards", "abc\ndef", "jlvkd", "af", 1, 2, "bc\nde", "v"},
+    {"v-with-a-count-of-lines", "a\nb\nc\nd", "v2jd", "\nd", 1, 1, "a\nb\nc", "v"},
+    {"v-j-keeps-the-wanted-column", "abcdef\nx\nabcdef", "3lvjjd", "abcef", 1, 4, "def\nx\nabcd", "v"},
+    {"v-on-an-empty-line-d", "abc\n\ndef", "jvd", "abc\ndef", 2, 1, "\n", "v"},
+    {"v-on-an-empty-line-y", "abc\n\ndef", "jvy", "abc\n\ndef", 2, 1, "\n", "v"},
+    {"v-japanese-d", "あいうえお", "vld", "うえお", 1, 1, "あい", "v"},
+    {"v-japanese-y", "あいうえお", "vlly", "あいうえお", 1, 1, "あいう", "v"},
+    {"v-c-across-lines", "abc\ndef", "vjcX<Esc>", "Xef", 1, 1, "abc\nd", "v"},
+    {"v-o-keeps-the-same-range", "abcdef", "3lvhhod", "aef", 1, 2, "bcd", "v"},
+    {"v-o-then-a-motion-moves-the-other-end", "abcdef", "3lvhhohd", "adef", 1, 2, "bc", "v"},
+    {"V-o-then-j-extends-the-other-end", "a\nb\nc\nd\ne", "2jVkojd", "a\ne", 2, 1, "b\nc\nd\n", "V"},
+    {"V-d-removes-the-line", "abc\ndef\nghi", "jVd", "abc\nghi", 2, 1, "def\n", "V"},
+    {"V-d-on-the-last-line", "abc\ndef", "jVd", "abc", 1, 1, "def\n", "V"},
+    {"V-j-d-removes-two-lines", "abc\ndef\nghi", "Vjd", "ghi", 1, 1, "abc\ndef\n", "V"},
+    {"V-with-a-count-of-lines", "a\nb\nc\nd", "V2jd", "d", 1, 1, "a\nb\nc\n", "V"},
+    {"V-y-yanks-a-line", "abc\ndef", "Vy", "abc\ndef", 1, 1, "abc\n", "V"},
+    {"V-j-y-yanks-two-lines", "abc\ndef", "Vjy", "abc\ndef", 1, 1, "abc\ndef\n", "V"},
+    {"V-c-changes-the-line", "abc\ndef", "VcX<Esc>", "X\ndef", 1, 1, "abc\n", "V"},
+    {"V-j-c-changes-two-lines", "abc\ndef\nghi", "VjcX<Esc>", "X\nghi", 1, 1, "abc\ndef\n", "V"},
+    {"V-dollar-keeps-the-line-range", "abc\ndef", "V$d", "def", 1, 1, "abc\n", "V"},
+    {"V-zero-keeps-the-line-range", "  abc\ndef", "V0d", "def", 1, 1, "  abc\n", "V"},
+    {"V-x-removes-the-line", "abc\ndef", "Vx", "def", 1, 1, "abc\n", "V"},
+    {"V-k-selects-upwards", "abc\ndef\nghi", "jjVkd", "abc", 1, 1, "def\nghi\n", "V"},
+    {"V-on-an-empty-line", "abc\n\ndef", "jVd", "abc\ndef", 2, 1, "\n", "V"},
+    {"V-indented-line-keeps-the-indent-in-the-register", "abc\n  def", "jVy", "abc\n  def", 2, 1, "  def\n", "V"},
+    {"V-y-then-p-puts-a-whole-line", "abc\ndef", "Vyp", "abc\nabc\ndef", 2, 1, "abc\n", "V"},
+    {"v-y-then-p-puts-characters", "abcdef", "vlyp", "aabbcdef", 1, 3, "ab", "v"},
+    {"v-d-then-undo", "alpha", "vlldu", "alpha", 1, 1, "alp", "v"},
+    {"V-d-then-undo", "abc\ndef", "Vdu", "abc\ndef", 1, 1, "abc\n", "V"},
+    {"v-l-reaches-the-line-end", "abc\ndef", "llvld", "abdef", 1, 3, "c\n", "v"},
+    {"v-l-with-a-big-count-stops-at-the-line-end", "abc\ndef", "v9ld", "def", 1, 1, "abc\n", "v"},
+    {"v-dollar-then-j-keeps-the-line-end", "abc\ndef", "v$jd", "", 1, 1, "abc\ndef", "v"},
+    {"v-e-at-the-last-word", "alpha beta", "wved", "alpha ", 1, 6, "beta", "v"},
+    {"a-count-before-V-selects-lines", "a\nb\nc\nd", "3Vd", "d", 1, 1, "a\nb\nc\n", "V"},
+    {"v-does-not-take-the-whole-line-like-d-does", "  abc\n   ", "vjd", "  ", 1, 1, "  abc\n ", "v"},
 }};
 } // namespace nenenib::tests
 // clang-format on

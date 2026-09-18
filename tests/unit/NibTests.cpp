@@ -85,13 +85,16 @@
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimMoveTo.hpp"
 #include "VimNewLine.hpp"
 #include "VimNoEffect.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
+#include "VimVisualRange.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
@@ -238,14 +241,17 @@ using nenenib::core::vim_next_word;
 using nenenib::core::vim_previous_word;
 using nenenib::core::vim_resting_caret;
 using nenenib::core::vim_step;
+using nenenib::core::vim_visual_range;
 using nenenib::core::vim_word_end;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
+using nenenib::core::VimMoveTo;
 using nenenib::core::VimNewLine;
 using nenenib::core::VimNoEffect;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
+using nenenib::core::VimSelect;
 using nenenib::core::VimSpecialKey;
 using nenenib::core::VimState;
 using nenenib::core::VimWordEndStop;
@@ -2272,8 +2278,8 @@ void verify_vim_fixture(const VimFixture &fixture)
 
 void verify_vim_fixtures()
 {
-    expect(nenenib::tests::vim_fixtures.size() >= 120,
-           "the oracle wrote at least the 120 fixtures the Issue asks for");
+    expect(nenenib::tests::vim_fixtures.size() >= 250,
+           "the oracle wrote at least the fixtures the Issues ask for (#22 / #43 / #53)");
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
         verify_vim_fixture(fixture);
@@ -2302,6 +2308,11 @@ void verify_vim_mode_labels()
            "the Vim mode does not show through in ordinary mode");
     expect(mode_label(EditMode::vim, VimMode::normal) == "NORMAL", "the NORMAL label");
     expect(mode_label(EditMode::vim, VimMode::insert) == "INSERT", "the INSERT label");
+    expect(mode_label(EditMode::vim, VimMode::visual) == "VISUAL", "the VISUAL label");
+    expect(mode_label(EditMode::vim, VimMode::visual_line) == "VISUAL LINE",
+           "the VISUAL LINE label");
+    expect(mode_label(EditMode::ordinary, VimMode::visual) == "通常",
+           "VISUAL does not show through in ordinary mode either");
 }
 
 void verify_vim_caret_shapes()
@@ -2319,6 +2330,42 @@ void verify_vim_caret_shapes()
     const auto ordinary = controller.apply(SelectEditMode{EditMode::ordinary});
     expect(ordinary.caret.shape == CaretShape::bar && ordinary.mode_label == "通常",
            "the ordinary mode takes its own caret and label back");
+}
+
+// VISUAL では描く選択と Ctrl+C / Ctrl+X の範囲が vim_visual_range と同じ 1 本
+// （ADR 0018 の決定 5 の強制）。fixture は本文とレジスタしか見ないので、ここで面を測る。
+void verify_vim_visual_selection_and_clipboard()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("abc\ndef")});
+    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, "vl");
+    const auto characters = controller.frame();
+    expect(characters.mode_label == "VISUAL" && characters.caret.shape == CaretShape::block,
+           "VISUAL names itself on the status bar and keeps the block caret");
+    expect(characters.lines.at(0).selection ==
+               nenenib::core::SelectionSpan{SelectionPresence::present, Column{1}, Column{3}},
+           "the drawn selection takes the character under the far end");
+    applied(controller, ClipboardAction{ClipboardOperation::copy});
+    expect(editing.clipboard().read().value() == "ab", "Ctrl+C copies that same range");
+    vim_replay(controller, "V");
+    const auto lines = controller.frame();
+    expect(lines.mode_label == "VISUAL LINE", "V switches the kind without losing the selection");
+    expect(lines.lines.at(0).selection ==
+               nenenib::core::SelectionSpan{SelectionPresence::present, Column{1}, Column{4}},
+           "the linewise selection covers the whole line");
+    applied(controller, ClipboardAction{ClipboardOperation::copy});
+    expect(editing.clipboard().read().value() == "abc", "and Ctrl+C takes the whole line");
+    vim_replay(controller, "<Esc>");
+    const auto back = controller.frame();
+    expect(back.mode_label == "NORMAL", "Esc goes back to NORMAL");
+    expect(back.lines.at(0).selection.presence == SelectionPresence::absent,
+           "and nothing is drawn as selected any more");
+    expect(back.caret.position == TextPosition{LineNumber{1}, Column{2}},
+           "the caret stays where VISUAL left it");
 }
 
 // Vim に入るときのキャレットは文字の上へ寄る。通常へ戻ると保留中の回数とオペレータは消える。
@@ -2541,17 +2588,67 @@ void verify_vim_step_edges()
     VimState inserting =
         nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
     inserting.mode = VimMode::insert;
-    const auto newline = vim_step(inserting, buffer, Offset{1}, VimKey{VimCharacter{U'\n'}});
+    const auto newline =
+        vim_step(inserting, buffer, collapsed_at(Offset{1}), VimKey{VimCharacter{U'\n'}});
     expect(std::holds_alternative<VimNewLine>(newline.effect),
            "a newline typed as a character becomes the buffer's own line ending");
-    const auto at_start = vim_step(inserting, buffer, Offset{0}, VimKey{VimSpecialKey::backspace});
+    const auto at_start =
+        vim_step(inserting, buffer, collapsed_at(Offset{0}), VimKey{VimSpecialKey::backspace});
     expect(std::holds_alternative<VimNoEffect>(at_start.effect),
            "Backspace at the start of the buffer does nothing");
     const VimState resting =
         nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
-    const auto unbound = vim_step(resting, buffer, Offset{0}, VimKey{VimCharacter{U'z'}});
+    const auto unbound =
+        vim_step(resting, buffer, collapsed_at(Offset{0}), VimKey{VimCharacter{U'z'}});
     expect(std::holds_alternative<VimNoEffect>(unbound.effect), "an unbound key does nothing");
     expect(unbound.next.mode == VimMode::normal, "and it leaves NORMAL alone");
+}
+
+// VISUAL の入口は選択そのもの（ADR 0018 の決定 2）。NORMAL / INSERT は anchor を読まない。
+void verify_vim_visual_step_edges()
+{
+    const auto text = TextBuffer::from_utf8("abc\ndef");
+    expect(text.has_value(), "the two line buffer parses");
+    const auto &buffer = text.value();
+    const VimState resting =
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
+    const auto entered =
+        vim_step(resting, buffer, collapsed_at(Offset{1}), VimKey{VimCharacter{U'v'}});
+    expect(entered.next.mode == VimMode::visual, "v enters VISUAL");
+    expect(std::get<VimSelect>(entered.effect).selection == Selection{Offset{1}, Offset{1}},
+           "and anchors the selection where the caret is");
+    VimState visual = resting;
+    visual.mode = VimMode::visual;
+    const Selection selection{Offset{1}, Offset{2}};
+    // VISUAL で効かない鍵は選択もモードも動かさない（決定 7）。
+    for (const VimKey key : {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'u'}},
+                             VimKey{VimCharacter{U'D'}}, VimKey{VimCharacter{U'A'}},
+                             VimKey{VimSpecialKey::enter}, VimKey{VimSpecialKey::backspace},
+                             VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
+    {
+        const auto step = vim_step(visual, buffer, selection, key);
+        expect(std::holds_alternative<VimNoEffect>(step.effect),
+               "a key outside this slice does nothing in VISUAL");
+        expect(step.next.mode == VimMode::visual, "and stays in VISUAL");
+    }
+    const auto escaped = vim_step(visual, buffer, selection, VimKey{VimSpecialKey::escape});
+    expect(std::get<VimMoveTo>(escaped.effect).caret == Offset{2}, "Esc leaves the caret alone");
+    expect(escaped.next.mode == VimMode::normal, "and goes back to NORMAL");
+    // 表示の範囲と操作の範囲は同じ 1 本（決定 5 / ADR 0018 の強制）。
+    const auto characters = vim_visual_range(buffer, selection, VimMode::visual);
+    expect(characters.range == OffsetRange{Offset{1}, Offset{3}} &&
+               characters.kind == VimRegisterKind::characters,
+           "the charwise range takes the character under the far end");
+    const auto lines = vim_visual_range(buffer, selection, VimMode::visual_line);
+    expect(lines.range == OffsetRange{Offset{0}, Offset{3}} && lines.kind == VimRegisterKind::lines,
+           "the linewise range takes whole lines");
+    const auto across =
+        vim_visual_range(buffer, Selection{Offset{1}, Offset{5}}, VimMode::visual_line);
+    expect(across.range == OffsetRange{Offset{0}, Offset{7}}, "and spans both lines");
+    const auto none = vim_visual_range(buffer, collapsed_at(Offset{2}), VimMode::normal);
+    expect(is_empty(none.range), "NORMAL has no visual range");
+    const auto inserting_none = vim_visual_range(buffer, collapsed_at(Offset{2}), VimMode::insert);
+    expect(is_empty(inserting_none.range), "and neither has INSERT");
 }
 
 // Vim モードではクリックと Ctrl+矢印のあとも文字の上へ寄る（Vim も行末より右のクリックは
@@ -2779,9 +2876,11 @@ void verify_vim_engine()
     verify_vim_word_motions();
     verify_vim_caret_rules();
     verify_vim_step_edges();
+    verify_vim_visual_step_edges();
     verify_vim_key_notation();
     verify_vim_mode_labels();
     verify_vim_caret_shapes();
+    verify_vim_visual_selection_and_clipboard();
     verify_vim_mode_entry();
     verify_vim_caret_placement();
     verify_vim_undo_boundaries();

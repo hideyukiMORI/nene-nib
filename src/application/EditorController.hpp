@@ -66,6 +66,7 @@ class EditorController final
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
     void perform(const core::VimNoEffect &);
     void perform(const core::VimMoveTo &effect);
+    void perform(const core::VimSelect &effect);
     void perform(const core::VimRemoveRange &effect);
     void perform(const core::VimRemoveLines &effect);
     void perform(const core::VimInsertString &effect);
@@ -88,6 +89,8 @@ class EditorController final
     void copy_selection();
     void cut_selection();
     void paste_clipboard();
+    // 描く選択と Ctrl+C / Ctrl+X が覆う本文は同じ 1 本（ADR 0018 の決定 5）。
+    [[nodiscard]] core::OffsetRange highlighted_range() const;
     [[nodiscard]] std::vector<LineView> visible_lines() const;
     [[nodiscard]] std::optional<CompositionView> composed() const;
     // Vim の NORMAL では IME を切ってあるので変換は来ないはずだが、来たら捨てる（決定 4）。

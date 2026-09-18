@@ -1168,5 +1168,371 @@
     "text": "abc\ndef",
     "keys": "cdX<Esc>",
     "settings": []
+  },
+  {
+    "name": "v-then-esc-changes-nothing",
+    "text": "alpha",
+    "keys": "v<Esc>",
+    "settings": []
+  },
+  {
+    "name": "v-then-v-leaves-visual",
+    "text": "alpha",
+    "keys": "vlvx",
+    "settings": []
+  },
+  {
+    "name": "v-then-V-switches-to-linewise",
+    "text": "abc\ndef",
+    "keys": "vVd",
+    "settings": []
+  },
+  {
+    "name": "V-then-v-switches-to-characterwise",
+    "text": "abc\ndef",
+    "keys": "Vvd",
+    "settings": []
+  },
+  {
+    "name": "V-then-V-leaves-visual",
+    "text": "abc\ndef",
+    "keys": "VVx",
+    "settings": []
+  },
+  {
+    "name": "a-count-before-v-is-ignored",
+    "text": "abcdef",
+    "keys": "3vd",
+    "settings": []
+  },
+  {
+    "name": "V-then-esc-changes-nothing",
+    "text": "abc\ndef",
+    "keys": "V<Esc>x",
+    "settings": []
+  },
+  {
+    "name": "v-d-removes-one-character",
+    "text": "alpha",
+    "keys": "vd",
+    "settings": []
+  },
+  {
+    "name": "v-x-is-the-same-as-d",
+    "text": "alpha",
+    "keys": "vx",
+    "settings": []
+  },
+  {
+    "name": "v-l-d-removes-two-characters",
+    "text": "alpha",
+    "keys": "vld",
+    "settings": []
+  },
+  {
+    "name": "v-with-a-count-on-the-motion",
+    "text": "abcdefgh",
+    "keys": "v3ld",
+    "settings": []
+  },
+  {
+    "name": "v-y-yanks-the-selection",
+    "text": "alpha",
+    "keys": "vly",
+    "settings": []
+  },
+  {
+    "name": "v-c-changes-the-selection",
+    "text": "alpha",
+    "keys": "vlcXY<Esc>",
+    "settings": []
+  },
+  {
+    "name": "v-h-selects-backwards",
+    "text": "alpha",
+    "keys": "$vhd",
+    "settings": []
+  },
+  {
+    "name": "v-dollar-d-takes-the-newline",
+    "text": "abc\ndef",
+    "keys": "v$d",
+    "settings": []
+  },
+  {
+    "name": "v-dollar-y-takes-the-newline",
+    "text": "abc\ndef",
+    "keys": "v$y",
+    "settings": []
+  },
+  {
+    "name": "v-zero-d",
+    "text": "  abc",
+    "keys": "$v0d",
+    "settings": []
+  },
+  {
+    "name": "v-caret-d",
+    "text": "  abc",
+    "keys": "$v^d",
+    "settings": []
+  },
+  {
+    "name": "v-w-d",
+    "text": "alpha beta",
+    "keys": "vwd",
+    "settings": []
+  },
+  {
+    "name": "v-w-at-the-last-word",
+    "text": "alpha beta",
+    "keys": "wvwd",
+    "settings": []
+  },
+  {
+    "name": "v-b-d",
+    "text": "alpha beta",
+    "keys": "$vbd",
+    "settings": []
+  },
+  {
+    "name": "v-e-d",
+    "text": "alpha beta",
+    "keys": "ved",
+    "settings": []
+  },
+  {
+    "name": "v-home-d",
+    "text": "  abc",
+    "keys": "$v<Home>d",
+    "settings": []
+  },
+  {
+    "name": "v-end-d",
+    "text": "abc\ndef",
+    "keys": "v<End>d",
+    "settings": []
+  },
+  {
+    "name": "v-j-d-across-lines",
+    "text": "abc\ndef",
+    "keys": "vjd",
+    "settings": []
+  },
+  {
+    "name": "v-j-y-across-lines",
+    "text": "abc\ndef",
+    "keys": "vjy",
+    "settings": []
+  },
+  {
+    "name": "v-k-selects-upwards",
+    "text": "abc\ndef",
+    "keys": "jlvkd",
+    "settings": []
+  },
+  {
+    "name": "v-with-a-count-of-lines",
+    "text": "a\nb\nc\nd",
+    "keys": "v2jd",
+    "settings": []
+  },
+  {
+    "name": "v-j-keeps-the-wanted-column",
+    "text": "abcdef\nx\nabcdef",
+    "keys": "3lvjjd",
+    "settings": []
+  },
+  {
+    "name": "v-on-an-empty-line-d",
+    "text": "abc\n\ndef",
+    "keys": "jvd",
+    "settings": []
+  },
+  {
+    "name": "v-on-an-empty-line-y",
+    "text": "abc\n\ndef",
+    "keys": "jvy",
+    "settings": []
+  },
+  {
+    "name": "v-japanese-d",
+    "text": "あいうえお",
+    "keys": "vld",
+    "settings": []
+  },
+  {
+    "name": "v-japanese-y",
+    "text": "あいうえお",
+    "keys": "vlly",
+    "settings": []
+  },
+  {
+    "name": "v-c-across-lines",
+    "text": "abc\ndef",
+    "keys": "vjcX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "v-o-keeps-the-same-range",
+    "text": "abcdef",
+    "keys": "3lvhhod",
+    "settings": []
+  },
+  {
+    "name": "v-o-then-a-motion-moves-the-other-end",
+    "text": "abcdef",
+    "keys": "3lvhhohd",
+    "settings": []
+  },
+  {
+    "name": "V-o-then-j-extends-the-other-end",
+    "text": "a\nb\nc\nd\ne",
+    "keys": "2jVkojd",
+    "settings": []
+  },
+  {
+    "name": "V-d-removes-the-line",
+    "text": "abc\ndef\nghi",
+    "keys": "jVd",
+    "settings": []
+  },
+  {
+    "name": "V-d-on-the-last-line",
+    "text": "abc\ndef",
+    "keys": "jVd",
+    "settings": []
+  },
+  {
+    "name": "V-j-d-removes-two-lines",
+    "text": "abc\ndef\nghi",
+    "keys": "Vjd",
+    "settings": []
+  },
+  {
+    "name": "V-with-a-count-of-lines",
+    "text": "a\nb\nc\nd",
+    "keys": "V2jd",
+    "settings": []
+  },
+  {
+    "name": "V-y-yanks-a-line",
+    "text": "abc\ndef",
+    "keys": "Vy",
+    "settings": []
+  },
+  {
+    "name": "V-j-y-yanks-two-lines",
+    "text": "abc\ndef",
+    "keys": "Vjy",
+    "settings": []
+  },
+  {
+    "name": "V-c-changes-the-line",
+    "text": "abc\ndef",
+    "keys": "VcX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "V-j-c-changes-two-lines",
+    "text": "abc\ndef\nghi",
+    "keys": "VjcX<Esc>",
+    "settings": []
+  },
+  {
+    "name": "V-dollar-keeps-the-line-range",
+    "text": "abc\ndef",
+    "keys": "V$d",
+    "settings": []
+  },
+  {
+    "name": "V-zero-keeps-the-line-range",
+    "text": "  abc\ndef",
+    "keys": "V0d",
+    "settings": []
+  },
+  {
+    "name": "V-x-removes-the-line",
+    "text": "abc\ndef",
+    "keys": "Vx",
+    "settings": []
+  },
+  {
+    "name": "V-k-selects-upwards",
+    "text": "abc\ndef\nghi",
+    "keys": "jjVkd",
+    "settings": []
+  },
+  {
+    "name": "V-on-an-empty-line",
+    "text": "abc\n\ndef",
+    "keys": "jVd",
+    "settings": []
+  },
+  {
+    "name": "V-indented-line-keeps-the-indent-in-the-register",
+    "text": "abc\n  def",
+    "keys": "jVy",
+    "settings": []
+  },
+  {
+    "name": "V-y-then-p-puts-a-whole-line",
+    "text": "abc\ndef",
+    "keys": "Vyp",
+    "settings": []
+  },
+  {
+    "name": "v-y-then-p-puts-characters",
+    "text": "abcdef",
+    "keys": "vlyp",
+    "settings": []
+  },
+  {
+    "name": "v-d-then-undo",
+    "text": "alpha",
+    "keys": "vlldu",
+    "settings": []
+  },
+  {
+    "name": "V-d-then-undo",
+    "text": "abc\ndef",
+    "keys": "Vdu",
+    "settings": []
+  },
+  {
+    "name": "v-l-reaches-the-line-end",
+    "text": "abc\ndef",
+    "keys": "llvld",
+    "settings": []
+  },
+  {
+    "name": "v-l-with-a-big-count-stops-at-the-line-end",
+    "text": "abc\ndef",
+    "keys": "v9ld",
+    "settings": []
+  },
+  {
+    "name": "v-dollar-then-j-keeps-the-line-end",
+    "text": "abc\ndef",
+    "keys": "v$jd",
+    "settings": []
+  },
+  {
+    "name": "v-e-at-the-last-word",
+    "text": "alpha beta",
+    "keys": "wved",
+    "settings": []
+  },
+  {
+    "name": "a-count-before-V-selects-lines",
+    "text": "a\nb\nc\nd",
+    "keys": "3Vd",
+    "settings": []
+  },
+  {
+    "name": "v-does-not-take-the-whole-line-like-d-does",
+    "text": "  abc\n   ",
+    "keys": "vjd",
+    "settings": []
   }
 ]
