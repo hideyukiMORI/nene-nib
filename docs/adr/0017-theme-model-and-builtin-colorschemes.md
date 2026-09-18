@@ -17,7 +17,7 @@
 
 **テーマは core の値型 `Theme{name, appearance, ui: Palette, body: SyntaxPalette, source: ThemeSource}`。有名テーマの UI トークンは整数演算だけの `constexpr` 純関数 `derive_ui` が本文の 3 色（背景・前景・アクセント）と明暗から導き、必要なテーマだけ個別に上書きする。組み込み 9 テーマと名前の表は `BuiltinTheme` の 1 か所。コントラスト比は tests が要求する。**
 
-1. **`SyntaxPalette`**（core・公開 aggregate・`RgbColor` 16 個）: `foreground` `background` `cursor` `selection` `current_line` `line_number` `comment` `keyword` `string` `number` `type` `function` `constant` `operator` `error` `warning`。
+1. **`SyntaxPalette`**（core・公開 aggregate・`RgbColor` 16 個）: `foreground` `background` `cursor` `selection` `current_line` `line_number` `comment` `keyword` `string` `number` `type` `function` `constant` `operators`（`operator` は C++ の予約語）`error` `warning`。
    base16 の 16 色を Nib の役割名で持つ。ハイライトの縦切りがこれを本文に塗る（この Issue では塗らない）
 2. **`ThemeSource`**（`std::string_view` の `author` / `license` / `url`）。色の値そのものは著作物ではないが、名前と配色の出典を表に残し、テーマの実装コード（Vim script・VS Code の JSON）は写さない
 3. **`Theme`**（`name: std::string_view`・`appearance: Appearance`・`ui: Palette`・`body: SyntaxPalette`・`source: ThemeSource`）。名前は Vim 流の小文字ハイフン（`solarized-dark`）
@@ -62,6 +62,13 @@
 得られるもの: テーマの模型が 1 つに固まり、C2（名前を保存）・C3（名前で選ぶ・補完）・C4（ファイルから同じ `Theme` を作る）・ハイライト（`SyntaxPalette` を塗る）が表と経路を足すだけで増える。
 失うもの: `derive_ui` は sRGB の整数補間なので、知覚的に均一ではない（同じ百分率でも明るいテーマと暗いテーマで見えの差が違う）。値の妥当性は C3 の絵で hide が見る。`Theme` の `name` / `source` は `string_view` なので、C4 のファイル由来のテーマは所有する文字列を別に持つ形が要る（C4 の ADR で）。
 正直に: 有名テーマの色の値は各出典から写すが、出典の版（Dracula の spec の改訂・One Dark の Atom 版と VS Code 版）で値が違うことがある。表の `url` が指す版を正とし、違う版の値を「間違い」とは言わない。
+
+2026-09-19 に実装（Issue #52）で分かったこと:
+
+- **`solarized-light` の本文の前景は base01（#586E75・4.99:1）**。Solarized の usage 表の body text は base00（#657B83）だが、背景 base3 との比は 4.13:1 で決定 7 の 4.5 を満たさない。ゲートを弱めず、同じ出典の「optional emphasized content」の色を採った。`solarized-dark` の base0 / base03 は 4.75:1 で通る
+- 出典に無い役割は同じテーマの近い色で埋めた（Monokai の行番号・operator・warning、Dracula の cursor・current line・行番号・warning、One Dark と Night Owl の `current_line` は α 付きの色を背景に重ねた計算値）。採用案 2 テーマの本文 16 トークンは**新しい値**（Tango の色表から役割に割り当て。`operators` の水色だけ端末の配色由来）で、hide の目を通していない。C3 の絵で見る
+- `derive_ui` の近似と採用案の差は `title_bar` で 2 / 5（±8 の検査内）だが、**`ime`（44 / 45）と `search`（21）は採用案が独立に決めた色で、規則の方向から違う**。C3 の絵を見る段で `ime` と `search` の規則を見直す
+- clang-tidy の `bugprone-unchecked-optional-access` は `has_value()` の直後でない `.value()` も落とす（CPP-004 の書き方に 1 行足す価値がある・別 Issue）
 
 ## 却下した選択肢
 
