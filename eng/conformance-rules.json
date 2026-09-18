@@ -6,6 +6,7 @@
   "lineSuppressionToken": "NOLINTNEXTLINE",
   "lineSuppressionPattern": "NOLINTNEXTLINE\\([A-Za-z0-9,.-]+\\)",
   "taskMarkerPattern": "\\b(?:TODO|FIXME)\\b",
+  "fixtureDigestPattern": "^// fixtures\\.json: sha256 ([0-9a-f]{64}) / ([0-9]+) fixtures$",
   "forbiddenFileWords": ["baseline", "suppressions"],
   "disabledGatePatterns": ["(?i)/W[0-3](?![0-9])", "(?i)/WX-", "(?i)/wd[0-9]+", "(?<![\\w-])-Wno-error(?:=|\\b)", "(?<![\\w-])-w(?![\\w-])", "(?i)\\bignoreFailures\\s*[:=]\\s*true", "(?i)continue-on-error\\s*:\\s*true", "(?i)--exit-zero\\b", "(?i)--line-filter", "(?i)--exclude-header-filter", "(?i)WarningsAsErrors:\\s*['\"]{2}"],
   "nondeterministicNames": ["system_clock", "steady_clock", "high_resolution_clock", "random_device", "rand", "rand_s", "srand", "getenv", "getenv_s", "_wgetenv", "_dupenv_s", "time", "timespec_get", "clock", "setlocale", "locale", "_Xtime_get_ticks", "_Query_perf_counter", "GetLocalTime", "GetSystemTime", "GetSystemTimeAsFileTime", "GetSystemTimePreciseAsFileTime", "GetTickCount", "GetTickCount64", "QueryPerformanceCounter", "GetEnvironmentVariableA", "GetEnvironmentVariableW", "BCryptGenRandom", "GetCursorPos"],

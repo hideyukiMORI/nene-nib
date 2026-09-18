@@ -49,7 +49,8 @@ Phase 0 の V2 で、Vim 9.1 を `-u NONE -i NONE -N -n -es -S probe.vim` で走
 - ARC-007 / CPP-013: `src/core` から時刻・OS のシンボルが出ない — **active**（既存の `eng/symbols.py`）
 - CPP-002: `VimMode` / `Special` / `VimOperator` の `switch` に `default` を書かない・`std::visit` の写し先を欠かさない — **active**（既存の clang-tidy とコンパイル）
 - fixture の再生が無名レジスタと Vim のモードを突き合わせるため、`EditorController` に読み出し専用の `vim_state()` が 1 つある（状態を変える口は足していない）
-- 「生成物 `VimFixtures.hpp` が `fixtures.json` と一致しているか」— **planned**。Vim の無い CI では検査できない。生成物の先頭に fixtures.json の SHA-256 を書き、単体テストが json を読まずに突き合わせる形は次の Vim の Issue で（Python 側だけで検査できる）
+- 「生成物 `VimFixtures.hpp` が `fixtures.json` と一致しているか」— **active**（2026-09-18・Issue #44）。`eng/vim-oracle.py` が生成物の先頭に `fixtures.json` の SHA-256 と本数を 1 行で書き、
+  `eng/conformance.py` の CNF-010 がその行と実際の `fixtures.json` のバイト列・配列の長さを突き合わせる。Vim を要らないので CI でも落ちる。突き合わせるのは「生成物がこの json から作られたか」だけで、期待値が本物の Vim の答えかは Vim のある機械での `--regenerate`（QLT-013）が見る
 
 ## 結果
 
@@ -62,7 +63,7 @@ Phase 0 の V2 で、Vim 9.1 を `-u NONE -i NONE -N -n -es -S probe.vim` で走
 - `:normal!` は失敗した鍵のあとの鍵を捨てることがある（`hx` は `h` が行頭で失敗して `x` が効かない）。規則が読み切れないので fixture では失敗する鍵を列の最後にだけ置く。エンジンは「失敗した鍵は何もしない・次の鍵は効く」
 - **回数の掛け算**（`2d3w` は Vim では 6 語）は `VimState` の `count` が 1 つなので 23 語になる。Issue の範囲（`3j` `2w` `2dw`）は一致。オペレータ側の回数は次の縦切りで足す
 - 語の種類の表は Vim の `utf_class_tab` のうちラテン補助・一般句読点・CJK 記号・ひらがな・カタカナ・漢字・全角記号だけで、それ以外の非 ASCII は「語の文字」に落ちる。ハングル・絵文字は未測
-- oracle は Vim 9.1（2024-01-02）に依存し、版を上げると fixture の差分として現れる。CI に Vim は無いので `fixtures.json` と生成物の食い違いは CI では見えない（上の planned）
+- oracle は Vim 9.1（2024-01-02）に依存し、版を上げると fixture の差分として現れる。CI に Vim は無いので、CI が見られるのは「生成物がいまの `fixtures.json` から作られたか」（CNF-010）までで、期待値が本物の Vim の答えかは Vim のある機械でしか測れない
 
 ## 却下した選択肢
 

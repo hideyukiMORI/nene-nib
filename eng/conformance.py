@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import re
 import subprocess
@@ -289,6 +290,33 @@ def version_metadata_checks(root: Path) -> list[Finding]:
     return findings
 
 
+def fixture_digest_checks(root: Path, rules: dict) -> list[Finding]:
+    """CNF-010: the generated Vim fixtures name the tests/vim/fixtures.json they were made from.
+
+    CI has no Vim and cannot regenerate the header, so the single line the oracle writes
+    (`eng/vim-oracle.py`) is all there is to compare: the SHA-256 of the source bytes and how many
+    fixtures that source holds (Issue #44). Whether the recorded expectations are what the real Vim
+    answers is the oracle's job on a machine that has Vim, not this check's.
+    """
+    name = "tests/vim/VimFixtures.hpp"
+    source = root / "tests/vim/fixtures.json"
+    generated = root / name
+    if not source.is_file() or not generated.is_file():
+        return [Finding("CNF-010", name, "the generated fixtures or tests/vim/fixtures.json is missing")]
+    match = re.search(rules["fixtureDigestPattern"], generated.read_text(encoding="utf-8"), re.M)
+    if not match:
+        return [Finding("CNF-010", name, "no digest of tests/vim/fixtures.json is recorded; regenerate")]
+    content = source.read_bytes()
+    digest = hashlib.sha256(content).hexdigest()
+    count = len(json.loads(content.decode("utf-8")))
+    findings = []
+    if match[1] != digest:
+        findings.append(Finding("CNF-010", name, f"recorded digest {match[1]} is not {digest}; regenerate"))
+    if int(match[2]) != count:
+        findings.append(Finding("CNF-010", name, f"recorded fixture count {match[2]} is not {count}; regenerate"))
+    return findings
+
+
 def architecture_checks(root: Path, paths: list[Path], build_dir: Path | None) -> list[Finding]:
     findings = []
     graph = json.loads((root / "eng/architecture.json").read_text(encoding="utf-8"))
@@ -364,6 +392,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(document_checks(root, paths, rules))
     findings.extend(configuration_checks(root, paths, rules))
     findings.extend(version_metadata_checks(root))
+    findings.extend(fixture_digest_checks(root, rules))
     findings.extend(architecture_checks(root, paths, build_dir))
     for path in paths:
         if path.suffix in rules["cppExtensions"]:

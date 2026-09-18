@@ -1,6 +1,7 @@
 """Positive and negative inputs for the repository conformance checker (QLT-007)."""
 
 import datetime
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -15,6 +16,9 @@ import conformance as cnf
 spec = importlib.util.spec_from_file_location("git_conventions", ROOT / "eng/git-conventions.py")
 git_conventions = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(git_conventions)
+spec = importlib.util.spec_from_file_location("vim_oracle", ROOT / "eng/vim-oracle.py")
+vim_oracle = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(vim_oracle)
 RULES = json.loads((ROOT / "eng/conformance-rules.json").read_text(encoding="utf-8"))
 TODAY = datetime.date(2026, 9, 15)
 
@@ -277,6 +281,45 @@ class RepositoryChecks(unittest.TestCase):
         self.seed_version_metadata()
         self.write("src/app/NeNeNib.manifest.in", '<assemblyIdentity version="0.1.0.0"/>')
         self.assertTrue(cnf.version_metadata_checks(self.root))
+
+    # CNF-010 — 生成物 VimFixtures.hpp が読んだ fixtures.json の SHA-256 と本数を名乗る。
+    # 正例は oracle の header() が書いた行をそのまま検査器に読ませる（書き方と読み方を機械で結ぶ）。
+    def vim_records(self, count):
+        return [{"name": f"fixture-{number}", "text": "ab", "keys": "x", "expected": "b",
+                 "line": 1, "column": 1, "register": "a"} for number in range(count)]
+
+    def seed_vim_fixtures(self, sources=1, recorded=None):
+        source = [{key: record[key] for key in ("name", "text", "keys")} for record in self.vim_records(sources)]
+        self.write("tests/vim/fixtures.json", json.dumps(source))
+        digest = hashlib.sha256((self.root / "tests/vim/fixtures.json").read_bytes()).hexdigest()
+        records = self.vim_records(sources if recorded is None else recorded)
+        self.write("tests/vim/VimFixtures.hpp", vim_oracle.header(records, "VIM 9.1", digest))
+
+    def fixture_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.fixture_digest_checks(self.root, RULES)]
+
+    def test_cnf010_positive(self):
+        self.seed_vim_fixtures()
+        self.assertEqual([], self.fixture_details())
+
+    def test_cnf010_digest_mismatch(self):
+        self.seed_vim_fixtures()
+        self.write("tests/vim/fixtures.json", json.dumps([{"name": "fixture-0", "text": "abc", "keys": "x"}]))
+        self.assertTrue(any("CNF-010" in detail and "digest" in detail for detail in self.fixture_details()))
+
+    def test_cnf010_count_mismatch(self):
+        self.seed_vim_fixtures(sources=1, recorded=2)
+        self.assertTrue(any("CNF-010" in detail and "count 2 is not 1" in detail for detail in self.fixture_details()))
+
+    def test_cnf010_missing_record(self):
+        self.seed_vim_fixtures()
+        path = self.root / "tests/vim/VimFixtures.hpp"
+        kept = [line for line in path.read_text(encoding="utf-8").splitlines() if "sha256" not in line]
+        path.write_text("\n".join(kept), encoding="utf-8")
+        self.assertTrue(any("no digest" in detail for detail in self.fixture_details()))
+
+    def test_cnf010_missing_files(self):
+        self.assertTrue(any("missing" in detail for detail in self.fixture_details()))
 
     def seed_docs(self):
         self.write("docs/QUALITY_GATES.md", "### CNF-006 — documents\n- 機械強制: **active**\n\n## 3. 強制マトリクス\n| CNF-006 | active | checker |\n\n## 4. Gates\n")
