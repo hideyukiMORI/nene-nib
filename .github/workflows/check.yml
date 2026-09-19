@@ -16,7 +16,7 @@ jobs:
     name: check
     if: github.event.pull_request.draft == false
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -32,15 +32,13 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ steps.versions.outputs.python }}
-      - name: Full gate
+      # 実装の検証結果は PR に記録し、入力が不変なら再利用する（ADR 0021）。
+      # イベントで変わる Git / PR メタデータだけを検査し、製品テストを再実行しない。
+      - name: Git conventions and verification record
         shell: pwsh
-        run: pwsh -NoProfile -File ./eng/check.ps1
-      # ADR 0016 の決定 4: 速さの記録は out/speed に残るが .gitignore の中なので、artifact で上げないと
-      # 消える。他の指紋の基準値をためる道はこれだけで、落ちた run の記録こそ要るので if: always()。
-      - name: Upload speed records
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: speed-records
-          path: out/speed/*.json
-          retention-days: 90
+        run: |
+          pwsh -NoProfile -File ./eng/validate-git.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $event = Get-Content -LiteralPath $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+          git diff --check "$($event.pull_request.base.sha)...HEAD"
+          exit $LASTEXITCODE

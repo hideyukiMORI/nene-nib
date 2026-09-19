@@ -4,8 +4,19 @@
 > 根拠となる規則: QLT-007（カスタムゲートには negative proof が要る）
 
 **検査は「落ちること」を見るまで信用しない。** 各ゲートについて、最小の違反を仕込んだ状態で
-意図した規則 ID によって失敗すること、そして元に戻すと `pwsh -NoProfile -File ./eng/check.ps1` が緑に戻ることを実測する。
+意図した規則 ID によって失敗すること、そして元に戻すと対応する最小の検査が成功することを実測する。
 ゲートを変えたら、この記録も同じ変更で更新する。
+
+2026-09-20 以降の実行頻度と結果の再利用は [ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md) が正。
+本書の過去の全件コマンド・CI 実行回数は歴史的な実測記録であり、現在の再実行指示ではない。
+
+### 2026-09-20・Issue #61: 検証の選択と再利用
+
+- 対象・退行: check.ps1 の全件誤起動、PR 検証記録の欠落、既存のコミット形式検査への影響。製品ソース・ビルド定義・性能や coverage の判定は変更していない。
+- `python -m unittest discover -s tests/conformance -p test_verification_policy.py -v`: 7 tests、終了 0（11.103 秒）。指定なし・Full のみ・空の理由・理由のみは QLT-001 で拒否。理由付き Full は隔離 fixture の toolchain sentinel まで到達して停止し、全件ゲート本体は実行していない。
+- 同テストで PR 記録の正例・CRLF と再利用記録・各項目の欠落/空白・CLI の非 0・validate-git.ps1 の模擬 PR イベントの正例と反例を確認した。CI のテスト未呼出と軽いフックの維持も確認した。
+- `python -m unittest discover -s tests/conformance -p test_conformance.py -k GitChecks -v`: 既存の Git 検査 4 tests、終了 0。
+- 成功後の説明文追記やコミット・PR 工程では上記結果を再利用する。対象コード・テスト・関連依存は不変。アプリの動作・Vim oracle・性能・coverage・全件検証はこの規約更新では実行しない。
 
 🔴 **この文書に結果を先に書かない。** 雛形の段階で「失敗」「成功」と書いてあった結果は、
 実測していないのに測ったように見える（NeNe Loupe ADR 0003 が雛形の欠陥として指摘・2026-09-06）。

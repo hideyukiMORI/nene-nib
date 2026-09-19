@@ -1,4 +1,4 @@
-"""One validator for commit subjects and pull request titles (GIT-003)."""
+"""Commit/title conventions and the required PR verification record (GIT-003 / GIT-004)."""
 
 import argparse
 import re
@@ -18,12 +18,23 @@ def validate(message: str, title_only: bool = False) -> list[str]:
     return errors
 
 
+def validate_pr(body: str) -> list[str]:
+    """Check record presence, not the truth or sufficiency of the reported verification."""
+    fields = ("確認する退行", "対象・依存", "検証結果", "再利用")
+    return [f"GIT-004: missing non-empty verification field {field}:"
+            for field in fields
+            if not re.search(rf"^{re.escape(field)}:[ \t]*\S[^\r\n]*\r?$", body, re.M)]
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("message_file", type=Path)
-    parser.add_argument("--title-only", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--title-only", action="store_true")
+    mode.add_argument("--pr-body", action="store_true")
     args = parser.parse_args()
-    errors = validate(args.message_file.read_text(encoding="utf-8-sig"), args.title_only)
+    text = args.message_file.read_text(encoding="utf-8-sig")
+    errors = validate_pr(text) if args.pr_body else validate(text, args.title_only)
     for error in errors:
         print(error)
     raise SystemExit(int(bool(errors)))

@@ -5,25 +5,31 @@
 > 規範の本文は [ARCHITECTURE_CONSTITUTION.md](ARCHITECTURE_CONSTITUTION.md) と
 > [CODING_RULES.md](CODING_RULES.md)、機械側の実体はこの文書に対応する。
 
-`pwsh -NoProfile -File ./eng/check.ps1` がローカルと CI の**唯一の完了定義**である。
-個別の道具は診断のために単独で回してよいが、その成功は完了の代わりにならない。
+完了条件は、差分の挙動と直接の依存・呼び出し元に必要な最小限の検証が成功し、その根拠・対象・結果・再利用条件が記録されていること。
+既存の個別コマンドと対象指定を使う。全件ゲートは既定ではない（[ADR 0021](adr/0021-diff-scoped-verification-and-result-reuse.md)・hide の 2026-09-20 指示）。
+過去の ADR・日報・引き継ぎの「常に全件」「最終 HEAD ごと」「CI で毎回」の頻度規定は本書が置き換える。過去の実測と各検査の合格基準は変えない。
 
 ---
 
 ## 1. ゲートの整合性規則（QLT-0xx）
 
-### QLT-001 — ゲートは一つ
+### QLT-001 — 検証は差分と退行の根拠から選ぶ
 
-ローカルの検証と CI は**同じ 1 つのコマンド**（`pwsh -NoProfile -File ./eng/check.ps1`）を呼ぶ。CI のワークフローに品質判断のロジックを書かない。
-第 2 の完了定義を文書化しない。道具の版は 1 か所（eng/tool-versions.json）にだけ書く。
+変更した挙動と直接影響を受ける依存先・呼び出し元を確認し、その退行を検出できる最小限の検証を選ぶ。
+「今回何が壊れる可能性を確認するか」を説明できない検証は実行しない。CMake target・CTest `-R`・unittest の対象指定・個別の eng コマンドを優先し、大規模な自動選定基盤を作らない。
+文書・コメント・ルール変更にアプリの動作テストは不要。フック・開発ツール変更はその道具の必要な正例・反例を短く確認する。
 
-- 機械強制: **planned**（CI が `pwsh -NoProfile -File ./eng/check.ps1` を呼ぶだけであること）
+全件は共通基盤など、限定した検証では影響を覆えない具体的な理由がある場合のみ。実行前に対象と理由を短く説明し、
+`pwsh -NoProfile -File ./eng/check.ps1 -Full -Reason <理由>` を使う。指定なし・空の理由は実行前に拒否する。
+「念のため」「習慣」「フックが回す」は理由にならず、定型の承認確認は増やさない。判定ロジック・道具の版は既存の正本を使い、CI に複製しない。
+
+- 機械強制: **planned**（check.ps1 は明示指定を要求し、CI は検証記録の存在を検査する。対象と理由の妥当性はレビュー事項）
 
 ### QLT-002 — 警告は失敗する
 
 コンパイラの警告・整形差分・静的解析の指摘はすべて失敗にする。重大度の引き下げは禁止。
 
-- 機械強制: **active**（clang-cl `/WX`、clang-tidy WarningsAsErrors、clang-format --Werror。`eng/prove-gates.py` が毎回のゲートで実ツールの反例と復帰を確かめる）
+- 機械強制: **active**（clang-cl `/WX`、clang-tidy WarningsAsErrors、clang-format --Werror。実ツールの反例と復帰は `eng/prove-gates.py`。強制経路の変更時に必要な証明を選ぶ）
 
 ### QLT-003 — baseline を作らない
 
@@ -72,7 +78,7 @@ Vim の振る舞いは oracle から生成した fixture が期待値である�
 中核の分岐カバレッジ下限を 90% とする。閾値は上げてよいが下げてはならない。下げるには ADR が要る。
 **置いていない層は「置いていない」と書く。**
 
-- 機械強制: **active**（`eng/coverage.py` / `eng/coverage-policy.json`。core / application の全 `.cpp` を測定ビルドで計装し、LLVM の分岐 90% 下限。対象欠落・空の集計も拒否。テストを省いた反例が落ちることを毎回確かめる。2026-09-15・Issue #3。CPP-002 に従って `default` を書かないため、llvm-cov が数える「どの `case` にも当たらない辺」は到達不能のまま残る）
+- 機械強制: **active**（`eng/coverage.py` / `eng/coverage-policy.json`。選択して実行した際は core / application の全 `.cpp` を計装し、LLVM の分岐 90% 下限、対象欠落・空の集計・反例を検査する。測定の必要性と再利用は QLT-001 / QLT-012 に従う。2026-09-15・Issue #3。CPP-002 により到達不能な網羅性の辺も集計に残る）
 
 ### QLT-010 — ゲートの弱体化はアーキテクチャ変更
 
@@ -89,11 +95,16 @@ Vim の振る舞いは oracle から生成した fixture が期待値である�
 
 ### QLT-012 — 検証の頻度は変更に従う
 
-反復中は最も狭い検査を使う。**フルゲートは PR の Draft → Ready の時点で必ず通す。**
-CI の起動条件は `ready_for_review`（＋非 draft の `synchronize` / `edited`）。draft の間にフルゲートを回さない。
-head が動いたら Draft に戻して再度 Ready にする。古い成功 SHA・スキップされたジョブ・狭い検査は、通ったフルゲートの代わりにならない。
+検証済みの実装・テスト・関連依存と必要な環境条件が変わらなければ、成功済み結果を push・レビュー・merge で再利用する。
+担当・工程・文書追記・コミット ID の変更だけでは再実行しない。関連する変更・失敗・具体的な未確認事項がある場合だけ、その範囲を再検証する。
+PR に「確認する退行」「対象・依存」「検証結果（コマンド・結果・記録の所在）」「再利用（元の記録と不変性の根拠、または初回検証）」を残す。
+CI の必須 `check` は非 draft の ready_for_review / synchronize / edited / reopened で Git 規約・記録の存在・空白だけを確認する。
+CI 成功は製品テストの実行を意味しない。関連入力の不変性と検証の十分性はレビューし、フックや merge のために同じテストを繰り返さない。
 
-- 機械強制: **planned**（ruleset の必須 check と strict up-to-date）
+本件が原因の失敗は修正する。無関係と判断できる既存失敗は、その根拠と別 Issue を記録して本件を継続する。
+無関係な全件再試行や別件修正へ脱線せず、成功するまで繰り返して不安定なテストを合格扱いにしない。
+
+- 機械強制: **planned**（必須 check は Git・記録・空白を検査する。結果の真偽・再利用条件・失敗との因果はレビュー事項。strict up-to-date はテスト再実行の理由ではない）
 
 ### QLT-013 — 環境依存の主張は正直に名付ける
 
@@ -115,14 +126,14 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 
 - 機械強制: **active**（施主の実機と、CI の指紋 `e7a87d5b`。[ADR 0011](adr/0011-speed-measurement-timing-port-and-paint-coalescing.md)・Issue #16／[ADR 0016](adr/0016-ci-speed-reference-per-host-fingerprint.md)・Issue #47。`eng/check.ps1` が Release の exe で `eng/measure-speed.py --check` を走らせ、
   `eng/perf-reference.json` に指紋の一致する機械では基準値との比較で落ちる。**CI で active なのは指紋 `e7a87d5b`（AMD EPYC 7763）の run だけ**で、他の指紋の host は記録だけ・打鍵 2 本は許容の floor 2 ms に飲まれて判定にならない — どちらも **planned**。
-  記録だけの run もそのことを 1 行で言い、`out/speed/*.json` は artifact `speed-records`（90 日）に残る）
+  記録だけの run もそのことを 1 行で言う。性能への影響がある場合に選んで実行し、`out/speed/*.json` の記録先を PR に示す。通常の CI は性能を測り直さない（ADR 0021）。過去の artifact `speed-records` は当時の証拠）
 
 ---
 
 ## 2. 規約検査の規則（CNF-0xx）— `eng/conformance.py`
 
-汎用の lint が見ないもの、つまり**このリポジトリ固有の規約**を検査する。依存ゼロで書き、ゲートから常に呼ぶ。
-各規則には正例・反例の単体テストを付け、それもゲートに結線する（QLT-007）。
+汎用の lint が見ないもの、つまり**このリポジトリ固有の規約**を検査する。依存ゼロで書く。
+各規則には正例・反例の単体テストを付ける（QLT-007）。実行対象は差分で選び、検査器の全テストを工程ごとに回さない。
 
 ### CNF-001 — 禁止された総称名
 
@@ -247,7 +258,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | GIT-002 | planned | ruleset＋CI（head ブランチ名） |
 | GIT-003 | planned | `.githooks/commit-msg`＋CI（全コミットと PR タイトル） |
 | GIT-004 | planned | PR テンプレート＋ruleset（squash-only） |
-| QLT-001 | planned | |
+| QLT-001 | planned | check.ps1 の全件明示指定。検証選択の妥当性はレビュー |
 | QLT-002 | active | clang-cl・clang-tidy・clang-format と実ツール反例（eng/prove-gates.py） |
 | QLT-003 | planned | CNF-005 |
 | QLT-004 | active | clang-format --dry-run --Werror |
@@ -258,7 +269,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
 | QLT-010 | 不能 | PR の手続き |
 | QLT-011 | planned | eng/toolchain.ps1 |
-| QLT-012 | planned | |
+| QLT-012 | planned | validate-git.ps1 / git-conventions.py の検証記録確認。結果の真偽と入力の不変性はレビュー |
 | QLT-013 | planned | |
 | QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機と CI の指紋 `e7a87d5b` で判定。CI の他の指紋と打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
 | CNF-001 | planned | eng/conformance.py / tests/conformance |
@@ -274,7 +285,11 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 
 ---
 
-## 4. `pwsh -NoProfile -File ./eng/check.ps1` に入っている層
+## 4. 選択できる検査（全件は `eng/check.ps1 -Full -Reason <理由>`）
+
+下表は検査の一覧であり、毎回全部を実行する指示ではない。関連する target / test / 検査関数を既存の引数で指定する。
+例: 文書整合は `eng/conformance.py` の `document_checks`、中核は `cmake --build build --target nib_tests` と `ctest --test-dir build -R '^nib_unit$' --output-on-failure`、
+検証ツールは `python -m unittest discover -s tests/conformance -p '<該当テスト>.py'`。全件が必要なときだけ上記の明示指定を使う。
 
 | 層 | 目的 | 実体 |
 | --- | --- | --- |
@@ -287,7 +302,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 検査自身のテスト | 規約検査・シンボル検査・カバレッジ判定・実ツールの正例・反例 | unittest / eng/prove-gates.py |
 | 単体テスト | C++23 基盤のスモークと中核の振る舞い | CTest / tests/build・tests/unit（ASan / UBSan 付き・`-fno-sanitize-recover=all`。OS 資源と表示は使わない） |
 | カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
-| 速さ | 4 本のベンチ（基準値の鍵 5 つ）の退行 | `eng/measure-speed.py --check`（施主の実機で基準値と比較。CI は記録だけ・QLT-014） |
+| 速さ | 4 本のベンチ（基準値の鍵 5 つ）の退行 | `eng/measure-speed.py --check`（一致する指紋の基準値で比較。必要な変更で選んで実行・QLT-014） |
 | 依存 | 道具の版と実行時依存 0 | tool-versions.json / architecture.json / `/MT`（R1） |
 
 ---
@@ -297,7 +312,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 `main` は次を必須とする。
 
 - Pull Request 経由であること
-- `pwsh -NoProfile -File ./eng/check.ps1` が成功していること（CI の必須 check）
+- 必要な差分検証の成功結果（再利用可）と根拠が PR にあり、Git 規約・検証記録・空白を確認する CI の必須 `check` が成功していること
 - 生成物のドリフトが無いこと（作業ツリーが汚れないこと）
 - 期限切れ waiver が無いこと
 - 未解決のレビュー指摘が無いこと

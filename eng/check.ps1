@@ -1,8 +1,12 @@
 [CmdletBinding()]
-param()
+param([switch]$Full, [string]$Reason)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if (-not $Full -or [string]::IsNullOrWhiteSpace($Reason)) {
+    throw 'Select the relevant CMake / CTest / eng checks. Full verification requires -Full -Reason <why narrower checks cannot cover this change> (QLT-001).'
+}
+Write-Host "Full verification selected: $Reason"
 . (Join-Path $PSScriptRoot 'toolchain.ps1')
 Push-Location $repoRoot
 try {

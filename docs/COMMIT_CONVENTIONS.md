@@ -49,7 +49,9 @@ Conventional Commits を、この正確な形で書く。
 PR には目的・変更の要約・使った正典経路・規則 ID・検証結果・waiver・残るリスク・`Closes #N` を書く（DEVELOPMENT_WORKFLOW 第 7 節）。
 1 つの PR に 1 つの作業単位。マージは squash のみ。マージ後はローカル `main` を綺麗に同期する。
 
-実装中とレビュー中は draft。Draft → Ready がフルゲートの要求である。
+実装中とレビュー中は draft。必要な差分検証と結果・再利用の根拠がそろったら Ready にする（QLT-001 / QLT-012）。
+push・レビュー・merge・担当変更・文書追記・SHA 変更だけでは成功済み検証を繰り返さない。
+CI の必須 `check` は Git 規約・検証記録の存在・差分の空白を確認する。記録の妥当性はレビューし、CI 成功を製品テストの実行証拠とは扱わない。
 
 - 機械強制: **planned**（PR テンプレート・必須 check・ruleset の squash-only）
 
@@ -63,7 +65,8 @@ PR には目的・変更の要約・使った正典経路・規則 ID・検証�
 pwsh -NoProfile -File ./eng/bootstrap.ps1     # core.hooksPath=.githooks を設定し、道具の版を確認する
 ```
 
-`bootstrap.ps1` はグローバルの git 設定を変えない。フックは軽い検査（コミットメッセージ・空白・秘密）だけを行い、
-**フルゲートの代わりにならない**。
+`bootstrap.ps1` はグローバルの git 設定を変えない。既存の `pre-commit` は staged 差分の空白、`commit-msg` はメッセージだけを確認する。
+push / merge フックは置かない。フックで指定なしの全件検証や成功済みテストの再実行を強制しない。
+必要な挙動の検証は差分から選んで PR に記録する。フック成功だけで検証済みとは扱わない。
 
 🔴 フックはローカルでしか動かない。`--no-verify` で迂回できるので、**CI が PR の全コミットと PR タイトルを同じ検証器で検査する**ことで初めて active と書ける。

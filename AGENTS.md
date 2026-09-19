@@ -36,14 +36,17 @@ Then the active issue, the relevant accepted ADRs, and any active waivers.
 - Do not claim a command passed unless it was actually executed.
 - Prefer the smallest change that fully follows the canonical path.
 
-## The only definition of done
+## Change-scoped verification
 
-```bash
-pwsh -NoProfile -File ./eng/check.ps1
-```
+- Select the smallest checks that can catch regressions in the changed behavior and its direct dependencies/callers. Explain that risk for every selected check; otherwise do not run it.
+- Reuse successful results while the implementation, tests, relevant dependencies and required environment remain unchanged. A new owner, phase, documentation edit or commit SHA alone is not a reason to repeat verification at push, review or merge.
+- Documentation/comment/rule changes need no application runtime tests. Hook/tool changes need only focused checks of that tool.
+- Full verification is exceptional: explain the scope and why narrower checks cannot cover it before using `pwsh -NoProfile -File ./eng/check.ps1 -Full -Reason '...'`. No routine approval request is required. Calling it without these arguments fails before running tools.
+- Fix failures caused by this change. Record demonstrably unrelated existing failures with evidence in a separate issue and continue the current work. Never retry until green or start unrelated repairs/full reruns.
+- Record scope, regression rationale, command/result/evidence and reuse rationale in the PR. CI checks Git conventions, this record and whitespace; hooks stay lightweight and do not repeat product tests.
 
-Local and CI run exactly this. Use narrow checks while iterating; run the full gate before
-moving the PR from Draft to Ready.
+The normative policy is QLT-001 / QLT-012 in `docs/QUALITY_GATES.md` and ADR 0021.
+It supersedes older full-gate/final-HEAD instructions in reports, handoffs and ADRs.
 
 ## Required completion report
 

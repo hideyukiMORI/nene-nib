@@ -14,7 +14,7 @@ try {
         if (-not $event.PSObject.Properties['pull_request']) { throw 'GIT-004: CI requires a pull request event.' }
         $branch = $event.pull_request.head.ref
         $base = $event.pull_request.base.sha
-        if ($event.pull_request.draft) { throw 'QLT-012: full CI gate must not run for draft pull requests.' }
+        if ($event.pull_request.draft) { throw 'QLT-012: merge checks run for ready pull requests.' }
         if ($event.pull_request.body -notmatch '(?m)\bCloses #[1-9][0-9]*\b') { throw 'GIT-001: PR body must close an Issue.' }
         foreach ($field in @('目的:', '使った正典経路:', '規則 ID:', '検証', 'Waivers:', '残るリスク:')) {
             if (-not $event.pull_request.body.Contains($field)) { throw "GIT-004: missing PR field $field" }
@@ -23,6 +23,9 @@ try {
         Set-Content -LiteralPath out/git/pr-title.txt -Value $event.pull_request.title -Encoding utf8NoBOM
         & python eng/git-conventions.py out/git/pr-title.txt --title-only
         if ($LASTEXITCODE -ne 0) { throw 'GIT-003: invalid PR title.' }
+        Set-Content -LiteralPath out/git/pr-body.txt -Value $event.pull_request.body -Encoding utf8NoBOM
+        & python eng/git-conventions.py out/git/pr-body.txt --pr-body
+        if ($LASTEXITCODE -ne 0) { throw 'GIT-004: incomplete verification record.' }
     }
     if ($branch -ne 'main' -and $branch -notmatch '^(feat|fix|docs|refactor|test|build|ci|chore)/[1-9][0-9]*-[a-z0-9]+(?:-[a-z0-9]+)*$') {
         throw "GIT-002: invalid branch $branch"
