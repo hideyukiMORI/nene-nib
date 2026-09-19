@@ -59,6 +59,7 @@ class EditorWindow final
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);
+    void click_palette(LPARAM data);
     void place_caret(LPARAM data);
     // 描く唯一の口。Present が返った直後に frame_presented を打つ（ADR 0011 の決定 1）。
     [[nodiscard]] std::expected<void, RenderFailure>
@@ -76,6 +77,7 @@ class EditorWindow final
     void type_text(std::string utf8);
     void press_key(WPARAM word);
     void press_command_key(WPARAM word);
+    void press_command_control_key(WPARAM word);
     void press_plain_key(WPARAM word);
     void press_vim_key(WPARAM word);
     void press_control_key(WPARAM word);

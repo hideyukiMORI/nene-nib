@@ -3,6 +3,7 @@
 #include "Appearance.hpp"
 #include "CaretView.hpp"
 #include "CommandLine.hpp"
+#include "CommandPaletteView.hpp"
 #include "CompositionView.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
@@ -46,5 +47,6 @@ struct EditorFrame
     std::optional<SettingsFailure> settings_failure;
     std::optional<core::CommandLine> command_line;
     std::optional<core::DisplayText> command_message;
+    std::optional<CommandPaletteView> command_palette;
 };
 } // namespace nenenib::application

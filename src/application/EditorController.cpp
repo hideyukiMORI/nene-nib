@@ -263,7 +263,37 @@ EditorFrame EditorController::apply(const EditorIntent &intent)
 
 bool EditorController::command_line_active() const noexcept
 {
-    return state_.command_line().has_value();
+    return state_.command_input().has_value();
+}
+
+bool EditorController::command_palette_active() const noexcept
+{
+    const auto &input = state_.command_input();
+    return input.has_value() && std::holds_alternative<core::CommandPalette>(input.value());
+}
+
+std::optional<core::CommandLine> EditorController::command_line_view() const
+{
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return std::nullopt;
+    }
+    return command_line_of(input.value());
+}
+
+std::optional<CommandPaletteView> EditorController::command_palette_view() const
+{
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return std::nullopt;
+    }
+    if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
+    {
+        return CommandPaletteView{palette->choices(), palette->selected()};
+    }
+    return std::nullopt;
 }
 
 void EditorController::fail(FileFailure failure)
@@ -510,7 +540,7 @@ void EditorController::accept(const VisibleLines &intent)
 
 void EditorController::accept(const SelectEditMode &intent)
 {
-    state_ = state_.with_command_line(std::nullopt);
+    state_ = state_.with_command_input(std::nullopt);
     // モードが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
@@ -537,7 +567,7 @@ void EditorController::accept(const SelectEditMode &intent)
 
 void EditorController::accept(const VimKeyPress &intent)
 {
-    if (state_.command_line().has_value())
+    if (state_.command_input().has_value())
     {
         return;
     }
@@ -554,7 +584,7 @@ void EditorController::accept(const VimKeyPress &intent)
     }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
-    if (!state_.command_line().has_value())
+    if (!state_.command_input().has_value())
     {
         settle_vim_caret();
     }
@@ -605,49 +635,105 @@ void EditorController::perform(const core::VimNoEffect &) {}
 
 void EditorController::perform(const core::VimOpenCommandLine &)
 {
-    state_ = state_.with_command_line(core::CommandLine::empty());
+    state_ = state_.with_command_input(core::CommandLine::empty());
 }
 
 void EditorController::accept(const CommandText &intent)
 {
-    const auto &input = state_.command_line();
+    const auto &input = state_.command_input();
     if (!input.has_value())
     {
         return;
     }
-    const auto next = input.value().inserted(intent.utf8);
+    const auto next = inserted_command(input.value(), intent.utf8);
     if (!next)
     {
         state_ = state_.with_command_message(core::ex_failure_message(next.error()));
         return;
     }
-    state_ = state_.with_command_line(next.value());
+    state_ = state_.with_command_input(next.value());
 }
 
 void EditorController::accept(const EditCommand &intent)
 {
-    const auto &input = state_.command_line();
+    const auto &input = state_.command_input();
     if (!input.has_value())
     {
         return;
     }
-    const auto &command = input.value();
-    if (command.text().empty() && intent.edit == core::CommandEdit::backspace)
+    const auto &command = command_line_of(input.value());
+    if (std::holds_alternative<core::CommandLine>(input.value()) && command.text().empty() &&
+        intent.edit == core::CommandEdit::backspace)
     {
         accept(CancelCommand{});
         return;
     }
-    state_ = state_.with_command_line(command.edited(intent.edit));
+    state_ = state_.with_command_input(edited_command(input.value(), intent.edit));
 }
 
 void EditorController::accept(const CancelCommand &)
 {
-    state_ = state_.with_command_line(std::nullopt);
+    state_ = state_.with_command_input(std::nullopt);
+}
+
+void EditorController::accept(const OpenCommandPalette &)
+{
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    if (command_palette_active())
+    {
+        accept(CancelCommand{});
+        return;
+    }
+    state_ = state_.with_command_input(core::CommandPalette::opened());
+}
+
+void EditorController::accept(const ActivateCommandChoice &intent)
+{
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return;
+    }
+    if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
+    {
+        if (intent.index < palette->choices().size())
+        {
+            submit_palette(palette->selected_at(intent.index));
+        }
+    }
+}
+
+void EditorController::submit_palette(const core::CommandPalette &palette)
+{
+    const auto choices = palette.choices();
+    if (choices.empty())
+    {
+        return;
+    }
+    const auto &choice = choices.at(palette.selected());
+    switch (choice.kind)
+    {
+    case core::CommandChoiceKind::execute:
+        evaluate_command(choice.command);
+        return;
+    case core::CommandChoiceKind::fill:
+        break;
+    }
+    const auto next = palette.filled(choice.command);
+    if (!next)
+    {
+        state_ = state_.with_command_message(core::ex_failure_message(next.error()));
+        return;
+    }
+    state_ = state_.with_command_input(next.value());
 }
 
 void EditorController::accept(const PasteCommand &)
 {
-    if (!state_.command_line().has_value())
+    if (!state_.command_input().has_value())
     {
         return;
     }
@@ -663,13 +749,23 @@ void EditorController::accept(const PasteCommand &)
 
 void EditorController::accept(const SubmitCommand &)
 {
-    const auto &input = state_.command_line();
+    const auto &input = state_.command_input();
     if (!input.has_value())
     {
         return;
     }
-    const auto text = std::string(input.value().text());
-    state_ = state_.with_command_line(std::nullopt);
+    if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
+    {
+        submit_palette(*palette);
+        return;
+    }
+    const auto text = std::string(command_line_of(input.value()).text());
+    evaluate_command(text);
+}
+
+void EditorController::evaluate_command(std::string_view text)
+{
+    state_ = state_.with_command_input(std::nullopt);
     if (text.empty())
     {
         return;
@@ -872,6 +968,10 @@ void EditorController::accept(const SaveDocument &intent)
 
 bool EditorController::composition_ignored() const noexcept
 {
+    if (command_line_active())
+    {
+        return true;
+    }
     switch (state_.mode())
     {
     case core::EditMode::ordinary:
@@ -988,7 +1088,8 @@ EditorFrame EditorController::frame() const
                        core::status_items_for(caret, document.encoding, state_.line_ending()),
                        state_.settings(),
                        state_.settings_failure(),
-                       state_.command_line(),
-                       state_.command_message()};
+                       command_line_view(),
+                       state_.command_message(),
+                       command_palette_view()};
 }
 } // namespace nenenib::application

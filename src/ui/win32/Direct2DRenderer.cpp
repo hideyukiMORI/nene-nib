@@ -825,13 +825,13 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
                                         const core::StatusBarLayout &layout)
 {
     const auto command = core::command_layout(layout, dpi_, 0);
-    if (frame.command_line.has_value())
+    if (frame.command_line.has_value() && !frame.command_palette.has_value())
     {
         draw_command(frame, command.input);
         draw_completions(frame, layout);
         return;
     }
-    if (frame.command_message.has_value())
+    if (frame.command_message.has_value() && !frame.command_palette.has_value())
     {
         context_->PushAxisAlignedClip(to_rect(command.input), D2D1_ANTIALIAS_MODE_ALIASED);
         write(frame.command_message.value().text(), command_format_.Get(), command.input,
@@ -855,7 +855,8 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
         return;
     }
     const auto &command = frame.command_line.value();
-    const auto shown = ":" + std::string(command.text());
+    const std::string prefix = frame.command_palette.has_value() ? "" : ":";
+    const auto shown = prefix + std::string(command.text());
     const auto text = text_layout(shown, command_format_.Get(), area);
     if (!text)
     {
@@ -864,8 +865,8 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
     float caret_x = 0.0F;
     float caret_y = 0.0F;
     DWRITE_HIT_TEST_METRICS metrics{};
-    if (FAILED(text->HitTestTextPosition(utf16_at(shown, command.caret().value + 1), FALSE,
-                                         &caret_x, &caret_y, &metrics)))
+    if (FAILED(text->HitTestTextPosition(utf16_at(shown, command.caret().value + prefix.size()),
+                                         FALSE, &caret_x, &caret_y, &metrics)))
     {
         return;
     }
@@ -926,6 +927,98 @@ void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,
     context_->DrawRectangle(to_rect(layout.panel), brush_.Get(), scaled(1.0F));
 }
 
+void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame,
+                                           const core::LayoutRect &row, std::size_t index)
+{
+    if (!frame.command_palette.has_value())
+    {
+        return;
+    }
+    const auto &palette = frame.command_palette.value();
+    const auto inset = core::to_pixels(8, dpi_);
+    if (palette.selected == index)
+    {
+        brush_->SetColor(to_color(frame.palette.selection));
+        const core::LayoutRect selected{row.left + inset, row.top, row.right - inset, row.bottom};
+        context_->FillRoundedRectangle(
+            D2D1::RoundedRect(to_rect(selected), scaled(6.0F), scaled(6.0F)), brush_.Get());
+    }
+    const core::LayoutRect label{row.left + inset * 2, row.top, row.right - inset * 2, row.bottom};
+    context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
+    write(palette.choices.at(index).label.text(), command_format_.Get(), label, frame.palette.text);
+    context_->PopAxisAlignedClip();
+}
+
+void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &frame,
+                                            const core::PaletteLayout &layout)
+{
+    if (!frame.command_palette.has_value())
+    {
+        return;
+    }
+    const auto &palette = frame.command_palette.value();
+    if (palette.choices.empty())
+    {
+        write("候補なし", mode_format_.Get(), core::palette_row(layout, 0), frame.palette.muted);
+        return;
+    }
+    const auto start = core::palette_first_visible(layout, palette.selected);
+    const auto count = std::min(layout.visible_rows, palette.choices.size() - start);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        draw_palette_choice(frame, core::palette_row(layout, index), start + index);
+    }
+}
+
+void Direct2DRenderer::draw_palette_footer(const application::EditorFrame &frame,
+                                           const core::LayoutRect &area)
+{
+    if (!frame.command_palette.has_value())
+    {
+        return;
+    }
+    const auto &palette = frame.command_palette.value();
+    const auto total = palette.choices.size();
+    const auto position = total == 0 ? 0 : palette.selected + 1;
+    const auto split = std::max(area.left, area.right - core::to_pixels(64, dpi_));
+    const core::LayoutRect hint_area{area.left, area.top, split, area.bottom};
+    const auto hint = frame.command_message.has_value()
+                          ? frame.command_message.value().text()
+                          : std::string_view("↑↓ 選択   Enter 決定   Esc 閉じる");
+    context_->PushAxisAlignedClip(to_rect(hint_area), D2D1_ANTIALIAS_MODE_ALIASED);
+    write(hint, mode_format_.Get(), hint_area, frame.palette.muted);
+    context_->PopAxisAlignedClip();
+    const core::LayoutRect count_area{split, area.top, area.right, area.bottom};
+    context_->PushAxisAlignedClip(to_rect(count_area), D2D1_ANTIALIAS_MODE_ALIASED);
+    write(std::to_string(position) + " / " + std::to_string(total), status_format_.Get(),
+          count_area, frame.palette.muted);
+    context_->PopAxisAlignedClip();
+}
+
+void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
+                                    const core::PaletteLayout &layout)
+{
+    if (core::width_of(layout.input) <= 0 || core::height_of(layout.input) <= 0)
+    {
+        return;
+    }
+    fill_rounded(layout.panel, frame.palette.panel, scaled(10.0F));
+    brush_->SetColor(to_color(frame.palette.panel_border));
+    context_->DrawRoundedRectangle(
+        D2D1::RoundedRect(to_rect(layout.panel), scaled(10.0F), scaled(10.0F)), brush_.Get(),
+        scaled(1.0F));
+    context_->DrawLine(D2D1::Point2F(static_cast<float>(layout.panel.left),
+                                     static_cast<float>(layout.input.bottom)),
+                       D2D1::Point2F(static_cast<float>(layout.panel.right),
+                                     static_cast<float>(layout.input.bottom)),
+                       brush_.Get(), scaled(1.0F));
+    draw_command(frame, layout.input);
+    context_->PushAxisAlignedClip(to_rect(layout.rows), D2D1_ANTIALIAS_MODE_ALIASED);
+    draw_palette_choices(frame, layout);
+    context_->PopAxisAlignedClip();
+    draw_palette_footer(frame, layout.footer);
+}
+
 std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface)
 {
@@ -940,6 +1033,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     draw_title_bar(frame, title);
     draw_body(frame, core::body_layout(width, height, dpi_, frame.settings.font_size));
     draw_status_bar(frame, status);
+    if (frame.command_palette.has_value())
+    {
+        draw_palette(frame, core::palette_layout(width, height, dpi_,
+                                                 frame.command_palette.value().choices.size()));
+    }
     const auto ended = context_->EndDraw();
     context_->SetTarget(nullptr);
     if (FAILED(ended))

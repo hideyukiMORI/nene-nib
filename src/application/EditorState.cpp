@@ -124,9 +124,9 @@ EditorState EditorState::with_mode(core::EditMode mode) const
     return next;
 }
 
-const std::optional<core::CommandLine> &EditorState::command_line() const noexcept
+const std::optional<CommandInput> &EditorState::command_input() const noexcept
 {
-    return command_line_;
+    return command_input_;
 }
 
 const std::optional<core::DisplayText> &EditorState::command_message() const noexcept
@@ -134,10 +134,10 @@ const std::optional<core::DisplayText> &EditorState::command_message() const noe
     return command_message_;
 }
 
-EditorState EditorState::with_command_line(std::optional<core::CommandLine> command) const
+EditorState EditorState::with_command_input(std::optional<CommandInput> command) const
 {
     EditorState next(*this);
-    next.command_line_ = std::move(command);
+    next.command_input_ = std::move(command);
     return next;
 }
 

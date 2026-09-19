@@ -21,4 +21,5 @@ struct ExResult
 [[nodiscard]] std::expected<ExResult, ExFailure>
 evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance);
 [[nodiscard]] std::vector<std::string> command_completions(std::string_view prefix);
+[[nodiscard]] std::vector<std::string> ex_command_candidates();
 } // namespace nenenib::core

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ActivateCommandChoice.hpp"
 #include "AdjustFontSize.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
@@ -14,6 +15,7 @@
 #include "InsertText.hpp"
 #include "MoveCaret.hpp"
 #include "NewLine.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
@@ -38,5 +40,6 @@ using EditorIntent =
                  ClipboardAction, HistoryAction, ScrollLines, VisibleLines, SelectEditMode,
                  VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument, ComposeText,
                  CommitText, CancelComposition, AdjustFontSize, CommandText, EditCommand,
-                 SubmitCommand, CancelCommand, PasteCommand>;
+                 SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
+                 ActivateCommandChoice>;
 } // namespace nenenib::application
