@@ -29,10 +29,15 @@ This repository follows the AYANE strict policy: **one meaning, one canonical im
 - `docs/quality/phase0-results.json` — the 114 compiler, linker and tool measurements the rules are based on
 - `docs/adr/` — decisions: clang-cl over cl, Direct2D over GDI, one UI thread plus one worker, an own Vim engine, a speed gate
 
-The only definition of done, locally and in CI:
+Select the smallest checks for the changed behavior and its direct dependencies/callers, and record
+the regression rationale and results in the PR. Reuse successful results when the relevant inputs
+are unchanged; CI validates Git conventions, verification records and whitespace without repeating
+product tests. Documentation-only changes need no application tests. See `docs/QUALITY_GATES.md`.
+
+Full verification is opt-in and requires a concrete reason why narrower checks cannot cover the change:
 
 ```powershell
-pwsh -NoProfile -File ./eng/check.ps1
+pwsh -NoProfile -File ./eng/check.ps1 -Full -Reason 'Concrete scope and reason'
 ```
 
 It needs Visual Studio Build Tools with the pinned MSVC toolset and the bundled LLVM 19.1.5, CMake, Ninja and

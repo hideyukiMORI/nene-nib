@@ -110,15 +110,21 @@ Markdown プレビュー（FR-007）の Issue で、別 target に `/W4 /WX` だ
 
 ## 3. 検証コマンド
 
-```bash
-pwsh -NoProfile -File ./eng/check.ps1          # 唯一の完了定義（ローカルと CI で同じ）
+差分の挙動・直接の依存先と呼び出し元から、起こり得る退行を検出する最小限の検証を選ぶ。
+何が壊れる可能性を確認するか説明できない検証は実行しない。既存の CMake target・CTest `-R`・unittest の対象指定を使う。
+文書・コメント・規約変更にはアプリの動作テストは不要。フック・開発ツールは変更した道具だけを短く確認する。
+
+実装・テスト・関連依存・必要な環境条件が不変なら成功結果を push / レビュー / merge で再利用する。
+担当・工程・文書追記・SHA の変更だけでは再実行しない。関連する変更・失敗・具体的な未確認事項だけを再検証する。
+全件は限定した検証では覆えない具体的な理由がある場合だけ、対象と理由を短く知らせて明示実行する。
+
+```powershell
+pwsh -NoProfile -File ./eng/check.ps1 -Full -Reason '限定した検証では影響を確認できない具体的な理由'
 ```
 
-開発中は最も狭い検査を使ってよい。フルゲートは **PR を Draft → Ready にする直前**に必ず通す。
-
-🔴 **`pwsh -NoProfile -File ./eng/check.ps1` が通っていないものを「できた」と報告しない。**
-実行していないコマンドの結果を書かない。テストの失敗を隠さない。
-テストが本当の欠陥を見つけたら、期待値ではなく production コードを直す。
+実行していない結果を書かない。本件が原因の失敗は直し、無関係な既存失敗は根拠とともに別 Issue へ記録して本件を続ける。
+成功するまでの再試行や無関係な修正・全件再実行は禁止。PR には対象・退行の根拠・結果と所在・再利用の根拠を記録する。
+正本は QLT-001 / QLT-012 と [ADR 0021](docs/adr/0021-diff-scoped-verification-and-result-reuse.md)。過去の全件・最終 HEAD ごとの実行指示より優先する。
 
 ---
 
@@ -127,7 +133,7 @@ pwsh -NoProfile -File ./eng/check.ps1          # 唯一の完了定義（ロー�
 [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) が正本。要約すると:
 
 Issue → 正典経路の特定 → ブランチ → （設計を変えるなら先に ADR）→ 最小の実装 →
-テスト → 狭い検査 → `pwsh -NoProfile -File ./eng/check.ps1` → 規則 ID ごとの自己レビュー → PR（draft）→ Ready → squash merge。
+必要な検証（成功結果を再利用）→ 規則 ID ごとの自己レビュー → PR（draft）→ 検証記録を整えて Ready → 必須 check → squash merge。
 
 コミットは Conventional Commits（`type` と `scope` は英語、説明は日本語、末尾に `(#N)`）。形の正本は GIT-003。
 
