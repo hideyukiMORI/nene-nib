@@ -411,4 +411,4 @@ oracle は 5-g と同じ固定した Vim 9.1。help と鍵を送った結果だ�
 
 検査側の 2 回の失敗は、`WM_CHAR` の改行が Enter と同じではないことと、丸角キャレットの端の 2 画素を文字と誤認したこと。前者は `VK_RETURN` の経路へ直し、後者は文字の検査領域をキャレットの外へ置いた。空行の期待値 0 と H / M / L の期待位置は変えていない。途中画面は `out/window-verification/vim-viewport-*.bmp`、最終結果は同ディレクトリの `look-slice-results.json`（git 対象外）。
 
-この追加操作の実機確認は 120 DPI・ダークでの結果であり、96 DPI や別の外観を実測したとは扱わない。最終 HEAD のフルゲートと CI の結果は Issue #58 の PR に記録する。
+この追加操作の実機確認は 120 DPI・ダークでの結果であり、96 DPI や別の外観を実測したとは扱わない。最終 HEAD のフルゲートと CI の結果は [PR #59](https://github.com/hideyukiMORI/nene-nib/pull/59) に記録する。
