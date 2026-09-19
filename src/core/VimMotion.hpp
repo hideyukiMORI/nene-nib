@@ -19,6 +19,9 @@ enum class VimMotion : std::uint8_t
     previous_word,
     word_end,
     word_end_for_change,
-    first_non_blank
+    first_non_blank,
+    screen_top,
+    screen_middle,
+    screen_bottom
 };
 } // namespace nenenib::core

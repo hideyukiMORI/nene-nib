@@ -80,15 +80,22 @@ constexpr std::array<KeyMotion, 4> control_motions{{{VK_LEFT, core::CaretMotion:
                                                     {VK_HOME, core::CaretMotion::document_start},
                                                     {VK_END, core::CaretMotion::document_end}}};
 // Vim モードの仮想キー → 特別な鍵。通常モードの表と入れ替えて引く（ADR 0012 の決定 4）。
-constexpr std::array<KeyVimSpecial, 9> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
-                                                     {VK_RETURN, core::VimSpecialKey::enter},
-                                                     {VK_BACK, core::VimSpecialKey::backspace},
-                                                     {VK_LEFT, core::VimSpecialKey::arrow_left},
-                                                     {VK_RIGHT, core::VimSpecialKey::arrow_right},
-                                                     {VK_UP, core::VimSpecialKey::arrow_up},
-                                                     {VK_DOWN, core::VimSpecialKey::arrow_down},
-                                                     {VK_HOME, core::VimSpecialKey::home},
-                                                     {VK_END, core::VimSpecialKey::end}}};
+constexpr std::array<KeyVimSpecial, 11> vim_specials{{{VK_ESCAPE, core::VimSpecialKey::escape},
+                                                      {VK_RETURN, core::VimSpecialKey::enter},
+                                                      {VK_BACK, core::VimSpecialKey::backspace},
+                                                      {VK_LEFT, core::VimSpecialKey::arrow_left},
+                                                      {VK_RIGHT, core::VimSpecialKey::arrow_right},
+                                                      {VK_UP, core::VimSpecialKey::arrow_up},
+                                                      {VK_DOWN, core::VimSpecialKey::arrow_down},
+                                                      {VK_HOME, core::VimSpecialKey::home},
+                                                      {VK_END, core::VimSpecialKey::end},
+                                                      {VK_PRIOR, core::VimSpecialKey::page_up},
+                                                      {VK_NEXT, core::VimSpecialKey::page_down}}};
+constexpr std::array<KeyVimSpecial, 4> vim_control_specials{
+    {{'D', core::VimSpecialKey::control_d},
+     {'U', core::VimSpecialKey::control_u},
+     {'F', core::VimSpecialKey::control_f},
+     {'B', core::VimSpecialKey::control_b}}};
 constexpr char32_t tab_character = U'\t';
 
 [[nodiscard]] bool held(int key) noexcept
@@ -112,6 +119,18 @@ constexpr char32_t tab_character = U'\t';
 [[nodiscard]] std::optional<core::VimSpecialKey> vim_special_for(WPARAM key) noexcept
 {
     for (const KeyVimSpecial entry : vim_specials)
+    {
+        if (entry.key == key)
+        {
+            return entry.special;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<core::VimSpecialKey> vim_control_special_for(WPARAM key) noexcept
+{
+    for (const KeyVimSpecial entry : vim_control_specials)
     {
         if (entry.key == key)
         {
@@ -1101,6 +1120,15 @@ void EditorWindow::press_plain_key(WPARAM word)
 
 void EditorWindow::press_control_key(WPARAM word)
 {
+    if (mode_ == core::EditMode::vim)
+    {
+        const auto special = vim_control_special_for(word);
+        if (special.has_value())
+        {
+            send(application::VimKeyPress{core::VimKey{special.value()}});
+            return;
+        }
+    }
     const auto motion = motion_for(std::span<const KeyMotion>(control_motions), word);
     if (motion)
     {

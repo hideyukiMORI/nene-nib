@@ -1,6 +1,9 @@
 #pragma once
 
+#include "VimViewportFixture.hpp"
+
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace nenenib::tests
@@ -20,5 +23,6 @@ struct VimFixture
     std::uint32_t column;
     std::string_view register_text;
     std::string_view register_kind;
+    std::optional<VimViewportFixture> viewport;
 };
 } // namespace nenenib::tests

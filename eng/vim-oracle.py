@@ -3,7 +3,13 @@
 The fixtures in tests/vim/fixtures.json name a buffer, a key sequence and the extra settings that
 belong to that case. This script feeds each one to a headless Vim 9.1 and writes what came back
 (the buffer, the cursor as line and byte column, and the unnamed register with its type) into a
-constexpr array.
+constexpr array.  A fixture with ``viewport`` starts Vim in ordinary terminal mode (without
+``-es``), resizes its edit window, and records the resulting first visible line and ``'scroll'``.
+That branch passes Vim's ``--not-a-term`` option because the oracle uses standard subprocess pipes;
+it recognizes the non-terminal stream and skips Vim's warning and startup delay.  The report is the
+deterministic output file.  The viewport probe verifies its requested initial height, first visible line, and cursor,
+then verifies that the final saved top line equals ``line('w0')`` and that ``line('w$')`` is not
+above it before recording the result.
 The unit tests replay that header; they never need Vim, so the gate runs on machines without it.
 
 Vim is started exactly the way the Phase 0 probe V2 did, from its full path, because `where vim`
@@ -41,12 +47,15 @@ import subprocess
 import tempfile
 
 VIM = Path(r"C:\Program Files\Vim\vim91\vim.exe")
+ORACLE_TIMEOUT_SECONDS = 30
 # 既定の設定（ADR 0012 の決定 8）。backspace は defaults.vim が入れる値で、これが無い Vim は
 # INSERT の Backspace が挿入開始位置より前を消せず、利用者が触る「既定の Vim」と違う。
 DEFAULT_SETTINGS = ["set nocompatible", "set backspace=indent,eol,start"]
 # fixture の記法 → Vim の二重引用符つき文字列の記法。写すのはここ 1 か所だけ（C++ 側は別の 1 か所）。
 KEY_NAMES = {"<Esc>": "\\<Esc>", "<CR>": "\\<CR>", "<BS>": "\\<BS>", "<C-r>": "\\<C-r>",
-             "<Home>": "\\<Home>", "<End>": "\\<End>"}
+             "<C-d>": "\\<C-d>", "<C-u>": "\\<C-u>", "<C-f>": "\\<C-f>", "<C-b>": "\\<C-b>",
+             "<Home>": "\\<Home>", "<End>": "\\<End>",
+             "<PageUp>": "\\<PageUp>", "<PageDown>": "\\<PageDown>"}
 BANNER = "// 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）"
 
 
@@ -64,26 +73,66 @@ def vim_keys(keys: str) -> str:
     return escaped
 
 
-def probe_script(settings: list[str], keys: str) -> str:
+def viewport_of(fixture: dict) -> dict | None:
+    viewport = fixture.get("viewport")
+    if viewport is None:
+        return None
+    required = ("visible_lines", "first_visible", "line", "column")
+    if not isinstance(viewport, dict) or set(viewport) != set(required):
+        raise ValueError(f"{fixture['name']}: viewport needs exactly {', '.join(required)}")
+    if any(type(viewport[key]) is not int or viewport[key] < 1 for key in required):
+        raise ValueError(f"{fixture['name']}: viewport values must be positive integers")
+    return viewport
+
+
+def probe_script(settings: list[str], keys: str, viewport: dict | None = None) -> str:
     # getregtype は "v"（文字単位）/ "V"（行単位）/ 一度も使っていないレジスタでは空を返す
     # (ADR 0015 decision 3). p の貼り方はその種類で決まるので、本文だけでは fixture が足りない。
     report = ("call writefile(getline(1, '$') + ['cursor=' . line('.') . ',' . col('.')]"
               " + ['regtype=' . getregtype('\"')]"
-              " + ['reg=' . getreg('\"')], 'out.txt')")
+              " + ['reg=' . getreg('\"')]"
+              + (" + ['topline=' . line('w0')] + ['scroll=' . &scroll]" if viewport else "")
+              + ", 'out.txt')")
     # Ex モードで開いた直後のカーソルは先頭ではないので、毎回 (1, 1) に置いてから鍵を流す。
-    lines = [*DEFAULT_SETTINGS, *settings, "call cursor(1, 1)",
-             'execute "normal! " . "%s"' % vim_keys(keys), report, "qa!"]
+    setup = ["call cursor(1, 1)"]
+    if viewport:
+        setup = ["set nowrap", f"resize {viewport['visible_lines']}",
+                 f"call cursor({viewport['line']}, {viewport['column']})",
+                 "call winrestview({'lnum': %d, 'topline': %d})"
+                 % (viewport["line"], viewport["first_visible"]),
+                 "redraw!",
+                 "if winheight(0) != %d || line('.') != %d || col('.') != %d || line('w0') != %d"
+                 " || winsaveview().topline != line('w0')"
+                 " | cquit | endif" % (viewport["visible_lines"], viewport["line"],
+                                        viewport["column"], viewport["first_visible"])]
+    settle = []
+    if viewport:
+        settle = ["redraw!",
+                  "if winsaveview().topline != line('w0') || line('w$') < line('w0')"
+                  " || line('w$') != min([line('$'), line('w0') + winheight(0) - 1])"
+                  " | cquit | endif"]
+    lines = [*DEFAULT_SETTINGS, *settings, *setup,
+             'execute "normal! " . "%s"' % vim_keys(keys), *settle, report, "qa!"]
     return "\n".join(lines) + "\n"
 
 
-def run_vim(work: Path, text: str, keys: str,
-            settings: list[str]) -> tuple[str, int, int, str, str]:
+def run_vim(work: Path, text: str, keys: str, settings: list[str],
+            viewport: dict | None = None) -> tuple[str, int, int, str, str, dict | None]:
     (work / "input.txt").write_bytes(text.encode("utf-8"))
-    (work / "probe.vim").write_text(probe_script(settings, keys), encoding="utf-8")
+    (work / "probe.vim").write_text(probe_script(settings, keys, viewport), encoding="utf-8")
     output = work / "out.txt"
     output.unlink(missing_ok=True)
-    finished = subprocess.run([str(VIM), "-u", "NONE", "-i", "NONE", "-N", "-n", "-es",
-                               "-S", "probe.vim", "input.txt"], cwd=work, capture_output=True)
+    command = [str(VIM), "-u", "NONE", "-i", "NONE", "-N", "-n"]
+    if viewport is None:
+        command.append("-es")
+    else:
+        command.append("--not-a-term")
+    command.extend(["-S", "probe.vim", "input.txt"])
+    try:
+        finished = subprocess.run(command, cwd=work, capture_output=True,
+                                 timeout=ORACLE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(f"vim timed out after {ORACLE_TIMEOUT_SECONDS}s on {keys!r}") from error
     if finished.returncode != 0 or not output.is_file():
         raise RuntimeError(f"vim failed ({finished.returncode}) on {keys!r}: "
                            f"{finished.stderr.decode('utf-8', errors='replace')}")
@@ -91,10 +140,16 @@ def run_vim(work: Path, text: str, keys: str,
     while lines and lines[-1] == "":
         lines.pop()
     # writefile は文字列の中の改行を NUL で書くので、レジスタの改行をここで戻す。
+    measured_viewport = None
+    if viewport:
+        scroll = int(lines.pop().removeprefix("scroll="))
+        first_visible = int(lines.pop().removeprefix("topline="))
+        measured_viewport = {**viewport, "expected_first_visible": first_visible,
+                             "expected_scroll_lines": scroll}
     register = lines.pop().removeprefix("reg=").replace("\x00", "\n")
     kind = lines.pop().removeprefix("regtype=")
     line, column = (int(part) for part in lines.pop().removeprefix("cursor=").split(","))
-    return "\n".join(lines), line, column, register, kind
+    return "\n".join(lines), line, column, register, kind, measured_viewport
 
 
 def measure(work: Path, fixture: dict) -> dict:
@@ -104,13 +159,15 @@ def measure(work: Path, fixture: dict) -> dict:
         raise ValueError(f"{name!r}: a fixture needs a name and a key sequence")
     if text.endswith("\n"):
         raise ValueError(f"{name}: fixture text must not end with a newline")
-    measured = run_vim(work, text, keys, settings)
+    viewport = viewport_of(fixture)
+    measured = run_vim(work, text, keys, settings, viewport)
     # NORMAL で終わっていれば、もう 1 つ Esc を足しても何も変わらない（上の注記）。
-    if run_vim(work, text, keys + "<Esc>", settings) != measured:
+    if run_vim(work, text, keys + "<Esc>", settings, viewport) != measured:
         raise ValueError(f"{name}: the keys do not leave Vim in NORMAL mode; end them with <Esc>")
-    body, line, column, register, kind = measured
+    body, line, column, register, kind, measured_viewport = measured
     return {"name": name, "text": text, "keys": keys, "expected": body,
-            "line": line, "column": column, "register": register, "register_kind": kind}
+            "line": line, "column": column, "register": register, "register_kind": kind,
+            "viewport": measured_viewport}
 
 
 def literal(value: str) -> str:
@@ -125,10 +182,16 @@ def literal(value: str) -> str:
 def header(records: list[dict], version: str, digest: str) -> str:
     rows = []
     for record in records:
-        rows.append("    {%s, %s, %s, %s, %d, %d, %s, %s},"
+        viewport = record.get("viewport")
+        viewport_value = "std::nullopt" if viewport is None else (
+            "VimViewportFixture{%d, %d, %d, %d, %d, %d}" %
+            (viewport["visible_lines"], viewport["first_visible"], viewport["line"],
+             viewport["column"], viewport["expected_first_visible"],
+             viewport["expected_scroll_lines"]))
+        rows.append("    {%s, %s, %s, %s, %d, %d, %s, %s, %s},"
                     % (literal(record["name"]), literal(record["text"]), literal(record["keys"]),
                        literal(record["expected"]), record["line"], record["column"],
-                       literal(record["register"]), literal(record["register_kind"])))
+                       literal(record["register"]), literal(record["register_kind"]), viewport_value))
     body = "\n".join(rows)
     settings = " / ".join(DEFAULT_SETTINGS)
     # 生成物にも clang-format は掛かるので、ファイルまるごと整形の対象から外す（QLT-004）。

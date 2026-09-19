@@ -66,6 +66,7 @@ class EditorController final
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
     void perform(const core::VimNoEffect &);
     void perform(const core::VimMoveTo &effect);
+    void perform(const core::VimNavigate &effect);
     void perform(const core::VimSelect &effect);
     void perform(const core::VimRemoveRange &effect);
     void perform(const core::VimRemoveLines &effect);

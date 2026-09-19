@@ -1534,5 +1534,278 @@
     "text": "  abc\n   ",
     "keys": "vjd",
     "settings": []
-  }
+  },
+  {
+    "name": "viewport-H-at-the-first-visible-line",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "H",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-M-keeps-the-middle-line",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "M",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-L-at-the-last-visible-line",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "L",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-d-scrolls-half-a-window",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-d>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-u-scrolls-half-a-window",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-u>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-f-is-page-down",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-f>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-b-is-page-up",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-b>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-page-down-is-control-f",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<PageDown>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-page-up-is-control-b",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<PageUp>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-d-count-persists",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "3<C-d><C-d>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-u-count-persists",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "3<C-u><C-u>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-d-stops-at-eof",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-d>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 28, "column": 1}
+  },
+  {
+    "name": "viewport-H-uses-first-nonblank",
+    "text": "  one\n\n  three",
+    "keys": "H",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 2, "column": 1}
+  },
+  {
+    "name": "viewport-M-can-land-on-an-empty-line",
+    "text": "  one\n\n  three",
+    "keys": "M",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 1}
+  },
+  {
+    "name": "viewport-L-uses-first-nonblank",
+    "text": "  one\n\n  three",
+    "keys": "L",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 1}
+  },
+  {
+    "name": "viewport-middle-on-a-one-line-window",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "M",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 1, "first_visible": 10, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-last-on-a-two-line-window",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "L",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 2, "first_visible": 10, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-d-on-a-twenty-line-window",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-d>",
+    "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 20, "first_visible": 5, "line": 14, "column": 1}
+  },
+  {
+    "name": "viewport-page-forward-from-the-bottom",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-f>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 15, "column": 1}
+  },
+  {
+    "name": "viewport-page-back-from-the-top",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-b>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 6, "column": 1}
+  },
+  {
+    "name": "viewport-page-forward-at-eof",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-f>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 30, "column": 1}
+  },
+  {
+    "name": "viewport-page-back-at-the-top",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-b>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 1}
+  },
+  {
+    "name": "viewport-height-one-control-keys",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-f><C-b><C-d><C-u>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 1, "first_visible": 10, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-height-two-control-keys",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-f><C-b><C-d><C-u>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 2, "first_visible": 10, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-d-large-count-sets-scroll",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "999<C-d>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-u-large-count-sets-scroll",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "999<C-u>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-H-and-L-large-count-clamp",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "999H999L", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-M-ignores-a-count",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "999M", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-delete-H-is-linewise",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12",
+    "keys": "dH", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 3, "line": 7, "column": 1}
+  },
+  {
+    "name": "viewport-change-L-is-linewise",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12",
+    "keys": "cLX<Esc>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 3, "line": 7, "column": 1}
+  },
+  {
+    "name": "viewport-yank-M-is-linewise",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12",
+    "keys": "yM", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 3, "line": 7, "column": 1}
+  },
+  {
+    "name": "viewport-visual-control-d-yanks",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
+    "keys": "v<C-d>y<Esc>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-visual-control-u-yanks",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
+    "keys": "v<C-u>y<Esc>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-insert-page-down-then-escape",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
+    "keys": "i<PageDown><Esc>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-insert-page-up-then-escape",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
+    "keys": "i<PageUp><Esc>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
+  },
+  {
+    "name": "viewport-control-d-at-eof-keeps-the-column",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-d>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 30, "column": 2}
+  },
+  {
+    "name": "viewport-control-u-at-the-top-keeps-the-column",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-u>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 2}
+  },
+  {
+    "name": "viewport-page-forward-at-eof-sets-the-column-to-one",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-f>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 30, "column": 2}
+  },
+  {
+    "name": "viewport-page-back-at-the-top-keeps-the-column",
+    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
+    "keys": "<C-b>", "settings": ["set scrolloff=0"],
+    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 2}
+  },
+  {"name":"viewport-h1-page-forward","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-h1-page-back","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-h1-half-down","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-h1-half-up","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-h2-page-forward","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":2,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-h2-page-back","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":2,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-h2-half-down","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":2,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-h2-half-up","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":2,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-H-large-count","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"999H","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":3,"line":7,"column":1}},
+  {"name":"viewport-L-large-count","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"999L","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":3,"line":7,"column":1}},
+  {"name":"viewport-visual-page-down-yanks","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20","keys":"v<C-f>y<Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-visual-page-up-yanks","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20","keys":"v<C-b>y<Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-count-down-at-eof-keeps-the-column","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"999<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":3,"line":12,"column":2}},
+  {"name":"viewport-count-up-at-top-keeps-the-column","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"999<C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":2}},
+  {"name":"viewport-two-pages-forward","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"2<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-two-pages-back","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"2<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":25,"column":1}},
+  {"name":"viewport-large-pages-forward","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"999<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-large-pages-back","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"999<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":25,"column":1}},
+  {"name":"viewport-visual-page-down-escape-scrolls","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"v<C-f><Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-visual-line-page-down-escape-scrolls","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"V<C-f><Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+{"name":"viewport-follow-up-h9-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"2k","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h9-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h10-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h10-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"4k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h11-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h11-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"4k","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-down-h9-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"5j","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":18,"column":1}},{"name":"viewport-follow-down-h9-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":18,"column":1}},{"name":"viewport-follow-down-h10-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"5j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":19,"column":1}},{"name":"viewport-follow-down-h10-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":19,"column":1}},{"name":"viewport-follow-down-h11-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":20,"column":1}},{"name":"viewport-follow-down-h11-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"7j","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":20,"column":1}},{"name":"viewport-follow-down-clamps-at-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"99j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":15,"column":1}},{"name":"viewport-page-follow-up-from-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f>k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":30,"column":1}}
 ]
