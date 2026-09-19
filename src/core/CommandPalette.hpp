@@ -8,7 +8,7 @@ namespace nenenib::core
 class CommandPalette final
 {
   public:
-    [[nodiscard]] static CommandPalette opened();
+    [[nodiscard]] static CommandPalette opened(ThemeCatalog themes = ThemeCatalog::builtins());
     [[nodiscard]] const CommandLine &input() const noexcept;
     [[nodiscard]] std::vector<CommandChoice> choices() const;
     [[nodiscard]] std::size_t selected() const noexcept;

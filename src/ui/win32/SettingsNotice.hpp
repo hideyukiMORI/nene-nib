@@ -1,6 +1,8 @@
 #pragma once
 
 #include "SettingsFailure.hpp"
+#include "SettingsIssue.hpp"
+#include "Utf16.hpp"
 
 #include <utility>
 
@@ -37,5 +39,16 @@ namespace nenenib::ui::win32
         return L"設定を読み込めていないため、保存しませんでした。";
     }
     std::unreachable();
+}
+[[nodiscard]] inline std::wstring settings_notice(const core::ThemeLookupFailure &failure)
+{
+    return core::to_utf16(core::theme_failure_message(failure).text()).value() +
+           L"\n元の設定ファイルは保持します。テーマを修正して再起動してください。";
+}
+
+[[nodiscard]] inline std::wstring settings_notice(const application::SettingsIssue &issue)
+{
+    return std::visit([](const auto &value) { return std::wstring(settings_notice(value)); },
+                      issue);
 }
 } // namespace nenenib::ui::win32

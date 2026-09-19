@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace nenenib::application
+namespace nenenib::core
 {
 enum class ThemeFailure : std::uint8_t
 {
@@ -22,4 +22,4 @@ enum class ThemeFailure : std::uint8_t
     invalid_color,
     insufficient_contrast
 };
-} // namespace nenenib::application
+} // namespace nenenib::core

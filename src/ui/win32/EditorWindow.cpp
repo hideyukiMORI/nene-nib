@@ -1014,7 +1014,7 @@ void EditorWindow::announce_settings(const application::EditorFrame &frame)
 {
     if (frame.settings_failure.has_value())
     {
-        MessageBoxW(window_, settings_notice(frame.settings_failure.value()), product_name,
+        MessageBoxW(window_, settings_notice(frame.settings_failure.value()).c_str(), product_name,
                     MB_OK | MB_ICONWARNING);
     }
 }

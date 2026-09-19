@@ -16,26 +16,9 @@ namespace nenenib::adapters::win32
 {
 namespace
 {
-using Failure = application::ThemeFailure;
+using Failure = core::ThemeFailure;
 constexpr std::array<std::string_view, 6> metadata_keys{"version", "name",    "appearance",
                                                         "author",  "license", "url"};
-
-[[nodiscard]] std::expected<core::ThemeName, Failure> file_theme_name(const core::FilePath &path)
-{
-    constexpr std::string_view suffix = ".v1.theme";
-    const auto filename = path.file_name();
-    if (!filename.ends_with(suffix))
-    {
-        return std::unexpected(Failure::invalid_name);
-    }
-    const auto stem = filename.substr(0, filename.size() - suffix.size());
-    const auto name = core::ThemeName::parse(stem);
-    if (!name || name.value().text() != stem)
-    {
-        return std::unexpected(Failure::invalid_name);
-    }
-    return name.value();
-}
 
 [[nodiscard]] bool known_key(std::string_view key)
 {
@@ -229,6 +212,23 @@ document_from(const KeyValueFields &fields, const core::ThemeName &expected)
 }
 } // namespace
 
+std::expected<core::ThemeName, Failure> theme_name_for_file(const core::FilePath &path)
+{
+    constexpr std::string_view suffix = ".v1.theme";
+    const auto filename = path.file_name();
+    if (!filename.ends_with(suffix))
+    {
+        return std::unexpected(Failure::invalid_name);
+    }
+    const auto stem = filename.substr(0, filename.size() - suffix.size());
+    const auto name = core::ThemeName::parse(stem);
+    if (!name || name.value().text() != stem)
+    {
+        return std::unexpected(Failure::invalid_name);
+    }
+    return name.value();
+}
+
 std::expected<core::ThemeDocument, Failure> decode_theme(std::string_view bytes,
                                                          const core::ThemeName &expected_name)
 {
@@ -251,7 +251,7 @@ std::expected<core::ThemeDocument, Failure> decode_theme(std::string_view bytes,
 std::expected<core::ThemeDocument, Failure> load_theme(application::FilePort &files,
                                                        const core::FilePath &path)
 {
-    const auto name = file_theme_name(path);
+    const auto name = theme_name_for_file(path);
     if (!name)
     {
         return std::unexpected(name.error());

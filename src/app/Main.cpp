@@ -11,6 +11,7 @@
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
+#include "Win32ThemeAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
 #include "WindowFailure.hpp"
 
@@ -20,6 +21,7 @@
 #include <shellapi.h>
 
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -102,18 +104,19 @@ constexpr wchar_t measure_option[] = L"--measure";
 }
 
 // NeNeNib.exe <path> で開く（ADR 0010 の決定 11）。最初の描画より前に意図として渡す。
-void open_first_file(nenenib::application::EditorController &controller,
-                     const std::wstring &argument)
+[[nodiscard]] std::optional<nenenib::application::OpenDocument>
+initial_document(const std::wstring &argument)
 {
     if (argument.empty())
     {
-        return;
+        return std::nullopt;
     }
     const auto path = nenenib::adapters::win32::absolute_file_path(argument);
-    if (path.has_value())
+    if (!path)
     {
-        static_cast<void>(controller.apply(nenenib::application::OpenDocument{path.value()}));
+        return std::nullopt;
     }
+    return nenenib::application::OpenDocument{path.value()};
 }
 
 int run(HINSTANCE instance)
@@ -132,9 +135,12 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32CodePageAdapter code_pages;
     nenenib::adapters::win32::Win32SettingsAdapter settings(
         files, nenenib::adapters::win32::local_settings_path());
+    nenenib::adapters::win32::Win32ThemeAdapter themes(
+        files, nenenib::adapters::win32::local_theme_directory());
     nenenib::application::EditorController controller(
-        nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings});
-    open_first_file(controller, first_file(given));
+        nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
+                                          themes},
+        initial_document(first_file(given)));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);

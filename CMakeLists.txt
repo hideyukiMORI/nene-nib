@@ -39,7 +39,8 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
-    src/core/ThemeName.cpp src/core/ThemeDocument.cpp
+    src/core/ThemeName.cpp src/core/ThemeDocument.cpp src/core/ThemeChoice.cpp
+    src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/Composition.cpp
     src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
@@ -51,7 +52,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimWordMotion.cpp)
 
 nenenib_target(nenenib_application application STATIC
-    src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp)
+    src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE tests/unit/NibTests.cpp)
@@ -62,6 +63,7 @@ add_test(NAME nib_unit COMMAND nib_tests)
 nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/KeyValueFields.cpp src/adapters/win32/ColorCodec.cpp
     src/adapters/win32/ThemeCodec.cpp src/adapters/win32/ThemeContrast.cpp
+    src/adapters/win32/Win32ThemeAdapter.cpp
     src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
     src/adapters/win32/SettingsCodec.cpp src/adapters/win32/Win32SettingsAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp

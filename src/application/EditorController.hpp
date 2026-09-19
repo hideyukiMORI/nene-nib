@@ -32,7 +32,8 @@ namespace nenenib::application
 class EditorController final
 {
   public:
-    explicit EditorController(EditorPorts ports);
+    explicit EditorController(EditorPorts ports,
+                              std::optional<OpenDocument> initial = std::nullopt);
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
     [[nodiscard]] EditorFrame frame() const;
     [[nodiscard]] bool command_line_active() const noexcept;

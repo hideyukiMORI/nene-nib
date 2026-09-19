@@ -7,19 +7,19 @@ namespace nenenib::adapters::win32
 {
 namespace
 {
-[[nodiscard]] std::expected<std::uint32_t, application::ThemeFailure>
-hex_value(std::string_view text, std::size_t digits)
+[[nodiscard]] std::expected<std::uint32_t, core::ThemeFailure> hex_value(std::string_view text,
+                                                                         std::size_t digits)
 {
     if (text.size() != digits + 1 || text.front() != '#')
     {
-        return std::unexpected(application::ThemeFailure::invalid_color);
+        return std::unexpected(core::ThemeFailure::invalid_color);
     }
     text.remove_prefix(1);
     std::uint32_t value = 0;
     const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value, 16);
     if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
     {
-        return std::unexpected(application::ThemeFailure::invalid_color);
+        return std::unexpected(core::ThemeFailure::invalid_color);
     }
     return value;
 }
@@ -32,7 +32,7 @@ hex_value(std::string_view text, std::size_t digits)
 }
 } // namespace
 
-std::expected<core::RgbColor, application::ThemeFailure> decode_rgb(std::string_view text)
+std::expected<core::RgbColor, core::ThemeFailure> decode_rgb(std::string_view text)
 {
     const auto value = hex_value(text, 6);
     if (!value)
@@ -42,7 +42,7 @@ std::expected<core::RgbColor, application::ThemeFailure> decode_rgb(std::string_
     return rgb(value.value());
 }
 
-std::expected<core::RgbaColor, application::ThemeFailure> decode_rgba(std::string_view text)
+std::expected<core::RgbaColor, core::ThemeFailure> decode_rgba(std::string_view text)
 {
     const auto value = hex_value(text, 8);
     if (!value)

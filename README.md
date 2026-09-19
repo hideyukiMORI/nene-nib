@@ -28,8 +28,12 @@ The format and failure behavior are specified in
 [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in
 [ADR 0022](docs/adr/0022-ex-command-line-and-settings-evaluation.md) and
 [ADR 0023](docs/adr/0023-command-palette-and-shared-input-session.md).
-The [user-theme file format](docs/design/user-theme-format.md) and validated reader are defined;
-selecting user themes from the app is the next slice.
+Put a [user-theme file](docs/design/user-theme-format.md) in
+`%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`, restart, then choose it through the same
+`colorscheme` command or Ctrl+P list. Up to 128 files are loaded once per launch. Invalid themes
+report their name and reason; a missing or broken saved theme leaves the original settings intact
+and blocks settings writes until repaired and restarted. See
+[ADR 0025](docs/adr/0025-user-theme-catalog-and-selection.md).
 
 ## What it will be
 

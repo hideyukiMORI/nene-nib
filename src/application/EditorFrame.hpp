@@ -11,7 +11,7 @@
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "Palette.hpp"
-#include "SettingsFailure.hpp"
+#include "SettingsIssue.hpp"
 #include "StatusItems.hpp"
 #include "VimMode.hpp"
 
@@ -44,7 +44,7 @@ struct EditorFrame
     std::array<core::DisplayText, core::status_item_count> status_items;
     core::EditorSettings settings;
     // 起動時と設定変更時だけ告知する。本文の次のキーで繰り返し表示しない（ADR 0020）。
-    std::optional<SettingsFailure> settings_failure;
+    std::optional<SettingsIssue> settings_failure;
     std::optional<core::CommandLine> command_line;
     std::optional<core::DisplayText> command_message;
     std::optional<CommandPaletteView> command_palette;

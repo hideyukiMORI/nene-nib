@@ -2,10 +2,14 @@
 #include "BuiltinThemes.hpp"
 #include "ColorCodec.hpp"
 #include "KeyValueFields.hpp"
+#include "SettingsCodec.hpp"
 #include "ThemeCodec.hpp"
 #include "ThemeContrast.hpp"
 #include "ThemeDerivation.hpp"
+#include "Utf16.hpp"
 #include "Win32FileAdapter.hpp"
+#include "Win32SettingsAdapter.hpp"
+#include "Win32ThemeAdapter.hpp"
 
 #include <windows.h>
 
@@ -17,7 +21,7 @@ namespace
 {
 namespace core = nenenib::core;
 namespace adapters = nenenib::adapters::win32;
-using Failure = nenenib::application::ThemeFailure;
+using Failure = nenenib::core::ThemeFailure;
 
 std::size_t &failures()
 {
@@ -301,16 +305,154 @@ void verify_owned_view()
     expect(view.ui.text == moved.ui.text && view.body.keyword == moved.body.keyword,
            "Theme view carries identical colors");
 }
+core::FilePath catalog_path(std::string_view name)
+{
+    return core::FilePath::parse("nib-theme-catalog/" + std::string(name)).value();
+}
+
+void put_theme(adapters::Win32FileAdapter &files, std::string_view filename, std::string_view bytes)
+{
+    expect(files.write(catalog_path(filename), bytes).has_value(), "catalog fixture written");
+}
+
+void remove_fixture(std::string_view name)
+{
+    const auto path = core::to_utf16(catalog_path(name).text()).value();
+    expect(DeleteFileW(path.c_str()) != 0, "catalog fixture removed");
+}
+
+void verify_catalog_restore(adapters::Win32FileAdapter &files, const core::ThemeCatalog &catalog)
+{
+    auto settings = core::default_editor_settings();
+    settings.theme = catalog.find(name_of()).value();
+    const auto encoded = adapters::encode_settings(settings);
+    expect(encoded.find("colorscheme=my-theme\n") != std::string::npos,
+           "settings store only canonical name");
+    const auto decoded = adapters::decode_settings(encoded, catalog);
+    expect(decoded && core::same_settings(decoded.value(), settings),
+           "settings restore user choice from catalog");
+    const auto path = catalog_path("settings.v1");
+    adapters::Win32SettingsAdapter store(files, path);
+    expect(store.read(catalog).has_value() && store.write(settings).has_value(),
+           "adapter saves selected theme");
+    adapters::Win32SettingsAdapter restarted(files, path);
+    expect(core::same_settings(
+               restarted.read(catalog).value().value_or(core::default_editor_settings()), settings),
+           "new adapter restores same user data");
+    for (const auto &bad :
+         {core::ThemeCatalog::builtins(),
+          core::ThemeCatalog::from({{name_of(), std::unexpected(Failure::invalid_color)}}).value()})
+    {
+        adapters::Win32SettingsAdapter blocked(files, path);
+        const auto reading = blocked.read(bad);
+        expect(!reading && std::get<core::ThemeLookupFailure>(reading.error()).name == name_of(),
+               "missing or broken saved theme returns its name");
+        const auto writing = blocked.write(core::default_editor_settings());
+        expect(!writing && writing.error() == reading.error(),
+               "named startup error also blocks later writes");
+        expect(files.read(path, 4096).value() == encoded, "blocked write preserves original bytes");
+    }
+    remove_fixture("settings.v1");
+    remove_fixture("settings.v1.lock");
+}
+
+void verify_catalog_files(adapters::Win32FileAdapter &files, adapters::Win32ThemeAdapter &adapter)
+{
+    put_theme(files, "z-theme.v1.theme", changed(fixture(), "my-theme", "z-theme"));
+    put_theme(files, "broken.v1.theme", "broken");
+    put_theme(files, "my-theme.v1.theme", fixture());
+    put_theme(files, "invalid_name.v1.theme", "broken");
+    put_theme(files, "dracula.v1.theme", "broken");
+    put_theme(files, "ignored.txt", "ignored");
+    const auto inventory = adapter.read();
+    expect(inventory.catalog.records().size() == 3 && inventory.catalog.names().back() == "z-theme",
+           "sorted catalog keeps valid and failed themes, skips noncanonical and reserved names");
+    expect(inventory.notice.has_value() &&
+               inventory.notice.value().text().starts_with("dracula.v1.theme:"),
+           "first invalid filename is reported deterministically");
+    const auto selected = inventory.catalog.find(name_of()).value();
+    expect(selected.name() == "my-theme", "valid file is selectable");
+    expect(inventory.catalog.find(name_of("broken")).error().reason == Failure::malformed,
+           "failed file is selectable with original reason");
+    verify_catalog_restore(files, inventory.catalog);
+    for (const auto name : {"z-theme.v1.theme", "broken.v1.theme", "my-theme.v1.theme",
+                            "invalid_name.v1.theme", "dracula.v1.theme", "ignored.txt"})
+    {
+        remove_fixture(name);
+    }
+    std::string unicode;
+    for (std::size_t index = 0; index < 100; ++index)
+    {
+        unicode += "界";
+    }
+    unicode += ".v1.theme";
+    put_theme(files, unicode, "invalid");
+    const auto invalid = adapter.read();
+    expect(invalid.notice.has_value() && invalid.notice.value().text().size() <= 256,
+           "long Unicode filename produces bounded valid UTF-8 notice");
+    remove_fixture(unicode);
+}
+
+void verify_catalog_limit(adapters::Win32FileAdapter &files, adapters::Win32ThemeAdapter &adapter)
+{
+    for (std::size_t index = 0; index < adapters::maximum_theme_files; ++index)
+    {
+        put_theme(files, "t-" + std::to_string(index) + ".v1.theme", "broken");
+    }
+    const auto limit = adapter.read();
+    expect(limit.catalog.records().size() == 128, "exactly 128 themes are retained");
+    put_theme(files, "overflow.v1.theme", "broken");
+    const auto overflow = adapter.read();
+    expect(overflow.catalog.records().empty() && overflow.notice.has_value() &&
+               overflow.notice.value().text().find("128") != std::string::npos,
+           "overflow rejects the whole user set instead of an arbitrary subset");
+    remove_fixture("overflow.v1.theme");
+    for (std::size_t index = 0; index < adapters::maximum_theme_files; ++index)
+    {
+        remove_fixture("t-" + std::to_string(index) + ".v1.theme");
+    }
+}
+
+void verify_catalog_loading()
+{
+    expect(CreateDirectoryW(L"nib-theme-catalog", nullptr) != 0,
+           "isolated catalog directory created");
+    adapters::Win32FileAdapter files;
+    adapters::Win32ThemeAdapter missing(files, catalog_path("missing"));
+    const auto empty = missing.read();
+    expect(empty.catalog.records().empty() && !empty.notice.has_value(),
+           "absent directory is normal");
+    adapters::Win32ThemeAdapter unavailable(files, std::unexpected(Failure::unreadable));
+    expect(unavailable.read().notice.has_value(), "unknown location is diagnosed");
+    adapters::Win32ThemeAdapter adapter(files, core::FilePath::parse("nib-theme-catalog").value());
+    expect(CreateDirectoryW(L"nib-theme-catalog/nested.v1.theme", nullptr) != 0,
+           "nested directory created");
+    put_theme(files, "nested.v1.theme/hidden.v1.theme", fixture());
+    const auto nested = adapter.read();
+    expect(nested.catalog.records().empty(), "directories are not followed recursively");
+    remove_fixture("nested.v1.theme/hidden.v1.theme");
+    expect(RemoveDirectoryW(L"nib-theme-catalog/nested.v1.theme") != 0, "nested fixture removed");
+    verify_catalog_files(files, adapter);
+    verify_catalog_limit(files, adapter);
+    expect(RemoveDirectoryW(L"nib-theme-catalog") != 0, "catalog directory removed");
+}
 } // namespace
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::string_view(argv[1]) == "--catalog")
+    {
+        verify_catalog_loading();
+        std::printf("Theme catalog: %zu checks, %zu failures\n", checks(), failures());
+        return failures() == 0 ? 0 : 1;
+    }
     if (argc == 2 && std::string_view(argv[1]) == "--file-loading")
     {
         verify_file_loading();
         std::printf("Theme file loading: %zu checks, %zu failures\n", checks(), failures());
         return failures() == 0 ? 0 : 1;
     }
+    verify_catalog_loading();
     verify_colors();
     verify_body();
     verify_overrides();

@@ -7,11 +7,19 @@
 
 namespace nenenib::core
 {
-CommandLine::CommandLine(std::string text, Offset caret) : text_(std::move(text)), caret_(caret) {}
-
-CommandLine CommandLine::empty()
+CommandLine::CommandLine(std::string text, Offset caret, ThemeCatalog themes)
+    : text_(std::move(text)), caret_(caret), themes_(std::move(themes))
 {
-    return CommandLine({}, Offset{0});
+}
+
+CommandLine CommandLine::empty(ThemeCatalog themes)
+{
+    return CommandLine({}, Offset{0}, std::move(themes));
+}
+
+const ThemeCatalog &CommandLine::catalog() const & noexcept
+{
+    return themes_;
 }
 
 std::string_view CommandLine::text() const noexcept
@@ -26,7 +34,7 @@ Offset CommandLine::caret() const noexcept
 
 std::vector<std::string> CommandLine::completions() const
 {
-    return command_completions(completion_seed_.value_or(text_));
+    return command_completions(completion_seed_.value_or(text_), themes_);
 }
 
 std::optional<std::size_t> CommandLine::completion_index() const noexcept
@@ -50,7 +58,7 @@ std::expected<CommandLine, ExFailure> CommandLine::inserted(std::string_view tex
     }
     std::string next = text_;
     next.insert(caret_.value, text);
-    return CommandLine(std::move(next), Offset{caret_.value + text.size()});
+    return CommandLine(std::move(next), Offset{caret_.value + text.size()}, themes_);
 }
 
 CommandLine CommandLine::completed(CommandEdit direction) const
@@ -66,7 +74,7 @@ CommandLine CommandLine::completed(CommandEdit direction) const
     {
         index = (completion_index_ + (backwards ? candidates.size() - 1 : 1)) % candidates.size();
     }
-    CommandLine next(candidates[index], Offset{candidates[index].size()});
+    CommandLine next(candidates[index], Offset{candidates[index].size()}, themes_);
     next.completion_seed_ = completion_seed_.value_or(text_);
     next.completion_index_ = index;
     return next;
@@ -74,7 +82,7 @@ CommandLine CommandLine::completed(CommandEdit direction) const
 
 CommandLine CommandLine::edited(CommandEdit edit) const
 {
-    CommandLine next(text_, caret_);
+    CommandLine next(text_, caret_, themes_);
     const auto before = previous_code_point(text_, caret_);
     const auto after = next_code_point(text_, caret_);
     switch (edit)

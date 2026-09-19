@@ -66,7 +66,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | FR-014 | 表示は Per-Monitor v2 の DPI で崩れない | マニフェスト |
 | FR-015 | 速さの退行は CI が落とす | QLT-014 |
 | FR-017 | 本文のフォントサイズを 8〜40 pt の範囲で変更できる。Ctrl+`+` / Ctrl+`-` / Ctrl+`0` と Ctrl+ホイール、`:set fontsize=<pt>`。値は設定に保存し、DPI と掛け合わせて描く。フォント名の変更は同じ設定の縦切りで扱う | D14 |
-| FR-016 | `:colorscheme <name>` で組み込みテーマ（ubuntu-aubergine / neutral-light / solarized-dark / solarized-light / monokai / dracula / one-dark / night-owl / night-owl-light）を切り替え、設定に保存する。`:colorscheme system` で OS 追従に戻す。Ctrl+P の `:` 接頭辞からも同じ一覧 | D13。計画は docs/plans/2026-09-15-colorschemes.md。利用者のテーマファイルは C4 |
+| FR-016 | `:colorscheme <name>` で組み込みテーマ（ubuntu-aubergine / neutral-light / solarized-dark / solarized-light / monokai / dracula / one-dark / night-owl / night-owl-light）を切り替え、設定に保存する。`:colorscheme system` で OS 追従に戻す。Ctrl+P の `:` 接頭辞からも同じ一覧 | D13。計画は docs/plans/2026-09-15-colorschemes.md。利用者のテーマファイルはC4a/b（#68 / #70・ADR 0024 / 0025）で同じ選択へ接続 |
 
 ## 5. Vim の範囲
 
@@ -92,7 +92,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 ` の直前が `
 ` かどうか、無ければ CRLF（ADR 0010・Issue #11 で確定） | — |
 | ベンチの目標値 | 初版の実測後 | 施主の実機で記録（ADR 0006） |
-| 利用者のテーマ（配色ファイル） | 組み込み 9 テーマ（D13）。配色は `core::Theme` の値型に閉じ、UI は色の定数を持たない | 計画 C4（docs/plans/2026-09-15-colorschemes.md）。設定の保存形式（版付き）を決める縦切りのあと |
+| 利用者のテーマ（配色ファイル） | 組み込み9テーマに加え、起動時に最大128件の `.v1.theme` を読み、共通カタログから選択・保存・復元する。UIはThemeの色だけを使う | C4a/b（#68 / #70・ADR 0024 / 0025）。形式と制限は docs/design/user-theme-format.md |
 
 ## 7. 非要件（やらないこと）
 

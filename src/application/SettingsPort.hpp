@@ -1,7 +1,8 @@
 #pragma once
 
 #include "EditorSettings.hpp"
-#include "SettingsFailure.hpp"
+#include "SettingsIssue.hpp"
+#include "ThemeCatalog.hpp"
 
 #include <expected>
 #include <optional>
@@ -18,9 +19,9 @@ class SettingsPort
     SettingsPort &operator=(const SettingsPort &) = delete;
     SettingsPort &operator=(SettingsPort &&) = delete;
 
-    [[nodiscard]] virtual std::expected<std::optional<core::EditorSettings>, SettingsFailure>
-    read() = 0;
-    [[nodiscard]] virtual std::expected<void, SettingsFailure>
+    [[nodiscard]] virtual std::expected<std::optional<core::EditorSettings>, SettingsIssue>
+    read(const core::ThemeCatalog &themes = core::ThemeCatalog::builtins()) = 0;
+    [[nodiscard]] virtual std::expected<void, SettingsIssue>
     write(const core::EditorSettings &settings) = 0;
 };
 } // namespace nenenib::application
