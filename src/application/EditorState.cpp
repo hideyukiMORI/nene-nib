@@ -21,7 +21,8 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode)
       line_ending_(core::LineEnding::crlf), appearance_(appearance), mode_(mode),
       vim_(core::vim_resting_state(
           core::VimRegister{std::string{}, core::VimRegisterKind::characters})),
-      document_(Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}})
+      document_(Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}}),
+      settings_(core::default_editor_settings())
 {
 }
 
@@ -89,6 +90,30 @@ EditorState EditorState::with_appearance(core::Appearance appearance) const
 {
     EditorState next(*this);
     next.appearance_ = appearance;
+    return next;
+}
+
+const core::EditorSettings &EditorState::settings() const noexcept
+{
+    return settings_;
+}
+
+std::optional<SettingsFailure> EditorState::settings_failure() const noexcept
+{
+    return settings_failure_;
+}
+
+EditorState EditorState::with_settings(core::EditorSettings settings) const
+{
+    EditorState next(*this);
+    next.settings_ = std::move(settings);
+    return next;
+}
+
+EditorState EditorState::with_settings_failure(std::optional<SettingsFailure> failure) const
+{
+    EditorState next(*this);
+    next.settings_failure_ = failure;
     return next;
 }
 

@@ -144,7 +144,7 @@ TOGGLE_WIDTH_DIPS = TOGGLE_PADDING_DIPS * 3 + SEGMENT_WIDTH_DIPS * 2
 MODE_LABEL_WIDTH_DIPS = 72
 # src/core/BodyLayout.cpp の DIP。行の帯とキャレットの位置はここから同じ整数丸めで出す。
 BODY_TOP_DIPS = 12
-BODY_LINE_HEIGHT_DIPS = 24
+BODY_DEFAULT_POINTS = 13.5
 BODY_GUTTER_DIPS = 56
 TYPED_LINES = 200
 PAGE_KEYS = 30
@@ -544,7 +544,8 @@ def judge_composition(composed: dict) -> None:
                                 "predicted candidate instead of opening a target clause")
 
 
-def verify_ime(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
+def verify_ime(executable: Path, environment: dict, appearance: str, output: Path,
+               points: float = BODY_DEFAULT_POINTS) -> dict:
     """Issue #28 / ADR 0014. A fresh editor, because this one drives the real keyboard."""
     thread_layout = user.GetKeyboardLayout(0)
     process, window, _ = start(executable, environment)
@@ -567,7 +568,7 @@ def verify_ime(executable: Path, environment: dict, appearance: str, output: Pat
         was_open = ime_open(ime)
         result["openStatusAsFound"] = was_open
         ground = {
-            "size": (width, height, dpi, body_points(width, height, dpi)),
+            "size": (width, height, dpi, body_points(width, height, dpi, points)),
             "background": list(PALETTE[appearance]),
             "current": list(CURRENT_LINE[appearance]),
             "ime": IME_TOKEN[appearance],
@@ -611,16 +612,16 @@ def verify_documents(executable: Path, environment: dict, appearance: str, outpu
     return {"utf8": utf8, "shiftJis": shift_jis, "missing": missing}
 
 
-def body_points(width: int, height: int, dpi: int) -> dict:
+def body_points(width: int, height: int, dpi: int, points: float = BODY_DEFAULT_POINTS) -> dict:
     """The body band, mirroring core::body_layout (src/core/BodyLayout.cpp)."""
     title = to_pixels(TITLE_BAR_DIPS, dpi)
     band_bottom = max(height - to_pixels(STATUS_BAR_DIPS, dpi), title)
     first = title + to_pixels(BODY_TOP_DIPS, dpi)
-    line_height = max(to_pixels(BODY_LINE_HEIGHT_DIPS, dpi), 1)
+    line_height = max(to_pixels(int(points * 96 / 72 * 1.6 + 0.5), dpi), 1)
     return {
         "firstRowTop": first,
         "lineHeight": line_height,
-        "gutter": to_pixels(BODY_GUTTER_DIPS, dpi),
+        "gutter": min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi), width),
         "bandBottom": band_bottom,
         "visibleLines": max((band_bottom - first) // line_height, 0),
     }

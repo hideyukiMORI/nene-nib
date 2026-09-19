@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AdjustFontSize.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "ClipboardAction.hpp"
@@ -31,5 +32,5 @@ using EditorIntent =
     std::variant<InsertText, MoveCaret, PlaceCaret, DeleteText, NewLine, SelectAll, CancelSelection,
                  ClipboardAction, HistoryAction, ScrollLines, VisibleLines, SelectEditMode,
                  VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument, ComposeText,
-                 CommitText, CancelComposition>;
+                 CommitText, CancelComposition, AdjustFontSize>;
 } // namespace nenenib::application

@@ -2,6 +2,7 @@
 // --coverage-negative は失敗系を全部省く。その実行が QLT-009 の閾値で落ちることが反例である。
 // 時間は測らない（<chrono> は ARC-007 でここに書けない）。1 MB と 1
 // 万行は「終わること」だけを見る。
+#include "AdjustFontSize.hpp"
 #include "Appearance.hpp"
 #include "AppearancePort.hpp"
 #include "AppearanceReadFailure.hpp"
@@ -36,6 +37,7 @@
 #include "EditMode.hpp"
 #include "EditorController.hpp"
 #include "EditorIntent.hpp"
+#include "EditorSettings.hpp"
 #include "EditorState.hpp"
 #include "EncodingFailure.hpp"
 #include "FileFailure.hpp"
@@ -64,6 +66,7 @@
 #include "SelectionAnchoring.hpp"
 #include "SelectionPresence.hpp"
 #include "SelectionSpan.hpp"
+#include "SettingsPort.hpp"
 #include "StatusBarHit.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusItems.hpp"
@@ -108,6 +111,7 @@
 #include <cstdio>
 #include <expected>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -464,6 +468,53 @@ DisplayText fixed_text(std::string_view text)
     expect(parsed.has_value(), "test fixture text must parse");
     return std::move(parsed).value();
 }
+
+using SettingsReading = std::expected<std::optional<nenenib::core::EditorSettings>,
+                                      nenenib::application::SettingsFailure>;
+
+class ScriptedSettings final : public nenenib::application::SettingsPort
+{
+  public:
+    explicit ScriptedSettings(SettingsReading reading = std::nullopt) : reading_(std::move(reading))
+    {
+    }
+
+    [[nodiscard]] SettingsReading read() override
+    {
+        return reading_;
+    }
+
+    [[nodiscard]] std::expected<void, nenenib::application::SettingsFailure>
+    write(const nenenib::core::EditorSettings &settings) override
+    {
+        ++writes_;
+        if (failure_.has_value())
+        {
+            return std::unexpected(failure_.value());
+        }
+        written_ = settings;
+        return {};
+    }
+
+    [[nodiscard]] std::size_t writes() const noexcept
+    {
+        return writes_;
+    }
+    [[nodiscard]] const std::optional<nenenib::core::EditorSettings> &written() const noexcept
+    {
+        return written_;
+    }
+    void fail(std::optional<nenenib::application::SettingsFailure> failure)
+    {
+        failure_ = failure;
+    }
+
+  private:
+    SettingsReading reading_;
+    std::size_t writes_ = 0;
+    std::optional<nenenib::core::EditorSettings> written_;
+    std::optional<nenenib::application::SettingsFailure> failure_;
+};
 
 TextBuffer buffer_of(std::string_view text)
 {
@@ -1058,18 +1109,18 @@ void verify_vim_scroll_follow_thresholds()
 
 void verify_body_layout()
 {
-    const auto layout = body_layout(640, 360, 96);
+    const auto layout = body_layout(640, 360, 96, nenenib::core::default_font_size());
     expect(layout.band == LayoutRect{0, 40, 640, 332}, "the body sits between the two bands");
     expect(layout.gutter == LayoutRect{0, 52, 56, 332}, "the gutter is 56 DIP wide");
     expect(layout.content == LayoutRect{56, 52, 640, 332}, "the content starts after the gutter");
-    expect(layout.line_height == 24 && layout.caret_width == 2, "the line height and the caret");
-    expect(layout.visible_lines == 11, "280 pixels hold eleven 24 DIP lines");
-    expect(body_line_rect(layout, 0) == LayoutRect{0, 52, 640, 76}, "the first row");
-    expect(body_line_rect(layout, 2) == LayoutRect{0, 100, 640, 124}, "the third row");
-    const auto scaled = body_layout(800, 450, 120);
-    expect(scaled.line_height == 30, "the line height scales to 125 percent");
-    expect(scaled.visible_lines == 11, "the taller window holds the same eleven lines");
-    const auto tiny = body_layout(640, 40, 96);
+    expect(layout.line_height == 29 && layout.caret_width == 2, "13.5 pt makes a 29 DIP row");
+    expect(layout.visible_lines == 9, "280 pixels hold nine 29 DIP lines");
+    expect(body_line_rect(layout, 0) == LayoutRect{0, 52, 640, 81}, "the first row");
+    expect(body_line_rect(layout, 2) == LayoutRect{0, 110, 640, 139}, "the third row");
+    const auto scaled = body_layout(800, 450, 120, nenenib::core::default_font_size());
+    expect(scaled.line_height == 36, "29 DIP rounds to 36 pixels at 125 percent");
+    expect(scaled.visible_lines == 9, "the taller window holds the same nine lines");
+    const auto tiny = body_layout(640, 40, 96, nenenib::core::default_font_size());
     expect(tiny.visible_lines == 0, "a window with no body holds no lines");
 }
 
@@ -1510,7 +1561,17 @@ void verify_status_bar_hits()
 class Editing final
 {
   public:
-    Editing() : controller_(appearance_, clipboard_, files_, code_pages_) {}
+    explicit Editing(SettingsReading reading = std::nullopt)
+        : settings_(std::move(reading)),
+          controller_(nenenib::application::EditorPorts{appearance_, clipboard_, files_,
+                                                        code_pages_, settings_})
+    {
+    }
+
+    [[nodiscard]] ScriptedSettings &settings() noexcept
+    {
+        return settings_;
+    }
 
     [[nodiscard]] EditorController &controller() noexcept
     {
@@ -1542,6 +1603,7 @@ class Editing final
     ScriptedClipboard clipboard_;
     ScriptedFiles files_;
     ScriptedCodePages code_pages_;
+    ScriptedSettings settings_;
     EditorController controller_;
 };
 
@@ -1561,17 +1623,148 @@ std::string applied(EditorController &controller, const nenenib::application::Ed
     return joined;
 }
 
+void verify_font_sizes()
+{
+    using nenenib::core::adjusted_font_size;
+    using nenenib::core::FontSize;
+    using nenenib::core::FontSizeAdjustment;
+    const auto initial = nenenib::core::default_font_size();
+    expect(initial.points() == 13.5F, "the default font is 13.5 points");
+    expect(nenenib::core::font_size_dips(initial) == 18.0F, "13.5 pt is 18 DIP, not 13.5 DIP");
+    for (const float points : {8.0F, 13.25F, 40.0F})
+    {
+        expect(FontSize::from_points(points).has_value(), "valid point sizes are accepted");
+    }
+    for (const float points : {7.99F, 40.01F, -1.0F, std::numeric_limits<float>::infinity(),
+                               std::numeric_limits<float>::quiet_NaN()})
+    {
+        expect(!FontSize::from_points(points).has_value(), "invalid point sizes are rejected");
+    }
+    expect(adjusted_font_size(initial, FontSizeAdjustment::increase, 1).points() == 14.5F,
+           "increase means one point");
+    expect(adjusted_font_size(initial, FontSizeAdjustment::decrease, 2).points() == 11.5F,
+           "wheel steps use the same point adjustment");
+    expect(adjusted_font_size(initial, FontSizeAdjustment::increase, 0).points() == 13.5F,
+           "zero wheel steps do nothing");
+    expect(adjusted_font_size(initial, FontSizeAdjustment::increase,
+                              std::numeric_limits<std::size_t>::max())
+                   .points() == 40.0F,
+           "a huge count clamps without arithmetic overflow");
+    expect(adjusted_font_size(initial, FontSizeAdjustment::decrease, 100).points() == 8.0F,
+           "decrease stops at eight points");
+    const auto largest = FontSize::from_points(40.0F).value();
+    expect(adjusted_font_size(largest, FontSizeAdjustment::reset, 0).points() == 13.5F,
+           "reset is independent of the count");
+}
+
+void verify_font_geometry()
+{
+    using nenenib::core::FontSize;
+    const auto small = body_layout(640, 360, 96, FontSize::from_points(8).value());
+    expect(small.line_height == 17 && small.gutter.right == 33,
+           "eight points changes the row and gutter together");
+    const auto large = body_layout(640, 360, 96, FontSize::from_points(40).value());
+    expect(large.line_height == 85 && large.gutter.right == 166 && large.visible_lines == 3,
+           "forty points is still measured in point-derived DIP");
+    const auto double_dpi = body_layout(1280, 720, 192, FontSize::from_points(40).value());
+    expect(double_dpi.line_height == 170 && double_dpi.gutter.right == 332 &&
+               double_dpi.visible_lines == large.visible_lines,
+           "DPI is applied once and preserves the visible line count");
+    const auto narrow = body_layout(50, 360, 96, FontSize::from_points(40).value());
+    expect(narrow.content.left == narrow.content.right, "a large gutter never inverts the content");
+}
+
+void verify_settings_loading()
+{
+    auto saved = nenenib::core::default_editor_settings();
+    saved.font_size = nenenib::core::FontSize::from_points(21.25F).value();
+    saved.font_family = fixed_text("Consolas");
+    saved.theme = BuiltinTheme::neutral_light;
+    Editing editor{SettingsReading{saved}};
+    const auto frame = editor.controller().frame();
+    expect(frame.settings.font_size.points() == 21.25F &&
+               frame.settings.font_family.text() == "Consolas",
+           "saved font settings are restored");
+    expect(frame.appearance == Appearance::light, "an explicit theme overrides the system");
+    editor.appearance().script(Reading{Appearance::dark});
+    const auto refreshed = editor.controller().apply(RefreshAppearance{});
+    expect(refreshed.appearance == Appearance::light, "system refresh preserves an explicit theme");
+    expect(editor.settings().writes() == 0, "loading and system refresh never rewrite settings");
+    const auto held_frame = frame;
+    static_cast<void>(editor.controller().apply(InsertText{"abc"}));
+    expect(held_frame.settings.font_family.text() == "Consolas",
+           "a retained frame owns its font name");
+}
+
+void verify_settings_adjustment()
+{
+    using nenenib::application::AdjustFontSize;
+    using nenenib::core::FontSizeAdjustment;
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(InsertText{"abc"}));
+    static_cast<void>(controller.apply(SelectAll{}));
+    const auto before = controller.frame();
+    const auto larger = controller.apply(AdjustFontSize{FontSizeAdjustment::increase, 1});
+    expect(larger.settings.font_size.points() == 14.5F && editor.settings().writes() == 1,
+           "a changed point size is persisted once");
+    const auto &written = editor.settings().written();
+    expect(written.has_value() && written.value().font_size.points() == 14.5F,
+           "the persisted size equals the displayed size");
+    expect(larger.lines.front().text == "abc" &&
+               larger.caret.position.column == before.caret.position.column,
+           "font adjustment preserves text and caret");
+    expect(larger.lines.front().selection.presence == before.lines.front().selection.presence,
+           "font adjustment preserves the selection");
+    const auto reset = controller.apply(AdjustFontSize{FontSizeAdjustment::reset, 1});
+    expect(reset.settings.font_size.points() == 13.5F, "reset restores the default");
+    static_cast<void>(controller.apply(AdjustFontSize{FontSizeAdjustment::reset, 1}));
+    expect(editor.settings().writes() == 2, "resetting the same size does not write again");
+    expect(applied(controller, HistoryAction{HistoryDirection::undo}).empty(),
+           "settings changes do not consume text undo steps");
+}
+
+void verify_settings_failures()
+{
+    using nenenib::application::AdjustFontSize;
+    using nenenib::application::SettingsFailure;
+    using nenenib::core::FontSizeAdjustment;
+    Editing unreadable{SettingsReading{std::unexpect, SettingsFailure::unsupported_version}};
+    auto &controller = unreadable.controller();
+    expect(controller.frame().settings_failure == SettingsFailure::unsupported_version,
+           "a bad settings version is exposed in the startup frame");
+    static_cast<void>(controller.apply(VisibleLines{20}));
+    expect(controller.frame().settings_failure == SettingsFailure::unsupported_version,
+           "layout notifications cannot swallow the startup diagnostic");
+    unreadable.settings().fail(SettingsFailure::unsupported_version);
+    const auto refused = controller.apply(AdjustFontSize{FontSizeAdjustment::increase, 1});
+    expect(refused.settings.font_size.points() == 13.5F && refused.settings_failure.has_value(),
+           "a failed write leaves the displayed setting unchanged");
+    Editing editor;
+    editor.settings().fail(SettingsFailure::unwritable);
+    const auto failed = editor.controller().apply(AdjustFontSize{FontSizeAdjustment::decrease, 1});
+    expect(failed.settings_failure == SettingsFailure::unwritable,
+           "write failure is a typed result");
+    editor.settings().fail(std::nullopt);
+    const auto retried = editor.controller().apply(AdjustFontSize{FontSizeAdjustment::decrease, 1});
+    expect(retried.settings.font_size.points() == 12.5F && !retried.settings_failure.has_value(),
+           "a later successful save clears the diagnostic");
+}
+
 void verify_controller_initial_appearance()
 {
     ScriptedAppearance light{Reading{Appearance::light}};
     ScriptedClipboard board;
     ScriptedFiles files;
     ScriptedCodePages code_pages;
-    const EditorController from_light(light, board, files, code_pages);
+    ScriptedSettings settings;
+    const EditorController from_light(
+        nenenib::application::EditorPorts{light, board, files, code_pages, settings});
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
     ScriptedAppearance dark{Reading{Appearance::dark}};
-    const EditorController from_dark(dark, board, files, code_pages);
+    const EditorController from_dark(
+        nenenib::application::EditorPorts{dark, board, files, code_pages, settings});
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
 }
@@ -1582,11 +1775,13 @@ void verify_controller_read_failures()
     ScriptedClipboard board;
     ScriptedFiles files;
     ScriptedCodePages code_pages;
+    ScriptedSettings settings;
     for (const auto failure :
          {AppearanceReadFailure::unavailable, AppearanceReadFailure::unreadable})
     {
         ScriptedAppearance port{Reading{std::unexpect, failure}};
-        const EditorController controller(port, board, files, code_pages);
+        const EditorController controller(
+            nenenib::application::EditorPorts{port, board, files, code_pages, settings});
         expect(controller.frame().palette.background == dark.background,
                "an unreadable setting falls back to dark");
     }
@@ -1598,7 +1793,9 @@ void verify_controller_refresh()
     ScriptedClipboard board;
     ScriptedFiles files;
     ScriptedCodePages code_pages;
-    EditorController controller(port, board, files, code_pages);
+    ScriptedSettings settings;
+    EditorController controller(
+        nenenib::application::EditorPorts{port, board, files, code_pages, settings});
     port.script(Reading{Appearance::dark});
     const auto frame = controller.apply(RefreshAppearance{});
     expect(frame.palette.background == RgbColor{0x30, 0x0A, 0x24},
@@ -3297,6 +3494,11 @@ void verify_text_and_caret()
 
 void verify_controller_intents()
 {
+    verify_font_sizes();
+    verify_font_geometry();
+    verify_settings_loading();
+    verify_settings_adjustment();
+    verify_settings_failures();
     verify_controller_initial_appearance();
     verify_controller_read_failures();
     verify_controller_refresh();

@@ -3,11 +3,16 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-09-15):** editing works in ordinary mode. A frameless window that keeps Windows snap and shadows, a Mica
-> title bar with one tab and the window buttons, a piece-table text buffer with typing, selection, clipboard, undo / redo,
-> scrolling and click-to-place caret, and a status bar with the ordinary / Vim mode toggle, all drawn with Direct2D /
-> DirectWrite through a flip-model composition swap chain. Dark is an Ubuntu-like aubergine with an orange accent.
-> No file open / save, no IME, no Vim engine, no multiple tabs yet. Nothing to download yet (Phase 4).
+> **Status (2026-09-20):** ordinary editing, file open/save, Japanese IME and the first Vim slices
+> (motions, operators, visual selection and viewport navigation) work. Body font size, font family and
+> theme settings persist between launches. Multiple tabs, Ex commands and Ctrl+P are still planned.
+> Nothing to download yet (Phase 4).
+
+Use `Ctrl` + `+` / `-` to change body size, `Ctrl+0` to reset to 13.5 pt, or `Ctrl` + mouse wheel
+in either editing mode (8–40 pt). The title and status bar keep their size.
+Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first size change.
+Theme and font family can currently be edited there while the editor is closed; the format and
+failure behavior are specified in [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md).
 
 ## What it will be
 

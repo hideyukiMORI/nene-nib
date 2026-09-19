@@ -99,8 +99,10 @@ class EditorWindow final
     [[nodiscard]] bool confirm_discard();
     void update_title(const application::EditorFrame &frame);
     void announce(const application::EditorFrame &frame);
+    void announce_settings(const application::EditorFrame &frame);
     void offer_utf8(const core::FilePath &path);
     void turn_wheel(WPARAM word);
+    void zoom_wheel(std::int32_t delta);
     [[nodiscard]] std::size_t body_lines() const;
 
     HINSTANCE instance_;
@@ -110,6 +112,7 @@ class EditorWindow final
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
     wchar_t pending_high_surrogate_ = 0;
+    std::int32_t zoom_wheel_remainder_ = 0;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Vim の NORMAL に入る前の IME の開閉。控えが在ることが「いま切ってある」でもある（決定 5）。

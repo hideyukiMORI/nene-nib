@@ -13,6 +13,7 @@
 #include "EditorIntent.hpp"
 #include "FileDialog.hpp"
 #include "FileFailure.hpp"
+#include "FontShortcut.hpp"
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
 #include "Milestone.hpp"
@@ -22,6 +23,7 @@
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "SelectionAnchoring.hpp"
+#include "SettingsNotice.hpp"
 #include "StatusBarLayout.hpp"
 #include "TextEncoding.hpp"
 #include "TitleBarLayout.hpp"
@@ -474,6 +476,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     update_title(controller_.frame());
     // 開けなかった理由も 1 行出す。窓が出てから出すので、利用者は空の無題で作業を続けられる。
     announce(opened);
+    announce_settings(opened);
     return {};
 }
 
@@ -690,7 +693,8 @@ void EditorWindow::click_client(LPARAM data)
     case core::StatusBarHit::none:
         break;
     }
-    const auto body = core::body_layout(client.right, client.bottom, dpi_);
+    const auto body = core::body_layout(client.right, client.bottom, dpi_,
+                                        controller_.frame().settings.font_size);
     if (core::contains(body.band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data);
@@ -705,8 +709,14 @@ void EditorWindow::place_caret(LPARAM data)
     }
     RECT client{};
     GetClientRect(window_, &client);
-    const auto body = core::body_layout(client.right, client.bottom, dpi_);
     const auto frame = controller_.frame();
+    const auto body =
+        core::body_layout(client.right, client.bottom, dpi_, frame.settings.font_size);
+    if (!renderer_->set_font(frame.settings))
+    {
+        abandon();
+        return;
+    }
     if (frame.lines.empty())
     {
         return;
@@ -749,7 +759,9 @@ std::size_t EditorWindow::body_lines() const
 {
     RECT client{};
     GetClientRect(window_, &client);
-    return core::body_layout(client.right, client.bottom, dpi_).visible_lines;
+    return core::body_layout(client.right, client.bottom, dpi_,
+                             controller_.frame().settings.font_size)
+        .visible_lines;
 }
 
 // ---------------------------------------------------------------- IMM32（ADR 0014）
@@ -885,7 +897,18 @@ void EditorWindow::restore_ime()
 
 void EditorWindow::send(const application::EditorIntent &intent)
 {
-    const auto frame = controller_.apply(intent);
+    const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent);
+    const float previous_size =
+        font_change ? controller_.frame().settings.font_size.points() : 0.0F;
+    auto frame = controller_.apply(intent);
+    if (font_change)
+    {
+        announce_settings(frame);
+        if (frame.settings.font_size.points() != previous_size)
+        {
+            frame = controller_.apply(application::VisibleLines{body_lines()});
+        }
+    }
     follow_ime(frame);
     mode_ = frame.mode;
     // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
@@ -933,6 +956,15 @@ void EditorWindow::announce(const application::EditorFrame &frame)
         return;
     }
     MessageBoxW(window_, reason_of(failure), product_name, MB_OK | MB_ICONWARNING);
+}
+
+void EditorWindow::announce_settings(const application::EditorFrame &frame)
+{
+    if (frame.settings_failure.has_value())
+    {
+        MessageBoxW(window_, settings_notice(frame.settings_failure.value()), product_name,
+                    MB_OK | MB_ICONWARNING);
+    }
 }
 
 void EditorWindow::offer_utf8(const core::FilePath &path)
@@ -1018,6 +1050,10 @@ void EditorWindow::close_window()
 
 void EditorWindow::type_character(WPARAM word)
 {
+    if (held(VK_CONTROL) && !held(VK_MENU))
+    {
+        return;
+    }
     const auto unit = static_cast<wchar_t>(word);
     if (unit >= first_high_surrogate && unit < first_low_surrogate)
     {
@@ -1054,6 +1090,15 @@ void EditorWindow::type_character(WPARAM word)
 
 void EditorWindow::press_key(WPARAM word)
 {
+    const auto font = font_shortcut(word);
+    if (held(VK_CONTROL) && !held(VK_MENU) && font.has_value())
+    {
+        if (!controller_.frame().composition.has_value())
+        {
+            send(application::AdjustFontSize{font.value(), 1});
+        }
+        return;
+    }
     if (held(VK_CONTROL))
     {
         press_control_key(word);
@@ -1202,7 +1247,28 @@ void EditorWindow::send_vim_redo()
 void EditorWindow::turn_wheel(WPARAM word)
 {
     const auto delta = static_cast<std::int16_t>(HIWORD(word));
+    if ((LOWORD(word) & MK_CONTROL) != 0)
+    {
+        zoom_wheel(delta);
+        return;
+    }
+    zoom_wheel_remainder_ = 0;
     send(application::ScrollLines{delta > 0 ? -wheel_lines : wheel_lines});
+}
+
+void EditorWindow::zoom_wheel(std::int32_t delta)
+{
+    zoom_wheel_remainder_ += delta;
+    const std::int32_t steps = zoom_wheel_remainder_ / WHEEL_DELTA;
+    zoom_wheel_remainder_ %= WHEEL_DELTA;
+    if (steps == 0)
+    {
+        return;
+    }
+    const auto adjustment =
+        steps > 0 ? core::FontSizeAdjustment::increase : core::FontSizeAdjustment::decrease;
+    const auto amount = static_cast<std::size_t>(steps > 0 ? steps : -steps);
+    send(application::AdjustFontSize{adjustment, amount});
 }
 
 void EditorWindow::change_dpi(WPARAM word, LPARAM data)
@@ -1227,6 +1293,10 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame(const application::E
     {
         // Present が返った直後の 1 点だけが「描けた」節目（ADR 0011 の決定 1・8）。
         timing_.mark(core::Milestone::frame_presented);
+        if (frame.composition.has_value())
+        {
+            place_candidate_window();
+        }
     }
     return drawn;
 }

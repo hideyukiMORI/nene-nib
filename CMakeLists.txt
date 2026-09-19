@@ -40,7 +40,7 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
     src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/Composition.cpp
-    src/core/DisplayText.cpp
+    src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FilePath.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
     src/core/ScrollBounds.cpp src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
@@ -58,7 +58,9 @@ nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
 
 nenenib_target(nenenib_adapters adapters_win32 STATIC
-    src/adapters/win32/AbsolutePath.cpp src/adapters/win32/Win32AppearanceAdapter.cpp
+    src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
+    src/adapters/win32/SettingsCodec.cpp src/adapters/win32/Win32SettingsAdapter.cpp
+    src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)

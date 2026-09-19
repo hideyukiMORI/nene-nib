@@ -1,5 +1,6 @@
 #pragma once
 
+#include "FontSize.hpp"
 #include "LayoutRect.hpp"
 
 #include <cstddef>
@@ -19,8 +20,8 @@ struct BodyLayout
     std::size_t visible_lines;
 };
 
-[[nodiscard]] BodyLayout body_layout(std::int32_t width, std::int32_t height,
-                                     std::uint32_t dpi) noexcept;
+[[nodiscard]] BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
+                                     FontSize font_size) noexcept;
 
 [[nodiscard]] LayoutRect body_line_rect(const BodyLayout &layout, std::size_t index) noexcept;
 } // namespace nenenib::core
