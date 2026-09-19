@@ -1,5 +1,7 @@
 #include "EditorWindow.hpp"
 
+#include "PaletteLayout.hpp"
+
 #include "BodyLayout.hpp"
 #include "CancelComposition.hpp"
 #include "CaretMotion.hpp"
@@ -678,6 +680,11 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
 
 void EditorWindow::click_client(LPARAM data)
 {
+    if (controller_.command_palette_active())
+    {
+        click_palette(data);
+        return;
+    }
     RECT client{};
     GetClientRect(window_, &client);
     const auto layout = core::status_bar_layout(client.right, client.bottom, dpi_);
@@ -712,6 +719,31 @@ void EditorWindow::click_client(LPARAM data)
     if (core::contains(body.band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data);
+    }
+}
+
+void EditorWindow::click_palette(LPARAM data)
+{
+    RECT client{};
+    GetClientRect(window_, &client);
+    const auto frame = controller_.frame();
+    if (!frame.command_palette.has_value())
+    {
+        return;
+    }
+    const auto &palette = frame.command_palette.value();
+    const auto layout =
+        core::palette_layout(client.right, client.bottom, dpi_, palette.choices.size());
+    const auto hit = core::palette_hit(layout, low_word_of(data), high_word_of(data));
+    if (hit.has_value())
+    {
+        send(application::ActivateCommandChoice{
+            core::palette_first_visible(layout, palette.selected) + hit.value()});
+        return;
+    }
+    if (!core::contains(layout.panel, low_word_of(data), high_word_of(data)))
+    {
+        send(application::CancelCommand{});
     }
 }
 
@@ -868,7 +900,7 @@ void EditorWindow::place_candidate_window()
 
 void EditorWindow::follow_ime(const application::EditorFrame &frame)
 {
-    if (ime_blocked(frame.mode, frame.vim_mode))
+    if (frame.command_line.has_value() || ime_blocked(frame.mode, frame.vim_mode))
     {
         close_ime();
         return;
@@ -912,7 +944,8 @@ void EditorWindow::restore_ime()
 void EditorWindow::send(const application::EditorIntent &intent)
 {
     const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent) ||
-                             std::holds_alternative<application::SubmitCommand>(intent);
+                             std::holds_alternative<application::SubmitCommand>(intent) ||
+                             std::holds_alternative<application::ActivateCommandChoice>(intent);
     const float previous_size =
         font_change ? controller_.frame().settings.font_size.points() : 0.0F;
     auto frame = controller_.apply(intent);
@@ -1148,18 +1181,35 @@ void EditorWindow::press_key(WPARAM word)
     press_plain_key(word);
 }
 
+void EditorWindow::press_command_control_key(WPARAM word)
+{
+    switch (word)
+    {
+    case 'V':
+        send(application::PasteCommand{});
+        return;
+    case 'C':
+        send(application::CancelCommand{});
+        return;
+    case 'P':
+        send(application::OpenCommandPalette{});
+        return;
+    default:
+        break;
+    }
+}
+
 void EditorWindow::press_command_key(WPARAM word)
 {
     if (held(VK_CONTROL) && !held(VK_MENU))
     {
-        if (word == 'V')
-        {
-            send(application::PasteCommand{});
-        }
-        if (word == 'C')
-        {
-            send(application::CancelCommand{});
-        }
+        press_command_control_key(word);
+        return;
+    }
+    if (controller_.command_palette_active() && (word == VK_UP || word == VK_DOWN))
+    {
+        send(application::EditCommand{word == VK_UP ? core::CommandEdit::complete_previous
+                                                    : core::CommandEdit::complete_next});
         return;
     }
     switch (word)
@@ -1247,6 +1297,11 @@ void EditorWindow::press_plain_key(WPARAM word)
 
 void EditorWindow::press_control_key(WPARAM word)
 {
+    if (word == 'P' && !held(VK_MENU))
+    {
+        send(application::OpenCommandPalette{});
+        return;
+    }
     if (mode_ == core::EditMode::vim)
     {
         const auto special = vim_control_special_for(word);
@@ -1329,6 +1384,15 @@ void EditorWindow::send_vim_redo()
 void EditorWindow::turn_wheel(WPARAM word)
 {
     const auto delta = static_cast<std::int16_t>(HIWORD(word));
+    if (controller_.command_palette_active())
+    {
+        if (delta != 0)
+        {
+            send(application::EditCommand{delta > 0 ? core::CommandEdit::complete_previous
+                                                    : core::CommandEdit::complete_next});
+        }
+        return;
+    }
     if ((LOWORD(word) & MK_CONTROL) != 0)
     {
         zoom_wheel(delta);

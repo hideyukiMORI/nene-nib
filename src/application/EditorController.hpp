@@ -36,6 +36,7 @@ class EditorController final
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
     [[nodiscard]] EditorFrame frame() const;
     [[nodiscard]] bool command_line_active() const noexcept;
+    [[nodiscard]] bool command_palette_active() const noexcept;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
@@ -63,6 +64,12 @@ class EditorController final
     void accept(const SubmitCommand &);
     void accept(const CancelCommand &);
     void accept(const PasteCommand &);
+    void accept(const OpenCommandPalette &);
+    void accept(const ActivateCommandChoice &intent);
+    void submit_palette(const core::CommandPalette &palette);
+    void evaluate_command(std::string_view text);
+    [[nodiscard]] std::optional<core::CommandLine> command_line_view() const;
+    [[nodiscard]] std::optional<CommandPaletteView> command_palette_view() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
     // 触らず、CommitText だけが既存の 1 本（replace / vim_step）を通って本文に入る。

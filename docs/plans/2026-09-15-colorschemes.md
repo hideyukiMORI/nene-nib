@@ -32,7 +32,7 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 
 - `:colorscheme` だけ → 現在のテーマ名を表示。`:colorscheme <name>` → 切り替えて設定に保存。`:colorscheme system` → OS のライト／ダーク追従に戻す（既定。ダーク＝`ubuntu-aubergine`・ライト＝`neutral-light`）
 - 明示的に選んだテーマは OS の切り替えで変わらない（`system` にしたときだけ追従）
-- 名前は `Ctrl+P` の `:` 接頭辞でも補完・選択できる予定（通常モードでも同じ一覧を使う。ARC-001）。存在しない名前は閉じた結果 `ExFailure::unknown_theme` で断り、既定へ黙って落とさない（Issue #64・ADR 0022）
+- 名前は `Ctrl+P` の `:` 接頭辞でも絞り込み・選択できる（通常モードでも同じ一覧を使う。Issue #66・ADR 0023・ARC-001）。Exの存在しない名前は閉じた結果 `ExFailure::unknown_theme` で断り、既定へ黙って落とさない（Issue #64・ADR 0022）
 - 利用者のテーマは版付きのファイル（`%LOCALAPPDATA%\NeNeNib\themes\<name>.v1.*`）から同じ `Theme` を作る。形式は設定の縦切りで ADR にする（ADR 0008 決定 8）
 
 ## 4. 縦切りの順（依存の順）
@@ -42,7 +42,7 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 | C1 | テーマの模型と組み込み 9 テーマ（core だけ） | `Theme` / `SyntaxPalette` / `derive_ui` と組み込みの表。**全テーマで本文の前景／背景のコントラスト比 4.5 以上を単体テストが要求する**。UI はまだ `Palette` だけを使う | 無し（いつでも） |
 | C2 | 設定の保存形式（版付き）とテーマ・本文フォントの永続化 | `settings.v1` にテーマ名・フォント名・pt。起動時に読む。読めない版は型のある失敗（ARC-009）。直接のサイズ操作も接続（Issue #60・ADR 0020） | C1 |
 | C3a | Ex入力とテーマ/フォント設定（Issue #64・ADR 0022） | NORMALの `:` で切替・表示・Tab補完。本文とは独立。C2と同じ保存へ接続 | C2・Vim NORMAL |
-| C3b | Ctrl+Pの共通一覧と `:` 接頭辞（後続） | 通常モードからも同じテーマ/設定評価を利用 | C3a・共通一覧 |
+| C3b | Ctrl+Pの共通一覧と `:` 接頭辞（Issue #66・ADR 0023） | 通常/Vim全モードから同じ候補・入力編集・テーマ/設定評価を利用。ファイル等の統合は別Issue | C3a・共通一覧 |
 | C4 | 利用者のテーマファイル | `themes/<name>.v1.*` を adapters が読んで `Theme` に変換。壊れたファイルは名前を挙げて断る | C2 |
 
 ハイライト（`SyntaxPalette` を実際に本文へ塗る）はハイライトの縦切りで、C1 の型をそのまま使う。

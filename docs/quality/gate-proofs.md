@@ -464,3 +464,23 @@ oracle は 5-g と同じ固定した Vim 9.1。help と鍵を送った結果だ�
 独立レビューは読み取りのみ。pipe、AltGr、本文外クリック、結果中のhidden toggleの4点を修正し、未解決指摘なし。検証後の文書・commit・push・mergeでは同じ成功結果を使う。保存schema変更なし、新規runtime依存なし、Waivers: none。
 
 未対応: 一般Ex、範囲/回数付きEx、VISUAL範囲、VimScript、`:w`/`:q`、履歴、Ctrl+P、専用フォント選択UI。ExのIMEはNORMALと同じ閉状態、Unicode名はUTF-8/単行貼付。nativeは120 DPI、日本語キーボード環境での実測。Ctrl+PなどFR-016全体は後続。
+
+### 5-m. Ctrl+P設定一覧（Issue #66・ADR 0023・2026-09-20）
+
+対象は候補の照合・選択、Exと共通化した入力session、設定評価/保存、Win32の配送と採用済み一覧の描画。保存形式/競合/adapter、Vim engine、Unicode編集本体は不変で5-k/5-lの成功を再利用する。新規依存・schema・waiver・全件検証なし。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4` | 新しい閉じた意図、状態と直接呼出元。Debug + ASan/UBSan + tidy成功 |
+| `build/nib_tests.exe --command-palette` | 最終130 checks成功。9テーマ/system、大小文字/部分列/順位/未知theme、fill、Unicode編集と256 bytes、候補巡回、96/120/192 DPI配置、保存失敗、本文/選択/undo/Vim count/pending保持、Exとの排他、遅れて届くIME/変換中の入口拒否 |
+| 初回の同selector（当時は `verify_ex_settings` も併実行） | 初回274 checks成功のうちEx153 checksを再利用。後のpalette候補修正はEx側のコードを変えず、selectorをpaletteだけに絞って再実行した |
+| `python eng/verify-palette.py` | 120 DPI、設定用に隔離したprofile。通常/Vim NORMAL/INSERT/VISUAL/VISUAL LINE、選択/caretの画面bytes保持、IME閉/復元、テーマ部分列、font値補完、クリック適用と配置、無効値、ホイールの本文/拡縮への漏れ防止、460x360狭窓、長入力clip、undo、本文保存一致、再起動。`out/palette-verification/palette-results.json` とBMP |
+| `python eng/verify-ex.py` | 共通sessionと入力/表示配送を変えた直接呼出元。Exの入力/Tab/編集/設定/本文と右status保持/長文clip/再起動が成功。5-lのinput-guardsは不変なので再実行なし |
+| `python eng/verify-palette.py --only surface` | 画面確認後に加えた候補件数と、独立レビューで修正した未知themeの経路だけ追加確認。件数描画、設定を書かず閉じて新たに一覧を開けることが成功。`palette-surface-results.json` とBMP |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | 新しい候補順位と状態の境界、ファイルの所属/依存を確認。2 libraries / 0 violations、conformance 0 violations。許可表は変更なし |
+| `cmake --build build-release --target NeNeNib --parallel 4` / `python out/git/issue66-speed.py` | 共通状態と通常のキー/frame経路への負荷だけ測定。既存measure-speedの起動/打鍵を5試行、指紋bc8a356f37c68491 / 120 DPI。中央値: 初回描画211.0728ms、窓33.7074ms、単打鍵0.872ms、200打鍵2.483ms。退行0・欠測0。`out/speed/issue66-selected.json`。無関係なファイルI/Oは測定しない |
+| changed C++ `clang-format --dry-run --Werror` / `git diff --check` | 変更ソースの整形と差分空白を確認、成功 |
+
+独立レビューは読み取り専用。`colorscheme missing` が無候補で止まる不一致を修正し、完全な未知themeの入力はExと同じエラーへ接続した。部分的な名前の絞り込みは維持する。文書・commit・push・mergeだけでは検証を繰り返さない。
+
+未対応: Ctrl+Pのファイル/履歴/フォルダ/ブックマーク統合、一般Ex、専用フォント一覧、利用者テーマ。nativeは120 DPI/Microsoft日本語IME、別モニターへのDPI移動・他IMEは未確認。Waivers: none。

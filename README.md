@@ -5,8 +5,8 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 
 > **Status (2026-09-20):** ordinary editing, file open/save, Japanese IME and the first Vim slices
 > (motions, operators, visual selection and viewport navigation) work. Body font size, font family and
-> theme settings persist between launches and can be changed from the Vim command line.
-> Multiple tabs and Ctrl+P are still planned.
+> theme settings persist between launches and can be changed from the Vim command line or Ctrl+P.
+> Multiple tabs and the Ctrl+P file/history lists are still planned.
 > Nothing to download yet (Phase 4).
 
 Use `Ctrl` + `+` / `-` to change body size, `Ctrl+0` to reset to 13.5 pt, or `Ctrl` + mouse wheel
@@ -17,10 +17,17 @@ Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Ent
 `Esc` cancels. Left/Right, Home/End, Backspace/Delete and single-line `Ctrl+V` edit the command.
 This settings command line does not yet support ranges, pipes, history, `:w` or `:q`.
 
+Press `Ctrl+P` in either editing mode to choose a settings command. Type part of a theme name
+(for example `drac`) to filter, use Up/Down or Tab/Shift+Tab to select, and press Enter or click
+to choose. Font-setting candidates fill the input so a value can be entered before execution.
+Esc, Ctrl+C, Ctrl+P again or a click outside closes the list and preserves the body selection.
+This first command palette does not yet list files, folders, bookmarks or history.
+
 Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first setting change.
 The format and failure behavior are specified in
 [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in
-[ADR 0022](docs/adr/0022-ex-command-line-and-settings-evaluation.md).
+[ADR 0022](docs/adr/0022-ex-command-line-and-settings-evaluation.md) and
+[ADR 0023](docs/adr/0023-command-palette-and-shared-input-session.md).
 
 ## What it will be
 

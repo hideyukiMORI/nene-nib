@@ -6,6 +6,7 @@
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
+#include "PaletteLayout.hpp"
 #include "RenderFailure.hpp"
 #include "RgbColor.hpp"
 #include "StatusBarLayout.hpp"
@@ -124,6 +125,12 @@ class Direct2DRenderer final
     void draw_command(const application::EditorFrame &frame, const core::LayoutRect &area);
     void draw_completions(const application::EditorFrame &frame,
                           const core::StatusBarLayout &status);
+    void draw_palette(const application::EditorFrame &frame, const core::PaletteLayout &layout);
+    void draw_palette_choices(const application::EditorFrame &frame,
+                              const core::PaletteLayout &layout);
+    void draw_palette_choice(const application::EditorFrame &frame, const core::LayoutRect &row,
+                             std::size_t index);
+    void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
 

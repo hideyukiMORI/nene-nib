@@ -37,3 +37,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0019](0019-vim-viewport-input-and-navigation-effect.md) | 表示領域は engine への入力で、画面移動は選択と先頭行を一緒に返す | 受理 |
 | [0020](0020-versioned-editor-settings-and-point-font-size.md) | 設定は版付きで保存し、本文フォントは pt から描画とクリックへ同じ配置を導く | 受理 |
 | [0021](0021-diff-scoped-verification-and-result-reuse.md) | 検証は差分から選び、関連入力が不変の成功結果を再利用する | 受理 |
+| [0022](0022-ex-command-line-and-settings-evaluation.md) | Ex入力は本文から分離し設定の評価と保存を共用する | 受理 |
+| [0023](0023-command-palette-and-shared-input-session.md) | Ctrl+PとExは入力session・候補・設定評価を共有する | 受理 |

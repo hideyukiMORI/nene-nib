@@ -3,6 +3,7 @@
 #include "BuiltinThemes.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <utility>
 
@@ -126,35 +127,27 @@ evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance sy
     return std::unexpected(ExFailure::unknown_command);
 }
 
-std::vector<std::string> command_completions(std::string_view prefix)
+std::vector<std::string> ex_command_candidates()
 {
-    std::vector<std::string> candidates;
-    constexpr std::array commands{"colorscheme", "set fontsize=", "set guifont="};
-    for (const std::string_view name : commands)
-    {
-        if (name.starts_with(prefix))
-        {
-            candidates.emplace_back(name);
-        }
-    }
-    constexpr std::string_view theme_prefix = "colorscheme ";
-    if (!prefix.starts_with(theme_prefix))
-    {
-        return candidates;
-    }
+    std::vector<std::string> candidates{"colorscheme", "set fontsize=", "set guifont="};
     for (const auto &theme : builtin_themes)
     {
-        const auto candidate = std::string(theme_prefix) + std::string(theme.name);
-        if (candidate.starts_with(prefix))
-        {
-            candidates.push_back(candidate);
-        }
+        candidates.push_back("colorscheme " + std::string(theme.name));
     }
-    const auto system = std::string(theme_prefix) + "system";
-    if (system.starts_with(prefix))
-    {
-        candidates.push_back(system);
-    }
+    candidates.emplace_back("colorscheme system");
+    return candidates;
+}
+
+std::vector<std::string> command_completions(std::string_view prefix)
+{
+    auto candidates = ex_command_candidates();
+    std::erase_if(candidates,
+                  [prefix](const std::string &candidate)
+                  {
+                      return !candidate.starts_with(prefix) ||
+                             (candidate.starts_with("colorscheme ") &&
+                              !prefix.starts_with("colorscheme "));
+                  });
     return candidates;
 }
 
