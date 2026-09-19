@@ -26,6 +26,18 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode)
 {
 }
 
+const core::ThemeCatalog &EditorState::themes() const noexcept
+{
+    return themes_;
+}
+
+EditorState EditorState::with_themes(core::ThemeCatalog themes) const
+{
+    EditorState next = *this;
+    next.themes_ = std::move(themes);
+    return next;
+}
+
 EditorState EditorState::create(core::Appearance appearance, core::EditMode mode)
 {
     return EditorState(appearance, mode);
@@ -98,7 +110,7 @@ const core::EditorSettings &EditorState::settings() const noexcept
     return settings_;
 }
 
-std::optional<SettingsFailure> EditorState::settings_failure() const noexcept
+std::optional<SettingsIssue> EditorState::settings_failure() const noexcept
 {
     return settings_failure_;
 }
@@ -110,7 +122,7 @@ EditorState EditorState::with_settings(core::EditorSettings settings) const
     return next;
 }
 
-EditorState EditorState::with_settings_failure(std::optional<SettingsFailure> failure) const
+EditorState EditorState::with_settings_failure(std::optional<SettingsIssue> failure) const
 {
     EditorState next(*this);
     next.settings_failure_ = failure;

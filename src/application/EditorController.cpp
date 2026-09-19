@@ -204,21 +204,27 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 }
 } // namespace
 
-EditorController::EditorController(EditorPorts ports)
+EditorController::EditorController(EditorPorts ports, std::optional<OpenDocument> initial)
     : ports_(ports),
       state_(EditorState::create(appearance_or_dark(ports.appearance), core::EditMode::ordinary))
 {
-    const auto loaded = ports_.settings.read();
+    const auto inventory = ports_.themes.read();
+    state_ = state_.with_themes(inventory.catalog);
+    const auto loaded = ports_.settings.read(state_.themes());
     if (!loaded)
     {
         state_ = state_.with_settings_failure(loaded.error());
-        return;
     }
-    const auto &settings = loaded.value();
-    if (settings.has_value())
+    else
     {
-        state_ = state_.with_settings(settings.value());
+        state_ = state_.with_settings(loaded.value().value_or(state_.settings()));
     }
+    if (initial.has_value())
+    {
+        static_cast<void>(apply(initial.value()));
+    }
+    // 初期ファイルも通常の意図を通す。その後で起動時の診断を載せ、最初の描画まで保持する。
+    state_ = state_.with_command_message(inventory.notice);
 }
 
 void EditorController::accept(const AdjustFontSize &intent)
@@ -231,8 +237,7 @@ void EditorController::accept(const AdjustFontSize &intent)
 
 bool EditorController::persist_settings(core::EditorSettings settings)
 {
-    state_ = state_.with_settings_failure(std::nullopt);
-    if (core::same_settings(settings, state_.settings()))
+    if (core::same_settings(settings, state_.settings()) && !state_.settings_failure().has_value())
     {
         return true;
     }
@@ -242,7 +247,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
         state_ = state_.with_settings_failure(saved.error());
         return false;
     }
-    state_ = state_.with_settings(std::move(settings));
+    state_ = state_.with_settings(std::move(settings)).with_settings_failure(std::nullopt);
     return true;
 }
 
@@ -635,7 +640,7 @@ void EditorController::perform(const core::VimNoEffect &) {}
 
 void EditorController::perform(const core::VimOpenCommandLine &)
 {
-    state_ = state_.with_command_input(core::CommandLine::empty());
+    state_ = state_.with_command_input(core::CommandLine::empty(state_.themes()));
 }
 
 void EditorController::accept(const CommandText &intent)
@@ -687,7 +692,7 @@ void EditorController::accept(const OpenCommandPalette &)
         accept(CancelCommand{});
         return;
     }
-    state_ = state_.with_command_input(core::CommandPalette::opened());
+    state_ = state_.with_command_input(core::CommandPalette::opened(state_.themes()));
 }
 
 void EditorController::accept(const ActivateCommandChoice &intent)
@@ -770,7 +775,8 @@ void EditorController::evaluate_command(std::string_view text)
     {
         return;
     }
-    const auto result = core::evaluate_ex(text, state_.settings(), state_.appearance());
+    const auto result =
+        core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
     if (!result)
     {
         state_ = state_.with_command_message(core::ex_failure_message(result.error()));

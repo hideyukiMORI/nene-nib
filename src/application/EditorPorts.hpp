@@ -5,6 +5,7 @@
 #include "CodePagePort.hpp"
 #include "FilePort.hpp"
 #include "SettingsPort.hpp"
+#include "ThemePort.hpp"
 
 namespace nenenib::application
 {
@@ -16,5 +17,6 @@ struct EditorPorts
     FilePort &files;
     CodePagePort &code_pages;
     SettingsPort &settings;
+    ThemePort &themes;
 };
 } // namespace nenenib::application

@@ -54,7 +54,8 @@ std::expected<std::optional<std::string>, Failure> Win32SettingsAdapter::read_cu
     return std::unexpected(Failure::unreadable);
 }
 
-std::expected<std::optional<core::EditorSettings>, Failure> Win32SettingsAdapter::read()
+std::expected<std::optional<core::EditorSettings>, application::SettingsIssue>
+Win32SettingsAdapter::read(const core::ThemeCatalog &themes)
 {
     const auto bytes = read_current();
     if (!bytes)
@@ -68,7 +69,7 @@ std::expected<std::optional<core::EditorSettings>, Failure> Win32SettingsAdapter
         blocked_ = std::nullopt;
         return std::nullopt;
     }
-    const auto decoded = decode_settings(original_.value());
+    const auto decoded = decode_settings(original_.value(), themes);
     if (!decoded)
     {
         blocked_ = decoded.error();
@@ -100,7 +101,8 @@ Win32SettingsAdapter::write_locked(const core::EditorSettings &settings)
     return {};
 }
 
-std::expected<void, Failure> Win32SettingsAdapter::write(const core::EditorSettings &settings)
+std::expected<void, application::SettingsIssue>
+Win32SettingsAdapter::write(const core::EditorSettings &settings)
 {
     if (blocked_.has_value())
     {

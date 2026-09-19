@@ -3,6 +3,7 @@
 #include "CommandEdit.hpp"
 #include "ExFailure.hpp"
 #include "Offset.hpp"
+#include "ThemeCatalog.hpp"
 
 #include <expected>
 #include <optional>
@@ -16,7 +17,9 @@ namespace nenenib::core
 class CommandLine final
 {
   public:
-    [[nodiscard]] static CommandLine empty();
+    [[nodiscard]] static CommandLine empty(ThemeCatalog themes = ThemeCatalog::builtins());
+    [[nodiscard]] const ThemeCatalog &catalog() const & noexcept;
+    const ThemeCatalog &catalog() const && = delete;
     [[nodiscard]] std::string_view text() const noexcept;
     [[nodiscard]] Offset caret() const noexcept;
     [[nodiscard]] std::vector<std::string> completions() const;
@@ -25,12 +28,13 @@ class CommandLine final
     [[nodiscard]] CommandLine edited(CommandEdit edit) const;
 
   private:
-    CommandLine(std::string text, Offset caret);
+    CommandLine(std::string text, Offset caret, ThemeCatalog themes);
     [[nodiscard]] CommandLine completed(CommandEdit direction) const;
 
     std::string text_;
     Offset caret_;
     std::optional<std::string> completion_seed_;
     std::size_t completion_index_ = 0;
+    ThemeCatalog themes_;
 };
 } // namespace nenenib::core

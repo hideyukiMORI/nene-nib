@@ -83,6 +83,7 @@
 #include "Theme.hpp"
 #include "ThemeDerivation.hpp"
 #include "ThemeDocument.hpp"
+#include "ThemePort.hpp"
 #include "ThemeSource.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
@@ -474,8 +475,33 @@ DisplayText fixed_text(std::string_view text)
     return std::move(parsed).value();
 }
 
+class ScriptedThemes final : public nenenib::application::ThemePort
+{
+  public:
+    explicit ScriptedThemes(
+        nenenib::core::ThemeCatalog catalog = nenenib::core::ThemeCatalog::builtins(),
+        std::optional<DisplayText> notice = std::nullopt)
+        : catalog_(std::move(catalog)), notice_(std::move(notice))
+    {
+    }
+    [[nodiscard]] nenenib::application::ThemeInventory read() override
+    {
+        ++reads_;
+        return {catalog_, notice_};
+    }
+    [[nodiscard]] std::size_t reads() const noexcept
+    {
+        return reads_;
+    }
+
+  private:
+    nenenib::core::ThemeCatalog catalog_;
+    std::optional<DisplayText> notice_;
+    std::size_t reads_ = 0;
+};
+
 using SettingsReading = std::expected<std::optional<nenenib::core::EditorSettings>,
-                                      nenenib::application::SettingsFailure>;
+                                      nenenib::application::SettingsIssue>;
 
 class ScriptedSettings final : public nenenib::application::SettingsPort
 {
@@ -484,12 +510,12 @@ class ScriptedSettings final : public nenenib::application::SettingsPort
     {
     }
 
-    [[nodiscard]] SettingsReading read() override
+    [[nodiscard]] SettingsReading read(const nenenib::core::ThemeCatalog &) override
     {
         return reading_;
     }
 
-    [[nodiscard]] std::expected<void, nenenib::application::SettingsFailure>
+    [[nodiscard]] std::expected<void, nenenib::application::SettingsIssue>
     write(const nenenib::core::EditorSettings &settings) override
     {
         ++writes_;
@@ -509,7 +535,7 @@ class ScriptedSettings final : public nenenib::application::SettingsPort
     {
         return written_;
     }
-    void fail(std::optional<nenenib::application::SettingsFailure> failure)
+    void fail(std::optional<nenenib::application::SettingsIssue> failure)
     {
         failure_ = failure;
     }
@@ -518,7 +544,7 @@ class ScriptedSettings final : public nenenib::application::SettingsPort
     SettingsReading reading_;
     std::size_t writes_ = 0;
     std::optional<nenenib::core::EditorSettings> written_;
-    std::optional<nenenib::application::SettingsFailure> failure_;
+    std::optional<nenenib::application::SettingsIssue> failure_;
 };
 
 TextBuffer buffer_of(std::string_view text)
@@ -1566,10 +1592,11 @@ void verify_status_bar_hits()
 class Editing final
 {
   public:
-    explicit Editing(SettingsReading reading = std::nullopt)
-        : settings_(std::move(reading)),
+    explicit Editing(SettingsReading reading = std::nullopt,
+                     nenenib::core::ThemeCatalog themes = nenenib::core::ThemeCatalog::builtins())
+        : settings_(std::move(reading)), themes_(std::move(themes)),
           controller_(nenenib::application::EditorPorts{appearance_, clipboard_, files_,
-                                                        code_pages_, settings_})
+                                                        code_pages_, settings_, themes_})
     {
     }
 
@@ -1609,6 +1636,7 @@ class Editing final
     ScriptedFiles files_;
     ScriptedCodePages code_pages_;
     ScriptedSettings settings_;
+    ScriptedThemes themes_;
     EditorController controller_;
 };
 
@@ -1684,7 +1712,7 @@ void verify_settings_loading()
     auto saved = nenenib::core::default_editor_settings();
     saved.font_size = nenenib::core::FontSize::from_points(21.25F).value();
     saved.font_family = fixed_text("Consolas");
-    saved.theme = BuiltinTheme::neutral_light;
+    saved.theme = nenenib::core::ThemeChoice::from(BuiltinTheme::neutral_light);
     Editing editor{SettingsReading{saved}};
     const auto frame = editor.controller().frame();
     expect(frame.settings.font_size.points() == 21.25F &&
@@ -1763,13 +1791,14 @@ void verify_controller_initial_appearance()
     ScriptedFiles files;
     ScriptedCodePages code_pages;
     ScriptedSettings settings;
+    ScriptedThemes themes;
     const EditorController from_light(
-        nenenib::application::EditorPorts{light, board, files, code_pages, settings});
+        nenenib::application::EditorPorts{light, board, files, code_pages, settings, themes});
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
     ScriptedAppearance dark{Reading{Appearance::dark}};
     const EditorController from_dark(
-        nenenib::application::EditorPorts{dark, board, files, code_pages, settings});
+        nenenib::application::EditorPorts{dark, board, files, code_pages, settings, themes});
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
 }
@@ -1781,12 +1810,13 @@ void verify_controller_read_failures()
     ScriptedFiles files;
     ScriptedCodePages code_pages;
     ScriptedSettings settings;
+    ScriptedThemes themes;
     for (const auto failure :
          {AppearanceReadFailure::unavailable, AppearanceReadFailure::unreadable})
     {
         ScriptedAppearance port{Reading{std::unexpect, failure}};
         const EditorController controller(
-            nenenib::application::EditorPorts{port, board, files, code_pages, settings});
+            nenenib::application::EditorPorts{port, board, files, code_pages, settings, themes});
         expect(controller.frame().palette.background == dark.background,
                "an unreadable setting falls back to dark");
     }
@@ -1799,8 +1829,9 @@ void verify_controller_refresh()
     ScriptedFiles files;
     ScriptedCodePages code_pages;
     ScriptedSettings settings;
+    ScriptedThemes themes;
     EditorController controller(
-        nenenib::application::EditorPorts{port, board, files, code_pages, settings});
+        nenenib::application::EditorPorts{port, board, files, code_pages, settings, themes});
     port.script(Reading{Appearance::dark});
     const auto frame = controller.apply(RefreshAppearance{});
     expect(frame.palette.background == RgbColor{0x30, 0x0A, 0x24},
@@ -3513,8 +3544,8 @@ void verify_ex_evaluation()
             core::evaluate_ex("colorscheme " + std::string(theme.name), settings, Appearance::dark)
                 .value();
         expect(result.settings.has_value(), "a theme command returns settings");
-        expect(core::selected_theme(result.settings.value_or(settings), Appearance::light).name ==
-                   theme.name,
+        const auto resolved = result.settings.value_or(settings);
+        expect(core::selected_theme(resolved, Appearance::light).name == theme.name,
                "every built-in theme uses the shared table");
     }
     const auto font =
@@ -3751,6 +3782,206 @@ void verify_user_theme_values()
            "Theme view preserves color values");
 }
 
+core::ThemeName user_name(std::string_view text)
+{
+    return core::ThemeName::parse(text).value();
+}
+
+core::ThemeChoice user_choice(std::string_view name)
+{
+    const auto &base = core::theme_of(core::BuiltinTheme::neutral_light);
+    return core::ThemeChoice::from(
+        core::ThemeDocument{user_name(name),
+                            base.appearance,
+                            base.ui,
+                            base.body,
+                            {fixed_text("作者"), fixed_text("MIT"), fixed_text("local")}});
+}
+
+core::ThemeCatalog user_catalog()
+{
+    return core::ThemeCatalog::from(
+               {{user_name("z-theme"), user_choice("z-theme")},
+                {user_name("broken"), std::unexpected(core::ThemeFailure::invalid_color)},
+                {user_name("my-theme"), user_choice("my-theme")}})
+        .value();
+}
+
+void verify_theme_catalog()
+{
+    auto catalog = user_catalog();
+    const auto names = catalog.names();
+    expect(names.size() == core::builtin_themes.size() + 3 && names.at(9) == "broken" &&
+               names.at(10) == "my-theme" && names.at(11) == "z-theme",
+           "user names follow builtins in sorted order");
+    const auto choice = catalog.find(user_name("my_theme")).value();
+    const auto copy = catalog;
+    catalog = core::ThemeCatalog::builtins();
+    expect(choice.view().source.author == "作者" && choice.name() == "my-theme",
+           "choice keeps owned data after its catalog is replaced");
+    expect(copy.find(user_name("my-theme")).value() == choice, "catalog copy shares live choices");
+    expect(catalog.records().empty(), "builtin-only catalog has no user records");
+    const auto alias = catalog.find(user_name("night_owl_light")).value();
+    expect(alias.name() == "night-owl-light", "built-in aliases keep their canonical spelling");
+    const auto missing = copy.find(user_name("missing"));
+    const auto broken = copy.find(user_name("broken"));
+    expect(!missing && missing.error() == core::ThemeLookupFailure{user_name("missing"),
+                                                                   core::ThemeFailure::not_found},
+           "missing theme names survive lookup failure");
+    expect(!broken && broken.error().reason == core::ThemeFailure::invalid_color,
+           "broken themes keep their actual load failure");
+    expect(!core::ThemeCatalog::from({{user_name("system"), user_choice("system")}}),
+           "system is reserved");
+    expect(!core::ThemeCatalog::from({{user_name("dracula"), user_choice("dracula")}}),
+           "builtin is reserved");
+    expect(!core::ThemeCatalog::from({{user_name("a"), user_choice("b")}}),
+           "record must match value name");
+    expect(!core::ThemeCatalog::from(
+               {{user_name("a"), user_choice("a")}, {user_name("a"), user_choice("a")}}),
+           "duplicate names are rejected");
+}
+
+void verify_user_theme_commands()
+{
+    const auto catalog = user_catalog();
+    const auto settings = core::default_editor_settings();
+    const auto selected =
+        core::evaluate_ex("colorscheme my_theme", settings, Appearance::dark, catalog).value();
+    expect(selected.settings.value_or(settings).theme == user_choice("my-theme"),
+           "Ex resolves user aliases canonically");
+    const auto resolved = selected.settings.value_or(settings);
+    expect(core::selected_theme(resolved, Appearance::dark).appearance == Appearance::light,
+           "explicit user appearance wins over system");
+    const auto broken =
+        core::evaluate_ex("colorscheme broken", settings, Appearance::dark, catalog);
+    expect(!broken && core::ex_failure_message(broken.error()).text() ==
+                          "broken: Invalid RGB or RGBA color",
+           "Ex explains named load failure");
+    auto line = core::CommandLine::empty(catalog).inserted("colorscheme my").value();
+    line = line.edited(core::CommandEdit::complete_next);
+    expect(line.text() == "colorscheme my-theme", "Ex Tab completes user theme");
+    line = line.edited(core::CommandEdit::backspace);
+    expect(line.completions().front() == "colorscheme my-theme", "editing preserves catalog");
+    auto palette = core::CommandPalette::opened(catalog).inserted("my-t").value();
+    expect(palette.choices().front().command == "colorscheme my-theme",
+           "palette finds the same user theme");
+    palette = palette.filled("colorscheme broken").value();
+    expect(palette.choices().front().command == "colorscheme broken",
+           "failed theme remains actionable after fill");
+    const auto system =
+        core::evaluate_ex("colorscheme system", selected.settings.value_or(settings),
+                          Appearance::dark, catalog)
+            .value();
+    expect(system.settings.has_value() && !system.settings.value().theme.has_value(),
+           "system clears explicit user choice");
+}
+
+void verify_user_theme_controller()
+{
+    Editing editor{std::nullopt, user_catalog()};
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(InsertText{"body"}));
+    const auto before = controller.frame();
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{"my-t"}));
+    auto frame = controller.apply(app::SubmitCommand{});
+    expect(frame.settings.theme == user_choice("my-theme") && frame.appearance == Appearance::light,
+           "controller applies user theme and appearance");
+    expect(editor.settings().writes() == 1 &&
+               editor.settings().written().value_or(core::default_editor_settings()).theme ==
+                   user_choice("my-theme"),
+           "controller persists the resolved choice once");
+    expect(frame.lines.front().text == "body" && frame.caret == before.caret,
+           "theme leaves body and caret intact");
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{"broken"}));
+    frame = controller.apply(app::SubmitCommand{});
+    expect(frame.command_message.value_or(fixed_text("none")).text() ==
+                   "broken: Invalid RGB or RGBA color" &&
+               editor.settings().writes() == 1,
+           "failed selection reports reason without writing settings");
+    expect(frame.settings.theme == user_choice("my-theme"),
+           "failed selection keeps previous appearance");
+    static_cast<void>(controller.apply(app::CancelCommand{}));
+    expect(applied(controller, HistoryAction{HistoryDirection::undo}) == "",
+           "theme commands do not enter document history");
+}
+
+template <typename T>
+concept CanBorrowName = requires(T &&value) { std::forward<T>(value).name(); };
+template <typename T>
+concept CanBorrowRecords = requires(T &&value) { std::forward<T>(value).records(); };
+template <typename T>
+concept CanSelectTheme =
+    requires(T &&value) { core::selected_theme(std::forward<T>(value), Appearance::dark); };
+static_assert(CanBorrowName<const core::ThemeChoice &> && !CanBorrowName<core::ThemeChoice>);
+static_assert(CanBorrowRecords<const core::ThemeCatalog &> &&
+              !CanBorrowRecords<core::ThemeCatalog>);
+static_assert(CanSelectTheme<const core::EditorSettings &> &&
+              !CanSelectTheme<core::EditorSettings>);
+
+void verify_theme_startup_notice()
+{
+    ScriptedAppearance appearance{Reading{Appearance::dark}};
+    ScriptedClipboard clipboard;
+    ScriptedFiles files;
+    files.hold(std::string("initial body"));
+    ScriptedCodePages pages;
+    ScriptedSettings settings;
+    ScriptedThemes themes{user_catalog(), fixed_text("invalid_name.v1.theme: invalid name")};
+    const auto initial = app::OpenDocument{FilePath::parse("initial.txt").value()};
+    EditorController controller{
+        app::EditorPorts{appearance, clipboard, files, pages, settings, themes}, initial};
+    auto frame = controller.frame();
+    expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
+    expect(frame.command_message.value_or(fixed_text("none")).text() ==
+               "invalid_name.v1.theme: invalid name",
+           "startup diagnostic survives initial file opening");
+    frame = controller.apply(VisibleLines{8});
+    expect(frame.command_message.has_value(), "first layout retains startup diagnostic");
+    frame = controller.apply(InsertText{"x"});
+    expect(!frame.command_message.has_value() && themes.reads() == 1,
+           "user input clears notice without rereading themes");
+    ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
+    const EditorController unreadable{
+        app::EditorPorts{appearance, clipboard, files, pages, broken, themes}, initial};
+    expect(unreadable.frame().lines.front().text == "initial body" &&
+               unreadable.frame().settings_failure == app::SettingsFailure::malformed,
+           "failed settings do not prevent opening initial document");
+}
+
+template <typename T>
+concept CanBorrowCatalog = requires(T &&value) { std::forward<T>(value).catalog(); };
+static_assert(CanBorrowCatalog<const core::CommandLine &> && !CanBorrowCatalog<core::CommandLine>);
+
+void verify_blocked_theme_noop()
+{
+    const app::SettingsIssue failure =
+        core::ThemeLookupFailure{user_name("missing"), core::ThemeFailure::not_found};
+    Editing editor{SettingsReading{std::unexpect, failure}};
+    editor.settings().fail(failure);
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{"colorscheme system"}));
+    const auto frame = controller.apply(app::SubmitCommand{});
+    expect(frame.settings_failure == failure,
+           "same-setting command cannot clear blocked startup error");
+    expect(frame.command_message.value_or(fixed_text("none")).text() ==
+               "Settings could not be saved",
+           "blocked no-op must not report a successful setting change");
+    expect(editor.settings().writes() == 1 && !editor.settings().written().has_value(),
+           "same value still consults the blocked settings port");
+}
+
+void verify_user_theme_selection()
+{
+    verify_theme_catalog();
+    verify_user_theme_commands();
+    verify_user_theme_controller();
+    verify_theme_startup_notice();
+    verify_blocked_theme_noop();
+}
+
 void verify_palette_choices()
 {
     const auto all = choices_for(":");
@@ -3971,7 +4202,7 @@ void verify_palette_vim_modes()
                "palette blocks body Vim commands without resetting mode");
         static_cast<void>(controller.apply(app::CommandText{"drac"}));
         frame = controller.apply(app::SubmitCommand{});
-        expect(frame.settings.theme == core::BuiltinTheme::dracula,
+        expect(frame.settings.theme == core::ThemeChoice::from(core::BuiltinTheme::dracula),
                "theme executes in every Vim state");
         expect(frame.caret == before.caret &&
                    frame.lines.front().selection == before.lines.front().selection,
@@ -4081,6 +4312,11 @@ int report()
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::string_view(argv[1]) == "--user-theme-selection")
+    {
+        verify_user_theme_selection();
+        return report();
+    }
     if (argc == 2 && std::string_view(argv[1]) == "--user-theme-values")
     {
         verify_user_theme_values();
@@ -4108,6 +4344,7 @@ int main(int argc, char **argv)
     verify_ex_settings();
     verify_command_palette();
     verify_user_theme_values();
+    verify_user_theme_selection();
     verify_look();
     return report();
 }

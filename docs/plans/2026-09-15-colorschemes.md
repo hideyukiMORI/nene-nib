@@ -1,6 +1,6 @@
 # 計画: `:colorscheme` で有名なカラーテーマを選べるようにする（2026-09-15）
 
-> Status: 計画（施主決定 D13・2026-09-15）。実装は縦切り 4 本に分けて、それぞれ焦点 Issue と ADR を持つ。
+> Status: C1〜C4b実装（施主決定 D13・2026-09-15、最新 #70 / ADR 0025）。統合状態はGitHubが正。それぞれ焦点IssueとADRを持つ。
 > 関連: [採用した見た目](../design/2026-09-15-look.md)・[ADR 0008](../adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md) 決定 8（テーマは `Palette` の値型で、UI は色の定数を持たない）
 
 ## 1. 施主の要望
@@ -32,8 +32,8 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 
 - `:colorscheme` だけ → 現在のテーマ名を表示。`:colorscheme <name>` → 切り替えて設定に保存。`:colorscheme system` → OS のライト／ダーク追従に戻す（既定。ダーク＝`ubuntu-aubergine`・ライト＝`neutral-light`）
 - 明示的に選んだテーマは OS の切り替えで変わらない（`system` にしたときだけ追従）
-- 名前は `Ctrl+P` の `:` 接頭辞でも絞り込み・選択できる（通常モードでも同じ一覧を使う。Issue #66・ADR 0023・ARC-001）。Exの存在しない名前は閉じた結果 `ExFailure::unknown_theme` で断り、既定へ黙って落とさない（Issue #64・ADR 0022）
-- 利用者のテーマは版付きのファイル（`%LOCALAPPDATA%\NeNeNib\themes\<name>.v1.*`）から同じ `Theme` を作る。形式は設定の縦切りで ADR にする（ADR 0008 決定 8）
+- 名前は `Ctrl+P` の `:` 接頭辞でも絞り込み・選択できる（通常モードでも同じ一覧を使う。Issue #66・ADR 0023・ARC-001）。存在しない/壊れたテーマは `ThemeLookupFailure` の名前と理由で断り、既定へ黙って落とさない（Issue #70・ADR 0025）
+- 利用者のテーマは版付きのファイル（`%LOCALAPPDATA%\NeNeNib\themes\<name>.v1.theme`）から同じ `Theme` を作る。形式はADR 0024、選択/保存/起動時の128件カタログはADR 0025
 
 ## 4. 縦切りの順（依存の順）
 
@@ -44,7 +44,7 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 | C3a | Ex入力とテーマ/フォント設定（Issue #64・ADR 0022） | NORMALの `:` で切替・表示・Tab補完。本文とは独立。C2と同じ保存へ接続 | C2・Vim NORMAL |
 | C3b | Ctrl+Pの共通一覧と `:` 接頭辞（Issue #66・ADR 0023） | 通常/Vim全モードから同じ候補・入力編集・テーマ/設定評価を利用。ファイル等の統合は別Issue | C3a・共通一覧 |
 | C4a | 利用者テーマの形式・所有・読込（Issue #68・ADR 0024） | `themes/<name>.v1.theme` を既存FilePortから読み、所有するThemeDocumentへ厳密に検証して既存Themeへ写す | C2 |
-| C4b | 利用者テーマの一覧・選択接続 | 起動時カタログ、設定保存/復元、Ex/Ctrl+P、名前付きの失敗表示へC4aを接続 | C3b・C4a |
+| C4b | 利用者テーマの一覧・選択接続（Issue #70・ADR 0025） | 起動時カタログ、設定保存/復元、Ex/Ctrl+P、名前付きの失敗表示へC4aを接続 | C3b・C4a |
 
 ハイライト（`SyntaxPalette` を実際に本文へ塗る）はハイライトの縦切りで、C1 の型をそのまま使う。
 
@@ -52,7 +52,7 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 
 - ui/win32 に `Palette` / `SyntaxPalette` 以外の色のリテラルを書かない（CNF の字句検査で `RgbColor{` を ui で拒否する予定）
 - 組み込みテーマの表は単体テストで「名前の重複なし」「全トークンが埋まっている」「本文のコントラスト比 4.5 以上」「UI の `text` / `background` も 4.5 以上」を要求する（QLT-008 / QLT-009）
-- テーマ名の一覧は 1 か所（`core::BuiltinTheme` の表）で、Ex の補完・Ctrl+P・設定の検証が同じ表を使う（ARC-001）
+- テーマ名の一覧は `core::ThemeCatalog` が既存の組み込み表と利用者recordを統合し、Ex の補完・Ctrl+P・設定の検証が同じ表を使う（ARC-001）
 
 ## 6. フォントサイズ（施主決定 D14・2026-09-15）
 

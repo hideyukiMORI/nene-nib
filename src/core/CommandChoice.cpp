@@ -70,7 +70,7 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
         return {choice_of(std::string(query))};
     }
     std::vector<CommandMatch> matches;
-    for (auto command : ex_command_candidates())
+    for (auto command : ex_command_candidates(input.catalog()))
     {
         const auto score = match_score(query, command);
         if (score.has_value())

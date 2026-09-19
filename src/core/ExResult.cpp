@@ -31,23 +31,36 @@ namespace
     return DisplayText::parse(message).value();
 }
 
-[[nodiscard]] std::expected<ExResult, ExFailure>
-colorscheme(std::string_view name, EditorSettings settings, Appearance appearance)
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> colorscheme(std::string_view name,
+                                                                       EditorSettings settings,
+                                                                       Appearance appearance,
+                                                                       const ThemeCatalog &themes)
 {
     if (name.empty())
     {
         return ExResult{std::nullopt, theme_message(settings, appearance)};
     }
-    settings.theme = theme_named(name);
-    if (!settings.theme.has_value() && name != "system")
+    if (name == "system")
+    {
+        settings.theme = std::nullopt;
+        return ExResult{settings, theme_message(settings, appearance)};
+    }
+    const auto parsed = ThemeName::parse(name);
+    if (!parsed)
     {
         return std::unexpected(ExFailure::unknown_theme);
     }
+    const auto found = themes.find(parsed.value());
+    if (!found)
+    {
+        return std::unexpected(found.error());
+    }
+    settings.theme = found.value();
     return ExResult{settings, theme_message(settings, appearance)};
 }
 
-[[nodiscard]] std::expected<ExResult, ExFailure> set_font_size(std::string_view value,
-                                                               EditorSettings settings)
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> set_font_size(std::string_view value,
+                                                                         EditorSettings settings)
 {
     const auto size = FontSize::parse(value);
     if (!size)
@@ -58,8 +71,8 @@ colorscheme(std::string_view name, EditorSettings settings, Appearance appearanc
     return ExResult{settings, DisplayText::parse("fontsize=" + std::string(value)).value()};
 }
 
-[[nodiscard]] std::expected<ExResult, ExFailure> set_gui_font(std::string_view value,
-                                                              EditorSettings settings)
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> set_gui_font(std::string_view value,
+                                                                        EditorSettings settings)
 {
     const auto separator = value.rfind(":h");
     if (separator == std::string_view::npos)
@@ -81,8 +94,8 @@ colorscheme(std::string_view name, EditorSettings settings, Appearance appearanc
     return ExResult{settings, DisplayText::parse("guifont=" + std::string(value)).value()};
 }
 
-[[nodiscard]] std::expected<ExResult, ExFailure> set_option(std::string_view option,
-                                                            const EditorSettings &settings)
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+set_option(std::string_view option, const EditorSettings &settings)
 {
     if (option.starts_with("fontsize="))
     {
@@ -96,8 +109,10 @@ colorscheme(std::string_view name, EditorSettings settings, Appearance appearanc
 }
 } // namespace
 
-std::expected<ExResult, ExFailure>
-evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance)
+std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
+                                                         const EditorSettings &settings,
+                                                         Appearance system_appearance,
+                                                         const ThemeCatalog &themes)
 {
     if (text.size() > DisplayText::maximum_bytes)
     {
@@ -118,7 +133,7 @@ evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance sy
         space == std::string_view::npos ? std::string_view{} : trimmed(text.substr(space + 1));
     if (name == "colorscheme")
     {
-        return colorscheme(argument, settings, system_appearance);
+        return colorscheme(argument, settings, system_appearance, themes);
     }
     if (name == "set")
     {
@@ -127,20 +142,20 @@ evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance sy
     return std::unexpected(ExFailure::unknown_command);
 }
 
-std::vector<std::string> ex_command_candidates()
+std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
 {
     std::vector<std::string> candidates{"colorscheme", "set fontsize=", "set guifont="};
-    for (const auto &theme : builtin_themes)
+    for (const auto &name : themes.names())
     {
-        candidates.push_back("colorscheme " + std::string(theme.name));
+        candidates.push_back("colorscheme " + name);
     }
     candidates.emplace_back("colorscheme system");
     return candidates;
 }
 
-std::vector<std::string> command_completions(std::string_view prefix)
+std::vector<std::string> command_completions(std::string_view prefix, const ThemeCatalog &themes)
 {
-    auto candidates = ex_command_candidates();
+    auto candidates = ex_command_candidates(themes);
     std::erase_if(candidates,
                   [prefix](const std::string &candidate)
                   {

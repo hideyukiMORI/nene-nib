@@ -2,7 +2,9 @@
 
 #include "DisplayText.hpp"
 #include "EditorSettings.hpp"
+#include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
+#include "ThemeCatalog.hpp"
 
 #include <expected>
 #include <optional>
@@ -18,8 +20,11 @@ struct ExResult
     DisplayText message;
 };
 
-[[nodiscard]] std::expected<ExResult, ExFailure>
-evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance);
-[[nodiscard]] std::vector<std::string> command_completions(std::string_view prefix);
-[[nodiscard]] std::vector<std::string> ex_command_candidates();
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance,
+            const ThemeCatalog &themes = ThemeCatalog::builtins());
+[[nodiscard]] std::vector<std::string>
+command_completions(std::string_view prefix, const ThemeCatalog &themes = ThemeCatalog::builtins());
+[[nodiscard]] std::vector<std::string>
+ex_command_candidates(const ThemeCatalog &themes = ThemeCatalog::builtins());
 } // namespace nenenib::core

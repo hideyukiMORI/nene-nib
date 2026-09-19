@@ -498,3 +498,25 @@ C4aのcodecと新しい所有値、共通のfield解析へ変えた既存Setting
 | `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | 2 libraries / 0 violations、conformance 0。新coreはOS/libmを参照しない。外部依存許可は変更なし |
 
 `ThemeDocument`のrvalueから借りるAPIはdeleted overload。実行時の所有/寿命はASan対象テストで確認。独立レビューは読み取りのみで、basename修正後に追加指摘なし。変更C++のclang-formatと差分空白も成功。利用者向けの形式と例は `docs/design/user-theme-format.md`。既存settingsの形式は変えない。C4bのカタログ/選択/保存/Ex/Ctrl+Pへの接続は未実装。Waivers: none。
+
+### 5-o. 利用者テーマの選択・保存・復元（Issue #70・ADR 0025・2026-09-20）
+
+対象はThemeChoice/ThemeCatalogの不変共有、SettingsIssueの名前付き失敗、ThemePortからの起動時読込、設定codecとEx/Tab/Ctrl+Pの共通検索。設定の4キー、C4aの色/UTF-8/コントラストcodec、Vim engineと本文編集は不変。全件・coverage・無関係なGUI/ファイルI/Oベンチは実行しない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build --target NeNeNib nib_tests nib_adapter_tests nib_theme_tests --parallel 4`（変更後は該当targetのみ増分build） | Debug + ASan/UBSan + tidy成功。core/application/adaptersと直接のUI/合成ルートを確認 |
+| `build/nib_tests.exe --user-theme-selection` | 最終88 checks成功。catalog順序/予約/重複/名前一致/alias、選択参照の所有、named failure、Ex補完/編集/Palette fillでのcatalog保持、保存/失敗と本文・undo不変。初期文書付きnotice、settings失敗でも文書を開くこと、一度だけread、blocked状態での同値操作も失敗保持。rvalueからのborrow禁止はrequires/static_assertでコンパイル時にも確認 |
+| `build/nib_tests.exe --ex-settings` / `--command-palette` | 直接変更した設定選択と共通候補・入力の旧契約を153 / 130 checksで確認。persist_settings修正後は直接影響する前者だけ再実行し成功。後者の入力操作/配置は初回成功を再利用 |
+| `build/nib_adapter_tests.exe --settings-codec` | 23 checks成功。既存の4キーと組み込み/systemの互換、missing名の保持 |
+| build内で `nib_theme_tests.exe --catalog` | 301 checks成功。隔離フォルダの欠落・不正名/予約名・正常/破損・非再帰・順序・長いUnicode名の診断・128件/129件、設定保存と新adapterでの復元、missing/brokenで後続writeを拒否し元bytes保持。後のAPI ref限定だけでは実行を繰り返さず、再コンパイル成功と初回結果を再利用 |
+| `python eng/verify-user-themes.py` | 最終成功。120 DPI/隔離profile、Ctrl+P利用者選択、NORMALのTab補完、独自body/title色、本文保存一致、broken選択時に設定bytes不変、再起動復元、壊れた保存済みthemeの名前付き警告と同値操作を含むwrite block。`out/user-theme-verification/results.json` とBMP |
+| `python eng/verify-user-themes.py --only startup-notice` | 初期ファイル付きでnoticeを表示。`startup-notice-with-document.bmp`を目視し本文と左statusのinvalid filename診断を確認 |
+| `python eng/conformance.py --build-dir build` / `python eng/symbols.py --build-dir build --require core application` / changed C++ clang-format / `git diff --check` | 新しい境界/所属/借用制約、2 libraries、いずれも違反0 |
+| `cmake --build build-release --target NeNeNib --parallel 4` | 起動時読込と通常のframe/キー経路の測定用、成功 |
+
+native初回は結果メッセージ上のクリックをtoggleと誤認した検証手順で停止。次はEx/Palette失敗がinline表示なのにmodalを期待した検証側の誤りで停止した。操作契約に合わせて修正し、saved-errorだけを追加確認。その後productionの初期入力/no-op修正が入ったため、関係する起動・復元・保護workflowを再実行した。成功するまでの無変更再試行はしていない。
+
+読み取り専用の独立レビューで、一時所有者からのborrow、初期文書によるnotice消去、blocked時同値の成功扱いを修正。追加指摘なし。列挙途中失敗は集合と上限を確認できないため、部分集合を採用せず組み込み＋noticeとする判断をADRへ明記。形式はuser-theme-format.md。runtime依存・settings schema・waiver変更なし。nativeは120 DPIで、他IME/DPI移動は本件では測らない。検証対象が不変のpush/review/mergeでは同じ成功結果を再利用する。
+
+性能は `python out/git/issue70-speed.py` で既存measure-speedの起動/打鍵4指標だけを5試行。指紋bc8a356f37c68491 / 120 DPI、中央値は初回描画209.9973ms、窓表示32.813ms、単打鍵1.14ms、200打鍵2.627ms。退行0・欠測0（`out/speed/issue70-selected.json`）。通常の空profileの基準比較であり、128個の最大サイズテーマを読む最悪時間の保証とは扱わない。

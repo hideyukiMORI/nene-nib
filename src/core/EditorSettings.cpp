@@ -16,11 +16,11 @@ EditorSettings default_editor_settings()
                           std::nullopt};
 }
 
-const Theme &selected_theme(const EditorSettings &settings, Appearance system_appearance) noexcept
+Theme selected_theme(const EditorSettings &settings, Appearance system_appearance) noexcept
 {
     if (settings.theme.has_value())
     {
-        return theme_of(settings.theme.value());
+        return settings.theme.value().view();
     }
     return theme_of(theme_for(system_appearance));
 }

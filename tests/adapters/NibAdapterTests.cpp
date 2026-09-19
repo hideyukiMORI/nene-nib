@@ -254,7 +254,9 @@ void verify_bad_settings_fields()
            "an unknown version is incompatible");
     const auto theme = decode_settings("version=1\ncolorscheme=missing\nfont_family=Consolas\n"
                                        "font_size=13.5\n");
-    expect(!theme && theme.error() == SettingsFailure::unknown_theme, "unknown themes fail");
+    expect(!theme &&
+               std::get<nenenib::core::ThemeLookupFailure>(theme.error()).name.text() == "missing",
+           "unknown theme keeps its name");
 }
 
 void verify_bad_settings_values()

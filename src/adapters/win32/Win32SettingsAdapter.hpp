@@ -14,9 +14,9 @@ class Win32SettingsAdapter final : public application::SettingsPort
   public:
     Win32SettingsAdapter(application::FilePort &files,
                          std::expected<core::FilePath, application::SettingsFailure> path);
-    [[nodiscard]] std::expected<std::optional<core::EditorSettings>, application::SettingsFailure>
-    read() override;
-    [[nodiscard]] std::expected<void, application::SettingsFailure>
+    [[nodiscard]] std::expected<std::optional<core::EditorSettings>, application::SettingsIssue>
+    read(const core::ThemeCatalog &themes = core::ThemeCatalog::builtins()) override;
+    [[nodiscard]] std::expected<void, application::SettingsIssue>
     write(const core::EditorSettings &settings) override;
 
   private:
@@ -28,6 +28,6 @@ class Win32SettingsAdapter final : public application::SettingsPort
     application::FilePort &files_;
     std::expected<core::FilePath, application::SettingsFailure> path_;
     std::optional<std::string> original_;
-    std::optional<application::SettingsFailure> blocked_{application::SettingsFailure::not_loaded};
+    std::optional<application::SettingsIssue> blocked_{application::SettingsFailure::not_loaded};
 };
 } // namespace nenenib::adapters::win32

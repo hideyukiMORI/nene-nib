@@ -9,9 +9,9 @@ CommandPalette::CommandPalette(CommandLine input, std::size_t selected)
 {
 }
 
-CommandPalette CommandPalette::opened()
+CommandPalette CommandPalette::opened(ThemeCatalog themes)
 {
-    return CommandPalette(CommandLine::empty().inserted(":").value(), 0);
+    return CommandPalette(CommandLine::empty(std::move(themes)).inserted(":").value(), 0);
 }
 
 const CommandLine &CommandPalette::input() const noexcept
@@ -79,7 +79,7 @@ CommandPalette CommandPalette::selected_at(std::size_t index) const
 
 std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view command) const
 {
-    const auto input = CommandLine::empty().inserted(":" + std::string(command));
+    const auto input = CommandLine::empty(input_.catalog()).inserted(":" + std::string(command));
     if (!input)
     {
         return std::unexpected(input.error());

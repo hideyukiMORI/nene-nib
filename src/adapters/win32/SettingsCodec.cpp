@@ -58,19 +58,24 @@ assign_field(SettingsFields &fields, std::string_view key, std::string_view valu
     return fields;
 }
 
-[[nodiscard]] std::expected<std::optional<core::BuiltinTheme>, Failure>
-theme_from(std::string_view name)
+[[nodiscard]] std::expected<std::optional<core::ThemeChoice>, application::SettingsIssue>
+theme_from(std::string_view name, const core::ThemeCatalog &themes)
 {
     if (name == "system")
     {
         return std::nullopt;
     }
-    const auto found = core::theme_named(name);
-    if (!found.has_value())
+    const auto parsed = core::ThemeName::parse(name);
+    if (!parsed)
     {
         return std::unexpected(Failure::unknown_theme);
     }
-    return found;
+    const auto found = themes.find(parsed.value());
+    if (!found)
+    {
+        return std::unexpected(found.error());
+    }
+    return found.value();
 }
 
 [[nodiscard]] std::expected<core::FontSize, Failure> size_from(std::string_view text)
@@ -83,7 +88,8 @@ theme_from(std::string_view name)
     return size.value();
 }
 
-[[nodiscard]] std::expected<core::EditorSettings, Failure> validated(const SettingsFields &fields)
+[[nodiscard]] std::expected<core::EditorSettings, application::SettingsIssue>
+validated(const SettingsFields &fields, const core::ThemeCatalog &themes)
 {
     if (!fields.version.has_value() || !fields.colorscheme.has_value() ||
         !fields.font_family.has_value() || !fields.font_size.has_value())
@@ -94,7 +100,7 @@ theme_from(std::string_view name)
     {
         return std::unexpected(Failure::unsupported_version);
     }
-    const auto theme = theme_from(fields.colorscheme.value());
+    const auto theme = theme_from(fields.colorscheme.value(), themes);
     if (!theme)
     {
         return std::unexpected(theme.error());
@@ -113,20 +119,21 @@ theme_from(std::string_view name)
 }
 } // namespace
 
-std::expected<core::EditorSettings, Failure> decode_settings(std::string_view bytes)
+std::expected<core::EditorSettings, application::SettingsIssue>
+decode_settings(std::string_view bytes, const core::ThemeCatalog &themes)
 {
     const auto fields = read_fields(bytes);
     if (!fields)
     {
         return std::unexpected(fields.error());
     }
-    return validated(fields.value());
+    return validated(fields.value(), themes);
 }
 
 std::string encode_settings(const core::EditorSettings &settings)
 {
-    const auto theme = settings.theme.has_value() ? core::theme_of(settings.theme.value()).name
-                                                  : std::string_view{"system"};
+    const auto theme =
+        settings.theme.has_value() ? settings.theme.value().name() : std::string_view{"system"};
     return std::format("version=1\ncolorscheme={}\nfont_family={}\nfont_size={}\n", theme,
                        settings.font_family.text(), settings.font_size.points());
 }
