@@ -1,6 +1,7 @@
 #include "SettingsCodec.hpp"
 
 #include "BuiltinThemes.hpp"
+#include "KeyValueFields.hpp"
 #include "SettingsFields.hpp"
 
 #include <format>
@@ -12,86 +13,47 @@ namespace
 {
 using Failure = application::SettingsFailure;
 
-[[nodiscard]] std::string_view trimmed(std::string_view text)
-{
-    const auto first = text.find_first_not_of(" \t\r\v\f");
-    if (first == std::string_view::npos)
-    {
-        return {};
-    }
-    const auto last = text.find_last_not_of(" \t\r\v\f");
-    return text.substr(first, last - first + 1);
-}
-
-[[nodiscard]] std::expected<void, Failure> assigned(std::optional<std::string_view> &field,
-                                                    std::string_view value)
-{
-    if (field.has_value())
-    {
-        return std::unexpected(Failure::malformed);
-    }
-    field = value;
-    return {};
-}
-
 [[nodiscard]] std::expected<void, Failure>
 assign_field(SettingsFields &fields, std::string_view key, std::string_view value)
 {
     if (key == "version")
     {
-        return assigned(fields.version, value);
+        fields.version = value;
+        return {};
     }
     if (key == "colorscheme")
     {
-        return assigned(fields.colorscheme, value);
+        fields.colorscheme = value;
+        return {};
     }
     if (key == "font_family")
     {
-        return assigned(fields.font_family, value);
+        fields.font_family = value;
+        return {};
     }
     if (key == "font_size")
     {
-        return assigned(fields.font_size, value);
+        fields.font_size = value;
+        return {};
     }
     return std::unexpected(Failure::malformed);
 }
 
-[[nodiscard]] std::expected<void, Failure> read_line(SettingsFields &fields, std::string_view line)
+[[nodiscard]] std::expected<SettingsFields, Failure> read_fields(std::string_view bytes)
 {
-    const auto text = trimmed(line);
-    if (text.empty())
-    {
-        return {};
-    }
-    const auto separator = text.find('=');
-    if (separator == std::string_view::npos)
+    const auto parsed = key_value_fields(bytes);
+    if (!parsed)
     {
         return std::unexpected(Failure::malformed);
     }
-    return assign_field(fields, trimmed(text.substr(0, separator)),
-                        trimmed(text.substr(separator + 1)));
-}
-
-[[nodiscard]] std::expected<SettingsFields, Failure> read_fields(std::string_view bytes)
-{
-    if (bytes.starts_with("\xEF\xBB\xBF"))
-    {
-        bytes.remove_prefix(3);
-    }
     SettingsFields fields;
-    while (!bytes.empty())
+    for (const auto &[key, value] : parsed.value())
     {
-        const auto end = bytes.find('\n');
-        const auto assigned_line = read_line(fields, bytes.substr(0, end));
-        if (!assigned_line)
+        const auto assigned = assign_field(fields, key, value);
+        if (!assigned)
         {
-            return std::unexpected(assigned_line.error());
+            return std::unexpected(assigned.error());
         }
-        if (end == std::string_view::npos)
-        {
-            break;
-        }
-        bytes.remove_prefix(end + 1);
     }
     return fields;
 }

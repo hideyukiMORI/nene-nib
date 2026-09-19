@@ -484,3 +484,17 @@ oracle は 5-g と同じ固定した Vim 9.1。help と鍵を送った結果だ�
 独立レビューは読み取り専用。`colorscheme missing` が無候補で止まる不一致を修正し、完全な未知themeの入力はExと同じエラーへ接続した。部分的な名前の絞り込みは維持する。文書・commit・push・mergeだけでは検証を繰り返さない。
 
 未対応: Ctrl+Pのファイル/履歴/フォルダ/ブックマーク統合、一般Ex、専用フォント一覧、利用者テーマ。nativeは120 DPI/Microsoft日本語IME、別モニターへのDPI移動・他IMEは未確認。Waivers: none。
+
+### 5-n. 利用者テーマの形式・所有・読込（Issue #68・ADR 0024・2026-09-20）
+
+C4aのcodecと新しい所有値、共通のfield解析へ変えた既存SettingsCodecだけを検証した。UIへの接続はまだ無く、GUI/性能/Vim/保存競合/全件検証は実行していない。名前/文字列の意味はcore、形式/OS/libmはadaptersに隔離した。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build --target nib_theme_tests nib_adapter_tests --parallel 4` / `ctest --test-dir build -R '^nib_themes$' --output-on-failure` | Debug + ASan/UBSan + tidy、127 checks成功。本文/UI全トークンの割当、導出と上書き、UTF-8・BOM/CRLF/空白、RGB/RGBA、版・名前・reserved・重複/未知/欠落、色/メタデータ拒否、4.5の両側、16KiBちょうどと超過、copy/moveと入力破棄後のview、実FilePortのmissing/正常/壊れた/大きい/directoryを確認。`build/Testing/Temporary/LastTest.log` |
+| `build/nib_adapter_tests.exe --settings-codec` | 23 checks成功。field分割の唯一の旧呼出元について受理/拒否と出力の同一性を確認。設定schemaは不変 |
+| `cmake --build build --target nib_tests nib_theme_tests --parallel 4` / `build/nib_tests.exe --user-theme-values` | 21 checks成功。名前の18 checksをadapterからpure coreの通常単体へ移し、ThemeDocumentの独立copyとviewの3 checksも追加。移動だけではadapter全件を繰り返さない |
+| `cmake --build build --target nib_theme_tests --parallel 4` / build内で `nib_theme_tests.exe --file-loading` | 独立レビューのbasename指摘への修正。loader自身が期待名をパスから導く2引数APIに変更。誤拡張子/underscore/空stemをread前に拒否、本文nameとの一致を19 checksで確認。codec/所有値/設定の成功は不変なので再利用 |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | 2 libraries / 0 violations、conformance 0。新coreはOS/libmを参照しない。外部依存許可は変更なし |
+
+`ThemeDocument`のrvalueから借りるAPIはdeleted overload。実行時の所有/寿命はASan対象テストで確認。独立レビューは読み取りのみで、basename修正後に追加指摘なし。変更C++のclang-formatと差分空白も成功。利用者向けの形式と例は `docs/design/user-theme-format.md`。既存settingsの形式は変えない。C4bのカタログ/選択/保存/Ex/Ctrl+Pへの接続は未実装。Waivers: none。

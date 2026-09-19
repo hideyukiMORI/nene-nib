@@ -79,6 +79,7 @@ gdi32 はどこにも無い（ADR 0002）。
 意味の正本を持つ。値型・閉じた選択肢・拒否理由と結果型。piece table・Vim エンジン（バッファ・カーソル・レジスタ・モード・オペレータ）・
 キー列 → 動作の表・Exの解析/入力編集/補完・Ctrl+P の順位付け・文字コード判別・行索引の**純関数**。UI 状態・ファイル・現在時刻・スレッドを持たない。
 実行時依存の許可表は空で、外部シンボルは `eng/symbol-allowlist.json` の固定STL（`operator new` / `delete`・例外・`memcpy` 系・純粋な範囲走査・`from_chars` の不変数値表）だけ（ARC-003・ADR 0022）。
+ファイル由来のテーマ名・出典・色は `ThemeDocument` が所有し、既存 `Theme` のviewへ渡す（ADR 0024）。名前の生成は `ThemeName` の一経路。
 
 ### `src/core/simd`
 

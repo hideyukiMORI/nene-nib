@@ -39,6 +39,7 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
+    src/core/ThemeName.cpp src/core/ThemeDocument.cpp
     src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/Composition.cpp
     src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
@@ -59,6 +60,8 @@ nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
 
 nenenib_target(nenenib_adapters adapters_win32 STATIC
+    src/adapters/win32/KeyValueFields.cpp src/adapters/win32/ColorCodec.cpp
+    src/adapters/win32/ThemeCodec.cpp src/adapters/win32/ThemeContrast.cpp
     src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
     src/adapters/win32/SettingsCodec.cpp src/adapters/win32/Win32SettingsAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp
@@ -78,6 +81,12 @@ nenenib_link(nib_adapter_tests nenenib_core)
 nenenib_link(nib_adapter_tests nenenib_application)
 nenenib_link(nib_adapter_tests nenenib_adapters)
 add_test(NAME nib_adapters COMMAND nib_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+nenenib_target(nib_theme_tests adapter_tests EXECUTABLE tests/adapters/ThemeCodecTests.cpp)
+nenenib_link(nib_theme_tests nenenib_core)
+nenenib_link(nib_theme_tests nenenib_application)
+nenenib_link(nib_theme_tests nenenib_adapters)
+add_test(NAME nib_themes COMMAND nib_theme_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp)
