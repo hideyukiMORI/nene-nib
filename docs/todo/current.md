@@ -7,7 +7,7 @@
 
 ## 現在の Issue
 
-**最新は Issue #70（C4b・利用者テーマの選択/保存/復元）**。起動時カタログを設定・Ex・Ctrl+Pへ接続した [ADR 0025](../adr/0025-user-theme-catalog-and-selection.md)。不変共有と名前付きの失敗で所有と保存禁止を保つ。対象unit88、Ex153、palette130、設定codec23、catalog301 checksとnative120 DPIが成功。統合状態はGitHubを正とする。
+**最新は Issue #70（C4b・利用者テーマの選択/保存/復元）**。起動時カタログを設定・Ex・Ctrl+Pへ接続した [ADR 0025](../adr/0025-user-theme-catalog-and-selection.md)。不変共有と名前付きの失敗で所有と保存禁止を保つ。対象unit88、Ex153、palette130、設定codec23、catalog301 checksとnative120 DPIが成功。[PR #71](https://github.com/hideyukiMORI/nene-nib/pull/71)でmain `9a493fa`へ統合済み。2026-09-20 03:45 JST、hide指示でこの区切りで停止。
 Issue #68 / PR #69（C4a）、#66 / PR #67（C3b）、#64 / PR #65（C3a）、#60 / PR #63（C2）、#58 / PR #59（Vim画面移動）、#61 / PR #62（差分検証・成功再利用）はmainへ統合済み。
 
 ## 段階
@@ -17,7 +17,7 @@ Issue #68 / PR #69（C4a）、#66 / PR #67（C3b）、#64 / PR #65（C3a）、#6
 | Phase 0 言語の実測 | ✅ 2026-09-15（114 記録・`docs/quality/phase0-results.json`） |
 | Phase 1 文書とゲートの足場 | ✅ 2026-09-15（Issue #1・PR #2） |
 | Phase 2 negative proof | ✅ 2026-09-15（26 反例・`docs/quality/gate-proofs.md`） |
-| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → #22 Vim の最初の縦切り（ADR 0012）✅ → #24 窓を先に見せる（ADR 0013）✅ → #28 IME（ADR 0014）✅ → #31 タブの帯（D16）✅ → #30 計測器の揺れ ✅ → #36 欠測の言い方 ✅ → #44 生成物の SHA（CNF-010）✅ → #43 Vim の 2 本目（ADR 0015）✅ → #47 CI の速さの基準値（ADR 0016）✅ → #52 カラーテーマ C1（ADR 0017）✅ → #53 VISUAL（ADR 0018）✅ → **#58 画面移動 ✅ → #60 C2 ✅ → #64 C3a ✅ → #66 C3b ✅ → #68 C4a ✅ → #70 C4b（ADR 0025）** |
+| Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → #22 Vim の最初の縦切り（ADR 0012）✅ → #24 窓を先に見せる（ADR 0013）✅ → #28 IME（ADR 0014）✅ → #31 タブの帯（D16）✅ → #30 計測器の揺れ ✅ → #36 欠測の言い方 ✅ → #44 生成物の SHA（CNF-010）✅ → #43 Vim の 2 本目（ADR 0015）✅ → #47 CI の速さの基準値（ADR 0016）✅ → #52 カラーテーマ C1（ADR 0017）✅ → #53 VISUAL（ADR 0018）✅ → **#58 画面移動 ✅ → #60 C2 ✅ → #64 C3a ✅ → #66 C3b ✅ → #68 C4a ✅ → #70 C4b ✅（ADR 0025）** |
 | Phase 4 公開 | 🔲 |
 
 ## 実装したもの（Issue #70まで）
@@ -44,5 +44,5 @@ Vim の `Ctrl-v`（矩形）/ VISUAL の `p u ~ > < J r I A gv` と `X D C Y`（
 
 ## 次の 1 手
 
-C1〜C4のテーマ/設定を一区切りとして、Vimの行内文字検索 `f/F/t/T` と `;` / `,` の縦切りを次候補とする。本物のVimのoracleで回数・方向・operator/visualとの範囲を先に確かめ、既存motion/operation経路へ接続する。Ctrl+Pのファイル・履歴統合、矩形選択とドラッグは別Issue。
+C1〜C4のテーマ/設定を一区切りとして停止中。次は [Issue #72](https://github.com/hideyukiMORI/nene-nib/issues/72)、Vimの行内文字検索 `f/F/t/T` と `;` / `,`。Issue作成と既存コードの読取りだけで実装未着手。hideの再開指示後に進める。本物のVimのoracleで回数・方向・operator/visualとの範囲を先に確かめ、既存motion/operation経路へ接続する。Ctrl+Pのファイル・履歴統合、矩形選択とドラッグは別Issue。
 今回の判断・結果・未確認は [日報](../reports/2026-09-20.md) と [引き継ぎ](../handoffs/2026-09-20.md)。検証は差分に必要な範囲だけ選び、成功結果を再利用する。
