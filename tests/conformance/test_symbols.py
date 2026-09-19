@@ -75,6 +75,14 @@ class SymbolTests(unittest.TestCase):
         self.assertEqual(1, len(findings))
         self.assertTrue(findings[0].startswith("ARC-007"))
 
+    def test_ex_stl_dependencies_are_exact_and_deterministic(self):
+        permitted = {"?_Large_power_data@std@@3QBIB", "__std_find_end_1", "__std_min_8u"}
+        self.assertEqual([], symbols.classify(permitted, "core", ALLOWLIST))
+        for forbidden in {"__std_find_end_2", "__std_min_f", "localeconv", "calloc",
+                          "?_Init@locale@std@@CAPEAV_Locimp@12@_N@Z", "SomeUnknownLibraryCall"}:
+            with self.subTest(symbol=forbidden):
+                self.assertTrue(symbols.classify({forbidden}, "core", ALLOWLIST))
+
     def test_steady_clock_is_arc007(self):
         self.assertTrue(symbols.classify({"_Query_perf_counter"}, "core", ALLOWLIST)[0].startswith("ARC-007"))
 

@@ -4,6 +4,12 @@
 
 namespace nenenib::core
 {
+bool same_settings(const EditorSettings &left, const EditorSettings &right) noexcept
+{
+    return left.font_size.points() == right.font_size.points() &&
+           left.font_family.text() == right.font_family.text() && left.theme == right.theme;
+}
+
 EditorSettings default_editor_settings()
 {
     return EditorSettings{default_font_size(), DisplayText::parse("Cascadia Code").value(),

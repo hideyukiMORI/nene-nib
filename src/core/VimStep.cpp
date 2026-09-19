@@ -47,7 +47,7 @@ constexpr char32_t control_r_character = 0x12;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 31> normal_bindings{{{U'h', VimAction::move_left},
+constexpr std::array<VimBinding, 32> normal_bindings{{{U'h', VimAction::move_left},
                                                       {U'j', VimAction::move_down},
                                                       {U'k', VimAction::move_up},
                                                       {U'l', VimAction::move_right},
@@ -77,7 +77,8 @@ constexpr std::array<VimBinding, 31> normal_bindings{{{U'h', VimAction::move_lef
                                                       {control_r_character, VimAction::redo},
                                                       {U'v', VimAction::visual},
                                                       {U'V', VimAction::visual_line},
-                                                      {U'o', VimAction::swap_visual_ends}}};
+                                                      {U'o', VimAction::swap_visual_ends},
+                                                      {U':', VimAction::open_command_line}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 13> motion_bindings{
@@ -1078,10 +1079,22 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return operated_to_line_end(state, view.text, view.selection.caret, operation);
 }
 
+[[nodiscard]] VimStep opened_command_line(const VimState &state)
+{
+    if (state.count.has_value())
+    {
+        return cancelled(state);
+    }
+    return VimStep{vim_resting_from(state, state.unnamed_register), VimOpenCommandLine{}};
+}
+
+[[nodiscard]] VimStep appended_insert(const VimState &state, const VimEditorView &view)
+{
+    return entered_insert(state, forward_characters(view.text, view.selection.caret, single_step));
+}
+
 [[nodiscard]] VimStep commanded(const VimState &state, const VimEditorView &view, VimAction action)
 {
-    const TextBuffer &text = view.text;
-    const Offset caret = view.selection.caret;
     switch (action)
     {
     case VimAction::move_left:
@@ -1109,8 +1122,10 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return visual_action(state, view, action);
     case VimAction::swap_visual_ends:
         return cancelled(state);
+    case VimAction::open_command_line:
+        return opened_command_line(state);
     case VimAction::remove_character:
-        return removed_character(state, text, caret);
+        return removed_character(state, view.text, view.selection.caret);
     case VimAction::remove_operator:
         return pending_operator(state, VimOperator::remove);
     case VimAction::change_operator:
@@ -1124,15 +1139,15 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::change_to_line_end:
         return line_end_action(state, view, action);
     case VimAction::yank_line:
-        return operated_on_lines(state, text, caret, VimOperator::yank);
+        return operated_on_lines(state, view.text, view.selection.caret, VimOperator::yank);
     case VimAction::insert_before:
-        return entered_insert(state, caret);
+        return entered_insert(state, view.selection.caret);
     case VimAction::insert_after:
-        return entered_insert(state, forward_characters(text, caret, single_step));
+        return appended_insert(state, view);
     case VimAction::insert_at_line_start:
-        return entered_insert(state, vim_first_non_blank(text, caret));
+        return entered_insert(state, vim_first_non_blank(view.text, view.selection.caret));
     case VimAction::insert_at_line_end:
-        return entered_insert(state, text.line_end(line_of(text, caret)));
+        return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
     case VimAction::undo:
         return VimStep{vim_resting_from(state, state.unnamed_register), VimUndo{}};
     case VimAction::redo:
@@ -1366,6 +1381,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::visual_line:
         return visual_switched(state, view.selection, VimMode::visual_line);
     // この縦切りの範囲の外の鍵は何もしない（決定 7・決定 8）。
+    case VimAction::open_command_line:
     case VimAction::put_after:
     case VimAction::put_before:
     case VimAction::remove_to_line_end:

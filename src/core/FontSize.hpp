@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <string_view>
 
 namespace nenenib::core
 {
@@ -17,6 +18,7 @@ class FontSize final
     static constexpr float default_points = 13.5F;
 
     [[nodiscard]] static std::expected<FontSize, FontSizeFailure> from_points(float points);
+    [[nodiscard]] static std::expected<FontSize, FontSizeFailure> parse(std::string_view text);
     [[nodiscard]] float points() const noexcept;
 
   private:

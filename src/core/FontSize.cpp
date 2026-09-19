@@ -1,11 +1,28 @@
 #include "FontSize.hpp"
 
 #include <algorithm>
+#include <charconv>
+#include <system_error>
 #include <utility>
 
 namespace nenenib::core
 {
 FontSize::FontSize(float points) : points_(points) {}
+
+std::expected<FontSize, FontSizeFailure> FontSize::parse(std::string_view text)
+{
+    if (text.empty())
+    {
+        return std::unexpected(FontSizeFailure::invalid_text);
+    }
+    float points = 0.0F;
+    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), points);
+    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+    {
+        return std::unexpected(FontSizeFailure::invalid_text);
+    }
+    return from_points(points);
+}
 
 std::expected<FontSize, FontSizeFailure> FontSize::from_points(float points)
 {

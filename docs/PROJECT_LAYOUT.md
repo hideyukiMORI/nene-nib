@@ -77,8 +77,8 @@ gdi32 はどこにも無い（ADR 0002）。
 ### `src/core`
 
 意味の正本を持つ。値型・閉じた選択肢・拒否理由と結果型。piece table・Vim エンジン（バッファ・カーソル・レジスタ・モード・オペレータ）・
-キー列 → 動作の表・Ctrl+P の順位付け・文字コード判別・行索引の**純関数**。UI 状態・ファイル・現在時刻・スレッドを持たない。
-実行時依存の許可表は空で、外部シンボルは `eng/symbol-allowlist.json` の STL の枠組み（`operator new` / `delete`・例外・`memcpy` 系）だけ（ARC-003）。
+キー列 → 動作の表・Exの解析/入力編集/補完・Ctrl+P の順位付け・文字コード判別・行索引の**純関数**。UI 状態・ファイル・現在時刻・スレッドを持たない。
+実行時依存の許可表は空で、外部シンボルは `eng/symbol-allowlist.json` の固定STL（`operator new` / `delete`・例外・`memcpy` 系・純粋な範囲走査・`from_chars` の不変数値表）だけ（ARC-003・ADR 0022）。
 
 ### `src/core/simd`
 
@@ -87,6 +87,7 @@ SIMD の組み込み関数を書ける唯一の場所。関数ごとに `[[gnu::
 ### `src/application`
 
 振る舞いの調整を持つ。ポートの宣言・状態の所有者（`EditorState` / `VimState`）・意図を受ける reducer・表示値の生成・結果型。
+`EditorState` は本文と独立した任意の `CommandLine` と結果メッセージも所有する。Exと相対フォント変更はcontrollerの `persist_settings` を共用する（ADR 0022）。
 ワーカーへの要求値と完了の受け取り（版番号）もここ（ADR 0004）。Win32・永続化・ファイル・スレッドを知らない。
 
 ### `src/adapters/win32`

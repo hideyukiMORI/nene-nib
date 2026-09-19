@@ -3,10 +3,8 @@
 #include "BuiltinThemes.hpp"
 #include "SettingsFields.hpp"
 
-#include <charconv>
 #include <format>
 #include <optional>
-#include <system_error>
 
 namespace nenenib::adapters::win32
 {
@@ -115,14 +113,8 @@ theme_from(std::string_view name)
 
 [[nodiscard]] std::expected<core::FontSize, Failure> size_from(std::string_view text)
 {
-    if (text.empty())
-    {
-        return std::unexpected(Failure::invalid_font_size);
-    }
-    float points = 0.0F;
-    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), points);
-    const auto size = core::FontSize::from_points(points);
-    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || !size)
+    const auto size = core::FontSize::parse(text);
+    if (!size)
     {
         return std::unexpected(Failure::invalid_font_size);
     }

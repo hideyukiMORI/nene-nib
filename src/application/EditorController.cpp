@@ -5,6 +5,7 @@
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
 #include "Edit.hpp"
+#include "ExResult.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
 #include "ScrollBounds.hpp"
@@ -222,30 +223,47 @@ EditorController::EditorController(EditorPorts ports)
 
 void EditorController::accept(const AdjustFontSize &intent)
 {
-    state_ = state_.with_settings_failure(std::nullopt);
     auto settings = state_.settings();
     settings.font_size =
         core::adjusted_font_size(settings.font_size, intent.adjustment, intent.steps);
-    if (settings.font_size.points() == state_.settings().font_size.points())
+    (void)persist_settings(std::move(settings));
+}
+
+bool EditorController::persist_settings(core::EditorSettings settings)
+{
+    state_ = state_.with_settings_failure(std::nullopt);
+    if (core::same_settings(settings, state_.settings()))
     {
-        return;
+        return true;
     }
     const auto saved = ports_.settings.write(settings);
     if (!saved)
     {
         state_ = state_.with_settings_failure(saved.error());
-        return;
+        return false;
     }
     state_ = state_.with_settings(std::move(settings));
+    return true;
 }
 
 EditorFrame EditorController::apply(const EditorIntent &intent)
 {
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     state_ = state_.with_failure(std::nullopt);
+    if (state_.command_message().has_value() && !std::holds_alternative<VisibleLines>(intent) &&
+        !std::holds_alternative<RefreshAppearance>(intent) &&
+        !std::holds_alternative<CancelComposition>(intent))
+    {
+        state_ = state_.with_command_message(std::nullopt);
+    }
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
+}
+
+bool EditorController::command_line_active() const noexcept
+{
+    return state_.command_line().has_value();
 }
 
 void EditorController::fail(FileFailure failure)
@@ -492,6 +510,7 @@ void EditorController::accept(const VisibleLines &intent)
 
 void EditorController::accept(const SelectEditMode &intent)
 {
+    state_ = state_.with_command_line(std::nullopt);
     // モードが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
@@ -518,6 +537,10 @@ void EditorController::accept(const SelectEditMode &intent)
 
 void EditorController::accept(const VimKeyPress &intent)
 {
+    if (state_.command_line().has_value())
+    {
+        return;
+    }
     const core::VimMode before = state_.vim().mode;
     const ScrollState scroll = state_.scroll();
     const core::VimEditorView view{state_.text(), state_.selection(),
@@ -531,7 +554,10 @@ void EditorController::accept(const VimKeyPress &intent)
     }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
-    settle_vim_caret();
+    if (!state_.command_line().has_value())
+    {
+        settle_vim_caret();
+    }
 }
 
 void EditorController::settle_vim_caret()
@@ -576,6 +602,93 @@ core::EditBoundary EditorController::vim_boundary() const noexcept
 }
 
 void EditorController::perform(const core::VimNoEffect &) {}
+
+void EditorController::perform(const core::VimOpenCommandLine &)
+{
+    state_ = state_.with_command_line(core::CommandLine::empty());
+}
+
+void EditorController::accept(const CommandText &intent)
+{
+    const auto &input = state_.command_line();
+    if (!input.has_value())
+    {
+        return;
+    }
+    const auto next = input.value().inserted(intent.utf8);
+    if (!next)
+    {
+        state_ = state_.with_command_message(core::ex_failure_message(next.error()));
+        return;
+    }
+    state_ = state_.with_command_line(next.value());
+}
+
+void EditorController::accept(const EditCommand &intent)
+{
+    const auto &input = state_.command_line();
+    if (!input.has_value())
+    {
+        return;
+    }
+    const auto &command = input.value();
+    if (command.text().empty() && intent.edit == core::CommandEdit::backspace)
+    {
+        accept(CancelCommand{});
+        return;
+    }
+    state_ = state_.with_command_line(command.edited(intent.edit));
+}
+
+void EditorController::accept(const CancelCommand &)
+{
+    state_ = state_.with_command_line(std::nullopt);
+}
+
+void EditorController::accept(const PasteCommand &)
+{
+    if (!state_.command_line().has_value())
+    {
+        return;
+    }
+    const auto text = ports_.clipboard.read();
+    if (!text)
+    {
+        state_ =
+            state_.with_command_message(core::DisplayText::parse("Clipboard unavailable").value());
+        return;
+    }
+    accept(CommandText{text.value()});
+}
+
+void EditorController::accept(const SubmitCommand &)
+{
+    const auto &input = state_.command_line();
+    if (!input.has_value())
+    {
+        return;
+    }
+    const auto text = std::string(input.value().text());
+    state_ = state_.with_command_line(std::nullopt);
+    if (text.empty())
+    {
+        return;
+    }
+    const auto result = core::evaluate_ex(text, state_.settings(), state_.appearance());
+    if (!result)
+    {
+        state_ = state_.with_command_message(core::ex_failure_message(result.error()));
+        return;
+    }
+    const auto &settings = result.value().settings;
+    if (settings.has_value() && !persist_settings(settings.value()))
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("Settings could not be saved").value());
+        return;
+    }
+    state_ = state_.with_command_message(result.value().message);
+}
 
 void EditorController::perform(const core::VimMoveTo &effect)
 {
@@ -874,6 +987,8 @@ EditorFrame EditorController::frame() const
                                     document.encoding, save_state, state_.last_failure()},
                        core::status_items_for(caret, document.encoding, state_.line_ending()),
                        state_.settings(),
-                       state_.settings_failure()};
+                       state_.settings_failure(),
+                       state_.command_line(),
+                       state_.command_message()};
 }
 } // namespace nenenib::application

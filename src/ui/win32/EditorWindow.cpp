@@ -681,6 +681,20 @@ void EditorWindow::click_client(LPARAM data)
     RECT client{};
     GetClientRect(window_, &client);
     const auto layout = core::status_bar_layout(client.right, client.bottom, dpi_);
+    const bool in_status = core::contains(layout.band, low_word_of(data), high_word_of(data));
+    if (controller_.command_line_active() && in_status)
+    {
+        return;
+    }
+    if (controller_.command_line_active())
+    {
+        send(application::CancelCommand{});
+    }
+    if (controller_.frame().command_message.has_value() && in_status)
+    {
+        send(application::CancelCommand{});
+        return;
+    }
     switch (core::status_bar_hit(layout, low_word_of(data), high_word_of(data)))
     {
     // 意図は「どちらを選んだか」。同じ側を押しても controller が同じ表示値を返すだけ（ARC-011）。
@@ -897,13 +911,18 @@ void EditorWindow::restore_ime()
 
 void EditorWindow::send(const application::EditorIntent &intent)
 {
-    const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent);
+    const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent) ||
+                             std::holds_alternative<application::SubmitCommand>(intent);
     const float previous_size =
         font_change ? controller_.frame().settings.font_size.points() : 0.0F;
     auto frame = controller_.apply(intent);
     if (font_change)
     {
-        announce_settings(frame);
+        if (std::holds_alternative<application::AdjustFontSize>(intent))
+        {
+            announce_settings(frame);
+        }
+        apply_backdrop(frame);
         if (frame.settings.font_size.points() != previous_size)
         {
             frame = controller_.apply(application::VisibleLines{body_lines()});
@@ -1075,7 +1094,16 @@ void EditorWindow::type_character(WPARAM word)
     wide.push_back(unit);
     // 合成した 1 文字を UTF-8 の意図へ（CPP-014 / ADR 0009 の決定 2）。変換は core::to_utf8
     // ただ 1 本で、対にならないサロゲートはここまでに捨ててあるので空にはならない（Issue #13）。
-    std::string utf8 = core::to_utf8(wide).value_or(std::string{});
+    type_text(core::to_utf8(wide).value_or(std::string{}));
+}
+
+void EditorWindow::type_text(std::string utf8)
+{
+    if (controller_.command_line_active())
+    {
+        send(application::CommandText{std::move(utf8)});
+        return;
+    }
     switch (mode_)
     {
     case core::EditMode::vim:
@@ -1090,6 +1118,11 @@ void EditorWindow::type_character(WPARAM word)
 
 void EditorWindow::press_key(WPARAM word)
 {
+    if (controller_.command_line_active())
+    {
+        press_command_key(word);
+        return;
+    }
     const auto font = font_shortcut(word);
     if (held(VK_CONTROL) && !held(VK_MENU) && font.has_value())
     {
@@ -1113,6 +1146,55 @@ void EditorWindow::press_key(WPARAM word)
         break;
     }
     press_plain_key(word);
+}
+
+void EditorWindow::press_command_key(WPARAM word)
+{
+    if (held(VK_CONTROL) && !held(VK_MENU))
+    {
+        if (word == 'V')
+        {
+            send(application::PasteCommand{});
+        }
+        if (word == 'C')
+        {
+            send(application::CancelCommand{});
+        }
+        return;
+    }
+    switch (word)
+    {
+    case VK_RETURN:
+        send(application::SubmitCommand{});
+        return;
+    case VK_ESCAPE:
+        send(application::CancelCommand{});
+        return;
+    case VK_LEFT:
+        send(application::EditCommand{core::CommandEdit::left});
+        return;
+    case VK_RIGHT:
+        send(application::EditCommand{core::CommandEdit::right});
+        return;
+    case VK_HOME:
+        send(application::EditCommand{core::CommandEdit::home});
+        return;
+    case VK_END:
+        send(application::EditCommand{core::CommandEdit::end});
+        return;
+    case VK_BACK:
+        send(application::EditCommand{core::CommandEdit::backspace});
+        return;
+    case VK_DELETE:
+        send(application::EditCommand{core::CommandEdit::erase});
+        return;
+    case VK_TAB:
+        send(application::EditCommand{held(VK_SHIFT) ? core::CommandEdit::complete_previous
+                                                     : core::CommandEdit::complete_next});
+        return;
+    default:
+        break;
+    }
 }
 
 // Vim モードの窓は鍵を写すだけで、何が起きるかは知らない（ARC-011 / ADR 0012 の決定 4）。

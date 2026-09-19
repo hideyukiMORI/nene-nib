@@ -124,6 +124,30 @@ EditorState EditorState::with_mode(core::EditMode mode) const
     return next;
 }
 
+const std::optional<core::CommandLine> &EditorState::command_line() const noexcept
+{
+    return command_line_;
+}
+
+const std::optional<core::DisplayText> &EditorState::command_message() const noexcept
+{
+    return command_message_;
+}
+
+EditorState EditorState::with_command_line(std::optional<core::CommandLine> command) const
+{
+    EditorState next(*this);
+    next.command_line_ = std::move(command);
+    return next;
+}
+
+EditorState EditorState::with_command_message(std::optional<core::DisplayText> message) const
+{
+    EditorState next(*this);
+    next.command_message_ = std::move(message);
+    return next;
+}
+
 EditorState EditorState::with_vim(core::VimState vim) const
 {
     EditorState next(*this);

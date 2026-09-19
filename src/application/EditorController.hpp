@@ -35,6 +35,7 @@ class EditorController final
     explicit EditorController(EditorPorts ports);
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
     [[nodiscard]] EditorFrame frame() const;
+    [[nodiscard]] bool command_line_active() const noexcept;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
@@ -57,6 +58,12 @@ class EditorController final
     void accept(const OpenDocument &intent);
     void accept(const SaveDocument &intent);
     void accept(const AdjustFontSize &intent);
+    void accept(const CommandText &intent);
+    void accept(const EditCommand &intent);
+    void accept(const SubmitCommand &);
+    void accept(const CancelCommand &);
+    void accept(const PasteCommand &);
+    [[nodiscard]] bool persist_settings(core::EditorSettings settings);
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
     // 触らず、CommitText だけが既存の 1 本（replace / vim_step）を通って本文に入る。
     void accept(const ComposeText &intent);
@@ -66,6 +73,7 @@ class EditorController final
     // VimEffect の写し先。選択肢が増えたら std::visit がここで足りずコンパイルが落ちる
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
     void perform(const core::VimNoEffect &);
+    void perform(const core::VimOpenCommandLine &);
     void perform(const core::VimMoveTo &effect);
     void perform(const core::VimNavigate &effect);
     void perform(const core::VimSelect &effect);

@@ -443,3 +443,24 @@ oracle は 5-g と同じ固定した Vim 9.1。help と鍵を送った結果だ�
 実機の最初の成功後、空白のcodec修正はadapter検査で、比例係数/OSテーマの共通化は既存unitとsymbolsで確認。無変更時のスクロール修正は該当nativeケースだけ追加した。全実機シナリオを繰り返していない。独立レビューは読み取り専用、追加の未解決指摘なし。
 
 未確認: 別モニターへのDPI移動、変換中の拡縮での候補窓の目視、他IME。外部エディタが比較後に書く競合は保証外。FR-016/FR-017のEx/選択UI部分はC3。Waivers: none。
+
+### 5-l. Ex入力と設定コマンド（Issue #64・ADR 0022・2026-09-20）
+
+対象はNORMALのEx入口、本文と独立した入力、設定の共通保存、入力欄/補完/結果の描画とイベント配線。既存C2のファイル競合・不変の保存形式・IME変換、変更していないVim操作の成功結果を再利用する。全件unit・全件GUI・coverage全件再測定・Vim oracle生成・16 MiB入出力は実行していない（QLT-001 / QLT-012）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build --target nib_tests nib_adapter_tests NeNeNib --parallel 4` | 閉じた意図/効果、公開状態と直接呼出元。Debug + ASan/UBSan + tidy成功 |
+| `build/nib_tests.exe --ex-settings` | 153 checks成功。設定の共通保存/失敗/同値、全テーマ・system、pt解析、未対応構文、UTF-8編集、Tab巡回、配置、本文/undo/レジスタの保持 |
+| `build/nib_adapter_tests.exe --settings-codec` | 23 checks成功。pt解析をcoreへ移した直接呼出元の保存形式と値の拒否を確認 |
+| `python eng/symbols.py --build-dir build --require core application` | 2 libraries / 0 violations。`std::format`が文字列版でも持ち込むlocale参照を検出して除去。追加許可は固定STLの不変表と純走査3シンボルだけ（ADR 0022） |
+| `python -m unittest discover -s tests/conformance -p test_symbols.py -k ex_stl -v` | 許可した3シンボルと、locale/未知関数/範囲外STLの拒否を1 test内で確認、成功 |
+| `python eng/verify-ex.py` | Windows 11 / 120 DPI。NORMAL入口、Tab、Home/End/Delete/Backspace、Esc、Ctrl+Zの本文への流出防止、テーマ切替、Consolas 21.5pt、無効値、長文clipとcaret追従、右status/本文保持、再起動。`out/ex-verification/ex-results.json` とBMP |
+| `python eng/verify-ex.py --only input-guards` | 独立レビュー指摘への追加検査。tabクリックのcaret保持、結果表示中の隠れたtoggle非作動、実SendInput Ctrl+Alt+C/Vで画面不変、guifont内pipe拒否。`out/ex-verification/ex-guards-results.json` |
+| `cmake --build build-release --target NeNeNib --parallel 4` | 新UI文字書式の起動・通常入力の経路を測るRelease製品target、成功 |
+| `python out/git/issue64-speed.py`（既存 measure-speed 関数を対象指定、5試行） | 指紋bc8a356f37c68491 / 120 DPI。中央値: 初回描画206.5191ms、窓31.8138ms、単打鍵1.157ms、200打鍵2.463ms。既存基準で退行0・欠測0。`out/speed/issue64-selected.json` |
+| `python eng/conformance.py --build-dir build` / changed C++ clang-format / `git diff --check` | 新ファイルの所属/依存と文書参照、変更ファイルの整形と空白を確認、成功 |
+
+独立レビューは読み取りのみ。pipe、AltGr、本文外クリック、結果中のhidden toggleの4点を修正し、未解決指摘なし。検証後の文書・commit・push・mergeでは同じ成功結果を使う。保存schema変更なし、新規runtime依存なし、Waivers: none。
+
+未対応: 一般Ex、範囲/回数付きEx、VISUAL範囲、VimScript、`:w`/`:q`、履歴、Ctrl+P、専用フォント選択UI。ExのIMEはNORMALと同じ閉状態、Unicode名はUTF-8/単行貼付。nativeは120 DPI、日本語キーボード環境での実測。Ctrl+PなどFR-016全体は後続。

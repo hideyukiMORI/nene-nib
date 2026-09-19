@@ -5,14 +5,22 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 
 > **Status (2026-09-20):** ordinary editing, file open/save, Japanese IME and the first Vim slices
 > (motions, operators, visual selection and viewport navigation) work. Body font size, font family and
-> theme settings persist between launches. Multiple tabs, Ex commands and Ctrl+P are still planned.
+> theme settings persist between launches and can be changed from the Vim command line.
+> Multiple tabs and Ctrl+P are still planned.
 > Nothing to download yet (Phase 4).
 
 Use `Ctrl` + `+` / `-` to change body size, `Ctrl+0` to reset to 13.5 pt, or `Ctrl` + mouse wheel
 in either editing mode (8–40 pt). The title and status bar keep their size.
-Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first size change.
-Theme and font family can currently be edited there while the editor is closed; the format and
-failure behavior are specified in [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md).
+In Vim NORMAL, press `:` and enter `colorscheme` to see the current theme, `colorscheme dracula`
+to switch, or `colorscheme system` to follow Windows. `Tab` / `Shift+Tab` cycle completions.
+Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Enter` applies;
+`Esc` cancels. Left/Right, Home/End, Backspace/Delete and single-line `Ctrl+V` edit the command.
+This settings command line does not yet support ranges, pipes, history, `:w` or `:q`.
+
+Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first setting change.
+The format and failure behavior are specified in
+[ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in
+[ADR 0022](docs/adr/0022-ex-command-line-and-settings-evaluation.md).
 
 ## What it will be
 
