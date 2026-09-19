@@ -322,6 +322,19 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf010_missing_files(self):
         self.assertTrue(any("missing" in detail for detail in self.fixture_details()))
 
+    def test_vim_viewport_header_row(self):
+        record = self.vim_records(1)[0]
+        record["viewport"] = {"visible_lines": 10, "first_visible": 6, "line": 10,
+                              "column": 1, "expected_first_visible": 11,
+                              "expected_scroll_lines": 5}
+        rendered = vim_oracle.header([record], "VIM 9.1", "digest")
+        self.assertIn("VimViewportFixture{10, 6, 10, 1, 11, 5}", rendered)
+
+    def test_vim_viewport_requires_exact_input(self):
+        fixture = {"name": "viewport", "viewport": {"visible_lines": 10}}
+        with self.assertRaises(ValueError):
+            vim_oracle.viewport_of(fixture)
+
     def seed_docs(self):
         self.write("docs/QUALITY_GATES.md", "### CNF-006 — documents\n- 機械強制: **active**\n\n## 3. 強制マトリクス\n| CNF-006 | active | checker |\n\n## 4. Gates\n")
         self.write("docs/quality/gate-proofs.md", "| CNF-006 | test | passed |")

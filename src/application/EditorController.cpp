@@ -17,6 +17,7 @@
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
+#include "VimNavigate.hpp"
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 
@@ -35,6 +36,30 @@ namespace
 constexpr std::size_t single_page_line = 1;
 // 同期で読むのはここまで（ADR 0010 の決定 12）。1 GB はメモリマップの縦切りで別に決める。
 constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
+
+[[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept
+{
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return core::ScrollExtent::filled_viewport;
+    case core::EditMode::vim:
+        return core::ScrollExtent::last_line;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] core::ScrollFollow scroll_follow_for(core::EditMode mode) noexcept
+{
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return core::ScrollFollow::minimal;
+    case core::EditMode::vim:
+        return core::ScrollFollow::vim;
+    }
+    std::unreachable();
+}
 
 [[nodiscard]] FileFailure file_failure_of(CodePageFailure failure) noexcept
 {
@@ -228,10 +253,16 @@ void EditorController::follow_caret()
 {
     const auto caret_line = state_.text().position_of(state_.selection().caret).line;
     const ScrollState scroll = state_.scroll();
-    const auto followed =
-        core::first_visible_for_caret(scroll.first_visible, caret_line, scroll.visible_lines);
-    const auto within =
-        core::first_visible_within(followed, state_.text().line_count(), scroll.visible_lines);
+    const auto followed = core::first_visible_for_caret(
+        scroll.first_visible, caret_line, scroll.visible_lines, scroll_follow_for(state_.mode()));
+    const auto last_filled = core::first_visible_within(
+        core::LineNumber{state_.text().line_count()}, state_.text().line_count(),
+        scroll.visible_lines, core::ScrollExtent::filled_viewport);
+    const core::ScrollExtent extent = scroll.first_visible.value <= last_filled.value
+                                          ? core::ScrollExtent::filled_viewport
+                                          : scroll_extent_for(state_.mode());
+    const auto within = core::first_visible_within(followed, state_.text().line_count(),
+                                                   scroll.visible_lines, extent);
     state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
 }
 
@@ -412,16 +443,20 @@ void EditorController::accept(const ScrollLines &intent)
     const ScrollState scroll = state_.scroll();
     const auto moved = static_cast<std::int64_t>(scroll.first_visible.value) + intent.lines;
     const auto requested = moved < 1 ? std::size_t{1} : static_cast<std::size_t>(moved);
-    const auto within = core::first_visible_within(
-        core::LineNumber{requested}, state_.text().line_count(), scroll.visible_lines);
+    const auto within =
+        core::first_visible_within(core::LineNumber{requested}, state_.text().line_count(),
+                                   scroll.visible_lines, scroll_extent_for(state_.mode()));
     state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
 }
 
 void EditorController::accept(const VisibleLines &intent)
 {
     const std::size_t lines = std::max<std::size_t>(intent.lines, 1);
-    const auto within = core::first_visible_within(state_.scroll().first_visible,
-                                                   state_.text().line_count(), lines);
+    state_ =
+        state_.with_vim(core::vim_after_resize(state_.vim(), state_.scroll().visible_lines, lines));
+    const auto within =
+        core::first_visible_within(state_.scroll().first_visible, state_.text().line_count(), lines,
+                                   scroll_extent_for(state_.mode()));
     state_ = state_.with_scroll(ScrollState{within, lines});
     follow_caret();
 }
@@ -431,12 +466,19 @@ void EditorController::accept(const SelectEditMode &intent)
     // モードが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
-    core::VimState vim = core::vim_resting_state(state_.vim().unnamed_register);
+    core::VimState vim = core::vim_resting_from(state_.vim(), state_.vim().unnamed_register);
     state_ = state_.with_mode(intent.mode).with_vim(std::move(vim));
     switch (intent.mode)
     {
     case core::EditMode::ordinary:
+    {
+        const ScrollState scroll = state_.scroll();
+        const auto within = core::first_visible_within(
+            scroll.first_visible, state_.text().line_count(), scroll.visible_lines,
+            scroll_extent_for(core::EditMode::ordinary));
+        state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
         return;
+    }
     case core::EditMode::vim:
         break;
     }
@@ -448,7 +490,10 @@ void EditorController::accept(const SelectEditMode &intent)
 void EditorController::accept(const VimKeyPress &intent)
 {
     const core::VimMode before = state_.vim().mode;
-    const auto step = core::vim_step(state_.vim(), state_.text(), state_.selection(), intent.key);
+    const ScrollState scroll = state_.scroll();
+    const core::VimEditorView view{state_.text(), state_.selection(),
+                                   core::VimViewport{scroll.first_visible, scroll.visible_lines}};
+    const auto step = core::vim_step(state_.vim(), view, intent.key);
     state_ = state_.with_vim(step.next);
     // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
     if (before != step.next.mode)
@@ -506,6 +551,13 @@ void EditorController::perform(const core::VimNoEffect &) {}
 void EditorController::perform(const core::VimMoveTo &effect)
 {
     move_caret_to(effect.caret, core::SelectionAnchoring::collapse);
+}
+
+void EditorController::perform(const core::VimNavigate &effect)
+{
+    state_ = state_.with_selection(effect.selection)
+                 .with_scroll(ScrollState{effect.first_visible, state_.scroll().visible_lines});
+    state_ = state_.with_history(state_.history().sealed());
 }
 
 // VISUAL の選択（決定 3）。engine が決めた両端をそのまま置く。範囲にするのは表示と操作の側。

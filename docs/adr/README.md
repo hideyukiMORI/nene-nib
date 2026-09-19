@@ -34,3 +34,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0016](0016-ci-speed-reference-per-host-fingerprint.md) | CI の速さの基準値は host の指紋ごとに持ち、基準値の無い host では記録だけにして黙らず、記録を artifact で残す | 受理 |
 | [0017](0017-theme-model-and-builtin-colorschemes.md) | テーマは core の値型 `Theme`（UI・本文・出典）で、有名テーマの UI トークンは整数演算の `derive_ui` から導き、組み込み 9 テーマと名前の表は 1 か所 | 受理 |
 | [0018](0018-vim-visual-selection-as-range.md) | VISUAL は `VimMode` の 2 値で、engine は `Selection` を読み、選択を範囲に変える純関数 1 つでオペレータの経路に流す | 受理 |
+| [0019](0019-vim-viewport-input-and-navigation-effect.md) | 表示領域は engine への入力で、画面移動は選択と先頭行を一緒に返す | 受理 |

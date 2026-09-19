@@ -6,6 +6,7 @@
 #include "VimRegister.hpp"
 #include "VimWantedColumn.hpp"
 
+#include <cstddef>
 #include <optional>
 #include <utility>
 
@@ -20,6 +21,9 @@ struct VimState
     std::optional<VimCount> count;
     std::optional<VimPendingOperator> pending;
     std::optional<VimWantedColumn> wanted_column;
+    // Ctrl-d / Ctrl-u に明示した window-local な移動量。現在の viewport ではなく、次の
+    // half-page command に残る Vim の 'scroll' に相当する値（ADR 0019 の決定 6）。
+    std::optional<VimCount> scroll_lines;
     VimRegister unnamed_register;
 };
 
@@ -27,7 +31,30 @@ struct VimState
 // Vim モードに入るときも、通常モードへ戻して保留を捨てるときも、この 1 つの形に寄せる。
 [[nodiscard]] inline VimState vim_resting_state(VimRegister unnamed_register)
 {
-    return VimState{VimMode::normal, std::nullopt, std::nullopt, std::nullopt,
-                    std::move(unnamed_register)};
+    return VimState{VimMode::normal, std::nullopt, std::nullopt,
+                    std::nullopt,    std::nullopt, std::move(unnamed_register)};
+}
+
+// 通常の鍵の完了は 'scroll' の明示値を捨てない。Vim モードへ初めて入る初期化だけが
+// vim_resting_state を直接使い、空の値から始める。
+[[nodiscard]] inline VimState vim_resting_from(const VimState &state, VimRegister unnamed_register)
+{
+    VimState next = vim_resting_state(std::move(unnamed_register));
+    next.scroll_lines = state.scroll_lines;
+    return next;
+}
+
+// Vim の window-local 'scroll' は実際の表示高が変わったときだけ半画面の既定へ戻る。
+// 同じ高さの通知は状態を変えない（ADR 0019 の決定 6）。
+[[nodiscard]] inline VimState vim_after_resize(const VimState &state, std::size_t before,
+                                               std::size_t after)
+{
+    if (before == after)
+    {
+        return state;
+    }
+    VimState next = state;
+    next.scroll_lines = std::nullopt;
+    return next;
 }
 } // namespace nenenib::core

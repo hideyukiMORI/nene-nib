@@ -3,14 +3,16 @@
 Starts build/NeNeNib.exe with an isolated environment, finds its window by class name, records the
 geometry and DPI, asks the window procedure where the caption and the close button are, reads the
 composed pixels back from the screen device context, drives the mode toggle and the editing keys
-with posted messages, and closes the window with WM_CLOSE. It never moves the real pointer and
-never generates keyboard input. Requires an unlocked interactive Windows session with DWM running;
+with posted messages, and closes the window with WM_CLOSE. It never moves the real pointer; the
+IME, save, and Vim viewport modifier checks use foreground-acquired real keyboard input. Requires
+an unlocked interactive Windows session with DWM running;
 eng/check.ps1 and CI do not call it, because a gate must not need a display (QLT-013).
 
 Posted messages cannot carry modifier state: GetKeyState only follows keys that really went through
-the raw input queue, so Ctrl+A / C / X / V / Z / Y cannot be driven from here without touching the
-real keyboard. Those live in the unit tests (Issue #7); this script drives WM_CHAR, Enter,
-Backspace, Esc, PgUp, PgDn and a posted click in the body, which need no modifier.
+the raw input queue, so Ctrl+A / C / X / V / Z / Y cannot be driven from here without real input.
+Those live in the unit tests (Issue #7); the Vim viewport Ctrl-d/u/f/b checks use SendInput after
+foreground acquisition. The remaining editing slice drives WM_CHAR, Enter, Backspace, Esc, PgUp,
+PgDn and a posted click in the body, which need no modifier.
 
 Issue #22 adds the Vim slice: the toggle enters NORMAL, `ihello<Esc>` types into the empty buffer,
 `0x` removes the first character, `yyp` (Issue #43) puts the line below itself, and `uuu` puts the
@@ -922,6 +924,19 @@ def await_ink(window, size: tuple, box: tuple, grounds: list, wanted: bool,
         time.sleep(0.1)
 
 
+def await_accent(window, size: tuple, box: tuple, wanted: bool,
+                 seconds: float = 8.0) -> tuple[bytes, int]:
+    """Capture until a Vim block caret appears in a cell, or the deadline expires."""
+    width, height = size
+    deadline = time.monotonic() + seconds
+    while True:
+        pixels = capture(window, width, height)
+        amount = accent_count(pixels, width, box)
+        if (amount > 0) == wanted or time.monotonic() > deadline:
+            return pixels, amount
+        time.sleep(0.1)
+
+
 def verify_scrolling(window, ground: dict, output: Path) -> dict:
     """200 Enters, then PgUp back to the top and PgDn away from it again."""
     width, height, dpi, body = ground["size"]
@@ -1033,6 +1048,107 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     return result
 
 
+def verify_vim_viewport(window, ground: dict, output: Path) -> dict:
+    """Issue #58: check Vim viewport motions through the real window input path."""
+    width, height, dpi, body = ground["size"]
+    grounds = [ground["background"], ground["current"], list(ACCENT)]
+    size = (width, height)
+    first_row = content_box(body, 0, dpi)
+    first_row_probe = (body["gutter"] + to_pixels(16, dpi), first_row[1], first_row[2], first_row[3])
+    marker = "VIEWPORT-TOP"
+    blank_lines = max(body["visibleLines"] * 3, 3) + 1
+    click(window, toggle_points(width, height, dpi)["vim"][0],
+          toggle_points(width, height, dpi)["vim"][1])
+    time.sleep(0.3)
+    write_text(window, "i" + marker)
+    press(window, VK_RETURN, blank_lines)
+    write_text(window, "VIEWPORT-BOTTOM")
+    press(window, VK_ESCAPE)
+
+    def return_to_top() -> int:
+        write_text(window, "999k0")
+        _, ink_at_top = await_ink(window, size, first_row_probe, grounds, True)
+        top_cell = first_cell_box(body, 0, dpi)
+        shifted_cell = (top_cell[0] + to_pixels(3, dpi), top_cell[1], top_cell[2], top_cell[3])
+        _, top_accent = await_accent(window, size, shifted_cell, True)
+        assert top_accent > 0, "999k0 did not settle on a NORMAL block caret"
+        return ink_at_top
+
+    top_ink = return_to_top()
+
+    def check_page_pair() -> dict:
+        return_to_top()
+        press(window, VK_NEXT)
+        down_pixels, down = await_ink(window, size, first_row_probe, grounds, False)
+        write_bitmap(output / "vim-viewport-page-down.bmp", down_pixels, width, height)
+        press(window, VK_PRIOR)
+        up_pixels, up = await_ink(window, size, first_row_probe, grounds, True)
+        write_bitmap(output / "vim-viewport-page-up.bmp", up_pixels, width, height)
+        return {"pageDownFirstRowInk": down, "pageUpFirstRowInk": up}
+
+    def check_ctrl_pair(key_down: int, key_up: int, name: str) -> dict:
+        return_to_top()
+        moved = press_chord(window, VK_CONTROL, key_down)
+        if not moved:
+            return {"status": "unconfirmed", "reason": "foreground acquisition failed"}
+        down_pixels, down = await_ink(window, size, first_row_probe, grounds, False)
+        write_bitmap(output / f"vim-viewport-{name}-down.bmp", down_pixels, width, height)
+        returned = press_chord(window, VK_CONTROL, key_up)
+        if not returned:
+            return {"status": "unconfirmed", "reason": "foreground acquisition failed after movement",
+                    "movedFirstRowInk": down}
+        up_pixels, up = await_ink(window, size, first_row_probe, grounds, True)
+        write_bitmap(output / f"vim-viewport-{name}-up.bmp", up_pixels, width, height)
+        return {"status": "confirmed", "movedFirstRowInk": down, "returnedFirstRowInk": up}
+
+    return_to_top()
+    write_text(window, "M")
+    expected_middle = max(body["visibleLines"] - 1, 0) // 2
+    middle_cell = first_cell_box(body, expected_middle, dpi)
+    middle, m_accent = await_accent(window, size, middle_cell, True)
+    write_bitmap(output / "vim-viewport-m.bmp", middle, width, height)
+    write_text(window, "L")
+    expected_lower = max(body["visibleLines"] - 1, 0)
+    lower_cell = first_cell_box(body, expected_lower, dpi)
+    lower, l_accent = await_accent(window, size, lower_cell, True)
+    write_bitmap(output / "vim-viewport-l.bmp", lower, width, height)
+    write_text(window, "H")
+    h_cell = first_cell_box(body, 0, dpi)
+    h, h_accent = await_accent(window, size, h_cell, True)
+    write_bitmap(output / "vim-viewport-h.bmp", h, width, height)
+    result = {
+        "marker": marker,
+        "visibleLines": body["visibleLines"],
+        "topInk": top_ink,
+        "hAccent": h_accent,
+        "mAccent": m_accent,
+        "lAccent": l_accent,
+        "page": check_page_pair(),
+        "ctrlD_U": check_ctrl_pair(ord("D"), ord("U"), "ctrl-d-u"),
+        "ctrlF_B": check_ctrl_pair(ord("F"), ord("B"), "ctrl-f-b"),
+    }
+    (output / "vim-viewport-results.json").write_text(json.dumps(result, indent=2) + "\n",
+                                                         encoding="utf-8")
+    assert result["topInk"] > 0, "the viewport marker was not drawn at the top"
+    assert result["hAccent"] > 0, "H did not place the caret on the first visible row"
+    assert result["mAccent"] > 0, "M did not place the caret on the middle visible row"
+    assert result["lAccent"] > 0, "L did not place the caret on the last visible row"
+    assert result["page"]["pageDownFirstRowInk"] == 0, "PgDn left the top marker visible"
+    assert result["page"]["pageUpFirstRowInk"] > 0, "PgUp did not return to the top marker"
+    for name in ("ctrlD_U", "ctrlF_B"):
+        if result[name]["status"] == "confirmed":
+            assert result[name]["movedFirstRowInk"] == 0, f"{name} did not move from the top"
+            assert result[name]["returnedFirstRowInk"] > 0, f"{name} did not return to the top"
+    write_text(window, "u")
+    _, empty_ink = await_ink(window, size, first_row_probe, grounds, False)
+    result["emptyAfterUndoInk"] = empty_ink
+    assert result["emptyAfterUndoInk"] == 0, "undo did not return the viewport body to empty"
+    click(window, toggle_points(width, height, dpi)["ordinary"][0],
+          toggle_points(width, height, dpi)["ordinary"][1])
+    time.sleep(0.3)
+    return result
+
+
 def verify_editing(window, process, appearance: str, output: Path) -> dict:
     """Drive the editing keys with posted messages and read the result back as pixels."""
     client = rectangle(window, user.GetClientRect)
@@ -1051,6 +1167,7 @@ def verify_editing(window, process, appearance: str, output: Path) -> dict:
     result = {"body": body_points(width, height, dpi)}
     # Vim の鍵は本文が空のうちに測り、u で空へ戻してから通常モードの編集を測る（Issue #22）。
     result["vim"] = verify_vim(window, ground, output)
+    result["vimViewport"] = verify_vim_viewport(window, ground, output)
     result["typing"] = verify_typing(window, ground, output)
     result["caretShapes"] = verify_block_caret(window, ground)
     result["escape"] = verify_escape(window, process, ground)
@@ -1058,7 +1175,10 @@ def verify_editing(window, process, appearance: str, output: Path) -> dict:
     result["backspace"] = verify_backspace(window, ground)
     result["scrolling"] = verify_scrolling(window, ground, output)
     # Ctrl の組み合わせは PostMessageW では作れない（GetKeyState は実キーだけを見る）。
-    result["modifierKeysCovered"] = "unit tests (posted messages carry no modifier state)"
+    result["modifierKeysCovered"] = (
+        "Vim viewport Ctrl-d/u/f/b uses press_chord; other modifier shortcuts are covered by "
+        "unit tests (posted messages carry no modifier state)"
+    )
     return result
 
 

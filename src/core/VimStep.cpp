@@ -5,6 +5,7 @@
 #include "Column.hpp"
 #include "LineNumber.hpp"
 #include "OffsetRange.hpp"
+#include "ScrollBounds.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimBinding.hpp"
@@ -14,14 +15,18 @@
 #include "VimPutSide.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimScreenPosition.hpp"
+#include "VimScrollDirection.hpp"
 #include "VimSelect.hpp"
 #include "VimVisualRange.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -42,7 +47,7 @@ constexpr char32_t control_r_character = 0x12;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 28> normal_bindings{{{U'h', VimAction::move_left},
+constexpr std::array<VimBinding, 31> normal_bindings{{{U'h', VimAction::move_left},
                                                       {U'j', VimAction::move_down},
                                                       {U'k', VimAction::move_up},
                                                       {U'l', VimAction::move_right},
@@ -52,6 +57,9 @@ constexpr std::array<VimBinding, 28> normal_bindings{{{U'h', VimAction::move_lef
                                                       {U'b', VimAction::move_previous_word},
                                                       {U'e', VimAction::move_word_end},
                                                       {U'^', VimAction::move_first_non_blank},
+                                                      {U'H', VimAction::move_screen_top},
+                                                      {U'M', VimAction::move_screen_middle},
+                                                      {U'L', VimAction::move_screen_bottom},
                                                       {U'x', VimAction::remove_character},
                                                       {U'd', VimAction::remove_operator},
                                                       {U'c', VimAction::change_operator},
@@ -72,7 +80,7 @@ constexpr std::array<VimBinding, 28> normal_bindings{{{U'h', VimAction::move_lef
                                                       {U'o', VimAction::swap_visual_ends}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 10> motion_bindings{
+constexpr std::array<VimMotionBinding, 13> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -82,7 +90,10 @@ constexpr std::array<VimMotionBinding, 10> motion_bindings{
      {VimAction::move_next_word, VimMotion::next_word},
      {VimAction::move_previous_word, VimMotion::previous_word},
      {VimAction::move_word_end, VimMotion::word_end},
-     {VimAction::move_first_non_blank, VimMotion::first_non_blank}}};
+     {VimAction::move_first_non_blank, VimMotion::first_non_blank},
+     {VimAction::move_screen_top, VimMotion::screen_top},
+     {VimAction::move_screen_middle, VimMotion::screen_middle},
+     {VimAction::move_screen_bottom, VimMotion::screen_bottom}}};
 
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e は入れる（inclusive）。
 // 行単位の j k はどちらでもないので、この表には無い。
@@ -136,7 +147,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 {
     const std::size_t pending =
         state.pending.has_value() ? count_of(state.pending.value().count) : single_step;
-    return pending * count_of(state.count);
+    const std::size_t motion = count_of(state.count);
+    const std::size_t highest = std::numeric_limits<std::size_t>::max();
+    return pending > highest / motion ? highest : pending * motion;
 }
 
 [[nodiscard]] LineNumber line_of(const TextBuffer &text, Offset caret)
@@ -228,8 +241,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 
 [[nodiscard]] LineNumber line_below(const TextBuffer &text, LineNumber line, std::size_t count)
 {
-    const std::size_t wanted = line.value + count;
-    return LineNumber{wanted > text.line_count() ? text.line_count() : wanted};
+    const std::size_t current = std::min(line.value, text.line_count());
+    const std::size_t step = std::min(count, text.line_count() - current);
+    return LineNumber{current + step};
 }
 
 [[nodiscard]] LineNumber line_above(LineNumber line, std::size_t count)
@@ -237,10 +251,41 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return LineNumber{line.value > count ? line.value - count : 1};
 }
 
-[[nodiscard]] Offset moved_by(const TextBuffer &text, const VimState &state, Offset caret,
-                              VimMotion motion)
+[[nodiscard]] LineNumber first_view_line(const VimEditorView &view) noexcept
+{
+    return LineNumber{std::min(view.viewport.first_visible.value, view.text.line_count())};
+}
+
+[[nodiscard]] LineNumber last_view_line(const VimEditorView &view) noexcept
+{
+    const std::size_t first = first_view_line(view).value;
+    const std::size_t lines = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t remaining = view.text.line_count() - first;
+    return LineNumber{first + std::min(lines - single_step, remaining)};
+}
+
+[[nodiscard]] LineNumber screen_line(const VimEditorView &view, VimScreenPosition position,
+                                     std::size_t count) noexcept
+{
+    const LineNumber first = first_view_line(view);
+    const LineNumber last = last_view_line(view);
+    switch (position)
+    {
+    case VimScreenPosition::top:
+        return LineNumber{first.value + std::min(count - single_step, last.value - first.value)};
+    case VimScreenPosition::middle:
+        return LineNumber{first.value + (last.value - first.value) / 2};
+    case VimScreenPosition::bottom:
+        return LineNumber{last.value - std::min(count - single_step, last.value - first.value)};
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion)
 {
     const std::size_t count = count_of(state.count);
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
     switch (motion)
     {
@@ -271,6 +316,15 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return rested_in(text,
                          vim_word_end(text, caret, count, VimWordEndStop::enter_the_next_word),
                          state.mode);
+    case VimMotion::screen_top:
+        return vim_first_non_blank(
+            text, text.line_start(screen_line(view, VimScreenPosition::top, count)));
+    case VimMotion::screen_middle:
+        return vim_first_non_blank(
+            text, text.line_start(screen_line(view, VimScreenPosition::middle, count)));
+    case VimMotion::screen_bottom:
+        return vim_first_non_blank(
+            text, text.line_start(screen_line(view, VimScreenPosition::bottom, count)));
     }
     std::unreachable();
 }
@@ -294,6 +348,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimMotion::previous_word:
     case VimMotion::word_end:
     case VimMotion::word_end_for_change:
+    case VimMotion::screen_top:
+    case VimMotion::screen_middle:
+    case VimMotion::screen_bottom:
         return VimWantedColumn{VimColumnWish::at_column, text.position_of(moved).column};
     }
     std::unreachable();
@@ -301,16 +358,16 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 
 [[nodiscard]] VimStep cancelled(const VimState &state)
 {
-    return VimStep{vim_resting_state(state.unnamed_register), VimNoEffect{}};
+    return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
 }
 
-[[nodiscard]] VimStep motion_step(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep motion_step(const VimState &state, const VimEditorView &view,
                                   VimMotion motion)
 {
-    const VimWantedColumn wanted = wanted_column_of(text, state, caret);
-    const Offset moved = moved_by(text, state, caret, motion);
-    VimState next = vim_resting_state(state.unnamed_register);
-    next.wanted_column = wanted_after(text, wanted, moved, motion);
+    const VimWantedColumn wanted = wanted_column_of(view.text, state, view.selection.caret);
+    const Offset moved = moved_by(view, state, motion);
+    VimState next = vim_resting_from(state, state.unnamed_register);
+    next.wanted_column = wanted_after(view.text, wanted, moved, motion);
     return VimStep{std::move(next), VimMoveTo{moved}};
 }
 
@@ -372,9 +429,20 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return forward_characters(text, at, single_step);
 }
 
-[[nodiscard]] std::optional<VimMotionRange> motion_range(const TextBuffer &text, Offset caret,
+[[nodiscard]] VimMotionRange screen_range(const VimEditorView &view, VimScreenPosition position,
+                                          std::size_t count, LineNumber line)
+{
+    const LineNumber target = screen_line(view, position, count);
+    const LineNumber first{std::min(line.value, target.value)};
+    const LineNumber last{std::max(line.value, target.value)};
+    return lines_between(view.text, first, last);
+}
+
+[[nodiscard]] std::optional<VimMotionRange> motion_range(const VimEditorView &view,
                                                          VimMotion motion, std::size_t count)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
     switch (motion)
     {
@@ -405,6 +473,12 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return characters_between(
             caret, inclusive_end(
                        text, vim_word_end(text, caret, count, VimWordEndStop::stay_in_this_word)));
+    case VimMotion::screen_top:
+        return screen_range(view, VimScreenPosition::top, count, line);
+    case VimMotion::screen_middle:
+        return screen_range(view, VimScreenPosition::middle, count, line);
+    case VimMotion::screen_bottom:
+        return screen_range(view, VimScreenPosition::bottom, count, line);
     }
     std::unreachable();
 }
@@ -525,7 +599,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
                                       const VimMotionRange &range)
 {
-    VimState next = vim_resting_state(register_after(state, text, range));
+    VimState next = vim_resting_from(state, register_after(state, text, range));
     switch (range.kind)
     {
     case VimRegisterKind::characters:
@@ -546,7 +620,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,
                               const VimMotionRange &range)
 {
-    VimState next = vim_resting_state(register_after(state, text, range));
+    VimState next = vim_resting_from(state, register_after(state, text, range));
     next.mode = VimMode::insert;
     return VimStep{std::move(next), VimRemoveRange{range.range}};
 }
@@ -570,7 +644,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 [[nodiscard]] VimStep yanked(const VimState &state, const TextBuffer &text, Offset caret,
                              const VimMotionRange &range)
 {
-    return VimStep{vim_resting_state(register_after(state, text, range)),
+    return VimStep{vim_resting_from(state, register_after(state, text, range)),
                    VimMoveTo{yanked_caret(text, state, caret, range)}};
 }
 
@@ -607,22 +681,23 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return VimMotion::word_end_for_change;
 }
 
-[[nodiscard]] VimStep operated(const VimState &state, const TextBuffer &text, Offset caret,
-                               VimMotion motion)
+[[nodiscard]] VimStep operated(const VimState &state, const VimEditorView &view, VimMotion motion)
 {
-    const VimMotion wanted = motion_for_change(text, caret, operation_of(state), motion);
-    const auto range = motion_range(text, caret, wanted, total_count(state));
+    const VimMotion wanted =
+        motion_for_change(view.text, view.selection.caret, operation_of(state), motion);
+    const auto range = motion_range(view, wanted, total_count(state));
     if (!range.has_value())
     {
         return cancelled(state);
     }
-    return performed(state, text, caret, adjusted_for_exclusive(text, range.value(), wanted));
+    return performed(state, view.text, view.selection.caret,
+                     adjusted_for_exclusive(view.text, range.value(), wanted));
 }
 
 // オペレータを自分の回数といっしょに保留する（決定 1）。積んだ回数はここで移る。
 [[nodiscard]] VimStep pending_operator(const VimState &state, VimOperator operation)
 {
-    VimState next = vim_resting_state(state.unnamed_register);
+    VimState next = vim_resting_from(state, state.unnamed_register);
     next.pending = VimPendingOperator{operation, state.count};
     return VimStep{std::move(next), VimNoEffect{}};
 }
@@ -647,7 +722,12 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 {
     VimState with = state;
     with.pending = VimPendingOperator{operation, std::nullopt};
-    return operated(with, text, caret, VimMotion::line_end);
+    const auto range = to_line_end(text, caret, total_count(with));
+    if (!range.has_value())
+    {
+        return cancelled(state);
+    }
+    return performed(with, text, caret, range.value());
 }
 
 // ---------------------------------------------------------------- p / P（決定 4）
@@ -720,7 +800,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return cancelled(state);
     }
     std::string body = repeated(state.unnamed_register.text, count_of(state.count));
-    VimState next = vim_resting_state(state.unnamed_register);
+    VimState next = vim_resting_from(state, state.unnamed_register);
     switch (state.unnamed_register.kind)
     {
     case VimRegisterKind::characters:
@@ -735,7 +815,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 
 [[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret)
 {
-    VimState next = vim_resting_state(state.unnamed_register);
+    VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = VimMode::insert;
     return VimStep{std::move(next), VimMoveTo{caret}};
 }
@@ -749,15 +829,188 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 }
 
 // 表から引ける移動は 1 本にまとめる（表に無い動作はここへ来ない）。
-[[nodiscard]] VimStep moved_step(const VimState &state, const TextBuffer &text, Offset caret,
-                                 VimAction action)
+[[nodiscard]] VimStep moved_step(const VimState &state, const VimEditorView &view, VimAction action)
 {
     const auto motion = motion_for(action);
     if (!motion.has_value())
     {
         return cancelled(state);
     }
-    return motion_step(state, text, caret, motion.value());
+    return motion_step(state, view, motion.value());
+}
+
+[[nodiscard]] std::size_t limited_amount(std::size_t amount, std::size_t total) noexcept
+{
+    return std::min(amount, total);
+}
+
+[[nodiscard]] std::size_t limited_product(std::size_t left, std::size_t right,
+                                          std::size_t total) noexcept
+{
+    if (left == 0 || right == 0)
+    {
+        return 0;
+    }
+    return left > total / right ? total : std::min(left * right, total);
+}
+
+[[nodiscard]] LineNumber shifted_line(LineNumber line, std::size_t amount, std::size_t total,
+                                      VimScrollDirection direction) noexcept
+{
+    switch (direction)
+    {
+    case VimScrollDirection::up:
+        return LineNumber{line.value > amount ? line.value - amount : 1};
+    case VimScrollDirection::down:
+    {
+        const std::size_t current = std::min(line.value, total);
+        return LineNumber{current + std::min(amount, total - current)};
+    }
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] LineNumber half_page_top(const VimEditorView &view, std::size_t amount,
+                                       VimScrollDirection direction)
+{
+    switch (direction)
+    {
+    case VimScrollDirection::up:
+        return shifted_line(view.viewport.first_visible, amount, view.text.line_count(), direction);
+    case VimScrollDirection::down:
+        break;
+    }
+    const LineNumber last_filled =
+        first_visible_within(LineNumber{view.text.line_count()}, view.text.line_count(),
+                             view.viewport.visible_lines, ScrollExtent::filled_viewport);
+    if (view.viewport.first_visible.value >= last_filled.value)
+    {
+        return view.viewport.first_visible;
+    }
+    return shifted_line(view.viewport.first_visible, amount, last_filled.value, direction);
+}
+
+[[nodiscard]] LineNumber page_top(const VimEditorView &view, std::size_t pages,
+                                  VimScrollDirection direction)
+{
+    if (direction == VimScrollDirection::down &&
+        last_view_line(view).value == view.text.line_count())
+    {
+        return LineNumber{view.text.line_count()};
+    }
+    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t one_page = height <= 2 ? height : height - 2;
+    const std::size_t amount = limited_product(one_page, pages, view.text.line_count());
+    return shifted_line(view.viewport.first_visible, amount, view.text.line_count(), direction);
+}
+
+[[nodiscard]] LineNumber previous_page_top(const VimEditorView &view, std::size_t pages)
+{
+    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t one_page = height <= 2 ? height : height - 2;
+    const std::size_t distance = view.viewport.first_visible.value - single_step;
+    const std::size_t steps_to_top = distance / one_page + (distance % one_page != 0 ? 1 : 0);
+    const std::size_t effective = std::min(pages, steps_to_top);
+    const std::size_t previous_steps = effective > 0 ? effective - single_step : 0;
+    const std::size_t amount = limited_product(one_page, previous_steps, view.text.line_count());
+    return shifted_line(view.viewport.first_visible, amount, view.text.line_count(),
+                        VimScrollDirection::up);
+}
+
+[[nodiscard]] Selection navigated_selection(const VimState &state, const Selection &selection,
+                                            Offset caret) noexcept
+{
+    switch (state.mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        return collapsed_at(caret);
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return Selection{selection.anchor, caret};
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimState navigated_state(const VimState &state, const TextBuffer &text, Offset caret)
+{
+    VimState next = state;
+    next.count = std::nullopt;
+    next.pending = std::nullopt;
+    next.wanted_column = VimWantedColumn{VimColumnWish::at_column, text.position_of(caret).column};
+    return next;
+}
+
+[[nodiscard]] VimStep navigated(const VimState &state, const VimEditorView &view, LineNumber first,
+                                LineNumber caret_line)
+{
+    const Offset caret = vim_first_non_blank(view.text, view.text.line_start(caret_line));
+    return VimStep{navigated_state(state, view.text, caret),
+                   VimNavigate{navigated_selection(state, view.selection, caret), first}};
+}
+
+[[nodiscard]] VimStep navigated_at(const VimState &state, const VimEditorView &view,
+                                   LineNumber first, Offset caret)
+{
+    return VimStep{navigated_state(state, view.text, caret),
+                   VimNavigate{navigated_selection(state, view.selection, caret), first}};
+}
+
+[[nodiscard]] VimStep half_page_step(const VimState &state, const VimEditorView &view,
+                                     VimScrollDirection direction)
+{
+    const std::size_t fallback =
+        std::max<std::size_t>(view.viewport.visible_lines / 2, single_step);
+    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t requested =
+        state.count.has_value()
+            ? state.count.value().value
+            : (state.scroll_lines.has_value() ? state.scroll_lines.value().value : fallback);
+    const std::size_t configured = std::min(requested, height);
+    const std::size_t amount = limited_amount(configured, view.text.line_count());
+    const LineNumber requested_top = half_page_top(view, amount, direction);
+    const LineNumber caret_line = shifted_line(line_of(view.text, view.selection.caret), amount,
+                                               view.text.line_count(), direction);
+    const LineNumber followed = first_visible_for_caret(
+        requested_top, caret_line, view.viewport.visible_lines, ScrollFollow::minimal);
+    const LineNumber first = first_visible_within(
+        followed, view.text.line_count(), view.viewport.visible_lines, ScrollExtent::last_line);
+    const LineNumber current_line = line_of(view.text, view.selection.caret);
+    VimStep step = caret_line == current_line
+                       ? navigated_at(state, view, first, view.selection.caret)
+                       : navigated(state, view, first, caret_line);
+    if (state.count.has_value() &&
+        (first != view.viewport.first_visible || caret_line != current_line))
+    {
+        step.next.scroll_lines = VimCount{configured};
+    }
+    return step;
+}
+
+[[nodiscard]] VimStep page_step(const VimState &state, const VimEditorView &view,
+                                VimScrollDirection direction)
+{
+    const LineNumber first = page_top(view, count_of(state.count), direction);
+    if (first == view.viewport.first_visible)
+    {
+        const Offset caret = view.selection.caret;
+        return VimStep{navigated_state(state, view.text, caret),
+                       VimNavigate{view.selection, first}};
+    }
+    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t last =
+        first.value + std::min(height - single_step, view.text.line_count() - first.value);
+    LineNumber caret_line = first;
+    switch (direction)
+    {
+    case VimScrollDirection::down:
+        break;
+    case VimScrollDirection::up:
+        caret_line = LineNumber{
+            std::min(last, previous_page_top(view, count_of(state.count)).value + single_step)};
+        break;
+    }
+    return navigated(state, view, first, caret_line);
 }
 
 // v / V で VISUAL に入る。回数があると入った直後にその広さぶんを選ぶ（Vim の nv_visual は
@@ -782,15 +1035,53 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 [[nodiscard]] VimStep entered_visual(const VimState &state, const TextBuffer &text, Offset caret,
                                      VimMode mode)
 {
-    VimState next = vim_resting_state(state.unnamed_register);
+    VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = mode;
     const Offset moved = widened(text, caret, count_of(state.count) - single_step, mode);
     return VimStep{std::move(next), VimSelect{Selection{caret, moved}}};
 }
 
-[[nodiscard]] VimStep commanded(const VimState &state, const TextBuffer &text, Offset caret,
-                                VimAction action)
+[[nodiscard]] VimStep half_page_action(const VimState &state, const VimEditorView &view,
+                                       VimAction action)
 {
+    const auto direction =
+        action == VimAction::scroll_half_down ? VimScrollDirection::down : VimScrollDirection::up;
+    return half_page_step(state, view, direction);
+}
+
+[[nodiscard]] VimStep page_action(const VimState &state, const VimEditorView &view,
+                                  VimAction action)
+{
+    const auto direction =
+        action == VimAction::scroll_page_down ? VimScrollDirection::down : VimScrollDirection::up;
+    return page_step(state, view, direction);
+}
+
+[[nodiscard]] VimStep visual_action(const VimState &state, const VimEditorView &view,
+                                    VimAction action)
+{
+    const VimMode mode = action == VimAction::visual ? VimMode::visual : VimMode::visual_line;
+    return entered_visual(state, view.text, view.selection.caret, mode);
+}
+
+[[nodiscard]] VimStep put_action(const VimState &state, const VimEditorView &view, VimAction action)
+{
+    const VimPutSide side = action == VimAction::put_after ? VimPutSide::after : VimPutSide::before;
+    return put_step(state, view.text, view.selection.caret, side);
+}
+
+[[nodiscard]] VimStep line_end_action(const VimState &state, const VimEditorView &view,
+                                      VimAction action)
+{
+    const VimOperator operation =
+        action == VimAction::remove_to_line_end ? VimOperator::remove : VimOperator::change;
+    return operated_to_line_end(state, view.text, view.selection.caret, operation);
+}
+
+[[nodiscard]] VimStep commanded(const VimState &state, const VimEditorView &view, VimAction action)
+{
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     switch (action)
     {
     case VimAction::move_left:
@@ -803,13 +1094,20 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::move_previous_word:
     case VimAction::move_word_end:
     case VimAction::move_first_non_blank:
-        return moved_step(state, text, caret, action);
+    case VimAction::move_screen_top:
+    case VimAction::move_screen_middle:
+    case VimAction::move_screen_bottom:
+        return moved_step(state, view, action);
+    case VimAction::scroll_half_down:
+    case VimAction::scroll_half_up:
+        return half_page_action(state, view, action);
+    case VimAction::scroll_page_down:
+    case VimAction::scroll_page_up:
+        return page_action(state, view, action);
     case VimAction::visual:
-        return entered_visual(state, text, caret, VimMode::visual);
     case VimAction::visual_line:
-        return entered_visual(state, text, caret, VimMode::visual_line);
+        return visual_action(state, view, action);
     case VimAction::swap_visual_ends:
-        // NORMAL の `o`（行を開く）はこの縦切りに無い。保留と回数を捨てるだけ（決定 7）。
         return cancelled(state);
     case VimAction::remove_character:
         return removed_character(state, text, caret);
@@ -820,13 +1118,11 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::yank_operator:
         return pending_operator(state, VimOperator::yank);
     case VimAction::put_after:
-        return put_step(state, text, caret, VimPutSide::after);
     case VimAction::put_before:
-        return put_step(state, text, caret, VimPutSide::before);
+        return put_action(state, view, action);
     case VimAction::remove_to_line_end:
-        return operated_to_line_end(state, text, caret, VimOperator::remove);
     case VimAction::change_to_line_end:
-        return operated_to_line_end(state, text, caret, VimOperator::change);
+        return line_end_action(state, view, action);
     case VimAction::yank_line:
         return operated_on_lines(state, text, caret, VimOperator::yank);
     case VimAction::insert_before:
@@ -838,9 +1134,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::insert_at_line_end:
         return entered_insert(state, text.line_end(line_of(text, caret)));
     case VimAction::undo:
-        return VimStep{vim_resting_state(state.unnamed_register), VimUndo{}};
+        return VimStep{vim_resting_from(state, state.unnamed_register), VimUndo{}};
     case VimAction::redo:
-        return VimStep{vim_resting_state(state.unnamed_register), VimRedo{}};
+        return VimStep{vim_resting_from(state, state.unnamed_register), VimRedo{}};
     }
     std::unreachable();
 }
@@ -861,30 +1157,29 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 }
 
 // 保留中のオペレータの後ろ。同じ鍵なら行単位、移動なら範囲、ほかの鍵なら打ち消し（Vim と同じ）。
-[[nodiscard]] VimStep pending_step(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep pending_step(const VimState &state, const VimEditorView &view,
                                    VimAction action)
 {
     const VimOperator operation = operation_of(state);
     if (action == doubled_action_of(operation))
     {
-        return operated_on_lines(state, text, caret, operation);
+        return operated_on_lines(state, view.text, view.selection.caret, operation);
     }
     const auto motion = motion_for(action);
     if (!motion.has_value())
     {
         return cancelled(state);
     }
-    return operated(state, text, caret, motion.value());
+    return operated(state, view, motion.value());
 }
 
-[[nodiscard]] VimStep acted(const VimState &state, const TextBuffer &text, Offset caret,
-                            VimAction action)
+[[nodiscard]] VimStep acted(const VimState &state, const VimEditorView &view, VimAction action)
 {
     if (state.pending.has_value())
     {
-        return pending_step(state, text, caret, action);
+        return pending_step(state, view, action);
     }
-    return commanded(state, text, caret, action);
+    return commanded(state, view, action);
 }
 
 [[nodiscard]] bool counts_as_digit(const VimState &state, char32_t key) noexcept
@@ -899,14 +1194,16 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 [[nodiscard]] VimStep counted(const VimState &state, char32_t key)
 {
     const auto digit = static_cast<std::size_t>(key - U'0');
+    const std::size_t previous = state.count.has_value() ? state.count.value().value : 0;
+    const std::size_t largest = std::numeric_limits<std::size_t>::max();
     const std::size_t carried =
-        state.count.has_value() ? state.count.value().value * decimal_base : 0;
+        previous > (largest - digit) / decimal_base ? largest - digit : previous * decimal_base;
     VimState next = state;
     next.count = VimCount{carried + digit};
     return VimStep{std::move(next), VimNoEffect{}};
 }
 
-[[nodiscard]] VimStep normal_character(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep normal_character(const VimState &state, const VimEditorView &view,
                                        VimCharacter key)
 {
     if (counts_as_digit(state, key.code))
@@ -918,12 +1215,12 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     {
         return cancelled(state);
     }
-    return acted(state, text, caret, action.value());
+    return acted(state, view, action.value());
 }
 
 // NORMAL の特別な鍵。矢印は h j k l と同じ動作で、Home / End は 0 と $（ADR 0015 の決定 6）。
 // Esc は保留を捨てるだけ（ADR 0012 の決定 5）。
-[[nodiscard]] VimStep normal_special(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep normal_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key)
 {
     switch (key)
@@ -933,19 +1230,29 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimSpecialKey::backspace:
         return cancelled(state);
     case VimSpecialKey::arrow_left:
-        return acted(state, text, caret, VimAction::move_left);
+        return acted(state, view, VimAction::move_left);
     case VimSpecialKey::arrow_right:
-        return acted(state, text, caret, VimAction::move_right);
+        return acted(state, view, VimAction::move_right);
     case VimSpecialKey::arrow_up:
-        return acted(state, text, caret, VimAction::move_up);
+        return acted(state, view, VimAction::move_up);
     case VimSpecialKey::arrow_down:
-        return acted(state, text, caret, VimAction::move_down);
+        return acted(state, view, VimAction::move_down);
     case VimSpecialKey::home:
-        return acted(state, text, caret, VimAction::move_line_start);
+        return acted(state, view, VimAction::move_line_start);
     case VimSpecialKey::end:
-        return acted(state, text, caret, VimAction::move_line_end);
+        return acted(state, view, VimAction::move_line_end);
     case VimSpecialKey::control_r:
-        return acted(state, text, caret, VimAction::redo);
+        return acted(state, view, VimAction::redo);
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::control_b:
+        return acted(state, view, VimAction::scroll_page_up);
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_f:
+        return acted(state, view, VimAction::scroll_page_down);
+    case VimSpecialKey::control_d:
+        return acted(state, view, VimAction::scroll_half_down);
+    case VimSpecialKey::control_u:
+        return acted(state, view, VimAction::scroll_half_up);
     }
     std::unreachable();
 }
@@ -955,7 +1262,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 // 鍵を 1 つ食べ終わったあとの VISUAL。回数とオペレータは捨て、モードと無名レジスタだけ残る。
 [[nodiscard]] VimState visual_resting(const VimState &state, VimMode mode)
 {
-    VimState next = vim_resting_state(state.unnamed_register);
+    VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = mode;
     return next;
 }
@@ -969,7 +1276,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 // VISUAL から出る（Esc・同じ鍵）。選択は畳み、キャレットはその場に残す（決定 3）。
 [[nodiscard]] VimStep left_visual(const VimState &state, const Selection &selection)
 {
-    return VimStep{vim_resting_state(state.unnamed_register), VimMoveTo{selection.caret}};
+    return VimStep{vim_resting_from(state, state.unnamed_register), VimMoveTo{selection.caret}};
 }
 
 // 同じ鍵なら出る、違う鍵なら選択を保ったまま種類を切り替える。
@@ -984,40 +1291,40 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 }
 
 // VISUAL の移動。anchor はそのままで caret だけ動く（決定 3）。欲しい列は NORMAL と同じ。
-[[nodiscard]] VimStep visual_moved(const VimState &state, const TextBuffer &text,
-                                   const Selection &selection, VimAction action)
+[[nodiscard]] VimStep visual_moved(const VimState &state, const VimEditorView &view,
+                                   VimAction action)
 {
     const auto motion = motion_for(action);
     if (!motion.has_value())
     {
         return visual_unchanged(state);
     }
-    const VimWantedColumn wanted = wanted_column_of(text, state, selection.caret);
-    const Offset moved = moved_by(text, state, selection.caret, motion.value());
+    const VimWantedColumn wanted = wanted_column_of(view.text, state, view.selection.caret);
+    const Offset moved = moved_by(view, state, motion.value());
     VimState next = visual_resting(state, state.mode);
-    next.wanted_column = wanted_after(text, wanted, moved, motion.value());
-    return VimStep{std::move(next), VimSelect{Selection{selection.anchor, moved}}};
+    next.wanted_column = wanted_after(view.text, wanted, moved, motion.value());
+    return VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, moved}}};
 }
 
 // `d x y c`。選択を範囲に変えて #43 と同じ経路へ流す（決定 5）。オペレータは VISUAL を終わらせる。
-[[nodiscard]] VimStep visual_operated(const VimState &state, const TextBuffer &text,
-                                      const Selection &selection, VimOperator operation)
+[[nodiscard]] VimStep visual_operated(const VimState &state, const VimEditorView &view,
+                                      VimOperator operation)
 {
-    const VimMotionRange range = vim_visual_range(text, selection, state.mode);
+    const VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
     switch (operation)
     {
     case VimOperator::remove:
-        return removed_exactly(state, text, range);
+        return removed_exactly(state, view.text, range);
     case VimOperator::change:
-        return changed(state, text, range);
+        return changed(state, view.text, range);
     case VimOperator::yank:
-        return yanked(state, text, selection.caret, range);
+        return yanked(state, view.text, view.selection.caret, range);
     }
     std::unreachable();
 }
 
-[[nodiscard]] VimStep visual_acted(const VimState &state, const TextBuffer &text,
-                                   const Selection &selection, VimAction action)
+[[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &view,
+                                   VimAction action)
 {
     switch (action)
     {
@@ -1031,22 +1338,33 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::move_previous_word:
     case VimAction::move_word_end:
     case VimAction::move_first_non_blank:
-        return visual_moved(state, text, selection, action);
+    case VimAction::move_screen_top:
+    case VimAction::move_screen_middle:
+    case VimAction::move_screen_bottom:
+        return visual_moved(state, view, action);
+    case VimAction::scroll_half_down:
+        return half_page_step(state, view, VimScrollDirection::down);
+    case VimAction::scroll_half_up:
+        return half_page_step(state, view, VimScrollDirection::up);
+    case VimAction::scroll_page_down:
+        return page_step(state, view, VimScrollDirection::down);
+    case VimAction::scroll_page_up:
+        return page_step(state, view, VimScrollDirection::up);
     // VISUAL の x は d と同じ（決定 7）。
     case VimAction::remove_character:
     case VimAction::remove_operator:
-        return visual_operated(state, text, selection, VimOperator::remove);
+        return visual_operated(state, view, VimOperator::remove);
     case VimAction::change_operator:
-        return visual_operated(state, text, selection, VimOperator::change);
+        return visual_operated(state, view, VimOperator::change);
     case VimAction::yank_operator:
-        return visual_operated(state, text, selection, VimOperator::yank);
+        return visual_operated(state, view, VimOperator::yank);
     case VimAction::swap_visual_ends:
         return VimStep{visual_resting(state, state.mode),
-                       VimSelect{Selection{selection.caret, selection.anchor}}};
+                       VimSelect{Selection{view.selection.caret, view.selection.anchor}}};
     case VimAction::visual:
-        return visual_switched(state, selection, VimMode::visual);
+        return visual_switched(state, view.selection, VimMode::visual);
     case VimAction::visual_line:
-        return visual_switched(state, selection, VimMode::visual_line);
+        return visual_switched(state, view.selection, VimMode::visual_line);
     // この縦切りの範囲の外の鍵は何もしない（決定 7・決定 8）。
     case VimAction::put_after:
     case VimAction::put_before:
@@ -1064,8 +1382,8 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     std::unreachable();
 }
 
-[[nodiscard]] VimStep visual_character(const VimState &state, const TextBuffer &text,
-                                       const Selection &selection, VimCharacter key)
+[[nodiscard]] VimStep visual_character(const VimState &state, const VimEditorView &view,
+                                       VimCharacter key)
 {
     if (counts_as_digit(state, key.code))
     {
@@ -1076,34 +1394,44 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     {
         return visual_unchanged(state);
     }
-    return visual_acted(state, text, selection, action.value());
+    return visual_acted(state, view, action.value());
 }
 
 // VISUAL の特別な鍵。Esc で出て、矢印と Home / End は NORMAL と同じ動作を引く。
 // Enter / Backspace / Ctrl-r はこの縦切りに無い（決定 7）。
-[[nodiscard]] VimStep visual_special(const VimState &state, const TextBuffer &text,
-                                     const Selection &selection, VimSpecialKey key)
+[[nodiscard]] VimStep visual_special(const VimState &state, const VimEditorView &view,
+                                     VimSpecialKey key)
 {
     switch (key)
     {
     case VimSpecialKey::escape:
-        return left_visual(state, selection);
+        return left_visual(state, view.selection);
     case VimSpecialKey::enter:
     case VimSpecialKey::backspace:
     case VimSpecialKey::control_r:
         return visual_unchanged(state);
     case VimSpecialKey::arrow_left:
-        return visual_acted(state, text, selection, VimAction::move_left);
+        return visual_acted(state, view, VimAction::move_left);
     case VimSpecialKey::arrow_right:
-        return visual_acted(state, text, selection, VimAction::move_right);
+        return visual_acted(state, view, VimAction::move_right);
     case VimSpecialKey::arrow_up:
-        return visual_acted(state, text, selection, VimAction::move_up);
+        return visual_acted(state, view, VimAction::move_up);
     case VimSpecialKey::arrow_down:
-        return visual_acted(state, text, selection, VimAction::move_down);
+        return visual_acted(state, view, VimAction::move_down);
     case VimSpecialKey::home:
-        return visual_acted(state, text, selection, VimAction::move_line_start);
+        return visual_acted(state, view, VimAction::move_line_start);
     case VimSpecialKey::end:
-        return visual_acted(state, text, selection, VimAction::move_line_end);
+        return visual_acted(state, view, VimAction::move_line_end);
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::control_b:
+        return visual_acted(state, view, VimAction::scroll_page_up);
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_f:
+        return visual_acted(state, view, VimAction::scroll_page_down);
+    case VimSpecialKey::control_d:
+        return visual_acted(state, view, VimAction::scroll_half_down);
+    case VimSpecialKey::control_u:
+        return visual_acted(state, view, VimAction::scroll_half_up);
     }
     std::unreachable();
 }
@@ -1128,13 +1456,15 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return VimStep{state, VimRemoveRange{OffsetRange{begin, caret}}};
 }
 
-[[nodiscard]] VimStep insert_special(const VimState &state, const TextBuffer &text, Offset caret,
+[[nodiscard]] VimStep insert_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key)
 {
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
     switch (key)
     {
     case VimSpecialKey::escape:
-        return VimStep{vim_resting_state(state.unnamed_register),
+        return VimStep{vim_resting_from(state, state.unnamed_register),
                        VimMoveTo{backward_characters(text, caret, single_step)}};
     case VimSpecialKey::enter:
         return VimStep{state, VimNewLine{}};
@@ -1153,7 +1483,15 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimSpecialKey::end:
         return insert_moved(state, text, caret, CaretMotion::line_end);
     case VimSpecialKey::control_r:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
         return VimStep{state, VimNoEffect{}};
+    case VimSpecialKey::page_up:
+        return page_step(state, view, VimScrollDirection::up);
+    case VimSpecialKey::page_down:
+        return page_step(state, view, VimScrollDirection::down);
     }
     std::unreachable();
 }
@@ -1169,49 +1507,45 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return VimStep{state, VimInsertString{std::move(utf8)}};
 }
 
-[[nodiscard]] VimStep normal_step(const VimState &state, const TextBuffer &text, Offset caret,
-                                  VimKey key)
+[[nodiscard]] VimStep normal_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     if (std::holds_alternative<VimCharacter>(key))
     {
-        return normal_character(state, text, caret, std::get<VimCharacter>(key));
+        return normal_character(state, view, std::get<VimCharacter>(key));
     }
-    return normal_special(state, text, caret, std::get<VimSpecialKey>(key));
+    return normal_special(state, view, std::get<VimSpecialKey>(key));
 }
 
-[[nodiscard]] VimStep insert_step(const VimState &state, const TextBuffer &text, Offset caret,
-                                  VimKey key)
+[[nodiscard]] VimStep insert_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     if (std::holds_alternative<VimCharacter>(key))
     {
         return insert_character(state, std::get<VimCharacter>(key));
     }
-    return insert_special(state, text, caret, std::get<VimSpecialKey>(key));
+    return insert_special(state, view, std::get<VimSpecialKey>(key));
 }
 
-[[nodiscard]] VimStep visual_step(const VimState &state, const TextBuffer &text,
-                                  const Selection &selection, VimKey key)
+[[nodiscard]] VimStep visual_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     if (std::holds_alternative<VimCharacter>(key))
     {
-        return visual_character(state, text, selection, std::get<VimCharacter>(key));
+        return visual_character(state, view, std::get<VimCharacter>(key));
     }
-    return visual_special(state, text, selection, std::get<VimSpecialKey>(key));
+    return visual_special(state, view, std::get<VimSpecialKey>(key));
 }
 } // namespace
 
-VimStep vim_step(const VimState &state, const TextBuffer &text, const Selection &selection,
-                 VimKey key)
+VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     switch (state.mode)
     {
     case VimMode::normal:
-        return normal_step(state, text, selection.caret, key);
+        return normal_step(state, view, key);
     case VimMode::insert:
-        return insert_step(state, text, selection.caret, key);
+        return insert_step(state, view, key);
     case VimMode::visual:
     case VimMode::visual_line:
-        return visual_step(state, text, selection, key);
+        return visual_step(state, view, key);
     }
     std::unreachable();
 }

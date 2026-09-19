@@ -1,7 +1,6 @@
 #pragma once
 
-#include "Selection.hpp"
-#include "TextBuffer.hpp"
+#include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimState.hpp"
@@ -16,8 +15,7 @@ struct VimStep
 };
 
 // Vim エンジンの唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
-// 選択をまるごと受け取る（ADR 0018 の決定 2）。NORMAL / INSERT は anchor == caret で caret しか
-// 読まず、VISUAL だけが anchor を範囲の片端として読む。
-[[nodiscard]] VimStep vim_step(const VimState &state, const TextBuffer &text,
-                               const Selection &selection, VimKey key);
+// 本文・選択・表示領域を 1 回だけ借用する（ADR 0019 の決定 1）。NORMAL / INSERT は
+// selection の caret だけを読み、VISUAL は anchor も範囲の片端として読む。
+[[nodiscard]] VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key);
 } // namespace nenenib::core

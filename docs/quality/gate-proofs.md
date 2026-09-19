@@ -393,3 +393,22 @@ Google 日本語入力・ATOK は**この機械に無いので測っていない
 - 起動直後の面（5-f / ADR 0013 の `verify_first_paint`）は**変わらない**。あの節が見ているのはクライアント領域の中央＝本文の地が来る場所で、帯ではない。この実行でも最初のフレームまでの画素は (32,32,32) の Mica で、黒も白も出ていない
 - ライトの外観（帯 #E1E4E9・タブ #F4F5F7）は**画素では測っていない**。表明は `TITLE_BAR` / `TAB_ACTIVE` の表にあり、OS をライトにすれば同じ経路で測れる。96 DPI と非アクティブなタブの面（D16 では変えていない）も測っていない
 - **施主の目視（2026-09-17 夜・Release `build-release\NeNeNib.exe`・実機 120 DPI）**: ダークの帯とアクティブなタブが案 C の絵と同じ。OS をライトに切り替えても起動したまま追従し、帯 #E1E4E9 / タブ #F4F5F7 の見た目。IME の変換・確定・Vim NORMAL での切断も「問題ない」（hide）。#31 の受け入れ条件の 3 つ目
+
+### 5-j. Vim の表示領域 oracle（Issue #58・ADR 0019・2026-09-19）
+
+oracle は 5-g と同じ固定した Vim 9.1。help と鍵を送った結果だけを参照し、Vim の実装ソースは参照しない。
+
+- `-es` で `set lines=10/20` を実行しても `winheight(0)` は 24。`:resize` では高さが変わるが、`winsaveview().topline` と `line('w0')` / `line('w$')` が矛盾するため、画面移動の期待値には採用しなかった。
+- `-es` を外す通常端末モードでは、標準の Python `subprocess` のパイプだけで `resize` と `winrestview` の入力に一致する画面を得た。PTY・追加依存・実キーボード入力は不要。最終版は `--not-a-term` で pipe を意図した実行と明示する。同梱 help の説明どおり警告と 2 秒の待機だけが消え、通常・VISUAL の画面移動と yank の結果は同じだった。
+- 高さ 10、カーソル 50 行の初期画面 46〜55 行では `H / M / L` が 46 / 50 / 55 行、`Ctrl-d` がカーソル 55・先頭 51 行となった。高さ 20 の初期画面 41〜60 行では同じ鍵が 41 / 50 / 60 行、`Ctrl-d` がカーソル 60・先頭 51 行となった。
+- `eng/vim-oracle.py` の任意の `viewport` 入力がこの実行方法を選ぶ。初期の高さ・カーソル・表示先頭と、最終の保存先頭・表示先頭・表示末尾の整合を検査し、失敗や 30 秒の timeout は fixture にしない。画面依存の fixture は折り返しを止め、既存 256 件の設定と `-es` は変えない。
+- fixture は本文・カーソルの行と UTF-8 バイト桁・レジスタの本文と種類に、表示先頭と window-local な `'scroll'` を加える。末尾にもう 1 つ Esc を送った結果も一致しなければ拒否する。単体テストと CI の再生には Vim を必要としない。
+- `python eng/vim-oracle.py --regenerate` を最終の **329 件（既存 256 ＋追加 73）**で 2 回実行し、生成ヘッダの SHA-256 はともに `814d77cddb785aa0aa9a01fde186d74ec7b34e14025bda94b519bfe468b120e4`。`fixtures.json` は `5b39fb1da0521b537a2fa6780283e852ee70f54518c0f3793fd1d69e3de8d416`。元の 256 件の入力と期待値 8 項目は `origin/main` と比較し、全件不変を確認した。途中の 313 件から追加した後も、先頭 313 行の期待値は不変だった。
+- `python eng/conformance.py` は違反 0、`python eng/test-conformance.py` は 131 件成功。後者には表示領域の不正入力・実行モードと timeout 指定・旧 fixture の空の表示領域・新しい生成行のテストが含まれる。
+- 最終 329 件の生成物を含む Debug build は成功。`nib_tests` は 3954 checks、CTest は 3/3 成功。`python eng/coverage.py` は全体 **91.51 %**（1566 分岐中 1433・下限 90 %）、検出能力を確認する negative proof は 2.87 % だった。
+
+`python eng/verify-window.py` は Debug・Windows 11 build 26200・120 DPI・ダーク・実 GPU で終了 0。高さ 11 行の画面で H / M / L のアクセント画素は 208 / 266 / 266。先頭の文字の画素は 392、PgDn 後は 0、PgUp 後は 392。実入力の Ctrl-d/u と Ctrl-f/b も両方 `confirmed`、各々 392 → 0 → 392。undo 後は 0。既存の通常編集・ファイル・IME の検査も通過した。
+
+検査側の 2 回の失敗は、`WM_CHAR` の改行が Enter と同じではないことと、丸角キャレットの端の 2 画素を文字と誤認したこと。前者は `VK_RETURN` の経路へ直し、後者は文字の検査領域をキャレットの外へ置いた。空行の期待値 0 と H / M / L の期待位置は変えていない。途中画面は `out/window-verification/vim-viewport-*.bmp`、最終結果は同ディレクトリの `look-slice-results.json`（git 対象外）。
+
+この追加操作の実機確認は 120 DPI・ダークでの結果であり、96 DPI や別の外観を実測したとは扱わない。最終 HEAD のフルゲートと CI の結果は [PR #59](https://github.com/hideyukiMORI/nene-nib/pull/59) に記録する。

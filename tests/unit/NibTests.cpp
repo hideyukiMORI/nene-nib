@@ -244,9 +244,11 @@ using nenenib::core::vim_step;
 using nenenib::core::vim_visual_range;
 using nenenib::core::vim_word_end;
 using nenenib::core::VimCharacter;
+using nenenib::core::VimEditorView;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
 using nenenib::core::VimMoveTo;
+using nenenib::core::VimNavigate;
 using nenenib::core::VimNewLine;
 using nenenib::core::VimNoEffect;
 using nenenib::core::VimRegister;
@@ -254,6 +256,7 @@ using nenenib::core::VimRegisterKind;
 using nenenib::core::VimSelect;
 using nenenib::core::VimSpecialKey;
 using nenenib::core::VimState;
+using nenenib::core::VimViewport;
 using nenenib::core::VimWordEndStop;
 using nenenib::core::VimWordStop;
 using nenenib::core::width_of;
@@ -972,22 +975,85 @@ void verify_history_travel()
 
 void verify_scroll_bounds()
 {
-    expect(first_visible_within(LineNumber{1}, 100, 10) == LineNumber{1}, "the top is allowed");
-    expect(first_visible_within(LineNumber{0}, 100, 10) == LineNumber{1}, "line zero clamps up");
-    expect(first_visible_within(LineNumber{91}, 100, 10) == LineNumber{91}, "the last page");
-    expect(first_visible_within(LineNumber{99}, 100, 10) == LineNumber{91}, "past the last page");
-    expect(first_visible_within(LineNumber{5}, 4, 10) == LineNumber{1},
+    expect(first_visible_within(LineNumber{1}, 100, 10,
+                                nenenib::core::ScrollExtent::filled_viewport) == LineNumber{1},
+           "the top is allowed");
+    expect(first_visible_within(LineNumber{0}, 100, 10,
+                                nenenib::core::ScrollExtent::filled_viewport) == LineNumber{1},
+           "line zero clamps up");
+    expect(first_visible_within(LineNumber{91}, 100, 10,
+                                nenenib::core::ScrollExtent::filled_viewport) == LineNumber{91},
+           "the last page");
+    expect(first_visible_within(LineNumber{99}, 100, 10,
+                                nenenib::core::ScrollExtent::filled_viewport) == LineNumber{91},
+           "past the last page");
+    expect(first_visible_within(LineNumber{5}, 4, 10,
+                                nenenib::core::ScrollExtent::filled_viewport) == LineNumber{1},
            "a buffer shorter than the window cannot scroll");
-    expect(first_visible_within(LineNumber{5}, 100, 0) == LineNumber{5},
+    expect(first_visible_within(LineNumber{5}, 100, 0,
+                                nenenib::core::ScrollExtent::filled_viewport) == LineNumber{5},
            "a window with no room still needs one line");
-    expect(first_visible_for_caret(LineNumber{5}, LineNumber{7}, 10) == LineNumber{5},
+    expect(first_visible_within(LineNumber{99}, 100, 10, nenenib::core::ScrollExtent::last_line) ==
+               LineNumber{99},
+           "Vim can put the last document lines at the top");
+    expect(first_visible_within(LineNumber{101}, 100, 10, nenenib::core::ScrollExtent::last_line) ==
+               LineNumber{100},
+           "Vim still clamps beyond the last line");
+    expect(first_visible_for_caret(LineNumber{5}, LineNumber{7}, 10,
+                                   nenenib::core::ScrollFollow::minimal) == LineNumber{5},
            "a visible caret does not scroll");
-    expect(first_visible_for_caret(LineNumber{5}, LineNumber{2}, 10) == LineNumber{2},
+    expect(first_visible_for_caret(LineNumber{5}, LineNumber{2}, 10,
+                                   nenenib::core::ScrollFollow::minimal) == LineNumber{2},
            "a caret above the window pulls it up");
-    expect(first_visible_for_caret(LineNumber{5}, LineNumber{20}, 10) == LineNumber{11},
+    expect(first_visible_for_caret(LineNumber{5}, LineNumber{20}, 10,
+                                   nenenib::core::ScrollFollow::minimal) == LineNumber{11},
            "a caret below the window pulls it down");
-    expect(first_visible_for_caret(LineNumber{5}, LineNumber{5}, 0) == LineNumber{5},
+    expect(first_visible_for_caret(LineNumber{5}, LineNumber{5}, 0,
+                                   nenenib::core::ScrollFollow::minimal) == LineNumber{5},
            "a window with no room keeps the caret line");
+    expect(first_visible_for_caret(LineNumber{11}, LineNumber{8}, 10,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{8},
+           "Vim follows minimally just before the upper threshold");
+    expect(first_visible_for_caret(LineNumber{11}, LineNumber{7}, 10,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{3},
+           "Vim centers at the upper threshold");
+    expect(first_visible_for_caret(LineNumber{6}, LineNumber{20}, 10,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{11},
+           "Vim follows minimally just before the lower threshold");
+    expect(first_visible_for_caret(LineNumber{6}, LineNumber{21}, 10,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{16},
+           "Vim centers at the lower threshold");
+    expect(first_visible_for_caret(LineNumber{6}, LineNumber{10}, 10,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{6},
+           "Vim preserves an explicit scroll while the caret remains visible");
+}
+
+void verify_vim_scroll_follow_thresholds()
+{
+    expect(first_visible_for_caret(LineNumber{10}, LineNumber{8}, 9,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{8},
+           "height 9 follows minimally before its upper threshold");
+    expect(first_visible_for_caret(LineNumber{10}, LineNumber{7}, 9,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{3},
+           "height 9 centers at its upper threshold");
+    expect(first_visible_for_caret(LineNumber{6}, LineNumber{19}, 9,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{11},
+           "height 9 follows minimally before its lower threshold");
+    expect(first_visible_for_caret(LineNumber{6}, LineNumber{20}, 9,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{16},
+           "height 9 centers at its lower threshold");
+    expect(first_visible_for_caret(LineNumber{12}, LineNumber{9}, 11,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{9},
+           "height 11 follows minimally before its upper threshold");
+    expect(first_visible_for_caret(LineNumber{12}, LineNumber{8}, 11,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{3},
+           "height 11 centers at its upper threshold");
+    expect(first_visible_for_caret(LineNumber{6}, LineNumber{22}, 11,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{12},
+           "height 11 follows minimally before its lower threshold");
+    expect(first_visible_for_caret(LineNumber{6}, LineNumber{23}, 11,
+                                   nenenib::core::ScrollFollow::vim) == LineNumber{18},
+           "height 11 centers at its lower threshold");
 }
 
 void verify_body_layout()
@@ -2158,12 +2224,18 @@ struct VimKeyName
     VimSpecialKey key;
 };
 
-constexpr std::array<VimKeyName, 6> vim_key_names{{{"<Esc>", VimSpecialKey::escape},
-                                                   {"<CR>", VimSpecialKey::enter},
-                                                   {"<BS>", VimSpecialKey::backspace},
-                                                   {"<C-r>", VimSpecialKey::control_r},
-                                                   {"<Home>", VimSpecialKey::home},
-                                                   {"<End>", VimSpecialKey::end}}};
+constexpr std::array<VimKeyName, 12> vim_key_names{{{"<Esc>", VimSpecialKey::escape},
+                                                    {"<CR>", VimSpecialKey::enter},
+                                                    {"<BS>", VimSpecialKey::backspace},
+                                                    {"<C-r>", VimSpecialKey::control_r},
+                                                    {"<C-d>", VimSpecialKey::control_d},
+                                                    {"<C-u>", VimSpecialKey::control_u},
+                                                    {"<C-f>", VimSpecialKey::control_f},
+                                                    {"<C-b>", VimSpecialKey::control_b},
+                                                    {"<Home>", VimSpecialKey::home},
+                                                    {"<End>", VimSpecialKey::end},
+                                                    {"<PageUp>", VimSpecialKey::page_up},
+                                                    {"<PageDown>", VimSpecialKey::page_down}}};
 // fixture はどれも数行なので、全部の行が表示値に載る高さで再生する。
 constexpr std::size_t vim_visible_lines = 64;
 
@@ -2233,6 +2305,45 @@ void vim_replay(EditorController &controller, std::string_view keys)
     }
 }
 
+[[nodiscard]] TextPosition vim_fixture_position(const VimFixture &fixture)
+{
+    const auto text = TextBuffer::from_utf8(fixture.text);
+    expect(text.has_value(), "the fixture input is valid UTF-8");
+    if (!text.has_value() || !fixture.viewport.has_value())
+    {
+        return TextPosition{LineNumber{1}, Column{1}};
+    }
+    const auto &viewport = fixture.viewport.value();
+    const LineNumber line{static_cast<std::size_t>(viewport.line)};
+    const Offset at{text.value().line_start(line).value +
+                    static_cast<std::size_t>(viewport.column - 1)};
+    return text.value().position_of(at);
+}
+
+void arrange_vim_viewport(EditorController &controller, const VimFixture &fixture)
+{
+    if (!fixture.viewport.has_value())
+    {
+        return;
+    }
+    const auto &viewport = fixture.viewport.value();
+    static_cast<void>(controller.apply(VisibleLines{viewport.visible_lines}));
+    static_cast<void>(
+        controller.apply(PlaceCaret{vim_fixture_position(fixture), SelectionAnchoring::collapse}));
+    const std::int64_t current = static_cast<std::int64_t>(controller.frame().first_visible.value);
+    const std::int64_t requested = static_cast<std::int64_t>(viewport.first_visible);
+    static_cast<void>(
+        controller.apply(ScrollLines{static_cast<std::int32_t>(requested - current)}));
+}
+
+[[nodiscard]] std::string whole_vim_body(EditorController &controller)
+{
+    static_cast<void>(controller.apply(VisibleLines{controller.frame().total_lines}));
+    const std::int64_t first = static_cast<std::int64_t>(controller.frame().first_visible.value);
+    static_cast<void>(controller.apply(ScrollLines{static_cast<std::int32_t>(1 - first)}));
+    return vim_body(controller.frame());
+}
+
 // 無名レジスタの種類を Vim の getregtype の言葉で言う。一度も使っていないレジスタは空（ADR 0015）。
 [[nodiscard]] std::string_view vim_register_kind(const VimRegister &value)
 {
@@ -2260,20 +2371,33 @@ void verify_vim_fixture(const VimFixture &fixture)
     static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
     static_cast<void>(controller.apply(OpenDocument{sample_path()}));
     static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    arrange_vim_viewport(controller, fixture);
     vim_replay(controller, fixture.keys);
     const auto frame = controller.frame();
     const std::string name(fixture.name);
-    const std::string body = vim_body(frame);
-    expect(frame.first_visible == LineNumber{1}, name.c_str());
-    expect(body == fixture.expected_text, (name + ": body").c_str());
+    const std::size_t expected_first =
+        fixture.viewport.has_value() ? fixture.viewport.value().expected_first_visible : 1;
+    expect(frame.first_visible == LineNumber{expected_first}, (name + ": viewport").c_str());
     expect(frame.caret.position.line.value == static_cast<std::size_t>(fixture.line),
            (name + ": line").c_str());
-    expect(vim_byte_column(body, frame.caret.position) == static_cast<std::size_t>(fixture.column),
+    expect(vim_byte_column(std::string(fixture.expected_text), frame.caret.position) ==
+               static_cast<std::size_t>(fixture.column),
            (name + ": column").c_str());
     expect(controller.vim_state().unnamed_register.text == fixture.register_text,
            (name + ": register").c_str());
     expect(vim_register_kind(controller.vim_state().unnamed_register) == fixture.register_kind,
            (name + ": register kind").c_str());
+    if (fixture.viewport.has_value())
+    {
+        const std::size_t fallback =
+            std::max<std::size_t>(fixture.viewport.value().visible_lines / 2, 1);
+        const std::size_t scroll_lines =
+            controller.vim_state().scroll_lines.value_or(nenenib::core::VimCount{fallback}).value;
+        expect(scroll_lines == fixture.viewport.value().expected_scroll_lines,
+               (name + ": scroll lines").c_str());
+    }
+    const std::string body = whole_vim_body(controller);
+    expect(body == fixture.expected_text, (name + ": body").c_str());
 }
 
 void verify_vim_fixtures()
@@ -2588,20 +2712,247 @@ void verify_vim_step_edges()
     VimState inserting =
         nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
     inserting.mode = VimMode::insert;
-    const auto newline =
-        vim_step(inserting, buffer, collapsed_at(Offset{1}), VimKey{VimCharacter{U'\n'}});
+    const auto newline = vim_step(
+        inserting, VimEditorView{buffer, collapsed_at(Offset{1}), VimViewport{LineNumber{1}, 64}},
+        VimKey{VimCharacter{U'\n'}});
     expect(std::holds_alternative<VimNewLine>(newline.effect),
            "a newline typed as a character becomes the buffer's own line ending");
-    const auto at_start =
-        vim_step(inserting, buffer, collapsed_at(Offset{0}), VimKey{VimSpecialKey::backspace});
+    const auto at_start = vim_step(
+        inserting, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}},
+        VimKey{VimSpecialKey::backspace});
     expect(std::holds_alternative<VimNoEffect>(at_start.effect),
            "Backspace at the start of the buffer does nothing");
     const VimState resting =
         nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
-    const auto unbound =
-        vim_step(resting, buffer, collapsed_at(Offset{0}), VimKey{VimCharacter{U'z'}});
+    const auto unbound = vim_step(
+        resting, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}},
+        VimKey{VimCharacter{U'z'}});
     expect(std::holds_alternative<VimNoEffect>(unbound.effect), "an unbound key does nothing");
     expect(unbound.next.mode == VimMode::normal, "and it leaves NORMAL alone");
+}
+
+[[nodiscard]] std::string vim_lines(std::size_t count)
+{
+    std::string text;
+    for (std::size_t line = 0; line < count; ++line)
+    {
+        if (line > 0)
+        {
+            text += '\n';
+        }
+        text += 'x';
+    }
+    return text;
+}
+
+void verify_vim_viewport_half_edges()
+{
+    const auto text = TextBuffer::from_utf8(vim_lines(30));
+    expect(text.has_value(), "the viewport sample parses");
+    const auto &buffer = text.value();
+    VimState state =
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
+    state.count = nenenib::core::VimCount{999};
+    const Selection selection = collapsed_at(buffer.line_start(LineNumber{10}));
+    const VimEditorView view{buffer, selection, VimViewport{LineNumber{6}, 10}};
+    const auto down = vim_step(state, view, VimKey{VimSpecialKey::control_d});
+    const auto &down_effect = std::get<VimNavigate>(down.effect);
+    const std::size_t down_line = buffer.position_of(down_effect.selection.caret).line.value;
+    expect(down_effect.first_visible == LineNumber{16},
+           "a huge Ctrl-d clamps its amount to the viewport height");
+    expect(down_line >= down_effect.first_visible.value &&
+               down_line < down_effect.first_visible.value + view.viewport.visible_lines,
+           "Ctrl-d returns a caret inside the viewport it returns");
+    expect(down.next.scroll_lines.value_or(nenenib::core::VimCount{0}).value == 10,
+           "Ctrl-d stores the clamped amount");
+    const auto up = vim_step(state, view, VimKey{VimSpecialKey::control_u});
+    const auto &up_effect = std::get<VimNavigate>(up.effect);
+    const std::size_t up_line = buffer.position_of(up_effect.selection.caret).line.value;
+    expect(up_effect.first_visible == LineNumber{1}, "a huge Ctrl-u stops at the first line");
+    expect(up_line >= up_effect.first_visible.value &&
+               up_line < up_effect.first_visible.value + view.viewport.visible_lines,
+           "Ctrl-u returns a caret inside the viewport it returns");
+}
+
+void verify_vim_viewport_page_edges()
+{
+    const auto text = TextBuffer::from_utf8(vim_lines(30));
+    expect(text.has_value(), "the viewport sample parses");
+    const auto &buffer = text.value();
+    VimState state =
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
+    state.count = nenenib::core::VimCount{999};
+    const Selection selection = collapsed_at(buffer.line_start(LineNumber{10}));
+    const VimEditorView view{buffer, selection, VimViewport{LineNumber{6}, 10}};
+    const auto page_down = vim_step(state, view, VimKey{VimSpecialKey::control_f});
+    const auto &page_down_effect = std::get<VimNavigate>(page_down.effect);
+    expect(page_down_effect.first_visible == LineNumber{30} &&
+               buffer.position_of(page_down_effect.selection.caret).line == LineNumber{30},
+           "a huge Ctrl-f reaches the last line without looping");
+    const VimEditorView lower_view{buffer, collapsed_at(buffer.line_start(LineNumber{25})),
+                                   VimViewport{LineNumber{21}, 10}};
+    const auto page_up = vim_step(state, lower_view, VimKey{VimSpecialKey::control_b});
+    const auto &page_up_effect = std::get<VimNavigate>(page_up.effect);
+    expect(page_up_effect.first_visible == LineNumber{1} &&
+               buffer.position_of(page_up_effect.selection.caret).line == LineNumber{6},
+           "a huge Ctrl-b keeps the overlap of its last effective page");
+    const VimEditorView top_view{buffer, collapsed_at(buffer.line_start(LineNumber{10})),
+                                 VimViewport{LineNumber{1}, 10}};
+    const auto page_at_top = vim_step(state, top_view, VimKey{VimSpecialKey::control_b});
+    const auto &page_at_top_effect = std::get<VimNavigate>(page_at_top.effect);
+    expect(page_at_top_effect.first_visible == LineNumber{1} &&
+               page_at_top_effect.selection == top_view.selection,
+           "Ctrl-b at the top preserves the caret exactly");
+}
+
+void verify_vim_viewport_mode_edges()
+{
+    const auto text = TextBuffer::from_utf8(vim_lines(30));
+    expect(text.has_value(), "the viewport sample parses");
+    const auto &buffer = text.value();
+    const Selection selection = collapsed_at(buffer.line_start(LineNumber{10}));
+    const VimEditorView view{buffer, selection, VimViewport{LineNumber{6}, 10}};
+    VimState state =
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
+    VimState remembered = state;
+    remembered.count = std::nullopt;
+    remembered.scroll_lines = nenenib::core::VimCount{3};
+    expect(nenenib::core::vim_after_resize(remembered, 10, 10).scroll_lines.has_value(),
+           "an unchanged height preserves the half-page amount");
+    expect(!nenenib::core::vim_after_resize(remembered, 10, 11).scroll_lines.has_value(),
+           "a changed height resets the half-page amount");
+    expect(nenenib::core::vim_resting_from(remembered, remembered.unnamed_register)
+               .scroll_lines.has_value(),
+           "resting transitions preserve the half-page amount");
+
+    VimState inserting = remembered;
+    inserting.mode = VimMode::insert;
+    for (const VimSpecialKey key : {VimSpecialKey::control_d, VimSpecialKey::control_u,
+                                    VimSpecialKey::control_f, VimSpecialKey::control_b})
+    {
+        const auto ignored = vim_step(inserting, view, VimKey{key});
+        expect(std::holds_alternative<VimNoEffect>(ignored.effect),
+               "INSERT ignores Ctrl viewport keys");
+    }
+
+    VimState visual = remembered;
+    visual.mode = VimMode::visual;
+    const std::array<std::pair<char32_t, LineNumber>, 3> screen_lines{
+        {{U'H', LineNumber{6}}, {U'M', LineNumber{10}}, {U'L', LineNumber{15}}}};
+    for (const auto &[key, expected] : screen_lines)
+    {
+        const auto moved = vim_step(visual, view, VimKey{VimCharacter{key}});
+        const auto &effect = std::get<VimSelect>(moved.effect);
+        expect(effect.selection.anchor == selection.anchor &&
+                   buffer.position_of(effect.selection.caret).line == expected,
+               "VISUAL H M L preserve the anchor and move on screen lines");
+    }
+    const auto visual_forward = vim_step(visual, view, VimKey{VimSpecialKey::control_f});
+    const auto &visual_forward_effect = std::get<VimNavigate>(visual_forward.effect);
+    expect(visual_forward_effect.selection.anchor == selection.anchor &&
+               visual_forward_effect.first_visible == LineNumber{14} &&
+               buffer.position_of(visual_forward_effect.selection.caret).line == LineNumber{14},
+           "VISUAL Ctrl-f preserves the anchor and uses the NORMAL viewport transition");
+    const auto visual_back = vim_step(visual, view, VimKey{VimSpecialKey::control_b});
+    const auto &visual_back_effect = std::get<VimNavigate>(visual_back.effect);
+    expect(visual_back_effect.selection.anchor == selection.anchor &&
+               visual_back_effect.first_visible == LineNumber{1} &&
+               buffer.position_of(visual_back_effect.selection.caret).line == LineNumber{7},
+           "VISUAL Ctrl-b preserves the anchor and uses the NORMAL viewport transition");
+}
+
+void verify_vim_viewport_state_lifetime()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{vim_lines(30)});
+    static_cast<void>(controller.apply(VisibleLines{10}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{10}, Column{1}}, SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(ScrollLines{5}));
+    vim_replay(controller, "3<C-d>j<C-d><Esc><C-u>");
+    expect(controller.vim_state().scroll_lines.value_or(nenenib::core::VimCount{0}).value == 3,
+           "ordinary Vim commands preserve an explicit half-page amount");
+    static_cast<void>(controller.apply(VisibleLines{10}));
+    expect(controller.vim_state().scroll_lines.has_value(),
+           "a repeated notification of the same height preserves it");
+
+    editing.files().hold(Bytes{vim_lines(30)});
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    expect(controller.vim_state().scroll_lines.has_value(), "opening another file preserves it");
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    expect(controller.vim_state().scroll_lines.has_value(), "mode toggles preserve it");
+
+    static_cast<void>(controller.apply(ScrollLines{100}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
+    expect(controller.frame().first_visible == LineNumber{21},
+           "ordinary mode restores the filled-viewport scroll bound");
+    static_cast<void>(controller.apply(VisibleLines{11}));
+    expect(!controller.vim_state().scroll_lines.has_value(),
+           "a real height change resets the explicit half-page amount");
+}
+
+void verify_vim_visual_scroll_recovers_viewport()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{vim_lines(30)});
+    static_cast<void>(controller.apply(VisibleLines{10}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{10}, Column{1}}, SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(ScrollLines{5}));
+    vim_replay(controller, "v");
+    static_cast<void>(controller.apply(ScrollLines{15}));
+    const auto frame = controller.apply(VimKeyPress{VimKey{VimSpecialKey::control_d}});
+    expect(frame.vim_mode == VimMode::visual && frame.first_visible == LineNumber{15} &&
+               frame.caret.position.line == LineNumber{15},
+           "VISUAL Ctrl-d brings a wheel-hidden caret into its returned viewport");
+}
+
+void verify_vim_follow_at_document_end()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{vim_lines(30)});
+    static_cast<void>(controller.apply(VisibleLines{10}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{15}, Column{1}}, SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(ScrollLines{5}));
+    vim_replay(controller, "99j");
+    expect(controller.frame().caret.position.line == LineNumber{30} &&
+               controller.frame().first_visible == LineNumber{21},
+           "an automatic jump fills the last viewport");
+
+    static_cast<void>(controller.apply(
+        PlaceCaret{TextPosition{LineNumber{30}, Column{1}}, SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(ScrollLines{9}));
+    vim_replay(controller, "<C-f>k");
+    expect(controller.frame().caret.position.line == LineNumber{29} &&
+               controller.frame().first_visible == LineNumber{29},
+           "a motion after an explicit EOF page preserves its trailing blank area");
+}
+
+void verify_vim_insert_page_move_breaks_undo()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("x\nx")});
+    static_cast<void>(controller.apply(VisibleLines{2}));
+    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    vim_replay(controller, "ia<PageDown>b<Esc>u");
+    expect(whole_vim_body(controller) == "ax\nx",
+           "undo after INSERT PageDown takes back only the second insertion");
+    vim_replay(controller, "u");
+    expect(whole_vim_body(controller) == "x\nx",
+           "the earlier insertion remains a separate undo unit");
 }
 
 // VISUAL の入口は選択そのもの（ADR 0018 の決定 2）。NORMAL / INSERT は anchor を読まない。
@@ -2612,8 +2963,9 @@ void verify_vim_visual_step_edges()
     const auto &buffer = text.value();
     const VimState resting =
         nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
-    const auto entered =
-        vim_step(resting, buffer, collapsed_at(Offset{1}), VimKey{VimCharacter{U'v'}});
+    const auto entered = vim_step(
+        resting, VimEditorView{buffer, collapsed_at(Offset{1}), VimViewport{LineNumber{1}, 64}},
+        VimKey{VimCharacter{U'v'}});
     expect(entered.next.mode == VimMode::visual, "v enters VISUAL");
     expect(std::get<VimSelect>(entered.effect).selection == Selection{Offset{1}, Offset{1}},
            "and anchors the selection where the caret is");
@@ -2626,12 +2978,15 @@ void verify_vim_visual_step_edges()
                              VimKey{VimSpecialKey::enter}, VimKey{VimSpecialKey::backspace},
                              VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
     {
-        const auto step = vim_step(visual, buffer, selection, key);
+        const auto step =
+            vim_step(visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64}}, key);
         expect(std::holds_alternative<VimNoEffect>(step.effect),
                "a key outside this slice does nothing in VISUAL");
         expect(step.next.mode == VimMode::visual, "and stays in VISUAL");
     }
-    const auto escaped = vim_step(visual, buffer, selection, VimKey{VimSpecialKey::escape});
+    const auto escaped =
+        vim_step(visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64}},
+                 VimKey{VimSpecialKey::escape});
     expect(std::get<VimMoveTo>(escaped.effect).caret == Offset{2}, "Esc leaves the caret alone");
     expect(escaped.next.mode == VimMode::normal, "and goes back to NORMAL");
     // 表示の範囲と操作の範囲は同じ 1 本（決定 5 / ADR 0018 の強制）。
@@ -2876,6 +3231,13 @@ void verify_vim_engine()
     verify_vim_word_motions();
     verify_vim_caret_rules();
     verify_vim_step_edges();
+    verify_vim_viewport_half_edges();
+    verify_vim_viewport_page_edges();
+    verify_vim_viewport_mode_edges();
+    verify_vim_viewport_state_lifetime();
+    verify_vim_visual_scroll_recovers_viewport();
+    verify_vim_follow_at_document_end();
+    verify_vim_insert_page_move_breaks_undo();
     verify_vim_visual_step_edges();
     verify_vim_key_notation();
     verify_vim_mode_labels();
@@ -2929,6 +3291,7 @@ void verify_text_and_caret()
     verify_tab_titles();
     verify_save_state_of_document();
     verify_scroll_bounds();
+    verify_vim_scroll_follow_thresholds();
     verify_body_layout();
 }
 

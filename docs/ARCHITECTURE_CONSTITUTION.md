@@ -91,7 +91,9 @@
 | --- | --- | --- | --- |
 | テキスト正本 | 開いている各バッファの本文（piece table）と undo の履歴 | application（`EditorState`） | 利用者の意図（通常・Vim とも同じ編集操作の集合） |
 | 編集モード | 通常 / Vim と、Vim の中のモード（normal / insert / visual / …） | application | トグルの意図と Vim エンジンの遷移 |
-| カーソル・選択・レジスタ・マーク | Vim エンジンの状態 | application（`VimState`） | Vim エンジンの純関数の結果 |
+| カーソル・選択 | 本文上の anchor と caret | application（`EditorState::selection`） | 編集の意図と Vim エンジンの効果（ADR 0018） |
+| Vim の保留・レジスタ・移動量の設定 | モード固有の入力状態と半画面の明示行数 | application（`EditorState::vim`） | core の純関数の結果（ADR 0012 / 0019） |
+| 縦スクロール | 表示中の先頭行と表示行数 | application（`EditorState::scroll`） | スクロール・表示行数の意図と Vim の画面移動の効果（ADR 0019）。engine へ渡す view は借用で保存しない |
 | ワーカーの結果（索引・ハイライト・md 変換） | 版番号付きの派生値 | application | ワーカー完了の意図。古い版は捨てる（ADR 0004） |
 | 窓の設定・履歴・ブックマーク | 保存される値 | application | 設定変更の意図と保存ポートの結果 |
 
