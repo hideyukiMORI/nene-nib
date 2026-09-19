@@ -423,3 +423,23 @@ oracle は 5-g と同じ固定した Vim 9.1。help と鍵を送った結果だ�
 検査側の 2 回の失敗は、`WM_CHAR` の改行が Enter と同じではないことと、丸角キャレットの端の 2 画素を文字と誤認したこと。前者は `VK_RETURN` の経路へ直し、後者は文字の検査領域をキャレットの外へ置いた。空行の期待値 0 と H / M / L の期待位置は変えていない。途中画面は `out/window-verification/vim-viewport-*.bmp`、最終結果は同ディレクトリの `look-slice-results.json`（git 対象外）。
 
 この追加操作の実機確認は 120 DPI・ダークでの結果であり、96 DPI や別の外観を実測したとは扱わない。最終 HEAD のフルゲートと CI の結果は [PR #59](https://github.com/hideyukiMORI/nene-nib/pull/59) に記録する。
+
+### 5-k. 設定と本文フォント（Issue #60・ADR 0020・2026-09-20）
+
+対象は設定の読込/保存/競合、新しい中核状態、本文フォントからの配置・クリック・IME、起動/打鍵への影響。ADR 0021 に従い既存の成功を再利用し、フルゲート・Vim oracle再生成・無変更の16 MiB入出力ベンチは実行しない。
+
+| 検査 | 実測 |
+| --- | --- |
+| `cmake --build build --target nib_tests NeNeNib` と `build/nib_tests.exe` | Debug + ASan/UBSan、3,992 checks成功。サイズ境界・NaN/inf・設定失敗・本文/選択/undo保持・明示テーマ/system・96/120/192 DPIの配置。公開状態/ctorの全呼出元を同じunit targetが覆う |
+| `cmake --build build --target nib_adapter_tests NeNeNib` と `ctest --test-dir build -R '^nib_adapters$' --output-on-failure` | 109 checks成功。初回/再起動、UTF-8/BOM/CRLF/ASCII空白/名前中の=、重複/未知キー/欠落/版/非数、4096 bytes境界、競合・lock・read-only、失敗後の元bytes保持。独立レビューのVT/FF修正後はこのtargetだけ再検証 |
+| `python eng/symbols.py --build-dir build --require core application` | 新しい中核の外部依存を確認。2 libraries、0 violation(s) |
+| `python eng/coverage.py` | 新しい状態と失敗分岐を含め1,454/1,588 = 91.56%。90%下限維持。negativeは2.96%で拒否 |
+| `python eng/verify-settings.py` | Windows 11 / 120 DPI / Microsoft日本語IME。主キー/テンキー、通常/Vim、Ctrl+wheel差分累積、8/40pt境界、復帰、21.5ptでのクリック→保存の本文一致、再起動、18pt/Consolas/neutral-lightの復元を確認。画面は out/settings-verification/*.bmp |
+| 上記から既存 `verify_ime(..., points=21.5)` | 実打鍵で変換→候補→確定。変換中下線401 pixels、確定後0。IME開閉状態を復元。out/settings-verification/settings-results.json |
+| `python eng/verify-settings.py --only unchanged-size` | 最大40ptでスクロール後、Ctrl+拡大しても前後の画面bytesが一致。no-opで表示行数通知を送らない修正の回帰検査 |
+| `cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release` / `cmake --build build-release --target NeNeNib` | Release製品target成功 |
+| `python out/git/issue60-speed.py`（既存 measure-speed の prepare / bench_startup / bench_keys / summarise / compare を使用、5試行） | 指紋 bc8a356f37c68491・120 DPI。起動初回描画209.147ms / 窓31.7409ms / 単打鍵0.803ms / 200打鍵2.419ms。既存基準値・許容値で4指標とも退行0・欠測0。out/speed/issue60-selected.json |
+
+実機の最初の成功後、空白のcodec修正はadapter検査で、比例係数/OSテーマの共通化は既存unitとsymbolsで確認。無変更時のスクロール修正は該当nativeケースだけ追加した。全実機シナリオを繰り返していない。独立レビューは読み取り専用、追加の未解決指摘なし。
+
+未確認: 別モニターへのDPI移動、変換中の拡縮での候補窓の目視、他IME。外部エディタが比較後に書く競合は保証外。FR-016/FR-017のEx/選択UI部分はC3。Waivers: none。

@@ -11,21 +11,24 @@ namespace nenenib::core
 namespace
 {
 constexpr std::int32_t body_top_dips = 12;
-constexpr std::int32_t line_height_dips = 24;
 constexpr std::int32_t gutter_width_dips = 56;
 constexpr std::int32_t caret_width_dips = 2;
 constexpr std::size_t single_tab = 1;
 } // namespace
 
-BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi) noexcept
+BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
+                       FontSize font_size) noexcept
 {
     const auto title = title_bar_layout(width, dpi, single_tab);
     const auto status = status_bar_layout(width, height, dpi);
     const std::int32_t top = std::min(title.band.bottom, status.band.top);
     const LayoutRect band{0, top, width, status.band.top};
     const std::int32_t first = band.top + to_pixels(body_top_dips, dpi);
-    const std::int32_t line_height = std::max(to_pixels(line_height_dips, dpi), 1);
-    const std::int32_t gutter = to_pixels(gutter_width_dips, dpi);
+    const auto line_dips = static_cast<std::int32_t>(font_size_dips(font_size) * 1.6F + 0.5F);
+    const auto gutter_dips = static_cast<std::int32_t>(
+        static_cast<float>(gutter_width_dips) * font_size_ratio(font_size) + 0.5F);
+    const std::int32_t line_height = std::max(to_pixels(line_dips, dpi), 1);
+    const std::int32_t gutter = std::clamp(to_pixels(gutter_dips, dpi), 0, std::max(width, 0));
     const std::int32_t rows = std::max((band.bottom - first) / line_height, 0);
     return BodyLayout{.band = band,
                       .gutter = LayoutRect{band.left, first, band.left + gutter, band.bottom},

@@ -35,6 +35,10 @@
 | 外観 | OS のライト／ダーク設定に対応する閉じた集合 | `Appearance`（core） |
 | 配色 | 外観ごとの背景と文字の色。純関数 `palette_for` の結果 | `Palette` / `RgbColor`（core） |
 | 外観ポート | OS の外観を読む唯一の窓口。実装は adapters/win32（レジストリの `AppsUseLightTheme`） | `AppearancePort` / `Win32AppearanceAdapter` |
+| 本文設定 | pt の文字サイズ・検証済みフォント名・任意の組み込みテーマ。テーマ無しは OS 追従 | `EditorSettings`（core）、所有者は `EditorState`（ADR 0020） |
+| フォントサイズ | 有限の 8〜40 pt。既定 13.5 pt。DIP と既定比率は名前付き純関数で導く | `FontSize`（core） |
+| 設定ポート | 設定の読込・保存と型付き失敗。保存形式と競合保護は adapter、bytes の置換は FilePort | `SettingsPort` / `Win32SettingsAdapter`（ADR 0020） |
+| エディタの依存 | controller へ注入する外観・clipboard・file・code page・設定ポートの名前付き参照 | `EditorPorts`（application / 合成は app、ADR 0020） |
 | エディタ状態 | 表示文字列と外観の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |
 | エディタフレーム | 表示文字列と配色の表示値。UI はこれを写すだけ | `EditorFrame`（application） |
 | 見た目のトークン | 採用案の寸法と配色。`core::Palette` が持ち、UI が写す | `docs/design/2026-09-15-look.md`（ADR 0008） |

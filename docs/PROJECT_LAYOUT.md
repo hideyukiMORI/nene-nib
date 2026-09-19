@@ -114,4 +114,4 @@ application が作った表示値を Direct2D / DirectWrite で描き、キー�
 | 検査設定 | `.clang-format` / `.clang-tidy` / `eng/*.json`。参照の一覧は `eng/config-bindings.json`（CNF-007） |
 | 実測と証明 | `eng/measure-language.ps1` ＋ `eng/probes/language.json`（Phase 0）/ `eng/prove-gates.py`（毎回のゲート）。結果は `docs/quality/` |
 | 生成物 | `build/`（CMake・オブジェクト・検証 exe）/ `out/`（Phase 0 の実測・証明 fixture・測定ビルド・出力）。製品 C++ コードの生成は未採用 |
-| 利用者データ | `%LOCALAPPDATA%\NeNeNib\`（設定・履歴・ブックマーク・セッション。形式は Phase 3 の ADR で決める）。リポジトリには入れない |
+| 利用者データ | `%LOCALAPPDATA%\NeNeNib\`。`settings.v1` は ADR 0020 の UTF-8 / version=1（テーマ・本文フォント名・pt）。履歴・ブックマーク・セッションは未採用。リポジトリには入れない |

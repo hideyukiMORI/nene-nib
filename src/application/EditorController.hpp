@@ -7,6 +7,7 @@
 #include "EditBoundary.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
+#include "EditorPorts.hpp"
 #include "EditorState.hpp"
 #include "FileFailure.hpp"
 #include "FilePort.hpp"
@@ -31,8 +32,7 @@ namespace nenenib::application
 class EditorController final
 {
   public:
-    EditorController(const AppearancePort &appearance, ClipboardPort &clipboard, FilePort &files,
-                     CodePagePort &code_pages);
+    explicit EditorController(EditorPorts ports);
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
     [[nodiscard]] EditorFrame frame() const;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
@@ -56,6 +56,7 @@ class EditorController final
     void accept(const RefreshAppearance &);
     void accept(const OpenDocument &intent);
     void accept(const SaveDocument &intent);
+    void accept(const AdjustFontSize &intent);
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
     // 触らず、CommitText だけが既存の 1 本（replace / vim_step）を通って本文に入る。
     void accept(const ComposeText &intent);
@@ -105,10 +106,7 @@ class EditorController final
     [[nodiscard]] std::expected<std::string, FileFailure> encoded(core::TextEncoding encoding,
                                                                   std::string_view utf8);
 
-    const AppearancePort &appearance_;
-    ClipboardPort &clipboard_;
-    FilePort &files_;
-    CodePagePort &code_pages_;
+    EditorPorts ports_;
     EditorState state_;
 };
 } // namespace nenenib::application

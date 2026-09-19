@@ -5,10 +5,12 @@
 #include "Document.hpp"
 #include "EditHistory.hpp"
 #include "EditMode.hpp"
+#include "EditorSettings.hpp"
 #include "FileFailure.hpp"
 #include "LineEnding.hpp"
 #include "ScrollState.hpp"
 #include "Selection.hpp"
+#include "SettingsFailure.hpp"
 #include "TextBuffer.hpp"
 #include "VimState.hpp"
 
@@ -36,6 +38,8 @@ class EditorState final
     // 変換中の文字列は本文の外にある（ADR 0014 の決定 2）。変換していない間は空。
     [[nodiscard]] const std::optional<core::Composition> &composition() const noexcept;
     [[nodiscard]] std::optional<FileFailure> last_failure() const noexcept;
+    [[nodiscard]] const core::EditorSettings &settings() const noexcept;
+    [[nodiscard]] std::optional<SettingsFailure> settings_failure() const noexcept;
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
@@ -49,6 +53,8 @@ class EditorState final
     [[nodiscard]] EditorState with_document(Document document) const;
     [[nodiscard]] EditorState with_composition(std::optional<core::Composition> composition) const;
     [[nodiscard]] EditorState with_failure(std::optional<FileFailure> failure) const;
+    [[nodiscard]] EditorState with_settings(core::EditorSettings settings) const;
+    [[nodiscard]] EditorState with_settings_failure(std::optional<SettingsFailure> failure) const;
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
     [[nodiscard]] EditorState with_opened(core::TextBuffer text, core::LineEnding ending,
@@ -68,5 +74,7 @@ class EditorState final
     Document document_;
     std::optional<core::Composition> composition_;
     std::optional<FileFailure> last_failure_;
+    core::EditorSettings settings_;
+    std::optional<SettingsFailure> settings_failure_;
 };
 } // namespace nenenib::application

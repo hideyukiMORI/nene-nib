@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 // 組み込み 9 テーマの唯一の表（ADR 0017 の決定 6）。名前の表も同じ配列で、Ex の補完（C3）・
 // Ctrl+P・設定の検証（C2）はここを引く（ARC-001）。
@@ -307,6 +308,19 @@ inline constexpr std::array<Theme, 9> builtin_themes{{
 [[nodiscard]] constexpr const Theme &theme_of(BuiltinTheme theme) noexcept
 {
     return builtin_themes[static_cast<std::size_t>(theme)];
+}
+
+// OS の外観から既定テーマへ写す唯一の経路（ADR 0020）。
+[[nodiscard]] constexpr BuiltinTheme theme_for(Appearance appearance) noexcept
+{
+    switch (appearance)
+    {
+    case Appearance::light:
+        return BuiltinTheme::neutral_light;
+    case Appearance::dark:
+        return BuiltinTheme::ubuntu_aubergine;
+    }
+    std::unreachable();
 }
 
 static_assert(theme_of(BuiltinTheme::ubuntu_aubergine).name == "ubuntu-aubergine");

@@ -40,7 +40,7 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 | 順 | 縦切り | 何ができるか | 前提 |
 | --- | --- | --- | --- |
 | C1 | テーマの模型と組み込み 9 テーマ（core だけ） | `Theme` / `SyntaxPalette` / `derive_ui` と組み込みの表。**全テーマで本文の前景／背景のコントラスト比 4.5 以上を単体テストが要求する**。UI はまだ `Palette` だけを使う | 無し（いつでも） |
-| C2 | 設定の保存形式（版付き）とテーマの選択の永続化 | `settings.v1` にテーマ名。起動時に読む。読めない版は型のある失敗（ARC-009） | C1 |
+| C2 | 設定の保存形式（版付き）とテーマ・本文フォントの永続化 | `settings.v1` にテーマ名・フォント名・pt。起動時に読む。読めない版は型のある失敗（ARC-009）。直接のサイズ操作も接続（Issue #60・ADR 0020） | C1 |
 | C3 | `:colorscheme` の Ex コマンドと Ctrl+P の `:` 接頭辞 | Vim モードのコマンドラインで切り替え・表示・補完。通常モードは Ctrl+P から | Vim エンジンの Ex コマンドライン・Ctrl+P |
 | C4 | 利用者のテーマファイル | `themes/<name>.v1.*` を adapters が読んで `Theme` に変換。壊れたファイルは名前を挙げて断る | C2 |
 
@@ -57,7 +57,7 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 同じ設定の縦切り（C2）で扱う。テーマと同じく application が所有する状態で、UI は写すだけ。
 
 - 状態: `FontSize`（core の値型。8〜40 pt に検証するファクトリ。既定 13.5 pt）。DPI との掛け算は `Direct2DRenderer` が描くときに行い、状態は pt のまま
-- 意図: `font_size_up`（+1）/ `font_size_down`（−1）/ `font_size_reset`（既定）/ `font_size_set(pt)`。通常モードは Ctrl+`+` / Ctrl+`-` / Ctrl+`0` と Ctrl+ホイール、Vim は `:set fontsize=<pt>`（`:set guifont=<name>:h<pt>` の書式も受け、名前の部分はフォント名の設定へ）
+- 意図: 増加（+1 pt）/ 減少（−1 pt）/ 既定へ戻す。C2 では通常・Vim とも Ctrl+`+` / Ctrl+`-` / Ctrl+`0` と Ctrl+ホイール。C3 で `:set fontsize=<pt>` / `:set guifont=<name>:h<pt>` を接続する（名前の部分はフォント名の設定へ）。C2 だけでは D14 / FR-017 全体の完了ではない
 - 保存: `settings.v1` に pt を書く（C2）。読めない値は既定へ黙って落とさず、型のある失敗で返す（ARC-009）
-- レイアウト: 行高は `フォントサイズ × 1.6` を丸めた DIP、行番号の欄はフォントサイズに比例（採用案の 56 DIP は 13.5 pt のとき）。`TitleBarLayout` / `StatusBarLayout` は固定のまま（UI の文字は変えない）
-- 順: C2 と同時。Ctrl+ホイールは Ctrl+P の後でもよい
+- レイアウト: 本文は `pt × 96 / 72` DIP、行高はこの DIP に 1.6 を掛けて整数 DIP に丸める（13.5 pt → 18 DIP → 行高 29 DIP）。行番号の欄・文字・右余白は、既定 13.5 pt の 56 / 12 / 16 DIP を基準に pt の比で拡縮する。`TitleBarLayout` / `StatusBarLayout` は固定のまま（UI の文字は変えない）
+- 順: C2 は保存と直接のサイズ操作、C3 は Ex / Ctrl+P。Ctrl+ホイールは C2 に含める（ADR 0020）

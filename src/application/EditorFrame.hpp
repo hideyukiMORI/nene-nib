@@ -5,9 +5,11 @@
 #include "CompositionView.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
+#include "EditorSettings.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "Palette.hpp"
+#include "SettingsFailure.hpp"
 #include "StatusItems.hpp"
 #include "VimMode.hpp"
 
@@ -38,5 +40,8 @@ struct EditorFrame
     std::optional<CompositionView> composition;
     DocumentView document;
     std::array<core::DisplayText, core::status_item_count> status_items;
+    core::EditorSettings settings;
+    // 起動時と設定変更時だけ告知する。本文の次のキーで繰り返し表示しない（ADR 0020）。
+    std::optional<SettingsFailure> settings_failure;
 };
 } // namespace nenenib::application

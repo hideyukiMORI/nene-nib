@@ -20,7 +20,6 @@ namespace
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
 constexpr float tab_text_dips = 12.5F;
 constexpr float ui_text_dips = 12.0F;
-constexpr float code_text_dips = 13.5F;
 constexpr std::int32_t tab_padding_left_dips = 14;
 constexpr std::int32_t tab_padding_right_dips = 10;
 constexpr std::int32_t tab_close_dips = 18;
@@ -321,8 +320,8 @@ HRESULT Direct2DRenderer::make_format(const wchar_t *face, float size_dips,
 
 void Direct2DRenderer::align_text_formats()
 {
-    const std::array<TextFormat, 6> every{tab_format_,  toggle_format_, status_format_,
-                                          mode_format_, gutter_format_, code_format_};
+    const std::array<TextFormat, 4> every{tab_format_, toggle_format_, status_format_,
+                                          mode_format_};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -330,7 +329,6 @@ void Direct2DRenderer::align_text_formats()
     }
     toggle_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     status_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
-    gutter_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
@@ -345,7 +343,6 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     // UI は Segoe UI Variable Text、本文は Cascadia Code。無い環境は順に落ちる（ADR 0008 の決定
     // 6）。
     const wchar_t *interface_face = family(L"Segoe UI Variable Text", L"Segoe UI");
-    const wchar_t *code_face = family(L"Cascadia Code", L"Consolas");
     const HRESULT tab =
         make_format(interface_face, tab_text_dips, DWRITE_FONT_WEIGHT_NORMAL, tab_format_);
     const HRESULT toggle =
@@ -354,17 +351,53 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
         make_format(interface_face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, status_format_);
     const HRESULT mode =
         make_format(interface_face, ui_text_dips, DWRITE_FONT_WEIGHT_BOLD, mode_format_);
-    const HRESULT gutter =
-        make_format(code_face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, gutter_format_);
-    const HRESULT code =
-        make_format(code_face, code_text_dips, DWRITE_FONT_WEIGHT_NORMAL, code_format_);
-    if (FAILED(tab) || FAILED(toggle) || FAILED(status) || FAILED(mode) || FAILED(gutter) ||
-        FAILED(code))
+    if (FAILED(tab) || FAILED(toggle) || FAILED(status) || FAILED(mode))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
     align_text_formats();
+    return create_body_formats(
+        core::EditorSettings{formatted_size_, formatted_family_, std::nullopt});
+}
+
+std::expected<void, RenderFailure>
+Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
+{
+    const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
+    const wchar_t *face = family(requested.c_str(), L"Consolas");
+    const float ratio = core::font_size_ratio(settings.font_size);
+    TextFormat code;
+    TextFormat gutter;
+    const auto made_code = make_format(face, core::font_size_dips(settings.font_size),
+                                       DWRITE_FONT_WEIGHT_NORMAL, code);
+    const auto made_gutter =
+        make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
+    if (FAILED(made_code) || FAILED(made_gutter))
+    {
+        return std::unexpected(RenderFailure::directwrite);
+    }
+    const std::array<TextFormat, 2> every{code, gutter};
+    for (const auto &format : every)
+    {
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    }
+    gutter->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+    code_format_ = std::move(code);
+    gutter_format_ = std::move(gutter);
+    formatted_size_ = settings.font_size;
+    formatted_family_ = settings.font_family;
     return {};
+}
+
+std::expected<void, RenderFailure> Direct2DRenderer::set_font(const core::EditorSettings &settings)
+{
+    if (formatted_size_.points() == settings.font_size.points() &&
+        formatted_family_.text() == settings.font_family.text())
+    {
+        return {};
+    }
+    return create_body_formats(settings);
 }
 
 float Direct2DRenderer::scaled(float dips) const noexcept
@@ -723,9 +756,15 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
         fill(row, frame.palette.current_line);
     }
     write(std::to_string(line.number.value), gutter_format_.Get(),
-          core::LayoutRect{body.gutter.left, row.top,
-                           body.gutter.right - core::to_pixels(gutter_padding_dips, dpi_),
-                           row.bottom},
+          core::LayoutRect{
+              body.gutter.left, row.top,
+              body.gutter.right -
+                  core::to_pixels(static_cast<std::int32_t>(
+                                      static_cast<float>(gutter_padding_dips) *
+                                          core::font_size_ratio(frame.settings.font_size) +
+                                      0.5F),
+                                  dpi_),
+              row.bottom},
           frame.palette.gutter);
     const core::LayoutRect area{body.content.left, row.top, body.content.right, row.bottom};
     // 変換中の文字列はキャレットの行にだけ差し込まれる（ADR 0014 の決定 2）。
@@ -786,7 +825,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto title = core::title_bar_layout(width, dpi_, 1);
     const auto status = core::status_bar_layout(width, height, dpi_);
     draw_title_bar(frame, title);
-    draw_body(frame, core::body_layout(width, height, dpi_));
+    draw_body(frame, core::body_layout(width, height, dpi_, frame.settings.font_size));
     draw_status_bar(frame, status);
     const auto ended = context_->EndDraw();
     context_->SetTarget(nullptr);
@@ -799,6 +838,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
 
 std::expected<void, RenderFailure> Direct2DRenderer::render(const application::EditorFrame &frame)
 {
+    const auto formatted = set_font(frame.settings);
+    if (!formatted)
+    {
+        return formatted;
+    }
     Microsoft::WRL::ComPtr<IDXGISurface> surface;
     const auto acquired = swap_chain_->GetBuffer(0, IID_PPV_ARGS(&surface));
     if (FAILED(acquired))

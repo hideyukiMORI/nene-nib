@@ -203,11 +203,40 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 }
 } // namespace
 
-EditorController::EditorController(const AppearancePort &appearance, ClipboardPort &clipboard,
-                                   FilePort &files, CodePagePort &code_pages)
-    : appearance_(appearance), clipboard_(clipboard), files_(files), code_pages_(code_pages),
-      state_(EditorState::create(appearance_or_dark(appearance), core::EditMode::ordinary))
+EditorController::EditorController(EditorPorts ports)
+    : ports_(ports),
+      state_(EditorState::create(appearance_or_dark(ports.appearance), core::EditMode::ordinary))
 {
+    const auto loaded = ports_.settings.read();
+    if (!loaded)
+    {
+        state_ = state_.with_settings_failure(loaded.error());
+        return;
+    }
+    const auto &settings = loaded.value();
+    if (settings.has_value())
+    {
+        state_ = state_.with_settings(settings.value());
+    }
+}
+
+void EditorController::accept(const AdjustFontSize &intent)
+{
+    state_ = state_.with_settings_failure(std::nullopt);
+    auto settings = state_.settings();
+    settings.font_size =
+        core::adjusted_font_size(settings.font_size, intent.adjustment, intent.steps);
+    if (settings.font_size.points() == state_.settings().font_size.points())
+    {
+        return;
+    }
+    const auto saved = ports_.settings.write(settings);
+    if (!saved)
+    {
+        state_ = state_.with_settings_failure(saved.error());
+        return;
+    }
+    state_ = state_.with_settings(std::move(settings));
 }
 
 EditorFrame EditorController::apply(const EditorIntent &intent)
@@ -360,7 +389,7 @@ void EditorController::copy_selection()
         return;
     }
     // 置けなかったことは本文を変えない。通知はまだ無いので表示値にも載せない（ARC-010）。
-    if (!clipboard_.write(state_.text().text_range(range.begin, range.end)))
+    if (!ports_.clipboard.write(state_.text().text_range(range.begin, range.end)))
     {
         return;
     }
@@ -374,7 +403,7 @@ void EditorController::cut_selection()
         return;
     }
     // 置けたときだけ切り取る。行き先の無いまま本文から消す方が損害が大きい。
-    if (!clipboard_.write(state_.text().text_range(range.begin, range.end)))
+    if (!ports_.clipboard.write(state_.text().text_range(range.begin, range.end)))
     {
         return;
     }
@@ -383,7 +412,7 @@ void EditorController::cut_selection()
 
 void EditorController::paste_clipboard()
 {
-    const auto pasted = clipboard_.read();
+    const auto pasted = ports_.clipboard.read();
     if (!pasted)
     {
         return;
@@ -628,7 +657,7 @@ const core::VimState &EditorController::vim_state() const noexcept
 
 void EditorController::accept(const RefreshAppearance &)
 {
-    state_ = state_.with_appearance(appearance_or_dark(appearance_));
+    state_ = state_.with_appearance(appearance_or_dark(ports_.appearance));
 }
 
 std::expected<std::string, FileFailure> EditorController::decoded(core::TextEncoding encoding,
@@ -643,7 +672,7 @@ std::expected<std::string, FileFailure> EditorController::decoded(core::TextEnco
     case core::TextEncoding::shift_jis:
         break;
     }
-    auto converted = code_pages_.to_utf8(bytes);
+    auto converted = ports_.code_pages.to_utf8(bytes);
     if (!converted)
     {
         return std::unexpected(file_failure_of(converted.error()));
@@ -663,7 +692,7 @@ std::expected<std::string, FileFailure> EditorController::encoded(core::TextEnco
     case core::TextEncoding::shift_jis:
         break;
     }
-    auto converted = code_pages_.from_utf8(utf8);
+    auto converted = ports_.code_pages.from_utf8(utf8);
     if (!converted)
     {
         return std::unexpected(file_failure_of(converted.error()));
@@ -676,7 +705,7 @@ void EditorController::accept(const OpenDocument &intent)
     // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     // 上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは大きいファイルを先に抱える。
-    const auto bytes = files_.read(intent.path, maximum_file_bytes);
+    const auto bytes = ports_.files.read(intent.path, maximum_file_bytes);
     if (!bytes)
     {
         fail(bytes.error());
@@ -713,7 +742,7 @@ void EditorController::accept(const SaveDocument &intent)
         return;
     }
     // 書けなかったときは本文も文書も変えない。元のファイルも adapters が守る（決定 6）。
-    const auto written = files_.write(intent.path, bytes.value());
+    const auto written = ports_.files.write(intent.path, bytes.value());
     if (!written)
     {
         fail(written.error());
@@ -830,18 +859,21 @@ EditorFrame EditorController::frame() const
     const auto caret = state_.text().position_of(state_.selection().caret);
     const auto &document = state_.document();
     const auto save_state = save_state_of(document, state_.history().position());
+    const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
     return EditorFrame{visible_lines(),
                        CaretView{caret, caret_shape_for(state_.mode(), state_.vim().mode)},
                        state_.scroll().first_visible,
                        state_.text().line_count(),
-                       state_.appearance(),
-                       core::palette_for(state_.appearance()),
+                       theme.appearance,
+                       theme.ui,
                        state_.mode(),
                        state_.vim().mode,
                        core::mode_label(state_.mode(), state_.vim().mode),
                        composed(),
                        DocumentView{core::tab_title_for(document.path, save_state), document.path,
                                     document.encoding, save_state, state_.last_failure()},
-                       core::status_items_for(caret, document.encoding, state_.line_ending())};
+                       core::status_items_for(caret, document.encoding, state_.line_ending()),
+                       state_.settings(),
+                       state_.settings_failure()};
 }
 } // namespace nenenib::application

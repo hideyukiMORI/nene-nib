@@ -43,6 +43,7 @@ class Direct2DRenderer final
     [[nodiscard]] core::Column column_at(std::string_view text, const core::BodyLayout &body,
                                          std::int32_t x);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
+    [[nodiscard]] std::expected<void, RenderFailure> set_font(const core::EditorSettings &settings);
     // 最後に描いたキャレットの物理画素。窓が IME の候補窓をその直下に置く（ADR 0014 の決定 6）。
     // 変換中は変換中のキャレット（GCS_CURSORPOS の位置）になる。
     [[nodiscard]] RECT caret_rectangle() const noexcept;
@@ -61,6 +62,8 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> bind_composition(HWND window);
     [[nodiscard]] std::expected<void, RenderFailure> create_context();
     [[nodiscard]] std::expected<void, RenderFailure> create_text_formats();
+    [[nodiscard]] std::expected<void, RenderFailure>
+    create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
     [[nodiscard]] const wchar_t *family(const wchar_t *preferred, const wchar_t *fallback) const;
     [[nodiscard]] HRESULT make_format(const wchar_t *face, float size_dips,
@@ -136,5 +139,8 @@ class Direct2DRenderer final
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;
     std::uint32_t dpi_ = 96;
+    // DirectWrite 資源の無効化キー。設定の所有者は EditorState（ADR 0020）。
+    core::FontSize formatted_size_ = core::default_font_size();
+    core::DisplayText formatted_family_ = core::default_editor_settings().font_family;
 };
 } // namespace nenenib::ui::win32
