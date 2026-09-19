@@ -37,6 +37,8 @@
 | 外観ポート | OS の外観を読む唯一の窓口。実装は adapters/win32（レジストリの `AppsUseLightTheme`） | `AppearancePort` / `Win32AppearanceAdapter` |
 | 本文設定 | pt の文字サイズ・検証済みフォント名・任意の組み込みテーマ。テーマ無しは OS 追従 | `EditorSettings`（core）、所有者は `EditorState`（ADR 0020） |
 | フォントサイズ | 有限の 8〜40 pt。既定 13.5 pt。DIP と既定比率は名前付き純関数で導く | `FontSize`（core） |
+| Ex入力 | 本文・undo・レジスタと独立した1行256 bytesまでのUTF-8入力。Tab補完の元prefixと位置も持つ | `CommandLine`（core）、所有者は `EditorState`（ADR 0022） |
+| Ex評価 | 設定用コマンドを検証し、任意の保存候補と結果表示、または閉じた失敗を返す純関数 | `evaluate_ex` / `ExResult` / `ExFailure`（core） |
 | 設定ポート | 設定の読込・保存と型付き失敗。保存形式と競合保護は adapter、bytes の置換は FilePort | `SettingsPort` / `Win32SettingsAdapter`（ADR 0020） |
 | エディタの依存 | controller へ注入する外観・clipboard・file・code page・設定ポートの名前付き参照 | `EditorPorts`（application / 合成は app、ADR 0020） |
 | エディタ状態 | 表示文字列と外観の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |

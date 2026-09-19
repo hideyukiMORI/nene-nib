@@ -39,8 +39,9 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 
 # Phase 3 の縦切り（Issue #3 / ADR 0007）。5 層に正典の経路を 1 本ずつ置く。
 nenenib_target(nenenib_core core STATIC
-    src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/Composition.cpp
-    src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/FontSize.cpp
+    src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/CommandLayout.cpp
+    src/core/CommandLine.cpp src/core/Composition.cpp
+    src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FilePath.cpp src/core/ModeLabel.cpp src/core/Palette.cpp
     src/core/ScrollBounds.cpp src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp

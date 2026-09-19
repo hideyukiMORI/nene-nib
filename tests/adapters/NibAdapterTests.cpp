@@ -216,13 +216,6 @@ void verify_timing_marks(Win32FileAdapter &files)
            "an adapter that was never bound writes nothing");
 }
 
-bool same_settings(const nenenib::core::EditorSettings &left,
-                   const nenenib::core::EditorSettings &right)
-{
-    return left.font_size.points() == right.font_size.points() &&
-           left.font_family.text() == right.font_family.text() && left.theme == right.theme;
-}
-
 void verify_settings_codec()
 {
     const auto defaults = default_editor_settings();
@@ -386,8 +379,16 @@ void verify_absolute_path()
 }
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    if (argc == 2 && std::string_view(argv[1]) == "--settings-codec")
+    {
+        verify_settings_codec();
+        verify_bad_settings_fields();
+        verify_bad_settings_values();
+        std::printf("Settings codec: %zu checks, %zu failures\n", check_count(), failure_count());
+        return failure_count() == 0 ? 0 : 1;
+    }
     reset_folder();
     Win32FileAdapter files;
     Win32CodePageAdapter code_pages;

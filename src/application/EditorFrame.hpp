@@ -2,6 +2,7 @@
 
 #include "Appearance.hpp"
 #include "CaretView.hpp"
+#include "CommandLine.hpp"
 #include "CompositionView.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
@@ -43,5 +44,7 @@ struct EditorFrame
     core::EditorSettings settings;
     // 起動時と設定変更時だけ告知する。本文の次のキーで繰り返し表示しない（ADR 0020）。
     std::optional<SettingsFailure> settings_failure;
+    std::optional<core::CommandLine> command_line;
+    std::optional<core::DisplayText> command_message;
 };
 } // namespace nenenib::application

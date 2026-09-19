@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "CommandLine.hpp"
 #include "Composition.hpp"
 #include "Document.hpp"
 #include "EditHistory.hpp"
@@ -40,6 +41,8 @@ class EditorState final
     [[nodiscard]] std::optional<FileFailure> last_failure() const noexcept;
     [[nodiscard]] const core::EditorSettings &settings() const noexcept;
     [[nodiscard]] std::optional<SettingsFailure> settings_failure() const noexcept;
+    [[nodiscard]] const std::optional<core::CommandLine> &command_line() const noexcept;
+    [[nodiscard]] const std::optional<core::DisplayText> &command_message() const noexcept;
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
@@ -55,6 +58,8 @@ class EditorState final
     [[nodiscard]] EditorState with_failure(std::optional<FileFailure> failure) const;
     [[nodiscard]] EditorState with_settings(core::EditorSettings settings) const;
     [[nodiscard]] EditorState with_settings_failure(std::optional<SettingsFailure> failure) const;
+    [[nodiscard]] EditorState with_command_line(std::optional<core::CommandLine> command) const;
+    [[nodiscard]] EditorState with_command_message(std::optional<core::DisplayText> message) const;
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
     [[nodiscard]] EditorState with_opened(core::TextBuffer text, core::LineEnding ending,
@@ -76,5 +81,7 @@ class EditorState final
     std::optional<FileFailure> last_failure_;
     core::EditorSettings settings_;
     std::optional<SettingsFailure> settings_failure_;
+    std::optional<core::CommandLine> command_line_;
+    std::optional<core::DisplayText> command_message_;
 };
 } // namespace nenenib::application

@@ -43,6 +43,7 @@ enum class VimAction : std::uint8_t
     // どうするか」を分ける。`o` は NORMAL では何もしない（行を開くのはこの縦切りに無い）。
     visual,
     visual_line,
-    swap_visual_ends
+    swap_visual_ends,
+    open_command_line
 };
 } // namespace nenenib::core

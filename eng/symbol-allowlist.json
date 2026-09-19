@@ -1,5 +1,5 @@
 {
-  "comment": "ARC-003 / ARC-007 / CPP-013: 中核（core / application）の静的ライブラリが、自身と宣言済みの依存モジュールで解決した後に、未定義のまま外へ要求してよいシンボル。正規表現で完全一致。ここに無い外部シンボルは依存の追加であり、ADR と 3 点セットが要る。modules.* は Phase 0 の L3-stl-baseline-undefined（14 個）と L3-stl-baseline-sanitizer-undefined から導いた。__std_fs_（filesystem）・locale・__std_system_error_ は意図的に入れていない（中核からのファイル・ロケールは ARC-003 で落とす）。 __std_find_trivial_* 等は MSVC STL の <algorithm> / string_view の検索の純関数（Issue #7 で実測。時刻・OS・スレッドに触れない）。",
+  "comment": "ARC-003 / ARC-007 / CPP-013: 中核（core / application）の静的ライブラリが、自身と宣言済みの依存モジュールで解決した後に、未定義のまま外へ要求してよいシンボル。正規表現で完全一致。ここに無い外部シンボルは依存の追加であり、ADR と 3 点セットが要る。modules.* は Phase 0 の L3-stl-baseline-undefined（14 個）と L3-stl-baseline-sanitizer-undefined から導いた。__std_fs_（filesystem）・locale・__std_system_error_ は意図的に入れていない（中核からのファイル・ロケールは ARC-003 で落とす）。 __std_find_trivial_* 等は MSVC STL の <algorithm> / string_view の検索の純関数（Issue #7 で実測。時刻・OS・スレッドに触れない）。 Issue #64 / ADR 0022: core の from_chars の不変な十進べき表、string_view::rfind と min(initializer_list) の純粋な範囲走査を完全一致で許可する。locale / allocation / threading は追加しない。",
   "modules": {
     "core": [
       "memcpy",
@@ -39,7 +39,10 @@
       "__std_find_trivial_.*",
       "__std_find_first_of_trivial_.*",
       "__std_mismatch_.*",
-      "__std_count_trivial_.*"
+      "__std_count_trivial_.*",
+      "\\?_Large_power_data@std@@3QBIB",
+      "__std_find_end_1",
+      "__std_min_8u"
     ],
     "application": [
       "memcpy",

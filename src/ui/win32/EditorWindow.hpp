@@ -73,7 +73,9 @@ class EditorWindow final
     void change_dpi(WPARAM word, LPARAM data);
     void send(const application::EditorIntent &intent);
     void type_character(WPARAM word);
+    void type_text(std::string utf8);
     void press_key(WPARAM word);
+    void press_command_key(WPARAM word);
     void press_plain_key(WPARAM word);
     void press_vim_key(WPARAM word);
     void press_control_key(WPARAM word);

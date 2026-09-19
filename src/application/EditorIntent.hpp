@@ -1,23 +1,28 @@
 #pragma once
 
 #include "AdjustFontSize.hpp"
+#include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "ClipboardAction.hpp"
+#include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "DeleteText.hpp"
+#include "EditCommand.hpp"
 #include "HistoryAction.hpp"
 #include "InsertText.hpp"
 #include "MoveCaret.hpp"
 #include "NewLine.hpp"
 #include "OpenDocument.hpp"
+#include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
 #include "RefreshAppearance.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollLines.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
+#include "SubmitCommand.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 
@@ -32,5 +37,6 @@ using EditorIntent =
     std::variant<InsertText, MoveCaret, PlaceCaret, DeleteText, NewLine, SelectAll, CancelSelection,
                  ClipboardAction, HistoryAction, ScrollLines, VisibleLines, SelectEditMode,
                  VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument, ComposeText,
-                 CommitText, CancelComposition, AdjustFontSize>;
+                 CommitText, CancelComposition, AdjustFontSize, CommandText, EditCommand,
+                 SubmitCommand, CancelCommand, PasteCommand>;
 } // namespace nenenib::application

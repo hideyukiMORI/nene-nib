@@ -19,6 +19,7 @@ struct EditorSettings
 };
 
 [[nodiscard]] EditorSettings default_editor_settings();
+[[nodiscard]] bool same_settings(const EditorSettings &left, const EditorSettings &right) noexcept;
 [[nodiscard]] const Theme &selected_theme(const EditorSettings &settings,
                                           Appearance system_appearance) noexcept;
 } // namespace nenenib::core

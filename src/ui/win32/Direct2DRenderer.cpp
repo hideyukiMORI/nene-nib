@@ -320,8 +320,8 @@ HRESULT Direct2DRenderer::make_format(const wchar_t *face, float size_dips,
 
 void Direct2DRenderer::align_text_formats()
 {
-    const std::array<TextFormat, 4> every{tab_format_, toggle_format_, status_format_,
-                                          mode_format_};
+    const std::array<TextFormat, 5> every{tab_format_, toggle_format_, status_format_, mode_format_,
+                                          command_format_};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -351,7 +351,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
         make_format(interface_face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, status_format_);
     const HRESULT mode =
         make_format(interface_face, ui_text_dips, DWRITE_FONT_WEIGHT_BOLD, mode_format_);
-    if (FAILED(tab) || FAILED(toggle) || FAILED(status) || FAILED(mode))
+    const HRESULT command = make_format(family(L"Cascadia Code", L"Consolas"), ui_text_dips,
+                                        DWRITE_FONT_WEIGHT_NORMAL, command_format_);
+    if (FAILED(tab) || FAILED(toggle) || FAILED(status) || FAILED(mode) || FAILED(command))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -493,13 +495,20 @@ void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
 Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
                                                          const core::BodyLayout &body)
 {
+    return text_layout(text, code_format_.Get(),
+                       core::LayoutRect{0, 0, core::width_of(body.content), body.line_height});
+}
+
+Direct2DRenderer::TextLayout Direct2DRenderer::text_layout(std::string_view text,
+                                                           IDWriteTextFormat *format,
+                                                           const core::LayoutRect &area)
+{
     const auto wide = widen(text);
     TextLayout made;
     // 折り返さず幅で切る（ADR 0009 の決定 6）。書式の側に NO_WRAP を立ててある。
-    if (FAILED(dwrite_->CreateTextLayout(wide.c_str(), static_cast<UINT32>(wide.size()),
-                                         code_format_.Get(),
-                                         static_cast<float>(core::width_of(body.content)),
-                                         static_cast<float>(body.line_height), &made)))
+    if (FAILED(dwrite_->CreateTextLayout(wide.c_str(), static_cast<UINT32>(wide.size()), format,
+                                         static_cast<float>(core::width_of(area)),
+                                         static_cast<float>(core::height_of(area)), &made)))
     {
         return nullptr;
     }
@@ -735,7 +744,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
     context_->DrawTextLayout(
         D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
         brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    if (line.number == frame.caret.position.line)
+    if (line.number == frame.caret.position.line && !frame.command_line.has_value())
     {
         draw_caret(frame, text.Get(), area, line.text);
     }
@@ -804,13 +813,117 @@ void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
                                        const core::StatusBarLayout &layout)
 {
     fill(layout.band, frame.palette.status);
-    draw_toggle(frame, layout);
-    write(frame.mode_label, mode_format_.Get(), layout.mode, frame.palette.text);
+    draw_status_left(frame, layout);
     for (std::size_t index = 0; index < core::status_item_count; ++index)
     {
         write(frame.status_items.at(index).text(), status_format_.Get(), layout.items.at(index),
               frame.palette.muted);
     }
+}
+
+void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
+                                        const core::StatusBarLayout &layout)
+{
+    const auto command = core::command_layout(layout, dpi_, 0);
+    if (frame.command_line.has_value())
+    {
+        draw_command(frame, command.input);
+        draw_completions(frame, layout);
+        return;
+    }
+    if (frame.command_message.has_value())
+    {
+        context_->PushAxisAlignedClip(to_rect(command.input), D2D1_ANTIALIAS_MODE_ALIASED);
+        write(frame.command_message.value().text(), command_format_.Get(), command.input,
+              frame.palette.text);
+        context_->PopAxisAlignedClip();
+        return;
+    }
+    draw_toggle(frame, layout);
+    write(frame.mode_label, mode_format_.Get(), layout.mode, frame.palette.text);
+}
+
+void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
+                                    const core::LayoutRect &area)
+{
+    if (core::width_of(area) <= 0)
+    {
+        return;
+    }
+    if (!frame.command_line.has_value())
+    {
+        return;
+    }
+    const auto &command = frame.command_line.value();
+    const auto shown = ":" + std::string(command.text());
+    const auto text = text_layout(shown, command_format_.Get(), area);
+    if (!text)
+    {
+        return;
+    }
+    float caret_x = 0.0F;
+    float caret_y = 0.0F;
+    DWRITE_HIT_TEST_METRICS metrics{};
+    if (FAILED(text->HitTestTextPosition(utf16_at(shown, command.caret().value + 1), FALSE,
+                                         &caret_x, &caret_y, &metrics)))
+    {
+        return;
+    }
+    const auto offset =
+        std::max(caret_x + scaled(3.0F) - static_cast<float>(core::width_of(area)), 0.0F);
+    const float origin = static_cast<float>(area.left) - offset;
+    context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
+    brush_->SetColor(to_color(frame.palette.text));
+    context_->DrawTextLayout(D2D1::Point2F(origin, static_cast<float>(area.top)), text.Get(),
+                             brush_.Get());
+    brush_->SetColor(to_color(frame.palette.accent));
+    context_->FillRectangle(D2D1::RectF(origin + caret_x, static_cast<float>(area.top) + caret_y,
+                                        origin + caret_x + scaled(2.0F),
+                                        static_cast<float>(area.top) + caret_y + metrics.height),
+                            brush_.Get());
+    context_->PopAxisAlignedClip();
+}
+
+void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,
+                                        const core::StatusBarLayout &status)
+{
+    if (!frame.command_line.has_value())
+    {
+        return;
+    }
+    const auto &command = frame.command_line.value();
+    auto candidates = command.completions();
+    if (frame.command_message.has_value())
+    {
+        candidates = {std::string(frame.command_message.value().text())};
+    }
+    const auto layout = core::command_layout(status, dpi_, candidates.size());
+    if (layout.visible_rows == 0 || core::width_of(layout.panel) <= 0)
+    {
+        return;
+    }
+    fill(layout.panel, frame.palette.panel);
+    const auto selected = frame.command_message.has_value() ? std::optional<std::size_t>{}
+                                                            : command.completion_index();
+    const auto start =
+        std::max(selected.value_or(0) + 1, layout.visible_rows) - layout.visible_rows;
+    context_->PushAxisAlignedClip(to_rect(layout.panel), D2D1_ANTIALIAS_MODE_ALIASED);
+    for (std::size_t index = 0; index < layout.visible_rows; ++index)
+    {
+        const auto top = layout.panel.top + static_cast<std::int32_t>(index) * layout.row_height;
+        const core::LayoutRect row{layout.panel.left, top, layout.panel.right,
+                                   top + layout.row_height};
+        const bool active = selected == start + index;
+        if (active)
+        {
+            fill(row, frame.palette.accent);
+        }
+        write(candidates.at(start + index), command_format_.Get(), row,
+              active ? frame.palette.on_accent : frame.palette.text);
+    }
+    context_->PopAxisAlignedClip();
+    brush_->SetColor(to_color(frame.palette.panel_border));
+    context_->DrawRectangle(to_rect(layout.panel), brush_.Get(), scaled(1.0F));
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::EditorFrame &frame,

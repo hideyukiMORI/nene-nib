@@ -2,6 +2,7 @@
 
 #include "BodyLayout.hpp"
 #include "ClauseEmphasis.hpp"
+#include "CommandLayout.hpp"
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
@@ -78,6 +79,8 @@ class Direct2DRenderer final
     void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
+    [[nodiscard]] TextLayout text_layout(std::string_view text, IDWriteTextFormat *format,
+                                         const core::LayoutRect &area);
     // 1 行の中の範囲の当たり矩形。折り返さないので数は少なく、上限を超えた分は描かない。
     [[nodiscard]] std::size_t runs_of(IDWriteTextLayout *text, const core::LayoutRect &area,
                                       DWRITE_TEXT_RANGE range,
@@ -116,6 +119,11 @@ class Direct2DRenderer final
     void draw_status_bar(const application::EditorFrame &frame,
                          const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
+    void draw_status_left(const application::EditorFrame &frame,
+                          const core::StatusBarLayout &layout);
+    void draw_command(const application::EditorFrame &frame, const core::LayoutRect &area);
+    void draw_completions(const application::EditorFrame &frame,
+                          const core::StatusBarLayout &status);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
 
@@ -133,6 +141,7 @@ class Direct2DRenderer final
     TextFormat toggle_format_;
     TextFormat status_format_;
     TextFormat mode_format_;
+    TextFormat command_format_;
     TextFormat gutter_format_;
     TextFormat code_format_;
     WaitableHandle latency_{nullptr, &::CloseHandle};
