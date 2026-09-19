@@ -43,7 +43,8 @@ Solarized 系・Monokai・Dracula・One Dark・Night Owl などの有名なカ�
 | C2 | 設定の保存形式（版付き）とテーマ・本文フォントの永続化 | `settings.v1` にテーマ名・フォント名・pt。起動時に読む。読めない版は型のある失敗（ARC-009）。直接のサイズ操作も接続（Issue #60・ADR 0020） | C1 |
 | C3a | Ex入力とテーマ/フォント設定（Issue #64・ADR 0022） | NORMALの `:` で切替・表示・Tab補完。本文とは独立。C2と同じ保存へ接続 | C2・Vim NORMAL |
 | C3b | Ctrl+Pの共通一覧と `:` 接頭辞（Issue #66・ADR 0023） | 通常/Vim全モードから同じ候補・入力編集・テーマ/設定評価を利用。ファイル等の統合は別Issue | C3a・共通一覧 |
-| C4 | 利用者のテーマファイル | `themes/<name>.v1.*` を adapters が読んで `Theme` に変換。壊れたファイルは名前を挙げて断る | C2 |
+| C4a | 利用者テーマの形式・所有・読込（Issue #68・ADR 0024） | `themes/<name>.v1.theme` を既存FilePortから読み、所有するThemeDocumentへ厳密に検証して既存Themeへ写す | C2 |
+| C4b | 利用者テーマの一覧・選択接続 | 起動時カタログ、設定保存/復元、Ex/Ctrl+P、名前付きの失敗表示へC4aを接続 | C3b・C4a |
 
 ハイライト（`SyntaxPalette` を実際に本文へ塗る）はハイライトの縦切りで、C1 の型をそのまま使う。
 

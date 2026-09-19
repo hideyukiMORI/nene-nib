@@ -82,6 +82,7 @@
 #include "TextPosition.hpp"
 #include "Theme.hpp"
 #include "ThemeDerivation.hpp"
+#include "ThemeDocument.hpp"
 #include "ThemeSource.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
@@ -3717,6 +3718,39 @@ std::vector<core::CommandChoice> choices_for(std::string_view query)
     return core::palette_choices(core::CommandLine::empty().inserted(query).value());
 }
 
+void verify_user_theme_values()
+{
+    for (const auto text : {"a", "my-theme", "my_theme", "theme-2026"})
+    {
+        expect(core::ThemeName::parse(text).has_value(), "valid user theme identifier");
+    }
+    expect(core::ThemeName::parse("my_theme").value() == core::ThemeName::parse("my-theme").value(),
+           "theme name has one canonical spelling");
+    for (const auto text :
+         {"", "1theme", "Theme", "-theme", "a/b", "a\\b", "a..b", "a:b", "a b", "界", "a\n"})
+    {
+        expect(!core::ThemeName::parse(text), "invalid or path-like theme names rejected");
+    }
+    expect(core::ThemeName::parse(std::string(64, 'a')).has_value(), "maximum theme name accepted");
+    expect(!core::ThemeName::parse(std::string(65, 'a')), "oversized theme name rejected");
+    const auto &theme = core::theme_of(core::BuiltinTheme::dracula);
+    core::ThemeDocument document{core::ThemeName::parse("my-theme").value(), theme.appearance,
+                                 theme.ui, theme.body,
+                                 core::OwnedThemeSource{core::DisplayText::parse("作者").value(),
+                                                        core::DisplayText::parse("MIT").value(),
+                                                        core::DisplayText::parse("local").value()}};
+    const auto copy = document;
+    document.name = core::ThemeName::parse("changed").value();
+    document.source.author = core::DisplayText::parse("changed").value();
+    const auto view = core::theme_view(copy);
+    expect(view.name == "my-theme" && view.source.author == "作者",
+           "copied ThemeDocument owns strings independently");
+    expect(view.source.license == "MIT" && view.source.url == "local",
+           "Theme view borrows all attribution fields");
+    expect(view.ui.background == theme.ui.background && view.body.keyword == theme.body.keyword,
+           "Theme view preserves color values");
+}
+
 void verify_palette_choices()
 {
     const auto all = choices_for(":");
@@ -4047,6 +4081,11 @@ int report()
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && std::string_view(argv[1]) == "--user-theme-values")
+    {
+        verify_user_theme_values();
+        return report();
+    }
     if (argc == 2 && std::string_view(argv[1]) == "--command-palette")
     {
         verify_command_palette();
@@ -4068,6 +4107,7 @@ int main(int argc, char **argv)
     verify_controller_intents();
     verify_ex_settings();
     verify_command_palette();
+    verify_user_theme_values();
     verify_look();
     return report();
 }

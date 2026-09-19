@@ -28,6 +28,8 @@ The format and failure behavior are specified in
 [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in
 [ADR 0022](docs/adr/0022-ex-command-line-and-settings-evaluation.md) and
 [ADR 0023](docs/adr/0023-command-palette-and-shared-input-session.md).
+The [user-theme file format](docs/design/user-theme-format.md) and validated reader are defined;
+selecting user themes from the app is the next slice.
 
 ## What it will be
 
