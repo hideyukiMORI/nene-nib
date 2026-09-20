@@ -89,7 +89,8 @@ class EditorController final
     void perform(const core::VimRemoveLines &effect);
     void perform(const core::VimInsertString &effect);
     void perform(const core::VimNewLine &);
-    void perform(const core::VimPutString &effect);
+    void perform(const core::VimInsertAt &effect);
+    void interrupt_vim_insert();
     void perform(const core::VimUndo &);
     void perform(const core::VimRedo &);
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。

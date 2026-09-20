@@ -11,9 +11,8 @@
 
 namespace nenenib::core
 {
-// 直前の Edit に edit を畳んだ結果（ADR 0015 の決定 5）。隣り合っていなければ空を返す。
-// 畳めるのは 3 つの形だけ: inserted の直後の挿入・inserted の末尾を消す削除・
-// 挿入を始めた位置より前を消す削除。Vim の INSERT 1 回が undo 1 単位になるのはこの関数である。
+// 直前のEditにeditを畳んだ結果（ADR 0015 / 0028）。inserted範囲内の編集と、その直前の
+// 削除を合成する。範囲から離れていれば空を返す。INSERTのundo単位を作る唯一の経路。
 [[nodiscard]] std::optional<Edit> absorbed(const Edit &previous, const Edit &edit);
 
 // undo / redo の履歴（ADR 0009 の決定 3）。所有者は application の EditorState（ARC-004）。

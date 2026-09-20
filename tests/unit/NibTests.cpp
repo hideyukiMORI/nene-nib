@@ -1011,7 +1011,7 @@ void verify_history_coalescing()
     return folded.value_or(edit);
 }
 
-// INSERT の 1 単位（ADR 0015 の決定 5）。畳めるのは 3 つの形だけで、離れていれば新しい単位。
+// INSERT の1単位。範囲内編集と直前の削除を畳み、離れていれば新しい単位（ADR 0028）。
 void verify_history_absorbing()
 {
     const Edit typed{Offset{5}, "", "ab"};
@@ -3980,8 +3980,240 @@ void verify_composition()
     verify_composition_vim_insert();
 }
 
+// 開行と反復は既存のINSERT・保存・undoの一単位（ADR 0028）。
+void verify_open_line_round_trip(std::string_view initial, std::string_view keys,
+                                 std::string_view expected)
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string(initial)});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, keys);
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == expected, "open-line saves the expected original bytes");
+    expect(controller.vim_state().mode == VimMode::normal &&
+               !controller.vim_state().insert_repeat.has_value(),
+           "Esc clears the repeat session");
+    vim_replay(controller, "u");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == initial, "one undo restores the document before opening");
+    vim_replay(controller, "<C-r>");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == expected, "one redo restores opening and all insertions");
+}
+
+void verify_vim_open_line_undo()
+{
+    verify_open_line_round_trip("aa\r\nbb", "3oあ<CR>😀<Esc>",
+                                "aa\r\nあ\r\n😀\r\nあ\r\n😀\r\nあ\r\n😀\r\nbb");
+    verify_open_line_round_trip("aa\r\nbb", "3Oa<BS>日<Esc>", "日\r\n日\r\n日\r\naa\r\nbb");
+    verify_open_line_round_trip("aa\nbb", "j3O<BS><BS>X<Esc>", "aX\nbb");
+    verify_open_line_round_trip("aa\nbb", "3o<BS>X<Esc>", "aaXXX\nbb");
+    verify_open_line_round_trip("aa\n", "GoX<Esc>", "aa\n\nX");
+    verify_open_line_round_trip("", "3O<Esc>", "\r\n\r\n\r\n");
+}
+
+void verify_vim_open_line_intermediate()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("aa\nbb")});
+    applied(controller, VisibleLines{2});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "G3o");
+    const auto frame = controller.frame();
+    expect(frame.total_lines == 3 && frame.vim_mode == VimMode::insert,
+           "a counted open starts one empty line and enters INSERT immediately");
+    expect(frame.caret.position == TextPosition{LineNumber{3}, Column{1}} &&
+               frame.first_visible == LineNumber{2},
+           "opening below EOF follows the caret");
+    applied(controller, ComposeText{composed_of("に", {}, 3)});
+    expect(controller.frame().composition.has_value(), "opened INSERT accepts composition");
+    applied(controller, CommitText{"日本😀"});
+    expect(controller.frame().total_lines == 3, "typing does not expand the count yet");
+    vim_replay(controller, "<Esc>");
+    expect(controller.frame().caret.position == TextPosition{LineNumber{5}, Column{3}},
+           "Esc expands the committed UTF-8 input and rests on the last character");
+    expect(whole_vim_body(controller) == "aa\nbb\n日本😀\n日本😀\n日本😀",
+           "IME commit and direct characters share the insertion record");
+    vim_replay(controller, "u");
+    expect(whole_vim_body(controller) == "aa\nbb", "IME and opening form one undo unit");
+}
+
+void verify_vim_open_line_movement()
+{
+    constexpr std::array<VimSpecialKey, 8> keys{
+        VimSpecialKey::arrow_left, VimSpecialKey::arrow_right, VimSpecialKey::arrow_up,
+        VimSpecialKey::arrow_down, VimSpecialKey::home,        VimSpecialKey::end,
+        VimSpecialKey::page_up,    VimSpecialKey::page_down};
+    for (const VimSpecialKey key : keys)
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        applied(controller, SelectEditMode{EditMode::vim});
+        vim_replay(controller, "3Oabc");
+        applied(controller, VimKeyPress{VimKey{key}});
+        expect(!controller.vim_state().insert_repeat.has_value(),
+               "every INSERT movement cancels open-line repetition, including no-op moves");
+        vim_replay(controller, "Z<Esc>u");
+        expect(whole_vim_body(controller) == "abc\n", "movement seals the earlier insertion");
+        vim_replay(controller, "u");
+        expect(whole_vim_body(controller).empty(), "the earlier undo also removes the open line");
+    }
+}
+
+void verify_vim_open_line_switch()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "3oX");
+    applied(controller, SelectEditMode{EditMode::ordinary});
+    expect(!controller.vim_state().insert_repeat.has_value(), "ordinary mode cancels repetition");
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "iY<Esc>");
+    expect(whole_vim_body(controller) == "\nYX", "a later INSERT cannot replay the old count");
+}
+
+void verify_history_inner_absorbing()
+{
+    const Edit typed{Offset{5}, "old", "ab\n"};
+    expect(absorbed_edit(typed, Edit{Offset{5}, "", "X"}) == Edit{Offset{5}, "old", "Xab\n"},
+           "inserting at the start preserves the old removal");
+    expect(absorbed_edit(typed, Edit{Offset{6}, "b", "YZ"}) == Edit{Offset{5}, "old", "aYZ\n"},
+           "a replacement inside the inserted span is composed into that edit");
+    expect(absorbed_edit(typed, Edit{Offset{5}, "a", ""}) == Edit{Offset{5}, "old", "b\n"},
+           "deleting before the trailing open-line newline stays in the same unit");
+    expect(!absorbed(typed, Edit{Offset{7}, "\nx", ""}).has_value(),
+           "a removal across the end cannot be absorbed as an inner edit");
+}
+
+void verify_vim_open_line_fixtures()
+{
+    std::size_t opened = 0;
+    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    {
+        if (fixture.name.starts_with("open-line-"))
+        {
+            verify_vim_fixture(fixture);
+            ++opened;
+        }
+        if (fixture.name.find("puts") != std::string_view::npos ||
+            fixture.name == "i-inserts-before-the-caret" ||
+            fixture.name == "a-inserts-after-the-caret")
+        {
+            verify_vim_fixture(fixture);
+        }
+    }
+    expect(opened == 40, "all 40 measured open-line fixtures were replayed");
+}
+
+void verify_vim_open_line_capacity()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("aa\nbb")});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    const std::string count = std::to_string(std::numeric_limits<std::size_t>::max());
+    vim_replay(controller, count + "oX<Esc>");
+    expect(whole_vim_body(controller) == "aa\nX\nbb",
+           "overflowing repetition preserves the initial insertion without expansion");
+    expect(controller.vim_state().mode == VimMode::normal &&
+               !controller.vim_state().insert_repeat.has_value(),
+           "a refused repetition still exits INSERT and clears its count");
+    vim_replay(controller, "uyy" + count + "p");
+    expect(whole_vim_body(controller) == "aa\nbb", "put shares the checked repetition size");
+    vim_replay(controller, "3o<BS><Esc>");
+    expect(whole_vim_body(controller) == "aa\nbb", "empty repetition does not allocate or loop");
+}
+
+void verify_vim_open_line_recovery()
+{
+    verify_open_line_round_trip("", "3O<Esc>", "\r\n\r\n\r\n");
+    verify_vim_open_line_capacity();
+    verify_vim_open_line_fixtures();
+}
+
+void verify_vim_open_line_external_input()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("aa\nbb")});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "3OX");
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{1}, Column{2}}, SelectionAnchoring::collapse});
+    expect(!controller.vim_state().insert_repeat.has_value(),
+           "even a same-position click cancels repeat");
+    vim_replay(controller, "Y<Esc>u");
+    expect(whole_vim_body(controller) == "X\naa\nbb", "a click seals the prior opening");
+    vim_replay(controller, "u3oX");
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    expect(!controller.vim_state().insert_repeat.has_value(), "Ctrl+Z cancels the undone session");
+    vim_replay(controller, "<Esc>");
+    expect(whole_vim_body(controller) == "aa\nbb", "Esc cannot replay input removed by Ctrl+Z");
+    vim_replay(controller, "3oX");
+    applied(controller, SelectAll{});
+    expect(!controller.vim_state().insert_repeat.has_value(),
+           "external selection cancels repetition");
+}
+
+void verify_vim_open_line_external_edit()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "3Oab");
+    applied(controller, InsertText{"PASTE"});
+    expect(!controller.vim_state().insert_repeat.has_value(),
+           "unrecorded edit cannot leave stale replay text");
+    vim_replay(controller, "<Esc>");
+    expect(whole_vim_body(controller) == "abPASTE\n", "Esc preserves unrecorded input once");
+    vim_replay(controller, "u");
+    expect(whole_vim_body(controller) == "ab\n", "external edit has its own undo unit");
+}
+
+void verify_vim_open_line_external_scope()
+{
+    verify_vim_open_line_external_input();
+    verify_vim_open_line_external_edit();
+    verify_vim_open_line_movement();
+    verify_vim_insert_motion_breaks_the_unit();
+    verify_vim_put_line_endings();
+}
+
+void verify_vim_open_line_contracts()
+{
+    verify_vim_open_line_undo();
+    verify_vim_open_line_intermediate();
+    verify_vim_open_line_movement();
+    verify_vim_open_line_switch();
+    verify_vim_open_line_external_input();
+    verify_vim_open_line_external_edit();
+    verify_vim_open_line_capacity();
+    verify_history_inner_absorbing();
+}
+
+void verify_vim_open_line_scope()
+{
+    verify_vim_open_line_contracts();
+    verify_vim_open_line_fixtures();
+    verify_history_absorbing();
+    verify_history_coalescing();
+    verify_vim_insert_undo_unit();
+    verify_vim_change_undo_unit();
+    verify_vim_insert_motion_breaks_the_unit();
+    verify_vim_insert_page_move_breaks_undo();
+    verify_vim_put_line_endings();
+}
+
 void verify_vim_engine()
 {
+    verify_vim_open_line_contracts();
     verify_vim_character_search_contracts();
     verify_vim_line_jump_contracts();
     verify_vim_word_motions();
@@ -4838,6 +5070,37 @@ void verify_look()
     verify_status_bar_hits();
 }
 
+void verify_vim_line_jump_recovery()
+{
+    verify_vim_line_jump_continuations();
+    verify_vim_line_jump_operator_undo();
+}
+
+[[nodiscard]] bool verify_selected_scope(std::string_view command)
+{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 10> scopes{{
+        {"--vim-open-lines", verify_vim_open_line_scope},
+        {"--vim-open-line-external", verify_vim_open_line_external_scope},
+        {"--vim-open-line-recovery", verify_vim_open_line_recovery},
+        {"--vim-character-search", verify_vim_character_search_scope},
+        {"--vim-line-jumps", verify_vim_line_jump_scope},
+        {"--vim-line-jump-recovery", verify_vim_line_jump_recovery},
+        {"--user-theme-selection", verify_user_theme_selection},
+        {"--user-theme-values", verify_user_theme_values},
+        {"--command-palette", verify_command_palette},
+        {"--ex-settings", verify_ex_settings},
+    }};
+    for (const auto &[name, verify] : scopes)
+    {
+        if (command == name)
+        {
+            verify();
+            return true;
+        }
+    }
+    return false;
+}
+
 int report()
 {
     if (failure_count() != 0)
@@ -4856,40 +5119,8 @@ int report()
 int main(int argc, char **argv)
 {
     const std::string_view command = argc == 2 ? std::string_view{argv[1]} : std::string_view{};
-    if (command == "--vim-character-search")
+    if (verify_selected_scope(command))
     {
-        verify_vim_character_search_scope();
-        return report();
-    }
-    if (command == "--vim-line-jumps")
-    {
-        verify_vim_line_jump_scope();
-        return report();
-    }
-    if (command == "--vim-line-jump-recovery")
-    {
-        verify_vim_line_jump_continuations();
-        verify_vim_line_jump_operator_undo();
-        return report();
-    }
-    if (command == "--user-theme-selection")
-    {
-        verify_user_theme_selection();
-        return report();
-    }
-    if (command == "--user-theme-values")
-    {
-        verify_user_theme_values();
-        return report();
-    }
-    if (command == "--command-palette")
-    {
-        verify_command_palette();
-        return report();
-    }
-    if (command == "--ex-settings")
-    {
-        verify_ex_settings();
         return report();
     }
     verify_display_text_accepts_ascii();

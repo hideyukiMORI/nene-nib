@@ -35,6 +35,12 @@ with `d` / `c` / `y`, they operate on whole lines including both ends.
 An explicit `1G` means line 1, so `dG` and `d1G` can select different ranges.
 Esc cancels a pending `g` while keeping VISUAL active. Other `g` commands are not yet supported.
 
+In Vim NORMAL, `o` / `O` opens a line below / above and enters INSERT. Counts such as `3o`
+open one line first and repeat the entered text when Esc is pressed. Opening and typing form
+one undo unit; moving the caret or saving creates an undo boundary. Arrow/Home/End/Page movement
+cancels the remaining repetition. In VISUAL, both `o` and `O` swap the selection ends.
+Autoindent and general `i` / `a` counts are not yet supported.
+
 Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first setting change.
 The format and failure behavior are specified in
 [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in

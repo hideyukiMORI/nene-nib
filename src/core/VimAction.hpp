@@ -41,11 +41,11 @@ enum class VimAction : std::uint8_t
     insert_at_line_end,
     undo,
     redo,
-    // VISUAL の 3 つ（ADR 0018 の決定 7）。表は NORMAL と同じ 1 つで、動作ごとに「VISUAL では
-    // どうするか」を分ける。`o` は NORMAL では何もしない（行を開くのはこの縦切りに無い）。
+    // 同じo/OをNORMALでは開行、VISUALでは端点交換へ写す（ADR 0028）。
     visual,
     visual_line,
-    swap_visual_ends,
+    open_line_below,
+    open_line_above,
     find_character_forward,
     find_character_backward,
     till_character_forward,
