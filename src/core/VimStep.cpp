@@ -1367,16 +1367,22 @@ character_search_position(const VimEditorView &view, const VimState &state,
 
 // v / V で VISUAL に入る。回数があると入った直後にその広さぶんを選ぶ（Vim の nv_visual は
 // count1 - 1 だけ v なら右へ・V なら下へ動かす。`3v` は 3 文字・`3V` は 3 行。Issue #53 で実測）。
-[[nodiscard]] Offset widened(const TextBuffer &text, Offset caret, std::size_t steps, VimMode mode)
+[[nodiscard]] Offset widened(const TextBuffer &text, Offset caret, const VimState &state,
+                             VimMode mode)
 {
+    const std::size_t steps = count_of(state.count) - single_step;
     switch (mode)
     {
     case VimMode::visual:
         return forward_characters(text, caret, steps);
     case VimMode::visual_line:
-        return caret_on_line(
-            text, VimWantedColumn{VimColumnWish::at_column, text.position_of(caret).column},
-            line_below(text, line_of(text, caret), steps), mode);
+    {
+        const LineNumber line = line_of(text, caret);
+        const LineNumber destination = line_below(text, line, steps);
+        return destination == line
+                   ? caret
+                   : caret_on_line(text, wanted_column_of(text, state, caret), destination, mode);
+    }
     case VimMode::normal:
     case VimMode::insert:
         return caret;
@@ -1389,7 +1395,13 @@ character_search_position(const VimEditorView &view, const VimState &state,
 {
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = mode;
-    const Offset moved = widened(text, caret, count_of(state.count) - single_step, mode);
+    const Offset moved = widened(text, caret, state, mode);
+    next.wanted_column = state.wanted_column;
+    if (mode == VimMode::visual && moved != caret)
+    {
+        next.wanted_column =
+            wanted_after(text, wanted_column_of(text, state, caret), moved, VimMotion::right);
+    }
     return VimStep{std::move(next), VimSelect{Selection{caret, moved}}};
 }
 
@@ -1793,11 +1805,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 [[nodiscard]] VimStep visual_switched(const VimState &state, const Selection &selection,
                                       VimMode mode)
 {
-    if (state.mode == mode)
-    {
-        return left_visual(state, selection);
-    }
-    return VimStep{visual_resting(state, mode), VimSelect{selection}};
+    VimStep step = state.mode == mode ? left_visual(state, selection)
+                                      : VimStep{visual_resting(state, mode), VimSelect{selection}};
+    step.next.wanted_column = state.wanted_column;
+    return step;
 }
 
 // VISUAL の移動。anchor はそのままで caret だけ動く（決定 3）。欲しい列は NORMAL と同じ。

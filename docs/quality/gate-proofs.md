@@ -610,3 +610,30 @@ captureではbelowEofのINSERT・行41列1のbar、Esc後のNORMAL・行46列1�
 設計と差分の独立レビューは読み取り専用。実装/調査/検証はroot単体で実施した。回数の積のoverflowは共通helperで型付きfailureにし、p/Pは拒否、o/Oは初回入力を保持してEsc完了とした。実メモリ予算は設けておらず、大きな有効サイズでのメモリ不足は残る制限。
 
 検証範囲の異なる3回のchecksを合算して全件成功とは主張しない。overflow前の成功のうち反復helper関連は430で更新し、controller中断の直接影響は46で更新した。他の成功は関連実装不変のため再利用する。push/review/merge・文書追記・SHAだけでは再実行しない。全oracle再測定、全件unit、設定/テーマ/性能の無関係な測定は未実行。autoindent、一般i/a回数、dot、矩形、既存Issue #77は範囲外。Waivers: none。
+
+
+### 5-s. VISUAL移行時の希望列（Issue #77・2026-09-20）
+
+NORMAL→v/V、v↔V、同じキーでの終了、回数付き選択を、既存VimState::wanted_columnで表す。変更したproductionはVimStep.cppのwidened / entered_visual / visual_switchedだけ。横に実際に広がった場合は既存wanted_afterで到達列へ更新し、縦は元の希望列を使う。空行/EOFで移動不能なら位置も希望列も保つ。Escの終了経路は不変。ADR 0018へ実測に基づく補足を入れ、型・所有・効果・UI・保存schemaは変えていない。
+
+固定Vimの新規fixture測定は19件＋空行2件（measureの通常/+Escで計42起動）。別の分割normal probeは開始/切替/終了12件、明示1と回数6件、空行2件、最終行2件を4起動で測定。合計46起動。Vimソースは読まず、#76のg取消に関する3ケースのprobeは結果を再利用した。証拠は `out/issue77-oracle/{fixture-results,empty-count,transitions,count-one,empty-transitions,last-line-transitions}.json`。
+
+最初のmeasure.pyは日本語/絵文字ケースの結果をcheckpoint保存した後、端末のcp932出力で例外になった。`python -X utf8 out/issue77-oracle/measure.py`で未測定の末尾2件だけ続行し、成功済み17件は再測定していない。空行の `$2vj<Esc>` は同じnormal内の後続キーが打ち切られるためfixtureへ採用せず、別normalへjを送るprobeの結果を手書きテストへ採用。空行2件はfixture数に含めない。
+
+`python -X utf8 out/git/assemble-visual-wanted-fixtures.py`でbase `69012f9eafa5d67dbd0bb7ba89829f7bab16649c` の471行の逐語一致と入力/測定ソース/固定Vim/metadataを照合し、一旦19件を追加した。そのうち `$2Vy` は修正前後で同じcolumn比較に失敗する既存の行単位VISUAL yank問題で、[Issue #81](https://github.com/hideyukiMORI/nene-nib/issues/81)へ分離した。yanked_caretはbaseから不変。実appの列番号をログには出しておらず、不一致以上の値は主張しない。
+
+`python -X utf8 out/git/exclude-visual-yank-fixture.py`はその1件だけを除き、他の全行が元のcanonical formatter出力と逐語一致することを検証した。最終採用18件、計489件、SHA-256 `7182d15458c4439674b35c5fc8b7c086ac4202d35878dd24654f13f64051fd2f`。記録は `assembly-result.json` / `exclusion-result.json`。回数付きVの到達列は分割probeとpure coreの選択位置テストで直接確認している。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=<repo>/build/issue77` | 実行中のhideの旧版を保持し、同じCMake target/compile flagsで出力先だけを分離。`out/issue77-configure.log` |
+| `cmake --build build --target nib_tests --parallel 4` → `build/issue77/nib_tests.exe --vim-visual-wanted`（production修正前） | 212 checks中37失敗。gなしの$vjj、開始/切替/希望列、count、選択の範囲ずれを再現。`out/issue77-build-before.log` / `out/issue77-before.log` |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4` → `build/issue77/nib_tests.exe --vim-visual-wanted`（修正後） | 空行/EOFの4確認を追加し216 checks中215成功。残る1失敗は修正前から同じcolumn比較に失敗している#81。対象の希望列・18fixture・待ち取消・範囲/CRLF/undo・既存VISUAL境界は成功。`out/issue77-build.log` / `out/issue77-unit.log` |
+| `cmake --build build --target nib_tests --parallel 4`（#81 fixture除外後） | 生成headerとselector件数だけを再コンパイル。成功したproduction/各テストは不変なので、実行を繰り返さず上記の成功を再利用。`out/issue77-build-fixture.log` |
+| `python -X utf8 out/issue77-native/verify.py` | 120 DPI、CRLF文書の$vjjでVISUALの行3列7・選択表示をcapture目視、dでabcTAIL、uで元bytesを復元。`out/issue77-native/result.json` / `visual-wanted.bmp` / `out/issue77-native-visible.log` |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` / `python -X utf8 eng/conformance.py --build-dir build` | 2libs/0 violations、conformance0。変更coreの外部参照と489件の生成整合。`out/issue77-symbols.log` / `out/issue77-conformance.log` |
+| `clang-format --dry-run --Werror src/core/VimStep.cpp tests/unit/NibTests.cpp` / `git diff --check` | 成功。DebugのbuildにはASan/UBSanとtidyを含む。`out/issue77-format.log` |
+
+native初回は窓を前面へ上げない手順でaccent検出0となり停止した（`out/issue77-native.log`）。既存window_driver.raise_windowを追加し、同じ表示/保存/undoの確認を実行して成功した。判定条件は緩めていない。実機exe SHA-256 `935b8362853cbd7889d86c6ea843375668b1c43f0ebbf9bc2858bedf3224ef93`、出力は `build/issue77/NeNeNib.exe`。起動中の旧版PID41000には入力も終了も送っていない。確認後はCMakeの出力先設定だけを既定へ戻し、旧版への再リンクは行わない。
+
+変更は3つの局所関数なのでrootの自己レビューで網羅性・optional・状態所有・回数境界を確認し、追加の独立レビューは使わなかった。一般のvisual_restingを変えず、未対応キーやo/Oなど別の寿命へ変更を広げていない。#81を直して全件を再実行することはせず、成功した関連範囲をpush/review/mergeでも再利用する。保存形式/依存/waiver変更なし、Waivers: none。
