@@ -9,6 +9,8 @@
 
 **直近の実装・限定検証完了は [Issue #79](https://github.com/hideyukiMORI/nene-nib/issues/79)（Vimのo/O）**。hideの#76実機確認と続行指示により、main `8f48f49`から `feat/79-vim-open-lines` で実装した。ADR 0028、追加oracle40件・計471件、初回unit551中549成功と修正/追加対象430・46成功、native3件、build/tidy/symbols/conformance成功。統合状態はGitHubを正とする。
 
+成果の統合単位は [PR #80](https://github.com/hideyukiMORI/nene-nib/pull/80)。独立レビューは未解決指摘なし。関連実装が不変のため、push/review/mergeではgate-proofs 5-rの成功結果を再利用する。
+
 直前の完了はIssue #76 / PR #78（gg/Gと指定行移動）。main `8f48f49`へ統合し、hideが実機確認済み。既存VISUAL移行時の希望列解除はIssue #77へ分離している。
 
 直前の完了はIssue #72（Vimの行内文字検索と反復）。2026-09-20夜のhideの続行指示で再開し、`feat/72-vim-character-search`で既存移動・範囲へ接続した。[ADR 0026](../adr/0026-vim-character-search-and-scoped-oracle.md)、追加oracle60件（旧329件は維持）、単体621 checks、native7シナリオ、build/tidy/symbols/conformanceが成功。PR #75でmainへ統合済み。
