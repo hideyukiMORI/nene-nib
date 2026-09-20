@@ -21,6 +21,8 @@
 | 編集履歴 | undo / redo の列。連続した文字入力は 1 単位 | `EditHistory`（core） |
 | 編集モード | 通常 / Vim の 2 つ。トグルで入れ替わるのはキー割り当てとマウス規則だけ | `EditMode`（core・閉じた集合） |
 | Vim エンジン | Vim の振る舞い（モード・カーソル・レジスタ・オペレータ・テキストオブジェクト・`.`・マクロ）を純関数で持つ自前実装 | `Vim*`（core） |
+| 行内文字検索 | `f/F/t/T`の次の対象文字を待ち、`;`/`,`で対象と種別を再利用する移動。待ちと記憶の寿命は別 | `VimCharacterSearchKind` / `VimCharacterSearch`、所有は `VimState`（core・ADR 0026） |
+| Vimレジスタの種別 | 未設定・文字単位・行単位の区別。未設定と、成功した空範囲yankの文字単位は別の状態 | `VimRegisterKind` / `VimRegister`（core・ADR 0026）、所有は `EditorState` |
 | Vim の編集対象の view | 本文・選択の借用と表示領域の値を 1 回の鍵処理へ渡す入力。状態の所有者ではない | `VimEditorView` / `VimViewport`（core・ADR 0019） |
 | 画面の境界と追従 | 本文末尾を画面内に埋めるか最終行まで先頭にできるか、カーソルを最小限で追うか Vim の規則で追うかを、それぞれ明示する方針 | `ScrollExtent` / `ScrollFollow`（core・ADR 0019） |
 | 画面移動 | 選択と表示先頭行を一緒に更新する Vim の効果。本文を編集しない | `VimNavigate`（core・ADR 0019） |

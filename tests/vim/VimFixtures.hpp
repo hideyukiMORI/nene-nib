@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 5b39fb1da0521b537a2fa6780283e852ee70f54518c0f3793fd1d69e3de8d416 / 329 fixtures
+// fixtures.json: sha256 712238a0ccaf290d2dd769748e1625d57220143e2b95e419b9b8ca09b6581a3b / 389 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 329> vim_fixtures{{
+constexpr std::array<VimFixture, 389> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -341,6 +341,66 @@ constexpr std::array<VimFixture, 329> vim_fixtures{{
     {"viewport-follow-down-h11-center", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80", "7j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80", 27, 1, "", "", VimViewportFixture{11, 10, 20, 1, 22, 5}},
     {"viewport-follow-down-clamps-at-eof", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "99j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 30, 1, "", "", VimViewportFixture{10, 6, 15, 1, 21, 5}},
     {"viewport-page-follow-up-from-eof", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "<C-f>k", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 29, 1, "", "", VimViewportFixture{10, 21, 30, 1, 29, 5}},
+    {"char-search-f-first", "axbxcxd", "fx", "axbxcxd", 1, 2, "", "", std::nullopt},
+    {"char-search-f-count", "axbxcxd", "2fx", "axbxcxd", 1, 4, "", "", std::nullopt},
+    {"char-search-F-first", "axbxcxd", "$Fx", "axbxcxd", 1, 6, "", "", std::nullopt},
+    {"char-search-F-count", "axbxcxd", "$2Fx", "axbxcxd", 1, 4, "", "", std::nullopt},
+    {"char-search-t-first", "abxcxd", "tx", "abxcxd", 1, 2, "", "", std::nullopt},
+    {"char-search-t-count", "abxcxd", "2tx", "abxcxd", 1, 4, "", "", std::nullopt},
+    {"char-search-T-first", "axbcxd", "$Tx", "axbcxd", 1, 6, "", "", std::nullopt},
+    {"char-search-T-count", "axbcxd", "$2Tx", "axbcxd", 1, 3, "", "", std::nullopt},
+    {"char-search-f-miss", "axb", "fz", "axb", 1, 1, "", "", std::nullopt},
+    {"char-search-F-miss", "axb", "$Fz", "axb", 1, 3, "", "", std::nullopt},
+    {"char-search-t-miss", "axb", "tz", "axb", 1, 1, "", "", std::nullopt},
+    {"char-search-T-miss", "axb", "$Tz", "axb", 1, 3, "", "", std::nullopt},
+    {"char-search-f-stops-at-line-end", "ab\nxb", "fx", "ab\nxb", 1, 1, "", "", std::nullopt},
+    {"char-search-F-stops-at-line-start", "xb\nab", "jFx", "xb\nab", 2, 1, "", "", std::nullopt},
+    {"char-search-repeat-forward-f", "axbxcx", "fx;", "axbxcx", 1, 4, "", "", std::nullopt},
+    {"char-search-repeat-opposite-f", "axbxcx", "2fx,", "axbxcx", 1, 2, "", "", std::nullopt},
+    {"char-search-repeat-backward-F", "axbxcx", "$Fx;", "axbxcx", 1, 2, "", "", std::nullopt},
+    {"char-search-repeat-opposite-F", "axbxcx", "$2Fx,", "axbxcx", 1, 4, "", "", std::nullopt},
+    {"char-search-repeat-t-adjacent-count-one", "axxxxb", "tx;", "axxxxb", 1, 2, "", "", std::nullopt},
+    {"char-search-repeat-t-adjacent-count-two", "axxxxb", "tx2;", "axxxxb", 1, 2, "", "", std::nullopt},
+    {"char-search-repeat-t-adjacent-count-three", "axxxxb", "tx3;", "axxxxb", 1, 3, "", "", std::nullopt},
+    {"char-search-repeat-T-adjacent-count-one", "axxxxb", "$Tx;", "axxxxb", 1, 5, "", "", std::nullopt},
+    {"char-search-repeat-T-adjacent-count-two", "axxxxb", "$Tx2;", "axxxxb", 1, 5, "", "", std::nullopt},
+    {"char-search-repeat-T-adjacent-count-three", "axxxxb", "$Tx3;", "axxxxb", 1, 4, "", "", std::nullopt},
+    {"char-search-repeat-t-operator-count-one", "axxxxb", "tx0d;", "xxxb", 1, 1, "ax", "v", std::nullopt},
+    {"char-search-repeat-t-operator-count-two", "axxxxb", "tx02d;", "xxxb", 1, 1, "ax", "v", std::nullopt},
+    {"char-search-repeat-t-motion-count-two", "axxxxb", "tx0d2;", "xxxb", 1, 1, "ax", "v", std::nullopt},
+    {"char-search-repeat-t-multiplied-count", "axxxxb", "tx02d2;", "xb", 1, 1, "axxx", "v", std::nullopt},
+    {"char-search-d-f-inclusive", "abxc", "dfx", "c", 1, 1, "abx", "v", std::nullopt},
+    {"char-search-c-f-inclusive", "abxc", "cfx<Esc>", "c", 1, 1, "abx", "v", std::nullopt},
+    {"char-search-y-f-inclusive", "abxc", "yfx", "abxc", 1, 1, "abx", "v", std::nullopt},
+    {"char-search-d-F-exclusive", "axbc", "$dFx", "ac", 1, 2, "xb", "v", std::nullopt},
+    {"char-search-c-F-exclusive", "axbc", "$cFx<Esc>", "ac", 1, 1, "xb", "v", std::nullopt},
+    {"char-search-y-F-exclusive", "axbc", "$yFx", "axbc", 1, 2, "xb", "v", std::nullopt},
+    {"char-search-d-t-inclusive", "abxc", "dtx", "xc", 1, 1, "ab", "v", std::nullopt},
+    {"char-search-c-t-inclusive", "abxc", "ctx<Esc>", "xc", 1, 1, "ab", "v", std::nullopt},
+    {"char-search-y-t-inclusive", "abxc", "ytx", "abxc", 1, 1, "ab", "v", std::nullopt},
+    {"char-search-d-T-exclusive", "axbc", "$dTx", "axc", 1, 3, "b", "v", std::nullopt},
+    {"char-search-c-T-exclusive", "axbc", "$cTx<Esc>", "axc", 1, 2, "b", "v", std::nullopt},
+    {"char-search-y-T-exclusive", "axbc", "$yTx", "axbc", 1, 3, "b", "v", std::nullopt},
+    {"char-search-d-t-adjacent-no-move", "axb", "dtx", "xb", 1, 1, "a", "v", std::nullopt},
+    {"char-search-c-t-adjacent-no-move", "axb", "ctx<Esc>", "xb", 1, 1, "a", "v", std::nullopt},
+    {"char-search-y-t-adjacent-no-move", "axb", "ytx", "axb", 1, 1, "a", "v", std::nullopt},
+    {"char-search-d-T-adjacent-no-move", "ax", "$dTa", "ax", 1, 2, "", "", std::nullopt},
+    {"char-search-c-T-adjacent-no-move", "ax", "$cTa<Esc>", "ax", 1, 1, "", "", std::nullopt},
+    {"char-search-y-T-adjacent-no-move", "ax", "$yTa", "ax", 1, 2, "", "v", std::nullopt},
+    {"char-search-visual-f-endpoint", "abxc", "vfx<Esc>", "abxc", 1, 3, "", "", std::nullopt},
+    {"char-search-visual-F-endpoint", "axbc", "$vFx<Esc>", "axbc", 1, 2, "", "", std::nullopt},
+    {"char-search-visual-t-endpoint", "abxc", "vtx<Esc>", "abxc", 1, 2, "", "", std::nullopt},
+    {"char-search-visual-T-endpoint", "axbc", "$vTx<Esc>", "axbc", 1, 3, "", "", std::nullopt},
+    {"char-search-visual-y-f-range", "abxc", "vfxy", "abxc", 1, 1, "abx", "v", std::nullopt},
+    {"char-search-visual-y-F-range", "axbc", "$vFxy", "axbc", 1, 2, "xbc", "v", std::nullopt},
+    {"char-search-visual-y-t-range", "abxc", "vtxy", "abxc", 1, 1, "ab", "v", std::nullopt},
+    {"char-search-visual-y-T-range", "axbc", "$vTxy", "axbc", 1, 3, "bc", "v", std::nullopt},
+    {"char-search-utf8-f-codepoint", "aéあbあ", "fあ", "aéあbあ", 1, 4, "", "", std::nullopt},
+    {"char-search-utf8-f-count", "aéあbあ", "2fあ", "aéあbあ", 1, 8, "", "", std::nullopt},
+    {"char-search-utf8-t-codepoint", "aéあbあ", "tあ", "aéあbあ", 1, 2, "", "", std::nullopt},
+    {"char-search-utf8-F-codepoint", "aéあbあ", "$Fé", "aéあbあ", 1, 2, "", "", std::nullopt},
+    {"char-search-utf8-f-non-bmp", "a😀b😀", "f😀", "a😀b😀", 1, 2, "", "", std::nullopt},
+    {"char-search-utf8-d-f-range", "aéあbあ", "dfあ", "bあ", 1, 1, "aéあ", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

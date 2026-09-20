@@ -26,8 +26,12 @@ Two rules keep the fixture and the editor comparable, and the script refuses inp
   of where a real Esc would leave it. The check is mechanical: the same keys with one more `<Esc>`
   must produce exactly the same buffer, cursor and register.
 
-Two runs of `--regenerate` must produce the same file; that equality is the record in
-docs/quality/gate-proofs.md section 5. Python standard library only.
+`--regenerate --only f- --only df-` measures just matching fixture-name prefixes and reuses every
+other generated row from `--reuse-ref` (default `HEAD`). Reuse is refused before measurement when
+a prefix is empty or unknown, the old JSON/header/source do not prove their origin, a non-selected
+input changed, or the measurement implementation changed. Repeating the same selected generation
+must produce the same file; that equality is the record in docs/quality/gate-proofs.md section 5.
+Python standard library only.
 
 The header also records the SHA-256 of the fixtures file it came from and how many fixtures that
 file held. CI has no Vim and cannot regenerate, so that one line is what CNF-010 in
@@ -39,9 +43,12 @@ keeps them LF, so nothing is normalised here.
 from __future__ import annotations
 
 import argparse
+import ast
+import copy
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -170,6 +177,8 @@ def measure(work: Path, fixture: dict) -> dict:
             "viewport": measured_viewport}
 
 
+# Partial regeneration compares every measurement constant and function above this boundary.
+# Keep rendering/reuse helpers below it; moving measurement code below it invalidates the proof.
 def literal(value: str) -> str:
     """A C++ string literal. The header is UTF-8 and the build passes /utf-8, so bytes pass through."""
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
@@ -179,19 +188,20 @@ def literal(value: str) -> str:
     return f'"{escaped}"'
 
 
-def header(records: list[dict], version: str, digest: str) -> str:
-    rows = []
-    for record in records:
-        viewport = record.get("viewport")
-        viewport_value = "std::nullopt" if viewport is None else (
-            "VimViewportFixture{%d, %d, %d, %d, %d, %d}" %
-            (viewport["visible_lines"], viewport["first_visible"], viewport["line"],
-             viewport["column"], viewport["expected_first_visible"],
-             viewport["expected_scroll_lines"]))
-        rows.append("    {%s, %s, %s, %s, %d, %d, %s, %s, %s},"
-                    % (literal(record["name"]), literal(record["text"]), literal(record["keys"]),
-                       literal(record["expected"]), record["line"], record["column"],
-                       literal(record["register"]), literal(record["register_kind"]), viewport_value))
+def fixture_row(record: dict) -> str:
+    viewport = record.get("viewport")
+    viewport_value = "std::nullopt" if viewport is None else (
+        "VimViewportFixture{%d, %d, %d, %d, %d, %d}" %
+        (viewport["visible_lines"], viewport["first_visible"], viewport["line"],
+         viewport["column"], viewport["expected_first_visible"],
+         viewport["expected_scroll_lines"]))
+    return "    {%s, %s, %s, %s, %d, %d, %s, %s, %s}," % (
+        literal(record["name"]), literal(record["text"]), literal(record["keys"]),
+        literal(record["expected"]), record["line"], record["column"],
+        literal(record["register"]), literal(record["register_kind"]), viewport_value)
+
+
+def header_from_rows(rows: list[str], version: str, digest: str) -> str:
     body = "\n".join(rows)
     settings = " / ".join(DEFAULT_SETTINGS)
     # 生成物にも clang-format は掛かるので、ファイルまるごと整形の対象から外す（QLT-004）。
@@ -199,7 +209,7 @@ def header(records: list[dict], version: str, digest: str) -> str:
             f"{BANNER}\n"
             f"// oracle: {VIM} — {version}\n"
             f"// 既定の設定（ADR 0012 の決定 8）: {settings}\n"
-            f"// fixtures.json: sha256 {digest} / {len(records)} fixtures\n"
+            f"// fixtures.json: sha256 {digest} / {len(rows)} fixtures\n"
             "#pragma once\n"
             "\n"
             '#include "VimFixture.hpp"\n'
@@ -208,11 +218,172 @@ def header(records: list[dict], version: str, digest: str) -> str:
             "\n"
             "namespace nenenib::tests\n"
             "{\n"
-            f"constexpr std::array<VimFixture, {len(records)}> vim_fixtures{{{{\n"
+            f"constexpr std::array<VimFixture, {len(rows)}> vim_fixtures{{{{\n"
             f"{body}\n"
             "}};\n"
             "} // namespace nenenib::tests\n"
             "// clang-format on\n")
+
+
+def header(records: list[dict], version: str, digest: str) -> str:
+    return header_from_rows([fixture_row(record) for record in records], version, digest)
+
+
+def selected_names(fixtures: list[dict], prefixes: list[str]) -> set[str]:
+    if any(not prefix for prefix in prefixes):
+        raise ValueError("--only prefixes must not be empty")
+    names = {fixture["name"] for fixture in fixtures}
+    selected = {name for name in names if any(name.startswith(prefix) for prefix in prefixes)}
+    unknown = [prefix for prefix in prefixes if not any(name.startswith(prefix) for name in names)]
+    if unknown:
+        raise ValueError(f"--only prefix matched no fixture: {', '.join(unknown)}")
+    return selected
+
+
+def measurement_ast(source: str) -> str:
+    tree = ast.parse(source)
+    compared = []
+    found_literal = False
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "literal":
+            found_literal = True
+            break
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) \
+                and isinstance(node.value.value, str):
+            continue
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(target, ast.Name) and target.id == "BANNER" for target in targets):
+                continue
+        normalized = copy.deepcopy(node)
+        if isinstance(normalized, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                and normalized.body and isinstance(normalized.body[0], ast.Expr) \
+                and isinstance(normalized.body[0].value, ast.Constant) \
+                and isinstance(normalized.body[0].value.value, str):
+            normalized.body.pop(0)
+        compared.append(ast.dump(normalized, include_attributes=False))
+    if not found_literal:
+        raise ValueError("oracle source has no literal() boundary")
+    return "\n".join(compared)
+
+
+def measurement_imports(source: str) -> set[tuple[str, ...]]:
+    imports = set()
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Import):
+            imports.update(("import", alias.name, alias.asname or "") for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imports.update(("from", node.module or "", str(node.level), alias.name,
+                            alias.asname or "") for alias in node.names)
+    return imports
+
+
+def measurement_sources_match(old_source: str, current_source: str) -> bool:
+    old_imports = measurement_imports(old_source)
+    current_imports = measurement_imports(current_source)
+    permitted_additions = {("import", "ast", ""), ("import", "copy", ""),
+                           ("import", "re", "")}
+    imports_match = old_imports <= current_imports \
+        and current_imports - old_imports <= permitted_additions
+    return imports_match and measurement_ast(old_source) == measurement_ast(current_source)
+
+
+def parsed_header(header_content: str,
+                  fixture_content: bytes) -> tuple[dict[str, str], dict[str, str]]:
+    fixture_digest = hashlib.sha256(fixture_content).hexdigest()
+    fixtures = json.loads(fixture_content.decode("utf-8"))
+    fixture_names = [fixture["name"] for fixture in fixtures]
+    if len(set(fixture_names)) != len(fixture_names):
+        raise ValueError("reuse fixture names must be unique")
+
+    oracle_match = re.search(r"^// oracle: (.+) — (.+)$", header_content, re.MULTILINE)
+    settings_match = re.search(r"^// 既定の設定（ADR 0012 の決定 8）: (.*)$",
+                               header_content, re.MULTILINE)
+    fixture_match = re.search(r"^// fixtures\.json: sha256 ([0-9a-f]{64}) / (\d+) fixtures$",
+                              header_content, re.MULTILINE)
+    array_match = re.search(r"^constexpr std::array<VimFixture, (\d+)> vim_fixtures\{\{$",
+                            header_content, re.MULTILINE)
+    if not oracle_match or not settings_match or not fixture_match or not array_match:
+        raise ValueError("reuse header metadata is incomplete")
+    declared_count = int(fixture_match.group(2))
+    if fixture_match.group(1) != fixture_digest or declared_count != len(fixtures):
+        raise ValueError("reuse header fixtures SHA or count does not match fixtures.json")
+    if int(array_match.group(1)) != len(fixtures):
+        raise ValueError("reuse header array count does not match fixtures.json")
+
+    rows = [line for line in header_content.splitlines() if line.startswith("    {")]
+    row_names = []
+    row_by_name = {}
+    for row in rows:
+        name_match = re.match(r'^    \{("(?:[^"\\]|\\.)*"),', row)
+        if not name_match:
+            raise ValueError("reuse header has an unrecognized fixture row")
+        name = json.loads(name_match.group(1))
+        row_names.append(name)
+        row_by_name[name] = row
+    if row_names != fixture_names or len(row_by_name) != len(fixture_names):
+        raise ValueError("reuse header fixture rows do not match fixtures.json name and order")
+    metadata = {"path": oracle_match.group(1), "version": oracle_match.group(2),
+                "settings": settings_match.group(1)}
+    return row_by_name, metadata
+
+
+def partial_header(fixtures: list[dict], fixture_content: bytes, prefixes: list[str],
+                   reuse_fixture_content: bytes, reuse_header_content: str,
+                   reuse_oracle_source: str, current_oracle_source: str,
+                   version: str, work: Path) -> str:
+    selected = selected_names(fixtures, prefixes)
+    old_fixtures = json.loads(reuse_fixture_content.decode("utf-8"))
+    old_by_name = {fixture["name"]: fixture for fixture in old_fixtures}
+    old_rows, metadata = parsed_header(reuse_header_content, reuse_fixture_content)
+    if metadata != {"path": str(VIM), "version": version,
+                    "settings": " / ".join(DEFAULT_SETTINGS)}:
+        raise ValueError("reuse oracle version, path, or default settings do not match")
+    if not measurement_sources_match(reuse_oracle_source, current_oracle_source):
+        raise ValueError("oracle measurement code changed; regenerate all fixtures")
+    current_names = {fixture["name"] for fixture in fixtures}
+    removed_nonselected = [name for name in old_by_name
+                           if name not in current_names
+                           and not any(name.startswith(prefix) for prefix in prefixes)]
+    if removed_nonselected:
+        raise ValueError(f"non-selected fixture was removed: {removed_nonselected[0]}")
+    for fixture in fixtures:
+        name = fixture["name"]
+        if name not in selected and old_by_name.get(name) != fixture:
+            raise ValueError(f"non-selected fixture input changed: {name}")
+
+    rows = []
+    for fixture in fixtures:
+        name = fixture["name"]
+        if name in selected:
+            rows.append(fixture_row(measure(work, fixture)))
+        else:
+            rows.append(old_rows[name])
+    digest = hashlib.sha256(fixture_content).hexdigest()
+    return header_from_rows(rows, version, digest)
+
+
+def git_output(root: Path, arguments: list[str]) -> bytes:
+    result = subprocess.run(["git", *arguments], cwd=root, capture_output=True)
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(f"git {' '.join(arguments)} failed: {detail}")
+    return result.stdout
+
+
+def write_header(target: Path, rendered: str) -> None:
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", delete=False,
+                                         dir=target.parent, prefix=f".{target.name}.") as temporary:
+            temporary.write(rendered)
+            temporary_path = Path(temporary.name)
+        temporary_path.replace(target)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -220,6 +391,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--regenerate", action="store_true",
                         help="run Vim and rewrite tests/vim/VimFixtures.hpp")
+    parser.add_argument("--only", action="append", default=[], metavar="FIXTURE-PREFIX",
+                        help="measure matching fixtures and reuse the remaining rows")
+    parser.add_argument("--reuse-ref", default="HEAD", metavar="GIT-REF",
+                        help="commit whose unchanged fixture rows are reused (default: HEAD)")
     arguments = parser.parse_args()
     source = root / "tests/vim/fixtures.json"
     target = root / "tests/vim/VimFixtures.hpp"
@@ -229,20 +404,40 @@ def main() -> int:
     if len(set(names)) != len(names):
         raise ValueError("fixture names must be unique")
     if not arguments.regenerate:
+        if arguments.only:
+            parser.error("--only requires --regenerate")
         print(f"{len(fixtures)} fixture(s) in {source}; pass --regenerate to run {VIM}")
         return 0
+    selected_names(fixtures, arguments.only) if arguments.only else set()
     if not VIM.is_file():
         raise RuntimeError(f"the oracle needs Vim 9.1 at {VIM} (ADR 0005)")
     version = vim_version()
     work = Path(tempfile.mkdtemp(prefix="vim-oracle-"))
     try:
-        records = [measure(work, fixture) for fixture in fixtures]
+        if arguments.only:
+            commit = git_output(root, ["rev-parse", "--verify", "--end-of-options",
+                                       f"{arguments.reuse_ref}^{{commit}}"]).decode("ascii").strip()
+            reuse_fixture_content = git_output(
+                root, ["show", f"{commit}:tests/vim/fixtures.json"])
+            reuse_header_content = git_output(
+                root, ["show", f"{commit}:tests/vim/VimFixtures.hpp"]).decode("utf-8")
+            reuse_oracle_source = git_output(
+                root, ["show", f"{commit}:eng/vim-oracle.py"]).decode("utf-8")
+            rendered = partial_header(
+                fixtures, content, arguments.only, reuse_fixture_content, reuse_header_content,
+                reuse_oracle_source, Path(__file__).read_text(encoding="utf-8"), version, work)
+        else:
+            records = [measure(work, fixture) for fixture in fixtures]
+            rendered = header(records, version, hashlib.sha256(content).hexdigest())
     finally:
         shutil.rmtree(work, ignore_errors=True)
     # 生成物も LF で書く（.gitattributes の eol=lf）。
-    target.write_text(header(records, version, hashlib.sha256(content).hexdigest()),
-                      encoding="utf-8", newline="\n")
-    print(f"Vim oracle: {len(records)} fixture(s) from {version} written to {target}")
+    write_header(target, rendered)
+    measured_count = len(fixtures) if not arguments.only else len(selected_names(fixtures, arguments.only))
+    reused_count = len(fixtures) - measured_count
+    reuse_detail = "" if not arguments.only else f" from {commit}"
+    print(f"Vim oracle: {measured_count} measured / {reused_count} reused{reuse_detail}; "
+          f"{version}; written to {target}")
     return 0
 
 

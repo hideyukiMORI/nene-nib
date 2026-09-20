@@ -1,5 +1,7 @@
 #pragma once
 
+#include "VimCharacterSearch.hpp"
+#include "VimCharacterSearchKind.hpp"
 #include "VimCount.hpp"
 #include "VimMode.hpp"
 #include "VimPendingOperator.hpp"
@@ -20,6 +22,8 @@ struct VimState
     VimMode mode;
     std::optional<VimCount> count;
     std::optional<VimPendingOperator> pending;
+    std::optional<VimCharacterSearchKind> awaiting_character;
+    std::optional<VimCharacterSearch> last_character_search;
     std::optional<VimWantedColumn> wanted_column;
     // Ctrl-d / Ctrl-u に明示した window-local な移動量。現在の viewport ではなく、次の
     // half-page command に残る Vim の 'scroll' に相当する値（ADR 0019 の決定 6）。
@@ -31,16 +35,17 @@ struct VimState
 // Vim モードに入るときも、通常モードへ戻して保留を捨てるときも、この 1 つの形に寄せる。
 [[nodiscard]] inline VimState vim_resting_state(VimRegister unnamed_register)
 {
-    return VimState{VimMode::normal, std::nullopt, std::nullopt,
-                    std::nullopt,    std::nullopt, std::move(unnamed_register)};
+    return VimState{VimMode::normal, std::nullopt, std::nullopt, std::nullopt,
+                    std::nullopt,    std::nullopt, std::nullopt, std::move(unnamed_register)};
 }
 
-// 通常の鍵の完了は 'scroll' の明示値を捨てない。Vim モードへ初めて入る初期化だけが
-// vim_resting_state を直接使い、空の値から始める。
+// 通常の鍵の完了は 'scroll' の明示値と直前の文字検索を捨てない。Vim モードへ初めて入る
+// 初期化だけが vim_resting_state を直接使い、空の値から始める。文字待ちは持ち越さない。
 [[nodiscard]] inline VimState vim_resting_from(const VimState &state, VimRegister unnamed_register)
 {
     VimState next = vim_resting_state(std::move(unnamed_register));
     next.scroll_lines = state.scroll_lines;
+    next.last_character_search = state.last_character_search;
     return next;
 }
 

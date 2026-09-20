@@ -4,7 +4,7 @@ A fast single-executable text editor for Windows 11 that toggles between ordinar
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
 > **Status (2026-09-20):** ordinary editing, file open/save, Japanese IME and the first Vim slices
-> (motions, operators, visual selection and viewport navigation) work. Body font size, font family and
+> (motions, character search, operators, visual selection and viewport navigation) work. Body font size, font family and
 > theme settings persist between launches and can be changed from the Vim command line or Ctrl+P.
 > Multiple tabs and the Ctrl+P file/history lists are still planned.
 > Nothing to download yet (Phase 4).
@@ -22,6 +22,12 @@ Press `Ctrl+P` in either editing mode to choose a settings command. Type part of
 to choose. Font-setting candidates fill the input so a value can be entered before execution.
 Esc, Ctrl+C, Ctrl+P again or a click outside closes the list and preserves the body selection.
 This first command palette does not yet list files, folders, bookmarks or history.
+
+In Vim NORMAL or VISUAL, use `f{char}` / `F{char}` to find a character on the current line,
+or `t{char}` / `T{char}` to stop just before it. `;` repeats the search and `,` repeats in the
+opposite direction. Counts and `d` / `c` / `y` use the same search (for example `2f,` or `dt)`).
+Esc cancels a pending target character; in VISUAL it keeps the selection active.
+Target characters use the existing Vim input path; IME composition in NORMAL/VISUAL remains disabled.
 
 Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first setting change.
 The format and failure behavior are specified in
@@ -59,6 +65,11 @@ Select the smallest checks for the changed behavior and its direct dependencies/
 the regression rationale and results in the PR. Reuse successful results when the relevant inputs
 are unchanged; CI validates Git conventions, verification records and whitespace without repeating
 product tests. Documentation-only changes need no application tests. See `docs/QUALITY_GATES.md`.
+
+For a new Vim fixture group, regenerate just that group with
+`python eng/vim-oracle.py --regenerate --only <name-prefix> --reuse-ref <commit>`.
+The generator validates the previous inputs, measurement code and Vim environment before reusing
+unchanged expectation rows. See [ADR 0026](docs/adr/0026-vim-character-search-and-scoped-oracle.md).
 
 Full verification is opt-in and requires a concrete reason why narrower checks cannot cover the change:
 
