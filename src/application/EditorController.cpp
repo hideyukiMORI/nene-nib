@@ -173,13 +173,13 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 
 // engine のキャレットは LF で数えた位置なので、直したあとの本文の上へずらす
 // （CRLF は改行 1 つにつき 1 バイト長い）。数えるのは貼る位置からキャレットまでの改行だけ。
-[[nodiscard]] core::Offset caret_after_insert(const core::VimInsertAt &effect,
-                                              std::size_t newline_bytes)
+[[nodiscard]] core::Offset caret_after_insert(core::Offset at, std::string_view utf8,
+                                              core::Offset caret, std::size_t newline_bytes)
 {
-    const auto inside = static_cast<std::ptrdiff_t>(effect.caret.value - effect.at.value);
-    const auto newlines = static_cast<std::size_t>(
-        std::count(effect.utf8.begin(), effect.utf8.begin() + inside, '\n'));
-    return core::Offset{effect.caret.value + newlines * (newline_bytes - 1)};
+    const auto inside = static_cast<std::ptrdiff_t>(caret.value - at.value);
+    const auto newlines =
+        static_cast<std::size_t>(std::count(utf8.begin(), utf8.begin() + inside, '\n'));
+    return core::Offset{caret.value + newlines * (newline_bytes - 1)};
 }
 
 // 1 行ぶんの選択の面。行をまたぐ選択はその行の内容の終わりから 1 桁ぶんはみ出して改行を示す。
@@ -864,7 +864,17 @@ void EditorController::perform(const core::VimInsertAt &effect)
     const std::string_view newline = core::newline_of(state_.line_ending());
     replace(core::OffsetRange{effect.at, effect.at}, with_document_newlines(effect.utf8, newline),
             effect.boundary);
-    move_caret_to(caret_after_insert(effect, newline.size()), core::SelectionAnchoring::collapse);
+    move_caret_to(caret_after_insert(effect.at, effect.utf8, effect.caret, newline.size()),
+                  core::SelectionAnchoring::collapse);
+}
+
+void EditorController::perform(const core::VimReplaceRange &effect)
+{
+    const std::string_view newline = core::newline_of(state_.line_ending());
+    replace(effect.range, with_document_newlines(effect.utf8, newline),
+            core::EditBoundary::separate);
+    move_caret_to(caret_after_insert(effect.range.begin, effect.utf8, effect.caret, newline.size()),
+                  core::SelectionAnchoring::collapse);
 }
 
 void EditorController::perform(const core::VimUndo &)

@@ -90,6 +90,7 @@ class EditorController final
     void perform(const core::VimInsertString &effect);
     void perform(const core::VimNewLine &);
     void perform(const core::VimInsertAt &effect);
+    void perform(const core::VimReplaceRange &effect);
     void interrupt_vim_insert();
     void perform(const core::VimUndo &);
     void perform(const core::VimRedo &);

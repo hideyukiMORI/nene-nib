@@ -81,6 +81,12 @@ Escによる終了は現在列へ戻す既存の動作を維持する。この�
 NORMALの行単位yankと文字単位yankは既存動作を維持する。レジスタ本文・種類・履歴・保存schemaは不変。
 証拠は `out/issue81-oracle/`。#77で分離した1件は入力/結果不変で再利用し、他22件だけを新規測定する。
 
+### 後続の文字置換（Issue #84・2026-09-21）
+
+決定7で後続としたrは [ADR 0029](0029-vim-character-replace-as-range-edit.md) で接続した。
+文字/行単位VISUALの範囲は引き続きvim_visual_rangeが正で、文字だけを置換して改行を残す。
+通常のUnicode文字とTabが対象。VISUAL r<Enter>のliteral CRはIssue #85で扱う。
+
 ## 関連
 
 ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と Vim のモード）・ADR 0015（範囲 → 効果・レジスタの種類）・採用案 `docs/design/2026-09-15-editing-look.md`（D15・選択の描き方）。

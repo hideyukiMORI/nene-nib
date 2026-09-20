@@ -53,6 +53,7 @@ enum class VimAction : std::uint8_t
     repeat_character_search,
     repeat_character_search_opposite,
     prefix_g,
+    replace_character,
     open_command_line
 };
 } // namespace nenenib::core

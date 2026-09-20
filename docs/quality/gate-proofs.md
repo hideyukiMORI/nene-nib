@@ -665,3 +665,32 @@ baseは `3b02f136c41905bb2667ddcf97f04087fcfa5fae`。変更productionは `VimSte
 実機操作はcomputer-useスキルの `@oai/sky` をnode_replでimportしたが、`sky.list_apps()` がnative pipeへの接続エラー（os error 2）で失敗した。画面確認は未実施。新規アプリの起動・入力も行っていない。記録は `out/issue81-native-unavailable.json`。ビルド成果物 `build/issue81/NeNeNib.exe` のSHA-256は `d02d7d3af67b0a89c3821c61a857c121d57815d48aeedf78b72203d26d741c82`。旧版 `build/NeNeNib.exe` のPID41000は維持した。
 
 規則FR-003 / ARC-001/004/007 / CPP-002/004 / QLT-001/008/012/013 / CNF-010を自己レビュー。閉じたswitch/既存optionalの扱い、状態所有、方向を既存入力から導けることを確認した。局所1関数の修正なので追加の独立レビューは無し。成功後は文書だけの変更で、push/review/mergeでも結果を再利用する。全件unit・全oracle・#77の開始/切替テスト・無関係なGUI/設定/性能は再実行していない。保存schema・依存変更なし。Waivers: none。
+
+### 5-u. rの次文字待ちと範囲置換（Issue #84・2026-09-21）
+
+統合単位は [PR #86](https://github.com/hideyukiMORI/nene-nib/pull/86)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
+base `8d7b3307b748b8341c1e6751631a365e0725f596`。ADR 0029を先に受理。VimAction/Prefixのrを既存VimInputWaitへ足し、VimStepの純粋な範囲/文字変換からVimReplaceRangeを返す。EditorControllerは既存with_document_newlines/replaceへ1回渡し、EditBoundary::separateで履歴を区切る。VimInsertAtのcaret_after_insertは同じ処理を引数だけ汎用化して共有した。新しい本文/選択/履歴所有、UI/IME、schema、依存、ゲートの変更はない。
+
+`python -X utf8 out/issue84-oracle/measure.py` は固定Vim9.1とcanonical measure()で41ケースを通常/+Escの82起動で測定。`python -X utf8 out/issue84-oracle/input-probe.py` は11起動で途中状態/取消後の操作とliteral CRを確認。合計93起動で、Vimソースは読んでいない。`fixture-inputs.json` / `fixture-results.json` / `input-probe.json`が証拠。
+
+VISUAL r<Enter>の2ケースはliteral CRを既存oracleのread_textがLFに変えていた。JSON probeのnormal!/feedkeys両方でCRを確認。TextBufferが内容末尾CRを区別しない問題とともにIssue #85へ分離した。今回は該当キーを取消扱いにし、generator/TextBufferを変えず2fixtureを採用しない。制御文字引用/置換とCtrl-e/yも本件の対象外。
+
+`python -X utf8 out/issue84-oracle/assemble.py` はcanonical parser/formatterを使い、旧512行の逐語一致、入力/固定Vim/metadata/測定ソースを照合して39件だけ追加した。551件の入力SHA-256は `4a783276e3e41033ba914b6142fcadc79cbc45bba028be3929868a221d044483`。`assembly-result.json`に記録。組立時の再測定は0。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=C:/Users/info/WORKS/NeNeNib/build/issue84` | 起動中の旧版を保持し、同じtarget/flagsで出力先だけ分離。成功、`out/issue84-configure.log` |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4`（初回） | visual_actedの61行がtidyの60行上限で失敗。`out/issue84-build.log`。NORMAL/VISUALの検索/g/r開始を既存input_actionにまとめて修正し、上限や除外を変更していない |
+| 同build（修正後） | 新しいenum/variantの写し先、共有controller、対象テストをDebug/tidy/ASan/UBSanでbuild成功。`out/issue84-build-fixed.log` |
+| `build/issue84/nib_tests.exe --vim-replace` | 460 checksすべて成功。新規39fixture＋共有挿入/caret/検索/gの既存12fixture、回数不足直後の独立キー、取消後VISUALの後続行、CRLF保存bytes、別々のundo/redo、モード切替を確認。`out/issue84-unit.log` |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | 変更した純粋経路にOS依存が混ざらないこと。2libs/0 violations、`out/issue84-symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新しい型/効果の規約と551fixtureの生成整合。0 violations、`out/issue84-conformance.log` |
+| `clang-format --dry-run --Werror src/core/VimReplaceRange.hpp src/core/VimEffect.hpp src/core/VimAction.hpp src/core/VimPrefix.hpp src/core/VimStep.cpp src/application/EditorController.hpp src/application/EditorController.cpp tests/unit/NibTests.cpp` | 変更C++の整形、成功。`out/issue84-format.log` |
+| `cmake -S . -B build -U CMAKE_RUNTIME_OUTPUT_DIRECTORY` | 一時出力先だけ既定へ復元。成功、`out/issue84-configure-restore.log`。旧版の再リンクはしない |
+
+computer-useの `sky.list_apps()` はnative pipe接続エラー（os error 2）。`out/issue84-native-unavailable.json`。今回の実機画面確認・新規起動・入力は未実施で、旧版PID41000を維持した。成果物は `build/issue84/NeNeNib.exe`、SHA-256 `985ee9f578f84613a24b1a21d121721724a95b75865fb10072035ac20134fe07`。
+
+FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / CNF-010を自己レビュー。optionalはhas_value/value、閉じたenumは網羅、count不足は待ち/対象文字列の反復確保前に拒否する。新効果と共有caret変換についてreadonly独立レビューを行い、回数不足後のキーとCRLF/既存挿入境界を対象テストに反映。整理後の再レビューに未解決指摘なし。実行検証はrootが担当した。
+
+文書更新後の `git diff --check` も成功。成功後の変更は文書だけで、production/テスト/測定ソース/関連依存は不変。push/review/mergeでも上記を再利用し、全件unit・全oracle・無関係な設定/テーマ/性能は実行しない。Waivers: none。
