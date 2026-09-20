@@ -7,7 +7,11 @@
 
 ## 現在の Issue
 
-**直近の修正は [Issue #81](https://github.com/hideyukiMORI/nene-nib/issues/81)（行単位VISUAL yankの戻り位置）**。下向き/単一行は範囲先頭の列1、上向きの複数行は現在位置へ戻す。追加23fixture・計512件、対象265 checks・build/tidy/symbols/conformance/format成功。実機操作ツールの接続エラーで今回の画面確認は未実施。修正版は `build/issue81/NeNeNib.exe`、旧版の起動窓は保持。詳細はgate-proofs 5-t、統合状態はGitHubが正。
+**直近の実装は [Issue #84](https://github.com/hideyukiMORI/nene-nib/issues/84)（Vimのr）**。NORMALの回数指定、文字/行単位VISUALの置換、Unicode/Tab、NORMALのEnter、取消、CRLF、undo/redoを接続した。追加39fixture・計551件、対象460 checks・build/tidy/symbols/conformance/format成功。画面確認はnative pipe接続エラーで未実施。成果物は `build/issue84/NeNeNib.exe`、詳細はgate-proofs 5-u、統合状態はGitHubが正。
+
+VISUAL r<Enter>はliteral CRを挿入するため、oracleと文書模型の既存問題を [Issue #85](https://github.com/hideyukiMORI/nene-nib/issues/85)へ分離した。今回は選択を維持して入力待ちを解除する。制御文字の引用/置換・Ctrl-e/yの隣行参照も未対応。
+
+**前回の修正は [Issue #81](https://github.com/hideyukiMORI/nene-nib/issues/81)（行単位VISUAL yankの戻り位置）**。下向き/単一行は範囲先頭の列1、上向きの複数行は現在位置へ戻す。追加23fixture・計512件、対象265 checks・build/tidy/symbols/conformance/format成功。実機操作ツールの接続エラーで今回の画面確認は未実施。修正版は `build/issue81/NeNeNib.exe`、旧版の起動窓は保持。詳細はgate-proofs 5-t、統合状態はGitHubが正。
 
 統合単位は [PR #83](https://github.com/hideyukiMORI/nene-nib/pull/83)。
 
@@ -36,7 +40,9 @@ Issue #68 / PR #69（C4a）、#66 / PR #67（C3b）、#64 / PR #65（C3a）、#6
 | Phase 3 縦切り | 🔲 進行中。#3 窓（ADR 0007）✅ → #5 見た目（ADR 0008）✅ → #7 編集（ADR 0009）✅ → #11 ファイル（ADR 0010）✅ → #16 速さ（ADR 0011）✅ → #19 起動の内訳 ✅ → #22 Vim の最初の縦切り（ADR 0012）✅ → #24 窓を先に見せる（ADR 0013）✅ → #28 IME（ADR 0014）✅ → #31 タブの帯（D16）✅ → #30 計測器の揺れ ✅ → #36 欠測の言い方 ✅ → #44 生成物の SHA（CNF-010）✅ → #43 Vim の 2 本目（ADR 0015）✅ → #47 CI の速さの基準値（ADR 0016）✅ → #52 カラーテーマ C1（ADR 0017）✅ → #53 VISUAL（ADR 0018）✅ → **#58 画面移動 ✅ → #60 C2 ✅ → #64 C3a ✅ → #66 C3b ✅ → #68 C4a ✅ → #70 C4b ✅ → #72 行内文字検索 ✅（ADR 0026）→ #76 指定行移動 ✅（ADR 0027）→ #79 開行と反復 ✅（ADR 0028）** |
 | Phase 4 公開 | 🔲 |
 
-## 実装したもの（Issue #81の補正まで）
+## 実装したもの（Issue #84まで）
+
+Vimのr: NORMALの回数分/文字・行単位VISUALの選択範囲を1回のreplaceで置換する。元の行境界と無名レジスタを保ち、1操作ずつundo/redoできる。普通のUnicode文字とTab、NORMALのEnterが対象。次キー待ちは検索/gと排他的。
 
 行単位VISUAL yank: 下向き・単一行は列1、上向きの複数行は現在列へ戻す。NORMALと文字単位のyankは維持。
 
@@ -59,16 +65,16 @@ C3a: NORMALの `:` から設定用Ex入力。Tab/Shift+Tab補完、単行貼付�
 C2: 設定の保存・復元、8〜40 ptの本文拡縮（Ctrl+`+` / `-` / `0` とCtrl+wheel）。本文・行番号だけを拡縮し、テーマ・フォント名・サイズを版付きで保存する。
 
 枠なし窓（Snap と影は OS のまま）・Mica のタイトルバーにタブ 1 本と窓の操作・piece table の本文（複数行・スクロール・選択・Ctrl+C/X/V・Ctrl+Z/Y・クリックでキャレット）・
-ステータスバーの「通常 | Vim」トグル・OS のライト／ダーク（茄子色 D11・橙 D12）・ファイルの開閉と保存（Ctrl+O / Ctrl+S / Ctrl+Shift+S・起動引数・UTF-8 / BOM / Shift_JIS・CRLF / LF・一時ファイルからの置換・未保存の印と確認）・速さのゲート（Release の exe で 4 本のベンチ・基準値の鍵 5 つ・実機の基準値・起動の内訳・窓を先に見せる起動（約 35 ms）・`WM_PAINT` で 1 フレームに 1 回の描画）・Vim（NORMAL / INSERT・`h j k l 0 $ w b e ^ gg G` と Home / End・回数（オペレータ側と移動側の掛け算）・`x`・`d c y` ＋移動・`dd cc yy`・`D C Y`・`p P`（文字単位と行単位・回数）・無名レジスタは種類つきで本文は LF・`i a I A`・`o O`・Esc・`u` / Ctrl-r・INSERT 1 回が undo 1 単位・VISUAL `v V`（回数・`o`・`d x y c`・表示と Ctrl+C と操作が同じ範囲）。画面移動 `H M L`・Ctrl-d/u/f/b・PgUp/PgDn、window-local な半画面量、Vim の自動追従。本物の Vim 9.1 の oracle が生成した fixture 512 件を CTest が再生）・IME（IMM32・変換中の文字列は本文の外の `Composition` に持って renderer がキャレットの行に差し込んで描く・確定は 1 意図で通常モードは undo 1 単位・Vim INSERT は打鍵として engine へ・Vim NORMAL では IME を切り INSERT で戻す・候補窓はキャレットの直下）・タブの帯は不透明の `title_bar`（D16・アクティブなタブは本文色）・速さのゲートは刺激が届かなかった試行を欠測にし、計測不能を退行と別の終了コード 2 で言う。性能検証は必要な変更で選んで実行する。一致する指紋の基準値で判定し、通常のCIでは測り直さない（ADR 0016 / 0021）。生成物 `VimFixtures.hpp` と `fixtures.json` の一致は CNF-010 が守る。core にテーマの模型（`Theme` / `SyntaxPalette` / `derive_ui`・組み込み 9 テーマ・コントラスト比 4.5 以上を tests が要求。ADR 0017）があり、設定ファイルから指定テーマまたはOS追従を選べる。NORMALのExからも切替可能。Ctrl+Pの設定一覧はC3bで接続済み。
+ステータスバーの「通常 | Vim」トグル・OS のライト／ダーク（茄子色 D11・橙 D12）・ファイルの開閉と保存（Ctrl+O / Ctrl+S / Ctrl+Shift+S・起動引数・UTF-8 / BOM / Shift_JIS・CRLF / LF・一時ファイルからの置換・未保存の印と確認）・速さのゲート（Release の exe で 4 本のベンチ・基準値の鍵 5 つ・実機の基準値・起動の内訳・窓を先に見せる起動（約 35 ms）・`WM_PAINT` で 1 フレームに 1 回の描画）・Vim（NORMAL / INSERT・`h j k l 0 $ w b e ^ gg G` と Home / End・回数（オペレータ側と移動側の掛け算）・`x`・`d c y` ＋移動・`dd cc yy`・`D C Y`・`p P`（文字単位と行単位・回数）・無名レジスタは種類つきで本文は LF・`i a I A`・`o O`・Esc・`u` / Ctrl-r・INSERT 1 回が undo 1 単位・VISUAL `v V`（回数・`o`・`d x y c`・表示と Ctrl+C と操作が同じ範囲）。画面移動 `H M L`・Ctrl-d/u/f/b・PgUp/PgDn、window-local な半画面量、Vim の自動追従。本物の Vim 9.1 の oracle が生成した fixture 551 件を CTest が再生）・IME（IMM32・変換中の文字列は本文の外の `Composition` に持って renderer がキャレットの行に差し込んで描く・確定は 1 意図で通常モードは undo 1 単位・Vim INSERT は打鍵として engine へ・Vim NORMAL では IME を切り INSERT で戻す・候補窓はキャレットの直下）・タブの帯は不透明の `title_bar`（D16・アクティブなタブは本文色）・速さのゲートは刺激が届かなかった試行を欠測にし、計測不能を退行と別の終了コード 2 で言う。性能検証は必要な変更で選んで実行する。一致する指紋の基準値で判定し、通常のCIでは測り直さない（ADR 0016 / 0021）。生成物 `VimFixtures.hpp` と `fixtures.json` の一致は CNF-010 が守る。core にテーマの模型（`Theme` / `SyntaxPalette` / `derive_ui`・組み込み 9 テーマ・コントラスト比 4.5 以上を tests が要求。ADR 0017）があり、設定ファイルから指定テーマまたはOS追従を選べる。NORMALのExからも切替可能。Ctrl+Pの設定一覧はC3bで接続済み。
 
 ## 動かないもの
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
-Vim の `Ctrl-v`（矩形）/ VISUAL の `p u ~ > < J r I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL /
-autoindent / 一般のi/a回数 / テキストオブジェクト / `.` / 名前つきレジスタ / `J r s S` / 全文検索 / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
+Vim の `Ctrl-v`（矩形）/ VISUAL の `p u ~ > < J I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL /
+autoindent / 一般のi/a回数 / テキストオブジェクト / `.` / 名前つきレジスタ / `J s S R` / VISUALのr<Enter>（#85）/ rの制御文字・Ctrl-e/y / 全文検索 / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
 複数タブ・Ctrl+Pのファイル/フォルダ/ブックマーク/履歴統合・折り返し・横スクロール・ドラッグ選択。
 
 ## 次の 1 手
 
-[Issue #81](https://github.com/hideyukiMORI/nene-nib/issues/81)の統合状態を確認し、残るdot・全文検索・テキストオブジェクト等を別の焦点Issueとして順に進める。
+[Issue #84](https://github.com/hideyukiMORI/nene-nib/issues/84)の統合状態を確認する。次はIssue #85のliteral CR、残るdot・全文検索・テキストオブジェクト等を、焦点Issueごとに進める。
 今回の結果と未確認は [日報](../reports/2026-09-21.md) / [引き継ぎ](../handoffs/2026-09-21.md)。変更に関係する検証だけを行い、成功結果を再利用する。

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 da104be451921a9d231baf27401d97651f9d341f49b7252bca4a656536b6ff51 / 512 fixtures
+// fixtures.json: sha256 4a783276e3e41033ba914b6142fcadc79cbc45bba028be3929868a221d044483 / 551 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 512> vim_fixtures{{
+constexpr std::array<VimFixture, 551> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -524,6 +524,45 @@ constexpr std::array<VimFixture, 512> vim_fixtures{{
     {"visual-yank-reverse-long-first", "  abcdef\nx\n    ghijkl", "jjlllV2ky", "  abcdef\nx\n    ghijkl", 1, 4, "  abcdef\nx\n    ghijkl\n", "V", std::nullopt},
     {"visual-yank-forward-continuation", "  abcdef\n x\n    ghijkl\nTAIL", "$Vjyjj", "  abcdef\n x\n    ghijkl\nTAIL", 3, 1, "  abcdef\n x\n", "V", std::nullopt},
     {"visual-yank-reverse-continuation", "  abcdef\nx\n    ghijkl", "jjlllV2kyjj", "  abcdef\nx\n    ghijkl", 3, 4, "  abcdef\nx\n    ghijkl\n", "V", std::nullopt},
+    {"replace-char-one", "abcd", "rX", "Xbcd", 1, 1, "", "", std::nullopt},
+    {"replace-char-count", "abcd", "3rX", "XXXd", 1, 3, "", "", std::nullopt},
+    {"replace-char-at-end", "abcd", "$rX", "abcX", 1, 4, "", "", std::nullopt},
+    {"replace-char-count-exact", "abcd", "4rX", "XXXX", 1, 4, "", "", std::nullopt},
+    {"replace-char-count-short", "abcd", "5rZ", "abcd", 1, 1, "", "", std::nullopt},
+    {"replace-char-empty", "", "rZ", "", 1, 1, "", "", std::nullopt},
+    {"replace-char-empty-line", "ab\n\ncd", "jrZ", "ab\n\ncd", 2, 1, "", "", std::nullopt},
+    {"replace-char-no-cross-line", "ab\ncd", "3rZ", "ab\ncd", 1, 1, "", "", std::nullopt},
+    {"replace-char-unicode-source", "あ😀いう", "l2rX", "あXXう", 1, 5, "", "", std::nullopt},
+    {"replace-char-unicode-target", "abcd", "3r界", "界界界d", 1, 7, "", "", std::nullopt},
+    {"replace-char-emoji-target", "あいabc", "l2r😀", "あ😀😀bc", 1, 8, "", "", std::nullopt},
+    {"replace-char-tab-target", "abcd", "2r\t", "\t\tcd", 1, 2, "", "", std::nullopt},
+    {"replace-char-tab-source", "\tabc", "rX", "Xabc", 1, 1, "", "", std::nullopt},
+    {"replace-char-digit-target", "abcd", "2r0", "00cd", 1, 2, "", "", std::nullopt},
+    {"replace-char-command-target", "abcd", "rr", "rbcd", 1, 1, "", "", std::nullopt},
+    {"replace-char-same-character", "aaaa", "3ra", "aaaa", 1, 3, "", "", std::nullopt},
+    {"replace-char-enter", "abcd", "lr<CR>", "a\ncd", 2, 1, "", "", std::nullopt},
+    {"replace-char-count-enter", "abcdef", "l3r<CR>", "a\nef", 2, 1, "", "", std::nullopt},
+    {"replace-char-end-enter", "abcd", "$r<CR>", "abc\n", 2, 1, "", "", std::nullopt},
+    {"replace-char-crlf", "abcd\r\nefgh", "l2r<CR>", "a\nd\nefgh", 2, 1, "", "", std::nullopt},
+    {"replace-char-register", "abcd\nefgh", "yyjrX", "abcd\nXfgh", 2, 1, "abcd\n", "V", std::nullopt},
+    {"replace-char-search-memory", "axbxc", "fxrX;", "aXbxc", 1, 4, "", "", std::nullopt},
+    {"replace-char-cancel", "abcd", "2r<Esc>", "abcd", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-one", "abcd", "vrX", "Xbcd", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-count", "abcdef", "vll3rX", "XXXdef", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-reverse", "abcdef", "$vhhhrX", "abXXXX", 1, 3, "", "", std::nullopt},
+    {"replace-char-visual-lines", "abcd\nefgh\nijkl", "lvjrX", "aXXX\nXXgh\nijkl", 1, 2, "", "", std::nullopt},
+    {"replace-char-visual-empty-middle", "abcd\n\nefgh", "lvjjrX", "aXXX\n\nXXgh", 1, 2, "", "", std::nullopt},
+    {"replace-char-visual-eol", "abcd\nefgh", "v$rX", "XXXX\nefgh", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-empty-line", "ab\n\ncd", "jvrX", "ab\n\ncd", 2, 1, "", "", std::nullopt},
+    {"replace-char-visual-empty-buffer", "", "vrX", "", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-tab", "\tabc", "vlrX", "XXbc", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-unicode", "あ😀いう\nえお", "vlr界", "界界いう\nえお", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-tab-target", "abcd", "vllr\t", "\t\t\td", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-line", "  ab\ncde\nf", "VjrX", "XXXX\nXXX\nf", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-line-reverse", "ab\ncdef\ngh", "j$VkrX", "XX\nXXXX\ngh", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-line-empty", "ab\n\ncd", "VjjrX", "XX\n\nXX", 1, 1, "", "", std::nullopt},
+    {"replace-char-visual-crlf", "ab\r\ncdef\r\ngh", "lvjr界", "a界\n界界ef\ngh", 1, 2, "", "", std::nullopt},
+    {"replace-char-visual-register", "abcd\nefgh", "yyjvlrX", "abcd\nXXgh", 2, 1, "abcd\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

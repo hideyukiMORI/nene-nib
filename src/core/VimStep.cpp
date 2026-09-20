@@ -61,7 +61,7 @@ constexpr char32_t carriage_return_character = 0x0D;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 41> normal_bindings{
+constexpr std::array<VimBinding, 42> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {U'k', VimAction::move_up},
@@ -102,6 +102,7 @@ constexpr std::array<VimBinding, 41> normal_bindings{
      {U';', VimAction::repeat_character_search},
      {U',', VimAction::repeat_character_search_opposite},
      {U'g', VimAction::prefix_g},
+     {U'r', VimAction::replace_character},
      {U':', VimAction::open_command_line}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
@@ -1168,6 +1169,119 @@ character_search_position(const VimEditorView &view, const VimState &state,
     std::unreachable();
 }
 
+// ---------------------------------------------------------------- r（ADR 0029）
+
+[[nodiscard]] std::optional<OffsetRange> normal_replacement_range(const TextBuffer &text,
+                                                                  Offset caret, std::size_t count)
+{
+    const Offset end = text.line_end(line_of(text, caret));
+    const std::string available = text.text_range(caret, end);
+    if (count > code_point_count(available))
+    {
+        return std::nullopt;
+    }
+    return OffsetRange{caret, forward_characters(text, caret, count)};
+}
+
+[[nodiscard]] std::optional<OffsetRange> replacement_range(const VimState &state,
+                                                           const VimEditorView &view)
+{
+    switch (state.mode)
+    {
+    case VimMode::normal:
+        return normal_replacement_range(view.text, view.selection.caret, count_of(state.count));
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return vim_visual_range(view.text, view.selection, state.mode).range;
+    case VimMode::insert:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep started_replacement(const VimState &state, const VimEditorView &view)
+{
+    if (!replacement_range(state, view).has_value())
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    return started_prefix(state, VimPrefix::r);
+}
+
+// 文字だけを置換する。CRLF/LFの行境界は残し、効果の本文はLFへ揃える。
+[[nodiscard]] std::string replacement_text(std::string_view source, char32_t target)
+{
+    std::string result;
+    result.reserve(source.size());
+    Offset at{0};
+    while (at.value < source.size())
+    {
+        const char32_t code = code_point_at(source, at);
+        at = next_code_point(source, at);
+        if (code == carriage_return_character && at.value < source.size() &&
+            source.at(at.value) == '\n')
+        {
+            continue;
+        }
+        append_utf8(result, code == line_feed ? line_feed : target);
+    }
+    return result;
+}
+
+[[nodiscard]] VimStep replaced_character(const VimState &state, const VimEditorView &view,
+                                         char32_t target)
+{
+    const bool newline = target == line_feed || target == carriage_return_character;
+    const bool unsupported = (newline && state.mode != VimMode::normal) ||
+                             (!newline && target < U' ' && target != U'\t') || target == U'\x7f';
+    const auto range = replacement_range(state, view);
+    if (unsupported || !range.has_value())
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    const OffsetRange selected = range.value();
+    std::string body =
+        newline ? std::string("\n")
+                : replacement_text(view.text.text_range(selected.begin, selected.end), target);
+    Offset caret = selected.begin;
+    if (state.mode == VimMode::normal)
+    {
+        caret.value += newline ? body.size() : previous_code_point(body, Offset{body.size()}).value;
+    }
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplaceRange{selected, std::move(body), caret}};
+}
+
+[[nodiscard]] VimStep replacement_key(const VimState &state, const VimEditorView &view, VimKey key)
+{
+    if (std::holds_alternative<VimCharacter>(key))
+    {
+        return replaced_character(state, view, std::get<VimCharacter>(key).code);
+    }
+    switch (std::get<VimSpecialKey>(key))
+    {
+    case VimSpecialKey::enter:
+        return replaced_character(state, view, line_feed);
+    case VimSpecialKey::escape:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    std::unreachable();
+}
+
 // ---------------------------------------------------------------- 鍵から動作へ
 
 [[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret)
@@ -1583,8 +1697,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
-[[nodiscard]] VimStep normal_input_action(const VimState &state, const VimEditorView &view,
-                                          VimAction action)
+[[nodiscard]] VimStep input_action(const VimState &state, const VimEditorView &view,
+                                   VimAction action)
 {
     if (action == VimAction::open_command_line)
     {
@@ -1593,6 +1707,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (action == VimAction::prefix_g)
     {
         return started_prefix(state, VimPrefix::g);
+    }
+    if (action == VimAction::replace_character)
+    {
+        return started_replacement(state, view);
     }
     return required_character_search_action(state, view, action);
 }
@@ -1636,7 +1754,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimAction::repeat_character_search_opposite:
     case VimAction::open_command_line:
     case VimAction::prefix_g:
-        return normal_input_action(state, view, action);
+    case VimAction::replace_character:
+        return input_action(state, view, action);
     case VimAction::remove_character:
     case VimAction::remove_operator:
     case VimAction::change_operator:
@@ -1932,9 +2051,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimAction::till_character_backward:
     case VimAction::repeat_character_search:
     case VimAction::repeat_character_search_opposite:
-        return required_character_search_action(state, view, action);
     case VimAction::prefix_g:
-        return started_prefix(state, VimPrefix::g);
+    case VimAction::replace_character:
+        return input_action(state, view, action);
     // この縦切りの範囲の外の鍵は何もしない（決定 7・決定 8）。
     case VimAction::open_command_line:
     case VimAction::put_after:
@@ -2209,16 +2328,16 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimPrefix prefix, VimKey key)
 {
-    if (!std::holds_alternative<VimCharacter>(key))
-    {
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
-    }
-    const char32_t character = std::get<VimCharacter>(key).code;
     switch (prefix)
     {
     case VimPrefix::g:
-        return character == U'g' ? completed_prefix(state, view, VimAction::move_document_first)
-                                 : VimStep{finished_input_wait(state), VimNoEffect{}};
+        if (std::holds_alternative<VimCharacter>(key) && std::get<VimCharacter>(key).code == U'g')
+        {
+            return completed_prefix(state, view, VimAction::move_document_first);
+        }
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    case VimPrefix::r:
+        return replacement_key(state, view, key);
     }
     std::unreachable();
 }
