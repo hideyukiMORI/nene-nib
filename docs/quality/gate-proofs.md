@@ -668,6 +668,8 @@ baseは `3b02f136c41905bb2667ddcf97f04087fcfa5fae`。変更productionは `VimSte
 
 ### 5-u. rの次文字待ちと範囲置換（Issue #84・2026-09-21）
 
+統合単位は [PR #86](https://github.com/hideyukiMORI/nene-nib/pull/86)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
 base `8d7b3307b748b8341c1e6751631a365e0725f596`。ADR 0029を先に受理。VimAction/Prefixのrを既存VimInputWaitへ足し、VimStepの純粋な範囲/文字変換からVimReplaceRangeを返す。EditorControllerは既存with_document_newlines/replaceへ1回渡し、EditBoundary::separateで履歴を区切る。VimInsertAtのcaret_after_insertは同じ処理を引数だけ汎用化して共有した。新しい本文/選択/履歴所有、UI/IME、schema、依存、ゲートの変更はない。
 
 `python -X utf8 out/issue84-oracle/measure.py` は固定Vim9.1とcanonical measure()で41ケースを通常/+Escの82起動で測定。`python -X utf8 out/issue84-oracle/input-probe.py` は11起動で途中状態/取消後の操作とliteral CRを確認。合計93起動で、Vimソースは読んでいない。`fixture-inputs.json` / `fixture-results.json` / `input-probe.json`が証拠。

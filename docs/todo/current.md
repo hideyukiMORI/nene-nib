@@ -9,6 +9,8 @@
 
 **直近の実装は [Issue #84](https://github.com/hideyukiMORI/nene-nib/issues/84)（Vimのr）**。NORMALの回数指定、文字/行単位VISUALの置換、Unicode/Tab、NORMALのEnter、取消、CRLF、undo/redoを接続した。追加39fixture・計551件、対象460 checks・build/tidy/symbols/conformance/format成功。画面確認はnative pipe接続エラーで未実施。成果物は `build/issue84/NeNeNib.exe`、詳細はgate-proofs 5-u、統合状態はGitHubが正。
 
+統合単位は [PR #86](https://github.com/hideyukiMORI/nene-nib/pull/86)。
+
 VISUAL r<Enter>はliteral CRを挿入するため、oracleと文書模型の既存問題を [Issue #85](https://github.com/hideyukiMORI/nene-nib/issues/85)へ分離した。今回は選択を維持して入力待ちを解除する。制御文字の引用/置換・Ctrl-e/yの隣行参照も未対応。
 
 **前回の修正は [Issue #81](https://github.com/hideyukiMORI/nene-nib/issues/81)（行単位VISUAL yankの戻り位置）**。下向き/単一行は範囲先頭の列1、上向きの複数行は現在位置へ戻す。追加23fixture・計512件、対象265 checks・build/tidy/symbols/conformance/format成功。実機操作ツールの接続エラーで今回の画面確認は未実施。修正版は `build/issue81/NeNeNib.exe`、旧版の起動窓は保持。詳細はgate-proofs 5-t、統合状態はGitHubが正。
