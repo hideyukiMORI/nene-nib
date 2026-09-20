@@ -3760,6 +3760,32 @@ void verify_vim_visual_step_edges()
     expect(is_empty(inserting_none.range), "and neither has INSERT");
 }
 
+void verify_vim_visual_yank_scope()
+{
+    constexpr std::array<std::string_view, 10> boundaries{
+        "yy-does-not-move-the-caret",
+        "yw-keeps-the-caret",
+        "yb-moves-to-the-range-start",
+        "y-dollar-keeps-the-caret",
+        "yj-yanks-two-lines",
+        "yk-moves-up-to-the-first-line",
+        "yk-clamps-the-column-on-a-short-line",
+        "v-y-yanks-the-selection",
+        "v-j-y-across-lines",
+        "V-indented-line-keeps-the-indent-in-the-register"};
+    std::size_t selected = 0;
+    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    {
+        if (fixture.name.starts_with("visual-yank-") ||
+            std::ranges::find(boundaries, fixture.name) != boundaries.end())
+        {
+            verify_vim_fixture(fixture);
+            ++selected;
+        }
+    }
+    expect(selected == 33, "the scope replays 23 visual yanks and 10 shared-path boundaries");
+}
+
 void verify_vim_visual_wanted_fixtures()
 {
     std::size_t selected = 0;
@@ -5187,7 +5213,8 @@ void verify_vim_line_jump_recovery()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 11> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 12> scopes{{
+        {"--vim-visual-yank", verify_vim_visual_yank_scope},
         {"--vim-visual-wanted", verify_vim_visual_wanted_scope},
         {"--vim-open-lines", verify_vim_open_line_scope},
         {"--vim-open-line-external", verify_vim_open_line_external_scope},
