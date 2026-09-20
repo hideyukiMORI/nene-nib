@@ -9,7 +9,7 @@
 
 **直近の実装・限定検証完了は [Issue #76](https://github.com/hideyukiMORI/nene-nib/issues/76)（Vimの先頭・末尾・指定行移動）**。main `2e22281` から `feat/76-vim-line-jumps` で [ADR 0027](../adr/0027-vim-line-jumps-and-exclusive-input-wait.md)を実装。新oracle42件・計431件、単体初回989中987成功と修正対象15成功、native6シナリオ、build/tidy/symbols/conformance成功。既存のVISUAL移行時の希望列解除はIssue #77へ分離。統合状態はGitHubを正とする。
 
-成果の統合単位: [PR #75](https://github.com/hideyukiMORI/nene-nib/pull/75)（Issue #72）。
+成果の統合単位: [PR #78](https://github.com/hideyukiMORI/nene-nib/pull/78)（Issue #76）。
 
 直前の完了はIssue #72（Vimの行内文字検索と反復）。2026-09-20夜のhideの続行指示で再開し、`feat/72-vim-character-search`で既存移動・範囲へ接続した。[ADR 0026](../adr/0026-vim-character-search-and-scoped-oracle.md)、追加oracle60件（旧329件は維持）、単体621 checks、native7シナリオ、build/tidy/symbols/conformanceが成功。PR #75でmainへ統合済み。
 
