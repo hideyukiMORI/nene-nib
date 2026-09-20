@@ -9,6 +9,8 @@
 
 **直近の修正は [Issue #77](https://github.com/hideyukiMORI/nene-nib/issues/77)（VISUAL移行時の希望列）**。開始/種類切替/回数の希望列を補正し、対象テストとnativeを確認。採用18fixture・計489件。行単位VISUAL yankの既存問題はIssue #81へ分離。検証と再利用はgate-proofs 5-s、統合状態はGitHubが正。
 
+統合単位は [PR #82](https://github.com/hideyukiMORI/nene-nib/pull/82)。9月21日未明の続行分も9月20日の作業開始日にまとめて記録した。
+
 **前回の実装・限定検証完了は [Issue #79](https://github.com/hideyukiMORI/nene-nib/issues/79)（Vimのo/O）**。hideの#76実機確認と続行指示により、main `8f48f49`から `feat/79-vim-open-lines` で実装した。ADR 0028、追加oracle40件・計471件、初回unit551中549成功と修正/追加対象430・46成功、native3件、build/tidy/symbols/conformance成功。統合状態はGitHubを正とする。
 
 成果の統合単位は [PR #80](https://github.com/hideyukiMORI/nene-nib/pull/80)。独立レビューは未解決指摘なし。関連実装が不変のため、push/review/mergeではgate-proofs 5-rの成功結果を再利用する。

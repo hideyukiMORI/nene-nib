@@ -614,6 +614,8 @@ captureではbelowEofのINSERT・行41列1のbar、Esc後のNORMAL・行46列1�
 
 ### 5-s. VISUAL移行時の希望列（Issue #77・2026-09-20）
 
+統合単位は [PR #82](https://github.com/hideyukiMORI/nene-nib/pull/82)。9月21日未明の文書追記・レビュー・統合でも、関連入力不変の成功結果を再利用する。
+
 NORMAL→v/V、v↔V、同じキーでの終了、回数付き選択を、既存VimState::wanted_columnで表す。変更したproductionはVimStep.cppのwidened / entered_visual / visual_switchedだけ。横に実際に広がった場合は既存wanted_afterで到達列へ更新し、縦は元の希望列を使う。空行/EOFで移動不能なら位置も希望列も保つ。Escの終了経路は不変。ADR 0018へ実測に基づく補足を入れ、型・所有・効果・UI・保存schemaは変えていない。
 
 固定Vimの新規fixture測定は19件＋空行2件（measureの通常/+Escで計42起動）。別の分割normal probeは開始/切替/終了12件、明示1と回数6件、空行2件、最終行2件を4起動で測定。合計46起動。Vimソースは読まず、#76のg取消に関する3ケースのprobeは結果を再利用した。証拠は `out/issue77-oracle/{fixture-results,empty-count,transitions,count-one,empty-transitions,last-line-transitions}.json`。
