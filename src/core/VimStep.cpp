@@ -10,6 +10,11 @@
 #include "Utf8.hpp"
 #include "VimBinding.hpp"
 #include "VimCaret.hpp"
+#include "VimCharacterSearch.hpp"
+#include "VimCharacterSearchInvocation.hpp"
+#include "VimCharacterSearchKind.hpp"
+#include "VimCharacterSearchRequest.hpp"
+#include "VimCharacterSearchScan.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimMotionRange.hpp"
 #include "VimPutSide.hpp"
@@ -43,42 +48,54 @@ constexpr char32_t line_feed = U'\n';
 constexpr char carriage_return = '\r';
 // Ctrl-r は文字としては制御文字なので、表に載せる値は名前で書く（原文に制御文字を置かない）。
 constexpr char32_t control_r_character = 0x12;
+constexpr char32_t control_b_character = 0x02;
+constexpr char32_t control_d_character = 0x04;
+constexpr char32_t control_f_character = 0x06;
+constexpr char32_t control_u_character = 0x15;
+constexpr char32_t carriage_return_character = 0x0D;
 
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 32> normal_bindings{{{U'h', VimAction::move_left},
-                                                      {U'j', VimAction::move_down},
-                                                      {U'k', VimAction::move_up},
-                                                      {U'l', VimAction::move_right},
-                                                      {U'0', VimAction::move_line_start},
-                                                      {U'$', VimAction::move_line_end},
-                                                      {U'w', VimAction::move_next_word},
-                                                      {U'b', VimAction::move_previous_word},
-                                                      {U'e', VimAction::move_word_end},
-                                                      {U'^', VimAction::move_first_non_blank},
-                                                      {U'H', VimAction::move_screen_top},
-                                                      {U'M', VimAction::move_screen_middle},
-                                                      {U'L', VimAction::move_screen_bottom},
-                                                      {U'x', VimAction::remove_character},
-                                                      {U'd', VimAction::remove_operator},
-                                                      {U'c', VimAction::change_operator},
-                                                      {U'y', VimAction::yank_operator},
-                                                      {U'p', VimAction::put_after},
-                                                      {U'P', VimAction::put_before},
-                                                      {U'D', VimAction::remove_to_line_end},
-                                                      {U'C', VimAction::change_to_line_end},
-                                                      {U'Y', VimAction::yank_line},
-                                                      {U'i', VimAction::insert_before},
-                                                      {U'a', VimAction::insert_after},
-                                                      {U'I', VimAction::insert_at_line_start},
-                                                      {U'A', VimAction::insert_at_line_end},
-                                                      {U'u', VimAction::undo},
-                                                      {control_r_character, VimAction::redo},
-                                                      {U'v', VimAction::visual},
-                                                      {U'V', VimAction::visual_line},
-                                                      {U'o', VimAction::swap_visual_ends},
-                                                      {U':', VimAction::open_command_line}}};
+constexpr std::array<VimBinding, 38> normal_bindings{
+    {{U'h', VimAction::move_left},
+     {U'j', VimAction::move_down},
+     {U'k', VimAction::move_up},
+     {U'l', VimAction::move_right},
+     {U'0', VimAction::move_line_start},
+     {U'$', VimAction::move_line_end},
+     {U'w', VimAction::move_next_word},
+     {U'b', VimAction::move_previous_word},
+     {U'e', VimAction::move_word_end},
+     {U'^', VimAction::move_first_non_blank},
+     {U'H', VimAction::move_screen_top},
+     {U'M', VimAction::move_screen_middle},
+     {U'L', VimAction::move_screen_bottom},
+     {U'x', VimAction::remove_character},
+     {U'd', VimAction::remove_operator},
+     {U'c', VimAction::change_operator},
+     {U'y', VimAction::yank_operator},
+     {U'p', VimAction::put_after},
+     {U'P', VimAction::put_before},
+     {U'D', VimAction::remove_to_line_end},
+     {U'C', VimAction::change_to_line_end},
+     {U'Y', VimAction::yank_line},
+     {U'i', VimAction::insert_before},
+     {U'a', VimAction::insert_after},
+     {U'I', VimAction::insert_at_line_start},
+     {U'A', VimAction::insert_at_line_end},
+     {U'u', VimAction::undo},
+     {control_r_character, VimAction::redo},
+     {U'v', VimAction::visual},
+     {U'V', VimAction::visual_line},
+     {U'o', VimAction::swap_visual_ends},
+     {U'f', VimAction::find_character_forward},
+     {U'F', VimAction::find_character_backward},
+     {U't', VimAction::till_character_forward},
+     {U'T', VimAction::till_character_backward},
+     {U';', VimAction::repeat_character_search},
+     {U',', VimAction::repeat_character_search_opposite},
+     {U':', VimAction::open_command_line}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 13> motion_bindings{
@@ -151,6 +168,155 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     const std::size_t motion = count_of(state.count);
     const std::size_t highest = std::numeric_limits<std::size_t>::max();
     return pending > highest / motion ? highest : pending * motion;
+}
+
+[[nodiscard]] bool searches_forward(VimCharacterSearchKind kind) noexcept
+{
+    switch (kind)
+    {
+    case VimCharacterSearchKind::find_forward:
+    case VimCharacterSearchKind::till_forward:
+        return true;
+    case VimCharacterSearchKind::find_backward:
+    case VimCharacterSearchKind::till_backward:
+        return false;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] bool searches_until(VimCharacterSearchKind kind) noexcept
+{
+    switch (kind)
+    {
+    case VimCharacterSearchKind::till_forward:
+    case VimCharacterSearchKind::till_backward:
+        return true;
+    case VimCharacterSearchKind::find_forward:
+    case VimCharacterSearchKind::find_backward:
+        return false;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimCharacterSearchKind opposite(VimCharacterSearchKind kind) noexcept
+{
+    switch (kind)
+    {
+    case VimCharacterSearchKind::find_forward:
+        return VimCharacterSearchKind::find_backward;
+    case VimCharacterSearchKind::find_backward:
+        return VimCharacterSearchKind::find_forward;
+    case VimCharacterSearchKind::till_forward:
+        return VimCharacterSearchKind::till_backward;
+    case VimCharacterSearchKind::till_backward:
+        return VimCharacterSearchKind::till_forward;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] Offset search_destination(std::string_view content, Offset match,
+                                        VimCharacterSearchKind kind) noexcept
+{
+    switch (kind)
+    {
+    case VimCharacterSearchKind::find_forward:
+    case VimCharacterSearchKind::find_backward:
+        return match;
+    case VimCharacterSearchKind::till_forward:
+        return previous_code_point(content, match);
+    case VimCharacterSearchKind::till_backward:
+        return next_code_point(content, match);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] bool skips_adjacent(Offset caret, Offset destination,
+                                  const VimCharacterSearchRequest &request) noexcept
+{
+    return request.invocation == VimCharacterSearchInvocation::repeat && request.count == 1 &&
+           searches_until(request.search.kind) && destination == caret;
+}
+
+[[nodiscard]] std::optional<Offset> matched_destination(std::string_view content, Offset at,
+                                                        Offset caret,
+                                                        VimCharacterSearchScan &scan) noexcept
+{
+    if (code_point_at(content, at) != scan.request.search.target)
+    {
+        return std::nullopt;
+    }
+    const Offset destination = search_destination(content, at, scan.request.search.kind);
+    if (skips_adjacent(caret, destination, scan.request))
+    {
+        return std::nullopt;
+    }
+    --scan.remaining;
+    return scan.remaining == 0 ? std::optional<Offset>{destination} : std::nullopt;
+}
+
+[[nodiscard]] std::optional<Offset>
+searched_forward(std::string_view content, Offset caret,
+                 const VimCharacterSearchRequest &request) noexcept
+{
+    VimCharacterSearchScan scan{request, request.count};
+    Offset at = next_code_point(content, caret);
+    while (at.value < content.size())
+    {
+        const auto destination = matched_destination(content, at, caret, scan);
+        if (destination.has_value())
+        {
+            return destination;
+        }
+        at = next_code_point(content, at);
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<Offset>
+searched_backward(std::string_view content, Offset caret,
+                  const VimCharacterSearchRequest &request) noexcept
+{
+    if (caret.value == 0)
+    {
+        return std::nullopt;
+    }
+    VimCharacterSearchScan scan{request, request.count};
+    Offset at = previous_code_point(content, caret);
+    while (true)
+    {
+        const auto destination = matched_destination(content, at, caret, scan);
+        if (destination.has_value())
+        {
+            return destination;
+        }
+        if (at.value == 0)
+        {
+            return std::nullopt;
+        }
+        at = previous_code_point(content, at);
+    }
+}
+
+[[nodiscard]] std::optional<Offset>
+searched_in_line(std::string_view content, Offset caret,
+                 const VimCharacterSearchRequest &request) noexcept
+{
+    return searches_forward(request.search.kind) ? searched_forward(content, caret, request)
+                                                 : searched_backward(content, caret, request);
+}
+
+[[nodiscard]] std::optional<Offset>
+character_search_position(const VimEditorView &view, const VimState &state,
+                          VimCharacterSearch search, VimCharacterSearchInvocation invocation)
+{
+    const LineNumber line = view.text.position_of(view.selection.caret).line;
+    const Offset start = view.text.line_start(line);
+    const std::string content = view.text.text_range(start, view.text.line_end(line));
+    const Offset caret{view.selection.caret.value - start.value};
+    const VimCharacterSearchRequest request{search, total_count(state), invocation};
+    const auto found = searched_in_line(content, caret, request);
+    return found.has_value() ? std::optional<Offset>{Offset{start.value + found.value().value}}
+                             : std::nullopt;
 }
 
 [[nodiscard]] LineNumber line_of(const TextBuffer &text, Offset caret)
@@ -563,6 +729,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         without_carriage_returns(text.text_range(range.range.begin, range.range.end));
     switch (range.kind)
     {
+    case VimRegisterKind::uninitialized:
+        // Motion ranges are constructed only as characterwise or linewise.
+        std::unreachable();
     case VimRegisterKind::lines:
         // 行単位のレジスタは必ず改行で終わる（Vim は最終行にも付ける）。
         body.push_back('\n');
@@ -603,6 +772,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     VimState next = vim_resting_from(state, register_after(state, text, range));
     switch (range.kind)
     {
+    case VimRegisterKind::uninitialized:
+        // Motion ranges are constructed only as characterwise or linewise.
+        std::unreachable();
     case VimRegisterKind::characters:
         return VimStep{std::move(next), VimRemoveRange{range.range}};
     case VimRegisterKind::lines:
@@ -633,6 +805,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 {
     switch (range.kind)
     {
+    case VimRegisterKind::uninitialized:
+        // Motion ranges are constructed only as characterwise or linewise.
+        std::unreachable();
     case VimRegisterKind::characters:
         return range.range.begin;
     case VimRegisterKind::lines:
@@ -645,7 +820,7 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 [[nodiscard]] VimStep yanked(const VimState &state, const TextBuffer &text, Offset caret,
                              const VimMotionRange &range)
 {
-    return VimStep{vim_resting_from(state, register_after(state, text, range)),
+    return VimStep{vim_resting_from(state, register_of(text, range)),
                    VimMoveTo{yanked_caret(text, state, caret, range)}};
 }
 
@@ -668,6 +843,96 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return yanked(state, text, caret, range);
     }
     std::unreachable();
+}
+
+[[nodiscard]] VimState finished_character_search(const VimState &state)
+{
+    VimState next = state;
+    next.count = std::nullopt;
+    next.pending = std::nullopt;
+    next.awaiting_character = std::nullopt;
+    return next;
+}
+
+[[nodiscard]] VimState recorded_character_search(const VimState &state, VimCharacterSearch search,
+                                                 VimCharacterSearchInvocation invocation)
+{
+    VimState next = state;
+    next.awaiting_character = std::nullopt;
+    if (invocation == VimCharacterSearchInvocation::first)
+    {
+        next.last_character_search = search;
+    }
+    return next;
+}
+
+[[nodiscard]] VimMotionRange character_search_range(const TextBuffer &text, Offset caret,
+                                                    Offset destination, VimCharacterSearchKind kind)
+{
+    if (searches_forward(kind))
+    {
+        return characters_between(caret, inclusive_end(text, destination));
+    }
+    return characters_between(destination, caret);
+}
+
+[[nodiscard]] VimStep moved_by_character_search(const VimState &state, const VimEditorView &view,
+                                                Offset destination)
+{
+    VimState next = finished_character_search(state);
+    next.wanted_column =
+        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(destination).column};
+    switch (state.mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        return VimStep{std::move(next), VimMoveTo{destination}};
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, destination}}};
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep completed_character_search(const VimState &state, const VimEditorView &view,
+                                                 VimCharacterSearch search,
+                                                 VimCharacterSearchInvocation invocation)
+{
+    const VimState recorded = recorded_character_search(state, search, invocation);
+    const auto destination = character_search_position(view, recorded, search, invocation);
+    if (!destination.has_value())
+    {
+        return VimStep{finished_character_search(recorded), VimNoEffect{}};
+    }
+    if (recorded.pending.has_value())
+    {
+        return performed(recorded, view.text, view.selection.caret,
+                         character_search_range(view.text, view.selection.caret,
+                                                destination.value(), search.kind));
+    }
+    return moved_by_character_search(recorded, view, destination.value());
+}
+
+[[nodiscard]] VimStep started_character_search(const VimState &state, VimCharacterSearchKind kind)
+{
+    VimState next = state;
+    next.awaiting_character = kind;
+    return VimStep{std::move(next), VimNoEffect{}};
+}
+
+[[nodiscard]] VimStep repeated_character_search(const VimState &state, const VimEditorView &view,
+                                                VimAction action)
+{
+    if (!state.last_character_search.has_value())
+    {
+        return VimStep{finished_character_search(state), VimNoEffect{}};
+    }
+    VimCharacterSearch search = state.last_character_search.value();
+    if (action == VimAction::repeat_character_search_opposite)
+    {
+        search.kind = opposite(search.kind);
+    }
+    return completed_character_search(state, view, search, VimCharacterSearchInvocation::repeat);
 }
 
 // cw の特例（Vim の nv_wordcmd）。語の上（非空白）では ce の範囲になり、空白の上は dw と同じ。
@@ -698,8 +963,10 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 // オペレータを自分の回数といっしょに保留する（決定 1）。積んだ回数はここで移る。
 [[nodiscard]] VimStep pending_operator(const VimState &state, VimOperator operation)
 {
-    VimState next = vim_resting_from(state, state.unnamed_register);
+    VimState next = state;
+    next.count = std::nullopt;
     next.pending = VimPendingOperator{operation, state.count};
+    next.awaiting_character = std::nullopt;
     return VimStep{std::move(next), VimNoEffect{}};
 }
 
@@ -804,6 +1071,9 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     VimState next = vim_resting_from(state, state.unnamed_register);
     switch (state.unnamed_register.kind)
     {
+    case VimRegisterKind::uninitialized:
+        // An uninitialized register is empty and returned above before put dispatch.
+        std::unreachable();
     case VimRegisterKind::characters:
         return VimStep{std::move(next), put_characters(text, caret, std::move(body), side)};
     case VimRegisterKind::lines:
@@ -1093,6 +1363,86 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return entered_insert(state, forward_characters(view.text, view.selection.caret, single_step));
 }
 
+[[nodiscard]] std::optional<VimStep>
+character_search_action(const VimState &state, const VimEditorView &view, VimAction action)
+{
+    if (action == VimAction::find_character_forward)
+    {
+        return started_character_search(state, VimCharacterSearchKind::find_forward);
+    }
+    if (action == VimAction::find_character_backward)
+    {
+        return started_character_search(state, VimCharacterSearchKind::find_backward);
+    }
+    if (action == VimAction::till_character_forward)
+    {
+        return started_character_search(state, VimCharacterSearchKind::till_forward);
+    }
+    if (action == VimAction::till_character_backward)
+    {
+        return started_character_search(state, VimCharacterSearchKind::till_backward);
+    }
+    if (action == VimAction::repeat_character_search ||
+        action == VimAction::repeat_character_search_opposite)
+    {
+        return repeated_character_search(state, view, action);
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] VimStep required_character_search_action(const VimState &state,
+                                                       const VimEditorView &view, VimAction action)
+{
+    auto step = character_search_action(state, view, action);
+    if (!step.has_value())
+    {
+        std::unreachable();
+    }
+    return std::move(step).value();
+}
+
+[[nodiscard]] VimStep pending_action(const VimState &state, VimAction action)
+{
+    const VimOperator operation = action == VimAction::remove_operator   ? VimOperator::remove
+                                  : action == VimAction::change_operator ? VimOperator::change
+                                                                         : VimOperator::yank;
+    return pending_operator(state, operation);
+}
+
+[[nodiscard]] VimStep normal_visual_action(const VimState &state, const VimEditorView &view,
+                                           VimAction action)
+{
+    return action == VimAction::swap_visual_ends ? cancelled(state)
+                                                 : visual_action(state, view, action);
+}
+
+[[nodiscard]] VimStep insert_action(const VimState &state, const VimEditorView &view,
+                                    VimAction action)
+{
+    if (action == VimAction::insert_before)
+    {
+        return entered_insert(state, view.selection.caret);
+    }
+    if (action == VimAction::insert_after)
+    {
+        return appended_insert(state, view);
+    }
+    if (action == VimAction::insert_at_line_start)
+    {
+        return entered_insert(state, vim_first_non_blank(view.text, view.selection.caret));
+    }
+    return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
+}
+
+[[nodiscard]] VimStep history_action(const VimState &state, VimAction action)
+{
+    if (action == VimAction::undo)
+    {
+        return VimStep{vim_resting_from(state, state.unnamed_register), VimUndo{}};
+    }
+    return VimStep{vim_resting_from(state, state.unnamed_register), VimRedo{}};
+}
+
 [[nodiscard]] VimStep commanded(const VimState &state, const VimEditorView &view, VimAction action)
 {
     switch (action)
@@ -1119,19 +1469,23 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return page_action(state, view, action);
     case VimAction::visual:
     case VimAction::visual_line:
-        return visual_action(state, view, action);
     case VimAction::swap_visual_ends:
-        return cancelled(state);
+        return normal_visual_action(state, view, action);
+    case VimAction::find_character_forward:
+    case VimAction::find_character_backward:
+    case VimAction::till_character_forward:
+    case VimAction::till_character_backward:
+    case VimAction::repeat_character_search:
+    case VimAction::repeat_character_search_opposite:
+        return required_character_search_action(state, view, action);
     case VimAction::open_command_line:
         return opened_command_line(state);
     case VimAction::remove_character:
         return removed_character(state, view.text, view.selection.caret);
     case VimAction::remove_operator:
-        return pending_operator(state, VimOperator::remove);
     case VimAction::change_operator:
-        return pending_operator(state, VimOperator::change);
     case VimAction::yank_operator:
-        return pending_operator(state, VimOperator::yank);
+        return pending_action(state, action);
     case VimAction::put_after:
     case VimAction::put_before:
         return put_action(state, view, action);
@@ -1141,17 +1495,13 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::yank_line:
         return operated_on_lines(state, view.text, view.selection.caret, VimOperator::yank);
     case VimAction::insert_before:
-        return entered_insert(state, view.selection.caret);
     case VimAction::insert_after:
-        return appended_insert(state, view);
     case VimAction::insert_at_line_start:
-        return entered_insert(state, vim_first_non_blank(view.text, view.selection.caret));
     case VimAction::insert_at_line_end:
-        return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
+        return insert_action(state, view, action);
     case VimAction::undo:
-        return VimStep{vim_resting_from(state, state.unnamed_register), VimUndo{}};
     case VimAction::redo:
-        return VimStep{vim_resting_from(state, state.unnamed_register), VimRedo{}};
+        return history_action(state, action);
     }
     std::unreachable();
 }
@@ -1179,6 +1529,11 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     if (action == doubled_action_of(operation))
     {
         return operated_on_lines(state, view.text, view.selection.caret, operation);
+    }
+    const auto search_step = character_search_action(state, view, action);
+    if (search_step.has_value())
+    {
+        return search_step.value();
     }
     const auto motion = motion_for(action);
     if (!motion.has_value())
@@ -1338,6 +1693,16 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     std::unreachable();
 }
 
+[[nodiscard]] VimStep visual_scroll_action(const VimState &state, const VimEditorView &view,
+                                           VimAction action)
+{
+    if (action == VimAction::scroll_half_down || action == VimAction::scroll_half_up)
+    {
+        return half_page_action(state, view, action);
+    }
+    return page_action(state, view, action);
+}
+
 [[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &view,
                                    VimAction action)
 {
@@ -1358,13 +1723,10 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     case VimAction::move_screen_bottom:
         return visual_moved(state, view, action);
     case VimAction::scroll_half_down:
-        return half_page_step(state, view, VimScrollDirection::down);
     case VimAction::scroll_half_up:
-        return half_page_step(state, view, VimScrollDirection::up);
     case VimAction::scroll_page_down:
-        return page_step(state, view, VimScrollDirection::down);
     case VimAction::scroll_page_up:
-        return page_step(state, view, VimScrollDirection::up);
+        return visual_scroll_action(state, view, action);
     // VISUAL の x は d と同じ（決定 7）。
     case VimAction::remove_character:
     case VimAction::remove_operator:
@@ -1380,6 +1742,13 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         return visual_switched(state, view.selection, VimMode::visual);
     case VimAction::visual_line:
         return visual_switched(state, view.selection, VimMode::visual_line);
+    case VimAction::find_character_forward:
+    case VimAction::find_character_backward:
+    case VimAction::till_character_forward:
+    case VimAction::till_character_backward:
+    case VimAction::repeat_character_search:
+    case VimAction::repeat_character_search_opposite:
+        return required_character_search_action(state, view, action);
     // この縦切りの範囲の外の鍵は何もしない（決定 7・決定 8）。
     case VimAction::open_command_line:
     case VimAction::put_after:
@@ -1523,6 +1892,68 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     return VimStep{state, VimInsertString{std::move(utf8)}};
 }
 
+[[nodiscard]] std::optional<char32_t> character_search_target(VimSpecialKey key) noexcept
+{
+    switch (key)
+    {
+    case VimSpecialKey::enter:
+        return carriage_return_character;
+    case VimSpecialKey::control_r:
+        return control_r_character;
+    case VimSpecialKey::control_d:
+        return control_d_character;
+    case VimSpecialKey::control_u:
+        return control_u_character;
+    case VimSpecialKey::control_f:
+        return control_f_character;
+    case VimSpecialKey::control_b:
+        return control_b_character;
+    case VimSpecialKey::escape:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep awaited_character(const VimState &state, const VimEditorView &view,
+                                        char32_t target)
+{
+    if (!state.awaiting_character.has_value())
+    {
+        std::unreachable();
+    }
+    const VimCharacterSearch search{state.awaiting_character.value(), target};
+    return completed_character_search(state, view, search, VimCharacterSearchInvocation::first);
+}
+
+[[nodiscard]] VimStep awaited_special(const VimState &state, const VimEditorView &view,
+                                      VimSpecialKey key)
+{
+    const auto target = character_search_target(key);
+    if (!target.has_value())
+    {
+        return VimStep{finished_character_search(state), VimNoEffect{}};
+    }
+    return awaited_character(state, view, target.value());
+}
+
+[[nodiscard]] VimStep awaiting_step(const VimState &state, const VimEditorView &view, VimKey key)
+{
+    if (std::holds_alternative<VimCharacter>(key))
+    {
+        return awaited_character(state, view, std::get<VimCharacter>(key).code);
+    }
+    return awaited_special(state, view, std::get<VimSpecialKey>(key));
+}
+
 [[nodiscard]] VimStep normal_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     if (std::holds_alternative<VimCharacter>(key))
@@ -1553,6 +1984,10 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
+    if (state.awaiting_character.has_value())
+    {
+        return awaiting_step(state, view, key);
+    }
     switch (state.mode)
     {
     case VimMode::normal:

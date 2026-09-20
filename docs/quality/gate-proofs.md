@@ -520,3 +520,35 @@ native初回は結果メッセージ上のクリックをtoggleと誤認した�
 読み取り専用の独立レビューで、一時所有者からのborrow、初期文書によるnotice消去、blocked時同値の成功扱いを修正。追加指摘なし。列挙途中失敗は集合と上限を確認できないため、部分集合を採用せず組み込み＋noticeとする判断をADRへ明記。形式はuser-theme-format.md。runtime依存・settings schema・waiver変更なし。nativeは120 DPIで、他IME/DPI移動は本件では測らない。検証対象が不変のpush/review/mergeでは同じ成功結果を再利用する。
 
 性能は `python out/git/issue70-speed.py` で既存measure-speedの起動/打鍵4指標だけを5試行。指紋bc8a356f37c68491 / 120 DPI、中央値は初回描画209.9973ms、窓表示32.813ms、単打鍵1.14ms、200打鍵2.627ms。退行0・欠測0（`out/speed/issue70-selected.json`）。通常の空profileの基準比較であり、128個の最大サイズテーマを読む最悪時間の保証とは扱わない。
+
+### 5-p. Vimの行内文字検索（Issue #72・ADR 0026・2026-09-20）
+
+対象は `f/F/t/T` と `;` / `,` の待ち・記憶・回数・行内UTF-8走査、既存operator/VISUALへの範囲接続、およびoracle生成器の対象指定。設定・テーマ・ファイルcodec・描画・保存schemaは不変であり、無関係な検証は再実行しない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python -m unittest tests.conformance.test_vim_oracle` | 10 tests成功。選択だけを測定し旧期待行を維持する正例、入力・SHA/件数・Vim版/場所/設定・測定AST/既存import・行順の不一致拒否、コメント/docstring変更の許容、空/未知prefix拒否 |
+| `python -X utf8 eng/vim-oracle.py --regenerate --only char-search- --reuse-ref b6d19ff` | 新しいCLIの実Vim接続と混合生成を確認。60 measured / 329 reused。固定Vim 9.1（2024 Jan 02, compiled Jan 3 2024 23:53:58）。`out/issue72-oracle/generation.log` |
+| `parsed_header` と `fixture_row` による生成行照合 | 旧commitの329行を逐語維持。追加60行は探索時 `out/issue72-oracle/fixture-results.json` と完全一致。現在の入力/生成物389件のSHAと本数も同じparserで一致 |
+| `. ./eng/toolchain.ps1` → `cmake --build build --target nib_tests NeNeNib --parallel 4` | 新しい状態と閉じた命令、直接呼出元をDebug + ASan/UBSan + tidyでコンパイル。成功 |
+| `build/nib_tests.exe --vim-character-search` | 621 checks成功。追加60fixture、文字待ちでの数字/命令文字、記憶/反転/取消/未発見/欲しい列、制御キー、最大count、モード切替、CRLF、undo、空/未設定/通常register。既存step/visual/viewport状態、insert/change undo、put改行の直接呼出元だけ選択 |
+| `python eng/symbols.py --build-dir build --require core application` | 行内走査と追加した所有値がOS/locale等の参照を増やしていないことを確認。2 libraries / 0 violations。`out/issue72-oracle/symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新しい型の所属/依存、文書参照、389件の生成物整合を確認。最終0 violations。`out/issue72-oracle/conformance.log` |
+| 変更C++の `clang-format --dry-run --Werror` / `git diff --check` | 新規headerを含む差分の整形・空白を確認、成功 |
+| `python -X utf8 eng/verify-vim-character-search.py`、修正後は `--only unicodeSurrogatePair` / `delete` / `change` / `yank` | 隔離profileで7シナリオ成功。検索待ちがdirtyにしないこと、Esc後のxとundo、ASCII/BMP日本語/絵文字の検索、d/c/yの保存本文とundoを既存Win32入力経路で確認。後続4件の実測は120 DPI。`out/issue72-native/vim-character-search-results-summary.json` |
+
+探索では同じ固定Vimの `getcharsearch()` / `getcurpos()` を追加観測した。生の記録は `out/issue72-oracle/priority-probes.json` / `control-special-probes.json`。fixtureにしない取消後のVISUAL継続、失敗後の新しい打鍵、欲しい列の保持は、複数の `normal!` を分けて観測し単体テストの根拠とする。CRLFの原データもVimで `fileformat=dos` を確認した。Vimのソースコードは参照していない。
+
+探索用スクリプトを増補する際、既存ケースを再実行する構造のまま走らせた不備があった。priorityの最終48ケースに対して累計118回、既存分70回が余分な測定。以後は新規対象だけの実行へ変更した。探索fixtureは60件の通常/+Esc比較と入力を訂正した3件の比較、別の制御キー4件を含め、探索段階のVim起動は248回。全329件のoracle再測定は行っていない。正式生成後は同じ入力・測定処理・Vim版の再実行を行わない。
+
+空範囲のレジスタ境界は追加の新規4ケースだけを観測した。`adjacent-T-register-probes.json` の3ケースと `existing-empty-yank-probe.json` の1ケースで、空yankの種別更新と空delete/changeの旧値保持、既存 `y0` にも同じ意味があることを確認した。
+
+読み取り専用の独立レビューでは、非空レジスタを持つ空delete/changeの検査不足を指摘し、`yy`で行単位の値を作った後に `$dTa` / `$cTa<Esc>` が本文とレジスタを維持する2ケースを追加した。追加差分の確認後は未解決指摘なし。yankは空範囲も既存 `register_of` の経路へ揃えた。
+
+初回buildではtidyが走査の入れ子2件、命令分岐の長さ2件、optionalの保証3件を検出し、共通の一致判定・命令ごとの小関数・明示した保証へ分割した。次にテスト入口の複雑度1件を、commandの一度の正規化で修正した。分割後の命令振り分けも独立レビューで元の意味との同等性を確認済み。conformanceはその際追加した走査値の型配置をCNF-002で検出したため、同名headerへ移して違反0を確認した。ゲートの抑制・緩和は行っていない。
+
+型配置変更は同じstruct定義の移動だけなので、coreの増分buildと対象2実行ファイルの再リンクで確認し、unit621とsymbolsの成功結果を再利用した。再リンク記録は `out/issue72-oracle/final-build.log`。その後の文書・push・review・mergeでも関連入力が同じ結果は再実行しない。
+
+native初回はpending/Esc・ASCII・BMP日本語を通過した後、検証側が非BMPのcode pointを単一WM_CHARとして送っていたため絵文字で停止した。刺激をUTF-16のcode unitへ分けて既存driverへ渡すよう直し、`--only`で絵文字と未実行のoperator3件だけを確認した。製品の入力経路は変更していない。初回3件の成功は途中まで到達した実行と保存結果、後続4件は各実行出力を集約した記録であり、7件を最後にまとめて再実行したものではない。
+
+結果の保存も各selector別ファイルと成功直後のcheckpointへ改善し、`py_compile`で確認した。保存の変更だけではnativeを再実行していない。NORMAL/VISUALのIMEを閉じる既存仕様は継続し、Unicode確認はWM_CHARから届く文字だけを対象とする。保存形式・runtime依存は不変、Waivers: none。

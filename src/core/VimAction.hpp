@@ -44,6 +44,12 @@ enum class VimAction : std::uint8_t
     visual,
     visual_line,
     swap_visual_ends,
+    find_character_forward,
+    find_character_backward,
+    till_character_forward,
+    till_character_backward,
+    repeat_character_search,
+    repeat_character_search_opposite,
     open_command_line
 };
 } // namespace nenenib::core

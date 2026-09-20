@@ -20,7 +20,7 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode)
       scroll_(ScrollState{core::LineNumber{first_line}, initial_visible_lines}),
       line_ending_(core::LineEnding::crlf), appearance_(appearance), mode_(mode),
       vim_(core::vim_resting_state(
-          core::VimRegister{std::string{}, core::VimRegisterKind::characters})),
+          core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized})),
       document_(Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}}),
       settings_(core::default_editor_settings())
 {

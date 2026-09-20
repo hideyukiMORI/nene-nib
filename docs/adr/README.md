@@ -40,3 +40,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0022](0022-ex-command-line-and-settings-evaluation.md) | Ex入力は本文から分離し設定の評価と保存を共用する | 受理 |
 | [0023](0023-command-palette-and-shared-input-session.md) | Ctrl+PとExは入力session・候補・設定評価を共有する | 受理 |
 | [0024](0024-user-theme-file-and-owned-values.md) | 利用者テーマは版付きファイルから所有する値へ検証して読む | 受理 |
+| [0025](0025-user-theme-catalog-and-selection.md) | 利用者テーマの不変カタログを設定・Ex・Ctrl+Pで共有する | 受理 |
+| [0026](0026-vim-character-search-and-scoped-oracle.md) | 行内文字検索の待ちと記憶を分け、oracleの未変更結果を再利用する | 受理 |
