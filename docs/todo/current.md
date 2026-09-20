@@ -9,6 +9,8 @@
 
 **直近の修正は [Issue #81](https://github.com/hideyukiMORI/nene-nib/issues/81)（行単位VISUAL yankの戻り位置）**。下向き/単一行は範囲先頭の列1、上向きの複数行は現在位置へ戻す。追加23fixture・計512件、対象265 checks・build/tidy/symbols/conformance/format成功。実機操作ツールの接続エラーで今回の画面確認は未実施。修正版は `build/issue81/NeNeNib.exe`、旧版の起動窓は保持。詳細はgate-proofs 5-t、統合状態はGitHubが正。
 
+統合単位は [PR #83](https://github.com/hideyukiMORI/nene-nib/pull/83)。
+
 **前回の修正は [Issue #77](https://github.com/hideyukiMORI/nene-nib/issues/77)（VISUAL移行時の希望列）**。開始/種類切替/回数の希望列を補正し、対象テストとnativeを確認。採用18fixture・計489件。行単位VISUAL yankの既存問題はIssue #81へ分離。検証と再利用はgate-proofs 5-s、統合状態はGitHubが正。
 
 統合単位は [PR #82](https://github.com/hideyukiMORI/nene-nib/pull/82)。9月21日未明の続行分も9月20日の作業開始日にまとめて記録した。

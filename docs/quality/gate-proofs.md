@@ -642,6 +642,8 @@ native初回は窓を前面へ上げない手順でaccent検出0となり停止�
 
 ### 5-t. 行単位VISUAL yankの戻り位置（Issue #81・2026-09-21）
 
+統合単位は [PR #83](https://github.com/hideyukiMORI/nene-nib/pull/83)。以下の成功結果は文書追記・レビュー・統合でも再利用する。
+
 baseは `3b02f136c41905bb2667ddcf97f04087fcfa5fae`。変更productionは `VimStep.cpp::yanked_caret` の1関数で、行単位VISUALに限り、現在行が範囲の最終行なら範囲先頭、そうでなければ現在位置を返す。単一行/下向きでは列1、上向きの複数行では現在列となる。行末の寄せは既存controllerを使い、NORMALのyankと文字単位、レジスタ本文/種類は不変。ADR 0018の狭い実測からの一般化を訂正した。
 
 `python -X utf8 out/issue81-oracle/measure.py` はcanonical `eng/vim-oracle.py::measure` で新規22件（通常/+Escで44起動）を測定し、成功結果を逐次保存した。単一行・方向・左右移動・字下げ/タブ・空行・$・回数・o・v/V切替・Unicode/CRLF・後続縦移動が対象。#77で分離した `$2Vy` は本文/キー/期待値/測定実装/環境が不変なので再測定せず、名前だけvisual-yank-count-long-lineに変えて再利用した。`fixture-inputs.json` / `fixture-results.json` が正。
