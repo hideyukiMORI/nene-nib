@@ -92,7 +92,7 @@
 | テキスト正本 | 開いている各バッファの本文（piece table）と undo の履歴 | application（`EditorState`） | 利用者の意図（通常・Vim とも同じ編集操作の集合） |
 | 編集モード | 通常 / Vim と、Vim の中のモード（normal / insert / visual / …） | application | トグルの意図と Vim エンジンの遷移 |
 | カーソル・選択 | 本文上の anchor と caret | application（`EditorState::selection`） | 編集の意図と Vim エンジンの効果（ADR 0018） |
-| Vim の保留・レジスタ・検索記憶・移動量の設定 | モード固有の入力状態、行内検索の対象と種別、半画面の明示行数 | application（`EditorState::vim`） | core の純関数の結果（ADR 0012 / 0019 / 0026） |
+| Vim の保留・レジスタ・検索記憶・移動量の設定 | 排他的な次キー待ち（文字検索またはprefix）、行内検索の対象と種別、半画面の明示行数 | application（`EditorState::vim`） | core の純関数の結果（ADR 0012 / 0019 / 0026 / 0027） |
 | 縦スクロール | 表示中の先頭行と表示行数 | application（`EditorState::scroll`） | スクロール・表示行数の意図と Vim の画面移動の効果（ADR 0019）。engine へ渡す view は借用で保存しない |
 | ワーカーの結果（索引・ハイライト・md 変換） | 版番号付きの派生値 | application | ワーカー完了の意図。古い版は捨てる（ADR 0004） |
 | 本文フォント・テーマ設定 | pt・フォント名・任意のテーマ（無しは OS 追従） | application（`EditorState::settings`） | `SettingsPort` の読込と、設定変更を保存した結果。UI は `EditorFrame` の値を写す（ADR 0020） |

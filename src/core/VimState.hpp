@@ -1,8 +1,8 @@
 #pragma once
 
 #include "VimCharacterSearch.hpp"
-#include "VimCharacterSearchKind.hpp"
 #include "VimCount.hpp"
+#include "VimInputWait.hpp"
 #include "VimMode.hpp"
 #include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
@@ -22,7 +22,7 @@ struct VimState
     VimMode mode;
     std::optional<VimCount> count;
     std::optional<VimPendingOperator> pending;
-    std::optional<VimCharacterSearchKind> awaiting_character;
+    std::optional<VimInputWait> input_wait;
     std::optional<VimCharacterSearch> last_character_search;
     std::optional<VimWantedColumn> wanted_column;
     // Ctrl-d / Ctrl-u に明示した window-local な移動量。現在の viewport ではなく、次の

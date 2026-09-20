@@ -22,6 +22,8 @@ enum class VimMotion : std::uint8_t
     first_non_blank,
     screen_top,
     screen_middle,
-    screen_bottom
+    screen_bottom,
+    document_first,
+    document_last
 };
 } // namespace nenenib::core

@@ -552,3 +552,31 @@ native初回は結果メッセージ上のクリックをtoggleと誤認した�
 native初回はpending/Esc・ASCII・BMP日本語を通過した後、検証側が非BMPのcode pointを単一WM_CHARとして送っていたため絵文字で停止した。刺激をUTF-16のcode unitへ分けて既存driverへ渡すよう直し、`--only`で絵文字と未実行のoperator3件だけを確認した。製品の入力経路は変更していない。初回3件の成功は途中まで到達した実行と保存結果、後続4件は各実行出力を集約した記録であり、7件を最後にまとめて再実行したものではない。
 
 結果の保存も各selector別ファイルと成功直後のcheckpointへ改善し、`py_compile`で確認した。保存の変更だけではnativeを再実行していない。NORMAL/VISUALのIMEを閉じる既存仕様は継続し、Unicode確認はWM_CHARから届く文字だけを対象とする。保存形式・runtime依存は不変、Waivers: none。
+
+### 5-q. Vimの指定行移動（Issue #76・ADR 0027・2026-09-20）
+
+対象は `gg` / `G`・絶対行番号、operatorとmotionの明示count、排他的な次キー待ち、既存の行単位範囲とVISUALへの接続。新しい待ち表現が文字検索にも直接影響するため、その既存contractも対象とする。描画、ファイルcodec、テーマ/設定、入力driver、oracle生成器は不変。
+
+固定Vim 9.1（2024 Jan 02, compiled Jan 3 2024 23:53:58）の既存 `measure` に48種類の入力を一度ずつ渡した。通常/+Escの比較が各1回で計96起動、別の分割normal probeが6起動。`out/line-jump-oracle/measure_cases.py <新規fixture名...>` の完了名guardと逐次保存により、完了ケースの再実測を拒否する。gの取消/無効入力後の継続は `python -X utf8 out/line-jump-oracle/prefix_probes.py` で確認した。Vimソースは読んでいない。
+
+採用は42件。nostartofline参考3件、同じnormal内で残りのキーが捨てられる無効prefix2件、重複したVISUAL到達点1件は採用しない。名前だけの3件の訂正はREADMEの対応表に残し、再測定しなかった。元入力・測定結果・採用入力は `out/line-jump-oracle/{fixture-inputs,fixture-results,candidate-fixtures}.json`、分割probeは `prefix-results.json`。
+
+`python -X utf8 out/git/assemble-line-jump-fixtures.py` は実測済みの42件を既存 `fixture_row` / `header_from_rows` で生成した。旧main `2e222818230e591a58a28040ec67735ccb693366` の入力/生成物を `parsed_header` で読み、389行の逐語一致、入力順/件数/SHA、測定AST/import、固定Vimの場所/版/既定設定、新規入力全体と実測時入力の一致を確認。新しい実Vim測定0、計431件、SHA-256 `ef1760d91b52228ae4b52329a36b2ba307765c9fbfb651c4560f339285acdb86`。証拠は `out/line-jump-oracle/assembly-result.json`。生成器の実装は変わらず、#72のツール10 testsを再利用する。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake --build build --target nib_tests NeNeNib --parallel 4` | 新しい和型・閉じた命令と直接呼出元のDebug + ASan/UBSan + tidyが成功。初回の関数長2件は役割別helperへ分割して解消。`out/issue76-unit/build-first.log` / `build-second.log` / `build.log` |
+| `build/nib_tests.exe --vim-line-jumps` | 新42fixture、排他的wait/count/取消、巨大count、CRLF/undoと、直接影響する既存文字検索scope（621 checks）を重複なく実行。初回989 checks中987成功、2件は下記の切り分け。42fixtureに失敗なし。`out/issue76-unit/vim-line-jumps.log` |
+| `cmake --build build --target nib_tests --parallel 4` → `build/nib_tests.exe --vim-line-jump-recovery` | 変更した続行・undo確認の2関数だけを再実行し15 checks成功。製品コードは不変で、他の成功987 checksは再利用。`out/issue76-unit/build-recovery-final.log` / `recovery.log` |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | 和型と行索引を使う中核にOS/時刻/locale等の参照が増えていないことを確認。2 libraries / 0 violations。`out/issue76-unit/symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新headerの型配置・依存と431件の生成物整合を確認。0 violations。`out/issue76-unit/conformance.log` |
+| 変更C++の `clang-format --dry-run --Werror` / `git diff --check` | 新headerを含む整形・差分の空白が成功。`out/issue76-unit/clang-format.log` |
+| `python -X utf8 eng/verify-vim-line-jumps.py` | 隔離profile・120 DPI・表示9行に対する80行文書で6シナリオ成功。g待ち/Esc、G→80行、Ggg→1行、G12G→12行の表示と保存後の編集位置、CRLFの12GdGとundoのbytes、3Gyggpとundo。`out/issue76-native/vim-line-jumps-all-results.json` / `native.log` |
+
+nativeの3枚のcaptureでも本文のblock caretとstatusの行番号80/1/12を確認した。入力・save・画面captureは既存driverを再利用し、製品の入力/UIは変更していない。実行exeのSHA-256は結果JSONに保存。初回6件すべて成功し、nativeの再実行はない。
+
+unit初回の2件は次のように切り分けた。undoは可視1行の `vim_body(frame)` を全文と比較していたテスト側の誤りで、既存 `whole_vim_body` に修正。VISUALは `$v` の時点で行末希望列が落ちる既存の `entered_visual` が原因で、baseと関数が同一であることを確認し [Issue #77](https://github.com/hideyukiMORI/nene-nib/issues/77)へ分離した。実測したappの `$vg<Esc>jj` は3行目列4。gなしのapp `$vjj` は未実行で、同じ結果になることは不変のコードからの推論。今回のg取消のテストは `v$g<Esc>jj` の列7へ修正し、状態保持と次入力を確認した。
+
+追加の `python -X utf8 out/line-jump-oracle/continuation_probe.py` は3回起動した。初回はEsc記法の誤りでcase間にVISUAL状態が漏れ、2回目は修正用の文字列置換が適用されず同じ無効なprobeを実行した。3回目だけ各caseを `enew!` で分離し、`$v` / `$vg<Esc>` / `v$g<Esc>` の後に別のnormalでjjを送り、いずれもVISUAL・3行目列7・MAXCOLと確認。無効2回の記録を `continuation-probe-invalid*.json`、有効結果を `continuation-probe-result.json`、経緯を `continuation-probe-notes.md` に保持した。成功したprobeの再実行はしていない。今回のVim起動はfixture96、初期分割probe6、追加probe3の計105回。
+
+独立レビューは型/所有・count・範囲・取消・dispatcher分割を読み取り専用で確認し、未解決指摘なし。rootレビューで検出した既存operatorへの余分な移動走査は、新しいdocument yankの場合だけに限定した。全oracle再測定、無関係な設定/テーマ/GUI/性能、全件unitは実行していない。上記の成功結果は実装・対象テスト・依存・必要な環境が不変のpush/review/mergeでも再利用する。保存schema・runtime依存は不変、Waivers: none。

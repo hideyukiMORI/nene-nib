@@ -20,6 +20,8 @@ enum class VimAction : std::uint8_t
     move_screen_top,
     move_screen_middle,
     move_screen_bottom,
+    move_document_first,
+    move_document_last,
     scroll_half_down,
     scroll_half_up,
     scroll_page_down,
@@ -50,6 +52,7 @@ enum class VimAction : std::uint8_t
     till_character_backward,
     repeat_character_search,
     repeat_character_search_opposite,
+    prefix_g,
     open_command_line
 };
 } // namespace nenenib::core

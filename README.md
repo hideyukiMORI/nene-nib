@@ -29,6 +29,12 @@ opposite direction. Counts and `d` / `c` / `y` use the same search (for example 
 Esc cancels a pending target character; in VISUAL it keeps the selection active.
 Target characters use the existing Vim input path; IME composition in NORMAL/VISUAL remains disabled.
 
+Use `gg` / `G` to jump to the first / last line, or `12gg` / `12G` to jump to line 12.
+The caret lands on the first non-blank character. These motions also extend VISUAL selections;
+with `d` / `c` / `y`, they operate on whole lines including both ends.
+An explicit `1G` means line 1, so `dG` and `d1G` can select different ranges.
+Esc cancels a pending `g` while keeping VISUAL active. Other `g` commands are not yet supported.
+
 Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first setting change.
 The format and failure behavior are specified in
 [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in

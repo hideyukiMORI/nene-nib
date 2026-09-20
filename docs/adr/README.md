@@ -42,3 +42,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0024](0024-user-theme-file-and-owned-values.md) | 利用者テーマは版付きファイルから所有する値へ検証して読む | 受理 |
 | [0025](0025-user-theme-catalog-and-selection.md) | 利用者テーマの不変カタログを設定・Ex・Ctrl+Pで共有する | 受理 |
 | [0026](0026-vim-character-search-and-scoped-oracle.md) | 行内文字検索の待ちと記憶を分け、oracleの未変更結果を再利用する | 受理 |
+| [0027](0027-vim-line-jumps-and-exclusive-input-wait.md) | 指定行移動は既存motionへ接続し、次キー待ちは排他的に持つ | 受理 |
