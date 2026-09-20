@@ -845,8 +845,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return VimStep{std::move(next), VimRemoveRange{range.range}};
 }
 
-// y のあとのキャレット。文字単位は範囲の先頭、行単位は範囲の最初の行の同じ桁（実測）。
-// y は VISUAL を終わらせるので、置き所は NORMAL の規則で寄せる。
+// y のあとのキャレット。行単位VISUALは下向き・単一行なら先頭、上向きなら現在位置。
+// NORMALの行単位は同じ桁を保つ。VISUAL終了時の行末の寄せはcontrollerの共通経路を使う。
 [[nodiscard]] Offset yanked_caret(const TextBuffer &text, const VimState &state, Offset caret,
                                   const VimMotionRange &range)
 {
@@ -858,6 +858,11 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimRegisterKind::characters:
         return range.range.begin;
     case VimRegisterKind::lines:
+        if (state.mode == VimMode::visual_line)
+        {
+            return line_of(text, caret) == line_of(text, range.range.end) ? range.range.begin
+                                                                          : caret;
+        }
         return caret_on_line(text, wanted_column_of(text, state, caret),
                              line_of(text, range.range.begin), VimMode::normal);
     }

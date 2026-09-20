@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 7182d15458c4439674b35c5fc8b7c086ac4202d35878dd24654f13f64051fd2f / 489 fixtures
+// fixtures.json: sha256 da104be451921a9d231baf27401d97651f9d341f49b7252bca4a656536b6ff51 / 512 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 489> vim_fixtures{{
+constexpr std::array<VimFixture, 512> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -501,6 +501,29 @@ constexpr std::array<VimFixture, 489> vim_fixtures{{
     {"visual-wanted-unicode", "あ😀い\nx\nあ😀いうえ\nTAIL", "$vjjy", "あ😀い\nx\nあ😀いうえ\nTAIL", 1, 8, "い\nx\nあ😀いうえ\n", "v", std::nullopt},
     {"visual-wanted-crlf", "abcd\r\nx\r\nabcdef\r\nTAIL", "$vjjd", "abcTAIL", 1, 4, "d\nx\nabcdef\n", "v", std::nullopt},
     {"visual-wanted-empty-middle", "abcd\n\nabcdef\nTAIL", "$vjj<Esc>", "abcd\n\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-yank-count-long-line", "abcd\nabcdef\nxy", "$2Vy", "abcd\nabcdef\nxy", 1, 1, "abcd\nabcdef\n", "V", std::nullopt},
+    {"visual-yank-single-end", "  abcdef\n x\n    ghijkl\nTAIL", "$Vy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n", "V", std::nullopt},
+    {"visual-yank-single-column", "  abcdef\n x\n    ghijkl\nTAIL", "lllVy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n", "V", std::nullopt},
+    {"visual-yank-forward-column", "  abcdef\n x\n    ghijkl\nTAIL", "lllVjy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n x\n", "V", std::nullopt},
+    {"visual-yank-forward-end", "  abcdef\n x\n    ghijkl\nTAIL", "$Vjy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n x\n", "V", std::nullopt},
+    {"visual-yank-backward-end", "  abcdef\n x\n    ghijkl\nTAIL", "jj$Vky", "  abcdef\n x\n    ghijkl\nTAIL", 2, 2, " x\n    ghijkl\n", "V", std::nullopt},
+    {"visual-yank-backward-column", "  abcdef\n x\n    ghijkl\nTAIL", "jjllllVky", "  abcdef\n x\n    ghijkl\nTAIL", 2, 2, " x\n    ghijkl\n", "V", std::nullopt},
+    {"visual-yank-swapped", "  abcdef\n x\n    ghijkl\nTAIL", "$2Voy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 8, "  abcdef\n x\n", "V", std::nullopt},
+    {"visual-yank-forward-indent", "  abcdef\n x\n    ghijkl\nTAIL", "Vjy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n x\n", "V", std::nullopt},
+    {"visual-yank-spaces-only", "   \nabcdef\nxy", "j$Vky", "   \nabcdef\nxy", 1, 3, "   \nabcdef\n", "V", std::nullopt},
+    {"visual-yank-empty-first", "\nabcdef\nxy", "j$Vky", "\nabcdef\nxy", 1, 1, "\nabcdef\n", "V", std::nullopt},
+    {"visual-yank-empty-buffer", "", "Vy", "", 1, 1, "\n", "V", std::nullopt},
+    {"visual-yank-tab-indent", "\t abc\nxy\nTAIL", "$Vjy", "\t abc\nxy\nTAIL", 1, 1, "\t abc\nxy\n", "V", std::nullopt},
+    {"visual-yank-unicode", "  あ😀い\nあいうえお\nTAIL", "$2Vy", "  あ😀い\nあいうえお\nTAIL", 1, 1, "  あ😀い\nあいうえお\n", "V", std::nullopt},
+    {"visual-yank-crlf", "  abcdef\r\nx\r\nTAIL", "$Vjy", "  abcdef\nx\nTAIL", 1, 1, "  abcdef\nx\n", "V", std::nullopt},
+    {"visual-yank-switch-line", "  abcdef\n x\n    ghijkl\nTAIL", "$vVjy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n x\n", "V", std::nullopt},
+    {"visual-yank-switch-character", "  abcdef\n x\n    ghijkl\nTAIL", "$Vvjy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 8, "f\n x\n", "v", std::nullopt},
+    {"visual-yank-reverse-same-line", "  abcdef\n x\n    ghijkl\nTAIL", "$Vhhy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n", "V", std::nullopt},
+    {"visual-yank-forward-same-line", "  abcdef\n x\n    ghijkl\nTAIL", "lllVlly", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n", "V", std::nullopt},
+    {"visual-yank-equal-after-motion", "  abcdef\n x\n    ghijkl\nTAIL", "lllVhly", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n", "V", std::nullopt},
+    {"visual-yank-reverse-long-first", "  abcdef\nx\n    ghijkl", "jjlllV2ky", "  abcdef\nx\n    ghijkl", 1, 4, "  abcdef\nx\n    ghijkl\n", "V", std::nullopt},
+    {"visual-yank-forward-continuation", "  abcdef\n x\n    ghijkl\nTAIL", "$Vjyjj", "  abcdef\n x\n    ghijkl\nTAIL", 3, 1, "  abcdef\n x\n", "V", std::nullopt},
+    {"visual-yank-reverse-continuation", "  abcdef\nx\n    ghijkl", "jjlllV2kyjj", "  abcdef\nx\n    ghijkl", 3, 4, "  abcdef\nx\n    ghijkl\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

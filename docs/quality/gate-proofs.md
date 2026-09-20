@@ -639,3 +639,29 @@ NORMAL→v/V、v↔V、同じキーでの終了、回数付き選択を、既存
 native初回は窓を前面へ上げない手順でaccent検出0となり停止した（`out/issue77-native.log`）。既存window_driver.raise_windowを追加し、同じ表示/保存/undoの確認を実行して成功した。判定条件は緩めていない。実機exe SHA-256 `935b8362853cbd7889d86c6ea843375668b1c43f0ebbf9bc2858bedf3224ef93`、出力は `build/issue77/NeNeNib.exe`。起動中の旧版PID41000には入力も終了も送っていない。確認後はCMakeの出力先設定だけを既定へ戻し、旧版への再リンクは行わない。
 
 変更は3つの局所関数なのでrootの自己レビューで網羅性・optional・状態所有・回数境界を確認し、追加の独立レビューは使わなかった。一般のvisual_restingを変えず、未対応キーやo/Oなど別の寿命へ変更を広げていない。#81を直して全件を再実行することはせず、成功した関連範囲をpush/review/mergeでも再利用する。保存形式/依存/waiver変更なし、Waivers: none。
+
+### 5-t. 行単位VISUAL yankの戻り位置（Issue #81・2026-09-21）
+
+統合単位は [PR #83](https://github.com/hideyukiMORI/nene-nib/pull/83)。以下の成功結果は文書追記・レビュー・統合でも再利用する。
+
+baseは `3b02f136c41905bb2667ddcf97f04087fcfa5fae`。変更productionは `VimStep.cpp::yanked_caret` の1関数で、行単位VISUALに限り、現在行が範囲の最終行なら範囲先頭、そうでなければ現在位置を返す。単一行/下向きでは列1、上向きの複数行では現在列となる。行末の寄せは既存controllerを使い、NORMALのyankと文字単位、レジスタ本文/種類は不変。ADR 0018の狭い実測からの一般化を訂正した。
+
+`python -X utf8 out/issue81-oracle/measure.py` はcanonical `eng/vim-oracle.py::measure` で新規22件（通常/+Escで44起動）を測定し、成功結果を逐次保存した。単一行・方向・左右移動・字下げ/タブ・空行・$・回数・o・v/V切替・Unicode/CRLF・後続縦移動が対象。#77で分離した `$2Vy` は本文/キー/期待値/測定実装/環境が不変なので再測定せず、名前だけvisual-yank-count-long-lineに変えて再利用した。`fixture-inputs.json` / `fixture-results.json` が正。
+
+`python -X utf8 out/issue81-oracle/split.py` は1起動で12件を測った。startoflineの有無を比較する単一行/下向き/上向き10件では戻り位置に差が無い。末尾の回数付きVの2件は、ケース間のVISUAL記憶を隔離できず独立起動より広い範囲になったため採用しない。回数/oはcanonical fixtureの独立起動を採用した。新規Vim起動は計45回。Vimソースは読んでいない。
+
+`python -X utf8 out/issue81-oracle/assemble.py` はcanonical parser/formatterを使い、既存489行の逐語一致とmetadata、測定ソースの一致、#77再利用行の名前以外の逐語的な値の一致を確認して追加23件を組み立てた。最終512件、入力SHA-256 `da104be451921a9d231baf27401d97651f9d341f49b7252bca4a656536b6ff51`。記録は `out/issue81-oracle/assembly-result.json`。生成ツール・ゲート・除外設定は変更していない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=C:/Users/info/WORKS/NeNeNib/build/issue81` | 起動中の旧版を保持し、既存target/flags/objectを使って出力先だけ分離。`out/issue81-configure.log` |
+| `cmake --build build --target nib_tests --parallel 4` → `build/issue81/nib_tests.exe --vim-visual-yank`（修正前） | 新規23fixtureと共有経路の既存10fixture。265 checks中13失敗、すべてcolumn。`out/issue81-build-before.log` / `out/issue81-before.log` |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4` → `build/issue81/nib_tests.exe --vim-visual-yank`（修正後） | Debug/tidy/ASan/UBSanでbuild成功、265 checksすべて成功。位置・本文・レジスタ本文/種類・後続移動、NORMAL/文字単位の直接境界を確認。`out/issue81-build.log` / `out/issue81-unit.log` |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | core修正の外部参照を確認。2libs、0 violations。`out/issue81-symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 修正実装の規約と512fixtureの生成整合。0 violations。`out/issue81-conformance.log` |
+| `clang-format --dry-run --Werror src/core/VimStep.cpp tests/unit/NibTests.cpp` / `git diff --check` | 変更C++の整形と差分の空白、成功。`out/issue81-format.log` |
+| `cmake -S . -B build -U CMAKE_RUNTIME_OUTPUT_DIRECTORY` | 一時出力先を既定へ復元、成功。再ビルドはしない。`out/issue81-restore-output.log` |
+
+実機操作はcomputer-useスキルの `@oai/sky` をnode_replでimportしたが、`sky.list_apps()` がnative pipeへの接続エラー（os error 2）で失敗した。画面確認は未実施。新規アプリの起動・入力も行っていない。記録は `out/issue81-native-unavailable.json`。ビルド成果物 `build/issue81/NeNeNib.exe` のSHA-256は `d02d7d3af67b0a89c3821c61a857c121d57815d48aeedf78b72203d26d741c82`。旧版 `build/NeNeNib.exe` のPID41000は維持した。
+
+規則FR-003 / ARC-001/004/007 / CPP-002/004 / QLT-001/008/012/013 / CNF-010を自己レビュー。閉じたswitch/既存optionalの扱い、状態所有、方向を既存入力から導けることを確認した。局所1関数の修正なので追加の独立レビューは無し。成功後は文書だけの変更で、push/review/mergeでも結果を再利用する。全件unit・全oracle・#77の開始/切替テスト・無関係なGUI/設定/性能は再実行していない。保存schema・依存変更なし。Waivers: none。
