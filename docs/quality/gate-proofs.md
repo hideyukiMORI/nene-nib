@@ -580,3 +580,33 @@ unit初回の2件は次のように切り分けた。undoは可視1行の `vim_b
 追加の `python -X utf8 out/line-jump-oracle/continuation_probe.py` は3回起動した。初回はEsc記法の誤りでcase間にVISUAL状態が漏れ、2回目は修正用の文字列置換が適用されず同じ無効なprobeを実行した。3回目だけ各caseを `enew!` で分離し、`$v` / `$vg<Esc>` / `v$g<Esc>` の後に別のnormalでjjを送り、いずれもVISUAL・3行目列7・MAXCOLと確認。無効2回の記録を `continuation-probe-invalid*.json`、有効結果を `continuation-probe-result.json`、経緯を `continuation-probe-notes.md` に保持した。成功したprobeの再実行はしていない。今回のVim起動はfixture96、初期分割probe6、追加probe3の計105回。
 
 独立レビューは型/所有・count・範囲・取消・dispatcher分割を読み取り専用で確認し、未解決指摘なし。rootレビューで検出した既存operatorへの余分な移動走査は、新しいdocument yankの場合だけに限定した。全oracle再測定、無関係な設定/テーマ/GUI/性能、全件unitは実行していない。上記の成功結果は実装・対象テスト・依存・必要な環境が不変のpush/review/mergeでも再利用する。保存schema・runtime依存は不変、Waivers: none。
+
+
+### 5-r. Vimの開行と回数付きINSERT（Issue #79・ADR 0028・2026-09-20）
+
+hideが#76の実機確認後にo/Oを挙げて続行を指示したため、NORMALの開行、INSERTの反復と履歴を今回の焦点にした。coreの既存行索引とINSERT、applicationの改行変換/replace/undoが正典。VimPutStringはVimInsertAtへ同じ変更で移行し、履歴境界を明示する。UI・codec・保存schema・依存・設定は不変。
+
+固定Vim 9.1の既存measureで40入力を各1回測定（通常/+Escで計80起動）。元の36件は `out/issue79-oracle/measure_open.py`、追加4件は `measure_extra.py`。`do`はdiff操作となり未設定環境でexit 1のため除外（追加1起動）、後続dOは未実行。Vimソースは読んでいない。実測記録は `fixture-results.json` / `extra-results.json`、採用入力は `adopted-inputs.json`。
+
+`python out/git/assemble-open-line-fixtures.py` は既存parser/formatterを使い、base `8f48f4950385051c988f197b3fd5889e6efdaf61` の431件を逐語維持して40件を追加した。測定ソースAST/import、固定Vimの場所/版/既定設定、入力全体と測定結果、旧行とSHAを照合。再測定0、計471件、入力SHA-256 `07d4aa391caa2bb45b0b4c2d235a1e04596eedb48061a4788e8eeca8f8925646`。`assembly-result.json`に証拠がある。oracle生成器は不変で、その既存ツール検証は再利用する。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake --build build --target nib_tests NeNeNib --parallel 4` | 新しい型・engine・履歴・直接呼出元をDebug + ASan/UBSan + tidyで確認。最終成功は `out/issue79-build-external.log`。初回 `out/issue79-build.log` も成功 |
+| `build/nib_tests.exe --vim-open-lines` | 初回551中549成功、40fixtureに失敗なし。o/O/count/Esc/BS/Enter/移動/UTF-8/CRLF/途中INSERT/IME確定/undo/redo、直接影響するp/Pと既存INSERT、EditHistoryを確認。`out/issue79-unit.log` |
+| `build/nib_tests.exe --vim-open-line-recovery` | 430 checks成功。空ファイルの保存期待値修正、共通反復サイズguard、空入力、反復helperが変わる40fixtureとp/Pを限定して再生。`out/issue79-recovery.log` |
+| `build/nib_tests.exe --vim-open-line-external` | 46 checks成功。マウス同位置移動・外部選択・Ctrl+Z・未記録編集のrepeat解除、移動のundo境界、p/Pを確認。`out/issue79-external.log` |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | 2 libraries / 0 violations。反復と編集合成にOS/時刻などの参照が増えていない。`out/issue79-symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新しい型/依存/生成物の整合、0 violations。`out/issue79-conformance.log` |
+| 変更C++の `clang-format --dry-run --Werror` / `git diff --check` | 成功。新headerを含む。`out/issue79-format.log`。native scriptのPython compileも成功 |
+| `python -X utf8 eng/verify-vim-open-lines.py --only belowEof` / `--only aboveEmpty` / `--only joinBefore` | 隔離profile・120 DPIで3件成功。40行CRLF末尾のG3oと日本語/絵文字/Enter、空ファイルの3Oと無効/有効BS、途中Oの前行結合。開行直後/入力後/Esc後の保存bytes、保存境界ごとのundo、表示9行での追従を確認。結果は `out/issue79-native/vim-open-lines-*-results.json`、ログは `out/issue79-native-*.log` |
+
+初回unitの2失敗は、空ファイルの保存改行をテスト側がLFと期待したもの。既存LineEndingの正典は改行を含まない文書をCRLFとするため、製品を変えず期待値をCRLFへ訂正した。その他の成功を再利用した。回数guardと追加selectorのbuildではテストmainが行数/複雑度に抵触したため、名前と関数のconstexpr表へ整理した（`out/issue79-build-recovery.log`）。既存selectorの対象は維持し、閾値や抑制を変えていない。
+
+native初回はbelowEofの開行・入力・反復・保存を通過し、途中で3回保存したのにundo1回で初期本文へ戻ると誤って期待して停止した（`out/issue79-native.log`）。保存ごとに履歴を閉じる既存ADR 0010の契約に合わせ、typed→opened→initialの3段階へ訂正。失敗したbelowEofを限定再実行し、未実行のaboveEmpty/joinBeforeを各1回実行した。保存を挟まない1回undoは単体のround-tripで確認している。
+
+captureではbelowEofのINSERT・行41列1のbar、Esc後のNORMAL・行46列1のblockと日本語/絵文字3回分、aboveEmptyの行3列2、joinBeforeの行1列5を目視確認。native exe SHA-256は `75e89f89f9a4f92534979ecf45f5017a37938149b0dbe62b1d21172bca0e2e12`。入力刺激は既存WM_CHARのUTF-16配送とWM_KEYDOWN、保存だけSendInput Ctrl+S。IME確定経路は単体で確認し、OSの日本語変換そのものは今回再検証していない。
+
+設計と差分の独立レビューは読み取り専用。実装/調査/検証はroot単体で実施した。回数の積のoverflowは共通helperで型付きfailureにし、p/Pは拒否、o/Oは初回入力を保持してEsc完了とした。実メモリ予算は設けておらず、大きな有効サイズでのメモリ不足は残る制限。
+
+検証範囲の異なる3回のchecksを合算して全件成功とは主張しない。overflow前の成功のうち反復helper関連は430で更新し、controller中断の直接影響は46で更新した。他の成功は関連実装不変のため再利用する。push/review/merge・文書追記・SHAだけでは再実行しない。全oracle再測定、全件unit、設定/テーマ/性能の無関係な測定は未実行。autoindent、一般i/a回数、dot、矩形、既存Issue #77は範囲外。Waivers: none。

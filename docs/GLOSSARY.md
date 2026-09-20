@@ -23,6 +23,8 @@
 | Vim エンジン | Vim の振る舞い（モード・カーソル・レジスタ・オペレータ・テキストオブジェクト・`.`・マクロ）を純関数で持つ自前実装 | `Vim*`（core） |
 | 行内文字検索 | `f/F/t/T`の次の対象文字を待ち、`;`/`,`で対象と種別を再利用する移動。待ちと記憶の寿命は別 | `VimCharacterSearchKind` / `VimCharacterSearch`、所有は `VimState`（core・ADR 0026） |
 | Vimの次キー待ち | 文字検索の対象待ち、または接頭キーの続き待ちの一方だけを持つ任意の和型 | `VimInputWait` / `VimPrefix`、所有は `VimState`（core・ADR 0027） |
+| 回数付き開行の入力記録 | o/Oで最初に開いた1行へのLF入力と残り回数。Escで反復し、移動・記録を越える削除・外部編集で破棄する | `VimInsertRepeat`、所有は `VimState`（core・ADR 0028） |
+| 位置指定のVim挿入 | p/P・o/O・Escの反復が返す挿入位置、LF本文、挿入後caret、履歴境界。同じ改行変換とreplaceを使う | `VimInsertAt`（core）→ `EditorController`（application・ADR 0028） |
 | 指定行移動 | `gg` / `G`で先頭・末尾・回数で指定した絶対行の最初の非空白へ移る。operatorでは両端を含む行単位範囲 | `VimMotion`（core・ADR 0027） |
 | Vimレジスタの種別 | 未設定・文字単位・行単位の区別。未設定と、成功した空範囲yankの文字単位は別の状態 | `VimRegisterKind` / `VimRegister`（core・ADR 0026）、所有は `EditorState` |
 | Vim の編集対象の view | 本文・選択の借用と表示領域の値を 1 回の鍵処理へ渡す入力。状態の所有者ではない | `VimEditorView` / `VimViewport`（core・ADR 0019） |

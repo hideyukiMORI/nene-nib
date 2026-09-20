@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ef1760d91b52228ae4b52329a36b2ba307765c9fbfb651c4560f339285acdb86 / 431 fixtures
+// fixtures.json: sha256 07d4aa391caa2bb45b0b4c2d235a1e04596eedb48061a4788e8eeca8f8925646 / 471 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 431> vim_fixtures{{
+constexpr std::array<VimFixture, 471> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -443,6 +443,46 @@ constexpr std::array<VimFixture, 431> vim_fixtures{{
     {"line-jump-y-G-preserves-column", "    aa\nabcdef\n  cc\n dd", "2G2lyG", "    aa\nabcdef\n  cc\n dd", 2, 3, "abcdef\n  cc\n dd\n", "V", std::nullopt},
     {"line-jump-G-empty-buffer", "", "G", "", 1, 1, "", "", std::nullopt},
     {"line-jump-zero-before-gg", "  abc\n def\nghi", "2G$0gg", "  abc\n def\nghi", 1, 3, "", "", std::nullopt},
+    {"open-line-below", "alpha\nbeta", "oX<Esc>", "alpha\nX\nbeta", 2, 1, "", "", std::nullopt},
+    {"open-line-above", "alpha\nbeta", "OX<Esc>", "X\nalpha\nbeta", 1, 1, "", "", std::nullopt},
+    {"open-line-below-middle-column", "alpha\nbeta", "lloX<Esc>", "alpha\nX\nbeta", 2, 1, "", "", std::nullopt},
+    {"open-line-above-middle-column", "alpha\nbeta", "llOX<Esc>", "X\nalpha\nbeta", 1, 1, "", "", std::nullopt},
+    {"open-line-below-last", "alpha\nbeta", "GoX<Esc>", "alpha\nbeta\nX", 3, 1, "", "", std::nullopt},
+    {"open-line-above-second", "alpha\nbeta", "jOX<Esc>", "alpha\nX\nbeta", 2, 1, "", "", std::nullopt},
+    {"open-line-empty-below", "", "o<Esc>", "\n", 2, 1, "", "", std::nullopt},
+    {"open-line-empty-above", "", "O<Esc>", "\n", 1, 1, "", "", std::nullopt},
+    {"open-line-empty-typed-below", "", "oあ😀<Esc>", "\nあ😀", 2, 4, "", "", std::nullopt},
+    {"open-line-empty-typed-above", "", "Oあ😀<Esc>", "あ😀\n", 1, 4, "", "", std::nullopt},
+    {"open-line-blank-below", "a\n\nb", "joX<Esc>", "a\n\nX\nb", 3, 1, "", "", std::nullopt},
+    {"open-line-blank-above", "a\n\nb", "jOX<Esc>", "a\nX\n\nb", 2, 1, "", "", std::nullopt},
+    {"open-line-indent-default", "  aa\n\tbb", "oX<Esc>", "  aa\nX\n\tbb", 2, 1, "", "", std::nullopt},
+    {"open-line-above-indent-default", "  aa\n\tbb", "OX<Esc>", "X\n  aa\n\tbb", 1, 1, "", "", std::nullopt},
+    {"open-line-crlf-below", "aa\r\nbb", "oX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
+    {"open-line-crlf-above", "aa\r\nbb", "jOX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
+    {"open-line-count-below", "aa\nbb", "3oX<Esc>", "aa\nX\nX\nX\nbb", 4, 1, "", "", std::nullopt},
+    {"open-line-count-above", "aa\nbb", "3OX<Esc>", "X\nX\nX\naa\nbb", 3, 1, "", "", std::nullopt},
+    {"open-line-count-empty-below", "aa\nbb", "3o<Esc>", "aa\n\n\n\nbb", 4, 1, "", "", std::nullopt},
+    {"open-line-count-empty-above", "aa\nbb", "3O<Esc>", "\n\n\naa\nbb", 3, 1, "", "", std::nullopt},
+    {"open-line-count-multiline-below", "aa\nbb", "3oA<CR>B<Esc>", "aa\nA\nB\nA\nB\nA\nB\nbb", 7, 1, "", "", std::nullopt},
+    {"open-line-count-multiline-above", "aa\nbb", "3OA<CR>B<Esc>", "A\nB\nA\nB\nA\nB\naa\nbb", 6, 1, "", "", std::nullopt},
+    {"open-line-count-backspace", "aa\nbb", "3oab<BS>X<Esc>", "aa\naX\naX\naX\nbb", 4, 2, "", "", std::nullopt},
+    {"open-line-count-join-before", "aa\nbb", "3o<BS>X<Esc>", "aaXXX\nbb", 1, 5, "", "", std::nullopt},
+    {"open-line-count-above-backspace-start", "aa\nbb", "3O<BS>X<Esc>", "X\nX\nX\naa\nbb", 3, 1, "", "", std::nullopt},
+    {"open-line-count-erase-newline", "aa\nbb", "3oX<BS><BS>Z<Esc>", "aaZZZ\nbb", 1, 5, "", "", std::nullopt},
+    {"open-line-count-home", "aa\nbb", "3oabc<Home>Z<Esc>", "aa\nZabc\nbb", 2, 1, "", "", std::nullopt},
+    {"open-line-count-end", "aa\nbb", "3oabc<End>Z<Esc>", "aa\nabcZ\nbb", 2, 4, "", "", std::nullopt},
+    {"open-line-count-empty-home", "aa\nbb", "3o<Home>X<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
+    {"open-line-count-above-enter", "aa\nbb", "3O<CR><Esc>", "\n\n\n\n\n\naa\nbb", 6, 1, "", "", std::nullopt},
+    {"open-line-preserve-register", "aa\nbb", "yyGoX<Esc>", "aa\nbb\nX", 3, 1, "aa\n", "V", std::nullopt},
+    {"open-line-search-target-lower", "aobOc", "fo", "aobOc", 1, 2, "", "", std::nullopt},
+    {"open-line-search-target-upper", "aobOc", "fO", "aobOc", 1, 4, "", "", std::nullopt},
+    {"open-line-visual-lower", "abcd\nef", "vllo<Esc>", "abcd\nef", 1, 1, "", "", std::nullopt},
+    {"open-line-visual-upper", "abcd\nef", "vllO<Esc>", "abcd\nef", 1, 1, "", "", std::nullopt},
+    {"open-line-visual-line-upper", "aa\nbb\ncc", "VjO<Esc>", "aa\nbb\ncc", 1, 1, "", "", std::nullopt},
+    {"open-line-count-delete-original", "aa\nbb", "3o<BS><BS>X<Esc>", "aX\nbb", 1, 2, "", "", std::nullopt},
+    {"open-line-count-above-join", "aa\nbb", "j3O<BS>X<Esc>", "aaXXX\nbb", 1, 5, "", "", std::nullopt},
+    {"open-line-count-above-join-delete", "aa\nbb", "j3O<BS><BS>X<Esc>", "aX\nbb", 1, 2, "", "", std::nullopt},
+    {"open-line-count-above-erase-text", "aa\nbb", "3OX<BS>Y<Esc>", "Y\nY\nY\naa\nbb", 3, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

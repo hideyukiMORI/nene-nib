@@ -173,8 +173,8 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 
 // engine のキャレットは LF で数えた位置なので、直したあとの本文の上へずらす
 // （CRLF は改行 1 つにつき 1 バイト長い）。数えるのは貼る位置からキャレットまでの改行だけ。
-[[nodiscard]] core::Offset caret_after_put(const core::VimPutString &effect,
-                                           std::size_t newline_bytes)
+[[nodiscard]] core::Offset caret_after_insert(const core::VimInsertAt &effect,
+                                              std::size_t newline_bytes)
 {
     const auto inside = static_cast<std::ptrdiff_t>(effect.caret.value - effect.at.value);
     const auto newlines = static_cast<std::size_t>(
@@ -314,6 +314,10 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     {
         return;
     }
+    if (boundary != core::EditBoundary::absorb)
+    {
+        interrupt_vim_insert();
+    }
     auto next = state_.text().erase(range.begin, range.end).insert(range.begin, text);
     const core::Edit edit{range.begin, std::move(removed), std::string(text)};
     const core::Offset caret{range.begin.value + text.size()};
@@ -355,6 +359,7 @@ void EditorController::accept(const InsertText &intent)
 
 void EditorController::accept(const MoveCaret &intent)
 {
+    interrupt_vim_insert();
     const core::Offset caret = core::moved_caret(state_.text(), state_.selection().caret,
                                                  intent.motion, state_.scroll().visible_lines);
     move_caret_to(caret, anchoring_in(state_.mode(), intent.anchoring));
@@ -363,6 +368,7 @@ void EditorController::accept(const MoveCaret &intent)
 
 void EditorController::accept(const PlaceCaret &intent)
 {
+    interrupt_vim_insert();
     move_caret_to(state_.text().offset_of(intent.position),
                   anchoring_in(state_.mode(), intent.anchoring));
     settle_vim_caret();
@@ -398,6 +404,7 @@ void EditorController::accept(const NewLine &)
 
 void EditorController::accept(const SelectAll &)
 {
+    interrupt_vim_insert();
     state_ = state_.with_selection(
         core::Selection{core::Offset{0}, core::Offset{state_.text().size_bytes()}});
     follow_caret();
@@ -476,6 +483,7 @@ void EditorController::paste_clipboard()
 
 void EditorController::accept(const HistoryAction &intent)
 {
+    interrupt_vim_insert();
     switch (intent.direction)
     {
     case core::HistoryDirection::undo:
@@ -583,12 +591,16 @@ void EditorController::accept(const VimKeyPress &intent)
     const auto step = core::vim_step(state_.vim(), view, intent.key);
     state_ = state_.with_vim(step.next);
     // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
-    if (before != step.next.mode)
+    if (before != step.next.mode && before != core::VimMode::insert)
     {
         state_ = state_.with_history(state_.history().sealed());
     }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    if (before == core::VimMode::insert && before != step.next.mode)
+    {
+        state_ = state_.with_history(state_.history().sealed());
+    }
     if (!state_.command_input().has_value())
     {
         settle_vim_caret();
@@ -621,7 +633,7 @@ void EditorController::settle_vim_caret()
 
 // Vim の効果を本文に写すときの undo の区切り（ADR 0015 の決定 5）。INSERT にいるあいだの編集は
 // 直前の Edit に吸収して 1 単位にし、NORMAL の編集（x d p）は単位を切る。
-// 決めるのは効果ではなくモードで、効果に境界を持たせない。
+// VimInsertAtはEsc時の反復も持つため、明示した境界を使う（ADR 0028）。
 core::EditBoundary EditorController::vim_boundary() const noexcept
 {
     switch (state_.vim().mode)
@@ -792,8 +804,19 @@ void EditorController::evaluate_command(std::string_view text)
     state_ = state_.with_command_message(result.value().message);
 }
 
+void EditorController::interrupt_vim_insert()
+{
+    if (state_.vim().mode == core::VimMode::insert)
+    {
+        core::VimState next = state_.vim();
+        next.insert_repeat = std::nullopt;
+        state_ = state_.with_vim(std::move(next)).with_history(state_.history().sealed());
+    }
+}
+
 void EditorController::perform(const core::VimMoveTo &effect)
 {
+    interrupt_vim_insert();
     move_caret_to(effect.caret, core::SelectionAnchoring::collapse);
 }
 
@@ -835,13 +858,13 @@ void EditorController::perform(const core::VimNewLine &)
             vim_boundary());
 }
 
-// p / P（ADR 0015 の決定 4）。engine が決めた LF の本文を文書の改行に直して入れるだけ。
-void EditorController::perform(const core::VimPutString &effect)
+// p/P・o/O・Esc時の反復を同じ改行変換とreplaceへ流す（ADR 0028）。
+void EditorController::perform(const core::VimInsertAt &effect)
 {
     const std::string_view newline = core::newline_of(state_.line_ending());
     replace(core::OffsetRange{effect.at, effect.at}, with_document_newlines(effect.utf8, newline),
-            core::EditBoundary::separate);
-    move_caret_to(caret_after_put(effect, newline.size()), core::SelectionAnchoring::collapse);
+            effect.boundary);
+    move_caret_to(caret_after_insert(effect, newline.size()), core::SelectionAnchoring::collapse);
 }
 
 void EditorController::perform(const core::VimUndo &)

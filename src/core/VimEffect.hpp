@@ -1,12 +1,12 @@
 #pragma once
 
+#include "VimInsertAt.hpp"
 #include "VimInsertString.hpp"
 #include "VimMoveTo.hpp"
 #include "VimNavigate.hpp"
 #include "VimNewLine.hpp"
 #include "VimNoEffect.hpp"
 #include "VimOpenCommandLine.hpp"
-#include "VimPutString.hpp"
 #include "VimRedo.hpp"
 #include "VimRemoveLines.hpp"
 #include "VimRemoveRange.hpp"
@@ -22,5 +22,5 @@ namespace nenenib::core
 // 選択肢が増えたら写し先が足りずコンパイルが落ちる＝網羅性は機械が守る（CPP-002）。
 using VimEffect =
     std::variant<VimNoEffect, VimMoveTo, VimNavigate, VimSelect, VimRemoveRange, VimRemoveLines,
-                 VimInsertString, VimNewLine, VimPutString, VimUndo, VimRedo, VimOpenCommandLine>;
+                 VimInsertString, VimNewLine, VimInsertAt, VimUndo, VimRedo, VimOpenCommandLine>;
 } // namespace nenenib::core

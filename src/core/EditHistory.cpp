@@ -39,21 +39,18 @@ namespace
 std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
 {
     const std::size_t end = previous.at.value + previous.inserted.size();
-    if (edit.removed.empty() && edit.at.value == end)
+    if (edit.at.value >= previous.at.value && edit.at.value <= end &&
+        edit.removed.size() <= end - edit.at.value)
     {
-        return Edit{previous.at, previous.removed, previous.inserted + edit.inserted};
+        std::string inserted = previous.inserted;
+        inserted.replace(edit.at.value - previous.at.value, edit.removed.size(), edit.inserted);
+        return Edit{previous.at, previous.removed, std::move(inserted)};
     }
     if (!edit.inserted.empty())
     {
         return std::nullopt;
     }
     const std::size_t erased = edit.at.value + edit.removed.size();
-    if (erased == end && edit.at.value >= previous.at.value)
-    {
-        // 入れたばかりの文字の末尾を消した。入れた文字列が縮むだけで、単位はそのまま続く。
-        return Edit{previous.at, previous.removed,
-                    previous.inserted.substr(0, edit.at.value - previous.at.value)};
-    }
     if (erased == previous.at.value)
     {
         // 挿入を始めた位置より前を消した。単位の頭が前へ動き、消した本文が removed の先頭に付く。
