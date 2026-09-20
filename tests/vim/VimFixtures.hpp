@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 712238a0ccaf290d2dd769748e1625d57220143e2b95e419b9b8ca09b6581a3b / 389 fixtures
+// fixtures.json: sha256 ef1760d91b52228ae4b52329a36b2ba307765c9fbfb651c4560f339285acdb86 / 431 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 389> vim_fixtures{{
+constexpr std::array<VimFixture, 431> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -401,6 +401,48 @@ constexpr std::array<VimFixture, 389> vim_fixtures{{
     {"char-search-utf8-F-codepoint", "aéあbあ", "$Fé", "aéあbあ", 1, 2, "", "", std::nullopt},
     {"char-search-utf8-f-non-bmp", "a😀b😀", "f😀", "a😀b😀", 1, 2, "", "", std::nullopt},
     {"char-search-utf8-d-f-range", "aéあbあ", "dfあ", "bあ", 1, 1, "aéあ", "v", std::nullopt},
+    {"line-jump-gg-default", "  one\n two\n   three\nfour", "3Ggg", "  one\n two\n   three\nfour", 1, 3, "", "", std::nullopt},
+    {"line-jump-G-default", "  one\n two\n   three\nfour", "G", "  one\n two\n   three\nfour", 4, 1, "", "", std::nullopt},
+    {"line-jump-gg-count", "  one\n two\n   three\nfour", "3gg", "  one\n two\n   three\nfour", 3, 4, "", "", std::nullopt},
+    {"line-jump-G-count", "  one\n two\n   three\nfour", "3G", "  one\n two\n   three\nfour", 3, 4, "", "", std::nullopt},
+    {"line-jump-G-explicit-one", "  one\n two\n   three\nfour", "1G", "  one\n two\n   three\nfour", 1, 3, "", "", std::nullopt},
+    {"line-jump-gg-huge-count", "a\nb\nc\nd", "999gg", "a\nb\nc\nd", 4, 1, "", "", std::nullopt},
+    {"line-jump-G-huge-count", "a\nb\nc\nd", "999G", "a\nb\nc\nd", 4, 1, "", "", std::nullopt},
+    {"line-jump-zero-before-G", "abc\ndef\nghi", "2G0G", "abc\ndef\nghi", 3, 1, "", "", std::nullopt},
+    {"line-jump-gg-empty-buffer", "", "gg", "", 1, 1, "", "", std::nullopt},
+    {"line-jump-G-empty-line", "abc\n\nxyz", "2G", "abc\n\nxyz", 2, 1, "", "", std::nullopt},
+    {"line-jump-gg-blank-only-line", "   \nabc", "Ggg", "   \nabc", 1, 3, "", "", std::nullopt},
+    {"line-jump-G-utf8-first-nonblank", "ascii\n  あ😀", "G", "ascii\n  あ😀", 2, 3, "", "", std::nullopt},
+    {"line-jump-G-crlf", "a\r\n  b\r\nc", "2G", "a\n  b\nc", 2, 3, "", "", std::nullopt},
+    {"line-jump-d-G-unspecified", "aa\nbb\ncc\ndd\nee\nff", "4GdG", "aa\nbb\ncc", 3, 1, "dd\nee\nff\n", "V", std::nullopt},
+    {"line-jump-one-d-G", "aa\nbb\ncc\ndd\nee\nff", "4G1dG", "ee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-d-one-G", "aa\nbb\ncc\ndd\nee\nff", "4Gd1G", "ee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-d-gg-unspecified", "aa\nbb\ncc\ndd\nee\nff", "4Gdgg", "ee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-one-d-gg", "aa\nbb\ncc\ndd\nee\nff", "4G1dgg", "ee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-d-one-gg", "aa\nbb\ncc\ndd\nee\nff", "4Gd1gg", "ee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-d-two-G", "aa\nbb\ncc\ndd\nee\nff", "4Gd2G", "aa\nee\nff", 2, 1, "bb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-two-d-G", "aa\nbb\ncc\ndd\nee\nff", "4G2dG", "aa\nee\nff", 2, 1, "bb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-two-d-three-G", "aa\nbb\ncc\ndd\nee\nff", "4G2d3G", "aa\nbb\ncc", 3, 1, "dd\nee\nff\n", "V", std::nullopt},
+    {"line-jump-d-two-gg", "aa\nbb\ncc\ndd\nee\nff", "4Gd2gg", "aa\nee\nff", 2, 1, "bb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-two-d-gg", "aa\nbb\ncc\ndd\nee\nff", "4G2dgg", "aa\nee\nff", 2, 1, "bb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-two-d-three-gg", "aa\nbb\ncc\ndd\nee\nff", "4G2d3gg", "aa\nbb\ncc", 3, 1, "dd\nee\nff\n", "V", std::nullopt},
+    {"line-jump-c-G", "aa\nbb\ncc\ndd\nee\nff", "4GcG<Esc>", "aa\nbb\ncc\n", 4, 1, "dd\nee\nff\n", "V", std::nullopt},
+    {"line-jump-c-gg", "aa\nbb\ncc\ndd\nee\nff", "4Gcgg<Esc>", "\nee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-y-G", "aa\nbb\ncc\ndd\nee\nff", "4GyG", "aa\nbb\ncc\ndd\nee\nff", 4, 1, "dd\nee\nff\n", "V", std::nullopt},
+    {"line-jump-y-gg", "aa\nbb\ncc\ndd\nee\nff", "4Gygg", "aa\nbb\ncc\ndd\nee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
+    {"line-jump-visual-gg-endpoint", "  aa\n bb\n  cc\ndd", "4Gvgg<Esc>", "  aa\n bb\n  cc\ndd", 1, 3, "", "", std::nullopt},
+    {"line-jump-visual-gg-yank", "  aa\n bb\n  cc\ndd", "4Gvggy", "  aa\n bb\n  cc\ndd", 1, 3, "aa\n bb\n  cc\nd", "v", std::nullopt},
+    {"line-jump-visual-G-yank", "  aa\n bb\n  cc\ndd", "2GvGy", "  aa\n bb\n  cc\ndd", 2, 2, "bb\n  cc\nd", "v", std::nullopt},
+    {"line-jump-visual-line-gg-yank", "  aa\n bb\n  cc\ndd", "4GVggy", "  aa\n bb\n  cc\ndd", 1, 3, "  aa\n bb\n  cc\ndd\n", "V", std::nullopt},
+    {"line-jump-visual-line-G-endpoint", "  aa\n bb\n  cc\ndd", "2GVG<Esc>", "  aa\n bb\n  cc\ndd", 4, 1, "", "", std::nullopt},
+    {"line-jump-g-prefix-escape", "a\nb\nc\nd", "g<Esc>G", "a\nb\nc\nd", 4, 1, "", "", std::nullopt},
+    {"line-jump-g-prefix-consumes-G", "a\nb\nc\nd", "gG", "a\nb\nc\nd", 1, 1, "", "", std::nullopt},
+    {"line-jump-awaited-f-target-lower-g", "aGbgc", "fg", "aGbgc", 1, 4, "", "", std::nullopt},
+    {"line-jump-awaited-f-target-upper-g", "aGbgc", "fG", "aGbgc", 1, 2, "", "", std::nullopt},
+    {"line-jump-y-gg-uses-target-first-nonblank", "    aa\n bb\n  cc\nabcdef", "4G2lygg", "    aa\n bb\n  cc\nabcdef", 1, 5, "    aa\n bb\n  cc\nabcdef\n", "V", std::nullopt},
+    {"line-jump-y-G-preserves-column", "    aa\nabcdef\n  cc\n dd", "2G2lyG", "    aa\nabcdef\n  cc\n dd", 2, 3, "abcdef\n  cc\n dd\n", "V", std::nullopt},
+    {"line-jump-G-empty-buffer", "", "G", "", 1, 1, "", "", std::nullopt},
+    {"line-jump-zero-before-gg", "  abc\n def\nghi", "2G$0gg", "  abc\n def\nghi", 1, 3, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
