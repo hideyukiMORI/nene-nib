@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 07d4aa391caa2bb45b0b4c2d235a1e04596eedb48061a4788e8eeca8f8925646 / 471 fixtures
+// fixtures.json: sha256 7182d15458c4439674b35c5fc8b7c086ac4202d35878dd24654f13f64051fd2f / 489 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 471> vim_fixtures{{
+constexpr std::array<VimFixture, 489> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -483,6 +483,24 @@ constexpr std::array<VimFixture, 471> vim_fixtures{{
     {"open-line-count-above-join", "aa\nbb", "j3O<BS>X<Esc>", "aaXXX\nbb", 1, 5, "", "", std::nullopt},
     {"open-line-count-above-join-delete", "aa\nbb", "j3O<BS><BS>X<Esc>", "aX\nbb", 1, 2, "", "", std::nullopt},
     {"open-line-count-above-erase-text", "aa\nbb", "3OX<BS>Y<Esc>", "Y\nY\nY\naa\nbb", 3, 1, "", "", std::nullopt},
+    {"visual-wanted-enter-character", "abcd\nx\nabcdef\nTAIL", "$vjj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-enter-line", "abcd\nx\nabcdef\nTAIL", "$Vjj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-switch-to-line", "abcd\nx\nabcdef\nTAIL", "$vVjj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-switch-to-character", "abcd\nx\nabcdef\nTAIL", "$Vvjj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-count-character", "abcd\nx\nabcdef\nTAIL", "$2vjj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 5, "", "", std::nullopt},
+    {"visual-wanted-explicit-one", "abcd\nx\nabcdef\nTAIL", "$1vjj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-count-line", "abcd\nx\nabcdef\nTAIL", "$2Vj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-column-after-short-character", "abcd\nx\nabcdef\nTAIL", "llljvj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 4, "", "", std::nullopt},
+    {"visual-wanted-column-after-short-line", "abcd\nx\nabcdef\nTAIL", "llljVj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 4, "", "", std::nullopt},
+    {"visual-wanted-count-line-column", "abcd\nx\nabcdef\nTAIL", "lll2Vj<Esc>", "abcd\nx\nabcdef\nTAIL", 3, 4, "", "", std::nullopt},
+    {"visual-wanted-same-character-exit", "abcd\nx\nabcdef\nTAIL", "$vvjj", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-same-line-exit", "abcd\nx\nabcdef\nTAIL", "$VVjj", "abcd\nx\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
+    {"visual-wanted-escape-resets", "abcd\nx\nabcdef\nTAIL", "$v<Esc>jj", "abcd\nx\nabcdef\nTAIL", 3, 4, "", "", std::nullopt},
+    {"visual-wanted-delete-through-line-end", "abcd\nx\nabcdef\nTAIL", "$vjjd", "abcTAIL", 1, 4, "d\nx\nabcdef\n", "v", std::nullopt},
+    {"visual-wanted-switch-delete", "abcd\nx\nabcdef\nTAIL", "$vVvjjd", "abcTAIL", 1, 4, "d\nx\nabcdef\n", "v", std::nullopt},
+    {"visual-wanted-unicode", "あ😀い\nx\nあ😀いうえ\nTAIL", "$vjjy", "あ😀い\nx\nあ😀いうえ\nTAIL", 1, 8, "い\nx\nあ😀いうえ\n", "v", std::nullopt},
+    {"visual-wanted-crlf", "abcd\r\nx\r\nabcdef\r\nTAIL", "$vjjd", "abcTAIL", 1, 4, "d\nx\nabcdef\n", "v", std::nullopt},
+    {"visual-wanted-empty-middle", "abcd\n\nabcdef\nTAIL", "$vjj<Esc>", "abcd\n\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
