@@ -4040,13 +4040,18 @@ void verify_vim_visual_wanted_blocked_expansion()
            "blocked vertical expansion preserves its wish");
 }
 
-void verify_vim_visual_wanted_scope()
+void verify_vim_visual_wanted_contracts()
 {
-    verify_vim_visual_wanted_fixtures();
     verify_vim_visual_wanted_continuations();
     verify_vim_visual_wanted_counted();
     verify_vim_visual_wanted_blocked_expansion();
     verify_vim_visual_wanted_undo();
+}
+
+void verify_vim_visual_wanted_scope()
+{
+    verify_vim_visual_wanted_fixtures();
+    verify_vim_visual_wanted_contracts();
     verify_vim_visual_step_edges();
 }
 
@@ -4501,16 +4506,10 @@ void verify_vim_open_line_scope()
     verify_vim_put_line_endings();
 }
 
+// scope 専用の契約は verify_vim_scope_contracts の表が回す（Issue #97）。ここは scope を持たない
+// Vim の共通部分だけを見る。
 void verify_vim_engine()
 {
-    verify_vim_replace_contracts();
-    verify_vim_visual_wanted_continuations();
-    verify_vim_visual_wanted_counted();
-    verify_vim_visual_wanted_blocked_expansion();
-    verify_vim_visual_wanted_undo();
-    verify_vim_open_line_contracts();
-    verify_vim_character_search_contracts();
-    verify_vim_line_jump_contracts();
     verify_vim_word_motions();
     verify_vim_caret_rules();
     verify_vim_step_edges();
@@ -5547,15 +5546,20 @@ void verify_vim_dot_fixtures()
            "the scope replays 99 dot fixtures and 8 shared open-line, r, f/t and g boundaries");
 }
 
-void verify_vim_dot_scope()
+void verify_vim_dot_contracts()
 {
-    verify_vim_dot_fixtures();
     verify_vim_dot_cancels();
     verify_vim_dot_recording();
     verify_vim_dot_counts();
     verify_vim_dot_history();
     verify_vim_dot_document();
     verify_vim_dot_modes();
+}
+
+void verify_vim_dot_scope()
+{
+    verify_vim_dot_fixtures();
+    verify_vim_dot_contracts();
 }
 
 void verify_vim_line_jump_recovery()
@@ -5742,14 +5746,41 @@ void verify_vim_text_object_fixtures()
            "the scope replays 192 text-object fixtures and 6 shared next-key boundaries");
 }
 
-void verify_vim_text_object_scope()
+void verify_vim_text_object_contracts()
 {
-    verify_vim_text_object_fixtures();
     verify_vim_text_object_waiting();
     verify_vim_text_object_cancellation();
     verify_vim_text_object_visual();
     verify_vim_text_object_history();
     verify_vim_text_object_dot();
+}
+
+void verify_vim_text_object_scope()
+{
+    verify_vim_text_object_fixtures();
+    verify_vim_text_object_contracts();
+}
+
+// 既定実行（引数なし）が回す scope 専用の契約。selector は「その scope だけを速く回す」絞り込みで、
+// 契約そのものは既定実行にも載る（Issue #97）。新しい scope を足したら、下の selector の表と対に
+// してここへも 1 行足す。fixture の再生は verify_vim_fixtures が全件行うので、ここには載せない。
+// 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
+// （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
+void verify_vim_scope_contracts()
+{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 7> contracts{{
+        {"--vim-dot", verify_vim_dot_contracts},
+        {"--vim-text-objects", verify_vim_text_object_contracts},
+        {"--vim-replace", verify_vim_replace_contracts},
+        {"--vim-visual-wanted", verify_vim_visual_wanted_contracts},
+        {"--vim-open-lines", verify_vim_open_line_contracts},
+        {"--vim-character-search", verify_vim_character_search_contracts},
+        {"--vim-line-jumps", verify_vim_line_jump_contracts},
+    }};
+    for (const auto &scope : contracts)
+    {
+        scope.second();
+    }
 }
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
@@ -5813,6 +5844,7 @@ int main(int argc, char **argv)
     }
     verify_text_and_caret();
     verify_controller_intents();
+    verify_vim_scope_contracts();
     verify_ex_settings();
     verify_command_palette();
     verify_user_theme_values();
