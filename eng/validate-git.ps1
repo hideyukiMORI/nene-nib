@@ -5,6 +5,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
+# 違反の文言は日本語。CI の windows-2022 は stdout が cp1252 なので、印字で UnicodeEncodeError になり
+# 理由が隠れていた（Issue #94）。python を呼ぶ前にここ 1 か所で UTF-8 にする。
+$env:PYTHONUTF8 = '1'
 try {
     $branch = & git branch --show-current
     if ($LASTEXITCODE -ne 0) { throw 'GIT-002: cannot read branch.' }

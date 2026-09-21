@@ -88,8 +88,11 @@ class VerificationPolicy(unittest.TestCase):
                     "base": {"sha": "origin/main"}, "draft": False, "title": title, "body": text,
                 }}), encoding="utf-8")
                 environment = dict(os.environ, GITHUB_EVENT_PATH=str(event), PYTHONUTF8="1")
+                # pwsh のエラー表示はコンソールの code page（cp932 の省略記号など）で出るので、
+                # 厳密な UTF-8 で読むと reader thread が落ちて stdout が None になる（Issue #94）。
                 result = subprocess.run(["pwsh", "-NoProfile", "-File", str(ROOT / "eng/validate-git.ps1")],
-                                         env=environment, capture_output=True, text=True, encoding="utf-8")
+                                         env=environment, capture_output=True, text=True, encoding="utf-8",
+                                         errors="replace")
                 with self.subTest(success=success):
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     if not success:
