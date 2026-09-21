@@ -694,3 +694,52 @@ computer-useの `sky.list_apps()` はnative pipe接続エラー（os error 2）�
 FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / CNF-010を自己レビュー。optionalはhas_value/value、閉じたenumは網羅、count不足は待ち/対象文字列の反復確保前に拒否する。新効果と共有caret変換についてreadonly独立レビューを行い、回数不足後のキーとCRLF/既存挿入境界を対象テストに反映。整理後の再レビューに未解決指摘なし。実行検証はrootが担当した。
 
 文書更新後の `git diff --check` も成功。成功後の変更は文書だけで、production/テスト/測定ソース/関連依存は不変。push/review/mergeでも上記を再利用し、全件unit・全oracle・無関係な設定/テーマ/性能は実行しない。Waivers: none。
+
+### 5-v. Vimの`.`（直前の変更の再生）（Issue #87・ADR 0030・2026-09-22）
+
+統合単位は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
+base `2c00655ca7e50c7275c68d7f4aef2425ecf0ad08`（ADR 0030 の 2 commit を含む `feat/87-vim-dot-repeat`。production の base は `82f260d`）。ADR 0030 を実測のあとで受理。`VimState` に `recording` / `last_change`（どちらも `optional<VimRepeatRecord>`）を足し、`VimEffect` に `VimReplay`、`VimAction` に `repeat_change` を足した。記録の確定・破棄は `vim_step` の後段にある純関数 1 か所（`vim_recorded` と 4 つの小さな判定）だけが書き、鍵の意味ではなく前のモードと効果で分ける。controller は `VimReplay` を受けて前後で履歴を閉じ、同じ `accept(VimKeyPress)` へ鍵を 1 つずつ流す。`.` は記録されないので再帰は深さ 1。UI・IME・描画・保存形式・schema・依存・ゲートは変更していない。
+
+実装の途中で ADR 0028 の穴が出た。`N.` が挿入命令を繰り返すには `3ifoo<Esc>` が `foofoofoo` でなければならないが、回数付きの `i a I A` は回数を捨てていた。既存の `VimInsertRepeat` を `entered_insert` でも立てて塞ぎ、`counted-insert-*` 5 件で固定 Vim と一致を確認した。これに伴い controller の `interrupt_vim_insert`（外からの割り込みで入力記録を捨てる）と `perform(VimMoveTo)`（Vim の鍵による移動で履歴だけ閉じる）を分けた。入力記録を捨てる判断は engine の 1 か所に残る。
+
+`python out/issue87-oracle/probe.py`（172 ケース）と `python out/issue87-oracle/probe2.py`（29 ケース）を実装の前に実行し、固定 Vim 9.1 を 201 ケース起動して ADR の決定を確かめた。証拠は `out/issue87-oracle/probe.json` / `probe.txt` / `probe2.json` / `probe2.txt`。Vim ソースは読んでいない。決定 2（回数の積を 1 つに畳む。`2d3w5.` と `6dw5.` が同じ 5 語）、決定 4（`ifoo<Home>bar<Esc>.` は `bar` だけ。`<End>` / `<Left>` / `<Down>` / `o` からの挿入も同じ）、決定 7（`x3..` / `3x3..` / `cwfoo<Esc>3..` が回数 3 を引き継ぐ）は一致した。
+
+食い違いは 2 つで、どちらも期待値を合わせず ADR のまま実装し、該当 fixture を採っていない。(1) 決定 5 は Vim と違う。Vim は `vlld.` を同じ大きさの範囲で再生し、`xjvlld.` でも VISUAL の削除を繰り返す。本実装は直前の変更を消して何もしない（Issue #91）。(2) 決定 3 に残る穴と書いた点は、**下の追記で撤回した**（測り方の誤りで、固定 Vim も決定 3 と一致する）。
+
+`python -X utf8 eng/vim-oracle.py --regenerate --only dot- --only counted-insert-` は 97 件だけを測り、既存 551 行を `2c00655` から逐語再利用した（`out/issue87-oracle/regenerate.log`）。`git diff` の削除行は metadata 2 行だけで、既存 fixture の期待値は測り直していない。648 件の入力 SHA-256 は `18c89df3a95008f534956eda918869fd4dcf5ff1df24fb6e71238e8dd4fda55d`。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=C:/Users/info/WORKS/NeNeNib/build/issue87` | 起動中の旧版を保持し、同じ target / flags で出力先だけ分離。成功、`out/issue87-configure.log` |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4`（初回） | `commanded` と `visual_acted` が新しい action 1 つで tidy の 60 行上限を超えて失敗。`out/issue87-build.log`。半画面と 1 画面の巻きを NORMAL / VISUAL 共通の `scroll_action` にまとめ、`.` を `history_action` に寄せて修正した。閾値・除外・重大度は変えていない |
+| 同 build（修正後・最終） | 新しい型/効果/action の写し先、記録の純関数、controller の再生、対象テストを Debug / tidy / ASan / UBSan で build 成功。`out/issue87-build-final.log` |
+| `build/issue87/nib_tests.exe --vim-dot` | 869 checks すべて成功。新規 97 fixture ＋ 共有境界 8 件（o/O の回数反復・r・f/t・g 待ち）と、記録の確定/破棄・回数の折り畳みと置換・`.` が `.` を記録しないこと・undo 1 単位と redo・CRLF の保存 bytes・1 行の表示領域での再生・VISUAL の変更が記録を消すこと・INSERT の `.` が文字であることを確認。`out/issue87-unit-dot.log` |
+| `build/issue87/nib_tests.exe --vim-open-lines` / `--vim-open-line-external` / `--vim-open-line-recovery` | ADR 0028 の入力記録に手を入れたので、o/O の回数反復と外からの割り込み（クリック・Ctrl+Z・全選択・外部編集）の退行を確認。565 / 46 / 430 checks すべて成功。`out/issue87-unit-open-lines.log` |
+| `build/issue87/nib_tests.exe --vim-replace` / `--vim-character-search` / `--vim-line-jumps` | 記録が次キー待ち（r・f/t/;・g）をまたぐので、待ちと取消の退行を確認。460 / 621 / 989 checks すべて成功。`out/issue87-unit-waits.log` |
+| `build/issue87/nib_tests.exe` | `vim_step` の後段を全 Vim 経路が通るため、unit 全体も 1 回だけ実行した。7181 checks すべて成功、648 fixture を再生。`out/issue87-unit-all.log` |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | `std::vector<VimKey>` を core に足したので、純粋経路に OS 依存が混ざらないこと。2 libs / 0 violations、`out/issue87-symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新しい 2 型の 1 ファイル 1 型と、648 fixture の生成整合（CNF-010）。0 violations、`out/issue87-conformance.log` |
+| `clang-format --dry-run --Werror`（変更した C++ 9 ファイル） | 変更 C++ の整形。初回は `VimEffect.hpp` ほかが拒否され、`clang-format -i` で整えてから再実行し成功。`out/issue87-format.log` |
+| `cmake -S . -B build -U CMAKE_RUNTIME_OUTPUT_DIRECTORY` | 一時出力先だけ既定へ復元。成功、`out/issue87-configure-restore.log`。旧版の再リンクはしない |
+
+computer-use による実機の画面確認は未実施（前回と同じく native pipe が繋がらないため試みていない）。起動中の旧版 PID には触れていない。成果物は `build/issue87/NeNeNib.exe`、SHA-256 `19952fcabafd0f1885c2a732802ec89b1ea238f651722e401e0e8371769da068`。
+
+FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / CNF-010 を自己レビュー。`optional` は `has_value` / `value` / `value_or`、効果の分類は 14 個の overload を `std::visit` で網羅、INSERT の記録を取り直す鍵は `VimSpecialKey` の網羅 `switch`、閉じた分岐に `default` は無い。記録は本文・履歴・レジスタを持たず、UI 側に `.` の知識を置いていない。
+
+性能は測っていない。1 打鍵あたり小さな `vector` の複製が増えるが、予算 0.9 ms に対する影響は速さのゲートが見張る（ADR 0016 / 0021）。関連しない設定・テーマ・性能・全 oracle は実行しない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+**追記（2026-09-22・取消の扱いを測り直した）。** 最初の probe は `xdk.` / `xGdj.` から「Vim は失敗したオペレータで記録を入れ替える」と読んだが、これは測り方の誤りだった。失敗してビープする命令のあと、`:normal!` に積んだ残りの鍵は捨てられるので、`.` がそもそも実行されていない（`xdkj` の最終カーソルが 1 行目のままなのが実測の証拠。Vim ソースは読んでいない）。`python out/issue87-oracle/probe3.py`（28 ケース）で取消の全経路を測り、`python out/issue87-oracle/probe4.py`（21 ケース × 区切った形と 1 回にまとめた形 = 42 起動）で鍵を命令の切れ目で区切って測り直した。結果は決定 3 と一致する。範囲の作れない `dk` / `dj` / `2dd` / `2D`、回数の入らない `3r`、外れた `f` / `;`、motion でない鍵 `dq`、`g` の続きが無い `dgz`、失敗した yank `yk`、Esc の取消 `d<Esc>` / `r<Esc>` のいずれも、取消になった命令は自分の鍵を捨てるだけで直前の変更を変えない。**engine は変更していない。**証拠は `probe3.json` / `probe3.txt` / `probe4.json` / `probe4.txt`。
+
+ビープする命令の後ろに鍵が続く列は、1 回 `:normal!` の既存生成器では fixture にできない（生成器が残りの鍵を捨てた答えを記録してしまう）。生成器は変更せず、ビープしない Esc の取消 `xd<Esc>j.` と `xr<Esc>j.` の 2 件だけを fixture に採って 650 件とし（`--only dot- --only counted-insert-` の再生成で 99 measured / 551 reused、既存 97 行は同じ値で再現・`out/issue87-oracle/regenerate2.log`）、残りの 12 の取消経路は `--vim-dot` の対象 unit が直接確かめる。650 件の入力 SHA-256 は `e7d90990f8eed17ae5b3ce86b8da6823a074f492eb65b5753b00a10276a8b4fb`。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4` | 取消の unit を足したテストの build。成功、`out/issue87-build-cancel.log` |
+| `build/issue87/nib_tests.exe --vim-dot` | 909 checks すべて成功（取消 12 経路 × 記録と本文、追加 2 fixture を含む）。`out/issue87-unit-cancel.log` |
+| `build/issue87/nib_tests.exe --vim-replace` / `--vim-character-search` / `--vim-line-jumps` | 取消経路を共有する r・f/t/;・g 待ちの退行。460 / 621 / 989 checks すべて成功。`out/issue87-unit-cancel.log` |
+| `eng/symbols.py --build-dir build --require core application` | 2 libs / 0 violations、`out/issue87-symbols2.log` |
+| `eng/conformance.py --build-dir build` | ADR の追記と 650 fixture の生成整合（CNF-010）。0 violations、`out/issue87-conformance2.log` |
+| `clang-format --dry-run --Werror tests/unit/NibTests.cpp` | 追加した unit の整形。成功、`out/issue87-format2.log` |
+
+engine と production の C++ は追記の前後で不変なので、unit 全体・o/O の scope・symbols 以外の既存成功結果は再利用し、測り直していない。

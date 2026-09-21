@@ -19,6 +19,7 @@
 #include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimNavigate.hpp"
+#include "VimReplay.hpp"
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 
@@ -804,6 +805,8 @@ void EditorController::evaluate_command(std::string_view text)
     state_ = state_.with_command_message(result.value().message);
 }
 
+// Vim の外から来た割り込み（クリック・Ctrl+Z・全選択・別経路の編集）。INSERT の入力記録は
+// engine の外の出来事では復元できないので、ここで捨てて undo の単位も切る（ADR 0028 の決定 3）。
 void EditorController::interrupt_vim_insert()
 {
     if (state_.vim().mode == core::VimMode::insert)
@@ -814,9 +817,14 @@ void EditorController::interrupt_vim_insert()
     }
 }
 
+// Vim の鍵による移動。入力記録を残すか捨てるかは engine が決めている（insert_moved が捨て、
+// i a I A の入りは残す）ので、ここは undo の単位を切るだけにする（ARC-004）。
 void EditorController::perform(const core::VimMoveTo &effect)
 {
-    interrupt_vim_insert();
+    if (state_.vim().mode == core::VimMode::insert)
+    {
+        state_ = state_.with_history(state_.history().sealed());
+    }
     move_caret_to(effect.caret, core::SelectionAnchoring::collapse);
 }
 
@@ -875,6 +883,17 @@ void EditorController::perform(const core::VimReplaceRange &effect)
             core::EditBoundary::separate);
     move_caret_to(caret_after_insert(effect.range.begin, effect.utf8, effect.caret, newline.size()),
                   core::SelectionAnchoring::collapse);
+}
+
+// `.`（ADR 0030 の決定 7）。前後で履歴を閉じるので、再生した命令が 1 つの undo 単位になる。
+void EditorController::perform(const core::VimReplay &effect)
+{
+    state_ = state_.with_history(state_.history().sealed());
+    for (const core::VimKey &key : effect.keys)
+    {
+        accept(VimKeyPress{key});
+    }
+    state_ = state_.with_history(state_.history().sealed());
 }
 
 void EditorController::perform(const core::VimUndo &)

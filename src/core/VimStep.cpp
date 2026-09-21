@@ -23,6 +23,8 @@
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimRepeatRecord.hpp"
+#include "VimReplay.hpp"
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimSelect.hpp"
@@ -41,6 +43,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -61,7 +64,7 @@ constexpr char32_t carriage_return_character = 0x0D;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 42> normal_bindings{
+constexpr std::array<VimBinding, 43> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {U'k', VimAction::move_up},
@@ -103,6 +106,7 @@ constexpr std::array<VimBinding, 42> normal_bindings{
      {U',', VimAction::repeat_character_search_opposite},
      {U'g', VimAction::prefix_g},
      {U'r', VimAction::replace_character},
+     {U'.', VimAction::repeat_change},
      {U':', VimAction::open_command_line}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
@@ -1284,10 +1288,17 @@ character_search_position(const VimEditorView &view, const VimState &state,
 
 // ---------------------------------------------------------------- 鍵から動作へ
 
+// i a I A。回数は o / O と同じで、Esc のときに入力を残りの回数だけ繰り返す（ADR 0028 の
+// 決定 2 の機構をそのまま使う。`3ifoo<Esc>` が foofoofoo になるのは Vim も同じ）。
 [[nodiscard]] VimStep entered_insert(const VimState &state, Offset caret)
 {
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = VimMode::insert;
+    const std::size_t count = count_of(state.count);
+    if (count > single_step)
+    {
+        next.insert_repeat = VimInsertRepeat{count - single_step, std::string{}};
+    }
     return VimStep{std::move(next), VimMoveTo{caret}};
 }
 
@@ -1540,6 +1551,17 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return page_step(state, view, direction);
 }
 
+// 半画面と 1 画面の巻き（ADR 0019）。NORMAL と VISUAL は同じ 1 本を通る。
+[[nodiscard]] VimStep scroll_action(const VimState &state, const VimEditorView &view,
+                                    VimAction action)
+{
+    if (action == VimAction::scroll_half_down || action == VimAction::scroll_half_up)
+    {
+        return half_page_action(state, view, action);
+    }
+    return page_action(state, view, action);
+}
+
 [[nodiscard]] VimStep visual_action(const VimState &state, const VimEditorView &view,
                                     VimAction action)
 {
@@ -1661,13 +1683,55 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
 }
 
+// ---------------------------------------------------------------- `.`（ADR 0030）
+
+// 記録の回数を 10 進の桁に戻す。表が数字を回数として読み直すので、再生に特別な経路は要らない。
+[[nodiscard]] std::vector<VimKey> count_keys(VimCount count)
+{
+    std::vector<VimKey> reversed;
+    for (std::size_t rest = count.value; rest > 0; rest /= decimal_base)
+    {
+        const auto digit = static_cast<char32_t>(U'0' + rest % decimal_base);
+        reversed.emplace_back(VimCharacter{digit});
+    }
+    return std::vector<VimKey>{reversed.rbegin(), reversed.rend()};
+}
+
+// 再生する鍵の列（決定 6）。回数の桁を先頭に展開するだけで、鍵の意味は engine の表が決める。
+[[nodiscard]] std::vector<VimKey> replayed_keys(const std::optional<VimCount> &count,
+                                                const std::vector<VimKey> &keys)
+{
+    std::vector<VimKey> result =
+        count.has_value() ? count_keys(count.value()) : std::vector<VimKey>{};
+    result.insert(result.end(), keys.begin(), keys.end());
+    return result;
+}
+
+// `.`。直前の変更が無ければ何も起きない。回数は `.` に付いた回数が優先で、無ければ記録の回数。
+[[nodiscard]] VimStep repeated_change(const VimState &state)
+{
+    if (!state.last_change.has_value())
+    {
+        return cancelled(state);
+    }
+    const VimRepeatRecord &record = state.last_change.value();
+    const std::optional<VimCount> count = state.count.has_value() ? state.count : record.count;
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplay{replayed_keys(count, record.keys)}};
+}
+
+// u / Ctrl-r / `.`。どれも済んだ編集をもう一度たどる（ADR 0030 の決定 6）。
 [[nodiscard]] VimStep history_action(const VimState &state, VimAction action)
 {
     if (action == VimAction::undo)
     {
         return VimStep{vim_resting_from(state, state.unnamed_register), VimUndo{}};
     }
-    return VimStep{vim_resting_from(state, state.unnamed_register), VimRedo{}};
+    if (action == VimAction::redo)
+    {
+        return VimStep{vim_resting_from(state, state.unnamed_register), VimRedo{}};
+    }
+    return repeated_change(state);
 }
 
 [[nodiscard]] VimStep normal_edit_action(const VimState &state, const VimEditorView &view,
@@ -1737,10 +1801,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return moved_step(state, view, action);
     case VimAction::scroll_half_down:
     case VimAction::scroll_half_up:
-        return half_page_action(state, view, action);
     case VimAction::scroll_page_down:
     case VimAction::scroll_page_up:
-        return page_action(state, view, action);
+        return scroll_action(state, view, action);
     case VimAction::visual:
     case VimAction::visual_line:
     case VimAction::open_line_below:
@@ -1773,6 +1836,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return insert_action(state, view, action);
     case VimAction::undo:
     case VimAction::redo:
+    case VimAction::repeat_change:
         return history_action(state, action);
     }
     std::unreachable();
@@ -1968,16 +2032,6 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
-[[nodiscard]] VimStep visual_scroll_action(const VimState &state, const VimEditorView &view,
-                                           VimAction action)
-{
-    if (action == VimAction::scroll_half_down || action == VimAction::scroll_half_up)
-    {
-        return half_page_action(state, view, action);
-    }
-    return page_action(state, view, action);
-}
-
 [[nodiscard]] VimStep visual_selection_action(const VimState &state, const VimEditorView &view,
                                               VimAction action)
 {
@@ -2034,8 +2088,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimAction::scroll_half_up:
     case VimAction::scroll_page_down:
     case VimAction::scroll_page_up:
-        return visual_scroll_action(state, view, action);
-    // VISUAL の x は d と同じ（決定 7）。
+        return scroll_action(state, view, action);
     case VimAction::remove_character:
     case VimAction::remove_operator:
     case VimAction::change_operator:
@@ -2054,7 +2107,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimAction::prefix_g:
     case VimAction::replace_character:
         return input_action(state, view, action);
-    // この縦切りの範囲の外の鍵は何もしない（決定 7・決定 8）。
+    // VISUAL の x は d と同じで、範囲の外の鍵は何もしない（決定 7・決定 8・ADR 0030 の決定 6）。
     case VimAction::open_command_line:
     case VimAction::put_after:
     case VimAction::put_before:
@@ -2067,6 +2120,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimAction::insert_at_line_end:
     case VimAction::undo:
     case VimAction::redo:
+    case VimAction::repeat_change:
         return visual_unchanged(state);
     }
     std::unreachable();
@@ -2378,9 +2432,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     }
     return visual_special(state, view, std::get<VimSpecialKey>(key));
 }
-} // namespace
 
-VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
+[[nodiscard]] VimStep stepped(const VimState &state, const VimEditorView &view, VimKey key)
 {
     if (state.input_wait.has_value())
     {
@@ -2397,5 +2450,214 @@ VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
         return visual_step(state, view, key);
     }
     std::unreachable();
+}
+
+// ---------------------------------------------------------------- 記録（ADR 0030 の決定 2〜5）
+
+// 本文を変える効果か（決定 3）。写し先が足りなければ std::visit がここで落ちる（CPP-002）。
+[[nodiscard]] bool changes_text(const VimNoEffect &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimMoveTo &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimNavigate &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimSelect &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimUndo &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimRedo &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimOpenCommandLine &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimReplay &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimRemoveRange &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool changes_text(const VimRemoveLines &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool changes_text(const VimInsertString &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool changes_text(const VimNewLine &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool changes_text(const VimInsertAt &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool changes_text(const VimReplaceRange &) noexcept
+{
+    return true;
+}
+
+[[nodiscard]] bool changes_text(const VimEffect &effect) noexcept
+{
+    return std::visit([](const auto &value) { return changes_text(value); }, effect);
+}
+
+// INSERT で記録を `i` から取り直す鍵（決定 4）。ADR 0028 の決定 3 が挿入の反復を切るのと
+// 同じ境界で、Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。
+[[nodiscard]] bool restarts_insert(VimKey key) noexcept
+{
+    if (std::holds_alternative<VimCharacter>(key))
+    {
+        return false;
+    }
+    switch (std::get<VimSpecialKey>(key))
+    {
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+        return true;
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+        return false;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimRepeatRecord appended(VimRepeatRecord record, VimKey key)
+{
+    record.keys.push_back(key);
+    return record;
+}
+
+// 命令が完了したか（決定 3）。次キー待ち・保留オペレータ・回数が空で NORMAL のまま。
+[[nodiscard]] bool completed(const VimState &next) noexcept
+{
+    return next.mode == VimMode::normal && !next.input_wait.has_value() &&
+           !next.pending.has_value() && !next.count.has_value();
+}
+
+// NORMAL の鍵を記録へ（決定 2）。回数の桁は記録せず、回数はそのときの積を 1 つだけ残す。
+[[nodiscard]] VimRepeatRecord normal_recording(const VimState &before, VimKey key)
+{
+    VimRepeatRecord record = before.recording.value_or(VimRepeatRecord{});
+    if (std::holds_alternative<VimCharacter>(key) &&
+        counts_as_digit(before, std::get<VimCharacter>(key).code))
+    {
+        return record;
+    }
+    record.count = combined_count(before);
+    return appended(std::move(record), key);
+}
+
+// INSERT の記録（決定 4）。Esc で 1 つの変更として確定し、移動の鍵は `i` から取り直す。
+// VISUAL から入った挿入は記録を持たないので、確定もしない（決定 5）。
+[[nodiscard]] VimState insert_recording(const VimState &before, VimState next, VimKey key)
+{
+    if (!before.recording.has_value())
+    {
+        return next;
+    }
+    if (next.mode == VimMode::normal)
+    {
+        next.last_change = appended(before.recording.value(), key);
+        return next;
+    }
+    if (restarts_insert(key))
+    {
+        next.recording = VimRepeatRecord{std::nullopt, {VimKey{VimCharacter{U'i'}}}};
+        return next;
+    }
+    next.recording = appended(before.recording.value(), key);
+    return next;
+}
+
+// NORMAL の記録。完了した鍵だけが効果で分かれ、途中の鍵と INSERT へ入る命令は記録を続ける。
+[[nodiscard]] VimState normal_recorded(const VimState &before, VimState next,
+                                       const VimEffect &effect, VimKey key)
+{
+    VimRepeatRecord record = normal_recording(before, key);
+    if (next.mode != VimMode::normal)
+    {
+        // VISUAL への遷移は記録を捨てる（決定 5）。INSERT へ入る命令は Esc まで続ける。
+        if (next.mode == VimMode::insert)
+        {
+            next.recording = std::move(record);
+        }
+        return next;
+    }
+    if (!completed(next))
+    {
+        next.recording = std::move(record);
+        return next;
+    }
+    if (changes_text(effect))
+    {
+        next.last_change = std::move(record);
+    }
+    return next;
+}
+
+// 記録の更新はこの 1 か所だけ（ARC-001）。鍵の意味ではなく、前のモードと効果で分ける。
+[[nodiscard]] VimState vim_recorded(const VimState &before, VimState next, const VimEffect &effect,
+                                    VimKey key)
+{
+    next.recording = std::nullopt;
+    next.last_change = before.last_change;
+    // `.` 自身は記録しない。再生する鍵に `.` が入らないので再帰は深さ 1 で止まる（決定 7）。
+    if (std::holds_alternative<VimReplay>(effect))
+    {
+        return next;
+    }
+    switch (before.mode)
+    {
+    case VimMode::visual:
+    case VimMode::visual_line:
+        // VISUAL で完了した変更は直前の変更を消す（決定 5）。yank と移動は残す。
+        if (changes_text(effect))
+        {
+            next.last_change = std::nullopt;
+        }
+        return next;
+    case VimMode::insert:
+        return insert_recording(before, std::move(next), key);
+    case VimMode::normal:
+        return normal_recorded(before, std::move(next), effect, key);
+    }
+    std::unreachable();
+}
+} // namespace
+
+VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
+{
+    VimStep step = stepped(state, view, key);
+    VimState recorded = vim_recorded(state, std::move(step.next), step.effect, key);
+    step.next = std::move(recorded);
+    return step;
 }
 } // namespace nenenib::core

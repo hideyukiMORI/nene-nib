@@ -7,6 +7,7 @@
 #include "VimMode.hpp"
 #include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
+#include "VimRepeatRecord.hpp"
 #include "VimWantedColumn.hpp"
 
 #include <cstddef>
@@ -30,6 +31,10 @@ struct VimState
     // half-page command に残る Vim の 'scroll' に相当する値（ADR 0019 の決定 6）。
     std::optional<VimCount> scroll_lines;
     std::optional<VimInsertRepeat> insert_repeat;
+    // `.` の記録（ADR 0030 の決定 1）。recording はいま組み立て中の命令の鍵、last_change は
+    // 確定した直前の変更。どちらも vim_step の 1 か所だけが書き換える。
+    std::optional<VimRepeatRecord> recording;
+    std::optional<VimRepeatRecord> last_change;
     VimRegister unnamed_register;
 };
 
@@ -37,9 +42,17 @@ struct VimState
 // Vim モードに入るときも、通常モードへ戻して保留を捨てるときも、この 1 つの形に寄せる。
 [[nodiscard]] inline VimState vim_resting_state(VimRegister unnamed_register)
 {
-    return VimState{VimMode::normal, std::nullopt, std::nullopt,
-                    std::nullopt,    std::nullopt, std::nullopt,
-                    std::nullopt,    std::nullopt, std::move(unnamed_register)};
+    return VimState{VimMode::normal,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::move(unnamed_register)};
 }
 
 // 通常の鍵の完了は 'scroll' の明示値と直前の文字検索を捨てない。Vim モードへ初めて入る

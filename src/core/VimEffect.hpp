@@ -11,6 +11,7 @@
 #include "VimRemoveLines.hpp"
 #include "VimRemoveRange.hpp"
 #include "VimReplaceRange.hpp"
+#include "VimReplay.hpp"
 #include "VimSelect.hpp"
 #include "VimUndo.hpp"
 
@@ -23,5 +24,5 @@ namespace nenenib::core
 // 選択肢が増えたら写し先が足りずコンパイルが落ちる＝網羅性は機械が守る（CPP-002）。
 using VimEffect = std::variant<VimNoEffect, VimMoveTo, VimNavigate, VimSelect, VimRemoveRange,
                                VimRemoveLines, VimInsertString, VimNewLine, VimInsertAt,
-                               VimReplaceRange, VimUndo, VimRedo, VimOpenCommandLine>;
+                               VimReplaceRange, VimUndo, VimRedo, VimOpenCommandLine, VimReplay>;
 } // namespace nenenib::core

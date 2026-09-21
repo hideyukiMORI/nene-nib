@@ -36,3 +36,9 @@ FR-003のNORMAL `o` / `O`を実装する。既存のINSERT、行索引、改行�
 ## 範囲外と却下
 
 一般のi/a回数、dot、autoindent/smartindent設定、未対応INSERT制御キー、矩形選択、Issue #77は範囲外。反復のためのキー再配送・再帰的controller呼び出し、効果の汎用列、別の本文やundo管理は追加しない。既存の挿入効果と編集合成で表現できるためである。
+
+## 補足（2026-09-22・Issue #87）
+
+決定 3 の「一般の i/a の回数には広げない」と、範囲外に挙げた「一般の i/a 回数」「dot」は [ADR 0030](0030-vim-dot-repeat-as-key-replay.md) が置換した。`.` の回数付き再生（`2.` が `2ifoo<Esc>` を流す）が成り立つには回数付きの `i a I A` も入力を反復する必要があり、固定 Vim 9.1 でも `3ifoo<Esc>` は `foofoofoo` になる。
+
+そこで `VimInsertRepeat` は o/O だけでなく `i a I A` の入りでも立つ。形も破棄の境界（移動・記録を越える削除・外部編集）も決定 2・3 のままで、`counted-insert-*` の 5 fixture が固定 Vim との一致を守る。o/O 以外の INSERT 制御キー・矩形選択は引き続き範囲外。
