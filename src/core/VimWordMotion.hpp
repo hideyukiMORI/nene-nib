@@ -2,10 +2,13 @@
 
 #include "Offset.hpp"
 #include "TextBuffer.hpp"
+#include "VimWordClass.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordStop.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 
 namespace nenenib::core
 {
@@ -21,4 +24,17 @@ namespace nenenib::core
 // （オペレータの後ろでは、その位置までが範囲になる＝ $de が最後の 1 文字だけを消す理由）。
 [[nodiscard]] Offset vim_word_end(const TextBuffer &text, Offset caret, std::size_t count,
                                   VimWordEndStop stop);
+
+// 文字の種類（Vim の cls()）。語の表はここ 1 つで、テキストオブジェクトも同じ表を引く
+// （ADR 0031 の決定 2）。0 は空白、1 は記号、2 は語の文字、それ以外はひらがな等の塊の印。
+[[nodiscard]] std::uint32_t vim_character_class(char32_t code, VimWordClass kind) noexcept;
+
+// テキストオブジェクトが使う語の走査（ADR 0031 の決定 2）。どちらも 1 語ぶんだけ動く。
+// vim_word_stop_forward は Vim の fwd_word(1, kind, eol=TRUE)。次の語の頭へ進み、行の終わりで
+// 止まる（止まった位置をそのまま返す）。
+[[nodiscard]] Offset vim_word_stop_forward(const TextBuffer &text, Offset caret, VimWordClass kind);
+// vim_word_object_end は Vim の end_word(1, kind, stop=TRUE, empty=TRUE)。語の末尾へ進み、
+// もう末尾にいるなら動かず、空白を飛ぶ途中の空行では空行で止まる。本文が尽きたら nullopt。
+[[nodiscard]] std::optional<Offset> vim_word_object_end(const TextBuffer &text, Offset caret,
+                                                        VimWordClass kind);
 } // namespace nenenib::core

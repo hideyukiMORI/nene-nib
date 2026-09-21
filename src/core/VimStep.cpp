@@ -28,6 +28,11 @@
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimSelect.hpp"
+#include "VimTextObject.hpp"
+#include "VimTextObjectBinding.hpp"
+#include "VimTextObjectRange.hpp"
+#include "VimTextObjectRequest.hpp"
+#include "VimTextObjectScope.hpp"
 #include "VimVisualRange.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
@@ -127,6 +132,25 @@ constexpr std::array<VimMotionBinding, 15> motion_bindings{
      {VimAction::move_document_first, VimMotion::document_first},
      {VimAction::move_document_last, VimMotion::document_last}}};
 
+// i / a の後ろの鍵 → テキストオブジェクトの表（ADR 0031 の決定 1 / CPP-012）。b は paren、
+// B は brace、閉じ括弧の鍵は開き括弧と同じ行（Vim 9.1 で実測）。ここに無い鍵は取消。
+constexpr std::array<VimTextObjectBinding, 15> text_object_bindings{
+    {{U'w', VimTextObject::word},
+     {U'W', VimTextObject::big_word},
+     {U'\"', VimTextObject::double_quote},
+     {U'\'', VimTextObject::single_quote},
+     {U'`', VimTextObject::backtick},
+     {U'(', VimTextObject::paren},
+     {U')', VimTextObject::paren},
+     {U'b', VimTextObject::paren},
+     {U'{', VimTextObject::brace},
+     {U'}', VimTextObject::brace},
+     {U'B', VimTextObject::brace},
+     {U'[', VimTextObject::bracket},
+     {U']', VimTextObject::bracket},
+     {U'<', VimTextObject::angle},
+     {U'>', VimTextObject::angle}}};
+
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e は入れる（inclusive）。
 // 行単位の j k はどちらでもないので、この表には無い。
 constexpr std::array<VimMotion, 6> exclusive_motions{
@@ -152,6 +176,18 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         if (binding.action == action)
         {
             return binding.motion;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimTextObject> text_object_for(char32_t key) noexcept
+{
+    for (const VimTextObjectBinding binding : text_object_bindings)
+    {
+        if (binding.key == key)
+        {
+            return binding.object;
         }
     }
     return std::nullopt;
@@ -984,6 +1020,21 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return VimStep{std::move(next), VimNoEffect{}};
 }
 
+// オペレータ保留中と VISUAL の i / a（ADR 0031 の決定 1）。次の鍵まで待つだけで本文は動かない。
+[[nodiscard]] VimStep started_text_object(const VimState &state, VimTextObjectScope scope)
+{
+    VimState next = state;
+    next.input_wait = VimInputWait{scope};
+    return VimStep{std::move(next), VimNoEffect{}};
+}
+
+[[nodiscard]] VimStep text_object_action(const VimState &state, VimAction action)
+{
+    return started_text_object(state, action == VimAction::insert_before
+                                          ? VimTextObjectScope::inner
+                                          : VimTextObjectScope::around);
+}
+
 [[nodiscard]] VimStep repeated_character_search(const VimState &state, const VimEditorView &view,
                                                 VimAction action)
 {
@@ -1764,6 +1815,12 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 [[nodiscard]] VimStep input_action(const VimState &state, const VimEditorView &view,
                                    VimAction action)
 {
+    // VISUAL の i / a はテキストオブジェクトの接頭辞（ADR 0031 の決定 1）。NORMAL の挿入命令は
+    // commanded が先に insert_action へ分けるので、ここへは VISUAL からしか来ない。
+    if (action == VimAction::insert_before || action == VimAction::insert_after)
+    {
+        return text_object_action(state, action);
+    }
     if (action == VimAction::open_command_line)
     {
         return opened_command_line(state);
@@ -1865,6 +1922,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (action == VimAction::prefix_g)
     {
         return started_prefix(state, VimPrefix::g);
+    }
+    if (action == VimAction::insert_before || action == VimAction::insert_after)
+    {
+        return text_object_action(state, action);
     }
     if (action == doubled_action_of(operation))
     {
@@ -2106,6 +2167,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimAction::repeat_character_search_opposite:
     case VimAction::prefix_g:
     case VimAction::replace_character:
+    case VimAction::insert_before:
+    case VimAction::insert_after:
         return input_action(state, view, action);
     // VISUAL の x は d と同じで、範囲の外の鍵は何もしない（決定 7・決定 8・ADR 0030 の決定 6）。
     case VimAction::open_command_line:
@@ -2114,8 +2177,6 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimAction::remove_to_line_end:
     case VimAction::change_to_line_end:
     case VimAction::yank_line:
-    case VimAction::insert_before:
-    case VimAction::insert_after:
     case VimAction::insert_at_line_start:
     case VimAction::insert_at_line_end:
     case VimAction::undo:
@@ -2361,6 +2422,66 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
     return awaited_character(state, view, kind, target.value());
+}
+
+// ---------------------------------------------------------------- テキストオブジェクト（ADR 0031）
+
+// オペレータの後ろ。exclusive 補正は通さず、d だけが Vi 互換の行単位の規則を通る（決定 3）。
+// y のキャレットは範囲の先頭で、行単位の範囲でもその桁へ戻る（Vim 9.1 で実測）。
+[[nodiscard]] VimStep operated_on_object(const VimState &state, const VimEditorView &view,
+                                         const VimMotionRange &range)
+{
+    VimState from = state;
+    from.input_wait = std::nullopt;
+    from.wanted_column = std::nullopt;
+    return performed(from, view.text, range.range.begin, range);
+}
+
+// VISUAL。選択を範囲に置き換える（決定 4）。行単位になる範囲でも VISUAL は文字単位のままで、
+// caret を最後の行の内容の終わりに置くと選択が改行まで届く（実測）。
+[[nodiscard]] VimStep selected_object(const VimState &state, const VimEditorView &view,
+                                      const VimMotionRange &range)
+{
+    const Offset last = vim_text_object_caret(view.text, range);
+    const bool backward = view.selection.caret < view.selection.anchor;
+    const Selection selected =
+        backward ? Selection{last, range.range.begin} : Selection{range.range.begin, last};
+    VimState next = visual_resting(state, VimMode::visual);
+    next.wanted_column =
+        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(selected.caret).column};
+    return VimStep{std::move(next), VimSelect{selected}};
+}
+
+[[nodiscard]] VimStep completed_text_object(const VimState &state, const VimEditorView &view,
+                                            const VimMotionRange &range)
+{
+    if (state.pending.has_value())
+    {
+        return operated_on_object(state, view, range);
+    }
+    return selected_object(state, view, range);
+}
+
+[[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
+                                   VimTextObjectScope scope, VimKey key)
+{
+    if (!std::holds_alternative<VimCharacter>(key))
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    const auto object = text_object_for(std::get<VimCharacter>(key).code);
+    if (!object.has_value())
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    const auto range =
+        vim_text_object_range(view.text, view.selection,
+                              VimTextObjectRequest{scope, object.value()}, resolved_count(state));
+    if (!range.has_value())
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    return completed_text_object(state, view, range.value());
 }
 
 [[nodiscard]] VimStep completed_prefix(const VimState &state, const VimEditorView &view,

@@ -695,6 +695,36 @@ FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / C
 
 文書更新後の `git diff --check` も成功。成功後の変更は文書だけで、production/テスト/測定ソース/関連依存は不変。push/review/mergeでも上記を再利用し、全件unit・全oracle・無関係な設定/テーマ/性能は実行しない。Waivers: none。
 
+### 5-w. Vimのテキストオブジェクト（Issue #93・ADR 0031・2026-09-22）
+
+統合単位は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
+base `e2518cd`（ADR 0031 の 1 commit を含む `feat/93-vim-text-objects`。production の base は `d26c232`）。ADR 0031 を実測のあとで受理し、食い違った 4 点は決定の側を直した。`VimInputWait` に `VimTextObjectScope` を足し、新しい純関数 `vim_text_object_range`（`src/core/VimTextObjectRange.cpp`）1 本がオペレータの後ろでも VISUAL でも同じ範囲を決める。語の種類の表は `vim_character_class` として `VimWordMotion` から公開し、`iW` は同じ表の畳み方の違いだけにした（表は 1 つ・ARC-001）。UI・IME・描画・保存形式・schema・依存・ゲートは変更していない。
+
+`python out/issue93-oracle/probe.py`（202）/ `probe2.py`（63）/ `probe3.py`（71）/ `probe4.py`（28）を実装の前に実行し、固定 Vim 9.1 を 364 ケース起動して決定を確かめた。証拠は `out/issue93-oracle/probe*.json` / `probe*.txt`。Vim ソースは読んでいない。すべてのケースを命令の切れ目で区切って測っている（5-v の教訓）。決定 1・2・5・6・8 は提案のまま一致。食い違った 4 点（VISUAL は行単位にならない / 括弧は中に居なくても前の塊を使う / `i(` の 2 つの寄せは独立 / `y` のキャレットは範囲の先頭の桁）は ADR 0031 の「文脈」に書き、**期待値ではなく決定と実装を直した**。合わせていない 2 点（回数が尽きた `d9iw` の Vim のキャレット移動、塊の外からの `2i(` が内側へ入ること）は fixture を採っていない。
+
+`python out/issue93-oracle/add-fixtures.py --write` は候補 192 件を「区切って測った答え」と「1 回の `:normal!` で測った答え」の両方で測り、食い違う候補を拒否する（0 件拒否）。`python -X utf8 eng/vim-oracle.py --regenerate --only text-object-` は 192 件だけを測り、既存 650 行を `e2518cd` から逐語再利用した（`out/issue93-oracle/regenerate.log`）。`git diff` の削除行は metadata 2 行だけ。842 件の入力 SHA-256 は `58ba91c91e65162e9c651acb53711f9b9c5d68e96bc70c1231874c9d1c0ee94a`。初回の再生 192 件のうち 191 件が実装と一致し、`text-object-block-nested-too-many` だけが落ちた。これは「外向きに始めた括弧の走査は前へ折り返さない」を実測から読み直して実装を直したもので、fixture の期待値は測った値のまま。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=C:/Users/info/WORKS/NeNeNib/build/issue93` | 起動中の旧版を保持し、同じ target / flags で出力先だけ分離。成功、`out/issue93-configure.log` |
+| `cmake --build build --target nib_tests --parallel 4`（初回） | 新しい範囲関数・待ち・表を Debug / tidy / ASan / UBSan で。`vim_word_object_end` の認知的複雑度、`scanned_back` / `scanned_forward` のネスト 4、`visual_acted` の 62 行で拒否。`out/issue93-build.log` / `build2.log`。空白の枝を `blank_object_end` へ、括弧 1 文字の判定を `opens_the_block` / `closes_the_block` へ、VISUAL の `i` / `a` を既存の `input_action`（次キー待ちの 1 か所）へ寄せて修正した。閾値・除外・重大度は変えていない |
+| 同 build（修正後・最終） | 整形後の最終形も build 成功。`out/issue93-build-final.log` |
+| `build/issue93/nib_tests.exe --vim-text-objects` | 1623 checks すべて成功。新規 192 fixture ＋ 共有境界 6 件（r・f/t・g 待ちと `.` の再生代表）と、待ちの排他・取消がモード/選択/希望列/検索記憶を保つこと・VISUAL の置換と種類切替・伸ばし（`viwiw`）・`.` の記録と再生・undo 1 単位と redo・CRLF の保存 bytes を確認。`out/issue93-unit-text-objects.log` |
+| `build/issue93/nib_tests.exe --vim-dot` / `--vim-replace` / `--vim-character-search` / `--vim-line-jumps` | `VimInputWait` に値を足したので、待ちを共有する `.`・r・f/t/;・g の退行を確認。909 / 460 / 621 / 989 checks すべて成功。`out/issue93-unit-waits.log` |
+| `build/issue93/nib_tests.exe --vim-visual-yank` | VISUAL の選択と yank の経路を共有するため。265 checks 成功。`out/issue93-unit-waits.log` |
+| `build/issue93/nib_tests.exe` | `VimWordMotion` の内部（`VimScanPoint` に語の切れ方を持たせた）に触れたので、w / b / e を含む 842 fixture 全部を再生する unit 全体も 1 回実行した。8733 checks すべて成功。`out/issue93-unit-all.log` |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | 新しい core の 1 本（`std::vector<Offset>` を使う）に OS 依存が混ざらないこと。2 libs / 0 violations、`out/issue93-symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新しい 6 型の 1 ファイル 1 型と、842 fixture の生成整合（CNF-010）。0 violations、`out/issue93-conformance.log` |
+| `clang-format --dry-run --Werror`（変更・追加した C++ 14 ファイル ＋ 生成 header） | 変更 C++ の整形。初回は `VimTextObjectRange.cpp` と `NibTests.cpp` が拒否され、`clang-format -i` のあと build と対象テストを再実行して成功 |
+| `cmake -S . -B build -U CMAKE_RUNTIME_OUTPUT_DIRECTORY` | 一時出力先だけ既定へ復元。成功、`out/issue93-configure-restore.log` |
+
+computer-use による実機の画面確認は未実施（native pipe が繋がらないため試みていない）。起動中の旧版 PID には触れていない。`NeNeNib.exe` はこの Issue では作っていない（engine と対象テストだけの変更で、窓・描画・保存に触れていないため）。
+
+FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / CNF-010 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimTextObject` / `VimTextObjectScope` / `VimWordClass` / `VimInputWait` の visit）に `default` は無い。範囲関数は本文・履歴・レジスタを持たず、UI 側にテキストオブジェクトの知識を置いていない。`reinterpret_cast`・時刻・OS・スレッドは増やしていない（新しい `__std_*` も出ていない）。
+
+性能は測っていない。1 打鍵あたりの走査は行単位に本文を引くので、括弧の探索だけが本文の長さに比例し得る。速さの予算への影響は次に速さを測る機会に ADR 0016 の基準値と突き合わせる（ADR 0021）。関連しない設定・テーマ・性能・全 oracle は実行しない。push / レビューでも上記の成功結果を再利用する。Waivers: none。
+
 ### 5-v. Vimの`.`（直前の変更の再生）（Issue #87・ADR 0030・2026-09-22）
 
 統合単位は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
