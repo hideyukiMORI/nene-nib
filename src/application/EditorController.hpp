@@ -91,6 +91,9 @@ class EditorController final
     void perform(const core::VimNewLine &);
     void perform(const core::VimInsertAt &effect);
     void perform(const core::VimReplaceRange &effect);
+    // `.` の再生（ADR 0030 の決定 7）。鍵を同じ accept の経路へ流すだけで、`.` は記録されない
+    // ので再帰は深さ 1 で止まる。UI・IME・描画は通らない。
+    void perform(const core::VimReplay &effect);
     void interrupt_vim_insert();
     void perform(const core::VimUndo &);
     void perform(const core::VimRedo &);

@@ -5364,6 +5364,164 @@ void verify_look()
     verify_status_bar_hits();
 }
 
+// ---------------------------------------------------------------- `.`（Issue #87 / ADR 0030）
+
+void open_vim_document(Editing &editing, std::string text)
+{
+    editing.files().hold(Bytes{std::move(text)});
+    applied(editing.controller(), VisibleLines{vim_visible_lines});
+    applied(editing.controller(), OpenDocument{sample_path()});
+    applied(editing.controller(), SelectEditMode{EditMode::vim});
+}
+
+// 記録は回数 1 つと、回数の桁を除いた鍵の列（決定 1・2）。表示値に出ないのでここで直接見る。
+[[nodiscard]] bool dot_record_is(const VimState &state,
+                                 const std::optional<nenenib::core::VimCount> &count,
+                                 std::string_view keys)
+{
+    if (!state.last_change.has_value())
+    {
+        return false;
+    }
+    const auto &record = state.last_change.value();
+    return record.count == count && record.keys == vim_keys_of(keys);
+}
+
+void verify_vim_dot_recording()
+{
+    Editing editing;
+    open_vim_document(editing, "alpha beta gamma\nsecond line");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "x");
+    expect(dot_record_is(controller.vim_state(), std::nullopt, "x") &&
+               !controller.vim_state().recording.has_value(),
+           "a delete is confirmed as the last change and leaves no recording behind");
+    vim_replay(controller, "wyyu");
+    expect(dot_record_is(controller.vim_state(), std::nullopt, "x"),
+           "motion, yank and undo throw their own keys away and keep the last change");
+    vim_replay(controller, "d");
+    expect(controller.vim_state().recording.has_value(),
+           "a pending operator is still being recorded");
+    vim_replay(controller, "<Esc>");
+    expect(dot_record_is(controller.vim_state(), std::nullopt, "x"),
+           "a cancelled operator drops its keys and keeps the previous change");
+    vim_replay(controller, "2d3w");
+    expect(dot_record_is(controller.vim_state(), nenenib::core::VimCount{6}, "dw"),
+           "the operator and motion counts fold into one and no digit is recorded");
+    vim_replay(controller, ".");
+    expect(dot_record_is(controller.vim_state(), nenenib::core::VimCount{6}, "dw"),
+           "the replay records the command again and never records the dot itself");
+}
+
+void verify_vim_dot_counts()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdefghij");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "x3.");
+    expect(vim_body(controller.frame()) == "efghij" &&
+               dot_record_is(controller.vim_state(), nenenib::core::VimCount{3}, "x"),
+           "a counted dot replaces the count of the recorded change and keeps the new one");
+    vim_replay(controller, ".");
+    expect(vim_body(controller.frame()) == "hij",
+           "the next dot repeats with the count that was given");
+    vim_replay(controller, "2.");
+    expect(vim_body(controller.frame()) == "j" &&
+               dot_record_is(controller.vim_state(), nenenib::core::VimCount{2}, "x"),
+           "and a smaller count replaces it again");
+}
+
+void verify_vim_dot_history()
+{
+    Editing editing;
+    open_vim_document(editing, "alpha beta\nsecond line");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "3ofoo<Esc>");
+    const std::string opened = vim_body(controller.frame());
+    const std::string repeated = "alpha beta\nfoo\nfoo\nfoo\nfoo\nfoo\nfoo\nsecond line";
+    vim_replay(controller, ".");
+    expect(vim_body(controller.frame()) == repeated,
+           "the dot repeats a counted open-line command through the same effects");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == opened, "one dot is one undo unit");
+    vim_replay(controller, "<C-r>");
+    expect(vim_body(controller.frame()) == repeated, "and redo puts the whole replay back");
+    vim_replay(controller, "uu");
+    expect(vim_body(controller.frame()) == "alpha beta\nsecond line",
+           "the command before the dot is a unit of its own");
+}
+
+void verify_vim_dot_document()
+{
+    Editing editing;
+    open_vim_document(editing, "ab\r\ncd");
+    applied(editing.controller(), SaveDocument{sample_path(), TextEncoding::utf8});
+    vim_replay(editing.controller(), "ofoo<Esc>.");
+    applied(editing.controller(), SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "ab\r\nfoo\r\nfoo\r\ncd",
+           "the replayed open-line writes the document's own CRLF bytes");
+
+    Editing narrow;
+    open_vim_document(narrow, "one\ntwo\nthree\nfour");
+    applied(narrow.controller(), VisibleLines{1});
+    vim_replay(narrow.controller(), "dd.");
+    expect(narrow.controller().frame().total_lines == 2,
+           "the replay passes no window: a one-line viewport repeats the same delete");
+}
+
+void verify_vim_dot_modes()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdefghij\nklmnopqrst");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "xjvlld");
+    expect(!controller.vim_state().last_change.has_value(),
+           "a change finished in VISUAL erases the last change (ADR 0030 decision 5)");
+    vim_replay(controller, ".");
+    expect(vim_body(controller.frame()) == "bcdefghij\nnopqrst",
+           "and the dot after it does nothing");
+
+    Editing typing;
+    open_vim_document(typing, "abc");
+    vim_replay(typing.controller(), "xv<Esc>");
+    expect(dot_record_is(typing.controller().vim_state(), std::nullopt, "x"),
+           "entering and leaving VISUAL keeps the previous change");
+    vim_replay(typing.controller(), "i.<Esc>");
+    expect(vim_body(typing.controller().frame()) == ".bc" &&
+               dot_record_is(typing.controller().vim_state(), std::nullopt, "i.<Esc>"),
+           "in INSERT the dot is an ordinary character and the insert is what repeats");
+}
+
+void verify_vim_dot_fixtures()
+{
+    constexpr std::array<std::string_view, 8> boundaries{
+        "open-line-count-below", "open-line-count-above", "open-line-crlf-below",
+        "replace-char-one",      "replace-char-count",    "char-search-f-count",
+        "char-search-t-first",   "line-jump-gg-count"};
+    std::size_t selected = 0;
+    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    {
+        if (fixture.name.starts_with("dot-") || fixture.name.starts_with("counted-insert-") ||
+            std::ranges::find(boundaries, fixture.name) != boundaries.end())
+        {
+            verify_vim_fixture(fixture);
+            ++selected;
+        }
+    }
+    expect(selected == 105,
+           "the scope replays 97 dot fixtures and 8 shared open-line, r, f/t and g boundaries");
+}
+
+void verify_vim_dot_scope()
+{
+    verify_vim_dot_fixtures();
+    verify_vim_dot_recording();
+    verify_vim_dot_counts();
+    verify_vim_dot_history();
+    verify_vim_dot_document();
+    verify_vim_dot_modes();
+}
+
 void verify_vim_line_jump_recovery()
 {
     verify_vim_line_jump_continuations();
@@ -5372,7 +5530,8 @@ void verify_vim_line_jump_recovery()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 13> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 14> scopes{{
+        {"--vim-dot", verify_vim_dot_scope},
         {"--vim-replace", verify_vim_replace_scope},
         {"--vim-visual-yank", verify_vim_visual_yank_scope},
         {"--vim-visual-wanted", verify_vim_visual_wanted_scope},

@@ -54,6 +54,8 @@ enum class VimAction : std::uint8_t
     repeat_character_search_opposite,
     prefix_g,
     replace_character,
-    open_command_line
+    open_command_line,
+    // `.`。直前の変更の鍵の列を同じ経路へ再生する（ADR 0030 の決定 6）。
+    repeat_change
 };
 } // namespace nenenib::core
