@@ -697,7 +697,7 @@ FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / C
 
 ### 5-w. Vimのテキストオブジェクト（Issue #93・ADR 0031・2026-09-22）
 
-統合単位は [PR #94](https://github.com/hideyukiMORI/nene-nib/pull/94)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+統合単位は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
 
 base `e2518cd`（ADR 0031 の 1 commit を含む `feat/93-vim-text-objects`。production の base は `d26c232`）。ADR 0031 を実測のあとで受理し、食い違った 4 点は決定の側を直した。`VimInputWait` に `VimTextObjectScope` を足し、新しい純関数 `vim_text_object_range`（`src/core/VimTextObjectRange.cpp`）1 本がオペレータの後ろでも VISUAL でも同じ範囲を決める。語の種類の表は `vim_character_class` として `VimWordMotion` から公開し、`iW` は同じ表の畳み方の違いだけにした（表は 1 つ・ARC-001）。UI・IME・描画・保存形式・schema・依存・ゲートは変更していない。
 
