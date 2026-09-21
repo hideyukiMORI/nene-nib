@@ -773,3 +773,23 @@ FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / C
 | `clang-format --dry-run --Werror tests/unit/NibTests.cpp` | 追加した unit の整形。成功、`out/issue87-format2.log` |
 
 engine と production の C++ は追記の前後で不変なので、unit 全体・o/O の scope・symbols 以外の既存成功結果は再利用し、測り直していない。
+
+### 5-y. scope専用の契約を既定の単体実行へ（Issue #97・2026-09-22）
+
+統合単位は [PR #102](https://github.com/hideyukiMORI/nene-nib/pull/102)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
+base `e6dfc14`（`test/97-default-run-contracts`）。変更は `tests/unit/NibTests.cpp` 1 本だけで、production の C++・fixture・閾値・期待文言は一切触れていない。`#87` / `#93` で足した `--vim-dot` / `--vim-text-objects` の契約（取消 12 経路・待ちの排他・記録の破棄・VISUAL の置換など）は selector を指定したときだけ走り、引数なしの既定実行＝ CTest の `nib_unit` では走っていなかった。各 scope の fixture 部分と契約部分を分け（`verify_vim_dot_contracts` / `verify_vim_text_object_contracts` / `verify_vim_visual_wanted_contracts`）、既定実行が回す契約を `verify_vim_scope_contracts` の 1 つの表にまとめて `main` から呼ぶ。selector の表と対になる位置に置いたので、新しい scope を足すときに既定から漏れたことが 2 つの表の差として見える。selector は「その scope だけを速く回す」絞り込みのまま変えていない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build --target nib_tests`（Debug / tidy / ASan / UBSan） | 契約を束ね直した関数と表の build。成功、64.3 s（初回・base）と 43.8 s（変更後の再 build） |
+| `build/nib_tests.exe`（引数なし） | 既定実行に 2 scope の契約が載ったこと。8733 → **8823 checks**（+90 = `--vim-dot` と `--vim-text-objects` の契約分）すべて成功。所要 1.68 → 1.73 s |
+| `build/nib_tests.exe --vim-dot` / `--vim-text-objects` | selector の内容が変わっていないこと。909 / 1623 checks で変更前と同数・すべて成功 |
+| `build/nib_tests.exe --coverage-negative` | 早期 return の経路が既定の追加に巻き込まれていないこと。22 checks 成功 |
+| `ctest --test-dir build -R '^nib_unit$' --output-on-failure` | CTest から見た既定実行。成功、1.45 → **1.56 s**（+0.11 s） |
+| `clang-format --dry-run --Werror tests/unit/NibTests.cpp` | 変更した C++ の整形。成功 |
+| `python eng/conformance.py` | 1 ファイル 1 型と生成物の一致（CNF-010）。0 violations |
+
+テストの内容・閾値・fixture・oracle は変更していないので、oracle の再生成・`eng/symbols.py`・性能（QLT-014）・Release build・全件（`check.ps1 -Full`）は実行していない。production の C++ とリンク境界が不変で、842 fixture の入力も不変だからである（QLT-001 / QLT-012・ADR 0021）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+QLT-001 / QLT-008 / QLT-012 / CNF-010 / CPP-011 を自己レビュー。新しい型は足していない（表は既存の selector 表と同じ `std::pair` の `constexpr` 配列）。閉じた分岐・`optional` の読み方・`reinterpret_cast` に関わる変更はない。
