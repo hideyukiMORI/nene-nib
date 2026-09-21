@@ -45,4 +45,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0027](0027-vim-line-jumps-and-exclusive-input-wait.md) | 指定行移動は既存motionへ接続し、次キー待ちは排他的に持つ | 受理 |
 | [0028](0028-vim-open-lines-and-insert-repeat.md) | 行を開く操作と回数付きINSERTは既存の挿入・履歴へ流す | 受理 |
 | [0029](0029-vim-character-replace-as-range-edit.md) | rは排他的な次文字待ちと範囲置換の効果で表す | 受理 |
-| [0030](0030-vim-dot-repeat-as-key-replay.md) | `.` は直前の変更を鍵の列として記録し同じ経路へ再生する | 提案 |
+| [0030](0030-vim-dot-repeat-as-key-replay.md) | `.` は直前の変更を鍵の列として記録し同じ経路へ再生する | 受理 |
