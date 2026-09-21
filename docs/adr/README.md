@@ -46,4 +46,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0028](0028-vim-open-lines-and-insert-repeat.md) | 行を開く操作と回数付きINSERTは既存の挿入・履歴へ流す | 受理 |
 | [0029](0029-vim-character-replace-as-range-edit.md) | rは排他的な次文字待ちと範囲置換の効果で表す | 受理 |
 | [0030](0030-vim-dot-repeat-as-key-replay.md) | `.` は直前の変更を鍵の列として記録し同じ経路へ再生する | 受理 |
-| [0031](0031-vim-text-objects-as-one-range-function.md) | テキストオブジェクトは 1 本の範囲関数で d c y と VISUAL に同じ範囲を渡す | 提案 |
+| [0031](0031-vim-text-objects-as-one-range-function.md) | テキストオブジェクトは 1 本の範囲関数で d c y と VISUAL に同じ範囲を渡す | 受理 |

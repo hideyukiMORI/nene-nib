@@ -7,6 +7,10 @@
 
 ## 現在の Issue
 
+**直近の実装は [Issue #93](https://github.com/hideyukiMORI/nene-nib/issues/93)（Vimのテキストオブジェクト）**。オペレータ保留中とVISUALの `i` / `a` を排他的な次キー待ちにし、新しい純関数 `vim_text_object_range` 1本が `iw aw iW aW i" a" i' a' i` a` i( a( i{ a{ i[ a[ i< a<`（`b` / `B` と閉じ括弧の鍵も別名）の範囲を決めて、d/c/y と VISUAL の選択へ同じ範囲を渡す（[ADR 0031](../adr/0031-vim-text-objects-as-one-range-function.md) 受理）。`.` は鍵の列なので追加の記録なしに `diw.` `ci"x<Esc>.` が再生される。追加192fixture・計842件、`--vim-text-objects` 1623 checks、待ちを共有する `.`・r・f/t・g と VISUAL yank、unit全体8733 checks、build/tidy/symbols/conformance/format成功。画面確認は未実施。詳細はgate-proofs 5-w、統合状態はGitHubが正。
+
+実測364ケースでADR 0031の決定4点を直した（VISUALは行単位にならず改行まで届く・括弧は中に居なくても前の塊を使う・`i(` の2つの寄せは独立・`y` のキャレットは範囲の先頭の桁）。合わせていないのは、回数が尽きた `d9iw` でVimがキャレットを動かすことと、塊の外から数えた `2i(` が内側へ入ることの2点（fixtureに採っていない）。`it at` / `is as` / `ip ap`・`Ctrl-v`・`> < gu gU`・VISUALの後ろ向きの選択を伸ばす規則は後続。
+
 **直近の実装は [Issue #87](https://github.com/hideyukiMORI/nene-nib/issues/87)（Vimの`.`）**。NORMALの直前の変更を鍵の列として記録し、同じ `accept(VimKeyPress)` の経路へ再生する（[ADR 0030](../adr/0030-vim-dot-repeat-as-key-replay.md) 受理）。回数付き `.` は記録の回数を置き換えて次の `.` にも残り、INSERTを伴う命令はEscまでを1つの変更として確定する。追加99fixture・計650件、`--vim-dot` 909 checks、共有境界（o/Oの回数反復・r・f/t・g待ち）とunit全体7181 checks、build/tidy/symbols/conformance/format成功。画面確認は未実施。成果物は `build/issue87/NeNeNib.exe`、詳細はgate-proofs 5-v、統合状態はGitHubが正。
 
 取消の扱いは測り直しで決定3と一致することが分かった。Vimのビープが `:normal!` の残りの鍵を捨てるため最初の測定が誤っていたもので、鍵を区切って測ると取消になった命令は自分の鍵を捨てるだけで直前の変更を変えない。engineは変更していない。VISUALで行った変更の `.` だけがVimと違い（何もしない・決定5）、[Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)へ送った。回数付き `i a I A` が回数を捨てていた穴は、`N.` の要件のためADR 0028の入力記録で塞ぎ（ADR 0028に補足）、controllerが入力記録を直接消す二重経路は[Issue #92](https://github.com/hideyukiMORI/nene-nib/issues/92)に分けた。
