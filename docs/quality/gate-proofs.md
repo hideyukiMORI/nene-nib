@@ -705,7 +705,7 @@ base `2c00655ca7e50c7275c68d7f4aef2425ecf0ad08`（ADR 0030 の 2 commit を含�
 
 `python out/issue87-oracle/probe.py`（172 ケース）と `python out/issue87-oracle/probe2.py`（29 ケース）を実装の前に実行し、固定 Vim 9.1 を 201 ケース起動して ADR の決定を確かめた。証拠は `out/issue87-oracle/probe.json` / `probe.txt` / `probe2.json` / `probe2.txt`。Vim ソースは読んでいない。決定 2（回数の積を 1 つに畳む。`2d3w5.` と `6dw5.` が同じ 5 語）、決定 4（`ifoo<Home>bar<Esc>.` は `bar` だけ。`<End>` / `<Left>` / `<Down>` / `o` からの挿入も同じ）、決定 7（`x3..` / `3x3..` / `cwfoo<Esc>3..` が回数 3 を引き継ぐ）は一致した。
 
-食い違いは 2 つで、どちらも期待値を合わせず ADR のまま実装し、該当 fixture を採っていない。(1) 決定 5 は Vim と違う。Vim は `vlld.` を同じ大きさの範囲で再生し、`xjvlld.` でも VISUAL の削除を繰り返す。本実装は直前の変更を消して何もしない。(2) 決定 3 に残る穴。Vim は範囲の作れないオペレータ（1 行目の `dk`・最終行の `dj`）でも記録を入れ替えるので `xdk.` / `xGdj.` の `.` は何もしないが、本実装は直前の `x` を繰り返す。扱いは後続 Issue の判断に残す。
+食い違いは 2 つで、どちらも期待値を合わせず ADR のまま実装し、該当 fixture を採っていない。(1) 決定 5 は Vim と違う。Vim は `vlld.` を同じ大きさの範囲で再生し、`xjvlld.` でも VISUAL の削除を繰り返す。本実装は直前の変更を消して何もしない（Issue #91）。(2) 決定 3 に残る穴と書いた点は、**下の追記で撤回した**（測り方の誤りで、固定 Vim も決定 3 と一致する）。
 
 `python -X utf8 eng/vim-oracle.py --regenerate --only dot- --only counted-insert-` は 97 件だけを測り、既存 551 行を `2c00655` から逐語再利用した（`out/issue87-oracle/regenerate.log`）。`git diff` の削除行は metadata 2 行だけで、既存 fixture の期待値は測り直していない。648 件の入力 SHA-256 は `18c89df3a95008f534956eda918869fd4dcf5ff1df24fb6e71238e8dd4fda55d`。
 
