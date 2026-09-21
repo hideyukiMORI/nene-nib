@@ -9,6 +9,8 @@
 
 **直近のテスト整備は [Issue #97](https://github.com/hideyukiMORI/nene-nib/issues/97)（scope専用の契約を既定の単体実行へ）**。`--vim-dot` / `--vim-text-objects` の契約が selector 指定時にしか走っていなかったので、契約部分を fixture と分けて `verify_vim_scope_contracts` の表にまとめ、既定実行（CTest の `nib_unit`）へ載せた。既定は 8733 → 8823 checks（+90）・1.45 → 1.56 s、selector は 909 / 1623 checks のまま。テストの内容・閾値・fixture は変えていない。詳細はgate-proofs 5-y。
 
+統合済み: #87 は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)、#93 は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)、#97 は [PR #102](https://github.com/hideyukiMORI/nene-nib/pull/102)、#88 / #94 は PR #89 / #95 で main `8f2c363` へ。進行中は [Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索・ADR 0032 提案・`feat/100-vim-search`）。
+
 **直近の実装は [Issue #93](https://github.com/hideyukiMORI/nene-nib/issues/93)（Vimのテキストオブジェクト）**。オペレータ保留中とVISUALの `i` / `a` を排他的な次キー待ちにし、新しい純関数 `vim_text_object_range` 1本が `iw aw iW aW i" a" i' a' i` a` i( a( i{ a{ i[ a[ i< a<`（`b` / `B` と閉じ括弧の鍵も別名）の範囲を決めて、d/c/y と VISUAL の選択へ同じ範囲を渡す（[ADR 0031](../adr/0031-vim-text-objects-as-one-range-function.md) 受理）。`.` は鍵の列なので追加の記録なしに `diw.` `ci"x<Esc>.` が再生される。追加192fixture・計842件、`--vim-text-objects` 1623 checks、待ちを共有する `.`・r・f/t・g と VISUAL yank、unit全体8733 checks、build/tidy/symbols/conformance/format成功。画面確認は未実施。詳細はgate-proofs 5-w、統合状態はGitHubが正。
 
 実測364ケースでADR 0031の決定4点を直した（VISUALは行単位にならず改行まで届く・括弧は中に居なくても前の塊を使う・`i(` の2つの寄せは独立・`y` のキャレットは範囲の先頭の桁）。合わせていないのは、回数が尽きた `d9iw` でVimがキャレットを動かすことと、塊の外から数えた `2i(` が内側へ入ることの2点（fixtureに採っていない）。`it at` / `is as` / `ip ap`・`Ctrl-v`・`> < gu gU`・VISUALの後ろ向きの選択を伸ばす規則は後続。
@@ -90,5 +92,6 @@ autoindent / テキストオブジェクト / VISUALで行った変更の `.` / 
 
 ## 次の 1 手
 
-[Issue #87](https://github.com/hideyukiMORI/nene-nib/issues/87) / [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90) はReadyにして必須checkを待つ。merge後は #91（VISUALの `.`）と #92（入力記録の二重経路）、Issue #85のliteral CR、`Ctrl-v`・全文検索・テキストオブジェクト・一般Exを焦点Issueごとに進める。
+[Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索）を再開する。実測は済み、ADR 0032 は提案＋補足、[PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) は draft。最初の一手は入力行の見え方を 1 本に畳む整え、次に照合器と走査を unit で固めてから繋ぐ（手順は [引き継ぎ](../handoffs/2026-09-22.md)）。
+その後は #98（fixtures.json の整形・検索の fixture 追記後に 1 回）→ #91（VISUAL の `.`）→ #99（テキストオブジェクト残差）→ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。
 今回の結果と未確認は [日報](../reports/2026-09-22.md) / [引き継ぎ](../handoffs/2026-09-22.md)。変更に関係する検証だけを行い、成功結果を再利用する。
