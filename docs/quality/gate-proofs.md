@@ -697,7 +697,7 @@ FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / C
 
 ### 5-v. Vimの`.`（直前の変更の再生）（Issue #87・ADR 0030・2026-09-22）
 
-統合単位は PR。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+統合単位は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
 
 base `2c00655ca7e50c7275c68d7f4aef2425ecf0ad08`（ADR 0030 の 2 commit を含む `feat/87-vim-dot-repeat`。production の base は `82f260d`）。ADR 0030 を実測のあとで受理。`VimState` に `recording` / `last_change`（どちらも `optional<VimRepeatRecord>`）を足し、`VimEffect` に `VimReplay`、`VimAction` に `repeat_change` を足した。記録の確定・破棄は `vim_step` の後段にある純関数 1 か所（`vim_recorded` と 4 つの小さな判定）だけが書き、鍵の意味ではなく前のモードと効果で分ける。controller は `VimReplay` を受けて前後で履歴を閉じ、同じ `accept(VimKeyPress)` へ鍵を 1 つずつ流す。`.` は記録されないので再帰は深さ 1。UI・IME・描画・保存形式・schema・依存・ゲートは変更していない。
 
