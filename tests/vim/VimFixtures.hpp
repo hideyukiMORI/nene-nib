@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 18c89df3a95008f534956eda918869fd4dcf5ff1df24fb6e71238e8dd4fda55d / 648 fixtures
+// fixtures.json: sha256 e7d90990f8eed17ae5b3ce86b8da6823a074f492eb65b5753b00a10276a8b4fb / 650 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 648> vim_fixtures{{
+constexpr std::array<VimFixture, 650> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -660,6 +660,8 @@ constexpr std::array<VimFixture, 648> vim_fixtures{{
     {"dot-crlf-change-word", "ab cd\r\nef gh", "cwZZ<Esc>j0.", "ZZ cd\nZZ gh", 2, 2, "ef", "v", std::nullopt},
     {"dot-crlf-open-below", "ab\r\ncd", "ofoo<Esc>.", "ab\nfoo\nfoo\ncd", 3, 3, "", "", std::nullopt},
     {"dot-crlf-remove-line", "ab\r\ncd\r\nef", "dd.", "ef", 1, 1, "cd\n", "V", std::nullopt},
+    {"dot-keeps-record-after-escape-elsewhere", "ab\ncd\nef", "xd<Esc>j.", "b\nd\nef", 2, 1, "c", "v", std::nullopt},
+    {"dot-keeps-record-after-replace-escape", "ab\ncd\nef", "xr<Esc>j.", "b\nd\nef", 2, 1, "c", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

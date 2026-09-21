@@ -728,3 +728,18 @@ computer-use による実機の画面確認は未実施（前回と同じく nat
 FR-003 / ARC-001/004/007/009 / CPP-002/004/006/011/012 / QLT-001/008/012/013 / CNF-010 を自己レビュー。`optional` は `has_value` / `value` / `value_or`、効果の分類は 14 個の overload を `std::visit` で網羅、INSERT の記録を取り直す鍵は `VimSpecialKey` の網羅 `switch`、閉じた分岐に `default` は無い。記録は本文・履歴・レジスタを持たず、UI 側に `.` の知識を置いていない。
 
 性能は測っていない。1 打鍵あたり小さな `vector` の複製が増えるが、予算 0.9 ms に対する影響は速さのゲートが見張る（ADR 0016 / 0021）。関連しない設定・テーマ・性能・全 oracle は実行しない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+**追記（2026-09-22・取消の扱いを測り直した）。** 最初の probe は `xdk.` / `xGdj.` から「Vim は失敗したオペレータで記録を入れ替える」と読んだが、これは測り方の誤りだった。Vim の `clearopbeep()` は `beep_flush()` → `flush_buffers(FLUSH_MINIMAL)` を呼んで `:normal!` が積んだ残りの鍵を捨てるので、`.` がそもそも実行されていない（`xdkj` の最終カーソルが 1 行目のままなのが証拠）。`python out/issue87-oracle/probe3.py`（28 ケース）で取消の全経路を測り、`python out/issue87-oracle/probe4.py`（21 ケース × 区切った形と 1 回にまとめた形 = 42 起動）で鍵を命令の切れ目で区切って測り直した。結果は決定 3 と一致する。範囲の作れない `dk` / `dj` / `2dd` / `2D`、回数の入らない `3r`、外れた `f` / `;`、motion でない鍵 `dq`、`g` の続きが無い `dgz`、失敗した yank `yk`、Esc の取消 `d<Esc>` / `r<Esc>` のいずれも、取消になった命令は自分の鍵を捨てるだけで直前の変更を変えない。**engine は変更していない。**証拠は `probe3.json` / `probe3.txt` / `probe4.json` / `probe4.txt`。
+
+ビープする命令の後ろに鍵が続く列は、1 回 `:normal!` の既存生成器では fixture にできない（生成器が残りの鍵を捨てた答えを記録してしまう）。生成器は変更せず、ビープしない Esc の取消 `xd<Esc>j.` と `xr<Esc>j.` の 2 件だけを fixture に採って 650 件とし（`--only dot- --only counted-insert-` の再生成で 99 measured / 551 reused、既存 97 行は同じ値で再現・`out/issue87-oracle/regenerate2.log`）、残りの 12 の取消経路は `--vim-dot` の対象 unit が直接確かめる。650 件の入力 SHA-256 は `e7d90990f8eed17ae5b3ce86b8da6823a074f492eb65b5753b00a10276a8b4fb`。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4` | 取消の unit を足したテストの build。成功、`out/issue87-build-cancel.log` |
+| `build/issue87/nib_tests.exe --vim-dot` | 909 checks すべて成功（取消 12 経路 × 記録と本文、追加 2 fixture を含む）。`out/issue87-unit-cancel.log` |
+| `build/issue87/nib_tests.exe --vim-replace` / `--vim-character-search` / `--vim-line-jumps` | 取消経路を共有する r・f/t/;・g 待ちの退行。460 / 621 / 989 checks すべて成功。`out/issue87-unit-cancel.log` |
+| `eng/symbols.py --build-dir build --require core application` | 2 libs / 0 violations、`out/issue87-symbols2.log` |
+| `eng/conformance.py --build-dir build` | ADR の追記と 650 fixture の生成整合（CNF-010）。0 violations、`out/issue87-conformance2.log` |
+| `clang-format --dry-run --Werror tests/unit/NibTests.cpp` | 追加した unit の整形。成功、`out/issue87-format2.log` |
+
+engine と production の C++ は追記の前後で不変なので、unit 全体・o/O の scope・symbols 以外の既存成功結果は再利用し、測り直していない。

@@ -2126,5 +2126,7 @@
   {"name":"dot-tab-replace","text":"\tone two\n\tthree four","keys":"rzj0."},
   {"name":"dot-crlf-change-word","text":"ab cd\r\nef gh","keys":"cwZZ<Esc>j0."},
   {"name":"dot-crlf-open-below","text":"ab\r\ncd","keys":"ofoo<Esc>."},
-  {"name":"dot-crlf-remove-line","text":"ab\r\ncd\r\nef","keys":"dd."}
+  {"name":"dot-crlf-remove-line","text":"ab\r\ncd\r\nef","keys":"dd."},
+  {"name":"dot-keeps-record-after-escape-elsewhere","text":"ab\ncd\nef","keys":"xd<Esc>j."},
+  {"name":"dot-keeps-record-after-replace-escape","text":"ab\ncd\nef","keys":"xr<Esc>j."}
 ]

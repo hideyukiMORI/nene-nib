@@ -7,9 +7,9 @@
 
 ## 現在の Issue
 
-**直近の実装は [Issue #87](https://github.com/hideyukiMORI/nene-nib/issues/87)（Vimの`.`）**。NORMALの直前の変更を鍵の列として記録し、同じ `accept(VimKeyPress)` の経路へ再生する（[ADR 0030](../adr/0030-vim-dot-repeat-as-key-replay.md) 受理）。回数付き `.` は記録の回数を置き換えて次の `.` にも残り、INSERTを伴う命令はEscまでを1つの変更として確定する。追加97fixture・計648件、`--vim-dot` 869 checks、共有境界（o/Oの回数反復・r・f/t・g待ち）とunit全体7181 checks、build/tidy/symbols/conformance/format成功。画面確認は未実施。成果物は `build/issue87/NeNeNib.exe`、詳細はgate-proofs 5-v、統合状態はGitHubが正。
+**直近の実装は [Issue #87](https://github.com/hideyukiMORI/nene-nib/issues/87)（Vimの`.`）**。NORMALの直前の変更を鍵の列として記録し、同じ `accept(VimKeyPress)` の経路へ再生する（[ADR 0030](../adr/0030-vim-dot-repeat-as-key-replay.md) 受理）。回数付き `.` は記録の回数を置き換えて次の `.` にも残り、INSERTを伴う命令はEscまでを1つの変更として確定する。追加99fixture・計650件、`--vim-dot` 909 checks、共有境界（o/Oの回数反復・r・f/t・g待ち）とunit全体7181 checks、build/tidy/symbols/conformance/format成功。画面確認は未実施。成果物は `build/issue87/NeNeNib.exe`、詳細はgate-proofs 5-v、統合状態はGitHubが正。
 
-実測がADRと食い違った2点は期待値を合わせず、fixtureも採らずに残した。(1) 範囲の作れないオペレータ（1行目の `dk`・最終行の `dj`）のあと、Vimの `.` は何もしないが本実装は直前の変更を繰り返す（決定3の穴）。(2) VISUALで行った変更の `.` は何もしない（決定5・Vimは同じ大きさの範囲で再生する）。どちらも後続Issueの判断に残す。回数付き `i a I A` が回数を捨てていた穴は、`N.` の要件のためADR 0028の入力記録で塞いだ。
+取消の扱いは測り直しで決定3と一致することが分かった。Vimのビープが `:normal!` の残りの鍵を捨てるため最初の測定が誤っていたもので、鍵を区切って測ると取消になった命令は自分の鍵を捨てるだけで直前の変更を変えない。engineは変更していない。VISUALで行った変更の `.` だけがVimと違い（何もしない・決定5）、[Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)へ送った。回数付き `i a I A` が回数を捨てていた穴は、`N.` の要件のためADR 0028の入力記録で塞ぎ（ADR 0028に補足）、controllerが入力記録を直接消す二重経路は[Issue #92](https://github.com/hideyukiMORI/nene-nib/issues/92)に分けた。
 
 **直近の実装は [Issue #84](https://github.com/hideyukiMORI/nene-nib/issues/84)（Vimのr）**。NORMALの回数指定、文字/行単位VISUALの置換、Unicode/Tab、NORMALのEnter、取消、CRLF、undo/redoを接続した。追加39fixture・計551件、対象460 checks・build/tidy/symbols/conformance/format成功。画面確認はnative pipe接続エラーで未実施。成果物は `build/issue84/NeNeNib.exe`、詳細はgate-proofs 5-u、統合状態はGitHubが正。
 
@@ -48,7 +48,7 @@ Issue #68 / PR #69（C4a）、#66 / PR #67（C3b）、#64 / PR #65（C3a）、#6
 
 ## 実装したもの（Issue #87まで）
 
-Vimの`.`: NORMALの直前の変更を回数1つと鍵の列で記録し、`.` / `N.` で同じ経路へ再生する。`x d c y`系・`D C`・`r`・`p P`・`i a I A o O` ＋ 入力 ＋ `<Esc>`、`f/t/;`・`gg/G` を含む待ちも対象。移動・yank・undo/redo・Ex開始は記録を変えず、VISUALで行った変更は記録を消す。`.` 1回はundo 1単位で、回数付き `i a I A` も入力を繰り返す。
+Vimの`.`: NORMALの直前の変更を回数1つと鍵の列で記録し、`.` / `N.` で同じ経路へ再生する。`x d c y`系・`D C`・`r`・`p P`・`i a I A o O` ＋ 入力 ＋ `<Esc>`、`f/t/;`・`gg/G` を含む待ちも対象。移動・yank・undo/redo・Ex開始・取消（範囲が作れない・回数が入らない・検索が外れる・Escなど12経路）は記録を変えず、VISUALで行った変更は記録を消す。`.` 1回はundo 1単位で、回数付き `i a I A` も入力を繰り返す。
 
 Vimのr: NORMALの回数分/文字・行単位VISUALの選択範囲を1回のreplaceで置換する。元の行境界と無名レジスタを保ち、1操作ずつundo/redoできる。普通のUnicode文字とTab、NORMALのEnterが対象。次キー待ちは検索/gと排他的。
 
@@ -84,5 +84,5 @@ autoindent / テキストオブジェクト / VISUALで行った変更の `.` / 
 
 ## 次の 1 手
 
-[Issue #87](https://github.com/hideyukiMORI/nene-nib/issues/87)のdraft PRをhideとFableが見る。決定3の穴とVISUALの `.`（決定5）の扱いを決めてから、Issue #85のliteral CR、`Ctrl-v`・全文検索・テキストオブジェクト・一般Exを焦点Issueごとに進める。
+[Issue #87](https://github.com/hideyukiMORI/nene-nib/issues/87) / [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90) はReadyにして必須checkを待つ。merge後は #91（VISUALの `.`）と #92（入力記録の二重経路）、Issue #85のliteral CR、`Ctrl-v`・全文検索・テキストオブジェクト・一般Exを焦点Issueごとに進める。
 今回の結果と未確認は [日報](../reports/2026-09-22.md) / [引き継ぎ](../handoffs/2026-09-22.md)。変更に関係する検証だけを行い、成功結果を再利用する。

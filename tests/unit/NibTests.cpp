@@ -5492,6 +5492,40 @@ void verify_vim_dot_modes()
            "in INSERT the dot is an ordinary character and the insert is what repeats");
 }
 
+// 取消になった命令は自分の鍵を捨て、直前の変更を変えない（ADR 0030 の決定 3）。固定 Vim では
+// ビープが `:normal!` の残りの鍵を捨てるので fixture では測れない。実測は
+// out/issue87-oracle/probe4.py が鍵を区切って行い、ここでは同じ規則を直接確かめる。
+void verify_vim_dot_cancel(std::string_view before, std::string_view cancelled,
+                           std::string_view after)
+{
+    Editing editing;
+    open_vim_document(editing, "ab\ncd\nef");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "x");
+    vim_replay(controller, before);
+    vim_replay(controller, cancelled);
+    vim_replay(controller, after);
+    vim_replay(controller, ".");
+    const std::string note = std::string(cancelled) + " is cancelled and keeps the last change";
+    expect(vim_body(controller.frame()) == "b\nd\nef" &&
+               dot_record_is(controller.vim_state(), std::nullopt, "x"),
+           note.c_str());
+}
+
+void verify_vim_dot_cancels()
+{
+    for (const std::string_view cancelled :
+         {"dk", "yk", "3rz", "dfz", "d;", "dq", "dgz", "d<Esc>", "r<Esc>"})
+    {
+        verify_vim_dot_cancel("", cancelled, "j");
+    }
+    // 最終行でだけ範囲が作れない命令。先に G で降りてから k で戻る。
+    for (const std::string_view cancelled : {"2dd", "2D", "dj"})
+    {
+        verify_vim_dot_cancel("G", cancelled, "k");
+    }
+}
+
 void verify_vim_dot_fixtures()
 {
     constexpr std::array<std::string_view, 8> boundaries{
@@ -5508,13 +5542,14 @@ void verify_vim_dot_fixtures()
             ++selected;
         }
     }
-    expect(selected == 105,
-           "the scope replays 97 dot fixtures and 8 shared open-line, r, f/t and g boundaries");
+    expect(selected == 107,
+           "the scope replays 99 dot fixtures and 8 shared open-line, r, f/t and g boundaries");
 }
 
 void verify_vim_dot_scope()
 {
     verify_vim_dot_fixtures();
+    verify_vim_dot_cancels();
     verify_vim_dot_recording();
     verify_vim_dot_counts();
     verify_vim_dot_history();
