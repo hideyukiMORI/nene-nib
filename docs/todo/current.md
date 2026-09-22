@@ -9,6 +9,8 @@
 
 **2026-09-23 施主指示（[ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md)・Issue #128）**: 背景席は仕事の種類で `model` を明示する（実装＝Opus 5・下ごしらえ＝Sonnet 5・機械作業＝Haiku 4.5・裁定と受理は設計席自身）。同じ手順を 2 回以上モデルに踏ませたら 3 回目は `eng/` のスクリプト（chore #129 / #130 / #131）。
 
+**実機用の Release は `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` 1 本で作る**（[Issue #129](https://github.com/hideyukiMORI/nene-nib/issues/129)・draft [PR #133](https://github.com/hideyukiMORI/nene-nib/pull/133)）。`build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（SHA-256・ref・HEAD・所要時間）ができ、**起動はしない**（起動は設計席）。ref 無し・無い ref・dirty な作業ツリーは何もせず終了 1。手で作った exe とは PE の `TimeDateStamp` の 2 バイトを除いて完全一致。
+
 
 **直近の道具の直しは [Issue #106](https://github.com/hideyukiMORI/nene-nib/issues/106)（cp932 の端末で検査が落ちる）**。`python eng/test-conformance.py` と `eng/validate-git.ps1` が cp932 の端末でだけ落ちていた既存の失敗を閉じた。子プロセスとの入出力の符号化を固定する場所は **python 側 1 か所**（`tests/conformance/test_verification_policy.py` の `run_tool`・`encoding="utf-8"` ＋ `errors="replace"` ＋ 子の `PYTHONUTF8=1`）と **pwsh 側 1 か所**（`eng/validate-git.ps1` の前置きの `[Console]::OutputEncoding` と `$OutputEncoding`）だけ。検査の閾値・違反文言・規則・`eng/git-conventions.py` は変えていない。4 通りの端末（cp932 / UTF-8 × `PYTHONUTF8` 有無）で **157 tests すべて成功**、日本語 subject の 11 commit に対する `validate-git.ps1` が cp932 で終了 0（変更前は GIT-003）。C++・fixture・CMake に触れないので build / unit / symbols / 速さ / 全件は未実行。詳細は gate-proofs 5-ai、統合状態は GitHub が正。
 

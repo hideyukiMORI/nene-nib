@@ -1117,3 +1117,25 @@ base `4c0414c`（設計リナが `ae460a6`（origin/main）の上に ADR 0037 �
 対象を限定した理由: 差分は core の 6 ファイル（enum 1 つ・`VimState` の 1 メンバー・`VimSearch` の走査の公開・`VimStep` の入口 3 か所・`ExResult` の 4 命令と候補 2 つ）、application の 3 ファイル（`LineView` の 2 メンバーと `EditorFrame` の作り方・Ex の写し 1 か所）、ui の 2 ファイル（塗りの経路の追加）である。`VimState` と `ExResult` と `LineView` は Vim・Ex・描画・controller のすべての呼び出し元を持つので unit 全体と ctest を 1 回ずつ回し、1 フレームの走査が増えるので速さも 1 回測った。テーマ・設定の保存・ファイル・IME・oracle の再生成は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。`check.ps1 -Full` は回していない。画面確認は**未実施**（hide の手元で行う。起動中の `build/release-main/NeNeNib.exe` PID 45480 には触れていない）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 FR-003 / ARC-001/003/004/007/010/011 / CPP-002/003/004/005/006/011/012 / QLT-001/008/012/013/014 / CNF-002/006 を自己レビュー。`optional` は `has_value` / `value` だけで読み、閉じた分岐（`VimSearchHighlight` の `switch`）に `default` は無い。`reinterpret_cast`・時刻・OS・スレッド・新しいトークン・色のリテラルは増やしていない。走査の規則は `vim_line_matches` の 1 本、桁の計算は `span_of` の 1 本のままである。
+
+### 5-ak. 実機用 Release の作成と SHA の記録をスクリプトに（Issue #129・ADR 0038 の決定 5・2026-09-23）
+
+統合単位は [PR #133](https://github.com/hideyukiMORI/nene-nib/pull/133)（draft・ブランチ `chore/129-build-release-script`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は 5-aj の次を取った。
+
+base `bfa91f0`（origin/main）。**製品の C++・CMake・fixture・保存 schema・ゲートの閾値・違反文言・規則には触れていない。** 足したのは `eng/build-release.ps1` 1 本と、その引数の検査の正例・反例（`tests/conformance/test_verification_policy.py` の `ReleaseBuildArguments`）、`docs/DEVELOPMENT_WORKFLOW.md` の 9 節の 1 段落だけである。2026-09-22 に同じ手順を 2 回モデルに踏ませた（`build/release-main` / `build/release-main-123`）ので、3 回目からスクリプトが正本になる（ADR 0038 の決定 5）。この経路は**ゲートに載せない**（QLT-013: ゲートに Release も display も要らない）。
+
+**断る 3 つ（QLT-013・「この exe はどの ref のものか」を偽らない）**: ref を名指ししない呼び方・無い ref・dirty な作業ツリー。どれも `eng/toolchain.ps1` を dot-source する**前**に終了 1 で止まるので、断られた呼び方は cmake にも ninja にも届かない。起動はしない（起動は設計席が `Start-Process` で行う）。出力先は短い SHA で決まるので、起動中の `build/release-main-123/NeNeNib.exe`・ゲートの `build/`・`eng/measure-speed.py` の `build-release/` のどれとも衝突しない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` | 対象の正例（ref が HEAD と違う＝ worktree 経路）。終了 0。`build/release-bfa91f0/NeNeNib.exe`（978944 bytes・SHA-256 `DE4D3900…59AFC`）と `out/release/bfa91f0.json` ができ、configure 1.839 s / build 93.687 s / total 96.037 s。`build/worktree-bfa91f0` は終了時に消えて `git worktree list` は本体 1 つだけ、本体の作業ツリーは clean のまま |
+| `pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` | もう 1 本の経路（ref が HEAD ＝ worktree を作らない）。終了 0・`builtFromWorktree: false`・configure 2.603 s / build 101.920 s |
+| 手で作った `build/release-main-123/NeNeNib.exe`（main `f9e4704`）との照合 | 受け入れ条件「同じ手順で再現できる」。978944 bytes で**違うのは 2 バイトだけ**（offset `0x80`〜`0x81` ＝ PE の COFF ヘッダの `TimeDateStamp`。`0x6AB279E3` → `0x6AB29E23`）。残り 978942 バイトは完全一致。`-Ref main` と `-Ref HEAD` の 2 つの生成物どうしも同じ 2 バイトだけが違う（`bfa91f0` と `1473b2e` の差は docs と `eng/` だけなので、製品のバイト列が変わっていないことの確認にもなる） |
+| `python -m unittest tests.conformance.test_verification_policy`（反例 3 通り） | 引数無し → `QLT-013: name the ref`、`-Ref no-such-ref` → `QLT-013: unknown ref`、untracked を 1 つ置いた作業ツリー → `QLT-013: the working tree is not clean (1 entries)`。3 つとも終了 1 で、fixture の `eng/toolchain.ps1` が投げる sentinel は**出ない**（＝何もせずに止まった） |
+| 同（正例） | `-Ref HEAD` を clean な fixture リポジトリで呼ぶと sentinel `fixture-toolchain-stop` に届き、`QLT-013` は出ない（検査を通り抜けたことだけを見て、製品は build も起動もしない・#61 の約束） |
+| `python eng/test-conformance.py` | conformance の自己テスト全体。**163 tests OK**（160 → 163・新規は `ReleaseBuildArguments` の 3 件） |
+| `python eng/conformance.py` | 新しい `.ps1` が CNF-005（ゲート無効化の綴り）・CNF-008（Issue 番号の無い TODO）に触れないこと、文書の相対リンクと規則 ID（CNF-006）。**0 violations** |
+
+対象を限定した理由: 差分は `eng/` の新しいスクリプト 1 本と conformance のテスト 1 ファイル、文書 4 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。文書を変えたので `eng/conformance.py` は実行する（CNF-006）。画面確認は不要（窓に出る差分が無い）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+ARC-001 / QLT-001 / QLT-012 / QLT-013 / CNF-005 / CNF-006 / CNF-008 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない（このスクリプトはゲートではない）。Release の作り方の正本は `eng/build-release.ps1` の 1 か所で、文書はそれを指すだけである（ARC-001）。残るのは PE の `TimeDateStamp` が link 時刻であること（`/Brepro` は入れていない）と、ゲートに載っていないので壊れたことは次に使うときにしか分からないことの 2 点。

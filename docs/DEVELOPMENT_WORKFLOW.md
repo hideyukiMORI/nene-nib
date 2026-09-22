@@ -155,6 +155,15 @@ Waivers: none | WVR-NNNN
 
 ## 9. リリース
 
+### 実機確認用の Release（配布物ではない）
+
+hide の実機で見え方と速さを見るための Release は **`eng/build-release.ps1` 1 本**で作る（Issue #129・[ADR 0038](adr/0038-model-per-seat-and-scripted-preparation.md) の決定 5。2026-09-22 に同じ手順を 2 回モデルに踏ませたので 3 回目からはスクリプトが正本）。
+`pwsh -NoProfile -File eng/build-release.ps1 -Ref main` が `eng/toolchain.ps1` で `CXX=clang-cl` を固定し、`build/release-<短い SHA>` に Ninja の Release を configure して `NeNeNib` だけを build し、
+SHA-256・ref・commit・HEAD・所要時間・道具の版を `out/release/<短い SHA>.json` に記録する。**起動はしない**（起動は設計席が `Start-Process` で行う）。
+ref を名指ししない呼び方・無い ref・dirty な作業ツリーは何もせず終了 1（QLT-013: 「この exe はどの ref のものか」を偽らない）。ref が HEAD と違うときは `build/` の下に worktree を一時的に作って build し、終わったら消すので本体の作業ツリーは動かない。
+ゲートの `build/` と `eng/measure-speed.py` の `build-release/` には触れない。この経路はゲートに載せない（QLT-013: ゲートに Release も display も要らない）。
+PE の `TimeDateStamp` だけは link した時刻なので、同じ commit を作り直すと 2 バイトだけ変わる（Issue #129 の実測）。
+
 製品の版入力は **`CMakeLists.txt` の `project(... VERSION)`** だけとする。設定画面・manifest・VERSIONINFO・配布物名はビルドがそこから導出し、
 2 か所目に手で書かない。配布物の正規生成経路は次の 1 本である。
 
