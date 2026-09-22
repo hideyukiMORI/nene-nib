@@ -945,3 +945,32 @@ computer-use による実機の画面確認は**未実施**（native pipe が繋
 FR-003 / ARC-001/004/007/009 / CPP-002/003/004/006/011/012 / QLT-001/008/012/013 / CNF-010/011 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimTextObject` / `VimTextObjectScope` / `VimRegisterKind` の switch、`VimTextObjectOutcome` の visit）に `default` は無い。新しい 3 型はどれも公開 aggregate でメソッドを持たない（CPP-003）。`reinterpret_cast`・時刻・OS・スレッドは増やしていない。範囲関数は純関数のままで、選択の正本は `EditorState`（engine は選択を持たない・ADR 0018 の決定 3）。
 
 性能は測っていない（差分は入力と編集の経路で、描画とファイルは触っていない）。`VimTextObjectOutcome` は `VimMotionRange` ＋ `Selection` ぶんだけ戻り値が大きくなるが、テキストオブジェクトの鍵 1 打ごとに 1 つ作るだけである。1 打鍵 0.9 ms の予算への影響は次に速さを測る機会に ADR 0016 の基準値と突き合わせる（ADR 0021）。関連しない設定・テーマ・利用者テーマ・性能・Release build・`check.ps1 -Full` は実行していない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+### 5-ae. Vim の桁を仮想桁で数える経路（Issue #108・ADR 0034・2026-09-22）
+
+統合単位は [PR #111](https://github.com/hideyukiMORI/nene-nib/pull/111)（draft・ブランチ `feat/108-vim-virtual-column`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節番号は #99（5-ad）の次を取った。
+
+base `220fe76`（origin/main。ADR 0034 の 1 commit を積んだあと #99 の merge の上へ rebase した。衝突なし）。ADR 0034 は**実測のあとで受理**にし、決定 1・2・3 を 4 点直して「補足」に差を残した（DEL は 1 桁・`<200b>` の 6 桁の class・Tab の上のキャレットは最後の桁・逆引きの端は行の内容の終わり）。新しい型は `DisplayWidth` / `DisplayWidthRange` / `VirtualColumn` の 3 つで、どれも 1 ファイル 1 型（CPP-011）。`VimWantedColumn.column` と `VimCharacterExtent.column` が `VirtualColumn` になり、着地は `offset_at_virtual_column` 1 本を通る（`caret_on_line` の `TextBuffer::offset_of` を置き換えた・ARC-001）。UI・IME・描画・保存形式・schema・依存・ゲートの閾値は変更していない。
+
+`python out/issue108-oracle/probe.py`（73 ケース＋ 164 code point）/ `probe2.py`（全 1,114,112 code point の掃引）/ `probe3.py`（24 ＋ viewport 6）/ `probe4.py`（12）/ `probe5.py`（9 ＋ 12）を**実装の前**に実行し、固定 Vim 9.1 で桁の規則を閉じた。証拠は `out/issue108-oracle/probe*.json` / `probe*.txt`（`out/` は追跡外なので作業機にだけある）。Vim ソースは読んでいない。表示幅の表 491 行は `probe2` の掃引値そのもので、`make-table.py` が 1 度だけ C++ に写した。
+
+`python out/issue108-oracle/add-fixtures.py --write` は候補 47 件（うち viewport 3 件）を「命令の切れ目で区切った形」と「1 回の `:normal!` の形」の両方で測り、**食い違いは 0 件**だった（`out/issue108-oracle/add-fixtures.txt`）。`python eng/vim-oracle.py --regenerate --only virtcol-` は **47 measured / 1090 reused**（reuse ref `274a280`）。既存 1090 行は逐語再利用し、削除行は metadata 2 行だけ。1137 件の入力 SHA-256 は `e4c933becb6ac8a8ce3125af3a9b8405d4c417c2956373a56fb7a4bae36287ef` → `0b0756ba9406f285d2939252bd0effac7e2485b7f757b07a922bf657479df80a`。**初回の再生で 47 件すべてが実装と一致した**（期待値を直した fixture は無い）。
+
+**桁の意味を変えても既存が壊れていない証拠**は 2 つある。(1) Tab か全角を含む本文に `j` `k` `H M L` `.` を打つ既存 fixture 9 件（`visual-wanted-unicode` / `visual-yank-tab-indent` / `dot-tab-remove` / `dot-tab-change` / `dot-tab-replace` / `visual-dot-utf8-one-line` / `visual-dot-utf8-last-line` / `visual-dot-utf8-multiline` / `visual-dot-utf8-linewise`）が引き続き一致する。(2) 既定実行の 11130 → 11553 checks のうち、期待値を直したのは ADR 0033 が「穴」として残していた `--vim-dot` の契約 2 件（`ab<Tab>cd` の `vll` と、ASCII 3 桁から全角の行へ）だけで、どちらも固定 Vim の答え（`cd\nrq` / `defghij\nうえおかきくけこ`）に合わせた。同じ 3 件は `virtcol-dot-*` の fixture にも採ってある。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake -S . -B build/issue108 -G Ninja -DCMAKE_BUILD_TYPE=Debug` → `cmake --build build/issue108` | 新しい 3 型・491 行の表・`std::ranges::lower_bound` の探索・型を変えた 2 つの値を Debug / clang-tidy / ASan / UBSan で。全 target 成功（clang-tidy の指摘なし） |
+| `build/issue108/nib_tests.exe --vim-virtual-column` | 新しい対象。**424 checks 成功**（fixture 47 件＋表の境界 24 点＋桁の 3 関数＋逆引きの端） |
+| `build/issue108/nib_tests.exe`（引数なし） | `VimWantedColumn` の型を変えたので 1137 fixture の再生を含む unit 全体を 1 回。11130 → **11553 checks** すべて成功 |
+| `build/issue108/nib_tests.exe --vim-visual-wanted` / `--vim-line-jumps` / `--vim-line-jump-recovery` / `--vim-dot` | 欲しい列を使う経路（`j` `k` `H M L` `gg G` `Ctrl-d/u/f/b`）と VISUAL の `.` の桁。208 / 989 / 15 / 1593 checks すべて成功（`--vim-dot` は #99 と同数） |
+| `build/issue108/nib_tests.exe --vim-text-objects` / `--vim-search` | 桁を **変えない** と決めた経路（決定 5）が動いていないこと。1912 / 1375 checks 成功（#99 と同数） |
+| `ctest --test-dir build/issue108 --output-on-failure --no-tests=error` | 4 件すべて成功。`nib_unit` は 2.74 s（#99 の 2.32 s から fixture 47 件ぶん増えた） |
+| `python eng/symbols.py --build-dir build/issue108 --require core application` | 表と桁の関数が core の外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし） |
+| `python eng/conformance.py` / `--build-dir build/issue108` | 新しい 3 型の 1 ファイル 1 型（CNF-002）と、1137 fixture の生成整合（CNF-010）・正準形（CNF-011）。どちらも **0 violations** |
+| `clang-format --dry-run --Werror`（変更した C++ 9 ファイル） | 整形。初回は表の 491 行が 1 行 1 件では拒否されたので `clang-format -i` で 2 件ずつに詰め、build と対象テストを再実行して成功 |
+| `python eng/measure-speed.py --check --executable build/issue108-release/NeNeNib.exe` | **1 打鍵に行頭からの走査が増える**ので QLT-014 を明示実行した（ADR 0021 の「差分が速さに関わるとき」）。Release を別に build し、5 本すべてを 5 回。**0 regression**：1 打鍵 **0.936 ms**（基準 0.906）・16 MiB **270.950 ms**（基準 249.783）・起動 214.929 ms（基準 191.488）・窓 34.531 ms（基準 34.933）・200 打鍵 2.702 ms（基準 2.695）。基準値・許容（25 % / 下限 2 ms）は変更していない |
+
+対象を限定した理由: 差分は core の新しい純関数 3 本＋表 1 つ、engine の桁の型 2 つとその参照、unit の対象 1 つと期待値 2 件、fixture 47 件である。`VimWantedColumn` の型が engine 全体に触るので unit 全体を 1 回回し、1 打鍵の走査が増えるので速さを明示実行した。設定・テーマ・利用者テーマ・Ex・パレット・adapters・`check.ps1 -Full` は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。画面確認は**未実施**（描画の桁は DirectWrite のままで、仮想桁は engine の意味論にしか出ない）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+**表の出典を「Unicode の版」から「Vim の実測」に変えた 1 点を記録する。** ADR 0034 の提案は EastAsianWidth の版をコメントに書くとしていたが、Vim 9.1 に版を問い合わせる手立てが無く、Unicode の表を写すと Vim との差が黙って入る。`strdisplaywidth('a' . nr2char(cp)) - 1` を全 code point で測った値をそのまま表にし、`DisplayWidthRange.hpp` の冒頭にその測り方を書いた。ゲートが守るのは「Vim と同じ答えを返すこと」（fixture・CNF-010）なので、正本も Vim に寄せてある。表の昇順と重なりの無さは `static_assert` が守る。
