@@ -819,7 +819,7 @@ base `b4f23e8`（ADR 0032 の 3 commit を含む `feat/100-vim-search`。product
 | `ctest --test-dir build -R '^nib_unit$' --output-on-failure` | CTest から見た既定実行。成功、2.33 s（#97 の 1.56 s から fixture 135 件ぶん増えた） |
 | `python -X utf8 eng/symbols.py --build-dir build --require core application` | 照合器と走査が core の外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし）。`out/issue100-symbols.log` |
 | `python -X utf8 eng/conformance.py --build-dir build` | 新しい 16 型の 1 ファイル 1 型と、977 fixture の生成整合（CNF-010）。0 violations、`out/issue100-conformance.log` |
-| `clang-format --dry-run --Werror`（変更・追加した C++ 38 ファイル） | 変更 C++ の整形。初回は `Direct2DRenderer.cpp` / `VimPattern.hpp` / `VimState.hpp` ほかが拒否され、`clang-format -i` のあと build と対象テストを再実行して成功 |
+| `clang-format --dry-run --Werror`（`eb79415..HEAD` の C++ 42 ファイル） | 変更 C++ の整形。初回は `Direct2DRenderer.cpp` / `VimPattern.hpp` / `VimState.hpp` ほかが拒否され、`clang-format -i` のあと build と対象テストを再実行して成功 |
 | `cmake -S . -B build -U CMAKE_RUNTIME_OUTPUT_DIRECTORY` | 一時出力先だけ既定へ復元。成功、`out/issue100-configure-restore.log`。旧版の再リンクはしない |
 
 computer-use による実機の画面確認は**未実施**（native pipe が繋がらないため試みていない）。起動中の旧版 PID には触れていない。成果物は `build/issue100/NeNeNib.exe`、SHA-256 `93c3029038b12855f00e24bc78e8fdc1e013f6de8f22ac7102af896e5d70d561`。`build/NeNeNib.exe` は旧版なので取り違えない。
