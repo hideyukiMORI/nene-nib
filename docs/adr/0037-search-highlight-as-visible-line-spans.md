@@ -1,6 +1,6 @@
 # ADR 0037 — 検索の当たりは見えている行だけを照合器で数え、行ごとの列として描く（`hlsearch` は既定オン）
 
-- 状態: 提案（実測で決定 1〜8 を確認したら受理へ更新する）
+- 状態: 受理（2026-09-22・`v:hlsearch` と `searchcount()` の実測で決定 1〜8 を確認し、補足を足した）
 - 日付: 2026-09-22
 - Issue: #123
 - 影響する規則: FR-003 / ARC-001 / ARC-004 / ARC-007 / ARC-011 / CPP-002 / CPP-004 / CPP-006 / CPP-011 / CPP-012 / QLT-001 / QLT-008 / QLT-012 / QLT-014
@@ -38,6 +38,43 @@ hide の要望（2026-09-22 の実機確認）: 検索したら全一致の背�
 
 得られるもの: 検索の手応え（全一致と現在の一致）が 9 テーマで既存の `search` / `accent` トークンから出る。走査の規則と桁の計算は既存の 1 本を共用し、engine は純関数のまま。
 失うもの・残る穴: `incsearch` は後続。`hlsearch` の設定は永続化しない（起動時は常にオン）。長い行に短いパターン（`/a`）を掛けると見えている行の一致が多くなるが、行内の走査は行の長さに比例するだけ。
+
+## 補足（実測のあとで・2026-09-22）
+
+**決定 1 は固定 Vim 9.1 の `v:hlsearch` で 29 ケース測って一致した**（`out/issue123-oracle/probe.py`
+25 件・`probe3.py` 4 件。証拠は同じ場所の `probe*.json` / `probe.txt`。`out/` は追跡外なので作業機にだけある）。
+検索の鍵は `/ ? n N * #` のどれでも、見つからなくても（E486）・直前のパターンが無くても（E35）
+`suspended` を `on` へ戻す。移動と編集は戻さない。`:set nohlsearch` の `off` は検索では戻らず、
+`:set hlsearch` だけが戻す。`:set hlsearch` は `suspended` も同時に解く。Vim ソースは読まず、
+help（`:help 'hlsearch'` / `:help :nohlsearch`）と実測だけを根拠にした。
+
+実測で足りなかった点を 3 つ足す。
+
+1. **固定 Vim は旗を 2 つ（`'hlsearch'` と `no_hlsearch`）持ち、本実装は 3 値に畳んでいる。**
+   畳んだぶん「`off` のときの `:nohlsearch`」だけが表せないので、`requested_highlight(current,
+   requested)` の 1 か所で `off` ＋ `suspended` → `off` に折る（`VimSearchHighlight.hpp`）。
+   これが無いと `:set nohlsearch` → `:noh` → 検索で強調が復活して実測と食い違う。
+2. **長さ 0 の一致は数えるが塗らない。** `searchcount()` で測ると `abc` の `/a*` は 3、`abc\ndef`
+   の `/^` は 2 で、走査は長さ 0 の一致も 1 つと数えて 1 文字進む（`vim_line_matches` はそのまま
+   返す）。面が無いので `span_of` が `absent` を返し、application がそこで落とす。決定 4 の
+   「長さ 0 なら `begin == caret`」は結果として使われない。
+3. **`aaaa` の `/aa` は 2 つである**（依頼書の例は 1 つとあったが、`searchcount()` の実測は 2）。
+   走査は一致の終わりから数え直すので `ababa` の `/aba` だけが 1 つになる。
+
+**決定 7 の測り方を直した。** `tests/unit/NibTests.cpp` は冒頭で「時間は測らない（`<chrono>` は
+ARC-007 でここに書けない）」と定めているので、対象 unit には時計を入れない。代わりに core の
+純関数だけを呼ぶ使い捨ての計測（scratchpad・リポジトリには置かない）で、**見えている 60 行 ×
+1 行 2 一致の走査が 1 フレームあたり 0.067〜0.073 ms**（Release・実機）であることを 1 回だけ
+記録した。1 打鍵の予算 0.9 ms に対しておよそ 8 % で、基準値には足していない。
+
+**決定 2 の言い回し。** Ex の答えの文言は `hlsearch=on` / `hlsearch=off` / `hlsearch=suspended`
+の 3 つで、`colorscheme=` / `fontsize=` と同じ形にそろえた（Vim は `:noh` に何も言わないが、
+`DisplayText` は空にできない）。補完の候補に足したのは `set hlsearch` と `set nohlsearch` の 2 つ
+だけで、裸の `nohlsearch` は足していない（10 文字で `colorscheme` より短く、Ctrl+P を開いた
+ときの先頭の候補を奪ってしまうため。`:nohlsearch` / `:noh` は打てば通る）。
+
+**モードの出入り。** `vim_resting_from` が `last_search` と同じように強調の値を持ち越すので、
+通常モードへ出て Vim へ戻っても `suspended` は残る。永続化しないので再起動では `on` に戻る。
 
 ## 却下した選択肢
 

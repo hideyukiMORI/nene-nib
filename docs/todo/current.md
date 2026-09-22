@@ -113,10 +113,12 @@ C2: 設定の保存・復元、8〜40 ptの本文拡縮（Ctrl+`+` / `-` / `0` �
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL / 矩形の `c I A C > < J ~` と VISUAL の中の `p` / `virtualedit` /
-autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `Ctrl-v` が同じ前提） / 名前つきレジスタ / `J s S R` / rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `hlsearch` / `incsearch` / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
+autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `Ctrl-v` が同じ前提） / 名前つきレジスタ / `J s S R` / rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `incsearch`（`hlsearch` は #123 で入れた） / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
 複数タブ・Ctrl+Pのファイル/フォルダ/ブックマーク/履歴統合・折り返し・横スクロール・ドラッグ選択。
 
 ## 次の 1 手
+
+[Issue #123](https://github.com/hideyukiMORI/nene-nib/issues/123)（検索の当たりの強調・`hlsearch` 既定オン）は実装・限定検証・文書まで済み、draft [PR #124](https://github.com/hideyukiMORI/nene-nib/pull/124)（`feat/123-search-highlight` は ADR 0037 の `4c0414c` の上）。ADR 0037 を受理し、`VimState` の閉じた 3 値と `vim_line_matches` の 1 本、`LineView` の `matches` / `current_match` で入れた。fixture は増減なし（強調は Vim の報告に出ないので契約 74 checks が正本）。速さのゲートは `startup-window-shown` が 46.782 ms で落ちたが、同じ機械の変更前の exe も 38.741 ms（最大 62.021 ms）で上限 43.666 ms に近く、測る区間が本件の差分より手前なので機械の揺らぎと見ている。静かな機械での 1 回の測り直しが要る。実機の画面確認は未実施。
 
 [Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUAL の `.`）は実装・限定検証・文書まで済み、draft [PR #107](https://github.com/hideyukiMORI/nene-nib/pull/107)。Ready・必須 check・merge は設計リナが行う。#98 は main `a44f380` へ統合済みで、#91 はその上に rebase してある。
 #92（割り込みの 1 本化）は main `9e41f79` へ統合済み。[Issue #99](https://github.com/hideyukiMORI/nene-nib/issues/99)（テキストオブジェクトの残る 3 点）は実装・限定検証・文書まで済み、draft [PR #110](https://github.com/hideyukiMORI/nene-nib/pull/110)（`feat/99-vim-text-object-residuals` は `9e41f79` の上に rebase 済み・fixture 1055 → 1090 件）。ADR 0031 に補足を足し、回数が尽きたときのキャレットと後ろ向き VISUAL の伸ばし方を固定 Vim に合わせた（塊の外からの回数は実装が既に正しかった）。後ろ向きの選択で引用符のどの対を選ぶかだけが穴として残り、Issue は未起票。その後は 仮想桁（`virtcol`）＋ `Ctrl-v` → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。仮想桁の Issue は未起票。
