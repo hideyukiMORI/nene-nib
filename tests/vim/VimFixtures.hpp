@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 0b0756ba9406f285d2939252bd0effac7e2485b7f757b07a922bf657479df80a / 1137 fixtures
+// fixtures.json: sha256 5cae75d18203f861d928001a1e2b85be1526e60981a677bdf5f57a29db84b54e / 1176 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1137> vim_fixtures{{
+constexpr std::array<VimFixture, 1176> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1149,6 +1149,45 @@ constexpr std::array<VimFixture, 1137> vim_fixtures{{
     {"virtcol-screen-H-then-j", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", "Hj", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", 2, 1, "", "", VimViewportFixture{5, 1, 3, 5, 1, 2}},
     {"virtcol-screen-L-then-k", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", "Lk", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", 4, 1, "", "", VimViewportFixture{5, 1, 1, 3, 1, 2}},
     {"virtcol-screen-M-then-j", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", "Mj", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", 4, 1, "", "", VimViewportFixture{5, 1, 1, 3, 1, 2}},
+    {"text-object-quote-back-gap", "a \"bb\" c \"dd\" e", "7lvhi\"y", "a \"bb\" c \"dd\" e", 1, 4, "bb", "v", std::nullopt},
+    {"text-object-quote-back-gap-around", "a \"bb\" c \"dd\" e", "7lvha\"y", "a \"bb\" c \"dd\" e", 1, 3, "\"bb\" ", "v", std::nullopt},
+    {"text-object-quote-back-gap-anchor-kept", "a \"bb\" c \"dd\" e", "9lvhi\"y", "a \"bb\" c \"dd\" e", 1, 4, "bb\" c \"", "v", std::nullopt},
+    {"text-object-quote-back-gap-direction", "a \"bb\" c \"dd\" e", "7lvhi\"ly", "a \"bb\" c \"dd\" e", 1, 5, "b", "v", std::nullopt},
+    {"text-object-quote-back-gap-anchor-direction", "a \"bb\" c \"dd\" e", "9lvhi\"ly", "a \"bb\" c \"dd\" e", 1, 5, "b\" c \"", "v", std::nullopt},
+    {"text-object-quote-back-after-last-pair", "a \"bb\" c \"dd\" e", "14lvhi\"y", "a \"bb\" c \"dd\" e", 1, 11, "dd", "v", std::nullopt},
+    {"text-object-quote-back-two-columns", "a \"bb\" c \"dd\" e", "8lvhhi\"y", "a \"bb\" c \"dd\" e", 1, 3, "\"bb\"", "v", std::nullopt},
+    {"text-object-quote-back-on-open", "a \"bb\" c \"dd\" e", "10lvhi\"y", "a \"bb\" c \"dd\" e", 1, 4, "bb\" c \"d", "v", std::nullopt},
+    {"text-object-quote-back-on-close", "a \"bb\" c \"dd\" e", "13lvhi\"y", "a \"bb\" c \"dd\" e", 1, 7, " c \"dd\" ", "v", std::nullopt},
+    {"text-object-quote-back-on-close-around", "a \"bb\" c \"dd\" e", "13lvha\"y", "a \"bb\" c \"dd\" e", 1, 6, "\" c \"dd\" ", "v", std::nullopt},
+    {"text-object-quote-back-inside", "a \"bb\" c \"dd\" e", "11lvhi\"y", "a \"bb\" c \"dd\" e", 1, 10, "\"dd\"", "v", std::nullopt},
+    {"text-object-quote-back-inside-around", "a \"bb\" c \"dd\" e", "11lvha\"y", "a \"bb\" c \"dd\" e", 1, 10, "\"dd\" ", "v", std::nullopt},
+    {"text-object-quote-back-inside-first", "a \"bb\" c \"dd\" e", "4lvhi\"y", "a \"bb\" c \"dd\" e", 1, 3, "\"bb\"", "v", std::nullopt},
+    {"text-object-quote-back-odd-gap", "it's a 'quoted' word", "11lvhi'y", "it's a 'quoted' word", 1, 4, "s a ", "v", std::nullopt},
+    {"text-object-quote-back-odd-anchor-kept", "it's a 'quoted' word", "13lvhi'y", "it's a 'quoted' word", 1, 4, "s a 'quoted", "v", std::nullopt},
+    {"text-object-quote-back-odd-on-third", "it's a 'quoted' word", "15lvhi'y", "it's a 'quoted' word", 1, 4, "s a 'quoted' ", "v", std::nullopt},
+    {"text-object-quote-back-odd-around", "it's a 'quoted' word", "11lvha'y", "it's a 'quoted' word", 1, 3, "'s a '", "v", std::nullopt},
+    {"text-object-quote-back-escape", "say \"a\\\"b\" end", "8lvhi\"y", "say \"a\\\"b\" end", 1, 6, "a\\\"b", "v", std::nullopt},
+    {"text-object-quote-back-escape-inside", "say \"a\\\"b\" end", "6lvhi\"y", "say \"a\\\"b\" end", 1, 5, "\"a\\\"b\"", "v", std::nullopt},
+    {"text-object-quote-back-tick-gap", "run `cmd` now `x` end", "10lvhi`y", "run `cmd` now `x` end", 1, 6, "cmd", "v", std::nullopt},
+    {"text-object-quote-back-tick-inside", "run `cmd` now `x` end", "15lvhi`y", "run `cmd` now `x` end", 1, 6, "cmd` now `x", "v", std::nullopt},
+    {"text-object-quote-back-head-gap", "\"ab\" cd \"ef\"", "6lvhi\"y", "\"ab\" cd \"ef\"", 1, 2, "ab", "v", std::nullopt},
+    {"text-object-quote-back-head-pair", "\"ab\" cd \"ef\"", "3lvhi\"y", "\"ab\" cd \"ef\"", 1, 2, "ab\"", "v", std::nullopt},
+    {"text-object-quote-back-count", "a \"bb\" c \"dd\" e", "7lvh2i\"y", "a \"bb\" c \"dd\" e", 1, 3, "\"bb\"", "v", std::nullopt},
+    {"text-object-quote-back-repeat-gap", "a \"bb\" c \"dd\" e", "7lvhi\"i\"y", "a \"bb\" c \"dd\" e", 1, 3, "\"bb\"", "v", std::nullopt},
+    {"text-object-quote-back-repeat-inside", "a \"bb\" c \"dd\" e", "11lvhi\"i\"y", "a \"bb\" c \"dd\" e", 1, 4, "bb\" c \"dd\"", "v", std::nullopt},
+    {"text-object-quote-back-line-visual", "a \"bb\" c \"dd\" e", "7lVhi\"y", "a \"bb\" c \"dd\" e", 1, 4, "bb", "v", std::nullopt},
+    {"text-object-quote-back-long-quote", "say \"hello world\" now", "6lvhi\"y", "say \"hello world\" now", 1, 6, "hello world", "v", std::nullopt},
+    {"text-object-quote-forward-gap", "a \"bb\" c \"dd\" e", "6lvli\"y", "a \"bb\" c \"dd\" e", 1, 7, " c \"dd", "v", std::nullopt},
+    {"text-object-quote-forward-gap-next-pair", "a \"bb\" c \"dd\" e", "7lvli\"y", "a \"bb\" c \"dd\" e", 1, 11, "dd", "v", std::nullopt},
+    {"text-object-quote-forward-gap-around", "a \"bb\" c \"dd\" e", "7lvla\"y", "a \"bb\" c \"dd\" e", 1, 10, "\"dd\" ", "v", std::nullopt},
+    {"text-object-quote-forward-on-close", "a \"bb\" c \"dd\" e", "4lvli\"y", "a \"bb\" c \"dd\" e", 1, 5, "b\" c \"dd", "v", std::nullopt},
+    {"text-object-quote-forward-count", "a \"bb\" c \"dd\" e", "6lvl2i\"y", "a \"bb\" c \"dd\" e", 1, 7, " c \"dd\"", "v", std::nullopt},
+    {"text-object-quote-empty-gap", "a \"bb\" c \"dd\" e", "6lvi\"y", "a \"bb\" c \"dd\" e", 1, 7, " c ", "v", std::nullopt},
+    {"text-object-quote-normal-gap", "a \"bb\" c \"dd\" e", "6lyi\"", "a \"bb\" c \"dd\" e", 1, 7, " c ", "v", std::nullopt},
+    {"text-object-quote-normal-odd", "it's a 'quoted' word", "9ldi'", "it's a '' word", 1, 9, "quoted", "v", std::nullopt},
+    {"text-object-quote-back-head-quote", "\"ab\" cd \"ef\"", "lvhi\"y", "\"ab\" cd \"ef\"", 1, 2, "a", "v", std::nullopt},
+    {"text-object-quote-back-head-quote-around", "\"ab\" cd \"ef\"", "lvha\"y", "\"ab\" cd \"ef\"", 1, 1, "\"a", "v", std::nullopt},
+    {"text-object-quote-back-head-quote-two", "\"ab\" cd \"ef\"", "2lvhhi\"y", "\"ab\" cd \"ef\"", 1, 2, "ab", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

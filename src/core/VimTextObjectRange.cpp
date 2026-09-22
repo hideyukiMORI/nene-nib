@@ -428,46 +428,191 @@ constexpr char32_t escape_character = U'\\';
     return found;
 }
 
-// 対の開きになる引用符の番号。上に載っているなら行頭からの偶奇で、そうでなければ手前の 1 つ。
-[[nodiscard]] std::optional<std::size_t> quote_start_index(const std::vector<Offset> &quotes,
-                                                           Offset caret)
+// 対の開きの番号から両端へ。閉じが無ければ対にならない。
+[[nodiscard]] std::optional<OffsetRange> quote_pair_at(const std::vector<Offset> &quotes,
+                                                       std::size_t open)
 {
-    if (quotes.empty())
+    if (open + 1 >= quotes.size())
     {
         return std::nullopt;
     }
+    return OffsetRange{quotes.at(open), quotes.at(open + 1)};
+}
+
+// caret が載っている引用符の番号（数える引用符だけ）。
+[[nodiscard]] std::optional<std::size_t> quote_index_at(const std::vector<Offset> &quotes,
+                                                        Offset caret)
+{
     for (std::size_t index = 0; index < quotes.size(); ++index)
     {
         if (quotes.at(index) == caret)
         {
-            return index % 2 == 0 ? index : index - 1;
+            return index;
         }
     }
-    std::size_t start = 0;
+    return std::nullopt;
+}
+
+// caret より手前の最後の引用符の番号。
+[[nodiscard]] std::optional<std::size_t> quote_index_before(const std::vector<Offset> &quotes,
+                                                            Offset caret)
+{
+    std::optional<std::size_t> found;
     for (std::size_t index = 0; index < quotes.size(); ++index)
     {
         if (quotes.at(index) < caret)
         {
-            start = index;
+            found = index;
         }
     }
-    return start;
+    return found;
 }
 
-[[nodiscard]] std::optional<OffsetRange> quote_pair(const TextBuffer &text, Offset caret,
+// 畳んだ位置（NORMAL と空の選択・決定 6）。上に載っているなら行頭からの偶奇で、そうでなければ
+// 手前の 1 つが開きになり、手前が無ければ行の最初の対を取る。
+[[nodiscard]] std::optional<OffsetRange> collapsed_quote_pair(const std::vector<Offset> &quotes,
+                                                              Offset caret)
+{
+    const auto on = quote_index_at(quotes, caret);
+    if (on.has_value())
+    {
+        return quote_pair_at(quotes, on.value() % 2 == 0 ? on.value() : on.value() - 1);
+    }
+    return quote_pair_at(quotes, quote_index_before(quotes, caret).value_or(0));
+}
+
+// 生の引用符（escape を見ない見方）。Vim は非空の選択の分岐と、その向きへの走査をこの見方で
+// 行う（Issue #111 で実測）。
+[[nodiscard]] bool raw_quote_at(const std::string &content, Offset at, char32_t quote)
+{
+    return at.value < content.size() && code_point_at(content, at) == quote;
+}
+
+[[nodiscard]] std::optional<Offset> raw_quote_before(const std::string &content, Offset at,
+                                                     char32_t quote)
+{
+    Offset here = at;
+    while (here.value > 0)
+    {
+        here = previous_code_point(content, here);
+        if (code_point_at(content, here) == quote)
+        {
+            return here;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<Offset> raw_quote_after(const std::string &content, Offset at,
                                                     char32_t quote)
 {
-    const LineNumber line = line_of(text, caret);
-    const Offset start = text.line_start(line);
-    const std::vector<Offset> quotes =
-        quotes_in(text.text_range(start, text.line_end(line)), quote);
-    const auto index = quote_start_index(quotes, Offset{caret.value - start.value});
-    if (!index.has_value() || index.value() + 1 >= quotes.size())
+    Offset here = at;
+    while (here.value < content.size())
+    {
+        here = next_code_point(content, here);
+        if (raw_quote_at(content, here, quote))
+        {
+            return here;
+        }
+    }
+    return std::nullopt;
+}
+
+// 数える引用符のうち at より後ろの最初のもの。
+[[nodiscard]] std::optional<Offset> counted_quote_after(const std::vector<Offset> &quotes,
+                                                        Offset at)
+{
+    for (const Offset quote : quotes)
+    {
+        if (at < quote)
+        {
+            return quote;
+        }
+    }
+    return std::nullopt;
+}
+
+// 前向きの選択（Issue #111 で実測）。caret の引用符は開きにせず次の対へ渡り、対の外に居るときは
+// 後ろの対を取る。
+[[nodiscard]] std::optional<OffsetRange> forward_quote_pair(const std::string &content,
+                                                            const std::vector<Offset> &quotes,
+                                                            Offset caret, char32_t quote)
+{
+    if (raw_quote_at(content, caret, quote))
+    {
+        const auto open = raw_quote_after(content, caret, quote);
+        if (!open.has_value())
+        {
+            return std::nullopt;
+        }
+        const auto close = counted_quote_after(quotes, open.value());
+        return close.has_value() ? OffsetRange{open.value(), close.value()}
+                                 : OffsetRange{caret, open.value()};
+    }
+    const auto before = quote_index_before(quotes, caret);
+    if (!before.has_value())
+    {
+        return quote_pair_at(quotes, 0);
+    }
+    return quote_pair_at(quotes, before.value() % 2 == 0 ? before.value() : before.value() + 1);
+}
+
+// 後ろ向きの選択（Issue #111 で実測）。caret より手前の引用符を閉じ側にし、対の外に居るときは
+// 手前の対を取る。行頭の引用符に載っているときだけ、その引用符自身が両端になる（Vim の走査が
+// 行頭で止まる境界）。
+[[nodiscard]] std::optional<OffsetRange> backward_quote_pair(const std::string &content,
+                                                             const std::vector<Offset> &quotes,
+                                                             Offset caret, char32_t quote)
+{
+    if (raw_quote_at(content, caret, quote))
+    {
+        const auto close = raw_quote_before(content, caret, quote);
+        if (!close.has_value())
+        {
+            return caret.value == 0 ? std::optional<OffsetRange>{OffsetRange{caret, caret}}
+                                    : std::nullopt;
+        }
+        const auto open = quote_index_before(quotes, close.value());
+        return open.has_value() ? OffsetRange{quotes.at(open.value()), close.value()}
+                                : OffsetRange{close.value(), caret};
+    }
+    const auto before = quote_index_before(quotes, caret);
+    if (!before.has_value())
     {
         return std::nullopt;
     }
-    return OffsetRange{Offset{start.value + quotes.at(index.value()).value},
-                       Offset{start.value + quotes.at(index.value() + 1).value}};
+    return before.value() % 2 == 0 ? quote_pair_at(quotes, before.value())
+                                   : quote_pair_at(quotes, before.value() - 1);
+}
+
+// 対の選び方は選択の向きで変わる（決定 6・Issue #111 で実測）。見るのは caret の行だけ。
+[[nodiscard]] std::optional<OffsetRange> quote_pair(const TextBuffer &text,
+                                                    const Selection &selection, char32_t quote)
+{
+    const LineNumber line = line_of(text, selection.caret);
+    const Offset start = text.line_start(line);
+    const std::string content = text.text_range(start, text.line_end(line));
+    const std::vector<Offset> quotes = quotes_in(content, quote);
+    const Offset caret{selection.caret.value - start.value};
+    std::optional<OffsetRange> pair;
+    if (!has_selection(selection))
+    {
+        pair = collapsed_quote_pair(quotes, caret);
+    }
+    else if (selection.anchor < selection.caret)
+    {
+        pair = forward_quote_pair(content, quotes, caret, quote);
+    }
+    else
+    {
+        pair = backward_quote_pair(content, quotes, caret, quote);
+    }
+    if (!pair.has_value())
+    {
+        return std::nullopt;
+    }
+    return OffsetRange{Offset{start.value + pair.value().begin.value},
+                       Offset{start.value + pair.value().end.value}};
 }
 
 [[nodiscard]] bool blank_at(const TextBuffer &text, Offset at)
@@ -497,25 +642,102 @@ constexpr char32_t escape_character = U'\\';
     return OffsetRange{begin, end};
 }
 
-[[nodiscard]] std::optional<VimMotionRange> quote_range_at(const TextBuffer &text, Offset caret,
-                                                           VimTextObjectRequest request,
-                                                           std::size_t count)
+// 引用符を含む形になるのは回数が 2 以上のときと、選択がちょうど内側だったとき（実測）。
+[[nodiscard]] VimMotionRange quote_motion(const TextBuffer &text, const OffsetRange &pair,
+                                          VimTextObjectRequest request, bool with_quotes)
 {
-    const auto pair = quote_pair(text, caret, quote_character(request.object));
-    if (!pair.has_value())
-    {
-        return std::nullopt;
-    }
     if (request.scope == VimTextObjectScope::around)
     {
-        return VimMotionRange{quote_with_blanks(text, pair.value()), VimRegisterKind::characters};
+        return VimMotionRange{quote_with_blanks(text, pair), VimRegisterKind::characters};
     }
-    if (count > 1)
+    if (with_quotes)
     {
-        return characters_through(text, pair.value().begin, pair.value().end);
+        return characters_through(text, pair.begin, pair.end);
     }
-    return VimMotionRange{OffsetRange{next_in_line(text, pair.value().begin), pair.value().end},
+    const Offset begin = next_in_line(text, pair.begin);
+    return VimMotionRange{OffsetRange{begin, pair.begin == pair.end ? begin : pair.end},
                           VimRegisterKind::characters};
+}
+
+// 選択がちょうど引用符の内側か（Vim の inside_quotes）。両端の外側が引用符のときだけ。
+[[nodiscard]] bool inside_quotes(const TextBuffer &text, const Selection &selection, char32_t quote)
+{
+    const OffsetRange ordered = selection_range(selection);
+    const Offset start = text.line_start(line_of(text, ordered.begin));
+    if (ordered.begin == start || ordered.end == start || code_at(text, ordered.end) == 0)
+    {
+        return false;
+    }
+    return code_at(text, previous_in_line(text, ordered.begin)) == quote &&
+           code_at(text, next_in_line(text, ordered.end)) == quote;
+}
+
+// 選択の中に引用符があるか（Vim の selected_quote）。escape は見ない。
+[[nodiscard]] bool selection_has_quote(const TextBuffer &text, const Selection &selection,
+                                       char32_t quote)
+{
+    const OffsetRange ordered = selection_range(selection);
+    Offset here = ordered.begin;
+    while (!(ordered.end < here))
+    {
+        if (code_at(text, here) == quote)
+        {
+            return true;
+        }
+        const Offset next = next_in_line(text, here);
+        if (next == here)
+        {
+            return false;
+        }
+        here = next;
+    }
+    return false;
+}
+
+// VISUAL の置き方（決定 4・Issue #111 で実測）。向きは保ち、anchor が引用符に触れていた選択では
+// anchor はその場に残る（範囲と選択が一致しないことがある）。
+[[nodiscard]] Selection quote_selection(const TextBuffer &text, const Selection &selection,
+                                        const VimMotionRange &range, char32_t quote)
+{
+    if (!has_selection(selection))
+    {
+        return forward_selection(text, range);
+    }
+    const Offset anchor = selection.anchor;
+    const bool touches = code_at(text, anchor) == quote;
+    const bool inside = inside_quotes(text, selection, quote);
+    if (selection.anchor < selection.caret)
+    {
+        const bool moves =
+            !selection_has_quote(text, selection, quote) &&
+            (inside || (!touches && code_at(text, previous_in_line(text, anchor)) != quote));
+        return Selection{moves ? range.range.begin : anchor, object_caret(text, range)};
+    }
+    const bool moves = inside || (!selection_has_quote(text, selection, quote) && !touches &&
+                                  code_at(text, next_in_line(text, anchor)) != quote);
+    return Selection{moves ? object_caret(text, range) : anchor, range.range.begin};
+}
+
+// 対が見つからなければ取消で、キャレットも選択も動かない（Vim 9.1 で実測）。引用符は行の中だけを
+// 見るので、行をまたぐ選択も取消（実測）。
+[[nodiscard]] VimTextObjectOutcome quote_outcome(const TextBuffer &text, const Selection &selection,
+                                                 VimTextObjectRequest request, std::size_t count)
+{
+    const char32_t quote = quote_character(request.object);
+    if (has_selection(selection) &&
+        line_of(text, selection.anchor).value != line_of(text, selection.caret).value)
+    {
+        return VimTextObjectCancel{selection};
+    }
+    const auto pair = quote_pair(text, selection, quote);
+    if (!pair.has_value())
+    {
+        return VimTextObjectCancel{selection};
+    }
+    const bool with_quotes =
+        count > 1 || (has_selection(selection) && inside_quotes(text, selection, quote));
+    const VimMotionRange range = quote_motion(text, pair.value(), request, with_quotes);
+    return VimTextObjectSpan{range, quote_selection(text, selection, range, quote)};
 }
 
 // ------------------------------------------------------------------ 括弧（決定 7）
@@ -787,61 +1009,23 @@ constexpr char32_t escape_character = U'\\';
            object_caret(text, range).value <= ordered.end.value;
 }
 
-// 向きを保つ置き方（引用符）。後ろ向きの選択では caret が範囲の先頭に残る（Issue #99 で実測。
-// 括弧は同じ形でも必ず前向きになるので、そちらは forward_selection を使う）。
-[[nodiscard]] Selection kept_direction(const TextBuffer &text, const Selection &selection,
-                                       const VimMotionRange &range)
-{
-    if (selection.caret < selection.anchor)
-    {
-        return Selection{object_caret(text, range), range.range.begin};
-    }
-    return forward_selection(text, range);
-}
-
-[[nodiscard]] bool quoted(VimTextObject object)
-{
-    switch (object)
-    {
-    case VimTextObject::double_quote:
-    case VimTextObject::single_quote:
-    case VimTextObject::backtick:
-        return true;
-    case VimTextObject::word:
-    case VimTextObject::big_word:
-    case VimTextObject::paren:
-    case VimTextObject::brace:
-    case VimTextObject::bracket:
-    case VimTextObject::angle:
-        return false;
-    }
-    std::unreachable();
-}
-
-[[nodiscard]] std::optional<VimMotionRange>
-pair_range_at(const TextBuffer &text, Offset caret, VimTextObjectRequest request, std::size_t count)
-{
-    return quoted(request.object) ? quote_range_at(text, caret, request, count)
-                                  : block_range_at(text, caret, request, count);
-}
-
-// 引用符と括弧は選択より広くならなければもう 1 段外へ（`vi(i(` / `vi"i"` の実測）。
+// 括弧は選択より広くならなければもう 1 段外へ（`vi(i(` の実測。引用符は quote_outcome）。
 [[nodiscard]] std::optional<VimMotionRange> paired_range(const TextBuffer &text,
                                                          const Selection &selection,
                                                          VimTextObjectRequest request,
                                                          std::size_t count)
 {
     const Offset from = selection_range(selection).begin;
-    const auto first = pair_range_at(text, from, request, count);
+    const auto first = block_range_at(text, from, request, count);
     if (!has_selection(selection) || !first.has_value() ||
         !within_selection(text, selection, first.value()))
     {
         return first;
     }
-    return pair_range_at(text, from, request, count + 1);
+    return block_range_at(text, from, request, count + 1);
 }
 
-// 対が見つからなければ取消で、キャレットも選択も動かない（Vim 9.1 で実測）。
+// 塊が見つからなければ取消で、キャレットも選択も動かない（Vim 9.1 で実測）。
 [[nodiscard]] VimTextObjectOutcome paired_outcome(const TextBuffer &text,
                                                   const Selection &selection,
                                                   VimTextObjectRequest request, std::size_t count)
@@ -851,9 +1035,7 @@ pair_range_at(const TextBuffer &text, Offset caret, VimTextObjectRequest request
     {
         return VimTextObjectCancel{selection};
     }
-    const Selection placed = quoted(request.object) ? kept_direction(text, selection, range.value())
-                                                    : forward_selection(text, range.value());
-    return VimTextObjectSpan{range.value(), placed};
+    return VimTextObjectSpan{range.value(), forward_selection(text, range.value())};
 }
 } // namespace
 
@@ -868,6 +1050,7 @@ VimTextObjectOutcome vim_text_object_range(const TextBuffer &text, const Selecti
     case VimTextObject::double_quote:
     case VimTextObject::single_quote:
     case VimTextObject::backtick:
+        return quote_outcome(text, selection, request, count);
     case VimTextObject::paren:
     case VimTextObject::brace:
     case VimTextObject::bracket:
