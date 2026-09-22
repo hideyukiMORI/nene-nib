@@ -1199,3 +1199,60 @@ ARC-001 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / CNF-006 / GIT-001〜004 を自
 | `python eng/protected-diff.py --base <root commit 07ded54> --head HEAD` | **終了 2**（反例の実例）。root に `tests/unit/NibTests.cpp` が無く base の `scopes` が 0 件。JSON に `"error": "scopes not found in 07ded54…:tests/unit/NibTests.cpp"`、`"fixtures"` と `"protectedFiles"` は残り `"scopes"` は無い |
 | `python eng/test-conformance.py` | **185 tests OK**（184 → 185・新規は `scopes` 配列の無い文字列で `parse_scopes` が 0 件を返し、純関数 `scopes_error` が「測れない」の理由 `scopes not found in HEAD:tests/unit/NibTests.cpp` を返す反例と、両方あれば `None` の正例を 1 件に） |
 | `python eng/conformance.py` | **0 violations** |
+
+### 5-an. transcript の usage を席ごとに集計するスクリプト（Issue #146・ADR 0038 の決定 5・ADR 0039 の決定 6・2026-09-23）
+
+base `d4de8c2`（main）。**製品の C++・CMake・fixture・保存 schema・`eng/check.ps1`・`eng/conformance-rules.json` には触れていない。** 足したのは `eng/usage-report.py` 1 本と、その数え方の正例・反例（`tests/conformance/test_usage_report.py`）、`docs/PROJECT_LAYOUT.md` の道具一覧の 1 行と引き継ぎ 09-23 の「今日入った道具」の 1 行だけである。「計測して言う」（ADR 0039 決定 6）のための道具で、**ゲートには載せない**（QLT-010 / QLT-013）。`~/.claude/projects/<dir>/**.jsonl` を読むだけで、書くのは `out/usage/` だけ。本文（`message.content`）は読み出さず、鍵と数字だけを出す。費用の換算と週間枠の推定はしない。jsonl 1 本が 1 席（`isSidechain` か `agentId` があれば背景席 `agent-<id 先頭 8>`・無ければ本流でセッション id の先頭 8）、1 ターンは assistant の `message.id` 1 つ（streaming の断片は 1 つにまとめ、`output_tokens` は最終値・他は最初の値）、`<synthetic>` は除く、JSON でない行と `usage` の無い assistant 行は `skipped` に数える。`--since` / `--until` は `timestamp` のローカル日付（施主の機械では JST）で比べる。`seat_tokens` は input + cache_creation + output（Agent の完了通知の `subagent_tokens` の物差し）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/test-conformance.py` | **191 tests OK**（185 → 191・新規は `test_usage_report.py` の 6 件: 同じ `message.id` の 3 行が turns 1・output は最終値 364（先頭の 8 ではない）、`<synthetic>` を turns に入れない、`isSidechain` の有無で本流 `86c7704f` と背景席 `agent-ac78e56b` に分かれる、壊れた行と `usage` の無い行が `skipped` 2、`--since 2026-09-22` が UTC 09-21T16:31（JST 09-22 01:31）を含み UTC 09-21T14:00 を外す、範囲に行の無いファイルは席にならない） |
+| `python eng/conformance.py` | **0 violations** |
+| `python eng/usage-report.py --since 2026-09-22`（受け入れの実測） | **終了 0**。`seats 33 / skipped 0`。probe-146 の手計算と一致: 09-22 の `agent-a71e4bf5` が turns 217・max_context 430,079・cache_read 61,322,076、09-23 の `agent-ac78e56b` の seat_tokens 117,427（日報の「棚卸し #124 117K」）、`agent-adabc244` 127,216（「#131 実装 131K」）。`claude-opus-5-5` はセッション `4187e184` の背景席 8 本（下の表） |
+
+| 席 | model | turns | max_context | cache_read | seat_tokens |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `dc0aed1f` | claude-fable-5-1 | 94 | 353,077 | 19,693,711 | 472,892 |
+| `agent-a71e4bf5` | claude-opus-5 | 217 | 430,079 | 61,322,076 | 621,041 |
+| `agent-ac888d76` | claude-opus-5 | 125 | 478,674 | 40,751,179 | 630,659 |
+| `agent-a8a557d1` | claude-opus-5 | 51 | 119,819 | 4,292,197 | 134,058 |
+| `agent-a7477189` | claude-opus-5 | 56 | 226,434 | 7,457,534 | 256,651 |
+| `86c7704f` | claude-fable-5-1 | 183 | 573,777 | 59,624,633 | 2,940,855 |
+| `agent-a9088861` | claude-opus-5 | 233 | 567,597 | 85,121,857 | 630,584 |
+| `agent-adb99db1` | claude-opus-5 | 95 | 254,626 | 17,201,791 | 248,618 |
+| `agent-ac47c9f7` | claude-opus-5 | 161 | 372,745 | 38,633,609 | 390,186 |
+| `agent-a45ec9f3` | claude-opus-5 | 112 | 314,779 | 24,297,911 | 563,084 |
+| `agent-a43dd5a9` | claude-opus-5 | 85 | 186,037 | 10,569,553 | 173,264 |
+| `agent-ae45540a` | claude-opus-5 | 174 | 380,419 | 43,420,845 | 447,446 |
+| `agent-a44e7665` | claude-opus-5 | 201 | 545,439 | 66,982,468 | 642,571 |
+| `agent-ac60a345` | claude-opus-5 | 85 | 308,543 | 18,224,862 | 306,340 |
+| `agent-ad4c5623` | claude-opus-5 | 157 | 307,248 | 31,344,042 | 325,137 |
+| `agent-ac78e56b` | claude-opus-5 | 53 | 135,036 | 4,771,019 | 117,427 |
+| `agent-a2c3e8c5` | claude-opus-5 | 11 | 72,093 | 595,245 | 50,536 |
+| `agent-a83bdda2` | claude-opus-5 | 106 | 272,237 | 18,360,832 | 429,763 |
+| `agent-ae105c49` | claude-opus-5 | 49 | 165,736 | 5,737,619 | 295,396 |
+| `4187e184` | claude-fable-5-1 | 106 | 298,297 | 18,402,128 | 398,689 |
+| `agent-a7e8d0a4` | claude-sonnet-5 | 37 | 86,135 | 2,378,017 | 90,791 |
+| `agent-ab448b4a` | claude-sonnet-5 | 25 | 91,982 | 1,656,941 | 97,034 |
+| `agent-adabc244` | claude-opus-5-5 | 40 | 129,281 | 3,778,347 | 127,216 |
+| `agent-aaa28a83` | claude-sonnet-5 | 12 | 117,118 | 882,581 | 102,569 |
+| `agent-a3e05a2e` | claude-opus-5-5 | 22 | 82,004 | 1,397,616 | 61,411 |
+| `agent-a86308ea` | claude-opus-5-5 | 19 | 81,631 | 1,218,772 | 60,525 |
+| `agent-a24866e8` | claude-opus-5-5 | 29 | 110,490 | 2,310,226 | 163,985 |
+| `agent-ad047984` | claude-opus-5-5 | 21 | 79,326 | 1,350,818 | 58,411 |
+| `agent-a427f4b0` | claude-sonnet-5 | 24 | 119,311 | 2,002,684 | 135,976 |
+| `agent-aae09915` | claude-sonnet-5 | 33 | 113,482 | 2,683,310 | 119,283 |
+| `agent-a96a5b66` | claude-sonnet-5 | 29 | 89,244 | 1,920,315 | 66,612 |
+| `agent-acc42210` | claude-opus-5-5 | 8 | 74,594 | 432,255 | 57,202 |
+| `agent-add38e8d` | claude-opus-5-5 | 15 | 77,257 | 909,844 | 55,773 |
+
+| model | turns | cache_read | output | seat_tokens |
+| --- | ---: | ---: | ---: | ---: |
+| claude-fable-5-1 | 383 | 97,720,472 | 520,466 | 3,812,436 |
+| claude-opus-5 | 1,971 | 479,084,639 | 1,056,599 | 6,262,761 |
+| claude-opus-5-5 | 154 | 11,397,878 | 36,897 | 584,523 |
+| claude-sonnet-5 | 160 | 11,523,848 | 49,770 | 612,265 |
+
+対象を限定した理由: 差分は `eng/` の Python 1 本とテスト 1 ファイル、文書 3 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+ARC-001 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / CNF-006 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない。残るのは、transcript の形（鍵名）は Claude Code の版で変わり得て、変わっても落ちずに turns 0 や `skipped` の増加として出ること（ゲートに載っていないので次に使うときに数字で気づく）と、実行中の席は途中までの数字になることの 2 点。
