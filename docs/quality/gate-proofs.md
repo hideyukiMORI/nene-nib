@@ -1139,3 +1139,17 @@ base `bfa91f0`（origin/main）。**製品の C++・CMake・fixture・保存 sch
 対象を限定した理由: 差分は `eng/` の新しいスクリプト 1 本と conformance のテスト 1 ファイル、文書 4 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。文書を変えたので `eng/conformance.py` は実行する（CNF-006）。画面確認は不要（窓に出る差分が無い）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 ARC-001 / QLT-001 / QLT-012 / QLT-013 / CNF-005 / CNF-006 / CNF-008 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない（このスクリプトはゲートではない）。Release の作り方の正本は `eng/build-release.ps1` の 1 か所で、文書はそれを指すだけである（ARC-001）。残るのは PE の `TimeDateStamp` が link 時刻であること（`/Brepro` は入れていない）と、ゲートに載っていないので壊れたことは次に使うときにしか分からないことの 2 点。
+
+### 5-al. verify-window の PNG 保存と前後の画素比較（Issue #131・ADR 0038 の決定 5・2026-09-23）
+
+base `f677a7e`（main）。**製品の C++・CMake・fixture・保存 schema・`eng/check.ps1`・`eng/conformance-rules.json` には触れていない。** 撮る経路は `eng/window_driver.py` の `capture(window)` 1 本に移し（画面 DC からの `BitBlt` のまま・ARC-001）、`verify-window.py` の `capture` はそれを呼んで大きさを確かめるだけの薄い口になった。既存の `.bmp` 出力は残す。PNG は `zlib` だけで書く・読む（依存ゼロ・DEVELOPMENT_WORKFLOW 6 節）。ゲートには載せない（QLT-013）。実行した exe は既存の Debug の `build/NeNeNib.exe`（2026-09-22 17:42 の build。以後の main の差分は docs と `eng/` だけ）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/verify-window.py --capture out/frames-131-all` | 撮る経路を driver へ移したことの退行（既存の全節）と `--capture`。**終了 0（1 回目で通過）**。PNG は **9 枚**（`look` `vim` `vimViewport` `typing` `caretShapes` `escape` `clickedCaret` `backspace` `scrolling`）、どれも 800×450・5559〜7103 bytes。別起動の節（`documents` `ime` `firstPaint`）は窓を閉じて終わるので PNG は撮らない（従来の `.bmp` は残る） |
+| `python eng/verify-window.py --capture out/frames-131 --keys "ihello<Esc>"` | `--keys` の経路。終了 0。`before.png`（5559 bytes）・`after.png`（6205 bytes）ともに 800×450、`frames.json` の `body` は `{"x": 0, "y": 50, "w": 800, "h": 365}`・`dpi` 120。起動直後の窓は通常モードなので `ihello` は 6 文字の本文になる |
+| `python eng/compare-frames.py out/frames-131/before.png out/frames-131/after.png --inside 0,50,800,365` | **終了 1・`inside: false`**。出力そのまま: `{"size": {"w": 800, "h": 450}, "differentPixels": 1441, "bounds": {"x": 29, "y": 23, "w": 581, "h": 418}, "insideOf": {"x": 0, "y": 50, "w": 800, "h": 365}, "inside": false}`。外接矩形が本文の外へ出たのは、タブの未保存の印「● 」（上端 y=23）とステータスバーの「行 1, 桁 7」（下端 y=440・本文は y=415 まで）が本文と一緒に変わるから（`after.png` を目で見て確認）。道具の誤りではなく受け入れ条件の矩形の取り方の問題なので、判断は設計席へ返す |
+| `python eng/test-conformance.py` | **171 tests OK**（163 → 171・新規は `tests/conformance/test_frame_capture.py` の 8 件: PNG の往復・PNG でないファイルの拒否・比較の正例 2（内側・差分 0）と反例 2（はみ出し終了 1・大きさ違い終了 2）・鍵の記法の正例と反例 `<Foo>`） |
+| `python eng/conformance.py` | 文書の相対リンクと規則 ID（CNF-006）ほか。**0 violations** |
+
+対象を限定した理由: 差分は `eng/` の Python 3 本とテスト 1 ファイル、文書 2 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
