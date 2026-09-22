@@ -38,7 +38,7 @@ hide の指示（2026-09-23・複数リポジトリ共通の型）。9/22 の Cl
    | 引き継ぎ書の手 1・手 2 の節 | [引き継ぎ 2026-09-23](../handoffs/2026-09-23.md) の「席ごとのモデルの切り分け」 |
    | 正本の `next_actions` の先頭 | `docs/todo/current.md` の「現在の Issue」の先頭行 |
    | 実装席の指示書テンプレート | [`docs/templates/implementation-seat-brief.md`](../templates/implementation-seat-brief.md)（依頼書の型。scratchpad に写して埋める） |
-   | 報告ファイル / mailbox | scratchpad の `report-<issue>.md`。親（設計席）にはパスと数字だけ |
+   | 報告ファイル / mailbox | scratchpad の `probe-<issue>.md`（probe）と `done-<issue>-<工程>.md`（実装・差し戻し）。「report」で始まる名前は Write ツールが拒むことがある（Issue #141）。親（設計席）にはパスと数字だけ |
 8. **記録**: 引き継ぎに 1 節、`docs/todo/current.md` の先頭に 1 行、依頼書の型に 3-1・3-2 の文言。日報で「席の本数・工程・最終報告の行数」を振り返る。
 
 ## 強制

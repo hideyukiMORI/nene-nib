@@ -9,7 +9,7 @@
 席・モデル・工程: 実装席 / Opus / <probe | 実装 | 差し戻し対応 N 回目>
 Issue: https://github.com/hideyukiMORI/nene-nib/issues/<issue>（`gh issue view <issue>`）
 ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
-前の工程の報告: <scratchpad の report-<issue>-<工程>.md のパス。無ければ「無し」>
+前の工程の報告: <scratchpad の done-<issue>-<工程>.md のパス。無ければ「無し」>
 ブランチ: <type>/<issue>-<summary>（main `<sha>` から）
 範囲: <触ってよい dir と、触らない dir>
 やらないこと: <S 級に切った残りの命題。別の席で行う>
@@ -20,7 +20,7 @@ ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
 - テストは対象だけ実行する（`ctest -R <名前>` / `build/tests/unit/nib_tests.exe <対象>`）。出力は `out/<issue>-<工程>.log` に落とし、失敗行だけ `tail` / `Select-String` で読む。
 - ビルド・ゲート（`eng/check.ps1`・`eng/conformance.py`・`eng/symbols.py`）の出力も `out/` のファイルへ落とし、`grep` で読む。端末に全文を流さない。
 - ファイルは必要な範囲だけ読む（`Read` の offset / limit・`sed -n`）。丸読みしない。
-- 最終報告は 30 行以内。詳細は `<scratchpad>/report-<issue>-<工程>.md` に書き、親にはそのパスと数字（checks 数・fixture 件数・SHA・所要時間）だけ返す。
+- 最終報告は 30 行以内。詳細は `<scratchpad>/done-<issue>-<工程>.md` に書き、親にはそのパスと数字（checks 数・fixture 件数・SHA・所要時間）だけ返す。
 - commit / push / PR は依頼書に書かれた範囲だけ。Ready・CI・merge は設計席。
 
 ## 先に読むもの
@@ -44,14 +44,14 @@ ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
 
 ## 報告の形
 
-CLAUDE.md §5 を `report-<issue>-<工程>.md` に書く。親への最終報告は 30 行以内で、Issue / 規則 ID・変更ファイル・検証の対象と結果の数字・報告ファイルのパス・止まった理由（あれば）。
+CLAUDE.md §5 を `done-<issue>-<工程>.md` に書く。親への最終報告は 30 行以内で、Issue / 規則 ID・変更ファイル・検証の対象と結果の数字・報告ファイルのパス・止まった理由（あれば）。
 ```
 
 ## 使い分け
 
 | 工程 | 席 | 渡すもの | 受け取るもの |
 | --- | --- | --- | --- |
-| probe（現物調査） | 新しい席（Sonnet が足りるなら Sonnet・ADR 0038） | Issue・調べる問い（15 件以内） | 報告ファイル（300 行以内） |
+| probe（現物調査） | 新しい席（Sonnet が足りるなら Sonnet・ADR 0038） | Issue・調べる問い（15 件以内） | `probe-<issue>.md`（300 行以内） |
 | 実装 | 新しい席（Opus） | 依頼書・probe の報告のパス | draft PR・報告ファイル・30 行の報告 |
 | 差し戻し対応 | 新しい席（Opus）・変更 1 命題 | 依頼書（狭く）・前の報告のパス・差し戻しの 1 命題 | 同上 |
 
