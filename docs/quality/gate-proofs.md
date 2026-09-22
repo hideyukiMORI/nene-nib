@@ -1091,7 +1091,7 @@ base `54b3a21`（origin/main）。**製品の C++・fixture・CMake・schema に
 QLT-001 / QLT-007 / QLT-012 / GIT-003 / CNF-006 を自己レビュー。新しい規則・新しい検査・新しい閾値は足していない。`tests/conformance/test_vim_oracle.py` の `subprocess` は Issue #85 が同じファイルを触っているので今回は寄せていない（`vim_oracle.subprocess.run` を patch する作りで端末符号化に依らない。残りとして申し送り）。
 ### 5-aj. 検索の当たりの強調（Issue #123・ADR 0037・2026-09-22）
 
-統合単位は [PR #124](https://github.com/hideyukiMORI/nene-nib/pull/124)（draft・ブランチ `feat/123-search-highlight`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は 5-ai までの並びの次を取った。
+統合単位は [PR #125](https://github.com/hideyukiMORI/nene-nib/pull/125)（draft・ブランチ `feat/123-search-highlight`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は 5-ai までの並びの次を取った。
 
 base `4c0414c`（設計リナが `ae460a6`（origin/main）の上に ADR 0037 を積んだ commit）。ADR 0037 を**受理**にし、補足を 5 点足した。`VimState` に閉じた 3 値 `VimSearchHighlight`（既定 `on`・施主決定 D17）が載り、`vim_resting_from` が `last_search` と同じように持ち越す。`vim_step` の検索の 3 つの入口（`searched_key` / `repeated_search` / `word_search`）だけが `suspended` を `on` へ戻す。`ExResult` に `std::optional<VimSearchHighlight>` が増え、`:set hlsearch` / `:set nohlsearch` / `:nohlsearch` / `:noh` が返して controller の Ex の写し 1 か所が `requested_highlight` で `VimState` へ置く。照合器から `vim_line_matches(line, pattern)` を公開し、`vim_search` の `first_match` / `last_match` をそれに寄せたので走査の規則は 1 本になった。application は `EditorFrame` を作るときに、Vim モードで強調が `on` で解析できる `last_search` があるときだけ、**見えている行だけ**を数えて `LineView` の `matches` / `current_match` を既存の `span_of` で作る。renderer は当たり → 選択 → 本文 → 現在の当たりの枠 → キャレットの順で、`palette.search` の面と `palette.accent` の 1 DIP の枠だけを使う（ui/win32 に色のリテラルは増えていない）。新しいトークン・新しい型（enum 1 つを除く）・保存 schema・依存・ゲートの閾値は変えていない。
 
