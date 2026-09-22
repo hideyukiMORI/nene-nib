@@ -106,5 +106,66 @@ class VerificationPolicy(unittest.TestCase):
                         self.assertIn("GIT-004", result.stdout + result.stderr)
 
 
+class ReleaseBuildArguments(unittest.TestCase):
+    """eng/build-release.ps1 の引数の検査だけを回す（Issue #129）。
+
+    製品は build も起動もしない（このファイルの約束・#61）。正例は「検査を通り抜けて
+    eng/toolchain.ps1 に届いたこと」を sentinel で見る fixture で、cmake には一度も届かない。
+    fixture は本物の git リポジトリにする（作業ツリーが clean かどうかを git に聞く検査なので）。
+    """
+
+    def prepare(self, directory):
+        repository = Path(directory)
+        engineering = repository / "eng"
+        engineering.mkdir()
+        shutil.copy2(ROOT / "eng/build-release.ps1", engineering / "build-release.ps1")
+        (engineering / "toolchain.ps1").write_text("throw 'fixture-toolchain-stop'\n", encoding="utf-8")
+        for command in (["init", "-b", "main"], ["add", "-A"],
+                        ["-c", "user.email=fixture@example.invalid", "-c", "user.name=fixture",
+                         "commit", "-m", "chore: fixture (#129)"]):
+            result = run_tool(["git", "-C", str(repository), *command])
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return repository
+
+    def script(self, repository, *arguments):
+        return run_tool(["pwsh", "-NoProfile", "-File",
+                         str(repository / "eng/build-release.ps1"), *arguments])
+
+    def test_a_named_ref_on_a_clean_tree_reaches_the_toolchain(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.script(self.prepare(directory), "-Ref", "HEAD")
+            self.assertIn("fixture-toolchain-stop", result.stderr)
+            self.assertNotIn("QLT-013", result.stdout + result.stderr)
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_missing_ref_unknown_ref_and_dirty_tree_stop_before_the_toolchain(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repository = self.prepare(directory)
+            cases = [((), "name the ref"), (("-Ref", "no-such-ref"), "unknown ref")]
+            for arguments, wording in cases:
+                with self.subTest(arguments=arguments):
+                    result = self.script(repository, *arguments)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("QLT-013", result.stderr)
+                    self.assertIn(wording, result.stderr)
+                    self.assertNotIn("fixture-toolchain-stop", result.stderr)
+            (repository / "untracked.txt").write_text("dirty\n", encoding="utf-8")
+            result = self.script(repository, "-Ref", "HEAD")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("QLT-013", result.stderr)
+            self.assertIn("not clean", result.stderr)
+            self.assertNotIn("fixture-toolchain-stop", result.stderr)
+
+    def test_the_release_script_does_not_start_the_product(self):
+        """起動は設計席が行う（ADR 0038）。注釈は読まず、実行される行だけを見る。"""
+        text = (ROOT / "eng/build-release.ps1").read_text(encoding="utf-8")
+        code = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+        for starter in ("Start-Process", "Invoke-Item", "& $executable", "&$executable"):
+            self.assertFalse(any(starter in line for line in code), starter)
+        # 出力先はゲートと measure-speed.py の持ち物（既定の build/ と build-release/）ではない。
+        self.assertTrue(any("build/release-$short" in line for line in code))
+        self.assertFalse(any("build-release/" in line for line in code))
+
+
 if __name__ == "__main__":
     unittest.main()
