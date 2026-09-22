@@ -48,5 +48,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0030](0030-vim-dot-repeat-as-key-replay.md) | `.` は直前の変更を鍵の列として記録し同じ経路へ再生する | 受理 |
 | [0031](0031-vim-text-objects-as-one-range-function.md) | テキストオブジェクトは 1 本の範囲関数で d c y と VISUAL に同じ範囲を渡す | 受理 |
 | [0032](0032-vim-search-as-input-line-and-one-key.md) | 検索は Ex と同じ入力行から入り、確定は engine の 1 つの鍵として届く | 受理 |
-| [0033](0033-vim-visual-dot-repeat-by-extent.md) | VISUAL の変更の `.` は範囲の大きさを記録し、選び直してから鍵を再生する | 提案 |
+| [0033](0033-vim-visual-dot-repeat-by-extent.md) | VISUAL の変更の `.` は範囲の大きさを記録し、選び直してから鍵を再生する | 受理 |
 | [0034](0034-vim-virtual-column-one-table.md) | Vim の桁は core の表示幅の表 1 本で仮想桁に直し、使う経路を閉じる | 受理 |
