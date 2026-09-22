@@ -1347,6 +1347,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
 // 矩形が覆う形。`$` が立っているかどうかだけを欲しい列から借りる（決定 2）。
 [[nodiscard]] VimBlockRange block_of(const VimState &state, const VimEditorView &view)
 {
+    if (state.replayed_block.has_value())
+    {
+        return vim_replayed_block_range(view.text, view.selection, state.replayed_block.value());
+    }
     return vim_block_range_for(view.text, view.selection, state.wanted_column);
 }
 
@@ -2183,6 +2187,18 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return VimMode::visual;
 }
 
+// 矩形の再生のあいだだけ立つ印（ADR 0035 の決定 7）。鍵を 1 つ食べ終わると休止の状態に
+// 戻るので、`r` の次キー待ちだけを跨いで消える。
+[[nodiscard]] std::optional<VimBlockExtent> replayed_extent(const VimVisualExtent &extent) noexcept
+{
+    const auto *block = std::get_if<VimBlockExtent>(&extent);
+    if (block == nullptr)
+    {
+        return std::nullopt;
+    }
+    return *block;
+}
+
 // `$` で取った矩形は「各行の内容の終わりまで」を覚え直す（ADR 0035 の決定 7・実測）。
 // 桁で覚えた矩形は選び直した両端の桁がそのまま幅になるので、欲しい列は空のままでよい。
 [[nodiscard]] std::optional<VimWantedColumn> replayed_wanted(const VimVisualExtent &extent) noexcept
@@ -2205,6 +2221,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = visual_mode_of(extent);
     next.wanted_column = replayed_wanted(extent);
+    next.replayed_block = replayed_extent(extent);
     next.recording = VimRepeatRecord{std::nullopt, {}, extent};
     return VimStep{std::move(next), VimReplay{record.keys, extent}};
 }

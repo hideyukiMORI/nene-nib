@@ -3,6 +3,7 @@
 #include "LineNumber.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
+#include "VimBlockExtent.hpp"
 #include "VimBlockLine.hpp"
 #include "VimBlockWidth.hpp"
 #include "VimColumnWish.hpp"
@@ -39,6 +40,13 @@ struct VimBlockRange
 // Ctrl+C / Ctrl+X がここを通る（ARC-001）。
 [[nodiscard]] VimBlockRange vim_block_range_for(const TextBuffer &text, const Selection &selection,
                                                 const std::optional<VimWantedColumn> &wanted);
+
+// `.` が再生する矩形（ADR 0035 の決定 7）。左上は選択の先の角で、幅は記録した大きさをその
+// まま使う（`$` は覆う行から決め直す）。角から幅を読み直すと、短い行へ畳まれた角のぶんだけ
+// 矩形が痩せる（固定 Vim も redo_VIsual_vcol を覚えている・Issue #112 で実測）。
+[[nodiscard]] VimBlockRange vim_replayed_block_range(const TextBuffer &text,
+                                                     const Selection &selection,
+                                                     const VimBlockExtent &extent);
 
 // 矩形が覆った本文（レジスタに入る形）。行を LF でつなぎ、末尾に改行は付けない。
 [[nodiscard]] std::string vim_block_text(const TextBuffer &text, const VimBlockRange &block);

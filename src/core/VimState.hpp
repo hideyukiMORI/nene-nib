@@ -1,5 +1,6 @@
 #pragma once
 
+#include "VimBlockExtent.hpp"
 #include "VimCharacterSearch.hpp"
 #include "VimCount.hpp"
 #include "VimInputWait.hpp"
@@ -39,6 +40,10 @@ struct VimState
     // 確定した直前の変更。どちらも vim_step の 1 か所だけが書き換える。
     std::optional<VimRepeatRecord> recording;
     std::optional<VimRepeatRecord> last_change;
+    // `.` が矩形の変更を再生しているあいだだけ値を持つ（ADR 0035 の決定 7）。固定 Vim の
+    // redo_VIsual_busy と同じで、再生の矩形は左上と幅を「選択の角」ではなく記録から取る
+    // （短い行へ畳まれた角からは幅が読めない・Issue #112 で実測）。
+    std::optional<VimBlockExtent> replayed_block;
     VimRegister unnamed_register;
 };
 
@@ -46,9 +51,19 @@ struct VimState
 // Vim モードに入るときも、通常モードへ戻して保留を捨てるときも、この 1 つの形に寄せる。
 [[nodiscard]] inline VimState vim_resting_state(VimRegister unnamed_register)
 {
-    return VimState{VimMode::normal, std::nullopt, std::nullopt, std::nullopt,
-                    std::nullopt,    std::nullopt, std::nullopt, std::nullopt,
-                    std::nullopt,    std::nullopt, std::nullopt, std::move(unnamed_register)};
+    return VimState{VimMode::normal,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::move(unnamed_register)};
 }
 
 // 通常の鍵の完了は 'scroll' の明示値と直前の文字検索・検索パターンを捨てない。Vim

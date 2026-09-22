@@ -37,10 +37,11 @@ constexpr std::size_t single_step = 1;
 }
 
 // `$` の右端。覆う行のうちいちばん長い行の内容の終わりまで（Vim は取るときにこの幅へ畳む）。
-[[nodiscard]] std::size_t longest_line(const TextBuffer &text, LineNumber first, LineNumber last)
+[[nodiscard]] std::size_t longest_line(const TextBuffer &text, const OffsetRange &ordered)
 {
     std::size_t longest = 0;
-    for (std::size_t number = first.value; number <= last.value; ++number)
+    for (std::size_t number = line_of(text, ordered.begin).value;
+         number <= line_of(text, ordered.end).value; ++number)
     {
         longest = std::max(longest, virtual_width(text.line_text(LineNumber{number})));
     }
@@ -106,24 +107,13 @@ constexpr std::size_t single_step = 1;
         cut_left ? left - first_begins : 0,
         cut_right ? last_ends - right : 0};
 }
-} // namespace
-
-VimBlockRange vim_block_range(const TextBuffer &text, const Selection &selection,
-                              VimColumnWish wish)
+// 左右の桁と覆う行が決まったあとの組み立て。決め方は 2 つ（選択の角と `.` の記録）あるが、
+// 行ごとの形を作るのはこの 1 本だけである（ARC-001）。
+[[nodiscard]] VimBlockRange built_block(const TextBuffer &text, const OffsetRange &ordered,
+                                        std::size_t left, std::size_t right)
 {
-    const OffsetRange ordered = selection_range(selection);
     const LineNumber first = line_of(text, ordered.begin);
     const LineNumber last = line_of(text, ordered.end);
-    const std::size_t left = left_column_of(text, ordered);
-    std::size_t right = right_column_of(text, ordered);
-    switch (wish)
-    {
-    case VimColumnWish::at_line_end:
-        right = longest_line(text, first, last);
-        break;
-    case VimColumnWish::at_column:
-        break;
-    }
     std::vector<VimBlockLine> lines;
     lines.reserve(last.value - first.value + single_step);
     for (std::size_t number = first.value; number <= last.value; ++number)
@@ -132,6 +122,37 @@ VimBlockRange vim_block_range(const TextBuffer &text, const Selection &selection
     }
     return VimBlockRange{std::move(lines), first, VirtualColumn{left},
                          VimBlockWidth{block_columns(left, right)}};
+}
+} // namespace
+
+VimBlockRange vim_block_range(const TextBuffer &text, const Selection &selection,
+                              VimColumnWish wish)
+{
+    const OffsetRange ordered = selection_range(selection);
+    const std::size_t left = left_column_of(text, ordered);
+    switch (wish)
+    {
+    case VimColumnWish::at_line_end:
+        return built_block(text, ordered, left, longest_line(text, ordered));
+    case VimColumnWish::at_column:
+        break;
+    }
+    return built_block(text, ordered, left, right_column_of(text, ordered));
+}
+
+VimBlockRange vim_replayed_block_range(const TextBuffer &text, const Selection &selection,
+                                       const VimBlockExtent &extent)
+{
+    const OffsetRange ordered = selection_range(selection);
+    const std::size_t left = virtual_column(text, ordered.begin).value;
+    switch (extent.wish)
+    {
+    case VimColumnWish::at_line_end:
+        return built_block(text, ordered, left, longest_line(text, ordered));
+    case VimColumnWish::at_column:
+        break;
+    }
+    return built_block(text, ordered, left, left + extent.width.columns - single_step);
 }
 
 VimBlockRange vim_block_range_for(const TextBuffer &text, const Selection &selection,
