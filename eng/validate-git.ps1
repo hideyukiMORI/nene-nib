@@ -7,7 +7,13 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 # 違反の文言は日本語。CI の windows-2022 は stdout が cp1252 なので、印字で UnicodeEncodeError になり
 # 理由が隠れていた（Issue #94）。python を呼ぶ前にここ 1 か所で UTF-8 にする。
+# 入力側も同じ 1 か所で固定する（Issue #106）。commit の subject は日本語で、git は UTF-8 で出す。
+# pwsh は native command の出力を [Console]::OutputEncoding で読むので、cp932 の端末だと
+# 壊れた文字列を python に渡して GIT-003 になっていた。$OutputEncoding は逆向き（子へ渡す側）。
 $env:PYTHONUTF8 = '1'
+$utf8Encoding = [Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = $utf8Encoding
+$OutputEncoding = $utf8Encoding
 try {
     $branch = & git branch --show-current
     if ($LASTEXITCODE -ne 0) { throw 'GIT-002: cannot read branch.' }

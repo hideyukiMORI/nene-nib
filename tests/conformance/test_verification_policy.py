@@ -20,6 +20,19 @@ RECORD = ("確認する退行: 全件の誤起動と検証記録の欠落\n"
           "再利用: 初回検証\n")
 
 
+def run_tool(command, **environment):
+    """子プロセスの入出力を端末符号化から切り離してここ 1 か所で UTF-8 に固定する（Issue #106）。
+
+    text=True だけだと親は locale の符号化（この機械では cp932）で読むので、子が出す UTF-8 を
+    読めずに reader thread が落ちて stdout / stderr が None になる。子には PYTHONUTF8=1 を渡して
+    出力側も UTF-8 に寄せる（Issue #94 が validate-git.ps1 で入れたのと同じ固定）。
+    pwsh のエラー表示だけはコンソールの code page（cp932 の省略記号など）で出るので、
+    厳密に読まず errors="replace" にして規則 ID を読み落とさない（Issue #94）。
+    """
+    return subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          env=dict(os.environ, PYTHONUTF8="1", **environment))
+
+
 class VerificationPolicy(unittest.TestCase):
     def test_record_and_reuse_are_accepted(self):
         self.assertEqual(CONVENTIONS.validate_pr(RECORD), [])
@@ -39,16 +52,15 @@ class VerificationPolicy(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             record = Path(directory) / "body.txt"
             record.write_text("確認する退行: only one field\n", encoding="utf-8")
-            result = subprocess.run([sys.executable, str(ROOT / "eng/git-conventions.py"),
-                                     str(record), "--pr-body"], capture_output=True, text=True)
+            result = run_tool([sys.executable, str(ROOT / "eng/git-conventions.py"),
+                               str(record), "--pr-body"])
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("GIT-004", result.stdout)
 
     def test_full_gate_requires_explicit_scope_and_reason(self):
         for arguments in ([], ["-Full"], ["-Full", "-Reason", " "], ["-Reason", "scope"]):
             with self.subTest(arguments=arguments):
-                result = subprocess.run(["pwsh", "-NoProfile", "-File", str(ROOT / "eng/check.ps1"),
-                                         *arguments], capture_output=True, text=True)
+                result = run_tool(["pwsh", "-NoProfile", "-File", str(ROOT / "eng/check.ps1"), *arguments])
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("QLT-001", result.stderr)
 
@@ -59,9 +71,8 @@ class VerificationPolicy(unittest.TestCase):
             fixture = Path(directory)
             shutil.copy2(ROOT / "eng/check.ps1", fixture / "check.ps1")
             (fixture / "toolchain.ps1").write_text("throw 'fixture-toolchain-stop'\n", encoding="utf-8")
-            result = subprocess.run(["pwsh", "-NoProfile", "-File", str(fixture / "check.ps1"),
-                                     "-Full", "-Reason", "shared compiler configuration"],
-                                    capture_output=True, text=True)
+            result = run_tool(["pwsh", "-NoProfile", "-File", str(fixture / "check.ps1"),
+                               "-Full", "-Reason", "shared compiler configuration"])
             self.assertIn("Full verification selected: shared compiler configuration", result.stdout)
             self.assertIn("fixture-toolchain-stop", result.stderr)
             self.assertNotEqual(result.returncode, 0)
@@ -87,12 +98,8 @@ class VerificationPolicy(unittest.TestCase):
                     "head": {"ref": "ci/61-diff-driven-verification"},
                     "base": {"sha": "origin/main"}, "draft": False, "title": title, "body": text,
                 }}), encoding="utf-8")
-                environment = dict(os.environ, GITHUB_EVENT_PATH=str(event), PYTHONUTF8="1")
-                # pwsh のエラー表示はコンソールの code page（cp932 の省略記号など）で出るので、
-                # 厳密な UTF-8 で読むと reader thread が落ちて stdout が None になる（Issue #94）。
-                result = subprocess.run(["pwsh", "-NoProfile", "-File", str(ROOT / "eng/validate-git.ps1")],
-                                         env=environment, capture_output=True, text=True, encoding="utf-8",
-                                         errors="replace")
+                result = run_tool(["pwsh", "-NoProfile", "-File", str(ROOT / "eng/validate-git.ps1")],
+                                  GITHUB_EVENT_PATH=str(event))
                 with self.subTest(success=success):
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     if not success:
