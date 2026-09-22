@@ -27,7 +27,7 @@
    [[nodiscard]] bool is_replaced(const DisplayLine&, std::size_t column);              // 本文の桁 column が置き換えられた文字か
    ```
 
-   置き換えの規則は ADR 0034 の表（`display_width_of`）だけを見る: `wide` かつ code point < 0x20 → `^` + (cp + 0x40)（`\r` → `^M`・`\x01` → `^A`・`\x1f` → `^_`）。`unprintable` → `<` + 小文字 16 進 4 桁 + `>`（U+200B → `<200b>`・U+FEFF → `<feff>`）。それ以外（Tab・全角・結合文字・DEL）はそのまま 1 文字。`\n` は行に含まれない。置き換えた文字数は ADR 0034 の `cells_of` と一致する（`wide` の制御文字 = 2・`unprintable` = 6）。
+   置き換えの規則は ADR 0034 の表（`display_width`）だけを見る: `wide` かつ code point < 0x20 → `^` + (cp + 0x40)（`\r` → `^M`・`\x01` → `^A`・`\x1f` → `^_`）。`unprintable` → `<` + 小文字 16 進 4 桁 + `>`（U+200B → `<200b>`・U+FEFF → `<feff>`）。それ以外（Tab・全角・結合文字・DEL）はそのまま 1 文字。`\n` は行に含まれない。置き換えた文字数は ADR 0034 の `cells_of` と一致する（`wide` の制御文字 = 2・`unprintable` = 6）。
 2. **`LineView` に `core::DisplayLine display` を足す**。`text` は残す（engine と選択の桁は本文の桁のまま）。`EditorController::line_view` が `display_line(text)` で埋める。
 3. **renderer は `display.text` で layout を作る**（`layout_of` / `text_layout`）。桁 → x は `display_position` を通してから `HitTestTextPosition`、x → 桁は `HitTestPoint` の `textPosition` を `source_column` で戻す。選択・検索の当たり・IME の差し込み位置も同じ変換を通す（変換は renderer の 1 か所の補助関数で、`SelectionSpan` の両端を写す）。
 4. **色**: 置き換えた文字は `Palette::muted` で `tint_runs`（ADR 0014 の IME の経路と同じ）。新しいトークンは足さない（Vim の `SpecialKey` に相当。テーマの `.v1.theme` の互換を保つ）。
