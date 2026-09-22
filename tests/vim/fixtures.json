@@ -1,1792 +1,299 @@
 [
-  {
-    "name": "h-at-the-line-start-stays",
-    "text": "alpha",
-    "keys": "h",
-    "settings": []
-  },
-  {
-    "name": "h-with-a-count",
-    "text": "alpha",
-    "keys": "$3h",
-    "settings": []
-  },
-  {
-    "name": "l-does-not-pass-the-last-character",
-    "text": "abc",
-    "keys": "lll",
-    "settings": []
-  },
-  {
-    "name": "l-with-a-count-clamps",
-    "text": "hello",
-    "keys": "5l",
-    "settings": []
-  },
-  {
-    "name": "zero-goes-to-the-line-start",
-    "text": "  abc",
-    "keys": "$0",
-    "settings": []
-  },
-  {
-    "name": "dollar-goes-to-the-last-character",
-    "text": "  abc",
-    "keys": "$",
-    "settings": []
-  },
-  {
-    "name": "w-crosses-punctuation",
-    "text": "alpha, beta; gamma",
-    "keys": "www",
-    "settings": []
-  },
-  {
-    "name": "w-crosses-the-line",
-    "text": "alpha beta\ngamma",
-    "keys": "ww",
-    "settings": []
-  },
-  {
-    "name": "w-stops-on-the-last-word",
-    "text": "alpha beta",
-    "keys": "ww",
-    "settings": []
-  },
-  {
-    "name": "w-stops-on-an-empty-line",
-    "text": "abc\n\ndef",
-    "keys": "w",
-    "settings": []
-  },
-  {
-    "name": "w-with-a-count",
-    "text": "one two three",
-    "keys": "2w",
-    "settings": []
-  },
-  {
-    "name": "b-crosses-punctuation",
-    "text": "alpha, beta",
-    "keys": "$bb",
-    "settings": []
-  },
-  {
-    "name": "b-crosses-the-line",
-    "text": "abc\ndef",
-    "keys": "jb",
-    "settings": []
-  },
-  {
-    "name": "b-at-the-start-of-the-buffer-stays",
-    "text": "abc",
-    "keys": "b",
-    "settings": []
-  },
-  {
-    "name": "b-with-a-count",
-    "text": "one two three",
-    "keys": "$2b",
-    "settings": []
-  },
-  {
-    "name": "j-with-a-count-clamps-to-the-last-line",
-    "text": "one\ntwo",
-    "keys": "3j",
-    "settings": []
-  },
-  {
-    "name": "k-with-a-count-clamps-to-the-first-line",
-    "text": "one\ntwo",
-    "keys": "j3k",
-    "settings": []
-  },
-  {
-    "name": "the-wanted-column-survives-a-short-line",
-    "text": "abcdef\nxy\nabcdefgh",
-    "keys": "4ljj",
-    "settings": []
-  },
-  {
-    "name": "dollar-sticks-to-the-line-end",
-    "text": "abcdef\nxy\nabcdefgh",
-    "keys": "$jj",
-    "settings": []
-  },
-  {
-    "name": "the-wanted-column-comes-back-up",
-    "text": "abcdef\nxy\nabcdefgh",
-    "keys": "$jjk",
-    "settings": []
-  },
-  {
-    "name": "motions-do-nothing-in-an-empty-buffer",
-    "text": "",
-    "keys": "w",
-    "settings": []
-  },
-  {
-    "name": "x-removes-the-character-under-the-caret",
-    "text": "hello",
-    "keys": "x",
-    "settings": []
-  },
-  {
-    "name": "x-at-the-line-end-pulls-the-caret-back",
-    "text": "abc",
-    "keys": "$x",
-    "settings": []
-  },
-  {
-    "name": "x-does-nothing-on-an-empty-line",
-    "text": "abc\n\ndef",
-    "keys": "jx",
-    "settings": []
-  },
-  {
-    "name": "x-with-a-count",
-    "text": "abcd",
-    "keys": "2x",
-    "settings": []
-  },
-  {
-    "name": "x-with-a-count-clamps-to-the-line-end",
-    "text": "abc\ndef",
-    "keys": "l3x",
-    "settings": []
-  },
-  {
-    "name": "dw-removes-the-word-and-its-blanks",
-    "text": "alpha beta",
-    "keys": "dw",
-    "settings": []
-  },
-  {
-    "name": "dw-stops-at-punctuation",
-    "text": "alpha, beta",
-    "keys": "dw",
-    "settings": []
-  },
-  {
-    "name": "dw-does-not-join-the-next-line",
-    "text": "alpha\nbeta",
-    "keys": "dw",
-    "settings": []
-  },
-  {
-    "name": "dw-on-the-last-word-of-a-line",
-    "text": "alpha beta\ngamma",
-    "keys": "wdw",
-    "settings": []
-  },
-  {
-    "name": "dw-on-an-empty-line-removes-the-newline",
-    "text": "abc\n\ndef",
-    "keys": "jdw",
-    "settings": []
-  },
-  {
-    "name": "dw-with-a-count",
-    "text": "alpha, beta",
-    "keys": "2dw",
-    "settings": []
-  },
-  {
-    "name": "d-dollar-removes-to-the-line-end",
-    "text": "alpha beta",
-    "keys": "ld$",
-    "settings": []
-  },
-  {
-    "name": "d-zero-removes-to-the-line-start",
-    "text": "alpha beta",
-    "keys": "$d0",
-    "settings": []
-  },
-  {
-    "name": "dl-removes-the-character-under-the-caret",
-    "text": "abc",
-    "keys": "$dl",
-    "settings": []
-  },
-  {
-    "name": "dh-does-nothing-at-the-line-start",
-    "text": "abc",
-    "keys": "dh",
-    "settings": []
-  },
-  {
-    "name": "dh-with-a-count",
-    "text": "hello",
-    "keys": "$d2h",
-    "settings": []
-  },
-  {
-    "name": "db-removes-back-to-the-word-start",
-    "text": "hello world",
-    "keys": "$db",
-    "settings": []
-  },
-  {
-    "name": "d-then-a-key-that-is-not-a-motion-is-dropped",
-    "text": "abc",
-    "keys": "dx",
-    "settings": []
-  },
-  {
-    "name": "escape-drops-a-pending-operator",
-    "text": "abc",
-    "keys": "d<Esc>x",
-    "settings": []
-  },
-  {
-    "name": "escape-drops-a-pending-count",
-    "text": "abc",
-    "keys": "2<Esc>x",
-    "settings": []
-  },
-  {
-    "name": "dd-removes-the-line",
-    "text": "one\ntwo\nthree",
-    "keys": "jdd",
-    "settings": []
-  },
-  {
-    "name": "dd-on-the-last-line",
-    "text": "one\ntwo\nthree",
-    "keys": "jjdd",
-    "settings": []
-  },
-  {
-    "name": "dd-goes-to-the-first-non-blank",
-    "text": "  one\n  two\n  three",
-    "keys": "jdd",
-    "settings": []
-  },
-  {
-    "name": "dd-with-a-count",
-    "text": "one\ntwo\nthree",
-    "keys": "2dd",
-    "settings": []
-  },
-  {
-    "name": "dd-removes-the-only-line",
-    "text": "one",
-    "keys": "dd",
-    "settings": []
-  },
-  {
-    "name": "dj-removes-the-line-below-too",
-    "text": "one\ntwo\nthree",
-    "keys": "dj",
-    "settings": []
-  },
-  {
-    "name": "dk-removes-the-line-above-too",
-    "text": "one\ntwo\nthree",
-    "keys": "jjdk",
-    "settings": []
-  },
-  {
-    "name": "i-inserts-before-the-caret",
-    "text": "hello",
-    "keys": "llix<Esc>",
-    "settings": []
-  },
-  {
-    "name": "a-inserts-after-the-caret",
-    "text": "hello",
-    "keys": "llax<Esc>",
-    "settings": []
-  },
-  {
-    "name": "a-at-the-line-end-appends",
-    "text": "alpha",
-    "keys": "$a!<Esc>",
-    "settings": []
-  },
-  {
-    "name": "capital-i-goes-to-the-first-non-blank",
-    "text": "  hello",
-    "keys": "Ix<Esc>",
-    "settings": []
-  },
-  {
-    "name": "capital-i-after-a-tab",
-    "text": "\tindented",
-    "keys": "Ix<Esc>",
-    "settings": []
-  },
-  {
-    "name": "capital-a-appends-at-the-line-end",
-    "text": "hello",
-    "keys": "Ax<Esc>",
-    "settings": []
-  },
-  {
-    "name": "escape-moves-one-left",
-    "text": "hello",
-    "keys": "ihi<Esc>",
-    "settings": []
-  },
-  {
-    "name": "escape-at-the-line-start-does-not-move",
-    "text": "hello",
-    "keys": "i<Esc>",
-    "settings": []
-  },
-  {
-    "name": "enter-splits-the-line",
-    "text": "hello",
-    "keys": "lli<CR><Esc>",
-    "settings": []
-  },
-  {
-    "name": "enter-at-the-line-end-opens-a-line",
-    "text": "hello",
-    "keys": "A<CR>world<Esc>",
-    "settings": []
-  },
-  {
-    "name": "backspace-joins-the-lines",
-    "text": "one\ntwo",
-    "keys": "ji<BS>x<Esc>",
-    "settings": []
-  },
-  {
-    "name": "backspace-reaches-before-the-insert",
-    "text": "hello",
-    "keys": "lllia<BS><BS>z<Esc>",
-    "settings": []
-  },
-  {
-    "name": "insert-into-an-empty-buffer",
-    "text": "",
-    "keys": "ix<Esc>",
-    "settings": []
-  },
-  {
-    "name": "undo-takes-back-one-insert",
-    "text": "hello",
-    "keys": "ix<Esc>u",
-    "settings": []
-  },
-  {
-    "name": "redo-puts-the-insert-back",
-    "text": "hello",
-    "keys": "ix<Esc>u<C-r>",
-    "settings": []
-  },
-  {
-    "name": "undo-takes-back-one-x",
-    "text": "hello",
-    "keys": "llxu",
-    "settings": []
-  },
-  {
-    "name": "undo-takes-back-one-line",
-    "text": "one\ntwo\nthree",
-    "keys": "jddu",
-    "settings": []
-  },
-  {
-    "name": "japanese-x-removes-one-code-point",
-    "text": "あいう",
-    "keys": "lx",
-    "settings": []
-  },
-  {
-    "name": "japanese-at-the-line-end-appends",
-    "text": "abcあ",
-    "keys": "A!<Esc>",
-    "settings": []
-  },
-  {
-    "name": "japanese-word-classes-split-the-line",
-    "text": "あいう、カタ abc",
-    "keys": "www",
-    "settings": []
-  },
-  {
-    "name": "japanese-dw-takes-one-class",
-    "text": "漢字かな",
-    "keys": "dw",
-    "settings": []
-  },
-  {
-    "name": "japanese-x-at-the-line-end",
-    "text": "abcあ",
-    "keys": "$x",
-    "settings": []
-  },
-  {
-    "name": "japanese-dollar-is-the-last-code-point",
-    "text": "あいう abc",
-    "keys": "$",
-    "settings": []
-  },
-  {
-    "name": "w-crosses-digits-and-underscore",
-    "text": "abc 123_x",
-    "keys": "ww",
-    "settings": []
-  },
-  {
-    "name": "w-on-letters-outside-the-class-table",
-    "text": "ＡＢ abc",
-    "keys": "w",
-    "settings": []
-  },
-  {
-    "name": "b-over-the-blanks-at-the-buffer-start",
-    "text": "  abc",
-    "keys": "wb",
-    "settings": []
-  },
-  {
-    "name": "b-stops-on-an-empty-line",
-    "text": "abc\n\ndef",
-    "keys": "jjb",
-    "settings": []
-  },
-  {
-    "name": "d-with-a-count-before-the-motion",
-    "text": "alpha beta gamma",
-    "keys": "d3w",
-    "settings": []
-  },
-  {
-    "name": "x-with-a-count-past-the-line",
-    "text": "abc",
-    "keys": "9x",
-    "settings": []
-  },
-  {
-    "name": "j-in-a-single-line-buffer",
-    "text": "abc",
-    "keys": "lj",
-    "settings": []
-  },
-  {
-    "name": "dj-at-the-last-line-does-nothing",
-    "text": "one\ntwo\nthree",
-    "keys": "jjdj",
-    "settings": []
-  },
-  {
-    "name": "dk-at-the-first-line-does-nothing",
-    "text": "one\ntwo",
-    "keys": "dk",
-    "settings": []
-  },
-  {
-    "name": "dd-with-a-count-past-the-end",
-    "text": "one\ntwo",
-    "keys": "j2dd",
-    "settings": []
-  },
-  {
-    "name": "undo-with-nothing-to-undo",
-    "text": "abc",
-    "keys": "u",
-    "settings": []
-  },
-  {
-    "name": "redo-with-nothing-to-redo",
-    "text": "abc",
-    "keys": "<C-r>",
-    "settings": []
-  },
-  {
-    "name": "dw-with-a-count-over-punctuation",
-    "text": "a.b c",
-    "keys": "3dw",
-    "settings": []
-  },
-  {
-    "name": "capital-a-on-an-empty-line",
-    "text": "\nabc",
-    "keys": "A0<Esc>",
-    "settings": []
-  },
-  {
-    "name": "capital-i-on-an-empty-line",
-    "text": "\nabc",
-    "keys": "I0<Esc>",
-    "settings": []
-  },
-  {
-    "name": "b-with-a-count-over-an-empty-line",
-    "text": "abc\n\ndef",
-    "keys": "jj2b",
-    "settings": []
-  },
-  {
-    "name": "d-with-a-count-on-both-sides",
-    "text": "alpha beta gamma delta",
-    "keys": "2d3w",
-    "settings": []
-  },
-  {
-    "name": "dd-with-a-count-on-both-sides",
-    "text": "a\nb\nc\nd\ne\nf\ng",
-    "keys": "2d3d",
-    "settings": []
-  },
-  {
-    "name": "dd-with-a-count-clamps-to-the-last-line",
-    "text": "a\nb\nc",
-    "keys": "5dd",
-    "settings": []
-  },
-  {
-    "name": "dd-with-a-count-clamps-from-the-middle",
-    "text": "a\nb\nc\nd\ne",
-    "keys": "j5dd",
-    "settings": []
-  },
-  {
-    "name": "dj-with-a-count-clamps-to-the-last-line",
-    "text": "a\nb\nc",
-    "keys": "5dj",
-    "settings": []
-  },
-  {
-    "name": "dk-with-a-count-clamps-to-the-first-line",
-    "text": "a\nb\nc",
-    "keys": "jj5dk",
-    "settings": []
-  },
-  {
-    "name": "cw-takes-the-word-like-ce",
-    "text": "alpha beta gamma",
-    "keys": "cwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cw-from-the-middle-of-a-word",
-    "text": "alpha beta gamma",
-    "keys": "llcwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cw-on-the-last-character-of-a-word",
-    "text": "alpha beta gamma",
-    "keys": "4lcwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cw-on-blanks-behaves-like-dw",
-    "text": "alpha  beta",
-    "keys": "5lcwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cw-with-a-count",
-    "text": "alpha beta gamma",
-    "keys": "2cwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cw-at-the-end-of-the-last-word",
-    "text": "alpha beta",
-    "keys": "$cwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "ce-goes-on-to-the-next-word",
-    "text": "alpha beta gamma",
-    "keys": "4lceX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "ce-empties-the-only-word",
-    "text": "alpha",
-    "keys": "ce<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cc-keeps-the-line",
-    "text": "one\ntwo\nthree",
-    "keys": "jccX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cc-drops-the-indent",
-    "text": "  one\ntwo",
-    "keys": "ccX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cc-on-the-only-line",
-    "text": "one",
-    "keys": "ccX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cc-with-a-count-leaves-one-line",
-    "text": "one\ntwo\nthree",
-    "keys": "2ccX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cj-changes-two-lines",
-    "text": "one\ntwo\nthree",
-    "keys": "cjX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "ck-changes-the-line-above",
-    "text": "one\ntwo\nthree",
-    "keys": "jjckX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "c-zero-at-the-line-start-only-inserts",
-    "text": "alpha beta",
-    "keys": "c0X<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cb-across-the-line-becomes-linewise",
-    "text": "  abc\ndef",
-    "keys": "jcbX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cb-inside-the-line",
-    "text": "alpha beta",
-    "keys": "wcbX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "cw-on-an-empty-line-becomes-linewise",
-    "text": "abc\n\ndef",
-    "keys": "jcwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "yy-does-not-move-the-caret",
-    "text": "alpha beta",
-    "keys": "llyy",
-    "settings": []
-  },
-  {
-    "name": "yw-keeps-the-caret",
-    "text": "alpha beta",
-    "keys": "yw",
-    "settings": []
-  },
-  {
-    "name": "yb-moves-to-the-range-start",
-    "text": "alpha beta",
-    "keys": "$yb",
-    "settings": []
-  },
-  {
-    "name": "y-dollar-keeps-the-caret",
-    "text": "alpha beta",
-    "keys": "ly$",
-    "settings": []
-  },
-  {
-    "name": "yj-yanks-two-lines",
-    "text": "one\ntwo\nthree",
-    "keys": "lyj",
-    "settings": []
-  },
-  {
-    "name": "yk-moves-up-to-the-first-line",
-    "text": "one\ntwo\nthree",
-    "keys": "jjlyk",
-    "settings": []
-  },
-  {
-    "name": "yk-clamps-the-column-on-a-short-line",
-    "text": "abcdefgh\nxy\nabcdefgh",
-    "keys": "jj5lyk",
-    "settings": []
-  },
-  {
-    "name": "yy-with-a-count-clamps-to-the-last-line",
-    "text": "a\nb\nc",
-    "keys": "5yy",
-    "settings": []
-  },
-  {
-    "name": "yy-with-a-count-on-the-last-line-does-nothing",
-    "text": "abc",
-    "keys": "2Y",
-    "settings": []
-  },
-  {
-    "name": "y-with-a-count-on-both-sides",
-    "text": "a\nb\nc\nd\ne",
-    "keys": "2y3y",
-    "settings": []
-  },
-  {
-    "name": "yw-on-an-empty-line-is-linewise",
-    "text": "abc\n\ndef",
-    "keys": "jyw",
-    "settings": []
-  },
-  {
-    "name": "yb-across-the-line-is-linewise",
-    "text": "abc\ndef",
-    "keys": "jyb",
-    "settings": []
-  },
-  {
-    "name": "capital-d-removes-to-the-line-end",
-    "text": "alpha beta",
-    "keys": "lD",
-    "settings": []
-  },
-  {
-    "name": "capital-d-on-an-empty-line-does-nothing",
-    "text": "\nabc",
-    "keys": "D",
-    "settings": []
-  },
-  {
-    "name": "capital-d-with-a-count-takes-the-next-line",
-    "text": "one\ntwo\nthree",
-    "keys": "j2D",
-    "settings": []
-  },
-  {
-    "name": "capital-d-with-a-count-on-the-last-line-does-nothing",
-    "text": "alpha beta",
-    "keys": "2D",
-    "settings": []
-  },
-  {
-    "name": "capital-c-changes-to-the-line-end",
-    "text": "alpha beta",
-    "keys": "lCx<Esc>",
-    "settings": []
-  },
-  {
-    "name": "capital-y-yanks-the-line",
-    "text": "one\ntwo",
-    "keys": "Y",
-    "settings": []
-  },
-  {
-    "name": "capital-y-with-a-count",
-    "text": "one\ntwo",
-    "keys": "2Y",
-    "settings": []
-  },
-  {
-    "name": "capital-y-on-the-last-line-with-a-count-does-nothing",
-    "text": "one\ntwo",
-    "keys": "j2Y",
-    "settings": []
-  },
-  {
-    "name": "p-puts-the-character-after-the-caret",
-    "text": "abcdef",
-    "keys": "ylp",
-    "settings": []
-  },
-  {
-    "name": "p-at-the-line-end",
-    "text": "abcdef",
-    "keys": "y2l$p",
-    "settings": []
-  },
-  {
-    "name": "p-with-a-count",
-    "text": "abcdef",
-    "keys": "y2l3p",
-    "settings": []
-  },
-  {
-    "name": "capital-p-puts-before-the-caret",
-    "text": "abcdef",
-    "keys": "yllP",
-    "settings": []
-  },
-  {
-    "name": "p-puts-the-line-below",
-    "text": "one\ntwo\nthree",
-    "keys": "yyjp",
-    "settings": []
-  },
-  {
-    "name": "capital-p-puts-the-line-above",
-    "text": "one\ntwo\nthree",
-    "keys": "yyjP",
-    "settings": []
-  },
-  {
-    "name": "p-of-a-line-goes-to-the-first-non-blank",
-    "text": "  one\ntwo",
-    "keys": "yyjp",
-    "settings": []
-  },
-  {
-    "name": "p-of-a-line-on-the-last-line",
-    "text": "one\ntwo",
-    "keys": "jyyp",
-    "settings": []
-  },
-  {
-    "name": "p-of-a-line-with-a-count",
-    "text": "one\ntwo\nthree",
-    "keys": "yy2p",
-    "settings": []
-  },
-  {
-    "name": "capital-p-of-a-line-on-the-first-line",
-    "text": "one\ntwo\nthree",
-    "keys": "yyP",
-    "settings": []
-  },
-  {
-    "name": "x-then-p-swaps-two-characters",
-    "text": "abc",
-    "keys": "xp",
-    "settings": []
-  },
-  {
-    "name": "x-then-capital-p-puts-it-back",
-    "text": "abc",
-    "keys": "xP",
-    "settings": []
-  },
-  {
-    "name": "x-at-the-line-end-then-p",
-    "text": "abc",
-    "keys": "$xp",
-    "settings": []
-  },
-  {
-    "name": "dd-then-p-moves-the-line-down",
-    "text": "abc\ndef",
-    "keys": "ddp",
-    "settings": []
-  },
-  {
-    "name": "dd-then-capital-p-puts-the-line-back",
-    "text": "abc\ndef",
-    "keys": "ddP",
-    "settings": []
-  },
-  {
-    "name": "dd-of-the-only-line-then-p",
-    "text": "one",
-    "keys": "ddp",
-    "settings": []
-  },
-  {
-    "name": "dd-then-p-with-a-count",
-    "text": "one\ntwo\nthree",
-    "keys": "dd2p",
-    "settings": []
-  },
-  {
-    "name": "dj-then-p",
-    "text": "one\ntwo\nthree",
-    "keys": "djp",
-    "settings": []
-  },
-  {
-    "name": "dw-then-capital-p-puts-the-word-back",
-    "text": "alpha beta",
-    "keys": "dwP",
-    "settings": []
-  },
-  {
-    "name": "dw-on-an-empty-line-then-p",
-    "text": "abc\n\ndef",
-    "keys": "jdwp",
-    "settings": []
-  },
-  {
-    "name": "y-dollar-then-p",
-    "text": "alpha",
-    "keys": "y$p",
-    "settings": []
-  },
-  {
-    "name": "yb-then-capital-p",
-    "text": "alpha beta",
-    "keys": "wybP",
-    "settings": []
-  },
-  {
-    "name": "japanese-p-after-a-code-point",
-    "text": "あいう",
-    "keys": "ylp",
-    "settings": []
-  },
-  {
-    "name": "japanese-p-of-a-line",
-    "text": "あいう",
-    "keys": "yyp",
-    "settings": []
-  },
-  {
-    "name": "e-goes-to-the-end-of-the-word",
-    "text": "alpha beta gamma",
-    "keys": "e",
-    "settings": []
-  },
-  {
-    "name": "e-twice-crosses-the-blank",
-    "text": "alpha beta gamma",
-    "keys": "ee",
-    "settings": []
-  },
-  {
-    "name": "e-stops-on-punctuation",
-    "text": "alpha, beta",
-    "keys": "ee",
-    "settings": []
-  },
-  {
-    "name": "e-crosses-the-line",
-    "text": "alpha\nbeta",
-    "keys": "$e",
-    "settings": []
-  },
-  {
-    "name": "e-with-a-count",
-    "text": "alpha beta",
-    "keys": "2e",
-    "settings": []
-  },
-  {
-    "name": "e-with-a-count-across-the-line",
-    "text": "alpha beta\ngamma",
-    "keys": "3e",
-    "settings": []
-  },
-  {
-    "name": "e-skips-an-empty-line",
-    "text": "alpha\n\nbeta",
-    "keys": "je",
-    "settings": []
-  },
-  {
-    "name": "japanese-e-stops-at-the-class-boundary",
-    "text": "あいう",
-    "keys": "e",
-    "settings": []
-  },
-  {
-    "name": "de-takes-the-word-inclusive",
-    "text": "alpha beta",
-    "keys": "de",
-    "settings": []
-  },
-  {
-    "name": "de-on-the-last-character-takes-one",
-    "text": "alpha beta",
-    "keys": "$de",
-    "settings": []
-  },
-  {
-    "name": "de-with-a-count",
-    "text": "alpha beta gamma",
-    "keys": "d2e",
-    "settings": []
-  },
-  {
-    "name": "japanese-de-takes-one-class",
-    "text": "漢字かな",
-    "keys": "de",
-    "settings": []
-  },
-  {
-    "name": "caret-goes-to-the-first-non-blank",
-    "text": "  alpha beta",
-    "keys": "$^",
-    "settings": []
-  },
-  {
-    "name": "caret-on-a-line-of-blanks",
-    "text": "  \nabc",
-    "keys": "^",
-    "settings": []
-  },
-  {
-    "name": "caret-on-an-empty-line",
-    "text": "\nabc",
-    "keys": "^",
-    "settings": []
-  },
-  {
-    "name": "d-caret-removes-back-to-the-first-non-blank",
-    "text": "  alpha beta",
-    "keys": "$d^",
-    "settings": []
-  },
-  {
-    "name": "d-caret-on-an-empty-line-does-nothing",
-    "text": "\nabc",
-    "keys": "d^",
-    "settings": []
-  },
-  {
-    "name": "home-goes-to-the-line-start",
-    "text": "  alpha",
-    "keys": "$<Home>",
-    "settings": []
-  },
-  {
-    "name": "end-goes-to-the-last-character",
-    "text": "  alpha",
-    "keys": "<End>",
-    "settings": []
-  },
-  {
-    "name": "d-with-end-removes-to-the-line-end",
-    "text": "  alpha",
-    "keys": "d<End>",
-    "settings": []
-  },
-  {
-    "name": "d-with-home-at-the-line-start-does-nothing",
-    "text": "abc",
-    "keys": "d<Home>",
-    "settings": []
-  },
-  {
-    "name": "c-with-home-removes-to-the-line-start",
-    "text": "  abc",
-    "keys": "$c<Home>X<Esc>",
-    "settings": []
-  },
-  {
-    "name": "end-in-insert-goes-past-the-last-character",
-    "text": "hello",
-    "keys": "lli<End>X<Esc>",
-    "settings": []
-  },
-  {
-    "name": "home-in-insert-goes-to-the-line-start",
-    "text": "hello",
-    "keys": "$i<Home>X<Esc>",
-    "settings": []
-  },
-  {
-    "name": "end-in-insert-on-an-empty-buffer",
-    "text": "",
-    "keys": "i<End>X<Esc>",
-    "settings": []
-  },
-  {
-    "name": "db-across-the-line-becomes-linewise",
-    "text": "abc\ndef",
-    "keys": "jdb",
-    "settings": []
-  },
-  {
-    "name": "db-across-the-line-keeps-the-indent",
-    "text": "  abc\ndef",
-    "keys": "jdb",
-    "settings": []
-  },
-  {
-    "name": "db-inside-the-line-is-characterwise",
-    "text": "alpha beta",
-    "keys": "wdb",
-    "settings": []
-  },
-  {
-    "name": "db-across-the-line-outside-the-indent-stays-characterwise",
-    "text": "abc def\nghi",
-    "keys": "jdb",
-    "settings": []
-  },
-  {
-    "name": "yb-across-the-line-outside-the-indent-stays-characterwise",
-    "text": "abc def\nghi",
-    "keys": "jyb",
-    "settings": []
-  },
-  {
-    "name": "de-across-the-line-with-text-after-it-stays-characterwise",
-    "text": "alpha\nbeta gamma",
-    "keys": "$de",
-    "settings": []
-  },
-  {
-    "name": "de-across-the-line-outside-the-indent-stays-characterwise",
-    "text": "abc def\nghi",
-    "keys": "$de",
-    "settings": []
-  },
-  {
-    "name": "undo-takes-back-a-change",
-    "text": "hello",
-    "keys": "cwbye<Esc>u",
-    "settings": []
-  },
-  {
-    "name": "undo-takes-back-an-insert-with-a-backspace",
-    "text": "hello",
-    "keys": "ia<BS>b<Esc>u",
-    "settings": []
-  },
-  {
-    "name": "japanese-cw-takes-one-class",
-    "text": "あいう、カタ",
-    "keys": "cwX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "c-then-a-key-that-is-not-a-motion-is-dropped",
-    "text": "abc",
-    "keys": "cx",
-    "settings": []
-  },
-  {
-    "name": "y-then-a-key-that-is-not-a-motion-is-dropped",
-    "text": "abc",
-    "keys": "yx",
-    "settings": []
-  },
-  {
-    "name": "d-then-another-operator-is-dropped",
-    "text": "abc",
-    "keys": "dy",
-    "settings": []
-  },
-  {
-    "name": "y-then-another-operator-is-dropped",
-    "text": "abc",
-    "keys": "yd",
-    "settings": []
-  },
-  {
-    "name": "c-then-another-operator-is-dropped",
-    "text": "abc\ndef",
-    "keys": "cdX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "v-then-esc-changes-nothing",
-    "text": "alpha",
-    "keys": "v<Esc>",
-    "settings": []
-  },
-  {
-    "name": "v-then-v-leaves-visual",
-    "text": "alpha",
-    "keys": "vlvx",
-    "settings": []
-  },
-  {
-    "name": "v-then-V-switches-to-linewise",
-    "text": "abc\ndef",
-    "keys": "vVd",
-    "settings": []
-  },
-  {
-    "name": "V-then-v-switches-to-characterwise",
-    "text": "abc\ndef",
-    "keys": "Vvd",
-    "settings": []
-  },
-  {
-    "name": "V-then-V-leaves-visual",
-    "text": "abc\ndef",
-    "keys": "VVx",
-    "settings": []
-  },
-  {
-    "name": "a-count-before-v-is-ignored",
-    "text": "abcdef",
-    "keys": "3vd",
-    "settings": []
-  },
-  {
-    "name": "V-then-esc-changes-nothing",
-    "text": "abc\ndef",
-    "keys": "V<Esc>x",
-    "settings": []
-  },
-  {
-    "name": "v-d-removes-one-character",
-    "text": "alpha",
-    "keys": "vd",
-    "settings": []
-  },
-  {
-    "name": "v-x-is-the-same-as-d",
-    "text": "alpha",
-    "keys": "vx",
-    "settings": []
-  },
-  {
-    "name": "v-l-d-removes-two-characters",
-    "text": "alpha",
-    "keys": "vld",
-    "settings": []
-  },
-  {
-    "name": "v-with-a-count-on-the-motion",
-    "text": "abcdefgh",
-    "keys": "v3ld",
-    "settings": []
-  },
-  {
-    "name": "v-y-yanks-the-selection",
-    "text": "alpha",
-    "keys": "vly",
-    "settings": []
-  },
-  {
-    "name": "v-c-changes-the-selection",
-    "text": "alpha",
-    "keys": "vlcXY<Esc>",
-    "settings": []
-  },
-  {
-    "name": "v-h-selects-backwards",
-    "text": "alpha",
-    "keys": "$vhd",
-    "settings": []
-  },
-  {
-    "name": "v-dollar-d-takes-the-newline",
-    "text": "abc\ndef",
-    "keys": "v$d",
-    "settings": []
-  },
-  {
-    "name": "v-dollar-y-takes-the-newline",
-    "text": "abc\ndef",
-    "keys": "v$y",
-    "settings": []
-  },
-  {
-    "name": "v-zero-d",
-    "text": "  abc",
-    "keys": "$v0d",
-    "settings": []
-  },
-  {
-    "name": "v-caret-d",
-    "text": "  abc",
-    "keys": "$v^d",
-    "settings": []
-  },
-  {
-    "name": "v-w-d",
-    "text": "alpha beta",
-    "keys": "vwd",
-    "settings": []
-  },
-  {
-    "name": "v-w-at-the-last-word",
-    "text": "alpha beta",
-    "keys": "wvwd",
-    "settings": []
-  },
-  {
-    "name": "v-b-d",
-    "text": "alpha beta",
-    "keys": "$vbd",
-    "settings": []
-  },
-  {
-    "name": "v-e-d",
-    "text": "alpha beta",
-    "keys": "ved",
-    "settings": []
-  },
-  {
-    "name": "v-home-d",
-    "text": "  abc",
-    "keys": "$v<Home>d",
-    "settings": []
-  },
-  {
-    "name": "v-end-d",
-    "text": "abc\ndef",
-    "keys": "v<End>d",
-    "settings": []
-  },
-  {
-    "name": "v-j-d-across-lines",
-    "text": "abc\ndef",
-    "keys": "vjd",
-    "settings": []
-  },
-  {
-    "name": "v-j-y-across-lines",
-    "text": "abc\ndef",
-    "keys": "vjy",
-    "settings": []
-  },
-  {
-    "name": "v-k-selects-upwards",
-    "text": "abc\ndef",
-    "keys": "jlvkd",
-    "settings": []
-  },
-  {
-    "name": "v-with-a-count-of-lines",
-    "text": "a\nb\nc\nd",
-    "keys": "v2jd",
-    "settings": []
-  },
-  {
-    "name": "v-j-keeps-the-wanted-column",
-    "text": "abcdef\nx\nabcdef",
-    "keys": "3lvjjd",
-    "settings": []
-  },
-  {
-    "name": "v-on-an-empty-line-d",
-    "text": "abc\n\ndef",
-    "keys": "jvd",
-    "settings": []
-  },
-  {
-    "name": "v-on-an-empty-line-y",
-    "text": "abc\n\ndef",
-    "keys": "jvy",
-    "settings": []
-  },
-  {
-    "name": "v-japanese-d",
-    "text": "あいうえお",
-    "keys": "vld",
-    "settings": []
-  },
-  {
-    "name": "v-japanese-y",
-    "text": "あいうえお",
-    "keys": "vlly",
-    "settings": []
-  },
-  {
-    "name": "v-c-across-lines",
-    "text": "abc\ndef",
-    "keys": "vjcX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "v-o-keeps-the-same-range",
-    "text": "abcdef",
-    "keys": "3lvhhod",
-    "settings": []
-  },
-  {
-    "name": "v-o-then-a-motion-moves-the-other-end",
-    "text": "abcdef",
-    "keys": "3lvhhohd",
-    "settings": []
-  },
-  {
-    "name": "V-o-then-j-extends-the-other-end",
-    "text": "a\nb\nc\nd\ne",
-    "keys": "2jVkojd",
-    "settings": []
-  },
-  {
-    "name": "V-d-removes-the-line",
-    "text": "abc\ndef\nghi",
-    "keys": "jVd",
-    "settings": []
-  },
-  {
-    "name": "V-d-on-the-last-line",
-    "text": "abc\ndef",
-    "keys": "jVd",
-    "settings": []
-  },
-  {
-    "name": "V-j-d-removes-two-lines",
-    "text": "abc\ndef\nghi",
-    "keys": "Vjd",
-    "settings": []
-  },
-  {
-    "name": "V-with-a-count-of-lines",
-    "text": "a\nb\nc\nd",
-    "keys": "V2jd",
-    "settings": []
-  },
-  {
-    "name": "V-y-yanks-a-line",
-    "text": "abc\ndef",
-    "keys": "Vy",
-    "settings": []
-  },
-  {
-    "name": "V-j-y-yanks-two-lines",
-    "text": "abc\ndef",
-    "keys": "Vjy",
-    "settings": []
-  },
-  {
-    "name": "V-c-changes-the-line",
-    "text": "abc\ndef",
-    "keys": "VcX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "V-j-c-changes-two-lines",
-    "text": "abc\ndef\nghi",
-    "keys": "VjcX<Esc>",
-    "settings": []
-  },
-  {
-    "name": "V-dollar-keeps-the-line-range",
-    "text": "abc\ndef",
-    "keys": "V$d",
-    "settings": []
-  },
-  {
-    "name": "V-zero-keeps-the-line-range",
-    "text": "  abc\ndef",
-    "keys": "V0d",
-    "settings": []
-  },
-  {
-    "name": "V-x-removes-the-line",
-    "text": "abc\ndef",
-    "keys": "Vx",
-    "settings": []
-  },
-  {
-    "name": "V-k-selects-upwards",
-    "text": "abc\ndef\nghi",
-    "keys": "jjVkd",
-    "settings": []
-  },
-  {
-    "name": "V-on-an-empty-line",
-    "text": "abc\n\ndef",
-    "keys": "jVd",
-    "settings": []
-  },
-  {
-    "name": "V-indented-line-keeps-the-indent-in-the-register",
-    "text": "abc\n  def",
-    "keys": "jVy",
-    "settings": []
-  },
-  {
-    "name": "V-y-then-p-puts-a-whole-line",
-    "text": "abc\ndef",
-    "keys": "Vyp",
-    "settings": []
-  },
-  {
-    "name": "v-y-then-p-puts-characters",
-    "text": "abcdef",
-    "keys": "vlyp",
-    "settings": []
-  },
-  {
-    "name": "v-d-then-undo",
-    "text": "alpha",
-    "keys": "vlldu",
-    "settings": []
-  },
-  {
-    "name": "V-d-then-undo",
-    "text": "abc\ndef",
-    "keys": "Vdu",
-    "settings": []
-  },
-  {
-    "name": "v-l-reaches-the-line-end",
-    "text": "abc\ndef",
-    "keys": "llvld",
-    "settings": []
-  },
-  {
-    "name": "v-l-with-a-big-count-stops-at-the-line-end",
-    "text": "abc\ndef",
-    "keys": "v9ld",
-    "settings": []
-  },
-  {
-    "name": "v-dollar-then-j-keeps-the-line-end",
-    "text": "abc\ndef",
-    "keys": "v$jd",
-    "settings": []
-  },
-  {
-    "name": "v-e-at-the-last-word",
-    "text": "alpha beta",
-    "keys": "wved",
-    "settings": []
-  },
-  {
-    "name": "a-count-before-V-selects-lines",
-    "text": "a\nb\nc\nd",
-    "keys": "3Vd",
-    "settings": []
-  },
-  {
-    "name": "v-does-not-take-the-whole-line-like-d-does",
-    "text": "  abc\n   ",
-    "keys": "vjd",
-    "settings": []
-  },
-  {
-    "name": "viewport-H-at-the-first-visible-line",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "H",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-M-keeps-the-middle-line",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "M",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-L-at-the-last-visible-line",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "L",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-d-scrolls-half-a-window",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-d>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-u-scrolls-half-a-window",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-u>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-f-is-page-down",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-f>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-b-is-page-up",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-b>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-page-down-is-control-f",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<PageDown>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-page-up-is-control-b",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<PageUp>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-d-count-persists",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "3<C-d><C-d>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-u-count-persists",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "3<C-u><C-u>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-d-stops-at-eof",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-d>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 28, "column": 1}
-  },
-  {
-    "name": "viewport-H-uses-first-nonblank",
-    "text": "  one\n\n  three",
-    "keys": "H",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 2, "column": 1}
-  },
-  {
-    "name": "viewport-M-can-land-on-an-empty-line",
-    "text": "  one\n\n  three",
-    "keys": "M",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 1}
-  },
-  {
-    "name": "viewport-L-uses-first-nonblank",
-    "text": "  one\n\n  three",
-    "keys": "L",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 1}
-  },
-  {
-    "name": "viewport-middle-on-a-one-line-window",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "M",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 1, "first_visible": 10, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-last-on-a-two-line-window",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "L",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 2, "first_visible": 10, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-d-on-a-twenty-line-window",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-d>",
-    "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 20, "first_visible": 5, "line": 14, "column": 1}
-  },
-  {
-    "name": "viewport-page-forward-from-the-bottom",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-f>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 15, "column": 1}
-  },
-  {
-    "name": "viewport-page-back-from-the-top",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-b>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 6, "column": 1}
-  },
-  {
-    "name": "viewport-page-forward-at-eof",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-f>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 30, "column": 1}
-  },
-  {
-    "name": "viewport-page-back-at-the-top",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-b>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 1}
-  },
-  {
-    "name": "viewport-height-one-control-keys",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-f><C-b><C-d><C-u>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 1, "first_visible": 10, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-height-two-control-keys",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-f><C-b><C-d><C-u>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 2, "first_visible": 10, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-d-large-count-sets-scroll",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "999<C-d>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-u-large-count-sets-scroll",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "999<C-u>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-H-and-L-large-count-clamp",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "999H999L", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-M-ignores-a-count",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "999M", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-delete-H-is-linewise",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12",
-    "keys": "dH", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 3, "line": 7, "column": 1}
-  },
-  {
-    "name": "viewport-change-L-is-linewise",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12",
-    "keys": "cLX<Esc>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 3, "line": 7, "column": 1}
-  },
-  {
-    "name": "viewport-yank-M-is-linewise",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12",
-    "keys": "yM", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 3, "line": 7, "column": 1}
-  },
-  {
-    "name": "viewport-visual-control-d-yanks",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
-    "keys": "v<C-d>y<Esc>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-visual-control-u-yanks",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
-    "keys": "v<C-u>y<Esc>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-insert-page-down-then-escape",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
-    "keys": "i<PageDown><Esc>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-insert-page-up-then-escape",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20",
-    "keys": "i<PageUp><Esc>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}
-  },
-  {
-    "name": "viewport-control-d-at-eof-keeps-the-column",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-d>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 30, "column": 2}
-  },
-  {
-    "name": "viewport-control-u-at-the-top-keeps-the-column",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-u>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 2}
-  },
-  {
-    "name": "viewport-page-forward-at-eof-sets-the-column-to-one",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-f>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 21, "line": 30, "column": 2}
-  },
-  {
-    "name": "viewport-page-back-at-the-top-keeps-the-column",
-    "text": "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30",
-    "keys": "<C-b>", "settings": ["set scrolloff=0"],
-    "viewport": {"visible_lines": 10, "first_visible": 1, "line": 1, "column": 2}
-  },
+  {"name":"h-at-the-line-start-stays","text":"alpha","keys":"h"},
+  {"name":"h-with-a-count","text":"alpha","keys":"$3h"},
+  {"name":"l-does-not-pass-the-last-character","text":"abc","keys":"lll"},
+  {"name":"l-with-a-count-clamps","text":"hello","keys":"5l"},
+  {"name":"zero-goes-to-the-line-start","text":"  abc","keys":"$0"},
+  {"name":"dollar-goes-to-the-last-character","text":"  abc","keys":"$"},
+  {"name":"w-crosses-punctuation","text":"alpha, beta; gamma","keys":"www"},
+  {"name":"w-crosses-the-line","text":"alpha beta\ngamma","keys":"ww"},
+  {"name":"w-stops-on-the-last-word","text":"alpha beta","keys":"ww"},
+  {"name":"w-stops-on-an-empty-line","text":"abc\n\ndef","keys":"w"},
+  {"name":"w-with-a-count","text":"one two three","keys":"2w"},
+  {"name":"b-crosses-punctuation","text":"alpha, beta","keys":"$bb"},
+  {"name":"b-crosses-the-line","text":"abc\ndef","keys":"jb"},
+  {"name":"b-at-the-start-of-the-buffer-stays","text":"abc","keys":"b"},
+  {"name":"b-with-a-count","text":"one two three","keys":"$2b"},
+  {"name":"j-with-a-count-clamps-to-the-last-line","text":"one\ntwo","keys":"3j"},
+  {"name":"k-with-a-count-clamps-to-the-first-line","text":"one\ntwo","keys":"j3k"},
+  {"name":"the-wanted-column-survives-a-short-line","text":"abcdef\nxy\nabcdefgh","keys":"4ljj"},
+  {"name":"dollar-sticks-to-the-line-end","text":"abcdef\nxy\nabcdefgh","keys":"$jj"},
+  {"name":"the-wanted-column-comes-back-up","text":"abcdef\nxy\nabcdefgh","keys":"$jjk"},
+  {"name":"motions-do-nothing-in-an-empty-buffer","text":"","keys":"w"},
+  {"name":"x-removes-the-character-under-the-caret","text":"hello","keys":"x"},
+  {"name":"x-at-the-line-end-pulls-the-caret-back","text":"abc","keys":"$x"},
+  {"name":"x-does-nothing-on-an-empty-line","text":"abc\n\ndef","keys":"jx"},
+  {"name":"x-with-a-count","text":"abcd","keys":"2x"},
+  {"name":"x-with-a-count-clamps-to-the-line-end","text":"abc\ndef","keys":"l3x"},
+  {"name":"dw-removes-the-word-and-its-blanks","text":"alpha beta","keys":"dw"},
+  {"name":"dw-stops-at-punctuation","text":"alpha, beta","keys":"dw"},
+  {"name":"dw-does-not-join-the-next-line","text":"alpha\nbeta","keys":"dw"},
+  {"name":"dw-on-the-last-word-of-a-line","text":"alpha beta\ngamma","keys":"wdw"},
+  {"name":"dw-on-an-empty-line-removes-the-newline","text":"abc\n\ndef","keys":"jdw"},
+  {"name":"dw-with-a-count","text":"alpha, beta","keys":"2dw"},
+  {"name":"d-dollar-removes-to-the-line-end","text":"alpha beta","keys":"ld$"},
+  {"name":"d-zero-removes-to-the-line-start","text":"alpha beta","keys":"$d0"},
+  {"name":"dl-removes-the-character-under-the-caret","text":"abc","keys":"$dl"},
+  {"name":"dh-does-nothing-at-the-line-start","text":"abc","keys":"dh"},
+  {"name":"dh-with-a-count","text":"hello","keys":"$d2h"},
+  {"name":"db-removes-back-to-the-word-start","text":"hello world","keys":"$db"},
+  {"name":"d-then-a-key-that-is-not-a-motion-is-dropped","text":"abc","keys":"dx"},
+  {"name":"escape-drops-a-pending-operator","text":"abc","keys":"d<Esc>x"},
+  {"name":"escape-drops-a-pending-count","text":"abc","keys":"2<Esc>x"},
+  {"name":"dd-removes-the-line","text":"one\ntwo\nthree","keys":"jdd"},
+  {"name":"dd-on-the-last-line","text":"one\ntwo\nthree","keys":"jjdd"},
+  {"name":"dd-goes-to-the-first-non-blank","text":"  one\n  two\n  three","keys":"jdd"},
+  {"name":"dd-with-a-count","text":"one\ntwo\nthree","keys":"2dd"},
+  {"name":"dd-removes-the-only-line","text":"one","keys":"dd"},
+  {"name":"dj-removes-the-line-below-too","text":"one\ntwo\nthree","keys":"dj"},
+  {"name":"dk-removes-the-line-above-too","text":"one\ntwo\nthree","keys":"jjdk"},
+  {"name":"i-inserts-before-the-caret","text":"hello","keys":"llix<Esc>"},
+  {"name":"a-inserts-after-the-caret","text":"hello","keys":"llax<Esc>"},
+  {"name":"a-at-the-line-end-appends","text":"alpha","keys":"$a!<Esc>"},
+  {"name":"capital-i-goes-to-the-first-non-blank","text":"  hello","keys":"Ix<Esc>"},
+  {"name":"capital-i-after-a-tab","text":"\tindented","keys":"Ix<Esc>"},
+  {"name":"capital-a-appends-at-the-line-end","text":"hello","keys":"Ax<Esc>"},
+  {"name":"escape-moves-one-left","text":"hello","keys":"ihi<Esc>"},
+  {"name":"escape-at-the-line-start-does-not-move","text":"hello","keys":"i<Esc>"},
+  {"name":"enter-splits-the-line","text":"hello","keys":"lli<CR><Esc>"},
+  {"name":"enter-at-the-line-end-opens-a-line","text":"hello","keys":"A<CR>world<Esc>"},
+  {"name":"backspace-joins-the-lines","text":"one\ntwo","keys":"ji<BS>x<Esc>"},
+  {"name":"backspace-reaches-before-the-insert","text":"hello","keys":"lllia<BS><BS>z<Esc>"},
+  {"name":"insert-into-an-empty-buffer","text":"","keys":"ix<Esc>"},
+  {"name":"undo-takes-back-one-insert","text":"hello","keys":"ix<Esc>u"},
+  {"name":"redo-puts-the-insert-back","text":"hello","keys":"ix<Esc>u<C-r>"},
+  {"name":"undo-takes-back-one-x","text":"hello","keys":"llxu"},
+  {"name":"undo-takes-back-one-line","text":"one\ntwo\nthree","keys":"jddu"},
+  {"name":"japanese-x-removes-one-code-point","text":"あいう","keys":"lx"},
+  {"name":"japanese-at-the-line-end-appends","text":"abcあ","keys":"A!<Esc>"},
+  {"name":"japanese-word-classes-split-the-line","text":"あいう、カタ abc","keys":"www"},
+  {"name":"japanese-dw-takes-one-class","text":"漢字かな","keys":"dw"},
+  {"name":"japanese-x-at-the-line-end","text":"abcあ","keys":"$x"},
+  {"name":"japanese-dollar-is-the-last-code-point","text":"あいう abc","keys":"$"},
+  {"name":"w-crosses-digits-and-underscore","text":"abc 123_x","keys":"ww"},
+  {"name":"w-on-letters-outside-the-class-table","text":"ＡＢ abc","keys":"w"},
+  {"name":"b-over-the-blanks-at-the-buffer-start","text":"  abc","keys":"wb"},
+  {"name":"b-stops-on-an-empty-line","text":"abc\n\ndef","keys":"jjb"},
+  {"name":"d-with-a-count-before-the-motion","text":"alpha beta gamma","keys":"d3w"},
+  {"name":"x-with-a-count-past-the-line","text":"abc","keys":"9x"},
+  {"name":"j-in-a-single-line-buffer","text":"abc","keys":"lj"},
+  {"name":"dj-at-the-last-line-does-nothing","text":"one\ntwo\nthree","keys":"jjdj"},
+  {"name":"dk-at-the-first-line-does-nothing","text":"one\ntwo","keys":"dk"},
+  {"name":"dd-with-a-count-past-the-end","text":"one\ntwo","keys":"j2dd"},
+  {"name":"undo-with-nothing-to-undo","text":"abc","keys":"u"},
+  {"name":"redo-with-nothing-to-redo","text":"abc","keys":"<C-r>"},
+  {"name":"dw-with-a-count-over-punctuation","text":"a.b c","keys":"3dw"},
+  {"name":"capital-a-on-an-empty-line","text":"\nabc","keys":"A0<Esc>"},
+  {"name":"capital-i-on-an-empty-line","text":"\nabc","keys":"I0<Esc>"},
+  {"name":"b-with-a-count-over-an-empty-line","text":"abc\n\ndef","keys":"jj2b"},
+  {"name":"d-with-a-count-on-both-sides","text":"alpha beta gamma delta","keys":"2d3w"},
+  {"name":"dd-with-a-count-on-both-sides","text":"a\nb\nc\nd\ne\nf\ng","keys":"2d3d"},
+  {"name":"dd-with-a-count-clamps-to-the-last-line","text":"a\nb\nc","keys":"5dd"},
+  {"name":"dd-with-a-count-clamps-from-the-middle","text":"a\nb\nc\nd\ne","keys":"j5dd"},
+  {"name":"dj-with-a-count-clamps-to-the-last-line","text":"a\nb\nc","keys":"5dj"},
+  {"name":"dk-with-a-count-clamps-to-the-first-line","text":"a\nb\nc","keys":"jj5dk"},
+  {"name":"cw-takes-the-word-like-ce","text":"alpha beta gamma","keys":"cwX<Esc>"},
+  {"name":"cw-from-the-middle-of-a-word","text":"alpha beta gamma","keys":"llcwX<Esc>"},
+  {"name":"cw-on-the-last-character-of-a-word","text":"alpha beta gamma","keys":"4lcwX<Esc>"},
+  {"name":"cw-on-blanks-behaves-like-dw","text":"alpha  beta","keys":"5lcwX<Esc>"},
+  {"name":"cw-with-a-count","text":"alpha beta gamma","keys":"2cwX<Esc>"},
+  {"name":"cw-at-the-end-of-the-last-word","text":"alpha beta","keys":"$cwX<Esc>"},
+  {"name":"ce-goes-on-to-the-next-word","text":"alpha beta gamma","keys":"4lceX<Esc>"},
+  {"name":"ce-empties-the-only-word","text":"alpha","keys":"ce<Esc>"},
+  {"name":"cc-keeps-the-line","text":"one\ntwo\nthree","keys":"jccX<Esc>"},
+  {"name":"cc-drops-the-indent","text":"  one\ntwo","keys":"ccX<Esc>"},
+  {"name":"cc-on-the-only-line","text":"one","keys":"ccX<Esc>"},
+  {"name":"cc-with-a-count-leaves-one-line","text":"one\ntwo\nthree","keys":"2ccX<Esc>"},
+  {"name":"cj-changes-two-lines","text":"one\ntwo\nthree","keys":"cjX<Esc>"},
+  {"name":"ck-changes-the-line-above","text":"one\ntwo\nthree","keys":"jjckX<Esc>"},
+  {"name":"c-zero-at-the-line-start-only-inserts","text":"alpha beta","keys":"c0X<Esc>"},
+  {"name":"cb-across-the-line-becomes-linewise","text":"  abc\ndef","keys":"jcbX<Esc>"},
+  {"name":"cb-inside-the-line","text":"alpha beta","keys":"wcbX<Esc>"},
+  {"name":"cw-on-an-empty-line-becomes-linewise","text":"abc\n\ndef","keys":"jcwX<Esc>"},
+  {"name":"yy-does-not-move-the-caret","text":"alpha beta","keys":"llyy"},
+  {"name":"yw-keeps-the-caret","text":"alpha beta","keys":"yw"},
+  {"name":"yb-moves-to-the-range-start","text":"alpha beta","keys":"$yb"},
+  {"name":"y-dollar-keeps-the-caret","text":"alpha beta","keys":"ly$"},
+  {"name":"yj-yanks-two-lines","text":"one\ntwo\nthree","keys":"lyj"},
+  {"name":"yk-moves-up-to-the-first-line","text":"one\ntwo\nthree","keys":"jjlyk"},
+  {"name":"yk-clamps-the-column-on-a-short-line","text":"abcdefgh\nxy\nabcdefgh","keys":"jj5lyk"},
+  {"name":"yy-with-a-count-clamps-to-the-last-line","text":"a\nb\nc","keys":"5yy"},
+  {"name":"yy-with-a-count-on-the-last-line-does-nothing","text":"abc","keys":"2Y"},
+  {"name":"y-with-a-count-on-both-sides","text":"a\nb\nc\nd\ne","keys":"2y3y"},
+  {"name":"yw-on-an-empty-line-is-linewise","text":"abc\n\ndef","keys":"jyw"},
+  {"name":"yb-across-the-line-is-linewise","text":"abc\ndef","keys":"jyb"},
+  {"name":"capital-d-removes-to-the-line-end","text":"alpha beta","keys":"lD"},
+  {"name":"capital-d-on-an-empty-line-does-nothing","text":"\nabc","keys":"D"},
+  {"name":"capital-d-with-a-count-takes-the-next-line","text":"one\ntwo\nthree","keys":"j2D"},
+  {"name":"capital-d-with-a-count-on-the-last-line-does-nothing","text":"alpha beta","keys":"2D"},
+  {"name":"capital-c-changes-to-the-line-end","text":"alpha beta","keys":"lCx<Esc>"},
+  {"name":"capital-y-yanks-the-line","text":"one\ntwo","keys":"Y"},
+  {"name":"capital-y-with-a-count","text":"one\ntwo","keys":"2Y"},
+  {"name":"capital-y-on-the-last-line-with-a-count-does-nothing","text":"one\ntwo","keys":"j2Y"},
+  {"name":"p-puts-the-character-after-the-caret","text":"abcdef","keys":"ylp"},
+  {"name":"p-at-the-line-end","text":"abcdef","keys":"y2l$p"},
+  {"name":"p-with-a-count","text":"abcdef","keys":"y2l3p"},
+  {"name":"capital-p-puts-before-the-caret","text":"abcdef","keys":"yllP"},
+  {"name":"p-puts-the-line-below","text":"one\ntwo\nthree","keys":"yyjp"},
+  {"name":"capital-p-puts-the-line-above","text":"one\ntwo\nthree","keys":"yyjP"},
+  {"name":"p-of-a-line-goes-to-the-first-non-blank","text":"  one\ntwo","keys":"yyjp"},
+  {"name":"p-of-a-line-on-the-last-line","text":"one\ntwo","keys":"jyyp"},
+  {"name":"p-of-a-line-with-a-count","text":"one\ntwo\nthree","keys":"yy2p"},
+  {"name":"capital-p-of-a-line-on-the-first-line","text":"one\ntwo\nthree","keys":"yyP"},
+  {"name":"x-then-p-swaps-two-characters","text":"abc","keys":"xp"},
+  {"name":"x-then-capital-p-puts-it-back","text":"abc","keys":"xP"},
+  {"name":"x-at-the-line-end-then-p","text":"abc","keys":"$xp"},
+  {"name":"dd-then-p-moves-the-line-down","text":"abc\ndef","keys":"ddp"},
+  {"name":"dd-then-capital-p-puts-the-line-back","text":"abc\ndef","keys":"ddP"},
+  {"name":"dd-of-the-only-line-then-p","text":"one","keys":"ddp"},
+  {"name":"dd-then-p-with-a-count","text":"one\ntwo\nthree","keys":"dd2p"},
+  {"name":"dj-then-p","text":"one\ntwo\nthree","keys":"djp"},
+  {"name":"dw-then-capital-p-puts-the-word-back","text":"alpha beta","keys":"dwP"},
+  {"name":"dw-on-an-empty-line-then-p","text":"abc\n\ndef","keys":"jdwp"},
+  {"name":"y-dollar-then-p","text":"alpha","keys":"y$p"},
+  {"name":"yb-then-capital-p","text":"alpha beta","keys":"wybP"},
+  {"name":"japanese-p-after-a-code-point","text":"あいう","keys":"ylp"},
+  {"name":"japanese-p-of-a-line","text":"あいう","keys":"yyp"},
+  {"name":"e-goes-to-the-end-of-the-word","text":"alpha beta gamma","keys":"e"},
+  {"name":"e-twice-crosses-the-blank","text":"alpha beta gamma","keys":"ee"},
+  {"name":"e-stops-on-punctuation","text":"alpha, beta","keys":"ee"},
+  {"name":"e-crosses-the-line","text":"alpha\nbeta","keys":"$e"},
+  {"name":"e-with-a-count","text":"alpha beta","keys":"2e"},
+  {"name":"e-with-a-count-across-the-line","text":"alpha beta\ngamma","keys":"3e"},
+  {"name":"e-skips-an-empty-line","text":"alpha\n\nbeta","keys":"je"},
+  {"name":"japanese-e-stops-at-the-class-boundary","text":"あいう","keys":"e"},
+  {"name":"de-takes-the-word-inclusive","text":"alpha beta","keys":"de"},
+  {"name":"de-on-the-last-character-takes-one","text":"alpha beta","keys":"$de"},
+  {"name":"de-with-a-count","text":"alpha beta gamma","keys":"d2e"},
+  {"name":"japanese-de-takes-one-class","text":"漢字かな","keys":"de"},
+  {"name":"caret-goes-to-the-first-non-blank","text":"  alpha beta","keys":"$^"},
+  {"name":"caret-on-a-line-of-blanks","text":"  \nabc","keys":"^"},
+  {"name":"caret-on-an-empty-line","text":"\nabc","keys":"^"},
+  {"name":"d-caret-removes-back-to-the-first-non-blank","text":"  alpha beta","keys":"$d^"},
+  {"name":"d-caret-on-an-empty-line-does-nothing","text":"\nabc","keys":"d^"},
+  {"name":"home-goes-to-the-line-start","text":"  alpha","keys":"$<Home>"},
+  {"name":"end-goes-to-the-last-character","text":"  alpha","keys":"<End>"},
+  {"name":"d-with-end-removes-to-the-line-end","text":"  alpha","keys":"d<End>"},
+  {"name":"d-with-home-at-the-line-start-does-nothing","text":"abc","keys":"d<Home>"},
+  {"name":"c-with-home-removes-to-the-line-start","text":"  abc","keys":"$c<Home>X<Esc>"},
+  {"name":"end-in-insert-goes-past-the-last-character","text":"hello","keys":"lli<End>X<Esc>"},
+  {"name":"home-in-insert-goes-to-the-line-start","text":"hello","keys":"$i<Home>X<Esc>"},
+  {"name":"end-in-insert-on-an-empty-buffer","text":"","keys":"i<End>X<Esc>"},
+  {"name":"db-across-the-line-becomes-linewise","text":"abc\ndef","keys":"jdb"},
+  {"name":"db-across-the-line-keeps-the-indent","text":"  abc\ndef","keys":"jdb"},
+  {"name":"db-inside-the-line-is-characterwise","text":"alpha beta","keys":"wdb"},
+  {"name":"db-across-the-line-outside-the-indent-stays-characterwise","text":"abc def\nghi","keys":"jdb"},
+  {"name":"yb-across-the-line-outside-the-indent-stays-characterwise","text":"abc def\nghi","keys":"jyb"},
+  {"name":"de-across-the-line-with-text-after-it-stays-characterwise","text":"alpha\nbeta gamma","keys":"$de"},
+  {"name":"de-across-the-line-outside-the-indent-stays-characterwise","text":"abc def\nghi","keys":"$de"},
+  {"name":"undo-takes-back-a-change","text":"hello","keys":"cwbye<Esc>u"},
+  {"name":"undo-takes-back-an-insert-with-a-backspace","text":"hello","keys":"ia<BS>b<Esc>u"},
+  {"name":"japanese-cw-takes-one-class","text":"あいう、カタ","keys":"cwX<Esc>"},
+  {"name":"c-then-a-key-that-is-not-a-motion-is-dropped","text":"abc","keys":"cx"},
+  {"name":"y-then-a-key-that-is-not-a-motion-is-dropped","text":"abc","keys":"yx"},
+  {"name":"d-then-another-operator-is-dropped","text":"abc","keys":"dy"},
+  {"name":"y-then-another-operator-is-dropped","text":"abc","keys":"yd"},
+  {"name":"c-then-another-operator-is-dropped","text":"abc\ndef","keys":"cdX<Esc>"},
+  {"name":"v-then-esc-changes-nothing","text":"alpha","keys":"v<Esc>"},
+  {"name":"v-then-v-leaves-visual","text":"alpha","keys":"vlvx"},
+  {"name":"v-then-V-switches-to-linewise","text":"abc\ndef","keys":"vVd"},
+  {"name":"V-then-v-switches-to-characterwise","text":"abc\ndef","keys":"Vvd"},
+  {"name":"V-then-V-leaves-visual","text":"abc\ndef","keys":"VVx"},
+  {"name":"a-count-before-v-is-ignored","text":"abcdef","keys":"3vd"},
+  {"name":"V-then-esc-changes-nothing","text":"abc\ndef","keys":"V<Esc>x"},
+  {"name":"v-d-removes-one-character","text":"alpha","keys":"vd"},
+  {"name":"v-x-is-the-same-as-d","text":"alpha","keys":"vx"},
+  {"name":"v-l-d-removes-two-characters","text":"alpha","keys":"vld"},
+  {"name":"v-with-a-count-on-the-motion","text":"abcdefgh","keys":"v3ld"},
+  {"name":"v-y-yanks-the-selection","text":"alpha","keys":"vly"},
+  {"name":"v-c-changes-the-selection","text":"alpha","keys":"vlcXY<Esc>"},
+  {"name":"v-h-selects-backwards","text":"alpha","keys":"$vhd"},
+  {"name":"v-dollar-d-takes-the-newline","text":"abc\ndef","keys":"v$d"},
+  {"name":"v-dollar-y-takes-the-newline","text":"abc\ndef","keys":"v$y"},
+  {"name":"v-zero-d","text":"  abc","keys":"$v0d"},
+  {"name":"v-caret-d","text":"  abc","keys":"$v^d"},
+  {"name":"v-w-d","text":"alpha beta","keys":"vwd"},
+  {"name":"v-w-at-the-last-word","text":"alpha beta","keys":"wvwd"},
+  {"name":"v-b-d","text":"alpha beta","keys":"$vbd"},
+  {"name":"v-e-d","text":"alpha beta","keys":"ved"},
+  {"name":"v-home-d","text":"  abc","keys":"$v<Home>d"},
+  {"name":"v-end-d","text":"abc\ndef","keys":"v<End>d"},
+  {"name":"v-j-d-across-lines","text":"abc\ndef","keys":"vjd"},
+  {"name":"v-j-y-across-lines","text":"abc\ndef","keys":"vjy"},
+  {"name":"v-k-selects-upwards","text":"abc\ndef","keys":"jlvkd"},
+  {"name":"v-with-a-count-of-lines","text":"a\nb\nc\nd","keys":"v2jd"},
+  {"name":"v-j-keeps-the-wanted-column","text":"abcdef\nx\nabcdef","keys":"3lvjjd"},
+  {"name":"v-on-an-empty-line-d","text":"abc\n\ndef","keys":"jvd"},
+  {"name":"v-on-an-empty-line-y","text":"abc\n\ndef","keys":"jvy"},
+  {"name":"v-japanese-d","text":"あいうえお","keys":"vld"},
+  {"name":"v-japanese-y","text":"あいうえお","keys":"vlly"},
+  {"name":"v-c-across-lines","text":"abc\ndef","keys":"vjcX<Esc>"},
+  {"name":"v-o-keeps-the-same-range","text":"abcdef","keys":"3lvhhod"},
+  {"name":"v-o-then-a-motion-moves-the-other-end","text":"abcdef","keys":"3lvhhohd"},
+  {"name":"V-o-then-j-extends-the-other-end","text":"a\nb\nc\nd\ne","keys":"2jVkojd"},
+  {"name":"V-d-removes-the-line","text":"abc\ndef\nghi","keys":"jVd"},
+  {"name":"V-d-on-the-last-line","text":"abc\ndef","keys":"jVd"},
+  {"name":"V-j-d-removes-two-lines","text":"abc\ndef\nghi","keys":"Vjd"},
+  {"name":"V-with-a-count-of-lines","text":"a\nb\nc\nd","keys":"V2jd"},
+  {"name":"V-y-yanks-a-line","text":"abc\ndef","keys":"Vy"},
+  {"name":"V-j-y-yanks-two-lines","text":"abc\ndef","keys":"Vjy"},
+  {"name":"V-c-changes-the-line","text":"abc\ndef","keys":"VcX<Esc>"},
+  {"name":"V-j-c-changes-two-lines","text":"abc\ndef\nghi","keys":"VjcX<Esc>"},
+  {"name":"V-dollar-keeps-the-line-range","text":"abc\ndef","keys":"V$d"},
+  {"name":"V-zero-keeps-the-line-range","text":"  abc\ndef","keys":"V0d"},
+  {"name":"V-x-removes-the-line","text":"abc\ndef","keys":"Vx"},
+  {"name":"V-k-selects-upwards","text":"abc\ndef\nghi","keys":"jjVkd"},
+  {"name":"V-on-an-empty-line","text":"abc\n\ndef","keys":"jVd"},
+  {"name":"V-indented-line-keeps-the-indent-in-the-register","text":"abc\n  def","keys":"jVy"},
+  {"name":"V-y-then-p-puts-a-whole-line","text":"abc\ndef","keys":"Vyp"},
+  {"name":"v-y-then-p-puts-characters","text":"abcdef","keys":"vlyp"},
+  {"name":"v-d-then-undo","text":"alpha","keys":"vlldu"},
+  {"name":"V-d-then-undo","text":"abc\ndef","keys":"Vdu"},
+  {"name":"v-l-reaches-the-line-end","text":"abc\ndef","keys":"llvld"},
+  {"name":"v-l-with-a-big-count-stops-at-the-line-end","text":"abc\ndef","keys":"v9ld"},
+  {"name":"v-dollar-then-j-keeps-the-line-end","text":"abc\ndef","keys":"v$jd"},
+  {"name":"v-e-at-the-last-word","text":"alpha beta","keys":"wved"},
+  {"name":"a-count-before-V-selects-lines","text":"a\nb\nc\nd","keys":"3Vd"},
+  {"name":"v-does-not-take-the-whole-line-like-d-does","text":"  abc\n   ","keys":"vjd"},
+  {"name":"viewport-H-at-the-first-visible-line","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"H","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-M-keeps-the-middle-line","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"M","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-L-at-the-last-visible-line","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"L","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-d-scrolls-half-a-window","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-u-scrolls-half-a-window","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-f-is-page-down","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-b-is-page-up","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-page-down-is-control-f","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<PageDown>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-page-up-is-control-b","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<PageUp>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-d-count-persists","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"3<C-d><C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-u-count-persists","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"3<C-u><C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-d-stops-at-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":28,"column":1}},
+  {"name":"viewport-H-uses-first-nonblank","text":"  one\n\n  three","keys":"H","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":2,"column":1}},
+  {"name":"viewport-M-can-land-on-an-empty-line","text":"  one\n\n  three","keys":"M","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"viewport-L-uses-first-nonblank","text":"  one\n\n  three","keys":"L","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"viewport-middle-on-a-one-line-window","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"M","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-last-on-a-two-line-window","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"L","settings":["set scrolloff=0"],"viewport":{"visible_lines":2,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-control-d-on-a-twenty-line-window","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":5,"line":14,"column":1}},
+  {"name":"viewport-page-forward-from-the-bottom","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":15,"column":1}},
+  {"name":"viewport-page-back-from-the-top","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":6,"column":1}},
+  {"name":"viewport-page-forward-at-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":30,"column":1}},
+  {"name":"viewport-page-back-at-the-top","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":1}},
+  {"name":"viewport-height-one-control-keys","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f><C-b><C-d><C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-height-two-control-keys","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f><C-b><C-d><C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":2,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-control-d-large-count-sets-scroll","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"999<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-u-large-count-sets-scroll","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"999<C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-H-and-L-large-count-clamp","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"999H999L","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-M-ignores-a-count","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"999M","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-delete-H-is-linewise","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"dH","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":3,"line":7,"column":1}},
+  {"name":"viewport-change-L-is-linewise","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"cLX<Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":3,"line":7,"column":1}},
+  {"name":"viewport-yank-M-is-linewise","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"yM","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":3,"line":7,"column":1}},
+  {"name":"viewport-visual-control-d-yanks","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20","keys":"v<C-d>y<Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-visual-control-u-yanks","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20","keys":"v<C-u>y<Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-insert-page-down-then-escape","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20","keys":"i<PageDown><Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-insert-page-up-then-escape","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20","keys":"i<PageUp><Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
+  {"name":"viewport-control-d-at-eof-keeps-the-column","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":30,"column":2}},
+  {"name":"viewport-control-u-at-the-top-keeps-the-column","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-u>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":2}},
+  {"name":"viewport-page-forward-at-eof-sets-the-column-to-one","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":30,"column":2}},
+  {"name":"viewport-page-back-at-the-top-keeps-the-column","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":1,"line":1,"column":2}},
   {"name":"viewport-h1-page-forward","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":6,"line":6,"column":1}},
   {"name":"viewport-h1-page-back","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":6,"line":6,"column":1}},
   {"name":"viewport-h1-half-down","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12","keys":"<C-d>","settings":["set scrolloff=0"],"viewport":{"visible_lines":1,"first_visible":6,"line":6,"column":1}},
@@ -1807,7 +314,20 @@
   {"name":"viewport-large-pages-back","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"999<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":25,"column":1}},
   {"name":"viewport-visual-page-down-escape-scrolls","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"v<C-f><Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
   {"name":"viewport-visual-line-page-down-escape-scrolls","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"V<C-f><Esc>","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":10,"column":1}},
-{"name":"viewport-follow-up-h9-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"2k","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h9-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h10-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h10-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"4k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h11-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-up-h11-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"4k","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":10,"column":1}},{"name":"viewport-follow-down-h9-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"5j","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":18,"column":1}},{"name":"viewport-follow-down-h9-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":18,"column":1}},{"name":"viewport-follow-down-h10-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"5j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":19,"column":1}},{"name":"viewport-follow-down-h10-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":19,"column":1}},{"name":"viewport-follow-down-h11-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":20,"column":1}},{"name":"viewport-follow-down-h11-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"7j","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":20,"column":1}},{"name":"viewport-follow-down-clamps-at-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"99j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":15,"column":1}},{"name":"viewport-page-follow-up-from-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f>k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":30,"column":1}},
+  {"name":"viewport-follow-up-h9-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"2k","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-follow-up-h9-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-follow-up-h10-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-follow-up-h10-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"4k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-follow-up-h11-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"3k","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-follow-up-h11-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"4k","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":10,"column":1}},
+  {"name":"viewport-follow-down-h9-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"5j","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":18,"column":1}},
+  {"name":"viewport-follow-down-h9-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":9,"first_visible":10,"line":18,"column":1}},
+  {"name":"viewport-follow-down-h10-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"5j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":19,"column":1}},
+  {"name":"viewport-follow-down-h10-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":10,"line":19,"column":1}},
+  {"name":"viewport-follow-down-h11-minimal","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"6j","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":20,"column":1}},
+  {"name":"viewport-follow-down-h11-center","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80","keys":"7j","settings":["set scrolloff=0"],"viewport":{"visible_lines":11,"first_visible":10,"line":20,"column":1}},
+  {"name":"viewport-follow-down-clamps-at-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"99j","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":6,"line":15,"column":1}},
+  {"name":"viewport-page-follow-up-from-eof","text":"01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30","keys":"<C-f>k","settings":["set scrolloff=0"],"viewport":{"visible_lines":10,"first_visible":21,"line":30,"column":1}},
   {"name":"char-search-f-first","text":"axbxcxd","keys":"fx"},
   {"name":"char-search-f-count","text":"axbxcxd","keys":"2fx"},
   {"name":"char-search-F-first","text":"axbxcxd","keys":"$Fx"},
