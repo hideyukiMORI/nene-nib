@@ -23,6 +23,8 @@ std::string_view mode_label(EditMode mode, VimMode vim) noexcept
         return "VISUAL";
     case VimMode::visual_line:
         return "VISUAL LINE";
+    case VimMode::visual_block:
+        return "VISUAL BLOCK";
     }
     std::unreachable();
 }

@@ -2489,7 +2489,7 @@ struct VimKeyName
     VimSpecialKey key;
 };
 
-constexpr std::array<VimKeyName, 12> vim_key_names{{{"<Esc>", VimSpecialKey::escape},
+constexpr std::array<VimKeyName, 13> vim_key_names{{{"<Esc>", VimSpecialKey::escape},
                                                     {"<CR>", VimSpecialKey::enter},
                                                     {"<BS>", VimSpecialKey::backspace},
                                                     {"<C-r>", VimSpecialKey::control_r},
@@ -2497,6 +2497,7 @@ constexpr std::array<VimKeyName, 12> vim_key_names{{{"<Esc>", VimSpecialKey::esc
                                                     {"<C-u>", VimSpecialKey::control_u},
                                                     {"<C-f>", VimSpecialKey::control_f},
                                                     {"<C-b>", VimSpecialKey::control_b},
+                                                    {"<C-v>", VimSpecialKey::control_v},
                                                     {"<Home>", VimSpecialKey::home},
                                                     {"<End>", VimSpecialKey::end},
                                                     {"<PageUp>", VimSpecialKey::page_up},
@@ -2674,7 +2675,8 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
 }
 
 // 無名レジスタの種類を Vim の getregtype の言葉で言う。一度も使っていないレジスタは空（ADR 0015）。
-[[nodiscard]] std::string_view vim_register_kind(const VimRegister &value)
+// 矩形は Ctrl-V（0x16）に幅の 10 進が続く（ADR 0035 の決定 10・Vim 9.1 で実測）。
+[[nodiscard]] std::string vim_register_kind(const VimRegister &value)
 {
     switch (value.kind)
     {
@@ -2684,6 +2686,9 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
         return "v";
     case VimRegisterKind::lines:
         return "V";
+    case VimRegisterKind::block:
+        // 8 進のエスケープは 3 桁で止まるので、続く幅の数字と混ざらない（"\x16" は混ざる）。
+        return "\026" + std::to_string(value.width.has_value() ? value.width.value().columns : 0);
     }
     std::unreachable();
 }

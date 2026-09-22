@@ -91,6 +91,7 @@ constexpr char32_t escape_character = U'\\';
     switch (range.kind)
     {
     case VimRegisterKind::uninitialized:
+    case VimRegisterKind::block:
         // テキストオブジェクトの範囲は文字単位か行単位でだけ作られる。
         std::unreachable();
     case VimRegisterKind::lines:

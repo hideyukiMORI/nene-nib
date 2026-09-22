@@ -16,6 +16,8 @@
 #include "OffsetRange.hpp"
 #include "SelectionAnchoring.hpp"
 #include "TextEncoding.hpp"
+#include "VimBlockEdit.hpp"
+#include "VimBlockRange.hpp"
 #include "VimEffect.hpp"
 #include "VimState.hpp"
 
@@ -97,6 +99,12 @@ class EditorController final
     void perform(const core::VimNewLine &);
     void perform(const core::VimInsertAt &effect);
     void perform(const core::VimReplaceRange &effect);
+    // 矩形の 3 つ（ADR 0035 の決定 3）。行ごとの置き換えを 1 つの Edit に畳んで写すので、
+    // undo は矩形 1 つで 1 単位になる。
+    void perform(const core::VimRemoveBlock &effect);
+    void perform(const core::VimReplaceBlock &effect);
+    void perform(const core::VimInsertBlock &effect);
+    void apply_block(const std::vector<core::VimBlockEdit> &edits, core::Offset caret);
     // `.` の再生（ADR 0030 の決定 7）。鍵を同じ accept の経路へ流すだけで、`.` は記録されない
     // ので再帰は深さ 1 で止まる。UI・IME・描画は通らない。
     void perform(const core::VimReplay &effect);
@@ -120,6 +128,9 @@ class EditorController final
     void paste_clipboard();
     // 描く選択と Ctrl+C / Ctrl+X が覆う本文は同じ 1 本（ADR 0018 の決定 5）。
     [[nodiscard]] core::OffsetRange highlighted_range() const;
+    // 矩形 VISUAL のあいだだけ値を持つ（ADR 0035 の決定 2・8）。描く選択も Ctrl+C / Ctrl+X も
+    // 同じ行ごとの範囲を使う。
+    [[nodiscard]] std::optional<core::VimBlockRange> block_selection() const;
     [[nodiscard]] std::vector<LineView> visible_lines() const;
     [[nodiscard]] std::optional<CompositionView> composed() const;
     // Vim の NORMAL では IME を切ってあるので変換は来ないはずだが、来たら捨てる（決定 4）。

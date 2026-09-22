@@ -14,6 +14,7 @@
 #include "StatusBarHit.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarHit.hpp"
+#include "VimMode.hpp"
 #include "WindowFailure.hpp"
 
 #include <windows.h>
@@ -119,6 +120,8 @@ class EditorWindow final
     std::int32_t zoom_wheel_remainder_ = 0;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
+    // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。
+    core::VimMode vim_mode_ = core::VimMode::normal;
     // Vim の NORMAL に入る前の IME の開閉。控えが在ることが「いま切ってある」でもある（決定 5）。
     ImeOpenState ime_open_ = ImeOpenState::unrecorded;
     std::unique_ptr<Direct2DRenderer> renderer_;

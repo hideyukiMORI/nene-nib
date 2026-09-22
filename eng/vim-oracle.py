@@ -75,6 +75,7 @@ DEFAULT_SETTINGS = ["set nocompatible", "set backspace=indent,eol,start"]
 # fixture の記法 → Vim の二重引用符つき文字列の記法。写すのはここ 1 か所だけ（C++ 側は別の 1 か所）。
 KEY_NAMES = {"<Esc>": "\\<Esc>", "<CR>": "\\<CR>", "<BS>": "\\<BS>", "<C-r>": "\\<C-r>",
              "<C-d>": "\\<C-d>", "<C-u>": "\\<C-u>", "<C-f>": "\\<C-f>", "<C-b>": "\\<C-b>",
+             "<C-v>": "\\<C-v>",
              "<Home>": "\\<Home>", "<End>": "\\<End>",
              "<PageUp>": "\\<PageUp>", "<PageDown>": "\\<PageDown>"}
 BANNER = "// 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）"
@@ -197,6 +198,9 @@ def literal(value: str) -> str:
     """A C++ string literal. The header is UTF-8 and the build passes /utf-8, so bytes pass through."""
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     escaped = escaped.replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
+    # 矩形レジスタの種類は Ctrl-V (0x16) に幅の 10 進が続く。8 進のエスケープは 3 桁で止まる
+    # ので続く数字と混ざらない（16 進の \\x は貪欲に読むので使えない・ADR 0035 の決定 10）。
+    escaped = escaped.replace("\x16", "\\026")
     if any(character < " " or character == "\x7f" for character in escaped):
         raise ValueError(f"unexpected control character in {value!r}")
     return f'"{escaped}"'

@@ -9,6 +9,11 @@
 #include "VimActionBinding.hpp"
 #include "VimActionGroup.hpp"
 #include "VimBinding.hpp"
+#include "VimBlockEdit.hpp"
+#include "VimBlockExtent.hpp"
+#include "VimBlockLine.hpp"
+#include "VimBlockRange.hpp"
+#include "VimBlockWidth.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacterExtent.hpp"
 #include "VimCharacterSearch.hpp"
@@ -18,6 +23,7 @@
 #include "VimCharacterSearchScan.hpp"
 #include "VimColumnWish.hpp"
 #include "VimInputWait.hpp"
+#include "VimInsertBlock.hpp"
 #include "VimLineExtent.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimMotionRange.hpp"
@@ -27,8 +33,10 @@
 #include "VimPutSide.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimRemoveBlock.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimRepeatRecord.hpp"
+#include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
@@ -74,6 +82,7 @@ namespace
 constexpr std::size_t single_step = 1;
 constexpr std::size_t decimal_base = 10;
 constexpr char32_t line_feed = U'\n';
+constexpr char32_t tab_character = U'\t';
 constexpr char carriage_return = '\r';
 // Ctrl-r は文字としては制御文字なので、表に載せる値は名前で書く（原文に制御文字を置かない）。
 constexpr char32_t control_r_character = 0x12;
@@ -579,6 +588,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     {
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return caret;
     case VimMode::normal:
     case VimMode::insert:
@@ -948,6 +958,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     switch (range.kind)
     {
     case VimRegisterKind::uninitialized:
+    case VimRegisterKind::block:
         // Motion ranges are constructed only as characterwise or linewise.
         std::unreachable();
     case VimRegisterKind::lines:
@@ -991,6 +1002,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     switch (range.kind)
     {
     case VimRegisterKind::uninitialized:
+    case VimRegisterKind::block:
         // Motion ranges are constructed only as characterwise or linewise.
         std::unreachable();
     case VimRegisterKind::characters:
@@ -1024,6 +1036,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     switch (range.kind)
     {
     case VimRegisterKind::uninitialized:
+    case VimRegisterKind::block:
         // Motion ranges are constructed only as characterwise or linewise.
         std::unreachable();
     case VimRegisterKind::characters:
@@ -1112,6 +1125,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return VimStep{std::move(next), VimMoveTo{destination}};
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, destination}}};
     }
     std::unreachable();
@@ -1328,12 +1342,250 @@ character_search_position(const VimEditorView &view, const VimState &state,
                        EditBoundary::separate};
 }
 
+// ---------------------------------------------------------------- 矩形 VISUAL（ADR 0035）
+
+// 矩形が覆う形。`$` が立っているかどうかだけを欲しい列から借りる（決定 2）。
+[[nodiscard]] VimBlockRange block_of(const VimState &state, const VimEditorView &view)
+{
+    return vim_block_range_for(view.text, view.selection, state.wanted_column);
+}
+
+// 矩形の左上。取ったあとも消したあとも置き換えたあとも Vim はここへキャレットを置く（実測）。
+// 端で切れた文字を消すと残る空白のぶんだけ右へ寄る。
+[[nodiscard]] Offset block_caret(const VimBlockRange &block, std::size_t kept)
+{
+    return Offset{block.lines.front().range.begin.value + kept};
+}
+
+[[nodiscard]] VimRegister block_register(const TextBuffer &text, const VimBlockRange &block)
+{
+    return VimRegister{vim_block_text(text, block), VimRegisterKind::block, block.width};
+}
+
+// 矩形の右の桁。幅は 1 以上なので左より手前には来ない。
+[[nodiscard]] std::size_t block_right(const VimBlockRange &block) noexcept
+{
+    return block.left.value + block.width.columns - single_step;
+}
+
+// r（決定 4）。行ごとに「矩形が覆った桁の数」だけ同じ文字を書く＝ Tab の上では桁の数ぶん並ぶ
+// （Issue #112 で実測）。矩形より手前で終わる行には何も書かない。
+[[nodiscard]] std::vector<VimBlockEdit>
+replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_t target)
+{
+    const std::size_t left = block.left.value;
+    const std::size_t right = block_right(block);
+    std::vector<VimBlockEdit> edits;
+    for (std::size_t index = 0; index < block.lines.size(); ++index)
+    {
+        const VimBlockLine &line = block.lines.at(index);
+        const std::size_t columns =
+            virtual_width(text.line_text(LineNumber{block.first.value + index}));
+        if (columns < left || is_empty(line.range))
+        {
+            continue;
+        }
+        std::string body(line.keep_lead, ' ');
+        const std::size_t covered = std::min(right, columns) - left + single_step;
+        for (std::size_t step = 0; step < covered; ++step)
+        {
+            append_utf8(body, target);
+        }
+        body.append(line.keep_tail, ' ');
+        edits.push_back(VimBlockEdit{line.range, std::move(body)});
+    }
+    return edits;
+}
+
+[[nodiscard]] VimStep block_operated(const VimState &state, const VimEditorView &view,
+                                     VimOperator operation)
+{
+    const VimBlockRange block = block_of(state, view);
+    VimState next = vim_resting_from(state, block_register(view.text, block));
+    switch (operation)
+    {
+    case VimOperator::remove:
+        return VimStep{std::move(next), vim_remove_block(block)};
+    case VimOperator::yank:
+        return VimStep{std::move(next), VimMoveTo{block_caret(block, 0)}};
+    case VimOperator::change:
+        // `c` は範囲外（決定 5）。visual_selection_action が先に取り消す。
+        break;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep replaced_block(const VimState &state, const VimEditorView &view,
+                                     char32_t target)
+{
+    const VimBlockRange block = block_of(state, view);
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplaceBlock{replaced_block_edits(view.text, block, target),
+                                   block_caret(block, block.lines.front().keep_lead)}};
+}
+
+// 矩形レジスタの行（本文は LF で区切られ、末尾に改行は無い）。
+[[nodiscard]] std::vector<std::string> block_register_lines(std::string_view body)
+{
+    std::vector<std::string> lines;
+    std::size_t at = 0;
+    while (true)
+    {
+        const std::size_t found = body.find('\n', at);
+        const std::size_t end = found == std::string_view::npos ? body.size() : found;
+        lines.emplace_back(body.substr(at, end - at));
+        if (found == std::string_view::npos)
+        {
+            return lines;
+        }
+        at = found + single_step;
+    }
+}
+
+// 貼り付ける桁（決定 6）。`p` は今いる文字の次の桁、`P` はその文字の桁。空行は 1 桁目（実測）。
+[[nodiscard]] std::size_t put_column(const TextBuffer &text, Offset caret, VimPutSide side)
+{
+    const LineNumber line = line_of(text, caret);
+    if (text.line_start(line).value >= text.line_end(line).value)
+    {
+        return single_step;
+    }
+    return side == VimPutSide::after ? virtual_column_end(text, caret).value + single_step
+                                     : virtual_column(text, caret).value;
+}
+
+// 貼る本文が始まる桁までに入れる空白の数。行が桁より短ければ末尾まで埋め、桁が Tab の途中に
+// 落ちればその Tab の左側ぶんを空白にする（固定 Vim も Tab だけを割る・実測）。
+[[nodiscard]] std::size_t put_lead(const TextBuffer &text, LineNumber line, std::size_t column)
+{
+    const std::string content = text.line_text(line);
+    const std::size_t columns = virtual_width(content);
+    if (column > columns)
+    {
+        return column - single_step - columns;
+    }
+    const std::size_t byte = byte_at_column(content, VirtualColumn{column});
+    const std::size_t begins = column_of(content, byte).value;
+    if (begins < column && code_point_at(content, Offset{byte}) == tab_character)
+    {
+        return column - begins;
+    }
+    return 0;
+}
+
+// 貼る 1 行ぶんの本文。回数ぶん並べ、`padded` 個のうしろだけを幅まで空白で埋める。貼り先の
+// 行に本文が続かないときは最後の 1 つを埋めない（固定 Vim の block_prep と同じ・実測）。
+[[nodiscard]] std::string put_block_body(const std::string &line, std::size_t width,
+                                         std::size_t count, std::size_t padded)
+{
+    const std::size_t filled = virtual_width(line);
+    const std::size_t spaces = width > filled ? width - filled : 0;
+    std::string body;
+    for (std::size_t step = 0; step < count; ++step)
+    {
+        body += line;
+        if (step < padded)
+        {
+            body.append(spaces, ' ');
+        }
+    }
+    return body;
+}
+
+// 1 行ぶんの貼付。行が桁より短ければ手前を空白で埋め、桁が Tab の途中に落ちればその Tab を
+// 空白に割って置き換える（固定 Vim も Tab だけを割る・実測）。
+[[nodiscard]] VimBlockEdit put_block_line(const TextBuffer &text, LineNumber line,
+                                          std::size_t column, const std::string &body)
+{
+    const std::string content = text.line_text(line);
+    const Offset start = text.line_start(line);
+    const std::size_t lead = put_lead(text, line, column);
+    std::string utf8(lead, ' ');
+    utf8 += body;
+    if (column > virtual_width(content))
+    {
+        return VimBlockEdit{OffsetRange{text.line_end(line), text.line_end(line)}, std::move(utf8)};
+    }
+    const std::size_t byte = byte_at_column(content, VirtualColumn{column});
+    if (lead == 0)
+    {
+        return VimBlockEdit{OffsetRange{Offset{start.value + byte}, Offset{start.value + byte}},
+                            std::move(utf8)};
+    }
+    utf8.append(column_end_of(content, byte).value - column + single_step, ' ');
+    return VimBlockEdit{
+        OffsetRange{Offset{start.value + byte},
+                    Offset{start.value + next_code_point(content, Offset{byte}).value}},
+        std::move(utf8)};
+}
+
+// 行が足りないぶんは文書の末尾へ新しい行として足す（決定 6）。桁までは空白で埋める。
+[[nodiscard]] VimBlockEdit appended_block_lines(const TextBuffer &text, std::size_t column,
+                                                const std::vector<std::string> &rest)
+{
+    const Offset at = text.line_end(LineNumber{text.line_count()});
+    std::string utf8;
+    for (const std::string &body : rest)
+    {
+        utf8 += '\n';
+        utf8.append(column - single_step, ' ');
+        utf8 += body;
+    }
+    return VimBlockEdit{OffsetRange{at, at}, std::move(utf8)};
+}
+
+// 貼り先の行に本文が続くかどうか。続くときは矩形の形を保つために右も空白で埋める（実測）。
+[[nodiscard]] std::size_t put_padded(const TextBuffer &text, LineNumber line, std::size_t column,
+                                     std::size_t count)
+{
+    return column <= virtual_width(text.line_text(line)) ? count : count - single_step;
+}
+
+[[nodiscard]] VimInsertBlock put_block(const VimState &state, const TextBuffer &text, Offset caret,
+                                       VimPutSide side)
+{
+    const std::vector<std::string> lines = block_register_lines(state.unnamed_register.text);
+    const std::size_t width = state.unnamed_register.width.has_value()
+                                  ? state.unnamed_register.width.value().columns
+                                  : single_step;
+    const std::size_t count = count_of(state.count);
+    const std::size_t column = put_column(text, caret, side);
+    const std::size_t first = line_of(text, caret).value;
+    const std::size_t last = std::min(first + lines.size() - single_step, text.line_count());
+    std::vector<VimBlockEdit> edits;
+    std::vector<std::string> rest;
+    for (std::size_t index = 0; index < lines.size(); ++index)
+    {
+        const std::size_t number = first + index;
+        if (number > last)
+        {
+            rest.push_back(put_block_body(lines.at(index), width, count, count - single_step));
+            continue;
+        }
+        const LineNumber line{number};
+        edits.push_back(put_block_line(
+            text, line, column,
+            put_block_body(lines.at(index), width, count, put_padded(text, line, column, count))));
+    }
+    const Offset at{edits.front().range.begin.value + put_lead(text, LineNumber{first}, column)};
+    if (!rest.empty())
+    {
+        edits.push_back(appended_block_lines(text, column, rest));
+    }
+    return VimInsertBlock{std::move(edits), at};
+}
+
 [[nodiscard]] VimStep put_step(const VimState &state, const TextBuffer &text, Offset caret,
                                VimPutSide side)
 {
     if (state.unnamed_register.text.empty())
     {
         return cancelled(state);
+    }
+    if (state.unnamed_register.kind == VimRegisterKind::block)
+    {
+        return VimStep{vim_resting_from(state, state.unnamed_register),
+                       put_block(state, text, caret, side)};
     }
     auto body = repeated(state.unnamed_register.text, count_of(state.count));
     if (!body.has_value())
@@ -1345,6 +1597,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     {
     case VimRegisterKind::uninitialized:
         // An uninitialized register is empty and returned above before put dispatch.
+    case VimRegisterKind::block:
+        // A block register is handled above, before the characterwise / linewise dispatch.
         std::unreachable();
     case VimRegisterKind::characters:
         return VimStep{std::move(next), put_characters(text, caret, std::move(body).value(), side)};
@@ -1379,6 +1633,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMode::visual_line:
         return vim_visual_range(view.text, view.selection, state.mode).range;
     case VimMode::insert:
+    // 矩形は 1 つの範囲では表せない。replaced_character が先に行ごとの経路へ分かれる（決定 4）。
+    case VimMode::visual_block:
         return std::nullopt;
     }
     std::unreachable();
@@ -1386,6 +1642,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
 
 [[nodiscard]] VimStep started_replacement(const VimState &state, const VimEditorView &view)
 {
+    if (state.mode == VimMode::visual_block)
+    {
+        return started_prefix(state, VimPrefix::r);
+    }
     if (!replacement_range(state, view).has_value())
     {
         return VimStep{finished_input_wait(state), VimNoEffect{}};
@@ -1413,14 +1673,28 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return result;
 }
 
+// r が書けない文字（改行は NORMAL だけ・制御文字と DEL は書けない・ADR 0029）。
+[[nodiscard]] bool unsupported_replacement(VimMode mode, char32_t target) noexcept
+{
+    const bool newline = target == line_feed || target == carriage_return_character;
+    return (newline && mode != VimMode::normal) || (!newline && target < U' ' && target != U'\t') ||
+           target == U'\x7f';
+}
+
 [[nodiscard]] VimStep replaced_character(const VimState &state, const VimEditorView &view,
                                          char32_t target)
 {
+    if (unsupported_replacement(state.mode, target))
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    if (state.mode == VimMode::visual_block)
+    {
+        return replaced_block(state, view, target);
+    }
     const bool newline = target == line_feed || target == carriage_return_character;
-    const bool unsupported = (newline && state.mode != VimMode::normal) ||
-                             (!newline && target < U' ' && target != U'\t') || target == U'\x7f';
     const auto range = replacement_range(state, view);
-    if (unsupported || !range.has_value())
+    if (!range.has_value())
     {
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
@@ -1466,6 +1740,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimSpecialKey::control_u:
     case VimSpecialKey::control_f:
     case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
     std::unreachable();
@@ -1594,6 +1869,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return collapsed_at(caret);
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return Selection{selection.anchor, caret};
     }
     std::unreachable();
@@ -1690,6 +1966,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     switch (mode)
     {
     case VimMode::visual:
+    case VimMode::visual_block:
         return forward_characters(text, caret, steps);
     case VimMode::visual_line:
     {
@@ -1713,7 +1990,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     next.mode = mode;
     const Offset moved = widened(text, caret, state, mode);
     next.wanted_column = state.wanted_column;
-    if (mode == VimMode::visual && moved != caret)
+    if ((mode == VimMode::visual || mode == VimMode::visual_block) && moved != caret)
     {
         next.wanted_column =
             wanted_after(text, wanted_column_of(text, state, caret), moved, VimMotion::right);
@@ -1895,7 +2172,27 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 
 [[nodiscard]] VimMode visual_mode_of(const VimVisualExtent &extent) noexcept
 {
-    return std::holds_alternative<VimLineExtent>(extent) ? VimMode::visual_line : VimMode::visual;
+    if (std::holds_alternative<VimLineExtent>(extent))
+    {
+        return VimMode::visual_line;
+    }
+    if (std::holds_alternative<VimBlockExtent>(extent))
+    {
+        return VimMode::visual_block;
+    }
+    return VimMode::visual;
+}
+
+// `$` で取った矩形は「各行の内容の終わりまで」を覚え直す（ADR 0035 の決定 7・実測）。
+// 桁で覚えた矩形は選び直した両端の桁がそのまま幅になるので、欲しい列は空のままでよい。
+[[nodiscard]] std::optional<VimWantedColumn> replayed_wanted(const VimVisualExtent &extent) noexcept
+{
+    const auto *block = std::get_if<VimBlockExtent>(&extent);
+    if (block == nullptr || block->wish == VimColumnWish::at_column)
+    {
+        return std::nullopt;
+    }
+    return VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
 }
 
 // VISUAL の記録の再生（ADR 0033 の決定 4・6）。step が記録の種類の VISUAL へ切り替えて大きさを
@@ -1907,6 +2204,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.mode = visual_mode_of(extent);
+    next.wanted_column = replayed_wanted(extent);
     next.recording = VimRepeatRecord{std::nullopt, {}, extent};
     return VimStep{std::move(next), VimReplay{record.keys, extent}};
 }
@@ -2005,6 +2303,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return VimMode::normal;
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return mode;
     }
     std::unreachable();
@@ -2077,6 +2376,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return VimStep{std::move(next), VimMoveTo{destination}};
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, destination}}};
     }
     std::unreachable();
@@ -2363,6 +2663,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return acted(state, view, VimAction::scroll_half_down);
     case VimSpecialKey::control_u:
         return acted(state, view, VimAction::scroll_half_up);
+    case VimSpecialKey::control_v:
+        return entered_visual(state, view.text, view.selection.caret, VimMode::visual_block);
     }
     std::unreachable();
 }
@@ -2399,6 +2701,19 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return step;
 }
 
+// 矩形の `O`。行はそのままで、両端の桁だけを入れ替える（ADR 0035 の決定 3・Vim 9.1 で実測）。
+[[nodiscard]] VimStep block_column_swapped(const VimState &state, const VimEditorView &view)
+{
+    const TextBuffer &text = view.text;
+    const LineNumber anchor_line = line_of(text, view.selection.anchor);
+    const LineNumber caret_line = line_of(text, view.selection.caret);
+    const VirtualColumn anchor_column = caret_virtual_column(text, view.selection.anchor);
+    const VirtualColumn caret_column = caret_virtual_column(text, view.selection.caret);
+    return VimStep{visual_resting(state, state.mode),
+                   VimSelect{Selection{offset_at_virtual_column(text, anchor_line, caret_column),
+                                       offset_at_virtual_column(text, caret_line, anchor_column)}}};
+}
+
 // VISUAL の移動。anchor はそのままで caret だけ動く（決定 3）。欲しい列は NORMAL と同じ。
 [[nodiscard]] VimStep visual_moved(const VimState &state, const VimEditorView &view,
                                    VimAction action)
@@ -2419,6 +2734,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 [[nodiscard]] VimStep visual_operated(const VimState &state, const VimEditorView &view,
                                       VimOperator operation)
 {
+    if (state.mode == VimMode::visual_block)
+    {
+        return block_operated(state, view, operation);
+    }
     const VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
     switch (operation)
     {
@@ -2432,6 +2751,26 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
+// VISUAL の `c`。矩形は範囲外なので鍵を捨てて矩形のまま残る（ADR 0035 の決定 5）。
+[[nodiscard]] VimStep visual_changed(const VimState &state, const VimEditorView &view)
+{
+    return state.mode == VimMode::visual_block ? visual_unchanged(state)
+                                               : visual_operated(state, view, VimOperator::change);
+}
+
+// VISUAL の `o` `O`。矩形の `O` だけが行を変えずに桁を入れ替え、ほかは対角の角へ移る
+// （ADR 0018 の決定 3 / ADR 0035 の決定 3）。
+[[nodiscard]] VimStep visual_swapped(const VimState &state, const VimEditorView &view,
+                                     VimAction action)
+{
+    if (state.mode == VimMode::visual_block && action == VimAction::open_line_above)
+    {
+        return block_column_swapped(state, view);
+    }
+    return VimStep{visual_resting(state, state.mode),
+                   VimSelect{Selection{view.selection.caret, view.selection.anchor}}};
+}
+
 [[nodiscard]] VimStep visual_selection_action(const VimState &state, const VimEditorView &view,
                                               VimAction action)
 {
@@ -2441,7 +2780,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     }
     if (action == VimAction::change_operator)
     {
-        return visual_operated(state, view, VimOperator::change);
+        return visual_changed(state, view);
     }
     if (action == VimAction::yank_operator)
     {
@@ -2449,8 +2788,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     }
     if (action == VimAction::open_line_below || action == VimAction::open_line_above)
     {
-        return VimStep{visual_resting(state, state.mode),
-                       VimSelect{Selection{view.selection.caret, view.selection.anchor}}};
+        return visual_swapped(state, view, action);
     }
     if (action == VimAction::visual)
     {
@@ -2482,6 +2820,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimActionGroup::edit_range:
         return visual_selection_action(state, view, action);
     case VimActionGroup::insert_object:
+        // 矩形の `i` `a`（テキストオブジェクト）は範囲外（ADR 0035 の決定 5）。
+        return state.mode == VimMode::visual_block ? visual_unchanged(state)
+                                                   : input_action(state, view, action);
     case VimActionGroup::input_wait:
         return input_action(state, view, action);
     case VimActionGroup::search:
@@ -2545,6 +2886,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return visual_acted(state, view, VimAction::scroll_half_down);
     case VimSpecialKey::control_u:
         return visual_acted(state, view, VimAction::scroll_half_up);
+    case VimSpecialKey::control_v:
+        return visual_switched(state, view.selection, VimMode::visual_block);
     }
     std::unreachable();
 }
@@ -2658,6 +3001,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimSpecialKey::control_u:
     case VimSpecialKey::control_f:
     case VimSpecialKey::control_b:
+    // INSERT の Ctrl+V は窓が OS の貼付のまま扱うのでここへ来ない（ADR 0035 の決定 9）。
+    case VimSpecialKey::control_v:
         return VimStep{state, VimNoEffect{}};
     case VimSpecialKey::page_up:
         return insert_page_moved(state, view, VimScrollDirection::up);
@@ -2704,6 +3049,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimSpecialKey::end:
     case VimSpecialKey::page_up:
     case VimSpecialKey::page_down:
+    case VimSpecialKey::control_v:
         return std::nullopt;
     }
     std::unreachable();
@@ -2829,6 +3175,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return visual_acted(state, view, action);
     }
     std::unreachable();
@@ -2873,6 +3220,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return insert_character(state, key);
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return visual_character(state, view, key);
     }
     std::unreachable();
@@ -2888,6 +3236,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return insert_special(state, view, key);
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return visual_special(state, view, key);
     }
     std::unreachable();
@@ -2904,6 +3253,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimMode::normal:
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return searched_key(state, view, key);
     }
     std::unreachable();
@@ -2981,6 +3331,18 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     return true;
 }
+[[nodiscard]] bool changes_text(const VimRemoveBlock &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool changes_text(const VimReplaceBlock &) noexcept
+{
+    return true;
+}
+[[nodiscard]] bool changes_text(const VimInsertBlock &) noexcept
+{
+    return true;
+}
 
 [[nodiscard]] bool changes_text(const VimEffect &effect) noexcept
 {
@@ -3014,6 +3376,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimSpecialKey::control_u:
     case VimSpecialKey::control_f:
     case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
         return false;
     }
     std::unreachable();
@@ -3135,6 +3498,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         std::unreachable();
     case VimMode::visual_line:
         return VimLineExtent{lines};
+    case VimMode::visual_block:
+        return VimBlockExtent{lines,
+                              state.wanted_column.has_value() ? state.wanted_column.value().wish
+                                                              : VimColumnWish::at_column,
+                              block_of(state, view).width};
     case VimMode::visual:
         return character_extent_of(view.text, state, view.selection, lines);
     }
@@ -3184,6 +3552,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
     case VimMode::visual:
     case VimMode::visual_line:
+    case VimMode::visual_block:
         return visual_recorded(before, view, std::move(step), key);
     case VimMode::insert:
         step.next = insert_recording(before, std::move(step.next), key);
