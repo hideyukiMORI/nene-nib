@@ -20,12 +20,16 @@ that a PR can paste instead of a sentence.
     moved ends with 1 unless it is named by --allow. A scope new in head is recorded only.
     Without an exe (no --base-tests / --head-tests and no --build) the counts are "未測" and
     nothing fails; build/nib_tests.exe is never used because it may be older than HEAD.
+    If the scopes array cannot be read from base or head, the checks cannot be compared at all,
+    so the record carries an "error" after (1) and (2) and the exit is 2: an empty comparison
+    must not look like a success (the same rule as Issue #131).
 
 --build makes a Debug nib_tests per ref in build/protected-<short sha>, the way
 eng/build-release.ps1 does (eng/toolchain.ps1, a temporary build/worktree-<short sha> when the
 ref is not the clean HEAD). An existing build/protected-<short sha>/nib_tests.exe is reused.
 The default build/ and build-release/ are not touched. The record is written to
-out/protected/<short head>.json. Exit: 0 clean, 1 protected difference, 2 unknown ref.
+out/protected/<short head>.json. Exit: 0 clean, 1 protected difference, 2 unknown ref or
+no scopes array.
 Not a gate (QLT-010): it is run by hand and its output is pasted into the PR record.
 """
 
@@ -154,6 +158,14 @@ def parse_scopes(source: str | None) -> list[str]:
     return SCOPE_ENTRY.findall(block.group(1)) if block else []
 
 
+def scopes_error(scopes: dict[str, list[str]]) -> str | None:
+    """ref ごとの scope の一覧のどれかが空なら「測れない」の理由を返す純関数。空の比較を成功に見せない。"""
+    for ref, names in scopes.items():
+        if not names:
+            return f"scopes not found in {ref}:{UNIT_TESTS}"
+    return None
+
+
 def fixtures_section(base: str, head: str) -> dict:
     diff = git("diff", "-U0", base, head, "--", FIXTURES_HEADER).stdout
     header = classify_header_diff(diff)
@@ -239,10 +251,8 @@ def count_checks(executable: Path | None, scope: str) -> dict:
     return {"checks": UNMEASURED, "state": f"失敗 (exit {result.returncode})"}
 
 
-def scopes_section(base: str, head: str, base_exe: Path | None, head_exe: Path | None,
-                   allowed: set[str]) -> list[dict]:
-    base_scopes = parse_scopes(show(base, UNIT_TESTS))
-    head_scopes = parse_scopes(show(head, UNIT_TESTS))
+def scopes_section(base_scopes: list[str], head_scopes: list[str], base_exe: Path | None,
+                   head_exe: Path | None, allowed: set[str]) -> list[dict]:
     rows = []
     for scope in head_scopes + [name for name in base_scopes if name not in head_scopes]:
         before = count_checks(base_exe, scope) if scope in base_scopes else None
@@ -273,6 +283,10 @@ def describe(record: dict) -> list[str]:
               for kind in ("deleted", "changed") for entry in fixtures[kind]]
     changed = [path for path, state in record["protectedFiles"].items() if state == "changed"]
     lines.append(f"Protected: files changed {changed if changed else 'none'} (recorded only)")
+    if "error" in record:
+        lines.append(f"Protected: error {record['error']}")
+        lines.append(f"Protected: exit {record['exit']} ({record['path']})")
+        return lines
     for row in record["scopes"]:
         if row["result"] not in ("同じ", UNMEASURED) or any(
                 side and "state" in side for side in (row["base"], row["head"])):
@@ -282,8 +296,6 @@ def describe(record: dict) -> list[str]:
             lines.append(f"Protected:   {row['scope']} {row['result']} {before} -> {after}{mark}")
     same = sum(1 for row in record["scopes"] if row["result"] == "同じ")
     unmeasured = sum(1 for row in record["scopes"] if row["result"] == UNMEASURED)
-    if not record["scopes"]:
-        lines.append(f"Protected: no scopes array was read from {UNIT_TESTS} (checks not compared)")
     lines.append(f"Protected: scopes {len(record['scopes'])} / same {same}"
                  f" / {UNMEASURED} {unmeasured}")
     lines.append(f"Protected: base exe {record['tests']['base']}")
@@ -330,23 +342,30 @@ def main(argv: list[str]) -> int:
             print(f"Protected: unknown ref {name}", file=sys.stderr)
             return 2
     allowed = {scope if scope.startswith("--") else f"--{scope}" for scope in arguments.allow}
-    base_exe, base_note = tests_for(base, arguments.base_tests, arguments.build)
-    head_exe, head_note = tests_for(head, arguments.head_tests, arguments.build)
     short = git("rev-parse", "--short=7", head).stdout.strip()
     record = {
         "base": {"ref": arguments.base, "commit": base,
                  "short": git("rev-parse", "--short=7", base).stdout.strip()},
         "head": {"ref": arguments.head, "commit": head, "short": short},
         "allow": sorted(allowed),
-        "tests": {"base": base_note, "head": head_note},
         "fixtures": fixtures_section(base, head),
         "protectedFiles": protected_section(base, head),
-        "scopes": scopes_section(base, head, base_exe, head_exe, allowed),
     }
-    fixtures = record["fixtures"]
-    failing = bool(fixtures["deleted"] or fixtures["changed"]) or any(
-        row["fails"] for row in record["scopes"])
-    record["exit"] = 1 if failing else 0
+    base_scopes = parse_scopes(show(base, UNIT_TESTS))
+    head_scopes = parse_scopes(show(head, UNIT_TESTS))
+    error = scopes_error({arguments.base: base_scopes, arguments.head: head_scopes})
+    if error is not None:
+        record["error"] = error
+        record["exit"] = 2
+    else:
+        base_exe, base_note = tests_for(base, arguments.base_tests, arguments.build)
+        head_exe, head_note = tests_for(head, arguments.head_tests, arguments.build)
+        record["tests"] = {"base": base_note, "head": head_note}
+        record["scopes"] = scopes_section(base_scopes, head_scopes, base_exe, head_exe, allowed)
+        fixtures = record["fixtures"]
+        failing = bool(fixtures["deleted"] or fixtures["changed"]) or any(
+            row["fails"] for row in record["scopes"])
+        record["exit"] = 1 if failing else 0
     OUTPUT.mkdir(parents=True, exist_ok=True)
     path = OUTPUT / f"{short}.json"
     record["path"] = path.relative_to(ROOT).as_posix()

@@ -83,6 +83,14 @@ class Scopes(unittest.TestCase):
         self.assertIn("--vim-search-highlight", scopes)
         self.assertTrue(all(scope.startswith("--") for scope in scopes))
 
+    def test_a_source_without_the_scopes_array_cannot_be_measured(self):
+        source = 'int main() {\n    constexpr std::array contracts{{"--vim", run}};\n}\n'
+        scopes = PROTECTED.parse_scopes(source)
+        self.assertEqual(scopes, [])
+        self.assertEqual(PROTECTED.scopes_error({"main": ["--vim"], "HEAD": scopes}),
+                         "scopes not found in HEAD:tests/unit/NibTests.cpp")
+        self.assertIsNone(PROTECTED.scopes_error({"main": ["--vim"], "HEAD": ["--vim"]}))
+
     def test_allow_takes_a_value_that_starts_with_dashes(self):
         arguments = PROTECTED.parse_arguments(
             ["--base", "main", "--allow", "--vim-dot", "--allow", "ex-settings"])

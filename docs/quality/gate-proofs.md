@@ -1189,4 +1189,13 @@ base `e0c8298`（main）。**製品の C++・CMake・fixture・保存 schema・`
 
 対象を限定した理由: 差分は `eng/` の Python 1 本とテスト 1 ファイル、文書 3 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、既定の `build/` の build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。上の 3 例の `nib_tests` は過去の ref の Debug build で、今回の差分の検証ではなく道具の受け入れの実測である。Waivers: none。
 
-ARC-001 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / CNF-006 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない。残るのは、scope の checks 数が fixture の件数も含むので fixture を足した PR（#99）でも「変化」になり `--allow` の名指しが要ること、`scopes` 配列の書き方が変わると静的パースが 0 件を返し、要約に 1 行出すだけで落ちないこと、ゲートに載っていないので壊れたことは次に使うときにしか分からないことの 3 点。
+ARC-001 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / CNF-006 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない。残るのは、scope の checks 数が fixture の件数も含むので fixture を足した PR（#99）でも「変化」になり `--allow` の名指しが要ること（これが道具の使い方。下の訂正）と、ゲートに載っていないので壊れたことは次に使うときにしか分からないことの 2 点。
+
+**訂正（差し戻し 1 回目・2026-09-23）**: 設計席の裁定で 2 点を直した。(a) #99 の終了 1 は正しい。scope の checks 数には fixture の件数が入るので、fixture を足した PR は増えた scope を `--allow` で名指しする。Issue #130 のコメントの「終了 0」は `--allow --vim-text-objects` を付けた場合と読み替え、その形で撮り直した（上の終了 1 の記録はそのまま残す）。(b) `scopes` 配列の静的パースが base か head で 0 件なら、警告 1 行で通すのをやめて**終了 2**（無い ref と同じ「測れない」）にした。checks の比較が空のまま成功に見えるのを防ぐ（#131 の「無変化を成功に見せない」と同じ）。fixture と他の保護対象の照合はその前に終えて JSON に残し、`"scopes"` の代わりに `"error": "scopes not found in <ref>:tests/unit/NibTests.cpp"` を書き、stdout に `Protected: error …` の 1 行を出す。build はしない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/protected-diff.py --base 9e41f79 --head 220fe76 --allow --vim-text-objects --base-tests build/protected-9e41f79/nib_tests.exe --head-tests build/protected-220fe76/nib_tests.exe`（#99・撮り直し） | **終了 0**。`fixtures 1055 -> 1090 / metadata 2 / deleted 0 / changed 0 / added 35`・保護対象 5 ファイルは `none`・`--vim-text-objects 変化 1623 -> 1912 allowed`（JSON は `"allowed": true, "fails": false`）・`scopes 16 / same 15 / 未測 0`。exe は前の席の `build/protected-*` をそのまま使い、作り直していない |
+| `python eng/protected-diff.py --base <root commit 07ded54> --head HEAD` | **終了 2**（反例の実例）。root に `tests/unit/NibTests.cpp` が無く base の `scopes` が 0 件。JSON に `"error": "scopes not found in 07ded54…:tests/unit/NibTests.cpp"`、`"fixtures"` と `"protectedFiles"` は残り `"scopes"` は無い |
+| `python eng/test-conformance.py` | **185 tests OK**（184 → 185・新規は `scopes` 配列の無い文字列で `parse_scopes` が 0 件を返し、純関数 `scopes_error` が「測れない」の理由 `scopes not found in HEAD:tests/unit/NibTests.cpp` を返す反例と、両方あれば `None` の正例を 1 件に） |
+| `python eng/conformance.py` | **0 violations** |
