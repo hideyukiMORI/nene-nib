@@ -28,6 +28,13 @@
 | 範囲指定のVim置換 | rが返す半開区間、LFの置換本文、LF換算の最終caret。既存の改行変換とreplaceで1つのundoにする | `VimReplaceRange`（core）→ `EditorController`（application・ADR 0029） |
 | 直前の変更の記録 | `.` が再生する回数1つと、回数の桁を除いた鍵の列。組み立て中の`recording` と確定した `last_change` の2つを持ち、本文・履歴・レジスタは持たない | `VimRepeatRecord`、所有は `VimState`（core・ADR 0030） |
 | 鍵の列の再生 | `.` が返す、回数の桁を先頭に展開した鍵の列。controllerが同じ `accept(VimKeyPress)` へ1つずつ流し、前後で履歴を閉じて1つのundo単位にする | `VimReplay`（core）→ `EditorController`（application・ADR 0030） |
+| 入力行の見え方 | Ex・設定一覧・検索の入力行を UI が描くための 1 つの値。プロンプトの種類・文字列・caret・補完候補を持ち、描画・clip・caret 追従はこの値から 1 本で決まる | `InputLineView` / `InputLinePrompt`（core）→ `EditorFrame`（application・ADR 0032） |
+| 入力行の文字列 | 1 行の入力とその中の caret。左右・Home / End・Backspace / Delete・貼付の規則を Ex と検索が共用する純関数の引数 | `InputText`（core・ADR 0032） |
+| 検索の入力行 | `/` `?` で開く入力行。文字列・caret・向きだけを持ち、補完も ThemeCatalog も持たない | `SearchLine`（core）、所有は `EditorState` の `CommandInput`（ADR 0032） |
+| 検索パターン | `magic` の部分集合の照合器。解析の失敗は未対応構文の種類を持つ閉じた値で返し、黙って別の意味にしない | `VimPattern` / `VimPatternFailure`（core・ADR 0032） |
+| 直前の検索 | `n` / `N` が使うパターンと打たれた向き。見つからなかった検索も覚える | `VimSearchPattern`、所有は `VimState`（core・ADR 0032） |
+| 検索の報せ | 見つからない・直前が無い・語が無い・折り返し・未対応構文の閉じた一覧と、その文言。1 打鍵の結果に添えて運び、Ex の結果と同じ左ステータスへ出す | `VimSearchNotice` / `VimSearchNoticeKind`（core）→ `command_message`（application・ADR 0032） |
+| 動作の大分類 | 鍵から引いた動作を NORMAL と VISUAL の写し先へ分ける閉じた分類。動作 → 分類は `constexpr` の表で、分類ごとの写し先は網羅する switch が持つ | `VimActionGroup` / `VimActionBinding`（core・CPP-012 / ADR 0032） |
 | 指定行移動 | `gg` / `G`で先頭・末尾・回数で指定した絶対行の最初の非空白へ移る。operatorでは両端を含む行単位範囲 | `VimMotion`（core・ADR 0027） |
 | Vimレジスタの種別 | 未設定・文字単位・行単位の区別。未設定と、成功した空範囲yankの文字単位は別の状態 | `VimRegisterKind` / `VimRegister`（core・ADR 0026）、所有は `EditorState` |
 | Vim の編集対象の view | 本文・選択の借用と表示領域の値を 1 回の鍵処理へ渡す入力。状態の所有者ではない | `VimEditorView` / `VimViewport`（core・ADR 0019） |

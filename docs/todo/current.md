@@ -9,7 +9,11 @@
 
 **直近のテスト整備は [Issue #97](https://github.com/hideyukiMORI/nene-nib/issues/97)（scope専用の契約を既定の単体実行へ）**。`--vim-dot` / `--vim-text-objects` の契約が selector 指定時にしか走っていなかったので、契約部分を fixture と分けて `verify_vim_scope_contracts` の表にまとめ、既定実行（CTest の `nib_unit`）へ載せた。既定は 8733 → 8823 checks（+90）・1.45 → 1.56 s、selector は 909 / 1623 checks のまま。テストの内容・閾値・fixture は変えていない。詳細はgate-proofs 5-y。
 
-統合済み: #87 は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)、#93 は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)、#97 は [PR #102](https://github.com/hideyukiMORI/nene-nib/pull/102)、#88 / #94 は PR #89 / #95 で main `8f2c363` へ。進行中は [Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索・ADR 0032 提案・`feat/100-vim-search`）。
+統合済み: #87 は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)、#93 は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)、#97 は [PR #102](https://github.com/hideyukiMORI/nene-nib/pull/102)、#88 / #94 は PR #89 / #95 で main `8f2c363` へ。進行中は [Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索・ADR 0032 受理・`feat/100-vim-search`・[PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) は draft）。
+
+**直近の実装は [Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（Vimの検索 `/ ? n N * #`）**。Ex と同じ入力行（`CommandInput` の 3 つめの値 `SearchLine`・見え方は `InputLineView` 1 つに畳んで描画を 1 本に）から入り、Enter の確定は `VimKey` の `VimSearchPattern` 1 鍵として engine に届く（[ADR 0032](../adr/0032-vim-search-as-input-line-and-one-key.md) 受理）。照合器 `VimPattern` は `magic` の部分集合（リテラル・`.`・`*`・`^`・`$`・`[...]`・`\<` `\>`・エスケープ・`\d \w \s` とその大文字）だけを受け、未対応の構文は閉じた失敗で拒否する（`std::regex` と `<locale>` は使わない）。`n` / `N` は `last_search`（失敗した検索も覚える）、`*` / `#` はキャレットの語を `\<…\>` にして同じ経路を通り、範囲の端だけは元のキャレット。オペレータは既存の exclusive の規則 1 か所を共用し、`.` は検索を鍵 1 つとして再生する。報せ（E486 / E35 / E348 / 折り返し / 未対応構文）は Ex と同じ左ステータスに出て次の入力で消える。追加 135 fixture・計 977 件、`--vim-search` 1375 checks、共有境界（`.`・r・f/t・gg）と Ex・設定一覧、unit 全体 10149 checks、build/tidy/symbols/conformance/format 成功。画面確認は未実施。成果物は `build/issue100/NeNeNib.exe`、詳細は gate-proofs 5-z、統合状態は GitHub が正。
+
+実測 218 ケースで食い違ったのは 1 点だけで、期待値ではなく ADR の補足を直した（`\<あいう\>` はひらがな → 漢字の境界で `あいう漢字` に一致する）。48 を超えた `VimAction` の分岐が関数長 60 行に収まらなくなったので、CPP-012 のとおり「動作 → 大分類」を `constexpr` の表にし、NORMAL と VISUAL は `VimActionGroup` を網羅する switch で写した（閾値は触っていない）。`:s` `:g`・検索履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `smartcase`・`hlsearch` / `incsearch` の描画は後続。
 
 **直近の実装は [Issue #93](https://github.com/hideyukiMORI/nene-nib/issues/93)（Vimのテキストオブジェクト）**。オペレータ保留中とVISUALの `i` / `a` を排他的な次キー待ちにし、新しい純関数 `vim_text_object_range` 1本が `iw aw iW aW i" a" i' a' i` a` i( a( i{ a{ i[ a[ i< a<`（`b` / `B` と閉じ括弧の鍵も別名）の範囲を決めて、d/c/y と VISUAL の選択へ同じ範囲を渡す（[ADR 0031](../adr/0031-vim-text-objects-as-one-range-function.md) 受理）。`.` は鍵の列なので追加の記録なしに `diw.` `ci"x<Esc>.` が再生される。追加192fixture・計842件、`--vim-text-objects` 1623 checks、待ちを共有する `.`・r・f/t・g と VISUAL yank、unit全体8733 checks、build/tidy/symbols/conformance/format成功。画面確認は未実施。詳細はgate-proofs 5-w、統合状態はGitHubが正。
 
@@ -87,11 +91,11 @@ C2: 設定の保存・復元、8〜40 ptの本文拡縮（Ctrl+`+` / `-` / `0` �
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
 Vim の `Ctrl-v`（矩形）/ VISUAL の `p u ~ > < J I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL /
-autoindent / テキストオブジェクト / VISUALで行った変更の `.` / 名前つきレジスタ / `J s S R` / VISUALのr<Enter>（#85）/ rの制御文字・Ctrl-e/y / 全文検索 / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
+autoindent / VISUALで行った変更の `.` / 名前つきレジスタ / `J s S R` / VISUALのr<Enter>（#85）/ rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `hlsearch` / `incsearch` / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
 複数タブ・Ctrl+Pのファイル/フォルダ/ブックマーク/履歴統合・折り返し・横スクロール・ドラッグ選択。
 
 ## 次の 1 手
 
-[Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索）を再開する。実測は済み、ADR 0032 は提案＋補足、[PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) は draft。最初の一手は入力行の見え方を 1 本に畳む整え、次に照合器と走査を unit で固めてから繋ぐ（手順は [引き継ぎ](../handoffs/2026-09-22.md)）。
-その後は #98（fixtures.json の整形・検索の fixture 追記後に 1 回）→ #91（VISUAL の `.`）→ #99（テキストオブジェクト残差）→ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。
+[Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索）は実装・限定検証・文書まで済み、[PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) は draft のまま。Ready・必須 check・merge は設計リナが行う。
+その後は #98（fixtures.json の整形・検索の fixture 追記が済んだので次に 1 回）→ #91（VISUAL の `.`）→ #99（テキストオブジェクト残差）→ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。
 今回の結果と未確認は [日報](../reports/2026-09-22.md) / [引き継ぎ](../handoffs/2026-09-22.md)。変更に関係する検証だけを行い、成功結果を再利用する。
