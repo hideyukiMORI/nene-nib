@@ -1178,7 +1178,7 @@ def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) ->
 
 
 def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
-               opened: Path | None = None) -> dict:
+               opened: Path | None = None, vim: bool = False) -> dict:
     """--keys: before.png, the keys through the posted-message path, after.png, frames.json."""
     steps = parse_keys(keys)
     # --open は起動引数でファイルを開いてから撮る（Issue #117: `\r` を含む行は鍵では打てない）。
@@ -1192,6 +1192,11 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
         dpi = user.GetDpiForWindow(window)
         body = body_points(width, height, dpi)
         top = to_pixels(TITLE_BAR_DIPS, dpi)
+        if vim:
+            # --vim は verify_vim と同じにトグルを押して Vim NORMAL から撮る（Issue #151）。
+            toggle = toggle_points(width, height, dpi)
+            click(window, toggle["vim"][0], toggle["vim"][1])
+            time.sleep(0.5)
         before = capture(window, width, height)
         write_png(frames / "before.png", width, height, before)
         send_key_sequence(window, keys)
@@ -1229,11 +1234,15 @@ def main() -> None:
                              "exits 1 when the keys left the window unchanged")
     parser.add_argument("--open", type=Path, default=None,
                         help="with --keys: open this file through the command line first")
+    parser.add_argument("--vim", action="store_true",
+                        help="with --keys: switch to Vim NORMAL before before.png")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
     if arguments.open is not None and arguments.keys is None:
         parser.error("--open needs --keys")
+    if arguments.vim and arguments.keys is None:
+        parser.error("--vim needs --keys")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -1247,7 +1256,8 @@ def main() -> None:
     become_dpi_aware()
     if arguments.keys is not None:
         opened = arguments.open.resolve() if arguments.open is not None else None
-        record = drive_keys(executable, environment, frames, arguments.keys, opened)
+        record = drive_keys(executable, environment, frames, arguments.keys, opened,
+                            arguments.vim)
         print(json.dumps(record, indent=2))
         if not record["changed"]:
             print("keys did not change the window within 8 s")

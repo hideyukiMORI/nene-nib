@@ -110,8 +110,9 @@ class Direct2DRenderer final
                              const core::LayoutRect &area, const application::LineView &line);
     void draw_bar_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                         const core::LayoutRect &area, UINT32 position);
+    // ブロックは本文の桁の描画上の範囲（`^M` なら 2 文字・全角なら字幅）を覆う（#151）。
     void draw_block_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                          const core::LayoutRect &area, UINT32 position);
+                          const core::LayoutRect &area, const core::DisplayLine &line);
     void draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                     const core::LayoutRect &area, const core::DisplayLine &line);
     // 置き換えた文字（`^M`・`<200b>`）は muted の字色で描き直す。面は塗らない（ADR 0040 の決定

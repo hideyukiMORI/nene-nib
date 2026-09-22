@@ -1275,3 +1275,20 @@ base `d4de8c2`（main）の上に 2 commit（`0b0a8b9` core・`4dcc918` applicat
 対象を限定した理由: 差分は application の表示値 1 欄・renderer の桁の変換・unit・verify-window の引数 1 つで、fixture・engine・保存・速さの入力に触れない。速さ・fixture の再生成・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
 
 ARC-001 / ARC-004 / ARC-011 / CPP-002 / CPP-009 / CPP-011 / CPP-014 / QLT-001 / QLT-012 を自己レビュー。残るのは、ブロックのキャレットが `^M` の上では `^` の 1 文字ぶんの幅になること（Vim は 2 桁を覆う）と、IME の変換中の行では置き換えた文字を `muted` にしないこと（本文の字色のまま）の 2 点。
+
+### 5-ap. NORMAL のブロックキャレットが置き換えた文字の全幅を覆う（Issue #151・ADR 0040 の決定 3・2026-09-23）
+
+base `1b6b253`（main）の上に `33f4b7b`。`draw_block_caret` は `DisplayLine` を受け、幅を本文の桁の描画上の範囲（`displayed(column)` と `displayed(column + 1)` をそれぞれ UTF-16 にして `HitTestTextPosition` で引いた x の差）にする。桁の変換は #117 の `displayed` 1 本のまま。`^M` なら 2 文字、全角なら字幅、行末は両端が同じ位置になり今までどおり `block_minimum_dips` に畳む。INSERT の細いキャレット・選択・IME（#152）は不変。`eng/verify-window.py` に `--vim`（`--keys` の前に `verify_vim` と同じにトグルを押して Vim NORMAL へ入る）を足した。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy 込み） | 成功・警告 0 |
+| `nib_tests.exe`（既定） | **13459 checks passed**（main と同数） |
+| `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`1b6b253..33f4b7b`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象 `none`・`scopes 20 / same 20 / 未測 0` |
+| `python eng/conformance.py` | **0 violations** |
+| `clang-format --dry-run --Werror`（renderer 2 ファイル）・`git diff --check` | 差分なし |
+| `python eng/verify-window.py --open out/117-cr.txt --vim --capture out/frames-151 --keys "l"` | 終了 0（`changed: true`）。`before.png` はブロックが `a` の 1 文字、`after.png` はブロックが `^M` の 2 文字を覆う |
+
+対象を限定した理由: 差分は renderer のブロックの幅と verify-window の引数 1 つで、core・application・fixture・保存・速さの入力に触れない。`eng/symbols.py`（core / application のリンク境界は不変）・速さ・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+ARC-001 / CPP-002 / CPP-009 / CPP-014 / QLT-001 / QLT-012 を自己レビュー。残るのは、INSERT の細いキャレット・選択・IME の変換中の行の置き換え文字（#152）。

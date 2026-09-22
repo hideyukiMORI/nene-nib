@@ -696,18 +696,17 @@ void Direct2DRenderer::draw_bar_caret(const application::EditorFrame &frame,
 
 void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
                                         IDWriteTextLayout *text, const core::LayoutRect &area,
-                                        UINT32 position)
+                                        const core::DisplayLine &line)
 {
-    DWRITE_HIT_TEST_METRICS metrics{};
-    float x = 0.0F;
-    float y = 0.0F;
-    if (FAILED(text->HitTestTextPosition(position, FALSE, &x, &y, &metrics)))
-    {
-        return;
-    }
-    const float left = static_cast<float>(area.left) + metrics.left;
+    // 幅は桁の描画上の範囲。両端を displayed で写してから HitTestTextPosition で引く（ADR 0040 の
+    // 決定 3）。行末では両端が同じ位置になり、既定の最小幅に畳む。
+    const core::Column column = frame.caret.position.column;
+    const float begin = caret_x(text, utf16_offset(line.text, displayed(line, column)));
+    const float end =
+        caret_x(text, utf16_offset(line.text, displayed(line, core::Column{column.value + 1})));
+    const float left = static_cast<float>(area.left) + begin;
     const float width =
-        std::max(metrics.width, static_cast<float>(core::to_pixels(block_minimum_dips, dpi_)));
+        std::max(end - begin, static_cast<float>(core::to_pixels(block_minimum_dips, dpi_)));
     const auto block = D2D1::RectF(left, static_cast<float>(area.top), left + width,
                                    static_cast<float>(area.bottom));
     caret_rectangle_ =
@@ -727,14 +726,14 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                   const core::LayoutRect &area, const core::DisplayLine &line)
 {
-    const UINT32 position = utf16_offset(line.text, displayed(line, frame.caret.position.column));
     switch (frame.caret.shape)
     {
     case core::CaretShape::bar:
-        draw_bar_caret(frame, text, area, position);
+        draw_bar_caret(frame, text, area,
+                       utf16_offset(line.text, displayed(line, frame.caret.position.column)));
         return;
     case core::CaretShape::block:
-        draw_block_caret(frame, text, area, position);
+        draw_block_caret(frame, text, area, line);
         return;
     }
     std::unreachable();
