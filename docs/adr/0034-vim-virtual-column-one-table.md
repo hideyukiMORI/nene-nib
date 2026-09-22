@@ -22,7 +22,7 @@ engine の桁は `Column`（code point・1 始まり）で一貫している（A
 3. **欲しい列**: `VimWantedColumn.column` を `VirtualColumn` にする。`j` `k` `Ctrl-d/u/f/b` `PgUp/PgDn` `H M L`（既存の欲しい列を使う経路すべて）は仮想桁で着地する。欲しい列に入れるのは決定 2 の `caret_virtual_column`。`$` の `at_line_end` は変えない。着地は決定 2 の逆引き 1 本。INSERT の矢印は `VimWantedColumn` を通らず `CaretMove` の経路なので範囲外（Vim も INSERT では Tab の最初の桁にキャレットを描くので、合わせるなら別の Issue）。
 4. **VISUAL の `.` の桁**: ADR 0033 の `VimCharacterExtent.column` を `VirtualColumn` にする。1 行の記録は「選択が覆う桁の数」＝ `virtual_column_end(末尾) - virtual_column(先頭) + 1`（`ab<Tab>cd` の `vll` は 8）、複数行の記録は最終行の `virtual_column_end`（絶対）。**記録の先頭は「最初の桁」・末尾は「最後の桁」で非対称**で、**選び直しの起点だけが `caret_virtual_column`**（Tab の上なら最後の桁）である。3 つとも実測で決めた（`out/issue108-oracle/probe4.py` / `probe5.py`）。選び直しは決定 2 の逆引き。ADR 0033 の「結果」の Tab / 幅の混在の穴が閉じる。
 5. **変えないもの**: `TextPosition.column`・テキストオブジェクト・`f` `F` `t` `T`・`r`・語の移動・検索・描画・`Ctrl+C/X/V`。`|`（桁への移動）は未実装のままで、入れるときは仮想桁。
-6. **矩形**: `Ctrl-v` は次の ADR。矩形の左右の桁は本 ADR の仮想桁を使う。本 ADR で `VimMode` や `VimRegisterKind` は増やさない。
+6. **矩形**: `Ctrl-v` は次の ADR（[ADR 0035](0035-vim-visual-block-as-column-ranges.md)・Issue #112 で受理）。矩形の左右の桁は本 ADR の仮想桁（`virtual_column` / `virtual_column_end`・端に掛かった文字も含む）を使う。本 ADR で `VimMode` や `VimRegisterKind` は増やさない。
 7. **oracle**: Tab と全角と結合文字を含む本文で `j` `k` `H M L` と VISUAL の `.` を測り、fixture に採る。`ambiwidth` と `tabstop` は既定固定なので設定は書かない。
 
 ## 強制

@@ -975,6 +975,34 @@ base `220fe76`（origin/main。ADR 0034 の 1 commit を積んだあと #99 の 
 
 **表の出典を「Unicode の版」から「Vim の実測」に変えた 1 点を記録する。** ADR 0034 の提案は EastAsianWidth の版をコメントに書くとしていたが、Vim 9.1 に版を問い合わせる手立てが無く、Unicode の表を写すと Vim との差が黙って入る。`strdisplaywidth('a' . nr2char(cp)) - 1` を全 code point で測った値をそのまま表にし、`DisplayWidthRange.hpp` の冒頭にその測り方を書いた。ゲートが守るのは「Vim と同じ答えを返すこと」（fixture・CNF-010）なので、正本も Vim に寄せてある。表の昇順と重なりの無さは `static_assert` が守る。
 
+### 5-af. 矩形 VISUAL（Issue #112・ADR 0035・2026-09-22）
+
+統合単位は [PR #117](https://github.com/hideyukiMORI/nene-nib/pull/117)（draft・ブランチ `feat/112-vim-visual-block`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節番号は引き継ぎが #112 に予約していた 5-af を取った（#111 が先に 5-ag へ入った）。
+
+base `87d8d71`（origin/main。ADR 0035 の 1 commit を積んだあと #111 の merge の上へ rebase した。衝突なし）。ADR 0035 は**実測のあとで受理**にし、決定 2・4・5・6・7 を 6 点直して「補足」に差を残した（端に掛かった文字は丸ごと外して空白に置き換える・取る空白と残す空白は内側と外側で逆・`$` の印はレジスタに残らない・`r` は桁の数だけ書く・貼付の右の埋めは本文が続くときだけ・再生は角ではなく記録した幅から）。新しい型は `VimBlockWidth` / `VimBlockLine` / `VimBlockEdit` / `VimBlockExtent` / `VimRemoveBlock` / `VimReplaceBlock` / `VimInsertBlock` / `VimBlockRange` の 8 つで、どれも 1 ファイル 1 型（CPP-011）。`VimMode` / `VimSpecialKey` / `VimRegisterKind` / `VimVisualExtent` / `VimEffect` の 5 つの閉じた和型が増え、写し漏れは `switch` / `std::visit` の網羅性が落とした（CPP-002）。保存形式・schema・依存・ゲートの閾値・描画（renderer）は変更していない。
+
+`python out/issue112-oracle/probe.py`（109 ケース）/ `probe2.py`（39）/ `probe3.py`（25）/ `probe4.py`（21）/ `probe5.py`（20）/ `probe6.py`（14）を**実装の前**に実行し、固定 Vim 9.1 で矩形の幾何・編集・貼付・`.`・取消を閉じた。証拠は `out/issue112-oracle/probe*.json` / `probe*.txt`（`out/` は追跡外なので作業機にだけある）。Vim ソースは読んでいない。
+
+`python out/issue112-oracle/add-fixtures.py --write` は候補 151 件を「命令の切れ目で区切った形」と「1 回の `:normal!` の形」の両方で測り、**5 件を拒否**した（`y-all-short` / `y-last-short` / `y-find` / `d-all-short` / `r-beyond-line`。走査の失敗が残りの打鍵を捨てる・Issue #87）。拒否した 3 つの境界（行が矩形より手前で終わるときの `y` `d` `r`）は `--vim-visual-block` の契約で測ってある。さらに `u`（VISUAL では小文字化）と `.` のあとの `u` の 2 件は、固定 Vim と単位・モードが違うので採らなかった（ADR 0035 の補足）。採用は **144 件**・計 1320 件。
+
+oracle の鍵の記法に `<C-v>` を足した（`KEY_NAMES`）ので測定コードが変わり、`--only` の部分再生成は使えない。**1 回目は全件（`--regenerate`・1322 measured / 0 reused）**で回し、**既存 1176 行が 1 行残らず逐語で一致した**（差分は metadata 2 行と追記 148 行だけ）＝ `<C-v>` の追加が既存の測定を動かしていない証拠になる。そのあと 2 件を落として `--regenerate --only block-`（**144 measured / 1176 reused**・reuse ref `d52bb35`）で締めた。既存 1176 行は逐語再利用し、削除行は metadata 2 行だけ。入力の SHA-256 は `5cae75d18203f861d928001a1e2b85be1526e60981a677bdf5f57a29db84b54e`（1176 件）→ `cd5bf5811457f569ccd2c303abc0f444bc176f9de0e2132e78558f65b5faf7d5`（1320 件）。**初回の再生で 144 件中 141 件が実装と一致し、3 件（`block-dot-short-line` / `block-undo-dot-r` / `block-u-does-not-undo`）だけが食い違った**。期待値は 1 つも直していない: 1 件は実装を直し（再生の幅を記録から取る・ADR 0035 の補足 6）、2 件は固定 Vim と合わせられない差として候補から外した。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake -S . -B build/issue112 -G Ninja -DCMAKE_BUILD_TYPE=Debug` → `cmake --build build/issue112` | 8 つの新しい型・5 つの和型の写し先・controller の 3 つの効果・窓の鍵の写しを Debug / clang-tidy / ASan / UBSan で。全 target 成功（clang-tidy の指摘なし） |
+| `build/issue112/nib_tests.exe --vim-visual-block` | 新しい対象。**1204 checks 成功**（fixture 144 件＋描画と Ctrl+C / Ctrl+X ＋短い行の 3 境界＋ undo 1 単位＋ CRLF ＋範囲外の 9 鍵＋ `vim_block_range` と `vim_visual_reselect` の直接測定） |
+| `build/issue112/nib_tests.exe`（引数なし） | `VimMode` / `VimEffect` / `VimRegisterKind` / `VimState` を変えたので 1320 fixture の再生を含む unit 全体を 1 回。11873 → **13076 checks** すべて成功 |
+| `build/issue112/nib_tests.exe --vim-dot` / `--vim-visual-yank` / `--vim-visual-wanted` / `--vim-text-objects` / `--vim-virtual-column` / `--vim-replace` | VISUAL・`.`・欲しい列・`r` を共有する経路。1593 / 265 / 208 / 2232 / 424 / 460 checks すべて成功（どれも #111 と同数） |
+| `ctest --test-dir build/issue112 --output-on-failure --no-tests=error` | 4 件すべて成功。`nib_unit` は 2.91 s（#111 の 2.74 s から fixture 144 件ぶん増えた） |
+| `python eng/symbols.py --build-dir build/issue112 --require core application` | 矩形の純関数が core の外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし） |
+| `python eng/conformance.py` / `--build-dir build/issue112` | 8 つの新しい型の 1 ファイル 1 型（CNF-002）と、1320 fixture の生成整合（CNF-010）・正準形（CNF-011）。どちらも **0 violations** |
+| `clang-format --dry-run --Werror`（変更した C++ 24 ファイル） | 整形。3 回 `clang-format -i` を掛けて成功 |
+| `python eng/measure-speed.py --check --executable build/issue112-release/NeNeNib.exe` | **矩形の範囲の列が行数に比例する**ので QLT-014 を明示実行した（ADR 0021 の「差分が速さに関わるとき」）。Release を別に build し、5 本すべてを 5 回。**0 regression / 0 unmeasurable**：1 打鍵 **0.925 ms**（基準 0.906）・200 打鍵 2.563 ms（2.695）・起動 210.491 ms（191.488）・窓 32.221 ms（34.933）・16 MiB 265.646 ms（249.783）。基準値・許容（25 % / 下限 2 ms）は変更していない |
+
+対象を限定した理由: 差分は core の新しい純関数 2 本（`vim_block_range` / `vim_replayed_block_range`）と 8 つの型、engine の矩形の枝、controller の効果 3 つと描画・クリップボードの分岐、窓の鍵の写し 1 か所、unit の対象 1 つ、fixture 144 件である。`VimMode` と `VimEffect` と `VimRegisterKind` が engine 全体に触るので unit 全体を 1 回回し、矩形の走査が行数に比例するので速さを明示実行した。設定・テーマ・利用者テーマ・Ex・パレット・adapters・`check.ps1 -Full` は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。**画面確認は未実施**（`NeNeNib.exe` は Debug と Release の両方を作った。Ctrl+V の写しと矩形の描画は実機でしか見えないので、hide の手元での確認が要る）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+**窓の Ctrl+V だけは unit で測れない**（`src/ui/win32` は unit の対象外・ARC-011）。`vim_block_key` は `core::VimMode` の閉じた switch で、INSERT だけ偽を返す 1 行の関数にしてある。矩形の鍵として送るかどうかは `EditorWindow` が `frame.vim_mode` を覚えた値で決め、通常モードと Vim の INSERT は既存の OS 貼付の表へ落ちる。
+
 ### 5-ag. 後ろ向きの VISUAL の引用符の対（Issue #111・ADR 0031 の補足・2026-09-22）
 
 統合単位は [PR #116](https://github.com/hideyukiMORI/nene-nib/pull/116)（draft・ブランチ `feat/111-vim-quote-object-backward`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は #112 の並行作業（5-af）と衝突しないよう 5-ag を取った。

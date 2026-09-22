@@ -50,4 +50,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0032](0032-vim-search-as-input-line-and-one-key.md) | 検索は Ex と同じ入力行から入り、確定は engine の 1 つの鍵として届く | 受理 |
 | [0033](0033-vim-visual-dot-repeat-by-extent.md) | VISUAL の変更の `.` は範囲の大きさを記録し、選び直してから鍵を再生する | 受理 |
 | [0034](0034-vim-virtual-column-one-table.md) | Vim の桁は core の表示幅の表 1 本で仮想桁に直し、使う経路を閉じる | 受理 |
-| [0035](0035-vim-visual-block-as-column-ranges.md) | 矩形 VISUAL は仮想桁の矩形を 1 本の範囲関数で決め、行ごとの範囲の列として編集する | 提案 |
+| [0035](0035-vim-visual-block-as-column-ranges.md) | 矩形 VISUAL は仮想桁の矩形を 1 本の範囲関数で決め、行ごとの範囲の列として編集する | 受理 |

@@ -68,6 +68,8 @@
 | エディタ状態 | 表示文字列と外観の唯一の所有者。不変で、次状態を返す | `EditorState`（application） |
 | エディタフレーム | 表示文字列と配色の表示値。UI はこれを写すだけ | `EditorFrame`（application） |
 | 見た目のトークン | 採用案の寸法と配色。`core::Palette` が持ち、UI が写す | `docs/design/2026-09-15-look.md`（ADR 0008） |
+| 矩形 VISUAL | `Ctrl-v` で入る 3 つめの VISUAL。選択の 2 つの角を仮想桁の矩形と読み、行ごとの範囲で編集する（ADR 0035） | `VimMode::visual_block` / `vim_block_range`（core） |
+| 矩形レジスタ | 矩形で取った本文。行を LF で結んだ本文と、覆った桁の数（幅）を持つ。短い行へ貼るときは空白で埋める | `VimRegisterKind::block` / `VimBlockWidth`（core） |
 | タイトルバーの配置 | タブ・「＋」・窓の操作の矩形とヒットテストを座標から決める純関数 | `TitleBarLayout`（ui/win32） |
 | レンダラ | D3D11 → DXGI（flip・waitable・composition）→ DirectComposition → Direct2D の提示経路。`render` だけが描く | `Direct2DRenderer`（ui/win32） |
 | 規約検査（conformance） | NeNe Nib 固有の自作ゲート | `eng/conformance.py`（CNF-NNN） |
