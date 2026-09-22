@@ -6224,6 +6224,36 @@ void verify_vim_text_object_residuals()
            "a block that is not found leaves the selection and the caret alone");
 }
 
+// 引用符の対の選び方は選択の向きで変わる（決定 6・Issue #111 で実測）。取消はビープが後続の鍵を
+// 捨てて 1 回の `:normal!` に乗らないので（Issue #87）、fixture に採れないぶんをここで固定する。
+void verify_vim_text_object_quote_pairs()
+{
+    Editing editing;
+    open_vim_document(editing, "a \"bb\" c \"dd\" e");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "3lvhi\"y");
+    expect(controller.vim_state().unnamed_register.text == "\"b",
+           "a backward selection on the first quote of the line cancels (measured on Vim 9.1)");
+    vim_replay(controller, "<Esc>02lvhi\"y");
+    expect(controller.vim_state().unnamed_register.text == " \"",
+           "a backward selection with no quote before the caret cancels");
+    vim_replay(controller, "<Esc>012lvli\"y");
+    expect(controller.vim_state().unnamed_register.text == "\" ",
+           "a forward selection with no pair after the caret cancels");
+    Editing odd;
+    open_vim_document(odd, "it's a 'quoted' word");
+    EditorController &other = odd.controller();
+    vim_replay(other, "16lvhi'y");
+    expect(other.vim_state().unnamed_register.text == " w",
+           "a backward selection past the last unpaired quote cancels");
+    Editing across;
+    open_vim_document(across, "x \"aa\" y\nz \"bb\" w");
+    EditorController &two_lines = across.controller();
+    vim_replay(two_lines, "j7lvki\"y");
+    expect(two_lines.vim_state().unnamed_register.text == "y\nz \"bb\" w",
+           "a selection whose ends are on two lines cancels (quotes are read within one line)");
+}
+
 void verify_vim_text_object_fixtures()
 {
     constexpr std::array<std::string_view, 6> boundaries{
@@ -6239,8 +6269,8 @@ void verify_vim_text_object_fixtures()
             ++selected;
         }
     }
-    expect(selected == 233,
-           "the scope replays 227 text-object fixtures and 6 shared next-key boundaries");
+    expect(selected == 272,
+           "the scope replays 266 text-object fixtures and 6 shared next-key boundaries");
 }
 
 void verify_vim_text_object_contracts()
@@ -6251,6 +6281,7 @@ void verify_vim_text_object_contracts()
     verify_vim_text_object_history();
     verify_vim_text_object_dot();
     verify_vim_text_object_residuals();
+    verify_vim_text_object_quote_pairs();
 }
 
 void verify_vim_text_object_scope()
