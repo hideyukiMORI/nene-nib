@@ -82,6 +82,8 @@ For a new Vim fixture group, regenerate just that group with
 `python eng/vim-oracle.py --regenerate --only <name-prefix> --reuse-ref <commit>`.
 The generator validates the previous inputs, measurement code and Vim environment before reusing
 unchanged expectation rows. See [ADR 0026](docs/adr/0026-vim-character-search-and-scoped-oracle.md).
+Write one fixture per line; `python eng/vim-oracle.py --format` stores `tests/vim/fixtures.json` in
+its one canonical form without running Vim, and CNF-011 refuses any other spelling.
 
 Full verification is opt-in and requires a concrete reason why narrower checks cannot cover the change:
 

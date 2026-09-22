@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 2e36c3b63bd65ea79ce3fed9af4c1423d70f8d6376005570bf3119c10b546ac1 / 977 fixtures
+// fixtures.json: sha256 d86f6d3214c9bd8f62f31426a219c1faa834df0ec633a18b8792027a681619a1 / 977 fixtures
 #pragma once
 
 #include "VimFixture.hpp"

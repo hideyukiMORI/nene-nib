@@ -147,6 +147,80 @@ class VimOracleTests(unittest.TestCase):
             with self.subTest(changed=changed):
                 self.assertFalse(vim_oracle.measurement_sources_match(source, changed))
 
+    # 整形の正本（Issue #98）。形を決めるのはこの 1 つの関数で、CNF-011 は同じ関数を呼ぶ。
+    def test_canonical_form_is_one_fixture_per_line_in_one_key_order(self):
+        fixtures = [{"name": "plain", "text": "ab", "keys": "x", "settings": []},
+                    {"name": "full", "text": "あ\tb", "keys": "y", "settings": ["set expandtab"],
+                     "viewport": {"column": 1, "line": 2, "first_visible": 1, "visible_lines": 3}}]
+        self.assertEqual(
+            '[\n'
+            '  {"name":"plain","text":"ab","keys":"x"},\n'
+            '  {"name":"full","text":"あ\\tb","keys":"y","settings":["set expandtab"],'
+            '"viewport":{"visible_lines":3,"first_visible":1,"line":2,"column":1}}\n'
+            ']\n'.encode("utf-8"),
+            vim_oracle.canonical_fixtures_json(fixtures))
+
+    def test_canonical_form_is_idempotent_and_ends_with_one_newline(self):
+        content = vim_oracle.canonical_fixtures_json(
+            [{"name": "one", "text": "a", "keys": "x"}, {"name": "two", "text": "b", "keys": "y"}])
+        self.assertTrue(content.endswith(b"}\n]\n"))
+        self.assertEqual(content, vim_oracle.canonical_fixtures_json(
+            json.loads(content.decode("utf-8"))))
+        self.assertEqual(b"[]\n", vim_oracle.canonical_fixtures_json([]))
+
+    def test_canonical_form_rejects_unknown_missing_and_wrong_shapes(self):
+        for fixtures in [{}, [[]], [{"name": "a", "text": "b", "keys": "c", "note": "d"}],
+                         [{"name": "a", "text": "b"}],
+                         [{"name": "a", "text": "b", "keys": "c", "viewport": {"line": 1}}]]:
+            with self.subTest(fixtures=fixtures), self.assertRaises(ValueError):
+                vim_oracle.canonical_fixtures_json(fixtures)
+
+    def reformat_inputs(self):
+        """A reuse ref written in the old shape (indent 2 and an empty ``settings``)."""
+        fixtures = [{"name": "old-kept", "text": "old", "keys": "h", "settings": []},
+                    {"name": "second", "text": "new", "keys": "l", "settings": []}]
+        old_content = (json.dumps(fixtures, indent=2) + "\n").encode("utf-8")
+        records = [self.record(fixtures[0], "old expected"),
+                   self.record(fixtures[1], "second expected")]
+        version = "VIM 9.1 test"
+        old_header = vim_oracle.header(records, version, hashlib.sha256(old_content).hexdigest())
+        canonical = vim_oracle.canonical_fixtures_json(fixtures)
+        return fixtures, canonical, old_content, old_header, version, records
+
+    def test_reformatting_reuses_every_row_and_writes_only_the_new_digest(self):
+        fixtures, canonical, old_content, old_header, version, records = self.reformat_inputs()
+        rendered, reused_version = vim_oracle.reformatted_header(
+            json.loads(canonical.decode("utf-8")), canonical, old_content, old_header)
+        self.assertEqual(version, reused_version)
+        for record in records:
+            self.assertIn(vim_oracle.fixture_row(record), rendered)
+        digest = hashlib.sha256(canonical).hexdigest()
+        self.assertEqual(old_header.replace(hashlib.sha256(old_content).hexdigest(), digest),
+                         rendered)
+
+    def test_reformatting_refuses_a_changed_input_or_a_foreign_oracle(self):
+        fixtures, canonical, old_content, old_header, version, _ = self.reformat_inputs()
+        changed = vim_oracle.canonical_fixtures_json([dict(fixtures[0], text="changed"),
+                                                     fixtures[1]])
+        with self.assertRaisesRegex(ValueError, "change fixture inputs"):
+            vim_oracle.reformatted_header(json.loads(changed.decode("utf-8")), changed,
+                                          old_content, old_header)
+        foreign = old_header.replace(str(vim_oracle.VIM), r"C:\Other\vim.exe")
+        with self.assertRaises(ValueError):
+            vim_oracle.reformatted_header(json.loads(canonical.decode("utf-8")), canonical,
+                                          old_content, foreign)
+
+    def test_writing_the_canonical_fixtures_replaces_the_file_only_when_it_differs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "fixtures.json"
+            source.write_bytes(b'[\n  {\n    "name": "a",\n    "text": "b",\n'
+                               b'    "keys": "x",\n    "settings": []\n  }\n]')
+            written = vim_oracle.write_canonical_fixtures(source)
+            self.assertEqual(b'[\n  {"name":"a","text":"b","keys":"x"}\n]\n', written)
+            self.assertEqual(written, source.read_bytes())
+            self.assertEqual(written, vim_oracle.write_canonical_fixtures(source))
+            self.assertEqual([source.name], [p.name for p in Path(directory).iterdir()])
+
     def test_only_rejects_empty_and_unknown_prefix(self):
         fixtures = [{"name": "known-case", "text": "x", "keys": "h", "settings": []},
                     {"name": "second-case", "text": "y", "keys": "l", "settings": []}]

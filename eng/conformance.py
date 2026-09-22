@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import datetime
 import hashlib
+import importlib.util
+import itertools
 import json
 import re
 import subprocess
@@ -12,6 +14,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RULE_ID = r"(?:ARC|CPP|QLT|CNF|GIT)-\d{3}"
+
+# 整形の正本は生成器の 1 か所だけ（ARC-001）。検査は形を書き写さずにその関数を呼ぶ（CNF-011）。
+_ORACLE = importlib.util.spec_from_file_location("vim_oracle",
+                                                 Path(__file__).resolve().parent / "vim-oracle.py")
+vim_oracle = importlib.util.module_from_spec(_ORACLE)
+_ORACLE.loader.exec_module(vim_oracle)
 
 
 @dataclass(frozen=True)
@@ -317,6 +325,50 @@ def fixture_digest_checks(root: Path, rules: dict) -> list[Finding]:
     return findings
 
 
+def excerpt(line: bytes | None, limit: int = 60) -> str:
+    if line is None:
+        return "(nothing)"
+    text = line.decode("utf-8", errors="replace")
+    return repr(text if len(text) <= limit else text[:limit] + "...")
+
+
+def fixture_format_checks(root: Path) -> list[Finding]:
+    """CNF-011: tests/vim/fixtures.json is stored in the one form eng/vim-oracle.py writes.
+
+    One fixture per line makes a new case a one-line diff and keeps a merge conflict inside the case
+    it belongs to; before Issue #98 two spellings of the same records lived in the file, because
+    nothing compared the bytes with anything. The form itself is not written here: the canonical
+    bytes come from the generator's own function, so the check and the write cannot drift apart
+    (ARC-001). This check never repairs the file -- `eng/vim-oracle.py --format` writes it, and
+    that is the only writer (QLT-004).
+    """
+    name = "tests/vim/fixtures.json"
+    path = root / name
+    if not path.is_file():
+        return [Finding("CNF-011", name, "the Vim fixtures source is missing")]
+    content = path.read_bytes()
+    try:
+        canonical = vim_oracle.canonical_fixtures_json(json.loads(content.decode("utf-8")))
+    except (UnicodeDecodeError, ValueError) as error:
+        return [Finding("CNF-011", name, f"is not a readable list of fixtures: {error}")]
+    if content == canonical:
+        return []
+    findings = []
+    if b"\r\n" in content:
+        findings.append(Finding("CNF-011", name, "CRLF line endings; the canonical form is LF"))
+    if not content.endswith(b"\n"):
+        findings.append(Finding("CNF-011", name, "no newline at the end of the file"))
+        if content + b"\n" == canonical:
+            return findings
+    for number, (stored, expected) in enumerate(
+            itertools.zip_longest(content.split(b"\n"), canonical.split(b"\n")), 1):
+        if stored != expected:
+            findings.append(Finding("CNF-011", name, f"line {number}: {excerpt(stored)} is not the "
+                                    f"canonical {excerpt(expected)}; run eng/vim-oracle.py --format"))
+            break
+    return findings
+
+
 def architecture_checks(root: Path, paths: list[Path], build_dir: Path | None) -> list[Finding]:
     findings = []
     graph = json.loads((root / "eng/architecture.json").read_text(encoding="utf-8"))
@@ -393,6 +445,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(configuration_checks(root, paths, rules))
     findings.extend(version_metadata_checks(root))
     findings.extend(fixture_digest_checks(root, rules))
+    findings.extend(fixture_format_checks(root))
     findings.extend(architecture_checks(root, paths, build_dir))
     for path in paths:
         if path.suffix in rules["cppExtensions"]:
