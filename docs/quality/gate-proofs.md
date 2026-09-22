@@ -1153,3 +1153,12 @@ base `f677a7e`（main）。**製品の C++・CMake・fixture・保存 schema・`
 | `python eng/conformance.py` | 文書の相対リンクと規則 ID（CNF-006）ほか。**0 violations** |
 
 対象を限定した理由: 差分は `eng/` の Python 3 本とテスト 1 ファイル、文書 2 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+**訂正（差し戻し 1 回目・2026-09-23）。** 設計席が受け入れ条件を「本文の内側」から「期待した領域の外に差分が無い」に直した（Issue #131 の設計席のコメント）。`ihello<Esc>` が変えるタブの未保存の印とステータスバーの「行 1, 桁 7」は製品の正しい振る舞いだからである。`frames.json` に `regions`（`title` はタブ帯 `{"x": 0, "y": 0, "w": 800, "h": 50}`・`body` `{"x": 0, "y": 50, "w": 800, "h": 365}`・`status` は `core::status_bar_layout` と同じ `{"x": 0, "y": 415, "w": 800, "h": 35}`。重ならず 50 + 365 + 35 = 450 で隙間なし）を書き、`compare-frames.py --regions` が領域ごとの差分と、どの領域にも入らない `outside` を数える（`--inside` は残す・両方あれば `--regions` が優先・閾値なし）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/verify-window.py --capture out/frames-131 --keys "ihello<Esc>"` | `regions` を書く経路。終了 0。ただし **4 回のうち 2 回は鍵が窓に届かず `after.png` が `before.png` と同じ（5559 bytes・8 秒の期限切れ）**で、同じ手で未変更の `a1f8e07` も 1 回走らせて届くことを確かめた（投函の経路の揺れで、今回の差分は撮った後の JSON だけ）。採った回は `after.png` 6205 bytes |
+| `python eng/compare-frames.py out/frames-131/before.png out/frames-131/after.png --regions out/frames-131/frames.json` | **終了 0・`inside: true`**。出力そのまま: `{"size": {"w": 800, "h": 450}, "differentPixels": 1441, "bounds": {"x": 29, "y": 23, "w": 581, "h": 418}, "regions": {"title": {"differentPixels": 406, "bounds": {"x": 29, "y": 23, "w": 44, "h": 14}}, "body": {"differentPixels": 679, "bounds": {"x": 70, "y": 68, "w": 82, "h": 30}}, "status": {"differentPixels": 356, "bounds": {"x": 551, "y": 427, "w": 59, "h": 14}}}, "outside": {"differentPixels": 0, "bounds": null}, "inside": true}` |
+| `python eng/test-conformance.py` | **173 tests OK**（171 → 173・`--regions` の正例（3 領域の内側だけ・終了 0）と反例（領域の外に 1 画素・終了 1・`outside.differentPixels == 1`）。既存 8 件は不変） |
+| `python eng/conformance.py` | **0 violations** |

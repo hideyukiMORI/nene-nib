@@ -2,12 +2,16 @@
 
 Prints one JSON object: the size, the number of pixels that differ, and their bounding rectangle
 {"x","y","w","h"} (null when nothing differs). With --inside x,y,w,h it also says whether that
-rectangle lies inside the given one. There is no threshold: a pixel either matches exactly or
+rectangle lies inside the given one. With --regions <frames.json> (the "regions" that
+verify-window.py --keys writes: title, body, status) it counts the differing pixels per region
+and those in no region ("outside"), and "inside" is true exactly when "outside" is 0; --regions
+wins over --inside when both are given. There is no threshold: a pixel either matches exactly or
 it does not, and the design seat reads the PNGs themselves for everything else.
 
 Exit codes: 2 when the two frames differ in size, 1 when --inside is given and the difference
-reaches outside it, 0 otherwise. Needs no display (it only reads files), but it is a tool for the
-interactive check, not a gate (QLT-013). Python standard library only; the PNG reader is the one in
+reaches outside it (with --regions: when any differing pixel lies in no region), 0 otherwise.
+Needs no display (it only reads files), but it is a tool for the interactive check, not a gate
+(QLT-013). Python standard library only; the PNG reader is the one in
 eng/window_driver.py, the same module that wrote the frames.
 """
 
@@ -49,6 +53,36 @@ def difference_bounds(width: int, height: int, before: bytes, after: bytes) -> t
     return count, {"x": left, "y": top, "w": right - left + 1, "h": bottom - top + 1}
 
 
+def region_differences(width: int, height: int, before: bytes, after: bytes,
+                       regions: dict) -> tuple[dict, dict]:
+    """Per region, and for the pixels in no region, the count and bounds of the differing pixels."""
+    boxes = {name: [0, width, height, -1, -1] for name in regions}
+    outside = [0, width, height, -1, -1]
+    stride = width * 3
+    for y in range(height):
+        row_before = before[y * stride:(y + 1) * stride]
+        row_after = after[y * stride:(y + 1) * stride]
+        if row_before == row_after:
+            continue
+        for x in range(width):
+            if row_before[x * 3:x * 3 + 3] == row_after[x * 3:x * 3 + 3]:
+                continue
+            owner = next((boxes[name] for name, box in regions.items()
+                          if box["x"] <= x < box["x"] + box["w"]
+                          and box["y"] <= y < box["y"] + box["h"]), outside)
+            owner[0] += 1
+            owner[1], owner[2] = min(owner[1], x), min(owner[2], y)
+            owner[3], owner[4] = max(owner[3], x), max(owner[4], y)
+
+    def summary(box: list) -> dict:
+        count, left, top, right, bottom = box
+        bounds = None if count == 0 else {"x": left, "y": top, "w": right - left + 1,
+                                          "h": bottom - top + 1}
+        return {"differentPixels": count, "bounds": bounds}
+
+    return {name: summary(box) for name, box in boxes.items()}, summary(outside)
+
+
 def contains(outer: dict, inner: dict | None) -> bool:
     if inner is None:
         return True
@@ -62,6 +96,8 @@ def main() -> int:
     parser.add_argument("before", type=Path)
     parser.add_argument("after", type=Path)
     parser.add_argument("--inside", type=rectangle_argument, default=None, metavar="x,y,w,h")
+    parser.add_argument("--regions", type=Path, default=None, metavar="frames.json",
+                        help="the frames.json whose \"regions\" hold the expected areas")
     arguments = parser.parse_args()
     before_width, before_height, before = read_png(arguments.before)
     after_width, after_height, after = read_png(arguments.after)
@@ -73,7 +109,14 @@ def main() -> int:
     count, bounds = difference_bounds(before_width, before_height, before, after)
     result = {"size": {"w": before_width, "h": before_height}, "differentPixels": count,
               "bounds": bounds}
-    if arguments.inside is not None:
+    if arguments.regions is not None:
+        regions = json.loads(arguments.regions.read_text(encoding="utf-8"))["regions"]
+        per_region, outside = region_differences(before_width, before_height, before, after,
+                                                 regions)
+        result["regions"] = per_region
+        result["outside"] = outside
+        result["inside"] = outside["differentPixels"] == 0
+    elif arguments.inside is not None:
         result["insideOf"] = arguments.inside
         result["inside"] = contains(arguments.inside, bounds)
     print(json.dumps(result))

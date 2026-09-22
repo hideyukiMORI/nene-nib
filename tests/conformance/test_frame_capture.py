@@ -93,6 +93,41 @@ class CompareFrames(unittest.TestCase):
         self.assertEqual(report["bounds"], {"x": 0, "y": 0, "w": 2, "h": 2})
         self.assertFalse(report["inside"])
 
+    def regions_file(self, directory):
+        path = Path(directory) / "frames.json"
+        # 4x3 を縦に 3 つへ分ける: title は行 0、body は行 1、status は行 2 の右の 3 画素だけ。
+        path.write_text(json.dumps({"regions": {
+            "title": {"x": 0, "y": 0, "w": 4, "h": 1},
+            "body": {"x": 0, "y": 1, "w": 4, "h": 1},
+            "status": {"x": 1, "y": 2, "w": 3, "h": 1}}}), encoding="utf-8")
+        return str(path)
+
+    def test_differences_only_inside_the_regions_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = compare(*self.pair(directory, {(2, 0): (1, 2, 3), (0, 1): (4, 5, 6),
+                                                    (3, 1): (4, 5, 6), (1, 2): (7, 8, 9)}),
+                             "--regions", self.regions_file(directory))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertTrue(report["inside"])
+        self.assertEqual(report["outside"], {"differentPixels": 0, "bounds": None})
+        self.assertEqual(report["regions"]["title"],
+                         {"differentPixels": 1, "bounds": {"x": 2, "y": 0, "w": 1, "h": 1}})
+        self.assertEqual(report["regions"]["body"],
+                         {"differentPixels": 2, "bounds": {"x": 0, "y": 1, "w": 4, "h": 1}})
+        self.assertEqual(report["regions"]["status"]["differentPixels"], 1)
+
+    def test_one_pixel_outside_the_regions_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = compare(*self.pair(directory, {(0, 1): (4, 5, 6), (0, 2): (9, 9, 9)}),
+                             "--regions", self.regions_file(directory), "--inside", "0,0,4,3")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertFalse(report["inside"])
+        self.assertEqual(report["outside"],
+                         {"differentPixels": 1, "bounds": {"x": 0, "y": 2, "w": 1, "h": 1}})
+        self.assertEqual(report["regions"]["body"]["differentPixels"], 1)
+
     def test_frames_of_different_sizes_are_refused(self):
         with tempfile.TemporaryDirectory() as directory:
             result = compare(*self.pair(directory, {}, after_size=(WIDTH + 1, HEIGHT)))

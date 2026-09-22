@@ -1187,8 +1187,13 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str) -> 
         send_key_sequence(window, keys)
         after = await_new_frame(window, before, (width, height))
         write_png(frames / "after.png", width, height, after)
+        band_top = max(height - to_pixels(STATUS_BAR_DIPS, dpi), 0)  # core::status_bar_layout と同じ
+        body_box = {"x": 0, "y": top, "w": width, "h": body["bandBottom"] - top}
+        # 期待してよい差分の領域（Issue #131 の訂正）。物理画素・クライアント座標で、重ならない。
+        regions = {"title": {"x": 0, "y": 0, "w": width, "h": top}, "body": body_box,
+                   "status": {"x": 0, "y": band_top, "w": width, "h": height - band_top}}
         record = {"before": "before.png", "after": "after.png", "keys": keys, "steps": len(steps),
-                  "body": {"x": 0, "y": top, "w": width, "h": body["bandBottom"] - top},
+                  "body": body_box, "regions": regions,
                   "dpi": dpi, "size": {"w": width, "h": height}}
         (frames / "frames.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         close(window)
