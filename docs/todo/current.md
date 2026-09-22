@@ -13,13 +13,13 @@
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
-| 1 | [#131](https://github.com/hideyukiMORI/nene-nib/issues/131) verify-window の PNG 保存と画素比較 | 実装席（Opus）が作業中 |
-| 2 | [#130](https://github.com/hideyukiMORI/nene-nib/issues/130) 保護対象の差分 0 確認のスクリプト | 依頼書あり。#131 の後に新しい席 |
-| 3 | [#124](https://github.com/hideyukiMORI/nene-nib/issues/124) README・current.md・日報の粒度 | 設計席（本 PR） |
-| 4 | `incsearch`（未起票・推しは既定オン） | |
-| 5 | `VimStep.cpp` / `NibTests.cpp` の分割（ADR） | |
-| 6 | [#117](https://github.com/hideyukiMORI/nene-nib/issues/117) 制御文字の `^M` 描画 | |
-| 7 | add バッファの chunk 化（ADR）→ マクロ `q @`（ADR） | |
+| 1 | `incsearch`（未起票・推しは既定オン・ADR） | |
+| 2 | `VimStep.cpp` / `NibTests.cpp` の分割（ADR） | |
+| 3 | [#117](https://github.com/hideyukiMORI/nene-nib/issues/117) 制御文字の `^M` 描画 | |
+| 4 | [#140](https://github.com/hideyukiMORI/nene-nib/issues/140) verify-window の `--keys` の鍵が届かない揺れ | 下ごしらえ席で原因の probe から |
+| 5 | add バッファの chunk 化（ADR）→ マクロ `q @`（ADR） | |
+
+2026-09-23 に統合: #124（README・本書の要約化）、#131（PNG 保存と領域比較）、#141（報告ファイル名）、#130（保護対象の差分 0 確認）。
 
 順は設計席の案で hide 未確認。open の一覧は `gh issue list --state open` が正。
 
@@ -28,8 +28,9 @@
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
 | Vim fixture | 1339 件 | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | 13309 checks・scope 19 | [gate-proofs 5-aj](../quality/gate-proofs.md) |
+| 既定の `nib_tests` | 13309 checks・scope 19 | [gate-proofs 5-aj](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
 | ADR | 0039 まで | [`docs/adr/README.md`](../adr/README.md) |
+| 見た目の確認 | `python eng/verify-window.py --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect` | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 速さ（実機） | 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms・16 MiB 250 ms | `eng/perf-reference.json`（ADR 0016） |
 
