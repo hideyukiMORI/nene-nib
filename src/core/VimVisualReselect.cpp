@@ -1,11 +1,10 @@
 #include "VimVisualReselect.hpp"
 
-#include "Column.hpp"
 #include "LineNumber.hpp"
-#include "TextPosition.hpp"
 #include "VimCharacterExtent.hpp"
 #include "VimColumnWish.hpp"
 #include "VimLineExtent.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -24,9 +23,10 @@ namespace
 }
 
 // 文字単位の端。`$` の記録は行の内容の終わり（Vim が NUL を置く桁）まで＝ vim_visual_range が
-// 改行まで含める。桁の記録は 1 行なら桁の個数、複数行なら最終行の絶対桁（実測）。
-// offset_of が行の内容の終わりで止まるので、桁が足りない行は自然にそこへ畳まれる。
-[[nodiscard]] Offset reselected_end(const TextBuffer &text, const TextPosition &at, LineNumber last,
+// 改行まで含める。桁の記録は 1 行なら桁の個数、複数行なら最終行の絶対桁（実測）。桁は仮想桁で、
+// 1 行のときの起点は「Vim がキャレットを描く桁」＝ Tab の上なら最後の桁（ADR 0034 の決定 4）。
+// offset_at_virtual_column が行の内容の終わりで止まるので、桁が足りない行はそこへ畳まれる。
+[[nodiscard]] Offset reselected_end(const TextBuffer &text, Offset caret, LineNumber last,
                                     const VimCharacterExtent &extent)
 {
     switch (extent.wish)
@@ -36,17 +36,19 @@ namespace
     case VimColumnWish::at_column:
         break;
     }
-    const Column column =
-        extent.lines > 1 ? extent.column : Column{at.column.value + extent.column.value - 1};
-    return text.offset_of(TextPosition{last, column});
+    const VirtualColumn column =
+        extent.lines > 1
+            ? extent.column
+            : VirtualColumn{caret_virtual_column(text, caret).value + extent.column.value - 1};
+    return offset_at_virtual_column(text, last, column);
 }
 
 [[nodiscard]] Selection reselected(const TextBuffer &text, Offset caret,
                                    const VimCharacterExtent &extent)
 {
-    const TextPosition at = text.position_of(caret);
+    const LineNumber line = text.position_of(caret).line;
     return Selection{caret,
-                     reselected_end(text, at, line_after(text, at.line, extent.lines), extent)};
+                     reselected_end(text, caret, line_after(text, line, extent.lines), extent)};
 }
 
 [[nodiscard]] Selection reselected(const TextBuffer &text, Offset caret, VimLineExtent extent)

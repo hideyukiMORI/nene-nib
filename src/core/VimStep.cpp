@@ -2,11 +2,9 @@
 
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
-#include "Column.hpp"
 #include "LineNumber.hpp"
 #include "OffsetRange.hpp"
 #include "ScrollBounds.hpp"
-#include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimActionBinding.hpp"
 #include "VimActionGroup.hpp"
@@ -55,6 +53,7 @@
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <array>
@@ -567,7 +566,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     {
         return state.wanted_column.value();
     }
-    return VimWantedColumn{VimColumnWish::at_column, text.position_of(caret).column};
+    return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, caret)};
 }
 
 // 動いた先のキャレットの置き所。NORMAL / INSERT は文字の上に寄せ、VISUAL は行の内容の終わり
@@ -597,7 +596,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimColumnWish::at_line_end:
         return rested_in(text, text.line_end(line), mode);
     case VimColumnWish::at_column:
-        return rested_in(text, text.offset_of(TextPosition{line, wanted.column}), mode);
+        return rested_in(text, offset_at_virtual_column(text, line, wanted.column), mode);
     }
     std::unreachable();
 }
@@ -710,7 +709,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::down:
         return wanted;
     case VimMotion::line_end:
-        return VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+        return VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     case VimMotion::left:
     case VimMotion::right:
     case VimMotion::line_start:
@@ -724,7 +723,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::screen_bottom:
     case VimMotion::document_first:
     case VimMotion::document_last:
-        return VimWantedColumn{VimColumnWish::at_column, text.position_of(moved).column};
+        return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     }
     std::unreachable();
 }
@@ -1105,7 +1104,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
 {
     VimState next = finished_input_wait(state);
     next.wanted_column =
-        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(destination).column};
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
     switch (state.mode)
     {
     case VimMode::normal:
@@ -1212,7 +1211,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
         if (line_of(view.text, destination).value < line_of(view.text, view.selection.caret).value)
         {
             performed_from.wanted_column = VimWantedColumn{
-                VimColumnWish::at_column, view.text.position_of(destination).column};
+                VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
         }
     }
     return performed(performed_from, view.text, view.selection.caret,
@@ -1605,7 +1604,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     VimState next = state;
     next.count = std::nullopt;
     next.pending = std::nullopt;
-    next.wanted_column = VimWantedColumn{VimColumnWish::at_column, text.position_of(caret).column};
+    next.wanted_column =
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, caret)};
     return next;
 }
 
@@ -2069,7 +2069,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     VimState next = search_rested(state);
     next.wanted_column =
-        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(destination).column};
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
     switch (state.mode)
     {
     case VimMode::normal:
@@ -2757,7 +2757,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     VimState next = visual_resting(state, VimMode::visual);
     next.wanted_column =
-        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(selected.caret).column};
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, selected.caret)};
     return VimStep{std::move(next), VimSelect{selected}};
 }
 
@@ -2784,8 +2784,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         {
             return VimStep{std::move(next), VimNoEffect{}};
         }
-        next.wanted_column = VimWantedColumn{VimColumnWish::at_column,
-                                             view.text.position_of(cancel.selection.caret).column};
+        next.wanted_column = VimWantedColumn{
+            VimColumnWish::at_column, caret_virtual_column(view.text, cancel.selection.caret)};
         return VimStep{std::move(next), VimSelect{cancel.selection}};
     }
     const Offset caret = rested_in(view.text, cancel.selection.caret, VimMode::normal);
@@ -2794,7 +2794,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return VimStep{std::move(next), VimNoEffect{}};
     }
     next.wanted_column =
-        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(caret).column};
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, caret)};
     return VimStep{std::move(next), VimMoveTo{caret}};
 }
 
@@ -3104,19 +3104,20 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 
 // 文字単位 VISUAL の大きさ（ADR 0033 の決定 5）。`$` で選んだ範囲は curswant が行末のままなので
 // 桁ではなく「行末まで」を覚える。1 行なら桁の個数、複数行なら最終行の絶対桁（どちらも実測）。
-// 桁は code point 単位で、Vim が数える仮想桁とは Tab と全角で食い違う（ADR 0033 の「文脈」）。
+// 桁は仮想桁で、範囲の先頭は「最初の桁」・末尾は「最後の桁」で数える（Tab の始まりと終わりで
+// 非対称なのは Vim も同じ・ADR 0034 の決定 4 で実測）。
 [[nodiscard]] VimVisualExtent character_extent_of(const TextBuffer &text, const VimState &state,
                                                   const Selection &selection, std::size_t lines)
 {
     const VimWantedColumn wanted = wanted_column_of(text, state, selection.caret);
     if (wanted.wish == VimColumnWish::at_line_end)
     {
-        return VimCharacterExtent{lines, VimColumnWish::at_line_end, Column{1}};
+        return VimCharacterExtent{lines, VimColumnWish::at_line_end, VirtualColumn{1}};
     }
     const OffsetRange ordered = selection_range(selection);
-    const Column end = text.position_of(ordered.end).column;
-    const Column column =
-        lines > 1 ? end : Column{end.value - text.position_of(ordered.begin).column.value + 1};
+    const VirtualColumn end = virtual_column_end(text, ordered.end);
+    const VirtualColumn column =
+        lines > 1 ? end : VirtualColumn{end.value - virtual_column(text, ordered.begin).value + 1};
     return VimCharacterExtent{lines, VimColumnWish::at_column, column};
 }
 
