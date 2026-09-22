@@ -5552,7 +5552,8 @@ void verify_vim_dot_modes()
 // ---------------------------------------------------------- VISUAL の `.`（Issue #91 / ADR 0033）
 
 // 記録の中身は表示値に出ないので直接見る。VISUAL の記録は回数を持たない（決定 3・実測）。
-[[nodiscard]] bool dot_visual_is(const VimState &state, const nenenib::core::VimVisualExtent &extent,
+[[nodiscard]] bool dot_visual_is(const VimState &state,
+                                 const nenenib::core::VimVisualExtent &extent,
                                  std::string_view keys)
 {
     if (!state.last_change.has_value())
@@ -5738,7 +5739,8 @@ void verify_vim_visual_dot_boundaries()
     open_vim_document(history, "abcdefghij");
     vim_replay(history.controller(), "vlld.");
     vim_replay(history.controller(), "u");
-    expect(vim_body(history.controller().frame()) == "defghij", "one replayed dot is one undo unit");
+    expect(vim_body(history.controller().frame()) == "defghij",
+           "one replayed dot is one undo unit");
     vim_replay(history.controller(), "<C-r>");
     expect(vim_body(history.controller().frame()) == "ghij", "and redo puts that unit back");
     vim_replay(history.controller(), "uu");
@@ -5820,15 +5822,16 @@ void verify_vim_dot_fixtures()
     std::size_t selected = 0;
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
-        if (fixture.name.starts_with("dot-") || fixture.name.starts_with("counted-insert-") ||
+        if (fixture.name.starts_with("dot-") || fixture.name.starts_with("visual-dot-") ||
+            fixture.name.starts_with("counted-insert-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())
         {
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 107,
-           "the scope replays 99 dot fixtures and 8 shared open-line, r, f/t and g boundaries");
+    expect(selected == 185,
+           "the scope replays 99 dot and 78 VISUAL dot fixtures and 8 shared boundaries");
 }
 
 void verify_vim_dot_contracts()

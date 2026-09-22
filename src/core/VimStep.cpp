@@ -3085,8 +3085,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     const OffsetRange ordered = selection_range(selection);
     const Column end = text.position_of(ordered.end).column;
     const Column column =
-        lines > 1 ? end
-                  : Column{end.value - text.position_of(ordered.begin).column.value + 1};
+        lines > 1 ? end : Column{end.value - text.position_of(ordered.begin).column.value + 1};
     return VimCharacterExtent{lines, VimColumnWish::at_column, column};
 }
 
@@ -3094,8 +3093,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 [[nodiscard]] VimVisualExtent visual_extent_of(const VimState &state, const VimEditorView &view)
 {
     const OffsetRange ordered = selection_range(view.selection);
-    const std::size_t lines = line_of(view.text, ordered.end).value -
-                              line_of(view.text, ordered.begin).value + 1;
+    const std::size_t lines =
+        line_of(view.text, ordered.end).value - line_of(view.text, ordered.begin).value + 1;
     switch (state.mode)
     {
     case VimMode::normal:

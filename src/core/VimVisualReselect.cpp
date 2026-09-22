@@ -26,8 +26,8 @@ namespace
 // 文字単位の端。`$` の記録は行の内容の終わり（Vim が NUL を置く桁）まで＝ vim_visual_range が
 // 改行まで含める。桁の記録は 1 行なら桁の個数、複数行なら最終行の絶対桁（実測）。
 // offset_of が行の内容の終わりで止まるので、桁が足りない行は自然にそこへ畳まれる。
-[[nodiscard]] Offset reselected_end(const TextBuffer &text, const TextPosition &at,
-                                   LineNumber last, const VimCharacterExtent &extent)
+[[nodiscard]] Offset reselected_end(const TextBuffer &text, const TextPosition &at, LineNumber last,
+                                    const VimCharacterExtent &extent)
 {
     switch (extent.wish)
     {
@@ -36,9 +36,8 @@ namespace
     case VimColumnWish::at_column:
         break;
     }
-    const Column column = extent.lines > 1
-                              ? extent.column
-                              : Column{at.column.value + extent.column.value - 1};
+    const Column column =
+        extent.lines > 1 ? extent.column : Column{at.column.value + extent.column.value - 1};
     return text.offset_of(TextPosition{last, column});
 }
 
