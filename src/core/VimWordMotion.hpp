@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Offset.hpp"
+#include "OffsetRange.hpp"
 #include "TextBuffer.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordEndStop.hpp"
@@ -28,6 +29,11 @@ namespace nenenib::core
 // 文字の種類（Vim の cls()）。語の表はここ 1 つで、テキストオブジェクトも同じ表を引く
 // （ADR 0031 の決定 2）。0 は空白、1 は記号、2 は語の文字、それ以外はひらがな等の塊の印。
 [[nodiscard]] std::uint32_t vim_character_class(char32_t code, VimWordClass kind) noexcept;
+
+// キャレットの下、無ければ同じ行の後ろにある語の範囲（Issue #100 で実測）。
+// `*` / `#` がこの範囲の本文を \<…\> のパターンにする（ADR 0032 の決定 3）。語は同じ種類の
+// 文字の連なりで、空白と記号の上では同じ行の次の語を探し、行の中に語が無ければ nullopt。
+[[nodiscard]] std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret);
 
 // テキストオブジェクトが使う語の走査（ADR 0031 の決定 2）。どちらも 1 語ぶんだけ動く。
 // vim_word_stop_forward は Vim の fwd_word(1, kind, eol=TRUE)。次の語の頭へ進み、行の終わりで

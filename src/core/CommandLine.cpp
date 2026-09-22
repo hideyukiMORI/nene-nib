@@ -1,7 +1,7 @@
 #include "CommandLine.hpp"
 
 #include "ExResult.hpp"
-#include "Utf8.hpp"
+#include "InputText.hpp"
 
 #include <utility>
 
@@ -48,17 +48,13 @@ std::optional<std::size_t> CommandLine::completion_index() const noexcept
 
 std::expected<CommandLine, ExFailure> CommandLine::inserted(std::string_view text) const
 {
-    if (text.size() > DisplayText::maximum_bytes - text_.size())
+    // 文字列とキャレットの規則は検索の入力行と共用する（ADR 0032 の決定 1・ARC-001）。
+    const auto next = inserted_input(InputText{text_, caret_}, text);
+    if (!next)
     {
-        return std::unexpected(ExFailure::too_long);
+        return std::unexpected(next.error());
     }
-    if (!validate_utf8(text) || has_control_character(text))
-    {
-        return std::unexpected(ExFailure::invalid_text);
-    }
-    std::string next = text_;
-    next.insert(caret_.value, text);
-    return CommandLine(std::move(next), Offset{caret_.value + text.size()}, themes_);
+    return CommandLine(next.value().text, next.value().caret, themes_);
 }
 
 CommandLine CommandLine::completed(CommandEdit direction) const
@@ -82,34 +78,11 @@ CommandLine CommandLine::completed(CommandEdit direction) const
 
 CommandLine CommandLine::edited(CommandEdit edit) const
 {
-    CommandLine next(text_, caret_, themes_);
-    const auto before = previous_code_point(text_, caret_);
-    const auto after = next_code_point(text_, caret_);
-    switch (edit)
+    if (edit == CommandEdit::complete_next || edit == CommandEdit::complete_previous)
     {
-    case CommandEdit::left:
-        next.caret_ = before;
-        break;
-    case CommandEdit::right:
-        next.caret_ = after;
-        break;
-    case CommandEdit::home:
-        next.caret_ = Offset{0};
-        break;
-    case CommandEdit::end:
-        next.caret_ = Offset{text_.size()};
-        break;
-    case CommandEdit::backspace:
-        next.text_.erase(before.value, caret_.value - before.value);
-        next.caret_ = before;
-        break;
-    case CommandEdit::erase:
-        next.text_.erase(caret_.value, after.value - caret_.value);
-        break;
-    case CommandEdit::complete_next:
-    case CommandEdit::complete_previous:
         return completed(edit);
     }
-    return next;
+    const InputText next = edited_input(InputText{text_, caret_}, edit);
+    return CommandLine(next.text, next.caret, themes_);
 }
 } // namespace nenenib::core

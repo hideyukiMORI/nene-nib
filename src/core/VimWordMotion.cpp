@@ -383,6 +383,38 @@ std::optional<Offset> vim_word_object_end(const TextBuffer &text, Offset caret, 
     return offset_of(text, point);
 }
 
+std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret)
+{
+    VimScanPoint point = scan_point(text, caret, VimWordClass::word);
+    // 空白と記号の上では、同じ行の後ろにある最初の語の文字まで進む（行はまたがない）。
+    while (class_at(point) <= symbol_group)
+    {
+        if (point.index >= point.content.size())
+        {
+            return std::nullopt;
+        }
+        point.index = next_code_point(point.content, Offset{point.index}).value;
+    }
+    const std::uint32_t group = class_at(point);
+    std::size_t begin = point.index;
+    while (begin > 0 &&
+           vim_character_class(
+               code_point_at(point.content, previous_code_point(point.content, Offset{begin})),
+               VimWordClass::word) == group)
+    {
+        begin = previous_code_point(point.content, Offset{begin}).value;
+    }
+    std::size_t end = point.index;
+    while (end < point.content.size() &&
+           vim_character_class(code_point_at(point.content, Offset{end}), VimWordClass::word) ==
+               group)
+    {
+        end = next_code_point(point.content, Offset{end}).value;
+    }
+    const Offset start = text.line_start(point.line);
+    return OffsetRange{Offset{start.value + begin}, Offset{start.value + end}};
+}
+
 Offset vim_previous_word(const TextBuffer &text, Offset caret, std::size_t count)
 {
     VimScanPoint point = scan_point(text, caret, VimWordClass::word);

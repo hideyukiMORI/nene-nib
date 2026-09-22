@@ -101,9 +101,14 @@
 #include "VimMoveTo.hpp"
 #include "VimNewLine.hpp"
 #include "VimNoEffect.hpp"
+#include "VimPattern.hpp"
+#include "VimPatternFailure.hpp"
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimSearch.hpp"
+#include "VimSearchDirection.hpp"
+#include "VimSearchHit.hpp"
 #include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -256,8 +261,10 @@ using nenenib::core::vim_first_non_blank;
 using nenenib::core::vim_next_word;
 using nenenib::core::vim_previous_word;
 using nenenib::core::vim_resting_caret;
+using nenenib::core::vim_search;
 using nenenib::core::vim_step;
 using nenenib::core::vim_visual_range;
+using nenenib::core::vim_word_at;
 using nenenib::core::vim_word_end;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimCharacterSearchKind;
@@ -270,9 +277,13 @@ using nenenib::core::VimMoveTo;
 using nenenib::core::VimNavigate;
 using nenenib::core::VimNewLine;
 using nenenib::core::VimNoEffect;
+using nenenib::core::VimPattern;
+using nenenib::core::VimPatternFailure;
 using nenenib::core::VimPrefix;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
+using nenenib::core::VimSearchDirection;
+using nenenib::core::VimSearchHit;
 using nenenib::core::VimSelect;
 using nenenib::core::VimSpecialKey;
 using nenenib::core::VimState;
@@ -5761,6 +5772,277 @@ void verify_vim_text_object_scope()
     verify_vim_text_object_contracts();
 }
 
+// ---------------------------------------------------------------- 検索（Issue #100・ADR 0032）
+
+// 照合器の答えは「行の中の一致の始まり」。パターンが部分集合の外なら検査そのものを落とす。
+[[nodiscard]] std::optional<std::size_t> matched_begin(std::string_view pattern,
+                                                       std::string_view line, std::size_t from)
+{
+    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    expect(parsed.has_value(), "the measured pattern is inside the supported subset");
+    if (!parsed.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto match = parsed.value().matched(line, from);
+    return match.has_value() ? std::optional<std::size_t>{match.value().begin} : std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimSearchHit> searched(std::string_view text, std::size_t from,
+                                                   std::string_view pattern,
+                                                   VimSearchDirection direction)
+{
+    const auto buffer = TextBuffer::from_utf8(text);
+    const auto parsed = VimPattern::parse(pattern, direction);
+    expect(buffer.has_value() && parsed.has_value(), "the searched body and pattern are valid");
+    if (!buffer.has_value() || !parsed.has_value())
+    {
+        return std::nullopt;
+    }
+    return vim_search(buffer.value(), Offset{from}, parsed.value(), direction);
+}
+
+[[nodiscard]] bool found_at(std::string_view text, std::size_t from, std::string_view pattern,
+                            std::size_t expected)
+{
+    const auto hit = searched(text, from, pattern, VimSearchDirection::forward);
+    return hit.has_value() && hit.value().caret == Offset{expected};
+}
+
+[[nodiscard]] bool found_back_at(std::string_view text, std::size_t from, std::string_view pattern,
+                                 std::size_t expected)
+{
+    const auto hit = searched(text, from, pattern, VimSearchDirection::backward);
+    return hit.has_value() && hit.value().caret == Offset{expected};
+}
+
+[[nodiscard]] bool rejects(std::string_view pattern, VimPatternFailure failure)
+{
+    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    return !parsed.has_value() && parsed.error() == failure;
+}
+
+// 決定 4 の部分集合。期待値は固定 Vim 9.1 の 218 ケース（out/issue100-oracle）から取った桁。
+void verify_vim_pattern_subset()
+{
+    const std::string_view three = "one two three";
+    expect(matched_begin("^four", "four five six", 0) == std::optional<std::size_t>{0},
+           "the caret anchors at the start of the line");
+    expect(!matched_begin("o^n", three, 0).has_value(),
+           "the caret in the middle is just a character");
+    expect(matched_begin("three$", three, 0) == std::optional<std::size_t>{8},
+           "the dollar anchors at the end of the line");
+    expect(!matched_begin("three$four", three, 0).has_value(),
+           "the dollar in the middle is a character");
+    expect(matched_begin("t.o", three, 0) == std::optional<std::size_t>{4},
+           "a dot is one character");
+    expect(matched_begin("f.*e", "four five six", 0) == std::optional<std::size_t>{0},
+           "a star is greedy and backs off until the rest fits");
+    expect(matched_begin("fo*bar", "foo foobar barfoo foo", 0) == std::optional<std::size_t>{4},
+           "a star repeats the atom before it");
+    expect(matched_begin("fz*oo", "foo foobar barfoo foo", 0) == std::optional<std::size_t>{0},
+           "a star allows zero of the atom before it");
+    const std::string_view mixed = "a1b2c3";
+    expect(matched_begin("[abc]", mixed, 0) == std::optional<std::size_t>{0}, "a character set");
+    expect(matched_begin("[a-c]1", mixed, 0) == std::optional<std::size_t>{0}, "a set range");
+    expect(matched_begin("[^a-z]", mixed, 0) == std::optional<std::size_t>{1}, "a negated set");
+    expect(matched_begin("[0-9]*c", mixed, 0) == std::optional<std::size_t>{3}, "a repeated set");
+    expect(matched_begin("[", "[bracket] {brace}", 0) == std::optional<std::size_t>{0},
+           "an unclosed set is the bracket itself");
+    expect(matched_begin("\\[bracket", "[bracket] {brace}", 0) == std::optional<std::size_t>{0},
+           "an escaped bracket is the character");
+    expect(matched_begin("\\d", mixed, 0) == std::optional<std::size_t>{1}, "a digit class");
+    expect(matched_begin("\\D", mixed, 0) == std::optional<std::size_t>{0}, "a non-digit class");
+    expect(matched_begin("\\w", mixed, 0) == std::optional<std::size_t>{0}, "a word byte class");
+    expect(matched_begin("\\W", "x.y.z", 0) == std::optional<std::size_t>{1}, "a non-word class");
+    expect(matched_begin("\\s", "[bracket] {brace}", 0) == std::optional<std::size_t>{9},
+           "a blank class");
+    expect(matched_begin("\\S", " x", 0) == std::optional<std::size_t>{1}, "a non-blank class");
+    expect(matched_begin("a\\*b", "a*b c", 0) == std::optional<std::size_t>{0},
+           "an escaped star is the character");
+    expect(matched_begin("a\\/b", "a/b c", 0) == std::optional<std::size_t>{0},
+           "an escaped separator is the character");
+    expect(matched_begin("a\\\\b", "a\\b c", 0) == std::optional<std::size_t>{0},
+           "an escaped backslash is the character");
+    expect(matched_begin("x\\.y", "x.y.z", 0) == std::optional<std::size_t>{0},
+           "an escaped dot is the character");
+    expect(matched_begin("foo", "Foo foo", 0) == std::optional<std::size_t>{4},
+           "the search is case sensitive (noignorecase)");
+}
+
+// 語の境界は iskeyword ではなく文字の種類の表で切る（決定 4 の追記・ADR 0031 の決定 2）。
+void verify_vim_pattern_word_boundaries()
+{
+    const std::string_view foos = "foo foobar barfoo foo";
+    expect(matched_begin("\\<foo", foos, 0) == std::optional<std::size_t>{0}, "a word start");
+    expect(matched_begin("\\<foo", foos, 1) == std::optional<std::size_t>{4},
+           "a word start skips the middle of a word");
+    expect(matched_begin("foo\\>", foos, 0) == std::optional<std::size_t>{0},
+           "a word end holds where a blank follows");
+    expect(matched_begin("foo\\>", foos, 1) == std::optional<std::size_t>{14},
+           "a word end skips the middle of foobar");
+    expect(matched_begin("\\<foo\\>", foos, 0) == std::optional<std::size_t>{0},
+           "both anchors hold on a whole word");
+    expect(matched_begin("\\<foo\\>", foos, 1) == std::optional<std::size_t>{18},
+           "both anchors skip foobar and barfoo");
+    expect(matched_begin("\\<ab\\>", "a_b ab", 0) == std::optional<std::size_t>{4},
+           "the underscore is a word byte, so the first three bytes are one word");
+    expect(matched_begin("\\<1\\>", "a1 1 a1", 0) == std::optional<std::size_t>{3},
+           "digits are word bytes");
+    // 種類が変われば境界になる。ADR 0032 の補足が「一致しない」と書いた例は実測では一致する。
+    const std::string_view kana_kanji =
+        "\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86\xe6\xbc\xa2\xe5\xad\x97";
+    expect(matched_begin("\\<\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86\\>", kana_kanji, 0) ==
+               std::optional<std::size_t>{0},
+           "kana followed by kanji is a class change, so the word ends there");
+    expect(matched_begin("\\<\xe6\xbc\xa2\xe5\xad\x97", kana_kanji, 0) ==
+               std::optional<std::size_t>{9},
+           "the same class change also starts a word");
+}
+
+// 未対応の構文は黙って別の意味にせず、閉じた失敗で拒否する（決定 4）。
+void verify_vim_pattern_rejections()
+{
+    expect(rejects("\\(foo\\)", VimPatternFailure::group), "a group is refused");
+    expect(rejects("foo\\|bar", VimPatternFailure::branch), "a branch is refused");
+    expect(rejects("fo\\{2}", VimPatternFailure::quantifier), "a brace count is refused");
+    expect(rejects("fo\\+", VimPatternFailure::quantifier), "one or more is refused");
+    expect(rejects("fo\\=", VimPatternFailure::quantifier), "an optional atom is refused");
+    expect(rejects("fo\\?", VimPatternFailure::quantifier), "its other spelling too");
+    expect(rejects("\\v(foo)", VimPatternFailure::magic), "very magic is refused");
+    expect(rejects("\\Mfoo", VimPatternFailure::magic), "nomagic is refused");
+    expect(rejects("\\cfoo", VimPatternFailure::ignore_case), "a case switch is refused");
+    expect(rejects("\\Cfoo", VimPatternFailure::ignore_case), "both case switches are refused");
+    expect(rejects("\\%(foo", VimPatternFailure::escape), "a percent escape is refused");
+    expect(rejects("\\_foo", VimPatternFailure::escape), "a multiline escape is refused");
+    expect(rejects("alpha\\r$", VimPatternFailure::escape), "a carriage return escape is refused");
+    expect(rejects("foo\\", VimPatternFailure::escape), "a trailing backslash is refused");
+    expect(rejects("~", VimPatternFailure::previous_substitute),
+           "the previous substitute is refused");
+    expect(rejects("foo/e", VimPatternFailure::offset), "a forward offset is refused");
+    const auto backward = VimPattern::parse("foo?e", VimSearchDirection::backward);
+    expect(!backward.has_value() && backward.error() == VimPatternFailure::offset,
+           "a backward offset is refused at its own separator");
+    const auto question = VimPattern::parse("a?b", VimSearchDirection::forward);
+    expect(question.has_value() && question.value().matched("a?b c", 0).has_value(),
+           "a question mark is a plain character in a forward search");
+}
+
+// 走査の規則（決定 4 の追記）。必要な桁に足りない一致は終端まで飛ばし、行の長さで打ち切る。
+void verify_vim_search_scan()
+{
+    expect(found_at("aaaa", 0, "aa", 2), "four a characters find the overlap at the third column");
+    expect(found_at("aaaaaa", 2, "aa", 4), "the scan restarts from the head of the line");
+    const auto overlap = searched("ababa", 0, "aba", VimSearchDirection::forward);
+    expect(overlap.has_value() && overlap.value().caret == Offset{0} && overlap.value().wrapped,
+           "skipping to the end of the match passes over the overlap and wraps");
+    expect(found_at("abc", 0, ".*", 0), "an always-matching pattern does not move");
+    expect(found_at("abc\ndef", 0, ".*", 4), "it does move to the next line");
+    expect(found_at("abc\ndef", 0, "^a*", 4), "a zero-length match on the next line");
+    expect(found_at("abc", 0, "a*", 1), "a zero-length match steps one character");
+    expect(found_at("abc", 1, "a*", 2), "and the next one steps again");
+    expect(found_at("alpha beta gamma", 0, "$", 16), "the dollar matches at the end of the line");
+    expect(found_at("xa xa", 0, "xa", 3), "the second match on the same line");
+    expect(found_at("xa xa", 3, "xa", 0), "and then it wraps to the first");
+    expect(found_back_at("aaaa", 3, "a", 2), "backwards takes the last match before the cursor");
+    expect(found_back_at("aaaa", 3, "aa", 2), "overlapping matches count backwards too");
+    expect(found_back_at("xa xa", 3, "xa", 0), "a match at the cursor is not a backward match");
+}
+
+// 折り返しと向き（決定 3・4）。wrapscan は既定どおり有効で、越えたときだけ報せが出る。
+void verify_vim_search_wrap()
+{
+    const std::string_view body = "alpha beta\nbeta gamma\ndelta beta";
+    expect(found_at(body, 0, "beta", 6), "the first match after the caret");
+    expect(found_at(body, 6, "beta", 11), "the next match is on the next line");
+    const auto wrapped = searched(body, 31, "alpha", VimSearchDirection::forward);
+    expect(wrapped.has_value() && wrapped.value().caret == Offset{0} && wrapped.value().wrapped,
+           "a forward search wraps from the bottom and says so");
+    const auto plain = searched(body, 0, "beta", VimSearchDirection::forward);
+    expect(plain.has_value() && !plain.value().wrapped, "a match below the caret does not wrap");
+    expect(found_back_at(body, 31, "beta", 28), "a backward search stays on the line");
+    const auto back = searched(body, 0, "gamma", VimSearchDirection::backward);
+    expect(back.has_value() && back.value().caret == Offset{16} && back.value().wrapped,
+           "a backward search wraps from the top and says so");
+    expect(!searched(body, 0, "zzz", VimSearchDirection::forward).has_value(),
+           "nothing is found for a pattern that is not there");
+    expect(!searched(body, 0, "three.four", VimSearchDirection::forward).has_value(),
+           "a match never crosses a line");
+    const auto only = searched("solo word", 0, "solo", VimSearchDirection::forward);
+    expect(only.has_value() && only.value().caret == Offset{0} && only.value().wrapped,
+           "the only match is the one under the caret, found by wrapping");
+}
+
+// UTF-8 と CRLF（決定 4・6）。CRLF は fixture にできないのでここで守る。
+void verify_vim_search_encoding()
+{
+    const std::string_view kana = "\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86 \xe3\x81\x8b\xe3\x81\x8d"
+                                  "\xe3\x81\x8f\n\xe6\xbc\xa2\xe5\xad\x97 \xe3\x81\x82\xe3\x81\x84"
+                                  "\xe3\x81\x86";
+    expect(found_at(kana, 0, "\xe3\x81\x82.\xe3\x81\x86", 27),
+           "a dot matches one multibyte character");
+    expect(found_at(kana, 0, "\xe6\xbc\xa2\xe5\xad\x97", 20), "a multibyte literal");
+    expect(found_at(kana, 0, "[\xe3\x81\x82\xe3\x81\x8b]", 10), "a multibyte character set");
+    expect(found_at(kana, 0, "\xe3\x81\x8f$", 16), "the dollar after a multibyte character");
+    expect(found_at(kana, 0, "\\<\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86\\>", 27),
+           "word anchors around a multibyte word");
+    // CRLF の本文では行の内容の終わりが CR の前なので、錨は CR に当たらない（保存形は変わらない）。
+    expect(found_at("alpha\r\nbeta", 0, "beta", 7), "a search over CRLF finds the next line");
+    const auto anchored = searched("alpha\r\nbeta", 0, "alpha$", VimSearchDirection::forward);
+    expect(anchored.has_value() && anchored.value().caret == Offset{0},
+           "the dollar sits before the carriage return");
+}
+
+[[nodiscard]] std::string word_under(std::string_view text, std::size_t at)
+{
+    const auto buffer = TextBuffer::from_utf8(text);
+    expect(buffer.has_value(), "the word body is valid UTF-8");
+    if (!buffer.has_value())
+    {
+        return {};
+    }
+    const auto range = vim_word_at(buffer.value(), Offset{at});
+    if (!range.has_value())
+    {
+        return {};
+    }
+    return buffer.value().text_range(range.value().begin, range.value().end);
+}
+
+// `*` / `#` が使う語（決定 3）。空白と記号の上では同じ行の次の語で、行に語が無ければ無い。
+void verify_vim_search_word()
+{
+    expect(word_under("foo bar\nbaz foo", 0) == "foo", "the word under the caret");
+    expect(word_under("foo foobar barfoo foo", 1) == "foo",
+           "the caret inside a word takes all of it");
+    expect(word_under("alpha beta gamma", 5) == "beta", "a blank takes the next word on the line");
+    expect(word_under("a.b x a.b", 1) == "b", "punctuation takes the next word too");
+    expect(word_under("[bracket] {brace}", 0) == "bracket", "and so does a bracket");
+    expect(word_under("   \nfoo", 0).empty(), "a blank line has no word (it does not cross lines)");
+    expect(word_under("beta gamma beta  ", 16).empty(), "trailing blanks have no word after them");
+    expect(word_under("\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86\xe6\xbc\xa2\xe5\xad\x97", 0) ==
+               "\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86",
+           "the word is the run of one character class");
+    expect(word_under("a1_b c a1_b", 0) == "a1_b", "digits and underscores are one word");
+    expect(word_under("foo-bar x foo-bar", 3) == "bar", "the hyphen takes the word after it");
+}
+
+void verify_vim_search_contracts()
+{
+    verify_vim_pattern_subset();
+    verify_vim_pattern_word_boundaries();
+    verify_vim_pattern_rejections();
+    verify_vim_search_scan();
+    verify_vim_search_wrap();
+    verify_vim_search_encoding();
+    verify_vim_search_word();
+}
+
+void verify_vim_search_scope()
+{
+    verify_vim_search_contracts();
+}
+
 // 既定実行（引数なし）が回す scope 専用の契約。selector は「その scope だけを速く回す」絞り込みで、
 // 契約そのものは既定実行にも載る（Issue #97）。新しい scope を足したら、下の selector の表と対に
 // してここへも 1 行足す。fixture の再生は verify_vim_fixtures が全件行うので、ここには載せない。
@@ -5768,8 +6050,9 @@ void verify_vim_text_object_scope()
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 7> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 8> contracts{{
         {"--vim-dot", verify_vim_dot_contracts},
+        {"--vim-search", verify_vim_search_contracts},
         {"--vim-text-objects", verify_vim_text_object_contracts},
         {"--vim-replace", verify_vim_replace_contracts},
         {"--vim-visual-wanted", verify_vim_visual_wanted_contracts},
@@ -5785,8 +6068,9 @@ void verify_vim_scope_contracts()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 15> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 16> scopes{{
         {"--vim-dot", verify_vim_dot_scope},
+        {"--vim-search", verify_vim_search_scope},
         {"--vim-text-objects", verify_vim_text_object_scope},
         {"--vim-replace", verify_vim_replace_scope},
         {"--vim-visual-yank", verify_vim_visual_yank_scope},

@@ -44,11 +44,13 @@ nenenib_target(nenenib_core core STATIC
     src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/Composition.cpp
     src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
-    src/core/EditHistory.cpp src/core/FilePath.cpp src/core/ModeLabel.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
+    src/core/EditHistory.cpp src/core/FilePath.cpp src/core/InputText.cpp
+    src/core/ModeLabel.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/ScrollBounds.cpp src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/Utf16.cpp src/core/Utf8.cpp
-    src/core/VimCaret.cpp src/core/VimStep.cpp src/core/VimTextObjectRange.cpp
+    src/core/VimCaret.cpp src/core/VimPattern.cpp src/core/VimSearch.cpp
+    src/core/VimStep.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimWordMotion.cpp)
 
 nenenib_target(nenenib_application application STATIC
