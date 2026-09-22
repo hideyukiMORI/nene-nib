@@ -1327,3 +1327,23 @@ base `6466fcc`（main）の上に `9e25e3f`。変換中の行の layout は描�
 対象を限定した理由: 差分は renderer の変換中の行の置き換え文字の塗りだけで、core・application・fixture・保存・速さの入力に触れない。`eng/symbols.py`・速さ・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
 
 ARC-001 / CPP-002 / CPP-011 / CPP-014 / QLT-001 / QLT-012 を自己レビュー。残るのは INSERT の細いキャレットと選択の置き換え文字の幅。
+
+### 5-as. incsearch の preview（Issue #148・ADR 0041・2026-09-23）
+
+ブランチ `feat/148-incsearch`。命題 1（core・`87c15da`）が `vim_find_match` 1 本と `VimState::incsearch`（既定 on）・`:set (no)incsearch` を置き、命題 2（application）が preview を足した。節記号は main の 5-ao の次を取った（main への追いつきは統合のときに設計席が行う）。application の `SearchPreview { std::optional<core::TextPosition> match; ScrollState origin; }`（1 ファイル 1 型・ADR の型に `optional` を補った）を `EditorState` が持ち、検索の入力行が閉じると `with_command_input` が一緒に消す。`perform(VimOpenSearch)` が今のスクロールを `origin` に置き、`accept(CommandText)` / `accept(EditCommand)` の後の `update_search_preview()` 1 か所が、`origin` の先頭行へ戻してから `vim_find_match(text, pattern, VimMatchRequest{caret, direction, 1})` の当たりを置いて `follow_position`（`follow_caret` から切り出した同じ計算）で見せる。incsearch off・空・解析の失敗・不一致は当たり無しで報せも出さない。`search_pattern()` は入力中なら入力のパターンを返し、`current_match` は preview の当たりを含む一致になる。Esc と Enter は入力前の先頭行へ戻してから今までどおり動く（Enter の前に戻すのは Vim の `finish_incsearch_highlighting` と同じで、incsearch の on / off で着いた後の画面が一致する）。`ExResult.incsearch` を `VimState::incsearch` へ写す 1 行を hlsearch の隣に足した。renderer・core・fixture・保存 schema・閾値は変えていない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | `EditorState` の欄と controller の経路。指摘なしで成功 |
+| `build/nib_tests.exe --vim-search-incremental` | 対象。**108 checks 成功**（契約の expect 91: 打った途中の 12 入力 × 5・全一致と打ち足し・BS・Enter 9・画面の追従と Esc の巻き戻しと on / off の Enter の一致と窓の大きさ 9・後ろ向きと折り返し 5・`:set (no)incsearch` と off のときの既存の強調とモードの切替 8。残りは文書を開く手順の前提の expect） |
+| `build/nib_tests.exe --vim-search` / `--vim-search-highlight` | 入力中は本文とキャレットが不変（`verify_vim_search_input` は変更なし）・確定後の強調。**1356 / 74 checks 成功** |
+| `build/nib_tests.exe`（引数なし） | `EditorState` と controller はすべての経路が通る。**13483 checks 成功**（13375 ＋ 108） |
+| `ctest --test-dir build` | 4 件すべて成功（fixture 1339 件の再生を含む） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py` | **0 violation / 0 violation** |
+| `python eng/protected-diff.py --base dbe8333 --allow --vim-search --allow --vim-search-incremental`（exe は `build/protected-*` を再利用） | **終了 0**。`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`--vim-search 1290 -> 1356`・`--vim-search-incremental 新規 108`・`scopes 20 / same 18`。`--base origin/main`（`1b6b253`）では #117 の `--display-line` が head に無く終了 1 になる（分岐元が #117 より前のため・追いつき後に解消） |
+| `python eng/verify-window.py --capture out/frames-148` | `verify_vim` に incsearch の節を足した（`ialpha beta<Esc>0/be` → 面と枠が出る・Esc で消える・`u` で空に戻る）。**終了 0**・`incsearchPaintedTheFirstRow` / `escapeTookThePreviewAway` が true。`out/frames-148/vimIncsearch.png` |
+| clang-format（変更した C++ 6 ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は application の 5 ファイルと単体テスト・`eng/verify-window.py` の 1 節である。core・renderer・fixture・速さの入力は不変なので、fixture の再生成・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。preview は 1 打鍵ごとに本文全体の検索と見えている行の照合を行うが、速さのゲートの `keystroke` は通常の入力なので測っていない（ADR 0041 の結果）。Waivers: none。
+
+FR-003 / ARC-001/004/010 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビュー。次の一致を求める経路は確定の鍵と preview で `vim_find_match` の 1 本、スクロールの追従は `follow_position` の 1 本。`optional` は `has_value` / `value` / `value_or` だけで読む。
