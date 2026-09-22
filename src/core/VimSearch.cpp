@@ -4,8 +4,11 @@
 #include "Utf8.hpp"
 #include "VimPatternMatch.hpp"
 
+#include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::core
@@ -90,6 +93,31 @@ namespace
     }
     return step >= start;
 }
+
+// 1 回ぶんの検索。着いたバイト位置と、本文の端を越えて折り返したか。
+[[nodiscard]] std::optional<std::pair<Offset, bool>> searched_once(const TextBuffer &text,
+                                                                   Offset from,
+                                                                   const VimPattern &pattern,
+                                                                   VimSearchDirection direction)
+{
+    const std::size_t start = text.position_of(from).line.value;
+    const std::size_t index = from.value - text.line_start(LineNumber{start}).value;
+    const std::size_t lines = text.line_count();
+    // 起点の行から 1 行ずつ外へ。最後の段は折り返して起点の行そのものをもう一度見る。
+    for (std::size_t step = 0; step <= lines; ++step)
+    {
+        const LineNumber line{rotated(start, step, lines, direction)};
+        const std::string content = text.line_text(line);
+        const std::size_t bound = bound_of(index, step, content.size(), direction);
+        const auto found = found_in_line(content, pattern, direction, bound);
+        if (found.has_value())
+        {
+            return std::pair{Offset{text.line_start(line).value + found.value()},
+                             wrapped_at(start, step, lines, direction)};
+        }
+    }
+    return std::nullopt;
+}
 } // namespace
 
 std::vector<OffsetRange> vim_line_matches(std::string_view line, const VimPattern &pattern)
@@ -112,25 +140,21 @@ std::vector<OffsetRange> vim_line_matches(std::string_view line, const VimPatter
     }
 }
 
-std::optional<VimSearchHit> vim_search(const TextBuffer &text, Offset from,
-                                       const VimPattern &pattern, VimSearchDirection direction)
+std::expected<VimSearchHit, VimSearchNoticeKind>
+vim_find_match(const TextBuffer &text, const VimPattern &pattern, const VimMatchRequest &request)
 {
-    const std::size_t start = text.position_of(from).line.value;
-    const std::size_t index = from.value - text.line_start(LineNumber{start}).value;
-    const std::size_t lines = text.line_count();
-    // 起点の行から 1 行ずつ外へ。最後の段は折り返して起点の行そのものをもう一度見る。
-    for (std::size_t step = 0; step <= lines; ++step)
+    Offset at = text.offset_of(request.from);
+    bool wrapped = false;
+    for (std::size_t step = 0; step < request.count; ++step)
     {
-        const LineNumber line{rotated(start, step, lines, direction)};
-        const std::string content = text.line_text(line);
-        const std::size_t bound = bound_of(index, step, content.size(), direction);
-        const auto found = found_in_line(content, pattern, direction, bound);
-        if (found.has_value())
+        const auto hit = searched_once(text, at, pattern, request.direction);
+        if (!hit.has_value())
         {
-            return VimSearchHit{Offset{text.line_start(line).value + found.value()},
-                                wrapped_at(start, step, lines, direction)};
+            return std::unexpected(VimSearchNoticeKind::pattern_not_found);
         }
+        at = hit.value().first;
+        wrapped = wrapped || hit.value().second;
     }
-    return std::nullopt;
+    return VimSearchHit{text.position_of(at), wrapped};
 }
 } // namespace nenenib::core

@@ -101,6 +101,7 @@
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimLineExtent.hpp"
+#include "VimMatchRequest.hpp"
 #include "VimMode.hpp"
 #include "VimMoveTo.hpp"
 #include "VimNewLine.hpp"
@@ -277,11 +278,11 @@ using nenenib::core::toggled;
 using nenenib::core::validate_utf8;
 using nenenib::core::vim_block_range;
 using nenenib::core::vim_block_text;
+using nenenib::core::vim_find_match;
 using nenenib::core::vim_first_non_blank;
 using nenenib::core::vim_next_word;
 using nenenib::core::vim_previous_word;
 using nenenib::core::vim_resting_caret;
-using nenenib::core::vim_search;
 using nenenib::core::vim_step;
 using nenenib::core::vim_visual_range;
 using nenenib::core::vim_visual_reselect;
@@ -295,6 +296,7 @@ using nenenib::core::VimColumnWish;
 using nenenib::core::VimEditorView;
 using nenenib::core::VimInputWait;
 using nenenib::core::VimKey;
+using nenenib::core::VimMatchRequest;
 using nenenib::core::VimMode;
 using nenenib::core::VimMoveTo;
 using nenenib::core::VimNavigate;
@@ -6789,21 +6791,31 @@ void verify_vim_text_object_scope()
     {
         return std::nullopt;
     }
-    return vim_search(buffer.value(), Offset{from}, parsed.value(), direction);
+    const auto hit =
+        vim_find_match(buffer.value(), parsed.value(),
+                       VimMatchRequest{buffer.value().position_of(Offset{from}), direction, 1});
+    return hit.has_value() ? std::optional<VimSearchHit>{hit.value()} : std::nullopt;
+}
+
+// 着いた位置を本文のバイト位置で読む（期待値をバイトで書くため）。
+[[nodiscard]] Offset landed(std::string_view text, const VimSearchHit &hit)
+{
+    const auto buffer = TextBuffer::from_utf8(text);
+    return buffer.has_value() ? buffer.value().offset_of(hit.position) : Offset{0};
 }
 
 [[nodiscard]] bool found_at(std::string_view text, std::size_t from, std::string_view pattern,
                             std::size_t expected)
 {
     const auto hit = searched(text, from, pattern, VimSearchDirection::forward);
-    return hit.has_value() && hit.value().caret == Offset{expected};
+    return hit.has_value() && landed(text, hit.value()) == Offset{expected};
 }
 
 [[nodiscard]] bool found_back_at(std::string_view text, std::size_t from, std::string_view pattern,
                                  std::size_t expected)
 {
     const auto hit = searched(text, from, pattern, VimSearchDirection::backward);
-    return hit.has_value() && hit.value().caret == Offset{expected};
+    return hit.has_value() && landed(text, hit.value()) == Offset{expected};
 }
 
 [[nodiscard]] bool rejects(std::string_view pattern, VimPatternFailure failure)
@@ -6924,7 +6936,8 @@ void verify_vim_search_scan()
     expect(found_at("aaaa", 0, "aa", 2), "four a characters find the overlap at the third column");
     expect(found_at("aaaaaa", 2, "aa", 4), "the scan restarts from the head of the line");
     const auto overlap = searched("ababa", 0, "aba", VimSearchDirection::forward);
-    expect(overlap.has_value() && overlap.value().caret == Offset{0} && overlap.value().wrapped,
+    expect(overlap.has_value() && landed("ababa", overlap.value()) == Offset{0} &&
+               overlap.value().wrapped,
            "skipping to the end of the match passes over the overlap and wraps");
     expect(found_at("abc", 0, ".*", 0), "an always-matching pattern does not move");
     expect(found_at("abc\ndef", 0, ".*", 4), "it does move to the next line");
@@ -6946,20 +6959,22 @@ void verify_vim_search_wrap()
     expect(found_at(body, 0, "beta", 6), "the first match after the caret");
     expect(found_at(body, 6, "beta", 11), "the next match is on the next line");
     const auto wrapped = searched(body, 31, "alpha", VimSearchDirection::forward);
-    expect(wrapped.has_value() && wrapped.value().caret == Offset{0} && wrapped.value().wrapped,
+    expect(wrapped.has_value() && landed(body, wrapped.value()) == Offset{0} &&
+               wrapped.value().wrapped,
            "a forward search wraps from the bottom and says so");
     const auto plain = searched(body, 0, "beta", VimSearchDirection::forward);
     expect(plain.has_value() && !plain.value().wrapped, "a match below the caret does not wrap");
     expect(found_back_at(body, 31, "beta", 28), "a backward search stays on the line");
     const auto back = searched(body, 0, "gamma", VimSearchDirection::backward);
-    expect(back.has_value() && back.value().caret == Offset{16} && back.value().wrapped,
+    expect(back.has_value() && landed(body, back.value()) == Offset{16} && back.value().wrapped,
            "a backward search wraps from the top and says so");
     expect(!searched(body, 0, "zzz", VimSearchDirection::forward).has_value(),
            "nothing is found for a pattern that is not there");
     expect(!searched(body, 0, "three.four", VimSearchDirection::forward).has_value(),
            "a match never crosses a line");
     const auto only = searched("solo word", 0, "solo", VimSearchDirection::forward);
-    expect(only.has_value() && only.value().caret == Offset{0} && only.value().wrapped,
+    expect(only.has_value() && landed("solo word", only.value()) == Offset{0} &&
+               only.value().wrapped,
            "the only match is the one under the caret, found by wrapping");
 }
 
@@ -6979,7 +6994,7 @@ void verify_vim_search_encoding()
     // CRLF の本文では行の内容の終わりが CR の前なので、錨は CR に当たらない（保存形は変わらない）。
     expect(found_at("alpha\r\nbeta", 0, "beta", 7), "a search over CRLF finds the next line");
     const auto anchored = searched("alpha\r\nbeta", 0, "alpha$", VimSearchDirection::forward);
-    expect(anchored.has_value() && anchored.value().caret == Offset{0},
+    expect(anchored.has_value() && landed("alpha\r\nbeta", anchored.value()) == Offset{0},
            "the dollar sits before the carriage return");
 }
 
@@ -7312,8 +7327,128 @@ void verify_vim_search_fixtures()
     expect(selected == 141, "the scope replays 135 search fixtures and 6 shared boundaries");
 }
 
+// 次の一致を求める 1 本の経路（ADR 0041 の決定 1）。確定の検索の鍵と incsearch の preview が
+// 同じ関数を呼ぶので、位置は行と桁（桁は文字で 1 から）で返り、回数と折り返しもここで決まる。
+[[nodiscard]] std::expected<VimSearchHit, core::VimSearchNoticeKind>
+match_found(std::string_view text, std::string_view pattern, const VimMatchRequest &request)
+{
+    const auto buffer = TextBuffer::from_utf8(text);
+    const auto parsed = VimPattern::parse(pattern, request.direction);
+    expect(buffer.has_value() && parsed.has_value(), "the matched body and pattern are valid");
+    if (!buffer.has_value() || !parsed.has_value())
+    {
+        return std::unexpected(core::VimSearchNoticeKind::pattern_not_found);
+    }
+    return vim_find_match(buffer.value(), parsed.value(), request);
+}
+
+[[nodiscard]] TextPosition at_position(std::size_t line, std::size_t column)
+{
+    return TextPosition{LineNumber{line}, Column{column}};
+}
+
+void expect_match(const std::expected<VimSearchHit, core::VimSearchNoticeKind> &hit,
+                  TextPosition expected, bool wrapped, const char *what)
+{
+    expect(hit.has_value() && hit.value().position == expected, what);
+    expect(hit.has_value() && hit.value().wrapped == wrapped, what);
+}
+
+void expect_no_match(const std::expected<VimSearchHit, core::VimSearchNoticeKind> &hit,
+                     const char *what)
+{
+    expect(!hit.has_value() && hit.error() == core::VimSearchNoticeKind::pattern_not_found, what);
+}
+
+void verify_vim_find_match()
+{
+    using enum VimSearchDirection;
+    const std::string_view body = "alpha beta\nbeta gamma\ndelta beta";
+    const std::string_view kana = "\xe3\x81\x82\xe3\x81\x84 \xe3\x81\x8b\n\xe6\xbc\xa2";
+    expect_match(match_found(body, "beta", {at_position(1, 1), forward, 1}), at_position(1, 7),
+                 false, "forward finds the first match after the caret");
+    expect_match(match_found(body, "beta", {at_position(1, 7), forward, 1}), at_position(2, 1),
+                 false, "a match under the caret is skipped and the next line is found");
+    expect_match(match_found("xa xa", "xa", {at_position(1, 1), forward, 1}), at_position(1, 4),
+                 false, "the next match on the same line");
+    expect_match(match_found(body, "beta", {at_position(3, 7), backward, 1}), at_position(2, 1),
+                 false, "backward finds the last match before the caret");
+    expect_match(match_found(body, "beta", {at_position(3, 10), backward, 1}), at_position(3, 7),
+                 false, "backward stays on the line when a match is before the caret");
+    expect_match(match_found(body, "alpha", {at_position(3, 7), forward, 1}), at_position(1, 1),
+                 true, "forward wraps from the bottom to the top");
+    expect_match(match_found(body, "gamma", {at_position(1, 1), backward, 1}), at_position(2, 6),
+                 true, "backward wraps from the top to the bottom");
+    expect_match(match_found("solo word", "solo", {at_position(1, 1), forward, 1}),
+                 at_position(1, 1), true, "the only match is reached again by wrapping");
+    expect_match(match_found(body, "beta", {at_position(1, 1), forward, 2}), at_position(2, 1),
+                 false, "a count of two moves twice");
+    expect_match(match_found(body, "beta", {at_position(1, 1), forward, 3}), at_position(3, 7),
+                 false, "a count of three reaches the last line");
+    expect_match(match_found(body, "beta", {at_position(1, 1), forward, 4}), at_position(1, 7),
+                 true, "a count that passes the end wraps and says so");
+    expect_match(match_found(body, "beta", {at_position(3, 7), backward, 2}), at_position(1, 7),
+                 false, "a backward count of two moves twice");
+    expect_match(match_found("solo word", "solo", {at_position(1, 1), forward, 2}),
+                 at_position(1, 1), true, "a count keeps wrapping back to the only match");
+    expect_match(match_found(kana, "\xe3\x81\x8b", {at_position(1, 1), forward, 1}),
+                 at_position(1, 4), false, "the column counts characters, not bytes");
+    expect_match(match_found(kana, "\xe6\xbc\xa2", {at_position(1, 4), forward, 1}),
+                 at_position(2, 1), false, "a multibyte match on the next line");
+    expect_match(match_found("alpha\r\nbeta", "beta", {at_position(1, 1), forward, 1}),
+                 at_position(2, 1), false, "CRLF lines are searched by their content");
+    expect_no_match(match_found(body, "zzz", {at_position(1, 1), forward, 1}),
+                    "a pattern that is not there is pattern_not_found");
+    expect_no_match(match_found(body, "zzz", {at_position(1, 1), backward, 3}),
+                    "a count does not hide a missing pattern");
+    expect_no_match(match_found(body, "three.four", {at_position(1, 1), forward, 1}),
+                    "a match never crosses a line");
+    expect_no_match(match_found("", "a", {at_position(1, 1), forward, 1}),
+                    "an empty body has no match");
+    expect_no_match(match_found("", "a", {at_position(1, 1), backward, 2}),
+                    "an empty body has no match backwards either");
+}
+
+// `:set incsearch` / `:set noincsearch`（ADR 0041 の決定 6）。hlsearch と同じ経路で評価し、
+// 設定にも強調にも触れない。既定は on で、Vim の鍵を食べ終えても持ち越す。
+void verify_ex_incsearch_commands()
+{
+    const auto settings = core::default_editor_settings();
+    const auto on = core::evaluate_ex("set incsearch", settings, Appearance::dark);
+    expect(on.has_value() && on.value().incsearch == std::optional<bool>{true} &&
+               !on.value().settings.has_value() && !on.value().highlight.has_value() &&
+               on.value().message.text() == "incsearch=on",
+           ":set incsearch turns the preview on without touching the settings");
+    const auto off = core::evaluate_ex("set noincsearch", settings, Appearance::dark);
+    expect(off.has_value() && off.value().incsearch == std::optional<bool>{false} &&
+               off.value().message.text() == "incsearch=off",
+           ":set noincsearch turns it off");
+    const auto again = core::evaluate_ex("set incsearch", settings, Appearance::dark);
+    expect(again.has_value() && again.value().incsearch == std::optional<bool>{true},
+           ":set incsearch turns it back on");
+    const auto typo = core::evaluate_ex("set incserch", settings, Appearance::dark);
+    expect(!typo.has_value() &&
+               typo.error() == core::ExEvaluationFailure{core::ExFailure::unknown_option},
+           "a misspelled option is the existing unknown option failure");
+    const auto theme = core::evaluate_ex("colorscheme dracula", settings, Appearance::dark);
+    expect(theme.has_value() && !theme.value().incsearch.has_value(),
+           "commands that are not about incsearch leave it alone");
+    const auto completions = core::command_completions("set noi");
+    expect(completions.size() == 1 && completions.front() == "set noincsearch",
+           "the option is offered as a completion");
+    auto state =
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
+    expect(state.incsearch, "incsearch is on by default");
+    state.incsearch = false;
+    const auto rested = nenenib::core::vim_resting_from(
+        state, VimRegister{std::string{}, VimRegisterKind::characters});
+    expect(!rested.incsearch, "a finished key keeps incsearch as it was");
+}
+
 void verify_vim_search_contracts()
 {
+    verify_vim_find_match();
+    verify_ex_incsearch_commands();
     verify_vim_pattern_subset();
     verify_vim_pattern_word_boundaries();
     verify_vim_pattern_rejections();

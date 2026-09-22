@@ -26,6 +26,7 @@
 #include "VimInputWait.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimLineExtent.hpp"
+#include "VimMatchRequest.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimMotionRange.hpp"
 #include "VimPattern.hpp"
@@ -2378,27 +2379,6 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                          : VimSearchNoticeKind::wrapped_to_bottom);
 }
 
-// 回数ぶん続けて探す。1 回でも見つからなければ命令ごと取り消しになる（実測）。
-[[nodiscard]] std::optional<VimSearchHit> search_hit(const VimEditorView &view,
-                                                     const VimPattern &pattern,
-                                                     const VimSearchRequest &request,
-                                                     std::size_t count)
-{
-    Offset at = request.origin;
-    bool wrapped = false;
-    for (std::size_t step = 0; step < count; ++step)
-    {
-        const auto hit = vim_search(view.text, at, pattern, request.direction);
-        if (!hit.has_value())
-        {
-            return std::nullopt;
-        }
-        at = hit.value().caret;
-        wrapped = wrapped || hit.value().wrapped;
-    }
-    return VimSearchHit{at, wrapped};
-}
-
 // 移動としての検索。NORMAL はキャレット、VISUAL は端点を動かす（決定 3）。
 [[nodiscard]] VimStep search_moved(const VimState &state, const VimEditorView &view,
                                    Offset destination)
@@ -2459,15 +2439,17 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::unsupported_pattern,
                                                      std::string{}, parsed.error()});
     }
-    const auto hit = search_hit(view, parsed.value(), request, resolved_count(state));
+    const auto hit = vim_find_match(view.text, parsed.value(),
+                                    VimMatchRequest{view.text.position_of(request.origin),
+                                                    request.direction, resolved_count(state)});
     if (!hit.has_value())
     {
-        return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::pattern_not_found,
-                                                     remembered.pattern, std::nullopt});
+        return search_noticed(state,
+                              VimSearchNotice{hit.error(), remembered.pattern, std::nullopt});
     }
-    VimStep step = state.pending.has_value()
-                       ? search_operated(state, view, request, hit.value().caret)
-                       : search_moved(state, view, hit.value().caret);
+    const Offset destination = view.text.offset_of(hit.value().position);
+    VimStep step = state.pending.has_value() ? search_operated(state, view, request, destination)
+                                             : search_moved(state, view, destination);
     step.notice = wrap_notice(hit.value(), request.direction);
     return step;
 }
