@@ -3,54 +3,66 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-09-20):** ordinary editing, file open/save, Japanese IME and the first Vim slices
-> (motions, character search, operators, visual selection and viewport navigation) work. Body font size, font family and
-> theme settings persist between launches and can be changed from the Vim command line or Ctrl+P.
-> Multiple tabs and the Ctrl+P file/history lists are still planned.
-> Nothing to download yet (Phase 4).
+> **Status (2026-09-23):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
+> built-in themes, and the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search with
+> highlighting, `.` repeat, blockwise VISUAL) work. One tab only; the Ctrl+P file/history lists, Markdown preview,
+> bookmarks and files above 64 MiB are still planned. Nothing to download yet (Phase 4).
 
-Use `Ctrl` + `+` / `-` to change body size, `Ctrl+0` to reset to 13.5 pt, or `Ctrl` + mouse wheel
-in either editing mode (8–40 pt). The title and status bar keep their size.
+## What works today
+
+Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
+[`docs/adr/`](docs/adr/README.md). The numbers below are as of `main` on 2026-09-23 and are kept in
+`docs/todo/current.md`; the measurements behind them are in `docs/quality/gate-proofs.md`.
+
+- **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
+- **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret. Done.
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1339 oracle-generated
+  fixtures in `tests/vim/` are checked by CTest. Implemented: `h j k l 0 $ ^ w b e gg G`, Home / End,
+  `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x r`, `d c y` + motion, `dd cc yy`,
+  `D C Y`, `p P` with a typed unnamed register, `i a I A o O` with counts, `.` (also in VISUAL), text objects
+  `iw aw iW aW i" a" i' a' i( a( i{ a{ i[ a[ i< a<` and the backtick pair (`b` / `B` aliases), search `/ ? n N * #`
+  with `hlsearch` on by default (`:noh`, `:set (no)hlsearch`), virtual columns (Tab = 8, wide = 2), `u` / Ctrl-r,
+  `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, block `p P`, `.`), literal CR in LF files, Esc everywhere.
+  Not yet: `it ip is`, `incsearch`, `:s :g`, named registers, macros `q @`, `J s S R`, `> < gu gU`, autoindent,
+  drag-to-select, block `I A c C`, general Ex (`:w :q`, ranges, pipes, history).
+- **FR-004 one toggle** — the status bar switches "通常 | Vim". Done.
+- **FR-005 tabs in the title bar** — the tab band with one tab and the window controls; multiple tabs are planned.
+- **FR-006 Ctrl+P** — lists the settings commands only (themes, `set fontsize=`, `set guifont=`); files, folders,
+  bookmarks and history are planned.
+- **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
+- **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS; CRLF / LF kept as read; unsaved mark and
+  "save?" prompt. Done.
+- **FR-009 tab restore** — waits for multiple tabs.
+- **FR-010 bookmarks and jump list** — planned.
+- **FR-011 look** — frameless window with Mica title bar, follows the OS light / dark theme (aubergine dark, orange
+  accent), one paint per frame. Done.
+- **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the
+  IME off, INSERT turns it back on. Done.
+- **FR-013 1 GB files** — planned; files above 64 MiB are not supported yet.
+- **FR-014 Per-Monitor v2 DPI** — declared in the manifest; DIP to pixel conversion is integer-only in the core.
+- **FR-015 speed** — five Release benchmarks in `eng/measure-speed.py` against per-machine baselines in
+  `eng/perf-reference.json` (startup 191 ms, window visible 35 ms, one keystroke 0.9 ms, 16 MiB file 250 ms on the
+  reference machine). Run on demand and in `-Full`; the required CI check does not measure.
+- **FR-016 colorscheme** — nine built-in themes plus up to 128 user themes from
+  `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`; `:colorscheme <name>` / `system`, Tab completion, Ctrl+P. Done.
+- **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v1`. Done.
+
+## Using the settings commands
+
 In Vim NORMAL, press `:` and enter `colorscheme` to see the current theme, `colorscheme dracula`
 to switch, or `colorscheme system` to follow Windows. `Tab` / `Shift+Tab` cycle completions.
 Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Enter` applies;
 `Esc` cancels. Left/Right, Home/End, Backspace/Delete and single-line `Ctrl+V` edit the command.
-This settings command line does not yet support ranges, pipes, history, `:w` or `:q`.
+Press `Ctrl+P` in either editing mode to choose the same commands from a filtered list.
 
-Press `Ctrl+P` in either editing mode to choose a settings command. Type part of a theme name
-(for example `drac`) to filter, use Up/Down or Tab/Shift+Tab to select, and press Enter or click
-to choose. Font-setting candidates fill the input so a value can be entered before execution.
-Esc, Ctrl+C, Ctrl+P again or a click outside closes the list and preserves the body selection.
-This first command palette does not yet list files, folders, bookmarks or history.
-
-In Vim NORMAL or VISUAL, use `f{char}` / `F{char}` to find a character on the current line,
-or `t{char}` / `T{char}` to stop just before it. `;` repeats the search and `,` repeats in the
-opposite direction. Counts and `d` / `c` / `y` use the same search (for example `2f,` or `dt)`).
-Esc cancels a pending target character; in VISUAL it keeps the selection active.
-Target characters use the existing Vim input path; IME composition in NORMAL/VISUAL remains disabled.
-
-Use `gg` / `G` to jump to the first / last line, or `12gg` / `12G` to jump to line 12.
-The caret lands on the first non-blank character. These motions also extend VISUAL selections;
-with `d` / `c` / `y`, they operate on whole lines including both ends.
-An explicit `1G` means line 1, so `dG` and `d1G` can select different ranges.
-Esc cancels a pending `g` while keeping VISUAL active. Other `g` commands are not yet supported.
-
-In Vim NORMAL, `o` / `O` opens a line below / above and enters INSERT. Counts such as `3o`
-open one line first and repeat the entered text when Esc is pressed. Opening and typing form
-one undo unit; moving the caret or saving creates an undo boundary. Arrow/Home/End/Page movement
-cancels the remaining repetition. In VISUAL, both `o` and `O` swap the selection ends.
-Autoindent and general `i` / `a` counts are not yet supported.
-
-Settings live in `%LOCALAPPDATA%/NeNeNib/settings.v1`, created on the first setting change.
-The format and failure behavior are specified in
+The settings file format and failure behavior are specified in
 [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in
 [ADR 0022](docs/adr/0022-ex-command-line-and-settings-evaluation.md) and
 [ADR 0023](docs/adr/0023-command-palette-and-shared-input-session.md).
-Put a [user-theme file](docs/design/user-theme-format.md) in
-`%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`, restart, then choose it through the same
-`colorscheme` command or Ctrl+P list. Up to 128 files are loaded once per launch. Invalid themes
-report their name and reason; a missing or broken saved theme leaves the original settings intact
-and blocks settings writes until repaired and restarted. See
+Put a [user-theme file](docs/design/user-theme-format.md) in the themes folder, restart, then choose it through
+the same `colorscheme` command or Ctrl+P list. Invalid themes report their name and reason; a missing or broken
+saved theme leaves the original settings intact and blocks settings writes until repaired and restarted. See
 [ADR 0025](docs/adr/0025-user-theme-catalog-and-selection.md).
 
 ## What it will be
