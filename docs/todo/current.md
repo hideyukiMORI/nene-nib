@@ -7,6 +7,10 @@
 
 ## 現在の Issue
 
+**直近の実装は [Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUALで行った変更の `.`）**。VISUAL で完了した変更は「範囲の大きさ」と「VISUAL を終えた鍵の列」を記録し、`.` はキャレットから同じ大きさを選び直してから同じ `accept` 経路へ再生する（[ADR 0033](../adr/0033-vim-visual-dot-repeat-by-extent.md) 受理）。`VimRepeatRecord` に `optional<VimVisualExtent>`、`VimReplay` に `optional<VimVisualExtent> reselect` を足しただけで、効果は 1 鍵 1 つのまま。選び直しは core の純関数 `vim_visual_reselect` 1 本。ADR 0030 の決定 5（VISUAL の変更は記録を消す）はこの ADR が置換した。追加 78 fixture・計 1055 件、`--vim-dot` 1593 checks、共有 6 scope（変更前と同数）、unit 全体 10833 checks、`nib_unit` 2.28 s、build/tidy/symbols/conformance/format 成功。画面確認は未実施。詳細は gate-proofs 5-ab、統合状態は GitHub が正。
+
+実測 138 ケースで ADR 0033 の決定を 2 つ直した（`N.` は VISUAL の記録では回数を使わない・桁は 1 行なら個数/複数行なら最終行の絶対桁/`$` は「行末まで」のまま）。**合わせていないのは 1 点**で、固定 Vim は桁を仮想桁で数えるが、この engine の `Column` は code point で `wanted_column` から `H M L` まで一貫している。仮想桁は表示幅の表と tabstop（＝ `Ctrl-v` と同じ前提）が要るので別 Issue に送り、Tab と幅の混ざった本文の fixture は採らず `--vim-dot` の対象 unit が engine の答えを固定している。
+
 **直近のテスト整備は [Issue #97](https://github.com/hideyukiMORI/nene-nib/issues/97)（scope専用の契約を既定の単体実行へ）**。`--vim-dot` / `--vim-text-objects` の契約が selector 指定時にしか走っていなかったので、契約部分を fixture と分けて `verify_vim_scope_contracts` の表にまとめ、既定実行（CTest の `nib_unit`）へ載せた。既定は 8733 → 8823 checks（+90）・1.45 → 1.56 s、selector は 909 / 1623 checks のまま。テストの内容・閾値・fixture は変えていない。詳細はgate-proofs 5-y。
 
 統合済み: #87 は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)、#93 は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)、#97 は [PR #102](https://github.com/hideyukiMORI/nene-nib/pull/102)、#88 / #94 は PR #89 / #95 で main `8f2c363` へ。#100（検索・ADR 0032 受理）は [PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) で main `b07c574` へ統合済み（fixture 977 件）。進行中は [Issue #98](https://github.com/hideyukiMORI/nene-nib/issues/98)（`fixtures.json` の整形・`chore/98-fixtures-json-format`・draft [PR #105](https://github.com/hideyukiMORI/nene-nib/pull/105)）と [Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUAL の `.`・別 worktree で並行）。
@@ -62,7 +66,9 @@ Issue #68 / PR #69（C4a）、#66 / PR #67（C3b）、#64 / PR #65（C3a）、#6
 
 ## 実装したもの（Issue #87まで）
 
-Vimの`.`: NORMALの直前の変更を回数1つと鍵の列で記録し、`.` / `N.` で同じ経路へ再生する。`x d c y`系・`D C`・`r`・`p P`・`i a I A o O` ＋ 入力 ＋ `<Esc>`、`f/t/;`・`gg/G` を含む待ちも対象。移動・yank・undo/redo・Ex開始・取消（範囲が作れない・回数が入らない・検索が外れる・Escなど12経路）は記録を変えず、VISUALで行った変更は記録を消す。`.` 1回はundo 1単位で、回数付き `i a I A` も入力を繰り返す。
+Vimの`.`: NORMALの直前の変更を回数1つと鍵の列で記録し、`.` / `N.` で同じ経路へ再生する。`x d c y`系・`D C`・`r`・`p P`・`i a I A o O` ＋ 入力 ＋ `<Esc>`、`f/t/;`・`gg/G` を含む待ちも対象。移動・yank・undo/redo・Ex開始・取消（範囲が作れない・回数が入らない・検索が外れる・Escなど12経路）は記録を変えない。`.` 1回はundo 1単位で、回数付き `i a I A` も入力を繰り返す。
+
+VISUALの`.`: VISUALで完了した変更（`d x c r`）は範囲の大きさ（文字単位は行数と「行末まで/桁」・行単位は行数）を記録し、`.` はキャレットから同じ大きさを選び直してから鍵を再生する。行や桁が足りなければ畳むが記録は縮まず、`N.` は大きさを変えない。桁は code point 単位で、Tab と幅の混ざった本文だけ固定 Vim（仮想桁）と食い違う。
 
 Vimのr: NORMALの回数分/文字・行単位VISUALの選択範囲を1回のreplaceで置換する。元の行境界と無名レジスタを保ち、1操作ずつundo/redoできる。普通のUnicode文字とTab、NORMALのEnterが対象。次キー待ちは検索/gと排他的。
 
@@ -93,12 +99,12 @@ C2: 設定の保存・復元、8〜40 ptの本文拡縮（Ctrl+`+` / `-` / `0` �
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
 Vim の `Ctrl-v`（矩形）/ VISUAL の `p u ~ > < J I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL /
-autoindent / VISUALで行った変更の `.` / 名前つきレジスタ / `J s S R` / VISUALのr<Enter>（#85）/ rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `hlsearch` / `incsearch` / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
+autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `Ctrl-v` が同じ前提） / 名前つきレジスタ / `J s S R` / VISUALのr<Enter>（#85）/ rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `hlsearch` / `incsearch` / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
 複数タブ・Ctrl+Pのファイル/フォルダ/ブックマーク/履歴統合・折り返し・横スクロール・ドラッグ選択。
 
 ## 次の 1 手
 
-[Issue #98](https://github.com/hideyukiMORI/nene-nib/issues/98)（`fixtures.json` の整形）は実装・限定検証・文書まで済み、draft [PR #105](https://github.com/hideyukiMORI/nene-nib/pull/105)。Ready・必須 check・merge は設計リナが行う。
-その後は #91（VISUAL の `.`・並行中）→ #99（テキストオブジェクト残差）→ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。
+[Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUAL の `.`）は実装・限定検証・文書まで済み、draft [PR #107](https://github.com/hideyukiMORI/nene-nib/pull/107)。Ready・必須 check・merge は設計リナが行う。#98 は main `a44f380` へ統合済みで、#91 はその上に rebase してある。
+その後は #99（テキストオブジェクト残差）→ 仮想桁（`virtcol`）＋ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。仮想桁の Issue は未起票。
 `eng/test-conformance.py` の `test_verification_policy.py` 6 件は、この機械の端末符号化（cp932）で pwsh / subprocess の出力が読めないことによる**既存の失敗**で、未変更の `b07c574` でも同じ 5 件が落ちる（残り 1 件は `validate-git.ps1` が `git show` の UTF-8 を pwsh の入力符号化で受ける問題で、main の commit `8f2c363` でも同じく落ちる）。#98 が原因ではないので別 Issue へ切る。
 今回の結果と未確認は [日報](../reports/2026-09-22.md) / [引き継ぎ](../handoffs/2026-09-22.md)。変更に関係する検証だけを行い、成功結果を再利用する。

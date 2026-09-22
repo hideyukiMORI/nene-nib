@@ -855,3 +855,34 @@ base `b07c574`（`chore/98-fixtures-json-format`）。`tests/vim/fixtures.json` 
 production の C++・fixture の入力・期待値・閾値・除外・重大度は 1 つも変えていない。`eng/symbols.py`・カバレッジ・速さ（QLT-014）・Release build・`check.ps1 -Full` は実行していない。リンク境界と core / application の翻訳単位が不変で、差分が JSON のバイト列と検査器・生成器の Python だけだからである（QLT-001 / QLT-012・ADR 0021）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 **無関係な既存の失敗（この作業が原因ではない）。** `python eng/test-conformance.py`（conformance 全体・157 tests）は `tests/conformance/test_verification_policy.py` の 6 件で落ちる。5 件は `subprocess` の `text=True` が cp932 の端末出力を読めず `result.stdout` / `stderr` が `None` になるもので、**未変更の `b07c574` を別 worktree に出して同じテストだけを走らせても同じ 5 件が落ちる**（この機械の環境依存）。6 件目は `test_pr_event_uses_the_record_validator` で、`eng/validate-git.ps1` が `git show -s --format=%B` の UTF-8 出力を pwsh の入力符号化（この機械は Shift_JIS）で受けるため、日本語の subject が壊れて GIT-003 になる。**既存の main の commit `8f2c363` を同じ経路に流しても同じく落ちる**（`chore(eng): fixtures.jsonの正準形めEか所…` のように化ける）ので、#98 の commit に固有の問題ではない。Issue #94 が直したのは python 側の出力（`PYTHONUTF8`）で、pwsh 側の入力符号化は残っている。設計リナへ報告して別 Issue に切る。#98 に関わる `test_conformance.py` / `test_vim_oracle.py` / `test_coverage.py` / `test_symbols.py` / `test_speed.py` は成功している。
+
+### 5-ab. VISUALの変更の`.`（Issue #91・ADR 0033・2026-09-22）
+
+統合単位は [PR #107](https://github.com/hideyukiMORI/nene-nib/pull/107)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
+base `a44f380`（origin/main。ADR 0033 の 1 commit を積んだ `feat/91-vim-visual-dot` を #98 の merge のあとに rebase した）。ADR 0033 を実測のあとで**受理**にし、**実測と食い違った 2 つの決定は期待値ではなく ADR と実装を直した**（決定 6 の `N.`・決定 5 の桁の数え方）。`VimRepeatRecord` に `std::optional<VimVisualExtent> visual`、`VimReplay` に `std::optional<VimVisualExtent> reselect` を足し、新しい 3 型（`VimCharacterExtent` / `VimLineExtent` / `VimVisualExtent`）と core の純関数 1 本（`vim_visual_reselect`）を置いた。記録の分岐は `vim_step` の後段の 1 か所のまま（`vim_recorded` が前のモードで分け、`visual_recorded` が VISUAL の記録を作る）。controller は `VimReplay.reselect` があれば `VimSelect` と同じ写しで選択を置いてから鍵を流す。UI・IME・描画・保存形式・schema・依存・ゲートの閾値は変更していない。
+
+`python -X utf8 out/issue91-oracle/probe.py`（71）/ `probe2.py`（31）/ `probe3.py`（23）/ `probe4.py`（13）を**実装の前**に実行し、固定 Vim 9.1 を 138 ケース起動して決定を確かめた。証拠は `out/issue91-oracle/probe*.json` / `probe*.txt`。Vim ソースは読んでいない。すべてのケースを命令の切れ目で区切って測っている（5-v の教訓）。決定 1〜4・7〜9 は提案のまま一致。食い違った 2 点は ADR 0033 の「文脈」に実測を書き、決定 5・6 を直した。(1) `N.` は VISUAL の記録では回数を使わない（`vlld` `2.` は 3 文字・`Vd` `2.` は 1 行）。(2) 桁は Vim では**仮想桁**で、1 行の記録は個数、複数行の記録は最終行の**絶対**桁、`$` の記録は「行末まで」のまま。1 行の個数・複数行の絶対桁・`$` は実装で合わせ、**仮想桁だけは合わせていない**（この engine の `Column` は code point・`wanted_column` から `H M L` まで一貫している。`virtcol` は `Ctrl-v` と同じ前提なので別の Issue）。Tab と幅の混ざった本文の fixture は採らず、`--vim-dot` の対象 unit が engine の答えを固定する。
+
+`python -X utf8 out/issue91-oracle/add-fixtures.py --write` は候補 82 件を「命令の切れ目で区切った形」と「1 回の `:normal!` の形」の両方で測り、食い違う 4 件（`clamp-columns-then-dot` / `empty-line-source` / `empty-line-record` / `dot-inside-visual`。どれもビープが残りの鍵を捨てる列）を機械的に拒否した（`out/issue91-oracle/add-fixtures.txt`）。`python -X utf8 eng/vim-oracle.py --regenerate --only visual-dot-` は 78 件だけを測り、既存 977 行を `453a7f7` から逐語再利用した（`out/issue91-oracle/regenerate.log`）。`git diff` の削除行は metadata 2 行だけ。977 件の入力 SHA-256 は #98 の正準形どおり `d86f6d3214c9bd8f62f31426a219c1faa834df0ec633a18b8792027a681619a1` で、1055 件は `fd673b1a3f9bfd93c8628049bd058558ea3aeaac1d9a5a048401d79b62ba135d` になった。同じ選択で 2 回目を再生成して**バイト単位で同一**（`out/issue91-oracle/regenerate2.log`）。**初回の再生で 78 件すべてが実装と一致した**（期待値を直した fixture は無い）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -G Ninja -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=C:/Users/info/WORKS/NeNeNib-91/build/issue91` | worktree の新しい build。起動中の旧版を保持し、同じ target / flags で出力先だけ分離。成功、`out/issue91-configure.log`（generator を明示しないと CMake が Visual Studio を選び `CXX=clang-cl` を無視するので、`-G Ninja` を足した。本体の build と同じ generator） |
+| `cmake --build build --target nib_tests --parallel 4`（engine の 1 つめ） | 新しい 3 型・純関数・記録の分岐の build。初回は clang-tidy が `visual_recorded` / `vim_recorded` の**引数 5 個**（上限 4）を拒否した（`out/issue91-build1.log`）。`VimState` と `VimEffect` を `VimStep` 1 つにまとめて修正し成功（`out/issue91-build2.log`）。閾値・除外・重大度は変えていない |
+| `cmake --build build --target nib_tests --parallel 4`（unit の契約） | 初回は clang-tidy が `last_change.value().visual` の未検査アクセスを拒否した（`out/issue91-build3.log`）。`has_value` を挟む小さな述語に寄せて成功（`out/issue91-build4.log`） |
+| `build/issue91/nib_tests.exe --vim-dot` | **1593 checks すべて成功**。新規 78 fixture ＋ 既存 99 dot / 8 共有境界と、記録の中身（大きさ・鍵の列・回数を持たないこと）・選び直しと再生・`N.` が大きさを変えないこと・畳まれても記録が縮まないこと・記録の入れ替え・VISUAL の中の `.`・undo 1 単位と redo・CRLF の保存 bytes・**仮想桁との差（Tab と幅の混在）**を確認 |
+| `build/issue91/nib_tests.exe`（引数なし） | `vim_step` の後段を全 Vim 経路が通るので、1055 fixture 全部の再生を含む unit 全体を実行した。10149 → **10833 checks** すべて成功 |
+| `build/issue91/nib_tests.exe --vim-search` / `--vim-visual-yank` / `--vim-visual-wanted` / `--vim-text-objects` / `--vim-replace` / `--vim-character-search` | VISUAL の選択・待ち・`.` の記録を共有するため。1375 / 265 / 208 / 1623 / 460 / 621 checks すべて成功（変更前と同数） |
+| `build/issue91/nib_tests.exe --coverage-negative` | 早期 return の経路。22 checks 成功 |
+| `ctest --test-dir build -R '^nib_unit$' --output-on-failure` | CTest から見た既定実行。成功、2.28 s（#98 の 2.13 s から fixture 78 件ぶん増えた） |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | `std::variant` の大きさの型と新しい純関数が core の外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし）。`out/issue91-symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新しい 3 型の 1 ファイル 1 型と、1055 fixture の生成整合（CNF-010）・正準形（CNF-011）。0 violations、`out/issue91-conformance.log` |
+| `clang-format --dry-run --Werror`（`a44f380..HEAD` と作業ツリーの C++ 10 ファイル） | 変更 C++ の整形。初回は `VimVisualReselect.cpp` / `VimStep.cpp` / `NibTests.cpp` が拒否され、`clang-format -i` のあと build と対象テストを再実行して成功。`out/issue91-format.log` |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4`（最終） | 整形後の全 target。成功、`out/issue91-build6.log` |
+
+computer-use による実機の画面確認は**未実施**（native pipe が繋がらないため試みていない）。起動中の旧版 PID には触れていない。本体の `C:\Users\info\WORKS\NeNeNib` には触れていない（worktree `NeNeNib-91` の中だけで build した）。成果物は `build/issue91/NeNeNib.exe`。
+
+FR-003 / ARC-001/004/007/009 / CPP-002/003/004/006/011/012 / QLT-001/008/012/013 / CNF-010/011 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimVisualExtent` の visit、`VimMode` / `VimColumnWish` の switch）に `default` は無い。新しい 3 型はどれも公開 aggregate で、比較は非メンバー（CPP-003）。`reinterpret_cast`・時刻・OS・スレッドは増やしていない。記録は本文・履歴・レジスタを持たず、選択の正本は `EditorState` のまま（engine は選択を持たない・ADR 0018 の決定 3）。
+
+性能は測っていない（差分は入力と編集の経路で、描画とファイルは触っていない）。`VimRepeatRecord` が `optional<variant>` 1 つぶん大きくなるので、1 打鍵あたりの複製がわずかに増える。1 打鍵 0.9 ms の予算への影響は次に速さを測る機会に ADR 0016 の基準値と突き合わせる（ADR 0021）。関連しない設定・テーマ・利用者テーマ・性能・Release build・`check.ps1 -Full` は実行していない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
