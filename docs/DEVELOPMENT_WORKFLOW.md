@@ -145,6 +145,7 @@ Waivers: none | WVR-NNNN
 - 判断とトレードオフ → ADR
 - 一時的な逸脱 → waiver
 - いまのタスク状態 → Issue / PR（`docs/todo/current.md` は要約）
+- 背景席（Agent）への依頼書の型 → `docs/templates/`（実装席は [implementation-seat-brief.md](templates/implementation-seat-brief.md)・ADR 0038 / 0039）
 - コードのコメント → その場の非自明な理由（方針そのものは書かない）
 
 設定ファイルとドキュメントが食い違ったら、**ドキュメントが決定の記録**である。ただし両方がそろうまで merge は止める。

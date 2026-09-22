@@ -54,3 +54,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0036](0036-line-ending-owned-by-text-buffer.md) | 改行の形は本文が 1 つ持ち、`\r` が改行の一部かどうかはその形だけで決まる | 受理 |
 | [0037](0037-search-highlight-as-visible-line-spans.md) | 検索の当たりは見えている行だけを照合器で数え、行ごとの列として描く（`hlsearch` は既定オン） | 受理 |
 | [0038](0038-model-per-seat-and-scripted-preparation.md) | 背景席は仕事の種類でモデルを明示し、繰り返す下ごしらえはスクリプトにする | 受理 |
+| [0039](0039-implementation-seat-per-step-and-small-tool-output.md) | 実装席は工程ごとに新しい席にし、道具の出力を小さく保つ | 受理 |
