@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace nenenib::core
@@ -66,4 +67,9 @@ enum class VimAction : std::uint8_t
     search_word_forward,
     search_word_backward
 };
+
+// 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
+// static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::search_word_backward) + 1;
 } // namespace nenenib::core

@@ -132,8 +132,8 @@ constexpr std::array<VimBinding, 49> normal_bindings{
      {U'#', VimAction::search_word_backward}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
-// 行の無い動作は何もしない（表と動作の一覧が離れたら、その動作の鍵が効かなくなる）。
-constexpr std::array<VimActionBinding, 54> action_groups{
+// 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
+constexpr std::array<VimActionBinding, vim_action_count> action_groups{
     {{VimAction::move_left, VimActionGroup::motion},
      {VimAction::move_down, VimActionGroup::motion},
      {VimAction::move_up, VimActionGroup::motion},
@@ -243,6 +243,37 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
     }
     return std::nullopt;
 }
+
+// 表の中でその動作を指す行の数。ちょうど 1 でなければ表が動作の一覧とずれている。
+[[nodiscard]] constexpr std::size_t rows_for(VimAction action) noexcept
+{
+    std::size_t rows = 0;
+    for (const VimActionBinding binding : action_groups)
+    {
+        if (binding.action == action)
+        {
+            ++rows;
+        }
+    }
+    return rows;
+}
+
+[[nodiscard]] constexpr bool every_action_has_one_row() noexcept
+{
+    for (std::size_t value = 0; value < vim_action_count; ++value)
+    {
+        if (rows_for(static_cast<VimAction>(value)) != 1)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static_assert(action_groups.size() == vim_action_count,
+              "動作 → 大分類の表は動作と同じ数の行を持つ（CPP-012）");
+static_assert(every_action_has_one_row(),
+              "どの動作も表にちょうど 1 行。欠落と重複はここでコンパイルが落ちる（CPP-002）");
 
 [[nodiscard]] std::optional<VimActionGroup> group_for(VimAction action) noexcept
 {
