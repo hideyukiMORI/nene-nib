@@ -44,9 +44,12 @@
 #include "VimSelect.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectBinding.hpp"
+#include "VimTextObjectCancel.hpp"
+#include "VimTextObjectOutcome.hpp"
 #include "VimTextObjectRange.hpp"
 #include "VimTextObjectRequest.hpp"
 #include "VimTextObjectScope.hpp"
+#include "VimTextObjectSpan.hpp"
 #include "VimVisualExtent.hpp"
 #include "VimVisualRange.hpp"
 #include "VimWordEndStop.hpp"
@@ -2746,15 +2749,12 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return performed(from, view.text, range.range.begin, range);
 }
 
-// VISUAL。選択を範囲に置き換える（決定 4）。行単位になる範囲でも VISUAL は文字単位のままで、
-// caret を最後の行の内容の終わりに置くと選択が改行まで届く（実測）。
+// VISUAL。両端は範囲関数が決めた値をそのまま置く（決定 4 と Issue #99 の補足）。行単位になる
+// 範囲でも VISUAL は文字単位のままで、caret が最後の行の内容の終わりに載ると選択が改行まで
+// 届く（実測）。
 [[nodiscard]] VimStep selected_object(const VimState &state, const VimEditorView &view,
-                                      const VimMotionRange &range)
+                                      const Selection &selected)
 {
-    const Offset last = vim_text_object_caret(view.text, range);
-    const bool backward = view.selection.caret < view.selection.anchor;
-    const Selection selected =
-        backward ? Selection{last, range.range.begin} : Selection{range.range.begin, last};
     VimState next = visual_resting(state, VimMode::visual);
     next.wanted_column =
         VimWantedColumn{VimColumnWish::at_column, view.text.position_of(selected.caret).column};
@@ -2762,13 +2762,40 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 [[nodiscard]] VimStep completed_text_object(const VimState &state, const VimEditorView &view,
-                                            const VimMotionRange &range)
+                                            const VimTextObjectSpan &span)
 {
     if (state.pending.has_value())
     {
-        return operated_on_object(state, view, range);
+        return operated_on_object(state, view, span.range);
     }
-    return selected_object(state, view, range);
+    return selected_object(state, view, span.selection);
+}
+
+// 範囲にならなかったとき（ADR 0031 の補足）。保留中のオペレータは捨て、キャレット（VISUAL では
+// 選択）だけが走査の止まった所へ動く。本文は変わらないので `.` の記録はそのまま捨てられる
+// （ADR 0030 の決定 3）。動いていなければ何も起きない鍵として返す。
+[[nodiscard]] VimStep completed_text_object(const VimState &state, const VimEditorView &view,
+                                            const VimTextObjectCancel &cancel)
+{
+    VimState next = finished_input_wait(state);
+    if (!state.pending.has_value())
+    {
+        if (cancel.selection == view.selection)
+        {
+            return VimStep{std::move(next), VimNoEffect{}};
+        }
+        next.wanted_column = VimWantedColumn{VimColumnWish::at_column,
+                                             view.text.position_of(cancel.selection.caret).column};
+        return VimStep{std::move(next), VimSelect{cancel.selection}};
+    }
+    const Offset caret = rested_in(view.text, cancel.selection.caret, VimMode::normal);
+    if (caret == view.selection.caret)
+    {
+        return VimStep{std::move(next), VimNoEffect{}};
+    }
+    next.wanted_column =
+        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(caret).column};
+    return VimStep{std::move(next), VimMoveTo{caret}};
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
@@ -2783,14 +2810,12 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
-    const auto range =
+    const VimTextObjectOutcome outcome =
         vim_text_object_range(view.text, view.selection,
                               VimTextObjectRequest{scope, object.value()}, resolved_count(state));
-    if (!range.has_value())
-    {
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
-    }
-    return completed_text_object(state, view, range.value());
+    // 答えの種類が増えたら写し先が足りずコンパイルが落ちる（CPP-002）。
+    return std::visit([&](const auto &value) { return completed_text_object(state, view, value); },
+                      outcome);
 }
 
 [[nodiscard]] VimStep completed_prefix(const VimState &state, const VimEditorView &view,

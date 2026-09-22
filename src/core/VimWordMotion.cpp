@@ -276,6 +276,42 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
     return word_overshot;
 }
 
+// bck_word の stop=TRUE の本体。空白を飛んでから同じ種類の連なりの先頭まで戻る。
+// 真なら今の位置が答え（本文の先頭か空行に着いた）。偽なら 1 つ行き過ぎている。
+[[nodiscard]] bool retreated_to_run_start(const TextBuffer &text, VimScanPoint &point)
+{
+    while (class_at(point) == blank_group)
+    {
+        if (at_empty_line(point) || step_backward(text, point) == stepped_past_end)
+        {
+            return true;
+        }
+    }
+    const std::uint32_t group = class_at(point);
+    while (class_at(point) == group)
+    {
+        if (step_backward(text, point) == stepped_past_end)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// bckend_word の「この語の始まりより前へ」。行をまたぐか本文の先頭に着いたら偽（そこが答え）。
+[[nodiscard]] bool retreated_before_run(const TextBuffer &text, VimScanPoint &point,
+                                        std::uint32_t group)
+{
+    while (class_at(point) == group)
+    {
+        if (step_backward(text, point) != stepped_inside)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 // end_word の empty=TRUE。空白を飛ぶ途中に空行があればそこで止まる（Vim の goto finished）。
 [[nodiscard]] bool skipped_blanks_to_word(const TextBuffer &text, VimScanPoint &point)
 {
@@ -380,6 +416,51 @@ std::optional<Offset> vim_word_object_end(const TextBuffer &text, Offset caret, 
         return std::nullopt;
     }
     static_cast<void>(step_backward(text, point));
+    return offset_of(text, point);
+}
+
+std::optional<Offset> vim_word_object_begin(const TextBuffer &text, Offset caret, VimWordClass kind)
+{
+    VimScanPoint point = scan_point(text, caret, kind);
+    const std::uint32_t group = class_at(point);
+    if (step_backward(text, point) == stepped_past_end)
+    {
+        return std::nullopt;
+    }
+    // 1 つ手前が違う種類なら動かない（stop = TRUE）。それ以外は連なりの先頭まで戻る。
+    const bool retreats = group == blank_group || group == class_at(point);
+    if (!retreats || !retreated_to_run_start(text, point))
+    {
+        static_cast<void>(step_forward(text, point));
+    }
+    return offset_of(text, point);
+}
+
+std::optional<Offset> vim_word_object_previous_end(const TextBuffer &text, Offset caret,
+                                                   VimWordClass kind)
+{
+    VimScanPoint point = scan_point(text, caret, kind);
+    const std::uint32_t group = class_at(point);
+    const int stepped = step_backward(text, point);
+    if (stepped == stepped_past_end)
+    {
+        return std::nullopt;
+    }
+    if (stepped == stepped_over_line)
+    {
+        return offset_of(text, point);
+    }
+    if (group != blank_group && !retreated_before_run(text, point, group))
+    {
+        return offset_of(text, point);
+    }
+    while (class_at(point) == blank_group)
+    {
+        if (at_empty_line(point) || step_backward(text, point) != stepped_inside)
+        {
+            return offset_of(text, point);
+        }
+    }
     return offset_of(text, point);
 }
 

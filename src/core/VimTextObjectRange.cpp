@@ -1,13 +1,18 @@
 #include "VimTextObjectRange.hpp"
 
 #include "LineNumber.hpp"
+#include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "Selection.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimBracketPair.hpp"
+#include "VimMotionRange.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimTextObject.hpp"
+#include "VimTextObjectCancel.hpp"
 #include "VimTextObjectScope.hpp"
+#include "VimTextObjectSpan.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 
@@ -72,6 +77,36 @@ constexpr char32_t escape_character = U'\\';
     return code == 0 ? blank_group : vim_character_class(code, kind);
 }
 
+// 本文の終わり（最後の行の内容の終わり）。前向きの走査が尽きるのはここだけで、回数が尽きた
+// `d9iw` のキャレットもここに残る（Vim 9.1 で実測・ADR 0031 の補足）。
+[[nodiscard]] Offset buffer_end(const TextBuffer &text)
+{
+    return text.line_end(LineNumber{text.line_count()});
+}
+
+// 範囲の最後の文字の位置（VISUAL の caret になる）。行単位の範囲では最後の行の内容の終わり
+// （Vim が NUL を置く桁）で、そこに caret を置くと選択が改行まで届く（実測）。
+[[nodiscard]] Offset object_caret(const TextBuffer &text, const VimMotionRange &range)
+{
+    switch (range.kind)
+    {
+    case VimRegisterKind::uninitialized:
+        // テキストオブジェクトの範囲は文字単位か行単位でだけ作られる。
+        std::unreachable();
+    case VimRegisterKind::lines:
+        return range.range.end;
+    case VimRegisterKind::characters:
+        return is_empty(range.range) ? range.range.begin : previous_in_line(text, range.range.end);
+    }
+    std::unreachable();
+}
+
+// 範囲をそのまま選ぶ置き方。anchor は範囲の先頭、caret は最後の文字。
+[[nodiscard]] Selection forward_selection(const TextBuffer &text, const VimMotionRange &range)
+{
+    return Selection{range.range.begin, object_caret(text, range)};
+}
+
 // Vim の inc()。行の内容の終わりへ、そこからは次の行の先頭へ。本文が尽きたら nullopt。
 [[nodiscard]] std::optional<Offset> advanced(const TextBuffer &text, Offset at)
 {
@@ -102,6 +137,38 @@ constexpr char32_t escape_character = U'\\';
         return advanced(text, next.value());
     }
     return next;
+}
+
+// Vim の dec()。行の先頭からは前の行の内容の終わり（NUL の桁）へ。本文の先頭では nullopt。
+[[nodiscard]] std::optional<Offset> retreated(const TextBuffer &text, Offset at)
+{
+    const LineNumber line = line_of(text, at);
+    if (text.line_start(line) < at)
+    {
+        return previous_in_line(text, at);
+    }
+    if (line.value <= 1)
+    {
+        return std::nullopt;
+    }
+    return text.line_end(LineNumber{line.value - 1});
+}
+
+// Vim の decl()。空でない行の内容の終わりは飛ばして、その行の最後の文字まで戻る。
+[[nodiscard]] std::optional<Offset> retreated_to_text(const TextBuffer &text, Offset at)
+{
+    const auto back = retreated(text, at);
+    if (!back.has_value())
+    {
+        return std::nullopt;
+    }
+    const LineNumber line = line_of(text, back.value());
+    const bool at_line_end = back.value() == text.line_end(line);
+    if (at_line_end && !(back.value() == text.line_start(line)))
+    {
+        return retreated(text, back.value());
+    }
+    return back;
 }
 
 // ------------------------------------------------------------------ 語（決定 2・決定 5）
@@ -159,6 +226,25 @@ constexpr char32_t escape_character = U'\\';
         return text.line_end(LineNumber{line.value - 1});
     }
     return previous_in_line(text, stop);
+}
+
+// 1 単位ぶんの始まり（Vim の current_word の後ろ向きの 1 周）。前向きと同じ条件で 2 つに
+// 分かれ、真なら連なりの先頭へ、偽なら手前の語の末尾の 1 つ後ろへ戻る（Issue #99 で実測）。
+[[nodiscard]] std::optional<Offset> unit_begin(const TextBuffer &text, Offset at,
+                                               VimTextObjectRequest request)
+{
+    const VimWordClass kind = word_class_of(request.object);
+    const bool include = request.scope == VimTextObjectScope::around;
+    if ((class_at(text, at, kind) == blank_group) == include)
+    {
+        return vim_word_object_begin(text, at, kind);
+    }
+    const auto end = vim_word_object_previous_end(text, at, kind);
+    if (!end.has_value())
+    {
+        return std::nullopt;
+    }
+    return advanced_to_text(text, end.value());
 }
 
 // 2 つめ以降の単位。incl で 1 つ進めてから、同じ 1 周をもう一度（決定 5 の「積」）。
@@ -223,49 +309,78 @@ constexpr char32_t escape_character = U'\\';
         text, with_leading_blanks(text, begin, end, word_class_of(request.object)), end);
 }
 
-[[nodiscard]] std::optional<VimMotionRange> fresh_word_range(const TextBuffer &text, Offset caret,
-                                                             VimTextObjectRequest request,
-                                                             std::size_t count)
+// 選択が無いときの 1 つめの単位と、そこから回数ぶん。
+[[nodiscard]] std::optional<Offset> fresh_word_end(const TextBuffer &text, Offset begin,
+                                                   VimTextObjectRequest request, std::size_t count)
 {
-    const Offset begin = run_start_in_line(text, caret, word_class_of(request.object));
     const auto first = unit_end(text, begin, request);
     if (!first.has_value())
     {
         return std::nullopt;
     }
-    const auto end = extended_end(text, first.value(), request, count - 1);
-    if (!end.has_value())
-    {
-        return std::nullopt;
-    }
-    return word_motion_range(text, begin, end.value(), request);
+    return extended_end(text, first.value(), request, count - 1);
 }
 
-// VISUAL で選択が 1 文字より大きいとき。始まりは選択の小さいほうのまま、caret 側だけ伸びる。
-[[nodiscard]] std::optional<VimMotionRange> extended_word_range(const TextBuffer &text,
-                                                                const Selection &selection,
-                                                                VimTextObjectRequest request,
-                                                                std::size_t count)
+// 前向き（選択が無いか、caret が anchor 以上）。VISUAL で選択が 1 文字より大きいときは
+// 始まりが選択の小さいほうのままで、caret 側だけ伸びる。
+[[nodiscard]] VimTextObjectOutcome forward_word_outcome(const TextBuffer &text,
+                                                        const Selection &selection,
+                                                        VimTextObjectRequest request,
+                                                        std::size_t count)
 {
-    const auto end = extended_end(text, selection.caret, request, count);
+    const bool grows = has_selection(selection);
+    const Offset begin =
+        grows ? selection_range(selection).begin
+              : run_start_in_line(text, selection.caret, word_class_of(request.object));
+    const auto end = grows ? extended_end(text, selection.caret, request, count)
+                           : fresh_word_end(text, begin, request, count);
     if (!end.has_value())
     {
-        return std::nullopt;
+        // 回数が本文で尽きた。Vim はそこまで作りかけた形を残してキャレットを本文の終わりへ
+        // 運ぶ（`d9iw` が最後の文字に載るのはこれ・実測）。
+        return VimTextObjectCancel{Selection{begin, buffer_end(text)}};
     }
-    return characters_through(text, selection_range(selection).begin, end.value());
+    const VimMotionRange range = grows ? characters_through(text, begin, end.value())
+                                       : word_motion_range(text, begin, end.value(), request);
+    return VimTextObjectSpan{range, forward_selection(text, range)};
 }
 
-[[nodiscard]] std::optional<VimMotionRange> word_range(const TextBuffer &text,
-                                                       const Selection &selection,
-                                                       VimTextObjectRequest request,
-                                                       std::size_t count)
+// 後ろ向きの選択（caret が anchor より小さい）。Vim は anchor を動かさず、caret だけを
+// 1 単位ずつ手前へ運ぶ（`vhhiwiw` が語と空白を交互にさかのぼるのはこれ・Issue #99 で実測）。
+// 本文の先頭で尽きたら取消で、そのときも caret は本文の先頭に残る。
+[[nodiscard]] VimTextObjectOutcome backward_word_outcome(const TextBuffer &text,
+                                                         const Selection &selection,
+                                                         VimTextObjectRequest request,
+                                                         std::size_t count)
 {
-    const bool forward = !(selection.caret < selection.anchor);
-    if (has_selection(selection) && forward)
+    Offset caret = selection.caret;
+    for (std::size_t step = 0; step < count; ++step)
     {
-        return extended_word_range(text, selection, request, count);
+        const auto back = retreated_to_text(text, caret);
+        if (!back.has_value())
+        {
+            return VimTextObjectCancel{Selection{selection.anchor, Offset{0}}};
+        }
+        const auto moved = unit_begin(text, back.value(), request);
+        if (!moved.has_value())
+        {
+            return VimTextObjectCancel{Selection{selection.anchor, Offset{0}}};
+        }
+        caret = moved.value();
     }
-    return fresh_word_range(text, selection.caret, request, count);
+    const Selection grown{selection.anchor, caret};
+    return VimTextObjectSpan{VimMotionRange{selection_range(grown), VimRegisterKind::characters},
+                             grown};
+}
+
+[[nodiscard]] VimTextObjectOutcome word_outcome(const TextBuffer &text, const Selection &selection,
+                                                VimTextObjectRequest request, std::size_t count)
+{
+    if (selection.caret < selection.anchor)
+    {
+        return backward_word_outcome(text, selection, request, count);
+    }
+    return forward_word_outcome(text, selection, request, count);
 }
 
 // ------------------------------------------------------------------ 引用符（決定 6）
@@ -669,7 +784,19 @@ constexpr char32_t escape_character = U'\\';
 {
     const OffsetRange ordered = selection_range(selection);
     return range.range.begin.value >= ordered.begin.value &&
-           vim_text_object_caret(text, range).value <= ordered.end.value;
+           object_caret(text, range).value <= ordered.end.value;
+}
+
+// 向きを保つ置き方（引用符）。後ろ向きの選択では caret が範囲の先頭に残る（Issue #99 で実測。
+// 括弧は同じ形でも必ず前向きになるので、そちらは forward_selection を使う）。
+[[nodiscard]] Selection kept_direction(const TextBuffer &text, const Selection &selection,
+                                       const VimMotionRange &range)
+{
+    if (selection.caret < selection.anchor)
+    {
+        return Selection{object_caret(text, range), range.range.begin};
+    }
+    return forward_selection(text, range);
 }
 
 [[nodiscard]] bool quoted(VimTextObject object)
@@ -713,17 +840,31 @@ pair_range_at(const TextBuffer &text, Offset caret, VimTextObjectRequest request
     }
     return pair_range_at(text, from, request, count + 1);
 }
+
+// 対が見つからなければ取消で、キャレットも選択も動かない（Vim 9.1 で実測）。
+[[nodiscard]] VimTextObjectOutcome paired_outcome(const TextBuffer &text,
+                                                  const Selection &selection,
+                                                  VimTextObjectRequest request, std::size_t count)
+{
+    const auto range = paired_range(text, selection, request, count);
+    if (!range.has_value())
+    {
+        return VimTextObjectCancel{selection};
+    }
+    const Selection placed = quoted(request.object) ? kept_direction(text, selection, range.value())
+                                                    : forward_selection(text, range.value());
+    return VimTextObjectSpan{range.value(), placed};
+}
 } // namespace
 
-std::optional<VimMotionRange> vim_text_object_range(const TextBuffer &text,
-                                                    const Selection &selection,
-                                                    VimTextObjectRequest request, std::size_t count)
+VimTextObjectOutcome vim_text_object_range(const TextBuffer &text, const Selection &selection,
+                                           VimTextObjectRequest request, std::size_t count)
 {
     switch (request.object)
     {
     case VimTextObject::word:
     case VimTextObject::big_word:
-        return word_range(text, selection, request, count);
+        return word_outcome(text, selection, request, count);
     case VimTextObject::double_quote:
     case VimTextObject::single_quote:
     case VimTextObject::backtick:
@@ -731,22 +872,7 @@ std::optional<VimMotionRange> vim_text_object_range(const TextBuffer &text,
     case VimTextObject::brace:
     case VimTextObject::bracket:
     case VimTextObject::angle:
-        return paired_range(text, selection, request, count);
-    }
-    std::unreachable();
-}
-
-Offset vim_text_object_caret(const TextBuffer &text, const VimMotionRange &range)
-{
-    switch (range.kind)
-    {
-    case VimRegisterKind::uninitialized:
-        // テキストオブジェクトの範囲は文字単位か行単位でだけ作られる。
-        std::unreachable();
-    case VimRegisterKind::lines:
-        return range.range.end;
-    case VimRegisterKind::characters:
-        return is_empty(range.range) ? range.range.begin : previous_in_line(text, range.range.end);
+        return paired_outcome(text, selection, request, count);
     }
     std::unreachable();
 }

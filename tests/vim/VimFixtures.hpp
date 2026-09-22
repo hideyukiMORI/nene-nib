@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 fd673b1a3f9bfd93c8628049bd058558ea3aeaac1d9a5a048401d79b62ba135d / 1055 fixtures
+// fixtures.json: sha256 e4c933becb6ac8a8ce3125af3a9b8405d4c417c2956373a56fb7a4bae36287ef / 1090 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1055> vim_fixtures{{
+constexpr std::array<VimFixture, 1090> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1067,6 +1067,41 @@ constexpr std::array<VimFixture, 1055> vim_fixtures{{
     {"visual-dot-utf8-last-line", "あいうえおかきくけこ\nさしすせそたちつてと", "vjld0.", "そたちつてと", 1, 1, "すせ", "v", std::nullopt},
     {"visual-dot-utf8-multiline", "あいうえお\nかきくけこ\nさしすせそ\nたちつてと", "vjldjj0.", "くけこ\nさしすせそ\nつてと", 3, 1, "たち", "v", std::nullopt},
     {"visual-dot-utf8-linewise", "あいうえお\nかきくけこ\nさしすせそ\nたちつてと", "Vjd.", "", 1, 1, "さしすせそ\nたちつてと\n", "V", std::nullopt},
+    {"text-object-residual-count-out-caret", "alpha beta gamma", "d9iw", "alpha beta gamma", 1, 16, "", "", std::nullopt},
+    {"text-object-residual-count-out-blank-tail", "alpha   ", "y9iw", "alpha   ", 1, 8, "", "", std::nullopt},
+    {"text-object-residual-count-out-multiline", "alpha beta\nsecond line\nthird", "j3ld9iw", "alpha beta\nsecond line\nthird", 3, 5, "", "", std::nullopt},
+    {"text-object-residual-count-out-empty-line", "ab\n\ncd", "jd9iw", "ab\n\ncd", 3, 2, "", "", std::nullopt},
+    {"text-object-residual-count-out-around", "alpha beta\nsecond line\nthird", "j3ly9aw", "alpha beta\nsecond line\nthird", 3, 5, "", "", std::nullopt},
+    {"text-object-residual-count-out-block-stays", "outer(a, inner(b, c), d) tail", "15ld9i(", "outer(a, inner(b, c), d) tail", 1, 16, "", "", std::nullopt},
+    {"text-object-residual-count-out-block-none", "alpha beta gamma", "5ld9i(", "alpha beta gamma", 1, 6, "", "", std::nullopt},
+    {"text-object-residual-outside-two", "x ((a)) y", "y2i(", "x ((a)) y", 1, 5, "a", "v", std::nullopt},
+    {"text-object-residual-outside-three", "x ((a)) y", "y3i(", "x ((a)) y", 1, 1, "", "", std::nullopt},
+    {"text-object-residual-outside-around-two", "x ((a)) y", "y2a(", "x ((a)) y", 1, 4, "(a)", "v", std::nullopt},
+    {"text-object-residual-outside-sibling", "x (a) (b) y", "y2i(", "x (a) (b) y", 1, 1, "", "", std::nullopt},
+    {"text-object-residual-outside-nested-three", "x (a (b (c) d) e) y", "y3i(", "x (a (b (c) d) e) y", 1, 10, "c", "v", std::nullopt},
+    {"text-object-residual-outside-nested-four", "x (a (b (c) d) e) y", "y4i(", "x (a (b (c) d) e) y", 1, 1, "", "", std::nullopt},
+    {"text-object-residual-outside-multiline", "x\n(\n  a\n) y", "y2i(", "x\n(\n  a\n) y", 1, 1, "", "", std::nullopt},
+    {"text-object-residual-inward-then-outward", "x (a (b (c) d) e) y", "9ly4i(", "x (a (b (c) d) e) y", 1, 10, "", "", std::nullopt},
+    {"text-object-residual-back-keeps-anchor", "alpha beta gamma", "5lvhiwy", "alpha beta gamma", 1, 1, "alpha ", "v", std::nullopt},
+    {"text-object-residual-back-blank-unit", "alpha beta gamma", "10lvhhhhiwy", "alpha beta gamma", 1, 6, " beta ", "v", std::nullopt},
+    {"text-object-residual-back-two-units", "alpha beta gamma", "9lvhhiwiwy", "alpha beta gamma", 1, 6, " beta", "v", std::nullopt},
+    {"text-object-residual-back-three-units", "alpha beta gamma", "9lvhhiwiwiwy", "alpha beta gamma", 1, 1, "alpha beta", "v", std::nullopt},
+    {"text-object-residual-back-around-units", "alpha beta gamma", "9lvhhawawy", "alpha beta gamma", 1, 2, "lpha beta", "v", std::nullopt},
+    {"text-object-residual-back-count", "alpha beta gamma", "9lvhh2iwy", "alpha beta gamma", 1, 6, " beta", "v", std::nullopt},
+    {"text-object-residual-back-big-word", "foo.bar baz qux", "9lvhhiWy", "foo.bar baz qux", 1, 1, "foo.bar ba", "v", std::nullopt},
+    {"text-object-residual-back-cross-line", "alpha beta\nsecond line\nthird", "G2lvkiwiwy", "alpha beta\nsecond line\nthird", 1, 7, "beta\nsecond line\nthi", "v", std::nullopt},
+    {"text-object-residual-back-cross-line-blank", "alpha beta\nsecond line\nthird", "G2lvkiwiwiwy", "alpha beta\nsecond line\nthird", 1, 6, " beta\nsecond line\nthi", "v", std::nullopt},
+    {"text-object-residual-back-empty-line", "ab\n\ncd", "Glvkiwy", "ab\n\ncd", 1, 1, "ab\n\ncd", "v", std::nullopt},
+    {"text-object-residual-back-line-visual", "alpha beta\nsecond line\nthird", "j2lVkiwy", "alpha beta\nsecond line\nthird", 1, 1, "alpha beta\nsec", "v", std::nullopt},
+    {"text-object-residual-back-then-swapped", "alpha beta gamma", "4lvhhiwoiwy", "alpha beta gamma", 1, 1, "alpha ", "v", std::nullopt},
+    {"text-object-residual-back-block-turns-forward", "if {a; b;} else", "8lvhhi{ly", "if {a; b;} else", 1, 5, "a; b;}", "v", std::nullopt},
+    {"text-object-residual-back-block-caret-side", "outer(a, inner(b, c), d) tail", "17lvhhi(ly", "outer(a, inner(b, c), d) tail", 1, 16, "b, c)", "v", std::nullopt},
+    {"text-object-residual-back-block-one-more", "outer(a, inner(b, c), d) tail", "17lvhhi(i(y", "outer(a, inner(b, c), d) tail", 1, 7, "a, inner(b, c), d", "v", std::nullopt},
+    {"text-object-residual-back-block-multiline", "if {\n  a;\n  b;\n} else", "jj2lvki{y", "if {\n  a;\n  b;\n} else", 2, 1, "  a;\n  b;\n", "v", std::nullopt},
+    {"text-object-residual-back-quote-keeps-direction", "say \"hello world\" now", "8lvhhi\"ly", "say \"hello world\" now", 1, 7, "ello world", "v", std::nullopt},
+    {"text-object-residual-back-quote-around", "say \"hello world\" now", "8lvhha\"y", "say \"hello world\" now", 1, 5, "\"hello world\" ", "v", std::nullopt},
+    {"text-object-residual-back-quote-grows", "a \"bb\" c \"dd\" e", "4lvhi\"y", "a \"bb\" c \"dd\" e", 1, 3, "\"bb\"", "v", std::nullopt},
+    {"text-object-residual-back-quote-grows-second", "a \"bb\" c \"dd\" e", "11lvhi\"y", "a \"bb\" c \"dd\" e", 1, 10, "\"dd\"", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
