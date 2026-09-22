@@ -38,6 +38,20 @@ file held. CI has no Vim and cannot regenerate, so that one line is what CNF-010
 eng/conformance.py compares against tests/vim/fixtures.json to see that the two have not drifted
 apart (Issue #44). The digest covers the bytes of the file as they are stored; .gitattributes
 keeps them LF, so nothing is normalised here.
+
+`canonical_fixtures_json` is the one definition of how tests/vim/fixtures.json is written: `[` and
+`]` alone on their own lines, one fixture per line indented by two spaces, compact separators, the
+keys in the order `name`, `text`, `keys`, `settings` (only when it holds something) and `viewport`
+(only when the case has one), non-ASCII text as itself, LF endings and a final newline. Both
+writers call it -- `--regenerate` rewrites the file before it measures anything, so the digest it
+records is the digest of the canonical bytes -- and CNF-011 in eng/conformance.py compares the
+stored bytes with what it returns, so the form cannot drift from the check (Issue #98).
+
+`--format` does that rewrite alone: it needs no Vim, reuses every generated row from `--reuse-ref`
+verbatim, and only writes the new digest into the header. It refuses to do so unless the reuse
+ref's fixtures hold exactly the same records, so reformatting can never change an expectation.
+One consequence of the one-time reformatting: `--regenerate --only` against a ref from before
+Issue #98 is refused, because dropping an empty `settings` reads as a changed input there.
 """
 
 from __future__ import annotations
@@ -373,17 +387,101 @@ def git_output(root: Path, arguments: list[str]) -> bytes:
     return result.stdout
 
 
-def write_header(target: Path, rendered: str) -> None:
+# tests/vim/fixtures.json の整形を決めるのはここ 1 か所だけである（ARC-001・Issue #98）。
+# 書き戻す側（--format / --regenerate）と検査する側（CNF-011・eng/conformance.py）が同じ関数を呼ぶ。
+FIXTURE_KEYS = ("name", "text", "keys", "settings", "viewport")
+VIEWPORT_KEYS = ("visible_lines", "first_visible", "line", "column")
+
+
+def canonical_fixture(fixture: dict) -> dict:
+    """One fixture with the canonical keys in the canonical order.
+
+    An empty `settings` is left out entirely instead of being written as `[]`: the oracle reads it
+    with `fixture.get("settings", [])`, so the two spellings are the same input and only one of
+    them may be stored. An unknown key is refused rather than dropped, because dropping it would
+    silently throw away part of a fixture's input.
+    """
+    if not isinstance(fixture, dict):
+        raise ValueError("a fixture must be a JSON object")
+    name = fixture.get("name", "?")
+    unknown = sorted(set(fixture) - set(FIXTURE_KEYS))
+    if unknown:
+        raise ValueError(f"{name}: unknown fixture key(s): {', '.join(unknown)}")
+    missing = [key for key in ("name", "text", "keys") if key not in fixture]
+    if missing:
+        raise ValueError(f"{name}: a fixture needs {', '.join(missing)}")
+    canonical = {key: fixture[key] for key in ("name", "text", "keys")}
+    if fixture.get("settings"):
+        canonical["settings"] = fixture["settings"]
+    viewport = viewport_of(fixture)
+    if viewport is not None:
+        canonical["viewport"] = {key: viewport[key] for key in VIEWPORT_KEYS}
+    return canonical
+
+
+def canonical_fixtures_json(fixtures: list[dict]) -> bytes:
+    """The canonical bytes of tests/vim/fixtures.json: one fixture per line, UTF-8, LF.
+
+    One line per fixture is what makes a new case a one-line diff and keeps a merge conflict inside
+    the case it belongs to; the brackets stay on their own lines so the first and last case read
+    like every other one.
+    """
+    if not isinstance(fixtures, list):
+        raise ValueError("fixtures.json must hold a JSON array of fixtures")
+    rows = [json.dumps(canonical_fixture(fixture), ensure_ascii=False, separators=(",", ":"))
+            for fixture in fixtures]
+    if not rows:
+        return b"[]\n"
+    body = ",\n".join(f"  {row}" for row in rows)
+    return f"[\n{body}\n]\n".encode("utf-8")
+
+
+def write_atomically(target: Path, content: bytes) -> None:
     temporary_path = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", delete=False,
-                                         dir=target.parent, prefix=f".{target.name}.") as temporary:
-            temporary.write(rendered)
+        with tempfile.NamedTemporaryFile("wb", delete=False, dir=target.parent,
+                                         prefix=f".{target.name}.") as temporary:
+            temporary.write(content)
             temporary_path = Path(temporary.name)
         temporary_path.replace(target)
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
+
+
+def write_header(target: Path, rendered: str) -> None:
+    # 生成物も LF で書く（.gitattributes の eol=lf）。rendered の改行は LF だけである。
+    write_atomically(target, rendered.encode("utf-8"))
+
+
+def write_canonical_fixtures(source: Path) -> bytes:
+    """Store tests/vim/fixtures.json in the canonical form and return the bytes it now holds."""
+    content = source.read_bytes()
+    canonical = canonical_fixtures_json(json.loads(content.decode("utf-8")))
+    if canonical != content:
+        write_atomically(source, canonical)
+    return canonical
+
+
+def reformatted_header(fixtures: list[dict], fixture_content: bytes,
+                       reuse_fixture_content: bytes,
+                       reuse_header_content: str) -> tuple[str, str]:
+    """The reuse ref's header with the digest of the reformatted JSON, and the version it names.
+
+    Reformatting may change the bytes of the fixtures file and nothing else, so the reuse ref has
+    to hold the same records: its canonical bytes are compared with the ones just written. Once
+    that holds, every generated row and the oracle metadata come from the reuse ref verbatim, which
+    is why no Vim is needed and why nothing here can invent an expectation.
+    """
+    old_rows, metadata = parsed_header(reuse_header_content, reuse_fixture_content)
+    old_fixtures = json.loads(reuse_fixture_content.decode("utf-8"))
+    if canonical_fixtures_json(old_fixtures) != fixture_content:
+        raise ValueError("--format would change fixture inputs, not only bytes; regenerate instead")
+    if metadata["path"] != str(VIM) or metadata["settings"] != " / ".join(DEFAULT_SETTINGS):
+        raise ValueError("reuse oracle path or default settings do not match")
+    rows = [old_rows[fixture["name"]] for fixture in fixtures]
+    digest = hashlib.sha256(fixture_content).hexdigest()
+    return header_from_rows(rows, metadata["version"], digest), metadata["version"]
 
 
 def main() -> int:
@@ -395,6 +493,9 @@ def main() -> int:
                         help="measure matching fixtures and reuse the remaining rows")
     parser.add_argument("--reuse-ref", default="HEAD", metavar="GIT-REF",
                         help="commit whose unchanged fixture rows are reused (default: HEAD)")
+    parser.add_argument("--format", action="store_true",
+                        help="rewrite tests/vim/fixtures.json in the canonical form without Vim, "
+                             "reusing every generated row from --reuse-ref")
     arguments = parser.parse_args()
     source = root / "tests/vim/fixtures.json"
     target = root / "tests/vim/VimFixtures.hpp"
@@ -403,10 +504,26 @@ def main() -> int:
     names = [fixture["name"] for fixture in fixtures]
     if len(set(names)) != len(names):
         raise ValueError("fixture names must be unique")
-    if not arguments.regenerate:
+    if arguments.format and (arguments.regenerate or arguments.only):
+        parser.error("--format measures nothing and selects nothing; use it on its own")
+    if not arguments.regenerate and not arguments.format:
         if arguments.only:
             parser.error("--only requires --regenerate")
         print(f"{len(fixtures)} fixture(s) in {source}; pass --regenerate to run {VIM}")
+        return 0
+    # 整形はここで 1 回だけ書き戻し、以降の SHA-256 は正準形のバイト列で取る（CNF-011）。
+    content = write_canonical_fixtures(source)
+    fixtures = json.loads(content.decode("utf-8"))
+    if arguments.format:
+        commit = git_output(root, ["rev-parse", "--verify", "--end-of-options",
+                                   f"{arguments.reuse_ref}^{{commit}}"]).decode("ascii").strip()
+        rendered, version = reformatted_header(
+            fixtures, content,
+            git_output(root, ["show", f"{commit}:tests/vim/fixtures.json"]),
+            git_output(root, ["show", f"{commit}:tests/vim/VimFixtures.hpp"]).decode("utf-8"))
+        write_header(target, rendered)
+        print(f"Vim oracle: 0 measured / {len(fixtures)} reused from {commit}; "
+              f"{version}; written to {target}")
         return 0
     selected_names(fixtures, arguments.only) if arguments.only else set()
     if not VIM.is_file():
@@ -431,7 +548,6 @@ def main() -> int:
             rendered = header(records, version, hashlib.sha256(content).hexdigest())
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    # 生成物も LF で書く（.gitattributes の eol=lf）。
     write_header(target, rendered)
     measured_count = len(fixtures) if not arguments.only else len(selected_names(fixtures, arguments.only))
     reused_count = len(fixtures) - measured_count
