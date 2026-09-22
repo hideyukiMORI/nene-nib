@@ -43,4 +43,14 @@ namespace nenenib::core
 // もう末尾にいるなら動かず、空白を飛ぶ途中の空行では空行で止まる。本文が尽きたら nullopt。
 [[nodiscard]] std::optional<Offset> vim_word_object_end(const TextBuffer &text, Offset caret,
                                                         VimWordClass kind);
+
+// 後ろ向きの走査（Issue #99 で実測。VISUAL で caret が anchor より小さいときだけ使う）。
+// vim_word_object_begin は Vim の bck_word(1, kind, stop=TRUE)。同じ種類の連なりの先頭へ戻り、
+// 1 つ手前が違う種類なら動かない。空行に着いたらそこで止まる。本文の先頭で尽きたら nullopt。
+[[nodiscard]] std::optional<Offset> vim_word_object_begin(const TextBuffer &text, Offset caret,
+                                                          VimWordClass kind);
+// vim_word_object_previous_end は Vim の bckend_word(1, kind, eol=TRUE)。手前の語の末尾へ戻り、
+// 行をまたいだらその行の内容の終わり（NUL の桁）で止まる。本文の先頭で尽きたら nullopt。
+[[nodiscard]] std::optional<Offset> vim_word_object_previous_end(const TextBuffer &text,
+                                                                 Offset caret, VimWordClass kind);
 } // namespace nenenib::core
