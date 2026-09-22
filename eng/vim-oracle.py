@@ -158,7 +158,9 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str],
     if finished.returncode != 0 or not output.is_file():
         raise RuntimeError(f"vim failed ({finished.returncode}) on {keys!r}: "
                            f"{finished.stderr.decode('utf-8', errors='replace')}")
-    lines = output.read_text(encoding="utf-8").split("\n")
+    # バイト列で読んで '\n' だけで分ける。read_text の universal newline は行の中の literal CR を
+    # LF に変えてしまい、Vim が文字として書いた '\r' が改行に化ける（ADR 0036 の決定 4）。
+    lines = output.read_bytes().decode("utf-8").split("\n")
     while lines and lines[-1] == "":
         lines.pop()
     # writefile は文字列の中の改行を NUL で書くので、レジスタの改行をここで戻す。
@@ -174,6 +176,25 @@ def run_vim(work: Path, text: str, keys: str, settings: list[str],
     return "\n".join(lines), line, column, register, kind, measured_viewport
 
 
+def check_literal_cr(name: str, text: str) -> None:
+    """literal CR を含む text が LF 文書として読まれることを確かめる（ADR 0036 の決定 4）。
+
+    Vim は 'fileformats' の既定で「全部の行が CR で終わる」ときだけ dos と読んで CR を落とす
+    （`:help 'fileformats'`）。私たちの `detect_line_ending`（ADR 0010 の決定 4）は最初の `\\n` の
+    直前だけを見るので、最初の行が CR で終わる text は CRLF と読む。どちらかに当たる text は
+    fixture として採れないので、黙って通さずに拒否する。
+    """
+    if "\r" not in text:
+        return
+    lines = text.split("\n")
+    if all(line.endswith("\r") for line in lines):
+        raise ValueError(f"{name}: every line ends with CR, so Vim reads the text as dos and "
+                         "drops it; leave at least one line without a trailing CR")
+    if lines[0].endswith("\r"):
+        raise ValueError(f"{name}: the first line ends with CR, so detect_line_ending reads the "
+                         "text as CRLF; put the literal CR somewhere else")
+
+
 def measure(work: Path, fixture: dict) -> dict:
     name, text, keys = fixture["name"], fixture["text"], fixture["keys"]
     settings = fixture.get("settings", [])
@@ -181,6 +202,7 @@ def measure(work: Path, fixture: dict) -> dict:
         raise ValueError(f"{name!r}: a fixture needs a name and a key sequence")
     if text.endswith("\n"):
         raise ValueError(f"{name}: fixture text must not end with a newline")
+    check_literal_cr(name, text)
     viewport = viewport_of(fixture)
     measured = run_vim(work, text, keys, settings, viewport)
     # NORMAL で終わっていれば、もう 1 つ Esc を足しても何も変わらない（上の注記）。

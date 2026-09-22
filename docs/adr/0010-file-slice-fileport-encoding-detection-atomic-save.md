@@ -26,7 +26,8 @@ SPECIFICATION の FR-008（D8: UTF-8 既定・Shift_JIS 自動判別・改行は
    どれでもない → `undecodable`（開かず理由を 1 行で出す）。**UTF-8 が常に勝つ**のが D8 の「UTF-8 既定」の意味。
    BOM は明示的なラベルなので、BOM で始まる列は `utf8_bom` か `undecodable` のどちらかで、CP932 へは落ちない
 4. **改行の判別は core の純関数 `detect_line_ending(utf8)`**: 最初の `\n` の直前が `\r` なら `crlf`、そうでなければ `lf`、`\n` が無ければ `crlf`。
-   本文のバイト列は変えない（混在は混在のまま保つ。ARC-009）。Enter は判別した形を挿入する。単独の `\r` は改行ではなく文字として残す
+   本文のバイト列は変えない（混在は混在のまま保つ。ARC-009）。Enter は判別した形を挿入する。単独の `\r` は改行ではなく文字として残す。
+   **判別の結果は `TextBuffer` が持つ**（`from_utf8` が 1 度だけ判別し、`insert` / `erase` が引き継ぐ）。`Document` も `EditorState` も自分では判別せず、行の切り方と同じ所から読む（ADR 0036 の決定 1）
 5. **保存は読んだ形を保つ。** BOM の有無・文字コード・（本文に残っている）改行をそのまま書く。Shift_JIS で表せない文字があれば UI が「UTF-8 で保存しますか」と聞き、
    同意なら `utf8` を載せて意図を出し直す。文字コードは意図（`SaveDocument{path, encoding}`）が必ず運び、controller は状態から勝手に変えない
 6. **書き込みは同じフォルダの一時ファイル `<経路>.nib-tmp` に書いて `FlushFileBuffers` → 既存なら `ReplaceFileW`、無ければ `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`。**

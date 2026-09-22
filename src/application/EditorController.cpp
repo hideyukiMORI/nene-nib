@@ -1151,7 +1151,7 @@ void EditorController::accept(const OpenDocument &intent)
         fail(FileFailure::undecodable);
         return;
     }
-    state_ = state_.with_opened(std::move(text).value(), core::detect_line_ending(utf8.value()),
+    state_ = state_.with_opened(std::move(text).value(),
                                 Document{intent.path, encoding.value(), std::size_t{0}});
 }
 

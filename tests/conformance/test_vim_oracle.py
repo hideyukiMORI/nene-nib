@@ -221,6 +221,42 @@ class VimOracleTests(unittest.TestCase):
             self.assertEqual(written, vim_oracle.write_canonical_fixtures(source))
             self.assertEqual([source.name], [p.name for p in Path(directory).iterdir()])
 
+    def test_run_vim_keeps_a_literal_cr_out_of_the_line_split(self):
+        """The report is read as bytes, so a CR Vim wrote as a character stays one (ADR 0036)."""
+        report = b"a\rb\r\nc\ncursor=1,2\nregtype=v\nreg=x\ry\n"
+
+        def fake_run(command, **kwargs):
+            (Path(kwargs["cwd"]) / "out.txt").write_bytes(report)
+            return subprocess.CompletedProcess(command, 0, b"", b"")
+
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(vim_oracle.subprocess, "run", fake_run):
+            body, line, column, register, kind, viewport = vim_oracle.run_vim(
+                Path(directory), "a\rb\r\nc", "h", [])
+        self.assertEqual("a\rb\r\nc", body)
+        self.assertEqual((1, 2), (line, column))
+        self.assertEqual(("x\ry", "v", None), (register, kind, viewport))
+
+    def test_literal_cr_text_is_accepted_only_when_vim_and_we_read_it_the_same_way(self):
+        vim_oracle.check_literal_cr("plain", "abcd\nefgh")
+        vim_oracle.check_literal_cr("inside-a-line", "ab\rcd\nefgh")
+        vim_oracle.check_literal_cr("at-a-later-line-end", "abc\nde\r\nfgh")
+        with self.assertRaisesRegex(ValueError, "Vim reads the text as dos"):
+            vim_oracle.check_literal_cr("all-lines", "ab\r\ncd\r")
+        with self.assertRaisesRegex(ValueError, "Vim reads the text as dos"):
+            vim_oracle.check_literal_cr("one-line", "ab\r")
+        with self.assertRaisesRegex(ValueError, "detect_line_ending reads the"):
+            vim_oracle.check_literal_cr("first-line", "a\r\nbc\ndef")
+
+    def test_measure_refuses_a_literal_cr_text_before_starting_vim(self):
+        run = Mock()
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(vim_oracle.subprocess, "run", run):
+            with self.assertRaises(ValueError):
+                vim_oracle.measure(Path(directory),
+                                   {"name": "crlf", "text": "ab\r\ncd", "keys": "h"})
+        run.assert_not_called()
+
     def test_only_rejects_empty_and_unknown_prefix(self):
         fixtures = [{"name": "known-case", "text": "x", "keys": "h", "settings": []},
                     {"name": "second-case", "text": "y", "keys": "l", "settings": []}]

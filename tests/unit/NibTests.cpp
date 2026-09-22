@@ -2206,6 +2206,46 @@ void verify_line_ending_detection()
     expect(detect_line_ending("a\rb") == LineEnding::crlf, "a lone CR is not a newline");
 }
 
+// 本文が持つ改行の形と、行の切り方（ADR 0036 の決定 1 と決定 2）。'\n' の直前の '\r' を
+// 改行の一部として外すのは CRLF の本文だけで、LF の本文の '\r' は 1 文字である。
+void verify_line_ending_model()
+{
+    expect(TextBuffer::empty().line_ending() == LineEnding::crlf, "a new buffer is CRLF");
+    const auto lf = TextBuffer::from_utf8("abc\nde\r\nfgh").value();
+    expect(lf.line_ending() == LineEnding::lf, "the first newline decides the form");
+    expect(lf.line_count() == 3, "the CR before the LF does not add a line");
+    expect(lf.line_text(LineNumber{2}) == "de\r", "an LF document keeps the CR at the line end");
+    expect(lf.line_end(LineNumber{2}) == Offset{7}, "the content of the line ends after the CR");
+    expect(lf.line_terminator_end(LineNumber{2}) == Offset{8}, "the newline is the LF alone");
+    expect(lf.position_of(Offset{6}) == TextPosition{LineNumber{2}, Column{3}},
+           "the CR is the third code point of its line");
+    expect(lf.offset_of(TextPosition{LineNumber{2}, Column{3}}) == Offset{6},
+           "and the third column is that CR");
+    const auto lone = TextBuffer::from_utf8("a\rb\ncd").value();
+    expect(lone.line_ending() == LineEnding::lf && lone.line_text(LineNumber{1}) == "a\rb",
+           "a CR inside a line is a character");
+    const auto doubled = TextBuffer::from_utf8("a\nb\r\r\nc").value();
+    expect(doubled.line_text(LineNumber{2}) == "b\r\r", "an LF document keeps both CRs");
+
+    const auto crlf = TextBuffer::from_utf8("abc\r\nde\r\r\nfgh").value();
+    expect(crlf.line_ending() == LineEnding::crlf, "the first CRLF decides the form");
+    expect(crlf.line_count() == 3, "CRLF is one newline");
+    expect(crlf.line_text(LineNumber{2}) == "de\r",
+           "in a CRLF document only the CR next to the LF belongs to the newline");
+    expect(crlf.line_end(LineNumber{2}) == Offset{8}, "the extra CR stays in the content");
+    expect(crlf.line_terminator_end(LineNumber{2}) == Offset{10}, "the newline is the CRLF");
+    expect(crlf.line_text(LineNumber{1}) == "abc", "the plain CRLF line has no CR");
+    const auto single = TextBuffer::from_utf8("a\r\nb").value();
+    expect(single.line_text(LineNumber{1}) == "a", "the CR of a CRLF newline is not content");
+
+    expect(lf.insert(Offset{0}, "x\r\ny").line_ending() == LineEnding::lf,
+           "an insertion does not change the form the document was read with");
+    expect(crlf.erase(Offset{0}, Offset{5}).line_ending() == LineEnding::crlf,
+           "and neither does a removal");
+    expect(TextBuffer::empty().insert(Offset{0}, "a\nb").line_ending() == LineEnding::crlf,
+           "an empty buffer stays CRLF, which is what Enter inserts");
+}
+
 // ---------------------------------------------------------------- 経路と題名
 
 void verify_file_path()
@@ -2558,15 +2598,29 @@ constexpr std::size_t vim_visible_lines = 64;
 }
 
 // キャレットの桁をバイトで測り直す。Vim の col('.') はバイト位置で、表示値の桁は code point。
+// oracle の本文は LF で区切られ、行の中の '\r' は文字である（ADR 0036 の決定 4）。TextBuffer へ
+// 入れ直すと先頭の行の末尾の '\r' を改行の形の判別が CRLF と読むので、ここは '\n' だけで数える。
 [[nodiscard]] std::size_t vim_byte_column(const std::string &body, const TextPosition &caret)
 {
-    const auto text = TextBuffer::from_utf8(body);
-    expect(text.has_value(), "the replayed body is valid UTF-8");
-    if (!text.has_value())
+    std::size_t start = 0;
+    for (std::size_t line = 1; line < caret.line.value; ++line)
     {
-        return 0;
+        const std::size_t found = body.find('\n', start);
+        expect(found != std::string::npos, "the replayed body holds the caret's line");
+        if (found == std::string::npos)
+        {
+            return 0;
+        }
+        start = found + 1;
     }
-    return text.value().offset_of(caret).value - text.value().line_start(caret.line).value + 1;
+    const std::size_t stop = std::min(body.find('\n', start), body.size());
+    const std::string_view content = std::string_view(body).substr(start, stop - start);
+    std::size_t byte = 0;
+    for (std::size_t step = 1; step < caret.column.value && byte < content.size(); ++step)
+    {
+        byte = next_code_point(content, Offset{byte}).value;
+    }
+    return byte + 1;
 }
 
 // 入力行が開いているあいだの鍵の写し先。窓と同じ約束の 2 つめの端（ARC-012・ADR 0032 の決定 1）。
@@ -2773,7 +2827,7 @@ void verify_vim_line_jump_fixtures()
             ++selected;
         }
     }
-    expect(selected == 42, "the scoped line-jump suite replays its 42 oracle fixtures");
+    expect(selected == 41, "the scoped line-jump suite replays its 41 oracle fixtures");
 }
 
 void verify_vim_character_search_waiting()
@@ -3444,6 +3498,36 @@ void verify_vim_put_line_endings()
 
 // fixture は LF だけ（Vim が CRLF を fileformat=dos として落とすので oracle に流せない）。
 // CRLF の本文で CR が本文に残らないことは、保存したバイト列で手で測る（ADR 0012 の決定 9）。
+// CRLF の文書は fixture にできない。`-S probe.vim input.txt` の順では `set binary` が間に合わず、
+// 全部の行が CR で終わる入力を Vim は dos と読んで CR を落とし、1 行でも CR で終わらない行が
+// あれば unix と読んで CR を文字として残すからである（ADR 0036 の決定 4 と決定 7・実測）。
+// ここに並ぶのは engine 自身の答えで、同じ鍵の LF の fixture と対になっている。
+// 再生の経路は fixture と同じ 1 本（verify_vim_fixture）を通す（ARC-001）。
+void verify_vim_crlf_documents()
+{
+    constexpr std::array<VimFixture, 10> contracts{{
+        {"crlf-line-jump-G", "a\r\n  b\r\nc", "2G", "a\n  b\nc", 2, 3, "", "", std::nullopt},
+        {"crlf-open-line-below", "aa\r\nbb", "oX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
+        {"crlf-open-line-above", "aa\r\nbb", "jOX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
+        {"crlf-visual-wanted", "abcd\r\nx\r\nabcdef\r\nTAIL", "$vjjd", "abcTAIL", 1, 4,
+         "d\nx\nabcdef\n", "v", std::nullopt},
+        {"crlf-visual-yank", "  abcdef\r\nx\r\nTAIL", "$Vjy", "  abcdef\nx\nTAIL", 1, 1,
+         "  abcdef\nx\n", "V", std::nullopt},
+        {"crlf-replace-char", "abcd\r\nefgh", "l2r<CR>", "a\nd\nefgh", 2, 1, "", "", std::nullopt},
+        {"crlf-replace-char-visual", "ab\r\ncdef\r\ngh", "lvjr\u754c",
+         "a\u754c\n\u754c\u754cef\ngh", 1, 2, "", "", std::nullopt},
+        {"crlf-dot-change-word", "ab cd\r\nef gh", "cwZZ<Esc>j0.", "ZZ cd\nZZ gh", 2, 2, "ef", "v",
+         std::nullopt},
+        {"crlf-dot-open-below", "ab\r\ncd", "ofoo<Esc>.", "ab\nfoo\nfoo\ncd", 3, 3, "", "",
+         std::nullopt},
+        {"crlf-dot-remove-line", "ab\r\ncd\r\nef", "dd.", "ef", 1, 1, "cd\n", "V", std::nullopt},
+    }};
+    for (const VimFixture &contract : contracts)
+    {
+        verify_vim_fixture(contract);
+    }
+}
+
 void verify_vim_crlf()
 {
     Editing editing;
@@ -3464,6 +3548,7 @@ void verify_vim_crlf()
     vim_replay(controller, "jdd");
     static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "on", "dd on the last line took the CRLF before it");
+    verify_vim_crlf_documents();
 }
 
 // 窓が送れる鍵のうち、fixture の記法に無いもの（Tab・矢印）と、NORMAL では効かない鍵。
@@ -3872,8 +3957,10 @@ void verify_vim_replace_cancellation()
     initial.wanted_column =
         nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     const auto waiting = vim_step(initial, view, VimKey{VimCharacter{U'r'}});
+    // <CR> はここに並ばない。VISUAL の r<CR> は選んだ各文字を literal CR に置き換える
+    // （ADR 0036 の決定 5・fixture literal-cr-visual-*）。
     for (const auto key : {VimSpecialKey::escape, VimSpecialKey::backspace,
-                           VimSpecialKey::arrow_left, VimSpecialKey::home, VimSpecialKey::enter})
+                           VimSpecialKey::arrow_left, VimSpecialKey::home})
     {
         const auto cancelled = vim_step(waiting.next, view, VimKey{key});
         expect(cancelled.next.mode == VimMode::visual && !cancelled.next.input_wait.has_value() &&
@@ -3966,13 +4053,11 @@ void verify_vim_replace_contracts()
 
 void verify_vim_replace_scope()
 {
-    constexpr std::array<std::string_view, 12> boundaries{"p-puts-the-character-after-the-caret",
+    constexpr std::array<std::string_view, 10> boundaries{"p-puts-the-character-after-the-caret",
                                                           "p-puts-the-line-below",
                                                           "capital-p-puts-the-line-above",
                                                           "capital-p-of-a-line-on-the-first-line",
                                                           "japanese-p-after-a-code-point",
-                                                          "open-line-crlf-below",
-                                                          "open-line-crlf-above",
                                                           "open-line-count-below",
                                                           "open-line-count-above",
                                                           "open-line-above",
@@ -3981,14 +4066,15 @@ void verify_vim_replace_scope()
     std::size_t selected = 0;
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
-        if (fixture.name.starts_with("replace-char-") ||
+        if (fixture.name.starts_with("replace-char-") || fixture.name.starts_with("literal-cr-") ||
             std::ranges::find(boundaries, fixture.name) != boundaries.end())
         {
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 51, "the scope replays 39 replacements and 12 shared-path boundaries");
+    expect(selected == 76, "the scope replays 37 replacements, 29 literal-CR cases and 10 "
+                           "shared-path boundaries");
     verify_vim_replace_contracts();
     verify_vim_character_search_waiting();
     verify_vim_line_jump_waiting();
@@ -4017,7 +4103,7 @@ void verify_vim_visual_yank_scope()
             ++selected;
         }
     }
-    expect(selected == 33, "the scope replays 23 visual yanks and 10 shared-path boundaries");
+    expect(selected == 32, "the scope replays 22 visual yanks and 10 shared-path boundaries");
 }
 
 void verify_vim_visual_wanted_fixtures()
@@ -4031,7 +4117,7 @@ void verify_vim_visual_wanted_fixtures()
             ++selected;
         }
     }
-    expect(selected == 18, "the scope replays all 18 adopted visual-column fixtures");
+    expect(selected == 17, "the scope replays all 17 adopted visual-column fixtures");
 }
 
 void verify_vim_visual_wanted_continuations()
@@ -4779,7 +4865,7 @@ void verify_vim_open_line_fixtures()
             verify_vim_fixture(fixture);
         }
     }
-    expect(opened == 40, "all 40 measured open-line fixtures were replayed");
+    expect(opened == 38, "all 38 measured open-line fixtures were replayed");
 }
 
 void verify_vim_open_line_capacity()
@@ -5008,6 +5094,7 @@ void verify_text_and_caret()
     verify_encoding_labels();
     verify_encoding_detection();
     verify_line_ending_detection();
+    verify_line_ending_model();
     verify_file_path();
     verify_tab_titles();
     verify_save_state_of_document();
@@ -6182,10 +6269,9 @@ void verify_vim_dot_cancels()
 
 void verify_vim_dot_fixtures()
 {
-    constexpr std::array<std::string_view, 8> boundaries{
-        "open-line-count-below", "open-line-count-above", "open-line-crlf-below",
-        "replace-char-one",      "replace-char-count",    "char-search-f-count",
-        "char-search-t-first",   "line-jump-gg-count"};
+    constexpr std::array<std::string_view, 7> boundaries{
+        "open-line-count-below", "open-line-count-above", "replace-char-one",  "replace-char-count",
+        "char-search-f-count",   "char-search-t-first",   "line-jump-gg-count"};
     std::size_t selected = 0;
     for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
     {
@@ -6197,8 +6283,8 @@ void verify_vim_dot_fixtures()
             ++selected;
         }
     }
-    expect(selected == 185,
-           "the scope replays 99 dot and 78 VISUAL dot fixtures and 8 shared boundaries");
+    expect(selected == 181,
+           "the scope replays 96 dot and 78 VISUAL dot fixtures and 7 shared boundaries");
 }
 
 void verify_vim_dot_contracts()

@@ -89,16 +89,16 @@ void append_insertion(std::vector<Piece> &out, std::size_t start, std::string_vi
 }
 } // namespace
 
-TextBuffer::TextBuffer(Buffer original, Buffer add, std::vector<Piece> pieces)
+TextBuffer::TextBuffer(Buffer original, Buffer add, std::vector<Piece> pieces, LineEnding ending)
     : original_(std::move(original)), add_(std::move(add)), pieces_(std::move(pieces)),
-      size_bytes_(total_length(pieces_)), newline_count_(total_newlines(pieces_))
+      size_bytes_(total_length(pieces_)), newline_count_(total_newlines(pieces_)), ending_(ending)
 {
 }
 
 TextBuffer TextBuffer::empty()
 {
     auto nothing = std::make_shared<const std::string>();
-    return TextBuffer(nothing, nothing, std::vector<Piece>{});
+    return TextBuffer(nothing, nothing, std::vector<Piece>{}, LineEnding::crlf);
 }
 
 std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view text)
@@ -114,7 +114,10 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view te
     {
         pieces.push_back(Piece{PieceSource::original, Offset{0}, text.size(), newlines_in(text)});
     }
-    return TextBuffer(original, std::make_shared<const std::string>(), std::move(pieces));
+    // 改行の形はここで 1 度だけ判別する。以後は本文が持ち回り、開く経路は自分で判別しない
+    // （ADR 0036 の決定 1 / ADR 0010 の決定 4）。
+    return TextBuffer(original, std::make_shared<const std::string>(), std::move(pieces),
+                      detect_line_ending(text));
 }
 
 std::string_view TextBuffer::view_of(const Piece &piece) const noexcept
@@ -160,7 +163,8 @@ TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text)
         append_insertion(next, start, text);
     }
     collect(next, end.value, size_bytes_);
-    return TextBuffer(original_, std::move(add), std::move(next));
+    // 編集はバイト列を変えても改行の形は変えない（ARC-009 / ADR 0036 の決定 1）。
+    return TextBuffer(original_, std::move(add), std::move(next), ending_);
 }
 
 TextBuffer TextBuffer::insert(Offset at, std::string_view text) const
@@ -174,6 +178,11 @@ TextBuffer TextBuffer::erase(Offset begin, Offset end) const
     const std::size_t from = std::min(begin.value, size_bytes_);
     const std::size_t to = std::clamp(end.value, from, size_bytes_);
     return replaced(Offset{from}, Offset{to}, std::string_view{});
+}
+
+LineEnding TextBuffer::line_ending() const noexcept
+{
+    return ending_;
 }
 
 std::size_t TextBuffer::size_bytes() const noexcept
@@ -268,7 +277,10 @@ Offset TextBuffer::line_end(LineNumber line) const noexcept
     const std::size_t start = line_start(line).value;
     std::size_t stop = line.value > newline_count_ ? size_bytes_ : newline_offset(line.value - 1);
     // CRLF の '\r' は行の内容ではない。表示もキャレットもここで止める（ADR 0009 の決定 8）。
-    if (stop > start && text_range(Offset{stop - 1}, Offset{stop}).front() == carriage_return)
+    // LF の本文では '\r' は 1 文字なので外さない。この 1 つの分岐が改行の模型の正本で、
+    // line_terminator_end / line_text / position_of / offset_of はこれに従う（ADR 0036 の決定 2）。
+    if (ending_ == LineEnding::crlf && stop > start &&
+        text_range(Offset{stop - 1}, Offset{stop}).front() == carriage_return)
     {
         --stop;
     }

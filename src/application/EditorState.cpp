@@ -18,7 +18,7 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode)
     : text_(core::TextBuffer::empty()), selection_(core::collapsed_at(core::Offset{0})),
       history_(core::EditHistory::empty()),
       scroll_(ScrollState{core::LineNumber{first_line}, initial_visible_lines}),
-      line_ending_(core::LineEnding::crlf), appearance_(appearance), mode_(mode),
+      appearance_(appearance), mode_(mode),
       vim_(core::vim_resting_state(
           core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized})),
       document_(Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}}),
@@ -65,7 +65,7 @@ const ScrollState &EditorState::scroll() const noexcept
 
 core::LineEnding EditorState::line_ending() const noexcept
 {
-    return line_ending_;
+    return text_.line_ending();
 }
 
 core::Appearance EditorState::appearance() const noexcept
@@ -219,15 +219,13 @@ EditorState EditorState::with_failure(std::optional<FileFailure> failure) const
     return next;
 }
 
-EditorState EditorState::with_opened(core::TextBuffer text, core::LineEnding ending,
-                                     Document document) const
+EditorState EditorState::with_opened(core::TextBuffer text, Document document) const
 {
     EditorState next(*this);
     next.text_ = std::move(text);
     next.selection_ = core::collapsed_at(core::Offset{0});
     next.history_ = core::EditHistory::empty();
     next.scroll_ = ScrollState{core::LineNumber{first_line}, scroll_.visible_lines};
-    next.line_ending_ = ending;
     next.document_ = std::move(document);
     return next;
 }
