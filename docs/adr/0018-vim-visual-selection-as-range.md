@@ -22,7 +22,7 @@ Vim の VISUAL は anchor と caret の**両端の文字を含む**（`v`）か*
 5. **表示と操作は同じ範囲**: controller の `span_of`（選択の描画）と Ctrl+C / Ctrl+X は VISUAL の間 `vim_visual_range` を使い、通常モードは `selection_range` のまま。`d x y c` は `vim_visual_range` の結果を #43 の `removed` / `changed` / `yanked` に流す（範囲 → 効果の経路は 1 本・ARC-001）。レジスタの種類は `visual` → `characters`・`visual_line` → `lines`。`c` は削除して INSERT（undo の単位は ADR 0015 の決定 5 のまま）
 6. **キャレットの寄せ**: `settle_vim_caret` は VISUAL では寄せない（EOL の上に置ける）。VISUAL から NORMAL へ戻るときに寄せる（既存の経路）
 7. **VISUAL で効く鍵**: 移動 `h j k l 0 $ w b e ^`・Home / End・矢印・回数・`o`・`d x y c`・Esc・`v` / `V`（同じ鍵で出る・違う鍵で種類を切り替える）。**効かない鍵は何もしない**（`u U ~ > < J p r I A gv` はこの縦切りでは無い。Vim の `u` は VISUAL では小文字化なので undo に流さない）。**`v` `V` の前の回数は Vim と同じく選ぶ量になる**（`3v` は 3 文字・`3V` は 3 行。`:help v` / `:help V`。2026-09-19 の改訂: 草稿は「回数を捨てる」だったが oracle と `:help` で誤りと分かった）
-8. **やらないこと**: `Ctrl-v`（矩形。`virtcol` が要る）・マウスのドラッグで VISUAL（FR-003。anchor が `EditorState` にあるので、ドラッグが選択を置いて `visual` に切り替える形で足せる）・画面の高さが要る移動（PgUp / PgDn・`Ctrl-d/u`・`H M L`。engine に見えている行数を渡す形と、oracle の `-es` で `lines` が効くかの実測が先）
+8. **やらないこと**: ~~`Ctrl-v`（矩形。`virtcol` が要る）~~ → **[ADR 0035](0035-vim-visual-block-as-column-ranges.md)（Issue #112）で `VimMode::visual_block` として入った。行ごとの範囲は `vim_block_range` が決め、`vim_visual_range` は文字単位と行単位のままである**・マウスのドラッグで VISUAL（FR-003。anchor が `EditorState` にあるので、ドラッグが選択を置いて `visual` に切り替える形で足せる）・画面の高さが要る移動（PgUp / PgDn・`Ctrl-d/u`・`H M L`。engine に見えている行数を渡す形と、oracle の `-es` で `lines` が効くかの実測が先）
 
 ## 強制
 
@@ -33,7 +33,7 @@ Vim の VISUAL は anchor と caret の**両端の文字を含む**（`v`）か*
 
 ## 結果
 
-得られるもの: `v` `V` で選んで `d x y c`。ドラッグで VISUAL（FR-003）は選択を置いてモードを切り替えるだけで足せる。`Ctrl-v` は `vim_visual_range` に矩形の形を 1 つ足す位置が決まった。
+得られるもの: `v` `V` で選んで `d x y c`。ドラッグで VISUAL（FR-003）は選択を置いてモードを切り替えるだけで足せる。~~`Ctrl-v` は `vim_visual_range` に矩形の形を 1 つ足す位置が決まった~~ → 矩形は 1 つの範囲では表せないので、ADR 0035 は `vim_block_range` を別の 1 本として足した（`vim_visual_range` は変えていない）。
 失うもの: engine の入口の型が変わる（`Offset` → `Selection`）ので、#43 までの呼び出し（controller とテストの再生）は全部書き換える。`p` `~` `>` `<` `J` は VISUAL で効かない（何もしない）。
 正直に: `v$` の改行の扱い・`vo` のあとのキャレット・行単位で `j` `k` の欲しい列・空行の `v` は oracle の結果に合わせる（実装の前に規則を書き切らない）。VISUAL の終わりの位置（`'<` `'>`）は fixture では見ない（`d` `y` の結果で範囲を確かめる）。
 

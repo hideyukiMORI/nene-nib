@@ -373,9 +373,43 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
     case core::VimMode::normal:
     case core::VimMode::visual:
     case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
         return true;
     }
     std::unreachable();
+}
+
+// Ctrl+V を矩形の鍵として送るモード（ADR 0035 の決定 9）。INSERT だけは OS の貼付に譲る。
+[[nodiscard]] bool vim_block_key(core::VimMode vim) noexcept
+{
+    switch (vim)
+    {
+    case core::VimMode::insert:
+        return false;
+    case core::VimMode::normal:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
+        return true;
+    }
+    std::unreachable();
+}
+
+// Vim モードで Ctrl と一緒に押された鍵（ADR 0019 / ADR 0035 の決定 9）。表に無い鍵と、
+// 矩形の入口にならない Ctrl+V は空を返し、呼ぶ側の通常モードの表へ落ちる。
+[[nodiscard]] std::optional<core::VimSpecialKey> vim_control_key(WPARAM word,
+                                                                 core::VimMode vim) noexcept
+{
+    const auto special = vim_control_special_for(word);
+    if (special.has_value())
+    {
+        return special;
+    }
+    if (word == 'V' && vim_block_key(vim))
+    {
+        return core::VimSpecialKey::control_v;
+    }
+    return std::nullopt;
 }
 
 [[nodiscard]] LRESULT caption_code(core::TitleBarHit hit) noexcept
@@ -963,6 +997,7 @@ void EditorWindow::send(const application::EditorIntent &intent)
     }
     follow_ime(frame);
     mode_ = frame.mode;
+    vim_mode_ = frame.vim_mode;
     // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
     invalidate();
     update_title(frame);
@@ -1304,7 +1339,7 @@ void EditorWindow::press_control_key(WPARAM word)
     }
     if (mode_ == core::EditMode::vim)
     {
-        const auto special = vim_control_special_for(word);
+        const auto special = vim_control_key(word, vim_mode_);
         if (special.has_value())
         {
             send(application::VimKeyPress{core::VimKey{special.value()}});

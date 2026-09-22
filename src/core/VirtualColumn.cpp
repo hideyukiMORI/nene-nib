@@ -69,27 +69,6 @@ constexpr char32_t tab_character = U'\t';
     return advance == 0 ? column : column + advance - 1;
 }
 
-// `column` を含む文字の、行頭からのバイト位置。行がそれより短ければ行の内容の終わり
-// （Vim が NUL を置く桁）で、`Column` で数えていたときの offset_of と同じ止まり方をする。
-// NORMAL でそこから 1 文字ぶん戻すのも、VISUAL で改行まで選ぶのも呼ぶ側の仕事（ADR 0018 の決定
-// 6）。
-[[nodiscard]] std::size_t byte_at_column(std::string_view line, std::size_t column) noexcept
-{
-    std::size_t at = 0;
-    std::size_t current = 1;
-    while (at < line.size())
-    {
-        const std::size_t advance = advance_of(code_point_at(line, Offset{at}), current);
-        if (advance != 0 && column < current + advance)
-        {
-            return at;
-        }
-        current += advance;
-        at = next_code_point(line, Offset{at}).value;
-    }
-    return line.size();
-}
-
 // 行の内容と、その中での `at` のバイト位置。3 つの桁の関数が同じ 2 つを要る。
 [[nodiscard]] std::pair<std::string, std::size_t> line_and_byte(const TextBuffer &text, Offset at)
 {
@@ -109,16 +88,51 @@ DisplayWidth display_width(char32_t value) noexcept
     return DisplayWidth::single;
 }
 
+std::size_t virtual_width(std::string_view text) noexcept
+{
+    return column_before(text, text.size()) - 1;
+}
+
+VirtualColumn column_of(std::string_view line, std::size_t byte) noexcept
+{
+    return VirtualColumn{column_before(line, byte)};
+}
+
+VirtualColumn column_end_of(std::string_view line, std::size_t byte) noexcept
+{
+    return VirtualColumn{column_through(line, byte)};
+}
+
+// 行がその桁より短ければ行の内容の終わり（Vim が NUL を置く桁）で、`Column` で数えていたときの
+// offset_of と同じ止まり方をする。NORMAL でそこから 1 文字ぶん戻すのも、VISUAL で改行まで選ぶのも
+// 呼ぶ側の仕事（ADR 0018 の決定 6）。
+std::size_t byte_at_column(std::string_view line, VirtualColumn column) noexcept
+{
+    std::size_t at = 0;
+    std::size_t current = 1;
+    while (at < line.size())
+    {
+        const std::size_t advance = advance_of(code_point_at(line, Offset{at}), current);
+        if (advance != 0 && column.value < current + advance)
+        {
+            return at;
+        }
+        current += advance;
+        at = next_code_point(line, Offset{at}).value;
+    }
+    return line.size();
+}
+
 VirtualColumn virtual_column(const TextBuffer &text, Offset at)
 {
     const auto [line, byte] = line_and_byte(text, at);
-    return VirtualColumn{column_before(line, byte)};
+    return column_of(line, byte);
 }
 
 VirtualColumn virtual_column_end(const TextBuffer &text, Offset at)
 {
     const auto [line, byte] = line_and_byte(text, at);
-    return VirtualColumn{column_through(line, byte)};
+    return column_end_of(line, byte);
 }
 
 VirtualColumn caret_virtual_column(const TextBuffer &text, Offset at)
@@ -130,6 +144,6 @@ VirtualColumn caret_virtual_column(const TextBuffer &text, Offset at)
 
 Offset offset_at_virtual_column(const TextBuffer &text, LineNumber line, VirtualColumn column)
 {
-    return Offset{text.line_start(line).value + byte_at_column(text.line_text(line), column.value)};
+    return Offset{text.line_start(line).value + byte_at_column(text.line_text(line), column)};
 }
 } // namespace nenenib::core

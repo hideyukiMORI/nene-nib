@@ -22,6 +22,8 @@ enum class VimSpecialKey : std::uint8_t
     control_d,
     control_u,
     control_f,
-    control_b
+    control_b,
+    // Vim の NORMAL / VISUAL でだけ窓が写す矩形 VISUAL の入口（ADR 0035 の決定 9）。
+    control_v
 };
 } // namespace nenenib::core

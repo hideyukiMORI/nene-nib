@@ -40,6 +40,9 @@ VimMotionRange vim_visual_range(const TextBuffer &text, const Selection &selecti
     {
     case VimMode::normal:
     case VimMode::insert:
+    // 矩形は 1 つの範囲では表せない。行ごとの範囲を決めるのは vim_block_range で、呼ぶ側は
+    // モードで先に分かれる（ADR 0035 の決定 2）。ここへ来たらキャレットの所の空の範囲になる。
+    case VimMode::visual_block:
         return VimMotionRange{OffsetRange{selection.caret, selection.caret},
                               VimRegisterKind::characters};
     case VimMode::visual:

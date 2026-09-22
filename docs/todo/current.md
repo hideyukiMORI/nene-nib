@@ -7,6 +7,10 @@
 
 ## 現在の Issue
 
+**直近の実装は [Issue #112](https://github.com/hideyukiMORI/nene-nib/issues/112)（矩形 VISUAL `Ctrl-v`）**。FR-003 の T2 に残っていた VISUAL の 3 つめを入れた（[ADR 0035](../adr/0035-vim-visual-block-as-column-ranges.md) 受理）。選択の正本は anchor / caret のままで、それを「仮想桁の矩形」と読む行ごとの範囲を core の純関数 `vim_block_range` 1 本が決め、描画の `SelectionSpan`・Ctrl+C / Ctrl+X・`d x y r`・`.` の大きさ・矩形レジスタの貼付がすべてその 1 本を通る。矩形の編集は行ごとの置き換えを運ぶ 3 つの効果（`VimRemoveBlock` / `VimReplaceBlock` / `VimInsertBlock`）で、controller が 1 つの `Edit` に畳んで写すので undo は矩形 1 つで 1 単位になる。`VimRegisterKind::block` と `VimRegister.width` で矩形レジスタの幅を持ち、短い行へ貼るときの空白の埋め・行の追加・回数が固定 Vim と一致する。窓は Vim の NORMAL / VISUAL でだけ Ctrl+V を矩形の鍵に写し、通常モードと Vim INSERT は OS の貼付のまま（決定 9・hide に見てほしい判断）。追加 144 fixture・計 1320 件、`--vim-visual-block` 1204 checks、共有経路（1593 / 265 / 208 / 2232 / 424 / 460）、unit 全体 13076 checks、build/tidy/ASan/UBSan・symbols 2 libs 0・conformance 0・format 成功。**速さは矩形の走査が行数に比例するので明示実行し、0 regression**（1 打鍵 0.925 ms / 16 MiB 265.646 ms・基準値は変えていない）。画面確認は未実施。詳細は gate-proofs 5-af、統合状態は GitHub が正。
+
+実測 228 ケースで ADR 0035 の決定を 6 点直した（端に掛かった Tab / 全角は丸ごと外して空白に置き換わる・取る空白は矩形の内側で残す空白は外側・`$` の印はレジスタに残らず幅 1 つに畳まれる・`r` は文字の数ではなく桁の数だけ書く・貼付の右の空白は貼り先に本文が続くときだけ・`.` の再生は選択の角ではなく記録した幅から矩形を決める）。**合わせていないのは 6 点**（`.` の直前の `$` が桁の記録にも漏れる・VISUAL の `u` `U` が VISUAL から抜ける・`.` のあとの `u` の単位・貼る桁が全角の途中に落ちたとき・矩形レジスタの Tab の幅の数え方・行が矩形より手前で終わる 3 件が 1 回の `:normal!` で再現しないこと）。`c I A C > < J ~ gv`・VISUAL の中の `p`・`virtualedit`・マウスのドラッグでの矩形は範囲外のまま。
+
 **直近の実装は [Issue #111](https://github.com/hideyukiMORI/nene-nib/issues/111)（後ろ向きの VISUAL の引用符の対）**。ADR 0031 が「残る穴」として残していた「後ろ向きの選択で `i" a"` がどの対を選ぶか」を、固定 Vim 9.1 の **645 ケース**で閉じた（[ADR 0031](../adr/0031-vim-text-objects-as-one-range-function.md) に「補足（2026-09-22・Issue #111）」・決定 4 と決定 6 を直した）。穴の正体は「奇数」でも「隙間」でもなく、**非空の選択では対の選び方そのものが選択の向きで変わる**こと（caret の手前の引用符の行頭からの番号が奇数＝ caret が対の外なら、前向きは後ろの対・後ろ向きは手前の対へ渡る）。caret が引用符の上にあるときは自分の引用符を端にせず、anchor は「選択が引用符を含む」「anchor の隣が引用符」なら置き換えた範囲の端へ動かずその場に残る。行をまたぐ選択は取消。`vim_text_object_range` は 1 本のままで、引用符の枝だけを `quote_outcome` に分けた。追加 39 fixture・計 1176 件、`--vim-text-objects` 2232 checks（1912 から）、`--vim-dot` 1593（同数）、unit 全体 11873 checks、build/tidy/ASan/UBSan・symbols 2 libs 0・conformance 0・format 成功。速さ・画面確認は未実施（engine の意味論だけの差分）。詳細は gate-proofs 5-ag、統合状態は GitHub が正。
 
 **直近の実装は [Issue #108](https://github.com/hideyukiMORI/nene-nib/issues/108)（Vim の桁を仮想桁で数える経路を閉じる）**。表示幅の表と仮想桁の計算を core の純関数に 1 本ずつ置き、Vim の桁の規則を使う経路（欲しい列・VISUAL の `.` の桁）だけがそれを通るようにした（[ADR 0034](../adr/0034-vim-virtual-column-one-table.md) 受理）。`VimWantedColumn.column` と `VimCharacterExtent.column` は `VirtualColumn`（`tabstop=8`・`ambiwidth=single` 固定）になり、着地は `offset_at_virtual_column` 1 本を通る。本文の位置・テキストオブジェクト・`f t`・`r`・検索・描画の桁は `Column`（code point）のまま。ADR 0033 が残した「Tab と幅の混ざった本文では固定 Vim と答えが違う」穴はこれで閉じた。追加 47 fixture・計 1137 件、`--vim-virtual-column` 424 checks、欲しい列を使う経路（208 / 989 / 15 / 1593）、unit 全体 11553 checks、build/tidy/ASan/UBSan・symbols 2 libs 0・conformance 0・format 成功。**速さは 1 打鍵に行頭からの走査が増えるので明示実行し、0 regression**（1 打鍵 0.936 ms / 16 MiB 270.950 ms・基準値は変えていない）。画面確認は未実施。詳細は gate-proofs 5-ae、統合状態は GitHub が正。
@@ -106,7 +110,7 @@ C2: 設定の保存・復元、8〜40 ptの本文拡縮（Ctrl+`+` / `-` / `0` �
 ## 動かないもの
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
-Vim の `Ctrl-v`（矩形）/ VISUAL の `p u ~ > < J I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL /
+VISUAL の `p u ~ > < J I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL / 矩形の `c I A C > < J ~` と VISUAL の中の `p` / `virtualedit` /
 autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `Ctrl-v` が同じ前提） / 名前つきレジスタ / `J s S R` / VISUALのr<Enter>（#85）/ rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `hlsearch` / `incsearch` / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
 複数タブ・Ctrl+Pのファイル/フォルダ/ブックマーク/履歴統合・折り返し・横スクロール・ドラッグ選択。
 

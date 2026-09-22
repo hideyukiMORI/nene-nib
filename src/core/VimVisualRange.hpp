@@ -14,7 +14,8 @@ namespace nenenib::core
 // 大きいほうが行の内容の終わり（Vim が NUL を置く桁）に載っていれば改行を含む
 // ＝ `v$d` が次の行と繋ぎ、空行の `v` が改行 1 つを選ぶ（Issue #53 で実測）。
 // `visual_line` は小さいほうの行の行頭から大きいほうの行の内容の終わりまで（行単位）。
-// NORMAL / INSERT で呼ぶと caret の所の空の範囲（選択はそこに無い）。
+// NORMAL / INSERT と矩形（`visual_block`）で呼ぶと caret の所の空の範囲。矩形の範囲は
+// `vim_block_range` が決めるので、呼ぶ側がモードで先に分かれる（ADR 0035 の決定 2）。
 [[nodiscard]] VimMotionRange vim_visual_range(const TextBuffer &text, const Selection &selection,
                                               VimMode mode);
 } // namespace nenenib::core

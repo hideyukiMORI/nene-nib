@@ -1,6 +1,7 @@
 #include "VimVisualReselect.hpp"
 
 #include "LineNumber.hpp"
+#include "VimBlockExtent.hpp"
 #include "VimCharacterExtent.hpp"
 #include "VimColumnWish.hpp"
 #include "VimLineExtent.hpp"
@@ -55,6 +56,23 @@ namespace
 {
     const LineNumber last = line_after(text, text.position_of(caret).line, extent.lines);
     return Selection{caret, text.line_start(last)};
+}
+
+// 矩形（ADR 0035 の決定 7）。左上をキャレットにして、同じ行数と桁数の矩形の右下を選ぶ。
+// `$` は桁を持たないので最終行の内容の終わりへ置き、幅は覆う行から決め直される（実測）。
+[[nodiscard]] Selection reselected(const TextBuffer &text, Offset caret,
+                                   const VimBlockExtent &extent)
+{
+    const LineNumber last = line_after(text, text.position_of(caret).line, extent.lines);
+    switch (extent.wish)
+    {
+    case VimColumnWish::at_line_end:
+        return Selection{caret, text.line_end(last)};
+    case VimColumnWish::at_column:
+        break;
+    }
+    const VirtualColumn right{caret_virtual_column(text, caret).value + extent.width.columns - 1};
+    return Selection{caret, offset_at_virtual_column(text, last, right)};
 }
 } // namespace
 

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "VimBlockWidth.hpp"
 #include "VimRegisterKind.hpp"
 
+#include <optional>
 #include <string>
 
 namespace nenenib::core
@@ -13,5 +15,8 @@ struct VimRegister
 {
     std::string text;
     VimRegisterKind kind;
+    // 矩形のときだけ持つ幅（ADR 0035 の決定 5）。短い行へ貼るときの空白の埋め方は本文だけでは
+    // 決まらないので、固定 Vim も `getregtype()` で幅を返す。
+    std::optional<VimBlockWidth> width = std::nullopt;
 };
 } // namespace nenenib::core

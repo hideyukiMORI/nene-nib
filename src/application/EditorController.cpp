@@ -14,11 +14,16 @@
 #include "StatusItems.hpp"
 #include "TabTitle.hpp"
 #include "Utf8.hpp"
+#include "VimBlockEdit.hpp"
+#include "VimBlockRange.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
+#include "VimInsertBlock.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimNavigate.hpp"
+#include "VimRemoveBlock.hpp"
+#include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimSearchPattern.hpp"
@@ -104,6 +109,7 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     case core::VimMode::normal:
     case core::VimMode::visual:
     case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
         return core::CaretShape::block;
     case core::VimMode::insert:
         return core::CaretShape::bar;
@@ -205,6 +211,23 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
                                   ? core::Column{text.position_of(content_end).column.value + 1}
                                   : text.position_of(core::Offset{end}).column;
     return core::SelectionSpan{core::SelectionPresence::present, first, last};
+}
+
+// 描く範囲。矩形のあいだだけ行ごとの範囲へ差し替わる（ADR 0035 の決定 8）。短い行の右側
+// （本文の無い所）は塗らない＝ Vim の既定と同じ。
+[[nodiscard]] core::OffsetRange block_row(const std::optional<core::VimBlockRange> &block,
+                                          core::LineNumber line, const core::OffsetRange &range)
+{
+    if (!block.has_value())
+    {
+        return range;
+    }
+    const core::VimBlockRange &rows = block.value();
+    if (line.value < rows.first.value || line.value >= rows.first.value + rows.lines.size())
+    {
+        return core::OffsetRange{core::Offset{0}, core::Offset{0}};
+    }
+    return rows.lines.at(line.value - rows.first.value).range;
 }
 } // namespace
 
@@ -445,8 +468,40 @@ core::OffsetRange EditorController::highlighted_range() const
     return core::vim_visual_range(state_.text(), state_.selection(), state_.vim().mode).range;
 }
 
+// 矩形は 1 つの範囲では表せないので、モードで先に分かれる（ADR 0035 の決定 2）。
+std::optional<core::VimBlockRange> EditorController::block_selection() const
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return std::nullopt;
+    case core::EditMode::vim:
+        break;
+    }
+    switch (state_.vim().mode)
+    {
+    case core::VimMode::normal:
+    case core::VimMode::insert:
+    case core::VimMode::visual:
+    case core::VimMode::visual_line:
+        return std::nullopt;
+    case core::VimMode::visual_block:
+        break;
+    }
+    return core::vim_block_range_for(state_.text(), state_.selection(), state_.vim().wanted_column);
+}
+
 void EditorController::copy_selection()
 {
+    const auto block = block_selection();
+    if (block.has_value())
+    {
+        // 矩形は行を文書の改行でつないで置く（ADR 0035 の決定 8）。
+        static_cast<void>(ports_.clipboard.write(
+            with_document_newlines(core::vim_block_text(state_.text(), block.value()),
+                                   core::newline_of(state_.line_ending()))));
+        return;
+    }
     const auto range = highlighted_range();
     if (core::is_empty(range))
     {
@@ -461,6 +516,19 @@ void EditorController::copy_selection()
 
 void EditorController::cut_selection()
 {
+    const auto block = block_selection();
+    if (block.has_value())
+    {
+        // 置けたときだけ切り取る。消す形は engine の `d` と同じ 1 本（ADR 0035 の決定 8）。
+        if (!ports_.clipboard.write(
+                with_document_newlines(core::vim_block_text(state_.text(), block.value()),
+                                       core::newline_of(state_.line_ending()))))
+        {
+            return;
+        }
+        perform(core::vim_remove_block(block.value()));
+        return;
+    }
     const auto range = highlighted_range();
     if (core::is_empty(range))
     {
@@ -632,6 +700,7 @@ void EditorController::settle_vim_caret()
     case core::VimMode::insert:
     case core::VimMode::visual:
     case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
         return;
     case core::VimMode::normal:
         break;
@@ -652,6 +721,7 @@ core::EditBoundary EditorController::vim_boundary() const noexcept
     case core::VimMode::normal:
     case core::VimMode::visual:
     case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
         return core::EditBoundary::separate;
     }
     std::unreachable();
@@ -923,6 +993,45 @@ void EditorController::perform(const core::VimReplaceRange &effect)
                   core::SelectionAnchoring::collapse);
 }
 
+// 矩形の編集（ADR 0035 の決定 3）。行ごとの置き換えを、上の行から下の行までを覆う 1 つの
+// 置き換えに畳んでから既存の replace へ流す。こうすると履歴に入る Edit が 1 つになり、矩形
+// 全体が undo 1 単位になる（固定 Vim も 1 回の `u` で戻す・実測）。改行は文書の形へ直す。
+void EditorController::apply_block(const std::vector<core::VimBlockEdit> &edits, core::Offset caret)
+{
+    if (edits.empty())
+    {
+        move_caret_to(caret, core::SelectionAnchoring::collapse);
+        return;
+    }
+    const std::string_view newline = core::newline_of(state_.line_ending());
+    const core::OffsetRange span{edits.front().range.begin, edits.back().range.end};
+    std::string body;
+    core::Offset at = span.begin;
+    for (const core::VimBlockEdit &edit : edits)
+    {
+        body += state_.text().text_range(at, edit.range.begin);
+        body += with_document_newlines(edit.utf8, newline);
+        at = edit.range.end;
+    }
+    replace(span, body, core::EditBoundary::separate);
+    move_caret_to(caret, core::SelectionAnchoring::collapse);
+}
+
+void EditorController::perform(const core::VimRemoveBlock &effect)
+{
+    apply_block(effect.edits, effect.caret);
+}
+
+void EditorController::perform(const core::VimReplaceBlock &effect)
+{
+    apply_block(effect.edits, effect.caret);
+}
+
+void EditorController::perform(const core::VimInsertBlock &effect)
+{
+    apply_block(effect.edits, effect.caret);
+}
+
 // `.`（ADR 0030 の決定 7）。前後で履歴を閉じるので、再生した命令が 1 つの undo 単位になる。
 // VISUAL の記録なら、鍵を流す前に core が決めた範囲を VimSelect と同じ写しで置く
 // （ADR 0033 の決定 4。engine が mode を VISUAL にしてあるので、ここは選択だけを置く）。
@@ -1090,6 +1199,7 @@ bool EditorController::composition_ignored() const noexcept
     case core::VimMode::normal:
     case core::VimMode::visual:
     case core::VimMode::visual_line:
+    case core::VimMode::visual_block:
         return true;
     }
     std::unreachable();
@@ -1161,12 +1271,13 @@ std::vector<LineView> EditorController::visible_lines() const
     const std::size_t last =
         std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
     const core::OffsetRange range = highlighted_range();
+    const auto block = block_selection();
     std::vector<LineView> lines;
     for (std::size_t number = first; number <= last; ++number)
     {
         const core::LineNumber line{number};
-        lines.push_back(
-            LineView{line, state_.text().line_text(line), span_of(state_.text(), range, line)});
+        lines.push_back(LineView{line, state_.text().line_text(line),
+                                 span_of(state_.text(), block_row(block, line, range), line)});
     }
     return lines;
 }
