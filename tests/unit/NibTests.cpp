@@ -48,6 +48,7 @@
 #include "FilePort.hpp"
 #include "HistoryDirection.hpp"
 #include "HistoryFailure.hpp"
+#include "InputLineView.hpp"
 #include "LayoutRect.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
@@ -4778,7 +4779,7 @@ void verify_ex_input_isolation()
     editor.clipboard().hold(std::string("set fontsize=19"));
     frame = controller.apply(app::PasteCommand{});
     expect(frame.command_line.has_value(), "paste keeps the command active");
-    expect(frame.command_line.value_or(core::CommandLine::empty()).text() == "set fontsize=19",
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "set fontsize=19",
            "clipboard goes to Ex");
     editor.clipboard().hold(std::string("\nBAD"));
     frame = controller.apply(app::PasteCommand{});
@@ -5166,7 +5167,7 @@ void verify_palette_controller()
            "opening keeps body selection and caret");
     static_cast<void>(controller.apply(app::CommandText{"fz"}));
     frame = controller.apply(app::SubmitCommand{});
-    expect(frame.command_line.value_or(core::CommandLine::empty()).text() == ":set fontsize=",
+    expect(frame.command_line.value_or(core::InputLineView{}).text == ":set fontsize=",
            "Enter on a fill candidate stages the value");
     expect(frame.command_palette.has_value() && editor.settings().writes() == 0,
            "fill does not save");
@@ -5232,8 +5233,7 @@ void verify_palette_input_isolation()
            "late IME events cannot edit the body");
     editor.clipboard().hold(std::string("set guifont=MS Gothic:h17"));
     frame = controller.apply(app::PasteCommand{});
-    expect(frame.command_line.value_or(core::CommandLine::empty()).text() ==
-               ":set guifont=MS Gothic:h17",
+    expect(frame.command_line.value_or(core::InputLineView{}).text == ":set guifont=MS Gothic:h17",
            "paste targets the palette query");
     editor.clipboard().hold(std::string("\nbody leak"));
     frame = controller.apply(app::PasteCommand{});

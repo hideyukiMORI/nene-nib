@@ -278,14 +278,14 @@ bool EditorController::command_palette_active() const noexcept
     return input.has_value() && std::holds_alternative<core::CommandPalette>(input.value());
 }
 
-std::optional<core::CommandLine> EditorController::command_line_view() const
+std::optional<core::InputLineView> EditorController::command_line_view() const
 {
     const auto &input = state_.command_input();
     if (!input.has_value())
     {
         return std::nullopt;
     }
-    return command_line_of(input.value());
+    return input_line_of(input.value());
 }
 
 std::optional<CommandPaletteView> EditorController::command_palette_view() const

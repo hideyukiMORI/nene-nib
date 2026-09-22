@@ -13,7 +13,30 @@ namespace
 {
     return palette.input();
 }
+
+// プロンプトの文字はこの表だけが決める。写し先が足りなければコンパイルが落ちる（CPP-002）。
+[[nodiscard]] core::InputLinePrompt prompt_of(const core::CommandLine &)
+{
+    return core::InputLinePrompt::ex;
+}
+
+[[nodiscard]] core::InputLinePrompt prompt_of(const core::CommandPalette &)
+{
+    return core::InputLinePrompt::palette;
+}
 } // namespace
+
+core::InputLineView input_line_of(const CommandInput &input)
+{
+    return std::visit(
+        [](const auto &value) -> core::InputLineView
+        {
+            const core::CommandLine &line = line_of(value);
+            return core::InputLineView{prompt_of(value), std::string(line.text()), line.caret(),
+                                       line.completions(), line.completion_index()};
+        },
+        input);
+}
 
 const core::CommandLine &command_line_of(const CommandInput &input)
 {

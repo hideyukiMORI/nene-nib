@@ -69,7 +69,7 @@ class EditorController final
     void accept(const ActivateCommandChoice &intent);
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
-    [[nodiscard]] std::optional<core::CommandLine> command_line_view() const;
+    [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;
     [[nodiscard]] std::optional<CommandPaletteView> command_palette_view() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
     // IME の 3 つ（ADR 0014 の決定 3）。ComposeText と CancelComposition は本文にも履歴にも
