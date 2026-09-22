@@ -52,7 +52,7 @@ Vim ソースは読まない。help と実測を根拠にし、実測で食い�
 ## 結果
 
 得られるもの: VISUAL の `d x c r` が `.` で繰り返せ、ADR 0030 の決定 5 の穴が閉じる。記録の形は大きさ 1 つ増えるだけで、VISUAL の鍵の意味は既存の表がそのまま定める。
-失うもの・残る穴: **桁は code point 単位なので、Tab と幅の混ざった本文では固定 Vim（仮想桁）と答えが違う**。幅の揃った本文では一致する。直すには `virtcol`（表示幅の表と tabstop）が要り、`Ctrl-v`（矩形）と同じ前提なので一緒に扱う。`Ctrl-v` の大きさは後続（`VimVisualExtent` に 3 つめの値を足す）。`gv` は範囲外。VISUAL の `p` `P` はまだ engine に無いので、足すときに同じ記録へ乗る（Vim はそのときの無名レジスタを使う・実測）。
+失うもの・残る穴: ~~**桁は code point 単位なので、Tab と幅の混ざった本文では固定 Vim（仮想桁）と答えが違う**~~ → **この穴は [ADR 0034](0034-vim-virtual-column-one-table.md)（Issue #108）で閉じた**。`VimCharacterExtent.column` は `VirtualColumn`（表示幅・`tabstop=8`）になり、Tab と幅の混ざった本文でも固定 Vim と一致する（`virtcol-dot-*` の fixture）。決定 5 と決定 8 の「桁は `Column`」「Tab と幅の混ざった本文は fixture にできない」も同じ Issue で置き換わっている。`Ctrl-v` の大きさは後続（`VimVisualExtent` に 3 つめの値を足す）。`Ctrl-v` の大きさは後続（`VimVisualExtent` に 3 つめの値を足す）。`gv` は範囲外。VISUAL の `p` `P` はまだ engine に無いので、足すときに同じ記録へ乗る（Vim はそのときの無名レジスタを使う・実測）。
 
 ## 却下した選択肢
 

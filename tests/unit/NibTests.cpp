@@ -185,6 +185,7 @@ using nenenib::core::body_line_rect;
 using nenenib::core::builtin_themes;
 using nenenib::core::BuiltinTheme;
 using nenenib::core::byte_order_mark;
+using nenenib::core::caret_virtual_column;
 using nenenib::core::CaretMotion;
 using nenenib::core::CaretShape;
 using nenenib::core::ClauseEmphasis;
@@ -200,7 +201,9 @@ using nenenib::core::DeleteDirection;
 using nenenib::core::derive_ui;
 using nenenib::core::detect_encoding;
 using nenenib::core::detect_line_ending;
+using nenenib::core::display_width;
 using nenenib::core::DisplayText;
+using nenenib::core::DisplayWidth;
 using nenenib::core::Edit;
 using nenenib::core::EditBoundary;
 using nenenib::core::EditHistory;
@@ -228,6 +231,7 @@ using nenenib::core::moved_caret;
 using nenenib::core::newline_of;
 using nenenib::core::next_code_point;
 using nenenib::core::Offset;
+using nenenib::core::offset_at_virtual_column;
 using nenenib::core::OffsetRange;
 using nenenib::core::Palette;
 using nenenib::core::palette_for;
@@ -294,6 +298,9 @@ using nenenib::core::VimState;
 using nenenib::core::VimViewport;
 using nenenib::core::VimWordEndStop;
 using nenenib::core::VimWordStop;
+using nenenib::core::virtual_column;
+using nenenib::core::virtual_column_end;
+using nenenib::core::VirtualColumn;
 using nenenib::core::width_of;
 using nenenib::core::without_byte_order_mark;
 using nenenib::tests::VimFixture;
@@ -2766,7 +2773,8 @@ void verify_vim_character_search_waiting()
     const Selection at_start = collapsed_at(Offset{0});
     const VimEditorView view{buffer, at_start, VimViewport{LineNumber{1}, 64}};
     VimState state = empty_vim_state();
-    state.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    state.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     const auto counted = vim_step(state, view, VimKey{VimCharacter{U'2'}});
     const auto waiting = vim_step(counted.next, view, VimKey{VimCharacter{U'f'}});
     expect(waits_for_character(waiting.next, VimCharacterSearchKind::find_forward) &&
@@ -2779,7 +2787,7 @@ void verify_vim_character_search_waiting()
                !found.next.count.has_value() && !found.next.input_wait.has_value(),
            "a successful search records its target and clears transient state");
     expect(found.next.wanted_column ==
-               nenenib::core::VimWantedColumn{VimColumnWish::at_column, Column{4}},
+               nenenib::core::VimWantedColumn{VimColumnWish::at_column, VirtualColumn{4}},
            "a successful search replaces the line-end column wish with its destination");
     const auto digit_waiting = vim_step(state, view, VimKey{VimCharacter{U'f'}});
     const auto digit = vim_step(digit_waiting.next, view, VimKey{VimCharacter{U'1'}});
@@ -2829,7 +2837,8 @@ void verify_vim_character_search_failure()
     VimState state = empty_vim_state();
     state.last_character_search =
         nenenib::core::VimCharacterSearch{VimCharacterSearchKind::till_backward, U'x'};
-    state.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    state.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     const auto counted = vim_step(state, view, VimKey{VimCharacter{U'3'}});
     const auto pending = vim_step(counted.next, view, VimKey{VimCharacter{U'd'}});
     expect(pending.next.wanted_column == state.wanted_column,
@@ -2856,7 +2865,8 @@ void verify_vim_character_search_cancellation()
     visual.mode = VimMode::visual;
     visual.last_character_search =
         nenenib::core::VimCharacterSearch{VimCharacterSearchKind::find_forward, U'x'};
-    visual.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    visual.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     const auto waiting = vim_step(visual, view, VimKey{VimCharacter{U'f'}});
     constexpr std::array cancellations{VimSpecialKey::escape,     VimSpecialKey::backspace,
                                        VimSpecialKey::arrow_left, VimSpecialKey::arrow_right,
@@ -3071,7 +3081,8 @@ void verify_vim_line_jump_waiting()
     VimState state = empty_vim_state();
     state.last_character_search =
         nenenib::core::VimCharacterSearch{VimCharacterSearchKind::find_forward, U'x'};
-    state.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    state.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
 
     const auto operation_count = vim_step(state, view, VimKey{VimCharacter{U'2'}});
     const auto pending = vim_step(operation_count.next, view, VimKey{VimCharacter{U'd'}});
@@ -3847,7 +3858,8 @@ void verify_vim_replace_cancellation()
     const VimEditorView view{buffer, selected, VimViewport{LineNumber{1}, 3}};
     VimState initial = empty_vim_state();
     initial.mode = VimMode::visual;
-    initial.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    initial.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     const auto waiting = vim_step(initial, view, VimKey{VimCharacter{U'r'}});
     for (const auto key : {VimSpecialKey::escape, VimSpecialKey::backspace,
                            VimSpecialKey::arrow_left, VimSpecialKey::home, VimSpecialKey::enter})
@@ -4026,7 +4038,7 @@ void verify_vim_visual_wanted_continuations()
         expect(controller.frame().caret.position == TextPosition{LineNumber{3}, Column{7}},
                std::string(keys).c_str());
         expect(controller.vim_state().wanted_column ==
-                   nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}},
+                   nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}},
                "visual transitions and waiting cancellation preserve the line-end wish");
         expect(vim_body(controller.frame()) == "abcd\nx\nabcdef",
                "visual transitions leave the document unchanged");
@@ -4038,7 +4050,8 @@ void verify_vim_visual_wanted_counted()
     const auto buffer = TextBuffer::from_utf8("abcd\nabcdef\nxy").value();
     const VimEditorView view{buffer, collapsed_at(Offset{3}), VimViewport{LineNumber{1}, 3}};
     VimState state = empty_vim_state();
-    state.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    state.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     state.count = nenenib::core::VimCount{2};
     const auto line = vim_step(state, view, VimKey{VimCharacter{U'V'}});
     expect(std::get<VimSelect>(line.effect).selection == Selection{Offset{3}, Offset{11}},
@@ -4047,7 +4060,7 @@ void verify_vim_visual_wanted_counted()
            "2V preserves the wish but consumes its count");
     const auto character = vim_step(state, view, VimKey{VimCharacter{U'v'}});
     expect(character.next.wanted_column ==
-               nenenib::core::VimWantedColumn{VimColumnWish::at_column, Column{5}},
+               nenenib::core::VimWantedColumn{VimColumnWish::at_column, VirtualColumn{5}},
            "2v replaces the line-end wish with the widened endpoint column");
     state.count = nenenib::core::VimCount{1};
     const auto single = vim_step(state, view, VimKey{VimCharacter{U'v'}});
@@ -4075,7 +4088,8 @@ void verify_vim_visual_wanted_blocked_expansion()
 {
     const auto buffer = TextBuffer::from_utf8("\nabcdef").value();
     VimState state = empty_vim_state();
-    state.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    state.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     state.count = nenenib::core::VimCount{2};
     const VimEditorView empty{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 2}};
     const auto character = vim_step(state, empty, VimKey{VimCharacter{U'v'}});
@@ -4105,6 +4119,117 @@ void verify_vim_visual_wanted_scope()
     verify_vim_visual_wanted_fixtures();
     verify_vim_visual_wanted_contracts();
     verify_vim_visual_step_edges();
+}
+
+// 表示幅の表（ADR 0034 の決定 1）。境界の code point を、固定 Vim 9.1 の strdisplaywidth() で
+// 測った値（out/issue108-oracle/probe2.txt）と突き合わせる。CI に Vim は無いのでここが正本。
+void verify_vim_display_width_table()
+{
+    constexpr std::array<std::pair<char32_t, DisplayWidth>, 24> measured{{
+        {U'a', DisplayWidth::single},   {0x0001, DisplayWidth::wide},
+        {0x001F, DisplayWidth::wide},   {0x0020, DisplayWidth::single},
+        {0x007F, DisplayWidth::single}, {0x00B1, DisplayWidth::single},
+        {0x03B1, DisplayWidth::single}, {0x0300, DisplayWidth::zero},
+        {0x036F, DisplayWidth::zero},   {0x0370, DisplayWidth::single},
+        {0x200A, DisplayWidth::single}, {0x200B, DisplayWidth::unprintable},
+        {0x2010, DisplayWidth::single}, {0x2329, DisplayWidth::wide},
+        {0x3042, DisplayWidth::wide},   {0x4E00, DisplayWidth::wide},
+        {0xAC00, DisplayWidth::wide},   {0xD7A3, DisplayWidth::wide},
+        {0xD7A4, DisplayWidth::single}, {0xFEFF, DisplayWidth::unprintable},
+        {0xFF21, DisplayWidth::wide},   {0xFF71, DisplayWidth::single},
+        {0x1F600, DisplayWidth::wide},  {0x10FFFF, DisplayWidth::single},
+    }};
+    for (const auto &[value, width] : measured)
+    {
+        expect(display_width(value) == width, "the range table answers the measured display width");
+    }
+}
+
+// 行頭からの桁（決定 2）。Tab は次の tabstop まで、全角は 2 桁、結合文字は 0 桁、Vim が
+// `<200b>` と描く書式用文字は 6 桁。キャレットの桁だけは Tab で最後の桁になる（決定 3・実測）。
+void verify_vim_virtual_columns()
+{
+    const auto tabs = TextBuffer::from_utf8("ab\tcd\n\tx").value();
+    expect(virtual_column(tabs, Offset{2}) == VirtualColumn{3}, "a Tab starts where it stands");
+    expect(virtual_column_end(tabs, Offset{2}) == VirtualColumn{8},
+           "and covers the columns up to the next tabstop");
+    expect(caret_virtual_column(tabs, Offset{2}) == VirtualColumn{8},
+           "the caret is drawn on the last cell of a Tab, so the wanted column is that one");
+    expect(virtual_column(tabs, Offset{3}) == VirtualColumn{9},
+           "the character after a Tab starts at the tabstop");
+    expect(virtual_column(tabs, Offset{7}) == VirtualColumn{9},
+           "a leading Tab fills the first eight columns of its own line");
+
+    const auto wide = TextBuffer::from_utf8("aあb").value();
+    expect(virtual_column(wide, Offset{1}) == VirtualColumn{2} &&
+               virtual_column_end(wide, Offset{1}) == VirtualColumn{3} &&
+               caret_virtual_column(wide, Offset{1}) == VirtualColumn{2},
+           "a double-width character covers two columns and the caret sits on the first");
+    expect(virtual_column(wide, Offset{4}) == VirtualColumn{4}, "the next character follows it");
+
+    const auto zero = TextBuffer::from_utf8("aéi").value();
+    expect(virtual_column(zero, Offset{1}) == VirtualColumn{2} &&
+               virtual_column_end(zero, Offset{1}) == VirtualColumn{2},
+           "a combining mark adds no column to the character it sits on");
+    expect(virtual_column(zero, Offset{4}) == VirtualColumn{3},
+           "so the character after the mark keeps the next column");
+
+    const auto format = TextBuffer::from_utf8("a​b").value();
+    expect(virtual_column_end(format, Offset{1}) == VirtualColumn{7} &&
+               caret_virtual_column(format, Offset{1}) == VirtualColumn{2},
+           "an unprintable character takes six columns and the caret stays on the first");
+    expect(virtual_column(format, Offset{4}) == VirtualColumn{8},
+           "and the character after it starts at the eighth column");
+}
+
+// 逆引き（決定 2）。桁を含む文字の先頭へ着き、行が短ければ行の内容の終わりで止まる。
+void verify_vim_virtual_column_reverse()
+{
+    const auto text = TextBuffer::from_utf8("ab\tcd\nあい\n\nx").value();
+    const LineNumber first{1};
+    expect(offset_at_virtual_column(text, first, VirtualColumn{1}) == Offset{0},
+           "the first column is the first character");
+    expect(offset_at_virtual_column(text, first, VirtualColumn{3}) == Offset{2} &&
+               offset_at_virtual_column(text, first, VirtualColumn{8}) == Offset{2},
+           "every column a Tab covers lands on the Tab itself");
+    expect(offset_at_virtual_column(text, first, VirtualColumn{9}) == Offset{3},
+           "the column after the tabstop lands on the next character");
+    expect(offset_at_virtual_column(text, first, VirtualColumn{99}) == Offset{5},
+           "a column past the line stops at the line's content end");
+
+    const LineNumber second{2};
+    expect(offset_at_virtual_column(text, second, VirtualColumn{2}) == Offset{6} &&
+               offset_at_virtual_column(text, second, VirtualColumn{3}) == Offset{9},
+           "both cells of a double-width character belong to it");
+    expect(offset_at_virtual_column(text, LineNumber{3}, VirtualColumn{4}) == Offset{13},
+           "an empty line has only its own start");
+}
+
+void verify_vim_virtual_column_fixtures()
+{
+    std::size_t selected = 0;
+    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    {
+        if (fixture.name.starts_with("virtcol-"))
+        {
+            verify_vim_fixture(fixture);
+            ++selected;
+        }
+    }
+    expect(selected == 47, "the scope replays all 47 adopted virtual-column fixtures");
+}
+
+void verify_vim_virtual_column_contracts()
+{
+    verify_vim_display_width_table();
+    verify_vim_virtual_columns();
+    verify_vim_virtual_column_reverse();
+}
+
+void verify_vim_virtual_column_scope()
+{
+    verify_vim_virtual_column_fixtures();
+    verify_vim_virtual_column_contracts();
 }
 
 // Vim モードではクリックと Ctrl+矢印のあとも文字の上へ寄る（Vim も行末より右のクリックは
@@ -5611,7 +5736,7 @@ void verify_vim_dot_modes()
                                                                std::size_t column)
 {
     return nenenib::core::VimCharacterExtent{lines, nenenib::core::VimColumnWish::at_column,
-                                             Column{column}};
+                                             VirtualColumn{column}};
 }
 
 // 何を記録するか（決定 3）。変更を起こす鍵から記録が始まり、そのときの選択の大きさが載る。
@@ -5635,7 +5760,7 @@ void verify_vim_visual_dot_records()
     vim_replay(controller, "v$d");
     expect(dot_visual_is(controller.vim_state(),
                          nenenib::core::VimCharacterExtent{
-                             1, nenenib::core::VimColumnWish::at_line_end, Column{1}},
+                             1, nenenib::core::VimColumnWish::at_line_end, VirtualColumn{1}},
                          "d"),
            "a selection made with $ stays to the end of the line instead of freezing a column");
     vim_replay(controller, "Vjd");
@@ -5798,15 +5923,15 @@ void verify_vim_visual_dot_boundaries()
            "the replayed VISUAL delete keeps the document's own CRLF bytes");
 }
 
-// 桁は code point 単位（Column）で数える。固定 Vim は仮想桁で数えるので、Tab と全角が混ざると
-// 答えが違う（out/issue91-oracle/probe*.txt で実測・ADR 0033 の「文脈」）。fixture には採らない。
+// 桁は仮想桁（表示幅）で数える（ADR 0034 の決定 4）。ADR 0033 が残した Tab と幅の混在の穴は
+// ここで閉じた。同じ 3 つは virtcol- の fixture にも採ってあり、これは engine 側の説明である。
 void verify_vim_visual_dot_columns()
 {
     Editing tabs;
     open_vim_document(tabs, "ab\tcd\nxyzwvutsrq");
     vim_replay(tabs.controller(), "vlldj0.");
-    expect(vim_body(tabs.controller().frame()) == "cd\nwvutsrq",
-           "a Tab counts as one column here; the real Vim would take its whole width");
+    expect(vim_body(tabs.controller().frame()) == "cd\nrq",
+           "a Tab reaches the next tabstop, so the record covers eight columns");
 
     Editing kana;
     open_vim_document(kana, "あいうえおかきくけこ\nさしすせそたちつてと");
@@ -5817,8 +5942,8 @@ void verify_vim_visual_dot_columns()
     Editing mixed;
     open_vim_document(mixed, "abcdefghij\nあいうえおかきくけこ");
     vim_replay(mixed.controller(), "vlldj0.");
-    expect(vim_body(mixed.controller().frame()) == "defghij\nえおかきくけこ",
-           "mixed widths take three code points; the real Vim would take two of them");
+    expect(vim_body(mixed.controller().frame()) == "defghij\nうえおかきくけこ",
+           "three columns of ASCII reach into the second double-width character");
 }
 
 // 取消になった命令は自分の鍵を捨て、直前の変更を変えない（ADR 0030 の決定 3）。固定 Vim では
@@ -5951,7 +6076,8 @@ void verify_vim_text_object_cancellation()
     const VimEditorView view{buffer, selected, VimViewport{LineNumber{1}, 8}};
     VimState initial = empty_vim_state();
     initial.mode = VimMode::visual;
-    initial.wanted_column = nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, Column{1}};
+    initial.wanted_column =
+        nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     initial.last_character_search =
         nenenib::core::VimCharacterSearch{VimCharacterSearchKind::find_forward, U'b'};
     const auto waiting = vim_step(initial, view, VimKey{VimCharacter{U'i'}});
@@ -6713,7 +6839,7 @@ void verify_vim_search_scope()
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 8> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 9> contracts{{
         {"--vim-dot", verify_vim_dot_contracts},
         {"--vim-search", verify_vim_search_contracts},
         {"--vim-text-objects", verify_vim_text_object_contracts},
@@ -6722,6 +6848,7 @@ void verify_vim_scope_contracts()
         {"--vim-open-lines", verify_vim_open_line_contracts},
         {"--vim-character-search", verify_vim_character_search_contracts},
         {"--vim-line-jumps", verify_vim_line_jump_contracts},
+        {"--vim-virtual-column", verify_vim_virtual_column_contracts},
     }};
     for (const auto &scope : contracts)
     {
@@ -6731,7 +6858,7 @@ void verify_vim_scope_contracts()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 16> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 17> scopes{{
         {"--vim-dot", verify_vim_dot_scope},
         {"--vim-search", verify_vim_search_scope},
         {"--vim-text-objects", verify_vim_text_object_scope},
@@ -6744,6 +6871,7 @@ void verify_vim_scope_contracts()
         {"--vim-character-search", verify_vim_character_search_scope},
         {"--vim-line-jumps", verify_vim_line_jump_scope},
         {"--vim-line-jump-recovery", verify_vim_line_jump_recovery},
+        {"--vim-virtual-column", verify_vim_virtual_column_scope},
         {"--user-theme-selection", verify_user_theme_selection},
         {"--user-theme-values", verify_user_theme_values},
         {"--command-palette", verify_command_palette},

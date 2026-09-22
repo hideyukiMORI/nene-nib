@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 e4c933becb6ac8a8ce3125af3a9b8405d4c417c2956373a56fb7a4bae36287ef / 1090 fixtures
+// fixtures.json: sha256 0b0756ba9406f285d2939252bd0effac7e2485b7f757b07a922bf657479df80a / 1137 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1090> vim_fixtures{{
+constexpr std::array<VimFixture, 1137> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1102,6 +1102,53 @@ constexpr std::array<VimFixture, 1090> vim_fixtures{{
     {"text-object-residual-back-quote-around", "say \"hello world\" now", "8lvhha\"y", "say \"hello world\" now", 1, 5, "\"hello world\" ", "v", std::nullopt},
     {"text-object-residual-back-quote-grows", "a \"bb\" c \"dd\" e", "4lvhi\"y", "a \"bb\" c \"dd\" e", 1, 3, "\"bb\"", "v", std::nullopt},
     {"text-object-residual-back-quote-grows-second", "a \"bb\" c \"dd\" e", "11lvhi\"y", "a \"bb\" c \"dd\" e", 1, 10, "\"dd\"", "v", std::nullopt},
+    {"virtcol-tab-j-on-tab", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "2lj", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 2, 8, "", "", std::nullopt},
+    {"virtcol-tab-j-after-tab", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "3lj", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 2, 9, "", "", std::nullopt},
+    {"virtcol-tab-j-second-tab", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "5lj", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 2, 16, "", "", std::nullopt},
+    {"virtcol-tab-k-into-tab", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "j4lk", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 1, 3, "", "", std::nullopt},
+    {"virtcol-tab-k-into-tab-last-cell", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "j7lk", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 1, 3, "", "", std::nullopt},
+    {"virtcol-tab-k-past-tab", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "j10lk", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 1, 6, "", "", std::nullopt},
+    {"virtcol-tab-dollar-k", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "j$k", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 1, 8, "", "", std::nullopt},
+    {"virtcol-tab-short-line-jk", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", "j20ljk", "ab\tcd\tef\nABCDEFGHIJKLMNOPQRSTUVWX\txy\nshort", 2, 21, "", "", std::nullopt},
+    {"virtcol-tab-lead-j", "\tabc\n0123456789012345\n\t\tz", "j", "\tabc\n0123456789012345\n\t\tz", 2, 8, "", "", std::nullopt},
+    {"virtcol-tab-lead-j-mid", "\tabc\n0123456789012345\n\t\tz", "lj", "\tabc\n0123456789012345\n\t\tz", 2, 9, "", "", std::nullopt},
+    {"virtcol-tab-lead-k-clamped", "\tabc\n0123456789012345\n\t\tz", "j5lk", "\tabc\n0123456789012345\n\t\tz", 1, 4, "", "", std::nullopt},
+    {"virtcol-tab-lead-second-tab-j", "\tabc\n0123456789012345\n\t\tz", "j9lj", "\tabc\n0123456789012345\n\t\tz", 3, 2, "", "", std::nullopt},
+    {"virtcol-tab-lead-double-k", "\tabc\n0123456789012345\n\t\tz", "jjlk", "\tabc\n0123456789012345\n\t\tz", 2, 16, "", "", std::nullopt},
+    {"virtcol-wide-j", "あいうえお\nabcdefghijklmno\n漢字abc", "2lj", "あいうえお\nabcdefghijklmno\n漢字abc", 2, 5, "", "", std::nullopt},
+    {"virtcol-wide-k-first-cell", "あいうえお\nabcdefghijklmno\n漢字abc", "j4lk", "あいうえお\nabcdefghijklmno\n漢字abc", 1, 7, "", "", std::nullopt},
+    {"virtcol-wide-k-second-cell", "あいうえお\nabcdefghijklmno\n漢字abc", "j5lk", "あいうえお\nabcdefghijklmno\n漢字abc", 1, 7, "", "", std::nullopt},
+    {"virtcol-wide-jj", "あいうえお\nabcdefghijklmno\n漢字abc", "2ljj", "あいうえお\nabcdefghijklmno\n漢字abc", 3, 7, "", "", std::nullopt},
+    {"virtcol-wide-dollar-j", "あいうえお\nabcdefghijklmno\n漢字abc", "$j", "あいうえお\nabcdefghijklmno\n漢字abc", 2, 15, "", "", std::nullopt},
+    {"virtcol-wide-mix-j", "aあbいc\nABCDEFGHIJ\nこんにちは", "2lj", "aあbいc\nABCDEFGHIJ\nこんにちは", 2, 4, "", "", std::nullopt},
+    {"virtcol-wide-mix-k", "aあbいc\nABCDEFGHIJ\nこんにちは", "j5lk", "aあbいc\nABCDEFGHIJ\nこんにちは", 1, 6, "", "", std::nullopt},
+    {"virtcol-wide-mix-jj", "aあbいc\nABCDEFGHIJ\nこんにちは", "2ljj", "aあbいc\nABCDEFGHIJ\nこんにちは", 3, 4, "", "", std::nullopt},
+    {"virtcol-full-alnum-k", "ＡＢ０１\nABCDEFGHIJ\nxyz", "j3lk", "ＡＢ０１\nABCDEFGHIJ\nxyz", 1, 4, "", "", std::nullopt},
+    {"virtcol-combining-zero-k", "aéiou\nABCDEFGHIJ\nxyz", "j3lk", "aéiou\nABCDEFGHIJ\nxyz", 1, 6, "", "", std::nullopt},
+    {"virtcol-combining-zero-j", "aéiou\nABCDEFGHIJ\nxyz", "2lj", "aéiou\nABCDEFGHIJ\nxyz", 2, 3, "", "", std::nullopt},
+    {"virtcol-emoji-wide-k", "a😀b😀c\nABCDEFGHIJ\nxyz", "j4lk", "a😀b😀c\nABCDEFGHIJ\nxyz", 1, 7, "", "", std::nullopt},
+    {"virtcol-emoji-wide-j", "a😀b😀c\nABCDEFGHIJ\nxyz", "2lj", "a😀b😀c\nABCDEFGHIJ\nxyz", 2, 4, "", "", std::nullopt},
+    {"virtcol-hangul-wide-k", "a각갂b\nABCDEFGHIJ\nxyz", "j4lk", "a각갂b\nABCDEFGHIJ\nxyz", 1, 5, "", "", std::nullopt},
+    {"virtcol-ambiguous-single-k", "aα±éb\nABCDEFGHIJ\nxyz", "j3lk", "aα±éb\nABCDEFGHIJ\nxyz", 1, 6, "", "", std::nullopt},
+    {"virtcol-kana-half-single-k", "aｱｲｳb\nABCDEFGHIJ\nxyz", "j3lk", "aｱｲｳb\nABCDEFGHIJ\nxyz", 1, 8, "", "", std::nullopt},
+    {"virtcol-format-six-cells-j", "a​b​c\nABCDEFGHIJKLMNOPQRST\nxyz", "2lj", "a​b​c\nABCDEFGHIJKLMNOPQRST\nxyz", 2, 8, "", "", std::nullopt},
+    {"virtcol-format-six-cells-k", "a​b​c\nABCDEFGHIJKLMNOPQRST\nxyz", "j7lk", "a​b​c\nABCDEFGHIJKLMNOPQRST\nxyz", 1, 5, "", "", std::nullopt},
+    {"virtcol-dot-tab-width", "ab\tcd\nxyzwvutsrq", "vlldj0.", "cd\nrq", 2, 1, "xyzwvuts", "v", std::nullopt},
+    {"virtcol-dot-mixed-width", "abcdefghij\nあいうえおかきくけこ", "vlldj0.", "defghij\nうえおかきくけこ", 2, 1, "あい", "v", std::nullopt},
+    {"virtcol-dot-tab-to-wide", "ab\tcd\nあいうえおかきく\nxyz", "vlldj.", "cd\nおかきく\nxyz", 2, 1, "あいうえ", "v", std::nullopt},
+    {"virtcol-dot-wide-to-tab", "ab\tcd\nあいうえおかきく\nxyz", "jvlldk.", "cd\nえおかきく\nxyz", 1, 1, "ab\t", "v", std::nullopt},
+    {"virtcol-dot-record-starts-on-tab", "ab\tcd\tefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", "2lvlldjj0.", "ab\tefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n89012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", 3, 1, "01234567", "v", std::nullopt},
+    {"virtcol-dot-record-ends-on-tab", "ab\tcd\tefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", "lvldjj0.", "acd\tefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", 3, 1, "0123456", "v", std::nullopt},
+    {"virtcol-dot-record-ends-on-wide", "aあbいcdefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", "vldjj0.", "bいcdefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n3456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", 3, 1, "012", "v", std::nullopt},
+    {"virtcol-dot-record-backwards-tab", "ab\tcd\tefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", "4lvhhdjj0.", "ab\tefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n89012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", 3, 1, "01234567", "v", std::nullopt},
+    {"virtcol-dot-replay-caret-on-tab", "ab\tcd\tefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", "jvlldgg2l.", "ab\tefgh\nDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", 1, 3, "\tcd", "v", std::nullopt},
+    {"virtcol-dot-replay-caret-on-wide", "aあbいcdefgh\nABCDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", "jvlldggl.", "aいcdefgh\nDEFGHIJKLMNOPQRSTUVWX\n0123456789012345678901234\nzzzzzzzzzzzzzzzzzzzzzzzzz", 1, 2, "あb", "v", std::nullopt},
+    {"virtcol-dot-multi-line-column", "\tabcdefgh\nABCDEFGHIJKLMNOP\nあいうえおかきく\nqrstuvwxyz0123456789\nQRSTUVWXYZ0123456789", "jlvk2ldjj0.", "\tabJKLMNOP\nあいうえおかきく\nZ0123456789", 3, 1, "qrstuvwxyz0123456789\nQRSTUVWXY", "v", std::nullopt},
+    {"virtcol-dot-multi-line-onto-wide", "\tabcdefgh\nABCDEFGHIJKLMNOP\nあいうえおかきく\nqrstuvwxyz0123456789\nQRSTUVWXYZ0123456789", "jjlvkldgg0.", "きく\nqrstuvwxyz0123456789\nQRSTUVWXYZ0123456789", 1, 1, "\tabcdefgh\nABCDEFGHIか", "v", std::nullopt},
+    {"virtcol-dot-tab-change", "ab\tcd\nxyzwvutsrq", "vllcZ<Esc>j0.", "Zcd\nZrq", 2, 1, "xyzwvuts", "v", std::nullopt},
+    {"virtcol-screen-H-then-j", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", "Hj", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", 2, 1, "", "", VimViewportFixture{5, 1, 3, 5, 1, 2}},
+    {"virtcol-screen-L-then-k", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", "Lk", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", 4, 1, "", "", VimViewportFixture{5, 1, 1, 3, 1, 2}},
+    {"virtcol-screen-M-then-j", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", "Mj", "ab\tcdefgh\nあいうえお\n0123456789012345\n\tx\nzz", 4, 1, "", "", VimViewportFixture{5, 1, 1, 3, 1, 2}},
 }};
 } // namespace nenenib::tests
 // clang-format on
