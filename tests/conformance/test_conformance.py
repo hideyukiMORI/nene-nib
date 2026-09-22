@@ -322,6 +322,70 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf010_missing_files(self):
         self.assertTrue(any("missing" in detail for detail in self.fixture_details()))
 
+    # CNF-011 — fixtures.json は生成器が書く 1 つの形（1 行 1 件）だけを許す（Issue #98）。
+    # 正例は oracle の canonical_fixtures_json が書いたバイト列そのままを読ませる。
+    def vim_fixtures(self):
+        return [{"name": "fixture-0", "text": "ab", "keys": "x"},
+                {"name": "fixture-1", "text": "あ", "keys": "y", "settings": ["set expandtab"]},
+                {"name": "fixture-2", "text": "ab", "keys": "z",
+                 "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}}]
+
+    def write_fixture_bytes(self, content):
+        path = self.root / "tests/vim/fixtures.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def format_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.fixture_format_checks(self.root)]
+
+    def test_cnf011_positive(self):
+        self.write_fixture_bytes(vim_oracle.canonical_fixtures_json(self.vim_fixtures()))
+        self.assertEqual([], self.format_details())
+
+    def test_cnf011_negatives(self):
+        fixtures = self.vim_fixtures()
+        canonical = vim_oracle.canonical_fixtures_json(fixtures)
+        first = b'{"name":"fixture-0","text":"ab","keys":"x"}'
+        cases = {
+            "indent": (json.dumps(fixtures, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+            "one line": (json.dumps(fixtures, ensure_ascii=False,
+                                    separators=(",", ":")) + "\n").encode("utf-8"),
+            "key order": canonical.replace(first, b'{"text":"ab","name":"fixture-0","keys":"x"}'),
+            "empty settings": canonical.replace(
+                first, b'{"name":"fixture-0","text":"ab","keys":"x","settings":[]}'),
+            "escaped non-ASCII": canonical.replace("あ".encode("utf-8"), b"\\u3042"),
+            "spaces after the separators": canonical.replace(first, first.replace(b",", b", ")),
+            "CRLF": canonical.replace(b"\n", b"\r\n"),
+            "no trailing newline": canonical[:-1],
+        }
+        for name, content in cases.items():
+            with self.subTest(case=name):
+                self.write_fixture_bytes(content)
+                details = self.format_details()
+                self.assertTrue(all("CNF-011" in detail for detail in details))
+                self.assertTrue(details, "the canonical form must not accept this")
+        self.write_fixture_bytes(cases["CRLF"])
+        self.assertTrue(any("CRLF" in detail for detail in self.format_details()))
+        self.write_fixture_bytes(cases["no trailing newline"])
+        self.assertTrue(any("no newline at the end" in detail for detail in self.format_details()))
+
+    def test_cnf011_names_the_first_wrong_line(self):
+        lines = vim_oracle.canonical_fixtures_json(self.vim_fixtures()).split(b"\n")
+        lines[2] = lines[2].replace(b'  {"name":"fixture-1"', b'   {"name":"fixture-1"')
+        self.write_fixture_bytes(b"\n".join(lines))
+        self.assertTrue(any("line 3" in detail for detail in self.format_details()))
+
+    def test_cnf011_unreadable_fixtures(self):
+        for content in [b"{}\n", b'[{"name":"a","text":"b","keys":"c","note":"d"}]\n',
+                        b'[{"name":"a","text":"b"}]\n', b"[\n",
+                        b'[{"name":"a","text":"b","keys":"c","viewport":{"line":1}}]\n']:
+            with self.subTest(content=content):
+                self.write_fixture_bytes(content)
+                self.assertTrue(any("CNF-011" in detail for detail in self.format_details()))
+
+    def test_cnf011_missing_file(self):
+        self.assertTrue(any("missing" in detail for detail in self.format_details()))
+
     def test_vim_viewport_header_row(self):
         record = self.vim_records(1)[0]
         record["viewport"] = {"visible_lines": 10, "first_visible": 6, "line": 10,
