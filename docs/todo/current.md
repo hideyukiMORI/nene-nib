@@ -9,7 +9,9 @@
 
 **直近のテスト整備は [Issue #97](https://github.com/hideyukiMORI/nene-nib/issues/97)（scope専用の契約を既定の単体実行へ）**。`--vim-dot` / `--vim-text-objects` の契約が selector 指定時にしか走っていなかったので、契約部分を fixture と分けて `verify_vim_scope_contracts` の表にまとめ、既定実行（CTest の `nib_unit`）へ載せた。既定は 8733 → 8823 checks（+90）・1.45 → 1.56 s、selector は 909 / 1623 checks のまま。テストの内容・閾値・fixture は変えていない。詳細はgate-proofs 5-y。
 
-統合済み: #87 は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)、#93 は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)、#97 は [PR #102](https://github.com/hideyukiMORI/nene-nib/pull/102)、#88 / #94 は PR #89 / #95 で main `8f2c363` へ。進行中は [Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索・ADR 0032 受理・`feat/100-vim-search`・[PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) は draft）。
+統合済み: #87 は [PR #90](https://github.com/hideyukiMORI/nene-nib/pull/90)、#93 は [PR #96](https://github.com/hideyukiMORI/nene-nib/pull/96)、#97 は [PR #102](https://github.com/hideyukiMORI/nene-nib/pull/102)、#88 / #94 は PR #89 / #95 で main `8f2c363` へ。#100（検索・ADR 0032 受理）は [PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) で main `b07c574` へ統合済み（fixture 977 件）。進行中は [Issue #98](https://github.com/hideyukiMORI/nene-nib/issues/98)（`fixtures.json` の整形・`chore/98-fixtures-json-format`・draft PR #104）と [Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUAL の `.`・別 worktree で並行）。
+
+**直近の道具の整えは [Issue #98](https://github.com/hideyukiMORI/nene-nib/issues/98)（`fixtures.json` の整形を 1 つに固定）**。`tests/vim/fixtures.json` は 3 通りの形（indent 2 ＋ 空の `"settings": []` が 295 件・1 行 1 件が 668 件・1 行に全部詰めた `viewport-follow-*` が 14 件）で混ざっていた。整形を決める関数を `eng/vim-oracle.py` に 1 つ置き（`canonical_fixtures_json`）、書き戻す `--format` / `--regenerate` と検査する CNF-011（`eng/conformance.py`）が同じ 1 か所を呼ぶ（ARC-001）。**既存の 1 行 1 件の 668 行はこの関数の出力とバイト単位で一致した**ので、追記者が手で書いてきた形をそのまま正準形にしている。整形は `--format` の 1 回だけで、**0 measured / 977 reused**・Vim 不要・変わったのは JSON のバイト列（108687 → 96756 bytes・2459 → 979 行）と生成物の SHA 行 1 行だけ。期待値・入力・`VimFixtures.hpp` の 977 行は 1 つも変えていない。CNF-011 は正例 1 と反例 15 通りを `tests/conformance` が回し、実リポジトリでも 2 通りの反例で終了 1 を確認した。既定の `nib_tests` は 10149 checks で #100 と同数、`nib_unit` 2.13 s。詳細は gate-proofs 5-aa。
 
 **直近の実装は [Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（Vimの検索 `/ ? n N * #`）**。Ex と同じ入力行（`CommandInput` の 3 つめの値 `SearchLine`・見え方は `InputLineView` 1 つに畳んで描画を 1 本に）から入り、Enter の確定は `VimKey` の `VimSearchPattern` 1 鍵として engine に届く（[ADR 0032](../adr/0032-vim-search-as-input-line-and-one-key.md) 受理）。照合器 `VimPattern` は `magic` の部分集合（リテラル・`.`・`*`・`^`・`$`・`[...]`・`\<` `\>`・エスケープ・`\d \w \s` とその大文字）だけを受け、未対応の構文は閉じた失敗で拒否する（`std::regex` と `<locale>` は使わない）。`n` / `N` は `last_search`（失敗した検索も覚える）、`*` / `#` はキャレットの語を `\<…\>` にして同じ経路を通り、範囲の端だけは元のキャレット。オペレータは既存の exclusive の規則 1 か所を共用し、`.` は検索を鍵 1 つとして再生する。報せ（E486 / E35 / E348 / 折り返し / 未対応構文）は Ex と同じ左ステータスに出て次の入力で消える。追加 135 fixture・計 977 件、`--vim-search` 1375 checks、共有境界（`.`・r・f/t・gg）と Ex・設定一覧、unit 全体 10149 checks、build/tidy/symbols/conformance/format 成功。画面確認は未実施。成果物は `build/issue100/NeNeNib.exe`、詳細は gate-proofs 5-z、統合状態は GitHub が正。
 
@@ -96,6 +98,7 @@ autoindent / VISUALで行った変更の `.` / 名前つきレジスタ / `J s S
 
 ## 次の 1 手
 
-[Issue #100](https://github.com/hideyukiMORI/nene-nib/issues/100)（検索）は実装・限定検証・文書まで済み、[PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103) は draft のまま。Ready・必須 check・merge は設計リナが行う。
-その後は #98（fixtures.json の整形・検索の fixture 追記が済んだので次に 1 回）→ #91（VISUAL の `.`）→ #99（テキストオブジェクト残差）→ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。
+[Issue #98](https://github.com/hideyukiMORI/nene-nib/issues/98)（`fixtures.json` の整形）は実装・限定検証・文書まで済み、draft PR #104。Ready・必須 check・merge は設計リナが行う。
+その後は #91（VISUAL の `.`・並行中）→ #99（テキストオブジェクト残差）→ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。
+`eng/test-conformance.py` の `test_verification_policy.py` 6 件は、この機械の端末符号化（cp932）で pwsh / subprocess の出力が読めないことによる**既存の失敗**で、未変更の `b07c574` でも同じ 5 件が落ちる（残り 1 件は `validate-git.ps1` が `git show` の UTF-8 を pwsh の入力符号化で受ける問題で、main の commit `8f2c363` でも同じく落ちる）。#98 が原因ではないので別 Issue へ切る。
 今回の結果と未確認は [日報](../reports/2026-09-22.md) / [引き継ぎ](../handoffs/2026-09-22.md)。変更に関係する検証だけを行い、成功結果を再利用する。

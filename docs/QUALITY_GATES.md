@@ -212,6 +212,18 @@ SHA はファイルのバイト列そのままで、改行は正規化しない�
 - 対応する規則: QLT-013
 - 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` がゲートで回る。正例は oracle の `header()` が書いた行をそのまま読ませる）
 
+### CNF-011 — `fixtures.json` の整形
+
+`tests/vim/fixtures.json` は次の 1 つの形でだけ保存する。`[` と `]` は単独行、fixture は **1 行 1 件**で行頭 2 空白、区切りは `,` と `:` だけ（後ろに空白を置かない）、
+キーは `name` → `text` → `keys` → `settings`（**中身があるときだけ**。空の `[]` は書かない）→ `viewport`（あるときだけ。中は `visible_lines` → `first_visible` → `line` → `column`）の順、
+非 ASCII は `\u` エスケープせず UTF-8 のまま、改行は LF で末尾は `]` ＋ 改行。1 行 1 件なので fixture を 1 件足すと差分が 1 行になり、衝突がその fixture の中に収まる。
+形を決めるのは `eng/vim-oracle.py` の `canonical_fixtures_json` **1 か所だけ**で（ARC-001）、検査はその関数を呼んで「保存されているバイト列 == 解析結果の正準形」を比べ、違う最初の行を行番号つきで拒否する。
+検査は直さない（QLT-004）。書き戻すのは `python -X utf8 eng/vim-oracle.py --format`（Vim を起動せず、生成行は `--reuse-ref` から逐語再利用し、reuse ref が同じ記録を持つことを確かめてから header の SHA 行だけ書き替える）と、
+測定の前に同じ関数を通す `--regenerate` だけである。未知のキー・必須キーの欠落・壊れた JSON・不正な `viewport` も、黙って落とさずに CNF-011 として拒否する（Issue #98）。
+
+- 対応する規則: QLT-013
+- 機械強制: **active**（`eng/conformance.py` の `fixture_format_checks`。正例・反例は `tests/conformance` がゲートで回る。正例は oracle の `canonical_fixtures_json` が書いたバイト列をそのまま読ませる）
+
 🔴 **検出語は検査器のソースに直書きしない**（検査器が自分自身を違反として報告する。前例: xi-tools 初版で 7 件の自己検出）。
 🔴 **テストソースは検査対象から外す**（テストは意図的な違反を書く場所）。
 
@@ -282,6 +294,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-008 | active | eng/conformance.py / tests/conformance |
 | CNF-009 | active | eng/conformance.py / tests/conformance |
 | CNF-010 | active | eng/conformance.py / tests/conformance |
+| CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
 
 ---
 
