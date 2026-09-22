@@ -25,6 +25,7 @@
 #include "VimRemoveBlock.hpp"
 #include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
+#include "VimSearch.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimStep.hpp"
@@ -910,6 +911,14 @@ void EditorController::evaluate_command(std::string_view text)
             core::DisplayText::parse("Settings could not be saved").value());
         return;
     }
+    // 検索の当たりの強調は設定ではなく Vim の状態なので、保存せずここで写す（ADR 0037 の決定 2）。
+    const auto &highlight = result.value().highlight;
+    if (highlight.has_value())
+    {
+        core::VimState vim = state_.vim();
+        vim.highlight = core::requested_highlight(vim.highlight, highlight.value());
+        state_ = state_.with_vim(std::move(vim));
+    }
     state_ = state_.with_command_message(result.value().message);
 }
 
@@ -1263,6 +1272,53 @@ std::optional<CompositionView> EditorController::composed() const
                            composition.value().cursor};
 }
 
+std::optional<core::VimPattern> EditorController::search_pattern() const
+{
+    const auto &remembered = state_.vim().last_search;
+    if (state_.mode() != core::EditMode::vim ||
+        state_.vim().highlight != core::VimSearchHighlight::on || !remembered.has_value())
+    {
+        return std::nullopt;
+    }
+    auto parsed = core::VimPattern::parse(remembered.value().pattern, remembered.value().direction);
+    if (!parsed)
+    {
+        return std::nullopt;
+    }
+    return std::move(parsed).value();
+}
+
+// 見えている 1 行ぶんの表示値。検索の当たりは行の中だけを数え、桁は選択と同じ span_of で作る
+// （ADR 0037 の決定 3・4）。塗る面を持たない長さ 0 の一致は span_of が absent を返すので落ちる。
+LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
+                                     const std::optional<core::VimPattern> &pattern) const
+{
+    const core::TextBuffer &text = state_.text();
+    LineView view{line, text.line_text(line), span_of(text, range, line), {}, std::nullopt};
+    if (!pattern.has_value())
+    {
+        return view;
+    }
+    const std::size_t start = text.line_start(line).value;
+    const std::size_t caret = state_.selection().caret.value;
+    for (const auto &match : core::vim_line_matches(view.text, pattern.value()))
+    {
+        const core::OffsetRange found{core::Offset{start + match.begin.value},
+                                      core::Offset{start + match.end.value}};
+        const core::SelectionSpan span = span_of(text, found, line);
+        if (span.presence != core::SelectionPresence::present)
+        {
+            continue;
+        }
+        view.matches.push_back(span);
+        if (found.begin.value <= caret && caret < found.end.value)
+        {
+            view.current_match = span;
+        }
+    }
+    return view;
+}
+
 std::vector<LineView> EditorController::visible_lines() const
 {
     const ScrollState scroll = state_.scroll();
@@ -1272,12 +1328,12 @@ std::vector<LineView> EditorController::visible_lines() const
         std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
     const core::OffsetRange range = highlighted_range();
     const auto block = block_selection();
+    const auto pattern = search_pattern();
     std::vector<LineView> lines;
     for (std::size_t number = first; number <= last; ++number)
     {
         const core::LineNumber line{number};
-        lines.push_back(LineView{line, state_.text().line_text(line),
-                                 span_of(state_.text(), block_row(block, line, range), line)});
+        lines.push_back(line_view(line, block_row(block, line, range), pattern));
     }
     return lines;
 }

@@ -596,6 +596,54 @@ void Direct2DRenderer::tint_runs(IDWriteTextLayout *text, const core::LayoutRect
     }
 }
 
+void Direct2DRenderer::outline_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
+                                    DWRITE_TEXT_RANGE range, float stroke)
+{
+    std::array<DWRITE_HIT_TEST_METRICS, selection_run_maximum> runs{};
+    const std::size_t drawn = runs_of(text, area, range, std::span(runs));
+    // 線は中心が座標に乗るので、半分だけ内側へ寄せて面からはみ出さないようにする。
+    const float inset = stroke / 2.0F;
+    for (std::size_t index = 0; index < drawn; ++index)
+    {
+        const auto &run = runs.at(index);
+        context_->DrawRectangle(D2D1::RectF(run.left + inset, static_cast<float>(area.top) + inset,
+                                            run.left + run.width - inset,
+                                            static_cast<float>(area.bottom) - inset),
+                                brush_.Get(), stroke);
+    }
+}
+
+DWRITE_TEXT_RANGE Direct2DRenderer::range_of(const application::LineView &line,
+                                             const core::SelectionSpan &span)
+{
+    const UINT32 from = utf16_offset(line.text, span.begin);
+    const UINT32 stop = utf16_offset(line.text, span.end);
+    return DWRITE_TEXT_RANGE{from, stop - from};
+}
+
+void Direct2DRenderer::draw_line_matches(const application::EditorFrame &frame,
+                                         IDWriteTextLayout *text, const core::LayoutRect &area,
+                                         const application::LineView &line)
+{
+    brush_->SetColor(to_color(frame.palette.search));
+    for (const auto &span : line.matches)
+    {
+        fill_runs(text, area, range_of(line, span));
+    }
+}
+
+void Direct2DRenderer::draw_current_match(const application::EditorFrame &frame,
+                                          IDWriteTextLayout *text, const core::LayoutRect &area,
+                                          const application::LineView &line)
+{
+    if (!line.current_match.has_value())
+    {
+        return;
+    }
+    brush_->SetColor(to_color(frame.palette.accent));
+    outline_runs(text, area, range_of(line, line.current_match.value()), scaled(1.0F));
+}
+
 void Direct2DRenderer::draw_line_selection(const application::EditorFrame &frame,
                                            IDWriteTextLayout *text, const core::LayoutRect &area,
                                            const application::LineView &line)
@@ -754,6 +802,8 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
     {
         return;
     }
+    // 検索の当たり → 選択 → 本文 → 現在の当たりの枠 → キャレットの順（ADR 0037 の決定 5）。
+    draw_line_matches(frame, text.Get(), area, line);
     if (line.selection.presence == core::SelectionPresence::present)
     {
         draw_line_selection(frame, text.Get(), area, line);
@@ -762,6 +812,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
     context_->DrawTextLayout(
         D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
         brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    draw_current_match(frame, text.Get(), area, line);
     if (line.number == frame.caret.position.line && !frame.command_line.has_value())
     {
         draw_caret(frame, text.Get(), area, line.text);

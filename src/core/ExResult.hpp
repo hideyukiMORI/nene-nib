@@ -5,6 +5,7 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ThemeCatalog.hpp"
+#include "VimSearchHighlight.hpp"
 
 #include <expected>
 #include <optional>
@@ -14,9 +15,12 @@
 
 namespace nenenib::core
 {
+// Ex の 1 命令の答え（ADR 0022）。settings は保存する設定、highlight は検索の当たりの強調で、
+// どちらも「変わらない」ことを空で表す。写し先は controller の Ex の経路 1 か所だけ（ARC-004）。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
+    std::optional<VimSearchHighlight> highlight;
     DisplayText message;
 };
 

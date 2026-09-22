@@ -39,6 +39,9 @@
 | 検索の入力行 | `/` `?` で開く入力行。文字列・caret・向きだけを持ち、補完も ThemeCatalog も持たない | `SearchLine`（core）、所有は `EditorState` の `CommandInput`（ADR 0032） |
 | 検索パターン | `magic` の部分集合の照合器。解析の失敗は未対応構文の種類を持つ閉じた値で返し、黙って別の意味にしない | `VimPattern` / `VimPatternFailure`（core・ADR 0032） |
 | 直前の検索 | `n` / `N` が使うパターンと打たれた向き。見つからなかった検索も覚える | `VimSearchPattern`、所有は `VimState`（core・ADR 0032） |
+| 検索の当たりの強調 | 検索した全一致を塗るかどうかの閉じた 3 値。`on` / `off` / `suspended`（`:nohlsearch` で次の検索まで止めた状態）。既定は `on`（施主決定 D17）で永続化しない | `VimSearchHighlight` / `requested_highlight`、所有は `VimState`（core・ADR 0037） |
+| 行の中の一致 | 1 行の中の一致を 0 桁目から数えた列。重なる一致は飛ばし、長さ 0 の一致も 1 つと数える。検索の移動と強調が同じ 1 本を使う | `vim_line_matches`（core・ADR 0037） |
+| 当たりの面 | 見えている 1 行に描く検索の当たりの桁の列と、そのうちキャレットを含む 1 つ。桁は選択と同じ `span_of` で作る | `LineView` の `matches` / `current_match`（application・ADR 0037） |
 | 検索の報せ | 見つからない・直前が無い・語が無い・折り返し・未対応構文の閉じた一覧と、その文言。1 打鍵の結果に添えて運び、Ex の結果と同じ左ステータスへ出す | `VimSearchNotice` / `VimSearchNoticeKind`（core）→ `command_message`（application・ADR 0032） |
 | 動作の大分類 | 鍵から引いた動作を NORMAL と VISUAL の写し先へ分ける閉じた分類。動作 → 分類は `constexpr` の表で、分類ごとの写し先は網羅する switch が持つ | `VimActionGroup` / `VimActionBinding`（core・CPP-012 / ADR 0032） |
 | 指定行移動 | `gg` / `G`で先頭・末尾・回数で指定した絶対行の最初の非空白へ移る。operatorでは両端を含む行単位範囲 | `VimMotion`（core・ADR 0027） |

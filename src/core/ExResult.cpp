@@ -38,12 +38,12 @@ namespace
 {
     if (name.empty())
     {
-        return ExResult{std::nullopt, theme_message(settings, appearance)};
+        return ExResult{std::nullopt, std::nullopt, theme_message(settings, appearance)};
     }
     if (name == "system")
     {
         settings.theme = std::nullopt;
-        return ExResult{settings, theme_message(settings, appearance)};
+        return ExResult{settings, std::nullopt, theme_message(settings, appearance)};
     }
     const auto parsed = ThemeName::parse(name);
     if (!parsed)
@@ -56,7 +56,7 @@ namespace
         return std::unexpected(found.error());
     }
     settings.theme = found.value();
-    return ExResult{settings, theme_message(settings, appearance)};
+    return ExResult{settings, std::nullopt, theme_message(settings, appearance)};
 }
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> set_font_size(std::string_view value,
@@ -68,7 +68,8 @@ namespace
         return std::unexpected(ExFailure::invalid_font_size);
     }
     settings.font_size = size.value();
-    return ExResult{settings, DisplayText::parse("fontsize=" + std::string(value)).value()};
+    return ExResult{settings, std::nullopt,
+                    DisplayText::parse("fontsize=" + std::string(value)).value()};
 }
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> set_gui_font(std::string_view value,
@@ -91,7 +92,31 @@ namespace
     }
     settings.font_size = size.value();
     settings.font_family = family.value();
-    return ExResult{settings, DisplayText::parse("guifont=" + std::string(value)).value()};
+    return ExResult{settings, std::nullopt,
+                    DisplayText::parse("guifont=" + std::string(value)).value()};
+}
+
+// 3 値が増えたらここでコンパイルが落ちる（CPP-002）。
+[[nodiscard]] std::string_view highlight_name(VimSearchHighlight highlight)
+{
+    switch (highlight)
+    {
+    case VimSearchHighlight::on:
+        return "on";
+    case VimSearchHighlight::off:
+        return "off";
+    case VimSearchHighlight::suspended:
+        return "suspended";
+    }
+    std::unreachable();
+}
+
+// 検索の強調の 3 値は設定に載せないので settings は空のまま返す（ADR 0037 の決定 1・2）。
+[[nodiscard]] ExResult highlight_result(VimSearchHighlight highlight)
+{
+    return ExResult{
+        std::nullopt, highlight,
+        DisplayText::parse("hlsearch=" + std::string(highlight_name(highlight))).value()};
 }
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
@@ -104,6 +129,14 @@ set_option(std::string_view option, const EditorSettings &settings)
     if (option.starts_with("guifont="))
     {
         return set_gui_font(option.substr(8), settings);
+    }
+    if (option == "hlsearch")
+    {
+        return highlight_result(VimSearchHighlight::on);
+    }
+    if (option == "nohlsearch")
+    {
+        return highlight_result(VimSearchHighlight::off);
     }
     return std::unexpected(ExFailure::unknown_option);
 }
@@ -139,12 +172,18 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
     {
         return set_option(argument, settings);
     }
+    // `:nohlsearch` と短縮形の `:noh` は次の検索まで強調を止めるだけで、設定は変えない。
+    if ((name == "nohlsearch" || name == "noh") && argument.empty())
+    {
+        return highlight_result(VimSearchHighlight::suspended);
+    }
     return std::unexpected(ExFailure::unknown_command);
 }
 
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
 {
-    std::vector<std::string> candidates{"colorscheme", "set fontsize=", "set guifont="};
+    std::vector<std::string> candidates{
+        "colorscheme", "set fontsize=", "set guifont=", "set hlsearch", "set nohlsearch"};
     for (const auto &name : themes.names())
     {
         candidates.push_back("colorscheme " + name);
@@ -173,7 +212,7 @@ DisplayText ex_failure_message(ExFailure failure)
     case ExFailure::unknown_command:
         return DisplayText::parse("Unknown command").value();
     case ExFailure::unknown_option:
-        return DisplayText::parse("Use set fontsize=<pt> or set guifont=<name>:h<pt>").value();
+        return DisplayText::parse("Use set fontsize=, set guifont= or set (no)hlsearch").value();
     case ExFailure::unknown_theme:
         return DisplayText::parse("Unknown colorscheme (Tab lists names)").value();
     case ExFailure::invalid_font_size:

@@ -6,6 +6,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -22,24 +23,14 @@ namespace
 [[nodiscard]] std::optional<std::size_t> first_match(std::string_view content,
                                                      const VimPattern &pattern, std::size_t lower)
 {
-    std::size_t at = 0;
-    while (true)
+    for (const auto &match : vim_line_matches(content, pattern))
     {
-        const auto match = pattern.matched(content, at);
-        if (!match.has_value())
+        if (match.begin.value >= lower)
         {
-            return std::nullopt;
-        }
-        if (match.value().begin >= lower)
-        {
-            return match.value().begin;
-        }
-        at = advanced(content, match.value());
-        if (at >= content.size())
-        {
-            return std::nullopt;
+            return match.begin.value;
         }
     }
+    return std::nullopt;
 }
 
 // 行の中で upper 桁より前にある最後の一致の始まり。
@@ -47,21 +38,15 @@ namespace
                                                     const VimPattern &pattern, std::size_t upper)
 {
     std::optional<std::size_t> found;
-    std::size_t at = 0;
-    while (true)
+    for (const auto &match : vim_line_matches(content, pattern))
     {
-        const auto match = pattern.matched(content, at);
-        if (!match.has_value() || match.value().begin >= upper)
+        if (match.begin.value >= upper)
         {
             return found;
         }
-        found = match.value().begin;
-        at = advanced(content, match.value());
-        if (at >= content.size())
-        {
-            return found;
-        }
+        found = match.begin.value;
     }
+    return found;
 }
 
 [[nodiscard]] std::optional<std::size_t> found_in_line(std::string_view content,
@@ -106,6 +91,26 @@ namespace
     return step >= start;
 }
 } // namespace
+
+std::vector<OffsetRange> vim_line_matches(std::string_view line, const VimPattern &pattern)
+{
+    std::vector<OffsetRange> matches;
+    std::size_t at = 0;
+    while (true)
+    {
+        const auto match = pattern.matched(line, at);
+        if (!match.has_value())
+        {
+            return matches;
+        }
+        matches.push_back(OffsetRange{Offset{match.value().begin}, Offset{match.value().end}});
+        at = advanced(line, match.value());
+        if (at >= line.size())
+        {
+            return matches;
+        }
+    }
+}
 
 std::optional<VimSearchHit> vim_search(const TextBuffer &text, Offset from,
                                        const VimPattern &pattern, VimSearchDirection direction)

@@ -1089,3 +1089,31 @@ base `54b3a21`（origin/main）。**製品の C++・fixture・CMake・schema に
 対象を限定した理由: 差分は conformance テスト 1 ファイルの `subprocess` の呼び方と、`eng/validate-git.ps1` の前置き 3 行である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / Release build / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。`eng/conformance.py` は文書を変えたので実行する（CNF-006）。画面確認は不要（窓に出る差分が無い）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 QLT-001 / QLT-007 / QLT-012 / GIT-003 / CNF-006 を自己レビュー。新しい規則・新しい検査・新しい閾値は足していない。`tests/conformance/test_vim_oracle.py` の `subprocess` は Issue #85 が同じファイルを触っているので今回は寄せていない（`vim_oracle.subprocess.run` を patch する作りで端末符号化に依らない。残りとして申し送り）。
+### 5-aj. 検索の当たりの強調（Issue #123・ADR 0037・2026-09-22）
+
+統合単位は [PR #125](https://github.com/hideyukiMORI/nene-nib/pull/125)（draft・ブランチ `feat/123-search-highlight`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は 5-ai までの並びの次を取った。
+
+base `4c0414c`（設計リナが `ae460a6`（origin/main）の上に ADR 0037 を積んだ commit）。ADR 0037 を**受理**にし、補足を 5 点足した。`VimState` に閉じた 3 値 `VimSearchHighlight`（既定 `on`・施主決定 D17）が載り、`vim_resting_from` が `last_search` と同じように持ち越す。`vim_step` の検索の 3 つの入口（`searched_key` / `repeated_search` / `word_search`）だけが `suspended` を `on` へ戻す。`ExResult` に `std::optional<VimSearchHighlight>` が増え、`:set hlsearch` / `:set nohlsearch` / `:nohlsearch` / `:noh` が返して controller の Ex の写し 1 か所が `requested_highlight` で `VimState` へ置く。照合器から `vim_line_matches(line, pattern)` を公開し、`vim_search` の `first_match` / `last_match` をそれに寄せたので走査の規則は 1 本になった。application は `EditorFrame` を作るときに、Vim モードで強調が `on` で解析できる `last_search` があるときだけ、**見えている行だけ**を数えて `LineView` の `matches` / `current_match` を既存の `span_of` で作る。renderer は当たり → 選択 → 本文 → 現在の当たりの枠 → キャレットの順で、`palette.search` の面と `palette.accent` の 1 DIP の枠だけを使う（ui/win32 に色のリテラルは増えていない）。新しいトークン・新しい型（enum 1 つを除く）・保存 schema・依存・ゲートの閾値は変えていない。
+
+実測は**実装の前**に行った。`python out/issue123-oracle/probe.py`（25 ケース）と `probe3.py`（4 ケース）が固定 Vim 9.1 の `v:hlsearch` の遷移を、`probe2.py`（14 ケース）が `searchcount()` の総数を測った。**決定 1 は 29 ケースすべて一致**し、実測で足りなかった 3 点（`off` のときの `:noh` を折る `requested_highlight`・長さ 0 の一致は数えるが塗らない・`aaaa` の `/aa` は 2 つ）を ADR の補足に書いた。強調そのものは Vim の報告に出ないので fixture にはできず（決定 8）、`--vim-search-highlight` の契約が正本である。`tests/vim/` の fixture は 1 件も増減していない。証拠は `out/issue123-oracle/probe*.json` / `probe*.txt`（`out/` は追跡外なので作業機にだけある）。Vim ソースは読まず、help と実測だけを根拠にした。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build/issue123 -G Ninja -DCMAKE_BUILD_TYPE=Debug` → `cmake --build build/issue123` | `VimState` / `ExResult` / `LineView` の形の変更と renderer の追加を Debug / clang-tidy / ASan / UBSan で。指摘なしで成功（閾値は触っていない） |
+| `build/issue123/nib_tests.exe --vim-search-highlight` | 対象。**74 checks 成功**（3 値の遷移 21・`vim_line_matches` 11・resting と畳み 6・Ex と補完 12・フレームの当たり 8・見えている行と強調しない場合 7・桁と CRLF と長さ 0 の 9） |
+| `build/issue123/nib_tests.exe --vim-search` | `vim_search` の行内走査を `vim_line_matches` に寄せたので、同じ答えであること。**1290 checks 成功**（この scope のテスト本文は変更していない） |
+| `build/issue123/nib_tests.exe --ex-settings` / `--command-palette` | `ExResult` の形と補完候補の変更。**153 / 130 checks 成功**。`command_completions("")` の末尾が `set guifont=` から `set nohlsearch` になったので既存の期待値 1 行を直した（候補が 2 つ増えたことの直接の帰結） |
+| `build/issue123/nib_tests.exe`（引数なし） | `VimState` / `ExResult` / `LineView` は Vim・Ex・描画・controller のすべてが通る形なので unit 全体を 1 回。**13309 checks すべて成功**（変更前 13235 ＋ 新規 74） |
+| `ctest --test-dir build/issue123 --output-on-failure --no-tests=error` | CTest から見た既定実行。4 件すべて成功（`nib_unit` 3.5 s） |
+| `python eng/symbols.py --build-dir build/issue123 --require core application` | `vim_line_matches` と強調の判定が core の外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし） |
+| `python eng/conformance.py` / `--build-dir build/issue123` | 1 ファイル 1 型（CNF-002・`VimSearchHighlight.hpp` が 1 つの enum）と fixture の生成整合（CNF-010 / CNF-011）。どちらも **0 violations** |
+| `cmake --build build/issue123-release` → `python eng/measure-speed.py --check --executable build/issue123-release/NeNeNib.exe` | 1 フレームに走査が増えるので 1 回。**5 benches / 1 regression**: `startup-window-shown` が median 46.782 ms で上限 43.666 ms を超えた（1 打鍵 0.914 ms・16 MiB 284.805 ms・起動 232.974 ms はすべて許容内）。**本件が原因ではない**（下記）。基準値は変更していない |
+| `python eng/measure-speed.py --check --executable build/release-main/NeNeNib.exe`（対照・変更前の Release exe・同じ機械で 1 分後） | **5 benches / 0 regressions**だが `startup-window-shown` は median 38.741 ms（最大 62.021 ms）で上限 43.666 ms に近く、こちらの試行にも外れ値がある。本件の実行の最小値 34.188 ms は対照の中央値より小さい |
+| 走査の時間（ADR 0037 の決定 7・ゲートではない） | 対象 unit には時計を入れられない（`tests/unit/NibTests.cpp` 冒頭・ARC-007）ので、core の純関数だけを呼ぶ使い捨ての計測を scratchpad で 1 回。**見えている 60 行 × 1 行 2 一致で 1 フレームあたり 0.067〜0.073 ms**（Release・予算 0.9 ms のおよそ 8 %）。基準値には足していない |
+| `clang-format --dry-run --Werror`（変更した C++ 13 ファイル） | 指摘なし |
+
+`startup-window-shown` の退行を本件の原因としない根拠: このベンチが測るのは `window_shown` の目印までで、`D3D11CreateDevice`（内訳で 173.5 ms）より**手前**である。本件が足したのは `EditorController::frame()` の中の走査だけで、`search_pattern()` は Vim モードでなければ最初の比較で `nullopt` を返す（起動時は通常モードで `last_search` も無い）。同じ機械で 1 分後に変更前の exe を測ると 0 regression だが中央値 38.741 ms・最大 62.021 ms で、本件の 5 試行の最小値 34.188 ms はその中央値より小さい。つまりこの機械のこのベンチが今この時間帯に不安定で、判定が上限の前後を行き来している。**再試行で緑を引きに行くことはしていない**（QLT-012）。基準値・閾値・除外はいっさい触っていないので、静かな機械での 1 回の測り直しは Ready の前に設計リナが行う。
+
+対象を限定した理由: 差分は core の 6 ファイル（enum 1 つ・`VimState` の 1 メンバー・`VimSearch` の走査の公開・`VimStep` の入口 3 か所・`ExResult` の 4 命令と候補 2 つ）、application の 3 ファイル（`LineView` の 2 メンバーと `EditorFrame` の作り方・Ex の写し 1 か所）、ui の 2 ファイル（塗りの経路の追加）である。`VimState` と `ExResult` と `LineView` は Vim・Ex・描画・controller のすべての呼び出し元を持つので unit 全体と ctest を 1 回ずつ回し、1 フレームの走査が増えるので速さも 1 回測った。テーマ・設定の保存・ファイル・IME・oracle の再生成は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。`check.ps1 -Full` は回していない。画面確認は**未実施**（hide の手元で行う。起動中の `build/release-main/NeNeNib.exe` PID 45480 には触れていない）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+FR-003 / ARC-001/003/004/007/010/011 / CPP-002/003/004/005/006/011/012 / QLT-001/008/012/013/014 / CNF-002/006 を自己レビュー。`optional` は `has_value` / `value` だけで読み、閉じた分岐（`VimSearchHighlight` の `switch`）に `default` は無い。`reinterpret_cast`・時刻・OS・スレッド・新しいトークン・色のリテラルは増やしていない。走査の規則は `vim_line_matches` の 1 本、桁の計算は `span_of` の 1 本のままである。
