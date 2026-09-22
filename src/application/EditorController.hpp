@@ -14,8 +14,10 @@
 #include "LineView.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "TextEncoding.hpp"
+#include "TextPosition.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimEffect.hpp"
@@ -122,6 +124,10 @@ class EditorController final
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
     void follow_caret();
+    void follow_position(core::TextPosition position);
+    // incsearch の preview（ADR 0041 の決定 3・5）。
+    void update_search_preview();
+    void restore_search_origin(const ScrollState &origin);
     void undo_edit();
     void redo_edit();
     void copy_selection();

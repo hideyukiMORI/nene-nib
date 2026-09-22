@@ -10,10 +10,13 @@
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
 #include "ScrollBounds.hpp"
+#include "SearchLine.hpp"
+#include "SearchPreview.hpp"
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
 #include "TabTitle.hpp"
+#include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
@@ -21,6 +24,7 @@
 #include "VimCharacter.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimKey.hpp"
+#include "VimMatchRequest.hpp"
 #include "VimMode.hpp"
 #include "VimNavigate.hpp"
 #include "VimRemoveBlock.hpp"
@@ -231,6 +235,58 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     }
     return rows.lines.at(line.value - rows.first.value).range;
 }
+// incsearch が入力中のパターンを見せる状態か（ADR 0041 の決定 3・4）。検索の入力行が開いていて、
+// 入力が空でなく、incsearch が on のときだけ。
+[[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state)
+{
+    const auto &input = state.command_input();
+    if (!state.vim().incsearch || !input.has_value())
+    {
+        return nullptr;
+    }
+    const auto *line = std::get_if<core::SearchLine>(&input.value());
+    if (line == nullptr || line->text().empty())
+    {
+        return nullptr;
+    }
+    return line;
+}
+
+[[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line)
+{
+    auto parsed = core::VimPattern::parse(line.text(), line.direction());
+    if (!parsed)
+    {
+        return std::nullopt;
+    }
+    return std::move(parsed).value();
+}
+
+// 入力中のパターンの次の当たり。確定の検索の鍵と同じ vim_find_match 1 本で、キャレットから
+// 入力行の向きへ 1 回ぶん探す（ADR 0041 の決定 1・3）。解析の失敗と不一致は当たり無しで、
+// 報せは出さない。
+[[nodiscard]] std::optional<core::TextPosition> previewed_match(const EditorState &state)
+{
+    const core::SearchLine *line = previewed_line(state);
+    if (line == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto pattern = typed_pattern(*line);
+    if (!pattern.has_value())
+    {
+        return std::nullopt;
+    }
+    const core::TextBuffer &text = state.text();
+    const core::VimMatchRequest request{text.position_of(state.selection().caret),
+                                        line->direction(), 1};
+    const auto hit = core::vim_find_match(text, pattern.value(), request);
+    if (!hit)
+    {
+        return std::nullopt;
+    }
+    return hit.value().position;
+}
 } // namespace
 
 EditorController::EditorController(EditorPorts ports, std::optional<OpenDocument> initial)
@@ -366,10 +422,17 @@ void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchorin
 
 void EditorController::follow_caret()
 {
-    const auto caret_line = state_.text().position_of(state_.selection().caret).line;
+    follow_position(state_.text().position_of(state_.selection().caret));
+}
+
+// 位置が見える範囲に入るようにスクロールする。キャレットと incsearch の preview が同じ計算を
+// 使う（ADR 0041 の決定 3）。
+void EditorController::follow_position(core::TextPosition position)
+{
     const ScrollState scroll = state_.scroll();
-    const auto followed = core::first_visible_for_caret(
-        scroll.first_visible, caret_line, scroll.visible_lines, scroll_follow_for(state_.mode()));
+    const auto followed =
+        core::first_visible_for_caret(scroll.first_visible, position.line, scroll.visible_lines,
+                                      scroll_follow_for(state_.mode()));
     const auto last_filled = core::first_visible_within(
         core::LineNumber{state_.text().line_count()}, state_.text().line_count(),
         scroll.visible_lines, core::ScrollExtent::filled_viewport);
@@ -739,6 +802,32 @@ void EditorController::perform(const core::VimOpenCommandLine &)
 void EditorController::perform(const core::VimOpenSearch &effect)
 {
     state_ = state_.with_command_input(core::SearchLine::opened(effect.direction));
+    state_ = state_.with_search_preview(SearchPreview{std::nullopt, state_.scroll()});
+}
+
+// 入力行が変わるたびに 1 か所で呼ぶ（ADR 0041 の決定 3）。画面は毎回 origin から数え直すので、
+// 打ち直しても同じ入力なら同じ位置に見える。当たりが無ければ origin のまま。
+void EditorController::update_search_preview()
+{
+    const auto &preview = state_.search_preview();
+    if (!preview.has_value())
+    {
+        return;
+    }
+    const ScrollState origin = preview.value().origin;
+    const auto match = previewed_match(state_);
+    restore_search_origin(origin);
+    state_ = state_.with_search_preview(SearchPreview{match, origin});
+    if (match.has_value())
+    {
+        follow_position(match.value());
+    }
+}
+
+// 見えている行数は入力中に窓の大きさで変わり得るので、戻すのは先頭行だけ。
+void EditorController::restore_search_origin(const ScrollState &origin)
+{
+    state_ = state_.with_scroll(ScrollState{origin.first_visible, state_.scroll().visible_lines});
 }
 
 void EditorController::accept(const CommandText &intent)
@@ -755,6 +844,7 @@ void EditorController::accept(const CommandText &intent)
         return;
     }
     state_ = state_.with_command_input(next.value());
+    update_search_preview();
 }
 
 void EditorController::accept(const EditCommand &intent)
@@ -774,6 +864,7 @@ void EditorController::accept(const EditCommand &intent)
         return;
     }
     state_ = state_.with_command_input(edited_command(input.value(), intent.edit));
+    update_search_preview();
 }
 
 void EditorController::accept(const CancelCommand &)
@@ -781,7 +872,13 @@ void EditorController::accept(const CancelCommand &)
     const auto &input = state_.command_input();
     const bool searching =
         input.has_value() && std::holds_alternative<core::SearchLine>(input.value());
+    // 入力行を閉じると preview も消えるので、戻す先を先に写す（ADR 0041 の決定 5）。
+    const auto preview = state_.search_preview();
     state_ = state_.with_command_input(std::nullopt);
+    if (preview.has_value())
+    {
+        restore_search_origin(preview.value().origin);
+    }
     if (searching)
     {
         // 検索の取消は保留中のオペレータと回数も捨てる（`d/<Esc>` のあとの `x` が消すのと
@@ -875,7 +972,14 @@ void EditorController::submit(const core::CommandPalette &palette)
 void EditorController::submit(const core::SearchLine &line)
 {
     const core::VimSearchPattern pattern{std::string(line.text()), line.direction()};
+    // Vim も確定の前に入力前の画面へ戻してから本当の検索をする（ex_getln.c の
+    // finish_incsearch_highlighting）。着いた先は engine の鍵のあとの follow_caret が見せる。
+    const auto preview = state_.search_preview();
     state_ = state_.with_command_input(std::nullopt);
+    if (preview.has_value())
+    {
+        restore_search_origin(preview.value().origin);
+    }
     accept(VimKeyPress{core::VimKey{pattern}});
 }
 
@@ -918,6 +1022,14 @@ void EditorController::evaluate_command(std::string_view text)
     {
         core::VimState vim = state_.vim();
         vim.highlight = core::requested_highlight(vim.highlight, highlight.value());
+        state_ = state_.with_vim(std::move(vim));
+    }
+    // incsearch も同じく Vim の状態で、保存しない（ADR 0041 の決定 6）。
+    const auto &incsearch = result.value().incsearch;
+    if (incsearch.has_value())
+    {
+        core::VimState vim = state_.vim();
+        vim.incsearch = incsearch.value();
         state_ = state_.with_vim(std::move(vim));
     }
     state_ = state_.with_command_message(result.value().message);
@@ -1275,6 +1387,12 @@ std::optional<CompositionView> EditorController::composed() const
 
 std::optional<core::VimPattern> EditorController::search_pattern() const
 {
+    // 入力中は入力のパターンで塗る。解析できなければ何も塗らない（ADR 0041 の決定 4）。
+    const core::SearchLine *typing = previewed_line(state_);
+    if (state_.mode() == core::EditMode::vim && typing != nullptr)
+    {
+        return typed_pattern(*typing);
+    }
     const auto &remembered = state_.vim().last_search;
     if (state_.mode() != core::EditMode::vim ||
         state_.vim().highlight != core::VimSearchHighlight::on || !remembered.has_value())
@@ -1305,7 +1423,12 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
         return view;
     }
     const std::size_t start = text.line_start(line).value;
-    const std::size_t caret = state_.selection().caret.value;
+    // 今の一致はキャレットを含む一致。incsearch の入力中は preview の当たりを含む一致（ADR 0041
+    // の決定 4）。
+    const auto &preview = state_.search_preview();
+    const std::size_t caret = preview.has_value() && preview.value().match.has_value()
+                                  ? text.offset_of(preview.value().match.value()).value
+                                  : state_.selection().caret.value;
     for (const auto &match : core::vim_line_matches(view.text, pattern.value()))
     {
         const core::OffsetRange found{core::Offset{start + match.begin.value},
