@@ -2551,10 +2551,46 @@ constexpr std::size_t vim_visible_lines = 64;
     return text.value().offset_of(caret).value - text.value().line_start(caret.line).value + 1;
 }
 
+// 入力行が開いているあいだの鍵の写し先。窓と同じ約束の 2 つめの端（ARC-012・ADR 0032 の決定 1）。
+// fixture の `/foo<CR>` は Vim では 1 つの命令なので、再生もこの 1 本を通る。
+void command_key(EditorController &controller, const VimKey &key)
+{
+    if (const auto *special = std::get_if<VimSpecialKey>(&key))
+    {
+        if (*special == VimSpecialKey::enter)
+        {
+            static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
+            return;
+        }
+        if (*special == VimSpecialKey::escape)
+        {
+            static_cast<void>(controller.apply(nenenib::application::CancelCommand{}));
+            return;
+        }
+        if (*special == VimSpecialKey::backspace)
+        {
+            static_cast<void>(controller.apply(
+                nenenib::application::EditCommand{nenenib::core::CommandEdit::backspace}));
+        }
+        return;
+    }
+    if (const auto *character = std::get_if<VimCharacter>(&key))
+    {
+        std::string utf8;
+        nenenib::core::append_utf8(utf8, character->code);
+        static_cast<void>(controller.apply(nenenib::application::CommandText{utf8}));
+    }
+}
+
 void vim_replay(EditorController &controller, std::string_view keys)
 {
     for (const VimKey &key : vim_keys_of(keys))
     {
+        if (controller.command_line_active())
+        {
+            command_key(controller, key);
+            continue;
+        }
         static_cast<void>(controller.apply(VimKeyPress{key}));
     }
 }
@@ -3740,10 +3776,10 @@ void verify_vim_visual_step_edges()
     visual.mode = VimMode::visual;
     const Selection selection{Offset{1}, Offset{2}};
     // VISUAL で効かない鍵は選択もモードも動かさない（決定 7）。
-    for (const VimKey key : {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'u'}},
-                             VimKey{VimCharacter{U'D'}}, VimKey{VimCharacter{U'A'}},
-                             VimKey{VimSpecialKey::enter}, VimKey{VimSpecialKey::backspace},
-                             VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
+    for (const VimKey &key : {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'u'}},
+                              VimKey{VimCharacter{U'D'}}, VimKey{VimCharacter{U'A'}},
+                              VimKey{VimSpecialKey::enter}, VimKey{VimSpecialKey::backspace},
+                              VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
     {
         const auto step =
             vim_step(visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64}}, key);
@@ -5633,8 +5669,8 @@ void verify_vim_text_object_cancellation()
     expect(waits_for_object(waiting.next, nenenib::core::VimTextObjectScope::inner) &&
                waiting.next.mode == VimMode::visual,
            "VISUAL i is the object prefix, not an insert command");
-    for (const VimKey key : {VimKey{VimCharacter{U'x'}}, VimKey{VimCharacter{U'3'}},
-                             VimKey{VimSpecialKey::escape}, VimKey{VimSpecialKey::arrow_left}})
+    for (const VimKey &key : {VimKey{VimCharacter{U'x'}}, VimKey{VimCharacter{U'3'}},
+                              VimKey{VimSpecialKey::escape}, VimKey{VimSpecialKey::arrow_left}})
     {
         const auto cancelled = vim_step(waiting.next, view, key);
         expect(cancelled.next.mode == VimMode::visual && !cancelled.next.input_wait.has_value() &&
@@ -6027,6 +6063,282 @@ void verify_vim_search_word()
     expect(word_under("foo-bar x foo-bar", 3) == "bar", "the hyphen takes the word after it");
 }
 
+// 期待値は固定 Vim 9.1 の 218 ケース（out/issue100-oracle）から取った。fixture にできない
+// 取消・未対応構文・報せの文言はここが正本の検査である（ADR 0032 の補足）。
+[[nodiscard]] bool caret_at(const EditorFrame &frame, std::size_t line, std::size_t column)
+{
+    return frame.caret.position.line == LineNumber{line} &&
+           frame.caret.position.column == Column{column};
+}
+
+[[nodiscard]] bool message_is(const EditorFrame &frame, std::string_view text)
+{
+    return frame.command_message.has_value() && frame.command_message.value().text() == text;
+}
+
+[[nodiscard]] bool register_is(const EditorController &controller, std::string_view text,
+                               std::string_view kind)
+{
+    return controller.vim_state().unnamed_register.text == text &&
+           vim_register_kind(controller.vim_state().unnamed_register) == kind;
+}
+
+// 決定 3 の到達位置・向き・回数。
+void verify_vim_search_keys()
+{
+    const std::string body = "alpha beta\nbeta gamma\ndelta beta";
+    Editing forward;
+    open_vim_document(forward, body);
+    EditorController &first = forward.controller();
+    vim_replay(first, "/beta<CR>");
+    expect(caret_at(first.frame(), 1, 7) && vim_body(first.frame()) == body,
+           "a forward search moves to the next match and leaves the body alone");
+    vim_replay(first, "n");
+    expect(caret_at(first.frame(), 2, 1), "n keeps the direction");
+    vim_replay(first, "N");
+    expect(caret_at(first.frame(), 1, 7), "N takes the opposite direction");
+    vim_replay(first, "/<CR>");
+    expect(caret_at(first.frame(), 2, 1), "an empty pattern reuses the previous one");
+    Editing backward;
+    open_vim_document(backward, body);
+    EditorController &second = backward.controller();
+    vim_replay(second, "G$?beta<CR>");
+    expect(caret_at(second.frame(), 3, 7), "a backward search moves to the previous match");
+    vim_replay(second, "n");
+    expect(caret_at(second.frame(), 2, 1), "n after ? keeps going backwards");
+    vim_replay(second, "N");
+    expect(caret_at(second.frame(), 3, 7), "N after ? goes forwards");
+    Editing counted;
+    open_vim_document(counted, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &third = counted.controller();
+    vim_replay(third, "3/aaa<CR>");
+    expect(caret_at(third.frame(), 1, 1), "a count takes the third match, which wraps");
+    Editing repeated;
+    open_vim_document(repeated, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &fourth = repeated.controller();
+    vim_replay(fourth, "/aaa<CR>3n");
+    expect(caret_at(fourth.frame(), 2, 5), "a count on n multiplies the same way");
+}
+
+// 決定 3 のオペレータ（exclusive）と VISUAL の端点。
+void verify_vim_search_operators()
+{
+    Editing removed;
+    open_vim_document(removed, "alpha beta gamma");
+    EditorController &first = removed.controller();
+    vim_replay(first, "d/gamma<CR>");
+    expect(vim_body(first.frame()) == "gamma" && register_is(first, "alpha beta ", "v") &&
+               caret_at(first.frame(), 1, 1),
+           "an operator takes the range up to the match (exclusive)");
+    vim_replay(first, "u");
+    expect(vim_body(first.frame()) == "alpha beta gamma", "and it is one undo unit");
+    Editing yanked;
+    open_vim_document(yanked, "alpha beta gamma");
+    EditorController &second = yanked.controller();
+    vim_replay(second, "y/gamma<CR>");
+    expect(vim_body(second.frame()) == "alpha beta gamma" &&
+               register_is(second, "alpha beta ", "v"),
+           "a yank through a search leaves the body alone");
+    Editing changed;
+    open_vim_document(changed, "alpha beta gamma");
+    EditorController &third = changed.controller();
+    vim_replay(third, "c/gamma<CR>ZZ<Esc>");
+    expect(vim_body(third.frame()) == "ZZgamma", "a change through a search opens INSERT");
+    Editing linewise;
+    open_vim_document(linewise, "foo bar\nbaz qux");
+    EditorController &fourth = linewise.controller();
+    vim_replay(fourth, "d/baz<CR>");
+    expect(vim_body(fourth.frame()) == "baz qux" && register_is(fourth, "foo bar\n", "V"),
+           "a range that ends in column 1 from the indent becomes linewise");
+    Editing shortened;
+    open_vim_document(shortened, "foo bar\nbaz qux");
+    EditorController &fifth = shortened.controller();
+    vim_replay(fifth, "4ld/baz<CR>");
+    expect(vim_body(fifth.frame()) == "foo \nbaz qux" && register_is(fifth, "bar", "v"),
+           "and from the middle of the line it ends at the end of the previous line");
+    Editing counted;
+    open_vim_document(counted, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &sixth = counted.controller();
+    vim_replay(counted.controller(), "2d/aaa<CR>");
+    expect(register_is(sixth, "aaa bbb\nccc aaa\nddd ", "v"),
+           "the operator count survives the input line");
+    Editing empty;
+    open_vim_document(empty, "foo bar");
+    EditorController &seventh = empty.controller();
+    vim_replay(seventh, "d/foo<CR>");
+    expect(vim_body(seventh.frame()) == "foo bar" && register_is(seventh, "", ""),
+           "a range that wraps onto itself changes neither the body nor the register");
+    Editing visual;
+    open_vim_document(visual, "alpha beta gamma");
+    EditorController &eighth = visual.controller();
+    vim_replay(eighth, "v/gamma<CR>");
+    expect(eighth.frame().vim_mode == VimMode::visual, "VISUAL stays VISUAL while searching");
+    vim_replay(eighth, "d");
+    expect(vim_body(eighth.frame()) == "amma", "and the search moved the end of the selection");
+    Editing visual_line;
+    open_vim_document(visual_line, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &ninth = visual_line.controller();
+    vim_replay(ninth, "V/gamma<CR>d");
+    expect(vim_body(ninth.frame()) == "delta beta", "a line VISUAL takes whole lines");
+}
+
+// 決定 3 の `*` / `#`。語の先頭から探すが、オペレータの範囲は元のキャレットから。
+void verify_vim_search_word_keys()
+{
+    Editing star;
+    open_vim_document(star, "foo bar\nbaz foo\nfoo qux");
+    EditorController &first = star.controller();
+    vim_replay(first, "*");
+    expect(caret_at(first.frame(), 2, 5), "the star searches the word under the caret");
+    vim_replay(first, "n");
+    expect(caret_at(first.frame(), 3, 1), "and n keeps that pattern");
+    Editing hash;
+    open_vim_document(hash, "foo bar\nbaz foo\nfoo qux");
+    EditorController &second = hash.controller();
+    vim_replay(second, "G#");
+    expect(caret_at(second.frame(), 2, 5), "the hash searches backwards");
+    Editing bounded;
+    open_vim_document(bounded, "foo foobar barfoo foo");
+    EditorController &third = bounded.controller();
+    vim_replay(third, "*");
+    expect(caret_at(third.frame(), 1, 19),
+           "the word is anchored, so foobar and barfoo are skipped");
+    Editing pending;
+    open_vim_document(pending, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &fourth = pending.controller();
+    vim_replay(fourth, "d*");
+    expect(vim_body(fourth.frame()) == "aaa\nddd aaa eee" &&
+               register_is(fourth, "aaa bbb\nccc ", "v"),
+           "an operator before the star takes the range to the match");
+    Editing anchored;
+    open_vim_document(anchored, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &fifth = anchored.controller();
+    vim_replay(fifth, "G$d#");
+    expect(vim_body(fifth.frame()) == "aaa bbb\nccc aaa\nddd aaa e" &&
+               register_is(fifth, "ee", "v"),
+           "the range ends at the original caret, not at the start of the word");
+}
+
+// 決定 5 の報せ。Vim にある文言は Vim のまま、未対応構文の拒否だけが本実装のもの。
+void verify_vim_search_messages()
+{
+    Editing missing;
+    open_vim_document(missing, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &first = missing.controller();
+    vim_replay(first, "/zzz<CR>");
+    expect(message_is(first.frame(), "E486: Pattern not found: zzz") &&
+               caret_at(first.frame(), 1, 1),
+           "a pattern that is not there says so and does not move");
+    vim_replay(first, "n");
+    expect(message_is(first.frame(), "E486: Pattern not found: zzz"),
+           "a failed search is still remembered, so n repeats the same failure");
+    vim_replay(first, "x");
+    expect(!first.frame().command_message.has_value(), "the next key clears the message");
+    Editing fresh;
+    open_vim_document(fresh, "alpha beta");
+    EditorController &second = fresh.controller();
+    vim_replay(second, "n");
+    expect(message_is(second.frame(), "E35: No previous regular expression"),
+           "n without a previous pattern says so");
+    vim_replay(second, "/<CR>");
+    expect(message_is(second.frame(), "E35: No previous regular expression"),
+           "and so does an empty pattern");
+    Editing wordless;
+    open_vim_document(wordless, "   \nfoo");
+    EditorController &third = wordless.controller();
+    vim_replay(third, "*");
+    expect(message_is(third.frame(), "E348: No string under cursor"),
+           "the star on a blank line says there is no word");
+    Editing wrapped;
+    open_vim_document(wrapped, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &fourth = wrapped.controller();
+    vim_replay(fourth, "G$/alpha<CR>");
+    expect(message_is(fourth.frame(), "search hit BOTTOM, continuing at TOP") &&
+               caret_at(fourth.frame(), 1, 1),
+           "a forward search that wraps says so");
+    Editing backwards;
+    open_vim_document(backwards, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &fifth = backwards.controller();
+    vim_replay(fifth, "?gamma<CR>");
+    expect(message_is(fifth.frame(), "search hit TOP, continuing at BOTTOM") &&
+               caret_at(fifth.frame(), 2, 6),
+           "and so does a backward one");
+    Editing refused;
+    open_vim_document(refused, "foo foobar");
+    EditorController &sixth = refused.controller();
+    vim_replay(sixth, "/\\(foo\\)<CR>");
+    expect(message_is(sixth.frame(), "Unsupported pattern item: \\( \\)") &&
+               caret_at(sixth.frame(), 1, 1),
+           "an unsupported item is refused instead of meaning something else");
+    vim_replay(sixth, "/foo/e<CR>");
+    expect(message_is(sixth.frame(), "Search offset is not supported"),
+           "and so is a search offset");
+}
+
+// 決定 1 の入力行と取消。入力中に本文は変わらず、Esc と空の Backspace で取消になる。
+void verify_vim_search_input()
+{
+    Editing editing;
+    open_vim_document(editing, "alpha beta gamma");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "2l/fo");
+    const auto typing = controller.frame();
+    expect(typing.command_line.has_value() &&
+               typing.command_line.value().prompt == nenenib::core::InputLinePrompt::search_forward,
+           "the search input line is drawn with its own prompt");
+    const auto shown = typing.command_line.value_or(nenenib::core::InputLineView{});
+    expect(shown.text == "fo" && shown.completions.empty(),
+           "the typed pattern is in the input line and there are no completions");
+    expect(vim_body(typing) == "alpha beta gamma" && caret_at(typing, 1, 3),
+           "typing a pattern changes neither the body nor the caret");
+    vim_replay(controller, "<Esc>");
+    expect(!controller.frame().command_line.has_value() && caret_at(controller.frame(), 1, 3),
+           "Esc closes the input line without searching");
+    expect(!controller.vim_state().last_search.has_value(), "a cancelled search is not remembered");
+    vim_replay(controller, "/<BS>");
+    expect(!controller.frame().command_line.has_value() && caret_at(controller.frame(), 1, 3),
+           "Backspace on an empty input line cancels too");
+    vim_replay(controller, "d/<Esc>x");
+    expect(vim_body(controller.frame()) == "alha beta gamma",
+           "a cancelled search drops the pending operator and the next key acts alone");
+    Editing backwards;
+    open_vim_document(backwards, "alpha beta gamma");
+    EditorController &second = backwards.controller();
+    vim_replay(second, "?al");
+    expect(second.frame().command_line.value_or(nenenib::core::InputLineView{}).prompt ==
+               nenenib::core::InputLinePrompt::search_backward,
+           "the backward search has the other prompt");
+}
+
+// 決定 3 の `.`。検索は鍵 1 つとして記録に乗るので、追加の仕掛けは要らない（ADR 0030）。
+void verify_vim_search_dot()
+{
+    Editing operated;
+    open_vim_document(operated, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &first = operated.controller();
+    vim_replay(first, "d/bbb<CR>j0.");
+    expect(vim_body(first.frame()) == "ccc aaa\nddd aaa eee" && register_is(first, "bbb\n", "V"),
+           ". replays the search as one key");
+    Editing starred;
+    open_vim_document(starred, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &second = starred.controller();
+    vim_replay(second, "*dn.");
+    expect(vim_body(second.frame()) == "aaa eee" && register_is(second, "aaa bbb\nccc ", "v"),
+           ". replays an operator over n");
+    Editing pending;
+    open_vim_document(pending, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &third = pending.controller();
+    vim_replay(third, "d*.");
+    expect(vim_body(third.frame()) == "aaa eee" && register_is(third, "aaa\nddd ", "v"),
+           ". replays the star as the key it is");
+    Editing plain;
+    open_vim_document(plain, "aaa bbb\nccc aaa\nddd aaa eee");
+    EditorController &fourth = plain.controller();
+    vim_replay(fourth, "x/aaa<CR>.");
+    expect(vim_body(fourth.frame()) == "aa bbb\nccc aa\nddd aaa eee",
+           "a plain search is a move, so . still replays the last change");
+}
+
 void verify_vim_search_contracts()
 {
     verify_vim_pattern_subset();
@@ -6036,6 +6348,12 @@ void verify_vim_search_contracts()
     verify_vim_search_wrap();
     verify_vim_search_encoding();
     verify_vim_search_word();
+    verify_vim_search_keys();
+    verify_vim_search_operators();
+    verify_vim_search_word_keys();
+    verify_vim_search_messages();
+    verify_vim_search_input();
+    verify_vim_search_dot();
 }
 
 void verify_vim_search_scope()

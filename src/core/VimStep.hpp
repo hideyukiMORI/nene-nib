@@ -3,7 +3,10 @@
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
+#include "VimSearchNotice.hpp"
 #include "VimState.hpp"
+
+#include <optional>
 
 namespace nenenib::core
 {
@@ -12,7 +15,14 @@ struct VimStep
 {
     VimState next;
     VimEffect effect;
+    // 検索が残した報せ（ADR 0032 の決定 5）。折り返しは効果と同時に出るので効果の選択肢では
+    // なく、1 打鍵の結果に添える値である。controller が command_message へ写す。
+    std::optional<VimSearchNotice> notice = std::nullopt;
 };
+
+// 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の
+// 鍵を捨て、モードと直前の変更は保つ。何を捨てるかを決めるのは engine の側である（ARC-004）。
+[[nodiscard]] VimState vim_cancelled_input(const VimState &state);
 
 // Vim エンジンの唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
 // 本文・選択・表示領域を 1 回だけ借用する（ADR 0019 の決定 1）。NORMAL / INSERT は

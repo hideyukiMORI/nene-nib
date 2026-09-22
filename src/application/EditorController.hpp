@@ -67,6 +67,11 @@ class EditorController final
     void accept(const PasteCommand &);
     void accept(const OpenCommandPalette &);
     void accept(const ActivateCommandChoice &intent);
+    // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
+    // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
+    void submit(const core::CommandLine &line);
+    void submit(const core::CommandPalette &palette);
+    void submit(const core::SearchLine &line);
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;
@@ -82,6 +87,7 @@ class EditorController final
     // （CPP-002 / ADR 0012 の決定 3）。どれも既存の 1 本の経路を呼ぶだけ（ARC-001）。
     void perform(const core::VimNoEffect &);
     void perform(const core::VimOpenCommandLine &);
+    void perform(const core::VimOpenSearch &effect);
     void perform(const core::VimMoveTo &effect);
     void perform(const core::VimNavigate &effect);
     void perform(const core::VimSelect &effect);

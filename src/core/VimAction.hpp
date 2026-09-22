@@ -56,6 +56,14 @@ enum class VimAction : std::uint8_t
     replace_character,
     open_command_line,
     // `.`。直前の変更の鍵の列を同じ経路へ再生する（ADR 0030 の決定 6）。
-    repeat_change
+    repeat_change,
+    // 検索（ADR 0032）。`/` `?` は入力行を開き、`n` `N` は覚えたパターン、`*` `#` は
+    // キャレットの語を \<…\> にして同じ経路を通る。
+    open_search_forward,
+    open_search_backward,
+    repeat_search,
+    repeat_search_opposite,
+    search_word_forward,
+    search_word_backward
 };
 } // namespace nenenib::core
