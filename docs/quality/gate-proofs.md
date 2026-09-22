@@ -1310,3 +1310,20 @@ base `1b6b253`（main）の上に `72b451f`。`DisplayWidth` に `hex`（4 桁�
 対象を限定した理由: 差分は core の表 1 範囲・enum 1 値・switch の枝 2 本と unit で、engine の経路・保存・速さの入力に触れない（C1 を含む行の桁だけが変わる）。速さ・fixture の再生成・verify-window・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
 
 ARC-001 / ARC-003 / CPP-002 / CPP-011 / QLT-001 / QLT-010 / QLT-012 を自己レビュー。残るのは、表の出典の掃引（`'a' . nr2char(cp)` で測った probe2）と C1 の実測（`strdisplaywidth("\x85")`）で測り方が違うことで、C1 以外に同じ食い違いが無いかは測っていない。
+
+### 5-ar. IME の変換中の行でも置き換えた文字を muted で描く（Issue #152・ADR 0040 の決定 4・ADR 0014・2026-09-23）
+
+base `6466fcc`（main）の上に `9e25e3f`。変換中の行の layout は描画用の行に差し込み位置 `base`（UTF-16）で変換中の文字列を差し込んだもの。無名名前空間の `replaced_ranges(DisplayLine, inserted)` が `is_replaced` の桁の UTF-16 の範囲を作り、`base` 以降の範囲だけ変換中の文字列の UTF-16 長ぶん右へずらす。本文だけの行は長さ 0 の差し込みとして同じ関数を通す（経路は 1 本）。`draw_replaced` は範囲の列を受けて `muted` で `tint_runs` し、変換中の行では本文の描画の後・文節の前に呼ぶ。差し込み位置は桁の境目なので置き換えた文字の範囲をまたがず、IME の節（`ime`）とも重ならない。候補窓・変換中の文字列の色・INSERT の細いキャレットは不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy 込み） | 成功・警告 0 |
+| `nib_tests.exe`（既定） | **13459 checks passed**（main と同数） |
+| `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`6466fcc..9e25e3f`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象 `none`・`scopes 20 / same 20 / 未測 0` |
+| `python eng/conformance.py` | **0 violations** |
+| `clang-format --dry-run --Werror`（renderer 2 ファイル）・`git diff --check` | 差分なし |
+| 実機の IME（scratchpad の撮影スクリプトが `window_driver` の `start` / `send_keys` / `capture_png` を使う・`verify_ime` と同じに実鍵で `a` を 1 文字変換中） | `out/117-cr.txt` の 1 行目 `a^Mb` で、行末（`out/frames-152/end.png`）と `^M` の前（`before-cr.png`・ずらす側）の両方で `^M` の最も明るい画素が `(189, 176, 184)`（muted）、`a` `b` は `(238, 238, 236)`（text） |
+
+対象を限定した理由: 差分は renderer の変換中の行の置き換え文字の塗りだけで、core・application・fixture・保存・速さの入力に触れない。`eng/symbols.py`・速さ・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+ARC-001 / CPP-002 / CPP-011 / CPP-014 / QLT-001 / QLT-012 を自己レビュー。残るのは INSERT の細いキャレットと選択の置き換え文字の幅。

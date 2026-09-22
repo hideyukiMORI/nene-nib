@@ -14,6 +14,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -145,6 +146,27 @@ constexpr float full_channel = 255.0F;
 {
     return core::SelectionSpan{span.presence, displayed(line, span.begin),
                                displayed(line, span.end)};
+}
+
+// 置き換えた文字（`is_replaced` の桁）の UTF-16 の範囲。IME の変換中の行では inserted に
+// 変換中の文字列が差し込んであるので、その位置以降の範囲を長さぶん右へずらす（#152）。
+// 本文だけの行は長さ 0 の inserted を渡す。差し込み位置は桁の境目なので範囲をまたがない。
+[[nodiscard]] std::vector<DWRITE_TEXT_RANGE> replaced_ranges(const core::DisplayLine &line,
+                                                             DWRITE_TEXT_RANGE inserted)
+{
+    std::vector<DWRITE_TEXT_RANGE> ranges;
+    for (std::size_t column = 0; column + 1 < line.starts.size(); ++column)
+    {
+        if (!core::is_replaced(line, column))
+        {
+            continue;
+        }
+        const UINT32 from = utf16_offset(line.text, core::Column{line.starts.at(column) + 1});
+        const UINT32 stop = utf16_offset(line.text, core::Column{line.starts.at(column + 1) + 1});
+        const UINT32 shift = from >= inserted.startPosition ? inserted.length : 0U;
+        ranges.push_back(DWRITE_TEXT_RANGE{from + shift, stop - from});
+    }
+    return ranges;
 }
 
 [[nodiscard]] float caret_x(IDWriteTextLayout *text, UINT32 position) noexcept
@@ -740,17 +762,12 @@ void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWrite
 }
 
 void Direct2DRenderer::draw_replaced(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                                     const core::LayoutRect &area, const core::DisplayLine &line)
+                                     const core::LayoutRect &area,
+                                     std::span<const DWRITE_TEXT_RANGE> ranges)
 {
-    for (std::size_t column = 0; column + 1 < line.starts.size(); ++column)
+    for (const auto &range : ranges)
     {
-        if (!core::is_replaced(line, column))
-        {
-            continue;
-        }
-        const UINT32 from = utf16_offset(line.text, core::Column{line.starts.at(column) + 1});
-        const UINT32 stop = utf16_offset(line.text, core::Column{line.starts.at(column + 1) + 1});
-        tint_runs(text, area, DWRITE_TEXT_RANGE{from, stop - from}, frame.palette.muted);
+        tint_runs(text, area, range, frame.palette.muted);
     }
 }
 
@@ -823,7 +840,13 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     context_->DrawTextLayout(
         D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
         brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    draw_clauses(frame, text.Get(), area, utf16_at(shown, at));
+    const UINT32 base = utf16_at(shown, at);
+    // 置き換えた文字は変換中の行でも muted（ADR 0040 の決定 4）。IME の節とは重ならない。
+    draw_replaced(
+        frame, text.Get(), area,
+        replaced_ranges(line.display, DWRITE_TEXT_RANGE{base, utf16_at(composition.utf8,
+                                                                       composition.utf8.size())}));
+    draw_clauses(frame, text.Get(), area, base);
     // 変換中のキャレットは GCS_CURSORPOS の位置のバー（ADR 0014 の決定 7）。
     draw_bar_caret(frame, text.Get(), area, utf16_at(shown, at + composition.cursor.value));
 }
@@ -847,7 +870,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
     context_->DrawTextLayout(
         D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
         brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    draw_replaced(frame, text.Get(), area, line.display);
+    draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_current_match(frame, text.Get(), area, line);
     if (line.number == frame.caret.position.line && !frame.command_line.has_value())
     {

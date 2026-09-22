@@ -117,8 +117,9 @@ class Direct2DRenderer final
                     const core::LayoutRect &area, const core::DisplayLine &line);
     // 置き換えた文字（`^M`・`<200b>`）は muted の字色で描き直す。面は塗らない（ADR 0040 の決定
     // 4）。
+    // ranges は描いた layout の UTF-16 の範囲（IME の変換中の行ではずらした後・#152）。
     void draw_replaced(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                       const core::LayoutRect &area, const core::DisplayLine &line);
+                       const core::LayoutRect &area, std::span<const DWRITE_TEXT_RANGE> ranges);
     // 注目文節は accent の 2 DIP の下線と selection と同じ面、他の文節は ime の 1 DIP の
     // 下線と ime の字色（ADR 0014 の決定 7・採用案 D15）。
     void draw_target_clause(const application::EditorFrame &frame, IDWriteTextLayout *text,
