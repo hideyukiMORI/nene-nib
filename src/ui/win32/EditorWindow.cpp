@@ -804,7 +804,7 @@ void EditorWindow::place_caret(LPARAM data)
     // 行番号の欄や行より左のクリックは行頭に寄せる（最も近い位置）。
     const auto &line = frame.lines.at(row_index(body, high_word_of(data), frame.lines.size()));
     const auto column =
-        renderer_->column_at(line.text, body, std::max(low_word_of(data), body.content.left));
+        renderer_->column_at(line, body, std::max(low_word_of(data), body.content.left));
     const auto anchoring =
         held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
     send(application::PlaceCaret{core::TextPosition{line.number, column}, anchoring});

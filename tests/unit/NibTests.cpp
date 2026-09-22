@@ -7594,6 +7594,69 @@ void verify_vim_search_highlight_scope()
     verify_vim_search_highlight_contracts();
 }
 
+// ---------------------------------------------------------------- 描画用の行の接続（ADR 0040
+// の決定 2）
+
+// 見えている行の display は core の display_line と同じで、選択・検索の当たりの桁は本文の桁のまま
+// （描画の桁へ写すのは renderer の 1 か所）。LF 文書の `\r` は文字、CRLF の改行は本文ではない。
+void verify_display_line_views()
+{
+    const std::string first = "a\rb\x01"
+                              "c\xe2\x80\x8b beta";
+    Editing session;
+    open_vim_document(session, first + "\nplain beta");
+    EditorController &controller = session.controller();
+    const auto opened = controller.frame();
+    const auto &line = opened.lines.at(0);
+    expect(line.text == first, "the line view keeps the source text");
+    const DisplayLine made = display_line(first);
+    expect(line.display.text == made.text, "the line view's display text is core's display_line");
+    expect(line.display.starts == made.starts, "the line view's starts are core's display_line");
+    expect(line.display.text == "a^Mb^Ac<200b> beta", "CR, ^A and U+200B are replaced in the view");
+    expect(line.display.starts.size() == code_point_count(first) + 1,
+           "one start per source column and the end");
+    for (std::size_t column = 0; column + 1 < line.display.starts.size(); ++column)
+    {
+        const bool replaced = column == 1 || column == 3 || column == 5;
+        expect(is_replaced(line.display, column) == replaced,
+               "only the CR, ^A and U+200B are replaced in the view");
+    }
+    expect(opened.lines.at(1).display.text == "plain beta" &&
+               starts_are(opened.lines.at(1).display, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+           "a plain line is drawn as it is");
+    vim_replay(controller, "/beta<CR>");
+    const auto found = controller.frame();
+    expect(frame_matches(found, 0) == std::vector<MatchSpan>{{8, 12}},
+           "the match keeps source columns (b is the 8th code point, not the 15th drawn one)");
+    expect(current_match_is(found, 0, MatchSpan{8, 12}), "the current match keeps source columns");
+    expect(frame_matches(found, 1) == std::vector<MatchSpan>{{7, 11}},
+           "a plain line's match is the same in both columns");
+    expect(display_position(found.lines.at(0).display, 7) == 14,
+           "the renderer's mapping puts the match at the 15th drawn character");
+    expect(found.caret.position.column == Column{8}, "the caret column is a source column too");
+    vim_replay(controller, "0vll");
+    const auto selected = controller.frame();
+    expect(selected.lines.at(0).selection.presence == SelectionPresence::present &&
+               selected.lines.at(0).selection.begin == Column{1} &&
+               selected.lines.at(0).selection.end == Column{4},
+           "a VISUAL selection over a, CR and b keeps source columns");
+    expect(display_position(selected.lines.at(0).display, 3) == 4,
+           "the renderer's mapping ends the selection after ^M and b");
+    Editing crlf;
+    crlf.files().hold(Bytes{std::string("alpha\r\nbeta\r\n")});
+    applied(crlf.controller(), VisibleLines{vim_visible_lines});
+    applied(crlf.controller(), OpenDocument{sample_path()});
+    const auto lines = crlf.controller().frame();
+    expect(lines.lines.at(0).display.text == "alpha" && lines.lines.at(1).display.text == "beta",
+           "a CRLF document draws no ^M (its line ending is not content)");
+}
+
+void verify_display_line_scope()
+{
+    verify_display_line();
+    verify_display_line_views();
+}
+
 // 既定実行（引数なし）が回す scope 専用の契約。selector は「その scope だけを速く回す」絞り込みで、
 // 契約そのものは既定実行にも載る（Issue #97）。新しい scope を足したら、下の selector の表と対に
 // してここへも 1 行足す。fixture の再生は verify_vim_fixtures が全件行うので、ここには載せない。
@@ -7623,7 +7686,7 @@ void verify_vim_scope_contracts()
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
     constexpr std::array<std::pair<std::string_view, void (*)()>, 20> scopes{{
-        {"--display-line", verify_display_line},
+        {"--display-line", verify_display_line_scope},
         {"--vim-dot", verify_vim_dot_scope},
         {"--vim-search", verify_vim_search_scope},
         {"--vim-search-highlight", verify_vim_search_highlight_scope},
@@ -7686,6 +7749,7 @@ int main(int argc, char **argv)
     }
     verify_text_and_caret();
     verify_display_line();
+    verify_display_line_views();
     verify_controller_intents();
     verify_vim_scope_contracts();
     verify_ex_settings();

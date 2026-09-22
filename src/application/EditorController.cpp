@@ -4,6 +4,7 @@
 #include "CaretShape.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
+#include "DisplayLine.hpp"
 #include "Edit.hpp"
 #include "ExResult.hpp"
 #include "ModeLabel.hpp"
@@ -1290,11 +1291,15 @@ std::optional<core::VimPattern> EditorController::search_pattern() const
 
 // 見えている 1 行ぶんの表示値。検索の当たりは行の中だけを数え、桁は選択と同じ span_of で作る
 // （ADR 0037 の決定 3・4）。塗る面を持たない長さ 0 の一致は span_of が absent を返すので落ちる。
+// 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
 LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
                                      const std::optional<core::VimPattern> &pattern) const
 {
     const core::TextBuffer &text = state_.text();
-    LineView view{line, text.line_text(line), span_of(text, range, line), {}, std::nullopt};
+    std::string body = text.line_text(line);
+    core::DisplayLine display = core::display_line(body);
+    LineView view{line, std::move(body), std::move(display), span_of(text, range, line),
+                  {},   std::nullopt};
     if (!pattern.has_value())
     {
         return view;
