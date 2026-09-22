@@ -977,7 +977,7 @@ base `220fe76`（origin/main。ADR 0034 の 1 commit を積んだあと #99 の 
 
 ### 5-af. 矩形 VISUAL（Issue #112・ADR 0035・2026-09-22）
 
-統合単位は [PR #117](https://github.com/hideyukiMORI/nene-nib/pull/117)（draft・ブランチ `feat/112-vim-visual-block`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節番号は引き継ぎが #112 に予約していた 5-af を取った（#111 が先に 5-ag へ入った）。
+統合単位は [PR #118](https://github.com/hideyukiMORI/nene-nib/pull/118)（draft・ブランチ `feat/112-vim-visual-block`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節番号は引き継ぎが #112 に予約していた 5-af を取った（#111 が先に 5-ag へ入った）。
 
 base `87d8d71`（origin/main。ADR 0035 の 1 commit を積んだあと #111 の merge の上へ rebase した。衝突なし）。ADR 0035 は**実測のあとで受理**にし、決定 2・4・5・6・7 を 6 点直して「補足」に差を残した（端に掛かった文字は丸ごと外して空白に置き換える・取る空白と残す空白は内側と外側で逆・`$` の印はレジスタに残らない・`r` は桁の数だけ書く・貼付の右の埋めは本文が続くときだけ・再生は角ではなく記録した幅から）。新しい型は `VimBlockWidth` / `VimBlockLine` / `VimBlockEdit` / `VimBlockExtent` / `VimRemoveBlock` / `VimReplaceBlock` / `VimInsertBlock` / `VimBlockRange` の 8 つで、どれも 1 ファイル 1 型（CPP-011）。`VimMode` / `VimSpecialKey` / `VimRegisterKind` / `VimVisualExtent` / `VimEffect` の 5 つの閉じた和型が増え、写し漏れは `switch` / `std::visit` の網羅性が落とした（CPP-002）。保存形式・schema・依存・ゲートの閾値・描画（renderer）は変更していない。
 
