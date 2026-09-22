@@ -1,6 +1,7 @@
 #include "Direct2DRenderer.hpp"
 
 #include "DevicePixels.hpp"
+#include "DisplayLine.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "RgbaColor.hpp"
@@ -128,6 +129,22 @@ constexpr float full_channel = 255.0F;
         ++points;
     }
     return points;
+}
+
+// 本文の桁（1 始まり）を描画用の行の桁へ（ADR 0040 の決定 3）。キャレット・選択・検索の当たり・
+// IME の差し込み位置はすべてここを通してから UTF-16 の位置にする。範囲外は描画の末尾に畳む。
+[[nodiscard]] core::Column displayed(const core::DisplayLine &line, core::Column column) noexcept
+{
+    const std::size_t index = column.value > 0 ? column.value - 1 : 0;
+    return core::Column{core::display_position(line, index) + 1};
+}
+
+// 選択・検索の当たりの両端を描画用の行へ写す。変換は上の 1 本だけ（ADR 0040 の決定 3）。
+[[nodiscard]] core::SelectionSpan displayed(const core::DisplayLine &line,
+                                            const core::SelectionSpan &span) noexcept
+{
+    return core::SelectionSpan{span.presence, displayed(line, span.begin),
+                               displayed(line, span.end)};
 }
 
 [[nodiscard]] float caret_x(IDWriteTextLayout *text, UINT32 position) noexcept
@@ -616,8 +633,9 @@ void Direct2DRenderer::outline_runs(IDWriteTextLayout *text, const core::LayoutR
 DWRITE_TEXT_RANGE Direct2DRenderer::range_of(const application::LineView &line,
                                              const core::SelectionSpan &span)
 {
-    const UINT32 from = utf16_offset(line.text, span.begin);
-    const UINT32 stop = utf16_offset(line.text, span.end);
+    const core::SelectionSpan shown = displayed(line.display, span);
+    const UINT32 from = utf16_offset(line.display.text, shown.begin);
+    const UINT32 stop = utf16_offset(line.display.text, shown.end);
     return DWRITE_TEXT_RANGE{from, stop - from};
 }
 
@@ -648,10 +666,11 @@ void Direct2DRenderer::draw_line_selection(const application::EditorFrame &frame
                                            IDWriteTextLayout *text, const core::LayoutRect &area,
                                            const application::LineView &line)
 {
-    const UINT32 from = utf16_offset(line.text, line.selection.begin);
-    const UINT32 stop = utf16_offset(line.text, line.selection.end);
+    const DWRITE_TEXT_RANGE range = range_of(line, line.selection);
+    const UINT32 stop = range.startPosition + range.length;
     brush_->SetColor(to_color(frame.palette.selection));
-    fill_runs(text, area, DWRITE_TEXT_RANGE{from, stop - from});
+    fill_runs(text, area, range);
+    // 行末を越えたかは本文の桁で見る（描画の桁は末尾に畳まれている）。
     if (line.selection.end.value <= core::code_point_count(line.text) + 1)
     {
         return;
@@ -706,9 +725,9 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
 }
 
 void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                                  const core::LayoutRect &area, std::string_view line)
+                                  const core::LayoutRect &area, const core::DisplayLine &line)
 {
-    const UINT32 position = utf16_offset(line, frame.caret.position.column);
+    const UINT32 position = utf16_offset(line.text, displayed(line, frame.caret.position.column));
     switch (frame.caret.shape)
     {
     case core::CaretShape::bar:
@@ -719,6 +738,21 @@ void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWrite
         return;
     }
     std::unreachable();
+}
+
+void Direct2DRenderer::draw_replaced(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                                     const core::LayoutRect &area, const core::DisplayLine &line)
+{
+    for (std::size_t column = 0; column + 1 < line.starts.size(); ++column)
+    {
+        if (!core::is_replaced(line, column))
+        {
+            continue;
+        }
+        const UINT32 from = utf16_offset(line.text, core::Column{line.starts.at(column) + 1});
+        const UINT32 stop = utf16_offset(line.text, core::Column{line.starts.at(column + 1) + 1});
+        tint_runs(text, area, DWRITE_TEXT_RANGE{from, stop - from}, frame.palette.muted);
+    }
 }
 
 void Direct2DRenderer::draw_target_clause(const application::EditorFrame &frame,
@@ -741,18 +775,18 @@ void Direct2DRenderer::draw_other_clause(const application::EditorFrame &frame,
 }
 
 void Direct2DRenderer::draw_clauses(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                                    const core::LayoutRect &area, std::string_view shown)
+                                    const core::LayoutRect &area, UINT32 base)
 {
     if (!frame.composition.has_value())
     {
         return;
     }
-    // 変換中の文字列はキャレットの桁に差し込んであるので、その手前までが行の元の字である。
-    const std::size_t at = byte_of_column(shown, frame.caret.position.column);
-    for (const auto &clause : frame.composition.value().underlines)
+    // 変換中の文字列は UTF-16 の base に差し込んであるので、文節の位置はそこから数える。
+    const auto &composition = frame.composition.value();
+    for (const auto &clause : composition.underlines)
     {
-        const UINT32 from = utf16_at(shown, at + clause.range.begin.value);
-        const UINT32 stop = utf16_at(shown, at + clause.range.end.value);
+        const UINT32 from = base + utf16_at(composition.utf8, clause.range.begin.value);
+        const UINT32 stop = base + utf16_at(composition.utf8, clause.range.end.value);
         const DWRITE_TEXT_RANGE range{from, stop - from};
         switch (clause.emphasis)
         {
@@ -776,8 +810,10 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
         return;
     }
     const auto &composition = frame.composition.value();
-    const std::size_t at = byte_of_column(line.text, frame.caret.position.column);
-    std::string shown(line.text);
+    // 差し込み位置も描画用の行の桁へ写してから探す（ADR 0040 の決定 3）。
+    const std::size_t at =
+        byte_of_column(line.display.text, displayed(line.display, frame.caret.position.column));
+    std::string shown(line.display.text);
     shown.insert(at, composition.utf8);
     const auto text = layout_of(shown, body);
     if (!text)
@@ -788,7 +824,7 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     context_->DrawTextLayout(
         D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
         brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    draw_clauses(frame, text.Get(), area, shown);
+    draw_clauses(frame, text.Get(), area, utf16_at(shown, at));
     // 変換中のキャレットは GCS_CURSORPOS の位置のバー（ADR 0014 の決定 7）。
     draw_bar_caret(frame, text.Get(), area, utf16_at(shown, at + composition.cursor.value));
 }
@@ -797,7 +833,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
                                        const core::BodyLayout &body, const core::LayoutRect &area,
                                        const application::LineView &line)
 {
-    const auto text = layout_of(line.text, body);
+    const auto text = layout_of(line.display.text, body);
     if (!text)
     {
         return;
@@ -812,10 +848,11 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
     context_->DrawTextLayout(
         D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
         brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    draw_replaced(frame, text.Get(), area, line.display);
     draw_current_match(frame, text.Get(), area, line);
     if (line.number == frame.caret.position.line && !frame.command_line.has_value())
     {
-        draw_caret(frame, text.Get(), area, line.text);
+        draw_caret(frame, text.Get(), area, line.display);
     }
 }
 
@@ -1158,10 +1195,10 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     return {};
 }
 
-core::Column Direct2DRenderer::column_at(std::string_view text, const core::BodyLayout &body,
-                                         std::int32_t x)
+core::Column Direct2DRenderer::column_at(const application::LineView &line,
+                                         const core::BodyLayout &body, std::int32_t x)
 {
-    const auto layout = layout_of(text, body);
+    const auto layout = layout_of(line.display.text, body);
     BOOL trailing = FALSE;
     BOOL inside = FALSE;
     DWRITE_HIT_TEST_METRICS metrics{};
@@ -1171,7 +1208,8 @@ core::Column Direct2DRenderer::column_at(std::string_view text, const core::Body
         return core::Column{1};
     }
     const UINT32 position = metrics.textPosition + (trailing != FALSE ? metrics.length : 0U);
-    return core::Column{code_points_before(text, position) + 1};
+    const std::size_t shown = code_points_before(line.display.text, position);
+    return core::Column{core::source_column(line.display, shown) + 1};
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::resize(UINT width, UINT height)

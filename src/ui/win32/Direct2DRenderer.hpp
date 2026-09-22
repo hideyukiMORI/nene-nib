@@ -3,6 +3,7 @@
 #include "BodyLayout.hpp"
 #include "ClauseEmphasis.hpp"
 #include "CommandLayout.hpp"
+#include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
@@ -42,8 +43,9 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> render(const application::EditorFrame &frame);
     [[nodiscard]] std::expected<void, RenderFailure> resize(UINT width, UINT height);
     // 本文のクリックを桁へ写す唯一の経路。DirectWrite の当たり判定は描く側が持つ（ARC-011）。
-    [[nodiscard]] core::Column column_at(std::string_view text, const core::BodyLayout &body,
-                                         std::int32_t x);
+    // 当たり判定は描画用の行で引き、本文の桁へ戻して返す（ADR 0040 の決定 3）。
+    [[nodiscard]] core::Column column_at(const application::LineView &line,
+                                         const core::BodyLayout &body, std::int32_t x);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
     [[nodiscard]] std::expected<void, RenderFailure> set_font(const core::EditorSettings &settings);
     // 最後に描いたキャレットの物理画素。窓が IME の候補窓をその直下に置く（ADR 0014 の決定 6）。
@@ -111,15 +113,20 @@ class Direct2DRenderer final
     void draw_block_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                           const core::LayoutRect &area, UINT32 position);
     void draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                    const core::LayoutRect &area, std::string_view line);
+                    const core::LayoutRect &area, const core::DisplayLine &line);
+    // 置き換えた文字（`^M`・`<200b>`）は muted の字色で描き直す。面は塗らない（ADR 0040 の決定
+    // 4）。
+    void draw_replaced(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                       const core::LayoutRect &area, const core::DisplayLine &line);
     // 注目文節は accent の 2 DIP の下線と selection と同じ面、他の文節は ime の 1 DIP の
     // 下線と ime の字色（ADR 0014 の決定 7・採用案 D15）。
     void draw_target_clause(const application::EditorFrame &frame, IDWriteTextLayout *text,
                             const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
     void draw_other_clause(const application::EditorFrame &frame, IDWriteTextLayout *text,
                            const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
+    // base は変換中の文字列を差し込んだ UTF-16 の位置（描画用の行の中・ADR 0040 の決定 3）。
     void draw_clauses(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                      const core::LayoutRect &area, std::string_view shown);
+                      const core::LayoutRect &area, UINT32 base);
     // 変換中の文字列をキャレットの位置に差し込んだ 1 行。TextBuffer は触らない（ARC-004）。
     void draw_composed_line(const application::EditorFrame &frame, const core::BodyLayout &body,
                             const core::LayoutRect &area, const application::LineView &line);

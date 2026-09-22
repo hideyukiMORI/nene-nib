@@ -1177,10 +1177,13 @@ def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) ->
         previous = pixels
 
 
-def drive_keys(executable: Path, environment: dict, frames: Path, keys: str) -> dict:
+def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
+               opened: Path | None = None) -> dict:
     """--keys: before.png, the keys through the posted-message path, after.png, frames.json."""
     steps = parse_keys(keys)
-    process, window, _ = start(executable, environment)
+    # --open は起動引数でファイルを開いてから撮る（Issue #117: `\r` を含む行は鍵では打てない）。
+    process, window, _ = start(executable, environment,
+                               [str(opened)] if opened is not None else None)
     try:
         raise_window(window)
         time.sleep(0.4)
@@ -1224,9 +1227,13 @@ def main() -> None:
                         help="with --capture: skip the sections, save before.png, send these keys "
                              "(fixture notation, e.g. ihello<Esc>), save after.png and frames.json; "
                              "exits 1 when the keys left the window unchanged")
+    parser.add_argument("--open", type=Path, default=None,
+                        help="with --keys: open this file through the command line first")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
+    if arguments.open is not None and arguments.keys is None:
+        parser.error("--open needs --keys")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -1239,7 +1246,8 @@ def main() -> None:
     environment = dict(os.environ, LOCALAPPDATA=str(isolated), APPDATA=str(isolated))
     become_dpi_aware()
     if arguments.keys is not None:
-        record = drive_keys(executable, environment, frames, arguments.keys)
+        opened = arguments.open.resolve() if arguments.open is not None else None
+        record = drive_keys(executable, environment, frames, arguments.keys, opened)
         print(json.dumps(record, indent=2))
         if not record["changed"]:
             print("keys did not change the window within 8 s")

@@ -1256,3 +1256,22 @@ base `d4de8c2`（main）。**製品の C++・CMake・fixture・保存 schema・`
 対象を限定した理由: 差分は `eng/` の Python 1 本とテスト 1 ファイル、文書 3 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
 
 ARC-001 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / CNF-006 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない。残るのは、transcript の形（鍵名）は Claude Code の版で変わり得て、変わっても落ちずに turns 0 や `skipped` の増加として出ること（ゲートに載っていないので次に使うときに数字で気づく）と、実行中の席は途中までの数字になることの 2 点。
+
+### 5-ao. 制御文字を `^X`・書式用文字を `<xxxx>` で描く（Issue #117・ADR 0040・2026-09-23）
+
+base `d4de8c2`（main）の上に 2 commit（`0b0a8b9` core・`4dcc918` application と renderer）。core の `display_line`（命題 1）を `LineView.display` に載せ、renderer は `display.text` で layout を作る。桁 → 位置は無名名前空間の `displayed`（`SelectionSpan` の両端も同じ 1 本）で `display_position` を通してから UTF-16 にし、位置 → 桁は `HitTestPoint` の位置を `source_column` で戻す（`column_at` は `LineView` を受ける）。IME の差し込みも描画用の行の桁で探す。置き換えた文字は `muted` で `tint_runs`（面は塗らない）。`LineView.text` を layout に渡す経路は 0 件（`grep -n "layout_of(" src/ui/win32/Direct2DRenderer.cpp` は `display.text` と IME の `shown` だけ）。fixture・保存 schema・色トークン・Tab は不変。`eng/verify-window.py` に `--open`（`--keys` の起動でファイルを開く）を足した。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy 込み） | 成功・警告 0 |
+| `nib_tests.exe --display-line` | **150 checks passed**（123 → 150・新規 27 は application の `verify_display_line_views`: `\r` `\x01` U+200B を含む LF 文書の行で `display.text` / `starts` が core の `display_line` と一致・置き換えは桁 1 3 5 だけ・`/beta` の当たりと現在の当たりとキャレットは本文の桁 8〜12 のまま・`0vll` の選択は本文の桁 [1, 4)・CRLF 文書は `^M` を描かない） |
+| `nib_tests.exe --vim-search-highlight` | **74 checks passed**（前と同数。強調の桁は壊れていない） |
+| `nib_tests.exe`（既定） | **13459 checks passed**（13432 → 13459・差は上の 27） |
+| `python eng/protected-diff.py --base origin/main --allow --display-line --build` | **終了 0**。`dbe8333..4dcc918`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象 5 ファイルは `none`・`--display-line 新規 - -> 150 allowed`・`scopes 20 / same 19 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` | 2 libraries, **0 violation(s)** |
+| `python eng/conformance.py` | **0 violations** |
+| `python eng/verify-window.py --capture out/frames-117 --open out/117-cr.txt --keys "x"` | 終了 0（`changed: true`）。`out/117-cr.txt` は `a\rb\n` と `\x01x` U+200B `y beta` の LF 文書。`before.png` で 1 行目が `a^Mb`、2 行目が `^Ax<200b>y beta` と描かれ、置き換えた文字は `muted` の字色 |
+
+対象を限定した理由: 差分は application の表示値 1 欄・renderer の桁の変換・unit・verify-window の引数 1 つで、fixture・engine・保存・速さの入力に触れない。速さ・fixture の再生成・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+ARC-001 / ARC-004 / ARC-011 / CPP-002 / CPP-009 / CPP-011 / CPP-014 / QLT-001 / QLT-012 を自己レビュー。残るのは、ブロックのキャレットが `^M` の上では `^` の 1 文字ぶんの幅になること（Vim は 2 桁を覆う）と、IME の変換中の行では置き換えた文字を `muted` にしないこと（本文の字色のまま）の 2 点。
