@@ -52,3 +52,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0034](0034-vim-virtual-column-one-table.md) | Vim の桁は core の表示幅の表 1 本で仮想桁に直し、使う経路を閉じる | 受理 |
 | [0035](0035-vim-visual-block-as-column-ranges.md) | 矩形 VISUAL は仮想桁の矩形を 1 本の範囲関数で決め、行ごとの範囲の列として編集する | 受理 |
 | [0036](0036-line-ending-owned-by-text-buffer.md) | 改行の形は本文が 1 つ持ち、`\r` が改行の一部かどうかはその形だけで決まる | 受理 |
+| [0037](0037-search-highlight-as-visible-line-spans.md) | 検索の当たりは見えている行だけを照合器で数え、行ごとの列として描く（`hlsearch` は既定オン） | 提案 |
