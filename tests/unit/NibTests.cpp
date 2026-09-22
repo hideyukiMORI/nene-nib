@@ -616,6 +616,8 @@ TextBuffer buffer_of(std::string_view text)
         return 2;
     case DisplayWidth::unprintable:
         return 6;
+    case DisplayWidth::hex:
+        return 4;
     }
     std::unreachable();
 }
@@ -647,8 +649,35 @@ void verify_display_line_notation()
     const DisplayLine combining = display_line("é");
     expect(combining.text == "é" && starts_are(combining, {0, 1, 2}),
            "a combining mark stays one character");
-    const DisplayLine c1 = display_line("\u0085");
-    expect(c1.text == "\u0085", "a C1 control is not replaced (ADR 0040 decision 6)");
+    const DisplayLine nbsp = display_line("\u00a0");
+    expect(nbsp.text == "\u00a0" && starts_are(nbsp, {0, 1}),
+           "U+00A0 right after the C1 range stays one character");
+}
+
+// C1 制御文字（U+0080〜U+009F）は Vim と同じ `<85>` の 4 文字（Issue #147・ADR 0040 補足）。
+void verify_display_line_c1()
+{
+    for (char32_t value = 0x80; value <= 0x9F; ++value)
+    {
+        std::string text;
+        append_utf8(text, value);
+        const DisplayLine line = display_line(text);
+        expect(line.text.size() == 4 && line.text.front() == '<' && line.text.back() == '>' &&
+                   starts_are(line, {0, 4}) && is_replaced(line, 0),
+               "every C1 control is drawn as <xx> in four characters");
+    }
+    expect(display_line("\u0085").text == "<85>", "U+0085 is drawn as <85>");
+    expect(display_line("\u0080").text == "<80>", "U+0080 is drawn as <80>");
+    expect(display_line("\u009f").text == "<9f>", "U+009F is drawn as <9f> in lower case");
+    const DisplayLine mixed = display_line("a\u0085x");
+    expect(mixed.text == "a<85>x" && starts_are(mixed, {0, 1, 5, 6}),
+           "a C1 control in a line moves the following characters by four");
+    expect(!is_replaced(mixed, 0) && is_replaced(mixed, 1) && !is_replaced(mixed, 2),
+           "only the C1 control is replaced");
+    expect(source_column(mixed, 3) == 1 && display_position(mixed, 2) == 5,
+           "the mapping steps over <85> as one source character");
+    expect(expected_cells(display_width(0x0085)) == 4,
+           "the drawn width of a C1 control equals its cells in the table");
 }
 
 void verify_display_line_controls()
@@ -681,8 +710,8 @@ void verify_display_line_widths()
     {
         const char32_t value = code_point_at(text, Offset{at});
         const DisplayWidth width = display_width(value);
-        const bool replaced =
-            (width == DisplayWidth::wide && value < U'\x20') || width == DisplayWidth::unprintable;
+        const bool replaced = (width == DisplayWidth::wide && value < U'\x20') ||
+                              width == DisplayWidth::unprintable || width == DisplayWidth::hex;
         const std::size_t drawn = line.starts[column + 1] - line.starts[column];
         expect(drawn == (replaced ? expected_cells(width) : 1),
                "controls and format characters take their cells, the rest take one");
@@ -731,6 +760,7 @@ void verify_display_line()
     verify_display_line_notation();
     verify_display_line_controls();
     verify_display_line_widths();
+    verify_display_line_c1();
     verify_display_line_mapping();
 }
 
@@ -4364,10 +4394,12 @@ void verify_vim_visual_wanted_scope()
 // 測った値（out/issue108-oracle/probe2.txt）と突き合わせる。CI に Vim は無いのでここが正本。
 void verify_vim_display_width_table()
 {
-    constexpr std::array<std::pair<char32_t, DisplayWidth>, 24> measured{{
+    constexpr std::array<std::pair<char32_t, DisplayWidth>, 28> measured{{
         {U'a', DisplayWidth::single},   {0x0001, DisplayWidth::wide},
         {0x001F, DisplayWidth::wide},   {0x0020, DisplayWidth::single},
-        {0x007F, DisplayWidth::single}, {0x00B1, DisplayWidth::single},
+        {0x007F, DisplayWidth::single}, {0x0080, DisplayWidth::hex},
+        {0x0085, DisplayWidth::hex},    {0x009F, DisplayWidth::hex},
+        {0x00A0, DisplayWidth::single}, {0x00B1, DisplayWidth::single},
         {0x03B1, DisplayWidth::single}, {0x0300, DisplayWidth::zero},
         {0x036F, DisplayWidth::zero},   {0x0370, DisplayWidth::single},
         {0x200A, DisplayWidth::single}, {0x200B, DisplayWidth::unprintable},
@@ -4419,6 +4451,18 @@ void verify_vim_virtual_columns()
            "an unprintable character takes six columns and the caret stays on the first");
     expect(virtual_column(format, Offset{4}) == VirtualColumn{8},
            "and the character after it starts at the eighth column");
+
+    // Vim は C1 制御文字を `<85>` と描き 4 桁を占める（Issue #147・実測 strdisplaywidth("\x85") ==
+    // 4）。
+    const auto c1 = TextBuffer::from_utf8("a\u0085x").value();
+    expect(virtual_column(c1, Offset{1}) == VirtualColumn{2} &&
+               virtual_column_end(c1, Offset{1}) == VirtualColumn{5} &&
+               caret_virtual_column(c1, Offset{1}) == VirtualColumn{2},
+           "a C1 control takes four columns and the caret stays on the first");
+    expect(virtual_column(c1, Offset{3}) == VirtualColumn{6},
+           "and the character after it starts at the sixth column");
+    expect(offset_at_virtual_column(c1, LineNumber{1}, VirtualColumn{5}) == Offset{1},
+           "every column a C1 control covers lands on it");
 }
 
 // 逆引き（決定 2）。桁を含む文字の先頭へ着き、行が短ければ行の内容の終わりで止まる。

@@ -30,6 +30,8 @@ constexpr char32_t tab_character = U'\t';
         return 2;
     case DisplayWidth::unprintable:
         return 6;
+    case DisplayWidth::hex:
+        return 4;
     }
     std::unreachable();
 }

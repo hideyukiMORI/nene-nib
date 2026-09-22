@@ -1292,3 +1292,21 @@ base `1b6b253`（main）の上に `33f4b7b`。`draw_block_caret` は `DisplayLin
 対象を限定した理由: 差分は renderer のブロックの幅と verify-window の引数 1 つで、core・application・fixture・保存・速さの入力に触れない。`eng/symbols.py`（core / application のリンク境界は不変）・速さ・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
 
 ARC-001 / CPP-002 / CPP-009 / CPP-014 / QLT-001 / QLT-012 を自己レビュー。残るのは、INSERT の細いキャレット・選択・IME の変換中の行の置き換え文字（#152）。
+
+### 5-aq. C1 制御文字を 4 桁の `hex` として `<85>` で描く（Issue #147・ADR 0034 / 0040 の補足・2026-09-23）
+
+base `1b6b253`（main）の上に `72b451f`。`DisplayWidth` に `hex`（4 桁）を足し、表に `{0x0080, 0x009F, hex}` を 1 範囲足した（491 → 492 行・clang-format が 2 件ずつに詰め直すので表の後半全体が差分に出る）。`display_line` は `hex` を `<` と小文字 16 進 2 桁と `>` に置き換える。enum が増えて落ちる `switch` は 3 本（`VirtualColumn.cpp` の `cells_of` → 4・`DisplayLine.cpp` の `append_display` → `<xx>`・unit の `expected_cells` → 4）で、どれも `default` を書かずに枝を足した。Vim の実測（`strdisplaywidth("\x85") == 4`）は設計席が済ませた。fixture に C1 は無いので再生成していない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy 込み・全 target） | 成功・警告 0 |
+| `nib_tests.exe --vim-virtual-column` | **424 checks passed**（417 → 424・表の境界 U+0080 / U+0085 / U+009F / U+00A0 と `a\u0085x` の桁 2〜5・次の文字 6・逆引き） |
+| `nib_tests.exe --display-line` | **189 checks passed**（150 → 189・C1 32 個が `<xx>` の 4 文字・`<85>` `<80>` `<9f>`・`a<85>x` の `starts` {0,1,5,6} と `is_replaced`・対応表の往復） |
+| `nib_tests.exe`（既定） | **13505 checks passed**（13459 → 13505・差は上の 46） |
+| `python eng/protected-diff.py --base origin/main --allow --vim-virtual-column --allow --display-line --build` | **終了 0**。`1b6b253..72b451f`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・`--display-line 150 -> 189 allowed`・`--vim-virtual-column 417 -> 424 allowed`・`scopes 20 / same 18 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` | 2 libraries, **0 violation(s)** |
+| `python eng/conformance.py` | **0 violation(s)** |
+
+対象を限定した理由: 差分は core の表 1 範囲・enum 1 値・switch の枝 2 本と unit で、engine の経路・保存・速さの入力に触れない（C1 を含む行の桁だけが変わる）。速さ・fixture の再生成・verify-window・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+ARC-001 / ARC-003 / CPP-002 / CPP-011 / QLT-001 / QLT-010 / QLT-012 を自己レビュー。残るのは、表の出典の掃引（`'a' . nr2char(cp)` で測った probe2）と C1 の実測（`strdisplaywidth("\x85")`）で測り方が違うことで、C1 以外に同じ食い違いが無いかは測っていない。
