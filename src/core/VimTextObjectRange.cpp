@@ -329,9 +329,9 @@ constexpr char32_t escape_character = U'\\';
                                                         std::size_t count)
 {
     const bool grows = has_selection(selection);
-    const Offset begin = grows ? selection_range(selection).begin
-                               : run_start_in_line(text, selection.caret,
-                                                   word_class_of(request.object));
+    const Offset begin =
+        grows ? selection_range(selection).begin
+              : run_start_in_line(text, selection.caret, word_class_of(request.object));
     const auto end = grows ? extended_end(text, selection.caret, request, count)
                            : fresh_word_end(text, begin, request, count);
     if (!end.has_value())
@@ -851,9 +851,8 @@ pair_range_at(const TextBuffer &text, Offset caret, VimTextObjectRequest request
     {
         return VimTextObjectCancel{selection};
     }
-    const Selection placed = quoted(request.object)
-                                 ? kept_direction(text, selection, range.value())
-                                 : forward_selection(text, range.value());
+    const Selection placed = quoted(request.object) ? kept_direction(text, selection, range.value())
+                                                    : forward_selection(text, range.value());
     return VimTextObjectSpan{range.value(), placed};
 }
 } // namespace

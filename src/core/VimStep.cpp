@@ -2784,8 +2784,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         {
             return VimStep{std::move(next), VimNoEffect{}};
         }
-        next.wanted_column = VimWantedColumn{
-            VimColumnWish::at_column, view.text.position_of(cancel.selection.caret).column};
+        next.wanted_column = VimWantedColumn{VimColumnWish::at_column,
+                                             view.text.position_of(cancel.selection.caret).column};
         return VimStep{std::move(next), VimSelect{cancel.selection}};
     }
     const Offset caret = rested_in(view.text, cancel.selection.caret, VimMode::normal);

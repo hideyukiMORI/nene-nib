@@ -6063,6 +6063,41 @@ void verify_vim_text_object_dot()
            "a cancelled object leaves the last change alone");
 }
 
+// 回数が尽きた取消のキャレットと選択（Issue #99・ADR 0031 の補足）。ビープが後続の鍵を捨てる
+// ので VISUAL の取消は 1 回の `:normal!` に乗らず、fixture にできない（Issue #87 の教訓）。
+// 固定 Vim を区切って測った値をここで engine に固定する（`out/issue99-oracle/probe*.txt`）。
+void verify_vim_text_object_residuals()
+{
+    Editing editing;
+    open_vim_document(editing, "alpha beta gamma");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "2lv9iwy");
+    expect(controller.vim_state().unnamed_register.text == "alpha beta gamma",
+           "a count that runs out leaves the selection it managed to build (measured)");
+    vim_replay(controller, "<Esc>02lvl9iwy");
+    expect(controller.vim_state().unnamed_register.text == "pha beta gamma",
+           "a forward selection keeps its anchor when the count runs out");
+    vim_replay(controller, "<Esc>04lvhh9iwy");
+    expect(controller.vim_state().unnamed_register.text == "alpha",
+           "a backward selection keeps its anchor and the caret stops at the start of the text");
+    vim_replay(controller, "<Esc>09lvhh9iwy");
+    expect(controller.vim_state().unnamed_register.text == "alpha beta",
+           "the backward walk crosses as many units as it can before it gives up");
+    vim_replay(controller, "<Esc>02lV9iwy");
+    expect(controller.vim_state().unnamed_register.kind == VimRegisterKind::lines,
+           "a cancelled object in linewise VISUAL stays linewise");
+    vim_replay(controller, "<Esc>0x");
+    vim_replay(controller, "d9iw");
+    expect(dot_record_is(controller.vim_state(), std::nullopt, "x"),
+           "a cancelled object moves the caret but is not a change for .");
+    Editing blocks;
+    open_vim_document(blocks, "if {a; b;} else");
+    EditorController &other = blocks.controller();
+    vim_replay(other, "5lvl9i{y");
+    expect(other.vim_state().unnamed_register.text == "; ",
+           "a block that is not found leaves the selection and the caret alone");
+}
+
 void verify_vim_text_object_fixtures()
 {
     constexpr std::array<std::string_view, 6> boundaries{
@@ -6078,8 +6113,8 @@ void verify_vim_text_object_fixtures()
             ++selected;
         }
     }
-    expect(selected == 198,
-           "the scope replays 192 text-object fixtures and 6 shared next-key boundaries");
+    expect(selected == 233,
+           "the scope replays 227 text-object fixtures and 6 shared next-key boundaries");
 }
 
 void verify_vim_text_object_contracts()
@@ -6089,6 +6124,7 @@ void verify_vim_text_object_contracts()
     verify_vim_text_object_visual();
     verify_vim_text_object_history();
     verify_vim_text_object_dot();
+    verify_vim_text_object_residuals();
 }
 
 void verify_vim_text_object_scope()
