@@ -843,15 +843,15 @@ void EditorController::evaluate_command(std::string_view text)
     state_ = state_.with_command_message(result.value().message);
 }
 
-// Vim の外から来た割り込み（クリック・Ctrl+Z・全選択・別経路の編集）。INSERT の入力記録は
-// engine の外の出来事では復元できないので、ここで捨てて undo の単位も切る（ADR 0028 の決定 3）。
+// Vim の外から来た割り込み（クリック・Ctrl+Z・全選択・別経路の編集）。どれが割り込みかは
+// ここが決め、何を捨てるかは engine の純関数 vim_interrupted が決める（Issue #92 / ARC-004）。
+// undo の単位を切るのは履歴を持つこちらの仕事（ADR 0028 の決定 3）。
 void EditorController::interrupt_vim_insert()
 {
     if (state_.vim().mode == core::VimMode::insert)
     {
-        core::VimState next = state_.vim();
-        next.insert_repeat = std::nullopt;
-        state_ = state_.with_vim(std::move(next)).with_history(state_.history().sealed());
+        state_ = state_.with_vim(core::vim_interrupted(state_.vim()))
+                     .with_history(state_.history().sealed());
     }
 }
 

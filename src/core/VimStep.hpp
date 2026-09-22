@@ -24,6 +24,13 @@ struct VimStep
 // 鍵を捨て、モードと直前の変更は保つ。何を捨てるかを決めるのは engine の側である（ARC-004）。
 [[nodiscard]] VimState vim_cancelled_input(const VimState &state);
 
+// 外から割り込まれたあとの状態（Issue #92）。クリック・Ctrl+Z / Ctrl+Y・全選択・engine を
+// 通らない編集のあとでは、組み立て中の入力（INSERT の入力記録・組み立て中の `.` の記録・
+// 保留オペレータ・回数・次キー待ち）はどれも engine の外の出来事を織り込めないので捨てる。
+// モード・直前の変更・検索と文字検索の記憶は保つ。何が割り込みかを決めるのは呼ぶ側だが、
+// 何を捨てるかを決めるのは engine の側である（ARC-004）。
+[[nodiscard]] VimState vim_interrupted(const VimState &state);
+
 // Vim エンジンの唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
 // 本文・選択・表示領域を 1 回だけ借用する（ADR 0019 の決定 1）。NORMAL / INSERT は
 // selection の caret だけを読み、VISUAL は anchor も範囲の片端として読む。

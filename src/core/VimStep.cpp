@@ -1992,21 +1992,27 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 
 // ---------------------------------------------------------------- 検索（ADR 0032）
 
-// 検索を食べ終わったあとの状態。VISUAL は VISUAL のまま残る（見つからなくても・実測）。
-[[nodiscard]] VimState search_rested(const VimState &state)
+// 命令を食べ終わったあとのモード。VISUAL は VISUAL のまま残る（見つからなくても・実測）。
+[[nodiscard]] VimMode rested_mode(VimMode mode)
 {
-    VimState next = vim_resting_from(state, state.unnamed_register);
-    switch (state.mode)
+    switch (mode)
     {
     case VimMode::normal:
     case VimMode::insert:
-        return next;
+        return VimMode::normal;
     case VimMode::visual:
     case VimMode::visual_line:
-        next.mode = state.mode;
-        return next;
+        return mode;
     }
     std::unreachable();
+}
+
+// 検索を食べ終わったあとの状態。
+[[nodiscard]] VimState search_rested(const VimState &state)
+{
+    VimState next = vim_resting_from(state, state.unnamed_register);
+    next.mode = rested_mode(state.mode);
+    return next;
 }
 
 [[nodiscard]] VimSearchNotice notice_of(VimSearchNoticeKind kind)
@@ -3162,14 +3168,37 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     }
     std::unreachable();
 }
+
+// ------------------------------------------ 組み立て中の入力を捨てる（Issue #92 / ADR 0032）
+
+// 途中まで組み立てた入力を捨てた状態。engine の外の出来事（入力行の取消・外からの割り込み）の
+// あとでは、回数・保留オペレータ・次キー待ち・INSERT の入力記録・組み立て中の `.` の記録は
+// どれも続きを持てない。モード・直前の変更・検索と文字検索の記憶・無名レジスタは保つ。
+// 捨てる範囲を決めるのはこの 1 か所だけである（ARC-001 / ARC-004）。
+[[nodiscard]] VimState input_discarded(const VimState &state)
+{
+    VimState next = state;
+    next.count = std::nullopt;
+    next.pending = std::nullopt;
+    next.input_wait = std::nullopt;
+    next.insert_repeat = std::nullopt;
+    next.recording = std::nullopt;
+    return next;
+}
 } // namespace
 
 VimState vim_cancelled_input(const VimState &state)
 {
-    VimState next = search_rested(state);
-    next.recording = std::nullopt;
-    next.last_change = state.last_change;
+    // 入力行の取消は、割り込みが捨てるものに加えて欲しい列も捨て、モードを休止へ戻す（決定 1）。
+    VimState next = input_discarded(state);
+    next.wanted_column = std::nullopt;
+    next.mode = rested_mode(state.mode);
     return next;
+}
+
+VimState vim_interrupted(const VimState &state)
+{
+    return input_discarded(state);
 }
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
