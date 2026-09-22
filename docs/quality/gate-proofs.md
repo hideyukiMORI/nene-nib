@@ -1028,6 +1028,38 @@ base `75bf047`（origin/main）。ADR 0031 は新しく書かず「補足（2026
 
 FR-003 / ARC-001/004/007 / CPP-002/003/004/006/011/012 / QLT-001/008/012/013 / CNF-010/011 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimTextObject` の switch）に `default` は無い。新しい型・`reinterpret_cast`・時刻・OS・スレッドは増やしていない。範囲関数は純関数のままで、選択の正本は `EditorState`。
 
+### 5-ah. literal CR を oracle と文書の改行模型で保つ（Issue #85・ADR 0036・2026-09-22）
+
+統合単位は [PR #120](https://github.com/hideyukiMORI/nene-nib/pull/120)（draft・ブランチ `feat/85-literal-cr-line-model`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は #112（5-af）・#111（5-ag）と衝突しないよう 5-ah を取った。
+
+base `b1be094`（origin/main・#112 の矩形 VISUAL と #106 の符号化の直しを取り込んだあとに rebase した）。ADR 0036 を**受理**にし、決定 4 に受け付けの条件を 1 つ足した。`TextBuffer` が `LineEnding` を 1 つ持ち（`from_utf8` が `detect_line_ending` で 1 度だけ判別・`insert` / `erase` が引き継ぐ）、`line_end` は `crlf` のときだけ `\n` の直前の `\r` を外す。`EditorState` は写しを捨てて `text_.line_ending()` を返すので、判別の経路は 1 本になった（`with_opened` の引数が 1 つ減る）。`replacement_text` とレジスタの `without_newline_carriage_returns` も同じ規則に従う。VISUAL（文字単位・行単位）の `r<CR>` は選んだ各文字を literal CR にし、NORMAL の `r<CR>`（行を割る）と矩形 VISUAL（未測・ADR 0035 の範囲のまま）は変えていない。新しい型は無い。UI・IME・描画・保存形式・schema・依存・ゲートの閾値は変更していない。
+
+`python out/issue85-oracle/probe.py`（25 ケース × 2 形 ＋ 読み方だけ 2 件 = 52 起動）と `probe2.py`（9 ケース × 2 形 = 18 起動）を**実装の前**に実行した。`normal!` と `feedkeys(..., 'xt')` の 2 形はすべて一致した（後ろ向き VISUAL の 1 件だけが命令の切れ目の問題で食い違い、候補から外した）。証拠は `out/issue85-oracle/probe*.json`（`out/` は追跡外なので作業機にだけある）。Vim ソースは読まず、`:help 'fileformats'` と実測を根拠にした。
+
+**実測で分かった 3 点**（詳細は ADR 0036 の補足）。(1) Vim は「全部の行が CR で終わる」ときだけ `dos` と読む。`a\r\nbc\ndef` は `unix` で CR を残す。(2) そのため既存の `-crlf` の fixture 10 件は **CRLF の fixture ではなく、`read_text()` の universal newline が CR を落としていたから偶然一致していた**。決定 4 の (b) で入力が受け付けられなくなるので、10 件は fixture から外して `verify_vim_crlf_documents`（同じ `verify_vim_fixture` で再生する engine の契約 10 件）へ移した。(3) `register_of` が CR を無条件に落としていたので、LF 文書の `yy` / `dd` / `x` のレジスタから literal CR が消えていた。決定 2 と同じ分岐にして直した。**期待値を直した fixture は 1 件も無い。**
+
+`python eng/vim-oracle.py --regenerate` は測定境界（`run_vim` の読み方と `measure` の検査）が変わったので **1339 measured / 0 reused**（`measurement_sources_match` の規則どおり 1 回きりの全件再測定。**113 秒**。rebase の前に 1195 件で 1 度測っており、rebase 後の 1 回でまとめた）。`git diff origin/main -- tests/vim/VimFixtures.hpp` の削除行は **metadata 2 行と上記の 10 行だけ**で、#112 の矩形 144 行を含む既存 1310 行は逐語で同じ値だった。入力の SHA-256 は `cd5bf5811457f569ccd2c303abc0f444bc176f9de0e2132e78558f65b5faf7d5`（1320 件）→ `71bc134e72bf415249c59ad36940f6a5829f35213a108933ee64ce6e345c95e6`（1339 件）。**初回の再生で新規 29 件すべてが実装と一致した**（合わせたのは実装のほうで、レジスタの CR の分岐 1 か所）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build/issue85 -G Ninja -DCMAKE_BUILD_TYPE=Debug` → `cmake --build build/issue85` | `TextBuffer` の行の切り方と `r` の枝を Debug / clang-tidy / ASan / UBSan で。初回は `readability-function-cognitive-complexity` で落ち、`unsupported_replacement` と `replacement_body` に分けて成功（閾値は触っていない） |
+| `build/issue85/nib_tests.exe`（引数なし） | 行の切り方は本文・キャレット・描画・レジスタ・ファイルのすべてを通るので unit 全体を 1 回。13235 checks すべて成功（`verify_line_ending_model` の lf / crlf × 「`\r` が行末」「`\r\r\n`」「単独の `\r`」の契約、`verify_vim_crlf_documents` の 10 件、fixture 1339 件を含む） |
+| `build/issue85/nib_tests.exe --vim-replace` | 対象。**613 checks 成功**（`replace-char-` 37 ＋ `literal-cr-` 29 ＋ 共有境界 10） |
+| `--vim-dot` / `--vim-visual-yank` / `--vim-visual-wanted` / `--vim-open-lines` / `--vim-line-jumps` | 外した 10 件が載っていた scope。1479 / 234 / 211 / 560 / 999 checks すべて成功 |
+| `--vim-visual-block` | rebase で合流した #112 の矩形。`r` の分岐を共有するので確認した。**1105 checks 成功** |
+| `ctest --test-dir build/issue85 --output-on-failure --no-tests=error` | CTest から見た既定実行。4 件すべて成功（`nib_unit` 2.5 s）。ADR 0010 の偽ポートを使うファイルの開閉と保存は `nib_adapter_tests` の **109 checks**（変更前と同数）と unit の `verify_controller_intents` で成功 |
+| `python eng/symbols.py --build-dir build/issue85 --require core application` | `LineEnding` を持ち回るようになった core が外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし） |
+| `python eng/conformance.py` / `--build-dir build/issue85` | 1 ファイル 1 型（CNF-002）と、1339 fixture の生成整合（CNF-010）・正準形（CNF-011）。どちらも **0 violations** |
+| `python -m unittest tests.conformance.test_vim_oracle tests.conformance.test_conformance` | oracle の読み方と受け付けの検査。**93 tests OK**（`run_vim` が literal CR を保つ正例、`check_literal_cr` の正例 3 と反例 3、Vim を起動する前に `measure` が断ること） |
+| `cmake --build build/issue85-release` → `python eng/measure-speed.py --check --executable build/issue85-release/NeNeNib.exe` | `line_end` に分岐が 1 つ増えたので 1 回。**5 benches / 0 regressions**（1 打鍵 0.850 ms・窓が見えるまで 32.791 ms・16 MiB 269.188 ms）。基準値は変更していない |
+| `clang-format --dry-run --Werror`（変更した C++ 7 ファイル） | 指摘なし |
+
+対象を限定した理由: 差分は core の 2 ファイル（`TextBuffer` と `VimStep` の `r` とレジスタ）、application の 3 ファイル（改行の形の写しを捨てる）、oracle の読み方と検査、unit の契約、fixture の入れ替えである。行の切り方は本文・キャレット・描画・レジスタ・ファイルのすべての呼び出し元を持つので unit 全体と ctest を 1 回ずつ回し、`line_end` に分岐が 1 つ増えるので速さも 1 回測った。テーマ・Ex・パレット・設定・`check.ps1 -Full` は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。画面確認は**未実施**（`\r` の描画は変えていない）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+作業の途中で見つけた既存の失敗は #106 が閉じた。`test_pr_event_uses_the_record_validator` が、この機械の端末符号化（cp932）で `validate-git.ps1` が `git show` の UTF-8 を読めずに落ちることを **未変更の `87d8d71` / `8c76e25`（どちらも main の commit）を base にしても同じく落ちる**ことで確かめ、設計リナへ報告した。#106（main `b1be094`）を取り込んだあとに rebase してから `python -m unittest discover -s tests/conformance` を回し直し、**160 tests すべて成功**している。
+
+FR-003 / FR-008 / ARC-001/003/004/005/007/009 / CPP-002/004/005/006/011/012 / QLT-001/008/012/013 / CNF-002/010/011 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`LineEnding` / `VimMode` の switch）に `default` は無い。新しい型・`reinterpret_cast`・時刻・OS・スレッドは増やしていない。`TextBuffer` は不変のままで、改行の形の正本は本文 1 か所である。
+
 ### 5-ai. 検査の入出力を端末符号化から切り離す（Issue #106・2026-09-22）
 
 統合単位は [PR #119](https://github.com/hideyukiMORI/nene-nib/pull/119)（draft・ブランチ `fix/106-cp932-utf8-io`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は #85 の並行作業と衝突しないよう 5-ai を取った（5-ah と 5-x は空き）。

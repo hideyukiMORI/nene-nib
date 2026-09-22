@@ -113,7 +113,7 @@ C2: 設定の保存・復元、8〜40 ptの本文拡縮（Ctrl+`+` / `-` / `0` �
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`（この縦切りでは何もしない）/ ドラッグで VISUAL / 矩形の `c I A C > < J ~` と VISUAL の中の `p` / `virtualedit` /
-autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `Ctrl-v` が同じ前提） / 名前つきレジスタ / `J s S R` / VISUALのr<Enter>（#85）/ rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `hlsearch` / `incsearch` / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
+autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `Ctrl-v` が同じ前提） / 名前つきレジスタ / `J s S R` / rの制御文字・Ctrl-e/y / 検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase` / `hlsearch` / `incsearch` / 一般Ex（`:w` / `:q`、範囲、パイプ、履歴）・
 複数タブ・Ctrl+Pのファイル/フォルダ/ブックマーク/履歴統合・折り返し・横スクロール・ドラッグ選択。
 
 ## 次の 1 手
@@ -121,4 +121,5 @@ autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `C
 [Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUAL の `.`）は実装・限定検証・文書まで済み、draft [PR #107](https://github.com/hideyukiMORI/nene-nib/pull/107)。Ready・必須 check・merge は設計リナが行う。#98 は main `a44f380` へ統合済みで、#91 はその上に rebase してある。
 #92（割り込みの 1 本化）は main `9e41f79` へ統合済み。[Issue #99](https://github.com/hideyukiMORI/nene-nib/issues/99)（テキストオブジェクトの残る 3 点）は実装・限定検証・文書まで済み、draft [PR #110](https://github.com/hideyukiMORI/nene-nib/pull/110)（`feat/99-vim-text-object-residuals` は `9e41f79` の上に rebase 済み・fixture 1055 → 1090 件）。ADR 0031 に補足を足し、回数が尽きたときのキャレットと後ろ向き VISUAL の伸ばし方を固定 Vim に合わせた（塊の外からの回数は実装が既に正しかった）。後ろ向きの選択で引用符のどの対を選ぶかだけが穴として残り、Issue は未起票。その後は 仮想桁（`virtcol`）＋ `Ctrl-v` → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。仮想桁の Issue は未起票。
 `eng/test-conformance.py` の `test_verification_policy.py` 6 件は、この機械の端末符号化（cp932）で pwsh / subprocess の出力が読めないことによる**既存の失敗**で、未変更の `b07c574` でも同じ 5 件が落ちる（残り 1 件は `validate-git.ps1` が `git show` の UTF-8 を pwsh の入力符号化で受ける問題で、main の commit `8f2c363` でも同じく落ちる）。#98 が原因ではないので別 Issue へ切る。
+[Issue #85](https://github.com/hideyukiMORI/nene-nib/issues/85)（literal CR）は実装・限定検証・文書まで済み、draft [PR #120](https://github.com/hideyukiMORI/nene-nib/pull/120)（`feat/85-literal-cr-line-model` は #106 の `b1be094` の上に rebase 済み・fixture 1320 → 1339 件）。ADR 0036 を受理し、改行の形を `TextBuffer` に 1 つ持たせて `lf` の本文の `\r` を文字として扱う。既存の `-crlf` の fixture 10 件は Vim が `unix` と読んでいた（CRLF の fixture ではなかった）ので engine の契約 `verify_vim_crlf_documents` へ移した。VISUAL の `r<Enter>` は fixture で守られ、矩形 VISUAL の `<CR>` と制御文字の描画（`^M`）は後続。
 今回の結果と未確認は [日報](../reports/2026-09-22.md) / [引き継ぎ](../handoffs/2026-09-22.md)。変更に関係する検証だけを行い、成功結果を再利用する。
