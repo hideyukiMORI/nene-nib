@@ -12,12 +12,15 @@
 #include "VimActionGroup.hpp"
 #include "VimBinding.hpp"
 #include "VimCaret.hpp"
+#include "VimCharacterExtent.hpp"
 #include "VimCharacterSearch.hpp"
 #include "VimCharacterSearchInvocation.hpp"
 #include "VimCharacterSearchKind.hpp"
 #include "VimCharacterSearchRequest.hpp"
 #include "VimCharacterSearchScan.hpp"
+#include "VimColumnWish.hpp"
 #include "VimInputWait.hpp"
+#include "VimLineExtent.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimMotionRange.hpp"
 #include "VimPattern.hpp"
@@ -44,6 +47,7 @@
 #include "VimTextObjectRange.hpp"
 #include "VimTextObjectRequest.hpp"
 #include "VimTextObjectScope.hpp"
+#include "VimVisualExtent.hpp"
 #include "VimVisualRange.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
@@ -1886,6 +1890,24 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return result;
 }
 
+[[nodiscard]] VimMode visual_mode_of(const VimVisualExtent &extent) noexcept
+{
+    return std::holds_alternative<VimLineExtent>(extent) ? VimMode::visual_line : VimMode::visual;
+}
+
+// VISUAL の記録の再生（ADR 0033 の決定 4・6）。step が記録の種類の VISUAL へ切り替えて大きさを
+// 効果に載せ、controller が選び直してから鍵を流す。回数は使わない（固定 Vim も `2.` で大きさを
+// 変えない・実測）。組み立て中の記録に同じ大きさを先に置くので、再生した鍵はこの大きさをその
+// まま記録し直す＝桁や行が足りずに畳まれても次の `.` は元の大きさで繰り返す（Vim も同じ・実測）。
+[[nodiscard]] VimStep replayed_visual(const VimState &state, const VimRepeatRecord &record,
+                                      const VimVisualExtent &extent)
+{
+    VimState next = vim_resting_from(state, state.unnamed_register);
+    next.mode = visual_mode_of(extent);
+    next.recording = VimRepeatRecord{std::nullopt, {}, extent};
+    return VimStep{std::move(next), VimReplay{record.keys, extent}};
+}
+
 // `.`。直前の変更が無ければ何も起きない。回数は `.` に付いた回数が優先で、無ければ記録の回数。
 [[nodiscard]] VimStep repeated_change(const VimState &state)
 {
@@ -1894,9 +1916,13 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return cancelled(state);
     }
     const VimRepeatRecord &record = state.last_change.value();
+    if (record.visual.has_value())
+    {
+        return replayed_visual(state, record, record.visual.value());
+    }
     const std::optional<VimCount> count = state.count.has_value() ? state.count : record.count;
     return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimReplay{replayed_keys(count, record.keys)}};
+                   VimReplay{replayed_keys(count, record.keys), std::nullopt}};
 }
 
 // u / Ctrl-r / `.`。どれも済んだ編集をもう一度たどる（ADR 0030 の決定 6）。
@@ -3010,7 +3036,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     }
     if (restarts_insert(key))
     {
-        next.recording = VimRepeatRecord{std::nullopt, {VimKey{VimCharacter{U'i'}}}};
+        // 取り直した記録は VISUAL の大きさを持たない（固定 Vim も `vlcZ<Home>Y<Esc>.` を
+        // ただの挿入として繰り返す・Issue #91 で実測）。
+        next.recording = VimRepeatRecord{std::nullopt, {VimKey{VimCharacter{U'i'}}}, std::nullopt};
         return next;
     }
     next.recording = appended(before.recording.value(), key);
@@ -3043,31 +3071,94 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return next;
 }
 
-// 記録の更新はこの 1 か所だけ（ARC-001）。鍵の意味ではなく、前のモードと効果で分ける。
-[[nodiscard]] VimState vim_recorded(const VimState &before, VimState next, const VimEffect &effect,
-                                    VimKey key)
+// 文字単位 VISUAL の大きさ（ADR 0033 の決定 5）。`$` で選んだ範囲は curswant が行末のままなので
+// 桁ではなく「行末まで」を覚える。1 行なら桁の個数、複数行なら最終行の絶対桁（どちらも実測）。
+// 桁は code point 単位で、Vim が数える仮想桁とは Tab と全角で食い違う（ADR 0033 の「文脈」）。
+[[nodiscard]] VimVisualExtent character_extent_of(const TextBuffer &text, const VimState &state,
+                                                  const Selection &selection, std::size_t lines)
 {
-    next.recording = std::nullopt;
-    next.last_change = before.last_change;
-    // `.` 自身は記録しない。再生する鍵に `.` が入らないので再帰は深さ 1 で止まる（決定 7）。
-    if (std::holds_alternative<VimReplay>(effect))
+    const VimWantedColumn wanted = wanted_column_of(text, state, selection.caret);
+    if (wanted.wish == VimColumnWish::at_line_end)
     {
-        return next;
+        return VimCharacterExtent{lines, VimColumnWish::at_line_end, Column{1}};
     }
+    const OffsetRange ordered = selection_range(selection);
+    const Column end = text.position_of(ordered.end).column;
+    const Column column =
+        lines > 1 ? end : Column{end.value - text.position_of(ordered.begin).column.value + 1};
+    return VimCharacterExtent{lines, VimColumnWish::at_column, column};
+}
+
+// VISUAL の変更の「範囲の大きさ」（決定 5）。選択と種類だけから決まり、本文は持たない。
+[[nodiscard]] VimVisualExtent visual_extent_of(const VimState &state, const VimEditorView &view)
+{
+    const OffsetRange ordered = selection_range(view.selection);
+    const std::size_t lines =
+        line_of(view.text, ordered.end).value - line_of(view.text, ordered.begin).value + 1;
+    switch (state.mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        // 記録は VISUAL の鍵からしか始まらない（決定 2）。
+        std::unreachable();
+    case VimMode::visual_line:
+        return VimLineExtent{lines};
+    case VimMode::visual:
+        return character_extent_of(view.text, state, view.selection, lines);
+    }
+    std::unreachable();
+}
+
+// VISUAL の記録（ADR 0033 の決定 2・3）。移動・選択の伸縮・`o`・種類の切替・yank は記録を
+// 始めず、直前の変更も変えない。変更を起こす鍵（`d x c r`）から記録が始まり、そのときの選択の
+// 大きさを載せる。`r` は次の文字まで、`c` は INSERT の鍵を Esc まで（INSERT は insert_recording
+// が続ける）。大きさは記録を始めた 1 回だけ測るので、`.` が種を置いた再生では元の大きさが残る。
+[[nodiscard]] VimStep visual_recorded(const VimState &before, const VimEditorView &view,
+                                      VimStep step, VimKey key)
+{
+    const bool waiting = step.next.input_wait.has_value();
+    if (!before.recording.has_value() && !changes_text(step.effect) && !waiting)
+    {
+        return step;
+    }
+    VimRepeatRecord record = before.recording.value_or(
+        VimRepeatRecord{std::nullopt, {}, visual_extent_of(before, view)});
+    record = appended(std::move(record), key);
+    if (waiting || step.next.mode == VimMode::insert)
+    {
+        step.next.recording = std::move(record);
+        return step;
+    }
+    if (changes_text(step.effect))
+    {
+        step.next.last_change = std::move(record);
+    }
+    return step;
+}
+
+// 記録の更新はこの 1 か所だけ（ARC-001）。鍵の意味ではなく、前のモードと効果で分ける。
+[[nodiscard]] VimStep vim_recorded(const VimState &before, const VimEditorView &view, VimStep step,
+                                   VimKey key)
+{
+    step.next.last_change = before.last_change;
+    // `.` 自身は記録しない。再生する鍵に `.` が入らないので再帰は深さ 1 で止まる（決定 7）。
+    // VISUAL の再生は step が置いた「大きさだけの記録」を種として持ち越す（ADR 0033 の決定 4）。
+    if (std::holds_alternative<VimReplay>(step.effect))
+    {
+        return step;
+    }
+    step.next.recording = std::nullopt;
     switch (before.mode)
     {
     case VimMode::visual:
     case VimMode::visual_line:
-        // VISUAL で完了した変更は直前の変更を消す（決定 5）。yank と移動は残す。
-        if (changes_text(effect))
-        {
-            next.last_change = std::nullopt;
-        }
-        return next;
+        return visual_recorded(before, view, std::move(step), key);
     case VimMode::insert:
-        return insert_recording(before, std::move(next), key);
+        step.next = insert_recording(before, std::move(step.next), key);
+        return step;
     case VimMode::normal:
-        return normal_recorded(before, std::move(next), effect, key);
+        step.next = normal_recorded(before, std::move(step.next), step.effect, key);
+        return step;
     }
     std::unreachable();
 }
@@ -3083,9 +3174,6 @@ VimState vim_cancelled_input(const VimState &state)
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    VimStep step = stepped(state, view, key);
-    VimState recorded = vim_recorded(state, std::move(step.next), step.effect, key);
-    step.next = std::move(recorded);
-    return step;
+    return vim_recorded(state, view, stepped(state, view, key), key);
 }
 } // namespace nenenib::core

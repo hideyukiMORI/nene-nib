@@ -24,6 +24,7 @@
 #include "VimSearchPattern.hpp"
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
+#include "VimVisualReselect.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -923,9 +924,17 @@ void EditorController::perform(const core::VimReplaceRange &effect)
 }
 
 // `.`（ADR 0030 の決定 7）。前後で履歴を閉じるので、再生した命令が 1 つの undo 単位になる。
+// VISUAL の記録なら、鍵を流す前に core が決めた範囲を VimSelect と同じ写しで置く
+// （ADR 0033 の決定 4。engine が mode を VISUAL にしてあるので、ここは選択だけを置く）。
 void EditorController::perform(const core::VimReplay &effect)
 {
     state_ = state_.with_history(state_.history().sealed());
+    if (effect.reselect.has_value())
+    {
+        state_ = state_.with_selection(core::vim_visual_reselect(
+            state_.text(), state_.selection().caret, effect.reselect.value()));
+        follow_caret();
+    }
     for (const core::VimKey &key : effect.keys)
     {
         accept(VimKeyPress{key});
