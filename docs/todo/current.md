@@ -7,6 +7,8 @@
 
 ## 現在の Issue
 
+**2026-09-23 施主指示 手 3（[ADR 0039](../adr/0039-implementation-seat-per-step-and-small-tool-output.md)・Issue #136）**: 実装席（Opus）は probe → 実装 → 差し戻し対応を**それぞれ新しい席**にし（`SendMessage` の使い回しと `fork` は禁止）、テストは対象だけ・ログは `out/` へ落として grep・ファイルは範囲だけ読み、最終報告は 30 行以内（依頼書の型は `docs/templates/implementation-seat-brief.md`）。task は S 級 3 本。Opus 5.5 は 1 日の試行。枠の減りは transcript の usage を席ごとに集計してから言う。**次に立てる Opus の実装席から適用する。**
+
 **2026-09-23 施主指示（[ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md)・Issue #128）**: 背景席は仕事の種類で `model` を明示する（実装＝Opus 5・下ごしらえ＝Sonnet 5・機械作業＝Haiku 4.5・裁定と受理は設計席自身）。同じ手順を 2 回以上モデルに踏ませたら 3 回目は `eng/` のスクリプト（chore #129 / #130 / #131）。
 
 **実機用の Release は `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` 1 本で作る**（[Issue #129](https://github.com/hideyukiMORI/nene-nib/issues/129)・draft [PR #133](https://github.com/hideyukiMORI/nene-nib/pull/133)）。`build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（SHA-256・ref・HEAD・所要時間）ができ、**起動はしない**（起動は設計席）。ref 無し・無い ref・dirty な作業ツリーは何もせず終了 1。手で作った exe とは PE の `TimeDateStamp` の 2 バイトを除いて完全一致。
