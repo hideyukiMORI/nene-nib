@@ -7,6 +7,8 @@
 
 ## 現在の Issue
 
+**直近の refactor は [Issue #92](https://github.com/hideyukiMORI/nene-nib/issues/92)（INSERT の入力記録を捨てる割り込みを engine の 1 本の経路に）**。外からの割り込み（クリック・Ctrl+Z / Ctrl+Y・全選択・engine を通らない編集）で何を捨てるかは engine の純関数 `vim_interrupted` が決め、controller は「割り込まれた」ことを伝えて履歴の単位を切るだけになった（controller に `VimState` のメンバーへの代入は残っていない・ARC-001 / ARC-004）。捨てる範囲は入力行の取消（`vim_cancelled_input`・ADR 0032 の決定 1）と同じなので共通の `input_discarded` 1 か所に書き、取消はそれに「欲しい列を捨てる」と「モードを休止へ戻す」を足したものになった。ADR は書いていない（ADR 0030 の「結果」の 1 文だけを更新）。振る舞いは変えていないので fixture も足していない。`--vim-open-line-external` 46 / `--vim-open-line-recovery` 430 / `--vim-dot` 1593 / `--vim-search` 1375 / `--vim-character-search` 621 checks と unit 全体 10833 checks が production の変更の前後で同数、契約を足したあとは 54 / 573 / 10841 checks（+8 はこの契約ぶん）。`ctest` 4 件・build/tidy/ASan/UBSan・symbols 2 libs 0・conformance 0・format すべて成功。詳細は gate-proofs 5-ac、統合単位は draft [PR #109](https://github.com/hideyukiMORI/nene-nib/pull/109)、統合状態は GitHub が正。
+
 **直近の実装は [Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUALで行った変更の `.`）**。VISUAL で完了した変更は「範囲の大きさ」と「VISUAL を終えた鍵の列」を記録し、`.` はキャレットから同じ大きさを選び直してから同じ `accept` 経路へ再生する（[ADR 0033](../adr/0033-vim-visual-dot-repeat-by-extent.md) 受理）。`VimRepeatRecord` に `optional<VimVisualExtent>`、`VimReplay` に `optional<VimVisualExtent> reselect` を足しただけで、効果は 1 鍵 1 つのまま。選び直しは core の純関数 `vim_visual_reselect` 1 本。ADR 0030 の決定 5（VISUAL の変更は記録を消す）はこの ADR が置換した。追加 78 fixture・計 1055 件、`--vim-dot` 1593 checks、共有 6 scope（変更前と同数）、unit 全体 10833 checks、`nib_unit` 2.28 s、build/tidy/symbols/conformance/format 成功。画面確認は未実施。詳細は gate-proofs 5-ab、統合状態は GitHub が正。
 
 実測 138 ケースで ADR 0033 の決定を 2 つ直した（`N.` は VISUAL の記録では回数を使わない・桁は 1 行なら個数/複数行なら最終行の絶対桁/`$` は「行末まで」のまま）。**合わせていないのは 1 点**で、固定 Vim は桁を仮想桁で数えるが、この engine の `Column` は code point で `wanted_column` から `H M L` まで一貫している。仮想桁は表示幅の表と tabstop（＝ `Ctrl-v` と同じ前提）が要るので別 Issue に送り、Tab と幅の混ざった本文の fixture は採らず `--vim-dot` の対象 unit が engine の答えを固定している。
@@ -105,6 +107,6 @@ autoindent / 仮想桁（Tab と全角の表示幅・`.` の VISUAL の桁と `C
 ## 次の 1 手
 
 [Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)（VISUAL の `.`）は実装・限定検証・文書まで済み、draft [PR #107](https://github.com/hideyukiMORI/nene-nib/pull/107)。Ready・必須 check・merge は設計リナが行う。#98 は main `a44f380` へ統合済みで、#91 はその上に rebase してある。
-その後は #99（テキストオブジェクト残差）→ 仮想桁（`virtcol`）＋ `Ctrl-v` → #92 → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。仮想桁の Issue は未起票。
+#92（割り込みの 1 本化）は実装・限定検証・文書まで済み、draft PR。その後は #99（テキストオブジェクト残差）→ 仮想桁（`virtcol`）＋ `Ctrl-v` → #85 を焦点 Issue ごとに進める（順は設計リナの案・hide 未確認）。仮想桁の Issue は未起票。
 `eng/test-conformance.py` の `test_verification_policy.py` 6 件は、この機械の端末符号化（cp932）で pwsh / subprocess の出力が読めないことによる**既存の失敗**で、未変更の `b07c574` でも同じ 5 件が落ちる（残り 1 件は `validate-git.ps1` が `git show` の UTF-8 を pwsh の入力符号化で受ける問題で、main の commit `8f2c363` でも同じく落ちる）。#98 が原因ではないので別 Issue へ切る。
 今回の結果と未確認は [日報](../reports/2026-09-22.md) / [引き継ぎ](../handoffs/2026-09-22.md)。変更に関係する検証だけを行い、成功結果を再利用する。

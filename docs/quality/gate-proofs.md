@@ -886,3 +886,32 @@ computer-use による実機の画面確認は**未実施**（native pipe が繋
 FR-003 / ARC-001/004/007/009 / CPP-002/003/004/006/011/012 / QLT-001/008/012/013 / CNF-010/011 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimVisualExtent` の visit、`VimMode` / `VimColumnWish` の switch）に `default` は無い。新しい 3 型はどれも公開 aggregate で、比較は非メンバー（CPP-003）。`reinterpret_cast`・時刻・OS・スレッドは増やしていない。記録は本文・履歴・レジスタを持たず、選択の正本は `EditorState` のまま（engine は選択を持たない・ADR 0018 の決定 3）。
 
 性能は測っていない（差分は入力と編集の経路で、描画とファイルは触っていない）。`VimRepeatRecord` が `optional<variant>` 1 つぶん大きくなるので、1 打鍵あたりの複製がわずかに増える。1 打鍵 0.9 ms の予算への影響は次に速さを測る機会に ADR 0016 の基準値と突き合わせる（ADR 0021）。関連しない設定・テーマ・利用者テーマ・性能・Release build・`check.ps1 -Full` は実行していない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+### 5-ac. 割り込みをengineの1本の経路へ（Issue #92・2026-09-22）
+
+統合単位は [PR #109](https://github.com/hideyukiMORI/nene-nib/pull/109)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
+base `433bb9a`（origin/main。#91 統合後）。worktree `C:\Users\info\WORKS\NeNeNib-92` の中だけで作業し、本体の `C:\Users\info\WORKS\NeNeNib` には触れていない。**ADR は書いていない**（ARC-004 の適用で設計は変わらないため。ADR 0030 の「結果」の 1 文だけを更新した）。engine に純関数 `vim_interrupted(const VimState &) -> VimState` を 1 つ足し、controller の `interrupt_vim_insert` はそれを呼んで `VimState` を置き換え、履歴の単位を切るだけにした。捨てる範囲は入力行の取消（`vim_cancelled_input`・ADR 0032 の決定 1）と同じなので無名名前空間の `input_discarded` 1 か所に書き、取消はそれに「欲しい列を捨てる」と「モードを休止へ戻す」を足したものとして書き直した（モードの規則は `rested_mode` 1 か所へ抜き出し、`search_rested` もそれを使う）。新しい鍵・`VimKey` の選択肢・`VimEffect`・fixture・UI・IME・描画・保存形式・schema・依存・ゲートの閾値は 1 つも増やしていない。
+
+**振る舞いが変わらないことの測り方**: production の 3 ファイルを `git stash` して base の状態で同じ build を作り、対象 scope と unit 全体を先に測ってから戻して測り直した（`out/issue92-unit.log` は最終の値）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake -S . -B build/issue92 -G Ninja -DCMAKE_BUILD_TYPE=Debug` | worktree の新しい build（`-G Ninja` を明示しないと Visual Studio が選ばれて `CXX=clang-cl` が無視される・#91 の教訓）。`build/issue92/.cmake/api/v1/query/codemodel-v2` も手で作った。成功 |
+| `cmake --build build/issue92`（Debug・clang-tidy・ASan / UBSan） | 新しい純関数と controller の書き換え。unit の契約で `before.last_character_search.value()` が `bugprone-unchecked-optional-access` に拒否されたので、`has_value` を挟む形に直して成功（閾値・除外・重大度は触っていない） |
+| `build/issue92/nib_tests.exe --vim-open-line-external` | 割り込みそのもの（同位置クリック・Ctrl+Z・全選択・未記録の編集で反復が解除されること）。**46 checks（変更前と同数）**→ 契約を足して **54 checks**。すべて成功 |
+| `build/issue92/nib_tests.exe --vim-open-lines` / `--vim-open-line-recovery` | `o` / `O` の回数反復と `VimInsertRepeat` の後段。**565 → 573 checks**（+8 は足した契約ぶん）/ **430 checks（変更前と同数）**。すべて成功 |
+| `build/issue92/nib_tests.exe --vim-dot` | `recording` / `last_change` を捨てる範囲に足したので、`.` の記録の確定・破棄・回数の置換・VISUAL の再生の退行を確認。**1593 checks（変更前と同数）**すべて成功 |
+| `build/issue92/nib_tests.exe --vim-search` / `--vim-character-search` | `vim_cancelled_input` と `search_rested` を書き換えたので、入力行の取消が捨てるものと `last_search` / `;` `,` の記憶が保たれることを確認。**1375 / 621 checks（どちらも変更前と同数）**すべて成功 |
+| `build/issue92/nib_tests.exe`（引数なし） | `VimState` の後段は全 Vim 経路が通るので unit 全体を 1 回。**10833 checks（変更前と同数）**→ 契約を足して **10841 checks**。1055 fixture の再生を含めすべて成功 |
+| `build/issue92/nib_tests.exe --coverage-negative` | 早期 return の経路。22 checks 成功 |
+| `ctest --test-dir build/issue92 --output-on-failure --no-tests=error` | 4 件すべて成功（`toolchain_smoke` / `nib_unit` / `nib_adapters` / `nib_themes`）。`nib_unit` 単体は 2.33 s（#91 の 2.28 s と同程度） |
+| `python eng/symbols.py --build-dir build/issue92 --require core application` | 新しい純関数が core の外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、allowlist は変更なし |
+| `python eng/conformance.py` / `python eng/conformance.py --build-dir build/issue92` | 字句検査と実際の build graph（1 ファイル 1 型・`<atomic>`・生成物の SHA）。どちらも **0 violations** |
+| `clang-format --dry-run --Werror`（変更した C++ 4 ファイル） | 整形。指摘なし |
+
+受け入れ条件の「controller に `VimState` のフィールド代入が残らないこと」は grep で確かめた。`git grep -nE "vim\(\)\.[a-z_]+ *=|next\.(mode|count|pending|input_wait|last_character_search|last_search|wanted_column|scroll_lines|insert_repeat|recording|last_change|unnamed_register) *=" -- src/application src/ui` が返すのは `state_.vim().mode == core::VimMode::insert` の比較 2 行と `EditorState.hpp` のメンバー宣言 1 行だけで、代入は 1 つも無い。CNF の規則にはしていない（字句で「代入」を一般に言い当てる検査は偽陽性が多く、engine の外で `VimState` を組み立てる正当な経路＝`vim_resting_from` と区別できないため）。engine が捨てる範囲そのものは `--vim-open-line-external` の契約が守る。
+
+対象を限定した理由: 差分は engine の純関数 1 本と controller の 1 関数と unit の契約 1 つだけで、fixture の入力・期待値・閾値・除外・重大度・生成物・schema・依存・UI は 1 つも変えていない。したがってカバレッジ・速さ（QLT-014）・Release build・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。画面確認は**未実施**（描画に関わる差分が無く、exe も作っていない）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+**設計の通りに「捨てるもの」を広げた 1 点を記録する。** base の `interrupt_vim_insert` は `insert_repeat` だけを消していたが、`vim_interrupted` は組み立て中の `.` の記録（`recording`）・保留オペレータ・回数・次キー待ちも捨てる。この経路は INSERT でだけ呼ばれ（`vim_boundary()` が INSERT では `absorb` を返すので Vim 自身の編集はこの経路を通らない）、INSERT で立ち得るのは `recording` だけなので、実際に増えるのは「割り込まれた INSERT の `.` の記録を捨てる」1 点である。engine の外から入った本文は鍵の列に入らず再生できないので、`insert_repeat` を捨てるのと同じ理由で捨てるのが正しい。固定 Vim に外部の割り込みは無いので oracle では測れず、fixture ではなく `--vim-open-line-external` の契約が守る。

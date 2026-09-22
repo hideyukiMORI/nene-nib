@@ -50,7 +50,7 @@ Vim 自身の `.` は打鍵の記録（redo buffer）を再実行する。fixtur
 ## 結果
 
 得られるもの: 既存と今後の変更命令がすべて自動的に `.` の対象になる。回数付きの `i a I A` も ADR 0028 の入力記録に載り、Vim と同じになった（ADR 0028 の決定 3 にあった「一般の i/a の回数には広げない」は本 ADR が置換する）。記録の形が命令の種類に依存しないので、テキストオブジェクト・検索 motion を足しても `.` 側の変更は要らない。engine は純関数のまま。
-失うもの・残る穴: VISUAL の変更の `.` はこの縦切りでは何もしない（決定 5・Vim は範囲の大きさで再生する。[Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)）。`i a I A` が入力記録を持つようになったので、controller の「外からの割り込みで記録を捨てる」経路（クリック・Ctrl+Z・全選択）と「Vim の鍵による移動」を分け、後者は undo の単位を切るだけにした。前者は今も controller が `VimState` の入力記録を直接消す二重経路で、engine のポートへ寄せるのは [Issue #92](https://github.com/hideyukiMORI/nene-nib/issues/92)。`VimState` が鍵の列を持つので 1 鍵あたり小さな vector の複製が増える（1 打鍵 0.9 ms の予算に対して無視できる見込み。速さのゲートが見張る）。Vim の redo は `"` によるレジスタ指定や `&` も含むが、名前付きレジスタが無いいまは範囲外。controller の `accept` が自分自身を鍵ごとに呼ぶ形になるので、`command_input` が開いたときの早期 return を再生中も通す（`:` は記録しないので実際には起きない）。
+失うもの・残る穴: VISUAL の変更の `.` はこの縦切りでは何もしない（決定 5・Vim は範囲の大きさで再生する。[Issue #91](https://github.com/hideyukiMORI/nene-nib/issues/91)）。`i a I A` が入力記録を持つようになったので、controller の「外からの割り込みで記録を捨てる」経路（クリック・Ctrl+Z・全選択）と「Vim の鍵による移動」を分け、後者は undo の単位を切るだけにした。前者は [Issue #92](https://github.com/hideyukiMORI/nene-nib/issues/92) で engine の純関数 `vim_interrupted` に寄せ、controller から `VimState` の代入は無くなった。`VimState` が鍵の列を持つので 1 鍵あたり小さな vector の複製が増える（1 打鍵 0.9 ms の予算に対して無視できる見込み。速さのゲートが見張る）。Vim の redo は `"` によるレジスタ指定や `&` も含むが、名前付きレジスタが無いいまは範囲外。controller の `accept` が自分自身を鍵ごとに呼ぶ形になるので、`command_input` が開いたときの早期 return を再生中も通す（`:` は記録しないので実際には起きない）。
 
 ## 却下した選択肢
 
