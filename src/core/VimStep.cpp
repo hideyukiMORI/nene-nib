@@ -2432,6 +2432,18 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                      exclusive_range(view.text, characters_between(request.anchor, destination)));
 }
 
+// 検索の鍵は `:nohlsearch` で止めた強調を戻す（ADR 0037 の決定 1）。見つからなくても（E486）、
+// 直前のパターンが無くても（E35）戻り、`:set nohlsearch` の off は戻らない（固定 Vim 9.1 の
+// `v:hlsearch` で実測）。入力行を開くだけの `/` `?` は確定ではないので通らない。
+[[nodiscard]] VimState search_highlighted(VimState state)
+{
+    if (state.highlight == VimSearchHighlight::suspended)
+    {
+        state.highlight = VimSearchHighlight::on;
+    }
+    return state;
+}
+
 // パターンは last_search が正本。解析して回数ぶん探し、着いた先へ 1 本で流す（決定 3・4）。
 [[nodiscard]] VimStep search_from(const VimState &state, const VimEditorView &view,
                                   const VimSearchRequest &request)
@@ -2462,9 +2474,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 
 // 入力行の Enter（決定 3）。空のパターンは直前を使い直し、無ければ E35。
 // 見つからない検索も last_search を更新する（次の `n` が同じ失敗を繰り返す・実測）。
-[[nodiscard]] VimStep searched_key(const VimState &state, const VimEditorView &view,
+[[nodiscard]] VimStep searched_key(const VimState &original, const VimEditorView &view,
                                    const VimSearchPattern &key)
 {
+    const VimState state = search_highlighted(original);
     const std::string previous =
         state.last_search.has_value() ? state.last_search.value().pattern : std::string{};
     const std::string pattern = key.pattern.empty() ? previous : key.pattern;
@@ -2479,9 +2492,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // `n` / `N`（決定 3）。覚えた向きのまま、または反対の向きで探す。last_search は変えない。
-[[nodiscard]] VimStep repeated_search(const VimState &state, const VimEditorView &view,
+[[nodiscard]] VimStep repeated_search(const VimState &original, const VimEditorView &view,
                                       VimAction action)
 {
+    const VimState state = search_highlighted(original);
     if (!state.last_search.has_value())
     {
         return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
@@ -2494,9 +2508,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // `*` / `#`（決定 3）。語を \<…\> のパターンにして同じ経路へ。語が無ければ E348。
-[[nodiscard]] VimStep word_search(const VimState &state, const VimEditorView &view,
+[[nodiscard]] VimStep word_search(const VimState &original, const VimEditorView &view,
                                   VimAction action)
 {
+    const VimState state = search_highlighted(original);
     const auto word = vim_word_at(view.text, view.selection.caret);
     if (!word.has_value())
     {

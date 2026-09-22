@@ -1,12 +1,15 @@
 #pragma once
 
 #include "Offset.hpp"
+#include "OffsetRange.hpp"
 #include "TextBuffer.hpp"
 #include "VimPattern.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSearchHit.hpp"
 
 #include <optional>
+#include <string_view>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -19,6 +22,14 @@ namespace nenenib::core
 // 本文の端を越えて起点の行まで戻る。見つからなければ nullopt（呼ぶ側が E486 を出す）。
 //
 // 回数は呼ぶ側が着いた位置からもう一度呼んで数える（`3/x` と `/x` ＋ `3n` が同じ・実測）。
+// 1 行の中の一致を 0 桁目から順に数えた列（ADR 0037 の決定 3）。走査の規則は vim_search と
+// 同じ 1 本で、重なる一致は飛ばし（"ababa" の /aba は 1 つ・"aaaa" の /aa は 2 つ）、長さ 0 の
+// 一致も 1 つと数えて 1 文字進む（"abc" の /a* は 3 つ・固定 Vim 9.1 の searchcount() で実測）。
+// 位置は行頭からの相対バイトで、行をまたがない。塗る面を持たない長さ 0 の一致を捨てるかは
+// 呼ぶ側が決める。
+[[nodiscard]] std::vector<OffsetRange> vim_line_matches(std::string_view line,
+                                                        const VimPattern &pattern);
+
 [[nodiscard]] std::optional<VimSearchHit> vim_search(const TextBuffer &text, Offset from,
                                                      const VimPattern &pattern,
                                                      VimSearchDirection direction);

@@ -19,6 +19,7 @@
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimEffect.hpp"
+#include "VimPattern.hpp"
 #include "VimState.hpp"
 
 #include <expected>
@@ -131,6 +132,11 @@ class EditorController final
     // 矩形 VISUAL のあいだだけ値を持つ（ADR 0035 の決定 2・8）。描く選択も Ctrl+C / Ctrl+X も
     // 同じ行ごとの範囲を使う。
     [[nodiscard]] std::optional<core::VimBlockRange> block_selection() const;
+    // 検索の当たりを強調するパターン（ADR 0037 の決定 3）。Vim モードで強調が on で、
+    // 解析できる last_search があるときだけ値を持ち、フレームごとに 1 回だけ作る。
+    [[nodiscard]] std::optional<core::VimPattern> search_pattern() const;
+    [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
+                                     const std::optional<core::VimPattern> &pattern) const;
     [[nodiscard]] std::vector<LineView> visible_lines() const;
     [[nodiscard]] std::optional<CompositionView> composed() const;
     // Vim の NORMAL では IME を切ってあるので変換は来ないはずだが、来たら捨てる（決定 4）。

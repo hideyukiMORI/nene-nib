@@ -9,6 +9,7 @@
 #include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
 #include "VimRepeatRecord.hpp"
+#include "VimSearchHighlight.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimWantedColumn.hpp"
 
@@ -31,6 +32,9 @@ struct VimState
     // 直前の検索（パターンと打たれた向き・ADR 0032 の決定 3）。`n` / `N` がこれを使い、
     // 見つからなかった検索も覚える（次の `n` が同じ失敗を繰り返すのが Vim と同じ・実測）。
     std::optional<VimSearchPattern> last_search;
+    // 検索の当たりを強調するか（ADR 0037 の決定 1）。既定は on で、Ex の `:set (no)hlsearch` と
+    // `:nohlsearch` だけが変え、検索の鍵が suspended を on へ戻す。永続化はしない。
+    VimSearchHighlight highlight;
     std::optional<VimWantedColumn> wanted_column;
     // Ctrl-d / Ctrl-u に明示した window-local な移動量。現在の viewport ではなく、次の
     // half-page command に残る Vim の 'scroll' に相当する値（ADR 0019 の決定 6）。
@@ -51,23 +55,17 @@ struct VimState
 // Vim モードに入るときも、通常モードへ戻して保留を捨てるときも、この 1 つの形に寄せる。
 [[nodiscard]] inline VimState vim_resting_state(VimRegister unnamed_register)
 {
-    return VimState{VimMode::normal,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::nullopt,
-                    std::move(unnamed_register)};
+    return VimState{VimMode::normal,        std::nullopt,
+                    std::nullopt,           std::nullopt,
+                    std::nullopt,           std::nullopt,
+                    VimSearchHighlight::on, std::nullopt,
+                    std::nullopt,           std::nullopt,
+                    std::nullopt,           std::nullopt,
+                    std::nullopt,           std::move(unnamed_register)};
 }
 
-// 通常の鍵の完了は 'scroll' の明示値と直前の文字検索・検索パターンを捨てない。Vim
-// モードへ初めて入る 初期化だけが vim_resting_state
+// 通常の鍵の完了は 'scroll' の明示値と直前の文字検索・検索パターンと強調の有無を捨てない。
+// Vim モードへ初めて入る 初期化だけが vim_resting_state
 // を直接使い、空の値から始める。文字待ちは持ち越さない。
 [[nodiscard]] inline VimState vim_resting_from(const VimState &state, VimRegister unnamed_register)
 {
@@ -75,6 +73,7 @@ struct VimState
     next.scroll_lines = state.scroll_lines;
     next.last_character_search = state.last_character_search;
     next.last_search = state.last_search;
+    next.highlight = state.highlight;
     return next;
 }
 
