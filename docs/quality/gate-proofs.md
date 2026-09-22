@@ -948,7 +948,7 @@ FR-003 / ARC-001/004/007/009 / CPP-002/003/004/006/011/012 / QLT-001/008/012/013
 
 ### 5-ae. Vim の桁を仮想桁で数える経路（Issue #108・ADR 0034・2026-09-22）
 
-統合単位は [PR #111](https://github.com/hideyukiMORI/nene-nib/pull/111)（draft・ブランチ `feat/108-vim-virtual-column`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節番号は #99（5-ad）の次を取った。
+統合単位は [PR #113](https://github.com/hideyukiMORI/nene-nib/pull/113)（draft・ブランチ `feat/108-vim-virtual-column`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節番号は #99（5-ad）の次を取った。
 
 base `220fe76`（origin/main。ADR 0034 の 1 commit を積んだあと #99 の merge の上へ rebase した。衝突なし）。ADR 0034 は**実測のあとで受理**にし、決定 1・2・3 を 4 点直して「補足」に差を残した（DEL は 1 桁・`<200b>` の 6 桁の class・Tab の上のキャレットは最後の桁・逆引きの端は行の内容の終わり）。新しい型は `DisplayWidth` / `DisplayWidthRange` / `VirtualColumn` の 3 つで、どれも 1 ファイル 1 型（CPP-011）。`VimWantedColumn.column` と `VimCharacterExtent.column` が `VirtualColumn` になり、着地は `offset_at_virtual_column` 1 本を通る（`caret_on_line` の `TextBuffer::offset_of` を置き換えた・ARC-001）。UI・IME・描画・保存形式・schema・依存・ゲートの閾値は変更していない。
 
