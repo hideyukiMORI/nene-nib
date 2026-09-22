@@ -6339,6 +6339,25 @@ void verify_vim_search_dot()
            "a plain search is a move, so . still replays the last change");
 }
 
+void verify_vim_search_fixtures()
+{
+    // 検索の 135 件と、鍵の分類の表・次キー待ちを共有する境界の代表（`.`・r・f/t・gg）。
+    constexpr std::array<std::string_view, 6> boundaries{
+        "replace-char-one",    "replace-char-count", "char-search-f-count",
+        "char-search-t-first", "line-jump-gg-count", "dot-remove-word"};
+    std::size_t selected = 0;
+    for (const VimFixture &fixture : nenenib::tests::vim_fixtures)
+    {
+        if (fixture.name.starts_with("search-") ||
+            std::ranges::find(boundaries, fixture.name) != boundaries.end())
+        {
+            verify_vim_fixture(fixture);
+            ++selected;
+        }
+    }
+    expect(selected == 141, "the scope replays 135 search fixtures and 6 shared boundaries");
+}
+
 void verify_vim_search_contracts()
 {
     verify_vim_pattern_subset();
@@ -6358,6 +6377,7 @@ void verify_vim_search_contracts()
 
 void verify_vim_search_scope()
 {
+    verify_vim_search_fixtures();
     verify_vim_search_contracts();
 }
 
