@@ -974,3 +974,28 @@ base `220fe76`（origin/main。ADR 0034 の 1 commit を積んだあと #99 の 
 対象を限定した理由: 差分は core の新しい純関数 3 本＋表 1 つ、engine の桁の型 2 つとその参照、unit の対象 1 つと期待値 2 件、fixture 47 件である。`VimWantedColumn` の型が engine 全体に触るので unit 全体を 1 回回し、1 打鍵の走査が増えるので速さを明示実行した。設定・テーマ・利用者テーマ・Ex・パレット・adapters・`check.ps1 -Full` は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。画面確認は**未実施**（描画の桁は DirectWrite のままで、仮想桁は engine の意味論にしか出ない）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 **表の出典を「Unicode の版」から「Vim の実測」に変えた 1 点を記録する。** ADR 0034 の提案は EastAsianWidth の版をコメントに書くとしていたが、Vim 9.1 に版を問い合わせる手立てが無く、Unicode の表を写すと Vim との差が黙って入る。`strdisplaywidth('a' . nr2char(cp)) - 1` を全 code point で測った値をそのまま表にし、`DisplayWidthRange.hpp` の冒頭にその測り方を書いた。ゲートが守るのは「Vim と同じ答えを返すこと」（fixture・CNF-010）なので、正本も Vim に寄せてある。表の昇順と重なりの無さは `static_assert` が守る。
+
+### 5-ag. 後ろ向きの VISUAL の引用符の対（Issue #111・ADR 0031 の補足・2026-09-22）
+
+統合単位は [PR #116](https://github.com/hideyukiMORI/nene-nib/pull/116)（draft・ブランチ `feat/111-vim-quote-object-backward`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は #112 の並行作業（5-af）と衝突しないよう 5-ag を取った。
+
+base `75bf047`（origin/main）。ADR 0031 は新しく書かず「補足（2026-09-22・Issue #111）」を足し、**決定 4（VISUAL の両端）と決定 6（引用符）を実測に合わせて直した**。`vim_text_object_range` は 1 本のままで（ARC-001）、引用符の枝だけを `quote_outcome` に分け、対の選び方（畳んだ位置 / 前向き / 後ろ向きの 3 本）と VISUAL の置き方を同じ関数の中に閉じた。括弧の「もう 1 段外へ」は `paired_outcome` に残り、引用符は Vim と同じ「選択がちょうど内側なら引用符ごと」に置き換えた。新しい型は無い。engine・UI・IME・描画・保存形式・schema・依存・ゲートの閾値は変更していない。
+
+`python out/issue111-oracle/probe.py`（618）/ `probe2.py`（27）を**実装の前**に実行し、固定 Vim 9.1 を **645 ケース**起動して規則を閉じた。証拠は `out/issue111-oracle/probe*.json` / `probe*.txt` と、645 ケースすべてを 1 つの模型で説明できることを確かめた `model.py`（`out/` は追跡外なので作業機にだけある）。Vim ソースは読んでいない。どのケースも命令の切れ目で区切って測り、選択の両端は `'<` `'>` で読んでいる。穴の正体は「奇数」でも「隙間」でもなく、**非空の選択では対の選び方そのものが向きで変わる**ことだった（caret の手前の引用符の行頭からの番号が奇数＝対の外なら、前向きは後ろの対・後ろ向きは手前の対へ渡る）。caret が引用符の上にあるとき・anchor がその場に残る条件・行をまたぐ選択の取消も同じ実測で閉じた。
+
+`python out/issue111-oracle/add-fixtures.py --write` は候補 40 件を「命令の切れ目で区切った形」と「1 回の `:normal!` の形」の両方で測り、**1 件を機械が拒否**した（前向きの隙間から `i'` はビープして後続の鍵が消える）。`python eng/vim-oracle.py --regenerate --only text-object-quote-` は **73 measured / 1103 reused**（reuse ref `75bf047`。73 のうち 34 件は #93 が採った既存の `text-object-quote-*` で、再測定しても値は変わっていない）。`git diff` の削除行は metadata 2 行だけで、既存 1137 行は逐語再利用した。1176 件の入力 SHA-256 は `0b0756ba9406f285d2939252bd0effac7e2485b7f757b07a922bf657479df80a` → `5cae75d18203f861d928001a1e2b85be1526e60981a677bdf5f57a29db84b54e`。**初回の再生で 39 件すべてが実装と一致した**（期待値を直した fixture は無い）。取消はビープが後続の鍵を捨てて 1 回の `:normal!` に乗らないので、対象 unit の契約 5 件（`verify_vim_text_object_quote_pairs`）が engine の答えを固定する。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug` → `cmake --build build` | 引用符の枝の書き換えを Debug / clang-tidy / ASan / UBSan で。初回は `readability-function-size` の入れ子 4 段で落ち、対の走査を `counted_quote_after` に分けて成功（閾値は触っていない） |
+| `build/nib_tests.exe --vim-text-objects` | 対象。1912 → **2232 checks すべて成功**（新規 fixture 39 件＋契約 5 件ぶん）。範囲・取消・VISUAL の置換・向き・`.` の記録を確認 |
+| `build/nib_tests.exe --vim-dot` | `ci"` などを鍵の列として再生する経路。**1593 checks 成功**（変更前と同数） |
+| `build/nib_tests.exe`（引数なし） | 引用符の枝は VISUAL の選択と register を通って他の scope の fixture にも出るので、unit 全体を 1 回。11553 → **11873 checks** すべて成功 |
+| `ctest --test-dir build --output-on-failure --no-tests=error` | CTest から見た既定実行。4 件すべて成功、`nib_unit` 2.47 s（#108 の 2.74 s から fixture 39 件を足して短縮側に振れたのは測定のばらつき） |
+| `python eng/symbols.py --build-dir build --require core application` | 走査を増やした core が外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし） |
+| `python eng/conformance.py` / `--build-dir build` | 1 ファイル 1 型（CNF-002）と、1176 fixture の生成整合（CNF-010）・正準形（CNF-011）。どちらも **0 violations** |
+| `clang-format --dry-run --Werror`（`src/core/VimTextObjectRange.cpp` / `tests/unit/NibTests.cpp`） | 変更した C++ の整形。指摘なし |
+
+対象を限定した理由: 差分は core の 1 ファイルの引用符の枝と、unit の対象 1 つ、fixture 39 件である。引用符の範囲は VISUAL の選択・register・`.` を通って他の scope にも出るので unit 全体を 1 回回した。描画・ファイル・設定・テーマ・Ex・パレット・adapters・速さ・Release build・`check.ps1 -Full` は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。画面確認は**未実施**（差分は engine の意味論にしか出ない）。exe は作っていない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+FR-003 / ARC-001/004/007 / CPP-002/003/004/006/011/012 / QLT-001/008/012/013 / CNF-010/011 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimTextObject` の switch）に `default` は無い。新しい型・`reinterpret_cast`・時刻・OS・スレッドは増やしていない。範囲関数は純関数のままで、選択の正本は `EditorState`。
