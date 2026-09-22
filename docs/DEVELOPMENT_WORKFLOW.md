@@ -167,6 +167,10 @@ ref を名指ししない呼び方・無い ref・dirty な作業ツリーは何
 ゲートの `build/` と `eng/measure-speed.py` の `build-release/` には触れない。この経路はゲートに載せない（QLT-013: ゲートに Release も display も要らない）。
 PE の `TimeDateStamp` だけは link した時刻なので、同じ commit を作り直すと 2 バイトだけ変わる（Issue #129 の実測）。
 
+### 窓の画（PNG）と前後の比較
+
+computer-use 無しで見た目を確かめるときは `python eng/verify-window.py --capture <dir>`（各節の後の `<dir>/<節名>.png`）か `--capture <dir> --keys "ihello<Esc>"`（`before.png` / `after.png` / 本文の矩形の `frames.json`）で撮り、`python eng/compare-frames.py before.png after.png --inside x,y,w,h` が差分の画素数と外接矩形を JSON で返す（Issue #131・閾値は持たない完全一致・PNG は `eng/window_driver.py` が `zlib` だけで読み書きする）。撮るのは画面の合成なので画面中央を空けて 1 回ずつ走らせ、ゲートには載せない（QLT-013）。
+
 製品の版入力は **`CMakeLists.txt` の `project(... VERSION)`** だけとする。設定画面・manifest・VERSIONINFO・配布物名はビルドがそこから導出し、
 2 か所目に手で書かない。配布物の正規生成経路は次の 1 本である。
 

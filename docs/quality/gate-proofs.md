@@ -1139,3 +1139,37 @@ base `bfa91f0`（origin/main）。**製品の C++・CMake・fixture・保存 sch
 対象を限定した理由: 差分は `eng/` の新しいスクリプト 1 本と conformance のテスト 1 ファイル、文書 4 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。文書を変えたので `eng/conformance.py` は実行する（CNF-006）。画面確認は不要（窓に出る差分が無い）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 ARC-001 / QLT-001 / QLT-012 / QLT-013 / CNF-005 / CNF-006 / CNF-008 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない（このスクリプトはゲートではない）。Release の作り方の正本は `eng/build-release.ps1` の 1 か所で、文書はそれを指すだけである（ARC-001）。残るのは PE の `TimeDateStamp` が link 時刻であること（`/Brepro` は入れていない）と、ゲートに載っていないので壊れたことは次に使うときにしか分からないことの 2 点。
+
+### 5-al. verify-window の PNG 保存と前後の画素比較（Issue #131・ADR 0038 の決定 5・2026-09-23）
+
+base `f677a7e`（main）。**製品の C++・CMake・fixture・保存 schema・`eng/check.ps1`・`eng/conformance-rules.json` には触れていない。** 撮る経路は `eng/window_driver.py` の `capture(window)` 1 本に移し（画面 DC からの `BitBlt` のまま・ARC-001）、`verify-window.py` の `capture` はそれを呼んで大きさを確かめるだけの薄い口になった。既存の `.bmp` 出力は残す。PNG は `zlib` だけで書く・読む（依存ゼロ・DEVELOPMENT_WORKFLOW 6 節）。ゲートには載せない（QLT-013）。実行した exe は既存の Debug の `build/NeNeNib.exe`（2026-09-22 17:42 の build。以後の main の差分は docs と `eng/` だけ）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/verify-window.py --capture out/frames-131-all` | 撮る経路を driver へ移したことの退行（既存の全節）と `--capture`。**終了 0（1 回目で通過）**。PNG は **9 枚**（`look` `vim` `vimViewport` `typing` `caretShapes` `escape` `clickedCaret` `backspace` `scrolling`）、どれも 800×450・5559〜7103 bytes。別起動の節（`documents` `ime` `firstPaint`）は窓を閉じて終わるので PNG は撮らない（従来の `.bmp` は残る） |
+| `python eng/verify-window.py --capture out/frames-131 --keys "ihello<Esc>"` | `--keys` の経路。終了 0。`before.png`（5559 bytes）・`after.png`（6205 bytes）ともに 800×450、`frames.json` の `body` は `{"x": 0, "y": 50, "w": 800, "h": 365}`・`dpi` 120。起動直後の窓は通常モードなので `ihello` は 6 文字の本文になる |
+| `python eng/compare-frames.py out/frames-131/before.png out/frames-131/after.png --inside 0,50,800,365` | **終了 1・`inside: false`**。出力そのまま: `{"size": {"w": 800, "h": 450}, "differentPixels": 1441, "bounds": {"x": 29, "y": 23, "w": 581, "h": 418}, "insideOf": {"x": 0, "y": 50, "w": 800, "h": 365}, "inside": false}`。外接矩形が本文の外へ出たのは、タブの未保存の印「● 」（上端 y=23）とステータスバーの「行 1, 桁 7」（下端 y=440・本文は y=415 まで）が本文と一緒に変わるから（`after.png` を目で見て確認）。道具の誤りではなく受け入れ条件の矩形の取り方の問題なので、判断は設計席へ返す |
+| `python eng/test-conformance.py` | **171 tests OK**（163 → 171・新規は `tests/conformance/test_frame_capture.py` の 8 件: PNG の往復・PNG でないファイルの拒否・比較の正例 2（内側・差分 0）と反例 2（はみ出し終了 1・大きさ違い終了 2）・鍵の記法の正例と反例 `<Foo>`） |
+| `python eng/conformance.py` | 文書の相対リンクと規則 ID（CNF-006）ほか。**0 violations** |
+
+対象を限定した理由: 差分は `eng/` の Python 3 本とテスト 1 ファイル、文書 2 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+**訂正（差し戻し 1 回目・2026-09-23）。** 設計席が受け入れ条件を「本文の内側」から「期待した領域の外に差分が無い」に直した（Issue #131 の設計席のコメント）。`ihello<Esc>` が変えるタブの未保存の印とステータスバーの「行 1, 桁 7」は製品の正しい振る舞いだからである。`frames.json` に `regions`（`title` はタブ帯 `{"x": 0, "y": 0, "w": 800, "h": 50}`・`body` `{"x": 0, "y": 50, "w": 800, "h": 365}`・`status` は `core::status_bar_layout` と同じ `{"x": 0, "y": 415, "w": 800, "h": 35}`。重ならず 50 + 365 + 35 = 450 で隙間なし）を書き、`compare-frames.py --regions` が領域ごとの差分と、どの領域にも入らない `outside` を数える（`--inside` は残す・両方あれば `--regions` が優先・閾値なし）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/verify-window.py --capture out/frames-131 --keys "ihello<Esc>"` | `regions` を書く経路。終了 0。ただし **4 回のうち 2 回は鍵が窓に届かず `after.png` が `before.png` と同じ（5559 bytes・8 秒の期限切れ）**で、同じ手で未変更の `a1f8e07` も 1 回走らせて届くことを確かめた（投函の経路の揺れで、今回の差分は撮った後の JSON だけ）。採った回は `after.png` 6205 bytes |
+| `python eng/compare-frames.py out/frames-131/before.png out/frames-131/after.png --regions out/frames-131/frames.json` | **終了 0・`inside: true`**。出力そのまま: `{"size": {"w": 800, "h": 450}, "differentPixels": 1441, "bounds": {"x": 29, "y": 23, "w": 581, "h": 418}, "regions": {"title": {"differentPixels": 406, "bounds": {"x": 29, "y": 23, "w": 44, "h": 14}}, "body": {"differentPixels": 679, "bounds": {"x": 70, "y": 68, "w": 82, "h": 30}}, "status": {"differentPixels": 356, "bounds": {"x": 551, "y": 427, "w": 59, "h": 14}}}, "outside": {"differentPixels": 0, "bounds": null}, "inside": true}` |
+| `python eng/test-conformance.py` | **173 tests OK**（171 → 173・`--regions` の正例（3 領域の内側だけ・終了 0）と反例（領域の外に 1 画素・終了 1・`outside.differentPixels == 1`）。既存 8 件は不変） |
+| `python eng/conformance.py` | **0 violations** |
+
+**訂正 2（差し戻し 2 回目・2026-09-23）。** 上の表の 2 行目のとおり、鍵が届かなかった回にも `--regions` は差分 0・`inside: true`・終了 0 を返し、「何も起きなかった」を「期待どおり」と言っていた。設計席の裁定で、道具は無変化を成功に見せない。`verify-window.py --keys` は `after` が `before` と画素まで同じなら `frames.json` に `"changed": false` を書き（画像は両方残す）、stdout に `keys did not change the window within 8 s` と出して**終了 1**、変わっていれば `"changed": true`。判定は `compare-frames.py` の純関数 `frames_changed`（画素列 2 つの比較）1 本で、`verify-window.py` はそれを読み込む（ARC-001）。`compare-frames.py --expect <region>[,<region>...]`（`--regions` と一緒にだけ）は名指しした領域ごとに `"expected": {"<region>": true/false}` を足し、差分 0 の領域があれば**終了 1**。`--expect` が無ければ従来どおり差分 0 は終了 0（同じ画面の比較は正当な使い方）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/verify-window.py --capture out/frames-131 --keys "ihello<Esc>"` | `changed` を書く経路。**1 回目で鍵が届き終了 0・`"changed": true`**。`before.png` 5559 bytes・`after.png` 6205 bytes。鍵が届かない回には当たらなかったので、`changed: false` と終了 1 は下の conformance の反例で見る |
+| `python eng/compare-frames.py out/frames-131/before.png out/frames-131/after.png --regions out/frames-131/frames.json --expect body,title,status` | **終了 0**。出力そのまま: `{"size": {"w": 800, "h": 450}, "differentPixels": 1441, "bounds": {"x": 29, "y": 23, "w": 581, "h": 418}, "regions": {"title": {"differentPixels": 406, "bounds": {"x": 29, "y": 23, "w": 44, "h": 14}}, "body": {"differentPixels": 679, "bounds": {"x": 70, "y": 68, "w": 82, "h": 30}}, "status": {"differentPixels": 356, "bounds": {"x": 551, "y": 427, "w": 59, "h": 14}}}, "outside": {"differentPixels": 0, "bounds": null}, "inside": true, "expected": {"body": true, "title": true, "status": true}}` |
+| `python eng/test-conformance.py` | **177 tests OK**（173 → 177・`--expect` の正例（期待した領域に差分・終了 0）と反例（`body` に差分 0・終了 1・`expected.body == false`）、`frames_changed` の正例と反例（同じ画素列は `false`）。既存は不変） |
+| `python eng/conformance.py` | **0 violations** |
+
+鍵が窓に届かない揺れ（差し戻し 1 回目の 4 回中 2 回）の原因は調べていない。既存の投函経路の flake で、別 Issue の候補として設計席へ返した。

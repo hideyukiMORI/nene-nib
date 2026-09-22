@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import ctypes as c
 from ctypes import wintypes as w
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -63,45 +64,27 @@ import winreg
 
 # 窓の駆動（起動・検出・PostMessageW・確認ダイアログ・終了）は 1 本しかない（ADR 0011 の決定 7）。
 from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, become_dpi_aware,
-                           click, close, covered_by, dismiss_dialog, GWL_STYLE, HTCAPTION,
-                           HTCLOSE,
-                           HWND_TOPMOST, IDNO, press, press_chord, rectangle, send_keys, start,
-                           stop, SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE,
-                           VK_NEXT, VK_NIHONGO, VK_PRIOR, VK_RETURN, VK_S, VK_SPACE, window_title,
-                           WINDOW_CLASS, write_text, WS_CAPTION, WS_POPUP, WS_THICKFRAME,
-                           WS_VISIBLE)
+                           capture as capture_client, capture_png, click, close, covered_by,
+                           dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE, HWND_TOPMOST, IDNO,
+                           parse_keys, press, press_chord, raise_window, rectangle,
+                           send_key_sequence, send_keys, start, stop, SWP_NOMOVE_NOSIZE_SHOW,
+                           user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_NEXT, VK_NIHONGO, VK_PRIOR,
+                           VK_RETURN, VK_S, VK_SPACE, window_title, WINDOW_CLASS, write_png,
+                           write_text, WS_CAPTION, WS_POPUP, WS_THICKFRAME, WS_VISIBLE)
 
-gdi = c.WinDLL("gdi32", use_last_error=True)
+# 前後の画が変わったかの判定は比較の道具と同じ 1 本（Issue #131 の訂正 2）。
+_spec = importlib.util.spec_from_file_location("compare_frames",
+                                               Path(__file__).resolve().parent / "compare-frames.py")
+compare_frames = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(compare_frames)
+
 imm = c.WinDLL("imm32", use_last_error=True)
 
-
-class BITMAPINFOHEADER(c.Structure):
-    _fields_ = [
-        ("biSize", w.DWORD), ("biWidth", w.LONG), ("biHeight", w.LONG),
-        ("biPlanes", w.WORD), ("biBitCount", w.WORD), ("biCompression", w.DWORD),
-        ("biSizeImage", w.DWORD), ("biXPelsPerMeter", w.LONG), ("biYPelsPerMeter", w.LONG),
-        ("biClrUsed", w.DWORD), ("biClrImportant", w.DWORD),
-    ]
-
-
-class BITMAPINFO(c.Structure):
-    _fields_ = [("bmiHeader", BITMAPINFOHEADER), ("bmiColors", w.DWORD * 3)]
-
-
-api(gdi, "CreateCompatibleDC", w.HDC, w.HDC)
-api(gdi, "CreateCompatibleBitmap", w.HBITMAP, w.HDC, c.c_int, c.c_int)
-api(gdi, "SelectObject", w.HGDIOBJ, w.HDC, w.HGDIOBJ)
-api(gdi, "DeleteObject", w.BOOL, w.HGDIOBJ)
-api(gdi, "DeleteDC", w.BOOL, w.HDC)
-api(gdi, "BitBlt", w.BOOL, w.HDC, c.c_int, c.c_int, c.c_int, c.c_int, w.HDC, c.c_int, c.c_int, w.DWORD)
-api(gdi, "GetDIBits", c.c_int, w.HDC, w.HBITMAP, w.UINT, w.UINT, w.LPVOID, c.POINTER(BITMAPINFO), w.UINT)
-api(gdi, "GdiFlush", w.BOOL)
 api(gdi, "GetPixel", w.DWORD, w.HDC, c.c_int, c.c_int)
 # IME の開閉は、その窓の既定 IME 窓に WM_IME_CONTROL を送れば外から読める（ADR 0014 の決定 5）。
 api(user, "GetKeyboardLayout", c.c_ssize_t, w.DWORD)
 api(imm, "ImmGetDefaultIMEWnd", w.HWND, w.HWND)
 
-SRCCOPY = 0x00CC0020
 CLR_INVALID = 0xFFFFFFFF
 # ADR 0013: 窓は device の生成より前に見える。その間のクライアント領域は DWM の Mica の面で、
 # 黒か白が見えたら決定そのものが却下になるので、起動直後の画素の列をここに記録する。
@@ -172,31 +155,16 @@ def expected_appearance() -> str:
 
 
 def capture(window, width: int, height: int) -> bytes:
-    """Read the composed client area back from the screen device context (top-down BGRA)."""
-    origin = w.POINT(0, 0)
-    assert user.ClientToScreen(window, c.byref(origin))
-    screen = user.GetDC(None)
-    memory = gdi.CreateCompatibleDC(screen)
-    bitmap = gdi.CreateCompatibleBitmap(screen, width, height)
-    previous = gdi.SelectObject(memory, bitmap)
-    try:
-        assert gdi.BitBlt(memory, 0, 0, width, height, screen, origin.x, origin.y, SRCCOPY)
-        assert gdi.GdiFlush()
-        info = BITMAPINFO()
-        info.bmiHeader.biSize = c.sizeof(BITMAPINFOHEADER)
-        info.bmiHeader.biWidth = width
-        info.bmiHeader.biHeight = -height
-        info.bmiHeader.biPlanes = 1
-        info.bmiHeader.biBitCount = 32
-        info.bmiHeader.biCompression = 0
-        pixels = (c.c_ubyte * (width * height * 4))()
-        assert gdi.GetDIBits(memory, bitmap, 0, height, pixels, c.byref(info), 0) == height
-        return bytes(pixels)
-    finally:
-        gdi.SelectObject(memory, previous)
-        gdi.DeleteObject(bitmap)
-        gdi.DeleteDC(memory)
-        user.ReleaseDC(None, screen)
+    """window_driver.capture (the one read-back path), checked against the size the caller measured."""
+    captured_width, captured_height, pixels = capture_client(window)
+    assert (captured_width, captured_height) == (width, height), "the client area changed size"
+    return pixels
+
+
+def snapshot(frames: Path | None, window, name: str) -> None:
+    """--capture: save the client area after a section as <dir>/<name>.png (Issue #131)."""
+    if frames is not None:
+        capture_png(window, frames / f"{name}.png")
 
 
 def pixel(pixels: bytes, width: int, x: int, y: int) -> list[int]:
@@ -1150,7 +1118,8 @@ def verify_vim_viewport(window, ground: dict, output: Path) -> dict:
     return result
 
 
-def verify_editing(window, process, appearance: str, output: Path) -> dict:
+def verify_editing(window, process, appearance: str, output: Path,
+                   frames: Path | None = None) -> dict:
     """Drive the editing keys with posted messages and read the result back as pixels."""
     client = rectangle(window, user.GetClientRect)
     width, height = client[2] - client[0], client[3] - client[1]
@@ -1168,13 +1137,21 @@ def verify_editing(window, process, appearance: str, output: Path) -> dict:
     result = {"body": body_points(width, height, dpi)}
     # Vim の鍵は本文が空のうちに測り、u で空へ戻してから通常モードの編集を測る（Issue #22）。
     result["vim"] = verify_vim(window, ground, output)
+    snapshot(frames, window, "vim")
     result["vimViewport"] = verify_vim_viewport(window, ground, output)
+    snapshot(frames, window, "vimViewport")
     result["typing"] = verify_typing(window, ground, output)
+    snapshot(frames, window, "typing")
     result["caretShapes"] = verify_block_caret(window, ground)
+    snapshot(frames, window, "caretShapes")
     result["escape"] = verify_escape(window, process, ground)
+    snapshot(frames, window, "escape")
     result["clickedCaret"] = verify_click_caret(window, ground)
+    snapshot(frames, window, "clickedCaret")
     result["backspace"] = verify_backspace(window, ground)
+    snapshot(frames, window, "backspace")
     result["scrolling"] = verify_scrolling(window, ground, output)
+    snapshot(frames, window, "scrolling")
     # Ctrl の組み合わせは PostMessageW では作れない（GetKeyState は実キーだけを見る）。
     result["modifierKeysCovered"] = (
         "Vim viewport Ctrl-d/u/f/b uses press_chord; other modifier shortcuts are covered by "
@@ -1183,11 +1160,76 @@ def verify_editing(window, process, appearance: str, output: Path) -> dict:
     return result
 
 
+def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) -> bytes:
+    """Capture until the picture has changed and holds still for one more capture (await_ink's way).
+
+    Drawing is one WM_PAINT after the posted messages drain, so a changed picture that repeats is
+    the settled frame. Keys that change nothing hand back the unchanged picture at the deadline.
+    """
+    width, height = size
+    deadline = time.monotonic() + seconds
+    previous = before
+    while True:
+        time.sleep(0.1)
+        pixels = capture(window, width, height)
+        if (pixels != before and pixels == previous) or time.monotonic() > deadline:
+            return pixels
+        previous = pixels
+
+
+def drive_keys(executable: Path, environment: dict, frames: Path, keys: str) -> dict:
+    """--keys: before.png, the keys through the posted-message path, after.png, frames.json."""
+    steps = parse_keys(keys)
+    process, window, _ = start(executable, environment)
+    try:
+        raise_window(window)
+        time.sleep(0.4)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        dpi = user.GetDpiForWindow(window)
+        body = body_points(width, height, dpi)
+        top = to_pixels(TITLE_BAR_DIPS, dpi)
+        before = capture(window, width, height)
+        write_png(frames / "before.png", width, height, before)
+        send_key_sequence(window, keys)
+        after = await_new_frame(window, before, (width, height))
+        write_png(frames / "after.png", width, height, after)
+        band_top = max(height - to_pixels(STATUS_BAR_DIPS, dpi), 0)  # core::status_bar_layout と同じ
+        body_box = {"x": 0, "y": top, "w": width, "h": body["bandBottom"] - top}
+        # 期待してよい差分の領域（Issue #131 の訂正）。物理画素・クライアント座標で、重ならない。
+        regions = {"title": {"x": 0, "y": 0, "w": width, "h": top}, "body": body_box,
+                   "status": {"x": 0, "y": band_top, "w": width, "h": height - band_top}}
+        # 鍵が届かず 8 秒の期限で同じ画が返った回を「期待どおり」に見せない（訂正 2）。
+        changed = compare_frames.frames_changed(before, after)
+        record = {"before": "before.png", "after": "after.png", "keys": keys, "steps": len(steps),
+                  "changed": changed, "body": body_box, "regions": regions,
+                  "dpi": dpi, "size": {"w": width, "h": height}}
+        (frames / "frames.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        close(window)
+        # 鍵が本文を変えていれば未保存の確認が出る。変えていなければ何も出ずにそのまま閉じる。
+        dismiss_dialog(process, IDNO)
+        process.wait(timeout=5)
+        return record
+    finally:
+        stop(process)
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, default=root / "build/NeNeNib.exe")
+    parser.add_argument("--capture", type=Path, default=None,
+                        help="save a PNG of the client area after each section into this directory")
+    parser.add_argument("--keys", default=None,
+                        help="with --capture: skip the sections, save before.png, send these keys "
+                             "(fixture notation, e.g. ihello<Esc>), save after.png and frames.json; "
+                             "exits 1 when the keys left the window unchanged")
     arguments = parser.parse_args()
+    if arguments.keys is not None and arguments.capture is None:
+        parser.error("--keys needs --capture <dir>")
+    frames = arguments.capture.resolve() if arguments.capture is not None else None
+    if frames is not None:
+        frames.mkdir(parents=True, exist_ok=True)
     output = root / "out/window-verification"
     output.mkdir(parents=True, exist_ok=True)
     executable = output / "NeNeNib.exe"
@@ -1196,11 +1238,19 @@ def main() -> None:
     assert isolated.is_relative_to(output.resolve())
     environment = dict(os.environ, LOCALAPPDATA=str(isolated), APPDATA=str(isolated))
     become_dpi_aware()
+    if arguments.keys is not None:
+        record = drive_keys(executable, environment, frames, arguments.keys)
+        print(json.dumps(record, indent=2))
+        if not record["changed"]:
+            print("keys did not change the window within 8 s")
+            sys.exit(1)
+        return
     process, window, first_rect = start(executable, environment)
     try:
         appearance = expected_appearance()
         result = verify(window, appearance, output)
-        result["editing"] = verify_editing(window, process, appearance, output)
+        snapshot(frames, window, "look")
+        result["editing"] = verify_editing(window, process, appearance, output, frames)
         result["firstSeenWindowRect"] = first_rect
         result["shownAfterPlacement"] = first_rect[:2] != [0, 0]
         assert result["shownAfterPlacement"], f"the window was shown at {first_rect[:2]}"

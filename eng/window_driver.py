@@ -3,7 +3,9 @@
 There is one driver for every script that needs a running editor, so eng/verify-window.py (which
 reads pixels back) and eng/measure-speed.py (which reads the milestone file back) share the same
 start / find / PostMessageW / dismiss / close path instead of growing a second one (ARC-001 /
-ARC-012). Nothing here reads pixels or judges a result; that belongs to the caller.
+ARC-012). The one pixel read-back (capture: the composed client area from the screen device
+context, and its PNG form for eng/compare-frames.py, Issue #131) lives here too, so there is one
+way to take a picture; nothing here judges a result, that belongs to the caller.
 
 The real pointer is never moved and no real keyboard input is generated, with one exception:
 press_chord uses SendInput, because posted messages cannot carry modifier state (GetKeyState only
@@ -18,11 +20,14 @@ from __future__ import annotations
 import ctypes as c
 from ctypes import wintypes as w
 from pathlib import Path
+import struct
 import subprocess
 import time
+import zlib
 
 user = c.WinDLL("user32", use_last_error=True)
 kernel = c.WinDLL("kernel32", use_last_error=True)
+gdi = c.WinDLL("gdi32", use_last_error=True)
 
 
 def api(dll, name, result, *arguments):
@@ -44,6 +49,19 @@ class INPUTPAYLOAD(c.Union):
 
 class INPUT(c.Structure):
     _fields_ = [("kind", w.DWORD), ("payload", INPUTPAYLOAD)]
+
+
+class BITMAPINFOHEADER(c.Structure):
+    _fields_ = [
+        ("biSize", w.DWORD), ("biWidth", w.LONG), ("biHeight", w.LONG),
+        ("biPlanes", w.WORD), ("biBitCount", w.WORD), ("biCompression", w.DWORD),
+        ("biSizeImage", w.DWORD), ("biXPelsPerMeter", w.LONG), ("biYPelsPerMeter", w.LONG),
+        ("biClrUsed", w.DWORD), ("biClrImportant", w.DWORD),
+    ]
+
+
+class BITMAPINFO(c.Structure):
+    _fields_ = [("bmiHeader", BITMAPINFOHEADER), ("bmiColors", w.DWORD * 3)]
 
 
 api(user, "SetProcessDpiAwarenessContext", w.BOOL, w.HANDLE)
@@ -71,6 +89,14 @@ api(user, "AttachThreadInput", w.BOOL, w.DWORD, w.DWORD, w.BOOL)
 api(user, "BringWindowToTop", w.BOOL, w.HWND)
 api(user, "GetDC", w.HDC, w.HWND)
 api(user, "ReleaseDC", c.c_int, w.HWND, w.HDC)
+api(gdi, "CreateCompatibleDC", w.HDC, w.HDC)
+api(gdi, "CreateCompatibleBitmap", w.HBITMAP, w.HDC, c.c_int, c.c_int)
+api(gdi, "SelectObject", w.HGDIOBJ, w.HDC, w.HGDIOBJ)
+api(gdi, "DeleteObject", w.BOOL, w.HGDIOBJ)
+api(gdi, "DeleteDC", w.BOOL, w.HDC)
+api(gdi, "BitBlt", w.BOOL, w.HDC, c.c_int, c.c_int, c.c_int, c.c_int, w.HDC, c.c_int, c.c_int, w.DWORD)
+api(gdi, "GetDIBits", c.c_int, w.HDC, w.HBITMAP, w.UINT, w.UINT, w.LPVOID, c.POINTER(BITMAPINFO), w.UINT)
+api(gdi, "GdiFlush", w.BOOL)
 api(kernel, "GetCurrentThreadId", w.DWORD)
 api(kernel, "OpenThread", w.HANDLE, w.DWORD, w.BOOL, w.DWORD)
 api(kernel, "SuspendThread", w.DWORD, w.HANDLE)
@@ -89,6 +115,8 @@ WM_LBUTTONDOWN = 0x0201
 WM_LBUTTONUP = 0x0202
 VK_RETURN = 0x0D
 VK_BACK = 0x08
+VK_TAB = 0x09
+VK_V = 0x56
 VK_ESCAPE = 0x1B
 VK_PRIOR = 0x21
 VK_NEXT = 0x22
@@ -99,6 +127,13 @@ VK_SPACE = 0x20
 VK_NIHONGO = [0x4E, 0x49, 0x48, 0x4F, 0x4E, 0x47, 0x4F]
 INPUT_KEYBOARD = 1
 KEYEVENTF_KEYUP = 0x0002
+SRCCOPY = 0x00CC0020
+# PNG の署名（RFC 2083）。write_png / read_png が書いて読むのは 8-bit RGB・filter 0・非 interlace だけ。
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+PNG_RGB = 2
+# 鍵の列の記法は tests/vim の fixture と同じ（<…> 以外の字は WM_CHAR）。読めない <…> は ValueError。
+KEY_NAMES = {"<CR>": ("key", VK_RETURN), "<Esc>": ("key", VK_ESCAPE), "<BS>": ("key", VK_BACK),
+             "<Tab>": ("key", VK_TAB), "<C-v>": ("chord", VK_V)}
 HTCAPTION = 2
 HTCLOSE = 20
 HWND_TOPMOST = c.c_void_p(-1)
@@ -347,3 +382,133 @@ def press_chord(window, modifier: int, key: int) -> bool:
                           key_input(key, KEYEVENTF_KEYUP),
                           key_input(modifier, KEYEVENTF_KEYUP))
     return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
+
+
+def capture(window) -> tuple[int, int, bytes]:
+    """Read the composed client area back from the screen device context (top-down BGRA).
+
+    It copies what the compositor shows, so another window over the editor ends up in the picture;
+    callers raise the window first and keep the middle of the screen clear.
+    """
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    origin = w.POINT(0, 0)
+    assert user.ClientToScreen(window, c.byref(origin))
+    screen = user.GetDC(None)
+    memory = gdi.CreateCompatibleDC(screen)
+    bitmap = gdi.CreateCompatibleBitmap(screen, width, height)
+    previous = gdi.SelectObject(memory, bitmap)
+    try:
+        assert gdi.BitBlt(memory, 0, 0, width, height, screen, origin.x, origin.y, SRCCOPY)
+        assert gdi.GdiFlush()
+        info = BITMAPINFO()
+        info.bmiHeader.biSize = c.sizeof(BITMAPINFOHEADER)
+        info.bmiHeader.biWidth = width
+        info.bmiHeader.biHeight = -height
+        info.bmiHeader.biPlanes = 1
+        info.bmiHeader.biBitCount = 32
+        info.bmiHeader.biCompression = 0
+        pixels = (c.c_ubyte * (width * height * 4))()
+        assert gdi.GetDIBits(memory, bitmap, 0, height, pixels, c.byref(info), 0) == height
+        return width, height, bytes(pixels)
+    finally:
+        gdi.SelectObject(memory, previous)
+        gdi.DeleteObject(bitmap)
+        gdi.DeleteDC(memory)
+        user.ReleaseDC(None, screen)
+
+
+def png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+
+def write_png(path: Path, width: int, height: int, bgra: bytes) -> None:
+    """Top-down BGRA to an 8-bit RGB PNG with the standard library alone (zlib, no dependency)."""
+    assert len(bgra) == width * height * 4, "the pixel buffer does not match the size"
+    rows = []
+    for y in range(height):
+        row = bgra[y * width * 4:(y + 1) * width * 4]
+        rgb = bytearray(width * 3)
+        rgb[0::3], rgb[1::3], rgb[2::3] = row[2::4], row[1::4], row[0::4]
+        rows.append(b"\x00" + bytes(rgb))
+    header = struct.pack(">IIBBBBB", width, height, 8, PNG_RGB, 0, 0, 0)
+    Path(path).write_bytes(PNG_SIGNATURE + png_chunk(b"IHDR", header)
+                           + png_chunk(b"IDAT", zlib.compress(b"".join(rows), 6))
+                           + png_chunk(b"IEND", b""))
+
+
+def read_png(path: Path) -> tuple[int, int, bytes]:
+    """Read back only the shape write_png writes (8-bit RGB, filter 0, no interlace) as RGB bytes."""
+    data = Path(path).read_bytes()
+    if not data.startswith(PNG_SIGNATURE):
+        raise ValueError(f"{path}: not a PNG")
+    offset, header, compressed = len(PNG_SIGNATURE), None, []
+    while offset + 12 <= len(data):
+        (length,) = struct.unpack(">I", data[offset:offset + 4])
+        kind = data[offset + 4:offset + 8]
+        body = data[offset + 8:offset + 8 + length]
+        (checksum,) = struct.unpack(">I", data[offset + 8 + length:offset + 12 + length])
+        if zlib.crc32(kind + body) != checksum:
+            raise ValueError(f"{path}: the {kind!r} chunk fails its CRC")
+        if kind == b"IHDR":
+            header = struct.unpack(">IIBBBBB", body)
+        if kind == b"IDAT":
+            compressed.append(body)
+        if kind == b"IEND":
+            break
+        offset += 12 + length
+    if header is None:
+        raise ValueError(f"{path}: no IHDR")
+    width, height, depth, colour, method, filtering, interlace = header
+    if (depth, colour, method, filtering, interlace) != (8, PNG_RGB, 0, 0, 0):
+        raise ValueError(f"{path}: only 8-bit RGB without interlace is read here")
+    raw = zlib.decompress(b"".join(compressed))
+    stride = width * 3 + 1
+    if len(raw) != stride * height:
+        raise ValueError(f"{path}: the image data does not match {width}x{height}")
+    rows = []
+    for y in range(height):
+        row = raw[y * stride:(y + 1) * stride]
+        if row[0] != 0:
+            raise ValueError(f"{path}: only filter 0 is read here")
+        rows.append(row[1:])
+    return width, height, b"".join(rows)
+
+
+def capture_png(window, path: Path) -> tuple[int, int]:
+    """capture() written as a PNG; returns the size that was saved."""
+    width, height, pixels = capture(window)
+    write_png(path, width, height, pixels)
+    return width, height
+
+
+def parse_keys(text: str) -> list[tuple[str, object]]:
+    """The fixture notation (ihello<Esc>) as ("text", str) / ("key", vk) / ("chord", vk) steps."""
+    steps: list[tuple[str, object]] = []
+    index = 0
+    while index < len(text):
+        if text[index] == "<":
+            end = text.find(">", index)
+            name = text[index:end + 1] if end >= 0 else text[index:]
+            if name not in KEY_NAMES:
+                raise ValueError(f"unknown key notation {name!r}; known: {', '.join(KEY_NAMES)}")
+            steps.append(KEY_NAMES[name])
+            index += len(name)
+            continue
+        if steps and steps[-1][0] == "text":
+            steps[-1] = ("text", str(steps[-1][1]) + text[index])
+        else:
+            steps.append(("text", text[index]))
+        index += 1
+    return steps
+
+
+def send_key_sequence(window, text: str) -> None:
+    """Post the parsed steps; only <C-v> needs the foreground, because it carries Ctrl."""
+    for kind, value in parse_keys(text):
+        if kind == "text":
+            write_text(window, str(value))
+        if kind == "key":
+            press(window, int(value))
+        if kind == "chord":
+            assert press_chord(window, VK_CONTROL, int(value)), "the foreground was refused for Ctrl"
