@@ -54,7 +54,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp
     src/core/VimStep.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
-    src/core/VimWordMotion.cpp)
+    src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp)
