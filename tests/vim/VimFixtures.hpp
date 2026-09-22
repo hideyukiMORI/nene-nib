@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 cd5bf5811457f569ccd2c303abc0f444bc176f9de0e2132e78558f65b5faf7d5 / 1320 fixtures
+// fixtures.json: sha256 71bc134e72bf415249c59ad36940f6a5829f35213a108933ee64ce6e345c95e6 / 1339 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1320> vim_fixtures{{
+constexpr std::array<VimFixture, 1339> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -413,7 +413,6 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"line-jump-G-empty-line", "abc\n\nxyz", "2G", "abc\n\nxyz", 2, 1, "", "", std::nullopt},
     {"line-jump-gg-blank-only-line", "   \nabc", "Ggg", "   \nabc", 1, 3, "", "", std::nullopt},
     {"line-jump-G-utf8-first-nonblank", "ascii\n  あ😀", "G", "ascii\n  あ😀", 2, 3, "", "", std::nullopt},
-    {"line-jump-G-crlf", "a\r\n  b\r\nc", "2G", "a\n  b\nc", 2, 3, "", "", std::nullopt},
     {"line-jump-d-G-unspecified", "aa\nbb\ncc\ndd\nee\nff", "4GdG", "aa\nbb\ncc", 3, 1, "dd\nee\nff\n", "V", std::nullopt},
     {"line-jump-one-d-G", "aa\nbb\ncc\ndd\nee\nff", "4G1dG", "ee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
     {"line-jump-d-one-G", "aa\nbb\ncc\ndd\nee\nff", "4Gd1G", "ee\nff", 1, 1, "aa\nbb\ncc\ndd\n", "V", std::nullopt},
@@ -457,8 +456,6 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"open-line-blank-above", "a\n\nb", "jOX<Esc>", "a\nX\n\nb", 2, 1, "", "", std::nullopt},
     {"open-line-indent-default", "  aa\n\tbb", "oX<Esc>", "  aa\nX\n\tbb", 2, 1, "", "", std::nullopt},
     {"open-line-above-indent-default", "  aa\n\tbb", "OX<Esc>", "X\n  aa\n\tbb", 1, 1, "", "", std::nullopt},
-    {"open-line-crlf-below", "aa\r\nbb", "oX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
-    {"open-line-crlf-above", "aa\r\nbb", "jOX<Esc>", "aa\nX\nbb", 2, 1, "", "", std::nullopt},
     {"open-line-count-below", "aa\nbb", "3oX<Esc>", "aa\nX\nX\nX\nbb", 4, 1, "", "", std::nullopt},
     {"open-line-count-above", "aa\nbb", "3OX<Esc>", "X\nX\nX\naa\nbb", 3, 1, "", "", std::nullopt},
     {"open-line-count-empty-below", "aa\nbb", "3o<Esc>", "aa\n\n\n\nbb", 4, 1, "", "", std::nullopt},
@@ -499,7 +496,6 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"visual-wanted-delete-through-line-end", "abcd\nx\nabcdef\nTAIL", "$vjjd", "abcTAIL", 1, 4, "d\nx\nabcdef\n", "v", std::nullopt},
     {"visual-wanted-switch-delete", "abcd\nx\nabcdef\nTAIL", "$vVvjjd", "abcTAIL", 1, 4, "d\nx\nabcdef\n", "v", std::nullopt},
     {"visual-wanted-unicode", "あ😀い\nx\nあ😀いうえ\nTAIL", "$vjjy", "あ😀い\nx\nあ😀いうえ\nTAIL", 1, 8, "い\nx\nあ😀いうえ\n", "v", std::nullopt},
-    {"visual-wanted-crlf", "abcd\r\nx\r\nabcdef\r\nTAIL", "$vjjd", "abcTAIL", 1, 4, "d\nx\nabcdef\n", "v", std::nullopt},
     {"visual-wanted-empty-middle", "abcd\n\nabcdef\nTAIL", "$vjj<Esc>", "abcd\n\nabcdef\nTAIL", 3, 6, "", "", std::nullopt},
     {"visual-yank-count-long-line", "abcd\nabcdef\nxy", "$2Vy", "abcd\nabcdef\nxy", 1, 1, "abcd\nabcdef\n", "V", std::nullopt},
     {"visual-yank-single-end", "  abcdef\n x\n    ghijkl\nTAIL", "$Vy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n", "V", std::nullopt},
@@ -515,7 +511,6 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"visual-yank-empty-buffer", "", "Vy", "", 1, 1, "\n", "V", std::nullopt},
     {"visual-yank-tab-indent", "\t abc\nxy\nTAIL", "$Vjy", "\t abc\nxy\nTAIL", 1, 1, "\t abc\nxy\n", "V", std::nullopt},
     {"visual-yank-unicode", "  あ😀い\nあいうえお\nTAIL", "$2Vy", "  あ😀い\nあいうえお\nTAIL", 1, 1, "  あ😀い\nあいうえお\n", "V", std::nullopt},
-    {"visual-yank-crlf", "  abcdef\r\nx\r\nTAIL", "$Vjy", "  abcdef\nx\nTAIL", 1, 1, "  abcdef\nx\n", "V", std::nullopt},
     {"visual-yank-switch-line", "  abcdef\n x\n    ghijkl\nTAIL", "$vVjy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n x\n", "V", std::nullopt},
     {"visual-yank-switch-character", "  abcdef\n x\n    ghijkl\nTAIL", "$Vvjy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 8, "f\n x\n", "v", std::nullopt},
     {"visual-yank-reverse-same-line", "  abcdef\n x\n    ghijkl\nTAIL", "$Vhhy", "  abcdef\n x\n    ghijkl\nTAIL", 1, 1, "  abcdef\n", "V", std::nullopt},
@@ -543,7 +538,6 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"replace-char-enter", "abcd", "lr<CR>", "a\ncd", 2, 1, "", "", std::nullopt},
     {"replace-char-count-enter", "abcdef", "l3r<CR>", "a\nef", 2, 1, "", "", std::nullopt},
     {"replace-char-end-enter", "abcd", "$r<CR>", "abc\n", 2, 1, "", "", std::nullopt},
-    {"replace-char-crlf", "abcd\r\nefgh", "l2r<CR>", "a\nd\nefgh", 2, 1, "", "", std::nullopt},
     {"replace-char-register", "abcd\nefgh", "yyjrX", "abcd\nXfgh", 2, 1, "abcd\n", "V", std::nullopt},
     {"replace-char-search-memory", "axbxc", "fxrX;", "aXbxc", 1, 4, "", "", std::nullopt},
     {"replace-char-cancel", "abcd", "2r<Esc>", "abcd", 1, 1, "", "", std::nullopt},
@@ -561,7 +555,6 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"replace-char-visual-line", "  ab\ncde\nf", "VjrX", "XXXX\nXXX\nf", 1, 1, "", "", std::nullopt},
     {"replace-char-visual-line-reverse", "ab\ncdef\ngh", "j$VkrX", "XX\nXXXX\ngh", 1, 1, "", "", std::nullopt},
     {"replace-char-visual-line-empty", "ab\n\ncd", "VjjrX", "XX\n\nXX", 1, 1, "", "", std::nullopt},
-    {"replace-char-visual-crlf", "ab\r\ncdef\r\ngh", "lvjr界", "a界\n界界ef\ngh", 1, 2, "", "", std::nullopt},
     {"replace-char-visual-register", "abcd\nefgh", "yyjvlrX", "abcd\nXXgh", 2, 1, "abcd\n", "V", std::nullopt},
     {"dot-remove-character", "alpha beta gamma", "x.", "pha beta gamma", 1, 1, "l", "v", std::nullopt},
     {"dot-remove-character-recount", "alpha beta gamma", "x2.", "ha beta gamma", 1, 1, "lp", "v", std::nullopt},
@@ -657,9 +650,6 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"dot-tab-remove", "\tone two\n\tthree four", "xj0.", "one two\nthree four", 2, 1, "\t", "v", std::nullopt},
     {"dot-tab-change", "\tone two\n\tthree four", "wcwzz<Esc>j0w.", "\tzz two\n\tzz four", 2, 3, "three", "v", std::nullopt},
     {"dot-tab-replace", "\tone two\n\tthree four", "rzj0.", "zone two\nzthree four", 2, 1, "", "", std::nullopt},
-    {"dot-crlf-change-word", "ab cd\r\nef gh", "cwZZ<Esc>j0.", "ZZ cd\nZZ gh", 2, 2, "ef", "v", std::nullopt},
-    {"dot-crlf-open-below", "ab\r\ncd", "ofoo<Esc>.", "ab\nfoo\nfoo\ncd", 3, 3, "", "", std::nullopt},
-    {"dot-crlf-remove-line", "ab\r\ncd\r\nef", "dd.", "ef", 1, 1, "cd\n", "V", std::nullopt},
     {"dot-keeps-record-after-escape-elsewhere", "ab\ncd\nef", "xd<Esc>j.", "b\nd\nef", 2, 1, "c", "v", std::nullopt},
     {"dot-keeps-record-after-replace-escape", "ab\ncd\nef", "xr<Esc>j.", "b\nd\nef", 2, 1, "c", "v", std::nullopt},
     {"text-object-word-diw-start", "alpha beta gamma", "diw", " beta gamma", 1, 1, "alpha", "v", std::nullopt},
@@ -1332,6 +1322,35 @@ constexpr std::array<VimFixture, 1320> vim_fixtures{{
     {"block-undo-d-twice", "abcdef\nghijkl\nmnopqr", "<C-v>jjllduu", "abcdef\nghijkl\nmnopqr", 1, 1, "abc\nghi\nmno", "\0263", std::nullopt},
     {"block-undo-r", "abcdef\nghijkl\nmnopqr", "<C-v>jlrZu", "abcdef\nghijkl\nmnopqr", 1, 1, "", "", std::nullopt},
     {"block-undo-cut-tab", "abcd\n\tzz\n\tyy", "2l<C-v>jjldu", "abcd\n\tzz\n\tyy", 1, 3, "cd\n      z\n      y", "\0267", std::nullopt},
+    {"literal-cr-visual-enter", "abcd\nefgh\nijkl", "lvjr<CR>", "a\r\r\r\n\r\rgh\nijkl", 1, 2, "", "", std::nullopt},
+    {"literal-cr-visual-line-enter", "abcd\nefgh\nijkl", "Vjr<CR>", "\r\r\r\r\n\r\r\r\r\nijkl", 1, 1, "", "", std::nullopt},
+    {"literal-cr-visual-one-line", "abcd\nefgh\nijkl", "vlr<CR>", "\r\rcd\nefgh\nijkl", 1, 1, "", "", std::nullopt},
+    {"literal-cr-visual-to-line-end", "abcd\nefgh\nijkl", "v$r<CR>", "\r\r\r\r\nefgh\nijkl", 1, 1, "", "", std::nullopt},
+    {"literal-cr-visual-at-line-end", "abcd\nefgh\nijkl", "$vr<CR>", "abc\r\nefgh\nijkl", 1, 4, "", "", std::nullopt},
+    {"literal-cr-visual-line-single", "abcd\nefgh\nijkl", "Vr<CR>", "\r\r\r\r\nefgh\nijkl", 1, 1, "", "", std::nullopt},
+    {"literal-cr-visual-count-motion", "abcd\nefgh\nijkl", "v2lr<CR>", "\r\r\rd\nefgh\nijkl", 1, 1, "", "", std::nullopt},
+    {"literal-cr-visual-all-lines", "abcd\nefgh\nijkl", "ggVGr<CR>", "\r\r\r\r\n\r\r\r\r\n\r\r\r\r", 1, 1, "", "", std::nullopt},
+    {"literal-cr-visual-over-cr", "ab\rcd\nef\rgh\nijkl", "vjr<CR>", "\r\r\r\r\r\n\rf\rgh\nijkl", 1, 1, "", "", std::nullopt},
+    {"literal-cr-visual-line-end-cr", "abc\nde\r\nfgh", "jvjr<CR>", "abc\n\r\r\r\n\rgh", 2, 1, "", "", std::nullopt},
+    {"literal-cr-visual-undo", "abcd\nefgh\nijkl", "lvjr<CR>u", "abcd\nefgh\nijkl", 1, 2, "", "", std::nullopt},
+    {"literal-cr-visual-dot", "abcd\nefgh\nijkl", "lvjr<CR>j0.", "a\r\r\r\n\r\r\r\r\n\r\rkl", 2, 1, "", "", std::nullopt},
+    {"literal-cr-dollar", "ab\rcd\nef\rgh\nijkl", "$", "ab\rcd\nef\rgh\nijkl", 1, 5, "", "", std::nullopt},
+    {"literal-cr-right", "ab\rcd\nef\rgh\nijkl", "ll", "ab\rcd\nef\rgh\nijkl", 1, 3, "", "", std::nullopt},
+    {"literal-cr-remove-char", "ab\rcd\nef\rgh\nijkl", "llx", "abcd\nef\rgh\nijkl", 1, 3, "\r", "v", std::nullopt},
+    {"literal-cr-down", "ab\rcd\nef\rgh\nijkl", "$j", "ab\rcd\nef\rgh\nijkl", 2, 5, "", "", std::nullopt},
+    {"literal-cr-up", "abc\nde\rf\nghi", "j$k", "abc\nde\rf\nghi", 1, 3, "", "", std::nullopt},
+    {"literal-cr-word", "ab\rcd\nef\rgh\nijkl", "w", "ab\rcd\nef\rgh\nijkl", 1, 3, "", "", std::nullopt},
+    {"literal-cr-end-of-word", "ab\rcd\nef\rgh\nijkl", "e", "ab\rcd\nef\rgh\nijkl", 1, 2, "", "", std::nullopt},
+    {"literal-cr-replace-char", "ab\rcd\nef\rgh\nijkl", "llrZ", "abZcd\nef\rgh\nijkl", 1, 3, "", "", std::nullopt},
+    {"literal-cr-delete-word", "ab\rcd\nef\rgh\nijkl", "dw", "\rcd\nef\rgh\nijkl", 1, 1, "ab", "v", std::nullopt},
+    {"literal-cr-text-object-word", "ab\rcd\nef\rgh\nijkl", "lldiw", "abcd\nef\rgh\nijkl", 1, 3, "\r", "v", std::nullopt},
+    {"literal-cr-line-end-dollar", "abc\nde\r\nfgh", "j$", "abc\nde\r\nfgh", 2, 3, "", "", std::nullopt},
+    {"literal-cr-line-end-remove-char", "abc\nde\r\nfgh", "j$x", "abc\nde\nfgh", 2, 2, "\r", "v", std::nullopt},
+    {"literal-cr-line-end-insert", "abc\nde\r\nfgh", "j$aZ<Esc>", "abc\nde\rZ\nfgh", 2, 4, "", "", std::nullopt},
+    {"literal-cr-yank-line", "ab\rcd\nef\rgh\nijkl", "yyjp", "ab\rcd\nef\rgh\nab\rcd\nijkl", 3, 1, "ab\rcd\n", "V", std::nullopt},
+    {"literal-cr-delete-line", "ab\rcd\nef\rgh\nijkl", "ddGp", "ef\rgh\nijkl\nab\rcd", 3, 1, "ab\rcd\n", "V", std::nullopt},
+    {"literal-cr-yank-chars", "ab\rcd\nef\rgh\nijkl", "v2lyGp", "ab\rcd\nef\rgh\niab\rjkl", 3, 4, "ab\r", "v", std::nullopt},
+    {"literal-cr-line-end-yank-line", "abc\nde\r\nfgh", "jyyGp", "abc\nde\r\nfgh\nde\r", 4, 1, "de\r\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

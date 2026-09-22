@@ -26,6 +26,8 @@
 | 回数付き開行の入力記録 | o/Oで最初に開いた1行へのLF入力と残り回数。Escで反復し、移動・記録を越える削除・外部編集で破棄する | `VimInsertRepeat`、所有は `VimState`（core・ADR 0028） |
 | 位置指定のVim挿入 | p/P・o/O・Escの反復が返す挿入位置、LF本文、挿入後caret、履歴境界。同じ改行変換とreplaceを使う | `VimInsertAt`（core）→ `EditorController`（application・ADR 0028） |
 | 範囲指定のVim置換 | rが返す半開区間、LFの置換本文、LF換算の最終caret。既存の改行変換とreplaceで1つのundoにする | `VimReplaceRange`（core）→ `EditorController`（application・ADR 0029） |
+| 改行の形 | CRLF / LF の閉じた 2 つ。読んだときに本文が 1 度だけ判別して持ち回り、編集では変わらない。`\r` が改行の一部かどうかはこの形だけで決まる | `LineEnding` / `detect_line_ending`、所有は `TextBuffer`（core・ADR 0010 / 0036） |
+| literal CR | LF 文書の中の `\r`。改行ではなく 1 文字で、桁を 1 つ数え（仮想桁は 2）、保存でもレジスタでも残る。Vim の `unix` の `^M` と同じ | `TextBuffer::line_end` の分岐（core・ADR 0036） |
 | 直前の変更の記録 | `.` が再生する回数1つと、回数の桁を除いた鍵の列と、VISUALなら範囲の大きさ。組み立て中の`recording` と確定した `last_change` の2つを持ち、本文・履歴・レジスタは持たない | `VimRepeatRecord`、所有は `VimState`（core・ADR 0030 / 0033） |
 | 鍵の列の再生 | `.` が返す、回数の桁を先頭に展開した鍵の列と、VISUALなら選び直す大きさ。controllerが選択を置いてから同じ `accept(VimKeyPress)` へ1つずつ流し、前後で履歴を閉じて1つのundo単位にする | `VimReplay`（core）→ `EditorController`（application・ADR 0030 / 0033） |
 | VISUALの範囲の大きさ | VISUALで行った変更を `.` が繰り返すために覚える大きさ。文字単位は行数と「行末まで/桁」、行単位は行数だけ。桁は仮想桁 | `VimVisualExtent` ＝ `VimCharacterExtent` / `VimLineExtent`（core・ADR 0033 / 0034） |

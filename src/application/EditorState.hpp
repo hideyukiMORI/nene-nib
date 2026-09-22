@@ -31,6 +31,7 @@ class EditorState final
     [[nodiscard]] const core::Selection &selection() const noexcept;
     [[nodiscard]] const core::EditHistory &history() const noexcept;
     [[nodiscard]] const ScrollState &scroll() const noexcept;
+    // 改行の形は本文が持つ。状態は写しを持たない（判別の経路を 1 本にする・ADR 0036 の決定 1）。
     [[nodiscard]] core::LineEnding line_ending() const noexcept;
     [[nodiscard]] core::Appearance appearance() const noexcept;
     [[nodiscard]] core::EditMode mode() const noexcept;
@@ -64,8 +65,7 @@ class EditorState final
     [[nodiscard]] EditorState with_command_message(std::optional<core::DisplayText> message) const;
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
-    [[nodiscard]] EditorState with_opened(core::TextBuffer text, core::LineEnding ending,
-                                          Document document) const;
+    [[nodiscard]] EditorState with_opened(core::TextBuffer text, Document document) const;
 
   private:
     EditorState(core::Appearance appearance, core::EditMode mode);
@@ -74,7 +74,6 @@ class EditorState final
     core::Selection selection_;
     core::EditHistory history_;
     ScrollState scroll_;
-    core::LineEnding line_ending_;
     core::Appearance appearance_;
     core::EditMode mode_;
     core::VimState vim_;

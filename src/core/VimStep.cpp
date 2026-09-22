@@ -2,6 +2,7 @@
 
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "OffsetRange.hpp"
 #include "ScrollBounds.hpp"
@@ -84,6 +85,7 @@ constexpr std::size_t decimal_base = 10;
 constexpr char32_t line_feed = U'\n';
 constexpr char32_t tab_character = U'\t';
 constexpr char carriage_return = '\r';
+constexpr char line_feed_byte = '\n';
 // Ctrl-r は文字としては制御文字なので、表に載せる値は名前で書く（原文に制御文字を置かない）。
 constexpr char32_t control_r_character = 0x12;
 constexpr char32_t control_b_character = 0x02;
@@ -936,16 +938,19 @@ character_search_position(const VimEditorView &view, const VimState &state,
 
 // ---------------------------------------------------------------- オペレータ（決定 2・3）
 
-// レジスタの本文は LF だけ（決定 3）。CRLF の文書から取った本文はここで CR を落とす。
-[[nodiscard]] std::string without_carriage_returns(std::string_view text)
+// レジスタの本文は LF だけ（決定 3）。落とすのは CRLF の文書の改行の '\r' だけで、LF の文書の
+// literal CR は文字なので残る（ADR 0036 の決定 2。行の切り方と同じ規則）。
+[[nodiscard]] std::string without_newline_carriage_returns(std::string_view text, LineEnding ending)
 {
     std::string result;
     result.reserve(text.size());
-    for (const char byte : text)
+    for (std::size_t index = 0; index < text.size(); ++index)
     {
-        if (byte != carriage_return)
+        const bool of_newline = ending == LineEnding::crlf && text.at(index) == carriage_return &&
+                                index + 1 < text.size() && text.at(index + 1) == line_feed_byte;
+        if (!of_newline)
         {
-            result.push_back(byte);
+            result.push_back(text.at(index));
         }
     }
     return result;
@@ -953,8 +958,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
 
 [[nodiscard]] VimRegister register_of(const TextBuffer &text, const VimMotionRange &range)
 {
-    std::string body =
-        without_carriage_returns(text.text_range(range.range.begin, range.range.end));
+    std::string body = without_newline_carriage_returns(
+        text.text_range(range.range.begin, range.range.end), text.line_ending());
     switch (range.kind)
     {
     case VimRegisterKind::uninitialized:
@@ -1657,8 +1662,10 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     return started_prefix(state, VimPrefix::r);
 }
 
-// 文字だけを置換する。CRLF/LFの行境界は残し、効果の本文はLFへ揃える。
-[[nodiscard]] std::string replacement_text(std::string_view source, char32_t target)
+// 文字だけを置換する。行境界は残し、効果の本文はLFへ揃える。'\n' の直前の '\r' を改行の一部と
+// 見るのは本文の改行の形が CRLF のときだけで、LF の本文の '\r' は置換される文字である（ADR 0036）。
+[[nodiscard]] std::string replacement_text(std::string_view source, char32_t target,
+                                           LineEnding ending)
 {
     std::string result;
     result.reserve(source.size());
@@ -1667,8 +1674,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     {
         const char32_t code = code_point_at(source, at);
         at = next_code_point(source, at);
-        if (code == carriage_return_character && at.value < source.size() &&
-            source.at(at.value) == '\n')
+        if (ending == LineEnding::crlf && code == carriage_return_character &&
+            at.value < source.size() && source.at(at.value) == '\n')
         {
             continue;
         }
@@ -1677,12 +1684,22 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     return result;
 }
 
-// r が書けない文字（改行は NORMAL だけ・制御文字と DEL は書けない・ADR 0029）。
+// r が書けない文字（Tab を除く制御文字と DEL・ADR 0029）。改行は NORMAL が行を割り、文字単位と
+// 行単位の VISUAL が選んだ各文字を literal CR に置き換える（ADR 0036 の決定 5）。矩形 VISUAL の
+// <CR> は未測なので、これまでどおり受け取らない（ADR 0035 の範囲のまま）。
 [[nodiscard]] bool unsupported_replacement(VimMode mode, char32_t target) noexcept
 {
     const bool newline = target == line_feed || target == carriage_return_character;
-    return (newline && mode != VimMode::normal) || (!newline && target < U' ' && target != U'\t') ||
-           target == U'\x7f';
+    return (newline && mode == VimMode::visual_block) ||
+           (!newline && target < U' ' && target != U'\t') || target == U'\x7f';
+}
+
+// 置き換えたあとの本文（LF 換算）。VISUAL の <CR> は各文字を literal CR にする（ADR 0036）。
+[[nodiscard]] std::string replacement_body(const VimEditorView &view, OffsetRange selected,
+                                           char32_t target, bool newline)
+{
+    return replacement_text(view.text.text_range(selected.begin, selected.end),
+                            newline ? carriage_return_character : target, view.text.line_ending());
 }
 
 [[nodiscard]] VimStep replaced_character(const VimState &state, const VimEditorView &view,
@@ -1697,6 +1714,9 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         return replaced_block(state, view, target);
     }
     const bool newline = target == line_feed || target == carriage_return_character;
+    // NORMAL の r<CR> は行を割り、文字単位と行単位の VISUAL の r<CR> は選んだ各文字を
+    // literal CR にする（ADR 0029 の決定 5 と ADR 0036 の決定 5・実測）。
+    const bool splits_line = newline && state.mode == VimMode::normal;
     const auto range = replacement_range(state, view);
     if (!range.has_value())
     {
@@ -1704,12 +1724,12 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     }
     const OffsetRange selected = range.value();
     std::string body =
-        newline ? std::string("\n")
-                : replacement_text(view.text.text_range(selected.begin, selected.end), target);
+        splits_line ? std::string("\n") : replacement_body(view, selected, target, newline);
     Offset caret = selected.begin;
     if (state.mode == VimMode::normal)
     {
-        caret.value += newline ? body.size() : previous_code_point(body, Offset{body.size()}).value;
+        caret.value +=
+            splits_line ? body.size() : previous_code_point(body, Offset{body.size()}).value;
     }
     return VimStep{vim_resting_from(state, state.unnamed_register),
                    VimReplaceRange{selected, std::move(body), caret}};

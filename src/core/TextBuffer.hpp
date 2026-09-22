@@ -1,5 +1,6 @@
 #pragma once
 
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "Piece.hpp"
@@ -27,6 +28,9 @@ class TextBuffer final
     [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
     [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;
 
+    // 本文の改行の形（ADR 0036 の決定 1）。読んだときに 1 度だけ判別し、編集では変わらない。
+    [[nodiscard]] LineEnding line_ending() const noexcept;
+
     [[nodiscard]] std::size_t size_bytes() const noexcept;
     [[nodiscard]] std::size_t line_count() const noexcept;
     [[nodiscard]] std::size_t piece_count() const noexcept;
@@ -36,7 +40,8 @@ class TextBuffer final
     // 行の文字列。piece をまたぐので string_view では返せない（ADR 0009）。末尾の改行は含まない。
     [[nodiscard]] std::string line_text(LineNumber line) const;
 
-    // 行の先頭と、行の内容の終わり（'\r\n' の '\r' も含めない）のバイト位置。
+    // 行の先頭と、行の内容の終わりのバイト位置。'\n' の直前の '\r' を改行の一部として外すのは
+    // 改行の形が CRLF のときだけで、LF の本文では '\r' は 1 文字である（ADR 0036 の決定 2）。
     [[nodiscard]] Offset line_start(LineNumber line) const noexcept;
     [[nodiscard]] Offset line_end(LineNumber line) const noexcept;
     // 次の行の先頭（最終行では本文の末尾）。改行そのものを含む半開区間の端。
@@ -48,7 +53,7 @@ class TextBuffer final
   private:
     using Buffer = std::shared_ptr<const std::string>;
 
-    TextBuffer(Buffer original, Buffer add, std::vector<Piece> pieces);
+    TextBuffer(Buffer original, Buffer add, std::vector<Piece> pieces, LineEnding ending);
     [[nodiscard]] std::string_view view_of(const Piece &piece) const noexcept;
     [[nodiscard]] TextBuffer replaced(Offset begin, Offset end, std::string_view text) const;
     void collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const;
@@ -61,5 +66,6 @@ class TextBuffer final
     std::vector<Piece> pieces_;
     std::size_t size_bytes_;
     std::size_t newline_count_;
+    LineEnding ending_;
 };
 } // namespace nenenib::core
