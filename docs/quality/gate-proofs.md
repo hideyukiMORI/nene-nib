@@ -793,3 +793,37 @@ base `e6dfc14`（`test/97-default-run-contracts`）。変更は `tests/unit/NibT
 テストの内容・閾値・fixture・oracle は変更していないので、oracle の再生成・`eng/symbols.py`・性能（QLT-014）・Release build・全件（`check.ps1 -Full`）は実行していない。production の C++ とリンク境界が不変で、842 fixture の入力も不変だからである（QLT-001 / QLT-012・ADR 0021）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 QLT-001 / QLT-008 / QLT-012 / CNF-010 / CPP-011 を自己レビュー。新しい型は足していない（表は既存の selector 表と同じ `std::pair` の `constexpr` 配列）。閉じた分岐・`optional` の読み方・`reinterpret_cast` に関わる変更はない。
+
+### 5-z. Vimの検索 `/ ? n N * #`（Issue #100・ADR 0032・2026-09-22）
+
+統合単位は [PR #103](https://github.com/hideyukiMORI/nene-nib/pull/103)。以下の成功結果を文書追記・レビュー・統合でも再利用する。
+
+base `b4f23e8`（ADR 0032 の 3 commit を含む `feat/100-vim-search`。production の base は origin/main `eb79415`）。ADR 0032 を実測のあとで受理し、食い違った 1 点（`\<あいう\>` はひらがな → 漢字の境界で `あいう漢字` に一致する）は**期待値ではなく ADR の補足を直した**。`CommandInput` に `SearchLine` を足し、入力行の見え方は `InputLineView`（プロンプトの閉じた enum ＋ 文字列 ＋ caret ＋ 候補）1 つに畳んで描画の経路を 1 本にした。照合器 `VimPattern`（`magic` の部分集合・未対応構文は `VimPatternFailure` で拒否）と走査 `vim_search` は core の純関数で、`std::regex` と `<locale>` は使っていない。engine は `VimKey` に `VimSearchPattern`、`VimEffect` に `VimOpenSearch`、`VimState` に `last_search`、`VimStep` に `notice` を足し、exclusive の規則は `exclusive_range` 1 か所を検索と移動が共用する。保存形式・schema・依存・ゲートの閾値は変更していない。
+
+`out/issue100-oracle/probe.py`（120）/ `probe2.py`（41）/ `probe3.py`（27）/ `probe4.py`（30）を**実装の前**に実行し、固定 Vim 9.1 を 218 ケース起動して決定を確かめてある（前セッション。証拠は `out/issue100-oracle/probe*.json` / `probe*.txt`）。Vim ソースは読んでいない。実装は決定 1〜7 のまま通り、実測と食い違ったのは上の 1 点だけである。
+
+`python -X utf8 out/issue100-oracle/add-fixtures.py --write` は候補 136 件を「命令の切れ目で区切った形」と「1 回の `:normal!` の形」の両方で測り、食い違う 1 件（空入力の Backspace の取消）を機械的に拒否した（`out/issue100-oracle/add-fixtures.txt`）。`python -X utf8 eng/vim-oracle.py --regenerate --only search-` は 135 件だけを測り、既存 842 行を `37816a1` から逐語再利用した（`out/issue100-oracle/regenerate.log`）。`git diff` の削除行は metadata 2 行だけ。842 件の入力 SHA-256 は来歴どおり `58ba91c91e65162e9c651acb53711f9b9c5d68e96bc70c1231874c9d1c0ee94a` で、977 件は `2e36c3b63bd65ea79ce3fed9af4c1423d70f8d6376005570bf3119c10b546ac1` になった。同じ選択で 2 回目を再生成して**バイト単位で同一**（`git status` に差分なし・`out/issue100-oracle/regenerate2.log`）。初回の再生で 135 件すべてが実装と一致した（期待値を直した fixture は無い）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `. ./eng/toolchain.ps1` → `cmake -S . -B build -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=C:/Users/info/WORKS/NeNeNib/build/issue100` | 起動中の旧版を保持し、同じ target / flags で出力先だけ分離。成功、`out/issue100-configure.log` |
+| `cmake --build build --target nib_tests --parallel 4`（入力行を畳んだ 1 つめの commit） | `EditorFrame.command_line` の型と renderer のプロンプトを変えた整えの build。成功、`out/issue100-build1.log`。`NeNeNib` も成功（`out/issue100-build1-app.log`） |
+| `build/issue100/nib_tests.exe --command-palette` / `--ex-settings` | 入力行の見え方を畳んだので Ex と設定一覧の退行を確認。130 / 153 checks すべて成功（変更前と同数） |
+| `cmake --build build --target nenenib_core --parallel 4`（照合器と走査） | 新しい 10 型と 2 本の純関数を Debug / tidy / ASan / UBSan で。初回から成功、`out/issue100-build2.log` |
+| `cmake --build build --target nenenib_core --parallel 4`（engine） | `VimKey` / `VimEffect` / `VimState` / `VimStep` の拡張と分岐の表を。初回から成功、`out/issue100-build4.log` |
+| `cmake --build build --target nib_tests NeNeNib --parallel 4`（controller と窓） | 初回は clang-tidy が `state_.command_input().value()` の未検査アクセスと、`VimKey` が 3 択になったことで `for (const VimKey key : …)` の複製を拒否した（`out/issue100-build5.log`）。前者は `has_value` の分岐を挟み、後者は参照で受けて修正した。閾値・除外・重大度は変えていない。修正後の build は成功（`out/issue100-build6.log` / `build7.log`） |
+| `build/issue100/nib_tests.exe --vim-search` | **1375 checks すべて成功**。新規 135 fixture ＋ 共有境界 6 件（r・f/t・gg・`.`）と、照合器の部分集合・語の境界・未対応構文の拒否 18 件・走査の規則・折り返し・UTF-8・CRLF・`*` / `#` の語・鍵の到達位置と向きと回数・オペレータの exclusive と行単位化・VISUAL の端点・報せの 6 文言・入力行と取消・`.` の再生を確認 |
+| `build/issue100/nib_tests.exe`（引数なし） | `vim_step` の分岐の表と `VimKey` の visit を全 Vim 経路が通るので、977 fixture 全部の再生を含む unit 全体を実行した。8823 → **10149 checks** すべて成功 |
+| `build/issue100/nib_tests.exe --vim-dot` / `--vim-text-objects` / `--vim-character-search` | 鍵の分類の表と次キー待ちの写し先を共有するため。909 / 1623 / 621 checks すべて成功（変更前と同数） |
+| `build/issue100/nib_tests.exe --coverage-negative` | 早期 return の経路。22 checks 成功 |
+| `ctest --test-dir build -R '^nib_unit$' --output-on-failure` | CTest から見た既定実行。成功、2.33 s（#97 の 1.56 s から fixture 135 件ぶん増えた） |
+| `python -X utf8 eng/symbols.py --build-dir build --require core application` | 照合器と走査が core の外へロケール・時刻・OS・スレッドのシンボルを出さないこと。**2 libs / 0 violations**、新しい `__std_*` は出ていない（allowlist は変更なし）。`out/issue100-symbols.log` |
+| `python -X utf8 eng/conformance.py --build-dir build` | 新しい 16 型の 1 ファイル 1 型と、977 fixture の生成整合（CNF-010）。0 violations、`out/issue100-conformance.log` |
+| `clang-format --dry-run --Werror`（`eb79415..HEAD` の C++ 42 ファイル） | 変更 C++ の整形。初回は `Direct2DRenderer.cpp` / `VimPattern.hpp` / `VimState.hpp` ほかが拒否され、`clang-format -i` のあと build と対象テストを再実行して成功 |
+| `cmake -S . -B build -U CMAKE_RUNTIME_OUTPUT_DIRECTORY` | 一時出力先だけ既定へ復元。成功、`out/issue100-configure-restore.log`。旧版の再リンクはしない |
+
+computer-use による実機の画面確認は**未実施**（native pipe が繋がらないため試みていない）。起動中の旧版 PID には触れていない。成果物は `build/issue100/NeNeNib.exe`、SHA-256 `93c3029038b12855f00e24bc78e8fdc1e013f6de8f22ac7102af896e5d70d561`。`build/NeNeNib.exe` は旧版なので取り違えない。
+
+FR-003 / ARC-001/003/004/007/009 / CPP-002/004/005/006/011/012 / QLT-001/008/012/013 / CNF-010 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimKey` / `CommandInput` / `VimEffect` の visit、`VimActionGroup` / `VimPatternAtomKind` / `VimPatternFailure` / `VimSearchNoticeKind` / `InputLinePrompt` の switch）に `default` は無い。照合の失敗は `std::expected` と閉じた enum で返し、例外は使っていない。`reinterpret_cast`・時刻・OS・スレッドは増やしていない。48 を超えた `VimAction` の分岐が関数長 60 行に収まらなくなったので、CPP-012 のとおり「動作 → 大分類」を `constexpr` の表にし、NORMAL と VISUAL は `VimActionGroup` を網羅する switch で写した（閾値は触っていない）。表の欠落と重複は `static_assert` 2 つが落とす（動作の個数を末尾の値から導いて表の大きさに固定し、どの値も表にちょうど 1 行あることを `constexpr` の関数で確かめる。反例として動作を 1 つ足して行を足さない形が実際にコンパイルで落ちることを確認した・`out/issue100-build-negative.log`）。
+
+性能は測っていない（差分は入力と編集の経路で、描画とファイルは触っていない）。**残るリスクは、照合が 1 行ずつ本文を引くので、見つからない検索が本文の行数と長さに比例することだけである**。1 打鍵 0.9 ms の予算への影響は次に速さを測る機会に ADR 0016 の基準値と突き合わせる（ADR 0021）。関連しない設定・テーマ・利用者テーマ・性能・Release build・`check.ps1 -Full` は実行していない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。

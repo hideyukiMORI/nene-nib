@@ -8,6 +8,8 @@
 #include "ScrollBounds.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
+#include "VimActionBinding.hpp"
+#include "VimActionGroup.hpp"
 #include "VimBinding.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacterSearch.hpp"
@@ -18,6 +20,8 @@
 #include "VimInputWait.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimMotionRange.hpp"
+#include "VimPattern.hpp"
+#include "VimPatternFailure.hpp"
 #include "VimPrefix.hpp"
 #include "VimPutSide.hpp"
 #include "VimRegister.hpp"
@@ -27,6 +31,13 @@
 #include "VimReplay.hpp"
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
+#include "VimSearch.hpp"
+#include "VimSearchDirection.hpp"
+#include "VimSearchHit.hpp"
+#include "VimSearchNotice.hpp"
+#include "VimSearchNoticeKind.hpp"
+#include "VimSearchPattern.hpp"
+#include "VimSearchRequest.hpp"
 #include "VimSelect.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectBinding.hpp"
@@ -69,7 +80,7 @@ constexpr char32_t carriage_return_character = 0x0D;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 43> normal_bindings{
+constexpr std::array<VimBinding, 49> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {U'k', VimAction::move_up},
@@ -112,7 +123,71 @@ constexpr std::array<VimBinding, 43> normal_bindings{
      {U'g', VimAction::prefix_g},
      {U'r', VimAction::replace_character},
      {U'.', VimAction::repeat_change},
-     {U':', VimAction::open_command_line}}};
+     {U':', VimAction::open_command_line},
+     {U'/', VimAction::open_search_forward},
+     {U'?', VimAction::open_search_backward},
+     {U'n', VimAction::repeat_search},
+     {U'N', VimAction::repeat_search_opposite},
+     {U'*', VimAction::search_word_forward},
+     {U'#', VimAction::search_word_backward}}};
+
+// 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
+// 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
+constexpr std::array<VimActionBinding, vim_action_count> action_groups{
+    {{VimAction::move_left, VimActionGroup::motion},
+     {VimAction::move_down, VimActionGroup::motion},
+     {VimAction::move_up, VimActionGroup::motion},
+     {VimAction::move_right, VimActionGroup::motion},
+     {VimAction::move_line_start, VimActionGroup::motion},
+     {VimAction::move_line_end, VimActionGroup::motion},
+     {VimAction::move_next_word, VimActionGroup::motion},
+     {VimAction::move_previous_word, VimActionGroup::motion},
+     {VimAction::move_word_end, VimActionGroup::motion},
+     {VimAction::move_first_non_blank, VimActionGroup::motion},
+     {VimAction::move_screen_top, VimActionGroup::motion},
+     {VimAction::move_screen_middle, VimActionGroup::motion},
+     {VimAction::move_screen_bottom, VimActionGroup::motion},
+     {VimAction::move_document_first, VimActionGroup::motion},
+     {VimAction::move_document_last, VimActionGroup::motion},
+     {VimAction::scroll_half_down, VimActionGroup::scroll},
+     {VimAction::scroll_half_up, VimActionGroup::scroll},
+     {VimAction::scroll_page_down, VimActionGroup::scroll},
+     {VimAction::scroll_page_up, VimActionGroup::scroll},
+     {VimAction::visual, VimActionGroup::enter_visual},
+     {VimAction::visual_line, VimActionGroup::enter_visual},
+     {VimAction::open_line_below, VimActionGroup::enter_visual},
+     {VimAction::open_line_above, VimActionGroup::enter_visual},
+     {VimAction::remove_character, VimActionGroup::edit_range},
+     {VimAction::remove_operator, VimActionGroup::edit_range},
+     {VimAction::change_operator, VimActionGroup::edit_range},
+     {VimAction::yank_operator, VimActionGroup::edit_range},
+     {VimAction::put_after, VimActionGroup::edit_line},
+     {VimAction::put_before, VimActionGroup::edit_line},
+     {VimAction::remove_to_line_end, VimActionGroup::edit_line},
+     {VimAction::change_to_line_end, VimActionGroup::edit_line},
+     {VimAction::yank_line, VimActionGroup::edit_line},
+     {VimAction::insert_before, VimActionGroup::insert_object},
+     {VimAction::insert_after, VimActionGroup::insert_object},
+     {VimAction::insert_at_line_start, VimActionGroup::insert_line},
+     {VimAction::insert_at_line_end, VimActionGroup::insert_line},
+     {VimAction::undo, VimActionGroup::history},
+     {VimAction::redo, VimActionGroup::history},
+     {VimAction::repeat_change, VimActionGroup::history},
+     {VimAction::find_character_forward, VimActionGroup::input_wait},
+     {VimAction::find_character_backward, VimActionGroup::input_wait},
+     {VimAction::till_character_forward, VimActionGroup::input_wait},
+     {VimAction::till_character_backward, VimActionGroup::input_wait},
+     {VimAction::repeat_character_search, VimActionGroup::input_wait},
+     {VimAction::repeat_character_search_opposite, VimActionGroup::input_wait},
+     {VimAction::prefix_g, VimActionGroup::input_wait},
+     {VimAction::replace_character, VimActionGroup::input_wait},
+     {VimAction::open_command_line, VimActionGroup::ex_line},
+     {VimAction::open_search_forward, VimActionGroup::search},
+     {VimAction::open_search_backward, VimActionGroup::search},
+     {VimAction::repeat_search, VimActionGroup::search},
+     {VimAction::repeat_search_opposite, VimActionGroup::search},
+     {VimAction::search_word_forward, VimActionGroup::search},
+     {VimAction::search_word_backward, VimActionGroup::search}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 15> motion_bindings{
@@ -164,6 +239,49 @@ constexpr std::array<VimMotion, 6> exclusive_motions{
         if (binding.key == key)
         {
             return binding.action;
+        }
+    }
+    return std::nullopt;
+}
+
+// 表の中でその動作を指す行の数。ちょうど 1 でなければ表が動作の一覧とずれている。
+[[nodiscard]] constexpr std::size_t rows_for(VimAction action) noexcept
+{
+    std::size_t rows = 0;
+    for (const VimActionBinding binding : action_groups)
+    {
+        if (binding.action == action)
+        {
+            ++rows;
+        }
+    }
+    return rows;
+}
+
+[[nodiscard]] constexpr bool every_action_has_one_row() noexcept
+{
+    for (std::size_t value = 0; value < vim_action_count; ++value)
+    {
+        if (rows_for(static_cast<VimAction>(value)) != 1)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static_assert(action_groups.size() == vim_action_count,
+              "動作 → 大分類の表は動作と同じ数の行を持つ（CPP-012）");
+static_assert(every_action_has_one_row(),
+              "どの動作も表にちょうど 1 行。欠落と重複はここでコンパイルが落ちる（CPP-002）");
+
+[[nodiscard]] std::optional<VimActionGroup> group_for(VimAction action) noexcept
+{
+    for (const VimActionBinding binding : action_groups)
+    {
+        if (binding.action == action)
+        {
+            return binding.group;
         }
     }
     return std::nullopt;
@@ -759,14 +877,14 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return true;
 }
 
-// :help exclusive の 2 つの言い換え。行頭で終わる exclusive な移動は 1 つ前の行の末尾までになり、
+// :help exclusive の 2 つの言い換え。行頭で終わる範囲は 1 つ前の行の末尾までになり、
 // 始まりが字下げの中なら行単位になる。dw が空行を丸ごと消すのも、db が上の行を消すのもこれ。
-[[nodiscard]] VimMotionRange adjusted_for_exclusive(const TextBuffer &text,
-                                                    const VimMotionRange &range, VimMotion motion)
+// 規則はこの 1 か所だけが持ち、exclusive な移動と検索の両方がここを通る（ARC-001）。
+[[nodiscard]] VimMotionRange exclusive_range(const TextBuffer &text, const VimMotionRange &range)
 {
     const LineNumber first = line_of(text, range.range.begin);
     const LineNumber last = line_of(text, range.range.end);
-    if (!exclusive(motion) || first.value >= last.value || range.range.end != text.line_start(last))
+    if (first.value >= last.value || range.range.end != text.line_start(last))
     {
         return range;
     }
@@ -776,6 +894,12 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return lines_between(text, first, previous);
     }
     return characters_between(range.range.begin, text.line_end(previous));
+}
+
+[[nodiscard]] VimMotionRange adjusted_for_exclusive(const TextBuffer &text,
+                                                    const VimMotionRange &range, VimMotion motion)
+{
+    return exclusive(motion) ? exclusive_range(text, range) : range;
 }
 
 // op_delete の「奇妙な Vi の振る舞い」。複数行にまたがる文字単位の削除で、終わりの後ろが空白だけ
@@ -1313,6 +1437,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
     {
         return replaced_character(state, view, std::get<VimCharacter>(key).code);
     }
+    if (!std::holds_alternative<VimSpecialKey>(key))
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
     switch (std::get<VimSpecialKey>(key))
     {
     case VimSpecialKey::enter:
@@ -1836,65 +1964,236 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return required_character_search_action(state, view, action);
 }
 
+// ---------------------------------------------------------------- 検索（ADR 0032）
+
+// 検索を食べ終わったあとの状態。VISUAL は VISUAL のまま残る（見つからなくても・実測）。
+[[nodiscard]] VimState search_rested(const VimState &state)
+{
+    VimState next = vim_resting_from(state, state.unnamed_register);
+    switch (state.mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        return next;
+    case VimMode::visual:
+    case VimMode::visual_line:
+        next.mode = state.mode;
+        return next;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimSearchNotice notice_of(VimSearchNoticeKind kind)
+{
+    return VimSearchNotice{kind, std::string{}, std::nullopt};
+}
+
+// 報せを残して命令を取り消す（見つからない・直前が無い・語が無い・未対応の構文）。
+[[nodiscard]] VimStep search_noticed(const VimState &state, VimSearchNotice notice)
+{
+    return VimStep{search_rested(state), VimNoEffect{}, std::move(notice)};
+}
+
+// 折り返したときだけ出る報せ（wrapscan は既定で有効）。
+[[nodiscard]] std::optional<VimSearchNotice> wrap_notice(const VimSearchHit &hit,
+                                                         VimSearchDirection direction)
+{
+    if (!hit.wrapped)
+    {
+        return std::nullopt;
+    }
+    return notice_of(direction == VimSearchDirection::forward
+                         ? VimSearchNoticeKind::wrapped_to_top
+                         : VimSearchNoticeKind::wrapped_to_bottom);
+}
+
+// 回数ぶん続けて探す。1 回でも見つからなければ命令ごと取り消しになる（実測）。
+[[nodiscard]] std::optional<VimSearchHit> search_hit(const VimEditorView &view,
+                                                     const VimPattern &pattern,
+                                                     const VimSearchRequest &request,
+                                                     std::size_t count)
+{
+    Offset at = request.origin;
+    bool wrapped = false;
+    for (std::size_t step = 0; step < count; ++step)
+    {
+        const auto hit = vim_search(view.text, at, pattern, request.direction);
+        if (!hit.has_value())
+        {
+            return std::nullopt;
+        }
+        at = hit.value().caret;
+        wrapped = wrapped || hit.value().wrapped;
+    }
+    return VimSearchHit{at, wrapped};
+}
+
+// 移動としての検索。NORMAL はキャレット、VISUAL は端点を動かす（決定 3）。
+[[nodiscard]] VimStep search_moved(const VimState &state, const VimEditorView &view,
+                                   Offset destination)
+{
+    VimState next = search_rested(state);
+    next.wanted_column =
+        VimWantedColumn{VimColumnWish::at_column, view.text.position_of(destination).column};
+    switch (state.mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        return VimStep{std::move(next), VimMoveTo{destination}};
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, destination}}};
+    }
+    std::unreachable();
+}
+
+// オペレータの後ろの検索は exclusive で、既存の 1 本の規則を通る（決定 3）。
+// 範囲が空（回数が自分自身へ折り返した）ときは本文もレジスタも変えない（実測）。
+[[nodiscard]] VimStep search_operated(const VimState &state, const VimEditorView &view,
+                                      const VimSearchRequest &request, Offset destination)
+{
+    if (destination == request.anchor)
+    {
+        return VimStep{search_rested(state), VimNoEffect{}};
+    }
+    return performed(state, view.text, request.anchor,
+                     exclusive_range(view.text, characters_between(request.anchor, destination)));
+}
+
+// パターンは last_search が正本。解析して回数ぶん探し、着いた先へ 1 本で流す（決定 3・4）。
+[[nodiscard]] VimStep search_from(const VimState &state, const VimEditorView &view,
+                                  const VimSearchRequest &request)
+{
+    if (!state.last_search.has_value())
+    {
+        return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
+    }
+    const VimSearchPattern remembered = state.last_search.value();
+    const auto parsed = VimPattern::parse(remembered.pattern, remembered.direction);
+    if (!parsed)
+    {
+        return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::unsupported_pattern,
+                                                     std::string{}, parsed.error()});
+    }
+    const auto hit = search_hit(view, parsed.value(), request, resolved_count(state));
+    if (!hit.has_value())
+    {
+        return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::pattern_not_found,
+                                                     remembered.pattern, std::nullopt});
+    }
+    VimStep step = state.pending.has_value()
+                       ? search_operated(state, view, request, hit.value().caret)
+                       : search_moved(state, view, hit.value().caret);
+    step.notice = wrap_notice(hit.value(), request.direction);
+    return step;
+}
+
+// 入力行の Enter（決定 3）。空のパターンは直前を使い直し、無ければ E35。
+// 見つからない検索も last_search を更新する（次の `n` が同じ失敗を繰り返す・実測）。
+[[nodiscard]] VimStep searched_key(const VimState &state, const VimEditorView &view,
+                                   const VimSearchPattern &key)
+{
+    const std::string previous =
+        state.last_search.has_value() ? state.last_search.value().pattern : std::string{};
+    const std::string pattern = key.pattern.empty() ? previous : key.pattern;
+    if (pattern.empty())
+    {
+        return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
+    }
+    VimState remembered = state;
+    remembered.last_search = VimSearchPattern{pattern, key.direction};
+    const Offset caret = view.selection.caret;
+    return search_from(remembered, view, VimSearchRequest{caret, caret, key.direction});
+}
+
+// `n` / `N`（決定 3）。覚えた向きのまま、または反対の向きで探す。last_search は変えない。
+[[nodiscard]] VimStep repeated_search(const VimState &state, const VimEditorView &view,
+                                      VimAction action)
+{
+    if (!state.last_search.has_value())
+    {
+        return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
+    }
+    const VimSearchDirection remembered = state.last_search.value().direction;
+    const VimSearchDirection direction =
+        action == VimAction::repeat_search ? remembered : opposite(remembered);
+    const Offset caret = view.selection.caret;
+    return search_from(state, view, VimSearchRequest{caret, caret, direction});
+}
+
+// `*` / `#`（決定 3）。語を \<…\> のパターンにして同じ経路へ。語が無ければ E348。
+[[nodiscard]] VimStep word_search(const VimState &state, const VimEditorView &view,
+                                  VimAction action)
+{
+    const auto word = vim_word_at(view.text, view.selection.caret);
+    if (!word.has_value())
+    {
+        return search_noticed(state, notice_of(VimSearchNoticeKind::no_word_under_cursor));
+    }
+    const VimSearchDirection direction = action == VimAction::search_word_forward
+                                             ? VimSearchDirection::forward
+                                             : VimSearchDirection::backward;
+    VimState remembered = state;
+    remembered.last_search = VimSearchPattern{
+        "\\<" + view.text.text_range(word.value().begin, word.value().end) + "\\>", direction};
+    // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
+    return search_from(remembered, view,
+                       VimSearchRequest{word.value().begin, view.selection.caret, direction});
+}
+
+// 検索の入力行を開く（決定 2）。VimState は変えないので保留・回数・記録はそのまま残る。
+[[nodiscard]] VimStep opened_search(const VimState &state, VimSearchDirection direction)
+{
+    return VimStep{state, VimOpenSearch{direction}};
+}
+
+[[nodiscard]] VimStep search_action(const VimState &state, const VimEditorView &view,
+                                    VimAction action)
+{
+    if (action == VimAction::open_search_forward)
+    {
+        return opened_search(state, VimSearchDirection::forward);
+    }
+    if (action == VimAction::open_search_backward)
+    {
+        return opened_search(state, VimSearchDirection::backward);
+    }
+    if (action == VimAction::repeat_search || action == VimAction::repeat_search_opposite)
+    {
+        return repeated_search(state, view, action);
+    }
+    return word_search(state, view, action);
+}
+
+// 鍵から引いた動作を、分類ごとの写し先へ（CPP-012 / ADR 0006）。分類が増えたらここで落ちる。
 [[nodiscard]] VimStep commanded(const VimState &state, const VimEditorView &view, VimAction action)
 {
-    switch (action)
+    const auto group = group_for(action);
+    if (!group.has_value())
     {
-    case VimAction::move_left:
-    case VimAction::move_down:
-    case VimAction::move_up:
-    case VimAction::move_right:
-    case VimAction::move_line_start:
-    case VimAction::move_line_end:
-    case VimAction::move_next_word:
-    case VimAction::move_previous_word:
-    case VimAction::move_word_end:
-    case VimAction::move_first_non_blank:
-    case VimAction::move_screen_top:
-    case VimAction::move_screen_middle:
-    case VimAction::move_screen_bottom:
-    case VimAction::move_document_first:
-    case VimAction::move_document_last:
+        return cancelled(state);
+    }
+    switch (group.value())
+    {
+    case VimActionGroup::motion:
         return moved_step(state, view, action);
-    case VimAction::scroll_half_down:
-    case VimAction::scroll_half_up:
-    case VimAction::scroll_page_down:
-    case VimAction::scroll_page_up:
+    case VimActionGroup::scroll:
         return scroll_action(state, view, action);
-    case VimAction::visual:
-    case VimAction::visual_line:
-    case VimAction::open_line_below:
-    case VimAction::open_line_above:
+    case VimActionGroup::enter_visual:
         return normal_visual_action(state, view, action);
-    case VimAction::find_character_forward:
-    case VimAction::find_character_backward:
-    case VimAction::till_character_forward:
-    case VimAction::till_character_backward:
-    case VimAction::repeat_character_search:
-    case VimAction::repeat_character_search_opposite:
-    case VimAction::open_command_line:
-    case VimAction::prefix_g:
-    case VimAction::replace_character:
-        return input_action(state, view, action);
-    case VimAction::remove_character:
-    case VimAction::remove_operator:
-    case VimAction::change_operator:
-    case VimAction::yank_operator:
-    case VimAction::put_after:
-    case VimAction::put_before:
-    case VimAction::remove_to_line_end:
-    case VimAction::change_to_line_end:
-    case VimAction::yank_line:
+    case VimActionGroup::edit_range:
+    case VimActionGroup::edit_line:
         return normal_edit_action(state, view, action);
-    case VimAction::insert_before:
-    case VimAction::insert_after:
-    case VimAction::insert_at_line_start:
-    case VimAction::insert_at_line_end:
+    case VimActionGroup::insert_object:
+    case VimActionGroup::insert_line:
         return insert_action(state, view, action);
-    case VimAction::undo:
-    case VimAction::redo:
-    case VimAction::repeat_change:
+    case VimActionGroup::history:
         return history_action(state, action);
+    case VimActionGroup::input_wait:
+    case VimActionGroup::ex_line:
+        return input_action(state, view, action);
+    case VimActionGroup::search:
+        return search_action(state, view, action);
     }
     std::unreachable();
 }
@@ -1935,6 +2234,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (search_step.has_value())
     {
         return search_step.value();
+    }
+    // 検索の 6 つの鍵は保留中のオペレータの範囲を作る（ADR 0032 の決定 3）。
+    if (group_for(action) == VimActionGroup::search)
+    {
+        return search_action(state, view, action);
     }
     const auto motion = motion_for(action);
     if (!motion.has_value())
@@ -2124,64 +2428,33 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
+// VISUAL の写し先（決定 7・決定 8）。行に効く命令・挿入・履歴・Ex は VISUAL では効かない。
 [[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &view,
                                    VimAction action)
 {
-    switch (action)
+    const auto group = group_for(action);
+    if (!group.has_value())
     {
-    case VimAction::move_left:
-    case VimAction::move_down:
-    case VimAction::move_up:
-    case VimAction::move_right:
-    case VimAction::move_line_start:
-    case VimAction::move_line_end:
-    case VimAction::move_next_word:
-    case VimAction::move_previous_word:
-    case VimAction::move_word_end:
-    case VimAction::move_first_non_blank:
-    case VimAction::move_screen_top:
-    case VimAction::move_screen_middle:
-    case VimAction::move_screen_bottom:
-    case VimAction::move_document_first:
-    case VimAction::move_document_last:
+        return visual_unchanged(state);
+    }
+    switch (group.value())
+    {
+    case VimActionGroup::motion:
         return visual_moved(state, view, action);
-    case VimAction::scroll_half_down:
-    case VimAction::scroll_half_up:
-    case VimAction::scroll_page_down:
-    case VimAction::scroll_page_up:
+    case VimActionGroup::scroll:
         return scroll_action(state, view, action);
-    case VimAction::remove_character:
-    case VimAction::remove_operator:
-    case VimAction::change_operator:
-    case VimAction::yank_operator:
-    case VimAction::open_line_below:
-    case VimAction::open_line_above:
-    case VimAction::visual:
-    case VimAction::visual_line:
+    case VimActionGroup::enter_visual:
+    case VimActionGroup::edit_range:
         return visual_selection_action(state, view, action);
-    case VimAction::find_character_forward:
-    case VimAction::find_character_backward:
-    case VimAction::till_character_forward:
-    case VimAction::till_character_backward:
-    case VimAction::repeat_character_search:
-    case VimAction::repeat_character_search_opposite:
-    case VimAction::prefix_g:
-    case VimAction::replace_character:
-    case VimAction::insert_before:
-    case VimAction::insert_after:
+    case VimActionGroup::insert_object:
+    case VimActionGroup::input_wait:
         return input_action(state, view, action);
-    // VISUAL の x は d と同じで、範囲の外の鍵は何もしない（決定 7・決定 8・ADR 0030 の決定 6）。
-    case VimAction::open_command_line:
-    case VimAction::put_after:
-    case VimAction::put_before:
-    case VimAction::remove_to_line_end:
-    case VimAction::change_to_line_end:
-    case VimAction::yank_line:
-    case VimAction::insert_at_line_start:
-    case VimAction::insert_at_line_end:
-    case VimAction::undo:
-    case VimAction::redo:
-    case VimAction::repeat_change:
+    case VimActionGroup::search:
+        return search_action(state, view, action);
+    case VimActionGroup::edit_line:
+    case VimActionGroup::insert_line:
+    case VimActionGroup::history:
+    case VimActionGroup::ex_line:
         return visual_unchanged(state);
     }
     std::unreachable();
@@ -2415,6 +2688,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return awaited_character(state, view, kind, std::get<VimCharacter>(key).code);
     }
+    if (!std::holds_alternative<VimSpecialKey>(key))
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
     const VimSpecialKey special = std::get<VimSpecialKey>(key);
     const auto target = character_search_target(special);
     if (!target.has_value())
@@ -2527,31 +2804,52 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                       state.input_wait.value());
 }
 
-[[nodiscard]] VimStep normal_step(const VimState &state, const VimEditorView &view, VimKey key)
+// 鍵の種類とモードの組（ADR 0012 の決定 4 / ADR 0032 の決定 3）。鍵の種類が増えたら
+// std::visit の写し先が足りずコンパイルが落ちる（CPP-002）。
+[[nodiscard]] VimStep pressed(const VimState &state, const VimEditorView &view, VimCharacter key)
 {
-    if (std::holds_alternative<VimCharacter>(key))
+    switch (state.mode)
     {
-        return normal_character(state, view, std::get<VimCharacter>(key));
+    case VimMode::normal:
+        return normal_character(state, view, key);
+    case VimMode::insert:
+        return insert_character(state, key);
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return visual_character(state, view, key);
     }
-    return normal_special(state, view, std::get<VimSpecialKey>(key));
+    std::unreachable();
 }
 
-[[nodiscard]] VimStep insert_step(const VimState &state, const VimEditorView &view, VimKey key)
+[[nodiscard]] VimStep pressed(const VimState &state, const VimEditorView &view, VimSpecialKey key)
 {
-    if (std::holds_alternative<VimCharacter>(key))
+    switch (state.mode)
     {
-        return insert_character(state, std::get<VimCharacter>(key));
+    case VimMode::normal:
+        return normal_special(state, view, key);
+    case VimMode::insert:
+        return insert_special(state, view, key);
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return visual_special(state, view, key);
     }
-    return insert_special(state, view, std::get<VimSpecialKey>(key));
+    std::unreachable();
 }
 
-[[nodiscard]] VimStep visual_step(const VimState &state, const VimEditorView &view, VimKey key)
+// 確定した検索は入力行からだけ来る。INSERT には届かない（斜線は文字・決定 2）。
+[[nodiscard]] VimStep pressed(const VimState &state, const VimEditorView &view,
+                              const VimSearchPattern &key)
 {
-    if (std::holds_alternative<VimCharacter>(key))
+    switch (state.mode)
     {
-        return visual_character(state, view, std::get<VimCharacter>(key));
+    case VimMode::insert:
+        return VimStep{state, VimNoEffect{}};
+    case VimMode::normal:
+    case VimMode::visual:
+    case VimMode::visual_line:
+        return searched_key(state, view, key);
     }
-    return visual_special(state, view, std::get<VimSpecialKey>(key));
+    std::unreachable();
 }
 
 [[nodiscard]] VimStep stepped(const VimState &state, const VimEditorView &view, VimKey key)
@@ -2560,17 +2858,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return awaiting_step(state, view, key);
     }
-    switch (state.mode)
-    {
-    case VimMode::normal:
-        return normal_step(state, view, key);
-    case VimMode::insert:
-        return insert_step(state, view, key);
-    case VimMode::visual:
-    case VimMode::visual_line:
-        return visual_step(state, view, key);
-    }
-    std::unreachable();
+    return std::visit([&](const auto &value) { return pressed(state, view, value); }, key);
 }
 
 // ---------------------------------------------------------------- 記録（ADR 0030 の決定 2〜5）
@@ -2601,6 +2889,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return false;
 }
 [[nodiscard]] bool changes_text(const VimOpenCommandLine &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool changes_text(const VimOpenSearch &) noexcept
 {
     return false;
 }
@@ -2642,7 +2934,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 // 同じ境界で、Vim も移動のあとの入力を新しい挿入として扱う（Home / End / 矢印で実測）。
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept
 {
-    if (std::holds_alternative<VimCharacter>(key))
+    if (!std::holds_alternative<VimSpecialKey>(key))
     {
         return false;
     }
@@ -2684,9 +2976,16 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // NORMAL の鍵を記録へ（決定 2）。回数の桁は記録せず、回数はそのときの積を 1 つだけ残す。
-[[nodiscard]] VimRepeatRecord normal_recording(const VimState &before, VimKey key)
+// 検索の入力行を開く鍵も記録しない。記録に残るのは確定した VimSearchPattern の 1 鍵だけで、
+// 再生はその鍵を同じ経路へ流すだけになる（ADR 0032 の決定 3）。
+[[nodiscard]] VimRepeatRecord normal_recording(const VimState &before, const VimEffect &effect,
+                                               VimKey key)
 {
     VimRepeatRecord record = before.recording.value_or(VimRepeatRecord{});
+    if (std::holds_alternative<VimOpenSearch>(effect))
+    {
+        return record;
+    }
     if (std::holds_alternative<VimCharacter>(key) &&
         counts_as_digit(before, std::get<VimCharacter>(key).code))
     {
@@ -2722,7 +3021,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 [[nodiscard]] VimState normal_recorded(const VimState &before, VimState next,
                                        const VimEffect &effect, VimKey key)
 {
-    VimRepeatRecord record = normal_recording(before, key);
+    VimRepeatRecord record = normal_recording(before, effect, key);
     if (next.mode != VimMode::normal)
     {
         // VISUAL への遷移は記録を捨てる（決定 5）。INSERT へ入る命令は Esc まで続ける。
@@ -2773,6 +3072,14 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 } // namespace
+
+VimState vim_cancelled_input(const VimState &state)
+{
+    VimState next = search_rested(state);
+    next.recording = std::nullopt;
+    next.last_change = state.last_change;
+    return next;
+}
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {

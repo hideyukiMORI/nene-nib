@@ -20,6 +20,8 @@
 #include "VimMode.hpp"
 #include "VimNavigate.hpp"
 #include "VimReplay.hpp"
+#include "VimSearchNotice.hpp"
+#include "VimSearchPattern.hpp"
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 
@@ -278,14 +280,14 @@ bool EditorController::command_palette_active() const noexcept
     return input.has_value() && std::holds_alternative<core::CommandPalette>(input.value());
 }
 
-std::optional<core::CommandLine> EditorController::command_line_view() const
+std::optional<core::InputLineView> EditorController::command_line_view() const
 {
     const auto &input = state_.command_input();
     if (!input.has_value())
     {
         return std::nullopt;
     }
-    return command_line_of(input.value());
+    return input_line_of(input.value());
 }
 
 std::optional<CommandPaletteView> EditorController::command_palette_view() const
@@ -598,6 +600,11 @@ void EditorController::accept(const VimKeyPress &intent)
     }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
+    if (step.notice.has_value())
+    {
+        state_ = state_.with_command_message(core::vim_search_message(step.notice.value()));
+    }
     if (before == core::VimMode::insert && before != step.next.mode)
     {
         state_ = state_.with_history(state_.history().sealed());
@@ -656,6 +663,11 @@ void EditorController::perform(const core::VimOpenCommandLine &)
     state_ = state_.with_command_input(core::CommandLine::empty(state_.themes()));
 }
 
+void EditorController::perform(const core::VimOpenSearch &effect)
+{
+    state_ = state_.with_command_input(core::SearchLine::opened(effect.direction));
+}
+
 void EditorController::accept(const CommandText &intent)
 {
     const auto &input = state_.command_input();
@@ -679,8 +691,10 @@ void EditorController::accept(const EditCommand &intent)
     {
         return;
     }
-    const auto &command = command_line_of(input.value());
-    if (std::holds_alternative<core::CommandLine>(input.value()) && command.text().empty() &&
+    // 空の入力行の Backspace は取消（Ex と検索で同じ・ADR 0032 の決定 1）。
+    // 設定一覧は候補を出したまま残る。
+    const bool palette = std::holds_alternative<core::CommandPalette>(input.value());
+    if (!palette && input_line_of(input.value()).text.empty() &&
         intent.edit == core::CommandEdit::backspace)
     {
         accept(CancelCommand{});
@@ -691,7 +705,16 @@ void EditorController::accept(const EditCommand &intent)
 
 void EditorController::accept(const CancelCommand &)
 {
+    const auto &input = state_.command_input();
+    const bool searching =
+        input.has_value() && std::holds_alternative<core::SearchLine>(input.value());
     state_ = state_.with_command_input(std::nullopt);
+    if (searching)
+    {
+        // 検索の取消は保留中のオペレータと回数も捨てる（`d/<Esc>` のあとの `x` が消すのと
+        // 同じ・実測）。何を捨てるかは engine の純関数が決める（ADR 0032 の決定 1）。
+        state_ = state_.with_vim(core::vim_cancelled_input(state_.vim()));
+    }
 }
 
 void EditorController::accept(const OpenCommandPalette &)
@@ -765,20 +788,34 @@ void EditorController::accept(const PasteCommand &)
     accept(CommandText{text.value()});
 }
 
+void EditorController::submit(const core::CommandLine &line)
+{
+    evaluate_command(std::string(line.text()));
+}
+
+void EditorController::submit(const core::CommandPalette &palette)
+{
+    submit_palette(palette);
+}
+
+// 検索の確定は engine の 1 つの鍵（ADR 0032 の決定 3）。先に入力行を閉じてから送る。
+void EditorController::submit(const core::SearchLine &line)
+{
+    const core::VimSearchPattern pattern{std::string(line.text()), line.direction()};
+    state_ = state_.with_command_input(std::nullopt);
+    accept(VimKeyPress{core::VimKey{pattern}});
+}
+
 void EditorController::accept(const SubmitCommand &)
 {
-    const auto &input = state_.command_input();
-    if (!input.has_value())
+    const auto &open = state_.command_input();
+    if (!open.has_value())
     {
         return;
     }
-    if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
-    {
-        submit_palette(*palette);
-        return;
-    }
-    const auto text = std::string(command_line_of(input.value()).text());
-    evaluate_command(text);
+    // 入力行は state_ が持つので、写し先が状態を書き換える前に値ごと複製する。
+    const CommandInput input = open.value();
+    std::visit([this](const auto &value) { this->submit(value); }, input);
 }
 
 void EditorController::evaluate_command(std::string_view text)

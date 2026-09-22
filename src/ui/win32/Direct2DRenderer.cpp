@@ -1,6 +1,7 @@
 #include "Direct2DRenderer.hpp"
 
 #include "DevicePixels.hpp"
+#include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "RgbaColor.hpp"
 #include "Utf16.hpp"
@@ -139,6 +140,23 @@ constexpr float full_channel = 255.0F;
         return 0.0F;
     }
     return x;
+}
+
+// 入力行のプロンプトの文字（ADR 0032 の決定 1）。選択肢が増えたらここで落ちる（CPP-002）。
+[[nodiscard]] std::string prompt_text(core::InputLinePrompt prompt)
+{
+    switch (prompt)
+    {
+    case core::InputLinePrompt::ex:
+        return ":";
+    case core::InputLinePrompt::palette:
+        return {};
+    case core::InputLinePrompt::search_forward:
+        return "/";
+    case core::InputLinePrompt::search_backward:
+        return "?";
+    }
+    std::unreachable();
 }
 } // namespace
 
@@ -855,8 +873,8 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
         return;
     }
     const auto &command = frame.command_line.value();
-    const std::string prefix = frame.command_palette.has_value() ? "" : ":";
-    const auto shown = prefix + std::string(command.text());
+    const std::string prefix = prompt_text(command.prompt);
+    const auto shown = prefix + command.text;
     const auto text = text_layout(shown, command_format_.Get(), area);
     if (!text)
     {
@@ -865,7 +883,7 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
     float caret_x = 0.0F;
     float caret_y = 0.0F;
     DWRITE_HIT_TEST_METRICS metrics{};
-    if (FAILED(text->HitTestTextPosition(utf16_at(shown, command.caret().value + prefix.size()),
+    if (FAILED(text->HitTestTextPosition(utf16_at(shown, command.caret.value + prefix.size()),
                                          FALSE, &caret_x, &caret_y, &metrics)))
     {
         return;
@@ -893,7 +911,7 @@ void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,
         return;
     }
     const auto &command = frame.command_line.value();
-    auto candidates = command.completions();
+    auto candidates = command.completions;
     if (frame.command_message.has_value())
     {
         candidates = {std::string(frame.command_message.value().text())};
@@ -904,8 +922,8 @@ void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,
         return;
     }
     fill(layout.panel, frame.palette.panel);
-    const auto selected = frame.command_message.has_value() ? std::optional<std::size_t>{}
-                                                            : command.completion_index();
+    const auto selected =
+        frame.command_message.has_value() ? std::optional<std::size_t>{} : command.completion_index;
     const auto start =
         std::max(selected.value_or(0) + 1, layout.visible_rows) - layout.visible_rows;
     context_->PushAxisAlignedClip(to_rect(layout.panel), D2D1_ANTIALIAS_MODE_ALIASED);

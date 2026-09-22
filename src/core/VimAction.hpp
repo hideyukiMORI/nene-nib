@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace nenenib::core
@@ -56,6 +57,19 @@ enum class VimAction : std::uint8_t
     replace_character,
     open_command_line,
     // `.`。直前の変更の鍵の列を同じ経路へ再生する（ADR 0030 の決定 6）。
-    repeat_change
+    repeat_change,
+    // 検索（ADR 0032）。`/` `?` は入力行を開き、`n` `N` は覚えたパターン、`*` `#` は
+    // キャレットの語を \<…\> にして同じ経路を通る。
+    open_search_forward,
+    open_search_backward,
+    repeat_search,
+    repeat_search_opposite,
+    search_word_forward,
+    search_word_backward
 };
+
+// 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
+// static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::search_word_backward) + 1;
 } // namespace nenenib::core
