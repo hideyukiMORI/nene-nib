@@ -1162,3 +1162,14 @@ base `f677a7e`（main）。**製品の C++・CMake・fixture・保存 schema・`
 | `python eng/compare-frames.py out/frames-131/before.png out/frames-131/after.png --regions out/frames-131/frames.json` | **終了 0・`inside: true`**。出力そのまま: `{"size": {"w": 800, "h": 450}, "differentPixels": 1441, "bounds": {"x": 29, "y": 23, "w": 581, "h": 418}, "regions": {"title": {"differentPixels": 406, "bounds": {"x": 29, "y": 23, "w": 44, "h": 14}}, "body": {"differentPixels": 679, "bounds": {"x": 70, "y": 68, "w": 82, "h": 30}}, "status": {"differentPixels": 356, "bounds": {"x": 551, "y": 427, "w": 59, "h": 14}}}, "outside": {"differentPixels": 0, "bounds": null}, "inside": true}` |
 | `python eng/test-conformance.py` | **173 tests OK**（171 → 173・`--regions` の正例（3 領域の内側だけ・終了 0）と反例（領域の外に 1 画素・終了 1・`outside.differentPixels == 1`）。既存 8 件は不変） |
 | `python eng/conformance.py` | **0 violations** |
+
+**訂正 2（差し戻し 2 回目・2026-09-23）。** 上の表の 2 行目のとおり、鍵が届かなかった回にも `--regions` は差分 0・`inside: true`・終了 0 を返し、「何も起きなかった」を「期待どおり」と言っていた。設計席の裁定で、道具は無変化を成功に見せない。`verify-window.py --keys` は `after` が `before` と画素まで同じなら `frames.json` に `"changed": false` を書き（画像は両方残す）、stdout に `keys did not change the window within 8 s` と出して**終了 1**、変わっていれば `"changed": true`。判定は `compare-frames.py` の純関数 `frames_changed`（画素列 2 つの比較）1 本で、`verify-window.py` はそれを読み込む（ARC-001）。`compare-frames.py --expect <region>[,<region>...]`（`--regions` と一緒にだけ）は名指しした領域ごとに `"expected": {"<region>": true/false}` を足し、差分 0 の領域があれば**終了 1**。`--expect` が無ければ従来どおり差分 0 は終了 0（同じ画面の比較は正当な使い方）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/verify-window.py --capture out/frames-131 --keys "ihello<Esc>"` | `changed` を書く経路。**1 回目で鍵が届き終了 0・`"changed": true`**。`before.png` 5559 bytes・`after.png` 6205 bytes。鍵が届かない回には当たらなかったので、`changed: false` と終了 1 は下の conformance の反例で見る |
+| `python eng/compare-frames.py out/frames-131/before.png out/frames-131/after.png --regions out/frames-131/frames.json --expect body,title,status` | **終了 0**。出力そのまま: `{"size": {"w": 800, "h": 450}, "differentPixels": 1441, "bounds": {"x": 29, "y": 23, "w": 581, "h": 418}, "regions": {"title": {"differentPixels": 406, "bounds": {"x": 29, "y": 23, "w": 44, "h": 14}}, "body": {"differentPixels": 679, "bounds": {"x": 70, "y": 68, "w": 82, "h": 30}}, "status": {"differentPixels": 356, "bounds": {"x": 551, "y": 427, "w": 59, "h": 14}}}, "outside": {"differentPixels": 0, "bounds": null}, "inside": true, "expected": {"body": true, "title": true, "status": true}}` |
+| `python eng/test-conformance.py` | **177 tests OK**（173 → 177・`--expect` の正例（期待した領域に差分・終了 0）と反例（`body` に差分 0・終了 1・`expected.body == false`）、`frames_changed` の正例と反例（同じ画素列は `false`）。既存は不変） |
+| `python eng/conformance.py` | **0 violations** |
+
+鍵が窓に届かない揺れ（差し戻し 1 回目の 4 回中 2 回）の原因は調べていない。既存の投函経路の flake で、別 Issue の候補として設計席へ返した。

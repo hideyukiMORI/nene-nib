@@ -5,6 +5,7 @@ CI から外したまま（QLT-013）。ここで回すのは、撮った後の�
 部分と、鍵の列を読む部分だけで、製品は build も起動もしない。
 """
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "eng"))
 
 from window_driver import parse_keys, read_png, VK_ESCAPE, write_png  # noqa: E402
+
+spec = importlib.util.spec_from_file_location("compare_frames", ROOT / "eng/compare-frames.py")
+compare_frames = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(compare_frames)
 
 WIDTH, HEIGHT = 4, 3
 GROUND = (0x30, 0x0A, 0x24)
@@ -128,11 +133,37 @@ class CompareFrames(unittest.TestCase):
                          {"differentPixels": 1, "bounds": {"x": 0, "y": 2, "w": 1, "h": 1}})
         self.assertEqual(report["regions"]["body"]["differentPixels"], 1)
 
+    def test_an_expected_region_that_changed_passes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = compare(*self.pair(directory, {(2, 0): (1, 2, 3), (0, 1): (4, 5, 6)}),
+                             "--regions", self.regions_file(directory), "--expect", "body,title")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)["expected"], {"body": True, "title": True})
+
+    def test_an_expected_region_without_difference_fails(self):
+        # 鍵が届かず同じ画が返った回。差分 0 は --expect の下では成功ではない（訂正 2）。
+        with tempfile.TemporaryDirectory() as directory:
+            result = compare(*self.pair(directory, {(2, 0): (1, 2, 3)}),
+                             "--regions", self.regions_file(directory), "--expect", "body,title")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertTrue(report["inside"])
+        self.assertEqual(report["expected"], {"body": False, "title": True})
+
     def test_frames_of_different_sizes_are_refused(self):
         with tempfile.TemporaryDirectory() as directory:
             result = compare(*self.pair(directory, {}, after_size=(WIDTH + 1, HEIGHT)))
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("size", json.loads(result.stdout)["error"])
+
+
+class FramesChanged(unittest.TestCase):
+    def test_a_changed_pixel_is_a_change(self):
+        self.assertTrue(compare_frames.frames_changed(frame(), frame({(1, 1): (1, 2, 3)})))
+
+    def test_the_same_capture_is_no_change(self):
+        # verify-window.py --keys はこのとき "changed": false を書いて終了 1 にする。
+        self.assertFalse(compare_frames.frames_changed(frame(), frame()))
 
 
 class KeyNotation(unittest.TestCase):

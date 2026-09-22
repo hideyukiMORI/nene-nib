@@ -5,11 +5,16 @@ Prints one JSON object: the size, the number of pixels that differ, and their bo
 rectangle lies inside the given one. With --regions <frames.json> (the "regions" that
 verify-window.py --keys writes: title, body, status) it counts the differing pixels per region
 and those in no region ("outside"), and "inside" is true exactly when "outside" is 0; --regions
-wins over --inside when both are given. There is no threshold: a pixel either matches exactly or
-it does not, and the design seat reads the PNGs themselves for everything else.
+wins over --inside when both are given. With --expect <region>[,<region>...] (only with --regions)
+it also says, per named region, whether it changed ("expected"), and fails when one did not: a
+compare of an unchanged picture must not pass as the change it was meant to show. Without
+--expect a difference of 0 still passes (comparing the same screen is a fair use). There is no
+threshold: a pixel either matches exactly or it does not, and the design seat reads the PNGs
+themselves for everything else.
 
 Exit codes: 2 when the two frames differ in size, 1 when --inside is given and the difference
-reaches outside it (with --regions: when any differing pixel lies in no region), 0 otherwise.
+reaches outside it (with --regions: when any differing pixel lies in no region, or when a region
+named by --expect has no differing pixel), 0 otherwise.
 Needs no display (it only reads files), but it is a tool for the interactive check, not a gate
 (QLT-013). Python standard library only; the PNG reader is the one in
 eng/window_driver.py, the same module that wrote the frames.
@@ -83,6 +88,23 @@ def region_differences(width: int, height: int, before: bytes, after: bytes,
     return {name: summary(box) for name, box in boxes.items()}, summary(outside)
 
 
+def frames_changed(before: bytes, after: bytes) -> bool:
+    """Whether two captures differ at all (verify-window.py --keys writes it as "changed")."""
+    return before != after
+
+
+def expectations(per_region: dict, expected: list[str]) -> dict:
+    """For each region named by --expect, whether it has at least one differing pixel."""
+    return {name: per_region[name]["differentPixels"] > 0 for name in expected}
+
+
+def region_names(text: str) -> list[str]:
+    names = [name for name in text.split(",") if name]
+    if not names:
+        raise argparse.ArgumentTypeError("expected region[,region...]")
+    return names
+
+
 def contains(outer: dict, inner: dict | None) -> bool:
     if inner is None:
         return True
@@ -98,7 +120,11 @@ def main() -> int:
     parser.add_argument("--inside", type=rectangle_argument, default=None, metavar="x,y,w,h")
     parser.add_argument("--regions", type=Path, default=None, metavar="frames.json",
                         help="the frames.json whose \"regions\" hold the expected areas")
+    parser.add_argument("--expect", type=region_names, default=None, metavar="region[,region...]",
+                        help="with --regions: fail when a named region did not change")
     arguments = parser.parse_args()
+    if arguments.expect is not None and arguments.regions is None:
+        parser.error("--expect needs --regions <frames.json>")
     before_width, before_height, before = read_png(arguments.before)
     after_width, after_height, after = read_png(arguments.after)
     if (before_width, before_height) != (after_width, after_height):
@@ -116,11 +142,17 @@ def main() -> int:
         result["regions"] = per_region
         result["outside"] = outside
         result["inside"] = outside["differentPixels"] == 0
+        if arguments.expect is not None:
+            unknown = [name for name in arguments.expect if name not in per_region]
+            if unknown:
+                parser.error(f"--expect names regions that frames.json does not have: {unknown}")
+            result["expected"] = expectations(per_region, arguments.expect)
     elif arguments.inside is not None:
         result["insideOf"] = arguments.inside
         result["inside"] = contains(arguments.inside, bounds)
     print(json.dumps(result))
-    return 0 if result.get("inside", True) else 1
+    passed = result.get("inside", True) and all(result.get("expected", {}).values())
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

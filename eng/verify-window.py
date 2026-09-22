@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import ctypes as c
 from ctypes import wintypes as w
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -70,6 +71,12 @@ from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, becom
                            user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_NEXT, VK_NIHONGO, VK_PRIOR,
                            VK_RETURN, VK_S, VK_SPACE, window_title, WINDOW_CLASS, write_png,
                            write_text, WS_CAPTION, WS_POPUP, WS_THICKFRAME, WS_VISIBLE)
+
+# 前後の画が変わったかの判定は比較の道具と同じ 1 本（Issue #131 の訂正 2）。
+_spec = importlib.util.spec_from_file_location("compare_frames",
+                                               Path(__file__).resolve().parent / "compare-frames.py")
+compare_frames = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(compare_frames)
 
 imm = c.WinDLL("imm32", use_last_error=True)
 
@@ -1192,8 +1199,10 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str) -> 
         # 期待してよい差分の領域（Issue #131 の訂正）。物理画素・クライアント座標で、重ならない。
         regions = {"title": {"x": 0, "y": 0, "w": width, "h": top}, "body": body_box,
                    "status": {"x": 0, "y": band_top, "w": width, "h": height - band_top}}
+        # 鍵が届かず 8 秒の期限で同じ画が返った回を「期待どおり」に見せない（訂正 2）。
+        changed = compare_frames.frames_changed(before, after)
         record = {"before": "before.png", "after": "after.png", "keys": keys, "steps": len(steps),
-                  "body": body_box, "regions": regions,
+                  "changed": changed, "body": body_box, "regions": regions,
                   "dpi": dpi, "size": {"w": width, "h": height}}
         (frames / "frames.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         close(window)
@@ -1213,7 +1222,8 @@ def main() -> None:
                         help="save a PNG of the client area after each section into this directory")
     parser.add_argument("--keys", default=None,
                         help="with --capture: skip the sections, save before.png, send these keys "
-                             "(fixture notation, e.g. ihello<Esc>), save after.png and frames.json")
+                             "(fixture notation, e.g. ihello<Esc>), save after.png and frames.json; "
+                             "exits 1 when the keys left the window unchanged")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -1229,7 +1239,11 @@ def main() -> None:
     environment = dict(os.environ, LOCALAPPDATA=str(isolated), APPDATA=str(isolated))
     become_dpi_aware()
     if arguments.keys is not None:
-        print(json.dumps(drive_keys(executable, environment, frames, arguments.keys), indent=2))
+        record = drive_keys(executable, environment, frames, arguments.keys)
+        print(json.dumps(record, indent=2))
+        if not record["changed"]:
+            print("keys did not change the window within 8 s")
+            sys.exit(1)
         return
     process, window, first_rect = start(executable, environment)
     try:
