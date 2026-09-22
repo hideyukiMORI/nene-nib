@@ -1173,3 +1173,29 @@ base `f677a7e`（main）。**製品の C++・CMake・fixture・保存 schema・`
 | `python eng/conformance.py` | **0 violations** |
 
 鍵が窓に届かない揺れ（差し戻し 1 回目の 4 回中 2 回）の原因は調べていない。既存の投函経路の flake で、別 Issue の候補として設計席へ返した。
+
+### 5-am. 保護対象の差分と scope ごとの checks 数を記録するスクリプト（Issue #130・ADR 0038 の決定 5・2026-09-23）
+
+base `e0c8298`（main）。**製品の C++・CMake・fixture・保存 schema・`eng/check.ps1`・`eng/conformance-rules.json` には触れていない。** 足したのは `eng/protected-diff.py` 1 本と、その純関数の正例・反例（`tests/conformance/test_protected_diff.py`）、`docs/DEVELOPMENT_WORKFLOW.md` 7 節の 1 行と `docs/PROJECT_LAYOUT.md` の道具一覧の 1 行だけである。PR の「保護対象は差分 0」を文ではなく実出力で書くための道具で、**ゲートには載せない**（QLT-010 / QLT-013）。fixture は `fixtures.json` を `name` をキーに要素で比べ（整形の差は差にならない）、`VimFixtures.hpp` の `-U0` の行を metadata（sha256 の行と配列の大きさの行の 2 種類）・削除・変更・追加に分ける。削除・変更があれば終了 1。他の保護対象 5 ファイル（`eng/perf-reference.json`・`eng/symbol-allowlist.json`・`eng/conformance-rules.json`・`src/adapters/win32/SettingsCodec.hpp` / `.cpp`）は有無だけを書いて落とさない。scope の一覧は各 ref の `tests/unit/NibTests.cpp` の `scopes` 配列を静的に読み、`--build` で `build/protected-<短い SHA>` に作った Debug の `nib_tests` を scope ごとに 1 回走らせる（`eng/build-release.ps1` と同じ `eng/toolchain.ps1` と一時 worktree の流儀・既存の同じ SHA の build は使い回す）。exe が無ければ `"checks": "未測"` で落とさない。無い ref だけ終了 2。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/protected-diff.py --base ae460a6 --head f9e4704 --allow --vim-search-highlight --build`（#125） | **終了 0**。`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象 5 ファイルはすべて `unchanged`・`--vim-search-highlight 新規 - -> 74 allowed`・`scopes 19 / same 18`。base と head の 2 本を build して 3 分 35 秒。`build/worktree-*` は終了時に消えて `git worktree list` は元の 2 つだけ |
+| `python eng/protected-diff.py --base b1be094 --head b8e16ca --build`（#85） | **終了 1**（反例の実例）。`fixtures 1320 -> 1339 / metadata 2 / deleted 10 / changed 0 / added 29`。削除 10 件は `line-jump-G-crlf`（base L416）・`open-line-crlf-below`（L460）・`open-line-crlf-above`（L461）・`visual-wanted-crlf`（L502）・`visual-yank-crlf`（L518）・`replace-char-crlf`（L546）・`replace-char-visual-crlf`（L564）・`dot-crlf-change-word`（L660）・`dot-crlf-open-below`（L661）・`dot-crlf-remove-line`（L662）。scope は 18 のうち 12 が変化（`--vim-dot 1593 -> 1479`・`--vim-search 1375 -> 1290`・`--vim-text-objects 2232 -> 1992`・`--vim-replace 460 -> 613`・`--vim-visual-yank 265 -> 234`・`--vim-visual-wanted 208 -> 211`・`--vim-open-lines 573 -> 560`・`--vim-open-line-recovery 430 -> 417`・`--vim-character-search 621 -> 639`・`--vim-line-jumps 989 -> 999`・`--vim-virtual-column 424 -> 417`・`--vim-visual-block 1204 -> 1105`）で、`--allow` が無いのですべて FAIL と書く |
+| `python eng/protected-diff.py --base 9e41f79 --head 220fe76 --build`（#99） | fixture は `fixtures 1055 -> 1090 / metadata 2 / deleted 0 / changed 0 / added 35`（metadata 2 行だけ）。scope は 16 のうち `--vim-text-objects 1623 -> 1912` が変化し、`--allow` を付けていないので**終了 1**（実測のまま。fixture を足した PR では、その fixture を回す scope の checks 数も増える） |
+| `python eng/protected-diff.py --base nope` | 無い ref は終了 2 |
+| `python eng/test-conformance.py` | **184 tests OK**（177 → 184・新規は `test_protected_diff.py` の 7 件: diff の行分類の正例（metadata 2 行と追加 1 件 → 削除・変更 0）と反例 2（削除 1 件は base の行番号つき・期待値の書き換えは変更）、`fixtures.json` の要素比較の反例（`keys` が変わった要素 1 つ）と正例（順序と整形と追加は差にならない）、HEAD の `scopes` 配列の静的パースが 19 件（`contracts` 配列を拾わない）、`--allow --vim-dot` の読み取り） |
+| `python eng/conformance.py` | 文書の相対リンクと規則 ID（CNF-006）ほか。**0 violations** |
+
+対象を限定した理由: 差分は `eng/` の Python 1 本とテスト 1 ファイル、文書 3 か所である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、既定の `build/` の build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。上の 3 例の `nib_tests` は過去の ref の Debug build で、今回の差分の検証ではなく道具の受け入れの実測である。Waivers: none。
+
+ARC-001 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / CNF-006 / GIT-001〜004 を自己レビュー。新しい規則・新しいゲート・新しい閾値は足していない。残るのは、scope の checks 数が fixture の件数も含むので fixture を足した PR（#99）でも「変化」になり `--allow` の名指しが要ること（これが道具の使い方。下の訂正）と、ゲートに載っていないので壊れたことは次に使うときにしか分からないことの 2 点。
+
+**訂正（差し戻し 1 回目・2026-09-23）**: 設計席の裁定で 2 点を直した。(a) #99 の終了 1 は正しい。scope の checks 数には fixture の件数が入るので、fixture を足した PR は増えた scope を `--allow` で名指しする。Issue #130 のコメントの「終了 0」は `--allow --vim-text-objects` を付けた場合と読み替え、その形で撮り直した（上の終了 1 の記録はそのまま残す）。(b) `scopes` 配列の静的パースが base か head で 0 件なら、警告 1 行で通すのをやめて**終了 2**（無い ref と同じ「測れない」）にした。checks の比較が空のまま成功に見えるのを防ぐ（#131 の「無変化を成功に見せない」と同じ）。fixture と他の保護対象の照合はその前に終えて JSON に残し、`"scopes"` の代わりに `"error": "scopes not found in <ref>:tests/unit/NibTests.cpp"` を書き、stdout に `Protected: error …` の 1 行を出す。build はしない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/protected-diff.py --base 9e41f79 --head 220fe76 --allow --vim-text-objects --base-tests build/protected-9e41f79/nib_tests.exe --head-tests build/protected-220fe76/nib_tests.exe`（#99・撮り直し） | **終了 0**。`fixtures 1055 -> 1090 / metadata 2 / deleted 0 / changed 0 / added 35`・保護対象 5 ファイルは `none`・`--vim-text-objects 変化 1623 -> 1912 allowed`（JSON は `"allowed": true, "fails": false`）・`scopes 16 / same 15 / 未測 0`。exe は前の席の `build/protected-*` をそのまま使い、作り直していない |
+| `python eng/protected-diff.py --base <root commit 07ded54> --head HEAD` | **終了 2**（反例の実例）。root に `tests/unit/NibTests.cpp` が無く base の `scopes` が 0 件。JSON に `"error": "scopes not found in 07ded54…:tests/unit/NibTests.cpp"`、`"fixtures"` と `"protectedFiles"` は残り `"scopes"` は無い |
+| `python eng/test-conformance.py` | **185 tests OK**（184 → 185・新規は `scopes` 配列の無い文字列で `parse_scopes` が 0 件を返し、純関数 `scopes_error` が「測れない」の理由 `scopes not found in HEAD:tests/unit/NibTests.cpp` を返す反例と、両方あれば `None` の正例を 1 件に） |
+| `python eng/conformance.py` | **0 violations** |
