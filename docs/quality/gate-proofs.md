@@ -1208,7 +1208,7 @@ base `d4de8c2`（main）。**製品の C++・CMake・fixture・保存 schema・`
 | --- | --- |
 | `python eng/test-conformance.py` | **191 tests OK**（185 → 191・新規は `test_usage_report.py` の 6 件: 同じ `message.id` の 3 行が turns 1・output は最終値 364（先頭の 8 ではない）、`<synthetic>` を turns に入れない、`isSidechain` の有無で本流 `86c7704f` と背景席 `agent-ac78e56b` に分かれる、壊れた行と `usage` の無い行が `skipped` 2、`--since 2026-09-22` が UTC 09-21T16:31（JST 09-22 01:31）を含み UTC 09-21T14:00 を外す、範囲に行の無いファイルは席にならない） |
 | `python eng/conformance.py` | **0 violations** |
-| `python eng/usage-report.py --since 2026-09-22`（受け入れの実測） | **終了 0**。`seats 33 / skipped 0`。probe-146 の手計算と一致: 09-22 の `agent-a71e4bf5` が turns 217・max_context 430,079・cache_read 61,322,076、09-23 の `agent-ac78e56b` の seat_tokens 117,427（日報の「棚卸し #124 117K」）、`agent-adabc244` 127,216（「#131 実装 131K」）。`claude-opus-5-5` はセッション `4187e184` の背景席 8 本（下の表） |
+| `python eng/usage-report.py --since 2026-09-22`（受け入れの実測） | **終了 0**。`seats 33 / skipped 0`。probe-146 の手計算と一致: 09-22 の `agent-a71e4bf5` が turns 217・max_context 430,079・cache_read 61,322,076、09-23 の `agent-ac78e56b` の seat_tokens 117,427（日報の「棚卸し #124 117K」）、`agent-adabc244` 127,216（「#131 実装 131K」）。`claude-opus-5-5` はセッション `4187e184` の背景席 7 本（下の表） |
 
 | 席 | model | turns | max_context | cache_read | seat_tokens |
 | --- | --- | ---: | ---: | ---: | ---: |
