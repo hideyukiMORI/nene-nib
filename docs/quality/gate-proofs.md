@@ -1027,3 +1027,33 @@ base `75bf047`（origin/main）。ADR 0031 は新しく書かず「補足（2026
 対象を限定した理由: 差分は core の 1 ファイルの引用符の枝と、unit の対象 1 つ、fixture 39 件である。引用符の範囲は VISUAL の選択・register・`.` を通って他の scope にも出るので unit 全体を 1 回回した。描画・ファイル・設定・テーマ・Ex・パレット・adapters・速さ・Release build・`check.ps1 -Full` は差分の依存先でも呼び出し元でもないので実行していない（QLT-001 / QLT-012・ADR 0021）。画面確認は**未実施**（差分は engine の意味論にしか出ない）。exe は作っていない。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
 
 FR-003 / ARC-001/004/007 / CPP-002/003/004/006/011/012 / QLT-001/008/012/013 / CNF-010/011 を自己レビュー。`optional` は `has_value` / `value` / `value_or` だけで読み、閉じた分岐（`VimTextObject` の switch）に `default` は無い。新しい型・`reinterpret_cast`・時刻・OS・スレッドは増やしていない。範囲関数は純関数のままで、選択の正本は `EditorState`。
+
+### 5-ai. 検査の入出力を端末符号化から切り離す（Issue #106・2026-09-22）
+
+統合単位は [PR #119](https://github.com/hideyukiMORI/nene-nib/pull/119)（draft・ブランチ `fix/106-cp932-utf8-io`）。以下の成功結果を文書追記・レビュー・統合でも再利用する。節記号は #85 の並行作業と衝突しないよう 5-ai を取った（5-ah と 5-x は空き）。
+
+base `54b3a21`（origin/main）。**製品の C++・fixture・CMake・schema には触れていない。検査の閾値・違反文言・規則・`eng/git-conventions.py` も変えていない。** 直したのは子プロセスとの入出力の符号化だけで、置き場所は 2 か所である（ARC-001）。
+
+**経路（誰が誰を呼び、どこで UTF-8 に固定されるか）**
+
+- `python eng/test-conformance.py` → `test_verification_policy.py` の `run_tool` → 子（`python eng/git-conventions.py` / `pwsh eng/check.ps1` / `pwsh eng/validate-git.ps1`）… **ここ 1 か所**で読む側を `encoding="utf-8"` ＋ `errors="replace"` に、子の環境を `PYTHONUTF8=1` に固定する（#106）
+- `pwsh eng/validate-git.ps1` → `git show -s --format=%B` の出力を受ける … **ここ 1 か所**で `[Console]::OutputEncoding` と `$OutputEncoding` を UTF-8 にする（#106。`$OutputEncoding` は逆向き＝子へ渡す側）
+- `pwsh eng/validate-git.ps1` → `python eng/git-conventions.py` の日本語の違反文言を印字 … 同じ前置きの `$env:PYTHONUTF8 = '1'`（#94。今回は触らず、隣に入力側を足しただけ）
+- `.githooks/commit-msg` → `eng/validate-commit-message.ps1` → `python eng/git-conventions.py <file>` … 文字列は渡さずファイル経由で、読み込みは `read_text(encoding="utf-8-sig")`（もとから固定・変更なし）
+- `.github/workflows/check.yml`（UTF-8 runner）→ `pwsh ./eng/validate-git.ps1` … 同じ 1 本。runner では符号化が既に UTF-8 なので判定は変わらない
+
+二重の固定にはならない。#94 は python の**出力**（`PYTHONUTF8`）を pwsh 側で、#106 は pwsh の**入力**（`[Console]::OutputEncoding`）を同じ前置きで、python の**読み取り**を `run_tool` で固定する。どれも同じ向きを 2 度設定していない。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/test-conformance.py`（cp932 console・`PYTHONUTF8=1`＝ `toolchain.ps1` を読んだ開発シェル相当） | 変更前は `test_full_gate_requires_explicit_scope_and_reason` の 4 subTest が ERROR（pwsh のエラー表示の cp932 の省略記号を厳密な UTF-8 で読んで reader thread が落ち `stderr` が `None`）。変更後 **157 tests すべて成功** |
+| `python eng/test-conformance.py`（cp932 console・`PYTHONUTF8` なし） | 変更前は `test_record_cli_returns_failure` が ERROR（子の UTF-8 出力を locale の cp932 で読めず `stdout` が `None`）。変更後 **157 tests すべて成功** |
+| `python eng/test-conformance.py`（UTF-8 console `chcp 65001`） / `python -X utf8 eng/test-conformance.py` | CI と同じ側の端末で判定が変わっていないこと。どちらも **157 tests すべて成功**（変更前と同数） |
+| `pwsh -NoProfile -File eng/validate-git.ps1`（cp932 console・`GITHUB_EVENT_PATH` で base を `8f2c363~1` に固定＝日本語 subject の commit 11 本） | 変更前は `GIT-003: invalid commit 8f2c363c3495d84a01cba53ec79b633566393e3a`（mojibake で subject が 100 文字を超える）。変更後 **`Git conventions passed (11 new commit(s)).` 終了 0** |
+| `pwsh -NoProfile -File eng/validate-git.ps1`（cp932 console・既存の呼び方・`origin/main..HEAD`） | 変更前後とも終了 0 だが、`out/git/message.txt` の subject が変更前は `fix(eng): 蟄舌・繝ｭ繧ｻ繧ｹ縺ｮ蜈･蜃ｺ蜉帙ｒUTF-8縺ｫ…`、**変更後は `git show -s --format=%B` と一致**（壊れた入力が偶然 100 文字に収まっていただけで、検査に渡る本文は壊れていた） |
+| `pwsh -NoProfile -File eng/validate-git.ps1`（UTF-8 console） | UTF-8 の端末でも同じ 1 本が通ること。終了 0 |
+| `.githooks/commit-msg`（`eng/validate-commit-message.ps1` → `git-conventions.py`） / `.githooks/pre-commit`（`git diff --cached --check`） | 本 PR の 2 commit で自然に実行。どちらも成功 |
+
+対象を限定した理由: 差分は conformance テスト 1 ファイルの `subprocess` の呼び方と、`eng/validate-git.ps1` の前置き 3 行である。製品の C++・リンク境界・fixture・CMake・速さの入力はどれも不変なので、build / `ctest` / `eng/symbols.py` / `eng/measure-speed.py` / Release build / `check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。`eng/conformance.py` は文書を変えたので実行する（CNF-006）。画面確認は不要（窓に出る差分が無い）。push / レビュー / 統合でも上記の成功結果を再利用する。Waivers: none。
+
+QLT-001 / QLT-007 / QLT-012 / GIT-003 / CNF-006 を自己レビュー。新しい規則・新しい検査・新しい閾値は足していない。`tests/conformance/test_vim_oracle.py` の `subprocess` は Issue #85 が同じファイルを触っているので今回は寄せていない（`vim_oracle.subprocess.run` を patch する作りで端末符号化に依らない。残りとして申し送り）。

@@ -64,6 +64,10 @@ CI で必要なゲートは、すべてローカルで実行できる。検査�
 🔴 **設定が在ることは、検査が効いていることの証明ではない。** 前例で 2 度、設定だけあって検査が効いていない状態が証明手順で発覚した。
 Nib でも clang-tidy の `bugprone-unchecked-optional-access` が MSVC STL の `operator*` を見ないことを Phase 0 で実測した（T3-tidy-unchecked-optional-star-hole）。
 
+**検査の結果は端末の符号化に依らない。** 検査器も証明のテストも日本語を扱うので、子プロセスとの入出力は呼ぶ側が UTF-8 に固定する
+（python は `encoding="utf-8"` と `errors="replace"` と子の `PYTHONUTF8=1`、pwsh は `[Console]::OutputEncoding` と `$OutputEncoding`）。
+固定していないと、cp932 の端末では日本語の subject が壊れて GIT-003 になり、出力が読めずテストが落ちる（Issue #94 / #106）。
+
 - 機械強制: **planned**（検査器自身の正例・反例テストをゲートに結線する）
 
 ### QLT-008 — 振る舞いの変更はテストを伴う
