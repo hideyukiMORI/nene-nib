@@ -4524,8 +4524,49 @@ void verify_vim_open_line_external_edit()
     expect(whole_vim_body(controller) == "ab\n", "external edit has its own undo unit");
 }
 
+// 割り込みが捨てるものと保つもの（Issue #92）。範囲を決めるのは engine の純関数
+// vim_interrupted で、controller は「どれが割り込みか」だけを決める（ARC-004）。
+void verify_vim_interrupt_discards()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("alpha beta\nsecond line")});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "x3Oab");
+    expect(controller.vim_state().insert_repeat.has_value() &&
+               controller.vim_state().recording.has_value(),
+           "the counted open line is holding both a repetition and a half-built dot recording");
+    applied(controller, SelectAll{});
+    expect(controller.vim_state().mode == VimMode::insert &&
+               !controller.vim_state().insert_repeat.has_value() &&
+               !controller.vim_state().recording.has_value(),
+           "an interruption drops the repetition and the recording it cannot replay, not the mode");
+    expect(controller.vim_state().last_change.has_value(),
+           "the change that was already confirmed is still what the dot repeats");
+
+    // 割り込みは鍵ではないので、engine の純関数を直に呼んで捨てる範囲を確かめる。
+    Editing pending;
+    EditorController &waiting = pending.controller();
+    pending.files().hold(Bytes{std::string("alpha beta\nsecond line")});
+    applied(waiting, OpenDocument{sample_path()});
+    applied(waiting, SelectEditMode{EditMode::vim});
+    vim_replay(waiting, "fa2d3f");
+    const VimState &before = waiting.vim_state();
+    expect(before.count.has_value() && before.pending.has_value() &&
+               before.input_wait.has_value() && before.last_character_search.has_value(),
+           "the operator is pending with a count and is waiting for one more key");
+    const VimState after = nenenib::core::vim_interrupted(before);
+    expect(!after.count.has_value() && !after.pending.has_value() && !after.input_wait.has_value(),
+           "the pure function drops the count, the pending operator and the awaited key");
+    expect(after.mode == before.mode && after.last_character_search.has_value() &&
+               after.last_character_search.value().target == U'a',
+           "and keeps the mode and the remembered character search");
+}
+
 void verify_vim_open_line_external_scope()
 {
+    verify_vim_interrupt_discards();
     verify_vim_open_line_external_input();
     verify_vim_open_line_external_edit();
     verify_vim_open_line_movement();
@@ -4539,6 +4580,7 @@ void verify_vim_open_line_contracts()
     verify_vim_open_line_intermediate();
     verify_vim_open_line_movement();
     verify_vim_open_line_switch();
+    verify_vim_interrupt_discards();
     verify_vim_open_line_external_input();
     verify_vim_open_line_external_edit();
     verify_vim_open_line_capacity();
