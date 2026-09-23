@@ -81,6 +81,7 @@ WARMUP_SECONDS = 0.5
 BURST_KEYS = 200
 BURST_SECONDS = 4.0
 # 200 打鍵が「まとめて」届いたと言える幅。これを越えた試行は刺激が仕様どおりでないので測り直す。
+# 空の文書の burst だけに当てる。16 MiB の本文では到着の幅が鍵の処理時間そのものになる（#179）。
 BURST_SPAN_LIMIT_MS = 50.0
 BURST_ATTEMPTS = 3
 # 5 試行のうちこれだけ有効な値が無いベンチは「遅くなった」ではなく「測れなかった」（Issue #30）。
@@ -98,6 +99,8 @@ BENCHES = ("startup-first-frame", "startup-window-shown", "key-to-frame-single",
 # 16 MiB の試行の 1 打鍵は暖機と同じ扱いで、値にするのは 200 打鍵だけ。
 EMPTY_BURST_BENCH = "key-to-frame-burst-200"
 LARGE_BURST_BENCH = "key-to-frame-burst-200-16mib"
+# 16 MiB の試行の到着の幅は欠測の理由にしない代わりに、内訳と同じ形で記録に残す（#179）。
+ARRIVAL_SEGMENT = "keysArrivalSpan"
 # 起動の節目の正典順（Issue #19 / core::Milestone と同じ綴り）。区間名は「到達する節目の名前」で、
 # 最初の区間 "origin" だけはプロセス生成 -> bind（loader・CRT・COM・引数）を指す。
 ORIGIN_SEGMENT = "origin"
@@ -106,6 +109,8 @@ STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "
                       "context_created", "text_formats_created", "frame_presented")
 # 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
 STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib")
+# 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
+BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH)
 
 
 class TrialNotObserved(RuntimeError):
@@ -263,8 +268,10 @@ def bench_keys(executable: Path, environment: dict, folder: Path,
     that is covered or starved can end up measuring fewer of them than were posted. Both are a
     stimulus that was not delivered as specified, so the trial is repeated rather than recorded,
     and when BURST_ATTEMPTS of them fail in a row the burst of that trial is missing rather than a
-    value (Issue #30). The single keystroke is a stimulus of its own: it stays a value whenever
-    that keystroke and the frame that answered it were measured.
+    value (Issue #30). Over the 16 MiB document the span is the editor's own reading time, so
+    only the count and the frame decide there and the span is recorded (Issue #179). The single
+    keystroke is a stimulus of its own: it stays a value whenever that keystroke and the frame
+    that answered it were measured.
 
     A trial can also deliver no observation at all (TrialNotObserved), and that is repeated in the
     same place and for the same reason; a trial that ended there measured neither keystroke, so its
@@ -279,9 +286,9 @@ def bench_keys(executable: Path, environment: dict, folder: Path,
         except TrialNotObserved as unobserved:
             single, reason = None, str(unobserved)
         else:
-            reason = burst_failure(burst, span, delivered)
+            reason = burst_failure(burst, span, delivered, name)
             if reason is None:
-                return keys_values(name, single, burst), {}
+                return keys_values(name, single, burst), keys_parts(name, span)
         print(f"Speed: {reason}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
     print(f"Speed: no trial delivered the stimulus as specified in {BURST_ATTEMPTS} attempts;"
           f" this trial of {name} is missing")
@@ -295,13 +302,28 @@ def keys_values(name: str, single: float | None, burst: float | None) -> dict:
     return {"key-to-frame-single": single, EMPTY_BURST_BENCH: burst}
 
 
-def burst_failure(burst: float | None, span: float, delivered: int) -> str | None:
-    """Why this trial's burst is not a value, in one phrase, or None when the stimulus arrived."""
+def keys_parts(name: str, span: float) -> dict:
+    """How long the 200 keystrokes of the 16 MiB trial took to arrive; nothing for the empty one."""
+    if name == LARGE_BURST_BENCH:
+        return {LARGE_BURST_BENCH: {ARRIVAL_SEGMENT: span}}
+    return {}
+
+
+def burst_failure(burst: float | None, span: float, delivered: int,
+                  name: str = EMPTY_BURST_BENCH) -> str | None:
+    """Why this trial's burst is not a value, in one phrase, or None when the stimulus arrived.
+
+    The keystrokes are posted while the window thread is held, so they are in the queue together
+    and the span of their input_received marks is how long the editor took to read them. Over the
+    empty document that stays within BURST_SPAN_LIMIT_MS and a wider span means the poster was
+    starved; over the 16 MiB document that span is the cost being measured, so it is recorded and
+    never a reason for the trial to be missing (Issue #179).
+    """
     if delivered < BURST_KEYS + 2:
         return f"only {delivered} of {BURST_KEYS + 2} keystrokes were measured by the window"
     if burst is None:
         return "no frame was presented after the 200 keystrokes"
-    if span > BURST_SPAN_LIMIT_MS:
+    if name == EMPTY_BURST_BENCH and span > BURST_SPAN_LIMIT_MS:
         return f"the 200 keystrokes reached the window over {span:.1f} ms, not together"
     return None
 
@@ -437,7 +459,8 @@ def measure(build: Path, repetitions: int) -> dict:
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in BENCHES}
     # 起動の内訳は区間ごとに 5 回ぶん貯めて、値と同じように中央値を出す（Issue #19）。
-    segments: dict = {name: {} for name in STARTUP_BENCHES}
+    # 16 MiB の 200 打鍵の到着の幅も同じ形で残す（#179）。
+    segments: dict = {name: {} for name in BREAKDOWN_BENCHES}
     for _ in range(repetitions):
         for values, parts in (bench_startup(executable, environment, folder),
                               bench_keys(executable, environment, folder),
@@ -455,7 +478,7 @@ def measure(build: Path, repetitions: int) -> dict:
             "document": {"path": document.name, "bytes": document.stat().st_size,
                          "lines": LARGE_LINES},
             "values": summarise(samples, missing),
-            "breakdown": {name: spread(segments[name]) for name in STARTUP_BENCHES}}
+            "breakdown": {name: spread(segments[name]) for name in BREAKDOWN_BENCHES}}
 
 
 def write_record(record: dict) -> Path:

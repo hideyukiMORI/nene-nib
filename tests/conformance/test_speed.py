@@ -224,7 +224,8 @@ class RepeatedTrialTests(unittest.TestCase):
         written = io.StringIO()
         with mock.patch.object(speed, "keys_trial", scripted), \
                 contextlib.redirect_stdout(written):
-            values, _ = speed.bench_keys(Path("exe"), {}, Path("folder"), document)
+            values, parts = speed.bench_keys(Path("exe"), {}, Path("folder"), document)
+        self.parts = parts
         return values, written.getvalue()
 
     def delivered(self, single: float, burst: float) -> tuple:
@@ -270,6 +271,24 @@ class RepeatedTrialTests(unittest.TestCase):
         values, written = self.bench([(0.9, None, 0.0, 7)] * speed.BURST_ATTEMPTS, document)
         self.assertEqual({"key-to-frame-burst-200-16mib": None}, values)
         self.assertIn("this trial of key-to-frame-burst-200-16mib is missing", written)
+
+    def test_a_slow_arrival_over_the_large_document_is_a_value_with_its_span(self):
+        """#179: over 16 MiB the span is the reading time being measured, so it is recorded."""
+        document = Path("large.txt")
+        span = speed.BURST_SPAN_LIMIT_MS + 30.0
+        values, written = self.bench([(0.9, 90.0, span, speed.BURST_KEYS + 2)], document)
+        self.assertEqual({"key-to-frame-burst-200-16mib": 90.0}, values)
+        self.assertEqual({"key-to-frame-burst-200-16mib": {speed.ARRIVAL_SEGMENT: span}},
+                         self.parts)
+        self.assertNotIn("not together", written)
+
+    def test_a_slow_arrival_over_the_empty_document_is_still_missing(self):
+        span = speed.BURST_SPAN_LIMIT_MS + 30.0
+        values, written = self.bench([(0.9, 90.0, span, speed.BURST_KEYS + 2)]
+                                     * speed.BURST_ATTEMPTS)
+        self.assertIsNone(values["key-to-frame-burst-200"])
+        self.assertEqual({}, self.parts)
+        self.assertIn("not together; repeating the trial (3/3)", written)
 
 
 class BenchTableTests(unittest.TestCase):

@@ -1568,3 +1568,17 @@ FR-003 / FR-004 / ARC-001/011 / CPP-004/009/011 / QLT-001/012 を自己レビュ
 対象を限定した理由: 差分は速さのゲートの道具とその基準値の説明・conformance だけである。製品のコードは変えていないので、ビルド・ctest・`--check` / `--adopt`（この机では別の席がビルド中で雑音が乗る）は実行していない（QLT-001 / QLT-012・ADR 0021）。受け入れ条件の「`--check` が 6 本を測り 0 regression」と基準値の記録は設計席の実機で行う。
 
 QLT-014 / ADR 0011 / 0016 / 0044 / QLT-001/012 を自己レビュー。ベンチ名は `BENCHES` の 1 表で、6 本目のための第 2 の選択・比較・書き込みの経路は作っていない（ARC-001）。
+
+#### 訂正（差し戻し 1 回目・2026-09-23）
+
+設計席が Release（`build/release-37a70ca`）で `--check` を回すと、6 本目は 5 試行 × 3 回の 15 回すべてが「the 200 keystrokes reached the window over N ms, not together」（432〜1758 ms）で測り直しになり、`missing 5 of 5` で測れなかった。`post_together` は窓のスレッドを `SuspendThread` で止めてから 200 本を積んで再開するので、到着は一斉である。`input_received` の幅は鍵を読む時間そのもので、16 MiB の本文では 200 鍵が 50 ms を必ず越える。上の表の「Debug（ASan）では到着幅が 50 ms を越え…missing（期待どおり）」は、この幅を poster の遅れと読んだ誤りである。
+
+- `burst_failure(burst, span, delivered, name)`: 判定の関数は 1 本のまま、ベンチ名を受ける。`BURST_SPAN_LIMIT_MS` を当てるのは `key-to-frame-burst-200`（空の文書）だけで、16 MiB では `delivered < 202` と frame が無いことだけが欠測の理由になる。
+- 到着の幅は記録（`out/speed/*.json`）の `breakdown` に、起動の内訳と同じ形（`medianMs` / `minimumMs` / `maximumMs`）で `key-to-frame-burst-200-16mib.keysArrivalSpan` として残す（有効な試行だけ・`keys_parts`）。値の本体は burst のままである。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/test-conformance.py` | **208 tests 成功**（206 ＋ 2: 16 MiB では到着幅 80 ms でも値になり幅が記録の内訳に載る正例・空の文書では同じ幅が 3 回とも「not together」で missing のままの反例） |
+| `git diff --check` | 指摘なし |
+
+計測（`--check` 6 本・`--adopt --bench key-to-frame-burst-200-16mib`・#174 の前後）は設計席が Release で行うので、この工程では実行していない（QLT-001 / QLT-012・ADR 0021）。
