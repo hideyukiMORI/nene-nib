@@ -1552,3 +1552,35 @@ FR-003 / ARC-001/004/010 / CPP-002/004/005/011/012 / QLT-001/012 / CNF-010/011 �
 対象を限定した理由: 差分は application の表示値 1 欄・renderer の 1 関数・verify-window の 1 節・単体の契約である。core・fixture・打鍵の経路は不変で、描く文字は録画中だけ増えるので、`--regenerate`・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / FR-004 / ARC-001/011 / CPP-004/009/011 / QLT-001/012 を自己レビュー。表示値は `frame()` の 1 経路（ARC-001）、`optional` は `value()` で読む（CPP-004）、`reinterpret_cast` 無し（CPP-009）。
+
+### 5-bb. 16 MiB を開いてから 200 打鍵するベンチ（Issue #179・ADR 0044 決定 6・2026-09-23）
+
+ブランチ `chore/179-keys-16mib-bench`（main `9198fea` から）。`eng/measure-speed.py` の `BENCHES` に 6 本目 `key-to-frame-burst-200-16mib` を足した。`bench_keys` / `keys_trial` は開く本文（`document`）を任意で受け、`open-large-file-16mib` と同じ `large.txt` を起動引数に渡して同じ試行（暖機 1 打鍵・1 打鍵・200 打鍵の post・未保存の確認に「いいえ」）を回す。値にするのは burst だけ（`keys_values`）。`measure` は `bench_large_file` の後にこの試行を 1 回回す。`--bench` の選択肢・`--check` の比較・`--adopt --bench` の書き込み・`describe` はどれも `BENCHES` の 1 表を読むので、6 本目もそのまま同じ経路に乗る。基準値の無い機械・ベンチは今のとおり判定しない（`compare` の `against is None`）。`eng/perf-reference.json` は `benches` に説明を 1 行足しただけで、基準値は変えていない（実機の値は設計席が `--adopt --bench key-to-frame-burst-200-16mib` で記録する・CI の指紋は ADR 0016 の手順で後から）。src・製品は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/test-conformance.py` | **206 tests 成功**（200 ＋ 6: 表の正例 6 本・`perf-reference.json` の説明が表と同じ並び（`eng/prove-gates.py` の QLT-014 の証明はこの説明の鍵から値を組む）・6 本目の基準値の無い機械は残り 5 本で判定・`adopt_one` は 6 本目だけを書き他の値と `recordedAt` を動かさない・16 MiB の試行は burst だけを値にし、欠けたときは 6 本目の名前で報せる） |
+| `python eng/measure-speed.py --help` | 終了 0。`--bench` の選択肢に 6 本目 |
+| `python eng/measure-speed.py --record --bench key-to-frame-burst-200-16mib --repetitions 1 --executable ../NeNeNib/build/NeNeNib.exe`（main `9198fea` の Debug の exe・src は不変） | 終了 0・例外なし・6 本すべてが記録に載る。Debug（ASan）では 200 打鍵の到着幅が 50 ms を越え、`key-to-frame-burst-200` と同じく 6 本目も 3 回とも測り直して missing（経路の確認だけで値は見ない・判定は Release で設計席） |
+| `python eng/protected-diff.py --base origin/main` | 終了 0。`fixtures 1359 -> 1359`・保護対象は `eng/perf-reference.json`（記録のみ・ADR 0044 決定 6 が根拠） |
+| `git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は速さのゲートの道具とその基準値の説明・conformance だけである。製品のコードは変えていないので、ビルド・ctest・`--check` / `--adopt`（この机では別の席がビルド中で雑音が乗る）は実行していない（QLT-001 / QLT-012・ADR 0021）。受け入れ条件の「`--check` が 6 本を測り 0 regression」と基準値の記録は設計席の実機で行う。
+
+QLT-014 / ADR 0011 / 0016 / 0044 / QLT-001/012 を自己レビュー。ベンチ名は `BENCHES` の 1 表で、6 本目のための第 2 の選択・比較・書き込みの経路は作っていない（ARC-001）。
+
+#### 訂正（差し戻し 1 回目・2026-09-23）
+
+設計席が Release（`build/release-37a70ca`）で `--check` を回すと、6 本目は 5 試行 × 3 回の 15 回すべてが「the 200 keystrokes reached the window over N ms, not together」（432〜1758 ms）で測り直しになり、`missing 5 of 5` で測れなかった。`post_together` は窓のスレッドを `SuspendThread` で止めてから 200 本を積んで再開するので、到着は一斉である。`input_received` の幅は鍵を読む時間そのもので、16 MiB の本文では 200 鍵が 50 ms を必ず越える。上の表の「Debug（ASan）では到着幅が 50 ms を越え…missing（期待どおり）」は、この幅を poster の遅れと読んだ誤りである。
+
+- `burst_failure(burst, span, delivered, name)`: 判定の関数は 1 本のまま、ベンチ名を受ける。`BURST_SPAN_LIMIT_MS` を当てるのは `key-to-frame-burst-200`（空の文書）だけで、16 MiB では `delivered < 202` と frame が無いことだけが欠測の理由になる。
+- 到着の幅は記録（`out/speed/*.json`）の `breakdown` に、起動の内訳と同じ形（`medianMs` / `minimumMs` / `maximumMs`）で `key-to-frame-burst-200-16mib.keysArrivalSpan` として残す（有効な試行だけ・`keys_parts`）。値の本体は burst のままである。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `python eng/test-conformance.py` | **208 tests 成功**（206 ＋ 2: 16 MiB では到着幅 80 ms でも値になり幅が記録の内訳に載る正例・空の文書では同じ幅が 3 回とも「not together」で missing のままの反例） |
+| `git diff --check` | 指摘なし |
+
+計測（`--check` 6 本・`--adopt --bench key-to-frame-burst-200-16mib`・#174 の前後）は設計席が Release で行うので、この工程では実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+設計席の計測（2026-09-23・Release `build/release-37a70ca`・実機 `bc8a356f37c68491`・差し戻し 1 回目の後）: `--check` は 6 本で 0 regression（`key-to-frame-burst-200-16mib` 447.5 ms・min 431.9 / max 478.6・到着幅の中央値 444.0 ms・既存 5 本は基準内）。`--adopt --bench key-to-frame-burst-200-16mib` で基準値 427.7 ms（5 回の中央値・min 410.6 / max 519.5）を `eng/perf-reference.json` に記録（他の値と `recordedAt` は不変・保護対象の変更の根拠は ADR 0044 決定 6）。#174 の前後: 前の exe（main `3041c31`）は同じベンチで 513.6 ms（min 429.7 / max 783.6）、後（本枝・本文は `9198fea` と同じ）は 427.7〜447.5 ms。16 MiB の 1 打鍵は約 2.2 ms で、空の文書の 0.9 ms との差の経路は別 Issue（Sonnet の probe 中）。ログは `out/179-check-2.log`・`out/179-adopt.log`・`out/179-before174.log`・記録は `out/speed/`。

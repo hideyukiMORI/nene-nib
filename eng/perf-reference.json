@@ -5,7 +5,8 @@
     "startup-window-shown": "プロセス生成時刻から最初の window_shown（ShowWindow が返った直後）まで。同じ 1 回の起動から取る第 2 の値で、device の生成より前に窓が見えるまでを測る（ADR 0013）",
     "key-to-frame-single": "1 つの WM_CHAR の input_received から次の frame_presented まで",
     "key-to-frame-burst-200": "200 の WM_CHAR をまとめて post したときの、最初の input_received から最後の打鍵を描き終えた frame_presented まで",
-    "open-large-file-16mib": "16,800,000 バイト・200,000 行の UTF-8 CRLF を起動引数で開いて最初の frame_presented まで（1 GB はメモリマップの縦切りで置き換える・決定 3）"
+    "open-large-file-16mib": "16,800,000 バイト・200,000 行の UTF-8 CRLF を起動引数で開いて最初の frame_presented まで（1 GB はメモリマップの縦切りで置き換える・決定 3）",
+    "key-to-frame-burst-200-16mib": "open-large-file-16mib と同じ 16 MiB を起動引数で開いたあと、key-to-frame-burst-200 と同じ 200 の WM_CHAR をまとめて post して、最初の input_received から最後の打鍵を描き終えた frame_presented まで（大きな piece table と長い add バッファの上の打鍵・ADR 0044 決定 6）"
   },
   "tolerance": {
     "percent": 25,
@@ -43,6 +44,11 @@
           "medianMs": 34.9327,
           "minimumMs": 32.1952,
           "maximumMs": 38.0386
+        },
+        "key-to-frame-burst-200-16mib": {
+          "medianMs": 427.674,
+          "minimumMs": 410.569,
+          "maximumMs": 519.529
         }
       }
     },
