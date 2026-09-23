@@ -1205,13 +1205,45 @@ def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) ->
         previous = pixels
 
 
+def summarize_measure(report: Path) -> dict:
+    """Read the --measure milestones back: were the keys received, and was a frame presented after.
+
+    Issue #140: tells "the keys never reached the window" from "they arrived but nothing was
+    drawn". Times are ms from window_shown, on the QPC clock the editor stamps with.
+    """
+    if not report.exists():
+        return {"written": False}
+    marks = json.loads(report.read_text(encoding="utf-8"))["marks"]
+
+    def times(name: str) -> list[float]:
+        return [mark["qpcMicroseconds"] / 1000 for mark in marks if mark["milestone"] == name]
+
+    shown = times("window_shown")
+    inputs = times("input_received")
+    presented = times("frame_presented")
+    origin = shown[0] if shown else 0.0
+
+    def since(moments: list[float], index: int) -> float | None:
+        return round(moments[index] - origin, 1) if moments else None
+
+    return {"written": True, "inputReceived": len(inputs), "framePresented": len(presented),
+            "firstFrameMs": since(presented, 0), "firstInputMs": since(inputs, 0),
+            "lastInputMs": since(inputs, -1), "lastFrameMs": since(presented, -1),
+            "framesAfterLastInput": sum(1 for moment in presented
+                                        if inputs and moment > inputs[-1])}
+
+
 def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
                opened: Path | None = None, vim: bool = False) -> dict:
     """--keys: before.png, the keys through the posted-message path, after.png, frames.json."""
     steps = parse_keys(keys)
+    # 節目を measure.json に落とし、鍵が届いたかと描かれたかを frames.json に写す（Issue #140）。
+    report = frames / "measure.json"
+    report.unlink(missing_ok=True)
     # --open は起動引数でファイルを開いてから撮る（Issue #117: `\r` を含む行は鍵では打てない）。
     process, window, _ = start(executable, environment,
-                               [str(opened)] if opened is not None else None)
+                               ["--measure", str(report),
+                                *([str(opened)] if opened is not None else [])])
     try:
         raise_window(window)
         time.sleep(0.4)
@@ -1240,11 +1272,13 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
         record = {"before": "before.png", "after": "after.png", "keys": keys, "steps": len(steps),
                   "changed": changed, "body": body_box, "regions": regions,
                   "dpi": dpi, "size": {"w": width, "h": height}}
-        (frames / "frames.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         close(window)
         # 鍵が本文を変えていれば未保存の確認が出る。変えていなければ何も出ずにそのまま閉じる。
         dismiss_dialog(process, IDNO)
         process.wait(timeout=5)
+        # 節目の書き出しは終了時なので、閉じてから読む（Issue #140）。
+        record["measure"] = summarize_measure(report)
+        (frames / "frames.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         return record
     finally:
         stop(process)
