@@ -6,6 +6,7 @@ diff の行は #99（fixture を足しただけ）と #85（-crlf の 10 件を�
 
 import importlib.util
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -77,9 +78,14 @@ class FixtureElements(unittest.TestCase):
 class Scopes(unittest.TestCase):
     def test_the_scopes_array_of_head_is_read_without_the_contracts_array(self):
         source = (ROOT / "tests/unit/NibTests.cpp").read_text(encoding="utf-8")
+        declared = re.search(
+            r"std::array<std::pair<std::string_view, void \(\*\)\(\)>, (\d+)> scopes\{\{", source)
+        self.assertIsNotNone(declared)
+        count = int(declared.group(1))
         scopes = PROTECTED.parse_scopes(source)
-        self.assertEqual(len(scopes), 19)
-        self.assertEqual(len(set(scopes)), 19)
+        self.assertEqual(len(scopes), count)
+        self.assertEqual(len(set(scopes)), count)
+        self.assertGreaterEqual(count, 19)
         self.assertIn("--vim-search-highlight", scopes)
         self.assertTrue(all(scope.startswith("--") for scope in scopes))
 
