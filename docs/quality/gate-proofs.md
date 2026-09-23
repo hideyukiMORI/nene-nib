@@ -1344,6 +1344,20 @@ ARC-001 / CPP-002 / CPP-011 / CPP-014 / QLT-001 / QLT-012 を自己レビュー�
 | `python eng/verify-window.py --capture out/frames-148` | `verify_vim` に incsearch の節を足した（`ialpha beta<Esc>0/be` → 面と枠が出る・Esc で消える・`u` で空に戻る）。**終了 0**・`incsearchPaintedTheFirstRow` / `escapeTookThePreviewAway` が true。`out/frames-148/vimIncsearch.png` |
 | clang-format（変更した C++ 6 ファイル）・`git diff --check` | 指摘なし |
 
+**訂正（rebase 後・base `de0eebd`・head `e79b9e1`）**: 設計席の差し戻し 1 回目で、入力中の全一致の面（`matches`）は `VimState::highlight` が on のときだけにした（Vim は `hlsearch` off なら今の当たりだけ光る）。`current_match` は `matches` と独立に preview の当たりから作る（`line_view` の 1 か所・`previewed_offset` を切り出した）。契約 2 つ（`:set nohlsearch` 後の `/be` は `matches` が空で `current_match` だけ・`:set hlsearch` で両方）を `--vim-search-incremental` に足した。rebase の衝突解消で `verify_display_line_scope` の閉じ括弧が落ちて `8801448` の `nib_tests` が組めなかったので戻した。上の表の数字は rebase 前のもので、rebase 後は次のとおり。
+
+| 検査 | 実測（rebase 後） |
+| --- | --- |
+| `cmake --build build --clean-first`（Debug・clang-tidy・ASan・UBSan） | 81 / 81・警告 0 |
+| `build/nib_tests.exe --vim-search-incremental` | **111 checks 成功**（108 ＋ 3・足した契約の関数 1 本の分） |
+| `build/nib_tests.exe --vim-search` / `--vim-search-highlight` / `--display-line` | **1356 / 74 / 189 checks 成功** |
+| `build/nib_tests.exe`（引数なし） | **13682 checks 成功** |
+| `ctest --test-dir build` | 4 / 4 成功 |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py`（`--build-dir build` も） | **0 violation / 0 violation** |
+| `python eng/protected-diff.py --base origin/main --allow --vim-search --allow --vim-search-incremental --build` | **終了 0**。`de0eebd..e79b9e1`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`--vim-search 1290 -> 1356`・`--vim-search-incremental 新規 111`・`scopes 21 / same 19 / 未測 0` |
+| `python eng/verify-window.py --capture out/frames-148` | **終了 0**・`incsearchPaintedTheFirstRow` が true。`out/frames-148/vimIncsearch.png`（`/be` で「beta」の be に面と枠・キャレットは 行 1 桁 1） |
+| clang-format（変更した C++ 2 ファイル）・`git diff --check` | 指摘なし |
+
 対象を限定した理由: 差分は application の 5 ファイルと単体テスト・`eng/verify-window.py` の 1 節である。core・renderer・fixture・速さの入力は不変なので、fixture の再生成・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。preview は 1 打鍵ごとに本文全体の検索と見えている行の照合を行うが、速さのゲートの `keystroke` は通常の入力なので測っていない（ADR 0041 の結果）。Waivers: none。
 
 FR-003 / ARC-001/004/010 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビュー。次の一致を求める経路は確定の鍵と preview で `vim_find_match` の 1 本、スクロールの追従は `follow_position` の 1 本。`optional` は `has_value` / `value` / `value_or` だけで読む。
