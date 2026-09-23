@@ -1475,3 +1475,21 @@ FR-003 / ARC-001/010/011 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビ
 | clang-format（変更した C++ 3 ファイル）・`git diff --check` | 指摘なし |
 
 `eng/verify-window.py` は `/be` の Ctrl-G だけを撮っており向きが変わらないので、PNG は撮り直していない（前の結果を再利用・ADR 0021）。
+
+### 5-ax. 本文の Tab を空白 8 個ぶんの tab stop で描く（Issue #175・ADR 0045・2026-09-23）
+
+ブランチ `feat/175-tab-stops`（main `86ab4ba` から）。`Direct2DRenderer::create_body_formats`（本文の `TextFormat` を作る唯一の所・フォント名・サイズ・DPI の変更はすべてここを通る）が、作った本文の書式を `set_tab_stops` に渡す。`set_tab_stops` は同じ書式で `" "` の layout を作り `GetMetrics` の `widthIncludingTrailingWhitespace` × 8（`tab_stop_spaces`）を `SetIncrementalTabStop` に渡す。layout の作成・計測が失敗したときや幅が 0 以下のときは何もせず DirectWrite の既定のまま描く（CPP-005）。行番号の書式・UI の書式・core・application・`display_line` は不変。`eng/verify-window.py` は全節の実行に Tab の節 `verify_tab_stops` を足し（`a<Tab>b` / 空白 8 個 ＋ `b` / `<Tab>c` / `ab<Tab>c` の CRLF を起動引数で開き、各行のインクの右端の x を読んで 1 行目と 2 行目、3 行目と 4 行目が同じ画素であることを assert・`--capture` なら `tabStops.png`）、`--open <file> --capture <dir>` を `--keys` なしでも受けて `opened.png` を 1 枚撮るようにした。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | renderer の書式の作成。警告 0 で成功 |
+| `python eng/verify-window.py --open out/tab-175.txt --capture out/frames-175` | 終了 0。`out/frames-175/opened.png` で `a<Tab>b` の `b` と空白 8 個の `b`、`<Tab>c` と `ab<Tab>c` の `c` が同じ x（DPI 120・800×450） |
+| 同じ `--open` を main `86ab4ba` の Debug exe で（`--executable ../NeNeNib/build/NeNeNib.exe --capture out/frames-175-main`） | 負の対照。`out/frames-175-main/opened.png` では DirectWrite の既定の tab stop で `a<Tab>b` の `b` が空白 8 個の `b` より左に描かれ、揃わない |
+| `python eng/verify-window.py --capture out/frames-175`（全節） | **終了 0**。既存の節はすべて通り、`documents.tabs.rightInk` が `[187, 187, 187, 187]`（4 行のインクの右端が同じ画素・DPI 120）。`out/frames-175/tabStops.png` |
+| `build/nib_tests.exe`（引数なし）・`ctest --test-dir build -R nib_unit` | **13712 checks 成功**（main と同数）・成功 |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py`（`--build-dir build` も） | 0 violation / 0 violation / 0 violation |
+| clang-format（renderer 2 ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は本文の書式を作る 1 か所への tab stop の設定と、`eng/verify-window.py` の 1 節・引数の組み合わせ 1 つである。core・application・fixture・保存・打鍵の経路に触れず、書式はフォントの変更時にだけ作り直すので速さの入力（起動・1 打鍵・16 MiB）の描画経路は不変。`--regenerate`・`eng/measure-speed.py`・Release・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
+FR-003 / ARC-001 / CPP-005 / CPP-009 / CPP-017 / QLT-001 / QLT-012 を自己レビュー。tab stop の値は renderer の 1 か所で、ADR 0034 の仮想桁（core の `tab_stop = 8`）とは同じ数を別に持つ（`tabstop` を設定にするときに 1 経路へ畳む・ADR 0045 の決定 3）。残るのは、等幅でない guifont と、Tab の前に全角文字がある行（DirectWrite は画素で、Vim は桁で次の tab stop を決めるので、全角の字幅が空白 2 個ぶんでないフォントでは揃わない）。PNG の受理は planned（設計席が Read で見る）。

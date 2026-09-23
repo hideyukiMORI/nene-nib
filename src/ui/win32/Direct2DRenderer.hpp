@@ -69,6 +69,9 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
+    // 本文の書式の tab stop を空白 8 個ぶんにする。本文の書式を作るたびにここだけを通る
+    // （ADR 0045 の決定 1）。測れないときは既定のまま。
+    void set_tab_stops(IDWriteTextFormat *format);
     [[nodiscard]] const wchar_t *family(const wchar_t *preferred, const wchar_t *fallback) const;
     [[nodiscard]] HRESULT make_format(const wchar_t *face, float size_dips,
                                       DWRITE_FONT_WEIGHT weight, TextFormat &format);
