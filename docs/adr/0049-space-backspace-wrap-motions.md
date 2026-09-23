@@ -1,6 +1,6 @@
 # ADR 0049 — `<Space>` `<BS>` は行をまたぐ `l` `h` で、オペレータ待ちと VISUAL では行末の位置に一度止まる
 
-- 状態: 受理（設計席 2026-09-23・Issue #200。hide 未確認・引き継ぎ 09-23「6 回目の区切り時点」の次の順の 2 番目）
+- 状態: 受理（設計席 2026-09-23・Issue #200。hide 未確認・引き継ぎ 09-23「6 回目の区切り時点」の次の順の 2 番目。決定 2・3 は #200 の実装の実測で設計席が補正）
 - 日付: 2026-09-23
 - Issue: #200
 - 影響する規則: FR-003 / ARC-001 / CPP-002 / QLT-001 / QLT-012 / CNF-010 / CNF-011
@@ -24,8 +24,8 @@
 **`<Space>` `<BS>` は NORMAL / VISUAL / 矩形 VISUAL の移動で、`l` `h` に「行をまたぐ」を足したもの。オペレータ待ちと VISUAL では行末の位置に一度止まる。範囲の形は既存の exclusive の規則に任せ、fixture が Vim と同じ結果を守る。**
 
 1. **鍵と motion**: `VimKeyTable` の表に `U' '` → `VimAction::space_right`、`VimSpecialKey::backspace`（NORMAL / VISUAL の `normal_special` / `visual_special`）→ `VimAction::space_left` を足し、`VimMotion::wrap_right` / `wrap_left` を足す（exclusive・文字単位）。NORMAL の `<BS>` は `cancelled` ではなく `acted()` を通る（オペレータ待ちの `d<BS>` も同じ口）。INSERT の `<Space>` `<BS>` は今までどおり文字と削除。
-2. **1 歩の規則**: 右へ 1 歩は「行末の文字の上でなければ 1 文字右」。行末の文字の上なら、裸の NORMAL は次の行の 0 桁目（次の行が無ければ `not_moved` の失敗）、オペレータ待ち・VISUAL は改行の位置（行末の位置・その行の `\n` のオフセット）に止まり、既に改行の位置なら次の行の 0 桁目。左へ 1 歩は対称（0 桁目から、裸の NORMAL は前の行の最後の文字、オペレータ待ち・VISUAL は前の行の改行の位置、改行の位置からは最後の文字。1 行目の 0 桁目は失敗）。空行は 0 桁目と改行の位置が同じで 1 歩で通る。回数は 1 歩ずつ繰り返し、途中で失敗したら全体が失敗（`j` `k` と同じ・Vim も `n == count1` のときだけビープ）。
-3. **範囲**: オペレータの範囲は exclusive の文字単位で、`:help exclusive` の 2 規則（終点が 0 桁目なら前の行の末尾までの inclusive・さらに始点が最初の非空白以前なら行単位）を `VimMotionRange` を作る 1 か所で適用する（既に他の motion に効いていればそれを使う。無ければ足し、既存の fixture 1384 件が不変であることで他の motion に影響しないことを確かめる）。VISUAL では caret が改行の位置に来られる（`$` と同じ扱い・選択は改行を含む）。
+2. **1 歩の規則**: 右へ 1 歩は「行末の文字の上でなければ 1 文字右」。行末の文字の上なら、裸の NORMAL は次の行の 0 桁目（次の行が無ければ `not_moved` の失敗）、オペレータ待ち・VISUAL は改行の位置（行末の位置・その行の `\n` のオフセット）に止まり、既に改行の位置なら次の行の 0 桁目。左へ 1 歩は対称（0 桁目から、裸の NORMAL と **`y` のオペレータ待ち**は前の行の最後の文字、**`d` `c` のオペレータ待ち**と VISUAL は前の行の改行の位置、改行の位置からは最後の文字。1 行目の 0 桁目は失敗）。`y<BS>` が止まらないのは Vim の `nv_left` の「消す改行を含めるときだけ NUL に置く」特例（`OP_DELETE` / `OP_CHANGE` だけ）で、#200 の実装で実測して補正した（`ab\ncd` の `jy<BS>` は `b`）。止まる・渡るは閉じた enum `VimLineEndStop` で渡す。空行は 0 桁目と改行の位置が同じで 1 歩で通る。回数は 1 歩ずつ繰り返し、途中で失敗したら全体が失敗（`j` `k` と同じ・Vim も `n == count1` のときだけビープ）。
+3. **範囲**: オペレータの範囲は exclusive の文字単位で、`:help exclusive` の 2 規則（終点が 0 桁目なら前の行の末尾までの inclusive・さらに始点が最初の非空白以前なら行単位）を `VimMotionRange` を作る 1 か所で適用する。**例外**: `d<BS>` `c<BS>` が文字のある行の改行の位置へ渡ったときは言い換えを通さない（Vim の `CA_NO_ADJ_OP_END`。通すと行頭の `d<BS>` が空の範囲になり「改行 1 つを消す」が出ない・`j2d<BS>` は `c\n`）。渡った先が空行なら通して行単位（`\ncd` の `jd<BS>` は `V`）。#200 の実装で実測して補正した。VISUAL では caret が改行の位置に来られる（`$` と同じ扱い・選択は改行を含む）。
 4. **`.` と録画**: `d<Space>` は普通の変更として `.` に記録される（鍵は `VimCharacter{U' '}`）。マクロの本文は `' '` と `<80>kb`（ADR 0048 決定 7）。
 5. **fixture の記法**: `eng/vim-oracle.py` の `KEY_NAMES` と `tests/unit/VimTestSupport.hpp` の `vim_key_names` に `<Space>` `<Left>` `<Right>` `<Up>` `<Down>` を足す（`<NL>` と同じ 2 か所・ARC-012 の既知の複製）。`keys` の生の空白は今までどおり文字。**先頭が空白（生でも `<Space>` でも）の `keys` は oracle が `1` を前置して `:normal!` に渡す**（`:help :normal` の書き方・回数 1 は無害・2 桁目の数字と繋がることは先頭が空白なので無い）。`records_a_macro`（#190）は空白と矢印を「コマンドでない鍵」として扱う（既存どおり）。
 6. **fixture**: `space-` の接頭辞で 25 件程度: 行の途中・行末の越境・行頭の `<BS>`・文書の端の失敗・回数・空行・`d<Space>`（途中・行末）・`d<BS>`（途中・行頭）・`3d<Space>`（行単位）・`c<Space>` `y<Space>`・VISUAL の `v<Space>…` の足踏みと越境・`v<BS>`・矩形 VISUAL の `<C-v><Space>`・`d<Space>` の後の `.`・先頭が `<Space>` の keys（決定 5）・矢印の fixture（NORMAL の `<Left>` `<Down>`・INSERT の中の `<Left>`・`d<Right>`）。
