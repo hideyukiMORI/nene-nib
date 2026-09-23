@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 833184dbe473207fd3129c251be69435ea2ee097b78b2422db03c4b74bae6c48 / 1359 fixtures
+// fixtures.json: sha256 81cd56f8cc6b1de55d1515c8d846e65f30f9b35e1e2eb435ee11ebbfd10afba4 / 1381 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1359> vim_fixtures{{
+constexpr std::array<VimFixture, 1381> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1371,6 +1371,28 @@ constexpr std::array<VimFixture, 1359> vim_fixtures{{
     {"macro-recursive", "a\nb\nc", "@a", "\n\n", 3, 1, "c", "v", std::nullopt, VimMacroFixture{'a', "xj@a"}},
     {"macro-visual", "abcdef", "@a", "def", 1, 1, "abc", "v", std::nullopt, VimMacroFixture{'a', "vlld"}},
     {"macro-operator-word", "one two three", "2@a", "three", 1, 1, "two ", "v", std::nullopt, VimMacroFixture{'a', "dw"}},
+    {"register-yank-put", "alpha\nbeta\ngamma", "\"ayyj\"ap", "alpha\nbeta\nalpha\ngamma", 3, 1, "alpha\n", "V", std::nullopt},
+    {"register-delete-put", "alpha\nbeta\ngamma", "\"add\"ap", "beta\nalpha\ngamma", 2, 1, "alpha\n", "V", std::nullopt},
+    {"register-name-then-count", "line1\nline2\nline3\nline4", "\"a3yyG\"ap", "line1\nline2\nline3\nline4\nline1\nline2\nline3", 5, 1, "line1\nline2\nline3\n", "V", std::nullopt},
+    {"register-count-then-name", "line1\nline2\nline3\nline4", "3\"ayyG\"ap", "line1\nline2\nline3\nline4\nline1\nline2\nline3", 5, 1, "line1\nline2\nline3\n", "V", std::nullopt},
+    {"register-later-name-wins", "alpha\nbeta\ngamma", "\"a\"byyj\"bp", "alpha\nbeta\nalpha\ngamma", 3, 1, "alpha\n", "V", std::nullopt},
+    {"register-earlier-name-empty", "alpha\nbeta\ngamma", "\"ayyj\"a\"byyj\"ap", "alpha\nbeta\ngamma\nalpha", 4, 1, "beta\n", "V", std::nullopt},
+    {"register-escape-drops-name", "alpha\nbeta\ngamma", "\"ayyj\"a<Esc>yyj\"ap", "alpha\nbeta\ngamma\nalpha", 4, 1, "beta\n", "V", std::nullopt},
+    {"register-escape-then-unnamed", "alpha\nbeta\ngamma", "\"a<Esc>yyjp", "alpha\nbeta\nalpha\ngamma", 3, 1, "alpha\n", "V", std::nullopt},
+    {"register-motion-drops-name", "alpha\nbeta\ngamma", "\"ayyj\"ajyy\"ap", "alpha\nbeta\ngamma\nalpha", 4, 1, "gamma\n", "V", std::nullopt},
+    {"register-black-hole-delete", "alpha\nbeta\ngamma", "yyj\"_ddp", "alpha\ngamma\nalpha", 3, 1, "alpha\n", "V", std::nullopt},
+    {"register-append-lines-lines", "abc def\nxyz", "\"ayyj\"Ayy\"ap", "abc def\nxyz\nabc def\nxyz", 3, 1, "abc def\nxyz\n", "V", std::nullopt},
+    {"register-append-lines-word", "abc def\nxyz", "\"ayyj\"Ayw\"ap", "abc def\nxyz\nabc def\nxyz", 3, 1, "abc def\nxyz\n", "V", std::nullopt},
+    {"register-append-word-lines", "abc def\nxyz", "\"aywj\"Ayy\"ap", "abc def\nxyz\nabc \nxyz", 3, 1, "abc \nxyz\n", "V", std::nullopt},
+    {"register-append-word-word", "abc def\nxyz", "\"aywj\"Ayw\"ap", "abc def\nxabc xyzyz", 2, 8, "abc xyz", "v", std::nullopt},
+    {"register-unnamed-name", "alpha\nbeta\ngamma", "\"\"yyjp", "alpha\nbeta\nalpha\ngamma", 3, 1, "alpha\n", "V", std::nullopt},
+    {"register-visual-yank", "alpha\nbeta\ngamma", "vll\"ayj\"ap", "alpha\nbalpeta\ngamma", 2, 4, "alp", "v", std::nullopt},
+    {"register-visual-delete", "alpha\nbeta\ngamma", "vl\"adj\"ap", "pha\nbaleta\ngamma", 2, 3, "al", "v", std::nullopt},
+    {"register-visual-line-yank", "alpha\nbeta\ngamma", "Vj\"ayG\"ap", "alpha\nbeta\ngamma\nalpha\nbeta", 4, 1, "alpha\nbeta\n", "V", std::nullopt},
+    {"register-block-yank-put", "abcd\nefgh\nijkl", "<C-v>jl\"ayG\"ap", "abcd\nefgh\niabjkl\n ef", 3, 2, "ab\nef", "\0262", std::nullopt},
+    {"register-delete-dot", "one\ntwo\nthree\nfour", "\"add.\"ap", "three\ntwo\nfour", 2, 1, "two\n", "V", std::nullopt},
+    {"register-append-delete-dot", "one\ntwo\nthree\nfour\nfive", "\"Add..\"ap", "four\none\ntwo\nthree\nfive", 2, 1, "one\ntwo\nthree\n", "V", std::nullopt},
+    {"register-put-dot", "alpha\nbeta\ngamma", "\"ayyjyy\"ap.", "alpha\nbeta\nalpha\nalpha\ngamma", 4, 1, "beta\n", "V", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

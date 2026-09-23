@@ -389,6 +389,30 @@ void verify_macro_unnamed_and_uninitialized()
     expect(whole_vim_body(controller) == "lbc", "an empty register replays nothing");
 }
 
+// 矩形が絡む `"A` の追記は書かずにビープする（ADR 0048 の決定 4・Vim は繋ぐ・後続）。矩形で取って
+// 行単位のレジスタへ追記しても、矩形のレジスタへ行を追記しても、名前つきも無名も変わらない。
+// VISUAL の中の拒否は選択を保ったまま残る。
+void verify_register_block_append_refused()
+{
+    Editing editing;
+    open_vim_document(editing, "abcd\nefgh");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "\"ayy<C-v>j\"Ay");
+    const VimState &into_lines = controller.vim_state();
+    expect(named_register(into_lines, U'a').text == "abcd\n" &&
+               named_register(into_lines, U'a').kind == VimRegisterKind::lines &&
+               into_lines.unnamed_register.text == "abcd\n" &&
+               into_lines.mode == VimMode::visual_block,
+           "a block yank appended to a lines register is refused and the block selection stays");
+    vim_replay(controller, "<Esc>gg<C-v>j\"by\"Byy");
+    const VimState &into_block = controller.vim_state();
+    expect(named_register(into_block, U'b').kind == VimRegisterKind::block &&
+               named_register(into_block, U'b').text == "a\ne" &&
+               into_block.unnamed_register.kind == VimRegisterKind::block &&
+               whole_vim_body(controller) == "abcd\nefgh" && into_block.mode == VimMode::normal,
+           "a line yank appended to a block register is refused and both registers stay");
+}
+
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
     return fixture.macro.has_value();
@@ -411,6 +435,7 @@ void verify_vim_macro_contracts()
     verify_recording_is_text();
     verify_macro_unnamed_and_uninitialized();
     verify_replay_through_input_line();
+    verify_register_block_append_refused();
 }
 
 void verify_vim_macro_scope()
