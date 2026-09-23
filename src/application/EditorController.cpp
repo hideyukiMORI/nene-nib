@@ -1589,6 +1589,19 @@ std::optional<CompositionView> EditorController::composed() const
                            composition.value().cursor};
 }
 
+std::optional<char> EditorController::recording_name() const
+{
+    const auto &recording = state_.vim().macro_recording;
+    if (state_.mode() != core::EditMode::vim || !recording.has_value())
+    {
+        return std::nullopt;
+    }
+    // core は名前を小文字で持ち、追記（`qA`）は append の印で持つ。Vim は打った名前の
+    // まま `recording @A` と出すので、追記なら大文字へ戻す。
+    const char name = recording.value().name;
+    return recording.value().append ? static_cast<char>(name - 'a' + 'A') : name;
+}
+
 std::optional<core::VimPattern> EditorController::search_pattern() const
 {
     // 入力中は入力のパターンで塗る。解析できなければ何も塗らない（ADR 0041 の決定 4）。
@@ -1687,6 +1700,7 @@ EditorFrame EditorController::frame() const
                        state_.mode(),
                        state_.vim().mode,
                        core::mode_label(state_.mode(), state_.vim().mode),
+                       recording_name(),
                        composed(),
                        DocumentView{core::tab_title_for(document.path, save_state), document.path,
                                     document.encoding, save_state, state_.last_failure()},

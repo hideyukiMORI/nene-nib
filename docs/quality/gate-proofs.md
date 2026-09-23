@@ -1534,3 +1534,21 @@ ARC-003/007 / CPP-001/002/004/011 / QLT-001/012 を自己レビュー。`PieceSo
 対象を限定した理由: 差分は Vim の engine と controller の再生の経路・oracle の入力欄・単体テストである。renderer・ui/win32・速さの入力（通常の打鍵は `step_vim` を通るだけで経路は同じ）は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001/004/010 / CPP-002/004/005/011/012 / QLT-001/012 / CNF-010/011 を自己レビュー。`.` と `@` の再生は `perform(VimReplay)` の 1 本（planned・レビュー事項）。失敗の判定は `VimStep.failure` の 1 本で、`.` と `@` が同じ規則を使う。
+
+### 5-ba. マクロの録画中の表示 `recording @a`（Issue #180・ADR 0046 の決定 8・2026-09-23）
+
+ブランチ `feat/180-recording-indicator`（main `9198fea` から）。application の `EditorFrame` に `recording`（`std::optional<char>`）を 1 欄足し、`EditorController::recording_name` が core の `VimState::macro_recording` を読むだけで埋める（Vim モードのときだけ値を持つ・通常モードでは鍵が engine を通らないので出さない・追記の `qA` は Vim の `reg_recording` と同じく打った大文字）。renderer の `draw_recording` はモード表示の文字の幅（`widthIncludingTrailingWhitespace`）＋ 12 DIP の後ろから最初の状態項目の手前までに `recording @a` を `command_format_`（Cascadia・Vim のコマンド行と同じ等幅）と `muted` のトークンで書く。色のリテラルは無い（ADR 0008 決定 8）。core・fixture は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | `EditorFrame` の集成体の初期化（`frame()` の 1 か所）と renderer。警告 0 で成功 |
+| `build/nib_tests.exe --vim-macro` | 対象。**289 checks 成功**（280 ＋ 9・契約 2 本: `qa` で `'a'`・INSERT の中も残る・止める `q` で消える・`qA` は `'A'` / 通常モードでは出さず Vim へ戻ると同じ録画がまた見える。増分 9 は `expect` 7 と `applied` 2） |
+| `build/nib_tests.exe`（引数なし） | **13995 checks 成功**（13986 ＋ 9） |
+| `python eng/protected-diff.py --base origin/main --allow --vim-macro --build` | **終了 0**。`9198fea..f249c9a`・`fixtures 1359 -> 1359 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`--vim-macro 変化 280 -> 289 allowed`・`scopes 22 / same 21 / 未測 0` |
+| `python eng/verify-window.py --capture out/frames-180` | **終了 0**。`verify_vim` の `recordingChangedTheStatusBar: true`（`qa` の後はモード表示から最初の状態項目までの箱の画素が NORMAL と違う）・`stoppingTookTheRecordingAway: true`（`q` の後は NORMAL と画素一致）。`out/frames-180/vimRecording.png` に `NORMAL  recording @a` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py`（`--build-dir build` も） | **0 violation / 0 violation / 0 violation** |
+| clang-format（変更した C++ 6 ファイル）・`git diff --check`・`eng/validate-git.ps1` | 指摘なし |
+
+対象を限定した理由: 差分は application の表示値 1 欄・renderer の 1 関数・verify-window の 1 節・単体の契約である。core・fixture・打鍵の経路は不変で、描く文字は録画中だけ増えるので、`--regenerate`・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / FR-004 / ARC-001/011 / CPP-004/009/011 / QLT-001/012 を自己レビュー。表示値は `frame()` の 1 経路（ARC-001）、`optional` は `value()` で読む（CPP-004）、`reinterpret_cast` 無し（CPP-009）。

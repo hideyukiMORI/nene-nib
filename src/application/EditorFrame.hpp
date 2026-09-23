@@ -39,6 +39,9 @@ struct EditorFrame
     // 通常モードのときは意味を持たない（mode_label にも出ない）。
     core::VimMode vim_mode;
     std::string_view mode_label;
+    // 録画中のマクロの名前（`q{a-z}` から `q` まで・ADR 0046 の決定 8）。Vim モードのあいだ
+    // だけ値を持ち、renderer がモード表示の隣に `recording @a` を muted で描く。
+    std::optional<char> recording;
     // 変換中の文字列。キャレットの位置に差し込んで描く（ADR 0014 の決定 2）。
     std::optional<CompositionView> composition;
     DocumentView document;

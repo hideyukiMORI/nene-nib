@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <utility>
@@ -41,6 +43,8 @@ constexpr std::size_t selection_run_maximum = 8;
 constexpr float tab_stop_spaces = 8.0F;
 // 空白 1 個を測る layout の最大幅。折り返さないので十分に大きければよい。
 constexpr float space_probe_width = 1000.0F;
+// モード表示の文字と `recording @a` のあいだ（ADR 0046 の決定 8）。
+constexpr float recording_gap_dips = 12.0F;
 constexpr DWORD latency_timeout_milliseconds = 1000;
 constexpr float full_channel = 255.0F;
 
@@ -994,6 +998,36 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
     }
     draw_toggle(frame, layout);
     write(frame.mode_label, mode_format_.Get(), layout.mode, frame.palette.text);
+    draw_recording(frame, layout);
+}
+
+// 録画中のマクロ（ADR 0046 の決定 8）。モード表示の文字の直後から右の項目の手前までに、
+// Vim のコマンド行と同じ `recording @a` を muted で書く。色はトークンだけ（ADR 0008 決定 8）。
+void Direct2DRenderer::draw_recording(const application::EditorFrame &frame,
+                                      const core::StatusBarLayout &layout)
+{
+    if (!frame.recording.has_value())
+    {
+        return;
+    }
+    const auto label = text_layout(frame.mode_label, mode_format_.Get(), layout.mode);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!label || FAILED(label->GetMetrics(&metrics)))
+    {
+        return;
+    }
+    const auto left = layout.mode.left +
+                      static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace +
+                                                          scaled(recording_gap_dips)));
+    const core::LayoutRect area{left, layout.band.top, layout.items.at(0).left, layout.band.bottom};
+    if (core::width_of(area) <= 0)
+    {
+        return;
+    }
+    const std::string shown = std::string("recording @") + frame.recording.value();
+    context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
+    write(shown, command_format_.Get(), area, frame.palette.muted);
+    context_->PopAxisAlignedClip();
 }
 
 void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
