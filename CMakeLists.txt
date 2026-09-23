@@ -60,7 +60,34 @@ nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
-nenenib_target(nib_tests unit_tests EXECUTABLE tests/unit/NibTests.cpp)
+nenenib_target(nib_tests unit_tests EXECUTABLE
+    tests/unit/NibTests.cpp
+    tests/unit/TestSupport.cpp
+    tests/unit/VimTestSupport.cpp
+    tests/unit/CoreTests.cpp
+    tests/unit/ApplicationTests.cpp
+    tests/unit/VimEngineTests.cpp
+    tests/unit/DisplayLineTests.cpp
+    tests/unit/VimDotTests.cpp
+    tests/unit/VimSearchTests.cpp
+    tests/unit/VimSearchHighlightTests.cpp
+    tests/unit/VimSearchIncrementalTests.cpp
+    tests/unit/VimTextObjectTests.cpp
+    tests/unit/VimReplaceTests.cpp
+    tests/unit/VimVisualYankTests.cpp
+    tests/unit/VimVisualWantedTests.cpp
+    tests/unit/VimOpenLineTests.cpp
+    tests/unit/VimOpenLineExternalTests.cpp
+    tests/unit/VimOpenLineRecoveryTests.cpp
+    tests/unit/VimCharacterSearchTests.cpp
+    tests/unit/VimLineJumpTests.cpp
+    tests/unit/VimLineJumpRecoveryTests.cpp
+    tests/unit/VimVirtualColumnTests.cpp
+    tests/unit/UserThemeSelectionTests.cpp
+    tests/unit/UserThemeValuesTests.cpp
+    tests/unit/CommandPaletteTests.cpp
+    tests/unit/ExSettingsTests.cpp
+    tests/unit/VimVisualBlockTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
