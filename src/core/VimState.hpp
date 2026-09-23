@@ -5,6 +5,8 @@
 #include "VimCount.hpp"
 #include "VimInputWait.hpp"
 #include "VimInsertRepeat.hpp"
+#include "VimMacroRecording.hpp"
+#include "VimMacroRegisters.hpp"
 #include "VimMode.hpp"
 #include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
@@ -53,6 +55,12 @@ struct VimState
     // （短い行へ畳まれた角からは幅が読めない・Issue #112 で実測）。
     std::optional<VimBlockExtent> replayed_block;
     VimRegister unnamed_register;
+    // マクロ（ADR 0046 の決定 1）。macros は a〜z の鍵の列、macro_recording は `q{a-z}` から
+    // `q` までの録画中の鍵、last_macro は `@@` が繰り返す直前の名前。`.` の記録とは独立で、
+    // どれも鍵を食べ終わっても（vim_resting_from でも）保つ。
+    VimMacroRegisters macros;
+    std::optional<VimMacroRecording> macro_recording;
+    std::optional<char> last_macro;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。
@@ -63,11 +71,12 @@ struct VimState
                     std::nullopt,           std::nullopt, std::nullopt,
                     VimSearchHighlight::on, true,         std::nullopt,
                     std::nullopt,           std::nullopt, std::nullopt,
-                    std::nullopt,           std::nullopt, std::move(unnamed_register)};
+                    std::nullopt,           std::nullopt, std::move(unnamed_register),
+                    VimMacroRegisters{},    std::nullopt, std::nullopt};
 }
 
 // 通常の鍵の完了は 'scroll' の明示値と直前の文字検索・検索パターンと強調・incsearch
-// の有無を捨てない。 Vim モードへ初めて入る 初期化だけが vim_resting_state
+// の有無とマクロ（ADR 0046）を捨てない。 Vim モードへ初めて入る 初期化だけが vim_resting_state
 // を直接使い、空の値から始める。文字待ちは持ち越さない。
 [[nodiscard]] inline VimState vim_resting_from(const VimState &state, VimRegister unnamed_register)
 {
@@ -77,6 +86,9 @@ struct VimState
     next.last_search = state.last_search;
     next.highlight = state.highlight;
     next.incsearch = state.incsearch;
+    next.macros = state.macros;
+    next.macro_recording = state.macro_recording;
+    next.last_macro = state.last_macro;
     return next;
 }
 

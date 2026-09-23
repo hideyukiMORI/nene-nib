@@ -160,6 +160,51 @@ class VimOracleTests(unittest.TestCase):
             ']\n'.encode("utf-8"),
             vim_oracle.canonical_fixtures_json(fixtures))
 
+    # マクロのレジスタ（ADR 0046 の決定 6）。欄は settings と viewport の間で、在るときだけ書く。
+    def test_canonical_form_puts_the_register_between_settings_and_viewport(self):
+        fixture = {"name": "macro", "text": "ab", "keys": "@a",
+                   "viewport": {"visible_lines": 3, "first_visible": 1, "line": 1, "column": 1},
+                   "register": {"keys": "x", "name": "a"}, "settings": ["set expandtab"]}
+        self.assertEqual(
+            '[\n  {"name":"macro","text":"ab","keys":"@a","settings":["set expandtab"],'
+            '"register":{"name":"a","keys":"x"},'
+            '"viewport":{"visible_lines":3,"first_visible":1,"line":1,"column":1}}\n]\n'
+            .encode("utf-8"),
+            vim_oracle.canonical_fixtures_json([fixture]))
+
+    # 録画は :normal! の中で動かないので、q を命令として打つ fixture は黙って測らずに拒む。
+    # 検索の入力行の q は文字なので通る。
+    def test_canonical_form_rejects_a_recording_q(self):
+        for fixture in [{"name": "a", "text": "b", "keys": "qaxq@a"},
+                        {"name": "a", "text": "b", "keys": "@a",
+                         "register": {"name": "a", "keys": "qbq"}},
+                        {"name": "a", "text": "b", "keys": "@a",
+                         "register": {"name": "A", "keys": "x"}},
+                        {"name": "a", "text": "b", "keys": "@a",
+                         "register": {"name": "a", "keys": ""}},
+                        {"name": "a", "text": "b", "keys": "@a", "register": {"name": "a"}}]:
+            with self.subTest(fixture=fixture), self.assertRaises(ValueError):
+                vim_oracle.canonical_fixtures_json([fixture])
+        vim_oracle.canonical_fixtures_json([{"name": "a", "text": "b", "keys": "d/qux<CR>"},
+                                            {"name": "c", "text": "b", "keys": "?q<CR>@a",
+                                             "register": {"name": "a", "keys": "/q<CR>x"}}])
+
+    def test_probe_script_lets_the_register_before_the_keys(self):
+        script = vim_oracle.probe_script([], "@a", None, {"name": "a", "keys": "iab<Esc>"})
+        lines = script.splitlines()
+        let = lines.index('let @a = "iab\\<Esc>"')
+        self.assertLess(let, next(index for index, line in enumerate(lines)
+                                  if line.startswith('execute "normal! "')))
+        self.assertNotIn("let @", vim_oracle.probe_script([], "x"))
+
+    def test_header_row_carries_the_register_only_when_there_is_one(self):
+        record = self.record({"name": "macro", "text": "ab", "keys": "@a"}, "b")
+        plain = vim_oracle.fixture_row({**record, "viewport": None, "macro": None})
+        self.assertTrue(plain.endswith(', "", "", std::nullopt},'))
+        macro = vim_oracle.fixture_row({**record, "viewport": None,
+                                        "macro": {"name": "a", "keys": "x"}})
+        self.assertTrue(macro.endswith(', std::nullopt, VimMacroFixture{\'a\', "x"}},'))
+
     def test_canonical_form_is_idempotent_and_ends_with_one_newline(self):
         content = vim_oracle.canonical_fixtures_json(
             [{"name": "one", "text": "a", "keys": "x"}, {"name": "two", "text": "b", "keys": "y"}])

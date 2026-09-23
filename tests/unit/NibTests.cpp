@@ -21,8 +21,9 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 12> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 13> contracts{{
         {"--vim-dot", verify_vim_dot_contracts},
+        {"--vim-macro", verify_vim_macro_contracts},
         {"--vim-search", verify_vim_search_contracts},
         {"--vim-search-highlight", verify_vim_search_highlight_contracts},
         {"--vim-search-incremental", verify_vim_search_incremental_contracts},
@@ -43,9 +44,10 @@ void verify_vim_scope_contracts()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 21> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 22> scopes{{
         {"--display-line", verify_display_line_scope},
         {"--vim-dot", verify_vim_dot_scope},
+        {"--vim-macro", verify_vim_macro_scope},
         {"--vim-search", verify_vim_search_scope},
         {"--vim-search-highlight", verify_vim_search_highlight_scope},
         {"--vim-search-incremental", verify_vim_search_incremental_scope},

@@ -21,9 +21,13 @@
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimEffect.hpp"
+#include "VimKey.hpp"
 #include "VimPattern.hpp"
+#include "VimRepeatFailure.hpp"
 #include "VimState.hpp"
 
+#include <cstddef>
+#include <deque>
 #include <expected>
 #include <optional>
 #include <string>
@@ -61,6 +65,13 @@ class EditorController final
     void accept(const VisibleLines &intent);
     void accept(const SelectEditMode &intent);
     void accept(const VimKeyPress &intent);
+    // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
+    // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
+    // 再生のあいだに積んだ編集を 1 つの undo 単位に畳む（ADR 0046 の決定 3）。
+    void merge_replayed_edits(const core::EditHistory &before, const core::TextBuffer &text);
+    // 再生の中の再生の鍵を列の先頭へ差し込む。深さが上限を超えたら残りを捨てる（決定 4）。
+    void queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth);
     void accept(const RefreshAppearance &);
     void accept(const OpenDocument &intent);
     void accept(const SaveDocument &intent);
@@ -73,6 +84,7 @@ class EditorController final
     void accept(const OpenCommandPalette &);
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
+    void accept(const StoreVimMacro &intent);
     // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
     // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
     void submit(const core::CommandLine &line);
@@ -159,5 +171,11 @@ class EditorController final
 
     EditorPorts ports_;
     EditorState state_;
+    // `.` と `@` の再生で流す鍵の列と、それぞれの鍵の入れ子の深さ（ADR 0046 の決定 3・4）。
+    // replay_depth_ はいま流している鍵の深さで、再生の外（打った鍵）では空。どれも
+    // perform(VimReplay) と queue_nested_replay だけが書く。
+    std::deque<core::VimKey> replay_queue_;
+    std::deque<std::size_t> replay_depths_;
+    std::optional<std::size_t> replay_depth_;
 };
 } // namespace nenenib::application

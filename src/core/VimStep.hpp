@@ -3,11 +3,13 @@
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
+#include "VimRepeatFailure.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimState.hpp"
 
 #include <cstddef>
 #include <optional>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -19,6 +21,9 @@ struct VimStep
     // 検索が残した報せ（ADR 0032 の決定 5）。折り返しは効果と同時に出るので効果の選択肢では
     // なく、1 打鍵の結果に添える値である。controller が command_message へ写す。
     std::optional<VimSearchNotice> notice = std::nullopt;
+    // 鍵が閉じた失敗（ビープ）で終わったか（ADR 0046 の決定 3）。再生（`.` と `@`）の中なら
+    // controller が残りの鍵を捨てる。打った鍵では何もしない（本文も状態も効果のとおり）。
+    std::optional<VimRepeatFailure> failure = std::nullopt;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の
@@ -31,6 +36,11 @@ struct VimStep
 // モード・直前の変更・検索と文字検索の記憶は保つ。何が割り込みかを決めるのは呼ぶ側だが、
 // 何を捨てるかを決めるのは engine の側である（ARC-004）。
 [[nodiscard]] VimState vim_interrupted(const VimState &state);
+
+// マクロのレジスタへ鍵の列を置いたあとの状態（ADR 0046 の決定 6・`:let @a = "…"` に当たる）。
+// 名前の a〜z は置き換え、A〜Z は追記、ほかの名前は状態を変えない。
+[[nodiscard]] VimState vim_macro_stored(const VimState &state, char32_t name,
+                                        const std::vector<VimKey> &keys);
 
 // 検索の入力行が開いているあいだの回数（`2/be` の 2・`d2/` なら積）。確定の鍵が engine の中で
 // 使う回数と同じ値で、incsearch の preview と Ctrl-G / Ctrl-T が同じ回数で探すために読む

@@ -65,11 +65,13 @@ enum class VimAction : std::uint8_t
     repeat_search,
     repeat_search_opposite,
     search_word_forward,
-    search_word_backward
+    search_word_backward,
+    // マクロ（ADR 0046）。`q` は録画の開始と停止、`@` は再生。どちらも次の鍵が名前。
+    record_macro,
+    replay_macro
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::search_word_backward) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::replay_macro) + 1;
 } // namespace nenenib::core

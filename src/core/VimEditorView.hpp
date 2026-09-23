@@ -2,6 +2,7 @@
 
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
+#include "VimKeySource.hpp"
 #include "VimViewport.hpp"
 
 namespace nenenib::core
@@ -13,5 +14,7 @@ struct VimEditorView
     const TextBuffer &text;
     const Selection &selection;
     VimViewport viewport;
+    // 鍵の出どころ（ADR 0046 の決定 2）。controller が再生の中だけ replayed にする。
+    VimKeySource source = VimKeySource::typed;
 };
 } // namespace nenenib::core

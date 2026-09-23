@@ -24,6 +24,7 @@
 #include "VimCharacter.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimKey.hpp"
+#include "VimKeySource.hpp"
 #include "VimMatchRequest.hpp"
 #include "VimMode.hpp"
 #include "VimNavigate.hpp"
@@ -41,6 +42,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <string>
 #include <utility>
@@ -312,6 +314,66 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return found_match(
         state.text(), pattern.value(),
         core::VimMatchRequest{from, line->direction(), core::vim_search_count(state.vim())});
+}
+
+// 境界が文字の途中か CRLF の間なら、覆う範囲を外へ 1 バイト広げる向きに動かせるか。
+[[nodiscard]] bool splits_a_character(std::string_view text, std::size_t at) noexcept
+{
+    if (at == 0 || at >= text.size())
+    {
+        return false;
+    }
+    const auto byte = static_cast<unsigned char>(text[at]);
+    return (byte & 0xC0U) == 0x80U || (text[at] == '\n' && text[at - 1] == '\r');
+}
+
+// 先頭の共通部分の長さ。文字と CRLF を割らない所まで戻す。
+[[nodiscard]] std::size_t common_head(std::string_view before, std::string_view after) noexcept
+{
+    std::size_t head = 0;
+    const std::size_t shorter = std::min(before.size(), after.size());
+    while (head < shorter && before[head] == after[head])
+    {
+        ++head;
+    }
+    while (head > 0 && (splits_a_character(before, head) || splits_a_character(after, head)))
+    {
+        --head;
+    }
+    return head;
+}
+
+// 末尾の共通部分の長さ（先頭の共通部分とは重ねない）。文字と CRLF を割らない所まで戻す。
+[[nodiscard]] std::size_t common_tail(std::string_view before, std::string_view after,
+                                      std::size_t head) noexcept
+{
+    std::size_t tail = 0;
+    const std::size_t room = std::min(before.size(), after.size()) - head;
+    while (tail < room && before[before.size() - 1 - tail] == after[after.size() - 1 - tail])
+    {
+        ++tail;
+    }
+    while (tail > 0 && (splits_a_character(before, before.size() - tail) ||
+                        splits_a_character(after, after.size() - tail)))
+    {
+        --tail;
+    }
+    return tail;
+}
+
+// 前後の本文の違う所を覆う 1 つの Edit（ADR 0046 の決定 3）。同じ本文なら空。
+[[nodiscard]] std::optional<core::Edit> covering_edit(std::string_view before,
+                                                      std::string_view after)
+{
+    if (before == after)
+    {
+        return std::nullopt;
+    }
+    const std::size_t head = common_head(before, after);
+    const std::size_t tail = common_tail(before, after, head);
+    return core::Edit{core::Offset{head},
+                      std::string(before.substr(head, before.size() - head - tail)),
+                      std::string(after.substr(head, after.size() - head - tail))};
 }
 } // namespace
 
@@ -743,15 +805,23 @@ void EditorController::accept(const SelectEditMode &intent)
 
 void EditorController::accept(const VimKeyPress &intent)
 {
+    static_cast<void>(step_vim(intent.key));
+}
+
+std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
+{
     if (state_.command_input().has_value())
     {
-        return;
+        // 入力行が開いたら残りの鍵は届かない。再生の中なら残りを捨てる（ADR 0046 の決定 3）。
+        return core::VimRepeatFailure::refused;
     }
     const core::VimMode before = state_.vim().mode;
     const ScrollState scroll = state_.scroll();
     const core::VimEditorView view{state_.text(), state_.selection(),
-                                   core::VimViewport{scroll.first_visible, scroll.visible_lines}};
-    const auto step = core::vim_step(state_.vim(), view, intent.key);
+                                   core::VimViewport{scroll.first_visible, scroll.visible_lines},
+                                   replay_depth_.has_value() ? core::VimKeySource::replayed
+                                                             : core::VimKeySource::typed};
+    const auto step = core::vim_step(state_.vim(), view, key);
     state_ = state_.with_vim(step.next);
     // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
     if (before != step.next.mode && before != core::VimMode::insert)
@@ -773,6 +843,7 @@ void EditorController::accept(const VimKeyPress &intent)
     {
         settle_vim_caret();
     }
+    return step.failure;
 }
 
 void EditorController::settle_vim_caret()
@@ -857,6 +928,11 @@ void EditorController::update_search_preview()
 // 検索の向きへ回数ぶん探すので、起点は新しい当たりから検索の向きの逆へ同じ回数だけ戻った当たりに
 // 置く（`/` の Ctrl-G では今の当たりになる）。折り返しは vim_find_match
 // の規則のままで報せは出さない。
+void EditorController::accept(const StoreVimMacro &intent)
+{
+    state_ = state_.with_vim(core::vim_macro_stored(state_.vim(), intent.name, intent.keys));
+}
+
 void EditorController::accept(const SearchHop &intent)
 {
     const core::SearchLine *line = previewed_line(state_);
@@ -1225,6 +1301,13 @@ void EditorController::perform(const core::VimInsertBlock &effect)
 // `.`（ADR 0030 の決定 7）。前後で履歴を閉じるので、再生した命令が 1 つの undo 単位になる。
 // VISUAL の記録なら、鍵を流す前に core が決めた範囲を VimSelect と同じ写しで置く
 // （ADR 0033 の決定 4。engine が mode を VISUAL にしてあるので、ここは選択だけを置く）。
+//
+// `@` も同じ効果で来る（ADR 0046 の決定 3・4）。再生の鍵は 1 本の列に積んで先頭から流す。
+// 再生の中で `@` や `.` がまた VimReplay を返したら、その鍵を列の先頭へ差し込む（Vim が
+// レジスタの中身を先読みの頭へ入れるのと同じ順）。流している鍵が閉じた失敗で終わったら列の
+// 残りをすべて捨てる（Vim の「エラーで残りの打鍵を捨てる」）。差し込みの深さが上限を超えたら
+// 何も差し込まずに残りを捨てる。入れ子を C++ の呼び出しの深さにしないので、深い再帰でも
+// スタックを食わない。
 void EditorController::perform(const core::VimReplay &effect)
 {
     state_ = state_.with_history(state_.history().sealed());
@@ -1234,11 +1317,64 @@ void EditorController::perform(const core::VimReplay &effect)
             state_.text(), state_.selection().caret, effect.reselect.value()));
         follow_caret();
     }
-    for (const core::VimKey &key : effect.keys)
+    if (replay_depth_.has_value())
     {
-        accept(VimKeyPress{key});
+        queue_nested_replay(effect.keys, replay_depth_.value() + 1);
+        return;
     }
+    const core::EditHistory history = state_.history();
+    const core::TextBuffer text = state_.text();
+    replay_queue_.assign(effect.keys.begin(), effect.keys.end());
+    replay_depths_.assign(effect.keys.size(), 1);
+    while (!replay_queue_.empty())
+    {
+        const core::VimKey key = replay_queue_.front();
+        replay_depth_ = replay_depths_.front();
+        replay_queue_.pop_front();
+        replay_depths_.pop_front();
+        if (step_vim(key).has_value())
+        {
+            replay_queue_.clear();
+            replay_depths_.clear();
+        }
+    }
+    replay_depth_ = std::nullopt;
+    merge_replayed_edits(history, text);
     state_ = state_.with_history(state_.history().sealed());
+}
+
+void EditorController::queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth)
+{
+    if (depth > core::vim_replay_depth_limit)
+    {
+        replay_queue_.clear();
+        replay_depths_.clear();
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("E132: Macro depth is higher than 100").value());
+        return;
+    }
+    replay_queue_.insert(replay_queue_.begin(), keys.begin(), keys.end());
+    replay_depths_.insert(replay_depths_.begin(), keys.size(), depth);
+}
+
+// 再生は命令ごとに編集を積むが、`[count]@a` と `.` の全体を 1 回の `u` で戻すのが Vim と同じ
+// （ADR 0046 の決定 3・Issue #176 の probe で実測）。履歴の 1 単位は連続した 1 つの Edit なので、
+// 2 つ以上積んだときは、再生の前後の本文の違う所をまとめて覆う 1 つの Edit に置き換える
+// （矩形の編集を 1 つの範囲の置換にする apply_block と同じ考え方）。
+void EditorController::merge_replayed_edits(const core::EditHistory &before,
+                                            const core::TextBuffer &text)
+{
+    if (state_.history().position() <= before.position() + 1)
+    {
+        return;
+    }
+    const auto edit = covering_edit(text.text(), state_.text().text());
+    if (!edit.has_value())
+    {
+        state_ = state_.with_history(before.sealed());
+        return;
+    }
+    state_ = state_.with_history(before.pushed(edit.value(), core::EditBoundary::separate));
 }
 
 void EditorController::perform(const core::VimUndo &)

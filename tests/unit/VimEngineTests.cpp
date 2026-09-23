@@ -566,6 +566,7 @@ void verify_vim_fixture(const VimFixture &fixture)
     static_cast<void>(controller.apply(OpenDocument{sample_path()}));
     static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
     arrange_vim_viewport(controller, fixture);
+    store_vim_fixture_macro(controller, fixture);
     vim_replay(controller, fixture.keys);
     const auto frame = controller.frame();
     const std::string name(fixture.name);

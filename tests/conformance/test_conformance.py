@@ -328,7 +328,9 @@ class RepositoryChecks(unittest.TestCase):
         return [{"name": "fixture-0", "text": "ab", "keys": "x"},
                 {"name": "fixture-1", "text": "あ", "keys": "y", "settings": ["set expandtab"]},
                 {"name": "fixture-2", "text": "ab", "keys": "z",
-                 "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}}]
+                 "viewport": {"visible_lines": 10, "first_visible": 6, "line": 10, "column": 1}},
+                {"name": "fixture-3", "text": "ab", "keys": "@a",
+                 "register": {"name": "a", "keys": "x"}}]
 
     def write_fixture_bytes(self, content):
         path = self.root / "tests/vim/fixtures.json"
@@ -378,7 +380,8 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf011_unreadable_fixtures(self):
         for content in [b"{}\n", b'[{"name":"a","text":"b","keys":"c","note":"d"}]\n',
                         b'[{"name":"a","text":"b"}]\n', b"[\n",
-                        b'[{"name":"a","text":"b","keys":"c","viewport":{"line":1}}]\n']:
+                        b'[{"name":"a","text":"b","keys":"c","viewport":{"line":1}}]\n',
+                        b'[{"name":"a","text":"b","keys":"qaxq@a"}]\n']:
             with self.subTest(content=content):
                 self.write_fixture_bytes(content)
                 self.assertTrue(any("CNF-011" in detail for detail in self.format_details()))
