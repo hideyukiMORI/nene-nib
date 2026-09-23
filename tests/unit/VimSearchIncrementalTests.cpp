@@ -4,10 +4,14 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "InputLineView.hpp"
 #include "LineView.hpp"
 #include "Scopes.hpp"
+#include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
 #include "TestSupport.hpp"
+#include "VimKey.hpp"
+#include "VimSearchDirection.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
@@ -19,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::tests
@@ -29,6 +34,8 @@ using nenenib::application::EditorFrame;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VisibleLines;
 using nenenib::core::EditMode;
+using nenenib::core::InputLineView;
+using nenenib::core::VimSearchDirection;
 
 namespace app = nenenib::application;
 
@@ -298,6 +305,156 @@ void verify_incsearch_hlsearch()
                frame_current(on) == std::optional{std::pair{std::size_t{0}, MatchSpan{7, 9}}},
            "with hlsearch on typing paints every match and the current one");
 }
+
+// Ctrl-G / Ctrl-T（ADR 0043 の決定 2）。向きは検索の向きに相対で、文字は入れない。
+void hop(EditorController &controller, VimSearchDirection relative)
+{
+    static_cast<void>(controller.apply(app::SearchHop{relative}));
+}
+
+[[nodiscard]] bool current_is(const EditorFrame &frame, std::size_t line, MatchSpan span)
+{
+    return frame_current(frame) == std::optional{std::pair{line, span}};
+}
+
+[[nodiscard]] std::string typed_text(const EditorFrame &frame)
+{
+    return frame.command_line.value_or(InputLineView{}).text;
+}
+
+// `/be` の Ctrl-G が次へ、Ctrl-T が前へ（先頭の前は末尾へ折り返す）。全一致は hop で変わらず、
+// Enter は preview の位置に着き、last_search は起点を持たない（決定 2・3・5）。
+void verify_incsearch_hops()
+{
+    constexpr std::string_view body = "alpha beta\nbeta gamma\ndelta beta";
+    Editing session;
+    open_vim_document(session, std::string(body));
+    EditorController &controller = session.controller();
+    vim_replay(controller, "/be");
+    hop(controller, VimSearchDirection::forward);
+    const auto next = controller.frame();
+    expect(current_is(next, 1, {1, 3}), "Ctrl-G moves the preview to the next match");
+    expect(frame_matches(next, 0) == std::vector<MatchSpan>{{7, 9}} &&
+               frame_matches(next, 2) == std::vector<MatchSpan>{{7, 9}},
+           "the painted matches stay the same after a hop");
+    expect(caret_at(next, 1, 1) && vim_body(next) == body && !next.command_message.has_value() &&
+               typed_text(next) == "be",
+           "a hop moves neither the caret nor the body and types nothing");
+    hop(controller, VimSearchDirection::forward);
+    expect(current_is(controller.frame(), 2, {7, 9}), "a second Ctrl-G moves on again");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 3, 7), "Enter lands where the hops showed");
+    expect(controller.vim_state().last_search ==
+               std::optional{nenenib::core::VimSearchPattern{"be", VimSearchDirection::forward,
+                                                             std::nullopt}},
+           "the remembered search carries no start, so n searches from the caret");
+    vim_replay(controller, "gg/be");
+    hop(controller, VimSearchDirection::backward);
+    expect(current_is(controller.frame(), 2, {7, 9}),
+           "Ctrl-T on the first match wraps to the last one");
+    hop(controller, VimSearchDirection::backward);
+    expect(current_is(controller.frame(), 1, {1, 3}), "and Ctrl-T again goes further back");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 2, 1), "Enter after Ctrl-T lands where the hops showed");
+    vim_replay(controller, "gg?be");
+    expect(current_is(controller.frame(), 2, {7, 9}), "? previews the match above, wrapped");
+    hop(controller, VimSearchDirection::forward);
+    expect(current_is(controller.frame(), 1, {1, 3}), "Ctrl-G while typing ? moves up the body");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 2, 1), "and Enter lands there");
+}
+
+// 起点はパターンの編集で残り、回数は hop のたびに数え直す（ADR 0043 の文脈 (a)(b)）。
+void verify_incsearch_hop_start()
+{
+    Editing session;
+    open_vim_document(session, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &controller = session.controller();
+    vim_replay(controller, "/be");
+    hop(controller, VimSearchDirection::forward);
+    vim_replay(controller, "<BS>");
+    expect(current_is(controller.frame(), 1, {1, 2}),
+           "an edited pattern still searches from where the hop left off");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 2, 1), "and Enter lands on that preview");
+    vim_replay(controller, "gg2/be");
+    expect(current_is(controller.frame(), 1, {1, 3}), "2/be previews the second match");
+    hop(controller, VimSearchDirection::forward);
+    expect(current_is(controller.frame(), 0, {7, 9}),
+           "Ctrl-G after 2/be goes two matches on from there, wrapping");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 1, 7), "and Enter lands on it");
+}
+
+// 起点を持たない検索の鍵か（`.` の記録は今のキャレットから探し直す・決定 3）。
+[[nodiscard]] bool startless(const nenenib::core::VimKey &key)
+{
+    const auto *search = std::get_if<nenenib::core::VimSearchPattern>(&key);
+    return search == nullptr || !search->from.has_value();
+}
+
+// 当たりが無い・noincsearch・Ex の入力行では何もしない。オペレータの後ろの hop は 1 つの変更で、
+// `.` の記録は起点を持たない（決定 2・3・4）。
+void verify_incsearch_hop_inert()
+{
+    Editing session;
+    open_vim_document(session, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &controller = session.controller();
+    vim_replay(controller, "/zz");
+    hop(controller, VimSearchDirection::forward);
+    expect(frame_paints_nothing(controller.frame()) && typed_text(controller.frame()) == "zz",
+           "without a match a hop does nothing and types nothing");
+    vim_replay(controller, "<Esc>:");
+    static_cast<void>(controller.apply(app::CommandText{"set"}));
+    hop(controller, VimSearchDirection::forward);
+    expect(typed_text(controller.frame()) == "set", "the Ex input line ignores a hop");
+    vim_replay(controller, "<Esc>");
+    static_cast<void>(run_ex(controller, "set noincsearch"));
+    vim_replay(controller, "/be");
+    hop(controller, VimSearchDirection::forward);
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 1, 7), "with incsearch off a hop does nothing");
+    static_cast<void>(run_ex(controller, "set incsearch"));
+    vim_replay(controller, "gg");
+    vim_replay(controller, "d/be");
+    hop(controller, VimSearchDirection::forward);
+    vim_replay(controller, "<CR>");
+    expect(vim_body(controller.frame()) == "beta gamma\ndelta beta",
+           "d/be with a hop deletes up to the hopped match");
+    const auto &change = controller.vim_state().last_change;
+    const auto keys =
+        change.has_value() ? change.value().keys : std::vector<nenenib::core::VimKey>{};
+    expect(!keys.empty() && std::ranges::all_of(keys, startless),
+           "the `.` record keeps the search key without the hop start");
+}
+
+// hop が見える範囲の外の当たりへ画面を動かし、Esc は入力前の先頭行とキャレットへ戻す（決定 1・2）。
+void verify_incsearch_hop_scroll()
+{
+    std::string body;
+    for (std::size_t number = 1; number <= 30; ++number)
+    {
+        body += number == 10 || number == 25 ? "target line\n" : "plain line\n";
+    }
+    body += "last";
+    Editing session;
+    open_vim_document(session, body);
+    applied(session.controller(), VisibleLines{5});
+    EditorController &controller = session.controller();
+    vim_replay(controller, "/tar");
+    const std::size_t first = first_line_of(controller.frame());
+    hop(controller, VimSearchDirection::forward);
+    const auto hopped = controller.frame();
+    const auto current = frame_current(hopped);
+    expect(first_line_of(hopped) > first && current.has_value() &&
+               hopped.lines.at(current.value_or(std::pair{std::size_t{0}, MatchSpan{}}).first)
+                       .number.value == 25,
+           "the view follows the hop out of sight");
+    vim_replay(controller, "<Esc>");
+    expect(first_line_of(controller.frame()) == 1 && caret_at(controller.frame(), 1, 1) &&
+               frame_paints_nothing(controller.frame()),
+           "Esc after a hop restores the view and the caret stays");
+}
 } // namespace
 
 void verify_vim_search_incremental_contracts()
@@ -308,6 +465,10 @@ void verify_vim_search_incremental_contracts()
     verify_incsearch_directions();
     verify_incsearch_option();
     verify_incsearch_hlsearch();
+    verify_incsearch_hops();
+    verify_incsearch_hop_start();
+    verify_incsearch_hop_inert();
+    verify_incsearch_hop_scroll();
 }
 
 void verify_vim_search_incremental_scope()

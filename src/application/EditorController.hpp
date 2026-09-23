@@ -72,6 +72,7 @@ class EditorController final
     void accept(const PasteCommand &);
     void accept(const OpenCommandPalette &);
     void accept(const ActivateCommandChoice &intent);
+    void accept(const SearchHop &intent);
     // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
     // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
     void submit(const core::CommandLine &line);

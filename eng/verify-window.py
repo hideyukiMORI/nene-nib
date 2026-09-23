@@ -941,9 +941,11 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     x, the put and the Vd are one unit each), so the editing checks that follow still start from an
     empty 無題 buffer. Vim needs no modifier for any of these keys.
 
-    Issue #148 adds incsearch: after the undos, `ialpha beta<Esc>0/be` paints the previewed match
-    while typing (saved as <frames>/vimIncsearch.png with --capture), Esc takes it away, and one
-    more undo empties the buffer again.
+    Issue #148 adds incsearch: after the undos, `ialpha beta beta<Esc>0/be` paints the previewed
+    match while typing (saved as <frames>/vimIncsearch.png with --capture), Esc takes it away, and
+    one more undo empties the buffer again. Issue #168 adds Ctrl-G while typing: the current match
+    moves to the second `be` (<frames>/vimIncsearchHop.png); Ctrl+G needs SendInput, so a session
+    that refuses the foreground records the hop as unconfirmed instead of failing.
     """
     width, height, dpi, body = ground["size"]
     grounds = [ground["background"], ground["current"], list(ACCENT)]
@@ -983,7 +985,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     write_text(window, "uuuu")
     time.sleep(0.5)
     # Issue #148: 入力中の当たりは engine の外の preview で、Esc で消える（ADR 0041）。
-    write_text(window, "ialpha beta")
+    write_text(window, "ialpha beta beta")
     press(window, VK_ESCAPE)
     write_text(window, "0")
     time.sleep(0.5)
@@ -995,6 +997,16 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     time.sleep(0.5)
     previewing = capture(window, width, height)
     snapshot(frames, window, "vimIncsearch")
+    # Issue #168: Ctrl-G は preview の当たりを次の `be` へ動かす（ADR 0043）。修飾鍵は SendInput。
+    hop = {"status": "unconfirmed", "reason": "foreground acquisition failed"}
+    if press_chord(window, VK_CONTROL, ord("G")):
+        time.sleep(0.5)
+        hopped = capture(window, width, height)
+        snapshot(frames, window, "vimIncsearchHop")
+        hop = {"status": "confirmed",
+               "movedTheCurrentMatch":
+                   box_pixels(hopped, width, content) != box_pixels(previewing, width, content)}
+        assert hop["movedTheCurrentMatch"], "Ctrl-G did not move the incsearch preview"
     press(window, VK_ESCAPE)
     time.sleep(0.5)
     cancelled = capture(window, width, height)
@@ -1024,6 +1036,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
             box_pixels(previewing, width, content) != box_pixels(opened, width, content),
         "escapeTookThePreviewAway":
             box_pixels(cancelled, width, content) == box_pixels(unsearched, width, content),
+        "incsearchHop": hop,
         "capture": "vim-slice.bmp",
         "capturePut": "vim-put.bmp",
     }

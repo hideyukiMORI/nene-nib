@@ -31,6 +31,7 @@
 #include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
 #include "VimSearch.hpp"
+#include "VimSearchDirection.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimStep.hpp"
@@ -279,10 +280,24 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return std::move(parsed).value();
 }
 
-// 入力中のパターンの次の当たり。確定の検索の鍵と同じ vim_find_match 1 本で、キャレットから
-// 入力行の向きへ 1 回ぶん探す（ADR 0041 の決定 1・3）。解析の失敗と不一致は当たり無しで、
-// 報せは出さない。
-[[nodiscard]] std::optional<core::TextPosition> previewed_match(const EditorState &state)
+// 確定の検索の鍵と同じ vim_find_match 1 本で探した当たりの位置（ADR 0041 の決定 1）。
+// 不一致は当たり無しで、報せは出さない。
+[[nodiscard]] std::optional<core::TextPosition> found_match(const core::TextBuffer &text,
+                                                            const core::VimPattern &pattern,
+                                                            const core::VimMatchRequest &request)
+{
+    const auto hit = core::vim_find_match(text, pattern, request);
+    if (!hit)
+    {
+        return std::nullopt;
+    }
+    return hit.value().position;
+}
+
+// 入力中のパターンの次の当たり。検索の起点から入力行の向きへ、確定の鍵と同じ回数だけ探す
+// （ADR 0041 の決定 3・ADR 0043 の決定 1）。解析の失敗と不一致は当たり無し。
+[[nodiscard]] std::optional<core::TextPosition> previewed_match(const EditorState &state,
+                                                                core::TextPosition from)
 {
     const core::SearchLine *line = previewed_line(state);
     if (line == nullptr)
@@ -294,15 +309,9 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     {
         return std::nullopt;
     }
-    const core::TextBuffer &text = state.text();
-    const core::VimMatchRequest request{text.position_of(state.selection().caret),
-                                        line->direction(), 1};
-    const auto hit = core::vim_find_match(text, pattern.value(), request);
-    if (!hit)
-    {
-        return std::nullopt;
-    }
-    return hit.value().position;
+    return found_match(
+        state.text(), pattern.value(),
+        core::VimMatchRequest{from, line->direction(), core::vim_search_count(state.vim())});
 }
 } // namespace
 
@@ -819,7 +828,8 @@ void EditorController::perform(const core::VimOpenCommandLine &)
 void EditorController::perform(const core::VimOpenSearch &effect)
 {
     state_ = state_.with_command_input(core::SearchLine::opened(effect.direction));
-    state_ = state_.with_search_preview(SearchPreview{std::nullopt, state_.scroll()});
+    state_ = state_.with_search_preview(SearchPreview{
+        std::nullopt, state_.scroll(), state_.text().position_of(state_.selection().caret)});
 }
 
 // 入力行が変わるたびに 1 か所で呼ぶ（ADR 0041 の決定 3）。画面は毎回 origin から数え直すので、
@@ -832,13 +842,53 @@ void EditorController::update_search_preview()
         return;
     }
     const ScrollState origin = preview.value().origin;
-    const auto match = previewed_match(state_);
+    const core::TextPosition from = preview.value().from;
+    const auto match = previewed_match(state_, from);
     restore_search_origin(origin);
-    state_ = state_.with_search_preview(SearchPreview{match, origin});
+    state_ = state_.with_search_preview(SearchPreview{match, origin, from});
     if (match.has_value())
     {
         follow_position(match.value());
     }
+}
+
+// Ctrl-G / Ctrl-T（ADR 0043 の決定 2）。検索の入力行が開いていて incsearch が当たりを見せている
+// ときだけ動く。確定の鍵は起点から検索の向きへ回数ぶん探すので、起点は「そこから探すと新しい
+// 当たりに着く」位置に置く。次は今の当たりがそのまま起点で、前は新しい当たりからさらに同じ
+// 回数だけ戻った当たりが起点になる。折り返しは vim_find_match の規則のままで報せは出さない。
+void EditorController::accept(const SearchHop &intent)
+{
+    const core::SearchLine *line = previewed_line(state_);
+    const auto preview = state_.search_preview();
+    if (line == nullptr || !preview.has_value() || !preview.value().match.has_value())
+    {
+        return;
+    }
+    const auto pattern = typed_pattern(*line);
+    if (!pattern.has_value())
+    {
+        return;
+    }
+    const bool ahead = intent.relative == core::VimSearchDirection::forward;
+    const core::VimSearchDirection toward =
+        ahead ? line->direction() : core::opposite(line->direction());
+    const std::size_t count = core::vim_search_count(state_.vim());
+    const core::TextPosition current = preview.value().match.value();
+    const auto match =
+        found_match(state_.text(), pattern.value(), core::VimMatchRequest{current, toward, count});
+    if (!match.has_value())
+    {
+        return;
+    }
+    const auto from = ahead ? std::optional{current}
+                            : found_match(state_.text(), pattern.value(),
+                                          core::VimMatchRequest{match.value(), toward, count});
+    if (!from.has_value())
+    {
+        return;
+    }
+    state_ = state_.with_search_preview(SearchPreview{match, preview.value().origin, from.value()});
+    follow_position(match.value());
 }
 
 // 見えている行数は入力中に窓の大きさで変わり得るので、戻すのは先頭行だけ。
@@ -988,10 +1038,13 @@ void EditorController::submit(const core::CommandPalette &palette)
 // 検索の確定は engine の 1 つの鍵（ADR 0032 の決定 3）。先に入力行を閉じてから送る。
 void EditorController::submit(const core::SearchLine &line)
 {
-    const core::VimSearchPattern pattern{std::string(line.text()), line.direction()};
     // Vim も確定の前に入力前の画面へ戻してから本当の検索をする（ex_getln.c の
     // finish_incsearch_highlighting）。着いた先は engine の鍵のあとの follow_caret が見せる。
+    // 鍵は preview の起点を運ぶ（Ctrl-G / Ctrl-T が無ければキャレットと同じ・ADR 0043 の決定 3）。
     const auto preview = state_.search_preview();
+    const std::optional<core::TextPosition> from =
+        preview.has_value() ? std::optional{preview.value().from} : std::nullopt;
+    const core::VimSearchPattern pattern{std::string(line.text()), line.direction(), from};
     state_ = state_.with_command_input(std::nullopt);
     if (preview.has_value())
     {
