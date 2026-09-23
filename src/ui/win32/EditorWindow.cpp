@@ -24,6 +24,7 @@
 #include "OpenDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
+#include "SearchHop.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
 #include "StatusBarLayout.hpp"
@@ -35,6 +36,7 @@
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
 
 #include <dwmapi.h>
@@ -1228,6 +1230,14 @@ void EditorWindow::press_command_control_key(WPARAM word)
         return;
     case 'P':
         send(application::OpenCommandPalette{});
+        return;
+    // incsearch の次・前の当たり（ADR 0043 の決定 4）。検索の入力行でなければ controller が
+    // 何もしない（Ex と設定一覧は今までどおり素通り）。
+    case 'G':
+        send(application::SearchHop{core::VimSearchDirection::forward});
+        return;
+    case 'T':
+        send(application::SearchHop{core::VimSearchDirection::backward});
         return;
     default:
         break;

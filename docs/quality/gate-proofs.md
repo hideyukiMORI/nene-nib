@@ -1442,3 +1442,36 @@ first paint の節は前面を取れない実行環境（設計席の端末が�
 対象を限定した理由: 差分はテスト 1 本と本節だけで、`eng/protected-diff.py`・`src/`・`tests/unit/` は変えていない。ビルド・アプリの検証は実行していない（QLT-001 / QLT-012・ADR 0021）。依頼書と Issue の「196 件」はこの枝の実測では 191 件。Waivers: none。
 
 QLT-001 / QLT-012 / CNF-001 を自己レビュー。件数の正本は `NibTests.cpp` の宣言 1 か所で、テストに第 2 の件数を持たない（ARC-012）。
+
+### 5-aw. incsearch の Ctrl-G / Ctrl-T（Issue #168・ADR 0043・2026-09-23）
+
+ブランチ `feat/168-incsearch-hop`（main `f0b453d` から）。core は `VimSearchPattern` に `std::optional<TextPosition> from`（比較も）を足し、`vim_step` の検索の鍵は起点があればそこから `vim_find_match` を引く（範囲の端は元のキャレット）。`last_search` と `.` の記録は起点を持たない（記録へ足すときに外す）。回数は `vim_search_count(const VimState&)`（engine の `resolved_count` をそのまま公開）で application が読む。application は `SearchPreview.from`・`SearchHop { core::VimSearchDirection relative; }`（`EditorIntent` の和型に 1 つ）・`accept(SearchHop)`・`update_search_preview()` は `from` から・`submit(SearchLine)` は `from` を鍵に載せる。ui/win32 は `press_command_control_key` の `G` / `T` を `SearchHop` に写す（Ex / 設定一覧では controller が何もしない）。renderer・fixture・oracle は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 検索の鍵の型と `EditorIntent` の網羅（`std::visit`）。警告 0 で成功 |
+| `build/nib_tests.exe --vim-search-incremental` | 対象。**139 checks 成功**（111 ＋ 28・契約の関数 4 本: `/be` の Ctrl-G ×2 と Enter・全一致は不変・文字を入れない・`last_search` は起点無し / Ctrl-T の折り返しと Enter / `?be` の Ctrl-G は上へ / BS の編集後も起点が残る / `2/be` の preview は 2 件目で Ctrl-G は起点から 2 件先 / 不一致・Ex・noincsearch では何もしない / `d/be` ＋ hop と `.` の記録に起点が無い / 画面の追従と Esc の巻き戻し） |
+| `build/nib_tests.exe --vim-search` / `--vim-search-highlight` | 確定の鍵と強調。**1356 / 74 checks 成功** |
+| `build/nib_tests.exe`（引数なし） | **13710 checks 成功**（13682 ＋ 28） |
+| `ctest --test-dir build` | 4 / 4 成功（fixture 1339 件の再生を含む） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py`（`--build-dir build` も） | **0 violation / 0 violation** |
+| `python eng/protected-diff.py --base origin/main --allow --vim-search-incremental --build` | **終了 0**。`f0b453d..7d8edd0`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`--vim-search-incremental 111 -> 139`・`scopes 21 / same 20 / 未測 0` |
+| `python eng/verify-window.py --capture out/frames-168` | `verify_vim` の incsearch の節を `ialpha beta beta` にし、`/be` の後に Ctrl+G（`press_chord`）を足した。**終了 0**・`incsearchHop.status` が `confirmed`・`movedTheCurrentMatch` が true。`out/frames-168/vimIncsearch.png`（枠は 1 つ目の be）→ `out/frames-168/vimIncsearchHop.png`（枠は 2 つ目の be・キャレットは 行 1 桁 1 のまま） |
+| clang-format（変更した C++ 10 ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は検索の鍵の型と `vim_step` の検索の鍵 1 か所・application の preview と意図・ui の Ctrl 鍵 2 つ・単体テスト・`eng/verify-window.py` の 1 節である。renderer・fixture・速さの入力（通常の打鍵）は不変なので、`--regenerate`・`eng/measure-speed.py`・Release・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001/010/011 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビュー。次の一致を求める経路は `vim_step`・`update_search_preview`・`accept(SearchHop)` の 3 か所とも `vim_find_match` の 1 本（planned・レビュー事項）。回数は engine の `resolved_count` 1 本を `vim_search_count` で読む。`optional` は `has_value` / `value` / `value_or` だけで読む。
+
+**訂正（差し戻し 1 回目・`4564f2b`）**: 上の表の「`?be` の Ctrl-G は上へ」は誤り。ADR 0043 決定 2（設計席が `4a9d17b` で直した）に合わせ、hop の向きは本文の順（Ctrl-G は下へ・Ctrl-T は上へ・`/` `?` に依らない）にした。起点は Ctrl-G / Ctrl-T で分けず、新しい当たり `M'` から検索の向きの逆へ同じ回数戻った当たり 1 本（`/` の Ctrl-G では今の当たり）。`SearchHop.relative` の意味は本文の順で、ui/win32 の写像（G → forward・T → backward）は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug） | `accept(SearchHop)` と契約。警告 0 で成功 |
+| `build/nib_tests.exe --vim-search-incremental` | **141 checks 成功**（139 ＋ 2・`?be` の Ctrl-G は下へ折り返して 行 1 桁 7 に着き Enter でそこへ / `?be` の Ctrl-T は上へ動き Enter でそこへ。`/be` の契約は向きが変わらないので不変） |
+| `build/nib_tests.exe`（引数なし）・`ctest --test-dir build` | **13712 checks 成功**・4 / 4 成功 |
+| `python eng/protected-diff.py --base origin/main --allow --vim-search-incremental --build` | **終了 0**。`f0b453d..4564f2b`・`fixtures 1339 -> 1339`・`--vim-search-incremental 111 -> 141`・`scopes 21 / same 20 / 未測 0` |
+| `python eng/conformance.py`（`--build-dir build` も）・`python eng/symbols.py --build-dir build --require core application` | 0 violation / 0 violation / 0 violation |
+| clang-format（変更した C++ 3 ファイル）・`git diff --check` | 指摘なし |
+
+`eng/verify-window.py` は `/be` の Ctrl-G だけを撮っており向きが変わらないので、PNG は撮り直していない（前の結果を再利用・ADR 0021）。

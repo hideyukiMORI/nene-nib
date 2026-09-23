@@ -2468,9 +2468,12 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
     }
     VimState remembered = state;
-    remembered.last_search = VimSearchPattern{pattern, key.direction};
+    remembered.last_search = VimSearchPattern{pattern, key.direction, std::nullopt};
+    // incsearch の Ctrl-G / Ctrl-T が起点を動かしていればそこから探す。範囲の端は元のキャレット
+    // （ADR 0043 の決定 3）。
     const Offset caret = view.selection.caret;
-    return search_from(remembered, view, VimSearchRequest{caret, caret, key.direction});
+    const Offset from = key.from.has_value() ? view.text.offset_of(key.from.value()) : caret;
+    return search_from(remembered, view, VimSearchRequest{from, caret, key.direction});
 }
 
 // `n` / `N`（決定 3）。覚えた向きのまま、または反対の向きで探す。last_search は変えない。
@@ -2503,8 +2506,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                              ? VimSearchDirection::forward
                                              : VimSearchDirection::backward;
     VimState remembered = state;
-    remembered.last_search = VimSearchPattern{
-        "\\<" + view.text.text_range(word.value().begin, word.value().end) + "\\>", direction};
+    remembered.last_search =
+        VimSearchPattern{"\\<" + view.text.text_range(word.value().begin, word.value().end) + "\\>",
+                         direction, std::nullopt};
     // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
     return search_from(remembered, view,
                        VimSearchRequest{word.value().begin, view.selection.caret, direction});
@@ -3416,9 +3420,20 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
+// `.` の再生は今のキャレットから探し直すので、incsearch の起点は記録に残さない（ADR 0043 の
+// 決定 3）。
+[[nodiscard]] VimKey replayable(VimKey key)
+{
+    if (auto *search = std::get_if<VimSearchPattern>(&key))
+    {
+        search->from = std::nullopt;
+    }
+    return key;
+}
+
 [[nodiscard]] VimRepeatRecord appended(VimRepeatRecord record, VimKey key)
 {
-    record.keys.push_back(key);
+    record.keys.push_back(replayable(std::move(key)));
     return record;
 }
 
@@ -3628,6 +3643,11 @@ VimState vim_cancelled_input(const VimState &state)
 VimState vim_interrupted(const VimState &state)
 {
     return input_discarded(state);
+}
+
+std::size_t vim_search_count(const VimState &state) noexcept
+{
+    return resolved_count(state);
 }
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
