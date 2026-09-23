@@ -1493,3 +1493,23 @@ FR-003 / ARC-001/010/011 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビ
 対象を限定した理由: 差分は本文の書式を作る 1 か所への tab stop の設定と、`eng/verify-window.py` の 1 節・引数の組み合わせ 1 つである。core・application・fixture・保存・打鍵の経路に触れず、書式はフォントの変更時にだけ作り直すので速さの入力（起動・1 打鍵・16 MiB）の描画経路は不変。`--regenerate`・`eng/measure-speed.py`・Release・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
 
 FR-003 / ARC-001 / CPP-005 / CPP-009 / CPP-017 / QLT-001 / QLT-012 を自己レビュー。tab stop の値は renderer の 1 か所で、ADR 0034 の仮想桁（core の `tab_stop = 8`）とは同じ数を別に持つ（`tabstop` を設定にするときに 1 経路へ畳む・ADR 0045 の決定 3）。残るのは、等幅でない guifont と、Tab の前に全角文字がある行（DirectWrite は画素で、Vim は桁で次の tab stop を決めるので、全角の字幅が空白 2 個ぶんでないフォントでは揃わない）。PNG の受理は planned（設計席が Read で見る）。
+
+### 5-ay. add バッファを 64 KiB の chunk の列にする（Issue #174・ADR 0044・2026-09-23）
+
+ブランチ `refactor/174-add-buffer-chunks`（main `86ab4ba` から）。core は `AddChunk.hpp`（`struct AddChunk { std::string bytes; }`）を足し、`Piece` に `chunk`（add の chunk の番号・original は 0）を足した。`TextBuffer` の `add_` は `std::vector<std::shared_ptr<AddChunk>>` と `add_fill_` になり、`replaced` の非空の分岐は `appended`（`bytes.size() == add_fill_` かつ `chunk_bytes = 64 KiB` の残りに収まるときだけその場で `append`、そうでなければ `max(chunk_bytes, text.size())` を `reserve` した新しい chunk）と `append_insertion`（同じ chunk の中で続くときだけ piece を伸ばす）を通る。`view_of` は `add_.at(piece.chunk)->bytes` から 1 本の `string_view` のまま（呼び出し側は不変）。コンストラクタの引数は 3 つにし、`add_` と `add_fill_` は `replaced` が組み立てた値へ入れる（引数 4 つの上限）。application・ui・eng・fixture は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | `Piece` の欄と `TextBuffer` の構築 3 か所。警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | **13727 checks 成功**（13712 ＋ 15・契約の関数 3 本: 同じ値から 2 回分岐した `x…` / `y…` と元の値の不変・先端を知る値は piece 1 のままその場で伸び、先端を知らない値は piece 2 で新しい chunk / 70,000 回の 1 文字入力（1000 字ごとに改行）の本文・71 行・**piece_count 2**・chunk 境界を跨ぐ行 66 / 200 KiB の 1 回の挿入は **piece_count 3**、その直後の追記は **4**（大きい chunk は伸ばさない）/ `erase` → `insert` で戻した本文と erase 前の値の本文。増分 15 は `expect` 14 と `buffer_of` の 1。旧 core にこのテストを当てると同じ 13727 件で 3 件が落ちる＝件数は core に依らず、契約は旧実装を拒む） |
+| `ctest --test-dir build` | 4 / 4 成功（fixture 1339 件の再生を含む） |
+| `python eng/protected-diff.py --base origin/main --build`（`--allow` 無し） | **終了 0**。`86ab4ba..2a3dadb`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`scopes 21 / same 21 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py`（`--build-dir build` も） | **0 violation / 0 violation / 0 violation** |
+| `pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` | `build/release-2a3dadb/NeNeNib.exe`（sha256 `1CA2FF4B…D1CF0F`・994304 bytes）。速さは設計席が測る |
+| clang-format（変更した C++ 5 ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の `TextBuffer` の add の持ち方と `Piece` の 1 欄・`CoreTests.cpp` の契約である。本文の値・行索引・公開の関数は変えていないので、fixture の再生（ctest）と scope ごとの checks 数（protected-diff）で退行を見る。`--regenerate`・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021。速さは ADR 0044 の決定 6 の後続と設計席）。
+
+ARC-003/007 / CPP-001/002/004/011 / QLT-001/012 を自己レビュー。`PieceSource` の `switch` は `default` 無し（CPP-002）。`AddChunk` は 1 ファイル 1 型（CPP-011）で、`.cpp` の補助は自由関数と `using` 別名だけ。chunk の大きさは `constexpr`・時刻・スレッド・OS に触れない（ARC-003/007・symbols 0）。「追記がその場で行われ複製が起きない」は planned（レビュー事項・ADR 0044 の強制）。
+
+設計席の速さの明示実行（QLT-014・差分が本文の経路に関わるので `--check` を Release で 4 回・2026-09-23）: #174 の exe（`build/release-2a3dadb`）は 1 回目 `startup-first-frame` 242 ms（上限 239）で 1 本、2 回目 245 ms と `startup-window-shown` 44.1 ms（上限 43.7）で 2 本落ち、3 回目は 214 ms / 39.0 ms で 0 regression。対照の今の main の exe（`build/release-3041c31`・同じ時間帯・別の席がビルド中）も 242 ms / 44.6 ms で同じ 2 本が落ちた。落ちた区間はどれも `device_created`（190 ms 前後・GPU ドライバ）と `window_shown` で、本文の経路より手前（`document_opened` は 0.2 ms で不変）。変更が触る打鍵の 2 本は 4 回とも基準内（`key-to-frame-single` 0.86〜1.06 ms・`burst-200` 3.0〜3.7 ms）。機械の雑音と判断して受理（ログは設計席の `out/174-speed*.log` と `out/174-control*.log`・記録は `out/speed/`）。
