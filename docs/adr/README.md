@@ -59,4 +59,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0041](0041-vim-incsearch-preview-outside-the-engine.md) | `incsearch` は入力中の当たりを engine の外の preview として持ち、確定は今までどおり 1 つの鍵で届く | 受理 |
 | [0042](0042-unit-tests-split-by-scope.md) | 単体テストは scope ごとの翻訳単位に分け、`VimStep.cpp` は純関数の切り出しだけで縮める | 受理 |
 | [0043](0043-incsearch-hop-moves-the-search-start.md) | incsearch の Ctrl-G / Ctrl-T は preview の検索の起点を当たりへ動かし、確定の鍵はその起点を運ぶ | 受理 |
+| [0044](0044-add-buffer-in-chunks.md) | piece table の add バッファは固定長の chunk の列で持ち、piece は chunk を跨がず、先端を持つ値だけがその場で伸ばす | 受理 |
 | [0045](0045-tab-stops-follow-vim-columns.md) | 本文の Tab は空白 8 個ぶんの tab stop で描き、Vim の仮想桁と同じ位置に止まる | 受理 |

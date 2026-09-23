@@ -1,9 +1,13 @@
 #include "TextBuffer.hpp"
 
+#include "AddChunk.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -11,19 +15,11 @@ namespace
 {
 constexpr char newline = '\n';
 constexpr char carriage_return = '\r';
+// add の chunk の大きさ（ADR 0044 の決定 2 / 7）。これより大きい 1 回の挿入はその 1 本だけの chunk
+// になる。
+constexpr std::size_t chunk_bytes = std::size_t{64} * 1024U;
 
-[[nodiscard]] const std::string &buffer_of(PieceSource source, const std::string &original,
-                                           const std::string &add) noexcept
-{
-    switch (source)
-    {
-    case PieceSource::original:
-        return original;
-    case PieceSource::add:
-        return add;
-    }
-    std::unreachable();
-}
+using Chunks = std::vector<std::shared_ptr<AddChunk>>;
 
 // 行索引の素。'\n' のバイト位置だけを持つ（CRLF は 1 つの改行なので数が狂わない・ADR 0009）。
 [[nodiscard]] std::vector<Offset> newlines_in(std::string_view text)
@@ -49,23 +45,50 @@ constexpr char carriage_return = '\r';
     return static_cast<std::size_t>(bound - newlines.begin());
 }
 
-// 末尾の add piece に続く入力は piece を増やさずに伸ばす。連続した入力で列が膨らまない。
-void append_insertion(std::vector<Piece> &out, std::size_t start, std::string_view text)
+// 末尾の chunk をその場で伸ばせるか（ADR 0044 の決定 2）。bytes.size() が自分の知る長さと違えば
+// 別の値が先に伸ばしたしるしで、上書きせず新しい chunk を始める。確保した容量は超えない。
+[[nodiscard]] bool extends_in_place(const Chunks &chunks, std::size_t fill,
+                                    std::size_t length) noexcept
 {
-    auto found = newlines_in(text);
+    return !chunks.empty() && chunks.back()->bytes.size() == fill && fill <= chunk_bytes &&
+           length <= chunk_bytes - fill;
+}
+
+// 入力を add に書き、それを指す piece を返す。add の複製は起きない（ADR 0044 の決定 2）。
+[[nodiscard]] Piece appended(Chunks &chunks, std::size_t &fill, std::string_view text)
+{
+    if (!extends_in_place(chunks, fill, text.size()))
+    {
+        auto chunk = std::make_shared<AddChunk>();
+        chunk->bytes.reserve(std::max(chunk_bytes, text.size()));
+        chunks.push_back(std::move(chunk));
+        fill = 0;
+    }
+    const std::size_t start = fill;
+    chunks.back()->bytes.append(text);
+    fill += text.size();
+    return Piece{PieceSource::add, chunks.size() - 1, Offset{start}, text.size(),
+                 newlines_in(text)};
+}
+
+// 末尾の add piece に続く入力は piece を増やさずに伸ばす。連続した入力で列が膨らまない。
+// 続くのは同じ chunk の中だけで、chunk が変われば新しい piece になる（ADR 0044 の決定 3）。
+void append_insertion(std::vector<Piece> &out, Piece piece)
+{
     const bool continues = !out.empty() && out.back().source == PieceSource::add &&
-                           out.back().start.value + out.back().length == start;
+                           out.back().chunk == piece.chunk &&
+                           out.back().start.value + out.back().length == piece.start.value;
     if (!continues)
     {
-        out.push_back(Piece{PieceSource::add, Offset{start}, text.size(), std::move(found)});
+        out.push_back(std::move(piece));
         return;
     }
     Piece &last = out.back();
-    for (const Offset entry : found)
+    for (const Offset entry : piece.newlines)
     {
         last.newlines.push_back(Offset{entry.value + last.length});
     }
-    last.length += text.size();
+    last.length += piece.length;
 }
 
 [[nodiscard]] std::size_t total_length(const std::vector<Piece> &pieces) noexcept
@@ -89,16 +112,17 @@ void append_insertion(std::vector<Piece> &out, std::size_t start, std::string_vi
 }
 } // namespace
 
-TextBuffer::TextBuffer(Buffer original, Buffer add, std::vector<Piece> pieces, LineEnding ending)
-    : original_(std::move(original)), add_(std::move(add)), pieces_(std::move(pieces)),
+// add は空の列で始まり、最初の挿入が 1 本目の chunk を作る（ADR 0044）。
+TextBuffer::TextBuffer(Buffer original, std::vector<Piece> pieces, LineEnding ending)
+    : original_(std::move(original)), add_fill_(0), pieces_(std::move(pieces)),
       size_bytes_(total_length(pieces_)), newline_count_(total_newlines(pieces_)), ending_(ending)
 {
 }
 
 TextBuffer TextBuffer::empty()
 {
-    auto nothing = std::make_shared<const std::string>();
-    return TextBuffer(nothing, nothing, std::vector<Piece>{}, LineEnding::crlf);
+    return TextBuffer(std::make_shared<const std::string>(), std::vector<Piece>{},
+                      LineEnding::crlf);
 }
 
 std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view text)
@@ -112,18 +136,31 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view te
     std::vector<Piece> pieces;
     if (!text.empty())
     {
-        pieces.push_back(Piece{PieceSource::original, Offset{0}, text.size(), newlines_in(text)});
+        pieces.push_back(
+            Piece{PieceSource::original, 0, Offset{0}, text.size(), newlines_in(text)});
     }
     // 改行の形はここで 1 度だけ判別する。以後は本文が持ち回り、開く経路は自分で判別しない
     // （ADR 0036 の決定 1 / ADR 0010 の決定 4）。
-    return TextBuffer(original, std::make_shared<const std::string>(), std::move(pieces),
-                      detect_line_ending(text));
+    return TextBuffer(original, std::move(pieces), detect_line_ending(text));
 }
 
 std::string_view TextBuffer::view_of(const Piece &piece) const noexcept
 {
-    const std::string &buffer = buffer_of(piece.source, *original_, *add_);
-    return std::string_view(buffer).substr(piece.start.value, piece.length);
+    return std::string_view(buffer_of(piece)).substr(piece.start.value, piece.length);
+}
+
+// piece が指すバッファ。add は piece の chunk の 1 本で、piece は chunk を跨がない（ADR 0044 の決定
+// 4）。
+const std::string &TextBuffer::buffer_of(const Piece &piece) const noexcept
+{
+    switch (piece.source)
+    {
+    case PieceSource::original:
+        return *original_;
+    case PieceSource::add:
+        return add_.at(piece.chunk)->bytes;
+    }
+    std::unreachable();
 }
 
 Piece TextBuffer::clipped(const Piece &piece, std::size_t from, std::size_t length) const
@@ -133,7 +170,8 @@ Piece TextBuffer::clipped(const Piece &piece, std::size_t from, std::size_t leng
         return piece;
     }
     const auto part = view_of(piece).substr(from, length);
-    return Piece{piece.source, Offset{piece.start.value + from}, length, newlines_in(part)};
+    return Piece{piece.source, piece.chunk, Offset{piece.start.value + from}, length,
+                 newlines_in(part)};
 }
 
 void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const
@@ -154,17 +192,19 @@ void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t 
 TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text) const
 {
     auto add = add_;
+    std::size_t fill = add_fill_;
     std::vector<Piece> next;
     collect(next, 0, begin.value);
     if (!text.empty())
     {
-        const std::size_t start = add->size();
-        add = std::make_shared<const std::string>(*add + std::string(text));
-        append_insertion(next, start, text);
+        append_insertion(next, appended(add, fill, text));
     }
     collect(next, end.value, size_bytes_);
     // 編集はバイト列を変えても改行の形は変えない（ARC-009 / ADR 0036 の決定 1）。
-    return TextBuffer(original_, std::move(add), std::move(next), ending_);
+    TextBuffer result(original_, std::move(next), ending_);
+    result.add_ = std::move(add);
+    result.add_fill_ = fill;
+    return result;
 }
 
 TextBuffer TextBuffer::insert(Offset at, std::string_view text) const
