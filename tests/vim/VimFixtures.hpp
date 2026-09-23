@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 16618971fb6be5ad08f4ce9b5d26b5356654bf193094e846d06f36bdff6ff781 / 1384 fixtures
+// fixtures.json: sha256 b4c8e557562b1e957ee983d67479a15c94052304b11bcdf9de065be8de569a38 / 1423 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1384> vim_fixtures{{
+constexpr std::array<VimFixture, 1423> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1396,6 +1396,45 @@ constexpr std::array<VimFixture, 1384> vim_fixtures{{
     {"register-yank-lines-replay", "jj\naaa\nbbb\nccc\nddd", "\"ayyj@a", "jj\naaa\nbbb\nccc\nddd", 5, 1, "jj\n", "V", std::nullopt},
     {"register-yank-lines-replay-unnamed", "jj\naaa\nbbb\nccc\nddd", "\"ayyj@\"", "jj\naaa\nbbb\nccc\nddd", 5, 1, "jj\n", "V", std::nullopt},
     {"register-yank-word-replay", "xl.abc", "\"ayw@a", "l.abc", 1, 2, "x", "v", std::nullopt},
+    {"space-moves-right-in-the-line", "abc", "<Space>x", "ac", 1, 2, "b", "v", std::nullopt},
+    {"space-raw-leading-space-moves-right", "abc", " x", "ac", 1, 2, "b", "v", std::nullopt},
+    {"space-wraps-from-the-line-end", "ab\ncd", "l<Space>x", "ab\nd", 2, 1, "c", "v", std::nullopt},
+    {"space-fails-at-the-document-end", "ab\ncd", "jl<Space>", "ab\ncd", 2, 2, "", "", std::nullopt},
+    {"space-count-crosses-lines", "ab\ncd\nef", "5<Space>x", "ab\ncd\ne", 3, 1, "f", "v", std::nullopt},
+    {"space-count-crosses-an-empty-line", "a\n\nb", "2<Space>x", "a\n\n", 3, 1, "b", "v", std::nullopt},
+    {"space-count-stops-at-the-document-end", "ab\ncd", "9<Space>x", "ab\nc", 2, 1, "d", "v", std::nullopt},
+    {"space-bs-moves-left", "abc", "$<BS>x", "ac", 1, 2, "b", "v", std::nullopt},
+    {"space-bs-wraps-from-the-line-start", "ab\ncd", "j<BS>x", "a\ncd", 1, 1, "b", "v", std::nullopt},
+    {"space-bs-fails-at-the-document-start", "ab", "l<BS><BS>", "ab", 1, 1, "", "", std::nullopt},
+    {"space-bs-count-crosses-lines", "ab\ncd\nef", "G$5<BS>x", "b\ncd\nef", 1, 1, "a", "v", std::nullopt},
+    {"space-bs-count-crosses-an-empty-line", "a\n\nb", "G2<BS>x", "\n\nb", 1, 1, "a", "v", std::nullopt},
+    {"space-d-in-the-line", "abc", "d<Space>", "bc", 1, 1, "a", "v", std::nullopt},
+    {"space-d-at-the-line-end-stays-on-the-line", "ab\ncd", "ld<Space>", "a\ncd", 1, 1, "b", "v", std::nullopt},
+    {"space-d-count-at-the-line-end", "ab\ncd", "l2d<Space>", "a\ncd", 1, 1, "b", "v", std::nullopt},
+    {"space-d-count-becomes-linewise", "ab\ncd", "3d<Space>", "cd", 1, 1, "ab\n", "V", std::nullopt},
+    {"space-d-count-from-the-middle-crosses", "ab\ncd", "l3d<Space>", "ad", 1, 2, "b\nc", "v", std::nullopt},
+    {"space-d-bs-in-the-line", "abc", "$d<BS>", "ac", 1, 2, "b", "v", std::nullopt},
+    {"space-d-bs-at-the-line-start-joins", "ab\ncd", "jd<BS>", "abcd", 1, 3, "\n", "v", std::nullopt},
+    {"space-d-bs-count-keeps-the-line-break", "abc\nd", "j2d<BS>", "abd", 1, 3, "c\n", "v", std::nullopt},
+    {"space-d-bs-after-an-empty-line", "\ncd", "jd<BS>", "cd", 1, 1, "\n", "V", std::nullopt},
+    {"space-y-bs-at-the-line-start", "ab\ncd", "jy<BS>", "ab\ncd", 1, 2, "b", "v", std::nullopt},
+    {"space-y-bs-count", "abc\nd", "j2y<BS>", "abc\nd", 1, 2, "bc", "v", std::nullopt},
+    {"space-y-count-at-the-line-end", "ab\ncd", "l2y<Space>", "ab\ncd", 1, 2, "b", "v", std::nullopt},
+    {"space-c-in-the-line", "abc", "c<Space>X<Esc>", "Xbc", 1, 1, "a", "v", std::nullopt},
+    {"space-c-bs-at-the-line-start", "ab\ncd", "jc<BS>X<Esc>", "abXcd", 1, 3, "\n", "v", std::nullopt},
+    {"space-d-then-dot", "ab\ncd\nef", "d<Space>.", "\ncd\nef", 1, 1, "b", "v", std::nullopt},
+    {"space-visual-rests-at-the-line-end", "abcd\nef", "v<Space><Space><Space><Space>d", "ef", 1, 1, "abcd\n", "v", std::nullopt},
+    {"space-visual-crosses-after-the-rest", "abcd\nef", "v<Space><Space><Space><Space><Space>d", "f", 1, 1, "abcd\ne", "v", std::nullopt},
+    {"space-visual-bs-rests-at-the-line-end", "ab\ncdef", "jv<BS>d", "abdef", 1, 3, "\nc", "v", std::nullopt},
+    {"space-visual-bs-crosses-after-the-rest", "ab\ncdef", "jv<BS><BS>d", "adef", 1, 2, "b\nc", "v", std::nullopt},
+    {"space-block-visual-reaches-the-line-end", "ab\ncd", "<C-v><Space><Space>d", "\ncd", 1, 1, "ab", "\0263", std::nullopt},
+    {"space-block-visual-crosses", "ab\ncd", "l<C-v><Space><Space><Space>d", "a\nc", 1, 1, "b\nd", "\0261", std::nullopt},
+    {"space-arrow-left", "ab\ncd", "jl<Left>x", "ab\nd", 2, 1, "c", "v", std::nullopt},
+    {"space-arrow-right-stays-on-the-line", "ab\ncd", "l<Right>", "ab\ncd", 1, 2, "", "", std::nullopt},
+    {"space-arrow-down", "ab\ncd", "<Down>x", "ab\nd", 2, 1, "c", "v", std::nullopt},
+    {"space-arrow-up", "ab\ncd", "j<Up>x", "b\ncd", 1, 1, "a", "v", std::nullopt},
+    {"space-arrow-d-right", "ab\ncd", "d<Right>", "b\ncd", 1, 1, "a", "v", std::nullopt},
+    {"space-arrow-left-in-insert", "ab", "ix<Left>y<Esc>", "yxab", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

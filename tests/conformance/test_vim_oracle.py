@@ -204,6 +204,12 @@ class VimOracleTests(unittest.TestCase):
                                   if line.startswith('execute "normal! "')))
         self.assertNotIn("let @", vim_oracle.probe_script([], "x"))
 
+    def test_probe_script_puts_a_count_before_a_leading_space(self):
+        # :help :normal: the Ex line eats a leading space, so the oracle writes `1 ` (ADR 0049).
+        for keys in (" x", "<Space>x"):
+            self.assertIn('execute "normal! " . "1 x"', vim_oracle.probe_script([], keys))
+        self.assertIn('execute "normal! " . "d x"', vim_oracle.probe_script([], "d<Space>x"))
+
     def test_header_row_carries_the_register_only_when_there_is_one(self):
         record = self.record({"name": "macro", "text": "ab", "keys": "@a"}, "b")
         plain = vim_oracle.fixture_row({**record, "viewport": None, "macro": None})

@@ -31,15 +31,16 @@ using MatchSpan = std::pair<std::size_t, std::size_t>;
 // 記法の名前が指す鍵。多くは特殊鍵で、`<NL>` だけは文字（Vim の Ctrl-J・ADR 0048 の決定 9）。
 using VimNamedKey = std::variant<nenenib::core::VimCharacter, VimSpecialKey>;
 
-// fixture の記法（<Esc> <CR> <NL> <BS> <C-r>）と鍵の対応。写す場所は eng/vim-oracle.py とここの
-// 2 つで、どちらも「fixture の書き方」という 1 つの約束の両端である（ARC-012）。
+// fixture の記法（<Esc> <CR> <NL> <BS> <C-r> <Space> 矢印など）と鍵の対応。写す場所は
+// eng/vim-oracle.py とここの 2 つで、どちらも「fixture の書き方」という 1 つの約束の
+// 両端である（ARC-012）。
 struct VimKeyName
 {
     std::string_view text;
     VimNamedKey key;
 };
 
-inline constexpr std::array<VimKeyName, 14> vim_key_names{
+inline constexpr std::array<VimKeyName, 19> vim_key_names{
     {{"<Esc>", VimSpecialKey::escape},
      {"<CR>", VimSpecialKey::enter},
      {"<NL>", nenenib::core::VimCharacter{U'\n'}},
@@ -53,7 +54,12 @@ inline constexpr std::array<VimKeyName, 14> vim_key_names{
      {"<Home>", VimSpecialKey::home},
      {"<End>", VimSpecialKey::end},
      {"<PageUp>", VimSpecialKey::page_up},
-     {"<PageDown>", VimSpecialKey::page_down}}};
+     {"<PageDown>", VimSpecialKey::page_down},
+     {"<Space>", nenenib::core::VimCharacter{U' '}},
+     {"<Left>", VimSpecialKey::arrow_left},
+     {"<Right>", VimSpecialKey::arrow_right},
+     {"<Up>", VimSpecialKey::arrow_up},
+     {"<Down>", VimSpecialKey::arrow_down}}};
 
 // fixture はどれも数行なので、全部の行が表示値に載る高さで再生する。
 inline constexpr std::size_t vim_visible_lines = 64;

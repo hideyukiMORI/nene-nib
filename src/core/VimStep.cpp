@@ -25,6 +25,7 @@
 #include "VimInsertBlock.hpp"
 #include "VimKeySource.hpp"
 #include "VimKeyTable.hpp"
+#include "VimLineEndStop.hpp"
 #include "VimLineExtent.hpp"
 #include "VimMacroRecording.hpp"
 #include "VimMatchRequest.hpp"
@@ -315,6 +316,75 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return Offset{start.value + index};
 }
 
+// `<Space>` の 1 歩（ADR 0049 の決定 2）。行の最後の文字の上からは、止まる側は行末の位置へ、
+// 止まらない側は次の行の 0 桁目へ。行末の位置（空行の 0 桁目も）からは次の行の 0 桁目へ。
+// 最終行で渡れなければその場に残る（呼び手が「動けない」失敗にする）。
+[[nodiscard]] Offset wrapped_forward_step(const TextBuffer &text, Offset at, VimLineEndStop stop)
+{
+    const LineNumber line = line_of(text, at);
+    const Offset end = text.line_end(line);
+    const Offset next = forward_characters(text, at, single_step);
+    if (next != end || (at != end && stop == VimLineEndStop::rests))
+    {
+        return next;
+    }
+    if (line.value >= text.line_count())
+    {
+        return at;
+    }
+    return text.line_start(LineNumber{line.value + 1});
+}
+
+// `<BS>` の 1 歩。対称に、0
+// 桁目からは前の行の行末の位置（止まる側）か最後の文字（止まらない側）へ。
+[[nodiscard]] Offset wrapped_backward_step(const TextBuffer &text, Offset at, VimLineEndStop stop)
+{
+    const LineNumber line = line_of(text, at);
+    if (at != text.line_start(line))
+    {
+        return backward_characters(text, at, single_step);
+    }
+    if (line.value <= 1)
+    {
+        return at;
+    }
+    const Offset end = text.line_end(LineNumber{line.value - 1});
+    return stop == VimLineEndStop::rests ? end : backward_characters(text, end, single_step);
+}
+
+// 回数ぶん 1 歩ずつ。途中で動けなくなったらそこで止まる（Vim は 1 歩も動けないときだけ鳴らす）。
+[[nodiscard]] Offset wrapped_forward(const TextBuffer &text, Offset caret, std::size_t count,
+                                     VimLineEndStop stop)
+{
+    Offset at = caret;
+    for (std::size_t step = 0; step < count; ++step)
+    {
+        const Offset next = wrapped_forward_step(text, at, stop);
+        if (next == at)
+        {
+            break;
+        }
+        at = next;
+    }
+    return at;
+}
+
+[[nodiscard]] Offset wrapped_backward(const TextBuffer &text, Offset caret, std::size_t count,
+                                      VimLineEndStop stop)
+{
+    Offset at = caret;
+    for (std::size_t step = 0; step < count; ++step)
+    {
+        const Offset next = wrapped_backward_step(text, at, stop);
+        if (next == at)
+        {
+            break;
+        }
+        at = next;
+    }
+    return at;
+}
+
 // キャレットの下に空白でない文字があるか（Vim の gchar_cursor() != NUL && !VIM_ISWHITE）。
 // 行の内容の終わり（NUL の桁）と空行は「文字が無い」ので偽。cw の特例が効く条件そのもの。
 [[nodiscard]] bool word_under_caret(const TextBuffer &text, Offset caret)
@@ -353,6 +423,23 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMode::normal:
     case VimMode::insert:
         return vim_resting_caret(text, caret);
+    }
+    std::unreachable();
+}
+
+// 移動としての `<Space>` `<BS>` が行末の位置に止まるか（ADR 0049 の決定 2）。VISUAL は止まり、
+// 裸の NORMAL は止まらない（rested_in が VISUAL だけ行末の位置に載せるのと同じ理由）。
+[[nodiscard]] VimLineEndStop line_end_stop_in(VimMode mode) noexcept
+{
+    switch (mode)
+    {
+    case VimMode::visual:
+    case VimMode::visual_line:
+    case VimMode::visual_block:
+        return VimLineEndStop::rests;
+    case VimMode::normal:
+    case VimMode::insert:
+        return VimLineEndStop::passes;
     }
     std::unreachable();
 }
@@ -481,6 +568,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return first_non_blank_of_other_line(text, caret, line, line_below(text, line, count));
     case VimMotion::previous_line:
         return first_non_blank_of_other_line(text, caret, line, line_above(line, count));
+    case VimMotion::wrap_right:
+        return wrapped_forward(text, caret, count, line_end_stop_in(state.mode));
+    case VimMotion::wrap_left:
+        return wrapped_backward(text, caret, count, line_end_stop_in(state.mode));
     }
     std::unreachable();
 }
@@ -511,6 +602,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::document_last:
     case VimMotion::next_line:
     case VimMotion::previous_line:
+    case VimMotion::wrap_right:
+    case VimMotion::wrap_left:
         return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     }
     std::unreachable();
@@ -544,6 +637,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::word_end_for_change:
     case VimMotion::next_line:
     case VimMotion::previous_line:
+    case VimMotion::wrap_right:
+    case VimMotion::wrap_left:
         return true;
     case VimMotion::line_start:
     case VimMotion::first_non_blank:
@@ -645,8 +740,24 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return lines_between(view.text, first, last);
 }
 
-[[nodiscard]] std::optional<VimMotionRange> motion_range(const VimEditorView &view,
-                                                         VimMotion motion, std::size_t count)
+// オペレータの後ろの `<BS>` が行末の位置に止まるか。d と c だけが前の行の改行に止まり、y は
+// 裸の NORMAL と同じに最後の文字へ渡る（Vim の nv_left は OP_DELETE / OP_CHANGE のときだけ NUL に
+// 置く・ADR 0049・Vim 9.1 で実測）。`<Space>` はどのオペレータでも止まる。
+[[nodiscard]] VimLineEndStop backspace_stop_for(VimOperator operation) noexcept
+{
+    switch (operation)
+    {
+    case VimOperator::remove:
+    case VimOperator::change:
+        return VimLineEndStop::rests;
+    case VimOperator::yank:
+        return VimLineEndStop::passes;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::optional<VimMotionRange>
+motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, VimOperator operation)
 {
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
@@ -695,6 +806,12 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return lines_between(text, LineNumber{std::min(line.value, target.value)},
                              LineNumber{std::max(line.value, target.value)});
     }
+    case VimMotion::wrap_right:
+        return characters_between(caret,
+                                  wrapped_forward(text, caret, count, VimLineEndStop::rests));
+    case VimMotion::wrap_left:
+        return characters_between(
+            wrapped_backward(text, caret, count, backspace_stop_for(operation)), caret);
     }
     std::unreachable();
 }
@@ -743,6 +860,27 @@ character_search_position(const VimEditorView &view, const VimState &state,
                                                     const VimMotionRange &range, VimMotion motion)
 {
     return vim_motion_is_exclusive(motion) ? exclusive_range(text, range) : range;
+}
+
+// d<BS> c<BS> が文字のある前の行へ渡ったら、範囲は exclusive の言い換えを通さない（Vim の nv_left
+// が前の行の NUL に止まって CA_NO_ADJ_OP_END を立てる・ADR 0049）。行頭の d<BS> が改行 1 つだけを
+// 消すのはこれ。渡った行が全部空行なら Vim も NUL に止まらず、言い換えを通って行単位になる。
+[[nodiscard]] bool keeps_the_line_break(const TextBuffer &text, const VimMotionRange &range,
+                                        VimMotion motion, VimOperator operation)
+{
+    if (motion != VimMotion::wrap_left || backspace_stop_for(operation) != VimLineEndStop::rests)
+    {
+        return false;
+    }
+    const LineNumber last = line_of(text, range.range.end);
+    for (std::size_t line = line_of(text, range.range.begin).value; line < last.value; ++line)
+    {
+        if (text.line_end(LineNumber{line}) != text.line_start(LineNumber{line}))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 // op_delete の「奇妙な Vi の振る舞い」。複数行にまたがる文字単位の削除で、終わりの後ろが空白だけ
@@ -1147,16 +1285,17 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 
 [[nodiscard]] VimStep operated(const VimState &state, const VimEditorView &view, VimMotion motion)
 {
-    const VimMotion wanted =
-        motion_for_change(view.text, view.selection.caret, operation_of(state), motion);
-    const auto range = motion_range(view, wanted, resolved_motion_count(state, view.text, wanted));
+    const VimOperator operation = operation_of(state);
+    const VimMotion wanted = motion_for_change(view.text, view.selection.caret, operation, motion);
+    const auto range =
+        motion_range(view, wanted, resolved_motion_count(state, view.text, wanted), operation);
     if (!range.has_value())
     {
         return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
     VimState performed_from = state;
     const bool document_yank =
-        operation_of(state) == VimOperator::yank &&
+        operation == VimOperator::yank &&
         (wanted == VimMotion::document_first || wanted == VimMotion::document_last);
     if (document_yank)
     {
@@ -1168,7 +1307,9 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
         }
     }
     return performed(performed_from, view.text, view.selection.caret,
-                     adjusted_for_exclusive(view.text, range.value(), wanted));
+                     keeps_the_line_break(view.text, range.value(), wanted, operation)
+                         ? range.value()
+                         : adjusted_for_exclusive(view.text, range.value(), wanted));
 }
 
 // オペレータを自分の回数といっしょに保留する（決定 1）。積んだ回数はここで移る。
@@ -2833,15 +2974,16 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // NORMAL の特別な鍵。矢印は h j k l と同じ動作で、Home / End は 0 と $（ADR 0015 の決定 6）。
-// Esc は保留を捨てるだけ（ADR 0012 の決定 5）。
+// Esc は保留を捨てるだけ（ADR 0012 の決定 5）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。
 [[nodiscard]] VimStep normal_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key)
 {
     switch (key)
     {
     case VimSpecialKey::escape:
-    case VimSpecialKey::backspace:
         return cancelled(state);
+    case VimSpecialKey::backspace:
+        return acted(state, view, VimAction::space_left);
     case VimSpecialKey::enter:
         return acted(state, view, VimAction::move_next_line);
     case VimSpecialKey::arrow_left:
@@ -3059,7 +3201,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // VISUAL の特別な鍵。Esc で出て、矢印と Home / End は NORMAL と同じ動作を引く。
-// Enter / Backspace / Ctrl-r はこの縦切りに無い（決定 7）。
+// Ctrl-r はこの縦切りに無い（決定 7）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。
 [[nodiscard]] VimStep visual_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key)
 {
@@ -3070,6 +3212,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimSpecialKey::enter:
         return visual_acted(state, view, VimAction::move_next_line);
     case VimSpecialKey::backspace:
+        return visual_acted(state, view, VimAction::space_left);
     case VimSpecialKey::control_r:
         return visual_unchanged(state);
     case VimSpecialKey::arrow_left:
