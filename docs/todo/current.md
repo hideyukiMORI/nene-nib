@@ -19,7 +19,7 @@
 | 4 | `VimStep.cpp` の鍵の表の切り出し（ADR 0042 決定 6・次に表を触る Issue で） | |
 | 5 | 複数タブ → Ctrl+P のファイル/履歴統合 → 一般 Ex | |
 
-2026-09-23 に統合: #124・#131・#141・#130・#144・#146（usage の集計）・#117（`^M` の描画・ADR 0040）・#151・#147（C1 の 4 桁）・#152・#148（incsearch・ADR 0041・既定オンは hide 未確認・D18 候補）・#162・#160（単体テストの分割・ADR 0042）・#165・#140（`assert_uncovered`・`measure`）・#168（Ctrl-G / Ctrl-T・ADR 0043）。open な Issue は 0。
+2026-09-23 に統合: #124・#131・#141・#130・#144・#146（usage の集計）・#117（`^M` の描画・ADR 0040）・#151・#147（C1 の 4 桁）・#152・#148（incsearch・ADR 0041・既定オンは施主決定 D18）・#162・#160（単体テストの分割・ADR 0042）・#165・#140（`assert_uncovered`・`measure`）・#168（Ctrl-G / Ctrl-T・ADR 0043）。open な Issue は 0。
 
 順は設計席の案で hide 未確認。open の一覧は `gh issue list --state open` が正。
 
