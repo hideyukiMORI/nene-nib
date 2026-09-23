@@ -1379,3 +1379,17 @@ FR-003 / ARC-001/004/010 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビ
 対象を限定した理由: 差分は `tests/unit/`・`CMakeLists.txt` の `nib_tests` の行・ADR 0042 だけで、`src/` と `eng/` と fixture は変えていない。Release・速さ・symbols・`--regenerate` は実行していない（QLT-001 / QLT-012・ADR 0021）。`c707911` から `origin/main`（docs だけの `3863fbe`）へ rebase した後は、テストの木が同じなので上の結果を再利用した。Waivers: none。
 
 CPP-008 / CPP-011 / ARC-001 / ARC-012 / QLT-001 / QLT-012 を自己レビュー。scope の入口・契約・既定実行の入口と、2 つのファイルから呼ばれる検証は `Scopes.hpp` の 1 本に宣言し（決定 2）、それ以外は各 `.cpp` の無名名前空間に閉じた。共有の足場のうち型はそれぞれのヘッダ（`Editing.hpp` と `Scripted*.hpp` 6 本・CPP-011）、関数は `TestSupport.hpp` / `VimTestSupport.hpp` に宣言した。
+
+### 5-av. test_protected_diff が scope の件数を固定しない（Issue #165・2026-09-23）
+
+`tests/conformance/test_protected_diff.py` の `Scopes` は `scopes` 表の件数を `19` と固定していて、#148 で 21 になった main では落ちていた。件数の固定を外し、`tests/unit/NibTests.cpp` の `std::array<std::pair<std::string_view, void (*)()>, N> scopes{{` の `N` を正規表現で読み、`parse_scopes` が読めた件数と重複の無い件数がどちらも `N` であること、`N >= 19`（過去の件数を下回らない）を確かめる形にした。scope が増えても落ちず、表の宣言と中身の食い違いは落ちる。
+
+| 検査 | 本件の前（`2f01a45`） | 本件の後 |
+| --- | --- | --- |
+| `python -m unittest tests.conformance.test_protected_diff` | 8 件中 1 件失敗（`21 != 19`） | **8 件成功** |
+| `python eng/test-conformance.py` | 191 件中 1 件失敗（同じ 1 件） | **191 件成功** |
+| `python eng/conformance.py` | — | **0 violation** |
+
+対象を限定した理由: 差分はテスト 1 本と本節だけで、`eng/protected-diff.py`・`src/`・`tests/unit/` は変えていない。ビルド・アプリの検証は実行していない（QLT-001 / QLT-012・ADR 0021）。依頼書と Issue の「196 件」はこの枝の実測では 191 件。Waivers: none。
+
+QLT-001 / QLT-012 / CNF-001 を自己レビュー。件数の正本は `NibTests.cpp` の宣言 1 か所で、テストに第 2 の件数を持たない（ARC-012）。
