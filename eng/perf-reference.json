@@ -46,9 +46,9 @@
           "maximumMs": 38.0386
         },
         "key-to-frame-burst-200-16mib": {
-          "medianMs": 427.674,
-          "minimumMs": 410.569,
-          "maximumMs": 519.529
+          "medianMs": 6.939,
+          "minimumMs": 6.589,
+          "maximumMs": 808.185
         }
       }
     },
