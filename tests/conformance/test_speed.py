@@ -211,10 +211,11 @@ class MeasurementFileTests(unittest.TestCase):
 class RepeatedTrialTests(unittest.TestCase):
     """bench_keys against scripted trials; keys_trial is replaced, so nothing is started (#36)."""
 
-    def bench(self, trials: list) -> tuple[dict, str]:
+    def bench(self, trials: list, document: Path | None = None) -> tuple[dict, str]:
         outcomes = iter(trials)
 
-        def scripted(executable, environment, folder):
+        def scripted(executable, environment, folder, opened):
+            self.assertEqual(document, opened)
             outcome = next(outcomes)
             if isinstance(outcome, Exception):
                 raise outcome
@@ -223,7 +224,7 @@ class RepeatedTrialTests(unittest.TestCase):
         written = io.StringIO()
         with mock.patch.object(speed, "keys_trial", scripted), \
                 contextlib.redirect_stdout(written):
-            values, _ = speed.bench_keys(Path("exe"), {}, Path("folder"))
+            values, _ = speed.bench_keys(Path("exe"), {}, Path("folder"), document)
         return values, written.getvalue()
 
     def delivered(self, single: float, burst: float) -> tuple:
@@ -257,6 +258,58 @@ class RepeatedTrialTests(unittest.TestCase):
         values, _ = self.bench([(0.9, None, 0.0, 7)] * speed.BURST_ATTEMPTS)
         self.assertEqual(0.9, values["key-to-frame-single"])
         self.assertIsNone(values["key-to-frame-burst-200"])
+
+    def test_the_burst_over_the_large_document_is_its_own_bench(self):
+        """ADR 0044 decision 6: the same trial over the 16 MiB document gives the burst alone."""
+        document = Path("large.txt")
+        values, _ = self.bench([self.delivered(0.9, 7.5)], document)
+        self.assertEqual({"key-to-frame-burst-200-16mib": 7.5}, values)
+
+    def test_a_missing_burst_over_the_large_document_names_its_bench(self):
+        document = Path("large.txt")
+        values, written = self.bench([(0.9, None, 0.0, 7)] * speed.BURST_ATTEMPTS, document)
+        self.assertEqual({"key-to-frame-burst-200-16mib": None}, values)
+        self.assertIn("this trial of key-to-frame-burst-200-16mib is missing", written)
+
+
+class BenchTableTests(unittest.TestCase):
+    """The bench names are one table: --bench, --check, --adopt and the reference all read it."""
+
+    def test_the_table_names_the_six_benches(self):
+        self.assertEqual(("startup-first-frame", "startup-window-shown", "key-to-frame-single",
+                          "key-to-frame-burst-200", "open-large-file-16mib",
+                          "key-to-frame-burst-200-16mib"), speed.BENCHES)
+
+    def test_the_reference_describes_every_bench_of_the_table(self):
+        """eng/prove-gates.py builds its QLT-014 proof from these descriptions (ADR 0044 decision 6)."""
+        reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
+        self.assertEqual(list(speed.BENCHES), list(reference["benches"]))
+        self.assertIn("ADR 0044", reference["benches"]["key-to-frame-burst-200-16mib"])
+
+    def test_a_machine_without_the_new_reference_is_judged_on_the_rest(self):
+        """A reference adopted before the sixth bench existed compares the five it has."""
+        recorded = reference_values()
+        del recorded["key-to-frame-burst-200-16mib"]
+        values = record({"key-to-frame-burst-200-16mib": ([900.0] * 5, 0)})["values"]
+        self.assertEqual(([], []), speed.compare(REFERENCE, values, recorded))
+
+    def test_adopting_the_new_bench_leaves_the_other_references_alone(self):
+        folder = ROOT / "out/conformance"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / "speed-adopt-one.json"
+        before = reference_values()
+        del before["key-to-frame-burst-200-16mib"]
+        path.write_text(json.dumps({"machines": {"test": {"recordedAt": "old",
+                                                          "values": before}}}), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            speed.adopt_one(path, record({"key-to-frame-burst-200-16mib": ([7.0] * 5, 0)}),
+                            "key-to-frame-burst-200-16mib")
+        after = json.loads(path.read_text(encoding="utf-8"))["machines"]["test"]
+        path.unlink()
+        self.assertEqual("old", after["recordedAt"])
+        self.assertEqual({"medianMs": 7.0, "minimumMs": 7.0, "maximumMs": 7.0},
+                         after["values"].pop("key-to-frame-burst-200-16mib"))
+        self.assertEqual(before, after["values"])
 
 
 if __name__ == "__main__":

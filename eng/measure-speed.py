@@ -1,4 +1,4 @@
-"""Measure the five speed benches and compare them with this machine's reference (QLT-014).
+"""Measure the six speed benches and compare them with this machine's reference (QLT-014).
 
 ADR 0011: the editor marks milestones (Issue #19 added the eight startup stages to the original
 input_received / frame_presented), the Win32 timing adapter turns them into a measurement file when
@@ -11,6 +11,10 @@ through eng/window_driver.py, and reads the file back.
   key-to-frame-single       one WM_CHAR -> the next frame_presented
   key-to-frame-burst-200    200 WM_CHAR posted at once -> the frame that finishes them
   open-large-file-16mib     the same startup measurement with a 16 MiB, 200,000 line argument
+  key-to-frame-burst-200-16mib
+                            the same 200 WM_CHAR after that 16 MiB document is open -> the frame
+                            that finishes them (ADR 0044 decision 6: the burst over an empty
+                            document never sees a large piece table or a long add buffer)
 
 --adopt writes the medians of every bench into this machine's reference; --adopt --bench <name>
 writes that one key and leaves the other reference values and recordedAt untouched, which is how a
@@ -89,7 +93,11 @@ MICROSECONDS_PER_MILLISECOND = 1000.0
 DISPLAY_ADAPTERS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000"
 CENTRAL_PROCESSOR = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 BENCHES = ("startup-first-frame", "startup-window-shown", "key-to-frame-single",
-           "key-to-frame-burst-200", "open-large-file-16mib")
+           "key-to-frame-burst-200", "open-large-file-16mib", "key-to-frame-burst-200-16mib")
+# 打鍵のベンチは 1 本の試行の経路を共有し、開く本文だけが違う（ADR 0044 決定 6）。
+# 16 MiB の試行の 1 打鍵は暖機と同じ扱いで、値にするのは 200 打鍵だけ。
+EMPTY_BURST_BENCH = "key-to-frame-burst-200"
+LARGE_BURST_BENCH = "key-to-frame-burst-200-16mib"
 # 起動の節目の正典順（Issue #19 / core::Milestone と同じ綴り）。区間名は「到達する節目の名前」で、
 # 最初の区間 "origin" だけはプロセス生成 -> bind（loader・CRT・COM・引数）を指す。
 ORIGIN_SEGMENT = "origin"
@@ -242,8 +250,12 @@ def bench_startup(executable: Path, environment: dict, folder: Path) -> tuple[di
             {"startup-first-frame": breakdown(measured)})
 
 
-def bench_keys(executable: Path, environment: dict, folder: Path) -> tuple[dict, dict]:
+def bench_keys(executable: Path, environment: dict, folder: Path,
+               document: Path | None = None) -> tuple[dict, dict]:
     """One keystroke, then 200 posted at once: Windows holds WM_PAINT until the queue drains.
+
+    With a document the same trial runs after that document was opened by the startup argument,
+    and only its burst becomes a value, as key-to-frame-burst-200-16mib (ADR 0044 decision 6).
 
     A trial only measures coalescing if the 200 messages really were in the queue together. When
     the posting process is starved the editor reads them as they arrive and the number becomes the
@@ -259,20 +271,28 @@ def bench_keys(executable: Path, environment: dict, folder: Path) -> tuple[dict,
     single is None too and the record says "missing" rather than carrying an older trial's number
     (Issue #36).
     """
+    name = EMPTY_BURST_BENCH if document is None else LARGE_BURST_BENCH
     single = None
     for attempt in range(BURST_ATTEMPTS):
         try:
-            single, burst, span, delivered = keys_trial(executable, environment, folder)
+            single, burst, span, delivered = keys_trial(executable, environment, folder, document)
         except TrialNotObserved as unobserved:
             single, reason = None, str(unobserved)
         else:
             reason = burst_failure(burst, span, delivered)
             if reason is None:
-                return ({"key-to-frame-single": single, "key-to-frame-burst-200": burst}, {})
+                return keys_values(name, single, burst), {}
         print(f"Speed: {reason}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
     print(f"Speed: no trial delivered the stimulus as specified in {BURST_ATTEMPTS} attempts;"
-          " this trial of key-to-frame-burst-200 is missing")
-    return ({"key-to-frame-single": single, "key-to-frame-burst-200": None}, {})
+          f" this trial of {name} is missing")
+    return keys_values(name, single, None), {}
+
+
+def keys_values(name: str, single: float | None, burst: float | None) -> dict:
+    """The values of one keystroke trial; the single keystroke is a bench of the empty one only."""
+    if name == LARGE_BURST_BENCH:
+        return {LARGE_BURST_BENCH: burst}
+    return {"key-to-frame-single": single, EMPTY_BURST_BENCH: burst}
 
 
 def burst_failure(burst: float | None, span: float, delivered: int) -> str | None:
@@ -296,16 +316,21 @@ def measured_single(marks: list, inputs: list) -> float | None:
     return (frame - int(marks[inputs[1]]["qpcMicroseconds"])) / MICROSECONDS_PER_MILLISECOND
 
 
-def keys_trial(executable: Path, environment: dict,
-               folder: Path) -> tuple[float | None, float | None, float, int]:
+def keys_trial(executable: Path, environment: dict, folder: Path,
+               document: Path | None = None) -> tuple[float | None, float | None, float, int]:
     """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
 
     Either value is None when its own stimulus did not reach the window, and the caller repeats or
     records the trial as missing (Issue #30); the count is what the caller says in that line.
     TrialNotObserved leaves instead when the trial produced nothing to read at all (Issue #36).
     """
-    report = report_path(folder, "keys")
-    process, window, _ = start(executable, environment, ["--measure", str(report)])
+    if document is None:
+        report = report_path(folder, "keys")
+        process, window, _ = start(executable, environment, ["--measure", str(report)])
+    else:
+        report = report_path(folder, "keys-large")
+        process, window, _ = start(executable, environment,
+                                   ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
     try:
         # 隠れた窓は合成器が間引き、待機可能オブジェクトが何十 vsync も signal されないことがある
         # （打鍵 → 描画に 800 ms の外れ値が出る）。最前面に出し、取れるなら前景にもする。
@@ -416,7 +441,8 @@ def measure(build: Path, repetitions: int) -> dict:
     for _ in range(repetitions):
         for values, parts in (bench_startup(executable, environment, folder),
                               bench_keys(executable, environment, folder),
-                              bench_large_file(executable, environment, folder, document)):
+                              bench_large_file(executable, environment, folder, document),
+                              bench_keys(executable, environment, folder, document)):
             for name, value in values.items():
                 if value is None:
                     missing[name] += 1
