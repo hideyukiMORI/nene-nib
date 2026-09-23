@@ -33,6 +33,8 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D15 | 編集中の状態の見た目（キャレットの形・選択・検索の当たり・IME・`:` の行）は [採用案](docs/design/2026-09-15-editing-look.md)。`:` の行は案 A（ステータスバーの左側が置き換わる）（施主決定 2026-09-15） | ADR 0009 |
 | D16 | タイトルバー（タブの帯）の背景は Mica に透かす淡い面ではなく、本文より一段深い不透明の茄子色 #1E0516。アクティブなタブは本文色で本文に繋がる（施主決定 2026-09-17・案 C） | テーマごとの値（`title_bar` / `tab_active`）。ライトは帯 #E1E4E9・タブ #F4F5F7。Mica 自体は起動の面（ADR 0013）と明暗のために残す。案の絵: https://claude.ai/artifact/NsLXAGUtYQnaS788WmFw2G 。実装は Issue #31 |
 | D14 | フォントサイズを変更できるようにする（施主決定 2026-09-15） | Ctrl+`+` / Ctrl+`-` / Ctrl+`0`（既定に戻す）と Ctrl+ホイール、Vim では `:set fontsize=<pt>`（`:set guifont` の書式も受ける）。値は設定に保存。計画は docs/plans/2026-09-15-colorschemes.md 第 6 節 |
+| D17 | 検索の当たりの強調（`hlsearch`）は既定オン。全一致は `search` の面、現在の一致は `accent` の 1 DIP の枠（施主決定 2026-09-22・案 A） | ADR 0037・Issue #123。`:noh` `:set (no)hlsearch` で消せる |
+| D18 | 入力中の当たりを見せる `incsearch` は既定オン（施主決定 2026-09-23）。Ctrl-G / Ctrl-T の向きと回数は Vim 準拠（Ctrl-G は本文の下へ・Ctrl-T は上へ・`[count]` は hop にも効く） | ADR 0041 / 0043・Issue #148 / #168。`:set (no)incsearch` で切り替え |
 | D12 | 見た目は `/design` で起こした案（[採用案](docs/design/2026-09-15-look.md)・[ADR 0008](docs/adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md)）を採用。アクセントは Ubuntu 橙 #E95420（施主承認 2026-09-15） | 見た目の判断は実装の前に `/design` で画を作って施主が選ぶ（施主指示 2026-09-15） |
 
 ## 3. 技術の土台（ADR で確定したもの）
