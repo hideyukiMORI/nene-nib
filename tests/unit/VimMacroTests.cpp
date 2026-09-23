@@ -338,6 +338,38 @@ void verify_recording_is_text()
            "an empty recording stores an empty characterwise text");
 }
 
+// 再生は窓の鍵と同じ口を通る（ADR 0048 の決定 8・9）。本文の `/ab\r` は入力行を経て確定し、
+// INSERT の中の `/cd\r` は文字のまま入り、`lines` の末尾の `\n` は `j` と同じ 1 行の移動になる。
+// 期待値は本物の Vim 9.1 で setreg の後に feedkeys("@a", 'xt') を打った実測。
+void verify_replay_through_input_line()
+{
+    Editing searching;
+    open_vim_document(searching, "one ab two\nab end");
+    EditorController &search = searching.controller();
+    applied(search, stored_text('a', "/ab<CR>x"));
+    vim_replay(search, "@a");
+    expect(whole_vim_body(search) == "one b two\nab end" && caret_at(search.frame(), 1, 5) &&
+               !search.command_line_active(),
+           "the stored /ab<CR> confirms through the input line and x acts on the match");
+
+    Editing inserting;
+    open_vim_document(inserting, "hello");
+    EditorController &insert = inserting.controller();
+    applied(insert, stored_text('a', "iab/cd<CR><Esc>"));
+    vim_replay(insert, "@a");
+    expect(whole_vim_body(insert) == "ab/cd\nhello" && caret_at(insert.frame(), 2, 1) &&
+               insert.vim_state().mode == VimMode::normal,
+           "a / inside INSERT is typed as text, not a search");
+
+    Editing lines;
+    open_vim_document(lines, "jj\naaa\nbbb\nccc\nddd");
+    EditorController &linewise = lines.controller();
+    applied(linewise, StoreVimRegister{'a', VimRegister{"jj\n", VimRegisterKind::lines}});
+    vim_replay(linewise, "j@a");
+    expect(whole_vim_body(linewise) == "jj\naaa\nbbb\nccc\nddd" && caret_at(linewise.frame(), 5, 1),
+           "the trailing newline of a lines register moves down one more line");
+}
+
 // `@"` は無名レジスタの本文を鍵として実行し、`@@` はそれを繰り返す（ADR 0048 の決定 6）。
 // 未使用のレジスタと空の本文はビープして何もしない。
 void verify_macro_unnamed_and_uninitialized()
@@ -378,6 +410,7 @@ void verify_vim_macro_contracts()
     verify_register_text_round_trip();
     verify_recording_is_text();
     verify_macro_unnamed_and_uninitialized();
+    verify_replay_through_input_line();
 }
 
 void verify_vim_macro_scope()

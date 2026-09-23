@@ -20,10 +20,13 @@
 #include "TextPosition.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
+#include "VimCharacter.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimPattern.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimSearchPattern.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 
 #include <cstddef>
@@ -65,6 +68,14 @@ class EditorController final
     void accept(const VisibleLines &intent);
     void accept(const SelectEditMode &intent);
     void accept(const VimKeyPress &intent);
+    // 再生の鍵の口（ADR 0048 の決定 8）。入力行が開いていれば窓と同じ入力行の intent へ、
+    // 閉じていれば engine へ。失敗を返すのは engine の鍵だけ。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> deliver_vim_key(const core::VimKey &key);
+    // 入力行が開いているときの 1 鍵の写し。写し漏れは std::visit / switch が落とす（CPP-002）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> command_key(const core::VimCharacter &key);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> command_key(core::VimSpecialKey key);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    command_key(const core::VimSearchPattern &key);
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
@@ -87,9 +98,10 @@ class EditorController final
     void accept(const StoreVimRegister &intent);
     // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
     // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
-    void submit(const core::CommandLine &line);
-    void submit(const core::CommandPalette &palette);
-    void submit(const core::SearchLine &line);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandLine &line);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandPalette &palette);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::SearchLine &line);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;

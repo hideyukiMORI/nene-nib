@@ -23,6 +23,9 @@ enum class VimAction : std::uint8_t
     move_screen_bottom,
     move_document_first,
     move_document_last,
+    // `+` と `<CR>`・`-`。次・前の行の最初の非空白（ADR 0048 の決定 9）。
+    move_next_line,
+    move_previous_line,
     scroll_half_down,
     scroll_half_up,
     scroll_page_down,

@@ -2,6 +2,7 @@
 
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
+#include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
 #include "DisplayLine.hpp"
@@ -35,6 +36,7 @@
 #include "VimSearchDirection.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimSearchPattern.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 #include "VimVisualReselect.hpp"
@@ -803,18 +805,77 @@ void EditorController::accept(const SelectEditMode &intent)
                   core::SelectionAnchoring::collapse);
 }
 
+// 窓は入力行の鍵を VimKeyPress ではなく CommandText / EditCommand / SubmitCommand /
+// CancelCommand で送る。入力行（設定一覧を含む）が開いているあいだに届いた Vim の鍵は捨てる。
 void EditorController::accept(const VimKeyPress &intent)
 {
+    if (state_.command_input().has_value())
+    {
+        return;
+    }
     static_cast<void>(step_vim(intent.key));
+}
+
+// 再生の鍵の口（ADR 0048 の決定 8）。入力行が開いていれば鍵を窓と同じ入力行の intent に写し、
+// 閉じていれば engine へ流す。確定した検索の鍵は入力行を経ずに engine へ。入力行の鍵は
+// 失敗しない。失敗を返すのは engine の鍵（入力行の確定が送る検索の鍵を含む）だけ。
+std::optional<core::VimRepeatFailure> EditorController::deliver_vim_key(const core::VimKey &key)
+{
+    if (!state_.command_input().has_value())
+    {
+        return step_vim(key);
+    }
+    return std::visit([this](const auto &value) { return this->command_key(value); }, key);
+}
+
+std::optional<core::VimRepeatFailure> EditorController::command_key(const core::VimCharacter &key)
+{
+    std::string utf8;
+    core::append_utf8(utf8, key.code);
+    accept(CommandText{std::move(utf8)});
+    return std::nullopt;
+}
+
+// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。確定・取消・削除のほかは入力行では捨てる。
+std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpecialKey key)
+{
+    switch (key)
+    {
+    case core::VimSpecialKey::enter:
+        return submitted_command();
+    case core::VimSpecialKey::escape:
+        accept(CancelCommand{});
+        return std::nullopt;
+    case core::VimSpecialKey::backspace:
+        accept(EditCommand{core::CommandEdit::backspace});
+        return std::nullopt;
+    case core::VimSpecialKey::arrow_left:
+    case core::VimSpecialKey::arrow_right:
+    case core::VimSpecialKey::arrow_up:
+    case core::VimSpecialKey::arrow_down:
+    case core::VimSpecialKey::control_r:
+    case core::VimSpecialKey::home:
+    case core::VimSpecialKey::end:
+    case core::VimSpecialKey::page_up:
+    case core::VimSpecialKey::page_down:
+    case core::VimSpecialKey::control_d:
+    case core::VimSpecialKey::control_u:
+    case core::VimSpecialKey::control_f:
+    case core::VimSpecialKey::control_b:
+    case core::VimSpecialKey::control_v:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+std::optional<core::VimRepeatFailure>
+EditorController::command_key(const core::VimSearchPattern &key)
+{
+    return step_vim(core::VimKey{key});
 }
 
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
-    if (state_.command_input().has_value())
-    {
-        // 入力行が開いたら残りの鍵は届かない。再生の中なら残りを捨てる（ADR 0046 の決定 3）。
-        return core::VimRepeatFailure::refused;
-    }
     const core::VimMode before = state_.vim().mode;
     const ScrollState scroll = state_.scroll();
     const core::VimEditorView view{state_.text(), state_.selection(),
@@ -1099,18 +1160,20 @@ void EditorController::accept(const PasteCommand &)
     accept(CommandText{text.value()});
 }
 
-void EditorController::submit(const core::CommandLine &line)
+std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
     evaluate_command(std::string(line.text()));
+    return std::nullopt;
 }
 
-void EditorController::submit(const core::CommandPalette &palette)
+std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandPalette &palette)
 {
     submit_palette(palette);
+    return std::nullopt;
 }
 
 // 検索の確定は engine の 1 つの鍵（ADR 0032 の決定 3）。先に入力行を閉じてから送る。
-void EditorController::submit(const core::SearchLine &line)
+std::optional<core::VimRepeatFailure> EditorController::submit(const core::SearchLine &line)
 {
     // Vim も確定の前に入力前の画面へ戻してから本当の検索をする（ex_getln.c の
     // finish_incsearch_highlighting）。着いた先は engine の鍵のあとの follow_caret が見せる。
@@ -1124,19 +1187,25 @@ void EditorController::submit(const core::SearchLine &line)
     {
         restore_search_origin(preview.value().origin);
     }
-    accept(VimKeyPress{core::VimKey{pattern}});
+    return step_vim(core::VimKey{pattern});
 }
 
 void EditorController::accept(const SubmitCommand &)
 {
+    static_cast<void>(submitted_command());
+}
+
+// 確定の失敗（検索の当たりが無い等）は再生を打ち切るので理由を返す（ADR 0048 の決定 8）。
+std::optional<core::VimRepeatFailure> EditorController::submitted_command()
+{
     const auto &open = state_.command_input();
     if (!open.has_value())
     {
-        return;
+        return std::nullopt;
     }
     // 入力行は state_ が持つので、写し先が状態を書き換える前に値ごと複製する。
     const CommandInput input = open.value();
-    std::visit([this](const auto &value) { this->submit(value); }, input);
+    return std::visit([this](const auto &value) { return this->submit(value); }, input);
 }
 
 void EditorController::evaluate_command(std::string_view text)
@@ -1332,7 +1401,7 @@ void EditorController::perform(const core::VimReplay &effect)
         replay_depth_ = replay_depths_.front();
         replay_queue_.pop_front();
         replay_depths_.pop_front();
-        if (step_vim(key).has_value())
+        if (deliver_vim_key(key).has_value())
         {
             replay_queue_.clear();
             replay_depths_.clear();

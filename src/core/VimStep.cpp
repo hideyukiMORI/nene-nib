@@ -102,9 +102,10 @@ constexpr char32_t carriage_return_character = 0x0D;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 51> normal_bindings{
+constexpr std::array<VimBinding, 54> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
+     {line_feed, VimAction::move_down},
      {U'k', VimAction::move_up},
      {U'l', VimAction::move_right},
      {U'0', VimAction::move_line_start},
@@ -113,6 +114,8 @@ constexpr std::array<VimBinding, 51> normal_bindings{
      {U'b', VimAction::move_previous_word},
      {U'e', VimAction::move_word_end},
      {U'^', VimAction::move_first_non_blank},
+     {U'+', VimAction::move_next_line},
+     {U'-', VimAction::move_previous_line},
      {U'H', VimAction::move_screen_top},
      {U'M', VimAction::move_screen_middle},
      {U'L', VimAction::move_screen_bottom},
@@ -173,6 +176,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_screen_bottom, VimActionGroup::motion},
      {VimAction::move_document_first, VimActionGroup::motion},
      {VimAction::move_document_last, VimActionGroup::motion},
+     {VimAction::move_next_line, VimActionGroup::motion},
+     {VimAction::move_previous_line, VimActionGroup::motion},
      {VimAction::scroll_half_down, VimActionGroup::scroll},
      {VimAction::scroll_half_up, VimActionGroup::scroll},
      {VimAction::scroll_page_down, VimActionGroup::scroll},
@@ -216,7 +221,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::replay_macro, VimActionGroup::input_wait}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 15> motion_bindings{
+constexpr std::array<VimMotionBinding, 17> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -231,7 +236,9 @@ constexpr std::array<VimMotionBinding, 15> motion_bindings{
      {VimAction::move_screen_middle, VimMotion::screen_middle},
      {VimAction::move_screen_bottom, VimMotion::screen_bottom},
      {VimAction::move_document_first, VimMotion::document_first},
-     {VimAction::move_document_last, VimMotion::document_last}}};
+     {VimAction::move_document_last, VimMotion::document_last},
+     {VimAction::move_next_line, VimMotion::next_line},
+     {VimAction::move_previous_line, VimMotion::previous_line}}};
 
 // i / a の後ろの鍵 → テキストオブジェクトの表（ADR 0031 の決定 1 / CPP-012）。b は paren、
 // B は brace、閉じ括弧の鍵は開き括弧と同じ行（Vim 9.1 で実測）。ここに無い鍵は取消。
@@ -669,6 +676,18 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return LineNumber{std::min(count, text.line_count())};
 }
 
+// `+` `-` `<CR>` の行き先。行が変わらなければ（最終行の `+`・1 行目の `-`）キャレットのまま
+// 返し、j k と同じ「動けない」失敗にする（ADR 0048 の決定 9）。
+[[nodiscard]] Offset first_non_blank_of_other_line(const TextBuffer &text, Offset caret,
+                                                   LineNumber from, LineNumber target)
+{
+    if (target.value == from.value)
+    {
+        return caret;
+    }
+    return vim_first_non_blank(text, text.line_start(target));
+}
+
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion)
 {
     const std::size_t count = resolved_motion_count(state, view.text, motion);
@@ -716,6 +735,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::document_first:
     case VimMotion::document_last:
         return vim_first_non_blank(text, text.line_start(document_line(text, count)));
+    case VimMotion::next_line:
+        return first_non_blank_of_other_line(text, caret, line, line_below(text, line, count));
+    case VimMotion::previous_line:
+        return first_non_blank_of_other_line(text, caret, line, line_above(line, count));
     }
     std::unreachable();
 }
@@ -744,6 +767,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::screen_bottom:
     case VimMotion::document_first:
     case VimMotion::document_last:
+    case VimMotion::next_line:
+    case VimMotion::previous_line:
         return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     }
     std::unreachable();
@@ -775,6 +800,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::previous_word:
     case VimMotion::word_end:
     case VimMotion::word_end_for_change:
+    case VimMotion::next_line:
+    case VimMotion::previous_line:
         return true;
     case VimMotion::line_start:
     case VimMotion::first_non_blank:
@@ -885,8 +912,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
     switch (motion)
     {
     case VimMotion::down:
+    case VimMotion::next_line:
         return lines_below(text, line, count);
     case VimMotion::up:
+    case VimMotion::previous_line:
         return lines_above(text, line, count);
     case VimMotion::left:
         return characters_between(backward_characters(text, caret, count), caret);
@@ -2893,9 +2922,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     switch (key)
     {
     case VimSpecialKey::escape:
-    case VimSpecialKey::enter:
     case VimSpecialKey::backspace:
         return cancelled(state);
+    case VimSpecialKey::enter:
+        return acted(state, view, VimAction::move_next_line);
     case VimSpecialKey::arrow_left:
         return acted(state, view, VimAction::move_left);
     case VimSpecialKey::arrow_right:
@@ -3120,6 +3150,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimSpecialKey::escape:
         return left_visual(state, view.selection);
     case VimSpecialKey::enter:
+        return visual_acted(state, view, VimAction::move_next_line);
     case VimSpecialKey::backspace:
     case VimSpecialKey::control_r:
         return visual_unchanged(state);

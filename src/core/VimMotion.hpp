@@ -24,6 +24,8 @@ enum class VimMotion : std::uint8_t
     screen_middle,
     screen_bottom,
     document_first,
-    document_last
+    document_last,
+    next_line,
+    previous_line
 };
 } // namespace nenenib::core

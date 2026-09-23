@@ -77,6 +77,11 @@ using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
 using nenenib::core::VimState;
 
+[[nodiscard]] VimKey vim_key_of(const VimNamedKey &named)
+{
+    return std::visit([](auto key) { return VimKey{key}; }, named);
+}
+
 [[nodiscard]] std::optional<VimKeyName> vim_key_name_at(std::string_view keys, std::size_t index)
 {
     for (const VimKeyName name : vim_key_names)
@@ -145,7 +150,7 @@ void command_key(EditorController &controller, const VimKey &key)
         const auto name = vim_key_name_at(keys, index);
         if (name.has_value())
         {
-            result.emplace_back(name.value().key);
+            result.push_back(vim_key_of(name.value().key));
             index += name.value().text.size();
             continue;
         }
