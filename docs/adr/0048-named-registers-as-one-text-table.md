@@ -38,7 +38,7 @@ Nib の今の形: 無名レジスタ `VimRegister { text; kind; width }` は eng
    - `VimSearchPattern { direction, pattern }` → `/` か `?` ＋ pattern ＋ `\r`。逆向きは無い（本文の `/` は文字のまま鍵になり、決定 8 で入力行を通って確定する）。
    - 本文 → 鍵列は上の逆に加えて `\x08` も `backspace`（Vim の Ctrl-H）。U+0080 の後ろの 2 文字が表に無ければ U+0080 も文字。`\n` は `VimCharacter{U'\n'}`（決定 9）。それ以外の制御文字は文字（engine が知らない鍵は `refused` で再生が止まる）。
    - 往復: `VimSearchPattern` を含まない鍵列で `vim_keys_of_text(vim_register_text(keys)) == keys`（契約）。
-8. **再生は窓の鍵と同じ口**: `perform(VimReplay)` の 1 鍵は `step_vim` 直結ではなく、窓の `VimKeyPress` が通る配送と同じ 1 本（入力行が開いていれば `CommandText` / `SubmitCommand` / `CancelCommand` と同じ写し・閉じていれば engine へ）。これで本文の `/ab\r` は `/` が `VimOpenSearch` で入力行を開き、`a` `b` が入力行へ入り、`\r` が確定して `VimSearchPattern` の鍵として engine に届く。`.` の記録に入っている `VimSearchPattern` は今までどおり engine へ。失敗の打ち切りは engine の失敗だけ（入力行の鍵は失敗しない）。入力行を開いたまま再生が終わったら開いたまま（Vim も同じ）。incsearch の preview は再生の中でも動くが描画は `WM_PAINT` の 1 フレームに 1 回のまま。`.` と `@a` の再生の経路は引き続き 1 本。
+8. **再生は窓の鍵と同じ口**: `perform(VimReplay)` の 1 鍵は `step_vim` 直結ではなく、窓の `VimKeyPress` が通る配送と同じ 1 本（入力行が開いていれば `CommandText` / `SubmitCommand` / `CancelCommand` と同じ写し・閉じていれば engine へ）。これで本文の `/ab\r` は `/` が `VimOpenSearch` で入力行を開き、`a` `b` が入力行へ入り、`\r` が確定して `VimSearchPattern` の鍵として engine に届く。`.` の記録に入っている `VimSearchPattern` は今までどおり engine へ。失敗の打ち切りは engine の失敗と検索の確定の失敗（E486）。**再生の中の入力行の `<Esc>` は取消ではなく確定**（`:help c_<Esc>`「マクロの中では入力した命令を実行する」・工程 2 の実測: `/ab<Esc>x` の `@a` は `one ab` → `one b`。窓で打った `<Esc>` は今までどおり取消）。入力行の中の矢印・Home / End・`<BS>` は窓と同じ写し（`EditCommand`）で、上下（履歴）は捨てる。写しの表は controller の 1 か所（`command_key`）で、テストの harness も同じ口を使う。入力行を開いたまま再生が終わったら開いたまま（Vim も同じ）。incsearch の preview は再生の中でも動くが描画は `WM_PAINT` の 1 フレームに 1 回のまま。`.` と `@a` の再生の経路は引き続き 1 本。
 9. **`<NL>` `<CR>` `+` `-`（NORMAL / VISUAL）**: `<NL>`（`VimCharacter{U'\n'}`・Vim の Ctrl-J）は `j` と同じ。`<CR>` と `+` は次の行の最初の非空白、`-` は前の行の最初の非空白（`:help +`・回数つき・動けなければ `j` `k` と同じ失敗）。VISUAL でも同じ移動。fixture の記法に `<NL>` を足す（`eng/vim-oracle.py` の `KEY_NAMES` と `tests/unit/VimTestSupport.hpp` の `vim_key_names` の両方・ARC-012 の既知の 2 か所）。
 10. **`.` の記録**: `"` とその名前は回数の桁と違って記録に残す（`normal_recording` の除外に載せない）。`"add` の後の `.` は `"a` へ置き換え、`"Add` の後の `.` は追記を繰り返す。`"ap` の後の `.` も同じ名前から貼る。
 11. **fixture と契約**: `register` 欄は今の形（`name`・`keys`）のまま。名前つきの本文は `"ayy` 等の鍵列で作れば `-es` で観測できるので新しい欄は足さない。期待値は本文・キャレット・無名レジスタ（`register_text` / `register_kind`）。fixture は 30 件程度: `"ayy"ap`・`"add"ap`・`"a3yy` と `3"ayy`・`"a"byy`・`"a<Esc>yy`・`"aj`・`"_dd` の後の `p`・`"Ayy` / `"Ayw` の 4 組・`"ayy@a`・`"ayy@"`・`""yy`・VISUAL の `"ay` `"ad`・矩形の `"ay"ap`・`"add.`・`"Add..`・`"ap.`・`<CR>` `+` `-` `<NL>`。録画がらみ（`qaxq"ap`・`"ayyqAxq`・`qaxq"Ayy`・特殊鍵の本文 `<Esc>` `<CR>` `<Left>`・往復・`block` の追記の `refused`・`@"`・空）は契約 `--vim-macro`（期待値は `feedkeys(…, 'xt')` で実測）。
@@ -55,7 +55,7 @@ Nib の今の形: 無名レジスタ `VimRegister { text; kind; width }` は eng
 ## 結果
 
 得られるもの: `"ayy` `"ap` `"add` `"Ayy` `""` `"_`・`"ap` がマクロを文字として貼る・`"ayy@a` が本文を鍵として実行する・`.` がレジスタ名と追記を繰り返す・`<CR>` `+` `-`。マクロと本文の表が 1 つになり、`VimMacroRegisters` と `StoreVimMacro` は消える。engine の 1 鍵 1 効果は不変。
-失うもの・残る穴: 矩形への追記は `refused`（Vim は繋ぐ）。特殊鍵の本文は Vim の `K_SPECIAL`（生の 0x80）ではなく U+0080 なので、貼ってから保存したバイト列は Vim と違う（描画は同じ）。数字・クリップボード・読み取り専用のレジスタは無い。録画がらみは oracle で観測できず契約だけ（ADR 0046 と同じ）。
+失うもの・残る穴: 矩形への追記は `refused`（Vim は繋ぐ）。特殊鍵の本文は Vim の `K_SPECIAL`（生の 0x80）ではなく U+0080 なので、貼ってから保存したバイト列は Vim と違う（描画は同じ）。数字・クリップボード・読み取り専用のレジスタは無い。録画がらみは oracle で観測できず契約だけ（ADR 0046 と同じ）。録画中に窓で打った入力行の `<Esc>` は取消なので engine に届かず、Vim が録る `/ab<Esc>`（再生で確定）は Nib では録れない（後続）。
 
 ## 却下した選択肢
 
