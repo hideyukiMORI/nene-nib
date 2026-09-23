@@ -36,6 +36,11 @@ constexpr std::int32_t target_underline_dips = 2;
 constexpr std::int32_t other_underline_dips = 1;
 // 折り返さない 1 行なので当たりの矩形は 1 つで足りる。多い分は行の帯からはみ出すだけ。
 constexpr std::size_t selection_run_maximum = 8;
+// 本文の Tab は空白この個数ぶんの tab stop に止まる。ADR 0034 の仮想桁（`tabstop` 固定 8）と
+// 同じ値で、等幅フォントなら見える位置が Vim の桁と一致する（ADR 0045 の決定 1）。
+constexpr float tab_stop_spaces = 8.0F;
+// 空白 1 個を測る layout の最大幅。折り返さないので十分に大きければよい。
+constexpr float space_probe_width = 1000.0F;
 constexpr DWORD latency_timeout_milliseconds = 1000;
 constexpr float full_channel = 255.0F;
 
@@ -442,11 +447,31 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
         format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
     }
     gutter->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+    set_tab_stops(code.Get());
     code_format_ = std::move(code);
     gutter_format_ = std::move(gutter);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     return {};
+}
+
+void Direct2DRenderer::set_tab_stops(IDWriteTextFormat *format)
+{
+    // 同じ書式で空白 1 個を測る。`width` は末尾の空白を含まないので含む方を読む（ADR 0045）。
+    TextLayout space;
+    if (FAILED(dwrite_->CreateTextLayout(L" ", 1, format, space_probe_width, space_probe_width,
+                                         space.GetAddressOf())))
+    {
+        return;
+    }
+    DWRITE_TEXT_METRICS metrics{};
+    if (FAILED(space->GetMetrics(&metrics)) || metrics.widthIncludingTrailingWhitespace <= 0.0F)
+    {
+        return;
+    }
+    // 失敗しても DirectWrite の既定の tab stop のまま描ける。描画は止めない（CPP-005）。
+    static_cast<void>(
+        format->SetIncrementalTabStop(metrics.widthIncludingTrailingWhitespace * tab_stop_spaces));
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::set_font(const core::EditorSettings &settings)

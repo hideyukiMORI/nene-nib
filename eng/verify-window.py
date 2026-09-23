@@ -43,6 +43,11 @@ that names no file must say so in one line and then carry on with an empty 無�
 Issue #31 adds the title bar's own ground (D16): the band is the opaque title_bar token and the
 active tab is the body ground, so both are read back as exact colours instead of as "the band
 differs from the body behind the tint".
+
+Issue #175 adds the tab stops (ADR 0045): a CRLF file with `a<Tab>b`, eight spaces and `b`,
+`<Tab>c` and `ab<Tab>c` is opened from the command line, and the right edge of the ink of the first
+two rows (and of the last two) must fall on the same pixel, because a Tab stops at eight spaces.
+`--open <file> --capture <dir>` without `--keys` opens any file and saves opened.png alone.
 Python standard library and ctypes only.
 """
 
@@ -227,6 +232,78 @@ def write_documents(output: Path) -> dict:
     shift_jis = folder / "sjis-lf.txt"
     shift_jis.write_bytes("日本語\n二行目".encode("cp932"))
     return {"utf8": utf8, "shiftJis": shift_jis}
+
+
+def write_tab_document(output: Path) -> Path:
+    """Four rows whose last glyph must line up in pairs when a Tab is eight spaces (ADR 0045)."""
+    folder = output / "documents"
+    folder.mkdir(parents=True, exist_ok=True)
+    tabs = folder / "tabs-crlf.txt"
+    tabs.write_bytes("a\tb\r\n        b\r\n\tc\r\nab\tc".encode("utf-8"))
+    return tabs
+
+
+def ink_right(pixels: bytes, width: int, box: tuple, grounds: list) -> int:
+    """The rightmost column inside a box that holds ink, or -1 when the box is empty."""
+    left, top, right, bottom = box
+    for x in range(right - 1, left - 1, -1):
+        if any(pixel(pixels, width, x, y) not in grounds for y in range(top, bottom)):
+            return x
+    return -1
+
+
+def verify_tab_stops(executable: Path, environment: dict, appearance: str, output: Path,
+                     frames: Path | None) -> dict:
+    """Issue #175: `a<Tab>b` puts `b` where eight spaces put it, and `ab<Tab>c` matches `<Tab>c`."""
+    path = write_tab_document(output)
+    process, window, _ = start(executable, environment, [str(path)])
+    try:
+        assert user.SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE_NOSIZE_SHOW)
+        time.sleep(0.6)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        dpi = user.GetDpiForWindow(window)
+        body = body_points(width, height, dpi)
+        grounds = [list(PALETTE[appearance]), list(CURRENT_LINE[appearance]), list(ACCENT)]
+        pixels = capture(window, width, height)
+        if frames is not None:
+            write_png(frames / "tabStops.png", width, height, pixels)
+        left = body["gutter"] + to_pixels(4, dpi)
+        rows = [ink_right(pixels, width, (left, top, width - to_pixels(8, dpi),
+                                          top + body["lineHeight"]), grounds)
+                for top in (body["firstRowTop"] + body["lineHeight"] * index
+                            for index in range(4))]
+        measured = {"file": path.name, "rightInk": rows, "dpi": dpi}
+        assert min(rows) > left, f"a row of the tab document was not drawn: {measured}"
+        assert rows[0] == rows[1], f"a<Tab>b and eight spaces + b end apart: {measured}"
+        assert rows[2] == rows[3], f"<Tab>c and ab<Tab>c end apart: {measured}"
+        close(window)
+        measured["exitCode"] = process.wait(timeout=5)
+        assert measured["exitCode"] == 0, measured["exitCode"]
+    finally:
+        stop(process)
+    return measured
+
+
+def capture_opened(executable: Path, environment: dict, frames: Path, opened: Path) -> dict:
+    """--open without --keys: open the file from the command line and save opened.png."""
+    process, window, _ = start(executable, environment, [str(opened)])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        try:
+            write_png(frames / "opened.png", width, height, capture(window, width, height))
+            record = {"opened": str(opened), "capture": "opened.png", "covered": False,
+                      "dpi": user.GetDpiForWindow(window), "size": {"w": width, "h": height}}
+        except WindowCovered as cover:
+            record = {"opened": str(opened), "covered": True, "coveredBy": cover.report()}
+        close(window)
+        process.wait(timeout=5)
+    finally:
+        stop(process)
+    return record
 
 
 def measure_document(window, appearance: str, rows: int, output: Path, name: str) -> dict:
@@ -567,7 +644,8 @@ def verify_ime(executable: Path, environment: dict, appearance: str, output: Pat
     return result
 
 
-def verify_documents(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
+def verify_documents(executable: Path, environment: dict, appearance: str, output: Path,
+                     frames: Path | None = None) -> dict:
     documents = write_documents(output)
     utf8 = verify_document(executable, environment, appearance, output,
                            {"path": documents["utf8"], "rows": 3, "save": True})
@@ -577,7 +655,8 @@ def verify_documents(executable: Path, environment: dict, appearance: str, outpu
     assert utf8["encodingInk"] != shift_jis["encodingInk"], "the encoding item never changed"
     assert utf8["endingInk"] != shift_jis["endingInk"], "the line ending item never changed"
     missing = verify_missing_document(executable, environment, output)
-    return {"utf8": utf8, "shiftJis": shift_jis, "missing": missing}
+    tabs = verify_tab_stops(executable, environment, appearance, output, frames)
+    return {"utf8": utf8, "shiftJis": shift_jis, "missing": missing, "tabs": tabs}
 
 
 def body_points(width: int, height: int, dpi: int, points: float = BODY_DEFAULT_POINTS) -> dict:
@@ -1320,14 +1399,15 @@ def main() -> None:
                              "(fixture notation, e.g. ihello<Esc>), save after.png and frames.json; "
                              "exits 1 when the keys left the window unchanged")
     parser.add_argument("--open", type=Path, default=None,
-                        help="with --keys: open this file through the command line first")
+                        help="open this file through the command line first; with --keys it is "
+                             "the start of the keys, without --keys it is saved as opened.png")
     parser.add_argument("--vim", action="store_true",
                         help="with --keys: switch to Vim NORMAL before before.png")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
-    if arguments.open is not None and arguments.keys is None:
-        parser.error("--open needs --keys")
+    if arguments.open is not None and arguments.capture is None:
+        parser.error("--open needs --capture <dir>")
     if arguments.vim and arguments.keys is None:
         parser.error("--vim needs --keys")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
@@ -1341,6 +1421,14 @@ def main() -> None:
     assert isolated.is_relative_to(output.resolve())
     environment = dict(os.environ, LOCALAPPDATA=str(isolated), APPDATA=str(isolated))
     become_dpi_aware()
+    if arguments.keys is None and arguments.open is not None:
+        record = capture_opened(executable, environment, frames, arguments.open.resolve())
+        print(json.dumps(record, indent=2))
+        if record["covered"]:
+            print(f"another window covers the capture: {record['coveredBy']['class']} "
+                  f"pid {record['coveredBy']['pid']}")
+            sys.exit(1)
+        return
     if arguments.keys is not None:
         opened = arguments.open.resolve() if arguments.open is not None else None
         record = drive_keys(executable, environment, frames, arguments.keys, opened,
@@ -1372,7 +1460,7 @@ def main() -> None:
             assert result["closeExitCode"] == 0, result["closeExitCode"]
         finally:
             stop(process)
-        result["documents"] = verify_documents(executable, environment, appearance, output)
+        result["documents"] = verify_documents(executable, environment, appearance, output, frames)
         # ADR 0014: IME の開閉は外から読め、変換そのものは本物の鍵が要るので別の 1 回の起動で測る。
         result["ime"] = verify_ime(executable, environment, appearance, output)
         # ADR 0013 の却下の条件は、窓が見えてから最初のフレームまでの面。別の 1 回の起動で記録する。
