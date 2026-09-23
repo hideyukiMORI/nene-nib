@@ -17,7 +17,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "eng"))
 
-from window_driver import parse_keys, read_png, VK_ESCAPE, write_png  # noqa: E402
+from window_driver import (cover_points, first_cover, parse_keys, read_png,  # noqa: E402
+                           VK_ESCAPE, write_png)
 
 spec = importlib.util.spec_from_file_location("compare_frames", ROOT / "eng/compare-frames.py")
 compare_frames = importlib.util.module_from_spec(spec)
@@ -164,6 +165,31 @@ class FramesChanged(unittest.TestCase):
     def test_the_same_capture_is_no_change(self):
         # verify-window.py --keys はこのとき "changed": false を書いて終了 1 にする。
         self.assertFalse(compare_frames.frames_changed(frame(), frame()))
+
+
+class CoveredCapture(unittest.TestCase):
+    """撮る前の確かめの判定（Issue #140）。WindowFromPoint の答えを並べた列だけを見る純関数。"""
+
+    OURS = 0x1234
+
+    def test_every_point_ours_is_uncovered(self):
+        self.assertIsNone(first_cover(self.OURS, [self.OURS] * 5))
+
+    def test_another_window_at_one_corner_is_covered(self):
+        # 反例: 同じ位置に上から出た別の editor の窓。1 点でも他人なら撮らない（終了 1 の元）。
+        occupants = [self.OURS, self.OURS, 0x5678, self.OURS, self.OURS]
+        self.assertEqual(first_cover(self.OURS, occupants), 2)
+
+    def test_no_window_at_a_point_is_covered(self):
+        self.assertEqual(first_cover(self.OURS, [0, self.OURS, self.OURS, self.OURS, self.OURS]), 0)
+
+    def test_the_points_are_the_centre_and_inside_each_corner(self):
+        self.assertEqual(cover_points(100, 60, inset=8),
+                         [(50, 30), (8, 8), (91, 8), (8, 51), (91, 51)])
+
+    def test_a_tiny_client_keeps_the_points_inside(self):
+        for x, y in cover_points(3, 2, inset=8):
+            self.assertTrue(0 <= x < 3 and 0 <= y < 2, (x, y))
 
 
 class KeyNotation(unittest.TestCase):
