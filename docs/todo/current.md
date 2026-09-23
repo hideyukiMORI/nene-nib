@@ -13,12 +13,13 @@
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
-| 1 | [#160](https://github.com/hideyukiMORI/nene-nib/issues/160) 単体テストを scope ごとの翻訳単位に分ける（ADR 0042） | 実装席（Opus）。`VimStep.cpp` はテーマで割らず純関数の切り出しだけ |
-| 2 | [#140](https://github.com/hideyukiMORI/nene-nib/issues/140) verify-window の `--keys` の鍵が届かない揺れ | Sonnet の probe 済み → `--measure` の節目で切り分ける診断席（Opus） |
-| 3 | Ctrl-G / Ctrl-T（incsearch の次・未起票） | |
-| 4 | add バッファの chunk 化（ADR）→ マクロ `q @`（ADR）→ Tab の画素幅（未起票） | |
+| 1 | add バッファの chunk 化（ADR・未起票） | 16 MiB の 1 打鍵は 0.9 ms なので急がない |
+| 2 | マクロ `q @`（ADR・未起票） | `.` の記録の型を再利用 |
+| 3 | Tab の画素幅（ADR 0034 の 8 桁と DirectWrite の tab stop・未起票） | |
+| 4 | `VimStep.cpp` の鍵の表の切り出し（ADR 0042 決定 6・次に表を触る Issue で） | |
+| 5 | 複数タブ → Ctrl+P のファイル/履歴統合 → 一般 Ex | |
 
-2026-09-23 に統合: #124・#131・#141・#130・#144・#146（usage の集計）・#117（`^M` の描画・ADR 0040）・#151・#147（C1 の 4 桁）・#152・#148（incsearch・ADR 0041・既定オンは hide 未確認・D18 候補）。
+2026-09-23 に統合: #124・#131・#141・#130・#144・#146（usage の集計）・#117（`^M` の描画・ADR 0040）・#151・#147（C1 の 4 桁）・#152・#148（incsearch・ADR 0041・既定オンは hide 未確認・D18 候補）・#162・#160（単体テストの分割・ADR 0042）・#165・#140（`assert_uncovered`・`measure`）・#168（Ctrl-G / Ctrl-T・ADR 0043）。open な Issue は 0。
 
 順は設計席の案で hide 未確認。open の一覧は `gh issue list --state open` が正。
 
@@ -27,9 +28,9 @@
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
 | Vim fixture | 1339 件 | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | 13682 checks・scope 21 | [gate-proofs 5-as](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0041 まで（0042 は #160 の枝） | [`docs/adr/README.md`](../adr/README.md) |
-| 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect` | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
+| 既定の `nib_tests` | 13712 checks・scope 21（1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042） | [gate-proofs 5-aw](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
+| ADR | 0043 まで | [`docs/adr/README.md`](../adr/README.md) |
+| 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
 | 速さ（実機） | 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms・16 MiB 250 ms | `eng/perf-reference.json`（ADR 0016） |
