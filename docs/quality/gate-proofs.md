@@ -1361,3 +1361,21 @@ ARC-001 / CPP-002 / CPP-011 / CPP-014 / QLT-001 / QLT-012 を自己レビュー�
 対象を限定した理由: 差分は application の 5 ファイルと単体テスト・`eng/verify-window.py` の 1 節である。core・renderer・fixture・速さの入力は不変なので、fixture の再生成・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。preview は 1 打鍵ごとに本文全体の検索と見えている行の照合を行うが、速さのゲートの `keystroke` は通常の入力なので測っていない（ADR 0041 の結果）。Waivers: none。
 
 FR-003 / ARC-001/004/010 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビュー。次の一致を求める経路は確定の鍵と preview で `vim_find_match` の 1 本、スクロールの追従は `follow_position` の 1 本。`optional` は `has_value` / `value` / `value_or` だけで読む。
+
+### 5-at. 単体テストを scope ごとの翻訳単位に分ける（Issue #160・ADR 0042・2026-09-23）
+
+`tests/unit/NibTests.cpp`（8224 行）を 37 ファイル（`.cpp` 27・`.hpp` 10）に分けた。移す手は scratchpad の 1 度きりのスクリプトで、実体（関数・型・定数）383 個のうち 382 個は本文が一字一句同じであることを同じスクリプトで照合した（残る 1 個は `vim_key_names` を `inline constexpr` にした宣言の変更）。`main` の本文も同じ。`NibTests.cpp` は `main`・`report`・`contracts` / `scopes` の 2 表で 137 行。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 新しい翻訳単位とヘッダ。警告 0 |
+| `build/nib_tests.exe`（引数なし）/ `--vim-search` / `--vim-dot` / `--display-line` | 呼ぶ順と中身の不変。**13682 / 1356 / 1479 / 189 checks 成功**（分ける前の `fac82f7` と同じ数） |
+| `ctest --test-dir build` | 4 / 4 成功（fixture 1339 件の再生を含む） |
+| `python eng/protected-diff.py --base origin/main --build`（`--allow` 無し） | **終了 0**。`3863fbe..c707911`・`fixtures 1339 -> 1339 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`scopes 21 / same 21 / 未測 0` |
+| `python eng/conformance.py`（`--build-dir build` も） | **0 violation / 0 violation** |
+| clang-format（`tests/unit` の全ファイル）・`git diff --check` | 指摘なし |
+| `cmake --build build --target nib_tests --clean-first` の時間（1 回ずつ・core / application の再ビルドを含む） | 分ける前 87.8 s → 分けた後 94.0 s。翻訳単位ごとに製品ヘッダと clang-tidy を読み直すぶん増えた（ADR 0042 の結果の「速くなる見込み」はこの機械では外れた） |
+
+対象を限定した理由: 差分は `tests/unit/`・`CMakeLists.txt` の `nib_tests` の行・ADR 0042 だけで、`src/` と `eng/` と fixture は変えていない。Release・速さ・symbols・`--regenerate` は実行していない（QLT-001 / QLT-012・ADR 0021）。`c707911` から `origin/main`（docs だけの `3863fbe`）へ rebase した後は、テストの木が同じなので上の結果を再利用した。Waivers: none。
+
+CPP-008 / CPP-011 / ARC-001 / ARC-012 / QLT-001 / QLT-012 を自己レビュー。scope の入口・契約・既定実行の入口と、2 つのファイルから呼ばれる検証は `Scopes.hpp` の 1 本に宣言し（決定 2）、それ以外は各 `.cpp` の無名名前空間に閉じた。共有の足場のうち型はそれぞれのヘッダ（`Editing.hpp` と `Scripted*.hpp` 6 本・CPP-011）、関数は `TestSupport.hpp` / `VimTestSupport.hpp` に宣言した。
