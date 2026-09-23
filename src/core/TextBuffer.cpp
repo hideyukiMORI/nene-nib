@@ -225,15 +225,18 @@ void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t 
 
 TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text) const
 {
+    // 範囲は本文の中へ丸める（insert / erase が丸めていたのと同じ規則・#191）。
+    const std::size_t from = std::min(begin.value, size_bytes_);
+    const std::size_t to = std::clamp(end.value, from, size_bytes_);
     auto add = add_;
     std::size_t fill = add_fill_;
     std::vector<Piece> next;
-    collect(next, 0, begin.value);
+    collect(next, 0, from);
     if (!text.empty())
     {
         append_insertion(next, appended(add, fill, text));
     }
-    collect(next, end.value, size_bytes_);
+    collect(next, to, size_bytes_);
     // 編集はバイト列を変えても改行の形は変えない（ARC-009 / ADR 0036 の決定 1）。
     TextBuffer result(original_, original_newlines_, std::move(next), ending_);
     result.add_ = std::move(add);
@@ -243,15 +246,12 @@ TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text)
 
 TextBuffer TextBuffer::insert(Offset at, std::string_view text) const
 {
-    const Offset clamped{std::min(at.value, size_bytes_)};
-    return replaced(clamped, clamped, text);
+    return replaced(at, at, text);
 }
 
 TextBuffer TextBuffer::erase(Offset begin, Offset end) const
 {
-    const std::size_t from = std::min(begin.value, size_bytes_);
-    const std::size_t to = std::clamp(end.value, from, size_bytes_);
-    return replaced(Offset{from}, Offset{to}, std::string_view{});
+    return replaced(begin, end, std::string_view{});
 }
 
 LineEnding TextBuffer::line_ending() const noexcept

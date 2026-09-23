@@ -491,7 +491,7 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     {
         interrupt_vim_insert();
     }
-    auto next = state_.text().erase(range.begin, range.end).insert(range.begin, text);
+    auto next = state_.text().replaced(range.begin, range.end, text);
     const core::Edit edit{range.begin, std::move(removed), std::string(text)};
     const core::Offset caret{range.begin.value + text.size()};
     const std::size_t before = state_.history().position();
@@ -730,7 +730,7 @@ void EditorController::undo_edit()
     }
     const core::Offset at = edit.value().at;
     const core::Offset end{at.value + edit.value().inserted.size()};
-    auto next = state_.text().erase(at, end).insert(at, edit.value().removed);
+    auto next = state_.text().replaced(at, end, edit.value().removed);
     const core::Offset caret{at.value + edit.value().removed.size()};
     state_ =
         state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone());
@@ -746,7 +746,7 @@ void EditorController::redo_edit()
     }
     const core::Offset at = edit.value().at;
     const core::Offset end{at.value + edit.value().removed.size()};
-    auto next = state_.text().erase(at, end).insert(at, edit.value().inserted);
+    auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
     state_ =
         state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone());
