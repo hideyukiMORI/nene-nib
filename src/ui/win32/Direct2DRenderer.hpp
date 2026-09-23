@@ -143,6 +143,7 @@ class Direct2DRenderer final
     void draw_status_bar(const application::EditorFrame &frame,
                          const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
+    void draw_recording(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
     void draw_status_left(const application::EditorFrame &frame,
                           const core::StatusBarLayout &layout);
     void draw_command(const application::EditorFrame &frame, const core::LayoutRect &area);

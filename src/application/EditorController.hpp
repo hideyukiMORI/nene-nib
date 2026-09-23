@@ -158,6 +158,8 @@ class EditorController final
                                      const std::optional<core::VimPattern> &pattern) const;
     [[nodiscard]] std::vector<LineView> visible_lines() const;
     [[nodiscard]] std::optional<CompositionView> composed() const;
+    // 録画中のマクロの名前。通常モードでは録画が止まっているので出さない（ADR 0046 の決定 8）。
+    [[nodiscard]] std::optional<char> recording_name() const;
     // Vim の NORMAL では IME を切ってあるので変換は来ないはずだが、来たら捨てる（決定 4）。
     [[nodiscard]] bool composition_ignored() const noexcept;
     // 確定した文字列を Vim の打鍵として流す。`.` の再生とマクロが後で自然に載る（決定 4）。

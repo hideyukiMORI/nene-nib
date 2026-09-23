@@ -1,8 +1,10 @@
 // scope `--vim-macro` の単体テスト（ADR 0042 決定 2・ADR 0046）。
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "Scopes.hpp"
+#include "SelectEditMode.hpp"
 #include "StoreVimMacro.hpp"
 #include "TestSupport.hpp"
 #include "VimKey.hpp"
@@ -28,7 +30,9 @@ namespace nenenib::tests
 {
 namespace
 {
+using nenenib::application::SelectEditMode;
 using nenenib::application::StoreVimMacro;
+using nenenib::core::EditMode;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
 using nenenib::core::VimPrefix;
@@ -207,6 +211,40 @@ void verify_macro_append()
     expect(whole_vim_body(controller) == "acdef", "a digit name stores nothing");
 }
 
+// 表示値の録画中の名前（決定 8・Issue #180）。`qa` で 'a' を持ち、止める `q` で消える。
+// INSERT に入っても録画は続くので値は残る。
+void verify_macro_recording_frame()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdef");
+    EditorController &controller = editing.controller();
+    expect(!controller.frame().recording.has_value(), "nothing is recorded at first");
+    vim_replay(controller, "qa");
+    expect(controller.frame().recording == std::optional<char>{'a'}, "qa shows the name a");
+    vim_replay(controller, "ix");
+    expect(controller.frame().recording == std::optional<char>{'a'}, "INSERT keeps recording");
+    vim_replay(controller, "<Esc>q");
+    expect(!controller.frame().recording.has_value(), "the stopping q clears the name");
+    vim_replay(controller, "qA");
+    expect(controller.frame().recording == std::optional<char>{'A'},
+           "an appending recording shows the typed capital like Vim");
+}
+
+// 通常モードでは Vim の鍵が流れないので、録画中でも名前を出さない（決定 8・Issue #180）。
+// Vim へ戻れば同じ録画がまた見える。
+void verify_macro_recording_hidden_in_ordinary()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdef");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "qb");
+    applied(controller, SelectEditMode{EditMode::ordinary});
+    expect(!controller.frame().recording.has_value(), "ordinary mode shows no recording");
+    applied(controller, SelectEditMode{EditMode::vim});
+    expect(controller.frame().recording == std::optional<char>{'b'},
+           "back in Vim the same recording shows again");
+}
+
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
     return fixture.macro.has_value();
@@ -223,6 +261,8 @@ void verify_vim_macro_contracts()
     verify_macro_failure_stops_the_rest();
     verify_macro_depth_limit();
     verify_macro_append();
+    verify_macro_recording_frame();
+    verify_macro_recording_hidden_in_ordinary();
 }
 
 void verify_vim_macro_scope()

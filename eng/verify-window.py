@@ -48,6 +48,9 @@ Issue #175 adds the tab stops (ADR 0045): a CRLF file with `a<Tab>b`, eight spac
 `<Tab>c` and `ab<Tab>c` is opened from the command line, and the right edge of the ink of the first
 two rows (and of the last two) must fall on the same pixel, because a Tab stops at eight spaces.
 `--open <file> --capture <dir>` without `--keys` opens any file and saves opened.png alone.
+
+Issue #180 adds the macro recording indicator (ADR 0046 decision 8): in Vim NORMAL `qa` writes
+`recording @a` beside the mode label and the stopping `q` takes it away (vimRecording.png).
 Python standard library and ctypes only.
 """
 
@@ -713,6 +716,13 @@ def mode_label_box(width: int, height: int, dpi: int) -> tuple:
     return (left, band_top, left + to_pixels(MODE_LABEL_WIDTH_DIPS, dpi), height)
 
 
+def status_left_box(width: int, height: int, dpi: int) -> tuple:
+    """From the mode label to the first status item, where recording @a is written (Issue #180)."""
+    left = mode_label_box(width, height, dpi)[0]
+    first = status_item_box(width, height, dpi, 0)
+    return (left, first[1], first[0], height)
+
+
 def box_pixels(pixels: bytes, width: int, box: tuple) -> list:
     """Every pixel inside a box, so two captures of the same box can be compared exactly."""
     left, top, right, bottom = box
@@ -1025,6 +1035,10 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     one more undo empties the buffer again. Issue #168 adds Ctrl-G while typing: the current match
     moves to the second `be` (<frames>/vimIncsearchHop.png); Ctrl+G needs SendInput, so a session
     that refuses the foreground records the hop as unconfirmed instead of failing.
+
+    Issue #180 adds the recording indicator: right after entering NORMAL, `qa` writes
+    `recording @a` next to the mode label (<frames>/vimRecording.png with --capture) and the
+    stopping `q` takes it away again. Register a stays empty, so nothing else changes.
     """
     width, height, dpi, body = ground["size"]
     grounds = [ground["background"], ground["current"], list(ACCENT)]
@@ -1035,6 +1049,15 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     click(window, toggle["vim"][0], toggle["vim"][1])
     time.sleep(0.5)
     normal = capture(window, width, height)
+    # Issue #180: 録画中はモード表示の隣に recording @a が出て、止める q で消える（ADR 0046 決定 8）。
+    beside = status_left_box(width, height, dpi)
+    write_text(window, "qa")
+    time.sleep(0.5)
+    recording = capture(window, width, height)
+    snapshot(frames, window, "vimRecording")
+    write_text(window, "q")
+    time.sleep(0.5)
+    stopped = capture(window, width, height)
     write_text(window, "i")
     time.sleep(0.5)
     inserting = capture(window, width, height)
@@ -1098,6 +1121,10 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
         "inkAfterTyping": typed_ink,
         "inkAfterRemoving": ink(shortened, width, content, grounds),
         "inkAfterUndoing": cleared_ink,
+        "recordingChangedTheStatusBar":
+            box_pixels(recording, width, beside) != box_pixels(normal, width, beside),
+        "stoppingTookTheRecordingAway":
+            box_pixels(stopped, width, beside) == box_pixels(normal, width, beside),
         "insertChangedTheModeLabel":
             box_pixels(inserting, width, label) != box_pixels(normal, width, label),
         "escapeBroughtTheNormalLabelBack":
@@ -1120,6 +1147,8 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
         "capturePut": "vim-put.bmp",
     }
     assert result["inkAfterTyping"] > 0, "ihello did not draw anything"
+    assert result["recordingChangedTheStatusBar"], "qa did not say recording @a"
+    assert result["stoppingTookTheRecordingAway"], "the stopping q left recording @a behind"
     assert result["insertChangedTheModeLabel"], "the status bar did not say INSERT"
     assert result["escapeBroughtTheNormalLabelBack"], "Esc did not bring NORMAL back"
     assert result["ordinaryLabelDiffers"], "the ordinary label looks like NORMAL"
