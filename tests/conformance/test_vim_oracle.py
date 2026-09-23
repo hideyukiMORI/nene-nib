@@ -172,9 +172,12 @@ class VimOracleTests(unittest.TestCase):
             .encode("utf-8"),
             vim_oracle.canonical_fixtures_json([fixture]))
 
-    # 録画は :normal! の中で動かないので、q を命令として打つ fixture は黙って測らずに拒む。
-    # 検索の入力行の q は文字なので通る。
+    # 録画は :normal! の中で動かないので、q を NORMAL / VISUAL の命令として打つ fixture は黙って
+    # 測らずに拒む（#190）。検索の入力行・挿入文字・文字引数・レジスタ名の q は文字なので通る。
     def test_canonical_form_rejects_a_recording_q(self):
+        for keys in ["\"aqa", "viwqa", "xqb", "dq", "gq"]:
+            with self.subTest(keys=keys), self.assertRaises(ValueError):
+                vim_oracle.canonical_fixtures_json([{"name": "a", "text": "b", "keys": keys}])
         for fixture in [{"name": "a", "text": "b", "keys": "qaxq@a"},
                         {"name": "a", "text": "b", "keys": "@a",
                          "register": {"name": "a", "keys": "qbq"}},
@@ -188,6 +191,10 @@ class VimOracleTests(unittest.TestCase):
         vim_oracle.canonical_fixtures_json([{"name": "a", "text": "b", "keys": "d/qux<CR>"},
                                             {"name": "c", "text": "b", "keys": "?q<CR>@a",
                                              "register": {"name": "a", "keys": "/q<CR>x"}}])
+        passing = ["fqx", "rq", "iq<Esc>", "cwq<Esc>x", "\"qyy", "diq", "vrq", "vcq<Esc>"]
+        vim_oracle.canonical_fixtures_json(
+            [{"name": f"p{index}", "text": "b", "keys": keys} for index, keys in enumerate(passing)]
+            + [{"name": "q", "text": "b", "keys": "@q", "register": {"name": "q", "keys": "x"}}])
 
     def test_probe_script_lets_the_register_before_the_keys(self):
         script = vim_oracle.probe_script([], "@a", None, {"name": "a", "keys": "iab<Esc>"})
