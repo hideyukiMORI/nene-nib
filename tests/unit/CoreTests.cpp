@@ -446,6 +446,63 @@ void verify_buffer_scale()
            "the last line is found");
 }
 
+// ADR 0044 の決定 2: 同じ値から 2 回分岐して挿入しても、互いの本文が壊れない。
+void verify_buffer_add_branches()
+{
+    const auto base = TextBuffer::empty().insert(Offset{0}, "base");
+    const auto first = base.insert(Offset{0}, "x");
+    const auto second = base.insert(Offset{0}, "y");
+    expect(first.text() == "xbase", "the first branch reads its own insert");
+    expect(second.text() == "ybase", "the second branch does not overwrite the first");
+    expect(base.text() == "base", "the common source is unchanged");
+    const auto tip = TextBuffer::empty().insert(Offset{0}, "tip");
+    const auto grown = tip.insert(Offset{3}, "1");
+    const auto forked = tip.insert(Offset{3}, "2");
+    expect(grown.text() == "tip1" && grown.piece_count() == 1,
+           "the value that knows the tip extends the chunk in place");
+    expect(forked.text() == "tip2" && forked.piece_count() == 2,
+           "a value behind the tip starts a new chunk instead of overwriting");
+    expect(grown.insert(Offset{4}, "!").text() == "tip1!" && tip.text() == "tip",
+           "the grown branch keeps growing and the source still reads its own length");
+}
+
+// 64 KiB の chunk を跨ぐ連続の 1 文字入力（ADR 0044 の決定 2 / 3）。
+void verify_buffer_chunk_growth()
+{
+    constexpr std::size_t typed = 70000;
+    auto text = TextBuffer::empty();
+    std::string expected;
+    for (std::size_t index = 0; index < typed; ++index)
+    {
+        const std::string_view key = index % 1000 == 999 ? "\n" : "a";
+        text = text.insert(Offset{text.size_bytes()}, key);
+        expected += key;
+    }
+    expect(text.text() == expected, "seventy thousand keys read back across the chunk boundary");
+    expect(text.line_count() == 71, "the newlines typed across the boundary are all indexed");
+    expect(text.piece_count() == 2, "crossing one chunk boundary adds exactly one piece");
+    expect(text.line_text(LineNumber{66}) == std::string(999, 'a'),
+           "a line that straddles the chunk boundary reads back whole");
+}
+
+// chunk より大きい 1 回の挿入と、erase から insert で戻した本文（ADR 0044 の決定 2 / 5）。
+void verify_buffer_oversized_and_restored()
+{
+    const std::string block(200U * 1024U, 'b');
+    const auto big = buffer_of("ac").insert(Offset{1}, block);
+    expect(big.text() == "a" + block + "c" && big.piece_count() == 3,
+           "an insert larger than a chunk is one piece of its own chunk");
+    const auto after = big.insert(Offset{1 + block.size()}, "d");
+    expect(after.text() == "a" + block + "dc" && after.piece_count() == 4,
+           "the oversized chunk is never extended");
+    const auto typed = TextBuffer::empty().insert(Offset{0}, "hello world");
+    const auto erased = typed.erase(Offset{5}, Offset{11});
+    const auto restored = erased.insert(Offset{5}, " world");
+    expect(erased.text() == "hello" && restored.text() == typed.text(),
+           "erase then insert restores the text");
+    expect(typed.text() == "hello world", "the value before the erase still reads its text");
+}
+
 // ---------------------------------------------------------------- 位置と選択
 
 void verify_offset_types()
@@ -1339,6 +1396,9 @@ void verify_text_and_caret()
     verify_buffer_positions();
     verify_buffer_round_trip();
     verify_buffer_scale();
+    verify_buffer_add_branches();
+    verify_buffer_chunk_growth();
+    verify_buffer_oversized_and_restored();
     verify_offset_types();
     verify_selection();
     verify_line_endings();

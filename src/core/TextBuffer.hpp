@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AddChunk.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
@@ -18,6 +19,7 @@ namespace nenenib::core
 {
 // 本文の正本（piece table・ADR 0009 の決定 1）。公開状態は不変で、編集は次の本文を返す（ARC-005）。
 // original（読んだ本文）と add（入力）の 2 本は shared_ptr で共有し、複製するのは piece の列だけ。
+// add は固定長の chunk の列で、末尾の chunk を伸ばすのはその先端を知っている値だけ（ADR 0044）。
 // 生成経路は empty と from_utf8 の 2 つだけで、どちらも不変条件（正しい UTF-8）を守る（CPP-007）。
 class TextBuffer final
 {
@@ -52,9 +54,11 @@ class TextBuffer final
 
   private:
     using Buffer = std::shared_ptr<const std::string>;
+    using Chunks = std::vector<std::shared_ptr<AddChunk>>;
 
-    TextBuffer(Buffer original, Buffer add, std::vector<Piece> pieces, LineEnding ending);
+    TextBuffer(Buffer original, std::vector<Piece> pieces, LineEnding ending);
     [[nodiscard]] std::string_view view_of(const Piece &piece) const noexcept;
+    [[nodiscard]] const std::string &buffer_of(const Piece &piece) const noexcept;
     [[nodiscard]] TextBuffer replaced(Offset begin, Offset end, std::string_view text) const;
     void collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const;
     [[nodiscard]] Piece clipped(const Piece &piece, std::size_t from, std::size_t length) const;
@@ -62,7 +66,9 @@ class TextBuffer final
     [[nodiscard]] std::size_t newlines_before(std::size_t at) const noexcept;
 
     Buffer original_;
-    Buffer add_;
+    Chunks add_;
+    // 末尾の chunk の、この値が知っている書き込み済みの長さ（ADR 0044 の決定 2）。
+    std::size_t add_fill_;
     std::vector<Piece> pieces_;
     std::size_t size_bytes_;
     std::size_t newline_count_;
