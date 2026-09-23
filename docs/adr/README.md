@@ -62,3 +62,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0044](0044-add-buffer-in-chunks.md) | piece table の add バッファは固定長の chunk の列で持ち、piece は chunk を跨がず、先端を持つ値だけがその場で伸ばす | 受理 |
 | [0045](0045-tab-stops-follow-vim-columns.md) | 本文の Tab は空白 8 個ぶんの tab stop で描き、Vim の仮想桁と同じ位置に止まる | 受理 |
 | [0046](0046-macros-record-keys-and-replay-through-dot-path.md) | マクロ `q` `@` は名前つきの鍵列を engine が録り、再生は `.` と同じ経路で 1 鍵ずつ流す | 受理 |
+| [0047](0047-shared-newline-index-per-source.md) | 改行の索引はバッファ（original と各 add chunk）ごとに 1 本を共有し、piece はその窓だけを持つ | 受理 |
