@@ -1582,3 +1582,5 @@ QLT-014 / ADR 0011 / 0016 / 0044 / QLT-001/012 を自己レビュー。ベンチ
 | `git diff --check` | 指摘なし |
 
 計測（`--check` 6 本・`--adopt --bench key-to-frame-burst-200-16mib`・#174 の前後）は設計席が Release で行うので、この工程では実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+設計席の計測（2026-09-23・Release `build/release-37a70ca`・実機 `bc8a356f37c68491`・差し戻し 1 回目の後）: `--check` は 6 本で 0 regression（`key-to-frame-burst-200-16mib` 447.5 ms・min 431.9 / max 478.6・到着幅の中央値 444.0 ms・既存 5 本は基準内）。`--adopt --bench key-to-frame-burst-200-16mib` で基準値 427.7 ms（5 回の中央値・min 410.6 / max 519.5）を `eng/perf-reference.json` に記録（他の値と `recordedAt` は不変・保護対象の変更の根拠は ADR 0044 決定 6）。#174 の前後: 前の exe（main `3041c31`）は同じベンチで 513.6 ms（min 429.7 / max 783.6）、後（本枝・本文は `9198fea` と同じ）は 427.7〜447.5 ms。16 MiB の 1 打鍵は約 2.2 ms で、空の文書の 0.9 ms との差の経路は別 Issue（Sonnet の probe 中）。ログは `out/179-check-2.log`・`out/179-adopt.log`・`out/179-before174.log`・記録は `out/speed/`。
