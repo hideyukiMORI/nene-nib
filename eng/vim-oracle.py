@@ -84,7 +84,7 @@ DEFAULT_SETTINGS = ["set nocompatible", "set backspace=indent,eol,start"]
 # fixture の記法 → Vim の二重引用符つき文字列の記法。写すのはここ 1 か所だけ（C++ 側は別の 1 か所）。
 KEY_NAMES = {"<Esc>": "\\<Esc>", "<CR>": "\\<CR>", "<BS>": "\\<BS>", "<C-r>": "\\<C-r>",
              "<C-d>": "\\<C-d>", "<C-u>": "\\<C-u>", "<C-f>": "\\<C-f>", "<C-b>": "\\<C-b>",
-             "<C-v>": "\\<C-v>",
+             "<C-v>": "\\<C-v>", "<NL>": "\\<NL>",
              "<Home>": "\\<Home>", "<End>": "\\<End>",
              "<PageUp>": "\\<PageUp>", "<PageDown>": "\\<PageDown>"}
 BANNER = "// 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）"

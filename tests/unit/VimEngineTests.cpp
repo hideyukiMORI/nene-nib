@@ -812,11 +812,12 @@ void verify_vim_visual_step_edges()
     VimState visual = resting;
     visual.mode = VimMode::visual;
     const Selection selection{Offset{1}, Offset{2}};
-    // VISUAL で効かない鍵は選択もモードも動かさない（決定 7）。
-    for (const VimKey &key : {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'u'}},
-                              VimKey{VimCharacter{U'D'}}, VimKey{VimCharacter{U'A'}},
-                              VimKey{VimSpecialKey::enter}, VimKey{VimSpecialKey::backspace},
-                              VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
+    // VISUAL で効かない鍵は選択もモードも動かさない（決定 7）。`<CR>` は ADR 0048 の決定 9 で
+    // `+` と同じ移動になったので、ここには効かない文字 `Z` を置く。
+    for (const VimKey &key :
+         {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'u'}}, VimKey{VimCharacter{U'D'}},
+          VimKey{VimCharacter{U'A'}}, VimKey{VimCharacter{U'Z'}}, VimKey{VimSpecialKey::backspace},
+          VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
     {
         const auto step =
             vim_step(visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64}}, key);

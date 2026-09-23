@@ -23,6 +23,9 @@ enum class VimAction : std::uint8_t
     move_screen_bottom,
     move_document_first,
     move_document_last,
+    // `+` と `<CR>`・`-`。次・前の行の最初の非空白（ADR 0048 の決定 9）。
+    move_next_line,
+    move_previous_line,
     scroll_half_down,
     scroll_half_up,
     scroll_page_down,
@@ -68,10 +71,12 @@ enum class VimAction : std::uint8_t
     search_word_backward,
     // マクロ（ADR 0046）。`q` は録画の開始と停止、`@` は再生。どちらも次の鍵が名前。
     record_macro,
-    replay_macro
+    replay_macro,
+    // `"`。次の鍵がレジスタの名前（ADR 0048 の決定 2）。
+    select_register
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::replay_macro) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::select_register) + 1;
 } // namespace nenenib::core

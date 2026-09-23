@@ -50,7 +50,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/Utf16.cpp src/core/Utf8.cpp
-    src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimPattern.cpp
+    src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimPattern.cpp src/core/VimRegisterText.cpp
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp
     src/core/VimStep.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp

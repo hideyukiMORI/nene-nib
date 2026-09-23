@@ -37,10 +37,11 @@ struct VimStep
 // 何を捨てるかを決めるのは engine の側である（ARC-004）。
 [[nodiscard]] VimState vim_interrupted(const VimState &state);
 
-// マクロのレジスタへ鍵の列を置いたあとの状態（ADR 0046 の決定 6・`:let @a = "…"` に当たる）。
-// 名前の a〜z は置き換え、A〜Z は追記、ほかの名前は状態を変えない。
-[[nodiscard]] VimState vim_macro_stored(const VimState &state, char32_t name,
-                                        const std::vector<VimKey> &keys);
+// 名前つきレジスタへ本文を置いたあとの状態（ADR 0048 の決定 6・`:let @a = "…"` に当たる）。
+// 名前の a〜z は置き換え、A〜Z は録画の追記と同じ規則で繋ぎ（本文の末尾の改行の手前・種類は
+// 保つ）、ほかの名前は状態を変えない。
+[[nodiscard]] VimState vim_register_stored(const VimState &state, char name,
+                                           const VimRegister &value);
 
 // 検索の入力行が開いているあいだの回数（`2/be` の 2・`d2/` なら積）。確定の鍵が engine の中で
 // 使う回数と同じ値で、incsearch の preview と Ctrl-G / Ctrl-T が同じ回数で探すために読む

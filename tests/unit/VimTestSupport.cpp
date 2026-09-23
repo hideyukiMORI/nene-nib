@@ -1,10 +1,6 @@
 // Vim の単体テストが共有する足場の定義（ADR 0042 決定 1）。
 #include "VimTestSupport.hpp"
-#include "CancelCommand.hpp"
 #include "Column.hpp"
-#include "CommandEdit.hpp"
-#include "CommandText.hpp"
-#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -17,8 +13,7 @@
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
-#include "StoreVimMacro.hpp"
-#include "SubmitCommand.hpp"
+#include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextPosition.hpp"
@@ -31,6 +26,7 @@
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VisibleLines.hpp"
@@ -58,7 +54,6 @@ using nenenib::application::ScrollLines;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
-using nenenib::core::append_utf8;
 using nenenib::core::code_point_at;
 using nenenib::core::Column;
 using nenenib::core::EditMode;
@@ -76,6 +71,11 @@ using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
 using nenenib::core::VimState;
 
+[[nodiscard]] VimKey vim_key_of(const VimNamedKey &named)
+{
+    return std::visit([](auto key) { return VimKey{key}; }, named);
+}
+
 [[nodiscard]] std::optional<VimKeyName> vim_key_name_at(std::string_view keys, std::size_t index)
 {
     for (const VimKeyName name : vim_key_names)
@@ -86,37 +86,6 @@ using nenenib::core::VimState;
         }
     }
     return std::nullopt;
-}
-
-// 入力行が開いているあいだの鍵の写し先。窓と同じ約束の 2 つめの端（ARC-012・ADR 0032 の決定 1）。
-// fixture の `/foo<CR>` は Vim では 1 つの命令なので、再生もこの 1 本を通る。
-void command_key(EditorController &controller, const VimKey &key)
-{
-    if (const auto *special = std::get_if<VimSpecialKey>(&key))
-    {
-        if (*special == VimSpecialKey::enter)
-        {
-            static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
-            return;
-        }
-        if (*special == VimSpecialKey::escape)
-        {
-            static_cast<void>(controller.apply(nenenib::application::CancelCommand{}));
-            return;
-        }
-        if (*special == VimSpecialKey::backspace)
-        {
-            static_cast<void>(controller.apply(
-                nenenib::application::EditCommand{nenenib::core::CommandEdit::backspace}));
-        }
-        return;
-    }
-    if (const auto *character = std::get_if<VimCharacter>(&key))
-    {
-        std::string utf8;
-        nenenib::core::append_utf8(utf8, character->code);
-        static_cast<void>(controller.apply(nenenib::application::CommandText{utf8}));
-    }
 }
 
 [[nodiscard]] TextPosition vim_fixture_position(const VimFixture &fixture)
@@ -144,7 +113,7 @@ void command_key(EditorController &controller, const VimKey &key)
         const auto name = vim_key_name_at(keys, index);
         if (name.has_value())
         {
-            result.emplace_back(name.value().key);
+            result.push_back(vim_key_of(name.value().key));
             index += name.value().text.size();
             continue;
         }
@@ -171,14 +140,11 @@ void command_key(EditorController &controller, const VimKey &key)
 
 void vim_replay(EditorController &controller, std::string_view keys)
 {
+    // 入力行の写しは controller の 1 か所（ADR 0048 の決定 8）。`/foo<CR>` も窓と同じ intent
+    // になる。
     for (const VimKey &key : vim_keys_of(keys))
     {
-        if (controller.command_line_active())
-        {
-            command_key(controller, key);
-            continue;
-        }
-        static_cast<void>(controller.apply(VimKeyPress{key}));
+        static_cast<void>(controller.press_vim_key(key));
     }
 }
 
@@ -228,7 +194,8 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
 
 // fixture の `register`（ADR 0046 の決定 6・oracle の `let @a = "…"`）。記法の鍵を VimKey の列へ
 // 写すのは録画と同じ 1 本にしたいので、同じ本文を開いた別の editor で `q{name}` のあとに鍵を打ち、
-// 録画中の鍵の列をそのまま取って、再生する editor のレジスタへ StoreVimMacro で置く。
+// 録画中の鍵の列を vim_register_text で本文にして、再生する editor のレジスタへ StoreVimRegister
+// で置く（録画を止める `q` と同じ写し・ADR 0048 の決定 6）。
 // 別の editor で打つので、再生する側の本文・レジスタ・直前の変更には何も残らない。
 void store_vim_fixture_macro(EditorController &controller, const VimFixture &fixture)
 {
@@ -250,8 +217,10 @@ void store_vim_fixture_macro(EditorController &controller, const VimFixture &fix
     {
         return;
     }
-    applied(controller, nenenib::application::StoreVimMacro{static_cast<char32_t>(macro.name),
-                                                            recording.value().keys});
+    applied(controller,
+            nenenib::application::StoreVimRegister{
+                macro.name, VimRegister{nenenib::core::vim_register_text(recording.value().keys),
+                                        VimRegisterKind::characters}});
 }
 
 [[nodiscard]] std::string whole_vim_body(EditorController &controller)

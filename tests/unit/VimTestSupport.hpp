@@ -4,6 +4,7 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "VimCharacter.hpp"
 #include "VimCharacterSearchKind.hpp"
 #include "VimCount.hpp"
 #include "VimKey.hpp"
@@ -20,24 +21,28 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::tests
 {
 using nenenib::core::VimSpecialKey;
 using MatchSpan = std::pair<std::size_t, std::size_t>;
+// 記法の名前が指す鍵。多くは特殊鍵で、`<NL>` だけは文字（Vim の Ctrl-J・ADR 0048 の決定 9）。
+using VimNamedKey = std::variant<nenenib::core::VimCharacter, VimSpecialKey>;
 
-// fixture の記法（<Esc> <CR> <BS> <C-r>）と鍵の対応。写す場所は eng/vim-oracle.py とここの
+// fixture の記法（<Esc> <CR> <NL> <BS> <C-r>）と鍵の対応。写す場所は eng/vim-oracle.py とここの
 // 2 つで、どちらも「fixture の書き方」という 1 つの約束の両端である（ARC-012）。
 struct VimKeyName
 {
     std::string_view text;
-    VimSpecialKey key;
+    VimNamedKey key;
 };
 
-inline constexpr std::array<VimKeyName, 13> vim_key_names{
+inline constexpr std::array<VimKeyName, 14> vim_key_names{
     {{"<Esc>", VimSpecialKey::escape},
      {"<CR>", VimSpecialKey::enter},
+     {"<NL>", nenenib::core::VimCharacter{U'\n'}},
      {"<BS>", VimSpecialKey::backspace},
      {"<C-r>", VimSpecialKey::control_r},
      {"<C-d>", VimSpecialKey::control_d},

@@ -20,10 +20,13 @@
 #include "TextPosition.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
+#include "VimCharacter.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimPattern.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimSearchPattern.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 
 #include <cstddef>
@@ -44,6 +47,9 @@ class EditorController final
     explicit EditorController(EditorPorts ports,
                               std::optional<OpenDocument> initial = std::nullopt);
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
+    // 試験の harness が Vim の鍵を 1 つ打つ口（ADR 0048 の決定 8）。窓の VimKeyPress と違い、
+    // 入力行が開いていれば再生と同じ command_key の写しで入力行へ入る。
+    [[nodiscard]] EditorFrame press_vim_key(const core::VimKey &key);
     [[nodiscard]] EditorFrame frame() const;
     [[nodiscard]] bool command_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
@@ -52,6 +58,8 @@ class EditorController final
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
 
   private:
+    // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
+    void begin_intent(bool keeps_message);
     void accept(const InsertText &intent);
     void accept(const MoveCaret &intent);
     void accept(const PlaceCaret &intent);
@@ -65,6 +73,14 @@ class EditorController final
     void accept(const VisibleLines &intent);
     void accept(const SelectEditMode &intent);
     void accept(const VimKeyPress &intent);
+    // 再生の鍵の口（ADR 0048 の決定 8）。入力行が開いていれば窓と同じ入力行の intent へ、
+    // 閉じていれば engine へ。失敗を返すのは engine の鍵だけ。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> deliver_vim_key(const core::VimKey &key);
+    // 入力行が開いているときの 1 鍵の写し。写し漏れは std::visit / switch が落とす（CPP-002）。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> command_key(const core::VimCharacter &key);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> command_key(core::VimSpecialKey key);
+    [[nodiscard]] std::optional<core::VimRepeatFailure>
+    command_key(const core::VimSearchPattern &key);
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
@@ -84,12 +100,13 @@ class EditorController final
     void accept(const OpenCommandPalette &);
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
-    void accept(const StoreVimMacro &intent);
+    void accept(const StoreVimRegister &intent);
     // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
     // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
-    void submit(const core::CommandLine &line);
-    void submit(const core::CommandPalette &palette);
-    void submit(const core::SearchLine &line);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandLine &line);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandPalette &palette);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::SearchLine &line);
+    [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;
