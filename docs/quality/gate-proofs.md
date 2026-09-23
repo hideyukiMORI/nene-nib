@@ -1513,3 +1513,24 @@ FR-003 / ARC-001 / CPP-005 / CPP-009 / CPP-017 / QLT-001 / QLT-012 を自己レ�
 ARC-003/007 / CPP-001/002/004/011 / QLT-001/012 を自己レビュー。`PieceSource` の `switch` は `default` 無し（CPP-002）。`AddChunk` は 1 ファイル 1 型（CPP-011）で、`.cpp` の補助は自由関数と `using` 別名だけ。chunk の大きさは `constexpr`・時刻・スレッド・OS に触れない（ARC-003/007・symbols 0）。「追記がその場で行われ複製が起きない」は planned（レビュー事項・ADR 0044 の強制）。
 
 設計席の速さの明示実行（QLT-014・差分が本文の経路に関わるので `--check` を Release で 4 回・2026-09-23）: #174 の exe（`build/release-2a3dadb`）は 1 回目 `startup-first-frame` 242 ms（上限 239）で 1 本、2 回目 245 ms と `startup-window-shown` 44.1 ms（上限 43.7）で 2 本落ち、3 回目は 214 ms / 39.0 ms で 0 regression。対照の今の main の exe（`build/release-3041c31`・同じ時間帯・別の席がビルド中）も 242 ms / 44.6 ms で同じ 2 本が落ちた。落ちた区間はどれも `device_created`（190 ms 前後・GPU ドライバ）と `window_shown` で、本文の経路より手前（`document_opened` は 0.2 ms で不変）。変更が触る打鍵の 2 本は 4 回とも基準内（`key-to-frame-single` 0.86〜1.06 ms・`burst-200` 3.0〜3.7 ms）。機械の雑音と判断して受理（ログは設計席の `out/174-speed*.log` と `out/174-control*.log`・記録は `out/speed/`）。
+
+### 5-az. マクロ `q` `@`（Issue #176・ADR 0046・2026-09-23）
+
+ブランチ `feat/176-vim-macros`（main `29ce210` へ rebase）。core は `VimMacroRegisters`（a〜z の鍵の列）・`VimMacroRecording`・`VimState` の `macros` / `macro_recording` / `last_macro`・`VimPrefix` の `q` / `at`・`VimAction` の `record_macro` / `replay_macro`（表 2 つに 1 行ずつ）・`VimStep.failure`（閉じた失敗の理由・`VimRepeatFailure` に `not_moved` / `not_found` / `refused`）・`VimEditorView.source`（`VimKeySource` の typed / replayed）・`vim_macro_stored`。録画は `vim_step` の出口の `macro_recorded` 1 か所が積む。application は `step_vim`（1 鍵の唯一の経路・失敗を返す）・`perform(VimReplay)` を鍵の列（`std::deque`）に積んで流す形にし、入れ子の再生は列の頭へ差し込み（深さ 100 で打ち切り）、失敗で残りを捨て、2 つ以上の編集は前後の本文の違いを覆う 1 つの Edit に畳む。`StoreVimMacro`（`EditorIntent` に 1 つ・`:let @a` に当たる）。oracle は `register` 欄（`let @a = "…"`）と、NORMAL の `q` を含む fixture の拒否（`canonical_fixture`・CNF-011）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 鍵の表・`VimPrefix` / `EditorIntent` の網羅。警告 0 で成功 |
+| `build/nib_tests.exe --vim-macro` | 対象。**280 checks 成功**（fixture 20 件の再生と契約 8 本: probe 2 節の 9 行の録画→再生・`q` / `@` の待ちと VISUAL・空のレジスタと `@@`・打った鍵だけを録る（`@a` `.` と確定した検索 1 鍵）・再生の中の `q` は無効・失敗で入れ子の外側まで捨てる・深さ 100 と報せ・大文字の追記） |
+| `build/nib_tests.exe --vim-dot` | 失敗の打ち切りを `.` と共用。**1479 checks 成功**（不変） |
+| `build/nib_tests.exe`（引数なし） | **13986 checks 成功**（13727 ＋ 259） |
+| `ctest --test-dir build` | 4 / 4 成功（fixture 1359 件の再生を含む） |
+| `python eng/vim-oracle.py --regenerate` × 2 | 1 回目 1359 measured（既存 1339 行は逐語不変・20 行を追加）、2 回目はバイト一致（差分 0） |
+| `python eng/protected-diff.py --base origin/main --allow --vim-macro --build` | **終了 0**。`29ce210..e203ce2`・`fixtures 1339 -> 1359 / metadata 2 / deleted 0 / changed 0 / added 20`・保護対象は `none`・`--vim-macro 新規 - -> 280`・`scopes 22 / same 21 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py`（`--build-dir build` も） | **0 violation / 0 violation / 0 violation** |
+| `python eng/test-conformance.py` | 200 tests 成功（`register` の正準の位置・`q` の拒否 5 件と検索の中の `q` は通る・`let` の行・生成行の末尾・CNF-011 の反例 `qaxq@a`） |
+| clang-format（変更した C++ 23 ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は Vim の engine と controller の再生の経路・oracle の入力欄・単体テストである。renderer・ui/win32・速さの入力（通常の打鍵は `step_vim` を通るだけで経路は同じ）は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001/004/010 / CPP-002/004/005/011/012 / QLT-001/012 / CNF-010/011 を自己レビュー。`.` と `@` の再生は `perform(VimReplay)` の 1 本（planned・レビュー事項）。失敗の判定は `VimStep.failure` の 1 本で、`.` と `@` が同じ規則を使う。
