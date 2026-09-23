@@ -306,7 +306,7 @@ void verify_incsearch_hlsearch()
            "with hlsearch on typing paints every match and the current one");
 }
 
-// Ctrl-G / Ctrl-T（ADR 0043 の決定 2）。向きは検索の向きに相対で、文字は入れない。
+// Ctrl-G / Ctrl-T（ADR 0043 の決定 2）。向きは本文の順で `/` `?` に依らず、文字は入れない。
 void hop(EditorController &controller, VimSearchDirection relative)
 {
     static_cast<void>(controller.apply(app::SearchHop{relative}));
@@ -359,9 +359,15 @@ void verify_incsearch_hops()
     vim_replay(controller, "gg?be");
     expect(current_is(controller.frame(), 2, {7, 9}), "? previews the match above, wrapped");
     hop(controller, VimSearchDirection::forward);
-    expect(current_is(controller.frame(), 1, {1, 3}), "Ctrl-G while typing ? moves up the body");
+    expect(current_is(controller.frame(), 0, {7, 9}),
+           "Ctrl-G while typing ? moves down the body, wrapping");
     vim_replay(controller, "<CR>");
-    expect(caret_at(controller.frame(), 2, 1), "and Enter lands there");
+    expect(caret_at(controller.frame(), 1, 7), "and Enter lands there");
+    vim_replay(controller, "gg?be");
+    hop(controller, VimSearchDirection::backward);
+    expect(current_is(controller.frame(), 1, {1, 3}), "Ctrl-T while typing ? moves up the body");
+    vim_replay(controller, "<CR>");
+    expect(caret_at(controller.frame(), 2, 1), "and Enter after Ctrl-T lands there");
 }
 
 // 起点はパターンの編集で残り、回数は hop のたびに数え直す（ADR 0043 の文脈 (a)(b)）。

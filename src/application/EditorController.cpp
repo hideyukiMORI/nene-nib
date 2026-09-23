@@ -853,9 +853,10 @@ void EditorController::update_search_preview()
 }
 
 // Ctrl-G / Ctrl-T（ADR 0043 の決定 2）。検索の入力行が開いていて incsearch が当たりを見せている
-// ときだけ動く。確定の鍵は起点から検索の向きへ回数ぶん探すので、起点は「そこから探すと新しい
-// 当たりに着く」位置に置く。次は今の当たりがそのまま起点で、前は新しい当たりからさらに同じ
-// 回数だけ戻った当たりが起点になる。折り返しは vim_find_match の規則のままで報せは出さない。
+// ときだけ動く。向きは本文の順（Ctrl-G は下・Ctrl-T は上）で `/` `?` に依らない。確定の鍵は起点から
+// 検索の向きへ回数ぶん探すので、起点は新しい当たりから検索の向きの逆へ同じ回数だけ戻った当たりに
+// 置く（`/` の Ctrl-G では今の当たりになる）。折り返しは vim_find_match
+// の規則のままで報せは出さない。
 void EditorController::accept(const SearchHop &intent)
 {
     const core::SearchLine *line = previewed_line(state_);
@@ -869,20 +870,17 @@ void EditorController::accept(const SearchHop &intent)
     {
         return;
     }
-    const bool ahead = intent.relative == core::VimSearchDirection::forward;
-    const core::VimSearchDirection toward =
-        ahead ? line->direction() : core::opposite(line->direction());
     const std::size_t count = core::vim_search_count(state_.vim());
-    const core::TextPosition current = preview.value().match.value();
     const auto match =
-        found_match(state_.text(), pattern.value(), core::VimMatchRequest{current, toward, count});
+        found_match(state_.text(), pattern.value(),
+                    core::VimMatchRequest{preview.value().match.value(), intent.relative, count});
     if (!match.has_value())
     {
         return;
     }
-    const auto from = ahead ? std::optional{current}
-                            : found_match(state_.text(), pattern.value(),
-                                          core::VimMatchRequest{match.value(), toward, count});
+    const auto from =
+        found_match(state_.text(), pattern.value(),
+                    core::VimMatchRequest{match.value(), core::opposite(line->direction()), count});
     if (!from.has_value())
     {
         return;
