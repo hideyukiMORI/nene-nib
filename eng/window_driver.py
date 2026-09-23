@@ -289,12 +289,13 @@ def covered_by(window) -> str | None:
     the surface under the centre of the client area really this window? eng/verify-window.py reads
     pixels there, and eng/measure-speed.py measures a window the compositor must not be throttling
     (Issue #30). Nothing here judges; the caller decides what a covered window means for it.
+    The centre and the comparison are assert_uncovered's own (cover_points, root_at, first_cover),
+    so the two never disagree about whose surface a point is (Issue #140).
     """
     client = rectangle(window, user.GetClientRect)
-    point = w.POINT((client[2] - client[0]) // 2, (client[3] - client[1]) // 2)
-    assert user.ClientToScreen(window, c.byref(point))
-    other = int(user.WindowFromPoint(point))
-    if other == int(window):
+    centre = cover_points(client[2] - client[0], client[3] - client[1])[0]
+    other = root_at(window, *centre)
+    if first_cover(int(window), [other]) is None:
         return None
     return window_title(other) if other else "no window at that point"
 

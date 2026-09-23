@@ -1416,6 +1416,19 @@ CPP-008 / CPP-011 / ARC-001 / ARC-012 / QLT-001 / QLT-012 を自己レビュー�
 
 対象を限定した理由: 差分は `eng/window_driver.py`・`eng/verify-window.py`・conformance の単体テストだけで、製品のコードは変えていない。C++ のビルドは古い exe を組み直しただけで、ctest・fixture・速さのゲート・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
 
+訂正（差し戻し 1 回目）: 直しの工程は `assert_uncovered`（`WindowFromPoint` → `GA_ROOT` で比べる）を足したが、`eng/measure-speed.py` と first paint の `ours` が使う `covered_by` は `WindowFromPoint` の生の hwnd を自分と比べたままで、「この点の面は自分か」に 2 本の計算があった（ARC-001）。`covered_by` は `cover_points(...)[0]` の中心を `root_at` で引き、`first_cover` で比べるようにした。返り値（`None` なら自分・文字列なら相手の題名か `no window at that point`）と呼び出し側の意味（measure-speed は印だけ・first paint の `ours`）は変えていない。
+
+| 検査（出力は `out/140-return1/`） | 結果 |
+| --- | --- |
+| `python -m unittest tests.conformance.test_frame_capture` | **19 件成功** |
+| `python eng/conformance.py` | 0 violation |
+| `python eng/verify-window.py --capture out/140-return1 --keys "ihello<Esc>"`（1 回） | **終了 0**・`changed: true`・`covered: false` |
+| `python eng/verify-window.py --capture out/140-return1-first`（節の実行 1 回） | **終了 1**。IME の節（本物の鍵盤入力・`covered_by` を通らない）で変換中の下線 0 画素・ink が打つ前と同じ 526 のまま落ち、first paint の節まで進まなかった |
+| first paint の節だけを `verify_first_paint` で 1 回（scratchpad の補助） | **落ちた**。全サンプル `ours: false`・画素 `[0, 0, 0]`。起動した窓が前面を取れず、中心の面は Windows Terminal（`CASCADIA_HOSTING_WINDOW_CLASS`）だった |
+| 同じ起動で中心を直接引く（scratchpad の補助） | 生の `WindowFromPoint` も Terminal の最上位窓 `0x702fa` を返した＝旧い規則でも「覆われている」。`raise_window` の後は `covered_by` が `None`。両方の枝が新しい計算で正しく答える |
+
+first paint の節は前面を取れない実行環境（設計席の端末が前にある）で落ちており、本件の計算の違いではない（旧い規則でも同じ答え）。`ours: true` のまま通ることは、前面を空けた実行で確かめる必要が残る。
+
 ### 5-av. test_protected_diff が scope の件数を固定しない（Issue #165・2026-09-23）
 
 `tests/conformance/test_protected_diff.py` の `Scopes` は `scopes` 表の件数を `19` と固定していて、#148 で 21 になった main では落ちていた。件数の固定を外し、`tests/unit/NibTests.cpp` の `std::array<std::pair<std::string_view, void (*)()>, N> scopes{{` の `N` を正規表現で読み、`parse_scopes` が読めた件数と重複の無い件数がどちらも `N` であること、`N >= 19`（過去の件数を下回らない）を確かめる形にした。scope が増えても落ちず、表の宣言と中身の食い違いは落ちる。
