@@ -20,6 +20,7 @@ namespace nenenib::core
 // 本文の正本（piece table・ADR 0009 の決定 1）。公開状態は不変で、編集は次の本文を返す（ARC-005）。
 // original（読んだ本文）と add（入力）の 2 本は shared_ptr で共有し、複製するのは piece の列だけ。
 // add は固定長の chunk の列で、末尾の chunk を伸ばすのはその先端を知っている値だけ（ADR 0044）。
+// 改行の索引は original と各 chunk に 1 本ずつで、piece はその窓だけを持つ（ADR 0047）。
 // 生成経路は empty と from_utf8 の 2 つだけで、どちらも不変条件（正しい UTF-8）を守る（CPP-007）。
 class TextBuffer final
 {
@@ -55,10 +56,14 @@ class TextBuffer final
   private:
     using Buffer = std::shared_ptr<const std::string>;
     using Chunks = std::vector<std::shared_ptr<AddChunk>>;
+    using Index = std::shared_ptr<const std::vector<Offset>>;
 
-    TextBuffer(Buffer original, std::vector<Piece> pieces, LineEnding ending);
+    TextBuffer(Buffer original, Index original_newlines, std::vector<Piece> pieces,
+               LineEnding ending);
     [[nodiscard]] std::string_view view_of(const Piece &piece) const noexcept;
     [[nodiscard]] const std::string &buffer_of(const Piece &piece) const noexcept;
+    // piece が指すバッファの改行の索引。窓 [newline_begin, newline_end) の添字はこの列の中を指す。
+    [[nodiscard]] const std::vector<Offset> &index_of(const Piece &piece) const noexcept;
     [[nodiscard]] TextBuffer replaced(Offset begin, Offset end, std::string_view text) const;
     void collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const;
     [[nodiscard]] Piece clipped(const Piece &piece, std::size_t from, std::size_t length) const;
@@ -66,6 +71,8 @@ class TextBuffer final
     [[nodiscard]] std::size_t newlines_before(std::size_t at) const noexcept;
 
     Buffer original_;
+    // original の '\n' の位置の昇順。from_utf8 で 1 度だけ作り、値のあいだで共有する（ADR 0047）。
+    Index original_newlines_;
     Chunks add_;
     // 末尾の chunk の、この値が知っている書き込み済みの長さ（ADR 0044 の決定 2）。
     std::size_t add_fill_;

@@ -52,6 +52,7 @@
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -61,6 +62,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -501,6 +503,160 @@ void verify_buffer_oversized_and_restored()
     expect(erased.text() == "hello" && restored.text() == typed.text(),
            "erase then insert restores the text");
     expect(typed.text() == "hello world", "the value before the erase still reads its text");
+}
+
+// 素朴な行の先頭の列。本文の '\n' を 1 つずつ数える（ADR 0047 の契約の比較相手）。
+std::vector<std::size_t> naive_line_starts(std::string_view text)
+{
+    std::vector<std::size_t> starts{0};
+    for (std::size_t at = 0; at < text.size(); ++at)
+    {
+        if (text[at] == '\n')
+        {
+            starts.push_back(at + 1);
+        }
+    }
+    return starts;
+}
+
+// index 番目の行の先頭・行番号（行の両端の位置から）・行の文字列が素朴な計算と一致するか。
+bool line_agrees(const TextBuffer &buffer, std::string_view text,
+                 const std::vector<std::size_t> &starts, std::size_t index)
+{
+    const LineNumber line{index + 1};
+    const std::size_t start = starts.at(index);
+    const std::size_t stop = index + 1 < starts.size() ? starts.at(index + 1) - 1 : text.size();
+    return buffer.line_start(line) == Offset{start} && buffer.line_end(line) == Offset{stop} &&
+           buffer.position_of(Offset{start}).line == line &&
+           buffer.position_of(Offset{stop}).line == line &&
+           buffer.line_text(line) == text.substr(start, stop - start);
+}
+
+// 行数と、stride 行ごと（最終行は必ず）の行の問いが素朴な計算と一致するか。
+bool lines_agree(const TextBuffer &buffer, std::string_view text, std::size_t stride)
+{
+    const auto starts = naive_line_starts(text);
+    if (buffer.line_count() != starts.size())
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < starts.size(); index += stride)
+    {
+        if (!line_agrees(buffer, text, starts, index))
+        {
+            return false;
+        }
+    }
+    return line_agrees(buffer, text, starts, starts.size() - 1);
+}
+
+// at を含む行が、本文の at の前後の '\n' から求めた行と一致するか（全体を数えずに見られる範囲）。
+bool line_around_agrees(const TextBuffer &buffer, std::string_view text, std::size_t at)
+{
+    const std::size_t before = at == 0 ? std::string_view::npos : text.rfind('\n', at - 1);
+    const std::size_t start = before == std::string_view::npos ? 0 : before + 1;
+    const std::size_t found = text.find('\n', at);
+    const std::size_t stop = found == std::string_view::npos ? text.size() : found;
+    const LineNumber line = buffer.position_of(Offset{at}).line;
+    return buffer.line_start(line) == Offset{start} && buffer.line_end(line) == Offset{stop} &&
+           buffer.line_text(line) == text.substr(start, stop - start);
+}
+
+// edited の後の行数（素朴な計算）。3 回に 1 回は入れた "x\n" と続く 1 文字を消す。
+std::size_t lines_after(std::size_t lines, std::string_view text, std::size_t at, std::size_t round)
+{
+    if (round % 3 != 2)
+    {
+        return lines + 1;
+    }
+    const bool newline_erased = at < text.size() && text[at] == '\n';
+    return newline_erased ? lines - 1 : lines;
+}
+
+// 本文と素朴な文字列に同じ編集をする。1 文字と改行を入れ（2 回目は直前の add piece を伸ばす）、
+// 3 回に 1 回はそれと続く 1 文字を消す（piece を切る）。
+TextBuffer edited(const TextBuffer &buffer, std::string &text, std::size_t at, std::size_t round)
+{
+    auto next = buffer.insert(Offset{at}, "x").insert(Offset{at + 1}, "\n");
+    text.insert(at, "x\n");
+    if (round % 3 == 2)
+    {
+        const std::size_t end = std::min(at + 3, text.size());
+        next = next.erase(Offset{at}, Offset{end});
+        text.erase(at, end - at);
+    }
+    return next;
+}
+
+// ADR 0047 の契約: 200,000 行を開いてから先頭・中央・末尾に 200 回ずつ 1 文字と改行を入れては
+// 消しても、行数・行の先頭・行番号・行の文字列が素朴な計算と一致する（窓の索引が狂わない）。
+void verify_buffer_shared_index_edits()
+{
+    std::string text;
+    for (std::size_t line = 0; line < 200000; ++line)
+    {
+        text += "line " + std::to_string(line) + "\n";
+    }
+    auto buffer = TextBuffer::from_utf8(text).value();
+    std::size_t lines = 200001;
+    bool counts = buffer.line_count() == lines;
+    bool around = true;
+    bool sampled = true;
+    for (std::size_t round = 0; round < 200; ++round)
+    {
+        for (std::size_t place = 0; place < 3; ++place)
+        {
+            const std::size_t at = place * text.size() / 2;
+            lines = lines_after(lines, text, at, round);
+            buffer = edited(buffer, text, at, round);
+            counts = counts && buffer.line_count() == lines;
+            around = around && line_around_agrees(buffer, text, at);
+        }
+        sampled = sampled && (round % 40 != 39 || lines_agree(buffer, text, 1009));
+    }
+    expect(counts, "the line count follows 600 edits on 200,000 lines");
+    expect(around, "the edited line reads back at the head, the middle and the tail");
+    expect(sampled, "every 1009th line keeps its start, number and text");
+    expect(buffer.text() == text, "the text after 600 edits matches the naive string");
+}
+
+// ADR 0047 の決定 1 / 4: chunk を跨いで打った改行の行番号と、境界を跨いで消した・入れた後の行。
+void verify_buffer_chunk_line_numbers()
+{
+    auto text = TextBuffer::empty();
+    std::string naive;
+    for (std::size_t index = 0; index < 70000; ++index)
+    {
+        const std::string_view key = index % 100 == 99 ? "\n" : "a";
+        text = text.insert(Offset{text.size_bytes()}, key);
+        naive += key;
+    }
+    expect(lines_agree(text, naive, 1), "every line typed across the chunk boundary is numbered");
+    const auto erased = text.erase(Offset{65000}, Offset{66000});
+    naive.erase(65000, 1000);
+    expect(lines_agree(erased, naive, 1), "erasing across the chunk boundary keeps the numbers");
+    const auto inserted = erased.insert(Offset{64990}, "p\nq\n");
+    naive.insert(64990, "p\nq\n");
+    expect(lines_agree(inserted, naive, 1), "inserting inside the first chunk keeps the numbers");
+}
+
+// ADR 0047 の決定 1: 同じ値から分岐して改行を足しても互いの行番号が壊れない（索引は先端でだけ伸び、
+// 古い値は自分の窓の端までしか読まない）。
+void verify_buffer_index_branches()
+{
+    const auto tip = buffer_of("a\nb").insert(Offset{3}, "\nc\n");
+    const auto grown = tip.insert(Offset{6}, "d\ne\n");
+    const auto forked = tip.insert(Offset{6}, "\n\nf");
+    const auto split = tip.insert(Offset{4}, "x\n");
+    expect(lines_agree(tip, "a\nb\nc\n", 1), "the source keeps its lines after its branches grow");
+    expect(lines_agree(grown, "a\nb\nc\nd\ne\n", 1), "the branch at the tip indexes its lines");
+    expect(lines_agree(forked, "a\nb\nc\n\n\nf", 1),
+           "the branch behind the tip does not see the other branch's newlines");
+    expect(lines_agree(split, "a\nb\nx\nc\n", 1), "a branch that splits the source's piece");
+    expect(lines_agree(grown.erase(Offset{4}, Offset{8}), "a\nb\ne\n", 1),
+           "clipping the grown piece keeps its window");
+    expect(lines_agree(forked.erase(Offset{3}, Offset{5}), "a\nb\n\n\nf", 1),
+           "clipping the shared piece ignores the newlines another branch appended");
 }
 
 // ---------------------------------------------------------------- 位置と選択
@@ -1399,6 +1555,9 @@ void verify_text_and_caret()
     verify_buffer_add_branches();
     verify_buffer_chunk_growth();
     verify_buffer_oversized_and_restored();
+    verify_buffer_shared_index_edits();
+    verify_buffer_chunk_line_numbers();
+    verify_buffer_index_branches();
     verify_offset_types();
     verify_selection();
     verify_line_endings();

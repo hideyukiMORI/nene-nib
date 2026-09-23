@@ -1584,3 +1584,23 @@ QLT-014 / ADR 0011 / 0016 / 0044 / QLT-001/012 を自己レビュー。ベンチ
 計測（`--check` 6 本・`--adopt --bench key-to-frame-burst-200-16mib`・#174 の前後）は設計席が Release で行うので、この工程では実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 設計席の計測（2026-09-23・Release `build/release-37a70ca`・実機 `bc8a356f37c68491`・差し戻し 1 回目の後）: `--check` は 6 本で 0 regression（`key-to-frame-burst-200-16mib` 447.5 ms・min 431.9 / max 478.6・到着幅の中央値 444.0 ms・既存 5 本は基準内）。`--adopt --bench key-to-frame-burst-200-16mib` で基準値 427.7 ms（5 回の中央値・min 410.6 / max 519.5）を `eng/perf-reference.json` に記録（他の値と `recordedAt` は不変・保護対象の変更の根拠は ADR 0044 決定 6）。#174 の前後: 前の exe（main `3041c31`）は同じベンチで 513.6 ms（min 429.7 / max 783.6）、後（本枝・本文は `9198fea` と同じ）は 427.7〜447.5 ms。16 MiB の 1 打鍵は約 2.2 ms で、空の文書の 0.9 ms との差の経路は別 Issue（Sonnet の probe 中）。ログは `out/179-check-2.log`・`out/179-adopt.log`・`out/179-before174.log`・記録は `out/speed/`。
+
+### 5-bc. 改行の索引をバッファごとに 1 本共有し piece は窓だけを持つ（Issue #184・ADR 0047・2026-09-23）
+
+ブランチ `refactor/184-shared-newline-index`（main `376affd` から）。`Piece` は `newlines`（`std::vector<Offset>`）を捨てて `newline_begin` / `newline_end`（索引の中の添字・`std::size_t`）を持つ。original の索引は `TextBuffer::original_newlines_`（`std::shared_ptr<const std::vector<Offset>>`・`from_utf8` の 1 回の走査）、add の索引は `AddChunk::newlines`（chunk の中の位置・`appended` が `bytes.append` と同じ「先端」の分岐で足した `text` だけを走査して伸ばす）。索引の本体は `index_of(piece)` 1 本で引く。`clipped` は窓の中を `lower_bound` 2 回（本文を読まない）、`append_insertion` は `newline_end` を進めるだけ、`newline_offset` / `newlines_before` は窓の中を引く。コンストラクタは引数 4 つ（`original_newlines_` を足した）。`Piece{...}` の構築は `from_utf8`・`appended`・`clipped` の 3 か所のまま。application・ui・eng・fixture・`eng/perf-reference.json` は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | `Piece` の欄・`TextBuffer` の構築・索引の引き方。警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | **14009 checks 成功**（13995 ＋ 14・契約の関数 3 本: 200,000 行を `from_utf8` してから先頭・中央・末尾に 200 回ずつ `x` と改行を入れ 3 回に 1 回は続く 1 文字ごと消す 600 回の編集で、毎回の `line_count` と編集した行の `line_start` / `line_end` / `line_text`・40 回ごとに 1009 行おきの行の先頭・行番号（`position_of`）・文字列・最後に本文が素朴な `std::string` と一致 / 70,000 回の 1 文字入力（100 字ごとに改行）の全行・chunk 境界を跨いで消した後・最初の chunk の中へ入れた後の全行 / 同じ値から先端で伸ばした・先端の後ろで分岐した・piece を割った 3 つの値と元の値の全行、伸ばした piece と共有の piece を切った後の全行。増分 14 は `expect` 13 と `buffer_of` の 1） |
+| `ctest --test-dir build` | 4 / 4 成功（fixture 1359 件の再生を含む） |
+| `python eng/protected-diff.py --base origin/main --build`（`--allow` 無し） | **終了 0**。`376affd..2ce95b6`・`fixtures 1359 -> 1359 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`scopes 22 / same 22 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py`（`--build-dir build` も） | **0 violation / 0 violation / 0 violation** |
+| `pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` | `build/release-2ce95b6/NeNeNib.exe`（sha256 `788922F4…0B86F4D`・1010688 bytes）。速さは設計席が測る |
+| clang-format（変更した C++ 5 ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の `TextBuffer` の改行の索引の持ち方と `Piece` / `AddChunk` の欄・`CoreTests.cpp` の契約である。本文の値・行番号・公開の関数は変えていないので、fixture の再生（ctest）と scope ごとの checks 数（protected-diff）で退行を見る。`--regenerate`・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021。速さと `--adopt --bench key-to-frame-burst-200-16mib` は ADR 0047 の決定 7 で設計席）。
+
+ARC-003/007 / CPP-001/002/004/011 / QLT-001/012 を自己レビュー。窓の添字は `std::size_t`・バイト位置は `Offset` のまま混ぜない（CPP-001）。`index_of` の `PieceSource` の `switch` は `default` 無し（CPP-002）。`.cpp` の補助は自由関数と `using Window = std::span<const Offset>` だけ（CPP-011）。時刻・スレッド・OS に触れない（ARC-003/007・symbols 0）。「本文を走査し直さない」は基準値を締めるまで契約（正しさだけ）で守る（ADR 0047 の強制）。
+
+設計席の計測（2026-09-23・Release `build/release-2ce95b6`・実機 `bc8a356f37c68491`）: `--check` 6 本を 2 回。`key-to-frame-burst-200-16mib` は 9.2 ms / 7.8 ms（基準値 427.7 ms・#179 の 447 ms から約 50 分の 1）。同じ時間帯の対照（main 相当の exe `build/release-3041c31`）は 461.7 ms。落ちたのは起動の区間だけ（`startup-first-frame` 249.5 / 267.7 ms・対照も 260.1 ms で同じく落ちる・`device_created` が 190 ms 前後）で、本文の経路より手前なので機械の雑音と判断。打鍵の 2 本は基準内。`document_opened` は 64〜71 ms（対照 56 ms・索引を 1 回作る）。ADR 0047 決定 7 のとおり `--adopt --bench key-to-frame-burst-200-16mib` で基準値を締めた。5 回の中央値 6.9 ms（最大 808 ms の外れ値あり）は上限が 8.9 ms になり今日の 3 回のうち 1 回（9.2 ms）が落ちる詰めすぎなので、同じ手順で `--repetitions 15` の中央値を採った（他の値と `recordedAt` は不変・保護対象の変更の根拠は ADR 0047）。ログは `out/184-check.log`・`out/184-check-2.log`・`out/184-control.log`・`out/184-adopt.log`。
