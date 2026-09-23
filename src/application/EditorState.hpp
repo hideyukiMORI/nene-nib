@@ -10,6 +10,7 @@
 #include "FileFailure.hpp"
 #include "LineEnding.hpp"
 #include "ScrollState.hpp"
+#include "SearchPreview.hpp"
 #include "Selection.hpp"
 #include "SettingsIssue.hpp"
 #include "TextBuffer.hpp"
@@ -46,6 +47,8 @@ class EditorState final
     [[nodiscard]] std::optional<SettingsIssue> settings_failure() const noexcept;
     [[nodiscard]] const std::optional<CommandInput> &command_input() const noexcept;
     [[nodiscard]] const std::optional<core::DisplayText> &command_message() const noexcept;
+    // 検索の入力行が開いているあいだだけ値を持つ（ADR 0041 の決定 2）。
+    [[nodiscard]] const std::optional<SearchPreview> &search_preview() const noexcept;
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
@@ -63,6 +66,7 @@ class EditorState final
     [[nodiscard]] EditorState with_settings_failure(std::optional<SettingsIssue> failure) const;
     [[nodiscard]] EditorState with_command_input(std::optional<CommandInput> command) const;
     [[nodiscard]] EditorState with_command_message(std::optional<core::DisplayText> message) const;
+    [[nodiscard]] EditorState with_search_preview(std::optional<SearchPreview> preview) const;
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
     [[nodiscard]] EditorState with_opened(core::TextBuffer text, Document document) const;
@@ -85,5 +89,6 @@ class EditorState final
     std::optional<SettingsIssue> settings_failure_;
     std::optional<CommandInput> command_input_;
     std::optional<core::DisplayText> command_message_;
+    std::optional<SearchPreview> search_preview_;
 };
 } // namespace nenenib::application

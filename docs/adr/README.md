@@ -56,3 +56,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0038](0038-model-per-seat-and-scripted-preparation.md) | 背景席は仕事の種類でモデルを明示し、繰り返す下ごしらえはスクリプトにする | 受理 |
 | [0039](0039-implementation-seat-per-step-and-small-tool-output.md) | 実装席は工程ごとに新しい席にし、道具の出力を小さく保つ | 受理 |
 | [0040](0040-display-line-with-control-glyphs.md) | 描画用の行は core の純関数が作り、制御文字は `^X`、書式用文字は `<xxxx>` に置き換えて桁の対応表を持つ | 受理 |
+| [0041](0041-vim-incsearch-preview-outside-the-engine.md) | `incsearch` は入力中の当たりを engine の外の preview として持ち、確定は今までどおり 1 つの鍵で届く | 受理 |

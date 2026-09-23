@@ -932,7 +932,7 @@ def verify_scrolling(window, ground: dict, output: Path) -> dict:
     return scrolled
 
 
-def verify_vim(window, ground: dict, output: Path) -> dict:
+def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -> dict:
     """Issue #22: the toggle enters NORMAL, ihello<Esc> types hello, 0x leaves ello.
 
     Issue #43 adds the second slice: yyp yanks the line and puts it below, so the body grows a
@@ -940,6 +940,10 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     row away again. The buffer is empty when this runs and four undos put it back (the insert, the
     x, the put and the Vd are one unit each), so the editing checks that follow still start from an
     empty 無題 buffer. Vim needs no modifier for any of these keys.
+
+    Issue #148 adds incsearch: after the undos, `ialpha beta<Esc>0/be` paints the previewed match
+    while typing (saved as <frames>/vimIncsearch.png with --capture), Esc takes it away, and one
+    more undo empties the buffer again.
     """
     width, height, dpi, body = ground["size"]
     grounds = [ground["background"], ground["current"], list(ACCENT)]
@@ -978,6 +982,24 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     unput = capture(window, width, height)
     write_text(window, "uuuu")
     time.sleep(0.5)
+    # Issue #148: 入力中の当たりは engine の外の preview で、Esc で消える（ADR 0041）。
+    write_text(window, "ialpha beta")
+    press(window, VK_ESCAPE)
+    write_text(window, "0")
+    time.sleep(0.5)
+    unsearched = capture(window, width, height)
+    write_text(window, "/")
+    time.sleep(0.5)
+    opened = capture(window, width, height)
+    write_text(window, "be")
+    time.sleep(0.5)
+    previewing = capture(window, width, height)
+    snapshot(frames, window, "vimIncsearch")
+    press(window, VK_ESCAPE)
+    time.sleep(0.5)
+    cancelled = capture(window, width, height)
+    write_text(window, "u")
+    time.sleep(0.5)
     # ブロックのキャレットは本文の枠に掛かるので、字形が消えたことは通常モードに戻してから測る。
     click(window, toggle["ordinary"][0], toggle["ordinary"][1])
     ordinary, cleared_ink = await_ink(window, size, content, grounds, False)
@@ -998,6 +1020,10 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
         "visualLineChangedTheModeLabel":
             box_pixels(visual, width, label) != box_pixels(normal, width, label),
         "inkInTheSecondRowAfterVisualDelete": ink(unput, width, second_row, grounds),
+        "incsearchPaintedTheFirstRow":
+            box_pixels(previewing, width, content) != box_pixels(opened, width, content),
+        "escapeTookThePreviewAway":
+            box_pixels(cancelled, width, content) == box_pixels(unsearched, width, content),
         "capture": "vim-slice.bmp",
         "capturePut": "vim-put.bmp",
     }
@@ -1013,7 +1039,9 @@ def verify_vim(window, ground: dict, output: Path) -> dict:
     assert result["inkInTheSecondRowAfterPutting"] > 0, "yyp did not put a second line"
     assert result["visualLineChangedTheModeLabel"], "the status bar did not say VISUAL LINE"
     assert result["inkInTheSecondRowAfterVisualDelete"] == 0, "Vd did not take the line away"
-    assert result["inkAfterUndoing"] == 0, f"four undos did not empty the line: {result}"
+    assert result["incsearchPaintedTheFirstRow"], "typing /be did not paint the previewed match"
+    assert result["escapeTookThePreviewAway"], "Esc did not take the incsearch preview away"
+    assert result["inkAfterUndoing"] == 0, f"five undos did not empty the line: {result}"
     return result
 
 
@@ -1136,7 +1164,7 @@ def verify_editing(window, process, appearance: str, output: Path,
     }
     result = {"body": body_points(width, height, dpi)}
     # Vim の鍵は本文が空のうちに測り、u で空へ戻してから通常モードの編集を測る（Issue #22）。
-    result["vim"] = verify_vim(window, ground, output)
+    result["vim"] = verify_vim(window, ground, output, frames)
     snapshot(frames, window, "vim")
     result["vimViewport"] = verify_vim_viewport(window, ground, output)
     snapshot(frames, window, "vimViewport")

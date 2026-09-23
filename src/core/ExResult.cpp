@@ -38,12 +38,13 @@ namespace
 {
     if (name.empty())
     {
-        return ExResult{std::nullopt, std::nullopt, theme_message(settings, appearance)};
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        theme_message(settings, appearance)};
     }
     if (name == "system")
     {
         settings.theme = std::nullopt;
-        return ExResult{settings, std::nullopt, theme_message(settings, appearance)};
+        return ExResult{settings, std::nullopt, std::nullopt, theme_message(settings, appearance)};
     }
     const auto parsed = ThemeName::parse(name);
     if (!parsed)
@@ -56,7 +57,7 @@ namespace
         return std::unexpected(found.error());
     }
     settings.theme = found.value();
-    return ExResult{settings, std::nullopt, theme_message(settings, appearance)};
+    return ExResult{settings, std::nullopt, std::nullopt, theme_message(settings, appearance)};
 }
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> set_font_size(std::string_view value,
@@ -68,7 +69,7 @@ namespace
         return std::unexpected(ExFailure::invalid_font_size);
     }
     settings.font_size = size.value();
-    return ExResult{settings, std::nullopt,
+    return ExResult{settings, std::nullopt, std::nullopt,
                     DisplayText::parse("fontsize=" + std::string(value)).value()};
 }
 
@@ -92,7 +93,7 @@ namespace
     }
     settings.font_size = size.value();
     settings.font_family = family.value();
-    return ExResult{settings, std::nullopt,
+    return ExResult{settings, std::nullopt, std::nullopt,
                     DisplayText::parse("guifont=" + std::string(value)).value()};
 }
 
@@ -115,8 +116,15 @@ namespace
 [[nodiscard]] ExResult highlight_result(VimSearchHighlight highlight)
 {
     return ExResult{
-        std::nullopt, highlight,
+        std::nullopt, highlight, std::nullopt,
         DisplayText::parse("hlsearch=" + std::string(highlight_name(highlight))).value()};
+}
+
+// incsearch も設定に載せず、表示名は hlsearch と同じ形（ADR 0041 の決定 6）。
+[[nodiscard]] ExResult incsearch_result(bool incsearch)
+{
+    return ExResult{std::nullopt, std::nullopt, incsearch,
+                    DisplayText::parse(incsearch ? "incsearch=on" : "incsearch=off").value()};
 }
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
@@ -137,6 +145,14 @@ set_option(std::string_view option, const EditorSettings &settings)
     if (option == "nohlsearch")
     {
         return highlight_result(VimSearchHighlight::off);
+    }
+    if (option == "incsearch")
+    {
+        return incsearch_result(true);
+    }
+    if (option == "noincsearch")
+    {
+        return incsearch_result(false);
     }
     return std::unexpected(ExFailure::unknown_option);
 }
@@ -183,7 +199,8 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
 {
     std::vector<std::string> candidates{
-        "colorscheme", "set fontsize=", "set guifont=", "set hlsearch", "set nohlsearch"};
+        "colorscheme",     "set fontsize=", "set guifont=",  "set incsearch",
+        "set noincsearch", "set hlsearch",  "set nohlsearch"};
     for (const auto &name : themes.names())
     {
         candidates.push_back("colorscheme " + name);

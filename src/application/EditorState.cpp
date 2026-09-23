@@ -1,8 +1,11 @@
 #include "EditorState.hpp"
 
+#include "SearchLine.hpp"
+
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 
 namespace nenenib::application
 {
@@ -149,7 +152,25 @@ const std::optional<core::DisplayText> &EditorState::command_message() const noe
 EditorState EditorState::with_command_input(std::optional<CommandInput> command) const
 {
     EditorState next(*this);
+    // preview は検索の入力行が開いているあいだだけある（ADR 0041 の決定 2）。どの経路で入力行が
+    // 閉じても（Enter・Esc・モードの切替・Ex への置き換え）ここで一緒に消える。
+    if (!command.has_value() || !std::holds_alternative<core::SearchLine>(command.value()))
+    {
+        next.search_preview_ = std::nullopt;
+    }
     next.command_input_ = std::move(command);
+    return next;
+}
+
+const std::optional<SearchPreview> &EditorState::search_preview() const noexcept
+{
+    return search_preview_;
+}
+
+EditorState EditorState::with_search_preview(std::optional<SearchPreview> preview) const
+{
+    EditorState next(*this);
+    next.search_preview_ = preview;
     return next;
 }
 
