@@ -1,5 +1,6 @@
 #pragma once
 
+#include "VimMacroFixture.hpp"
 #include "VimViewportFixture.hpp"
 
 #include <cstdint>
@@ -13,6 +14,7 @@ namespace nenenib::tests
 // line / column は Vim の line('.') / col('.')（column はバイト位置で 1 始まり）、
 // register_text は getreg('"')（行単位の削除では末尾に改行が付く）、
 // register_kind は getregtype('"')（文字単位は "v"・行単位は "V"・一度も使っていなければ空）。
+// macro は keys を流す前に置くマクロのレジスタ（録画は oracle で測れないので再生だけ）。
 struct VimFixture
 {
     std::string_view name;
@@ -24,5 +26,7 @@ struct VimFixture
     std::string_view register_text;
     std::string_view register_kind;
     std::optional<VimViewportFixture> viewport;
+    // 先に置くマクロのレジスタ（ADR 0046 の決定 6）。無い fixture の行は書かない。
+    std::optional<VimMacroFixture> macro = std::nullopt;
 };
 } // namespace nenenib::tests

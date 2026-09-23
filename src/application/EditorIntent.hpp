@@ -25,6 +25,7 @@
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
+#include "StoreVimMacro.hpp"
 #include "SubmitCommand.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
@@ -42,5 +43,5 @@ using EditorIntent =
                  VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument, ComposeText,
                  CommitText, CancelComposition, AdjustFontSize, CommandText, EditCommand,
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
-                 ActivateCommandChoice, SearchHop>;
+                 ActivateCommandChoice, SearchHop, StoreVimMacro>;
 } // namespace nenenib::application

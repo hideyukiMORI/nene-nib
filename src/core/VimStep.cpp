@@ -25,7 +25,10 @@
 #include "VimColumnWish.hpp"
 #include "VimInputWait.hpp"
 #include "VimInsertBlock.hpp"
+#include "VimKeySource.hpp"
 #include "VimLineExtent.hpp"
+#include "VimMacroRecording.hpp"
+#include "VimMacroRegisters.hpp"
 #include "VimMatchRequest.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimMotionRange.hpp"
@@ -98,7 +101,7 @@ constexpr char32_t carriage_return_character = 0x0D;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 49> normal_bindings{
+constexpr std::array<VimBinding, 51> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {U'k', VimAction::move_up},
@@ -147,7 +150,9 @@ constexpr std::array<VimBinding, 49> normal_bindings{
      {U'n', VimAction::repeat_search},
      {U'N', VimAction::repeat_search_opposite},
      {U'*', VimAction::search_word_forward},
-     {U'#', VimAction::search_word_backward}}};
+     {U'#', VimAction::search_word_backward},
+     {U'q', VimAction::record_macro},
+     {U'@', VimAction::replay_macro}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -205,7 +210,9 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::repeat_search, VimActionGroup::search},
      {VimAction::repeat_search_opposite, VimActionGroup::search},
      {VimAction::search_word_forward, VimActionGroup::search},
-     {VimAction::search_word_backward, VimActionGroup::search}}};
+     {VimAction::search_word_backward, VimActionGroup::search},
+     {VimAction::record_macro, VimActionGroup::input_wait},
+     {VimAction::replay_macro, VimActionGroup::input_wait}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 15> motion_bindings{
@@ -746,6 +753,50 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return VimStep{vim_resting_from(state, state.unnamed_register), VimNoEffect{}};
 }
 
+// 閉じた失敗（Vim のビープ）の印を添える（ADR 0046 の決定 3）。状態と効果は変えない。
+[[nodiscard]] VimStep failed(VimStep step, VimRepeatFailure failure)
+{
+    step.failure = failure;
+    return step;
+}
+
+// 動かなかったらビープする移動（h l j k w b e・Vim は 1 つも動けないときだけ鳴らす）。
+// 0 $ ^ H M L gg G は動かなくても鳴らない（ADR 0046 の決定 3）。
+[[nodiscard]] bool fails_unmoved(VimMotion motion) noexcept
+{
+    switch (motion)
+    {
+    case VimMotion::left:
+    case VimMotion::right:
+    case VimMotion::up:
+    case VimMotion::down:
+    case VimMotion::next_word:
+    case VimMotion::previous_word:
+    case VimMotion::word_end:
+    case VimMotion::word_end_for_change:
+        return true;
+    case VimMotion::line_start:
+    case VimMotion::first_non_blank:
+    case VimMotion::line_end:
+    case VimMotion::screen_top:
+    case VimMotion::screen_middle:
+    case VimMotion::screen_bottom:
+    case VimMotion::document_first:
+    case VimMotion::document_last:
+        return false;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] VimStep moved_or_failed(VimStep step, VimMotion motion, Offset from, Offset moved)
+{
+    if (moved == from && fails_unmoved(motion))
+    {
+        return failed(std::move(step), VimRepeatFailure::not_moved);
+    }
+    return step;
+}
+
 [[nodiscard]] VimStep motion_step(const VimState &state, const VimEditorView &view,
                                   VimMotion motion)
 {
@@ -753,7 +804,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const Offset moved = moved_by(view, state, motion);
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.wanted_column = wanted_after(view.text, wanted, moved, motion);
-    return VimStep{std::move(next), VimMoveTo{moved}};
+    return moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion, view.selection.caret,
+                           moved);
 }
 
 // ---------------------------------------------------------------- 範囲（ADR 0015 の決定 2）
@@ -1145,7 +1197,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const auto destination = character_search_position(view, recorded, search, invocation);
     if (!destination.has_value())
     {
-        return VimStep{finished_input_wait(recorded), VimNoEffect{}};
+        return failed(VimStep{finished_input_wait(recorded), VimNoEffect{}},
+                      VimRepeatFailure::not_found);
     }
     if (recorded.pending.has_value())
     {
@@ -1190,7 +1243,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
 {
     if (!state.last_character_search.has_value())
     {
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
+        return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
+                      VimRepeatFailure::refused);
     }
     VimCharacterSearch search = state.last_character_search.value();
     if (action == VimAction::repeat_character_search_opposite)
@@ -1219,7 +1273,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const auto range = motion_range(view, wanted, resolved_motion_count(state, view.text, wanted));
     if (!range.has_value())
     {
-        return cancelled(state);
+        return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
     VimState performed_from = state;
     const bool document_yank =
@@ -1255,7 +1309,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const auto range = lines_below(text, line_of(text, caret), resolved_count(state) - single_step);
     if (!range.has_value())
     {
-        return cancelled(state);
+        return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
     VimState with = state;
     with.pending = VimPendingOperator{operation, std::nullopt};
@@ -1271,7 +1325,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const auto range = to_line_end(text, caret, resolved_count(with));
     if (!range.has_value())
     {
-        return cancelled(state);
+        return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
     return performed(with, text, caret, range.value());
 }
@@ -1590,7 +1644,7 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
 {
     if (state.unnamed_register.text.empty())
     {
-        return cancelled(state);
+        return failed(cancelled(state), VimRepeatFailure::refused);
     }
     if (state.unnamed_register.kind == VimRegisterKind::block)
     {
@@ -1600,7 +1654,7 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     auto body = repeated(state.unnamed_register.text, count_of(state.count));
     if (!body.has_value())
     {
-        return cancelled(state);
+        return failed(cancelled(state), body.error());
     }
     VimState next = vim_resting_from(state, state.unnamed_register);
     switch (state.unnamed_register.kind)
@@ -1658,7 +1712,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     }
     if (!replacement_range(state, view).has_value())
     {
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
+        return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
+                      VimRepeatFailure::refused);
     }
     return started_prefix(state, VimPrefix::r);
 }
@@ -1708,7 +1763,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
 {
     if (unsupported_replacement(state.mode, target))
     {
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
+        return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
+                      VimRepeatFailure::refused);
     }
     if (state.mode == VimMode::visual_block)
     {
@@ -1721,7 +1777,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     const auto range = replacement_range(state, view);
     if (!range.has_value())
     {
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
+        return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
+                      VimRepeatFailure::refused);
     }
     const OffsetRange selected = range.value();
     std::string body =
@@ -2171,6 +2228,115 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return entered_insert(state, view.text.line_end(line_of(view.text, view.selection.caret)));
 }
 
+// ---------------------------------------------------------------- マクロ（ADR 0046）
+
+// 名前の鍵（`q` と `@` の次の 1 鍵）。a〜z と A〜Z だけが名前で、ほかは空。
+[[nodiscard]] std::optional<char32_t> macro_name_of(const VimKey &key) noexcept
+{
+    if (!std::holds_alternative<VimCharacter>(key))
+    {
+        return std::nullopt;
+    }
+    return std::get<VimCharacter>(key).code;
+}
+
+// `q{a-z}` は新しい録画、`q{A-Z}` は追記の録画（決定 2）。ほかの鍵はビープして何もしない。
+// モードと欲しい列はそのまま（VISUAL の `q` も同じ）。
+[[nodiscard]] VimStep started_macro(const VimState &state, const VimKey &key)
+{
+    VimState next = finished_input_wait(state);
+    const char32_t name = macro_name_of(key).value_or(char32_t{});
+    const auto index = vim_macro_index(name);
+    if (!index.has_value())
+    {
+        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
+    }
+    next.macro_recording = VimMacroRecording{
+        static_cast<char>(U'a' + index.value()), {}, name >= U'A' && name <= U'Z'};
+    return VimStep{std::move(next), VimNoEffect{}};
+}
+
+// 止める `q`（決定 2）。録った鍵をレジスタへ置き、追記なら末尾へ繋ぐ。止める `q` 自身は積まない。
+[[nodiscard]] VimStep stopped_macro(const VimState &state, const VimMacroRecording &recording)
+{
+    VimState next = finished_input_wait(state);
+    next.macro_recording = std::nullopt;
+    const auto index = vim_macro_index(static_cast<char32_t>(recording.name));
+    if (!index.has_value())
+    {
+        return VimStep{std::move(next), VimNoEffect{}};
+    }
+    std::vector<VimKey> &target = next.macros.keys.at(index.value());
+    if (!recording.append)
+    {
+        target.clear();
+    }
+    target.insert(target.end(), recording.keys.begin(), recording.keys.end());
+    return VimStep{std::move(next), VimNoEffect{}};
+}
+
+// NORMAL / VISUAL の `q`（決定 2）。再生の中では何もせず次の鍵も待たない（Vim の「レジスタ
+// 実行中は q は無効」）。録画中なら止め、そうでなければ名前を待つ。
+[[nodiscard]] VimStep macro_record_action(const VimState &state, const VimEditorView &view)
+{
+    if (view.source == VimKeySource::replayed)
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    if (state.macro_recording.has_value())
+    {
+        return stopped_macro(state, state.macro_recording.value());
+    }
+    return started_prefix(state, VimPrefix::q);
+}
+
+// 再生する名前。`@@` は直前の名前で、無ければ位置を持たない（E748 相当）。
+[[nodiscard]] std::optional<std::size_t> replayed_index(const VimState &state, const VimKey &key)
+{
+    const char32_t name = macro_name_of(key).value_or(char32_t{});
+    if (name != U'@')
+    {
+        return vim_macro_index(name);
+    }
+    if (!state.last_macro.has_value())
+    {
+        return std::nullopt;
+    }
+    return vim_macro_index(static_cast<char32_t>(state.last_macro.value()));
+}
+
+// `[count]@{a-z}` と `@@`（決定 3）。レジスタの鍵の列を回数ぶん繋いだ VimReplay を返し、
+// controller が `.` と同じ経路で 1 鍵ずつ流す。名前が無い・空のレジスタはビープして何もしない。
+[[nodiscard]] VimStep replayed_macro(const VimState &state, const VimKey &key)
+{
+    VimState next = finished_input_wait(state);
+    // `@` の鍵は `.` の記録に残さない（`.` と同じく再生された鍵が記録し直す・決定 5）。
+    next.recording = std::nullopt;
+    const auto index = replayed_index(state, key);
+    if (!index.has_value())
+    {
+        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
+    }
+    next.last_macro = static_cast<char>(U'a' + index.value());
+    const std::vector<VimKey> &keys = state.macros.keys.at(index.value());
+    const std::size_t count = resolved_count(state);
+    if (keys.empty())
+    {
+        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
+    }
+    if (count > std::vector<VimKey>{}.max_size() / keys.size())
+    {
+        return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::too_large);
+    }
+    std::vector<VimKey> replayed;
+    replayed.reserve(keys.size() * count);
+    for (std::size_t round = 0; round < count; ++round)
+    {
+        replayed.insert(replayed.end(), keys.begin(), keys.end());
+    }
+    return VimStep{std::move(next), VimReplay{std::move(replayed), std::nullopt}};
+}
+
 // ---------------------------------------------------------------- `.`（ADR 0030）
 
 // 記録の回数を 10 進の桁に戻す。表が数字を回数として読み直すので、再生に特別な経路は要らない。
@@ -2252,7 +2418,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     if (!state.last_change.has_value())
     {
-        return cancelled(state);
+        return failed(cancelled(state), VimRepeatFailure::refused);
     }
     const VimRepeatRecord &record = state.last_change.value();
     if (record.visual.has_value())
@@ -2326,6 +2492,14 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return started_replacement(state, view);
     }
+    if (action == VimAction::record_macro)
+    {
+        return macro_record_action(state, view);
+    }
+    if (action == VimAction::replay_macro)
+    {
+        return started_prefix(state, VimPrefix::at);
+    }
     return required_character_search_action(state, view, action);
 }
 
@@ -2363,7 +2537,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 // 報せを残して命令を取り消す（見つからない・直前が無い・語が無い・未対応の構文）。
 [[nodiscard]] VimStep search_noticed(const VimState &state, VimSearchNotice notice)
 {
-    return VimStep{search_rested(state), VimNoEffect{}, std::move(notice)};
+    return VimStep{search_rested(state), VimNoEffect{}, std::move(notice),
+                   VimRepeatFailure::not_found};
 }
 
 // 折り返したときだけ出る報せ（wrapscan は既定で有効）。
@@ -2616,7 +2791,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     const auto motion = motion_for(action);
     if (!motion.has_value())
     {
-        return cancelled(state);
+        return failed(cancelled(state), VimRepeatFailure::refused);
     }
     return operated(state, view, motion.value());
 }
@@ -2661,7 +2836,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     const auto action = action_for(key.code);
     if (!action.has_value())
     {
-        return cancelled(state);
+        return failed(cancelled(state), VimRepeatFailure::refused);
     }
     return acted(state, view, action.value());
 }
@@ -2765,7 +2940,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     const Offset moved = moved_by(view, state, motion.value());
     VimState next = visual_resting(state, state.mode);
     next.wanted_column = wanted_after(view.text, wanted, moved, motion.value());
-    return VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, moved}}};
+    return moved_or_failed(
+        VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, moved}}},
+        motion.value(), view.selection.caret, moved);
 }
 
 // `d x y c`。選択を範囲に変えて #43 と同じ経路へ流す（決定 5）。オペレータは VISUAL を終わらせる。
@@ -3192,14 +3369,21 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     const auto object = text_object_for(std::get<VimCharacter>(key).code);
     if (!object.has_value())
     {
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
+        return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
+                      VimRepeatFailure::refused);
     }
     const VimTextObjectOutcome outcome =
         vim_text_object_range(view.text, view.selection,
                               VimTextObjectRequest{scope, object.value()}, resolved_count(state));
-    // 答えの種類が増えたら写し先が足りずコンパイルが落ちる（CPP-002）。
-    return std::visit([&](const auto &value) { return completed_text_object(state, view, value); },
-                      outcome);
+    // 答えの種類が増えたら写し先が足りずコンパイルが落ちる（CPP-002）。範囲にならなかったときは
+    // キャレットが動いても Vim はビープする（ADR 0046 の決定 3）。
+    VimStep step = std::visit([&](const auto &value)
+                              { return completed_text_object(state, view, value); }, outcome);
+    if (std::holds_alternative<VimTextObjectCancel>(outcome))
+    {
+        return failed(std::move(step), VimRepeatFailure::not_found);
+    }
+    return step;
 }
 
 [[nodiscard]] VimStep completed_prefix(const VimState &state, const VimEditorView &view,
@@ -3232,6 +3416,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     case VimPrefix::r:
         return replacement_key(state, view, key);
+    case VimPrefix::q:
+        return started_macro(state, key);
+    case VimPrefix::at:
+        return replayed_macro(state, key);
     }
     std::unreachable();
 }
@@ -3613,6 +3801,26 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
+// ------------------------------------------ マクロの録画（ADR 0046 の決定 2）
+
+// 録画中は vim_step に届いた鍵をそのまま積む。積まないのは、録画を始める鍵と止める `q`
+// （どちらも step の前後で録画が立っていない）、再生の中の鍵（打った鍵ではない）、入力行を
+// 開くだけの `/` `?` `:`（確定した検索は VimSearchPattern の 1 鍵として積まれる・Ex は後続）。
+// 録画は実行の経路を変えない。
+[[nodiscard]] VimStep macro_recorded(const VimState &before, const VimEditorView &view,
+                                     VimStep step, VimKey key)
+{
+    if (view.source == VimKeySource::replayed || !before.macro_recording.has_value() ||
+        !step.next.macro_recording.has_value() ||
+        std::holds_alternative<VimOpenSearch>(step.effect) ||
+        std::holds_alternative<VimOpenCommandLine>(step.effect))
+    {
+        return step;
+    }
+    step.next.macro_recording.value().keys.push_back(replayable(std::move(key)));
+    return step;
+}
+
 // ------------------------------------------ 組み立て中の入力を捨てる（Issue #92 / ADR 0032）
 
 // 途中まで組み立てた入力を捨てた状態。engine の外の出来事（入力行の取消・外からの割り込み）の
@@ -3645,6 +3853,26 @@ VimState vim_interrupted(const VimState &state)
     return input_discarded(state);
 }
 
+VimState vim_macro_stored(const VimState &state, char32_t name, const std::vector<VimKey> &keys)
+{
+    const auto index = vim_macro_index(name);
+    if (!index.has_value())
+    {
+        return state;
+    }
+    VimState next = state;
+    std::vector<VimKey> &target = next.macros.keys.at(index.value());
+    if (name >= U'a' && name <= U'z')
+    {
+        target.clear();
+    }
+    for (const VimKey &key : keys)
+    {
+        target.push_back(replayable(key));
+    }
+    return next;
+}
+
 std::size_t vim_search_count(const VimState &state) noexcept
 {
     return resolved_count(state);
@@ -3652,6 +3880,7 @@ std::size_t vim_search_count(const VimState &state) noexcept
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    return vim_recorded(state, view, stepped(state, view, key), key);
+    return macro_recorded(state, view, vim_recorded(state, view, stepped(state, view, key), key),
+                          key);
 }
 } // namespace nenenib::core

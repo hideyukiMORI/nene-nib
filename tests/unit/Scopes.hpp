@@ -17,6 +17,10 @@ void verify_display_line_scope();
 void verify_vim_dot_contracts();
 void verify_vim_dot_scope();
 
+// VimMacroTests.cpp
+void verify_vim_macro_contracts();
+void verify_vim_macro_scope();
+
 // VimSearchTests.cpp
 void verify_vim_search_contracts();
 void verify_vim_search_scope();

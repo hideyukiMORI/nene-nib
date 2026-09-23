@@ -41,7 +41,7 @@
 
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`・ドラッグで VISUAL・矩形の `c I A C > < J ~` と VISUAL の中の `p`・`virtualedit`・
-autoindent・名前つきレジスタ・マクロ `q @`・`J s S R`・r の制御文字・Ctrl-e/y・検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase`・
+autoindent・名前つきレジスタ（`"a` の接頭辞と `"ap`）・マクロの中の Ex と録画中の表示・`J s S R`・r の制御文字・Ctrl-e/y・検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase`・
 テキストオブジェクト `it ip is`・一般 Ex（`:w` / `:q`、範囲、パイプ、履歴）・
 複数タブ・Ctrl+P のファイル/フォルダ/ブックマーク/履歴統合・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
 

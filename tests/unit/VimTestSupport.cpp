@@ -17,6 +17,7 @@
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
+#include "StoreVimMacro.hpp"
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
@@ -35,6 +36,7 @@
 #include "VisibleLines.hpp"
 
 #include "../vim/VimFixture.hpp"
+#include "../vim/VimMacroFixture.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -222,6 +224,34 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
     const std::int64_t requested = static_cast<std::int64_t>(viewport.first_visible);
     static_cast<void>(
         controller.apply(ScrollLines{static_cast<std::int32_t>(requested - current)}));
+}
+
+// fixture の `register`（ADR 0046 の決定 6・oracle の `let @a = "…"`）。記法の鍵を VimKey の列へ
+// 写すのは録画と同じ 1 本にしたいので、同じ本文を開いた別の editor で `q{name}` のあとに鍵を打ち、
+// 録画中の鍵の列をそのまま取って、再生する editor のレジスタへ StoreVimMacro で置く。
+// 別の editor で打つので、再生する側の本文・レジスタ・直前の変更には何も残らない。
+void store_vim_fixture_macro(EditorController &controller, const VimFixture &fixture)
+{
+    if (!fixture.macro.has_value())
+    {
+        return;
+    }
+    const VimMacroFixture &macro = fixture.macro.value();
+    Editing scratch;
+    open_vim_document(scratch, std::string(fixture.text));
+    applied(scratch.controller(), VimKeyPress{VimKey{VimCharacter{U'q'}}});
+    applied(scratch.controller(),
+            VimKeyPress{VimKey{VimCharacter{static_cast<char32_t>(macro.name)}}});
+    vim_replay(scratch.controller(), macro.keys);
+    const auto &recording = scratch.controller().vim_state().macro_recording;
+    expect(recording.has_value(),
+           (std::string(fixture.name) + ": the register was recorded").c_str());
+    if (!recording.has_value())
+    {
+        return;
+    }
+    applied(controller, nenenib::application::StoreVimMacro{static_cast<char32_t>(macro.name),
+                                                            recording.value().keys});
 }
 
 [[nodiscard]] std::string whole_vim_body(EditorController &controller)

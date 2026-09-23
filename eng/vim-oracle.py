@@ -26,6 +26,12 @@ Two rules keep the fixture and the editor comparable, and the script refuses inp
   of where a real Esc would leave it. The check is mechanical: the same keys with one more `<Esc>`
   must produce exactly the same buffer, cursor and register.
 
+A fixture may also name one macro register (`register`: `{"name": "a", "keys": "llx"}`, ADR 0046
+decision 6). probe.vim writes it with `let @a = "..."` before the keys run, which is how a macro is
+replayed under `:normal!`. Recording (`q`) does not work inside `:normal` at all, so a `q` typed as
+a NORMAL command would silently measure the wrong answer; `canonical_fixture` refuses a fixture
+whose `keys` or register keys hold one (a `q` inside a `/.../<CR>` or `?...?<CR>` search is text).
+
 `--regenerate --only f- --only df-` measures just matching fixture-name prefixes and reuses every
 other generated row from `--reuse-ref` (default `HEAD`). Reuse is refused before measurement when
 a prefix is empty or unknown, the old JSON/header/source do not prove their origin, a non-selected
@@ -41,8 +47,8 @@ keeps them LF, so nothing is normalised here.
 
 `canonical_fixtures_json` is the one definition of how tests/vim/fixtures.json is written: `[` and
 `]` alone on their own lines, one fixture per line indented by two spaces, compact separators, the
-keys in the order `name`, `text`, `keys`, `settings` (only when it holds something) and `viewport`
-(only when the case has one), non-ASCII text as itself, LF endings and a final newline. Both
+keys in the order `name`, `text`, `keys`, `settings` (only when it holds something), `register`
+(only when the case has one) and `viewport` (only when the case has one), non-ASCII text as itself, LF endings and a final newline. Both
 writers call it -- `--regenerate` rewrites the file before it measures anything, so the digest it
 records is the digest of the canonical bytes -- and CNF-011 in eng/conformance.py compares the
 stored bytes with what it returns, so the form cannot drift from the check (Issue #98).
@@ -107,7 +113,36 @@ def viewport_of(fixture: dict) -> dict | None:
     return viewport
 
 
-def probe_script(settings: list[str], keys: str, viewport: dict | None = None) -> str:
+def register_of(fixture: dict) -> dict | None:
+    """The fixture's macro register (ADR 0046 decision 6): one lowercase name and its keys."""
+    register = fixture.get("register")
+    if register is None:
+        return None
+    if not isinstance(register, dict) or set(register) != {"name", "keys"}:
+        raise ValueError(f"{fixture['name']}: register needs exactly name, keys")
+    name, keys = register["name"], register["keys"]
+    if not isinstance(name, str) or len(name) != 1 or not "a" <= name <= "z":
+        raise ValueError(f"{fixture['name']}: register name must be one of a-z")
+    if not isinstance(keys, str) or not keys:
+        raise ValueError(f"{fixture['name']}: register keys must be a non-empty string")
+    return {"name": name, "keys": keys}
+
+
+def records_a_macro(keys: str) -> bool:
+    """Whether the keys type `q` as a command. A search typed on the command line is text."""
+    return "q" in re.sub(r"[/?].*?<CR>", "", keys)
+
+
+def macro_script(register: dict | None) -> list[str]:
+    # マクロの再生だけを測る（ADR 0046 の決定 6）。録画は :normal の中で動かないので、
+    # レジスタは鍵を流す前に let で置く。
+    if register is None:
+        return []
+    return ['let @%s = "%s"' % (register["name"], vim_keys(register["keys"]))]
+
+
+def probe_script(settings: list[str], keys: str, viewport: dict | None = None,
+                 register: dict | None = None) -> str:
     # getregtype は "v"（文字単位）/ "V"（行単位）/ 一度も使っていないレジスタでは空を返す
     # (ADR 0015 decision 3). p の貼り方はその種類で決まるので、本文だけでは fixture が足りない。
     report = ("call writefile(getline(1, '$') + ['cursor=' . line('.') . ',' . col('.')]"
@@ -133,15 +168,17 @@ def probe_script(settings: list[str], keys: str, viewport: dict | None = None) -
                   "if winsaveview().topline != line('w0') || line('w$') < line('w0')"
                   " || line('w$') != min([line('$'), line('w0') + winheight(0) - 1])"
                   " | cquit | endif"]
-    lines = [*DEFAULT_SETTINGS, *settings, *setup,
+    lines = [*DEFAULT_SETTINGS, *settings, *setup, *macro_script(register),
              'execute "normal! " . "%s"' % vim_keys(keys), *settle, report, "qa!"]
     return "\n".join(lines) + "\n"
 
 
 def run_vim(work: Path, text: str, keys: str, settings: list[str],
-            viewport: dict | None = None) -> tuple[str, int, int, str, str, dict | None]:
+            viewport: dict | None = None,
+            register: dict | None = None) -> tuple[str, int, int, str, str, dict | None]:
     (work / "input.txt").write_bytes(text.encode("utf-8"))
-    (work / "probe.vim").write_text(probe_script(settings, keys, viewport), encoding="utf-8")
+    (work / "probe.vim").write_text(probe_script(settings, keys, viewport, register),
+                                    encoding="utf-8")
     output = work / "out.txt"
     output.unlink(missing_ok=True)
     command = [str(VIM), "-u", "NONE", "-i", "NONE", "-N", "-n"]
@@ -204,14 +241,15 @@ def measure(work: Path, fixture: dict) -> dict:
         raise ValueError(f"{name}: fixture text must not end with a newline")
     check_literal_cr(name, text)
     viewport = viewport_of(fixture)
-    measured = run_vim(work, text, keys, settings, viewport)
+    macro = register_of(fixture)
+    measured = run_vim(work, text, keys, settings, viewport, macro)
     # NORMAL で終わっていれば、もう 1 つ Esc を足しても何も変わらない（上の注記）。
-    if run_vim(work, text, keys + "<Esc>", settings, viewport) != measured:
+    if run_vim(work, text, keys + "<Esc>", settings, viewport, macro) != measured:
         raise ValueError(f"{name}: the keys do not leave Vim in NORMAL mode; end them with <Esc>")
     body, line, column, register, kind, measured_viewport = measured
     return {"name": name, "text": text, "keys": keys, "expected": body,
             "line": line, "column": column, "register": register, "register_kind": kind,
-            "viewport": measured_viewport}
+            "viewport": measured_viewport, "macro": macro}
 
 
 # Partial regeneration compares every measurement constant and function above this boundary.
@@ -235,10 +273,16 @@ def fixture_row(record: dict) -> str:
         (viewport["visible_lines"], viewport["first_visible"], viewport["line"],
          viewport["column"], viewport["expected_first_visible"],
          viewport["expected_scroll_lines"]))
-    return "    {%s, %s, %s, %s, %d, %d, %s, %s, %s}," % (
+    # マクロのレジスタは在るときだけ末尾に足す（VimFixture の既定値は空・ADR 0046 の決定 6）。
+    # 無い行は前と同じ字面のまま残る。
+    macro = record.get("macro")
+    macro_value = "" if macro is None else ", VimMacroFixture{'%s', %s}" % (
+        macro["name"], literal(macro["keys"]))
+    return "    {%s, %s, %s, %s, %d, %d, %s, %s, %s%s}," % (
         literal(record["name"]), literal(record["text"]), literal(record["keys"]),
         literal(record["expected"]), record["line"], record["column"],
-        literal(record["register"]), literal(record["register_kind"]), viewport_value)
+        literal(record["register"]), literal(record["register_kind"]), viewport_value,
+        macro_value)
 
 
 def header_from_rows(rows: list[str], version: str, digest: str) -> str:
@@ -415,7 +459,7 @@ def git_output(root: Path, arguments: list[str]) -> bytes:
 
 # tests/vim/fixtures.json の整形を決めるのはここ 1 か所だけである（ARC-001・Issue #98）。
 # 書き戻す側（--format / --regenerate）と検査する側（CNF-011・eng/conformance.py）が同じ関数を呼ぶ。
-FIXTURE_KEYS = ("name", "text", "keys", "settings", "viewport")
+FIXTURE_KEYS = ("name", "text", "keys", "settings", "register", "viewport")
 VIEWPORT_KEYS = ("visible_lines", "first_visible", "line", "column")
 
 
@@ -439,6 +483,14 @@ def canonical_fixture(fixture: dict) -> dict:
     canonical = {key: fixture[key] for key in ("name", "text", "keys")}
     if fixture.get("settings"):
         canonical["settings"] = fixture["settings"]
+    register = register_of(fixture)
+    if register is not None:
+        canonical["register"] = register
+    # 録画は oracle の :normal! の中で動かないので、黙って間違った期待値を書く前に拒む（ADR 0046）。
+    if records_a_macro(fixture["keys"]) or (register is not None
+                                            and records_a_macro(register["keys"])):
+        raise ValueError(f"{name}: a fixture cannot type q as a command; the oracle's :normal! "
+                         "never records a macro, so put the macro in register instead")
     viewport = viewport_of(fixture)
     if viewport is not None:
         canonical["viewport"] = {key: viewport[key] for key in VIEWPORT_KEYS}

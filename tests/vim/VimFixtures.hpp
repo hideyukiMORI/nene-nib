@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 71bc134e72bf415249c59ad36940f6a5829f35213a108933ee64ce6e345c95e6 / 1339 fixtures
+// fixtures.json: sha256 833184dbe473207fd3129c251be69435ea2ee097b78b2422db03c4b74bae6c48 / 1359 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1339> vim_fixtures{{
+constexpr std::array<VimFixture, 1359> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1351,6 +1351,26 @@ constexpr std::array<VimFixture, 1339> vim_fixtures{{
     {"literal-cr-delete-line", "ab\rcd\nef\rgh\nijkl", "ddGp", "ef\rgh\nijkl\nab\rcd", 3, 1, "ab\rcd\n", "V", std::nullopt},
     {"literal-cr-yank-chars", "ab\rcd\nef\rgh\nijkl", "v2lyGp", "ab\rcd\nef\rgh\niab\rjkl", 3, 4, "ab\r", "v", std::nullopt},
     {"literal-cr-line-end-yank-line", "abc\nde\r\nfgh", "jyyGp", "abc\nde\r\nfgh\nde\r", 4, 1, "de\r\n", "V", std::nullopt},
+    {"macro-at-a", "abcdefgh", "@a", "bcdefgh", 1, 1, "a", "v", std::nullopt, VimMacroFixture{'a', "x"}},
+    {"macro-count", "abcdefgh", "3@a", "defgh", 1, 1, "c", "v", std::nullopt, VimMacroFixture{'a', "x"}},
+    {"macro-at-at", "abcdefgh", "@a@@", "cdefgh", 1, 1, "b", "v", std::nullopt, VimMacroFixture{'a', "x"}},
+    {"macro-at-at-count", "abcdefgh", "@a2@@", "defgh", 1, 1, "c", "v", std::nullopt, VimMacroFixture{'a', "x"}},
+    {"macro-uppercase-name", "abcdefgh", "@A", "acdefgh", 1, 2, "b", "v", std::nullopt, VimMacroFixture{'a', "lx"}},
+    {"macro-multiline-count", "abc\ndef\nghi\njkl", "2@a", "bc\nef\nghi\njkl", 3, 1, "d", "v", std::nullopt, VimMacroFixture{'a', "0xj"}},
+    {"macro-insert", "xyz", "@a", "abxyz", 1, 2, "", "", std::nullopt, VimMacroFixture{'a', "iab<Esc>"}},
+    {"macro-insert-count", "xyz", "3@a", "xyzbbb", 1, 6, "", "", std::nullopt, VimMacroFixture{'a', "Ab<Esc>"}},
+    {"macro-fail-stops-rest", "ab", "@a", "ab", 1, 2, "", "", std::nullopt, VimMacroFixture{'a', "llx"}},
+    {"macro-fail-stops-count", "abc", "5@a", "ac", 1, 2, "b", "v", std::nullopt, VimMacroFixture{'a', "lx"}},
+    {"macro-fail-find", "abcabc", "3@a", "abab", 1, 4, "c", "v", std::nullopt, VimMacroFixture{'a', "fcx"}},
+    {"macro-fail-down", "ab\ncd", "@a", "ab\ncd", 2, 1, "", "", std::nullopt, VimMacroFixture{'a', "jjx"}},
+    {"macro-search-forward", "alpha beta\nbeta gamma", "2@a", "alpha eta\neta gamma", 2, 1, "b", "v", std::nullopt, VimMacroFixture{'a', "/beta<CR>x"}},
+    {"macro-search-backward", "alpha beta\nbeta gamma\ndelta beta", "G$@a", "alpha beta\nbeta gamma\ndelta eta", 3, 7, "b", "v", std::nullopt, VimMacroFixture{'a', "?beta<CR>x"}},
+    {"macro-dot-inside", "abcdef", "@a", "cdef", 1, 1, "b", "v", std::nullopt, VimMacroFixture{'a', "x."}},
+    {"macro-dot-after", "abcdefghij", "@a.", "abefghij", 1, 3, "d", "v", std::nullopt, VimMacroFixture{'a', "llx"}},
+    {"macro-undo-unit", "abcdef", "@au", "abcdef", 1, 1, "b", "v", std::nullopt, VimMacroFixture{'a', "xx"}},
+    {"macro-recursive", "a\nb\nc", "@a", "\n\n", 3, 1, "c", "v", std::nullopt, VimMacroFixture{'a', "xj@a"}},
+    {"macro-visual", "abcdef", "@a", "def", 1, 1, "abc", "v", std::nullopt, VimMacroFixture{'a', "vlld"}},
+    {"macro-operator-word", "one two three", "2@a", "three", 1, 1, "two ", "v", std::nullopt, VimMacroFixture{'a', "dw"}},
 }};
 } // namespace nenenib::tests
 // clang-format on

@@ -66,6 +66,8 @@ void vim_replay(nenenib::application::EditorController &controller, std::string_
                                     nenenib::core::VimPrefix prefix) noexcept;
 void arrange_vim_viewport(nenenib::application::EditorController &controller,
                           const VimFixture &fixture);
+void store_vim_fixture_macro(nenenib::application::EditorController &controller,
+                             const VimFixture &fixture);
 [[nodiscard]] std::string whole_vim_body(nenenib::application::EditorController &controller);
 [[nodiscard]] std::string vim_register_kind(const nenenib::core::VimRegister &value);
 void open_vim_document(Editing &editing, std::string text);
