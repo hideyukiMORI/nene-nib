@@ -30,6 +30,9 @@ class TextBuffer final
 
     [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
     [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;
+    // 編集の原始で、insert / erase はその薄い口。application からも直接呼ぶ（ARC-001）。
+    // 範囲は丸めないので、begin <= end <= size_bytes は呼び手が守る。
+    [[nodiscard]] TextBuffer replaced(Offset begin, Offset end, std::string_view text) const;
 
     // 本文の改行の形（ADR 0036 の決定 1）。読んだときに 1 度だけ判別し、編集では変わらない。
     [[nodiscard]] LineEnding line_ending() const noexcept;
@@ -64,7 +67,6 @@ class TextBuffer final
     [[nodiscard]] const std::string &buffer_of(const Piece &piece) const noexcept;
     // piece が指すバッファの改行の索引。窓 [newline_begin, newline_end) の添字はこの列の中を指す。
     [[nodiscard]] const std::vector<Offset> &index_of(const Piece &piece) const noexcept;
-    [[nodiscard]] TextBuffer replaced(Offset begin, Offset end, std::string_view text) const;
     void collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const;
     [[nodiscard]] Piece clipped(const Piece &piece, std::size_t from, std::size_t length) const;
     [[nodiscard]] std::size_t newline_offset(std::size_t index) const noexcept;
