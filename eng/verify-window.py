@@ -69,8 +69,8 @@ from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, becom
                            parse_keys, press, press_chord, raise_window, rectangle,
                            send_key_sequence, send_keys, start, stop, SWP_NOMOVE_NOSIZE_SHOW,
                            user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_NEXT, VK_NIHONGO, VK_PRIOR,
-                           VK_RETURN, VK_S, VK_SPACE, window_title, WINDOW_CLASS, write_png,
-                           write_text, WS_CAPTION, WS_POPUP, WS_THICKFRAME, WS_VISIBLE)
+                           VK_RETURN, VK_S, VK_SPACE, window_title, WINDOW_CLASS, WindowCovered,
+                           write_png, write_text, WS_CAPTION, WS_POPUP, WS_THICKFRAME, WS_VISIBLE)
 
 # 前後の画が変わったかの判定は比較の道具と同じ 1 本（Issue #131 の訂正 2）。
 _spec = importlib.util.spec_from_file_location("compare_frames",
@@ -1257,11 +1257,23 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
             toggle = toggle_points(width, height, dpi)
             click(window, toggle["vim"][0], toggle["vim"][1])
             time.sleep(0.5)
-        before = capture(window, width, height)
-        write_png(frames / "before.png", width, height, before)
-        send_key_sequence(window, keys)
-        after = await_new_frame(window, before, (width, height))
-        write_png(frames / "after.png", width, height, after)
+        # 撮るたびに窓の面が自分のものかを確かめる。別の窓が覆っていたら撮らずに記録する（Issue #140）。
+        try:
+            before = capture(window, width, height)
+            write_png(frames / "before.png", width, height, before)
+            send_key_sequence(window, keys)
+            after = await_new_frame(window, before, (width, height))
+            write_png(frames / "after.png", width, height, after)
+        except WindowCovered as cover:
+            record = {"keys": keys, "steps": len(steps), "changed": False, "covered": True,
+                      "coveredBy": cover.report(), "dpi": dpi, "size": {"w": width, "h": height}}
+            close(window)
+            dismiss_dialog(process, IDNO)
+            process.wait(timeout=5)
+            record["measure"] = summarize_measure(report)
+            (frames / "frames.json").write_text(json.dumps(record, indent=2) + "\n",
+                                                encoding="utf-8")
+            return record
         band_top = max(height - to_pixels(STATUS_BAR_DIPS, dpi), 0)  # core::status_bar_layout と同じ
         body_box = {"x": 0, "y": top, "w": width, "h": body["bandBottom"] - top}
         # 期待してよい差分の領域（Issue #131 の訂正）。物理画素・クライアント座標で、重ならない。
@@ -1270,7 +1282,7 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
         # 鍵が届かず 8 秒の期限で同じ画が返った回を「期待どおり」に見せない（訂正 2）。
         changed = compare_frames.frames_changed(before, after)
         record = {"before": "before.png", "after": "after.png", "keys": keys, "steps": len(steps),
-                  "changed": changed, "body": body_box, "regions": regions,
+                  "changed": changed, "covered": False, "body": body_box, "regions": regions,
                   "dpi": dpi, "size": {"w": width, "h": height}}
         close(window)
         # 鍵が本文を変えていれば未保存の確認が出る。変えていなければ何も出ずにそのまま閉じる。
@@ -1321,35 +1333,48 @@ def main() -> None:
         record = drive_keys(executable, environment, frames, arguments.keys, opened,
                             arguments.vim)
         print(json.dumps(record, indent=2))
+        if record["covered"]:
+            print(f"another window covers the capture: {record['coveredBy']['class']} "
+                  f"pid {record['coveredBy']['pid']}")
+            sys.exit(1)
         if not record["changed"]:
             print("keys did not change the window within 8 s")
             sys.exit(1)
         return
-    process, window, first_rect = start(executable, environment)
     try:
-        appearance = expected_appearance()
-        result = verify(window, appearance, output)
-        snapshot(frames, window, "look")
-        result["editing"] = verify_editing(window, process, appearance, output, frames)
-        result["firstSeenWindowRect"] = first_rect
-        result["shownAfterPlacement"] = first_rect[:2] != [0, 0]
-        assert result["shownAfterPlacement"], f"the window was shown at {first_rect[:2]}"
-        close(window)
-        # この検査は本文を打ち替えたあとなので、閉じるときは未保存の確認が出る（ADR 0010 の決定 10）。
-        result["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
-        assert result["closeConfirmationDismissed"], "WM_CLOSE did not ask about the unsaved body"
-        result["closeExitCode"] = process.wait(timeout=5)
-        assert result["closeExitCode"] == 0, result["closeExitCode"]
-    finally:
-        stop(process)
-    result["documents"] = verify_documents(executable, environment, appearance, output)
-    # ADR 0014: IME の開閉は外から読め、変換そのものは本物の鍵が要るので別の 1 回の起動で測る。
-    result["ime"] = verify_ime(executable, environment, appearance, output)
-    # ADR 0013 の却下の条件は、窓が見えてから最初のフレームまでの面。別の 1 回の起動で記録する。
-    result["firstPaint"] = verify_first_paint(executable, environment, appearance, output)
-    (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
-                                                    encoding="utf-8")
-    print(json.dumps(result, indent=2))
+        process, window, first_rect = start(executable, environment)
+        try:
+            appearance = expected_appearance()
+            result = verify(window, appearance, output)
+            snapshot(frames, window, "look")
+            result["editing"] = verify_editing(window, process, appearance, output, frames)
+            result["firstSeenWindowRect"] = first_rect
+            result["shownAfterPlacement"] = first_rect[:2] != [0, 0]
+            assert result["shownAfterPlacement"], f"the window was shown at {first_rect[:2]}"
+            close(window)
+            # この検査は本文を打ち替えたあとなので、閉じるときは未保存の確認が出る（ADR 0010 の決定 10）。
+            result["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
+            assert result["closeConfirmationDismissed"], "WM_CLOSE did not ask about the unsaved body"
+            result["closeExitCode"] = process.wait(timeout=5)
+            assert result["closeExitCode"] == 0, result["closeExitCode"]
+        finally:
+            stop(process)
+        result["documents"] = verify_documents(executable, environment, appearance, output)
+        # ADR 0014: IME の開閉は外から読め、変換そのものは本物の鍵が要るので別の 1 回の起動で測る。
+        result["ime"] = verify_ime(executable, environment, appearance, output)
+        # ADR 0013 の却下の条件は、窓が見えてから最初のフレームまでの面。別の 1 回の起動で記録する。
+        result["firstPaint"] = verify_first_paint(executable, environment, appearance, output)
+        (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
+                                                        encoding="utf-8")
+        print(json.dumps(result, indent=2))
+    except WindowCovered as cover:
+        # 節の撮影も同じ確かめを通る（Issue #140）。覆われた画は判定にも PNG にも使わない。
+        if frames is not None:
+            (frames / "frames.json").write_text(
+                json.dumps({"covered": True, "coveredBy": cover.report()}, indent=2) + "\n",
+                encoding="utf-8")
+        print(cover)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

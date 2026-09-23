@@ -1380,6 +1380,42 @@ FR-003 / ARC-001/004/010 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビ
 
 CPP-008 / CPP-011 / ARC-001 / ARC-012 / QLT-001 / QLT-012 を自己レビュー。scope の入口・契約・既定実行の入口と、2 つのファイルから呼ばれる検証は `Scopes.hpp` の 1 本に宣言し（決定 2）、それ以外は各 `.cpp` の無名名前空間に閉じた。共有の足場のうち型はそれぞれのヘッダ（`Editing.hpp` と `Scripted*.hpp` 6 本・CPP-011）、関数は `TestSupport.hpp` / `VimTestSupport.hpp` に宣言した。
 
+### 5-au. verify-window が撮る前に窓の面が自分のものかを確かめる（Issue #140・2026-09-23）
+
+ブランチ `eng/140-keys-diagnosis`。5-al の「`--keys "ihello<Esc>"` が 4 回中 2 回、`after.png` が `before.png` と画素まで同じ」の揺れを 2 工程で扱った。診断の工程（`0bba56d`・rebase 前は `06b2105`）は `drive_keys` が `--measure` を付けて起動し、節目（`input_received` / `frame_presented`）を `frames.json` の `measure` に写すようにした。直しの工程は `eng/window_driver.py` に `assert_uncovered(window)` を 1 本置き、`capture` が毎回その後で撮るようにした。クライアント領域の中心と四隅の内側 8 物理画素の 5 点で `WindowFromPoint` → `GetAncestor(GA_ROOT)` が自分の hwnd でなければ `WindowCovered`（相手のクラス名・pid・hwnd・点）を投げる。判定は純関数 `cover_points` / `first_cover` に切った。`--keys` は `frames.json` に `"covered": true` と `coveredBy` を書き、`another window covers the capture: <class> pid <n>` を出して終了 1。節の実行（`verify_vim` などすべての `capture` と `snapshot`）も同じ関数を通り、覆われたら同じ 1 行を出して終了 1（`--capture` があれば `frames.json` に `covered` を書く）。成功の回の `frames.json` は `"covered": false` を持つ。待ち条件（固定 0.4 s）と `await_new_frame` の判定は変えていない。src/ は不変。
+
+診断の 16 回（Debug・rebase 前の `06b2105`・直列 8 回と間を置かない 8 回）:
+
+| 回 | changed | input_received | frame_presented | 初回 frame ms | 最初の鍵 ms | 最後の鍵 ms | 最後の frame ms |
+|---|---|---|---|---|---|---|---|
+| run-1 | true | 8 | 3 | 214.4 | 645.7 | 647.1 | 653.2 |
+| run-2 | true | 8 | 3 | 202.3 | 616.8 | 618.4 | 621.2 |
+| run-3 | true | 8 | 3 | 192.4 | 624.7 | 626.4 | 629.4 |
+| run-4 | true | 8 | 3 | 201.5 | 637.6 | 639.0 | 644.3 |
+| run-5 | true | 8 | 3 | 206.5 | 636.0 | 638.0 | 645.3 |
+| run-6 | true | 8 | 3 | 275.3 | 698.6 | 700.7 | 705.1 |
+| run-7 | true | 8 | 3 | 201.0 | 621.0 | 622.6 | 625.9 |
+| run-8 | true | 8 | 3 | 199.8 | 617.9 | 619.3 | 622.1 |
+| burst-1〜8 | 全 true | 全 8 | 全 3 | 184〜211 | 605〜640 | 607〜642 | 610〜645 |
+
+7 鍵に対して `input_received` が 8 なのは、投函した `WM_KEYDOWN`(Esc) から `TranslateMessage` が `WM_CHAR`(0x1B) を作るため。16 回とも鍵は届いて描かれており、揺れは再現しなかった。5-al の失敗回の `after.png`（5559 bytes）は正常な `before.png` と同じ大きさで、「窓は撮れたが鍵の結果が写っていない」形である。
+
+直しの実測（Debug・main `3863fbe` の src を組み直した `build/NeNeNib.exe`）:
+
+| 検査 | 結果 |
+| --- | --- |
+| `python eng/verify-window.py --capture out/140-fix/run-N --keys "ihello<Esc>"` を直列 8 回（間に 2 秒） | **8 / 8 終了 0**。全回 `changed: true`・`covered: false`・`input_received` 8・`frame_presented` 3・初回 frame 172〜218 ms・最初の鍵 596〜649 ms・最後の frame 601〜654 ms |
+| 重なりの反例: `--keys "<Esc>"`（本文を変えないので 8 秒のあいだ撮り続ける）を走らせ、2 秒後に 2 本目の NeNeNib を同じ位置に出して `raise_window` で `HWND_TOPMOST` にする | **終了 1**。`another window covers the capture: NeNeNib.Editor pid 43248`・`frames.json` は `"covered": true`・`coveredBy` の点は中心 `[400, 225]`・`after.png` は書かれない |
+| `python eng/verify-window.py --capture out/140-fix/sections`（節の実行・IME の変換と候補窓を含む） | **終了 0**。すべての `capture` が確かめを通っても覆われた回は無い |
+| `python -m unittest tests/conformance/test_frame_capture.py` | **19 件成功**（`CoveredCapture` 5 件: 全点が自分なら覆われていない・1 点でも他人なら覆われている・点に窓が無いのも覆われている・5 点の位置・小さな窓でも点は内側） |
+| `python eng/conformance.py` | 0 violation |
+
+反例の作り方の注: 依頼は「別の verify-window を同時に走らせる」だったが、2 本目の `start()` は `FindWindowW(WINDOW_CLASS)` が z 順で先に返す 1 本目の窓（`HWND_TOPMOST`）の pid が合わないまま 5 秒で `WindowUnavailable` になり、窓を重ねられなかった（`out/140-fix` の 1 回目の試み）。そこで 2 本目は同じクラスの窓を pid で探して `raise_window` する使い捨ての補助（scratchpad・リポジトリには入れない）で出した。つまり verify-window を 2 本同時に走らせても 2 本目は 1 本目が閉じるまで窓を掴めず、09-23 の揺れが「別の席の verify-window の窓」だったとは考えにくい。覆ったのが NeNeNib 以外の窓（別の最前面の窓や通知）だった可能性は残り、次に出た回は `coveredBy` のクラス名と pid で分かる。
+
+`python eng/test-conformance.py` は 196 件中 1 件失敗した。`test_protected_diff.Scopes.test_the_scopes_array_of_head_is_read_without_the_contracts_array` が HEAD の scope 数を 19 と固定しているのに対し、main は 21 である。本件の変更を stash しても同じく落ちるので、main の既存の失敗で本件とは無関係である。
+
+対象を限定した理由: 差分は `eng/window_driver.py`・`eng/verify-window.py`・conformance の単体テストだけで、製品のコードは変えていない。C++ のビルドは古い exe を組み直しただけで、ctest・fixture・速さのゲート・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。Waivers: none。
+
 ### 5-av. test_protected_diff が scope の件数を固定しない（Issue #165・2026-09-23）
 
 `tests/conformance/test_protected_diff.py` の `Scopes` は `scopes` 表の件数を `19` と固定していて、#148 で 21 になった main では落ちていた。件数の固定を外し、`tests/unit/NibTests.cpp` の `std::array<std::pair<std::string_view, void (*)()>, N> scopes{{` の `N` を正規表現で読み、`parse_scopes` が読めた件数と重複の無い件数がどちらも `N` であること、`N >= 19`（過去の件数を下回らない）を確かめる形にした。scope が増えても落ちず、表の宣言と中身の食い違いは落ちる。

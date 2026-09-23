@@ -74,6 +74,8 @@ api(user, "GetWindowRect", w.BOOL, w.HWND, c.POINTER(w.RECT))
 api(user, "GetClientRect", w.BOOL, w.HWND, c.POINTER(w.RECT))
 # 窓の面が本当に見えているかを確かめる（別の窓が覆っていたら、測るのはその窓の面になる）。
 api(user, "WindowFromPoint", w.HWND, w.POINT)
+api(user, "GetAncestor", w.HWND, w.HWND, w.UINT)
+api(user, "GetClassNameW", c.c_int, w.HWND, w.LPWSTR, c.c_int)
 api(user, "GetWindowLongPtrW", c.c_ssize_t, w.HWND, c.c_int)
 api(user, "GetDpiForWindow", w.UINT, w.HWND)
 api(user, "GetDpiForSystem", w.UINT)
@@ -146,12 +148,31 @@ WS_CAPTION = 0x00C00000
 DPI_AWARENESS_PER_MONITOR_V2 = c.c_void_p(-4)
 THREAD_SUSPEND_RESUME = 0x0002
 SUSPEND_FAILED = 0xFFFFFFFF
+GA_ROOT = 2
+# 撮る前に覆われていないかを見る点の、クライアント領域の角からの内側への距離（物理画素・Issue #140）。
+COVER_INSET = 8
 # 前景を取り損ねるのは珍しくない（他のプロセスが入力を握っている間は OS が断る）ので数回試す。
 FOREGROUND_ATTEMPTS = 3
 
 
 class WindowUnavailable(RuntimeError):
     """The editor did not put a window on this desktop; the caller decides whether that is fatal."""
+
+
+class WindowCovered(RuntimeError):
+    """Another top-level window owns a point of the client area, so a capture would read its pixels.
+
+    Issue #140: two verify-window runs on one desktop both raise their editor to HWND_TOPMOST at the
+    same place, and the screen read-back then pictures whichever is on top.
+    """
+
+    def __init__(self, other: int, class_name: str, pid: int, point: tuple[int, int]):
+        super().__init__(f"another window covers the capture: {class_name} pid {pid}")
+        self.other, self.class_name, self.pid, self.point = other, class_name, pid, point
+
+    def report(self) -> dict:
+        return {"class": self.class_name, "pid": self.pid, "hwnd": self.other,
+                "point": list(self.point)}
 
 
 def become_dpi_aware() -> None:
@@ -278,6 +299,49 @@ def covered_by(window) -> str | None:
     return window_title(other) if other else "no window at that point"
 
 
+def cover_points(width: int, height: int, inset: int = COVER_INSET) -> list[tuple[int, int]]:
+    """The client points assert_uncovered asks about: the centre, then one inside each corner."""
+    right, bottom = max(width - 1 - inset, 0), max(height - 1 - inset, 0)
+    left, top = min(inset, right), min(inset, bottom)
+    return [(width // 2, height // 2), (left, top), (right, top), (left, bottom), (right, bottom)]
+
+
+def first_cover(ours: int, occupants: list[int]) -> int | None:
+    """The index of the first root window that is not ours (0, no window at all, counts), or None."""
+    for index, occupant in enumerate(occupants):
+        if occupant != ours:
+            return index
+    return None
+
+
+def root_at(window, x: int, y: int) -> int:
+    """The top-level window WindowFromPoint finds at a client point of this window (0 if none)."""
+    point = w.POINT(x, y)
+    assert user.ClientToScreen(window, c.byref(point))
+    hit = user.WindowFromPoint(point)
+    return int(user.GetAncestor(hit, GA_ROOT) or 0) if hit else 0
+
+
+def assert_uncovered(window) -> None:
+    """Raise WindowCovered unless this window owns the centre and the four corners of its client.
+
+    Every capture goes through here first (Issue #140), so a picture of someone else's window is
+    never saved as ours; the caller turns the exception into its own failure report.
+    """
+    client = rectangle(window, user.GetClientRect)
+    points = cover_points(client[2] - client[0], client[3] - client[1])
+    occupants = [root_at(window, x, y) for x, y in points]
+    index = first_cover(int(window), occupants)
+    if index is None:
+        return
+    other = occupants[index]
+    name, owner = c.create_unicode_buffer(256), w.DWORD()
+    if other:
+        user.GetClassNameW(other, name, len(name))
+        user.GetWindowThreadProcessId(other, c.byref(owner))
+    raise WindowCovered(other, name.value or "no window", owner.value, points[index])
+
+
 def owned_dialog(pid: int) -> int:
     """The visible MessageBoxW of that process, if one is up."""
     child = None
@@ -387,9 +451,10 @@ def press_chord(window, modifier: int, key: int) -> bool:
 def capture(window) -> tuple[int, int, bytes]:
     """Read the composed client area back from the screen device context (top-down BGRA).
 
-    It copies what the compositor shows, so another window over the editor ends up in the picture;
-    callers raise the window first and keep the middle of the screen clear.
+    It copies what the compositor shows, so another window over the editor would end up in the
+    picture; callers raise the window first, and assert_uncovered refuses the capture otherwise.
     """
+    assert_uncovered(window)
     client = rectangle(window, user.GetClientRect)
     width, height = client[2] - client[0], client[3] - client[1]
     origin = w.POINT(0, 0)
