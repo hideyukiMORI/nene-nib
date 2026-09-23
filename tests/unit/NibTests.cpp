@@ -7834,6 +7834,8 @@ void verify_display_line_scope()
 {
     verify_display_line();
     verify_display_line_views();
+}
+
 // incsearch の preview（ADR 0041）。入力中の当たりは engine の外の別欄で、表示値の matches と
 // current_match と先頭行にだけ現れる。本文・キャレット・last_search は確定まで動かない。
 struct IncsearchCase
@@ -8077,6 +8079,30 @@ void verify_incsearch_option()
            "leaving Vim while typing takes the preview away with the input line");
 }
 
+// 入力中の全一致の面は hlsearch が on のときだけ。off でも preview の当たりの枠は出る（Vim と同じ・
+// ADR 0041 の決定 4）。
+void verify_incsearch_hlsearch()
+{
+    Editing session;
+    open_vim_document(session, "alpha beta\nbeta gamma\ndelta beta");
+    EditorController &controller = session.controller();
+    static_cast<void>(run_ex(controller, "set nohlsearch"));
+    vim_replay(controller, "/be");
+    const auto off = controller.frame();
+    expect(std::ranges::all_of(off.lines,
+                               [](const app::LineView &line) { return line.matches.empty(); }) &&
+               frame_current(off) == std::optional{std::pair{std::size_t{0}, MatchSpan{7, 9}}},
+           "with hlsearch off typing shows only the current match");
+    vim_replay(controller, "<Esc>");
+    static_cast<void>(run_ex(controller, "set hlsearch"));
+    vim_replay(controller, "/be");
+    const auto on = controller.frame();
+    expect(frame_matches(on, 0) == std::vector<MatchSpan>{{7, 9}} &&
+               frame_matches(on, 1) == std::vector<MatchSpan>{{1, 3}} &&
+               frame_current(on) == std::optional{std::pair{std::size_t{0}, MatchSpan{7, 9}}},
+           "with hlsearch on typing paints every match and the current one");
+}
+
 void verify_vim_search_incremental_contracts()
 {
     verify_incsearch_typed_cases();
@@ -8084,6 +8110,7 @@ void verify_vim_search_incremental_contracts()
     verify_incsearch_scroll();
     verify_incsearch_directions();
     verify_incsearch_option();
+    verify_incsearch_hlsearch();
 }
 
 void verify_vim_search_incremental_scope()

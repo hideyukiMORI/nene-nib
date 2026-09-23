@@ -252,6 +252,23 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return line;
 }
 
+// incsearch の preview が着いた当たりの位置。入力中でないか当たりが無ければ absent（ADR 0041 の
+// 決定 4）。
+[[nodiscard]] std::optional<core::Offset> previewed_offset(const EditorState &state)
+{
+    const auto &preview = state.search_preview();
+    if (!preview.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &match = preview.value().match;
+    if (!match.has_value())
+    {
+        return std::nullopt;
+    }
+    return state.text().offset_of(match.value());
+}
+
 [[nodiscard]] std::optional<core::VimPattern> typed_pattern(const core::SearchLine &line)
 {
     auto parsed = core::VimPattern::parse(line.text(), line.direction());
@@ -1424,11 +1441,9 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
     }
     const std::size_t start = text.line_start(line).value;
     // 今の一致はキャレットを含む一致。incsearch の入力中は preview の当たりを含む一致（ADR 0041
-    // の決定 4）。
-    const auto &preview = state_.search_preview();
-    const std::size_t caret = preview.has_value() && preview.value().match.has_value()
-                                  ? text.offset_of(preview.value().match.value()).value
-                                  : state_.selection().caret.value;
+    // の決定 4）。全一致の面は hlsearch が on のときだけで、off の入力中は今の当たりの枠だけ
+    // （Vim と同じ）。入力中でなければ off の search_pattern は何も返さない。
+    const std::size_t caret = previewed_offset(state_).value_or(state_.selection().caret).value;
     for (const auto &match : core::vim_line_matches(view.text, pattern.value()))
     {
         const core::OffsetRange found{core::Offset{start + match.begin.value},
@@ -1443,6 +1458,10 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
         {
             view.current_match = span;
         }
+    }
+    if (state_.vim().highlight != core::VimSearchHighlight::on)
+    {
+        view.matches.clear();
     }
     return view;
 }
