@@ -1462,3 +1462,16 @@ QLT-001 / QLT-012 / CNF-001 を自己レビュー。件数の正本は `NibTests
 対象を限定した理由: 差分は検索の鍵の型と `vim_step` の検索の鍵 1 か所・application の preview と意図・ui の Ctrl 鍵 2 つ・単体テスト・`eng/verify-window.py` の 1 節である。renderer・fixture・速さの入力（通常の打鍵）は不変なので、`--regenerate`・`eng/measure-speed.py`・Release・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001/010/011 / CPP-002/003/004/005/011 / QLT-001/012 を自己レビュー。次の一致を求める経路は `vim_step`・`update_search_preview`・`accept(SearchHop)` の 3 か所とも `vim_find_match` の 1 本（planned・レビュー事項）。回数は engine の `resolved_count` 1 本を `vim_search_count` で読む。`optional` は `has_value` / `value` / `value_or` だけで読む。
+
+**訂正（差し戻し 1 回目・`4564f2b`）**: 上の表の「`?be` の Ctrl-G は上へ」は誤り。ADR 0043 決定 2（設計席が `4a9d17b` で直した）に合わせ、hop の向きは本文の順（Ctrl-G は下へ・Ctrl-T は上へ・`/` `?` に依らない）にした。起点は Ctrl-G / Ctrl-T で分けず、新しい当たり `M'` から検索の向きの逆へ同じ回数戻った当たり 1 本（`/` の Ctrl-G では今の当たり）。`SearchHop.relative` の意味は本文の順で、ui/win32 の写像（G → forward・T → backward）は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug） | `accept(SearchHop)` と契約。警告 0 で成功 |
+| `build/nib_tests.exe --vim-search-incremental` | **141 checks 成功**（139 ＋ 2・`?be` の Ctrl-G は下へ折り返して 行 1 桁 7 に着き Enter でそこへ / `?be` の Ctrl-T は上へ動き Enter でそこへ。`/be` の契約は向きが変わらないので不変） |
+| `build/nib_tests.exe`（引数なし）・`ctest --test-dir build` | **13712 checks 成功**・4 / 4 成功 |
+| `python eng/protected-diff.py --base origin/main --allow --vim-search-incremental --build` | **終了 0**。`f0b453d..4564f2b`・`fixtures 1339 -> 1339`・`--vim-search-incremental 111 -> 141`・`scopes 21 / same 20 / 未測 0` |
+| `python eng/conformance.py`（`--build-dir build` も）・`python eng/symbols.py --build-dir build --require core application` | 0 violation / 0 violation / 0 violation |
+| clang-format（変更した C++ 3 ファイル）・`git diff --check` | 指摘なし |
+
+`eng/verify-window.py` は `/be` の Ctrl-G だけを撮っており向きが変わらないので、PNG は撮り直していない（前の結果を再利用・ADR 0021）。
