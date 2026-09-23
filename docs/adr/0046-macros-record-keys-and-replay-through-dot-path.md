@@ -31,13 +31,13 @@ Nib の今の形: `.` の記録 `VimRepeatRecord { count; keys: vector<VimKey>; 
 
 - fixture（`register` 欄・再生だけ）: **active**（CTest・CNF-010 / 011 で生成物と json の一致）。
 - 契約 `--vim-macro`: **active**（`eng/protected-diff.py --allow --vim-macro`）。
-- `keys` に `q` を含む fixture の拒否: **active**（`eng/vim-oracle.py`・conformance の反例 1 つ）。
+- `keys` に `q` を含む fixture の拒否: **active**（`eng/vim-oracle.py` の `records_a_macro` が鍵を 1 つずつ歩く状態機械で、`q` が NORMAL / VISUAL のコマンドの位置に届くときだけ拒む・迷う位置は拒む側・挿入文字・文字引数・レジスタ名・検索の入力の `q` は通す・conformance の反例 `qaxq@a` `"aqa` `viwqa` `xqb` `dq` `gq` と通る例 `fqx` `rq` `iq<Esc>` `cwq<Esc>x` `@q` `"qyy` `diq` `vrq` `vcq<Esc>`・#190）。
 - 再生の経路が `.` と同じ 1 本（`perform(VimReplay)`）: **planned**（レビュー事項）。
 
 ## 結果
 
 得られるもの: `qa…q` `@a` `@@` `3@a`、再帰マクロ、undo 1 単位、失敗で打ち切り。engine の 1 鍵 1 効果は不変（`@a` も `.` と同じく「鍵列を返す 1 効果」）。
-失うもの・残る穴: 録画は oracle で観測できず契約だけ。失敗の印（`VimStep.failure`）は主な経路だけで、スクロールと VISUAL の未対応の鍵は再生を打ち切らない（後続）。oracle の `q` の拒否は検索の入力の外の `q` を一律に拒むので `fq` や挿入文字の `q` も書けない（拒みすぎる側・後続）。検索の失敗（E486）は Vim が `-es` でエラー終了するので fixture にできず契約で守る。Ex を含むマクロ・`"ap`・recording の表示（#180）・数字レジスタは後続。
+失うもの・残る穴: 録画は oracle で観測できず契約だけ。失敗の印（`VimStep.failure`）は主な経路だけで、スクロールと VISUAL の未対応の鍵は再生を打ち切らない（後続）。oracle の `q` の拒否は NORMAL / VISUAL のコマンドの位置の `q` だけに狭めた（#190・`fq` や挿入文字の `q` は書ける）。字句の判定なので、失敗する `c` の動作（`cfz` で z が無い）の後の `q` は INSERT の文字と見て通す（本文に依る失敗は見ない）。検索の失敗（E486）は Vim が `-es` でエラー終了するので fixture にできず契約で守る。Ex を含むマクロ・`"ap`・recording の表示（#180）・数字レジスタは後続。
 
 ## 却下した選択肢
 

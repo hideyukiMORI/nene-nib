@@ -29,8 +29,10 @@ Two rules keep the fixture and the editor comparable, and the script refuses inp
 A fixture may also name one macro register (`register`: `{"name": "a", "keys": "llx"}`, ADR 0046
 decision 6). probe.vim writes it with `let @a = "..."` before the keys run, which is how a macro is
 replayed under `:normal!`. Recording (`q`) does not work inside `:normal` at all, so a `q` typed as
-a NORMAL command would silently measure the wrong answer; `canonical_fixture` refuses a fixture
-whose `keys` or register keys hold one (a `q` inside a `/.../<CR>` or `?...?<CR>` search is text).
+a NORMAL or VISUAL command would silently measure the wrong answer; `canonical_fixture` refuses a
+fixture whose `keys` or register keys hold one (#190). `records_a_macro` walks the keys through a
+conservative subset of the modes, so a `q` typed as text, a character argument (`fq` `rq`), a
+register name (`@q` `"qyy`) or inside a `/.../<CR>` search passes, and a doubtful `q` is refused.
 
 `--regenerate --only f- --only df-` measures just matching fixture-name prefixes and reuses every
 other generated row from `--reuse-ref` (default `HEAD`). Reuse is refused before measurement when
@@ -64,6 +66,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+from collections.abc import Iterator
 import copy
 import hashlib
 import json
@@ -128,9 +131,103 @@ def register_of(fixture: dict) -> dict | None:
     return {"name": name, "keys": keys}
 
 
+# q の拒否の状態機械（ADR 0046 の決定 6・#190）。Vim の文法の写しではなく oracle 側の保守的な検査で、
+# q が NORMAL / VISUAL のコマンドとして届くかだけを見る。迷う位置は拒む側（NORMAL / VISUAL）に倒す。
+RECORDS, NORMAL, INSERT, VISUAL = "records", "normal", "insert", "visual"
+COUNT_START, COUNT_DIGITS = frozenset("123456789"), frozenset("0123456789")
+NORMAL_ARGUMENT = frozenset("fFtTr@\"g")
+NORMAL_INSERT = frozenset("iaIAoOCsS")
+OPERATORS = frozenset("dcy")
+VISUAL_START = frozenset({"v", "V", "<C-v>"})
+OPERATOR_ARGUMENT = frozenset("iafFtTg")
+VISUAL_ARGUMENT = frozenset("iafFtT")
+VISUAL_INSERT = frozenset("cs")
+VISUAL_END = frozenset({"d", "x", "y", "D", "X", "Y", "p", "P", "J", "~", "u", "U", ">", "<",
+                        "<Esc>"})
+
+
+def key_tokens(keys: str) -> list[str]:
+    """The keys one by one: a name from KEY_NAMES is one key, any other character is one key."""
+    tokens: list[str] = []
+    index = 0
+    while index < len(keys):
+        name = next((name for name in KEY_NAMES if keys.startswith(name, index)), keys[index])
+        tokens.append(name)
+        index += len(name)
+    return tokens
+
+
+def read_line(tokens: Iterator[str]) -> str | None:
+    """Skips a search or Ex line up to the key that ends it, which it returns."""
+    return next((key for key in tokens if key in ("<CR>", "<Esc>")), None)
+
+
+def after_normal(key: str, tokens: Iterator[str]) -> str:
+    if key == "q":
+        return RECORDS
+    if key in ("/", "?", ":"):
+        read_line(tokens)
+        return NORMAL
+    if key in NORMAL_ARGUMENT:
+        argument = next(tokens, None)
+        return RECORDS if key == "g" and argument == "q" else NORMAL
+    if key in NORMAL_INSERT:
+        return INSERT
+    if key in OPERATORS:
+        return after_operator(key, tokens)
+    return VISUAL if key in VISUAL_START else NORMAL
+
+
+def after_operator(operator: str, tokens: Iterator[str]) -> str:
+    # dq cq yq は録画を始めないが打ち切りで fixture として意味が無いので拒む。dfq diq は通す。
+    motion = next(tokens, None)
+    if motion in COUNT_START:
+        while motion in COUNT_DIGITS:
+            motion = next(tokens, None)
+    done = INSERT if operator == "c" else NORMAL
+    if motion is None or motion == "<Esc>":
+        return NORMAL
+    if motion == "q":
+        return RECORDS
+    if motion in ("/", "?"):
+        return NORMAL if read_line(tokens) == "<Esc>" else done
+    if motion in OPERATOR_ARGUMENT:
+        next(tokens, None)
+    return done
+
+
+def after_visual(key: str, tokens: Iterator[str]) -> str:
+    if key == "q":
+        return RECORDS
+    if key in ("/", "?"):
+        read_line(tokens)
+        return VISUAL
+    if key in VISUAL_ARGUMENT:
+        next(tokens, None)
+        return VISUAL
+    if key == "r":
+        next(tokens, None)
+        return NORMAL
+    if key in VISUAL_INSERT:
+        return INSERT
+    return NORMAL if key in VISUAL_END else VISUAL
+
+
 def records_a_macro(keys: str) -> bool:
-    """Whether the keys type `q` as a command. A search typed on the command line is text."""
-    return "q" in re.sub(r"[/?].*?<CR>", "", keys)
+    """Whether a `q` reaches Vim as a NORMAL or VISUAL command (ADR 0046 decision 6, #190).
+    A `q` typed as text, a character argument or a register name does not record."""
+    tokens = iter(key_tokens(keys))
+    mode = NORMAL
+    for key in tokens:
+        if mode == INSERT:
+            mode = NORMAL if key == "<Esc>" else INSERT
+        elif mode == NORMAL:
+            mode = after_normal(key, tokens)
+        else:
+            mode = after_visual(key, tokens)
+        if mode == RECORDS:
+            return True
+    return False
 
 
 def macro_script(register: dict | None) -> list[str]:
