@@ -928,9 +928,9 @@ void EditorController::update_search_preview()
 // 検索の向きへ回数ぶん探すので、起点は新しい当たりから検索の向きの逆へ同じ回数だけ戻った当たりに
 // 置く（`/` の Ctrl-G では今の当たりになる）。折り返しは vim_find_match
 // の規則のままで報せは出さない。
-void EditorController::accept(const StoreVimMacro &intent)
+void EditorController::accept(const StoreVimRegister &intent)
 {
-    state_ = state_.with_vim(core::vim_macro_stored(state_.vim(), intent.name, intent.keys));
+    state_ = state_.with_vim(core::vim_register_stored(state_.vim(), intent.name, intent.value));
 }
 
 void EditorController::accept(const SearchHop &intent)

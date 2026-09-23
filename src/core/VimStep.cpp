@@ -28,16 +28,17 @@
 #include "VimKeySource.hpp"
 #include "VimLineExtent.hpp"
 #include "VimMacroRecording.hpp"
-#include "VimMacroRegisters.hpp"
 #include "VimMatchRequest.hpp"
 #include "VimMotionBinding.hpp"
 #include "VimMotionRange.hpp"
+#include "VimNamedRegisters.hpp"
 #include "VimPattern.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPrefix.hpp"
 #include "VimPutSide.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimRemoveBlock.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimRepeatRecord.hpp"
@@ -2246,7 +2247,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     VimState next = finished_input_wait(state);
     const char32_t name = macro_name_of(key).value_or(char32_t{});
-    const auto index = vim_macro_index(name);
+    const auto index = vim_register_index(name);
     if (!index.has_value())
     {
         return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
@@ -2256,22 +2257,35 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return VimStep{std::move(next), VimNoEffect{}};
 }
 
-// 止める `q`（決定 2）。録った鍵をレジスタへ置き、追記なら末尾へ繋ぐ。止める `q` 自身は積まない。
+// 録画の追記（ADR 0048 の決定 4）。本文の末尾の改行の手前へ繋ぎ、種類は保つ（行単位なら末尾の
+// `\n` の前・文字と矩形は末尾）。未使用のレジスタへの追記は新規と同じで文字単位になる。
+[[nodiscard]] VimRegister appended_recording(const VimRegister &old, std::string_view text)
+{
+    if (old.kind == VimRegisterKind::uninitialized)
+    {
+        return VimRegister{std::string(text), VimRegisterKind::characters};
+    }
+    VimRegister next = old;
+    const bool before_newline = old.kind == VimRegisterKind::lines && next.text.ends_with('\n');
+    next.text.insert(before_newline ? next.text.size() - 1 : next.text.size(), text);
+    return next;
+}
+
+// 止める `q`（ADR 0046 の決定 2・ADR 0048 の決定 6）。録った鍵を本文にして文字単位でレジスタへ
+// 置き、追記なら appended_recording で繋ぐ。止める `q` 自身は積まない。
 [[nodiscard]] VimStep stopped_macro(const VimState &state, const VimMacroRecording &recording)
 {
     VimState next = finished_input_wait(state);
     next.macro_recording = std::nullopt;
-    const auto index = vim_macro_index(static_cast<char32_t>(recording.name));
+    const auto index = vim_register_index(static_cast<char32_t>(recording.name));
     if (!index.has_value())
     {
         return VimStep{std::move(next), VimNoEffect{}};
     }
-    std::vector<VimKey> &target = next.macros.keys.at(index.value());
-    if (!recording.append)
-    {
-        target.clear();
-    }
-    target.insert(target.end(), recording.keys.begin(), recording.keys.end());
+    VimRegister &target = next.registers.registers.at(index.value());
+    const std::string text = vim_register_text(recording.keys);
+    target = recording.append ? appended_recording(target, text)
+                              : VimRegister{text, VimRegisterKind::characters};
     return VimStep{std::move(next), VimNoEffect{}};
 }
 
@@ -2290,35 +2304,65 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return started_prefix(state, VimPrefix::q);
 }
 
-// 再生する名前。`@@` は直前の名前で、無ければ位置を持たない（E748 相当）。
-[[nodiscard]] std::optional<std::size_t> replayed_index(const VimState &state, const VimKey &key)
+// 再生する名前を小文字の a〜z か `"`（無名・ADR 0048 の決定 6）に解く。ほかの鍵は名前を持たない。
+[[nodiscard]] std::optional<char> replayed_name(char32_t name)
+{
+    if (name == U'"')
+    {
+        return '"';
+    }
+    const auto index = vim_register_index(name);
+    if (!index.has_value())
+    {
+        return std::nullopt;
+    }
+    return static_cast<char>(U'a' + index.value());
+}
+
+// `@` の次の鍵が指す名前。`@@` は直前の名前で、無ければ名前を持たない（E748 相当）。
+[[nodiscard]] std::optional<char> replayed_name(const VimState &state, const VimKey &key)
 {
     const char32_t name = macro_name_of(key).value_or(char32_t{});
     if (name != U'@')
     {
-        return vim_macro_index(name);
+        return replayed_name(name);
     }
     if (!state.last_macro.has_value())
     {
         return std::nullopt;
     }
-    return vim_macro_index(static_cast<char32_t>(state.last_macro.value()));
+    return replayed_name(static_cast<char32_t>(state.last_macro.value()));
 }
 
-// `[count]@{a-z}` と `@@`（決定 3）。レジスタの鍵の列を回数ぶん繋いだ VimReplay を返し、
-// controller が `.` と同じ経路で 1 鍵ずつ流す。名前が無い・空のレジスタはビープして何もしない。
+// 解いた名前のレジスタ。`"` は無名、ほかは表の位置（replayed_name が a〜z に限ってある）。
+[[nodiscard]] const VimRegister &replayed_register(const VimState &state, char name)
+{
+    if (name == '"')
+    {
+        return state.unnamed_register;
+    }
+    return state.registers.registers.at(
+        vim_register_index(static_cast<char32_t>(name)).value_or(0));
+}
+
+// `[count]@{a-z}` と `@"` と `@@`（ADR 0046 の決定 3・ADR 0048 の決定 6）。レジスタの本文を
+// vim_keys_of_text で鍵列にして回数ぶん繋いだ VimReplay を返し、controller が `.` と同じ経路で
+// 1 鍵ずつ流す。名前が無い・未使用か空のレジスタはビープして何もしない。
 [[nodiscard]] VimStep replayed_macro(const VimState &state, const VimKey &key)
 {
     VimState next = finished_input_wait(state);
     // `@` の鍵は `.` の記録に残さない（`.` と同じく再生された鍵が記録し直す・決定 5）。
     next.recording = std::nullopt;
-    const auto index = replayed_index(state, key);
-    if (!index.has_value())
+    const auto name = replayed_name(state, key);
+    if (!name.has_value())
     {
         return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
     }
-    next.last_macro = static_cast<char>(U'a' + index.value());
-    const std::vector<VimKey> &keys = state.macros.keys.at(index.value());
+    next.last_macro = name.value();
+    const VimRegister &source = replayed_register(state, name.value());
+    const std::vector<VimKey> keys = source.kind == VimRegisterKind::uninitialized
+                                         ? std::vector<VimKey>{}
+                                         : vim_keys_of_text(source.text);
     const std::size_t count = resolved_count(state);
     if (keys.empty())
     {
@@ -3853,23 +3897,16 @@ VimState vim_interrupted(const VimState &state)
     return input_discarded(state);
 }
 
-VimState vim_macro_stored(const VimState &state, char32_t name, const std::vector<VimKey> &keys)
+VimState vim_register_stored(const VimState &state, char name, const VimRegister &value)
 {
-    const auto index = vim_macro_index(name);
+    const auto index = vim_register_index(static_cast<char32_t>(name));
     if (!index.has_value())
     {
         return state;
     }
     VimState next = state;
-    std::vector<VimKey> &target = next.macros.keys.at(index.value());
-    if (name >= U'a' && name <= U'z')
-    {
-        target.clear();
-    }
-    for (const VimKey &key : keys)
-    {
-        target.push_back(replayable(key));
-    }
+    VimRegister &target = next.registers.registers.at(index.value());
+    target = name >= 'A' && name <= 'Z' ? appended_recording(target, value.text) : value;
     return next;
 }
 

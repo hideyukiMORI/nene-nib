@@ -5,14 +5,19 @@
 #include "EditorFrame.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
-#include "StoreVimMacro.hpp"
+#include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
+#include "VimCharacter.hpp"
 #include "VimKey.hpp"
-#include "VimMacroRegisters.hpp"
 #include "VimMode.hpp"
+#include "VimNamedRegisters.hpp"
 #include "VimPrefix.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSearchPattern.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimTestSupport.hpp"
 
@@ -31,13 +36,16 @@ namespace nenenib::tests
 namespace
 {
 using nenenib::application::SelectEditMode;
-using nenenib::application::StoreVimMacro;
+using nenenib::application::StoreVimRegister;
 using nenenib::core::EditMode;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
 using nenenib::core::VimPrefix;
+using nenenib::core::VimRegister;
+using nenenib::core::VimRegisterKind;
 using nenenib::core::VimSearchDirection;
 using nenenib::core::VimSearchPattern;
+using nenenib::core::VimSpecialKey;
 using nenenib::core::VimState;
 
 // 録画→再生の一気通貫の 1 件（決定 7）。期待値は本物の Vim 9.1 を feedkeys で打った実測
@@ -64,9 +72,22 @@ constexpr std::array<MacroCase, 9> recorded_cases{{
     {"qaxxqu", "abcdef", "bcdef", 1, 1, "xx"},
 }};
 
-[[nodiscard]] const std::vector<VimKey> &macro_keys(const VimState &state, char32_t name)
+[[nodiscard]] const VimRegister &named_register(const VimState &state, char32_t name)
 {
-    return state.macros.keys.at(nenenib::core::vim_macro_index(name).value_or(0));
+    return state.registers.registers.at(nenenib::core::vim_register_index(name).value_or(0));
+}
+
+// レジスタの本文を再生と同じ写しで鍵列に戻した値（ADR 0048 の決定 7）。
+[[nodiscard]] std::vector<VimKey> macro_keys(const VimState &state, char32_t name)
+{
+    return nenenib::core::vim_keys_of_text(named_register(state, name).text);
+}
+
+// 文字単位の本文を置く意図（`:let @a = "…"` に当たる）。
+[[nodiscard]] StoreVimRegister stored_text(char name, std::string_view keys)
+{
+    return StoreVimRegister{name, VimRegister{nenenib::core::vim_register_text(vim_keys_of(keys)),
+                                              VimRegisterKind::characters}};
 }
 
 void verify_recorded_case(const MacroCase &sample)
@@ -143,10 +164,8 @@ void verify_macro_records_typed_keys_only()
     expect(macro_keys(controller.vim_state(), U'b') == vim_keys_of("@a."),
            "replayed keys are not recorded; @a and . are");
     vim_replay(controller, "qc/beta<CR>q");
-    const std::vector<VimKey> expected{
-        VimKey{VimSearchPattern{"beta", VimSearchDirection::forward, std::nullopt}}};
-    expect(macro_keys(controller.vim_state(), U'c') == expected,
-           "a search is recorded as the one confirmed pattern key");
+    expect(named_register(controller.vim_state(), U'c').text == "/beta\r",
+           "a search is recorded as the one confirmed pattern key and stored as /beta<CR>");
     vim_replay(controller, "j0@c");
     expect(caret_at(controller.frame(), 3, 1), "the recorded search replays from the caret");
 }
@@ -157,7 +176,7 @@ void verify_macro_q_inside_replay()
     Editing editing;
     open_vim_document(editing, "abcdef");
     EditorController &controller = editing.controller();
-    applied(controller, StoreVimMacro{U'a', vim_keys_of("qlx")});
+    applied(controller, stored_text('a', "qlx"));
     vim_replay(controller, "@a");
     expect(whole_vim_body(controller) == "acdef" &&
                !controller.vim_state().macro_recording.has_value(),
@@ -171,10 +190,8 @@ void verify_macro_failure_stops_the_rest()
     Editing editing;
     open_vim_document(editing, "ab\ncd");
     EditorController &controller = editing.controller();
-    applied(controller, StoreVimMacro{U'a',
-                                      {VimKey{VimSearchPattern{"zzz", VimSearchDirection::forward,
-                                                               std::nullopt}}}});
-    applied(controller, StoreVimMacro{U'b', vim_keys_of("@ax")});
+    applied(controller, stored_text('a', "/zzz<CR>"));
+    applied(controller, stored_text('b', "@ax"));
     vim_replay(controller, "@b");
     expect(whole_vim_body(controller) == "ab\ncd", "a failed search in @a stops the x of @b");
     vim_replay(controller, "hx");
@@ -187,7 +204,7 @@ void verify_macro_depth_limit()
     Editing editing;
     open_vim_document(editing, "abcdef");
     EditorController &controller = editing.controller();
-    applied(controller, StoreVimMacro{U'a', vim_keys_of("0@a")});
+    applied(controller, stored_text('a', "0@a"));
     vim_replay(controller, "@a");
     const auto frame = controller.frame();
     expect(frame.command_message.has_value() &&
@@ -197,16 +214,16 @@ void verify_macro_depth_limit()
     expect(whole_vim_body(controller) == "bcdef", "the next typed key runs normally");
 }
 
-// 大文字の名前は追記（決定 2）。StoreVimMacro も同じ規則（`:let @A` と同じ）。
+// 大文字の名前は追記（決定 2）。StoreVimRegister も録画の追記と同じ規則（ADR 0048 の決定 4）。
 void verify_macro_append()
 {
     Editing editing;
     open_vim_document(editing, "abcdef");
     EditorController &controller = editing.controller();
-    applied(controller, StoreVimMacro{U'a', vim_keys_of("l")});
-    applied(controller, StoreVimMacro{U'A', vim_keys_of("x")});
+    applied(controller, stored_text('a', "l"));
+    applied(controller, stored_text('A', "x"));
     expect(macro_keys(controller.vim_state(), U'a') == vim_keys_of("lx"), "A appends to a");
-    applied(controller, StoreVimMacro{U'1', vim_keys_of("x")});
+    applied(controller, stored_text('1', "x"));
     vim_replay(controller, "@a");
     expect(whole_vim_body(controller) == "acdef", "a digit name stores nothing");
 }
@@ -245,6 +262,101 @@ void verify_macro_recording_hidden_in_ordinary()
            "back in Vim the same recording shows again");
 }
 
+// 鍵列 ↔ 本文の往復（ADR 0048 の決定 7）。特殊鍵の全列挙子と文字（ASCII・日本語・U+0080 単独）
+// は戻り、`\x08` は backspace に読み、確定した検索は `/` か `?` ＋ pattern ＋ `\r` の片道。
+void verify_register_text_round_trip()
+{
+    const std::vector<VimKey> keys{
+        VimKey{nenenib::core::VimCharacter{U'a'}},
+        VimKey{nenenib::core::VimCharacter{U'\u65E5'}},
+        VimKey{nenenib::core::VimCharacter{U'\u0080'}},
+        VimKey{nenenib::core::VimCharacter{U'z'}},
+        VimKey{nenenib::core::VimCharacter{U'\n'}},
+        VimKey{VimSpecialKey::escape},
+        VimKey{VimSpecialKey::enter},
+        VimKey{VimSpecialKey::backspace},
+        VimKey{VimSpecialKey::arrow_left},
+        VimKey{VimSpecialKey::arrow_right},
+        VimKey{VimSpecialKey::arrow_up},
+        VimKey{VimSpecialKey::arrow_down},
+        VimKey{VimSpecialKey::control_r},
+        VimKey{VimSpecialKey::home},
+        VimKey{VimSpecialKey::end},
+        VimKey{VimSpecialKey::page_up},
+        VimKey{VimSpecialKey::page_down},
+        VimKey{VimSpecialKey::control_d},
+        VimKey{VimSpecialKey::control_u},
+        VimKey{VimSpecialKey::control_f},
+        VimKey{VimSpecialKey::control_b},
+        VimKey{VimSpecialKey::control_v},
+    };
+    expect(nenenib::core::vim_keys_of_text(nenenib::core::vim_register_text(keys)) == keys,
+           "every special key and character survives the round trip");
+    expect(nenenib::core::vim_register_text(vim_keys_of("iab<Esc>")) == "iab\x1b",
+           "Esc is the byte 0x1b");
+    expect(nenenib::core::vim_register_text(vim_keys_of("<CR>")) == "\r", "CR is the byte 0x0d");
+    expect(nenenib::core::vim_register_text(vim_keys_of("<Home><End>")) == "\xC2\x80kh\xC2\x80@7",
+           "Home and End are U+0080 followed by Vim's two termcap letters");
+    const std::vector<VimKey> searches{
+        VimKey{VimSearchPattern{"ab", VimSearchDirection::forward, std::nullopt}},
+        VimKey{VimSearchPattern{"cd", VimSearchDirection::backward, std::nullopt}}};
+    expect(nenenib::core::vim_register_text(searches) == "/ab\r?cd\r",
+           "a confirmed search is the prefix, the pattern and CR");
+    expect(nenenib::core::vim_keys_of_text("a\x08") ==
+               std::vector<VimKey>{VimKey{nenenib::core::VimCharacter{U'a'}},
+                                   VimKey{VimSpecialKey::backspace}},
+           "Ctrl-H reads as backspace");
+    expect(nenenib::core::vim_keys_of_text("\xC2\x80zz") ==
+               std::vector<VimKey>{VimKey{nenenib::core::VimCharacter{U'\u0080'}},
+                                   VimKey{nenenib::core::VimCharacter{U'z'}},
+                                   VimKey{nenenib::core::VimCharacter{U'z'}}},
+           "U+0080 without a known key after it is a character");
+}
+
+// 録画は本文として置かれる（ADR 0048 の決定 6）。種類は文字単位、特殊鍵は Vim のバイト。
+// `qA` は行単位の本文の末尾の改行の手前へ繋ぎ種類を保つ（probe Q11 の `abcdefx\n`）。
+void verify_recording_is_text()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdef");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "qaxq");
+    expect(named_register(controller.vim_state(), U'a').text == "x" &&
+               named_register(controller.vim_state(), U'a').kind == VimRegisterKind::characters,
+           "qaxq stores the characterwise text x");
+    vim_replay(controller, "qbi<Home><Esc>q");
+    expect(named_register(controller.vim_state(), U'b').text == "i\xC2\x80kh\x1b",
+           "special keys are stored as Vim's bytes");
+    applied(controller, StoreVimRegister{'c', VimRegister{"abcdef\n", VimRegisterKind::lines}});
+    vim_replay(controller, "qCxq");
+    expect(named_register(controller.vim_state(), U'c').text == "abcdefx\n" &&
+               named_register(controller.vim_state(), U'c').kind == VimRegisterKind::lines,
+           "qA appends before the trailing newline of a linewise register and keeps the kind");
+    vim_replay(controller, "qdq");
+    expect(named_register(controller.vim_state(), U'd').text.empty() &&
+               named_register(controller.vim_state(), U'd').kind == VimRegisterKind::characters,
+           "an empty recording stores an empty characterwise text");
+}
+
+// `@"` は無名レジスタの本文を鍵として実行し、`@@` はそれを繰り返す（ADR 0048 の決定 6）。
+// 未使用のレジスタと空の本文はビープして何もしない。
+void verify_macro_unnamed_and_uninitialized()
+{
+    Editing editing;
+    open_vim_document(editing, "lxabc");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "2yl@\"");
+    expect(whole_vim_body(controller) == "labc", "@\" runs the unnamed text lx");
+    expect(controller.vim_state().last_macro == std::optional<char>{'"'}, "@@ remembers @\"");
+    vim_replay(controller, "@@");
+    expect(whole_vim_body(controller) == "lbc",
+           "@@ after @\" runs the unnamed register again, which x has made x");
+    vim_replay(controller, "@e");
+    expect(whole_vim_body(controller) == "lbc", "an uninitialized register replays nothing");
+    vim_replay(controller, "qfq@f");
+    expect(whole_vim_body(controller) == "lbc", "an empty register replays nothing");
+}
+
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
     return fixture.macro.has_value();
@@ -263,6 +375,9 @@ void verify_vim_macro_contracts()
     verify_macro_append();
     verify_macro_recording_frame();
     verify_macro_recording_hidden_in_ordinary();
+    verify_register_text_round_trip();
+    verify_recording_is_text();
+    verify_macro_unnamed_and_uninitialized();
 }
 
 void verify_vim_macro_scope()

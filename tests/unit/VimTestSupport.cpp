@@ -17,7 +17,7 @@
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
-#include "StoreVimMacro.hpp"
+#include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
@@ -31,6 +31,7 @@
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VisibleLines.hpp"
@@ -228,7 +229,8 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
 
 // fixture の `register`（ADR 0046 の決定 6・oracle の `let @a = "…"`）。記法の鍵を VimKey の列へ
 // 写すのは録画と同じ 1 本にしたいので、同じ本文を開いた別の editor で `q{name}` のあとに鍵を打ち、
-// 録画中の鍵の列をそのまま取って、再生する editor のレジスタへ StoreVimMacro で置く。
+// 録画中の鍵の列を vim_register_text で本文にして、再生する editor のレジスタへ StoreVimRegister
+// で置く（録画を止める `q` と同じ写し・ADR 0048 の決定 6）。
 // 別の editor で打つので、再生する側の本文・レジスタ・直前の変更には何も残らない。
 void store_vim_fixture_macro(EditorController &controller, const VimFixture &fixture)
 {
@@ -250,8 +252,10 @@ void store_vim_fixture_macro(EditorController &controller, const VimFixture &fix
     {
         return;
     }
-    applied(controller, nenenib::application::StoreVimMacro{static_cast<char32_t>(macro.name),
-                                                            recording.value().keys});
+    applied(controller,
+            nenenib::application::StoreVimRegister{
+                macro.name, VimRegister{nenenib::core::vim_register_text(recording.value().keys),
+                                        VimRegisterKind::characters}});
 }
 
 [[nodiscard]] std::string whole_vim_body(EditorController &controller)

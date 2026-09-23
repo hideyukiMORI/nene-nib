@@ -6,8 +6,8 @@
 #include "VimInputWait.hpp"
 #include "VimInsertRepeat.hpp"
 #include "VimMacroRecording.hpp"
-#include "VimMacroRegisters.hpp"
 #include "VimMode.hpp"
+#include "VimNamedRegisters.hpp"
 #include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
 #include "VimRepeatRecord.hpp"
@@ -55,10 +55,11 @@ struct VimState
     // （短い行へ畳まれた角からは幅が読めない・Issue #112 で実測）。
     std::optional<VimBlockExtent> replayed_block;
     VimRegister unnamed_register;
-    // マクロ（ADR 0046 の決定 1）。macros は a〜z の鍵の列、macro_recording は `q{a-z}` から
-    // `q` までの録画中の鍵、last_macro は `@@` が繰り返す直前の名前。`.` の記録とは独立で、
-    // どれも鍵を食べ終わっても（vim_resting_from でも）保つ。
-    VimMacroRegisters macros;
+    // 名前つきレジスタとマクロ（ADR 0046 の決定 1・ADR 0048 の決定 1・6）。registers は a〜z の
+    // 本文の表（マクロも本文で持つ）、macro_recording は `q{a-z}` から `q` までの録画中の鍵、
+    // last_macro は `@@` が繰り返す直前の名前。`.` の記録とは独立で、どれも鍵を食べ終わっても
+    // （vim_resting_from でも）保つ。
+    VimNamedRegisters registers;
     std::optional<VimMacroRecording> macro_recording;
     std::optional<char> last_macro;
 };
@@ -72,7 +73,7 @@ struct VimState
                     VimSearchHighlight::on, true,         std::nullopt,
                     std::nullopt,           std::nullopt, std::nullopt,
                     std::nullopt,           std::nullopt, std::move(unnamed_register),
-                    VimMacroRegisters{},    std::nullopt, std::nullopt};
+                    VimNamedRegisters{},    std::nullopt, std::nullopt};
 }
 
 // 通常の鍵の完了は 'scroll' の明示値と直前の文字検索・検索パターンと強調・incsearch
@@ -86,7 +87,7 @@ struct VimState
     next.last_search = state.last_search;
     next.highlight = state.highlight;
     next.incsearch = state.incsearch;
-    next.macros = state.macros;
+    next.registers = state.registers;
     next.macro_recording = state.macro_recording;
     next.last_macro = state.last_macro;
     return next;
