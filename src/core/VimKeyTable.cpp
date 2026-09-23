@@ -25,7 +25,7 @@ constexpr char32_t control_r_character = 0x12;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 55> normal_bindings{
+constexpr std::array<VimBinding, 56> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -80,7 +80,8 @@ constexpr std::array<VimBinding, 55> normal_bindings{
      {U'#', VimAction::search_word_backward},
      {U'q', VimAction::record_macro},
      {U'@', VimAction::replay_macro},
-     {U'"', VimAction::select_register}}};
+     {U'"', VimAction::select_register},
+     {U' ', VimAction::space_right}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -143,10 +144,12 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::search_word_backward, VimActionGroup::search},
      {VimAction::record_macro, VimActionGroup::input_wait},
      {VimAction::replay_macro, VimActionGroup::input_wait},
-     {VimAction::select_register, VimActionGroup::input_wait}}};
+     {VimAction::select_register, VimActionGroup::input_wait},
+     {VimAction::space_right, VimActionGroup::motion},
+     {VimAction::space_left, VimActionGroup::motion}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 17> motion_bindings{
+constexpr std::array<VimMotionBinding, 19> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -163,7 +166,9 @@ constexpr std::array<VimMotionBinding, 17> motion_bindings{
      {VimAction::move_document_first, VimMotion::document_first},
      {VimAction::move_document_last, VimMotion::document_last},
      {VimAction::move_next_line, VimMotion::next_line},
-     {VimAction::move_previous_line, VimMotion::previous_line}}};
+     {VimAction::move_previous_line, VimMotion::previous_line},
+     {VimAction::space_right, VimMotion::wrap_right},
+     {VimAction::space_left, VimMotion::wrap_left}}};
 
 // i / a の後ろの鍵 → テキストオブジェクトの表（ADR 0031 の決定 1 / CPP-012）。b は paren、
 // B は brace、閉じ括弧の鍵は開き括弧と同じ行（Vim 9.1 で実測）。ここに無い鍵は取消。
@@ -186,9 +191,9 @@ constexpr std::array<VimTextObjectBinding, 15> text_object_bindings{
 
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e は入れる（inclusive）。
 // 行単位の j k はどちらでもないので、この表には無い。
-constexpr std::array<VimMotion, 6> exclusive_motions{
+constexpr std::array<VimMotion, 8> exclusive_motions{
     {VimMotion::left, VimMotion::right, VimMotion::line_start, VimMotion::first_non_blank,
-     VimMotion::next_word, VimMotion::previous_word}};
+     VimMotion::next_word, VimMotion::previous_word, VimMotion::wrap_right, VimMotion::wrap_left}};
 
 // 表の中でその動作を指す行の数。ちょうど 1 でなければ表が動作の一覧とずれている。
 [[nodiscard]] constexpr std::size_t rows_for(VimAction action) noexcept

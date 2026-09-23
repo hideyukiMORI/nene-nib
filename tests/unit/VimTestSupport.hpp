@@ -31,8 +31,9 @@ using MatchSpan = std::pair<std::size_t, std::size_t>;
 // 記法の名前が指す鍵。多くは特殊鍵で、`<NL>` だけは文字（Vim の Ctrl-J・ADR 0048 の決定 9）。
 using VimNamedKey = std::variant<nenenib::core::VimCharacter, VimSpecialKey>;
 
-// fixture の記法（<Esc> <CR> <NL> <BS> <C-r> <Space> 矢印 …）と鍵の対応。写す場所は eng/vim-oracle.py とここの
-// 2 つで、どちらも「fixture の書き方」という 1 つの約束の両端である（ARC-012）。
+// fixture の記法（<Esc> <CR> <NL> <BS> <C-r> <Space> 矢印など）と鍵の対応。写す場所は
+// eng/vim-oracle.py とここの 2 つで、どちらも「fixture の書き方」という 1 つの約束の
+// 両端である（ARC-012）。
 struct VimKeyName
 {
     std::string_view text;

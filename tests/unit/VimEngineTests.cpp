@@ -317,9 +317,9 @@ void verify_vim_other_keys()
     static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
     static_cast<void>(controller.apply(OpenDocument{sample_path()}));
     static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    // Backspace は行をまたぐ h（ADR 0049）で、fixture の `space-bs-*` が守る。
     static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::enter}}));
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::backspace}}));
-    expect(vim_body(controller.frame()) == "one\ntwo", "Enter and Backspace do nothing in NORMAL");
+    expect(vim_body(controller.frame()) == "one\ntwo", "Enter does not edit in NORMAL");
     static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
     static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{2}},
@@ -813,11 +813,12 @@ void verify_vim_visual_step_edges()
     visual.mode = VimMode::visual;
     const Selection selection{Offset{1}, Offset{2}};
     // VISUAL で効かない鍵は選択もモードも動かさない（決定 7）。`<CR>` は ADR 0048 の決定 9 で
-    // `+` と同じ移動になったので、ここには効かない文字 `Z` を置く。
+    // `+` と同じ移動に、`<BS>` は ADR 0049 で行をまたぐ h になったので、ここには効かない文字
+    // `Z` を置く。
     for (const VimKey &key :
          {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'u'}}, VimKey{VimCharacter{U'D'}},
-          VimKey{VimCharacter{U'A'}}, VimKey{VimCharacter{U'Z'}}, VimKey{VimSpecialKey::backspace},
-          VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
+          VimKey{VimCharacter{U'A'}}, VimKey{VimCharacter{U'Z'}}, VimKey{VimSpecialKey::control_r},
+          VimKey{VimCharacter{U'z'}}})
     {
         const auto step =
             vim_step(visual, VimEditorView{buffer, selection, VimViewport{LineNumber{1}, 64}}, key);

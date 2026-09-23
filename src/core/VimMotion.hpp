@@ -26,6 +26,9 @@ enum class VimMotion : std::uint8_t
     document_first,
     document_last,
     next_line,
-    previous_line
+    previous_line,
+    // `<Space>` `<BS>`。行をまたぐ exclusive な文字単位の移動（ADR 0049 の決定 1・2）。
+    wrap_right,
+    wrap_left
 };
 } // namespace nenenib::core
