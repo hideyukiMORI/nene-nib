@@ -25,7 +25,7 @@ Nib の今の形: `.` の記録 `VimRepeatRecord { count; keys: vector<VimKey>; 
 5. **`.` との関係**: 再生された鍵は普通に `accept` を通るので、`last_change` は再生の中の最後の変更になり、`@a` の後の `.` はその 1 変更だけを繰り返す（Vim と同じ）。録画中の `.` は鍵 `.` として録られ、再生時に `.` として動く。
 6. **fixture（oracle）**: `tests/vim/fixtures.json` に任意の欄 `"register"`（`{"name": "a", "keys": "llx"}`・1 件に 1 本・鍵の記法は `keys` と同じ）を足す。`eng/vim-oracle.py` は `probe_script` の `:normal!` の前に `let @a = "<vim_keys(keys)>"` を書く。`tests/vim/VimFixture.hpp` に `std::optional<VimMacroFixture>`（`VimMacroFixture { char name; std::string_view keys; }`・1 型・`tests/vim/VimMacroFixture.hpp`）。テストの再生は fixture の `register` を application の意図 `StoreVimMacro`（controller に状態を置く口として足す。後続の `:let @a=` も同じ口）で `VimState::macros` に置いてから `keys` を流す。fixture は `@a` `2@a` `@@` `@a` の失敗の打ち切り・INSERT を含む再生・複数行・`?` 検索を含む再生など 15 件程度。**`q` を含む鍵列は fixture に書かない**（oracle が観測できない。`eng/vim-oracle.py` は `keys` に `q` を含む fixture を拒む: 終了 1・CNF-011 と同じ「黙って通さない」）。
 7. **契約（unit・scope `--vim-macro`）**: 録画→再生の一気通貫（probe 2 節の表をそのまま期待値に: `qaxq@a`・`qa0xjq2@a`・`qaiab<Esc>q@a`・`qallq` → `qAxq`・`qaxq@a@@`・`qallxq@a`・`qallxq@a.`・`qaxxq@au`・`qaxxqu`）・再生中の `q` 無効・再帰の上限・空のレジスタ・`@@` が無いとき。
-8. **後続（別 Issue）**: ステータスバーの「recording @a」の表示（renderer・application の表示値に 1 欄）。`"a` の接頭辞（`"ayy` `"ap`・名前つきのテキストレジスタ・`VimRegister` の 26 本表）と、そのときのマクロレジスタとの統合（Vim はレジスタが 1 つの表で `"ap` が鍵列を文字として貼る。統合の ADR で鍵列 ↔ 文字列の写しを 1 本にする）。`@:`・`q"`・数字レジスタ。
+8. **後続（別 Issue）**: ステータスバーの「recording @a」の表示（renderer・application の表示値に 1 欄）。`"a` の接頭辞（`"ayy` `"ap`・名前つきのテキストレジスタ・`VimRegister` の 26 本表）と、そのときのマクロレジスタとの統合（Vim はレジスタが 1 つの表で `"ap` が鍵列を文字として貼る。統合の ADR で鍵列 ↔ 文字列の写しを 1 本にする → [ADR 0048](0048-named-registers-as-one-text-table.md)）。`@:`・`q"`・数字レジスタ。
 
 ## 強制
 
