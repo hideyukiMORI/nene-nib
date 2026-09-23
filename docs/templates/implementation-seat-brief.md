@@ -21,7 +21,7 @@ ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
 - ビルド・ゲート（`eng/check.ps1`・`eng/conformance.py`・`eng/symbols.py`）の出力も `out/` のファイルへ落とし、`grep` で読む。端末に全文を流さない。
 - ファイルは必要な範囲だけ読む（`Read` の offset / limit・`sed -n`）。丸読みしない。
 - 最終報告は 30 行以内。詳細は `<scratchpad>/done-<issue>-<工程>.md` に書き、親にはそのパスと数字（checks 数・fixture 件数・SHA・所要時間）だけ返す。
-- commit / push / PR は依頼書に書かれた範囲だけ。Ready・CI・merge は設計席。
+- commit / push / PR は依頼書に書かれた範囲だけ。Ready・CI・merge は設計席。PR の本文は GIT-004 の必須欄（`Closes #N` / `目的:` / `使った正典経路:` / `規則 ID:` / `振る舞い・スキーマの変更:` / `検証（実行したコマンドと結果）:` / `確認する退行:` / `対象・依存:` / `検証結果:` / `再利用:` / `Waivers:` / `残るリスク:`）をすべて持ち、作る前にファイルに書いて `python eng/git-conventions.py <ファイル> --pr-body` で検証する（#191 で 2 回落ちた）。
 
 ## 先に読むもの
 
