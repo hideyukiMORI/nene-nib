@@ -26,6 +26,11 @@ Two rules keep the fixture and the editor comparable, and the script refuses inp
   of where a real Esc would leave it. The check is mechanical: the same keys with one more `<Esc>`
   must produce exactly the same buffer, cursor and register.
 
+The keys run under `execute "normal! " . keys`, and `:help :normal` says {commands} cannot start
+with a space: the Ex command line eats it and the fixture would silently measure a different case.
+So `keys` whose first key is a space (raw or `<Space>`) are passed with a `1` in front, the way the
+help writes it (`normal_keys`, ADR 0049 decision 5).
+
 A fixture may also name one macro register (`register`: `{"name": "a", "keys": "llx"}`, ADR 0046
 decision 6). probe.vim writes it with `let @a = "..."` before the keys run, which is how a macro is
 replayed under `:normal!`. Recording (`q`) does not work inside `:normal` at all, so a `q` typed as
@@ -86,7 +91,9 @@ KEY_NAMES = {"<Esc>": "\\<Esc>", "<CR>": "\\<CR>", "<BS>": "\\<BS>", "<C-r>": "\
              "<C-d>": "\\<C-d>", "<C-u>": "\\<C-u>", "<C-f>": "\\<C-f>", "<C-b>": "\\<C-b>",
              "<C-v>": "\\<C-v>", "<NL>": "\\<NL>",
              "<Home>": "\\<Home>", "<End>": "\\<End>",
-             "<PageUp>": "\\<PageUp>", "<PageDown>": "\\<PageDown>"}
+             "<PageUp>": "\\<PageUp>", "<PageDown>": "\\<PageDown>",
+             "<Space>": " ", "<Left>": "\\<Left>", "<Right>": "\\<Right>",
+             "<Up>": "\\<Up>", "<Down>": "\\<Down>"}
 BANNER = "// 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）"
 
 
@@ -94,6 +101,17 @@ def vim_version() -> str:
     """The first line of `vim --version`, which names the release and its patch level."""
     result = subprocess.run([str(VIM), "--version"], capture_output=True, check=True)
     return result.stdout.decode("utf-8", errors="replace").splitlines()[0].strip()
+
+
+def normal_keys(keys: str) -> str:
+    """The keys as the argument of ``:normal!`` (ADR 0049 decision 5).
+
+    ``:help :normal``: {commands} cannot start with a space -- the Ex command line eats it -- and
+    the help writes ``1`` in front instead.  So a first key that is a space, typed raw or as
+    ``<Space>``, gets that ``1``.  A count of 1 changes nothing, and no digit can join it because
+    the key after it is the space itself.
+    """
+    return "1" + keys if keys.startswith((" ", "<Space>")) else keys
 
 
 def vim_keys(keys: str) -> str:
@@ -266,7 +284,7 @@ def probe_script(settings: list[str], keys: str, viewport: dict | None = None,
                   " || line('w$') != min([line('$'), line('w0') + winheight(0) - 1])"
                   " | cquit | endif"]
     lines = [*DEFAULT_SETTINGS, *settings, *setup, *macro_script(register),
-             'execute "normal! " . "%s"' % vim_keys(keys), *settle, report, "qa!"]
+             'execute "normal! " . "%s"' % vim_keys(normal_keys(keys)), *settle, report, "qa!"]
     return "\n".join(lines) + "\n"
 
 
