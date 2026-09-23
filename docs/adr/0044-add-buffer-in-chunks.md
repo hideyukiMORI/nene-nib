@@ -4,7 +4,7 @@
 - 日付: 2026-09-23
 - Issue: #174
 - 影響する規則: ARC-003 / ARC-007 / CPP-001 / CPP-011 / QLT-001 / QLT-012 / QLT-014
-- 前提: [ADR 0009](0009-editing-piece-table-and-history.md)（piece table・original と add の 2 本）・[ADR 0011](0011-speed-gate.md)（速さのゲート）・[ADR 0016](0016-ci-speed-baseline.md)（機械ごとの基準値）・[ADR 0036](0036-line-ending-owned-by-text-buffer.md)
+- 前提: [ADR 0009](0009-editing-slice-piece-table-and-editing-states.md)（piece table・original と add の 2 本）・[ADR 0011](0011-speed-measurement-timing-port-and-paint-coalescing.md)（速さのゲート）・[ADR 0016](0016-ci-speed-reference-per-host-fingerprint.md)（機械ごとの基準値）・[ADR 0036](0036-line-ending-owned-by-text-buffer.md)
 
 ## 文脈
 
