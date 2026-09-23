@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 81cd56f8cc6b1de55d1515c8d846e65f30f9b35e1e2eb435ee11ebbfd10afba4 / 1381 fixtures
+// fixtures.json: sha256 16618971fb6be5ad08f4ce9b5d26b5356654bf193094e846d06f36bdff6ff781 / 1384 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1381> vim_fixtures{{
+constexpr std::array<VimFixture, 1384> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1393,6 +1393,9 @@ constexpr std::array<VimFixture, 1381> vim_fixtures{{
     {"register-delete-dot", "one\ntwo\nthree\nfour", "\"add.\"ap", "three\ntwo\nfour", 2, 1, "two\n", "V", std::nullopt},
     {"register-append-delete-dot", "one\ntwo\nthree\nfour\nfive", "\"Add..\"ap", "four\none\ntwo\nthree\nfive", 2, 1, "one\ntwo\nthree\n", "V", std::nullopt},
     {"register-put-dot", "alpha\nbeta\ngamma", "\"ayyjyy\"ap.", "alpha\nbeta\nalpha\nalpha\ngamma", 4, 1, "beta\n", "V", std::nullopt},
+    {"register-yank-lines-replay", "jj\naaa\nbbb\nccc\nddd", "\"ayyj@a", "jj\naaa\nbbb\nccc\nddd", 5, 1, "jj\n", "V", std::nullopt},
+    {"register-yank-lines-replay-unnamed", "jj\naaa\nbbb\nccc\nddd", "\"ayyj@\"", "jj\naaa\nbbb\nccc\nddd", 5, 1, "jj\n", "V", std::nullopt},
+    {"register-yank-word-replay", "xl.abc", "\"ayw@a", "l.abc", 1, 2, "x", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

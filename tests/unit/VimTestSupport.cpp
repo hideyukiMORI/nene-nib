@@ -1,10 +1,6 @@
 // Vim の単体テストが共有する足場の定義（ADR 0042 決定 1）。
 #include "VimTestSupport.hpp"
-#include "CancelCommand.hpp"
 #include "Column.hpp"
-#include "CommandEdit.hpp"
-#include "CommandText.hpp"
-#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -18,7 +14,6 @@
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StoreVimRegister.hpp"
-#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextPosition.hpp"
@@ -59,7 +54,6 @@ using nenenib::application::ScrollLines;
 using nenenib::application::SelectEditMode;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
-using nenenib::core::append_utf8;
 using nenenib::core::code_point_at;
 using nenenib::core::Column;
 using nenenib::core::EditMode;
@@ -92,37 +86,6 @@ using nenenib::core::VimState;
         }
     }
     return std::nullopt;
-}
-
-// 入力行が開いているあいだの鍵の写し先。窓と同じ約束の 2 つめの端（ARC-012・ADR 0032 の決定 1）。
-// fixture の `/foo<CR>` は Vim では 1 つの命令なので、再生もこの 1 本を通る。
-void command_key(EditorController &controller, const VimKey &key)
-{
-    if (const auto *special = std::get_if<VimSpecialKey>(&key))
-    {
-        if (*special == VimSpecialKey::enter)
-        {
-            static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
-            return;
-        }
-        if (*special == VimSpecialKey::escape)
-        {
-            static_cast<void>(controller.apply(nenenib::application::CancelCommand{}));
-            return;
-        }
-        if (*special == VimSpecialKey::backspace)
-        {
-            static_cast<void>(controller.apply(
-                nenenib::application::EditCommand{nenenib::core::CommandEdit::backspace}));
-        }
-        return;
-    }
-    if (const auto *character = std::get_if<VimCharacter>(&key))
-    {
-        std::string utf8;
-        nenenib::core::append_utf8(utf8, character->code);
-        static_cast<void>(controller.apply(nenenib::application::CommandText{utf8}));
-    }
 }
 
 [[nodiscard]] TextPosition vim_fixture_position(const VimFixture &fixture)
@@ -177,14 +140,11 @@ void command_key(EditorController &controller, const VimKey &key)
 
 void vim_replay(EditorController &controller, std::string_view keys)
 {
+    // 入力行の写しは controller の 1 か所（ADR 0048 の決定 8）。`/foo<CR>` も窓と同じ intent
+    // になる。
     for (const VimKey &key : vim_keys_of(keys))
     {
-        if (controller.command_line_active())
-        {
-            command_key(controller, key);
-            continue;
-        }
-        static_cast<void>(controller.apply(VimKeyPress{key}));
+        static_cast<void>(controller.press_vim_key(key));
     }
 }
 

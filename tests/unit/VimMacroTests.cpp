@@ -1,4 +1,5 @@
 // scope `--vim-macro` の単体テスト（ADR 0042 決定 2・ADR 0046）。
+#include "DisplayLine.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -28,6 +29,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -370,6 +372,102 @@ void verify_replay_through_input_line()
            "the trailing newline of a lines register moves down one more line");
 }
 
+// 再生の中の入力行の鍵（ADR 0048 の決定 8 の改訂）。`<Esc>` は取消ではなく確定（Vim の
+// c_<Esc>）で、矢印・Home / End・`<BS>` は窓と同じ EditCommand の写しで入力行を編集する。
+// keys はレジスタ a に置く本文（Vim のバイト・`<80>` は U+0080）で、再生の後も a は変わらない。
+// 期待値は本物の Vim 9.1 で setreg の後に feedkeys("@a", 'xt') を打った実測。
+constexpr std::array<MacroCase, 4> input_line_cases{{
+    {"/ab\x1bx", "one ab", "one b", 1, 5, "/ab\x1bx"},
+    {"/ac\xC2\x80klb\rx", "one ac abc", "one ac bc", 1, 8, "/ac\xC2\x80klb\rx"},
+    {"/b\xC2\x80kha\xC2\x80@7z\rx", "xb ab abz", "xb ab bz", 1, 7, "/b\xC2\x80kha\xC2\x80@7z\rx"},
+    {"/ab\xC2\x80kbc\rx", "one ab ac", "one ab c", 1, 8, "/ab\xC2\x80kbc\rx"},
+}};
+
+// 録画と `"` の読み書きが同じ表を通る（ADR 0048 の決定 6・11）。期待値は本物の Vim 9.1 で
+// feedkeys(…, 'xt') を打った実測（録画は `:normal!` では観測できない）。`<NL>` は本文の改行。
+constexpr std::array<MacroCase, 4> recording_register_cases{{
+    {"qaxq\"ap", "abcdef", "bxcdef", 1, 2, "x"},
+    {"qaiab<Esc>q\"ap", "xyz", "abiab\x1bxyz", 1, 6, "iab<Esc>"},
+    {"\"ayyqAxq", "abcdef", "bcdef", 1, 1, "abcdefx<NL>"},
+    {"qaxq\"Ayy", "abcdef", "bcdef", 1, 1, "x<NL>bcdef<NL>"},
+}};
+
+// 上の表と同じ順の a の種類と無名レジスタの本文。
+using RegisterOutcome = std::pair<VimRegisterKind, std::string_view>;
+constexpr std::array<RegisterOutcome, 4> recording_register_outcomes{{
+    {VimRegisterKind::characters, "a"},
+    {VimRegisterKind::characters, ""},
+    {VimRegisterKind::lines, "a"},
+    {VimRegisterKind::lines, "x\nbcdef\n"},
+}};
+
+void verify_replayed_input_line(const MacroCase &sample)
+{
+    Editing editing;
+    open_vim_document(editing, std::string(sample.text));
+    EditorController &controller = editing.controller();
+    applied(controller, StoreVimRegister{'a', VimRegister{std::string(sample.keys),
+                                                          VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    const std::string name(sample.expected);
+    expect(whole_vim_body(controller) == sample.expected, (name + ": body").c_str());
+    expect(caret_at(controller.frame(), sample.line, sample.column), (name + ": caret").c_str());
+    expect(named_register(controller.vim_state(), U'a').text == sample.register_a,
+           (name + ": register a").c_str());
+    expect(!controller.command_line_active(), (name + ": the input line is closed").c_str());
+}
+
+void verify_replay_input_line_keys()
+{
+    for (const MacroCase &sample : input_line_cases)
+    {
+        verify_replayed_input_line(sample);
+    }
+    Editing typed;
+    open_vim_document(typed, "one ab");
+    EditorController &window = typed.controller();
+    vim_replay(window, "/ab<Esc>x");
+    expect(whole_vim_body(window) == "ne ab" && !window.command_line_active(),
+           "a typed Esc still cancels the input line");
+}
+
+// `qa<Left>q"ap`: 録った `<Left>` は U+0080 `kl` の本文として貼られ、描画は Vim と同じ `<80>kl`。
+void verify_recorded_left_pasted()
+{
+    Editing editing;
+    open_vim_document(editing, "abc");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "qa");
+    static_cast<void>(controller.press_vim_key(VimKey{VimSpecialKey::arrow_left}));
+    vim_replay(controller, "q\"ap");
+    const VimState &state = controller.vim_state();
+    expect(whole_vim_body(controller) == "a\xC2\x80klbc" && caret_at(controller.frame(), 1, 4),
+           "qa<Left>q\"ap pastes U+0080 kl after the caret");
+    expect(named_register(state, U'a').text == "\xC2\x80kl" &&
+               named_register(state, U'a').kind == VimRegisterKind::characters,
+           "the recorded Left is the characterwise text U+0080 kl");
+    expect(nenenib::core::display_line(whole_vim_body(controller)).text == "a<80>klbc",
+           "a pasted Left is drawn as <80>kl like Vim");
+}
+
+void verify_recording_meets_registers()
+{
+    for (std::size_t index = 0; index < recording_register_cases.size(); ++index)
+    {
+        const MacroCase &sample = recording_register_cases.at(index);
+        verify_recorded_case(sample);
+        Editing editing;
+        open_vim_document(editing, std::string(sample.text));
+        vim_replay(editing.controller(), sample.keys);
+        const VimState &state = editing.controller().vim_state();
+        const RegisterOutcome &outcome = recording_register_outcomes.at(index);
+        expect(named_register(state, U'a').kind == outcome.first &&
+                   state.unnamed_register.text == outcome.second,
+               (std::string(sample.keys) + ": register kinds").c_str());
+    }
+    verify_recorded_left_pasted();
+}
+
 // `@"` は無名レジスタの本文を鍵として実行し、`@@` はそれを繰り返す（ADR 0048 の決定 6）。
 // 未使用のレジスタと空の本文はビープして何もしない。
 void verify_macro_unnamed_and_uninitialized()
@@ -413,9 +511,10 @@ void verify_register_block_append_refused()
            "a line yank appended to a block register is refused and both registers stay");
 }
 
+// 録画を経る fixture と `"` の fixture は同じレジスタの表を通るので 1 scope（ADR 0048 の決定 11）。
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
-    return fixture.macro.has_value();
+    return fixture.macro.has_value() || fixture.name.starts_with("register-");
 }
 } // namespace
 
@@ -436,6 +535,8 @@ void verify_vim_macro_contracts()
     verify_macro_unnamed_and_uninitialized();
     verify_replay_through_input_line();
     verify_register_block_append_refused();
+    verify_replay_input_line_keys();
+    verify_recording_meets_registers();
 }
 
 void verify_vim_macro_scope()
@@ -445,12 +546,13 @@ void verify_vim_macro_scope()
     {
         if (macro_fixture(fixture))
         {
-            expect(fixture.name.starts_with("macro-"), "every register fixture is a macro- case");
+            expect(fixture.name.starts_with("macro-") || fixture.name.starts_with("register-"),
+                   "every selected fixture is a macro- or register- case");
             verify_vim_fixture(fixture);
             ++selected;
         }
     }
-    expect(selected == 20, "the scope replays the 20 macro fixtures");
+    expect(selected == 45, "the scope replays the 20 macro and 25 register fixtures");
     verify_vim_macro_contracts();
 }
 } // namespace nenenib::tests

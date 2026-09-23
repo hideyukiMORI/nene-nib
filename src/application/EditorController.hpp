@@ -47,6 +47,9 @@ class EditorController final
     explicit EditorController(EditorPorts ports,
                               std::optional<OpenDocument> initial = std::nullopt);
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
+    // 試験の harness が Vim の鍵を 1 つ打つ口（ADR 0048 の決定 8）。窓の VimKeyPress と違い、
+    // 入力行が開いていれば再生と同じ command_key の写しで入力行へ入る。
+    [[nodiscard]] EditorFrame press_vim_key(const core::VimKey &key);
     [[nodiscard]] EditorFrame frame() const;
     [[nodiscard]] bool command_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
@@ -55,6 +58,8 @@ class EditorController final
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
 
   private:
+    // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
+    void begin_intent(bool keeps_message);
     void accept(const InsertText &intent);
     void accept(const MoveCaret &intent);
     void accept(const PlaceCaret &intent);

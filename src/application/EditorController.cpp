@@ -428,17 +428,31 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 
 EditorFrame EditorController::apply(const EditorIntent &intent)
 {
-    // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
-    state_ = state_.with_failure(std::nullopt);
-    if (state_.command_message().has_value() && !std::holds_alternative<VisibleLines>(intent) &&
-        !std::holds_alternative<RefreshAppearance>(intent) &&
-        !std::holds_alternative<CancelComposition>(intent))
-    {
-        state_ = state_.with_command_message(std::nullopt);
-    }
+    begin_intent(std::holds_alternative<VisibleLines>(intent) ||
+                 std::holds_alternative<RefreshAppearance>(intent) ||
+                 std::holds_alternative<CancelComposition>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
+}
+
+// fixture と契約の harness が打つ 1 鍵（ADR 0048 の決定 8）。入力行の写しは再生と同じ
+// command_key の 1 か所を通り、打った鍵なので <Esc> は取消のまま。
+EditorFrame EditorController::press_vim_key(const core::VimKey &key)
+{
+    begin_intent(false);
+    static_cast<void>(deliver_vim_key(key));
+    return frame();
+}
+
+void EditorController::begin_intent(bool keeps_message)
+{
+    // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
+    state_ = state_.with_failure(std::nullopt);
+    if (state_.command_message().has_value() && !keeps_message)
+    {
+        state_ = state_.with_command_message(std::nullopt);
+    }
 }
 
 bool EditorController::command_line_active() const noexcept
@@ -836,7 +850,8 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(const core::
     return std::nullopt;
 }
 
-// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。確定・取消・削除のほかは入力行では捨てる。
+// 入力行での特殊鍵の写し（ADR 0048 の決定 8）。窓と同じ EditCommand の写しで、上下（履歴）と
+// 入力行に意味の無い鍵は捨てる。再生の中の <Esc> は Vim の c_<Esc> と同じに確定する。
 std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpecialKey key)
 {
     switch (key)
@@ -844,18 +859,30 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::enter:
         return submitted_command();
     case core::VimSpecialKey::escape:
+        if (replay_depth_.has_value())
+        {
+            return submitted_command();
+        }
         accept(CancelCommand{});
         return std::nullopt;
     case core::VimSpecialKey::backspace:
         accept(EditCommand{core::CommandEdit::backspace});
         return std::nullopt;
     case core::VimSpecialKey::arrow_left:
+        accept(EditCommand{core::CommandEdit::left});
+        return std::nullopt;
     case core::VimSpecialKey::arrow_right:
+        accept(EditCommand{core::CommandEdit::right});
+        return std::nullopt;
+    case core::VimSpecialKey::home:
+        accept(EditCommand{core::CommandEdit::home});
+        return std::nullopt;
+    case core::VimSpecialKey::end:
+        accept(EditCommand{core::CommandEdit::end});
+        return std::nullopt;
     case core::VimSpecialKey::arrow_up:
     case core::VimSpecialKey::arrow_down:
     case core::VimSpecialKey::control_r:
-    case core::VimSpecialKey::home:
-    case core::VimSpecialKey::end:
     case core::VimSpecialKey::page_up:
     case core::VimSpecialKey::page_down:
     case core::VimSpecialKey::control_d:

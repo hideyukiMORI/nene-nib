@@ -1379,5 +1379,8 @@
   {"name":"register-block-yank-put","text":"abcd\nefgh\nijkl","keys":"<C-v>jl\"ayG\"ap"},
   {"name":"register-delete-dot","text":"one\ntwo\nthree\nfour","keys":"\"add.\"ap"},
   {"name":"register-append-delete-dot","text":"one\ntwo\nthree\nfour\nfive","keys":"\"Add..\"ap"},
-  {"name":"register-put-dot","text":"alpha\nbeta\ngamma","keys":"\"ayyjyy\"ap."}
+  {"name":"register-put-dot","text":"alpha\nbeta\ngamma","keys":"\"ayyjyy\"ap."},
+  {"name":"register-yank-lines-replay","text":"jj\naaa\nbbb\nccc\nddd","keys":"\"ayyj@a"},
+  {"name":"register-yank-lines-replay-unnamed","text":"jj\naaa\nbbb\nccc\nddd","keys":"\"ayyj@\""},
+  {"name":"register-yank-word-replay","text":"xl.abc","keys":"\"ayw@a"}
 ]
