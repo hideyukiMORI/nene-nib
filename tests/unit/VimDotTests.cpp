@@ -1,8 +1,13 @@
 // scope `--vim-dot` の単体テスト（ADR 0042 決定 2）。
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
+#include "HistoryAction.hpp"
+#include "HistoryDirection.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
+#include "SelectEditMode.hpp"
+#include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "VimCharacterExtent.hpp"
@@ -10,6 +15,9 @@
 #include "VimCount.hpp"
 #include "VimLineExtent.hpp"
 #include "VimMode.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimState.hpp"
 #include "VimTestSupport.hpp"
 #include "VimVisualExtent.hpp"
@@ -22,18 +30,27 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::tests
 {
 namespace
 {
+using nenenib::application::HistoryAction;
 using nenenib::application::SaveDocument;
+using nenenib::application::SelectEditMode;
+using nenenib::application::StoreVimRegister;
 using nenenib::application::VisibleLines;
+using nenenib::core::EditMode;
+using nenenib::core::HistoryDirection;
 using nenenib::core::TextEncoding;
 using nenenib::core::VimColumnWish;
 using nenenib::core::VimMode;
+using nenenib::core::VimRegister;
+using nenenib::core::VimRegisterKind;
 using nenenib::core::VimState;
 using nenenib::core::VirtualColumn;
 
@@ -412,6 +429,167 @@ void verify_vim_dot_cancels()
     }
 }
 
+// ------------------------------- 変更が 2 つ以上の u と Ctrl-r の戻り先（Issue #208 / ADR 0052）
+
+// 本文と期待値は probe（out/probes/probe-undocaret-2026-09-29.md の U10〜U13・Vim 9.1 の実測）。
+// oracle の :normal! は 1 回の実行をまるごと 1 つの undo の単位にするので、ここで手で測る
+// （ADR 0052 の決定 12）。本文は ASCII と Tab だけなので、probe のバイトの桁が表示値の桁と同じ。
+constexpr std::string_view undo_caret_text =
+    "alpha beta gamma delta epsilon zeta\n    four space indent line\n\ttab indent line here\n\n"
+    "short\nmiddle line of text foo\n    second indented foo bar\nlast line pat here";
+
+// 行と桁（1 始まり）。
+using CaretAt = std::pair<std::size_t, std::size_t>;
+
+// その行と桁へ動く鍵。`0` で欲しい列を捨ててから右へ数える。
+[[nodiscard]] std::string undo_caret_move(std::size_t line, std::size_t column)
+{
+    std::string keys = "gg";
+    if (line > 1)
+    {
+        keys += std::to_string(line - 1) + "j";
+    }
+    keys += "0";
+    if (column > 1)
+    {
+        keys += std::to_string(column - 1) + "l";
+    }
+    return keys;
+}
+
+// 変更を打ち終えた controller で `u` を carets の前半の数だけ打って本文が元に戻ることを見て、
+// 同じ数の `<C-r>` を打つ。各回のキャレットが carets の順に並ぶ。
+void verify_undo_walk(EditorController &controller, const std::string &name,
+                      std::span<const CaretAt> carets)
+{
+    const std::size_t changes = carets.size() / 2;
+    for (std::size_t index = 0; index < carets.size(); ++index)
+    {
+        const bool undoing = index < changes;
+        vim_replay(controller, undoing ? "u" : "<C-r>");
+        const std::string what = name + (undoing ? ": u " : ": <C-r> ") +
+                                 std::to_string((undoing ? index : index - changes) + 1);
+        expect(caret_at(controller.frame(), carets[index].first, carets[index].second),
+               what.c_str());
+        if (index + 1 == changes)
+        {
+            expect(vim_body(controller.frame()) == undo_caret_text,
+                   (name + ": the undos bring the text back").c_str());
+        }
+    }
+}
+
+void verify_undo_caret_case(std::string_view name, std::string_view keys,
+                            std::span<const CaretAt> carets)
+{
+    Editing editing;
+    open_vim_document(editing, std::string(undo_caret_text));
+    vim_replay(editing.controller(), keys);
+    verify_undo_walk(editing.controller(), std::string(name), carets);
+}
+
+// U10: `.` の `u` は `.` を打つ直前のキャレットへ戻り、元の変更は別の単位（u2）。
+void verify_undo_caret_after_dot()
+{
+    const std::string there = undo_caret_move(2, 12);
+    const std::string first = undo_caret_move(6, 8);
+    constexpr std::array<CaretAt, 4> in_place{{{2, 12}, {6, 8}, {6, 8}, {2, 12}}};
+    verify_undo_caret_case("dw .", first + "dw" + there + ".", in_place);
+    verify_undo_caret_case("ixyz .", first + "ixyz<Esc>" + there + ".", in_place);
+    verify_undo_caret_case("oabc .", first + "oabc<Esc>" + there + ".", in_place);
+    constexpr std::array<CaretAt, 4> lines{{{2, 5}, {6, 1}, {6, 1}, {2, 5}}};
+    verify_undo_caret_case("dd .", first + "dd" + there + ".", lines);
+    constexpr std::array<CaretAt, 4> appended{{{2, 26}, {6, 23}, {6, 24}, {2, 27}}};
+    verify_undo_caret_case("Axyz .", first + "Axyz<Esc>" + there + ".", appended);
+    constexpr std::array<CaretAt, 4> counted{{{1, 1}, {6, 8}, {6, 8}, {1, 1}}};
+    verify_undo_caret_case("x 3.", first + "x" + undo_caret_move(1, 1) + "3.", counted);
+}
+
+// U11: マクロは 1 回の `u` で全部戻り、戻り先はマクロの最初の変更の戻り先。
+void verify_undo_caret_macro(std::string_view name, std::string_view macro, std::string_view keys,
+                             std::span<const CaretAt> carets)
+{
+    Editing editing;
+    open_vim_document(editing, std::string(undo_caret_text));
+    applied(editing.controller(),
+            StoreVimRegister{'a', VimRegister{nenenib::core::vim_register_text(vim_keys_of(macro)),
+                                              VimRegisterKind::characters}});
+    vim_replay(editing.controller(), keys);
+    verify_undo_walk(editing.controller(), std::string(name), carets);
+}
+
+void verify_undo_caret_after_macro()
+{
+    const std::string middle = undo_caret_move(6, 8);
+    constexpr std::array<CaretAt, 2> in_place{{{6, 8}, {6, 8}}};
+    verify_undo_caret_macro("@a xjx", "xjx", middle + "@a", in_place);
+    verify_undo_caret_macro("2@a xjx", "xjx", middle + "2@a", in_place);
+    constexpr std::array<CaretAt, 2> lines{{{1, 1}, {1, 1}}};
+    verify_undo_caret_macro("@a ddjdd", "ddjdd", undo_caret_move(1, 3) + "@a", lines);
+    constexpr std::array<CaretAt, 2> appended{{{6, 23}, {6, 24}}};
+    verify_undo_caret_macro("@a Axyz jIabc", "Axyz<Esc>jIabc<Esc>", middle + "@a", appended);
+}
+
+// U12: 離れた 3 か所の変更。`u` は新しい順に各変更の戻り先へ、`<C-r>` は古い順に同じ行と桁へ。
+void verify_undo_caret_walks_back()
+{
+    constexpr std::array<CaretAt, 6> word_char_line{
+        {{3, 10}, {6, 8}, {1, 7}, {1, 7}, {6, 8}, {3, 9}}};
+    verify_undo_caret_case("dw / x / D",
+                           undo_caret_move(1, 7) + "dw" + undo_caret_move(6, 8) + "x" +
+                               undo_caret_move(3, 10) + "D",
+                           word_char_line);
+    constexpr std::array<CaretAt, 6> bottom_up{{{1, 3}, {6, 8}, {8, 12}, {8, 12}, {6, 8}, {1, 3}}};
+    verify_undo_caret_case("x bottom-up",
+                           undo_caret_move(8, 12) + "x" + undo_caret_move(6, 8) + "x" +
+                               undo_caret_move(1, 3) + "x",
+                           bottom_up);
+    constexpr std::array<CaretAt, 6> insert_append_line{
+        {{3, 2}, {6, 23}, {2, 12}, {2, 12}, {6, 24}, {3, 1}}};
+    verify_undo_caret_case("ixyz / Axyz / dd",
+                           undo_caret_move(2, 12) + "ixyz<Esc>" + undo_caret_move(6, 4) +
+                               "Axyz<Esc>" + undo_caret_move(3, 3) + "dd",
+                           insert_append_line);
+}
+
+// U13: 戻り先の行がやり直した後の本文に無いときは、最後の行の最初の非空白。
+void verify_undo_caret_lost_line()
+{
+    constexpr std::array<CaretAt, 4> last_line{{{3, 10}, {8, 1}, {7, 5}, {3, 10}}};
+    verify_undo_caret_case("dd last then x",
+                           undo_caret_move(8, 5) + "dd" + undo_caret_move(3, 10) + "x", last_line);
+    constexpr std::array<CaretAt, 4> opened{{{9, 1}, {8, 5}, {8, 5}, {8, 1}}};
+    verify_undo_caret_case("oabc last then dd",
+                           undo_caret_move(8, 5) + "oabc<Esc>" + undo_caret_move(9, 1) + "dd",
+                           opened);
+}
+
+// 通常モードの Ctrl+Z / Ctrl+Y は今までどおり戻した本文の末尾（ADR 0052 は Vim の u と
+// Ctrl-r だけを変える）。
+void verify_undo_caret_ordinary_history()
+{
+    Editing editing;
+    open_vim_document(editing, std::string(undo_caret_text));
+    EditorController &controller = editing.controller();
+    vim_replay(controller, undo_caret_move(2, 12) + "dd");
+    applied(controller, SelectEditMode{EditMode::ordinary});
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    expect(vim_body(controller.frame()) == undo_caret_text && caret_at(controller.frame(), 3, 1),
+           "the ordinary undo still ends after the text it put back");
+    applied(controller, HistoryAction{HistoryDirection::redo});
+    expect(caret_at(controller.frame(), 2, 1),
+           "and the ordinary redo still ends where the removed line was");
+}
+
+void verify_vim_undo_caret_contracts()
+{
+    verify_undo_caret_after_dot();
+    verify_undo_caret_after_macro();
+    verify_undo_caret_walks_back();
+    verify_undo_caret_lost_line();
+    verify_undo_caret_ordinary_history();
+}
+
 void verify_vim_dot_fixtures()
 {
     constexpr std::array<std::string_view, 7> boundaries{
@@ -447,6 +625,7 @@ void verify_vim_dot_contracts()
     verify_vim_visual_dot_limits();
     verify_vim_visual_dot_boundaries();
     verify_vim_visual_dot_columns();
+    verify_vim_undo_caret_contracts();
 }
 
 void verify_vim_dot_scope()
