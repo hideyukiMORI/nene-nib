@@ -37,13 +37,14 @@ ADR 0056 は Ctrl+Tab を「帯の位置の順・使った順にはしない」�
 4. **鍵（ui・ADR 0056 の決定 10 の表はそのまま）**: `tab_command_for` の `next` / `previous` の写し先を `WalkRecentTab` に変える。
    - Ctrl を離したとき（`WM_KEYUP` の `VK_CONTROL`）と窓がフォーカスを失ったとき（`WM_KILLFOCUS`）に、**歩いているときだけ** `SettleRecentTab` を送る。歩いているかは `EditorController` の読み取りの口（状態の 1 欄を読むだけ）で確かめる。歩いていないときの Ctrl の上げ下げ（Ctrl+C など）は意図を送らず、画面を描き直さない。
    - 入力行が開いている間はタブの鍵を引かない（今のまま）。歩いている間に入力行を開く鍵（`:` `/` Ctrl+P）が来たら、先に歩きを確定する。
+   - 歩きを続ける意図は `WalkRecentTab` `SettleRecentTab` と、文書もアクティブのタブも動かさない窓の意図（`PointTitleBar` `ScrollTabs` `TitleBarWidth` `VisibleLines` `RefreshAppearance`）で、ほかの意図と Vim の鍵は写す前に確定する。判断は `EditorController` の入口の 1 か所（`apply` と `press_vim_key` / `press_vim_keys` が通る）に置き、ui には置かない（#248 の差し戻しで設計席が ui から移した）。
 5. **変えないもの**: `gt` `gT` `{N}gt` `{N}gT`・`:tabnext` `:tabprevious`・一覧・Ctrl+T・Ctrl+F4・Ctrl+W・帯の並び。帯の並びは使った順では動かない。
 6. **実機の検査**: `eng/verify-window.py --tabs` の Ctrl+Tab の期待値を使った順に直す（Ctrl+T × 2 の後の Ctrl+Tab は 2 本目・Ctrl を押したままの 2 回目は 1 本目）。Ctrl を押したまま Tab を 2 回送る手を `eng/window_driver.py` に足す。
 7. **範囲の外（後続）**: 歩いている間に出す一覧の面・Ctrl+PageDown / Ctrl+PageUp（帯の位置の順）・Ctrl+1〜9・閉じた後のアクティブを使った順で選ぶこと・使った順の保存と復元。
 
 ## 強制
 
-- 契約（`--tabs`）: **planned**（Issue #248 の実装で active にする）。使った順の 4 つの純関数・歩き（押したままの 2 回目以降・折り返し・逆向き）・確定・歩きの途中のクリックと `gt`・新しいタブと閉じるの後の順・`gt` `:tabnext` が帯の位置の順のままであること。
+- 契約（`--tabs`）: **active**（Issue #248 の工程 1 `3ae7dca`・差し戻し `f140fcc`）。使った順の 4 つの純関数（`tests/unit/TabsTests.cpp` の `verify_tab_recency_functions` `verify_tab_recency_keeps_every_tab`）・歩き（押したままの 2 回目以降・折り返し・逆向き・`verify_walk_recent_tabs`）・確定（`verify_settle_without_walk`）・歩きの途中のクリックと `gt` `gT`（`verify_walk_interrupted`）・歩きを続けない意図と Vim の鍵の前の確定と、歩いていないときに順が変わらないこと（`verify_walk_settles_before_other_intents` `verify_order_kept_without_walk`）・新しいタブと閉じるの後の順（`verify_recent_after_open_and_close`）・起動の順（`verify_recent_after_startup`）・`gt` `:tabnext` が帯の位置の順のままであること（`verify_walk_interrupted` の `gt` `gT` と既存の `verify_vim_tab_keys` `verify_ex_tab_switch`）。入口は `build/nib_tests.exe --tabs`（scope の絞り込み）と、載る既定実行 `ctest -R nib_unit`。
 - 網羅性: `EditorIntent` は閉じた和型で、`StepTab` の写し先はコンパイルが落とす（CPP-002・active）。
 - 実機: `eng/verify-window.py --tabs`（本物のキー入力を送るので CI では回さない。施主に確かめてから設計席が回す）。
 - fixture: **不能**（oracle はタブを観測できない）。既存の fixture は不変（`eng/protected-diff.py`）。
