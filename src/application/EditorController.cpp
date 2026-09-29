@@ -17,6 +17,7 @@
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
+#include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
@@ -49,10 +50,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <expected>
 #include <optional>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -382,9 +385,43 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
                       std::string(before.substr(head, before.size() - head - tail)),
                       std::string(after.substr(head, after.size() - head - tail)), restore};
 }
+// 帯の順のタブの表示値（ADR 0056 の決定 7）。脇の束は置いたときの値を並べるだけで、
+// 題名を作り直さない。アクティブの分は document と同じ値を差し込む。
+[[nodiscard]] std::vector<DocumentView> tab_views(const EditorState &state,
+                                                  const DocumentView &active)
+{
+    std::vector<DocumentView> views;
+    views.reserve(state.tab_count());
+    for (const auto &tab : state.parked())
+    {
+        if (views.size() == state.active_tab())
+        {
+            views.push_back(active);
+        }
+        views.push_back(tab->view);
+    }
+    if (views.size() == state.active_tab())
+    {
+        views.push_back(active);
+    }
+    return views;
+}
+
+// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。
+[[nodiscard]] std::size_t stepped_tab(std::size_t active, std::size_t count, core::TabStep step)
+{
+    switch (step)
+    {
+    case core::TabStep::next:
+        return (active + 1) % count;
+    case core::TabStep::previous:
+        return (active + count - 1) % count;
+    }
+    std::unreachable();
+}
 } // namespace
 
-EditorController::EditorController(EditorPorts ports, std::optional<OpenDocument> initial)
+EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
     : ports_(ports),
       state_(EditorState::create(appearance_or_dark(ports.appearance), core::EditMode::ordinary))
 {
@@ -399,10 +436,15 @@ EditorController::EditorController(EditorPorts ports, std::optional<OpenDocument
     {
         state_ = state_.with_settings(loaded.value().value_or(state_.settings()));
     }
-    if (initial.has_value())
+    // 起動引数のファイルは順にタブで開き、最後に開けたものがアクティブになる（ADR 0056 の決定
+    // 13）。失敗は 1 意図だけの値なので、後の引数が消さないよう最後の失敗を控えて載せ直す。
+    std::optional<FileFailure> failure;
+    for (const OpenDocument &document : initial)
     {
-        static_cast<void>(apply(initial.value()));
+        static_cast<void>(apply(document));
+        failure = state_.last_failure().has_value() ? state_.last_failure() : failure;
     }
+    state_ = state_.with_failure(failure);
     // 初期ファイルも通常の意図を通す。その後で起動時の診断を載せ、最初の描画まで保持する。
     state_ = state_.with_command_message(inventory.notice);
 }
@@ -469,7 +511,8 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 void EditorController::begin_intent(bool keeps_message)
 {
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
-    state_ = state_.with_failure(std::nullopt);
+    // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
+    state_ = state_.with_failure(std::nullopt).with_closing(false);
     if (state_.command_message().has_value() && !keeps_message)
     {
         state_ = state_.with_command_message(std::nullopt);
@@ -1613,37 +1656,90 @@ std::expected<std::string, FileFailure> EditorController::encoded(core::TextEnco
     return std::move(converted).value();
 }
 
-void EditorController::accept(const OpenDocument &intent)
+// 読んで復号した本文と文書。上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは
+// 大きいファイルを先に抱える。
+std::expected<std::pair<core::TextBuffer, Document>, FileFailure>
+EditorController::read_document(const core::FilePath &path)
 {
-    // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
-    state_ = state_.with_composition(std::nullopt);
-    // 上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは大きいファイルを先に抱える。
-    const auto bytes = ports_.files.read(intent.path, maximum_file_bytes);
+    const auto bytes = ports_.files.read(path, maximum_file_bytes);
     if (!bytes)
     {
-        fail(bytes.error());
-        return;
+        return std::unexpected(bytes.error());
     }
     const auto encoding = core::detect_encoding(bytes.value());
     if (!encoding)
     {
-        fail(FileFailure::undecodable);
-        return;
+        return std::unexpected(FileFailure::undecodable);
     }
     const auto utf8 = decoded(encoding.value(), bytes.value());
     if (!utf8)
     {
-        fail(utf8.error());
-        return;
+        return std::unexpected(utf8.error());
     }
     auto text = core::TextBuffer::from_utf8(utf8.value());
     if (!text)
     {
-        fail(FileFailure::undecodable);
+        return std::unexpected(FileFailure::undecodable);
+    }
+    return std::pair{std::move(text).value(), Document{path, encoding.value(), std::size_t{0}}};
+}
+
+// 同じファイルを開いているタブの帯の位置（決定 5 の (a)）。比べ方は FilePort が OS の規則で決める。
+std::optional<std::size_t> EditorController::open_tab_of(const core::FilePath &path) const
+{
+    const auto &active = state_.document().path;
+    if (active.has_value() && ports_.files.same_file(active.value(), path))
+    {
+        return state_.active_tab();
+    }
+    const auto &parked = state_.parked();
+    for (std::size_t index = 0; index < parked.size(); ++index)
+    {
+        const auto &other = parked.at(index)->document.path;
+        if (other.has_value() && ports_.files.same_file(other.value(), path))
+        {
+            // 脇の束は帯の位置からアクティブを抜いた順。アクティブより右は 1 つずれる。
+            return index < state_.active_tab() ? index : index + 1;
+        }
+    }
+    return std::nullopt;
+}
+
+// 何も書いていない無題（決定 5 の (b)）。やり直しも含めて編集が 1 つも無いこと。
+bool EditorController::blank_untitled() const
+{
+    return !state_.document().path.has_value() && state_.text().size_bytes() == 0 &&
+           state_.history().size() == 0;
+}
+
+// 開く（ADR 0056 の決定 5）。(a) 同じファイルのタブへ切り替える（読み直さない）→ (b) 何も
+// 書いていない無題ならそこに開く → (c) アクティブの右に新しいタブを足して開く。開けなかったら
+// タブを足さず失敗を告げる。
+void EditorController::accept(const OpenDocument &intent)
+{
+    const auto open = open_tab_of(intent.path);
+    if (open.has_value())
+    {
+        accept(SwitchTab{open.value()});
         return;
     }
-    state_ = state_.with_opened(std::move(text).value(),
-                                Document{intent.path, encoding.value(), std::size_t{0}});
+    // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
+    state_ = state_.with_composition(std::nullopt);
+    auto document = read_document(intent.path);
+    if (!document)
+    {
+        fail(document.error());
+        return;
+    }
+    auto [text, opened] = std::move(document).value();
+    if (blank_untitled())
+    {
+        state_ = state_.with_opened(std::move(text), std::move(opened));
+        return;
+    }
+    leave_document();
+    state_ = state_.with_new_tab().with_opened(std::move(text), std::move(opened));
+    enter_document();
 }
 
 void EditorController::accept(const SaveDocument &intent)
@@ -1666,6 +1762,77 @@ void EditorController::accept(const SaveDocument &intent)
     const std::size_t position = history.position();
     state_ = state_.with_history(history).with_document(
         Document{intent.path, intent.encoding, position});
+}
+
+// ---------------------------------------------------------------- タブ（ADR 0056）
+
+void EditorController::leave_document()
+{
+    // 入力行の取消は検索の preview を閉じて入力前のスクロールへ戻し、検索なら Vim の保留も
+    // 捨てる。Esc と同じ 1 本を通す（ADR 0041 の決定 5・ADR 0056 の決定 4）。
+    if (state_.command_input().has_value())
+    {
+        accept(CancelCommand{});
+    }
+    state_ = state_.with_composition(std::nullopt);
+}
+
+void EditorController::enter_document()
+{
+    // 見えている行数は置いていたあいだに変わり得るので、先頭行だけを今の窓の範囲へ収める。
+    // キャレットを追いかけない（ScrollLines で動かしたスクロールを文書ごとに保つ）。
+    const ScrollState scroll = state_.scroll();
+    const auto within =
+        core::first_visible_within(scroll.first_visible, state_.text().line_count(),
+                                   scroll.visible_lines, scroll_extent_for(state_.mode()));
+    state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
+    settle_vim_caret();
+}
+
+void EditorController::accept(const NewTab &)
+{
+    leave_document();
+    state_ = state_.with_new_tab();
+    enter_document();
+}
+
+void EditorController::accept(const SwitchTab &intent)
+{
+    if (intent.index >= state_.tab_count() || intent.index == state_.active_tab())
+    {
+        return;
+    }
+    leave_document();
+    state_ = state_.with_switched(intent.index);
+    enter_document();
+}
+
+void EditorController::accept(const StepTab &intent)
+{
+    accept(SwitchTab{stepped_tab(state_.active_tab(), state_.tab_count(), intent.step)});
+}
+
+void EditorController::accept(const CloseTab &intent)
+{
+    if (intent.index >= state_.tab_count())
+    {
+        return;
+    }
+    // 最後の 1 つは状態を変えず、窓を閉じる印だけを立てる（D22）。
+    if (state_.tab_count() == 1)
+    {
+        state_ = state_.with_closing(true);
+        return;
+    }
+    // 脇のタブを閉じてもアクティブな文書は動かないので、一時の値も閉じない。
+    if (intent.index != state_.active_tab())
+    {
+        state_ = state_.with_closed(intent.index);
+        return;
+    }
+    leave_document();
+    state_ = state_.with_closed(intent.index);
+    enter_document();
 }
 
 // ---------------------------------------------------------------- IME（ADR 0014）
@@ -1856,6 +2023,9 @@ EditorFrame EditorController::frame() const
     const auto &document = state_.document();
     const auto save_state = save_state_of(document, state_.history().position());
     const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
+    DocumentView active{core::tab_title_for(document.path, save_state), document.path,
+                        document.encoding, save_state, state_.last_failure()};
+    auto tabs = tab_views(state_, active);
     return EditorFrame{visible_lines(),
                        CaretView{caret, caret_shape_for(state_.mode(), state_.vim().mode)},
                        state_.scroll().first_visible,
@@ -1867,13 +2037,15 @@ EditorFrame EditorController::frame() const
                        core::mode_label(state_.mode(), state_.vim().mode),
                        recording_name(),
                        composed(),
-                       DocumentView{core::tab_title_for(document.path, save_state), document.path,
-                                    document.encoding, save_state, state_.last_failure()},
+                       std::move(active),
                        core::status_items_for(caret, document.encoding, state_.line_ending()),
                        state_.settings(),
                        state_.settings_failure(),
                        command_line_view(),
                        state_.command_message(),
-                       command_palette_view()};
+                       command_palette_view(),
+                       std::move(tabs),
+                       state_.active_tab(),
+                       state_.closing()};
 }
 } // namespace nenenib::application

@@ -88,35 +88,28 @@ constexpr wchar_t measure_option[] = L"--measure";
     return {};
 }
 
-// 選択肢とその値を飛ばした最初の引数がファイル（ADR 0010 の決定 11）。
-[[nodiscard]] std::wstring first_file(const std::vector<std::wstring> &given)
+// 選択肢とその値を飛ばした引数がどれもファイル（ADR 0010 の決定 11・ADR 0056 の決定 13）。
+// 絶対パスにできない引数はタブにしない。開けるかどうかは controller の OpenDocument が決める。
+[[nodiscard]] std::vector<nenenib::application::OpenDocument>
+initial_documents(const std::vector<std::wstring> &given)
 {
+    std::vector<nenenib::application::OpenDocument> documents;
     std::size_t index = 0;
     while (index < given.size())
     {
-        if (given[index] != measure_option)
+        if (given[index] == measure_option)
         {
-            return given[index];
+            index += 2;
+            continue;
         }
-        index += 2;
+        const auto path = nenenib::adapters::win32::absolute_file_path(given[index]);
+        if (path.has_value())
+        {
+            documents.push_back(nenenib::application::OpenDocument{path.value()});
+        }
+        ++index;
     }
-    return {};
-}
-
-// NeNeNib.exe <path> で開く（ADR 0010 の決定 11）。最初の描画より前に意図として渡す。
-[[nodiscard]] std::optional<nenenib::application::OpenDocument>
-initial_document(const std::wstring &argument)
-{
-    if (argument.empty())
-    {
-        return std::nullopt;
-    }
-    const auto path = nenenib::adapters::win32::absolute_file_path(argument);
-    if (!path)
-    {
-        return std::nullopt;
-    }
-    return nenenib::application::OpenDocument{path.value()};
+    return documents;
 }
 
 int run(HINSTANCE instance)
@@ -140,7 +133,7 @@ int run(HINSTANCE instance)
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes},
-        initial_document(first_file(given)));
+        initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);

@@ -1,0 +1,23 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-09-29T12:30:00Z"},
+  "title": "NeNe Nib 複数タブ",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1200, "h": 200, "title": "決定済みの見た目: タブ 3 本（アクティブ・未保存・マウスを載せた状態）"},
+    "OverflowA.dc.html": {"x": 0, "y": 820, "w": 1200, "h": 200, "title": "あふれ 案 A: 幅 120 で止めて横へ送る ＋ 一覧ボタン"},
+    "OverflowB.dc.html": {"x": 0, "y": 1140, "w": 1200, "h": 200, "title": "あふれ 案 B: 全部を同じ幅で縮め続ける"},
+    "OverflowC.dc.html": {"x": 0, "y": 1460, "w": 1200, "h": 200, "title": "あふれ 案 C: 入る分だけ並べて残りは一覧にまとめる"},
+    "List.dc.html": {"x": 1280, "y": 820, "w": 420, "h": 520, "title": "一覧ボタンを押したとき（案 A・C 共通）"},
+    "CloseA.dc.html": {"x": 0, "y": 2280, "w": 1200, "h": 200, "title": "閉じるボタン 案 A: 全部のタブに出す"},
+    "CloseB.dc.html": {"x": 0, "y": 2600, "w": 1200, "h": 200, "title": "閉じるボタン 案 B: アクティブなタブとマウスを載せたタブだけ"}
+  },
+  "order": ["Main.dc.html", "OverflowA.dc.html", "OverflowB.dc.html", "OverflowC.dc.html", "List.dc.html", "CloseA.dc.html", "CloseB.dc.html"],
+  "notes": {
+    "group1": {"x": 0, "y": -300, "text": "1. いま決まっている見た目", "kind": "title1", "maxW": 1200},
+    "group2": {"x": 0, "y": 520, "text": "2. タブが帯に収まらないとき（14 個開いた場合）", "kind": "title1", "maxW": 1700},
+    "group3": {"x": 0, "y": 1980, "text": "3. 閉じるボタン × の出し方", "kind": "title1", "maxW": 1200}
+  },
+  "designSystems": []
+}

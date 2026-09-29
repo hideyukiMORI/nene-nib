@@ -90,7 +90,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/UserThemeValuesTests.cpp
     tests/unit/CommandPaletteTests.cpp
     tests/unit/ExSettingsTests.cpp
-    tests/unit/VimVisualBlockTests.cpp)
+    tests/unit/VimVisualBlockTests.cpp
+    tests/unit/TabsTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)

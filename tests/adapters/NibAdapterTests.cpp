@@ -379,6 +379,23 @@ void verify_absolute_path()
     expect(absolute.value().text().find(':') != std::string_view::npos,
            "the absolute path carries a drive");
 }
+// 同じファイルの判定（ADR 0056 の決定 5）。大文字と小文字だけが違う絶対パスは同じ、違う
+// ファイルは違う。短い名前（8.3）とリンクは解かない（ADR の「残る穴」）。
+void verify_same_file(const Win32FileAdapter &files)
+{
+    const auto lower = FilePath::parse("C:\\work\\note.txt");
+    const auto upper = FilePath::parse("C:\\WORK\\NOTE.TXT");
+    const auto other = FilePath::parse("C:\\work\\note2.txt");
+    expect(lower.has_value() && upper.has_value() && other.has_value(), "the paths parse");
+    if (!lower.has_value() || !upper.has_value() || !other.has_value())
+    {
+        return;
+    }
+    expect(files.same_file(lower.value(), upper.value()),
+           "paths that differ only in case are the same file");
+    expect(files.same_file(lower.value(), lower.value()), "a path is the same file as itself");
+    expect(!files.same_file(lower.value(), other.value()), "different paths are different files");
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -401,6 +418,7 @@ int main(int argc, char **argv)
     verify_code_pages(code_pages);
     verify_timing_marks(files);
     verify_absolute_path();
+    verify_same_file(files);
     verify_settings_codec();
     verify_bad_settings_fields();
     verify_bad_settings_values();

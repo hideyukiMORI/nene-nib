@@ -13,6 +13,10 @@ void verify_display_line();
 void verify_display_line_views();
 void verify_display_line_scope();
 
+// TabsTests.cpp
+void verify_tabs_contracts();
+void verify_tabs_scope();
+
 // VimDotTests.cpp
 void verify_vim_dot_contracts();
 void verify_vim_dot_scope();

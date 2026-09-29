@@ -71,3 +71,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0053](0053-vim-character-is-a-code-point-with-its-zero-width-followers.md) | Vim の 1 文字はコードポイント 1 つと直後に続く幅 0 のコードポイントの列で、判定は仮想桁の表を使う | 受理 |
 | [0054](0054-fixture-key-notation-has-one-table.md) | fixture の鍵の記法の表は oracle の 1 つで、C++ の表はそこから作る生成物 | 受理 |
 | [0055](0055-pasted-text-takes-the-document-line-ending.md) | 貼り付けた本文の改行は文書の改行の形に揃える | 受理 |
+| [0056](0056-tabs-park-inactive-documents-behind-the-active-one.md) | 複数タブは、アクティブな文書を今の形のまま持ち、ほかの文書は不変の束として脇に置く | 受理 |

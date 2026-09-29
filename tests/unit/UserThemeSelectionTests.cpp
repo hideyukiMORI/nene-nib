@@ -46,6 +46,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -215,7 +216,7 @@ void verify_theme_startup_notice()
     ScriptedCodePages pages;
     ScriptedSettings settings;
     ScriptedThemes themes{user_catalog(), fixed_text("invalid_name.v1.theme: invalid name")};
-    const auto initial = app::OpenDocument{FilePath::parse("initial.txt").value()};
+    const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{
         app::EditorPorts{appearance, clipboard, files, pages, settings, themes}, initial};
     auto frame = controller.frame();

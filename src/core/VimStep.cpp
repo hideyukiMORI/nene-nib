@@ -4457,6 +4457,17 @@ VimState vim_interrupted(const VimState &state)
     return input_discarded(state);
 }
 
+VimState vim_switched_document(const VimState &state, std::optional<VimWantedColumn> wanted_column,
+                               std::optional<VimCount> scroll_lines)
+{
+    // VISUAL と INSERT は文書の上の出来事なので持ち越さない（ADR 0056 の決定 4）。
+    VimState next = input_discarded(state);
+    next.mode = VimMode::normal;
+    next.wanted_column = wanted_column;
+    next.scroll_lines = scroll_lines;
+    return next;
+}
+
 VimState vim_register_stored(const VimState &state, char name, const VimRegister &value)
 {
     // 数字と `-` は置き換えるだけ（`:let @0=` に当たる・ADR 0050 の決定 7）。

@@ -4,18 +4,21 @@
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "CompositionView.hpp"
+#include "Document.hpp"
 #include "EditBoundary.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
 #include "FileFailure.hpp"
+#include "FilePath.hpp"
 #include "FilePort.hpp"
 #include "LineView.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
+#include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "VimBlockEdit.hpp"
@@ -37,6 +40,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::application
@@ -46,8 +50,8 @@ namespace nenenib::application
 class EditorController final
 {
   public:
-    explicit EditorController(EditorPorts ports,
-                              std::optional<OpenDocument> initial = std::nullopt);
+    // 起動引数のファイルは順にタブで開く（ADR 0056 の決定 13）。どれも通常の OpenDocument を通る。
+    explicit EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial = {});
     [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
     // 試験の harness が Vim の鍵を 1 つ打つ口（ADR 0048 の決定 8）。窓の VimKeyPress と違い、
     // 入力行が開いていれば再生と同じ command_key の写しで入力行へ入る。
@@ -109,6 +113,22 @@ class EditorController final
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
     void accept(const StoreVimRegister &intent);
+    // タブ（ADR 0056 の決定 3・4・6）。切り替えは leave_document → EditorState の置く・広げる →
+    // enter_document の順で、どの意図もこの 1 本を通る。
+    void accept(const NewTab &);
+    void accept(const SwitchTab &intent);
+    void accept(const StepTab &intent);
+    void accept(const CloseTab &intent);
+    // 開く（決定 5）の 3 つの枝の材料。同じファイルを開いているタブの帯の位置・何も書いていない
+    // 無題か・読んで復号した本文と文書。
+    [[nodiscard]] std::optional<std::size_t> open_tab_of(const core::FilePath &path) const;
+    [[nodiscard]] bool blank_untitled() const;
+    [[nodiscard]] std::expected<std::pair<core::TextBuffer, Document>, FileFailure>
+    read_document(const core::FilePath &path);
+    // 出ていく前に文書の上の一時の値を閉じる（入力行・検索の preview・IME の変換中の文字列）。
+    void leave_document();
+    // 入ってきた文書のスクロールを今の窓の行数で収め、NORMAL のキャレットを文字の上へ寄せる。
+    void enter_document();
     // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
     // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandLine &line);
