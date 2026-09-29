@@ -42,7 +42,7 @@ Nib の今の形（同じ probe の A 節）: core の engine は OS を知ら�
 - 契約 `--vim-clipboard`（決定 9）: **active**（CTest の既定の `nib_tests` と scope の指定実行・`eng/protected-diff.py` は新しい scope を記録する）。
 - core が OS に触れないこと: **active**（`eng/symbols.py`・ARC-003 / ARC-007。`vim_register_of_clipboard` は文字列の純関数）。
 - 閉じた enum の写し漏れ（`VimRegisterTarget::clipboard`）: **active**（`switch` の網羅性・CPP-002）。
-- OS との往復が controller の `step_vim` の 1 か所であること・`ClipboardPort` を呼ぶのが `copy_selection` `cut_selection` `paste_clipboard` と本 ADR の 2 行だけであること: **planned**（レビュー事項・`grep -n "ports_.clipboard" src/application/EditorController.cpp`）。
+- Vim のレジスタと OS との往復が controller の `step_vim` の 1 か所（`load_vim_clipboard` と `send_vim_clipboard`）であること・`ClipboardPort` を呼ぶのがそれと、前からある `copy_selection` `cut_selection` `paste_clipboard` と入力行の貼り付け（`accept(PasteCommand)`）だけであること: **planned**（レビュー事項・`grep -n "ports_.clipboard" src/application/EditorController.cpp`）。
 - fixture: **不能**（oracle が実機のクリップボードを書き換える・probe で実測）。
 
 ## 結果
