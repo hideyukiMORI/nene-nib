@@ -81,6 +81,9 @@ class EditorController final
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
     void begin_intent(bool keeps_message);
+    // Ctrl+Tab の歩きの途中に歩きを続けない入口が来たら、写す前に確定する（ADR 0058 の決定 4）。
+    // keeps_walk は歩きを続ける意図か。Vim の鍵は歩きを続けない。
+    void settle_tab_walk_before(bool keeps_walk);
     void accept(const InsertText &intent);
     void accept(const MoveCaret &intent);
     void accept(const PlaceCaret &intent);

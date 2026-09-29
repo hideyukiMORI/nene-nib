@@ -421,6 +421,20 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return views;
 }
 
+// Ctrl+Tab の歩きを続けたまま受け取れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の
+// 寸法・外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の
+// 意図は写す前に歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
+[[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<WalkRecentTab>(intent) ||
+           std::holds_alternative<SettleRecentTab>(intent) ||
+           std::holds_alternative<PointTitleBar>(intent) ||
+           std::holds_alternative<ScrollTabs>(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<VisibleLines>(intent) ||
+           std::holds_alternative<RefreshAppearance>(intent);
+}
+
 } // namespace
 
 EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
@@ -477,6 +491,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 
 EditorFrame EditorController::apply(const EditorIntent &intent)
 {
+    settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
     // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
@@ -495,6 +510,7 @@ EditorFrame EditorController::apply(const EditorIntent &intent)
 // command_key の 1 か所を通り、打った鍵なので <Esc> は取消のまま。
 EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 {
+    settle_tab_walk_before(false);
     begin_intent(false);
     static_cast<void>(deliver_vim_key(key));
     return frame();
@@ -507,6 +523,7 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
     for (const core::VimKey &key : keys)
     {
+        settle_tab_walk_before(false);
         begin_intent(false);
         if (deliver_vim_key(key).has_value())
         {
@@ -514,6 +531,17 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
         }
     }
     return frame();
+}
+
+// 歩いている間に歩きを続けない意図や Vim の鍵が来たら、写す前に SettleRecentTab と同じ確定を
+// 通す（ADR 0058 の決定 4）。controller の入口はどれもここを通るので、窓を経ない経路でも確定が
+// 漏れない。1 打鍵ごとに通るので、歩いていないときは欄を 1 つ読むだけで抜ける。
+void EditorController::settle_tab_walk_before(bool keeps_walk)
+{
+    if (state_.tab_walking() && !keeps_walk)
+    {
+        accept(SettleRecentTab{});
+    }
 }
 
 void EditorController::begin_intent(bool keeps_message)

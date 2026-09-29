@@ -450,19 +450,6 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
     std::unreachable();
 }
 
-// Ctrl+Tab の歩きを続けたまま送れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の寸法・
-// 外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の意図の前に
-// 窓は歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
-[[nodiscard]] bool keeps_tab_walk(const application::EditorIntent &intent) noexcept
-{
-    return std::holds_alternative<application::WalkRecentTab>(intent) ||
-           std::holds_alternative<application::SettleRecentTab>(intent) ||
-           std::holds_alternative<application::PointTitleBar>(intent) ||
-           std::holds_alternative<application::ScrollTabs>(intent) ||
-           std::holds_alternative<application::TitleBarWidth>(intent) ||
-           std::holds_alternative<application::VisibleLines>(intent) ||
-           std::holds_alternative<application::RefreshAppearance>(intent);
-}
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
@@ -1256,13 +1243,6 @@ void EditorWindow::restore_ime()
 
 void EditorWindow::send(const application::EditorIntent &intent)
 {
-    // 歩いている間に来たほかの意図（入力行を開く鍵・文字・クリックなど）の前に、歩きを確定する
-    // （ADR 0058 の決定 4）。送る口はこの 1 か所なので漏れが無い。確定は controller へ直に渡し、
-    // send へ戻らないので再入しない。
-    if (controller_.tab_walking() && !keeps_tab_walk(intent))
-    {
-        static_cast<void>(controller_.apply(application::SettleRecentTab{}));
-    }
     const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent) ||
                              std::holds_alternative<application::SubmitCommand>(intent) ||
                              std::holds_alternative<application::ActivateCommandChoice>(intent);

@@ -1063,7 +1063,8 @@ void verify_walk_recent_tabs()
     applied(controller, SettleRecentTab{});
 }
 
-// 歩きの途中のクリックと gt は歩きを終え、着いたタブを先頭へ動かす（決定 2）。gt は帯の位置の順。
+// 歩きの途中のクリックと gt は、先に歩きを確定してから（決定 4）、着いたタブを先頭へ動かす
+// （決定 2）。gt は帯の位置の順。
 void verify_walk_interrupted()
 {
     Editing editing;
@@ -1072,20 +1073,20 @@ void verify_walk_interrupted()
     applied(controller, WalkRecentTab{TabStep::next});
     const auto clicked = controller.apply(SwitchTab{0});
     expect(first_line(clicked) == "a" && !controller.tab_walking() &&
-               recent_bodies(controller) == "adcb",
-           "a click during the walk ends it and moves the clicked tab to the front");
+               recent_bodies(controller) == "acdb",
+           "a click during the walk settles it and moves the clicked tab to the front");
     applied(controller, WalkRecentTab{TabStep::next});
-    applied(controller, SwitchTab{3});
-    expect(!controller.tab_walking() && recent_bodies(controller) == "dacb",
+    applied(controller, SwitchTab{2});
+    expect(!controller.tab_walking() && recent_bodies(controller) == "cadb",
            "a click on the tab reached by the walk settles there");
     applied(controller, SelectEditMode{EditMode::vim});
     applied(controller, WalkRecentTab{TabStep::next});
     vim_normal(controller, "gt");
     expect(first_line(controller.frame()) == "b" && !controller.tab_walking() &&
-               recent_bodies(controller) == "bdac",
+               recent_bodies(controller) == "bacd",
            "gt during the walk goes by the band from the reached tab and ends the walk");
     vim_normal(controller, "gT");
-    expect(first_line(controller.frame()) == "a" && recent_bodies(controller) == "abdc",
+    expect(first_line(controller.frame()) == "a" && recent_bodies(controller) == "abcd",
            "gT keeps the band order and moves the tab it reaches to the front");
 }
 
@@ -1164,6 +1165,58 @@ void verify_settle_without_walk()
                settled.command_message.has_value() && !controller.tab_walking(),
            "settling without a walk changes nothing and keeps the Vim message");
     expect(recent_bodies(controller) == "dcbaa", "and the order stays as it was");
+}
+
+// 歩きを続けない意図は、controller が写す前に歩きを確定する（決定 4）。窓を経ずに controller を
+// 直に叩いても確定は漏れない。帯の上のマウスと窓の行数は歩きを続ける。
+void verify_walk_settles_before_other_intents()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_four_tabs(controller);
+    applied(controller, WalkRecentTab{TabStep::next});
+    applied(controller, PointTitleBar{TitleBarTarget{TitleBarHit::tab, 1}});
+    applied(controller, VisibleLines{12});
+    const auto third = controller.apply(WalkRecentTab{TabStep::next});
+    expect(first_line(third) == "b" && controller.tab_walking(),
+           "hovering the band and resizing during the walk keep it going to the third tab");
+    applied(controller, SettleRecentTab{});
+    applied(controller, WalkRecentTab{TabStep::next});
+    const auto typed = controller.apply(InsertText{"x"});
+    expect(first_line(typed) == "dx" && !controller.tab_walking(),
+           "typing during the walk settles it and edits the reached tab");
+    expect(first_line(controller.apply(WalkRecentTab{TabStep::next})) == "b",
+           "the next walk after typing goes back to the tab the walk left");
+    applied(controller, SettleRecentTab{});
+    expect(recent_bodies(controller) == "bdxca", "and the order is the settled one");
+    applied(controller, SelectEditMode{EditMode::vim});
+    applied(controller, WalkRecentTab{TabStep::next});
+    vim_replay(controller, "0");
+    expect(!controller.tab_walking() && first_line(controller.frame()) == "dx" &&
+               recent_bodies(controller) == "dxbca",
+           "a Vim key during the walk settles it");
+    applied(controller, WalkRecentTab{TabStep::next});
+    vim_normal(controller, "0");
+    expect(!controller.tab_walking() && recent_bodies(controller) == "bdxca",
+           "Vim keys given as a list settle the walk too");
+}
+
+// 歩いていないときは、切り替え・開く・閉じる以外の意図で使った順は変わらない（決定 2・4）。
+void verify_order_kept_without_walk()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_four_tabs(controller);
+    applied(controller, SwitchTab{1});
+    applied(controller, InsertText{"y"});
+    applied(controller, PointTitleBar{TitleBarTarget{TitleBarHit::tab, 3}});
+    applied(controller, VisibleLines{12});
+    applied(controller, SettleRecentTab{});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "0");
+    vim_normal(controller, "l");
+    expect(!controller.tab_walking() && recent_bodies(controller) == "bydca",
+           "intents other than switching, opening and closing keep the order");
 }
 
 // Vim の 3 本のタブ（本文 alpha / bravo / charlie・キャレットはどれも行頭）。アクティブは先頭。
@@ -1508,6 +1561,8 @@ void verify_tabs_contracts()
     verify_recent_after_open_and_close();
     verify_recent_after_startup();
     verify_settle_without_walk();
+    verify_walk_settles_before_other_intents();
+    verify_order_kept_without_walk();
     verify_vim_tab_keys();
     verify_vim_tab_keys_after_operator();
     verify_vim_tab_keys_repeat();
