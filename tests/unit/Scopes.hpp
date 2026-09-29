@@ -21,6 +21,10 @@ void verify_vim_dot_scope();
 void verify_vim_macro_contracts();
 void verify_vim_macro_scope();
 
+// VimClipboardTests.cpp
+void verify_vim_clipboard_contracts();
+void verify_vim_clipboard_scope();
+
 // VimSearchTests.cpp
 void verify_vim_search_contracts();
 void verify_vim_search_scope();
