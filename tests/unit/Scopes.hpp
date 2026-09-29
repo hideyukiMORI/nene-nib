@@ -17,6 +17,10 @@ void verify_display_line_scope();
 void verify_tabs_contracts();
 void verify_tabs_scope();
 
+// SessionTests.cpp
+void verify_session_contracts();
+void verify_session_scope();
+
 // VimDotTests.cpp
 void verify_vim_dot_contracts();
 void verify_vim_dot_scope();

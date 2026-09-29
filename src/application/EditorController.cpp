@@ -23,6 +23,9 @@
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
+#include "Session.hpp"
+#include "SessionEnd.hpp"
+#include "SessionTab.hpp"
 #include "StatusItems.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
@@ -421,6 +424,101 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return views;
 }
 
+// 帯の 1 本ぶんの覚える値（ADR 0059 の決定 1）。パスの無いタブ（無題）は値なし（D9）。未保存の
+// 変更があってもパスがあれば入る。カーソルは行と桁、画面の位置は先頭の行。
+[[nodiscard]] std::optional<SessionTab> session_tab_of(const Document &document,
+                                                       const core::TextBuffer &text,
+                                                       const core::Selection &selection,
+                                                       core::LineNumber first_visible)
+{
+    if (!document.path.has_value())
+    {
+        return std::nullopt;
+    }
+    return SessionTab{document.path.value(), text.position_of(selection.caret), first_visible, 0};
+}
+
+// 帯の順の各タブの覚える値。アクティブな文書は今の欄から、脇に置いたタブは束から読む。
+[[nodiscard]] std::vector<std::optional<SessionTab>> band_session_tabs(const EditorState &state)
+{
+    const std::optional<SessionTab> active = session_tab_of(
+        state.document(), state.text(), state.selection(), state.scroll().first_visible);
+    std::vector<std::optional<SessionTab>> band;
+    band.reserve(state.tab_count());
+    for (const auto &tab : state.parked())
+    {
+        if (band.size() == state.active_tab())
+        {
+            band.push_back(active);
+        }
+        band.push_back(
+            session_tab_of(tab->document, tab->text, tab->selection, tab->first_visible));
+    }
+    if (band.size() == state.active_tab())
+    {
+        band.push_back(active);
+    }
+    return band;
+}
+
+// 使った順の順位を、一覧に入るタブだけで 0 から詰め直す（ADR 0059 の決定 1）。
+void rank_session_tabs(std::vector<std::optional<SessionTab>> &band,
+                       const core::TabRecency &recency)
+{
+    std::size_t rank = 0;
+    for (const std::size_t position : recency.order())
+    {
+        if (position >= band.size())
+        {
+            continue;
+        }
+        std::optional<SessionTab> &tab = band.at(position);
+        if (tab.has_value())
+        {
+            tab.value().recency = rank;
+            ++rank;
+        }
+    }
+}
+
+// 状態から前回のタブの一覧を作る純粋な読み取り（ADR 0059 の決定 1）。active はアクティブなタブの
+// 一覧の中の位置で、アクティブが無題なら帯の上で右隣（無ければ左隣）のパスのあるタブ。一覧が
+// 空なら 0。
+[[nodiscard]] Session session_of(const EditorState &state)
+{
+    std::vector<std::optional<SessionTab>> band = band_session_tabs(state);
+    rank_session_tabs(band, state.recency());
+    Session session{{}, 0};
+    std::size_t position = 0;
+    for (const std::optional<SessionTab> &tab : band)
+    {
+        if (tab.has_value())
+        {
+            session.active += position < state.active_tab() ? 1U : 0U;
+            session.tabs.push_back(tab.value());
+        }
+        ++position;
+    }
+    if (!session.tabs.empty() && session.active == session.tabs.size())
+    {
+        session.active = session.tabs.size() - 1;
+    }
+    return session;
+}
+
+// 窓が閉じていく理由ごとに覚える一覧（ADR 0059 の決定 3）。最後の 1 本を使う人が閉じたときは空。
+[[nodiscard]] Session ended_session(const EditorState &state, SessionEnd reason)
+{
+    switch (reason)
+    {
+    case SessionEnd::window_closed:
+        return session_of(state);
+    case SessionEnd::last_tab_closed:
+        return Session{{}, 0};
+    }
+    std::unreachable();
+}
+
 // Ctrl+Tab の歩きを続けたまま受け取れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の
 // 寸法・外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の
 // 意図は写す前に歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
@@ -493,14 +591,16 @@ EditorFrame EditorController::apply(const EditorIntent &intent)
 {
     settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
-    // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。
+    // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。窓が閉じていくときの一覧の
+    // 書き出しも同じ（ADR 0059 の決定 3）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
                  std::holds_alternative<CancelComposition>(intent) ||
                  std::holds_alternative<TitleBarWidth>(intent) ||
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<PointTitleBar>(intent) ||
-                 std::holds_alternative<SettleRecentTab>(intent));
+                 std::holds_alternative<SettleRecentTab>(intent) ||
+                 std::holds_alternative<EndSession>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
@@ -1963,6 +2063,13 @@ void EditorController::accept(const WalkRecentTab &intent)
     leave_document();
     state_ = state_.with_walked(destination.value());
     enter_document();
+}
+
+// 窓が閉じていく（ADR 0059 の決定 3）。一覧を作るのはここだけで、1 打鍵の道には無い。書けなくても
+// 窓は閉じていく途中なので、状態を変えず何も出さない。
+void EditorController::accept(const EndSession &intent)
+{
+    static_cast<void>(ports_.session.write(ended_session(state_, intent.reason)));
 }
 
 void EditorController::accept(const SettleRecentTab &)

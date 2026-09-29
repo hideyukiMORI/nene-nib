@@ -7,6 +7,7 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
 #include "ThemeCatalog.hpp"
@@ -26,7 +27,7 @@ class Editing final
                      nenenib::core::ThemeCatalog themes = nenenib::core::ThemeCatalog::builtins())
         : settings_(std::move(reading)), themes_(std::move(themes)),
           controller_(nenenib::application::EditorPorts{appearance_, clipboard_, files_,
-                                                        code_pages_, settings_, themes_})
+                                                        code_pages_, settings_, themes_, session_})
     {
     }
 
@@ -55,6 +56,11 @@ class Editing final
         return files_;
     }
 
+    [[nodiscard]] ScriptedSession &session() noexcept
+    {
+        return session_;
+    }
+
     [[nodiscard]] ScriptedCodePages &code_pages() noexcept
     {
         return code_pages_;
@@ -67,6 +73,7 @@ class Editing final
     ScriptedCodePages code_pages_;
     ScriptedSettings settings_;
     ScriptedThemes themes_;
+    ScriptedSession session_;
     EditorController controller_;
 };
 } // namespace nenenib::tests
