@@ -1763,3 +1763,21 @@ FR-003 / ARC-001 / ARC-012 / CPP-002/004/011 / QLT-001/012 / CNF-010/011 を自�
 対象を限定した理由: 差分は core の鍵の表・動作と移動の値・語の走査と `VimStep` の移動の分岐と、単体テストと fixture である。renderer・ui/win32・application・adapters の経路は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001 / CPP-002/011/012 / QLT-001/012 / CNF-010/011 を自己レビュー。WORD のための 2 つ目の歩き方は無い（ARC-001）・動作の表の欠落と重複は `every_action_has_one_row` の static_assert、移動の値の網羅は `switch` が守る（CPP-002）・鍵と分類は表（CPP-012）・`VimWordWalk` は 1 ファイル 1 型（CPP-011）。
+
+### 5-bl. 回数つきの語の移動が本文の端に当たったとき（Issue #224・2026-09-29）
+
+ブランチ `fix/224-counted-word-motion-at-text-edge`（main `efe0cd3` から・`afefd23`）。先に fixture `word-edge-*` 34 件（後ろ向き: 本文 `\nabc` と `abc def` で `2b 9b d2b d9b y2b c2bX<Esc> d2B d2ge d9ge 2ge` と回数がちょうど足りる対照 `d2b`・前向き: `9w d9w y9w c9wX<Esc> 9e d9e 9W d9W` と行をまたぐ `d9w d9e`・対照 `d2w d2e`）を本物の Vim から生成し、直す前の Nib で既定の実行が **20 of 18127 checks failed**（`word-edge-*` のうち 1 行目が空行の本文でオペレータを付けた 7 件 `d2b d9b y2b c2b d2B d2ge d9ge` の本文とレジスタ）で落ちることを確かめた。Vim の実測は `bck_word` / `bckend_word` の読みどおりで、周の始めに本文の先頭にいたとき（空行で止まった次の周）だけ FAIL になり、裸の移動は着地まで動いてビープし、オペレータは打ち消されてキャレットだけ着地へ動く。周の途中で本文の先頭に当たったときは OK（`wd2b` は `abc ` を消す）。前向きの `w e W` は回数の途中で本文の終わりに当たってもオペレータは効き（Vim の `nv_wordcmd` は FAIL をオペレータの無いときだけ見る）、直す前の Nib と一致していた。語の歩き方は 1 本のまま、`vim_previous_word` / `vim_previous_word_end` が着地と失敗の印 `VimMotionLanding`（`std::optional<VimRepeatFailure>`）を返し、`VimStep` は裸の移動で失敗の印を添え（`moved_or_failed`）、オペレータでは範囲を作らず着地へ動く（`cancelled_at_landing`）。application・ui・adapters・eng は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | 対象（`word-edge-*` を再生・`vim_previous_word` の失敗の印の単体テスト 4 件）。直す前 **20 of 18127 checks failed** → 直した後 **18131 checks 成功** |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only word-edge-` × 2 | 34 measured / 1789 reused。2 回で `VimFixtures.hpp`（`EB587152…05CE7DA4`）と `fixtures.json`（`36F693B0…24144EDC`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`efe0cd3..afefd23`（この節を足す前のコミット）・`fixtures 1789 -> 1823 / metadata 2 / deleted 0 / changed 0 / added 34`・保護対象は `none`・`scopes 24 / same 24 / 未測 0`（`--allow` 不要） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の語の後ろ向きの走査の戻り値と `VimStep` の移動・オペレータの失敗の扱いと、単体テストと fixture である。renderer・ui/win32・application・adapters の経路は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / CPP-002/004/005/011 / QLT-001/012 / CNF-010/011 を自己レビュー。端のための 2 つ目の歩き方は無い（ARC-001）・`landing_of` の移動の値は `switch` で網羅（CPP-002）・失敗は `std::optional<VimRepeatFailure>` で返し `value()` で読む（CPP-004 / CPP-005）・`VimMotionLanding` は 1 ファイル 1 型（CPP-011）。
