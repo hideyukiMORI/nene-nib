@@ -48,8 +48,10 @@
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 #include "VimVisualRange.hpp"
+#include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
+#include "VimWordWalk.hpp"
 #include "VisibleLines.hpp"
 
 #include "../vim/VimFixtures.hpp"
@@ -114,7 +116,9 @@ using nenenib::core::VimRegisterKind;
 using nenenib::core::VimSelect;
 using nenenib::core::VimState;
 using nenenib::core::VimViewport;
+using nenenib::core::VimWordClass;
 using nenenib::core::VimWordStop;
+using nenenib::core::VimWordWalk;
 
 // キャレットの桁をバイトで測り直す。Vim の col('.') はバイト位置で、表示値の桁は code point。
 // oracle の本文は LF で区切られ、行の中の '\r' は文字である（ADR 0036 の決定 4）。TextBuffer へ
@@ -349,15 +353,18 @@ void verify_vim_word_motions()
     const auto text = TextBuffer::from_utf8("alpha beta\n\ngamma");
     expect(text.has_value(), "the sample buffer parses");
     const auto &buffer = text.value();
-    expect(vim_next_word(buffer, Offset{0}, 2, VimWordStop::across_lines) == Offset{11},
+    expect(vim_next_word(buffer, Offset{0}, VimWordWalk{2, VimWordClass::word},
+                         VimWordStop::across_lines) == Offset{11},
            "two w land on the empty line, which is a word of its own");
-    expect(vim_next_word(buffer, Offset{6}, 1, VimWordStop::at_line_end) == Offset{10},
+    expect(vim_next_word(buffer, Offset{6}, VimWordWalk{1, VimWordClass::word},
+                         VimWordStop::at_line_end) == Offset{10},
            "an operator's w stops at the end of the line it started on");
-    expect(vim_next_word(buffer, Offset{12}, 3, VimWordStop::across_lines) == Offset{17},
+    expect(vim_next_word(buffer, Offset{12}, VimWordWalk{3, VimWordClass::word},
+                         VimWordStop::across_lines) == Offset{17},
            "w runs out at the end of the buffer");
-    expect(vim_previous_word(buffer, Offset{12}, 2) == Offset{6},
+    expect(vim_previous_word(buffer, Offset{12}, VimWordWalk{2, VimWordClass::word}) == Offset{6},
            "two b walk back over the empty line");
-    expect(vim_previous_word(buffer, Offset{0}, 1) == Offset{0},
+    expect(vim_previous_word(buffer, Offset{0}, VimWordWalk{1, VimWordClass::word}) == Offset{0},
            "b at the start of the buffer stays");
 }
 

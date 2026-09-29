@@ -70,6 +70,7 @@
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
+#include "VimWordWalk.hpp"
 #include "VirtualColumn.hpp"
 
 #include <algorithm>
@@ -521,12 +522,20 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return vim_first_non_blank(text, text.line_start(target));
 }
 
+// H M L の着地（画面の行の最初の非空白）。
+[[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, VimScreenPosition position,
+                                            std::size_t count)
+{
+    return vim_first_non_blank(view.text, view.text.line_start(screen_line(view, position, count)));
+}
+
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion)
 {
     const std::size_t count = resolved_motion_count(state, view.text, motion);
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
+    const VimWordWalk walk{count, vim_motion_word_class(motion)};
     switch (motion)
     {
     case VimMotion::left:
@@ -547,24 +556,27 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return rested_in(text, text.line_end(line_below(text, line, count - single_step)),
                          state.mode);
     case VimMotion::next_word:
-        return rested_in(text, vim_next_word(text, caret, count, VimWordStop::across_lines),
+    case VimMotion::next_big_word:
+        return rested_in(text, vim_next_word(text, caret, walk, VimWordStop::across_lines),
                          state.mode);
     case VimMotion::previous_word:
-        return vim_previous_word(text, caret, count);
+    case VimMotion::previous_big_word:
+        return vim_previous_word(text, caret, walk);
     case VimMotion::word_end:
     case VimMotion::word_end_for_change:
-        return rested_in(text,
-                         vim_word_end(text, caret, count, VimWordEndStop::enter_the_next_word),
+    case VimMotion::big_word_end:
+    case VimMotion::big_word_end_for_change:
+        return rested_in(text, vim_word_end(text, caret, walk, VimWordEndStop::enter_the_next_word),
                          state.mode);
+    case VimMotion::previous_word_end:
+    case VimMotion::previous_big_word_end:
+        return vim_previous_word_end(text, caret, walk);
     case VimMotion::screen_top:
-        return vim_first_non_blank(
-            text, text.line_start(screen_line(view, VimScreenPosition::top, count)));
+        return screen_first_non_blank(view, VimScreenPosition::top, count);
     case VimMotion::screen_middle:
-        return vim_first_non_blank(
-            text, text.line_start(screen_line(view, VimScreenPosition::middle, count)));
+        return screen_first_non_blank(view, VimScreenPosition::middle, count);
     case VimMotion::screen_bottom:
-        return vim_first_non_blank(
-            text, text.line_start(screen_line(view, VimScreenPosition::bottom, count)));
+        return screen_first_non_blank(view, VimScreenPosition::bottom, count);
     case VimMotion::document_first:
     case VimMotion::document_last:
         return vim_first_non_blank(text, text.line_start(document_line(text, count)));
@@ -608,6 +620,12 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::previous_line:
     case VimMotion::wrap_right:
     case VimMotion::wrap_left:
+    case VimMotion::next_big_word:
+    case VimMotion::previous_big_word:
+    case VimMotion::big_word_end:
+    case VimMotion::big_word_end_for_change:
+    case VimMotion::previous_word_end:
+    case VimMotion::previous_big_word_end:
         return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     }
     std::unreachable();
@@ -643,6 +661,12 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::previous_line:
     case VimMotion::wrap_right:
     case VimMotion::wrap_left:
+    case VimMotion::next_big_word:
+    case VimMotion::previous_big_word:
+    case VimMotion::big_word_end:
+    case VimMotion::big_word_end_for_change:
+    case VimMotion::previous_word_end:
+    case VimMotion::previous_big_word_end:
         return true;
     case VimMotion::line_start:
     case VimMotion::first_non_blank:
@@ -760,12 +784,34 @@ character_search_position(const VimEditorView &view, const VimState &state,
     std::unreachable();
 }
 
+// e E の範囲の終わりの止まり方。cw cW の特例は語の末尾にいたら次の語へ渡らない。
+[[nodiscard]] VimWordEndStop word_end_stop_for(VimMotion motion) noexcept
+{
+    const bool for_change =
+        motion == VimMotion::word_end_for_change || motion == VimMotion::big_word_end_for_change;
+    return for_change ? VimWordEndStop::stay_in_this_word : VimWordEndStop::enter_the_next_word;
+}
+
+// ge gE の範囲（inclusive・キャレットの文字まで含む）。本文の先頭で動けなければ Vim は
+// オペレータを打ち消す（clearopbeep）ので範囲が無い（Issue #222）。
+[[nodiscard]] std::optional<VimMotionRange> previous_word_end_range(const TextBuffer &text,
+                                                                    Offset caret, VimWordWalk walk)
+{
+    const Offset destination = vim_previous_word_end(text, caret, walk);
+    if (destination == caret)
+    {
+        return std::nullopt;
+    }
+    return characters_between(destination, inclusive_end(text, caret));
+}
+
 [[nodiscard]] std::optional<VimMotionRange>
 motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, VimOperator operation)
 {
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
+    const VimWordWalk walk{count, vim_motion_word_class(motion)};
     switch (motion)
     {
     case VimMotion::down:
@@ -785,18 +831,21 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::line_end:
         return to_line_end(text, caret, count);
     case VimMotion::next_word:
+    case VimMotion::next_big_word:
         return characters_between(caret,
-                                  vim_next_word(text, caret, count, VimWordStop::at_line_end));
+                                  vim_next_word(text, caret, walk, VimWordStop::at_line_end));
     case VimMotion::previous_word:
-        return characters_between(vim_previous_word(text, caret, count), caret);
+    case VimMotion::previous_big_word:
+        return characters_between(vim_previous_word(text, caret, walk), caret);
     case VimMotion::word_end:
-        return characters_between(
-            caret, inclusive_end(text, vim_word_end(text, caret, count,
-                                                    VimWordEndStop::enter_the_next_word)));
+    case VimMotion::big_word_end:
     case VimMotion::word_end_for_change:
+    case VimMotion::big_word_end_for_change:
         return characters_between(
-            caret, inclusive_end(
-                       text, vim_word_end(text, caret, count, VimWordEndStop::stay_in_this_word)));
+            caret, inclusive_end(text, vim_word_end(text, caret, walk, word_end_stop_for(motion))));
+    case VimMotion::previous_word_end:
+    case VimMotion::previous_big_word_end:
+        return previous_word_end_range(text, caret, walk);
     case VimMotion::screen_top:
         return screen_range(view, VimScreenPosition::top, count, line);
     case VimMotion::screen_middle:
@@ -1446,16 +1495,18 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     return completed_character_search(state, view, search, VimCharacterSearchInvocation::repeat);
 }
 
-// cw の特例（Vim の nv_wordcmd）。語の上（非空白）では ce の範囲になり、空白の上は dw と同じ。
+// cw cW の特例（Vim の nv_wordcmd）。語の上（非空白）では ce cE の範囲になり、空白の上は
+// dw dW と同じ。
 [[nodiscard]] VimMotion motion_for_change(const TextBuffer &text, Offset caret,
                                           VimOperator operation, VimMotion motion)
 {
-    if (operation != VimOperator::change || motion != VimMotion::next_word ||
-        !word_under_caret(text, caret))
+    const bool word_motion = motion == VimMotion::next_word || motion == VimMotion::next_big_word;
+    if (operation != VimOperator::change || !word_motion || !word_under_caret(text, caret))
     {
         return motion;
     }
-    return VimMotion::word_end_for_change;
+    return motion == VimMotion::next_word ? VimMotion::word_end_for_change
+                                          : VimMotion::big_word_end_for_change;
 }
 
 // 行単位の移動の範囲の戻り先（ADR 0052 の決定 8）。先頭行にあるのはキャレットと着地の小さい方
@@ -3831,17 +3882,26 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
+// g の後ろの鍵（gg ge gE）。表に無い鍵は g を打ち消す（Issue #222）。
+[[nodiscard]] VimStep g_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
+{
+    const std::optional<VimAction> action = std::holds_alternative<VimCharacter>(key)
+                                                ? vim_g_action_for(std::get<VimCharacter>(key).code)
+                                                : std::nullopt;
+    if (action.has_value())
+    {
+        return completed_prefix(state, view, action.value());
+    }
+    return VimStep{finished_input_wait(state), VimNoEffect{}};
+}
+
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimPrefix prefix, VimKey key)
 {
     switch (prefix)
     {
     case VimPrefix::g:
-        if (std::holds_alternative<VimCharacter>(key) && std::get<VimCharacter>(key).code == U'g')
-        {
-            return completed_prefix(state, view, VimAction::move_document_first);
-        }
-        return VimStep{finished_input_wait(state), VimNoEffect{}};
+        return g_prefix_step(state, view, key);
     case VimPrefix::r:
         return replacement_key(state, view, key);
     case VimPrefix::q:

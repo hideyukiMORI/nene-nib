@@ -31,6 +31,11 @@ constexpr int stepped_past_end = -1;
 constexpr int word_stopped = 0;
 constexpr int word_at_empty_line = 1;
 constexpr int word_overshot = 2;
+// 手前の語の末尾へ 1 つ戻った結果（Vim の bckend_word の 1 周）。最初の 1 歩で本文の先頭に
+// 当たったときだけ失敗で、途中で当たったら・行をまたいで止まったらそこで回数ごと終わる。
+constexpr int end_failed = 0;
+constexpr int end_finished = 1;
+constexpr int end_continues = 2;
 
 // Vim の utf_class_tab のうち、この縦切りが扱う範囲（Issue #22 で本物の Vim と突き合わせた）。
 // 表に無い非 ASCII は語の文字（2）に落ちる。全角の英数字もそちら（'ＡＢabc' が 1 語＝実測）。
@@ -299,18 +304,53 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
     return false;
 }
 
-// bckend_word の「この語の始まりより前へ」。行をまたぐか本文の先頭に着いたら偽（そこが答え）。
-[[nodiscard]] bool retreated_before_run(const TextBuffer &text, VimScanPoint &point,
-                                        std::uint32_t group)
+// bckend_word の 1 歩戻り（dec_cursor）。本文の先頭に着いたか、at_line_end で行をまたいだら偽
+// （そこが答え＝Vim の return OK）。
+[[nodiscard]] bool retreated_one(const TextBuffer &text, VimScanPoint &point, VimWordStop stop)
 {
-    while (class_at(point) == group)
+    const int stepped = step_backward(text, point);
+    return stepped == stepped_inside ||
+           (stepped == stepped_over_line && stop == VimWordStop::across_lines);
+}
+
+// bckend_word の 1 周の後半。この語の始まりより前へ戻り、空白を戻って手前の語の末尾に着く。
+// 空白の途中の空行ではそこで止まる。偽ならそこで回数ごと終わる（Vim の return OK）。
+[[nodiscard]] bool retreated_to_previous_end(const TextBuffer &text, VimScanPoint &point,
+                                             std::uint32_t group, VimWordStop stop)
+{
+    while (group != blank_group && class_at(point) == group)
     {
-        if (step_backward(text, point) != stepped_inside)
+        if (!retreated_one(text, point, stop))
+        {
+            return false;
+        }
+    }
+    while (class_at(point) == blank_group && !at_empty_line(point))
+    {
+        if (!retreated_one(text, point, stop))
         {
             return false;
         }
     }
     return true;
+}
+
+// 手前の語の末尾へ 1 つ（Vim の bckend_word の 1 周）。at_line_end は eol=TRUE（テキスト
+// オブジェクト）、across_lines は eol=FALSE（ge gE）。空白を戻る途中の空行ではそこで止まり、
+// 回数の残りは次の周が数える。
+[[nodiscard]] int backward_word_end(const TextBuffer &text, VimScanPoint &point, VimWordStop stop)
+{
+    const std::uint32_t group = class_at(point);
+    const int stepped = step_backward(text, point);
+    if (stepped == stepped_past_end)
+    {
+        return end_failed;
+    }
+    if (stepped == stepped_over_line && stop == VimWordStop::at_line_end)
+    {
+        return end_finished;
+    }
+    return retreated_to_previous_end(text, point, group, stop) ? end_continues : end_finished;
 }
 
 // end_word の empty=TRUE。空白を飛ぶ途中に空行があればそこで止まる（Vim の goto finished）。
@@ -349,13 +389,13 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
 }
 } // namespace
 
-Offset vim_next_word(const TextBuffer &text, Offset caret, std::size_t count, VimWordStop stop)
+Offset vim_next_word(const TextBuffer &text, Offset caret, VimWordWalk walk, VimWordStop stop)
 {
-    VimScanPoint point = scan_point(text, caret, VimWordClass::word);
-    for (std::size_t step = 0; step < count; ++step)
+    VimScanPoint point = scan_point(text, caret, walk.kind);
+    for (std::size_t step = 0; step < walk.count; ++step)
     {
         // 行末で止まる特例が効くのは最後の 1 回だけ（Vim の fwd_word の count == 0 の条件）。
-        const VimWordStop limit = step + 1 == count ? stop : VimWordStop::across_lines;
+        const VimWordStop limit = step + 1 == walk.count ? stop : VimWordStop::across_lines;
         if (!forward_word(text, point, limit))
         {
             break;
@@ -364,11 +404,11 @@ Offset vim_next_word(const TextBuffer &text, Offset caret, std::size_t count, Vi
     return offset_of(text, point);
 }
 
-Offset vim_word_end(const TextBuffer &text, Offset caret, std::size_t count, VimWordEndStop stop)
+Offset vim_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk, VimWordEndStop stop)
 {
-    VimScanPoint point = scan_point(text, caret, VimWordClass::word);
+    VimScanPoint point = scan_point(text, caret, walk.kind);
     VimWordEndStop limit = stop;
-    for (std::size_t step = 0; step < count; ++step)
+    for (std::size_t step = 0; step < walk.count; ++step)
     {
         if (!forward_word_end(text, point, limit))
         {
@@ -441,25 +481,21 @@ std::optional<Offset> vim_word_object_previous_end(const TextBuffer &text, Offse
                                                    VimWordClass kind)
 {
     VimScanPoint point = scan_point(text, caret, kind);
-    const std::uint32_t group = class_at(point);
-    const int stepped = step_backward(text, point);
-    if (stepped == stepped_past_end)
+    if (backward_word_end(text, point, VimWordStop::at_line_end) == end_failed)
     {
         return std::nullopt;
     }
-    if (stepped == stepped_over_line)
+    return offset_of(text, point);
+}
+
+Offset vim_previous_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk)
+{
+    VimScanPoint point = scan_point(text, caret, walk.kind);
+    for (std::size_t step = 0; step < walk.count; ++step)
     {
-        return offset_of(text, point);
-    }
-    if (group != blank_group && !retreated_before_run(text, point, group))
-    {
-        return offset_of(text, point);
-    }
-    while (class_at(point) == blank_group)
-    {
-        if (at_empty_line(point) || step_backward(text, point) != stepped_inside)
+        if (backward_word_end(text, point, VimWordStop::across_lines) != end_continues)
         {
-            return offset_of(text, point);
+            break;
         }
     }
     return offset_of(text, point);
@@ -497,10 +533,10 @@ std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret)
     return OffsetRange{Offset{start.value + begin}, Offset{start.value + end}};
 }
 
-Offset vim_previous_word(const TextBuffer &text, Offset caret, std::size_t count)
+Offset vim_previous_word(const TextBuffer &text, Offset caret, VimWordWalk walk)
 {
-    VimScanPoint point = scan_point(text, caret, VimWordClass::word);
-    for (std::size_t step = 0; step < count; ++step)
+    VimScanPoint point = scan_point(text, caret, walk.kind);
+    for (std::size_t step = 0; step < walk.count; ++step)
     {
         const int outcome = backward_word(text, point);
         if (outcome == word_stopped)

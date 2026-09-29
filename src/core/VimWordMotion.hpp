@@ -6,6 +6,7 @@
 #include "VimWordClass.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordStop.hpp"
+#include "VimWordWalk.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -16,15 +17,21 @@ namespace nenenib::core
 // Vim の語の移動（ADR 0012 の決定 5）。語の切れ目は文字の種類（空白・記号・語の文字・
 // ひらがな・カタカナ・漢字…）が変わるところで、空行そのものも 1 つの語として止まる。
 // 既存の moved_caret の語は空白だけで切るので別物。あちらは通常モードのまま変えない。
-[[nodiscard]] Offset vim_next_word(const TextBuffer &text, Offset caret, std::size_t count,
+// kind が big_word なら W B E gE（Vim の WORD・空白だけで切る）で、歩き方は同じ 1 本（Issue
+// #222）。
+[[nodiscard]] Offset vim_next_word(const TextBuffer &text, Offset caret, VimWordWalk walk,
                                    VimWordStop stop);
-[[nodiscard]] Offset vim_previous_word(const TextBuffer &text, Offset caret, std::size_t count);
+[[nodiscard]] Offset vim_previous_word(const TextBuffer &text, Offset caret, VimWordWalk walk);
 
 // e（Vim の end_word）。語の末尾の文字へ進み、空行は素通りして行をまたぐ。
 // 走査が本文の終わりで尽きたときは、Vim と同じくそこで止まった位置をそのまま返す
 // （オペレータの後ろでは、その位置までが範囲になる＝ $de が最後の 1 文字だけを消す理由）。
-[[nodiscard]] Offset vim_word_end(const TextBuffer &text, Offset caret, std::size_t count,
+[[nodiscard]] Offset vim_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk,
                                   VimWordEndStop stop);
+
+// ge gE（Vim の bckend_word(count, bigword, eol=FALSE)）。手前の語の末尾の文字へ戻り、行を
+// またぎ、空白を戻る途中の空行で止まる。本文の先頭に当たったらそこで回数ごと終わる。
+[[nodiscard]] Offset vim_previous_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk);
 
 // 文字の種類（Vim の cls()）。語の表はここ 1 つで、テキストオブジェクトも同じ表を引く
 // （ADR 0031 の決定 2）。0 は空白、1 は記号、2 は語の文字、それ以外はひらがな等の塊の印。

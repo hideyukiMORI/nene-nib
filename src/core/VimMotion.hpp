@@ -29,6 +29,13 @@ enum class VimMotion : std::uint8_t
     previous_line,
     // `<Space>` `<BS>`。行をまたぐ exclusive な文字単位の移動（ADR 0049 の決定 1・2）。
     wrap_right,
-    wrap_left
+    wrap_left,
+    // `W` `B` `E` と cW の特例、`ge` `gE`（Issue #222）。語の分類は VimKeyTable の表が決める。
+    next_big_word,
+    previous_big_word,
+    big_word_end,
+    big_word_end_for_change,
+    previous_word_end,
+    previous_big_word_end
 };
 } // namespace nenenib::core

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 38d19a05cdaebbd21fed97d0fcfc7040dbb3e0e3981daf30a5285d6c4cd87fb2 / 1738 fixtures
+// fixtures.json: sha256 7c18d0a4872d57cf8f69d70614caff877125f0ad3e071c4bc2969dd7099c8f40 / 1789 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1738> vim_fixtures{{
+constexpr std::array<VimFixture, 1789> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1750,6 +1750,57 @@ constexpr std::array<VimFixture, 1738> vim_fixtures{{
     {"combining-insert-bs-middle", "aéb", "$i<BS><Esc>", "ab", 1, 1, "", "", std::nullopt},
     {"combining-3a-typed", "ab", "3aé<Esc>", "aéééb", 1, 8, "", "", std::nullopt},
     {"combining-3a-typed-then-x", "ab", "3aé<Esc>x", "aééb", 1, 8, "é", "v", std::nullopt},
+    {"word-motion-W-crosses-punctuation", "foo.bar(baz) qux", "W", "foo.bar(baz) qux", 1, 14, "", "", std::nullopt},
+    {"word-motion-WW-crosses-the-line", "foo.bar baz\nqux-1 x", "WW", "foo.bar baz\nqux-1 x", 2, 1, "", "", std::nullopt},
+    {"word-motion-W-stops-on-an-empty-line", "a.b\n\nc.d", "W", "a.b\n\nc.d", 2, 1, "", "", std::nullopt},
+    {"word-motion-W-with-a-count", "a.b c-d e,f g", "3W", "a.b c-d e,f g", 1, 13, "", "", std::nullopt},
+    {"word-motion-W-skips-a-tab", "a\t.b  c", "W", "a\t.b  c", 1, 3, "", "", std::nullopt},
+    {"word-motion-W-at-the-end-fails", "foo bar.baz", "WWW", "foo bar.baz", 1, 11, "", "", std::nullopt},
+    {"word-motion-E-crosses-punctuation", "foo.bar(baz) qux", "E", "foo.bar(baz) qux", 1, 12, "", "", std::nullopt},
+    {"word-motion-EE-skips-the-empty-line", "a.b\n\n  c.d e", "EE", "a.b\n\n  c.d e", 3, 5, "", "", std::nullopt},
+    {"word-motion-E-with-a-count", "a.b c-d e,f", "3E", "a.b c-d e,f", 1, 11, "", "", std::nullopt},
+    {"word-motion-B-crosses-punctuation", "foo.bar(baz) qux", "$B", "foo.bar(baz) qux", 1, 14, "", "", std::nullopt},
+    {"word-motion-BB-stops-on-the-empty-line", "a.b\n\nc.d", "GBB", "a.b\n\nc.d", 1, 1, "", "", std::nullopt},
+    {"word-motion-B-with-a-count", "a.b c-d e,f", "$2B", "a.b c-d e,f", 1, 5, "", "", std::nullopt},
+    {"word-motion-B-at-the-start-fails", "a.b c", "B", "a.b c", 1, 1, "", "", std::nullopt},
+    {"word-motion-ge-to-the-symbol", "foo.bar(baz) qux", "$ge", "foo.bar(baz) qux", 1, 12, "", "", std::nullopt},
+    {"word-motion-gE-to-the-WORD-end", "foo.bar baz", "$gE", "foo.bar baz", 1, 7, "", "", std::nullopt},
+    {"word-motion-ge-inside-the-WORD", "foo.bar baz", "bge", "foo.bar baz", 1, 1, "", "", std::nullopt},
+    {"word-motion-ge-with-a-count", "one two three", "$2ge", "one two three", 1, 3, "", "", std::nullopt},
+    {"word-motion-gE-with-a-count", "a.b c.d e.f", "$2gE", "a.b c.d e.f", 1, 3, "", "", std::nullopt},
+    {"word-motion-ge-crosses-the-line", "abc def\nghi", "jge", "abc def\nghi", 1, 7, "", "", std::nullopt},
+    {"word-motion-ge-stops-on-an-empty-line", "abc\n\ndef", "Gge", "abc\n\ndef", 2, 1, "", "", std::nullopt},
+    {"word-motion-ge-in-the-first-word", "foo bar", "llge", "foo bar", 1, 1, "", "", std::nullopt},
+    {"word-motion-ge-at-the-start-fails", "abc", "ge", "abc", 1, 1, "", "", std::nullopt},
+    {"word-motion-ge-count-past-the-start", "ab cd", "w3ge", "ab cd", 1, 1, "", "", std::nullopt},
+    {"word-motion-dW", "foo.bar baz", "dW", "baz", 1, 1, "foo.bar ", "v", std::nullopt},
+    {"word-motion-dW-stops-at-the-line-end", "foo.bar\nbaz", "dW", "\nbaz", 1, 1, "foo.bar", "v", std::nullopt},
+    {"word-motion-d2W-across-the-line", "a.b\nc.d e", "d2W", "e", 1, 1, "a.b\nc.d ", "v", std::nullopt},
+    {"word-motion-cW-changes-to-the-WORD-end", "foo.bar baz", "cWX<Esc>", "X baz", 1, 1, "foo.bar", "v", std::nullopt},
+    {"word-motion-cW-on-a-blank", "foo  bar.baz", "3lcWX<Esc>", "fooXbar.baz", 1, 4, "  ", "v", std::nullopt},
+    {"word-motion-yE", "foo.bar baz", "yE", "foo.bar baz", 1, 1, "foo.bar", "v", std::nullopt},
+    {"word-motion-dE", "a.b c.d", "dE", " c.d", 1, 1, "a.b", "v", std::nullopt},
+    {"word-motion-dB", "foo.bar baz", "$dB", "foo.bar z", 1, 9, "ba", "v", std::nullopt},
+    {"word-motion-d3B-past-the-start", "a.b c.d", "wd3B", ".b c.d", 1, 1, "a", "v", std::nullopt},
+    {"word-motion-dge", "foo.bar baz", "$dge", "foo.ba", 1, 6, "r baz", "v", std::nullopt},
+    {"word-motion-dgE-crosses-the-line", "a.b\nc.d", "jdgE", "a..d", 1, 3, "b\nc", "v", std::nullopt},
+    {"word-motion-dge-joins-the-lines", "abc\ndef", "jdge", "abef", 1, 3, "c\nd", "v", std::nullopt},
+    {"word-motion-d3ge-past-the-start", "ab cd", "wd3ge", "d", 1, 1, "ab c", "v", std::nullopt},
+    {"word-motion-cge", "foo bar", "$cgeX<Esc>", "foX", 1, 3, "o bar", "v", std::nullopt},
+    {"word-motion-vWd", "a.b c.d e", "vWd", ".d e", 1, 1, "a.b c", "v", std::nullopt},
+    {"word-motion-vgey", "foo.bar baz", "$vgey", "foo.bar baz", 1, 7, "r baz", "v", std::nullopt},
+    {"word-motion-v2Ey", "a.b c.d e.f", "v2Ey", "a.b c.d e.f", 1, 1, "a.b c.d", "v", std::nullopt},
+    {"word-motion-vBd", "a.b c.d", "$vBd", "a.b ", 1, 4, "c.d", "v", std::nullopt},
+    {"word-motion-dW-dot", "a.b c.d e.f", "dW.", "e.f", 1, 1, "c.d ", "v", std::nullopt},
+    {"word-motion-dge-dot", "ab cd ef", "$dge.", "a", 1, 1, "b c", "v", std::nullopt},
+    {"word-motion-cW-dot", "a.b c.d", "cWx<Esc>W.", "x x", 1, 3, "c.d", "v", std::nullopt},
+    {"word-motion-combining-ge", "café au lait", "wge", "café au lait", 1, 4, "", "", std::nullopt},
+    {"word-motion-combining-W", "café-x au", "W", "café-x au", 1, 10, "", "", std::nullopt},
+    {"word-motion-combining-E", "café-xé au", "E", "café-xé au", 1, 9, "", "", std::nullopt},
+    {"word-motion-combining-B", "ab éx-café", "$B", "ab éx-café", 1, 4, "", "", std::nullopt},
+    {"word-motion-combining-gE", "x café-é y", "$gE", "x café-é y", 1, 10, "", "", std::nullopt},
+    {"word-motion-combining-dge", "café au", "$dge", "caf", 1, 3, "é au", "v", std::nullopt},
+    {"word-motion-2ge-below-an-empty-first-line", "\nabc", "j2ge", "\nabc", 1, 1, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
