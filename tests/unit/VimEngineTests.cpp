@@ -98,6 +98,7 @@ using nenenib::core::vim_first_non_blank;
 using nenenib::core::vim_next_word;
 using nenenib::core::vim_previous_word;
 using nenenib::core::vim_resting_caret;
+using nenenib::core::vim_same_line_and_column;
 using nenenib::core::vim_step;
 using nenenib::core::vim_visual_range;
 using nenenib::core::VimCharacter;
@@ -373,6 +374,22 @@ void verify_vim_caret_rules()
     expect(vim_first_non_blank(buffer, Offset{8}) == Offset{8}, "an empty line has no non-blank");
     expect(vim_first_non_blank(buffer, Offset{9}) == Offset{10},
            "a line of blanks rests on its last character");
+}
+
+// Ctrl-r の戻り先の写し（ADR 0052 の決定 5）。
+void verify_vim_redo_caret()
+{
+    const auto before = TextBuffer::from_utf8("ab\ncdef\n  ef");
+    const auto after = TextBuffer::from_utf8("a\n xあ");
+    expect(before.has_value() && after.has_value(), "the redo buffers parse");
+    expect(vim_same_line_and_column(before.value(), Offset{3}, after.value()) == Offset{2},
+           "redo keeps the line and the byte column");
+    expect(vim_same_line_and_column(before.value(), Offset{6}, after.value()) == Offset{4},
+           "a column inside a character goes to its start");
+    expect(vim_same_line_and_column(before.value(), Offset{1}, after.value()) == Offset{1},
+           "a column past the line stops at its end");
+    expect(vim_same_line_and_column(before.value(), Offset{10}, after.value()) == Offset{3},
+           "a line past the end goes to the first non-blank of the last line");
 }
 
 [[nodiscard]] std::string vim_lines(std::size_t count)
@@ -854,6 +871,7 @@ void verify_vim_engine()
 {
     verify_vim_word_motions();
     verify_vim_caret_rules();
+    verify_vim_redo_caret();
     verify_vim_step_edges();
     verify_vim_viewport_half_edges();
     verify_vim_viewport_page_edges();

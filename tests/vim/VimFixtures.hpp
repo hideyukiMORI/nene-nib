@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 ef439def7bc937d098d77535e5f62ceaf2f948a57db8b29ac876492cdda03836 / 1536 fixtures
+// fixtures.json: sha256 0f4feb21755c496a0edb6c2ae1e7c41f125db512ab277319be185d3e2bf67eda / 1587 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1536> vim_fixtures{{
+constexpr std::array<VimFixture, 1587> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1548,6 +1548,57 @@ constexpr std::array<VimFixture, 1536> vim_fixtures{{
     {"put-caret-newline-start-p", "abc\n\nxyz", "jvjyggp", "a\nxbc\n\nxyz", 1, 1, "\nx", "v", std::nullopt},
     {"put-caret-newline-start-capital-p", "abc\n\nxyz", "jvjyggP", "\nxabc\n\nxyz", 1, 1, "\nx", "v", std::nullopt},
     {"put-caret-one-line-count-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllyw3p", "abc def ghi\nabccdef cdef cdef def ghi\n  indented line\nlast line here", 2, 18, "cdef ", "v", std::nullopt},
+    {"undo-caret-yyp-u", "one two three\nfour five\nsix", "wyypu", "one two three\nfour five\nsix", 1, 5, "one two three\n", "V", std::nullopt},
+    {"undo-caret-yyp-u-redo", "one two three\nfour five\nsix", "wyypu<C-r>", "one two three\none two three\nfour five\nsix", 1, 5, "one two three\n", "V", std::nullopt},
+    {"undo-caret-yyp-u-j", "one two three\nfour five\nsix", "wyypuj", "one two three\nfour five\nsix", 2, 5, "one two three\n", "V", std::nullopt},
+    {"undo-caret-yyP-u", "one two three\nfour five\nsix", "jwyyPu", "one two three\nfour five\nsix", 2, 6, "four five\n", "V", std::nullopt},
+    {"undo-caret-yyP-u-redo", "one two three\nfour five\nsix", "jwyyPu<C-r>", "one two three\nfour five\nfour five\nsix", 2, 6, "four five\n", "V", std::nullopt},
+    {"undo-caret-yy3p-u", "one two three\nfour five\nsix", "wyy3pu", "one two three\nfour five\nsix", 1, 5, "one two three\n", "V", std::nullopt},
+    {"undo-caret-yy3p-u-j", "one two three\nfour five\nsix", "wyy3puj", "one two three\nfour five\nsix", 2, 5, "one two three\n", "V", std::nullopt},
+    {"undo-caret-ywp-u", "one two three\nfour five\nsix", "ywwpu", "one two three\nfour five\nsix", 1, 5, "one ", "v", std::nullopt},
+    {"undo-caret-ywp-u-redo", "one two three\nfour five\nsix", "ywwpu<C-r>", "one tone wo three\nfour five\nsix", 1, 5, "one ", "v", std::nullopt},
+    {"undo-caret-ywP-u", "one two three\nfour five\nsix", "ywwPu", "one two three\nfour five\nsix", 1, 5, "one ", "v", std::nullopt},
+    {"undo-caret-ywP-u-j", "one two three\nfour five\nsix", "ywwPuj", "one two three\nfour five\nsix", 2, 5, "one ", "v", std::nullopt},
+    {"undo-caret-multiline-p-u", "one two three\nfour five\nsix", "vjyjlpu", "one two three\nfour five\nsix", 2, 2, "one two three\nf", "v", std::nullopt},
+    {"undo-caret-multiline-p-u-redo", "one two three\nfour five\nsix", "vjyjlpu<C-r>", "one two three\nfoone two three\nfur five\nsix", 2, 2, "one two three\nf", "v", std::nullopt},
+    {"undo-caret-multiline-p-u-j", "one two three\nfour five\nsix", "vjyjlpuj", "one two three\nfour five\nsix", 3, 2, "one two three\nf", "v", std::nullopt},
+    {"undo-caret-block-p-u", "abcdef\nghijkl\nmnopqr\nstuvwx", "<C-v>jly2jlpu", "abcdef\nghijkl\nmnopqr\nstuvwx", 3, 2, "ab\ngh", "\0262", std::nullopt},
+    {"undo-caret-block-p-u-redo", "abcdef\nghijkl\nmnopqr\nstuvwx", "<C-v>jly2jlpu<C-r>", "abcdef\nghijkl\nmnabopqr\nstghuvwx", 3, 2, "ab\ngh", "\0262", std::nullopt},
+    {"undo-caret-block-p-u-j", "abcdef\nghijkl\nmnopqr\nstuvwx", "<C-v>jly2jlpuj", "abcdef\nghijkl\nmnopqr\nstuvwx", 4, 2, "ab\ngh", "\0262", std::nullopt},
+    {"undo-caret-o-u", "one two three\nfour five\nsix", "wlloabc<Esc>u", "one two three\nfour five\nsix", 1, 7, "", "", std::nullopt},
+    {"undo-caret-o-u-redo", "one two three\nfour five\nsix", "wlloabc<Esc>u<C-r>", "one two three\nabc\nfour five\nsix", 1, 7, "", "", std::nullopt},
+    {"undo-caret-o-u-j", "one two three\nfour five\nsix", "wlloabc<Esc>uj", "one two three\nfour five\nsix", 2, 7, "", "", std::nullopt},
+    {"undo-caret-O-u", "one two three\nfour five\nsix", "jwOabc<Esc>u", "one two three\nfour five\nsix", 2, 6, "", "", std::nullopt},
+    {"undo-caret-O-u-redo", "one two three\nfour five\nsix", "jwOabc<Esc>u<C-r>", "one two three\nabc\nfour five\nsix", 2, 3, "", "", std::nullopt},
+    {"undo-caret-O-u-j", "one two three\nfour five\nsix", "jwOabc<Esc>uj", "one two three\nfour five\nsix", 3, 3, "", "", std::nullopt},
+    {"undo-caret-i-u", "one two three\nfour five\nsix", "wixyz<Esc>u", "one two three\nfour five\nsix", 1, 5, "", "", std::nullopt},
+    {"undo-caret-i-u-redo", "one two three\nfour five\nsix", "wixyz<Esc>u<C-r>", "one xyztwo three\nfour five\nsix", 1, 5, "", "", std::nullopt},
+    {"undo-caret-a-u", "one two three\nfour five\nsix", "waxyz<Esc>u", "one two three\nfour five\nsix", 1, 6, "", "", std::nullopt},
+    {"undo-caret-a-u-redo", "one two three\nfour five\nsix", "waxyz<Esc>u<C-r>", "one txyzwo three\nfour five\nsix", 1, 6, "", "", std::nullopt},
+    {"undo-caret-a-u-j", "one two three\nfour five\nsix", "waxyz<Esc>uj", "one two three\nfour five\nsix", 2, 6, "", "", std::nullopt},
+    {"undo-caret-I-u", "    indented line\nnext line here", "wwIxyz<Esc>u", "    indented line\nnext line here", 1, 5, "", "", std::nullopt},
+    {"undo-caret-I-u-redo", "    indented line\nnext line here", "wwIxyz<Esc>u<C-r>", "    xyzindented line\nnext line here", 1, 5, "", "", std::nullopt},
+    {"undo-caret-I-u-j", "    indented line\nnext line here", "wwIxyz<Esc>uj", "    indented line\nnext line here", 2, 5, "", "", std::nullopt},
+    {"undo-caret-A-u", "one two three\nfour five\nsix", "Axyz<Esc>u", "one two three\nfour five\nsix", 1, 13, "", "", std::nullopt},
+    {"undo-caret-A-u-redo", "one two three\nfour five\nsix", "Axyz<Esc>u<C-r>", "one two threexyz\nfour five\nsix", 1, 14, "", "", std::nullopt},
+    {"undo-caret-A-u-j", "one two three\nfour five\nsix", "Axyz<Esc>uj", "one two three\nfour five\nsix", 2, 9, "", "", std::nullopt},
+    {"undo-caret-r-u", "one two three\nfour five\nsix", "wrxu", "one two three\nfour five\nsix", 1, 5, "", "", std::nullopt},
+    {"undo-caret-r-u-redo", "one two three\nfour five\nsix", "wrxu<C-r>", "one xwo three\nfour five\nsix", 1, 5, "", "", std::nullopt},
+    {"undo-caret-3r-u", "one two three\nfour five\nsix", "w3rxu", "one two three\nfour five\nsix", 1, 5, "", "", std::nullopt},
+    {"undo-caret-3r-u-redo", "one two three\nfour five\nsix", "w3rxu<C-r>", "one xxx three\nfour five\nsix", 1, 5, "", "", std::nullopt},
+    {"undo-caret-3r-u-j", "one two three\nfour five\nsix", "w3rxuj", "one two three\nfour five\nsix", 2, 5, "", "", std::nullopt},
+    {"undo-caret-x-u", "one two three\nfour five\nsix", "wxu", "one two three\nfour five\nsix", 1, 5, "t", "v", std::nullopt},
+    {"undo-caret-x-u-redo", "one two three\nfour five\nsix", "wxu<C-r>", "one wo three\nfour five\nsix", 1, 5, "t", "v", std::nullopt},
+    {"undo-caret-x-u-j", "one two three\nfour five\nsix", "wxuj", "one two three\nfour five\nsix", 2, 5, "t", "v", std::nullopt},
+    {"undo-caret-3x-u", "one two three\nfour five\nsix", "w3xu", "one two three\nfour five\nsix", 1, 5, "two", "v", std::nullopt},
+    {"undo-caret-3x-u-j", "one two three\nfour five\nsix", "w3xuj", "one two three\nfour five\nsix", 2, 5, "two", "v", std::nullopt},
+    {"undo-caret-dw-u", "one two three\nfour five\nsix", "wdwu", "one two three\nfour five\nsix", 1, 5, "two ", "v", std::nullopt},
+    {"undo-caret-dw-u-redo", "one two three\nfour five\nsix", "wdwu<C-r>", "one three\nfour five\nsix", 1, 5, "two ", "v", std::nullopt},
+    {"undo-caret-d-dollar-u", "one two three\nfour five\nsix", "wd$u", "one two three\nfour five\nsix", 1, 5, "two three", "v", std::nullopt},
+    {"undo-caret-d-dollar-u-redo", "one two three\nfour five\nsix", "wd$u<C-r>", "one \nfour five\nsix", 1, 4, "two three", "v", std::nullopt},
+    {"undo-caret-d-dollar-u-j", "one two three\nfour five\nsix", "wd$uj", "one two three\nfour five\nsix", 2, 5, "two three", "v", std::nullopt},
+    {"undo-caret-cw-u", "one two three\nfour five\nsix", "wcwNEW<Esc>u", "one two three\nfour five\nsix", 1, 5, "two", "v", std::nullopt},
+    {"undo-caret-cw-u-redo", "one two three\nfour five\nsix", "wcwNEW<Esc>u<C-r>", "one NEW three\nfour five\nsix", 1, 5, "two", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

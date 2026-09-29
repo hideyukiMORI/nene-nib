@@ -758,10 +758,11 @@ void verify_composition_underlines()
 // 変換中は本文も履歴も動かない（ARC-004 / 決定 2）。EditorState の側で先に測る。
 void verify_composition_state()
 {
-    const auto state = EditorState::create(Appearance::dark, EditMode::ordinary)
-                           .with_edit(buffer_of("hi"), collapsed_at(Offset{2}),
-                                      EditHistory::empty().pushed(Edit{Offset{0}, "", "hi"},
-                                                                  EditBoundary::separate));
+    const auto state =
+        EditorState::create(Appearance::dark, EditMode::ordinary)
+            .with_edit(buffer_of("hi"), collapsed_at(Offset{2}),
+                       EditHistory::empty().pushed(Edit{Offset{0}, "", "hi", Offset{0}},
+                                                   EditBoundary::separate));
     expect(!state.composition().has_value(), "a state starts without a composition");
     const auto composing = state.with_composition(composed_of("あ", {}, 0));
     const auto &held = composing.composition();

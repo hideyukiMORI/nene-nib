@@ -13,6 +13,7 @@ namespace nenenib::core
 {
 // 直前のEditにeditを畳んだ結果（ADR 0015 / 0028）。inserted範囲内の編集と、その直前の
 // 削除を合成する。範囲から離れていれば空を返す。INSERTのundo単位を作る唯一の経路。
+// 畳んだ結果の restore は previous の値（最初の編集の瞬間のキャレット・ADR 0052 の決定 3）。
 [[nodiscard]] std::optional<Edit> absorbed(const Edit &previous, const Edit &edit);
 
 // undo / redo の履歴（ADR 0009 の決定 3）。所有者は application の EditorState（ARC-004）。
@@ -28,6 +29,9 @@ class EditHistory final
     // 末尾の単位を閉じた次の履歴。保存の直後に呼ぶと、続く入力が保存時点の単位に混ざらない
     // （ADR 0010 の決定 7）。位置は動かさない。
     [[nodiscard]] EditHistory sealed() const;
+    // 本文に適用済みの index 番目の編集。範囲の外なら空。再生が積んだ最初の編集の restore を
+    // 畳んだ単位へ写すために読む（ADR 0052 の決定 3）。
+    [[nodiscard]] std::optional<Edit> applied(std::size_t index) const;
     [[nodiscard]] EditHistory undone() const;
     [[nodiscard]] EditHistory redone() const;
     [[nodiscard]] std::size_t size() const noexcept;

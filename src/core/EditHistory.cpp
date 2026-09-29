@@ -16,6 +16,7 @@ namespace
 }
 
 // 区切り方ごとの畳み方。separate は畳まない＝新しい単位を開く（ADR 0009 / ADR 0015）。
+// 畳んだ単位の restore は最初の編集の値のまま（ADR 0052 の決定 3）。
 [[nodiscard]] std::optional<Edit> folded(const Edit &previous, const Edit &edit,
                                          EditBoundary boundary)
 {
@@ -28,7 +29,8 @@ namespace
         {
             return std::nullopt;
         }
-        return Edit{previous.at, previous.removed, previous.inserted + edit.inserted};
+        return Edit{previous.at, previous.removed, previous.inserted + edit.inserted,
+                    previous.restore};
     case EditBoundary::absorb:
         return absorbed(previous, edit);
     }
@@ -44,7 +46,7 @@ std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
     {
         std::string inserted = previous.inserted;
         inserted.replace(edit.at.value - previous.at.value, edit.removed.size(), edit.inserted);
-        return Edit{previous.at, previous.removed, std::move(inserted)};
+        return Edit{previous.at, previous.removed, std::move(inserted), previous.restore};
     }
     if (!edit.inserted.empty())
     {
@@ -54,7 +56,7 @@ std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
     if (erased == previous.at.value)
     {
         // 挿入を始めた位置より前を消した。単位の頭が前へ動き、消した本文が removed の先頭に付く。
-        return Edit{edit.at, edit.removed + previous.removed, previous.inserted};
+        return Edit{edit.at, edit.removed + previous.removed, previous.inserted, previous.restore};
     }
     return std::nullopt;
 }
@@ -102,6 +104,15 @@ std::expected<Edit, HistoryFailure> EditHistory::redo() const
         return std::unexpected(HistoryFailure::nothing_to_redo);
     }
     return edits_.at(position_);
+}
+
+std::optional<Edit> EditHistory::applied(std::size_t index) const
+{
+    if (index >= position_)
+    {
+        return std::nullopt;
+    }
+    return edits_.at(index);
 }
 
 EditHistory EditHistory::sealed() const
