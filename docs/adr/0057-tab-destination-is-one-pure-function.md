@@ -77,7 +77,7 @@ oracle の fixture はタブを観測できない（1 本の `:normal!` の結�
    - 開いた直後の入力は空で、選ばれているのはアクティブなタブの行。
    - 絞り込みは題名に対する今の `match_score`（大文字と小文字を区別しない部分列）。入力が空なら帯の順のまま、入力があれば点数の順（同点は帯の順）。
    - 実行は今の `submit_palette` → `evaluate_command("tabnext N")`（決定 4・5 を通る 1 本）。
-   - 意図は `OpenTabList {}`（`EditorIntent` に 1 つ足す）。「∨」のクリック（押した要素と離した要素が同じとき・ADR 0056 の決定 9）と、Ex の `list` が同じ所へ着く。一覧が開いている間の `OpenTabList` と Ctrl+P は今の Ctrl+P と同じく閉じる。
+   - 意図は `OpenTabList {}`（`EditorIntent` に 1 つ足す）。「∨」のクリック（押した要素と離した要素が同じとき・ADR 0056 の決定 9）と、Ex の `list` が同じ所へ着く。一覧が開いている間の `OpenTabList` と Ctrl+P は今の Ctrl+P と同じく閉じる。一覧が開いている間に「∨」を押したときも閉じる（面の外のクリックで閉じる今の規則がそのまま効き、開き直さない。開閉のボタンとして振る舞う・工程 2 の実装席の確認を設計席が受理）。
    - Ctrl+P の Ex の候補（`ex_command_candidates`）に `tabs` `tabnew` `tabnext` `tabprevious` `tabclose` を足す。
 8. **縦切りの工程**: (1) core と application（決定 1〜7 の ui 以外）と契約 → (2) ui（「∨」のクリック・`close_request`・`detail` の描画）→ (3) 検証の記録と PR。
 9. **範囲の外（後続）**: `g<Tab>`・`:tabfirst` `:tablast` `:tabrewind`・`:tabmove`・`:tabonly`・`:tabnext +N` `-N` `$`・範囲の形・`:tabclose N` と `!`・`:tabnew <file>` `:tabedit`・「∨」の真下に出る小さい一覧の面・一覧からタブを閉じる。
