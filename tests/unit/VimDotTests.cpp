@@ -428,8 +428,8 @@ void verify_vim_dot_fixtures()
             ++selected;
         }
     }
-    expect(selected == 181,
-           "the scope replays 96 dot and 78 VISUAL dot fixtures and 7 shared boundaries");
+    expect(selected == 188,
+           "the scope replays 103 dot and 78 VISUAL dot fixtures and 7 shared boundaries");
 }
 } // namespace
 
