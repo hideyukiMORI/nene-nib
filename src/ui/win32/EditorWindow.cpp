@@ -612,6 +612,7 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
         return press_caption(message, word, data);
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP:
+    case WM_MBUTTONDOWN:
     case WM_MBUTTONUP:
     case WM_MOUSEMOVE:
     case WM_MOUSELEAVE:
@@ -696,7 +697,7 @@ LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
 
 LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
 {
-    // マウスの 6 通。帯の上の要素は同じ 1 本の title_bar_target で引く（ADR 0056 の決定 9）。
+    // マウスの 7 通。帯の上の要素は同じ 1 本の title_bar_target で引く（ADR 0056 の決定 9）。
     switch (message)
     {
     case WM_LBUTTONDOWN:
@@ -704,6 +705,9 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case WM_LBUTTONUP:
         release_title_bar(data);
+        return 0;
+    case WM_MBUTTONDOWN:
+        press_middle(data);
         return 0;
     case WM_MBUTTONUP:
         middle_click(data);
@@ -736,8 +740,7 @@ core::TitleBarLayout EditorWindow::title_bar() const
 {
     RECT client{};
     GetClientRect(window_, &client);
-    return core::title_bar_layout(
-        application::title_bar_input(controller_.frame(), client.right, dpi_));
+    return core::title_bar_layout(controller_.title_bar_input(client.right, dpi_));
 }
 
 core::TitleBarTarget EditorWindow::title_bar_target_at(LPARAM data) const
@@ -748,6 +751,7 @@ core::TitleBarTarget EditorWindow::title_bar_target_at(LPARAM data) const
 bool EditorWindow::click_title_bar(LPARAM data)
 {
     const auto target = title_bar_target_at(data);
+    left_pressed_ = target;
     switch (target.hit)
     {
     case core::TitleBarHit::tab:
@@ -770,31 +774,53 @@ bool EditorWindow::click_title_bar(LPARAM data)
 
 void EditorWindow::release_title_bar(LPARAM data)
 {
+    // 押した要素と離した要素が同じときだけ動かす。押して帯が送られ、同じ点へ来た × では閉じない。
+    const auto pressed = std::exchange(left_pressed_, std::nullopt);
     if (controller_.command_palette_active())
     {
         return;
     }
-    const auto target = title_bar_target_at(data);
-    if (target.hit == core::TitleBarHit::tab_close)
+    const auto target = core::title_bar_released(pressed, title_bar_target_at(data));
+    if (!target.has_value())
     {
-        close_tab(target.tab);
+        return;
     }
-    if (target.hit == core::TitleBarHit::add_tab)
+    if (target.value().hit == core::TitleBarHit::tab_close)
+    {
+        close_tab(target.value().tab);
+    }
+    if (target.value().hit == core::TitleBarHit::add_tab)
     {
         send(application::NewTab{});
     }
 }
 
-void EditorWindow::middle_click(LPARAM data)
+void EditorWindow::press_middle(LPARAM data)
 {
+    middle_pressed_ = std::nullopt;
     if (controller_.command_palette_active())
     {
         return;
     }
-    const auto target = title_bar_target_at(data);
-    if (target.hit == core::TitleBarHit::tab || target.hit == core::TitleBarHit::tab_close)
+    middle_pressed_ = title_bar_target_at(data);
+}
+
+void EditorWindow::middle_click(LPARAM data)
+{
+    const auto pressed = std::exchange(middle_pressed_, std::nullopt);
+    if (controller_.command_palette_active())
     {
-        close_tab(target.tab);
+        return;
+    }
+    const auto target = core::title_bar_released(pressed, title_bar_target_at(data));
+    if (!target.has_value())
+    {
+        return;
+    }
+    if (target.value().hit == core::TitleBarHit::tab ||
+        target.value().hit == core::TitleBarHit::tab_close)
+    {
+        close_tab(target.value().tab);
     }
 }
 
@@ -812,7 +838,9 @@ void EditorWindow::point_at(LPARAM data)
 void EditorWindow::hover(const std::optional<core::TitleBarTarget> &target)
 {
     // 前の値は application の状態が持つ。変わったときだけ意図を送る（ADR 0056 の決定 3）。
-    if (controller_.frame().hovered == target)
+    RECT client{};
+    GetClientRect(window_, &client);
+    if (controller_.title_bar_input(client.right, dpi_).hovered == target)
     {
         return;
     }
@@ -891,6 +919,7 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
 
 void EditorWindow::click_client(LPARAM data)
 {
+    left_pressed_ = std::nullopt;
     if (controller_.command_palette_active())
     {
         click_palette(data);

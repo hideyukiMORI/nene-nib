@@ -64,6 +64,11 @@ class EditorController final
     [[nodiscard]] EditorFrame frame() const;
     [[nodiscard]] bool command_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
+    // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
+    // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
+    // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
+    // と同じ。
+    [[nodiscard]] core::TitleBarInput title_bar_input(std::int32_t width, std::uint32_t dpi) const;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;

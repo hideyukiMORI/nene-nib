@@ -64,13 +64,14 @@ class EditorWindow final
     [[nodiscard]] LRESULT frame_message(UINT message, WPARAM word, LPARAM data);
     [[nodiscard]] LRESULT pointer_message(UINT message, WPARAM word, LPARAM data);
     void limit_size(LPARAM data) const noexcept;
-    // 帯の配置は表示値と窓の幅から毎回作る。描画と同じ入力（ADR 0056 の決定 9）。
+    // 帯の配置は状態の 4 つの値と窓の幅から毎回作る。表示値は作らない（ADR 0056 の決定 9）。
     [[nodiscard]] core::TitleBarLayout title_bar() const;
     [[nodiscard]] core::TitleBarTarget title_bar_target_at(LPARAM data) const;
     [[nodiscard]] std::int32_t title_bar_width() const;
     // 帯の上の押下を扱ったら true（本文とステータスバーへは流さない）。
     [[nodiscard]] bool click_title_bar(LPARAM data);
     void release_title_bar(LPARAM data);
+    void press_middle(LPARAM data);
     void middle_click(LPARAM data);
     void point_at(LPARAM data);
     void hover(const std::optional<core::TitleBarTarget> &target);
@@ -140,6 +141,10 @@ class EditorWindow final
     wchar_t pending_high_surrogate_ = 0;
     std::int32_t zoom_wheel_remainder_ = 0;
     std::int32_t tab_wheel_remainder_ = 0;
+    // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
+    // 消す（ADR 0056 の決定 9）。
+    std::optional<core::TitleBarTarget> left_pressed_;
+    std::optional<core::TitleBarTarget> middle_pressed_;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。

@@ -250,6 +250,16 @@ std::optional<TitleBarTarget> title_bar_hover(const TitleBarTarget &target) noex
     std::unreachable();
 }
 
+std::optional<TitleBarTarget> title_bar_released(const std::optional<TitleBarTarget> &pressed,
+                                                 const TitleBarTarget &released) noexcept
+{
+    if (!pressed.has_value() || pressed.value() != released)
+    {
+        return std::nullopt;
+    }
+    return released;
+}
+
 LayoutRect minimum_window(std::uint32_t dpi) noexcept
 {
     return LayoutRect{0, 0, to_pixels(minimum_window_width_dips, dpi),

@@ -1852,10 +1852,15 @@ void EditorController::accept(const CloseTab &intent)
     enter_document();
 }
 
+core::TitleBarInput EditorController::title_bar_input(std::int32_t width, std::uint32_t dpi) const
+{
+    return core::TitleBarInput{
+        width, dpi, state_.tab_count(), state_.active_tab(), state_.tab_scroll(), state_.hovered()};
+}
+
 core::TitleBarInput EditorController::title_bar_input() const
 {
-    return core::TitleBarInput{state_.title_bar_width(), core::reference_dpi, state_.tab_count(),
-                               state_.active_tab(),      state_.tab_scroll(), state_.hovered()};
+    return title_bar_input(state_.title_bar_width(), core::reference_dpi);
 }
 
 void EditorController::reveal_active_tab()

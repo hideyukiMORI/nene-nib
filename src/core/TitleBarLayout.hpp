@@ -71,6 +71,13 @@ struct TitleBarLayout
 // 窓の操作と帯の外は値なし（ui が PointTitleBar に写す値・ADR 0056 の決定 9）。
 [[nodiscard]] std::optional<TitleBarTarget> title_bar_hover(const TitleBarTarget &target) noexcept;
 
+// 押した要素と離した要素が同じ（hit も tab も）ときだけ離した要素を返す。違えば・押した値が
+// 無ければ値なし。×・「＋」・中ボタンで閉じる流れは、押して帯が送られた後に同じ点へ来た別の
+// 要素では動かない（ADR 0056 の決定 9）。
+[[nodiscard]] std::optional<TitleBarTarget>
+title_bar_released(const std::optional<TitleBarTarget> &pressed,
+                   const TitleBarTarget &released) noexcept;
+
 // 窓の最小の大きさ（幅 360 × 高さ 200 DIP・ADR 0056 の決定 8）を物理画素の矩形 {0, 0, 幅, 高さ}
 // で返す。ui は WM_GETMINMAXINFO の ptMinTrackSize に写すだけ。
 [[nodiscard]] LayoutRect minimum_window(std::uint32_t dpi) noexcept;

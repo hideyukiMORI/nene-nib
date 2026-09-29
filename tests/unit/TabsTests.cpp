@@ -53,6 +53,7 @@
 #include "VisibleLines.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -683,6 +684,112 @@ void verify_band_pointer()
            "physical pixels become DIP for the band width");
 }
 
+// 押した要素と離した要素が同じ（種類も帯の位置も）ときだけ離した要素が返る（ADR 0056 の決定 9）。
+void verify_band_release()
+{
+    using nenenib::core::title_bar_released;
+    const TitleBarTarget close_two{TitleBarHit::tab_close, 2};
+    expect(title_bar_released(close_two, close_two) == std::optional{close_two} &&
+               title_bar_released(TitleBarTarget{TitleBarHit::add_tab, 0},
+                                  TitleBarTarget{TitleBarHit::add_tab, 0}) ==
+                   std::optional{TitleBarTarget{TitleBarHit::add_tab, 0}},
+           "releasing on the pressed element returns it");
+    expect(!title_bar_released(TitleBarTarget{TitleBarHit::tab, 2}, close_two).has_value() &&
+               !title_bar_released(TitleBarTarget{TitleBarHit::caption, 0},
+                                   TitleBarTarget{TitleBarHit::add_tab, 0})
+                    .has_value(),
+           "releasing on another kind of element does nothing");
+    expect(!title_bar_released(TitleBarTarget{TitleBarHit::tab_close, 1}, close_two).has_value(),
+           "releasing on the same kind of element of another tab does nothing");
+    expect(!title_bar_released(std::nullopt, close_two).has_value(),
+           "releasing without a press on the band does nothing");
+}
+
+// 右が viewport で欠けた最初のタブの帯の位置。無ければ本数。
+[[nodiscard]] std::size_t right_clipped_tab(const nenenib::core::TitleBarLayout &layout)
+{
+    for (std::size_t tab = 0; tab < layout.tab_count; ++tab)
+    {
+        if (nenenib::core::tab_visible(layout, tab) &&
+            nenenib::core::tab_rect(layout, tab).right > layout.viewport.right)
+        {
+            return tab;
+        }
+    }
+    return layout.tab_count;
+}
+
+// 送る前にタブ tab の本体・送った後にその × に当たる点の x。無ければ値なし。
+[[nodiscard]] std::optional<std::int32_t>
+point_moved_onto_close(const nenenib::core::TitleBarLayout &before,
+                       const nenenib::core::TitleBarLayout &after, std::size_t tab, std::int32_t y)
+{
+    const TitleBarTarget body{TitleBarHit::tab, tab};
+    const TitleBarTarget closer{TitleBarHit::tab_close, tab};
+    for (std::int32_t x = before.viewport.right - 1; x >= before.viewport.left; --x)
+    {
+        if (nenenib::core::title_bar_target(before, x, y) == body &&
+            nenenib::core::title_bar_target(after, x, y) == closer)
+        {
+            return x;
+        }
+    }
+    return std::nullopt;
+}
+
+// 右が欠けたタブの見えている右寄りを押すと切り替えで帯が左へ送られ、同じ点がそのタブの × に
+// 来る。押した要素（タブ）と離した要素（×）は違うので閉じない（ADR 0056 の決定 9）。
+void verify_band_release_after_scroll()
+{
+    const TitleBarInput unscrolled{1200, 96, 9, 0, 0, std::nullopt};
+    const auto before = nenenib::core::title_bar_layout(unscrolled);
+    const std::size_t clipped = right_clipped_tab(before);
+    expect(before.overflowing && clipped < before.tab_count,
+           "nine tabs in 1200 DIP leave a tab clipped on the right");
+    TitleBarInput switched = unscrolled;
+    switched.active = clipped;
+    switched.scroll_dips = nenenib::core::tabs_scrolled_into_view(switched);
+    const auto after = nenenib::core::title_bar_layout(switched);
+    expect(after.scroll > 0, "switching to the clipped tab scrolls the band left");
+    const auto rect = nenenib::core::tab_rect(before, clipped);
+    const std::int32_t y = rect.top + ((rect.bottom - rect.top) / 2);
+    const auto x = point_moved_onto_close(before, after, clipped, y);
+    expect(x.has_value(), "a point on the clipped tab lands on its close button after the scroll");
+    const auto pressed = nenenib::core::title_bar_target(before, x.value_or(0), y);
+    const auto released = nenenib::core::title_bar_target(after, x.value_or(0), y);
+    expect(!nenenib::core::title_bar_released(pressed, released).has_value(),
+           "pressing the tab and releasing on its scrolled close button does not close it");
+}
+
+// 状態から読む配置の入力は、表示値から作る入力と 6 つの欄で一致する（ADR 0056 の決定 9）。
+[[nodiscard]] bool same_band_input(const EditorController &controller)
+{
+    const TitleBarInput read = controller.title_bar_input(1800, 144);
+    const TitleBarInput built = title_bar_input(controller.frame(), 1800, 144);
+    return read.width == built.width && read.dpi == built.dpi &&
+           read.tab_count == built.tab_count && read.active == built.active &&
+           read.scroll_dips == built.scroll_dips && read.hovered == built.hovered;
+}
+
+void verify_band_input_from_state()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    expect(same_band_input(controller), "one tab reads the same band input as the frame");
+    open_nine_tabs(controller);
+    expect(same_band_input(controller), "several tabs read the same band input as the frame");
+    applied(controller, TitleBarWidth{1200});
+    expect(controller.frame().tab_scroll > 0 && same_band_input(controller),
+           "a scrolled band reads the same band input as the frame");
+    applied(controller, SwitchTab{2});
+    expect(same_band_input(controller), "a switched tab reads the same band input as the frame");
+    applied(controller, PointTitleBar{TitleBarTarget{TitleBarHit::tab_close, 4}});
+    expect(controller.frame().hovered.has_value() && same_band_input(controller),
+           "a hovered band reads the same band input as the frame");
+    applied(controller, CloseTab{8});
+    expect(same_band_input(controller), "a closed tab reads the same band input as the frame");
+}
+
 } // namespace
 
 void verify_tabs_contracts()
@@ -709,6 +816,9 @@ void verify_tabs_contracts()
     verify_band_scroll();
     verify_band_hover();
     verify_band_pointer();
+    verify_band_release();
+    verify_band_release_after_scroll();
+    verify_band_input_from_state();
 }
 
 void verify_tabs_scope()
