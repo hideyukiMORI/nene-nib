@@ -51,6 +51,16 @@ two rows (and of the last two) must fall on the same pixel, because a Tab stops 
 
 Issue #180 adds the macro recording indicator (ADR 0046 decision 8): in Vim NORMAL `qa` writes
 `recording @a` beside the mode label and the stopping `q` takes it away (vimRecording.png).
+
+Issue #239 adds the tab keys (ADR 0056 decision 10), in two launches of their own that `--tabs`
+also runs alone. Ctrl+T twice gives three tabs with the third one active, Ctrl+Tab wraps to the
+first, Ctrl+Shift+Tab back to the last, Ctrl+F4 closes one, Ctrl+W closes one more in the ordinary
+mode and nothing in the Vim mode, and Ctrl+T while the Vim `/` line is open adds no tab. The tab
+count is read from the hit test (the right edge of the add button) and the active tab from the
+tab_active face, both mirroring core::title_bar_layout. The second launch opens two files, types
+into both and closes the window: the unsaved confirmation must show them in band order (the window
+title names the file it asks about); the first is answered No and the second Cancel, so the window
+stays. The chords need SendInput; a session that refuses the foreground is recorded, not failed.
 Python standard library and ctypes only.
 """
 
@@ -73,11 +83,12 @@ import winreg
 # 窓の駆動（起動・検出・PostMessageW・確認ダイアログ・終了）は 1 本しかない（ADR 0011 の決定 7）。
 from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, become_dpi_aware,
                            capture as capture_client, capture_png, click, close, covered_by,
-                           dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE, HWND_TOPMOST, IDNO,
-                           parse_keys, press, press_chord, raise_window, rectangle,
-                           send_key_sequence, send_keys, start, stop, SWP_NOMOVE_NOSIZE_SHOW,
-                           user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_NEXT, VK_NIHONGO, VK_PRIOR,
-                           VK_RETURN, VK_S, VK_SPACE, window_title, WINDOW_CLASS, WindowCovered,
+                           dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE, HWND_TOPMOST,
+                           IDCANCEL, IDNO, parse_keys, press, press_chord, press_combination,
+                           raise_window, rectangle, send_key_sequence, send_keys, start, stop,
+                           SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_F4,
+                           VK_NEXT, VK_NIHONGO, VK_PRIOR, VK_RETURN, VK_S, VK_SHIFT, VK_SPACE,
+                           VK_T, VK_TAB, VK_W, window_title, WINDOW_CLASS, WindowCovered,
                            write_png, write_text, WS_CAPTION, WS_POPUP, WS_THICKFRAME, WS_VISIBLE)
 
 # 前後の画が変わったかの判定は比較の道具と同じ 1 本（Issue #131 の訂正 2）。
@@ -122,6 +133,14 @@ TAB_LEFT_DIPS = 8
 TAB_TOP_DIPS = 8
 TAB_HEIGHT_DIPS = 32
 TAB_PADDING_LEFT_DIPS = 14
+# タブの並びの残り（src/core/TitleBarLayout.cpp の tab_gap_dips 以下）。本数の読み取りに要る。
+TAB_GAP_DIPS = 2
+TAB_MINIMUM_DIPS = 120
+TAB_MAXIMUM_DIPS = 200
+ADD_TAB_DIPS = 32
+GRAB_DIPS = 40
+# 鍵を送ってから窓が意図を適用して描き終えるまで待つ。
+TAB_SETTLE_SECONDS = 0.5
 STATUS_BAR_DIPS = 28
 STATUS_PADDING_DIPS = 12
 TOGGLE_PADDING_DIPS = 2
@@ -1309,6 +1328,187 @@ def verify_editing(window, process, appearance: str, output: Path,
     return result
 
 
+class ForegroundRefused(RuntimeError):
+    """A tab chord could not be sent, because the session refused the foreground."""
+
+
+def tab_strip(width: int, dpi: int, count: int) -> dict:
+    """The strip of `count` tabs, mirroring core::title_bar_layout (src/core/TitleBarLayout.cpp).
+
+    Only the fields the tab check reads: the tabs' left edge, width and gap, whether the band
+    overflows (strip_limit / overflows / tab_width_for) and the right edge of the add button.
+    """
+    left = to_pixels(TAB_LEFT_DIPS, dpi)
+    gap = to_pixels(TAB_GAP_DIPS, dpi)
+    minimum = to_pixels(TAB_MINIMUM_DIPS, dpi)
+    limit = (width - to_pixels(CAPTION_BUTTON_DIPS, dpi) * 3 - to_pixels(GRAB_DIPS, dpi)
+             - to_pixels(ADD_TAB_DIPS, dpi) - gap)
+    overflowing = minimum * count + gap * (count - 1) > max(limit - left, 0)
+    share = int((limit - left - gap * (count - 1)) / count)  # C++ の整数除算は 0 へ丸める
+    tab_width = minimum if overflowing else min(max(share, minimum),
+                                                to_pixels(TAB_MAXIMUM_DIPS, dpi))
+    add_left = left + tab_width * count + gap * (count - 1) + gap
+    return {"left": left, "tabWidth": tab_width, "gap": gap, "overflowing": overflowing,
+            "addRight": add_left + to_pixels(ADD_TAB_DIPS, dpi)}
+
+
+def tab_row_middle(dpi: int) -> int:
+    return to_pixels(TAB_TOP_DIPS, dpi) + to_pixels(TAB_HEIGHT_DIPS, dpi) // 2
+
+
+def tab_count_from_hits(window, width: int, dpi: int) -> int:
+    """How many tabs the band holds: the right edge of the add button read from WM_NCHITTEST.
+
+    Right of the add button up to the window buttons is the grab area (HTCAPTION); the add button
+    and the tabs are HTCLIENT (caption_code in src/ui/win32/EditorWindow.cpp). Returns 0 when no
+    count up to 20 lays the add button out there, or when the band overflows.
+    """
+    y = tab_row_middle(dpi)
+    x = width - to_pixels(CAPTION_BUTTON_DIPS, dpi) * 3 - 1
+    while x >= 0 and ask_hit(window, x, y) == HTCAPTION:
+        x -= 1
+    for count in range(1, 21):
+        strip = tab_strip(width, dpi, count)
+        if not strip["overflowing"] and strip["addRight"] == x + 1:
+            return count
+    return 0
+
+
+def active_tabs(pixels: bytes, width: int, dpi: int, count: int, appearance: str) -> list[int]:
+    """The band positions whose face is tab_active, read where active_tab_point reads the first."""
+    strip = tab_strip(width, dpi, count)
+    padding = to_pixels(TAB_PADDING_LEFT_DIPS, dpi)
+    y = tab_row_middle(dpi)
+    face = list(TAB_ACTIVE[appearance])
+    return [index for index in range(count)
+            if pixel(pixels, width,
+                     strip["left"] + index * (strip["tabWidth"] + strip["gap"]) + padding // 2,
+                     y) == face]
+
+
+def read_band(window, appearance: str) -> dict:
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    count = tab_count_from_hits(window, width, dpi)
+    pixels = capture(window, width, height)
+    return {"count": count, "active": active_tabs(pixels, width, dpi, count, appearance),
+            "title": window_title(window)}
+
+
+def tab_chord(window, modifiers: list[int], key: int) -> None:
+    if not press_combination(window, modifiers, key):
+        raise ForegroundRefused("the window could not take the foreground")
+    time.sleep(TAB_SETTLE_SECONDS)
+
+
+def expect_band(window, appearance: str, count: int, active: int, step: str) -> dict:
+    band = read_band(window, appearance)
+    assert band["count"] == count, f"{step}: the band holds {band['count']} tabs, not {count}"
+    assert band["active"] == [active], f"{step}: the active face is at {band['active']}"
+    return band
+
+
+def drive_tab_keys(window, process, appearance: str, frames: Path | None) -> dict:
+    """Ctrl+T / Ctrl+Tab / Ctrl+Shift+Tab / Ctrl+F4 / Ctrl+W, and the keys the input line keeps."""
+    steps = {"start": expect_band(window, appearance, 1, 0, "start")}
+    tab_chord(window, [VK_CONTROL], VK_T)
+    tab_chord(window, [VK_CONTROL], VK_T)
+    steps["opened"] = expect_band(window, appearance, 3, 2, "Ctrl+T twice")
+    assert steps["opened"]["title"] == "無題 - NeNe Nib", steps["opened"]["title"]
+    snapshot(frames, window, "tabsOpened")
+    tab_chord(window, [VK_CONTROL], VK_TAB)
+    steps["next"] = expect_band(window, appearance, 3, 0, "Ctrl+Tab wraps to the first")
+    tab_chord(window, [VK_CONTROL, VK_SHIFT], VK_TAB)
+    steps["previous"] = expect_band(window, appearance, 3, 2, "Ctrl+Shift+Tab wraps to the last")
+    tab_chord(window, [VK_CONTROL], VK_F4)
+    steps["closedByF4"] = expect_band(window, appearance, 2, 1, "Ctrl+F4")
+    tab_chord(window, [VK_CONTROL], VK_W)
+    steps["closedByW"] = expect_band(window, appearance, 1, 0, "Ctrl+W in the ordinary mode")
+    steps["askedWhileClosing"] = bool(await_dialog(process, 0.3))
+    assert not steps["askedWhileClosing"], "closing untouched tabs asked about saving"
+    client = rectangle(window, user.GetClientRect)
+    dpi = user.GetDpiForWindow(window)
+    toggle = toggle_points(client[2] - client[0], client[3] - client[1], dpi)
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    time.sleep(TAB_SETTLE_SECONDS)
+    tab_chord(window, [VK_CONTROL], VK_W)
+    steps["vimControlW"] = expect_band(window, appearance, 1, 0, "Ctrl+W in the Vim mode")
+    assert user.IsWindow(window) and process.poll() is None, "Ctrl+W in Vim closed the window"
+    write_text(window, "/")
+    time.sleep(TAB_SETTLE_SECONDS)
+    tab_chord(window, [VK_CONTROL], VK_T)
+    steps["searchControlT"] = expect_band(window, appearance, 1, 0, "Ctrl+T on the / line")
+    snapshot(frames, window, "tabsSearchLine")
+    press(window, VK_ESCAPE)
+    time.sleep(TAB_SETTLE_SECONDS)
+    return steps
+
+
+def write_tab_documents(output: Path) -> list[Path]:
+    folder = output / "documents"
+    folder.mkdir(parents=True, exist_ok=True)
+    paths = [folder / "tab-left.txt", folder / "tab-right.txt"]
+    for path in paths:
+        path.write_bytes(b"tab\r\n")
+    return paths
+
+
+def confirm_in_band_order(executable: Path, environment: dict, output: Path) -> dict:
+    """Two unsaved tabs: closing the window asks left to right; No, then Cancel keeps it open."""
+    left, right = write_tab_documents(output)
+    process, window, _ = start(executable, environment, [str(left), str(right)])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        write_text(window, "X")
+        time.sleep(TAB_SETTLE_SECONDS)
+        tab_chord(window, [VK_CONTROL], VK_TAB)
+        write_text(window, "X")
+        time.sleep(TAB_SETTLE_SECONDS)
+        close(window)
+        result = {"firstDialog": bool(await_dialog(process)), "firstTitle": window_title(window)}
+        assert result["firstDialog"], "closing the window did not ask about the unsaved tabs"
+        assert result["firstTitle"] == f"● {left.name} - NeNe Nib", result
+        assert dismiss_dialog(process, IDNO)
+        result["secondDialog"] = bool(await_dialog(process))
+        result["secondTitle"] = window_title(window)
+        assert result["secondDialog"], "the second unsaved tab was closed without asking"
+        assert result["secondTitle"] == f"● {right.name} - NeNe Nib", result
+        assert dismiss_dialog(process, IDCANCEL)
+        time.sleep(TAB_SETTLE_SECONDS)
+        result["stayedOpen"] = bool(user.IsWindow(window)) and process.poll() is None
+        assert result["stayedOpen"], "Cancel on the second confirmation closed the window"
+        result["filesUntouched"] = all(path.read_bytes() == b"tab\r\n" for path in (left, right))
+        assert result["filesUntouched"], "answering No or Cancel wrote a file"
+        return result
+    finally:
+        stop(process)
+
+
+def verify_tabs(executable: Path, environment: dict, appearance: str, output: Path,
+                frames: Path | None) -> dict:
+    """Issue #239: the tab keys (ADR 0056 decision 10) in two launches of their own."""
+    process, window, _ = start(executable, environment)
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        try:
+            result = {"driven": True, "keys": drive_tab_keys(window, process, appearance, frames)}
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the tab keys stay in the unit tests"}
+        close(window)
+        dismiss_dialog(process, IDNO)
+        process.wait(timeout=5)
+    finally:
+        stop(process)
+    try:
+        result["closeInBandOrder"] = confirm_in_band_order(executable, environment, output)
+    except ForegroundRefused as refused:
+        result["closeInBandOrder"] = {"driven": False, "note": str(refused)}
+    return result
+
+
 def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) -> bytes:
     """Capture until the picture has changed and holds still for one more capture (await_ink's way).
 
@@ -1432,6 +1632,8 @@ def main() -> None:
                              "the start of the keys, without --keys it is saved as opened.png")
     parser.add_argument("--vim", action="store_true",
                         help="with --keys: switch to Vim NORMAL before before.png")
+    parser.add_argument("--tabs", action="store_true",
+                        help="run the tab key section alone (Issue #239); it sends real keys")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -1439,6 +1641,8 @@ def main() -> None:
         parser.error("--open needs --capture <dir>")
     if arguments.vim and arguments.keys is None:
         parser.error("--vim needs --keys")
+    if arguments.tabs and (arguments.keys is not None or arguments.open is not None):
+        parser.error("--tabs runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -1450,6 +1654,14 @@ def main() -> None:
     assert isolated.is_relative_to(output.resolve())
     environment = dict(os.environ, LOCALAPPDATA=str(isolated), APPDATA=str(isolated))
     become_dpi_aware()
+    if arguments.tabs:
+        try:
+            record = verify_tabs(executable, environment, expected_appearance(), output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
     if arguments.keys is None and arguments.open is not None:
         record = capture_opened(executable, environment, frames, arguments.open.resolve())
         print(json.dumps(record, indent=2))
@@ -1494,6 +1706,8 @@ def main() -> None:
         result["ime"] = verify_ime(executable, environment, appearance, output)
         # ADR 0013 の却下の条件は、窓が見えてから最初のフレームまでの面。別の 1 回の起動で記録する。
         result["firstPaint"] = verify_first_paint(executable, environment, appearance, output)
+        # Issue #239: タブの鍵と閉じる順は、本物の鍵が要るので別の 2 回の起動で測る。
+        result["tabs"] = verify_tabs(executable, environment, appearance, output, frames)
         (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                         encoding="utf-8")
         print(json.dumps(result, indent=2))

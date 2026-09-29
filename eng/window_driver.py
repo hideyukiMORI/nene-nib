@@ -110,6 +110,7 @@ DIALOG_CLASS = "#32770"
 WM_CLOSE = 0x0010
 WM_COMMAND = 0x0111
 IDNO = 7
+IDCANCEL = 2
 WM_NCHITTEST = 0x0084
 WM_KEYDOWN = 0x0100
 WM_CHAR = 0x0102
@@ -123,6 +124,10 @@ VK_ESCAPE = 0x1B
 VK_PRIOR = 0x21
 VK_NEXT = 0x22
 VK_CONTROL = 0x11
+VK_SHIFT = 0x10
+VK_F4 = 0x73
+VK_T = 0x54
+VK_W = 0x57
 VK_S = 0x53
 VK_SPACE = 0x20
 # ローマ字で「にほんご」を打つ鍵（ADR 0014 の実機の節）。仮想キーは英字の大文字の符号。
@@ -441,11 +446,17 @@ def send_keys(window, keys: list[int]) -> bool:
 
 def press_chord(window, modifier: int, key: int) -> bool:
     """Ctrl+key through the raw input queue; posted messages cannot carry the modifier."""
+    return press_combination(window, [modifier], key)
+
+
+def press_combination(window, modifiers: list[int], key: int) -> bool:
+    """Several modifiers held around one key (Ctrl+Shift+Tab), through the raw input queue."""
     if not take_foreground(window):
         return False
-    records = (INPUT * 4)(key_input(modifier, 0), key_input(key, 0),
-                          key_input(key, KEYEVENTF_KEYUP),
-                          key_input(modifier, KEYEVENTF_KEYUP))
+    records = (INPUT * (2 * len(modifiers) + 2))(
+        *[key_input(modifier, 0) for modifier in modifiers], key_input(key, 0),
+        key_input(key, KEYEVENTF_KEYUP),
+        *[key_input(modifier, KEYEVENTF_KEYUP) for modifier in reversed(modifiers)])
     return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
 
 
