@@ -3,6 +3,7 @@
 #include "Appearance.hpp"
 #include "CloseTab.hpp"
 #include "ComposeText.hpp"
+#include "DevicePixels.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -14,6 +15,7 @@
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
+#include "LayoutRect.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
@@ -36,6 +38,8 @@
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TitleBarHit.hpp"
+#include "TitleBarInput.hpp"
+#include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
 #include "TitleBarWidth.hpp"
 #include "UnsavedTab.hpp"
@@ -75,15 +79,19 @@ using nenenib::application::ScrollTabs;
 using nenenib::application::SelectEditMode;
 using nenenib::application::StepTab;
 using nenenib::application::SwitchTab;
+using nenenib::application::tab_unsaved;
+using nenenib::application::title_bar_input;
 using nenenib::application::TitleBarWidth;
 using nenenib::application::VisibleLines;
 using nenenib::core::Appearance;
 using nenenib::core::EditMode;
 using nenenib::core::FilePath;
 using nenenib::core::HistoryDirection;
+using nenenib::core::LayoutRect;
 using nenenib::core::SaveState;
 using nenenib::core::TabStep;
 using nenenib::core::TitleBarHit;
+using nenenib::core::TitleBarInput;
 using nenenib::core::TitleBarTarget;
 using nenenib::core::VimMode;
 
@@ -625,6 +633,56 @@ void verify_band_hover()
            "leaving the band clears the hover");
 }
 
+// ui が帯を描き・当て・閉じるときに読む純関数（ADR 0056 の決定 6・8・9）。配置の入力は表示値から
+// 1 本で作り、hover に写すのは見た目の変わる要素だけ、窓の最小の大きさでタブ 1 本はあふれない。
+void verify_band_pointer()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_four_tabs(controller);
+    applied(controller, NewTab{});
+    applied(controller, TitleBarWidth{1200});
+    const TitleBarTarget closer{TitleBarHit::tab_close, 1};
+    const auto frame = controller.apply(PointTitleBar{closer});
+    const TitleBarInput input = title_bar_input(frame, 1800, 144);
+    expect(input.width == 1800 && input.dpi == 144 && input.tab_count == 5 && input.active == 4 &&
+               input.scroll_dips == frame.tab_scroll && input.hovered == std::optional{closer},
+           "the band input is the frame's tabs, active tab, scroll and hover");
+    expect(tab_unsaved(frame.tabs, 0) && tab_unsaved(frame.tabs, 3) &&
+               !tab_unsaved(frame.tabs, 4) && !tab_unsaved(frame.tabs, 9),
+           "only a modified tab in range asks before it closes");
+    const auto layout = nenenib::core::title_bar_layout(input);
+    expect(nenenib::core::tab_hovered(layout, 1) && !nenenib::core::tab_hovered(layout, 0) &&
+               !nenenib::core::tab_hovered(layout, 4) && !nenenib::core::tab_hovered(layout, 7),
+           "the hovered tab is the one under the pointer, its close button included");
+    expect(layout.tab_padding == 21 && layout.button_radius == 6,
+           "the title padding and the button corner scale with the DPI");
+    const auto hover = [](TitleBarHit hit, std::size_t tab)
+    { return nenenib::core::title_bar_hover(TitleBarTarget{hit, tab}); };
+    expect(hover(TitleBarHit::tab, 2) == std::optional{TitleBarTarget{TitleBarHit::tab, 2}} &&
+               hover(TitleBarHit::tab_close, 1) == std::optional{closer} &&
+               hover(TitleBarHit::add_tab, 0) ==
+                   std::optional{TitleBarTarget{TitleBarHit::add_tab, 0}} &&
+               hover(TitleBarHit::tab_list, 0) ==
+                   std::optional{TitleBarTarget{TitleBarHit::tab_list, 0}},
+           "tabs, close buttons and the band buttons are hovered");
+    expect(!hover(TitleBarHit::caption, 0).has_value() &&
+               !hover(TitleBarHit::minimize, 0).has_value() &&
+               !hover(TitleBarHit::maximize, 0).has_value() &&
+               !hover(TitleBarHit::close, 0).has_value() &&
+               !hover(TitleBarHit::none, 0).has_value(),
+           "the caption, the window buttons and outside the band clear the hover");
+    expect(nenenib::core::minimum_window(96) == LayoutRect{0, 0, 360, 200} &&
+               nenenib::core::minimum_window(144) == LayoutRect{0, 0, 540, 300},
+           "the smallest window is 360 by 200 DIP");
+    expect(
+        !nenenib::core::title_bar_layout(TitleBarInput{360, 96, 1, 0, 0, std::nullopt}).overflowing,
+        "one tab does not overflow in the smallest window");
+    expect(nenenib::core::to_dips(540, 144) == 360 && nenenib::core::to_dips(1200, 96) == 1200 &&
+               nenenib::core::to_dips(181, 120) == 144,
+           "physical pixels become DIP for the band width");
+}
+
 } // namespace
 
 void verify_tabs_contracts()
@@ -650,6 +708,7 @@ void verify_tabs_contracts()
     verify_unsaved_tabs_in_band_order();
     verify_band_scroll();
     verify_band_hover();
+    verify_band_pointer();
 }
 
 void verify_tabs_scope()

@@ -14,6 +14,7 @@
 #include "Palette.hpp"
 #include "SettingsIssue.hpp"
 #include "StatusItems.hpp"
+#include "TitleBarInput.hpp"
 #include "TitleBarTarget.hpp"
 #include "VimMode.hpp"
 
@@ -66,4 +67,13 @@ struct EditorFrame
     // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。ui はこれを見て窓を閉じる。
     bool closing;
 };
+
+// 表示値から作る帯の配置の入力（ADR 0056 の決定 8・9）。renderer の描画と窓の hit test・
+// クリック・hover が同じ値を渡すための 1 本。width は帯の幅（物理画素）。
+[[nodiscard]] inline core::TitleBarInput title_bar_input(const EditorFrame &frame,
+                                                         std::int32_t width, std::uint32_t dpi)
+{
+    return core::TitleBarInput{
+        width, dpi, frame.tabs.size(), frame.active_tab, frame.tab_scroll, frame.hovered};
+}
 } // namespace nenenib::application

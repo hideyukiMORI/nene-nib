@@ -3,6 +3,7 @@
 #include "DevicePixels.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -26,6 +27,12 @@ constexpr std::int32_t grab_dips = 40;
 constexpr std::int32_t tab_list_dips = 32;
 constexpr std::int32_t tab_close_dips = 24;
 constexpr std::int32_t tab_close_inset_dips = 6;
+// 題名の左右の余白・× と「∨」と「＋」の面の角丸（docs/design/2026-09-29-tabs.md 第 3 節）。
+constexpr std::int32_t tab_padding_dips = 14;
+constexpr std::int32_t button_radius_dips = 4;
+// 窓の最小の大きさ（ADR 0056 の決定 8）。幅 360 ではタブ 1 本があふれない。
+constexpr std::int32_t minimum_window_width_dips = 360;
+constexpr std::int32_t minimum_window_height_dips = 200;
 // ホイール 1 刻みはタブ 1 本ぶん（幅 120 ＋ 間 2）。
 constexpr std::int32_t wheel_step_dips = tab_minimum_dips + tab_gap_dips;
 
@@ -68,13 +75,6 @@ constexpr std::int32_t wheel_step_dips = tab_minimum_dips + tab_gap_dips;
                                           std::int32_t strip, std::int32_t viewport) noexcept
 {
     return std::clamp(to_pixels(std::max(scroll_dips, 0), dpi), 0, std::max(strip - viewport, 0));
-}
-
-// 物理画素を DIP へ。96 DPI では同じ値（application はこの DPI で呼ぶ）。
-[[nodiscard]] std::int32_t to_dips(std::int32_t pixels, std::uint32_t dpi) noexcept
-{
-    const auto divisor = static_cast<std::int32_t>(std::max<std::uint32_t>(dpi, 1));
-    return pixels * static_cast<std::int32_t>(reference_dpi) / divisor;
 }
 
 [[nodiscard]] LayoutRect caption_button(std::int32_t right, std::int32_t height,
@@ -187,6 +187,8 @@ TitleBarLayout title_bar_layout(const TitleBarInput &input) noexcept
         .glyph = to_pixels(glyph_dips, dpi),
         .tab_close_size = to_pixels(tab_close_dips, dpi),
         .tab_close_inset = to_pixels(tab_close_inset_dips, dpi),
+        .tab_padding = to_pixels(tab_padding_dips, dpi),
+        .button_radius = to_pixels(button_radius_dips, dpi),
         .scroll = scroll,
         .overflowing = overflowing,
         .tab_count = static_cast<std::size_t>(count),
@@ -221,6 +223,37 @@ std::optional<LayoutRect> tab_close_rect(const TitleBarLayout &layout, std::size
     const std::int32_t right = tab.right - layout.tab_close_inset;
     const std::int32_t top = tab.top + (height_of(tab) - layout.tab_close_size) / 2;
     return LayoutRect{right - layout.tab_close_size, top, right, top + layout.tab_close_size};
+}
+
+bool tab_hovered(const TitleBarLayout &layout, std::size_t index) noexcept
+{
+    return index < layout.tab_count && hovering(layout.hovered, index);
+}
+
+std::optional<TitleBarTarget> title_bar_hover(const TitleBarTarget &target) noexcept
+{
+    switch (target.hit)
+    {
+    case TitleBarHit::tab:
+    case TitleBarHit::tab_close:
+        return target;
+    case TitleBarHit::add_tab:
+    case TitleBarHit::tab_list:
+        return TitleBarTarget{target.hit, 0};
+    case TitleBarHit::caption:
+    case TitleBarHit::minimize:
+    case TitleBarHit::maximize:
+    case TitleBarHit::close:
+    case TitleBarHit::none:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+LayoutRect minimum_window(std::uint32_t dpi) noexcept
+{
+    return LayoutRect{0, 0, to_pixels(minimum_window_width_dips, dpi),
+                      to_pixels(minimum_window_height_dips, dpi)};
 }
 
 TitleBarTarget title_bar_target(const TitleBarLayout &layout, std::int32_t x,

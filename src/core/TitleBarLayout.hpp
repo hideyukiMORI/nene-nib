@@ -33,6 +33,10 @@ struct TitleBarLayout
     // × の領域の一辺と、タブの右端からの距離（物理画素）。
     std::int32_t tab_close_size;
     std::int32_t tab_close_inset;
+    // 題名の左の余白と、× が無いときの右の余白（物理画素）。
+    std::int32_t tab_padding;
+    // ×・「∨」・「＋」にマウスを載せたときの面の角丸（物理画素）。
+    std::int32_t button_radius;
     // 収めた後の送り量（物理画素）。あふれていなければ 0。
     std::int32_t scroll;
     bool overflowing;
@@ -59,6 +63,17 @@ struct TitleBarLayout
 // それ以外は caption。viewport の外へはみ出したタブの部分とタブの間は当たらない（決定 9）。
 [[nodiscard]] TitleBarTarget title_bar_target(const TitleBarLayout &layout, std::int32_t x,
                                               std::int32_t y) noexcept;
+
+// マウスが載っているタブか（そのタブの本体か × の上）。非アクティブなタブの面を tab_hover にする。
+[[nodiscard]] bool tab_hovered(const TitleBarLayout &layout, std::size_t index) noexcept;
+
+// マウスを載せたときに見た目が変わる要素（タブ・×・「＋」・「∨」）だけを残す。caption と
+// 窓の操作と帯の外は値なし（ui が PointTitleBar に写す値・ADR 0056 の決定 9）。
+[[nodiscard]] std::optional<TitleBarTarget> title_bar_hover(const TitleBarTarget &target) noexcept;
+
+// 窓の最小の大きさ（幅 360 × 高さ 200 DIP・ADR 0056 の決定 8）を物理画素の矩形 {0, 0, 幅, 高さ}
+// で返す。ui は WM_GETMINMAXINFO の ptMinTrackSize に写すだけ。
+[[nodiscard]] LayoutRect minimum_window(std::uint32_t dpi) noexcept;
 
 // アクティブなタブの全体がタブの領域に入る最小の動きで直した送り量（DIP）。あふれていなければ
 // 0。application は 96 DPI の入力で呼ぶ（その DPI では物理画素と DIP が一致する）。
