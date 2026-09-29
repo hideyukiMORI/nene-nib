@@ -1704,3 +1704,23 @@ FR-003 / ARC-001 / CPP-002/004 / QLT-001/012 / CNF-010/011 を自己レビュー
 対象を限定した理由: 差分は core の鍵の表 1 行と動作 1 値と `x` の隣の分岐、`--vim-macro` の件数の契約、fixture である。renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001 / CPP-002/004/012 / QLT-001/012 / CNF-010/011 を自己レビュー。範囲は `motion_range` の left の 1 本を再利用（ARC-001）・動作の分類の網羅は `every_action_has_one_row` の static_assert で守られる（CPP-002）。
+
+### 5-bi. `u` と Ctrl-r の後のキャレット（Issue #208・ADR 0052・2026-09-29）
+
+ブランチ `fix/208-undo-caret-restore`（main `f73a23c` から）。3 工程で進めた。工程 1（`b0e1e0a`）は `core::Edit` に戻り先 `restore` を足して `replace` の 1 か所で書き、履歴の畳みと再生の畳み（`merge_replayed_edits`）は最初の値を残し、Vim の `u` / Ctrl-r は `edit.at` ではなく `restore`（Ctrl-r は `vim_same_line_and_column` で同じ行と桁）へ置く。工程 2（`0fdf052`）は engine が範囲の先頭か着地を `VimStep.restore` に載せ、controller が編集の前にキャレットを置く（1 行の `dd` `cc` の min・`cj` の 1 行下・行単位の移動の着地・VISUAL の固定の端・矩形の左上）。工程 3 は変更が 2 つ以上ある形を `--vim-dot` の契約で守り（期待値は `out/probes/probe-undocaret-2026-09-29.md` の U10〜U13 の Vim 9.1 の実測・本文は probe と同じ 8 行）、#204 の `register-dot-undo-advances` の隣に `p` の形 `register-dot-undo-advances-after`（`"1pu.u.`）を足した。契約: `.` の後の `u` `u` `<C-r>` `<C-r>`（`dw` `ixyz<Esc>` `oabc<Esc>` `dd` `Axyz<Esc>` と `x` の `3.`）・`@a` `2@a`（`xjx`）と `@a`（`ddjdd` `Axyz<Esc>jIabc<Esc>`）の 1 回の `u` と `<C-r>`・3 か所の変更の `u` × 3 と `<C-r>` × 3（`dw / x / D`・下から上の `x`・`ixyz / Axyz / dd`）・最終行の `dd` のやり直し（行が無いので最後の行の最初の非空白）と最終行に `o` した行の `dd`・通常モードの Ctrl+Z / Ctrl+Y は今までどおり戻した本文の末尾。どれも工程 1・2 の実装のまま Vim の実測と一致した（`src/` は工程 3 で不変）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 3 工程とも警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | 工程 1: 12 of 16224 checks failed（VISUAL の `u` の既存 fixture 7 件・工程 2 で直す途中の状態）→ 工程 2: **16764 checks 成功** → 工程 3: **16863 checks 成功** |
+| `build/nib_tests.exe --vim-dot` | 足した契約（U10〜U13 と通常モードの履歴）。1528 → **1619 checks 成功** |
+| `build/nib_tests.exe --vim-macro` | `register-` の fixture を選ぶ scope。件数の契約を 108 件（計 129）にして 1514 → **1523 checks 成功** |
+| `ctest --test-dir build -R nib_unit` | 工程 2・3 とも 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only undo-caret-` × 2（工程 1・2）・`--only register-dot-` × 2（工程 3） | 工程 1: 51 measured / 1536 reused・工程 2: 109 measured / 1536 reused・工程 3: 12 measured / 1634 reused。工程 3 の 2 回で `VimFixtures.hpp`（`E6C2D897…C370144F`）と `fixtures.json`（`433E77EB…AB4A2BD6`）の SHA-256 が一致。`register-dot-undo-advances-after` は Vim が本文 `one\nthree\ntwo\nthree\nfour`・(2,1)・`three\n` `V` で、Nib も同じ |
+| `python eng/protected-diff.py --base origin/main --build --allow vim-dot --allow vim-macro` | **終了 0**。`f73a23c..2c39b24`（この節を足す前のコミット）・`fixtures 1536 -> 1646 / metadata 2 / deleted 0 / changed 0 / added 110`・保護対象は `none`・`--vim-dot 変化 1528 -> 1619 allowed`・`--vim-macro 変化 1514 -> 1523 allowed`・`scopes 23 / same 21 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | 3 工程とも **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の `Edit`・`EditHistory`・`VimStep`・`VimCaret` と application の `u` / Ctrl-r と `step_vim` の 1 か所、単体テストと fixture である。renderer・ui/win32・adapters の経路は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / ARC-004 / CPP-002/003/004 / QLT-001/012 / CNF-010/011 を自己レビュー。戻り先を書くのは `replace` の 1 か所と engine の `VimStep.restore`（ARC-001）・`Edit` の欄は既定値なしの集成初期化で書き忘れがコンパイルで落ちる（ADR 0052 の強制）。
