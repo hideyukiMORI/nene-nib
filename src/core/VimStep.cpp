@@ -31,6 +31,8 @@
 #include "VimMatchRequest.hpp"
 #include "VimMotionRange.hpp"
 #include "VimNamedRegisters.hpp"
+#include "VimNumberedRegisters.hpp"
+#include "VimNumberedRule.hpp"
 #include "VimPattern.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPrefix.hpp"
@@ -896,7 +898,9 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     {
         return range;
     }
-    return lines_between(text, first, last);
+    VimMotionRange lines = lines_between(text, first, last);
+    lines.numbered = range.numbered;
+    return lines;
 }
 
 // ---------------------------------------------------------------- オペレータ（決定 2・3）
@@ -985,42 +989,128 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     return VimRegister{std::move(text), VimRegisterKind::lines};
 }
 
-// 削除・変更・yank の書き先（ADR 0048 の決定 3）。書き手はすべてここを通る（ARC-001）。
-// `"_` は何も変えず、選択が無いか `""` なら無名へ、名前つきは表へ置いて（追記なら繋いで）
-// 無名へも同じ値を写す。値が無い（空の文字単位の範囲）ときはどのレジスタも変えない。
-// 命令が完了した状態を返すので、選んだレジスタはここで消える。
+// 名指しの書き込み（ADR 0050 の決定 3 の 1）。名前つきは表へ（追記なら ADR 0048 の決定 4 で
+// 繋ぐ・繋げなければ refused）、数字はその位置へ、`"-` は小削除へ置き換える。`""` と選択の無い
+// yank は `"0` へ置く。選択の無い削除・変更はここでは何も書かない。`"_` は呼び出し元が先に返す。
 [[nodiscard]] std::expected<VimState, VimRepeatFailure>
-registers_written(const VimState &state, const std::optional<VimRegister> &value)
+named_written(VimState state, const VimRegister &value, VimOperator operation)
 {
-    if (!value.has_value())
-    {
-        return vim_resting_from(state, state.unnamed_register);
-    }
     if (!state.selected_register.has_value())
     {
-        return vim_resting_from(state, value.value());
+        switch (operation)
+        {
+        case VimOperator::yank:
+            state.numbered.registers.at(0) = value;
+            return state;
+        case VimOperator::remove:
+        case VimOperator::change:
+            return state;
+        }
+        std::unreachable();
     }
     const VimRegisterSelection selection = state.selected_register.value();
+    const auto name = static_cast<char32_t>(selection.name);
     switch (selection.target)
     {
     case VimRegisterTarget::black_hole:
-        return vim_resting_from(state, state.unnamed_register);
+        return state;
     case VimRegisterTarget::unnamed:
-        return vim_resting_from(state, value.value());
+        state.numbered.registers.at(0) = value;
+        return state;
+    case VimRegisterTarget::numbered:
+        state.numbered.registers.at(vim_numbered_index(name).value_or(0)) = value;
+        return state;
+    case VimRegisterTarget::small_delete:
+        state.small_delete = value;
+        return state;
     case VimRegisterTarget::named:
         break;
     }
-    const std::size_t index = vim_register_index(static_cast<char32_t>(selection.name)).value_or(0);
+    VimRegister &target = state.registers.registers.at(vim_register_index(name).value_or(0));
     const std::optional<VimRegister> written =
-        selection.append ? appended_register(state.registers.registers.at(index), value.value())
-                         : value;
+        selection.append ? appended_register(target, value) : value;
     if (!written.has_value())
     {
         return std::unexpected(VimRepeatFailure::refused);
     }
-    VimState next = vim_resting_from(state, written.value());
-    next.registers.registers.at(index) = written.value();
-    return next;
+    target = written.value();
+    return state;
+}
+
+// レジスタの値が 1 行に収まらないか（行単位か、本文に改行を含む・ADR 0050 の決定 4）。複数行の
+// 矩形の本文は行の区切りの改行を含む。「`"1` へ行くか」はこの 1 か所が値から決める。
+[[nodiscard]] bool spans_lines(const VimRegister &value) noexcept
+{
+    return value.kind == VimRegisterKind::lines || value.text.contains('\n');
+}
+
+// `"1` の規則（決定 3 の 2）。削除と変更で、値が 1 行に収まらないか検索の移動なら、`"1`〜`"8` を
+// `"2`〜`"9` へ繰り下げて（`"9` は捨てる）`"1` へ今回の値を置く。
+[[nodiscard]] VimState shifted_into_first(VimState state, const VimRegister &value,
+                                          VimOperator operation, VimNumberedRule rule)
+{
+    if (operation == VimOperator::yank ||
+        (rule == VimNumberedRule::by_extent && !spans_lines(value)))
+    {
+        return state;
+    }
+    auto &numbered = state.numbered.registers;
+    std::shift_right(std::next(numbered.begin()), numbered.end(), 1);
+    numbered.at(1) = value;
+    return state;
+}
+
+// `"-` の規則（決定 3 の 3）。選択の無い削除と変更で、値が 1 行に収まるときだけ小削除へ置く。
+[[nodiscard]] VimState small_delete_written(VimState state, const VimRegister &value,
+                                            VimOperator operation)
+{
+    if (operation == VimOperator::yank || state.selected_register.has_value() || spans_lines(value))
+    {
+        return state;
+    }
+    state.small_delete = value;
+    return state;
+}
+
+// 無名へ写す値（決定 3 の 4）。追記なら表の追記後の全体、ほかは今回の値。
+[[nodiscard]] VimRegister unnamed_written(const VimState &state, const VimRegister &value)
+{
+    if (!state.selected_register.has_value())
+    {
+        return value;
+    }
+    const VimRegisterSelection selection = state.selected_register.value();
+    if (selection.target != VimRegisterTarget::named || !selection.append)
+    {
+        return value;
+    }
+    return state.registers.registers.at(
+        vim_register_index(static_cast<char32_t>(selection.name)).value_or(0));
+}
+
+// 削除・変更・yank の書き先（ADR 0050 の決定 3・ADR 0048 の決定 3 を改める）。書き手はすべて
+// ここを通る（ARC-001）。`"_` と値が無い（空の文字単位の範囲）ときはどのレジスタも変えず、
+// ほかは「名指しの書き込み → `"1` の規則 → `"-` の規則 → 無名」の順に埋める。
+// 命令が完了した状態を返すので、選んだレジスタはここで消える。
+[[nodiscard]] std::expected<VimState, VimRepeatFailure>
+registers_written(const VimState &state, const std::optional<VimRegister> &value,
+                  VimOperator operation, VimNumberedRule rule)
+{
+    const bool black_hole = state.selected_register.has_value() &&
+                            state.selected_register.value().target == VimRegisterTarget::black_hole;
+    if (!value.has_value() || black_hole)
+    {
+        return vim_resting_from(state, state.unnamed_register);
+    }
+    auto named = named_written(state, value.value(), operation);
+    if (!named.has_value())
+    {
+        return std::unexpected(named.error());
+    }
+    const VimState written = small_delete_written(
+        shifted_into_first(std::move(named).value(), value.value(), operation, rule), value.value(),
+        operation);
+    return vim_resting_from(written, unnamed_written(written, value.value()));
 }
 
 // 書けなかった命令（矩形が絡む追記・決定 4）と名前にならない鍵（決定 2）。回数と保留と選んだ
@@ -1058,7 +1148,8 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
                                       const VimMotionRange &range)
 {
-    auto written = registers_written(state, register_after(text, range));
+    auto written =
+        registers_written(state, register_after(text, range), VimOperator::remove, range.numbered);
     if (!written.has_value())
     {
         return refused_register(state);
@@ -1088,7 +1179,8 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep changed(const VimState &state, const TextBuffer &text,
                               const VimMotionRange &range)
 {
-    auto written = registers_written(state, register_after(text, range));
+    auto written =
+        registers_written(state, register_after(text, range), VimOperator::change, range.numbered);
     if (!written.has_value())
     {
         return refused_register(state);
@@ -1126,7 +1218,8 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep yanked(const VimState &state, const TextBuffer &text, Offset caret,
                              const VimMotionRange &range)
 {
-    auto written = registers_written(state, register_of(text, range));
+    auto written =
+        registers_written(state, register_of(text, range), VimOperator::yank, range.numbered);
     if (!written.has_value())
     {
         return refused_register(state);
@@ -1485,7 +1578,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
                                      VimOperator operation)
 {
     const VimBlockRange block = block_of(state, view);
-    auto written = registers_written(state, block_register(view.text, block));
+    auto written = registers_written(state, block_register(view.text, block), operation,
+                                     VimNumberedRule::by_extent);
     if (!written.has_value())
     {
         return refused_register(state);
@@ -1630,8 +1724,9 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     return column <= virtual_width(text.line_text(line)) ? count : count - single_step;
 }
 
-// `p` `P` の読み元（ADR 0048 の決定 5）。名前つきは表の 1 本（`"Ap` も同じ）、選択が無いか `""`
-// なら無名、`"_` は空（空のレジスタと同じく何も貼らない）。
+// `p` `P` の読み元（ADR 0048 の決定 5・ADR 0050 の決定 5）。名前つきは表の 1 本（`"Ap` も同じ）、
+// 数字は `"0`〜`"9` の表の 1 本、`"-` は小削除、選択が無いか `""` なら無名、`"_` は空（空の
+// レジスタと同じく何も貼らない）。
 [[nodiscard]] VimRegister register_read(const VimState &state)
 {
     if (!state.selected_register.has_value())
@@ -1648,6 +1743,11 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         return state.unnamed_register;
     case VimRegisterTarget::black_hole:
         return VimRegister{"", VimRegisterKind::uninitialized};
+    case VimRegisterTarget::numbered:
+        return state.numbered.registers.at(
+            vim_numbered_index(static_cast<char32_t>(selection.name)).value_or(0));
+    case VimRegisterTarget::small_delete:
+        return state.small_delete;
     }
     std::unreachable();
 }
@@ -2430,7 +2530,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 // ---------------------------------------------------------------- `"`（ADR 0048）
 
 // `"` の次の鍵が選ぶレジスタ（決定 2）。a〜z は名前つき、A〜Z は同じ名前への追記、`"` は無名、
-// `_` はブラックホール。ほかの鍵は名前を持たない。
+// `_` はブラックホール、`0`〜`9` は数字、`-` は小削除（ADR 0050 の決定 2・回数の桁ではない）。
+// ほかの鍵は名前を持たない。
 [[nodiscard]] std::optional<VimRegisterSelection> register_selection_of(char32_t name)
 {
     if (name == U'"')
@@ -2440,6 +2541,14 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (name == U'_')
     {
         return VimRegisterSelection{VimRegisterTarget::black_hole, '_', false};
+    }
+    if (name == U'-')
+    {
+        return VimRegisterSelection{VimRegisterTarget::small_delete, '-', false};
+    }
+    if (vim_numbered_index(name).has_value())
+    {
+        return VimRegisterSelection{VimRegisterTarget::numbered, static_cast<char>(name), false};
     }
     const auto index = vim_register_index(name);
     if (!index.has_value())
@@ -2715,8 +2824,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return VimStep{search_rested(state), VimNoEffect{}};
     }
-    return performed(state, view.text, request.anchor,
-                     exclusive_range(view.text, characters_between(request.anchor, destination)));
+    VimMotionRange range =
+        exclusive_range(view.text, characters_between(request.anchor, destination));
+    // 検索の移動の削除は 1 行の中でも `"1` へ行く（ADR 0050 の決定 4）。
+    range.numbered = VimNumberedRule::always;
+    return performed(state, view.text, request.anchor, range);
 }
 
 // 検索の鍵は `:nohlsearch` で止めた強調を戻す（ADR 0037 の決定 1）。見つからなくても（E486）、

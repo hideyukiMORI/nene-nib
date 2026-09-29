@@ -8,6 +8,7 @@
 #include "VimMacroRecording.hpp"
 #include "VimMode.hpp"
 #include "VimNamedRegisters.hpp"
+#include "VimNumberedRegisters.hpp"
 #include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterSelection.hpp"
@@ -64,6 +65,10 @@ struct VimState
     // last_macro は `@@` が繰り返す直前の名前。`.` の記録とは独立で、どれも鍵を食べ終わっても
     // （vim_resting_from でも）保つ。
     VimNamedRegisters registers;
+    // 数字レジスタ `"0`〜`"9` と小削除 `"-`（ADR 0050 の決定 1）。名前つきと同じく
+    // vim_resting_from が持ち越し、書くのは registers_written だけ。
+    VimNumberedRegisters numbered;
+    VimRegister small_delete;
     std::optional<VimMacroRecording> macro_recording;
     std::optional<char> last_macro;
 };
@@ -89,6 +94,8 @@ struct VimState
                     std::nullopt,
                     std::move(unnamed_register),
                     VimNamedRegisters{},
+                    VimNumberedRegisters{},
+                    VimRegister{"", VimRegisterKind::uninitialized},
                     std::nullopt,
                     std::nullopt};
 }
@@ -105,6 +112,8 @@ struct VimState
     next.highlight = state.highlight;
     next.incsearch = state.incsearch;
     next.registers = state.registers;
+    next.numbered = state.numbered;
+    next.small_delete = state.small_delete;
     next.macro_recording = state.macro_recording;
     next.last_macro = state.last_macro;
     return next;
