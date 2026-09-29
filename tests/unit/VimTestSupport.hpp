@@ -37,7 +37,11 @@ inline constexpr std::size_t vim_visible_lines = 64;
 
 [[nodiscard]] std::vector<nenenib::core::VimKey> vim_keys_of(std::string_view keys);
 [[nodiscard]] std::string vim_body(const nenenib::application::EditorFrame &frame);
+// 打った鍵の意味で流す。窓で打った鍵と同じに、鍵が失敗しても次の鍵が走る（ADR 0046 の決定 3）。
 void vim_replay(nenenib::application::EditorController &controller, std::string_view keys);
+// fixture の鍵を Vim の :normal! の意味で流す。鍵が失敗で終わったら残りの鍵を流さない
+// （Issue #230・oracle は鍵を 1 本の :normal! で Vim へ入れる）。
+void vim_normal(nenenib::application::EditorController &controller, std::string_view keys);
 [[nodiscard]] nenenib::core::VimState empty_vim_state();
 [[nodiscard]] bool last_search_is(const nenenib::core::VimState &state,
                                   nenenib::core::VimCharacterSearchKind kind,

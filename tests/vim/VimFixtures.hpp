@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 b4027b10eef86c238624e53a8a8c3e63b9941c00655c86d0d50a1b041f3b93f0 / 1844 fixtures
+// fixtures.json: sha256 9c03b3d79477d134bf2db4bc1d47de7411cccc15a7af51af1daeaa5987d28a21 / 1853 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1844> vim_fixtures{{
+constexpr std::array<VimFixture, 1853> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1856,6 +1856,15 @@ constexpr std::array<VimFixture, 1844> vim_fixtures{{
     {"macro-word-edge-w-trailing-blank-after-the-last-word", "abc  ", "2l@a", "abc ", 1, 4, " ", "v", std::nullopt, VimMacroFixture{'a', "wx"}},
     {"macro-word-edge-e-count-lands-on-a-one-letter-last-word", "abc d", "@a", "abc d", 1, 5, "", "", std::nullopt, VimMacroFixture{'a', "9ex"}},
     {"macro-word-edge-e-count-past-end-across-lines", "abc\ndef", "@a", "abc\ndef", 2, 3, "", "", std::nullopt, VimMacroFixture{'a', "9ex"}},
+    {"word-edge-forward-9w", "abc def", "9wx", "abc de", 1, 6, "f", "v", std::nullopt},
+    {"word-edge-forward-last-char-w", "abc def", "$wx", "abc def", 1, 7, "", "", std::nullopt},
+    {"word-edge-forward-9e", "abc def", "9ex", "abc def", 1, 7, "", "", std::nullopt},
+    {"word-edge-forward-last-char-e", "abc def", "$ex", "abc def", 1, 7, "", "", std::nullopt},
+    {"word-edge-forward-9W", "a.c d.f", "9Wx", "a.c d.", 1, 6, "f", "v", std::nullopt},
+    {"word-edge-forward-9E", "a.c d.f", "9Ex", "a.c d.f", 1, 7, "", "", std::nullopt},
+    {"word-edge-forward-2w-exact", "abc def ghi", "2wx", "abc def hi", 1, 9, "g", "v", std::nullopt},
+    {"word-edge-forward-9w-one-letter-last-word", "abc d", "9wx", "abc d", 1, 5, "", "", std::nullopt},
+    {"word-edge-forward-e-trailing-blank", "abc  ", "2lex", "abc  ", 1, 5, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

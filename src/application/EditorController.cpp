@@ -450,6 +450,22 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
     return frame();
 }
 
+// fixture の harness が Vim の :normal! の意味で鍵の列を流す口（Issue #230）。1 鍵の流し方は
+// press_vim_key と同じで、鍵が閉じた失敗で終わったら残りの鍵を流さない（再生の打ち切りと同じ
+// deliver_vim_key の返り値で決める）。
+EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
+{
+    for (const core::VimKey &key : keys)
+    {
+        begin_intent(false);
+        if (deliver_vim_key(key).has_value())
+        {
+            break;
+        }
+    }
+    return frame();
+}
+
 void EditorController::begin_intent(bool keeps_message)
 {
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。

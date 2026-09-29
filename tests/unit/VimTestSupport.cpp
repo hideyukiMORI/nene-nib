@@ -148,6 +148,13 @@ void vim_replay(EditorController &controller, std::string_view keys)
     }
 }
 
+void vim_normal(EditorController &controller, std::string_view keys)
+{
+    // 打ち切りの判定は controller の 1 か所（Issue #230）。テストの側に 2 つ目を書かない。
+    const std::vector<VimKey> all = vim_keys_of(keys);
+    static_cast<void>(controller.press_vim_keys(all));
+}
+
 [[nodiscard]] VimState empty_vim_state()
 {
     return nenenib::core::vim_resting_state(
@@ -209,6 +216,8 @@ void store_vim_fixture_macro(EditorController &controller, const VimFixture &fix
     applied(scratch.controller(), VimKeyPress{VimKey{VimCharacter{U'q'}}});
     applied(scratch.controller(),
             VimKeyPress{VimKey{VimCharacter{static_cast<char32_t>(macro.name)}}});
+    // oracle は register の鍵を実行せず `let @a = "..."` で文字のまま置くので、録画は鍵が
+    // 途中で失敗しても全部の鍵を録る打った鍵の意味で流す（:normal! の打ち切りを掛けない・#230）。
     vim_replay(scratch.controller(), macro.keys);
     const auto &recording = scratch.controller().vim_state().macro_recording;
     expect(recording.has_value(),
