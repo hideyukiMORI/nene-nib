@@ -25,9 +25,6 @@ namespace
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
 constexpr float tab_text_dips = 12.5F;
 constexpr float ui_text_dips = 12.0F;
-constexpr std::int32_t tab_padding_left_dips = 14;
-constexpr std::int32_t tab_padding_right_dips = 10;
-constexpr std::int32_t tab_close_dips = 18;
 constexpr std::int32_t gutter_padding_dips = 16;
 constexpr std::int32_t caret_inset_dips = 2;
 constexpr std::int32_t newline_mark_dips = 6;
@@ -397,6 +394,19 @@ void Direct2DRenderer::align_text_formats()
     status_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 }
 
+HRESULT Direct2DRenderer::trim_tab_titles()
+{
+    Microsoft::WRL::ComPtr<IDWriteInlineObject> ellipsis;
+    const HRESULT made =
+        dwrite_->CreateEllipsisTrimmingSign(tab_format_.Get(), ellipsis.GetAddressOf());
+    if (FAILED(made))
+    {
+        return made;
+    }
+    const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+    return tab_format_->SetTrimming(&trimming, ellipsis.Get());
+}
+
 std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
 {
     Microsoft::WRL::ComPtr<IUnknown> unknown;
@@ -424,6 +434,10 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
         return std::unexpected(RenderFailure::directwrite);
     }
     align_text_formats();
+    if (FAILED(trim_tab_titles()))
+    {
+        return std::unexpected(RenderFailure::directwrite);
+    }
     return create_body_formats(
         core::EditorSettings{formatted_size_, formatted_family_, std::nullopt});
 }
@@ -539,34 +553,81 @@ void Direct2DRenderer::draw_caption_glyphs(const core::TitleBarLayout &layout, c
     draw_cross(layout.close, half, stroke);
 }
 
-void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
-                                const core::TitleBarLayout &layout)
+void Direct2DRenderer::draw_tab_face(const core::TitleBarLayout &layout,
+                                     const core::LayoutRect &tab, core::RgbColor color)
 {
-    const auto tab = core::tab_rect(layout, 0);
-    const auto radius = static_cast<float>(layout.corner_radius);
-    fill_rounded(tab, frame.palette.tab_active, radius);
+    // 上の角だけ丸め、下は帯の下端と面一にする（docs/design/2026-09-15-look.md 第 2 節）。
+    fill_rounded(tab, color, static_cast<float>(layout.corner_radius));
     fill(core::LayoutRect{tab.left, tab.bottom - layout.corner_radius, tab.right, tab.bottom},
-         frame.palette.tab_active);
-    fill(core::LayoutRect{tab.left, tab.bottom - layout.underline, tab.right, tab.bottom},
-         frame.palette.accent);
-    const auto close_width = core::to_pixels(tab_close_dips, dpi_);
-    const auto right = tab.right - core::to_pixels(tab_padding_right_dips, dpi_);
-    write(frame.document.title.text(), tab_format_.Get(),
-          core::LayoutRect{tab.left + core::to_pixels(tab_padding_left_dips, dpi_), tab.top,
-                           right - close_width, tab.bottom},
-          frame.palette.text);
-    brush_->SetColor(to_color(frame.palette.muted));
-    draw_cross(core::LayoutRect{right - close_width, tab.top, right, tab.bottom},
-               static_cast<float>(close_width) / 4.0F, scaled(1.0F));
+         color);
 }
 
-void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
-                                      const core::TitleBarLayout &layout)
+void Direct2DRenderer::draw_button_face(const application::EditorFrame &frame,
+                                        const core::TitleBarLayout &layout,
+                                        const core::LayoutRect &box, core::TitleBarTarget target)
 {
-    // 帯は D16 で不透明。Mica は DWM 側に掛けたままだが、この面で隠れる（最初のフレームまでの
-    // 面と非クライアントの明暗の判定に要るので外さない・ADR 0013 / ADR 0008 の決定 9）。
-    fill(layout.band, frame.palette.title_bar);
-    draw_tab(frame, layout);
+    // ×・「∨」・「＋」にマウスを載せているときだけ toggle の面（ADR 0056 の決定 12）。
+    if (layout.hovered == target)
+    {
+        fill_rounded(box, frame.palette.toggle, static_cast<float>(layout.button_radius));
+    }
+}
+
+void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
+                                const core::TitleBarLayout &layout, std::size_t index)
+{
+    const auto tab = core::tab_rect(layout, index);
+    const bool active = index == layout.active;
+    const bool lit = active || core::tab_hovered(layout, index);
+    if (active)
+    {
+        draw_tab_face(layout, tab, frame.palette.tab_active);
+        fill(core::LayoutRect{tab.left, tab.bottom - layout.underline, tab.right, tab.bottom},
+             frame.palette.accent);
+    }
+    if (!active && lit)
+    {
+        draw_tab_face(layout, tab, frame.palette.tab_hover);
+    }
+    // × はアクティブなタブとマウスを載せたタブにだけある（D21）。題名はその左端まで。
+    const auto close = core::tab_close_rect(layout, index);
+    const auto right = close.has_value() ? close.value().left : tab.right - layout.tab_padding;
+    const core::LayoutRect title{tab.left + layout.tab_padding, tab.top, right, tab.bottom};
+    context_->PushAxisAlignedClip(to_rect(title), D2D1_ANTIALIAS_MODE_ALIASED);
+    write(frame.tabs.at(index).title.text(), tab_format_.Get(), title,
+          lit ? frame.palette.text : frame.palette.muted);
+    context_->PopAxisAlignedClip();
+    if (!close.has_value())
+    {
+        return;
+    }
+    draw_button_face(frame, layout, close.value(),
+                     core::TitleBarTarget{core::TitleBarHit::tab_close, index});
+    brush_->SetColor(to_color(frame.palette.muted));
+    draw_cross(close.value(), static_cast<float>(layout.glyph) / 2.0F, scaled(1.0F));
+}
+
+void Direct2DRenderer::draw_tabs(const application::EditorFrame &frame,
+                                 const core::TitleBarLayout &layout)
+{
+    // タブの領域の外（左へ送られた分と「∨」の下）は描かない（D20）。
+    context_->PushAxisAlignedClip(to_rect(layout.viewport), D2D1_ANTIALIAS_MODE_ALIASED);
+    const std::size_t count = std::min(frame.tabs.size(), layout.tab_count);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        if (core::tab_visible(layout, index))
+        {
+            draw_tab(frame, layout, index);
+        }
+    }
+    context_->PopAxisAlignedClip();
+}
+
+void Direct2DRenderer::draw_add_tab(const application::EditorFrame &frame,
+                                    const core::TitleBarLayout &layout)
+{
+    draw_button_face(frame, layout, layout.add_tab,
+                     core::TitleBarTarget{core::TitleBarHit::add_tab, 0});
     brush_->SetColor(to_color(frame.palette.muted));
     const auto plus = centre_of(layout.add_tab);
     const float half = static_cast<float>(layout.glyph) / 2.0F;
@@ -575,6 +636,37 @@ void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
                        brush_.Get(), stroke);
     context_->DrawLine(D2D1::Point2F(plus.x, plus.y - half), D2D1::Point2F(plus.x, plus.y + half),
                        brush_.Get(), stroke);
+}
+
+void Direct2DRenderer::draw_tab_list(const application::EditorFrame &frame,
+                                     const core::TitleBarLayout &layout)
+{
+    // 「∨」はあふれているときだけある（D20）。押したときの一覧は #240。
+    draw_button_face(frame, layout, layout.tab_list,
+                     core::TitleBarTarget{core::TitleBarHit::tab_list, 0});
+    brush_->SetColor(to_color(frame.palette.muted));
+    const auto centre = centre_of(layout.tab_list);
+    const float half = static_cast<float>(layout.glyph) / 2.0F;
+    const float quarter = half / 2.0F;
+    const float stroke = scaled(1.0F);
+    context_->DrawLine(D2D1::Point2F(centre.x - half, centre.y - quarter),
+                       D2D1::Point2F(centre.x, centre.y + quarter), brush_.Get(), stroke);
+    context_->DrawLine(D2D1::Point2F(centre.x, centre.y + quarter),
+                       D2D1::Point2F(centre.x + half, centre.y - quarter), brush_.Get(), stroke);
+}
+
+void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
+                                      const core::TitleBarLayout &layout)
+{
+    // 帯は D16 で不透明。Mica は DWM 側に掛けたままだが、この面で隠れる（最初のフレームまでの
+    // 面と非クライアントの明暗の判定に要るので外さない・ADR 0013 / ADR 0008 の決定 9）。
+    fill(layout.band, frame.palette.title_bar);
+    draw_tabs(frame, layout);
+    if (layout.overflowing)
+    {
+        draw_tab_list(frame, layout);
+    }
+    draw_add_tab(frame, layout);
     draw_caption_glyphs(layout, frame.palette.muted);
 }
 
@@ -1215,7 +1307,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto size = context_->GetSize();
     const auto width = static_cast<std::int32_t>(size.width);
     const auto height = static_cast<std::int32_t>(size.height);
-    const auto title = core::title_bar_layout(width, dpi_, 1);
+    const auto title = core::title_bar_layout(application::title_bar_input(frame, width, dpi_));
     const auto status = core::status_bar_layout(width, height, dpi_);
     draw_title_bar(frame, title);
     draw_body(frame, core::body_layout(width, height, dpi_, frame.settings.font_size));

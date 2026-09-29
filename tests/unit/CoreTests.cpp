@@ -48,7 +48,9 @@
 #include "Theme.hpp"
 #include "ThemeDerivation.hpp"
 #include "TitleBarHit.hpp"
+#include "TitleBarInput.hpp"
 #include "TitleBarLayout.hpp"
+#include "TitleBarTarget.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 
@@ -127,8 +129,12 @@ using nenenib::core::status_bar_layout;
 using nenenib::core::status_items_for;
 using nenenib::core::StatusBarHit;
 using nenenib::core::SyntaxPalette;
+using nenenib::core::tab_close_rect;
 using nenenib::core::tab_rect;
 using nenenib::core::tab_title_for;
+using nenenib::core::tab_visible;
+using nenenib::core::tabs_scrolled_by;
+using nenenib::core::tabs_scrolled_into_view;
 using nenenib::core::TextBuffer;
 using nenenib::core::TextEncoding;
 using nenenib::core::TextFailure;
@@ -136,9 +142,12 @@ using nenenib::core::TextPosition;
 using nenenib::core::Theme;
 using nenenib::core::theme_named;
 using nenenib::core::theme_of;
-using nenenib::core::title_bar_hit;
 using nenenib::core::title_bar_layout;
+using nenenib::core::title_bar_target;
 using nenenib::core::TitleBarHit;
+using nenenib::core::TitleBarInput;
+using nenenib::core::TitleBarLayout;
+using nenenib::core::TitleBarTarget;
 using nenenib::core::to_pixels;
 using nenenib::core::to_utf16;
 using nenenib::core::to_utf8;
@@ -930,6 +939,27 @@ void verify_dark_palette_tokens()
     expect(dark.ime == RgbColor{0xD7, 0xC4, 0xE5}, "dark IME underline is the pale violet");
 }
 
+// マウスを載せたタブの面は帯とアクティブなタブの各成分の平均（切り捨て・ADR 0056 の決定 12）。
+void verify_tab_hover_tokens()
+{
+    expect(theme_of(BuiltinTheme::ubuntu_aubergine).ui.tab_hover == RgbColor{0x27, 0x07, 0x1D},
+           "the dark hovered tab is #27071D");
+    expect(theme_of(BuiltinTheme::neutral_light).ui.tab_hover == RgbColor{0xEA, 0xEC, 0xF0},
+           "the light hovered tab is #EAECF0");
+    const auto half = [](std::uint8_t left, std::uint8_t right)
+    { return static_cast<std::uint8_t>((static_cast<int>(left) + static_cast<int>(right)) / 2); };
+    for (const Theme &theme : builtin_themes)
+    {
+        const Palette &ui = theme.ui;
+        const RgbColor expected{half(ui.title_bar.red, ui.tab_active.red),
+                                half(ui.title_bar.green, ui.tab_active.green),
+                                half(ui.title_bar.blue, ui.tab_active.blue)};
+        expect(ui.tab_hover == expected,
+               (std::string{theme.name} + ": the hovered tab averages the band and the active tab")
+                   .c_str());
+    }
+}
+
 void verify_light_palette_tokens()
 {
     const auto light = theme_of(BuiltinTheme::neutral_light).ui;
@@ -1199,9 +1229,20 @@ void verify_rect_geometry()
     expect(!contains(rectangle, 15, 40), "the bottom edge is a half-open bound");
 }
 
+// 帯の配置の入力（ADR 0056 の決定 8）。送り量 0・マウスなし・アクティブは先頭。
+[[nodiscard]] TitleBarLayout bar(std::int32_t width, std::uint32_t dpi, std::size_t tabs)
+{
+    return title_bar_layout(TitleBarInput{width, dpi, tabs, 0, 0, std::nullopt});
+}
+
+[[nodiscard]] TitleBarHit hit_at(const TitleBarLayout &layout, std::int32_t x, std::int32_t y)
+{
+    return title_bar_target(layout, x, y).hit;
+}
+
 void verify_title_bar_rectangles()
 {
-    const auto layout = title_bar_layout(640, 96, 1);
+    const auto layout = bar(640, 96, 1);
     expect(layout.band == LayoutRect{0, 0, 640, 40}, "the band is 40 DIP high");
     expect(layout.close == LayoutRect{594, 0, 640, 40}, "close is the rightmost 46 DIP button");
     expect(layout.maximize == LayoutRect{548, 0, 594, 40}, "maximize sits left of close");
@@ -1215,48 +1256,203 @@ void verify_title_bar_rectangles()
 
 void verify_title_bar_scaling()
 {
-    const auto at_125 = title_bar_layout(800, 120, 1);
+    const auto at_125 = bar(800, 120, 1);
     expect(at_125.band == LayoutRect{0, 0, 800, 50}, "the band scales to 125 percent");
     expect(at_125.close == LayoutRect{742, 0, 800, 50}, "the buttons scale to 125 percent");
     expect(at_125.tabs == LayoutRect{10, 10, 260, 50}, "the tab scales to 125 percent");
-    const auto at_150 = title_bar_layout(960, 144, 1);
+    const auto at_150 = bar(960, 144, 1);
     expect(at_150.band == LayoutRect{0, 0, 960, 60}, "the band scales to 150 percent");
     expect(at_150.close == LayoutRect{891, 0, 960, 60}, "the buttons scale to 150 percent");
     expect(at_150.tabs == LayoutRect{12, 12, 312, 60}, "the tab scales to 150 percent");
-    const auto maximised = title_bar_layout(2560, 96, 1);
+    const auto maximised = bar(2560, 96, 1);
     expect(maximised.close == LayoutRect{2514, 0, 2560, 40}, "close follows the right edge");
     expect(maximised.tabs == LayoutRect{8, 8, 208, 40}, "a wide window does not widen the tab");
 }
 
 void verify_title_bar_tab_counts()
 {
-    const auto two = title_bar_layout(1280, 96, 2);
+    const auto two = bar(1280, 96, 2);
     expect(two.tabs == LayoutRect{8, 8, 410, 40}, "two tabs share the strip with a 2 DIP gap");
     expect(tab_rect(two, 0) == LayoutRect{8, 8, 208, 40}, "the first tab starts at the left");
     expect(tab_rect(two, 1) == LayoutRect{210, 8, 410, 40}, "the second tab follows the gap");
     expect(two.add_tab == LayoutRect{412, 8, 444, 40}, "the plus follows the last tab");
-    const auto narrow = title_bar_layout(300, 96, 1);
+    const auto narrow = bar(300, 96, 1);
     expect(narrow.tab_width == 120, "a narrow window clamps the tab to 120 DIP");
-    expect(title_bar_hit(narrow, 260, 20) == TitleBarHit::close,
+    expect(hit_at(narrow, 260, 20) == TitleBarHit::close,
            "the window buttons win over an overlapping tab strip");
 }
 
 void verify_title_bar_hits()
 {
-    const auto layout = title_bar_layout(640, 96, 1);
-    expect(title_bar_hit(layout, 617, 20) == TitleBarHit::close, "the close button centre");
-    expect(title_bar_hit(layout, 571, 20) == TitleBarHit::maximize, "the maximize button centre");
-    expect(title_bar_hit(layout, 525, 20) == TitleBarHit::minimize, "the minimize button centre");
-    expect(title_bar_hit(layout, 226, 20) == TitleBarHit::add_tab, "the plus centre");
-    expect(title_bar_hit(layout, 108, 20) == TitleBarHit::tab, "the tab centre");
-    expect(title_bar_hit(layout, 300, 20) == TitleBarHit::caption,
-           "the empty strip is the caption");
-    expect(title_bar_hit(layout, 4, 2) == TitleBarHit::caption, "above the tab is the caption");
-    expect(title_bar_hit(layout, 108, 39) == TitleBarHit::tab,
+    const auto layout = bar(640, 96, 1);
+    expect(hit_at(layout, 617, 20) == TitleBarHit::close, "the close button centre");
+    expect(hit_at(layout, 571, 20) == TitleBarHit::maximize, "the maximize button centre");
+    expect(hit_at(layout, 525, 20) == TitleBarHit::minimize, "the minimize button centre");
+    expect(hit_at(layout, 226, 20) == TitleBarHit::add_tab, "the plus centre");
+    expect(hit_at(layout, 108, 20) == TitleBarHit::tab, "the tab centre");
+    expect(hit_at(layout, 300, 20) == TitleBarHit::caption, "the empty strip is the caption");
+    expect(hit_at(layout, 4, 2) == TitleBarHit::caption, "above the tab is the caption");
+    expect(hit_at(layout, 108, 39) == TitleBarHit::tab,
            "the tab reaches the bottom edge of the band");
-    expect(title_bar_hit(layout, 300, 40) == TitleBarHit::none,
-           "below the band is not the caption");
-    expect(title_bar_hit(layout, 640, 20) == TitleBarHit::none, "right of the band is nothing");
+    expect(hit_at(layout, 300, 40) == TitleBarHit::none, "below the band is not the caption");
+    expect(hit_at(layout, 640, 20) == TitleBarHit::none, "right of the band is nothing");
+}
+
+// ---------------------------------------------------------------- 帯の配置（ADR 0056 の決定 8・9）
+
+[[nodiscard]] TitleBarLayout scrolled_bar(std::int32_t width, std::size_t tabs, std::size_t active,
+                                          std::int32_t scroll)
+{
+    return title_bar_layout(TitleBarInput{width, 96, tabs, active, scroll, std::nullopt});
+}
+
+// 空きは 帯の幅 − 46 × 3 − 掴む余白 40 −「＋」32 − 間 2 − 左余白 8（1200 なら 980）。
+void verify_title_bar_tab_widths()
+{
+    const auto three = bar(1200, 96, 3);
+    expect(three.tab_width == 200 && three.tabs == LayoutRect{8, 8, 612, 40} &&
+               three.viewport == three.tabs && !three.overflowing,
+           "three tabs fit at 200 DIP and the strip is the viewport");
+    expect(three.add_tab == LayoutRect{614, 8, 646, 40} && core::width_of(three.tab_list) == 0,
+           "without overflow the plus follows the last tab and there is no list button");
+    const auto five = bar(1200, 96, 5);
+    expect(five.tab_width == 194 && five.tabs == LayoutRect{8, 8, 986, 40} && !five.overflowing,
+           "five tabs share the free width");
+    const auto eight = bar(1200, 96, 8);
+    expect(eight.tab_width == 120 && !eight.overflowing,
+           "eight tabs fit exactly at the 120 DIP minimum");
+    const auto nine = bar(1200, 96, 9);
+    expect(nine.overflowing && nine.tab_width == 120, "the ninth tab overflows at 120 DIP (D20)");
+    expect(nine.viewport == LayoutRect{8, 8, 954, 40} &&
+               nine.tab_list == LayoutRect{956, 8, 988, 40} &&
+               nine.add_tab == LayoutRect{990, 8, 1022, 40},
+           "overflow lays out [viewport][list][plus] before the grab margin");
+    expect(nine.tabs == LayoutRect{8, 8, 1104, 40}, "the strip runs past the viewport");
+    const auto medium = bar(800, 96, 4);
+    expect(medium.tab_width == 143 && !medium.overflowing, "four tabs fit an 800 DIP band");
+    const auto crowded = bar(800, 96, 5);
+    expect(crowded.overflowing && crowded.viewport == LayoutRect{8, 8, 554, 40} &&
+               crowded.tab_list == LayoutRect{556, 8, 588, 40} &&
+               crowded.add_tab == LayoutRect{590, 8, 622, 40},
+           "five tabs overflow an 800 DIP band");
+    const auto small = bar(400, 96, 2);
+    expect(small.overflowing && small.viewport == LayoutRect{8, 8, 154, 40} &&
+               small.tab_list == LayoutRect{156, 8, 188, 40},
+           "a narrow band keeps the list button and the plus");
+}
+
+void verify_title_bar_overflow_scaling()
+{
+    const auto at_125 = bar(1500, 120, 3);
+    expect(at_125.tab_width == 250 && at_125.tabs == LayoutRect{10, 10, 766, 50},
+           "three tabs at 125 percent keep the 200 DIP cap");
+    const auto at_150 = bar(1200, 144, 5);
+    expect(at_150.overflowing && at_150.viewport == LayoutRect{12, 12, 831, 60} &&
+               at_150.tab_list == LayoutRect{834, 12, 882, 60} &&
+               at_150.add_tab == LayoutRect{885, 12, 933, 60},
+           "overflow at 150 percent scales the list button and the plus");
+    const auto scrolled = title_bar_layout(TitleBarInput{1200, 144, 5, 0, 40, std::nullopt});
+    expect(scrolled.scroll == 60 && scrolled.tabs.left == 12 - 60,
+           "the DIP scroll becomes physical pixels");
+}
+
+void verify_title_bar_scroll_clamp()
+{
+    expect(scrolled_bar(1200, 9, 0, -50).scroll == 0, "a negative scroll is clamped to 0");
+    expect(scrolled_bar(1200, 9, 0, 1000).scroll == 150,
+           "the scroll stops where the last tab meets the viewport end");
+    const auto shifted = scrolled_bar(1200, 9, 0, 100);
+    expect(shifted.tabs.left == -92 && tab_rect(shifted, 1) == LayoutRect{30, 8, 150, 40},
+           "tab rectangles are shifted by the scroll");
+    expect(scrolled_bar(1200, 3, 0, 50).scroll == 0, "a band without overflow never scrolls");
+    const auto start = bar(1200, 96, 9);
+    expect(tab_visible(start, 0) && tab_visible(start, 7) && !tab_visible(start, 8),
+           "a tab partly inside the viewport is visible and one past it is not");
+    const auto far = scrolled_bar(1200, 9, 0, 150);
+    expect(!tab_visible(far, 0) && tab_visible(far, 8) && !tab_visible(far, 9),
+           "scrolling hides the leftmost tab and shows the last one");
+}
+
+void verify_title_bar_scroll_into_view()
+{
+    const auto input = [](std::size_t active, std::int32_t scroll)
+    { return TitleBarInput{1200, 96, 9, active, scroll, std::nullopt}; };
+    expect(tabs_scrolled_into_view(input(8, 0)) == 150,
+           "an active tab hidden on the right is scrolled in by its right edge");
+    expect(tabs_scrolled_into_view(input(0, 150)) == 0,
+           "an active tab hidden on the left is scrolled in by its left edge");
+    expect(tabs_scrolled_into_view(input(4, 100)) == 100, "a visible active tab keeps the scroll");
+    expect(tabs_scrolled_into_view(input(7, 0)) == 28,
+           "a partly hidden active tab moves the least to show all of it");
+    expect(tabs_scrolled_into_view(TitleBarInput{1200, 96, 3, 2, 50, std::nullopt}) == 0,
+           "without overflow the scroll is 0");
+}
+
+void verify_title_bar_wheel()
+{
+    const auto input = [](std::int32_t scroll)
+    { return TitleBarInput{1200, 96, 9, 0, scroll, std::nullopt}; };
+    expect(tabs_scrolled_by(input(0), -1) == 122, "one notch toward the user shows the next tab");
+    expect(tabs_scrolled_by(input(0), -2) == 150, "the wheel stops at the right end");
+    expect(tabs_scrolled_by(input(150), 1) == 28, "one notch away scrolls back one tab");
+    expect(tabs_scrolled_by(input(150), 5) == 0, "the wheel stops at the left end");
+    expect(tabs_scrolled_by(TitleBarInput{1200, 96, 3, 0, 0, std::nullopt}, -1) == 0,
+           "the wheel does nothing without overflow");
+}
+
+// × は アクティブなタブと、マウスを載せたタブにだけある（D21）。
+void verify_title_bar_close_buttons()
+{
+    const auto hovered =
+        title_bar_layout(TitleBarInput{1200, 96, 3, 1, 0, TitleBarTarget{TitleBarHit::tab, 2}});
+    expect(tab_close_rect(hovered, 1) == std::optional{LayoutRect{380, 12, 404, 36}},
+           "the active tab has a 24 DIP close button 6 DIP from its right edge");
+    expect(tab_close_rect(hovered, 2) == std::optional{LayoutRect{582, 12, 606, 36}},
+           "the hovered tab has a close button");
+    expect(!tab_close_rect(hovered, 0).has_value() && !tab_close_rect(hovered, 3).has_value(),
+           "other tabs have no close button");
+    const auto on_close = title_bar_layout(
+        TitleBarInput{1200, 96, 3, 1, 0, TitleBarTarget{TitleBarHit::tab_close, 0}});
+    expect(tab_close_rect(on_close, 0).has_value(),
+           "hovering the close button keeps the close button");
+    const auto on_plus =
+        title_bar_layout(TitleBarInput{1200, 96, 3, 1, 0, TitleBarTarget{TitleBarHit::add_tab, 0}});
+    expect(!tab_close_rect(on_plus, 0).has_value(), "the plus is not a hovered tab");
+}
+
+void verify_title_bar_targets()
+{
+    const auto layout =
+        title_bar_layout(TitleBarInput{1200, 96, 3, 1, 0, TitleBarTarget{TitleBarHit::tab, 2}});
+    expect(title_bar_target(layout, 100, 20) == TitleBarTarget{TitleBarHit::tab, 0},
+           "a tab carries its band position");
+    expect(title_bar_target(layout, 190, 20) == TitleBarTarget{TitleBarHit::tab, 0},
+           "a tab without a close button is the tab to its right edge");
+    expect(hit_at(layout, 208, 20) == TitleBarHit::caption &&
+               hit_at(layout, 209, 20) == TitleBarHit::caption,
+           "the gap between tabs is the caption");
+    expect(title_bar_target(layout, 210, 20) == TitleBarTarget{TitleBarHit::tab, 1},
+           "the next tab starts after the gap");
+    expect(title_bar_target(layout, 390, 20) == TitleBarTarget{TitleBarHit::tab_close, 1},
+           "the close button wins over its tab");
+    expect(title_bar_target(layout, 590, 20) == TitleBarTarget{TitleBarHit::tab_close, 2},
+           "the hovered tab's close button is hit");
+    expect(hit_at(layout, 630, 20) == TitleBarHit::add_tab &&
+               hit_at(layout, 700, 20) == TitleBarHit::caption,
+           "the plus and the grab margin");
+    expect(hit_at(layout, 1170, 20) == TitleBarHit::close &&
+               hit_at(layout, 1130, 20) == TitleBarHit::maximize &&
+               hit_at(layout, 1080, 20) == TitleBarHit::minimize,
+           "the window buttons");
+    const auto overflow = bar(1200, 96, 9);
+    expect(hit_at(overflow, 970, 20) == TitleBarHit::tab_list &&
+               hit_at(overflow, 1000, 20) == TitleBarHit::add_tab,
+           "the list button and the plus of an overflowing band");
+    expect(hit_at(overflow, 955, 20) == TitleBarHit::caption,
+           "a tab running past the viewport is not hit outside it");
+    const auto shifted = scrolled_bar(1200, 9, 0, 150);
+    expect(title_bar_target(shifted, 20, 20) == TitleBarTarget{TitleBarHit::tab, 1},
+           "a scrolled band hits the tab under the point");
 }
 
 void verify_status_bar_rectangles()
@@ -1595,6 +1791,7 @@ void verify_look()
     verify_rgba_equality();
     verify_dark_palette_tokens();
     verify_light_palette_tokens();
+    verify_tab_hover_tokens();
     verify_theme_contrast();
     verify_theme_tokens_filled();
     verify_theme_names();
@@ -1609,6 +1806,13 @@ void verify_look()
     verify_title_bar_scaling();
     verify_title_bar_tab_counts();
     verify_title_bar_hits();
+    verify_title_bar_tab_widths();
+    verify_title_bar_overflow_scaling();
+    verify_title_bar_scroll_clamp();
+    verify_title_bar_scroll_into_view();
+    verify_title_bar_wheel();
+    verify_title_bar_close_buttons();
+    verify_title_bar_targets();
     verify_status_bar_rectangles();
     verify_status_bar_scaling();
     verify_status_bar_hits();

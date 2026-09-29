@@ -21,6 +21,7 @@
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
+#include "TitleBarInput.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimCharacter.hpp"
@@ -63,6 +64,11 @@ class EditorController final
     [[nodiscard]] EditorFrame frame() const;
     [[nodiscard]] bool command_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
+    // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
+    // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
+    // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
+    // と同じ。
+    [[nodiscard]] core::TitleBarInput title_bar_input(std::int32_t width, std::uint32_t dpi) const;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
@@ -119,6 +125,14 @@ class EditorController final
     void accept(const SwitchTab &intent);
     void accept(const StepTab &intent);
     void accept(const CloseTab &intent);
+    // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
+    void accept(const TitleBarWidth &intent);
+    void accept(const ScrollTabs &intent);
+    void accept(const PointTitleBar &intent);
+    // 帯の配置の入力（96 DPI・幅は DIP・決定 8）と、送り量をアクティブなタブが見える所へ直す
+    // 1 本（切り替え・新しいタブ・閉じる・開く・帯の幅のたび）。帯の幅がまだ 0 なら送り量は 0。
+    [[nodiscard]] core::TitleBarInput title_bar_input() const;
+    void reveal_active_tab();
     // 開く（決定 5）の 3 つの枝の材料。同じファイルを開いているタブの帯の位置・何も書いていない
     // 無題か・読んで復号した本文と文書。
     [[nodiscard]] std::optional<std::size_t> open_tab_of(const core::FilePath &path) const;

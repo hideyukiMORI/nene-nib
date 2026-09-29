@@ -14,14 +14,18 @@
 #include "StatusBarHit.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarHit.hpp"
+#include "TitleBarLayout.hpp"
+#include "TitleBarTarget.hpp"
 #include "VimMode.hpp"
 #include "WindowFailure.hpp"
 
 #include <windows.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace nenenib::ui::win32
@@ -57,6 +61,22 @@ class EditorWindow final
     LRESULT dispatch(UINT message, WPARAM word, LPARAM data) noexcept;
     [[nodiscard]] LRESULT calculate_client(WPARAM word, LPARAM data) noexcept;
     [[nodiscard]] LRESULT hit_test(LPARAM data) noexcept;
+    [[nodiscard]] LRESULT frame_message(UINT message, WPARAM word, LPARAM data);
+    [[nodiscard]] LRESULT pointer_message(UINT message, WPARAM word, LPARAM data);
+    void limit_size(LPARAM data) const noexcept;
+    // 帯の配置は状態の 4 つの値と窓の幅から毎回作る。表示値は作らない（ADR 0056 の決定 9）。
+    [[nodiscard]] core::TitleBarLayout title_bar() const;
+    [[nodiscard]] core::TitleBarTarget title_bar_target_at(LPARAM data) const;
+    [[nodiscard]] std::int32_t title_bar_width() const;
+    // 帯の上の押下を扱ったら true（本文とステータスバーへは流さない）。
+    [[nodiscard]] bool click_title_bar(LPARAM data);
+    void release_title_bar(LPARAM data);
+    void press_middle(LPARAM data);
+    void middle_click(LPARAM data);
+    void point_at(LPARAM data);
+    void hover(const std::optional<core::TitleBarTarget> &target);
+    // タブを閉じる流れ（未保存なら切り替えて確かめる・ADR 0056 の決定 6）。
+    void close_tab(std::size_t tab);
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);
@@ -106,7 +126,9 @@ class EditorWindow final
     void announce(const application::EditorFrame &frame);
     void announce_settings(const application::EditorFrame &frame);
     void offer_utf8(const core::FilePath &path);
-    void turn_wheel(WPARAM word);
+    void turn_wheel(WPARAM word, LPARAM data);
+    [[nodiscard]] bool over_title_bar(LPARAM data) const;
+    void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);
     [[nodiscard]] std::size_t body_lines() const;
 
@@ -118,6 +140,11 @@ class EditorWindow final
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
     wchar_t pending_high_surrogate_ = 0;
     std::int32_t zoom_wheel_remainder_ = 0;
+    std::int32_t tab_wheel_remainder_ = 0;
+    // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
+    // 消す（ADR 0056 の決定 9）。
+    std::optional<core::TitleBarTarget> left_pressed_;
+    std::optional<core::TitleBarTarget> middle_pressed_;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。

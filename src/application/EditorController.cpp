@@ -6,6 +6,7 @@
 #include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
+#include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
 #include "Edit.hpp"
 #include "ExResult.hpp"
@@ -20,6 +21,8 @@
 #include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
+#include "TitleBarHit.hpp"
+#include "TitleBarLayout.hpp"
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
@@ -475,9 +478,13 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 
 EditorFrame EditorController::apply(const EditorIntent &intent)
 {
+    // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
-                 std::holds_alternative<CancelComposition>(intent));
+                 std::holds_alternative<CancelComposition>(intent) ||
+                 std::holds_alternative<TitleBarWidth>(intent) ||
+                 std::holds_alternative<ScrollTabs>(intent) ||
+                 std::holds_alternative<PointTitleBar>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
@@ -1787,6 +1794,7 @@ void EditorController::enter_document()
                                    scroll.visible_lines, scroll_extent_for(state_.mode()));
     state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
     settle_vim_caret();
+    reveal_active_tab();
 }
 
 void EditorController::accept(const NewTab &)
@@ -1824,15 +1832,62 @@ void EditorController::accept(const CloseTab &intent)
         state_ = state_.with_closing(true);
         return;
     }
+    // 閉じたタブに載せていたマウスは、そのタブと一緒に消える（ADR 0056 の決定 2）。
+    const auto &hovered = state_.hovered();
+    if (hovered.has_value() && hovered.value().tab == intent.index &&
+        (hovered.value().hit == core::TitleBarHit::tab ||
+         hovered.value().hit == core::TitleBarHit::tab_close))
+    {
+        state_ = state_.with_hovered(std::nullopt);
+    }
     // 脇のタブを閉じてもアクティブな文書は動かないので、一時の値も閉じない。
     if (intent.index != state_.active_tab())
     {
         state_ = state_.with_closed(intent.index);
+        reveal_active_tab();
         return;
     }
     leave_document();
     state_ = state_.with_closed(intent.index);
     enter_document();
+}
+
+core::TitleBarInput EditorController::title_bar_input(std::int32_t width, std::uint32_t dpi) const
+{
+    return core::TitleBarInput{
+        width, dpi, state_.tab_count(), state_.active_tab(), state_.tab_scroll(), state_.hovered()};
+}
+
+core::TitleBarInput EditorController::title_bar_input() const
+{
+    return title_bar_input(state_.title_bar_width(), core::reference_dpi);
+}
+
+void EditorController::reveal_active_tab()
+{
+    const std::int32_t scroll =
+        state_.title_bar_width() > 0 ? core::tabs_scrolled_into_view(title_bar_input()) : 0;
+    state_ = state_.with_tab_scroll(scroll);
+}
+
+void EditorController::accept(const TitleBarWidth &intent)
+{
+    state_ = state_.with_title_bar_width(std::max(intent.dip, 0));
+    reveal_active_tab();
+}
+
+void EditorController::accept(const ScrollTabs &intent)
+{
+    if (state_.title_bar_width() <= 0)
+    {
+        return;
+    }
+    state_ = state_.with_tab_scroll(core::tabs_scrolled_by(title_bar_input(), intent.notches));
+}
+
+void EditorController::accept(const PointTitleBar &intent)
+{
+    state_ = state_.with_hovered(intent.target);
 }
 
 // ---------------------------------------------------------------- IME（ADR 0014）
@@ -2046,6 +2101,8 @@ EditorFrame EditorController::frame() const
                        command_palette_view(),
                        std::move(tabs),
                        state_.active_tab(),
+                       state_.tab_scroll(),
+                       state_.hovered(),
                        state_.closing()};
 }
 } // namespace nenenib::application

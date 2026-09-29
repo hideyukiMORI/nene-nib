@@ -14,10 +14,13 @@
 #include "Palette.hpp"
 #include "SettingsIssue.hpp"
 #include "StatusItems.hpp"
+#include "TitleBarInput.hpp"
+#include "TitleBarTarget.hpp"
 #include "VimMode.hpp"
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -57,7 +60,20 @@ struct EditorFrame
     // 置いたときに作った値を並べるだけ。active_tab は帯の上のアクティブの位置（0 始まり）。
     std::vector<DocumentView> tabs;
     std::size_t active_tab;
+    // 帯の送り量（DIP・アクティブなタブが見える所へ application が直した値）と、マウスを載せて
+    // いる帯の要素（ADR 0056 の決定 7）。renderer は配置の入力にこの 2 つを渡す。
+    std::int32_t tab_scroll;
+    std::optional<core::TitleBarTarget> hovered;
     // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。ui はこれを見て窓を閉じる。
     bool closing;
 };
+
+// 表示値から作る帯の配置の入力（ADR 0056 の決定 8・9）。renderer の描画と窓の hit test・
+// クリック・hover が同じ値を渡すための 1 本。width は帯の幅（物理画素）。
+[[nodiscard]] inline core::TitleBarInput title_bar_input(const EditorFrame &frame,
+                                                         std::int32_t width, std::uint32_t dpi)
+{
+    return core::TitleBarInput{
+        width, dpi, frame.tabs.size(), frame.active_tab, frame.tab_scroll, frame.hovered};
+}
 } // namespace nenenib::application

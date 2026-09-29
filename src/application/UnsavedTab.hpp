@@ -23,4 +23,11 @@ next_unsaved_tab(const std::vector<DocumentView> &tabs, std::size_t from)
     }
     return std::nullopt;
 }
+
+// 帯の位置 tab のタブが未保存か（範囲の外は false）。タブを閉じるとき ui はこれが true のときだけ
+// そのタブへ切り替えて「保存しますか」を出す（ADR 0056 の決定 6）。
+[[nodiscard]] inline bool tab_unsaved(const std::vector<DocumentView> &tabs, std::size_t tab)
+{
+    return tab < tabs.size() && tabs.at(tab).save_state != core::SaveState::saved;
+}
 } // namespace nenenib::application

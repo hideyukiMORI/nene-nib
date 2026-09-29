@@ -6,6 +6,7 @@
 #include "CancelComposition.hpp"
 #include "CaretMotion.hpp"
 #include "ClauseEmphasis.hpp"
+#include "CloseTab.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "Composition.hpp"
@@ -19,18 +20,24 @@
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
 #include "Milestone.hpp"
+#include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenDocument.hpp"
+#include "PointTitleBar.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
+#include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
 #include "StatusBarLayout.hpp"
 #include "SwitchTab.hpp"
 #include "TextEncoding.hpp"
+#include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
+#include "TitleBarTarget.hpp"
+#include "TitleBarWidth.hpp"
 #include "UnsavedTab.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -66,7 +73,6 @@ constexpr wchar_t untitled_file[] = L"無題.txt";
 constexpr std::int32_t design_width_dips = 640;
 constexpr std::int32_t design_height_dips = 360;
 constexpr std::int32_t resize_border_dips = 8;
-constexpr std::size_t single_tab = 1;
 constexpr std::int32_t wheel_lines = 3;
 constexpr SHORT key_down_mask = static_cast<SHORT>(0x8000);
 constexpr wchar_t first_high_surrogate = 0xD800;
@@ -429,7 +435,9 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
     case core::TitleBarHit::caption:
         return HTCAPTION;
     case core::TitleBarHit::tab:
+    case core::TitleBarHit::tab_close:
     case core::TitleBarHit::add_tab:
+    case core::TitleBarHit::tab_list:
     case core::TitleBarHit::none:
         return HTCLIENT;
     }
@@ -542,6 +550,8 @@ std::expected<void, WindowFailure> EditorWindow::start_rendering()
         return std::unexpected(WindowFailure::render);
     }
     renderer_ = std::make_unique<Direct2DRenderer>(std::move(renderer).value());
+    // 帯の幅は最初の描画の前に知らせる（アクティブなタブが見える送り量に直る・ADR 0056 の決定 8）。
+    static_cast<void>(controller_.apply(application::TitleBarWidth{title_bar_width()}));
     if (!draw_frame(controller_.apply(application::VisibleLines{body_lines()})))
     {
         return std::unexpected(WindowFailure::render);
@@ -601,8 +611,18 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_NCLBUTTONUP:
         return press_caption(message, word, data);
     case WM_LBUTTONDOWN:
-        click_client(data);
-        return 0;
+    case WM_LBUTTONUP:
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONUP:
+    case WM_MOUSEMOVE:
+    case WM_MOUSELEAVE:
+    case WM_MOUSEWHEEL:
+        return pointer_message(message, word, data);
+    case WM_GETMINMAXINFO:
+    case WM_SETTINGCHANGE:
+    case WM_SIZE:
+    case WM_DPICHANGED:
+        return frame_message(message, word, data);
     case WM_ERASEBKGND:
         return 1;
     case WM_PAINT:
@@ -620,18 +640,6 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_IME_COMPOSITION:
     case WM_IME_ENDCOMPOSITION:
         return compose_message(message, word, data);
-    case WM_MOUSEWHEEL:
-        turn_wheel(word);
-        return 0;
-    case WM_SETTINGCHANGE:
-        refresh_appearance();
-        return 0;
-    case WM_SIZE:
-        resize();
-        return 0;
-    case WM_DPICHANGED:
-        change_dpi(word, data);
-        return 0;
     case WM_CLOSE:
         close_window();
         return 0;
@@ -664,14 +672,207 @@ LRESULT EditorWindow::calculate_client(WPARAM word, LPARAM data) noexcept
     return 0;
 }
 
+LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
+{
+    // 窓の大きさ・DPI・外観の 4 通。
+    switch (message)
+    {
+    case WM_GETMINMAXINFO:
+        limit_size(data);
+        return 0;
+    case WM_SETTINGCHANGE:
+        refresh_appearance();
+        return 0;
+    case WM_SIZE:
+        resize();
+        return 0;
+    case WM_DPICHANGED:
+        change_dpi(word, data);
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(window_, message, word, data);
+}
+
+LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
+{
+    // マウスの 7 通。帯の上の要素は同じ 1 本の title_bar_target で引く（ADR 0056 の決定 9）。
+    switch (message)
+    {
+    case WM_LBUTTONDOWN:
+        click_client(data);
+        return 0;
+    case WM_LBUTTONUP:
+        release_title_bar(data);
+        return 0;
+    case WM_MBUTTONDOWN:
+        press_middle(data);
+        return 0;
+    case WM_MBUTTONUP:
+        middle_click(data);
+        return 0;
+    case WM_MOUSEMOVE:
+        point_at(data);
+        return 0;
+    case WM_MOUSELEAVE:
+        hover(std::nullopt);
+        return 0;
+    case WM_MOUSEWHEEL:
+        turn_wheel(word, data);
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(window_, message, word, data);
+}
+
+void EditorWindow::limit_size(LPARAM data) const noexcept
+{
+    // 窓の最小の大きさは core が決める（ADR 0056 の決定 8）。窓はそれを OS へ写すだけ。
+    auto *limits = std::bit_cast<MINMAXINFO *>(data);
+    const auto minimum = core::minimum_window(dpi_);
+    limits->ptMinTrackSize.x = core::width_of(minimum);
+    limits->ptMinTrackSize.y = core::height_of(minimum);
+}
+
+core::TitleBarLayout EditorWindow::title_bar() const
+{
+    RECT client{};
+    GetClientRect(window_, &client);
+    return core::title_bar_layout(controller_.title_bar_input(client.right, dpi_));
+}
+
+core::TitleBarTarget EditorWindow::title_bar_target_at(LPARAM data) const
+{
+    return core::title_bar_target(title_bar(), low_word_of(data), high_word_of(data));
+}
+
+bool EditorWindow::click_title_bar(LPARAM data)
+{
+    const auto target = title_bar_target_at(data);
+    left_pressed_ = target;
+    switch (target.hit)
+    {
+    case core::TitleBarHit::tab:
+        send(application::SwitchTab{target.tab});
+        return true;
+    // ×・「＋」は離したときに動かす（窓の操作と同じ）。「∨」の一覧は #240。
+    case core::TitleBarHit::tab_close:
+    case core::TitleBarHit::add_tab:
+    case core::TitleBarHit::tab_list:
+        return true;
+    case core::TitleBarHit::caption:
+    case core::TitleBarHit::minimize:
+    case core::TitleBarHit::maximize:
+    case core::TitleBarHit::close:
+    case core::TitleBarHit::none:
+        return false;
+    }
+    std::unreachable();
+}
+
+void EditorWindow::release_title_bar(LPARAM data)
+{
+    // 押した要素と離した要素が同じときだけ動かす。押して帯が送られ、同じ点へ来た × では閉じない。
+    const auto pressed = std::exchange(left_pressed_, std::nullopt);
+    if (controller_.command_palette_active())
+    {
+        return;
+    }
+    const auto target = core::title_bar_released(pressed, title_bar_target_at(data));
+    if (!target.has_value())
+    {
+        return;
+    }
+    if (target.value().hit == core::TitleBarHit::tab_close)
+    {
+        close_tab(target.value().tab);
+    }
+    if (target.value().hit == core::TitleBarHit::add_tab)
+    {
+        send(application::NewTab{});
+    }
+}
+
+void EditorWindow::press_middle(LPARAM data)
+{
+    middle_pressed_ = std::nullopt;
+    if (controller_.command_palette_active())
+    {
+        return;
+    }
+    middle_pressed_ = title_bar_target_at(data);
+}
+
+void EditorWindow::middle_click(LPARAM data)
+{
+    const auto pressed = std::exchange(middle_pressed_, std::nullopt);
+    if (controller_.command_palette_active())
+    {
+        return;
+    }
+    const auto target = core::title_bar_released(pressed, title_bar_target_at(data));
+    if (!target.has_value())
+    {
+        return;
+    }
+    if (target.value().hit == core::TitleBarHit::tab ||
+        target.value().hit == core::TitleBarHit::tab_close)
+    {
+        close_tab(target.value().tab);
+    }
+}
+
+void EditorWindow::point_at(LPARAM data)
+{
+    // 窓の外や caption（非クライアント領域）へ出たとき WM_MOUSELEAVE が来るように頼む。
+    TRACKMOUSEEVENT track{};
+    track.cbSize = static_cast<DWORD>(sizeof(track));
+    track.dwFlags = TME_LEAVE;
+    track.hwndTrack = window_;
+    TrackMouseEvent(&track);
+    hover(core::title_bar_hover(title_bar_target_at(data)));
+}
+
+void EditorWindow::hover(const std::optional<core::TitleBarTarget> &target)
+{
+    // 前の値は application の状態が持つ。変わったときだけ意図を送る（ADR 0056 の決定 3）。
+    RECT client{};
+    GetClientRect(window_, &client);
+    if (controller_.title_bar_input(client.right, dpi_).hovered == target)
+    {
+        return;
+    }
+    send(application::PointTitleBar{target});
+}
+
+void EditorWindow::close_tab(std::size_t tab)
+{
+    // 未保存なら映してから確かめる。取り消しか保存の失敗なら閉じない（ADR 0056 の決定 6）。
+    if (application::tab_unsaved(controller_.frame().tabs, tab))
+    {
+        send(application::SwitchTab{tab});
+        if (!confirm_discard())
+        {
+            return;
+        }
+    }
+    send(application::CloseTab{tab});
+    // 最後の 1 つを閉じたら窓を閉じる（D22）。確認は済んだので close_window を通さない。
+    if (controller_.frame().closing)
+    {
+        DestroyWindow(window_);
+    }
+}
+
 LRESULT EditorWindow::hit_test(LPARAM data) noexcept
 {
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
     RECT client{};
     GetClientRect(window_, &client);
-    const auto layout = core::title_bar_layout(client.right, dpi_, single_tab);
-    const auto hit = core::title_bar_hit(layout, point.x, point.y);
+    const auto hit = core::title_bar_target(title_bar(), point.x, point.y).hit;
     // 窓の操作の上では大きさを変えられない。それ以外の縁は 8 DIP を 8 方向に割り当てる。
     if (window_button(hit))
     {
@@ -718,9 +919,14 @@ void EditorWindow::activate_caption(WPARAM word) noexcept
 
 void EditorWindow::click_client(LPARAM data)
 {
+    left_pressed_ = std::nullopt;
     if (controller_.command_palette_active())
     {
         click_palette(data);
+        return;
+    }
+    if (click_title_bar(data))
+    {
         return;
     }
     RECT client{};
@@ -836,7 +1042,15 @@ void EditorWindow::resize()
         return;
     }
     // 何行入るかは application が持つ。窓は寸法から数えた行数を意図として渡すだけ（ADR 0009）。
+    send(application::TitleBarWidth{title_bar_width()});
     send(application::VisibleLines{body_lines()});
+}
+
+std::int32_t EditorWindow::title_bar_width() const
+{
+    RECT client{};
+    GetClientRect(window_, &client);
+    return core::to_dips(client.right, dpi_);
 }
 
 std::size_t EditorWindow::body_lines() const
@@ -1072,10 +1286,7 @@ void EditorWindow::offer_utf8(const core::FilePath &path)
 
 void EditorWindow::open_document()
 {
-    if (!confirm_discard())
-    {
-        return;
-    }
+    // 開くは今の文書を置き換えないので確かめない（ADR 0056 の決定 5）。
     const auto chosen = choose_file_to_open(window_);
     if (!chosen.has_value())
     {
@@ -1437,7 +1648,7 @@ void EditorWindow::send_vim_redo()
     send(application::VimKeyPress{core::VimKey{core::VimSpecialKey::control_r}});
 }
 
-void EditorWindow::turn_wheel(WPARAM word)
+void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
 {
     const auto delta = static_cast<std::int16_t>(HIWORD(word));
     if (controller_.command_palette_active())
@@ -1449,6 +1660,11 @@ void EditorWindow::turn_wheel(WPARAM word)
         }
         return;
     }
+    if (over_title_bar(data))
+    {
+        scroll_tabs(delta);
+        return;
+    }
     if ((LOWORD(word) & MK_CONTROL) != 0)
     {
         zoom_wheel(delta);
@@ -1456,6 +1672,26 @@ void EditorWindow::turn_wheel(WPARAM word)
     }
     zoom_wheel_remainder_ = 0;
     send(application::ScrollLines{delta > 0 ? -wheel_lines : wheel_lines});
+}
+
+bool EditorWindow::over_title_bar(LPARAM data) const
+{
+    // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから帯の上かを見る。
+    POINT point{low_word_of(data), high_word_of(data)};
+    ScreenToClient(window_, &point);
+    return core::title_bar_target(title_bar(), point.x, point.y).hit != core::TitleBarHit::none;
+}
+
+void EditorWindow::scroll_tabs(std::int32_t delta)
+{
+    // 刻みに満たない分は次へ繰り越す（高分解能のホイール）。奥が正・手前が負（ADR 0056 の決定 3）。
+    tab_wheel_remainder_ += delta;
+    const std::int32_t notches = tab_wheel_remainder_ / WHEEL_DELTA;
+    tab_wheel_remainder_ %= WHEEL_DELTA;
+    if (notches != 0)
+    {
+        send(application::ScrollTabs{notches});
+    }
 }
 
 void EditorWindow::zoom_wheel(std::int32_t delta)
@@ -1485,6 +1721,8 @@ void EditorWindow::change_dpi(WPARAM word, LPARAM data)
         abandon();
         return;
     }
+    // 物理画素の大きさが変わらなくても DIP の幅は変わる（ADR 0056 の決定 8）。
+    send(application::TitleBarWidth{title_bar_width()});
     invalidate();
 }
 

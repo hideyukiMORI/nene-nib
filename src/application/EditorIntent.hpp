@@ -21,9 +21,11 @@
 #include "OpenDocument.hpp"
 #include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
+#include "PointTitleBar.hpp"
 #include "RefreshAppearance.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollLines.hpp"
+#include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
@@ -31,6 +33,7 @@
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
+#include "TitleBarWidth.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 
@@ -48,5 +51,5 @@ using EditorIntent =
                  CommitText, CancelComposition, AdjustFontSize, CommandText, EditCommand,
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
                  ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab, StepTab,
-                 CloseTab>;
+                 CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth>;
 } // namespace nenenib::application

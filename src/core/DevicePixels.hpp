@@ -13,4 +13,11 @@ inline constexpr std::uint32_t reference_dpi = 96;
     const auto reference = static_cast<std::int32_t>(reference_dpi);
     return (dips * static_cast<std::int32_t>(dpi) + reference / 2) / reference;
 }
+
+// 物理画素を DIP へ（切り捨て）。96 DPI では同じ値。DPI 0 は割らずに 1 として扱う。
+[[nodiscard]] constexpr std::int32_t to_dips(std::int32_t pixels, std::uint32_t dpi) noexcept
+{
+    const auto divisor = static_cast<std::int32_t>(dpi == 0 ? 1U : dpi);
+    return pixels * static_cast<std::int32_t>(reference_dpi) / divisor;
+}
 } // namespace nenenib::core

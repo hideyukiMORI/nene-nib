@@ -13,6 +13,7 @@
 #include "StatusBarLayout.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarLayout.hpp"
+#include "TitleBarTarget.hpp"
 
 #include <windows.h>
 
@@ -69,6 +70,9 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
+    // タブの題名が題名の領域に入りきらないときは文字単位で切って末尾に「…」を付ける
+    // （docs/design/2026-09-29-tabs.md 第 2 節）。
+    [[nodiscard]] HRESULT trim_tab_titles();
     // 本文の書式の tab stop を空白 8 個ぶんにする。本文の書式を作るたびにここだけを通る
     // （ADR 0045 の決定 1）。測れないときは既定のまま。
     void set_tab_stops(IDWriteTextFormat *format);
@@ -82,7 +86,15 @@ class Direct2DRenderer final
                core::RgbColor color);
     void draw_cross(const core::LayoutRect &box, float half, float stroke);
     void draw_title_bar(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
-    void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
+    void draw_tab_face(const core::TitleBarLayout &layout, const core::LayoutRect &tab,
+                       core::RgbColor color);
+    void draw_button_face(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
+                          const core::LayoutRect &box, core::TitleBarTarget target);
+    void draw_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout,
+                  std::size_t index);
+    void draw_tabs(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
+    void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
+    void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
     [[nodiscard]] TextLayout text_layout(std::string_view text, IDWriteTextFormat *format,

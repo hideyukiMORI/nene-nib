@@ -6,8 +6,9 @@
 
 namespace nenenib::core
 {
-// テーマ 1 つ分の表示トークン 16 個（docs/design/2026-09-15-look.md 第 3 節と
-// docs/design/2026-09-15-editing-look.md 第 2 節の search / ime）。
+// テーマ 1 つ分の表示トークン 17 個（docs/design/2026-09-15-look.md 第 3 節と
+// docs/design/2026-09-15-editing-look.md 第 2 節の search / ime と、docs/design/2026-09-29-tabs.md
+// 第 4 節の tab_hover）。
 // どのメンバーも単独で妥当な色なので公開 aggregate（ADR 0007 / ADR 0008）。
 // 組み込みテーマの表は BuiltinTheme.hpp が持ち、将来のテーマファイルも同じ値型を作る。
 struct Palette
@@ -19,6 +20,8 @@ struct Palette
     RgbColor current_line;
     RgbColor title_bar;
     RgbColor tab_active;
+    // マウスを載せた非アクティブなタブの面（ADR 0056 の決定 12）。
+    RgbColor tab_hover;
     RgbColor status;
     RgbColor accent;
     RgbaColor selection;
