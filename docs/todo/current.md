@@ -13,12 +13,11 @@
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
-| 1 | #226 前向きの語の移動が回数の途中で本文の終わりに当たったら失敗の印を付ける | 小・fixture で観測できるかを先に確かめる |
-| 2 | 小: fixture の記法の表（`KEY_NAMES` / `vim_key_names`）の 1 本化（ARC-012・未起票） | |
-| 3 | 複数タブ | 見た目と挙動の施主決定の後（`/design`） |
-| 4 | Ctrl+P のファイル/履歴統合 → 一般 Ex | |
+| 1 | #230 fixture の再生は `:normal!` と同じく失敗した鍵の後ろを打ち切る | 施主の確認の後・既存の fixture がいくつ落ちるかを先に一覧にする |
+| 2 | 複数タブ | 見た目と挙動の施主決定の後（`/design`） |
+| 3 | Ctrl+P のファイル/履歴統合 → 一般 Ex | |
 
-2026-09-29 に統合: #204 数字レジスタ `"0`〜`"9` と小削除 `"-`（ADR 0050）・#210 クリップボードのレジスタ `"+` `"*`（ADR 0051）・#209 `.` の記録は待ちの状態の数字を残す・#205 改行を含む文字単位の `p` `P` のキャレット・#206 NORMAL の `X`・#208 `u` と Ctrl-r の後のキャレット（ADR 0052）・#216 Vim の 1 文字と結合文字（ADR 0053）・#222 `W` `E` `B` `ge` `gE`・#224 後ろ向きの語の移動が本文の先頭に当たる形。候補（未起票）: 巨大な削除の後の打鍵のベンチとレジスタの本文の共有・oracle に undo の塊を区切る記法。
+2026-09-29 に統合: #204 数字レジスタ `"0`〜`"9` と小削除 `"-`（ADR 0050）・#210 クリップボードのレジスタ `"+` `"*`（ADR 0051）・#209 `.` の記録は待ちの状態の数字を残す・#205 改行を含む文字単位の `p` `P` のキャレット・#206 NORMAL の `X`・#208 `u` と Ctrl-r の後のキャレット（ADR 0052）・#216 Vim の 1 文字と結合文字（ADR 0053）・#222 `W` `E` `B` `ge` `gE`・#224 後ろ向きの語の移動が本文の先頭に当たる形・#226 前向きの語の移動の失敗の印・#229 fixture の鍵の記法の表の 1 本化（ADR 0054）。候補（未起票）: 巨大な削除の後の打鍵のベンチとレジスタの本文の共有・oracle に undo の塊を区切る記法。
 
 2026-09-23 に統合: #124・#131・#141・#130・#144・#146（usage の集計）・#117（`^M` の描画・ADR 0040）・#151・#147（C1 の 4 桁）・#152・#148（incsearch・ADR 0041・既定オンは施主決定 D18）・#162・#160（単体テストの分割・ADR 0042）・#165・#140（`assert_uncovered`・`measure`）・#168（Ctrl-G / Ctrl-T・ADR 0043）・#172（D18）・#175 Tab の tab stop（ADR 0045）・#174 add の chunk 化（ADR 0044）・#176 マクロ `q` `@`（ADR 0046）・#180 `recording @a`・#179 16 MiB の打鍵ベンチ・#184 改行の索引の共有（ADR 0047）・#190 oracle の `q` の拒否を狭める・#191 `erase().insert()` を `replaced` に・#193 名前つきレジスタ `"a`（ADR 0048）・#198 `VimKeyTable` の切り出し・#200 `<Space>` `<BS>`（ADR 0049）。
 
@@ -28,9 +27,9 @@
 
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
-| Vim fixture | 1823 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | 18131 checks・scope 24（`--vim-clipboard` と `--vim-characters` が 2026-09-29 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042） | [gate-proofs 5-bd 〜 5-bl](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0053 まで | [`docs/adr/README.md`](../adr/README.md) |
+| Vim fixture | 1844 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
+| 既定の `nib_tests` | 18332 checks・scope 24（`--vim-clipboard` と `--vim-characters` が 2026-09-29 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042） | [gate-proofs 5-bd 〜 5-bn](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
+| ADR | 0054 まで | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
