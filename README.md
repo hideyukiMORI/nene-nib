@@ -11,19 +11,20 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). The numbers below are as of `main` on 2026-09-23 and are kept in
+[`docs/adr/`](docs/adr/README.md). The numbers below are as of `main` on 2026-09-29 and are kept in
 `docs/todo/current.md`; the measurements behind them are in `docs/quality/gate-proofs.md`.
 
 - **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
 - **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret. Done.
-- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1339 oracle-generated
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1536 oracle-generated
   fixtures in `tests/vim/` are checked by CTest. Implemented: `h j k l 0 $ ^ w b e gg G`, Home / End,
-  `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x r`, `d c y` + motion, `dd cc yy`,
-  `D C Y`, `p P` with a typed unnamed register, `i a I A o O` with counts, `.` (also in VISUAL), text objects
+  `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x X r`, `d c y` + motion, `dd cc yy`,
+  `D C Y`, `p P` with typed registers (unnamed, named `"a`-`"z` / `"A`-`"Z`, numbered `"0`-`"9`, small delete `"-`,
+  black hole `"_`, clipboard `"+` `"*`), macros `q @ @@`, `i a I A o O` with counts, `.` (also in VISUAL), text objects
   `iw aw iW aW i" a" i' a' i( a( i{ a{ i[ a[ i< a<` and the backtick pair (`b` / `B` aliases), search `/ ? n N * #`
-  with `hlsearch` on by default (`:noh`, `:set (no)hlsearch`), virtual columns (Tab = 8, wide = 2), `u` / Ctrl-r,
+  with `hlsearch` and `incsearch` on by default (`:noh`, `:set (no)hlsearch`, `:set (no)incsearch`, Ctrl-G / Ctrl-T), virtual columns (Tab = 8, wide = 2), `u` / Ctrl-r,
   `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, block `p P`, `.`), literal CR in LF files, Esc everywhere.
-  Not yet: `it ip is`, `incsearch`, `:s :g`, named registers, macros `q @`, `J s S R`, `> < gu gU`, autoindent,
+  Not yet: `it ip is`, `:s :g`, read-only registers, `J s S R`, `> < gu gU`, autoindent,
   drag-to-select, block `I A c C`, general Ex (`:w :q`, ranges, pipes, history).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim". Done.
 - **FR-005 tabs in the title bar** — the tab band with one tab and the window controls; multiple tabs are planned.
