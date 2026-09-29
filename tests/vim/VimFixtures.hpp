@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 433e77ebd6c6b977493b580d0d81dc4aefc6d571f95c8b997b38e116ab4a2bd6 / 1646 fixtures
+// fixtures.json: sha256 5ad158d6c4bd9782811b92fa1952800806ed4a562f01e60e33b3571f721fe015 / 1695 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1646> vim_fixtures{{
+constexpr std::array<VimFixture, 1695> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1658,6 +1658,55 @@ constexpr std::array<VimFixture, 1646> vim_fixtures{{
     {"undo-caret-Vjc-u", "alpha beta gamma delta epsilon zeta\n    four space indent line\n\ttab indent line here\n\nshort\nmiddle line of text foo\n    second indented foo bar\nlast line pat here", "1j11lVjcNEW<Esc>u", "alpha beta gamma delta epsilon zeta\n    four space indent line\n\ttab indent line here\n\nshort\nmiddle line of text foo\n    second indented foo bar\nlast line pat here", 3, 1, "    four space indent line\n\ttab indent line here\n", "V", std::nullopt},
     {"undo-caret-vlr-u", "alpha beta gamma delta epsilon zeta\n    four space indent line\n\ttab indent line here\n\nshort\nmiddle line of text foo\n    second indented foo bar\nlast line pat here", "5j7lvlr1u", "alpha beta gamma delta epsilon zeta\n    four space indent line\n\ttab indent line here\n\nshort\nmiddle line of text foo\n    second indented foo bar\nlast line pat here", 6, 8, "", "", std::nullopt},
     {"undo-caret-Vjr-u", "alpha beta gamma delta epsilon zeta\n    four space indent line\n\ttab indent line here\n\nshort\nmiddle line of text foo\n    second indented foo bar\nlast line pat here", "1j11lVjrxu", "alpha beta gamma delta epsilon zeta\n    four space indent line\n\ttab indent line here\n\nshort\nmiddle line of text foo\n    second indented foo bar\nlast line pat here", 2, 1, "", "", std::nullopt},
+    {"combining-l-steps-over-the-mark", "aéb", "ll", "aéb", 1, 5, "", "", std::nullopt},
+    {"combining-3l", "aébécd", "3l", "aébécd", 1, 6, "", "", std::nullopt},
+    {"combining-h-lands-on-the-base", "aéb", "$h", "aéb", 1, 2, "", "", std::nullopt},
+    {"combining-3h", "aébécd", "$3h", "aébécd", 1, 5, "", "", std::nullopt},
+    {"combining-two-marks-l", "aẹ́b", "ll", "aẹ́b", 1, 7, "", "", std::nullopt},
+    {"combining-kana-l", "aがb", "ll", "aがb", 1, 8, "", "", std::nullopt},
+    {"combining-variation-selector-l", "a葛󠄀b", "ll", "a葛󠄀b", 1, 9, "", "", std::nullopt},
+    {"combining-x", "aéb", "lx", "ab", 1, 2, "é", "v", std::nullopt},
+    {"combining-X", "aéb", "$X", "ab", 1, 2, "é", "v", std::nullopt},
+    {"combining-3x", "aébécd", "l3x", "acd", 1, 2, "ébé", "v", std::nullopt},
+    {"combining-dl", "aéb", "ldl", "ab", 1, 2, "é", "v", std::nullopt},
+    {"combining-dh", "aéb", "$dh", "ab", 1, 2, "é", "v", std::nullopt},
+    {"combining-yl", "aéb", "lyl", "aéb", 1, 2, "é", "v", std::nullopt},
+    {"combining-d2l", "aébc", "ld2l", "ac", 1, 2, "éb", "v", std::nullopt},
+    {"combining-two-marks-x", "aẹ́b", "lx", "ab", 1, 2, "ẹ́", "v", std::nullopt},
+    {"combining-kana-x", "aがb", "lx", "ab", 1, 2, "が", "v", std::nullopt},
+    {"combining-variation-selector-x", "a葛󠄀b", "lx", "ab", 1, 2, "葛󠄀", "v", std::nullopt},
+    {"combining-kana-X", "aがb", "$X", "ab", 1, 2, "が", "v", std::nullopt},
+    {"combining-rz", "aéb", "lrz", "azb", 1, 2, "", "", std::nullopt},
+    {"combining-kana-rz", "aがb", "lrz", "azb", 1, 2, "", "", std::nullopt},
+    {"combining-a-after-the-whole", "aéb", "laZ<Esc>", "aéZb", 1, 5, "", "", std::nullopt},
+    {"combining-i-before-the-base", "aéb", "liZ<Esc>", "aZéb", 1, 2, "", "", std::nullopt},
+    {"combining-dollar-on-the-base", "aé", "$", "aé", 1, 2, "", "", std::nullopt},
+    {"combining-dollar-x", "aが", "$x", "a", 1, 1, "が", "v", std::nullopt},
+    {"combining-zero", "éab", "$0", "éab", 1, 1, "", "", std::nullopt},
+    {"combining-j-from-ascii", "abcdef\naébcd", "lj", "abcdef\naébcd", 2, 2, "", "", std::nullopt},
+    {"combining-j-from-ascii-2", "abcdef\naébcd", "llj", "abcdef\naébcd", 2, 5, "", "", std::nullopt},
+    {"combining-k-from-ascii", "aébcd\nabcdef", "jlk", "aébcd\nabcdef", 1, 2, "", "", std::nullopt},
+    {"combining-vld", "aébc", "lvld", "ac", 1, 2, "éb", "v", std::nullopt},
+    {"combining-vly", "aébc", "lvly", "aébc", 1, 2, "éb", "v", std::nullopt},
+    {"combining-vhd", "aébc", "lvhd", "bc", 1, 1, "aé", "v", std::nullopt},
+    {"combining-v-dollar-hd", "aéb", "$vhd", "a", 1, 1, "éb", "v", std::nullopt},
+    {"combining-vd", "aéb", "lvd", "ab", 1, 2, "é", "v", std::nullopt},
+    {"combining-dot", "aéééb", "lx.", "aéb", 1, 2, "é", "v", std::nullopt},
+    {"combining-u", "aéb", "lxu", "aéb", 1, 2, "é", "v", std::nullopt},
+    {"combining-dollar-h-X", "aébc", "$hX", "abc", 1, 2, "é", "v", std::nullopt},
+    {"combining-tab-base-l", "\t́a", "l", "\t́a", 1, 4, "", "", std::nullopt},
+    {"combining-lone-mark-l", "́abc", "l", "́abc", 1, 3, "", "", std::nullopt},
+    {"combining-lone-mark-x", "́abc", "x", "abc", 1, 1, "́", "v", std::nullopt},
+    {"combining-lone-two-marks-l", "́́abc", "l", "́́abc", 1, 5, "", "", std::nullopt},
+    {"combining-zwj-l", "a👨‍👩‍👧b", "ll", "a👨‍👩‍👧b", 1, 6, "", "", std::nullopt},
+    {"combining-zwj-x", "a👨‍👩‍👧b", "lx", "a‍👩‍👧b", 1, 2, "👨", "v", std::nullopt},
+    {"combining-flag-l", "a🇯🇵b", "ll", "a🇯🇵b", 1, 6, "", "", std::nullopt},
+    {"combining-flag-x", "a🇯🇵b", "lx", "a🇵b", 1, 2, "🇯", "v", std::nullopt},
+    {"combining-skin-tone-x", "a👍🏽b", "lx", "a🏽b", 1, 2, "👍", "v", std::nullopt},
+    {"combining-hangul-jamo-l", "a각b", "lll", "a각b", 1, 8, "", "", std::nullopt},
+    {"combining-hangul-jamo-x", "a각b", "lx", "aᅡᆨb", 1, 2, "ᄀ", "v", std::nullopt},
+    {"combining-xp", "aéb", "lxp", "abé", 1, 3, "é", "v", std::nullopt},
+    {"combining-ylP", "abé", "$ylP", "abéé", 1, 3, "é", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

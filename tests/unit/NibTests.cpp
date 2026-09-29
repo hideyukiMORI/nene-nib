@@ -21,7 +21,7 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 14> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 15> contracts{{
         {"--vim-dot", verify_vim_dot_contracts},
         {"--vim-macro", verify_vim_macro_contracts},
         {"--vim-clipboard", verify_vim_clipboard_contracts},
@@ -35,6 +35,7 @@ void verify_vim_scope_contracts()
         {"--vim-character-search", verify_vim_character_search_contracts},
         {"--vim-line-jumps", verify_vim_line_jump_contracts},
         {"--vim-virtual-column", verify_vim_virtual_column_contracts},
+        {"--vim-characters", verify_vim_character_contracts},
         {"--vim-visual-block", verify_vim_block_contracts},
     }};
     for (const auto &scope : contracts)
@@ -45,7 +46,7 @@ void verify_vim_scope_contracts()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 23> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 24> scopes{{
         {"--display-line", verify_display_line_scope},
         {"--vim-dot", verify_vim_dot_scope},
         {"--vim-macro", verify_vim_macro_scope},
@@ -64,6 +65,7 @@ void verify_vim_scope_contracts()
         {"--vim-line-jumps", verify_vim_line_jump_scope},
         {"--vim-line-jump-recovery", verify_vim_line_jump_recovery},
         {"--vim-virtual-column", verify_vim_virtual_column_scope},
+        {"--vim-characters", verify_vim_character_scope},
         {"--user-theme-selection", verify_user_theme_selection},
         {"--user-theme-values", verify_user_theme_values},
         {"--command-palette", verify_command_palette},

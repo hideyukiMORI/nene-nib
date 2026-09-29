@@ -4,7 +4,7 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "TextPosition.hpp"
-#include "Utf8.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimRegisterKind.hpp"
 
 #include <string>
@@ -19,7 +19,8 @@ namespace
     return text.position_of(at).line;
 }
 
-// inclusive な端の次。行の内容の終わり（NUL の桁）に載っていれば改行そのものを越える。
+// inclusive な端の次（端の文字は付く結合文字ごと含める・ADR 0053 の決定 4）。行の内容の終わり
+// （NUL の桁）に載っていれば改行そのものを越える。
 [[nodiscard]] Offset after(const TextBuffer &text, Offset at)
 {
     const LineNumber line = line_of(text, at);
@@ -29,7 +30,7 @@ namespace
         return text.line_terminator_end(line);
     }
     const std::string rest = text.text_range(at, end);
-    return Offset{at.value + next_code_point(rest, Offset{0}).value};
+    return Offset{at.value + vim_character_end(rest, Offset{0}).value};
 }
 } // namespace
 

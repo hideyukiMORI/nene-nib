@@ -85,6 +85,10 @@ void verify_vim_line_jump_scope();
 // VimLineJumpRecoveryTests.cpp
 void verify_vim_line_jump_recovery();
 
+// VimCharacterBoundaryTests.cpp
+void verify_vim_character_contracts();
+void verify_vim_character_scope();
+
 // VimVirtualColumnTests.cpp
 void verify_vim_virtual_column_contracts();
 void verify_vim_virtual_column_scope();
