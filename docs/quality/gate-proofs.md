@@ -1736,7 +1736,7 @@ FR-003 / ARC-001 / ARC-004 / CPP-002/003/004 / QLT-001/012 / CNF-010/011 を自�
 | `build/nib_tests.exe --vim-characters` | 工程 1: 356 → 工程 2: 直す前 **9 of 686 checks failed** → **665 checks 成功**（`W E B ge` の 4 件を外した後） |
 | `build/nib_tests.exe --vim-text-objects` / `--vim-character-search` / `--vim-visual-block` / `--vim-dot` / `--vim-virtual-column` | 置き換えた走査の既存の経路。**1992 / 639 / 1105 / 1619 / 424 checks 成功** |
 | `ctest --test-dir build -R nib_unit` | 2 工程とも 1 / 1 成功 |
-| `python eng/vim-oracle.py --regenerate --only combining-` × 2 | 工程 1: 49 measured / 1646 reused・工程 2: 92 measured / 1646 reused。工程 2 の 2 回で `VimFixtures.hpp`（`684CD082…BB892C1`）がバイト一致・`fixtures.json` は `38D19A05…C4CD87FB2` |
+| `python eng/vim-oracle.py --regenerate --only combining-` × 2 | 工程 1: 49 measured / 1646 reused・工程 2: 92 measured / 1646 reused。工程 2 の 2 回で `VimFixtures.hpp`（`684CD082…CBB892C1`）がバイト一致・`fixtures.json` は `38D19A05…4CD87FB2` |
 | `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`9b28d10..85e4cf7`（この節を足す前のコミット）・`fixtures 1646 -> 1738 / metadata 2 / deleted 0 / changed 0 / added 92`・保護対象は `none`・`--vim-characters 新規 - -> 665`・`scopes 24 / same 23 / 未測 0`（`--allow` 不要） |
 | `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | 2 工程とも **0 violation / 0 violation** |
 | clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
