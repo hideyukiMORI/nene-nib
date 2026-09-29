@@ -303,6 +303,18 @@ EditorState EditorState::with_closing(bool closing) const
     return next;
 }
 
+const std::optional<std::size_t> &EditorState::close_request() const noexcept
+{
+    return close_request_;
+}
+
+EditorState EditorState::with_close_request(std::optional<std::size_t> position) const
+{
+    EditorState next(*this);
+    next.close_request_ = position;
+    return next;
+}
+
 std::int32_t EditorState::title_bar_width() const noexcept
 {
     return title_bar_width_;

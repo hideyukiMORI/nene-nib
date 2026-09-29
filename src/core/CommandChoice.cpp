@@ -4,7 +4,10 @@
 #include "ExResult.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::core
@@ -47,6 +50,13 @@ namespace
     return CommandChoice{label, std::move(command), kind};
 }
 
+[[nodiscard]] std::string lowered(std::string_view text)
+{
+    std::string lower(text);
+    std::ranges::transform(lower, lower.begin(), lower_ascii);
+    return lower;
+}
+
 [[nodiscard]] bool before(const CommandMatch &left, const CommandMatch &right)
 {
     if (left.score != right.score)
@@ -87,6 +97,47 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
     if (choices.empty() && query.starts_with("colorscheme "))
     {
         return {choice_of(std::string(query))};
+    }
+    return choices;
+}
+
+std::vector<CommandChoice> tab_list_choices(const std::vector<CommandChoice> &tabs,
+                                            std::string_view query)
+{
+    if (query.empty())
+    {
+        return tabs;
+    }
+    std::vector<CommandMatch> matches;
+    for (const CommandChoice &tab : tabs)
+    {
+        const auto score = match_score(query, lowered(tab.label.text()));
+        if (score.has_value())
+        {
+            matches.push_back(CommandMatch{tab, score.value()});
+        }
+    }
+    // 同点は帯の順。std::stable_sort は一時の領域を std::nothrow で取るので core の外へ
+    // シンボルが出る（ARC-003）。帯の位置を添えた並べ替えで同じ順にする。
+    std::vector<std::size_t> order;
+    order.reserve(matches.size());
+    for (std::size_t index = 0; index < matches.size(); ++index)
+    {
+        order.push_back(index);
+    }
+    std::ranges::sort(order,
+                      [&matches](std::size_t left, std::size_t right)
+                      {
+                          const std::size_t left_score = matches.at(left).score;
+                          const std::size_t right_score = matches.at(right).score;
+                          return left_score != right_score ? left_score < right_score
+                                                           : left < right;
+                      });
+    std::vector<CommandChoice> choices;
+    choices.reserve(order.size());
+    for (const std::size_t index : order)
+    {
+        choices.push_back(std::move(matches.at(index).choice));
     }
     return choices;
 }

@@ -66,6 +66,10 @@ struct EditorFrame
     std::optional<core::TitleBarTarget> hovered;
     // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。ui はこれを見て窓を閉じる。
     bool closing;
+    // Ex の `:tabclose` が閉じたいタブの帯の位置（ADR 0057 の決定 6）。closing と同じく 1 意図の
+    // 1 回だけ立つ。ui は意図を送った結果を受ける 1 か所でこれを見て、× と同じ閉じる流れ
+    // （未保存なら確認・最後の 1 本なら窓を閉じる）を呼ぶ。controller はタブを閉じない。
+    std::optional<std::size_t> close_request;
 };
 
 // 表示値から作る帯の配置の入力（ADR 0056 の決定 8・9）。renderer の描画と窓の hit test・

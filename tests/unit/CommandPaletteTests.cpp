@@ -4,9 +4,11 @@
 #include "BuiltinThemes.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
+#include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
+#include "CommandPaletteSource.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
@@ -17,6 +19,7 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExResult.hpp"
+#include "FilePath.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InputLineView.hpp"
@@ -30,13 +33,18 @@
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
 #include "SubmitCommand.hpp"
+#include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "ThemeChoice.hpp"
 #include "VimCharacter.hpp"
 #include "VimKeyPress.hpp"
 
 #include <cstddef>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -65,7 +73,9 @@ void verify_palette_choices()
 {
     const auto all = choices_for(":");
     expect(all.size() == core::ex_command_candidates().size(), "Ex and palette share the catalog");
-    expect(all.front().command == "colorscheme", "empty query has deterministic ranking");
+    // 空の入力の点数は候補の長さなので、最も短いタブの一覧 `tabs`（ADR 0057 の決定 7）が先頭。
+    expect(all.front().command == "tabs" && all.at(1).command == "tabnew",
+           "empty query has deterministic ranking");
     for (const auto &theme : core::builtin_themes)
     {
         const auto matched = choices_for(theme.name);
@@ -306,6 +316,65 @@ void verify_palette_vim_modes()
     expect(frame.command_line.has_value() && !frame.command_palette.has_value(),
            "Ex still opens independently after palette cancellation");
 }
+[[nodiscard]] core::CommandChoice tab_choice(std::string_view title, std::size_t number)
+{
+    return core::CommandChoice{fixed_text(title), "tabnext " + std::to_string(number),
+                               core::CommandChoiceKind::execute, std::nullopt};
+}
+
+[[nodiscard]] std::vector<std::string> commands_of(const std::vector<core::CommandChoice> &choices)
+{
+    std::vector<std::string> commands;
+    for (const auto &choice : choices)
+    {
+        commands.push_back(choice.command);
+    }
+    return commands;
+}
+
+// タブの一覧の候補（ADR 0057 の決定 7）。空の入力は帯の順、入力があれば題名の部分列で絞って
+// 点数の順（同点は帯の順）。大文字と小文字は区別しない。
+void verify_tab_list_choices()
+{
+    const std::vector<core::CommandChoice> tabs{tab_choice("● note.txt", 1), tab_choice("無題", 2),
+                                                tab_choice("Notes.md", 3),
+                                                tab_choice("another note", 4)};
+    const auto opened = core::CommandPalette::opened_tabs(tabs, 2);
+    expect(opened.source() == core::CommandPaletteSource::tabs && opened.input().text().empty() &&
+               opened.selected() == 2,
+           "the tab list opens with an empty input on the active tab");
+    expect(commands_of(opened.choices()) ==
+               std::vector<std::string>{"tabnext 1", "tabnext 2", "tabnext 3", "tabnext 4"},
+           "an empty query lists the tabs in band order");
+    const auto filtered = opened.inserted("NOTE").value();
+    expect(commands_of(filtered.choices()) ==
+                   std::vector<std::string>{"tabnext 3", "tabnext 4", "tabnext 1"} &&
+               filtered.selected() == 0,
+           "a query keeps the matching titles in score order, ignoring case");
+    const std::vector<core::CommandChoice> twins{tab_choice("x.txt", 1), tab_choice("a.txt", 2),
+                                                 tab_choice("a.txt", 3)};
+    expect(commands_of(core::tab_list_choices(twins, "a")) ==
+               std::vector<std::string>{"tabnext 2", "tabnext 3"},
+           "equal scores keep band order");
+    expect(opened.edited(core::CommandEdit::complete_next).selected() == 3 &&
+               opened.edited(core::CommandEdit::complete_previous).selected() == 1,
+           "up and down move the selection over the tab rows");
+    expect(core::CommandPalette::opened().source() == core::CommandPaletteSource::commands &&
+               opened.selected_at(0).source() == core::CommandPaletteSource::tabs,
+           "the source stays with the palette it opened");
+}
+
+void verify_tab_folders()
+{
+    const auto folder = core::tab_folder_for(core::FilePath::parse("C:\\work\\note.txt").value());
+    expect(folder.has_value() && folder.value().text() == "C:\\work",
+           "the folder is the path without its last name");
+    const auto root = core::tab_folder_for(core::FilePath::parse("C:\\note.txt").value());
+    expect(root.has_value() && root.value().text() == "C:", "a root file keeps its drive");
+    expect(!core::tab_folder_for(std::nullopt).has_value() &&
+               !core::tab_folder_for(core::FilePath::parse("note.txt").value()).has_value(),
+           "an untitled tab and a bare name have no folder");
+}
 } // namespace
 
 void verify_command_palette()
@@ -317,5 +386,7 @@ void verify_command_palette()
     verify_palette_unknown_theme();
     verify_palette_input_isolation();
     verify_palette_vim_modes();
+    verify_tab_list_choices();
+    verify_tab_folders();
 }
 } // namespace nenenib::tests

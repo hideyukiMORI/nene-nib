@@ -2,6 +2,7 @@
 
 #include "BodyLayout.hpp"
 #include "ClauseEmphasis.hpp"
+#include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
 #include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
@@ -70,9 +71,10 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
-    // タブの題名が題名の領域に入りきらないときは文字単位で切って末尾に「…」を付ける
-    // （docs/design/2026-09-29-tabs.md 第 2 節）。
-    [[nodiscard]] HRESULT trim_tab_titles();
+    // 書式（か layout）の領域に入りきらない文字列を文字単位で切って末尾に「…」を付ける。
+    // タブの題名（docs/design/2026-09-29-tabs.md 第 2 節）と一覧の場所（ADR 0057 の決定 7）が
+    // 同じ設定を使う。
+    [[nodiscard]] HRESULT trim_by_character(IDWriteTextFormat *format);
     // 本文の書式の tab stop を空白 8 個ぶんにする。本文の書式を作るたびにここだけを通る
     // （ADR 0045 の決定 1）。測れないときは既定のまま。
     void set_tab_stops(IDWriteTextFormat *format);
@@ -166,6 +168,8 @@ class Direct2DRenderer final
                               const core::PaletteLayout &layout);
     void draw_palette_choice(const application::EditorFrame &frame, const core::LayoutRect &row,
                              std::size_t index);
+    void draw_palette_detail(const application::EditorFrame &frame,
+                             const core::CommandChoice &choice, const core::LayoutRect &label);
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);

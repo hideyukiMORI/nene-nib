@@ -762,7 +762,7 @@ bool EditorWindow::click_title_bar(LPARAM data)
     case core::TitleBarHit::tab:
         send(application::SwitchTab{target.tab});
         return true;
-    // ×・「＋」は離したときに動かす（窓の操作と同じ）。「∨」の一覧は #240。
+    // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。
     case core::TitleBarHit::tab_close:
     case core::TitleBarHit::add_tab:
     case core::TitleBarHit::tab_list:
@@ -797,6 +797,12 @@ void EditorWindow::release_title_bar(LPARAM data)
     if (target.value().hit == core::TitleBarHit::add_tab)
     {
         send(application::NewTab{});
+    }
+    // 「∨」は Ctrl+P の面にタブの一覧を開く（ADR 0057 の決定 7）。面が開いている間は上で
+    // 帯のクリックを受けないので、閉じるのは Esc と面の外のクリック（今の Ctrl+P と同じ）。
+    if (target.value().hit == core::TitleBarHit::tab_list)
+    {
+        send(application::OpenTabList{});
     }
 }
 
@@ -1206,6 +1212,9 @@ void EditorWindow::send(const application::EditorIntent &intent)
     const float previous_size =
         font_change ? controller_.frame().settings.font_size.points() : 0.0F;
     auto frame = controller_.apply(intent);
+    // 閉じたいタブは意図を送った結果の frame にだけ載る（ADR 0057 の決定 6）。下で frame を
+    // 作り直す前に読んでおく。
+    const auto close_request = frame.close_request;
     if (font_change)
     {
         if (std::holds_alternative<application::AdjustFontSize>(intent))
@@ -1225,6 +1234,13 @@ void EditorWindow::send(const application::EditorIntent &intent)
     invalidate();
     update_title(frame);
     announce(frame);
+    // `:tabclose` は × と同じ流れで閉じる。この frame を写し終えてから呼ぶ（古い frame で題名を
+    // 上書きしない）。close_tab の中の send の frame は close_request が空なので再入は 1 段で
+    // 止まる。close_tab が窓を壊したら、この後で window_ に触らない（ここで終わる）。
+    if (close_request.has_value())
+    {
+        close_tab(close_request.value());
+    }
 }
 
 void EditorWindow::invalidate() noexcept

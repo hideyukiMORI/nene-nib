@@ -34,6 +34,7 @@
 #include "VimEditorView.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimKeySource.hpp"
 #include "VimMode.hpp"
 #include "VimMoveTo.hpp"
 #include "VimNavigate.hpp"
@@ -41,10 +42,13 @@
 #include "VimNoEffect.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimRepeatFailure.hpp"
 #include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
+#include "VimSwitchTab.hpp"
+#include "VimTabs.hpp"
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 #include "VimVisualRange.hpp"
@@ -952,6 +956,80 @@ void verify_vim_visual_step_edges()
     expect(is_empty(inserting_none.range), "and neither has INSERT");
 }
 
+namespace
+{
+// `gt` `gT` の engine（ADR 0057 の決定 2）。鍵を順に流し、最後の 1 鍵の結果を返す。本文と選択と
+// タブの値は鍵のあいだで変えない（engine が借用だけすることを見る）。
+[[nodiscard]] nenenib::core::VimStep tab_step(std::string_view keys, nenenib::core::VimTabs tabs)
+{
+    const auto text = TextBuffer::from_utf8("abc def");
+    const auto &buffer = text.value();
+    const Selection selection = collapsed_at(Offset{4});
+    const VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, 64},
+                             nenenib::core::VimKeySource::typed, tabs};
+    nenenib::core::VimStep last{
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters}),
+        VimNoEffect{}};
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        last = vim_step(last.next, view, key);
+    }
+    return last;
+}
+
+[[nodiscard]] bool switched_to(const nenenib::core::VimStep &step, std::size_t index)
+{
+    const auto *const effect = std::get_if<nenenib::core::VimSwitchTab>(&step.effect);
+    return effect != nullptr && effect->index == index && !step.failure.has_value() &&
+           step.next.mode == VimMode::normal && !step.next.count.has_value() &&
+           !step.next.input_wait.has_value();
+}
+
+[[nodiscard]] bool refused_tab(const nenenib::core::VimStep &step, VimMode mode)
+{
+    return std::holds_alternative<VimNoEffect>(step.effect) && step.failure.has_value() &&
+           step.next.mode == mode && !step.next.count.has_value() &&
+           !step.next.pending.has_value() && !step.next.input_wait.has_value();
+}
+
+void verify_vim_tab_steps()
+{
+    using nenenib::core::VimTabs;
+    const VimTabs three{1, 3};
+    expect(switched_to(tab_step("gt", three), 2) && switched_to(tab_step("gT", three), 0),
+           "gt and gT name the neighbouring tab");
+    expect(switched_to(tab_step("gt", VimTabs{2, 3}), 0) &&
+               switched_to(tab_step("gT", VimTabs{0, 3}), 2),
+           "gt and gT wrap around the band");
+    expect(switched_to(tab_step("3gt", three), 2) && switched_to(tab_step("1gt", three), 0) &&
+               switched_to(tab_step("2gt", three), 1),
+           "a count before gt is the tab number, the current tab included");
+    expect(switched_to(tab_step("2gT", three), 2) && switched_to(tab_step("9gT", three), 1),
+           "a count before gT goes back that many tabs and wraps");
+    const auto outside = tab_step("4gt", three);
+    expect(refused_tab(outside, VimMode::normal) &&
+               outside.failure == std::optional{nenenib::core::VimRepeatFailure::not_moved},
+           "a tab number past the band fails without an effect");
+    expect(switched_to(tab_step("gt", VimTabs{0, 1}), 0) &&
+               switched_to(tab_step("3gT", VimTabs{0, 1}), 0) &&
+               refused_tab(tab_step("2gt", VimTabs{0, 1}), VimMode::normal),
+           "with one tab gt and gT stay and 2gt fails");
+    for (const std::string_view keys : {"dgt", "ygt", "cgt", "d2gt", "dgT"})
+    {
+        expect(refused_tab(tab_step(keys, three), VimMode::normal),
+               "an operator before gt is cancelled with a failure");
+    }
+    expect(switched_to(tab_step("vgt", three), 2), "gt in VISUAL switches and rests in NORMAL");
+    expect(refused_tab(tab_step("v9gt", three), VimMode::visual),
+           "a failing gt in VISUAL keeps VISUAL");
+    const auto after_change = tab_step("xgt", three);
+    expect(after_change.next.last_change.has_value() &&
+               after_change.next.last_change.value().keys == vim_keys_of("x"),
+           "gt keeps the last change for the dot");
+}
+
+} // namespace
+
 // scope 専用の契約は verify_vim_scope_contracts の表が回す（Issue #97）。ここは scope を持たない
 // Vim の共通部分だけを見る。
 void verify_vim_engine()
@@ -983,6 +1061,7 @@ void verify_vim_engine()
     verify_vim_crlf();
     verify_vim_other_keys();
     verify_vim_normal_stops_at_failure();
+    verify_vim_tab_steps();
     verify_vim_fixtures();
 }
 } // namespace nenenib::tests

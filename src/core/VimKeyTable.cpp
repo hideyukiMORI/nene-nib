@@ -157,7 +157,9 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_previous_big_word, VimActionGroup::motion},
      {VimAction::move_big_word_end, VimActionGroup::motion},
      {VimAction::move_previous_word_end, VimActionGroup::motion},
-     {VimAction::move_previous_big_word_end, VimActionGroup::motion}}};
+     {VimAction::move_previous_big_word_end, VimActionGroup::motion},
+     {VimAction::next_tab, VimActionGroup::tab},
+     {VimAction::previous_tab, VimActionGroup::tab}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 24> motion_bindings{
@@ -186,10 +188,12 @@ constexpr std::array<VimMotionBinding, 24> motion_bindings{
      {VimAction::move_previous_word_end, VimMotion::previous_word_end},
      {VimAction::move_previous_big_word_end, VimMotion::previous_big_word_end}}};
 
-// g の後ろの鍵 → 動作（ADR 0027 / Issue #222）。ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 3> g_bindings{{{U'g', VimAction::move_document_first},
+// g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2）。ここに無い鍵は g を打ち消す。
+constexpr std::array<VimBinding, 5> g_bindings{{{U'g', VimAction::move_document_first},
                                                 {U'e', VimAction::move_previous_word_end},
-                                                {U'E', VimAction::move_previous_big_word_end}}};
+                                                {U'E', VimAction::move_previous_big_word_end},
+                                                {U't', VimAction::next_tab},
+                                                {U'T', VimAction::previous_tab}}};
 
 // 空白だけで切る（Vim の WORD の）移動。ほかの語の移動は文字の種類の表で切る（Issue #222）。
 constexpr std::array<VimMotion, 5> big_word_motions{

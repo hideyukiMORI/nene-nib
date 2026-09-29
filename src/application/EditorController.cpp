@@ -3,13 +3,19 @@
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
 #include "ClipboardText.hpp"
+#include "CommandChoice.hpp"
+#include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
+#include "CommandPalette.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
 #include "Edit.hpp"
+#include "ExEvaluationFailure.hpp"
 #include "ExResult.hpp"
+#include "ExTabRequest.hpp"
+#include "ExTabVerb.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
 #include "ScrollBounds.hpp"
@@ -18,6 +24,9 @@
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
+#include "TabDestination.hpp"
+#include "TabJump.hpp"
+#include "TabJumpDirection.hpp"
 #include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
@@ -46,6 +55,8 @@
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimStep.hpp"
+#include "VimSwitchTab.hpp"
+#include "VimTabs.hpp"
 #include "VimVisualRange.hpp"
 #include "VimVisualReselect.hpp"
 
@@ -410,15 +421,16 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return views;
 }
 
-// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。
-[[nodiscard]] std::size_t stepped_tab(std::size_t active, std::size_t count, core::TabStep step)
+// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。行き先を数えるのは gt / gT と同じ
+// tab_destination の 1 本（ADR 0057 の決定 1）。
+[[nodiscard]] core::TabJumpDirection direction_of(core::TabStep step) noexcept
 {
     switch (step)
     {
     case core::TabStep::next:
-        return (active + 1) % count;
+        return core::TabJumpDirection::forward;
     case core::TabStep::previous:
-        return (active + count - 1) % count;
+        return core::TabJumpDirection::backward;
     }
     std::unreachable();
 }
@@ -519,7 +531,7 @@ void EditorController::begin_intent(bool keeps_message)
 {
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
-    state_ = state_.with_failure(std::nullopt).with_closing(false);
+    state_ = state_.with_failure(std::nullopt).with_closing(false).with_close_request(std::nullopt);
     if (state_.command_message().has_value() && !keeps_message)
     {
         state_ = state_.with_command_message(std::nullopt);
@@ -1013,7 +1025,8 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     const core::VimEditorView view{state_.text(), state_.selection(),
                                    core::VimViewport{scroll.first_visible, scroll.visible_lines},
                                    replay_depth_.has_value() ? core::VimKeySource::replayed
-                                                             : core::VimKeySource::typed};
+                                                             : core::VimKeySource::typed,
+                                   core::VimTabs{state_.active_tab(), state_.tab_count()}};
     const auto step = core::vim_step(state_.vim(), view, key);
     state_ = state_.with_vim(step.next);
     // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
@@ -1242,6 +1255,33 @@ void EditorController::accept(const OpenCommandPalette &)
     state_ = state_.with_command_input(core::CommandPalette::opened(state_.themes()));
 }
 
+// 一覧の候補は帯の表示値から作る（題名は帯と同じ・場所はファイルのあるフォルダ・実行は Ex の
+// `tabnext N`）。開いている間の OpenTabList は Ctrl+P と同じく閉じる（ADR 0057 の決定 7）。
+void EditorController::accept(const OpenTabList &)
+{
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    if (command_palette_active())
+    {
+        accept(CancelCommand{});
+        return;
+    }
+    const auto views = tab_views(state_, active_document_view());
+    std::vector<core::CommandChoice> tabs;
+    tabs.reserve(views.size());
+    for (std::size_t index = 0; index < views.size(); ++index)
+    {
+        const DocumentView &view = views.at(index);
+        tabs.push_back(core::CommandChoice{view.title, "tabnext " + std::to_string(index + 1),
+                                           core::CommandChoiceKind::execute,
+                                           core::tab_folder_for(view.path)});
+    }
+    state_ = state_.with_command_input(
+        core::CommandPalette::opened_tabs(std::move(tabs), state_.active_tab(), state_.themes()));
+}
+
 void EditorController::accept(const ActivateCommandChoice &intent)
 {
     const auto &input = state_.command_input();
@@ -1358,7 +1398,13 @@ void EditorController::evaluate_command(std::string_view text)
         core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
     if (!result)
     {
-        state_ = state_.with_command_message(core::ex_failure_message(result.error()));
+        state_ = state_.with_command_message(core::ex_failure_message(result.error(), text));
+        return;
+    }
+    const auto &tab = result.value().tab;
+    if (tab.has_value())
+    {
+        run_tab_request(tab.value());
         return;
     }
     const auto &settings = result.value().settings;
@@ -1385,6 +1431,40 @@ void EditorController::evaluate_command(std::string_view text)
         state_ = state_.with_vim(std::move(vim));
     }
     state_ = state_.with_command_message(result.value().message);
+}
+
+// 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
+// `:tabclose` は状態を変えず、閉じたいタブの位置だけを載せる（決定 6）。
+void EditorController::run_tab_request(const core::ExTabRequest &request)
+{
+    switch (request.verb)
+    {
+    case core::ExTabVerb::next:
+    case core::ExTabVerb::previous:
+        break;
+    case core::ExTabVerb::open:
+        accept(NewTab{});
+        return;
+    case core::ExTabVerb::close:
+        state_ = state_.with_close_request(state_.active_tab());
+        return;
+    case core::ExTabVerb::list:
+        accept(OpenTabList{});
+        return;
+    }
+    const auto direction = request.verb == core::ExTabVerb::next ? core::TabJumpDirection::forward
+                                                                 : core::TabJumpDirection::backward;
+    const auto destination = core::tab_destination(core::TabJump{direction, request.number},
+                                                   state_.active_tab(), state_.tab_count());
+    if (!destination.has_value())
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("E475: Invalid argument: " +
+                                     std::to_string(request.number.value_or(0)))
+                .value());
+        return;
+    }
+    accept(SwitchTab{destination.value()});
 }
 
 // Vim の外から来た割り込み（クリック・Ctrl+Z・全選択・別経路の編集）。どれが割り込みかは
@@ -1530,8 +1610,8 @@ void EditorController::perform(const core::VimReplay &effect)
         queue_nested_replay(effect.keys, replay_depth_.value() + 1);
         return;
     }
-    const core::EditHistory history = state_.history();
-    const core::TextBuffer text = state_.text();
+    replay_history_ = state_.history();
+    replay_text_ = state_.text();
     replay_queue_.assign(effect.keys.begin(), effect.keys.end());
     replay_depths_.assign(effect.keys.size(), 1);
     while (!replay_queue_.empty())
@@ -1547,8 +1627,29 @@ void EditorController::perform(const core::VimReplay &effect)
         }
     }
     replay_depth_ = std::nullopt;
-    merge_replayed_edits(history, text);
+    close_replayed_unit();
+    replay_history_ = std::nullopt;
+    replay_text_ = std::nullopt;
     state_ = state_.with_history(state_.history().sealed());
+}
+
+void EditorController::close_replayed_unit()
+{
+    if (!replay_history_.has_value() || !replay_text_.has_value())
+    {
+        return;
+    }
+    merge_replayed_edits(replay_history_.value(), replay_text_.value());
+}
+
+void EditorController::reopen_replayed_unit()
+{
+    if (!replay_history_.has_value())
+    {
+        return;
+    }
+    replay_history_ = state_.history();
+    replay_text_ = state_.text();
 }
 
 void EditorController::queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth)
@@ -1611,6 +1712,11 @@ void EditorController::perform(const core::VimRedo &)
         move_caret_to(core::vim_same_line_and_column(before, edit.value().restore, state_.text()),
                       core::SelectionAnchoring::collapse);
     }
+}
+
+void EditorController::perform(const core::VimSwitchTab &effect)
+{
+    accept(SwitchTab{effect.index});
 }
 
 const core::VimState &EditorController::vim_state() const noexcept
@@ -1775,6 +1881,7 @@ void EditorController::accept(const SaveDocument &intent)
 
 void EditorController::leave_document()
 {
+    close_replayed_unit();
     // 入力行の取消は検索の preview を閉じて入力前のスクロールへ戻し、検索なら Vim の保留も
     // 捨てる。Esc と同じ 1 本を通す（ADR 0041 の決定 5・ADR 0056 の決定 4）。
     if (state_.command_input().has_value())
@@ -1795,6 +1902,7 @@ void EditorController::enter_document()
     state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
     settle_vim_caret();
     reveal_active_tab();
+    reopen_replayed_unit();
 }
 
 void EditorController::accept(const NewTab &)
@@ -1817,7 +1925,13 @@ void EditorController::accept(const SwitchTab &intent)
 
 void EditorController::accept(const StepTab &intent)
 {
-    accept(SwitchTab{stepped_tab(state_.active_tab(), state_.tab_count(), intent.step)});
+    const auto destination =
+        core::tab_destination(core::TabJump{direction_of(intent.step), std::nullopt},
+                              state_.active_tab(), state_.tab_count());
+    if (destination.has_value())
+    {
+        accept(SwitchTab{destination.value()});
+    }
 }
 
 void EditorController::accept(const CloseTab &intent)
@@ -2072,14 +2186,20 @@ std::vector<LineView> EditorController::visible_lines() const
     return lines;
 }
 
+DocumentView EditorController::active_document_view() const
+{
+    const auto &document = state_.document();
+    const auto save_state = save_state_of(document, state_.history().position());
+    return DocumentView{core::tab_title_for(document.path, save_state), document.path,
+                        document.encoding, save_state, state_.last_failure()};
+}
+
 EditorFrame EditorController::frame() const
 {
     const auto caret = state_.text().position_of(state_.selection().caret);
     const auto &document = state_.document();
-    const auto save_state = save_state_of(document, state_.history().position());
     const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
-    DocumentView active{core::tab_title_for(document.path, save_state), document.path,
-                        document.encoding, save_state, state_.last_failure()};
+    DocumentView active = active_document_view();
     auto tabs = tab_views(state_, active);
     return EditorFrame{visible_lines(),
                        CaretView{caret, caret_shape_for(state_.mode(), state_.vim().mode)},
@@ -2103,6 +2223,7 @@ EditorFrame EditorController::frame() const
                        state_.active_tab(),
                        state_.tab_scroll(),
                        state_.hovered(),
-                       state_.closing()};
+                       state_.closing(),
+                       state_.close_request()};
 }
 } // namespace nenenib::application

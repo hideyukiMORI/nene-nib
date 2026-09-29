@@ -14,6 +14,8 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExResult.hpp"
+#include "ExTabRequest.hpp"
+#include "ExTabVerb.hpp"
 #include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "HistoryAction.hpp"
@@ -37,11 +39,14 @@
 #include "VimMode.hpp"
 #include "VisibleLines.hpp"
 
+#include <array>
 #include <cstddef>
 #include <expected>
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::tests
@@ -278,7 +283,8 @@ void verify_command_completions()
     line = line.edited(CommandEdit::home);
     expect(!line.completion_index().has_value(), "manual movement resets completion");
     const auto first = core::CommandLine::empty().edited(CommandEdit::complete_previous);
-    expect(first.text() == "set nohlsearch", "backwards completion starts at the last command");
+    // 名前だけの候補の末尾はタブの命令の最後の `tabclose`（ADR 0057 の決定 7）。
+    expect(first.text() == "tabclose", "backwards completion starts at the last command");
     expect(core::command_completions("set f") == std::vector<std::string>{"set fontsize="},
            "option prefix");
     const auto unknown = core::CommandLine::empty().inserted("unknown").value();
@@ -369,6 +375,91 @@ void verify_ex_input_isolation()
     expect(!frame.command_line.has_value() && frame.vim_mode == core::VimMode::visual,
            "visual ranges are not interpreted");
 }
+// タブの命令の名前と省略形と引数（ADR 0057 の決定 4）。省略は Vim 9.1 の実測（probe の節 F）。
+[[nodiscard]] bool tab_request_is(std::string_view text, core::ExTabVerb verb,
+                                  std::optional<std::size_t> number)
+{
+    const auto result = core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+    if (!result.has_value())
+    {
+        return false;
+    }
+    const auto &tab = result.value().tab;
+    return tab.has_value() && tab.value().verb == verb && tab.value().number == number &&
+           !result.value().settings.has_value() && !result.value().highlight.has_value() &&
+           !result.value().incsearch.has_value();
+}
+
+[[nodiscard]] bool ex_fails_with(std::string_view text, core::ExFailure failure)
+{
+    const auto result = core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark);
+    return !result.has_value() && result.error() == core::ExEvaluationFailure{failure};
+}
+
+void verify_ex_tab_names()
+{
+    using core::ExTabVerb;
+    using Row = std::pair<std::string_view, ExTabVerb>;
+    const std::array<Row, 17> names{{{"tabn", ExTabVerb::next},
+                                     {"tabne", ExTabVerb::next},
+                                     {"tabnex", ExTabVerb::next},
+                                     {"tabnext", ExTabVerb::next},
+                                     {"tabp", ExTabVerb::previous},
+                                     {"tabpr", ExTabVerb::previous},
+                                     {"tabprev", ExTabVerb::previous},
+                                     {"tabprevious", ExTabVerb::previous},
+                                     {"tabN", ExTabVerb::previous},
+                                     {"tabNe", ExTabVerb::previous},
+                                     {"tabNext", ExTabVerb::previous},
+                                     {"tabc", ExTabVerb::close},
+                                     {"tabcl", ExTabVerb::close},
+                                     {"tabclose", ExTabVerb::close},
+                                     {"tabnew", ExTabVerb::open},
+                                     {"tabs", ExTabVerb::list},
+                                     {"  tabs  ", ExTabVerb::list}}};
+    for (const auto &[text, verb] : names)
+    {
+        expect(tab_request_is(text, verb, std::nullopt),
+               "a tab command name and its abbreviations name one verb");
+    }
+    for (const std::string_view text :
+         {"tab", "tabe", "tabm", "tabf", "tabnexts", "tabnewx", "Tabnext", "tabpreviouss"})
+    {
+        expect(ex_fails_with(text, core::ExFailure::unknown_command),
+               "names outside the table stay unknown commands");
+    }
+}
+
+void verify_ex_tab_arguments()
+{
+    using core::ExTabVerb;
+    expect(tab_request_is("tabnext 2", ExTabVerb::next, 2) &&
+               tab_request_is("tabn 9", ExTabVerb::next, 9) &&
+               tab_request_is("tabnext 0", ExTabVerb::next, 0) &&
+               tab_request_is("tabprevious 4", ExTabVerb::previous, 4) &&
+               tab_request_is("tabN 1", ExTabVerb::previous, 1),
+           "tabnext and tabprevious take one decimal number and leave its range to the caller");
+    for (const std::string_view text :
+         {"tabnext +1", "tabnext -1", "tabnext $", "4tabnext", "2tabnew", "tabnext!", "tabclose!",
+          "tabnew note.txt", "tabclose 2", "tabs 1", "tabnext 1 2", "tabnext x",
+          "tabnext 99999999999999999999999"})
+    {
+        expect(ex_fails_with(text, core::ExFailure::unsupported_argument),
+               "forms Vim accepts but Nib does not yet are unsupported");
+    }
+    const auto result =
+        core::evaluate_ex("tabnext +1", core::default_editor_settings(), Appearance::dark);
+    expect(!result.has_value() && core::ex_failure_message(result.error(), " tabnext +1 ").text() ==
+                                      "Not supported: tabnext +1",
+           "the unsupported message names the input without a Vim error number");
+    expect(
+        core::ex_failure_message(core::ExEvaluationFailure{core::ExFailure::unknown_command}, "tab")
+                .text() == "Unknown command",
+        "other failures keep their own message");
+    expect(core::ex_failure_message(core::ExFailure::unsupported_argument).text() ==
+               "Not supported",
+           "the bare message has no input");
+}
 } // namespace
 
 void verify_ex_settings()
@@ -383,5 +474,7 @@ void verify_ex_settings()
     verify_command_completions();
     verify_ex_controller();
     verify_ex_input_isolation();
+    verify_ex_tab_names();
+    verify_ex_tab_arguments();
 }
 } // namespace nenenib::tests

@@ -42,6 +42,8 @@ constexpr float tab_stop_spaces = 8.0F;
 constexpr float space_probe_width = 1000.0F;
 // モード表示の文字と `recording @a` のあいだ（ADR 0046 の決定 8）。
 constexpr float recording_gap_dips = 12.0F;
+// 一覧の行の題名と場所（`detail`）のあいだ（ADR 0057 の決定 7）。
+constexpr float palette_detail_gap_dips = 12.0F;
 constexpr DWORD latency_timeout_milliseconds = 1000;
 constexpr float full_channel = 255.0F;
 
@@ -394,17 +396,16 @@ void Direct2DRenderer::align_text_formats()
     status_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 }
 
-HRESULT Direct2DRenderer::trim_tab_titles()
+HRESULT Direct2DRenderer::trim_by_character(IDWriteTextFormat *format)
 {
     Microsoft::WRL::ComPtr<IDWriteInlineObject> ellipsis;
-    const HRESULT made =
-        dwrite_->CreateEllipsisTrimmingSign(tab_format_.Get(), ellipsis.GetAddressOf());
+    const HRESULT made = dwrite_->CreateEllipsisTrimmingSign(format, ellipsis.GetAddressOf());
     if (FAILED(made))
     {
         return made;
     }
     const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
-    return tab_format_->SetTrimming(&trimming, ellipsis.Get());
+    return format->SetTrimming(&trimming, ellipsis.Get());
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
@@ -434,7 +435,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
         return std::unexpected(RenderFailure::directwrite);
     }
     align_text_formats();
-    if (FAILED(trim_tab_titles()))
+    if (FAILED(trim_by_character(tab_format_.Get())))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -1225,7 +1226,43 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
     const core::LayoutRect label{row.left + inset * 2, row.top, row.right - inset * 2, row.bottom};
     context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
     write(palette.choices.at(index).label.text(), command_format_.Get(), label, frame.palette.text);
+    draw_palette_detail(frame, palette.choices.at(index), label);
     context_->PopAxisAlignedClip();
+}
+
+void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame,
+                                           const core::CommandChoice &choice,
+                                           const core::LayoutRect &label)
+{
+    // 場所は題名の後ろに 12 DIP 空けて muted で書き、行の右端で文字単位に切る（ADR 0057 の
+    // 決定 7）。題名が入りきらない行には書かない。detail の無い行（Ex の候補）は何もしない。
+    if (!choice.detail.has_value())
+    {
+        return;
+    }
+    const auto title = text_layout(choice.label.text(), command_format_.Get(), label);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!title || FAILED(title->GetMetrics(&metrics)))
+    {
+        return;
+    }
+    const auto left =
+        label.left + static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace +
+                                                         scaled(palette_detail_gap_dips)));
+    const core::LayoutRect place{left, label.top, label.right, label.bottom};
+    if (core::width_of(place) <= 0)
+    {
+        return;
+    }
+    const auto detail = text_layout(choice.detail.value().text(), command_format_.Get(), place);
+    if (!detail || FAILED(trim_by_character(detail.Get())))
+    {
+        return;
+    }
+    brush_->SetColor(to_color(frame.palette.muted));
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(place.left), static_cast<float>(place.top)), detail.Get(),
+        brush_.Get());
 }
 
 void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &frame,

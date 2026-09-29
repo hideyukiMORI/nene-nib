@@ -1,9 +1,15 @@
 // scope `--tabs` の単体テスト（ADR 0042 決定 2・ADR 0056）。状態・切り替え・閉じる（決定 1〜4・
 // 6・7）と、開く（決定 5）と起動（決定 13）。
+#include "ActivateCommandChoice.hpp"
 #include "Appearance.hpp"
+#include "CancelCommand.hpp"
 #include "CloseTab.hpp"
+#include "CommandChoiceKind.hpp"
+#include "CommandEdit.hpp"
+#include "CommandText.hpp"
 #include "ComposeText.hpp"
 #include "DevicePixels.hpp"
+#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -18,7 +24,9 @@
 #include "LayoutRect.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "OpenTabList.hpp"
 #include "PointTitleBar.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -34,11 +42,17 @@
 #include "Selection.hpp"
 #include "SelectionPresence.hpp"
 #include "StepTab.hpp"
+#include "StoreVimRegister.hpp"
+#include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TabCommand.hpp"
+#include "TabDestination.hpp"
+#include "TabJump.hpp"
+#include "TabJumpDirection.hpp"
 #include "TabKey.hpp"
 #include "TabKeyTable.hpp"
 #include "TabStep.hpp"
+#include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarInput.hpp"
@@ -49,6 +63,9 @@
 #include "VimColumnWish.hpp"
 #include "VimCount.hpp"
 #include "VimMode.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 #include "VimWantedColumn.hpp"
@@ -827,6 +844,376 @@ void verify_tab_keys()
     }
 }
 
+// 行き先の表（ADR 0057 の決定 1）。期待値は Vim 9.1 の実測（probe-vimtabs-2026-09-29 の
+// 節 A・B・I）。行は回数（値なし・0・1・2・3・4・9）、列は今の位置（0 始まり）、
+// 値は行き先で failed は失敗（動かず・後ろの鍵は打ち切られる）。
+constexpr std::size_t failed = 99;
+using DestinationRow = std::pair<std::optional<std::size_t>, std::array<std::size_t, 3>>;
+
+void verify_tab_destination_rows(nenenib::core::TabJumpDirection direction, std::size_t tab_count,
+                                 const std::array<DestinationRow, 7> &rows)
+{
+    using nenenib::core::tab_destination;
+    using nenenib::core::TabJump;
+    for (const auto &[count, expected] : rows)
+    {
+        for (std::size_t active = 0; active < tab_count; ++active)
+        {
+            const auto destination = tab_destination(TabJump{direction, count}, active, tab_count);
+            const std::size_t wanted = expected.at(active);
+            expect(wanted == failed ? !destination.has_value()
+                                    : destination == std::optional<std::size_t>{wanted},
+                   "the tab destination matches the measured Vim table");
+        }
+    }
+}
+
+void verify_tab_destination()
+{
+    using nenenib::core::TabJumpDirection;
+    constexpr std::size_t none = failed;
+    const std::array<DestinationRow, 7> forward_three{{{std::nullopt, {1, 2, 0}},
+                                                       {0, {none, none, none}},
+                                                       {1, {0, 0, 0}},
+                                                       {2, {1, 1, 1}},
+                                                       {3, {2, 2, 2}},
+                                                       {4, {none, none, none}},
+                                                       {9, {none, none, none}}}};
+    const std::array<DestinationRow, 7> backward_three{{{std::nullopt, {2, 0, 1}},
+                                                        {0, {none, none, none}},
+                                                        {1, {2, 0, 1}},
+                                                        {2, {1, 2, 0}},
+                                                        {3, {0, 1, 2}},
+                                                        {4, {2, 0, 1}},
+                                                        {9, {0, 1, 2}}}};
+    const std::array<DestinationRow, 7> forward_one{{{std::nullopt, {0, none, none}},
+                                                     {0, {none, none, none}},
+                                                     {1, {0, none, none}},
+                                                     {2, {none, none, none}},
+                                                     {3, {none, none, none}},
+                                                     {4, {none, none, none}},
+                                                     {9, {none, none, none}}}};
+    const std::array<DestinationRow, 7> backward_one{{{std::nullopt, {0, none, none}},
+                                                      {0, {none, none, none}},
+                                                      {1, {0, none, none}},
+                                                      {2, {0, none, none}},
+                                                      {3, {0, none, none}},
+                                                      {4, {0, none, none}},
+                                                      {9, {0, none, none}}}};
+    verify_tab_destination_rows(TabJumpDirection::forward, 3, forward_three);
+    verify_tab_destination_rows(TabJumpDirection::backward, 3, backward_three);
+    verify_tab_destination_rows(TabJumpDirection::forward, 1, forward_one);
+    verify_tab_destination_rows(TabJumpDirection::backward, 1, backward_one);
+    expect(!nenenib::core::tab_destination(
+                nenenib::core::TabJump{TabJumpDirection::forward, std::nullopt}, 3, 3)
+                .has_value(),
+           "a position outside the band has no destination");
+}
+// Vim の 3 本のタブ（本文 alpha / bravo / charlie・キャレットはどれも行頭）。アクティブは先頭。
+// 本文は通常モードで打つので、`.` の直前の変更は空のまま。
+void open_three_vim_tabs(Editing &editing)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{10});
+    applied(controller, InsertText{"alpha"});
+    for (const std::string_view body : {"bravo", "charlie"})
+    {
+        applied(controller, NewTab{});
+        applied(controller, InsertText{std::string(body)});
+    }
+    applied(controller, SelectEditMode{EditMode::vim});
+    for (const std::size_t tab : {0U, 1U, 2U})
+    {
+        applied(controller, SwitchTab{tab});
+        vim_replay(controller, "0");
+    }
+    applied(controller, SwitchTab{0});
+}
+
+[[nodiscard]] std::size_t active_after(EditorController &controller, std::string_view keys)
+{
+    vim_normal(controller, keys);
+    return controller.frame().active_tab;
+}
+
+// `gt` `gT` は折り返し、`{N}gt` は絶対の番号、`{N}gT` は N 個ぶん戻る（ADR 0057 の決定 2・実測
+// A）。
+void verify_vim_tab_keys()
+{
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    expect(active_after(controller, "gt") == 1 && active_after(controller, "gt") == 2 &&
+               active_after(controller, "gt") == 0,
+           "gt moves to the next tab and wraps from the last to the first");
+    expect(active_after(controller, "gT") == 2 && active_after(controller, "gT") == 1,
+           "gT moves to the previous tab and wraps from the first to the last");
+    expect(active_after(controller, "3gt") == 2 && active_after(controller, "1gt") == 0 &&
+               active_after(controller, "2gt") == 1,
+           "a count before gt names the tab by its number");
+    expect(active_after(controller, "2gT") == 2 && active_after(controller, "4gT") == 1 &&
+               active_after(controller, "3gT") == 1,
+           "a count before gT goes back that many tabs and wraps");
+    vim_normal(controller, "1gt");
+    const auto same = active_after(controller, "1gtx");
+    expect(same == 0 && vim_body(controller.frame()) == "lpha",
+           "1gt on the first tab succeeds and the keys after it run");
+    const auto outside = active_after(controller, "9gtx");
+    expect(outside == 0 && vim_body(controller.frame()) == "lpha",
+           "9gt with three tabs fails, stays and drops the keys after it");
+    vim_normal(controller, "$");
+    const auto zero = active_after(controller, "0gt");
+    applied(controller, SwitchTab{0});
+    expect(zero == 1 && caret_at(controller.frame(), 1, 1),
+           "0gt is the 0 motion followed by gt, not a count of zero");
+}
+
+// オペレータの後ろの gt gT は打ち消して失敗し、VISUAL の gt は切り替えて NORMAL へ（実測 G）。
+void verify_vim_tab_keys_after_operator()
+{
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    for (const std::string_view keys : {"dgtx", "ygtx", "cgtx", "d2gtx", "dgTx"})
+    {
+        const auto active = active_after(controller, keys);
+        expect(active == 0 && vim_body(controller.frame()) == "alpha" &&
+                   controller.vim_state().mode == VimMode::normal &&
+                   !controller.vim_state().pending.has_value(),
+               "an operator before gt is cancelled and the keys after it are dropped");
+    }
+    vim_replay(controller, "vl");
+    const auto visual = active_after(controller, "gt");
+    expect(visual == 1 && controller.vim_state().mode == VimMode::normal,
+           "gt in VISUAL switches the tab and ends VISUAL");
+    const auto back = controller.apply(SwitchTab{0});
+    expect(back.lines.at(0).selection.presence == nenenib::core::SelectionPresence::absent,
+           "the tab left from VISUAL keeps no selection");
+}
+
+// gt は `.` の対象ではなく、マクロに録った gt は動く（実測 H）。範囲の外は再生を打ち切る。
+void verify_vim_tab_keys_repeat()
+{
+    using nenenib::application::StoreVimRegister;
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    const auto dotted = active_after(controller, "gt.");
+    expect(dotted == 1 && vim_body(controller.frame()) == "bravo" &&
+               !controller.vim_state().last_change.has_value(),
+           "the dot after gt does nothing");
+    const auto store = [&controller](std::string_view keys)
+    {
+        applied(
+            controller,
+            StoreVimRegister{'a', VimRegister{nenenib::core::vim_register_text(vim_keys_of(keys)),
+                                              VimRegisterKind::characters}});
+    };
+    store("gt");
+    expect(active_after(controller, "@a") == 2 && active_after(controller, "@a") == 0,
+           "a macro holding gt moves one tab each time");
+    applied(controller, SwitchTab{2});
+    expect(active_after(controller, "2@a") == 1, "a count before the macro repeats gt");
+    applied(controller, SwitchTab{0});
+    store("9gtx");
+    vim_replay(controller, "@a");
+    expect(controller.frame().active_tab == 0 && vim_body(controller.frame()) == "alpha",
+           "a failing 9gt in a macro drops the keys after it");
+}
+
+// 再生の途中の切り替え（ADR 0057 の決定 3）。出ていく文書の単位を閉じ、残りの鍵は入った文書へ。
+void verify_vim_tab_switch_in_macro()
+{
+    using nenenib::application::StoreVimRegister;
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    applied(controller,
+            StoreVimRegister{'a', VimRegister{nenenib::core::vim_register_text(vim_keys_of("xgtx")),
+                                              VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    const auto entered = controller.frame();
+    expect(entered.active_tab == 1 && vim_body(entered) == "ravo",
+           "the keys after gt in a macro run in the entered tab");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == "bravo", "one u undoes the entered tab's part");
+    applied(controller, SwitchTab{0});
+    expect(vim_body(controller.frame()) == "lpha", "the left tab keeps its own part");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == "alpha", "one u undoes the left tab's part");
+}
+[[nodiscard]] std::size_t active_after_ex(EditorController &controller, std::string text)
+{
+    return run_ex(controller, std::move(text)).active_tab;
+}
+
+[[nodiscard]] bool message_is(const EditorFrame &frame, std::string_view text)
+{
+    return frame.command_message.has_value() && frame.command_message.value().text() == text;
+}
+
+// `:tabnext` `:tabprevious` は gt / gT と同じ行き先で、範囲の外は Vim の文言（決定 4・5・実測 B）。
+void verify_ex_tab_switch()
+{
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    expect(active_after_ex(controller, "tabnext") == 1 &&
+               active_after_ex(controller, "tabn") == 2 &&
+               active_after_ex(controller, "tabne") == 0,
+           ":tabnext moves to the next tab and wraps");
+    expect(active_after_ex(controller, "tabprevious") == 2 &&
+               active_after_ex(controller, "tabN") == 1 && active_after_ex(controller, "tabp") == 0,
+           ":tabprevious and :tabNext move to the previous tab and wrap");
+    expect(active_after_ex(controller, "tabnext 3") == 2 &&
+               active_after_ex(controller, "tabnext 1") == 0 &&
+               active_after_ex(controller, "tabprevious 2") == 1 &&
+               active_after_ex(controller, "tabprevious 4") == 0,
+           ":tabnext N names the tab and :tabprevious N goes back N tabs");
+    for (const auto &[text, message] : std::array<std::pair<std::string_view, std::string_view>, 3>{
+             {{"tabnext 4", "E475: Invalid argument: 4"},
+              {"tabnext 0", "E475: Invalid argument: 0"},
+              {"tabprevious 0", "E475: Invalid argument: 0"}}})
+    {
+        const auto failed_frame = run_ex(controller, std::string(text));
+        expect(failed_frame.active_tab == 0 && message_is(failed_frame, message),
+               "a number outside the band stays and shows the measured Vim message");
+    }
+    const auto unsupported = run_ex(controller, "tabnext +1");
+    expect(unsupported.active_tab == 0 && message_is(unsupported, "Not supported: tabnext +1"),
+           "a relative argument is not supported yet");
+    const auto moved = run_ex(controller, "tabnext 2");
+    expect(moved.active_tab == 1 && !moved.command_message.has_value() &&
+               !moved.command_line.has_value(),
+           "a switch by Ex shows no message and closes the Ex line");
+}
+
+// `:tabnew` は今の右隣、`:tabclose` は閉じたい位置を 1 意図だけ載せて状態を変えない（決定 5・6）。
+void verify_ex_tab_open_and_close()
+{
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    const auto opened = run_ex(controller, "tabnew");
+    expect(opened.tabs.size() == 4 && opened.active_tab == 1 && vim_body(opened).empty() &&
+               first_line(controller.apply(SwitchTab{2})) == "bravo",
+           ":tabnew adds an empty tab right of the active one and moves there");
+    const auto closing = run_ex(controller, "tabclose");
+    expect(closing.close_request == std::optional<std::size_t>{2} && closing.tabs.size() == 4 &&
+               closing.active_tab == 2 && first_line(closing) == "bravo" && !closing.closing,
+           ":tabclose asks to close the active tab and leaves the state alone");
+    expect(!controller.apply(VisibleLines{10}).close_request.has_value(),
+           "the close request lasts one intent");
+    expect(!run_ex(controller, "tabc").closing && controller.frame().tabs.size() == 4,
+           "the abbreviation asks the same way");
+}
+
+// 一覧の行が帯と同じ順と題名で、実行が tabnext N で、場所がフォルダ（無題は無し）か。
+[[nodiscard]] bool rows_follow_band(const EditorFrame &listed)
+{
+    if (!listed.command_palette.has_value())
+    {
+        return false;
+    }
+    const auto &choices = listed.command_palette.value().choices;
+    bool same = choices.size() == listed.tabs.size();
+    for (std::size_t index = 0; same && index < choices.size(); ++index)
+    {
+        const auto &choice = choices.at(index);
+        const auto folder = nenenib::core::tab_folder_for(listed.tabs.at(index).path);
+        const auto &detail = choice.detail;
+        same = choice.label.text() == listed.tabs.at(index).title.text() &&
+               choice.command == "tabnext " + std::to_string(index + 1) &&
+               choice.kind == nenenib::core::CommandChoiceKind::execute &&
+               detail.has_value() == folder.has_value() &&
+               (!detail.has_value() || !folder.has_value() ||
+                detail.value().text() == folder.value().text());
+    }
+    return same && choices.size() == 3 && choices.at(2).label.text() == "● 無題" &&
+           choices.at(0).detail.has_value() && !choices.at(1).detail.has_value();
+}
+
+// 一覧（決定 7）。帯の順・アクティブの行・題名は帯と同じ・場所はフォルダ・実行は tabnext N。
+void verify_tab_list_rows()
+{
+    Editing editing;
+    open_vim_document(editing, "alpha");
+    EditorController &controller = editing.controller();
+    applied(controller, NewTab{});
+    applied(controller, NewTab{});
+    vim_replay(controller, "ix<Esc>");
+    applied(controller, SwitchTab{1});
+    const auto listed = controller.apply(nenenib::application::OpenTabList{});
+    const auto &palette = listed.command_palette;
+    const auto &line = listed.command_line;
+    expect(palette.has_value() && line.has_value() && palette.value().choices.size() == 3 &&
+               palette.value().selected == 1 && line.value().text.empty() &&
+               line.value().completions.empty(),
+           "it lists every tab with the active one selected and an empty input");
+    expect(rows_follow_band(listed), "each row is the band title with its mark and runs tabnext N");
+    const auto chosen = controller.apply(nenenib::application::ActivateCommandChoice{0});
+    expect(chosen.active_tab == 0 && !chosen.command_palette.has_value() &&
+               !chosen.command_line.has_value(),
+           "running a row switches to that tab and closes the list");
+}
+
+[[nodiscard]] std::vector<std::string> listed_commands(const EditorFrame &frame)
+{
+    std::vector<std::string> commands;
+    if (frame.command_palette.has_value())
+    {
+        for (const auto &choice : frame.command_palette.value().choices)
+        {
+            commands.push_back(choice.command);
+        }
+    }
+    return commands;
+}
+
+// `:tabs` と OpenTabList と Ctrl+P の候補 `tabs` は同じ一覧を開き、開いている間は閉じる。
+void verify_tab_list_entries()
+{
+    using nenenib::application::CommandText;
+    using nenenib::application::OpenCommandPalette;
+    using nenenib::application::OpenTabList;
+    using nenenib::application::SubmitCommand;
+    Editing editing;
+    open_vim_document(editing, "alpha");
+    EditorController &controller = editing.controller();
+    applied(controller, NewTab{});
+    applied(controller, NewTab{});
+    const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3"};
+    expect(listed_commands(controller.apply(OpenTabList{})) == all, "OpenTabList opens the list");
+    expect(!controller.apply(OpenTabList{}).command_palette.has_value(),
+           "OpenTabList closes the open list");
+    expect(listed_commands(run_ex(controller, "tabs")) == all, ":tabs opens the same list");
+    expect(!controller.apply(OpenCommandPalette{}).command_palette.has_value(),
+           "Ctrl+P closes the open list");
+    applied(controller, OpenCommandPalette{});
+    applied(controller, CommandText{"tabs"});
+    expect(listed_commands(controller.apply(SubmitCommand{})) == all,
+           "the Ctrl+P candidate tabs opens the same list");
+    applied(controller, CommandText{"NOTE"});
+    const auto filtered = controller.frame();
+    expect(listed_commands(filtered) == std::vector<std::string>{"tabnext 1"},
+           "typing filters the rows by title, ignoring case");
+    const auto ran = controller.apply(SubmitCommand{});
+    expect(ran.active_tab == 0 && !ran.command_palette.has_value(), "Enter runs the selected row");
+    applied(controller, OpenTabList{});
+    const auto up = controller.apply(
+        nenenib::application::EditCommand{nenenib::core::CommandEdit::complete_previous});
+    expect(up.command_palette.has_value() && up.command_palette.value().selected == 2,
+           "moving up from the first row wraps to the last");
+    applied(controller, nenenib::application::CancelCommand{});
+    applied(controller, SelectEditMode{EditMode::ordinary});
+    applied(controller, ComposeText{composed_of("あ", {}, 0)});
+    expect(!controller.apply(OpenTabList{}).command_palette.has_value(),
+           "the list does not open during a composition");
+}
 } // namespace
 
 void verify_tabs_contracts()
@@ -857,6 +1244,15 @@ void verify_tabs_contracts()
     verify_band_release_after_scroll();
     verify_band_input_from_state();
     verify_tab_keys();
+    verify_tab_destination();
+    verify_vim_tab_keys();
+    verify_vim_tab_keys_after_operator();
+    verify_vim_tab_keys_repeat();
+    verify_vim_tab_switch_in_macro();
+    verify_ex_tab_switch();
+    verify_ex_tab_open_and_close();
+    verify_tab_list_rows();
+    verify_tab_list_entries();
 }
 
 void verify_tabs_scope()

@@ -19,7 +19,7 @@ namespace nenenib::core
 // NORMAL / VISUAL の鍵 → 動作。表に無い鍵は nullopt。
 [[nodiscard]] std::optional<VimAction> vim_action_for(char32_t key) noexcept;
 
-// g の後ろの鍵 → 動作（gg ge gE）。表に無い鍵は nullopt（g を打ち消す）。
+// g の後ろの鍵 → 動作（gg ge gE gt gT）。表に無い鍵は nullopt（g を打ち消す）。
 [[nodiscard]] std::optional<VimAction> vim_g_action_for(char32_t key) noexcept;
 
 // 語の移動がどちらの語の分類で切るか（w b e ge は word・W B E gE は big_word・Issue #222）。

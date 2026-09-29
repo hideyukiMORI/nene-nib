@@ -5,11 +5,13 @@
 #include "CodePagePort.hpp"
 #include "CompositionView.hpp"
 #include "Document.hpp"
+#include "DocumentView.hpp"
 #include "EditBoundary.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
+#include "ExTabRequest.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
@@ -104,6 +106,11 @@ class EditorController final
     void send_vim_clipboard(const std::optional<core::VimRegister> &written);
     // 再生のあいだに積んだ編集を 1 つの undo 単位に畳む（ADR 0046 の決定 3）。
     void merge_replayed_edits(const core::EditHistory &before, const core::TextBuffer &text);
+    // 再生の中でアクティブな文書が替わるとき（ADR 0057 の決定 3）。出ていく文書に積んだ編集を
+    // その文書の 1 単位に畳み、入った文書の今の履歴と本文を次の畳みの起点にする。undo の単位は
+    // 文書ごとで、再生の外では何もしない。
+    void close_replayed_unit();
+    void reopen_replayed_unit();
     // 再生の中の再生の鍵を列の先頭へ差し込む。深さが上限を超えたら残りを捨てる（決定 4）。
     void queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth);
     void accept(const RefreshAppearance &);
@@ -116,6 +123,8 @@ class EditorController final
     void accept(const CancelCommand &);
     void accept(const PasteCommand &);
     void accept(const OpenCommandPalette &);
+    // 開いているタブの一覧（ADR 0057 の決定 7）。Ctrl+P の面を帯の順の候補で開く。
+    void accept(const OpenTabList &);
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
     void accept(const StoreVimRegister &intent);
@@ -151,6 +160,10 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
+    // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
+    void run_tab_request(const core::ExTabRequest &request);
+    // アクティブな文書の表示値。frame と一覧の候補が同じ 1 本を使う。
+    [[nodiscard]] DocumentView active_document_view() const;
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;
     [[nodiscard]] std::optional<CommandPaletteView> command_palette_view() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
@@ -186,6 +199,8 @@ class EditorController final
     void interrupt_vim_insert();
     void perform(const core::VimUndo &);
     void perform(const core::VimRedo &);
+    // `gt` `gT`（ADR 0057 の決定 3）。窓の SwitchTab と同じ accept の 1 本へ写す。
+    void perform(const core::VimSwitchTab &effect);
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 
@@ -238,5 +253,9 @@ class EditorController final
     std::deque<core::VimKey> replay_queue_;
     std::deque<std::size_t> replay_depths_;
     std::optional<std::size_t> replay_depth_;
+    // 再生の編集を畳む起点（ADR 0046 の決定 3）。再生の外では空。perform(VimReplay) が置いて
+    // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
+    std::optional<core::EditHistory> replay_history_;
+    std::optional<core::TextBuffer> replay_text_;
 };
 } // namespace nenenib::application

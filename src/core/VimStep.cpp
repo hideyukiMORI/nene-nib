@@ -6,6 +6,9 @@
 #include "LineNumber.hpp"
 #include "OffsetRange.hpp"
 #include "ScrollBounds.hpp"
+#include "TabDestination.hpp"
+#include "TabJump.hpp"
+#include "TabJumpDirection.hpp"
 #include "Utf8.hpp"
 #include "VimActionGroup.hpp"
 #include "VimBlockEdit.hpp"
@@ -59,6 +62,7 @@
 #include "VimSearchPattern.hpp"
 #include "VimSearchRequest.hpp"
 #include "VimSelect.hpp"
+#include "VimSwitchTab.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectCancel.hpp"
 #include "VimTextObjectOutcome.hpp"
@@ -3292,6 +3296,28 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return word_search(state, view, action);
 }
 
+// `gt` `gT`（ADR 0057 の決定 2）。行き先は tab_destination の 1 本が決め、値なしなら
+// refused に not_moved の印を添えて返す（タブは動かず、再生の中なら残りの鍵が捨てられる）。
+// 回数は `{N}gt` の N で、無いときは隣へ。切り替えが VISUAL を終えるので、成功は NORMAL の
+// 休止で返す（ADR 0056 の決定 4）。
+[[nodiscard]] VimStep tab_action(const VimState &state, const VimEditorView &view, VimAction action,
+                                 VimStep refused)
+{
+    const TabJumpDirection direction =
+        action == VimAction::next_tab ? TabJumpDirection::forward : TabJumpDirection::backward;
+    const std::optional<std::size_t> count =
+        state.count.has_value() ? std::optional<std::size_t>{state.count.value().value}
+                                : std::nullopt;
+    const auto destination =
+        tab_destination(TabJump{direction, count}, view.tabs.active, view.tabs.count);
+    if (!destination.has_value())
+    {
+        return failed(std::move(refused), VimRepeatFailure::not_moved);
+    }
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimSwitchTab{destination.value()}};
+}
+
 // 鍵から引いた動作を、分類ごとの写し先へ（CPP-012 / ADR 0006）。分類が増えたらここで落ちる。
 [[nodiscard]] VimStep commanded(const VimState &state, const VimEditorView &view, VimAction action)
 {
@@ -3321,6 +3347,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return input_action(state, view, action);
     case VimActionGroup::search:
         return search_action(state, view, action);
+    case VimActionGroup::tab:
+        return tab_action(state, view, action, cancelled(state));
     }
     std::unreachable();
 }
@@ -3625,6 +3653,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return input_action(state, view, action);
     case VimActionGroup::search:
         return search_action(state, view, action);
+    case VimActionGroup::tab:
+        return tab_action(state, view, action, visual_unchanged(state));
     case VimActionGroup::edit_line:
     case VimActionGroup::insert_line:
     case VimActionGroup::history:
@@ -4126,6 +4156,11 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return false;
 }
 [[nodiscard]] bool changes_text(const VimReplay &) noexcept
+{
+    return false;
+}
+// `gt` `gT` は繰り返しの対象ではない（ADR 0057 の決定 2・Vim の実測）。
+[[nodiscard]] bool changes_text(const VimSwitchTab &) noexcept
 {
     return false;
 }
