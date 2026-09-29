@@ -36,6 +36,9 @@
 #include "StepTab.hpp"
 #include "SwitchTab.hpp"
 #include "TabCommand.hpp"
+#include "TabDestination.hpp"
+#include "TabJump.hpp"
+#include "TabJumpDirection.hpp"
 #include "TabKey.hpp"
 #include "TabKeyTable.hpp"
 #include "TabStep.hpp"
@@ -827,6 +830,71 @@ void verify_tab_keys()
     }
 }
 
+// 行き先の表（ADR 0057 の決定 1）。期待値は Vim 9.1 の実測（probe-vimtabs-2026-09-29 の
+// 節 A・B・I）。行は回数（値なし・0・1・2・3・4・9）、列は今の位置（0 始まり）、
+// 値は行き先で failed は失敗（動かず・後ろの鍵は打ち切られる）。
+constexpr std::size_t failed = 99;
+using DestinationRow = std::pair<std::optional<std::size_t>, std::array<std::size_t, 3>>;
+
+void verify_tab_destination_rows(nenenib::core::TabJumpDirection direction, std::size_t tab_count,
+                                 const std::array<DestinationRow, 7> &rows)
+{
+    using nenenib::core::tab_destination;
+    using nenenib::core::TabJump;
+    for (const auto &[count, expected] : rows)
+    {
+        for (std::size_t active = 0; active < tab_count; ++active)
+        {
+            const auto destination = tab_destination(TabJump{direction, count}, active, tab_count);
+            const std::size_t wanted = expected.at(active);
+            expect(wanted == failed ? !destination.has_value()
+                                    : destination == std::optional<std::size_t>{wanted},
+                   "the tab destination matches the measured Vim table");
+        }
+    }
+}
+
+void verify_tab_destination()
+{
+    using nenenib::core::TabJumpDirection;
+    constexpr std::size_t none = failed;
+    const std::array<DestinationRow, 7> forward_three{{{std::nullopt, {1, 2, 0}},
+                                                       {0, {none, none, none}},
+                                                       {1, {0, 0, 0}},
+                                                       {2, {1, 1, 1}},
+                                                       {3, {2, 2, 2}},
+                                                       {4, {none, none, none}},
+                                                       {9, {none, none, none}}}};
+    const std::array<DestinationRow, 7> backward_three{{{std::nullopt, {2, 0, 1}},
+                                                        {0, {none, none, none}},
+                                                        {1, {2, 0, 1}},
+                                                        {2, {1, 2, 0}},
+                                                        {3, {0, 1, 2}},
+                                                        {4, {2, 0, 1}},
+                                                        {9, {0, 1, 2}}}};
+    const std::array<DestinationRow, 7> forward_one{{{std::nullopt, {0, none, none}},
+                                                     {0, {none, none, none}},
+                                                     {1, {0, none, none}},
+                                                     {2, {none, none, none}},
+                                                     {3, {none, none, none}},
+                                                     {4, {none, none, none}},
+                                                     {9, {none, none, none}}}};
+    const std::array<DestinationRow, 7> backward_one{{{std::nullopt, {0, none, none}},
+                                                      {0, {none, none, none}},
+                                                      {1, {0, none, none}},
+                                                      {2, {0, none, none}},
+                                                      {3, {0, none, none}},
+                                                      {4, {0, none, none}},
+                                                      {9, {0, none, none}}}};
+    verify_tab_destination_rows(TabJumpDirection::forward, 3, forward_three);
+    verify_tab_destination_rows(TabJumpDirection::backward, 3, backward_three);
+    verify_tab_destination_rows(TabJumpDirection::forward, 1, forward_one);
+    verify_tab_destination_rows(TabJumpDirection::backward, 1, backward_one);
+    expect(!nenenib::core::tab_destination(
+                nenenib::core::TabJump{TabJumpDirection::forward, std::nullopt}, 3, 3)
+                .has_value(),
+           "a position outside the band has no destination");
+}
 } // namespace
 
 void verify_tabs_contracts()
@@ -857,6 +925,7 @@ void verify_tabs_contracts()
     verify_band_release_after_scroll();
     verify_band_input_from_state();
     verify_tab_keys();
+    verify_tab_destination();
 }
 
 void verify_tabs_scope()

@@ -18,6 +18,9 @@
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
+#include "TabDestination.hpp"
+#include "TabJump.hpp"
+#include "TabJumpDirection.hpp"
 #include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
@@ -410,15 +413,16 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return views;
 }
 
-// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。
-[[nodiscard]] std::size_t stepped_tab(std::size_t active, std::size_t count, core::TabStep step)
+// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。行き先を数えるのは gt / gT と同じ
+// tab_destination の 1 本（ADR 0057 の決定 1）。
+[[nodiscard]] core::TabJumpDirection direction_of(core::TabStep step) noexcept
 {
     switch (step)
     {
     case core::TabStep::next:
-        return (active + 1) % count;
+        return core::TabJumpDirection::forward;
     case core::TabStep::previous:
-        return (active + count - 1) % count;
+        return core::TabJumpDirection::backward;
     }
     std::unreachable();
 }
@@ -1817,7 +1821,13 @@ void EditorController::accept(const SwitchTab &intent)
 
 void EditorController::accept(const StepTab &intent)
 {
-    accept(SwitchTab{stepped_tab(state_.active_tab(), state_.tab_count(), intent.step)});
+    const auto destination =
+        core::tab_destination(core::TabJump{direction_of(intent.step), std::nullopt},
+                              state_.active_tab(), state_.tab_count());
+    if (destination.has_value())
+    {
+        accept(SwitchTab{destination.value()});
+    }
 }
 
 void EditorController::accept(const CloseTab &intent)
