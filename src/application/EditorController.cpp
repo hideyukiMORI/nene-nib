@@ -49,6 +49,8 @@
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimStep.hpp"
+#include "VimSwitchTab.hpp"
+#include "VimTabs.hpp"
 #include "VimVisualRange.hpp"
 #include "VimVisualReselect.hpp"
 
@@ -1017,7 +1019,8 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     const core::VimEditorView view{state_.text(), state_.selection(),
                                    core::VimViewport{scroll.first_visible, scroll.visible_lines},
                                    replay_depth_.has_value() ? core::VimKeySource::replayed
-                                                             : core::VimKeySource::typed};
+                                                             : core::VimKeySource::typed,
+                                   core::VimTabs{state_.active_tab(), state_.tab_count()}};
     const auto step = core::vim_step(state_.vim(), view, key);
     state_ = state_.with_vim(step.next);
     // INSERT の出入りが undo の区切り（ADR 0012 の決定 6 / ADR 0009 の決定 3 の Vim 側）。
@@ -1534,8 +1537,8 @@ void EditorController::perform(const core::VimReplay &effect)
         queue_nested_replay(effect.keys, replay_depth_.value() + 1);
         return;
     }
-    const core::EditHistory history = state_.history();
-    const core::TextBuffer text = state_.text();
+    replay_history_ = state_.history();
+    replay_text_ = state_.text();
     replay_queue_.assign(effect.keys.begin(), effect.keys.end());
     replay_depths_.assign(effect.keys.size(), 1);
     while (!replay_queue_.empty())
@@ -1551,8 +1554,29 @@ void EditorController::perform(const core::VimReplay &effect)
         }
     }
     replay_depth_ = std::nullopt;
-    merge_replayed_edits(history, text);
+    close_replayed_unit();
+    replay_history_ = std::nullopt;
+    replay_text_ = std::nullopt;
     state_ = state_.with_history(state_.history().sealed());
+}
+
+void EditorController::close_replayed_unit()
+{
+    if (!replay_history_.has_value() || !replay_text_.has_value())
+    {
+        return;
+    }
+    merge_replayed_edits(replay_history_.value(), replay_text_.value());
+}
+
+void EditorController::reopen_replayed_unit()
+{
+    if (!replay_history_.has_value())
+    {
+        return;
+    }
+    replay_history_ = state_.history();
+    replay_text_ = state_.text();
 }
 
 void EditorController::queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth)
@@ -1615,6 +1639,11 @@ void EditorController::perform(const core::VimRedo &)
         move_caret_to(core::vim_same_line_and_column(before, edit.value().restore, state_.text()),
                       core::SelectionAnchoring::collapse);
     }
+}
+
+void EditorController::perform(const core::VimSwitchTab &effect)
+{
+    accept(SwitchTab{effect.index});
 }
 
 const core::VimState &EditorController::vim_state() const noexcept
@@ -1779,6 +1808,7 @@ void EditorController::accept(const SaveDocument &intent)
 
 void EditorController::leave_document()
 {
+    close_replayed_unit();
     // 入力行の取消は検索の preview を閉じて入力前のスクロールへ戻し、検索なら Vim の保留も
     // 捨てる。Esc と同じ 1 本を通す（ADR 0041 の決定 5・ADR 0056 の決定 4）。
     if (state_.command_input().has_value())
@@ -1799,6 +1829,7 @@ void EditorController::enter_document()
     state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
     settle_vim_caret();
     reveal_active_tab();
+    reopen_replayed_unit();
 }
 
 void EditorController::accept(const NewTab &)

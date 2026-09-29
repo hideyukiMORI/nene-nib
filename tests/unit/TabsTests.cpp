@@ -34,6 +34,7 @@
 #include "Selection.hpp"
 #include "SelectionPresence.hpp"
 #include "StepTab.hpp"
+#include "StoreVimRegister.hpp"
 #include "SwitchTab.hpp"
 #include "TabCommand.hpp"
 #include "TabDestination.hpp"
@@ -52,6 +53,9 @@
 #include "VimColumnWish.hpp"
 #include "VimCount.hpp"
 #include "VimMode.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 #include "VimWantedColumn.hpp"
@@ -895,6 +899,143 @@ void verify_tab_destination()
                 .has_value(),
            "a position outside the band has no destination");
 }
+// Vim の 3 本のタブ（本文 alpha / bravo / charlie・キャレットはどれも行頭）。アクティブは先頭。
+// 本文は通常モードで打つので、`.` の直前の変更は空のまま。
+void open_three_vim_tabs(Editing &editing)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{10});
+    applied(controller, InsertText{"alpha"});
+    for (const std::string_view body : {"bravo", "charlie"})
+    {
+        applied(controller, NewTab{});
+        applied(controller, InsertText{std::string(body)});
+    }
+    applied(controller, SelectEditMode{EditMode::vim});
+    for (const std::size_t tab : {0U, 1U, 2U})
+    {
+        applied(controller, SwitchTab{tab});
+        vim_replay(controller, "0");
+    }
+    applied(controller, SwitchTab{0});
+}
+
+[[nodiscard]] std::size_t active_after(EditorController &controller, std::string_view keys)
+{
+    vim_normal(controller, keys);
+    return controller.frame().active_tab;
+}
+
+// `gt` `gT` は折り返し、`{N}gt` は絶対の番号、`{N}gT` は N 個ぶん戻る（ADR 0057 の決定 2・実測
+// A）。
+void verify_vim_tab_keys()
+{
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    expect(active_after(controller, "gt") == 1 && active_after(controller, "gt") == 2 &&
+               active_after(controller, "gt") == 0,
+           "gt moves to the next tab and wraps from the last to the first");
+    expect(active_after(controller, "gT") == 2 && active_after(controller, "gT") == 1,
+           "gT moves to the previous tab and wraps from the first to the last");
+    expect(active_after(controller, "3gt") == 2 && active_after(controller, "1gt") == 0 &&
+               active_after(controller, "2gt") == 1,
+           "a count before gt names the tab by its number");
+    expect(active_after(controller, "2gT") == 2 && active_after(controller, "4gT") == 1 &&
+               active_after(controller, "3gT") == 1,
+           "a count before gT goes back that many tabs and wraps");
+    vim_normal(controller, "1gt");
+    const auto same = active_after(controller, "1gtx");
+    expect(same == 0 && vim_body(controller.frame()) == "lpha",
+           "1gt on the first tab succeeds and the keys after it run");
+    const auto outside = active_after(controller, "9gtx");
+    expect(outside == 0 && vim_body(controller.frame()) == "lpha",
+           "9gt with three tabs fails, stays and drops the keys after it");
+    vim_normal(controller, "$");
+    const auto zero = active_after(controller, "0gt");
+    applied(controller, SwitchTab{0});
+    expect(zero == 1 && caret_at(controller.frame(), 1, 1),
+           "0gt is the 0 motion followed by gt, not a count of zero");
+}
+
+// オペレータの後ろの gt gT は打ち消して失敗し、VISUAL の gt は切り替えて NORMAL へ（実測 G）。
+void verify_vim_tab_keys_after_operator()
+{
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    for (const std::string_view keys : {"dgtx", "ygtx", "cgtx", "d2gtx", "dgTx"})
+    {
+        const auto active = active_after(controller, keys);
+        expect(active == 0 && vim_body(controller.frame()) == "alpha" &&
+                   controller.vim_state().mode == VimMode::normal &&
+                   !controller.vim_state().pending.has_value(),
+               "an operator before gt is cancelled and the keys after it are dropped");
+    }
+    vim_replay(controller, "vl");
+    const auto visual = active_after(controller, "gt");
+    expect(visual == 1 && controller.vim_state().mode == VimMode::normal,
+           "gt in VISUAL switches the tab and ends VISUAL");
+    const auto back = controller.apply(SwitchTab{0});
+    expect(back.lines.at(0).selection.presence == nenenib::core::SelectionPresence::absent,
+           "the tab left from VISUAL keeps no selection");
+}
+
+// gt は `.` の対象ではなく、マクロに録った gt は動く（実測 H）。範囲の外は再生を打ち切る。
+void verify_vim_tab_keys_repeat()
+{
+    using nenenib::application::StoreVimRegister;
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    const auto dotted = active_after(controller, "gt.");
+    expect(dotted == 1 && vim_body(controller.frame()) == "bravo" &&
+               !controller.vim_state().last_change.has_value(),
+           "the dot after gt does nothing");
+    const auto store = [&controller](std::string_view keys)
+    {
+        applied(
+            controller,
+            StoreVimRegister{'a', VimRegister{nenenib::core::vim_register_text(vim_keys_of(keys)),
+                                              VimRegisterKind::characters}});
+    };
+    store("gt");
+    expect(active_after(controller, "@a") == 2 && active_after(controller, "@a") == 0,
+           "a macro holding gt moves one tab each time");
+    applied(controller, SwitchTab{2});
+    expect(active_after(controller, "2@a") == 1, "a count before the macro repeats gt");
+    applied(controller, SwitchTab{0});
+    store("9gtx");
+    vim_replay(controller, "@a");
+    expect(controller.frame().active_tab == 0 && vim_body(controller.frame()) == "alpha",
+           "a failing 9gt in a macro drops the keys after it");
+}
+
+// 再生の途中の切り替え（ADR 0057 の決定 3）。出ていく文書の単位を閉じ、残りの鍵は入った文書へ。
+void verify_vim_tab_switch_in_macro()
+{
+    using nenenib::application::StoreVimRegister;
+    using nenenib::core::VimRegister;
+    using nenenib::core::VimRegisterKind;
+    Editing editing;
+    open_three_vim_tabs(editing);
+    EditorController &controller = editing.controller();
+    applied(controller,
+            StoreVimRegister{'a', VimRegister{nenenib::core::vim_register_text(vim_keys_of("xgtx")),
+                                              VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    const auto entered = controller.frame();
+    expect(entered.active_tab == 1 && vim_body(entered) == "ravo",
+           "the keys after gt in a macro run in the entered tab");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == "bravo", "one u undoes the entered tab's part");
+    applied(controller, SwitchTab{0});
+    expect(vim_body(controller.frame()) == "lpha", "the left tab keeps its own part");
+    vim_replay(controller, "u");
+    expect(vim_body(controller.frame()) == "alpha", "one u undoes the left tab's part");
+}
 } // namespace
 
 void verify_tabs_contracts()
@@ -926,6 +1067,10 @@ void verify_tabs_contracts()
     verify_band_input_from_state();
     verify_tab_keys();
     verify_tab_destination();
+    verify_vim_tab_keys();
+    verify_vim_tab_keys_after_operator();
+    verify_vim_tab_keys_repeat();
+    verify_vim_tab_switch_in_macro();
 }
 
 void verify_tabs_scope()

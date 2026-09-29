@@ -30,6 +30,8 @@ enum class VimActionGroup : std::uint8_t
     // Ex の `:`。VISUAL では効かない（範囲は解釈しない）。
     ex_line,
     // 検索（`/` `?` `n` `N` `*` `#`・ADR 0032）。
-    search
+    search,
+    // `gt` `gT`（ADR 0057 の決定 2）。NORMAL と VISUAL で動き、オペレータの後ろでは打ち消す。
+    tab
 };
 } // namespace nenenib::core
