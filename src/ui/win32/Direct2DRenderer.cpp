@@ -394,6 +394,19 @@ void Direct2DRenderer::align_text_formats()
     status_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
 }
 
+HRESULT Direct2DRenderer::trim_tab_titles()
+{
+    Microsoft::WRL::ComPtr<IDWriteInlineObject> ellipsis;
+    const HRESULT made =
+        dwrite_->CreateEllipsisTrimmingSign(tab_format_.Get(), ellipsis.GetAddressOf());
+    if (FAILED(made))
+    {
+        return made;
+    }
+    const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+    return tab_format_->SetTrimming(&trimming, ellipsis.Get());
+}
+
 std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
 {
     Microsoft::WRL::ComPtr<IUnknown> unknown;
@@ -421,6 +434,10 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
         return std::unexpected(RenderFailure::directwrite);
     }
     align_text_formats();
+    if (FAILED(trim_tab_titles()))
+    {
+        return std::unexpected(RenderFailure::directwrite);
+    }
     return create_body_formats(
         core::EditorSettings{formatted_size_, formatted_family_, std::nullopt});
 }

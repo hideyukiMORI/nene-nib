@@ -70,6 +70,9 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     void align_text_formats();
+    // タブの題名が題名の領域に入りきらないときは文字単位で切って末尾に「…」を付ける
+    // （docs/design/2026-09-29-tabs.md 第 2 節）。
+    [[nodiscard]] HRESULT trim_tab_titles();
     // 本文の書式の tab stop を空白 8 個ぶんにする。本文の書式を作るたびにここだけを通る
     // （ADR 0045 の決定 1）。測れないときは既定のまま。
     void set_tab_stops(IDWriteTextFormat *format);
