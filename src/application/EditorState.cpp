@@ -376,12 +376,8 @@ void EditorState::spread(const DocumentState &tab)
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 
-EditorState EditorState::with_switched(std::size_t position) const
+EditorState EditorState::switched_to(std::size_t position) const
 {
-    if (position >= tab_count() || position == active_)
-    {
-        return *this;
-    }
     EditorState next(*this);
     // 今の文書を元の位置に置くと、脇の束の添字が帯の位置と一致する。
     next.parked_.insert(std::next(next.parked_.begin(), distance_of(active_)), parked_active());
@@ -392,12 +388,66 @@ EditorState EditorState::with_switched(std::size_t position) const
     return next;
 }
 
+void EditorState::touch_active()
+{
+    recency_ = core::tab_recency_touched(recency_, active_);
+    tab_walk_ = false;
+}
+
+EditorState EditorState::with_switched(std::size_t position) const
+{
+    if (position >= tab_count())
+    {
+        return *this;
+    }
+    // 歩きの途中でアクティブ自身を指されたら、着いた所で歩きを終える（ADR 0058 の決定 2）。
+    EditorState next = position == active_ ? with_walk_settled() : switched_to(position);
+    next.touch_active();
+    return next;
+}
+
+EditorState EditorState::with_walked(std::size_t position) const
+{
+    if (position >= tab_count())
+    {
+        return *this;
+    }
+    EditorState next = position == active_ ? *this : switched_to(position);
+    next.tab_walk_ = true;
+    return next;
+}
+
+EditorState EditorState::with_walk_settled() const
+{
+    if (!tab_walk_)
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    next.touch_active();
+    return next;
+}
+
+const core::TabRecency &EditorState::recency() const noexcept
+{
+    return recency_;
+}
+
+bool EditorState::tab_walking() const noexcept
+{
+    return tab_walk_;
+}
+
 EditorState EditorState::with_new_tab() const
 {
     EditorState next(*this);
     next.parked_.insert(std::next(next.parked_.begin(), distance_of(active_)), parked_active());
     next.active_ = active_ + 1;
     next.spread(untitled_document());
+    // 歩きの途中なら着いたタブで確定してから、新しいタブを先頭に置く（ADR 0058 の決定 2）。
+    next.recency_ =
+        core::tab_recency_opened(core::tab_recency_touched(recency_, active_), next.active_);
+    next.tab_walk_ = false;
     return next;
 }
 
@@ -408,12 +458,14 @@ EditorState EditorState::with_closed(std::size_t position) const
         return *this;
     }
     EditorState next(*this);
+    next.recency_ = core::tab_recency_closed(recency_, position);
     if (position != active_)
     {
         // 脇の束は帯の位置からアクティブを抜いた順なので、右側は 1 つ左へずれる。
         const std::size_t index = position < active_ ? position : position - 1;
         next.parked_.erase(std::next(next.parked_.begin(), distance_of(index)));
         next.active_ = position < active_ ? active_ - 1 : active_;
+        next.touch_active();
         return next;
     }
     // 右隣は脇の束の添字 active_、左隣は active_ - 1。どちらも閉じた後の帯の位置と一致する。
@@ -422,6 +474,7 @@ EditorState EditorState::with_closed(std::size_t position) const
     next.parked_.erase(std::next(next.parked_.begin(), distance_of(index)));
     next.active_ = index;
     next.spread(*target);
+    next.touch_active();
     return next;
 }
 } // namespace nenenib::application

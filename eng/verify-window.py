@@ -53,8 +53,10 @@ Issue #180 adds the macro recording indicator (ADR 0046 decision 8): in Vim NORM
 `recording @a` beside the mode label and the stopping `q` takes it away (vimRecording.png).
 
 Issue #239 adds the tab keys (ADR 0056 decision 10), in two launches of their own that `--tabs`
-also runs alone. Ctrl+T twice gives three tabs with the third one active, Ctrl+Tab wraps to the
-first, Ctrl+Shift+Tab back to the last, Ctrl+F4 closes one, Ctrl+W closes one more in the ordinary
+also runs alone. Ctrl+T twice gives three tabs with the third one active. Issue #248 (ADR 0058)
+makes Ctrl+Tab walk the recently used order: Ctrl+Tab goes to the second tab and again back to the
+third, Ctrl held over two Tabs reaches the first, and Ctrl+Shift+Tab walks that order backwards to
+the second. Ctrl+F4 closes one, Ctrl+W closes one more in the ordinary
 mode and nothing in the Vim mode, and Ctrl+T while the Vim `/` line is open adds no tab. The tab
 count is read from the hit test (the right edge of the add button) and the active tab from the
 tab_active face, both mirroring core::title_bar_layout. The second launch opens two files, types
@@ -85,7 +87,8 @@ from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, becom
                            capture as capture_client, capture_png, click, close, covered_by,
                            dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE, HWND_TOPMOST,
                            IDCANCEL, IDNO, parse_keys, press, press_chord, press_combination,
-                           raise_window, rectangle, send_key_sequence, send_keys, start, stop,
+                           press_held_repeat, raise_window, rectangle, send_key_sequence,
+                           send_keys, start, stop,
                            SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_F4,
                            VK_NEXT, VK_NIHONGO, VK_PRIOR, VK_RETURN, VK_S, VK_SHIFT, VK_SPACE,
                            VK_T, VK_TAB, VK_W, window_title, WINDOW_CLASS, WindowCovered,
@@ -1402,6 +1405,12 @@ def tab_chord(window, modifiers: list[int], key: int) -> None:
     time.sleep(TAB_SETTLE_SECONDS)
 
 
+def tab_held(window, modifiers: list[int], key: int, times: int) -> None:
+    if not press_held_repeat(window, modifiers, key, times):
+        raise ForegroundRefused("the window could not take the foreground")
+    time.sleep(TAB_SETTLE_SECONDS)
+
+
 def expect_band(window, appearance: str, count: int, active: int, step: str) -> dict:
     band = read_band(window, appearance)
     assert band["count"] == count, f"{step}: the band holds {band['count']} tabs, not {count}"
@@ -1417,10 +1426,18 @@ def drive_tab_keys(window, process, appearance: str, frames: Path | None) -> dic
     steps["opened"] = expect_band(window, appearance, 3, 2, "Ctrl+T twice")
     assert steps["opened"]["title"] == "無題 - NeNe Nib", steps["opened"]["title"]
     snapshot(frames, window, "tabsOpened")
+    # Ctrl+Tab walks the recently used order (ADR 0058): 3rd, 2nd, 1st after two Ctrl+T.
     tab_chord(window, [VK_CONTROL], VK_TAB)
-    steps["next"] = expect_band(window, appearance, 3, 0, "Ctrl+Tab wraps to the first")
+    steps["next"] = expect_band(window, appearance, 3, 1, "Ctrl+Tab goes to the tab used before")
+    tab_chord(window, [VK_CONTROL], VK_TAB)
+    steps["nextAgain"] = expect_band(window, appearance, 3, 2, "Ctrl+Tab again goes back")
+    tab_held(window, [VK_CONTROL], VK_TAB, 2)
+    steps["heldTwice"] = expect_band(window, appearance, 3, 0,
+                                     "Ctrl held over two Tabs reaches the third tab in the order")
+    # The order is now 1st, 3rd, 2nd; the reverse walk from the front wraps to its end.
     tab_chord(window, [VK_CONTROL, VK_SHIFT], VK_TAB)
-    steps["previous"] = expect_band(window, appearance, 3, 2, "Ctrl+Shift+Tab wraps to the last")
+    steps["previous"] = expect_band(window, appearance, 3, 1,
+                                    "Ctrl+Shift+Tab walks the order backwards and wraps")
     tab_chord(window, [VK_CONTROL], VK_F4)
     steps["closedByF4"] = expect_band(window, appearance, 2, 1, "Ctrl+F4")
     tab_chord(window, [VK_CONTROL], VK_W)

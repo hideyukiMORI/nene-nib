@@ -41,7 +41,7 @@
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
 #include "SelectionPresence.hpp"
-#include "StepTab.hpp"
+#include "SettleRecentTab.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
@@ -51,6 +51,7 @@
 #include "TabJumpDirection.hpp"
 #include "TabKey.hpp"
 #include "TabKeyTable.hpp"
+#include "TabRecency.hpp"
 #include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
@@ -71,10 +72,13 @@
 #include "VimWantedColumn.hpp"
 #include "VirtualColumn.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -99,12 +103,13 @@ using nenenib::application::PointTitleBar;
 using nenenib::application::ScrollLines;
 using nenenib::application::ScrollTabs;
 using nenenib::application::SelectEditMode;
-using nenenib::application::StepTab;
+using nenenib::application::SettleRecentTab;
 using nenenib::application::SwitchTab;
 using nenenib::application::tab_unsaved;
 using nenenib::application::title_bar_input;
 using nenenib::application::TitleBarWidth;
 using nenenib::application::VisibleLines;
+using nenenib::application::WalkRecentTab;
 using nenenib::core::Appearance;
 using nenenib::core::EditMode;
 using nenenib::core::FilePath;
@@ -217,25 +222,6 @@ void verify_undo_per_document()
            "the other tab undoes its own edit");
     expect(applied(controller, HistoryAction{HistoryDirection::undo}).empty(),
            "and has nothing more to undo");
-}
-
-// 帯の位置の順で隣へ。端は折り返す（決定 3）。
-void verify_step_wraps()
-{
-    Editing editing;
-    EditorController &controller = editing.controller();
-    expect(controller.apply(StepTab{TabStep::next}).active_tab == 0 &&
-               controller.frame().tabs.size() == 1,
-           "stepping with a single tab stays on it");
-    open_four_tabs(controller);
-    const auto wrapped = controller.apply(StepTab{TabStep::next});
-    expect(wrapped.active_tab == 0 && first_line(wrapped) == "a",
-           "next from the right end wraps to the left end");
-    const auto back = controller.apply(StepTab{TabStep::previous});
-    expect(back.active_tab == 3 && first_line(back) == "d",
-           "previous from the left end wraps to the right end");
-    const auto left = controller.apply(StepTab{TabStep::previous});
-    expect(left.active_tab == 2 && first_line(left) == "c", "previous moves one tab left");
 }
 
 // 閉じた後のアクティブ（決定 6）。範囲の外は何もしない。
@@ -374,7 +360,7 @@ void verify_switch_closes_input()
                caret_at(searched, 1, 1),
            "switching cancels the search line and its preview");
     vim_replay(controller, ":");
-    expect(!controller.apply(StepTab{TabStep::next}).command_line.has_value(),
+    expect(!controller.apply(WalkRecentTab{TabStep::next}).command_line.has_value(),
            "switching cancels the Ex line");
     applied(controller, SelectEditMode{EditMode::ordinary});
     applied(controller, ComposeText{composed_of("あ", {}, 0)});
@@ -628,7 +614,7 @@ void verify_band_scroll()
            "switching to the first tab scrolls it into view");
     expect(controller.apply(ScrollTabs{-1}).tab_scroll == 122, "one notch scrolls one tab");
     expect(controller.apply(ScrollTabs{-3}).tab_scroll == 150, "the wheel stops at the end");
-    expect(controller.apply(StepTab{TabStep::previous}).tab_scroll == 150,
+    expect(controller.apply(WalkRecentTab{TabStep::next}).tab_scroll == 150,
            "a visible active tab keeps the scroll");
     expect(controller.apply(NewTab{}).tab_scroll == 272, "a new tab at the end is scrolled in");
     expect(controller.apply(CloseTab{9}).tab_scroll == 150,
@@ -909,6 +895,277 @@ void verify_tab_destination()
                 .has_value(),
            "a position outside the band has no destination");
 }
+// ---------------------------------------------------------------- 使った順（ADR 0058）
+
+[[nodiscard]] bool order_is(const nenenib::core::TabRecency &recency,
+                            std::initializer_list<std::size_t> expected)
+{
+    return std::ranges::equal(recency.order(), expected);
+}
+
+// 列が 0 から本数 - 1 までの帯の位置を 1 回ずつ含む（決定 1 の不変条件）。
+[[nodiscard]] bool covers_every_tab(const nenenib::core::TabRecency &recency)
+{
+    const auto order = recency.order();
+    std::vector<bool> seen(order.size(), false);
+    for (const std::size_t tab : order)
+    {
+        if (tab >= seen.size() || seen.at(tab))
+        {
+            return false;
+        }
+        seen.at(tab) = true;
+    }
+    return !order.empty();
+}
+
+// 4 つの純関数（決定 1）。範囲の外の位置は同じ列（歩きは値なし）。
+void verify_tab_recency_functions()
+{
+    using nenenib::core::tab_recency_closed;
+    using nenenib::core::tab_recency_opened;
+    using nenenib::core::tab_recency_touched;
+    using nenenib::core::tab_recency_walked;
+    using nenenib::core::TabRecency;
+    const auto single = TabRecency::single();
+    expect(order_is(single, {0}) && tab_recency_walked(single, 0, TabStep::next) == 0 &&
+               tab_recency_walked(single, 0, TabStep::previous) == 0,
+           "one tab walks to itself");
+    expect(order_is(tab_recency_closed(single, 0), {0}) &&
+               !tab_recency_walked(single, 1, TabStep::next).has_value(),
+           "the last tab is not closed and a tab outside the list has no neighbour");
+    const auto three = tab_recency_opened(tab_recency_opened(single, 1), 2);
+    expect(order_is(three, {2, 1, 0}), "a new tab goes to the front");
+    const auto shifted = tab_recency_opened(three, 0);
+    expect(order_is(shifted, {0, 3, 2, 1}), "a new tab shifts the positions at and after it");
+    expect(order_is(tab_recency_opened(shifted, 5), {0, 3, 2, 1}) &&
+               order_is(tab_recency_opened(shifted, 4), {4, 0, 3, 2, 1}),
+           "a new tab may go right of the last one but not beyond");
+    const auto touched = tab_recency_touched(shifted, 2);
+    expect(order_is(touched, {2, 0, 3, 1}) &&
+               order_is(tab_recency_touched(touched, 4), {2, 0, 3, 1}),
+           "touching moves a tab to the front and ignores a position outside the band");
+    expect(order_is(tab_recency_closed(touched, 0), {1, 2, 0}) &&
+               order_is(tab_recency_closed(touched, 3), {2, 0, 1}) &&
+               order_is(tab_recency_closed(touched, 4), {2, 0, 3, 1}),
+           "closing removes a tab and shifts the positions after it");
+    expect(tab_recency_walked(touched, 2, TabStep::next) == 0 &&
+               tab_recency_walked(touched, 3, TabStep::next) == 1 &&
+               tab_recency_walked(touched, 1, TabStep::next) == 2,
+           "next walks to the tab used before and wraps at the end");
+    expect(tab_recency_walked(touched, 2, TabStep::previous) == 1 &&
+               tab_recency_walked(touched, 3, TabStep::previous) == 0,
+           "previous walks the other way and wraps at the front");
+}
+
+enum class RecencyStep : std::uint8_t
+{
+    open,
+    touch,
+    close
+};
+
+[[nodiscard]] nenenib::core::TabRecency stepped_recency(const nenenib::core::TabRecency &recency,
+                                                        RecencyStep step, std::size_t tab)
+{
+    switch (step)
+    {
+    case RecencyStep::open:
+        return nenenib::core::tab_recency_opened(recency, tab);
+    case RecencyStep::touch:
+        return nenenib::core::tab_recency_touched(recency, tab);
+    case RecencyStep::close:
+        return nenenib::core::tab_recency_closed(recency, tab);
+    }
+    std::unreachable();
+}
+
+// 操作を混ぜ続けても、列は開いている全部のタブを 1 回ずつ含む（決定 1）。範囲の外も混ぜる。
+void verify_tab_recency_keeps_every_tab()
+{
+    using Row = std::pair<RecencyStep, std::size_t>;
+    constexpr std::array<Row, 22> rows{{
+        {RecencyStep::open, 1},  {RecencyStep::open, 0},  {RecencyStep::touch, 2},
+        {RecencyStep::open, 3},  {RecencyStep::close, 1}, {RecencyStep::open, 2},
+        {RecencyStep::touch, 0}, {RecencyStep::close, 3}, {RecencyStep::open, 1},
+        {RecencyStep::touch, 3}, {RecencyStep::open, 4},  {RecencyStep::close, 0},
+        {RecencyStep::close, 9}, {RecencyStep::touch, 7}, {RecencyStep::open, 2},
+        {RecencyStep::close, 4}, {RecencyStep::touch, 1}, {RecencyStep::open, 5},
+        {RecencyStep::close, 2}, {RecencyStep::open, 0},  {RecencyStep::touch, 4},
+        {RecencyStep::close, 1},
+    }};
+    auto recency = nenenib::core::TabRecency::single();
+    bool whole = true;
+    for (const auto &[step, tab] : rows)
+    {
+        recency = stepped_recency(recency, step, tab);
+        whole = whole && covers_every_tab(recency);
+    }
+    expect(whole && order_is(recency, {0, 1, 2}),
+           "every mix of opening, touching and closing keeps each tab once");
+}
+
+// 使った順に並べた本文の 1 行目（いちばん最近から）。歩いていないときに、列の上を next で端まで
+// 歩いて読み、previous で同じ数だけ戻って確定する。戻った先は先頭なので、列は変わらない。
+[[nodiscard]] std::string recent_bodies(EditorController &controller)
+{
+    const std::size_t count = controller.frame().tabs.size();
+    std::string bodies = first_line(controller.frame());
+    for (std::size_t step = 1; step < count; ++step)
+    {
+        bodies += first_line(controller.apply(WalkRecentTab{TabStep::next}));
+    }
+    for (std::size_t step = 1; step < count; ++step)
+    {
+        applied(controller, WalkRecentTab{TabStep::previous});
+    }
+    applied(controller, SettleRecentTab{});
+    return bodies;
+}
+
+// 押して離すと直前の 2 つを行き来し、押したまま続けると 3 つ目以降へ届く（決定 2・3）。
+void verify_walk_recent_tabs()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_four_tabs(controller);
+    expect(recent_bodies(controller) == "dcba", "each new tab goes to the front of the order");
+    const auto walked = controller.apply(WalkRecentTab{TabStep::next});
+    expect(first_line(walked) == "c" && walked.active_tab == 2 && controller.tab_walking(),
+           "one walk goes to the tab used before");
+    applied(controller, SettleRecentTab{});
+    expect(!controller.tab_walking() && recent_bodies(controller) == "cdba",
+           "releasing Ctrl moves the reached tab to the front");
+    applied(controller, WalkRecentTab{TabStep::next});
+    applied(controller, SettleRecentTab{});
+    expect(first_line(controller.frame()) == "d" && recent_bodies(controller) == "dcba",
+           "press and release again goes back to the tab before");
+    applied(controller, WalkRecentTab{TabStep::next});
+    const auto held = controller.apply(WalkRecentTab{TabStep::next});
+    expect(first_line(held) == "b" && held.active_tab == 1,
+           "the second walk with Ctrl held reaches the third tab in the order");
+    applied(controller, SettleRecentTab{});
+    expect(recent_bodies(controller) == "bdca", "settling after two walks moves only that tab");
+    for (std::size_t step = 0; step < 4; ++step)
+    {
+        applied(controller, WalkRecentTab{TabStep::next});
+    }
+    applied(controller, SettleRecentTab{});
+    expect(first_line(controller.frame()) == "b" && recent_bodies(controller) == "bdca",
+           "four walks over four tabs wrap back to the start");
+    const auto reverse = controller.apply(WalkRecentTab{TabStep::previous});
+    expect(first_line(reverse) == "a", "previous walks to the least recently used tab");
+    applied(controller, SettleRecentTab{});
+    expect(recent_bodies(controller) == "abdc", "and settling moves it to the front");
+    expect(first_line(controller.apply(WalkRecentTab{TabStep::next})) == "b" &&
+               first_line(controller.apply(WalkRecentTab{TabStep::previous})) == "a",
+           "next and previous walk back and forth over the same frozen order");
+    applied(controller, SettleRecentTab{});
+}
+
+// 歩きの途中のクリックと gt は歩きを終え、着いたタブを先頭へ動かす（決定 2）。gt は帯の位置の順。
+void verify_walk_interrupted()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_four_tabs(controller);
+    applied(controller, WalkRecentTab{TabStep::next});
+    const auto clicked = controller.apply(SwitchTab{0});
+    expect(first_line(clicked) == "a" && !controller.tab_walking() &&
+               recent_bodies(controller) == "adcb",
+           "a click during the walk ends it and moves the clicked tab to the front");
+    applied(controller, WalkRecentTab{TabStep::next});
+    applied(controller, SwitchTab{3});
+    expect(!controller.tab_walking() && recent_bodies(controller) == "dacb",
+           "a click on the tab reached by the walk settles there");
+    applied(controller, SelectEditMode{EditMode::vim});
+    applied(controller, WalkRecentTab{TabStep::next});
+    vim_normal(controller, "gt");
+    expect(first_line(controller.frame()) == "b" && !controller.tab_walking() &&
+               recent_bodies(controller) == "bdac",
+           "gt during the walk goes by the band from the reached tab and ends the walk");
+    vim_normal(controller, "gT");
+    expect(first_line(controller.frame()) == "a" && recent_bodies(controller) == "abdc",
+           "gT keeps the band order and moves the tab it reaches to the front");
+}
+
+// 新しいタブは先頭、閉じた後は新しくアクティブになったタブが先頭（決定 2）。
+void verify_recent_after_open_and_close()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_four_tabs(controller);
+    applied(controller, SwitchTab{1});
+    applied(controller, NewTab{});
+    applied(controller, InsertText{"n"});
+    expect(recent_bodies(controller) == "nbdca", "a new tab right of the active one is the newest");
+    const auto closed = controller.apply(CloseTab{2});
+    expect(first_line(closed) == "c" && recent_bodies(controller) == "cbda",
+           "closing the active tab moves its right neighbour to the front");
+    applied(controller, CloseTab{0});
+    expect(first_line(controller.frame()) == "c" && recent_bodies(controller) == "cbd",
+           "closing a parked tab keeps the order of the others");
+    applied(controller, WalkRecentTab{TabStep::next});
+    applied(controller, CloseTab{2});
+    expect(!controller.tab_walking() && first_line(controller.frame()) == "b" &&
+               recent_bodies(controller) == "bc",
+           "closing during the walk ends it at the reached tab");
+    applied(controller, WalkRecentTab{TabStep::next});
+    applied(controller, NewTab{});
+    applied(controller, InsertText{"m"});
+    expect(!controller.tab_walking() && recent_bodies(controller) == "mcb",
+           "a new tab during the walk settles the reached tab before it");
+}
+
+// 起動引数のファイルは最後に開けたものが先頭で、前に開いたものほど後ろ（決定 2）。
+void verify_recent_after_startup()
+{
+    ScriptedFiles files;
+    hold_three(files);
+    ScriptedAppearance appearance{Reading{Appearance::dark}};
+    ScriptedClipboard clipboard;
+    ScriptedCodePages code_pages;
+    ScriptedSettings settings;
+    ScriptedThemes themes;
+    EditorController controller(
+        EditorPorts{appearance, clipboard, files, code_pages, settings, themes},
+        {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
+    applied(controller, VisibleLines{10});
+    expect(recent_bodies(controller) == "cba", "three arguments leave the last one most recent");
+}
+
+[[nodiscard]] std::string message_text(const EditorFrame &frame)
+{
+    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                             : std::string{};
+}
+
+// 1 本のときの歩きは同じ位置。歩いていないときの確定は何も変えず、Vim の報せも消さない
+// （決定 1・3）。
+void verify_settle_without_walk()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{10});
+    applied(controller, InsertText{"a"});
+    const auto alone = controller.apply(WalkRecentTab{TabStep::next});
+    expect(alone.active_tab == 0 && first_line(alone) == "a" && controller.tab_walking(),
+           "walking with one tab stays on it");
+    applied(controller, SettleRecentTab{});
+    expect(!controller.tab_walking(), "settling ends the walk");
+    open_four_tabs(controller);
+    applied(controller, SelectEditMode{EditMode::vim});
+    const auto failed_frame = run_ex(controller, "tabnext 9");
+    const auto settled = controller.apply(SettleRecentTab{});
+    expect(settled.active_tab == failed_frame.active_tab && settled.tabs.size() == 4 &&
+               first_line(settled) == first_line(failed_frame) &&
+               settled.tab_scroll == failed_frame.tab_scroll &&
+               message_text(settled) == message_text(failed_frame) &&
+               settled.command_message.has_value() && !controller.tab_walking(),
+           "settling without a walk changes nothing and keeps the Vim message");
+    expect(recent_bodies(controller) == "dcbaa", "and the order stays as it was");
+}
+
 // Vim の 3 本のタブ（本文 alpha / bravo / charlie・キャレットはどれも行頭）。アクティブは先頭。
 // 本文は通常モードで打つので、`.` の直前の変更は空のまま。
 void open_three_vim_tabs(Editing &editing)
@@ -1221,7 +1478,6 @@ void verify_tabs_contracts()
     verify_new_tab();
     verify_switch_keeps_each_document();
     verify_undo_per_document();
-    verify_step_wraps();
     verify_close_moves_active();
     verify_close_right_of_active();
     verify_last_tab_closes_window();
@@ -1245,6 +1501,13 @@ void verify_tabs_contracts()
     verify_band_input_from_state();
     verify_tab_keys();
     verify_tab_destination();
+    verify_tab_recency_functions();
+    verify_tab_recency_keeps_every_tab();
+    verify_walk_recent_tabs();
+    verify_walk_interrupted();
+    verify_recent_after_open_and_close();
+    verify_recent_after_startup();
+    verify_settle_without_walk();
     verify_vim_tab_keys();
     verify_vim_tab_keys_after_operator();
     verify_vim_tab_keys_repeat();

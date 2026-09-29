@@ -460,6 +460,22 @@ def press_combination(window, modifiers: list[int], key: int) -> bool:
     return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
 
 
+def press_held_repeat(window, modifiers: list[int], key: int, times: int) -> bool:
+    """Hold the modifiers, press the key `times` times, then release the modifiers (Issue #248).
+
+    Ctrl+Tab walks the tabs in recently used order while Ctrl stays down and settles only when
+    Ctrl comes up (ADR 0058), so Ctrl held over two Tabs reaches the third tab in that order.
+    """
+    if not take_foreground(window):
+        return False
+    records = (INPUT * (2 * len(modifiers) + 2 * times))(
+        *[key_input(modifier, 0) for modifier in modifiers],
+        *[record for _ in range(times)
+          for record in (key_input(key, 0), key_input(key, KEYEVENTF_KEYUP))],
+        *[key_input(modifier, KEYEVENTF_KEYUP) for modifier in reversed(modifiers)])
+    return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
+
+
 def capture(window) -> tuple[int, int, bytes]:
     """Read the composed client area back from the screen device context (top-down BGRA).
 

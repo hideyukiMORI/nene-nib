@@ -27,7 +27,7 @@
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
-#include "TabStep.hpp"
+#include "TabRecency.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
 #include "TitleBarHit.hpp"
@@ -421,19 +421,6 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return views;
 }
 
-// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。行き先を数えるのは gt / gT と同じ
-// tab_destination の 1 本（ADR 0057 の決定 1）。
-[[nodiscard]] core::TabJumpDirection direction_of(core::TabStep step) noexcept
-{
-    switch (step)
-    {
-    case core::TabStep::next:
-        return core::TabJumpDirection::forward;
-    case core::TabStep::previous:
-        return core::TabJumpDirection::backward;
-    }
-    std::unreachable();
-}
 } // namespace
 
 EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
@@ -491,12 +478,14 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 EditorFrame EditorController::apply(const EditorIntent &intent)
 {
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
+    // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
                  std::holds_alternative<CancelComposition>(intent) ||
                  std::holds_alternative<TitleBarWidth>(intent) ||
                  std::holds_alternative<ScrollTabs>(intent) ||
-                 std::holds_alternative<PointTitleBar>(intent));
+                 std::holds_alternative<PointTitleBar>(intent) ||
+                 std::holds_alternative<SettleRecentTab>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
@@ -1914,8 +1903,14 @@ void EditorController::accept(const NewTab &)
 
 void EditorController::accept(const SwitchTab &intent)
 {
-    if (intent.index >= state_.tab_count() || intent.index == state_.active_tab())
+    if (intent.index >= state_.tab_count())
     {
+        return;
+    }
+    // アクティブ自身は文書を動かさず、歩きの途中なら着いた所で確定する（ADR 0058 の決定 2）。
+    if (intent.index == state_.active_tab())
+    {
+        state_ = state_.with_switched(intent.index);
         return;
     }
     leave_document();
@@ -1923,15 +1918,33 @@ void EditorController::accept(const SwitchTab &intent)
     enter_document();
 }
 
-void EditorController::accept(const StepTab &intent)
+void EditorController::accept(const WalkRecentTab &intent)
 {
     const auto destination =
-        core::tab_destination(core::TabJump{direction_of(intent.step), std::nullopt},
-                              state_.active_tab(), state_.tab_count());
-    if (destination.has_value())
+        core::tab_recency_walked(state_.recency(), state_.active_tab(), intent.step);
+    if (!destination.has_value())
     {
-        accept(SwitchTab{destination.value()});
+        return;
     }
+    // 1 本のときの歩きは同じ位置で、文書は動かさず歩いている印だけを立てる。
+    if (destination.value() == state_.active_tab())
+    {
+        state_ = state_.with_walked(destination.value());
+        return;
+    }
+    leave_document();
+    state_ = state_.with_walked(destination.value());
+    enter_document();
+}
+
+void EditorController::accept(const SettleRecentTab &)
+{
+    state_ = state_.with_walk_settled();
+}
+
+bool EditorController::tab_walking() const noexcept
+{
+    return state_.tab_walking();
 }
 
 void EditorController::accept(const CloseTab &intent)

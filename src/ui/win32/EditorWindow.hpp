@@ -64,6 +64,9 @@ class EditorWindow final
     [[nodiscard]] LRESULT hit_test(LPARAM data) noexcept;
     [[nodiscard]] LRESULT frame_message(UINT message, WPARAM word, LPARAM data);
     [[nodiscard]] LRESULT pointer_message(UINT message, WPARAM word, LPARAM data);
+    [[nodiscard]] LRESULT key_message(UINT message, WPARAM word, LPARAM data);
+    // Ctrl+Tab の歩きの確定（ADR 0058 の決定 4）。歩いているときだけ SettleRecentTab を送る。
+    void settle_tab_walk();
     void limit_size(LPARAM data) const noexcept;
     // 帯の配置は状態の 4 つの値と窓の幅から毎回作る。表示値は作らない（ADR 0056 の決定 9）。
     [[nodiscard]] core::TitleBarLayout title_bar() const;

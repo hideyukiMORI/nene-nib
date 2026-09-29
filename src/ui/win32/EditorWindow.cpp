@@ -31,8 +31,8 @@
 #include "SearchHop.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
+#include "SettleRecentTab.hpp"
 #include "StatusBarLayout.hpp"
-#include "StepTab.hpp"
 #include "SwitchTab.hpp"
 #include "TabCommand.hpp"
 #include "TabKeyTable.hpp"
@@ -52,6 +52,7 @@
 #include "VimMode.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
+#include "WalkRecentTab.hpp"
 
 #include <dwmapi.h>
 #include <imm.h>
@@ -448,6 +449,20 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
     }
     std::unreachable();
 }
+
+// Ctrl+Tab の歩きを続けたまま送れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の寸法・
+// 外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の意図の前に
+// 窓は歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
+[[nodiscard]] bool keeps_tab_walk(const application::EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<application::WalkRecentTab>(intent) ||
+           std::holds_alternative<application::SettleRecentTab>(intent) ||
+           std::holds_alternative<application::PointTitleBar>(intent) ||
+           std::holds_alternative<application::ScrollTabs>(intent) ||
+           std::holds_alternative<application::TitleBarWidth>(intent) ||
+           std::holds_alternative<application::VisibleLines>(intent) ||
+           std::holds_alternative<application::RefreshAppearance>(intent);
+}
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
@@ -634,13 +649,10 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
         paint();
         return 0;
     case WM_KEYDOWN:
-        timing_.mark(core::Milestone::input_received);
-        press_key(word);
-        return 0;
+    case WM_KEYUP:
     case WM_CHAR:
-        timing_.mark(core::Milestone::input_received);
-        type_character(word);
-        return 0;
+    case WM_KILLFOCUS:
+        return key_message(message, word, data);
     case WM_IME_STARTCOMPOSITION:
     case WM_IME_COMPOSITION:
     case WM_IME_ENDCOMPOSITION:
@@ -698,6 +710,44 @@ LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
         break;
     }
     return DefWindowProcW(window_, message, word, data);
+}
+
+LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
+{
+    // 鍵の 3 通とフォーカスを失ったとき。Ctrl を離したとき・フォーカスを失ったときは、歩いて
+    // いれば使った順を確定してから OS の既定処理へ渡す（ADR 0058 の決定 4）。
+    switch (message)
+    {
+    case WM_KEYDOWN:
+        timing_.mark(core::Milestone::input_received);
+        press_key(word);
+        return 0;
+    case WM_CHAR:
+        timing_.mark(core::Milestone::input_received);
+        type_character(word);
+        return 0;
+    case WM_KEYUP:
+        if (word == VK_CONTROL)
+        {
+            settle_tab_walk();
+        }
+        break;
+    case WM_KILLFOCUS:
+        settle_tab_walk();
+        break;
+    default:
+        break;
+    }
+    return DefWindowProcW(window_, message, word, data);
+}
+
+// 歩いていないときは意図を送らない（Ctrl+C などのたびに描き直さない・決定 4）。
+void EditorWindow::settle_tab_walk()
+{
+    if (controller_.tab_walking())
+    {
+        send(application::SettleRecentTab{});
+    }
 }
 
 LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
@@ -1206,6 +1256,13 @@ void EditorWindow::restore_ime()
 
 void EditorWindow::send(const application::EditorIntent &intent)
 {
+    // 歩いている間に来たほかの意図（入力行を開く鍵・文字・クリックなど）の前に、歩きを確定する
+    // （ADR 0058 の決定 4）。送る口はこの 1 か所なので漏れが無い。確定は controller へ直に渡し、
+    // send へ戻らないので再入しない。
+    if (controller_.tab_walking() && !keeps_tab_walk(intent))
+    {
+        static_cast<void>(controller_.apply(application::SettleRecentTab{}));
+    }
     const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent) ||
                              std::holds_alternative<application::SubmitCommand>(intent) ||
                              std::holds_alternative<application::ActivateCommandChoice>(intent);
@@ -1494,10 +1551,10 @@ void EditorWindow::run_tab_command(core::TabCommand command)
         send(application::NewTab{});
         return;
     case core::TabCommand::next:
-        send(application::StepTab{core::TabStep::next});
+        send(application::WalkRecentTab{core::TabStep::next});
         return;
     case core::TabCommand::previous:
-        send(application::StepTab{core::TabStep::previous});
+        send(application::WalkRecentTab{core::TabStep::previous});
         return;
     case core::TabCommand::close:
     {

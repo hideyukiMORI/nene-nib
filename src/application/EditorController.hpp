@@ -74,6 +74,9 @@ class EditorController final
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
+    // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
+    // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
+    [[nodiscard]] bool tab_walking() const noexcept;
 
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
@@ -132,7 +135,9 @@ class EditorController final
     // enter_document の順で、どの意図もこの 1 本を通る。
     void accept(const NewTab &);
     void accept(const SwitchTab &intent);
-    void accept(const StepTab &intent);
+    // 使った順の歩きと確定（ADR 0058 の決定 3）。歩きの 1 歩も上の切り替えと同じ 1 本を通る。
+    void accept(const WalkRecentTab &intent);
+    void accept(const SettleRecentTab &);
     void accept(const CloseTab &intent);
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);

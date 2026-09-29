@@ -30,13 +30,14 @@
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
-#include "StepTab.hpp"
+#include "SettleRecentTab.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TitleBarWidth.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 
 #include <variant>
 
@@ -51,6 +52,7 @@ using EditorIntent =
                  VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument, ComposeText,
                  CommitText, CancelComposition, AdjustFontSize, CommandText, EditCommand,
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
-                 ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab, StepTab,
-                 CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth, OpenTabList>;
+                 ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
+                 WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth,
+                 OpenTabList>;
 } // namespace nenenib::application
