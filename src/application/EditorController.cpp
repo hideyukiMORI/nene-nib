@@ -50,6 +50,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <expected>
 #include <optional>
 #include <string>
 #include <utility>
@@ -420,7 +421,7 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 }
 } // namespace
 
-EditorController::EditorController(EditorPorts ports, std::optional<OpenDocument> initial)
+EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
     : ports_(ports),
       state_(EditorState::create(appearance_or_dark(ports.appearance), core::EditMode::ordinary))
 {
@@ -435,10 +436,15 @@ EditorController::EditorController(EditorPorts ports, std::optional<OpenDocument
     {
         state_ = state_.with_settings(loaded.value().value_or(state_.settings()));
     }
-    if (initial.has_value())
+    // 起動引数のファイルは順にタブで開き、最後に開けたものがアクティブになる（ADR 0056 の決定
+    // 13）。失敗は 1 意図だけの値なので、後の引数が消さないよう最後の失敗を控えて載せ直す。
+    std::optional<FileFailure> failure;
+    for (const OpenDocument &document : initial)
     {
-        static_cast<void>(apply(initial.value()));
+        static_cast<void>(apply(document));
+        failure = state_.last_failure().has_value() ? state_.last_failure() : failure;
     }
+    state_ = state_.with_failure(failure);
     // 初期ファイルも通常の意図を通す。その後で起動時の診断を載せ、最初の描画まで保持する。
     state_ = state_.with_command_message(inventory.notice);
 }
@@ -1650,37 +1656,90 @@ std::expected<std::string, FileFailure> EditorController::encoded(core::TextEnco
     return std::move(converted).value();
 }
 
-void EditorController::accept(const OpenDocument &intent)
+// 読んで復号した本文と文書。上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは
+// 大きいファイルを先に抱える。
+std::expected<std::pair<core::TextBuffer, Document>, FileFailure>
+EditorController::read_document(const core::FilePath &path)
 {
-    // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
-    state_ = state_.with_composition(std::nullopt);
-    // 上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは大きいファイルを先に抱える。
-    const auto bytes = ports_.files.read(intent.path, maximum_file_bytes);
+    const auto bytes = ports_.files.read(path, maximum_file_bytes);
     if (!bytes)
     {
-        fail(bytes.error());
-        return;
+        return std::unexpected(bytes.error());
     }
     const auto encoding = core::detect_encoding(bytes.value());
     if (!encoding)
     {
-        fail(FileFailure::undecodable);
-        return;
+        return std::unexpected(FileFailure::undecodable);
     }
     const auto utf8 = decoded(encoding.value(), bytes.value());
     if (!utf8)
     {
-        fail(utf8.error());
-        return;
+        return std::unexpected(utf8.error());
     }
     auto text = core::TextBuffer::from_utf8(utf8.value());
     if (!text)
     {
-        fail(FileFailure::undecodable);
+        return std::unexpected(FileFailure::undecodable);
+    }
+    return std::pair{std::move(text).value(), Document{path, encoding.value(), std::size_t{0}}};
+}
+
+// 同じファイルを開いているタブの帯の位置（決定 5 の (a)）。比べ方は FilePort が OS の規則で決める。
+std::optional<std::size_t> EditorController::open_tab_of(const core::FilePath &path) const
+{
+    const auto &active = state_.document().path;
+    if (active.has_value() && ports_.files.same_file(active.value(), path))
+    {
+        return state_.active_tab();
+    }
+    const auto &parked = state_.parked();
+    for (std::size_t index = 0; index < parked.size(); ++index)
+    {
+        const auto &other = parked.at(index)->document.path;
+        if (other.has_value() && ports_.files.same_file(other.value(), path))
+        {
+            // 脇の束は帯の位置からアクティブを抜いた順。アクティブより右は 1 つずれる。
+            return index < state_.active_tab() ? index : index + 1;
+        }
+    }
+    return std::nullopt;
+}
+
+// 何も書いていない無題（決定 5 の (b)）。やり直しも含めて編集が 1 つも無いこと。
+bool EditorController::blank_untitled() const
+{
+    return !state_.document().path.has_value() && state_.text().size_bytes() == 0 &&
+           state_.history().size() == 0;
+}
+
+// 開く（ADR 0056 の決定 5）。(a) 同じファイルのタブへ切り替える（読み直さない）→ (b) 何も
+// 書いていない無題ならそこに開く → (c) アクティブの右に新しいタブを足して開く。開けなかったら
+// タブを足さず失敗を告げる。
+void EditorController::accept(const OpenDocument &intent)
+{
+    const auto open = open_tab_of(intent.path);
+    if (open.has_value())
+    {
+        accept(SwitchTab{open.value()});
         return;
     }
-    state_ = state_.with_opened(std::move(text).value(),
-                                Document{intent.path, encoding.value(), std::size_t{0}});
+    // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
+    state_ = state_.with_composition(std::nullopt);
+    auto document = read_document(intent.path);
+    if (!document)
+    {
+        fail(document.error());
+        return;
+    }
+    auto [text, opened] = std::move(document).value();
+    if (blank_untitled())
+    {
+        state_ = state_.with_opened(std::move(text), std::move(opened));
+        return;
+    }
+    leave_document();
+    state_ = state_.with_new_tab().with_opened(std::move(text), std::move(opened));
+    enter_document();
 }
 
 void EditorController::accept(const SaveDocument &intent)

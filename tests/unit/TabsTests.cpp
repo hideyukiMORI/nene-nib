@@ -1,5 +1,5 @@
-// scope `--tabs` の単体テスト（ADR 0042 決定 2・ADR 0056）。開く（決定 5）と起動（決定 13）は
-// 縦切りの工程 2 が足す。
+// scope `--tabs` の単体テスト（ADR 0042 決定 2・ADR 0056）。状態・切り替え・閉じる（決定 1〜4・
+// 6・7）と、開く（決定 5）と起動（決定 13）。
 #include "Appearance.hpp"
 #include "CloseTab.hpp"
 #include "ComposeText.hpp"
@@ -7,7 +7,10 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorPorts.hpp"
 #include "EditorState.hpp"
+#include "FileFailure.hpp"
+#include "FilePath.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
@@ -16,7 +19,12 @@
 #include "OpenDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
+#include "ScriptedAppearance.hpp"
+#include "ScriptedClipboard.hpp"
+#include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedSettings.hpp"
+#include "ScriptedThemes.hpp"
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
@@ -38,6 +46,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -46,6 +56,7 @@ namespace
 using nenenib::application::CloseTab;
 using nenenib::application::ComposeText;
 using nenenib::application::EditorFrame;
+using nenenib::application::EditorPorts;
 using nenenib::application::EditorState;
 using nenenib::application::HistoryAction;
 using nenenib::application::InsertText;
@@ -58,6 +69,7 @@ using nenenib::application::SwitchTab;
 using nenenib::application::VisibleLines;
 using nenenib::core::Appearance;
 using nenenib::core::EditMode;
+using nenenib::core::FilePath;
 using nenenib::core::HistoryDirection;
 using nenenib::core::SaveState;
 using nenenib::core::TabStep;
@@ -347,6 +359,167 @@ void verify_parked_references()
                closed.parked().at(0) == switched.parked().at(1),
            "closing a parked tab keeps the other bundles as they are");
 }
+// 契約の経路。どれも絶対パスの形（起動引数とダイアログが作る値と同じ）。
+[[nodiscard]] FilePath path_of(std::string_view text)
+{
+    auto parsed = FilePath::parse(text);
+    expect(parsed.has_value(), "the contract path parses");
+    return std::move(parsed).value();
+}
+
+[[nodiscard]] OpenDocument open_at(std::string_view text)
+{
+    return OpenDocument{path_of(text)};
+}
+
+// a.txt b.txt c.txt の中身をそれぞれ a b c にする。
+void hold_three(ScriptedFiles &files)
+{
+    files.hold_at("C:\\work\\a.txt", Bytes{std::string("a")});
+    files.hold_at("C:\\work\\b.txt", Bytes{std::string("b")});
+    files.hold_at("C:\\work\\c.txt", Bytes{std::string("c")});
+}
+
+// (a) 同じファイルはそのタブへ切り替え、読み直さない（決定 5）。
+void verify_open_same_file()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("one")});
+    applied(controller, VisibleLines{10});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, InsertText{"x"});
+    const auto again = controller.apply(OpenDocument{sample_path()});
+    expect(again.tabs.size() == 1 && again.active_tab == 0 && vim_body(again) == "xone" &&
+               again.document.title.text() == "● note.txt" && editing.files().reads() == 1,
+           "opening the active file again keeps its unsaved body and mark without rereading");
+    applied(controller, NewTab{});
+    const auto back = controller.apply(OpenDocument{sample_path()});
+    expect(back.tabs.size() == 2 && back.active_tab == 0 && vim_body(back) == "xone" &&
+               titled(back, 0, "● note.txt") && titled(back, 1, "無題") &&
+               editing.files().reads() == 1,
+           "opening a file open in another tab switches to that tab");
+}
+
+// (a) の判定は FilePort が決める。替え玉が同じと答えた組は同じファイル。
+void verify_open_same_file_by_port()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(Bytes{std::string("one")});
+    editing.files().treat_as_same("C:\\WORK\\NOTE.TXT", "C:\\work\\note.txt");
+    applied(controller, open_at("C:\\WORK\\NOTE.TXT"));
+    applied(controller, NewTab{});
+    const auto frame = controller.apply(OpenDocument{sample_path()});
+    expect(frame.tabs.size() == 2 && frame.active_tab == 0 && titled(frame, 0, "NOTE.TXT") &&
+               editing.files().reads() == 1,
+           "a path the port calls the same file switches instead of opening a second tab");
+}
+
+// (b) 何も書いていない無題に開く。1 文字でも編集があれば（取り消しても）新しいタブ。
+void verify_open_into_blank_untitled()
+{
+    Editing blank;
+    blank.files().hold(Bytes{std::string("one")});
+    const auto into = blank.controller().apply(OpenDocument{sample_path()});
+    expect(into.tabs.size() == 1 && into.document.title.text() == "note.txt",
+           "a blank untitled tab takes the opened file");
+    Editing typed;
+    typed.files().hold(Bytes{std::string("one")});
+    applied(typed.controller(), InsertText{"a"});
+    const auto beside = typed.controller().apply(OpenDocument{sample_path()});
+    expect(beside.tabs.size() == 2 && beside.active_tab == 1 && titled(beside, 0, "● 無題") &&
+               vim_body(beside) == "one",
+           "an untitled tab with an edit keeps its text and the file opens in a new tab");
+    Editing undone;
+    undone.files().hold(Bytes{std::string("one")});
+    applied(undone.controller(), InsertText{"a"});
+    applied(undone.controller(), HistoryAction{HistoryDirection::undo});
+    const auto kept = undone.controller().apply(OpenDocument{sample_path()});
+    expect(kept.tabs.size() == 2 && kept.active_tab == 1,
+           "an untitled tab whose edit was undone still has history and is not reused");
+}
+
+// (c) ほかのファイルはアクティブの右に入る。
+void verify_open_right_of_active()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    hold_three(editing.files());
+    applied(controller, VisibleLines{10});
+    applied(controller, open_at("C:\\work\\a.txt"));
+    const auto second = controller.apply(open_at("C:\\work\\b.txt"));
+    expect(second.tabs.size() == 2 && second.active_tab == 1 && vim_body(second) == "b" &&
+               titled(second, 0, "a.txt"),
+           "a file opened from a file tab gets a new tab to the right");
+    applied(controller, SwitchTab{0});
+    const auto middle = controller.apply(open_at("C:\\work\\c.txt"));
+    expect(middle.tabs.size() == 3 && middle.active_tab == 1 && titled(middle, 0, "a.txt") &&
+               titled(middle, 1, "c.txt") && titled(middle, 2, "b.txt") &&
+               middle.document.save_state == SaveState::saved,
+           "the new tab goes right of the active tab, not at the end");
+}
+
+// 開けなかったらタブを足さず、失敗は今までどおり 1 意図だけ載る。
+void verify_open_failure_adds_no_tab()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    hold_three(editing.files());
+    applied(controller, open_at("C:\\work\\a.txt"));
+    applied(controller, NewTab{});
+    applied(controller, InsertText{"b"});
+    const auto failed = controller.apply(open_at("C:\\work\\missing.txt"));
+    expect(failed.tabs.size() == 2 && failed.active_tab == 1 && vim_body(failed) == "b" &&
+               failed.document.last_failure == FileFailure::not_found,
+           "a file that cannot be read adds no tab and reports the failure");
+    expect(!controller.apply(VisibleLines{10}).document.last_failure.has_value(),
+           "the failure stays for one intent");
+    Editing blank;
+    const auto untitled = blank.controller().apply(open_at("C:\\work\\missing.txt"));
+    expect(untitled.tabs.size() == 1 && untitled.document.title.text() == "無題" &&
+               untitled.document.last_failure == FileFailure::not_found,
+           "a failed open leaves the blank untitled tab as it was");
+}
+
+// 起動の controller を組んで最初の表示値を返す（決定 13）。ポートは controller より先に宣言する。
+[[nodiscard]] EditorFrame started(ScriptedFiles &files, const std::vector<OpenDocument> &initial)
+{
+    ScriptedAppearance appearance{Reading{Appearance::dark}};
+    ScriptedClipboard clipboard;
+    ScriptedCodePages code_pages;
+    ScriptedSettings settings;
+    ScriptedThemes themes;
+    const EditorController controller(
+        EditorPorts{appearance, clipboard, files, code_pages, settings, themes}, initial);
+    return controller.frame();
+}
+
+// 起動引数のファイルは全部を順にタブで開き、最後に開けたものがアクティブ（決定 13）。
+void verify_startup_opens_every_file()
+{
+    ScriptedFiles files;
+    hold_three(files);
+    const auto three = started(files, {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"),
+                                       open_at("C:\\work\\c.txt")});
+    expect(three.tabs.size() == 3 && three.active_tab == 2 && titled(three, 0, "a.txt") &&
+               titled(three, 1, "b.txt") && titled(three, 2, "c.txt") && vim_body(three) == "c",
+           "three arguments open three tabs and the last one is active");
+    const auto skipped =
+        started(files, {open_at("C:\\work\\a.txt"), open_at("C:\\work\\missing.txt"),
+                        open_at("C:\\work\\c.txt")});
+    expect(skipped.tabs.size() == 2 && skipped.active_tab == 1 && titled(skipped, 0, "a.txt") &&
+               titled(skipped, 1, "c.txt") &&
+               skipped.document.last_failure == FileFailure::not_found,
+           "an argument that cannot be opened makes no tab and its failure reaches the window");
+    const auto none = started(files, {});
+    expect(none.tabs.size() == 1 && none.document.title.text() == "無題" &&
+               !none.document.last_failure.has_value(),
+           "no argument starts with one untitled tab");
+    const auto twice = started(files, {open_at("C:\\work\\a.txt"), open_at("C:\\work\\a.txt")});
+    expect(twice.tabs.size() == 1 && twice.document.title.text() == "a.txt",
+           "the same file given twice opens one tab");
+}
 } // namespace
 
 void verify_tabs_contracts()
@@ -363,6 +536,12 @@ void verify_tabs_contracts()
     verify_vim_switched_document();
     verify_switch_closes_input();
     verify_parked_references();
+    verify_open_same_file();
+    verify_open_same_file_by_port();
+    verify_open_into_blank_untitled();
+    verify_open_right_of_active();
+    verify_open_failure_adds_no_tab();
+    verify_startup_opens_every_file();
 }
 
 void verify_tabs_scope()

@@ -27,5 +27,9 @@ class FilePort
     read(const core::FilePath &path, std::size_t maximum_bytes) = 0;
     [[nodiscard]] virtual std::expected<void, FileFailure> write(const core::FilePath &path,
                                                                  std::string_view bytes) = 0;
+    // 2 つの経路が同じファイルを指すか（ADR 0056 の決定 5）。比べ方は OS の規則で、adapters が
+    // 決める（Windows は大文字と小文字を区別しない序数比較）。
+    [[nodiscard]] virtual bool same_file(const core::FilePath &left,
+                                         const core::FilePath &right) const = 0;
 };
 } // namespace nenenib::application

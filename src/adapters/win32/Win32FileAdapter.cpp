@@ -154,4 +154,16 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
     }
     return {};
 }
+
+bool Win32FileAdapter::same_file(const core::FilePath &left, const core::FilePath &right) const
+{
+    const std::wstring first = widen(left.text());
+    const std::wstring second = widen(right.text());
+    if (first.empty() || second.empty())
+    {
+        return false;
+    }
+    return CompareStringOrdinal(first.c_str(), static_cast<int>(first.size()), second.c_str(),
+                                static_cast<int>(second.size()), TRUE) == CSTR_EQUAL;
+}
 } // namespace nenenib::adapters::win32

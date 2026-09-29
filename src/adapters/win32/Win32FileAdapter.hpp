@@ -23,5 +23,9 @@ class Win32FileAdapter final : public application::FilePort
     read(const core::FilePath &path, std::size_t maximum_bytes) override;
     [[nodiscard]] std::expected<void, application::FileFailure>
     write(const core::FilePath &path, std::string_view bytes) override;
+    // 経路は absolute_file_path が作った絶対パス。大文字と小文字を区別しない序数比較で比べる。
+    // 短い名前（8.3）とリンクは解かない（ADR 0056 の「残る穴」）。
+    [[nodiscard]] bool same_file(const core::FilePath &left,
+                                 const core::FilePath &right) const override;
 };
 } // namespace nenenib::adapters::win32
