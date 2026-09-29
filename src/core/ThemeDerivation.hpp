@@ -37,6 +37,15 @@ inline constexpr int on_accent_threshold = 160;
                     mix_channel(from.blue, to.blue, percent)};
 }
 
+// 2 色の各成分の平均（切り捨て）。マウスを載せたタブの面は帯とアクティブなタブの間
+// （ADR 0056 の決定 12）。
+[[nodiscard]] constexpr RgbColor average(RgbColor left, RgbColor right) noexcept
+{
+    return RgbColor{static_cast<std::uint8_t>((left.red + right.red) / 2),
+                    static_cast<std::uint8_t>((left.green + right.green) / 2),
+                    static_cast<std::uint8_t>((left.blue + right.blue) / 2)};
+}
+
 // アクセントの明るさ（299R + 587G + 114B）/ 1000 が境目以上なら黒、未満なら白。
 [[nodiscard]] constexpr RgbColor on_accent_for(RgbColor accent) noexcept
 {
@@ -85,21 +94,23 @@ static_assert(static_cast<std::size_t>(Appearance::light) == 0,
 static_assert(static_cast<std::size_t>(Appearance::dark) == 1,
               "ui_mix_weights の添字は Appearance の並びそのもの");
 
-// 本文の 3 色と明暗から UI トークン 16 個を導く決定的な純関数（ADR 0017 の決定 4）。
+// 本文の 3 色と明暗から UI トークン 17 個を導く決定的な純関数（ADR 0017 の決定 4）。
 // 有名テーマは本文の色しか定義しないので、タイトルバー・ステータスバー・パネルはここが決める。
 // 導出した見た目は仮で、C3 の絵で hide が見る（D12）。
 [[nodiscard]] constexpr Palette derive_ui(RgbColor background, RgbColor foreground, RgbColor accent,
                                           Appearance appearance) noexcept
 {
     const UiMixWeights weights = ui_mix_weights[static_cast<std::size_t>(appearance)];
+    const RgbColor title_bar = mix(background, mix_black, weights.title_bar);
     return Palette{
         .background = background,
         .text = foreground,
         .muted = mix(foreground, background, weights.muted),
         .gutter = mix(foreground, background, weights.gutter),
         .current_line = mix(background, foreground, weights.current_line),
-        .title_bar = mix(background, mix_black, weights.title_bar),
+        .title_bar = title_bar,
         .tab_active = background,
+        .tab_hover = average(title_bar, background),
         .status = mix(background, mix_black, weights.status),
         .accent = accent,
         .selection = RgbaColor{accent, weights.selection_alpha},

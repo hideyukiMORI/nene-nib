@@ -39,7 +39,7 @@ ui.selection=#E9542047
 
 `appearance` はdarkまたはlight。author/license/urlは非空の一行UTF-8、各256 bytesまで。出典URLは文字列として保持し、アプリがアクセスすることはない。ローカル作品には例のように `url=local` と書ける。licenseには配色の実際の利用条件を書く。
 
-上書きできるUI役割は `background text muted gutter current_line title_bar tab_active status accent selection toggle on_accent panel panel_border search ime`。本文のforeground/backgroundと、上書き後のUIのtext/backgroundのコントラスト比は4.5以上が必要。低い場合は色を自動補正せずエラーとして返す。
+上書きできるUI役割は `background text muted gutter current_line title_bar tab_active tab_hover status accent selection toggle on_accent panel panel_border search ime`。`tab_hover`（マウスを載せた非アクティブなタブの面）を省略すると `tab_active` と同じ色になる（ADR 0056 の決定 12）。本文のforeground/backgroundと、上書き後のUIのtext/backgroundのコントラスト比は4.5以上が必要。低い場合は色を自動補正せずエラーとして返す。
 
 フォルダの直下だけを起動時に一度読む。最大128ファイルで、超えた場合は利用者テーマを一件も読み込まず注意を表示する。フォルダ列挙が途中で失敗した場合も、不完全な一覧を採用せず組み込みだけで起動し注意を表示する。ファイルの追加・編集は再起動で反映する。正規のファイル名はハイフン表記のみで、underscoreはコマンド入力で使える別表記。組み込みとsystemは予約名。
 

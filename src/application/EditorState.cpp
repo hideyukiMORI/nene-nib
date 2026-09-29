@@ -303,6 +303,42 @@ EditorState EditorState::with_closing(bool closing) const
     return next;
 }
 
+std::int32_t EditorState::title_bar_width() const noexcept
+{
+    return title_bar_width_;
+}
+
+std::int32_t EditorState::tab_scroll() const noexcept
+{
+    return tab_scroll_;
+}
+
+const std::optional<core::TitleBarTarget> &EditorState::hovered() const noexcept
+{
+    return hovered_;
+}
+
+EditorState EditorState::with_title_bar_width(std::int32_t dip) const
+{
+    EditorState next(*this);
+    next.title_bar_width_ = dip;
+    return next;
+}
+
+EditorState EditorState::with_tab_scroll(std::int32_t dip) const
+{
+    EditorState next(*this);
+    next.tab_scroll_ = dip;
+    return next;
+}
+
+EditorState EditorState::with_hovered(std::optional<core::TitleBarTarget> hovered) const
+{
+    EditorState next(*this);
+    next.hovered_ = hovered;
+    return next;
+}
+
 // 置く（ADR 0056 の決定 1・4）。出ていく文書の選択はキャレットへ畳み（VISUAL を持ち越さない）、
 // undo の単位を閉じる。題名は置くこの 1 回だけ作り、frame は並べるだけにする。
 std::shared_ptr<const DocumentState> EditorState::parked_active() const

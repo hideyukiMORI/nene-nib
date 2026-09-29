@@ -1215,7 +1215,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto size = context_->GetSize();
     const auto width = static_cast<std::int32_t>(size.width);
     const auto height = static_cast<std::int32_t>(size.height);
-    const auto title = core::title_bar_layout(width, dpi_, 1);
+    const auto title =
+        core::title_bar_layout(core::TitleBarInput{width, dpi_, 1, 0, 0, std::nullopt});
     const auto status = core::status_bar_layout(width, height, dpi_);
     draw_title_bar(frame, title);
     draw_body(frame, core::body_layout(width, height, dpi_, frame.settings.font_size));

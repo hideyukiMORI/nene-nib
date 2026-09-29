@@ -17,6 +17,7 @@
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
+#include "PointTitleBar.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
@@ -26,6 +27,7 @@
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
 #include "ScrollLines.hpp"
+#include "ScrollTabs.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
 #include "SelectionPresence.hpp"
@@ -33,6 +35,9 @@
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "TitleBarHit.hpp"
+#include "TitleBarTarget.hpp"
+#include "TitleBarWidth.hpp"
 #include "UnsavedTab.hpp"
 #include "VimColumnWish.hpp"
 #include "VimCount.hpp"
@@ -64,10 +69,13 @@ using nenenib::application::InsertText;
 using nenenib::application::NewTab;
 using nenenib::application::next_unsaved_tab;
 using nenenib::application::OpenDocument;
+using nenenib::application::PointTitleBar;
 using nenenib::application::ScrollLines;
+using nenenib::application::ScrollTabs;
 using nenenib::application::SelectEditMode;
 using nenenib::application::StepTab;
 using nenenib::application::SwitchTab;
+using nenenib::application::TitleBarWidth;
 using nenenib::application::VisibleLines;
 using nenenib::core::Appearance;
 using nenenib::core::EditMode;
@@ -75,6 +83,8 @@ using nenenib::core::FilePath;
 using nenenib::core::HistoryDirection;
 using nenenib::core::SaveState;
 using nenenib::core::TabStep;
+using nenenib::core::TitleBarHit;
+using nenenib::core::TitleBarTarget;
 using nenenib::core::VimMode;
 
 [[nodiscard]] bool titled(const EditorFrame &frame, std::size_t tab, std::string_view title)
@@ -555,6 +565,66 @@ void verify_unsaved_tabs_in_band_order()
     expect(asked == std::vector<std::size_t>{0, 1, 3, 4},
            "every unsaved tab is asked once from the left of the band");
 }
+// ---------------------------------------------------------------- 帯（ADR 0056 の決定 2・3・7・8）
+
+// 9 本のタブ。帯の幅 1200 DIP では 9 本目があふれ、送り量の上限は 150 DIP。
+void open_nine_tabs(EditorController &controller)
+{
+    applied(controller, VisibleLines{10});
+    for (std::size_t added = 0; added < 8; ++added)
+    {
+        applied(controller, NewTab{});
+    }
+}
+
+// 帯の幅と送り量は状態に入り表示値に出る。切り替え・新しいタブ・閉じる・帯の幅のたびに
+// アクティブなタブが見える所へ直り、ホイールは端で止まる。
+void verify_band_scroll()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    const auto initial = controller.frame();
+    expect(initial.tab_scroll == 0 && !initial.hovered.has_value(),
+           "the band starts unscrolled with nothing hovered");
+    open_nine_tabs(controller);
+    expect(controller.frame().tab_scroll == 0, "an unknown band width keeps the scroll at 0");
+    expect(controller.apply(ScrollTabs{-1}).tab_scroll == 0,
+           "the wheel does nothing before the band width is known");
+    expect(controller.apply(TitleBarWidth{1200}).tab_scroll == 150,
+           "the band width scrolls the active last tab into view");
+    expect(controller.apply(SwitchTab{0}).tab_scroll == 0,
+           "switching to the first tab scrolls it into view");
+    expect(controller.apply(ScrollTabs{-1}).tab_scroll == 122, "one notch scrolls one tab");
+    expect(controller.apply(ScrollTabs{-3}).tab_scroll == 150, "the wheel stops at the end");
+    expect(controller.apply(StepTab{TabStep::previous}).tab_scroll == 150,
+           "a visible active tab keeps the scroll");
+    expect(controller.apply(NewTab{}).tab_scroll == 272, "a new tab at the end is scrolled in");
+    expect(controller.apply(CloseTab{9}).tab_scroll == 150,
+           "closing clamps the scroll to the shorter strip");
+    expect(controller.apply(TitleBarWidth{2000}).tab_scroll == 0,
+           "a band wide enough for every tab does not scroll");
+}
+
+// マウスを載せた要素は状態に入り表示値に出る。閉じたタブの hover は消える（決定 2）。
+void verify_band_hover()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_four_tabs(controller);
+    const TitleBarTarget third{TitleBarHit::tab, 2};
+    expect(controller.apply(PointTitleBar{third}).hovered == std::optional{third},
+           "the pointed element is in the frame");
+    const auto closed_other = controller.apply(CloseTab{1});
+    expect(closed_other.hovered == std::optional{third},
+           "closing another tab keeps the hover where the pointer is");
+    static_cast<void>(controller.apply(PointTitleBar{TitleBarTarget{TitleBarHit::tab_close, 1}}));
+    const auto closed_hovered = controller.apply(CloseTab{1});
+    expect(!closed_hovered.hovered.has_value(), "closing the hovered tab forgets the hover");
+    static_cast<void>(controller.apply(PointTitleBar{TitleBarTarget{TitleBarHit::add_tab, 0}}));
+    expect(!controller.apply(PointTitleBar{std::nullopt}).hovered.has_value(),
+           "leaving the band clears the hover");
+}
+
 } // namespace
 
 void verify_tabs_contracts()
@@ -578,6 +648,8 @@ void verify_tabs_contracts()
     verify_open_failure_adds_no_tab();
     verify_startup_opens_every_file();
     verify_unsaved_tabs_in_band_order();
+    verify_band_scroll();
+    verify_band_hover();
 }
 
 void verify_tabs_scope()

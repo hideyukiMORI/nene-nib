@@ -429,7 +429,9 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
     case core::TitleBarHit::caption:
         return HTCAPTION;
     case core::TitleBarHit::tab:
+    case core::TitleBarHit::tab_close:
     case core::TitleBarHit::add_tab:
+    case core::TitleBarHit::tab_list:
     case core::TitleBarHit::none:
         return HTCLIENT;
     }
@@ -670,8 +672,9 @@ LRESULT EditorWindow::hit_test(LPARAM data) noexcept
     ScreenToClient(window_, &point);
     RECT client{};
     GetClientRect(window_, &client);
-    const auto layout = core::title_bar_layout(client.right, dpi_, single_tab);
-    const auto hit = core::title_bar_hit(layout, point.x, point.y);
+    const auto layout = core::title_bar_layout(
+        core::TitleBarInput{client.right, dpi_, single_tab, 0, 0, std::nullopt});
+    const auto hit = core::title_bar_target(layout, point.x, point.y).hit;
     // 窓の操作の上では大きさを変えられない。それ以外の縁は 8 DIP を 8 方向に割り当てる。
     if (window_button(hit))
     {

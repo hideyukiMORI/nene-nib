@@ -21,6 +21,7 @@
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
+#include "TitleBarInput.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimCharacter.hpp"
@@ -119,6 +120,14 @@ class EditorController final
     void accept(const SwitchTab &intent);
     void accept(const StepTab &intent);
     void accept(const CloseTab &intent);
+    // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
+    void accept(const TitleBarWidth &intent);
+    void accept(const ScrollTabs &intent);
+    void accept(const PointTitleBar &intent);
+    // 帯の配置の入力（96 DPI・幅は DIP・決定 8）と、送り量をアクティブなタブが見える所へ直す
+    // 1 本（切り替え・新しいタブ・閉じる・開く・帯の幅のたび）。帯の幅がまだ 0 なら送り量は 0。
+    [[nodiscard]] core::TitleBarInput title_bar_input() const;
+    void reveal_active_tab();
     // 開く（決定 5）の 3 つの枝の材料。同じファイルを開いているタブの帯の位置・何も書いていない
     // 無題か・読んで復号した本文と文書。
     [[nodiscard]] std::optional<std::size_t> open_tab_of(const core::FilePath &path) const;

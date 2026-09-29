@@ -168,6 +168,21 @@ void verify_overrides()
            "UI override does not rewrite body");
 }
 
+// tab_hover を省略したテーマはアクティブなタブの面を使う（ADR 0056 の決定 12）。
+void verify_tab_hover_default()
+{
+    const auto overridden =
+        adapters::decode_theme(fixture() + "ui.tab_active=#050505\n", name_of()).value();
+    expect(overridden.ui.tab_hover == core::RgbColor{5, 5, 5},
+           "an omitted tab_hover is the overridden active tab");
+    const auto plain = adapters::decode_theme(fixture(), name_of()).value();
+    expect(plain.ui.tab_hover == plain.ui.tab_active,
+           "an omitted tab_hover is the derived active tab");
+    const auto hovered =
+        adapters::decode_theme(fixture() + "ui.tab_hover=#131313\n", name_of()).value();
+    expect(hovered.ui.tab_hover == core::RgbColor{0x13, 0x13, 0x13}, "UI hover tab override");
+}
+
 void verify_rejected_fields()
 {
     rejected("", Failure::missing_field);
@@ -456,6 +471,7 @@ int main(int argc, char **argv)
     verify_colors();
     verify_body();
     verify_overrides();
+    verify_tab_hover_default();
     verify_owned_view();
     verify_rejected_fields();
     verify_contrast_and_limits();

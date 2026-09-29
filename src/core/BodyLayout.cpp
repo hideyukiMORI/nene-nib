@@ -19,7 +19,7 @@ constexpr std::size_t single_tab = 1;
 BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
                        FontSize font_size) noexcept
 {
-    const auto title = title_bar_layout(width, dpi, single_tab);
+    const auto title = title_bar_layout(TitleBarInput{width, dpi, single_tab, 0, 0, std::nullopt});
     const auto status = status_bar_layout(width, height, dpi);
     const std::int32_t top = std::min(title.band.bottom, status.band.top);
     const LayoutRect band{0, top, width, status.band.top};

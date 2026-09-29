@@ -166,6 +166,12 @@ ui_from(const KeyValueFields &fields, const core::SyntaxPalette &body, core::App
     {
         return std::unexpected(rgb.error());
     }
+    // tab_hover を省略したテーマは、マウスを載せたタブをアクティブなタブの面で塗る
+    // （ADR 0056 の決定 12）。上書きした tab_active にも従う。
+    if (!fields.contains("ui.tab_hover"))
+    {
+        ui.tab_hover = ui.tab_active;
+    }
     const auto rgba = override_colors(ui, fields, ui_rgba_fields, decode_rgba);
     if (!rgba)
     {
