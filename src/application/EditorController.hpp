@@ -24,6 +24,7 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimPattern.hpp"
+#include "VimRegister.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
@@ -84,6 +85,8 @@ class EditorController final
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
+    void load_vim_clipboard();
+    void send_vim_clipboard(const std::optional<core::VimRegister> &written);
     // 再生のあいだに積んだ編集を 1 つの undo 単位に畳む（ADR 0046 の決定 3）。
     void merge_replayed_edits(const core::EditHistory &before, const core::TextBuffer &text);
     // 再生の中の再生の鍵を列の先頭へ差し込む。深さが上限を超えたら残りを捨てる（決定 4）。

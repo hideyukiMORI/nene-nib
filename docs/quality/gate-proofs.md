@@ -1626,3 +1626,22 @@ fixture は 82 件（工程 1 の 66 件と工程 2 の `register-dot-*` 11 件�
 対象を限定した理由: 差分は core の Vim の engine（レジスタの置き場・書き手・読み・`.` の記録と再生の鍵・`@` `q`）と `--vim-macro` の単体テストと fixture である。renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021。速さは設計席）。
 
 FR-003 / ARC-001/004 / CPP-002/003/004/011 / QLT-001/012 / CNF-010/011 を自己レビュー。書き手は `registers_written` の 1 本・読みは `register_read` の 1 本（planned・レビュー事項・`grep -n "\.numbered\|small_delete" src/core/VimStep.cpp` が書き手の 4 段・`register_read`・`register_selection_of`・録画の停止・`vim_register_stored`・範囲の印だけ）。
+
+### 5-be. クリップボードのレジスタ `"+` `"*`（Issue #210・ADR 0051・2026-09-29）
+
+ブランチ `feat/210-clipboard-registers`（main `5706c55` から・工程 1 `97f140f`・工程 2 `33f1172`）。工程 1（core）: `VimRegisterTarget::clipboard`・`VimState.clipboard`（命令が終わると消える写し）・`VimStep.clipboard`（OS へ出す本文）・述語 `vim_reads_clipboard`・置く口 `vim_clipboard_loaded`・純関数 `vim_register_of_clipboard`（`VimClipboardText`）・書き手 `registers_written` の名指しの書き先に `clipboard`。工程 2（application）: `step_vim` が `vim_step` を呼ぶ直前に `load_vim_clipboard`（述語が真なら `ClipboardPort::read` を 1 回・失敗は空のレジスタ）、効果を写した後に `send_vim_clipboard`（`with_document_newlines` で文書の改行にして `ClipboardPort::write`・失敗は黙って続ける）。替え玉 `ScriptedClipboard` に書かれた回数と読まれた回数。ui・adapters・eng・fixture は不変。OS のクリップボードには触れていない（替え玉だけ）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | `VimRegisterTarget` の網羅・関数の認知的複雑度（`step_vim` は読みと書きを private の 2 関数に分けて 10 以内）。工程 1・2 とも警告 0 で成功 |
+| `build/nib_tests.exe --vim-clipboard` | 対象（新しい scope）。**191 checks 成功**（controller を通す契約 11 本: 読みの表 9 行・`"+p` `"*p` `3"+p` `"+3p` `"+P` の 13 行と書かれた回数 0・読む回数（普通の打鍵 0・`"+yy` 2・`"+p` 1）・`"+yy` `"*yy` `"+yj` `"+yw` `"+dd` `"*dd` `"+x` `vj"+y` の OS 側の本文を LF 文書と CRLF 文書で・`"0` `"1` `"-` と `"1` の繰り下がり・書きの失敗・読みの失敗と空文字列・`.` の読み直し（種類も新しい方）・`@+` `@@` `@*`・`"ayy@a` の中の `"+p`・矩形の `"+y` と続く `"+p`） |
+| `build/nib_tests.exe --vim-macro` | 工程 1 の core の契約 6 本。main 1392 → **1500 checks 成功**（工程 2 で不変） |
+| `build/nib_tests.exe`（引数なし） | 工程 1 15395 → 工程 2 **15586 checks 成功**（＋191 = 新しい scope の契約） |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/protected-diff.py --base origin/main --build --allow --vim-macro` | **終了 0**。`5706c55..33f1172`・`fixtures 1505 -> 1505 / metadata 0 / deleted 0 / changed 0 / added 0`・保護対象は `none`・`--vim-macro 変化 1392 -> 1500 allowed`・`--vim-clipboard 新規 - -> 191`・`scopes 23 / same 21 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check`・`eng/validate-git.ps1` | 指摘なし |
+
+対象を限定した理由: 差分は core の Vim の engine（レジスタの書き先・読み・`VimStep` の欄）と application の `step_vim` の前後 2 か所と単体テストである。renderer・ui/win32・adapters の経路は不変で、`ClipboardPort` の実装も変えていないので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021。実機のクリップボードでの確認と速さは設計席）。fixture は oracle が実機のクリップボードを書き換えるので作らない（ADR 0051 の強制）。
+
+FR-003 / ARC-001/003/004/007/010 / CPP-002/005/011 / QLT-001/012 を自己レビュー。OS との往復は `step_vim` の前後の 2 関数だけ（planned・レビュー事項・`grep -n "ports_.clipboard" src/application/EditorController.cpp` は `copy_selection` `cut_selection` `paste_clipboard`・入力行の `PasteCommand`（本 Issue の前から）と本 Issue の 2 行）。engine は OS に触れない（symbols 0）。

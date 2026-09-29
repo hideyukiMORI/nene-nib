@@ -23,12 +23,15 @@
 #include "VimBlockRange.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
+#include "VimClipboardText.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimKey.hpp"
 #include "VimKeySource.hpp"
 #include "VimMatchRequest.hpp"
 #include "VimMode.hpp"
 #include "VimNavigate.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
 #include "VimRemoveBlock.hpp"
 #include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
@@ -901,8 +904,36 @@ EditorController::command_key(const core::VimSearchPattern &key)
     return step_vim(core::VimKey{key});
 }
 
+// 写しを読みうる状態なら、鍵を流す直前に OS の本文を読んで engine に置く（ADR 0051 の決定 3）。
+// 読めなければ空のレジスタを置き、engine が空のレジスタと同じに拒む。
+void EditorController::load_vim_clipboard()
+{
+    if (!core::vim_reads_clipboard(state_.vim()))
+    {
+        return;
+    }
+    const auto pasted = ports_.clipboard.read();
+    state_ = state_.with_vim(core::vim_clipboard_loaded(
+        state_.vim(),
+        pasted ? core::vim_register_of_clipboard(pasted.value())
+               : core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized}));
+}
+
+// `"+` へ書いた本文は文書の改行で OS へ出す（ADR 0051 の決定 7・Ctrl+C と同じ形）。書けなくても
+// 本文と無名は engine の結果のまま（copy_selection と同じ）。
+void EditorController::send_vim_clipboard(const std::optional<core::VimRegister> &written)
+{
+    if (!written.has_value())
+    {
+        return;
+    }
+    static_cast<void>(ports_.clipboard.write(
+        with_document_newlines(written.value().text, core::newline_of(state_.line_ending()))));
+}
+
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
+    load_vim_clipboard();
     const core::VimMode before = state_.vim().mode;
     const ScrollState scroll = state_.scroll();
     const core::VimEditorView view{state_.text(), state_.selection(),
@@ -918,6 +949,7 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
+    send_vim_clipboard(step.clipboard);
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
     if (step.notice.has_value())
     {
