@@ -2044,6 +2044,19 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         characters_between(caret, forward_characters(text, caret, count_of(state.count))));
 }
 
+// X。`dh` の範囲（行頭で止まる・行をまたがない）を x と同じ 1 本（performed）に流す。行頭では
+// 空の範囲で、`dh` と同じく失敗の印は付けずレジスタも書かない（Vim 9.1 で実測・Issue #206）。
+[[nodiscard]] VimStep removed_character_before(const VimState &state, const VimEditorView &view)
+{
+    const auto range =
+        motion_range(view, VimMotion::left, count_of(state.count), VimOperator::remove);
+    if (!range.has_value())
+    {
+        return failed(cancelled(state), VimRepeatFailure::not_moved);
+    }
+    return performed(state, view.text, view.selection.caret, range.value());
+}
+
 // 表から引ける移動は 1 本にまとめる（表に無い動作はここへ来ない）。
 [[nodiscard]] VimStep moved_step(const VimState &state, const VimEditorView &view, VimAction action)
 {
@@ -2766,6 +2779,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (action == VimAction::remove_character)
     {
         return removed_character(state, view.text, view.selection.caret);
+    }
+    if (action == VimAction::remove_character_before)
+    {
+        return removed_character_before(state, view);
     }
     if (action == VimAction::remove_operator || action == VimAction::change_operator ||
         action == VimAction::yank_operator)

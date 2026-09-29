@@ -25,7 +25,7 @@ constexpr char32_t control_r_character = 0x12;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 56> normal_bindings{
+constexpr std::array<VimBinding, 57> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -44,6 +44,7 @@ constexpr std::array<VimBinding, 56> normal_bindings{
      {U'L', VimAction::move_screen_bottom},
      {U'G', VimAction::move_document_last},
      {U'x', VimAction::remove_character},
+     {U'X', VimAction::remove_character_before},
      {U'd', VimAction::remove_operator},
      {U'c', VimAction::change_operator},
      {U'y', VimAction::yank_operator},
@@ -120,6 +121,7 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::remove_to_line_end, VimActionGroup::edit_line},
      {VimAction::change_to_line_end, VimActionGroup::edit_line},
      {VimAction::yank_line, VimActionGroup::edit_line},
+     {VimAction::remove_character_before, VimActionGroup::edit_line},
      {VimAction::insert_before, VimActionGroup::insert_object},
      {VimAction::insert_after, VimActionGroup::insert_object},
      {VimAction::insert_at_line_start, VimActionGroup::insert_line},
