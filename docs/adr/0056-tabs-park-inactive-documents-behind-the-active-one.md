@@ -55,8 +55,8 @@ Nib は 1 つの窓に 1 つの文書で、タブの帯にはタブが 1 本と�
 
 ## 強制
 
-- 契約（application と core の純関数）: **planned**（各 Issue の実装で **active**・新しい scope `--tabs`）。
-- 閉じた和型の写し漏れ（`EditorIntent`・`TitleBarHit`・`VimEffect`）: **planned**（各 Issue の実装で **active**・`std::visit` と `switch` の網羅性）。
+- 契約（application と core の純関数）: #237 の分（決定 1 の束・決定 2 の `parked_` `active_` `closing_`・決定 3 の `NewTab` `SwitchTab` `StepTab` `CloseTab`・決定 4・5・決定 6 の `CloseTab`（ui の確認の流れは #239）・決定 7 の `tabs` `active_tab` `closing`・決定 13）は **active**（scope `--tabs` 88 checks・`tests/unit/TabsTests.cpp`・`python eng/protected-diff.py` の scope ごとの checks 数）。帯の送り量・hover・帯の幅（決定 2・3・7 の残り）と決定 8〜12 は **planned**（#238〜#240 の実装で **active**）。
+- 閉じた和型の写し漏れ: `EditorIntent`（`NewTab` `SwitchTab` `StepTab` `CloseTab`）は **active**（#237・`std::visit` の網羅性）。`EditorIntent` の残り（`PointTitleBar` `ScrollTabs` `TitleBarWidth`）・`TitleBarHit`・`VimEffect` は **planned**（各 Issue の実装で **active**・`std::visit` と `switch` の網羅性）。
 - 1 打鍵の重さがタブの数に依らないこと: **planned**（1 本目の Issue で、タブを 50 本開いた状態の打鍵のベンチを `eng/measure-speed.py` に足すかを実測して決める。足すまでは設計席が merge の前に手で測る・QLT-014）。
 - 実機の確認（クリック・hover・鍵・閉じる流れ）: **planned**（3 本目の Issue で `eng/verify-window.py` に足す・QLT-013）。
 - core が OS に触れないこと・ui に色のリテラルが無いこと: **active**（既存の `eng/symbols.py` と conformance）。
