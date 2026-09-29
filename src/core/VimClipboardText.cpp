@@ -1,5 +1,6 @@
 #include "VimClipboardText.hpp"
 
+#include "ClipboardText.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
 
@@ -11,19 +12,8 @@ namespace nenenib::core
 {
 VimRegister vim_register_of_clipboard(std::string_view text)
 {
-    std::string folded;
-    folded.reserve(text.size());
-    bool after_carriage_return = false;
-    for (const char unit : text)
-    {
-        // `\r\n` の `\r` は直前に積んだ 1 文字なので、`\n` を積む前に下ろす。
-        if (unit == '\n' && after_carriage_return)
-        {
-            folded.pop_back();
-        }
-        folded.push_back(unit);
-        after_carriage_return = unit == '\r';
-    }
+    // 畳む規則は clipboard_line_feeds の 1 本（ADR 0055 の決定 1）。ここは種類だけを決める。
+    std::string folded = clipboard_line_feeds(text);
     const VimRegisterKind kind =
         folded.ends_with('\n') ? VimRegisterKind::lines : VimRegisterKind::characters;
     return VimRegister{std::move(folded), kind};

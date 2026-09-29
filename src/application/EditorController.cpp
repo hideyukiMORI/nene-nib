@@ -2,6 +2,7 @@
 
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
+#include "ClipboardText.hpp"
 #include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
@@ -725,7 +726,10 @@ void EditorController::paste_clipboard()
     {
         return;
     }
-    replace(core::selection_range(state_.selection()), pasted.value(),
+    // 改行は `"+p` と同じ 2 段で文書の形に揃える（ADR 0055 の決定 2）。単独の `\r` は文字のまま。
+    replace(core::selection_range(state_.selection()),
+            with_document_newlines(core::clipboard_line_feeds(pasted.value()),
+                                   core::newline_of(state_.line_ending())),
             core::EditBoundary::separate);
 }
 

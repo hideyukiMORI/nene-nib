@@ -9,7 +9,9 @@
 #include "CaretView.hpp"
 #include "ClauseEmphasis.hpp"
 #include "ClipboardAction.hpp"
+#include "ClipboardFailure.hpp"
 #include "ClipboardOperation.hpp"
+#include "ClipboardText.hpp"
 #include "CodePageFailure.hpp"
 #include "Column.hpp"
 #include "CommitText.hpp"
@@ -72,10 +74,13 @@
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <array>
 #include <cstddef>
 #include <expected>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::tests
@@ -111,6 +116,7 @@ using nenenib::core::byte_order_mark;
 using nenenib::core::CaretMotion;
 using nenenib::core::CaretShape;
 using nenenib::core::ClauseEmphasis;
+using nenenib::core::clipboard_line_feeds;
 using nenenib::core::collapsed_at;
 using nenenib::core::Column;
 using nenenib::core::composition_underlines;
@@ -420,6 +426,103 @@ void verify_controller_clipboard_failures()
     expect(applied(nothing_held.controller(), ClipboardAction{ClipboardOperation::paste}) ==
                "pasted",
            "a clipboard filled from outside pastes");
+}
+
+// クリップボードの本文 → 畳んだ本文（ADR 0055 の決定 1・3）。`\r\r\n` は `\r`（文字）と改行。
+using LineFeedFold = std::pair<std::string_view, std::string_view>;
+
+constexpr std::array<LineFeedFold, 7> line_feed_folds{{
+    {"", ""},
+    {"abc", "abc"},
+    {"a\r\nb", "a\nb"},
+    {"a\nb", "a\nb"},
+    {"a\rb", "a\rb"},
+    {"a\r\r\nb", "a\r\nb"},
+    {"a\r\n\r\nb", "a\n\nb"},
+}};
+
+void verify_clipboard_line_feeds()
+{
+    for (const auto &[text, folded] : line_feed_folds)
+    {
+        expect(clipboard_line_feeds(text) == folded,
+               "CRLF folds to LF and a lone CR stays a character");
+    }
+}
+
+// 文書を開いて末尾へキャレットを置いた足場。文書の改行の形は開いた本文が決める（ADR 0036）。
+void open_at_end(Editing &editing, std::string text)
+{
+    editing.files().hold(Bytes{std::move(text)});
+    applied(editing.controller(), VisibleLines{10});
+    applied(editing.controller(), OpenDocument{sample_path()});
+    applied(editing.controller(),
+            MoveCaret{CaretMotion::document_end, SelectionAnchoring::collapse});
+}
+
+// 本文のバイト列そのもの。保存の口へ出して替え玉が受けたものを読む（改行の形まで見る）。
+[[nodiscard]] std::string saved_body(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    return editing.files().written();
+}
+
+// 文書の本文・OS の本文・貼った後の本文（ADR 0055 の決定 2・3）。キャレットは文書の末尾。
+using DocumentPaste = std::tuple<std::string_view, std::string_view, std::string_view>;
+
+constexpr std::array<DocumentPaste, 9> document_pastes{{
+    {"X1\nX2", "a\r\nb", "X1\nX2a\nb"},
+    {"X1\r\nX2", "a\nb", "X1\r\nX2a\r\nb"},
+    {"X1\r\nX2", "a\r\nb", "X1\r\nX2a\r\nb"},
+    {"X1\nX2", "a\rb\r\n", "X1\nX2a\rb\n"},
+    {"X1\r\nX2", "a\rb", "X1\r\nX2a\rb"},
+    {"X1\nX2", "a\r\r\nb", "X1\nX2a\r\nb"},
+    {"X1\nX2", "abc\r\n", "X1\nX2abc\n"},
+    {"X1\r\nX2", "abc\n", "X1\r\nX2abc\r\n"},
+    {"X1\nX2", "a\nb", "X1\nX2a\nb"},
+}};
+
+void verify_controller_paste_line_endings()
+{
+    for (const auto &[document, os_text, expected] : document_pastes)
+    {
+        Editing editing;
+        open_at_end(editing, std::string(document));
+        editing.clipboard().hold(Content{std::string(os_text)});
+        applied(editing.controller(), ClipboardAction{ClipboardOperation::paste});
+        expect(saved_body(editing) == expected,
+               "a paste takes the document's line ending and keeps a lone CR");
+    }
+    Editing replacing;
+    open_at_end(replacing, "X1\nX2");
+    applied(replacing.controller(), SelectAll{});
+    replacing.clipboard().hold(Content{std::string("a\r\nb")});
+    applied(replacing.controller(), ClipboardAction{ClipboardOperation::paste});
+    expect(replacing.controller().frame().caret.position == TextPosition{LineNumber{2}, Column{2}},
+           "the caret lands after the pasted text");
+    expect(saved_body(replacing) == "a\nb", "a paste over a selection replaces it in LF");
+    Editing vim;
+    open_vim_document(vim, "X1\nX2");
+    vim_replay(vim.controller(), "i");
+    vim.clipboard().hold(Content{std::string("a\r\nb")});
+    applied(vim.controller(), ClipboardAction{ClipboardOperation::paste});
+    expect(saved_body(vim) == "a\nbX1\nX2", "Ctrl+V in Vim INSERT takes the same fold");
+}
+
+void verify_controller_paste_undo_and_failure()
+{
+    Editing undoing;
+    open_at_end(undoing, "X1\r\nX2");
+    undoing.clipboard().hold(Content{std::string("a\nb\nc")});
+    applied(undoing.controller(), ClipboardAction{ClipboardOperation::paste});
+    expect(saved_body(undoing) == "X1\r\nX2a\r\nb\r\nc", "the pasted lines are CRLF");
+    applied(undoing.controller(), HistoryAction{HistoryDirection::undo});
+    expect(saved_body(undoing) == "X1\r\nX2", "one undo takes the whole paste back");
+    Editing failing;
+    open_at_end(failing, "X1\nX2");
+    failing.clipboard().hold(Content{std::unexpected(ClipboardFailure::read_failed)});
+    applied(failing.controller(), ClipboardAction{ClipboardOperation::paste});
+    expect(saved_body(failing) == "X1\nX2", "a failed read leaves the body alone");
 }
 
 void verify_controller_scrolling()
@@ -916,6 +1019,9 @@ void verify_controller_intents()
     verify_controller_cancel_selection();
     verify_controller_clipboard();
     verify_controller_clipboard_failures();
+    verify_clipboard_line_feeds();
+    verify_controller_paste_line_endings();
+    verify_controller_paste_undo_and_failure();
     verify_controller_scrolling();
     verify_controller_frame();
     verify_controller_mode_selection();
