@@ -33,9 +33,9 @@ oracle には部分再生成の再利用の証明がある（`measurement_source
 
 ## 強制
 
-- 生成物と表の一致: **planned**（本 Issue の実装で **active** にする・CNF-010・`eng/conformance.py`・正例と反例は `tests/conformance`）。
-- 列挙子の名前: **planned**（本 Issue の実装で **active**・コンパイル）。
-- 表の検査（重複・形・接頭辞）: **planned**（本 Issue の実装で **active**・oracle の読み込みと `tests/conformance`）。
+- 生成物と表の一致: **active**（CNF-010・`eng/conformance.py` の `key_names_checks`・正例と反例は `tests/conformance/test_conformance.py`）。
+- 列挙子の名前: **active**（コンパイル。`arrow_leftward` に書き換えると `no member named 'arrow_leftward'` で落ちることを実測・gate-proofs 5-bn）。
+- 表の検査（重複・形・接頭辞）: **active**（oracle の読み込みの `key_names_of`・反例は `tests/conformance/test_vim_oracle.py`）。
 - 表を変えたときの部分再生成の拒否: **active**（既存の `measurement_sources_match`・`tests/conformance/test_vim_oracle.py`）。
 
 ## 結果
