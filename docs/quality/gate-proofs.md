@@ -1868,6 +1868,7 @@ ARC-001 / ARC-010 / CPP-005 / QLT-001 / QLT-012 / CNF-010 を自己レビュー�
 
 - 工程 1: アクティブな文書は `EditorState` の今の欄のまま、ほかのタブは不変の束 `DocumentState`（`src/application/DocumentState.hpp`）を `shared_ptr<const>` の列 `parked_` に置く。意図 `NewTab` `SwitchTab` `StepTab` `CloseTab`、core の純関数 `vim_switched_document`、切り替えの 1 本（`leave_document` → `with_switched` / `with_new_tab` / `with_closed` → `enter_document`）、`EditorFrame` の `tabs` `active_tab` `closing`。
 - 工程 2: `accept(OpenDocument)` を決定 5 の 3 つの枝にする（(a) `open_tab_of` が `FilePort::same_file` で見つけたタブへ `SwitchTab`・読み直さない → (b) `blank_untitled`〔パスが無い・本文が空・履歴が空〕なら `with_opened` → (c) `leave_document` → `with_new_tab().with_opened(...)` → `enter_document`。読めなければタブを足さず `fail`）。`Win32FileAdapter::same_file` は絶対パスを `CompareStringOrdinal(..., TRUE)` で比べる。`EditorController` のコンストラクタは `std::vector<OpenDocument>` を受けて順に `apply` し、最後の失敗を控えて最初のフレームへ載せ直す。`Main.cpp` の `initial_documents` は `--measure <json>` の組を飛ばした引数を全部 `absolute_file_path` で渡す（0 個と 1 個の経路は今と同じ重さ・`document_opened` の節目の位置は不変）。
+- 差し戻し（工程 3・`e02a26f`）: 窓を閉じる（`WM_CLOSE` → `EditorWindow::close_window`）は、application の純関数 `next_unsaved_tab`（`src/application/UnsavedTab.hpp`・帯の位置 from から右へ最初の未保存）で未保存のタブを左から順に `SwitchTab` で映して今の `confirm_discard` を出し、キャンセルか保存の失敗で止めて窓を閉じない（見えないタブの変更が確認なしに消える道を塞ぐ・#239 から前倒し）。
 
 | 検査 | 退行の対象と実測 |
 | --- | --- |
@@ -1875,6 +1876,7 @@ ARC-001 / ARC-010 / CPP-005 / QLT-001 / QLT-012 / CNF-010 を自己レビュー�
 | `build/nib_tests.exe --tabs` | 工程 1 **51 checks**（新しいタブ・切り替えで文書ごとに保つ・undo は文書ごと・折り返し・閉じた後のアクティブ・最後の 1 つで closing・Vim の保留と INSERT・入力行と IME・脇の束の参照）→ 工程 2 **88 checks**（同じファイルは読み直さず切り替え・替え玉が同じと答えた組・何も書いていない無題に開く／打った・取り消した無題は新しいタブ・アクティブの右に入る・開けなければタブを足さない・起動の引数 3 つ／2 つ目が開けない／なし／同じファイル 2 回） |
 | `build/nib_tests.exe`（引数なし）・`ctest --test-dir build -R "nib_unit\|nib_adapters"` | 工程 1 18432 checks（rebase の前）・工程 2 **18536 checks 成功**・2 / 2 成功 |
 | `build/nib_adapter_tests.exe`（`nib_adapters`） | **113 checks 成功**（`same_file`: 大文字と小文字だけ違う絶対パスは同じ・同じ経路は同じ・違う経路は違う） |
+| 工程 3 の `cmake --build build`・`build/nib_tests.exe --tabs` / 引数なし・`ctest -R nib_unit`・`protected-diff` | 警告 0・**95 checks**（+7: 保存済み 1 本は確かめない・保存済みを飛ばし右へ探す・切り替えて映るタブが確かめるタブ・0 1 3 4 の順に 1 度ずつ）・18543 checks・1 / 1・`3198c71..e02a26f` で changed 0 / added 0 / deleted 0・same 24（`out/237-step3-*.log`・`out/protected/e02a26f.json`） |
 | `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`3198c71..f235242`・`fixtures 1853 -> 1853 / metadata 0 / deleted 0 / changed 0 / added 0`・`scopes 25 / same 24 / 未測 0`・`--tabs` 新規 88（`out/protected/f235242.json`） |
 | `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation**（工程 1・2 とも） |
 | clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
