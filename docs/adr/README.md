@@ -69,3 +69,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0051](0051-clipboard-registers-through-controller.md) | クリップボードのレジスタ `"+` `"*` は engine が写しを読み書きし、OS との往復は controller が `ClipboardPort` で行う | 受理 |
 | [0052](0052-undo-caret-restores-the-first-edit-position.md) | `u` と Ctrl-r の後のキャレットは undo の単位が覚えた戻り先で、戻り先は最初の編集の瞬間のキャレット | 受理 |
 | [0053](0053-vim-character-is-a-code-point-with-its-zero-width-followers.md) | Vim の 1 文字はコードポイント 1 つと直後に続く幅 0 のコードポイントの列で、判定は仮想桁の表を使う | 受理 |
+| [0054](0054-fixture-key-notation-has-one-table.md) | fixture の鍵の記法の表は oracle の 1 つで、C++ の表はそこから作る生成物 | 受理 |

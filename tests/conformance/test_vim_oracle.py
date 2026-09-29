@@ -119,6 +119,48 @@ class VimOracleTests(unittest.TestCase):
                 fixtures, content, ["new-"], content, old_header, source, changed_source,
                 version, Path(directory))
 
+    # 記法の表（ADR 0054）。表は測定の領域にあるので、変えると部分再生成は拒む（決定 7）。
+    def test_partial_regeneration_rejects_key_table_change(self):
+        fixtures, content, old_header, source, version = self.reuse_inputs()
+        changed_source = source.replace('("<Left>", "\\\\<Left>", "arrow_left")',
+                                        '("<Left>", "\\\\<Left>", "arrow_right")', 1)
+        self.assertNotEqual(source, changed_source)
+        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(
+                ValueError, "measurement code changed"):
+            vim_oracle.partial_header(
+                fixtures, content, ["new-"], content, old_header, source, changed_source,
+                version, Path(directory))
+
+    def test_key_names_are_derived_from_the_table_in_its_order(self):
+        self.assertEqual([row[0] for row in vim_oracle.KEY_TABLE], list(vim_oracle.KEY_NAMES))
+        self.assertEqual({row[0]: row[1] for row in vim_oracle.KEY_TABLE}, vim_oracle.KEY_NAMES)
+        rendered = vim_oracle.key_names_header()
+        rows = [line for line in rendered.splitlines() if line.startswith('    {"<')]
+        self.assertEqual([f'    {{"{row[0]}",' for row in vim_oracle.KEY_TABLE],
+                         [row.split(" nenenib")[0] for row in rows])
+        self.assertIn('{"<NL>", nenenib::core::VimCharacter{U\'\\x0A\'}},', rendered)
+        self.assertIn('{"<Esc>", nenenib::core::VimSpecialKey::escape},', rendered)
+        self.assertIn(f"std::array<VimKeyName, {len(vim_oracle.KEY_TABLE)}> vim_key_names", rendered)
+
+    def test_key_table_rejects_duplicate_prefix_and_shape(self):
+        good = (("<Esc>", "\\<Esc>", "escape"), ("<NL>", "\\<NL>", 0x0A))
+        self.assertEqual({"<Esc>": "\\<Esc>", "<NL>": "\\<NL>"}, vim_oracle.key_names_of(good))
+        cases = {
+            "duplicate": good + (("<Esc>", "\\<Esc>", "escape"),),
+            "prefix": good + (("<Esc>x>", "\\<Esc>x", "escape"),),
+            "no opening bracket": good + (("Tab>", "\\<Tab>", 0x09),),
+            "no closing bracket": good + (("<Tab", "\\<Tab>", 0x09),),
+            "empty Vim spelling": good + (("<Tab>", "", 0x09),),
+            "not an enumerator name": good + (("<Tab>", "\\<Tab>", "tab key"),),
+            "not a code point": good + (("<Tab>", "\\<Tab>", -1),),
+            "two columns": good + (("<Tab>", "\\<Tab>"),),
+        }
+        for name, table in cases.items():
+            with self.subTest(case=name), self.assertRaises(ValueError):
+                vim_oracle.key_names_of(table)
+        with self.assertRaises(ValueError):
+            vim_oracle.key_names_header(cases["prefix"])
+
     def test_measurement_source_allows_comments_docstrings_and_reuse_imports_only(self):
         source = Path(vim_oracle.__file__).read_text(encoding="utf-8")
         comments_changed = source.replace(
