@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 b6e28638c5ed71d10849de7e8baa5c600be0791c889b52fe60ee2e655f9b65df / 1505 fixtures
+// fixtures.json: sha256 bec608b5875f0f083c8897f3b96f9bd4f36a7f9e03d26e4562650124d0fe8c67 / 1512 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1505> vim_fixtures{{
+constexpr std::array<VimFixture, 1512> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -652,6 +652,13 @@ constexpr std::array<VimFixture, 1505> vim_fixtures{{
     {"dot-tab-replace", "\tone two\n\tthree four", "rzj0.", "zone two\nzthree four", 2, 1, "", "", std::nullopt},
     {"dot-keeps-record-after-escape-elsewhere", "ab\ncd\nef", "xd<Esc>j.", "b\nd\nef", 2, 1, "c", "v", std::nullopt},
     {"dot-keeps-record-after-replace-escape", "ab\ncd\nef", "xr<Esc>j.", "b\nd\nef", 2, 1, "c", "v", std::nullopt},
+    {"dot-waited-digit-replace", "abcd", "r1l.", "11cd", 1, 2, "", "", std::nullopt},
+    {"dot-waited-digit-replace-counted", "abcdefgh", "3r13l.", "111de111", 1, 8, "", "", std::nullopt},
+    {"dot-waited-digit-replace-zero", "abcd", "r0l.", "00cd", 1, 2, "", "", std::nullopt},
+    {"dot-waited-digit-delete-find", "a1b1c1d1", "df1.", "c1d1", 1, 1, "b1", "v", std::nullopt},
+    {"dot-waited-digit-change-till", "ab2cd2ef2g", "ct2X<Esc>l.", "XX2ef2g", 1, 2, "2cd", "v", std::nullopt},
+    {"dot-waited-digit-delete-find-backward", "a0bc0de", "$dF0.", "ae", 1, 2, "0bc", "v", std::nullopt},
+    {"dot-waited-digit-visual-replace", "abcdef", "vlr1ll.", "1111ef", 1, 3, "", "", std::nullopt},
     {"text-object-word-diw-start", "alpha beta gamma", "diw", " beta gamma", 1, 1, "alpha", "v", std::nullopt},
     {"text-object-word-diw-mid", "alpha beta gamma", "2ldiw", " beta gamma", 1, 1, "alpha", "v", std::nullopt},
     {"text-object-word-diw-end", "alpha beta gamma", "4ldiw", " beta gamma", 1, 1, "alpha", "v", std::nullopt},

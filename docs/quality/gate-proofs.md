@@ -1645,3 +1645,22 @@ FR-003 / ARC-001/004 / CPP-002/003/004/011 / QLT-001/012 / CNF-010/011 を自己
 対象を限定した理由: 差分は core の Vim の engine（レジスタの書き先・読み・`VimStep` の欄）と application の `step_vim` の前後 2 か所と単体テストである。renderer・ui/win32・adapters の経路は不変で、`ClipboardPort` の実装も変えていないので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021。実機のクリップボードでの確認と速さは設計席）。fixture は oracle が実機のクリップボードを書き換えるので作らない（ADR 0051 の強制）。
 
 FR-003 / ARC-001/003/004/007/010 / CPP-002/005/011 / QLT-001/012 を自己レビュー。OS との往復は `step_vim` の前後の 2 関数だけ（planned・レビュー事項・`grep -n "ports_.clipboard" src/application/EditorController.cpp` は `copy_selection` `cut_selection` `paste_clipboard`・入力行の `PasteCommand`（本 Issue の前から）と本 Issue の 2 行）。engine は OS に触れない（symbols 0）。
+
+### 5-bf. 次の 1 鍵を待つ状態の数字を `.` の記録に残す（Issue #209・2026-09-29）
+
+ブランチ `fix/209-dot-keeps-waited-digit`（main `ba1e8ca` から）。先に fixture `dot-waited-digit-*` 7 件（`r1l.` `3r13l.` `r0l.` `df1.` `ct2X<Esc>l.` `$dF0.` `vlr1ll.`）を本物の Vim から生成し、直す前の Nib で `--vim-dot` を回して `r1` `3r1` `df1` `ct2` の 4 件が本文・レジスタ・桁で落ちることを確かめた（`r0` `dF0` は `0` が回数の途中でないので桁にならず、VISUAL の記録は数字を落とさないのでどちらも直す前から通る）。`normal_recording` の `"` の待ちだけの特例（ADR 0050 の決定 9）を「`before.input_wait` があるとき」の 1 本の規則に広げた。`counts_as_digit` は不変で、オペレータ待ち（`pending`）は待ちではないので `d2w` の `2` は今までどおり回数。application・ui・adapters・eng は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功 |
+| `build/nib_tests.exe --vim-dot` | 対象。直す前 **8 of 1528 checks failed** → 直した後 **1528 checks 成功**（1479 から。fixture の再生は 181 → 188 件） |
+| `build/nib_tests.exe`（引数なし） | **15635 checks 成功**（15586 から ＋49 = 新しい fixture 7 件の再生） |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only dot-waited-digit-` × 2 | 7 measured / 1505 reused。2 回で `VimFixtures.hpp`（`AC7B3FDD…01182EAC`）と `fixtures.json`（`BEC608B5…D0FE8C67`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build --allow --vim-dot` | **終了 0**。`ba1e8ca..3fea3c0`（この節を足す前のコミット・コードと fixture は同じ）・`fixtures 1505 -> 1512 / metadata 2 / deleted 0 / changed 0 / added 7`・保護対象は `none`・`--vim-dot 変化 1479 -> 1528 allowed`・`scopes 23 / same 22 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の `normal_recording` の条件 1 行と `--vim-dot` の単体テストと fixture である。renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / CPP-002/004 / QLT-001/012 / CNF-010/011 を自己レビュー。記録の更新は `vim_recorded` の 1 か所のまま（ARC-001）。

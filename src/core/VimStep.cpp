@@ -3960,7 +3960,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // NORMAL の鍵を記録へ（決定 2）。回数の桁は記録せず、回数はそのときの積を 1 つだけ残す。
-// `"` の待ちの次の数字は回数の桁ではなくレジスタの名前なので記録に残す（ADR 0050 の決定 9）。
+// 次の 1 鍵を待つ状態（`"` の名前・`r` の文字・`f F t T` の対象など）の数字は回数の桁ではなく
+// 引数なので記録に残す（ADR 0050 の決定 9 を待ち全体へ・Issue #209）。オペレータ待ちは待ちでは
+// ないので `d2w` の `2` は回数のまま。
 // 検索の入力行を開く鍵も記録しない。記録に残るのは確定した VimSearchPattern の 1 鍵だけで、
 // 再生はその鍵を同じ経路へ流すだけになる（ADR 0032 の決定 3）。
 [[nodiscard]] VimRepeatRecord normal_recording(const VimState &before, const VimEffect &effect,
@@ -3971,8 +3973,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return record;
     }
-    const bool names_register = before.input_wait == std::optional<VimInputWait>{VimPrefix::quote};
-    if (!names_register && std::holds_alternative<VimCharacter>(key) &&
+    if (!before.input_wait.has_value() && std::holds_alternative<VimCharacter>(key) &&
         counts_as_digit(before, std::get<VimCharacter>(key).code))
     {
         return record;
