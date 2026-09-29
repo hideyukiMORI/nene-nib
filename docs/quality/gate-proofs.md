@@ -1822,3 +1822,21 @@ FR-003 / ARC-001 / ARC-010 / CPP-002/005/011 / QLT-001/012 / CNF-010/011 を自�
 対象を限定した理由: 差分は道具（oracle・conformance）とテストの足場で、製品のコードは触っていない。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 ARC-001 / ARC-012 / CPP-002 / QLT-001 / QLT-012 / QLT-013 / CNF-010 を自己レビュー。記法の表は 1 つ（ARC-001 / ARC-012）・生成物の形は `key_names_header` の 1 か所で、書く側（`--key-names` / `--regenerate`）と検査する側（CNF-010）が同じ関数を呼ぶ・`KEY_TABLE` と `key_names_of` は測定の領域（`literal()` より上）、生成の関数は下にある。
+
+### 5-bo. 貼り付けた本文の改行を文書の改行の形に揃える（Issue #235・ADR 0055・施主決定 D19・2026-09-29）
+
+ブランチ `fix/235-paste-document-line-ending`（main `c72e144` から・ADR `083e21e`・実装 `a207006`）。畳む関数 `clipboard_line_feeds`（`src/core/ClipboardText.hpp` / `.cpp`）を core の 1 本にし、`vim_register_of_clipboard` はそれを呼んでから種類だけを決める（畳みの本体は移しただけで振る舞いは不変）。`EditorController::paste_clipboard` は `with_document_newlines(clipboard_line_feeds(本文), 文書の改行)` を `replace` へ渡す（undo の単位・選択の置き換え・キャレット・読みの失敗は不変）。契約は `tests/unit/ApplicationTests.cpp`（既存のクリップボードの契約と同じ翻訳単位・引数なしの実行）に `verify_clipboard_line_feeds`（表 7 行）・`verify_controller_paste_line_endings`（LF / CRLF の文書 × 本文の表 9 行・選択の置き換えとキャレット・Vim の INSERT の Ctrl+V）・`verify_controller_paste_undo_and_failure`（Ctrl+Z 1 回・読みの失敗）。本文の改行の形は保存の口へ出したバイト列（`ScriptedFiles::written`）で見る。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| 契約を先に書いて直す前の Nib で `build/nib_tests.exe` | **9 checks が落ちる**（表の 6 行・選択の置き換え・Vim の INSERT・CRLF の文書へ LF の 3 行）。`out/235-tests-before.log`（記録には期待値の誤りの 1 件〔桁は 1 始まり〕も入っていて、直して 9 件） |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし）・`ctest --test-dir build -R nib_unit` | **18381 checks 成功**・1 / 1 成功 |
+| `build/nib_tests.exe --vim-clipboard` / `--vim-macro` | 191 / 1735 checks 成功（`"+p` の既存の契約は不変） |
+| `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`c72e144..a207006`・`fixtures 1844 -> 1844 / metadata 0 / deleted 0 / changed 0 / added 0`・`scopes 24 / same 24 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の文字列の純関数 1 本と application の貼り付けの 1 関数と単体テストである。コピー・切り取り・入力行への貼り付け・ui/win32・adapters・fixture は不変。実機の確認（ほかのアプリの本文を LF の文書へ Ctrl+V）は設計席が行う。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+FR-002 / ARC-001 / ARC-009 / CPP-007 / QLT-001 / QLT-012 を自己レビュー。畳む規則は `clipboard_line_feeds` の 1 本（`grep -rn "clipboard_line_feeds" src` は `ClipboardText.*`・`VimClipboardText.cpp`・`EditorController.cpp` だけ・ARC-001）・文書の改行へ直すのは `EditorController.cpp` の `with_document_newlines` の 1 本で 2 つ目を作らない（ARC-009）・OS に触れない純関数で core に置く（ARC-007）。

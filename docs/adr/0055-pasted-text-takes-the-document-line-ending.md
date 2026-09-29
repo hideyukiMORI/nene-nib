@@ -26,7 +26,7 @@ Vim の `"+p`（ADR 0051）は CRLF を LF に畳んでレジスタに置き、�
 
 ## 強制
 
-- 契約（決定 5）: **planned**（本 Issue の実装で **active**・既存の scope の翻訳単位）。
+- 契約（決定 5）: **active**（Issue #235・`tests/unit/ApplicationTests.cpp` の `verify_clipboard_line_feeds` / `verify_controller_paste_line_endings` / `verify_controller_paste_undo_and_failure`・引数なしの `nib_tests` と `ctest -R nib_unit` が回す）。
 - 畳む関数が 1 本であること: **planned**（レビュー事項・`grep -rn "clipboard_line_feeds" src` が `ClipboardText.*` と `VimClipboardText.cpp` と `EditorController.cpp` だけ）。
 - fixture: **不能**（通常モードの貼り付けは oracle の対象ではない）。
 
