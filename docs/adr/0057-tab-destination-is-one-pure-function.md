@@ -84,7 +84,7 @@ oracle の fixture はタブを観測できない（1 本の `:normal!` の結�
 
 ## 強制
 
-- 契約（`--tabs` と Vim の engine の scope）: **planned**（Issue #240 の工程 1 で active にする）。`tab_destination` は本数 1 / 3 × 今の位置 × 回数の表・Vim の鍵は実測の表のとおり（`gt` `gT` `{N}gt` `{N}gT`・範囲外の失敗と打ち切り・`dgt`・`vgt`・`.`・マクロ）・Ex の 5 つと省略形と失敗の文言・一覧の候補と絞り込みと実行・`close_request`。
+- 契約: **active**（Issue #240 の工程 1・`b1a1147` `110843e` `60637a9`）。`tab_destination` は本数 1 / 3 × 今の位置 × 回数の表（`tests/unit/TabsTests.cpp` の `verify_tab_destination`）・Vim の鍵は実測の表のとおり（`gt` `gT` `{N}gt` `{N}gT`・範囲外の失敗と打ち切り・`dgt`・`vgt`・`.`・マクロ。controller を通す `verify_vim_tab_keys` `verify_vim_tab_keys_after_operator` `verify_vim_tab_keys_repeat` `verify_vim_tab_switch_in_macro` と、`vim_step` の直の結果の `tests/unit/VimEngineTests.cpp` の `verify_vim_tab_steps`）・Ex の 5 つと省略形と失敗の文言（`tests/unit/ExSettingsTests.cpp` の `verify_ex_tab_names` `verify_ex_tab_arguments` と TabsTests.cpp の `verify_ex_tab_switch` `verify_ex_tab_open_and_close`）・一覧の候補と絞り込みと実行（`tests/unit/CommandPaletteTests.cpp` の `verify_tab_list_choices` `verify_tab_folders` と TabsTests.cpp の `verify_tab_list_rows` `verify_tab_list_entries`）・`close_request`（`verify_ex_tab_open_and_close`）。入口は `build/nib_tests.exe --tabs` `--ex-settings` `--command-palette`（scope ごとの絞り込み）と、どれも載る既定実行 `ctest -R nib_unit`。
 - fixture: **不能**（oracle はタブを観測できない）。既存の fixture 1853 件は不変（`eng/protected-diff.py`）。
 - 網羅性: `VimEffect` `EditorIntent` `ExTabVerb` `CommandPaletteSource` `TabJumpDirection` は閉じた型で、写し漏れはコンパイルが落とす（CPP-002・active）。
 - 実機: 設計席が PNG で確かめる（「∨」のクリック → 一覧・選ぶ → 切り替わる）。
