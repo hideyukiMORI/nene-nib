@@ -66,4 +66,25 @@ DisplayText tab_title_for(const std::optional<FilePath> &path, SaveState state)
     // 材料は検証済みの経路と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
     return DisplayText::parse(clipped(std::move(title))).value();
 }
+
+std::optional<DisplayText> tab_folder_for(const std::optional<FilePath> &path)
+{
+    if (!path.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::string_view text = path.value().text();
+    const std::size_t name = path.value().file_name().size();
+    // file_name は最後の区切りの後ろなので、その前の 1 文字が区切り（無ければ経路の全体が名前）。
+    if (name >= text.size())
+    {
+        return std::nullopt;
+    }
+    const std::string_view folder = text.substr(0, text.size() - name - 1);
+    if (folder.empty())
+    {
+        return std::nullopt;
+    }
+    return DisplayText::parse(clipped(std::string(folder))).value();
+}
 } // namespace nenenib::core

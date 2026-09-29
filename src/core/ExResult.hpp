@@ -4,6 +4,7 @@
 #include "EditorSettings.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
+#include "ExTabRequest.hpp"
 #include "ThemeCatalog.hpp"
 #include "VimSearchHighlight.hpp"
 
@@ -16,14 +17,17 @@
 namespace nenenib::core
 {
 // Ex の 1 命令の答え（ADR 0022）。settings は保存する設定、highlight は検索の当たりの強調、
-// incsearch は入力中の当たりの preview の有無（ADR 0041 の決定 6）で、どれも「変わらない」ことを
-// 空で表す。写し先は controller の Ex の経路 1 か所だけ（ARC-004）。
+// incsearch は入力中の当たりの preview の有無（ADR 0041 の決定 6）、tab はタブの命令（ADR 0057 の
+// 決定 4）で、どれも「変わらない」ことを空で表す。写し先は controller の Ex の経路 1 か所だけ
+// （ARC-004）。タブの命令の message は命令の完全な名前で、controller は画面に出さない（Vim も
+// 成功した切り替えでは何も出さない）。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
     std::optional<VimSearchHighlight> highlight;
     std::optional<bool> incsearch;
     DisplayText message;
+    std::optional<ExTabRequest> tab = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

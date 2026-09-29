@@ -3,13 +3,19 @@
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
 #include "ClipboardText.hpp"
+#include "CommandChoice.hpp"
+#include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
+#include "CommandPalette.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
 #include "Edit.hpp"
+#include "ExEvaluationFailure.hpp"
 #include "ExResult.hpp"
+#include "ExTabRequest.hpp"
+#include "ExTabVerb.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
 #include "ScrollBounds.hpp"
@@ -525,7 +531,7 @@ void EditorController::begin_intent(bool keeps_message)
 {
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
-    state_ = state_.with_failure(std::nullopt).with_closing(false);
+    state_ = state_.with_failure(std::nullopt).with_closing(false).with_close_request(std::nullopt);
     if (state_.command_message().has_value() && !keeps_message)
     {
         state_ = state_.with_command_message(std::nullopt);
@@ -1249,6 +1255,33 @@ void EditorController::accept(const OpenCommandPalette &)
     state_ = state_.with_command_input(core::CommandPalette::opened(state_.themes()));
 }
 
+// 一覧の候補は帯の表示値から作る（題名は帯と同じ・場所はファイルのあるフォルダ・実行は Ex の
+// `tabnext N`）。開いている間の OpenTabList は Ctrl+P と同じく閉じる（ADR 0057 の決定 7）。
+void EditorController::accept(const OpenTabList &)
+{
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    if (command_palette_active())
+    {
+        accept(CancelCommand{});
+        return;
+    }
+    const auto views = tab_views(state_, active_document_view());
+    std::vector<core::CommandChoice> tabs;
+    tabs.reserve(views.size());
+    for (std::size_t index = 0; index < views.size(); ++index)
+    {
+        const DocumentView &view = views.at(index);
+        tabs.push_back(core::CommandChoice{view.title, "tabnext " + std::to_string(index + 1),
+                                           core::CommandChoiceKind::execute,
+                                           core::tab_folder_for(view.path)});
+    }
+    state_ = state_.with_command_input(
+        core::CommandPalette::opened_tabs(std::move(tabs), state_.active_tab(), state_.themes()));
+}
+
 void EditorController::accept(const ActivateCommandChoice &intent)
 {
     const auto &input = state_.command_input();
@@ -1365,7 +1398,13 @@ void EditorController::evaluate_command(std::string_view text)
         core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
     if (!result)
     {
-        state_ = state_.with_command_message(core::ex_failure_message(result.error()));
+        state_ = state_.with_command_message(core::ex_failure_message(result.error(), text));
+        return;
+    }
+    const auto &tab = result.value().tab;
+    if (tab.has_value())
+    {
+        run_tab_request(tab.value());
         return;
     }
     const auto &settings = result.value().settings;
@@ -1392,6 +1431,40 @@ void EditorController::evaluate_command(std::string_view text)
         state_ = state_.with_vim(std::move(vim));
     }
     state_ = state_.with_command_message(result.value().message);
+}
+
+// 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
+// `:tabclose` は状態を変えず、閉じたいタブの位置だけを載せる（決定 6）。
+void EditorController::run_tab_request(const core::ExTabRequest &request)
+{
+    switch (request.verb)
+    {
+    case core::ExTabVerb::next:
+    case core::ExTabVerb::previous:
+        break;
+    case core::ExTabVerb::open:
+        accept(NewTab{});
+        return;
+    case core::ExTabVerb::close:
+        state_ = state_.with_close_request(state_.active_tab());
+        return;
+    case core::ExTabVerb::list:
+        accept(OpenTabList{});
+        return;
+    }
+    const auto direction = request.verb == core::ExTabVerb::next ? core::TabJumpDirection::forward
+                                                                 : core::TabJumpDirection::backward;
+    const auto destination = core::tab_destination(core::TabJump{direction, request.number},
+                                                   state_.active_tab(), state_.tab_count());
+    if (!destination.has_value())
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("E475: Invalid argument: " +
+                                     std::to_string(request.number.value_or(0)))
+                .value());
+        return;
+    }
+    accept(SwitchTab{destination.value()});
 }
 
 // Vim の外から来た割り込み（クリック・Ctrl+Z・全選択・別経路の編集）。どれが割り込みかは
@@ -2113,14 +2186,20 @@ std::vector<LineView> EditorController::visible_lines() const
     return lines;
 }
 
+DocumentView EditorController::active_document_view() const
+{
+    const auto &document = state_.document();
+    const auto save_state = save_state_of(document, state_.history().position());
+    return DocumentView{core::tab_title_for(document.path, save_state), document.path,
+                        document.encoding, save_state, state_.last_failure()};
+}
+
 EditorFrame EditorController::frame() const
 {
     const auto caret = state_.text().position_of(state_.selection().caret);
     const auto &document = state_.document();
-    const auto save_state = save_state_of(document, state_.history().position());
     const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
-    DocumentView active{core::tab_title_for(document.path, save_state), document.path,
-                        document.encoding, save_state, state_.last_failure()};
+    DocumentView active = active_document_view();
     auto tabs = tab_views(state_, active);
     return EditorFrame{visible_lines(),
                        CaretView{caret, caret_shape_for(state_.mode(), state_.vim().mode)},
@@ -2144,6 +2223,7 @@ EditorFrame EditorController::frame() const
                        state_.active_tab(),
                        state_.tab_scroll(),
                        state_.hovered(),
-                       state_.closing()};
+                       state_.closing(),
+                       state_.close_request()};
 }
 } // namespace nenenib::application

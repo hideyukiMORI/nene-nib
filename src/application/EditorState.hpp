@@ -96,6 +96,10 @@ class EditorState final
     // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。last_failure と同じく次の意図で消す。
     [[nodiscard]] bool closing() const noexcept;
     [[nodiscard]] EditorState with_closing(bool closing) const;
+    // Ex の `:tabclose` が閉じたいタブの位置（ADR 0057 の決定 6）。closing と同じく
+    // 1 意図だけ立ち、状態は変えない（閉じるのは ui が × と同じ閉じる流れで行う）。
+    [[nodiscard]] const std::optional<std::size_t> &close_request() const noexcept;
+    [[nodiscard]] EditorState with_close_request(std::optional<std::size_t> position) const;
     // 帯（ADR 0056 の決定 2）。帯の幅は ui が知らせる DIP で、まだ知らないあいだは 0。送り量は
     // DIP。マウスを載せている要素は、載せていなければ nullopt。
     [[nodiscard]] std::int32_t title_bar_width() const noexcept;
@@ -131,6 +135,7 @@ class EditorState final
     std::vector<std::shared_ptr<const DocumentState>> parked_;
     std::size_t active_ = 0;
     bool closing_ = false;
+    std::optional<std::size_t> close_request_;
     std::int32_t title_bar_width_ = 0;
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;

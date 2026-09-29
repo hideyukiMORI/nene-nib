@@ -1,5 +1,11 @@
 #include "CommandInput.hpp"
 
+#include "CommandPaletteSource.hpp"
+
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace nenenib::application
 {
 namespace
@@ -34,11 +40,24 @@ namespace
                                line.completions(), line.completion_index()};
 }
 
+// タブの一覧の入力は題名の絞り込みで、Ex の補完を持たない（ADR 0057 の決定 7）。
+[[nodiscard]] std::vector<std::string> completions_of(const core::CommandPalette &palette)
+{
+    switch (palette.source())
+    {
+    case core::CommandPaletteSource::commands:
+        return palette.input().completions();
+    case core::CommandPaletteSource::tabs:
+        return {};
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] core::InputLineView view_of(const core::CommandPalette &palette)
 {
     const core::CommandLine &line = palette.input();
     return core::InputLineView{prompt_of(palette), std::string(line.text()), line.caret(),
-                               line.completions(), line.completion_index()};
+                               completions_of(palette), line.completion_index()};
 }
 } // namespace
 

@@ -1,10 +1,17 @@
 #include "ExResult.hpp"
 
 #include "BuiltinThemes.hpp"
+#include "ExTabName.hpp"
+#include "ExTabRequest.hpp"
+#include "ExTabVerb.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
 #include <array>
+#include <charconv>
+#include <cstddef>
+#include <optional>
+#include <system_error>
 #include <utility>
 
 namespace nenenib::core
@@ -156,6 +163,120 @@ set_option(std::string_view option, const EditorSettings &settings)
     }
     return std::unexpected(ExFailure::unknown_option);
 }
+// タブの命令の名前の表（ADR 0057 の決定 4・CPP-012）。省略は Vim 9.1 の実測のとおり「最短の形
+// から完全な形までの前方一致」で、`tabne` は tabnext（tabnew は完全一致だけ）。`tab` `tabe`
+// `tabm` `tabf` はどの行にも当たらず、今までどおり unknown_command になる。
+constexpr std::array<ExTabName, 6> tab_names{{{"tabnext", 4, ExTabVerb::next},
+                                              {"tabprevious", 4, ExTabVerb::previous},
+                                              {"tabNext", 4, ExTabVerb::previous},
+                                              {"tabnew", 6, ExTabVerb::open},
+                                              {"tabclose", 4, ExTabVerb::close},
+                                              {"tabs", 4, ExTabVerb::list}}};
+
+[[nodiscard]] std::optional<ExTabName> tab_name_of(std::string_view name) noexcept
+{
+    for (const ExTabName &row : tab_names)
+    {
+        if (name.size() >= row.shortest && row.name.starts_with(name))
+        {
+            return row;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] bool is_digit(char letter) noexcept
+{
+    return letter >= '0' && letter <= '9';
+}
+
+[[nodiscard]] bool is_letter(char letter) noexcept
+{
+    return (letter >= 'a' && letter <= 'z') || (letter >= 'A' && letter <= 'Z');
+}
+
+[[nodiscard]] std::size_t leading(std::string_view text, bool (*accepts)(char) noexcept) noexcept
+{
+    std::size_t length = 0;
+    while (length < text.size() && accepts(text.at(length)))
+    {
+        ++length;
+    }
+    return length;
+}
+
+// `:tabnext` `:tabprevious` の引数。空か 10 進の数 1 つだけを受け、ほかの形（`+1` `-1` `$`・
+// 数でない文字・大きすぎる数）は受けない（決定 4）。
+[[nodiscard]] std::expected<std::optional<std::size_t>, ExEvaluationFailure>
+tab_number(std::string_view argument)
+{
+    if (argument.empty())
+    {
+        return std::optional<std::size_t>{};
+    }
+    std::size_t number = 0;
+    const char *const last = argument.data() + argument.size();
+    const auto [end, error] = std::from_chars(argument.data(), last, number);
+    if (error != std::errc{} || end != last)
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    return std::optional<std::size_t>{number};
+}
+
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> tab_result(const ExTabName &row,
+                                                                      std::string_view argument)
+{
+    const bool counted = row.verb == ExTabVerb::next || row.verb == ExTabVerb::previous;
+    if (!counted && !argument.empty())
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    const auto number = tab_number(argument);
+    if (!number)
+    {
+        return std::unexpected(number.error());
+    }
+    return ExResult{std::nullopt, std::nullopt, std::nullopt, DisplayText::parse(row.name).value(),
+                    ExTabRequest{row.verb, number.value()}};
+}
+
+// タブの命令（決定 4）。名前が表に当たらなければ値なし（ほかの命令として扱う）。範囲の形
+// （`:4tabnext`）と `!` と受けない引数は unsupported_argument。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+tab_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    const std::size_t letters = leading(text.substr(range), is_letter);
+    const auto row = tab_name_of(text.substr(range, letters));
+    if (!row.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::string_view argument = trimmed(text.substr(range + letters));
+    if (range > 0 || argument.starts_with('!'))
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    return tab_result(row.value(), argument);
+}
+// colorscheme と set のほか（Vim の強調の止め方とタブの命令）。どれにも当たらなければ
+// unknown_command。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
+remaining_command(std::string_view text, std::string_view name, std::string_view argument)
+{
+    // `:nohlsearch` と短縮形の `:noh` は次の検索まで強調を止めるだけで、設定は変えない。
+    if ((name == "nohlsearch" || name == "noh") && argument.empty())
+    {
+        return highlight_result(VimSearchHighlight::suspended);
+    }
+    auto tab = tab_command(text);
+    if (tab.has_value())
+    {
+        return std::move(tab).value();
+    }
+    return std::unexpected(ExFailure::unknown_command);
+}
 } // namespace
 
 std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
@@ -188,19 +309,15 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
     {
         return set_option(argument, settings);
     }
-    // `:nohlsearch` と短縮形の `:noh` は次の検索まで強調を止めるだけで、設定は変えない。
-    if ((name == "nohlsearch" || name == "noh") && argument.empty())
-    {
-        return highlight_result(VimSearchHighlight::suspended);
-    }
-    return std::unexpected(ExFailure::unknown_command);
+    return remaining_command(text, name, argument);
 }
 
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
 {
     std::vector<std::string> candidates{
-        "colorscheme",     "set fontsize=", "set guifont=",  "set incsearch",
-        "set noincsearch", "set hlsearch",  "set nohlsearch"};
+        "colorscheme",     "set fontsize=", "set guifont=",   "set incsearch",
+        "set noincsearch", "set hlsearch",  "set nohlsearch", "tabs",
+        "tabnew",          "tabnext",       "tabprevious",    "tabclose"};
     for (const auto &name : themes.names())
     {
         candidates.push_back("colorscheme " + name);
@@ -240,6 +357,8 @@ DisplayText ex_failure_message(ExFailure failure)
         return DisplayText::parse("Command must be a single line of UTF-8 text").value();
     case ExFailure::too_long:
         return DisplayText::parse("Command is limited to 256 bytes").value();
+    case ExFailure::unsupported_argument:
+        return DisplayText::parse("Not supported").value();
     }
     std::unreachable();
 }
