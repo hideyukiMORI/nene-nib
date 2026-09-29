@@ -12,6 +12,7 @@
 #include "Milestone.hpp"
 #include "RenderFailure.hpp"
 #include "StatusBarHit.hpp"
+#include "TabCommand.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
@@ -97,6 +98,9 @@ class EditorWindow final
     void type_character(WPARAM word);
     void type_text(std::string utf8);
     void press_key(WPARAM word);
+    // タブの鍵（ADR 0056 の決定 10）。扱ったら true。
+    [[nodiscard]] bool press_tab_key(WPARAM word);
+    void run_tab_command(core::TabCommand command);
     void press_command_key(WPARAM word);
     void press_command_control_key(WPARAM word);
     void press_plain_key(WPARAM word);

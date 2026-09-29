@@ -35,6 +35,9 @@
 #include "SelectionPresence.hpp"
 #include "StepTab.hpp"
 #include "SwitchTab.hpp"
+#include "TabCommand.hpp"
+#include "TabKey.hpp"
+#include "TabKeyTable.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TitleBarHit.hpp"
@@ -52,6 +55,7 @@
 #include "VirtualColumn.hpp"
 #include "VisibleLines.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -90,6 +94,8 @@ using nenenib::core::FilePath;
 using nenenib::core::HistoryDirection;
 using nenenib::core::LayoutRect;
 using nenenib::core::SaveState;
+using nenenib::core::TabCommand;
+using nenenib::core::TabKey;
 using nenenib::core::TabStep;
 using nenenib::core::TitleBarHit;
 using nenenib::core::TitleBarInput;
@@ -790,6 +796,37 @@ void verify_band_input_from_state()
     expect(same_band_input(controller), "a closed tab reads the same band input as the frame");
 }
 
+// 5 つの鍵 × 2 つのモードの 10 通り（ADR 0056 の決定 10）。Vim モードの Ctrl+W だけが値なし。
+void verify_tab_keys()
+{
+    using nenenib::core::tab_command_for;
+    using Row = std::pair<TabKey, std::optional<TabCommand>>;
+    const std::array<Row, 5> ordinary{{
+        {TabKey::control_t, TabCommand::open},
+        {TabKey::control_tab, TabCommand::next},
+        {TabKey::control_shift_tab, TabCommand::previous},
+        {TabKey::control_f4, TabCommand::close},
+        {TabKey::control_w, TabCommand::close},
+    }};
+    const std::array<Row, 5> vim{{
+        {TabKey::control_t, TabCommand::open},
+        {TabKey::control_tab, TabCommand::next},
+        {TabKey::control_shift_tab, TabCommand::previous},
+        {TabKey::control_f4, TabCommand::close},
+        {TabKey::control_w, std::nullopt},
+    }};
+    for (const auto &[key, command] : ordinary)
+    {
+        expect(tab_command_for(key, EditMode::ordinary) == command,
+               "a tab key in the ordinary mode maps to its command");
+    }
+    for (const auto &[key, command] : vim)
+    {
+        expect(tab_command_for(key, EditMode::vim) == command,
+               "a tab key in the vim mode maps to its command, and control-w does nothing");
+    }
+}
+
 } // namespace
 
 void verify_tabs_contracts()
@@ -819,6 +856,7 @@ void verify_tabs_contracts()
     verify_band_release();
     verify_band_release_after_scroll();
     verify_band_input_from_state();
+    verify_tab_keys();
 }
 
 void verify_tabs_scope()

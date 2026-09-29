@@ -1908,3 +1908,26 @@ ARC-001 / ARC-004 / ARC-005 / ARC-007 / ARC-010 / CPP-002 / CPP-003 / CPP-011 �
 対象を限定した理由: 差分は core の帯の配置と純関数・application の意図と状態・ui/win32 の描画とポインタの処理・色のトークンとユーザーテーマの読み 1 欄・単体テストである。Vim の engine・fixture・ファイルの経路は不変（protected-diff で changed 0）。帯の見た目と押す・離すの流れは契約で覆えないので設計席が実機で見た。工程 3 は本節の追記だけで、実装・テスト・依存が不変なので工程 1・2・差し戻しの成功結果と設計席の実機・速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-011 / CPP-002 / CPP-003 / CPP-009 / CPP-011 / CPP-012 / CPP-017 を自己レビュー。帯の配置は `title_bar_layout` の 1 本で renderer と hit test が同じ入力を使い（ARC-001）・入力は `title_bar_input` の 1 本・閉じる流れの確かめる判定は `tab_unsaved` の 1 本・押した要素と離した要素の突き合わせは `title_bar_released` の 1 本・色は `Palette` のトークンだけ。残る穴: マウスを動かしたときの重さはベンチに無い（入力は状態の 4 つの値だけを読む形にした）・別の DPI のモニターへ移す・最大化と元に戻すの実機の確認は無い（`TitleBarWidth` を送り直す経路は `resize` と `change_dpi` の 2 か所・契約は application まで）・ライトと組み込み 9 テーマの `tab_hover` の画は無い（値は契約で守る）・窓の外で左ボタンを離すと `left_pressed_` が残る（次の押下で必ず上書き・消去される）・「∨」は #240・鍵は #239。
+
+### 5-bs. タブの鍵で足して切り替えて閉じる（Issue #239・ADR 0056 決定 10・2026-09-29）
+
+ブランチ `feat/239-tab-keys`（main `6522d21` の上・ADR `6e53eed`・工程 1 `ca337bf` / `0159b6e`）。縦切り 3/4 で、「∨」の一覧・Ex の `tabnext`・Vim の `gt`（#240）は変えない。
+
+- 工程 1: core に閉じた `enum` の `TabKey`（`control_t` `control_tab` `control_shift_tab` `control_f4` `control_w`）と `TabCommand`（`open` `next` `previous` `close`）、モードとの組から命令を決める純関数 `tab_command_for(TabKey, EditMode) -> std::optional<TabCommand>`（`src/core/TabKeyTable.hpp/.cpp`・`default` なし・Vim の Ctrl+W は値なし）。ui/win32 の `tab_shortcut(WPARAM, bool shift)`（OS の仮想キーなので `default` あり・CPP-017・Shift と組むのは Tab だけ）と `EditorWindow::press_tab_key` / `run_tab_command`。`press_key` は入力行の分岐（入力行の間は今のまま・Ctrl+T は SearchHop）の直後、フォントの鍵と Vim の Ctrl の表より前に引く。命令は #237 の意図 `NewTab` `StepTab` と #238 の閉じる流れ `close_tab` を通す。
+- 実機の検査の道具: `eng/window_driver.py` の `press_combination`（複数の修飾鍵）と `eng/verify-window.py --tabs`（既定の全体実行の末尾にも載る）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・ui を含む全 target） | 警告 0・エラー 0（`out/239-step1-build2.log`） |
+| `build/nib_tests.exe --tabs` | 133 → **143 checks**（5 つの鍵 × 2 つのモードの 10 通り・`out/239-step1-tabs.log`） |
+| `build/nib_tests.exe`（引数なし）・`ctest --test-dir build -R nib_unit` | **18647 checks 成功**・1 / 1 成功（`out/239-step1-unit.log` / `out/239-step1-ctest.log`） |
+| `python eng/protected-diff.py --base origin/main --build --allow=--tabs` | **終了 0**。`fixtures 1853 -> 1853 / changed 0 / added 0 / deleted 0`・`scopes 25 / same 24`・`--tabs` 133 → 143 allowed（`out/protected/0159b6e.json`） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation**（conformance は C++ の commit の前と両 commit の後の 2 回） |
+| clang-format（変更した C++ 8 ファイル）・`python -m py_compile eng/verify-window.py eng/window_driver.py` | 指摘なし（1 回目は長い注釈で落ち、注釈を短くして通した）・OK |
+| 実機（設計席・施主の了承の後・Release `build/release-0159b6e/NeNeNib.exe`・125%）`python eng/verify-window.py --tabs --executable build/release-0159b6e/NeNeNib.exe --capture out/239-tabs-frames` | **終了 0・`driven: true`**。起動 1 本・0 → Ctrl+T × 2 で 3 本・2 → Ctrl+Tab で 0（末尾から先頭へ折り返す）→ Ctrl+Shift+Tab で 2 → Ctrl+F4 で 2 本・1 → 通常モードの Ctrl+W で 1 本・0（確認なし）→ Vim モードの Ctrl+W で 1 本のまま（窓も残る）→ `/` の入力行で Ctrl+T で 1 本のまま。未保存の 2 本で窓を閉じると確認が 2 回・題名は `● tab-left.txt` → `● tab-right.txt` の順・「いいえ」「キャンセル」の後に窓が残りファイルは書き換わらない。Ctrl+Tab と Ctrl+F4 が `WM_KEYDOWN` で届く前提を確かめた（`out/logs/239-verify-tabs.log`・`out/239-tabs-frames/tabsOpened.png` `tabsSearchLine.png`・記録は `out/reports/done-239-design.md`） |
+| `python eng/measure-speed.py --check --executable build/release-0159b6e/NeNeNib.exe`（設計席） | **6 benches checked, 0 regression(s), 0 unmeasurable**（機械 bc8a356f37c68491・5 回・startup-first-frame 195.4 ms・startup-window-shown 32.3 ms・key-to-frame-single 1.000 ms・key-to-frame-burst-200 3.501 ms・open-large-file-16mib 251.3 ms・key-to-frame-burst-200-16mib 7.083 ms・`out/speed/2026-09-29T13-54-41Z.json`） |
+| 工程 2（本節の追記だけ）の `python eng/conformance.py --build-dir build`・`git diff --check` | **0 violation**・指摘なし |
+
+対象を限定した理由: 差分は core の鍵と命令の閉じた型と純関数 1 本・ui/win32 の鍵の写しと命令の実行・単体テスト・実機の検査の道具である。application の意図と状態・renderer・Vim の engine・fixture は不変（protected-diff で changed 0）。鍵が OS から届く形は契約で覆えないので設計席が実機で確かめた。工程 2 は本節の追記だけで、実装・テスト・依存が不変なので工程 1 の成功結果と設計席の実機・速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-001 / CPP-002 / CPP-011 / CPP-017 を自己レビュー。鍵 → 命令は `tab_command_for` の 1 本で、タブの操作は #237 の意図と #238 の閉じる流れを通る（ARC-001）・閉じた選択肢の `switch` に `default` なし（CPP-002）・`default` は OS の仮想キーの写しだけ（CPP-017）。残る穴: Ctrl+1〜9・使った順の切り替え・Vim の Ctrl-W の実装は後続（決定 15）・「∨」の一覧と `tabnext` `gt` は #240・IME の変換中にタブの鍵を押したときと入力行の間の Ctrl+Shift の組は実機で確かめていない・本物のポインタがタブの上にあると hover で塗られる（色は `tab_active` と違うので判定は崩れない想定）・`eng/verify-window.py --tabs` は本物のキー入力を送るので CI では回さない。
