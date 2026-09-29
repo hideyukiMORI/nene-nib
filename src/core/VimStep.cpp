@@ -992,6 +992,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
 // 名指しの書き込み（ADR 0050 の決定 3 の 1）。名前つきは表へ（追記なら ADR 0048 の決定 4 で
 // 繋ぐ・繋げなければ refused）、数字はその位置へ、`"-` は小削除へ置き換える。`""` と選択の無い
 // yank は `"0` へ置く。選択の無い削除・変更はここでは何も書かない。`"_` は呼び出し元が先に返す。
+// `"+` `"*` は表へ置かない（OS へ出す本文は registers_written が組にして返す・ADR 0051 の決定 6）。
 [[nodiscard]] std::expected<VimState, VimRepeatFailure>
 named_written(VimState state, const VimRegister &value, VimOperator operation)
 {
@@ -1022,6 +1023,8 @@ named_written(VimState state, const VimRegister &value, VimOperator operation)
         return state;
     case VimRegisterTarget::small_delete:
         state.small_delete = value;
+        return state;
+    case VimRegisterTarget::clipboard:
         return state;
     case VimRegisterTarget::named:
         break;
@@ -1088,11 +1091,28 @@ named_written(VimState state, const VimRegister &value, VimOperator operation)
         vim_register_index(static_cast<char32_t>(selection.name)).value_or(0));
 }
 
+// 書き手の結果（ADR 0051 の決定 6）。first は命令が完了した状態、second は `"+` `"*` へ書いた
+// ときだけ持つ「OS へ出す本文」。呼び出し元が second を VimStep.clipboard へ写す。
+using WrittenRegisters = std::pair<VimState, std::optional<VimRegister>>;
+
+// 名指しの書き込みの書き先が OS のクリップボードなら、その本文（決定 6）。
+[[nodiscard]] std::optional<VimRegister> clipboard_written(const VimState &state,
+                                                           const VimRegister &value)
+{
+    if (!state.selected_register.has_value() ||
+        state.selected_register.value().target != VimRegisterTarget::clipboard)
+    {
+        return std::nullopt;
+    }
+    return value;
+}
+
 // 削除・変更・yank の書き先（ADR 0050 の決定 3・ADR 0048 の決定 3 を改める）。書き手はすべて
 // ここを通る（ARC-001）。`"_` と値が無い（空の文字単位の範囲）ときはどのレジスタも変えず、
-// ほかは「名指しの書き込み → `"1` の規則 → `"-` の規則 → 無名」の順に埋める。
-// 命令が完了した状態を返すので、選んだレジスタはここで消える。
-[[nodiscard]] std::expected<VimState, VimRepeatFailure>
+// ほかは「名指しの書き込み → `"1` の規則 → `"-` の規則 → 無名」の順に埋める。`"+` `"*` の
+// 名指しの書き込みは状態へ置かず、OS へ出す本文として組の second に返す（ADR 0051 の決定 6）。
+// 命令が完了した状態を返すので、選んだレジスタと写しはここで消える。
+[[nodiscard]] std::expected<WrittenRegisters, VimRepeatFailure>
 registers_written(const VimState &state, const std::optional<VimRegister> &value,
                   VimOperator operation, VimNumberedRule rule)
 {
@@ -1100,7 +1120,7 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
                             state.selected_register.value().target == VimRegisterTarget::black_hole;
     if (!value.has_value() || black_hole)
     {
-        return vim_resting_from(state, state.unnamed_register);
+        return WrittenRegisters{vim_resting_from(state, state.unnamed_register), std::nullopt};
     }
     auto named = named_written(state, value.value(), operation);
     if (!named.has_value())
@@ -1110,7 +1130,15 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     const VimState written = small_delete_written(
         shifted_into_first(std::move(named).value(), value.value(), operation, rule), value.value(),
         operation);
-    return vim_resting_from(written, unnamed_written(written, value.value()));
+    return WrittenRegisters{vim_resting_from(written, unnamed_written(written, value.value())),
+                            clipboard_written(state, value.value())};
+}
+
+// OS へ出す本文を 1 打鍵の結果に添える（ADR 0051 の決定 6）。状態と効果は変えない。
+[[nodiscard]] VimStep with_clipboard(VimStep step, std::optional<VimRegister> clipboard)
+{
+    step.clipboard = std::move(clipboard);
+    return step;
 }
 
 // 書けなかった命令（矩形が絡む追記・決定 4）と名前にならない鍵（決定 2）。回数と保留と選んだ
@@ -1154,7 +1182,7 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     {
         return refused_register(state);
     }
-    VimState next = std::move(written).value();
+    auto [next, clipboard] = std::move(written).value();
     switch (range.kind)
     {
     case VimRegisterKind::uninitialized:
@@ -1162,9 +1190,12 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
         // Motion ranges are constructed only as characterwise or linewise.
         std::unreachable();
     case VimRegisterKind::characters:
-        return VimStep{std::move(next), VimRemoveRange{range.range}};
+        return with_clipboard(VimStep{std::move(next), VimRemoveRange{range.range}},
+                              std::move(clipboard));
     case VimRegisterKind::lines:
-        return VimStep{std::move(next), VimRemoveLines{removed_lines_range(text, range)}};
+        return with_clipboard(
+            VimStep{std::move(next), VimRemoveLines{removed_lines_range(text, range)}},
+            std::move(clipboard));
     }
     std::unreachable();
 }
@@ -1185,9 +1216,10 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     {
         return refused_register(state);
     }
-    VimState next = std::move(written).value();
+    auto [next, clipboard] = std::move(written).value();
     next.mode = VimMode::insert;
-    return VimStep{std::move(next), VimRemoveRange{range.range}};
+    return with_clipboard(VimStep{std::move(next), VimRemoveRange{range.range}},
+                          std::move(clipboard));
 }
 
 // y のあとのキャレット。行単位VISUALは下向き・単一行なら先頭、上向きなら現在位置。
@@ -1224,7 +1256,10 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     {
         return refused_register(state);
     }
-    return VimStep{std::move(written).value(), VimMoveTo{yanked_caret(text, state, caret, range)}};
+    auto [next, clipboard] = std::move(written).value();
+    return with_clipboard(
+        VimStep{std::move(next), VimMoveTo{yanked_caret(text, state, caret, range)}},
+        std::move(clipboard));
 }
 
 // いま効かせるオペレータ。保留が無ければ「消す」＝ x が通る道（x は保留を立てずにここへ来る）。
@@ -1584,13 +1619,15 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     {
         return refused_register(state);
     }
-    VimState next = std::move(written).value();
+    auto [next, clipboard] = std::move(written).value();
     switch (operation)
     {
     case VimOperator::remove:
-        return VimStep{std::move(next), vim_remove_block(block)};
+        return with_clipboard(VimStep{std::move(next), vim_remove_block(block)},
+                              std::move(clipboard));
     case VimOperator::yank:
-        return VimStep{std::move(next), VimMoveTo{block_caret(block, 0)}};
+        return with_clipboard(VimStep{std::move(next), VimMoveTo{block_caret(block, 0)}},
+                              std::move(clipboard));
     case VimOperator::change:
         // `c` は範囲外（決定 5）。visual_selection_action が先に取り消す。
         break;
@@ -1726,7 +1763,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
 
 // `p` `P` と `@` の読み元（ADR 0048 の決定 5・ADR 0050 の決定 5）。名前つきは表の 1 本（`"Ap`
 // `@A` も同じ）、数字は `"0`〜`"9` の表の 1 本、`"-` は小削除、選択が無いか `""` なら無名、`"_`
-// は空（空のレジスタと同じく何も貼らない）。
+// は空（空のレジスタと同じく何も貼らない）、`"+` `"*` は controller が置いた写し（ADR 0051 の
+// 決定 5）。
 [[nodiscard]] VimRegister register_read(const VimState &state,
                                         const std::optional<VimRegisterSelection> &chosen)
 {
@@ -1749,6 +1787,8 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
             vim_numbered_index(static_cast<char32_t>(selection.name)).value_or(0));
     case VimRegisterTarget::small_delete:
         return state.small_delete;
+    case VimRegisterTarget::clipboard:
+        return state.clipboard;
     }
     std::unreachable();
 }
@@ -2379,7 +2419,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 // ---------------------------------------------------------------- レジスタの名前（ADR 0048）
 
 // `"` の次の鍵が選ぶレジスタ（決定 2）。a〜z は名前つき、A〜Z は同じ名前への追記、`"` は無名、
-// `_` はブラックホール、`0`〜`9` は数字、`-` は小削除（ADR 0050 の決定 2・回数の桁ではない）。
+// `_` はブラックホール、`0`〜`9` は数字、`-` は小削除（ADR 0050 の決定 2・回数の桁ではない）、
+// `+` と `*` はクリップボード（ADR 0051 の決定 1・名前は打った鍵のまま）。
 // ほかの鍵は名前を持たない。
 [[nodiscard]] std::optional<VimRegisterSelection> register_selection_of(char32_t name)
 {
@@ -2394,6 +2435,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (name == U'-')
     {
         return VimRegisterSelection{VimRegisterTarget::small_delete, '-', false};
+    }
+    if (name == U'+' || name == U'*')
+    {
+        return VimRegisterSelection{VimRegisterTarget::clipboard, static_cast<char>(name), false};
     }
     if (vim_numbered_index(name).has_value())
     {
@@ -2498,8 +2543,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // 再生するレジスタの選択（ADR 0048 の決定 6・ADR 0050 の決定 5・6）。名前 → 選択は `"` と同じ
-// register_selection_of で解く（a〜z・A〜Z・`"`・`0`〜`9`・`-`）。`_` はレジスタを持たないので
-// 名前にならない。
+// register_selection_of で解く（a〜z・A〜Z・`"`・`0`〜`9`・`-`・`+` `*`・ADR 0051 の
+// 決定 5）。`_` はレジスタを持たないので名前にならない。
 [[nodiscard]] std::optional<VimRegisterSelection> replayed_selection(char32_t name)
 {
     const auto selection = register_selection_of(name);
@@ -4160,6 +4205,28 @@ VimState vim_register_stored(const VimState &state, char name, const VimRegister
     VimState next = state;
     VimRegister &target = next.registers.registers.at(index.value());
     target = name >= 'A' && name <= 'Z' ? appended_recording(target, value.text) : value;
+    return next;
+}
+
+bool vim_reads_clipboard(const VimState &state) noexcept
+{
+    if (state.selected_register.has_value() &&
+        state.selected_register.value().target == VimRegisterTarget::clipboard)
+    {
+        return true;
+    }
+    if (!state.input_wait.has_value())
+    {
+        return false;
+    }
+    const auto *const prefix = std::get_if<VimPrefix>(&state.input_wait.value());
+    return prefix != nullptr && *prefix == VimPrefix::at;
+}
+
+VimState vim_clipboard_loaded(const VimState &state, VimRegister value)
+{
+    VimState next = state;
+    next.clipboard = std::move(value);
     return next;
 }
 

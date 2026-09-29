@@ -69,6 +69,10 @@ struct VimState
     // vim_resting_from が持ち越し、書くのは registers_written だけ。
     VimNumberedRegisters numbered;
     VimRegister small_delete;
+    // `"+` `"*` の写し（ADR 0051 の決定 2）。controller が vim_clipboard_loaded で OS の本文を
+    // 置き、engine は普通のレジスタとして読む。selected_register と同じく命令が終わると消え
+    // （vim_resting_from は持ち越さない）、OS が正のままである。
+    VimRegister clipboard;
     std::optional<VimMacroRecording> macro_recording;
     std::optional<char> last_macro;
 };
@@ -95,6 +99,7 @@ struct VimState
                     std::move(unnamed_register),
                     VimNamedRegisters{},
                     VimNumberedRegisters{},
+                    VimRegister{"", VimRegisterKind::uninitialized},
                     VimRegister{"", VimRegisterKind::uninitialized},
                     std::nullopt,
                     std::nullopt};

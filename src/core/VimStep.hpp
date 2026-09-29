@@ -24,6 +24,9 @@ struct VimStep
     // 鍵が閉じた失敗（ビープ）で終わったか（ADR 0046 の決定 3）。再生（`.` と `@`）の中なら
     // controller が残りの鍵を捨てる。打った鍵では何もしない（本文も状態も効果のとおり）。
     std::optional<VimRepeatFailure> failure = std::nullopt;
+    // `"+` `"*` へ書いた本文（ADR 0051 の決定 6）。engine の値のまま（本文は LF・種類つき）で、
+    // controller が文書の改行に直して ClipboardPort へ出す。状態の欄には置かない。
+    std::optional<VimRegister> clipboard = std::nullopt;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の
@@ -42,6 +45,16 @@ struct VimStep
 // 保つ）、`0`〜`9` と `-` は置き換え（ADR 0050 の決定 7）、ほかの名前は状態を変えない。
 [[nodiscard]] VimState vim_register_stored(const VimState &state, char name,
                                            const VimRegister &value);
+
+// OS のクリップボードを読む状態か（ADR 0051 の決定 3）。`"+` `"*` を選んでいるか、`@` の次の
+// 名前を待っている（`q` の待ちは含めない）とき真。controller は vim_step の結果を写した直後に
+// これを見て、真なら 1 回読んで vim_clipboard_loaded で写しを置く。何が読む状態かを決めるのは
+// engine の側である（ARC-004）。
+[[nodiscard]] bool vim_reads_clipboard(const VimState &state) noexcept;
+
+// `"+` `"*` の写しを置いたあとの状態（ADR 0051 の決定 3）。写しを置くだけで、ほかは変えない。
+// 写しを置く口はこの 1 本（vim_register_stored は `+` `*` を受けない）。
+[[nodiscard]] VimState vim_clipboard_loaded(const VimState &state, VimRegister value);
 
 // 検索の入力行が開いているあいだの回数（`2/be` の 2・`d2/` なら積）。確定の鍵が engine の中で
 // 使う回数と同じ値で、incsearch の preview と Ctrl-G / Ctrl-T が同じ回数で探すために読む

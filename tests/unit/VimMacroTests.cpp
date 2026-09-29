@@ -4,24 +4,35 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "LineNumber.hpp"
+#include "Offset.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
+#include "Selection.hpp"
 #include "StoreVimRegister.hpp"
 #include "TestSupport.hpp"
+#include "TextBuffer.hpp"
 #include "VimCharacter.hpp"
+#include "VimClipboardText.hpp"
+#include "VimEditorView.hpp"
+#include "VimInsertAt.hpp"
 #include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimNamedRegisters.hpp"
+#include "VimNoEffect.hpp"
 #include "VimNumberedRegisters.hpp"
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimRegisterText.hpp"
+#include "VimReplay.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
+#include "VimStep.hpp"
 #include "VimTestSupport.hpp"
+#include "VimViewport.hpp"
 
 #include "../vim/VimFixtures.hpp"
 
@@ -30,6 +41,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -40,16 +52,31 @@ namespace
 {
 using nenenib::application::SelectEditMode;
 using nenenib::application::StoreVimRegister;
+using nenenib::core::collapsed_at;
 using nenenib::core::EditMode;
+using nenenib::core::LineNumber;
+using nenenib::core::Offset;
+using nenenib::core::Selection;
+using nenenib::core::TextBuffer;
+using nenenib::core::vim_clipboard_loaded;
+using nenenib::core::vim_reads_clipboard;
+using nenenib::core::vim_register_of_clipboard;
+using nenenib::core::vim_step;
+using nenenib::core::VimEditorView;
+using nenenib::core::VimInsertAt;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
+using nenenib::core::VimNoEffect;
 using nenenib::core::VimPrefix;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
+using nenenib::core::VimReplay;
 using nenenib::core::VimSearchDirection;
 using nenenib::core::VimSearchPattern;
 using nenenib::core::VimSpecialKey;
 using nenenib::core::VimState;
+using nenenib::core::VimStep;
+using nenenib::core::VimViewport;
 
 // 録画→再生の一気通貫の 1 件（決定 7）。期待値は本物の Vim 9.1 を feedkeys で打った実測
 // （Issue #176 の probe 2 節の表）。oracle の :normal! は録画できないので fixture にならない。
@@ -575,6 +602,257 @@ void verify_register_block_append_refused()
            "a line yank appended to a block register is refused and both registers stay");
 }
 
+// ---------------------------------------------------------------- `"+` `"*`（ADR 0051）の core
+// の側
+
+// 本文とキャレットを固定して core の vim_step だけへ鍵を流す（決定 9 のうち controller を要らない
+// 契約）。効果は本文へ写さないので、本文を変えない鍵の列か、最後の 1 鍵の効果だけを見る。
+[[nodiscard]] VimStep core_steps(const VimState &state, const TextBuffer &text,
+                                 const Selection &selection, std::string_view keys)
+{
+    const VimEditorView view{text, selection, VimViewport{LineNumber{1}, vim_visible_lines}};
+    VimStep step{state, VimNoEffect{}};
+    for (const VimKey &key : vim_keys_of(keys))
+    {
+        step = vim_step(step.next, view, key);
+    }
+    return step;
+}
+
+[[nodiscard]] TextBuffer buffer_of(std::string_view text)
+{
+    auto buffer = TextBuffer::from_utf8(text);
+    expect(buffer.has_value(), "the clipboard sample parses");
+    return std::move(buffer).value();
+}
+
+[[nodiscard]] bool register_is(const VimRegister &value, std::string_view text,
+                               VimRegisterKind kind)
+{
+    return value.text == text && value.kind == kind;
+}
+
+[[nodiscard]] bool register_unused(const VimRegister &value)
+{
+    return value.kind == VimRegisterKind::uninitialized;
+}
+
+// `p` `P` の VimInsertAt を本文へ写した結果（写し方は controller の LF 文書と同じ）。
+[[nodiscard]] std::string put_into(std::string body, const VimStep &step)
+{
+    const auto *const insert = std::get_if<VimInsertAt>(&step.effect);
+    if (insert == nullptr)
+    {
+        return {};
+    }
+    body.insert(insert->at.value, insert->utf8);
+    return body;
+}
+
+// OS の本文 → 写しの表（決定 4・probe の B3）。本文・畳んだ本文・種類。
+constexpr std::array<std::tuple<std::string_view, std::string_view, VimRegisterKind>, 9>
+    clipboard_texts{{
+        {"abc", "abc", VimRegisterKind::characters},
+        {"abc\r\n", "abc\n", VimRegisterKind::lines},
+        {"abc\n", "abc\n", VimRegisterKind::lines},
+        {"ab\r\ncd", "ab\ncd", VimRegisterKind::characters},
+        {"ab\r\ncd\r\n", "ab\ncd\n", VimRegisterKind::lines},
+        {"ab\rcd", "ab\rcd", VimRegisterKind::characters},
+        {"abc\r\n\r\n", "abc\n\n", VimRegisterKind::lines},
+        {"\r\n", "\n", VimRegisterKind::lines},
+        {"", "", VimRegisterKind::characters},
+    }};
+
+void verify_clipboard_text_table()
+{
+    for (const auto &[os_text, folded, kind] : clipboard_texts)
+    {
+        expect(register_is(vim_register_of_clipboard(os_text), folded, kind),
+               "the clipboard text folds CRLF and a trailing newline makes it linewise");
+        expect(!vim_register_of_clipboard(os_text).width.has_value(),
+               "the clipboard text is never a block");
+    }
+}
+
+// 読む時機の述語（決定 3）。`"+` `"*` を選んでいるか `@` の名前を待っているときだけ真。`q` の
+// 待ちと、後勝ちで別の名前へ選び直した `"+"a` は読まない。
+void verify_clipboard_read_predicate()
+{
+    const TextBuffer text = buffer_of("one");
+    const Selection caret = collapsed_at(Offset{0});
+    const VimState empty = empty_vim_state();
+    expect(!vim_reads_clipboard(empty), "a resting state does not read the clipboard");
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "\"+").next), "\"+ reads it");
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "\"*").next), "\"* reads it");
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "3\"+2").next),
+           "the count digits after \"+ keep reading it");
+    expect(vim_reads_clipboard(core_steps(empty, text, caret, "@").next),
+           "waiting for the @ name reads it");
+    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "q").next),
+           "waiting for the q name does not read it");
+    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "\"a").next),
+           "\"a does not read it");
+    expect(!vim_reads_clipboard(core_steps(empty, text, caret, "\"+\"a").next),
+           "the later \"a replaces \"+");
+    const VimStep refused = core_steps(empty, text, caret, "q+");
+    expect(refused.failure.has_value() && !refused.next.macro_recording.has_value(),
+           "q+ is not a recording name");
+    const VimState stored = nenenib::core::vim_register_stored(
+        empty, '+', VimRegister{"x", VimRegisterKind::characters});
+    expect(register_unused(stored.clipboard), "vim_register_stored does not take +");
+}
+
+// 写しを置いてから貼る（決定 5・probe の B3 と B4）。前置きの鍵・OS の本文・貼る鍵・貼った本文。
+// 本文は `X1` `X2` の 2 行でキャレットは 1 行 1 桁。
+constexpr std::array<
+    std::tuple<std::string_view, std::string_view, std::string_view, std::string_view>, 12>
+    clipboard_puts{{
+        {"\"+", "abc", "p", "Xabc1\nX2"},
+        {"\"+", "abc\r\n", "p", "X1\nabc\nX2"},
+        {"\"+", "abc\n", "p", "X1\nabc\nX2"},
+        {"\"+", "ab\r\ncd", "p", "Xab\ncd1\nX2"},
+        {"\"+", "ab\r\ncd\r\n", "p", "X1\nab\ncd\nX2"},
+        {"\"+", "ab\rcd", "p", "Xab\rcd1\nX2"},
+        {"\"+", "abc\r\n\r\n", "p", "X1\nabc\n\nX2"},
+        {"\"*", "abc\r\n", "p", "X1\nabc\nX2"},
+        {"\"*", "ab\r\ncd", "p", "Xab\ncd1\nX2"},
+        {"3\"+", "abc", "p", "Xabcabcabc1\nX2"},
+        {"\"+3", "abc", "p", "Xabcabcabc1\nX2"},
+        {"\"+", "abc", "P", "abcX1\nX2"},
+    }};
+
+[[nodiscard]] VimStep clipboard_put(std::string_view prefix, std::string_view os_text,
+                                    std::string_view put)
+{
+    const TextBuffer text = buffer_of("X1\nX2");
+    const Selection caret = collapsed_at(Offset{0});
+    const VimStep chosen = core_steps(empty_vim_state(), text, caret, prefix);
+    return core_steps(vim_clipboard_loaded(chosen.next, vim_register_of_clipboard(os_text)), text,
+                      caret, put);
+}
+
+void verify_clipboard_put()
+{
+    for (const auto &[prefix, os_text, put, expected] : clipboard_puts)
+    {
+        const VimStep step = clipboard_put(prefix, os_text, put);
+        expect(put_into("X1\nX2", step) == expected, "\"+p pastes the clipboard text as read");
+        expect(!step.clipboard.has_value() && !step.failure.has_value(),
+               "\"+p does not write the clipboard");
+        expect(register_unused(step.next.clipboard), "the copy is gone after the command");
+    }
+    expect(dot_record_is(clipboard_put("\"+", "abc", "p").next, std::nullopt, "\"+p"),
+           "\"+p is recorded for . with its name, which reads the clipboard again");
+    const TextBuffer text = buffer_of("X1\nX2");
+    const Selection caret = collapsed_at(Offset{0});
+    const VimStep unread = core_steps(empty_vim_state(), text, caret, "\"+p");
+    expect(unread.failure.has_value() && std::holds_alternative<VimNoEffect>(unread.effect),
+           "\"+p without a copy is refused like an empty register");
+    const VimStep empty = clipboard_put("\"+", "", "p");
+    expect(empty.failure.has_value() && std::holds_alternative<VimNoEffect>(empty.effect),
+           "\"+p of an empty text is refused");
+    const VimStep held = clipboard_put("\"+", "abc", "3");
+    expect(held.next.clipboard.text == "abc", "the copy stays while the command is typed");
+    expect(register_unused(core_steps(held.next, text, caret, "<Esc>").next.clipboard),
+           "Esc drops the copy");
+}
+
+// `@+` `@*` と `@@`（決定 5・probe の B8）。`@` の待ちに置いた写しを鍵列にして再生する。
+[[nodiscard]] VimStep clipboard_replay(const VimState &state, std::string_view os_text,
+                                       std::string_view name)
+{
+    const TextBuffer text = buffer_of("abc");
+    const Selection caret = collapsed_at(Offset{0});
+    const VimStep waiting = core_steps(state, text, caret, "@");
+    return core_steps(vim_clipboard_loaded(waiting.next, vim_register_of_clipboard(os_text)), text,
+                      caret, name);
+}
+
+[[nodiscard]] bool replays(const VimStep &step, std::string_view keys)
+{
+    const auto *const replay = std::get_if<VimReplay>(&step.effect);
+    return replay != nullptr && replay->keys == vim_keys_of(keys);
+}
+
+void verify_clipboard_replay()
+{
+    const VimStep plus = clipboard_replay(empty_vim_state(), "x", "+");
+    expect(replays(plus, "x") && plus.next.last_macro == std::optional<char>{'+'},
+           "@+ runs the clipboard text and @@ remembers +");
+    const VimStep again = clipboard_replay(plus.next, "l", "@");
+    expect(replays(again, "l"), "@@ after @+ reads the clipboard again");
+    const VimStep star = clipboard_replay(empty_vim_state(), "x\r\n", "*");
+    expect(replays(star, "x<NL>") && star.next.last_macro == std::optional<char>{'*'},
+           "@* runs a linewise clipboard text with its newline as <NL>");
+    const VimStep empty = clipboard_replay(empty_vim_state(), "", "+");
+    expect(empty.failure.has_value() && std::holds_alternative<VimNoEffect>(empty.effect),
+           "@+ of an empty text is refused");
+}
+
+// `"+` への書き（決定 6・probe の B1）。表へは置かず VimStep.clipboard に返し、`"1` の規則と
+// `"-` の規則と無名は名前つきと同じ（`"0` は変えない・1 行の中の削除は `"-` に入らない）。
+void verify_clipboard_written()
+{
+    const TextBuffer text = buffer_of("one\ntwo");
+    const Selection caret = collapsed_at(Offset{0});
+    const VimState empty = empty_vim_state();
+    for (const std::string_view keys : {std::string_view{"\"+yy"}, std::string_view{"\"*yy"}})
+    {
+        const VimStep yank = core_steps(empty, text, caret, keys);
+        expect(yank.clipboard.has_value() &&
+                   register_is(yank.clipboard.value(), "one\n", VimRegisterKind::lines),
+               "\"+yy writes the line to the clipboard");
+        expect(register_is(yank.next.unnamed_register, "one\n", VimRegisterKind::lines) &&
+                   register_unused(numbered_register(yank.next, 0)) &&
+                   register_unused(yank.next.clipboard),
+               "\"+yy fills the unnamed register but not \"0 or the copy");
+    }
+    const VimStep line = core_steps(empty, text, caret, "\"+dd");
+    expect(line.clipboard.has_value() &&
+               register_is(line.clipboard.value(), "one\n", VimRegisterKind::lines) &&
+               register_is(numbered_register(line.next, 1), "one\n", VimRegisterKind::lines) &&
+               register_is(line.next.unnamed_register, "one\n", VimRegisterKind::lines) &&
+               register_unused(numbered_register(line.next, 0)) &&
+               register_unused(line.next.small_delete),
+           "\"+dd writes the clipboard, \"1 and the unnamed register");
+    const VimStep character = core_steps(empty, text, caret, "\"+x");
+    expect(character.clipboard.has_value() &&
+               register_is(character.clipboard.value(), "o", VimRegisterKind::characters) &&
+               register_is(character.next.unnamed_register, "o", VimRegisterKind::characters) &&
+               register_unused(numbered_register(character.next, 1)) &&
+               register_unused(character.next.small_delete),
+           "\"+x writes the clipboard and the unnamed register but not \"- or \"1");
+    const VimStep change = core_steps(empty, text, caret, "\"+cw");
+    expect(change.clipboard.has_value() &&
+               register_is(change.clipboard.value(), "one", VimRegisterKind::characters) &&
+               change.next.mode == VimMode::insert && register_unused(change.next.small_delete),
+           "\"+cw writes the clipboard and enters INSERT");
+    const VimStep word = core_steps(empty, buffer_of("hello world"), caret, "\"+yw");
+    expect(word.clipboard.has_value() &&
+               register_is(word.clipboard.value(), "hello ", VimRegisterKind::characters),
+           "\"+yw writes the word with its trailing blank");
+    const VimStep plain = core_steps(empty, text, caret, "yy");
+    expect(!plain.clipboard.has_value() &&
+               register_is(numbered_register(plain.next, 0), "one\n", VimRegisterKind::lines),
+           "yy without \"+ does not write the clipboard");
+    const VimStep blackhole = core_steps(empty, text, caret, "\"_dd");
+    expect(!blackhole.clipboard.has_value(), "\"_dd does not write the clipboard");
+}
+
+// 矩形の `"+y`（決定 6・7）。OS へ出す本文は engine の値のまま矩形の種類と幅を持ち、行を
+// 改行で繋いだ本文にするのは controller。
+void verify_clipboard_block_written()
+{
+    const TextBuffer text = buffer_of("abcd\nefgh");
+    VimState block = empty_vim_state();
+    block.mode = VimMode::visual_block;
+    const VimStep yank = core_steps(block, text, Selection{Offset{0}, Offset{6}}, "\"+y");
+    expect(yank.clipboard.has_value() &&
+               register_is(yank.clipboard.value(), "ab\nef", VimRegisterKind::block) &&
+               yank.next.mode == VimMode::normal,
+           "a block \"+y writes the block text to the clipboard");
+}
+
 // 録画を経る fixture と `"` の fixture は同じレジスタの表を通るので 1 scope（ADR 0048 の決定 11）。
 [[nodiscard]] bool macro_fixture(const VimFixture &fixture) noexcept
 {
@@ -603,6 +881,12 @@ void verify_vim_macro_contracts()
     verify_register_block_append_refused();
     verify_replay_input_line_keys();
     verify_recording_meets_registers();
+    verify_clipboard_text_table();
+    verify_clipboard_read_predicate();
+    verify_clipboard_put();
+    verify_clipboard_replay();
+    verify_clipboard_written();
+    verify_clipboard_block_written();
 }
 
 void verify_vim_macro_scope()
