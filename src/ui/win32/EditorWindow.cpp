@@ -14,6 +14,7 @@
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
+#include "EndSession.hpp"
 #include "FileDialog.hpp"
 #include "FileFailure.hpp"
 #include "FontShortcut.hpp"
@@ -647,6 +648,13 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_CLOSE:
         close_window();
         return 0;
+    case WM_ENDSESSION:
+        // OS の終了が確定したら（word が真）一覧を書く。窓は壊さない（ADR 0059 の決定 3）。
+        if (word != FALSE)
+        {
+            remember_session(application::SessionEnd::window_closed);
+        }
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -908,9 +916,10 @@ void EditorWindow::close_tab(std::size_t tab)
     }
     send(application::CloseTab{tab});
     // 最後の 1 つを閉じたら窓を閉じる（D22）。確認は済んだので close_window を通さない。
+    // closing は 1 意図だけの印なので、見てから一覧を書く（EndSession の frame では消えている）。
     if (controller_.frame().closing)
     {
-        DestroyWindow(window_);
+        leave(application::SessionEnd::last_tab_closed);
     }
 }
 
@@ -1414,7 +1423,20 @@ void EditorWindow::close_window()
         }
         from = next.value() + 1;
     }
+    leave(application::SessionEnd::window_closed);
+}
+
+void EditorWindow::leave(application::SessionEnd reason)
+{
+    remember_session(reason);
     DestroyWindow(window_);
+}
+
+void EditorWindow::remember_session(application::SessionEnd reason)
+{
+    // send を通さない。send の後半（IME・題名・告知・無効化）は壊れていく窓に触れるので、
+    // 一覧を書くだけの意図には要らない（書けなくても何も出さない・ADR 0059 の決定 3）。
+    static_cast<void>(controller_.apply(application::EndSession{reason}));
 }
 
 void EditorWindow::type_character(WPARAM word)

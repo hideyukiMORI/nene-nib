@@ -142,6 +142,8 @@ class EditorController final
     void accept(const WalkRecentTab &intent);
     void accept(const SettleRecentTab &);
     void accept(const CloseTab &intent);
+    // 窓が閉じていくときに前回のタブの一覧を書く（ADR 0059 の決定 3）。状態は変えない。
+    void accept(const EndSession &intent);
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);

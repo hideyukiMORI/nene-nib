@@ -34,6 +34,7 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
 #include "ScrollLines.hpp"
@@ -520,8 +521,9 @@ void verify_open_failure_adds_no_tab()
     ScriptedCodePages code_pages;
     ScriptedSettings settings;
     ScriptedThemes themes;
+    ScriptedSession session;
     const EditorController controller(
-        EditorPorts{appearance, clipboard, files, code_pages, settings, themes}, initial);
+        EditorPorts{appearance, clipboard, files, code_pages, settings, themes, session}, initial);
     return controller.frame();
 }
 
@@ -1128,8 +1130,9 @@ void verify_recent_after_startup()
     ScriptedCodePages code_pages;
     ScriptedSettings settings;
     ScriptedThemes themes;
+    ScriptedSession session;
     EditorController controller(
-        EditorPorts{appearance, clipboard, files, code_pages, settings, themes},
+        EditorPorts{appearance, clipboard, files, code_pages, settings, themes, session},
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});
     expect(recent_bodies(controller) == "cba", "three arguments leave the last one most recent");

@@ -11,6 +11,7 @@
 #include "ImeOpenState.hpp"
 #include "Milestone.hpp"
 #include "RenderFailure.hpp"
+#include "SessionEnd.hpp"
 #include "StatusBarHit.hpp"
 #include "TabCommand.hpp"
 #include "TimingPort.hpp"
@@ -127,6 +128,11 @@ class EditorWindow final
     void save_document();
     void save_document_as();
     void close_window();
+    // 窓を壊す直前の 1 か所（ADR 0059 の決定 3）。前回のタブの一覧を書いてから壊す。
+    // close_window と、最後の 1 つを閉じる close_tab が通る。abandon とデストラクタは通らない。
+    void leave(application::SessionEnd reason);
+    // 前回のタブの一覧を書く意図を送る（leave と WM_ENDSESSION）。この後は窓へ描かない。
+    void remember_session(application::SessionEnd reason);
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
     [[nodiscard]] bool confirm_discard();
     void update_title(const application::EditorFrame &frame);

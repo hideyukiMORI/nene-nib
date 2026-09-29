@@ -74,3 +74,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0056](0056-tabs-park-inactive-documents-behind-the-active-one.md) | 複数タブは、アクティブな文書を今の形のまま持ち、ほかの文書は不変の束として脇に置く | 受理 |
 | [0057](0057-tab-destination-is-one-pure-function.md) | タブの行き先は 1 つの純関数が決め、Vim の `gt` `gT` と Ex と一覧が共用する | 受理 |
 | [0058](0058-ctrl-tab-walks-tabs-in-recent-order.md) | Ctrl+Tab は最近使った順に歩き、Ctrl を離したときに確定する | 受理 |
+| [0059](0059-session-remembers-tabs-and-loads-them-on-view.md) | 前回のタブは別のファイルに覚え、起動のときは見ていたタブだけを読む | 受理 |

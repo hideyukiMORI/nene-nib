@@ -1,6 +1,7 @@
 #include "Win32SettingsAdapter.hpp"
 
 #include "FileHandle.hpp"
+#include "ParentDirectory.hpp"
 #include "SettingsCodec.hpp"
 #include "Utf16.hpp"
 
@@ -13,17 +14,6 @@ namespace
 {
 using Failure = application::SettingsFailure;
 constexpr std::size_t maximum_settings_bytes = 4096;
-
-[[nodiscard]] bool ensure_parent(const std::wstring &path)
-{
-    const auto separator = path.find_last_of(L"/\\");
-    if (separator == std::wstring::npos)
-    {
-        return false;
-    }
-    const auto parent = path.substr(0, separator);
-    return CreateDirectoryW(parent.c_str(), nullptr) != 0 || GetLastError() == ERROR_ALREADY_EXISTS;
-}
 } // namespace
 
 Win32SettingsAdapter::Win32SettingsAdapter(application::FilePort &files,
@@ -109,7 +99,7 @@ Win32SettingsAdapter::write(const core::EditorSettings &settings)
         return std::unexpected(blocked_.value());
     }
     const auto wide = core::to_utf16(path_.value().text());
-    if (!wide || !ensure_parent(wide.value()))
+    if (!wide || !ensure_parent_directory(wide.value()))
     {
         return std::unexpected(Failure::unwritable);
     }

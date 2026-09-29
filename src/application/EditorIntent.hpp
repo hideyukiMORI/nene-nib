@@ -12,6 +12,7 @@
 #include "ComposeText.hpp"
 #include "DeleteText.hpp"
 #include "EditCommand.hpp"
+#include "EndSession.hpp"
 #include "HistoryAction.hpp"
 #include "InsertText.hpp"
 #include "MoveCaret.hpp"
@@ -54,5 +55,5 @@ using EditorIntent =
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
                  ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
                  WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth,
-                 OpenTabList>;
+                 OpenTabList, EndSession>;
 } // namespace nenenib::application

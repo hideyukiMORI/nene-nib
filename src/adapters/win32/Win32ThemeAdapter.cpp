@@ -128,14 +128,7 @@ read_record(application::FilePort &files, const core::FilePath &directory,
 
 std::expected<core::FilePath, core::ThemeFailure> local_theme_directory()
 {
-    const auto settings = local_settings_path();
-    if (!settings)
-    {
-        return std::unexpected(core::ThemeFailure::unreadable);
-    }
-    const auto path = settings.value().text();
-    const auto parent = path.substr(0, path.find_last_of("/\\") + 1);
-    const auto directory = core::FilePath::parse(std::string(parent) + "themes");
+    const auto directory = beside_local_settings("themes");
     if (!directory)
     {
         return std::unexpected(core::ThemeFailure::unreadable);
