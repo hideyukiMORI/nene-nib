@@ -5,12 +5,12 @@
 #include "EditorWindow.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
-#include "NoSession.hpp"
 #include "OpenDocument.hpp"
 #include "Win32AppearanceAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
+#include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ThemeAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
@@ -131,8 +131,9 @@ int run(HINSTANCE instance)
         files, nenenib::adapters::win32::local_settings_path());
     nenenib::adapters::win32::Win32ThemeAdapter themes(
         files, nenenib::adapters::win32::local_theme_directory());
-    // 前回のタブの一覧は、本物の adapter が入るまで何も覚えない（Issue #252・ADR 0059 の決定 2）。
-    nenenib::application::NoSession session;
+    // 前回のタブの一覧は窓が閉じるときに書く。起動ではまだ読まない（ADR 0059 の決定 2・3・#253）。
+    nenenib::adapters::win32::Win32SessionAdapter session(
+        files, nenenib::adapters::win32::local_session_path());
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session},

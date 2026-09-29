@@ -1,11 +1,13 @@
 #include "LocalSettingsPath.hpp"
 
+#include "AbsolutePath.hpp"
 #include "Utf16.hpp"
 
 #include <windows.h>
 
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::adapters::win32
 {
@@ -25,14 +27,8 @@ std::expected<core::FilePath, application::SettingsFailure> local_settings_path(
         return std::unexpected(Failure::location_unavailable);
     }
     directory.resize(copied);
-    const bool drive = directory.size() >= 3 && directory[1] == L':' &&
-                       (directory[2] == L'\\' || directory[2] == L'/');
-    if (!drive && !directory.starts_with(L"\\\\"))
-    {
-        return std::unexpected(Failure::location_unavailable);
-    }
     const auto utf8 = core::to_utf8(directory);
-    if (!utf8)
+    if (!utf8 || !rooted_path_text(utf8.value()))
     {
         return std::unexpected(Failure::location_unavailable);
     }
@@ -42,5 +38,22 @@ std::expected<core::FilePath, application::SettingsFailure> local_settings_path(
         return std::unexpected(Failure::location_unavailable);
     }
     return path.value();
+}
+
+std::optional<core::FilePath> beside_local_settings(std::string_view name)
+{
+    const auto settings = local_settings_path();
+    if (!settings)
+    {
+        return std::nullopt;
+    }
+    const auto path = settings.value().text();
+    const auto parent = path.substr(0, path.find_last_of("/\\") + 1);
+    auto beside = core::FilePath::parse(std::string(parent) + std::string(name));
+    if (!beside)
+    {
+        return std::nullopt;
+    }
+    return std::move(beside).value();
 }
 } // namespace nenenib::adapters::win32

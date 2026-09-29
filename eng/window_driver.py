@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ctypes as c
 from ctypes import wintypes as w
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -191,9 +192,36 @@ def rectangle(window, getter) -> list[int]:
     return [bounds.left, bounds.top, bounds.right, bounds.bottom]
 
 
+def forget_session(environment: dict) -> bool:
+    """Delete the previous tab list (NeNeNib/session.v1) of the profile the environment names.
+
+    A tool starts from its own profile, so a list left by an earlier run must not come back in the
+    next start (ADR 0059 decision 7). Nothing is deleted when the environment's LOCALAPPDATA is this
+    process's own: that is the user's real list, not a tool profile. Returns whether it deleted.
+    """
+    profile = environment.get("LOCALAPPDATA")
+    own = os.environ.get("LOCALAPPDATA")
+    if not profile:
+        return False
+    if own and os.path.normcase(os.path.abspath(profile)) == os.path.normcase(os.path.abspath(own)):
+        return False
+    listed = Path(profile) / "NeNeNib" / "session.v1"
+    if not listed.is_file():
+        return False
+    listed.unlink()
+    return True
+
+
 def start(executable: Path, environment: dict, arguments: list[str] | None = None,
-          seconds: float = 5.0) -> tuple[subprocess.Popen, int, list[int]]:
-    """Return the process, its window, and the window rectangle as first seen."""
+          seconds: float = 5.0, *,
+          keep_session: bool = False) -> tuple[subprocess.Popen, int, list[int]]:
+    """Return the process, its window, and the window rectangle as first seen.
+
+    The profile's previous tab list is deleted first unless keep_session is set (only the checks of
+    restoring itself keep it, Issue #253).
+    """
+    if not keep_session:
+        forget_session(environment)
     process = subprocess.Popen([str(executable), *(arguments or [])], env=environment)
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:

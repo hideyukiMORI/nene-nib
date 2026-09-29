@@ -103,6 +103,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32ThemeAdapter.cpp
     src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
     src/adapters/win32/SettingsCodec.cpp src/adapters/win32/Win32SettingsAdapter.cpp
+    src/adapters/win32/ParentDirectory.cpp src/adapters/win32/SessionCodec.cpp
+    src/adapters/win32/Win32SessionAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp)
@@ -126,6 +128,12 @@ nenenib_link(nib_theme_tests nenenib_core)
 nenenib_link(nib_theme_tests nenenib_application)
 nenenib_link(nib_theme_tests nenenib_adapters)
 add_test(NAME nib_themes COMMAND nib_theme_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+nenenib_target(nib_session_tests adapter_tests EXECUTABLE tests/adapters/SessionAdapterTests.cpp)
+nenenib_link(nib_session_tests nenenib_core)
+nenenib_link(nib_session_tests nenenib_application)
+nenenib_link(nib_session_tests nenenib_adapters)
+add_test(NAME nib_sessions COMMAND nib_session_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp)

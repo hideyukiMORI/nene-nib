@@ -32,4 +32,10 @@ std::optional<core::FilePath> absolute_file_path(const std::wstring &path)
     }
     return std::move(parsed).value();
 }
+
+bool rooted_path_text(std::string_view text) noexcept
+{
+    const bool drive = text.size() >= 3 && text[1] == ':' && (text[2] == '\\' || text[2] == '/');
+    return drive || text.starts_with("\\\\");
+}
 } // namespace nenenib::adapters::win32
