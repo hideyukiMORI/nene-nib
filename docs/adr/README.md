@@ -67,3 +67,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0049](0049-space-backspace-wrap-motions.md) | `<Space>` `<BS>` は行をまたぐ `l` `h` で、オペレータ待ちと VISUAL では行末の位置に一度止まる | 受理 |
 | [0050](0050-numbered-and-small-delete-registers.md) | 数字レジスタ `"0`〜`"9` と小削除 `"-` は書き手 1 本の規則で埋め、`.` は番号を 1 つ進めて再生する | 受理 |
 | [0051](0051-clipboard-registers-through-controller.md) | クリップボードのレジスタ `"+` `"*` は engine が写しを読み書きし、OS との往復は controller が `ClipboardPort` で行う | 受理 |
+| [0052](0052-undo-caret-restores-the-first-edit-position.md) | `u` と Ctrl-r の後のキャレットは undo の単位が覚えた戻り先で、戻り先は最初の編集の瞬間のキャレット | 受理 |

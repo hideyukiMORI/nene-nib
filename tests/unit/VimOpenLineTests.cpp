@@ -123,14 +123,17 @@ void verify_vim_open_line_switch()
 
 void verify_history_inner_absorbing()
 {
-    const Edit typed{Offset{5}, "old", "ab\n"};
-    expect(absorbed_edit(typed, Edit{Offset{5}, "", "X"}) == Edit{Offset{5}, "old", "Xab\n"},
+    const Edit typed{Offset{5}, "old", "ab\n", Offset{5}};
+    expect(absorbed_edit(typed, Edit{Offset{5}, "", "X", Offset{5}}) ==
+               Edit{Offset{5}, "old", "Xab\n", Offset{5}},
            "inserting at the start preserves the old removal");
-    expect(absorbed_edit(typed, Edit{Offset{6}, "b", "YZ"}) == Edit{Offset{5}, "old", "aYZ\n"},
+    expect(absorbed_edit(typed, Edit{Offset{6}, "b", "YZ", Offset{6}}) ==
+               Edit{Offset{5}, "old", "aYZ\n", Offset{5}},
            "a replacement inside the inserted span is composed into that edit");
-    expect(absorbed_edit(typed, Edit{Offset{5}, "a", ""}) == Edit{Offset{5}, "old", "b\n"},
+    expect(absorbed_edit(typed, Edit{Offset{5}, "a", "", Offset{5}}) ==
+               Edit{Offset{5}, "old", "b\n", Offset{5}},
            "deleting before the trailing open-line newline stays in the same unit");
-    expect(!absorbed(typed, Edit{Offset{7}, "\nx", ""}).has_value(),
+    expect(!absorbed(typed, Edit{Offset{7}, "\nx", "", Offset{7}}).has_value(),
            "a removal across the end cannot be absorbed as an inner edit");
 }
 } // namespace

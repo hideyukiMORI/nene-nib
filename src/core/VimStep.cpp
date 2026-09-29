@@ -853,7 +853,10 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     const LineNumber previous{last.value - 1};
     if (starts_in_the_indent(text, range.range.begin))
     {
-        return lines_between(text, first, previous);
+        // 行単位に言い換えても、Vim のカーソルは元の範囲の先頭のまま保存する（ADR 0052 の決定 8）。
+        VimMotionRange lines = lines_between(text, first, previous);
+        lines.restore = range.restore.value_or(range.range.begin);
+        return lines;
     }
     return characters_between(range.range.begin, text.line_end(previous));
 }
@@ -900,6 +903,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     }
     VimMotionRange lines = lines_between(text, first, last);
     lines.numbered = range.numbered;
+    lines.restore = range.restore.value_or(range.range.begin);
     return lines;
 }
 
@@ -1171,6 +1175,44 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     return OffsetRange{begin, text.line_terminator_end(last)};
 }
 
+// u と Ctrl-r の戻り先を 1 打鍵の結果に添える（ADR 0052 の決定 7）。状態と効果は変えない。
+[[nodiscard]] VimStep restored_at(VimStep step, Offset restore)
+{
+    step.restore = restore;
+    return step;
+}
+
+// `c` の戻り先（ADR 0052 の決定 9）。行単位で 2 行以上なら、範囲の戻り先の 1 行下の同じバイトの
+// 桁（Vim の op_change は残りの行を消す間だけカーソルを 1 行下げて最初の保存をする・実測）。
+[[nodiscard]] Offset change_restore(const TextBuffer &text, const VimMotionRange &range)
+{
+    const Offset restore = range.restore.value_or(range.range.begin);
+    const LineNumber first = line_of(text, range.range.begin);
+    if (range.kind != VimRegisterKind::lines || line_of(text, range.range.end) == first)
+    {
+        return restore;
+    }
+    const LineNumber line = line_of(text, restore);
+    return vim_line_and_column(text, LineNumber{line.value + single_step},
+                               restore.value - text.line_start(line).value);
+}
+
+// VISUAL の u と Ctrl-r の戻り先（ADR 0052 の決定 10）。文字単位は選択の先頭。行単位は先頭行の
+// 上で、固定の端が先頭行なら行頭（1 行だけの `Vd` も・実測）、動く端だけが先頭行ならその位置。
+// 矩形は左上（block_operated と replaced_block が書く）。
+[[nodiscard]] Offset visual_restore(const TextBuffer &text, const Selection &selection,
+                                    VimMode mode)
+{
+    const Offset first =
+        selection.anchor.value < selection.caret.value ? selection.anchor : selection.caret;
+    if (mode != VimMode::visual_line)
+    {
+        return first;
+    }
+    const LineNumber line = line_of(text, first);
+    return line_of(text, selection.anchor) == line ? text.line_start(line) : selection.caret;
+}
+
 // 範囲をそのまま消す。VISUAL の `d` `x` はここへ直接来る（Vim の op_delete の「奇妙な Vi の
 // 振る舞い」は `!oap->is_VIsual` で守られていて、選択からの削除には掛からない。Issue #53 で実測）。
 [[nodiscard]] VimStep removed_exactly(const VimState &state, const TextBuffer &text,
@@ -1190,12 +1232,14 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
         // Motion ranges are constructed only as characterwise or linewise.
         std::unreachable();
     case VimRegisterKind::characters:
-        return with_clipboard(VimStep{std::move(next), VimRemoveRange{range.range}},
-                              std::move(clipboard));
+        return restored_at(with_clipboard(VimStep{std::move(next), VimRemoveRange{range.range}},
+                                          std::move(clipboard)),
+                           range.restore.value_or(range.range.begin));
     case VimRegisterKind::lines:
-        return with_clipboard(
-            VimStep{std::move(next), VimRemoveLines{removed_lines_range(text, range)}},
-            std::move(clipboard));
+        return restored_at(with_clipboard(VimStep{std::move(next),
+                                                  VimRemoveLines{removed_lines_range(text, range)}},
+                                          std::move(clipboard)),
+                           range.restore.value_or(range.range.begin));
     }
     std::unreachable();
 }
@@ -1218,8 +1262,9 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     }
     auto [next, clipboard] = std::move(written).value();
     next.mode = VimMode::insert;
-    return with_clipboard(VimStep{std::move(next), VimRemoveRange{range.range}},
-                          std::move(clipboard));
+    return restored_at(
+        with_clipboard(VimStep{std::move(next), VimRemoveRange{range.range}}, std::move(clipboard)),
+        change_restore(text, range));
 }
 
 // y のあとのキャレット。行単位VISUALは下向き・単一行なら先頭、上向きなら現在位置。
@@ -1411,6 +1456,20 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     return VimMotion::word_end_for_change;
 }
 
+// 行単位の移動の範囲の戻り先（ADR 0052 の決定 8）。先頭行にあるのはキャレットと着地の小さい方
+// で、その位置で Vim は保存する（`dk` は着地の桁・`dj` はキャレットの桁）。
+[[nodiscard]] VimMotionRange landed(const VimEditorView &view, const VimState &state,
+                                    VimMotion motion, VimMotionRange range)
+{
+    if (range.kind == VimRegisterKind::lines)
+    {
+        const Offset destination = moved_by(view, state, motion);
+        const Offset caret = view.selection.caret;
+        range.restore = destination.value < caret.value ? destination : caret;
+    }
+    return range;
+}
+
 [[nodiscard]] VimStep operated(const VimState &state, const VimEditorView &view, VimMotion motion)
 {
     const VimOperator operation = operation_of(state);
@@ -1437,7 +1496,8 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     return performed(performed_from, view.text, view.selection.caret,
                      keeps_the_line_break(view.text, range.value(), wanted, operation)
                          ? range.value()
-                         : adjusted_for_exclusive(view.text, range.value(), wanted));
+                         : adjusted_for_exclusive(
+                               view.text, landed(view, state, wanted, range.value()), wanted));
 }
 
 // オペレータを自分の回数といっしょに保留する（決定 1）。積んだ回数はここで移る。
@@ -1454,11 +1514,14 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 [[nodiscard]] VimStep operated_on_lines(const VimState &state, const TextBuffer &text, Offset caret,
                                         VimOperator operation)
 {
-    const auto range = lines_below(text, line_of(text, caret), resolved_count(state) - single_step);
+    auto range = lines_below(text, line_of(text, caret), resolved_count(state) - single_step);
     if (!range.has_value())
     {
         return failed(cancelled(state), VimRepeatFailure::not_moved);
     }
+    // 着地は範囲の最後の行の最初の非空白。1 行ならキャレットと着地の小さい方（ADR 0052 の決定 8）。
+    const Offset landing = vim_first_non_blank(text, range.value().range.end);
+    range.value().restore = landing.value < caret.value ? landing : caret;
     VimState with = state;
     with.pending = VimPendingOperator{operation, std::nullopt};
     return performed(with, text, caret, range.value());
@@ -1627,8 +1690,9 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     switch (operation)
     {
     case VimOperator::remove:
-        return with_clipboard(VimStep{std::move(next), vim_remove_block(block)},
-                              std::move(clipboard));
+        return restored_at(
+            with_clipboard(VimStep{std::move(next), vim_remove_block(block)}, std::move(clipboard)),
+            block_caret(block, 0));
     case VimOperator::yank:
         return with_clipboard(VimStep{std::move(next), VimMoveTo{block_caret(block, 0)}},
                               std::move(clipboard));
@@ -1643,9 +1707,11 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
                                      char32_t target)
 {
     const VimBlockRange block = block_of(state, view);
-    return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimReplaceBlock{replaced_block_edits(view.text, block, target),
-                                   block_caret(block, block.lines.front().keep_lead)}};
+    // 戻り先は矩形の左上（ADR 0052 の決定 10）。
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceBlock{replaced_block_edits(view.text, block, target),
+                                               block_caret(block, block.lines.front().keep_lead)}},
+                       block_caret(block, 0));
 }
 
 // 矩形レジスタの行（本文は LF で区切られ、末尾に改行は無い）。
@@ -1981,8 +2047,14 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         caret.value +=
             splits_line ? body.size() : previous_code_point(body, Offset{body.size()}).value;
     }
-    return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimReplaceRange{selected, std::move(body), caret}};
+    VimStep step{vim_resting_from(state, state.unnamed_register),
+                 VimReplaceRange{selected, std::move(body), caret}};
+    // NORMAL の r は engine が書かない（ADR 0052 の決定 11）。VISUAL は決定 10。
+    if (state.mode != VimMode::normal)
+    {
+        step.restore = visual_restore(view.text, view.selection, state.mode);
+    }
+    return step;
 }
 
 [[nodiscard]] VimStep replacement_key(const VimState &state, const VimEditorView &view, VimKey key)
@@ -3295,7 +3367,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return block_operated(state, view, operation);
     }
-    const VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
+    VimMotionRange range = vim_visual_range(view.text, view.selection, state.mode);
+    range.restore = visual_restore(view.text, view.selection, state.mode);
     switch (operation)
     {
     case VimOperator::remove:

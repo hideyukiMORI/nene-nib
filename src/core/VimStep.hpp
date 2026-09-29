@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Offset.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
@@ -27,6 +28,10 @@ struct VimStep
     // `"+` `"*` へ書いた本文（ADR 0051 の決定 6）。engine の値のまま（本文は LF・種類つき）で、
     // controller が文書の改行に直して ClipboardPort へ出す。状態の欄には置かない。
     std::optional<VimRegister> clipboard = std::nullopt;
+    // u と Ctrl-r の戻り先（ADR 0052 の決定 7）。Vim のオペレータが範囲の先頭へ動いてから保存する
+    // のと同じに、controller は効果を写す前にキャレット（選択は畳む）をここへ置く。空はいまの
+    // キャレットのまま。書くのはオペレータと VISUAL の d x c r（決定 8〜10）。
+    std::optional<Offset> restore = std::nullopt;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の

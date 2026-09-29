@@ -51,4 +51,30 @@ Offset vim_first_non_blank(const TextBuffer &text, Offset at)
     }
     return Offset{start.value + index};
 }
+
+Offset vim_line_and_column(const TextBuffer &text, LineNumber line, std::size_t column)
+{
+    const Offset start = text.line_start(line);
+    const std::string content = text.text_range(start, text.line_end(line));
+    if (column >= content.size())
+    {
+        return Offset{start.value + content.size()};
+    }
+    if (is_boundary(content, Offset{column}))
+    {
+        return Offset{start.value + column};
+    }
+    return Offset{start.value + previous_code_point(content, Offset{column}).value};
+}
+
+Offset vim_same_line_and_column(const TextBuffer &before, Offset at, const TextBuffer &after)
+{
+    const LineNumber line = before.position_of(at).line;
+    const std::size_t column = at.value - before.line_start(line).value;
+    if (line.value > after.line_count())
+    {
+        return vim_first_non_blank(after, after.line_start(LineNumber{after.line_count()}));
+    }
+    return vim_line_and_column(after, line, column);
+}
 } // namespace nenenib::core

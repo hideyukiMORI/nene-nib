@@ -782,20 +782,23 @@ void verify_caret_words()
 void verify_history_travel()
 {
     const auto history = EditHistory::empty()
-                             .pushed(Edit{Offset{0}, "", "a"}, EditBoundary::separate)
-                             .pushed(Edit{Offset{1}, "", "b"}, EditBoundary::separate);
-    expect(history.undo().value() == Edit{Offset{1}, "", "b"}, "undo names the last edit");
+                             .pushed(Edit{Offset{0}, "", "a", Offset{0}}, EditBoundary::separate)
+                             .pushed(Edit{Offset{1}, "", "b", Offset{1}}, EditBoundary::separate);
+    expect(history.undo().value() == Edit{Offset{1}, "", "b", Offset{1}},
+           "undo names the last edit");
     expect(history.redo().error() == HistoryFailure::nothing_to_redo, "nothing to redo at the tip");
     const auto once = history.undone();
     expect(once.position() == 1 && once.size() == 2, "undone moves the position, not the list");
-    expect(once.redo().value() == Edit{Offset{1}, "", "b"}, "redo names the edit just undone");
+    expect(once.redo().value() == Edit{Offset{1}, "", "b", Offset{1}},
+           "redo names the edit just undone");
     const auto twice = once.undone();
     expect(twice.position() == 0, "two undos reach the start");
     expect(twice.undo().error() == HistoryFailure::nothing_to_undo, "nothing to undo at the start");
     expect(twice.undone().position() == 0, "undone at the start stays at the start");
     expect(history.redone().position() == 2, "redone at the tip stays at the tip");
     expect(twice.redone().position() == 1, "redone moves forward");
-    const auto rewritten = twice.pushed(Edit{Offset{0}, "", "z"}, EditBoundary::separate);
+    const auto rewritten =
+        twice.pushed(Edit{Offset{0}, "", "z", Offset{0}}, EditBoundary::separate);
     expect(rewritten.size() == 1, "a new edit after undo drops the redo tail");
     expect(EditHistory::empty().size() == 0, "a new history is empty");
 }
@@ -1465,53 +1468,60 @@ void verify_display_text_accepts_ascii()
 void verify_history_coalescing()
 {
     const auto history = EditHistory::empty()
-                             .pushed(Edit{Offset{0}, "", "a"}, EditBoundary::coalesce)
-                             .pushed(Edit{Offset{1}, "", "b"}, EditBoundary::coalesce)
-                             .pushed(Edit{Offset{2}, "", "c"}, EditBoundary::coalesce);
+                             .pushed(Edit{Offset{0}, "", "a", Offset{0}}, EditBoundary::coalesce)
+                             .pushed(Edit{Offset{1}, "", "b", Offset{1}}, EditBoundary::coalesce)
+                             .pushed(Edit{Offset{2}, "", "c", Offset{2}}, EditBoundary::coalesce);
     expect(history.size() == 1 && history.position() == 1, "three keystrokes are one unit");
-    expect(history.undo().value() == Edit{Offset{0}, "", "abc"}, "the unit holds all three");
-    const auto broken = history.pushed(Edit{Offset{3}, "", "d"}, EditBoundary::separate);
+    expect(history.undo().value() == Edit{Offset{0}, "", "abc", Offset{0}},
+           "the unit holds all three");
+    const auto broken = history.pushed(Edit{Offset{3}, "", "d", Offset{3}}, EditBoundary::separate);
     expect(broken.size() == 2, "a separate boundary starts a new unit");
-    const auto jumped = history.pushed(Edit{Offset{9}, "", "d"}, EditBoundary::coalesce);
+    const auto jumped = history.pushed(Edit{Offset{9}, "", "d", Offset{9}}, EditBoundary::coalesce);
     expect(jumped.size() == 2, "an insert somewhere else starts a new unit");
-    const auto removed = history.pushed(Edit{Offset{3}, "x", ""}, EditBoundary::coalesce);
+    const auto removed =
+        history.pushed(Edit{Offset{3}, "x", "", Offset{3}}, EditBoundary::coalesce);
     expect(removed.size() == 2, "a deletion never joins the unit before it");
-    const auto after_removal = removed.pushed(Edit{Offset{3}, "", "y"}, EditBoundary::coalesce);
+    const auto after_removal =
+        removed.pushed(Edit{Offset{3}, "", "y", Offset{3}}, EditBoundary::coalesce);
     expect(after_removal.size() == 3, "an insert after a deletion starts its own unit");
     const auto sealed = history.sealed();
     expect(sealed.size() == 1 && sealed.position() == 1, "sealing keeps the edits and the place");
-    const auto after_seal = sealed.pushed(Edit{Offset{3}, "", "d"}, EditBoundary::coalesce);
+    const auto after_seal =
+        sealed.pushed(Edit{Offset{3}, "", "d", Offset{3}}, EditBoundary::coalesce);
     expect(after_seal.size() == 2 && after_seal.position() == 2,
            "a sealed unit does not take the next keystroke");
     const auto first =
-        EditHistory::empty().pushed(Edit{Offset{0}, "", "a"}, EditBoundary::coalesce);
+        EditHistory::empty().pushed(Edit{Offset{0}, "", "a", Offset{0}}, EditBoundary::coalesce);
     expect(first.size() == 1, "the first edit has nothing to join");
 }
 
 // INSERT の1単位。範囲内編集と直前の削除を畳み、離れていれば新しい単位（ADR 0028）。
 void verify_history_absorbing()
 {
-    const Edit typed{Offset{5}, "", "ab"};
-    expect(absorbed_edit(typed, Edit{Offset{7}, "", "c"}) == Edit{Offset{5}, "", "abc"},
+    const Edit typed{Offset{5}, "", "ab", Offset{5}};
+    expect(absorbed_edit(typed, Edit{Offset{7}, "", "c", Offset{7}}) ==
+               Edit{Offset{5}, "", "abc", Offset{5}},
            "an insert right after the inserted text grows it");
-    expect(absorbed_edit(typed, Edit{Offset{6}, "b", ""}) == Edit{Offset{5}, "", "a"},
+    expect(absorbed_edit(typed, Edit{Offset{6}, "b", "", Offset{6}}) ==
+               Edit{Offset{5}, "", "a", Offset{5}},
            "a backspace over the inserted text shrinks it");
-    expect(absorbed_edit(Edit{Offset{5}, "", ""}, Edit{Offset{4}, "x", ""}) ==
-               Edit{Offset{4}, "x", ""},
+    expect(absorbed_edit(Edit{Offset{5}, "", "", Offset{5}}, Edit{Offset{4}, "x", "", Offset{4}}) ==
+               Edit{Offset{4}, "x", "", Offset{5}},
            "a backspace before the insert moves the head of the unit back");
-    expect(!absorbed(typed, Edit{Offset{9}, "", "c"}).has_value(),
+    expect(!absorbed(typed, Edit{Offset{9}, "", "c", Offset{9}}).has_value(),
            "an insert somewhere else does not join");
-    expect(!absorbed(typed, Edit{Offset{0}, "x", ""}).has_value(),
+    expect(!absorbed(typed, Edit{Offset{0}, "x", "", Offset{0}}).has_value(),
            "a deletion somewhere else does not join");
     const auto history = EditHistory::empty()
-                             .pushed(Edit{Offset{0}, "", "a"}, EditBoundary::absorb)
-                             .pushed(Edit{Offset{0}, "a", ""}, EditBoundary::absorb)
-                             .pushed(Edit{Offset{0}, "", "b"}, EditBoundary::absorb);
+                             .pushed(Edit{Offset{0}, "", "a", Offset{0}}, EditBoundary::absorb)
+                             .pushed(Edit{Offset{0}, "a", "", Offset{0}}, EditBoundary::absorb)
+                             .pushed(Edit{Offset{0}, "", "b", Offset{0}}, EditBoundary::absorb);
     expect(history.size() == 1, "the three edits of one insert are one undo unit");
-    expect(history.undo().value() == Edit{Offset{0}, "", "b"}, "and the unit is what is left");
-    expect(history.pushed(Edit{Offset{9}, "", "z"}, EditBoundary::absorb).size() == 2,
+    expect(history.undo().value() == Edit{Offset{0}, "", "b", Offset{0}},
+           "and the unit is what is left");
+    expect(history.pushed(Edit{Offset{9}, "", "z", Offset{9}}, EditBoundary::absorb).size() == 2,
            "an edit that does not touch the unit opens a new one");
-    expect(history.pushed(Edit{Offset{1}, "", "z"}, EditBoundary::separate).size() == 2,
+    expect(history.pushed(Edit{Offset{1}, "", "z", Offset{1}}, EditBoundary::separate).size() == 2,
            "a separate boundary never joins");
     expect(EditHistory::empty().pushed(typed, EditBoundary::absorb).size() == 1,
            "the first edit of a unit has nothing to be absorbed into");

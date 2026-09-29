@@ -366,9 +366,10 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return tail;
 }
 
-// 前後の本文の違う所を覆う 1 つの Edit（ADR 0046 の決定 3）。同じ本文なら空。
+// 前後の本文の違う所を覆う 1 つの Edit（ADR 0046 の決定 3）。同じ本文なら空。restore は畳む
+// 単位の最初の編集の値を呼ぶ側が渡す（ADR 0052 の決定 3）。
 [[nodiscard]] std::optional<core::Edit> covering_edit(std::string_view before,
-                                                      std::string_view after)
+                                                      std::string_view after, core::Offset restore)
 {
     if (before == after)
     {
@@ -378,7 +379,7 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     const std::size_t tail = common_tail(before, after, head);
     return core::Edit{core::Offset{head},
                       std::string(before.substr(head, before.size() - head - tail)),
-                      std::string(after.substr(head, after.size() - head - tail))};
+                      std::string(after.substr(head, after.size() - head - tail)), restore};
 }
 } // namespace
 
@@ -501,6 +502,9 @@ void EditorController::fail(FileFailure failure)
 void EditorController::replace(const core::OffsetRange &range, std::string_view text,
                                core::EditBoundary boundary)
 {
+    // 編集を始める瞬間のキャレット。Vim の u と Ctrl-r の戻り先で、書くのはここだけ（ADR 0052 の
+    // 決定 2）。
+    const core::Offset restore = state_.selection().caret;
     std::string removed = state_.text().text_range(range.begin, range.end);
     if (removed.empty() && text.empty())
     {
@@ -511,7 +515,7 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
         interrupt_vim_insert();
     }
     auto next = state_.text().replaced(range.begin, range.end, text);
-    const core::Edit edit{range.begin, std::move(removed), std::string(text)};
+    const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
     const core::Offset caret{range.begin.value + text.size()};
     const std::size_t before = state_.history().position();
     const auto edited = state_.with_edit(std::move(next), core::collapsed_at(caret),
@@ -946,6 +950,12 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     if (before != step.next.mode && before != core::VimMode::insert)
     {
         state_ = state_.with_history(state_.history().sealed());
+    }
+    // オペレータと VISUAL の戻り先（ADR 0052 の決定 7）。効果を写す前にキャレットを置くので、
+    // replace が覚える戻り先は Vim の保存の瞬間のカーソルと同じになる。スクロールは効果の後で追う。
+    if (step.restore.has_value())
+    {
+        state_ = state_.with_selection(core::collapsed_at(step.restore.value()));
     }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
@@ -1492,11 +1502,13 @@ void EditorController::queue_nested_replay(const std::vector<core::VimKey> &keys
 void EditorController::merge_replayed_edits(const core::EditHistory &before,
                                             const core::TextBuffer &text)
 {
-    if (state_.history().position() <= before.position() + 1)
+    // 畳んだ単位の戻り先は再生が積んだ最初の編集の restore（ADR 0052 の決定 3）。
+    const auto first = state_.history().applied(before.position());
+    if (state_.history().position() <= before.position() + 1 || !first.has_value())
     {
         return;
     }
-    const auto edit = covering_edit(text.text(), state_.text().text());
+    const auto edit = covering_edit(text.text(), state_.text().text(), first.value().restore);
     if (!edit.has_value())
     {
         state_ = state_.with_history(before.sealed());
@@ -1505,24 +1517,29 @@ void EditorController::merge_replayed_edits(const core::EditHistory &before,
     state_ = state_.with_history(before.pushed(edit.value(), core::EditBoundary::separate));
 }
 
+// Vim の u は戻した単位が覚えた戻り先（最初の編集の瞬間のキャレット）へ置き、行末の 1 つ先などの
+// 寄せは step_vim の最後の settle_vim_caret に任せる（ADR 0052 の決定 4）。
 void EditorController::perform(const core::VimUndo &)
 {
-    // Vim は戻したあと、変わったところの先頭にキャレットを置く（Issue #22 で実測）。
     const auto edit = state_.history().undo();
     undo_edit();
     if (edit.has_value())
     {
-        move_caret_to(edit.value().at, core::SelectionAnchoring::collapse);
+        move_caret_to(edit.value().restore, core::SelectionAnchoring::collapse);
     }
 }
 
+// Vim の Ctrl-r は同じ戻り先の行とバイトの桁を、やり直した後の本文の同じ行と桁へ写す（ADR 0052 の
+// 決定 5）。
 void EditorController::perform(const core::VimRedo &)
 {
     const auto edit = state_.history().redo();
+    const core::TextBuffer before = state_.text();
     redo_edit();
     if (edit.has_value())
     {
-        move_caret_to(edit.value().at, core::SelectionAnchoring::collapse);
+        move_caret_to(core::vim_same_line_and_column(before, edit.value().restore, state_.text()),
+                      core::SelectionAnchoring::collapse);
     }
 }
 

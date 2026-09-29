@@ -1,7 +1,10 @@
 #pragma once
 
+#include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "TextBuffer.hpp"
+
+#include <cstddef>
 
 namespace nenenib::core
 {
@@ -11,4 +14,16 @@ namespace nenenib::core
 
 // at の行の最初の非空白。行が空白だけなら行頭。行単位の削除のあとの位置（Vim の規則）。
 [[nodiscard]] Offset vim_first_non_blank(const TextBuffer &text, Offset at);
+
+// line の上のバイトの桁 column の位置。桁が行の内容を越えたら行の内容の終わり（NORMAL の寄せは
+// vim_resting_caret）、文字の途中ならその文字の先頭。行の桁の写しはこの 1 本（ADR 0052 の決定
+// 5・9）。
+[[nodiscard]] Offset vim_line_and_column(const TextBuffer &text, LineNumber line,
+                                         std::size_t column);
+
+// before の上の at の行とバイトの桁を、after の同じ行と桁へ写す（Vim の Ctrl-r の戻り先・ADR 0052
+// の決定 5）。桁が行の内容を越えたら行の内容の終わり（NORMAL の寄せは vim_resting_caret）、文字の
+// 途中ならその文字の先頭、行が after に無ければ最後の行の最初の非空白。
+[[nodiscard]] Offset vim_same_line_and_column(const TextBuffer &before, Offset at,
+                                              const TextBuffer &after);
 } // namespace nenenib::core
