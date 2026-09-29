@@ -31,7 +31,7 @@
 **前回のタブは設定とは別のファイル `session.v1` に覚える。書くのは窓が閉じるとき。読むのは、ファイルを指定せずに起動したとき。戻したタブは「まだ読んでいない文書」として帯に並び、初めて見るときに読む。起動の重さはタブの数に依らない。**
 
 1. **覚える値（application）**: `Session { std::vector<SessionTab> tabs; std::size_t active; }` と `SessionTab { core::FilePath path; core::TextPosition caret; core::LineNumber first_visible; std::size_t recency; }`（1 型 1 ファイル）。`tabs` は帯の順、`active` は `tabs` の中の位置、`recency` は使った順の順位（0 がいちばん最近）。パスの無いタブ（無題）は入れない（D9）。パスがあって未保存の変更があるタブは入れる（窓を閉じるときに保存するか捨てるかを確かめ済みで、戻るのはディスクの上の中身）。
-2. **port と adapter**: `SessionPort`（application）は `read() → std::expected<std::optional<Session>, SessionFailure>` と `write(const Session &) → std::expected<void, SessionFailure>`。`SessionFailure` は閉じた enum（`location_unavailable` `unreadable` `too_large` `malformed` `unsupported_version` `unwritable`）。adapter は `src/adapters/win32/Win32SessionAdapter`、場所は設定と同じ親の `%LOCALAPPDATA%/NeNeNib/session.v1`。保存形式（UTF-8 のテキスト・`version=1`・1 行 1 タブ・パスは行の最後の欄で行末まで）は adapters に閉じる（ADR 0020 の決定 3 と同じ置き方）。上限は 256 タブ・1 MiB。書きは `FilePort::write`（一時ファイルと置き換え）。
+2. **port と adapter**: `SessionPort`（application）は `read() → std::expected<std::optional<Session>, SessionFailure>` と `write(const Session &) → std::expected<void, SessionFailure>`。`SessionFailure` は閉じた enum（`location_unavailable` `unreadable` `too_large` `malformed` `unsupported_version` `unwritable`）。adapter は `src/adapters/win32/Win32SessionAdapter`、場所は設定と同じ親の `%LOCALAPPDATA%/NeNeNib/session.v1`。保存形式（UTF-8 のテキスト・`version=1`・1 行 1 タブ・パスは行の最後の欄で行末まで）は adapters に閉じる（ADR 0020 の決定 3 と同じ置き方）。欄の区切りは `,` で、1 行は `<カーソルの行>,<桁>,<画面の先頭の行>,<使った順の順位>,<パス>`（どれも 1 始まり・順位は 0 始まり）。設定と同じ親のフォルダの組み立ては `beside_local_settings` の 1 本（設定の場所 `local_settings_path` の親に名前を付ける）で、テーマと一覧の adapter が通る。親のフォルダを作るのは設定と一覧の adapter が共用する `ensure_parent_directory` の 1 本（#252 の工程 2）。上限は 256 タブ・1 MiB。書きは `FilePort::write`（一時ファイルと置き換え）。
    - 設定のような「外で変わっていたら上書きしない」は持たない。窓を 2 つ開いていたら、後から閉じたほうの一覧が残る。
    - 版が違う・壊れている・大きすぎる・パスが絶対でないものは、全体を読まなかったことにする（一部だけ戻さない）。
 3. **書く時（窓が閉じるとき）**: 意図 `EndSession { SessionEnd reason }`（`SessionEnd` は `window_closed` / `last_tab_closed` の閉じた enum）。controller は状態から `Session` を作って `SessionPort::write` へ渡す。
@@ -61,8 +61,10 @@
 
 ## 強制
 
-- 契約（application と adapters）: **planned**（各 Issue の実装で active にする）。`Session` の作り方（無題を入れない・帯の順・active の位置・使った順）・`EndSession` の 2 つの理由・まだ読んでいない文書への切り替え（読む・位置を寄せる・読めないときに外して知らせる）・閉じた後の隣・起動の 3 つの枝（引数あり・一覧あり・一覧なし）・adapter の往復と壊れた入力の拒否。
-- 閉じた和型の写し漏れ: `ParkedTab` `EditorIntent`（`EndSession`）`SessionEnd` `SessionFailure` は **planned**（実装で active・`std::visit` と `switch` の網羅性）。
+- 契約（#252 の分）: **active**。`Session` の作り方（無題を入れない・帯の順・active の位置・使った順）と `EndSession` の 2 つの理由は `tests/unit/SessionTests.cpp` の `verify_untitled_and_single` `verify_mixed_band` `verify_positions_and_unsaved` `verify_after_close` `verify_last_tab_closed` `verify_no_write_on_ordinary_intents` `verify_write_failure_changes_nothing` `verify_walk_settles_before_writing`（scope `nib_tests --session` と既定実行・CTest `nib_unit`）。adapter の往復と壊れた入力の拒否は `tests/adapters/SessionAdapterTests.cpp` の `verify_round_trips` `verify_line_ends` `verify_rejected_headers` `verify_rejected_tabs` `verify_limits` `verify_adapter_round_trip` `verify_adapter_failures`（CTest `nib_sessions`）。
+- 契約（#253 の分）: **planned**。まだ読んでいない文書への切り替え（読む・位置を寄せる・読めないときに外して知らせる）・閉じた後の隣・起動の 3 つの枝（引数あり・一覧あり・一覧なし）。
+- 閉じた和型の写し漏れ（#252 の分）: **active**。`EditorIntent`（`EndSession`）は `EditorController::apply` の `std::visit`、`SessionEnd` は `ended_session` の `default` の無い `switch`（CPP-002）。`SessionFailure` は今は写す `switch` が無く、6 つの値を adapter が返すことを `nib_sessions` の契約が確かめる（写す所ができたら `default` の無い `switch` で書く）。
+- 閉じた和型の写し漏れ（#253 の分）: `ParkedTab` は **planned**（実装で active・`std::visit` の網羅性）。
 - core と application が OS とファイルに触れないこと: **active**（既存の `eng/symbols.py`。ファイルに触れるのは adapters の `FilePort` と `SessionPort` の実装だけ）。
 - 起動の重さがタブの数に依らないこと: **planned**（決定 7。ベンチに足すまでは設計席が手で測る）。
 - 実機の確認: **planned**（#253 で `eng/verify-window.py` に節を足す。機械の必須 check ではない）。
