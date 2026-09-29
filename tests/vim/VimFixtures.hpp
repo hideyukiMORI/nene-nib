@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 7c18d0a4872d57cf8f69d70614caff877125f0ad3e071c4bc2969dd7099c8f40 / 1789 fixtures
+// fixtures.json: sha256 36f693b035056e14c656c47599fada0c753f1df08b359c5631d8ccaf24144edc / 1823 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1789> vim_fixtures{{
+constexpr std::array<VimFixture, 1823> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1801,6 +1801,40 @@ constexpr std::array<VimFixture, 1789> vim_fixtures{{
     {"word-motion-combining-gE", "x café-é y", "$gE", "x café-é y", 1, 10, "", "", std::nullopt},
     {"word-motion-combining-dge", "café au", "$dge", "caf", 1, 3, "é au", "v", std::nullopt},
     {"word-motion-2ge-below-an-empty-first-line", "\nabc", "j2ge", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-2b-below-an-empty-first-line", "\nabc", "j2b", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-9b-below-an-empty-first-line", "\nabc", "j$9b", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-d2b-below-an-empty-first-line", "\nabc", "jd2b", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-d9b-below-an-empty-first-line", "\nabc", "j$d9b", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-y2b-below-an-empty-first-line", "\nabc", "jy2b", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-c2b-below-an-empty-first-line", "\nabc", "jc2bX<Esc>", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-d2B-below-an-empty-first-line", "\nabc", "jd2B", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-d2ge-below-an-empty-first-line", "\nabc", "j$d2ge", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-d9ge-below-an-empty-first-line", "\nabc", "j$d9ge", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-2ge-below-an-empty-first-line", "\nabc", "j$2ge", "\nabc", 1, 1, "", "", std::nullopt},
+    {"word-edge-d2b-exact-below-an-empty-first-line", "\nabc", "j$d2b", "c", 1, 1, "\nab", "v", std::nullopt},
+    {"word-edge-2b-in-the-second-word", "abc def", "w2b", "abc def", 1, 1, "", "", std::nullopt},
+    {"word-edge-9b-at-the-line-end", "abc def", "$9b", "abc def", 1, 1, "", "", std::nullopt},
+    {"word-edge-d2b-in-the-second-word", "abc def", "wd2b", "def", 1, 1, "abc ", "v", std::nullopt},
+    {"word-edge-d9b-at-the-line-end", "abc def", "$d9b", "f", 1, 1, "abc de", "v", std::nullopt},
+    {"word-edge-y2b-in-the-second-word", "abc def", "wy2b", "abc def", 1, 1, "abc ", "v", std::nullopt},
+    {"word-edge-c2b-in-the-second-word", "abc def", "wc2bX<Esc>", "Xdef", 1, 1, "abc ", "v", std::nullopt},
+    {"word-edge-d2B-in-the-second-word", "abc def", "wd2B", "def", 1, 1, "abc ", "v", std::nullopt},
+    {"word-edge-d2ge-at-the-line-end", "abc def", "$d2ge", "", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-d9ge-at-the-line-end", "abc def", "$d9ge", "", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-2ge-at-the-line-end", "abc def", "$2ge", "abc def", 1, 1, "", "", std::nullopt},
+    {"word-edge-d2b-exact-at-the-line-end", "abc def", "$d2b", "f", 1, 1, "abc de", "v", std::nullopt},
+    {"word-edge-9w-before-the-last-word", "abc def", "9w", "abc def", 1, 7, "", "", std::nullopt},
+    {"word-edge-d9w-before-the-last-word", "abc def", "d9w", "", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-y9w-before-the-last-word", "abc def", "y9w", "abc def", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-c9w-before-the-last-word", "abc def", "c9wX<Esc>", "X", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-9e-before-the-last-word", "abc def", "9e", "abc def", 1, 7, "", "", std::nullopt},
+    {"word-edge-d9e-before-the-last-word", "abc def", "d9e", "", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-9W-before-the-last-word", "abc def", "9W", "abc def", 1, 7, "", "", std::nullopt},
+    {"word-edge-d9W-before-the-last-word", "abc def", "d9W", "", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-d9w-across-the-line", "abc def\nghi", "d9w", "", 1, 1, "abc def\nghi\n", "V", std::nullopt},
+    {"word-edge-d9e-across-the-line", "abc def\nghi", "d9e", "", 1, 1, "abc def\nghi\n", "V", std::nullopt},
+    {"word-edge-d2w-exact-to-the-end", "abc def", "d2w", "", 1, 1, "abc def", "v", std::nullopt},
+    {"word-edge-d2e-exact-to-the-end", "abc def", "d2e", "", 1, 1, "abc def", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

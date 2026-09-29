@@ -99,6 +99,7 @@ using nenenib::core::TextPosition;
 using nenenib::core::vim_first_non_blank;
 using nenenib::core::vim_next_word;
 using nenenib::core::vim_previous_word;
+using nenenib::core::vim_previous_word_end;
 using nenenib::core::vim_resting_caret;
 using nenenib::core::vim_same_line_and_column;
 using nenenib::core::vim_step;
@@ -362,10 +363,28 @@ void verify_vim_word_motions()
     expect(vim_next_word(buffer, Offset{12}, VimWordWalk{3, VimWordClass::word},
                          VimWordStop::across_lines) == Offset{17},
            "w runs out at the end of the buffer");
-    expect(vim_previous_word(buffer, Offset{12}, VimWordWalk{2, VimWordClass::word}) == Offset{6},
+    expect(vim_previous_word(buffer, Offset{12}, VimWordWalk{2, VimWordClass::word}).offset ==
+               Offset{6},
            "two b walk back over the empty line");
-    expect(vim_previous_word(buffer, Offset{0}, VimWordWalk{1, VimWordClass::word}) == Offset{0},
-           "b at the start of the buffer stays");
+    const auto stuck = vim_previous_word(buffer, Offset{0}, VimWordWalk{1, VimWordClass::word});
+    expect(stuck.offset == Offset{0} && stuck.failure.has_value(),
+           "b at the start of the buffer stays and fails");
+    // 回数の途中で本文の先頭に当たったら、着地まで動いて失敗する（Issue #224・Vim の return
+    // FAIL）。
+    const auto below_empty = TextBuffer::from_utf8("\nabc");
+    expect(below_empty.has_value(), "the buffer below an empty first line parses");
+    const auto counted_b =
+        vim_previous_word(below_empty.value(), Offset{1}, VimWordWalk{2, VimWordClass::word});
+    expect(counted_b.offset == Offset{0} && counted_b.failure.has_value(),
+           "2b below an empty first line lands on it and fails");
+    const auto counted_ge =
+        vim_previous_word_end(below_empty.value(), Offset{3}, VimWordWalk{2, VimWordClass::word});
+    expect(counted_ge.offset == Offset{0} && counted_ge.failure.has_value(),
+           "2ge below an empty first line lands on it and fails");
+    const auto exact_b =
+        vim_previous_word(below_empty.value(), Offset{3}, VimWordWalk{2, VimWordClass::word});
+    expect(exact_b.offset == Offset{0} && !exact_b.failure.has_value(),
+           "2b that reaches the empty first line on its last word does not fail");
 }
 
 void verify_vim_caret_rules()

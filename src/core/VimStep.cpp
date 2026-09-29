@@ -30,6 +30,7 @@
 #include "VimLineExtent.hpp"
 #include "VimMacroRecording.hpp"
 #include "VimMatchRequest.hpp"
+#include "VimMotionLanding.hpp"
 #include "VimMotionRange.hpp"
 #include "VimNamedRegisters.hpp"
 #include "VimNumberedRegisters.hpp"
@@ -561,7 +562,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
                          state.mode);
     case VimMotion::previous_word:
     case VimMotion::previous_big_word:
-        return vim_previous_word(text, caret, walk);
+        return vim_previous_word(text, caret, walk).offset;
     case VimMotion::word_end:
     case VimMotion::word_end_for_change:
     case VimMotion::big_word_end:
@@ -570,7 +571,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
                          state.mode);
     case VimMotion::previous_word_end:
     case VimMotion::previous_big_word_end:
-        return vim_previous_word_end(text, caret, walk);
+        return vim_previous_word_end(text, caret, walk).offset;
     case VimMotion::screen_top:
         return screen_first_non_blank(view, VimScreenPosition::top, count);
     case VimMotion::screen_middle:
@@ -588,6 +589,48 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return wrapped_forward(text, caret, count, line_end_stop_in(state.mode));
     case VimMotion::wrap_left:
         return wrapped_backward(text, caret, count, line_end_stop_in(state.mode));
+    }
+    std::unreachable();
+}
+
+// 移動の着地と失敗の印（Issue #224）。後ろ向きの語の移動だけが回数の途中で本文の先頭に当たった
+// 失敗を持ち、ほかの移動は失敗を持たない（動かなかったときのビープは moved_or_failed が決める）。
+[[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
+                                          VimMotion motion)
+{
+    const VimWordWalk walk{resolved_motion_count(state, view.text, motion),
+                           vim_motion_word_class(motion)};
+    switch (motion)
+    {
+    case VimMotion::previous_word:
+    case VimMotion::previous_big_word:
+        return vim_previous_word(view.text, view.selection.caret, walk);
+    case VimMotion::previous_word_end:
+    case VimMotion::previous_big_word_end:
+        return vim_previous_word_end(view.text, view.selection.caret, walk);
+    case VimMotion::left:
+    case VimMotion::right:
+    case VimMotion::up:
+    case VimMotion::down:
+    case VimMotion::line_start:
+    case VimMotion::first_non_blank:
+    case VimMotion::line_end:
+    case VimMotion::next_word:
+    case VimMotion::next_big_word:
+    case VimMotion::word_end:
+    case VimMotion::word_end_for_change:
+    case VimMotion::big_word_end:
+    case VimMotion::big_word_end_for_change:
+    case VimMotion::screen_top:
+    case VimMotion::screen_middle:
+    case VimMotion::screen_bottom:
+    case VimMotion::document_first:
+    case VimMotion::document_last:
+    case VimMotion::next_line:
+    case VimMotion::previous_line:
+    case VimMotion::wrap_right:
+    case VimMotion::wrap_left:
+        return VimMotionLanding{moved_by(view, state, motion)};
     }
     std::unreachable();
 }
@@ -681,9 +724,15 @@ character_search_position(const VimEditorView &view, const VimState &state,
     std::unreachable();
 }
 
-[[nodiscard]] VimStep moved_or_failed(VimStep step, VimMotion motion, Offset from, Offset moved)
+// 移動が失敗を返したか（Issue #224）、1 つも動けなかったらビープする。
+[[nodiscard]] VimStep moved_or_failed(VimStep step, VimMotion motion, Offset from,
+                                      const VimMotionLanding &landing)
 {
-    if (moved == from && fails_unmoved(motion))
+    if (landing.failure.has_value())
+    {
+        return failed(std::move(step), landing.failure.value());
+    }
+    if (landing.offset == from && fails_unmoved(motion))
     {
         return failed(std::move(step), VimRepeatFailure::not_moved);
     }
@@ -694,11 +743,12 @@ character_search_position(const VimEditorView &view, const VimState &state,
                                   VimMotion motion)
 {
     const VimWantedColumn wanted = wanted_column_of(view.text, state, view.selection.caret);
-    const Offset moved = moved_by(view, state, motion);
+    const VimMotionLanding landing = landing_of(view, state, motion);
+    const Offset moved = landing.offset;
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.wanted_column = wanted_after(view.text, wanted, moved, motion);
     return moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion, view.selection.caret,
-                           moved);
+                           landing);
 }
 
 // ---------------------------------------------------------------- 範囲（ADR 0015 の決定 2）
@@ -792,17 +842,30 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return for_change ? VimWordEndStop::stay_in_this_word : VimWordEndStop::enter_the_next_word;
 }
 
-// ge gE の範囲（inclusive・キャレットの文字まで含む）。本文の先頭で動けなければ Vim は
-// オペレータを打ち消す（clearopbeep）ので範囲が無い（Issue #222）。
-[[nodiscard]] std::optional<VimMotionRange> previous_word_end_range(const TextBuffer &text,
-                                                                    Offset caret, VimWordWalk walk)
+// b B の範囲（exclusive）。回数の途中で本文の先頭に当たったら Vim はオペレータを打ち消す
+// （clearopbeep）ので範囲が無い（Issue #224）。
+[[nodiscard]] std::optional<VimMotionRange> previous_word_range(const TextBuffer &text,
+                                                                Offset caret, VimWordWalk walk)
 {
-    const Offset destination = vim_previous_word_end(text, caret, walk);
-    if (destination == caret)
+    const VimMotionLanding landing = vim_previous_word(text, caret, walk);
+    if (landing.failure.has_value())
     {
         return std::nullopt;
     }
-    return characters_between(destination, inclusive_end(text, caret));
+    return characters_between(landing.offset, caret);
+}
+
+// ge gE の範囲（inclusive・キャレットの文字まで含む）。本文の先頭で動けなければ Vim は
+// オペレータを打ち消す（clearopbeep）ので範囲が無い（Issue #222 / #224）。
+[[nodiscard]] std::optional<VimMotionRange> previous_word_end_range(const TextBuffer &text,
+                                                                    Offset caret, VimWordWalk walk)
+{
+    const VimMotionLanding landing = vim_previous_word_end(text, caret, walk);
+    if (landing.failure.has_value())
+    {
+        return std::nullopt;
+    }
+    return characters_between(landing.offset, inclusive_end(text, caret));
 }
 
 [[nodiscard]] std::optional<VimMotionRange>
@@ -836,7 +899,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
                                   vim_next_word(text, caret, walk, VimWordStop::at_line_end));
     case VimMotion::previous_word:
     case VimMotion::previous_big_word:
-        return characters_between(vim_previous_word(text, caret, walk), caret);
+        return previous_word_range(text, caret, walk);
     case VimMotion::word_end:
     case VimMotion::big_word_end:
     case VimMotion::word_end_for_change:
@@ -1523,6 +1586,19 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     return range;
 }
 
+// 範囲にならなかったオペレータ。移動が失敗つきで動いていたら（回数の途中で本文の先頭に当たった
+// b B ge gE）Vim と同じくキャレットだけ着地へ動かし、オペレータは打ち消す（Issue #224）。
+[[nodiscard]] VimStep cancelled_at_landing(const VimState &state, const VimEditorView &view,
+                                           VimMotion motion)
+{
+    const VimMotionLanding landing = landing_of(view, state, motion);
+    if (landing.failure.has_value() && landing.offset != view.selection.caret)
+    {
+        return motion_step(state, view, motion);
+    }
+    return failed(cancelled(state), VimRepeatFailure::not_moved);
+}
+
 [[nodiscard]] VimStep operated(const VimState &state, const VimEditorView &view, VimMotion motion)
 {
     const VimOperator operation = operation_of(state);
@@ -1531,7 +1607,7 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
         motion_range(view, wanted, resolved_motion_count(state, view.text, wanted), operation);
     if (!range.has_value())
     {
-        return failed(cancelled(state), VimRepeatFailure::not_moved);
+        return cancelled_at_landing(state, view, wanted);
     }
     VimState performed_from = state;
     const bool document_yank =
@@ -3413,12 +3489,13 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return visual_unchanged(state);
     }
     const VimWantedColumn wanted = wanted_column_of(view.text, state, view.selection.caret);
-    const Offset moved = moved_by(view, state, motion.value());
+    const VimMotionLanding landing = landing_of(view, state, motion.value());
+    const Offset moved = landing.offset;
     VimState next = visual_resting(state, state.mode);
     next.wanted_column = wanted_after(view.text, wanted, moved, motion.value());
     return moved_or_failed(
         VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, moved}}},
-        motion.value(), view.selection.caret, moved);
+        motion.value(), view.selection.caret, landing);
 }
 
 // `d x y c`。選択を範囲に変えて #43 と同じ経路へ流す（決定 5）。オペレータは VISUAL を終わらせる。
