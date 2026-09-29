@@ -325,6 +325,29 @@ def fixture_digest_checks(root: Path, rules: dict) -> list[Finding]:
     return findings
 
 
+def key_names_checks(root: Path) -> list[Finding]:
+    """CNF-010: tests/vim/VimKeyNames.hpp is exactly what eng/vim-oracle.py writes from KEY_TABLE.
+
+    The fixture key notation has one table, in the oracle (ADR 0054); the C++ table is generated
+    from it. Unlike VimFixtures.hpp this needs no Vim, so the whole file is compared, not a digest
+    line. Missing and different are both findings; `eng/vim-oracle.py --key-names` writes it.
+    """
+    name = "tests/vim/VimKeyNames.hpp"
+    path = root / name
+    if not path.is_file():
+        return [Finding("CNF-010", name, "the generated key names are missing; run eng/vim-oracle.py --key-names")]
+    content = path.read_bytes()
+    expected = vim_oracle.key_names_header().encode("utf-8")
+    if content == expected:
+        return []
+    for number, (stored, wanted) in enumerate(
+            itertools.zip_longest(content.split(b"\n"), expected.split(b"\n")), 1):
+        if stored != wanted:
+            return [Finding("CNF-010", name, f"line {number}: {excerpt(stored)} is not the generated "
+                            f"{excerpt(wanted)}; run eng/vim-oracle.py --key-names")]
+    return [Finding("CNF-010", name, "differs from the generated key names; run eng/vim-oracle.py --key-names")]
+
+
 def excerpt(line: bytes | None, limit: int = 60) -> str:
     if line is None:
         return "(nothing)"
@@ -445,6 +468,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(configuration_checks(root, paths, rules))
     findings.extend(version_metadata_checks(root))
     findings.extend(fixture_digest_checks(root, rules))
+    findings.extend(key_names_checks(root))
     findings.extend(fixture_format_checks(root))
     findings.extend(architecture_checks(root, paths, build_dir))
     for path in paths:

@@ -322,6 +322,46 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf010_missing_files(self):
         self.assertTrue(any("missing" in detail for detail in self.fixture_details()))
 
+    # CNF-010 — 生成物 VimKeyNames.hpp は oracle の KEY_TABLE から key_names_header() が作る全文と
+    # バイト一致する（ADR 0054 の決定 6）。正例は同じ関数の出力をそのまま読ませる。
+    def key_names_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.key_names_checks(self.root)]
+
+    def seed_key_names(self, content=None):
+        path = self.root / "tests/vim/VimKeyNames.hpp"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(vim_oracle.key_names_header().encode("utf-8") if content is None else content)
+
+    def test_cnf010_key_names_positive(self):
+        self.seed_key_names()
+        self.assertEqual([], self.key_names_details())
+
+    def test_cnf010_key_names_stored_file_positive(self):
+        stored = (ROOT / "tests/vim/VimKeyNames.hpp").read_bytes()
+        self.seed_key_names(stored)
+        self.assertEqual([], self.key_names_details())
+
+    def test_cnf010_key_names_edited_row_negative(self):
+        generated = vim_oracle.key_names_header().encode("utf-8")
+        cases = {
+            "wrong key": generated.replace(b"VimSpecialKey::arrow_left}", b"VimSpecialKey::arrow_right}", 1),
+            "dropped row": generated.replace(b'    {"<Down>", nenenib::core::VimSpecialKey::arrow_down},\n', b"", 1),
+            "added row": generated.replace(b"}};\n", b'    {"<Tab>", nenenib::core::VimCharacter{U\'\\x09\'}},\n}};\n', 1),
+            "CRLF": generated.replace(b"\n", b"\r\n"),
+        }
+        for name, content in cases.items():
+            with self.subTest(case=name):
+                self.assertNotEqual(generated, content)
+                self.seed_key_names(content)
+                details = self.key_names_details()
+                self.assertTrue(details)
+                self.assertTrue(all(detail.startswith("CNF-010") for detail in details))
+        self.seed_key_names(cases["wrong key"])
+        self.assertTrue(any("--key-names" in detail for detail in self.key_names_details()))
+
+    def test_cnf010_key_names_missing_negative(self):
+        self.assertTrue(any("CNF-010" in detail and "missing" in detail for detail in self.key_names_details()))
+
     # CNF-011 — fixtures.json は生成器が書く 1 つの形（1 行 1 件）だけを許す（Issue #98）。
     # 正例は oracle の canonical_fixtures_json が書いたバイト列そのままを読ませる。
     def vim_fixtures(self):

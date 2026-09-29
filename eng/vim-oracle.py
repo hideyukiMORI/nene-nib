@@ -65,6 +65,12 @@ verbatim, and only writes the new digest into the header. It refuses to do so un
 ref's fixtures hold exactly the same records, so reformatting can never change an expectation.
 One consequence of the one-time reformatting: `--regenerate --only` against a ref from before
 Issue #98 is refused, because dropping an empty `settings` reads as a changed input there.
+
+`KEY_TABLE` is the one table of the fixture key notation (`<Esc>` `<NL>` `<Space>` ...): each row
+holds the name, the Vim spelling and the Nib key (ADR 0054). `KEY_NAMES` is derived from it, and
+the C++ table tests/vim/VimKeyNames.hpp is generated from it by `key_names_header`. `--regenerate`
+writes that header next to VimFixtures.hpp and `--key-names` writes it alone without Vim; CNF-010
+compares the stored bytes with the function's output.
 """
 
 from __future__ import annotations
@@ -86,14 +92,53 @@ ORACLE_TIMEOUT_SECONDS = 30
 # 既定の設定（ADR 0012 の決定 8）。backspace は defaults.vim が入れる値で、これが無い Vim は
 # INSERT の Backspace が挿入開始位置より前を消せず、利用者が触る「既定の Vim」と違う。
 DEFAULT_SETTINGS = ["set nocompatible", "set backspace=indent,eol,start"]
-# fixture の記法 → Vim の二重引用符つき文字列の記法。写すのはここ 1 か所だけ（C++ 側は別の 1 か所）。
-KEY_NAMES = {"<Esc>": "\\<Esc>", "<CR>": "\\<CR>", "<BS>": "\\<BS>", "<C-r>": "\\<C-r>",
-             "<C-d>": "\\<C-d>", "<C-u>": "\\<C-u>", "<C-f>": "\\<C-f>", "<C-b>": "\\<C-b>",
-             "<C-v>": "\\<C-v>", "<NL>": "\\<NL>",
-             "<Home>": "\\<Home>", "<End>": "\\<End>",
-             "<PageUp>": "\\<PageUp>", "<PageDown>": "\\<PageDown>",
-             "<Space>": " ", "<Left>": "\\<Left>", "<Right>": "\\<Right>",
-             "<Up>": "\\<Up>", "<Down>": "\\<Down>"}
+# fixture の記法の表（ADR 0054）。正本はここ 1 か所だけで、1 行が 名前・Vim の二重引用符つき文字列の
+# 書き方・Nib の鍵。Nib の鍵は特殊鍵なら VimSpecialKey の列挙子の名前、文字ならコードポイント。
+# C++ の表 tests/vim/VimKeyNames.hpp は key_names_header() が作る生成物で、一致は CNF-010 が守る。
+# 測定の領域にあるので、表を変えると部分再生成は「測定コードが変わった」で拒む（決定 7）。
+KEY_TABLE = (("<Esc>", "\\<Esc>", "escape"), ("<CR>", "\\<CR>", "enter"),
+             ("<BS>", "\\<BS>", "backspace"), ("<C-r>", "\\<C-r>", "control_r"),
+             ("<C-d>", "\\<C-d>", "control_d"), ("<C-u>", "\\<C-u>", "control_u"),
+             ("<C-f>", "\\<C-f>", "control_f"), ("<C-b>", "\\<C-b>", "control_b"),
+             ("<C-v>", "\\<C-v>", "control_v"), ("<NL>", "\\<NL>", 0x0A),
+             ("<Home>", "\\<Home>", "home"), ("<End>", "\\<End>", "end"),
+             ("<PageUp>", "\\<PageUp>", "page_up"), ("<PageDown>", "\\<PageDown>", "page_down"),
+             ("<Space>", " ", 0x20), ("<Left>", "\\<Left>", "arrow_left"),
+             ("<Right>", "\\<Right>", "arrow_right"), ("<Up>", "\\<Up>", "arrow_up"),
+             ("<Down>", "\\<Down>", "arrow_down"))
+
+
+def key_names_of(table: tuple) -> dict[str, str]:
+    """Name -> Vim spelling, after checking the table (ADR 0054 decision 2).
+
+    A name is unique, starts with `<` and ends with `>`, and is no other name's prefix; the
+    Nib key is an enumerator name or a code point. A violation stops the oracle.
+    """
+    names = [row[0] for row in table]
+    for row in table:
+        if len(row) != 3:
+            raise ValueError(f"key table row {row!r} needs a name, a Vim spelling and a Nib key")
+        name, code, key = row
+        if not isinstance(name, str) or len(name) < 3 or not name.startswith("<") \
+                or not name.endswith(">"):
+            raise ValueError(f"key name {name!r} must start with < and end with >")
+        if not isinstance(code, str) or not code:
+            raise ValueError(f"{name}: the Vim spelling must be a non-empty string")
+        if not (isinstance(key, str) and key.isidentifier()) and not (
+                type(key) is int and 0 <= key <= 0x10FFFF):
+            raise ValueError(f"{name}: the Nib key must be an enumerator name or a code point")
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(f"duplicate key name(s): {', '.join(duplicates)}")
+    for name in names:
+        for other in names:
+            if name != other and other.startswith(name):
+                raise ValueError(f"key name {name} is a prefix of {other}")
+    return {name: code for name, code, _ in table}
+
+
+# fixture の記法 → Vim の二重引用符つき文字列の記法。KEY_TABLE から作る導出の値。
+KEY_NAMES = key_names_of(KEY_TABLE)
 BANNER = "// 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）"
 
 
@@ -428,6 +473,41 @@ def header(records: list[dict], version: str, digest: str) -> str:
     return header_from_rows([fixture_row(record) for record in records], version, digest)
 
 
+KEY_NAMES_BANNER = "// 生成物。手で編集しない。python eng/vim-oracle.py --key-names"
+
+
+def key_name_row(name: str, key: str | int) -> str:
+    # 列挙子の名前はそのまま書くので、VimSpecialKey に無い名前はコンパイルが落とす（決定 5）。
+    value = f"nenenib::core::VimSpecialKey::{key}" if isinstance(key, str) else \
+        f"nenenib::core::VimCharacter{{U'\\x{key:02X}'}}"
+    return f"    {{{literal(name)}, {value}}},"
+
+
+def key_names_header(table: tuple = KEY_TABLE) -> str:
+    """The whole of tests/vim/VimKeyNames.hpp (ADR 0054 decision 3). Needs no Vim.
+
+    CNF-010 compares the stored file with this output byte for byte, so this is the one place
+    the C++ table's form is written.
+    """
+    key_names_of(table)
+    body = "\n".join(key_name_row(name, key) for name, _, key in table)
+    return ("// clang-format off\n"
+            f"{KEY_NAMES_BANNER}\n"
+            "#pragma once\n"
+            "\n"
+            '#include "VimKeyName.hpp"\n'
+            "\n"
+            "#include <array>\n"
+            "\n"
+            "namespace nenenib::tests\n"
+            "{\n"
+            f"inline constexpr std::array<VimKeyName, {len(table)}> vim_key_names{{{{\n"
+            f"{body}\n"
+            "}};\n"
+            "} // namespace nenenib::tests\n"
+            "// clang-format on\n")
+
+
 def selected_names(fixtures: list[dict], prefixes: list[str]) -> set[str]:
     if any(not prefix for prefix in prefixes):
         raise ValueError("--only prefixes must not be empty")
@@ -689,9 +769,18 @@ def main() -> int:
     parser.add_argument("--format", action="store_true",
                         help="rewrite tests/vim/fixtures.json in the canonical form without Vim, "
                              "reusing every generated row from --reuse-ref")
+    parser.add_argument("--key-names", action="store_true",
+                        help="rewrite tests/vim/VimKeyNames.hpp from KEY_TABLE without Vim")
     arguments = parser.parse_args()
     source = root / "tests/vim/fixtures.json"
     target = root / "tests/vim/VimFixtures.hpp"
+    key_names_target = root / "tests/vim/VimKeyNames.hpp"
+    if arguments.key_names:
+        if arguments.regenerate or arguments.format or arguments.only:
+            parser.error("--key-names writes only tests/vim/VimKeyNames.hpp; use it on its own")
+        write_header(key_names_target, key_names_header())
+        print(f"key names: {len(KEY_TABLE)} name(s); written to {key_names_target}")
+        return 0
     content = source.read_bytes()
     fixtures = json.loads(content.decode("utf-8"))
     names = [fixture["name"] for fixture in fixtures]
@@ -742,6 +831,7 @@ def main() -> int:
     finally:
         shutil.rmtree(work, ignore_errors=True)
     write_header(target, rendered)
+    write_header(key_names_target, key_names_header())
     measured_count = len(fixtures) if not arguments.only else len(selected_names(fixtures, arguments.only))
     reused_count = len(fixtures) - measured_count
     reuse_detail = "" if not arguments.only else f" from {commit}"
