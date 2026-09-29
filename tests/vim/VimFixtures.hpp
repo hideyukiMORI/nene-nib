@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 5ad158d6c4bd9782811b92fa1952800806ed4a562f01e60e33b3571f721fe015 / 1695 fixtures
+// fixtures.json: sha256 38d19a05cdaebbd21fed97d0fcfc7040dbb3e0e3981daf30a5285d6c4cd87fb2 / 1738 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1695> vim_fixtures{{
+constexpr std::array<VimFixture, 1738> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1707,6 +1707,49 @@ constexpr std::array<VimFixture, 1695> vim_fixtures{{
     {"combining-hangul-jamo-x", "a각b", "lx", "aᅡᆨb", 1, 2, "ᄀ", "v", std::nullopt},
     {"combining-xp", "aéb", "lxp", "abé", 1, 3, "é", "v", std::nullopt},
     {"combining-ylP", "abé", "$ylP", "abéé", 1, 3, "é", "v", std::nullopt},
+    {"combining-w", "café au lait", "w", "café au lait", 1, 8, "", "", std::nullopt},
+    {"combining-e", "café au lait", "e", "café au lait", 1, 4, "", "", std::nullopt},
+    {"combining-ee", "café au lait", "ee", "café au lait", 1, 9, "", "", std::nullopt},
+    {"combining-b", "café au lait", "$b", "café au lait", 1, 11, "", "", std::nullopt},
+    {"combining-bb", "café au lait", "$bb", "café au lait", 1, 8, "", "", std::nullopt},
+    {"combining-dw", "café au lait", "dw", "au lait", 1, 1, "café ", "v", std::nullopt},
+    {"combining-de", "café au lait", "de", " au lait", 1, 1, "café", "v", std::nullopt},
+    {"combining-w-word-starts-with-accent", "ab écd", "wx", "ab cd", 1, 4, "é", "v", std::nullopt},
+    {"combining-e-two-marks-at-the-end", "abẹ́ cd", "e", "abẹ́ cd", 1, 3, "", "", std::nullopt},
+    {"combining-kana-w", "x がが y", "wx", "x が y", 1, 3, "が", "v", std::nullopt},
+    {"combining-diw", "a café b", "wdiw", "a  b", 1, 3, "café", "v", std::nullopt},
+    {"combining-diw-on-the-accent", "a café b", "wllldiw", "a  b", 1, 3, "café", "v", std::nullopt},
+    {"combining-daw-on-the-accent", "a café b", "wllldaw", "a b", 1, 3, "café ", "v", std::nullopt},
+    {"combining-diW", "a x-café b", "wdiW", "a  b", 1, 3, "x-café", "v", std::nullopt},
+    {"combining-yiw", "a éx b", "wyiw", "a éx b", 1, 3, "éx", "v", std::nullopt},
+    {"combining-di-quote", "a \"xéy\" b", "fxdi\"", "a \"\" b", 1, 4, "xéy", "v", std::nullopt},
+    {"combining-di-quote-on-the-accent", "a \"xéy\" b", "fxldi\"", "a \"\" b", 1, 4, "xéy", "v", std::nullopt},
+    {"combining-di-paren", "(é)", "di(", "()", 1, 2, "é", "v", std::nullopt},
+    {"combining-di-paren-from-the-accent", "(aé)", "$hdi(", "()", 1, 2, "aé", "v", std::nullopt},
+    {"combining-fe", "aéb", "fe", "aéb", 1, 2, "", "", std::nullopt},
+    {"combining-tb", "aéb", "tb", "aéb", 1, 2, "", "", std::nullopt},
+    {"combining-dfe", "aéb", "dfe", "b", 1, 1, "aé", "v", std::nullopt},
+    {"combining-dtb", "aéb", "dtb", "b", 1, 1, "aé", "v", std::nullopt},
+    {"combining-Fe", "aéb", "$Fe", "aéb", 1, 2, "", "", std::nullopt},
+    {"combining-Ta", "aéb", "$Ta", "aéb", 1, 2, "", "", std::nullopt},
+    {"combining-dTa", "aébc", "$dTa", "ac", 1, 2, "éb", "v", std::nullopt},
+    {"combining-fe-semicolon", "aébéc", "fe;", "aébéc", 1, 6, "", "", std::nullopt},
+    {"combining-fe-semicolon-comma", "aébéc", "fe;,", "aébéc", 1, 2, "", "", std::nullopt},
+    {"combining-tb-semicolon", "aébébc", "tb;", "aébébc", 1, 6, "", "", std::nullopt},
+    {"combining-2fe", "aébéc", "2fe", "aébéc", 1, 6, "", "", std::nullopt},
+    {"combining-put-ends-with-accent", "aé b", "y2l$p", "aé baé", 1, 8, "aé", "v", std::nullopt},
+    {"combining-Put-ends-with-accent", "aé b", "y2l$P", "aé aéb", 1, 7, "aé", "v", std::nullopt},
+    {"combining-3p-ends-with-accent", "aé b", "y2l$3p", "aé baéaéaé", 1, 16, "aé", "v", std::nullopt},
+    {"combining-block-d", "aéb\nxyz", "l<C-v>jd", "ab\nxz", 1, 2, "é\ny", "\0261", std::nullopt},
+    {"combining-block-y", "aéb\nxyz", "l<C-v>jy", "aéb\nxyz", 1, 2, "é\ny", "\0261", std::nullopt},
+    {"combining-block-d-wider", "aébc\nwxyz", "l<C-v>jld", "ac\nwz", 1, 2, "éb\nxy", "\0262", std::nullopt},
+    {"combining-block-r", "aéb\nxyz", "l<C-v>jrz", "azb\nxzz", 1, 2, "", "", std::nullopt},
+    {"combining-block-dollar", "aé\nxyz", "<C-v>j$d", "\n", 1, 1, "aé\nxyz", "\0263", std::nullopt},
+    {"combining-insert-bs", "abé", "A<BS><Esc>", "ab", 1, 2, "", "", std::nullopt},
+    {"combining-insert-bs-typed", "ab", "Aé<BS><Esc>", "ab", 1, 2, "", "", std::nullopt},
+    {"combining-insert-bs-middle", "aéb", "$i<BS><Esc>", "ab", 1, 1, "", "", std::nullopt},
+    {"combining-3a-typed", "ab", "3aé<Esc>", "aéééb", 1, 8, "", "", std::nullopt},
+    {"combining-3a-typed-then-x", "ab", "3aé<Esc>x", "aééb", 1, 8, "é", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

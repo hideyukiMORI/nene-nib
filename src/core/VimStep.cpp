@@ -191,9 +191,9 @@ constexpr char32_t carriage_return_character = 0x0D;
     case VimCharacterSearchKind::find_backward:
         return match;
     case VimCharacterSearchKind::till_forward:
-        return previous_code_point(content, match);
+        return vim_character_start(content, match);
     case VimCharacterSearchKind::till_backward:
-        return next_code_point(content, match);
+        return vim_character_end(content, match);
     }
     std::unreachable();
 }
@@ -227,7 +227,7 @@ searched_forward(std::string_view content, Offset caret,
                  const VimCharacterSearchRequest &request) noexcept
 {
     VimCharacterSearchScan scan{request, request.count};
-    Offset at = next_code_point(content, caret);
+    Offset at = vim_character_end(content, caret);
     while (at.value < content.size())
     {
         const auto destination = matched_destination(content, at, caret, scan);
@@ -235,7 +235,7 @@ searched_forward(std::string_view content, Offset caret,
         {
             return destination;
         }
-        at = next_code_point(content, at);
+        at = vim_character_end(content, at);
     }
     return std::nullopt;
 }
@@ -249,7 +249,7 @@ searched_backward(std::string_view content, Offset caret,
         return std::nullopt;
     }
     VimCharacterSearchScan scan{request, request.count};
-    Offset at = previous_code_point(content, caret);
+    Offset at = vim_character_start(content, caret);
     while (true)
     {
         const auto destination = matched_destination(content, at, caret, scan);
@@ -261,7 +261,7 @@ searched_backward(std::string_view content, Offset caret,
         {
             return std::nullopt;
         }
-        at = previous_code_point(content, at);
+        at = vim_character_start(content, at);
     }
 }
 

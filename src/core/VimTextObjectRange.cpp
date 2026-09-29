@@ -7,6 +7,7 @@
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimBracketPair.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimMotionRange.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimTextObject.hpp"
@@ -37,7 +38,7 @@ constexpr char32_t escape_character = U'\\';
     return text.position_of(at).line;
 }
 
-// 行の中で次の code point。行の内容の終わり（Vim が NUL を置く桁）では動かない。
+// 行の中で次の文字（ADR 0053）。行の内容の終わり（Vim が NUL を置く桁）では動かない。
 [[nodiscard]] Offset next_in_line(const TextBuffer &text, Offset at)
 {
     const Offset end = text.line_end(line_of(text, at));
@@ -46,7 +47,7 @@ constexpr char32_t escape_character = U'\\';
         return at;
     }
     const std::string rest = text.text_range(at, end);
-    return Offset{at.value + next_code_point(rest, Offset{0}).value};
+    return Offset{at.value + vim_character_end(rest, Offset{0}).value};
 }
 
 [[nodiscard]] Offset previous_in_line(const TextBuffer &text, Offset at)
@@ -57,7 +58,7 @@ constexpr char32_t escape_character = U'\\';
         return at;
     }
     const std::string head = text.text_range(start, at);
-    return Offset{start.value + previous_code_point(head, Offset{head.size()}).value};
+    return Offset{start.value + vim_character_start(head, Offset{head.size()}).value};
 }
 
 // その位置の code point。行の内容の終わりは 0（Vim の NUL）。

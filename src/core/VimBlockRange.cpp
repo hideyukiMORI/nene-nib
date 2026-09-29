@@ -3,8 +3,8 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "TextPosition.hpp"
-#include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
+#include "VimCharacterBoundary.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -82,7 +82,7 @@ constexpr std::size_t single_step = 1;
     const std::size_t first_ends = column_end_of(line, first_byte).value;
     const std::size_t last_begins = column_of(line, last_byte).value;
     const std::size_t last_ends = column_end_of(line, last_byte).value;
-    const std::size_t after_last = next_code_point(line, Offset{last_byte}).value;
+    const std::size_t after_last = vim_character_end(line, Offset{last_byte}).value;
     const OffsetRange range{Offset{start.value + first_byte}, Offset{start.value + after_last}};
     if (first_byte == last_byte && first_begins < left && last_ends > right)
     {
@@ -97,7 +97,7 @@ constexpr std::size_t single_step = 1;
     const bool cut_left = first_begins < left;
     const bool cut_right = last_ends > right;
     const std::size_t inside_begin =
-        cut_left ? next_code_point(line, Offset{first_byte}).value : first_byte;
+        cut_left ? vim_character_end(line, Offset{first_byte}).value : first_byte;
     const std::size_t inside_end = std::max(inside_begin, cut_right ? last_byte : after_last);
     return VimBlockLine{
         range,

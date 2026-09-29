@@ -115,7 +115,7 @@ void verify_vim_character_fixtures()
             ++selected;
         }
     }
-    expect(selected == 49, "the scope replays all 49 adopted combining-character fixtures");
+    expect(selected == 92, "the scope replays all 92 adopted combining-character fixtures");
 }
 } // namespace
 
