@@ -35,6 +35,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D14 | フォントサイズを変更できるようにする（施主決定 2026-09-15） | Ctrl+`+` / Ctrl+`-` / Ctrl+`0`（既定に戻す）と Ctrl+ホイール、Vim では `:set fontsize=<pt>`（`:set guifont` の書式も受ける）。値は設定に保存。計画は docs/plans/2026-09-15-colorschemes.md 第 6 節 |
 | D17 | 検索の当たりの強調（`hlsearch`）は既定オン。全一致は `search` の面、現在の一致は `accent` の 1 DIP の枠（施主決定 2026-09-22・案 A） | ADR 0037・Issue #123。`:noh` `:set (no)hlsearch` で消せる |
 | D18 | 入力中の当たりを見せる `incsearch` は既定オン（施主決定 2026-09-23）。Ctrl-G / Ctrl-T の向きと回数は Vim 準拠（Ctrl-G は本文の下へ・Ctrl-T は上へ・`[count]` は hop にも効く） | ADR 0041 / 0043・Issue #148 / #168。`:set (no)incsearch` で切り替え |
+| D19 | 貼り付けた本文の改行は文書の改行の形に揃える。ほかのアプリの CR+LF の本文を LF の文書へ貼っても行末に `^M` を出さない（施主決定 2026-09-29） | ADR 0055・Issue #235。コピーが OS へ出す本文は文書の形のまま |
 | D12 | 見た目は `/design` で起こした案（[採用案](docs/design/2026-09-15-look.md)・[ADR 0008](docs/adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md)）を採用。アクセントは Ubuntu 橙 #E95420（施主承認 2026-09-15） | 見た目の判断は実装の前に `/design` で画を作って施主が選ぶ（施主指示 2026-09-15） |
 
 ## 3. 技術の土台（ADR で確定したもの）
