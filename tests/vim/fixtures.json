@@ -1475,6 +1475,7 @@
   {"name":"register-dot-put-before-advances","text":"a\nb\nc\nd\ne","keys":"dddddd\"1P.."},
   {"name":"register-dot-count-put-advances","text":"a\nb\nc\nd\ne","keys":"dddddd3\"1p."},
   {"name":"register-dot-undo-advances","text":"one\ntwo\nthree\nfour","keys":"\"1yyj\"2yyj\"3yygg\"1Pu.u."},
+  {"name":"register-dot-undo-advances-after","text":"one\ntwo\nthree\nfour","keys":"\"1yyj\"2yyj\"3yygg\"1pu.u."},
   {"name":"register-dot-delete-advances","text":"a\nb\nc\nd\ne\nf","keys":"dddd\"1dd.\"1p\"2p\"3p"},
   {"name":"register-dot-visual-advances","text":"abcdefgh","keys":"vl\"1d.\"1P\"2P"},
   {"name":"register-dot-insert-text-stays","text":"one two three","keys":"cw\"1<Esc>w."},

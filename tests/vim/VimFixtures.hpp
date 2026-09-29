@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 e40c1c3ef1d64796bea2548dd9f0ed50df219331376b087f4e43bf80255e39b4 / 1645 fixtures
+// fixtures.json: sha256 433e77ebd6c6b977493b580d0d81dc4aefc6d571f95c8b997b38e116ab4a2bd6 / 1646 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1645> vim_fixtures{{
+constexpr std::array<VimFixture, 1646> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1488,6 +1488,7 @@ constexpr std::array<VimFixture, 1645> vim_fixtures{{
     {"register-dot-put-before-advances", "a\nb\nc\nd\ne", "dddddd\"1P..", "a\nb\nc\nd\ne", 1, 1, "c\n", "V", std::nullopt},
     {"register-dot-count-put-advances", "a\nb\nc\nd\ne", "dddddd3\"1p.", "d\nc\nb\nb\nb\nc\nc\ne", 3, 1, "c\n", "V", std::nullopt},
     {"register-dot-undo-advances", "one\ntwo\nthree\nfour", "\"1yyj\"2yyj\"3yygg\"1Pu.u.", "three\none\ntwo\nthree\nfour", 1, 1, "three\n", "V", std::nullopt},
+    {"register-dot-undo-advances-after", "one\ntwo\nthree\nfour", "\"1yyj\"2yyj\"3yygg\"1pu.u.", "one\nthree\ntwo\nthree\nfour", 2, 1, "three\n", "V", std::nullopt},
     {"register-dot-delete-advances", "a\nb\nc\nd\ne\nf", "dddd\"1dd.\"1p\"2p\"3p", "e\nd\nc\nd\nf", 4, 1, "d\n", "V", std::nullopt},
     {"register-dot-visual-advances", "abcdefgh", "vl\"1d.\"1P\"2P", "acdbefgh", 1, 3, "cd", "v", std::nullopt},
     {"register-dot-insert-text-stays", "one two three", "cw\"1<Esc>w.", "\"1 \"1 three", 1, 5, "two", "v", std::nullopt},
