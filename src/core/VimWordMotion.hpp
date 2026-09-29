@@ -3,6 +3,7 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "TextBuffer.hpp"
+#include "VimMotionLanding.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordStop.hpp"
@@ -21,7 +22,10 @@ namespace nenenib::core
 // #222）。
 [[nodiscard]] Offset vim_next_word(const TextBuffer &text, Offset caret, VimWordWalk walk,
                                    VimWordStop stop);
-[[nodiscard]] Offset vim_previous_word(const TextBuffer &text, Offset caret, VimWordWalk walk);
+// b B（Vim の bck_word(count, bigword, stop=FALSE)）。周の始めに本文の先頭にいたら（空行で
+// 止まった次の周を含む）失敗つきの着地を返す（Issue #224 で実測）。
+[[nodiscard]] VimMotionLanding vim_previous_word(const TextBuffer &text, Offset caret,
+                                                 VimWordWalk walk);
 
 // e（Vim の end_word）。語の末尾の文字へ進み、空行は素通りして行をまたぐ。
 // 走査が本文の終わりで尽きたときは、Vim と同じくそこで止まった位置をそのまま返す
@@ -30,8 +34,10 @@ namespace nenenib::core
                                   VimWordEndStop stop);
 
 // ge gE（Vim の bckend_word(count, bigword, eol=FALSE)）。手前の語の末尾の文字へ戻り、行を
-// またぎ、空白を戻る途中の空行で止まる。本文の先頭に当たったらそこで回数ごと終わる。
-[[nodiscard]] Offset vim_previous_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk);
+// またぎ、空白を戻る途中の空行で止まる。周の途中で本文の先頭に当たったらそこで回数ごと終わり、
+// 周の最初の 1 歩で当たったら失敗つきの着地を返す（Issue #224 で実測）。
+[[nodiscard]] VimMotionLanding vim_previous_word_end(const TextBuffer &text, Offset caret,
+                                                     VimWordWalk walk);
 
 // 文字の種類（Vim の cls()）。語の表はここ 1 つで、テキストオブジェクトも同じ表を引く
 // （ADR 0031 の決定 2）。0 は空白、1 は記号、2 は語の文字、それ以外はひらがな等の塊の印。

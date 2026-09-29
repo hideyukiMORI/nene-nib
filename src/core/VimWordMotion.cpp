@@ -28,9 +28,11 @@ constexpr int stepped_to_line_end = 2;
 constexpr int stepped_past_end = -1;
 // 後ろへ 1 語ぶん歩いた結果。空行で止まったときは回数の残りを数え続ける（Vim の bck_word の
 // goto finished）が、本文の先頭に着いたらそこで終わる。行き過ぎたときだけ 1 つ進め直す。
+// 周の始めに本文の先頭にいたときだけ失敗（Vim の return FAIL・Issue #224）。
 constexpr int word_stopped = 0;
 constexpr int word_at_empty_line = 1;
 constexpr int word_overshot = 2;
+constexpr int word_failed = 3;
 // 手前の語の末尾へ 1 つ戻った結果（Vim の bckend_word の 1 周）。最初の 1 歩で本文の先頭に
 // 当たったときだけ失敗で、途中で当たったら・行をまたいで止まったらそこで回数ごと終わる。
 constexpr int end_failed = 0;
@@ -264,7 +266,7 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
 {
     if (step_backward(text, point) == stepped_past_end)
     {
-        return word_stopped;
+        return word_failed;
     }
     const int blanks = retreated_over_blanks(text, point);
     if (blanks != word_overshot)
@@ -488,17 +490,22 @@ std::optional<Offset> vim_word_object_previous_end(const TextBuffer &text, Offse
     return offset_of(text, point);
 }
 
-Offset vim_previous_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk)
+VimMotionLanding vim_previous_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk)
 {
     VimScanPoint point = scan_point(text, caret, walk.kind);
     for (std::size_t step = 0; step < walk.count; ++step)
     {
-        if (backward_word_end(text, point, VimWordStop::across_lines) != end_continues)
+        const int outcome = backward_word_end(text, point, VimWordStop::across_lines);
+        if (outcome == end_failed)
+        {
+            return VimMotionLanding{offset_of(text, point), VimRepeatFailure::not_moved};
+        }
+        if (outcome == end_finished)
         {
             break;
         }
     }
-    return offset_of(text, point);
+    return VimMotionLanding{offset_of(text, point)};
 }
 
 std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret)
@@ -533,12 +540,16 @@ std::optional<OffsetRange> vim_word_at(const TextBuffer &text, Offset caret)
     return OffsetRange{Offset{start.value + begin}, Offset{start.value + end}};
 }
 
-Offset vim_previous_word(const TextBuffer &text, Offset caret, VimWordWalk walk)
+VimMotionLanding vim_previous_word(const TextBuffer &text, Offset caret, VimWordWalk walk)
 {
     VimScanPoint point = scan_point(text, caret, walk.kind);
     for (std::size_t step = 0; step < walk.count; ++step)
     {
         const int outcome = backward_word(text, point);
+        if (outcome == word_failed)
+        {
+            return VimMotionLanding{offset_of(text, point), VimRepeatFailure::not_moved};
+        }
         if (outcome == word_stopped)
         {
             break;
@@ -548,6 +559,6 @@ Offset vim_previous_word(const TextBuffer &text, Offset caret, VimWordWalk walk)
             static_cast<void>(step_forward(text, point));
         }
     }
-    return offset_of(text, point);
+    return VimMotionLanding{offset_of(text, point)};
 }
 } // namespace nenenib::core
