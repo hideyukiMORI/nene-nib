@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 05c464d632072c9a29f83e327b5a4d26ecfc8937f1a77b45012bb79a773ebfc3 / 1489 fixtures
+// fixtures.json: sha256 b6e28638c5ed71d10849de7e8baa5c600be0791c889b52fe60ee2e655f9b65df / 1505 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1489> vim_fixtures{{
+constexpr std::array<VimFixture, 1505> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1462,6 +1462,22 @@ constexpr std::array<VimFixture, 1489> vim_fixtures{{
     {"register-numbered-count-block-put", "abcd\nefgh\nijkl", "<C-v>jld2\"1p", "cababd\ngefefh\nijkl", 1, 2, "ab\nef", "\0262", std::nullopt},
     {"register-numbered-name-then-count", "one\ntwo\nthree\nfour", "ddj\"12p", "two\nthree\none\none\nfour", 3, 1, "one\n", "V", std::nullopt},
     {"register-small-block-put", "abcd\nefgh", "<C-v>ldj\"-p", "cd\neabfgh", 2, 2, "ab", "\0262", std::nullopt},
+    {"register-dot-put-one-advances", "a\nb\nc\nd\ne", "dddddd\"1p..", "d\nc\nb\na\ne", 4, 1, "c\n", "V", std::nullopt},
+    {"register-dot-put-eight-stops-at-nine", "L01\nL02\nL03\nL04\nL05\nL06\nL07\nL08\nL09\nL10\nL11\nL12", "dddddddddddddddddd\"8p..", "L10\nL02\nL01\nL01\nL11\nL12", 4, 1, "L09\n", "V", std::nullopt},
+    {"register-dot-put-nine-stays", "L01\nL02\nL03\nL04\nL05\nL06\nL07\nL08\nL09\nL10\nL11\nL12", "dddddddddddddddddd\"9p.", "L10\nL01\nL01\nL11\nL12", 3, 1, "L09\n", "V", std::nullopt},
+    {"register-dot-put-zero-stays", "one two\nthree", "ywjdd\"0p.", "oone one ne two", 1, 9, "three\n", "V", std::nullopt},
+    {"register-dot-put-small-stays", "one two three", "dw\"-p.", "tone one wo three", 1, 9, "one ", "v", std::nullopt},
+    {"register-dot-put-before-advances", "a\nb\nc\nd\ne", "dddddd\"1P..", "a\nb\nc\nd\ne", 1, 1, "c\n", "V", std::nullopt},
+    {"register-dot-count-put-advances", "a\nb\nc\nd\ne", "dddddd3\"1p.", "d\nc\nb\nb\nb\nc\nc\ne", 3, 1, "c\n", "V", std::nullopt},
+    {"register-dot-undo-advances", "one\ntwo\nthree\nfour", "\"1yyj\"2yyj\"3yygg\"1Pu.u.", "three\none\ntwo\nthree\nfour", 1, 1, "three\n", "V", std::nullopt},
+    {"register-dot-delete-advances", "a\nb\nc\nd\ne\nf", "dddd\"1dd.\"1p\"2p\"3p", "e\nd\nc\nd\nf", 4, 1, "d\n", "V", std::nullopt},
+    {"register-dot-visual-advances", "abcdefgh", "vl\"1d.\"1P\"2P", "acdbefgh", 1, 3, "cd", "v", std::nullopt},
+    {"register-dot-insert-text-stays", "one two three", "cw\"1<Esc>w.", "\"1 \"1 three", 1, 5, "two", "v", std::nullopt},
+    {"register-at-zero", "x\nabc\ndef", "yyj@0", "x\nbc\ndef", 3, 1, "a", "v", std::nullopt},
+    {"register-at-one", "x\nabc\ndef", "dd@1", "bc\ndef", 2, 1, "a", "v", std::nullopt},
+    {"register-at-small", "x abc\ndef", "dw@-", "bc\ndef", 1, 2, "a", "v", std::nullopt},
+    {"register-at-two", "x\nl\nabc\ndef", "dddd@2", "bc\ndef", 2, 1, "a", "v", std::nullopt},
+    {"register-at-one-again", "x\nabc\ndef\nghi", "dd@1@@", "bc\nef\nghi", 3, 1, "d", "v", std::nullopt},
     {"space-moves-right-in-the-line", "abc", "<Space>x", "ac", 1, 2, "b", "v", std::nullopt},
     {"space-raw-leading-space-moves-right", "abc", " x", "ac", 1, 2, "b", "v", std::nullopt},
     {"space-wraps-from-the-line-end", "ab\ncd", "l<Space>x", "ab\nd", 2, 1, "c", "v", std::nullopt},

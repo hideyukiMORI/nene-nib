@@ -39,7 +39,7 @@ struct VimStep
 
 // 名前つきレジスタへ本文を置いたあとの状態（ADR 0048 の決定 6・`:let @a = "…"` に当たる）。
 // 名前の a〜z は置き換え、A〜Z は録画の追記と同じ規則で繋ぎ（本文の末尾の改行の手前・種類は
-// 保つ）、ほかの名前は状態を変えない。
+// 保つ）、`0`〜`9` と `-` は置き換え（ADR 0050 の決定 7）、ほかの名前は状態を変えない。
 [[nodiscard]] VimState vim_register_stored(const VimState &state, char name,
                                            const VimRegister &value);
 

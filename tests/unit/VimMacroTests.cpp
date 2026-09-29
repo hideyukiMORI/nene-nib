@@ -12,6 +12,7 @@
 #include "VimKey.hpp"
 #include "VimMode.hpp"
 #include "VimNamedRegisters.hpp"
+#include "VimNumberedRegisters.hpp"
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
@@ -124,10 +125,10 @@ void verify_macro_waiting()
     EditorController &controller = editing.controller();
     vim_replay(controller, "q");
     expect(waits_for_prefix(controller.vim_state(), VimPrefix::q), "q waits for a register name");
-    vim_replay(controller, "1");
+    vim_replay(controller, "-");
     expect(!controller.vim_state().macro_recording.has_value() &&
                !controller.vim_state().input_wait.has_value(),
-           "a digit is no register name; nothing records");
+           "- is no recording name; nothing records");
     vim_replay(controller, "@");
     expect(waits_for_prefix(controller.vim_state(), VimPrefix::at), "@ waits for a register name");
     vim_replay(controller, "<Esc>");
@@ -225,9 +226,72 @@ void verify_macro_append()
     applied(controller, stored_text('a', "l"));
     applied(controller, stored_text('A', "x"));
     expect(macro_keys(controller.vim_state(), U'a') == vim_keys_of("lx"), "A appends to a");
-    applied(controller, stored_text('1', "x"));
     vim_replay(controller, "@a");
-    expect(whole_vim_body(controller) == "acdef", "a digit name stores nothing");
+    expect(whole_vim_body(controller) == "acdef", "@a runs the appended lx");
+}
+
+[[nodiscard]] const VimRegister &numbered_register(const VimState &state, std::size_t index)
+{
+    return state.numbered.registers.at(index);
+}
+
+// `q{0-9}` はその数字へ文字単位で録る（ADR 0050 の決定 6・probe 2 の Q10）。追記も繰り下がりも
+// 無く、無名は変えない。`q-` は録らずにビープし（`"-` は `x` が置いた `b` のまま）、次の `l` は
+// ふつうの移動になる。
+void verify_macro_numbered_recording()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdef\nsecond");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "yyq0lq");
+    const VimState &zero = controller.vim_state();
+    expect(numbered_register(zero, 0).text == "l" &&
+               numbered_register(zero, 0).kind == VimRegisterKind::characters &&
+               zero.unnamed_register.text == "abcdef\n" &&
+               zero.unnamed_register.kind == VimRegisterKind::lines,
+           "q0lq records l into 0 and leaves the unnamed yank");
+    vim_replay(controller, "jddq1lq");
+    const VimState &one = controller.vim_state();
+    expect(numbered_register(one, 1).text == "l" && numbered_register(one, 2).text.empty() &&
+               one.unnamed_register.text == "second\n",
+           "q1lq replaces 1 without shifting 1 into 2 and leaves the unnamed delete");
+    vim_replay(controller, "q9xq");
+    expect(numbered_register(controller.vim_state(), 9).text == "x" &&
+               whole_vim_body(controller) == "acdef",
+           "q9xq records x into 9");
+    vim_replay(controller, "q-l");
+    expect(!controller.vim_state().macro_recording.has_value() &&
+               controller.vim_state().small_delete.text == "b" &&
+               caret_at(controller.frame(), 1, 3),
+           "q- refuses and the next l moves");
+}
+
+// 数字と `-` へ本文を置く意図は置き換え（ADR 0050 の決定 7・`:let @0 = "…"`）。`@0` `@9` `@-`
+// は置いた本文を鍵として実行し、`@@` は数字も `-` も覚える（決定 6）。
+void verify_macro_numbered_stored()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdefgh");
+    EditorController &controller = editing.controller();
+    applied(controller, stored_text('0', "l"));
+    applied(controller, stored_text('0', "x"));
+    applied(controller, stored_text('9', "lx"));
+    applied(controller, stored_text('-', "lrZ"));
+    const VimState &stored = controller.vim_state();
+    expect(numbered_register(stored, 0).text == "x" && numbered_register(stored, 9).text == "lx" &&
+               stored.small_delete.text == "lrZ" &&
+               stored.small_delete.kind == VimRegisterKind::characters,
+           "0 9 and - are replaced");
+    vim_replay(controller, "@-");
+    expect(whole_vim_body(controller) == "aZcdefgh" &&
+               controller.vim_state().last_macro == std::optional<char>{'-'},
+           "@- runs lrZ and @@ remembers -");
+    vim_replay(controller, "@@");
+    expect(whole_vim_body(controller) == "aZZdefgh", "@@ after @- runs - again");
+    vim_replay(controller, "0@0");
+    expect(whole_vim_body(controller) == "ZZdefgh", "@0 runs x");
+    vim_replay(controller, "@9");
+    expect(whole_vim_body(controller) == "Zdefgh", "@9 runs lx");
 }
 
 // 表示値の録画中の名前（決定 8・Issue #180）。`qa` で 'a' を持ち、止める `q` で消える。
@@ -528,6 +592,8 @@ void verify_vim_macro_contracts()
     verify_macro_failure_stops_the_rest();
     verify_macro_depth_limit();
     verify_macro_append();
+    verify_macro_numbered_recording();
+    verify_macro_numbered_stored();
     verify_macro_recording_frame();
     verify_macro_recording_hidden_in_ordinary();
     verify_register_text_round_trip();
@@ -552,7 +618,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 111, "the scope replays the 20 macro and 91 register fixtures");
+    expect(selected == 127, "the scope replays the 20 macro and 107 register fixtures");
     verify_vim_macro_contracts();
 }
 } // namespace nenenib::tests
