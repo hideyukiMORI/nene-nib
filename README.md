@@ -16,7 +16,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 
 - **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
 - **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret. Done.
-- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1536 oracle-generated
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1646 oracle-generated
   fixtures in `tests/vim/` are checked by CTest. Implemented: `h j k l 0 $ ^ w b e gg G`, Home / End,
   `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x X r`, `d c y` + motion, `dd cc yy`,
   `D C Y`, `p P` with typed registers (unnamed, named `"a`-`"z` / `"A`-`"Z`, numbered `"0`-`"9`, small delete `"-`,
