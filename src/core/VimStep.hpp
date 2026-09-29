@@ -1,12 +1,14 @@
 #pragma once
 
 #include "Offset.hpp"
+#include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimState.hpp"
+#include "VimWantedColumn.hpp"
 
 #include <cstddef>
 #include <optional>
@@ -44,6 +46,14 @@ struct VimStep
 // モード・直前の変更・検索と文字検索の記憶は保つ。何が割り込みかを決めるのは呼ぶ側だが、
 // 何を捨てるかを決めるのは engine の側である（ARC-004）。
 [[nodiscard]] VimState vim_interrupted(const VimState &state);
+
+// タブを切り替えたあとの状態（ADR 0056 の決定 4）。割り込みと同じく組み立て中の入力を捨て、
+// モードは NORMAL へ戻し、文書ごとの値（欲しい列と 'scroll'）は相手の文書の値に置き換える。
+// レジスタ・マクロ（録画中の録画も）・直前の検索と文字検索・`.` の直前の変更・hlsearch と
+// incsearch は窓全体で 1 つなので保つ。何を捨てるかを決めるのは engine の側である（ARC-004）。
+[[nodiscard]] VimState vim_switched_document(const VimState &state,
+                                             std::optional<VimWantedColumn> wanted_column,
+                                             std::optional<VimCount> scroll_lines);
 
 // 名前つきレジスタへ本文を置いたあとの状態（ADR 0048 の決定 6・`:let @a = "…"` に当たる）。
 // 名前の a〜z は置き換え、A〜Z は録画の追記と同じ規則で繋ぎ（本文の末尾の改行の手前・種類は

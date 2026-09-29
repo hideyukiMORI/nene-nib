@@ -4,6 +4,7 @@
 #include "CommandInput.hpp"
 #include "Composition.hpp"
 #include "Document.hpp"
+#include "DocumentState.hpp"
 #include "EditHistory.hpp"
 #include "EditMode.hpp"
 #include "EditorSettings.hpp"
@@ -16,7 +17,10 @@
 #include "TextBuffer.hpp"
 #include "VimState.hpp"
 
+#include <cstddef>
+#include <memory>
 #include <optional>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -71,8 +75,32 @@ class EditorState final
     // モードと外観は保たれる（ADR 0010 の決定 8）。
     [[nodiscard]] EditorState with_opened(core::TextBuffer text, Document document) const;
 
+    // タブ（ADR 0056 の決定 1・2）。上の欄と関数はどれも「アクティブな文書」のもので、ほかの
+    // タブは不変の束として脇に置く。タブの本数は脇の束の数 + 1。
+    [[nodiscard]] std::size_t tab_count() const noexcept;
+    // 帯の上のアクティブの位置（0 始まり）。
+    [[nodiscard]] std::size_t active_tab() const noexcept;
+    // 脇に置いた束（帯の順・アクティブを除く）。frame が表示値を並べ、契約が「切り替えても
+    // 動いていないタブの束は同じ参照のまま」を見るための読み取りの口。
+    [[nodiscard]] const std::vector<std::shared_ptr<const DocumentState>> &parked() const noexcept;
+    // 帯の位置 position のタブをアクティブにする。今の文書は束にして元の位置に置く（選択は
+    // キャレットへ畳み、undo の単位は閉じる）。範囲の外とアクティブ自身なら何も変えない。
+    [[nodiscard]] EditorState with_switched(std::size_t position) const;
+    // 空の「無題」をアクティブの右に足してアクティブにする。今の文書は束にして置く。
+    [[nodiscard]] EditorState with_new_tab() const;
+    // 帯の位置 position のタブを捨てる。アクティブを捨てたら右隣（無ければ左隣）をアクティブに
+    // する（決定 6）。範囲の外と最後の 1 つなら何も変えない（最後の 1 つは closing が受ける）。
+    [[nodiscard]] EditorState with_closed(std::size_t position) const;
+    // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。last_failure と同じく次の意図で消す。
+    [[nodiscard]] bool closing() const noexcept;
+    [[nodiscard]] EditorState with_closing(bool closing) const;
+
   private:
-    EditorState(core::Appearance appearance, core::EditMode mode);
+    EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled);
+    // 置く・広げるの 1 対（決定 2）。脇の束と欄の両方を知るのはこの 2 つと、上の with_switched /
+    // with_new_tab / with_closed だけである。
+    [[nodiscard]] std::shared_ptr<const DocumentState> parked_active() const;
+    void spread(const DocumentState &tab);
 
     core::TextBuffer text_;
     core::Selection selection_;
@@ -90,5 +118,8 @@ class EditorState final
     std::optional<CommandInput> command_input_;
     std::optional<core::DisplayText> command_message_;
     std::optional<SearchPreview> search_preview_;
+    std::vector<std::shared_ptr<const DocumentState>> parked_;
+    std::size_t active_ = 0;
+    bool closing_ = false;
 };
 } // namespace nenenib::application

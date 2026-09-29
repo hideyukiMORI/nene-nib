@@ -109,6 +109,16 @@ class EditorController final
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
     void accept(const StoreVimRegister &intent);
+    // タブ（ADR 0056 の決定 3・4・6）。切り替えは leave_document → EditorState の置く・広げる →
+    // enter_document の順で、どの意図もこの 1 本を通る。
+    void accept(const NewTab &);
+    void accept(const SwitchTab &intent);
+    void accept(const StepTab &intent);
+    void accept(const CloseTab &intent);
+    // 出ていく前に文書の上の一時の値を閉じる（入力行・検索の preview・IME の変換中の文字列）。
+    void leave_document();
+    // 入ってきた文書のスクロールを今の窓の行数で収め、NORMAL のキャレットを文字の上へ寄せる。
+    void enter_document();
     // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
     // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandLine &line);

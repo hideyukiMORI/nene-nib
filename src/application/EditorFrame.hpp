@@ -53,5 +53,11 @@ struct EditorFrame
     std::optional<core::InputLineView> command_line;
     std::optional<core::DisplayText> command_message;
     std::optional<CommandPaletteView> command_palette;
+    // 帯の順のタブの表示値（ADR 0056 の決定 7）。アクティブの分は document と同じ値で、ほかは
+    // 置いたときに作った値を並べるだけ。active_tab は帯の上のアクティブの位置（0 始まり）。
+    std::vector<DocumentView> tabs;
+    std::size_t active_tab;
+    // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。ui はこれを見て窓を閉じる。
+    bool closing;
 };
 } // namespace nenenib::application

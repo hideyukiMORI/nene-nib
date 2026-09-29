@@ -6,6 +6,7 @@
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "ClipboardAction.hpp"
+#include "CloseTab.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
@@ -15,6 +16,7 @@
 #include "InsertText.hpp"
 #include "MoveCaret.hpp"
 #include "NewLine.hpp"
+#include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PasteCommand.hpp"
@@ -25,8 +27,10 @@
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
+#include "StepTab.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
+#include "SwitchTab.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 
@@ -43,5 +47,6 @@ using EditorIntent =
                  VimKeyPress, RefreshAppearance, OpenDocument, SaveDocument, ComposeText,
                  CommitText, CancelComposition, AdjustFontSize, CommandText, EditCommand,
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
-                 ActivateCommandChoice, SearchHop, StoreVimRegister>;
+                 ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab, StepTab,
+                 CloseTab>;
 } // namespace nenenib::application

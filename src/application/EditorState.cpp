@@ -1,7 +1,13 @@
 #include "EditorState.hpp"
 
+#include "SaveState.hpp"
 #include "SearchLine.hpp"
+#include "TabTitle.hpp"
+#include "VimStep.hpp"
 
+#include <cstddef>
+#include <iterator>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -15,17 +21,36 @@ namespace
 // 何も打たずに閉じるときは未保存にならない（ADR 0010 の決定 7）。
 constexpr std::size_t first_line = 1;
 constexpr std::size_t initial_visible_lines = 1;
+
+// 起動のときの文書と NewTab の文書は同じ「空の無題」の 1 つ（ADR 0056 の決定 3・ARC-001）。
+[[nodiscard]] DocumentState untitled_document()
+{
+    const Document document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}};
+    return DocumentState{core::TextBuffer::empty(),
+                         core::collapsed_at(core::Offset{0}),
+                         core::EditHistory::empty(),
+                         document,
+                         core::LineNumber{first_line},
+                         std::nullopt,
+                         std::nullopt,
+                         DocumentView{core::tab_title_for(std::nullopt, core::SaveState::saved),
+                                      std::nullopt, document.encoding, core::SaveState::saved,
+                                      std::nullopt}};
+}
+
+[[nodiscard]] std::ptrdiff_t distance_of(std::size_t index) noexcept
+{
+    return static_cast<std::ptrdiff_t>(index);
+}
 } // namespace
 
-EditorState::EditorState(core::Appearance appearance, core::EditMode mode)
-    : text_(core::TextBuffer::empty()), selection_(core::collapsed_at(core::Offset{0})),
-      history_(core::EditHistory::empty()),
-      scroll_(ScrollState{core::LineNumber{first_line}, initial_visible_lines}),
-      appearance_(appearance), mode_(mode),
-      vim_(core::vim_resting_state(
-          core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized})),
-      document_(Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}}),
-      settings_(core::default_editor_settings())
+EditorState::EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled)
+    : text_(std::move(untitled.text)), selection_(untitled.selection),
+      history_(std::move(untitled.history)),
+      scroll_(ScrollState{untitled.first_visible, initial_visible_lines}), appearance_(appearance),
+      mode_(mode), vim_(core::vim_resting_state(
+                       core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized})),
+      document_(std::move(untitled.document)), settings_(core::default_editor_settings())
 {
 }
 
@@ -43,7 +68,7 @@ EditorState EditorState::with_themes(core::ThemeCatalog themes) const
 
 EditorState EditorState::create(core::Appearance appearance, core::EditMode mode)
 {
-    return EditorState(appearance, mode);
+    return EditorState(appearance, mode, untitled_document());
 }
 
 const core::TextBuffer &EditorState::text() const noexcept
@@ -248,6 +273,107 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.history_ = core::EditHistory::empty();
     next.scroll_ = ScrollState{core::LineNumber{first_line}, scroll_.visible_lines};
     next.document_ = std::move(document);
+    return next;
+}
+
+std::size_t EditorState::tab_count() const noexcept
+{
+    return parked_.size() + 1;
+}
+
+std::size_t EditorState::active_tab() const noexcept
+{
+    return active_;
+}
+
+const std::vector<std::shared_ptr<const DocumentState>> &EditorState::parked() const noexcept
+{
+    return parked_;
+}
+
+bool EditorState::closing() const noexcept
+{
+    return closing_;
+}
+
+EditorState EditorState::with_closing(bool closing) const
+{
+    EditorState next(*this);
+    next.closing_ = closing;
+    return next;
+}
+
+// 置く（ADR 0056 の決定 1・4）。出ていく文書の選択はキャレットへ畳み（VISUAL を持ち越さない）、
+// undo の単位を閉じる。題名は置くこの 1 回だけ作り、frame は並べるだけにする。
+std::shared_ptr<const DocumentState> EditorState::parked_active() const
+{
+    auto history = history_.sealed();
+    const auto save_state = save_state_of(document_, history.position());
+    DocumentView view{core::tab_title_for(document_.path, save_state), document_.path,
+                      document_.encoding, save_state, std::nullopt};
+    return std::make_shared<const DocumentState>(DocumentState{
+        text_, core::collapsed_at(selection_.caret), std::move(history), document_,
+        scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view)});
+}
+
+// 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
+// Vim の文書ごとの値（欲しい列と 'scroll'）は engine の純関数が入れ替える。
+void EditorState::spread(const DocumentState &tab)
+{
+    text_ = tab.text;
+    selection_ = tab.selection;
+    history_ = tab.history.sealed();
+    document_ = tab.document;
+    scroll_ = ScrollState{tab.first_visible, scroll_.visible_lines};
+    vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
+}
+
+EditorState EditorState::with_switched(std::size_t position) const
+{
+    if (position >= tab_count() || position == active_)
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    // 今の文書を元の位置に置くと、脇の束の添字が帯の位置と一致する。
+    next.parked_.insert(std::next(next.parked_.begin(), distance_of(active_)), parked_active());
+    const auto target = next.parked_.at(position);
+    next.parked_.erase(std::next(next.parked_.begin(), distance_of(position)));
+    next.active_ = position;
+    next.spread(*target);
+    return next;
+}
+
+EditorState EditorState::with_new_tab() const
+{
+    EditorState next(*this);
+    next.parked_.insert(std::next(next.parked_.begin(), distance_of(active_)), parked_active());
+    next.active_ = active_ + 1;
+    next.spread(untitled_document());
+    return next;
+}
+
+EditorState EditorState::with_closed(std::size_t position) const
+{
+    if (position >= tab_count() || tab_count() == 1)
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    if (position != active_)
+    {
+        // 脇の束は帯の位置からアクティブを抜いた順なので、右側は 1 つ左へずれる。
+        const std::size_t index = position < active_ ? position : position - 1;
+        next.parked_.erase(std::next(next.parked_.begin(), distance_of(index)));
+        next.active_ = position < active_ ? active_ - 1 : active_;
+        return next;
+    }
+    // 右隣は脇の束の添字 active_、左隣は active_ - 1。どちらも閉じた後の帯の位置と一致する。
+    const std::size_t index = active_ < parked_.size() ? active_ : active_ - 1;
+    const auto target = next.parked_.at(index);
+    next.parked_.erase(std::next(next.parked_.begin(), distance_of(index)));
+    next.active_ = index;
+    next.spread(*target);
     return next;
 }
 } // namespace nenenib::application

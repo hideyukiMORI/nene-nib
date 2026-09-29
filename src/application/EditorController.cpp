@@ -17,6 +17,7 @@
 #include "Selection.hpp"
 #include "SelectionSpan.hpp"
 #include "StatusItems.hpp"
+#include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
@@ -53,6 +54,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -382,6 +384,40 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
                       std::string(before.substr(head, before.size() - head - tail)),
                       std::string(after.substr(head, after.size() - head - tail)), restore};
 }
+// 帯の順のタブの表示値（ADR 0056 の決定 7）。脇の束は置いたときの値を並べるだけで、
+// 題名を作り直さない。アクティブの分は document と同じ値を差し込む。
+[[nodiscard]] std::vector<DocumentView> tab_views(const EditorState &state,
+                                                  const DocumentView &active)
+{
+    std::vector<DocumentView> views;
+    views.reserve(state.tab_count());
+    for (const auto &tab : state.parked())
+    {
+        if (views.size() == state.active_tab())
+        {
+            views.push_back(active);
+        }
+        views.push_back(tab->view);
+    }
+    if (views.size() == state.active_tab())
+    {
+        views.push_back(active);
+    }
+    return views;
+}
+
+// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。
+[[nodiscard]] std::size_t stepped_tab(std::size_t active, std::size_t count, core::TabStep step)
+{
+    switch (step)
+    {
+    case core::TabStep::next:
+        return (active + 1) % count;
+    case core::TabStep::previous:
+        return (active + count - 1) % count;
+    }
+    std::unreachable();
+}
 } // namespace
 
 EditorController::EditorController(EditorPorts ports, std::optional<OpenDocument> initial)
@@ -469,7 +505,8 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 void EditorController::begin_intent(bool keeps_message)
 {
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
-    state_ = state_.with_failure(std::nullopt);
+    // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
+    state_ = state_.with_failure(std::nullopt).with_closing(false);
     if (state_.command_message().has_value() && !keeps_message)
     {
         state_ = state_.with_command_message(std::nullopt);
@@ -1668,6 +1705,77 @@ void EditorController::accept(const SaveDocument &intent)
         Document{intent.path, intent.encoding, position});
 }
 
+// ---------------------------------------------------------------- タブ（ADR 0056）
+
+void EditorController::leave_document()
+{
+    // 入力行の取消は検索の preview を閉じて入力前のスクロールへ戻し、検索なら Vim の保留も
+    // 捨てる。Esc と同じ 1 本を通す（ADR 0041 の決定 5・ADR 0056 の決定 4）。
+    if (state_.command_input().has_value())
+    {
+        accept(CancelCommand{});
+    }
+    state_ = state_.with_composition(std::nullopt);
+}
+
+void EditorController::enter_document()
+{
+    // 見えている行数は置いていたあいだに変わり得るので、先頭行だけを今の窓の範囲へ収める。
+    // キャレットを追いかけない（ScrollLines で動かしたスクロールを文書ごとに保つ）。
+    const ScrollState scroll = state_.scroll();
+    const auto within =
+        core::first_visible_within(scroll.first_visible, state_.text().line_count(),
+                                   scroll.visible_lines, scroll_extent_for(state_.mode()));
+    state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
+    settle_vim_caret();
+}
+
+void EditorController::accept(const NewTab &)
+{
+    leave_document();
+    state_ = state_.with_new_tab();
+    enter_document();
+}
+
+void EditorController::accept(const SwitchTab &intent)
+{
+    if (intent.index >= state_.tab_count() || intent.index == state_.active_tab())
+    {
+        return;
+    }
+    leave_document();
+    state_ = state_.with_switched(intent.index);
+    enter_document();
+}
+
+void EditorController::accept(const StepTab &intent)
+{
+    accept(SwitchTab{stepped_tab(state_.active_tab(), state_.tab_count(), intent.step)});
+}
+
+void EditorController::accept(const CloseTab &intent)
+{
+    if (intent.index >= state_.tab_count())
+    {
+        return;
+    }
+    // 最後の 1 つは状態を変えず、窓を閉じる印だけを立てる（D22）。
+    if (state_.tab_count() == 1)
+    {
+        state_ = state_.with_closing(true);
+        return;
+    }
+    // 脇のタブを閉じてもアクティブな文書は動かないので、一時の値も閉じない。
+    if (intent.index != state_.active_tab())
+    {
+        state_ = state_.with_closed(intent.index);
+        return;
+    }
+    leave_document();
+    state_ = state_.with_closed(intent.index);
+    enter_document();
+}
+
 // ---------------------------------------------------------------- IME（ADR 0014）
 
 bool EditorController::composition_ignored() const noexcept
@@ -1856,6 +1964,9 @@ EditorFrame EditorController::frame() const
     const auto &document = state_.document();
     const auto save_state = save_state_of(document, state_.history().position());
     const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
+    DocumentView active{core::tab_title_for(document.path, save_state), document.path,
+                        document.encoding, save_state, state_.last_failure()};
+    auto tabs = tab_views(state_, active);
     return EditorFrame{visible_lines(),
                        CaretView{caret, caret_shape_for(state_.mode(), state_.vim().mode)},
                        state_.scroll().first_visible,
@@ -1867,13 +1978,15 @@ EditorFrame EditorController::frame() const
                        core::mode_label(state_.mode(), state_.vim().mode),
                        recording_name(),
                        composed(),
-                       DocumentView{core::tab_title_for(document.path, save_state), document.path,
-                                    document.encoding, save_state, state_.last_failure()},
+                       std::move(active),
                        core::status_items_for(caret, document.encoding, state_.line_ending()),
                        state_.settings(),
                        state_.settings_failure(),
                        command_line_view(),
                        state_.command_message(),
-                       command_palette_view()};
+                       command_palette_view(),
+                       std::move(tabs),
+                       state_.active_tab(),
+                       state_.closing()};
 }
 } // namespace nenenib::application
