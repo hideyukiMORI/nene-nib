@@ -13,11 +13,12 @@
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
-| 1 | #230 fixture の再生は `:normal!` と同じく失敗した鍵の後ろを打ち切る | 施主の確認の後・既存の fixture がいくつ落ちるかを先に一覧にする |
-| 2 | 複数タブ | 見た目と挙動の施主決定の後（`/design`） |
-| 3 | Ctrl+P のファイル/履歴統合 → 一般 Ex | |
+| 1 | #238 複数タブ 2/4: 帯に複数のタブを描きクリックと hover とホイールで操作する（ADR 0056・branch `feat/238-tab-band`） | **実装中**・3 工程・工程 2 の後に実機の画 |
+| 2 | #239 複数タブ 3/4: 鍵（Ctrl+T・Ctrl+Tab・Ctrl+F4・通常モードの Ctrl+W）と `eng/verify-window.py` の検査 | 実機の検査は施主に確かめてから |
+| 3 | #240 複数タブ 4/4: 開いているタブの一覧と Ex の `tabnext` と Vim の `gt` `gT` | |
+| 4 | 通常モードの矢印・Backspace・Delete と結合文字（未起票）→ Ctrl+P のファイル/履歴統合 → 一般 Ex | |
 
-2026-09-29 に統合: #204 数字レジスタ `"0`〜`"9` と小削除 `"-`（ADR 0050）・#210 クリップボードのレジスタ `"+` `"*`（ADR 0051）・#209 `.` の記録は待ちの状態の数字を残す・#205 改行を含む文字単位の `p` `P` のキャレット・#206 NORMAL の `X`・#208 `u` と Ctrl-r の後のキャレット（ADR 0052）・#216 Vim の 1 文字と結合文字（ADR 0053）・#222 `W` `E` `B` `ge` `gE`・#224 後ろ向きの語の移動が本文の先頭に当たる形・#226 前向きの語の移動の失敗の印・#229 fixture の鍵の記法の表の 1 本化（ADR 0054）。候補（未起票）: 巨大な削除の後の打鍵のベンチとレジスタの本文の共有・oracle に undo の塊を区切る記法。
+2026-09-29 に統合: #204 数字レジスタ `"0`〜`"9` と小削除 `"-`（ADR 0050）・#210 クリップボードのレジスタ `"+` `"*`（ADR 0051）・#209 `.` の記録は待ちの状態の数字を残す・#205 改行を含む文字単位の `p` `P` のキャレット・#206 NORMAL の `X`・#208 `u` と Ctrl-r の後のキャレット（ADR 0052）・#216 Vim の 1 文字と結合文字（ADR 0053）・#222 `W` `E` `B` `ge` `gE`・#224 後ろ向きの語の移動が本文の先頭に当たる形・#226 前向きの語の移動の失敗の印・#229 fixture の鍵の記法の表の 1 本化（ADR 0054）・#235 貼り付けた本文の改行を文書の形に揃える（ADR 0055・D19）・#230 fixture の再生は `:normal!` と同じ打ち切り・#237 複数タブの状態（ADR 0056・D20〜D22）。候補（未起票）: 巨大な削除の後の打鍵のベンチとレジスタの本文の共有・oracle に undo の塊を区切る記法。
 
 2026-09-23 に統合: #124・#131・#141・#130・#144・#146（usage の集計）・#117（`^M` の描画・ADR 0040）・#151・#147（C1 の 4 桁）・#152・#148（incsearch・ADR 0041・既定オンは施主決定 D18）・#162・#160（単体テストの分割・ADR 0042）・#165・#140（`assert_uncovered`・`measure`）・#168（Ctrl-G / Ctrl-T・ADR 0043）・#172（D18）・#175 Tab の tab stop（ADR 0045）・#174 add の chunk 化（ADR 0044）・#176 マクロ `q` `@`（ADR 0046）・#180 `recording @a`・#179 16 MiB の打鍵ベンチ・#184 改行の索引の共有（ADR 0047）・#190 oracle の `q` の拒否を狭める・#191 `erase().insert()` を `replaced` に・#193 名前つきレジスタ `"a`（ADR 0048）・#198 `VimKeyTable` の切り出し・#200 `<Space>` `<BS>`（ADR 0049）。
 
@@ -27,13 +28,13 @@
 
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
-| Vim fixture | 1844 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | 18332 checks・scope 24（`--vim-clipboard` と `--vim-characters` が 2026-09-29 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042） | [gate-proofs 5-bd 〜 5-bn](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0054 まで | [`docs/adr/README.md`](../adr/README.md) |
+| Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
+| 既定の `nib_tests` | 18543 checks・scope 25（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042） | [gate-proofs 5-bd 〜 5-bq](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
+| ADR | 0056 まで | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
-| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-09-29 の #216 の後の実測は 6 本とも基準内（`out/speed/2026-09-29T08-53-10Z.json`） | `eng/perf-reference.json`（ADR 0016） |
+| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-09-29 の #237 の後の実測は 6 本とも基準内（`out/speed/2026-09-29T12-16-44Z.json`）。計測は窓を最前面に出すので施主に確かめてから回す | `eng/perf-reference.json`（ADR 0016） |
 
 既知の既存失敗: `eng/test-conformance.py` の `test_verification_policy.py` の一部は cp932 の端末で pwsh の出力が読めず落ちることがある（道具側は #106 で直した。残れば別 Issue）。
 
@@ -43,7 +44,7 @@
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`・ドラッグで VISUAL・矩形の `c I A C > < J ~` と VISUAL の中の `p`・`virtualedit`・
 autoindent・読み取り専用のレジスタ（`".` `":` `"/` `"%`）と `"=`・`q"`・矩形の種類を保った `"+` の往復・矩形レジスタへの `"A` の追記・通常モードの矢印と Backspace と Delete で結合文字を 1 文字として歩くこと・行頭の孤立した結合文字の幅・INSERT の中の矢印による undo の区切り・`whichwrap` の設定・マクロの中の Ex と録画中の表示・`J s S R`・r の制御文字・Ctrl-e/y・検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase`・
 テキストオブジェクト `it ip is`・一般 Ex（`:w` / `:q`、範囲、パイプ、履歴）・
-複数タブ・Ctrl+P のファイル/フォルダ/ブックマーク/履歴統合・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
+複数タブの見た目と操作（状態は #237 で入った・帯の描画と鍵と一覧は #238〜#240）・Ctrl+P のファイル/フォルダ/ブックマーク/履歴統合・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
 
 ## 段階
 

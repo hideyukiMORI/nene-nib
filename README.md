@@ -16,7 +16,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 
 - **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
 - **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret. Done.
-- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1844 oracle-generated
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1853 oracle-generated
   fixtures in `tests/vim/` are checked by CTest. Implemented: `h j k l 0 $ ^ w b e W B E ge gE gg G` (a character includes its combining marks), Home / End,
   `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x X r`, `d c y` + motion, `dd cc yy`,
   `D C Y`, `p P` with typed registers (unnamed, named `"a`-`"z` / `"A`-`"Z`, numbered `"0`-`"9`, small delete `"-`,
@@ -27,7 +27,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   Not yet: `it ip is`, `:s :g`, read-only registers, `J s S R`, `> < gu gU`, autoindent,
   drag-to-select, block `I A c C`, general Ex (`:w :q`, ranges, pipes, history).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim". Done.
-- **FR-005 tabs in the title bar** — the tab band with one tab and the window controls; multiple tabs are planned.
+- **FR-005 tabs in the title bar** — the tab band with one tab and the window controls. The editor already holds several documents (opening a second file adds a tab, closing the window asks about every unsaved tab); drawing the tabs, the mouse and the keys are in progress.
 - **FR-006 Ctrl+P** — lists the settings commands only (themes, `set fontsize=`, `set guifont=`); files, folders,
   bookmarks and history are planned.
 - **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
