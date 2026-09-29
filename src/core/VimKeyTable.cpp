@@ -8,6 +8,7 @@
 #include "VimMotionBinding.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectBinding.hpp"
+#include "VimWordClass.hpp"
 
 #include <array>
 #include <cstddef>
@@ -25,7 +26,7 @@ constexpr char32_t control_r_character = 0x12;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 57> normal_bindings{
+constexpr std::array<VimBinding, 60> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -36,6 +37,9 @@ constexpr std::array<VimBinding, 57> normal_bindings{
      {U'w', VimAction::move_next_word},
      {U'b', VimAction::move_previous_word},
      {U'e', VimAction::move_word_end},
+     {U'W', VimAction::move_next_big_word},
+     {U'B', VimAction::move_previous_big_word},
+     {U'E', VimAction::move_big_word_end},
      {U'^', VimAction::move_first_non_blank},
      {U'+', VimAction::move_next_line},
      {U'-', VimAction::move_previous_line},
@@ -148,10 +152,15 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::replay_macro, VimActionGroup::input_wait},
      {VimAction::select_register, VimActionGroup::input_wait},
      {VimAction::space_right, VimActionGroup::motion},
-     {VimAction::space_left, VimActionGroup::motion}}};
+     {VimAction::space_left, VimActionGroup::motion},
+     {VimAction::move_next_big_word, VimActionGroup::motion},
+     {VimAction::move_previous_big_word, VimActionGroup::motion},
+     {VimAction::move_big_word_end, VimActionGroup::motion},
+     {VimAction::move_previous_word_end, VimActionGroup::motion},
+     {VimAction::move_previous_big_word_end, VimActionGroup::motion}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 19> motion_bindings{
+constexpr std::array<VimMotionBinding, 24> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -170,7 +179,22 @@ constexpr std::array<VimMotionBinding, 19> motion_bindings{
      {VimAction::move_next_line, VimMotion::next_line},
      {VimAction::move_previous_line, VimMotion::previous_line},
      {VimAction::space_right, VimMotion::wrap_right},
-     {VimAction::space_left, VimMotion::wrap_left}}};
+     {VimAction::space_left, VimMotion::wrap_left},
+     {VimAction::move_next_big_word, VimMotion::next_big_word},
+     {VimAction::move_previous_big_word, VimMotion::previous_big_word},
+     {VimAction::move_big_word_end, VimMotion::big_word_end},
+     {VimAction::move_previous_word_end, VimMotion::previous_word_end},
+     {VimAction::move_previous_big_word_end, VimMotion::previous_big_word_end}}};
+
+// g の後ろの鍵 → 動作（ADR 0027 / Issue #222）。ここに無い鍵は g を打ち消す。
+constexpr std::array<VimBinding, 3> g_bindings{{{U'g', VimAction::move_document_first},
+                                                {U'e', VimAction::move_previous_word_end},
+                                                {U'E', VimAction::move_previous_big_word_end}}};
+
+// 空白だけで切る（Vim の WORD の）移動。ほかの語の移動は文字の種類の表で切る（Issue #222）。
+constexpr std::array<VimMotion, 5> big_word_motions{
+    {VimMotion::next_big_word, VimMotion::previous_big_word, VimMotion::big_word_end,
+     VimMotion::big_word_end_for_change, VimMotion::previous_big_word_end}};
 
 // i / a の後ろの鍵 → テキストオブジェクトの表（ADR 0031 の決定 1 / CPP-012）。b は paren、
 // B は brace、閉じ括弧の鍵は開き括弧と同じ行（Vim 9.1 で実測）。ここに無い鍵は取消。
@@ -191,11 +215,12 @@ constexpr std::array<VimTextObjectBinding, 15> text_object_bindings{
      {U'<', VimTextObject::angle},
      {U'>', VimTextObject::angle}}};
 
-// 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e は入れる（inclusive）。
+// 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e E ge gE は入れる（inclusive）。
 // 行単位の j k はどちらでもないので、この表には無い。
-constexpr std::array<VimMotion, 8> exclusive_motions{
+constexpr std::array<VimMotion, 10> exclusive_motions{
     {VimMotion::left, VimMotion::right, VimMotion::line_start, VimMotion::first_non_blank,
-     VimMotion::next_word, VimMotion::previous_word, VimMotion::wrap_right, VimMotion::wrap_left}};
+     VimMotion::next_word, VimMotion::previous_word, VimMotion::wrap_right, VimMotion::wrap_left,
+     VimMotion::next_big_word, VimMotion::previous_big_word}};
 
 // 表の中でその動作を指す行の数。ちょうど 1 でなければ表が動作の一覧とずれている。
 [[nodiscard]] constexpr std::size_t rows_for(VimAction action) noexcept
@@ -239,6 +264,30 @@ static_assert(every_action_has_one_row(),
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimAction> vim_g_action_for(char32_t key) noexcept
+{
+    for (const VimBinding binding : g_bindings)
+    {
+        if (binding.key == key)
+        {
+            return binding.action;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] VimWordClass vim_motion_word_class(VimMotion motion) noexcept
+{
+    for (const VimMotion entry : big_word_motions)
+    {
+        if (entry == motion)
+        {
+            return VimWordClass::big_word;
+        }
+    }
+    return VimWordClass::word;
 }
 
 [[nodiscard]] std::optional<VimActionGroup> vim_group_for(VimAction action) noexcept

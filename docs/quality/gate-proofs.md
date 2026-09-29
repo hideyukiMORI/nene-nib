@@ -1744,3 +1744,22 @@ FR-003 / ARC-001 / ARC-004 / CPP-002/003/004 / QLT-001/012 / CNF-010/011 を自�
 対象を限定した理由: 差分は core の文字の 1 対・寄せ・語・テキストオブジェクト・`f t`・矩形の端と、単体テストと fixture である。renderer・ui/win32・application・adapters の経路は不変。Release・`eng/measure-speed.py`（寄せの窓と 1 歩ごとの表の引き）・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001 / ARC-012 / CPP-002/004/011 / QLT-001/012 / CNF-010/011 を自己レビュー。文字の境は 1 対だけ（ARC-001）・`grep -rln "DisplayWidth::zero" src/core` は仮想桁・表示・1 対だけ（寄せの窓は 1 対で判定し表を 2 度引かない）・バイト列の走査（照合器・UTF-16 との変換・`*` の語の切り出し）は変えていない（ADR 0053 の決定 3・4）。
+
+### 5-bk. WORD の移動 `W` `E` `B` と `ge` `gE`（Issue #222・2026-09-29）
+
+ブランチ `feat/222-word-motions-and-ge`（main `47eb938` から・`0b905fb`）。先に fixture `word-motion-*` 51 件（`W E B ge gE`・回数 `3W 3E 2B 2ge 2gE`・行またぎ・空行・記号の混じる語 `foo.bar(baz) qux`・Tab・文書の端での失敗・`dW cW yE dE dB dge dgE cge d2W d3B d3ge`・VISUAL の `vWd vgey v2Ey vBd`・`.` の `dW. $dge. cWx<Esc>W.`・結合文字つきの語 6 件（#216 で外した `wge` `W` `E` `$B` を含む））を本物の Vim から生成し、直す前の Nib で既定の実行が **101 of 17892 checks failed**（`word-motion-*` 48 件）で落ちることを確かめた。`W B E` は鍵の表に 3 行、`ge gE` は `g` の接頭辞の表（`gg` と同じ表・`VimKeyTable` の `g_bindings`）に 2 行で、どれも `VimMotion` の値になって `w b e` と同じ分岐を通る。語の分類は `VimKeyTable` の表 `big_word_motions` が決め、`VimWordMotion` の既存の走査に `VimWordWalk`（回数と `VimWordClass`）で渡す（WORD の分類は `iW aW` と同じ `vim_character_class`）。`ge gE` は Vim の `bckend_word(eol=FALSE)` で、テキストオブジェクトの手前の語の末尾（`eol=TRUE`）と同じ 1 周 `backward_word_end` を共有する。範囲は inclusive で、本文の先頭で動けなければオペレータを打ち消す。`cW` は `cw` と同じ特例（`big_word_end_for_change`）。oracle の `q` の拒否の状態機械は NORMAL とオペレータの後ろで `g` の次の鍵を引数として読み、VISUAL の `vge` は VISUAL のまま読む（`q` を含む fixture は無い）。application・ui・adapters・eng は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | 対象（`word-motion-*` を再生）。直す前 **101 of 17892 checks failed** → 直した後 **17889 checks 成功** |
+| `build/nib_tests.exe --vim-text-objects` / `--vim-line-jumps` / `--vim-characters` / `--vim-dot` | 共有した手前の語の末尾（`iw aw` の後ろ向き）・`g` の接頭辞の表（`gg`）・語の 1 歩・`.`。**1992 / 999 / 665 / 1619 checks 成功**（不変） |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only word-motion-` × 2 | 51 measured / 1738 reused。2 回で `VimFixtures.hpp`（`10CBAC71…8A294C61`）と `fixtures.json`（`7C18D0A4…099C8F40`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`47eb938..0b905fb`（この節を足す前のコミット）・`fixtures 1738 -> 1789 / metadata 2 / deleted 0 / changed 0 / added 51`・保護対象は `none`・`scopes 24 / same 24 / 未測 0`（`--allow` 不要） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の鍵の表・動作と移動の値・語の走査と `VimStep` の移動の分岐と、単体テストと fixture である。renderer・ui/win32・application・adapters の経路は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / CPP-002/011/012 / QLT-001/012 / CNF-010/011 を自己レビュー。WORD のための 2 つ目の歩き方は無い（ARC-001）・動作の表の欠落と重複は `every_action_has_one_row` の static_assert、移動の値の網羅は `switch` が守る（CPP-002）・鍵と分類は表（CPP-012）・`VimWordWalk` は 1 ファイル 1 型（CPP-011）。
