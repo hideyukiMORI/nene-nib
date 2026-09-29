@@ -1,6 +1,6 @@
 # ADR 0051 — クリップボードのレジスタ `"+` `"*` は engine が写しを読み書きし、OS との往復は controller が `ClipboardPort` で行う
 
-- 状態: 受理（設計席 2026-09-29・Issue #210。hide 未確認・ADR 0050 の決定 11 の 1 番目）
+- 状態: 受理（設計席 2026-09-29・Issue #210。hide 未確認・ADR 0050 の決定 11 の 1 番目。決定 3 の読む時機は工程 1 の実装席の指摘で設計席が「鍵を流す直前」に改めた）
 - 日付: 2026-09-29
 - Issue: #210
 - 影響する規則: FR-003 / ARC-001 / ARC-003 / ARC-004 / ARC-007 / ARC-010 / CPP-002 / CPP-005 / CPP-011 / QLT-001 / QLT-012
@@ -24,11 +24,11 @@ Nib の今の形（同じ probe の A 節）: core の engine は OS を知ら�
 
 ## 決定
 
-**engine は OS に触れない。`"+` `"*` を選んだ時点で controller が `ClipboardPort` から読んだ本文を engine の状態の写しに置き、engine はそれを普通のレジスタとして読む。engine が `"+` へ書いた本文は 1 打鍵の結果（`VimStep`）に添えて返し、controller が `ClipboardPort` へ出す。写しは命令が終わると消え、OS が正のままである。**
+**engine は OS に触れない。写しを読みうる鍵を流す直前に controller が `ClipboardPort` から読んだ本文を engine の状態の写しに置き、engine はそれを普通のレジスタとして読む。engine が `"+` へ書いた本文は 1 打鍵の結果（`VimStep`）に添えて返し、controller が `ClipboardPort` へ出す。写しは命令が終わると消え、OS が正のままである。**
 
 1. **選択**: `VimRegisterTarget` に `clipboard` を足す。`register_selection_of` は `+` と `*` を `clipboard` にする（`name` は打った鍵のまま・`append` は false）。`+` と `*` は同じ 1 つの書き先・読み元で、違いは `.` の記録に残る鍵だけ。
 2. **写し（core）**: `VimState.clipboard`（`VimRegister`・空は `{"", uninitialized}`）。`vim_resting_from` は**持ち越さない**（`selected_register` と同じ「命令が終わると消える側」）。回数の桁など命令の途中の鍵は状態を写すので、`"+3p` の間は残る。
-3. **読む時機（core の述語 1 本）**: `vim_reads_clipboard(const VimState &) → bool` は「`selected_register` が `clipboard`」か「`@` の名前を待っている」とき真。何が読む状態かを決めるのは engine の側（ARC-004）。controller は `step_vim` で状態を写した直後にこの述語を見て、真なら `ClipboardPort::read()` を 1 回呼び、`vim_clipboard_loaded(state, value)` で写しを置く。読みが失敗（`ClipboardFailure` のどれでも）なら空のレジスタを置く。窓で打った鍵も再生の鍵も同じ `step_vim` を通るので、`.` と `@a` の中の `"+p` も再生の時点で読み直す（実測と同じ）。
+3. **読む時機（core の述語 1 本）**: `vim_reads_clipboard(const VimState &) → bool` は「`selected_register` が `clipboard`」か「`@` の名前を待っている」とき真。何が読む状態かを決めるのは engine の側（ARC-004）。controller は `step_vim` で **`vim_step` を呼ぶ直前に**いまの状態でこの述語を見て、真なら `ClipboardPort::read()` を 1 回呼び、`vim_clipboard_loaded(state, value)` で写しを置いてから鍵を流す。読みが失敗（`ClipboardFailure` のどれでも）なら空のレジスタを置く。直前に読むので、`"+` を打ってから `p` を打つまでの間に OS 側が変わっても `p` の時点の中身を貼る（Vim と同じ時機）。述語は状態だけを見るので、`"+3p` の `3` や `"+yy` の `y` の前でも読む（読まれないだけで結果は変わらない・工程 1 の実装席の指摘）。窓で打った鍵も再生の鍵も同じ `step_vim` を通るので、`.` と `@a` の中の `"+p` も再生の時点で読み直す（実測と同じ）。
 4. **本文 → レジスタ（core の純関数）**: `vim_register_of_clipboard(std::string_view) → VimRegister`（`src/core/VimClipboardText.hpp` / `.cpp`）。`\r\n` を `\n` に畳み、単独の `\r` は残す。畳んだ後の末尾が `\n` なら `lines`、そうでなければ `characters`。矩形にはしない。空文字列は `{"", characters}`。
 5. **読み**: `register_read`（ADR 0050 の決定 5 の 1 本）の `clipboard` は `VimState.clipboard` を返す。`p` `P` と `@+` `@*` が同じ口を通る。空（読みの失敗・本当に空・空文字列）は今の「空のレジスタ」と同じ `refused`（E353 相当・報せの文言は出さない・マクロの中ならそこで止まる）。`@@` の `last_macro` は `+` `*` も覚える。
 6. **書き（ADR 0050 の決定 3 に足す）**: 名指しの書き込みが `clipboard` のときは表へ置かず、「OS へ出す本文」として返す。続く `"1` の規則・`"-` の規則・無名は名前つきと同じ（`"+dd` は `"1` へも入り、`"+x` は `"-` に入らない）。`VimStep` に `std::optional<VimRegister> clipboard = std::nullopt` を足す（報せ `notice` と同じ「1 打鍵の結果に添える値」）。`registers_written` の戻り値は次の状態と「OS へ出す本文」の組にし、4 つの呼び出し元が `VimStep` に写す。状態を外向きの箱に使わない。
@@ -48,7 +48,7 @@ Nib の今の形（同じ probe の A 節）: core の engine は OS を知ら�
 ## 結果
 
 得られるもの: Vim モードから OS のクリップボードへの読み書き（`"+yy` `"+p` `"+dd` `@+`）。`.` とマクロの中でも再生の時点の中身を読む。engine は純関数のまま。
-失うもの・残る穴: 矩形を `"+y` して `"+p` すると矩形でなくなる（Vim は私的な形式で保つ・無名レジスタの `p` は矩形のまま貼れる）。OS へ出す改行は文書の形で、Vim の「必ず CRLF」とは LF の文書で違う（Ctrl+C と同じ）。空文字列のテキストの `"+p` は Vim ではエラーなしだが Nib は `refused` で、マクロの中では Nib だけ止まる。`@` を打つたびにクリップボードを 1 回読む（読むのは `CF_UNICODETEXT` の 1 形式だけ）。再現度は fixture ではなく契約で守るので、Vim の版が変わっても機械は気づかない。
+失うもの・残る穴: 矩形を `"+y` して `"+p` すると矩形でなくなる（Vim は私的な形式で保つ・無名レジスタの `p` は矩形のまま貼れる）。OS へ出す改行は文書の形で、Vim の「必ず CRLF」とは LF の文書で違う（Ctrl+C と同じ）。空文字列のテキストの `"+p` は Vim ではエラーなしだが Nib は `refused` で、マクロの中では Nib だけ止まる。`"+` `"*` を選んでいる間と `@` の名前を待つ間は、鍵ごとにクリップボードを 1 回読む（`"+yy` は 2 回・読むのは `CF_UNICODETEXT` の 1 形式だけ・普通の打鍵では読まない）。再現度は fixture ではなく契約で守るので、Vim の版が変わっても機械は気づかない。
 
 ## 却下した選択肢
 
@@ -56,6 +56,7 @@ Nib の今の形（同じ probe の A 節）: core の engine は OS を知ら�
 | --- | --- |
 | core に型のあるクリップボードのポートを足して engine から呼ぶ | engine が純関数でなくなり、`vim_step` の決定性と symbols の検査（ARC-003 / ARC-007）を失う |
 | 毎打鍵、`vim_step` の前に必ずクリップボードを読んで `VimEditorView` に載せる | 1 打鍵ごとに OS を開く。打鍵の速さ（QLT-014）に乗り、巨大な本文がクリップボードにあると全打鍵が重くなる |
+| `"+` を選んだ直後（鍵を食べた後）に読む | 次の鍵までの間に OS 側が変わると古い本文を貼る。直前に読めば Vim と同じ時機になり、写しの寿命も問題にならない |
 | engine が「OS を読め」の効果を返し、controller が読んでから同じ鍵をもう一度流す | 1 鍵 1 効果（ADR 0012）が崩れ、`.` の記録と録画が同じ鍵を 2 回見る |
 | 書きの合図を `VimState` の欄に置き、controller が出してから消す | 状態が外向きの箱になり、「`step_vim` の後は必ず空」という不変条件を型が守れない。`VimStep` は 1 打鍵で消える |
 | `"+p` を読んだ後に同じ本文を OS へ書き戻す（読み書きを区別しない） | 文字以外の形式（画像・来歴のタグ）を消す。読みは OS を変えてはならない |
