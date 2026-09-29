@@ -31,6 +31,8 @@ enum class VimAction : std::uint8_t
     scroll_page_down,
     scroll_page_up,
     remove_character,
+    // `X`。`dh` と同じ範囲を同じ道で消す（行頭では空の範囲・失敗の印なし・Issue #206）。
+    remove_character_before,
     remove_operator,
     change_operator,
     yank_operator,

@@ -902,7 +902,7 @@ void verify_vim_macro_scope()
             ++selected;
         }
     }
-    expect(selected == 127, "the scope replays the 20 macro and 107 register fixtures");
+    expect(selected == 128, "the scope replays the 21 macro and 107 register fixtures");
     verify_vim_macro_contracts();
 }
 } // namespace nenenib::tests

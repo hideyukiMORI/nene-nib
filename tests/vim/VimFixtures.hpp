@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 f9d7285d5b240e433dca9e522cc9859b7092d8fb7dedeea04504d21c6a12feb3 / 1525 fixtures
+// fixtures.json: sha256 ef439def7bc937d098d77535e5f62ceaf2f948a57db8b29ac876492cdda03836 / 1536 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1525> vim_fixtures{{
+constexpr std::array<VimFixture, 1536> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -156,6 +156,17 @@ constexpr std::array<VimFixture, 1525> vim_fixtures{{
     {"x-then-p-swaps-two-characters", "abc", "xp", "bac", 1, 2, "a", "v", std::nullopt},
     {"x-then-capital-p-puts-it-back", "abc", "xP", "abc", 1, 1, "a", "v", std::nullopt},
     {"x-at-the-line-end-then-p", "abc", "$xp", "abc", 1, 3, "c", "v", std::nullopt},
+    {"capital-x-removes-the-character-before-the-caret", "hello", "$X", "helo", 1, 4, "l", "v", std::nullopt},
+    {"capital-x-with-a-count", "hello world", "$3X", "hello wd", 1, 8, "orl", "v", std::nullopt},
+    {"capital-x-does-nothing-at-the-line-start", "abc\ndef", "jX", "abc\ndef", 2, 1, "", "", std::nullopt},
+    {"capital-x-with-a-count-does-nothing-at-the-line-start", "abc\ndef", "j3X", "abc\ndef", 2, 1, "", "", std::nullopt},
+    {"capital-x-with-a-count-past-the-line-start", "abcdef\nxyz", "j$9X", "abcdef\nz", 2, 1, "xy", "v", std::nullopt},
+    {"capital-x-into-a-named-register", "abcdef\nxyz", "$\"aXj\"ap", "abcdf\nxyze", 2, 4, "e", "v", std::nullopt},
+    {"capital-x-then-dot", "abcdefgh", "$2X.", "abch", 1, 4, "de", "v", std::nullopt},
+    {"capital-x-then-small-delete-register", "abcdef\nxyz", "$Xj\"-p", "abcdf\nxyze", 2, 4, "e", "v", std::nullopt},
+    {"capital-x-before-a-wide-character", "あいう", "$X", "あう", 1, 4, "い", "v", std::nullopt},
+    {"capital-x-register-small", "zero\nabc def ghi\nxyz", "dd$Xyy\"-p\"1p", "abc def gih\nzero\nxyz", 2, 1, "abc def gi\n", "V", std::nullopt},
+    {"macro-capital-x-at-the-line-start-does-not-stop", "abc\ndef\nghi", "j2@a", "abc\ndef\nghi", 3, 1, "", "", std::nullopt, VimMacroFixture{'a', "Xj"}},
     {"dd-then-p-moves-the-line-down", "abc\ndef", "ddp", "def\nabc", 2, 1, "abc\n", "V", std::nullopt},
     {"dd-then-capital-p-puts-the-line-back", "abc\ndef", "ddP", "abc\ndef", 1, 1, "abc\n", "V", std::nullopt},
     {"dd-of-the-only-line-then-p", "one", "ddp", "\none", 2, 1, "one\n", "V", std::nullopt},
