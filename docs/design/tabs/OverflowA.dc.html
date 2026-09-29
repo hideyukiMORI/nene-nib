@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>あふれ 案 A 横へ送る</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap">
+<style>
+body{margin:0;font-family:"Segoe UI Variable Text","Segoe UI","Noto Sans JP",sans-serif;background:#300A24}
+.tab{display:flex;align-items:center;height:32px;box-sizing:border-box;padding:0 6px 0 14px;border-radius:8px 8px 0 0;color:#B8A9B3;flex-shrink:0}
+.tab-on{background:#300A24;color:#EEEEEC;box-shadow:inset 0 -2px 0 #E95420}
+.tab-name{border:0;background:none;color:inherit;font:inherit;padding:0;flex-grow:1;min-width:0;text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tab-x{border:0;background:none;color:inherit;width:24px;height:24px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:4px;flex-shrink:0}
+.bar-btn{border:0;background:none;color:#B8A9B3;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.win-btn{border:0;background:none;color:#B8A9B3;width:46px;height:40px;padding:0;display:flex;align-items:center;justify-content:center}
+.row{display:flex;height:29px}
+.num{width:40px;padding-right:16px;text-align:right;color:#7A6675;font-size:14px}
+</style>
+</helmet>
+<div style="width: 1200px; height: 200px; box-sizing: border-box; display: flex; flex-direction: column; background: #300A24; color: #EEEEEC; font-size: 13px">
+<div style="height: 40px; flex-shrink: 0; display: flex; align-items: flex-end; background: #1E0516; padding-left: 8px">
+<div style="width: 990px; height: 32px; overflow: hidden; flex-shrink: 0">
+<div style="display: flex; gap: 2px; margin-left: -262px">
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">README.md</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">CLAUDE.md</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">TextBuffer.hpp</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">TextBuffer.cpp</button></div>
+<div class="tab tab-on" style="width: 120px"><button type="button" class="tab-name">VimStep.cpp</button><button type="button" class="tab-x" aria-label="VimStep.cpp を閉じる"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M1 1l8 8M9 1l-8 8"></path></svg></button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">VimState.hpp</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">EditorController.cpp</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">EditorWindow.cpp</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">● Palette.hpp</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">fixtures.json</button></div>
+<div class="tab" style="width: 120px"><button type="button" class="tab-name">vim-oracle.py</button></div>
+</div>
+</div>
+<button type="button" class="bar-btn" aria-label="開いているタブの一覧"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4l4 4 4-4"></path></svg></button>
+<button type="button" class="bar-btn" aria-label="新しいタブ"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M6 1v10M1 6h10"></path></svg></button>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; height: 40px; flex-shrink: 0">
+<button type="button" class="win-btn" aria-label="最小化"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><path d="M0 5h10"></path></svg></button>
+<button type="button" class="win-btn" aria-label="最大化"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="9" height="9"></rect></svg></button>
+<button type="button" class="win-btn" aria-label="閉じる"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><path d="M0 0l10 10M10 0L0 10"></path></svg></button>
+</div>
+</div>
+<div style="flex-grow: 1; padding-top: 12px; font-family: 'Cascadia Code', Consolas, 'JetBrains Mono', monospace; font-size: 18px; line-height: 29px">
+<div class="row" style="background: #3E1A32"><span class="num" style="color: #EEEEEC">1</span><span><span style="background: #E95420; color: #FFFFFF">#</span>include "VimStep.hpp"</span></div>
+<div class="row"><span class="num">2</span><span></span></div>
+<div class="row"><span class="num">3</span><span>namespace nenenib::core</span></div>
+<div class="row"><span class="num">4</span><span>{</span></div>
+</div>
+<div style="height: 28px; flex-shrink: 0; display: flex; align-items: center; gap: 16px; background: #26071D; color: #B8A9B3; font-size: 12px; padding: 0 16px">
+<div style="display: flex; background: #4A1E3D; border-radius: 6px; padding: 2px"><span style="width: 44px; height: 20px; display: flex; align-items: center; justify-content: center">通常</span><span style="width: 44px; height: 20px; display: flex; align-items: center; justify-content: center; background: #E95420; color: #FFFFFF; border-radius: 4px; font-weight: 700">Vim</span></div>
+<span style="color: #EEEEEC; font-weight: 700">NORMAL</span>
+<div style="flex-grow: 1"></div>
+<span>行 1, 桁 1</span><span>UTF-8</span><span>LF</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":200}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

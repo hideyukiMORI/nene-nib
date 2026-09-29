@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>開いているタブの一覧</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap">
+<style>
+body{margin:0;font-family:"Segoe UI Variable Text","Segoe UI","Noto Sans JP",sans-serif;background:#300A24}
+.item{border:0;background:none;color:#EEEEEC;font:inherit;text-align:left;height:32px;padding:0 12px 0 16px;display:flex;align-items:center;gap:10px;border-radius:6px;width:100%;box-sizing:border-box}
+.item-on{background:rgba(233,84,32,0.28)}
+.dot{width:8px;flex-shrink:0;color:#E95420;font-size:10px}
+.place{margin-left:auto;color:#B8A9B3;font-size:12px}
+</style>
+</helmet>
+<div style="width: 420px; height: 520px; box-sizing: border-box; padding: 16px; background: #300A24; color: #EEEEEC; font-size: 13px">
+<div style="background: #3B1430; border: 1px solid #5A2A4C; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px">
+<button type="button" class="item"><span class="dot"></span><span>README.md</span><span class="place">NeNeNib</span></button>
+<button type="button" class="item"><span class="dot"></span><span>CLAUDE.md</span><span class="place">NeNeNib</span></button>
+<button type="button" class="item"><span class="dot"></span><span>TextBuffer.hpp</span><span class="place">src/core</span></button>
+<button type="button" class="item"><span class="dot"></span><span>TextBuffer.cpp</span><span class="place">src/core</span></button>
+<button type="button" class="item item-on"><span class="dot"></span><span>VimStep.cpp</span><span class="place">src/core</span></button>
+<button type="button" class="item"><span class="dot"></span><span>VimState.hpp</span><span class="place">src/core</span></button>
+<button type="button" class="item"><span class="dot"></span><span>EditorController.cpp</span><span class="place">src/application</span></button>
+<button type="button" class="item"><span class="dot"></span><span>EditorWindow.cpp</span><span class="place">src/ui/win32</span></button>
+<button type="button" class="item"><span class="dot">●</span><span>Palette.hpp</span><span class="place">src/core</span></button>
+<button type="button" class="item"><span class="dot"></span><span>fixtures.json</span><span class="place">tests/vim</span></button>
+<button type="button" class="item"><span class="dot"></span><span>vim-oracle.py</span><span class="place">eng</span></button>
+<button type="button" class="item"><span class="dot"></span><span>メモ.txt</span><span class="place">Desktop</span></button>
+<button type="button" class="item"><span class="dot"></span><span>日報.md</span><span class="place">docs/reports</span></button>
+<button type="button" class="item"><span class="dot"></span><span>CMakeLists.txt</span><span class="place">NeNeNib</span></button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":420,"height":520}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
