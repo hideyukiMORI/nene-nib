@@ -19,9 +19,10 @@ namespace nenenib::core
 // ひらがな・カタカナ・漢字…）が変わるところで、空行そのものも 1 つの語として止まる。
 // 既存の moved_caret の語は空白だけで切るので別物。あちらは通常モードのまま変えない。
 // kind が big_word なら W B E gE（Vim の WORD・空白だけで切る）で、歩き方は同じ 1 本（Issue
-// #222）。
-[[nodiscard]] Offset vim_next_word(const TextBuffer &text, Offset caret, VimWordWalk walk,
-                                   VimWordStop stop);
+// #222）。Vim の fwd_word の写しで、周の始めに本文の最後の文字（か終わり）にいて出られない
+// ときだけ失敗つきの着地を返す。周の途中で本文が尽きたら成功で止まる（Issue #226 で実測）。
+[[nodiscard]] VimMotionLanding vim_next_word(const TextBuffer &text, Offset caret, VimWordWalk walk,
+                                             VimWordStop stop);
 // b B（Vim の bck_word(count, bigword, stop=FALSE)）。周の始めに本文の先頭にいたら（空行で
 // 止まった次の周を含む）失敗つきの着地を返す（Issue #224 で実測）。
 [[nodiscard]] VimMotionLanding vim_previous_word(const TextBuffer &text, Offset caret,
@@ -30,8 +31,10 @@ namespace nenenib::core
 // e（Vim の end_word）。語の末尾の文字へ進み、空行は素通りして行をまたぐ。
 // 走査が本文の終わりで尽きたときは、Vim と同じくそこで止まった位置をそのまま返す
 // （オペレータの後ろでは、その位置までが範囲になる＝ $de が最後の 1 文字だけを消す理由）。
-[[nodiscard]] Offset vim_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk,
-                                  VimWordEndStop stop);
+// Vim の end_word の写しで、周のどの歩でも本文の終わりの先へ出ようとしたら失敗つきの着地を返す
+// （Issue #226 で実測）。オペレータの後ろは失敗を見ない（Vim の nv_wordcmd）。
+[[nodiscard]] VimMotionLanding vim_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk,
+                                            VimWordEndStop stop);
 
 // ge gE（Vim の bckend_word(count, bigword, eol=FALSE)）。手前の語の末尾の文字へ戻り、行を
 // またぎ、空白を戻る途中の空行で止まる。周の途中で本文の先頭に当たったらそこで回数ごと終わり、

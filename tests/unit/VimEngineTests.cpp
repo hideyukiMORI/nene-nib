@@ -104,6 +104,7 @@ using nenenib::core::vim_resting_caret;
 using nenenib::core::vim_same_line_and_column;
 using nenenib::core::vim_step;
 using nenenib::core::vim_visual_range;
+using nenenib::core::vim_word_end;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimEditorView;
 using nenenib::core::VimKey;
@@ -118,6 +119,7 @@ using nenenib::core::VimSelect;
 using nenenib::core::VimState;
 using nenenib::core::VimViewport;
 using nenenib::core::VimWordClass;
+using nenenib::core::VimWordEndStop;
 using nenenib::core::VimWordStop;
 using nenenib::core::VimWordWalk;
 
@@ -355,14 +357,21 @@ void verify_vim_word_motions()
     expect(text.has_value(), "the sample buffer parses");
     const auto &buffer = text.value();
     expect(vim_next_word(buffer, Offset{0}, VimWordWalk{2, VimWordClass::word},
-                         VimWordStop::across_lines) == Offset{11},
+                         VimWordStop::across_lines)
+                   .offset == Offset{11},
            "two w land on the empty line, which is a word of its own");
     expect(vim_next_word(buffer, Offset{6}, VimWordWalk{1, VimWordClass::word},
-                         VimWordStop::at_line_end) == Offset{10},
+                         VimWordStop::at_line_end)
+                   .offset == Offset{10},
            "an operator's w stops at the end of the line it started on");
     expect(vim_next_word(buffer, Offset{12}, VimWordWalk{3, VimWordClass::word},
-                         VimWordStop::across_lines) == Offset{17},
+                         VimWordStop::across_lines)
+                   .offset == Offset{17},
            "w runs out at the end of the buffer");
+    expect(!vim_next_word(buffer, Offset{12}, VimWordWalk{3, VimWordClass::word},
+                          VimWordStop::across_lines)
+                .failure.has_value(),
+           "w that runs out in the middle of a round does not fail (Vim's fwd_word returns OK)");
     expect(vim_previous_word(buffer, Offset{12}, VimWordWalk{2, VimWordClass::word}).offset ==
                Offset{6},
            "two b walk back over the empty line");
@@ -385,6 +394,43 @@ void verify_vim_word_motions()
         vim_previous_word(below_empty.value(), Offset{3}, VimWordWalk{2, VimWordClass::word});
     expect(exact_b.offset == Offset{0} && !exact_b.failure.has_value(),
            "2b that reaches the empty first line on its last word does not fail");
+}
+
+// 前向きの語の移動の失敗（Issue #226）。w は周の始めに本文の最後の文字にいたときだけ
+// （Vim の fwd_word）、e は周のどの歩でも本文の終わりの先へ出ようとしたら（Vim の end_word）。
+void verify_vim_forward_word_failures()
+{
+    const auto text = TextBuffer::from_utf8("abc d");
+    expect(text.has_value(), "the buffer with a one-letter last word parses");
+    const auto &buffer = text.value();
+    const VimWordWalk nine{9, VimWordClass::word};
+    const auto counted_w = vim_next_word(buffer, Offset{0}, nine, VimWordStop::across_lines);
+    expect(counted_w.offset == Offset{5} && counted_w.failure.has_value(),
+           "9w fails when a round starts on the last character");
+    const auto exact_w = vim_next_word(buffer, Offset{0}, VimWordWalk{1, VimWordClass::word},
+                                       VimWordStop::across_lines);
+    expect(exact_w.offset == Offset{4} && !exact_w.failure.has_value(),
+           "w onto the last character does not fail");
+    const auto operator_w = vim_next_word(buffer, Offset{4}, VimWordWalk{1, VimWordClass::word},
+                                          VimWordStop::at_line_end);
+    expect(operator_w.offset == Offset{5} && operator_w.failure.has_value(),
+           "an operator's w from the last character reaches the end and carries the failure");
+    const auto counted_e =
+        vim_word_end(buffer, Offset{0}, nine, VimWordEndStop::enter_the_next_word);
+    expect(counted_e.offset == Offset{5} && counted_e.failure.has_value(),
+           "9e fails once a round runs past the end");
+    const auto exact_e = vim_word_end(buffer, Offset{0}, VimWordWalk{2, VimWordClass::word},
+                                      VimWordEndStop::enter_the_next_word);
+    expect(exact_e.offset == Offset{4} && !exact_e.failure.has_value(),
+           "2e onto the last word end does not fail");
+    const auto blanks = TextBuffer::from_utf8("abc  ");
+    expect(blanks.has_value(), "the buffer with trailing blanks parses");
+    const auto blank_e = vim_word_end(blanks.value(), Offset{2}, VimWordWalk{1, VimWordClass::word},
+                                      VimWordEndStop::enter_the_next_word);
+    expect(blank_e.failure.has_value(), "e fails when only blanks follow the last word");
+    const auto blank_w = vim_next_word(
+        blanks.value(), Offset{2}, VimWordWalk{1, VimWordClass::word}, VimWordStop::across_lines);
+    expect(!blank_w.failure.has_value(), "w over trailing blanks runs out without failing");
 }
 
 void verify_vim_caret_rules()
@@ -896,6 +942,7 @@ void verify_vim_visual_step_edges()
 void verify_vim_engine()
 {
     verify_vim_word_motions();
+    verify_vim_forward_word_failures();
     verify_vim_caret_rules();
     verify_vim_redo_caret();
     verify_vim_step_edges();

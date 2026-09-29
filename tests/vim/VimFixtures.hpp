@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 36f693b035056e14c656c47599fada0c753f1df08b359c5631d8ccaf24144edc / 1823 fixtures
+// fixtures.json: sha256 b4027b10eef86c238624e53a8a8c3e63b9941c00655c86d0d50a1b041f3b93f0 / 1844 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1823> vim_fixtures{{
+constexpr std::array<VimFixture, 1844> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1835,6 +1835,27 @@ constexpr std::array<VimFixture, 1823> vim_fixtures{{
     {"word-edge-d9e-across-the-line", "abc def\nghi", "d9e", "", 1, 1, "abc def\nghi\n", "V", std::nullopt},
     {"word-edge-d2w-exact-to-the-end", "abc def", "d2w", "", 1, 1, "abc def", "v", std::nullopt},
     {"word-edge-d2e-exact-to-the-end", "abc def", "d2e", "", 1, 1, "abc def", "v", std::nullopt},
+    {"macro-word-edge-w-count-past-end", "abc def", "@a", "abc de", 1, 6, "f", "v", std::nullopt, VimMacroFixture{'a', "9wx"}},
+    {"macro-word-edge-w-count-past-end-replace", "abc def", "@a", "abc deZ", 1, 7, "", "", std::nullopt, VimMacroFixture{'a', "9wrZ"}},
+    {"macro-word-edge-w-count-past-end-across-lines", "abc\ndef", "@a", "abc\nde", 2, 2, "f", "v", std::nullopt, VimMacroFixture{'a', "9wx"}},
+    {"macro-word-edge-w-count-exact", "abc def ghi", "@a", "abc def hi", 1, 9, "g", "v", std::nullopt, VimMacroFixture{'a', "2wx"}},
+    {"macro-word-edge-w-last-word-reaches-the-end", "abc def", "w@a", "abc de", 1, 6, "f", "v", std::nullopt, VimMacroFixture{'a', "wx"}},
+    {"macro-word-edge-w-last-word-trailing-blank", "abc def  ", "w@a", "abc def ", 1, 8, " ", "v", std::nullopt, VimMacroFixture{'a', "wx"}},
+    {"macro-word-edge-w-last-char", "abc def", "$@a", "abc def", 1, 7, "", "", std::nullopt, VimMacroFixture{'a', "wx"}},
+    {"macro-word-edge-big-w-count-past-end", "a.c d.f", "@a", "a.c d.", 1, 6, "f", "v", std::nullopt, VimMacroFixture{'a', "9Wx"}},
+    {"macro-word-edge-big-w-last-char", "a.c d.f", "$@a", "a.c d.f", 1, 7, "", "", std::nullopt, VimMacroFixture{'a', "Wx"}},
+    {"macro-word-edge-e-count-past-end", "abc def", "@a", "abc def", 1, 7, "", "", std::nullopt, VimMacroFixture{'a', "9ex"}},
+    {"macro-word-edge-e-count-exact", "abc def ghi", "@a", "abc de ghi", 1, 7, "f", "v", std::nullopt, VimMacroFixture{'a', "2ex"}},
+    {"macro-word-edge-e-last-word", "abc def", "w@a", "abc de", 1, 6, "f", "v", std::nullopt, VimMacroFixture{'a', "ex"}},
+    {"macro-word-edge-e-last-char", "abc def", "$@a", "abc def", 1, 7, "", "", std::nullopt, VimMacroFixture{'a', "ex"}},
+    {"macro-word-edge-big-e-count-past-end", "a.c d.f", "@a", "a.c d.f", 1, 7, "", "", std::nullopt, VimMacroFixture{'a', "9Ex"}},
+    {"macro-word-edge-big-e-last-char", "a.c d.f", "$@a", "a.c d.f", 1, 7, "", "", std::nullopt, VimMacroFixture{'a', "Ex"}},
+    {"macro-word-edge-w-count-lands-on-a-one-letter-last-word", "abc d", "@a", "abc d", 1, 5, "", "", std::nullopt, VimMacroFixture{'a', "9wx"}},
+    {"macro-word-edge-w-count-exact-one-letter-last-word", "abc d", "@a", "abc ", 1, 4, "d", "v", std::nullopt, VimMacroFixture{'a', "1wx"}},
+    {"macro-word-edge-e-trailing-blank-after-the-last-word", "abc  ", "2l@a", "abc  ", 1, 5, "", "", std::nullopt, VimMacroFixture{'a', "ex"}},
+    {"macro-word-edge-w-trailing-blank-after-the-last-word", "abc  ", "2l@a", "abc ", 1, 4, " ", "v", std::nullopt, VimMacroFixture{'a', "wx"}},
+    {"macro-word-edge-e-count-lands-on-a-one-letter-last-word", "abc d", "@a", "abc d", 1, 5, "", "", std::nullopt, VimMacroFixture{'a', "9ex"}},
+    {"macro-word-edge-e-count-past-end-across-lines", "abc\ndef", "@a", "abc\ndef", 2, 3, "", "", std::nullopt, VimMacroFixture{'a', "9ex"}},
 }};
 } // namespace nenenib::tests
 // clang-format on
