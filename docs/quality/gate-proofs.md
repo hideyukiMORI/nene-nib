@@ -1604,3 +1604,25 @@ QLT-014 / ADR 0011 / 0016 / 0044 / QLT-001/012 を自己レビュー。ベンチ
 ARC-003/007 / CPP-001/002/004/011 / QLT-001/012 を自己レビュー。窓の添字は `std::size_t`・バイト位置は `Offset` のまま混ぜない（CPP-001）。`index_of` の `PieceSource` の `switch` は `default` 無し（CPP-002）。`.cpp` の補助は自由関数と `using Window = std::span<const Offset>` だけ（CPP-011）。時刻・スレッド・OS に触れない（ARC-003/007・symbols 0）。「本文を走査し直さない」は基準値を締めるまで契約（正しさだけ）で守る（ADR 0047 の強制）。
 
 設計席の計測（2026-09-23・Release `build/release-2ce95b6`・実機 `bc8a356f37c68491`）: `--check` 6 本を 2 回。`key-to-frame-burst-200-16mib` は 9.2 ms / 7.8 ms（基準値 427.7 ms・#179 の 447 ms から約 50 分の 1）。同じ時間帯の対照（main 相当の exe `build/release-3041c31`）は 461.7 ms。落ちたのは起動の区間だけ（`startup-first-frame` 249.5 / 267.7 ms・対照も 260.1 ms で同じく落ちる・`device_created` が 190 ms 前後）で、本文の経路より手前なので機械の雑音と判断。打鍵の 2 本は基準内。`document_opened` は 64〜71 ms（対照 56 ms・索引を 1 回作る）。ADR 0047 決定 7 のとおり `--adopt --bench key-to-frame-burst-200-16mib` で基準値を締めた。5 回の中央値 6.9 ms（最大 808 ms の外れ値あり）は上限が 8.9 ms になり今日の 3 回のうち 1 回（9.2 ms）が落ちる詰めすぎなので、同じ手順で `--repetitions 15` の中央値を採った（他の値と `recordedAt` は不変・保護対象の変更の根拠は ADR 0047）。ログは `out/184-check.log`・`out/184-check-2.log`・`out/184-control.log`・`out/184-adopt.log`。
+
+### 5-bd. 数字レジスタ `"0`〜`"9` と小削除 `"-`（Issue #204・ADR 0050・2026-09-29）
+
+ブランチ `feat/204-numbered-registers`（main `8b32b9b` から・工程 1 `0bd66d4`・工程 2 `5388b1d`）。工程 1: `VimNumberedRegisters`（10 本の表）・`VimNumberedRule`（`by_extent` / `always`）・`VimRegisterTarget` の `numbered` / `small_delete`・`VimState` の `numbered` / `small_delete`、書き手 `registers_written` の 4 段（名指し → `"1` の繰り下がり → `"-` → 無名）と `p` `P` の読み `register_read`。工程 2: `normal_recording` が `"` の待ちの次の数字を記録に残し、`numbered_advanced`（記録の先頭に並ぶ `"{名前}` の最後の組が `1`〜`8` なら 1 つ進める）を `repeated_change` と `replayed_visual` が通す。`@` の読みは `register_read(state, selection)` の 1 本へ寄せ、名前は `register_selection_of` で解く（`@{0-9}` `@-`・`last_macro` は数字と `-` も覚える・`@_` は今までどおり拒否）。`q{0-9}` は数字へ文字単位で置き換えて録り（繰り下がらない・無名は変えない）、`q-` は拒否。`vim_register_stored` は `0`〜`9` と `-` を置き換えで受ける。application・ui・eng・oracle の測定コードは不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | `VimRegisterTarget` / `VimNumberedRule` の網羅・関数長。工程 1・2 とも警告 0 で成功 |
+| `build/nib_tests.exe --vim-macro` | 対象。工程 1 **1234 checks**（625 から）→ 工程 2 **1392 checks 成功**（fixture 127 件 = macro 20 ＋ register 107 の再生と、`q0` `q1` `q9` の録画・`q-` の拒否・`vim_register_stored` の `0` `9` `-` と `@-` `@@` `@0` `@9` の契約 2 本） |
+| `build/nib_tests.exe --vim-dot` | `.` の記録と再生の経路。**1479 checks 成功**（不変） |
+| `build/nib_tests.exe`（引数なし） | 工程 1 15145 → 工程 2 **15287 checks 成功** |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only register-` × 2 | 工程 2: 107 measured / 1398 reused。2 回で `VimFixtures.hpp`（`09F880AE…6EA6DFC`）と `fixtures.json`（`B6E28638…9F9B65DF`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build --allow --vim-macro` | **終了 0**。`8b32b9b..5388b1d`・`fixtures 1423 -> 1505 / metadata 2 / deleted 0 / changed 0 / added 82`・保護対象は `none`・`--vim-macro 変化 625 -> 1392 allowed`・`scopes 22 / same 21 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+fixture は 82 件（工程 1 の 66 件と工程 2 の `register-dot-*` 11 件・`register-at-*` 5 件）。`"1pu.u.` は `:normal!` の中でも `u` が塊を区切る形（前置きを `"1yy` `"2yy` `"3yy` の yank だけにした `"1Pu.u.`）で fixture にした。`p` で書くと Nib の `u` 後のキャレットが Vim と 1 行ずれる（行単位の `p` の取消・本 Issue の前からの差）ので `P` にした。
+
+対象を限定した理由: 差分は core の Vim の engine（レジスタの置き場・書き手・読み・`.` の記録と再生の鍵・`@` `q`）と `--vim-macro` の単体テストと fixture である。renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021。速さは設計席）。
+
+FR-003 / ARC-001/004 / CPP-002/003/004/011 / QLT-001/012 / CNF-010/011 を自己レビュー。書き手は `registers_written` の 1 本・読みは `register_read` の 1 本（planned・レビュー事項・`grep -n "\.numbered\|small_delete" src/core/VimStep.cpp` が書き手の 4 段・`register_read`・`register_selection_of`・録画の停止・`vim_register_stored`・範囲の印だけ）。
