@@ -33,6 +33,7 @@
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "UnsavedTab.hpp"
 #include "VimColumnWish.hpp"
 #include "VimCount.hpp"
 #include "VimMode.hpp"
@@ -61,6 +62,7 @@ using nenenib::application::EditorState;
 using nenenib::application::HistoryAction;
 using nenenib::application::InsertText;
 using nenenib::application::NewTab;
+using nenenib::application::next_unsaved_tab;
 using nenenib::application::OpenDocument;
 using nenenib::application::ScrollLines;
 using nenenib::application::SelectEditMode;
@@ -520,6 +522,39 @@ void verify_startup_opens_every_file()
     expect(twice.tabs.size() == 1 && twice.document.title.text() == "a.txt",
            "the same file given twice opens one tab");
 }
+
+// 窓を閉じるときに確かめる未保存のタブは帯の左から順（#237）。保存済みのタブは飛ばし、
+// 切り替えても帯の並びと印は変わらないので、確かめた次の位置から探し直せば 1 本ずつ 1 度だけ映る。
+void verify_unsaved_tabs_in_band_order()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    const auto single = controller.frame();
+    expect(!next_unsaved_tab(single.tabs, 0).has_value(),
+           "one saved tab asks nothing when the window closes");
+    open_four_tabs(controller);
+    applied(controller, SwitchTab{1});
+    const auto band = controller.apply(NewTab{});
+    expect(band.tabs.size() == 5 &&
+               next_unsaved_tab(band.tabs, 0) == std::optional<std::size_t>{0} &&
+               next_unsaved_tab(band.tabs, 2) == std::optional<std::size_t>{3} &&
+               !next_unsaved_tab(band.tabs, 5).has_value() &&
+               !next_unsaved_tab(band.tabs, 9).has_value(),
+           "the next unsaved tab is searched rightward and skips the saved one");
+    std::vector<std::size_t> asked;
+    std::size_t from = 0;
+    for (auto next = next_unsaved_tab(controller.frame().tabs, from); next.has_value();
+         next = next_unsaved_tab(controller.frame().tabs, from))
+    {
+        const auto shown = controller.apply(SwitchTab{next.value()});
+        expect(shown.active_tab == next.value() && shown.document.save_state == SaveState::modified,
+               "the tab asked about is the one the window shows");
+        asked.push_back(next.value());
+        from = next.value() + 1;
+    }
+    expect(asked == std::vector<std::size_t>{0, 1, 3, 4},
+           "every unsaved tab is asked once from the left of the band");
+}
 } // namespace
 
 void verify_tabs_contracts()
@@ -542,6 +577,7 @@ void verify_tabs_contracts()
     verify_open_right_of_active();
     verify_open_failure_adds_no_tab();
     verify_startup_opens_every_file();
+    verify_unsaved_tabs_in_band_order();
 }
 
 void verify_tabs_scope()

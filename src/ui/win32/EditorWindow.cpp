@@ -28,8 +28,10 @@
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
 #include "StatusBarLayout.hpp"
+#include "SwitchTab.hpp"
 #include "TextEncoding.hpp"
 #include "TitleBarLayout.hpp"
+#include "UnsavedTab.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 #include "VimCharacter.hpp"
@@ -1130,9 +1132,18 @@ bool EditorWindow::confirm_discard()
 
 void EditorWindow::close_window()
 {
-    if (!confirm_discard())
+    // 未保存のタブを帯の左から順に映して確かめる（#237）。取り消しか保存の失敗でそこで止め、
+    // 窓を閉じない。それまでに保存したタブは保存されたまま。
+    std::size_t from = 0;
+    for (auto next = application::next_unsaved_tab(controller_.frame().tabs, from);
+         next.has_value(); next = application::next_unsaved_tab(controller_.frame().tabs, from))
     {
-        return;
+        send(application::SwitchTab{next.value()});
+        if (!confirm_discard())
+        {
+            return;
+        }
+        from = next.value() + 1;
     }
     DestroyWindow(window_);
 }
