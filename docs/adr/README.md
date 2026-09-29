@@ -66,3 +66,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0048](0048-named-registers-as-one-text-table.md) | 名前つきレジスタ `"a` はマクロと同じ 26 本の本文の表で、鍵列 ↔ 本文の写しは core の 1 対 | 受理 |
 | [0049](0049-space-backspace-wrap-motions.md) | `<Space>` `<BS>` は行をまたぐ `l` `h` で、オペレータ待ちと VISUAL では行末の位置に一度止まる | 受理 |
 | [0050](0050-numbered-and-small-delete-registers.md) | 数字レジスタ `"0`〜`"9` と小削除 `"-` は書き手 1 本の規則で埋め、`.` は番号を 1 つ進めて再生する | 受理 |
+| [0051](0051-clipboard-registers-through-controller.md) | クリップボードのレジスタ `"+` `"*` は engine が写しを読み書きし、OS との往復は controller が `ClipboardPort` で行う | 受理 |
