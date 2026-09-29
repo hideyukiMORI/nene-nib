@@ -31,8 +31,8 @@
 #include "SearchHop.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
+#include "SettleRecentTab.hpp"
 #include "StatusBarLayout.hpp"
-#include "StepTab.hpp"
 #include "SwitchTab.hpp"
 #include "TabCommand.hpp"
 #include "TabKeyTable.hpp"
@@ -52,6 +52,7 @@
 #include "VimMode.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
+#include "WalkRecentTab.hpp"
 
 #include <dwmapi.h>
 #include <imm.h>
@@ -448,6 +449,7 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
     }
     std::unreachable();
 }
+
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
@@ -634,13 +636,10 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
         paint();
         return 0;
     case WM_KEYDOWN:
-        timing_.mark(core::Milestone::input_received);
-        press_key(word);
-        return 0;
+    case WM_KEYUP:
     case WM_CHAR:
-        timing_.mark(core::Milestone::input_received);
-        type_character(word);
-        return 0;
+    case WM_KILLFOCUS:
+        return key_message(message, word, data);
     case WM_IME_STARTCOMPOSITION:
     case WM_IME_COMPOSITION:
     case WM_IME_ENDCOMPOSITION:
@@ -698,6 +697,44 @@ LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
         break;
     }
     return DefWindowProcW(window_, message, word, data);
+}
+
+LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
+{
+    // 鍵の 3 通とフォーカスを失ったとき。Ctrl を離したとき・フォーカスを失ったときは、歩いて
+    // いれば使った順を確定してから OS の既定処理へ渡す（ADR 0058 の決定 4）。
+    switch (message)
+    {
+    case WM_KEYDOWN:
+        timing_.mark(core::Milestone::input_received);
+        press_key(word);
+        return 0;
+    case WM_CHAR:
+        timing_.mark(core::Milestone::input_received);
+        type_character(word);
+        return 0;
+    case WM_KEYUP:
+        if (word == VK_CONTROL)
+        {
+            settle_tab_walk();
+        }
+        break;
+    case WM_KILLFOCUS:
+        settle_tab_walk();
+        break;
+    default:
+        break;
+    }
+    return DefWindowProcW(window_, message, word, data);
+}
+
+// 歩いていないときは意図を送らない（Ctrl+C などのたびに描き直さない・決定 4）。
+void EditorWindow::settle_tab_walk()
+{
+    if (controller_.tab_walking())
+    {
+        send(application::SettleRecentTab{});
+    }
 }
 
 LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
@@ -1494,10 +1531,10 @@ void EditorWindow::run_tab_command(core::TabCommand command)
         send(application::NewTab{});
         return;
     case core::TabCommand::next:
-        send(application::StepTab{core::TabStep::next});
+        send(application::WalkRecentTab{core::TabStep::next});
         return;
     case core::TabCommand::previous:
-        send(application::StepTab{core::TabStep::previous});
+        send(application::WalkRecentTab{core::TabStep::previous});
         return;
     case core::TabCommand::close:
     {

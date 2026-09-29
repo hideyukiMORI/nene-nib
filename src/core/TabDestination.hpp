@@ -8,7 +8,8 @@
 namespace nenenib::core
 {
 // どのタブへ行くかを決める 1 本（ADR 0057 の決定 1）。Vim の `gt` `gT`・Ex の `tabnext`
-// `tabprevious`・一覧の候補の実行・窓の Ctrl+Tab がどれもここを通る（ARC-001）。
+// `tabprevious`・一覧の候補の実行がどれもここを通る（ARC-001）。窓の Ctrl+Tab は使った順
+// （TabRecency・ADR 0058）で、ここを通らない。
 // active は帯の上の今の位置、tab_count は本数（どちらも 0 始まりの帯の位置で数える）。
 // 答えは行き先の帯の位置で、値なしは失敗（Vim の実測・out/probes/probe-vimtabs-2026-09-29.md）。
 // - forward・回数なし: 次（末尾から先頭へ折り返す）。

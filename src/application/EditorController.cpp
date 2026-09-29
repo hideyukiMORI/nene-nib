@@ -27,7 +27,7 @@
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
-#include "TabStep.hpp"
+#include "TabRecency.hpp"
 #include "TabTitle.hpp"
 #include "TextPosition.hpp"
 #include "TitleBarHit.hpp"
@@ -421,19 +421,20 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return views;
 }
 
-// 帯の位置の順で隣へ。端は折り返す（ADR 0056 の決定 3）。行き先を数えるのは gt / gT と同じ
-// tab_destination の 1 本（ADR 0057 の決定 1）。
-[[nodiscard]] core::TabJumpDirection direction_of(core::TabStep step) noexcept
+// Ctrl+Tab の歩きを続けたまま受け取れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の
+// 寸法・外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の
+// 意図は写す前に歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
+[[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
-    switch (step)
-    {
-    case core::TabStep::next:
-        return core::TabJumpDirection::forward;
-    case core::TabStep::previous:
-        return core::TabJumpDirection::backward;
-    }
-    std::unreachable();
+    return std::holds_alternative<WalkRecentTab>(intent) ||
+           std::holds_alternative<SettleRecentTab>(intent) ||
+           std::holds_alternative<PointTitleBar>(intent) ||
+           std::holds_alternative<ScrollTabs>(intent) ||
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<VisibleLines>(intent) ||
+           std::holds_alternative<RefreshAppearance>(intent);
 }
+
 } // namespace
 
 EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
@@ -490,13 +491,16 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 
 EditorFrame EditorController::apply(const EditorIntent &intent)
 {
+    settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
+    // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
                  std::holds_alternative<CancelComposition>(intent) ||
                  std::holds_alternative<TitleBarWidth>(intent) ||
                  std::holds_alternative<ScrollTabs>(intent) ||
-                 std::holds_alternative<PointTitleBar>(intent));
+                 std::holds_alternative<PointTitleBar>(intent) ||
+                 std::holds_alternative<SettleRecentTab>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
@@ -506,6 +510,7 @@ EditorFrame EditorController::apply(const EditorIntent &intent)
 // command_key の 1 か所を通り、打った鍵なので <Esc> は取消のまま。
 EditorFrame EditorController::press_vim_key(const core::VimKey &key)
 {
+    settle_tab_walk_before(false);
     begin_intent(false);
     static_cast<void>(deliver_vim_key(key));
     return frame();
@@ -518,6 +523,7 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 {
     for (const core::VimKey &key : keys)
     {
+        settle_tab_walk_before(false);
         begin_intent(false);
         if (deliver_vim_key(key).has_value())
         {
@@ -525,6 +531,17 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
         }
     }
     return frame();
+}
+
+// 歩いている間に歩きを続けない意図や Vim の鍵が来たら、写す前に SettleRecentTab と同じ確定を
+// 通す（ADR 0058 の決定 4）。controller の入口はどれもここを通るので、窓を経ない経路でも確定が
+// 漏れない。1 打鍵ごとに通るので、歩いていないときは欄を 1 つ読むだけで抜ける。
+void EditorController::settle_tab_walk_before(bool keeps_walk)
+{
+    if (state_.tab_walking() && !keeps_walk)
+    {
+        accept(SettleRecentTab{});
+    }
 }
 
 void EditorController::begin_intent(bool keeps_message)
@@ -1914,8 +1931,14 @@ void EditorController::accept(const NewTab &)
 
 void EditorController::accept(const SwitchTab &intent)
 {
-    if (intent.index >= state_.tab_count() || intent.index == state_.active_tab())
+    if (intent.index >= state_.tab_count())
     {
+        return;
+    }
+    // アクティブ自身は文書を動かさず、歩きの途中なら着いた所で確定する（ADR 0058 の決定 2）。
+    if (intent.index == state_.active_tab())
+    {
+        state_ = state_.with_switched(intent.index);
         return;
     }
     leave_document();
@@ -1923,15 +1946,33 @@ void EditorController::accept(const SwitchTab &intent)
     enter_document();
 }
 
-void EditorController::accept(const StepTab &intent)
+void EditorController::accept(const WalkRecentTab &intent)
 {
     const auto destination =
-        core::tab_destination(core::TabJump{direction_of(intent.step), std::nullopt},
-                              state_.active_tab(), state_.tab_count());
-    if (destination.has_value())
+        core::tab_recency_walked(state_.recency(), state_.active_tab(), intent.step);
+    if (!destination.has_value())
     {
-        accept(SwitchTab{destination.value()});
+        return;
     }
+    // 1 本のときの歩きは同じ位置で、文書は動かさず歩いている印だけを立てる。
+    if (destination.value() == state_.active_tab())
+    {
+        state_ = state_.with_walked(destination.value());
+        return;
+    }
+    leave_document();
+    state_ = state_.with_walked(destination.value());
+    enter_document();
+}
+
+void EditorController::accept(const SettleRecentTab &)
+{
+    state_ = state_.with_walk_settled();
+}
+
+bool EditorController::tab_walking() const noexcept
+{
+    return state_.tab_walking();
 }
 
 void EditorController::accept(const CloseTab &intent)

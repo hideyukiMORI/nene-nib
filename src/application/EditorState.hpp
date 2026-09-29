@@ -14,6 +14,7 @@
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
 #include "SettingsIssue.hpp"
+#include "TabRecency.hpp"
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
 #include "VimState.hpp"
@@ -86,13 +87,24 @@ class EditorState final
     // 動いていないタブの束は同じ参照のまま」を見るための読み取りの口。
     [[nodiscard]] const std::vector<std::shared_ptr<const DocumentState>> &parked() const noexcept;
     // 帯の位置 position のタブをアクティブにする。今の文書は束にして元の位置に置く（選択は
-    // キャレットへ畳み、undo の単位は閉じる）。範囲の外とアクティブ自身なら何も変えない。
+    // キャレットへ畳み、undo の単位は閉じる）。範囲の外なら何も変えず、アクティブ自身なら文書は
+    // 動かさない（歩きの確定だけ・下の使った順）。
     [[nodiscard]] EditorState with_switched(std::size_t position) const;
     // 空の「無題」をアクティブの右に足してアクティブにする。今の文書は束にして置く。
     [[nodiscard]] EditorState with_new_tab() const;
     // 帯の位置 position のタブを捨てる。アクティブを捨てたら右隣（無ければ左隣）をアクティブに
     // する（決定 6）。範囲の外と最後の 1 つなら何も変えない（最後の 1 つは closing が受ける）。
     [[nodiscard]] EditorState with_closed(std::size_t position) const;
+    // タブの使った順（ADR 0058 の決定 2）。上の 3 つ（切り替え・足す・閉じる）が列を直し、
+    // 歩きを終える。with_switched はアクティブ自身を指されても歩きを終える（着いた所の確定）。
+    [[nodiscard]] const core::TabRecency &recency() const noexcept;
+    // Ctrl+Tab で歩いている間だけ真（決定 3）。
+    [[nodiscard]] bool tab_walking() const noexcept;
+    // 歩きの 1 歩。帯の位置 position のタブへ切り替えるが、使った順の列は入れ替えない。
+    // 範囲の外なら何も変えない。アクティブ自身なら歩いている印だけを立てる。
+    [[nodiscard]] EditorState with_walked(std::size_t position) const;
+    // 歩いていれば今のタブを使った順の先頭へ動かして歩きを終える。歩いていなければ同じ状態。
+    [[nodiscard]] EditorState with_walk_settled() const;
     // 最後の 1 つのタブを閉じる意図の 1 回だけ立つ（D22）。last_failure と同じく次の意図で消す。
     [[nodiscard]] bool closing() const noexcept;
     [[nodiscard]] EditorState with_closing(bool closing) const;
@@ -112,9 +124,13 @@ class EditorState final
   private:
     EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled);
     // 置く・広げるの 1 対（決定 2）。脇の束と欄の両方を知るのはこの 2 つと、上の with_switched /
-    // with_new_tab / with_closed だけである。
+    // with_new_tab / with_closed / with_walked だけである。
     [[nodiscard]] std::shared_ptr<const DocumentState> parked_active() const;
     void spread(const DocumentState &tab);
+    // 帯の位置 position のタブを広げる（使った順は触らない）。with_switched と with_walked の共通。
+    [[nodiscard]] EditorState switched_to(std::size_t position) const;
+    // アクティブを使った順の先頭へ動かし、歩きを終える。使った順を直す 3 か所の締め。
+    void touch_active();
 
     core::TextBuffer text_;
     core::Selection selection_;
@@ -134,6 +150,8 @@ class EditorState final
     std::optional<SearchPreview> search_preview_;
     std::vector<std::shared_ptr<const DocumentState>> parked_;
     std::size_t active_ = 0;
+    core::TabRecency recency_ = core::TabRecency::single();
+    bool tab_walk_ = false;
     bool closing_ = false;
     std::optional<std::size_t> close_request_;
     std::int32_t title_bar_width_ = 0;
