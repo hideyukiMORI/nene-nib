@@ -159,6 +159,20 @@ void verify_vim_fixtures()
     }
 }
 
+// fixture の再生は :normal! と同じに失敗した鍵の後ろを流さず、打った鍵は流す（Issue #230）。
+void verify_vim_normal_stops_at_failure()
+{
+    Editing normal;
+    open_vim_document(normal, "abc");
+    vim_normal(normal.controller(), "hx");
+    expect(whole_vim_body(normal.controller()) == "abc",
+           "under :normal! a failed h drops the x after it");
+    Editing typed;
+    open_vim_document(typed, "abc");
+    vim_replay(typed.controller(), "hx");
+    expect(whole_vim_body(typed.controller()) == "bc", "a typed x still runs after a failed h");
+}
+
 void verify_vim_key_notation()
 {
     const auto keys = vim_keys_of("i<Esc><CR><BS><C-r><Home><End>あ");
@@ -656,7 +670,8 @@ void verify_vim_fixture(const VimFixture &fixture)
     static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
     arrange_vim_viewport(controller, fixture);
     store_vim_fixture_macro(controller, fixture);
-    vim_replay(controller, fixture.keys);
+    // oracle は鍵を 1 本の :normal! で流すので、鍵が失敗したら残りを流さない（Issue #230）。
+    vim_normal(controller, fixture.keys);
     const auto frame = controller.frame();
     const std::string name(fixture.name);
     const std::size_t expected_first =
@@ -967,6 +982,7 @@ void verify_vim_engine()
     verify_vim_put_line_endings();
     verify_vim_crlf();
     verify_vim_other_keys();
+    verify_vim_normal_stops_at_failure();
     verify_vim_fixtures();
 }
 } // namespace nenenib::tests

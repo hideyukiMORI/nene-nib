@@ -1842,5 +1842,14 @@
   {"name":"macro-word-edge-e-trailing-blank-after-the-last-word","text":"abc  ","keys":"2l@a","register":{"name":"a","keys":"ex"}},
   {"name":"macro-word-edge-w-trailing-blank-after-the-last-word","text":"abc  ","keys":"2l@a","register":{"name":"a","keys":"wx"}},
   {"name":"macro-word-edge-e-count-lands-on-a-one-letter-last-word","text":"abc d","keys":"@a","register":{"name":"a","keys":"9ex"}},
-  {"name":"macro-word-edge-e-count-past-end-across-lines","text":"abc\ndef","keys":"@a","register":{"name":"a","keys":"9ex"}}
+  {"name":"macro-word-edge-e-count-past-end-across-lines","text":"abc\ndef","keys":"@a","register":{"name":"a","keys":"9ex"}},
+  {"name":"word-edge-forward-9w","text":"abc def","keys":"9wx"},
+  {"name":"word-edge-forward-last-char-w","text":"abc def","keys":"$wx"},
+  {"name":"word-edge-forward-9e","text":"abc def","keys":"9ex"},
+  {"name":"word-edge-forward-last-char-e","text":"abc def","keys":"$ex"},
+  {"name":"word-edge-forward-9W","text":"a.c d.f","keys":"9Wx"},
+  {"name":"word-edge-forward-9E","text":"a.c d.f","keys":"9Ex"},
+  {"name":"word-edge-forward-2w-exact","text":"abc def ghi","keys":"2wx"},
+  {"name":"word-edge-forward-9w-one-letter-last-word","text":"abc d","keys":"9wx"},
+  {"name":"word-edge-forward-e-trailing-blank","text":"abc  ","keys":"2lex"}
 ]
