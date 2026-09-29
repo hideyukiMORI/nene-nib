@@ -1840,3 +1840,24 @@ ARC-001 / ARC-012 / CPP-002 / QLT-001 / QLT-012 / QLT-013 / CNF-010 を自己レ
 対象を限定した理由: 差分は core の文字列の純関数 1 本と application の貼り付けの 1 関数と単体テストである。コピー・切り取り・入力行への貼り付け・ui/win32・adapters・fixture は不変。実機の確認（ほかのアプリの本文を LF の文書へ Ctrl+V）は設計席が行う。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 FR-002 / ARC-001 / ARC-009 / CPP-007 / QLT-001 / QLT-012 を自己レビュー。畳む規則は `clipboard_line_feeds` の 1 本（`grep -rn "clipboard_line_feeds" src` は `ClipboardText.*`・`VimClipboardText.cpp`・`EditorController.cpp` だけ・ARC-001）・文書の改行へ直すのは `EditorController.cpp` の `with_document_newlines` の 1 本で 2 つ目を作らない（ARC-009）・OS に触れない純関数で core に置く（ARC-007）。
+
+### 5-bp. fixture の再生は `:normal!` と同じく失敗した鍵の後ろを打ち切る（Issue #230・2026-09-29）
+
+ブランチ `test/230-replay-stops-at-failure`（main `c72e144` から・`47384cd` へ rebase・実装 `8af6621`）。oracle は fixture の鍵列を 1 本の `:normal!` で Vim へ流し、Vim は鍵が失敗すると残りを打ち切るが、Nib の fixture の再生（`vim_replay`）は失敗の後も鍵を流していた。controller に harness の口 `press_vim_keys(std::span<const core::VimKey>)` を 1 つ足し（1 鍵の流し方は `press_vim_key` と同じ `begin_intent` と `deliver_vim_key`・打ち切りの判定は再生の打ち切りと同じ `deliver_vim_key` の返り値・失敗の値を外へ出す口は作らない）、テストの足場に `vim_normal` を足して `verify_vim_fixture` だけをそれへ切り替えた（fixture を再生する scope はどれも `verify_vim_fixture` を通る）。打った鍵の `vim_replay` と手書きの契約（ADR 0046 の決定 3 を前提に鍵を 1 本に並べた 25 checks）は変えない。`register` 欄の録画（`store_vim_fixture_macro`）は、oracle が鍵を実行せず `let @a = "..."` で文字のまま置くので、途中で失敗しても全部の鍵を録る打った鍵の `vim_replay` のまま。#226 から外した `word-edge-forward-*` 9 件（`9wx` `$wx` `9ex` `$ex` `9Wx` `9Ex` `2wx` と `abc d` の `9wx`・`abc  ` の `2lex`）を本物の Vim で生成した。打ち切りの契約 `verify_vim_normal_stops_at_failure`（本文 `abc` の `hx` は `vim_normal` で不変・`vim_replay` で `bc`）を足した。製品の打鍵と再生の経路は不変。
+
+下ごしらえ（`out/probes/probe-replay-abort-2026-09-29.md`）の実測: 打ち切りにしても既存の fixture 1844 件は 1 件も落ちず、打ち切りなしでは `word-edge-forward-*` のうち 6 件（`last-char-w` `9e` `last-char-e` `9E` `9w-one-letter-last-word` `e-trailing-blank`）が本文・キャレット・レジスタの 24 checks で落ちる（打ち切りの反例）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | 対象（fixture 全件の再生・打ち切りの契約・手書きの契約）。**18448 checks 成功**（main `47384cd` の 18381 から +67・fixture 9 件と打ち切りの契約 1 本） |
+| `build/nib_tests.exe --<scope>`（24 scope 全部） | fixture を再生する scope を含めて全部成功（件数は下の protected-diff と同じ） |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only word-edge-forward-` × 2 | 9 measured / 1844 reused。2 回で `VimFixtures.hpp` と `fixtures.json`（`9C03B3D7…87D28A21`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`47384cd..8af6621`・`fixtures 1844 -> 1853 / metadata 2 / deleted 0 / changed 0 / added 9`・保護対象は `none`・`scopes 24 / same 24 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は application の harness の口 1 本（製品の打鍵・再生からは呼ばれない）とテストの足場・契約・fixture である。renderer・ui/win32・adapters・core は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+ARC-001 / ARC-010 / CPP-005 / QLT-001 / QLT-012 / CNF-010 を自己レビュー。打ち切りの判定は controller の `deliver_vim_key` の返り値の 1 つで、再生（`perform(VimReplay)`）と同じ値を読み、テストの側に 2 つ目の判定を書かない（ARC-001）・失敗は既存の `std::optional<VimRepeatFailure>` のまま外へ出さない（ARC-010 / CPP-005）。
