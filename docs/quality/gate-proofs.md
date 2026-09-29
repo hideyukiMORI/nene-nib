@@ -1781,3 +1781,22 @@ FR-003 / ARC-001 / CPP-002/011/012 / QLT-001/012 / CNF-010/011 を自己レビ�
 対象を限定した理由: 差分は core の語の後ろ向きの走査の戻り値と `VimStep` の移動・オペレータの失敗の扱いと、単体テストと fixture である。renderer・ui/win32・application・adapters の経路は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001 / CPP-002/004/005/011 / QLT-001/012 / CNF-010/011 を自己レビュー。端のための 2 つ目の歩き方は無い（ARC-001）・`landing_of` の移動の値は `switch` で網羅（CPP-002）・失敗は `std::optional<VimRepeatFailure>` で返し `value()` で読む（CPP-004 / CPP-005）・`VimMotionLanding` は 1 ファイル 1 型（CPP-011）。
+
+### 5-bm. 前向きの語の移動が本文の終わりに当たったときの失敗（Issue #226・2026-09-29）
+
+ブランチ `fix/226-forward-word-motion-failure`（main `1d6173f` から・`10e2e61`）。Issue 本文の読み（「`9w` は回数の途中で本文の終わりに当たると失敗」）は `w` について誤りで、本物の Vim 9.1 の実測で訂正した。裸の移動の失敗は本文・キャレット・レジスタに出ないので、マクロの打ち切りで観測する fixture `macro-word-edge-*` 21 件（`register` 欄・a = `9wx` `9wrZ` `2wx` `wx` `9Wx` `Wx` `9ex` `2ex` `ex` `9Ex` `Ex` など・本文 `abc def` `a.c d.f` `abc d` `abc  ` `abc\ndef`）を生成した。Vim の規則は 2 本（関数の写し）: `w` `W`（`fwd_word`）は周の始めに本文の最後の文字にいて出られないときだけ FAIL で、周の途中で本文が尽きたら OK（`abc def` の `9wx` は `x` が走り、`abc d` の `9wx` は 2 周目が最後の文字から始まって打ち切り）。`e` `E`（`end_word`）は周のどの歩でも本文の終わりの先へ出ようとしたら FAIL（`9ex`・`abc  ` の `c` からの `ex` は打ち切り）。直す前の Nib はマクロの 6 件（`w` の 1 件と `e` `E` の 5 件）の本文・キャレット・レジスタで落ちた（probe 30 件の段階で **48 of 18385 checks failed**）。`:normal!` 1 本の形（鍵列 `9ex` をそのまま）は Nib の fixture の再生が失敗の後も鍵を流すので使わない（Issue #230）。歩き方は 1 本のまま、`forward_word` の 1 周の結果を閉じた `VimWordAdvance`（続ける・止まった＝OK・端から出られない＝FAIL）にし、`vim_next_word` / `vim_word_end` が `VimMotionLanding` を返す。`landing_of` の前向きの枝（`forward_word_landing`）が失敗の印を運び、オペレータの範囲（`forward_word_range`）は着地だけを使う（Vim の `nv_wordcmd` は FAIL を OP_NOP のときだけ見る）。application・ui・adapters・eng は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功（途中で `motion_range` が関数の大きさで落ちたので範囲を `forward_word_range` へ出した） |
+| `build/nib_tests.exe`（引数なし） | 対象（前向きの失敗の単体テスト `verify_vim_forward_word_failures` と既存の `vim_next_word` の着地）。**18332 checks 成功** |
+| `build/nib_tests.exe --vim-macro` | 対象（`macro-word-edge-*` 21 件を再生・scope の件数 129 → 150）。**1735 checks 成功** |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only macro-word-edge-` × 2 | 21 measured / 1823 reused。2 回で `VimFixtures.hpp`（`1A0A57B9…A6F99EC7`）と `fixtures.json`（`B4027B10…1F3B93F0`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build --allow --vim-macro` | **終了 0**。`1d6173f..10e2e61`（この節を足す前のコミット）・`fixtures 1823 -> 1844 / metadata 2 / deleted 0 / changed 0 / added 21`・保護対象は `none`・`--vim-macro 1523 -> 1735 allowed`・`scopes 24 / same 23 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の語の前向きの走査の戻り値と `VimStep` の移動の着地・オペレータの範囲の取り出しと、単体テストと fixture である。renderer・ui/win32・application・adapters の経路は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / ARC-010 / CPP-002/005/011 / QLT-001/012 / CNF-010/011 を自己レビュー。端のための 2 つ目の歩き方は無く、裸の移動の着地（`moved_by`）も `forward_word_landing` を通る（ARC-001）・`VimWordAdvance` は `switch` で網羅し `default` を書かない（CPP-002）・失敗は `VimMotionLanding` の `std::optional<VimRepeatFailure>` で返す（ARC-010 / CPP-005）・`VimWordAdvance` は 1 ファイル 1 型（CPP-011）。
