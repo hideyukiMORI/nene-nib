@@ -1724,3 +1724,23 @@ FR-003 / ARC-001 / CPP-002/004/012 / QLT-001/012 / CNF-010/011 を自己レビ�
 対象を限定した理由: 差分は core の `Edit`・`EditHistory`・`VimStep`・`VimCaret` と application の `u` / Ctrl-r と `step_vim` の 1 か所、単体テストと fixture である。renderer・ui/win32・adapters の経路は不変。Release・`eng/measure-speed.py`・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001 / ARC-004 / CPP-002/003/004 / QLT-001/012 / CNF-010/011 を自己レビュー。戻り先を書くのは `replace` の 1 か所と engine の `VimStep.restore`（ARC-001）・`Edit` の欄は既定値なしの集成初期化で書き忘れがコンパイルで落ちる（ADR 0052 の強制）。
+
+### 5-bj. Vim の 1 文字と結合文字（Issue #216・ADR 0053・2026-09-29）
+
+ブランチ `fix/216-vim-character-with-combining`（main `9b28d10` から）。2 工程で進めた。工程 1（`a45a959`）は core に文字を歩く 1 対 `vim_character_end` / `vim_character_start`（判定は仮想桁の表の `DisplayWidth::zero` の 1 つ）を足し、`forward_characters` / `backward_characters`・`r`・VISUAL の端・NORMAL のキャレットの寄せをその境に揃えた（fixture `combining-*` 49 件）。工程 2 は、寄せ（`vim_resting_caret` / `vim_line_and_column`）が行の全体を写さずキャレットの手前 64 バイトと後ろ 64 バイトの窓だけを読み、見つけた文字の先頭が窓の先頭なら手前へ・文字の終わりが窓の終わりに近ければ後ろへ窓を倍に広げる形にした（`4a7603b`・1 MiB の 1 行で行の途中・200 バイトの結合文字の列の上・行末を単体で確かめる）。続けて fixture 43 件（語 `w e b dw de`・`diw daw diW yiw di" di(`・`f t F T ; , 2fe dfe dtb dTa`・put `p P 3p`・矩形 `d y r $`・INSERT の `<BS>` と `3a`）を先に生成し、直す前に 6 件 9 checks（`ee` `tb;` と矩形 4 件）が落ちることを確かめてから、語の走査の 1 歩・テキストオブジェクトの行の中の次と前・`f t F T` の走査と着地・矩形の端の文字の終わりを 1 対に置き換えた（`85e4cf7`）。`W E B ge` は Nib に無い移動なので fixture から外した。INSERT の `<BS>`（Vim の既定で文字の全体を消す）・`3a` の反復・put の後のキャレットは直さずに Vim と一致した。application・ui・adapters・eng は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 2 工程とも警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | 工程 1: **17218 checks 成功** → 工程 2: **17527 checks 成功** |
+| `build/nib_tests.exe --vim-characters` | 工程 1: 356 → 工程 2: 直す前 **9 of 686 checks failed** → **665 checks 成功**（`W E B ge` の 4 件を外した後） |
+| `build/nib_tests.exe --vim-text-objects` / `--vim-character-search` / `--vim-visual-block` / `--vim-dot` / `--vim-virtual-column` | 置き換えた走査の既存の経路。**1992 / 639 / 1105 / 1619 / 424 checks 成功** |
+| `ctest --test-dir build -R nib_unit` | 2 工程とも 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only combining-` × 2 | 工程 1: 49 measured / 1646 reused・工程 2: 92 measured / 1646 reused。工程 2 の 2 回で `VimFixtures.hpp`（`684CD082…BB892C1`）がバイト一致・`fixtures.json` は `38D19A05…C4CD87FB2` |
+| `python eng/protected-diff.py --base origin/main --build` | **終了 0**。`9b28d10..85e4cf7`（この節を足す前のコミット）・`fixtures 1646 -> 1738 / metadata 2 / deleted 0 / changed 0 / added 92`・保護対象は `none`・`--vim-characters 新規 - -> 665`・`scopes 24 / same 23 / 未測 0`（`--allow` 不要） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | 2 工程とも **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の文字の 1 対・寄せ・語・テキストオブジェクト・`f t`・矩形の端と、単体テストと fixture である。renderer・ui/win32・application・adapters の経路は不変。Release・`eng/measure-speed.py`（寄せの窓と 1 歩ごとの表の引き）・`check.ps1 -Full` は実行していない（設計席が回す・QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / ARC-012 / CPP-002/004/011 / QLT-001/012 / CNF-010/011 を自己レビュー。文字の境は 1 対だけ（ARC-001）・`grep -rln "DisplayWidth::zero" src/core` は仮想桁・表示・1 対だけ（寄せの窓は 1 対で判定し表を 2 度引かない）・バイト列の走査（照合器・UTF-16 との変換・`*` の語の切り出し）は変えていない（ADR 0053 の決定 3・4）。
