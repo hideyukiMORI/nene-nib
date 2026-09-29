@@ -951,6 +951,12 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     {
         state_ = state_.with_history(state_.history().sealed());
     }
+    // オペレータと VISUAL の戻り先（ADR 0052 の決定 7）。効果を写す前にキャレットを置くので、
+    // replace が覚える戻り先は Vim の保存の瞬間のカーソルと同じになる。スクロールは効果の後で追う。
+    if (step.restore.has_value())
+    {
+        state_ = state_.with_selection(core::collapsed_at(step.restore.value()));
+    }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
     send_vim_clipboard(step.clipboard);
