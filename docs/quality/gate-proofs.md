@@ -1684,3 +1684,23 @@ FR-003 / ARC-001 / CPP-002/004 / QLT-001/012 / CNF-010/011 を自己レビュー
 対象を限定した理由: 差分は core の `put_characters` のキャレットの式 1 行と fixture である。行単位・矩形の put、renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001 / CPP-002/004 / QLT-001/012 / CNF-010/011 を自己レビュー。行末を越えたキャレットの寄せは controller の 1 か所のまま（ARC-001）。
+
+### 5-bh. NORMAL の `X`（Issue #206・2026-09-29）
+
+ブランチ `feat/206-normal-capital-x`（main `dd3c1dd` から・`08f1eb6`）。先に fixture 11 件（`capital-x-*` 10 件: `$X` `$3X`・行頭の `jX` `j3X`・行頭を越える `j$9X`・`"aX` の後の `"ap`・`$2X.`・`X` の後の `"-p`・全角の前・Issue 本文の `dd$Xyy"-p"1p`、と `macro-capital-x-at-the-line-start-does-not-stop` 1 件）を本物の Vim から生成し、直す前の Nib で既定の実行が **34 of 15821 checks failed**（`capital-x-*` だけ）で落ちることを確かめた。`X` は表に 1 行・`VimAction::remove_character_before`（分類は `edit_line` なので VISUAL では今のまま効かない）で、`x` の隣の分岐が `motion_range(view, VimMotion::left, count, remove)` → `performed` を通す（`X` のための範囲・失敗・レジスタの規則は足していない）。Issue 本文の「行頭では失敗」は Vim 9.1 の実測（レジスタ a=`Xj` の `j2@a` がキャレット 3 行目＝マクロが止まらない・`Xx` と `dhx` は後ろの `x` が走り `hx` は止まる）で訂正し、行頭の `X` は `dh` と同じく空の範囲の削除で失敗の印を付けない。結合文字の前の `X` は Vim が 1 文字（`é`）として消すが、Nib の `h` `x` `dh` 共通の `backward_characters` / `forward_characters` がコードポイント単位なので合わず、fixture から外した（範囲外・報告のみ）。`--vim-macro` の契約（選ぶ fixture は `macro-` か `register-`・件数 127）に合わせて macro の fixture を `macro-` で始め、件数を 128 にした。application・ui・adapters・eng は不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | 対象（`capital-x-*` を再生）。直す前 **34 of 15821 checks failed** → 直した後 **15825 checks 成功**（15738 から） |
+| `build/nib_tests.exe --vim-macro` | macro の fixture の再生と scope の契約。1502 → **1514 checks 成功** |
+| `build/nib_tests.exe --vim-dot` | `.` の記録と再生の経路。**1528 checks 成功**（不変） |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only capital-x- --only macro-capital-x-` × 2 | 11 measured / 1525 reused。2 回で `VimFixtures.hpp`（`DC3F3091…9F7F1E35`）と `fixtures.json`（`EF439DEF…DDA03836`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build --allow --vim-macro` | **終了 0**。`dd3c1dd..08f1eb6`（この節を足す前のコミット）・`fixtures 1525 -> 1536 / metadata 2 / deleted 0 / changed 0 / added 11`・保護対象は `none`・`--vim-macro 変化 1502 -> 1514 allowed`・`scopes 23 / same 22 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（変更した C++ ファイル）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の鍵の表 1 行と動作 1 値と `x` の隣の分岐、`--vim-macro` の件数の契約、fixture である。renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / CPP-002/004/012 / QLT-001/012 / CNF-010/011 を自己レビュー。範囲は `motion_range` の left の 1 本を再利用（ARC-001）・動作の分類の網羅は `every_action_has_one_row` の static_assert で守られる（CPP-002）。
