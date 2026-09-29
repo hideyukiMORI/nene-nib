@@ -72,3 +72,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0054](0054-fixture-key-notation-has-one-table.md) | fixture の鍵の記法の表は oracle の 1 つで、C++ の表はそこから作る生成物 | 受理 |
 | [0055](0055-pasted-text-takes-the-document-line-ending.md) | 貼り付けた本文の改行は文書の改行の形に揃える | 受理 |
 | [0056](0056-tabs-park-inactive-documents-behind-the-active-one.md) | 複数タブは、アクティブな文書を今の形のまま持ち、ほかの文書は不変の束として脇に置く | 受理 |
+| [0057](0057-tab-destination-is-one-pure-function.md) | タブの行き先は 1 つの純関数が決め、Vim の `gt` `gT` と Ex と一覧が共用する | 受理 |
