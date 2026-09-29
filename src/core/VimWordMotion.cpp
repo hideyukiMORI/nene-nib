@@ -3,6 +3,7 @@
 #include "LineNumber.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimCharacterRange.hpp"
 #include "VimScanPoint.hpp"
 
@@ -116,7 +117,7 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
 {
     if (point.index < point.content.size())
     {
-        point.index = next_code_point(point.content, Offset{point.index}).value;
+        point.index = vim_character_end(point.content, Offset{point.index}).value;
         return point.index >= point.content.size() ? stepped_to_line_end : stepped_inside;
     }
     if (point.line.value >= text.line_count())
@@ -132,7 +133,7 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
 {
     if (point.index > 0)
     {
-        point.index = previous_code_point(point.content, Offset{point.index}).value;
+        point.index = vim_character_start(point.content, Offset{point.index}).value;
         return stepped_inside;
     }
     if (point.line.value <= 1)

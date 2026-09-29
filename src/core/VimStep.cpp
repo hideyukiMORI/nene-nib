@@ -14,6 +14,7 @@
 #include "VimBlockRange.hpp"
 #include "VimBlockWidth.hpp"
 #include "VimCaret.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VimCharacterExtent.hpp"
 #include "VimCharacterSearch.hpp"
 #include "VimCharacterSearchInvocation.hpp"
@@ -190,9 +191,9 @@ constexpr char32_t carriage_return_character = 0x0D;
     case VimCharacterSearchKind::find_backward:
         return match;
     case VimCharacterSearchKind::till_forward:
-        return previous_code_point(content, match);
+        return vim_character_start(content, match);
     case VimCharacterSearchKind::till_backward:
-        return next_code_point(content, match);
+        return vim_character_end(content, match);
     }
     std::unreachable();
 }
@@ -226,7 +227,7 @@ searched_forward(std::string_view content, Offset caret,
                  const VimCharacterSearchRequest &request) noexcept
 {
     VimCharacterSearchScan scan{request, request.count};
-    Offset at = next_code_point(content, caret);
+    Offset at = vim_character_end(content, caret);
     while (at.value < content.size())
     {
         const auto destination = matched_destination(content, at, caret, scan);
@@ -234,7 +235,7 @@ searched_forward(std::string_view content, Offset caret,
         {
             return destination;
         }
-        at = next_code_point(content, at);
+        at = vim_character_end(content, at);
     }
     return std::nullopt;
 }
@@ -248,7 +249,7 @@ searched_backward(std::string_view content, Offset caret,
         return std::nullopt;
     }
     VimCharacterSearchScan scan{request, request.count};
-    Offset at = previous_code_point(content, caret);
+    Offset at = vim_character_start(content, caret);
     while (true)
     {
         const auto destination = matched_destination(content, at, caret, scan);
@@ -260,7 +261,7 @@ searched_backward(std::string_view content, Offset caret,
         {
             return std::nullopt;
         }
-        at = previous_code_point(content, at);
+        at = vim_character_start(content, at);
     }
 }
 
@@ -291,7 +292,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return text.position_of(caret).line;
 }
 
-// 行の中で count 文字ぶん先。行の内容の終わり（Vim が NUL を置く桁）までは進める。
+// 行の中で count 文字ぶん先（1 文字は ADR 0053 の境）。
+// 行の内容の終わり（Vim が NUL を置く桁）までは進める。
 [[nodiscard]] Offset forward_characters(const TextBuffer &text, Offset caret, std::size_t count)
 {
     const LineNumber line = line_of(text, caret);
@@ -300,7 +302,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     std::size_t index = caret.value - start.value;
     for (std::size_t step = 0; step < count && index < content.size(); ++step)
     {
-        index = next_code_point(content, Offset{index}).value;
+        index = vim_character_end(content, Offset{index}).value;
     }
     return Offset{start.value + index};
 }
@@ -313,7 +315,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     std::size_t index = caret.value - start.value;
     for (std::size_t step = 0; step < count && index > 0; ++step)
     {
-        index = previous_code_point(content, Offset{index}).value;
+        index = vim_character_start(content, Offset{index}).value;
     }
     return Offset{start.value + index};
 }
@@ -1936,12 +1938,18 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
                                                                   Offset caret, std::size_t count)
 {
     const Offset end = text.line_end(line_of(text, caret));
+    // 数えるのは Vim の文字（結合文字は付く文字ごと・ADR 0053 の決定 4）。
     const std::string available = text.text_range(caret, end);
-    if (count > code_point_count(available))
+    Offset at{0};
+    for (std::size_t step = 0; step < count; ++step)
     {
-        return std::nullopt;
+        if (at.value >= available.size())
+        {
+            return std::nullopt;
+        }
+        at = vim_character_end(available, at);
     }
-    return OffsetRange{caret, forward_characters(text, caret, count)};
+    return OffsetRange{caret, Offset{caret.value + at.value}};
 }
 
 [[nodiscard]] std::optional<OffsetRange> replacement_range(const VimState &state,
@@ -1976,8 +1984,9 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     return started_prefix(state, VimPrefix::r);
 }
 
-// 文字だけを置換する。行境界は残し、効果の本文はLFへ揃える。'\n' の直前の '\r' を改行の一部と
-// 見るのは本文の改行の形が CRLF のときだけで、LF の本文の '\r' は置換される文字である（ADR 0036）。
+// 文字だけを置換する。source は文字の先頭から始まる。行境界は残し、効果の本文はLFへ揃える。
+// '\n' の直前の '\r' を改行の一部と見るのは本文の改行の形が CRLF のときだけで、LF の本文の
+// '\r' は置換される文字である（ADR 0036）。
 [[nodiscard]] std::string replacement_text(std::string_view source, char32_t target,
                                            LineEnding ending)
 {
@@ -1987,7 +1996,9 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     while (at.value < source.size())
     {
         const char32_t code = code_point_at(source, at);
-        at = next_code_point(source, at);
+        // 1 文字（付く結合文字ごと）を 1 つの target に置き換える（ADR 0053 の決定 4）。
+        // 改行の後ろは行頭なので、改行はそれだけで 1 文字として進む。
+        at = code == line_feed ? next_code_point(source, at) : vim_character_end(source, at);
         if (ending == LineEnding::crlf && code == carriage_return_character &&
             at.value < source.size() && source.at(at.value) == '\n')
         {
