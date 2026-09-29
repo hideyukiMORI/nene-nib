@@ -68,3 +68,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0050](0050-numbered-and-small-delete-registers.md) | 数字レジスタ `"0`〜`"9` と小削除 `"-` は書き手 1 本の規則で埋め、`.` は番号を 1 つ進めて再生する | 受理 |
 | [0051](0051-clipboard-registers-through-controller.md) | クリップボードのレジスタ `"+` `"*` は engine が写しを読み書きし、OS との往復は controller が `ClipboardPort` で行う | 受理 |
 | [0052](0052-undo-caret-restores-the-first-edit-position.md) | `u` と Ctrl-r の後のキャレットは undo の単位が覚えた戻り先で、戻り先は最初の編集の瞬間のキャレット | 受理 |
+| [0053](0053-vim-character-is-a-code-point-with-its-zero-width-followers.md) | Vim の 1 文字はコードポイント 1 つと直後に続く幅 0 のコードポイントの列で、判定は仮想桁の表を使う | 受理 |
