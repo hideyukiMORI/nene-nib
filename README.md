@@ -27,13 +27,13 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   Not yet: `it ip is`, `:s :g`, read-only registers, `J s S R`, `> < gu gU`, autoindent,
   drag-to-select, block `I A c C`, general Ex (`:w :q`, ranges, pipes, history).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim". Done.
-- **FR-005 tabs in the title bar** — the tab band with one tab and the window controls. The editor already holds several documents (opening a second file adds a tab, closing the window asks about every unsaved tab); drawing the tabs, the mouse and the keys are in progress.
+- **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT` and `:tabnext` `:tabnew` `:tabclose`. Done; reordering by drag is planned.
 - **FR-006 Ctrl+P** — lists the settings commands only (themes, `set fontsize=`, `set guifont=`); files, folders,
   bookmarks and history are planned.
 - **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS; CRLF / LF kept as read; unsaved mark and
   "save?" prompt. Done.
-- **FR-009 tab restore** — waits for multiple tabs.
+- **FR-009 tab restore** — planned.
 - **FR-010 bookmarks and jump list** — planned.
 - **FR-011 look** — frameless window with Mica title bar, follows the OS light / dark theme (aubergine dark, orange
   accent), one paint per frame. Done.

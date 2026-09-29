@@ -56,9 +56,10 @@ Nib は 1 つの窓に 1 つの文書で、タブの帯にはタブが 1 本と�
 ## 強制
 
 - 契約（application と core の純関数）: #237 の分（決定 1 の束・決定 2 の `parked_` `active_` `closing_`・決定 3 の `NewTab` `SwitchTab` `StepTab` `CloseTab`・決定 4・5・決定 6 の `CloseTab`（ui の確認の流れは #239）・決定 7 の `tabs` `active_tab` `closing`・決定 13）は **active**（scope `--tabs` 88 checks・`tests/unit/TabsTests.cpp`・`python eng/protected-diff.py` の scope ごとの checks 数）。帯の送り量・hover・帯の幅（決定 2・3・7 の残り）と決定 8〜12 は **planned**（#238〜#240 の実装で **active**）。
-- 閉じた和型の写し漏れ: `EditorIntent`（`NewTab` `SwitchTab` `StepTab` `CloseTab`）は **active**（#237・`std::visit` の網羅性）。`EditorIntent` の残り（`PointTitleBar` `ScrollTabs` `TitleBarWidth`）・`TitleBarHit`・`VimEffect` は **planned**（各 Issue の実装で **active**・`std::visit` と `switch` の網羅性）。
+- 契約（#238〜#240 の分）: 決定 8・9（帯の配置・送り量・hit・押した要素と離した要素・配置の入力）と決定 10（鍵の表）は **active**（`tests/unit/TabsTests.cpp` の `verify_band_scroll` `verify_band_hover` `verify_band_pointer` `verify_band_release` `verify_band_release_after_scroll` `verify_band_input_from_state` `verify_tab_keys` と、`tests/unit/CoreTests.cpp` の `verify_title_bar_rectangles` `verify_title_bar_tab_widths` `verify_title_bar_scroll_clamp` `verify_title_bar_scroll_into_view` `verify_title_bar_wheel` `verify_title_bar_hits`・`nib_tests --tabs` と既定実行・`ctest -R nib_unit`）。決定 11 の契約は [ADR 0057](0057-tab-destination-is-one-pure-function.md) の「強制」、Ctrl+Tab の順は [ADR 0058](0058-ctrl-tab-walks-tabs-in-recent-order.md) の「強制」に書いた。
+- 閉じた和型の写し漏れ: `EditorIntent`（`NewTab` `SwitchTab` `StepTab` `CloseTab`）は **active**（#237・`std::visit` の網羅性）。`EditorIntent` の残り（`PointTitleBar` `ScrollTabs` `TitleBarWidth`・#238）・`TitleBarHit`（`tab_close` `tab_list`・#238）・`VimEffect`（`VimSwitchTab`・#240）も **active**（`std::visit` と `switch` の網羅性）。`StepTab` は #248 で `WalkRecentTab` に置き換わった（ADR 0058）。
 - 1 打鍵の重さがタブの数に依らないこと: **planned**（1 本目の Issue で、タブを 50 本開いた状態の打鍵のベンチを `eng/measure-speed.py` に足すかを実測して決める。足すまでは設計席が merge の前に手で測る・QLT-014）。
-- 実機の確認（クリック・hover・鍵・閉じる流れ）: **planned**（3 本目の Issue で `eng/verify-window.py` に足す・QLT-013）。
+- 実機の確認（クリック・hover・鍵・閉じる流れ）: **planned のまま**（機械の必須 check ではない）。道具は入った: 鍵と閉じる流れは `eng/verify-window.py --tabs`（#239 / #248）。本物のキー入力を送るので CI では回さず、施主に確かめてから設計席が回す。クリックと hover とホイールと一覧は、設計席が 1 回限りの撮影で確かめた（gate-proofs の #238 と #240 の節・QLT-013）。
 - core が OS に触れないこと・ui に色のリテラルが無いこと: **active**（既存の `eng/symbols.py` と conformance）。
 
 ## 結果
