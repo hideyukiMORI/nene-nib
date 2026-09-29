@@ -1884,3 +1884,27 @@ ARC-001 / ARC-010 / CPP-005 / QLT-001 / QLT-012 / CNF-010 を自己レビュー�
 対象を限定した理由: 差分は application の状態と意図・controller の開くとコンストラクタ・adapters の比較 1 本・起動引数の読み方と単体テストである。renderer・ui/win32・fixture は不変。1 打鍵で写すのは参照の列だけ（決定 2）。Release・`eng/measure-speed.py`（タブ 50 本の打鍵の実測を含む）・`check.ps1 -Full`・実機は設計席が行う（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-004 / ARC-005 / ARC-007 / ARC-010 / CPP-002 / CPP-003 / CPP-011 を自己レビュー。開く経路は `accept(OpenDocument)` の 1 本で、起動引数もダイアログも同じ意図を通る（ARC-001）・同じファイルの比べ方は `FilePort` の 1 つで adapters だけが OS に触れる（ARC-007）・タブを足す経路は `leave_document` → 状態 → `enter_document` の 1 本（工程 1 と共有）・開けなかった理由は既存の `FileFailure` のまま（ARC-010）。残る穴: 起動引数の失敗は最後の 1 件だけが窓の告知に届く（決定 13 の「1 件ずつ」は ui の告知が表示値の 1 件を読む形のままなので満たしていない・どの Issue で直すかは設計席）・Ctrl+O は新しいタブに開く場合も今の「保存しますか」を先に出す（#238 で外す）。
+
+### 5-br. タブの帯に全部のタブを描きマウスで切り替えて閉じて足す（Issue #238・ADR 0056 決定 8・9・12・施主決定 D20〜D22・2026-09-29）
+
+ブランチ `feat/238-tab-band`（main `ac0fe14` の上・ADR `f8d1e5c` / `ce23093` / `5a4177b`・工程 1 `0141cd8`〔報告の `23f8fc6` を rebase した同じ patch-id の commit〕・工程 2 `7982358`・差し戻し `08a3b23` / `22e146a`・design `026c73e`）。縦切り 2/4 で、鍵（#239）と「∨」の一覧（#240）は変えない。
+
+- 工程 1: core の帯の配置を 1 つの入力 `TitleBarInput`（幅・DPI・タブの数・アクティブ・送り量・hover）から計算する `title_bar_layout` にし、位置つきの結果 `TitleBarTarget` を `title_bar_target` が返す（あふれ・viewport・「∨」・× の領域 24 DIP・掴む余白 40・ホイール 1 刻み 122）。application に意図 `TitleBarWidth` `ScrollTabs` `PointTitleBar` と状態の帯の幅・送り量・hover。色のトークン `Palette::tab_hover`（ユーザーテーマの `ui.tab_hover`・省略時は上書き後の `tab_active`）。
+- 工程 2: renderer が全部のタブを viewport で切り抜いて描き（アクティブ = `tab_active` と下線・hover = `tab_hover`・× は `tab_close_rect` の所だけ）、窓が同じ入力の配置で hit test・左クリック（押下で切り替え・× と「＋」は離したとき）・中ボタン・hover（`TrackMouseEvent` の `WM_MOUSELEAVE`）・帯の上のホイールを当てる。閉じる流れは `tab_unsaved` なら切り替えて `confirm_discard`・最後の 1 本で窓を閉じる（D22）。窓の最小の大きさ 360 × 200 DIP（`minimum_window`・ADR `ce23093`）。Ctrl+O は「保存しますか」を先に出さない。
+- 差し戻し: 押した要素を覚えて離した要素と同じときだけ動かす（core の純関数 `title_bar_released`・ui の `left_pressed_` / `middle_pressed_`）・配置の入力は表示値を作らずに状態の 4 つの値から読む（`EditorController::title_bar_input(width, dpi)`）・入りきらない題名は文字単位で切って「…」（`DWRITE_TRIMMING_GRANULARITY_CHARACTER`）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan・ui を含む全 target） | 工程 1・工程 2・差し戻しとも警告 0・エラー 0（`out/238-step1-build.log` / `out/238-step2-build.log` / `out/238-step2r-build.log`・`out/238-step2r-build3.log`）。工程 2 の途中で `dispatch` が readability-function-size で落ち、分割して直した |
+| `build/nib_tests.exe --tabs` | 工程 1 **110 checks**（95 → 110・送り量・hover）→ 工程 2 **119 checks**（配置の入力の写し・`tab_unsaved`・`title_bar_hover` の 9 通り・`minimum_window`・最小幅 360 で 1 本はあふれない）→ 差し戻し **133 checks**（`title_bar_released` の 4 通り・送った後に欠けたタブの × に当たる点で値なし・状態から読む配置の入力が 6 欄一致） |
+| `build/nib_tests.exe`（引数なし）・`ctest --test-dir build -R nib_unit` | 工程 1 18614 checks・工程 2 18623 checks・差し戻し **18637 checks 成功**・1 / 1 成功（工程 1 は `ThemeCodec` を変えたので `-R "nib_unit\|nib_themes"` で 2 / 2） |
+| `python eng/protected-diff.py --base origin/main --build --allow=--tabs` | **終了 0**（`23f8fc6` / `7982358` / `08a3b23` / `22e146a`）。`fixtures 1853 -> 1853 / changed 0 / added 0 / deleted 0`・`scopes 25 / same 24 / 未測 0`・`--tabs` 95 → 133 allowed（`out/protected/22e146a.json` ほか） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation**（工程 1・工程 2・差し戻し。差し戻しの省略記号は ui だけなので symbols は 1+2 の後） |
+| clang-format（変更した C++ ファイル）・`git diff --check`・`eng/validate-git.ps1` | 指摘なし・passed |
+| 実機の画（設計席・施主の了承の後・Release `build/release-7982358` と `build/release-22e146a`・125%） | 1 回目: タブ 1 本の見た目・「＋」で足す・切り替えと窓の題名・「● 」・hover の面と × と `toggle`・caption と本文へ出ると hover が消える・12 本のあふれと「∨」・帯のホイール 1 刻み 1 本と端・本文のホイールで帯は動かない・「∨」は何もしない・× と中ボタンで閉じる・未保存の確認・最後の 1 本で窓が閉じる（終了コード 0）・最小 450 × 250 px（= 360 × 200 DIP）は設計どおり。右が欠けたタブの右寄りを押すと閉じる不具合と題名のぶつ切りを見つけて差し戻した。2 回目（`22e146a`）: 欠けたタブは切り替わって閉じない・題名は「…」・本文で押して「＋」で離してもタブはできない・中ボタンは別のタブで離すと閉じない・「＋」で押して離すとできる（`out/window-verification/tabs-238/*.png`・1 回目は `first/`・記録は `out/reports/done-238-design.md`） |
+| `python eng/measure-speed.py --check --executable build/release-22e146a/NeNeNib.exe`（設計席） | **6 benches checked, 0 regression(s), 0 unmeasurable**（機械 bc8a356f37c68491・5 回・startup-first-frame 206.8 ms・startup-window-shown 34.1 ms・key-to-frame-single 0.838 ms・key-to-frame-burst-200 3.454 ms・open-large-file-16mib 252.1 ms・key-to-frame-burst-200-16mib 6.572 ms・`out/speed/2026-09-29T13-26-07Z.json`） |
+| 工程 3（本節の追記だけ）の `python eng/conformance.py --build-dir build`・`git diff --check` | **0 violation**・指摘なし |
+
+対象を限定した理由: 差分は core の帯の配置と純関数・application の意図と状態・ui/win32 の描画とポインタの処理・色のトークンとユーザーテーマの読み 1 欄・単体テストである。Vim の engine・fixture・ファイルの経路は不変（protected-diff で changed 0）。帯の見た目と押す・離すの流れは契約で覆えないので設計席が実機で見た。工程 3 は本節の追記だけで、実装・テスト・依存が不変なので工程 1・2・差し戻しの成功結果と設計席の実機・速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-001 / ARC-011 / CPP-002 / CPP-003 / CPP-009 / CPP-011 / CPP-012 / CPP-017 を自己レビュー。帯の配置は `title_bar_layout` の 1 本で renderer と hit test が同じ入力を使い（ARC-001）・入力は `title_bar_input` の 1 本・閉じる流れの確かめる判定は `tab_unsaved` の 1 本・押した要素と離した要素の突き合わせは `title_bar_released` の 1 本・色は `Palette` のトークンだけ。残る穴: マウスを動かしたときの重さはベンチに無い（入力は状態の 4 つの値だけを読む形にした）・別の DPI のモニターへ移す・最大化と元に戻すの実機の確認は無い（`TitleBarWidth` を送り直す経路は `resize` と `change_dpi` の 2 か所・契約は application まで）・ライトと組み込み 9 テーマの `tab_hover` の画は無い（値は契約で守る）・窓の外で左ボタンを離すと `left_pressed_` が残る（次の押下で必ず上書き・消去される）・「∨」は #240・鍵は #239。
