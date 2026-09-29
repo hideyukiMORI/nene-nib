@@ -166,9 +166,11 @@ class EditorController final
     void enter_document();
     // まだ読んでいない文書を読む 1 本（ADR 0059 の決定 5）。帯の位置 position が読み込み済みか
     // アクティブなら真。まだ読んでいない文書なら読んで束に置き換えて真、読めなければ帯から外して
-    // 1
-    // 行知らせて偽。範囲の外は偽（何もしない）。タブが切り替わる入口は状態を動かす前にこれを呼ぶ。
+    // 1 行知らせて偽。範囲の外は偽（何もしない）。タブが切り替わる入口（SwitchTab・WalkRecentTab・
+    // CloseTab の後の隣・起動）は状態を動かす前にこれを呼ぶ。
     [[nodiscard]] bool reach_tab(std::size_t position);
+    // アクティブを閉じて隣へ移る（隣を reach_tab で読む・1 本も残らなければ空の無題）。
+    void close_active_tab();
     // 読めなかったタブの知らせ（ADR 0059 の「知らせの文言」）。同じ意図の中の件数を数える。
     void report_unreached(const core::FilePath &path);
     // 起動で前回のタブを戻す（ADR 0059 の決定 6 と「手順」）。ファイルの引数が無いときだけ。

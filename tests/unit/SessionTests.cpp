@@ -1,7 +1,9 @@
 // scope `--session` の単体テスト（ADR 0042 決定 2・ADR 0059 の決定 1〜6）。状態から前回のタブの
 // 一覧を作る読み取りと、窓が閉じていくときの意図 EndSession。まだ読んでいない文書の状態の関数と、
 // 起動で前回のタブを戻す手順。
+#include "ActivateCommandChoice.hpp"
 #include "Appearance.hpp"
+#include "CancelCommand.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
 #include "Document.hpp"
@@ -21,7 +23,9 @@
 #include "LineNumber.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "OpenTabList.hpp"
 #include "PlaceCaret.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -65,6 +69,8 @@ namespace nenenib::tests
 {
 namespace
 {
+using nenenib::application::ActivateCommandChoice;
+using nenenib::application::CancelCommand;
 using nenenib::application::CloseTab;
 using nenenib::application::Document;
 using nenenib::application::DocumentState;
@@ -75,7 +81,9 @@ using nenenib::application::EditorState;
 using nenenib::application::EndSession;
 using nenenib::application::InsertText;
 using nenenib::application::NewTab;
+using nenenib::application::OpenCommandPalette;
 using nenenib::application::OpenDocument;
+using nenenib::application::OpenTabList;
 using nenenib::application::PlaceCaret;
 using nenenib::application::ScrollLines;
 using nenenib::application::SelectEditMode;
@@ -562,8 +570,9 @@ void verify_restore_band()
     expect(written(closed_window(editing)) == "a.txt@2:2/3#1 b.txt@4:1/2#0 c.txt@1:1/1#2 >1",
            "the list writes unloaded tabs at their remembered positions and ranks");
     const EditorFrame walked = controller.apply(WalkRecentTab{TabStep::next});
-    expect(walked.active_tab == 1 && !controller.tab_walking() && editing.files().reads() == 1,
-           "a walk step towards an unloaded tab does not move in this step");
+    expect(walked.active_tab == 0 && controller.tab_walking() && editing.files().reads() == 2 &&
+               caret_at(walked, 2, 2),
+           "a walk step towards an unloaded tab reads it and walks there");
     Editing out_of_range(listed({listed_tab("a", TextPosition{LineNumber{1}, Column{1}}, 1, 1),
                                  listed_tab("b", TextPosition{LineNumber{1}, Column{1}}, 1, 0)},
                                 7),
@@ -642,6 +651,156 @@ void verify_restore_unreadable()
                nothing.files().reads() == 3,
            "when no tab can be read the untitled tab stays");
 }
+
+// 名前の文字のファイルを読めなくする（ほかは hold_three のまま）。
+void hold_without(ScriptedFiles &files, std::string_view names)
+{
+    hold_three(files);
+    for (const char name : names)
+    {
+        files.hold_at("C:\\work\\" + std::string(1, name) + ".txt",
+                      Bytes{std::unexpected(FileFailure::not_found)});
+    }
+}
+
+// 切り替えの入口はまだ読んでいない文書をそこで読み、覚えていた位置に着く（決定 5・D27）。
+void verify_switch_reads()
+{
+    Editing clicked(three_listed(1), hold_three);
+    auto &controller = clicked.controller();
+    const EditorFrame first = controller.apply(SwitchTab{0});
+    expect(titles(first) == "a.txt b.txt c.txt >0" && first.document.title.text() == "a.txt" &&
+               caret_at(first, 2, 2) && first.first_visible.value == 3 &&
+               clicked.files().reads() == 2 && clicked.files().read_path() == "C:\\work\\a.txt",
+           "a click on an unloaded tab reads it and shows its caret and first line");
+    const EditorFrame back = controller.apply(SwitchTab{1});
+    expect(back.document.title.text() == "b.txt" && caret_at(back, 4, 1) &&
+               clicked.files().reads() == 2,
+           "switching back to a loaded tab reads nothing");
+    const EditorFrame ex = run_ex(controller, "tabnext 3");
+    expect(ex.active_tab == 2 && ex.document.title.text() == "c.txt" &&
+               clicked.files().reads() == 3,
+           ":tabnext reads the unloaded tab");
+    applied(controller, SwitchTab{0});
+    expect(clicked.files().reads() == 3, "a tab read once is not read again");
+
+    Editing vim(three_listed(1), hold_three);
+    applied(vim.controller(), SelectEditMode{EditMode::vim});
+    vim_replay(vim.controller(), "gt");
+    const EditorFrame gt = vim.controller().frame();
+    expect(gt.active_tab == 2 && gt.document.title.text() == "c.txt" && vim.files().reads() == 2,
+           "gt reads the unloaded tab");
+
+    Editing listed_tabs(three_listed(1), hold_three);
+    applied(listed_tabs.controller(), OpenTabList{});
+    const EditorFrame chosen = listed_tabs.controller().apply(ActivateCommandChoice{0});
+    expect(chosen.active_tab == 0 && chosen.document.title.text() == "a.txt" &&
+               !chosen.command_palette.has_value() && listed_tabs.files().reads() == 2,
+           "a row of the tab list reads the unloaded tab");
+
+    Editing opened(three_listed(1), hold_three);
+    const EditorFrame same = opened.controller().apply(open_at("C:\\work\\c.txt"));
+    expect(titles(same) == "a.txt b.txt c.txt >2" && opened.files().reads() == 2,
+           "opening the file of an unloaded tab switches there and reads it once");
+}
+
+// 歩きの 1 歩も同じ 1 本で読む。読めなければ外れて、歩きは今のタブのまま続く（決定 5）。
+void verify_walk_reaches()
+{
+    Editing walking(three_listed(1), hold_three);
+    auto &controller = walking.controller();
+    applied(controller, WalkRecentTab{TabStep::next});
+    const EditorFrame second = controller.apply(WalkRecentTab{TabStep::next});
+    expect(second.active_tab == 2 && controller.tab_walking() && walking.files().reads() == 3,
+           "each walk step reads the tab it reaches");
+    const EditorFrame settled = controller.apply(SettleRecentTab{});
+    expect(settled.active_tab == 2 && !controller.tab_walking(), "the walk settles as before");
+
+    Editing missing(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "a"); });
+    auto &walker = missing.controller();
+    const EditorFrame dropped = walker.apply(WalkRecentTab{TabStep::next});
+    expect(titles(dropped) == "b.txt c.txt >0" && !walker.tab_walking() &&
+               notice(dropped) == "開けませんでした: a.txt",
+           "an unreadable walk target is dropped and the walk stays on the current tab");
+    const EditorFrame next = walker.apply(WalkRecentTab{TabStep::next});
+    expect(next.active_tab == 1 && next.document.title.text() == "c.txt" && walker.tab_walking() &&
+               notice(next) == "none",
+           "the next step goes to the neighbour in the order after the drop");
+
+    Editing mid(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "c"); });
+    applied(mid.controller(), WalkRecentTab{TabStep::next});
+    const EditorFrame stuck = mid.controller().apply(WalkRecentTab{TabStep::next});
+    expect(titles(stuck) == "a.txt b.txt >0" && mid.controller().tab_walking(),
+           "a drop in the middle of a walk keeps walking");
+}
+
+// 読めない行き先は外れて 1 行知らせ、アクティブと入力行はそのまま。知らせは意図ごとに数える。
+void verify_switch_unreadable()
+{
+    Editing editing(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "ac"); });
+    auto &controller = editing.controller();
+    applied(controller, OpenCommandPalette{});
+    const EditorFrame first = controller.apply(SwitchTab{0});
+    expect(titles(first) == "b.txt c.txt >0" && first.document.title.text() == "b.txt" &&
+               caret_at(first, 4, 1) && notice(first) == "開けませんでした: a.txt" &&
+               first.command_palette.has_value() && !first.document.last_failure.has_value(),
+           "an unreadable tab is dropped, noticed and the open palette stays");
+    applied(controller, CancelCommand{});
+    const EditorFrame second = run_ex(controller, "tabnext 2");
+    expect(titles(second) == "b.txt >0" && notice(second) == "開けませんでした: c.txt",
+           "a failure in a later intent is counted afresh");
+
+    Editing vim(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "c"); });
+    applied(vim.controller(), SelectEditMode{EditMode::vim});
+    vim_replay(vim.controller(), "gt");
+    const EditorFrame gt = vim.controller().frame();
+    expect(titles(gt) == "a.txt b.txt >1" && notice(gt) == "開けませんでした: c.txt",
+           "gt towards an unreadable tab stays and notices");
+
+    Editing opened(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "a"); });
+    const EditorFrame same = opened.controller().apply(open_at("C:\\work\\a.txt"));
+    expect(titles(same) == "b.txt c.txt >0" && notice(same) == "開けませんでした: a.txt" &&
+               !same.document.last_failure.has_value() && opened.files().reads() == 2,
+           "opening the file of an unreadable tab only notices and does not read it twice");
+}
+
+// 閉じた後の隣は読んでから移る。読めなければ次の隣、1 本も残らなければ無題（決定 5）。
+void verify_close_reaches()
+{
+    Editing right(three_listed(1), hold_three);
+    const EditorFrame closed = right.controller().apply(CloseTab{1});
+    expect(titles(closed) == "a.txt c.txt >1" && closed.document.title.text() == "c.txt" &&
+               right.files().reads() == 2 && !closed.closing,
+           "closing the active tab reads its right neighbour");
+    Editing left(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "c"); });
+    const EditorFrame fallback = left.controller().apply(CloseTab{1});
+    expect(titles(fallback) == "a.txt >0" && caret_at(fallback, 2, 2) &&
+               notice(fallback) == "開けませんでした: c.txt" && !fallback.closing &&
+               left.files().reads() == 3,
+           "an unreadable neighbour is dropped and the next neighbour is read");
+    Editing none(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "ac"); });
+    const EditorFrame blank = none.controller().apply(CloseTab{1});
+    expect(titles(blank) == "無題 >0" && !blank.closing &&
+               notice(blank) == "開けませんでした: a.txt（ほか 1 件）",
+           "when no neighbour can be read one untitled tab stays and the window stays open");
+    Editing parked(three_listed(1), hold_three);
+    const EditorFrame aside = parked.controller().apply(CloseTab{0});
+    expect(titles(aside) == "b.txt c.txt >0" && parked.files().reads() == 1,
+           "closing an unloaded tab that is not active reads nothing");
+}
+
+// 窓を閉じるときの一覧。まだ読んでいない文書は覚えていた位置、読んだタブは今の位置（決定 1・5）。
+void verify_list_after_reaching()
+{
+    Editing editing(three_listed(1), hold_three);
+    auto &controller = editing.controller();
+    applied(controller, VisibleLines{3});
+    applied(controller, SwitchTab{0});
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{5}, Column{1}}, SelectionAnchoring::collapse});
+    expect(written(closed_window(editing)) == "a.txt@5:1/3#0 b.txt@4:1/2#1 c.txt@1:1/1#2 >0",
+           "a read tab is listed at its current position and an unloaded one as remembered");
+}
 } // namespace
 
 void verify_session_contracts()
@@ -662,6 +821,11 @@ void verify_session_contracts()
     verify_restore_band();
     verify_restore_clamps();
     verify_restore_unreadable();
+    verify_switch_reads();
+    verify_walk_reaches();
+    verify_switch_unreadable();
+    verify_close_reaches();
+    verify_list_after_reaching();
 }
 
 void verify_session_scope()

@@ -2203,6 +2203,7 @@ bool EditorController::reach_tab(std::size_t position)
         // には載せない（D26: 窓を止めない）。
         state_ = state_.with_dropped(position);
         report_unreached(tab.path);
+        reveal_active_tab();
         return false;
     }
     auto [text, opened] = std::move(document).value();
@@ -2235,6 +2236,12 @@ void EditorController::accept(const SwitchTab &intent)
         state_ = state_.with_switched(intent.index);
         return;
     }
+    // 行き先がまだ読んでいない文書ならここで読む。読めなければそのタブは外れて知らせだけが残り、
+    // 今の文書の一時の値（入力行・変換中の文字列）は閉じない（ADR 0059 の決定 5）。
+    if (!reach_tab(intent.index))
+    {
+        return;
+    }
     leave_document();
     state_ = state_.with_switched(intent.index);
     enter_document();
@@ -2252,6 +2259,12 @@ void EditorController::accept(const WalkRecentTab &intent)
     if (destination.value() == state_.active_tab())
     {
         state_ = state_.with_walked(destination.value());
+        return;
+    }
+    // 行き先が読めなければ外れて、歩きは今のタブのまま続く。次の 1 歩は外れた後の使った順の
+    // 隣へ行く（ADR 0059 の決定 5）。
+    if (!reach_tab(destination.value()))
+    {
         return;
     }
     leave_document();
@@ -2303,8 +2316,28 @@ void EditorController::accept(const CloseTab &intent)
         reveal_active_tab();
         return;
     }
+    close_active_tab();
+}
+
+// アクティブを閉じる。次にアクティブになる隣（右隣・無ければ左隣）を先に読み、読めなければ外して
+// 次の隣を試す。隣が 1 本も残らなければ空の無題を 1 本置く。窓は閉じない。使う人が閉じたのは
+// 1 本だけで、ほかのタブが読めなかったのは使う人の操作ではない（ADR 0059 の決定 5）。
+void EditorController::close_active_tab()
+{
+    while (state_.tab_count() > 1)
+    {
+        const std::size_t active = state_.active_tab();
+        const std::size_t neighbour = active + 1 < state_.tab_count() ? active + 1 : active - 1;
+        if (reach_tab(neighbour))
+        {
+            leave_document();
+            state_ = state_.with_closed(active);
+            enter_document();
+            return;
+        }
+    }
     leave_document();
-    state_ = state_.with_closed(intent.index);
+    state_ = state_.with_new_tab().with_closed(0);
     enter_document();
 }
 
