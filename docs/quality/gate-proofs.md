@@ -1664,3 +1664,23 @@ FR-003 / ARC-001/003/004/007/010 / CPP-002/005/011 / QLT-001/012 を自己レビ
 対象を限定した理由: 差分は core の `normal_recording` の条件 1 行と `--vim-dot` の単体テストと fixture である。renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
 
 FR-003 / ARC-001 / CPP-002/004 / QLT-001/012 / CNF-010/011 を自己レビュー。記録の更新は `vim_recorded` の 1 か所のまま（ARC-001）。
+
+### 5-bg. 改行を含む文字単位の `p` `P` のキャレット（Issue #205・2026-09-29）
+
+ブランチ `fix/205-put-caret-multiline-characters`（main `2592a57` から・`78c0b35`）。先に fixture `put-caret-*` 13 件（`vjy` の `p` `P` `3p` `3P`・別の位置の `p`・`v$y` の `p` `P`・`y/ind<CR>` の `p`・`p.` `P.`・本文が改行で始まる `p` `P`・対照の 1 行の `yw3p`）を本物の Vim から生成し、#204 の 3 件（`register-numbered-di-paren-lines` `-3dw-crosses-lines` `-visual-lines-delete`）の `keys` の末尾の `gg` を外して作り直した。直す前の Nib では 13 件のうち対照の `yw3p` を除く 12 件と #204 の 3 件が桁・行（`.` の 2 件は本文も）で落ちた（25 of 15757 checks failed）。`put_characters` は本文に改行を含むとき貼った本文の先頭（回数つきは最初のコピーの先頭）にキャレットを置き、含まないときは今までどおり最後の文字に置く。先頭が行末を越える `put-caret-newline-start-*` は controller の既存の寄せでそのまま Vim と一致した（`put_characters` に寄せを書いていない）。application・ui・adapters・eng・単体テストは不変。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・clang-tidy・ASan・UBSan） | 警告 0 で成功 |
+| `build/nib_tests.exe`（引数なし） | 対象（`put-caret-*` を再生するのは既定実行だけ・既存の `p-*` と同じ）。直す前 **25 of 15757 checks failed** → 直した後 **15738 checks 成功**（15635 から ＋103 = 新しい fixture 13 件 × 7 と、キャレットが 2 行目の fixture ごとの行の検査 10 と #204 の 3 件の 2） |
+| `build/nib_tests.exe --vim-macro` | #204 の 3 件の再生。1500 → **1502 checks 成功**（`vim_byte_column` がキャレットの行の手前の行ごとに 1 つ数える。2 件がキャレット 2 行目になった） |
+| `build/nib_tests.exe --vim-dot` | `.` の記録と再生の経路。**1528 checks 成功**（不変） |
+| `ctest --test-dir build -R nib_unit` | 1 / 1 成功 |
+| `python eng/vim-oracle.py --regenerate --only put-caret-` × 2・`--only register-numbered-` × 2 | 13 measured / 1512 reused と 46 measured / 1479 reused。4 回で `VimFixtures.hpp`（`862E5AD9…00DF4D04`）と `fixtures.json`（`F9D7285D…6A12FEB3`）の SHA-256 が一致 |
+| `python eng/protected-diff.py --base origin/main --build --allow --vim-macro` | **終了 1（予定どおり）**。`2592a57..78c0b35`・`fixtures 1512 -> 1525 / metadata 2 / deleted 0 / changed 3 / added 13`・changed は `register-numbered-di-paren-lines`（L1433）`register-numbered-3dw-crosses-lines`（L1434）`register-numbered-visual-lines-delete`（L1436）の 3 件だけで、Issue の受け入れ条件どおり `gg` を外してキャレットも守る形にした変更・保護対象は `none`・`--vim-macro 変化 1500 -> 1502 allowed`・`scopes 23 / same 22 / 未測 0` |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | **0 violation / 0 violation** |
+| clang-format（`VimStep.cpp`）・`git diff --check` | 指摘なし |
+
+対象を限定した理由: 差分は core の `put_characters` のキャレットの式 1 行と fixture である。行単位・矩形の put、renderer・ui/win32・application の経路は不変なので、Release・`eng/measure-speed.py`・`verify-window`・`check.ps1 -Full` は実行していない（QLT-001 / QLT-012・ADR 0021）。
+
+FR-003 / ARC-001 / CPP-002/004 / QLT-001/012 / CNF-010/011 を自己レビュー。行末を越えたキャレットの寄せは controller の 1 か所のまま（ARC-001）。
