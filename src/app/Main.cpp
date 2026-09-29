@@ -131,7 +131,8 @@ int run(HINSTANCE instance)
         files, nenenib::adapters::win32::local_settings_path());
     nenenib::adapters::win32::Win32ThemeAdapter themes(
         files, nenenib::adapters::win32::local_theme_directory());
-    // 前回のタブの一覧は窓が閉じるときに書く。起動ではまだ読まない（ADR 0059 の決定 2・3・#253）。
+    // 前回のタブの一覧は窓が閉じるときに書き、ファイルの引数が無い起動で controller が読む
+    // （ADR 0059 の決定 2・3・6）。
     nenenib::adapters::win32::Win32SessionAdapter session(
         files, nenenib::adapters::win32::local_session_path());
     nenenib::application::EditorController controller(

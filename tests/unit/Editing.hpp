@@ -12,6 +12,7 @@
 #include "ScriptedThemes.hpp"
 #include "ThemeCatalog.hpp"
 
+#include <functional>
 #include <optional>
 #include <utility>
 
@@ -28,6 +29,13 @@ class Editing final
         : settings_(std::move(reading)), themes_(std::move(themes)),
           controller_(nenenib::application::EditorPorts{appearance_, clipboard_, files_,
                                                         code_pages_, settings_, themes_, session_})
+    {
+    }
+
+    // 起動で前回のタブを戻す契約の口（ADR 0059 の決定 6）。一覧の読みと、controller が起動のときに
+    // 読むファイルを仕込んでから controller を作る。
+    Editing(SessionReading listed, const std::function<void(ScriptedFiles &)> &prepare)
+        : session_(std::move(listed)), controller_(prepared_ports(prepare))
     {
     }
 
@@ -67,6 +75,15 @@ class Editing final
     }
 
   private:
+    // controller より先に宣言したポートは、この時点でもう出来ている。
+    [[nodiscard]] nenenib::application::EditorPorts
+    prepared_ports(const std::function<void(ScriptedFiles &)> &prepare)
+    {
+        prepare(files_);
+        return nenenib::application::EditorPorts{appearance_, clipboard_, files_,  code_pages_,
+                                                 settings_,   themes_,    session_};
+    }
+
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
     ScriptedClipboard clipboard_;
     ScriptedFiles files_;

@@ -20,10 +20,12 @@
 #include "OffsetRange.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
+#include "Session.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "TitleBarInput.hpp"
+#include "UnloadedDocument.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
 #include "VimCharacter.hpp"
@@ -162,6 +164,16 @@ class EditorController final
     void leave_document();
     // 入ってきた文書のスクロールを今の窓の行数で収め、NORMAL のキャレットを文字の上へ寄せる。
     void enter_document();
+    // まだ読んでいない文書を読む 1 本（ADR 0059 の決定 5）。帯の位置 position が読み込み済みか
+    // アクティブなら真。まだ読んでいない文書なら読んで束に置き換えて真、読めなければ帯から外して
+    // 1
+    // 行知らせて偽。範囲の外は偽（何もしない）。タブが切り替わる入口は状態を動かす前にこれを呼ぶ。
+    [[nodiscard]] bool reach_tab(std::size_t position);
+    // 読めなかったタブの知らせ（ADR 0059 の「知らせの文言」）。同じ意図の中の件数を数える。
+    void report_unreached(const core::FilePath &path);
+    // 起動で前回のタブを戻す（ADR 0059 の決定 6 と「手順」）。ファイルの引数が無いときだけ。
+    void restore_session();
+    void restore_tabs(const Session &session);
     // 入力行の Enter の写し先（ADR 0032 の決定 3）。選択肢が増えたら std::visit がここで
     // 足りずコンパイルが落ちる（CPP-002）。検索だけが engine へ鍵を 1 つ送る。
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandLine &line);
@@ -267,5 +279,7 @@ class EditorController final
     // 消し、再生の中で文書が替わったら reopen_replayed_unit が入った文書の値へ置き直す。
     std::optional<core::EditHistory> replay_history_;
     std::optional<core::TextBuffer> replay_text_;
+    // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
+    std::size_t unreached_tabs_ = 0;
 };
 } // namespace nenenib::application
