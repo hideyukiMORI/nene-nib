@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 bec608b5875f0f083c8897f3b96f9bd4f36a7f9e03d26e4562650124d0fe8c67 / 1512 fixtures
+// fixtures.json: sha256 f9d7285d5b240e433dca9e522cc9859b7092d8fb7dedeea04504d21c6a12feb3 / 1525 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1512> vim_fixtures{{
+constexpr std::array<VimFixture, 1525> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1430,10 +1430,10 @@ constexpr std::array<VimFixture, 1512> vim_fixtures{{
     {"register-numbered-dj", "zero\nabc def\nghi jkl\nxyz", "xjdj\"-p\"1p", "ero\nxzyz\nabc def\nghi jkl", 3, 1, "abc def\nghi jkl\n", "V", std::nullopt},
     {"register-numbered-dgg", "zero\nabc def\nghi jkl\nxyz", "xjjdgg\"-p\"1p", "xzyz\nero\nabc def\nghi jkl", 2, 1, "ero\nabc def\nghi jkl\n", "V", std::nullopt},
     {"register-numbered-dG", "zero\nabc def\nghi jkl\nxyz", "xjjdG\"-p\"1p", "ero\nazbc def\nghi jkl\nxyz", 3, 1, "ghi jkl\nxyz\n", "V", std::nullopt},
-    {"register-numbered-di-paren-lines", "x(ab\ncd)y\nend", "xjdi(\"-p\"1pgg", "()xab\ncdy\nend", 1, 1, "ab\ncd", "v", std::nullopt},
-    {"register-numbered-3dw-crosses-lines", "zero\nabc def\nghi jkl\nxyz", "xjw3dw\"-p\"1pgg", "ero\nabc zdef\nghi jkl\nxyz", 1, 1, "def\nghi jkl", "v", std::nullopt},
+    {"register-numbered-di-paren-lines", "x(ab\ncd)y\nend", "xjdi(\"-p\"1p", "()xab\ncdy\nend", 1, 4, "ab\ncd", "v", std::nullopt},
+    {"register-numbered-3dw-crosses-lines", "zero\nabc def\nghi jkl\nxyz", "xjw3dw\"-p\"1p", "ero\nabc zdef\nghi jkl\nxyz", 2, 6, "def\nghi jkl", "v", std::nullopt},
     {"register-numbered-d-backspace-line-start", "zero\nabc def\nghi jkl\nxyz", "xjd<BS>\"-p\"1p", "eroaz\nbc def\nghi jkl\nxyz", 1, 5, "\n", "v", std::nullopt},
-    {"register-numbered-visual-lines-delete", "zero\nabc def\nghi jkl\nxyz", "xjvjd\"-p\"1pgg", "ero\nhzabc def\ngi jkl\nxyz", 1, 1, "abc def\ng", "v", std::nullopt},
+    {"register-numbered-visual-lines-delete", "zero\nabc def\nghi jkl\nxyz", "xjvjd\"-p\"1p", "ero\nhzabc def\ngi jkl\nxyz", 2, 3, "abc def\ng", "v", std::nullopt},
     {"register-numbered-line-visual-delete", "zero\nabc def\nghi jkl\nxyz", "xjVd\"-p\"1p", "ero\ngzhi jkl\nabc def\nxyz", 3, 1, "abc def\n", "V", std::nullopt},
     {"register-numbered-line-visual-change", "zero\nabc def\nghi jkl\nxyz", "xjVcNEW<Esc>\"-p\"1p", "ero\nNEWz\nabc def\nghi jkl\nxyz", 3, 1, "abc def\n", "V", std::nullopt},
     {"register-numbered-block-two-lines", "zero\nabc def\nghi jkl\nxyz", "xj<C-v>jld\"-p\"1p", "ero\nczab def\ni ghjkl\nxyz", 2, 3, "ab\ngh", "\0262", std::nullopt},
@@ -1524,6 +1524,19 @@ constexpr std::array<VimFixture, 1512> vim_fixtures{{
     {"space-arrow-up", "ab\ncd", "j<Up>x", "b\ncd", 1, 1, "a", "v", std::nullopt},
     {"space-arrow-d-right", "ab\ncd", "d<Right>", "b\ncd", 1, 1, "a", "v", std::nullopt},
     {"space-arrow-left-in-insert", "ab", "ix<Left>y<Esc>", "yxab", 1, 1, "", "", std::nullopt},
+    {"put-caret-lines-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllvjyp", "abc def ghi\nabccdef ghi\n  idef ghi\n  indented line\nlast line here", 2, 4, "cdef ghi\n  i", "v", std::nullopt},
+    {"put-caret-lines-capital-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllvjyP", "abc def ghi\nabcdef ghi\n  icdef ghi\n  indented line\nlast line here", 2, 3, "cdef ghi\n  i", "v", std::nullopt},
+    {"put-caret-lines-count-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllvjy3p", "abc def ghi\nabccdef ghi\n  icdef ghi\n  icdef ghi\n  idef ghi\n  indented line\nlast line here", 2, 4, "cdef ghi\n  i", "v", std::nullopt},
+    {"put-caret-lines-count-capital-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllvjy3P", "abc def ghi\nabcdef ghi\n  icdef ghi\n  icdef ghi\n  icdef ghi\n  indented line\nlast line here", 2, 3, "cdef ghi\n  i", "v", std::nullopt},
+    {"put-caret-lines-elsewhere-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllvjyggllllp", "abc dcdef ghi\n  ief ghi\nabcdef ghi\n  indented line\nlast line here", 1, 6, "cdef ghi\n  i", "v", std::nullopt},
+    {"put-caret-newline-end-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllv$yp", "abc def ghi\nabccdef ghi\ndef ghi\n  indented line\nlast line here", 2, 4, "cdef ghi\n", "v", std::nullopt},
+    {"put-caret-newline-end-capital-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllv$yP", "abc def ghi\nabcdef ghi\ncdef ghi\n  indented line\nlast line here", 2, 3, "cdef ghi\n", "v", std::nullopt},
+    {"put-caret-search-crosses-lines-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jlly/ind<CR>p", "abc def ghi\nabccdef ghi\n  def ghi\n  indented line\nlast line here", 2, 4, "cdef ghi\n  ", "v", std::nullopt},
+    {"put-caret-lines-dot-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllvjyp.", "abc def ghi\nabcccdef ghi\n  idef ghi\n  idef ghi\n  indented line\nlast line here", 2, 5, "cdef ghi\n  i", "v", std::nullopt},
+    {"put-caret-lines-dot-capital-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllvjyP.", "abc def ghi\nabcdef ghi\n  icdef ghi\n  icdef ghi\n  indented line\nlast line here", 2, 3, "cdef ghi\n  i", "v", std::nullopt},
+    {"put-caret-newline-start-p", "abc\n\nxyz", "jvjyggp", "a\nxbc\n\nxyz", 1, 1, "\nx", "v", std::nullopt},
+    {"put-caret-newline-start-capital-p", "abc\n\nxyz", "jvjyggP", "\nxabc\n\nxyz", 1, 1, "\nx", "v", std::nullopt},
+    {"put-caret-one-line-count-p", "abc def ghi\nabcdef ghi\n  indented line\nlast line here", "jllyw3p", "abc def ghi\nabccdef cdef cdef def ghi\n  indented line\nlast line here", 2, 18, "cdef ", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

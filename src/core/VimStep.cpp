@@ -1517,12 +1517,16 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     return index;
 }
 
+// 文字単位の put。1 行に収まる本文は貼った全体の最後の文字へ、改行を含む本文は貼った本文の
+// 先頭（回数つきは最初のコピーの先頭）へキャレットが載る（本物の Vim の実測・Issue #205）。
+// 先頭が行末を越えるときの寄せは NORMAL のキャレットの寄せに任せる（ARC-001）。
 [[nodiscard]] VimInsertAt put_characters(const TextBuffer &text, Offset caret, std::string body,
                                          VimPutSide side)
 {
     const Offset at =
         side == VimPutSide::after ? forward_characters(text, caret, single_step) : caret;
-    const Offset rest{at.value + body.size() - last_code_point_size(body)};
+    const Offset rest =
+        body.contains('\n') ? at : Offset{at.value + body.size() - last_code_point_size(body)};
     return VimInsertAt{at, std::move(body), rest, EditBoundary::separate};
 }
 
