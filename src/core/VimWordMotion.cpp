@@ -5,7 +5,9 @@
 #include "Utf8.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimCharacterRange.hpp"
+#include "VimRepeatFailure.hpp"
 #include "VimScanPoint.hpp"
+#include "VimWordAdvance.hpp"
 
 #include <array>
 #include <cstdint>
@@ -188,18 +190,28 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
     return true;
 }
 
-[[nodiscard]] bool forward_word(const TextBuffer &text, VimScanPoint &point, VimWordStop stop)
+// 前へ 1 語（Vim の fwd_word の 1 周）。失敗は周の始めの 1 歩で本文の最後の文字（か終わり）から
+// 出られないときだけ（`i == -1 || (i >= 1 && last_line)`）。周の途中で本文が尽きたら、行末で
+// 止まる特例と同じく回数の残りを捨てた成功（Issue #226 で実測）。
+[[nodiscard]] VimWordAdvance forward_word(const TextBuffer &text, VimScanPoint &point,
+                                          VimWordStop stop)
 {
     const std::uint32_t group = class_at(point);
-    if (!advanced(text, point, stop))
+    const bool on_last_line = point.line.value >= text.line_count();
+    const int stepped = step_forward(text, point);
+    if (stepped == stepped_past_end || (stepped != stepped_inside && on_last_line))
     {
-        return false;
+        return VimWordAdvance::failed_at_the_end;
+    }
+    if (stepped != stepped_inside && stop == VimWordStop::at_line_end)
+    {
+        return VimWordAdvance::stopped;
     }
     if (group != blank_group && !skipped_group(text, point, group, stop))
     {
-        return false;
+        return VimWordAdvance::stopped;
     }
-    return skipped_blanks(text, point, stop);
+    return skipped_blanks(text, point, stop) ? VimWordAdvance::continues : VimWordAdvance::stopped;
 }
 
 // e の走査（Vim の skip_chars）。同じ種類の文字を進み、本文の終わりで尽きたら偽。
@@ -391,35 +403,45 @@ void load_line(const TextBuffer &text, VimScanPoint &point, LineNumber line)
 }
 } // namespace
 
-Offset vim_next_word(const TextBuffer &text, Offset caret, VimWordWalk walk, VimWordStop stop)
+VimMotionLanding vim_next_word(const TextBuffer &text, Offset caret, VimWordWalk walk,
+                               VimWordStop stop)
 {
     VimScanPoint point = scan_point(text, caret, walk.kind);
     for (std::size_t step = 0; step < walk.count; ++step)
     {
         // 行末で止まる特例が効くのは最後の 1 回だけ（Vim の fwd_word の count == 0 の条件）。
         const VimWordStop limit = step + 1 == walk.count ? stop : VimWordStop::across_lines;
-        if (!forward_word(text, point, limit))
+        switch (forward_word(text, point, limit))
         {
-            break;
+        case VimWordAdvance::continues:
+            continue;
+        case VimWordAdvance::stopped:
+            return VimMotionLanding{offset_of(text, point)};
+        case VimWordAdvance::failed_at_the_end:
+            return VimMotionLanding{offset_of(text, point), VimRepeatFailure::not_moved};
         }
+        std::unreachable();
     }
-    return offset_of(text, point);
+    return VimMotionLanding{offset_of(text, point)};
 }
 
-Offset vim_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk, VimWordEndStop stop)
+VimMotionLanding vim_word_end(const TextBuffer &text, Offset caret, VimWordWalk walk,
+                              VimWordEndStop stop)
 {
     VimScanPoint point = scan_point(text, caret, walk.kind);
     VimWordEndStop limit = stop;
     for (std::size_t step = 0; step < walk.count; ++step)
     {
+        // Vim の end_word は周のどの歩でも本文の終わりの先へ出ようとしたら FAIL（Issue #226 で
+        // 実測）。着地はそこで止まった位置のまま。
         if (!forward_word_end(text, point, limit))
         {
-            break;
+            return VimMotionLanding{offset_of(text, point), VimRepeatFailure::not_moved};
         }
         // 止まる特例が効くのは最初の 1 回だけ（Vim の end_word の stop = FALSE）。
         limit = VimWordEndStop::enter_the_next_word;
     }
-    return offset_of(text, point);
+    return VimMotionLanding{offset_of(text, point)};
 }
 
 std::uint32_t vim_character_class(char32_t code, VimWordClass kind) noexcept
