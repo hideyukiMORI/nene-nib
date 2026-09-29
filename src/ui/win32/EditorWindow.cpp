@@ -32,7 +32,12 @@
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
 #include "StatusBarLayout.hpp"
+#include "StepTab.hpp"
 #include "SwitchTab.hpp"
+#include "TabCommand.hpp"
+#include "TabKeyTable.hpp"
+#include "TabShortcut.hpp"
+#include "TabStep.hpp"
 #include "TextEncoding.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
@@ -1415,6 +1420,10 @@ void EditorWindow::press_key(WPARAM word)
         press_command_key(word);
         return;
     }
+    if (press_tab_key(word))
+    {
+        return;
+    }
     const auto font = font_shortcut(word);
     if (held(VK_CONTROL) && !held(VK_MENU) && font.has_value())
     {
@@ -1438,6 +1447,52 @@ void EditorWindow::press_key(WPARAM word)
         break;
     }
     press_plain_key(word);
+}
+
+// タブの鍵は Vim の Ctrl の表より先に引く。扱ったら true（値なしの Vim の Ctrl+W も true で、
+// どの表へも流さない）。IME の変換中も効く（切り替えが変換中を捨てる・ADR 0056 の決定 4・10）。
+bool EditorWindow::press_tab_key(WPARAM word)
+{
+    if (!held(VK_CONTROL) || held(VK_MENU))
+    {
+        return false;
+    }
+    const auto key = tab_shortcut(word, held(VK_SHIFT));
+    if (!key.has_value())
+    {
+        return false;
+    }
+    const auto command = core::tab_command_for(key.value(), mode_);
+    if (command.has_value())
+    {
+        run_tab_command(command.value());
+    }
+    return true;
+}
+
+void EditorWindow::run_tab_command(core::TabCommand command)
+{
+    switch (command)
+    {
+    case core::TabCommand::open:
+        send(application::NewTab{});
+        return;
+    case core::TabCommand::next:
+        send(application::StepTab{core::TabStep::next});
+        return;
+    case core::TabCommand::previous:
+        send(application::StepTab{core::TabStep::previous});
+        return;
+    case core::TabCommand::close:
+    {
+        // 閉じるのはアクティブのタブ。位置は状態から読む（表示値を作らない・決定 9）。
+        RECT client{};
+        GetClientRect(window_, &client);
+        close_tab(controller_.title_bar_input(client.right, dpi_).active);
+        return;
+    }
+    }
+    std::unreachable();
 }
 
 void EditorWindow::press_command_control_key(WPARAM word)
