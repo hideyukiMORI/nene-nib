@@ -75,3 +75,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0057](0057-tab-destination-is-one-pure-function.md) | タブの行き先は 1 つの純関数が決め、Vim の `gt` `gT` と Ex と一覧が共用する | 受理 |
 | [0058](0058-ctrl-tab-walks-tabs-in-recent-order.md) | Ctrl+Tab は最近使った順に歩き、Ctrl を離したときに確定する | 受理 |
 | [0059](0059-session-remembers-tabs-and-loads-them-on-view.md) | 前回のタブは別のファイルに覚え、起動のときは見ていたタブだけを読む | 受理 |
+| [0060](0060-ctrl-p-lists-files-and-marks-select-the-source.md) | Ctrl+P の一覧は 1 つの候補の列で、行頭の記号が出どころを絞る | 受理 |
