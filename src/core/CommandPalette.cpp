@@ -1,37 +1,37 @@
 #include "CommandPalette.hpp"
 
+#include "PaletteMarks.hpp"
+#include "PaletteQuery.hpp"
+
+#include <string>
 #include <utility>
 
 namespace nenenib::core
 {
-CommandPalette::CommandPalette(CommandLine input, std::size_t selected, CommandPaletteSource source,
-                               std::vector<CommandChoice> tabs)
-    : input_(std::move(input)), selected_(selected), source_(source), tabs_(std::move(tabs))
+CommandPalette::CommandPalette(CommandLine input, std::size_t selected,
+                               std::shared_ptr<const std::vector<CommandChoice>> entries)
+    : input_(std::move(input)), selected_(selected), entries_(std::move(entries))
 {
 }
 
-CommandPalette CommandPalette::opened(ThemeCatalog themes)
+CommandPalette CommandPalette::opened(std::vector<CommandChoice> entries, std::string_view input,
+                                      std::size_t selected, ThemeCatalog themes)
 {
-    return CommandPalette(CommandLine::empty(std::move(themes)).inserted(":").value(), 0,
-                          CommandPaletteSource::commands, {});
+    const auto empty = CommandLine::empty(std::move(themes));
+    const CommandPalette palette(
+        empty.inserted(input).value_or(empty), 0,
+        std::make_shared<const std::vector<CommandChoice>>(std::move(entries)));
+    return palette.selected_at(selected);
 }
 
-CommandPalette CommandPalette::opened_tabs(std::vector<CommandChoice> tabs, std::size_t active,
-                                           ThemeCatalog themes)
+PaletteScope CommandPalette::scope() const noexcept
 {
-    const std::size_t selected = active < tabs.size() ? active : 0;
-    return CommandPalette(CommandLine::empty(std::move(themes)), selected,
-                          CommandPaletteSource::tabs, std::move(tabs));
-}
-
-CommandPaletteSource CommandPalette::source() const noexcept
-{
-    return source_;
+    return palette_query_of(input_.text()).scope;
 }
 
 CommandPalette CommandPalette::with_input(CommandLine input, std::size_t selected) const
 {
-    return CommandPalette(std::move(input), selected, source_, tabs_);
+    return CommandPalette(std::move(input), selected, entries_);
 }
 
 const CommandLine &CommandPalette::input() const noexcept
@@ -41,12 +41,16 @@ const CommandLine &CommandPalette::input() const noexcept
 
 std::vector<CommandChoice> CommandPalette::choices() const
 {
-    switch (source_)
+    const PaletteQuery query = palette_query_of(input_.text());
+    switch (query.scope)
     {
-    case CommandPaletteSource::commands:
+    case PaletteScope::commands:
+        // palette_choices は先頭の `:` を自分で剥がす（結果は Ctrl+P が `:`
+        // で開いていた頃と同じ）。
         return palette_choices(input_);
-    case CommandPaletteSource::tabs:
-        return tab_list_choices(tabs_, input_.text());
+    case PaletteScope::files:
+    case PaletteScope::tabs:
+        return listed_choices(*entries_, query.scope, query.query);
     }
     std::unreachable();
 }
@@ -104,6 +108,7 @@ CommandPalette CommandPalette::selected_at(std::size_t index) const
     return with_input(input_, index);
 }
 
+// 候補の列を持ったまま、入力を `:<command>` にする（ADR 0060 の決定 5）。
 std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view command) const
 {
     const auto input = CommandLine::empty(input_.catalog()).inserted(":" + std::string(command));
@@ -111,6 +116,6 @@ std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view
     {
         return std::unexpected(input.error());
     }
-    return CommandPalette(input.value(), 0, CommandPaletteSource::commands, {});
+    return CommandPalette(input.value(), 0, entries_);
 }
 } // namespace nenenib::core

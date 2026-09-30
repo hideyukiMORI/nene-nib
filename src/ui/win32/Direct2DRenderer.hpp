@@ -86,6 +86,9 @@ class Direct2DRenderer final
     void fill_rounded(const core::LayoutRect &area, core::RgbColor color, float radius);
     void write(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
                core::RgbColor color);
+    // 欄の右端に寄せて書き、欄の外は切る。幅 0 の欄には何も書かない。
+    void write_right(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
+                     core::RgbColor color);
     void draw_cross(const core::LayoutRect &box, float half, float stroke);
     void draw_title_bar(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_face(const core::TitleBarLayout &layout, const core::LayoutRect &tab,

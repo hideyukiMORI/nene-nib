@@ -26,4 +26,13 @@ struct PaletteLayout
                                                      std::int32_t y) noexcept;
 [[nodiscard]] std::size_t palette_first_visible(const PaletteLayout &layout,
                                                 std::size_t selected) noexcept;
+
+// 行の右端の補足の欄（ADR 0060 の決定 9）。行の内側（左右 16 DIP）の右端から幅 112 DIP。
+// 内側が 補足 112 + すき間 12 + 名前の最小 120 DIP より狭ければ幅 0（補足を出さない）。
+[[nodiscard]] LayoutRect palette_row_note(const LayoutRect &row, std::uint32_t dpi) noexcept;
+// 名前と場所の欄。`noted` で補足の欄が幅を持てばその左 12 DIP まで、そうでなければ行の内側の全部。
+[[nodiscard]] LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi,
+                                           bool noted) noexcept;
+// 検索欄の右半分（記号の案内の欄）。160 DIP 相当より狭ければ幅 0。
+[[nodiscard]] LayoutRect palette_input_hint(const PaletteLayout &layout) noexcept;
 } // namespace nenenib::core

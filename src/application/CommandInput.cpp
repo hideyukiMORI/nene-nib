@@ -1,6 +1,6 @@
 #include "CommandInput.hpp"
 
-#include "CommandPaletteSource.hpp"
+#include "PaletteScope.hpp"
 
 #include <string>
 #include <utility>
@@ -40,14 +40,16 @@ namespace
                                line.completions(), line.completion_index()};
 }
 
-// タブの一覧の入力は題名の絞り込みで、Ex の補完を持たない（ADR 0057 の決定 7）。
+// Ex の補完を持つのは `:` の出どころだけ。ほかの出どころの入力は候補の絞り込み（ADR 0060 の
+// 決定 5）。
 [[nodiscard]] std::vector<std::string> completions_of(const core::CommandPalette &palette)
 {
-    switch (palette.source())
+    switch (palette.scope())
     {
-    case core::CommandPaletteSource::commands:
+    case core::PaletteScope::commands:
         return palette.input().completions();
-    case core::CommandPaletteSource::tabs:
+    case core::PaletteScope::files:
+    case core::PaletteScope::tabs:
         return {};
     }
     std::unreachable();

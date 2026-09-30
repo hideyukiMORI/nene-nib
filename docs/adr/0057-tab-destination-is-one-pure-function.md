@@ -75,6 +75,7 @@ oracle の fixture はタブを観測できない（1 本の `:normal!` の結�
 7. **一覧（「∨」と `:tabs` と Ctrl+P の候補 `tabs`）**: 新しい面は作らない。`CommandPalette` に候補の出どころ `CommandPaletteSource`（`commands` / `tabs` の閉じた enum）を足し、`CommandPalette::opened_tabs(std::vector<CommandChoice> tabs, std::size_t active, ThemeCatalog)` で開く。
    - 候補は帯の順に 1 タブ 1 行。`label` は題名（未保存の印「● 」つき・帯と同じ）、`command` は `tabnext {N}`（N は 1 始まり）、`kind` は `execute`。`CommandChoice` に `std::optional<DisplayText> detail` を足し、場所（ファイルのあるフォルダ。無題は無し）を入れる。ui は `detail` を `muted` で題名の後ろに描く。既存の Ex の候補の `detail` は無し。
    - 開いた直後の入力は空で、選ばれているのはアクティブなタブの行。
+   - **後の変更（[ADR 0060](0060-ctrl-p-lists-files-and-marks-select-the-source.md)・#258）**: 入口で固定の `CommandPaletteSource` と `opened_tabs` は、1 つの候補の列と行頭の記号（`#`）に置き換わる。一覧は入力が `#` の状態で開き、絞り込みは `listed_choices` の 1 本になる。候補の形・実行・意図はこの決定のまま。
    - 絞り込みは題名に対する今の `match_score`（大文字と小文字を区別しない部分列）。入力が空なら帯の順のまま、入力があれば点数の順（同点は帯の順）。
    - 実行は今の `submit_palette` → `evaluate_command("tabnext N")`（決定 4・5 を通る 1 本）。
    - 意図は `OpenTabList {}`（`EditorIntent` に 1 つ足す）。「∨」のクリック（押した要素と離した要素が同じとき・ADR 0056 の決定 9）と、Ex の `list` が同じ所へ着く。一覧が開いている間の `OpenTabList` と Ctrl+P は今の Ctrl+P と同じく閉じる。一覧が開いている間に「∨」を押したときも閉じる（面の外のクリックで閉じる今の規則がそのまま効き、開き直さない。開閉のボタンとして振る舞う・工程 2 の実装席の確認を設計席が受理）。

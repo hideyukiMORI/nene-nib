@@ -2048,3 +2048,48 @@ ARC-001 / ARC-003 / ARC-007 / ARC-010 / CPP-002 / CPP-003 / CPP-004 / CPP-005 / 
 対象を限定した理由: 差分は application の状態と controller の起動・切り替え・歩き・閉じるの入口・単体テスト・`eng/verify-window.py` の新しい節で、adapters と ui/win32 と core は変えていない（`Main.cpp` はコメント 1 か所）。既存の fixture は不変（protected-diff で changed 0）。タブの切り替えに触れるので `--tabs` を回した。起動の本物の流れと知らせの描画は契約で覆えないので設計席が実機で確かめ、起動の出口に触れるので速さとタブ 20 本の起動を設計席が測った。工程 4 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の実機・速さの結果（`e2f4936`）を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-003 / ARC-010 / CPP-002 / CPP-003 / CPP-004 / CPP-011 / CPP-012 / QLT-013 / QLT-014 を自己レビュー。読むのは `reach_tab` の 1 本で起動と切り替え・歩き・閉じた後の隣が共用（ARC-001）・core と application は OS とファイルに触れない（ARC-003・symbols 0）・読めないのは結果型から知らせへ写し例外にしない（ARC-010）・`ParkedTab` を読む所はどれも `std::visit`（CPP-002）。残る穴: 起動の重さがタブの数に依らないことはベンチに足すまで機械では守られていない（ADR 0059「強制」は planned）・無くなったファイルに気づくのはそのタブを見るとき（D27）・Vim の `gt` `gT` の行き先が読めなかったとき engine は再生を打ち切らない（決定 5）・読めなかったタブを外したとき帯の上のマウスの印は位置のまま残る（次のマウスの移動で直る）・通常モードでは覚えたカーソルが結合文字の間に置かれうる・強制終了のときは前に窓を閉じたときの一覧が残る（決定 3。今回の OS の異常終了がその例）。
+
+### 5-bx. Ctrl+P を開くと開いているタブの一覧が出て行頭の記号で出どころを絞る（Issue #258・ADR 0060 決定 1〜6・9・施主決定 D28〜D30・2026-09-30）
+
+ブランチ `feat/258-palette-file-list`（main `0fe30b8` の上・ADR `3069393`・工程 1 `3371ead`・工程 2 `590e512`・差し戻し `6dbfe63`・工程 3 は本節と ADR 0060 の「強制」の #258 の分と `docs/todo/current.md` の数字の 2 行と README の FR-006 の 1 項目だけ）。
+統合の一覧の土台（ADR 0060 決定 11 の 1 本目）。Ctrl+P は空の入力で開いて開いているタブを出し、入力の行頭の `#` はタブだけ、`:` は設定のコマンドを出す。履歴（`@`）は #259。
+
+- 工程 1: core の出どころの記号の表 `palette_marks`（`#` タブ・`:` 設定）・`palette_query_of`・`palette_mark_hint`・閉じた enum `PaletteScope` `PaletteOrigin`・`CommandChoice.origin`・`tab_list_choices` を置き換える `listed_choices`（名前 → 場所＋名前に罰点・同点は列の順・`std::stable_sort` は使わない）・`CommandPalette::opened` の 1 本（`CommandPaletteSource` は削除）・controller の `palette_entries()` と 2 つの入口（Ctrl+P は入力が空・「∨」と `:tabs` は `#` でアクティブのタブ）。途中で clang-tidy の `readability-function-size` と `readability-function-cognitive-complexity` に落ちたので、閾値は触らず `std::ranges::find` と `in_score_order` へ切り出した。
+- 工程 2: 配置の純関数 `palette_row_note` `palette_row_label` `palette_input_hint`（整数演算だけ）・`CommandPaletteView.hint`（入力が空のときだけ）・描画の `write_right`（書式は `status_format_`・色は `muted`・新しい書式と色は無し）。
+- 差し戻し 1 回（`6dbfe63`）: 設計席の 1 回目の画で、行の右端の補足が「開い」で切れ入力が空のときの案内が見えなかった。原因は、もともと右寄せ（TRAILING）の `status_format_` に `write_right` が幅を測って原点をさらに右へずらしていたこと（右寄せが二重）。右寄せは text layout の TRAILING に任せ、原点を欄の左端に置いた。
+- fixture は oracle の対象ではないので不能で、契約で守る（ADR 0060「強制」）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・全 target・clang-tidy 込み） | 工程 1・工程 2・差し戻しとも成功・警告 0（`out/258-step1-build.log` / `out/258-step2-build.log` / `out/258-rework1-build.log`） |
+| `build/nib_tests.exe --command-palette` | 146 → **189 checks**（工程 1）→ **207 checks**（工程 2）・差し戻しの後も **207 checks** 通過（`out/258-rework1-tests.log`） |
+| `build/nib_tests.exe --tabs` | 288 → **289 checks**（工程 1） |
+| `build/nib_tests.exe --ex-settings` / `--session`（工程 1） | 195 → 195 / 199 → 199 |
+| `build/nib_tests.exe`（引数なし） | 19063 → **19107**（工程 1 `out/258-step1-tests.log`）→ **19125 checks 成功**（工程 2 `out/258-step2-tests.log`） |
+| `ctest --test-dir build -R nib_unit` | 工程 1・工程 2 とも **1 / 1 成功** |
+| `python eng/symbols.py --build-dir build --require core application` | 工程 1・工程 2 とも **2 libraries・0 violation**（`std::make_shared` と `std::ranges::find` は通る・`out/258-step{1,2}-symbols.log`） |
+| `python eng/conformance.py --build-dir build` | 工程 1・工程 2・差し戻しとも **0 violation**（`out/258-step{1,2}-conformance.log` / `out/258-rework1-conformance.log`） |
+| clang-format --dry-run --Werror（工程 1 の変更 16 ファイル・工程 2 の変更 7 ファイル・差し戻しの `Direct2DRenderer.cpp`） | 指摘なし（`out/258-rework1-format.log`） |
+| `python eng/protected-diff.py --base origin/main --build --allow --command-palette --allow --tabs`（工程 1・工程 2 の commit 後） | **終了 0**。`fixtures 1853 -> 1853 / changed 0`・`scopes 26 / same 24`・`--command-palette` 146 → 189 / 146 → 207 と `--tabs` 288 → 289 だけ allowed（`out/protected/3371ead.json` / `out/protected/590e512.json`） |
+| `pwsh -NoProfile -File eng/validate-git.ps1` | 工程 1・工程 2・差し戻しとも passed（`out/258-step{1,2}-validate-git.log` / `out/258-rework1-validate-git.log`） |
+| 実機（設計席・施主の了承の後・Debug `build/NeNeNib.exe`・`6dbfe63`・125%・`eng/window_driver.py` を使う 1 回限りのスクリプト `D:\NeNeNib\scripts\palette_frames.py`） | 終了コード 0（`out/258-accept-frames.log`）。クリック・文字・鍵はどれも窓へ post（本物のキーボードとポインタは使っていない）。ファイル 3 つ（1 つは下位のフォルダ `notes`）で起動 → トグルで Vim → `:tabs` と Enter → Backspace → 文字。画は `out/frames-258/`・記録は `out/reports/done-258-design.md` |
+| 工程 3（本節と ADR 0060 の「強制」と `current.md` の 2 行と README の 1 項目だけ）の `python eng/conformance.py --build-dir build`・`git diff --check`・`eng/validate-git.ps1` | **0 violation**（`out/258-step3-conformance.log`）・`git diff --check` 指摘なし・`eng/validate-git.ps1` passed（`out/258-step3-git.log`） |
+
+設計席の実機の画（2 回目・`6dbfe63`）:
+
+| 画 | 操作 | 見えたもの |
+| --- | --- | --- |
+| `1-tab-list-mark.png` | `:tabs` と Enter | 入力欄に `#`・タブ 3 本が帯の順・選ばれているのはアクティブの 3 本目・「3 / 3」・行の右端に「開いているタブ」 |
+| `2-all-empty-input.png` | Backspace（`#` を消す） | 入力が空・全部の候補・先頭が選ばれる・検索欄の右に「# タブ　: 設定」 |
+| `3-query-name.png` | `sec` | `palette-second.md` の 1 件 |
+| `4-query-place.png` | `notes` | 場所に当たった候補 2 件（`notes` のフォルダの 1 件が先） |
+| `5-commands.png` | `:` | 設定のコマンド 22 件（補足なし・案内なし・今までと同じ一覧） |
+| `6-after-enter.png` | `:` を消す → 下 → Enter | 2 本目のタブへ切り替わる（題名 `palette-second.md - NeNe Nib`） |
+
+長い場所は「…」で切れ、補足の欄に重ならない。選択中の行の上でも補足は読める。1 回目（`590e512`）の画で見つかった右寄せの二重は上の差し戻しで直した。
+
+回していないものと理由: 速さの 6 本（差分は面が開いているときの候補の組み立てと描画だけで、起動と本文の打鍵の経路に触れていない・QLT-014）・本物の Ctrl+P の鍵（鍵から意図 `OpenCommandPalette` への経路の ui は変えていない。意図の後は契約 `verify_palette_entries_controller` が覆う）・「∨」のクリック（経路 `OpenTabList` は `:tabs` と同じ意図で ui は変えていない）。
+
+対象を限定した理由: 差分は core の出どころの表・絞り込み・面の形と配置、application の面の入口と view、ui/win32 の面の描画、単体テストで、adapters と起動と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--command-palette` と `--tabs` だけ。面の描画は契約で覆えないので設計席が実機の画で確かめた。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 と差し戻しの成功結果と設計席の実機の結果（`6dbfe63`）を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-001 / ARC-003 / ARC-010 / CPP-002 / CPP-004 / CPP-011 / CPP-012 / ADR 0008 決定 8 / QLT-013 / QLT-014 を自己レビュー。出どころの記号を引くのは `palette_query_of` の 1 本・候補の列を作るのは `palette_entries()` の 1 本で Ctrl+P と「∨」と `:tabs` が共用（ARC-001）・core と application は OS とファイルに触れない（ARC-003・symbols 0）・`PaletteScope` `PaletteOrigin` の `switch` に `default` は無い（CPP-002）・色は今のトークンだけ（ADR 0008 決定 8）。残る穴: 履歴は #259 で、今の Ctrl+P の一覧に出るファイルは開いているタブだけ・設定のコマンドは Ctrl+P の後に `:` を打って出す・「∨」の一覧の入力欄に `#` が見える・`:` を消した後は Ex の前方一致の補完が出ない（面では Tab が選択の上下なので見える違いは無い）・照合はバイト単位のまま（日本語の名前の照合は面の中の日本語入力の Issue）・候補は 1 つの意図で 2 回以上作り直す（タブ 256 本までなら問題にならない）・面が開いている間にタブが切り替わっても列は開いたときのまま・`palette_origin_label` の宣言は `PaletteOrigin.hpp` で定義は `CommandChoice.cpp`（#259 で寄せるか決める）・面の実機の検査は `eng/verify-window.py` に無い（ADR 0060 決定 12 の後続）。

@@ -27,6 +27,7 @@
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OpenTabList.hpp"
+#include "PaletteOrigin.hpp"
 #include "PointTitleBar.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -1442,6 +1443,7 @@ void verify_ex_tab_open_and_close()
         same = choice.label.text() == listed.tabs.at(index).title.text() &&
                choice.command == "tabnext " + std::to_string(index + 1) &&
                choice.kind == nenenib::core::CommandChoiceKind::execute &&
+               choice.origin == std::optional{nenenib::core::PaletteOrigin::tab} &&
                detail.has_value() == folder.has_value() &&
                (!detail.has_value() || !folder.has_value() ||
                 detail.value().text() == folder.value().text());
@@ -1464,9 +1466,9 @@ void verify_tab_list_rows()
     const auto &palette = listed.command_palette;
     const auto &line = listed.command_line;
     expect(palette.has_value() && line.has_value() && palette.value().choices.size() == 3 &&
-               palette.value().selected == 1 && line.value().text.empty() &&
+               palette.value().selected == 1 && line.value().text == "#" &&
                line.value().completions.empty(),
-           "it lists every tab with the active one selected and an empty input");
+           "it lists every tab with the active one selected and the tabs mark as input");
     expect(rows_follow_band(listed), "each row is the band title with its mark and runs tabnext N");
     const auto chosen = controller.apply(nenenib::application::ActivateCommandChoice{0});
     expect(chosen.active_tab == 0 && !chosen.command_palette.has_value() &&
@@ -1487,7 +1489,8 @@ void verify_tab_list_rows()
     return commands;
 }
 
-// `:tabs` と OpenTabList と Ctrl+P の候補 `tabs` は同じ一覧を開き、開いている間は閉じる。
+// `:tabs` と OpenTabList と Ctrl+P の候補 `tabs` と Ctrl+P の空の入力は同じ列を開き、開いている間は
+// 閉じる（ADR 0060 の決定 6）。
 void verify_tab_list_entries()
 {
     using nenenib::application::CommandText;
@@ -1506,8 +1509,9 @@ void verify_tab_list_entries()
     expect(listed_commands(run_ex(controller, "tabs")) == all, ":tabs opens the same list");
     expect(!controller.apply(OpenCommandPalette{}).command_palette.has_value(),
            "Ctrl+P closes the open list");
-    applied(controller, OpenCommandPalette{});
-    applied(controller, CommandText{"tabs"});
+    expect(listed_commands(controller.apply(OpenCommandPalette{})) == all,
+           "Ctrl+P opens the same entries with an empty input");
+    applied(controller, CommandText{":tabs"});
     expect(listed_commands(controller.apply(SubmitCommand{})) == all,
            "the Ctrl+P candidate tabs opens the same list");
     applied(controller, CommandText{"NOTE"});
