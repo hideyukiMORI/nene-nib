@@ -10,6 +10,7 @@
 #include "EditorSettings.hpp"
 #include "FileFailure.hpp"
 #include "LineEnding.hpp"
+#include "ParkedTab.hpp"
 #include "ScrollState.hpp"
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
@@ -17,12 +18,14 @@
 #include "TabRecency.hpp"
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
+#include "UnloadedDocument.hpp"
 #include "VimState.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace nenenib::application
@@ -83,17 +86,36 @@ class EditorState final
     [[nodiscard]] std::size_t tab_count() const noexcept;
     // 帯の上のアクティブの位置（0 始まり）。
     [[nodiscard]] std::size_t active_tab() const noexcept;
-    // 脇に置いた束（帯の順・アクティブを除く）。frame が表示値を並べ、契約が「切り替えても
-    // 動いていないタブの束は同じ参照のまま」を見るための読み取りの口。
-    [[nodiscard]] const std::vector<std::shared_ptr<const DocumentState>> &parked() const noexcept;
+    // 脇に置いたタブ（帯の順・アクティブを除く）。読み込み済みの束か、まだ読んでいない文書か
+    // （ADR 0059 の決定 4）。frame が表示値を並べ、契約が「切り替えても動いていないタブの束は同じ
+    // 参照のまま」を見るための読み取りの口。
+    [[nodiscard]] const std::vector<ParkedTab> &parked() const noexcept;
+    // 帯の位置 position がまだ読んでいない文書なら、その値。アクティブ・範囲の外・読み込み済みは
+    // 値なし。読むのは controller の reach_tab だけ（ADR 0059 の決定 5）。
+    [[nodiscard]] std::optional<UnloadedDocument> unloaded_at(std::size_t position) const;
+    // 前回のタブ（ADR 0059 の決定 6）。今の帯の右へ、まだ読んでいない文書を順に並べる。使った順の
+    // 列にも足し、アクティブは先頭のまま。アクティブは動かさない。
+    [[nodiscard]] EditorState with_restored(std::vector<UnloadedDocument> documents) const;
+    // 帯の位置 position のまだ読んでいない文書を、読み込み済みの束に置き換える（決定 5）。
+    // アクティブ・範囲の外・読み込み済みなら何も変えない。
+    [[nodiscard]] EditorState with_loaded(std::size_t position, DocumentState bundle) const;
+    // 帯の位置 position のまだ読んでいない文書を、帯と使った順から外す（決定 5・D26・D27）。
+    // アクティブ・範囲の外・読み込み済みなら何も変えない。
+    [[nodiscard]] EditorState with_dropped(std::size_t position) const;
+    // 使った順を順位から作り直す（決定 6）。ranks は帯の位置ごとの順位（0 がいちばん最近）で、
+    // 本数が帯と違えば何も変えない。同じ順位は帯の順。
+    [[nodiscard]] EditorState with_recency_ranked(std::span<const std::size_t> ranks) const;
     // 帯の位置 position のタブをアクティブにする。今の文書は束にして元の位置に置く（選択は
-    // キャレットへ畳み、undo の単位は閉じる）。範囲の外なら何も変えず、アクティブ自身なら文書は
+    // キャレットへ畳み、undo
+    // の単位は閉じる）。範囲の外とまだ読んでいない文書なら何も変えず、アクティブ自身なら文書は
     // 動かさない（歩きの確定だけ・下の使った順）。
     [[nodiscard]] EditorState with_switched(std::size_t position) const;
     // 空の「無題」をアクティブの右に足してアクティブにする。今の文書は束にして置く。
     [[nodiscard]] EditorState with_new_tab() const;
     // 帯の位置 position のタブを捨てる。アクティブを捨てたら右隣（無ければ左隣）をアクティブに
     // する（決定 6）。範囲の外と最後の 1 つなら何も変えない（最後の 1 つは closing が受ける）。
+    // アクティブを捨てて隣がまだ読んでいない文書のときも何も変えない（読むのは controller・
+    // ADR 0059 の決定 5）。
     [[nodiscard]] EditorState with_closed(std::size_t position) const;
     // タブの使った順（ADR 0058 の決定 2）。上の 3 つ（切り替え・足す・閉じる）が列を直し、
     // 歩きを終える。with_switched はアクティブ自身を指されても歩きを終える（着いた所の確定）。
@@ -101,7 +123,7 @@ class EditorState final
     // Ctrl+Tab で歩いている間だけ真（決定 3）。
     [[nodiscard]] bool tab_walking() const noexcept;
     // 歩きの 1 歩。帯の位置 position のタブへ切り替えるが、使った順の列は入れ替えない。
-    // 範囲の外なら何も変えない。アクティブ自身なら歩いている印だけを立てる。
+    // 範囲の外とまだ読んでいない文書なら何も変えない。アクティブ自身なら歩いている印だけを立てる。
     [[nodiscard]] EditorState with_walked(std::size_t position) const;
     // 歩いていれば今のタブを使った順の先頭へ動かして歩きを終える。歩いていなければ同じ状態。
     [[nodiscard]] EditorState with_walk_settled() const;
@@ -127,8 +149,14 @@ class EditorState final
     // with_new_tab / with_closed / with_walked だけである。
     [[nodiscard]] std::shared_ptr<const DocumentState> parked_active() const;
     void spread(const DocumentState &tab);
-    // 帯の位置 position のタブを広げる（使った順は触らない）。with_switched と with_walked の共通。
-    [[nodiscard]] EditorState switched_to(std::size_t position) const;
+    // 帯の位置 position（アクティブではない）の脇の列の添字。
+    [[nodiscard]] std::size_t parked_index_of(std::size_t position) const noexcept;
+    // 帯の位置 position（アクティブではない）が読み込み済みなら、その束。
+    [[nodiscard]] std::optional<std::shared_ptr<const DocumentState>>
+    loaded_at(std::size_t position) const;
+    // 帯の位置 position の読み込み済みの束 target を広げる（使った順は触らない）。with_switched と
+    // with_walked の共通。spread は読み込み済みの束しか受けない（ADR 0059 の決定 5）。
+    [[nodiscard]] EditorState switched_to(std::size_t position, const DocumentState &target) const;
     // アクティブを使った順の先頭へ動かし、歩きを終える。使った順を直す 3 か所の締め。
     void touch_active();
 
@@ -148,7 +176,7 @@ class EditorState final
     std::optional<CommandInput> command_input_;
     std::optional<core::DisplayText> command_message_;
     std::optional<SearchPreview> search_preview_;
-    std::vector<std::shared_ptr<const DocumentState>> parked_;
+    std::vector<ParkedTab> parked_;
     std::size_t active_ = 0;
     core::TabRecency recency_ = core::TabRecency::single();
     bool tab_walk_ = false;

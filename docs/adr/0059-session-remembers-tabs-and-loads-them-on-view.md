@@ -47,10 +47,14 @@
    - カーソルと画面の位置は、読んだ本文の範囲の中へ寄せる（行が無ければ最後の行・桁が行の終わりを越えたら行の終わり・文字の途中なら文字の先頭）。Vim モードなら今の切り替えと同じくキャレットを寄せる。
    - 読めなかったとき（D26・D27）: そのタブを帯から外し（使った順からも）、`command_message` に 1 行知らせる（ファイルの名前と理由）。切り替えは起きず、今のタブのまま。
    - 閉じた後の隣が読めなかったときは、それも外して次の隣を試す。1 本も残らなければ空の無題を 1 本置く（窓は閉じない）。
+   - **形（#253）**: 読むのは controller の 1 本 `reach_tab(position)`（読めたら束に置き換えて真・読めなければ外して知らせて偽）。タブが切り替わる入口（`SwitchTab`・`WalkRecentTab`・`CloseTab` の後の隣・同じファイルを開く）は、状態を動かす前にこれを呼ぶ。状態（`EditorState`）はファイルに触れない: まだ読んでいない文書へは切り替えられず、指されたら範囲の外と同じく何も変えない。置き換えは `with_loaded(position, 束)`、外すのは `with_dropped(position)`。
+   - **知らせの文言**: 1 件は「開けませんでした: <ファイルの名前>」、同じ意図の中で 2 件以上なら「開けませんでした: <最後のファイルの名前>（ほか N 件）」。理由は書かない（1 行に収める）。ファイルを開く失敗のダイアログ（ui）と同じく日本語。
+   - Vim の `gt` `gT` の行き先が読めなかったときは、タブは動かず 1 行知らせる。engine は本数と位置だけを借用しているので、この失敗では再生を打ち切らない（残る穴）。
 6. **戻す時（起動）**: ファイルの引数が 1 つも無いとき（D24）、controller は `SessionPort::read` の一覧を、全部「まだ読んでいない文書」として帯に並べ、`active` のタブを決定 5 の道で読む。読めなければ外して 1 行知らせ、右隣（無ければ左隣）を試す。1 本も残らなければ空の無題が 1 本。使った順は `recency` の順位から作る。
    - ファイルの引数があるときは、今までどおり引数だけを開く（ADR 0056 の決定 13）。一覧は読まない。窓を閉じるときには、そのとき開いているタブで一覧を書き換える。
    - 一覧そのものが読めなかったとき（壊れている・版が違う）は、空の無題 1 本で始めて 1 行知らせる。一覧が無い（初めての起動）ときは何も知らせない。
    - `--measure` の起動を特別に扱わない（計ったものと使う人の起動を同じにする）。
+   - **手順（#253）**: 空の無題 1 本の状態に、一覧のタブを帯の順で「まだ読んでいない文書」として右へ並べ（`with_restored`）、`active` のタブを `reach_tab` で読んで切り替え、最初の無題を外す。使った順は、その後で `recency` の順位から作る。読めたタブが 1 本も無ければ、無題がそのまま残る。
 7. **計測と検査の道具**: 道具は自分の profile を持つので、exe を起動する 1 本の関数（`eng/window_driver.py` の `start`）が、起動の前に profile の `session.v1` を消す（既定）。復元そのものを確かめる検査だけが、消さない指定で起動する。これで今の 6 本のベンチと今の検査は、復元が入っても同じものを測る。
    - 復元したときの起動の重さ（タブ 20 本の一覧で起動）は、ベンチに足すまで設計席が merge の前に手で測る（QLT-014）。
 8. **縦切り（2 本の Issue・どちらの後も main は動く状態）**:
@@ -62,12 +66,12 @@
 ## 強制
 
 - 契約（#252 の分）: **active**。`Session` の作り方（無題を入れない・帯の順・active の位置・使った順）と `EndSession` の 2 つの理由は `tests/unit/SessionTests.cpp` の `verify_untitled_and_single` `verify_mixed_band` `verify_positions_and_unsaved` `verify_after_close` `verify_last_tab_closed` `verify_no_write_on_ordinary_intents` `verify_write_failure_changes_nothing` `verify_walk_settles_before_writing`（scope `nib_tests --session` と既定実行・CTest `nib_unit`）。adapter の往復と壊れた入力の拒否は `tests/adapters/SessionAdapterTests.cpp` の `verify_round_trips` `verify_line_ends` `verify_rejected_headers` `verify_rejected_tabs` `verify_limits` `verify_adapter_round_trip` `verify_adapter_failures`（CTest `nib_sessions`）。
-- 契約（#253 の分）: **planned**。まだ読んでいない文書への切り替え（読む・位置を寄せる・読めないときに外して知らせる）・閉じた後の隣・起動の 3 つの枝（引数あり・一覧あり・一覧なし）。
+- 契約（#253 の分）: **active**。状態の `with_restored` `with_loaded` `with_dropped` `with_recency_ranked` と、切り替え・歩き・閉じるが読んでいない文書を指したら何も変えないことは `tests/unit/SessionTests.cpp` の `verify_restored_state` `verify_loaded_and_dropped` `verify_switch_refuses_unloaded` `verify_recency_ranked`。起動の枝（一覧なし・空の一覧・読めない一覧・引数あり・テーマの告知との優先）は `verify_restore_branches`、戻った帯・アクティブ・位置・読むのは見ていた 1 本だけは `verify_restore_band`、位置を読んだ本文の範囲へ寄せるのは `verify_restore_clamps`、読めないときに外して知らせて隣を試すのは `verify_restore_unreadable`。切り替え（クリック・`:tabnext`・`gt`・一覧・同じファイルを開く）と歩きと閉じた後の隣で読むのは `verify_switch_reads` `verify_walk_reaches` `verify_switch_unreadable` `verify_close_reaches`、読んだ後の一覧は `verify_list_after_reaching`（scope `nib_tests --session` と既定実行・CTest `nib_unit`）。
 - 閉じた和型の写し漏れ（#252 の分）: **active**。`EditorIntent`（`EndSession`）は `EditorController::apply` の `std::visit`、`SessionEnd` は `ended_session` の `default` の無い `switch`（CPP-002）。`SessionFailure` は今は写す `switch` が無く、6 つの値を adapter が返すことを `nib_sessions` の契約が確かめる（写す所ができたら `default` の無い `switch` で書く）。
-- 閉じた和型の写し漏れ（#253 の分）: `ParkedTab` は **planned**（実装で active・`std::visit` の網羅性）。
+- 閉じた和型の写し漏れ（#253 の分）: `ParkedTab` は **active**（`std::visit` の網羅性）。脇のタブの中身を読む所はどれも `std::visit` で 2 つの形の多重定義へ写す: `EditorState.cpp` の `loaded_bundle`（`loaded_of`）と `unloaded_at`（`unloaded_of`）・`EditorController.cpp` の `tab_views`（`parked_view`）・`band_session_tabs`（`parked_session_tab`）・`open_tab_of`（`parked_path`）。`std::get_if` と `std::holds_alternative` で `ParkedTab` を分ける所は無い。
 - core と application が OS とファイルに触れないこと: **active**（既存の `eng/symbols.py`。ファイルに触れるのは adapters の `FilePort` と `SessionPort` の実装だけ）。
-- 起動の重さがタブの数に依らないこと: **planned**（決定 7。ベンチに足すまでは設計席が手で測る）。
-- 実機の確認: **planned**（#253 で `eng/verify-window.py` に節を足す。機械の必須 check ではない）。
+- 起動の重さがタブの数に依らないこと: **planned**（決定 7。ベンチに足すまでは設計席が手で測る）。2026-09-30 に設計席が手で測った（gate-proofs の #253 の節）。
+- 実機の確認: **planned のまま**（機械の必須 check ではない）。道具は入った: `eng/verify-window.py --restore`（窓へ post するクリックだけで本物のキー入力を送らない・CI では回さず設計席が回す）。
 - fixture: **不能**（oracle の対象ではない）。既存の fixture は不変（`eng/protected-diff.py`）。
 
 ## 結果

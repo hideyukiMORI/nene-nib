@@ -11,6 +11,8 @@
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
+#include "DisplayText.hpp"
+#include "DocumentState.hpp"
 #include "Edit.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExResult.hpp"
@@ -18,6 +20,8 @@
 #include "ExTabVerb.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
+#include "ParkedTab.hpp"
+#include "SaveState.hpp"
 #include "ScrollBounds.hpp"
 #include "SearchLine.hpp"
 #include "SearchPreview.hpp"
@@ -35,6 +39,7 @@
 #include "TextPosition.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
+#include "UnloadedDocument.hpp"
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
@@ -68,8 +73,11 @@
 #include <cstdint>
 #include <deque>
 #include <expected>
+#include <iterator>
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -402,6 +410,12 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
                       std::string(before.substr(head, before.size() - head - tail)),
                       std::string(after.substr(head, after.size() - head - tail)), restore};
 }
+// 脇のタブの表示値。読み込み済みかどうかを区別せずに並べる（ADR 0059 の決定 4）。
+[[nodiscard]] const DocumentView &parked_view(const ParkedTab &tab)
+{
+    return std::visit([](const auto &value) -> const DocumentView & { return value->view; }, tab);
+}
+
 // 帯の順のタブの表示値（ADR 0056 の決定 7）。脇の束は置いたときの値を並べるだけで、
 // 題名を作り直さない。アクティブの分は document と同じ値を差し込む。
 [[nodiscard]] std::vector<DocumentView> tab_views(const EditorState &state,
@@ -415,7 +429,7 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
         {
             views.push_back(active);
         }
-        views.push_back(tab->view);
+        views.push_back(parked_view(tab));
     }
     if (views.size() == state.active_tab())
     {
@@ -438,6 +452,20 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     return SessionTab{document.path.value(), text.position_of(selection.caret), first_visible, 0};
 }
 
+// 脇のタブの覚える値。読み込み済みは束から、まだ読んでいない文書は覚えていた位置のまま
+// （ADR 0059 の決定 4）。写し先が足りなければ std::visit が落ちる（CPP-002）。
+[[nodiscard]] std::optional<SessionTab>
+parked_session_tab(const std::shared_ptr<const DocumentState> &tab)
+{
+    return session_tab_of(tab->document, tab->text, tab->selection, tab->first_visible);
+}
+
+[[nodiscard]] std::optional<SessionTab>
+parked_session_tab(const std::shared_ptr<const UnloadedDocument> &tab)
+{
+    return SessionTab{tab->path, tab->caret, tab->first_visible, 0};
+}
+
 // 帯の順の各タブの覚える値。アクティブな文書は今の欄から、脇に置いたタブは束から読む。
 [[nodiscard]] std::vector<std::optional<SessionTab>> band_session_tabs(const EditorState &state)
 {
@@ -452,7 +480,7 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
             band.push_back(active);
         }
         band.push_back(
-            session_tab_of(tab->document, tab->text, tab->selection, tab->first_visible));
+            std::visit([](const auto &value) { return parked_session_tab(value); }, tab));
     }
     if (band.size() == state.active_tab())
     {
@@ -519,6 +547,82 @@ void rank_session_tabs(std::vector<std::optional<SessionTab>> &band,
     std::unreachable();
 }
 
+// 脇のタブのパス。同じファイルの検索は、まだ読んでいない文書にもパスで当たる（ADR 0059 の決定 4）。
+[[nodiscard]] const std::optional<core::FilePath> &
+parked_path(const std::shared_ptr<const DocumentState> &tab)
+{
+    return tab->document.path;
+}
+
+[[nodiscard]] std::optional<core::FilePath>
+parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
+{
+    return tab->path;
+}
+
+// 前回のタブ 1 本を、まだ読んでいない文書にする（ADR 0059 の決定 4・6）。符号化は読むまで
+// 分からないので既定の UTF-8（見えるのはアクティブの分だけ）。未保存ではない。
+[[nodiscard]] UnloadedDocument unloaded_document_of(const SessionTab &tab)
+{
+    return UnloadedDocument{tab.path, tab.caret, tab.first_visible,
+                            DocumentView{core::tab_title_for(tab.path, core::SaveState::saved),
+                                         tab.path, core::TextEncoding::utf8, core::SaveState::saved,
+                                         std::nullopt}};
+}
+
+// 覚えていた行を本文の範囲の中へ寄せる（行が無ければ最後の行・ADR 0059 の決定 5）。
+[[nodiscard]] core::LineNumber line_within(const core::TextBuffer &text, core::LineNumber line)
+{
+    return core::LineNumber{std::clamp<std::size_t>(line.value, 1, text.line_count())};
+}
+
+// 読んだ本文と、まだ読んでいない文書が覚えていた位置から束を作る（決定 5）。カーソルは行を寄せて
+// から桁を行の中の文字の境目へ寄せる（offset_of は行の終わりで止まり、コードポイントの先頭にしか
+// 着かない）。履歴は空、Vim の文書ごとの値は無し。
+[[nodiscard]] DocumentState reached_bundle(core::TextBuffer text, Document document,
+                                           const UnloadedDocument &tab)
+{
+    const core::Offset caret =
+        text.offset_of(core::TextPosition{line_within(text, tab.caret.line), tab.caret.column});
+    const core::LineNumber first_visible = line_within(text, tab.first_visible);
+    DocumentView view{tab.view.title, document.path, document.encoding, core::SaveState::saved,
+                      std::nullopt};
+    return DocumentState{std::move(text),
+                         core::collapsed_at(caret),
+                         core::EditHistory::empty(),
+                         std::move(document),
+                         first_visible,
+                         std::nullopt,
+                         std::nullopt,
+                         std::move(view)};
+}
+
+constexpr std::string_view unreached_prefix = "開けませんでした: ";
+constexpr std::string_view clipped_mark = "…";
+
+// 知らせの 1 行（ADR 0059 の「知らせの文言」）。others は同じ意図の中でほかに読めなかった数。
+// 名前は 1 行に収まるよう末尾をコードポイントの境目で落とす（題名と同じ「…」）。
+[[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
+{
+    const std::string suffix =
+        others == 0 ? std::string{} : "（ほか " + std::to_string(others) + " 件）";
+    std::string name(path.file_name().empty() ? path.text() : path.file_name());
+    const std::size_t room =
+        core::DisplayText::maximum_bytes - unreached_prefix.size() - suffix.size();
+    if (name.size() > room)
+    {
+        core::Offset cut{room - clipped_mark.size()};
+        while (!core::is_boundary(name, cut))
+        {
+            cut = core::previous_code_point(name, cut);
+        }
+        name.resize(cut.value);
+        name += clipped_mark;
+    }
+    // 材料は検証済みの経路と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+    return core::DisplayText::parse(std::string(unreached_prefix) + name + suffix).value();
+}
+
 // Ctrl+Tab の歩きを続けたまま受け取れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の
 // 寸法・外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の
 // 意図は写す前に歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
@@ -559,8 +663,68 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
         failure = state_.last_failure().has_value() ? state_.last_failure() : failure;
     }
     state_ = state_.with_failure(failure);
+    // ファイルの引数が無いときだけ前回のタブを戻す（ADR 0059 の決定 6・D24）。
+    if (initial.empty())
+    {
+        restore_session();
+    }
     // 初期ファイルも通常の意図を通す。その後で起動時の診断を載せ、最初の描画まで保持する。
-    state_ = state_.with_command_message(inventory.notice);
+    // 前回のタブの知らせがあればそれを残す（ステータスバーは 1 行）。
+    if (!state_.command_message().has_value())
+    {
+        state_ = state_.with_command_message(inventory.notice);
+    }
+}
+
+// 一覧が無い（初めての起動）なら何も知らせない。読めなければ無題 1 本のまま 1 行知らせる
+// （ADR 0059 の決定 6）。
+void EditorController::restore_session()
+{
+    const auto session = ports_.session.read();
+    if (!session)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("前回のタブを読めませんでした").value());
+        return;
+    }
+    const std::optional<Session> &listed = session.value();
+    if (!listed.has_value() || listed.value().tabs.empty())
+    {
+        return;
+    }
+    restore_tabs(listed.value());
+}
+
+// 手順（ADR 0059 の決定 6）: 無題 1 本の右に一覧を並べ、active を reach_tab
+// で読んで切り替え、最初の 無題を外し、使った順を順位から作る。active
+// が読めなければ外れた後の右隣（無ければ左隣）を 試す。読めたタブが 1
+// 本も無ければ無題が残る。active が範囲の外なら最後のタブから試す。
+void EditorController::restore_tabs(const Session &session)
+{
+    std::vector<UnloadedDocument> documents;
+    std::vector<std::size_t> ranks;
+    documents.reserve(session.tabs.size());
+    ranks.reserve(session.tabs.size());
+    for (const SessionTab &tab : session.tabs)
+    {
+        documents.push_back(unloaded_document_of(tab));
+        ranks.push_back(tab.recency);
+    }
+    state_ = state_.with_restored(std::move(documents));
+    // 帯の位置は一覧の位置 + 1（最初の無題の右）。ranks の添字は帯の位置 - 1。
+    std::size_t position = std::min(session.active, session.tabs.size() - 1) + 1;
+    while (state_.tab_count() > 1)
+    {
+        if (reach_tab(position))
+        {
+            leave_document();
+            state_ = state_.with_switched(position).with_closed(0).with_recency_ranked(ranks);
+            enter_document();
+            return;
+        }
+        ranks.erase(std::next(ranks.begin(), static_cast<std::ptrdiff_t>(position - 1)));
+        position = position < state_.tab_count() ? position : position - 1;
+    }
 }
 
 void EditorController::accept(const AdjustFontSize &intent)
@@ -649,6 +813,7 @@ void EditorController::begin_intent(bool keeps_message)
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
     state_ = state_.with_failure(std::nullopt).with_closing(false).with_close_request(std::nullopt);
+    unreached_tabs_ = 0;
     if (state_.command_message().has_value() && !keeps_message)
     {
         state_ = state_.with_command_message(std::nullopt);
@@ -1925,7 +2090,8 @@ std::optional<std::size_t> EditorController::open_tab_of(const core::FilePath &p
     const auto &parked = state_.parked();
     for (std::size_t index = 0; index < parked.size(); ++index)
     {
-        const auto &other = parked.at(index)->document.path;
+        const std::optional<core::FilePath> other =
+            std::visit([](const auto &value) { return parked_path(value); }, parked.at(index));
         if (other.has_value() && ports_.files.same_file(other.value(), path))
         {
             // 脇の束は帯の位置からアクティブを抜いた順。アクティブより右は 1 つずれる。
@@ -2022,6 +2188,35 @@ void EditorController::enter_document()
     reopen_replayed_unit();
 }
 
+bool EditorController::reach_tab(std::size_t position)
+{
+    const auto unloaded = state_.unloaded_at(position);
+    if (!unloaded.has_value())
+    {
+        return position < state_.tab_count();
+    }
+    const UnloadedDocument &tab = unloaded.value();
+    auto document = read_document(tab.path);
+    if (!document)
+    {
+        // 読めなかったタブは帯と使った順から外し、1 行知らせる。ダイアログの経路（last_failure）
+        // には載せない（D26: 窓を止めない）。
+        state_ = state_.with_dropped(position);
+        report_unreached(tab.path);
+        reveal_active_tab();
+        return false;
+    }
+    auto [text, opened] = std::move(document).value();
+    state_ = state_.with_loaded(position, reached_bundle(std::move(text), std::move(opened), tab));
+    return true;
+}
+
+void EditorController::report_unreached(const core::FilePath &path)
+{
+    ++unreached_tabs_;
+    state_ = state_.with_command_message(unreached_message(path, unreached_tabs_ - 1));
+}
+
 void EditorController::accept(const NewTab &)
 {
     leave_document();
@@ -2041,6 +2236,12 @@ void EditorController::accept(const SwitchTab &intent)
         state_ = state_.with_switched(intent.index);
         return;
     }
+    // 行き先がまだ読んでいない文書ならここで読む。読めなければそのタブは外れて知らせだけが残り、
+    // 今の文書の一時の値（入力行・変換中の文字列）は閉じない（ADR 0059 の決定 5）。
+    if (!reach_tab(intent.index))
+    {
+        return;
+    }
     leave_document();
     state_ = state_.with_switched(intent.index);
     enter_document();
@@ -2058,6 +2259,12 @@ void EditorController::accept(const WalkRecentTab &intent)
     if (destination.value() == state_.active_tab())
     {
         state_ = state_.with_walked(destination.value());
+        return;
+    }
+    // 行き先が読めなければ外れて、歩きは今のタブのまま続く。次の 1 歩は外れた後の使った順の
+    // 隣へ行く（ADR 0059 の決定 5）。
+    if (!reach_tab(destination.value()))
+    {
         return;
     }
     leave_document();
@@ -2109,8 +2316,28 @@ void EditorController::accept(const CloseTab &intent)
         reveal_active_tab();
         return;
     }
+    close_active_tab();
+}
+
+// アクティブを閉じる。次にアクティブになる隣（右隣・無ければ左隣）を先に読み、読めなければ外して
+// 次の隣を試す。隣が 1 本も残らなければ空の無題を 1 本置く。窓は閉じない。使う人が閉じたのは
+// 1 本だけで、ほかのタブが読めなかったのは使う人の操作ではない（ADR 0059 の決定 5）。
+void EditorController::close_active_tab()
+{
+    while (state_.tab_count() > 1)
+    {
+        const std::size_t active = state_.active_tab();
+        const std::size_t neighbour = active + 1 < state_.tab_count() ? active + 1 : active - 1;
+        if (reach_tab(neighbour))
+        {
+            leave_document();
+            state_ = state_.with_closed(active);
+            enter_document();
+            return;
+        }
+    }
     leave_document();
-    state_ = state_.with_closed(intent.index);
+    state_ = state_.with_new_tab().with_closed(0);
     enter_document();
 }
 

@@ -9,9 +9,11 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -41,6 +43,52 @@ constexpr std::size_t initial_visible_lines = 1;
 [[nodiscard]] std::ptrdiff_t distance_of(std::size_t index) noexcept
 {
     return static_cast<std::ptrdiff_t>(index);
+}
+
+// 脇のタブの 2 つの形（ADR 0059 の決定 4）。写し先が足りなければ std::visit が落ちる（CPP-002）。
+[[nodiscard]] std::optional<std::shared_ptr<const DocumentState>>
+loaded_of(const std::shared_ptr<const DocumentState> &tab)
+{
+    return tab;
+}
+
+[[nodiscard]] std::optional<std::shared_ptr<const DocumentState>>
+loaded_of(const std::shared_ptr<const UnloadedDocument> &)
+{
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::shared_ptr<const DocumentState>>
+loaded_bundle(const ParkedTab &tab)
+{
+    return std::visit([](const auto &value) { return loaded_of(value); }, tab);
+}
+
+[[nodiscard]] std::optional<UnloadedDocument>
+unloaded_of(const std::shared_ptr<const DocumentState> &)
+{
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<UnloadedDocument>
+unloaded_of(const std::shared_ptr<const UnloadedDocument> &tab)
+{
+    return *tab;
+}
+// まだ動かしていない帯の位置のうち、順位がいちばん大きいもの。同じ順位なら帯の右のもの（帯の順で
+// 左ほど最近になる）。まだ動かしていない位置が 1 つは残っているときだけ呼ぶ。
+[[nodiscard]] std::size_t oldest_untouched(std::span<const std::size_t> ranks,
+                                           const std::vector<bool> &touched)
+{
+    std::size_t oldest = ranks.size();
+    for (std::size_t position = 0; position < ranks.size(); ++position)
+    {
+        if (!touched.at(position) && (oldest == ranks.size() || ranks[position] >= ranks[oldest]))
+        {
+            oldest = position;
+        }
+    }
+    return oldest;
 }
 } // namespace
 
@@ -286,9 +334,87 @@ std::size_t EditorState::active_tab() const noexcept
     return active_;
 }
 
-const std::vector<std::shared_ptr<const DocumentState>> &EditorState::parked() const noexcept
+const std::vector<ParkedTab> &EditorState::parked() const noexcept
 {
     return parked_;
+}
+
+std::size_t EditorState::parked_index_of(std::size_t position) const noexcept
+{
+    // 脇の列は帯の位置からアクティブを抜いた順なので、アクティブより右は 1 つずれる。
+    return position < active_ ? position : position - 1;
+}
+
+std::optional<std::shared_ptr<const DocumentState>>
+EditorState::loaded_at(std::size_t position) const
+{
+    return loaded_bundle(parked_.at(parked_index_of(position)));
+}
+
+std::optional<UnloadedDocument> EditorState::unloaded_at(std::size_t position) const
+{
+    if (position >= tab_count() || position == active_)
+    {
+        return std::nullopt;
+    }
+    return std::visit([](const auto &tab) { return unloaded_of(tab); },
+                      parked_.at(parked_index_of(position)));
+}
+
+EditorState EditorState::with_restored(std::vector<UnloadedDocument> documents) const
+{
+    EditorState next(*this);
+    for (UnloadedDocument &document : documents)
+    {
+        next.recency_ = core::tab_recency_opened(next.recency_, next.tab_count());
+        next.parked_.emplace_back(std::make_shared<const UnloadedDocument>(std::move(document)));
+    }
+    next.recency_ = core::tab_recency_touched(next.recency_, active_);
+    return next;
+}
+
+EditorState EditorState::with_loaded(std::size_t position, DocumentState bundle) const
+{
+    if (!unloaded_at(position).has_value())
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    next.parked_.at(parked_index_of(position)) =
+        std::make_shared<const DocumentState>(std::move(bundle));
+    return next;
+}
+
+EditorState EditorState::with_dropped(std::size_t position) const
+{
+    if (!unloaded_at(position).has_value())
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    next.parked_.erase(std::next(next.parked_.begin(), distance_of(parked_index_of(position))));
+    next.recency_ = core::tab_recency_closed(recency_, position);
+    next.active_ = position < active_ ? active_ - 1 : active_;
+    return next;
+}
+
+EditorState EditorState::with_recency_ranked(std::span<const std::size_t> ranks) const
+{
+    if (ranks.size() != tab_count())
+    {
+        return *this;
+    }
+    // いちばん古いものから先頭へ動かしていくと、最後に動かした順位 0 が先頭になる。起動の 1
+    // 回だけで 本数は一覧の上限（256）までなので、毎回まだ動かしていない中から探す。
+    EditorState next(*this);
+    std::vector<bool> touched(ranks.size(), false);
+    for (std::size_t round = 0; round < ranks.size(); ++round)
+    {
+        const std::size_t oldest = oldest_untouched(ranks, touched);
+        touched.at(oldest) = true;
+        next.recency_ = core::tab_recency_touched(next.recency_, oldest);
+    }
+    return next;
 }
 
 bool EditorState::closing() const noexcept
@@ -376,15 +502,14 @@ void EditorState::spread(const DocumentState &tab)
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 
-EditorState EditorState::switched_to(std::size_t position) const
+EditorState EditorState::switched_to(std::size_t position, const DocumentState &target) const
 {
     EditorState next(*this);
     // 今の文書を元の位置に置くと、脇の束の添字が帯の位置と一致する。
     next.parked_.insert(std::next(next.parked_.begin(), distance_of(active_)), parked_active());
-    const auto target = next.parked_.at(position);
     next.parked_.erase(std::next(next.parked_.begin(), distance_of(position)));
     next.active_ = position;
-    next.spread(*target);
+    next.spread(target);
     return next;
 }
 
@@ -401,7 +526,19 @@ EditorState EditorState::with_switched(std::size_t position) const
         return *this;
     }
     // 歩きの途中でアクティブ自身を指されたら、着いた所で歩きを終える（ADR 0058 の決定 2）。
-    EditorState next = position == active_ ? with_walk_settled() : switched_to(position);
+    if (position == active_)
+    {
+        EditorState next = with_walk_settled();
+        next.touch_active();
+        return next;
+    }
+    // まだ読んでいない文書へは切り替えない（読むのは controller・ADR 0059 の決定 5）。
+    const auto target = loaded_at(position);
+    if (!target.has_value())
+    {
+        return *this;
+    }
+    EditorState next = switched_to(position, *target.value());
     next.touch_active();
     return next;
 }
@@ -412,7 +549,18 @@ EditorState EditorState::with_walked(std::size_t position) const
     {
         return *this;
     }
-    EditorState next = position == active_ ? *this : switched_to(position);
+    if (position == active_)
+    {
+        EditorState next(*this);
+        next.tab_walk_ = true;
+        return next;
+    }
+    const auto target = loaded_at(position);
+    if (!target.has_value())
+    {
+        return *this;
+    }
+    EditorState next = switched_to(position, *target.value());
     next.tab_walk_ = true;
     return next;
 }
@@ -462,18 +610,22 @@ EditorState EditorState::with_closed(std::size_t position) const
     if (position != active_)
     {
         // 脇の束は帯の位置からアクティブを抜いた順なので、右側は 1 つ左へずれる。
-        const std::size_t index = position < active_ ? position : position - 1;
-        next.parked_.erase(std::next(next.parked_.begin(), distance_of(index)));
+        next.parked_.erase(std::next(next.parked_.begin(), distance_of(parked_index_of(position))));
         next.active_ = position < active_ ? active_ - 1 : active_;
         next.touch_active();
         return next;
     }
     // 右隣は脇の束の添字 active_、左隣は active_ - 1。どちらも閉じた後の帯の位置と一致する。
-    const std::size_t index = active_ < parked_.size() ? active_ : active_ - 1;
-    const auto target = next.parked_.at(index);
-    next.parked_.erase(std::next(next.parked_.begin(), distance_of(index)));
-    next.active_ = index;
-    next.spread(*target);
+    const std::size_t neighbour = active_ < parked_.size() ? active_ : active_ - 1;
+    const auto target = loaded_bundle(parked_.at(neighbour));
+    // 隣がまだ読んでいない文書なら閉じない（読むのは controller・ADR 0059 の決定 5）。
+    if (!target.has_value())
+    {
+        return *this;
+    }
+    next.parked_.erase(std::next(next.parked_.begin(), distance_of(neighbour)));
+    next.active_ = neighbour;
+    next.spread(*target.value());
     next.touch_active();
     return next;
 }

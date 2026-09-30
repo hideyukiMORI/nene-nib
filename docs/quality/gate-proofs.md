@@ -2009,3 +2009,42 @@ ARC-001 / ARC-003 / ARC-004 / CPP-002 / CPP-003 / CPP-007 / CPP-011 / CPP-012 / 
 対象を限定した理由: 差分は application の値と port と意図と controller の 1 意図・adapters の一覧の形式と adapter と設定と共用の場所と親のフォルダの関数・ui/win32 の窓を壊す直前の 1 本と `WM_ENDSESSION`・`Main.cpp` の合成・`eng/window_driver.py`・単体テストと adapter の試験である。既存の fixture は不変（protected-diff で changed 0）。設定とテーマの場所の関数を寄せたので `nib_adapters` と `nib_themes` を回した。窓を閉じる本物の流れは契約で覆えないので設計席が実機で確かめた。速さは起動と窓の出口に触れるので設計席が測った。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の実機・速さの結果（`00660f2` の Release）を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-003 / ARC-007 / ARC-010 / CPP-002 / CPP-003 / CPP-004 / CPP-005 / CPP-009 / CPP-011 / CPP-017 / QLT-013 を自己レビュー。一覧を作るのは controller の `EndSession` の 1 か所で 1 打鍵の道には何も足していない（ARC-001）・core と application は OS とファイルに触れない（ARC-003 / ARC-007・symbols 0）・期待される失敗は `SessionFailure` の結果型（ARC-010 / CPP-005）・`SessionEnd` の `switch` に `default` なし（CPP-002）。残る穴: 一覧を読んで戻すのは #253・`WM_ENDSESSION`（サインアウト・シャットダウン）の実機の確認はしていない（未保存の変更があるまま OS が終了したときも確認を出さずに書く）・強制終了のときは前に窓を閉じたときの一覧が残る（決定 3）・窓を 2 つ開いていたら後から閉じたほうの一覧だけが残る・`LocalSettingsPath` の絶対の検査を UTF-8 の後へ移したので、先頭が非 ASCII で 2 文字目が `:` の `LOCALAPPDATA` だけ拒むようになる（Windows のパスとして成り立たない形）。
+
+### 5-bw. ファイルを指定せずに起動したとき前回のタブを戻し見るときに読む（Issue #253・ADR 0059 決定 4〜7・施主決定 D24〜D27・2026-09-30）
+
+ブランチ `feat/253-session-restore`（main `02e4c5c` の上・ADR `94d986a`・工程 1 `2a19d54`・工程 2 `e2f4936`・工程 4 は本節と ADR 0059 の「強制」の 4 行と `docs/todo/current.md` の数字の 1 行だけ）。
+戻す 2 本目（ADR 0059 決定 8）。引数なしの起動で `session.v1` のタブを帯に並べ、読むのは見ていたタブだけ。ほかのタブは見るときに読む（D27）。
+
+- 工程 1: application の型 `UnloadedDocument` と `ParkedTab`（`std::variant` の 2 つの形）・`EditorState` の `unloaded_at` `with_restored` `with_loaded` `with_dropped` `with_recency_ranked`・読む 1 本 `EditorController::reach_tab`（開く経路と同じ読み・位置は読んだ本文の範囲へ寄せる・読めなければ帯から外して「開けませんでした: <名前>（ほか N 件）」）・起動の手順 `restore_session` / `restore_tabs`（引数があるときは一覧を読まない・D24）。途中で `std::ranges::stable_sort` が `eng/symbols.py` の ARC-003 に落ちたので、許可の表は触らず選び出しに書き直した。
+- 工程 2: `accept(SwitchTab)`（クリック・Ex `:tabnext`・Vim `gt` `gT`・一覧・同じファイルを開く）・`accept(WalkRecentTab)`・`accept(CloseTab)` の後の隣（新しい `close_active_tab`）で `reach_tab` を呼ぶ。読めなければ何も切り替えず、入力行と変換中の文字列を閉じない。`eng/verify-window.py --restore`（窓へ post するクリックと WM_CLOSE だけ）。
+- fixture は oracle の対象ではないので不能で、契約で守る（ADR 0059「強制」）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・全 target・clang-tidy 込み） | 工程 1・工程 2 とも exit 0・警告 0（`out/253-step1-build.log` / `out/253-step2-build.log`） |
+| `build/nib_tests.exe --session` | 38 → **131 checks**（工程 1 `out/253-step1-session.log`）→ **199 checks**（工程 2 `out/253-step2-session.log`。途中 1 回 `verify_list_after_reaching` が `VisibleLines` を置いていなかったため落ち、試験に `VisibleLines{3}` を足した） |
+| `build/nib_tests.exe --tabs` | **288 checks**（`out/253-step1-tabs.log` / `out/253-step2-tabs.log`） |
+| `build/nib_tests.exe`（引数なし） | 18902 → **18995**（工程 1 `out/253-step1-default.log`）→ **19063 checks 成功**（工程 2 `out/253-step2-default.log`） |
+| `ctest --test-dir build -R "nib_unit\|nib_sessions"` | 工程 1・工程 2 とも **2 / 2 成功**（`out/253-step1-ctest.log` / `out/253-step2-ctest.log`） |
+| `python eng/symbols.py --build-dir build --require core application` / `python eng/conformance.py --build-dir build` | 工程 1・工程 2 とも **2 libraries・0 violation / 0 violation**（`out/253-step{1,2}-symbols.log` `out/253-step{1,2}-conformance.log`） |
+| clang-format --dry-run --Werror（工程 1 の変更・追加 10 ファイル・工程 2 の変更 3 ファイル） | 指摘なし |
+| `python -m py_compile eng/verify-window.py eng/window_driver.py`（工程 2） | exit 0（`out/253-step2-pycompile.log`） |
+| `python eng/protected-diff.py --base origin/main --build --allow --session --allow --tabs`（各工程の commit 後） | **終了 0**。`fixtures 1853 -> 1853 / changed 0 / added 0 / deleted 0`・`scopes 26 / same 25`・`--session` 38 → 131 / 38 → 199 だけ allowed（`out/253-step1-protected.log` / `out/253-step2-protected.log`） |
+| 実機（設計席・施主の了承の後・Debug `build/NeNeNib.exe`・`e2f4936`・125%・`python eng/verify-window.py --restore --capture out/frames-253`） | **exit 0**（`out/253-accept-restore.log`）。送ったのは窓へ post するクリックと WM_CLOSE だけ。(a) 引数 3 本で起動 → 2 本目 → 行番号の 3 行目 → 閉じる: 終了コード 0・`session.v1` が書かれた。(b) 引数なしで起動: 帯 3 本・アクティブ 2 本目・題名 `restore-second.txt - NeNe Nib`・CURRENT_LINE とキャレットが 3 行目（`restoreBack.png`・「行 3, 桁 1」）。(c) 3 本目をクリック: 題名 `restore-third.txt - NeNe Nib`（`restoreThird.png`）。(d) `restore-first.txt` を消して起動 → 1 本目をクリック: 帯 2 本・アクティブは third のまま・ステータスバーに「開けませんでした: restore-first.txt」・窓は止まらない（`restoreMissing.png`・D26）。(e) `restore-second.txt` を引数に起動: 帯 1 本（D24）。記録は `out/reports/done-253-design.md` |
+| `python eng/measure-speed.py --check --executable build/release-e2f4936/NeNeNib.exe`（設計席・Release sha256 8F478684…14F3C106） | **6 benches checked, 0 regression(s), 0 unmeasurable**（機械 bc8a356f37c68491・5 回・startup-first-frame 206.7 ms・startup-window-shown 33.2 ms・key-to-frame-single 0.848 ms・key-to-frame-burst-200 3.370 ms・open-large-file-16mib 251.7 ms・key-to-frame-burst-200-16mib 6.279 ms・`out/speed/2026-09-30T07-20-35Z.json`・`out/253-accept-speed.log`） |
+| 工程 4（本節と ADR 0059 の「強制」の #253 の分と `current.md` の 1 行だけ）の `python eng/conformance.py --build-dir build`・`git diff --check`・`eng/validate-git.ps1` | **0 violation**（`out/253-step4-conformance.log`）・`git diff --check` 指摘なし・`eng/validate-git.ps1` passed（`out/253-step4-git.log`） |
+
+タブ 20 本の一覧で起動した時間（ADR 0059 決定 7・設計席が手で測る・QLT-014）。同じ Release の exe を `--measure` で起動して閉じる 1 回限りのスクリプト（`eng/window_driver.py` の `start`）で、3 つの profile を交互に 9 回ずつ。ファイルはどれも 1 MiB・見ていたタブはどちらも `tab-20.txt`・最前面の要求なし。記録 `out/speed-253/restore-startup-2.json`。
+
+| 条件 | 最初のフレームまで（中央値・最小〜最大） | 窓が見えるまで | `document_opened` の区間 | `frame_presented` の区間 |
+| --- | --- | --- | --- | --- |
+| 一覧なし（空の無題） | 198.1 ms（194.2〜206.5） | 31.7 ms | 0.19 ms | 4.18 ms |
+| 一覧 1 本 | 202.7 ms（200.2〜207.7） | 36.2 ms | 3.49 ms | 4.76 ms |
+| 一覧 20 本 | 203.4 ms（199.7〜205.1） | 35.3 ms | 3.53 ms | 4.94 ms |
+
+1 本と 20 本の差は 0.7 ms で揺れの中、読む区間は 3.49 ms と 3.53 ms で同じ（見ていた 1 本だけを読む・D27）。起動の重さはタブの数に依らない。1 回目（区間の内訳なし・`restore-startup.json`）は 1 本と 20 本に 5 ms の差が出たが、内訳を取った 2 回目で再現しなかった（`device_created` の約 157 ms の揺れ）。
+2026-09-30 の 04:19〜04:44 ごろ OS が異常終了した（Kernel-Power 41・失われたものは無い）ので、実機の確認と速さはその再起動の後に回した。
+
+対象を限定した理由: 差分は application の状態と controller の起動・切り替え・歩き・閉じるの入口・単体テスト・`eng/verify-window.py` の新しい節で、adapters と ui/win32 と core は変えていない（`Main.cpp` はコメント 1 か所）。既存の fixture は不変（protected-diff で changed 0）。タブの切り替えに触れるので `--tabs` を回した。起動の本物の流れと知らせの描画は契約で覆えないので設計席が実機で確かめ、起動の出口に触れるので速さとタブ 20 本の起動を設計席が測った。工程 4 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の実機・速さの結果（`e2f4936`）を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-001 / ARC-003 / ARC-010 / CPP-002 / CPP-003 / CPP-004 / CPP-011 / CPP-012 / QLT-013 / QLT-014 を自己レビュー。読むのは `reach_tab` の 1 本で起動と切り替え・歩き・閉じた後の隣が共用（ARC-001）・core と application は OS とファイルに触れない（ARC-003・symbols 0）・読めないのは結果型から知らせへ写し例外にしない（ARC-010）・`ParkedTab` を読む所はどれも `std::visit`（CPP-002）。残る穴: 起動の重さがタブの数に依らないことはベンチに足すまで機械では守られていない（ADR 0059「強制」は planned）・無くなったファイルに気づくのはそのタブを見るとき（D27）・Vim の `gt` `gT` の行き先が読めなかったとき engine は再生を打ち切らない（決定 5）・読めなかったタブを外したとき帯の上のマウスの印は位置のまま残る（次のマウスの移動で直る）・通常モードでは覚えたカーソルが結合文字の間に置かれうる・強制終了のときは前に窓を閉じたときの一覧が残る（決定 3。今回の OS の異常終了がその例）。

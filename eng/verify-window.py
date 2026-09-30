@@ -63,6 +63,14 @@ tab_active face, both mirroring core::title_bar_layout. The second launch opens 
 into both and closes the window: the unsaved confirmation must show them in band order (the window
 title names the file it asks about); the first is answered No and the second Cancel, so the window
 stays. The chords need SendInput; a session that refuses the foreground is recorded, not failed.
+
+Issue #253 adds the restore (ADR 0059), which `--restore` also runs alone: three files opened from
+the command line, the second tab clicked and the caret put on line 3, and the window closed; a start
+without arguments must show three tabs with the second active, its title and the current line on
+row 3 (restoreBack.png), and a click on the third reads it (restoreThird.png); with the first file
+deleted, a click on its tab leaves two tabs and a one-line notice (restoreMissing.png); a start with
+one file argument shows that file alone (D24). These launches keep the profile's session.v1
+(window_driver.start with keep_session) and use posted messages only.
 Python standard library and ctypes only.
 """
 
@@ -1526,6 +1534,163 @@ def verify_tabs(executable: Path, environment: dict, appearance: str, output: Pa
     return result
 
 
+def write_restore_documents(output: Path) -> list[Path]:
+    folder = output / "documents"
+    folder.mkdir(parents=True, exist_ok=True)
+    paths = [folder / f"restore-{name}.txt" for name in ("first", "second", "third")]
+    for path in paths:
+        path.write_bytes(f"{path.stem}\r\nl2\r\nl3\r\nl4\r\nl5\r\n".encode("ascii"))
+    return paths
+
+
+def click_tab(window, count: int, index: int) -> None:
+    """Post a click on the title side of tab `index` of `count` (left of its close button)."""
+    client = rectangle(window, user.GetClientRect)
+    dpi = user.GetDpiForWindow(window)
+    strip = tab_strip(client[2] - client[0], dpi, count)
+    x = strip["left"] + index * (strip["tabWidth"] + strip["gap"]) + to_pixels(TAB_PADDING_LEFT_DIPS,
+                                                                               dpi)
+    click(window, x, tab_row_middle(dpi))
+    time.sleep(TAB_SETTLE_SECONDS)
+
+
+def caret_row(window, appearance: str) -> dict:
+    """Which body row has the current line ground, and whether the caret bar sits in column one."""
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    body = body_points(width, height, dpi)
+    pixels = capture(window, width, height)
+    current = list(CURRENT_LINE[appearance])
+    rows = [index for index in range(min(body["visibleLines"], 5))
+            if row_ground(pixels, width, body, index) == current]
+    return {"currentRows": rows,
+            "caretInColumnOne": [index for index in range(min(body["visibleLines"], 5))
+                                 if caret_pixel(pixels, width, body, index) == list(ACCENT)]}
+
+
+def status_ink(window, appearance: str) -> int:
+    """Ink left of the status items, where the one-line notice is written (recorded, not judged)."""
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    pixels = capture(window, width, height)
+    grounds = [list(STATUS_BAND[appearance]), list(TOGGLE[appearance]), list(ACCENT)]
+    return ink(pixels, width, status_left_box(width, height, dpi), grounds)
+
+
+def closed_cleanly(window, process) -> int:
+    close(window)
+    code = process.wait(timeout=5)
+    assert code == 0, f"closing the window exited with {code}"
+    return code
+
+
+def started(executable: Path, environment: dict, arguments: list[str] | None = None, *,
+            keep_session: bool) -> tuple:
+    process, window, _ = start(executable, environment, arguments, keep_session=keep_session)
+    raise_window(window)
+    time.sleep(0.6 + TAB_SETTLE_SECONDS)
+    return process, window
+
+
+def remember_three(executable: Path, environment: dict, appearance: str,
+                   paths: list[Path]) -> dict:
+    """(a) Three files from the command line, the second tab watched with the caret on line 3."""
+    process, window = started(executable, environment, [str(path) for path in paths],
+                              keep_session=False)
+    try:
+        step = {"opened": expect_band(window, appearance, 3, 2, "three files opened")}
+        click_tab(window, 3, 1)
+        step["switched"] = expect_band(window, appearance, 3, 1, "the second tab clicked")
+        client = rectangle(window, user.GetClientRect)
+        dpi = user.GetDpiForWindow(window)
+        body = body_points(client[2] - client[0], client[3] - client[1], dpi)
+        # 行番号の欄のクリックは行頭に寄せる（verify_click_caret と同じ）。3 行目の桁 1 に置く。
+        click(window, to_pixels(6, dpi), row_middle(body, 2))
+        time.sleep(TAB_SETTLE_SECONDS)
+        step["caret"] = caret_row(window, appearance)
+        assert step["caret"]["currentRows"] == [2], step["caret"]
+        step["closeExitCode"] = closed_cleanly(window, process)
+    finally:
+        stop(process)
+    listed = Path(environment["LOCALAPPDATA"]) / "NeNeNib" / "session.v1"
+    step["listWritten"] = listed.is_file()
+    assert step["listWritten"], "closing the window wrote no session.v1"
+    return step
+
+
+def restore_three(executable: Path, environment: dict, appearance: str, frames: Path | None,
+                  paths: list[Path]) -> dict:
+    """(b) No argument: three tabs, the second active on line 3. (c) The third is read on a click."""
+    process, window = started(executable, environment, keep_session=True)
+    try:
+        step = {"restored": expect_band(window, appearance, 3, 1, "the tabs came back")}
+        assert step["restored"]["title"] == f"{paths[1].name} - NeNe Nib", step["restored"]
+        step["caret"] = caret_row(window, appearance)
+        assert step["caret"]["currentRows"] == [2], step["caret"]
+        assert step["caret"]["caretInColumnOne"] == [2], step["caret"]
+        snapshot(frames, window, "restoreBack")
+        click_tab(window, 3, 2)
+        step["third"] = expect_band(window, appearance, 3, 2, "the third tab clicked")
+        assert step["third"]["title"] == f"{paths[2].name} - NeNe Nib", step["third"]
+        snapshot(frames, window, "restoreThird")
+        step["closeExitCode"] = closed_cleanly(window, process)
+    finally:
+        stop(process)
+    return step
+
+
+def restore_missing(executable: Path, environment: dict, appearance: str, frames: Path | None,
+                    paths: list[Path]) -> dict:
+    """(d) The first file deleted: clicking its tab drops it and writes one notice line."""
+    paths[0].unlink()
+    process, window = started(executable, environment, keep_session=True)
+    try:
+        step = {"restored": expect_band(window, appearance, 3, 2, "the tabs came back again")}
+        step["statusInkBefore"] = status_ink(window, appearance)
+        click_tab(window, 3, 0)
+        step["dropped"] = expect_band(window, appearance, 2, 1, "the missing tab clicked")
+        assert step["dropped"]["title"] == f"{paths[2].name} - NeNe Nib", step["dropped"]
+        step["statusInkAfter"] = status_ink(window, appearance)
+        step["noticeSeenInPng"] = "restoreMissing.png: 開けませんでした: " + paths[0].name
+        snapshot(frames, window, "restoreMissing")
+        step["closeExitCode"] = closed_cleanly(window, process)
+    finally:
+        stop(process)
+    return step
+
+
+def restore_with_argument(executable: Path, environment: dict, appearance: str,
+                          paths: list[Path]) -> dict:
+    """(e) One file argument with the list kept: only that file opens (D24)."""
+    process, window = started(executable, environment, [str(paths[1])], keep_session=True)
+    try:
+        step = {"opened": expect_band(window, appearance, 1, 0, "one file argument")}
+        assert step["opened"]["title"] == f"{paths[1].name} - NeNe Nib", step["opened"]
+        step["closeExitCode"] = closed_cleanly(window, process)
+    finally:
+        stop(process)
+    return step
+
+
+def verify_restore(executable: Path, environment: dict, appearance: str, output: Path,
+                   frames: Path | None) -> dict:
+    """Issue #253: the previous tabs come back (ADR 0059 decisions 5 and 6, D24 to D27).
+
+    Four launches on one profile, all driven by posted messages (no real keys, no foreground):
+    remember three tabs, start without arguments and click the third, delete the first file and
+    click its tab, then start with one file argument.
+    """
+    paths = write_restore_documents(output)
+    return {
+        "remembered": remember_three(executable, environment, appearance, paths),
+        "restored": restore_three(executable, environment, appearance, frames, paths),
+        "missing": restore_missing(executable, environment, appearance, frames, paths),
+        "argument": restore_with_argument(executable, environment, appearance, paths),
+    }
+
+
 def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) -> bytes:
     """Capture until the picture has changed and holds still for one more capture (await_ink's way).
 
@@ -1651,6 +1816,8 @@ def main() -> None:
                         help="with --keys: switch to Vim NORMAL before before.png")
     parser.add_argument("--tabs", action="store_true",
                         help="run the tab key section alone (Issue #239); it sends real keys")
+    parser.add_argument("--restore", action="store_true",
+                        help="run the restore section alone (Issue #253); posted messages only")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -1660,6 +1827,9 @@ def main() -> None:
         parser.error("--vim needs --keys")
     if arguments.tabs and (arguments.keys is not None or arguments.open is not None):
         parser.error("--tabs runs alone")
+    if arguments.restore and (arguments.tabs or arguments.keys is not None
+                              or arguments.open is not None):
+        parser.error("--restore runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -1674,6 +1844,14 @@ def main() -> None:
     if arguments.tabs:
         try:
             record = verify_tabs(executable, environment, expected_appearance(), output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.restore:
+        try:
+            record = verify_restore(executable, environment, expected_appearance(), output, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)
@@ -1725,6 +1903,8 @@ def main() -> None:
         result["firstPaint"] = verify_first_paint(executable, environment, appearance, output)
         # Issue #239: タブの鍵と閉じる順は、本物の鍵が要るので別の 2 回の起動で測る。
         result["tabs"] = verify_tabs(executable, environment, appearance, output, frames)
+        # Issue #253: 前回のタブを戻す。一覧を残して起動し直すので、別の 4 回の起動で測る。
+        result["restore"] = verify_restore(executable, environment, appearance, output, frames)
         (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                         encoding="utf-8")
         print(json.dumps(result, indent=2))

@@ -24,6 +24,7 @@ class ScriptedSession final : public nenenib::application::SessionPort
 
     [[nodiscard]] SessionReading read() override
     {
+        ++reads_;
         return reading_;
     }
 
@@ -39,6 +40,11 @@ class ScriptedSession final : public nenenib::application::SessionPort
         return {};
     }
 
+    // read が呼ばれた回数（ファイルの引数があるときは一覧を読まないことを見る・決定 6）。
+    [[nodiscard]] std::size_t reads() const noexcept
+    {
+        return reads_;
+    }
     [[nodiscard]] std::size_t writes() const noexcept
     {
         return writes_;
@@ -54,6 +60,7 @@ class ScriptedSession final : public nenenib::application::SessionPort
 
   private:
     SessionReading reading_;
+    std::size_t reads_ = 0;
     std::size_t writes_ = 0;
     std::optional<nenenib::application::Session> written_;
     std::optional<nenenib::application::SessionFailure> failure_;
