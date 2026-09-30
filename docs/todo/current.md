@@ -13,9 +13,11 @@
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
-| 1 | 次の仕事は hide に聞く。候補: 通常モードの矢印・Backspace・Delete と結合文字 / Ctrl+P のファイルと履歴の統合（FR-006）/ 前回のタブの復元（FR-009）/ 一般 Ex | 未起票 |
+| 1 | 次の仕事は hide に聞く。候補: 通常モードの矢印・Backspace・Delete と結合文字 / Ctrl+P のファイルと履歴の統合（FR-006）/ 一般 Ex | 未起票 |
 
-2026-09-30 に統合: #238 タブの帯とマウス（ADR 0056 の決定 8・9・12）・#239 タブの鍵（決定 10）・#240 タブの一覧と Ex の `tabnext` と Vim の `gt` `gT`（ADR 0057）・#248 Ctrl+Tab は最近使った順（ADR 0058・施主決定 D23）。#238 と #239 の merge は 09-29 の夜。複数タブの 4 本の縦切りは全部 main に入った。
+2026-09-30 に統合（7 回目の区切り）: #252 窓を閉じるときに開いていたタブを `session.v1` に覚える・#253 ファイルを指定せずに起動したとき前回のタブを戻し見るときに読む（どちらも ADR 0059・施主決定 D24〜D27）。前回のタブの復元（FR-009）は main に入った。
+
+2026-09-30 に統合（6 回目の区切りまで）: #238 タブの帯とマウス（ADR 0056 の決定 8・9・12）・#239 タブの鍵（決定 10）・#240 タブの一覧と Ex の `tabnext` と Vim の `gt` `gT`（ADR 0057）・#248 Ctrl+Tab は最近使った順（ADR 0058・施主決定 D23）。#238 と #239 の merge は 09-29 の夜。複数タブの 4 本の縦切りは全部 main に入った。
 
 2026-09-29 に統合: #204 数字レジスタ `"0`〜`"9` と小削除 `"-`（ADR 0050）・#210 クリップボードのレジスタ `"+` `"*`（ADR 0051）・#209 `.` の記録は待ちの状態の数字を残す・#205 改行を含む文字単位の `p` `P` のキャレット・#206 NORMAL の `X`・#208 `u` と Ctrl-r の後のキャレット（ADR 0052）・#216 Vim の 1 文字と結合文字（ADR 0053）・#222 `W` `E` `B` `ge` `gE`・#224 後ろ向きの語の移動が本文の先頭に当たる形・#226 前向きの語の移動の失敗の印・#229 fixture の鍵の記法の表の 1 本化（ADR 0054）・#235 貼り付けた本文の改行を文書の形に揃える（ADR 0055・D19）・#230 fixture の再生は `:normal!` と同じ打ち切り・#237 複数タブの状態（ADR 0056・D20〜D22）。候補（未起票）: 巨大な削除の後の打鍵のベンチとレジスタの本文の共有・oracle に undo の塊を区切る記法。
 
@@ -29,11 +31,11 @@
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
 | 既定の `nib_tests` | 19063 checks・scope 26（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` が 2026-09-30 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252） | [gate-proofs 5-bd 〜 5-bw](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0058 まで | [`docs/adr/README.md`](../adr/README.md) |
+| ADR | 0059 まで | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
-| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-09-30 の #248 の後の実測は 6 本とも基準内（`out/speed/2026-09-29T16-14-05Z.json`）。計測は窓を最前面に出すので施主に確かめてから回す | `eng/perf-reference.json`（ADR 0016） |
+| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-09-30 の #253 の後の実測は 6 本とも基準内（`out/speed/2026-09-30T07-20-35Z.json`）。タブ 20 本の一覧で起動した時間は 1 本のときと同じ（手で測る・[gate-proofs 5-bw](../quality/gate-proofs.md)）。計測は窓を最前面に出すので施主に確かめてから回す | `eng/perf-reference.json`（ADR 0016） |
 
 既知の既存失敗: `eng/test-conformance.py` の `test_verification_policy.py` の一部は cp932 の端末で pwsh の出力が読めず落ちることがある（道具側は #106 で直した。残れば別 Issue）。
 
@@ -43,7 +45,7 @@
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`・ドラッグで VISUAL・矩形の `c I A C > < J ~` と VISUAL の中の `p`・`virtualedit`・
 autoindent・読み取り専用のレジスタ（`".` `":` `"/` `"%`）と `"=`・`q"`・矩形の種類を保った `"+` の往復・矩形レジスタへの `"A` の追記・通常モードの矢印と Backspace と Delete で結合文字を 1 文字として歩くこと・行頭の孤立した結合文字の幅・INSERT の中の矢印による undo の区切り・`whichwrap` の設定・マクロの中の Ex と録画中の表示・`J s S R`・r の制御文字・Ctrl-e/y・検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase`・
 テキストオブジェクト `it ip is`・一般 Ex（`:w` / `:q`、範囲、パイプ、履歴）・
-タブのドラッグの並べ替え・前回のタブの復元・Ctrl+1〜9・Ctrl+Tab で歩いている間の一覧の面・`g<Tab>` と `:tabfirst` `:tablast` と `:tabnext +N`・Ctrl+P のファイル/フォルダ/ブックマーク/履歴統合・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
+タブのドラッグの並べ替え・窓の位置と大きさの復元・強制終了したときのタブの一覧・Ctrl+1〜9・Ctrl+Tab で歩いている間の一覧の面・`g<Tab>` と `:tabfirst` `:tablast` と `:tabnext +N`・Ctrl+P のファイル/フォルダ/ブックマーク/履歴統合・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
 
 ## 段階
 
