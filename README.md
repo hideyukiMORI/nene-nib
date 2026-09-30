@@ -33,7 +33,9 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS; CRLF / LF kept as read; unsaved mark and
   "save?" prompt. Done.
-- **FR-009 tab restore** — planned.
+- **FR-009 tab restore** — starting without a file argument brings back the previous tabs (saved files only): their
+  order, the tab in view, caret and scroll position. Only the tab in view is read at startup; the others are read
+  when first viewed, and a missing file is dropped with a one-line notice. Done; window position and size are planned.
 - **FR-010 bookmarks and jump list** — planned.
 - **FR-011 look** — frameless window with Mica title bar, follows the OS light / dark theme (aubergine dark, orange
   accent), one paint per frame. Done.
