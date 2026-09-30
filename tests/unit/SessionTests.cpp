@@ -33,6 +33,7 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -512,8 +513,10 @@ void verify_recency_ranked()
     hold_three(files);
     ScriptedCodePages code_pages;
     ScriptedSettings settings;
+    ScriptedHistory history;
     const EditorController controller(
-        EditorPorts{appearance, clipboard, files, code_pages, settings, themes, session}, initial);
+        EditorPorts{appearance, clipboard, files, code_pages, settings, themes, session, history},
+        initial);
     return controller.frame();
 }
 

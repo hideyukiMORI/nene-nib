@@ -123,7 +123,15 @@ class EditorController final
     // 再生の中の再生の鍵を列の先頭へ差し込む。深さが上限を超えたら残りを捨てる（決定 4）。
     void queue_nested_replay(const std::vector<core::VimKey> &keys, std::size_t depth);
     void accept(const RefreshAppearance &);
+    // 開く道の 1 本（ADR 0056 の決定 5・ADR 0060 の決定 7）。同じファイルのタブへ切り替える →
+    // 何も書いていない無題に開く → 新しいタブ。開けなければタブを足さず失敗を返す。
+    [[nodiscard]] std::expected<void, FileFailure> open_document(const core::FilePath &path);
     void accept(const OpenDocument &intent);
+    // 一覧から選んだファイルを開く。失敗は 1 行の知らせで、not_found なら履歴から外す。
+    void open_listed(const core::FilePath &path);
+    // 閉じたファイルを履歴に記録する（read → history_recorded を順に → write）。空なら何もしない。
+    void remember(const std::vector<core::FilePath> &paths);
+    void forget(const core::FilePath &path);
     void accept(const SaveDocument &intent);
     void accept(const AdjustFontSize &intent);
     void accept(const CommandText &intent);
@@ -136,7 +144,8 @@ class EditorController final
     // 開いているタブの一覧（「∨」と `:tabs`・ADR 0060 の決定 6）。Ctrl+P と同じ列を入力 `#` で
     // 開き、アクティブなタブの行を選ぶ。
     void accept(const OpenTabList &);
-    // Ctrl+P の面の候補の列を作る 1 本（ADR 0060 の決定 6）。開いているタブ（帯の順）。
+    // Ctrl+P の面の候補の列を作る 1 本（ADR 0060 の決定 6）。開いているタブ（帯の順）→ 履歴
+    // （新しい順・開いているファイルを除く）。履歴を読むのはここだけ。
     [[nodiscard]] std::vector<core::CommandChoice> palette_entries() const;
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);

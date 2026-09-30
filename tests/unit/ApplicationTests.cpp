@@ -53,6 +53,7 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -173,13 +174,14 @@ void verify_controller_initial_appearance()
     ScriptedSettings settings;
     ScriptedThemes themes;
     ScriptedSession session;
+    ScriptedHistory history;
     const EditorController from_light(nenenib::application::EditorPorts{
-        light, board, files, code_pages, settings, themes, session});
+        light, board, files, code_pages, settings, themes, session, history});
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
     ScriptedAppearance dark{Reading{Appearance::dark}};
     const EditorController from_dark(nenenib::application::EditorPorts{
-        dark, board, files, code_pages, settings, themes, session});
+        dark, board, files, code_pages, settings, themes, session, history});
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
 }
@@ -193,12 +195,13 @@ void verify_controller_read_failures()
     ScriptedSettings settings;
     ScriptedThemes themes;
     ScriptedSession session;
+    ScriptedHistory history;
     for (const auto failure :
          {AppearanceReadFailure::unavailable, AppearanceReadFailure::unreadable})
     {
         ScriptedAppearance port{Reading{std::unexpect, failure}};
         const EditorController controller(nenenib::application::EditorPorts{
-            port, board, files, code_pages, settings, themes, session});
+            port, board, files, code_pages, settings, themes, session, history});
         expect(controller.frame().palette.background == dark.background,
                "an unreadable setting falls back to dark");
     }
@@ -213,8 +216,9 @@ void verify_controller_refresh()
     ScriptedSettings settings;
     ScriptedThemes themes;
     ScriptedSession session;
-    EditorController controller(nenenib::application::EditorPorts{port, board, files, code_pages,
-                                                                  settings, themes, session});
+    ScriptedHistory history;
+    EditorController controller(nenenib::application::EditorPorts{
+        port, board, files, code_pages, settings, themes, session, history});
     port.script(Reading{Appearance::dark});
     const auto frame = controller.apply(RefreshAppearance{});
     expect(frame.palette.background == RgbColor{0x30, 0x0A, 0x24},

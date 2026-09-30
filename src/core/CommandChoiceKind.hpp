@@ -7,6 +7,7 @@ namespace nenenib::core
 enum class CommandChoiceKind : std::uint8_t
 {
     fill,
-    execute
+    execute,
+    open
 };
 } // namespace nenenib::core

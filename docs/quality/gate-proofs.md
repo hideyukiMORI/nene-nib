@@ -2093,3 +2093,69 @@ ARC-001 / ARC-003 / ARC-010 / CPP-002 / CPP-003 / CPP-004 / CPP-011 / CPP-012 / 
 対象を限定した理由: 差分は core の出どころの表・絞り込み・面の形と配置、application の面の入口と view、ui/win32 の面の描画、単体テストで、adapters と起動と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--command-palette` と `--tabs` だけ。面の描画は契約で覆えないので設計席が実機の画で確かめた。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 と差し戻しの成功結果と設計席の実機の結果（`6dbfe63`）を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-003 / ARC-010 / CPP-002 / CPP-004 / CPP-011 / CPP-012 / ADR 0008 決定 8 / QLT-013 / QLT-014 を自己レビュー。出どころの記号を引くのは `palette_query_of` の 1 本・候補の列を作るのは `palette_entries()` の 1 本で Ctrl+P と「∨」と `:tabs` が共用（ARC-001）・core と application は OS とファイルに触れない（ARC-003・symbols 0）・`PaletteScope` `PaletteOrigin` の `switch` に `default` は無い（CPP-002）・色は今のトークンだけ（ADR 0008 決定 8）。残る穴: 履歴は #259 で、今の Ctrl+P の一覧に出るファイルは開いているタブだけ・設定のコマンドは Ctrl+P の後に `:` を打って出す・「∨」の一覧の入力欄に `#` が見える・`:` を消した後は Ex の前方一致の補完が出ない（面では Tab が選択の上下なので見える違いは無い）・照合はバイト単位のまま（日本語の名前の照合は面の中の日本語入力の Issue）・候補は 1 つの意図で 2 回以上作り直す（タブ 256 本までなら問題にならない）・面が開いている間にタブが切り替わっても列は開いたときのまま・`palette_origin_label` の宣言は `PaletteOrigin.hpp` で定義は `CommandChoice.cpp`（#259 で寄せるか決める）・面の実機の検査は `eng/verify-window.py` に無い（ADR 0060 決定 12 の後続）。
+
+### 5-by. 閉じたファイルを履歴に覚え Ctrl+P の一覧から開く（Issue #259・ADR 0060 決定 7・8・施主決定 D28〜D30・2026-09-30）
+
+ブランチ `feat/259-palette-history`（main `9246767` の上・工程 1 `6d36aa8`・工程 2 `d9d0203`・工程 3 は本節と ADR 0060 の決定 8 の型の名前と「強制」の #259 の分と `docs/todo/current.md` の数字の 2 行と README の FR-006 の 1 項目と `docs/PROJECT_LAYOUT.md` の利用者データの 1 行だけ）。
+統合の一覧の 2 本目（ADR 0060 決定 11）。パスのあるタブを閉じたときと窓が閉じるときに、そのファイルを `history.v1` に新しい順で 100 件まで覚え、Ctrl+P の面でタブの後ろに出す。行頭の `@` は履歴だけ。選ぶと開く道で開き、無くなったファイルは 1 行知らせて履歴から外す。
+
+- 工程 1: application の値 `FileHistory`・port `HistoryPort`・閉じた enum `FileHistoryFailure`・記録の純関数 `history_recorded` `history_forgotten`（`same_file` で比較・100 件で切る）・`EditorPorts` の `HistoryPort &history`、adapters の `HistoryCodec`（`version=1` の次に 1 行 1 パス・BOM と CRLF を受ける・1 MiB と行数の上限）と `Win32HistoryAdapter`（`local_history_path` は `beside_local_settings("history.v1")`）、`session.v1` と共用する行の割り方 `TextLines`、`Main.cpp` の合成、替え玉 `ScriptedHistory`、`eng/window_driver.py` が `history.v1` も消す。製品の動きは不変。
+- 工程 2: core の `PaletteScope::history` `PaletteOrigin::history` `CommandChoiceKind::open` と記号の表の `@`（案内「# タブ　@ 履歴　: 設定」）、controller の `open_document` `open_listed` `remember` `forget`、`CloseTab` と `EndSession` で記録（`window_closed` は最後に見ていたタブが先頭・`last_tab_closed` はその 1 本）、`palette_entries()` に履歴（開いているタブと同じファイルは除く・読めなければ履歴なしで知らせない）、`submit_palette` の `open`（`not_found` だけ履歴から外す）。
+- 逸脱を 1 つ受理（設計席）: 失敗の enum は ADR の `HistoryFailure` ではなく `FileHistoryFailure`。core に undo の端に使う同じ名前の型（`src/core/HistoryFailure.hpp`）があり include が取り違えられてビルドが落ちたため。ADR 0060 の決定 8 の文言は工程 3 で直した。
+- fixture は oracle の対象ではないので不能で、契約で守る（ADR 0060「強制」）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・全 target・clang-tidy 込み） | 工程 1・工程 2 とも成功・警告 0（`out/259-step1-build.log` / `out/259-step2-build.log`。工程 2 は途中で clang-tidy の入れ子 3 段を 2 か所で直した） |
+| `build/nib_tests.exe --history` | 新規 **23 checks**（工程 1 `out/259-step1-history.log`）→ **38 checks**（工程 2） |
+| `build/nib_tests.exe --command-palette` | 207 → **222 checks**（工程 2） |
+| `build/nib_tests.exe --session` / `--tabs`（工程 2） | 199 → 199 / 289 → 289 |
+| `build/nib_tests.exe`（引数なし） | 19125 → **19148**（工程 1 `out/259-step1-unit.log`）→ **19178 checks 成功**（工程 2 `out/259-step2-unit.log`） |
+| `ctest --test-dir build -R "nib_unit\|nib_histories\|nib_sessions\|nib_adapters"`（工程 1） | **4 / 4 成功**。`nib_history_tests` **1210 checks**・0 failures／`nib_session_tests` 472 checks・0 failures（`TextLines` への移し替えの退行なし・`out/259-step1-ctest.log`） |
+| `ctest --test-dir build -R "nib_unit\|nib_histories"`（工程 2） | **2 / 2 成功**（`out/259-step2-ctest.log`） |
+| `python eng/symbols.py --build-dir build --require core application` | 工程 1・工程 2 とも **2 libraries・0 violation**（`out/259-step{1,2}-symbols.log`） |
+| `python eng/conformance.py --build-dir build` | 工程 1・工程 2 とも **0 violation**（`out/259-step{1,2}-conformance.log`） |
+| clang-format --dry-run --Werror（工程 1 の変更・新規の C++ 全部・工程 2 の変更 12 ファイル） | 指摘なし（`out/259-step{1,2}-format.log`） |
+| `python -m py_compile eng/window_driver.py` と使い捨ての確認（`subprocess.Popen` を替え玉・exe は起動しない）（工程 1） | 成功・**6 / 6 ok**（既定で `session.v1` と `history.v1` を消す・`keep_session=True` で両方残す・自分の `LOCALAPPDATA` では消さない ほか・`out/259-step1-driver.log`） |
+| `python eng/protected-diff.py --base origin/main --build --allow --history`（工程 1）／`--allow --history --allow --command-palette`（工程 2） | **終了 0**。`fixtures 1853 -> 1853`・保護ファイル不変・`--history` 新規 23 / 38 と `--command-palette` 207 → 222 だけ allowed（`out/protected/6d36aa8.json` / `out/protected/d9d0203.json`） |
+| `pwsh -NoProfile -File eng/validate-git.ps1` | 工程 1・工程 2 とも passed（`out/259-step1-validate-git.log` / `out/259-step2-git.log`） |
+| 実機（設計席・施主の了承の後・Debug `build/NeNeNib.exe`・`d9d0203`・125%・`eng/window_driver.py` を使う 1 回限りのスクリプト `D:\NeNeNib\scripts\history_frames.py`） | 2 回とも終了コード 0（`out/259-accept-frames.log`）。クリック・文字・鍵はどれも窓へ post（本物のキーボードとポインタは使っていない）。タブを閉じるのは Vim の `:tabclose`、面を開くのは `:tabs` の後に Backspace。profile と文書は `D:\NeNeNib\evidence\frames-259\`（HDD）。画は `out/frames-259/`・記録は `out/reports/done-259-design.md` |
+| 速さ（設計席・`python eng/measure-speed.py --check --executable build/release-d9d0203/NeNeNib.exe`） | **6 benches checked, 0 regression(s), 0 unmeasurable**（Release sha256 B87AEF5B…CF64BF12D・`out/release/d9d0203.json`・機械 bc8a356f37c68491・5 回・`out/speed/2026-09-30T09-46-23Z.json`・`out/259-accept-speed.log`） |
+| 工程 3（文書だけ）の `python eng/conformance.py --build-dir build`・`git diff --check`・`eng/validate-git.ps1` | **0 violation**（`out/259-step3-conformance.log`）・`git diff --check` 指摘なし・`eng/validate-git.ps1` passed（`out/259-step3-git.log`） |
+
+設計席の実機の画（2 回目・`d9d0203`。1 回目は待ち時間 0.6 秒で 4 枚目が知らせの出る前の画になったため、1.5 秒にして撮り直した。Debug の exe と HDD の上の profile では履歴の書き込みに数百 ms かかる）:
+
+| 画 | 操作 | 見えたもの・`history.v1` |
+| --- | --- | --- |
+| `1-tabs-then-history.png` | ファイル 3 つで起動 → 3 本目を閉じる → 面を開いて `#` を消す | タブ 2 本（「開いているタブ」）の後ろに `palette-third.txt`（「履歴」）・案内は「# タブ　@ 履歴　: 設定」・`history.v1` は third の 1 行 |
+| `2-history-only.png` | `@` | 履歴の 1 件だけ（1 / 1） |
+| `3-opened-from-history.png` | Enter | 3 本目が新しいタブで開く（題名 `palette-third.txt - NeNe Nib`） |
+| `4-missing-notice.png` | 3 本目を閉じる → ファイルを消す → 面で `@` と Enter | タブは 2 本のまま・ステータスバーの左に「開けませんでした: palette-third.txt」・ダイアログなし・`history.v1` は `version=1` だけ（外れた） |
+| `5-history-after-drop.png` | 面で `@` | 「候補なし」（0 / 0） |
+| `6-next-start.png` | 窓を閉じる → `palette-first.txt` を指定して起動（一覧と履歴を残す）→ 面を開いて `#` を消す | タブ 1 本の後ろに `palette-second.md`（「履歴」）。窓を閉じたときの `history.v1` は second（最後に見ていた）→ first の順 |
+
+速さの 6 本（設計席・`d9d0203` の Release・中央値）:
+
+| ベンチ | 中央値 |
+| --- | --- |
+| startup-first-frame | 208.8 ms |
+| startup-window-shown | 34.3 ms |
+| key-to-frame-single | 0.936 ms |
+| key-to-frame-burst-200 | 3.545 ms |
+| open-large-file-16mib | 257.7 ms |
+| key-to-frame-burst-200-16mib | 7.210 ms |
+
+起動の内訳の `document_opened` は 0.2 ms（引数なし）と 50.5 ms（16 MiB）で #253 のときと同じ。起動の道に履歴の読み書きは無い。
+
+履歴の 1 回の書き込みの時間（設計席が手で測った・窓なし。タブを閉じるたびに走る「読む → 書く → ディスクへ確定（`FlushFileBuffers`）→ 置き換え」と同じ手順を Python で 15 回ずつ・50 行の履歴。製品の exe では測っていない）:
+
+| 置き場所 | 中央値 | 最小〜最大 |
+| --- | --- | --- |
+| C（NVMe の SSD。施主の `%LOCALAPPDATA%` と同じドライブ・リポジトリの `out/io-probe`） | 1.9 ms | 1.6〜7.0 ms |
+| D（HDD・`D:\NeNeNib\evidence\io-probe`） | 36.6 ms | 28.1〜379.3 ms（最大は 1 回目） |
+
+回していないものと理由: 本物の Ctrl+P の鍵・「∨」のクリック・× のクリックでの撮影（意図は同じ `OpenCommandPalette` / `OpenTabList` / `CloseTab` で ui は変えていない。意図の後は契約 `verify_close_records` `verify_palette_history_rows` `verify_palette_history_open` が覆う）・面を開く時間のベンチ（ベンチが無い）。
+
+対象を限定した理由: 差分は application の履歴の値と port と純関数と controller の記録・面の入口と確定、core の記号の表と閉じた enum の値、adapters の `history.v1` の codec と adapter と行の割り方、`Main.cpp` の合成、単体テストと adapter の試験、`eng/window_driver.py` の消すもので、ui/win32 と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--history` と `--command-palette` だけ。起動の道に読み書きを足していないことは契約 `verify_quiet_paths` と設計席の速さの 6 本で確かめた。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の実機と速さの結果（`d9d0203`）を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-001 / ARC-003 / ARC-007 / ARC-010 / CPP-002 / CPP-004 / CPP-005 / CPP-011 / QLT-013 / QLT-014 / ADR 0042 を自己レビュー。記録は `history_recorded` の 1 本・外すのは `history_forgotten` の 1 本・開くのは `open_document` の 1 本で `OpenDocument` と履歴の行が共用・行の割り方は `TextLines` の 1 本で `session.v1` と `history.v1` が共用（ARC-001）・core と application は OS とファイルに触れず場所とファイルは adapters の `Win32HistoryAdapter` だけ（ARC-003 / ARC-007・symbols 0）・失敗は `std::expected` と閉じた enum `FileHistoryFailure`（ARC-010 / CPP-005）・`CommandChoiceKind` `PaletteScope` `PaletteOrigin` の `switch` に `default` は無い（CPP-002）・単体テストは scope `--history` の 1 翻訳単位（ADR 0042）。残る穴: 履歴を書くのは閉じたときだけで、強制終了のときはその回に閉じていないファイルは入らない・システムドライブが HDD の機械ではタブを閉じるたびに 30〜40 ms の書き込みが入る（今の `FilePort::write` のまま・ベンチに無い）・履歴に時刻と種別のアイコンは無い・大きすぎる / 読めないファイルは知らせるだけで履歴に残る（選ぶたびに知らせが出る）・面を開くときの履歴の読みは 1 回（ディスクから）で面を開く時間のベンチは無い・面の中の日本語入力・同じフォルダ・ブックマーク・Vim の `:e` `:b` `:ls`・履歴を消すコマンドと件数の設定は後続・面の実機の検査は `eng/verify-window.py` に無い（ADR 0060 決定 12 の後続）。

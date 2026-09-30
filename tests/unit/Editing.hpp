@@ -7,6 +7,7 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -27,8 +28,8 @@ class Editing final
     explicit Editing(SettingsReading reading = std::nullopt,
                      nenenib::core::ThemeCatalog themes = nenenib::core::ThemeCatalog::builtins())
         : settings_(std::move(reading)), themes_(std::move(themes)),
-          controller_(nenenib::application::EditorPorts{appearance_, clipboard_, files_,
-                                                        code_pages_, settings_, themes_, session_})
+          controller_(nenenib::application::EditorPorts{
+              appearance_, clipboard_, files_, code_pages_, settings_, themes_, session_, history_})
     {
     }
 
@@ -69,6 +70,11 @@ class Editing final
         return session_;
     }
 
+    [[nodiscard]] ScriptedHistory &history() noexcept
+    {
+        return history_;
+    }
+
     [[nodiscard]] ScriptedCodePages &code_pages() noexcept
     {
         return code_pages_;
@@ -80,8 +86,8 @@ class Editing final
     prepared_ports(const std::function<void(ScriptedFiles &)> &prepare)
     {
         prepare(files_);
-        return nenenib::application::EditorPorts{appearance_, clipboard_, files_,  code_pages_,
-                                                 settings_,   themes_,    session_};
+        return nenenib::application::EditorPorts{appearance_, clipboard_, files_,   code_pages_,
+                                                 settings_,   themes_,    session_, history_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -91,6 +97,7 @@ class Editing final
     ScriptedSettings settings_;
     ScriptedThemes themes_;
     ScriptedSession session_;
+    ScriptedHistory history_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

@@ -57,7 +57,8 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp)
 
 nenenib_target(nenenib_application application STATIC
-    src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp)
+    src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
+    src/application/FileHistoryEdit.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -92,7 +93,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ExSettingsTests.cpp
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
-    tests/unit/SessionTests.cpp)
+    tests/unit/SessionTests.cpp
+    tests/unit/HistoryTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
@@ -104,7 +106,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
     src/adapters/win32/SettingsCodec.cpp src/adapters/win32/Win32SettingsAdapter.cpp
     src/adapters/win32/ParentDirectory.cpp src/adapters/win32/SessionCodec.cpp
-    src/adapters/win32/Win32SessionAdapter.cpp
+    src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp
+    src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp)
@@ -134,6 +137,12 @@ nenenib_link(nib_session_tests nenenib_core)
 nenenib_link(nib_session_tests nenenib_application)
 nenenib_link(nib_session_tests nenenib_adapters)
 add_test(NAME nib_sessions COMMAND nib_session_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+nenenib_target(nib_history_tests adapter_tests EXECUTABLE tests/adapters/HistoryAdapterTests.cpp)
+nenenib_link(nib_history_tests nenenib_core)
+nenenib_link(nib_history_tests nenenib_application)
+nenenib_link(nib_history_tests nenenib_adapters)
+add_test(NAME nib_histories COMMAND nib_history_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp)

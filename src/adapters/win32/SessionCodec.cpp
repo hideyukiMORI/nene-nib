@@ -1,6 +1,7 @@
 #include "SessionCodec.hpp"
 
 #include "AbsolutePath.hpp"
+#include "TextLines.hpp"
 #include "Utf8.hpp"
 
 #include <array>
@@ -19,28 +20,6 @@ using Failure = application::SessionFailure;
 using application::Session;
 using application::SessionTab;
 using Lines = std::vector<std::string_view>;
-
-// 行に割る。行末の CR は落とし、最後の LF の後ろの空は行に数えない。
-[[nodiscard]] Lines lines_of(std::string_view bytes)
-{
-    Lines lines;
-    while (!bytes.empty())
-    {
-        const auto end = bytes.find('\n');
-        auto line = bytes.substr(0, end);
-        if (line.ends_with('\r'))
-        {
-            line.remove_suffix(1);
-        }
-        lines.push_back(line);
-        if (end == std::string_view::npos)
-        {
-            break;
-        }
-        bytes.remove_prefix(end + 1);
-    }
-    return lines;
-}
 
 // 符号も空白も無い 10 進だけを受ける。
 [[nodiscard]] std::optional<std::size_t> number_of(std::string_view text)
@@ -167,7 +146,7 @@ std::expected<Session, Failure> decode_session(std::string_view bytes)
     {
         bytes.remove_prefix(3);
     }
-    const Lines lines = lines_of(bytes);
+    const Lines lines = text_lines(bytes);
     const auto version =
         header_value(lines.empty() ? std::string_view{} : lines.front(), "version");
     if (!version.has_value())

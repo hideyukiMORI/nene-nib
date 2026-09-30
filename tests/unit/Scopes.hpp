@@ -21,6 +21,10 @@ void verify_tabs_scope();
 void verify_session_contracts();
 void verify_session_scope();
 
+// HistoryTests.cpp
+void verify_history_contracts();
+void verify_history_scope();
+
 // VimDotTests.cpp
 void verify_vim_dot_contracts();
 void verify_vim_dot_scope();

@@ -4,6 +4,7 @@
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "FilePort.hpp"
+#include "HistoryPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
 #include "ThemePort.hpp"
@@ -20,5 +21,6 @@ struct EditorPorts
     SettingsPort &settings;
     ThemePort &themes;
     SessionPort &session;
+    HistoryPort &history;
 };
 } // namespace nenenib::application
