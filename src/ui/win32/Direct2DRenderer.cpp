@@ -540,18 +540,15 @@ void Direct2DRenderer::write_right(std::string_view text, IDWriteTextFormat *for
         return;
     }
     const auto shown = text_layout(text, format, area);
-    DWRITE_TEXT_METRICS metrics{};
-    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    if (!shown || FAILED(shown->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING)))
     {
         return;
     }
-    const auto width =
-        static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace));
-    const auto left = std::max(area.left, area.right - width);
     brush_->SetColor(to_color(color));
     context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
-    context_->DrawTextLayout(D2D1::Point2F(static_cast<float>(left), static_cast<float>(area.top)),
-                             shown.Get(), brush_.Get());
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), shown.Get(),
+        brush_.Get());
     context_->PopAxisAlignedClip();
 }
 
