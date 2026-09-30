@@ -10,6 +10,7 @@
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
+#include "Win32HistoryAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ThemeAdapter.hpp"
@@ -135,9 +136,13 @@ int run(HINSTANCE instance)
     // （ADR 0059 の決定 2・3・6）。
     nenenib::adapters::win32::Win32SessionAdapter session(
         files, nenenib::adapters::win32::local_session_path());
+    // 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む。起動の道では読まない
+    // （ADR 0060 の決定 8）。
+    nenenib::adapters::win32::Win32HistoryAdapter history(
+        files, nenenib::adapters::win32::local_history_path());
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
-                                          themes, session},
+                                          themes, session, history},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

@@ -26,6 +26,7 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -218,9 +219,11 @@ void verify_theme_startup_notice()
     ScriptedSettings settings;
     ScriptedThemes themes{user_catalog(), fixed_text("invalid_name.v1.theme: invalid name")};
     ScriptedSession session;
+    ScriptedHistory history;
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{
-        app::EditorPorts{appearance, clipboard, files, pages, settings, themes, session}, initial};
+        app::EditorPorts{appearance, clipboard, files, pages, settings, themes, session, history},
+        initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
     expect(frame.command_message.value_or(fixed_text("none")).text() ==
@@ -233,7 +236,8 @@ void verify_theme_startup_notice()
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
     const EditorController unreadable{
-        app::EditorPorts{appearance, clipboard, files, pages, broken, themes, session}, initial};
+        app::EditorPorts{appearance, clipboard, files, pages, broken, themes, session, history},
+        initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,
            "failed settings do not prevent opening initial document");
