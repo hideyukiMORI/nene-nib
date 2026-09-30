@@ -66,12 +66,12 @@
 ## 強制
 
 - 契約（#252 の分）: **active**。`Session` の作り方（無題を入れない・帯の順・active の位置・使った順）と `EndSession` の 2 つの理由は `tests/unit/SessionTests.cpp` の `verify_untitled_and_single` `verify_mixed_band` `verify_positions_and_unsaved` `verify_after_close` `verify_last_tab_closed` `verify_no_write_on_ordinary_intents` `verify_write_failure_changes_nothing` `verify_walk_settles_before_writing`（scope `nib_tests --session` と既定実行・CTest `nib_unit`）。adapter の往復と壊れた入力の拒否は `tests/adapters/SessionAdapterTests.cpp` の `verify_round_trips` `verify_line_ends` `verify_rejected_headers` `verify_rejected_tabs` `verify_limits` `verify_adapter_round_trip` `verify_adapter_failures`（CTest `nib_sessions`）。
-- 契約（#253 の分）: **planned**。まだ読んでいない文書への切り替え（読む・位置を寄せる・読めないときに外して知らせる）・閉じた後の隣・起動の 3 つの枝（引数あり・一覧あり・一覧なし）。
+- 契約（#253 の分）: **active**。状態の `with_restored` `with_loaded` `with_dropped` `with_recency_ranked` と、切り替え・歩き・閉じるが読んでいない文書を指したら何も変えないことは `tests/unit/SessionTests.cpp` の `verify_restored_state` `verify_loaded_and_dropped` `verify_switch_refuses_unloaded` `verify_recency_ranked`。起動の枝（一覧なし・空の一覧・読めない一覧・引数あり・テーマの告知との優先）は `verify_restore_branches`、戻った帯・アクティブ・位置・読むのは見ていた 1 本だけは `verify_restore_band`、位置を読んだ本文の範囲へ寄せるのは `verify_restore_clamps`、読めないときに外して知らせて隣を試すのは `verify_restore_unreadable`。切り替え（クリック・`:tabnext`・`gt`・一覧・同じファイルを開く）と歩きと閉じた後の隣で読むのは `verify_switch_reads` `verify_walk_reaches` `verify_switch_unreadable` `verify_close_reaches`、読んだ後の一覧は `verify_list_after_reaching`（scope `nib_tests --session` と既定実行・CTest `nib_unit`）。
 - 閉じた和型の写し漏れ（#252 の分）: **active**。`EditorIntent`（`EndSession`）は `EditorController::apply` の `std::visit`、`SessionEnd` は `ended_session` の `default` の無い `switch`（CPP-002）。`SessionFailure` は今は写す `switch` が無く、6 つの値を adapter が返すことを `nib_sessions` の契約が確かめる（写す所ができたら `default` の無い `switch` で書く）。
-- 閉じた和型の写し漏れ（#253 の分）: `ParkedTab` は **planned**（実装で active・`std::visit` の網羅性）。
+- 閉じた和型の写し漏れ（#253 の分）: `ParkedTab` は **active**（`std::visit` の網羅性）。脇のタブの中身を読む所はどれも `std::visit` で 2 つの形の多重定義へ写す: `EditorState.cpp` の `loaded_bundle`（`loaded_of`）と `unloaded_at`（`unloaded_of`）・`EditorController.cpp` の `tab_views`（`parked_view`）・`band_session_tabs`（`parked_session_tab`）・`open_tab_of`（`parked_path`）。`std::get_if` と `std::holds_alternative` で `ParkedTab` を分ける所は無い。
 - core と application が OS とファイルに触れないこと: **active**（既存の `eng/symbols.py`。ファイルに触れるのは adapters の `FilePort` と `SessionPort` の実装だけ）。
-- 起動の重さがタブの数に依らないこと: **planned**（決定 7。ベンチに足すまでは設計席が手で測る）。
-- 実機の確認: **planned**（#253 で `eng/verify-window.py` に節を足す。機械の必須 check ではない）。
+- 起動の重さがタブの数に依らないこと: **planned**（決定 7。ベンチに足すまでは設計席が手で測る）。2026-09-30 に設計席が手で測った（gate-proofs の #253 の節）。
+- 実機の確認: **planned のまま**（機械の必須 check ではない）。道具は入った: `eng/verify-window.py --restore`（窓へ post するクリックだけで本物のキー入力を送らない・CI では回さず設計席が回す）。
 - fixture: **不能**（oracle の対象ではない）。既存の fixture は不変（`eng/protected-diff.py`）。
 
 ## 結果
