@@ -1,7 +1,7 @@
 # 依頼書の型 — 実装席（Opus）
 
 > 正本は [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md)（席ごとのモデル）と [ADR 0039](../adr/0039-implementation-seat-per-step-and-small-tool-output.md)（工程ごとの席・道具出力）。
-> この型を scratchpad に写して埋め、Agent（`subagent_type: general-purpose`・`model: opus`）にパスを渡す。小さい chore は依頼書を別に書かず、Issue 本文と ADR を指して席とモデルと工程を 1 行で伝える。
+> この型を `D:\NeNeNib\briefs\` に写して埋め（リポジトリの外の作業場所は D ドライブ・施主指示 2026-09-30。C ドライブの scratchpad と Temp は使わない）、Agent（`subagent_type: general-purpose`・`model: opus`）にパスを渡す。小さい chore は依頼書を別に書かず、Issue 本文と ADR を指して席とモデルと工程を 1 行で伝える。
 
 ```markdown
 # 依頼書 #<issue> — <題>（<工程>）
@@ -9,7 +9,7 @@
 席・モデル・工程: 実装席 / Opus / <probe | 実装 | 差し戻し対応 N 回目>
 Issue: https://github.com/hideyukiMORI/nene-nib/issues/<issue>（`gh issue view <issue>`）
 ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
-前の工程の報告: <scratchpad の done-<issue>-<工程>.md のパス。無ければ「無し」>
+前の工程の報告: <`out/reports/done-<issue>-<工程>.md` のパス。無ければ「無し」>
 ブランチ: <type>/<issue>-<summary>（main `<sha>` から）
 範囲: <触ってよい dir と、触らない dir>
 やらないこと: <S 級に切った残りの命題。別の席で行う>
@@ -20,7 +20,8 @@ ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
 - テストは対象だけ実行する（`ctest -R <名前>` / `build/tests/unit/nib_tests.exe <対象>`）。出力は `out/<issue>-<工程>.log` に落とし、失敗行だけ `tail` / `Select-String` で読む。
 - ビルド・ゲート（`eng/check.ps1`・`eng/conformance.py`・`eng/symbols.py`）の出力も `out/` のファイルへ落とし、`grep` で読む。端末に全文を流さない。
 - ファイルは必要な範囲だけ読む（`Read` の offset / limit・`sed -n`）。丸読みしない。
-- 最終報告は 30 行以内。詳細は `<scratchpad>/done-<issue>-<工程>.md` に書き、親にはそのパスと数字（checks 数・fixture 件数・SHA・所要時間）だけ返す。
+- 最終報告は 30 行以内。詳細は `out/reports/done-<issue>-<工程>.md` に書き、親にはそのパスと数字（checks 数・fixture 件数・SHA・所要時間）だけ返す。
+- リポジトリの外に何かを置くときは `D:\NeNeNib\` の下（C ドライブの Temp と scratchpad に書かない）。道具の出力と報告はリポジトリの `out/`。
 - commit / push / PR は依頼書に書かれた範囲だけ。Ready・CI・merge は設計席。PR の本文は GIT-004 の必須欄（`Closes #N` / `目的:` / `使った正典経路:` / `規則 ID:` / `振る舞い・スキーマの変更:` / `検証（実行したコマンドと結果）:` / `確認する退行:` / `対象・依存:` / `検証結果:` / `再利用:` / `Waivers:` / `残るリスク:`）をすべて持ち、作る前にファイルに書いて `python eng/git-conventions.py <ファイル> --pr-body` で検証する（#191 で 2 回落ちた）。
 
 ## 先に読むもの
