@@ -14,9 +14,11 @@
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "DevicePixels.hpp"
+#include "DisplayText.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorFrame.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExResult.hpp"
@@ -514,6 +516,67 @@ void verify_palette_entries_controller()
            "a command behind the colon mark changes the theme as before");
 }
 
+// 行の右端の補足と検索欄の案内の欄（ADR 0060 の決定 9）。描画と同じ core の配置を読む。
+void verify_palette_notes_geometry()
+{
+    for (const auto dpi : {96U, 120U})
+    {
+        const auto inset = to_pixels(8, dpi) * 2;
+        const auto layout = core::palette_layout(1600, 1200, dpi, 13);
+        const auto row = core::palette_row(layout, 0);
+        const core::LayoutRect inside{row.left + inset, row.top, row.right - inset, row.bottom};
+        const auto note = core::palette_row_note(row, dpi);
+        const auto label = core::palette_row_label(row, dpi, true);
+        expect(note.right == inside.right && width_of(note) == to_pixels(112, dpi) &&
+                   note.top == row.top && note.bottom == row.bottom,
+               "the note sits at the right end of the row inside");
+        expect(label.left == inside.left && note.left - label.right == to_pixels(12, dpi),
+               "the name ends 12 DIP before the note without overlapping");
+        expect(core::palette_row_label(row, dpi, false) == inside,
+               "an unmarked row keeps the whole inside for the name");
+        const auto hint = core::palette_input_hint(layout);
+        expect(hint.right == layout.input.right &&
+                   hint.left == layout.input.left + width_of(layout.input) / 2 &&
+                   hint.top == layout.input.top && hint.bottom == layout.input.bottom &&
+                   width_of(hint) > 0,
+               "the mark hint takes the right half of the query");
+        const core::LayoutRect least{0, 0, to_pixels(244, dpi) + inset * 2, row.bottom - row.top};
+        expect(width_of(core::palette_row_note(least, dpi)) == to_pixels(112, dpi),
+               "the note stays while the name keeps its minimum");
+        const core::LayoutRect narrow{0, 0, to_pixels(240, dpi) + inset * 2, row.bottom - row.top};
+        const core::LayoutRect narrow_inside{inset, 0, to_pixels(240, dpi) + inset,
+                                             row.bottom - row.top};
+        expect(width_of(core::palette_row_note(narrow, dpi)) == 0 &&
+                   core::palette_row_label(narrow, dpi, true) == narrow_inside,
+               "a narrow row drops the note and keeps the name as before");
+        const auto smallest = core::palette_layout(to_pixels(360, dpi), 1200, dpi, 13);
+        expect(width_of(core::palette_input_hint(smallest)) == 0,
+               "the smallest window drops the mark hint");
+    }
+}
+
+// 案内は入力が空のときだけ出す（ADR 0060 の決定 9）。判断は application に置く。
+void verify_palette_hint_view()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    const auto hint_of = [](const app::EditorFrame &frame)
+    { return frame.command_palette.value_or(app::CommandPaletteView{}).hint; };
+    auto frame = controller.apply(app::OpenCommandPalette{});
+    const auto opened = hint_of(frame);
+    expect(opened.has_value() && opened.value().text() == core::palette_mark_hint().text(),
+           "Ctrl+P opens with the mark hint");
+    frame = controller.apply(app::CommandText{"a"});
+    expect(frame.command_palette.has_value() && !hint_of(frame).has_value(),
+           "one typed character hides the hint");
+    frame = controller.apply(app::EditCommand{core::CommandEdit::backspace});
+    expect(hint_of(frame).has_value(), "an emptied input shows the hint again");
+    static_cast<void>(controller.apply(app::CancelCommand{}));
+    frame = controller.apply(app::OpenTabList{});
+    expect(frame.command_palette.has_value() && !hint_of(frame).has_value(),
+           "the tab list behind the hash mark has no hint");
+}
+
 void verify_tab_folders()
 {
     const auto folder = core::tab_folder_for(core::FilePath::parse("C:\\work\\note.txt").value());
@@ -540,6 +603,8 @@ void verify_command_palette()
     verify_listed_choices();
     verify_palette_sources();
     verify_palette_entries_controller();
+    verify_palette_notes_geometry();
+    verify_palette_hint_view();
     verify_tab_folders();
 }
 } // namespace nenenib::tests

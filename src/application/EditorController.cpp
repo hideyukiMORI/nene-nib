@@ -20,6 +20,7 @@
 #include "ExTabVerb.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
+#include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
 #include "ParkedTab.hpp"
 #include "SaveState.hpp"
@@ -851,7 +852,11 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
     }
     if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
     {
-        return CommandPaletteView{palette->choices(), palette->selected()};
+        // 記号の案内は入力が空のときだけ（ADR 0060 の決定 9）。1 文字でも打てば消える。
+        auto hint = palette->input().text().empty()
+                        ? std::optional<core::DisplayText>{core::palette_mark_hint()}
+                        : std::nullopt;
+        return CommandPaletteView{palette->choices(), palette->selected(), std::move(hint)};
     }
     return std::nullopt;
 }

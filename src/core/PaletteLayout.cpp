@@ -61,4 +61,50 @@ std::size_t palette_first_visible(const PaletteLayout &layout, std::size_t selec
     }
     return std::max(selected + 1, layout.visible_rows) - layout.visible_rows;
 }
+
+namespace
+{
+// 行の内側。選択の面の内側 8 DIP のさらに 8 DIP 内（今までの描画と 1 画素も変えないため 8 DIP を
+// 2 回足す）。
+LayoutRect row_inside(const LayoutRect &row, std::uint32_t dpi) noexcept
+{
+    const auto inset = to_pixels(8, dpi) * 2;
+    const auto left = std::min(row.left + inset, row.right);
+    return LayoutRect{left, row.top, std::max(left, row.right - inset), row.bottom};
+}
+} // namespace
+
+LayoutRect palette_row_note(const LayoutRect &row, std::uint32_t dpi) noexcept
+{
+    const auto inside = row_inside(row, dpi);
+    if (width_of(inside) < to_pixels(112 + 12 + 120, dpi))
+    {
+        return LayoutRect{inside.right, inside.top, inside.right, inside.bottom};
+    }
+    return LayoutRect{inside.right - to_pixels(112, dpi), inside.top, inside.right, inside.bottom};
+}
+
+LayoutRect palette_row_label(const LayoutRect &row, std::uint32_t dpi, bool noted) noexcept
+{
+    const auto inside = row_inside(row, dpi);
+    const auto note = palette_row_note(row, dpi);
+    if (!noted || width_of(note) <= 0)
+    {
+        return inside;
+    }
+    return LayoutRect{inside.left, inside.top, note.left - to_pixels(12, dpi), inside.bottom};
+}
+
+LayoutRect palette_input_hint(const PaletteLayout &layout) noexcept
+{
+    // 行の高さは 40 DIP なので、160 DIP はその 4 つぶん（配置は dpi を持たない）。
+    const auto least = layout.row_height * 4;
+    const auto &input = layout.input;
+    const auto centre = input.left + width_of(input) / 2;
+    if (input.right - centre < least)
+    {
+        return LayoutRect{input.right, input.top, input.right, input.bottom};
+    }
+    return LayoutRect{centre, input.top, input.right, input.bottom};
+}
 } // namespace nenenib::core

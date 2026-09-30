@@ -4,6 +4,8 @@
 #include "DisplayLine.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
+#include "PaletteLayout.hpp"
+#include "PaletteOrigin.hpp"
 #include "RgbaColor.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -528,6 +530,29 @@ void Direct2DRenderer::write(std::string_view text, IDWriteTextFormat *format,
     const auto wide = widen(text);
     context_->DrawTextW(wide.c_str(), static_cast<UINT32>(wide.size()), format, to_rect(area),
                         brush_.Get());
+}
+
+void Direct2DRenderer::write_right(std::string_view text, IDWriteTextFormat *format,
+                                   const core::LayoutRect &area, core::RgbColor color)
+{
+    if (core::width_of(area) <= 0 || core::height_of(area) <= 0)
+    {
+        return;
+    }
+    const auto shown = text_layout(text, format, area);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    {
+        return;
+    }
+    const auto width =
+        static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace));
+    const auto left = std::max(area.left, area.right - width);
+    brush_->SetColor(to_color(color));
+    context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
+    context_->DrawTextLayout(D2D1::Point2F(static_cast<float>(left), static_cast<float>(area.top)),
+                             shown.Get(), brush_.Get());
+    context_->PopAxisAlignedClip();
 }
 
 void Direct2DRenderer::draw_cross(const core::LayoutRect &box, float half, float stroke)
@@ -1223,11 +1248,19 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
         context_->FillRoundedRectangle(
             D2D1::RoundedRect(to_rect(selected), scaled(6.0F), scaled(6.0F)), brush_.Get());
     }
-    const core::LayoutRect label{row.left + inset * 2, row.top, row.right - inset * 2, row.bottom};
+    // 名前・場所と右端の補足の欄は core の配置が決める（ADR 0060 の決定 9）。印の無い候補（Ex の
+    // コマンド）は補足を持たず、名前の欄は行の内側の全部で今までと同じ。
+    const auto &choice = palette.choices.at(index);
+    const auto label = core::palette_row_label(row, dpi_, choice.origin.has_value());
     context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
-    write(palette.choices.at(index).label.text(), command_format_.Get(), label, frame.palette.text);
-    draw_palette_detail(frame, palette.choices.at(index), label);
+    write(choice.label.text(), command_format_.Get(), label, frame.palette.text);
+    draw_palette_detail(frame, choice, label);
     context_->PopAxisAlignedClip();
+    if (choice.origin.has_value())
+    {
+        write_right(core::palette_origin_label(choice.origin.value()), status_format_.Get(),
+                    core::palette_row_note(row, dpi_), frame.palette.muted);
+    }
 }
 
 void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame,
@@ -1328,6 +1361,12 @@ void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
                        D2D1::Point2F(static_cast<float>(layout.panel.right),
                                      static_cast<float>(layout.input.bottom)),
                        brush_.Get(), scaled(1.0F));
+    // 記号の案内は入力より先に描く。出すかどうかは application が決め、ui は値があれば描く。
+    if (frame.command_palette.has_value() && frame.command_palette.value().hint.has_value())
+    {
+        write_right(frame.command_palette.value().hint.value().text(), status_format_.Get(),
+                    core::palette_input_hint(layout), frame.palette.muted);
+    }
     draw_command(frame, layout.input);
     context_->PushAxisAlignedClip(to_rect(layout.rows), D2D1_ANTIALIAS_MODE_ALIASED);
     draw_palette_choices(frame, layout);
