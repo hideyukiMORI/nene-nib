@@ -20,6 +20,7 @@
 #include "ExTabVerb.hpp"
 #include "FileHistory.hpp"
 #include "FileHistoryEdit.hpp"
+#include "ImeStance.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
 #include "PaletteMarks.hpp"
@@ -689,6 +690,18 @@ constexpr std::string_view clipped_mark = "…";
            std::holds_alternative<RefreshAppearance>(intent);
 }
 
+// 状態の変換の表示値。本文と面の入力行のどちらに載せるかは呼び手が決める（ADR 0061 の決定 4）。
+[[nodiscard]] std::optional<CompositionView>
+composition_view_of(const std::optional<core::Composition> &composition)
+{
+    if (!composition.has_value())
+    {
+        return std::nullopt;
+    }
+    return CompositionView{composition.value().utf8,
+                           core::composition_underlines(composition.value()),
+                           composition.value().cursor};
+}
 } // namespace
 
 EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
@@ -1221,7 +1234,7 @@ void EditorController::accept(const VisibleLines &intent)
 
 void EditorController::accept(const SelectEditMode &intent)
 {
-    state_ = state_.with_command_input(std::nullopt);
+    close_command_input();
     // モードが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
     // Vim に入ると NORMAL で、回数もオペレータも空。通常へ戻るときも同じ形に捨てる（決定 10）。
@@ -1566,7 +1579,7 @@ void EditorController::accept(const CancelCommand &)
         input.has_value() && std::holds_alternative<core::SearchLine>(input.value());
     // 入力行を閉じると preview も消えるので、戻す先を先に写す（ADR 0041 の決定 5）。
     const auto preview = state_.search_preview();
-    state_ = state_.with_command_input(std::nullopt);
+    close_command_input();
     if (preview.has_value())
     {
         restore_search_origin(preview.value().origin);
@@ -1679,7 +1692,7 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         // 入力を閉じてから開く（evaluate_command と同じ順・choice は入力ではなく手元の列を指す）。
         // open の候補は palette_entries が検証済みの FilePath の text() から作るので parse は必ず
         // 成功する（不変条件）。失敗したら何もしない。
-        state_ = state_.with_command_input(std::nullopt);
+        close_command_input();
         if (const auto path = core::FilePath::parse(choice.command); path.has_value())
         {
             open_listed(path.value());
@@ -1735,7 +1748,7 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     const std::optional<core::TextPosition> from =
         preview.has_value() ? std::optional{preview.value().from} : std::nullopt;
     const core::VimSearchPattern pattern{std::string(line.text()), line.direction(), from};
-    state_ = state_.with_command_input(std::nullopt);
+    close_command_input();
     if (preview.has_value())
     {
         restore_search_origin(preview.value().origin);
@@ -1763,7 +1776,7 @@ std::optional<core::VimRepeatFailure> EditorController::submitted_command()
 
 void EditorController::evaluate_command(std::string_view text)
 {
-    state_ = state_.with_command_input(std::nullopt);
+    close_command_input();
     if (text.empty())
     {
         return;
@@ -2542,6 +2555,12 @@ void EditorController::accept(const PointTitleBar &intent)
 
 bool EditorController::composition_ignored() const noexcept
 {
+    // 面の入力は変換を受け、下のモード（Vim の NORMAL など）の決まりは見ない（ADR 0061 決定 3）。
+    if (command_palette_active())
+    {
+        return false;
+    }
+    // Ex の行と検索の行は今までどおり捨てる。
     if (command_line_active())
     {
         return true;
@@ -2595,6 +2614,13 @@ void EditorController::accept(const CommitText &intent)
     {
         return;
     }
+    // 面の確定は打った文字と同じ道で面の入力に入る。本文にも engine にも行かない（ADR 0061 の
+    // 決定 3）。上限を越えたときの知らせも同じ道が出す。
+    if (command_palette_active())
+    {
+        accept(CommandText{intent.utf8});
+        return;
+    }
     switch (state_.mode())
     {
     case core::EditMode::ordinary:
@@ -2612,16 +2638,32 @@ void EditorController::accept(const CancelComposition &)
     state_ = state_.with_composition(std::nullopt);
 }
 
+void EditorController::close_command_input()
+{
+    const bool palette = command_palette_active();
+    state_ = state_.with_command_input(std::nullopt);
+    if (palette)
+    {
+        state_ = state_.with_composition(std::nullopt);
+    }
+}
+
 std::optional<CompositionView> EditorController::composed() const
 {
-    const auto &composition = state_.composition();
-    if (!composition.has_value())
+    if (command_palette_active())
     {
         return std::nullopt;
     }
-    return CompositionView{composition.value().utf8,
-                           core::composition_underlines(composition.value()),
-                           composition.value().cursor};
+    return composition_view_of(state_.composition());
+}
+
+std::optional<CompositionView> EditorController::command_composed() const
+{
+    if (!command_palette_active())
+    {
+        return std::nullopt;
+    }
+    return composition_view_of(state_.composition());
 }
 
 std::optional<char> EditorController::recording_name() const
@@ -2743,9 +2785,11 @@ EditorFrame EditorController::frame() const
                        theme.ui,
                        state_.mode(),
                        state_.vim().mode,
+                       ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input()),
                        core::mode_label(state_.mode(), state_.vim().mode),
                        recording_name(),
                        composed(),
+                       command_composed(),
                        std::move(active),
                        core::status_items_for(caret, document.encoding, state_.line_ending()),
                        state_.settings(),

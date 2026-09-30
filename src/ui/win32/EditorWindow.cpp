@@ -1180,7 +1180,7 @@ void EditorWindow::send_composition(const core::Composition &composition)
 
 void EditorWindow::end_composition()
 {
-    if (!controller_.frame().composition.has_value())
+    if (!application::composing(controller_.frame()))
     {
         return;
     }
@@ -1502,7 +1502,7 @@ void EditorWindow::press_key(WPARAM word)
     const auto font = font_shortcut(word);
     if (held(VK_CONTROL) && !held(VK_MENU) && font.has_value())
     {
-        if (!controller_.frame().composition.has_value())
+        if (!application::composing(controller_.frame()))
         {
             send(application::AdjustFontSize{font.value(), 1});
         }
@@ -1863,7 +1863,7 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame(const application::E
     {
         // Present が返った直後の 1 点だけが「描けた」節目（ADR 0011 の決定 1・8）。
         timing_.mark(core::Milestone::frame_presented);
-        if (frame.composition.has_value())
+        if (application::composing(frame))
         {
             place_candidate_window();
         }
