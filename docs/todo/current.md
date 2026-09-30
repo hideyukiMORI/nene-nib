@@ -30,12 +30,12 @@
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | 19125 checks・scope 26（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` が 2026-09-30 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252） | [gate-proofs 5-bd 〜 5-bx](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
+| 既定の `nib_tests` | 19178 checks・scope 27（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259） | [gate-proofs 5-bd 〜 5-by](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
 | ADR | 0060 まで | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
-| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-09-30 の #253 の後の実測は 6 本とも基準内（`out/speed/2026-09-30T07-20-35Z.json`）。タブ 20 本の一覧で起動した時間は 1 本のときと同じ（手で測る・[gate-proofs 5-bw](../quality/gate-proofs.md)）。計測は窓を最前面に出すので施主に確かめてから回す | `eng/perf-reference.json`（ADR 0016） |
+| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-09-30 の #259 の後の実測は 6 本とも基準内（`out/speed/2026-09-30T09-46-23Z.json`）。タブ 20 本の一覧で起動した時間は 1 本のときと同じ（手で測る・[gate-proofs 5-bw](../quality/gate-proofs.md)）。計測は窓を最前面に出すので施主に確かめてから回す | `eng/perf-reference.json`（ADR 0016） |
 
 既知の既存失敗: `eng/test-conformance.py` の `test_verification_policy.py` の一部は cp932 の端末で pwsh の出力が読めず落ちることがある（道具側は #106 で直した。残れば別 Issue）。
 

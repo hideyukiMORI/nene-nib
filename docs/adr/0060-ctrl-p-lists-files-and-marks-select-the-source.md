@@ -53,7 +53,7 @@
    - 失敗が `not_found` のときは、その行を履歴から外す（D30）。ほかの失敗（大きすぎる・読めない・文字コード）は知らせるだけで、履歴に残す。
    - 後続の Vim の `:e <file>` は、Ex の評価がファイルの要求を返し、controller が同じ `open_listed` を呼ぶ。
 8. **履歴（#259）**:
-   - 値と port（application）: `FileHistory { std::vector<core::FilePath> files; }`（新しい順）。`HistoryPort` は `read() → std::expected<FileHistory, HistoryFailure>`（ファイルが無ければ空の履歴）と `write(const FileHistory &) → std::expected<void, HistoryFailure>`。`HistoryFailure` は閉じた enum。1 型 1 ファイル。`EditorPorts` に `HistoryPort &history`。
+   - 値と port（application）: `FileHistory { std::vector<core::FilePath> files; }`（新しい順）。`HistoryPort` は `read() → std::expected<FileHistory, FileHistoryFailure>`（ファイルが無ければ空の履歴）と `write(const FileHistory &) → std::expected<void, FileHistoryFailure>`。`FileHistoryFailure` は閉じた enum。名前を `HistoryFailure` にしないのは、core に undo の端に使う同じ名前の型（`src/core/HistoryFailure.hpp`）があるため（#259 の工程 1 で include が取り違えられてビルドが落ちた）。1 型 1 ファイル。`EditorPorts` に `HistoryPort &history`。
    - 記録の純関数（application）: `history_recorded(履歴, パス, FilePort)` は、同じファイル（`FilePort::same_file`）を除いて先頭へ置き、100 件で切る。`history_forgotten(履歴, パス, FilePort)` は同じファイルを外す。
    - **書くのは閉じたときだけ**: パスのあるタブを閉じたとき（`CloseTab`）と、窓が閉じるとき（`EndSession`。`window_closed` は開いているパスのあるタブを使った順の古いほうから記録して、最後に見ていたタブが先頭になる。`last_tab_closed` は閉じたその 1 本）。開いている間は、そのファイルはタブの候補として一覧に出ている。起動と「開く」の道には、履歴の読み書きを足さない（D1・D24・ADR 0013）。
    - 書くたびに `read` → 記録 → `write`（ほかの窓が書いた分を失わない）。履歴を状態に持たない。結果の失敗は捨てる（履歴は無くても動く。窓を止めない）。
@@ -82,12 +82,21 @@
   - `verify_palette_entries_controller`: Ctrl+P は入力が空で帯の順のタブ（印 `tab`）・「∨」の入口 `OpenTabList` は入力が `#` でアクティブのタブを選ぶ・Enter でタブが切り替わる・`:colo` の補完と `:colorscheme` の確定が今までどおり。
   - `verify_palette_notes_geometry` / `verify_palette_hint_view`: 行の右端の補足と検索欄の案内の配置（96 / 120 dpi・狭い欄で幅 0）と、案内は入力が空のときだけ出ること（決定 9）。
   - `TabsTests.cpp` の `verify_tab_list_rows` / `verify_tab_list_entries`: 一覧の入力が `#`・行に印 `tab`・`OpenTabList` と `:tabs` と Ctrl+P の空の入力が同じ列を開くこと・確定でタブが切り替わること。
-- 契約（#259 の分）: **planned**。記録（先頭へ・重ねない・100 件）・閉じたときだけ書くこと・開いているタブを履歴の候補から除くこと・選んで開く・`not_found` は 1 行知らせて外す・adapter の往復と壊れた入力の拒否。
+- 契約（#259 の分）: **active**（`tests/unit/HistoryTests.cpp` と `tests/unit/CommandPaletteTests.cpp` と `tests/adapters/HistoryAdapterTests.cpp`。入口は scope `nib_tests --history` と `--command-palette` と既定の実行・CTest `nib_unit` と `nib_histories`）。
+  - `verify_recorded_order` / `verify_recorded_same_file` / `verify_recorded_limit` / `verify_forgotten`: 記録は先頭へ置き既にあれば 1 つだけ前へ動かす・同じファイル（`same_file`）は記録した綴りで 1 つ・100 件で古いほうを切る・外すと同じファイルの綴りがすべて外れる。
+  - `verify_scripted_round_trip`: 替え玉 `ScriptedHistory` の読み書き・書きの失敗・読みの失敗・回数。
+  - `verify_close_records`: パスのあるタブを閉じると読み 1・書き 1 で先頭に入る（脇のタブもアクティブのタブも）・最後の 1 本・無題・範囲の外は書かない。
+  - `verify_end_session_records`: `window_closed` は最後に見ていたタブが先頭・まだ読んでいないタブも読まずに入る・`last_tab_closed` はその 1 本・無題だけの窓は履歴を読み書きしない。
+  - `verify_record_failures`: 書けなくてもタブ・知らせ・`last_failure` は不変で一覧の書きは 1 回・読めない履歴は閉じたファイルから書き直す。
+  - `CommandPaletteTests.cpp` の `verify_palette_marks`: `@` が履歴を選ぶ・案内「# タブ　@ 履歴　: 設定」・補足「履歴」。
+  - `verify_palette_history_rows`: タブの後ろに履歴を新しい順・開いているファイルは出ない・行の名前 / 場所 / `open` / `history`・`@` と `#` の絞り込み・読むのは面を開く 1 回・読めなければタブだけで知らせない。
+  - `verify_palette_history_open`: 履歴の行は新しいタブで開き書かない・`not_found` は「開けませんでした: <名前>」の 1 行でダイアログなし・書き 1 回で外れる・`too_large` は知らせだけで残る。
+  - `HistoryAdapterTests.cpp` の `verify_round_trips` / `verify_line_ends` / `verify_rejected` / `verify_limits` / `verify_adapter_round_trip` / `verify_adapter_failures`: `history.v1` の往復（LF・新しい順）・BOM と CRLF・壊れた入力（空・版・空行・相対・制御文字・壊れた UTF-8）の拒否・1 MiB と行数の上限・無いファイルは空の履歴・版違い / 壊れ / フォルダ / 場所なしの失敗。
 - 閉じた和型の写し漏れ（#258）: `PaletteScope` `PaletteOrigin` は **active**（`default` の無い `switch`・CPP-002）。`PaletteScope` は `src/core/CommandChoice.cpp` の `in_scope`・`src/core/CommandPalette.cpp` の `CommandPalette::choices`・`src/application/CommandInput.cpp` の `completions_of`、`PaletteOrigin` は `src/core/CommandChoice.cpp` の `scope_of` と `palette_origin_label`。値を足すとコンパイルが落ちる。
-- 閉じた和型の写し漏れ（#259）: `CommandChoiceKind` の `open` は **planned**（実装で active・`submit_palette` の `default` の無い `switch`・CPP-002）。
+- 閉じた和型の写し漏れ（#259）: **active**（`default` の無い `switch`・CPP-002）。`CommandChoiceKind` の `open` は `src/application/EditorController.cpp` の `EditorController::submit_palette`。`PaletteScope::history` は `src/core/CommandChoice.cpp` の `in_scope`・`src/core/CommandPalette.cpp` の `CommandPalette::choices`・`src/application/CommandInput.cpp` の `completions_of`、`PaletteOrigin::history` は `src/core/CommandChoice.cpp` の `scope_of` と `palette_origin_label`。値を足すとコンパイルが落ちる。
 - core と application が OS とファイルに触れないこと: **active**（既存の `eng/symbols.py`）。
-- 起動と「開く」の道に履歴の読み書きが無いこと: **planned**（#259 の契約で、替え玉の port の読み書きの回数を数える。速さの 6 本は設計席が測る）。
-- 実機の確認: **planned**（設計席が画で確かめる。機械の必須 check ではない）。#258 は設計席が 1 回限りの撮影で確かめた（gate-proofs の #258 の節）。
+- 起動と「開く」の道に履歴の読み書きが無いこと: **active**（`tests/unit/HistoryTests.cpp` の `verify_quiet_paths`: ファイル引数つきの起動・前回のタブを戻す起動・`OpenDocument`（同じファイルへの切り替えを含む）・`SwitchTab`・`NewTab`・`SaveDocument`・打鍵で、替え玉の port の読みと書きがどちらも 0 回。履歴の行から開く道の書き 0 回は `verify_palette_history_open`）。速さの 6 本は設計席が測った（gate-proofs の #259 の節）。
+- 実機の確認: **planned**（設計席が画で確かめる。機械の必須 check ではない）。#258 は設計席が 1 回限りの撮影で確かめた（gate-proofs の #258 の節）。#259 も設計席が 1 回限りの撮影で確かめた（gate-proofs の #259 の節）。
 - fixture: **不能**（oracle の対象ではない）。既存の fixture は不変（`eng/protected-diff.py`）。
 
 ## 結果
