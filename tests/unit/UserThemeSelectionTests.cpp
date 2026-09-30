@@ -145,7 +145,7 @@ void verify_user_theme_commands()
     expect(line.text() == "colorscheme my-theme", "Ex Tab completes user theme");
     line = line.edited(core::CommandEdit::backspace);
     expect(line.completions().front() == "colorscheme my-theme", "editing preserves catalog");
-    auto palette = core::CommandPalette::opened(catalog).inserted("my-t").value();
+    auto palette = core::CommandPalette::opened({}, ":", 0, catalog).inserted("my-t").value();
     expect(palette.choices().front().command == "colorscheme my-theme",
            "palette finds the same user theme");
     palette = palette.filled("colorscheme broken").value();
@@ -166,7 +166,7 @@ void verify_user_theme_controller()
     static_cast<void>(controller.apply(InsertText{"body"}));
     const auto before = controller.frame();
     static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"my-t"}));
+    static_cast<void>(controller.apply(app::CommandText{":my-t"}));
     auto frame = controller.apply(app::SubmitCommand{});
     expect(frame.settings.theme == user_choice("my-theme") && frame.appearance == Appearance::light,
            "controller applies user theme and appearance");
@@ -177,7 +177,7 @@ void verify_user_theme_controller()
     expect(frame.lines.front().text == "body" && frame.caret == before.caret,
            "theme leaves body and caret intact");
     static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"broken"}));
+    static_cast<void>(controller.apply(app::CommandText{":broken"}));
     frame = controller.apply(app::SubmitCommand{});
     expect(frame.command_message.value_or(fixed_text("none")).text() ==
                    "broken: Invalid RGB or RGBA color" &&
@@ -252,7 +252,7 @@ void verify_blocked_theme_noop()
     editor.settings().fail(failure);
     auto &controller = editor.controller();
     static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"colorscheme system"}));
+    static_cast<void>(controller.apply(app::CommandText{":colorscheme system"}));
     const auto frame = controller.apply(app::SubmitCommand{});
     expect(frame.settings_failure == failure,
            "same-setting command cannot clear blocked startup error");

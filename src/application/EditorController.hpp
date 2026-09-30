@@ -3,6 +3,7 @@
 #include "AppearancePort.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
+#include "CommandChoice.hpp"
 #include "CompositionView.hpp"
 #include "Document.hpp"
 #include "DocumentView.hpp"
@@ -130,9 +131,13 @@ class EditorController final
     void accept(const SubmitCommand &);
     void accept(const CancelCommand &);
     void accept(const PasteCommand &);
+    // Ctrl+P（ADR 0060 の決定 6）。候補の列を入力が空で開き、先頭を選ぶ。
     void accept(const OpenCommandPalette &);
-    // 開いているタブの一覧（ADR 0057 の決定 7）。Ctrl+P の面を帯の順の候補で開く。
+    // 開いているタブの一覧（「∨」と `:tabs`・ADR 0060 の決定 6）。Ctrl+P と同じ列を入力 `#` で
+    // 開き、アクティブなタブの行を選ぶ。
     void accept(const OpenTabList &);
+    // Ctrl+P の面の候補の列を作る 1 本（ADR 0060 の決定 6）。開いているタブ（帯の順）。
+    [[nodiscard]] std::vector<core::CommandChoice> palette_entries() const;
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
     void accept(const StoreVimRegister &intent);

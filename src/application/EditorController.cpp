@@ -20,6 +20,7 @@
 #include "ExTabVerb.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
+#include "PaletteOrigin.hpp"
 #include "ParkedTab.hpp"
 #include "SaveState.hpp"
 #include "ScrollBounds.hpp"
@@ -1534,11 +1535,11 @@ void EditorController::accept(const OpenCommandPalette &)
         accept(CancelCommand{});
         return;
     }
-    state_ = state_.with_command_input(core::CommandPalette::opened(state_.themes()));
+    state_ = state_.with_command_input(
+        core::CommandPalette::opened(palette_entries(), "", 0, state_.themes()));
 }
 
-// 一覧の候補は帯の表示値から作る（題名は帯と同じ・場所はファイルのあるフォルダ・実行は Ex の
-// `tabnext N`）。開いている間の OpenTabList は Ctrl+P と同じく閉じる（ADR 0057 の決定 7）。
+// 開いている間の OpenTabList は Ctrl+P と同じく閉じる（ADR 0057 の決定 7）。
 void EditorController::accept(const OpenTabList &)
 {
     if (state_.composition().has_value())
@@ -1550,18 +1551,25 @@ void EditorController::accept(const OpenTabList &)
         accept(CancelCommand{});
         return;
     }
+    state_ = state_.with_command_input(
+        core::CommandPalette::opened(palette_entries(), "#", state_.active_tab(), state_.themes()));
+}
+
+// タブの候補は帯の表示値から作る（題名は帯と同じ・場所はファイルのあるフォルダ・実行は Ex の
+// `tabnext N`・印は tab）。
+std::vector<core::CommandChoice> EditorController::palette_entries() const
+{
     const auto views = tab_views(state_, active_document_view());
-    std::vector<core::CommandChoice> tabs;
-    tabs.reserve(views.size());
+    std::vector<core::CommandChoice> entries;
+    entries.reserve(views.size());
     for (std::size_t index = 0; index < views.size(); ++index)
     {
         const DocumentView &view = views.at(index);
-        tabs.push_back(core::CommandChoice{view.title, "tabnext " + std::to_string(index + 1),
-                                           core::CommandChoiceKind::execute,
-                                           core::tab_folder_for(view.path)});
+        entries.push_back(core::CommandChoice{
+            view.title, "tabnext " + std::to_string(index + 1), core::CommandChoiceKind::execute,
+            core::tab_folder_for(view.path), core::PaletteOrigin::tab});
     }
-    state_ = state_.with_command_input(
-        core::CommandPalette::opened_tabs(std::move(tabs), state_.active_tab(), state_.themes()));
+    return entries;
 }
 
 void EditorController::accept(const ActivateCommandChoice &intent)

@@ -7,8 +7,9 @@
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
+#include "CommandLine.hpp"
 #include "CommandPalette.hpp"
-#include "CommandPaletteSource.hpp"
+#include "CommandPaletteView.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
@@ -25,14 +26,21 @@
 #include "InputLineView.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
+#include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenTabList.hpp"
 #include "PaletteLayout.hpp"
+#include "PaletteMarks.hpp"
+#include "PaletteOrigin.hpp"
+#include "PaletteQuery.hpp"
+#include "PaletteScope.hpp"
 #include "PasteCommand.hpp"
 #include "Scopes.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
 #include "SubmitCommand.hpp"
+#include "SwitchTab.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "ThemeChoice.hpp"
@@ -107,9 +115,10 @@ void verify_palette_choices()
 void verify_palette_editing()
 {
     using core::CommandEdit;
-    auto palette = core::CommandPalette::opened();
-    expect(palette.input().text() == ":" && palette.selected() == 0,
-           "palette opens in command mode");
+    auto palette = core::CommandPalette::opened({}, ":", 0);
+    expect(palette.input().text() == ":" && palette.selected() == 0 &&
+               palette.scope() == core::PaletteScope::commands,
+           "the colon mark lists the commands");
     const auto count = palette.choices().size();
     palette = palette.edited(CommandEdit::complete_previous);
     expect(palette.selected() == count - 1, "previous wraps backwards");
@@ -184,7 +193,7 @@ void verify_palette_controller()
     expect(frame.caret == before.caret &&
                frame.lines.front().selection == before.lines.front().selection,
            "opening keeps body selection and caret");
-    static_cast<void>(controller.apply(app::CommandText{"fz"}));
+    static_cast<void>(controller.apply(app::CommandText{":fz"}));
     frame = controller.apply(app::SubmitCommand{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == ":set fontsize=",
            "Enter on a fill candidate stages the value");
@@ -199,12 +208,12 @@ void verify_palette_controller()
                frame.lines.front().text == "body",
            "execution preserves body and selection");
     static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"set fontsize=90"}));
+    static_cast<void>(controller.apply(app::CommandText{":set fontsize=90"}));
     frame = controller.apply(app::SubmitCommand{});
     expect(frame.command_message.has_value() && editor.settings().writes() == 1,
            "invalid value uses Ex failure and does not save");
     static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"drac"}));
+    static_cast<void>(controller.apply(app::CommandText{":drac"}));
     editor.settings().fail(app::SettingsFailure::unwritable);
     frame = controller.apply(app::SubmitCommand{});
     expect(frame.command_message.has_value() && !frame.settings.theme.has_value(),
@@ -220,7 +229,7 @@ void verify_palette_unknown_theme()
     for (const auto query : {"colorscheme missing", "colorscheme systemx", "colorscheme dracula|q"})
     {
         static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-        static_cast<void>(controller.apply(app::CommandText{query}));
+        static_cast<void>(controller.apply(app::CommandText{":" + std::string(query)}));
         const auto frame = controller.apply(app::SubmitCommand{});
         const auto expected = core::evaluate_ex(query, frame.settings, frame.appearance);
         expect(!frame.command_palette.has_value() && frame.command_message.has_value(),
@@ -250,6 +259,7 @@ void verify_palette_input_isolation()
     frame = controller.apply(CommitText{"界"});
     expect(!frame.composition.has_value() && frame.lines.front().text == "body",
            "late IME events cannot edit the body");
+    static_cast<void>(controller.apply(app::CommandText{":"}));
     editor.clipboard().hold(std::string("set guifont=MS Gothic:h17"));
     frame = controller.apply(app::PasteCommand{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == ":set guifont=MS Gothic:h17",
@@ -288,7 +298,7 @@ void verify_palette_vim_modes()
         auto frame = controller.apply(app::VimKeyPress{core::VimCharacter{U'x'}});
         expect(frame.lines.front().text == "body" && frame.vim_mode == before.vim_mode,
                "palette blocks body Vim commands without resetting mode");
-        static_cast<void>(controller.apply(app::CommandText{"drac"}));
+        static_cast<void>(controller.apply(app::CommandText{":drac"}));
         frame = controller.apply(app::SubmitCommand{});
         expect(frame.settings.theme == core::ThemeChoice::from(core::BuiltinTheme::dracula),
                "theme executes in every Vim state");
@@ -316,10 +326,13 @@ void verify_palette_vim_modes()
     expect(frame.command_line.has_value() && !frame.command_palette.has_value(),
            "Ex still opens independently after palette cancellation");
 }
-[[nodiscard]] core::CommandChoice tab_choice(std::string_view title, std::size_t number)
+[[nodiscard]] core::CommandChoice tab_choice(std::string_view title, std::size_t number,
+                                             std::optional<std::string_view> folder = std::nullopt)
 {
-    return core::CommandChoice{fixed_text(title), "tabnext " + std::to_string(number),
-                               core::CommandChoiceKind::execute, std::nullopt};
+    return core::CommandChoice{
+        fixed_text(title), "tabnext " + std::to_string(number), core::CommandChoiceKind::execute,
+        folder.has_value() ? std::optional{fixed_text(folder.value())} : std::nullopt,
+        core::PaletteOrigin::tab};
 }
 
 [[nodiscard]] std::vector<std::string> commands_of(const std::vector<core::CommandChoice> &choices)
@@ -332,36 +345,173 @@ void verify_palette_vim_modes()
     return commands;
 }
 
-// タブの一覧の候補（ADR 0057 の決定 7）。空の入力は帯の順、入力があれば題名の部分列で絞って
-// 点数の順（同点は帯の順）。大文字と小文字は区別しない。
-void verify_tab_list_choices()
+[[nodiscard]] bool query_is(std::string_view input, core::PaletteScope scope,
+                            std::string_view query)
+{
+    const auto split = core::palette_query_of(input);
+    return split.scope == scope && split.query == query;
+}
+
+// 出どころの記号の表（ADR 0060 の決定 2）。先頭の 1 文字が表にあればその出どころと残り、無ければ
+// files と入力の全体。案内の文字列も同じ表から作る。
+void verify_palette_marks()
+{
+    expect(query_is("", core::PaletteScope::files, ""), "an empty input lists every file");
+    expect(query_is("#abc", core::PaletteScope::tabs, "abc"), "the hash mark selects the tabs");
+    expect(query_is(":set", core::PaletteScope::commands, "set"),
+           "the colon mark selects the commands");
+    expect(query_is("abc", core::PaletteScope::files, "abc"), "plain text searches the files");
+    expect(query_is("@a", core::PaletteScope::files, "@a") &&
+               query_is("*a", core::PaletteScope::files, "*a") &&
+               query_is("/a", core::PaletteScope::files, "/a"),
+           "marks outside the table are plain search text");
+    expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
+    expect(core::palette_mark_hint().text() == "# タブ\u3000: 設定",
+           "the hint is built from the table");
+    expect(core::palette_origin_label(core::PaletteOrigin::tab) == "開いているタブ",
+           "the tab origin has its label");
+}
+
+// 絞り込みと順（ADR 0060 の決定 4）。scope で残し、query が空なら列の順、名前の当たりが場所だけの
+// 当たりより先、同点は列の順、どちらにも当たらなければ落ちる。
+void verify_listed_choices()
+{
+    const std::vector<core::CommandChoice> entries{
+        tab_choice("● note.txt", 1, "C:\\work"), tab_choice("無題", 2),
+        tab_choice("Notes.md", 3, "C:\\docs"), tab_choice("readme.md", 4, "C:\\notes"),
+        core::CommandChoice{fixed_text("tabs"), "tabs", core::CommandChoiceKind::execute}};
+    const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3", "tabnext 4"};
+    expect(commands_of(core::listed_choices(entries, core::PaletteScope::files, "")) == all,
+           "files keeps every entry with an origin in list order");
+    expect(commands_of(core::listed_choices(entries, core::PaletteScope::tabs, "")) == all,
+           "tabs keeps the tab entries in list order");
+    expect(core::listed_choices(entries, core::PaletteScope::commands, "").empty(),
+           "commands are not listed from the entries");
+    expect(commands_of(core::listed_choices(entries, core::PaletteScope::tabs, "NOTE")) ==
+               std::vector<std::string>{"tabnext 3", "tabnext 1", "tabnext 4"},
+           "name hits come first in score order and a folder hit follows, ignoring case");
+    const std::vector<core::CommandChoice> folder_first{
+        tab_choice("a.md", 1, "C:\\note"),
+        tab_choice("x-note-with-a-rather-long-name.txt", 2, "C:\\work")};
+    expect(commands_of(core::listed_choices(folder_first, core::PaletteScope::files, "note")) ==
+               std::vector<std::string>{"tabnext 2", "tabnext 1"},
+           "a name hit beats a shorter folder-only hit");
+    const std::vector<core::CommandChoice> twins{tab_choice("x.txt", 1), tab_choice("a.txt", 2),
+                                                 tab_choice("a.txt", 3)};
+    expect(commands_of(core::listed_choices(twins, core::PaletteScope::tabs, "a")) ==
+               std::vector<std::string>{"tabnext 2", "tabnext 3"},
+           "equal scores keep list order");
+    expect(core::listed_choices(entries, core::PaletteScope::files, "zq").empty(),
+           "an entry that matches neither name nor folder is dropped");
+    expect(commands_of(core::listed_choices(entries, core::PaletteScope::files, "work")) ==
+               std::vector<std::string>{"tabnext 1"},
+           "the folder and the name are searched together");
+}
+
+// CommandPalette は開いたときの列を持ち、入力の先頭の記号で出どころを切り替える（決定 1・5）。
+void verify_palette_sources()
 {
     const std::vector<core::CommandChoice> tabs{tab_choice("● note.txt", 1), tab_choice("無題", 2),
                                                 tab_choice("Notes.md", 3),
                                                 tab_choice("another note", 4)};
-    const auto opened = core::CommandPalette::opened_tabs(tabs, 2);
-    expect(opened.source() == core::CommandPaletteSource::tabs && opened.input().text().empty() &&
-               opened.selected() == 2,
-           "the tab list opens with an empty input on the active tab");
-    expect(commands_of(opened.choices()) ==
-               std::vector<std::string>{"tabnext 1", "tabnext 2", "tabnext 3", "tabnext 4"},
-           "an empty query lists the tabs in band order");
-    const auto filtered = opened.inserted("NOTE").value();
+    const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3", "tabnext 4"};
+    const auto empty = core::CommandPalette::opened(tabs, "", 0);
+    expect(empty.scope() == core::PaletteScope::files && commands_of(empty.choices()) == all &&
+               empty.selected() == 0,
+           "an empty input lists every entry with an origin");
+    const auto listed = core::CommandPalette::opened(tabs, "#", 2);
+    expect(listed.scope() == core::PaletteScope::tabs && listed.input().text() == "#" &&
+               listed.selected() == 2 && commands_of(listed.choices()) == all,
+           "the hash input opens on the given row");
+    expect(core::CommandPalette::opened(tabs, "#", 9).selected() == 0,
+           "a row outside the choices selects the first");
+    const auto filtered = listed.inserted("NOTE").value();
     expect(commands_of(filtered.choices()) ==
                    std::vector<std::string>{"tabnext 3", "tabnext 4", "tabnext 1"} &&
                filtered.selected() == 0,
            "a query keeps the matching titles in score order, ignoring case");
-    const std::vector<core::CommandChoice> twins{tab_choice("x.txt", 1), tab_choice("a.txt", 2),
-                                                 tab_choice("a.txt", 3)};
-    expect(commands_of(core::tab_list_choices(twins, "a")) ==
-               std::vector<std::string>{"tabnext 2", "tabnext 3"},
-           "equal scores keep band order");
-    expect(opened.edited(core::CommandEdit::complete_next).selected() == 3 &&
-               opened.edited(core::CommandEdit::complete_previous).selected() == 1,
+    expect(listed.edited(core::CommandEdit::complete_next).selected() == 3 &&
+               listed.edited(core::CommandEdit::complete_previous).selected() == 1,
            "up and down move the selection over the tab rows");
-    expect(core::CommandPalette::opened().source() == core::CommandPaletteSource::commands &&
-               opened.selected_at(0).source() == core::CommandPaletteSource::tabs,
-           "the source stays with the palette it opened");
+    const auto erased = listed.edited(core::CommandEdit::backspace);
+    expect(erased.input().text().empty() && erased.scope() == core::PaletteScope::files &&
+               commands_of(erased.choices()) == all,
+           "erasing the mark lists every entry");
+    for (const auto query : {":", ":drac", ":fz", ":set fontsize=18", ":colorscheme missing"})
+    {
+        const auto commands = empty.inserted(query).value();
+        expect(commands.scope() == core::PaletteScope::commands &&
+                   commands_of(commands.choices()) == commands_of(choices_for(query)),
+               "the colon mark gives the same commands as before");
+    }
+    auto staged = empty.inserted(":fz").value().filled("set fontsize=").value();
+    expect(staged.input().text() == ":set fontsize=" &&
+               staged.scope() == core::PaletteScope::commands,
+           "fill stages the command behind the colon mark");
+    while (!staged.input().text().empty())
+    {
+        staged = staged.edited(core::CommandEdit::backspace);
+    }
+    expect(commands_of(staged.inserted("#").value().choices()) == all,
+           "the entries survive a fill");
+}
+
+// Ctrl+P と「∨」は同じ列を開き、Enter はタブを切り替え、`:` の後ろは今までどおり（決定 6）。
+void verify_palette_entries_controller()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(InsertText{"one"}));
+    static_cast<void>(controller.apply(app::NewTab{}));
+    static_cast<void>(controller.apply(InsertText{"two"}));
+    static_cast<void>(controller.apply(app::NewTab{}));
+    static_cast<void>(controller.apply(InsertText{"three"}));
+    static_cast<void>(controller.apply(app::SwitchTab{1}));
+    const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3"};
+    auto frame = controller.apply(app::OpenCommandPalette{});
+    const auto opened = frame.command_palette.value_or(app::CommandPaletteView{});
+    bool marked = frame.command_palette.has_value();
+    for (const auto &choice : opened.choices)
+    {
+        marked = marked && choice.origin == std::optional{core::PaletteOrigin::tab};
+    }
+    expect(marked && commands_of(opened.choices) == all,
+           "Ctrl+P lists the tabs in band order with the tab origin");
+    expect(frame.command_line.value_or(core::InputLineView{}).text.empty() &&
+               frame.command_line.value_or(core::InputLineView{}).completions.empty() &&
+               opened.selected == 0,
+           "Ctrl+P opens with an empty input on the first row without Ex completions");
+    frame = controller.apply(app::SubmitCommand{});
+    expect(frame.active_tab == 0 && !frame.command_palette.has_value() &&
+               frame.lines.front().text == "one",
+           "Enter on a Ctrl+P row switches to that tab");
+    frame = controller.apply(app::OpenTabList{});
+    const auto listed = frame.command_palette.value_or(app::CommandPaletteView{});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "#" && listed.selected == 0 &&
+               commands_of(listed.choices) == all,
+           "the tab list opens the same entries behind the hash mark on the active tab");
+    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
+    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
+    frame = controller.apply(app::SubmitCommand{});
+    expect(frame.active_tab == 2 && !frame.command_palette.has_value() &&
+               frame.lines.front().text == "three",
+           "Enter on a tab list row switches like SwitchTab");
+    frame = controller.apply(app::OpenTabList{});
+    expect(frame.command_palette.value_or(app::CommandPaletteView{}).selected == 2,
+           "the tab list selects the active tab");
+    static_cast<void>(controller.apply(app::CancelCommand{}));
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    frame = controller.apply(app::CommandText{":colo"});
+    expect(frame.command_line.value_or(core::InputLineView{}).completions ==
+               core::CommandLine::empty().inserted(":colo").value().completions(),
+           "the colon mark keeps the Ex completions of its input");
+    static_cast<void>(controller.apply(app::CancelCommand{}));
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{":colorscheme dracula"}));
+    frame = controller.apply(app::SubmitCommand{});
+    expect(frame.settings.theme == core::ThemeChoice::from(core::BuiltinTheme::dracula) &&
+               !frame.command_palette.has_value() && frame.active_tab == 2,
+           "a command behind the colon mark changes the theme as before");
 }
 
 void verify_tab_folders()
@@ -386,7 +536,10 @@ void verify_command_palette()
     verify_palette_unknown_theme();
     verify_palette_input_isolation();
     verify_palette_vim_modes();
-    verify_tab_list_choices();
+    verify_palette_marks();
+    verify_listed_choices();
+    verify_palette_sources();
+    verify_palette_entries_controller();
     verify_tab_folders();
 }
 } // namespace nenenib::tests
