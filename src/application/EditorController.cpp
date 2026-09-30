@@ -18,6 +18,8 @@
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "FileHistory.hpp"
+#include "FileHistoryEdit.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
 #include "PaletteMarks.hpp"
@@ -623,6 +625,54 @@ constexpr std::string_view clipped_mark = "…";
     }
     // 材料は検証済みの経路と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
     return core::DisplayText::parse(std::string(unreached_prefix) + name + suffix).value();
+}
+
+// 帯の位置 position のタブのパス（無題なら無し）。脇の束は帯の位置からアクティブを抜いた順。
+[[nodiscard]] std::optional<core::FilePath> tab_path_at(const EditorState &state,
+                                                        std::size_t position)
+{
+    if (position == state.active_tab())
+    {
+        return state.document().path;
+    }
+    const std::size_t parked = position < state.active_tab() ? position : position - 1;
+    return std::visit([](const auto &value) { return std::optional{parked_path(value)}; },
+                      state.parked().at(parked));
+}
+
+// パスのあるタブの全部を、使った順の古いほうから並べる（最後に見ていたタブが末尾）。順位は 0 が
+// いちばん最近。std::stable_sort は ARC-003 に落ちるので std::sort（順位は rank_session_tabs が
+// 詰め直した一意の値）。
+[[nodiscard]] std::vector<core::FilePath> oldest_first_paths(const EditorState &state)
+{
+    std::vector<SessionTab> tabs = session_of(state).tabs;
+    std::ranges::sort(tabs, [](const SessionTab &left, const SessionTab &right)
+                      { return left.recency > right.recency; });
+    std::vector<core::FilePath> paths;
+    paths.reserve(tabs.size());
+    for (const SessionTab &tab : tabs)
+    {
+        paths.push_back(tab.path);
+    }
+    return paths;
+}
+
+// 窓が閉じていくときに履歴へ記録するパス（ADR 0060 の決定 8）。記録の順に並べる。window_closed は
+// パスのあるタブの全部を使った順の古いほうから（最後に見ていたタブが履歴の先頭になる）、
+// last_tab_closed は閉じたその 1 本（アクティブな文書）。
+[[nodiscard]] std::vector<core::FilePath> ended_paths(const EditorState &state, SessionEnd reason)
+{
+    switch (reason)
+    {
+    case SessionEnd::window_closed:
+        return oldest_first_paths(state);
+    case SessionEnd::last_tab_closed:
+    {
+        const auto &path = state.document().path;
+        return path.has_value() ? std::vector{path.value()} : std::vector<core::FilePath>{};
+    }
+    }
+    std::unreachable();
 }
 
 // Ctrl+Tab の歩きを続けたまま受け取れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の
@@ -1574,6 +1624,25 @@ std::vector<core::CommandChoice> EditorController::palette_entries() const
             view.title, "tabnext " + std::to_string(index + 1), core::CommandChoiceKind::execute,
             core::tab_folder_for(view.path), core::PaletteOrigin::tab});
     }
+    // 履歴は面を開くときに 1 回だけ読む（ADR 0060 の決定 8）。読めなければ履歴の候補なしで開き、
+    // 知らせない。開いているタブと同じファイルは、タブの候補として出ているので重ねない。
+    const auto history = ports_.history.read();
+    if (!history)
+    {
+        return entries;
+    }
+    for (const core::FilePath &path : history.value().files)
+    {
+        if (open_tab_of(path).has_value())
+        {
+            continue;
+        }
+        // 名前はタブの題名と同じ作り方（未保存の印なし）。確定は open_listed へ写すパスの文字列。
+        entries.push_back(
+            core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
+                                std::string(path.text()), core::CommandChoiceKind::open,
+                                core::tab_folder_for(path), core::PaletteOrigin::history});
+    }
     return entries;
 }
 
@@ -1605,6 +1674,16 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
     {
     case core::CommandChoiceKind::execute:
         evaluate_command(choice.command);
+        return;
+    case core::CommandChoiceKind::open:
+        // 入力を閉じてから開く（evaluate_command と同じ順・choice は入力ではなく手元の列を指す）。
+        // open の候補は palette_entries が検証済みの FilePath の text() から作るので parse は必ず
+        // 成功する（不変条件）。失敗したら何もしない。
+        state_ = state_.with_command_input(std::nullopt);
+        if (const auto path = core::FilePath::parse(choice.command); path.has_value())
+        {
+            open_listed(path.value());
+        }
         return;
     case core::CommandChoiceKind::fill:
         break;
@@ -2124,31 +2203,86 @@ bool EditorController::blank_untitled() const
 // 開く（ADR 0056 の決定 5）。(a) 同じファイルのタブへ切り替える（読み直さない）→ (b) 何も
 // 書いていない無題ならそこに開く → (c) アクティブの右に新しいタブを足して開く。開けなかったら
 // タブを足さず失敗を告げる。
-void EditorController::accept(const OpenDocument &intent)
+// タブを足さず失敗を返す。失敗の告げ方は呼び出し元が決める（ADR 0060 の決定 7）。
+std::expected<void, FileFailure> EditorController::open_document(const core::FilePath &path)
 {
-    const auto open = open_tab_of(intent.path);
+    const auto open = open_tab_of(path);
     if (open.has_value())
     {
         accept(SwitchTab{open.value()});
-        return;
+        return {};
     }
     // ファイルが変わる途中の変換は捨てる（ADR 0014 の決定 3）。
     state_ = state_.with_composition(std::nullopt);
-    auto document = read_document(intent.path);
+    auto document = read_document(path);
     if (!document)
     {
-        fail(document.error());
-        return;
+        return std::unexpected(document.error());
     }
     auto [text, opened] = std::move(document).value();
     if (blank_untitled())
     {
         state_ = state_.with_opened(std::move(text), std::move(opened));
-        return;
+        return {};
     }
     leave_document();
     state_ = state_.with_new_tab().with_opened(std::move(text), std::move(opened));
     enter_document();
+    return {};
+}
+
+// Ctrl+O と起動引数の開く。失敗はダイアログ（ADR 0010 の決定 9）。
+void EditorController::accept(const OpenDocument &intent)
+{
+    const auto opened = open_document(intent.path);
+    if (!opened)
+    {
+        fail(opened.error());
+    }
+}
+
+// 一覧から選んだファイルを開く（ADR 0060 の決定 7）。失敗はダイアログではなく 1 行の知らせで、
+// 無くなっていたファイル（not_found）だけ履歴から外す（D30）。ほかの失敗は履歴に残す。
+void EditorController::open_listed(const core::FilePath &path)
+{
+    const auto opened = open_document(path);
+    if (opened)
+    {
+        return;
+    }
+    state_ = state_.with_command_message(unreached_message(path, 0));
+    if (opened.error() == FileFailure::not_found)
+    {
+        forget(path);
+    }
+}
+
+// 履歴に記録する 1 本（ADR 0060 の決定 8）。書くたびに読んで足す（ほかの窓の分を失わない）。
+// 読めなければ空の履歴から。結果の失敗は捨てる（履歴は無くても動く・状態も知らせも変えない）。
+void EditorController::remember(const std::vector<core::FilePath> &paths)
+{
+    if (paths.empty())
+    {
+        return;
+    }
+    FileHistory history = ports_.history.read().value_or(FileHistory{});
+    for (const core::FilePath &path : paths)
+    {
+        history = history_recorded(std::move(history), path, ports_.files);
+    }
+    static_cast<void>(ports_.history.write(history));
+}
+
+// 履歴から外す 1 本（D30）。読めなければ外すものが無いので書かない。結果の失敗は捨てる。
+void EditorController::forget(const core::FilePath &path)
+{
+    auto history = ports_.history.read();
+    if (!history)
+    {
+        return;
+    }
+    static_cast<void>(
+        ports_.history.write(history_forgotten(std::move(history).value(), path, ports_.files)));
 }
 
 void EditorController::accept(const SaveDocument &intent)
@@ -2290,6 +2424,8 @@ void EditorController::accept(const WalkRecentTab &intent)
 void EditorController::accept(const EndSession &intent)
 {
     static_cast<void>(ports_.session.write(ended_session(state_, intent.reason)));
+    // 閉じたファイルを履歴に記録する（ADR 0060 の決定 8）。一覧の書きの後。
+    remember(ended_paths(state_, intent.reason));
 }
 
 void EditorController::accept(const SettleRecentTab &)
@@ -2322,14 +2458,24 @@ void EditorController::accept(const CloseTab &intent)
     {
         state_ = state_.with_hovered(std::nullopt);
     }
+    // 閉じるタブにパスがあれば、閉じた後に履歴へ記録する（ADR 0060 の決定 8）。最後の 1 本は上で
+    // 窓を閉じる印だけを立て、窓が閉じるとき（EndSession）に記録する。隣が読めずに外れたタブは
+    // 記録しない（使う人が閉じたのは 1 本だけ）。
+    const std::optional<core::FilePath> closed = tab_path_at(state_, intent.index);
     // 脇のタブを閉じてもアクティブな文書は動かないので、一時の値も閉じない。
     if (intent.index != state_.active_tab())
     {
         state_ = state_.with_closed(intent.index);
         reveal_active_tab();
-        return;
     }
-    close_active_tab();
+    else
+    {
+        close_active_tab();
+    }
+    if (closed.has_value())
+    {
+        remember({closed.value()});
+    }
 }
 
 // アクティブを閉じる。次にアクティブになる隣（右隣・無ければ左隣）を先に読み、読めなければ外して

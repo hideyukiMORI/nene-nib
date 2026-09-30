@@ -50,6 +50,7 @@ namespace
         return palette.input().completions();
     case core::PaletteScope::files:
     case core::PaletteScope::tabs:
+    case core::PaletteScope::history:
         return {};
     }
     std::unreachable();

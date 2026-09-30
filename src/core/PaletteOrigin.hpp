@@ -9,7 +9,8 @@ namespace nenenib::core
 // 出どころで絞る関数と補足の文言の switch が落ちる（CPP-002）。
 enum class PaletteOrigin : std::uint8_t
 {
-    tab
+    tab,
+    history
 };
 
 // 行の右に添える補足の文言（ADR 0060 の決定 3）。

@@ -56,6 +56,11 @@ class ScriptedHistory final : public nenenib::application::HistoryPort
     {
         return written_;
     }
+    // 次からの読みが返す値を仕込む（読みも書きも数えない）。
+    void serve(HistoryReading reading)
+    {
+        reading_ = std::move(reading);
+    }
     void fail(std::optional<nenenib::application::FileHistoryFailure> failure)
     {
         failure_ = failure;

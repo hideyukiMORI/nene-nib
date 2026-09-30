@@ -50,6 +50,7 @@ std::vector<CommandChoice> CommandPalette::choices() const
         return palette_choices(input_);
     case PaletteScope::files:
     case PaletteScope::tabs:
+    case PaletteScope::history:
         return listed_choices(*entries_, query.scope, query.query);
     }
     std::unreachable();

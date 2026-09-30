@@ -22,6 +22,9 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExResult.hpp"
+#include "FileFailure.hpp"
+#include "FileHistory.hpp"
+#include "FileHistoryFailure.hpp"
 #include "FilePath.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
@@ -30,6 +33,7 @@
 #include "LayoutRect.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenDocument.hpp"
 #include "OpenTabList.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
@@ -38,6 +42,8 @@
 #include "PaletteScope.hpp"
 #include "PasteCommand.hpp"
 #include "Scopes.hpp"
+#include "ScriptedFiles.hpp"
+#include "ScriptedHistory.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
@@ -50,6 +56,7 @@
 #include "VimKeyPress.hpp"
 
 #include <cstddef>
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -363,15 +370,17 @@ void verify_palette_marks()
     expect(query_is(":set", core::PaletteScope::commands, "set"),
            "the colon mark selects the commands");
     expect(query_is("abc", core::PaletteScope::files, "abc"), "plain text searches the files");
-    expect(query_is("@a", core::PaletteScope::files, "@a") &&
-               query_is("*a", core::PaletteScope::files, "*a") &&
+    expect(query_is("@a", core::PaletteScope::history, "a"), "the at mark selects the history");
+    expect(query_is("*a", core::PaletteScope::files, "*a") &&
                query_is("/a", core::PaletteScope::files, "/a"),
            "marks outside the table are plain search text");
     expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
-    expect(core::palette_mark_hint().text() == "# タブ\u3000: 設定",
+    expect(core::palette_mark_hint().text() == "# タブ\u3000@ 履歴\u3000: 設定",
            "the hint is built from the table");
     expect(core::palette_origin_label(core::PaletteOrigin::tab) == "開いているタブ",
            "the tab origin has its label");
+    expect(core::palette_origin_label(core::PaletteOrigin::history) == "履歴",
+           "the history origin has its label");
 }
 
 // 絞り込みと順（ADR 0060 の決定 4）。scope で残し、query が空なら列の順、名前の当たりが場所だけの
@@ -577,6 +586,129 @@ void verify_palette_hint_view()
            "the tab list behind the hash mark has no hint");
 }
 
+// ---------------------------------------------------------------- 履歴（#259・ADR 0060 の決定
+// 7・8）
+
+[[nodiscard]] app::FileHistory history_of(const std::vector<std::string_view> &texts)
+{
+    app::FileHistory history;
+    for (const std::string_view text : texts)
+    {
+        history.files.push_back(core::FilePath::parse(text).value());
+    }
+    return history;
+}
+
+[[nodiscard]] std::string history_text(const HistoryReading &reading)
+{
+    std::string text;
+    for (const core::FilePath &path : reading.value_or(app::FileHistory{}).files)
+    {
+        text += std::string(path.text()) + "|";
+    }
+    return text;
+}
+
+[[nodiscard]] app::CommandPaletteView palette_of(const app::EditorFrame &frame)
+{
+    return frame.command_palette.value_or(app::CommandPaletteView{});
+}
+
+[[nodiscard]] std::string notice_of(const app::EditorFrame &frame)
+{
+    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                             : std::string("none");
+}
+
+// 開いている C:\work\a.txt（履歴の中では大文字の綴り）と、履歴の x y。
+void open_history_editor(Editing &editor)
+{
+    editor.files().hold_at("C:\\work\\a.txt", Bytes{"a"});
+    editor.files().treat_as_same("C:\\Work\\A.TXT", "C:\\work\\a.txt");
+    editor.history().serve(history_of({"C:\\docs\\x.txt", "C:\\Work\\A.TXT", "C:\\docs\\y.txt"}));
+    applied(editor.controller(),
+            app::OpenDocument{core::FilePath::parse("C:\\work\\a.txt").value()});
+}
+
+// Ctrl+P はタブの後ろに履歴を新しい順に出し、開いているファイルは重ねない。`@` は履歴だけ、`#` は
+// タブだけ。履歴を読むのは開くときの 1 回（決定 6・8）。
+void verify_palette_history_rows()
+{
+    Editing editor;
+    open_history_editor(editor);
+    auto &controller = editor.controller();
+    auto frame = controller.apply(app::OpenCommandPalette{});
+    const auto opened = palette_of(frame);
+    expect(commands_of(opened.choices) ==
+               std::vector<std::string>{"tabnext 1", "C:\\docs\\x.txt", "C:\\docs\\y.txt"},
+           "Ctrl+P lists the tabs and then the history, newest first, without the open file");
+    const auto &row = opened.choices.at(1);
+    expect(row.label.text() == "x.txt" && row.kind == core::CommandChoiceKind::open &&
+               row.detail.has_value() && row.detail.value().text() == "C:\\docs" &&
+               row.origin == std::optional{core::PaletteOrigin::history},
+           "a history row has the file name, its folder, the open kind and the history origin");
+    expect(editor.history().reads() == 1 && editor.history().writes() == 0,
+           "opening the palette reads the history once and writes nothing");
+    frame = controller.apply(app::CommandText{"@"});
+    expect(commands_of(palette_of(frame).choices) ==
+               std::vector<std::string>{"C:\\docs\\x.txt", "C:\\docs\\y.txt"},
+           "the at mark lists only the history");
+    frame = controller.apply(app::CommandText{"y"});
+    expect(commands_of(palette_of(frame).choices) == std::vector<std::string>{"C:\\docs\\y.txt"},
+           "a query behind the at mark filters the history");
+    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
+    frame = controller.apply(app::CommandText{"#"});
+    expect(commands_of(palette_of(frame).choices) == std::vector<std::string>{"tabnext 1"},
+           "the hash mark lists only the tabs");
+    expect(editor.history().reads() == 1, "typing in the palette never reads the history again");
+    static_cast<void>(controller.apply(app::CancelCommand{}));
+    editor.history().serve(HistoryReading{std::unexpected(app::FileHistoryFailure::malformed)});
+    frame = controller.apply(app::OpenCommandPalette{});
+    expect(commands_of(palette_of(frame).choices) == std::vector<std::string>{"tabnext 1"} &&
+               notice_of(frame) == "none",
+           "an unreadable history opens the palette with the tabs only and no notice");
+}
+
+// 履歴の行を選ぶと開く道を通って開き、失敗は 1 行の知らせ。無いファイルだけ履歴から外す（決定 7）。
+void verify_palette_history_open()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    editor.files().hold_at("C:\\docs\\x.txt", Bytes{"x"});
+    editor.files().hold_at("C:\\docs\\big.txt",
+                           Bytes{std::unexpected(app::FileFailure::too_large)});
+    static_cast<void>(controller.apply(InsertText{"one"}));
+    editor.history().serve(history_of({"C:\\docs\\x.txt"}));
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{"@"}));
+    auto frame = controller.apply(app::SubmitCommand{});
+    expect(frame.tabs.size() == 2 && frame.active_tab == 1 && !frame.command_palette.has_value() &&
+               frame.lines.front().text == "x" && editor.history().writes() == 0,
+           "a history row opens in a new tab, closes the palette and records nothing");
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    frame = controller.apply(app::SubmitCommand{});
+    expect(frame.tabs.size() == 2 && frame.active_tab == 0, "a tab row still switches tabs");
+    editor.history().serve(history_of({"C:\\docs\\gone.txt", "C:\\docs\\big.txt"}));
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{"@gone"}));
+    frame = controller.apply(app::SubmitCommand{});
+    expect(frame.tabs.size() == 2 && frame.active_tab == 0 && !frame.command_palette.has_value() &&
+               notice_of(frame) == "開けませんでした: gone.txt" &&
+               !frame.document.last_failure.has_value(),
+           "a missing file keeps the tabs and shows one notice line without the dialog");
+    expect(editor.history().writes() == 1 &&
+               history_text(editor.history().read()) == "C:\\docs\\big.txt|",
+           "a missing file leaves the history in one write");
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{"@big"}));
+    frame = controller.apply(app::SubmitCommand{});
+    expect(frame.tabs.size() == 2 && notice_of(frame) == "開けませんでした: big.txt" &&
+               !frame.document.last_failure.has_value() && editor.history().writes() == 1 &&
+               history_text(editor.history().read()) == "C:\\docs\\big.txt|",
+           "a file too large to open is only noticed and stays in the history");
+}
+
 void verify_tab_folders()
 {
     const auto folder = core::tab_folder_for(core::FilePath::parse("C:\\work\\note.txt").value());
@@ -605,6 +737,8 @@ void verify_command_palette()
     verify_palette_entries_controller();
     verify_palette_notes_geometry();
     verify_palette_hint_view();
+    verify_palette_history_rows();
+    verify_palette_history_open();
     verify_tab_folders();
 }
 } // namespace nenenib::tests
