@@ -75,12 +75,19 @@
 
 ## 強制
 
-- 契約（#258 の分）: **planned**。記号から出どころを決める表・絞り込みと順・Ctrl+P と「∨」と `:tabs` が同じ列を開くこと・`:` の後ろが今のコマンド一覧と同じ結果であること・確定でタブが切り替わること（scope `nib_tests --command-palette` と `--tabs`）。
+- 契約（#258 の分）: **active**（`tests/unit/CommandPaletteTests.cpp` と `tests/unit/TabsTests.cpp`。入口は scope `nib_tests --command-palette` と `--tabs` と既定の実行・CTest `nib_unit`）。
+  - `verify_palette_marks`: 記号の表（`#` `:` と表に無い `@` `*` `/`・先頭でない `#`）から出どころと残りの文字を決めること・案内の文字列・補足の文言。
+  - `verify_listed_choices`: 出どころごとの絞り込み・空の入力は列の順・名前で当たった候補が場所だけで当たった候補より先・同点は列の順・当たらない候補は落ちる。
+  - `verify_palette_sources`: 空の入力で全部・`#` で渡した位置を選ぶ（範囲の外は先頭）・`#` を消すと全部・`:` の後ろが `choices_for`（今のコマンド一覧）と同じ結果・補った後も列が残ること。
+  - `verify_palette_entries_controller`: Ctrl+P は入力が空で帯の順のタブ（印 `tab`）・「∨」の入口 `OpenTabList` は入力が `#` でアクティブのタブを選ぶ・Enter でタブが切り替わる・`:colo` の補完と `:colorscheme` の確定が今までどおり。
+  - `verify_palette_notes_geometry` / `verify_palette_hint_view`: 行の右端の補足と検索欄の案内の配置（96 / 120 dpi・狭い欄で幅 0）と、案内は入力が空のときだけ出ること（決定 9）。
+  - `TabsTests.cpp` の `verify_tab_list_rows` / `verify_tab_list_entries`: 一覧の入力が `#`・行に印 `tab`・`OpenTabList` と `:tabs` と Ctrl+P の空の入力が同じ列を開くこと・確定でタブが切り替わること。
 - 契約（#259 の分）: **planned**。記録（先頭へ・重ねない・100 件）・閉じたときだけ書くこと・開いているタブを履歴の候補から除くこと・選んで開く・`not_found` は 1 行知らせて外す・adapter の往復と壊れた入力の拒否。
-- 閉じた和型の写し漏れ: `PaletteScope` `PaletteOrigin`（#258）・`CommandChoiceKind` の `open`（#259）は **planned**（実装で active・`default` の無い `switch`・CPP-002）。
+- 閉じた和型の写し漏れ（#258）: `PaletteScope` `PaletteOrigin` は **active**（`default` の無い `switch`・CPP-002）。`PaletteScope` は `src/core/CommandChoice.cpp` の `in_scope`・`src/core/CommandPalette.cpp` の `CommandPalette::choices`・`src/application/CommandInput.cpp` の `completions_of`、`PaletteOrigin` は `src/core/CommandChoice.cpp` の `scope_of` と `palette_origin_label`。値を足すとコンパイルが落ちる。
+- 閉じた和型の写し漏れ（#259）: `CommandChoiceKind` の `open` は **planned**（実装で active・`submit_palette` の `default` の無い `switch`・CPP-002）。
 - core と application が OS とファイルに触れないこと: **active**（既存の `eng/symbols.py`）。
 - 起動と「開く」の道に履歴の読み書きが無いこと: **planned**（#259 の契約で、替え玉の port の読み書きの回数を数える。速さの 6 本は設計席が測る）。
-- 実機の確認: **planned**（設計席が画で確かめる。機械の必須 check ではない）。
+- 実機の確認: **planned**（設計席が画で確かめる。機械の必須 check ではない）。#258 は設計席が 1 回限りの撮影で確かめた（gate-proofs の #258 の節）。
 - fixture: **不能**（oracle の対象ではない）。既存の fixture は不変（`eng/protected-diff.py`）。
 
 ## 結果

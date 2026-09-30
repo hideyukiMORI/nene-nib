@@ -28,8 +28,9 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   drag-to-select, block `I A c C`, general Ex (`:w :q`, ranges, pipes, history).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim". Done.
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT` and `:tabnext` `:tabnew` `:tabclose`. Done; reordering by drag is planned.
-- **FR-006 Ctrl+P** — lists the settings commands only (themes, `set fontsize=`, `set guifont=`); files, folders,
-  bookmarks and history are planned.
+- **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, fuzzy-matched by name and then by folder.
+  A leading mark narrows the list: `#` shows the tabs only, `:` shows the settings commands (themes,
+  `set fontsize=`, `set guifont=`). History, the current folder and bookmarks are planned.
 - **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS; CRLF / LF kept as read; unsaved mark and
   "save?" prompt. Done.
