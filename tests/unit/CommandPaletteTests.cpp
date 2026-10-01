@@ -843,6 +843,28 @@ void verify_input_lines_drop_composition()
     }
 }
 
+// 記号の案内は変換を始めたら消え、取り消して空に戻ればまた出る。確定して文字が入れば出ない
+// （ADR 0060 の決定 9・#264 の差し戻し 1）。
+void verify_palette_hint_composing()
+{
+    Editing editor;
+    open_palette_over_body(editor, false);
+    auto &controller = editor.controller();
+    auto frame = controller.frame();
+    expect(palette_of(frame).hint.has_value(), "an opened palette shows the mark hint");
+    frame = controller.apply(ComposeText{composed_of("あ", {}, 3)});
+    expect(frame.command_composition.has_value() && !palette_of(frame).hint.has_value(),
+           "a composition in the palette hides the mark hint");
+    frame = controller.apply(CancelComposition{});
+    expect(!app::composing(frame) && palette_of(frame).hint.has_value(),
+           "a cancelled composition shows the hint again");
+    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 3)}));
+    frame = controller.apply(CommitText{"メモ"});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "メモ" &&
+               !palette_of(frame).hint.has_value(),
+           "a committed query keeps the hint hidden");
+}
+
 void verify_palette_composition()
 {
     for (const auto vim : {false, true})
@@ -850,6 +872,7 @@ void verify_palette_composition()
         verify_palette_commit(vim);
         verify_palette_closing_composition(vim);
     }
+    verify_palette_hint_composing();
     verify_palette_commit_limits();
     verify_input_lines_drop_composition();
 }

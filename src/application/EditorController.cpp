@@ -915,8 +915,9 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
     }
     if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
     {
-        // 記号の案内は入力が空のときだけ（ADR 0060 の決定 9）。1 文字でも打てば消える。
-        auto hint = palette->input().text().empty()
+        // 記号の案内は入力が空で、入力行が変換中でないときだけ（ADR 0060 の決定 9）。
+        // 1 文字でも打てば消え、変換を始めても消える（長い変換の文字列に重ねない）。
+        auto hint = palette->input().text().empty() && !command_composed().has_value()
                         ? std::optional<core::DisplayText>{core::palette_mark_hint()}
                         : std::nullopt;
         return CommandPaletteView{palette->choices(), palette->selected(), std::move(hint)};
