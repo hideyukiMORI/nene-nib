@@ -164,6 +164,10 @@ class Direct2DRenderer final
     void draw_status_left(const application::EditorFrame &frame,
                           const core::StatusBarLayout &layout);
     void draw_command(const application::EditorFrame &frame, const core::LayoutRect &area);
+    // 入力行の変換の面と下線を文字の 1 行の上下に引き、画素に揃えた上下を返す。
+    [[nodiscard]] D2D1_RECT_F draw_command_clauses(const application::EditorFrame &frame,
+                                                   IDWriteTextLayout *text, D2D1_RECT_F line,
+                                                   UINT32 base);
     void draw_completions(const application::EditorFrame &frame,
                           const core::StatusBarLayout &status);
     void draw_palette(const application::EditorFrame &frame, const core::PaletteLayout &layout);

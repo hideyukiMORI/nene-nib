@@ -1193,16 +1193,16 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
     brush_->SetColor(to_color(frame.palette.text));
     context_->DrawTextLayout(D2D1::Point2F(origin, static_cast<float>(area.top)), text.Get(),
                              brush_.Get());
+    // 文字の 1 行の上下（キャレットの棒と同じ）。原点は横ずらしの後の左端。
+    const float line_top = static_cast<float>(area.top) + caret_y;
+    auto line =
+        D2D1::RectF(origin, line_top, static_cast<float>(area.right), line_top + metrics.height);
     if (frame.command_composition.has_value())
     {
-        // 下線は本文の変換と同じ 1 本（ADR 0014 の決定 7）。原点は横ずらしの後の左端。
-        const core::LayoutRect shifted{static_cast<std::int32_t>(origin), area.top, area.right,
-                                       area.bottom};
-        draw_clauses(frame, text.Get(), shifted, utf16_at(shown, at));
+        line = draw_command_clauses(frame, text.Get(), line, utf16_at(shown, at));
     }
-    const auto caret_bar = D2D1::RectF(origin + caret_x, static_cast<float>(area.top) + caret_y,
-                                       origin + caret_x + scaled(2.0F),
-                                       static_cast<float>(area.top) + caret_y + metrics.height);
+    const auto caret_bar =
+        D2D1::RectF(origin + caret_x, line.top, origin + caret_x + scaled(2.0F), line.bottom);
     brush_->SetColor(to_color(frame.palette.accent));
     context_->FillRectangle(caret_bar, brush_.Get());
     context_->PopAxisAlignedClip();
@@ -1210,6 +1210,28 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
     caret_rectangle_ =
         RECT{static_cast<LONG>(caret_bar.left), static_cast<LONG>(caret_bar.top),
              static_cast<LONG>(caret_bar.right), static_cast<LONG>(caret_bar.bottom)};
+}
+
+D2D1_RECT_F Direct2DRenderer::draw_command_clauses(const application::EditorFrame &frame,
+                                                   IDWriteTextLayout *text, D2D1_RECT_F line,
+                                                   UINT32 base)
+{
+    // 下線は本文の変換と同じ 1 本（ADR 0014 の決定 7）。本文と同じく 1 行の矩形を渡し、
+    // 面と下線とキャレットの棒を同じ画素の上下に揃える。
+    const float top = std::floor(line.top);
+    const float bottom = std::ceil(line.bottom);
+    // 他の文節の色は渡した上端から layout を描き直す（tint_runs）。上下の中央寄せの余白を
+    // 上端の端数にして、描き直した字を入力行の字と同じ高さに置く。
+    if (FAILED(text->SetMaxHeight((line.bottom - line.top) + (2.0F * (line.top - top)))))
+    {
+        return line;
+    }
+    draw_clauses(
+        frame, text,
+        core::LayoutRect{static_cast<std::int32_t>(line.left), static_cast<std::int32_t>(top),
+                         static_cast<std::int32_t>(line.right), static_cast<std::int32_t>(bottom)},
+        base);
+    return D2D1::RectF(line.left, top, line.right, bottom);
 }
 
 void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,
