@@ -937,12 +937,15 @@ void Direct2DRenderer::draw_other_clause(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_clauses(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                     const core::LayoutRect &area, UINT32 base)
 {
-    if (!frame.composition.has_value())
+    // 本文の変換と面の入力行の変換は同時に値を持たない（ADR 0061 の決定 4）ので、在る方を引く。
+    const auto &shown =
+        frame.command_composition.has_value() ? frame.command_composition : frame.composition;
+    if (!shown.has_value())
     {
         return;
     }
     // 変換中の文字列は UTF-16 の base に差し込んであるので、文節の位置はそこから数える。
-    const auto &composition = frame.composition.value();
+    const auto &composition = shown.value();
     for (const auto &clause : composition.underlines)
     {
         const UINT32 from = base + utf16_at(composition.utf8, clause.range.begin.value);
@@ -1158,7 +1161,16 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
     }
     const auto &command = frame.command_line.value();
     const std::string prefix = prompt_text(command.prompt);
-    const auto shown = prefix + command.text;
+    // 入力の文字のキャレットの位置（バイト）。変換中の文字列はここへ差し込む（ADR 0061 の決定 5）。
+    const std::size_t at = prefix.size() + command.caret.value;
+    auto shown = prefix + command.text;
+    std::size_t caret = at;
+    if (frame.command_composition.has_value())
+    {
+        const auto &composition = frame.command_composition.value();
+        shown.insert(at, composition.utf8);
+        caret = at + composition.cursor.value;
+    }
     const auto text = text_layout(shown, command_format_.Get(), area);
     if (!text)
     {
@@ -1167,24 +1179,37 @@ void Direct2DRenderer::draw_command(const application::EditorFrame &frame,
     float caret_x = 0.0F;
     float caret_y = 0.0F;
     DWRITE_HIT_TEST_METRICS metrics{};
-    if (FAILED(text->HitTestTextPosition(utf16_at(shown, command.caret.value + prefix.size()),
-                                         FALSE, &caret_x, &caret_y, &metrics)))
+    if (FAILED(
+            text->HitTestTextPosition(utf16_at(shown, caret), FALSE, &caret_x, &caret_y, &metrics)))
     {
         return;
     }
-    const auto offset =
+    const float overflow =
         std::max(caret_x + scaled(3.0F) - static_cast<float>(core::width_of(area)), 0.0F);
+    // 文節の下線は整数の原点から引くので、変換中だけは横ずらしを画素に揃える（下線と字を揃える）。
+    const float offset = frame.command_composition.has_value() ? std::ceil(overflow) : overflow;
     const float origin = static_cast<float>(area.left) - offset;
     context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
     brush_->SetColor(to_color(frame.palette.text));
     context_->DrawTextLayout(D2D1::Point2F(origin, static_cast<float>(area.top)), text.Get(),
                              brush_.Get());
+    if (frame.command_composition.has_value())
+    {
+        // 下線は本文の変換と同じ 1 本（ADR 0014 の決定 7）。原点は横ずらしの後の左端。
+        const core::LayoutRect shifted{static_cast<std::int32_t>(origin), area.top, area.right,
+                                       area.bottom};
+        draw_clauses(frame, text.Get(), shifted, utf16_at(shown, at));
+    }
+    const auto caret_bar = D2D1::RectF(origin + caret_x, static_cast<float>(area.top) + caret_y,
+                                       origin + caret_x + scaled(2.0F),
+                                       static_cast<float>(area.top) + caret_y + metrics.height);
     brush_->SetColor(to_color(frame.palette.accent));
-    context_->FillRectangle(D2D1::RectF(origin + caret_x, static_cast<float>(area.top) + caret_y,
-                                        origin + caret_x + scaled(2.0F),
-                                        static_cast<float>(area.top) + caret_y + metrics.height),
-                            brush_.Get());
+    context_->FillRectangle(caret_bar, brush_.Get());
     context_->PopAxisAlignedClip();
+    // 候補窓はこの矩形の直下に出る（place_candidate_window・ADR 0061 の決定 5）。
+    caret_rectangle_ =
+        RECT{static_cast<LONG>(caret_bar.left), static_cast<LONG>(caret_bar.top),
+             static_cast<LONG>(caret_bar.right), static_cast<LONG>(caret_bar.bottom)};
 }
 
 void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,

@@ -372,30 +372,6 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
                           ImmGetCompositionStringW(context, GCS_CURSORPOS, nullptr, 0));
 }
 
-// Vim の INSERT でだけ IME を開けておく。通常モードの開閉には触らない（ADR 0014 の決定 5）。
-// VISUAL は鍵が命令なので NORMAL と同じく切る（ADR 0018 の決定 1）。
-[[nodiscard]] bool ime_blocked(core::EditMode mode, core::VimMode vim) noexcept
-{
-    switch (mode)
-    {
-    case core::EditMode::ordinary:
-        return false;
-    case core::EditMode::vim:
-        break;
-    }
-    switch (vim)
-    {
-    case core::VimMode::insert:
-        return false;
-    case core::VimMode::normal:
-    case core::VimMode::visual:
-    case core::VimMode::visual_line:
-    case core::VimMode::visual_block:
-        return true;
-    }
-    std::unreachable();
-}
-
 // Ctrl+V を矩形の鍵として送るモード（ADR 0035 の決定 9）。INSERT だけは OS の貼付に譲る。
 [[nodiscard]] bool vim_block_key(core::VimMode vim) noexcept
 {
@@ -1207,30 +1183,62 @@ void EditorWindow::place_candidate_window()
     ImmReleaseContext(window_, context);
 }
 
+// 構えは application の ime_stance_of が決めて frame に載せる。ui はその値を実行するだけで、
+// モードや入力行の有無から IME を決めない（ADR 0061 の決定 2）。
 void EditorWindow::follow_ime(const application::EditorFrame &frame)
 {
-    if (frame.command_line.has_value() || ime_blocked(frame.mode, frame.vim_mode))
+    const auto previous = ime_stance_;
+    ime_stance_ = frame.ime;
+    switch (frame.ime)
     {
+    case application::ImeStance::as_left:
+        restore_ime();
+        return;
+    case application::ImeStance::closed:
         close_ime();
         return;
+    case application::ImeStance::closed_once:
+        // 入るときに 1 度だけ閉じる。続く意図では、使う人が開いた IME を閉じ直さない。
+        if (previous != application::ImeStance::closed_once)
+        {
+            close_ime();
+        }
+        return;
     }
-    restore_ime();
+    std::unreachable();
 }
 
 void EditorWindow::close_ime()
 {
-    // 控えが在る＝すでに切ってある。切る前の値を上書きしない（決定 5）。
-    if (ime_open_ != ImeOpenState::unrecorded)
-    {
-        return;
-    }
     const HIMC context = ImmGetContext(window_);
     if (context == nullptr)
     {
         return;
     }
-    ime_open_ = ImmGetOpenStatus(context) != FALSE ? ImeOpenState::open : ImeOpenState::closed;
-    ImmSetOpenStatus(context, FALSE);
+    // 控えが在れば切る前の値を上書きしない（ADR 0014 の決定 5）。閉じるのは控えの有無に依らない
+    // ＝面の中で開いた IME も、Vim の NORMAL へ戻るときに閉じ直す（ADR 0061 の決定 2）。
+    const bool open = ImmGetOpenStatus(context) != FALSE;
+    if (ime_open_ == ImeOpenState::unrecorded)
+    {
+        ime_open_ = open ? ImeOpenState::open : ImeOpenState::closed;
+    }
+    // 閉じているときは OS に何も送らない（NORMAL の打鍵ごとに通知を起こさない）。
+    if (open)
+    {
+        ImmSetOpenStatus(context, FALSE);
+    }
+    ImmReleaseContext(window_, context);
+}
+
+// 面が閉じて入力行の変換が消えたとき、IME の側に変換を残さない（ADR 0061 の決定 3）。
+void EditorWindow::cancel_ime_composition()
+{
+    const HIMC context = ImmGetContext(window_);
+    if (context == nullptr)
+    {
+        return;
+    }
+    ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
     ImmReleaseContext(window_, context);
 }
 
@@ -1258,6 +1266,17 @@ void EditorWindow::send(const application::EditorIntent &intent)
     const float previous_size =
         font_change ? controller_.frame().settings.font_size.points() : 0.0F;
     auto frame = controller_.apply(intent);
+    // 面が閉じて入力行の変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
+    // の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
+    // 変換の無い frame に CancelComposition を送るだけ（再入は 1 段で止まる）。
+    const bool command_composed = command_composing_;
+    command_composing_ = frame.command_composition.has_value();
+    if (command_composed && !command_composing_ &&
+        !std::holds_alternative<application::CommitText>(intent) &&
+        !std::holds_alternative<application::CancelComposition>(intent))
+    {
+        cancel_ime_composition();
+    }
     // 閉じたいタブは意図を送った結果の frame にだけ載る（ADR 0057 の決定 6）。下で frame を
     // 作り直す前に読んでおく。
     const auto close_request = frame.close_request;
