@@ -54,6 +54,7 @@
 #include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
 #include "WalkRecentTab.hpp"
+#include "WorkCompleted.hpp"
 
 #include <dwmapi.h>
 #include <imm.h>
@@ -63,6 +64,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -87,6 +89,8 @@ constexpr wchar_t first_low_surrogate = 0xDC00;
 constexpr wchar_t last_low_surrogate = 0xDFFF;
 constexpr wchar_t first_printable = 0x20;
 constexpr wchar_t delete_character = 0x7F;
+// 裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。番号を持つのはここだけ。
+constexpr UINT work_message = WM_APP + 1;
 // キー → キャレットの移動は表で引く（CPP-012）。Ctrl の有無は表そのものを分けて表す。
 constexpr std::array<KeyMotion, 8> plain_motions{{{VK_LEFT, core::CaretMotion::previous_character},
                                                   {VK_RIGHT, core::CaretMotion::next_character},
@@ -622,6 +626,22 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_IME_ENDCOMPOSITION:
         return compose_message(message, word, data);
     case WM_CLOSE:
+    case WM_ENDSESSION:
+    case WM_DESTROY:
+    case work_message:
+        return lifetime_message(message, word, data);
+    default:
+        break;
+    }
+    return DefWindowProcW(window_, message, word, data);
+}
+
+LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
+{
+    // 窓の終わりの 3 通と、裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。
+    switch (message)
+    {
+    case WM_CLOSE:
         close_window();
         return 0;
     case WM_ENDSESSION:
@@ -633,6 +653,9 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
         return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
+        return 0;
+    case work_message:
+        receive_work();
         return 0;
     default:
         break;
@@ -1258,6 +1281,37 @@ void EditorWindow::restore_ime()
 }
 
 void EditorWindow::send(const application::EditorIntent &intent)
+{
+    // close_tab の中の send・MessageBoxW の入れ子のループの中で受けた入力の send は深さ 2 以上。
+    ++sending_depth_;
+    deliver(intent);
+    --sending_depth_;
+    // いちばん外の send の終わりで、途中で届いた合図を 1 回だけ送る。close_tab が窓を壊していたら
+    // 送らない。送る send も深さを数えるので、その途中で届いた合図はまた次の 1 回にまとまる。
+    if (sending_depth_ == 0 && std::exchange(work_waiting_, false) && window_ != nullptr)
+    {
+        send(application::WorkCompleted{});
+    }
+}
+
+void EditorWindow::receive_work()
+{
+    if (sending_depth_ > 0)
+    {
+        work_waiting_ = true;
+        return;
+    }
+    send(application::WorkCompleted{});
+}
+
+std::function<void()> EditorWindow::work_signal() const
+{
+    const HWND window = window_;
+    // 戻り値は見ない。壊れた窓への post は失敗するだけで、合図を落としてよい（決定 7）。
+    return [window] { static_cast<void>(PostMessageW(window, work_message, 0, 0)); };
+}
+
+void EditorWindow::deliver(const application::EditorIntent &intent)
 {
     const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent) ||
                              std::holds_alternative<application::SubmitCommand>(intent) ||

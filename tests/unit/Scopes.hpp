@@ -25,6 +25,10 @@ void verify_session_scope();
 void verify_history_contracts();
 void verify_history_scope();
 
+// BackgroundWorkTests.cpp
+void verify_background_work_contracts();
+void verify_background_work_scope();
+
 // VimDotTests.cpp
 void verify_vim_dot_contracts();
 void verify_vim_dot_scope();

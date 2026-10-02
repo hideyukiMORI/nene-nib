@@ -94,7 +94,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
     tests/unit/SessionTests.cpp
-    tests/unit/HistoryTests.cpp)
+    tests/unit/HistoryTests.cpp
+    tests/unit/BackgroundWorkTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)

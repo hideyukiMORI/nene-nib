@@ -160,6 +160,8 @@ class EditorController final
     void accept(const CloseTab &intent);
     // 窓が閉じていくときに前回のタブの一覧を書く（ADR 0059 の決定 3）。状態は変えない。
     void accept(const EndSession &intent);
+    // 裏の仕事の合図（ADR 0062 の決定 7）。使う人の操作の途中の状態を動かさない。
+    void accept(const WorkCompleted &);
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);

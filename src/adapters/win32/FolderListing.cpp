@@ -79,6 +79,11 @@ FolderListing::FolderListing(application::FolderRequest request, std::uint64_t g
 
 void FolderListing::run(const std::stop_token &stop)
 {
+    // キューで待っている間に古くなった列挙は、最初の I/O も呼ばずに戻る。
+    if (!live(stop))
+    {
+        return;
+    }
     const auto pattern = core::to_utf16(joined(request_.folder.text(), "*"));
     if (!pattern)
     {
