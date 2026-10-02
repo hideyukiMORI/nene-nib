@@ -4,6 +4,7 @@
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "FilePort.hpp"
+#include "FolderPort.hpp"
 #include "HistoryPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
@@ -22,5 +23,7 @@ struct EditorPorts
     ThemePort &themes;
     SessionPort &session;
     HistoryPort &history;
+    // 同じフォルダを裏で読む（ADR 0062 の決定 10）。#271 では controller はまだ呼ばない。
+    FolderPort &folders;
 };
 } // namespace nenenib::application

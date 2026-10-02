@@ -10,11 +10,13 @@
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
+#include "Win32FolderAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ThemeAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
+#include "Win32Worker.hpp"
 #include "WindowFailure.hpp"
 
 #include <windows.h>
@@ -140,9 +142,14 @@ int run(HINSTANCE instance)
     // （ADR 0060 の決定 8）。
     nenenib::adapters::win32::Win32HistoryAdapter history(
         files, nenenib::adapters::win32::local_history_path());
+    // 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
+    // スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
+    // （壊れる順は 窓 → controller → adapter → ワーカー）。
+    nenenib::adapters::win32::Win32Worker worker;
+    nenenib::adapters::win32::Win32FolderAdapter folders(worker);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
-                                          themes, session, history},
+                                          themes, session, history, folders},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
@@ -154,6 +161,9 @@ int run(HINSTANCE instance)
     }
     // OpenClipboard に要る HWND は窓ができてから渡す（ADR 0009 の決定 5）。
     clipboard.bind(window.value()->handle());
+    // 「届いた」の合図も窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（決定
+    // 7）。
+    folders.bind(window.value()->work_signal());
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {

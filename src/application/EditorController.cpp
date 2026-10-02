@@ -680,10 +680,12 @@ constexpr std::string_view clipped_mark = "…";
 // Ctrl+Tab の歩きを続けたまま受け取れる意図（ADR 0058 の決定 4）。歩きの 1 歩と確定、それに窓の
 // 寸法・外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の
 // 意図は写す前に歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
+// 裏の仕事の合図（WorkCompleted）も使う人の操作ではないので歩きを続ける（ADR 0062 の決定 7）。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WalkRecentTab>(intent) ||
            std::holds_alternative<SettleRecentTab>(intent) ||
+           std::holds_alternative<WorkCompleted>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<ScrollTabs>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
@@ -822,7 +824,7 @@ EditorFrame EditorController::apply(const EditorIntent &intent)
     settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
     // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。窓が閉じていくときの一覧の
-    // 書き出しも同じ（ADR 0059 の決定 3）。
+    // 書き出しも同じ（ADR 0059 の決定 3）。裏の仕事の合図も同じ（ADR 0062 の決定 7）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
                  std::holds_alternative<CancelComposition>(intent) ||
@@ -830,7 +832,8 @@ EditorFrame EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<PointTitleBar>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
-                 std::holds_alternative<EndSession>(intent));
+                 std::holds_alternative<EndSession>(intent) ||
+                 std::holds_alternative<WorkCompleted>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     return frame();
@@ -2446,6 +2449,10 @@ void EditorController::accept(const EndSession &intent)
     // 閉じたファイルを履歴に記録する（ADR 0060 の決定 8）。一覧の書きの後。
     remember(ended_paths(state_, intent.reason));
 }
+
+// 裏の仕事が読めた分を置いた（ADR 0062 の決定 7・10）。入口は歩きも知らせも残す。
+// #272 で collect() を呼ぶ。#271 では何もしない。
+void EditorController::accept(const WorkCompleted &) {}
 
 void EditorController::accept(const SettleRecentTab &)
 {

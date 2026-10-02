@@ -39,6 +39,7 @@
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
+#include "WorkCompleted.hpp"
 
 #include <variant>
 
@@ -55,5 +56,5 @@ using EditorIntent =
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
                  ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
                  WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth,
-                 OpenTabList, EndSession>;
+                 OpenTabList, EndSession, WorkCompleted>;
 } // namespace nenenib::application

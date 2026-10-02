@@ -22,6 +22,7 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
+#include "ScriptedFolders.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
@@ -358,16 +359,19 @@ void verify_quiet_paths()
         ScriptedThemes themes;
         ScriptedSession session;
         ScriptedHistory history;
+        ScriptedFolders folders;
         const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
-                                                      settings, themes, session, history},
+                                                      settings, themes, session, history, folders},
                                           {work_open('a'), work_open('b')});
-        expect(controller.frame().tabs.size() == 2 && history.reads() == 0 && history.writes() == 0,
-               "starting with file arguments never touches the history");
+        expect(controller.frame().tabs.size() == 2 && history.reads() == 0 &&
+                   history.writes() == 0 && folders.requests().empty() && folders.collects() == 0,
+               "starting with file arguments never touches the history nor the folder");
     }
     Editing restored(three_listed(), hold_work);
     expect(restored.controller().frame().tabs.size() == 3 && restored.history().reads() == 0 &&
-               restored.history().writes() == 0,
-           "restoring the last tabs never touches the history");
+               restored.history().writes() == 0 && restored.folders().requests().empty() &&
+               restored.folders().collects() == 0,
+           "restoring the last tabs never touches the history nor the folder");
     Editing editing;
     hold_work(editing.files());
     auto &controller = editing.controller();
@@ -380,8 +384,10 @@ void verify_quiet_paths()
     applied(controller,
             SaveDocument{path_of("C:\\work\\new.txt"), nenenib::core::TextEncoding::utf8});
     applied(controller, InsertText{"more"});
-    expect(editing.history().reads() == 0 && editing.history().writes() == 0,
-           "opening, switching, new tabs, saving and typing never touch the history");
+    expect(
+        editing.history().reads() == 0 && editing.history().writes() == 0 &&
+            editing.folders().requests().empty() && editing.folders().collects() == 0,
+        "opening, switching, new tabs, saving and typing never touch the history nor the folder");
 }
 } // namespace
 

@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -52,6 +53,10 @@ class EditorWindow final
     [[nodiscard]] bool rendering_failed() const noexcept;
     // クリップボードの OpenClipboard に渡す所有者。合成ルートが adapters へ結ぶためだけの口。
     [[nodiscard]] HWND handle() const noexcept;
+    // 裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。合成ルートが adapters へ結ぶためだけの口。
+    // 返す値は窓のハンドルを値で持ち、窓へ合図のメッセージを post するだけで、窓の状態に触れない
+    // （ワーカーのスレッドから呼ばれる・窓が壊れた後に呼ばれても post が失敗するだけ）。
+    [[nodiscard]] std::function<void()> work_signal() const;
 
   private:
     EditorWindow(HINSTANCE instance, application::EditorController &controller,
@@ -67,6 +72,8 @@ class EditorWindow final
     [[nodiscard]] LRESULT frame_message(UINT message, WPARAM word, LPARAM data);
     [[nodiscard]] LRESULT pointer_message(UINT message, WPARAM word, LPARAM data);
     [[nodiscard]] LRESULT key_message(UINT message, WPARAM word, LPARAM data);
+    // 窓を閉じる・OS の終了・壊れた・裏の仕事の合図の 4 通。
+    [[nodiscard]] LRESULT lifetime_message(UINT message, WPARAM word, LPARAM data);
     // Ctrl+Tab の歩きの確定（ADR 0058 の決定 4）。歩いているときだけ SettleRecentTab を送る。
     void settle_tab_walk();
     void limit_size(LPARAM data) const noexcept;
@@ -99,7 +106,13 @@ class EditorWindow final
     void refresh_appearance();
     void resize();
     void change_dpi(WPARAM word, LPARAM data);
+    // 意図を送る唯一の口。入れ子の深さを数え、途中で届いた裏の仕事の合図は、いちばん外の send が
+    // 終わる所で 1 回だけ WorkCompleted にして送る（ADR 0062 の決定 7）。
     void send(const application::EditorIntent &intent);
+    // send の本体（意図を写して frame を窓へ映す）。深さは数えない。
+    void deliver(const application::EditorIntent &intent);
+    // 合図のメッセージを受けた。send の途中なら覚えるだけ、そうでなければ送る。
+    void receive_work();
     void type_character(WPARAM word);
     void type_text(std::string utf8);
     void press_key(WPARAM word);
@@ -171,6 +184,9 @@ class EditorWindow final
     std::optional<application::ImeStance> ime_stance_;
     // 前の frame で面の入力行が変換中だったか。面が閉じて変換が消えた瞬間を知る（決定 3）。
     bool command_composing_ = false;
+    // いま入れ子になっている send の数と、send の途中で届いた合図（何回届いても 1 つ）。
+    std::size_t sending_depth_ = 0;
+    bool work_waiting_ = false;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
     ATOM class_ = 0;
