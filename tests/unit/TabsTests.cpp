@@ -1437,8 +1437,10 @@ void verify_ex_tab_open_and_close()
     {
         return false;
     }
-    const auto &choices = listed.command_palette.value().choices;
-    bool same = choices.size() == listed.tabs.size();
+    const auto &view = listed.command_palette.value();
+    const auto &choices = view.rows;
+    bool same =
+        view.first == 0 && view.total == choices.size() && choices.size() == listed.tabs.size();
     for (std::size_t index = 0; same && index < choices.size(); ++index)
     {
         const auto &choice = choices.at(index);
@@ -1469,7 +1471,7 @@ void verify_tab_list_rows()
     const auto listed = controller.apply(nenenib::application::OpenTabList{});
     const auto &palette = listed.command_palette;
     const auto &line = listed.command_line;
-    expect(palette.has_value() && line.has_value() && palette.value().choices.size() == 3 &&
+    expect(palette.has_value() && line.has_value() && palette.value().total == 3 &&
                palette.value().selected == 1 && line.value().text == "#" &&
                line.value().completions.empty(),
            "it lists every tab with the active one selected and the tabs mark as input");
@@ -1485,9 +1487,15 @@ void verify_tab_list_rows()
     std::vector<std::string> commands;
     if (frame.command_palette.has_value())
     {
-        for (const auto &choice : frame.command_palette.value().choices)
+        const auto &view = frame.command_palette.value();
+        for (const auto &choice : view.rows)
         {
             commands.push_back(choice.command);
+        }
+        // frame は窓だけを持つ（ADR 0062 の決定 2）。窓が全体でなければ全件の期待に一致させない。
+        if (view.first != 0 || view.rows.size() != view.total)
+        {
+            commands.emplace_back("<window>");
         }
     }
     return commands;

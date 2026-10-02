@@ -52,8 +52,8 @@
 | キーマップの表 | キー列 → 動作の `constexpr` の表。巨大な `switch` を書かない | `KeyBinding`（core） |
 | oracle | 本物の Vim（headless）。fixture の期待値を生成する開発時の道具。製品にも CI にも要らない | `eng/`（ADR 0005） |
 | fixture | 初期テキスト・キー列・oracle が出した期待値（本文・カーソル・レジスタ）の組。単体テストが再生する | `tests/unit/`（ADR 0005） |
-| ワーカー | `src/adapters/win32` が所有する固定の 1 本のスレッド。要求を受けて完了を返す | `WorkerPort` / `Win32WorkerAdapter`（ADR 0004） |
-| 要求（request）/ 完了（completion） | ワーカーへ渡す不変の値と、UI スレッドへ返る版番号付きの値 | application |
+| ワーカー | `src/adapters/win32` が所有する固定の 1 本のスレッド。要求を受けて完了を返す | 仕事の種類ごとの port（最初は `FolderPort`）（ADR 0004 / 0062） |
+| 要求（request）/ 完了（completion） | ワーカーへ渡す不変の値と、UI スレッドへ返る版番号付きの値。完了の知らせは中身の無い合図で、中身は application が port から引く（ADR 0062） | application |
 | 版番号 | 状態の世代。古い完了を捨てる唯一の判断材料 | application |
 | 速さの基準値 | ベンチ 3 本の参照値。退行でゲートが落ちる。「baseline」とは呼ばない | `eng/perf-reference.json`（ADR 0006） |
 | 表示文字列 | 検証済み（空・制御文字・不正 UTF-8・256 バイト超を拒否）の UTF-8 文字列。窓に描く 1 行の正本 | `DisplayText`（core） |

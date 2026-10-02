@@ -6,6 +6,7 @@
 #include "PaletteOrigin.hpp"
 #include "PaletteScope.hpp"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -29,7 +30,8 @@ struct CommandChoice
 // Ctrl+P の候補の列の絞り込みと順（ADR 0060 の決定 4）。scope に入る候補だけを残し（files は印の
 // ある候補の全部・commands はこの関数の外なので空）、query が空なら列の順、あれば名前に
 // match_score（大文字と小文字を区別しない部分列）、名前に当たらなければ「場所＋名前」に当てて
-// 固定の罰点を足す。点の小さい順で、同点は列の順。
-[[nodiscard]] std::vector<CommandChoice> listed_choices(const std::vector<CommandChoice> &entries,
+// 固定の罰点を足す。点の小さい順で、同点は列の順。結果は entries の中の位置の列で、候補の写しを
+// 作らない（ADR 0062 の決定 1）。
+[[nodiscard]] std::vector<std::size_t> listed_positions(const std::vector<CommandChoice> &entries,
                                                         PaletteScope scope, std::string_view query);
 } // namespace nenenib::core

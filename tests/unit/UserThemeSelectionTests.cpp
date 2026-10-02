@@ -147,10 +147,12 @@ void verify_user_theme_commands()
     line = line.edited(core::CommandEdit::backspace);
     expect(line.completions().front() == "colorscheme my-theme", "editing preserves catalog");
     auto palette = core::CommandPalette::opened({}, ":", 0, catalog).inserted("my-t").value();
-    expect(palette.choices().front().command == "colorscheme my-theme",
+    const auto found = palette.choice_at(0);
+    expect(found.has_value() && found.value().command == "colorscheme my-theme",
            "palette finds the same user theme");
     palette = palette.filled("colorscheme broken").value();
-    expect(palette.choices().front().command == "colorscheme broken",
+    const auto broken_choice = palette.choice_at(0);
+    expect(broken_choice.has_value() && broken_choice.value().command == "colorscheme broken",
            "failed theme remains actionable after fill");
     const auto system =
         core::evaluate_ex("colorscheme system", selected.settings.value_or(settings),

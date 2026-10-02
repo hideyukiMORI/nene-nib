@@ -1294,7 +1294,12 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
     }
     // 名前・場所と右端の補足の欄は core の配置が決める（ADR 0060 の決定 9）。印の無い候補（Ex の
     // コマンド）は補足を持たず、名前の欄は行の内側の全部で今までと同じ。
-    const auto &choice = palette.choices.at(index);
+    // frame は結果の窓だけを持つ（ADR 0062 の決定 2）。窓の外の位置は読まない（起きない）。
+    if (index < palette.first || index - palette.first >= palette.rows.size())
+    {
+        return;
+    }
+    const auto &choice = palette.rows.at(index - palette.first);
     const auto label = core::palette_row_label(row, dpi_, choice.origin.has_value());
     context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
     write(choice.label.text(), command_format_.Get(), label, frame.palette.text);
@@ -1350,13 +1355,13 @@ void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &fram
         return;
     }
     const auto &palette = frame.command_palette.value();
-    if (palette.choices.empty())
+    if (palette.total == 0)
     {
         write("候補なし", mode_format_.Get(), core::palette_row(layout, 0), frame.palette.muted);
         return;
     }
     const auto start = core::palette_first_visible(layout, palette.selected);
-    const auto count = std::min(layout.visible_rows, palette.choices.size() - start);
+    const auto count = std::min(layout.visible_rows, palette.total - start);
     for (std::size_t index = 0; index < count; ++index)
     {
         draw_palette_choice(frame, core::palette_row(layout, index), start + index);
@@ -1371,7 +1376,7 @@ void Direct2DRenderer::draw_palette_footer(const application::EditorFrame &frame
         return;
     }
     const auto &palette = frame.command_palette.value();
-    const auto total = palette.choices.size();
+    const auto total = palette.total;
     const auto position = total == 0 ? 0 : palette.selected + 1;
     const auto split = std::max(area.left, area.right - core::to_pixels(64, dpi_));
     const core::LayoutRect hint_area{area.left, area.top, split, area.bottom};
@@ -1434,8 +1439,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     draw_status_bar(frame, status);
     if (frame.command_palette.has_value())
     {
-        draw_palette(frame, core::palette_layout(width, height, dpi_,
-                                                 frame.command_palette.value().choices.size()));
+        draw_palette(
+            frame, core::palette_layout(width, height, dpi_, frame.command_palette.value().total));
     }
     const auto ended = context_->EndDraw();
     context_->SetTarget(nullptr);

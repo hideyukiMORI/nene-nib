@@ -23,6 +23,7 @@
 #include "ImeStance.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
+#include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
 #include "ParkedTab.hpp"
@@ -920,7 +921,11 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         auto hint = palette->input().text().empty() && !command_composed().has_value()
                         ? std::optional<core::DisplayText>{core::palette_mark_hint()}
                         : std::nullopt;
-        return CommandPaletteView{palette->choices(), palette->selected(), std::move(hint)};
+        // 載せるのは見えている行の窓だけ（ADR 0062 の決定 2）。全件は写さない。
+        const auto selected = palette->selected();
+        const auto first = core::palette_window_first(selected);
+        return CommandPaletteView{palette->rows(first, core::palette_row_limit), first, selected,
+                                  palette->count(), std::move(hint)};
     }
     return std::nullopt;
 }
@@ -1669,7 +1674,7 @@ void EditorController::accept(const ActivateCommandChoice &intent)
     }
     if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
     {
-        if (intent.index < palette->choices().size())
+        if (intent.index < palette->count())
         {
             submit_palette(palette->selected_at(intent.index));
         }
@@ -1678,12 +1683,12 @@ void EditorController::accept(const ActivateCommandChoice &intent)
 
 void EditorController::submit_palette(const core::CommandPalette &palette)
 {
-    const auto choices = palette.choices();
-    if (choices.empty())
+    const auto chosen = palette.choice_at(palette.selected());
+    if (!chosen.has_value())
     {
         return;
     }
-    const auto &choice = choices.at(palette.selected());
+    const auto &choice = chosen.value();
     switch (choice.kind)
     {
     case core::CommandChoiceKind::execute:

@@ -2239,3 +2239,68 @@ Ctrl+P の面は IME がオフで開き、使う人が「半角/全角」で開�
 対象を限定した理由: 差分は core の `match_score`、application の `ImeStance` `ime_stance_of` `EditorFrame` `EditorController`（変換の行き先・入力行を閉じる 1 本・案内）と `CommandPaletteView` のコメント、ui/win32 の `EditorWindow`（構えの実行・変換の取り消し）と `Direct2DRenderer`（入力行の変換の描画）、`CMakeLists.txt`、単体テスト `CommandPaletteTests.cpp` `ApplicationTests.cpp` で、Vim の engine と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--command-palette` だけ。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 と差し戻し 1・2 の成功結果と設計席の実機と速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-003 / ARC-004 / CPP-002 / CPP-004 / CPP-011 / QLT-001 / QLT-012 / QLT-013 / ADR 0042 を自己レビュー。IME の構えを決めるのは application の `ime_stance_of` の 1 本で ui は frame の値を実行するだけ・入力行を閉じるのは `close_command_input()` の 1 本・確定は打った文字と同じ `CommandText` の道・案内の判断は `command_palette_view()` の 1 か所（ARC-001）・core と application は OS に触れず IMM32 は ui/win32 だけ（ARC-003・symbols 0）・`ImeStance` の `switch` に `default` は無く入力の種類は `std::visit`（CPP-002）・`std::optional` は `value()` / `value_or()` で読む（CPP-004）・`ImeStance` は 1 ファイル 1 型（CPP-011）・単体テストは既存の scope の翻訳単位（ADR 0042）。残る穴: 本文の変換を消す既存の道（モードの切り替え・タブの切り替え・開く）は IME の側を取り消さない・Vim の NORMAL では打鍵ごとに IME の開閉を読み（`ImmGetContext` / `ImmGetOpenStatus`・閉じていれば OS へは何も送らない）6 本のベンチは通常モードの打鍵なのでこの分は測れていない・変換中は入力行のキャレットの棒と候補窓の位置が上下に最大 1 画素動く・最初の変換の 1 回目の候補窓の位置は前の描画の矩形を使う・入力欄の幅を越える長い変換の画は撮っていない・実機の確認は 125% の 1 台・Microsoft IME だけ・面の IME の検査は `eng/verify-window.py` に無い・Ex の行と検索の行の日本語入力・変換中の文字列での絞り込み・全角の `＃` `＠` `：`・全角と半角やひらがなとカタカナを同じとみなす照合は後続（決定 7）。
+
+### 5-ca. Ctrl+P の面は絞り込みの結果を入力と列が変わったときだけ作り frame には見えている行だけを載せる（Issue #270・ADR 0062 決定 1〜4・2026-10-02）
+
+ブランチ `refactor/270-palette-result-window`（main `cbaf4a9` の上・ADR `a3a5e31`・工程 1 `f8cf2aa`・工程 2 `592cd80`・工程 3 は本節と ADR 0062 の「強制」の #270 の行と「実機の確認」の 1 文と「結果」の 3 行と `docs/todo/current.md` の数字の 2 行と #270 の行だけ）。rebase はしていない（main は動いていない）。
+ADR の commit は ADR 0062・仕様の D33・D34 と FR-006 の出どころ・索引・ADR 0004（後の変更の 1 行と「強制」の欄を active に）・ADR 0060 の決定 10（後の変更の 1 行）・用語集のワーカーの行・`docs/todo/current.md` を運ぶ。
+使う人から見える動きは変えない。施主決定 D33・D34 は #271 / #272 の分。
+
+- 工程 1: core の `CommandPalette` が絞り込みの結果を不変の共有の値（`std::shared_ptr<const Result>`・`Result` は `std::variant<std::vector<std::size_t>, std::vector<CommandChoice>>`）で持つ。作るのは private の `filtered` の 1 本（`opened`・`inserted`・入力を変える `edited`・`filled`）、選択だけを動かすのは private の `reselected` の 1 本（`moved`・`selected_at`）で前の結果を共有する。public の `choices()` を消して `count()`・`choice_at(index)`・`rows(first, limit)`・観測の口 `shares_result_with` を置いた。`listed_choices` は `listed_positions`（位置の列）の 1 本にした（同点は列の順・`std::stable_sort` は使わない）。`mutable` と遅延の計算は無い。
+- 工程 2: core に行数の上限 `palette_row_limit`（8）と窓の先頭 `palette_window_first(selected)`。`palette_first_visible` と同じ内側の式 `first_row_of` の 1 本を呼ぶ。`CommandPaletteView` は `rows`（窓・最大 8 件）・`first`・`selected`・`total`・`hint`（公開 aggregate のまま）。`command_palette_view()` は窓だけを写す。ui（`Direct2DRenderer`・`EditorWindow::click_palette`）は件数を `total` で読み、行は窓の中の位置で読む（窓の外は読まない）。
+- 設計席が差分で確かめたこと: 結果を作る所と選択だけを動かす所がそれぞれ 1 本・application と ui は 8 を数字で書かない・ui は範囲を確かめてから `rows.at` を読む・`ActivateCommandChoice` に渡すのは今と同じ結果の全体の中の位置・試験の期待値は変わっていない（`choices()` を補助 `rows_of` と `listed_choices_of`、frame の全件を `whole_commands_of` に替えただけ）。
+- fixture は oracle の対象ではないので不能で、契約で守る（ADR 0062「強制」）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・全 target・clang-tidy 込み） | 工程 1・工程 2 とも成功・警告 0（`out/270-step1-build.log` / `out/270-step2-build.log`。工程 2 は途中で `readability-function-size`（入れ子 4）で落ち、閾値は触らず契約の補助関数に分けた） |
+| `build/nib_tests.exe --command-palette` | 261 → **272 checks**（工程 1）→ **276 checks**（工程 2・`out/270-step2-palette.log`） |
+| `build/nib_tests.exe`（引数なし） | 19265 → **19276**（工程 1）→ **19280 checks 成功**（工程 2・`out/270-step2-all.log`） |
+| `python eng/symbols.py --build-dir build --require core application` | 工程 1・工程 2 とも **0 violation**（新しい `__std_*` なし） |
+| `python eng/conformance.py --build-dir build` | 工程 1・工程 2 とも **0 violation** |
+| clang-format --dry-run --Werror（工程 1 の 7 ファイル・工程 2 の 8 ファイル） | 指摘なし |
+| `python eng/protected-diff.py --base origin/main --build --allow --command-palette`（工程 1・工程 2） | **終了 0**。`fixtures 1853 -> 1853`・scope 27 のうち `--command-palette` だけ 261 → 272 / 276 allowed・ほかの 26 scope は同じ（`out/protected/f8cf2aa.json` / `out/protected/592cd80.json`） |
+| `pwsh -NoProfile -File eng/validate-git.ps1` | 工程 1・工程 2 とも passed |
+| 実機（設計席・施主の了承の後・1 回限りのスクリプト `D:\NeNeNib\scripts\palette_window_frames.py`・125%） | 前後とも終了コード 0。画は `out/frames-270/before/` と `out/frames-270/after/`（各 15 枚と `record.json`）・ログは `out/270-accept-frames-before.log` `out/270-accept-frames-after.log`。比較は `D:\NeNeNib\scripts\palette_window_compare.py`（`out/270-accept-frames-compare.log`）で **15 枚すべて前後で違う画素 0**。窓へ post するだけで本物のキー入力なし・OS のクリップボードに触れていない |
+| 速さ（設計席・`python eng/measure-speed.py --check --executable build/release-592cd80/NeNeNib.exe`・2026-10-02・施主の了承の後） | **6 benches checked, 0 regression(s), 0 unmeasurable**（機械 bc8a356f37c68491（i9-10850K / RTX 3090 / 120 dpi）・5 回・`out/speed/2026-10-02T13-44-21Z.json`・`out/270-accept-speed.log`） |
+| 工程 3（文書だけ）の `python eng/conformance.py --build-dir build`・`git diff --check`・`eng/validate-git.ps1` | **0 violation**（`out/270-step3-conformance.log`）・`git diff --check` 指摘なし・`eng/validate-git.ps1` passed（`out/270-step3-git.log`） |
+
+設計席の実機の画の前後比較（2026-10-02）。前は `build/release-992df2f/NeNeNib.exe`（`src` `tests` `eng` は main `cbaf4a9` と同じ・sha256 280A7BDD…996D5AE5・`out/release/992df2f.json`）、後は `build/release-592cd80/NeNeNib.exe`（sha256 DBC2421A9A251F209EDEA4475D57B537FD573A9F2ABE740ECD1383904C1D6B2C・`out/release/592cd80.json`）。タブ 12 本。Vim の NORMAL の `:tabs` で一覧を開き、Backspace で `#` を消して全部の候補にしてから操作した。題名も前後で同じ（低い窓のクリックの後 `p04.txt - NeNe Nib`・高い窓のクリックの後 `p06.txt - NeNe Nib`）:
+
+| 画 | 窓 | 操作 | 見えたもの（前後で同じ） |
+| --- | --- | --- | --- |
+| `a1-tab-list-active-last` | 800 × 450（見える行 3） | `:tabs` | `#`・アクティブ（12 本目）が一番下の行 |
+| `a2-all-first` | 同 | Backspace | 入力が空・選択は先頭 |
+| `a3-down-5` | 同 | ↓ 5 回 | p04〜p06・選択は p06・`6 / 12` |
+| `a4-wrapped-down` | 同 | ↓ 8 回 | 12 本を越えて折り返す |
+| `a5-wrapped-up` | 同 | ↑ 3 回 | 先頭を越えて後ろへ |
+| `a6-query` | 同 | `p1` | 絞り込み |
+| `a7-commands` | 同 | `:` | 設定のコマンド |
+| `a8-commands-down-10` | 同 | ↓ 10 回 | `set fontsize=` `set incsearch` `set nohlsearch`・`11 / 22` |
+| `a9-before-click` `a10-after-click` | 同 | 全部の候補で ↓ 4 回 → 見えている 2 行目をクリック | p04 のタブへ切り替わる |
+| `b1-all-first` | 1000 × 800（見える行 8） | 一覧を開いて Backspace | 8 行 |
+| `b2-down-9` | 同 | ↓ 9 回 | p03〜p10・選択は p10・`10 / 12` |
+| `b3-wrapped` | 同 | ↓ 3 回 | 折り返して先頭 |
+| `b4-up-2` | 同 | ↑ 2 回 | 後ろから 2 本目 |
+| `b5-after-click` | 同 | 見えている 3 行目をクリック | p06 のタブへ切り替わる |
+
+設計席は後の 15 枚を目でも見た（件数の表示は `a1` 12 / 12・`a2` 1 / 12・`a4` 2 / 12・`a5` 11 / 12・`a6` 1 / 4・`a7` 1 / 22・`a9` 5 / 12・`b1` 1 / 12・`b3` 1 / 12・`b4` 11 / 12）。
+
+速さの 6 本（設計席・`592cd80` の Release・中央値）:
+
+| ベンチ | 中央値 |
+| --- | --- |
+| startup-first-frame | 217.173 ms |
+| startup-window-shown | 37.616 ms |
+| key-to-frame-single | 0.960 ms |
+| key-to-frame-burst-200 | 3.489 ms |
+| open-large-file-16mib | 262.512 ms |
+| key-to-frame-burst-200-16mib | 7.721 ms |
+
+6 本は面を開かない道（起動と本文の打鍵）。面の中の 1 打鍵が軽くなった分は、この 6 本では測れていない（面の中の 1 打鍵のベンチは #272 で足す・ADR 0062 の決定 19）。
+
+回していないものと理由: 実装席の Release・`-Full`・`eng/verify-window.py`（実装席は exe を起動しない・面の検査は `eng/verify-window.py` に無い）・面の中の 1 打鍵の速さ（ベンチが無い・#272）・履歴の候補（`@`）とホイールと本物の Ctrl+P の鍵とほかの DPI の画（frame の同じ欄を同じ式で読む。ホイールは ↑↓ と同じ意図 `complete_*`）。
+
+対象を限定した理由: 差分は core の `CommandPalette` `CommandChoice` `PaletteLayout`、application の `CommandPaletteView` と `EditorController`（面の view・`ActivateCommandChoice`・`submit_palette`）、ui/win32 の `Direct2DRenderer`（面の行と件数）と `EditorWindow::click_palette`、単体テスト `CommandPaletteTests.cpp` `UserThemeSelectionTests.cpp` `TabsTests.cpp` で、Vim の engine と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--command-palette` だけ。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の実機と速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-001 / ARC-003 / CPP-002 / CPP-003 / CPP-004 / CPP-011 / QLT-001 / QLT-012 / QLT-013 / ADR 0042 を自己レビュー。結果を作るのは `filtered` の 1 本・選択だけを動かすのは `reselected` の 1 本・絞り込みと順は `listed_positions` の 1 本・窓の先頭は `first_row_of` の 1 つの式を `palette_first_visible` と `palette_window_first` が共用・上限は core の `palette_row_limit` の 1 か所（ARC-001）・core と application は OS に触れない（ARC-003・symbols 0）・結果の 2 つの形は `std::visit` で型ごとの `row_of` へ写す（CPP-002）・`CommandPaletteView` は公開 aggregate のままでメソッドを持たない（CPP-003）・`choice_at` の `std::optional` は `value()` / `has_value()` で読む（CPP-004）・新しい struct とファイルは無い（CPP-011）・単体テストは既存の scope の翻訳単位（ADR 0042）。残る穴: 面の中の 1 打鍵が軽くなった量は測っていない（ベンチは #272）・実機の画は 125% の 1 台・ダークのテーマ・タブの候補と設定のコマンドだけ・候補の列を後から伸ばす口はまだ無い（#272）・ワーカーとフォルダの列挙は #271・観測の口 `shares_result_with` は製品のコードからは呼ばれない（契約のためだけにある）。

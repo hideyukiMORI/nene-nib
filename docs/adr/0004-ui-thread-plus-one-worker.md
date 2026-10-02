@@ -28,6 +28,8 @@ Phase 0 で何を機械で強制できるかを実測した（[phase0-results.js
 - 要求は不変の値型（対象・版番号・範囲）。ワーカーは自分が受け取った値だけを読み、結果を新しい値として作る
 - 完了は UI スレッドの窓メッセージ（`PostMessage` に所有権を載せた heap の値）として届き、application が意図として受ける。
   古い版番号の完了は捨てる（状態の所有者は application ただ 1 つ・ARC-004）
+  - **後の変更（[ADR 0062](0062-the-worker-reads-the-folder-and-the-palette-keeps-its-result.md)・#271）**: 窓メッセージは中身の無い合図だけにし、
+    中身は application が port の `collect()` で引く。`WorkerPort` は仕事の種類ごとの型のある port として宣言する（最初は `FolderPort`）
 - ワーカーはポートの実装であり（`WorkerPort` を application が宣言し、`src/adapters/win32` が実装する）、application と core は
   スレッド・mutex・atomic・条件変数・`std::async`・スレッドプールを一切知らない
 - ワーカーの実体は 1 本のスレッドと 1 本のキュー。2 本目が要る計測が出たら新しい ADR
@@ -35,11 +37,11 @@ Phase 0 で何を機械で強制できるかを実測した（[phase0-results.js
 
 ## 強制
 
-- **planned** → `eng/symbols.py` の `concurrency` 分類（CPP-013）: `_beginthread(ex)?` / `__imp_CreateThread` / `_Thrd_*` / `_Mtx_*` /
+- **active**（宣言したときは planned。`--require core application` を結線して active・[QUALITY_GATES](../QUALITY_GATES.md) の CPP-013）→ `eng/symbols.py` の `concurrency` 分類（CPP-013）: `_beginthread(ex)?` / `__imp_CreateThread` / `_Thrd_*` / `_Mtx_*` /
   `_Cnd_*` / `__std_atomic_*` / `Concurrency` 名前空間 / `__imp_CreateEvent*` / `__imp_WaitForSingleObject*` /
   `__imp_(Post|Send)Message*` 等が core / application の静的ライブラリの未定義シンボルに現れたら落ちる（TH1）。
   中核のライブラリが生まれて `--require core application` を結線したときに active
-- **planned** → CNF-009 の字句検査: `<thread>` `<mutex>` `<atomic>` `<future>` `<condition_variable>` `<semaphore>` `<latch>` `<barrier>`
+- **active**（宣言したときは planned。検査器の正例・反例テストがゲートで回って active・[QUALITY_GATES](../QUALITY_GATES.md) の CNF-009）→ CNF-009 の字句検査: `<thread>` `<mutex>` `<atomic>` `<future>` `<condition_variable>` `<semaphore>` `<latch>` `<barrier>`
   `<stop_token>` `process.h` `synchapi.h` を `src/adapters/win32` 以外の `src/` で include したら CPP-013（TH2 の穴を補う。
   検査器の正例・反例テストがゲートで回った時点で CNF-009 は active）
 - **不能**: ワーカーが受け取った値を本当に読むだけであること（意味の検査）。レビュー事項
