@@ -154,31 +154,26 @@ constexpr std::size_t location_only_penalty = std::numeric_limits<std::size_t>::
     return location_only_penalty + score.value();
 }
 
+// 列の中の位置と点の組（first が位置・second が点）。
+using ScoredPosition = std::pair<std::size_t, std::size_t>;
+
 // 点の小さい順、同点は列の順。std::stable_sort は一時の領域を std::nothrow で取るので core の外へ
 // シンボルが出る（ARC-003）。列の位置を添えた並べ替えで同じ順にする。
-[[nodiscard]] std::vector<CommandChoice> in_score_order(std::vector<CommandMatch> matches)
+[[nodiscard]] std::vector<std::size_t> in_score_order(std::vector<ScoredPosition> scored)
 {
-    std::vector<std::size_t> order;
-    order.reserve(matches.size());
-    for (std::size_t index = 0; index < matches.size(); ++index)
-    {
-        order.push_back(index);
-    }
-    std::ranges::sort(order,
-                      [&matches](std::size_t left, std::size_t right)
+    std::ranges::sort(scored,
+                      [](const ScoredPosition &left, const ScoredPosition &right)
                       {
-                          const std::size_t left_score = matches.at(left).score;
-                          const std::size_t right_score = matches.at(right).score;
-                          return left_score != right_score ? left_score < right_score
-                                                           : left < right;
+                          return left.second != right.second ? left.second < right.second
+                                                             : left.first < right.first;
                       });
-    std::vector<CommandChoice> choices;
-    choices.reserve(order.size());
-    for (const std::size_t index : order)
+    std::vector<std::size_t> positions;
+    positions.reserve(scored.size());
+    for (const ScoredPosition &entry : scored)
     {
-        choices.push_back(std::move(matches.at(index).choice));
+        positions.push_back(entry.first);
     }
-    return choices;
+    return positions;
 }
 
 [[nodiscard]] bool before(const CommandMatch &left, const CommandMatch &right)
@@ -237,12 +232,13 @@ std::string_view palette_origin_label(PaletteOrigin origin) noexcept
     std::unreachable();
 }
 
-std::vector<CommandChoice> listed_choices(const std::vector<CommandChoice> &entries,
+std::vector<std::size_t> listed_positions(const std::vector<CommandChoice> &entries,
                                           PaletteScope scope, std::string_view query)
 {
-    std::vector<CommandMatch> matches;
-    for (const CommandChoice &entry : entries)
+    std::vector<ScoredPosition> scored;
+    for (std::size_t position = 0; position < entries.size(); ++position)
     {
+        const CommandChoice &entry = entries.at(position);
         if (!in_scope(entry.origin, scope))
         {
             continue;
@@ -251,9 +247,9 @@ std::vector<CommandChoice> listed_choices(const std::vector<CommandChoice> &entr
             query.empty() ? std::optional<std::size_t>{0} : listed_score(query, entry);
         if (score.has_value())
         {
-            matches.push_back(CommandMatch{entry, score.value()});
+            scored.emplace_back(position, score.value());
         }
     }
-    return in_score_order(std::move(matches));
+    return in_score_order(std::move(scored));
 }
 } // namespace nenenib::core

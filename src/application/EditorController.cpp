@@ -920,7 +920,9 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         auto hint = palette->input().text().empty() && !command_composed().has_value()
                         ? std::optional<core::DisplayText>{core::palette_mark_hint()}
                         : std::nullopt;
-        return CommandPaletteView{palette->choices(), palette->selected(), std::move(hint)};
+        // 工程 2（#270）で全件の代わりに見えている行の窓に替える（ADR 0062 の決定 2）。
+        return CommandPaletteView{palette->rows(0, palette->count()), palette->selected(),
+                                  std::move(hint)};
     }
     return std::nullopt;
 }
@@ -1669,7 +1671,7 @@ void EditorController::accept(const ActivateCommandChoice &intent)
     }
     if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
     {
-        if (intent.index < palette->choices().size())
+        if (intent.index < palette->count())
         {
             submit_palette(palette->selected_at(intent.index));
         }
@@ -1678,12 +1680,12 @@ void EditorController::accept(const ActivateCommandChoice &intent)
 
 void EditorController::submit_palette(const core::CommandPalette &palette)
 {
-    const auto choices = palette.choices();
-    if (choices.empty())
+    const auto chosen = palette.choice_at(palette.selected());
+    if (!chosen.has_value())
     {
         return;
     }
-    const auto &choice = choices.at(palette.selected());
+    const auto &choice = chosen.value();
     switch (choice.kind)
     {
     case core::CommandChoiceKind::execute:

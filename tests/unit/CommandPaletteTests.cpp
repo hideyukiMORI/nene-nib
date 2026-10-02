@@ -130,15 +130,14 @@ void verify_palette_editing()
     expect(palette.input().text() == ":" && palette.selected() == 0 &&
                palette.scope() == core::PaletteScope::commands,
            "the colon mark lists the commands");
-    const auto count = palette.choices().size();
+    const auto count = palette.count();
     palette = palette.edited(CommandEdit::complete_previous);
     expect(palette.selected() == count - 1, "previous wraps backwards");
     palette = palette.edited(CommandEdit::complete_next);
     expect(palette.selected() == 0 && palette.input().text() == ":",
            "next wraps without changing query");
     palette = palette.selected_at(4).inserted("drac").value();
-    expect(palette.selected() == 0 && palette.choices().size() == 1,
-           "filter resets the selected row");
+    expect(palette.selected() == 0 && palette.count() == 1, "filter resets the selected row");
     expect(palette.selected_at(50).selected() == 0, "invalid row leaves selection intact");
     palette = palette.filled("set fontsize=").value();
     expect(palette.input().text() == ":set fontsize=", "fill retains command prefix");
@@ -149,8 +148,7 @@ void verify_palette_editing()
     expect(!palette.inserted("\n") && !palette.inserted("\xFF"),
            "palette rejects invalid one-line text");
     palette = palette.edited(CommandEdit::complete_next);
-    expect(palette.selected() == 0 && palette.choices().empty(),
-           "no results can be navigated safely");
+    expect(palette.selected() == 0 && palette.count() == 0, "no results can be navigated safely");
     palette =
         palette.edited(CommandEdit::home).edited(CommandEdit::erase).edited(CommandEdit::erase);
     expect(palette.input().text().empty(), "home and delete use shared editing");
@@ -360,6 +358,25 @@ void verify_palette_vim_modes()
     return commands;
 }
 
+// 絞り込みの結果の位置の列を候補に写す（全件を読むのは試験だけ・ADR 0062 の決定 1）。
+[[nodiscard]] std::vector<core::CommandChoice>
+listed_choices_of(const std::vector<core::CommandChoice> &entries, core::PaletteScope scope,
+                  std::string_view query)
+{
+    std::vector<core::CommandChoice> listed;
+    for (const std::size_t position : core::listed_positions(entries, scope, query))
+    {
+        listed.push_back(entries.at(position));
+    }
+    return listed;
+}
+
+// 面の結果の全件（試験だけが読む。controller と frame は件数・1 件・行の範囲を読む）。
+[[nodiscard]] std::vector<core::CommandChoice> rows_of(const core::CommandPalette &palette)
+{
+    return palette.rows(0, palette.count());
+}
+
 [[nodiscard]] bool query_is(std::string_view input, core::PaletteScope scope,
                             std::string_view query)
 {
@@ -398,29 +415,29 @@ void verify_listed_choices()
         tab_choice("Notes.md", 3, "C:\\docs"), tab_choice("readme.md", 4, "C:\\notes"),
         core::CommandChoice{fixed_text("tabs"), "tabs", core::CommandChoiceKind::execute}};
     const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3", "tabnext 4"};
-    expect(commands_of(core::listed_choices(entries, core::PaletteScope::files, "")) == all,
+    expect(commands_of(listed_choices_of(entries, core::PaletteScope::files, "")) == all,
            "files keeps every entry with an origin in list order");
-    expect(commands_of(core::listed_choices(entries, core::PaletteScope::tabs, "")) == all,
+    expect(commands_of(listed_choices_of(entries, core::PaletteScope::tabs, "")) == all,
            "tabs keeps the tab entries in list order");
-    expect(core::listed_choices(entries, core::PaletteScope::commands, "").empty(),
+    expect(listed_choices_of(entries, core::PaletteScope::commands, "").empty(),
            "commands are not listed from the entries");
-    expect(commands_of(core::listed_choices(entries, core::PaletteScope::tabs, "NOTE")) ==
+    expect(commands_of(listed_choices_of(entries, core::PaletteScope::tabs, "NOTE")) ==
                std::vector<std::string>{"tabnext 3", "tabnext 1", "tabnext 4"},
            "name hits come first in score order and a folder hit follows, ignoring case");
     const std::vector<core::CommandChoice> folder_first{
         tab_choice("a.md", 1, "C:\\note"),
         tab_choice("x-note-with-a-rather-long-name.txt", 2, "C:\\work")};
-    expect(commands_of(core::listed_choices(folder_first, core::PaletteScope::files, "note")) ==
+    expect(commands_of(listed_choices_of(folder_first, core::PaletteScope::files, "note")) ==
                std::vector<std::string>{"tabnext 2", "tabnext 1"},
            "a name hit beats a shorter folder-only hit");
     const std::vector<core::CommandChoice> twins{tab_choice("x.txt", 1), tab_choice("a.txt", 2),
                                                  tab_choice("a.txt", 3)};
-    expect(commands_of(core::listed_choices(twins, core::PaletteScope::tabs, "a")) ==
+    expect(commands_of(listed_choices_of(twins, core::PaletteScope::tabs, "a")) ==
                std::vector<std::string>{"tabnext 2", "tabnext 3"},
            "equal scores keep list order");
-    expect(core::listed_choices(entries, core::PaletteScope::files, "zq").empty(),
+    expect(listed_choices_of(entries, core::PaletteScope::files, "zq").empty(),
            "an entry that matches neither name nor folder is dropped");
-    expect(commands_of(core::listed_choices(entries, core::PaletteScope::files, "work")) ==
+    expect(commands_of(listed_choices_of(entries, core::PaletteScope::files, "work")) ==
                std::vector<std::string>{"tabnext 1"},
            "the folder and the name are searched together");
 }
@@ -432,26 +449,26 @@ void verify_listed_code_points()
     const std::vector<core::CommandChoice> names{
         tab_choice("日本語メモ", 1), tab_choice("メモ.txt", 2), tab_choice("めも.md", 3),
         tab_choice("Memo帳.txt", 4), tab_choice("アあ", 5),     tab_choice("memo.txt", 6)};
-    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "メモ")) ==
+    expect(commands_of(listed_choices_of(names, core::PaletteScope::files, "メモ")) ==
                std::vector<std::string>{"tabnext 2", "tabnext 1"},
            "a katakana query hits the katakana names, the shorter skip first");
-    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "めも")) ==
+    expect(commands_of(listed_choices_of(names, core::PaletteScope::files, "めも")) ==
                std::vector<std::string>{"tabnext 3"},
            "a hiragana query hits only the hiragana name");
     // め は E3 82 81。「アあ」は E3 82 A2 E3 81 82 で、バイトの部分列としては E3 82 81 を含む。
-    expect(core::listed_choices(names, core::PaletteScope::files, "め").size() == 1 &&
-               core::listed_choices(names, core::PaletteScope::files, "め").front().command ==
+    expect(listed_choices_of(names, core::PaletteScope::files, "め").size() == 1 &&
+               listed_choices_of(names, core::PaletteScope::files, "め").front().command ==
                    "tabnext 3",
            "a character never matches across the bytes of two other characters");
-    expect(core::listed_choices(names, core::PaletteScope::files, "ア め").empty(),
+    expect(listed_choices_of(names, core::PaletteScope::files, "ア め").empty(),
            "the spaced query still needs every character on a boundary");
-    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "MEMO帳")) ==
+    expect(commands_of(listed_choices_of(names, core::PaletteScope::files, "MEMO帳")) ==
                std::vector<std::string>{"tabnext 4"},
            "ASCII and Japanese mix in one query, ASCII ignoring case");
-    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "帳txt")) ==
+    expect(commands_of(listed_choices_of(names, core::PaletteScope::files, "帳txt")) ==
                std::vector<std::string>{"tabnext 4"},
            "a Japanese character is followed by ASCII in the same name");
-    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "memo")) ==
+    expect(commands_of(listed_choices_of(names, core::PaletteScope::files, "memo")) ==
                std::vector<std::string>{"tabnext 6", "tabnext 4"},
            "ASCII scores still count bytes: the shorter name comes first");
     expect(choices_for("メモ").empty() &&
@@ -467,17 +484,17 @@ void verify_palette_sources()
                                                 tab_choice("another note", 4)};
     const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3", "tabnext 4"};
     const auto empty = core::CommandPalette::opened(tabs, "", 0);
-    expect(empty.scope() == core::PaletteScope::files && commands_of(empty.choices()) == all &&
+    expect(empty.scope() == core::PaletteScope::files && commands_of(rows_of(empty)) == all &&
                empty.selected() == 0,
            "an empty input lists every entry with an origin");
     const auto listed = core::CommandPalette::opened(tabs, "#", 2);
     expect(listed.scope() == core::PaletteScope::tabs && listed.input().text() == "#" &&
-               listed.selected() == 2 && commands_of(listed.choices()) == all,
+               listed.selected() == 2 && commands_of(rows_of(listed)) == all,
            "the hash input opens on the given row");
     expect(core::CommandPalette::opened(tabs, "#", 9).selected() == 0,
            "a row outside the choices selects the first");
     const auto filtered = listed.inserted("NOTE").value();
-    expect(commands_of(filtered.choices()) ==
+    expect(commands_of(rows_of(filtered)) ==
                    std::vector<std::string>{"tabnext 3", "tabnext 4", "tabnext 1"} &&
                filtered.selected() == 0,
            "a query keeps the matching titles in score order, ignoring case");
@@ -486,13 +503,13 @@ void verify_palette_sources()
            "up and down move the selection over the tab rows");
     const auto erased = listed.edited(core::CommandEdit::backspace);
     expect(erased.input().text().empty() && erased.scope() == core::PaletteScope::files &&
-               commands_of(erased.choices()) == all,
+               commands_of(rows_of(erased)) == all,
            "erasing the mark lists every entry");
     for (const auto query : {":", ":drac", ":fz", ":set fontsize=18", ":colorscheme missing"})
     {
         const auto commands = empty.inserted(query).value();
         expect(commands.scope() == core::PaletteScope::commands &&
-                   commands_of(commands.choices()) == commands_of(choices_for(query)),
+                   commands_of(rows_of(commands)) == commands_of(choices_for(query)),
                "the colon mark gives the same commands as before");
     }
     auto staged = empty.inserted(":fz").value().filled("set fontsize=").value();
@@ -503,8 +520,45 @@ void verify_palette_sources()
     {
         staged = staged.edited(core::CommandEdit::backspace);
     }
-    expect(commands_of(staged.inserted("#").value().choices()) == all,
-           "the entries survive a fill");
+    expect(commands_of(rows_of(staged.inserted("#").value())) == all, "the entries survive a fill");
+}
+
+// 絞り込みの結果は入力が変わったときだけ作り、選択を動かす道は同じ結果を共有する（ADR 0062 の
+// 決定 1）。読む口は件数・1 件・行の範囲で、範囲の外は無しか切り詰め。
+void verify_palette_result_shared()
+{
+    using core::CommandEdit;
+    const std::vector<core::CommandChoice> tabs{tab_choice("● note.txt", 1), tab_choice("無題", 2),
+                                                tab_choice("Notes.md", 3),
+                                                tab_choice("another note", 4)};
+    const auto palette = core::CommandPalette::opened(tabs, "", 0);
+    expect(palette.edited(CommandEdit::complete_next).shares_result_with(palette) &&
+               palette.edited(CommandEdit::complete_previous).shares_result_with(palette),
+           "up and down share the result");
+    expect(palette.selected_at(3).shares_result_with(palette) &&
+               palette.selected_at(9).shares_result_with(palette),
+           "selecting a row shares the result");
+    const auto commands = core::CommandPalette::opened({}, ":", 0);
+    expect(commands.edited(CommandEdit::complete_next).shares_result_with(commands) &&
+               commands.selected_at(2).shares_result_with(commands),
+           "the command rows are shared the same way");
+    expect(!palette.inserted("n").value().shares_result_with(palette) &&
+               !commands.filled("set fontsize=").value().shares_result_with(commands),
+           "typing and filling rebuild the result");
+    const auto typed = palette.inserted("n").value();
+    expect(!typed.edited(CommandEdit::backspace).shares_result_with(typed) &&
+               !typed.edited(CommandEdit::left).shares_result_with(typed) &&
+               !typed.edited(CommandEdit::home).shares_result_with(typed),
+           "editing the input rebuilds the result");
+    const auto last = palette.choice_at(3);
+    expect(palette.count() == 4 && last.has_value() && last.value().command == "tabnext 4" &&
+               !palette.choice_at(4).has_value(),
+           "one row is read by its index and none outside");
+    expect(commands_of(palette.rows(1, 2)) == std::vector<std::string>{"tabnext 2", "tabnext 3"} &&
+               commands_of(palette.rows(2, 100)) ==
+                   std::vector<std::string>{"tabnext 3", "tabnext 4"} &&
+               palette.rows(4, 1).empty() && palette.rows(0, 0).empty(),
+           "a row range is cut at the end of the result");
 }
 
 // Ctrl+P と「∨」は同じ列を開き、Enter はタブを切り替え、`:` の後ろは今までどおり（決定 6）。
@@ -903,6 +957,7 @@ void verify_command_palette()
     verify_listed_choices();
     verify_listed_code_points();
     verify_palette_sources();
+    verify_palette_result_shared();
     verify_palette_entries_controller();
     verify_palette_notes_geometry();
     verify_palette_hint_view();
