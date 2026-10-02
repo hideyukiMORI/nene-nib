@@ -33,7 +33,9 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   A leading mark narrows the list: `#` shows the tabs only, `:` shows the settings commands (themes,
   `set fontsize=`, `set guifont=`). Closed files are kept in a history of up to 100 files, listed
   newest first after the tabs; `@` shows the history only. A file that no longer exists is reported
-  in one line and dropped from the history. The current folder and bookmarks are planned.
+  in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
+  off and leaves it to the user after that, and matching walks code points, so a character never matches
+  inside the bytes of another. The current folder and bookmarks are planned.
 - **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS; CRLF / LF kept as read; unsaved mark and
   "save?" prompt. Done.
@@ -44,7 +46,8 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-011 look** — frameless window with Mica title bar, follows the OS light / dark theme (aubergine dark, orange
   accent), one paint per frame. Done.
 - **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the
-  IME off, INSERT turns it back on. Done.
+  IME off, INSERT turns it back on. The Ctrl+P palette accepts a composition in its input line; the Ex line
+  and the search line still keep the IME closed. Done.
 - **FR-013 1 GB files** — planned; files above 64 MiB are not supported yet.
 - **FR-014 Per-Monitor v2 DPI** — declared in the manifest; DIP to pixel conversion is integer-only in the core.
 - **FR-015 speed** — five Release benchmarks in `eng/measure-speed.py` against per-machine baselines in

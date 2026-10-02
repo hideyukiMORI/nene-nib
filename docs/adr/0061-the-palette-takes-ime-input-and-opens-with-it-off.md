@@ -51,16 +51,21 @@ Ctrl+P の面が開いている間、ui は意図を送るたびに IME を閉�
 
 ## 強制
 
-- 契約（照合）: **planned**。文字の途中のバイトに当たらないこと・ASCII の結果が今と同じこと（scope `nib_tests --command-palette`）。
-- 契約（構えと変換の行き先）: **planned**。`ime_stance_of` の表（通常 / Vim の各モード / Ex と検索の行 / 面）・面が開いているときの `ComposeText` と `CommitText`・Ex と検索の行では捨てること・変換が本文と入力行のどちらか一方にだけ載ること。
-- 閉じた和型の写し漏れ: `ImeStance` は **planned**（実装で active・ui の `default` の無い `switch`・CPP-002）。
-- 実機の確認: **planned**（本物のキー入力が要る。設計席が施主に確かめてから回す。機械の必須 check ではない）。
+- 契約（照合）: **active**（#264）。`tests/unit/CommandPaletteTests.cpp` の `verify_listed_code_points` が、カタカナ・ひらがなの query がそれぞれの名前にだけ当たること・「め」が「アあ」の継続バイトにまたがって当たらないこと・空白で区切った query も文字の境目で当たること・ASCII と日本語の混在（ASCII は大文字と小文字を区別しない）・ASCII の点は今までどおりバイトで数えること・Ex の候補も同じ照合を使うことを守る。入口は scope `nib_tests --command-palette` と引数なしの既定の実行（CTest `nib_unit`）。
+- 契約（構えと変換の行き先）: **active**（#264）。`tests/unit/ApplicationTests.cpp` の `verify_ime_stance_table`（通常 / Vim × 5 つのモード × 入力なし・Ex の行・検索の行・面の全組で `ime_stance_of` の値）と `verify_ime_stance_frame`（controller の frame の構え: 通常で Ctrl+P → `closed_once`・閉じる → `as_left`・Vim の NORMAL → `closed`・Ctrl+P → `closed_once`・もう一度 Ctrl+P → `closed`・`:` → `closed`・`i` → `as_left`）。入口は既定の実行（CTest `nib_unit`）。`tests/unit/CommandPaletteTests.cpp` の `verify_palette_composition`（通常と Vim の NORMAL の両方で、面の変換は `command_composition` にだけ載り本文と一覧を変えないこと・確定は面の入力に入り変換が消えること・面を閉じる取消と確定で変換が消えること・確定は undo の単位を作らないこと・上限を越える確定は入らず知らせが出ること・Ex の行と検索の行では変換も確定も捨てること・変換中は記号の案内を出さないこと `verify_palette_hint_composing`）と `verify_palette_input_isolation`（面に打った文字が本文に入らず、確定が面の入力に入ること）。入口は scope `nib_tests --command-palette` と既定の実行。
+- 閉じた和型の写し漏れ: `ImeStance` は **active**（#264）。ui の `EditorWindow::follow_ime`（`src/ui/win32/EditorWindow.cpp`）の `switch (frame.ime)` は `as_left` `closed` `closed_once` を写し、`default` は無い（後ろは `std::unreachable()`）。application の `ime_stance_of`（`src/application/ImeStance.cpp`）は、入力の種類を `std::visit` で型ごとの `stance_of` へ写し（`CommandLine` `SearchLine` `CommandPalette`）、入力が無いときは `default` の無い `switch` で `EditMode` と `VimMode` を写す（CPP-002）。
+- 実機の確認: **planned**（本物のキー入力が要る。設計席が施主に確かめてから回す。機械の必須 check ではない）。#264 は設計席が 1 回限りのスクリプトで確かめた（gate-proofs の #264 の節）。
 - fixture: **不能**（oracle の対象ではない）。既存の fixture は不変（`eng/protected-diff.py`）。
 
 ## 結果
 
 得られるもの: Ctrl+P の面で日本語の名前を打って絞り込める。IME をどうするかの判断が application の 1 つの関数になり、契約で守れる。日本語の名前と query が、文字の途中のバイトで誤って当たらない。
 失うもの・残る穴: 日本語の名前を探すたびに「半角/全角」を 1 回押す（D32）。変換中は一覧が動かない（確定してから絞り込む）。全角で打った `＃` `＠` `：` は記号にならない。Ex の行と検索の行では今も日本語を打てない。変換中の鍵（Enter・Esc・矢印）が面に届かないことは、IME が `VK_PROCESSKEY` にすることに頼っている（実機で確かめる）。
+
+- Vim の NORMAL で使う人が IME を開いても、次の 1 打鍵で閉じ直す（決定 2 の `closed`）。前は控えがあれば何もしなかったので、開いたままだった。
+- 面の記号の案内（`# タブ　@ 履歴　: 設定`）は、入力が空で、入力行が変換中でないときだけ出す。変換中の文字列と重なるため（実機の画で見つけた。判断は `command_palette_view()` の 1 か所・契約 `verify_palette_hint_composing`）。
+- 入力行の変換の面と下線は、文字の 1 行の上下（キャレットの棒と同じ画素）に引く。入力欄の領域は 1 行より高いので、領域をそのまま `draw_clauses` に渡さない（`draw_command_clauses`）。
+- 本文の変換を状態から消す既存の道（ステータスバーのモードの切り替え・タブの切り替え・ファイルを開く）は、今も IME の側の変換を取り消さない。IME の側を取り消すのは、面の入力行の変換が消えたときだけ（残る穴）。
 
 ## 却下した選択肢
 

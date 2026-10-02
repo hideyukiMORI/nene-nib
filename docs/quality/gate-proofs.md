@@ -2159,3 +2159,83 @@ ARC-001 / ARC-003 / ARC-010 / CPP-002 / CPP-004 / CPP-011 / CPP-012 / ADR 0008 �
 対象を限定した理由: 差分は application の履歴の値と port と純関数と controller の記録・面の入口と確定、core の記号の表と閉じた enum の値、adapters の `history.v1` の codec と adapter と行の割り方、`Main.cpp` の合成、単体テストと adapter の試験、`eng/window_driver.py` の消すもので、ui/win32 と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--history` と `--command-palette` だけ。起動の道に読み書きを足していないことは契約 `verify_quiet_paths` と設計席の速さの 6 本で確かめた。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の実機と速さの結果（`d9d0203`）を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-003 / ARC-007 / ARC-010 / CPP-002 / CPP-004 / CPP-005 / CPP-011 / QLT-013 / QLT-014 / ADR 0042 を自己レビュー。記録は `history_recorded` の 1 本・外すのは `history_forgotten` の 1 本・開くのは `open_document` の 1 本で `OpenDocument` と履歴の行が共用・行の割り方は `TextLines` の 1 本で `session.v1` と `history.v1` が共用（ARC-001）・core と application は OS とファイルに触れず場所とファイルは adapters の `Win32HistoryAdapter` だけ（ARC-003 / ARC-007・symbols 0）・失敗は `std::expected` と閉じた enum `FileHistoryFailure`（ARC-010 / CPP-005）・`CommandChoiceKind` `PaletteScope` `PaletteOrigin` の `switch` に `default` は無い（CPP-002）・単体テストは scope `--history` の 1 翻訳単位（ADR 0042）。残る穴: 履歴を書くのは閉じたときだけで、強制終了のときはその回に閉じていないファイルは入らない・システムドライブが HDD の機械ではタブを閉じるたびに 30〜40 ms の書き込みが入る（今の `FilePort::write` のまま・ベンチに無い）・履歴に時刻と種別のアイコンは無い・大きすぎる / 読めないファイルは知らせるだけで履歴に残る（選ぶたびに知らせが出る）・面を開くときの履歴の読みは 1 回（ディスクから）で面を開く時間のベンチは無い・面の中の日本語入力・同じフォルダ・ブックマーク・Vim の `:e` `:b` `:ls`・履歴を消すコマンドと件数の設定は後続・面の実機の検査は `eng/verify-window.py` に無い（ADR 0060 決定 12 の後続）。
+
+### 5-bz. Ctrl+P の面で日本語入力を受け名前の照合をコードポイントの境目で行う（Issue #264・ADR 0061 決定 1〜6・施主決定 D31・D32・2026-10-02）
+
+ブランチ `feat/264-palette-ime`（main `4aa169a` の上・ADR `c19fee1`・工程 1 `3eb04a6`・工程 2 `a0cb11c`・差し戻し 1 `8e181e0`・差し戻し 2 `7f99031`・工程 3 は本節と ADR 0061 の「強制」と「結果」の 4 行と `docs/todo/current.md` の数字の 2 行と #264 の行と README の FR-006 と FR-012 の項目だけ）。
+2026-10-02 に設計席が `git rebase origin/main` で main に追いつかせた。席の報告と日報・引き継ぎは rebase の前の番号（ADR `049064c`・工程 1 `56d1c35`・工程 2 `c5d7ae6`・差し戻し 1 `6a7330e`・差し戻し 2 `992df2f`）で書いてある。rebase で変わったのは main に入った文書だけで、それ以外の差分は 0（`git diff --stat 992df2f 7f99031 -- . ':!docs/handoffs' ':!docs/reports' ':!docs/todo' ':!CLAUDE.md'` が空）。
+Ctrl+P の面は IME がオフで開き、使う人が「半角/全角」で開いた IME はそのまま使える。面の変換は面の入力欄に描き、確定は面の入力に入って絞り込む。面を閉じると IME は開く前の状態に戻る。名前の照合はコードポイントの境目で行う。
+
+- 工程 1: core の `match_score` は query をコードポイントごとに歩き、候補の中を `next_code_point` の境目ごとに比べる（点の決め方は今のまま）。application の閉じた enum `ImeStance { as_left, closed, closed_once }` と純関数 `ime_stance_of`（入力は `std::visit`・入力なしはモードの `switch`）・`EditorFrame` の `ime` と `command_composition` と `composing()`。`composition_ignored` は面が開いていれば捨てない、`CommitText` は面が開いていれば `CommandText` の道で面の入力へ、入力行を閉じるのは `close_command_input()` の 1 本。
+- 工程 2: ui の `ime_blocked` を消し、`follow_ime` は `frame.ime` を `default` の無い `switch` で実行（`closed_once` は前の構えが違うときだけ閉じる）。`close_ime` は控えの有無に依らず閉じる（既に閉じていれば OS を呼ばない）。面の入力行の変換が消えたとき `cancel_ime_composition`（`ImmNotifyIME` の `CPS_CANCEL`）を `follow_ime` の前に呼ぶ。`draw_command` は入力行の変換を差し込んで本文と同じ `draw_clauses` で下線を引き、キャレットの矩形を `caret_rectangle_` に書く（候補窓は入力欄の下）。
+- 差し戻し 1（application・実機の画で見つけた: 案内が変換中も出たままで、長い変換の文字列と重なる）: 面の記号の案内は、入力が空で入力行が変換中でないときだけ出す（`command_palette_view()` の 1 か所・契約 `verify_palette_hint_composing`）。
+- 差し戻し 2（ui・実機の画で見つけた: 下線が入力欄の下端に出て、変換の対象の面が入力欄の上下いっぱいの帯になる）: 入力行の変換の面と下線は文字の 1 行の上下に引く（`draw_command_clauses` が上下を画素に揃えて `draw_clauses` へ渡し、変換中はキャレットの棒も同じ上下）。席が見つけて直したこと: 矩形の上端を下げるだけだと `tint_runs` が渡された上端から layout を描き直して字が下へずれるので、変換中だけ layout の高さを 1 行ぶんに詰めた。
+- 設計席が差分で確かめたこと（工程 2）: 構えの判断が ui に残っていない・IME の変換の取り消しは IME を開け閉めする前・取り消しが送り返す通知の再入は 1 段で止まる・本文のキャレットの後に入力行のキャレットを描くので候補窓の位置は入力行のもの。
+- fixture は oracle の対象ではないので不能で、契約で守る（ADR 0061「強制」）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・全 target・clang-tidy 込み） | 工程 1・工程 2・差し戻し 1・差し戻し 2 とも成功・警告 0（`out/264-step1-build.log` / `out/264-step2-build.log` / `out/264-rework1-build.log` / `out/264-rework2-build.log`。工程 2 は途中で `readability-function-size`（引数 4・60 行）で落ち、閾値は触らず形を直した） |
+| `build/nib_tests.exe --command-palette` | 222 → **257 checks**（工程 1）→ **261 checks**（差し戻し 1・`out/264-rework1-palette.log`） |
+| `build/nib_tests.exe`（引数なし） | 19178 → **19261**（工程 1 `out/264-step1-tests.log`・面 +35・構え +48）→ 19261（工程 2 `out/264-step2-tests.log`）→ **19265 checks 成功**（差し戻し 1 `out/264-rework1-tests.log`・差し戻し 2 `out/264-rework2-tests.log`） |
+| `ctest --test-dir build -R nib_unit`（工程 1） | **1 / 1 成功**（`out/264-step1-ctest.log`） |
+| `python eng/symbols.py --build-dir build --require core application` | 工程 1・工程 2・差し戻し 1 とも **0 violation**（`out/264-step1-symbols.log` / `out/264-step2-symbols.log` / `out/264-rework1-symbols.log`） |
+| `python eng/conformance.py --build-dir build` | 工程 1・工程 2・差し戻し 1・差し戻し 2 とも **0 violation**（`out/264-{step1,step2,rework1,rework2}-conformance.log`） |
+| clang-format --dry-run --Werror（工程 1 の 9 ファイル・工程 2 の 4 ファイル・差し戻し 1 の 3 ファイル・差し戻し 2 の 2 ファイル） | 指摘なし（差し戻しの分は `out/264-rework1-format.log` / `out/264-rework2-format.log`） |
+| `clang-tidy -p build src/ui/win32/Direct2DRenderer.cpp`（差し戻し 2・関数長の確認） | 0（`out/264-rework2-tidy.log`） |
+| `python eng/protected-diff.py --base origin/main --build --allow --command-palette`（工程 1・工程 2・差し戻し 1） | **終了 0**。`fixtures 1853 -> 1853`・changed 0・scopes 27 / same 26・`--command-palette` だけ 222 → 257 / 261 allowed（`out/protected/56d1c35.json` / `out/protected/c5d7ae6.json` / `out/protected/6a7330e.json`） |
+| `pwsh -NoProfile -File eng/validate-git.ps1` | 工程 1・工程 2・差し戻し 1・差し戻し 2 とも passed（`out/264-step1-validate-git.log` / `out/264-step2-validate-git.log` / `out/264-rework1-git.log` / `out/264-rework2-validate-git.log`） |
+| 実機（設計席・施主の了承の後・1 回限りのスクリプト `D:\NeNeNib\scripts\palette_ime_frames.py`・125%） | どの回も終了コード 0。profile と文書は `D:\NeNeNib\evidence\frames-264\`・画と記録は `out/frames-264/`（差し戻し 2 の前の画は `out/frames-264/6a7330e/`）。終わりに機械の IME の開閉を見つけたとおりに戻した。OS のクリップボードには触れていない |
+| 速さ（設計席・`python eng/measure-speed.py --check --executable build/release-6a7330e/NeNeNib.exe`・2026-10-01） | **6 benches checked, 0 regression(s), 0 unmeasurable**（Release は差し戻し 1 まで・sha256 は `out/release/6a7330e.json`・機械 bc8a356f37c68491（i9-10850K / RTX 3090 / 120 dpi）・`out/speed/2026-10-01T14-01-04Z.json`・`out/264-accept-speed.log`） |
+| 工程 3（文書だけ）の `python eng/conformance.py --build-dir build`・`git diff --check`・`eng/validate-git.ps1` | **0 violation**（`out/264-step3-conformance.log`）・`git diff --check` 指摘なし・`eng/validate-git.ps1` passed（`out/264-step3-git.log`） |
+
+設計席の実機の IME の開閉（`states`・2026-10-01・Release `build/release-6a7330e`・窓へ post するだけで本物のキー入力なし・`out/frames-264/states.json`）:
+
+| 場面 | IME の開閉 |
+| --- | --- |
+| 通常モードで IME をオンにする | 1 |
+| Vim の NORMAL へ | 0 |
+| NORMAL から面を開く（`:tabs`） | 0 |
+| 面の中で外から IME を開く（「半角/全角」の代わり） | 1 |
+| 面の中で文字を打つ・Backspace | 1・1（閉じ直さない） |
+| 面を閉じて NORMAL | 0 |
+| `i` で INSERT | 1（控えに戻る） |
+| Esc で NORMAL | 0 |
+| 通常モードへ | 1 |
+
+設計席の実機の変換（`compose`・本物のキー入力・2 回。1 回目は 2026-10-01・Release `build/release-6a7330e`（差し戻し 1 まで）。2 回目は 2026-10-02・Release `build/release-992df2f`（差し戻し 2 まで・sha256 280A7BDD37C428F9D42CB86EBB2721EEFBD643EF22EE435F5D160EF5996D5AE5・`out/release/992df2f.json`・記録 `out/frames-264/compose.json`・ログ `out/264-accept-frames-992df2f.log`）。下は 2 回目。IME の開閉と題名の値は 1 回目と同じ）:
+
+| 画 | 操作 | 見えたもの・値 |
+| --- | --- | --- |
+| `c1-palette-opened.png` | 通常モードで IME オンのまま Ctrl+P | 面は IME オフで開く（開閉 0） |
+| `c2-composing.png` | 面の中で IME を開いて「にほんご」 | 入力欄に下線つきで出る。下線は字のすぐ下（1 画素・y 159）で、キャレットの棒（y 142〜162）の中に収まる。候補窓は入力欄の下。一覧は動かず（1 / 3 のまま）、案内は出ない |
+| `c3-converted.png` | Space | 変換の対象の面は y 142〜162（キャレットの棒と同じ上下）、太い下線は y 157〜159。入力欄の上下いっぱいの帯ではなくなった |
+| `c4-committed.png` | Enter | 面は開いたまま・入力が「日本語」・一覧が `日本語の予定.md` の 1 件（1 / 1）。確定の後の IME は 1・題名は変わらない（Enter は面に届いていない） |
+| `c5-activated.png` | Enter | そのタブへ切り替わる（題名 `日本語の予定.md - NeNe Nib`）。IME は 1（面を開く前の状態） |
+| `c6-escape-while-composing.png` | Ctrl+P → 「にほんご」→ Esc | 変換だけが消え、面は開いたまま（入力は空・案内が戻る）。開いた直後の IME は 0 |
+| `c7-closed-while-composing.png` | 「にほんご」の変換中に面の外（面の左の余白）を押す | 面が閉じる。本文に変換の残りが無い。IME は 1 |
+| `c8-fresh-composition-in-body.png` | 本文で `a` | 本文の変換は「あ」だけ（前の「にほんご」が IME の側に残っていない） |
+| `c9-body-untouched.png` | Esc | 本文は元のまま。題名に「● 」なし。終了のとき「保存しますか」は出ない・終了 0 |
+
+差し戻し 2 の前後で字は動いていない: 入力行の字の明るい画素の範囲は、`c2` が y 146〜156・x 41〜86、`c3` と `c4` が y 147〜156・x 43〜83 で、前（`6a7330e`）と後（`992df2f`）で同じ。変換中の字（`c3`）と確定した字（`c4`）も同じ高さ。
+下線の位置の読み（設計席）: 下線は本文と同じ `underline_runs` が「渡した矩形の下端からキャレットの余白（2 DIP・125% で 3 画素）だけ上」に引く。本文では 1 行の矩形がキャレットの棒より上下 3 画素ずつ広いので下線は棒の下端に来て、入力行では 1 行の矩形が棒と同じなので棒の下端より 3 画素上（字のすぐ下）に来る。面と下線の関係は本文と同じで、直す所は無いと判断した。
+`c2` の画は rebase の前の `992df2f` の exe で撮った。rebase の後の `7f99031` と `src` `tests` `eng` の差分は 0 なので、撮り直していない。
+
+速さの 6 本（設計席・`6a7330e` の Release・中央値）:
+
+| ベンチ | 中央値 |
+| --- | --- |
+| startup-first-frame | 213.7 ms |
+| startup-window-shown | 32.6 ms |
+| key-to-frame-single | 0.883 ms |
+| key-to-frame-burst-200 | 3.888 ms |
+| open-large-file-16mib | 252.8 ms |
+| key-to-frame-burst-200-16mib | 7.532 ms |
+
+差し戻し 2 の後は測り直していない。差し戻し 2 が触るのは `src/ui/win32/Direct2DRenderer.cpp` と `.hpp` の 2 ファイルで、変えたのは面の入力行が変換中のときに通る描画だけ。変換が無いときのキャレットの棒の式は前と同じ評価順（席の報告）で、起動と打鍵の道に触れない（ADR 0021）。
+
+回していないものと理由: 実装席の Release・`-Full`・`eng/verify-window.py`（実装席は exe を起動しない・面の IME の検査は `eng/verify-window.py` に無い・ADR 0061 決定 7 の後続）・差し戻し 2 の後の速さ（上のとおり）・入力欄の幅を越える長い変換の画（横ずらしを画素に揃える所は差分の読みだけ）・ほかの DPI とほかの IME（Google 日本語入力・ATOK）。
+
+対象を限定した理由: 差分は core の `match_score`、application の `ImeStance` `ime_stance_of` `EditorFrame` `EditorController`（変換の行き先・入力行を閉じる 1 本・案内）と `CommandPaletteView` のコメント、ui/win32 の `EditorWindow`（構えの実行・変換の取り消し）と `Direct2DRenderer`（入力行の変換の描画）、`CMakeLists.txt`、単体テスト `CommandPaletteTests.cpp` `ApplicationTests.cpp` で、Vim の engine と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--command-palette` だけ。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 と差し戻し 1・2 の成功結果と設計席の実機と速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-001 / ARC-003 / ARC-004 / CPP-002 / CPP-004 / CPP-011 / QLT-001 / QLT-012 / QLT-013 / ADR 0042 を自己レビュー。IME の構えを決めるのは application の `ime_stance_of` の 1 本で ui は frame の値を実行するだけ・入力行を閉じるのは `close_command_input()` の 1 本・確定は打った文字と同じ `CommandText` の道・案内の判断は `command_palette_view()` の 1 か所（ARC-001）・core と application は OS に触れず IMM32 は ui/win32 だけ（ARC-003・symbols 0）・`ImeStance` の `switch` に `default` は無く入力の種類は `std::visit`（CPP-002）・`std::optional` は `value()` / `value_or()` で読む（CPP-004）・`ImeStance` は 1 ファイル 1 型（CPP-011）・単体テストは既存の scope の翻訳単位（ADR 0042）。残る穴: 本文の変換を消す既存の道（モードの切り替え・タブの切り替え・開く）は IME の側を取り消さない・Vim の NORMAL では打鍵ごとに IME の開閉を読み（`ImmGetContext` / `ImmGetOpenStatus`・閉じていれば OS へは何も送らない）6 本のベンチは通常モードの打鍵なのでこの分は測れていない・変換中は入力行のキャレットの棒と候補窓の位置が上下に最大 1 画素動く・最初の変換の 1 回目の候補窓の位置は前の描画の矩形を使う・入力欄の幅を越える長い変換の画は撮っていない・実機の確認は 125% の 1 台・Microsoft IME だけ・面の IME の検査は `eng/verify-window.py` に無い・Ex の行と検索の行の日本語入力・変換中の文字列での絞り込み・全角の `＃` `＠` `：`・全角と半角やひらがなとカタカナを同じとみなす照合は後続（決定 7）。
