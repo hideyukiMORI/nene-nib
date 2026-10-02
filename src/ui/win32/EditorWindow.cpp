@@ -1009,8 +1009,7 @@ void EditorWindow::click_palette(LPARAM data)
         return;
     }
     const auto &palette = frame.command_palette.value();
-    const auto layout =
-        core::palette_layout(client.right, client.bottom, dpi_, palette.choices.size());
+    const auto layout = core::palette_layout(client.right, client.bottom, dpi_, palette.total);
     const auto hit = core::palette_hit(layout, low_word_of(data), high_word_of(data));
     if (hit.has_value())
     {

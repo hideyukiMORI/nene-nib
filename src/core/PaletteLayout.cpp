@@ -20,7 +20,7 @@ PaletteLayout palette_layout(std::int32_t width, std::int32_t height, std::uint3
     const auto row_height = std::max(to_pixels(40, dpi), 1);
     const auto available =
         static_cast<std::size_t>((bottom - top - header_height - footer_height) / row_height);
-    const auto count = std::min({std::max(choices, std::size_t{1}), available, std::size_t{8}});
+    const auto count = std::min({std::max(choices, std::size_t{1}), available, palette_row_limit});
     const auto rows_top = top + header_height;
     const auto rows_bottom = rows_top + static_cast<std::int32_t>(count) * row_height;
     const auto right = left + panel_width;
@@ -53,13 +53,28 @@ std::optional<std::size_t> palette_hit(const PaletteLayout &layout, std::int32_t
     return static_cast<std::size_t>((y - layout.rows.top) / layout.row_height);
 }
 
-std::size_t palette_first_visible(const PaletteLayout &layout, std::size_t selected) noexcept
+namespace
 {
-    if (layout.visible_rows == 0)
+// 見えている行数 visible で選択 selected を最後の行に収める先頭。描く行と frame の窓が共有する
+// 1 つの式（ARC-001）。
+std::size_t first_row_of(std::size_t visible, std::size_t selected) noexcept
+{
+    if (visible == 0)
     {
         return 0;
     }
-    return std::max(selected + 1, layout.visible_rows) - layout.visible_rows;
+    return std::max(selected + 1, visible) - visible;
+}
+} // namespace
+
+std::size_t palette_first_visible(const PaletteLayout &layout, std::size_t selected) noexcept
+{
+    return first_row_of(layout.visible_rows, selected);
+}
+
+std::size_t palette_window_first(std::size_t selected) noexcept
+{
+    return first_row_of(palette_row_limit, selected);
 }
 
 namespace

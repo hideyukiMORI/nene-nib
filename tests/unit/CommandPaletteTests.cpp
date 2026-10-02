@@ -57,6 +57,7 @@
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <expected>
 #include <optional>
@@ -358,6 +359,18 @@ void verify_palette_vim_modes()
     return commands;
 }
 
+// frame の面の窓（ADR 0062 の決定 2）が結果の全体と同じときの実行の列。窓が全体でなければ印
+// "<window>" を足し、全件を言う期待に一致させない（候補が上限以下の試験の確かめ）。
+[[nodiscard]] std::vector<std::string> whole_commands_of(const app::CommandPaletteView &view)
+{
+    auto commands = commands_of(view.rows);
+    if (view.first != 0 || view.rows.size() != view.total)
+    {
+        commands.emplace_back("<window>");
+    }
+    return commands;
+}
+
 // 絞り込みの結果の位置の列を候補に写す（全件を読むのは試験だけ・ADR 0062 の決定 1）。
 [[nodiscard]] std::vector<core::CommandChoice>
 listed_choices_of(const std::vector<core::CommandChoice> &entries, core::PaletteScope scope,
@@ -576,11 +589,11 @@ void verify_palette_entries_controller()
     auto frame = controller.apply(app::OpenCommandPalette{});
     const auto opened = frame.command_palette.value_or(app::CommandPaletteView{});
     bool marked = frame.command_palette.has_value();
-    for (const auto &choice : opened.choices)
+    for (const auto &choice : opened.rows)
     {
         marked = marked && choice.origin == std::optional{core::PaletteOrigin::tab};
     }
-    expect(marked && commands_of(opened.choices) == all,
+    expect(marked && whole_commands_of(opened) == all,
            "Ctrl+P lists the tabs in band order with the tab origin");
     expect(frame.command_line.value_or(core::InputLineView{}).text.empty() &&
                frame.command_line.value_or(core::InputLineView{}).completions.empty() &&
@@ -593,7 +606,7 @@ void verify_palette_entries_controller()
     frame = controller.apply(app::OpenTabList{});
     const auto listed = frame.command_palette.value_or(app::CommandPaletteView{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "#" && listed.selected == 0 &&
-               commands_of(listed.choices) == all,
+               whole_commands_of(listed) == all,
            "the tab list opens the same entries behind the hash mark on the active tab");
     static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
     static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
@@ -733,10 +746,10 @@ void verify_palette_history_rows()
     auto &controller = editor.controller();
     auto frame = controller.apply(app::OpenCommandPalette{});
     const auto opened = palette_of(frame);
-    expect(commands_of(opened.choices) ==
+    expect(whole_commands_of(opened) ==
                std::vector<std::string>{"tabnext 1", "C:\\docs\\x.txt", "C:\\docs\\y.txt"},
            "Ctrl+P lists the tabs and then the history, newest first, without the open file");
-    const auto &row = opened.choices.at(1);
+    const auto &row = opened.rows.at(1);
     expect(row.label.text() == "x.txt" && row.kind == core::CommandChoiceKind::open &&
                row.detail.has_value() && row.detail.value().text() == "C:\\docs" &&
                row.origin == std::optional{core::PaletteOrigin::history},
@@ -744,22 +757,22 @@ void verify_palette_history_rows()
     expect(editor.history().reads() == 1 && editor.history().writes() == 0,
            "opening the palette reads the history once and writes nothing");
     frame = controller.apply(app::CommandText{"@"});
-    expect(commands_of(palette_of(frame).choices) ==
+    expect(whole_commands_of(palette_of(frame)) ==
                std::vector<std::string>{"C:\\docs\\x.txt", "C:\\docs\\y.txt"},
            "the at mark lists only the history");
     frame = controller.apply(app::CommandText{"y"});
-    expect(commands_of(palette_of(frame).choices) == std::vector<std::string>{"C:\\docs\\y.txt"},
+    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"C:\\docs\\y.txt"},
            "a query behind the at mark filters the history");
     static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
     static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
     frame = controller.apply(app::CommandText{"#"});
-    expect(commands_of(palette_of(frame).choices) == std::vector<std::string>{"tabnext 1"},
+    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"tabnext 1"},
            "the hash mark lists only the tabs");
     expect(editor.history().reads() == 1, "typing in the palette never reads the history again");
     static_cast<void>(controller.apply(app::CancelCommand{}));
     editor.history().serve(HistoryReading{std::unexpected(app::FileHistoryFailure::malformed)});
     frame = controller.apply(app::OpenCommandPalette{});
-    expect(commands_of(palette_of(frame).choices) == std::vector<std::string>{"tabnext 1"} &&
+    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"tabnext 1"} &&
                notice_of(frame) == "none",
            "an unreadable history opens the palette with the tabs only and no notice");
 }
@@ -828,14 +841,14 @@ void verify_palette_commit(bool vim)
            "a composition in the palette is shown on the input line only");
     expect(frame.command_composition.value_or(app::CompositionView{}).utf8 == "めも" &&
                frame.command_line.value_or(core::InputLineView{}).text.empty() &&
-               palette_of(frame).choices.size() == 3 && frame.lines.front().text == "body",
+               palette_of(frame).total == 3 && palette_of(frame).rows.size() == 3 &&
+               frame.lines.front().text == "body",
            "the composition neither filters the list nor touches the body");
     frame = controller.apply(CommitText{"メモ"});
     expect(!app::composing(frame) &&
                frame.command_line.value_or(core::InputLineView{}).text == "メモ",
            "the commit goes into the palette query");
-    expect(commands_of(palette_of(frame).choices) ==
-                   std::vector<std::string>{"C:\\docs\\メモ.txt"} &&
+    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"C:\\docs\\メモ.txt"} &&
                palette_of(frame).selected == 0,
            "the commit filters the list and the selection returns to the top");
     expect(frame.lines.front().text == "body" && frame.command_palette.has_value() &&
@@ -942,6 +955,82 @@ void verify_tab_folders()
                !core::tab_folder_for(core::FilePath::parse("note.txt").value()).has_value(),
            "an untitled tab and a bare name have no folder");
 }
+
+// ui が描く行は frame の窓に入る（ADR 0062 の決定 2・3）。見えている行数 1〜上限・件数 0〜20・
+// 選択のすべての組で、ui が読む [見えている先頭, +min(行数, 件数 - 先頭)) が窓
+// [窓の先頭, +min(上限, 件数 - 窓の先頭)) に入り、選択はその中にある。行数が上限なら先頭は同じ式。
+[[nodiscard]] bool window_covers_rows(std::size_t visible, std::size_t total)
+{
+    const core::PaletteLayout layout{{}, {}, {}, {}, 1, visible};
+    bool covered = true;
+    for (std::size_t selected = 0; covered && selected < total; ++selected)
+    {
+        const auto start = core::palette_first_visible(layout, selected);
+        const auto end = start + std::min(visible, total - start);
+        const auto first = core::palette_window_first(selected);
+        const auto last = first + std::min(core::palette_row_limit, total - first);
+        covered = first <= start && end <= last && start <= selected && selected < end;
+    }
+    return covered;
+}
+
+void verify_palette_window_covers_rows()
+{
+    bool covered = true;
+    for (std::size_t visible = 1; visible <= core::palette_row_limit; ++visible)
+    {
+        for (std::size_t total = 0; total <= 20; ++total)
+        {
+            covered = covered && window_covers_rows(visible, total);
+        }
+    }
+    expect(covered, "every drawn row lies inside the window carried by the frame");
+    const core::PaletteLayout full{{}, {}, {}, {}, 1, core::palette_row_limit};
+    bool shared = true;
+    for (std::size_t selected = 0; selected <= 20; ++selected)
+    {
+        shared = shared && core::palette_first_visible(full, selected) ==
+                               core::palette_window_first(selected);
+    }
+    expect(shared && core::palette_row_limit == 8 && core::palette_window_first(7) == 0 &&
+               core::palette_window_first(8) == 1 && core::palette_window_first(12) == 5,
+           "the window starts where eight visible rows start");
+}
+
+// frame に載るのは窓だけ。候補が上限を越えても rows は上限まで、rows の i 番目は結果の first + i
+// 番目、選択と件数は結果の全体の数（ADR 0062 の決定 2）。
+[[nodiscard]] bool window_follows_tabs(const app::CommandPaletteView &view, std::size_t selected)
+{
+    const auto first = core::palette_window_first(selected);
+    bool same = view.first == first && view.selected == selected && view.total == 12 &&
+                view.rows.size() == std::min(core::palette_row_limit, view.total - first);
+    for (std::size_t index = 0; same && index < view.rows.size(); ++index)
+    {
+        same = view.rows.at(index).command == "tabnext " + std::to_string(first + index + 1);
+    }
+    return same;
+}
+
+void verify_palette_view_window()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    for (std::size_t made = 1; made < 12; ++made)
+    {
+        applied(controller, app::NewTab{});
+    }
+    applied(controller, app::SwitchTab{0});
+    bool follows = window_follows_tabs(palette_of(controller.apply(app::OpenCommandPalette{})), 0);
+    for (std::size_t selected = 1; selected < 12; ++selected)
+    {
+        const auto frame = controller.apply(app::EditCommand{core::CommandEdit::complete_next});
+        follows = follows && window_follows_tabs(palette_of(frame), selected);
+    }
+    expect(follows, "the frame carries at most eight rows of the result around the selection");
+    expect(palette_of(controller.frame()).rows.size() == core::palette_row_limit &&
+               palette_of(controller.frame()).first == 4,
+           "the last selection keeps the eight rows before it");
+}
 } // namespace
 
 void verify_command_palette()
@@ -965,5 +1054,7 @@ void verify_command_palette()
     verify_palette_history_open();
     verify_palette_composition();
     verify_tab_folders();
+    verify_palette_window_covers_rows();
+    verify_palette_view_window();
 }
 } // namespace nenenib::tests

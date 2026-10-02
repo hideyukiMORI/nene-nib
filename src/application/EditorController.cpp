@@ -23,6 +23,7 @@
 #include "ImeStance.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
+#include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
 #include "ParkedTab.hpp"
@@ -920,9 +921,11 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         auto hint = palette->input().text().empty() && !command_composed().has_value()
                         ? std::optional<core::DisplayText>{core::palette_mark_hint()}
                         : std::nullopt;
-        // 工程 2（#270）で全件の代わりに見えている行の窓に替える（ADR 0062 の決定 2）。
-        return CommandPaletteView{palette->rows(0, palette->count()), palette->selected(),
-                                  std::move(hint)};
+        // 載せるのは見えている行の窓だけ（ADR 0062 の決定 2）。全件は写さない。
+        const auto selected = palette->selected();
+        const auto first = core::palette_window_first(selected);
+        return CommandPaletteView{palette->rows(first, core::palette_row_limit), first, selected,
+                                  palette->count(), std::move(hint)};
     }
     return std::nullopt;
 }
