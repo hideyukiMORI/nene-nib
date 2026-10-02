@@ -44,6 +44,7 @@
    - 空でなければ、名前（`label`）に `match_score`。名前に当たらなければ「場所＋名前」（`detail` と `label`）に `match_score` して、固定の罰点を足す（名前で当たった候補が先）。どちらにも当たらなければ落とす。
    - 並べ替えは点の小さい順、同点は列の順。`std::stable_sort` は使わず、(点, 元の位置) を比べる（ARC-003）。
    - 照合はバイト単位のまま。日本語の名前の照合（コードポイントの境目）は、面の中の日本語入力の Issue で直す。
+   - **後の変更（[ADR 0061](0061-the-palette-takes-ime-input-and-opens-with-it-off.md)・#264）**: 照合はコードポイントの境目で行う。
 5. **`choices()`**: `palette_query_of(input)` の出どころが `commands` なら今の `palette_choices(input)`（先頭の `:` を剥がす・結果は今と同じ）、それ以外は `listed_choices`。`filled`（`set fontsize=` を補う）は候補の列を持ったまま入力を `:<コマンド>` にする。
 6. **開く入口（application）**: 候補の列を作るのは controller の 1 本（`palette_entries()`）。Ctrl+P（`OpenCommandPalette`）は入力が空・選ぶのは先頭。「∨」と `:tabs`（`OpenTabList`）は同じ列で入力が `#`・選ぶのはアクティブなタブの行。開いている間にもう一度送ると閉じるのは今までどおり。
    - 列の順は、開いているタブ（帯の順・今の `tabnext N` の候補のまま）→ 履歴（新しい順・#259）。後続でブックマークはタブの後ろ、同じフォルダは最後（採用した画の順）。

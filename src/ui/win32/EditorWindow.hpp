@@ -9,6 +9,7 @@
 #include "FilePath.hpp"
 #include "HistoryDirection.hpp"
 #include "ImeOpenState.hpp"
+#include "ImeStance.hpp"
 #include "Milestone.hpp"
 #include "RenderFailure.hpp"
 #include "SessionEnd.hpp"
@@ -117,10 +118,12 @@ class EditorWindow final
     void send_composition(const core::Composition &composition);
     void end_composition();
     void place_candidate_window();
-    // NORMAL では IME を切り、INSERT と通常モードでは切る前の開閉に戻す（決定 5）。
+    // frame の構え（ImeStance）を実行する。決めるのは application（ADR 0061 の決定 2）。
     void follow_ime(const application::EditorFrame &frame);
     void close_ime();
     void restore_ime();
+    // IME の側に残った変換を取り消す（ImmNotifyIME の CPS_CANCEL・ADR 0061 の決定 3）。
+    void cancel_ime_composition();
     // Ctrl+Z / Ctrl+Y は Vim では u / Ctrl-r に譲り、Ctrl+R は Vim のときだけ意味を持つ。
     void send_history(core::HistoryDirection direction);
     void send_vim_redo();
@@ -164,6 +167,10 @@ class EditorWindow final
     core::VimMode vim_mode_ = core::VimMode::normal;
     // Vim の NORMAL に入る前の IME の開閉。控えが在ることが「いま切ってある」でもある（決定 5）。
     ImeOpenState ime_open_ = ImeOpenState::unrecorded;
+    // 前に実行した構え。closed_once を入るときの 1 回にするために覚える（ADR 0061 の決定 2）。
+    std::optional<application::ImeStance> ime_stance_;
+    // 前の frame で面の入力行が変換中だったか。面が閉じて変換が消えた瞬間を知る（決定 3）。
+    bool command_composing_ = false;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
     ATOM class_ = 0;

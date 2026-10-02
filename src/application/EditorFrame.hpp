@@ -8,6 +8,7 @@
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
 #include "EditorSettings.hpp"
+#include "ImeStance.hpp"
 #include "InputLineView.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
@@ -41,12 +42,17 @@ struct EditorFrame
     // Vim のモード。窓は NORMAL のあいだ IME を切るのにこれを読む（ADR 0014 の決定 5）。
     // 通常モードのときは意味を持たない（mode_label にも出ない）。
     core::VimMode vim_mode;
+    // IME の構え（ADR 0061 の決定 1）。ui はこの値の変わり目を実行するだけ。
+    ImeStance ime;
     std::string_view mode_label;
     // 録画中のマクロの名前（`q{a-z}` から `q` まで・ADR 0046 の決定 8）。Vim モードのあいだ
     // だけ値を持ち、renderer がモード表示の隣に `recording @a` を muted で描く。
     std::optional<char> recording;
-    // 変換中の文字列。キャレットの位置に差し込んで描く（ADR 0014 の決定 2）。
+    // 本文の変換中の文字列。キャレットの位置に差し込んで描く（ADR 0014 の決定 2）。
     std::optional<CompositionView> composition;
+    // 面の入力行の変換中の文字列（ADR 0061 の決定 4）。面が開いていればこちらに載り、composition
+    // は空。両方が同時に値を持つことは無い。
+    std::optional<CompositionView> command_composition;
     DocumentView document;
     std::array<core::DisplayText, core::status_item_count> status_items;
     core::EditorSettings settings;
@@ -71,6 +77,13 @@ struct EditorFrame
     // （未保存なら確認・最後の 1 本なら窓を閉じる）を呼ぶ。controller はタブを閉じない。
     std::optional<std::size_t> close_request;
 };
+
+// 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは
+// この 1 本。
+[[nodiscard]] inline bool composing(const EditorFrame &frame) noexcept
+{
+    return frame.composition.has_value() || frame.command_composition.has_value();
+}
 
 // 表示値から作る帯の配置の入力（ADR 0056 の決定 8・9）。renderer の描画と窓の hit test・
 // クリック・hover が同じ値を渡すための 1 本。width は帯の幅（物理画素）。

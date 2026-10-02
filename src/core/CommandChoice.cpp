@@ -2,6 +2,8 @@
 
 #include "CommandMatch.hpp"
 #include "ExResult.hpp"
+#include "Offset.hpp"
+#include "Utf8.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -20,24 +22,47 @@ namespace
     return letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter + ('a' - 'A')) : letter;
 }
 
+[[nodiscard]] char32_t lower_code_point(char32_t value) noexcept
+{
+    return value >= U'A' && value <= U'Z' ? value + (U'a' - U'A') : value;
+}
+
+// from から先で wanted のコードポイントが始まる境目（ADR 0061 の決定 6）。境目ごとに進むので、
+// 別の文字の継続バイトの並びには当たらない。
+[[nodiscard]] std::optional<Offset> code_point_from(std::string_view command, Offset from,
+                                                    char32_t wanted) noexcept
+{
+    for (Offset at = from; at.value < command.size(); at = next_code_point(command, at))
+    {
+        if (code_point_at(command, at) == wanted)
+        {
+            return at;
+        }
+    }
+    return std::nullopt;
+}
+
+// query のコードポイントを順に候補の中から探す部分列の照合。空白は飛ばし、ASCII は大文字と
+// 小文字を区別しない。点は候補の長さと飛ばした量の和で、最初の文字までは 4 倍（単位はバイト）。
 [[nodiscard]] std::optional<std::size_t> match_score(std::string_view query,
                                                      std::string_view command)
 {
-    std::size_t at = 0;
+    Offset at{0};
     std::size_t score = command.size();
-    for (const char letter : query)
+    for (Offset letter{0}; letter.value < query.size(); letter = next_code_point(query, letter))
     {
-        if (letter == ' ')
+        const char32_t wanted = lower_code_point(code_point_at(query, letter));
+        if (wanted == U' ')
         {
             continue;
         }
-        const auto found = command.find(lower_ascii(letter), at);
-        if (found == std::string_view::npos)
+        const auto found = code_point_from(command, at, wanted);
+        if (!found.has_value())
         {
             return std::nullopt;
         }
-        score += (found - at) * (at == 0 ? 4 : 1);
-        at = found + 1;
+        score += (found.value().value - at.value) * (at.value == 0 ? 4 : 1);
+        at = next_code_point(command, found.value());
     }
     return score;
 }

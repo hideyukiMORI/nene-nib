@@ -2,6 +2,7 @@
 #include "Appearance.hpp"
 #include "AppearanceReadFailure.hpp"
 #include "BodyLayout.hpp"
+#include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
@@ -14,6 +15,9 @@
 #include "ClipboardText.hpp"
 #include "CodePageFailure.hpp"
 #include "Column.hpp"
+#include "CommandInput.hpp"
+#include "CommandLine.hpp"
+#include "CommandPalette.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "Composition.hpp"
@@ -33,6 +37,7 @@
 #include "FontSize.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
+#include "ImeStance.hpp"
 #include "InsertText.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
@@ -41,6 +46,7 @@
 #include "NewLine.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "Palette.hpp"
 #include "PlaceCaret.hpp"
@@ -59,6 +65,7 @@
 #include "ScriptedThemes.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollState.hpp"
+#include "SearchLine.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
@@ -72,6 +79,7 @@
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
@@ -976,6 +984,62 @@ void verify_composition_vim_insert()
            "Vim sees the committed text as characters it typed itself");
 }
 
+// IME の構えの表（ADR 0061 の決定 1）。入力があれば入力の種類が決め（面は closed_once・Ex と
+// 検索の行は closed）、無ければモードが決める（通常と INSERT は as_left・NORMAL / VISUAL は
+// closed）。
+void verify_ime_stance_table()
+{
+    using nenenib::application::CommandInput;
+    using nenenib::application::ime_stance_of;
+    using nenenib::application::ImeStance;
+    const std::array<std::optional<CommandInput>, 4> inputs{
+        std::nullopt, CommandInput{nenenib::core::CommandLine::empty()},
+        CommandInput{nenenib::core::SearchLine::opened(nenenib::core::VimSearchDirection::forward)},
+        CommandInput{nenenib::core::CommandPalette::opened({}, "", 0)}};
+    const std::array<ImeStance, 4> typed{ImeStance::as_left, ImeStance::closed, ImeStance::closed,
+                                         ImeStance::closed_once};
+    const std::array<ImeStance, 4> blocked{ImeStance::closed, ImeStance::closed, ImeStance::closed,
+                                           ImeStance::closed_once};
+    const std::array<VimMode, 5> vim_modes{VimMode::normal, VimMode::insert, VimMode::visual,
+                                           VimMode::visual_line, VimMode::visual_block};
+    for (std::size_t index = 0; index < inputs.size(); ++index)
+    {
+        for (const VimMode vim_mode : vim_modes)
+        {
+            expect(ime_stance_of(EditMode::ordinary, vim_mode, inputs.at(index)) == typed.at(index),
+                   "ordinary mode ignores the Vim mode");
+            const auto &expected = vim_mode == VimMode::insert ? typed : blocked;
+            expect(ime_stance_of(EditMode::vim, vim_mode, inputs.at(index)) == expected.at(index),
+                   "Vim INSERT is as_left and NORMAL / VISUAL are closed without an input");
+        }
+    }
+}
+
+// controller の frame に載る構え（ADR 0061 の決定 1）。面を閉じると元のモードの値に戻る。
+void verify_ime_stance_frame()
+{
+    using nenenib::application::ImeStance;
+    using nenenib::application::OpenCommandPalette;
+    Editing editing;
+    EditorController &controller = editing.controller();
+    expect(controller.frame().ime == ImeStance::as_left, "ordinary mode leaves the IME as it was");
+    expect(controller.apply(OpenCommandPalette{}).ime == ImeStance::closed_once,
+           "Ctrl+P closes the IME once in ordinary mode");
+    expect(controller.apply(nenenib::application::CancelCommand{}).ime == ImeStance::as_left,
+           "closing the palette returns to as_left");
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    expect(controller.frame().ime == ImeStance::closed, "Vim NORMAL keeps the IME closed");
+    expect(controller.apply(OpenCommandPalette{}).ime == ImeStance::closed_once,
+           "Ctrl+P closes the IME once in Vim NORMAL");
+    expect(controller.apply(OpenCommandPalette{}).ime == ImeStance::closed,
+           "Ctrl+P again returns to closed");
+    expect(controller.apply(VimKeyPress{VimKey{VimCharacter{U':'}}}).ime == ImeStance::closed,
+           "the Ex line keeps the IME closed");
+    static_cast<void>(controller.apply(nenenib::application::CancelCommand{}));
+    expect(controller.apply(VimKeyPress{VimKey{VimCharacter{U'i'}}}).ime == ImeStance::as_left,
+           "Vim INSERT leaves the IME as it was");
+}
+
 void verify_composition()
 {
     verify_composition_underlines();
@@ -984,6 +1048,8 @@ void verify_composition()
     verify_composition_cancelling();
     verify_composition_vim_normal();
     verify_composition_vim_insert();
+    verify_ime_stance_table();
+    verify_ime_stance_frame();
 }
 } // namespace
 

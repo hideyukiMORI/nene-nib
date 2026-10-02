@@ -13,6 +13,7 @@
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
+#include "CompositionView.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayText.hpp"
 #include "EditCommand.hpp"
@@ -54,6 +55,7 @@
 #include "ThemeChoice.hpp"
 #include "VimCharacter.hpp"
 #include "VimKeyPress.hpp"
+#include "VimMode.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -268,6 +270,10 @@ void verify_palette_input_isolation()
     frame = controller.apply(CommitText{"界"});
     expect(!frame.composition.has_value() && frame.lines.front().text == "body",
            "late IME events cannot edit the body");
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "界" &&
+               !frame.command_composition.has_value(),
+           "the commit goes into the palette query instead (ADR 0061)");
+    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
     static_cast<void>(controller.apply(app::CommandText{":"}));
     editor.clipboard().hold(std::string("set guifont=MS Gothic:h17"));
     frame = controller.apply(app::PasteCommand{});
@@ -417,6 +423,40 @@ void verify_listed_choices()
     expect(commands_of(core::listed_choices(entries, core::PaletteScope::files, "work")) ==
                std::vector<std::string>{"tabnext 1"},
            "the folder and the name are searched together");
+}
+
+// 照合はコードポイントの境目で行う（ADR 0061 の決定 6）。日本語の query は日本語の名前に当たり、
+// 別の文字の継続バイトにまたがる並びには当たらない。ASCII の点は今までと同じ。
+void verify_listed_code_points()
+{
+    const std::vector<core::CommandChoice> names{
+        tab_choice("日本語メモ", 1), tab_choice("メモ.txt", 2), tab_choice("めも.md", 3),
+        tab_choice("Memo帳.txt", 4), tab_choice("アあ", 5),     tab_choice("memo.txt", 6)};
+    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "メモ")) ==
+               std::vector<std::string>{"tabnext 2", "tabnext 1"},
+           "a katakana query hits the katakana names, the shorter skip first");
+    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "めも")) ==
+               std::vector<std::string>{"tabnext 3"},
+           "a hiragana query hits only the hiragana name");
+    // め は E3 82 81。「アあ」は E3 82 A2 E3 81 82 で、バイトの部分列としては E3 82 81 を含む。
+    expect(core::listed_choices(names, core::PaletteScope::files, "め").size() == 1 &&
+               core::listed_choices(names, core::PaletteScope::files, "め").front().command ==
+                   "tabnext 3",
+           "a character never matches across the bytes of two other characters");
+    expect(core::listed_choices(names, core::PaletteScope::files, "ア め").empty(),
+           "the spaced query still needs every character on a boundary");
+    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "MEMO帳")) ==
+               std::vector<std::string>{"tabnext 4"},
+           "ASCII and Japanese mix in one query, ASCII ignoring case");
+    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "帳txt")) ==
+               std::vector<std::string>{"tabnext 4"},
+           "a Japanese character is followed by ASCII in the same name");
+    expect(commands_of(core::listed_choices(names, core::PaletteScope::files, "memo")) ==
+               std::vector<std::string>{"tabnext 6", "tabnext 4"},
+           "ASCII scores still count bytes: the shorter name comes first");
+    expect(choices_for("メモ").empty() &&
+               choices_for("drac").front().command == "colorscheme dracula",
+           "the Ex commands take the same matcher");
 }
 
 // CommandPalette は開いたときの列を持ち、入力の先頭の記号で出どころを切り替える（決定 1・5）。
@@ -709,6 +749,134 @@ void verify_palette_history_open()
            "a file too large to open is only noticed and stays in the history");
 }
 
+// 面を開いた editor（本文は "body"・履歴は メモ.txt と notes.md・vim なら Vim の NORMAL から）。
+void open_palette_over_body(Editing &editor, bool vim)
+{
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(InsertText{"body"}));
+    editor.history().serve(history_of({"C:\\docs\\メモ.txt", "C:\\docs\\notes.md"}));
+    static_cast<void>(controller.apply(SelectEditMode{vim ? EditMode::vim : EditMode::ordinary}));
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+}
+
+// 面が開いている間の変換は面の入力欄のもの。確定は打った文字と同じ道で入り、本文にも engine
+// にも行かない（ADR 0061 の決定 3・4）。
+void verify_palette_commit(bool vim)
+{
+    Editing editor;
+    open_palette_over_body(editor, vim);
+    auto &controller = editor.controller();
+    const auto mode = controller.frame().vim_mode;
+    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
+    auto frame = controller.apply(ComposeText{composed_of("めも", {}, 6)});
+    expect(frame.command_composition.has_value() && !frame.composition.has_value() &&
+               app::composing(frame),
+           "a composition in the palette is shown on the input line only");
+    expect(frame.command_composition.value_or(app::CompositionView{}).utf8 == "めも" &&
+               frame.command_line.value_or(core::InputLineView{}).text.empty() &&
+               palette_of(frame).choices.size() == 3 && frame.lines.front().text == "body",
+           "the composition neither filters the list nor touches the body");
+    frame = controller.apply(CommitText{"メモ"});
+    expect(!app::composing(frame) &&
+               frame.command_line.value_or(core::InputLineView{}).text == "メモ",
+           "the commit goes into the palette query");
+    expect(commands_of(palette_of(frame).choices) ==
+                   std::vector<std::string>{"C:\\docs\\メモ.txt"} &&
+               palette_of(frame).selected == 0,
+           "the commit filters the list and the selection returns to the top");
+    expect(frame.lines.front().text == "body" && frame.command_palette.has_value() &&
+               frame.vim_mode == mode,
+           "the body and the Vim engine never see the commit and the palette stays open");
+}
+
+// 面を閉じる道（取消・確定）は残っている変換を消す（ADR 0061 の決定 3）。
+void verify_palette_closing_composition(bool vim)
+{
+    Editing editor;
+    open_palette_over_body(editor, vim);
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 3)}));
+    auto frame = controller.apply(app::CancelCommand{});
+    expect(!frame.command_palette.has_value() && !app::composing(frame),
+           "closing the palette drops its composition");
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 3)}));
+    frame = controller.apply(app::SubmitCommand{});
+    expect(!frame.command_palette.has_value() && !app::composing(frame),
+           "submitting the palette drops its composition");
+}
+
+// 確定は undo の単位を作らない。上限を越える確定は入らず知らせが出る（ADR 0061 の決定 3）。
+void verify_palette_commit_limits()
+{
+    Editing editor;
+    open_palette_over_body(editor, false);
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(CommitText{"メモ"}));
+    static_cast<void>(controller.apply(app::CancelCommand{}));
+    auto frame = controller.apply(HistoryAction{HistoryDirection::undo});
+    expect(frame.lines.front().text.empty(), "undo still only sees the typed body");
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{std::string(250, 'a')}));
+    frame = controller.apply(CommitText{"日本語"});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == std::string(250, 'a') &&
+               frame.command_message.has_value() && !app::composing(frame),
+           "a commit past the input limit is refused with a notice");
+}
+
+// Ex の行と検索の行は今までどおり変換も確定も捨てる（ADR 0061 の決定 3）。
+void verify_input_lines_drop_composition()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    for (const auto entry : {U':', U'/'})
+    {
+        static_cast<void>(controller.apply(VimKeyPress{core::VimCharacter{entry}}));
+        auto frame = controller.apply(ComposeText{composed_of("あ", {}, 3)});
+        expect(frame.command_line.has_value() && !app::composing(frame),
+               "the Ex and search lines still drop the composition");
+        frame = controller.apply(CommitText{"界"});
+        expect(frame.command_line.value_or(core::InputLineView{}).text.empty(),
+               "and drop the commit");
+        static_cast<void>(controller.apply(app::CancelCommand{}));
+    }
+}
+
+// 記号の案内は変換を始めたら消え、取り消して空に戻ればまた出る。確定して文字が入れば出ない
+// （ADR 0060 の決定 9・#264 の差し戻し 1）。
+void verify_palette_hint_composing()
+{
+    Editing editor;
+    open_palette_over_body(editor, false);
+    auto &controller = editor.controller();
+    auto frame = controller.frame();
+    expect(palette_of(frame).hint.has_value(), "an opened palette shows the mark hint");
+    frame = controller.apply(ComposeText{composed_of("あ", {}, 3)});
+    expect(frame.command_composition.has_value() && !palette_of(frame).hint.has_value(),
+           "a composition in the palette hides the mark hint");
+    frame = controller.apply(CancelComposition{});
+    expect(!app::composing(frame) && palette_of(frame).hint.has_value(),
+           "a cancelled composition shows the hint again");
+    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 3)}));
+    frame = controller.apply(CommitText{"メモ"});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "メモ" &&
+               !palette_of(frame).hint.has_value(),
+           "a committed query keeps the hint hidden");
+}
+
+void verify_palette_composition()
+{
+    for (const auto vim : {false, true})
+    {
+        verify_palette_commit(vim);
+        verify_palette_closing_composition(vim);
+    }
+    verify_palette_hint_composing();
+    verify_palette_commit_limits();
+    verify_input_lines_drop_composition();
+}
+
 void verify_tab_folders()
 {
     const auto folder = core::tab_folder_for(core::FilePath::parse("C:\\work\\note.txt").value());
@@ -733,12 +901,14 @@ void verify_command_palette()
     verify_palette_vim_modes();
     verify_palette_marks();
     verify_listed_choices();
+    verify_listed_code_points();
     verify_palette_sources();
     verify_palette_entries_controller();
     verify_palette_notes_geometry();
     verify_palette_hint_view();
     verify_palette_history_rows();
     verify_palette_history_open();
+    verify_palette_composition();
     verify_tab_folders();
 }
 } // namespace nenenib::tests
