@@ -2304,3 +2304,50 @@ ADR の commit は ADR 0062・仕様の D33・D34 と FR-006 の出どころ・�
 対象を限定した理由: 差分は core の `CommandPalette` `CommandChoice` `PaletteLayout`、application の `CommandPaletteView` と `EditorController`（面の view・`ActivateCommandChoice`・`submit_palette`）、ui/win32 の `Direct2DRenderer`（面の行と件数）と `EditorWindow::click_palette`、単体テスト `CommandPaletteTests.cpp` `UserThemeSelectionTests.cpp` `TabsTests.cpp` で、Vim の engine と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した `--command-palette` だけ。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の実機と速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
 
 ARC-001 / ARC-003 / CPP-002 / CPP-003 / CPP-004 / CPP-011 / QLT-001 / QLT-012 / QLT-013 / ADR 0042 を自己レビュー。結果を作るのは `filtered` の 1 本・選択だけを動かすのは `reselected` の 1 本・絞り込みと順は `listed_positions` の 1 本・窓の先頭は `first_row_of` の 1 つの式を `palette_first_visible` と `palette_window_first` が共用・上限は core の `palette_row_limit` の 1 か所（ARC-001）・core と application は OS に触れない（ARC-003・symbols 0）・結果の 2 つの形は `std::visit` で型ごとの `row_of` へ写す（CPP-002）・`CommandPaletteView` は公開 aggregate のままでメソッドを持たない（CPP-003）・`choice_at` の `std::optional` は `value()` / `has_value()` で読む（CPP-004）・新しい struct とファイルは無い（CPP-011）・単体テストは既存の scope の翻訳単位（ADR 0042）。残る穴: 面の中の 1 打鍵が軽くなった量は測っていない（ベンチは #272）・実機の画は 125% の 1 台・ダークのテーマ・タブの候補と設定のコマンドだけ・候補の列を後から伸ばす口はまだ無い（#272）・ワーカーとフォルダの列挙は #271・観測の口 `shares_result_with` は製品のコードからは呼ばれない（契約のためだけにある）。
+
+### 5-cb. 同じフォルダは裏のワーカー 1 本が読み application は型のある FolderPort で頼んで受け取る（Issue #271・ADR 0062 決定 5〜10・ADR 0004・2026-10-02）
+
+ブランチ `feat/271-folder-worker`（main `e570fc3` の上・工程 1 `dcc9d31`・工程 2 `1770825`・工程 3 は本節と ADR 0062 の「強制」の #271 の行と「実機の確認」の 1 文と「結果」の 4 行と `docs/todo/current.md` の数字の 2 行と同じフォルダの行だけ）。rebase はしていない（main は動いていない）。
+使う人から見える動きは変えない（controller は `list` も `collect` も呼ばない。呼ぶのは #272）。
+
+- 工程 1（`dcc9d31`）: application に `FolderRequest`（フォルダと券）・`FolderProgress`（閉じた enum `more` `complete` `truncated` `failed`）・`FolderBatch`・`FolderPort`（`list` / `[[nodiscard]] collect`）。adapters に `Win32Worker`（スレッド 1 本・キュー 1 本・最初の仕事で `std::jthread` を起こす・壊すときは止める合図の後「`CancelSynchronousIo` → スレッドのハンドルを 10 ms 待つ」をスレッドが終わるまで繰り返して join・`TerminateThread` は無い）・`FolderShelf`（たまり・世代・合図を 1 つのロックで守り、合図はたまりが空から 1 つ以上になったときだけロックの外で呼ぶ）・`FolderListing`（1 つの要求の列挙・1 件ごとに止める合図と世代を見る）・`Win32FolderAdapter`（既定値 `folder_batch_files` 1024・`folder_file_limit` 8192 の 1 か所）。CTest `nib_folders`（`tests/adapters/FolderAdapterTests.cpp`・90 checks・`TIMEOUT 60`）。
+- 工程 2（`1770825`）: `EditorPorts` に 9 番目の `folders`・替え玉 `ScriptedFolders`・中身の無い意図 `WorkCompleted`（controller の入口の 1 か所で Ctrl+Tab の歩きを続け知らせを消さない意図に数え、`accept` は空）・ui の合図の窓メッセージ `work_message`（`WM_APP + 1`・`EditorWindow.cpp` の 1 か所）と `work_signal()`・`send` の深さを数えて途中で届いた合図をいちばん外の `send` の終わりで 1 回送る・`src/app` の合成（ワーカーと adapter を controller より前に宣言・窓ができた後に `bind`）・新しい scope `--background-work`（46 checks）。`--history` の `verify_quiet_paths` にフォルダの口の回数を足した（checks 数は不変）。
+- 設計席が差分で見つけた 1 か所（差し戻し・工程 2 の席が直した）: `FolderListing::run` が最初の `FindFirstFileExW` を呼んだ後で初めて世代を見ていた。キューで待つ間に古くなった列挙が走り出すたびに 1 回ずつ無駄な I/O を呼ぶので、`run` の先頭で `live(stop)` を見るようにした（外から見える結果は変わらない）。
+- 設計席が決めたこと: スレッドは最初の仕事を受けたときに起こす（Ctrl+P を開かない人はスレッドを持たない）・batch の件数と上限は adapter を作るときに渡せる値で既定値は 1 か所の定数（試験は小さい数で確かめる。数字は #272 の実測で見直す）・合図は「たまりが空から 1 つ以上になったとき」だけ・ロックの外で呼ぶ。
+- fixture は oracle の対象ではないので不能。adapters の試験と契約で守る（ADR 0062「強制」）。
+
+| 検査 | 退行の対象と実測 |
+| --- | --- |
+| `cmake --build build`（Debug・ASan / UBSan・clang-tidy 込み） | 工程 1・工程 2 とも成功・警告 0（`out/271-step1-build.log` / `out/271-step2-build.log`） |
+| `ctest --test-dir build -R nib_folders`（工程 1）・`-R "nib_folders\|nib_adapters"`（工程 2） | 工程 1 は 3 回とも成功（**90 checks**・0 failures・`out/271-step1-ctest-{1,2,3}.log`）・工程 2 は 3 回とも 2/2 成功（`out/271-step2-ctest-{1,2,3}.log`） |
+| `build/nib_tests.exe --background-work` / `--history` | **46 checks** 成功 / 38 checks 成功（工程 2） |
+| `build/nib_tests.exe`（引数なし） | 19280（工程 1）→ **19326 checks 成功**（工程 2・`out/271-step2-unit.log`） |
+| 契約の効き目（工程 2） | controller の入口の 2 行を外した変異で 4 件落ちることを確かめて戻した（`out/271-step2-mutant.log`） |
+| `python eng/symbols.py --build-dir build --require core application` | 工程 1・工程 2 とも 2 libraries・**0 violation**（core と application にスレッドと `PostMessage` のシンボルが出ない） |
+| `python eng/conformance.py --build-dir build` | 工程 1・工程 2 とも **0 violation** |
+| clang-format --dry-run --Werror（工程 1 の 13 ファイル・工程 2 の 19 ファイル） | 指摘なし |
+| `python eng/protected-diff.py --base origin/main --build`（工程 1）・`--allow=--background-work`（工程 2） | **終了 0**。`fixtures 1853 -> 1853`・工程 1 は scope 27 same 27・工程 2 は scope 28（same 27・`--background-work` 新規 46 allowed）（`out/protected/dcc9d31.json` / `out/protected/1770825.json`） |
+| `pwsh -NoProfile -File eng/validate-git.ps1` | 工程 1・工程 2 とも passed |
+| 速さ（設計席・`python eng/measure-speed.py --check --executable build/release-1770825/NeNeNib.exe`・2026-10-02・施主の了承の後） | **6 benches checked, 0 regression(s), 0 unmeasurable**（機械 bc8a356f37c68491（i9-10850K / RTX 3090 / 120 dpi）・5 回・`out/speed/2026-10-02T15-08-39Z.json`・`out/271-accept-speed.log`。Release の sha256 262A90B985068F3B9981C462F59E4A0A17F8ED6062F71EFC21477E63A4867612・`out/release/1770825.json`） |
+| 工程 3（文書だけ）の `python eng/conformance.py --build-dir build`・`git diff --check`・`eng/validate-git.ps1` | **0 violation**（`out/271-step3-conformance.log`）・`git diff --check` 指摘なし・`eng/validate-git.ps1` passed（`out/271-step3-git.log`） |
+
+`eng/architecture.json` と許可表は変えていない（`adapters_win32` は kernel32 だけで link が通った）。
+
+速さの 6 本（設計席・中央値）:
+
+| ベンチ | `1770825`（#271 の後） | #270 の後（`e570fc3` と同じ実装・`out/speed/2026-10-02T13-44-21Z.json`） |
+| --- | --- | --- |
+| startup-first-frame | 212.547 ms | 217.173 ms |
+| startup-window-shown | 35.155 ms | 37.616 ms |
+| key-to-frame-single | 0.911 ms | 0.960 ms |
+| key-to-frame-burst-200 | 4.604 ms | 3.489 ms |
+| open-large-file-16mib | 273.350 ms | 262.512 ms |
+| key-to-frame-burst-200-16mib | 6.329 ms | 7.721 ms |
+
+起動は前と同じ（合成でワーカーと adapter を作るが、スレッドは起こさない）。200 打鍵（空の文書）は 5 回の幅が 3.369〜8.219 ms で、中央値は基準の許容（±25%・下限 2 ms）の中。6 本は面を開かないので、ワーカーのスレッドは 1 度も起きていない。exe の終了は 6 本の全部の回で正常。
+
+回していないものと理由: 実機の画（#271 は使う人から見える動きと見た目を変えず、合図の窓メッセージは届く道がまだ無い・`Direct2DRenderer` は不変）・実装席の Release・`-Full`・`eng/verify-window.py`（実装席は exe を起動しない）・Ctrl+P を初めて開いたときにスレッドを起こす時間（#272 の面を開く道で測る）。
+
+対象を限定した理由: 差分は application の port と値と意図 `WorkCompleted`・controller の入口・adapters の新しい 4 つのクラス・ui の `EditorWindow`（合図と `send` の深さ）・`src/app` の合成・単体テストの替え玉と新しい scope と `EditorPorts` を作る所で、core と Vim の engine と本文の編集の経路は変えていない。既存の fixture は不変（protected-diff で changed 0）で、変わった scope は許可した新規の `--background-work` だけ。新しい adapters の試験は CTest `nib_folders` で 3 回続けて回した。工程 3 は文書だけで、実装・テスト・依存が不変なので工程 1・2 の成功結果と設計席の速さの結果を再利用する（QLT-001 / QLT-012 / QLT-014・ADR 0021）。
+
+ARC-003 / ARC-007 / ARC-010 / CPP-002 / CPP-003 / CPP-005 / CPP-011 / CPP-013 / CNF-009 / QLT-010 / ADR 0004 / ADR 0042 を自己レビュー。スレッド・ロック・セマフォの待ちは `src/adapters/win32` と adapters の試験の中だけで、core と application の symbols は違反 0・ui にスレッドと同期のヘッダは無い（ARC-003 / ARC-007 / CPP-013 / CNF-009）・期待される失敗は `FolderProgress::failed` で返す（ARC-010）・`run` は `noexcept` で広い catch を書かない（CPP-005）・新しい型は 1 ファイル 1 型（CPP-011）・`WorkCompleted` は公開 aggregate でメソッドを持たない（CPP-003）・閾値と除外は触らず `dispatch` の関数長は `lifetime_message` へ出して通した（QLT-010）・要求は値の写し（ADR 0004）・新しい scope は 1 翻訳単位（ADR 0042）。残る穴: 合図の窓メッセージと `send` の再入の扱いは単体テストが無い（窓が要る・実際に走るのは #272 から）・止まっているネットワークの I/O を `CancelSynchronousIo` で起こす道は試験で再現していない・「OS が返す順」の試験は NTFS の名前順を当てにしている・ワーカーは 1 本なので遅い場所の列挙が I/O の中で止まっている間は次の列挙が待つ・`PostMessageW` の失敗を見ない・adapter が壊れる直前に写した合図が壊れた後に 1 回呼ばれ得る・`FolderProgress` を読む `switch` はまだ無い（#272）。
