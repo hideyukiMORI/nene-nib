@@ -68,14 +68,14 @@ Ctrl+P の 3 本目の出どころ「同じフォルダ」は、今見ている�
 
 ## 強制
 
-- 契約（面の重さ・#270）: **planned**。絞り込みの結果が入力と列の変化のときだけ作られること・frame の行が 8 行を越えないこと・窓の先頭と選択と件数が今の見え方と同じであること（scope `nib_tests --command-palette`）。
+- 契約（面の重さ・#270）: **active**（#270）。`tests/unit/CommandPaletteTests.cpp` の `verify_palette_result_shared`（↑↓ と行の選択は前の結果を共有し、打つ・埋める・入力を変える編集（Backspace・←・Home）は結果を作り直すこと・タブの候補と設定のコマンドの両方で・観測の口 `shares_result_with`。`choice_at` は範囲の外で値なし・`rows(first, limit)` は結果の末尾で切れること）、`verify_palette_window_covers_rows`（見える行 1〜8・件数 0〜20・選択の全部で、ui が描く行が frame の窓の中にあること・見える行が 8 なら `palette_first_visible` と `palette_window_first` が同じこと・上限 `palette_row_limit` が 8）、`verify_palette_view_window`（タブ 12 本で面を開き選択を 0〜11 へ動かす各 frame で、`rows` は上限 8 件まで・`first` は `palette_window_first(selected)`・`selected` と `total` は結果の全体の数・`rows` の i 番目は全体の `first + i` 番目）。入口は scope `nib_tests --command-palette` と引数なしの既定の実行（CTest `nib_unit`）。
 - 契約（port を呼ばない道・#272）: **planned**。起動・開く・切り替え・保存・打鍵で `list` と `collect` が呼ばれないこと・面を開くと `list` が 1 回・`WorkCompleted` で `collect` が 1 回（替え玉 `ScriptedFolders` の回数）。
 - 契約（受け取り・#272）: **planned**。古い券の batch を捨てること・面が閉じた後の batch を捨てること・出さない拡張子・タブと履歴との重なり・後ろへ足しても選択が同じ候補のままであること・`truncated` の 1 行・無題では頼まないこと。
 - 閉じた和型の写し漏れ: `PaletteScope::folder`・`PaletteOrigin::folder`・`FolderProgress` は **planned**（実装で active・`default` の無い `switch`・CPP-002）。
 - 並行性の区画: symbols の concurrency 分類（core / application）と CNF-009 は **active**（今のまま）。ワーカーを足しても core と application にスレッドと `PostMessage` のシンボルが出ないことを、#271 の検証で確かめる。
 - adapters の試験（#271）: **planned**。本物のフォルダと本物のワーカーで、batch の区切り・打ち切り・隠しとフォルダを出さないこと・新しい券で前の列挙をやめること・止まること（CTest の新しい target。待つのは合図の受け皿で、時刻は読まない。止まらないときは CTest の制限時間で落ちる）。
 - 速さ（#272）: **planned**。面の中の 1 打鍵のベンチ（QLT-014）。
-- 実機の確認: **planned**（設計席が施主に確かめてから回す。機械の必須 check ではない）。
+- 実機の確認: **planned**（設計席が施主に確かめてから回す。機械の必須 check ではない）。#270 は設計席が 1 回限りのスクリプトで前後の画を比べた（gate-proofs の #270 の節）。
 - fixture: **不能**（oracle の対象ではない）。既存の fixture は不変（`eng/protected-diff.py`）。
 - 不能: ワーカーが受け取った値だけを読むこと（意味の検査・ADR 0004 のまま）。レビュー事項。
 
@@ -84,6 +84,10 @@ Ctrl+P の 3 本目の出どころ「同じフォルダ」は、今見ている�
 得られるもの: Ctrl+P は、どこのフォルダのファイルを見ていても同じ速さで開く。同じフォルダのファイルを名前の数文字で開ける。候補が数千件でも、1 打鍵で作る絞り込みは 1 回で、frame に載るのは 8 行。裏の仕事を載せる場所（ワーカー 1 本と型のある port）ができ、次の仕事（行の索引・ハイライト）は port を 1 つ足す形になる。
 
 失うもの・残る穴: 面を開いた直後の 1 枚目には同じフォルダの候補が無く、少し後で足される（普通のドライブでは次の描画まで）。並びは OS が返す順で、NTFS では名前順だがネットワークや FAT では名前順と限らない。8192 件を超えるフォルダでは、後ろのファイルが一覧に出ない。読み込み中と、読めなかったことは見えない。表に無い拡張子のバイナリは一覧に出て、選ぶと「開けませんでした」になるか、文字化けした本文で開く（今の開く道は NUL を含むファイルを拒まない）。ワーカーの中の動き（受け取った値だけを読むこと）は機械で守れない。
+
+- #270 の実装: `CommandPalette` の public の `choices()`（全件の写し）は消し、読む口は `count()`・`choice_at(index)`・`rows(first, limit)` にした。結果を作るのは private の `filtered` の 1 本、選択だけを動かす道は `reselected` の 1 本で前の結果を共有する。絞り込みと順は `listed_positions`（候補の列の中の位置を返す）の 1 本で、`listed_choices` は無くなった。
+- #270 の実装: 行数の上限は core の `palette_row_limit`（8）、frame の窓の先頭は `palette_window_first(selected)` で、`palette_first_visible` と同じ 1 つの式を呼ぶ。`CommandPaletteView` は `rows`・`first`・`selected`・`total`・`hint`。
+- #270 の実機: タブ 12 本の面の画 15 枚（見える行が 3 と 8 の窓・送り・折り返し・絞り込み・設定のコマンド・行のクリック）は、前後で 1 画素も違わなかった。
 
 ## 却下した選択肢
 
