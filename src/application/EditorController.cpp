@@ -2557,10 +2557,10 @@ void EditorController::accept(const EndSession &intent)
 }
 
 // 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて
-// いなくても 1 回呼んでたまりを
-// 空にする。使うのは面が開いていて今の券の batch だけで、届いた分は 1 回の extended で後ろへ
-// 足す（入力と選択は core が保つ）。打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る
-// command_message() が出す。入力・知らせ・ほかの状態には触れない。
+// いなくても 1 回呼んでたまりを空にする。使うのは面が開いていて今の券の batch だけ。
+// 届いた分は 1 回の extended で後ろへ足す（入力と選択は core が保つ）。
+// 打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る command_message() が出す。
+// 入力・知らせ・ほかの状態には触れない。
 void EditorController::accept(const WorkCompleted &)
 {
     const auto batches = ports_.folders.collect();
