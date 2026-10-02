@@ -110,7 +110,9 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
-    src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp)
+    src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp
+    src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
+    src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
@@ -143,6 +145,15 @@ nenenib_link(nib_history_tests nenenib_core)
 nenenib_link(nib_history_tests nenenib_application)
 nenenib_link(nib_history_tests nenenib_adapters)
 add_test(NAME nib_histories COMMAND nib_history_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# Issue #271: 同じフォルダの列挙とワーカー 1 本を本物のフォルダとスレッドで測る（ADR 0062）。時刻は読まず、
+# 合図の受け皿だけを待つので、止まらないときはこの制限時間で落ちる。
+nenenib_target(nib_folder_tests adapter_tests EXECUTABLE tests/adapters/FolderAdapterTests.cpp)
+nenenib_link(nib_folder_tests nenenib_core)
+nenenib_link(nib_folder_tests nenenib_application)
+nenenib_link(nib_folder_tests nenenib_adapters)
+add_test(NAME nib_folders COMMAND nib_folder_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp)
