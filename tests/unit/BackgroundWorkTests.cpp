@@ -503,6 +503,75 @@ void verify_folder_order()
            "one collect with two batches lists the same order");
 }
 
+constexpr std::string_view truncated_notice = "同じフォルダは 5 件まで。残りは一覧に出ません";
+
+// 打ち切りは今の面の状態で、面を開いている間は打鍵・↑↓・Backspace・`/` の後も案内に出る。状態の
+// 知らせ（面の入力の上限）が出る意図ではその 1 回だけそちらで、次の意図で戻る。面を閉じると出ない
+// （ADR 0062 の決定 17）。
+void verify_folder_truncated_stays()
+{
+    Editing editing;
+    open_work_file(editing);
+    auto &controller = editing.controller();
+    applied(controller, app::OpenCommandPalette{});
+    static_cast<void>(deliver(editing,
+                              {"C:\\work\\b.txt", "C:\\work\\c.txt", "C:\\work\\d.txt",
+                               "C:\\work\\e.txt", "C:\\work\\f.txt"},
+                              app::FolderProgress::truncated));
+    const auto typed = controller.apply(app::CommandText{"c"});
+    expect(optional_text(typed.command_message) == truncated_notice,
+           "the notice stays after a typed letter");
+    const auto down = controller.apply(app::EditCommand{core::CommandEdit::complete_next});
+    const auto up = controller.apply(app::EditCommand{core::CommandEdit::complete_previous});
+    expect(optional_text(down.command_message) == truncated_notice &&
+               optional_text(up.command_message) == truncated_notice,
+           "the notice stays after moving the selection");
+    const auto erased = controller.apply(app::EditCommand{core::CommandEdit::backspace});
+    expect(optional_text(erased.command_message) == truncated_notice,
+           "the notice stays after a backspace");
+    const auto slash = controller.apply(app::CommandText{"/"});
+    expect(optional_text(slash.command_message) == truncated_notice &&
+               rows_of(slash).starts_with("C:\\work\\b.txt<同じフォルダ>|"),
+           "the notice stays when the slash shows only the same folder");
+    const auto refused = controller.apply(app::CommandText{std::string(300, 'a')});
+    expect(refused.command_message.has_value() &&
+               optional_text(refused.command_message) != truncated_notice,
+           "a state notice shows once over the truncated notice");
+    const auto back = controller.apply(app::EditCommand{core::CommandEdit::complete_next});
+    expect(optional_text(back.command_message) == truncated_notice,
+           "the next intent shows the truncated notice again");
+    const auto closed = controller.apply(app::CancelCommand{});
+    expect(!closed.command_message.has_value() && !closed.command_palette.has_value(),
+           "the closed palette leaves no notice anywhere");
+    expect(!controller.apply(WorkCompleted{}).command_message.has_value(),
+           "a signal after closing tells nothing");
+}
+
+// 開き直した面は新しい券の truncated が届くまで出ない。新しい券の more・complete・failed でも、
+// 古い券の truncated でも出ない。
+void verify_folder_truncated_reopened()
+{
+    Editing editing;
+    open_work_file(editing);
+    auto &controller = editing.controller();
+    auto &folders = editing.folders();
+    applied(controller, app::OpenCommandPalette{});
+    const auto old = folders.requests().back().ticket;
+    static_cast<void>(deliver(editing, {"C:\\work\\b.txt"}, app::FolderProgress::truncated));
+    applied(controller, app::CancelCommand{});
+    const auto reopened = controller.apply(app::OpenCommandPalette{});
+    expect(!reopened.command_message.has_value(), "a reopened palette starts without the notice");
+    folders.serve(batch_of(old, {"C:\\work\\c.txt"}, app::FolderProgress::truncated));
+    expect(!controller.apply(WorkCompleted{}).command_message.has_value(),
+           "a truncated batch of an older ticket tells nothing");
+    for (const auto progress :
+         {app::FolderProgress::more, app::FolderProgress::complete, app::FolderProgress::failed})
+    {
+        expect(!deliver(editing, {}, progress).command_message.has_value(),
+               "more, complete and failed of the new ticket tell nothing");
+    }
+}
+
 // truncated で案内が 1 行。数は今の券で届いたファイルの合計（除く前）。complete・more・failed は
 // 知らせない。failed の空の batch では一覧が変わらない（ADR 0062 の決定 17）。
 void verify_folder_truncated()
@@ -515,7 +584,7 @@ void verify_folder_truncated()
     expect(!more.command_message.has_value(), "a batch with more leaves no notice");
     const auto cut =
         deliver(editing, {"C:\\work\\d.txt", "C:\\work\\e.txt"}, app::FolderProgress::truncated);
-    expect(optional_text(cut.command_message) == "同じフォルダは 5 件まで。残りは一覧に出ません",
+    expect(optional_text(cut.command_message) == truncated_notice,
            "a truncated listing tells how many files arrived");
     expect(rows_of(cut).ends_with("C:\\work\\e.txt<同じフォルダ>|"),
            "the last batch is listed with the notice");
@@ -600,6 +669,8 @@ void verify_background_work_contracts()
     verify_folder_keeps_choice();
     verify_folder_order();
     verify_folder_truncated();
+    verify_folder_truncated_stays();
+    verify_folder_truncated_reopened();
     verify_folder_commands_scope();
     verify_folder_open();
 }

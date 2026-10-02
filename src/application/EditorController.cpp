@@ -938,6 +938,23 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
     return std::nullopt;
 }
 
+// 打ち切りは 1 回の知らせではなく今の面の状態（ADR 0062 の決定 17）。状態の知らせが出る意図では
+// その 1 回だけそちらが出て、次の意図で打ち切りの 1 行へ戻る。面を閉じると出ない。
+std::optional<core::DisplayText> EditorController::command_message() const
+{
+    if (state_.command_message().has_value())
+    {
+        return state_.command_message();
+    }
+    if (!command_palette_active() || !palette_folder_.truncated)
+    {
+        return std::nullopt;
+    }
+    return core::DisplayText::parse("同じフォルダは " + std::to_string(palette_folder_.received) +
+                                    " 件まで。残りは一覧に出ません")
+        .value();
+}
+
 void EditorController::fail(FileFailure failure)
 {
     state_ = state_.with_failure(failure);
@@ -1648,7 +1665,7 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
 
 void EditorController::request_folder(const std::vector<core::CommandChoice> &entries)
 {
-    palette_folder_ = PaletteFolder{palette_folder_.ticket + 1, {}, 0};
+    palette_folder_ = PaletteFolder{palette_folder_.ticket + 1, {}, 0, false};
     const auto &path = state_.document().path;
     if (!path.has_value())
     {
@@ -2542,7 +2559,8 @@ void EditorController::accept(const EndSession &intent)
 // 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて
 // いなくても 1 回呼んでたまりを
 // 空にする。使うのは面が開いていて今の券の batch だけで、届いた分は 1 回の extended で後ろへ
-// 足す（入力と選択は core が保つ）。入力・知らせ・ほかの状態には、打ち切りの 1 行のほか触れない。
+// 足す（入力と選択は core が保つ）。打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る
+// command_message() が出す。入力・知らせ・ほかの状態には触れない。
 void EditorController::accept(const WorkCompleted &)
 {
     const auto batches = ports_.folders.collect();
@@ -2554,7 +2572,6 @@ void EditorController::accept(const WorkCompleted &)
         return;
     }
     std::vector<core::CommandChoice> more;
-    bool truncated = false;
     for (const FolderBatch &batch : batches)
     {
         if (batch.ticket != palette_folder_.ticket)
@@ -2570,7 +2587,7 @@ void EditorController::accept(const WorkCompleted &)
         case FolderProgress::failed:
             break;
         case FolderProgress::truncated:
-            truncated = true;
+            palette_folder_.truncated = true;
             break;
         }
     }
@@ -2578,13 +2595,6 @@ void EditorController::accept(const WorkCompleted &)
     {
         auto extended = palette->extended(std::move(more));
         state_ = state_.with_command_input(std::move(extended));
-    }
-    if (truncated)
-    {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("同じフォルダは " + std::to_string(palette_folder_.received) +
-                                     " 件まで。残りは一覧に出ません")
-                .value());
     }
 }
 
@@ -2942,7 +2952,7 @@ EditorFrame EditorController::frame() const
                        state_.settings(),
                        state_.settings_failure(),
                        command_line_view(),
-                       state_.command_message(),
+                       command_message(),
                        command_palette_view(),
                        std::move(tabs),
                        state_.active_tab(),
