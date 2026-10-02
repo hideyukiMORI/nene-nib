@@ -2539,9 +2539,8 @@ void EditorController::accept(const EndSession &intent)
     remember(ended_paths(state_, intent.reason));
 }
 
-// 裏の仕事が読めた分を置いた（ADR 0062 の決定 7・10）。入口は歩きも知らせも残す。
-// #272 で collect() を呼ぶ。#271 では何もしない。
-// 裏の仕事の合図（ADR 0062 の決定 15・17）。collect は面が開いていなくても 1 回呼んでたまりを
+// 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて
+// いなくても 1 回呼んでたまりを
 // 空にする。使うのは面が開いていて今の券の batch だけで、届いた分は 1 回の extended で後ろへ
 // 足す（入力と選択は core が保つ）。入力・知らせ・ほかの状態には、打ち切りの 1 行のほか触れない。
 void EditorController::accept(const WorkCompleted &)
