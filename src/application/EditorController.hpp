@@ -19,6 +19,8 @@
 #include "LineView.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "PaletteFolder.hpp"
+#include "PaletteOrigin.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "Session.hpp"
@@ -127,8 +129,9 @@ class EditorController final
     // 何も書いていない無題に開く → 新しいタブ。開けなければタブを足さず失敗を返す。
     [[nodiscard]] std::expected<void, FileFailure> open_document(const core::FilePath &path);
     void accept(const OpenDocument &intent);
-    // 一覧から選んだファイルを開く。失敗は 1 行の知らせで、not_found なら履歴から外す。
-    void open_listed(const core::FilePath &path);
+    // 一覧から選んだファイルを開く。失敗は 1 行の知らせで、not_found で出どころが履歴の候補の
+    // ときだけ履歴から外す（ADR 0062 の決定 18）。
+    void open_listed(const core::FilePath &path, std::optional<core::PaletteOrigin> origin);
     // 閉じたファイルを履歴に記録する（read → history_recorded を順に → write）。空なら何もしない。
     void remember(const std::vector<core::FilePath> &paths);
     void forget(const core::FilePath &path);
@@ -144,6 +147,21 @@ class EditorController final
     // 開いているタブの一覧（「∨」と `:tabs`・ADR 0060 の決定 6）。Ctrl+P と同じ列を入力 `#` で
     // 開き、アクティブなタブの行を選ぶ。
     void accept(const OpenTabList &);
+    // 面を開く 2 つの意図の 1 本。前の面の残りを collect で捨て、券を進め、同じフォルダを頼む
+    // （ADR 0062 の決定 14）。input と selected は CommandPalette::opened へ渡す。
+    void open_palette(std::string_view input, std::size_t selected);
+    // アクティブな文書のフォルダを頼む。無題とフォルダを取り出せないパスでは頼まない。
+    void request_folder(const std::vector<core::CommandChoice> &entries);
+    // folder にある、一覧にもう出ているファイル（開いているタブと履歴の候補 entries）。
+    [[nodiscard]] std::vector<core::FilePath>
+    listed_in_folder(const core::FilePath &folder,
+                     const std::vector<core::CommandChoice> &entries) const;
+    // path が folder の直下にあるか（ファイルのあるフォルダと folder を FilePort の規則で比べる）。
+    [[nodiscard]] bool in_folder(const core::FilePath &path, const core::FilePath &folder) const;
+    // 届いたファイルを同じフォルダの候補にする（出さない拡張子と一覧にもう出ているものを除く・
+    // OS が返した順のまま）。
+    void append_folder_choices(const std::vector<core::FilePath> &files,
+                               std::vector<core::CommandChoice> &choices) const;
     // Ctrl+P の面の候補の列を作る 1 本（ADR 0060 の決定 6）。開いているタブ（帯の順）→ 履歴
     // （新しい順・開いているファイルを除く）。履歴を読むのはここだけ。
     [[nodiscard]] std::vector<core::CommandChoice> palette_entries() const;
@@ -305,5 +323,8 @@ class EditorController final
     std::optional<core::TextBuffer> replay_text_;
     // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
     std::size_t unreached_tabs_ = 0;
+    // 面が同じフォルダを頼んだ控え（ADR 0062 の決定 14・15）。券は面を開くたびに進み、ほかは
+    // 面を開くときに置き直す。面が閉じている間は読まない。
+    PaletteFolder palette_folder_;
 };
 } // namespace nenenib::application

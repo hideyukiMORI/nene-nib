@@ -12,11 +12,12 @@ namespace
     return letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter + ('a' - 'A')) : letter;
 }
 
-// 名前の最後の '.' の後ろ。'.' が無ければ無し。'.' は ASCII なので UTF-8 の継続バイトに現れない。
+// 名前の最後の '.' の後ろ。'.' が無いか、先頭の 1 つだけなら無し（`.gitignore` `.png` は設定の
+// ファイルの慣習で、拡張子なしとして出す・D33）。'.' は ASCII なので UTF-8 の継続バイトに現れない。
 // STL の後ろからの検索を使わないのは、core の外へシンボルを出さないためである（ARC-003）。
 [[nodiscard]] std::optional<std::string_view> extension_of(std::string_view name) noexcept
 {
-    for (std::size_t index = name.size(); index > 0; --index)
+    for (std::size_t index = name.size(); index > 1; --index)
     {
         if (name[index - 1] == '.')
         {

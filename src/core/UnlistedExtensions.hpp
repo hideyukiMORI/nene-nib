@@ -18,6 +18,8 @@ inline constexpr auto unlisted_extensions = std::to_array<std::string_view>(
 
 // 同じフォルダの一覧に name（ファイルの名前）を出すか。名前の最後の '.' の後ろを、ASCII の大文字と
 // 小文字を区別せずに表で引き、表にあれば出さない。'.' の無い名前・'.' で終わる名前・表に無い
-// 拡張子は出す（`.gitignore` の拡張子は `gitignore`）。OS とロケールに触れない（ARC-003）。
+// 拡張子は出す。'.' が先頭の 1 つだけの名前（`.gitignore` `.png` `.a`）は拡張子なしとして出し、
+// 後ろにもう 1 つ '.' があれば（`.config.png`）最後の '.' の後ろで引く。OS とロケールに触れない
+// （ARC-003）。
 [[nodiscard]] bool folder_lists(std::string_view name) noexcept;
 } // namespace nenenib::core

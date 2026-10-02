@@ -1055,15 +1055,17 @@ void verify_unlisted_table()
 }
 
 // 表に無い拡張子・拡張子の無い名前・`.` で終わる名前は出す。引くのは最後の `.` の後ろ（D33）。
+// `.` が先頭の 1 つだけの名前は拡張子なしとして出す（`.png` `.a` も）。後ろにもう 1 つあれば引く。
 void verify_unlisted_names()
 {
     for (const std::string_view name :
          {"note.txt", "note.md", "Makefile", "note.", ".gitignore", "archive.gz.txt", "note.pngx",
-          "png", "メモ.txt", "settings.json", "a.b.c.log"})
+          "png", "メモ.txt", "settings.json", "a.b.c.log", ".png", ".a", ".PNG"})
     {
         expect(core::folder_lists(name), "a name outside the table is listed");
     }
-    for (const std::string_view name : {"a.tar.gz", "メモ.png", "写真.JPG", "setup.Exe"})
+    for (const std::string_view name :
+         {"a.tar.gz", "メモ.png", "写真.JPG", "setup.Exe", ".config.png", "..png"})
     {
         expect(!core::folder_lists(name), "the last extension decides a hidden name");
     }
