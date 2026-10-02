@@ -5,12 +5,14 @@
 
 namespace nenenib::core
 {
-// Ctrl+P の候補の出どころの印（ADR 0060 の決定 3）。Ex のコマンドの候補は印なし。値が増えたら
+// Ctrl+P の候補の出どころの印（ADR 0060 の決定 3）。folder は同じフォルダの候補（ADR 0062 の
+// 決定 11）。Ex のコマンドの候補は印なし。値が増えたら
 // 出どころで絞る関数と補足の文言の switch が落ちる（CPP-002）。
 enum class PaletteOrigin : std::uint8_t
 {
     tab,
-    history
+    history,
+    folder
 };
 
 // 行の右に添える補足の文言（ADR 0060 の決定 3）。

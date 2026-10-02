@@ -24,6 +24,7 @@
 #include "ExFailure.hpp"
 #include "ExResult.hpp"
 #include "FileFailure.hpp"
+#include "FileFolder.hpp"
 #include "FileHistory.hpp"
 #include "FileHistoryFailure.hpp"
 #include "FilePath.hpp"
@@ -53,6 +54,7 @@
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "ThemeChoice.hpp"
+#include "UnlistedExtensions.hpp"
 #include "VimCharacter.hpp"
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
@@ -407,16 +409,21 @@ void verify_palette_marks()
            "the colon mark selects the commands");
     expect(query_is("abc", core::PaletteScope::files, "abc"), "plain text searches the files");
     expect(query_is("@a", core::PaletteScope::history, "a"), "the at mark selects the history");
+    expect(query_is("/a", core::PaletteScope::folder, "a") &&
+               query_is("/", core::PaletteScope::folder, ""),
+           "the slash mark selects the same folder");
     expect(query_is("*a", core::PaletteScope::files, "*a") &&
-               query_is("/a", core::PaletteScope::files, "/a"),
+               query_is("?a", core::PaletteScope::files, "?a"),
            "marks outside the table are plain search text");
     expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
-    expect(core::palette_mark_hint().text() == "# タブ\u3000@ 履歴\u3000: 設定",
+    expect(core::palette_mark_hint().text() == "# タブ\u3000@ 履歴\u3000/ フォルダ\u3000: 設定",
            "the hint is built from the table");
     expect(core::palette_origin_label(core::PaletteOrigin::tab) == "開いているタブ",
            "the tab origin has its label");
     expect(core::palette_origin_label(core::PaletteOrigin::history) == "履歴",
            "the history origin has its label");
+    expect(core::palette_origin_label(core::PaletteOrigin::folder) == "同じフォルダ",
+           "the folder origin has its label");
 }
 
 // 絞り込みと順（ADR 0060 の決定 4）。scope で残し、query が空なら列の順、名前の当たりが場所だけの
@@ -956,6 +963,230 @@ void verify_tab_folders()
            "an untitled tab and a bare name have no folder");
 }
 
+[[nodiscard]] core::CommandChoice origin_choice(std::string_view title, std::size_t number,
+                                                core::PaletteOrigin origin)
+{
+    return core::CommandChoice{fixed_text(title), "tabnext " + std::to_string(number),
+                               core::CommandChoiceKind::execute, std::nullopt, origin};
+}
+
+[[nodiscard]] core::CommandChoice folder_choice(std::string_view title, std::size_t number)
+{
+    return origin_choice(title, number, core::PaletteOrigin::folder);
+}
+
+// 記号 `/` は同じフォルダの候補だけ、記号なしは印のある候補の全部（ADR 0062 の決定 11）。
+void verify_palette_folder_scope()
+{
+    using core::PaletteOrigin;
+    using core::PaletteScope;
+    const std::vector<core::CommandChoice> entries{
+        origin_choice("a.txt", 1, PaletteOrigin::tab),
+        origin_choice("b.txt", 2, PaletteOrigin::history), folder_choice("c.txt", 3),
+        folder_choice("d.txt", 4), origin_choice("e.txt", 5, PaletteOrigin::history)};
+    expect(commands_of(listed_choices_of(entries, PaletteScope::files, "")) ==
+               std::vector<std::string>{"tabnext 1", "tabnext 2", "tabnext 3", "tabnext 4",
+                                        "tabnext 5"},
+           "no mark lists the tabs, the history and the same folder");
+    expect(commands_of(listed_choices_of(entries, PaletteScope::tabs, "")) ==
+                   std::vector<std::string>{"tabnext 1"} &&
+               commands_of(listed_choices_of(entries, PaletteScope::history, "")) ==
+                   std::vector<std::string>{"tabnext 2", "tabnext 5"} &&
+               commands_of(listed_choices_of(entries, PaletteScope::folder, "")) ==
+                   std::vector<std::string>{"tabnext 3", "tabnext 4"},
+           "each mark lists only its own source");
+    expect(listed_choices_of(entries, PaletteScope::commands, "").empty(),
+           "the commands do not come from the entries");
+    const auto palette = core::CommandPalette::opened(entries, "/", 0);
+    expect(palette.scope() == PaletteScope::folder &&
+               commands_of(rows_of(palette)) == std::vector<std::string>{"tabnext 3", "tabnext 4"},
+           "the slash alone lists the same folder in list order");
+    expect(commands_of(rows_of(palette.inserted("d").value())) ==
+               std::vector<std::string>{"tabnext 4"},
+           "the slash query searches only the same folder");
+}
+
+[[nodiscard]] std::string upper_ascii(std::string_view text)
+{
+    std::string upper(text);
+    for (char &letter : upper)
+    {
+        if (letter >= 'a' && letter <= 'z')
+        {
+            letter = static_cast<char>(letter - ('a' - 'A'));
+        }
+    }
+    return upper;
+}
+
+[[nodiscard]] bool lower_ascii_word(std::string_view text)
+{
+    return !text.empty() &&
+           std::ranges::all_of(
+               text, [](char letter)
+               { return (letter >= 'a' && letter <= 'z') || (letter >= '0' && letter <= '9'); });
+}
+
+// 表の全部の拡張子は、小文字・大文字・混ぜた形のどれでも出さない。表は小文字の ASCII で重複が無い
+// （ADR 0062 の決定 12）。
+void verify_unlisted_table()
+{
+    bool hidden = true;
+    bool lowered = true;
+    bool unique = true;
+    for (std::size_t index = 0; index < core::unlisted_extensions.size(); ++index)
+    {
+        const std::string_view extension = core::unlisted_extensions.at(index);
+        const std::string lower(extension);
+        const std::string mixed = upper_ascii(lower.substr(0, 1)) + lower.substr(1);
+        hidden = hidden && !core::folder_lists("note." + lower) &&
+                 !core::folder_lists("NOTE." + upper_ascii(lower)) &&
+                 !core::folder_lists("Note." + mixed);
+        lowered = lowered && lower_ascii_word(extension);
+        for (std::size_t other = index + 1; other < core::unlisted_extensions.size(); ++other)
+        {
+            unique = unique && core::unlisted_extensions.at(other) != extension;
+        }
+    }
+    expect(hidden, "every extension in the table is hidden in any case");
+    expect(lowered, "the table is written in lower-case ASCII");
+    expect(unique, "no extension is written twice");
+    expect(core::unlisted_extensions.size() == 70, "the table has the 70 extensions of ADR 0062");
+}
+
+// 表に無い拡張子・拡張子の無い名前・`.` で終わる名前は出す。引くのは最後の `.` の後ろ（D33）。
+void verify_unlisted_names()
+{
+    for (const std::string_view name :
+         {"note.txt", "note.md", "Makefile", "note.", ".gitignore", "archive.gz.txt", "note.pngx",
+          "png", "メモ.txt", "settings.json", "a.b.c.log"})
+    {
+        expect(core::folder_lists(name), "a name outside the table is listed");
+    }
+    for (const std::string_view name : {"a.tar.gz", "メモ.png", "写真.JPG", "setup.Exe"})
+    {
+        expect(!core::folder_lists(name), "the last extension decides a hidden name");
+    }
+}
+
+[[nodiscard]] std::optional<std::string> folder_text(std::string_view path)
+{
+    const auto folder = core::folder_of(core::FilePath::parse(path).value());
+    if (!folder.has_value())
+    {
+        return std::nullopt;
+    }
+    return std::string(folder.value().text());
+}
+
+// 列挙に渡すフォルダ（ADR 0062 の決定 13）。最後の区切りの前まで、ルート直下は区切りを残す。
+void verify_folder_of()
+{
+    expect(folder_text("C:\\work\\note.txt") == "C:\\work", "the folder drops the last name");
+    expect(folder_text("C:\\note.txt") == "C:\\" && folder_text("C:/note.txt") == "C:/",
+           "a root file keeps the separator after the drive");
+    expect(folder_text("C:/work/note.txt") == "C:/work", "a slash is a separator too");
+    expect(folder_text("\\\\server\\share\\note.txt") == "\\\\server\\share",
+           "a UNC file keeps the server and the share");
+    expect(folder_text("\\note.txt") == "\\", "a rooted name keeps its separator");
+    expect(folder_text("D:\\メモ\\a.txt") == "D:\\メモ",
+           "a Japanese folder is cut on the separator");
+    expect(folder_text("C:\\work\\") == "C:\\work" && folder_text("C:\\") == "C:\\",
+           "a path ending in a separator gives the part before it, the root stays");
+    expect(!folder_text("note.txt").has_value() && !folder_text("C:note.txt").has_value(),
+           "a path without a separator has no folder");
+}
+
+// 入力が空のとき、足した候補は後ろに付き、選択の番号は同じ（ADR 0062 の決定 16）。伸ばすと結果を
+// 作り直し、足す分が空なら同じ面。伸ばした後の入力は足した候補も絞り込む。
+void verify_palette_extended_tail()
+{
+    const std::vector<core::CommandChoice> tabs{tab_choice("a.txt", 1), tab_choice("b.txt", 2),
+                                                tab_choice("c.txt", 3)};
+    const auto palette = core::CommandPalette::opened(tabs, "", 2);
+    const auto grown = palette.extended({folder_choice("d.txt", 4), folder_choice("e.txt", 5)});
+    expect(commands_of(rows_of(grown)) == std::vector<std::string>{"tabnext 1", "tabnext 2",
+                                                                   "tabnext 3", "tabnext 4",
+                                                                   "tabnext 5"} &&
+               grown.selected() == 2 && grown.input().text().empty(),
+           "with no input the added choices follow and the selection stays");
+    expect(commands_of(rows_of(palette)) ==
+               std::vector<std::string>{"tabnext 1", "tabnext 2", "tabnext 3"},
+           "the palette before growing keeps its choices");
+    expect(!grown.shares_result_with(palette) && palette.extended({}).shares_result_with(palette),
+           "growing rebuilds the result and adding nothing keeps it");
+    const auto twice = grown.extended({folder_choice("f.txt", 6)});
+    const auto last = twice.choice_at(5);
+    expect(twice.count() == 6 && twice.selected() == 2 && last.has_value() &&
+               last.value().command == "tabnext 6",
+           "growing twice appends again and keeps the selection");
+    expect(commands_of(rows_of(grown.inserted("e").value())) ==
+                   std::vector<std::string>{"tabnext 5"} &&
+               commands_of(rows_of(grown.inserted("/").value())) ==
+                   std::vector<std::string>{"tabnext 4", "tabnext 5"},
+           "the input filters the added choices after growing");
+}
+
+[[nodiscard]] bool selects_command(const core::CommandPalette &palette, std::string_view command)
+{
+    const auto choice = palette.choice_at(palette.selected());
+    return choice.has_value() && choice.value().command == command;
+}
+
+// 足した候補が点の順で前に入ると選択の番号は増え、指す候補は同じ（ADR 0062 の決定 16）。
+void verify_palette_extended_keeps_choice()
+{
+    const std::vector<core::CommandChoice> tabs{tab_choice("a-note.txt", 1),
+                                                tab_choice("bb-note.txt", 2)};
+    const auto palette = core::CommandPalette::opened(tabs, "note", 1);
+    expect(palette.selected() == 1 && selects_command(palette, "tabnext 2"),
+           "the second hit is selected before growing");
+    const auto grown =
+        palette.extended({folder_choice("note.txt", 3), folder_choice("zzzz-note.txt", 4),
+                          folder_choice("memo.txt", 5)});
+    expect(commands_of(rows_of(grown)) ==
+                   std::vector<std::string>{"tabnext 3", "tabnext 1", "tabnext 2", "tabnext 4"} &&
+               grown.selected() == 2 && selects_command(grown, "tabnext 2"),
+           "a better added hit moves the selected index but not the selected choice");
+    const auto twice = grown.extended({folder_choice("note.md", 6)});
+    expect(commands_of(rows_of(twice)) == std::vector<std::string>{"tabnext 6", "tabnext 3",
+                                                                   "tabnext 1", "tabnext 2",
+                                                                   "tabnext 4"} &&
+               twice.selected() == 3 && selects_command(twice, "tabnext 2"),
+           "growing twice still keeps the selected choice");
+    expect(twice.edited(core::CommandEdit::complete_next).selected() == 4,
+           "moving walks the grown result");
+    expect(grown.inserted("t").value().selected() == 0,
+           "changing the input still selects the first row");
+}
+
+// 伸ばす前に当たりが無ければ先頭。設定のコマンドは件数も選択も変わらない（ADR 0062 の決定 16）。
+void verify_palette_extended_edges()
+{
+    const auto none = core::CommandPalette::opened({tab_choice("a.txt", 1)}, "qz", 0);
+    const auto miss = none.extended({folder_choice("b.txt", 2)});
+    expect(none.count() == 0 && miss.count() == 0 && miss.selected() == 0,
+           "added choices that miss the query leave the result empty");
+    const auto hit = miss.extended(
+        {folder_choice("x.txt", 3), folder_choice("qz.txt", 4), folder_choice("qqz.txt", 5)});
+    expect(commands_of(rows_of(hit)) == std::vector<std::string>{"tabnext 4", "tabnext 5"} &&
+               hit.selected() == 0,
+           "the first hits after none select the first row");
+    const auto folder = core::CommandPalette::opened({tab_choice("a.txt", 1)}, "/", 0)
+                            .extended({folder_choice("b.txt", 2), folder_choice("c.txt", 3)});
+    expect(commands_of(rows_of(folder)) == std::vector<std::string>{"tabnext 2", "tabnext 3"} &&
+               folder.selected() == 0,
+           "the slash palette fills from its first row");
+    const auto commands = core::CommandPalette::opened({}, ":", 0).selected_at(2);
+    const auto grown = commands.extended({folder_choice("a.txt", 1)});
+    expect(grown.count() == commands.count() && grown.selected() == 2 &&
+               commands_of(rows_of(grown)) == commands_of(rows_of(commands)),
+           "the command rows and their selection do not change");
+    expect(commands_of(rows_of(grown.edited(core::CommandEdit::backspace))) ==
+               std::vector<std::string>{"tabnext 1"},
+           "the added choice is listed once the colon is erased");
+}
+
 // ui が描く行は frame の窓に入る（ADR 0062 の決定 2・3）。見えている行数 1〜上限・件数 0〜20・
 // 選択のすべての組で、ui が読む [見えている先頭, +min(行数, 件数 - 先頭)) が窓
 // [窓の先頭, +min(上限, 件数 - 窓の先頭)) に入り、選択はその中にある。行数が上限なら先頭は同じ式。
@@ -1056,5 +1287,12 @@ void verify_command_palette()
     verify_tab_folders();
     verify_palette_window_covers_rows();
     verify_palette_view_window();
+    verify_palette_folder_scope();
+    verify_unlisted_table();
+    verify_unlisted_names();
+    verify_folder_of();
+    verify_palette_extended_tail();
+    verify_palette_extended_keeps_choice();
+    verify_palette_extended_edges();
 }
 } // namespace nenenib::tests

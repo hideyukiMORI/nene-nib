@@ -51,6 +51,7 @@ namespace
     case core::PaletteScope::files:
     case core::PaletteScope::tabs:
     case core::PaletteScope::history:
+    case core::PaletteScope::folder:
         return {};
     }
     std::unreachable();
