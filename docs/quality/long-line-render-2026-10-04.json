@@ -7930,5 +7930,6268 @@
       "crc": "pass",
       "executablesIncluded": false
     }
+  },
+  "emptyDiagnostic": {
+    "record": {
+      "issue": 291,
+      "purpose": "stage diagnosis, not speed acceptance",
+      "sharedLoad": "hide reported concurrent agents and occupied GPU; other workloads untouched",
+      "startedAt": "2026-10-03T16:19:15.476577+00:00",
+      "releases": {
+        "O": {
+          "recordedAt": "2026-10-03T14-51-31Z",
+          "ref": "HEAD",
+          "commit": "fedf727a168b0061bba3342cd7f2e4a7d4aba6a6",
+          "shortCommit": "fedf727",
+          "subject": "test: 未使用の描画計測点を減らす (#291)",
+          "head": "fedf727a168b0061bba3342cd7f2e4a7d4aba6a6",
+          "builtFromWorktree": false,
+          "buildDirectory": "build/release-fedf727",
+          "executable": "build/release-fedf727/NeNeNib.exe",
+          "sha256": "7D99B0451330094F42CE1C02C771C0B11B2C5597E0E587248A1987D5A1622ADD",
+          "bytes": 1303552,
+          "seconds": {
+            "configure": 1.991,
+            "build": 143.015,
+            "total": 145.006
+          },
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          }
+        },
+        "A": {
+          "recordedAt": "2026-10-03T16-15-54Z",
+          "ref": "HEAD",
+          "commit": "2d8a10efe4f120394776345f29144772c842214a",
+          "shortCommit": "2d8a10e",
+          "subject": "test(ui): 空文書の描画と提示待ちを同じ節目で分ける (#291)",
+          "head": "2d8a10efe4f120394776345f29144772c842214a",
+          "builtFromWorktree": false,
+          "buildDirectory": "build/release-2d8a10e",
+          "executable": "build/release-2d8a10e/NeNeNib.exe",
+          "sha256": "88F95A6BE15095518474CDAF659C74781EE10F948008DF5C5115F4B04A8476DC",
+          "bytes": 1308160,
+          "seconds": {
+            "configure": 2.836,
+            "build": 148.199,
+            "total": 151.036
+          },
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          }
+        }
+      },
+      "runnerSha256": "36385a89aea18cf910138a90b121346babf8b05942c5819442e76d5f1686fdeb",
+      "helperSha256": "2ebb8ed05ff5e6d45dcc8b355977174a46872ffeef0197cd797f9eed7a2d4d8d",
+      "measurementSha256": "0a07ab8dc659b15d56cf9c353925a3eb9cb4cac757d418a06ec1a54f934660fd",
+      "driverSha256": "59bab4f9fc39564f0472a0f846c1db03819b0dfcab0f25483d799116ec47a328",
+      "trials": [
+        {
+          "group": 1,
+          "variant": "O",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-1-O",
+          "singleMs": 1.067,
+          "burstMs": 3.436,
+          "inputSpanMs": 2.395,
+          "delivered": 202,
+          "marks": 709,
+          "rawSha256": "a18d32d65e4b92446e1e7e070dc6f27ff7cfef3cdadab5fb144641c0e5e27600",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.019,
+                "count": 1,
+                "samples": [
+                  0.019
+                ]
+              },
+              "frameMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "bodyMs": {
+                "total": 0.257,
+                "count": 1,
+                "samples": [
+                  0.257
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.136,
+                "count": 1,
+                "samples": [
+                  0.136
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.254,
+                "count": 1,
+                "samples": [
+                  0.254
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.112,
+                "count": 1,
+                "samples": [
+                  0.112
+                ]
+              },
+              "totalMs": 1.067,
+              "otherMs": 0.42199999999999993
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.193,
+                "count": 200,
+                "samples": [
+                  0.018,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.01,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.009,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.013,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.008,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.255,
+                "count": 1,
+                "samples": [
+                  0.255
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.162,
+                "count": 1,
+                "samples": [
+                  0.162
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.362,
+                "count": 1,
+                "samples": [
+                  0.362
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.049,
+                "count": 1,
+                "samples": [
+                  0.049
+                ]
+              },
+              "totalMs": 3.436,
+              "otherMs": 1.573
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.255,
+                "count": 1,
+                "samples": [
+                  0.255
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.162,
+                "count": 1,
+                "samples": [
+                  0.162
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.362,
+                "count": 1,
+                "samples": [
+                  0.362
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.049,
+                "count": 1,
+                "samples": [
+                  0.049
+                ]
+              },
+              "totalMs": 1.041,
+              "otherMs": 0.3639999999999999
+            }
+          },
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\O.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 1,
+          "variant": "A",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-1-A",
+          "singleMs": 0.852,
+          "burstMs": 3.29,
+          "inputSpanMs": 2.357,
+          "delivered": 202,
+          "marks": 706,
+          "rawSha256": "7dc310f55005d7df8d794f803be643501eecb4942b5ce700e70108df5a2e5bb7",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.017,
+                "count": 1,
+                "samples": [
+                  0.017
+                ]
+              },
+              "frameMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "bodyMs": {
+                "total": 0.096,
+                "count": 1,
+                "samples": [
+                  0.096
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.025,
+                "count": 1,
+                "samples": [
+                  0.025
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.185,
+                "count": 1,
+                "samples": [
+                  0.185
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.122,
+                "count": 1,
+                "samples": [
+                  0.122
+                ]
+              },
+              "totalMs": 0.852,
+              "otherMs": 0.429
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.196,
+                "count": 200,
+                "samples": [
+                  0.017,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.007,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.012,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.137,
+                "count": 1,
+                "samples": [
+                  0.137
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.055,
+                "count": 1,
+                "samples": [
+                  0.055
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.329,
+                "count": 1,
+                "samples": [
+                  0.329
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.073,
+                "count": 1,
+                "samples": [
+                  0.073
+                ]
+              },
+              "totalMs": 3.29,
+              "otherMs": 1.5510000000000002
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.137,
+                "count": 1,
+                "samples": [
+                  0.137
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.055,
+                "count": 1,
+                "samples": [
+                  0.055
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.329,
+                "count": 1,
+                "samples": [
+                  0.329
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.073,
+                "count": 1,
+                "samples": [
+                  0.073
+                ]
+              },
+              "totalMs": 0.933,
+              "otherMs": 0.383
+            }
+          },
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\A.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 2,
+          "variant": "A",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-2-A",
+          "singleMs": 0.806,
+          "burstMs": 3.71,
+          "inputSpanMs": 2.696,
+          "delivered": 202,
+          "marks": 706,
+          "rawSha256": "cbd42226739217ec794764737df2c0de9c189de1cbb1287320cc12ae855a7475",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.019,
+                "count": 1,
+                "samples": [
+                  0.019
+                ]
+              },
+              "frameMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "bodyMs": {
+                "total": 0.106,
+                "count": 1,
+                "samples": [
+                  0.106
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.025,
+                "count": 1,
+                "samples": [
+                  0.025
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.156,
+                "count": 1,
+                "samples": [
+                  0.156
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.105,
+                "count": 1,
+                "samples": [
+                  0.105
+                ]
+              },
+              "totalMs": 0.806,
+              "otherMs": 0.41800000000000004
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.374,
+                "count": 200,
+                "samples": [
+                  0.017,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.007,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.007,
+                  0.016,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.014,
+                  0.006,
+                  0.006,
+                  0.018,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.011,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.013,
+                  0.01,
+                  0.007,
+                  0.006,
+                  0.011,
+                  0.01,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.01,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.015,
+                  0.007,
+                  0.006,
+                  0.017,
+                  0.014,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.066,
+                  0.009,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.014,
+                  0.007,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.015,
+                "count": 1,
+                "samples": [
+                  0.015
+                ]
+              },
+              "bodyMs": {
+                "total": 0.137,
+                "count": 1,
+                "samples": [
+                  0.137
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.055,
+                "count": 1,
+                "samples": [
+                  0.055
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.301,
+                "count": 1,
+                "samples": [
+                  0.301
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.077,
+                "count": 1,
+                "samples": [
+                  0.077
+                ]
+              },
+              "totalMs": 3.71,
+              "otherMs": 1.805
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.015,
+                "count": 1,
+                "samples": [
+                  0.015
+                ]
+              },
+              "bodyMs": {
+                "total": 0.137,
+                "count": 1,
+                "samples": [
+                  0.137
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.055,
+                "count": 1,
+                "samples": [
+                  0.055
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.301,
+                "count": 1,
+                "samples": [
+                  0.301
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.077,
+                "count": 1,
+                "samples": [
+                  0.077
+                ]
+              },
+              "totalMs": 1.014,
+              "otherMs": 0.476
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 2,
+          "variant": "O",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-2-O",
+          "singleMs": 1.125,
+          "burstMs": 4.476,
+          "inputSpanMs": 3.165,
+          "delivered": 202,
+          "marks": 709,
+          "rawSha256": "4e9bf0f4b50d4eb787c1235dcc29826c99e820f21c992be2fb71193af5dd0ccf",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.018,
+                "count": 1,
+                "samples": [
+                  0.018
+                ]
+              },
+              "frameMs": {
+                "total": 0.004,
+                "count": 1,
+                "samples": [
+                  0.004
+                ]
+              },
+              "bodyMs": {
+                "total": 0.254,
+                "count": 1,
+                "samples": [
+                  0.254
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.158,
+                "count": 1,
+                "samples": [
+                  0.158
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.215,
+                "count": 1,
+                "samples": [
+                  0.215
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.126,
+                "count": 1,
+                "samples": [
+                  0.126
+                ]
+              },
+              "totalMs": 1.125,
+              "otherMs": 0.507
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.647,
+                "count": 200,
+                "samples": [
+                  0.021,
+                  0.008,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.018,
+                  0.009,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.009,
+                  0.01,
+                  0.01,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.015,
+                  0.01,
+                  0.009,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.01,
+                  0.01,
+                  0.01,
+                  0.009
+                ]
+              },
+              "frameMs": {
+                "total": 0.004,
+                "count": 1,
+                "samples": [
+                  0.004
+                ]
+              },
+              "bodyMs": {
+                "total": 0.312,
+                "count": 1,
+                "samples": [
+                  0.312
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.198,
+                "count": 1,
+                "samples": [
+                  0.198
+                ]
+              },
+              "decorationMs": {
+                "total": 0.004,
+                "count": 1,
+                "samples": [
+                  0.004
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.423,
+                "count": 1,
+                "samples": [
+                  0.423
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.072,
+                "count": 1,
+                "samples": [
+                  0.072
+                ]
+              },
+              "totalMs": 4.476,
+              "otherMs": 2.017
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.009,
+                "count": 1,
+                "samples": [
+                  0.009
+                ]
+              },
+              "frameMs": {
+                "total": 0.004,
+                "count": 1,
+                "samples": [
+                  0.004
+                ]
+              },
+              "bodyMs": {
+                "total": 0.312,
+                "count": 1,
+                "samples": [
+                  0.312
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.198,
+                "count": 1,
+                "samples": [
+                  0.198
+                ]
+              },
+              "decorationMs": {
+                "total": 0.004,
+                "count": 1,
+                "samples": [
+                  0.004
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.423,
+                "count": 1,
+                "samples": [
+                  0.423
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.072,
+                "count": 1,
+                "samples": [
+                  0.072
+                ]
+              },
+              "totalMs": 1.311,
+              "otherMs": 0.49
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 3,
+          "variant": "O",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-3-O",
+          "singleMs": 0.924,
+          "burstMs": 3.43,
+          "inputSpanMs": 2.506,
+          "delivered": 202,
+          "marks": 709,
+          "rawSha256": "dcbdd495ec4cc3850d328b30eee70235ecc25c85725b21b3cdabc8b0f680754d",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.018,
+                "count": 1,
+                "samples": [
+                  0.018
+                ]
+              },
+              "frameMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "bodyMs": {
+                "total": 0.208,
+                "count": 1,
+                "samples": [
+                  0.208
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.126,
+                "count": 1,
+                "samples": [
+                  0.126
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.197,
+                "count": 1,
+                "samples": [
+                  0.197
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.114,
+                "count": 1,
+                "samples": [
+                  0.114
+                ]
+              },
+              "totalMs": 0.924,
+              "otherMs": 0.385
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.2670000000000001,
+                "count": 200,
+                "samples": [
+                  0.017,
+                  0.006,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.01,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.009,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.007,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.007,
+                  0.009,
+                  0.009,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.009,
+                  0.01,
+                  0.01,
+                  0.01,
+                  0.011,
+                  0.01,
+                  0.007,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.01,
+                  0.01,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.012,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.228,
+                "count": 1,
+                "samples": [
+                  0.228
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.148,
+                "count": 1,
+                "samples": [
+                  0.148
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.286,
+                "count": 1,
+                "samples": [
+                  0.286
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.048,
+                "count": 1,
+                "samples": [
+                  0.048
+                ]
+              },
+              "totalMs": 3.43,
+              "otherMs": 1.597
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.228,
+                "count": 1,
+                "samples": [
+                  0.228
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.148,
+                "count": 1,
+                "samples": [
+                  0.148
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.286,
+                "count": 1,
+                "samples": [
+                  0.286
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.048,
+                "count": 1,
+                "samples": [
+                  0.048
+                ]
+              },
+              "totalMs": 0.924,
+              "otherMs": 0.3510000000000001
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 3,
+          "variant": "A",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-3-A",
+          "singleMs": 0.82,
+          "burstMs": 3.425,
+          "inputSpanMs": 2.496,
+          "delivered": 202,
+          "marks": 706,
+          "rawSha256": "2603b593328901860fd20c32e2cdd91505754a66038a3e05c86384b981bf1a84",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.017,
+                "count": 1,
+                "samples": [
+                  0.017
+                ]
+              },
+              "frameMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "bodyMs": {
+                "total": 0.103,
+                "count": 1,
+                "samples": [
+                  0.103
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.025,
+                "count": 1,
+                "samples": [
+                  0.025
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.163,
+                "count": 1,
+                "samples": [
+                  0.163
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.112,
+                "count": 1,
+                "samples": [
+                  0.112
+                ]
+              },
+              "totalMs": 0.82,
+              "otherMs": 0.42199999999999993
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.24,
+                "count": 200,
+                "samples": [
+                  0.018,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.004,
+                  0.004,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.008,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.017,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.008,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.009,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.138,
+                "count": 1,
+                "samples": [
+                  0.138
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.054,
+                "count": 1,
+                "samples": [
+                  0.054
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.327,
+                "count": 1,
+                "samples": [
+                  0.327
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.051,
+                "count": 1,
+                "samples": [
+                  0.051
+                ]
+              },
+              "totalMs": 3.425,
+              "otherMs": 1.6649999999999998
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.138,
+                "count": 1,
+                "samples": [
+                  0.138
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.054,
+                "count": 1,
+                "samples": [
+                  0.054
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.327,
+                "count": 1,
+                "samples": [
+                  0.327
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.051,
+                "count": 1,
+                "samples": [
+                  0.051
+                ]
+              },
+              "totalMs": 0.929,
+              "otherMs": 0.402
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 4,
+          "variant": "A",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-4-A",
+          "singleMs": 0.792,
+          "burstMs": 3.462,
+          "inputSpanMs": 2.508,
+          "delivered": 202,
+          "marks": 706,
+          "rawSha256": "26c5684794b325079afdbb6316cfe32ef9141e47d67e7253f003246134aa21a0",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.017,
+                "count": 1,
+                "samples": [
+                  0.017
+                ]
+              },
+              "frameMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "bodyMs": {
+                "total": 0.107,
+                "count": 1,
+                "samples": [
+                  0.107
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.025,
+                "count": 1,
+                "samples": [
+                  0.025
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.149,
+                "count": 1,
+                "samples": [
+                  0.149
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.105,
+                "count": 1,
+                "samples": [
+                  0.105
+                ]
+              },
+              "totalMs": 0.792,
+              "otherMs": 0.41100000000000003
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.272,
+                "count": 200,
+                "samples": [
+                  0.017,
+                  0.006,
+                  0.005,
+                  0.004,
+                  0.011,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.013,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.029,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.013,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.018,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.154,
+                "count": 1,
+                "samples": [
+                  0.154
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.067,
+                "count": 1,
+                "samples": [
+                  0.067
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.326,
+                "count": 1,
+                "samples": [
+                  0.326
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.051,
+                "count": 1,
+                "samples": [
+                  0.051
+                ]
+              },
+              "totalMs": 3.462,
+              "otherMs": 1.6550000000000002
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.154,
+                "count": 1,
+                "samples": [
+                  0.154
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.067,
+                "count": 1,
+                "samples": [
+                  0.067
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.326,
+                "count": 1,
+                "samples": [
+                  0.326
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.051,
+                "count": 1,
+                "samples": [
+                  0.051
+                ]
+              },
+              "totalMs": 0.954,
+              "otherMs": 0.4119999999999999
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 4,
+          "variant": "O",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-4-O",
+          "singleMs": 1.063,
+          "burstMs": 3.517,
+          "inputSpanMs": 2.483,
+          "delivered": 202,
+          "marks": 709,
+          "rawSha256": "ef223eb060089ef0160ba160a60dd74efaaaa14fe36a3e6ad9631b4ecc018de5",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.018,
+                "count": 1,
+                "samples": [
+                  0.018
+                ]
+              },
+              "frameMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "bodyMs": {
+                "total": 0.233,
+                "count": 1,
+                "samples": [
+                  0.233
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.133,
+                "count": 1,
+                "samples": [
+                  0.133
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.28,
+                "count": 1,
+                "samples": [
+                  0.28
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.123,
+                "count": 1,
+                "samples": [
+                  0.123
+                ]
+              },
+              "totalMs": 1.063,
+              "otherMs": 0.4059999999999999
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.24,
+                "count": 200,
+                "samples": [
+                  0.018,
+                  0.006,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.007,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.013,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.012,
+                  0.011,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.009,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.244,
+                "count": 1,
+                "samples": [
+                  0.244
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.154,
+                "count": 1,
+                "samples": [
+                  0.154
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.367,
+                "count": 1,
+                "samples": [
+                  0.367
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.048,
+                "count": 1,
+                "samples": [
+                  0.048
+                ]
+              },
+              "totalMs": 3.517,
+              "otherMs": 1.6139999999999999
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.244,
+                "count": 1,
+                "samples": [
+                  0.244
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.154,
+                "count": 1,
+                "samples": [
+                  0.154
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.367,
+                "count": 1,
+                "samples": [
+                  0.367
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.048,
+                "count": 1,
+                "samples": [
+                  0.048
+                ]
+              },
+              "totalMs": 1.034,
+              "otherMs": 0.364
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 5,
+          "variant": "O",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-5-O",
+          "singleMs": 0.911,
+          "burstMs": 3.364,
+          "inputSpanMs": 2.385,
+          "delivered": 202,
+          "marks": 709,
+          "rawSha256": "18bc18c49028eaf2913b6724ad4a9daf515d0b1954005a176e2d064dc5c047d5",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.018,
+                "count": 1,
+                "samples": [
+                  0.018
+                ]
+              },
+              "frameMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "bodyMs": {
+                "total": 0.217,
+                "count": 1,
+                "samples": [
+                  0.217
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.13,
+                "count": 1,
+                "samples": [
+                  0.13
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.185,
+                "count": 1,
+                "samples": [
+                  0.185
+                ]
+              },
+              "waitMs": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "presentMs": {
+                "total": 0.11,
+                "count": 1,
+                "samples": [
+                  0.11
+                ]
+              },
+              "totalMs": 0.911,
+              "otherMs": 0.379
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.225,
+                "count": 200,
+                "samples": [
+                  0.018,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.012,
+                  0.008,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.239,
+                "count": 1,
+                "samples": [
+                  0.239
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.152,
+                "count": 1,
+                "samples": [
+                  0.152
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.323,
+                "count": 1,
+                "samples": [
+                  0.323
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.046,
+                "count": 1,
+                "samples": [
+                  0.046
+                ]
+              },
+              "totalMs": 3.364,
+              "otherMs": 1.5269999999999997
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.239,
+                "count": 1,
+                "samples": [
+                  0.239
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.152,
+                "count": 1,
+                "samples": [
+                  0.152
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.323,
+                "count": 1,
+                "samples": [
+                  0.323
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.046,
+                "count": 1,
+                "samples": [
+                  0.046
+                ]
+              },
+              "totalMs": 0.979,
+              "otherMs": 0.36
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 5,
+          "variant": "A",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-5-A",
+          "singleMs": 0.761,
+          "burstMs": 3.956,
+          "inputSpanMs": 2.917,
+          "delivered": 202,
+          "marks": 706,
+          "rawSha256": "bccc6b34181ecada16e5c8343ad54f6efdb9799b1d5a7c90799413ad447e9ca5",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.018,
+                "count": 1,
+                "samples": [
+                  0.018
+                ]
+              },
+              "frameMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "bodyMs": {
+                "total": 0.109,
+                "count": 1,
+                "samples": [
+                  0.109
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.023,
+                "count": 1,
+                "samples": [
+                  0.023
+                ]
+              },
+              "decorationMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.146,
+                "count": 1,
+                "samples": [
+                  0.146
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.099,
+                "count": 1,
+                "samples": [
+                  0.099
+                ]
+              },
+              "totalMs": 0.761,
+              "otherMs": 0.387
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.488,
+                "count": 200,
+                "samples": [
+                  0.021,
+                  0.007,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.009,
+                  0.01,
+                  0.009,
+                  0.01,
+                  0.009,
+                  0.009,
+                  0.01,
+                  0.014,
+                  0.009,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.009,
+                  0.008,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.01,
+                  0.008,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.007,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.01,
+                  0.014,
+                  0.01,
+                  0.01,
+                  0.009,
+                  0.011,
+                  0.009,
+                  0.009,
+                  0.008,
+                  0.009,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.011,
+                  0.008,
+                  0.012,
+                  0.008,
+                  0.009,
+                  0.028,
+                  0.01,
+                  0.009,
+                  0.011,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.01,
+                  0.009,
+                  0.01,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.009,
+                  0.013,
+                  0.01,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.009,
+                  0.008,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.008,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.011,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.172,
+                "count": 1,
+                "samples": [
+                  0.172
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.059,
+                "count": 1,
+                "samples": [
+                  0.059
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.307,
+                "count": 1,
+                "samples": [
+                  0.307
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.068,
+                "count": 1,
+                "samples": [
+                  0.068
+                ]
+              },
+              "totalMs": 3.956,
+              "otherMs": 1.9169999999999998
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.172,
+                "count": 1,
+                "samples": [
+                  0.172
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.059,
+                "count": 1,
+                "samples": [
+                  0.059
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.307,
+                "count": 1,
+                "samples": [
+                  0.307
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.068,
+                "count": 1,
+                "samples": [
+                  0.068
+                ]
+              },
+              "totalMs": 1.039,
+              "otherMs": 0.481
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 6,
+          "variant": "A",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-6-A",
+          "singleMs": 1.266,
+          "burstMs": 3.838,
+          "inputSpanMs": 2.879,
+          "delivered": 202,
+          "marks": 706,
+          "rawSha256": "928f5bea862a02b3820cfd5a48f5e74768ecaa66f5be8810000e3a997dbb6de6",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.019,
+                "count": 1,
+                "samples": [
+                  0.019
+                ]
+              },
+              "frameMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "bodyMs": {
+                "total": 0.17,
+                "count": 1,
+                "samples": [
+                  0.17
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.044,
+                "count": 1,
+                "samples": [
+                  0.044
+                ]
+              },
+              "decorationMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.185,
+                "count": 1,
+                "samples": [
+                  0.185
+                ]
+              },
+              "waitMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "presentMs": {
+                "total": 0.312,
+                "count": 1,
+                "samples": [
+                  0.312
+                ]
+              },
+              "totalMs": 1.266,
+              "otherMs": 0.577
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.497,
+                "count": 200,
+                "samples": [
+                  0.026,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.038,
+                  0.007,
+                  0.006,
+                  0.011,
+                  0.006,
+                  0.025,
+                  0.025,
+                  0.007,
+                  0.007,
+                  0.025,
+                  0.006,
+                  0.027,
+                  0.006,
+                  0.006,
+                  0.023,
+                  0.026,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.023,
+                  0.007,
+                  0.005,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.029,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.009,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.008,
+                  0.008,
+                  0.008,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.232,
+                "count": 1,
+                "samples": [
+                  0.232
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.077,
+                "count": 1,
+                "samples": [
+                  0.077
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.257,
+                "count": 1,
+                "samples": [
+                  0.257
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.045,
+                "count": 1,
+                "samples": [
+                  0.045
+                ]
+              },
+              "totalMs": 3.838,
+              "otherMs": 1.803
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.232,
+                "count": 1,
+                "samples": [
+                  0.232
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.077,
+                "count": 1,
+                "samples": [
+                  0.077
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.257,
+                "count": 1,
+                "samples": [
+                  0.257
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.045,
+                "count": 1,
+                "samples": [
+                  0.045
+                ]
+              },
+              "totalMs": 0.959,
+              "otherMs": 0.4139999999999999
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "group": 6,
+          "variant": "O",
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-empty-diagnostic\\empty-6-O",
+          "singleMs": 0.983,
+          "burstMs": 3.403,
+          "inputSpanMs": 2.382,
+          "delivered": 202,
+          "marks": 709,
+          "rawSha256": "7bde69fe5c81b56909781292d57269b71ae8680064fcf06055fcb09f6d1a9217",
+          "stages": {
+            "single": {
+              "applyMs": {
+                "total": 0.022,
+                "count": 1,
+                "samples": [
+                  0.022
+                ]
+              },
+              "frameMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "bodyMs": {
+                "total": 0.221,
+                "count": 1,
+                "samples": [
+                  0.221
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.0,
+                "count": 1,
+                "samples": [
+                  0.0
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.132,
+                "count": 1,
+                "samples": [
+                  0.132
+                ]
+              },
+              "decorationMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.2,
+                "count": 1,
+                "samples": [
+                  0.2
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.123,
+                "count": 1,
+                "samples": [
+                  0.123
+                ]
+              },
+              "totalMs": 0.983,
+              "otherMs": 0.4149999999999999
+            },
+            "burst": {
+              "applyMs": {
+                "total": 1.203,
+                "count": 200,
+                "samples": [
+                  0.019,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.004,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.007,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.004,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.005,
+                  0.005,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.005,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.006,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.008,
+                  0.007,
+                  0.044,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.007,
+                  0.006,
+                  0.007,
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.264,
+                "count": 1,
+                "samples": [
+                  0.264
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.162,
+                "count": 1,
+                "samples": [
+                  0.162
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.33,
+                "count": 1,
+                "samples": [
+                  0.33
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.046,
+                "count": 1,
+                "samples": [
+                  0.046
+                ]
+              },
+              "totalMs": 3.403,
+              "otherMs": 1.5559999999999998
+            },
+            "lastInputTail": {
+              "applyMs": {
+                "total": 0.007,
+                "count": 1,
+                "samples": [
+                  0.007
+                ]
+              },
+              "frameMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "bodyMs": {
+                "total": 0.264,
+                "count": 1,
+                "samples": [
+                  0.264
+                ]
+              },
+              "utf16Ms": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "createLayoutMs": {
+                "total": 0.002,
+                "count": 1,
+                "samples": [
+                  0.002
+                ]
+              },
+              "drawTextMs": {
+                "total": 0.162,
+                "count": 1,
+                "samples": [
+                  0.162
+                ]
+              },
+              "decorationMs": {
+                "total": 0.003,
+                "count": 1,
+                "samples": [
+                  0.003
+                ]
+              },
+              "endDrawMs": {
+                "total": 0.33,
+                "count": 1,
+                "samples": [
+                  0.33
+                ]
+              },
+              "waitMs": {
+                "total": 0.001,
+                "count": 1,
+                "samples": [
+                  0.001
+                ]
+              },
+              "presentMs": {
+                "total": 0.046,
+                "count": 1,
+                "samples": [
+                  0.046
+                ]
+              },
+              "totalMs": 1.021,
+              "otherMs": 0.3699999999999999
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        }
+      ],
+      "summary": {
+        "O": {
+          "valid": 6,
+          "single": {
+            "applyMs": {
+              "samples": [
+                0.019,
+                0.018,
+                0.018,
+                0.018,
+                0.018,
+                0.022
+              ],
+              "median": 0.018
+            },
+            "frameMs": {
+              "samples": [
+                0.002,
+                0.004,
+                0.001,
+                0.002,
+                0.002,
+                0.001
+              ],
+              "median": 0.002
+            },
+            "bodyMs": {
+              "samples": [
+                0.257,
+                0.254,
+                0.208,
+                0.233,
+                0.217,
+                0.221
+              ],
+              "median": 0.227
+            },
+            "utf16Ms": {
+              "samples": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "median": 0.0
+            },
+            "createLayoutMs": {
+              "samples": [
+                0.002,
+                0.002,
+                0.001,
+                0.001,
+                0.002,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "drawTextMs": {
+              "samples": [
+                0.136,
+                0.158,
+                0.126,
+                0.133,
+                0.13,
+                0.132
+              ],
+              "median": 0.1325
+            },
+            "decorationMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+              ],
+              "median": 0.001
+            },
+            "endDrawMs": {
+              "samples": [
+                0.254,
+                0.215,
+                0.197,
+                0.28,
+                0.185,
+                0.2
+              ],
+              "median": 0.20750000000000002
+            },
+            "waitMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.0,
+                0.001
+              ],
+              "median": 0.001
+            },
+            "presentMs": {
+              "samples": [
+                0.112,
+                0.126,
+                0.114,
+                0.123,
+                0.11,
+                0.123
+              ],
+              "median": 0.1185
+            },
+            "otherMs": {
+              "samples": [
+                0.42199999999999993,
+                0.507,
+                0.385,
+                0.4059999999999999,
+                0.379,
+                0.4149999999999999
+              ],
+              "median": 0.4104999999999999
+            },
+            "totalMs": {
+              "samples": [
+                1.067,
+                1.125,
+                0.924,
+                1.063,
+                0.911,
+                0.983
+              ],
+              "median": 1.023
+            }
+          },
+          "burst": {
+            "applyMs": {
+              "samples": [
+                1.193,
+                1.647,
+                1.2670000000000001,
+                1.24,
+                1.225,
+                1.203
+              ],
+              "median": 1.2325
+            },
+            "frameMs": {
+              "samples": [
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "bodyMs": {
+              "samples": [
+                0.255,
+                0.312,
+                0.228,
+                0.244,
+                0.239,
+                0.264
+              ],
+              "median": 0.2495
+            },
+            "utf16Ms": {
+              "samples": [
+                0.001,
+                0.002,
+                0.001,
+                0.001,
+                0.001,
+                0.002
+              ],
+              "median": 0.001
+            },
+            "createLayoutMs": {
+              "samples": [
+                0.002,
+                0.002,
+                0.002,
+                0.002,
+                0.002,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "drawTextMs": {
+              "samples": [
+                0.162,
+                0.198,
+                0.148,
+                0.154,
+                0.152,
+                0.162
+              ],
+              "median": 0.158
+            },
+            "decorationMs": {
+              "samples": [
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "endDrawMs": {
+              "samples": [
+                0.362,
+                0.423,
+                0.286,
+                0.367,
+                0.323,
+                0.33
+              ],
+              "median": 0.346
+            },
+            "waitMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+              ],
+              "median": 0.001
+            },
+            "presentMs": {
+              "samples": [
+                0.049,
+                0.072,
+                0.048,
+                0.048,
+                0.046,
+                0.046
+              ],
+              "median": 0.048
+            },
+            "otherMs": {
+              "samples": [
+                1.573,
+                2.017,
+                1.597,
+                1.6139999999999999,
+                1.5269999999999997,
+                1.5559999999999998
+              ],
+              "median": 1.585
+            },
+            "totalMs": {
+              "samples": [
+                3.436,
+                4.476,
+                3.43,
+                3.517,
+                3.364,
+                3.403
+              ],
+              "median": 3.433
+            }
+          },
+          "lastInputTail": {
+            "applyMs": {
+              "samples": [
+                0.007,
+                0.009,
+                0.007,
+                0.007,
+                0.007,
+                0.007
+              ],
+              "median": 0.007
+            },
+            "frameMs": {
+              "samples": [
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "bodyMs": {
+              "samples": [
+                0.255,
+                0.312,
+                0.228,
+                0.244,
+                0.239,
+                0.264
+              ],
+              "median": 0.2495
+            },
+            "utf16Ms": {
+              "samples": [
+                0.001,
+                0.002,
+                0.001,
+                0.001,
+                0.001,
+                0.002
+              ],
+              "median": 0.001
+            },
+            "createLayoutMs": {
+              "samples": [
+                0.002,
+                0.002,
+                0.002,
+                0.002,
+                0.002,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "drawTextMs": {
+              "samples": [
+                0.162,
+                0.198,
+                0.148,
+                0.154,
+                0.152,
+                0.162
+              ],
+              "median": 0.158
+            },
+            "decorationMs": {
+              "samples": [
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "endDrawMs": {
+              "samples": [
+                0.362,
+                0.423,
+                0.286,
+                0.367,
+                0.323,
+                0.33
+              ],
+              "median": 0.346
+            },
+            "waitMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+              ],
+              "median": 0.001
+            },
+            "presentMs": {
+              "samples": [
+                0.049,
+                0.072,
+                0.048,
+                0.048,
+                0.046,
+                0.046
+              ],
+              "median": 0.048
+            },
+            "otherMs": {
+              "samples": [
+                0.3639999999999999,
+                0.49,
+                0.3510000000000001,
+                0.364,
+                0.36,
+                0.3699999999999999
+              ],
+              "median": 0.36399999999999993
+            },
+            "totalMs": {
+              "samples": [
+                1.041,
+                1.311,
+                0.924,
+                1.034,
+                0.979,
+                1.021
+              ],
+              "median": 1.0274999999999999
+            }
+          }
+        },
+        "A": {
+          "valid": 6,
+          "single": {
+            "applyMs": {
+              "samples": [
+                0.017,
+                0.019,
+                0.017,
+                0.017,
+                0.018,
+                0.019
+              ],
+              "median": 0.0175
+            },
+            "frameMs": {
+              "samples": [
+                0.002,
+                0.001,
+                0.002,
+                0.002,
+                0.001,
+                0.001
+              ],
+              "median": 0.0015
+            },
+            "bodyMs": {
+              "samples": [
+                0.096,
+                0.106,
+                0.103,
+                0.107,
+                0.109,
+                0.17
+              ],
+              "median": 0.1065
+            },
+            "utf16Ms": {
+              "samples": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "median": 0.0
+            },
+            "createLayoutMs": {
+              "samples": [
+                0.001,
+                0.002,
+                0.002,
+                0.001,
+                0.002,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "drawTextMs": {
+              "samples": [
+                0.025,
+                0.025,
+                0.025,
+                0.025,
+                0.023,
+                0.044
+              ],
+              "median": 0.025
+            },
+            "decorationMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.002,
+                0.002
+              ],
+              "median": 0.001
+            },
+            "endDrawMs": {
+              "samples": [
+                0.185,
+                0.156,
+                0.163,
+                0.149,
+                0.146,
+                0.185
+              ],
+              "median": 0.1595
+            },
+            "waitMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.002
+              ],
+              "median": 0.001
+            },
+            "presentMs": {
+              "samples": [
+                0.122,
+                0.105,
+                0.112,
+                0.105,
+                0.099,
+                0.312
+              ],
+              "median": 0.1085
+            },
+            "otherMs": {
+              "samples": [
+                0.429,
+                0.41800000000000004,
+                0.42199999999999993,
+                0.41100000000000003,
+                0.387,
+                0.577
+              ],
+              "median": 0.42
+            },
+            "totalMs": {
+              "samples": [
+                0.852,
+                0.806,
+                0.82,
+                0.792,
+                0.761,
+                1.266
+              ],
+              "median": 0.813
+            }
+          },
+          "burst": {
+            "applyMs": {
+              "samples": [
+                1.196,
+                1.374,
+                1.24,
+                1.272,
+                1.488,
+                1.497
+              ],
+              "median": 1.323
+            },
+            "frameMs": {
+              "samples": [
+                0.003,
+                0.015,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "bodyMs": {
+              "samples": [
+                0.137,
+                0.137,
+                0.138,
+                0.154,
+                0.172,
+                0.232
+              ],
+              "median": 0.14600000000000002
+            },
+            "utf16Ms": {
+              "samples": [
+                0.002,
+                0.001,
+                0.001,
+                0.002,
+                0.002,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "createLayoutMs": {
+              "samples": [
+                0.001,
+                0.002,
+                0.002,
+                0.002,
+                0.001,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "drawTextMs": {
+              "samples": [
+                0.055,
+                0.055,
+                0.054,
+                0.067,
+                0.059,
+                0.077
+              ],
+              "median": 0.056999999999999995
+            },
+            "decorationMs": {
+              "samples": [
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "endDrawMs": {
+              "samples": [
+                0.329,
+                0.301,
+                0.327,
+                0.326,
+                0.307,
+                0.257
+              ],
+              "median": 0.3165
+            },
+            "waitMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+              ],
+              "median": 0.001
+            },
+            "presentMs": {
+              "samples": [
+                0.073,
+                0.077,
+                0.051,
+                0.051,
+                0.068,
+                0.045
+              ],
+              "median": 0.0595
+            },
+            "otherMs": {
+              "samples": [
+                1.5510000000000002,
+                1.805,
+                1.6649999999999998,
+                1.6550000000000002,
+                1.9169999999999998,
+                1.803
+              ],
+              "median": 1.734
+            },
+            "totalMs": {
+              "samples": [
+                3.29,
+                3.71,
+                3.425,
+                3.462,
+                3.956,
+                3.838
+              ],
+              "median": 3.5860000000000003
+            }
+          },
+          "lastInputTail": {
+            "applyMs": {
+              "samples": [
+                0.007,
+                0.007,
+                0.007,
+                0.007,
+                0.007,
+                0.007
+              ],
+              "median": 0.007
+            },
+            "frameMs": {
+              "samples": [
+                0.003,
+                0.015,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "bodyMs": {
+              "samples": [
+                0.137,
+                0.137,
+                0.138,
+                0.154,
+                0.172,
+                0.232
+              ],
+              "median": 0.14600000000000002
+            },
+            "utf16Ms": {
+              "samples": [
+                0.002,
+                0.001,
+                0.001,
+                0.002,
+                0.002,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "createLayoutMs": {
+              "samples": [
+                0.001,
+                0.002,
+                0.002,
+                0.002,
+                0.001,
+                0.002
+              ],
+              "median": 0.002
+            },
+            "drawTextMs": {
+              "samples": [
+                0.055,
+                0.055,
+                0.054,
+                0.067,
+                0.059,
+                0.077
+              ],
+              "median": 0.056999999999999995
+            },
+            "decorationMs": {
+              "samples": [
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003
+              ],
+              "median": 0.003
+            },
+            "endDrawMs": {
+              "samples": [
+                0.329,
+                0.301,
+                0.327,
+                0.326,
+                0.307,
+                0.257
+              ],
+              "median": 0.3165
+            },
+            "waitMs": {
+              "samples": [
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001,
+                0.001
+              ],
+              "median": 0.001
+            },
+            "presentMs": {
+              "samples": [
+                0.073,
+                0.077,
+                0.051,
+                0.051,
+                0.068,
+                0.045
+              ],
+              "median": 0.0595
+            },
+            "otherMs": {
+              "samples": [
+                0.383,
+                0.476,
+                0.402,
+                0.4119999999999999,
+                0.481,
+                0.4139999999999999
+              ],
+              "median": 0.4129999999999999
+            },
+            "totalMs": {
+              "samples": [
+                0.933,
+                1.014,
+                0.929,
+                0.954,
+                1.039,
+                0.959
+              ],
+              "median": 0.9564999999999999
+            }
+          }
+        }
+      },
+      "finishedAt": "2026-10-03T16:20:38.683593+00:00"
+    },
+    "artifact": {
+      "path": "D:\\NeNeNib\\evidence\\291-empty-diagnostic\\empty-diagnostic-evidence.zip",
+      "fileCount": 27,
+      "bytes": 106822,
+      "sha256": "4f148c785fe116bae1f3ca454ff802aebefee76cc16ad50495a79db05a547112",
+      "crc": "pass",
+      "executablesIncluded": false
+    },
+    "interpretation": {
+      "validTrials": 12,
+      "missingTrials": 0,
+      "retryCount": 0,
+      "originalBurstTailSpikeReproduced": false,
+      "sharedGpuCauseIdentified": false,
+      "bodyIntervalImprovedInAllSixPairs": true,
+      "extraProductionChange": false,
+      "acceptanceDecision": "Unchanged: instrumented diagnostic does not replace normal release speed acceptance; empty document remains on hold."
+    }
   }
 }

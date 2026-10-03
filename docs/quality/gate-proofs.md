@@ -2818,3 +2818,29 @@ profile.bundleとsplit-recheck.bundleはgit bundle verifyで成功し、共にma
 **現在の残件は空文書の連続入力の安定性。** [PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)はdraftを維持し、性能受入全体とmergeは保留。splitの採用保留も変わらない。成功した短行・長行と表示確認は保存して再利用し、原因を特定せず合格まで測り直すことはしない。基準値・閾値・schemaは変更せず、waiverなし。
 
 追記後は文書の規則参照とPRの検証記録だけを確認した。document_checksは違反0（`out/291-normal-doc-conformance.log`）、`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-long-line-rendering.md --pr-body`と`git diff --check`は終了0。製品・対象テスト・依存はa1a0e4dから変わらず、アプリの再検証は行っていない。
+
+### 並行作業がある環境での空文書の内訳診断
+
+hideから他の作業が並行しGPUも使われているとの説明と続行指示を受けた。01:14にIssueへ固定12試行の診断計画を先に保存し、他プロセスや設定を変えずに実施した。共有負荷はhideからの説明であり、GPU占有率を別途計測したものではない。
+
+変更前の計装版fedf727を再利用し、同じ計測点だけをa1a0e4dへ重ねた2d8a10eを`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`で生成、終了0（`out/291-empty-profile-build.log`）。151.036秒、1308160 bytes、SHA-256 `88F95A6BE15095518474CDAF659C74781EE10F948008DF5C5115F4B04A8476DC`。2版の製品コードの追加/削除行が、検証済みのcache修正だけであることも比較した。最終的な製品枝には計装を入れない。GetMetrics先行版は使っていない。
+
+`python D:/NeNeNib/scripts/291-empty-diagnostic.py`を01:19〜01:20に実行して終了0。空文書6組、奇数O/A・偶数A/Oの12本は全て202入力、欠測なし。単打の独立、全節目の対、rawからの時間再計算、1280×800 / DPI120を確認した。節目数はOが709、Aが706で容量65536に未到達。集計処理は先に保存済みのprofileのrawでも確認した。単打・200文字全体・最後の入力以降を分解し、重なるUTF変換/文字組み/描画の区間を二重加算していない。各区間はQPCの経過時間で、CPUの実使用時間ではない。
+
+最後の入力から提示までに含まれる各区間の中央値（ms）。各行を別々に中央値へ取っているため合計は一致しない。
+
+| 区間 | O 変更前 | A 修正版 |
+| --- | ---: | ---: |
+| 本文描画 | 0.2495 | 0.1460 |
+| EndDraw | 0.3460 | 0.3165 |
+| 交換鎖の待機 | 0.0010 | 0.0010 |
+| Presentを含む提示 | 0.0480 | 0.0595 |
+| 最後の入力から提示まで全体 | 1.0275 | 0.9565 |
+
+本文描画は単打・連続入力とも対応する6組全てで短縮した。修正版の連続入力後の全体は0.929〜1.039msで、前回の1.536〜2.456msの跳ねは再現していない。修正版の第6組の単打だけは1.266msで、Presentを含む区間0.312msやstatus描画を含む区間0.404msなど複数箇所が長かったが、これを前回の連続入力と同一原因とは扱わない。
+
+**追加の製品修正を入れる根拠は得られなかった。** 今回の修正部分は短縮したが、前回の揺れの原因は未特定。共有GPU負荷が原因だとも、この診断で通常版の空文書の受入が済んだとも主張しない。PR #293はdraftのまま、共有負荷が落ち着いた時の通常版の空文書確認を残件にする。12本を繰り返さず、短行・長行・表示・IME・splitは再利用する。
+
+全記録は実測JSONのemptyDiagnostic。束は`D:/NeNeNib/evidence/291-empty-diagnostic/empty-diagnostic-evidence.zip`、27ファイル、106822 bytes、SHA-256 `4f148c785fe116bae1f3ca454ff802aebefee76cc16ad50495a79db05a547112`、CRC成功。raw、画像、事前計画、測定器、Releaseメタデータ、検証済みgit bundleと差分を含む。製品コードはa1a0e4dのまま、受入条件・schemaは変更せず、waiverなし。
+
+文書追記後のdocument_checksは違反0（`out/291-empty-diagnostic-doc-conformance.log`）、PR本文のgit-conventions.pyと`git diff --check`は終了0。`git diff --exit-code dcf5811 -- src tests eng CMakeLists.txt`も終了0で、製品枝に計装が混入していない。文書のための製品テストは追加していない。
