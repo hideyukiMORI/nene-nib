@@ -2661,3 +2661,11 @@ Windows 11・clang-cl 19.1.5・Debug（clang-tidy / ASan / UBSan）。保存要�
 性能範囲: 新しい処理は明示したEx保存時だけで、通常打鍵・描画・一覧照合・起動の経路は不変。既存replaceのI/O列は維持し、新規作成モードは存在確認と上書きしない最終配置を使う。全性能/全Vimを再実行する根拠はない。Releaseと専用ファイルの実機確認を別途記録する。
 
 差分C++の`clang-format --dry-run --Werror`、`git diff --check`、文書追加後の`python eng/conformance.py --build-dir build`が成功（違反0、`out/286-conformance-final.log`）。
+
+### Releaseと保護対象の比較
+
+`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`はcleanな`591b99fa7bbd2b6a4149fe45b81c81cafeb3e03a`で成功。`build/release-591b99f/NeNeNib.exe`、1,302,528 bytes、SHA-256 `312B55BE0A62F8593CEB95AF1EDC87EB13C3BB7C7E39A739948A43DF939C66E6`。configure 2.148s / build 138.892s。`out/286-release.log` / `out/release/591b99f.json`。生成だけで起動はしていない。
+
+`python eng/protected-diff.py --base 12a0a83 --head 591b99f`は終了0（`out/286-protected.log` / `out/protected/591b99f.json`）。`fixtures 1853 -> 1853 / metadata 0 / deleted 0 / changed 0 / added 0`、`files changed none`、`scopes 33 / same 0 / 未測 32`、新規`--ex-write-path`も比較器では未測。比較用exeを渡していないため全scopeの件数不変の証明にはしない。perf-reference / symbol-allowlist / conformance-rules / SettingsCodecの静的差分0。
+
+[PR #287](https://github.com/hideyukiMORI/nene-nib/pull/287)をDraftで作成。専用profileと文書、8場面の手順は`D:/NeNeNib/scripts/ex-write-path-286.py`、専用文書は`D:/NeNeNib/evidence/ex-write-path-286/`。`--prepare`は成功し、前面操作は行っていない。20:02 JSTに今回分の前面確認を依頼した。実機結果は未確認で、了承後に同じReleaseを確認して記録する。
