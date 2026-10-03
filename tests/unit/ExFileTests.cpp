@@ -89,7 +89,7 @@ void verify_names_and_queries()
     }
     expect(request_is("  edit  日本語  memo.txt  ", core::PaletteScope::files, "日本語  memo.txt"),
            "outer spaces are trimmed and inner spaces are kept");
-    expect(core::command_completions("e") == std::vector<std::string>{"edit"} &&
+    expect(core::command_completions("e") == std::vector<std::string>{"edit", "exit"} &&
                core::command_completions("b") == std::vector<std::string>{"buffer", "buffers"},
            "Ex completion exposes the full names from the common catalog");
 }

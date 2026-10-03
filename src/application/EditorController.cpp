@@ -127,6 +127,23 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     std::unreachable();
 }
 
+[[nodiscard]] std::string_view ex_write_failure(FileFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case FileFailure::unencodable:
+        return "Could not write: text cannot be represented in this encoding";
+    case FileFailure::not_found:
+    case FileFailure::access_denied:
+    case FileFailure::unreadable:
+    case FileFailure::unwritable:
+    case FileFailure::too_large:
+    case FileFailure::undecodable:
+        return "Could not write file";
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] FileFailure file_failure_of(CodePageFailure failure) noexcept
 {
     switch (failure)
@@ -2065,6 +2082,12 @@ void EditorController::evaluate_command(std::string_view text)
         run_palette_request(palette.value());
         return;
     }
+    const auto &document = result.value().document;
+    if (document.has_value())
+    {
+        run_document_request(document.value());
+        return;
+    }
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {
@@ -2096,6 +2119,60 @@ void EditorController::run_palette_request(const core::ExPaletteRequest &request
     const bool active = request.scope == core::PaletteScope::tabs && request.query.empty();
     open_palette(core::palette_input_for(core::PaletteQuery{request.scope, request.query}),
                  active ? state_.active_tab() : 0);
+}
+
+bool EditorController::write_current_document()
+{
+    const auto path = state_.document().path;
+    if (!path.has_value())
+    {
+        state_ = state_.with_command_message(core::DisplayText::parse("E32: No file name").value());
+        return false;
+    }
+    const auto written = save_document(SaveDocument{path.value(), state_.document().encoding});
+    if (!written)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse(ex_write_failure(written.error())).value());
+        return false;
+    }
+    state_ = state_.with_command_message(core::DisplayText::parse("Written").value());
+    return true;
+}
+
+void EditorController::run_document_request(core::ExDocumentVerb verb)
+{
+    const bool changed = active_document_view().save_state == core::SaveState::modified;
+    switch (verb)
+    {
+    case core::ExDocumentVerb::write:
+        static_cast<void>(write_current_document());
+        return;
+    case core::ExDocumentVerb::quit:
+        if (changed)
+        {
+            state_ = state_.with_command_message(
+                core::DisplayText::parse("E37: No write since last change (add ! to override)")
+                    .value());
+            return;
+        }
+        break;
+    case core::ExDocumentVerb::quit_force:
+        break;
+    case core::ExDocumentVerb::write_quit:
+        if (!write_current_document())
+        {
+            return;
+        }
+        break;
+    case core::ExDocumentVerb::update_quit:
+        if (changed && !write_current_document())
+        {
+            return;
+        }
+        break;
+    }
+    accept(CloseTab{state_.active_tab()});
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
@@ -2581,24 +2658,32 @@ void EditorController::forget(const core::FilePath &path)
 
 void EditorController::accept(const SaveDocument &intent)
 {
+    const auto saved = save_document(intent);
+    if (!saved)
+    {
+        fail(saved.error());
+    }
+}
+
+std::expected<void, FileFailure> EditorController::save_document(const SaveDocument &intent)
+{
     const auto bytes = encoded(intent.encoding, state_.text().text());
     if (!bytes)
     {
-        fail(bytes.error());
-        return;
+        return std::unexpected(bytes.error());
     }
     // 書けなかったときは本文も文書も変えない。元のファイルも adapters が守る（決定 6）。
     const auto written = ports_.files.write(intent.path, bytes.value());
     if (!written)
     {
-        fail(written.error());
-        return;
+        return std::unexpected(written.error());
     }
     // 保存の直後に単位を閉じる。続く入力が保存時点の単位に混ざらない（決定 7）。
     const auto history = state_.history().sealed();
     const std::size_t position = history.position();
     state_ = state_.with_history(history).with_document(
         Document{intent.path, intent.encoding, position});
+    return {};
 }
 
 // ---------------------------------------------------------------- タブ（ADR 0056）

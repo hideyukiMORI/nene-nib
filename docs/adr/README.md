@@ -79,3 +79,6 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0061](0061-the-palette-takes-ime-input-and-opens-with-it-off.md) | Ctrl+P の面は日本語入力を受け、IME はオフで開いて使う人に任せる | 受理 |
 | [0062](0062-the-worker-reads-the-folder-and-the-palette-keeps-its-result.md) | 同じフォルダは裏のワーカーが読み、面は絞り込みの結果を持って見えている行だけを載せる | 受理 |
 | [0063](0063-bookmarks-are-explicit-and-share-the-file-palette.md) | ブックマークは明示操作で保存し、同じファイルの候補を一覧で共有する | 受理 |
+| [0064](0064-ex-file-commands-open-the-shared-palette.md) | Ex のファイル命令は共通の一覧を開く | 受理 |
+| [0065](0065-ordinary-combining-character-boundaries.md) | 通常モードの結合文字と削除方向を区別する | 受理 |
+| [0066](0066-ex-save-and-quit-use-document-operations.md) | Ex の保存と終了は既存の文書操作を通る | 受理 |

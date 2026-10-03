@@ -147,8 +147,13 @@ void verify_text_and_caret();
 void verify_look();
 
 // ApplicationTests.cpp
+void verify_document_save_contracts();
 void verify_editor_state();
 void verify_controller_intents();
+
+// ExDocumentTests.cpp
+void verify_ex_document_contracts();
+void verify_ex_document_scope();
 
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);

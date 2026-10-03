@@ -919,12 +919,6 @@ void EditorWindow::close_tab(std::size_t tab)
         }
     }
     send(application::CloseTab{tab});
-    // 最後の 1 つを閉じたら窓を閉じる（D22）。確認は済んだので close_window を通さない。
-    // closing は 1 意図だけの印なので、見てから一覧を書く（EndSession の frame では消えている）。
-    if (controller_.frame().closing)
-    {
-        leave(application::SessionEnd::last_tab_closed);
-    }
 }
 
 LRESULT EditorWindow::hit_test(LPARAM data) noexcept
@@ -1338,6 +1332,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     // 閉じたいタブは意図を送った結果の frame にだけ載る（ADR 0057 の決定 6）。下で frame を
     // 作り直す前に読んでおく。
     const auto close_request = frame.close_request;
+    const bool closing = frame.closing;
     if (font_change)
     {
         if (std::holds_alternative<application::AdjustFontSize>(intent))
@@ -1357,12 +1352,22 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     invalidate();
     update_title(frame);
     announce(frame);
-    // `:tabclose` は × と同じ流れで閉じる。この frame を写し終えてから呼ぶ（古い frame で題名を
-    // 上書きしない）。close_tab の中の send の frame は close_request が空なので再入は 1 段で
-    // 止まる。close_tab が窓を壊したら、この後で window_ に触らない（ここで終わる）。
+    finish_tab_action(close_request, closing);
+}
+
+// frame を写し終えてから閉じる。窓を壊した後は古い frame で題名を上書きしない（ADR 0066）。
+void EditorWindow::finish_tab_action(std::optional<std::size_t> close_request, bool closing)
+{
+    // :tabclose は × と同じ確認へ。その中の send は close_request が空なので再入は 1 段で止まる。
     if (close_request.has_value())
     {
         close_tab(close_request.value());
+        return;
+    }
+    // Ex と通常のタブ操作が通る終了の 1 か所。確認は済んでいる。
+    if (closing)
+    {
+        leave(application::SessionEnd::last_tab_closed);
     }
 }
 

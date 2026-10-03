@@ -18,7 +18,8 @@
 | 3 | #278 ブックマーク（4/5・`*`・通常 Ctrl+D / Vim Ctrl+Shift+D・ADR 0063・D36・D37） | **済み**・明示登録・永続化・一覧からの付け外し・消えた登録の保持。実装と対象自動検証・実機を受理し、[PR #279](https://github.com/hideyukiMORI/nene-nib/pull/279)で統合。続いて #280 の Vim の入口へ |
 | 4 | #280 Vim の `:e` `:b` `:ls`（5/5・ADR 0064） | **済み**・共通一覧への接続・引数の検索・省略名。実装と対象自動検証・実機9場面を受理。[PR #281](https://github.com/hideyukiMORI/nene-nib/pull/281)、記録は [gate-proofs 5-ce](../quality/gate-proofs.md#5-ce--exから共通のファイル一覧issue-280adr-0064)。Ctrl+P統合の5本が揃った |
 | 5 | #282 通常モードの矢印・Backspace・Delete と結合文字（D38・ADR 0065） | **済み**。アクセント・濁点・共通の異体字セレクタから段階的に対応。対象898 checks・Release・実機9場面/保存5通りを受理。[PR #283](https://github.com/hideyukiMORI/nene-nib/pull/283)、[gate-proofs 5-cf](../quality/gate-proofs.md#5-cf--通常モードの結合文字境界issue-282adr-0065) |
-| 6 | その後の候補: 一般 Ex / 複雑な書記素境界 | 未起票 |
+| 6 | #284 基本Exの保存と終了（ADR 0066） | 実装と対象1365 checks成功。Release・実機確認を準備中。[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066) |
+| 7 | その後の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
 
@@ -34,13 +35,13 @@
 
 順は設計席の案で hide 未確認。open の一覧は `gh issue list --state open` が正。
 
-## いまの数字（#272 の検証済み実装・2026-10-03）
+## いまの数字（2026-10-03・差分ごとの検証済み実装）
 
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | scope 31。全件checksは最新差分で未測（過去の全件実測19449 checks）。`--bookmarks` 40 / `--ex-files` 82 / `--ordinary-characters` 233 checksを対象実行で確認（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-cf](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0062 まで | [`docs/adr/README.md`](../adr/README.md) |
+| 既定の `nib_tests` | scope 32。全件checksは最新差分で未測（過去の全件実測19449 checks）。`--bookmarks` 40 / `--ex-files` 82 / `--ordinary-characters` 233 / `--ex-document` 204 checksを対象実行で確認（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-cg](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
+| ADR | 0066 まで | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
@@ -53,7 +54,7 @@
 64 MiB 超のファイル・文字コードと改行の手動切り替え・IME の再変換と TSF 固有の機能・
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`・ドラッグで VISUAL・矩形の `c I A C > < J ~` と VISUAL の中の `p`・`virtualedit`・
 autoindent・読み取り専用のレジスタ（`".` `":` `"/` `"%`）と `"=`・`q"`・矩形の種類を保った `"+` の往復・矩形レジスタへの `"A` の追記・通常モードの複雑な絵文字・言語固有の書記素境界（アクセント・濁点・共通VSは#282で段階対応）・行頭の孤立した結合文字の幅・INSERT の中の矢印による undo の区切り・`whichwrap` の設定・マクロの中の Ex と録画中の表示・`J s S R`・r の制御文字・Ctrl-e/y・検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase`・
-テキストオブジェクト `it ip is`・一般 Ex（`:w` / `:q`、範囲、パイプ、履歴）・
+テキストオブジェクト `it ip is`・一般 Exの残り（ファイル名引数、範囲、パイプ、履歴、強制上書き、全タブ終了）・
 タブのドラッグの並べ替え・窓の位置と大きさの復元・強制終了したときのタブの一覧・Ctrl+1〜9・Ctrl+Tab で歩いている間の一覧の面・`g<Tab>` と `:tabfirst` `:tablast` と `:tabnext +N`・一覧の種別のアイコンと履歴の時刻・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
 
 ## 段階

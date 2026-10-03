@@ -2570,3 +2570,36 @@ Windows 11・clang-cl 19.1.5のDebug（clang-tidy・ASan・UBSan）。全件は�
 - 5通りの削除後に保存し、全ファイルのUTF-8を期待値と照合してすべて一致。最後にundoで元の全バイト列へ戻して保存し、未保存印が消えたこと、終了コード0を確認した。
 
 描画・IME実装は不変で、この確認ではIME変換自体を再実行していない。製品と対象テストは`f0efe72`から不変。以降の文書・PR・mergeでは898 checksとRelease・実機の成功結果を再利用する。PR #283へ同じ記録を載せる。
+
+## 5-cg — Exの保存と終了（Issue #284・ADR 0066）
+
+2026-10-03。FR-003 / FR-008 / D22に沿い、現在の文書の`:w` / `:q` / `:q!` / `:wq` / `:x`と省略名を追加。coreの名前表と閉じた要求を既存のEx評価から渡し、保存はGUIと共通の`save_document`、閉じる操作は既存の`CloseTab`。最後のタブの終了をuiの`deliver`末尾へ統一する。`:tabclose`やCtrl+F4の保存確認は維持する。
+
+### 参照と限定
+
+固定Vim 9.1を`-u NONE -i NONE -N -n -es`で非対話実行し、26命令×名前あり/無題・保存済み/未保存の4条件、計104ケースを観測した。`D:/NeNeNib/scripts/probe-ex-save-quit.py`、`out/probes/ex-save-quit-2026-10-03.json` / `.log`。`w` / `q` / `wq` / `x`系の省略、E32/E37、`:x`の変更時だけの保存を確認。専用文書以外への書き込み・前面化・クリップボード操作なし。ファイル名引数・範囲・追記・強制上書き・全タブ命令は本件の対象外。
+
+### 自動検証
+
+Windows 11・clang-cl 19.1.5・Debug（clang-tidy・ASan・UBSan）。共有保存とEx評価、タブ終了の直接依存に限定した。
+
+| 確認する退行 | コマンド | 結果・記録 |
+| --- | --- | --- |
+| 型の追加・共有保存/終了の呼び出し・厳格な静的解析 | `. ./eng/toolchain.ps1; cmake --build build --target nib_tests NeNeNib` | 成功、`out/284-build02.log` |
+| 省略と拒否、E32/E37、成功/失敗、文字コード/BOM/改行、undo/保存位置、他タブの保持、既存GUI保存 | `build/nib_tests.exe --ex-document` | 204 checks成功、`out/284-ex-document.log` |
+| 新しい補完候補と設定の共有評価 | `build/nib_tests.exe --ex-settings` | 195 checks成功、`out/284-ex-settings-final.log` |
+| `edit`と`exit`の候補衝突、ファイル一覧への要求 | `build/nib_tests.exe --ex-files` | 82 checks成功、`out/284-ex-files.log` |
+| コマンド候補の順位と共通の入力/確定 | `build/nib_tests.exe --command-palette` | 356 checks成功、`out/284-command-palette.log` |
+| 現在のタブを閉じた後の切替・dirtyと未読文書 | `build/nib_tests.exe --tabs` | 291 checks成功、`out/284-tabs.log` |
+| 最後のタブを閉じた後のsessionの意味 | `build/nib_tests.exe --session` | 199 checks成功、`out/284-session.log` |
+| 閉じるときだけのファイル履歴更新 | `build/nib_tests.exe --history` | 38 checks成功、`out/284-history.log` |
+| core/applicationにファイルやOSの依存を増やさない | `python eng/symbols.py --build-dir build --require core application` | 2 libraries・違反0、`out/284-symbols.log` |
+| 正典経路・型の配置・生成物 | `python eng/conformance.py --build-dir build` | 違反0、`out/284-conformance.log` |
+
+計1365 checks。最初のビルドは`deliver`の認知的複雑度11が上限10を超えて停止（`out/284-build01.log`）。終了処理を`finish_tab_action`へ分けて修正し、規則は不変。最初の`--ex-settings`では補完末尾の旧期待値`buffers`が1件不一致だった。増えた名前表での正しい`exit`へテストを直し、`--target nib_tests`（`out/284-build03.log`）とこの195 checksだけ再実行した。他の6scopeの成功は関連入力不変なので再利用。差分C++の`clang-format --dry-run --Werror`と`git diff --check`も終了0。
+
+自己レビュー: ARC-001 / ARC-004は名前表・保存関数・CloseTabの正典、ARC-003はsymbols、ARC-010 / CPP-002は閉じた要求と保存失敗、CPP-004 / CPP-011はoptional参照と1ファイル1型、QLT-001 / QLT-012は対象選択と再利用で確認。保存schema・port・adapterの変更なし。Waivers: none。
+
+性能範囲: 起動・通常の文字挿入・一覧の照合/描画・ファイルI/Oの実装は不変。新しい保存/終了は明示したEx命令だけで実行され、通常打鍵のuiには終了のboolと条件分岐が加わるだけ。起動/巨大ファイル/5000候補等の全性能ベンチや全Vim再生は行わない。保存実装の抽出は既存保存の契約を新規scopeへ束ねて確認した。
+
+Releaseと保護対象比較、実機の限定確認は準備中。前面の確認はhideの今回分の了承を得てから実行する。製品・対象テスト・関連依存・環境が不変なら、文書・PR・mergeでは上記成功を再利用する。
