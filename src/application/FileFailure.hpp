@@ -14,6 +14,7 @@ enum class FileFailure : std::uint8_t
     unwritable,
     too_large,
     undecodable,
-    unencodable
+    unencodable,
+    already_exists
 };
 } // namespace nenenib::application

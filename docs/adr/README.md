@@ -82,3 +82,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0064](0064-ex-file-commands-open-the-shared-palette.md) | Ex のファイル命令は共通の一覧を開く | 受理 |
 | [0065](0065-ordinary-combining-character-boundaries.md) | 通常モードの結合文字と削除方向を区別する | 受理 |
 | [0066](0066-ex-save-and-quit-use-document-operations.md) | Ex の保存と終了は既存の文書操作を通る | 受理 |
+| [0067](0067-ex-filenames-share-atomic-save-policy.md) | Ex のファイル名は共通保存へ渡し、新規作成を原子的に守る | 受理 |

@@ -35,6 +35,7 @@ using nenenib::adapters::win32::Win32SettingsAdapter;
 using nenenib::adapters::win32::Win32TimingAdapter;
 using nenenib::application::CodePageFailure;
 using nenenib::application::FileFailure;
+using nenenib::application::FileWriteMode;
 using nenenib::application::SettingsFailure;
 using nenenib::core::byte_order_mark;
 using nenenib::core::default_editor_settings;
@@ -161,6 +162,66 @@ void verify_failures(Win32FileAdapter &files)
            "a body larger than the read limit still writes");
     expect(files.read(big, read_limit).value_or(std::string{}).size() == 1024U * 1024U,
            "and it comes back whole");
+}
+
+void verify_create_only(Win32FileAdapter &files)
+{
+    const auto path = path_of("nib-adapter-files/replaced.txt");
+    const auto temporary = path_of("nib-adapter-files/replaced.txt.nib-tmp");
+    expect(DeleteFileW(L"nib-adapter-files/replaced.txt") != 0, "remove our previous fixture");
+    expect(files.write(path, "new content", FileWriteMode::create_new).has_value(),
+           "create_new places a complete new file");
+    const auto refused = files.write(path, "replacement", FileWriteMode::create_new);
+    expect(!refused && refused.error() == FileFailure::already_exists,
+           "create_new refuses a file that already exists");
+    expect(files.read(path, read_limit).value_or(std::string{}) == "new content",
+           "a rejected create preserves all existing bytes");
+    expect(GetFileAttributesW(L"nib-adapter-files/replaced.txt.nib-tmp") == INVALID_FILE_ATTRIBUTES,
+           "successful and rejected creation leave no temporary file");
+    expect(DeleteFileW(L"nib-adapter-files/replaced.txt") != 0, "remove only our created file");
+    expect(files.write(temporary, "someone else's temporary").has_value(),
+           "prepare a pre-existing temporary file");
+    expect(!files.write(path, "must not write", FileWriteMode::create_new),
+           "an occupied temporary name refuses the write");
+    expect(files.read(temporary, read_limit).value_or(std::string{}) == "someone else's temporary",
+           "an unowned temporary file is neither overwritten nor deleted");
+    expect(!files.read(path, read_limit), "the destination is not partially created");
+    expect(DeleteFileW(L"nib-adapter-files/replaced.txt.nib-tmp") != 0,
+           "remove only the temporary fixture we prepared");
+}
+
+void verify_resolved_write(Win32FileAdapter &files)
+{
+    const auto input = path_of("nib-adapter-files/../nib-adapter-files/replaced.txt");
+    const auto absolute = files.resolve(input);
+    expect(absolute.has_value(), "FilePort resolves relative names through the OS boundary");
+    if (!absolute)
+    {
+        return;
+    }
+    expect(absolute.value().file_name() == "replaced.txt" &&
+               absolute.value().text().find("..") == std::string_view::npos,
+           "resolved names preserve the filename and remove dot segments");
+    expect(files.write(absolute.value(), "resolved", FileWriteMode::create_new).has_value(),
+           "the resolved path can be created");
+    expect(files.read(input, read_limit).value_or(std::string{}) == "resolved",
+           "relative and resolved paths read the same bytes");
+}
+
+void verify_failed_replacement(Win32FileAdapter &files)
+{
+    const auto path = path_of("nib-adapter-files/replaced.txt");
+    {
+        const FileHandle held(CreateFileW(L"nib-adapter-files/replaced.txt", GENERIC_READ,
+                                          FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr));
+        expect(held.valid(), "hold the target without sharing replacement");
+        expect(!files.write(path, "must not replace"), "a locked target refuses replacement");
+    }
+    expect(files.read(path, read_limit).value_or(std::string{}) == "resolved",
+           "failed replacement retains the complete original file");
+    expect(GetFileAttributesW(L"nib-adapter-files/replaced.txt.nib-tmp") == INVALID_FILE_ATTRIBUTES,
+           "failed replacement removes the temporary file it owned");
 }
 
 void verify_code_pages(Win32CodePageAdapter &code_pages)
@@ -396,6 +457,19 @@ void verify_same_file(const Win32FileAdapter &files)
     expect(files.same_file(lower.value(), lower.value()), "a path is the same file as itself");
     expect(!files.same_file(lower.value(), other.value()), "different paths are different files");
 }
+void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
+{
+    verify_utf8_files(files);
+    verify_shift_jis_file(files, code_pages);
+    verify_replacement(files);
+    verify_failures(files);
+    verify_create_only(files);
+    verify_resolved_write(files);
+    verify_failed_replacement(files);
+    verify_code_pages(code_pages);
+    verify_absolute_path();
+    verify_same_file(files);
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -411,14 +485,14 @@ int main(int argc, char **argv)
     reset_folder();
     Win32FileAdapter files;
     Win32CodePageAdapter code_pages;
-    verify_utf8_files(files);
-    verify_shift_jis_file(files, code_pages);
-    verify_replacement(files);
-    verify_failures(files);
-    verify_code_pages(code_pages);
+    verify_files(files, code_pages);
+    if (argc == 2 && std::string_view(argv[1]) == "--files")
+    {
+        std::printf("File adapter tests: %zu checks, %zu failures\n", check_count(),
+                    failure_count());
+        return failure_count() == 0 ? 0 : 1;
+    }
     verify_timing_marks(files);
-    verify_absolute_path();
-    verify_same_file(files);
     verify_settings_codec();
     verify_bad_settings_fields();
     verify_bad_settings_values();

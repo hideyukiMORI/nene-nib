@@ -2,6 +2,7 @@
 
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
+#include "FileWriteMode.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -25,8 +26,16 @@ class FilePort
 
     [[nodiscard]] virtual std::expected<std::string, FileFailure>
     read(const core::FilePath &path, std::size_t maximum_bytes) = 0;
-    [[nodiscard]] virtual std::expected<void, FileFailure> write(const core::FilePath &path,
-                                                                 std::string_view bytes) = 0;
+    // 既存の保存は replace。実際の書き込みは mode 付きの一つだけ（ADR 0067）。
+    [[nodiscard]] std::expected<void, FileFailure> write(const core::FilePath &path,
+                                                         std::string_view bytes)
+    {
+        return write(path, bytes, FileWriteMode::replace);
+    }
+    [[nodiscard]] virtual std::expected<void, FileFailure>
+    write(const core::FilePath &path, std::string_view bytes, FileWriteMode mode) = 0;
+    [[nodiscard]] virtual std::expected<core::FilePath, FileFailure>
+    resolve(const core::FilePath &path) = 0;
     // 2 つの経路が同じファイルを指すか（ADR 0056 の決定 5）。比べ方は OS の規則で、adapters が
     // 決める（Windows は大文字と小文字を区別しない序数比較）。
     [[nodiscard]] virtual bool same_file(const core::FilePath &left,

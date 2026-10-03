@@ -11,6 +11,7 @@ enum class ExDocumentVerb : std::uint8_t
     quit,
     quit_force,
     write_quit,
-    update_quit
+    update_quit,
+    save_as
 };
 } // namespace nenenib::core

@@ -34,9 +34,14 @@ bool request_is(std::string_view text, Verb verb)
 {
     const auto result =
         core::evaluate_ex(text, core::default_editor_settings(), core::Appearance::dark);
-    return result.has_value() && result.value().document == verb &&
-           !result.value().tab.has_value() && !result.value().palette.has_value() &&
-           !result.value().settings.has_value();
+    if (!result)
+    {
+        return false;
+    }
+    const auto &document = result.value().document;
+    return document.has_value() && document.value().verb == verb &&
+           !document.value().path.has_value() && !result.value().tab.has_value() &&
+           !result.value().palette.has_value() && !result.value().settings.has_value();
 }
 
 std::string message(const app::EditorFrame &frame)
@@ -88,12 +93,12 @@ void verify_rejections()
                                          "x!",
                                          "q!!",
                                          "q !",
-                                         "w other.txt",
+                                         "w ++enc=utf8 other.txt",
                                          "w >> other.txt",
                                          "w !cmd",
                                          "q other",
-                                         "wq other",
-                                         "x other",
+                                         "wq! other",
+                                         "x! other",
                                          "2q",
                                          "1w",
                                          "1,2w",

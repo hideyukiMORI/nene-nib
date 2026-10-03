@@ -2,7 +2,7 @@
 
 #include "DisplayText.hpp"
 #include "EditorSettings.hpp"
-#include "ExDocumentVerb.hpp"
+#include "ExDocumentRequest.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
 #include "ExPaletteRequest.hpp"
@@ -32,7 +32,7 @@ struct ExResult
     DisplayText message;
     std::optional<ExTabRequest> tab = std::nullopt;
     std::optional<ExPaletteRequest> palette = std::nullopt;
-    std::optional<ExDocumentVerb> document = std::nullopt;
+    std::optional<ExDocumentRequest> document = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

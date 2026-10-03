@@ -192,6 +192,8 @@ constexpr char32_t tab_character = U'\t';
         return L"ファイルを読み取れませんでした。";
     case application::FileFailure::unwritable:
         return L"ファイルを保存できませんでした。元のファイルは変わっていません。";
+    case application::FileFailure::already_exists:
+        return L"ファイルは既に存在します。";
     case application::FileFailure::too_large:
         return L"64 MiB を超えるファイルはまだ開けません。";
     case application::FileFailure::undecodable:

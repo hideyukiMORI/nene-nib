@@ -131,6 +131,8 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 {
     switch (failure)
     {
+    case FileFailure::already_exists:
+        return "E13: File exists";
     case FileFailure::unencodable:
         return "Could not write: text cannot be represented in this encoding";
     case FileFailure::not_found:
@@ -2121,15 +2123,46 @@ void EditorController::run_palette_request(const core::ExPaletteRequest &request
                  active ? state_.active_tab() : 0);
 }
 
-bool EditorController::write_current_document()
+bool EditorController::write_ex_document(const core::ExDocumentRequest &request)
 {
-    const auto path = state_.document().path;
+    const auto path = request.path.has_value() ? request.path : state_.document().path;
     if (!path.has_value())
     {
         state_ = state_.with_command_message(core::DisplayText::parse("E32: No file name").value());
         return false;
     }
-    const auto written = save_document(SaveDocument{path.value(), state_.document().encoding});
+    const auto target = request.path.has_value()
+                            ? ports_.files.resolve(path.value())
+                            : std::expected<core::FilePath, FileFailure>{path.value()};
+    if (!target)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse(ex_write_failure(target.error())).value());
+        return false;
+    }
+    return write_ex_path(target.value(), request);
+}
+
+bool EditorController::write_ex_path(const core::FilePath &path,
+                                     const core::ExDocumentRequest &request)
+{
+    const auto other = open_tab_of(path);
+    if (other.has_value() && other.value() != state_.active_tab())
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("E139: File is open in another tab").value());
+        return false;
+    }
+    const auto &current = state_.document().path;
+    const bool same = current.has_value() && ports_.files.same_file(current.value(), path);
+    const auto mode =
+        request.path.has_value() && !same ? FileWriteMode::create_new : FileWriteMode::replace;
+    const auto identity =
+        current.has_value() && !same && request.verb != core::ExDocumentVerb::save_as
+            ? SaveIdentity::retain_document
+            : SaveIdentity::update_document;
+    const auto written =
+        save_document(SaveDocument{path, state_.document().encoding, mode, identity});
     if (!written)
     {
         state_ = state_.with_command_message(
@@ -2140,37 +2173,46 @@ bool EditorController::write_current_document()
     return true;
 }
 
-void EditorController::run_document_request(core::ExDocumentVerb verb)
+bool EditorController::refuse_modified_quit()
+{
+    if (active_document_view().save_state != core::SaveState::modified)
+    {
+        return false;
+    }
+    state_ = state_.with_command_message(
+        core::DisplayText::parse("E37: No write since last change (add ! to override)").value());
+    return true;
+}
+
+void EditorController::run_document_request(const core::ExDocumentRequest &request)
 {
     const bool changed = active_document_view().save_state == core::SaveState::modified;
-    switch (verb)
+    switch (request.verb)
     {
     case core::ExDocumentVerb::write:
-        static_cast<void>(write_current_document());
+    case core::ExDocumentVerb::save_as:
+        static_cast<void>(write_ex_document(request));
         return;
     case core::ExDocumentVerb::quit:
-        if (changed)
-        {
-            state_ = state_.with_command_message(
-                core::DisplayText::parse("E37: No write since last change (add ! to override)")
-                    .value());
-            return;
-        }
         break;
     case core::ExDocumentVerb::quit_force:
         break;
     case core::ExDocumentVerb::write_quit:
-        if (!write_current_document())
+        if (!write_ex_document(request))
         {
             return;
         }
         break;
     case core::ExDocumentVerb::update_quit:
-        if (changed && !write_current_document())
+        if (changed && !write_ex_document(request))
         {
             return;
         }
         break;
+    }
+    if (request.verb != core::ExDocumentVerb::quit_force && refuse_modified_quit())
+    {
+        return;
     }
     accept(CloseTab{state_.active_tab()});
 }
@@ -2673,10 +2715,14 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
         return std::unexpected(bytes.error());
     }
     // 書けなかったときは本文も文書も変えない。元のファイルも adapters が守る（決定 6）。
-    const auto written = ports_.files.write(intent.path, bytes.value());
+    const auto written = ports_.files.write(intent.path, bytes.value(), intent.mode);
     if (!written)
     {
         return std::unexpected(written.error());
+    }
+    if (intent.identity == SaveIdentity::retain_document)
+    {
+        return {};
     }
     // 保存の直後に単位を閉じる。続く入力が保存時点の単位に混ざらない（決定 7）。
     const auto history = state_.history().sealed();

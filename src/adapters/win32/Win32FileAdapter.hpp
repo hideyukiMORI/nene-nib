@@ -19,10 +19,14 @@ namespace nenenib::adapters::win32
 class Win32FileAdapter final : public application::FilePort
 {
   public:
+    using application::FilePort::write;
     [[nodiscard]] std::expected<std::string, application::FileFailure>
     read(const core::FilePath &path, std::size_t maximum_bytes) override;
     [[nodiscard]] std::expected<void, application::FileFailure>
-    write(const core::FilePath &path, std::string_view bytes) override;
+    write(const core::FilePath &path, std::string_view bytes,
+          application::FileWriteMode mode) override;
+    [[nodiscard]] std::expected<core::FilePath, application::FileFailure>
+    resolve(const core::FilePath &path) override;
     // 経路は absolute_file_path が作った絶対パス。大文字と小文字を区別しない序数比較で比べる。
     // 短い名前（8.3）とリンクは解かない（ADR 0056 の「残る穴」）。
     [[nodiscard]] bool same_file(const core::FilePath &left,
