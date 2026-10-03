@@ -21,7 +21,7 @@
 | 6 | #284 基本Exの保存と終了（ADR 0066） | **実装・検証済み**。対象1365 checks・Release・実機7場面/保存内容/3回の正常終了を受理。[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)、[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066) |
 | 7 | #286 Exのファイル名付き保存とsaveas（ADR 0067・D39） | **実装・検証済み**。対象991 checks・Release・実機8場面/保存内容/3回の正常終了を受理。名前は保存成功時だけ更新。[PR #287](https://github.com/hideyukiMORI/nene-nib/pull/287)。[gate-proofs 5-ch](../quality/gate-proofs.md#5-ch--名前付きex保存issue-286adr-0067) |
 | 8 | #288 split前の区切り / #290 範囲・判定条件・限定描画試作（D40・ADR 0068） | **下準備・試作済み、製品採用は保留**。注釈付き`checkpoint/pre-split-20261003`を保存。長い日本語行で左右分割の費用が増え、事前条件を満たさない。[準備資料](../design/2026-10-03-split-preparation.md) / [gate-proofs 5-cj](../quality/gate-proofs.md#5-cj--splitの下準備と限定した描画費用issue-290adr-0068) |
-| 9 | #291 長い日本語行の単画面の入力遅延（ADR 0069） | **修正・表示検証済み、性能受入とmergeは保留**。全文の文字組みの重複を除去。欠測と比較元の揺れを残したまま合格にせず、draft PRで証拠を保持する。[gate-proofs 5-ck](../quality/gate-proofs.md#5-ck--長い行の文字組み再利用issue-291adr-0069)。split採用も保留を維持 |
+| 9 | #291 長い日本語行の単画面の入力遅延（ADR 0069） | **修正・表示検証済み、空文書の連続入力の揺れが残件**。通常版の別比較36本は欠測なし、短行・長行は受入条件内。空文書は修正版の前半/後半の差が許容を超え、[PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)はdraft、mergeとsplit採用は保留。[gate-proofs 5-ck](../quality/gate-proofs.md#5-ck--長い行の文字組み再利用issue-291adr-0069) |
 | 10 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。

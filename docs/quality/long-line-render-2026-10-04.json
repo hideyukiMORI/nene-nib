@@ -6192,5 +6192,1743 @@
     "sha256": "6e1fe550cf41204aa58a3e739ff39ede1eae2fb384833f89e4f870bd239397e1",
     "crc": "pass",
     "executablesIncluded": false
+  },
+  "normalRecomparison": {
+    "reason": "Separate preregistered experiment after hide confirmed keyboard use during the original 90 trials and approved an input-free 5-minute window.",
+    "paired": {
+      "issue": 291,
+      "startedAt": "2026-10-03T15:53:24.160118+00:00",
+      "machine": {
+        "fingerprint": "bc8a356f37c68491",
+        "cpu": "Intel(R) Core(TM) i9-10850K CPU @ 3.60GHz",
+        "gpu": "NVIDIA GeForce RTX 3090",
+        "dpi": 120
+      },
+      "windowSize": [
+        1280,
+        800
+      ],
+      "manifest": {
+        "O": {
+          "commit": "591b99fa7bbd2b6a4149fe45b81c81cafeb3e03a",
+          "sha256": "312B55BE0A62F8593CEB95AF1EDC87EB13C3BB7C7E39A739948A43DF939C66E6",
+          "bytes": 1302528,
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          },
+          "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-591b99f\\NeNeNib.exe"
+        },
+        "A": {
+          "commit": "a1a0e4d50a7c9eb784652a4d5ee65e11e7953e0d",
+          "sha256": "20BDE40B142DCC16409E5CE4973B1FBA91B5FB739FB474835BDD35A88CF0FC4D",
+          "bytes": 1307648,
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          },
+          "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-a1a0e4d\\NeNeNib.exe"
+        }
+      },
+      "runnerSha256": "2ebb8ed05ff5e6d45dcc8b355977174a46872ffeef0197cd797f9eed7a2d4d8d",
+      "measurementSha256": "0a07ab8dc659b15d56cf9c353925a3eb9cb4cac757d418a06ec1a54f934660fd",
+      "driverSha256": "59bab4f9fc39564f0472a0f846c1db03819b0dfcab0f25483d799116ec47a328",
+      "fixtures": {
+        "empty": null,
+        "16mib": {
+          "path": "D:\\NeNeNib\\evidence\\291-normal-paired\\documents\\large.txt",
+          "bytes": 16800000,
+          "sha256": "e0cfa5bd4f828d8e26fa1f476ef0467e80fb9014993c07eb18935fcf6959fdaf"
+        },
+        "long-japanese": {
+          "path": "D:\\NeNeNib\\evidence\\291-normal-paired\\documents\\long-japanese.txt",
+          "bytes": 6219000,
+          "sha256": "ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32a6c5"
+        }
+      },
+      "trials": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "O",
+          "singleMs": 0.86,
+          "burstMs": 4.766,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-1-O",
+          "arrivalSpanMs": 3.73,
+          "delivered": 202,
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\captures\\empty-O.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "A",
+          "singleMs": 0.783,
+          "burstMs": 3.29,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-1-A",
+          "arrivalSpanMs": 2.378,
+          "delivered": 202,
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\captures\\empty-A.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "A",
+          "singleMs": 0.899,
+          "burstMs": 4.693,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-2-A",
+          "arrivalSpanMs": 2.864,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "O",
+          "singleMs": 0.874,
+          "burstMs": 3.429,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-2-O",
+          "arrivalSpanMs": 2.35,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "O",
+          "singleMs": 0.896,
+          "burstMs": 3.537,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-3-O",
+          "arrivalSpanMs": 2.526,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "A",
+          "singleMs": 0.781,
+          "burstMs": 4.494,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-3-A",
+          "arrivalSpanMs": 2.958,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "A",
+          "singleMs": 0.886,
+          "burstMs": 5.357,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-4-A",
+          "arrivalSpanMs": 2.901,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "O",
+          "singleMs": 0.883,
+          "burstMs": 3.504,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-4-O",
+          "arrivalSpanMs": 2.58,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "O",
+          "singleMs": 0.927,
+          "burstMs": 3.508,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-5-O",
+          "arrivalSpanMs": 2.511,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "A",
+          "singleMs": 0.8,
+          "burstMs": 3.223,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-5-A",
+          "arrivalSpanMs": 2.339,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "A",
+          "singleMs": 0.819,
+          "burstMs": 3.256,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-6-A",
+          "arrivalSpanMs": 2.39,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "O",
+          "singleMs": 1.045,
+          "burstMs": 3.765,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\empty-6-O",
+          "arrivalSpanMs": 2.767,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "O",
+          "singleMs": 2.457,
+          "burstMs": 9.104,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-1-O",
+          "arrivalSpanMs": 7.252,
+          "delivered": 202,
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\captures\\16mib-O.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "A",
+          "singleMs": 1.417,
+          "burstMs": 8.622,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-1-A",
+          "arrivalSpanMs": 7.42,
+          "delivered": 202,
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\captures\\16mib-A.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "A",
+          "singleMs": 1.204,
+          "burstMs": 11.241,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-2-A",
+          "arrivalSpanMs": 10.001,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "O",
+          "singleMs": 1.69,
+          "burstMs": 10.569,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-2-O",
+          "arrivalSpanMs": 7.898,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "O",
+          "singleMs": 1.868,
+          "burstMs": 9.972,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-3-O",
+          "arrivalSpanMs": 8.054,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "A",
+          "singleMs": 1.48,
+          "burstMs": 8.951,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-3-A",
+          "arrivalSpanMs": 7.77,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "A",
+          "singleMs": 1.503,
+          "burstMs": 8.655,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-4-A",
+          "arrivalSpanMs": 7.359,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "O",
+          "singleMs": 2.867,
+          "burstMs": 10.188,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-4-O",
+          "arrivalSpanMs": 7.882,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "O",
+          "singleMs": 1.77,
+          "burstMs": 10.448,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-5-O",
+          "arrivalSpanMs": 8.408,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "A",
+          "singleMs": 1.696,
+          "burstMs": 8.826,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-5-A",
+          "arrivalSpanMs": 7.578,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "A",
+          "singleMs": 1.152,
+          "burstMs": 8.641,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-6-A",
+          "arrivalSpanMs": 7.27,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "O",
+          "singleMs": 1.737,
+          "burstMs": 10.14,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\16mib-6-O",
+          "arrivalSpanMs": 8.367,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "O",
+          "singleMs": 327.15,
+          "burstMs": 492.595,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-1-O",
+          "arrivalSpanMs": 157.764,
+          "delivered": 202,
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\captures\\long-japanese-O.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "A",
+          "singleMs": 30.487,
+          "burstMs": 195.47,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-1-A",
+          "arrivalSpanMs": 163.528,
+          "delivered": 202,
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\captures\\long-japanese-A.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "A",
+          "singleMs": 30.153,
+          "burstMs": 207.41,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-2-A",
+          "arrivalSpanMs": 172.037,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "O",
+          "singleMs": 362.615,
+          "burstMs": 526.62,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-2-O",
+          "arrivalSpanMs": 176.406,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "O",
+          "singleMs": 355.5,
+          "burstMs": 533.815,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-3-O",
+          "arrivalSpanMs": 187.733,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "A",
+          "singleMs": 30.021,
+          "burstMs": 194.108,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-3-A",
+          "arrivalSpanMs": 165.001,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "A",
+          "singleMs": 30.264,
+          "burstMs": 194.403,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-4-A",
+          "arrivalSpanMs": 153.702,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "O",
+          "singleMs": 331.689,
+          "burstMs": 487.484,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-4-O",
+          "arrivalSpanMs": 161.971,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "O",
+          "singleMs": 336.136,
+          "burstMs": 504.176,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-5-O",
+          "arrivalSpanMs": 173.817,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "A",
+          "singleMs": 33.374,
+          "burstMs": 190.215,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-5-A",
+          "arrivalSpanMs": 162.263,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "A",
+          "singleMs": 28.453,
+          "burstMs": 183.983,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-6-A",
+          "arrivalSpanMs": 155.285,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "O",
+          "singleMs": 330.559,
+          "burstMs": 483.676,
+          "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-normal-paired\\long-japanese-6-O",
+          "arrivalSpanMs": 157.297,
+          "delivered": 202,
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        }
+      ],
+      "summary": {
+        "empty": {
+          "O": {
+            "singleMs": {
+              "samples": [
+                0.86,
+                0.874,
+                0.896,
+                0.883,
+                0.927,
+                1.045
+              ],
+              "count": 6,
+              "median": 0.8895,
+              "minimum": 0.86,
+              "maximum": 1.045,
+              "pairedDeltas": [
+                0.07699999999999996,
+                -0.025000000000000022,
+                0.11499999999999999,
+                -0.0030000000000000027,
+                0.127,
+                0.22599999999999998
+              ],
+              "positivePairs": 4
+            },
+            "burstMs": {
+              "samples": [
+                4.766,
+                3.429,
+                3.537,
+                3.504,
+                3.508,
+                3.765
+              ],
+              "count": 6,
+              "median": 3.5225,
+              "minimum": 3.429,
+              "maximum": 4.766,
+              "pairedDeltas": [
+                1.476,
+                -1.2639999999999998,
+                -0.9569999999999999,
+                -1.8530000000000002,
+                0.28500000000000014,
+                0.5090000000000003
+              ],
+              "positivePairs": 3
+            }
+          },
+          "A": {
+            "singleMs": {
+              "samples": [
+                0.783,
+                0.899,
+                0.781,
+                0.886,
+                0.8,
+                0.819
+              ],
+              "count": 6,
+              "median": 0.8095,
+              "minimum": 0.781,
+              "maximum": 0.899,
+              "pairedDeltas": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "positivePairs": 0
+            },
+            "burstMs": {
+              "samples": [
+                3.29,
+                4.693,
+                4.494,
+                5.357,
+                3.223,
+                3.256
+              ],
+              "count": 6,
+              "median": 3.892,
+              "minimum": 3.223,
+              "maximum": 5.357,
+              "pairedDeltas": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "positivePairs": 0
+            }
+          }
+        },
+        "16mib": {
+          "O": {
+            "singleMs": {
+              "samples": [
+                2.457,
+                1.69,
+                1.868,
+                2.867,
+                1.77,
+                1.737
+              ],
+              "count": 6,
+              "median": 1.819,
+              "minimum": 1.69,
+              "maximum": 2.867,
+              "pairedDeltas": [
+                1.0399999999999998,
+                0.486,
+                0.3880000000000001,
+                1.364,
+                0.07400000000000007,
+                0.5850000000000002
+              ],
+              "positivePairs": 6
+            },
+            "burstMs": {
+              "samples": [
+                9.104,
+                10.569,
+                9.972,
+                10.188,
+                10.448,
+                10.14
+              ],
+              "count": 6,
+              "median": 10.164000000000001,
+              "minimum": 9.104,
+              "maximum": 10.569,
+              "pairedDeltas": [
+                0.4819999999999993,
+                -0.6719999999999988,
+                1.020999999999999,
+                1.5330000000000013,
+                1.6219999999999999,
+                1.4990000000000006
+              ],
+              "positivePairs": 5
+            }
+          },
+          "A": {
+            "singleMs": {
+              "samples": [
+                1.417,
+                1.204,
+                1.48,
+                1.503,
+                1.696,
+                1.152
+              ],
+              "count": 6,
+              "median": 1.4485000000000001,
+              "minimum": 1.152,
+              "maximum": 1.696,
+              "pairedDeltas": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "positivePairs": 0
+            },
+            "burstMs": {
+              "samples": [
+                8.622,
+                11.241,
+                8.951,
+                8.655,
+                8.826,
+                8.641
+              ],
+              "count": 6,
+              "median": 8.7405,
+              "minimum": 8.622,
+              "maximum": 11.241,
+              "pairedDeltas": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "positivePairs": 0
+            }
+          }
+        },
+        "long-japanese": {
+          "O": {
+            "singleMs": {
+              "samples": [
+                327.15,
+                362.615,
+                355.5,
+                331.689,
+                336.136,
+                330.559
+              ],
+              "count": 6,
+              "median": 333.9125,
+              "minimum": 327.15,
+              "maximum": 362.615,
+              "pairedDeltas": [
+                296.66299999999995,
+                332.462,
+                325.479,
+                301.425,
+                302.762,
+                302.10600000000005
+              ],
+              "positivePairs": 6
+            },
+            "burstMs": {
+              "samples": [
+                492.595,
+                526.62,
+                533.815,
+                487.484,
+                504.176,
+                483.676
+              ],
+              "count": 6,
+              "median": 498.3855,
+              "minimum": 483.676,
+              "maximum": 533.815,
+              "pairedDeltas": [
+                297.125,
+                319.21000000000004,
+                339.70700000000005,
+                293.081,
+                313.961,
+                299.693
+              ],
+              "positivePairs": 6
+            }
+          },
+          "A": {
+            "singleMs": {
+              "samples": [
+                30.487,
+                30.153,
+                30.021,
+                30.264,
+                33.374,
+                28.453
+              ],
+              "count": 6,
+              "median": 30.2085,
+              "minimum": 28.453,
+              "maximum": 33.374,
+              "pairedDeltas": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "positivePairs": 0
+            },
+            "burstMs": {
+              "samples": [
+                195.47,
+                207.41,
+                194.108,
+                194.403,
+                190.215,
+                183.983
+              ],
+              "count": 6,
+              "median": 194.25549999999998,
+              "minimum": 183.983,
+              "maximum": 207.41,
+              "pairedDeltas": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "positivePairs": 0
+            }
+          }
+        }
+      },
+      "finishedAt": "2026-10-03T15:57:34.082482+00:00"
+    },
+    "audit": {
+      "rawRecordSha256": "bca732b71343380b6b57604fae82c60bc544fe6b159ab2850988be5de1ff1285",
+      "inputAudit": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "e6fcd841082d3d0c3cb9d1516cbba21d9a3635de40867aaa770b67ea56864bae"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "78165a7edfe2df788a547668df6b0a20a05e9fecd76589c7bc3d9937311ed581"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "0c9e83959317fa0f01586f639bb9ea21933643641215feae7723246b26ed01d5"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "184f3db72c6ac74539507a1cb804bc0436eec4974f956d43ec54ee15e9fb2f79"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "aa5c96ae18030001491dc99c5eea25c486d56ac87060f4607f414c5c8d4545cc"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "a1be1eec5539622d6156a22b07ce3aa60923d8294ae2480cbf18f47edddb20da"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "1c20513f30fc275db4fc40c0647dffdbc260b3f34176cab927844ea3b19d5033"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "15d3c88bb29b4e0e85749a1c7ce07be57a838456e58d216d5d6e3f4a180af9e5"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "8f5a2f580d078f91a82f65e3413d4c5b5f3b58edcefa71e03d0f75df360a7fb3"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "c5ef16c8e8f41f76b7264e3e9b12c16f294fbbb7736d6e0a26bc2c5e3a66ca34"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "47222f79aef2ca325bd3ff2960c54115d793442338a8b24fd536362c28ec7587"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "0822db3c9c0efad318897d6bf888762c1108351c5655d13c98d941e2949aaa7f"
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "e3f051ee84cf6a4efdee5aa5528f9dbcf923b704b48182e6ae980d3268613370"
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "f21a3153ad63f8e926b9e5eb549e625f6a59029b19a6e120e63362a3ade3f764"
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "6b71beaea35e4f7cec80cbe461778c24ef519100007b657f9030050782329d3e"
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "494d88303b12b50e0e317bf800c3812857a131257c6f25a67486d290ed35f17f"
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "89547e0a287b1ad853ab8d60d47277358f0a75d51496846293e4c3c48ef132c4"
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "b612eff7e6939d4eb36c77252bd954e82b0ac44a23c79990af24a43f148c9f01"
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "d2d9bfd2ffbf98abbfd341411453a8c10689d35ea04b7aed12216946c4a32deb"
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "dc532ec6df91dbf89794a2f21bb13e0bd53404840b9bd6dc3b1aa8bb1548e7de"
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "1ff7124954f530f5661db3abeff2d3d48839ec851db79e2f4658ee62810b1304"
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "bbe9e9c42fa3b19b1c80a8ee3f007ef4a2dff6a2ba7d382ee7e91feab24d0e78"
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "a6fee4caea5fb2f4e5f877a87d4c47b2b6741e4b507f2501a3fa100ccf44466e"
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "387a6ad4260cfef9601da18490e99949ac0bbf9561ef00a3676a992f4330f44c"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "d75ab432449612abf8c0b6a7a44eecf25c4e90d14c1b3a1d430e3e9239659a59"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "194fcc64739bf0b43ad1e5f6f2b8d78f8c464d5e16206156e9fd0237d52601cf"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "9362b8e40787db349758419c1c9a46794231869d8a98a122dad0539777bb1f08"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "e32f3c52436c05ef4dbb489fb4eaf8105ba47c4f7ebbd4ee938945646e00e374"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "17103b384a5f2d984915e20ee64b92930c237cb6989ff6c4fe8030ffb54b777c"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "8d9d5bbdb606f3cd5adee144f151691101bc5777c878123f9153a6f79b40193d"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "4f82cbcdfa9fedb0634ea74c30fcd5188ff3173a25bdf830c4aa9c4539953917"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "bab214499a0a8a9491cdacfea1b8854c90846a84559446b85fa9429a1ad2e4a8"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "8cdf757679dd72fa315b10b6988c9e9cc3886521d5f2a9a1bb5e1db33c8e9697"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "60a870931e1be35cb44e35acb97362d9d484328502d7cd5edaeaedadcd2e214c"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "A",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "4ec4742150c41ef29ff91637f2d49aea8bd0863e8ea6669a5e0de726f786c02a"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "O",
+          "isolatedWarmupAndSingle": true,
+          "inputs": 202,
+          "rawSha256": "f9dc7628347532a138b28930adcbcac74c71f93a3b166e108330c54d2a49705d"
+        }
+      ],
+      "judgment": {
+        "empty": {
+          "controls": {
+            "singleMs": {
+              "firstHalfMedian": 0.783,
+              "lastHalfMedian": 0.819,
+              "drift": 0.03599999999999992,
+              "limit": 0.1,
+              "stable": true
+            },
+            "burstMs": {
+              "firstHalfMedian": 4.494,
+              "lastHalfMedian": 3.256,
+              "drift": 1.238,
+              "limit": 0.5,
+              "stable": false
+            }
+          },
+          "comparisons": {},
+          "fixtureStable": false,
+          "originalControls": {
+            "singleMs": {
+              "firstHalfMedian": 0.874,
+              "lastHalfMedian": 0.927,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "drift": 0.05300000000000005,
+              "limit": 0.1,
+              "stable": true
+            },
+            "burstMs": {
+              "firstHalfMedian": 3.537,
+              "lastHalfMedian": 3.508,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "drift": 0.028999999999999915,
+              "limit": 0.5,
+              "stable": true
+            }
+          },
+          "cacheComparisons": {
+            "singleMs": {
+              "medianDelta": -0.07999999999999996,
+              "pairedDeltas": [
+                -0.07699999999999996,
+                0.025000000000000022,
+                -0.11499999999999999,
+                0.0030000000000000027,
+                -0.127,
+                -0.22599999999999998
+              ],
+              "positivePairs": 2,
+              "negativePairs": 4,
+              "reductionPercent": 8.993816750983697,
+              "limit": 0.1,
+              "stableControls": false,
+              "withinNumericLimit": true,
+              "decision": "hold"
+            },
+            "burstMs": {
+              "medianDelta": 0.36949999999999994,
+              "pairedDeltas": [
+                -1.476,
+                1.2639999999999998,
+                0.9569999999999999,
+                1.8530000000000002,
+                -0.28500000000000014,
+                -0.5090000000000003
+              ],
+              "positivePairs": 3,
+              "negativePairs": 3,
+              "reductionPercent": -10.489709013484738,
+              "limit": 0.5,
+              "stableControls": false,
+              "withinNumericLimit": true,
+              "decision": "hold"
+            }
+          }
+        },
+        "16mib": {
+          "controls": {
+            "singleMs": {
+              "firstHalfMedian": 1.417,
+              "lastHalfMedian": 1.503,
+              "drift": 0.08599999999999985,
+              "limit": 0.14485,
+              "stable": true
+            },
+            "burstMs": {
+              "firstHalfMedian": 8.951,
+              "lastHalfMedian": 8.655,
+              "drift": 0.29600000000000115,
+              "limit": 0.8740500000000001,
+              "stable": true
+            }
+          },
+          "comparisons": {},
+          "fixtureStable": true,
+          "originalControls": {
+            "singleMs": {
+              "firstHalfMedian": 1.868,
+              "lastHalfMedian": 1.77,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "drift": 0.09800000000000009,
+              "limit": 0.1819,
+              "stable": true
+            },
+            "burstMs": {
+              "firstHalfMedian": 9.972,
+              "lastHalfMedian": 10.188,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "drift": 0.21600000000000108,
+              "limit": 1.0164000000000002,
+              "stable": true
+            }
+          },
+          "cacheComparisons": {
+            "singleMs": {
+              "medianDelta": -0.37049999999999983,
+              "pairedDeltas": [
+                -1.0399999999999998,
+                -0.486,
+                -0.3880000000000001,
+                -1.364,
+                -0.07400000000000007,
+                -0.5850000000000002
+              ],
+              "positivePairs": 0,
+              "negativePairs": 6,
+              "reductionPercent": 20.368334249587672,
+              "limit": 0.1819,
+              "stableControls": true,
+              "withinNumericLimit": true,
+              "decision": "improved"
+            },
+            "burstMs": {
+              "medianDelta": -1.4235000000000007,
+              "pairedDeltas": [
+                -0.4819999999999993,
+                0.6719999999999988,
+                -1.020999999999999,
+                -1.5330000000000013,
+                -1.6219999999999999,
+                -1.4990000000000006
+              ],
+              "positivePairs": 1,
+              "negativePairs": 5,
+              "reductionPercent": 14.005312868949238,
+              "limit": 1.0164000000000002,
+              "stableControls": true,
+              "withinNumericLimit": true,
+              "decision": "improved"
+            }
+          }
+        },
+        "long-japanese": {
+          "controls": {
+            "singleMs": {
+              "firstHalfMedian": 30.153,
+              "lastHalfMedian": 30.264,
+              "drift": 0.11100000000000065,
+              "limit": 3.0208500000000003,
+              "stable": true
+            },
+            "burstMs": {
+              "firstHalfMedian": 195.47,
+              "lastHalfMedian": 190.215,
+              "drift": 5.2549999999999955,
+              "limit": 19.42555,
+              "stable": true
+            }
+          },
+          "comparisons": {},
+          "fixtureStable": true,
+          "originalControls": {
+            "singleMs": {
+              "firstHalfMedian": 355.5,
+              "lastHalfMedian": 331.689,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "drift": 23.81099999999998,
+              "limit": 33.39125000000001,
+              "stable": true
+            },
+            "burstMs": {
+              "firstHalfMedian": 526.62,
+              "lastHalfMedian": 487.484,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "drift": 39.136000000000024,
+              "limit": 49.83855,
+              "stable": true
+            }
+          },
+          "cacheComparisons": {
+            "singleMs": {
+              "medianDelta": -303.704,
+              "pairedDeltas": [
+                -296.66299999999995,
+                -332.462,
+                -325.479,
+                -301.425,
+                -302.762,
+                -302.10600000000005
+              ],
+              "positivePairs": 0,
+              "negativePairs": 6,
+              "reductionPercent": 90.95316886908995,
+              "limit": 33.39125000000001,
+              "stableControls": true,
+              "withinNumericLimit": true,
+              "decision": "improved"
+            },
+            "burstMs": {
+              "medianDelta": -304.13,
+              "pairedDeltas": [
+                -297.125,
+                -319.21000000000004,
+                -339.70700000000005,
+                -293.081,
+                -313.961,
+                -299.693
+              ],
+              "positivePairs": 0,
+              "negativePairs": 6,
+              "reductionPercent": 61.02304340716172,
+              "limit": 49.83855,
+              "stableControls": true,
+              "withinNumericLimit": true,
+              "decision": "improved"
+            }
+          }
+        }
+      }
+    },
+    "interpretation": {
+      "validTrials": 36,
+      "missingTrials": 0,
+      "retryCount": 0,
+      "cacheComparisonDecision": "hold: short-line and long-line conditions accepted; empty document candidate burst drift 1.238 ms exceeds preset 0.5 ms limit",
+      "splitDecision": "hold unchanged; completed split comparison was reused without another foreground run"
+    },
+    "artifact": {
+      "path": "D:\\NeNeNib\\evidence\\291-normal-paired\\normal-render-evidence.zip",
+      "fileCount": 57,
+      "bytes": 1105344,
+      "sha256": "73580c19e1ec17ed7a1c7b1b7cc6a654e267dbc51c706a65c3f69c3ceb5547e5",
+      "crc": "pass",
+      "executablesIncluded": false
+    }
   }
 }

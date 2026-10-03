@@ -2792,8 +2792,29 @@ profile.bundleとsplit-recheck.bundleはgit bundle verifyで成功し、共にma
 
 自己レビュー: 本文/履歴を複製せず描画資源だけをuiに置く（ARC-001 / 004 / 011）。時刻と追加の非決定的入力を製品へ足さない（ARC-007）。COMはComPtr、移した空のlayoutは一致対象から除外し、フォント名/サイズ/DPIの書式再生成とframe終端で破棄する（CPP-016）。全ての本文の描画/IME/hit testがlayout_ofに通り、選択/検索の処理は共有layoutを書き換えない。CPP-011 / 012は型の配置と通常Releaseの静的解析で確認した。
 
-現時点は実装・表示検証済み、性能受入とmergeは保留。draft PRで差分と証拠を保持する。ゲート/既存速度基準値/schemaの変更なし、Waivers: none。00:40にhideから、測定中にキーボードを操作していたとの回答を得た。予定外の入力があった3本は欠測のまま保存する。再計測する場合も今回の90本を上書きせず、操作しない時間を合わせてから別の固定計画を作る。
+90試行の時点では実装・表示検証済み、性能受入とmergeは保留。draft PRで差分と証拠を保持した。ゲート/既存速度基準値/schemaの変更なし、Waivers: none。00:40にhideから、測定中にキーボードを操作していたとの回答を得た。予定外の入力があった3本は欠測のまま保存した。
 
 文書の整合はconformance.document_checksで違反0（`out/291-doc-conformance.log`）、`git diff --check`は終了0。`git diff --exit-code a1a0e4d -- src tests eng CMakeLists.txt`も終了0で、文書をまとめた後も検証対象の実装と依存は変わっていない。
 
 再利用: a1a0e4d以降の変更は文書だけで、製品の3ファイル・対象検証・関連依存は不変。22場面の一致、IME、Releaseと今回の測定をPR工程だけの理由で繰り返さない。残るリスクは、編集した長い行と初めて見える行の全文字組み、frame生成、同じ描画の再実行、表示行ぶんの資源保持、DPI/device lostの実機未確認、および欠測/対照揺れによる厳格比較の未判定。
+
+### 手動入力のない時間に行った通常版36本の別比較
+
+00:47にIssueへ別計画を先に保存し、hideの「いいよ」を受けて00:53〜00:57に実施。O/Aだけを3本文×6組＝36本、奇数O/A・偶数A/Oの順に固定した。以前の90本は上書き・補完せず、バイナリ、fixture、窓、DPI、字体、keys_trialと判定条件は同じ。表示22場面、IME、Release、split比較は再利用して繰り返していない。
+
+`python D:/NeNeNib/scripts/291-normal-paired.py --manifest D:/NeNeNib/evidence/291-normal-paired/manifest.json`は終了0。続く`python D:/NeNeNib/scripts/291-normal-audit.py`も終了0（`out/291-normal-audit.log`）。36本全て正確な202入力で欠測なし。暖機/1文字の独立、raw時刻からの再計算、窓1280×800 / DPI120も一致した。実測JSONのnormalRecomparisonに原記録と監査を追加した。
+
+| 本文 | O 変更前 1文字 / 200文字 ms | A 修正版 1文字 / 200文字 ms | 事前条件での判定 |
+| --- | ---: | ---: | --- |
+| 空文書 | 0.8895 / 3.5225 | 0.8095 / 3.8920 | Aの200文字が前半/後半で不安定のため保留 |
+| 16MiB短行 | 1.8190 / 10.1640 | 1.4485 / 8.7405 | O/Aとも安定、受入条件内 |
+| 長い日本語行 | 333.9125 / 498.3855 | 30.2085 / 194.2555 | O/Aとも安定、受入条件内 |
+
+長行の1文字は90.95%、200文字は61.02%短縮し、両方とも対応する6組全てで短縮した。短行も1文字6/6、200文字5/6で短縮した。
+空文書は中央値の増分が1文字-0.0800ms、200文字+0.3695msで許容内だが、Aの200文字の前半4.494ms→後半3.256msの差1.238msが許容0.500msを超えた。Oの200文字は前半3.537ms→後半3.508msで安定。今回も空文書全体を保留とし、中央値だけで合格にしない。入力混入による欠測は解消したが、この揺れの原因は未特定であり、退行確定とも無関係な測定ノイズとも断定しない。追加の再試行は行わない。
+
+別比較の束は`D:/NeNeNib/evidence/291-normal-paired/normal-render-evidence.zip`、57ファイル、1105344 bytes、SHA-256 `73580c19e1ec17ed7a1c7b1b7cc6a654e267dbc51c706a65c3f69c3ceb5547e5`。CRC検査成功。36本のraw、画像、fixture、測定器、事前計画、Releaseメタデータを含み、ソースは元の235ファイルの束をhashで参照する。
+
+**現在の残件は空文書の連続入力の安定性。** [PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)はdraftを維持し、性能受入全体とmergeは保留。splitの採用保留も変わらない。成功した短行・長行と表示確認は保存して再利用し、原因を特定せず合格まで測り直すことはしない。基準値・閾値・schemaは変更せず、waiverなし。
+
+追記後は文書の規則参照とPRの検証記録だけを確認した。document_checksは違反0（`out/291-normal-doc-conformance.log`）、`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-long-line-rendering.md --pr-body`と`git diff --check`は終了0。製品・対象テスト・依存はa1a0e4dから変わらず、アプリの再検証は行っていない。
