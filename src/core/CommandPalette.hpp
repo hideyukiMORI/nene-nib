@@ -40,6 +40,11 @@ class CommandPalette final
     [[nodiscard]] CommandPalette edited(CommandEdit edit) const;
     [[nodiscard]] CommandPalette selected_at(std::size_t index) const;
     [[nodiscard]] std::expected<CommandPalette, ExFailure> filled(std::string_view command) const;
+    // 候補の列の後ろへ more を足した面（ADR 0062 の決定 16）。前の列の順と位置は変えず、結果は
+    // filtered の 1 本で作り直す。選択は伸ばす前に選んでいた候補と同じ候補（列の中の位置で探す）、
+    // 伸ばす前の結果が空なら先頭、設定のコマンド（commands）は番号のまま。入力は変えない。
+    // more が空なら同じ面を返す。
+    [[nodiscard]] CommandPalette extended(std::vector<CommandChoice> more) const;
 
   private:
     using Entries = std::shared_ptr<const std::vector<CommandChoice>>;
@@ -59,7 +64,8 @@ class CommandPalette final
     [[nodiscard]] const CommandChoice &row(std::size_t index) const;
     CommandLine input_;
     std::size_t selected_;
-    // 開くときに受け取った候補の列（ADR 0060 の決定 1）。入力が変わっても同じ列を指す。
+    // 開くときに受け取った候補の列（ADR 0060 の決定 1）。入力が変わっても同じ列を指し、変わるのは
+    // extended が後ろへ伸ばすときだけ（ADR 0062 の決定 16）。
     Entries entries_;
     std::shared_ptr<const Result> result_;
 };

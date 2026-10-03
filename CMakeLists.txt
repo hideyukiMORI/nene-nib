@@ -44,12 +44,12 @@ nenenib_target(nenenib_core core STATIC
     src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
-    src/core/EditHistory.cpp src/core/FilePath.cpp src/core/InputText.cpp
+    src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp
     src/core/ModeLabel.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/ScrollBounds.cpp src/core/SearchLine.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
-    src/core/TitleBarLayout.cpp src/core/Utf16.cpp src/core/Utf8.cpp
+    src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
     src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimKeyTable.cpp src/core/VimPattern.cpp src/core/VimRegisterText.cpp
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp
     src/core/VimStep.cpp src/core/VimTextObjectRange.cpp

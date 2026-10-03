@@ -1,4 +1,4 @@
-"""Measure the six speed benches and compare them with this machine's reference (QLT-014).
+"""Measure the seven speed benches and compare them with this machine's reference (QLT-014).
 
 ADR 0011: the editor marks milestones (Issue #19 added the eight startup stages to the original
 input_received / frame_presented), the Win32 timing adapter turns them into a measurement file when
@@ -15,6 +15,13 @@ through eng/window_driver.py, and reads the file back.
                             the same 200 WM_CHAR after that 16 MiB document is open -> the frame
                             that finishes them (ADR 0044 decision 6: the burst over an empty
                             document never sees a large piece table or a long add buffer)
+  key-to-frame-palette-5000  one WM_CHAR in Ctrl+P over a folder with 5000 files -> the next frame
+                            (candidate arrival is assumed after a fixed wait, not observed)
+
+--bench selects the stimulus to measure and the value to record, compare or adopt. Without it,
+every bench runs. Related benches share their existing trial, but only the selected value is kept.
+The palette trial saves a PNG of the candidate count before the measured character for review;
+the PNG is evidence for a reviewer, not an automatic candidate-completion check.
 
 --adopt writes the medians of every bench into this machine's reference; --adopt --bench <name>
 writes that one key and leaves the other reference values and recordedAt untouched, which is how a
@@ -41,11 +48,11 @@ and a bench with fewer than MIN_VALID_SAMPLES of them is not judged at all. --ch
 with 1 for a regression and with 2 for a bench that could not be measured, which are different
 things and say so in different words; eng/check.ps1 fails on both.
 
-Every bench runs five times; the value is the median and the spread is recorded with it. References
+Each selected bench runs five times; the median and spread are recorded with it. References
 live in eng/perf-reference.json per machine fingerprint (CPU name, display adapter, system DPI),
 because the same numbers on another machine mean nothing (ADR 0006); the shared CI runners are
 several hosts whose CPU generations differ by more than the tolerance, so they get one entry per
-fingerprint as well (ADR 0016). A machine without a reference records its numbers and passes, and
+fingerprint as well (ADR 0016). A machine without a reference records valid numbers and passes, and
 says in one line which host was not judged rather than passing in silence; so does a machine that
 cannot put a window on a desktop. Widening a reference is an ADR decision, not a repair.
 
@@ -62,12 +69,13 @@ import os
 from pathlib import Path
 import shutil
 import statistics
+import subprocess
 import time
 import winreg
 
-from window_driver import (become_dpi_aware, close, covered_by, dismiss_dialog, IDNO,
-                           post_together, raise_window, start, stop, take_foreground, user,
-                           WindowUnavailable, write_text)
+from window_driver import (become_dpi_aware, capture_png, close, covered_by, dismiss_dialog, IDNO,
+                           post_together, press_chord, raise_window, start, stop, take_foreground,
+                           user, VK_CONTROL, WindowCovered, WindowUnavailable, write_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "eng/perf-reference.json"
@@ -90,11 +98,15 @@ EXIT_SECONDS = 15.0
 LARGE_LINES = 200_000
 LARGE_LINE_BYTES = 84
 LARGE_SECONDS = 60.0
+PALETTE_FILES = 5000
+PALETTE_WAIT_SECONDS = 1.5
 MICROSECONDS_PER_MILLISECOND = 1000.0
 DISPLAY_ADAPTERS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000"
 CENTRAL_PROCESSOR = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 BENCHES = ("startup-first-frame", "startup-window-shown", "key-to-frame-single",
-           "key-to-frame-burst-200", "open-large-file-16mib", "key-to-frame-burst-200-16mib")
+           "key-to-frame-burst-200", "open-large-file-16mib", "key-to-frame-burst-200-16mib",
+           "key-to-frame-palette-5000")
+PALETTE_BENCH = "key-to-frame-palette-5000"
 # 打鍵のベンチは 1 本の試行の経路を共有し、開く本文だけが違う（ADR 0044 決定 6）。
 # 16 MiB の試行の 1 打鍵は暖機と同じ扱いで、値にするのは 200 打鍵だけ。
 EMPTY_BURST_BENCH = "key-to-frame-burst-200"
@@ -167,6 +179,17 @@ def large_document(folder: Path) -> Path:
         for index in range(LARGE_LINES):
             handle.write((f"{index:06d} " + filler + filler)[:LARGE_LINE_BYTES - 2] + "\r\n")
     return path
+
+
+def palette_document(folder: Path) -> Path:
+    """A document among 5000 fixture files; existing fixture files are left alone."""
+    directory = folder / "palette-folder"
+    directory.mkdir(parents=True, exist_ok=True)
+    for index in range(PALETTE_FILES):
+        path = directory / f"f{index:04d}.txt"
+        if not path.is_file():
+            path.write_text("nib\n", encoding="utf-8")
+    return directory / "f0000.txt"
 
 
 def report_path(folder: Path, name: str) -> Path:
@@ -338,6 +361,70 @@ def measured_single(marks: list, inputs: list) -> float | None:
     return (frame - int(marks[inputs[1]]["qpcMicroseconds"])) / MICROSECONDS_PER_MILLISECOND
 
 
+def measured_palette(marks: list) -> float | None:
+    """The last input's first following frame in ms; opening and warmup must precede it."""
+    inputs = input_indexes(marks)
+    if len(inputs) < 3:
+        return None
+    last = inputs[-1]
+    frame = frame_after(marks, last)
+    if frame is None:
+        return None
+    return (frame - int(marks[last]["qpcMicroseconds"])) / MICROSECONDS_PER_MILLISECOND
+
+
+def palette_trial(executable: Path, environment: dict, folder: Path,
+                  document: Path) -> float | None:
+    report = report_path(folder, "palette")
+    process, window, _ = start(executable, environment,
+                               ["--measure", str(report), str(document)])
+    try:
+        raise_window(window)
+        if not take_foreground(window):
+            print("Speed: the bench window did not take the foreground")
+        covering = covered_by(window)
+        if covering is not None:
+            print(f"Speed: another window covers the bench window ({covering})")
+        time.sleep(SETTLE_SECONDS)
+        if not press_chord(window, VK_CONTROL, ord("P")):
+            print("Speed: Ctrl+P did not reach the bench window; this palette trial is missing")
+            close(window)
+            process.wait(timeout=EXIT_SECONDS)
+            return None
+        # No milestone exposes candidate completion. This wait assumes arrival; it cannot prove it.
+        time.sleep(PALETTE_WAIT_SECONDS)
+        write_text(window, "f")
+        time.sleep(WARMUP_SECONDS)
+        # Keep the visible candidate count for review before the measured input, not inside its span.
+        snapshot = folder / f"palette-{stamp()}-{process.pid}.png"
+        try:
+            capture_png(window, snapshot)
+        except (WindowCovered, AssertionError, OSError) as unobserved:
+            raise TrialNotObserved(f"candidate snapshot failed ({unobserved})") from unobserved
+        print(f"Speed: palette candidate snapshot for review: {snapshot}")
+        write_text(window, "0")
+        time.sleep(SINGLE_KEY_SECONDS)
+        close(window)
+        changed_document = dismiss_dialog(process, IDNO, seconds=SETTLE_SECONDS)
+        process.wait(timeout=EXIT_SECONDS)
+        if changed_document:
+            print("Speed: the palette input changed the document; this palette trial is missing")
+            return None
+    finally:
+        stop(process)
+    return measured_palette(observed_marks(report))
+
+
+def bench_palette(executable: Path, environment: dict, folder: Path,
+                  document: Path) -> tuple[dict, dict]:
+    try:
+        value = palette_trial(executable, environment, folder, document)
+    except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
+        print(f"Speed: {unobserved}; this trial of {PALETTE_BENCH} is missing")
+        value = None
+    return {PALETTE_BENCH: value}, {}
+
+
 def keys_trial(executable: Path, environment: dict, folder: Path,
                document: Path | None = None) -> tuple[float | None, float | None, float, int]:
     """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
@@ -451,34 +538,56 @@ def judged_samples(measured: dict) -> int | None:
     return None if samples is None else len(samples)
 
 
-def measure(build: Path, repetitions: int) -> dict:
+def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
+                document: Path | None, palette: Path | None):
+    """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
+    if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
+        yield bench_startup(executable, environment, folder)
+    if any(name in names for name in ("key-to-frame-single", EMPTY_BURST_BENCH)):
+        yield bench_keys(executable, environment, folder)
+    if "open-large-file-16mib" in names:
+        yield bench_large_file(executable, environment, folder, document)
+    if LARGE_BURST_BENCH in names:
+        yield bench_keys(executable, environment, folder, document)
+    if PALETTE_BENCH in names:
+        yield bench_palette(executable, environment, folder, palette)
+
+
+def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
+    names = BENCHES if bench is None else (bench,)
     become_dpi_aware()
     executable, environment, folder = prepare(build)
-    document = large_document(folder)
-    samples: dict = {name: [] for name in BENCHES}
+    document = (large_document(folder)
+                if any(name in names for name in ("open-large-file-16mib", LARGE_BURST_BENCH))
+                else None)
+    palette = palette_document(folder) if PALETTE_BENCH in names else None
+    samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
-    missing: dict = {name: 0 for name in BENCHES}
+    missing: dict = {name: 0 for name in names}
     # 起動の内訳は区間ごとに 5 回ぶん貯めて、値と同じように中央値を出す（Issue #19）。
     # 16 MiB の 200 打鍵の到着の幅も同じ形で残す（#179）。
-    segments: dict = {name: {} for name in BREAKDOWN_BENCHES}
+    segments: dict = {name: {} for name in BREAKDOWN_BENCHES if name in names}
     for _ in range(repetitions):
-        for values, parts in (bench_startup(executable, environment, folder),
-                              bench_keys(executable, environment, folder),
-                              bench_large_file(executable, environment, folder, document),
-                              bench_keys(executable, environment, folder, document)):
+        for values, parts in run_benches(executable, environment, folder, names, document, palette):
             for name, value in values.items():
+                if name not in samples:
+                    continue
                 if value is None:
                     missing[name] += 1
                 else:
                     samples[name].append(value)
             for name, run in parts.items():
+                if name not in segments:
+                    continue
                 for segment, value in run.items():
                     segments[name].setdefault(segment, []).append(value)
-    return {"recordedAt": stamp(), "repetitions": repetitions, "machine": machine(),
-            "document": {"path": document.name, "bytes": document.stat().st_size,
-                         "lines": LARGE_LINES},
-            "values": summarise(samples, missing),
-            "breakdown": {name: spread(segments[name]) for name in BREAKDOWN_BENCHES}}
+    record = {"recordedAt": stamp(), "repetitions": repetitions, "machine": machine(),
+              "values": summarise(samples, missing),
+              "breakdown": {name: spread(values) for name, values in segments.items()}}
+    if document is not None:
+        record["document"] = {"path": document.name, "bytes": document.stat().st_size,
+                              "lines": LARGE_LINES}
+    return record
 
 
 def write_record(record: dict) -> Path:
@@ -493,6 +602,8 @@ def describe(record: dict) -> str:
              f" ({record['machine']['cpu']} / {record['machine']['gpu']}"
              f" / {record['machine']['dpi']} dpi)"]
     for name in BENCHES:
+        if name not in record["values"]:
+            continue
         value = record["values"][name]
         gone = value.get("missing", 0)
         note = f" (missing {gone} of {len(value['samples']) + gone})" if gone else ""
@@ -524,14 +635,16 @@ def compare(reference: dict, values: dict, recorded: dict) -> tuple[list[str], l
     tolerance = reference["tolerance"]
     findings, unmeasurable = [], []
     for name in BENCHES:
-        against = recorded.get(name)
-        if against is None:
+        if name not in values:
             continue
         valid = judged_samples(values[name])
         if valid is not None and valid < MIN_VALID_SAMPLES:
             trials = valid + values[name].get("missing", 0)
             unmeasurable.append(f"QLT-014: {name}: only {valid} of {trials} trials delivered the"
                                 " stimulus; not judged")
+            continue
+        against = recorded.get(name)
+        if against is None:
             continue
         allowed = against["medianMs"] * (1.0 + tolerance["percent"] / 100.0)
         measured = values[name]["medianMs"]
@@ -569,6 +682,10 @@ def adopt_one(reference_path: Path, record: dict, name: str) -> None:
 def adopt(reference_path: Path, record: dict) -> None:
     reference = json.loads(reference_path.read_text(encoding="utf-8"))
     identity = record["machine"]
+    absent = [name for name in BENCHES if name not in record["values"]]
+    if absent:
+        raise SystemExit("Speed: adopting every bench requires a complete record;"
+                         " use --adopt --bench <name> for a partial record")
     unmeasured = [name for name in BENCHES if record["values"][name]["medianMs"] is None]
     if unmeasured:
         raise SystemExit(f"Speed: {', '.join(unmeasured)} had no valid trial in this record;"
@@ -589,11 +706,30 @@ def adopt(reference_path: Path, record: dict) -> None:
 def gather(arguments) -> dict:
     """The values to judge: a record made now, or one that was measured earlier."""
     if arguments.values:
-        return json.loads(Path(arguments.values).read_text(encoding="utf-8"))
-    record = measure(arguments.executable, arguments.repetitions)
+        record = json.loads(Path(arguments.values).read_text(encoding="utf-8"))
+        return selected_record(record, arguments.bench)
+    record = measure(arguments.executable, arguments.repetitions, arguments.bench)
     print(describe(record))
     print(f"Speed: recorded {write_record(record)}")
     return record
+
+
+def selected_record(record: dict, name: str | None) -> dict:
+    """Reuse older/partial records without inventing trials for benches that were never run."""
+    if name is None:
+        return record
+    if name not in record["values"]:
+        raise SystemExit(f"Speed: {name} is absent from this record; it was not measured")
+    return dict(record, values={name: record["values"][name]},
+                breakdown={name: record["breakdown"][name]}
+                if name in record.get("breakdown", {}) else {})
+
+
+def compared_benches(values: dict, recorded: dict) -> tuple:
+    """Names with a reference and enough observed trials to compare, not merely a table entry."""
+    return tuple(name for name in BENCHES if name in values and name in recorded
+                 and (judged_samples(values[name]) is None
+                      or judged_samples(values[name]) >= MIN_VALID_SAMPLES))
 
 
 def check(arguments) -> int:
@@ -614,11 +750,18 @@ def check(arguments) -> int:
         # 「退行」と言ってしまう。ファイル内の他の出力と docstring も同じ綴りを使っている。
         print(f"Speed: no reference for {identity['fingerprint']} ({identity['cpu']});"
               " recorded only -- QLT-014 is not judged on this host")
-        return 0
-    findings, unmeasurable = compare(reference, record["values"], recorded["values"])
+    references = {} if recorded is None else recorded["values"]
+    findings, unmeasurable = compare(reference, record["values"], references)
+    if recorded is not None:
+        for name, value in record["values"].items():
+            valid = judged_samples(value)
+            if name not in references and (valid is None or valid >= MIN_VALID_SAMPLES):
+                print(f"Speed: no reference for {name} on {record['machine']['fingerprint']};"
+                      " recorded only -- this bench is not judged")
     for line in [*findings, *unmeasurable]:
         print(line)
-    print(f"Speed: {len(BENCHES)} benches checked, {len(findings)} regression(s),"
+    print(f"Speed: {len(compared_benches(record['values'], references))} benches checked,"
+          f" {len(findings)} regression(s),"
           f" {len(unmeasurable)} unmeasurable")
     return exit_code(findings, unmeasurable)
 
@@ -634,7 +777,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--record", action="store_true", help="measure and write out/speed")
     parser.add_argument("--adopt", action="store_true", help="write the medians into the reference")
-    parser.add_argument("--bench", choices=BENCHES, help="with --adopt: write this one bench only")
+    parser.add_argument("--bench", choices=BENCHES,
+                        help="measure, record, compare or adopt this one bench only")
     parser.add_argument("--check", action="store_true", help="compare with this machine's reference")
     parser.add_argument("--executable", type=Path, default=ROOT / RELEASE_EXECUTABLE)
     parser.add_argument("--reference", type=Path, help="a reference file other than the canonical one")

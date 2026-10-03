@@ -4,6 +4,8 @@
 #include "PaletteQuery.hpp"
 
 #include <algorithm>
+#include <iterator>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -24,6 +26,45 @@ namespace
                                           std::size_t index)
 {
     return choices.at(index);
+}
+
+// 選んでいた候補の列の中の位置（ADR 0062 の決定 16）。結果が空なら無し。設定のコマンドの結果は
+// 列に依らないので無し。
+[[nodiscard]] std::optional<std::size_t> entry_position(const std::vector<std::size_t> &positions,
+                                                        std::size_t selected)
+{
+    if (selected >= positions.size())
+    {
+        return std::nullopt;
+    }
+    return positions.at(selected);
+}
+
+[[nodiscard]] std::optional<std::size_t>
+entry_position(const std::vector<CommandChoice> & /*choices*/, std::size_t /*selected*/)
+{
+    return std::nullopt;
+}
+
+// 伸ばした後の結果の中で、列の位置 kept の候補の番号。無ければ先頭。
+[[nodiscard]] std::size_t carried_index(const std::vector<std::size_t> &positions,
+                                        std::optional<std::size_t> kept, std::size_t /*selected*/)
+{
+    if (!kept.has_value())
+    {
+        return 0;
+    }
+    const auto found = std::ranges::find(positions, kept.value());
+    return found == positions.end()
+               ? 0
+               : static_cast<std::size_t>(std::ranges::distance(positions.begin(), found));
+}
+
+// 設定のコマンドの結果は列に依らないので、選択の番号はそのまま。
+[[nodiscard]] std::size_t carried_index(const std::vector<CommandChoice> & /*choices*/,
+                                        std::optional<std::size_t> /*kept*/, std::size_t selected)
+{
+    return selected;
 }
 } // namespace
 
@@ -62,6 +103,7 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input,
     case PaletteScope::files:
     case PaletteScope::tabs:
     case PaletteScope::history:
+    case PaletteScope::folder:
         return Result{listed_positions(entries, query.scope, query.query)};
     }
     std::unreachable();
@@ -186,5 +228,25 @@ std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view
         return std::unexpected(input.error());
     }
     return filtered(input.value(), entries_);
+}
+
+CommandPalette CommandPalette::extended(std::vector<CommandChoice> more) const
+{
+    if (more.empty())
+    {
+        return *this;
+    }
+    auto grown = std::make_shared<std::vector<CommandChoice>>();
+    grown->reserve(entries_->size() + more.size());
+    grown->insert(grown->end(), entries_->begin(), entries_->end());
+    grown->insert(grown->end(), std::make_move_iterator(more.begin()),
+                  std::make_move_iterator(more.end()));
+    const auto kept = std::visit([this](const auto &result)
+                                 { return entry_position(result, selected_); }, *result_);
+    const CommandPalette next = filtered(input_, std::move(grown));
+    const auto index =
+        std::visit([this, kept](const auto &result)
+                   { return carried_index(result, kept, selected_); }, *next.result_);
+    return next.reselected(index);
 }
 } // namespace nenenib::core

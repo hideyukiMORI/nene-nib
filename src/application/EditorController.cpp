@@ -18,8 +18,12 @@
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "FileFolder.hpp"
 #include "FileHistory.hpp"
 #include "FileHistoryEdit.hpp"
+#include "FolderBatch.hpp"
+#include "FolderProgress.hpp"
+#include "FolderRequest.hpp"
 #include "ImeStance.hpp"
 #include "ModeLabel.hpp"
 #include "Palette.hpp"
@@ -45,6 +49,7 @@
 #include "TextPosition.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
+#include "UnlistedExtensions.hpp"
 #include "UnloadedDocument.hpp"
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
@@ -933,6 +938,23 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
     return std::nullopt;
 }
 
+// 打ち切りは 1 回の知らせではなく今の面の状態（ADR 0062 の決定 17）。状態の知らせが出る意図では
+// その 1 回だけそちらが出て、次の意図で打ち切りの 1 行へ戻る。面を閉じると出ない。
+std::optional<core::DisplayText> EditorController::command_message() const
+{
+    if (state_.command_message().has_value())
+    {
+        return state_.command_message();
+    }
+    if (!command_palette_active() || !palette_folder_.truncated)
+    {
+        return std::nullopt;
+    }
+    return core::DisplayText::parse("同じフォルダは " + std::to_string(palette_folder_.received) +
+                                    " 件まで。残りは一覧に出ません")
+        .value();
+}
+
 void EditorController::fail(FileFailure failure)
 {
     state_ = state_.with_failure(failure);
@@ -1612,8 +1634,7 @@ void EditorController::accept(const OpenCommandPalette &)
         accept(CancelCommand{});
         return;
     }
-    state_ = state_.with_command_input(
-        core::CommandPalette::opened(palette_entries(), "", 0, state_.themes()));
+    open_palette("", 0);
 }
 
 // 開いている間の OpenTabList は Ctrl+P と同じく閉じる（ADR 0057 の決定 7）。
@@ -1628,8 +1649,90 @@ void EditorController::accept(const OpenTabList &)
         accept(CancelCommand{});
         return;
     }
+    open_palette("#", state_.active_tab());
+}
+
+// 面を開く（ADR 0062 の決定 14）。前の面のときに届いて残った分は collect で捨てる（たまりが空で
+// ないと次の列挙の合図が来ない）。券を進めてから頼むので、前の面の分は券で見分けて捨てられる。
+void EditorController::open_palette(std::string_view input, std::size_t selected)
+{
+    static_cast<void>(ports_.folders.collect());
+    auto entries = palette_entries();
+    request_folder(entries);
     state_ = state_.with_command_input(
-        core::CommandPalette::opened(palette_entries(), "#", state_.active_tab(), state_.themes()));
+        core::CommandPalette::opened(std::move(entries), input, selected, state_.themes()));
+}
+
+void EditorController::request_folder(const std::vector<core::CommandChoice> &entries)
+{
+    palette_folder_ = PaletteFolder{palette_folder_.ticket + 1, {}, 0, false};
+    const auto &path = state_.document().path;
+    if (!path.has_value())
+    {
+        return;
+    }
+    const auto folder = core::folder_of(path.value());
+    if (!folder.has_value())
+    {
+        return;
+    }
+    palette_folder_.listed = listed_in_folder(folder.value(), entries);
+    ports_.folders.list(FolderRequest{folder.value(), palette_folder_.ticket});
+}
+
+// 面を開いている間はタブも履歴も変わらないので、開くときに 1 回だけ作る（ADR 0062 の決定 15）。
+// 比べるのはファイルのあるフォルダと頼んだフォルダで、比べ方は FilePort が OS の規則で決める。
+std::vector<core::FilePath>
+EditorController::listed_in_folder(const core::FilePath &folder,
+                                   const std::vector<core::CommandChoice> &entries) const
+{
+    std::vector<core::FilePath> listed;
+    // path は optional か expected（どちらも値が無ければ数えない）。
+    const auto keep = [&](const auto &path)
+    {
+        if (path.has_value() && in_folder(path.value(), folder))
+        {
+            listed.push_back(path.value());
+        }
+    };
+    keep(state_.document().path);
+    for (const ParkedTab &tab : state_.parked())
+    {
+        keep(std::visit([](const auto &value) { return std::optional{parked_path(value)}; }, tab));
+    }
+    for (const core::CommandChoice &entry : entries)
+    {
+        if (entry.origin == core::PaletteOrigin::history)
+        {
+            keep(core::FilePath::parse(entry.command));
+        }
+    }
+    return listed;
+}
+
+bool EditorController::in_folder(const core::FilePath &path, const core::FilePath &folder) const
+{
+    const auto home = core::folder_of(path);
+    return home.has_value() && ports_.files.same_file(home.value(), folder);
+}
+
+// 名前と場所は履歴の候補と同じ作り方、確定はパスの文字列（open_listed へ写す）。
+void EditorController::append_folder_choices(const std::vector<core::FilePath> &files,
+                                             std::vector<core::CommandChoice> &choices) const
+{
+    for (const core::FilePath &file : files)
+    {
+        if (!core::folder_lists(file.file_name()) ||
+            std::ranges::any_of(palette_folder_.listed, [&](const core::FilePath &shown)
+                                { return ports_.files.same_file(shown, file); }))
+        {
+            continue;
+        }
+        choices.push_back(
+            core::CommandChoice{core::tab_title_for(file, core::SaveState::saved),
+                                std::string(file.text()), core::CommandChoiceKind::open,
+                                core::tab_folder_for(file), core::PaletteOrigin::folder});
+    }
 }
 
 // タブの候補は帯の表示値から作る（題名は帯と同じ・場所はファイルのあるフォルダ・実行は Ex の
@@ -1704,7 +1807,7 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         close_command_input();
         if (const auto path = core::FilePath::parse(choice.command); path.has_value())
         {
-            open_listed(path.value());
+            open_listed(path.value(), choice.origin);
         }
         return;
     case core::CommandChoiceKind::fill:
@@ -2265,7 +2368,10 @@ void EditorController::accept(const OpenDocument &intent)
 
 // 一覧から選んだファイルを開く（ADR 0060 の決定 7）。失敗はダイアログではなく 1 行の知らせで、
 // 無くなっていたファイル（not_found）だけ履歴から外す（D30）。ほかの失敗は履歴に残す。
-void EditorController::open_listed(const core::FilePath &path)
+// 外すのは出どころが履歴の候補のときだけで、同じフォルダの候補では履歴を読み書きしない
+// （ADR 0062 の決定 18）。
+void EditorController::open_listed(const core::FilePath &path,
+                                   std::optional<core::PaletteOrigin> origin)
 {
     const auto opened = open_document(path);
     if (opened)
@@ -2273,7 +2379,7 @@ void EditorController::open_listed(const core::FilePath &path)
         return;
     }
     state_ = state_.with_command_message(unreached_message(path, 0));
-    if (opened.error() == FileFailure::not_found)
+    if (opened.error() == FileFailure::not_found && origin == core::PaletteOrigin::history)
     {
         forget(path);
     }
@@ -2450,9 +2556,47 @@ void EditorController::accept(const EndSession &intent)
     remember(ended_paths(state_, intent.reason));
 }
 
-// 裏の仕事が読めた分を置いた（ADR 0062 の決定 7・10）。入口は歩きも知らせも残す。
-// #272 で collect() を呼ぶ。#271 では何もしない。
-void EditorController::accept(const WorkCompleted &) {}
+// 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて
+// いなくても 1 回呼んでたまりを空にする。使うのは面が開いていて今の券の batch だけ。
+// 届いた分は 1 回の extended で後ろへ足す（入力と選択は core が保つ）。
+// 打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る command_message() が出す。
+// 入力・知らせ・ほかの状態には触れない。
+void EditorController::accept(const WorkCompleted &)
+{
+    const auto batches = ports_.folders.collect();
+    const auto &input = state_.command_input();
+    const auto *palette =
+        input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
+    if (palette == nullptr)
+    {
+        return;
+    }
+    std::vector<core::CommandChoice> more;
+    for (const FolderBatch &batch : batches)
+    {
+        if (batch.ticket != palette_folder_.ticket)
+        {
+            continue;
+        }
+        palette_folder_.received += batch.files.size();
+        append_folder_choices(batch.files, more);
+        switch (batch.progress)
+        {
+        case FolderProgress::more:
+        case FolderProgress::complete:
+        case FolderProgress::failed:
+            break;
+        case FolderProgress::truncated:
+            palette_folder_.truncated = true;
+            break;
+        }
+    }
+    if (!more.empty())
+    {
+        auto extended = palette->extended(std::move(more));
+        state_ = state_.with_command_input(std::move(extended));
+    }
+}
 
 void EditorController::accept(const SettleRecentTab &)
 {
@@ -2808,7 +2952,7 @@ EditorFrame EditorController::frame() const
                        state_.settings(),
                        state_.settings_failure(),
                        command_line_view(),
-                       state_.command_message(),
+                       command_message(),
                        command_palette_view(),
                        std::move(tabs),
                        state_.active_tab(),

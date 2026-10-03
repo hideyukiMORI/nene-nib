@@ -92,6 +92,8 @@ namespace
         return PaletteScope::tabs;
     case PaletteOrigin::history:
         return PaletteScope::history;
+    case PaletteOrigin::folder:
+        return PaletteScope::folder;
     }
     std::unreachable();
 }
@@ -110,6 +112,7 @@ namespace
         return true;
     case PaletteScope::tabs:
     case PaletteScope::history:
+    case PaletteScope::folder:
     case PaletteScope::commands:
         return scope_of(origin.value()) == scope;
     }
@@ -228,6 +231,8 @@ std::string_view palette_origin_label(PaletteOrigin origin) noexcept
         return "開いているタブ";
     case PaletteOrigin::history:
         return "履歴";
+    case PaletteOrigin::folder:
+        return "同じフォルダ";
     }
     std::unreachable();
 }
