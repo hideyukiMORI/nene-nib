@@ -24,7 +24,7 @@
 
 ## 強制と検証
 
-新規 `--ex-document` 204 checksで省略・拒否・無題・未保存・保存成功/失敗・文字コード・undo・ほかのタブの保持と既存GUI保存の契約を確認した。共有評価と補完は `--ex-settings` 195 / `--ex-files` 82 / `--command-palette` 356、閉じる直接の依存は `--tabs` 291 / `--session` 199 / `--history` 38。計1365 checks成功。Debugの静的解析・sanitizer、conformanceとsymbolsも成功。コマンドと初回失敗の修正は[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066)。Releaseと専用の実機手順を用意してから、hideの今回分の了承を得て前面確認する。全件Vim・性能は実行しない。
+新規 `--ex-document` 204 checksで省略・拒否・無題・未保存・保存成功/失敗・文字コード・undo・ほかのタブの保持と既存GUI保存の契約を確認した。共有評価と補完は `--ex-settings` 195 / `--ex-files` 82 / `--command-palette` 356、閉じる直接の依存は `--tabs` 291 / `--session` 199 / `--history` 38。計1365 checks成功。Debugの静的解析・sanitizer、conformanceとsymbolsも成功。Releaseはd078f9aで生成。hideの今回分の了承後、専用文書を使った実機7場面・保存内容/更新時刻・3回の正常終了を確認し、全画像を目視して受理した。コマンドと初回失敗の修正は[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066)。全件Vim・性能は実行しない。
 
 ## 結果
 

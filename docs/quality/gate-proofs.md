@@ -2614,4 +2614,16 @@ Windows 11・clang-cl 19.1.5・Debug（clang-tidy・ASan・UBSan）。共有保�
 
 ### 実機の限定確認
 
-専用profileとalpha/beta/blockedの3文書を`D:/NeNeNib/evidence/ex-document-284/`へ準備。手順は`D:/NeNeNib/scripts/ex-document-284.py`、出力は`out/frames-284/`。Release生成と[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)のDraft作成後、18:51 JSTに今回分の前面確認を依頼した。まだ実行していない。未保存の拒否・保存・現在のタブだけの終了・無題・実ファイルの書き込み拒否・既存の閉じる確認を7場面で確かめる。
+専用profileとalpha/beta/blockedの3文書を`D:/NeNeNib/evidence/ex-document-284/`へ準備。Release生成と[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)のDraft作成後、18:51 JSTに今回分の前面確認を依頼し、hideが「今、実行してよい」と了承した。18:54〜18:55 JSTに`python D:/NeNeNib/scripts/ex-document-284.py --executable C:/Users/info/WORKS/NeNeNib/build/release-d078f9a/NeNeNib.exe`を1回実行して終了0。`out/284-window.log`、7枚のPNGと`record.json`は`out/frames-284/`。18:55:01 JSTに前面操作の終了をhideへ通知した。
+
+サナが7枚すべてを読み、次を受理した。
+
+- 未保存のbetaの`:q`はE37を一行表示し、本文`beta!`・未保存印・両方のタブが残る。ダイアログも書き込みもない。
+- `:w`で`Written`と保存済みの印へ変わり、実ファイルが`beta!`+LFに一致する。
+- 続いて`?`を足した`:wq`は`beta!?`+LFを書いてbetaだけを閉じ、alphaへ戻る。
+- 無題の`:w`はE32で止まり、`:q`は変更のない無題を閉じる。変更した無題の`:q!`もそのタブだけを閉じ、alphaを保つ。
+- 最後の変更のないalphaを`:x`で閉じて終了0。本文と更新時刻が不変で、書き込みを省くことを確認する。
+- 読み取り専用にした専用のblockedへの`:wq`は`Could not write file`を表示し、`blocked!`と未保存印を残す。元のディスク内容は不変。`:q!`で終了0。確認後は専用ファイルの読み取り専用属性を戻した。
+- 既存の`:tabclose`は未保存の確認を出し、取消で本文を残す。続く実キーCtrl+F4にも確認があり、「保存しない」で最後のタブを閉じて終了0。ディスク内容は元のまま。
+
+3回のプロセス終了すべてが0。製品・対象テスト・関連依存は`d078f9a`から不変で、文書更新時の`git diff --exit-code d078f9a -- src tests eng CMakeLists.txt`も差分0。PRのReady/mergeでは1365 checks・Release・実機の成功結果を再利用する。実機のIME変換・クリップボード・全件性能はこの変更の確認に必要なく、実行していない。

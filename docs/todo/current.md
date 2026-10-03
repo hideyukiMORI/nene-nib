@@ -18,7 +18,7 @@
 | 3 | #278 ブックマーク（4/5・`*`・通常 Ctrl+D / Vim Ctrl+Shift+D・ADR 0063・D36・D37） | **済み**・明示登録・永続化・一覧からの付け外し・消えた登録の保持。実装と対象自動検証・実機を受理し、[PR #279](https://github.com/hideyukiMORI/nene-nib/pull/279)で統合。続いて #280 の Vim の入口へ |
 | 4 | #280 Vim の `:e` `:b` `:ls`（5/5・ADR 0064） | **済み**・共通一覧への接続・引数の検索・省略名。実装と対象自動検証・実機9場面を受理。[PR #281](https://github.com/hideyukiMORI/nene-nib/pull/281)、記録は [gate-proofs 5-ce](../quality/gate-proofs.md#5-ce--exから共通のファイル一覧issue-280adr-0064)。Ctrl+P統合の5本が揃った |
 | 5 | #282 通常モードの矢印・Backspace・Delete と結合文字（D38・ADR 0065） | **済み**。アクセント・濁点・共通の異体字セレクタから段階的に対応。対象898 checks・Release・実機9場面/保存5通りを受理。[PR #283](https://github.com/hideyukiMORI/nene-nib/pull/283)、[gate-proofs 5-cf](../quality/gate-proofs.md#5-cf--通常モードの結合文字境界issue-282adr-0065) |
-| 6 | #284 基本Exの保存と終了（ADR 0066） | 実装・対象1365 checks・Release成功。[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)はDraft。実機確認の前面操作了承待ち。[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066) |
+| 6 | #284 基本Exの保存と終了（ADR 0066） | **実装・検証済み**。対象1365 checks・Release・実機7場面/保存内容/3回の正常終了を受理。[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)、[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066) |
 | 7 | その後の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
