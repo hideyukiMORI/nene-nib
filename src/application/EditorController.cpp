@@ -18,6 +18,7 @@
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "FileBookmarkEdit.hpp"
 #include "FileFolder.hpp"
 #include "FileHistory.hpp"
 #include "FileHistoryEdit.hpp"
@@ -1657,10 +1658,16 @@ void EditorController::accept(const OpenTabList &)
 void EditorController::open_palette(std::string_view input, std::size_t selected)
 {
     static_cast<void>(ports_.folders.collect());
-    auto entries = palette_entries();
+    const auto bookmarks = ports_.bookmarks.read();
+    auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     request_folder(entries);
     state_ = state_.with_command_input(
         core::CommandPalette::opened(std::move(entries), input, selected, state_.themes()));
+    if (!bookmarks)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("ブックマークを読めませんでした").value());
+    }
 }
 
 void EditorController::request_folder(const std::vector<core::CommandChoice> &entries)
@@ -1695,14 +1702,9 @@ EditorController::listed_in_folder(const core::FilePath &folder,
             listed.push_back(path.value());
         }
     };
-    keep(state_.document().path);
-    for (const ParkedTab &tab : state_.parked())
-    {
-        keep(std::visit([](const auto &value) { return std::optional{parked_path(value)}; }, tab));
-    }
     for (const core::CommandChoice &entry : entries)
     {
-        if (entry.origin == core::PaletteOrigin::history)
+        if (entry.kind == core::CommandChoiceKind::open)
         {
             keep(core::FilePath::parse(entry.command));
         }
@@ -1735,22 +1737,50 @@ void EditorController::append_folder_choices(const std::vector<core::FilePath> &
     }
 }
 
-// タブの候補は帯の表示値から作る（題名は帯と同じ・場所はファイルのあるフォルダ・実行は Ex の
-// `tabnext N`・印は tab）。
-std::vector<core::CommandChoice> EditorController::palette_entries() const
+// ファイルの候補はパスを持つopenの1本。無題だけはパスが無いのでtabnextを使う（ADR 0063）。
+std::vector<core::CommandChoice>
+EditorController::palette_tabs(const FileBookmarks &bookmarks) const
 {
     const auto views = tab_views(state_, active_document_view());
     std::vector<core::CommandChoice> entries;
-    entries.reserve(views.size());
+    entries.reserve(views.size() + bookmarks.files.size());
     for (std::size_t index = 0; index < views.size(); ++index)
     {
         const DocumentView &view = views.at(index);
+        const bool named = view.path.has_value();
+        const bool marked = named && bookmarks_contain(bookmarks, view.path.value(), ports_.files);
         entries.push_back(core::CommandChoice{
-            view.title, "tabnext " + std::to_string(index + 1), core::CommandChoiceKind::execute,
-            core::tab_folder_for(view.path), core::PaletteOrigin::tab});
+            view.title,
+            named ? std::string(view.path.value().text()) : "tabnext " + std::to_string(index + 1),
+            named ? core::CommandChoiceKind::open : core::CommandChoiceKind::execute,
+            core::tab_folder_for(view.path),
+            marked ? core::PaletteOrigin::bookmarked_tab : core::PaletteOrigin::tab});
     }
-    // 履歴は面を開くときに 1 回だけ読む（ADR 0060 の決定 8）。読めなければ履歴の候補なしで開き、
-    // 知らせない。開いているタブと同じファイルは、タブの候補として出ているので重ねない。
+    return entries;
+}
+
+void EditorController::append_bookmark_choices(const FileBookmarks &bookmarks,
+                                               std::vector<core::CommandChoice> &entries) const
+{
+    FileBookmarks listed;
+    for (const core::FilePath &path : bookmarks.files)
+    {
+        if (!open_tab_of(path).has_value() && !bookmarks_contain(listed, path, ports_.files))
+        {
+            entries.push_back(
+                core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
+                                    std::string(path.text()), core::CommandChoiceKind::open,
+                                    core::tab_folder_for(path), core::PaletteOrigin::bookmark});
+            listed.files.push_back(path);
+        }
+    }
+}
+
+std::vector<core::CommandChoice>
+EditorController::palette_entries(const FileBookmarks &bookmarks) const
+{
+    auto entries = palette_tabs(bookmarks);
+    append_bookmark_choices(bookmarks, entries);
     const auto history = ports_.history.read();
     if (!history)
     {
@@ -1758,17 +1788,95 @@ std::vector<core::CommandChoice> EditorController::palette_entries() const
     }
     for (const core::FilePath &path : history.value().files)
     {
-        if (open_tab_of(path).has_value())
+        if (!open_tab_of(path).has_value() && !bookmarks_contain(bookmarks, path, ports_.files))
         {
-            continue;
+            entries.push_back(
+                core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
+                                    std::string(path.text()), core::CommandChoiceKind::open,
+                                    core::tab_folder_for(path), core::PaletteOrigin::history});
         }
-        // 名前はタブの題名と同じ作り方（未保存の印なし）。確定は open_listed へ写すパスの文字列。
-        entries.push_back(
-            core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
-                                std::string(path.text()), core::CommandChoiceKind::open,
-                                core::tab_folder_for(path), core::PaletteOrigin::history});
     }
     return entries;
+}
+
+// 保存済みの文書か、面で選んだファイルだけ。設定/Ex/検索の文字列をパスとして解釈しない。
+std::optional<core::FilePath> EditorController::bookmark_target() const
+{
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return state_.document().path;
+    }
+    const auto *palette = std::get_if<core::CommandPalette>(&input.value());
+    if (palette == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto choice = palette->choice_at(palette->selected());
+    if (!choice.has_value() || choice.value().kind != core::CommandChoiceKind::open)
+    {
+        return std::nullopt;
+    }
+    const auto path = core::FilePath::parse(choice.value().command);
+    return path.has_value() ? std::optional{path.value()} : std::nullopt;
+}
+
+bool EditorController::bookmark_toggle_allowed() const
+{
+    if (state_.composition().has_value() || (command_line_active() && !command_palette_active()))
+    {
+        return false;
+    }
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return true;
+    }
+    const auto *palette = std::get_if<core::CommandPalette>(&input.value());
+    return palette != nullptr && palette->scope() != core::PaletteScope::commands;
+}
+
+void EditorController::accept(const ToggleBookmark &)
+{
+    if (!bookmark_toggle_allowed())
+    {
+        return;
+    }
+    const auto path = bookmark_target();
+    if (!path.has_value())
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("保存済みのファイルを選んでください").value());
+        return;
+    }
+    const auto before = ports_.bookmarks.read();
+    if (!before)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("ブックマークを読めませんでした").value());
+        return;
+    }
+    const bool removing = bookmarks_contain(before.value(), path.value(), ports_.files);
+    const auto after = bookmarks_toggled(before.value(), path.value(), ports_.files);
+    if (!after)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("ブックマークは " + std::to_string(bookmark_limit) +
+                                     " 件まで登録できます")
+                .value());
+        return;
+    }
+    if (!ports_.bookmarks.write(after.value()))
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("ブックマークを保存できませんでした").value());
+        return;
+    }
+    close_command_input();
+    state_ = state_.with_command_message(
+        core::DisplayText::parse(removing ? "ブックマークを解除しました"
+                                          : "ブックマークに追加しました")
+            .value());
 }
 
 void EditorController::accept(const ActivateCommandChoice &intent)

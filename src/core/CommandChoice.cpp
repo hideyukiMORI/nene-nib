@@ -89,7 +89,10 @@ namespace
     switch (origin)
     {
     case PaletteOrigin::tab:
+    case PaletteOrigin::bookmarked_tab:
         return PaletteScope::tabs;
+    case PaletteOrigin::bookmark:
+        return PaletteScope::bookmarks;
     case PaletteOrigin::history:
         return PaletteScope::history;
     case PaletteOrigin::folder:
@@ -110,6 +113,9 @@ namespace
     {
     case PaletteScope::files:
         return true;
+    case PaletteScope::bookmarks:
+        return origin.value() == PaletteOrigin::bookmark ||
+               origin.value() == PaletteOrigin::bookmarked_tab;
     case PaletteScope::tabs:
     case PaletteScope::history:
     case PaletteScope::folder:
@@ -229,6 +235,10 @@ std::string_view palette_origin_label(PaletteOrigin origin) noexcept
     {
     case PaletteOrigin::tab:
         return "開いているタブ";
+    case PaletteOrigin::bookmarked_tab:
+        return "タブ・ブックマーク";
+    case PaletteOrigin::bookmark:
+        return "ブックマーク";
     case PaletteOrigin::history:
         return "履歴";
     case PaletteOrigin::folder:

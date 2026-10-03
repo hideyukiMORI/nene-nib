@@ -406,7 +406,7 @@ void verify_folder_tail()
                                 "C:\\work\\pic.png", "C:\\work\\z.md", "C:\\work\\.png"},
                                app::FolderProgress::complete);
     expect(rows_of(frame) ==
-               "tabnext 1<開いているタブ>|C:\\work\\h.txt<履歴>|C:\\other\\n.txt<履歴>|"
+               "C:\\work\\a.txt<開いているタブ>|C:\\work\\h.txt<履歴>|C:\\other\\n.txt<履歴>|"
                "C:\\work\\n.txt<同じフォルダ>|C:\\work\\z.md<同じフォルダ>|"
                "C:\\work\\.png<同じフォルダ>|",
            "the folder files follow the tabs and the history without the shown and hidden ones");
@@ -439,7 +439,7 @@ void verify_folder_stale()
     applied(controller, app::CancelCommand{});
     applied(controller, WorkCompleted{});
     applied(controller, app::OpenCommandPalette{});
-    expect(rows_of(controller.frame()) == "tabnext 1<開いているタブ>|",
+    expect(rows_of(controller.frame()) == "C:\\work\\a.txt<開いているタブ>|",
            "a batch delivered after the palette closed never reaches the reopened palette");
     // 残っていた分は、次の面の券に合っていても、面を開くときの collect で捨てる。
     folders.serve(batch_of(folders.requests().back().ticket + 1, {"C:\\work\\left.txt"},
@@ -447,7 +447,7 @@ void verify_folder_stale()
     applied(controller, app::CancelCommand{});
     applied(controller, app::OpenCommandPalette{});
     applied(controller, WorkCompleted{});
-    expect(rows_of(controller.frame()) == "tabnext 1<開いているタブ>|",
+    expect(rows_of(controller.frame()) == "C:\\work\\a.txt<開いているタブ>|",
            "a batch left over from the previous palette is collected away on opening");
 }
 
@@ -494,11 +494,10 @@ void verify_folder_order()
     joined.folders().serve(
         batch_of(ticket, {"C:\\work\\e.txt", "C:\\work\\d.txt"}, app::FolderProgress::complete));
     const auto one = joined.controller().apply(WorkCompleted{});
-    expect(
-        rows_of(two) ==
-            "tabnext 1<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|C:\\work\\b.txt<同じフォルダ>|"
-            "C:\\work\\e.txt<同じフォルダ>|C:\\work\\d.txt<同じフォルダ>|",
-        "two deliveries keep the order the OS returned");
+    expect(rows_of(two) == "C:\\work\\a.txt<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|C:"
+                           "\\work\\b.txt<同じフォルダ>|"
+                           "C:\\work\\e.txt<同じフォルダ>|C:\\work\\d.txt<同じフォルダ>|",
+           "two deliveries keep the order the OS returned");
     expect(rows_of(one) == rows_of(two) && joined.folders().collects() == 2,
            "one collect with two batches lists the same order");
 }
@@ -611,15 +610,15 @@ void verify_folder_commands_scope()
     applied(controller, app::CommandText{":"});
     static_cast<void>(deliver(editing, {"C:\\work\\c.txt"}, app::FolderProgress::complete));
     const auto erased = controller.apply(app::EditCommand{core::CommandEdit::backspace});
-    expect(rows_of(erased) == "tabnext 1<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|",
+    expect(rows_of(erased) == "C:\\work\\a.txt<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|",
            "a batch delivered under the colon is listed once the colon is erased");
     applied(controller, app::CancelCommand{});
     applied(controller, app::OpenTabList{});
     const auto tabs = deliver(editing, {"C:\\work\\c.txt"}, app::FolderProgress::complete);
     applied(controller, app::EditCommand{core::CommandEdit::backspace});
-    expect(rows_of(tabs) == "tabnext 1<開いているタブ>|" &&
+    expect(rows_of(tabs) == "C:\\work\\a.txt<開いているタブ>|" &&
                rows_of(controller.frame()) ==
-                   "tabnext 1<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|",
+                   "C:\\work\\a.txt<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|",
            "the tab list asks for the folder too");
 }
 

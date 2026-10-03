@@ -21,6 +21,10 @@ void verify_tabs_scope();
 void verify_session_contracts();
 void verify_session_scope();
 
+// BookmarkTests.cpp
+void verify_bookmarks_contracts();
+void verify_bookmarks_scope();
+
 // HistoryTests.cpp
 void verify_history_contracts();
 void verify_history_scope();

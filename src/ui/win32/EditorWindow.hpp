@@ -116,6 +116,7 @@ class EditorWindow final
     void type_character(WPARAM word);
     void type_text(std::string utf8);
     void press_key(WPARAM word);
+    [[nodiscard]] bool press_bookmark_key(WPARAM word, LPARAM data);
     // タブの鍵（ADR 0056 の決定 10）。扱ったら true。
     [[nodiscard]] bool press_tab_key(WPARAM word);
     void run_tab_command(core::TabCommand command);

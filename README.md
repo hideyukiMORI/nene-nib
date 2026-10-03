@@ -6,7 +6,7 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > **Status (2026-10-03):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
 > built-in themes, and the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search with
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
-> and Ctrl+P lists the open tabs, recently closed files and files in the current folder. Bookmarks, Markdown
+> and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. Markdown
 > preview and files above 64 MiB are still planned. Nothing to download yet (Phase 4).
 
 ## What works today
@@ -36,7 +36,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
   off and leaves it to the user after that, and matching walks code points, so a character never matches
   inside the bytes of another. Files in the current folder arrive in the background; `/` shows only
-  those files. Open tabs and history entries are not repeated, and hidden, system and known non-text
+  those files. Open tabs, bookmarks and history entries are not repeated, and hidden, system and known non-text
   files are excluded. Unknown extensions and extensionless names remain available. After 8192 files
   have been read, a notice stays visible until the palette closes; the limit counts files before
   extension and duplicate filtering. Bookmarks and Vim `:e`, `:b`, `:ls` are planned.
@@ -46,7 +46,12 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-009 tab restore** — starting without a file argument brings back the previous tabs (saved files only): their
   order, the tab in view, caret and scroll position. Only the tab in view is read at startup; the others are read
   when first viewed, and a missing file is dropped with a one-line notice. Done; window position and size are planned.
-- **FR-010 bookmarks and jump list** — planned.
+- **FR-010 bookmarks and jump list** — `Ctrl+D` in ordinary mode and `Ctrl+Shift+D` in Vim mode toggle a
+  bookmark for the current named file or the file selected in Ctrl+P. Vim `Ctrl+D` keeps its half-page motion.
+  `*` in Ctrl+P shows bookmarks, including open tabs, without duplicate rows. Up to 1024 registrations are
+  persisted in `%LOCALAPPDATA%/NeNeNib/bookmarks.v1`; missing files remain registered and can be removed from
+  the list. Read/write failures leave the previous list intact and show a one-line notice. The taskbar jump
+  list is planned.
 - **FR-011 look** — frameless window with Mica title bar, follows the OS light / dark theme (aubergine dark, orange
   accent), one paint per frame. Done.
 - **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the

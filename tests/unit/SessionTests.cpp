@@ -30,6 +30,7 @@
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
+#include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
@@ -516,8 +517,10 @@ void verify_recency_ranked()
     ScriptedSettings settings;
     ScriptedHistory history;
     ScriptedFolders folders;
+    ScriptedBookmarks bookmarks;
     const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
-                                                  settings, themes, session, history, folders},
+                                                  settings, themes, session, history, folders,
+                                                  bookmarks},
                                       initial);
     return controller.frame();
 }

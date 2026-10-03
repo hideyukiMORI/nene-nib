@@ -41,7 +41,7 @@ add_test(NAME toolchain_smoke COMMAND toolchain_smoke)
 nenenib_target(nenenib_core core STATIC
     src/core/ThemeName.cpp src/core/ThemeDocument.cpp src/core/ThemeChoice.cpp
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
-    src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
+    src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp
@@ -58,7 +58,7 @@ nenenib_target(nenenib_core core STATIC
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
-    src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp)
+    src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -94,6 +94,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
     tests/unit/SessionTests.cpp
+    tests/unit/BookmarkTests.cpp
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp)
 nenenib_link(nib_tests nenenib_core)
@@ -108,6 +109,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/SettingsCodec.cpp src/adapters/win32/Win32SettingsAdapter.cpp
     src/adapters/win32/ParentDirectory.cpp src/adapters/win32/SessionCodec.cpp
     src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp
+    src/adapters/win32/BookmarkCodec.cpp src/adapters/win32/Win32BookmarkAdapter.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
@@ -140,6 +142,12 @@ nenenib_link(nib_session_tests nenenib_core)
 nenenib_link(nib_session_tests nenenib_application)
 nenenib_link(nib_session_tests nenenib_adapters)
 add_test(NAME nib_sessions COMMAND nib_session_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+nenenib_target(nib_bookmark_tests adapter_tests EXECUTABLE tests/adapters/BookmarkAdapterTests.cpp)
+nenenib_link(nib_bookmark_tests nenenib_core)
+nenenib_link(nib_bookmark_tests nenenib_application)
+nenenib_link(nib_bookmark_tests nenenib_adapters)
+add_test(NAME nib_bookmarks COMMAND nib_bookmark_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 nenenib_target(nib_history_tests adapter_tests EXECUTABLE tests/adapters/HistoryAdapterTests.cpp)
 nenenib_link(nib_history_tests nenenib_core)

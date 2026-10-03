@@ -14,8 +14,8 @@
 | 順 | Issue | 状態 |
 | --- | --- | --- |
 | 1 | #264 Ctrl+P の面で日本語入力を受け、名前の照合をコードポイントの境目で行う（ADR 0061・施主決定 D31・D32） | **済み**・工程 1（照合と IME の構えと変換の行き先）と工程 2（ui の IME の開閉と入力行の描画と候補窓）と差し戻し 2 件を受理し、実機は IME の開閉と変換（差し戻し 2 の後の撮り直しを含む）と速さの 6 本を確かめた。検証の記録は [gate-proofs 5-bz](../quality/gate-proofs.md) |
-| 2 | #272 同じフォルダ（3/5・`/`・ADR 0062・D33〜D35） | 実装・実機確認済み。#270 面の重さ、#271 ワーカーに続く最後の接続。計測器と文書を仕上げる PR は [#277](https://github.com/hideyukiMORI/nene-nib/pull/277)。統合状態は PR が正。検証と再利用の根拠は [gate-proofs 5-cc](../quality/gate-proofs.md#5-cc--ctrlp-の同じフォルダissue-272adr-0062) |
-| 3 | Ctrl+P の統合の続き: ブックマーク（4/5・`*`・Ctrl+D）→ Vim の `:e` `:b` `:ls`（5/5） | 未起票。次は仕様の D5・D28・D29 と FR-006、ADR 0060 を照合してブックマークの設計を具体化する |
+| 2 | #272 同じフォルダ（3/5・`/`・ADR 0062・D33〜D35） | **済み**。[PR #277](https://github.com/hideyukiMORI/nene-nib/pull/277) を統合。検証と再利用の根拠は [gate-proofs 5-cc](../quality/gate-proofs.md#5-cc--ctrlp-の同じフォルダissue-272adr-0062) |
+| 3 | #278 ブックマーク（4/5・`*`・通常 Ctrl+D / Vim Ctrl+Shift+D・ADR 0063・D36・D37） | **済み**・明示登録・永続化・一覧からの付け外し・消えた登録の保持。実装と対象自動検証・実機を受理し、[PR #279](https://github.com/hideyukiMORI/nene-nib/pull/279)で統合。次は Vim の `:e` `:b` `:ls`（5/5・未起票） |
 | 4 | その後の候補: 通常モードの矢印・Backspace・Delete と結合文字 / 一般 Ex | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
@@ -52,7 +52,7 @@
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`・ドラッグで VISUAL・矩形の `c I A C > < J ~` と VISUAL の中の `p`・`virtualedit`・
 autoindent・読み取り専用のレジスタ（`".` `":` `"/` `"%`）と `"=`・`q"`・矩形の種類を保った `"+` の往復・矩形レジスタへの `"A` の追記・通常モードの矢印と Backspace と Delete で結合文字を 1 文字として歩くこと・行頭の孤立した結合文字の幅・INSERT の中の矢印による undo の区切り・`whichwrap` の設定・マクロの中の Ex と録画中の表示・`J s S R`・r の制御文字・Ctrl-e/y・検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase`・
 テキストオブジェクト `it ip is`・一般 Ex（`:w` / `:q`、範囲、パイプ、履歴）・
-タブのドラッグの並べ替え・窓の位置と大きさの復元・強制終了したときのタブの一覧・Ctrl+1〜9・Ctrl+Tab で歩いている間の一覧の面・`g<Tab>` と `:tabfirst` `:tablast` と `:tabnext +N`・Ctrl+P のブックマーク・一覧の種別のアイコンと履歴の時刻・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
+タブのドラッグの並べ替え・窓の位置と大きさの復元・強制終了したときのタブの一覧・Ctrl+1〜9・Ctrl+Tab で歩いている間の一覧の面・`g<Tab>` と `:tabfirst` `:tablast` と `:tabnext +N`・一覧の種別のアイコンと履歴の時刻・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
 
 ## 段階
 

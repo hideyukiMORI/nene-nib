@@ -412,11 +412,12 @@ void verify_palette_marks()
     expect(query_is("/a", core::PaletteScope::folder, "a") &&
                query_is("/", core::PaletteScope::folder, ""),
            "the slash mark selects the same folder");
-    expect(query_is("*a", core::PaletteScope::files, "*a") &&
+    expect(query_is("*a", core::PaletteScope::bookmarks, "a") &&
                query_is("?a", core::PaletteScope::files, "?a"),
-           "marks outside the table are plain search text");
+           "the star selects bookmarks while unknown marks are plain search text");
     expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
-    expect(core::palette_mark_hint().text() == "# タブ\u3000@ 履歴\u3000/ フォルダ\u3000: 設定",
+    expect(core::palette_mark_hint().text() ==
+               "# タブ\u3000* ブックマーク\u3000@ 履歴\u3000/ フォルダ\u3000: 設定",
            "the hint is built from the table");
     expect(core::palette_origin_label(core::PaletteOrigin::tab) == "開いているタブ",
            "the tab origin has its label");
@@ -754,7 +755,7 @@ void verify_palette_history_rows()
     auto frame = controller.apply(app::OpenCommandPalette{});
     const auto opened = palette_of(frame);
     expect(whole_commands_of(opened) ==
-               std::vector<std::string>{"tabnext 1", "C:\\docs\\x.txt", "C:\\docs\\y.txt"},
+               std::vector<std::string>{"C:\\work\\a.txt", "C:\\docs\\x.txt", "C:\\docs\\y.txt"},
            "Ctrl+P lists the tabs and then the history, newest first, without the open file");
     const auto &row = opened.rows.at(1);
     expect(row.label.text() == "x.txt" && row.kind == core::CommandChoiceKind::open &&
@@ -773,13 +774,13 @@ void verify_palette_history_rows()
     static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
     static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
     frame = controller.apply(app::CommandText{"#"});
-    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"tabnext 1"},
+    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"C:\\work\\a.txt"},
            "the hash mark lists only the tabs");
     expect(editor.history().reads() == 1, "typing in the palette never reads the history again");
     static_cast<void>(controller.apply(app::CancelCommand{}));
     editor.history().serve(HistoryReading{std::unexpected(app::FileHistoryFailure::malformed)});
     frame = controller.apply(app::OpenCommandPalette{});
-    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"tabnext 1"} &&
+    expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"C:\\work\\a.txt"} &&
                notice_of(frame) == "none",
            "an unreadable history opens the palette with the tabs only and no notice");
 }
