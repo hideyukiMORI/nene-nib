@@ -2446,3 +2446,10 @@ rebase後の最終文書確認: conformance.document_checksは0 violation（out/
 規則: ARC-001 / ARC-003 / ARC-004 / ARC-007 / ARC-010 / ARC-011 / CPP-002 / CPP-004 / CPP-005 / CPP-011 / QLT-001 / QLT-012 / QLT-013 / QLT-014。閾値・除外・依存追加なし。Waivers: none。
 
 残る制約: 既存のsame_fileは区切り文字混在を同一視しない。複数窓が同時にread-modify-writeしたときの直列化は範囲外。ほかの窓の変更は次に面を開くときに読み直す。登録解除後も履歴や同じフォルダとして出ることは正常。
+
+
+### Releaseと保護対象の静的比較
+
+`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` は `764fa20` で成功（`out/278-release.log` / `out/release/764fa20.json`）。`build/release-764fa20/NeNeNib.exe`、1,283,072 bytes、SHA-256 `0328FFAD811C0E77F2166C4002995C090358A9D08FDC99E49BF7EEA085DBF693`。このコマンドでは起動していない。
+
+`python eng/protected-diff.py --base 2096565 --head 764fa20` は終了0（`out/278-protected.log` / `out/protected/764fa20.json`）。実出力は `fixtures 1853 -> 1853 / metadata 0 / deleted 0 / changed 0 / added 0`、`files changed none`。保護対象はperf-reference・symbol-allowlist・conformance-rules・SettingsCodec。既存scopeの件数比較は28本すべて「未測」、新規 `--bookmarks` もこの道具では未測。比較用exeも `--build` も渡していないためで、全scope不変の証拠とは扱わない。対象scopeの成否と件数は上の限定実行の記録が正。

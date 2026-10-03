@@ -34,13 +34,14 @@ Ctrl+Pの同じフォルダまでがmainに入り、明示的に登録したフ�
 
 ## 強制と検証
 
-実装前はすべて **planned**。実測した後で対応する項目だけをactiveへ移す。
+2026-10-03の対象実行で、以下の自動検証は **active**。記録は [gate-proofs 5-cd](../quality/gate-proofs.md#5-cd--明示ブックマークとctrlpの共有候補issue-278adr-0063)。実機表示と性能は確認待ち。
 
 - 新規 `--bookmarks` の契約: 更新と上限、キーの対応、I/Oの時機、保存失敗、読込失敗の保護、本文とVim状態の維持、選択候補の付け外し、消えた登録の保持、登録済みタブの `#` / `*`、各出どころの重複。
 - `nib_bookmarks`: codecの正例・反例と、専用ディレクトリの本物のadapterで往復・再作成・壊れた入力・保存失敗。
 - 直接変わる `--command-palette` / `--tabs` / `--history` / `--background-work`: 名前ありのタブの確定経路、履歴とフォルダの候補、選択維持、静かな経路。
 - Debugの必要なtarget（clang-tidy / ASan / UBSan）、変更ファイルの整形、conformance、core/applicationのsymbols。fixture等はprotected-diffの静的比較。全件のVim再生は選ばない。
-- 道具のprofile初期化の対象試験。実機はhideの了承後にキー・登録・再起動・一覧解除・失敗を限定確認。絞り込みの分岐が変わるため `key-to-frame-palette-5000` を対象指定で測り、既存の基準値へ比較する。起動・本文の編集はI/O回数と不変の経路で確認し、全性能ベンチを繰り返さない。
+- 道具のprofile初期化の対象試験（2 tests）。
+- **planned**: 実機はhideの了承後にキー・登録・再起動・一覧解除・失敗を限定確認。絞り込みの分岐が変わるため `key-to-frame-palette-5000` を対象指定で測り、既存の基準値へ比較する。起動・本文の編集はI/O回数と不変の経路で確認し、全性能ベンチを繰り返さない。
 
 ## 残る制約
 
