@@ -2669,3 +2669,16 @@ Windows 11・clang-cl 19.1.5・Debug（clang-tidy / ASan / UBSan）。保存要�
 `python eng/protected-diff.py --base 12a0a83 --head 591b99f`は終了0（`out/286-protected.log` / `out/protected/591b99f.json`）。`fixtures 1853 -> 1853 / metadata 0 / deleted 0 / changed 0 / added 0`、`files changed none`、`scopes 33 / same 0 / 未測 32`、新規`--ex-write-path`も比較器では未測。比較用exeを渡していないため全scopeの件数不変の証明にはしない。perf-reference / symbol-allowlist / conformance-rules / SettingsCodecの静的差分0。
 
 [PR #287](https://github.com/hideyukiMORI/nene-nib/pull/287)をDraftで作成。専用profileと文書、8場面の手順は`D:/NeNeNib/scripts/ex-write-path-286.py`、専用文書は`D:/NeNeNib/evidence/ex-write-path-286/`。`--prepare`は成功し、前面操作は行っていない。20:02 JSTに今回分の前面確認を依頼した。実機結果は未確認で、了承後に同じReleaseを確認して記録する。
+
+### 実機の確認
+
+hideの「やって」を受け、20:09 JSTに`python D:/NeNeNib/scripts/ex-write-path-286.py --executable C:/Users/info/WORKS/NeNeNib/build/release-591b99f/NeNeNib.exe`を実行。名前あり文書の5場面は成功し、`out/frames-286/01`〜`05`のPNGをすべて目視で受理した。コピー後の名前/未保存印、E13で既存ファイル保護、コピーを作ったwqのE37、失敗したsaveasの旧名保持、相対の日本語名でのsaveas成功を確認。alphaの元バイト列、コピー2件の全バイト列、既存ファイルの不変も照合した。続く変更のないxは指定先を作らず、保存先の更新時刻も変えず終了0。
+
+初回は無題文書のタイトル比較で停止して終了1（`out/286-window.log`）。入力をPostMessageで送った直後、処理完了前にもタイトルを読む手順だったため、未保存の無題タイトルへの反映を待ってから比較するよう外部スクリプトを修正した。製品コードは変更していない。20:09:40 JSTに前面操作を終了したと通知し、20:11 JSTに残り3場面だけの再開を依頼した。成功した5場面と正常終了1回は保持し、再実行しない。タイトル保持・無題の命名/同名保存終了・他タブ保護の残りは未確認。
+
+
+hideの再開指示「やって」を受け、20:18〜20:19 JSTに残りだけを`python D:/NeNeNib/scripts/ex-write-path-286.py --remaining --executable C:/Users/info/WORKS/NeNeNib/build/release-591b99f/NeNeNib.exe`で実行して終了0（`out/286-window-remaining.log`）。処理後に比較した無題のタイトルは、保存失敗前後とも`● 無題 - NeNe Nib`で一致した。無題へ名前を付けて`draft`を書き、同じパスへのwqで`draft!`を書いて終了0。別の開いているタブへのsaveasはE139で拒否し、両文書の全バイト列を保持した。両タブは通常のqで閉じ、終了0。一時ファイルの残りもない。
+
+20:19:15 JSTに前面操作終了をhideへ通知。サナが残りの06〜08を含む8枚すべてを読み、メッセージ・本文・名前・未保存印を受理した。正常終了は計3回（初回の中断した無題プロセスはこの数に含めない）。画像と`record.json`は`out/frames-286/`。初回に完了した5場面とcopy/saveas/clean-xの結果は保存して再利用し、残り3場面だけを再実行した。製品の修正・Release再生成・成功済みの自動テスト再実行は不要だった。
+
+製品・対象テスト・関連依存は591b99fから不変。文書追加時の`git diff --exit-code 591b99f -- src tests eng CMakeLists.txt`が差分0。文書だけは`conformance.document_checks`で確認し、違反0（`out/286-doc-conformance-final.log`）。Ready/mergeでは991 checks・Release・8場面の成功を再利用する。実機IME・クリップボード・全件性能は本件の変更に必要なく実行していない。
