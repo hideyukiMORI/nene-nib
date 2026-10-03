@@ -16,7 +16,7 @@
 | 1 | #264 Ctrl+P の面で日本語入力を受け、名前の照合をコードポイントの境目で行う（ADR 0061・施主決定 D31・D32） | **済み**・工程 1（照合と IME の構えと変換の行き先）と工程 2（ui の IME の開閉と入力行の描画と候補窓）と差し戻し 2 件を受理し、実機は IME の開閉と変換（差し戻し 2 の後の撮り直しを含む）と速さの 6 本を確かめた。検証の記録は [gate-proofs 5-bz](../quality/gate-proofs.md) |
 | 2 | #272 同じフォルダ（3/5・`/`・ADR 0062・D33〜D35） | **済み**。[PR #277](https://github.com/hideyukiMORI/nene-nib/pull/277) を統合。検証と再利用の根拠は [gate-proofs 5-cc](../quality/gate-proofs.md#5-cc--ctrlp-の同じフォルダissue-272adr-0062) |
 | 3 | #278 ブックマーク（4/5・`*`・通常 Ctrl+D / Vim Ctrl+Shift+D・ADR 0063・D36・D37） | **済み**・明示登録・永続化・一覧からの付け外し・消えた登録の保持。実装と対象自動検証・実機を受理し、[PR #279](https://github.com/hideyukiMORI/nene-nib/pull/279)で統合。続いて #280 の Vim の入口へ |
-| 4 | #280 Vim の `:e` `:b` `:ls`（5/5・ADR 0064） | 実装と対象自動検証は成功。Release を準備し、実機の限定確認後に [PR #281](https://github.com/hideyukiMORI/nene-nib/pull/281) を仕上げる |
+| 4 | #280 Vim の `:e` `:b` `:ls`（5/5・ADR 0064） | **済み**・共通一覧への接続・引数の検索・省略名。実装と対象自動検証・実機9場面を受理。[PR #281](https://github.com/hideyukiMORI/nene-nib/pull/281)、記録は [gate-proofs 5-ce](../quality/gate-proofs.md#5-ce--exから共通のファイル一覧issue-280adr-0064)。Ctrl+P統合の5本が揃った |
 | 5 | その後の候補: 通常モードの矢印・Backspace・Delete と結合文字 / 一般 Ex | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
