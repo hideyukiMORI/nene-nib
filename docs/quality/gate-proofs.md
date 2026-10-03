@@ -2453,3 +2453,21 @@ rebase後の最終文書確認: conformance.document_checksは0 violation（out/
 `pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` は `764fa20` で成功（`out/278-release.log` / `out/release/764fa20.json`）。`build/release-764fa20/NeNeNib.exe`、1,283,072 bytes、SHA-256 `0328FFAD811C0E77F2166C4002995C090358A9D08FDC99E49BF7EEA085DBF693`。このコマンドでは起動していない。
 
 `python eng/protected-diff.py --base 2096565 --head 764fa20` は終了0（`out/278-protected.log` / `out/protected/764fa20.json`）。実出力は `fixtures 1853 -> 1853 / metadata 0 / deleted 0 / changed 0 / added 0`、`files changed none`。保護対象はperf-reference・symbol-allowlist・conformance-rules・SettingsCodec。既存scopeの件数比較は28本すべて「未測」、新規 `--bookmarks` もこの道具では未測。比較用exeも `--build` も渡していないためで、全scope不変の証拠とは扱わない。対象scopeの成否と件数は上の限定実行の記録が正。
+
+
+### 実機の限定確認と性能
+
+hideが2026-10-03 15:37 JSTに前面操作を了承した後、`python D:/NeNeNib/scripts/bookmarks-278.py --executable C:/Users/info/WORKS/NeNeNib/build/release-764fa20/NeNeNib.exe` を実行。終了0、11枚の画とJSONを `out/frames-278/` に保存（`out/278-window.log`）。専用profileと文書は `D:/NeNeNib/evidence/bookmarks-278/`。サナが11枚すべてを目視し、以下を受理した。
+
+- 通常Ctrl+Dは長押しの4 key-downでも登録1回。版と登録内容を実ファイルで照合した。
+- 空のCtrl+Pで5種類の記号の案内が収まり、登録済みのタブは「タブ・ブックマーク」の1行。`*`では同じ登録が1件だけ。
+- Vim Ctrl+Dは行1から行5へ半画面移動し、登録のbytesは不変。Ctrl+Shift+Dで解除・再登録できる。
+- 再起動後、開いた登録と閉じた登録が同じ `*` に並ぶ。存在しないgone.txtは「開けませんでした」の1行と登録保持、一覧で解除してもタブは増えない。
+- 閉じたbeta.txtは新しいタブで開き、開いているalpha.txtは既存タブへ切り替わる。
+- version=9の登録ファイルへ付け外しを試みてもbytesを変えず、読めなかったことを1行知らせる。
+
+同じexeで `python eng/measure-speed.py --check --bench key-to-frame-palette-5000 --executable build/release-764fa20/NeNeNib.exe` を実行。5試行すべて有効、中央値 **2.708ms**、最小2.614・最大2.831ms（samples 2.614 / 2.708 / 2.831 / 2.658 / 2.797）。実機 `bc8a356f37c68491` の既存基準値2.630msへ比較して **1 bench checked / 0 regressions / 0 unmeasurable**。基準値は変更していない。記録は `out/278-speed-palette.log` / `out/speed/2026-10-03T06-38-44Z.json`。
+
+測定直前のPNG5枚 `palette-2026-10-03T06-38-*.png` すべてを読み、暖機fと **1 / 5000** の表示を確認した。5枚のSHA-256もすべて `5873681DFF7C111BA6876363CC5D835A9E70F0CE908FB405C4967A42BB12B5E9` で一致。打鍵区間で5000候補が揃っていることを証明する。15:38 JSTにhideへ前面操作終了を通知済み。
+
+自己レビュー: 既存の原子的な保存、パス同一性、開く経路、閉じたenum、状態の所有を維持した。追加されたI/OはBookmarkPortのread/writeに限定し、通常の起動/開く/保存/入力/切替/終了では呼ばないことを契約で確認。完全同時の複数窓の競合はADRで明示した範囲外。最終製品は実測した `764fa20` と同一で、以後の文書変更では成功済みの検証を再実行しない。PR #279に同じ検証と再利用根拠を記録する。
