@@ -22,7 +22,7 @@ ADR 0053 は Vim の文字境界を決め、通常モードの矢印と削除は
 
 ## 強制と検証
 
-自動検証は **active**（2026-10-03、[gate-proofs 5-cf](../quality/gate-proofs.md#5-cf--通常モードの結合文字境界issue-282adr-0065)）。新規 `--ordinary-characters` で UTF-8・結合文字列・VS・改行・選択・上下移動・undo と共有 Vim INSERT を確かめる。既存の移動契約と `--vim-characters` を直接の退行範囲として選ぶ。Release の実機確認は用意した実行ファイルと限定した手順を、hide の了承後に実施する。全件検証は行わない。
+自動検証は **active**（2026-10-03、[gate-proofs 5-cf](../quality/gate-proofs.md#5-cf--通常モードの結合文字境界issue-282adr-0065)）。新規 `--ordinary-characters` で UTF-8・結合文字列・VS・改行・選択・上下移動・undo と共有 Vim INSERT を確かめる。既存の移動契約と `--vim-characters` を直接の退行範囲として選ぶ。Release の実機確認は hide の了承後に実施し、9場面を目視、5通りの削除後の保存内容と全 undo 後の元の UTF-8 の一致を確認した。全件検証は行っていない。
 
 ## 結果
 
