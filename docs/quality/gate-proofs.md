@@ -2602,4 +2602,16 @@ Windows 11・clang-cl 19.1.5・Debug（clang-tidy・ASan・UBSan）。共有保�
 
 性能範囲: 起動・通常の文字挿入・一覧の照合/描画・ファイルI/Oの実装は不変。新しい保存/終了は明示したEx命令だけで実行され、通常打鍵のuiには終了のboolと条件分岐が加わるだけ。起動/巨大ファイル/5000候補等の全性能ベンチや全Vim再生は行わない。保存実装の抽出は既存保存の契約を新規scopeへ束ねて確認した。
 
-Releaseと保護対象比較、実機の限定確認は準備中。前面の確認はhideの今回分の了承を得てから実行する。製品・対象テスト・関連依存・環境が不変なら、文書・PR・mergeでは上記成功を再利用する。
+製品・対象テスト・関連依存・環境が不変なら、文書・PR・mergeでは上記成功を再利用する。
+
+### Releaseと保護対象の比較
+
+`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`は`d078f9a92cff3450724e8d26cdc9a867855a20e4`で成功。`build/release-d078f9a/NeNeNib.exe`、1,296,896 bytes、SHA-256 `10F0B2D3C2EA6B946236F89514D20C45BDE9969FAF56EB634EF829837D5A8505`。configure 2.158s / build 136.882s。`out/284-release.log` / `out/release/d078f9a.json`に記録。この生成コマンドでは起動していない。
+
+`python eng/protected-diff.py --base ecf4aa9 --head d078f9a`は終了0（`out/284-protected.log` / `out/protected/d078f9a.json`）。`fixtures 1853 -> 1853 / metadata 0 / deleted 0 / changed 0 / added 0`、`files changed none`、`scopes 32 / same 0 / 未測 31`、新規`--ex-document`も未測。比較用exeを渡していないため、全scopeの件数不変の証明にはしない。perf-reference / symbol-allowlist / conformance-rules / SettingsCodecの静的差分0。
+
+文書追加後は`conformance.document_checks(root, paths, rules)`だけを呼び、規則IDと相対リンク・強制状態の一致を確認して違反0（`out/284-doc-conformance.log`）。C++と関連依存は不変なので製品の検査は再実行しない。
+
+### 実機の限定確認
+
+専用profileとalpha/beta/blockedの3文書を`D:/NeNeNib/evidence/ex-document-284/`へ準備。手順は`D:/NeNeNib/scripts/ex-document-284.py`、出力は`out/frames-284/`。Release生成と[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)のDraft作成後、18:51 JSTに今回分の前面確認を依頼した。まだ実行していない。未保存の拒否・保存・現在のタブだけの終了・無題・実ファイルの書き込み拒否・既存の閉じる確認を7場面で確かめる。
