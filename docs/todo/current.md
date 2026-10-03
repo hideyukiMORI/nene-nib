@@ -20,7 +20,9 @@
 | 5 | #282 通常モードの矢印・Backspace・Delete と結合文字（D38・ADR 0065） | **済み**。アクセント・濁点・共通の異体字セレクタから段階的に対応。対象898 checks・Release・実機9場面/保存5通りを受理。[PR #283](https://github.com/hideyukiMORI/nene-nib/pull/283)、[gate-proofs 5-cf](../quality/gate-proofs.md#5-cf--通常モードの結合文字境界issue-282adr-0065) |
 | 6 | #284 基本Exの保存と終了（ADR 0066） | **実装・検証済み**。対象1365 checks・Release・実機7場面/保存内容/3回の正常終了を受理。[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)、[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066) |
 | 7 | #286 Exのファイル名付き保存とsaveas（ADR 0067・D39） | **実装・検証済み**。対象991 checks・Release・実機8場面/保存内容/3回の正常終了を受理。名前は保存成功時だけ更新。[PR #287](https://github.com/hideyukiMORI/nene-nib/pull/287)。[gate-proofs 5-ch](../quality/gate-proofs.md#5-ch--名前付きex保存issue-286adr-0067) |
-| 8 | その後の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
+| 8 | #288 split前の区切り / #290 範囲・判定条件・限定描画試作（D40・ADR 0068） | **下準備・試作済み、製品採用は保留**。注釈付き`checkpoint/pre-split-20261003`を保存。長い日本語行で左右分割の費用が増え、事前条件を満たさない。[準備資料](../design/2026-10-03-split-preparation.md) / [gate-proofs 5-cj](../quality/gate-proofs.md#5-cj--splitの下準備と限定した描画費用issue-290adr-0068) |
+| 9 | #291 長い日本語行の単画面の入力遅延 | **未着手**。splitより先に既存描画の主な費用を特定する候補。#290から分離し、追加修正はしていない |
+| 10 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
 
@@ -34,7 +36,7 @@
 
 2026-09-23 に統合: #124・#131・#141・#130・#144・#146（usage の集計）・#117（`^M` の描画・ADR 0040）・#151・#147（C1 の 4 桁）・#152・#148（incsearch・ADR 0041・既定オンは施主決定 D18）・#162・#160（単体テストの分割・ADR 0042）・#165・#140（`assert_uncovered`・`measure`）・#168（Ctrl-G / Ctrl-T・ADR 0043）・#172（D18）・#175 Tab の tab stop（ADR 0045）・#174 add の chunk 化（ADR 0044）・#176 マクロ `q` `@`（ADR 0046）・#180 `recording @a`・#179 16 MiB の打鍵ベンチ・#184 改行の索引の共有（ADR 0047）・#190 oracle の `q` の拒否を狭める・#191 `erase().insert()` を `replaced` に・#193 名前つきレジスタ `"a`（ADR 0048）・#198 `VimKeyTable` の切り出し・#200 `<Space>` `<BS>`（ADR 0049）。
 
-順は設計席の案で hide 未確認。open の一覧は `gh issue list --state open` が正。
+splitの下準備はD40でhide了承済み。本実装は試作結果から保留。その他の候補の順は未確認。open の一覧は `gh issue list --state open` が正。
 
 ## いまの数字（2026-10-03・差分ごとの検証済み実装）
 
@@ -42,7 +44,7 @@
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
 | 既定の `nib_tests` | scope 33。全件checksは最新差分で未測（過去の全件実測19449 checks）。`--bookmarks` 40 / `--ex-files` 82 / `--ordinary-characters` 233 / `--ex-document` 204 / `--ex-write-path` 90 checksを対象実行で確認（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-ch](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0067 まで | [`docs/adr/README.md`](../adr/README.md) |
+| ADR | 0068 まで（splitの実験方法。製品採用は保留） | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
