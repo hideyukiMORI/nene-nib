@@ -4,6 +4,7 @@
 #include "EditorController.hpp"
 #include "EditorPorts.hpp"
 #include "ScriptedAppearance.hpp"
+#include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
@@ -31,7 +32,7 @@ class Editing final
         : settings_(std::move(reading)), themes_(std::move(themes)),
           controller_(nenenib::application::EditorPorts{appearance_, clipboard_, files_,
                                                         code_pages_, settings_, themes_, session_,
-                                                        history_, folders_})
+                                                        history_, folders_, bookmarks_})
     {
     }
 
@@ -77,6 +78,11 @@ class Editing final
         return history_;
     }
 
+    [[nodiscard]] ScriptedBookmarks &bookmarks() noexcept
+    {
+        return bookmarks_;
+    }
+
     [[nodiscard]] ScriptedFolders &folders() noexcept
     {
         return folders_;
@@ -93,9 +99,9 @@ class Editing final
     prepared_ports(const std::function<void(ScriptedFiles &)> &prepare)
     {
         prepare(files_);
-        return nenenib::application::EditorPorts{appearance_, clipboard_, files_,
-                                                 code_pages_, settings_,  themes_,
-                                                 session_,    history_,   folders_};
+        return nenenib::application::EditorPorts{appearance_, clipboard_, files_,   code_pages_,
+                                                 settings_,   themes_,    session_, history_,
+                                                 folders_,    bookmarks_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -107,6 +113,7 @@ class Editing final
     ScriptedSession session_;
     ScriptedHistory history_;
     ScriptedFolders folders_;
+    ScriptedBookmarks bookmarks_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

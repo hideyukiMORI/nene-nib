@@ -23,6 +23,7 @@
 #include "OpenDocument.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
+#include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
@@ -224,9 +225,10 @@ void verify_theme_startup_notice()
     ScriptedSession session;
     ScriptedHistory history;
     ScriptedFolders folders;
+    ScriptedBookmarks bookmarks;
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{app::EditorPorts{appearance, clipboard, files, pages, settings,
-                                                 themes, session, history, folders},
+                                                 themes, session, history, folders, bookmarks},
                                 initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -240,7 +242,8 @@ void verify_theme_startup_notice()
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
     const EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
-                                                       themes, session, history, folders},
+                                                       themes, session, history, folders,
+                                                       bookmarks},
                                       initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,

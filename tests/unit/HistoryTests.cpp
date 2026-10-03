@@ -19,6 +19,7 @@
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
+#include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
@@ -360,8 +361,10 @@ void verify_quiet_paths()
         ScriptedSession session;
         ScriptedHistory history;
         ScriptedFolders folders;
+        ScriptedBookmarks bookmarks;
         const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
-                                                      settings, themes, session, history, folders},
+                                                      settings, themes, session, history, folders,
+                                                      bookmarks},
                                           {work_open('a'), work_open('b')});
         expect(controller.frame().tabs.size() == 2 && history.reads() == 0 &&
                    history.writes() == 0 && folders.requests().empty() && folders.collects() == 0,

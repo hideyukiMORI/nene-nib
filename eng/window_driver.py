@@ -198,7 +198,7 @@ def forget_session(environment: dict) -> bool:
     A tool starts from its own profile, so a list left by an earlier run must not come back in the
     next start (ADR 0059 decision 7). Nothing is deleted when the environment's LOCALAPPDATA is this
     process's own: that is the user's real list, not a tool profile. Returns whether it deleted.
-    The closed-file history (NeNeNib/history.v1) is deleted with it (ADR 0060 decision 8).
+    The history and bookmarks (history.v1 / bookmarks.v1) are cleared with it (ADR 0060 / 0063).
     """
     profile = environment.get("LOCALAPPDATA")
     own = os.environ.get("LOCALAPPDATA")
@@ -207,7 +207,7 @@ def forget_session(environment: dict) -> bool:
     if own and os.path.normcase(os.path.abspath(profile)) == os.path.normcase(os.path.abspath(own)):
         return False
     deleted = False
-    for name in ("session.v1", "history.v1"):
+    for name in ("session.v1", "history.v1", "bookmarks.v1"):
         listed = Path(profile) / "NeNeNib" / name
         if listed.is_file():
             listed.unlink()

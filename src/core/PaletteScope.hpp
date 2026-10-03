@@ -11,6 +11,7 @@ enum class PaletteScope : std::uint8_t
 {
     files,
     tabs,
+    bookmarks,
     history,
     folder,
     commands

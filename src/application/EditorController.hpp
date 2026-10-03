@@ -13,6 +13,7 @@
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
 #include "ExTabRequest.hpp"
+#include "FileBookmarks.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
@@ -163,8 +164,16 @@ class EditorController final
     void append_folder_choices(const std::vector<core::FilePath> &files,
                                std::vector<core::CommandChoice> &choices) const;
     // Ctrl+P の面の候補の列を作る 1 本（ADR 0060 の決定 6）。開いているタブ（帯の順）→ 履歴
-    // （新しい順・開いているファイルを除く）。履歴を読むのはここだけ。
-    [[nodiscard]] std::vector<core::CommandChoice> palette_entries() const;
+    // （新しい順・タブと登録を除く）。タブの直後へ登録順のブックマークを合流する（ADR 0063）。
+    [[nodiscard]] std::vector<core::CommandChoice>
+    palette_entries(const FileBookmarks &bookmarks) const;
+    [[nodiscard]] std::vector<core::CommandChoice>
+    palette_tabs(const FileBookmarks &bookmarks) const;
+    void append_bookmark_choices(const FileBookmarks &bookmarks,
+                                 std::vector<core::CommandChoice> &entries) const;
+    void accept(const ToggleBookmark &);
+    [[nodiscard]] std::optional<core::FilePath> bookmark_target() const;
+    [[nodiscard]] bool bookmark_toggle_allowed() const;
     void accept(const ActivateCommandChoice &intent);
     void accept(const SearchHop &intent);
     void accept(const StoreVimRegister &intent);

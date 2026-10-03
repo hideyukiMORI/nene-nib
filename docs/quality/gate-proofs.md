@@ -2418,3 +2418,31 @@ CI後の変更は基準値と文書だけ。製品・計測器・テスト・wor
 統合前に `origin/main` の `c328e0d`（PR #276・前日の日報と引き継ぎ）へrebaseした。競合はCLAUDE.mdとcurrent.mdの説明・進捗だけで、mainのワーカーの説明と履歴を残して今回の状態へ揃えた。受理・測定時の番号は証拠の出典として書き換えず残す。対応は `eb5b0e7→4d2babe`・`f6ec509→7fb002d`・`8d0e6ff→f8d7b19`・`10cab8c→3682ad3`・`edeb38b→2787f72`・`05792e5→6018734`。`git diff --exit-code 001debf -- src tests eng .github CMakeLists.txt` は終了0で、製品・試験・計測・workflowがrebase前後で同一と確認した。性能や製品テストを繰り返す変更ではない。
 
 rebase後の最終文書確認: conformance.document_checksは0 violation（out/272-sana-docs-rebase.log）、git diff --checkとPR本文のgit-conventions.py --pr-bodyは終了0。確認対象は文書の相対リンク・規則ID・強制状態と差分の空白・検証記録の存在。
+
+
+## 5-cd — 明示ブックマークとCtrl+Pの共有候補（Issue #278・ADR 0063）
+
+2026-10-03、設計・実装・検証をサナが単体で実施。基点は #272 統合後の `2096565`。FR-006 / FR-010 と D36・D37 に従い、通常 Ctrl+D / Vim Ctrl+Shift+D の明示操作、`*` の候補、消えた登録の保持を追加した。保存先は独立した `bookmarks.v1`。既存の `FilePort::write` の原子的な置換と `same_file` を使い、名前のあるタブも `open_listed` → `open_document` の経路へ揃える。無題は既存の `tabnext N`。中核へOSのI/Oを持ち込まない。
+
+### 対象検証と根拠
+
+| 対象・退行の理由 | コマンド | 結果・記録 |
+| --- | --- | --- |
+| 新しい型・port・閉じた分岐とキー経路、未検査optional・複雑度 | `cmake --build build --target NeNeNib nib_tests nib_bookmark_tests`（`eng/toolchain.ps1`、Debug・clang-tidy・ASan/UBSan） | 成功。`out/278-sana-build05.log`。テストの期待値調整後は `--target nib_tests` で成功（`out/278-sana-build06.log`） |
+| 更新・上限・キー対応・I/Oの時機・失敗時の保護・Vim待ち・IME・各出どころの重複 | `build/nib_tests.exe --bookmarks` | 40 checks成功、`out/278-bookmarks.log` |
+| 名前ありタブのopen経路・一覧の順と確定 | `build/nib_tests.exe --tabs` | 291 checks成功、`out/278-tabs.log` |
+| 新しいscope分岐・印・候補の保持・名前あり候補のパス | `build/nib_tests.exe --command-palette` | 356 checks成功、`out/278-command-palette.log` |
+| ブックマークと分けた履歴の記録・終了時のI/O | `build/nib_tests.exe --history` | 38 checks成功、`out/278-history.log` |
+| 既表示のファイルを除くフォルダの列・選択維持・静かな完了合図 | `build/nib_tests.exe --background-work` | 89 checks成功、`out/278-background-work.log` |
+| 新schemaの正例・反例・上限・絶対パス・本物の保存の往復と再作成、読取専用の原本を失敗時に保護 | `ctest --test-dir build -R '^nib_bookmarks$' --output-on-failure` | 1 test / 1245 checks / 0 failures。`out/278-adapter.log`、`build/Testing/Temporary/LastTest.log` |
+| 専用profileの初期化にbookmarksを追加し、本物のprofileを消さない | `python tests/conformance/test_frame_capture.py ProfileReset -v`（TEMP/TMP=`D:/NeNeNib/evidence/temp`） | 2 tests / OK。製品は起動しない |
+| 新型とモジュール境界・規則・整形 | `python eng/conformance.py --build-dir build`、変更したC++への `clang-format --dry-run --Werror` | 違反0・終了0。`out/278-conformance.log` / `out/278-format.log` |
+| core/applicationへOS依存を追加しない | `python eng/symbols.py --build-dir build --require core application` | 2 libraries / 0 violations、`out/278-symbols.log` |
+
+最初のビルドでcodecと候補作成の複雑度を検出し、責務で分割した。続くoptional参照と新規テストの型指定を修正。旧タブ候補の `tabnext N` の期待値をパスによるopenへ更新し、IMEは変換を受ける通常モードでbodyとpaletteを測った。最終の上記実行はすべて成功。関係しないVim fixtureの全再生・全性能ベンチは実行していない。
+
+再利用: 成功後に製品・関連テスト・依存・環境が変わらない検証はpush・レビュー・mergeでも再利用する。対象の期待値だけが変わった再ビルド後には `--bookmarks` / `--tabs` のみ実行し、成功済みの候補・履歴・裏の仕事・adapterは繰り返していない。実機表示・キーと絞り込みの新しい性能測定、保護対象の静的差分はこの時点では未実施。
+
+規則: ARC-001 / ARC-003 / ARC-004 / ARC-007 / ARC-010 / ARC-011 / CPP-002 / CPP-004 / CPP-005 / CPP-011 / QLT-001 / QLT-012 / QLT-013 / QLT-014。閾値・除外・依存追加なし。Waivers: none。
+
+残る制約: 既存のsame_fileは区切り文字混在を同一視しない。複数窓が同時にread-modify-writeしたときの直列化は範囲外。ほかの窓の変更は次に面を開くときに読み直す。登録解除後も履歴や同じフォルダとして出ることは正常。

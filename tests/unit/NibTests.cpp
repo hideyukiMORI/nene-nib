@@ -21,7 +21,7 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 19> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 20> contracts{{
         {"--vim-dot", verify_vim_dot_contracts},
         {"--vim-macro", verify_vim_macro_contracts},
         {"--vim-clipboard", verify_vim_clipboard_contracts},
@@ -40,6 +40,7 @@ void verify_vim_scope_contracts()
         {"--tabs", verify_tabs_contracts},
         {"--session", verify_session_contracts},
         {"--history", verify_history_contracts},
+        {"--bookmarks", verify_bookmarks_contracts},
         {"--background-work", verify_background_work_contracts},
     }};
     for (const auto &scope : contracts)
@@ -50,7 +51,7 @@ void verify_vim_scope_contracts()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 28> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 29> scopes{{
         {"--display-line", verify_display_line_scope},
         {"--vim-dot", verify_vim_dot_scope},
         {"--vim-macro", verify_vim_macro_scope},
@@ -78,6 +79,7 @@ void verify_vim_scope_contracts()
         {"--tabs", verify_tabs_scope},
         {"--session", verify_session_scope},
         {"--history", verify_history_scope},
+        {"--bookmarks", verify_bookmarks_scope},
         {"--background-work", verify_background_work_scope},
     }};
     for (const auto &[name, verify] : scopes)

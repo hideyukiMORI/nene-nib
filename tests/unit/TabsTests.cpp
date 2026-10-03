@@ -32,6 +32,7 @@
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
+#include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
@@ -527,8 +528,10 @@ void verify_open_failure_adds_no_tab()
     ScriptedSession session;
     ScriptedHistory history;
     ScriptedFolders folders;
+    ScriptedBookmarks bookmarks;
     const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
-                                                  settings, themes, session, history, folders},
+                                                  settings, themes, session, history, folders,
+                                                  bookmarks},
                                       initial);
     return controller.frame();
 }
@@ -1139,9 +1142,10 @@ void verify_recent_after_startup()
     ScriptedSession session;
     ScriptedHistory history;
     ScriptedFolders folders;
+    ScriptedBookmarks bookmarks;
     EditorController controller(
         EditorPorts{appearance, clipboard, files, code_pages, settings, themes, session, history,
-                    folders},
+                    folders, bookmarks},
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});
     expect(recent_bodies(controller) == "cba", "three arguments leave the last one most recent");
@@ -1434,7 +1438,19 @@ void verify_ex_tab_open_and_close()
            "the abbreviation asks the same way");
 }
 
-// 一覧の行が帯と同じ順と題名で、実行が tabnext N で、場所がフォルダ（無題は無し）か。
+[[nodiscard]] bool opens_tab(const nenenib::core::CommandChoice &choice,
+                             const std::optional<nenenib::core::FilePath> &path, std::size_t index)
+{
+    if (path.has_value())
+    {
+        return choice.kind == nenenib::core::CommandChoiceKind::open &&
+               choice.command == path.value().text();
+    }
+    return choice.kind == nenenib::core::CommandChoiceKind::execute &&
+           choice.command == "tabnext " + std::to_string(index + 1);
+}
+
+// 一覧の行は帯と同じ順と題名。名前ありはopen、無題はtabnext、場所はフォルダ（ADR 0063）。
 [[nodiscard]] bool rows_follow_band(const EditorFrame &listed)
 {
     if (!listed.command_palette.has_value())
@@ -1451,8 +1467,7 @@ void verify_ex_tab_open_and_close()
         const auto folder = nenenib::core::tab_folder_for(listed.tabs.at(index).path);
         const auto &detail = choice.detail;
         same = choice.label.text() == listed.tabs.at(index).title.text() &&
-               choice.command == "tabnext " + std::to_string(index + 1) &&
-               choice.kind == nenenib::core::CommandChoiceKind::execute &&
+               opens_tab(choice, listed.tabs.at(index).path, index) &&
                choice.origin == std::optional{nenenib::core::PaletteOrigin::tab} &&
                detail.has_value() == folder.has_value() &&
                (!detail.has_value() || !folder.has_value() ||
@@ -1462,7 +1477,7 @@ void verify_ex_tab_open_and_close()
            choices.at(0).detail.has_value() && !choices.at(1).detail.has_value();
 }
 
-// 一覧（決定 7）。帯の順・アクティブの行・題名は帯と同じ・場所はフォルダ・実行は tabnext N。
+// 一覧（決定 7・ADR 0063）。帯の順・アクティブの行・題名は帯と同じ・場所はフォルダ。
 void verify_tab_list_rows()
 {
     Editing editing;
@@ -1479,7 +1494,8 @@ void verify_tab_list_rows()
                palette.value().selected == 1 && line.value().text == "#" &&
                line.value().completions.empty(),
            "it lists every tab with the active one selected and the tabs mark as input");
-    expect(rows_follow_band(listed), "each row is the band title with its mark and runs tabnext N");
+    expect(rows_follow_band(listed),
+           "each row has the band title and opens its tab by the canonical route");
     const auto chosen = controller.apply(nenenib::application::ActivateCommandChoice{0});
     expect(chosen.active_tab == 0 && !chosen.command_palette.has_value() &&
                !chosen.command_line.has_value(),
@@ -1518,7 +1534,7 @@ void verify_tab_list_entries()
     EditorController &controller = editing.controller();
     applied(controller, NewTab{});
     applied(controller, NewTab{});
-    const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3"};
+    const std::vector<std::string> all{std::string(sample_path().text()), "tabnext 2", "tabnext 3"};
     expect(listed_commands(controller.apply(OpenTabList{})) == all, "OpenTabList opens the list");
     expect(!controller.apply(OpenTabList{}).command_palette.has_value(),
            "OpenTabList closes the open list");
@@ -1532,7 +1548,7 @@ void verify_tab_list_entries()
            "the Ctrl+P candidate tabs opens the same list");
     applied(controller, CommandText{"NOTE"});
     const auto filtered = controller.frame();
-    expect(listed_commands(filtered) == std::vector<std::string>{"tabnext 1"},
+    expect(listed_commands(filtered) == std::vector<std::string>{std::string(sample_path().text())},
            "typing filters the rows by title, ignoring case");
     const auto ran = controller.apply(SubmitCommand{});
     expect(ran.active_tab == 0 && !ran.command_palette.has_value(), "Enter runs the selected row");

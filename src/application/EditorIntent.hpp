@@ -36,6 +36,7 @@
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TitleBarWidth.hpp"
+#include "ToggleBookmark.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
@@ -56,5 +57,5 @@ using EditorIntent =
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
                  ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
                  WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth,
-                 OpenTabList, EndSession, WorkCompleted>;
+                 OpenTabList, EndSession, WorkCompleted, ToggleBookmark>;
 } // namespace nenenib::application

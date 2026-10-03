@@ -3,6 +3,7 @@
 #include "PaletteLayout.hpp"
 
 #include "BodyLayout.hpp"
+#include "BookmarkKey.hpp"
 #include "CancelComposition.hpp"
 #include "CaretMotion.hpp"
 #include "ClauseEmphasis.hpp"
@@ -44,6 +45,7 @@
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
 #include "TitleBarWidth.hpp"
+#include "ToggleBookmark.hpp"
 #include "UnsavedTab.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -714,7 +716,10 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     {
     case WM_KEYDOWN:
         timing_.mark(core::Milestone::input_received);
-        press_key(word);
+        if (!press_bookmark_key(word, data))
+        {
+            press_key(word);
+        }
         return 0;
     case WM_CHAR:
         timing_.mark(core::Milestone::input_received);
@@ -1558,6 +1563,27 @@ void EditorWindow::type_text(std::string utf8)
         break;
     }
     send(application::InsertText{std::move(utf8)});
+}
+
+// Ctrl+Dの意味はcoreの表の1本。長押しの反復は登録を付け外ししない（D36・ADR 0063）。
+bool EditorWindow::press_bookmark_key(WPARAM word, LPARAM data)
+{
+    if (word != 'D' || !held(VK_CONTROL) || held(VK_MENU))
+    {
+        return false;
+    }
+    const auto key =
+        held(VK_SHIFT) ? core::BookmarkKey::control_shift_d : core::BookmarkKey::control_d;
+    if (!core::toggles_bookmark(key, mode_))
+    {
+        return false;
+    }
+    constexpr LPARAM repeated_key_bit = LPARAM{1} << 30;
+    if ((data & repeated_key_bit) == 0 && !application::composing(controller_.frame()))
+    {
+        send(application::ToggleBookmark{});
+    }
+    return true;
 }
 
 void EditorWindow::press_key(WPARAM word)

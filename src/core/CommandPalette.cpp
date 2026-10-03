@@ -102,6 +102,7 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input,
         return Result{palette_choices(input)};
     case PaletteScope::files:
     case PaletteScope::tabs:
+    case PaletteScope::bookmarks:
     case PaletteScope::history:
     case PaletteScope::folder:
         return Result{listed_positions(entries, query.scope, query.query)};

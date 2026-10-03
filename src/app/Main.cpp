@@ -7,6 +7,7 @@
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
 #include "Win32AppearanceAdapter.hpp"
+#include "Win32BookmarkAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
@@ -147,9 +148,11 @@ int run(HINSTANCE instance)
     // （壊れる順は 窓 → controller → adapter → ワーカー）。
     nenenib::adapters::win32::Win32Worker worker;
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
+    nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
+        files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
-                                          themes, session, history, folders},
+                                          themes, session, history, folders, bookmarks},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

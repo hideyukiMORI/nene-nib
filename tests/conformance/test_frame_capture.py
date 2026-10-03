@@ -13,11 +13,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "eng"))
 
-from window_driver import (cover_points, first_cover, parse_keys, read_png,  # noqa: E402
+from window_driver import (cover_points, first_cover, forget_session, parse_keys, read_png,  # noqa: E402
                            VK_ESCAPE, write_png)
 
 spec = importlib.util.spec_from_file_location("compare_frames", ROOT / "eng/compare-frames.py")
@@ -190,6 +191,29 @@ class CoveredCapture(unittest.TestCase):
     def test_a_tiny_client_keeps_the_points_inside(self):
         for x, y in cover_points(3, 2, inset=8):
             self.assertTrue(0 <= x < 3 and 0 <= y < 2, (x, y))
+
+
+class ProfileReset(unittest.TestCase):
+    def test_tool_profile_clears_lists_but_preserves_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory) / "NeNeNib"
+            profile.mkdir()
+            for name in ("session.v1", "history.v1", "bookmarks.v1", "settings.v1"):
+                (profile / name).write_text("kept", encoding="utf-8")
+            self.assertTrue(forget_session({"LOCALAPPDATA": directory}))
+            self.assertEqual([p.name for p in profile.iterdir()], ["settings.v1"])
+            self.assertFalse(forget_session({"LOCALAPPDATA": directory}))
+
+    def test_own_profile_is_never_deleted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory) / "NeNeNib"
+            profile.mkdir()
+            listed = profile / "bookmarks.v1"
+            listed.write_text("kept", encoding="utf-8")
+            with patch.dict(os.environ, {"LOCALAPPDATA": directory}):
+                self.assertFalse(forget_session({"LOCALAPPDATA": directory}))
+                self.assertEqual(listed.read_text(encoding="utf-8"), "kept")
+            self.assertFalse(forget_session({}))
 
 
 class KeyNotation(unittest.TestCase):

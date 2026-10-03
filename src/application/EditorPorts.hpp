@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AppearancePort.hpp"
+#include "BookmarkPort.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "FilePort.hpp"
@@ -23,7 +24,8 @@ struct EditorPorts
     ThemePort &themes;
     SessionPort &session;
     HistoryPort &history;
-    // 同じフォルダを裏で読む（ADR 0062 の決定 10）。#271 では controller はまだ呼ばない。
+    // 同じフォルダを裏で読む（ADR 0062 の決定 10）。
     FolderPort &folders;
+    BookmarkPort &bookmarks;
 };
 } // namespace nenenib::application
