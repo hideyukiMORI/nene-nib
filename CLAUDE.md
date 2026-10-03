@@ -173,6 +173,10 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 `status_format_` はもともと右寄せ（TRAILING）。欄の幅の text layout を作ってさらに原点を右へずらすと、右寄せが二重に効いて欄の外へ出る（#258 の差し戻し）。
 
+### 本文の文字組みは `layout_of`。描画とクリックで共用する
+
+通常行・IMEの差し込み済み行・クリックは同じ入口で、全文と幅・行高が一致する現在/直前のlayoutを再利用する。本文の書式を作り直したら全て破棄する（ADR 0069）。選択や検索の描画で共有layoutの書式を変更しない。整列・高さを変える右寄せやコマンド入力のlayoutは、この保持へ入れない。
+
 ### リポジトリの外の作業場所は `D:\NeNeNib\`
 
 依頼書は `D:\NeNeNib\briefs\`、1 回限りのスクリプトは `D:\NeNeNib\scripts\`、実機の確認の profile と文書は `D:\NeNeNib\evidence\`（施主指示 2026-09-30。C ドライブの Temp と scratchpad を使わない）。道具の出力と席の報告はリポジトリの `out/`。

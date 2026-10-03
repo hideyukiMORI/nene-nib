@@ -1,0 +1,6196 @@
+{
+  "issue": 291,
+  "date": "2026-10-04",
+  "productionCommit": "a1a0e4d50a7c9eb784652a4d5ee65e11e7953e0d",
+  "profile": {
+    "baseline": {
+      "issue": 291,
+      "release": {
+        "recordedAt": "2026-10-03T14-51-31Z",
+        "ref": "HEAD",
+        "commit": "fedf727a168b0061bba3342cd7f2e4a7d4aba6a6",
+        "shortCommit": "fedf727",
+        "subject": "test: 未使用の描画計測点を減らす (#291)",
+        "head": "fedf727a168b0061bba3342cd7f2e4a7d4aba6a6",
+        "builtFromWorktree": false,
+        "buildDirectory": "build/release-fedf727",
+        "executable": "build/release-fedf727/NeNeNib.exe",
+        "sha256": "7D99B0451330094F42CE1C02C771C0B11B2C5597E0E587248A1987D5A1622ADD",
+        "bytes": 1303552,
+        "seconds": {
+          "configure": 1.991,
+          "build": 143.015,
+          "total": 145.006
+        },
+        "toolchain": {
+          "compiler": "clang-cl",
+          "llvm": "19.1.5",
+          "cmake": "3.31.6-msvc6",
+          "ninja": "1.12.1",
+          "msvcToolset": "14.44.35207"
+        }
+      },
+      "runnerSha256": "b62623075016641bbc0e7e8d1971d72d92507c142fa2f2600404591f745440a6",
+      "startedAt": "2026-10-03T14:54:16.383585+00:00",
+      "trials": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "singleMs": 0.908,
+          "burstMs": 3.572,
+          "inputSpanMs": 2.443,
+          "marks": 709,
+          "rawSha256": "60ca4465c14f315e975d25046192208f22df5e9c37c4f17f0242763312603679",
+          "stage": {
+            "applyMs": {
+              "total": 0.018,
+              "count": 1,
+              "samples": [
+                0.018
+              ]
+            },
+            "frameMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "bodyMs": {
+              "total": 0.203,
+              "count": 1,
+              "samples": [
+                0.203
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "drawTextMs": {
+              "total": 0.122,
+              "count": 1,
+              "samples": [
+                0.122
+              ]
+            },
+            "decorationMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.178,
+              "count": 1,
+              "samples": [
+                0.178
+              ]
+            },
+            "waitMs": {
+              "total": 0.0,
+              "count": 1,
+              "samples": [
+                0.0
+              ]
+            },
+            "presentMs": {
+              "total": 0.112,
+              "count": 1,
+              "samples": [
+                0.112
+              ]
+            }
+          },
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-profile\\baseline\\empty.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "singleMs": 0.85,
+          "burstMs": 5.004,
+          "inputSpanMs": 4.0,
+          "marks": 709,
+          "rawSha256": "23467b64cdd48b7972fcfbb67338b30360f51397adc53fe7752bbb5d2745c178",
+          "stage": {
+            "applyMs": {
+              "total": 0.018,
+              "count": 1,
+              "samples": [
+                0.018
+              ]
+            },
+            "frameMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "bodyMs": {
+              "total": 0.204,
+              "count": 1,
+              "samples": [
+                0.204
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.0,
+              "count": 1,
+              "samples": [
+                0.0
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.002,
+              "count": 1,
+              "samples": [
+                0.002
+              ]
+            },
+            "drawTextMs": {
+              "total": 0.123,
+              "count": 1,
+              "samples": [
+                0.123
+              ]
+            },
+            "decorationMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.176,
+              "count": 1,
+              "samples": [
+                0.176
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.102,
+              "count": 1,
+              "samples": [
+                0.102
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "singleMs": 0.884,
+          "burstMs": 4.196,
+          "inputSpanMs": 3.216,
+          "marks": 709,
+          "rawSha256": "ddfbd4fbd0be9eabcfd3c05ab6d82f95dfd5cb8b6d8ad9a37c23538cd55702cd",
+          "stage": {
+            "applyMs": {
+              "total": 0.018,
+              "count": 1,
+              "samples": [
+                0.018
+              ]
+            },
+            "frameMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "bodyMs": {
+              "total": 0.185,
+              "count": 1,
+              "samples": [
+                0.185
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "drawTextMs": {
+              "total": 0.11,
+              "count": 1,
+              "samples": [
+                0.11
+              ]
+            },
+            "decorationMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.188,
+              "count": 1,
+              "samples": [
+                0.188
+              ]
+            },
+            "waitMs": {
+              "total": 0.0,
+              "count": 1,
+              "samples": [
+                0.0
+              ]
+            },
+            "presentMs": {
+              "total": 0.104,
+              "count": 1,
+              "samples": [
+                0.104
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "singleMs": 328.58,
+          "burstMs": 489.208,
+          "inputSpanMs": 156.589,
+          "marks": 1297,
+          "rawSha256": "13a5893731c534a7e9217376fe895670b3f66f53a7da8e867db7d799137b8cae",
+          "stage": {
+            "applyMs": {
+              "total": 0.805,
+              "count": 1,
+              "samples": [
+                0.805
+              ]
+            },
+            "frameMs": {
+              "total": 0.704,
+              "count": 1,
+              "samples": [
+                0.704
+              ]
+            },
+            "bodyMs": {
+              "total": 326.423,
+              "count": 1,
+              "samples": [
+                326.423
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.377,
+              "count": 19,
+              "samples": [
+                0.016,
+                0.018,
+                0.016,
+                0.016,
+                0.016,
+                0.017,
+                0.018,
+                0.017,
+                0.016,
+                0.015,
+                0.031,
+                0.017,
+                0.017,
+                0.016,
+                0.02,
+                0.034,
+                0.044,
+                0.017,
+                0.016
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.04,
+              "count": 19,
+              "samples": [
+                0.006,
+                0.001,
+                0.002,
+                0.001,
+                0.006,
+                0.001,
+                0.001,
+                0.001,
+                0.002,
+                0.002,
+                0.004,
+                0.001,
+                0.002,
+                0.001,
+                0.003,
+                0.001,
+                0.002,
+                0.001,
+                0.002
+              ]
+            },
+            "drawTextMs": {
+              "total": 324.951,
+              "count": 19,
+              "samples": [
+                17.802,
+                16.284,
+                17.821,
+                16.391,
+                17.577,
+                16.35,
+                17.925,
+                16.264,
+                17.671,
+                16.655,
+                17.341,
+                17.271,
+                16.585,
+                16.969,
+                17.398,
+                17.957,
+                16.322,
+                18.193,
+                16.175
+              ]
+            },
+            "decorationMs": {
+              "total": 0.125,
+              "count": 19,
+              "samples": [
+                0.005,
+                0.003,
+                0.004,
+                0.004,
+                0.004,
+                0.004,
+                0.004,
+                0.003,
+                0.003,
+                0.019,
+                0.004,
+                0.032,
+                0.005,
+                0.01,
+                0.006,
+                0.005,
+                0.003,
+                0.004,
+                0.003
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.051,
+              "count": 1,
+              "samples": [
+                0.051
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.103,
+              "count": 1,
+              "samples": [
+                0.103
+              ]
+            }
+          },
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-profile\\baseline\\long-japanese.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "singleMs": 325.999,
+          "burstMs": 492.974,
+          "inputSpanMs": 160.954,
+          "marks": 1297,
+          "rawSha256": "8abab1e3ca763379cfb2451f10c8f0fd3bf6c4b37912327cb1f2dbf2e9bb5056",
+          "stage": {
+            "applyMs": {
+              "total": 0.801,
+              "count": 1,
+              "samples": [
+                0.801
+              ]
+            },
+            "frameMs": {
+              "total": 0.721,
+              "count": 1,
+              "samples": [
+                0.721
+              ]
+            },
+            "bodyMs": {
+              "total": 323.853,
+              "count": 1,
+              "samples": [
+                323.853
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.307,
+              "count": 19,
+              "samples": [
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.017,
+                0.016,
+                0.017,
+                0.016,
+                0.016,
+                0.016,
+                0.017,
+                0.016,
+                0.016,
+                0.016
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.032,
+              "count": 19,
+              "samples": [
+                0.002,
+                0.002,
+                0.002,
+                0.002,
+                0.001,
+                0.002,
+                0.002,
+                0.002,
+                0.002,
+                0.001,
+                0.001,
+                0.001,
+                0.002,
+                0.002,
+                0.001,
+                0.001,
+                0.002,
+                0.002,
+                0.002
+              ]
+            },
+            "drawTextMs": {
+              "total": 322.712,
+              "count": 19,
+              "samples": [
+                17.137,
+                16.385,
+                17.733,
+                15.966,
+                17.84,
+                16.278,
+                17.44,
+                16.457,
+                17.419,
+                15.836,
+                18.422,
+                15.87,
+                18.477,
+                15.881,
+                17.38,
+                16.423,
+                17.355,
+                16.451,
+                17.962
+              ]
+            },
+            "decorationMs": {
+              "total": 0.069,
+              "count": 19,
+              "samples": [
+                0.005,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.004,
+                0.004,
+                0.004,
+                0.004,
+                0.004,
+                0.004,
+                0.004,
+                0.004,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.004
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.051,
+              "count": 1,
+              "samples": [
+                0.051
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.105,
+              "count": 1,
+              "samples": [
+                0.105
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "singleMs": 320.022,
+          "burstMs": 477.758,
+          "inputSpanMs": 153.97,
+          "marks": 1297,
+          "rawSha256": "1a9e1c9e1317006f55a70c13ef9cd838925d09fc2452358ac252512ed1938f7b",
+          "stage": {
+            "applyMs": {
+              "total": 0.799,
+              "count": 1,
+              "samples": [
+                0.799
+              ]
+            },
+            "frameMs": {
+              "total": 0.705,
+              "count": 1,
+              "samples": [
+                0.705
+              ]
+            },
+            "bodyMs": {
+              "total": 317.287,
+              "count": 1,
+              "samples": [
+                317.287
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.34700000000000003,
+              "count": 19,
+              "samples": [
+                0.016,
+                0.017,
+                0.017,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.035,
+                0.016,
+                0.017,
+                0.015,
+                0.017,
+                0.016,
+                0.035,
+                0.016,
+                0.017,
+                0.017
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.037,
+              "count": 19,
+              "samples": [
+                0.002,
+                0.001,
+                0.001,
+                0.002,
+                0.001,
+                0.001,
+                0.002,
+                0.002,
+                0.002,
+                0.004,
+                0.002,
+                0.002,
+                0.002,
+                0.001,
+                0.002,
+                0.006,
+                0.001,
+                0.002,
+                0.001
+              ]
+            },
+            "drawTextMs": {
+              "total": 315.844,
+              "count": 19,
+              "samples": [
+                16.424,
+                16.806,
+                16.398,
+                17.146,
+                15.965,
+                17.957,
+                15.968,
+                17.782,
+                16.49,
+                16.927,
+                16.755,
+                16.861,
+                16.83,
+                15.86,
+                16.837,
+                16.01,
+                15.694,
+                17.447,
+                15.687
+              ]
+            },
+            "decorationMs": {
+              "total": 0.102,
+              "count": 19,
+              "samples": [
+                0.006,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.004,
+                0.018,
+                0.004,
+                0.003,
+                0.003,
+                0.005,
+                0.003,
+                0.023,
+                0.003,
+                0.004,
+                0.004,
+                0.003
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.157,
+              "count": 1,
+              "samples": [
+                0.157
+              ]
+            },
+            "waitMs": {
+              "total": 0.003,
+              "count": 1,
+              "samples": [
+                0.003
+              ]
+            },
+            "presentMs": {
+              "total": 0.356,
+              "count": 1,
+              "samples": [
+                0.356
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        }
+      ],
+      "finishedAt": "2026-10-03T14:55:00.483119+00:00"
+    },
+    "shaped": {
+      "issue": 291,
+      "release": {
+        "recordedAt": "2026-10-03T14-55-52Z",
+        "ref": "HEAD",
+        "commit": "a0b2c57b87e13b24eb5bc31ff1d4eca1e75f3c19",
+        "shortCommit": "a0b2c57",
+        "subject": "test: 文字組みを描画の前に確定して費用を分ける (#291)",
+        "head": "a0b2c57b87e13b24eb5bc31ff1d4eca1e75f3c19",
+        "builtFromWorktree": false,
+        "buildDirectory": "build/release-a0b2c57",
+        "executable": "build/release-a0b2c57/NeNeNib.exe",
+        "sha256": "D171B93D9C56A589BBDFECB0C6B7C2AAAB6AD359ECBA8FC4990558509DD4AA8A",
+        "bytes": 1303552,
+        "seconds": {
+          "configure": 1.958,
+          "build": 141.998,
+          "total": 143.956
+        },
+        "toolchain": {
+          "compiler": "clang-cl",
+          "llvm": "19.1.5",
+          "cmake": "3.31.6-msvc6",
+          "ninja": "1.12.1",
+          "msvcToolset": "14.44.35207"
+        }
+      },
+      "runnerSha256": "b62623075016641bbc0e7e8d1971d72d92507c142fa2f2600404591f745440a6",
+      "startedAt": "2026-10-03T14:58:41.304872+00:00",
+      "trials": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "singleMs": 0.955,
+          "burstMs": 4.745,
+          "inputSpanMs": 3.624,
+          "marks": 709,
+          "rawSha256": "3968a43586ba182d0f429588dfd63394fe4d87f3714f4cfad461b5ee6cc02df2",
+          "stage": {
+            "applyMs": {
+              "total": 0.017,
+              "count": 1,
+              "samples": [
+                0.017
+              ]
+            },
+            "frameMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "bodyMs": {
+              "total": 0.259,
+              "count": 1,
+              "samples": [
+                0.259
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.167,
+              "count": 1,
+              "samples": [
+                0.167
+              ]
+            },
+            "drawTextMs": {
+              "total": 0.003,
+              "count": 1,
+              "samples": [
+                0.003
+              ]
+            },
+            "decorationMs": {
+              "total": 0.002,
+              "count": 1,
+              "samples": [
+                0.002
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.184,
+              "count": 1,
+              "samples": [
+                0.184
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.108,
+              "count": 1,
+              "samples": [
+                0.108
+              ]
+            }
+          },
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-profile\\shaped\\empty.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "singleMs": 0.89,
+          "burstMs": 3.495,
+          "inputSpanMs": 2.365,
+          "marks": 709,
+          "rawSha256": "3d1c1c177b6c93c33ee3f29288c3d75afaf0206aa21d0fb665662497a38903ee",
+          "stage": {
+            "applyMs": {
+              "total": 0.018,
+              "count": 1,
+              "samples": [
+                0.018
+              ]
+            },
+            "frameMs": {
+              "total": 0.002,
+              "count": 1,
+              "samples": [
+                0.002
+              ]
+            },
+            "bodyMs": {
+              "total": 0.187,
+              "count": 1,
+              "samples": [
+                0.187
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.0,
+              "count": 1,
+              "samples": [
+                0.0
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.111,
+              "count": 1,
+              "samples": [
+                0.111
+              ]
+            },
+            "drawTextMs": {
+              "total": 0.004,
+              "count": 1,
+              "samples": [
+                0.004
+              ]
+            },
+            "decorationMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.185,
+              "count": 1,
+              "samples": [
+                0.185
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.113,
+              "count": 1,
+              "samples": [
+                0.113
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "singleMs": 1.057,
+          "burstMs": 3.295,
+          "inputSpanMs": 2.338,
+          "marks": 709,
+          "rawSha256": "5a51b82afe2f6112365d938ebfb194ab6ee63928fec2feba67693f2aa102f822",
+          "stage": {
+            "applyMs": {
+              "total": 0.04,
+              "count": 1,
+              "samples": [
+                0.04
+              ]
+            },
+            "frameMs": {
+              "total": 0.003,
+              "count": 1,
+              "samples": [
+                0.003
+              ]
+            },
+            "bodyMs": {
+              "total": 0.221,
+              "count": 1,
+              "samples": [
+                0.221
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.0,
+              "count": 1,
+              "samples": [
+                0.0
+              ]
+            },
+            "createLayoutMs": {
+              "total": 0.125,
+              "count": 1,
+              "samples": [
+                0.125
+              ]
+            },
+            "drawTextMs": {
+              "total": 0.004,
+              "count": 1,
+              "samples": [
+                0.004
+              ]
+            },
+            "decorationMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.174,
+              "count": 1,
+              "samples": [
+                0.174
+              ]
+            },
+            "waitMs": {
+              "total": 0.002,
+              "count": 1,
+              "samples": [
+                0.002
+              ]
+            },
+            "presentMs": {
+              "total": 0.107,
+              "count": 1,
+              "samples": [
+                0.107
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "singleMs": 325.445,
+          "burstMs": 472.598,
+          "inputSpanMs": 153.213,
+          "marks": 1297,
+          "rawSha256": "d6941fcf47462b9f36b25ad890c5637068f674f50293ea8764aac8a694f19ec2",
+          "stage": {
+            "applyMs": {
+              "total": 1.12,
+              "count": 1,
+              "samples": [
+                1.12
+              ]
+            },
+            "frameMs": {
+              "total": 1.007,
+              "count": 1,
+              "samples": [
+                1.007
+              ]
+            },
+            "bodyMs": {
+              "total": 322.434,
+              "count": 1,
+              "samples": [
+                322.434
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.313,
+              "count": 19,
+              "samples": [
+                0.027,
+                0.015,
+                0.017,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.015,
+                0.017,
+                0.015,
+                0.015,
+                0.016,
+                0.016,
+                0.015,
+                0.017,
+                0.016,
+                0.016
+              ]
+            },
+            "createLayoutMs": {
+              "total": 311.463,
+              "count": 19,
+              "samples": [
+                15.667,
+                16.544,
+                15.99,
+                17.647,
+                16.399,
+                16.73,
+                16.269,
+                18.34,
+                15.755,
+                16.149,
+                15.808,
+                17.806,
+                15.633,
+                17.211,
+                15.442,
+                16.117,
+                15.696,
+                16.93,
+                15.33
+              ]
+            },
+            "drawTextMs": {
+              "total": 9.77,
+              "count": 19,
+              "samples": [
+                0.593,
+                0.466,
+                0.497,
+                0.517,
+                0.505,
+                0.524,
+                0.481,
+                0.467,
+                0.507,
+                0.469,
+                0.515,
+                0.557,
+                0.467,
+                0.499,
+                0.469,
+                0.462,
+                0.457,
+                0.719,
+                0.599
+              ]
+            },
+            "decorationMs": {
+              "total": 0.062,
+              "count": 19,
+              "samples": [
+                0.005,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.004,
+                0.003,
+                0.003
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.056,
+              "count": 1,
+              "samples": [
+                0.056
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.106,
+              "count": 1,
+              "samples": [
+                0.106
+              ]
+            }
+          },
+          "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\291-profile\\shaped\\long-japanese.png",
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "singleMs": 318.701,
+          "burstMs": 488.311,
+          "inputSpanMs": 154.769,
+          "marks": 1297,
+          "rawSha256": "d3115c67a869a2bab451880acf283ddb4a56ca29b965387161561bd5aaf71836",
+          "stage": {
+            "applyMs": {
+              "total": 0.808,
+              "count": 1,
+              "samples": [
+                0.808
+              ]
+            },
+            "frameMs": {
+              "total": 0.713,
+              "count": 1,
+              "samples": [
+                0.713
+              ]
+            },
+            "bodyMs": {
+              "total": 316.523,
+              "count": 1,
+              "samples": [
+                316.523
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.312,
+              "count": 19,
+              "samples": [
+                0.017,
+                0.016,
+                0.016,
+                0.016,
+                0.017,
+                0.016,
+                0.016,
+                0.017,
+                0.017,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.018,
+                0.018
+              ]
+            },
+            "createLayoutMs": {
+              "total": 305.361,
+              "count": 19,
+              "samples": [
+                15.494,
+                16.329,
+                15.267,
+                17.367,
+                15.282,
+                16.037,
+                15.684,
+                16.423,
+                15.219,
+                16.514,
+                15.228,
+                16.565,
+                15.351,
+                17.221,
+                15.266,
+                16.411,
+                15.283,
+                16.412,
+                18.008
+              ]
+            },
+            "drawTextMs": {
+              "total": 9.983,
+              "count": 19,
+              "samples": [
+                0.594,
+                0.477,
+                0.504,
+                0.509,
+                0.502,
+                0.539,
+                0.464,
+                0.478,
+                0.485,
+                0.484,
+                0.454,
+                0.54,
+                0.501,
+                0.473,
+                0.455,
+                0.594,
+                0.456,
+                0.959,
+                0.515
+              ]
+            },
+            "decorationMs": {
+              "total": 0.073,
+              "count": 19,
+              "samples": [
+                0.005,
+                0.003,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.004,
+                0.013,
+                0.003
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.056,
+              "count": 1,
+              "samples": [
+                0.056
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.118,
+              "count": 1,
+              "samples": [
+                0.118
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "singleMs": 327.249,
+          "burstMs": 497.369,
+          "inputSpanMs": 159.778,
+          "marks": 1360,
+          "rawSha256": "95abd69bd4f6584b20d0ed788c594075e9ff3737e5a2f12bceb485caf14e9a36",
+          "stage": {
+            "applyMs": {
+              "total": 0.78,
+              "count": 1,
+              "samples": [
+                0.78
+              ]
+            },
+            "frameMs": {
+              "total": 0.698,
+              "count": 1,
+              "samples": [
+                0.698
+              ]
+            },
+            "bodyMs": {
+              "total": 325.104,
+              "count": 1,
+              "samples": [
+                325.104
+              ]
+            },
+            "utf16Ms": {
+              "total": 0.311,
+              "count": 19,
+              "samples": [
+                0.018,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.016,
+                0.017,
+                0.016,
+                0.016,
+                0.017,
+                0.017,
+                0.016,
+                0.015,
+                0.016,
+                0.018,
+                0.016,
+                0.016,
+                0.016,
+                0.017
+              ]
+            },
+            "createLayoutMs": {
+              "total": 314.058,
+              "count": 19,
+              "samples": [
+                16.963,
+                16.072,
+                17.053,
+                15.74,
+                17.124,
+                16.082,
+                16.914,
+                16.236,
+                16.851,
+                15.775,
+                16.901,
+                15.783,
+                17.227,
+                16.128,
+                16.784,
+                16.004,
+                17.227,
+                16.582,
+                16.612
+              ]
+            },
+            "drawTextMs": {
+              "total": 9.89,
+              "count": 19,
+              "samples": [
+                0.64,
+                0.5,
+                0.473,
+                0.485,
+                0.483,
+                0.517,
+                0.838,
+                0.534,
+                0.481,
+                0.5,
+                0.503,
+                0.565,
+                0.463,
+                0.461,
+                0.509,
+                0.466,
+                0.472,
+                0.527,
+                0.473
+              ]
+            },
+            "decorationMs": {
+              "total": 0.066,
+              "count": 19,
+              "samples": [
+                0.007,
+                0.004,
+                0.004,
+                0.003,
+                0.004,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.003,
+                0.004,
+                0.003,
+                0.003,
+                0.003
+              ]
+            },
+            "endDrawMs": {
+              "total": 0.052,
+              "count": 1,
+              "samples": [
+                0.052
+              ]
+            },
+            "waitMs": {
+              "total": 0.001,
+              "count": 1,
+              "samples": [
+                0.001
+              ]
+            },
+            "presentMs": {
+              "total": 0.118,
+              "count": 1,
+              "samples": [
+                0.118
+              ]
+            }
+          },
+          "window": [
+            80,
+            80,
+            1360,
+            880
+          ],
+          "client": [
+            0,
+            0,
+            1280,
+            800
+          ],
+          "dpi": 120
+        }
+      ],
+      "finishedAt": "2026-10-03T14:59:23.220310+00:00"
+    }
+  },
+  "paired": {
+    "issue": 291,
+    "startedAt": "2026-10-03T15:18:30.542676+00:00",
+    "machine": {
+      "fingerprint": "bc8a356f37c68491",
+      "cpu": "Intel(R) Core(TM) i9-10850K CPU @ 3.60GHz",
+      "gpu": "NVIDIA GeForce RTX 3090",
+      "dpi": 120
+    },
+    "windowSize": [
+      1280,
+      800
+    ],
+    "manifest": {
+      "O": {
+        "commit": "591b99fa7bbd2b6a4149fe45b81c81cafeb3e03a",
+        "sha256": "312B55BE0A62F8593CEB95AF1EDC87EB13C3BB7C7E39A739948A43DF939C66E6",
+        "bytes": 1302528,
+        "toolchain": {
+          "compiler": "clang-cl",
+          "llvm": "19.1.5",
+          "cmake": "3.31.6-msvc6",
+          "ninja": "1.12.1",
+          "msvcToolset": "14.44.35207"
+        },
+        "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-591b99f\\NeNeNib.exe"
+      },
+      "A": {
+        "commit": "a1a0e4d50a7c9eb784652a4d5ee65e11e7953e0d",
+        "sha256": "20BDE40B142DCC16409E5CE4973B1FBA91B5FB739FB474835BDD35A88CF0FC4D",
+        "bytes": 1307648,
+        "toolchain": {
+          "compiler": "clang-cl",
+          "llvm": "19.1.5",
+          "cmake": "3.31.6-msvc6",
+          "ninja": "1.12.1",
+          "msvcToolset": "14.44.35207"
+        },
+        "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-a1a0e4d\\NeNeNib.exe"
+      },
+      "S": {
+        "commit": "4d60d79d00bd496b18887ce7ff4445a94ace1d5b",
+        "sha256": "04DC8289BDAB3B82E3B0B127D7D6B134CB6BCE505548ECA35627B4A6F058DBFA",
+        "bytes": 1307648,
+        "toolchain": {
+          "compiler": "clang-cl",
+          "llvm": "19.1.5",
+          "cmake": "3.31.6-msvc6",
+          "ninja": "1.12.1",
+          "msvcToolset": "14.44.35207"
+        },
+        "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-4d60d79\\NeNeNib.exe"
+      },
+      "H": {
+        "commit": "58a48fb871c8df497d5ebc6bd0a616aef3815b55",
+        "sha256": "2484CF545D646BBDFA15D052C86D941EAE94011936837CA8B70BBBEB8F87D176",
+        "bytes": 1308160,
+        "toolchain": {
+          "compiler": "clang-cl",
+          "llvm": "19.1.5",
+          "cmake": "3.31.6-msvc6",
+          "ninja": "1.12.1",
+          "msvcToolset": "14.44.35207"
+        },
+        "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-58a48fb\\NeNeNib.exe"
+      },
+      "V": {
+        "commit": "fc0b4c078ec8a9074e31b81315b6c1c012d56468",
+        "sha256": "33C04C7549C85E3C193244B1ACE958E7DCA214444477F71D134B972E8D8B2415",
+        "bytes": 1308160,
+        "toolchain": {
+          "compiler": "clang-cl",
+          "llvm": "19.1.5",
+          "cmake": "3.31.6-msvc6",
+          "ninja": "1.12.1",
+          "msvcToolset": "14.44.35207"
+        },
+        "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-fc0b4c0\\NeNeNib.exe"
+      }
+    },
+    "runnerSha256": "8a986aae431737a2ec98d15b346b9c2284654f14ca91d8758f076f0aa23728ee",
+    "measurementSha256": "0a07ab8dc659b15d56cf9c353925a3eb9cb4cac757d418a06ec1a54f934660fd",
+    "driverSha256": "59bab4f9fc39564f0472a0f846c1db03819b0dfcab0f25483d799116ec47a328",
+    "fixtures": {
+      "empty": null,
+      "16mib": {
+        "path": "D:\\NeNeNib\\evidence\\291-paired\\documents\\large.txt",
+        "bytes": 16800000,
+        "sha256": "e0cfa5bd4f828d8e26fa1f476ef0467e80fb9014993c07eb18935fcf6959fdaf"
+      },
+      "long-japanese": {
+        "path": "D:\\NeNeNib\\evidence\\291-paired\\documents\\long-japanese.txt",
+        "bytes": 6219000,
+        "sha256": "ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32a6c5"
+      }
+    },
+    "trials": [
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "O",
+        "singleMs": 0.893,
+        "burstMs": 3.455,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-1-O",
+        "arrivalSpanMs": 2.487,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\empty-O.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "A",
+        "singleMs": 0.81,
+        "burstMs": 3.541,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-1-A",
+        "arrivalSpanMs": 2.484,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\empty-A.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "S",
+        "singleMs": 0.787,
+        "burstMs": 3.949,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-1-S",
+        "arrivalSpanMs": 3.044,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\empty-S.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "H",
+        "singleMs": 0.88,
+        "burstMs": 4.182,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-1-H",
+        "arrivalSpanMs": 3.086,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\empty-H.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "V",
+        "singleMs": 0.891,
+        "burstMs": 5.346,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-1-V",
+        "arrivalSpanMs": 4.507,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\empty-V.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "V",
+        "singleMs": 0.749,
+        "burstMs": 3.444,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-2-V",
+        "arrivalSpanMs": 2.41,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "H",
+        "singleMs": 1.091,
+        "burstMs": 3.365,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-2-H",
+        "arrivalSpanMs": 2.417,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "S",
+        "singleMs": 0.791,
+        "burstMs": 3.256,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-2-S",
+        "arrivalSpanMs": 2.338,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "A",
+        "singleMs": 0.795,
+        "burstMs": 3.318,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-2-A",
+        "arrivalSpanMs": 2.327,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "O",
+        "singleMs": 0.891,
+        "burstMs": 4.474,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-2-O",
+        "arrivalSpanMs": 3.185,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "O",
+        "singleMs": null,
+        "burstMs": null,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-3-O",
+        "arrivalSpanMs": 3.173,
+        "delivered": 207,
+        "missing": "expected 202 inputs, observed 207",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "A",
+        "singleMs": 0.949,
+        "burstMs": 3.281,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-3-A",
+        "arrivalSpanMs": 2.407,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "S",
+        "singleMs": null,
+        "burstMs": null,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-3-S",
+        "arrivalSpanMs": 2.829,
+        "delivered": 207,
+        "missing": "expected 202 inputs, observed 207",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "H",
+        "singleMs": 0.822,
+        "burstMs": 4.001,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-3-H",
+        "arrivalSpanMs": 2.545,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "V",
+        "singleMs": 0.856,
+        "burstMs": 3.282,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-3-V",
+        "arrivalSpanMs": 2.335,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "V",
+        "singleMs": 0.804,
+        "burstMs": 3.359,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-4-V",
+        "arrivalSpanMs": 2.332,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "H",
+        "singleMs": 0.807,
+        "burstMs": 4.054,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-4-H",
+        "arrivalSpanMs": 2.993,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "S",
+        "singleMs": 0.84,
+        "burstMs": 4.05,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-4-S",
+        "arrivalSpanMs": 2.409,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "A",
+        "singleMs": 0.738,
+        "burstMs": 3.363,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-4-A",
+        "arrivalSpanMs": 2.367,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "O",
+        "singleMs": 0.882,
+        "burstMs": 6.149,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-4-O",
+        "arrivalSpanMs": 5.165,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "O",
+        "singleMs": 1.119,
+        "burstMs": 3.708,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-5-O",
+        "arrivalSpanMs": 2.734,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "A",
+        "singleMs": 0.921,
+        "burstMs": 3.358,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-5-A",
+        "arrivalSpanMs": 2.434,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "S",
+        "singleMs": 0.798,
+        "burstMs": 3.227,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-5-S",
+        "arrivalSpanMs": 2.342,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "H",
+        "singleMs": 0.949,
+        "burstMs": 4.278,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-5-H",
+        "arrivalSpanMs": 2.808,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "V",
+        "singleMs": 1.067,
+        "burstMs": 3.428,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-5-V",
+        "arrivalSpanMs": 2.419,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "V",
+        "singleMs": 0.802,
+        "burstMs": 3.323,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-6-V",
+        "arrivalSpanMs": 2.394,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "H",
+        "singleMs": 1.115,
+        "burstMs": 4.134,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-6-H",
+        "arrivalSpanMs": 3.215,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "S",
+        "singleMs": 0.923,
+        "burstMs": 3.277,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-6-S",
+        "arrivalSpanMs": 2.389,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "A",
+        "singleMs": 0.894,
+        "burstMs": 3.32,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-6-A",
+        "arrivalSpanMs": 2.444,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "O",
+        "singleMs": 0.909,
+        "burstMs": 3.428,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\empty-6-O",
+        "arrivalSpanMs": 2.415,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "O",
+        "singleMs": 1.744,
+        "burstMs": 12.564,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-1-O",
+        "arrivalSpanMs": 10.773,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\16mib-O.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "A",
+        "singleMs": 1.181,
+        "burstMs": 9.413,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-1-A",
+        "arrivalSpanMs": 8.196,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\16mib-A.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "S",
+        "singleMs": 1.137,
+        "burstMs": 8.52,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-1-S",
+        "arrivalSpanMs": 7.306,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\16mib-S.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "H",
+        "singleMs": 1.014,
+        "burstMs": 10.466,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-1-H",
+        "arrivalSpanMs": 9.145,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\16mib-H.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "V",
+        "singleMs": 1.402,
+        "burstMs": 8.165,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-1-V",
+        "arrivalSpanMs": 6.776,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\16mib-V.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "V",
+        "singleMs": 1.689,
+        "burstMs": 8.744,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-2-V",
+        "arrivalSpanMs": 7.41,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "H",
+        "singleMs": 1.113,
+        "burstMs": 8.368,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-2-H",
+        "arrivalSpanMs": 7.202,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "S",
+        "singleMs": 1.144,
+        "burstMs": 9.025,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-2-S",
+        "arrivalSpanMs": 7.035,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "A",
+        "singleMs": 1.262,
+        "burstMs": 8.641,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-2-A",
+        "arrivalSpanMs": 7.392,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "O",
+        "singleMs": 2.543,
+        "burstMs": 9.998,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-2-O",
+        "arrivalSpanMs": 8.005,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "O",
+        "singleMs": 1.77,
+        "burstMs": 11.005,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-3-O",
+        "arrivalSpanMs": 9.187,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "A",
+        "singleMs": 2.193,
+        "burstMs": 10.384,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-3-A",
+        "arrivalSpanMs": 9.082,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "S",
+        "singleMs": 1.213,
+        "burstMs": 8.946,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-3-S",
+        "arrivalSpanMs": 7.319,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "H",
+        "singleMs": 1.202,
+        "burstMs": 8.23,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-3-H",
+        "arrivalSpanMs": 7.036,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "V",
+        "singleMs": 1.446,
+        "burstMs": 11.671,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-3-V",
+        "arrivalSpanMs": 9.497,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "V",
+        "singleMs": 2.276,
+        "burstMs": 9.24,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-4-V",
+        "arrivalSpanMs": 8.003,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "H",
+        "singleMs": 1.092,
+        "burstMs": 8.878,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-4-H",
+        "arrivalSpanMs": 7.65,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "S",
+        "singleMs": 1.127,
+        "burstMs": 8.486,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-4-S",
+        "arrivalSpanMs": 7.342,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "A",
+        "singleMs": 1.157,
+        "burstMs": 9.626,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-4-A",
+        "arrivalSpanMs": 8.441,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "O",
+        "singleMs": 1.77,
+        "burstMs": 9.028,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-4-O",
+        "arrivalSpanMs": 7.238,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "O",
+        "singleMs": 1.668,
+        "burstMs": 9.602,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-5-O",
+        "arrivalSpanMs": 7.474,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "A",
+        "singleMs": 1.161,
+        "burstMs": 11.382,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-5-A",
+        "arrivalSpanMs": 9.806,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "S",
+        "singleMs": 1.145,
+        "burstMs": 8.609,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-5-S",
+        "arrivalSpanMs": 7.363,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "H",
+        "singleMs": 2.221,
+        "burstMs": 9.92,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-5-H",
+        "arrivalSpanMs": 8.57,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "V",
+        "singleMs": 2.421,
+        "burstMs": 10.615,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-5-V",
+        "arrivalSpanMs": 9.378,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "V",
+        "singleMs": 1.751,
+        "burstMs": 8.588,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-6-V",
+        "arrivalSpanMs": 7.294,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "H",
+        "singleMs": 1.91,
+        "burstMs": 8.529,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-6-H",
+        "arrivalSpanMs": 7.276,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "S",
+        "singleMs": 1.108,
+        "burstMs": 8.439,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-6-S",
+        "arrivalSpanMs": 7.265,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "A",
+        "singleMs": 1.137,
+        "burstMs": 8.479,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-6-A",
+        "arrivalSpanMs": 7.291,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "O",
+        "singleMs": 1.798,
+        "burstMs": 9.219,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\16mib-6-O",
+        "arrivalSpanMs": 7.308,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "O",
+        "singleMs": 339.603,
+        "burstMs": 509.53,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-1-O",
+        "arrivalSpanMs": 164.841,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\long-japanese-O.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "A",
+        "singleMs": 29.673,
+        "burstMs": 204.929,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-1-A",
+        "arrivalSpanMs": 173.486,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\long-japanese-A.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "S",
+        "singleMs": 34.944,
+        "burstMs": 206.711,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-1-S",
+        "arrivalSpanMs": 175.09,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\long-japanese-S.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "H",
+        "singleMs": 29.571,
+        "burstMs": 193.8,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-1-H",
+        "arrivalSpanMs": 163.454,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\long-japanese-H.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "V",
+        "singleMs": 39.795,
+        "burstMs": 202.637,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-1-V",
+        "arrivalSpanMs": 163.194,
+        "delivered": 202,
+        "capture": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\captures\\long-japanese-V.png",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "V",
+        "singleMs": 42.259,
+        "burstMs": 200.294,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-2-V",
+        "arrivalSpanMs": 161.21,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "H",
+        "singleMs": 26.88,
+        "burstMs": 178.408,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-2-H",
+        "arrivalSpanMs": 151.456,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "S",
+        "singleMs": 27.974,
+        "burstMs": 200.094,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-2-S",
+        "arrivalSpanMs": 165.066,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "A",
+        "singleMs": 31.467,
+        "burstMs": 182.428,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-2-A",
+        "arrivalSpanMs": 154.667,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "O",
+        "singleMs": null,
+        "burstMs": null,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-2-O",
+        "arrivalSpanMs": 2030.318,
+        "delivered": 207,
+        "missing": "expected 202 inputs, observed 207",
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "O",
+        "singleMs": 349.862,
+        "burstMs": 485.058,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-3-O",
+        "arrivalSpanMs": 159.869,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "A",
+        "singleMs": 28.746,
+        "burstMs": 188.635,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-3-A",
+        "arrivalSpanMs": 159.192,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "S",
+        "singleMs": 28.662,
+        "burstMs": 181.693,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-3-S",
+        "arrivalSpanMs": 153.617,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "H",
+        "singleMs": 28.577,
+        "burstMs": 182.699,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-3-H",
+        "arrivalSpanMs": 154.108,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "V",
+        "singleMs": 37.173,
+        "burstMs": 194.984,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-3-V",
+        "arrivalSpanMs": 156.504,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "V",
+        "singleMs": 38.369,
+        "burstMs": 211.906,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-4-V",
+        "arrivalSpanMs": 170.114,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "H",
+        "singleMs": 28.041,
+        "burstMs": 183.929,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-4-H",
+        "arrivalSpanMs": 155.87,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "S",
+        "singleMs": 29.435,
+        "burstMs": 189.826,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-4-S",
+        "arrivalSpanMs": 160.311,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "A",
+        "singleMs": 28.202,
+        "burstMs": 185.243,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-4-A",
+        "arrivalSpanMs": 155.698,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "O",
+        "singleMs": 325.643,
+        "burstMs": 485.28,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-4-O",
+        "arrivalSpanMs": 154.703,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "O",
+        "singleMs": 320.929,
+        "burstMs": 472.22,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-5-O",
+        "arrivalSpanMs": 154.847,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "A",
+        "singleMs": 28.486,
+        "burstMs": 187.465,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-5-A",
+        "arrivalSpanMs": 157.426,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "S",
+        "singleMs": 29.142,
+        "burstMs": 192.497,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-5-S",
+        "arrivalSpanMs": 163.713,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "H",
+        "singleMs": 29.013,
+        "burstMs": 182.835,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-5-H",
+        "arrivalSpanMs": 155.489,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "V",
+        "singleMs": 37.755,
+        "burstMs": 194.353,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-5-V",
+        "arrivalSpanMs": 154.443,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "V",
+        "singleMs": 37.977,
+        "burstMs": 196.729,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-6-V",
+        "arrivalSpanMs": 158.62,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "H",
+        "singleMs": 27.782,
+        "burstMs": 179.816,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-6-H",
+        "arrivalSpanMs": 153.195,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "S",
+        "singleMs": 28.739,
+        "burstMs": 196.587,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-6-S",
+        "arrivalSpanMs": 167.087,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "A",
+        "singleMs": 27.014,
+        "burstMs": 184.983,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-6-A",
+        "arrivalSpanMs": 156.492,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "O",
+        "singleMs": 333.784,
+        "burstMs": 499.174,
+        "rawDirectory": "C:\\Users\\info\\WORKS\\NeNeNib\\out\\split-291\\long-japanese-6-O",
+        "arrivalSpanMs": 162.01,
+        "delivered": 202,
+        "window": [
+          80,
+          80,
+          1360,
+          880
+        ],
+        "client": [
+          0,
+          0,
+          1280,
+          800
+        ],
+        "dpi": 120
+      }
+    ],
+    "summary": {
+      "empty": {
+        "O": {
+          "singleMs": {
+            "samples": [
+              0.893,
+              0.891,
+              0.882,
+              1.119,
+              0.909
+            ],
+            "count": 5,
+            "median": 0.893,
+            "minimum": 0.882,
+            "maximum": 1.119,
+            "pairedDeltas": [
+              0.08299999999999996,
+              0.09599999999999997,
+              0.14400000000000002,
+              0.19799999999999995,
+              0.015000000000000013
+            ],
+            "positivePairs": 5
+          },
+          "burstMs": {
+            "samples": [
+              3.455,
+              4.474,
+              6.149,
+              3.708,
+              3.428
+            ],
+            "count": 5,
+            "median": 3.708,
+            "minimum": 3.428,
+            "maximum": 6.149,
+            "pairedDeltas": [
+              -0.08599999999999985,
+              1.1560000000000001,
+              2.786,
+              0.3500000000000001,
+              0.1080000000000001
+            ],
+            "positivePairs": 4
+          }
+        },
+        "A": {
+          "singleMs": {
+            "samples": [
+              0.81,
+              0.795,
+              0.949,
+              0.738,
+              0.921,
+              0.894
+            ],
+            "count": 6,
+            "median": 0.8520000000000001,
+            "minimum": 0.738,
+            "maximum": 0.949,
+            "pairedDeltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "positivePairs": 0
+          },
+          "burstMs": {
+            "samples": [
+              3.541,
+              3.318,
+              3.281,
+              3.363,
+              3.358,
+              3.32
+            ],
+            "count": 6,
+            "median": 3.339,
+            "minimum": 3.281,
+            "maximum": 3.541,
+            "pairedDeltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "positivePairs": 0
+          }
+        },
+        "S": {
+          "singleMs": {
+            "samples": [
+              0.787,
+              0.791,
+              0.84,
+              0.798,
+              0.923
+            ],
+            "count": 5,
+            "median": 0.798,
+            "minimum": 0.787,
+            "maximum": 0.923,
+            "pairedDeltas": [
+              -0.02300000000000002,
+              -0.0040000000000000036,
+              0.10199999999999998,
+              -0.123,
+              0.029000000000000026
+            ],
+            "positivePairs": 2
+          },
+          "burstMs": {
+            "samples": [
+              3.949,
+              3.256,
+              4.05,
+              3.227,
+              3.277
+            ],
+            "count": 5,
+            "median": 3.277,
+            "minimum": 3.227,
+            "maximum": 4.05,
+            "pairedDeltas": [
+              0.4079999999999999,
+              -0.06200000000000028,
+              0.6869999999999998,
+              -0.13100000000000023,
+              -0.042999999999999705
+            ],
+            "positivePairs": 2
+          }
+        },
+        "H": {
+          "singleMs": {
+            "samples": [
+              0.88,
+              1.091,
+              0.822,
+              0.807,
+              0.949,
+              1.115
+            ],
+            "count": 6,
+            "median": 0.9145,
+            "minimum": 0.807,
+            "maximum": 1.115,
+            "pairedDeltas": [
+              0.06999999999999995,
+              0.29599999999999993,
+              -0.127,
+              0.06900000000000006,
+              0.027999999999999914,
+              0.22099999999999997
+            ],
+            "positivePairs": 5
+          },
+          "burstMs": {
+            "samples": [
+              4.182,
+              3.365,
+              4.001,
+              4.054,
+              4.278,
+              4.134
+            ],
+            "count": 6,
+            "median": 4.094,
+            "minimum": 3.365,
+            "maximum": 4.278,
+            "pairedDeltas": [
+              0.6410000000000005,
+              0.04700000000000015,
+              0.7200000000000002,
+              0.6910000000000003,
+              0.9199999999999995,
+              0.8140000000000005
+            ],
+            "positivePairs": 6
+          }
+        },
+        "V": {
+          "singleMs": {
+            "samples": [
+              0.891,
+              0.749,
+              0.856,
+              0.804,
+              1.067,
+              0.802
+            ],
+            "count": 6,
+            "median": 0.8300000000000001,
+            "minimum": 0.749,
+            "maximum": 1.067,
+            "pairedDeltas": [
+              0.08099999999999996,
+              -0.04600000000000004,
+              -0.09299999999999997,
+              0.06600000000000006,
+              0.1459999999999999,
+              -0.09199999999999997
+            ],
+            "positivePairs": 3
+          },
+          "burstMs": {
+            "samples": [
+              5.346,
+              3.444,
+              3.282,
+              3.359,
+              3.428,
+              3.323
+            ],
+            "count": 6,
+            "median": 3.3935,
+            "minimum": 3.282,
+            "maximum": 5.346,
+            "pairedDeltas": [
+              1.8050000000000002,
+              0.1259999999999999,
+              0.0009999999999998899,
+              -0.0040000000000000036,
+              0.06999999999999984,
+              0.0030000000000001137
+            ],
+            "positivePairs": 5
+          }
+        }
+      },
+      "16mib": {
+        "O": {
+          "singleMs": {
+            "samples": [
+              1.744,
+              2.543,
+              1.77,
+              1.77,
+              1.668,
+              1.798
+            ],
+            "count": 6,
+            "median": 1.77,
+            "minimum": 1.668,
+            "maximum": 2.543,
+            "pairedDeltas": [
+              0.563,
+              1.2810000000000001,
+              -0.42300000000000004,
+              0.613,
+              0.5069999999999999,
+              0.661
+            ],
+            "positivePairs": 5
+          },
+          "burstMs": {
+            "samples": [
+              12.564,
+              9.998,
+              11.005,
+              9.028,
+              9.602,
+              9.219
+            ],
+            "count": 6,
+            "median": 9.8,
+            "minimum": 9.028,
+            "maximum": 12.564,
+            "pairedDeltas": [
+              3.151,
+              1.3569999999999993,
+              0.6210000000000004,
+              -0.597999999999999,
+              -1.7799999999999994,
+              0.7400000000000002
+            ],
+            "positivePairs": 4
+          }
+        },
+        "A": {
+          "singleMs": {
+            "samples": [
+              1.181,
+              1.262,
+              2.193,
+              1.157,
+              1.161,
+              1.137
+            ],
+            "count": 6,
+            "median": 1.171,
+            "minimum": 1.137,
+            "maximum": 2.193,
+            "pairedDeltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "positivePairs": 0
+          },
+          "burstMs": {
+            "samples": [
+              9.413,
+              8.641,
+              10.384,
+              9.626,
+              11.382,
+              8.479
+            ],
+            "count": 6,
+            "median": 9.5195,
+            "minimum": 8.479,
+            "maximum": 11.382,
+            "pairedDeltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "positivePairs": 0
+          }
+        },
+        "S": {
+          "singleMs": {
+            "samples": [
+              1.137,
+              1.144,
+              1.213,
+              1.127,
+              1.145,
+              1.108
+            ],
+            "count": 6,
+            "median": 1.1404999999999998,
+            "minimum": 1.108,
+            "maximum": 1.213,
+            "pairedDeltas": [
+              -0.04400000000000004,
+              -0.1180000000000001,
+              -0.98,
+              -0.030000000000000027,
+              -0.016000000000000014,
+              -0.028999999999999915
+            ],
+            "positivePairs": 0
+          },
+          "burstMs": {
+            "samples": [
+              8.52,
+              9.025,
+              8.946,
+              8.486,
+              8.609,
+              8.439
+            ],
+            "count": 6,
+            "median": 8.564499999999999,
+            "minimum": 8.439,
+            "maximum": 9.025,
+            "pairedDeltas": [
+              -0.8930000000000007,
+              0.38400000000000034,
+              -1.4380000000000006,
+              -1.1399999999999988,
+              -2.7729999999999997,
+              -0.03999999999999915
+            ],
+            "positivePairs": 1
+          }
+        },
+        "H": {
+          "singleMs": {
+            "samples": [
+              1.014,
+              1.113,
+              1.202,
+              1.092,
+              2.221,
+              1.91
+            ],
+            "count": 6,
+            "median": 1.1575,
+            "minimum": 1.014,
+            "maximum": 2.221,
+            "pairedDeltas": [
+              -0.16700000000000004,
+              -0.14900000000000002,
+              -0.9910000000000001,
+              -0.06499999999999995,
+              1.06,
+              0.7729999999999999
+            ],
+            "positivePairs": 2
+          },
+          "burstMs": {
+            "samples": [
+              10.466,
+              8.368,
+              8.23,
+              8.878,
+              9.92,
+              8.529
+            ],
+            "count": 6,
+            "median": 8.7035,
+            "minimum": 8.23,
+            "maximum": 10.466,
+            "pairedDeltas": [
+              1.052999999999999,
+              -0.2729999999999997,
+              -2.154,
+              -0.7479999999999993,
+              -1.4619999999999997,
+              0.05000000000000071
+            ],
+            "positivePairs": 2
+          }
+        },
+        "V": {
+          "singleMs": {
+            "samples": [
+              1.402,
+              1.689,
+              1.446,
+              2.276,
+              2.421,
+              1.751
+            ],
+            "count": 6,
+            "median": 1.72,
+            "minimum": 1.402,
+            "maximum": 2.421,
+            "pairedDeltas": [
+              0.22099999999999986,
+              0.42700000000000005,
+              -0.7470000000000001,
+              1.1189999999999998,
+              1.2599999999999998,
+              0.6139999999999999
+            ],
+            "positivePairs": 5
+          },
+          "burstMs": {
+            "samples": [
+              8.165,
+              8.744,
+              11.671,
+              9.24,
+              10.615,
+              8.588
+            ],
+            "count": 6,
+            "median": 8.992,
+            "minimum": 8.165,
+            "maximum": 11.671,
+            "pairedDeltas": [
+              -1.248000000000001,
+              0.10299999999999976,
+              1.286999999999999,
+              -0.38599999999999923,
+              -0.7669999999999995,
+              0.10899999999999999
+            ],
+            "positivePairs": 3
+          }
+        }
+      },
+      "long-japanese": {
+        "O": {
+          "singleMs": {
+            "samples": [
+              339.603,
+              349.862,
+              325.643,
+              320.929,
+              333.784
+            ],
+            "count": 5,
+            "median": 333.784,
+            "minimum": 320.929,
+            "maximum": 349.862,
+            "pairedDeltas": [
+              309.93,
+              321.11600000000004,
+              297.441,
+              292.443,
+              306.77
+            ],
+            "positivePairs": 5
+          },
+          "burstMs": {
+            "samples": [
+              509.53,
+              485.058,
+              485.28,
+              472.22,
+              499.174
+            ],
+            "count": 5,
+            "median": 485.28,
+            "minimum": 472.22,
+            "maximum": 509.53,
+            "pairedDeltas": [
+              304.601,
+              296.423,
+              300.037,
+              284.755,
+              314.191
+            ],
+            "positivePairs": 5
+          }
+        },
+        "A": {
+          "singleMs": {
+            "samples": [
+              29.673,
+              31.467,
+              28.746,
+              28.202,
+              28.486,
+              27.014
+            ],
+            "count": 6,
+            "median": 28.616,
+            "minimum": 27.014,
+            "maximum": 31.467,
+            "pairedDeltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "positivePairs": 0
+          },
+          "burstMs": {
+            "samples": [
+              204.929,
+              182.428,
+              188.635,
+              185.243,
+              187.465,
+              184.983
+            ],
+            "count": 6,
+            "median": 186.35399999999998,
+            "minimum": 182.428,
+            "maximum": 204.929,
+            "pairedDeltas": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "positivePairs": 0
+          }
+        },
+        "S": {
+          "singleMs": {
+            "samples": [
+              34.944,
+              27.974,
+              28.662,
+              29.435,
+              29.142,
+              28.739
+            ],
+            "count": 6,
+            "median": 28.9405,
+            "minimum": 27.974,
+            "maximum": 34.944,
+            "pairedDeltas": [
+              5.271000000000004,
+              -3.4929999999999986,
+              -0.08399999999999963,
+              1.232999999999997,
+              0.6559999999999988,
+              1.7250000000000014
+            ],
+            "positivePairs": 4
+          },
+          "burstMs": {
+            "samples": [
+              206.711,
+              200.094,
+              181.693,
+              189.826,
+              192.497,
+              196.587
+            ],
+            "count": 6,
+            "median": 194.542,
+            "minimum": 181.693,
+            "maximum": 206.711,
+            "pairedDeltas": [
+              1.7820000000000107,
+              17.665999999999997,
+              -6.941999999999979,
+              4.582999999999998,
+              5.032000000000011,
+              11.603999999999985
+            ],
+            "positivePairs": 5
+          }
+        },
+        "H": {
+          "singleMs": {
+            "samples": [
+              29.571,
+              26.88,
+              28.577,
+              28.041,
+              29.013,
+              27.782
+            ],
+            "count": 6,
+            "median": 28.309,
+            "minimum": 26.88,
+            "maximum": 29.571,
+            "pairedDeltas": [
+              -0.10199999999999676,
+              -4.587,
+              -0.16899999999999693,
+              -0.16100000000000136,
+              0.527000000000001,
+              0.7680000000000007
+            ],
+            "positivePairs": 2
+          },
+          "burstMs": {
+            "samples": [
+              193.8,
+              178.408,
+              182.699,
+              183.929,
+              182.835,
+              179.816
+            ],
+            "count": 6,
+            "median": 182.767,
+            "minimum": 178.408,
+            "maximum": 193.8,
+            "pairedDeltas": [
+              -11.12899999999999,
+              -4.02000000000001,
+              -5.935999999999979,
+              -1.313999999999993,
+              -4.6299999999999955,
+              -5.167000000000002
+            ],
+            "positivePairs": 0
+          }
+        },
+        "V": {
+          "singleMs": {
+            "samples": [
+              39.795,
+              42.259,
+              37.173,
+              38.369,
+              37.755,
+              37.977
+            ],
+            "count": 6,
+            "median": 38.173,
+            "minimum": 37.173,
+            "maximum": 42.259,
+            "pairedDeltas": [
+              10.122000000000003,
+              10.792000000000002,
+              8.427000000000003,
+              10.166999999999998,
+              9.269000000000002,
+              10.962999999999997
+            ],
+            "positivePairs": 6
+          },
+          "burstMs": {
+            "samples": [
+              202.637,
+              200.294,
+              194.984,
+              211.906,
+              194.353,
+              196.729
+            ],
+            "count": 6,
+            "median": 198.5115,
+            "minimum": 194.353,
+            "maximum": 211.906,
+            "pairedDeltas": [
+              -2.2920000000000016,
+              17.866000000000014,
+              6.349000000000018,
+              26.66300000000001,
+              6.888000000000005,
+              11.74600000000001
+            ],
+            "positivePairs": 5
+          }
+        }
+      }
+    },
+    "finishedAt": "2026-10-03T15:28:51.384162+00:00"
+  },
+  "audit": {
+    "rawRecordSha256": "36a6517c3d63a3e0bb41e70884040fb2452923c8f0f843e20611b2bb60c4b6fb",
+    "inputAudit": [
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "cdf5c70fea4e09a66aedf82d609de0d7042254d6007c83a459a3a0d9df8ea7e8"
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "e623a09b9467acef78cbda5b58c47ad990c6b9f6c3d52d443af425110ba62bbf"
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b78931e17048fbab9c7966cc7aa39aa692a75f9f026205689cdccf960f14c283"
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "f55cec36d9b31c4b8c618deb4e59b2b680ee6f2e6516383ec7ffa614a6d75e34"
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "e5de4424ad3dbdec15ababd11f5d388f51e0b205554e737c6ac67a3144f1e526"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "3ef113c23870f2995f84de7956fed0dbf4c60f21b549fbcc4190ab8fbf43ba2b"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b0204c8dd35b324160bf2cf0bdcba2bf22748c50e64aa9b536d442b1683febb3"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "4a4b57e44a30b8791f761035b244020fab8d23074e7f43f027eda6d18b46ebff"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "99056f7bc276a990d37f7b094c282a6c73507bc2acd287aad8bae5d9716da2e7"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "031392479a111b3b5671e67861ea2711e06b249c193b47bbe20617665a4ed845"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "O",
+        "missing": "expected 202 inputs, observed 207",
+        "inputs": 207,
+        "rawSha256": "f8006dd568ed1e118617dac2a4e3a6633b2b6a9478570deb903b4192dd331f1e"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "1fd72bb32742cdc44893e4ec9b3c49e50850e3251fe23266315fb0fba20ff896"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "S",
+        "missing": "expected 202 inputs, observed 207",
+        "inputs": 207,
+        "rawSha256": "e158a3c8bd53f08cb205cf442d0c16ddcbbcfc2cc37d1b3bcbec36accca1908c"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "f8a86563dddc6df138ed054847896987aff745339009a8c48bff977ede24bca1"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d5ef57ae6f51cfea395f87b0af0d9b8921b54a7526f8dd73e13c0343b075e7b7"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "338d306118c1321542629ff391b11ec9e2bd185a0a46c45e2688f11f400293fa"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "4326925bcc2a73c607f6e32cdcad317bc0bae2d466e6297c3ca4c12c1f203b38"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "90f87817f39a5e4ddcf5f5037bf93bfbfd360f1c38c6accbbe3acb8561031455"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "4f9ed979e30cabd2b629372e1e354e4a2e38067b69df0fdf28adcd8a759814cd"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "fa456d87187808f44bcf9ef8d5f6adefb7b1f2ad54900d96f3e3338965011d46"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "921583059e6a1d84650cf0f027ce6078aa9ac613c077c2151ae7d08cb28962a2"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "25d09c36af218c0dd2ef78dd3a15d29459d8044b2c2cc1a4ee7e27be001c6f8f"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "7e237e29aaf36b7e03a4c7e3158f78a65da9f3ec32ab7a0e0538d96dbe3b9de3"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "9214044da9c9f6c64485172705a665cc4ecd7019a87fd9aca76599b4947bbfc0"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "68d0274076cefd07289cc4f1377b9c41139315834f4a6d0a4c9a7cddd543fe49"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "51717b8ea15c1fc51be40b40f848c16f9e8a8b6e8d3da5663f2d029fb540dee7"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d5d673632b0b17f11c37f970c3ef9ca77af9f9d139c15c05f5843e64e2245736"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "fc3c4fc734c15cecc1454b4e16c389efac5aa312baaa29b1c3671c09af43df25"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "f8e2206211037a54a1d9aaa62f32cb9b324e9667f429c32e855214b1de8df8a7"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d889758fae9b34a088fe6de005c62ce96009e5ee959aab4138d7139465e523e7"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "13cb9e6ea16e2daeb352c51efa2f3946d67ec73dc38cffd44bc134f1eba05df7"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "38cea1a3a07970446c76170605d0c68c2bf679a9508064611438e9d20cd32cc9"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "61acac3f50ccb9caf390170972e836b783d4c9958eaa32b44e8b18702a4003f6"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d5a7e8ead46311610cf62ab79bffc1c39ff8775705ccd2c6d265ae0680645f28"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "c4a51a6008dcce25705cdb4378440da0214e168c55db63c1446203b8d68447ff"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "5d1c9ce4756b22b455021173b661c536fbc2188c65b7a5b028f01be14099c08b"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "3e433af0a108ee1456ee7e319390cb16d4d33b596ce40a7a947668fa28641760"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "45969e84d7f5a26868424cb99d44ee02058bf3062725b0686b266d364ed05d2e"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "de27fc2597d239344c16cf8de6eae48088cc2666123d24c6313beaf36be5247a"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "e0d0c8e7935a53fcab14026acb1eea8cb9f0d1e803cb53775cc4aec071d513c9"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d7fd15b9902f3d68dba52f7a3b5f0e11ef454ab1735a9d27924756e3468b65ec"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "e90da1ae542dcd3cbaaed66c919560107252e716886016e543fb4fed3386e21e"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "e494b765493051c934922b26e6c9b16cab7ea9039ad0e26aa36ee7699e57b400"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b6a54c201498dec4744a9564349bee5f6f5d1090e0e837c7318198f2aad97a20"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "1a7550b42c418af03c69228efd8ef6965970157a8bd22bc422d252a76fd57564"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "9a3eaa96588d69a05e5f61d90050818a38c5830e822054148ced644887a0246e"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "7002617431db6b380563c37b36e5a05783e19662923afe2c8b84f7fb5250c7fa"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "f936ac24de9c2630fa155038df3bddd005dac3213a53a05431a86a9bd6e810c3"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b793d607cba8d9044e6443d21d1b75b99cdf8e0450abf6273c1adc661f7428e3"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "5ec2b1d67e44a8b3d3d48d9e489296ffbf7e3dc829aa46737fab5d5ce45d9058"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b0500b7d04448fd0a545e3c671ecaba121f4da6bb67cfe6a1639dd04535ab796"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b2b7c4c80faa2b15136e067c203ed422d33ab0c3ed3b0ab7ae54c0ed439d547f"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "2041005161a8c9847a04f1ac268859ec60c94a105b20693dacd6c9f61ef870c8"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "dfcd402f21110f93a02ce37370fd54b35d4c364a585dd3edda0472379b056e88"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b394ce69bbda928df3b6a91285500395b40a2ea1f84b21576bae329d55789b67"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "33cc01fcfb8979fdcc955a55625b23eebde00e17b2ed9353a96f75de6c51bce0"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "3a5bf8c41c7478913cf26ffcbbf2a94d1a64ecb31bce6b84b6b1bb1206fa198b"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "bca116286ab22719cd0e4069ffaadfe5b4cb49383776b8808ffd66183e735640"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "02acded416949e0c94d61e6a700c132286293ff76350c92e909892d63897b7b2"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b2ff749f0a90015ec14a861a35afd0edd9e98688710e87db0bf4c04057db8c06"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "ba494fc8fa5d72d1c948222e187892a1a4f437ec7f63de2a8939414742cba899"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d38a054162048e0545ad7e765212898e6a6032bc8c212117bc4689682bc0e445"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "31a2a7b9ebbbec591c059089573816e850f4567e13d18ce5f55cf3b405fe8aca"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b4428938e5a7be61ed53721beb47bd182721b565c1364356409eccfb51f39c40"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "923629bb5c7c4dc57be282176cf09454668ba5e17c6655bca0ea799f7200510d"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "1a1eace73c31cbd1756d38db56831fa0f969de407bbbf293bd70cad77472367d"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "7accceb830153b970198fadceb979d057ae630aaee0f2d22e6eaef8e6263ada3"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "84795af33e5e68c270d4fe53509a6562ec5062ec51cefc7a72bc075e1441200a"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "c49a634f9c3ad26ea1ff185b4c0d22076db8b33ad93f28659b3411b1be3bbd88"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "O",
+        "missing": "expected 202 inputs, observed 207",
+        "inputs": 207,
+        "rawSha256": "b4dda091fe4daf3e0052d9073f2b5b4d1e8367d9cf70f9e9e032072f4c7f5eab"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "10046ad7815a6b10d819d7d2e4c811182034a49cd40cee6c17f4a0fd8fa84462"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b18765104f0f852a4f85f7d9e66648b86a6d974892bb55647b61866b756a1ca7"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "e7521bf9a8baa2f885a3257cd9ecab193527e3edd17ee051d14dfc0b7d141b38"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "38df9131295b63a5ad4370a8899ff434d389ebc3d3f02501e44c2a1a3a03fd3d"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "661a86401b86e32500d24d94d2e6b6a9a044b3ea80cd3e4ff855a42245d080c7"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b3de4bc7c878f79a6b37e3104714b030997777dbd2f30daccc98cca08a2a548d"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d50b1979f502a4d48763079b76cb356658f72aea03513ded045fe5d6197f07ff"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "9ad177b2a065f1107b0439589cd2482decf0fa2bf051ab976e5694b9dc530e5a"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "b990f23c9eef6e35a4df68f6536a2ad181352f11ea5693a5e717cce4a39e1a7f"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "3acf5e60dcf87f418c70afa16c9c42efd844ad39a498077da6f1d66dd6ee6caf"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "496fd501f5b780ddc8e3b52aa9bce7f831796d0cdc871bb7861226b80bd84616"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "f72d42ea6a1c775d694190970b8986912d2188d27b0fc56f8a8cf78c1b226cbc"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "d3bfd95a1f6db93472cba5a660aea37a1cc1dd6820b5917d85f8be2d000f72b3"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "51f1ab6279ad891f18391f807f3681bfdbe980b940b4447ef60f86d9921f66e9"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "750085eb6fb2e775ad771d2dbacbba4123e3547393841130f29bf6cfd80040b3"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "V",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "869e3f11be61f28d4464b107293c1fcda317a506029d5e47e90b0ba63d79fba3"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "H",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "48f2ca10837c0cfaf37e3800014491bb001577365d2268184a1bb5f57b2cfbb2"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "S",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "7c3eccac1488d08b62a4260b51c369663e623d7f7ee80d687c73936c504fbbf2"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "A",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "081de3aaf62e11bf4aed64238aa31ee45eef6f846ad2c1db2b9b66d81bf1262c"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "O",
+        "isolatedWarmupAndSingle": true,
+        "inputs": 202,
+        "rawSha256": "7ce755b997698fe732be47bdb5e5d639655681eefd4dd04c48e50bccb5f588ac"
+      }
+    ],
+    "judgment": {
+      "empty": {
+        "controls": {
+          "singleMs": {
+            "firstHalfMedian": 0.81,
+            "lastHalfMedian": 0.894,
+            "drift": 0.08399999999999996,
+            "limit": 0.1,
+            "stable": true
+          },
+          "burstMs": {
+            "firstHalfMedian": 3.318,
+            "lastHalfMedian": 3.358,
+            "drift": 0.040000000000000036,
+            "limit": 0.5,
+            "stable": true
+          }
+        },
+        "comparisons": {
+          "S": {
+            "singleMs": {
+              "medianDelta": -0.05400000000000005,
+              "limit": 0.1,
+              "withinNumericLimit": true,
+              "positivePairs": 2,
+              "consistentSmallIncrease": false,
+              "decision": "hold"
+            },
+            "burstMs": {
+              "medianDelta": -0.06199999999999983,
+              "limit": 0.5,
+              "withinNumericLimit": true,
+              "positivePairs": 2,
+              "consistentSmallIncrease": false,
+              "decision": "hold"
+            }
+          },
+          "H": {
+            "singleMs": {
+              "medianDelta": 0.06249999999999989,
+              "limit": 0.5,
+              "withinNumericLimit": true,
+              "positivePairs": 5,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            },
+            "burstMs": {
+              "medianDelta": 0.7550000000000003,
+              "limit": 1.0,
+              "withinNumericLimit": true,
+              "positivePairs": 6,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            }
+          },
+          "V": {
+            "singleMs": {
+              "medianDelta": -0.02200000000000002,
+              "limit": 0.5,
+              "withinNumericLimit": true,
+              "positivePairs": 3,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            },
+            "burstMs": {
+              "medianDelta": 0.05449999999999999,
+              "limit": 1.0,
+              "withinNumericLimit": true,
+              "positivePairs": 5,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            }
+          }
+        },
+        "fixtureStable": true,
+        "originalControls": {
+          "singleMs": {
+            "firstHalfMedian": 0.892,
+            "lastHalfMedian": 0.909,
+            "firstHalfCount": 2,
+            "lastHalfCount": 3,
+            "drift": 0.017000000000000015,
+            "limit": 0.1,
+            "stable": false
+          },
+          "burstMs": {
+            "firstHalfMedian": 3.9645,
+            "lastHalfMedian": 3.708,
+            "firstHalfCount": 2,
+            "lastHalfCount": 3,
+            "drift": 0.25649999999999995,
+            "limit": 0.5,
+            "stable": false
+          }
+        },
+        "cacheComparisons": {
+          "singleMs": {
+            "medianDelta": -0.040999999999999925,
+            "pairedDeltas": [
+              -0.08299999999999996,
+              -0.09599999999999997,
+              -0.14400000000000002,
+              -0.19799999999999995,
+              -0.015000000000000013
+            ],
+            "positivePairs": 0,
+            "negativePairs": 5,
+            "reductionPercent": 4.5912653975363815,
+            "limit": 0.1,
+            "stableControls": false,
+            "withinNumericLimit": true,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": -0.3690000000000002,
+            "pairedDeltas": [
+              0.08599999999999985,
+              -1.1560000000000001,
+              -2.786,
+              -0.3500000000000001,
+              -0.1080000000000001
+            ],
+            "positivePairs": 1,
+            "negativePairs": 4,
+            "reductionPercent": 9.951456310679617,
+            "limit": 0.5,
+            "stableControls": false,
+            "withinNumericLimit": true,
+            "decision": "hold"
+          }
+        }
+      },
+      "16mib": {
+        "controls": {
+          "singleMs": {
+            "firstHalfMedian": 1.262,
+            "lastHalfMedian": 1.157,
+            "drift": 0.10499999999999998,
+            "limit": 0.11710000000000001,
+            "stable": true
+          },
+          "burstMs": {
+            "firstHalfMedian": 9.413,
+            "lastHalfMedian": 9.626,
+            "drift": 0.2129999999999992,
+            "limit": 0.9519500000000001,
+            "stable": true
+          }
+        },
+        "comparisons": {
+          "S": {
+            "singleMs": {
+              "medianDelta": -0.030500000000000194,
+              "limit": 0.11710000000000001,
+              "withinNumericLimit": true,
+              "positivePairs": 0,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            },
+            "burstMs": {
+              "medianDelta": -0.9550000000000018,
+              "limit": 0.9519500000000001,
+              "withinNumericLimit": true,
+              "positivePairs": 1,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            }
+          },
+          "H": {
+            "singleMs": {
+              "medianDelta": -0.013500000000000068,
+              "limit": 0.5,
+              "withinNumericLimit": true,
+              "positivePairs": 2,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            },
+            "burstMs": {
+              "medianDelta": -0.8160000000000007,
+              "limit": 1.0,
+              "withinNumericLimit": true,
+              "positivePairs": 2,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            }
+          },
+          "V": {
+            "singleMs": {
+              "medianDelta": 0.5489999999999999,
+              "limit": 0.5,
+              "withinNumericLimit": false,
+              "positivePairs": 5,
+              "consistentSmallIncrease": false,
+              "decision": "hold"
+            },
+            "burstMs": {
+              "medianDelta": -0.5274999999999999,
+              "limit": 1.0,
+              "withinNumericLimit": true,
+              "positivePairs": 3,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            }
+          }
+        },
+        "fixtureStable": true,
+        "originalControls": {
+          "singleMs": {
+            "firstHalfMedian": 1.77,
+            "lastHalfMedian": 1.77,
+            "firstHalfCount": 3,
+            "lastHalfCount": 3,
+            "drift": 0.0,
+            "limit": 0.17700000000000002,
+            "stable": true
+          },
+          "burstMs": {
+            "firstHalfMedian": 11.005,
+            "lastHalfMedian": 9.219,
+            "firstHalfCount": 3,
+            "lastHalfCount": 3,
+            "drift": 1.7860000000000014,
+            "limit": 0.9800000000000001,
+            "stable": false
+          }
+        },
+        "cacheComparisons": {
+          "singleMs": {
+            "medianDelta": -0.599,
+            "pairedDeltas": [
+              -0.563,
+              -1.2810000000000001,
+              0.42300000000000004,
+              -0.613,
+              -0.5069999999999999,
+              -0.661
+            ],
+            "positivePairs": 1,
+            "negativePairs": 5,
+            "reductionPercent": 33.84180790960451,
+            "limit": 0.17700000000000002,
+            "stableControls": false,
+            "withinNumericLimit": true,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": -0.28049999999999997,
+            "pairedDeltas": [
+              -3.151,
+              -1.3569999999999993,
+              -0.6210000000000004,
+              0.597999999999999,
+              1.7799999999999994,
+              -0.7400000000000002
+            ],
+            "positivePairs": 2,
+            "negativePairs": 4,
+            "reductionPercent": 2.8622448979591875,
+            "limit": 0.9800000000000001,
+            "stableControls": false,
+            "withinNumericLimit": true,
+            "decision": "hold"
+          }
+        }
+      },
+      "long-japanese": {
+        "controls": {
+          "singleMs": {
+            "firstHalfMedian": 29.673,
+            "lastHalfMedian": 28.202,
+            "drift": 1.4709999999999965,
+            "limit": 2.8616,
+            "stable": true
+          },
+          "burstMs": {
+            "firstHalfMedian": 188.635,
+            "lastHalfMedian": 185.243,
+            "drift": 3.391999999999996,
+            "limit": 18.6354,
+            "stable": true
+          }
+        },
+        "comparisons": {
+          "S": {
+            "singleMs": {
+              "medianDelta": 0.32450000000000045,
+              "limit": 2.8616,
+              "withinNumericLimit": true,
+              "positivePairs": 4,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            },
+            "burstMs": {
+              "medianDelta": 8.188000000000017,
+              "limit": 18.6354,
+              "withinNumericLimit": true,
+              "positivePairs": 5,
+              "consistentSmallIncrease": true,
+              "decision": "hold"
+            }
+          },
+          "H": {
+            "singleMs": {
+              "medianDelta": -0.3069999999999986,
+              "limit": 0.5,
+              "withinNumericLimit": false,
+              "positivePairs": 2,
+              "consistentSmallIncrease": false,
+              "decision": "hold"
+            },
+            "burstMs": {
+              "medianDelta": -3.586999999999989,
+              "limit": 1.0,
+              "withinNumericLimit": true,
+              "positivePairs": 0,
+              "consistentSmallIncrease": false,
+              "decision": "within-probe-limits"
+            }
+          },
+          "V": {
+            "singleMs": {
+              "medianDelta": 9.557000000000002,
+              "limit": 0.5,
+              "withinNumericLimit": false,
+              "positivePairs": 6,
+              "consistentSmallIncrease": false,
+              "decision": "hold"
+            },
+            "burstMs": {
+              "medianDelta": 12.157500000000027,
+              "limit": 1.0,
+              "withinNumericLimit": false,
+              "positivePairs": 5,
+              "consistentSmallIncrease": false,
+              "decision": "hold"
+            }
+          }
+        },
+        "fixtureStable": true,
+        "originalControls": {
+          "singleMs": {
+            "firstHalfMedian": 344.7325,
+            "lastHalfMedian": 325.643,
+            "firstHalfCount": 2,
+            "lastHalfCount": 3,
+            "drift": 19.089500000000044,
+            "limit": 33.3784,
+            "stable": false
+          },
+          "burstMs": {
+            "firstHalfMedian": 497.294,
+            "lastHalfMedian": 485.28,
+            "firstHalfCount": 2,
+            "lastHalfCount": 3,
+            "drift": 12.01400000000001,
+            "limit": 48.528,
+            "stable": false
+          }
+        },
+        "cacheComparisons": {
+          "singleMs": {
+            "medianDelta": -305.168,
+            "pairedDeltas": [
+              -309.93,
+              -321.11600000000004,
+              -297.441,
+              -292.443,
+              -306.77
+            ],
+            "positivePairs": 0,
+            "negativePairs": 5,
+            "reductionPercent": 91.42679097859694,
+            "limit": 33.3784,
+            "stableControls": false,
+            "withinNumericLimit": true,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": -298.926,
+            "pairedDeltas": [
+              -304.601,
+              -296.423,
+              -300.037,
+              -284.755,
+              -314.191
+            ],
+            "positivePairs": 0,
+            "negativePairs": 5,
+            "reductionPercent": 61.5986646884273,
+            "limit": 48.528,
+            "stableControls": false,
+            "withinNumericLimit": true,
+            "decision": "hold"
+          }
+        }
+      }
+    }
+  },
+  "visual": {
+    "before": {
+      "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-591b99f\\NeNeNib.exe",
+      "sha256": "312b55be0a62f8593ceb95af1edc87eb13c3bb7c7e39a739948a43df939c66e6",
+      "runnerSha256": "0995b5b606a83533acf87c91b94c411dc6ee684430c0ed6996cb7a3b396ccf92",
+      "frames": [
+        {
+          "label": "01-initial",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "02-repaint",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "03-edit",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "04-backspace",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "05-newline",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "06-undo",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "07-click-0",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "07-click-1",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "07-click-2",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "08-selection",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "09-selection-cleared",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "10-scroll",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "11-scroll-back",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "12-narrow",
+          "size": [
+            920,
+            660
+          ]
+        },
+        {
+          "label": "13-wide",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "14-block-caret",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "15-search",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "16-search-next",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "17-font-size",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "18-font-family",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "19-font-restored",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "20-theme",
+          "size": [
+            1280,
+            800
+          ]
+        }
+      ],
+      "dpi": 120,
+      "settings": "version=1\ncolorscheme=dracula\nfont_family=Consolas\nfont_size=13.5\n",
+      "exitCode": 0
+    },
+    "after": {
+      "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-a1a0e4d\\NeNeNib.exe",
+      "sha256": "20bde40b142dcc16409e5ce4973b1fba91b5fb739fb474835bdd35a88cf0fc4d",
+      "runnerSha256": "0995b5b606a83533acf87c91b94c411dc6ee684430c0ed6996cb7a3b396ccf92",
+      "frames": [
+        {
+          "label": "01-initial",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "02-repaint",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "03-edit",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "04-backspace",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "05-newline",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "06-undo",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "07-click-0",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "07-click-1",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "07-click-2",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "08-selection",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "09-selection-cleared",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "10-scroll",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "11-scroll-back",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "12-narrow",
+          "size": [
+            920,
+            660
+          ]
+        },
+        {
+          "label": "13-wide",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "14-block-caret",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "15-search",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "16-search-next",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "17-font-size",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "18-font-family",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "19-font-restored",
+          "size": [
+            1280,
+            800
+          ]
+        },
+        {
+          "label": "20-theme",
+          "size": [
+            1280,
+            800
+          ]
+        }
+      ],
+      "dpi": 120,
+      "settings": "version=1\ncolorscheme=dracula\nfont_family=Consolas\nfont_size=13.5\n",
+      "exitCode": 0
+    },
+    "comparisons": [
+      {
+        "label": "01-initial",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "02-repaint",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "03-edit",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "04-backspace",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "05-newline",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "06-undo",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "07-click-0",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "07-click-1",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "07-click-2",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "08-selection",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "09-selection-cleared",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "10-scroll",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "11-scroll-back",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "12-narrow",
+        "width": 920,
+        "height": 660,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "13-wide",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "14-block-caret",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "15-search",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "16-search-next",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "17-font-size",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "18-font-family",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "19-font-restored",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      },
+      {
+        "label": "20-theme",
+        "width": 1280,
+        "height": 800,
+        "comparedFromY": 50,
+        "changedPixels": 0
+      }
+    ]
+  },
+  "ime": {
+    "keyboardLanguage": "0x411",
+    "defaultImeWindow": true,
+    "verifierKeyboardLanguage": "0x411",
+    "openStatusAsFound": 0,
+    "modes": {
+      "openAfterTurningItOn": 1,
+      "openInOrdinaryMode": 1,
+      "openInVimNormal": 0,
+      "openInVimInsert": 1,
+      "openBackInVimNormal": 0,
+      "openBackInOrdinaryMode": 1
+    },
+    "composition": {
+      "foreground": true,
+      "inkWhileComposing": 522,
+      "imeUnderlinePixels": 189,
+      "accentPixelsWhileComposing": 90,
+      "capture": "ime-slice.bmp",
+      "inkAfterSpace": 2181,
+      "accentPixelsAfterSpace": 186,
+      "captureAfterSpace": "ime-slice-converted.bmp",
+      "inkAfterEnter": 651,
+      "imeUnderlinePixelsAfterEnter": 0,
+      "captureAfterEnter": "ime-slice-committed.bmp",
+      "spaceOpenedATargetClause": true,
+      "checked": "composed, converted and committed with real keystrokes"
+    },
+    "openStatusRestored": 0,
+    "closeConfirmationDismissed": true,
+    "exitCode": 0
+  },
+  "interpretation": {
+    "validTrials": 87,
+    "missingTrials": 3,
+    "retryCount": 0,
+    "cacheComparisonDecision": "hold: missing original samples in empty/long; original short-line burst drift exceeds preset limit",
+    "splitDecision": "hold: long-line total single input exceeds 2ms, side-by-side short-line extra exceeds 0.5ms"
+  },
+  "artifact": {
+    "path": "D:\\NeNeNib\\evidence\\291-render\\long-line-render-evidence.zip",
+    "fileCount": 235,
+    "bytes": 9082031,
+    "sha256": "6e1fe550cf41204aa58a3e739ff39ede1eae2fb384833f89e4f870bd239397e1",
+    "crc": "pass",
+    "executablesIncluded": false
+  }
+}
