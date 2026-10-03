@@ -4,18 +4,19 @@
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
 
-## 運用（2026-09-23 施主指示）
+## 運用（2026-10-03）
 
-- 背景席は仕事の種類で `model` を明示する（実装＝Opus・下ごしらえ＝Sonnet・機械作業＝Haiku・裁定と受理は設計席）。繰り返す手順は `eng/` のスクリプト（[ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md)）。
-- 実装席は probe → 実装 → 差し戻し対応を**それぞれ新しい席**にし（`SendMessage` の使い回しと `fork` は禁止）、道具出力を `out/` へ落とし、最終報告は 30 行以内。依頼書の型は [`docs/templates/implementation-seat-brief.md`](../templates/implementation-seat-brief.md)（[ADR 0039](../adr/0039-implementation-seat-per-step-and-small-tool-output.md)）。
+- 既定は現在のサナの単体実行。hide が現在の作業で分担を明示した範囲では、その指定を優先する（AGENTS.md）。2026-10-03 の #272 の仕上げは、hide の指示で設計サナが設計・判断・受理、SOL の実装サナが調査・計測器・CI を担当した。この分担を次の作業の既定にはしない。
+- 繰り返す手順は `eng/` のスクリプト、道具の出力は `out/`。依頼書の型は [`docs/templates/implementation-seat-brief.md`](../templates/implementation-seat-brief.md)。過去の ADR 0038 / 0039 にある固定モデルや一律の分担より、現在の AGENTS.md と hide の指示を優先する。
 
 ## いまの Issue と次の順
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
-| 1 | #272 同じフォルダを Ctrl+P の面に出す（ADR 0062 の C・施主決定 D29・D33・D34・branch `feat/272-palette-same-folder`） | **実装中**・工程 1（core）と工程 2（application）と差し戻し 1（打ち切りの知らせを面を開いている間ずっと出す）を受理して push 済み（先頭 `edeb38b`）。実機の画は小さいフォルダと 8200 個のフォルダで確かめた。残りは工程 3（面の中の 1 打鍵のベンチ）→ 速さ（施主に確かめてから）→ 工程 4（記録と PR）。状態は[引き継ぎ 2026-10-02](../handoffs/2026-10-02.md) |
-| 2 | Ctrl+P の統合（FR-006・ADR 0060・施主決定 D28）の続き: 同じフォルダ（3/5・`/`）→ ブックマーク（4/5・`*`・Ctrl+D）→ Vim の `:e` `:b` `:ls`（5/5） | 同じフォルダは ADR 0062・施主決定 D33・D34 で 3 本に分けた: #270 面の重さ（絞り込みの結果を持ち frame は見えている行だけ）→ #271 ワーカーとフォルダの列挙 → #272 同じフォルダを面に出す。#270・#271 は済み（検証の記録は [gate-proofs 5-ca・5-cb](../quality/gate-proofs.md)）。#272 は上の 1。ブックマークと Vim の `:e` `:b` `:ls` は未起票 |
-| 3 | その後の候補: 通常モードの矢印・Backspace・Delete と結合文字 / 一般 Ex | 未起票 |
+| 1 | #264 Ctrl+P の面で日本語入力を受け、名前の照合をコードポイントの境目で行う（ADR 0061・施主決定 D31・D32） | **済み**・工程 1（照合と IME の構えと変換の行き先）と工程 2（ui の IME の開閉と入力行の描画と候補窓）と差し戻し 2 件を受理し、実機は IME の開閉と変換（差し戻し 2 の後の撮り直しを含む）と速さの 6 本を確かめた。検証の記録は [gate-proofs 5-bz](../quality/gate-proofs.md) |
+| 2 | #272 同じフォルダ（3/5・`/`・ADR 0062・D33〜D35） | 実装・実機確認済み。#270 面の重さ、#271 ワーカーに続く最後の接続。計測器と文書を仕上げる PR は [#277](https://github.com/hideyukiMORI/nene-nib/pull/277)。統合状態は PR が正。検証と再利用の根拠は [gate-proofs 5-cc](../quality/gate-proofs.md#5-cc--ctrlp-の同じフォルダissue-272adr-0062) |
+| 3 | Ctrl+P の統合の続き: ブックマーク（4/5・`*`・Ctrl+D）→ Vim の `:e` `:b` `:ls`（5/5） | 未起票。次は仕様の D5・D28・D29 と FR-006、ADR 0060 を照合してブックマークの設計を具体化する |
+| 4 | その後の候補: 通常モードの矢印・Backspace・Delete と結合文字 / 一般 Ex | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
 
@@ -31,17 +32,17 @@
 
 順は設計席の案で hide 未確認。open の一覧は `gh issue list --state open` が正。
 
-## いまの数字（main・2026-09-30）
+## いまの数字（#272 の検証済み実装・2026-10-03）
 
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | 19326 checks・scope 28（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-cb](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
+| 既定の `nib_tests` | 19449 checks・scope 28（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-cc](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
 | ADR | 0062 まで | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
-| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-10-02 の #271 の後の実測は 6 本とも基準内（`out/speed/2026-10-02T15-08-39Z.json`）。タブ 20 本の一覧で起動した時間は 1 本のときと同じ（手で測る・[gate-proofs 5-bw](../quality/gate-proofs.md)）。計測は窓を最前面に出すので施主に確かめてから回す | `eng/perf-reference.json`（ADR 0016） |
+| 速さ（実機） | 基準値は 起動 191 ms・窓 35 ms・1 打鍵 0.9 ms（空の文書）・16 MiB を開く 250 ms・16 MiB で 200 打鍵 7.4 ms（6 本目・#179 / #184）。2026-10-03 の #272 は同じフォルダ5000件の入力2.630 msを新規採用し、通常入力1.016 msは基準内。起動・大容量は不変なので #271 の成功を再利用（詳細は gate-proofs 5-cc）。タブ 20 本の一覧で起動した時間は 1 本のときと同じ（手で測る・[gate-proofs 5-bw](../quality/gate-proofs.md)）。計測は窓を最前面に出すので施主に確かめてから回す | `eng/perf-reference.json`（ADR 0016） |
 
 既知の既存失敗: `eng/test-conformance.py` の `test_verification_policy.py` の一部は cp932 の端末で pwsh の出力が読めず落ちることがある（道具側は #106 で直した。残れば別 Issue）。
 
@@ -51,7 +52,7 @@
 VISUAL の `p u ~ > < J I A gv` と `X D C Y`・ドラッグで VISUAL・矩形の `c I A C > < J ~` と VISUAL の中の `p`・`virtualedit`・
 autoindent・読み取り専用のレジスタ（`".` `":` `"/` `"%`）と `"=`・`q"`・矩形の種類を保った `"+` の往復・矩形レジスタへの `"A` の追記・通常モードの矢印と Backspace と Delete で結合文字を 1 文字として歩くこと・行頭の孤立した結合文字の幅・INSERT の中の矢印による undo の区切り・`whichwrap` の設定・マクロの中の Ex と録画中の表示・`J s S R`・r の制御文字・Ctrl-e/y・検索の `:s` `:g`・履歴・offset・`\v` `\c` `\(` `\|` `\{`・`ignorecase`・
 テキストオブジェクト `it ip is`・一般 Ex（`:w` / `:q`、範囲、パイプ、履歴）・
-タブのドラッグの並べ替え・窓の位置と大きさの復元・強制終了したときのタブの一覧・Ctrl+1〜9・Ctrl+Tab で歩いている間の一覧の面・`g<Tab>` と `:tabfirst` `:tablast` と `:tabnext +N`・Ctrl+P の同じフォルダとブックマーク・Ctrl+P の面の中の日本語入力・一覧の種別のアイコンと履歴の時刻・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
+タブのドラッグの並べ替え・窓の位置と大きさの復元・強制終了したときのタブの一覧・Ctrl+1〜9・Ctrl+Tab で歩いている間の一覧の面・`g<Tab>` と `:tabfirst` `:tablast` と `:tabnext +N`・Ctrl+P のブックマーク・一覧の種別のアイコンと履歴の時刻・Markdown プレビュー・折り返し・横スクロール・ドラッグ選択。
 
 ## 段階
 

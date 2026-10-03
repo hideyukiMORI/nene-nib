@@ -64,7 +64,7 @@
       "dpi": 96,
       "recordedAt": "2026-09-18T14-11-26Z",
       "repetitions": 5,
-      "note": "ADR 0016: GitHub Actions の windows-2022 ランナー。1 run の --adopt で書いた値ではない。#24（ADR 0013）以降・同じ指紋の 7 run（35121845572 / 35208906192 / 35209555298 / 35216632797 / 35217895642 / 35219937347 / 35354289264）の、run ごとの中央値の中央値。minimumMs / maximumMs はその 7 つの中央値の最小・最大で、1 run の 5 試行の幅ではない。recordedAt は最新の出典 run の日時、repetitions は 1 run あたりの試行数。小数 3 桁は出典が CI のログの表示行だから。",
+      "note": "ADR 0016: GitHub Actions の windows-2022 ランナー。1 run の --adopt で書いた値ではない。#24（ADR 0013）以降・同じ指紋の 7 run（35121845572 / 35208906192 / 35209555298 / 35216632797 / 35217895642 / 35219937347 / 35354289264）の、run ごとの中央値の中央値。minimumMs / maximumMs はその 7 つの中央値の最小・最大で、1 run の 5 試行の幅ではない。recordedAt は最新の出典 run の日時、repetitions は 1 run あたりの試行数。小数 3 桁は出典が CI のログの表示行だから。 2026-10-03 の key-to-frame-palette-5000 だけは ADR 0062 決定 19 により Actions run 37099450677 の同じ host の独立した 3 記録（05-24-43Z / 05-24-58Z / 05-25-14Z、各5試行）の中央値 4.097 / 4.038 / 4.179 ms の中央値。minimumMs / maximumMs もその3中央値の最小・最大。15枚の測定直前のPNGはSHA-256がすべて同じで、代表画像の暖機fと1 / 5000を目視した。ほかの基準値・recordedAt・repetitionsは変更しない。",
       "values": {
         "startup-first-frame": {
           "medianMs": 36.516,
@@ -90,6 +90,11 @@
           "medianMs": 87.349,
           "minimumMs": 85.585,
           "maximumMs": 108.886
+        },
+        "key-to-frame-palette-5000": {
+          "medianMs": 4.097,
+          "minimumMs": 4.038,
+          "maximumMs": 4.179
         }
       }
     }

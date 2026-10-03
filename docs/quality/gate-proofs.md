@@ -2391,8 +2391,30 @@ ARC-003 / ARC-007 / ARC-010 / CPP-002 / CPP-003 / CPP-005 / CPP-011 / CPP-013 / 
 
 実機はhideの了承後、Release `edeb38b` で `python eng/measure-speed.py --check --bench key-to-frame-palette-5000 --executable build/release-edeb38b/NeNeNib.exe` を実行。5試行すべて有効、中央値 **2.630 ms**（2.526〜2.715 ms・`out/speed/2026-10-03T05-15-16Z.json`・`out/272-sana-speed-palette.log`）。各試行の `palette-2026-10-03T05-15-*.png` 5枚すべてに暖機fと件数 **1 / 5000** が写り、設計サナが目視した。`--adopt --bench key-to-frame-palette-5000 --values out/speed/2026-10-03T05-15-16Z.json` で、この1本だけを実機 `bc8a356f37c68491` の新しい基準値として採用した（`out/272-sana-adopt.log`）。1024件のbatchと8192件の上限は、今回の5000件の入力速度と前の8200件の実機確認を根拠に維持する。
 
-共通の `command_message()` が全frameで呼ばれるため、同じexeで `--check --bench key-to-frame-single` も実行し、5試行すべて有効、中央値 **1.016 ms**（0.829〜1.614 ms）、1 bench checked・0 regression・0 unmeasurable（`out/speed/2026-10-03T05-15-53Z.json`・`out/272-sana-speed-single.log`）。CIの新しい測定と基準値の採用は未完了。それ以外の起動・大容量ファイルを開く処理は不変で、#271の成功（`out/speed/2026-10-02T15-08-39Z.json`・5-cb）を再利用する。全件の製品テストと全性能ベンチを工程のために繰り返さない。
+共通の `command_message()` が全frameで呼ばれるため、同じexeで `--check --bench key-to-frame-single` も実行し、5試行すべて有効、中央値 **1.016 ms**（0.829〜1.614 ms）、1 bench checked・0 regression・0 unmeasurable（`out/speed/2026-10-03T05-15-53Z.json`・`out/272-sana-speed-single.log`）。CIの新しい測定と基準値の採用は下記のとおり完了。それ以外の起動・大容量ファイルを開く処理は不変で、#271の成功（`out/speed/2026-10-02T15-08-39Z.json`・5-cb）を再利用する。全件の製品テストと全性能ベンチを工程のために繰り返さない。
 
 自己レビュー: FR-006 / D33〜D35 / ARC-001 / ARC-003 / ARC-004 / ARC-007 / ARC-010 / CPP-002 / CPP-004 / CPP-011 / QLT-001 / QLT-012 / QLT-013 / QLT-014。公開の値とportの境界を保ち、時刻・ファイル・スレッドを中核へ持ち込まず、閉じた分岐を網羅し、閾値・除外・依存を弱めていない。製品の保存スキーマ変更なし。Waivers: none。
 
 残るリスク: 8192件は拡張子・重複除外前の上限であり、画像多数のフォルダではテキスト候補が少なくても後ろが打ち切られる。パスの比較は既存の `same_file`（大文字小文字を無視する文字列比較）であり、`/` と `\` の混在を同一視しない既存の制約がある。入れ子のメッセージループ中の完了合図と、停止したネットワークI/Oの解除は未確認。候補なしの字が左へ寄る既存の表示は本件で修正していない。
+
+### CI の新しい基準値（2026-10-03）
+
+[Actions run 37099450677](https://github.com/hideyukiMORI/nene-nib/actions/runs/37099450677) は成功。正典 `eng/build-release.ps1 -Ref HEAD` が `05792e5` の Release をビルドし、同じ host `e7a87d5b6ac1e14b`（AMD EPYC 7763 / Microsoft Hyper-V Video / 96 DPI）で `python eng/measure-speed.py --check --bench key-to-frame-palette-5000 --executable build/release-05792e5/NeNeNib.exe` を独立に3回実行した。新しい値はまだ基準が無いので記録だけと明示し、5試行ずつ15試行すべて有効・欠測0。通常のPR必須checkからは起動しない。
+
+| 記録（UTC） | 中央値 ms | 5試行の最小〜最大 ms |
+| --- | --- | --- |
+| `2026-10-03T05-24-43Z.json` | 4.097 | 3.938〜4.337 |
+| `2026-10-03T05-24-58Z.json` | 4.038 | 3.878〜4.085 |
+| `2026-10-03T05-25-14Z.json` | 4.179 | 4.047〜4.428 |
+
+artifact `palette-speed-records`（保持90日）には上記JSON・各試行の測定直前のPNG15枚・Releaseの記録がある。取得先は `D:/NeNeNib/evidence/272-ci-37099450677/`、ログは `out/272-sana-ci-speed.log`。Release SHA-256は `74089D9528CE3680778DDD736F6AF1407AA6FFFC709E2589DEF5B1B571B2FFA2`。PNG15枚すべてのSHA-256が `0E034FE4653BBDFF921256209503EE4A832F6A32C21AA87F24807B74774BE387` と一致し、設計サナが代表画像で暖機fと **1 / 5000** を目視した。従って15試行すべての測定直前の表示に5000候補が揃っている。
+
+ADR 0016 / 0062決定19に従い、3中央値の中央値 **4.097 ms** をこの指紋の新ベンチだけの基準値として採用。minimumMs / maximumMsは3中央値の幅 **4.038〜4.179 ms**。出典・日付・集計方法を基準値のnoteへ追記した。既存6本の値・既存metadata・25% / floor2msの許容を機械比較し不変（`out/272-sana-ci-adopt.log`）。3つの保存記録それぞれへ `python eng/measure-speed.py --check --bench key-to-frame-palette-5000 --values <記録>` を適用し、各 **1 bench checked・0 regression・0 unmeasurable**（`out/272-sana-ci-reference-check.log`）。これは採用したデータと比較器の整合確認であり、新たな性能測定ではない。
+
+CI後の変更は基準値と文書だけ。製品・計測器・テスト・workflowは不変であり、成功済みの64試験・実機2本・CI3回を統合時にも再利用する。文書のリンク・規則ID・強制状態の整合とGit/PR規約・空白だけを最終確認する。
+
+### main の文書更新の取り込み
+
+統合前に `origin/main` の `c328e0d`（PR #276・前日の日報と引き継ぎ）へrebaseした。競合はCLAUDE.mdとcurrent.mdの説明・進捗だけで、mainのワーカーの説明と履歴を残して今回の状態へ揃えた。受理・測定時の番号は証拠の出典として書き換えず残す。対応は `eb5b0e7→4d2babe`・`f6ec509→7fb002d`・`8d0e6ff→f8d7b19`・`10cab8c→3682ad3`・`edeb38b→2787f72`・`05792e5→6018734`。`git diff --exit-code 001debf -- src tests eng .github CMakeLists.txt` は終了0で、製品・試験・計測・workflowがrebase前後で同一と確認した。性能や製品テストを繰り返す変更ではない。
+
+rebase後の最終文書確認: conformance.document_checksは0 violation（out/272-sana-docs-rebase.log）、git diff --checkとPR本文のgit-conventions.py --pr-bodyは終了0。確認対象は文書の相対リンク・規則ID・強制状態と差分の空白・検証記録の存在。
