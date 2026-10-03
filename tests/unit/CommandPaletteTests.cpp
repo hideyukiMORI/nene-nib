@@ -95,9 +95,8 @@ void verify_palette_choices()
 {
     const auto all = choices_for(":");
     expect(all.size() == core::ex_command_candidates().size(), "Ex and palette share the catalog");
-    // 設定候補の点数は長さ、同点は文字列の順。ls、edit、tabs の順になる（ADR 0064）。
-    expect(all.front().command == "ls" && all.at(1).command == "edit" &&
-               all.at(2).command == "tabs",
+    // 設定候補の点数は長さ、同点は文字列の順。ls、wq、xit の順になる（ADR 0066）。
+    expect(all.front().command == "ls" && all.at(1).command == "wq" && all.at(2).command == "xit",
            "empty query has deterministic ranking");
     for (const auto &theme : core::builtin_themes)
     {

@@ -92,6 +92,8 @@ SIMD の組み込み関数を書ける唯一の場所。関数ごとに `[[gnu::
 
 Ex の `:e` / `:b` / `:ls` は core の `ExPaletteRequest`（出どころと検索文字）を controller の `run_palette_request` → `open_palette` に写す。記号への変換は `palette_input_for` が `palette_marks` を逆引きし、候補生成・照合・確定は Ctrl+P と同じ経路を使う（ADR 0064）。
 
+Ex の保存・終了は core の `ExDocumentName` の表から `ExDocumentVerb` を返し、controller の `run_document_request` が現在の文書の条件を確認する。GUIとExの保存は `save_document` の一つで、成功したときだけ保存位置を更新する。終了は既存の `CloseTab` を通り、最後のタブの `EditorFrame.closing` はuiの `deliver` の末尾から `finish_tab_action` → `leave` へ一回だけ渡す。通常の閉じる操作と `:tabclose` は従来の確認を保つ（ADR 0066）。
+
 通常モードの結合文字は core の `ordinary_character_boundary` が移動・着地・方向ごとの削除境界を返す。`CaretMoveRequest` の単位で通常と Vim INSERT の code point 移動を区別する。controller は結果を既存の選択と `replace` に渡し、本文・undo の道を増やさない（ADR 0065）。
 ワーカーへの要求値と完了の受け取り（版番号）もここ（ADR 0004）。Win32・永続化・ファイル・スレッドを知らない。
 

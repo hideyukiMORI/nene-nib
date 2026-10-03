@@ -90,6 +90,7 @@ class EditorWindow final
     void hover(const std::optional<core::TitleBarTarget> &target);
     // タブを閉じる流れ（未保存なら切り替えて確かめる・ADR 0056 の決定 6）。
     void close_tab(std::size_t tab);
+    void finish_tab_action(std::optional<std::size_t> close_request, bool closing);
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);

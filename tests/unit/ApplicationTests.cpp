@@ -1088,6 +1088,15 @@ void verify_editor_state()
            "with_edit leaves the source alone");
 }
 
+void verify_document_save_contracts()
+{
+    verify_document_save();
+    verify_document_save_encodings();
+    verify_document_save_failures();
+    verify_save_state_transitions();
+    verify_unreachable_save_point();
+}
+
 void verify_controller_intents()
 {
     verify_font_geometry();

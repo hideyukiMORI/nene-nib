@@ -26,7 +26,10 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   with `hlsearch` and `incsearch` on by default (`:noh`, `:set (no)hlsearch`, `:set (no)incsearch`, Ctrl-G / Ctrl-T), virtual columns (Tab = 8, wide = 2), `u` / Ctrl-r,
   `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, block `p P`, `.`), literal CR in LF files, Esc everywhere.
   Not yet: `it ip is`, `:s :g`, read-only registers, `J s S R`, `> < gu gU`, autoindent,
-  drag-to-select, block `I A c C`, general Ex (`:w :q`, ranges, pipes, history).
+  drag-to-select, block `I A c C`, further Ex commands (filename arguments, ranges, pipes, history).
+  Basic Ex `:w`, `:q`, `:q!`, `:wq` and `:x` work on the current tab. `:q` refuses unsaved changes;
+  `:wq` always writes, while `:x` writes only changes. Failed writes keep the tab open. An untitled
+  document needs a name through Ctrl+S before Ex can save it. See [ADR 0066](docs/adr/0066-ex-save-and-quit-use-document-operations.md).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim". Done.
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT` and `:tabnext` `:tabnew` `:tabclose`. Done; reordering by drag is planned.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, fuzzy-matched by name and then by folder.
