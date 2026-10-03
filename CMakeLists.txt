@@ -93,6 +93,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ExSettingsTests.cpp
     tests/unit/ExFileTests.cpp
     tests/unit/ExDocumentTests.cpp
+    tests/unit/ExWritePathTests.cpp
     tests/unit/OrdinaryCharacterTests.cpp
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp

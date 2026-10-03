@@ -155,6 +155,9 @@ void verify_controller_intents();
 void verify_ex_document_contracts();
 void verify_ex_document_scope();
 
+// ExWritePathTests.cpp
+void verify_ex_write_path_contracts();
+
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);
 void verify_vim_insert_undo_unit();

@@ -19,6 +19,7 @@ namespace nenenib::tests
 {
 using nenenib::application::FileFailure;
 using nenenib::application::FilePort;
+using nenenib::application::FileWriteMode;
 using nenenib::core::FilePath;
 using Bytes = std::expected<std::string, FileFailure>;
 
@@ -26,6 +27,28 @@ using Bytes = std::expected<std::string, FileFailure>;
 class ScriptedFiles final : public FilePort
 {
   public:
+    using FilePort::write;
+
+    void resolve_to(std::expected<FilePath, FileFailure> path)
+    {
+        resolved_ = std::move(path);
+    }
+
+    [[nodiscard]] FileWriteMode write_mode() const noexcept
+    {
+        return write_mode_;
+    }
+
+    [[nodiscard]] const std::string &resolve_input() const noexcept
+    {
+        return resolve_input_;
+    }
+
+    [[nodiscard]] std::expected<FilePath, FileFailure> resolve(const FilePath &path) override
+    {
+        resolve_input_ = std::string(path.text());
+        return resolved_.value_or(std::expected<FilePath, FileFailure>{path});
+    }
     void hold(Bytes content)
     {
         content_ = std::move(content);
@@ -84,9 +107,10 @@ class ScriptedFiles final : public FilePort
         return found == by_path_.end() ? content_ : found->second;
     }
 
-    [[nodiscard]] std::expected<void, FileFailure> write(const FilePath &path,
-                                                         std::string_view bytes) override
+    [[nodiscard]] std::expected<void, FileFailure>
+    write(const FilePath &path, std::string_view bytes, FileWriteMode mode) override
     {
+        write_mode_ = mode;
         if (write_failure_.has_value())
         {
             return std::unexpected(write_failure_.value());
@@ -113,6 +137,9 @@ class ScriptedFiles final : public FilePort
 
   private:
     Bytes content_{std::unexpected(FileFailure::not_found)};
+    std::optional<std::expected<FilePath, FileFailure>> resolved_;
+    std::string resolve_input_;
+    FileWriteMode write_mode_ = FileWriteMode::replace;
     std::optional<FileFailure> write_failure_;
     std::string written_;
     std::string written_path_;

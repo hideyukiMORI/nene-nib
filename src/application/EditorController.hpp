@@ -12,7 +12,7 @@
 #include "EditorIntent.hpp"
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
-#include "ExDocumentVerb.hpp"
+#include "ExDocumentRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "FileBookmarks.hpp"
@@ -235,8 +235,11 @@ class EditorController final
     void run_palette_request(const core::ExPaletteRequest &request);
     // GUI と Ex の保存は同じ処理で、失敗の表示だけが入口ごとに違う（ADR 0066）。
     [[nodiscard]] std::expected<void, FileFailure> save_document(const SaveDocument &intent);
-    [[nodiscard]] bool write_current_document();
-    void run_document_request(core::ExDocumentVerb verb);
+    [[nodiscard]] bool write_ex_document(const core::ExDocumentRequest &request);
+    [[nodiscard]] bool write_ex_path(const core::FilePath &path,
+                                     const core::ExDocumentRequest &request);
+    [[nodiscard]] bool refuse_modified_quit();
+    void run_document_request(const core::ExDocumentRequest &request);
     // アクティブな文書の表示値。frame と一覧の候補が同じ 1 本を使う。
     [[nodiscard]] DocumentView active_document_view() const;
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;

@@ -296,13 +296,73 @@ palette_command(std::string_view text)
                     std::nullopt, ExPaletteRequest{row->scope, std::string(query)}};
 }
 
-constexpr std::array<ExDocumentName, 5> document_names{{
+constexpr std::array<ExDocumentName, 6> document_names{{
     {"write", 1, ExDocumentVerb::write},
     {"quit", 1, ExDocumentVerb::quit},
     {"wq", 2, ExDocumentVerb::write_quit},
     {"xit", 1, ExDocumentVerb::update_quit},
     {"exit", 3, ExDocumentVerb::update_quit},
+    {"saveas", 3, ExDocumentVerb::save_as},
 }};
+
+[[nodiscard]] bool unsupported_filename_character(char value) noexcept
+{
+    return value == '%' || value == '#' || value == '$' || value == '~' || value == '*' ||
+           value == '?' || value == '`' || value == '"' || value == '<' || value == '>' ||
+           value == '!';
+}
+
+[[nodiscard]] std::expected<FilePath, ExFailure> document_path(std::string_view text)
+{
+    // ファイル名展開はまだしない。Windows の区切りは保ち、空白の escape だけ外す（ADR 0067）。
+    if (text.starts_with('+') || std::ranges::any_of(text, unsupported_filename_character))
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    std::string path;
+    for (std::size_t index = 0; index < text.size(); ++index)
+    {
+        if (text[index] == '\\' && index + 1 < text.size() && text[index + 1] == ' ')
+        {
+            ++index;
+        }
+        path += text[index];
+    }
+    auto parsed = FilePath::parse(path);
+    if (!parsed)
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    return std::move(parsed).value();
+}
+
+[[nodiscard]] std::expected<ExDocumentRequest, ExFailure> document_request(ExDocumentVerb verb,
+                                                                           std::string_view suffix)
+{
+    const auto argument = trimmed(suffix);
+    if (argument.empty())
+    {
+        if (verb == ExDocumentVerb::save_as)
+        {
+            return std::unexpected(ExFailure::unsupported_argument);
+        }
+        return ExDocumentRequest{verb, std::nullopt};
+    }
+    if (verb == ExDocumentVerb::quit && suffix == "!")
+    {
+        return ExDocumentRequest{ExDocumentVerb::quit_force, std::nullopt};
+    }
+    if (!suffix.starts_with(' ') || verb == ExDocumentVerb::quit)
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    auto path = document_path(argument);
+    if (!path)
+    {
+        return std::unexpected(path.error());
+    }
+    return ExDocumentRequest{verb, std::move(path).value()};
+}
 
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 document_command(std::string_view text)
@@ -317,11 +377,14 @@ document_command(std::string_view text)
     {
         return std::nullopt;
     }
-    const auto suffix = text.substr(range + letters);
-    const bool force = row->verb == ExDocumentVerb::quit && suffix == "!";
-    if (range > 0 || (!trimmed(suffix).empty() && !force))
+    if (range > 0)
     {
         return std::unexpected(ExFailure::unsupported_argument);
+    }
+    auto request = document_request(row->verb, text.substr(letters));
+    if (!request)
+    {
+        return std::unexpected(request.error());
     }
     return ExResult{std::nullopt,
                     std::nullopt,
@@ -329,7 +392,7 @@ document_command(std::string_view text)
                     DisplayText::parse(row->name).value(),
                     std::nullopt,
                     std::nullopt,
-                    force ? ExDocumentVerb::quit_force : row->verb};
+                    std::move(request).value()};
 }
 
 // colorscheme と set のほか（Vim の強調の止め方とタブ・ファイルの命令）。どれにも当たらなければ

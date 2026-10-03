@@ -1,6 +1,8 @@
 #pragma once
 
 #include "FilePath.hpp"
+#include "FileWriteMode.hpp"
+#include "SaveIdentity.hpp"
 #include "TextEncoding.hpp"
 
 namespace nenenib::application
@@ -10,5 +12,7 @@ struct SaveDocument
 {
     core::FilePath path;
     core::TextEncoding encoding;
+    FileWriteMode mode = FileWriteMode::replace;
+    SaveIdentity identity = SaveIdentity::update_document;
 };
 } // namespace nenenib::application

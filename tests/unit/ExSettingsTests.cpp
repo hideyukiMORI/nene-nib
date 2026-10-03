@@ -283,8 +283,8 @@ void verify_command_completions()
     line = line.edited(CommandEdit::home);
     expect(!line.completion_index().has_value(), "manual movement resets completion");
     const auto first = core::CommandLine::empty().edited(CommandEdit::complete_previous);
-    // 名前だけの候補の末尾は文書の命令の最後の `exit`（ADR 0066）。
-    expect(first.text() == "exit", "backwards completion starts at the last command");
+    // 名前だけの候補の末尾は文書の命令の最後の `saveas`（ADR 0067）。
+    expect(first.text() == "saveas", "backwards completion starts at the last command");
     expect(core::command_completions("set f") == std::vector<std::string>{"set fontsize="},
            "option prefix");
     const auto unknown = core::CommandLine::empty().inserted("unknown").value();

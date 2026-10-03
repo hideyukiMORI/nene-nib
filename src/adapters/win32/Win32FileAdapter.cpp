@@ -1,16 +1,19 @@
 #include "Win32FileAdapter.hpp"
 
+#include "AbsolutePath.hpp"
 #include "FileHandle.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 
 namespace nenenib::adapters::win32
 {
 namespace
 {
 using Failure = application::FileFailure;
+using Mode = application::FileWriteMode;
 
 // WriteFile が 1 回に受け取れるのは DWORD の分まで。上限ではなく分割で書く（決定 6）。
 constexpr std::size_t write_chunk_bytes = 32U * 1024U * 1024U;
@@ -67,15 +70,8 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
     return bytes;
 }
 
-[[nodiscard]] std::expected<void, Failure> write_all(const std::wstring &path,
-                                                     std::string_view bytes)
+[[nodiscard]] std::expected<void, Failure> write_all(const FileHandle &file, std::string_view bytes)
 {
-    const FileHandle file(CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                                      FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (!file.valid())
-    {
-        return std::unexpected(failure_of(GetLastError(), Failure::unwritable));
-    }
     std::size_t written = 0;
     while (written < bytes.size())
     {
@@ -97,6 +93,18 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
     return {};
 }
 
+[[nodiscard]] DWORD temporary_creation(Mode mode) noexcept
+{
+    switch (mode)
+    {
+    case Mode::replace:
+        return CREATE_ALWAYS;
+    case Mode::create_new:
+        return CREATE_NEW;
+    }
+    std::unreachable();
+}
+
 // 既存なら ReplaceFileW が属性と ACL を保ったまま入れ替え、無ければ MoveFileExW で置く（決定 6）。
 [[nodiscard]] bool replaced(const std::wstring &target, const std::wstring &temporary) noexcept
 {
@@ -107,6 +115,27 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
     }
     return MoveFileExW(temporary.c_str(), target.c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+}
+[[nodiscard]] bool placed(const std::wstring &target, const std::wstring &temporary,
+                          Mode mode) noexcept
+{
+    switch (mode)
+    {
+    case Mode::replace:
+        return replaced(target, temporary);
+    case Mode::create_new:
+        return MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH) != 0;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] Failure placement_failure(DWORD error, Mode mode) noexcept
+{
+    if (mode == Mode::create_new && (error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS))
+    {
+        return Failure::already_exists;
+    }
+    return Failure::unwritable;
 }
 } // namespace
 
@@ -133,7 +162,7 @@ std::expected<std::string, Failure> Win32FileAdapter::read(const core::FilePath 
 }
 
 std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
-                                                     std::string_view bytes)
+                                                     std::string_view bytes, Mode mode)
 {
     const std::wstring target = widen(path.text());
     if (target.empty())
@@ -141,18 +170,44 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
         return std::unexpected(Failure::unwritable);
     }
     const std::wstring temporary = target + temporary_suffix;
-    const auto written = write_all(temporary, bytes);
+    if (mode == Mode::create_new && GetFileAttributesW(target.c_str()) != INVALID_FILE_ATTRIBUTES)
+    {
+        return std::unexpected(Failure::already_exists);
+    }
+    std::expected<void, Failure> written;
+    {
+        const FileHandle file(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr,
+                                          temporary_creation(mode), FILE_ATTRIBUTE_NORMAL,
+                                          nullptr));
+        if (!file.valid())
+        {
+            // 作れなかった一時ファイルは自分のものではないので消さない（ADR 0067）。
+            return std::unexpected(failure_of(GetLastError(), Failure::unwritable));
+        }
+        written = write_all(file, bytes);
+    }
     if (!written)
     {
         DeleteFileW(temporary.c_str());
         return written;
     }
-    if (!replaced(target, temporary))
+    if (!placed(target, temporary, mode))
     {
+        const auto failure = placement_failure(GetLastError(), mode);
         DeleteFileW(temporary.c_str());
-        return std::unexpected(Failure::unwritable);
+        return std::unexpected(failure);
     }
     return {};
+}
+
+std::expected<core::FilePath, Failure> Win32FileAdapter::resolve(const core::FilePath &path)
+{
+    auto absolute = absolute_file_path(widen(path.text()));
+    if (!absolute.has_value())
+    {
+        return std::unexpected(Failure::unwritable);
+    }
+    return std::move(absolute).value();
 }
 
 bool Win32FileAdapter::same_file(const core::FilePath &left, const core::FilePath &right) const
