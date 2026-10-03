@@ -3,10 +3,10 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-09-30):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
+> **Status (2026-10-03):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
 > built-in themes, and the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search with
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
-> and Ctrl+P lists the open tabs and the recently closed files. The Ctrl+P folder list, bookmarks, Markdown
+> and Ctrl+P lists the open tabs, recently closed files and files in the current folder. Bookmarks, Markdown
 > preview and files above 64 MiB are still planned. Nothing to download yet (Phase 4).
 
 ## What works today
@@ -35,7 +35,11 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   newest first after the tabs; `@` shows the history only. A file that no longer exists is reported
   in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
   off and leaves it to the user after that, and matching walks code points, so a character never matches
-  inside the bytes of another. The current folder and bookmarks are planned.
+  inside the bytes of another. Files in the current folder arrive in the background; `/` shows only
+  those files. Open tabs and history entries are not repeated, and hidden, system and known non-text
+  files are excluded. Unknown extensions and extensionless names remain available. After 8192 files
+  have been read, a notice stays visible until the palette closes; the limit counts files before
+  extension and duplicate filtering. Bookmarks and Vim `:e`, `:b`, `:ls` are planned.
 - **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS; CRLF / LF kept as read; unsaved mark and
   "save?" prompt. Done.
@@ -50,9 +54,10 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   and the search line still keep the IME closed. Done.
 - **FR-013 1 GB files** — planned; files above 64 MiB are not supported yet.
 - **FR-014 Per-Monitor v2 DPI** — declared in the manifest; DIP to pixel conversion is integer-only in the core.
-- **FR-015 speed** — five Release benchmarks in `eng/measure-speed.py` against per-machine baselines in
+- **FR-015 speed** — Release benchmarks in `eng/measure-speed.py` against per-machine references in
   `eng/perf-reference.json` (startup 191 ms, window visible 35 ms, one keystroke 0.9 ms, 16 MiB file 250 ms on the
-  reference machine). Run on demand and in `-Full`; the required CI check does not measure.
+  reference machine). `--bench <name>` selects one measurement, including input in a 5000-file palette.
+  Run on demand and in `-Full`; the required CI check does not measure.
 - **FR-016 colorscheme** — nine built-in themes plus up to 128 user themes from
   `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`; `:colorscheme <name>` / `system`, Tab completion, Ctrl+P. Done.
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,

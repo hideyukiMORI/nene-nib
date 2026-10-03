@@ -105,7 +105,7 @@ class ComparisonTests(unittest.TestCase):
     def test_a_bench_without_a_reference_is_neither(self):
         recorded = reference_values()
         del recorded["key-to-frame-burst-200"]
-        values = record({"key-to-frame-burst-200": ([], 5)})["values"]
+        values = record({"key-to-frame-burst-200": ([900.0] * 5, 0)})["values"]
         self.assertEqual(([], []), speed.compare(REFERENCE, values, recorded))
 
     def test_a_record_written_before_missing_existed_is_read(self):
@@ -294,10 +294,10 @@ class RepeatedTrialTests(unittest.TestCase):
 class BenchTableTests(unittest.TestCase):
     """The bench names are one table: --bench, --check, --adopt and the reference all read it."""
 
-    def test_the_table_names_the_six_benches(self):
+    def test_the_table_names_the_seven_benches(self):
         self.assertEqual(("startup-first-frame", "startup-window-shown", "key-to-frame-single",
                           "key-to-frame-burst-200", "open-large-file-16mib",
-                          "key-to-frame-burst-200-16mib"), speed.BENCHES)
+                          "key-to-frame-burst-200-16mib", "key-to-frame-palette-5000"), speed.BENCHES)
 
     def test_the_reference_describes_every_bench_of_the_table(self):
         """eng/prove-gates.py builds its QLT-014 proof from these descriptions (ADR 0044 decision 6)."""
@@ -329,6 +329,260 @@ class BenchTableTests(unittest.TestCase):
         self.assertEqual({"medianMs": 7.0, "minimumMs": 7.0, "maximumMs": 7.0},
                          after["values"].pop("key-to-frame-burst-200-16mib"))
         self.assertEqual(before, after["values"])
+
+
+class PaletteReadingTests(unittest.TestCase):
+    def test_the_last_input_is_measured_after_two_or_three_opening_marks_and_warmup(self):
+        for opening in (2, 3):
+            with self.subTest(opening=opening):
+                entries = marks(opening + 2)
+                entries[-1]["qpcMicroseconds"] += 700
+                self.assertEqual(1.2, speed.measured_palette(entries))
+
+    def test_fewer_than_three_inputs_are_missing(self):
+        for count in range(3):
+            with self.subTest(count=count):
+                self.assertIsNone(speed.measured_palette(marks(count)))
+
+    def test_a_frame_before_the_last_input_does_not_answer_it(self):
+        self.assertIsNone(speed.measured_palette(marks(4)[:-1]))
+
+    def test_only_the_first_frame_after_the_last_input_is_used(self):
+        entries = marks(4)
+        entries[-1]["qpcMicroseconds"] += 1700
+        entries.append({"milestone": "frame_presented", "qpcMicroseconds": 9000})
+        self.assertEqual(2.2, speed.measured_palette(entries))
+
+
+class PaletteTrialTests(unittest.TestCase):
+    """Script every OS boundary, including the clock: never start a process or send real input."""
+
+    def trial(self, chord=True, changed=False, observed=None, wait_error=None, capture_error=None):
+        process = mock.Mock()
+        process.pid = 456
+        process.wait.side_effect = wait_error
+        boundaries = {name: mock.Mock() for name in
+                      ("start", "report_path", "raise_window", "take_foreground", "covered_by",
+                       "press_chord", "write_text", "close", "dismiss_dialog", "stop",
+                       "observed_marks", "time", "capture_png", "stamp")}
+        boundaries["stamp"].return_value = "test"
+        boundaries["capture_png"].side_effect = capture_error
+        order = mock.Mock()
+        order.attach_mock(boundaries["write_text"], "write_text")
+        order.attach_mock(boundaries["capture_png"], "capture_png")
+        boundaries["start"].return_value = process, 123, []
+        boundaries["report_path"].return_value = Path("marks-palette.json")
+        boundaries["take_foreground"].return_value = True
+        boundaries["covered_by"].return_value = None
+        boundaries["press_chord"].return_value = chord
+        boundaries["dismiss_dialog"].return_value = changed
+        boundaries["observed_marks"].return_value = marks(4)
+        boundaries["observed_marks"].side_effect = observed
+        with mock.patch.multiple(speed, **boundaries), contextlib.redirect_stdout(io.StringIO()):
+            values, parts = speed.bench_palette(Path("exe"), {}, Path("folder"), Path("f0000.txt"))
+        self.assertEqual({}, parts)
+        boundaries["stop"].assert_called_once_with(process)
+        self.assertEqual(int(capture_error is None), boundaries["close"].call_count)
+        self.order = order
+        return values[speed.PALETTE_BENCH], boundaries
+
+    def test_success_posts_warmup_then_the_measured_character(self):
+        value, calls = self.trial()
+        self.assertEqual(0.5, value)
+        calls["start"].assert_called_once_with(
+            Path("exe"), {}, ["--measure", "marks-palette.json", "f0000.txt"])
+        calls["press_chord"].assert_called_once_with(123, speed.VK_CONTROL, ord("P"))
+        self.assertEqual([mock.call(123, "f"), mock.call(123, "0")],
+                         calls["write_text"].call_args_list)
+        self.assertEqual([mock.call.write_text(123, "f"),
+                          mock.call.capture_png(123, Path("folder/palette-test-456.png")),
+                          mock.call.write_text(123, "0")], self.order.mock_calls)
+        self.assertEqual([mock.call(speed.SETTLE_SECONDS), mock.call(speed.PALETTE_WAIT_SECONDS),
+                          mock.call(speed.WARMUP_SECONDS), mock.call(speed.SINGLE_KEY_SECONDS)],
+                         calls["time"].sleep.call_args_list)
+
+    def test_failed_ctrl_p_sends_no_characters_and_is_missing(self):
+        value, calls = self.trial(chord=False)
+        self.assertIsNone(value)
+        calls["write_text"].assert_not_called()
+        calls["observed_marks"].assert_not_called()
+        calls["capture_png"].assert_not_called()
+
+    def test_unsaved_confirmation_invalidates_the_trial(self):
+        value, calls = self.trial(changed=True)
+        self.assertIsNone(value)
+        calls["observed_marks"].assert_not_called()
+
+    def test_an_unfinished_report_is_missing(self):
+        value, _ = self.trial(observed=speed.TrialNotObserved("unfinished report"))
+        self.assertIsNone(value)
+
+    def test_an_unfinished_close_is_missing(self):
+        value, _ = self.trial(wait_error=speed.subprocess.TimeoutExpired("exe", 15))
+        self.assertIsNone(value)
+
+    def test_failed_or_covered_capture_is_missing_and_sends_no_measured_character(self):
+        errors = (speed.WindowCovered(9, "cover", 8, (1, 1)), OSError("write failed"),
+                  AssertionError("capture failed"))
+        for error in errors:
+            with self.subTest(error=type(error).__name__):
+                value, calls = self.trial(capture_error=error)
+                self.assertIsNone(value)
+                calls["write_text"].assert_called_once_with(123, "f")
+                calls["observed_marks"].assert_not_called()
+
+
+class SelectedMeasurementTests(unittest.TestCase):
+    def scripted_measurement(self, bench):
+        document = mock.Mock()
+        document.name = "large.txt"
+        document.stat.return_value.st_size = 123
+        boundaries = {name: mock.Mock() for name in
+                      ("become_dpi_aware", "prepare", "large_document", "palette_document",
+                       "stamp", "machine", "bench_startup", "bench_keys", "bench_large_file",
+                       "bench_palette")}
+        boundaries["prepare"].return_value = Path("exe"), {}, Path("folder")
+        boundaries["large_document"].return_value = document
+        boundaries["palette_document"].return_value = Path("f0000.txt")
+        boundaries["stamp"].return_value = "test"
+        boundaries["machine"].return_value = record({})["machine"]
+        boundaries["bench_startup"].return_value = {
+            "startup-first-frame": 1.0, "startup-window-shown": 2.0}, {}
+        boundaries["bench_keys"].side_effect = lambda *args: (
+            ({"key-to-frame-single": 3.0, speed.EMPTY_BURST_BENCH: 4.0}, {}) if len(args) == 3
+            else ({speed.LARGE_BURST_BENCH: 6.0}, {}))
+        boundaries["bench_large_file"].return_value = {"open-large-file-16mib": 5.0}, {}
+        boundaries["bench_palette"].return_value = {speed.PALETTE_BENCH: 7.0}, {}
+        with mock.patch.multiple(speed, **boundaries):
+            written = speed.measure(Path("build"), 1, bench)
+        return written, boundaries
+
+    def test_each_selection_runs_only_its_shared_stimulus_and_records_only_that_value(self):
+        groups = ("bench_startup", "bench_startup", "bench_keys", "bench_keys",
+                  "bench_large_file", "bench_keys", "bench_palette")
+        for index, (name, group) in enumerate(zip(speed.BENCHES, groups)):
+            with self.subTest(bench=name):
+                written, calls = self.scripted_measurement(name)
+                self.assertEqual({name}, set(written["values"]))
+                self.assertEqual(index + 1.0, written["values"][name]["medianMs"])
+                self.assertEqual(0, written["values"][name]["missing"])
+                for candidate in set(groups):
+                    self.assertEqual(int(candidate == group), calls[candidate].call_count)
+                is_large = name in ("open-large-file-16mib", speed.LARGE_BURST_BENCH)
+                self.assertEqual(int(is_large), calls["large_document"].call_count)
+                self.assertEqual(is_large, "document" in written)
+                self.assertEqual(int(name == speed.PALETTE_BENCH),
+                                 calls["palette_document"].call_count)
+                self.assertEqual(set(speed.BREAKDOWN_BENCHES).intersection({name}),
+                                 set(written["breakdown"]))
+
+    def test_no_selection_runs_all_trials_and_records_seven_values(self):
+        written, calls = self.scripted_measurement(None)
+        self.assertEqual(list(speed.BENCHES), list(written["values"]))
+        self.assertEqual(2, calls["bench_keys"].call_count)
+        for name in ("bench_startup", "bench_large_file", "bench_palette"):
+            calls[name].assert_called_once()
+
+    def test_gather_forwards_the_selection_to_measure(self):
+        arguments = mock.Mock(values=None, executable=Path("build"), repetitions=5,
+                              bench=speed.PALETTE_BENCH)
+        written = speed.selected_record(record({}), speed.PALETTE_BENCH)
+        with mock.patch.object(speed, "measure", return_value=written) as measure, \
+                mock.patch.object(speed, "write_record", return_value=Path("record.json")), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(written, speed.gather(arguments))
+        measure.assert_called_once_with(Path("build"), 5, speed.PALETTE_BENCH)
+
+
+class PartialRecordTests(unittest.TestCase):
+    def test_an_old_six_bench_record_is_described_and_compared_without_fabricating_the_seventh(self):
+        written = record({})
+        del written["values"][speed.PALETTE_BENCH]
+        self.assertNotIn(speed.PALETTE_BENCH, speed.describe(written))
+        self.assertIs(written, speed.selected_record(written, None))
+        self.assertEqual(([], []), speed.compare(REFERENCE, written["values"], reference_values()))
+        self.assertEqual(6, len(speed.compared_benches(written["values"], reference_values())))
+
+    def test_a_selection_keeps_only_that_value_and_breakdown_without_mutating_the_source(self):
+        written = record({})
+        written["breakdown"] = {"startup-first-frame": {"origin": 1}, speed.LARGE_BURST_BENCH: {}}
+        selected = speed.selected_record(written, "startup-first-frame")
+        self.assertEqual({"startup-first-frame"}, set(selected["values"]))
+        self.assertEqual({"startup-first-frame": {"origin": 1}}, selected["breakdown"])
+        self.assertEqual(7, len(written["values"]))
+        self.assertEqual(2, len(written["breakdown"]))
+
+    def test_a_requested_value_absent_from_the_record_is_rejected_explicitly(self):
+        written = record({})
+        del written["values"][speed.PALETTE_BENCH]
+        with self.assertRaisesRegex(SystemExit, "absent from this record"):
+            speed.selected_record(written, speed.PALETTE_BENCH)
+
+    def test_a_partial_record_cannot_replace_the_machine_references(self):
+        path = mock.Mock()
+        path.read_text.return_value = json.dumps({"machines": {"test": {"values": reference_values()}}})
+        written = speed.selected_record(record({}), speed.PALETTE_BENCH)
+        with self.assertRaisesRegex(SystemExit, "requires a complete record"):
+            speed.adopt(path, written)
+        path.write_text.assert_not_called()
+
+    def test_adopting_only_the_palette_preserves_all_six_references_and_timestamp(self):
+        before = reference_values()
+        del before[speed.PALETTE_BENCH]
+        path = mock.Mock()
+        path.read_text.return_value = json.dumps({"machines": {"test": {"recordedAt": "old",
+                                                                     "values": before}}})
+        written = speed.selected_record(record({speed.PALETTE_BENCH: ([7.0] * 5, 0)}),
+                                        speed.PALETTE_BENCH)
+        with contextlib.redirect_stdout(io.StringIO()):
+            speed.adopt_one(path, written, speed.PALETTE_BENCH)
+        after = json.loads(path.write_text.call_args.args[0])["machines"]["test"]
+        self.assertEqual("old", after["recordedAt"])
+        self.assertEqual(7.0, after["values"].pop(speed.PALETTE_BENCH)["medianMs"])
+        self.assertEqual(before, after["values"])
+
+    def test_a_missing_trial_is_unmeasurable_even_without_a_reference(self):
+        values = speed.selected_record(record({speed.PALETTE_BENCH: ([], 5)}),
+                                       speed.PALETTE_BENCH)["values"]
+        findings, unmeasurable = speed.compare(REFERENCE, values, {})
+        self.assertEqual([], findings)
+        self.assertEqual(1, len(unmeasurable))
+        self.assertEqual(2, speed.exit_code(findings, unmeasurable))
+        self.assertEqual((), speed.compared_benches(values, reference_values()))
+
+    def test_a_valid_value_without_a_reference_is_recorded_only(self):
+        values = speed.selected_record(record({}), speed.PALETTE_BENCH)["values"]
+        self.assertEqual(([], []), speed.compare(REFERENCE, values, {}))
+        self.assertEqual((), speed.compared_benches(values, {}))
+
+    def test_check_without_machine_reference_still_reports_missing_and_returns_two(self):
+        path = mock.Mock()
+        path.read_text.return_value = json.dumps(dict(REFERENCE, machines={}))
+        arguments = mock.Mock(reference=path)
+        for missing, expected in ((False, 0), (True, 2)):
+            with self.subTest(missing=missing):
+                written = speed.selected_record(record({speed.PALETTE_BENCH: ([], 5)}
+                                                       if missing else {}), speed.PALETTE_BENCH)
+                output = io.StringIO()
+                with mock.patch.object(speed, "gather", return_value=written), \
+                        contextlib.redirect_stdout(output):
+                    self.assertEqual(expected, speed.check(arguments))
+                self.assertIn("no reference for test", output.getvalue())
+                self.assertIn("0 benches checked", output.getvalue())
+
+    def test_check_reports_a_valid_palette_without_a_reference_as_recorded_only(self):
+        path = mock.Mock()
+        references = reference_values()
+        del references[speed.PALETTE_BENCH]
+        path.read_text.return_value = json.dumps(dict(REFERENCE, machines={"test": {"values": references}}))
+        arguments = mock.Mock(reference=path)
+        written = speed.selected_record(record({}), speed.PALETTE_BENCH)
+        output = io.StringIO()
+        with mock.patch.object(speed, "gather", return_value=written), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(0, speed.check(arguments))
+        self.assertIn(f"no reference for {speed.PALETTE_BENCH} on test; recorded only", output.getvalue())
+        self.assertIn("0 benches checked", output.getvalue())
 
 
 if __name__ == "__main__":
