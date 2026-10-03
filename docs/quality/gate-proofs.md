@@ -2550,3 +2550,13 @@ Windows 11・clang-cl 19.1.5のDebug（clang-tidy・ASan・UBSan）。全件は�
 再利用: 製品・対象テスト・関連依存・環境が不変の文書/PR/mergeでは上記成功を再利用する。通常入力の挿入・一覧の照合・起動・ファイルI/O・描画は変えていないため、その全性能ベンチと無関係なscopeは実行しない。新境界の長い行の契約は時間を測らず、結果と終端を確認する。前面の確認はReleaseと専用手順を準備し、了承後に実施する。
 
 自己レビュー: ARC-001 / ARC-004は文字境界と移動単位をcoreへ一本化、選択・replace・undoは既存経路。ARC-003はsymbols、CPP-002 / CPP-011は網羅switch・1ファイル1型、QLT-001 / QLT-012は対象と再利用根拠で確認。Waivers: none。schema変更なし。Release・保護対象比較・実機の結果は追記する。
+
+### Releaseと保護対象の比較
+
+`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`は`f0efe72f476da2026219d7239f5015296a261c20`で成功。`build/release-f0efe72/NeNeNib.exe`、1,290,240 bytes、SHA-256 `445250FD4E42FF9E4FBCD67186357B5ABE0B211DBADBC39862F49CD2E289F058`。configure 2.218s / build 144.589s。`out/282-release.log` / `out/release/f0efe72.json`に記録した。この生成コマンドでは起動していない。
+
+`python eng/protected-diff.py --base a787186 --head f0efe72`は終了0（`out/282-protected.log` / `out/protected/f0efe72.json`）。`fixtures 1853 -> 1853 / metadata 0 / deleted 0 / changed 0 / added 0`、`files changed none`、`scopes 31 / same 0 / 未測 30`、新規`--ordinary-characters`も未測。比較用exeを渡していないため、全scopeの件数不変の証明にはしない。`src/ui`・`src/adapters`・`eng`の静的差分も0。
+
+### 実機確認の準備
+
+専用profileと`combining.txt`を`D:/NeNeNib/evidence/ordinary-282/`に用意し、`D:/NeNeNib/scripts/ordinary-282.py --prepare`で作成した。9場面の撮影と、5通りの削除後の保存UTF-8・全undo後の元バイト列の照合を行う手順。17:34 JSTに今回分の前面確認の了承を依頼し、現在は回答待ち。PR #283はdraftのまま。
