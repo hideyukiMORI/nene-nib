@@ -12,6 +12,7 @@
 #include "EditorIntent.hpp"
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
+#include "ExPaletteRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "FileBookmarks.hpp"
 #include "FileFailure.hpp"
@@ -229,6 +230,8 @@ class EditorController final
     void evaluate_command(std::string_view text);
     // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
     void run_tab_request(const core::ExTabRequest &request);
+    // Ex のファイル命令も Ctrl+P と同じ面へ渡す（ADR 0064）。
+    void run_palette_request(const core::ExPaletteRequest &request);
     // アクティブな文書の表示値。frame と一覧の候補が同じ 1 本を使う。
     [[nodiscard]] DocumentView active_document_view() const;
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;

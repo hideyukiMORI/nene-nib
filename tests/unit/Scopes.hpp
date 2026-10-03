@@ -125,6 +125,10 @@ void verify_command_palette();
 // ExSettingsTests.cpp
 void verify_ex_settings();
 
+// ExFileTests.cpp
+void verify_ex_files_contracts();
+void verify_ex_files_scope();
+
 // VimVisualBlockTests.cpp
 void verify_vim_block_contracts();
 void verify_vim_block_scope();

@@ -65,6 +65,7 @@
 | Ex入力 | 本文・undo・レジスタと独立した1行256 bytesまでのUTF-8入力。Tab補完の元prefixと位置も持つ | `CommandLine`（core）、所有者は `EditorState`（ADR 0022） |
 | Ex評価 | 設定用コマンドを検証し、任意の保存候補と結果表示、または閉じた失敗を返す純関数 | `evaluate_ex` / `ExResult` / `ExFailure`（core） |
 | コマンド入力session | Ex一行入力またはCtrl+P一覧の一方だけを持つ任意の和型 | `CommandInput`（application）、所有者は `EditorState`（ADR 0023） |
+| Ex の一覧要求 | `:e` は全ファイル、`:b` / `:ls` はタブ。引数を検索文字として同じ面へ渡し、確定するまでファイルを開かない | `ExPaletteRequest`（core）→ `EditorController::run_palette_request`（ADR 0064） |
 | コマンドpalette | 共通の一行入力、決定的な部分列照合、候補選択。候補はEx補完と同じ一覧から導く | `CommandPalette` / `CommandChoice` / `PaletteLayout`（core）、`CommandPaletteView`（application） |
 | 利用者テーマの所有値 | ファイル由来の名前・出典・配色を所有し、lvalueから既存Themeのviewを貸す | `ThemeName` / `ThemeDocument` / `OwnedThemeSource`（core、ADR 0024） |
 | テーマファイルの検証 | version/名前/必須色/任意UI色/コントラストを検証。制限付き読込は既存FilePortへ委ねる | `ThemeCodec` / `ThemeContrast`、共通 `KeyValueFields`（adapters/win32） |
