@@ -1,5 +1,6 @@
 #include "CaretMove.hpp"
 
+#include "OrdinaryCharacterBoundary.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -119,9 +120,8 @@ namespace
     const std::size_t line = std::min(position.line.value + count, text.line_count());
     return text.offset_of(TextPosition{LineNumber{line}, position.column});
 }
-} // namespace
-
-Offset moved_caret(const TextBuffer &text, Offset caret, CaretMotion motion, std::size_t page_lines)
+[[nodiscard]] Offset code_point_moved(const TextBuffer &text, Offset caret, CaretMotion motion,
+                                      std::size_t page_lines)
 {
     switch (motion)
     {
@@ -149,6 +149,44 @@ Offset moved_caret(const TextBuffer &text, Offset caret, CaretMotion motion, std
         return Offset{0};
     case CaretMotion::document_end:
         return Offset{text.size_bytes()};
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] Offset ordinary_moved(const TextBuffer &text, Offset caret, CaretMoveRequest request)
+{
+    switch (request.motion)
+    {
+    case CaretMotion::previous_character:
+        return ordinary_character_boundary(text, caret, OrdinaryCharacterAction::previous);
+    case CaretMotion::next_character:
+        return ordinary_character_boundary(text, caret, OrdinaryCharacterAction::next);
+    case CaretMotion::previous_word:
+    case CaretMotion::next_word:
+    case CaretMotion::previous_line:
+    case CaretMotion::next_line:
+    case CaretMotion::line_start:
+    case CaretMotion::line_end:
+    case CaretMotion::page_up:
+    case CaretMotion::page_down:
+    case CaretMotion::document_start:
+    case CaretMotion::document_end:
+        return ordinary_character_boundary(
+            text, code_point_moved(text, caret, request.motion, request.page_lines),
+            OrdinaryCharacterAction::containing);
+    }
+    std::unreachable();
+}
+} // namespace
+
+Offset moved_caret(const TextBuffer &text, Offset caret, CaretMoveRequest request)
+{
+    switch (request.unit)
+    {
+    case CaretUnit::code_point:
+        return code_point_moved(text, caret, request.motion, request.page_lines);
+    case CaretUnit::ordinary:
+        return ordinary_moved(text, caret, request);
     }
     std::unreachable();
 }

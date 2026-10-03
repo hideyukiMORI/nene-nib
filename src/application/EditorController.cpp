@@ -27,6 +27,7 @@
 #include "FolderRequest.hpp"
 #include "ImeStance.hpp"
 #include "ModeLabel.hpp"
+#include "OrdinaryCharacterBoundary.hpp"
 #include "Palette.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
@@ -200,20 +201,62 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     std::unreachable();
 }
 
-// 選択が空のときの Backspace / Delete が消す範囲。行頭・行末では改行 1 つぶんを丸ごと消す。
-[[nodiscard]] core::OffsetRange deletion_range(const core::TextBuffer &text, core::Offset caret,
-                                               core::DeleteDirection direction)
+[[nodiscard]] core::CaretUnit caret_unit(core::EditMode mode) noexcept
+{
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return core::CaretUnit::ordinary;
+    case core::EditMode::vim:
+        return core::CaretUnit::code_point;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] core::OffsetRange ordinary_deletion_range(const core::TextBuffer &text,
+                                                        core::Offset caret,
+                                                        core::DeleteDirection direction)
 {
     switch (direction)
     {
     case core::DeleteDirection::backward:
+        return core::OffsetRange{core::ordinary_character_boundary(
+                                     text, caret, core::OrdinaryCharacterAction::backspace),
+                                 caret};
+    case core::DeleteDirection::forward:
         return core::OffsetRange{
-            core::moved_caret(text, caret, core::CaretMotion::previous_character, single_page_line),
+            caret, core::ordinary_character_boundary(text, caret,
+                                                     core::OrdinaryCharacterAction::erase_forward)};
+    }
+    std::unreachable();
+}
+
+// 選択が空のときの Backspace / Delete。外部から来る Vim の意図は既存の単位を保つ。
+[[nodiscard]] core::OffsetRange deletion_range(const core::TextBuffer &text, core::Offset caret,
+                                               core::DeleteDirection direction, core::EditMode mode)
+{
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return ordinary_deletion_range(text, caret, direction);
+    case core::EditMode::vim:
+        break;
+    }
+    switch (direction)
+    {
+    case core::DeleteDirection::backward:
+        return core::OffsetRange{
+            core::moved_caret(text, caret,
+                              core::CaretMoveRequest{core::CaretMotion::previous_character,
+                                                     single_page_line,
+                                                     core::CaretUnit::code_point}),
             caret};
     case core::DeleteDirection::forward:
         return core::OffsetRange{
-            caret,
-            core::moved_caret(text, caret, core::CaretMotion::next_character, single_page_line)};
+            caret, core::moved_caret(text, caret,
+                                     core::CaretMoveRequest{core::CaretMotion::next_character,
+                                                            single_page_line,
+                                                            core::CaretUnit::code_point})};
     }
     std::unreachable();
 }
@@ -1025,8 +1068,10 @@ void EditorController::accept(const InsertText &intent)
 void EditorController::accept(const MoveCaret &intent)
 {
     interrupt_vim_insert();
-    const core::Offset caret = core::moved_caret(state_.text(), state_.selection().caret,
-                                                 intent.motion, state_.scroll().visible_lines);
+    const core::Offset caret =
+        core::moved_caret(state_.text(), state_.selection().caret,
+                          core::CaretMoveRequest{intent.motion, state_.scroll().visible_lines,
+                                                 caret_unit(state_.mode())});
     move_caret_to(caret, anchoring_in(state_.mode(), intent.anchoring));
     settle_vim_caret();
 }
@@ -1055,9 +1100,9 @@ void EditorController::accept(const CancelSelection &)
 void EditorController::accept(const DeleteText &intent)
 {
     const auto selected = core::selection_range(state_.selection());
-    const auto range = core::is_empty(selected)
-                           ? deletion_range(state_.text(), selected.begin, intent.direction)
-                           : selected;
+    const auto range = core::is_empty(selected) ? deletion_range(state_.text(), selected.begin,
+                                                                 intent.direction, state_.mode())
+                                                : selected;
     replace(range, std::string_view{}, core::EditBoundary::separate);
 }
 

@@ -16,7 +16,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 `docs/todo/current.md`; the measurements behind them are in `docs/quality/gate-proofs.md`.
 
 - **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
-- **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret. Done.
+- **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret. Arrow keys and Delete group combining accents, Japanese voicing marks and common variation selectors; Backspace removes accents individually and a selector with its preceding code point. Complex emoji and language-specific grapheme rules remain outside this first stage ([ADR 0065](docs/adr/0065-ordinary-combining-character-boundaries.md)).
 - **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1853 oracle-generated
   fixtures in `tests/vim/` are checked by CTest. Implemented: `h j k l 0 $ ^ w b e W B E ge gE gg G` (a character includes its combining marks), Home / End,
   `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x X r`, `d c y` + motion, `dd cc yy`,

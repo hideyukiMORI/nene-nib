@@ -3727,7 +3727,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     VimState next = state;
     next.insert_repeat = std::nullopt;
-    return VimStep{std::move(next), VimMoveTo{moved_caret(text, caret, motion, single_step)}};
+    return VimStep{std::move(next),
+                   VimMoveTo{moved_caret(
+                       text, caret, CaretMoveRequest{motion, single_step, CaretUnit::code_point})}};
 }
 
 [[nodiscard]] VimState insert_recorded(const VimState &state, std::string_view input)
