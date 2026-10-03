@@ -1650,7 +1650,7 @@ void EditorController::accept(const OpenTabList &)
         accept(CancelCommand{});
         return;
     }
-    open_palette("#", state_.active_tab());
+    run_palette_request(core::ExPaletteRequest{core::PaletteScope::tabs, {}});
 }
 
 // 面を開く（ADR 0062 の決定 14）。前の面のときに届いて残った分は collect で捨てる（たまりが空で
@@ -2014,6 +2014,12 @@ void EditorController::evaluate_command(std::string_view text)
         run_tab_request(tab.value());
         return;
     }
+    const auto &palette = result.value().palette;
+    if (palette.has_value())
+    {
+        run_palette_request(palette.value());
+        return;
+    }
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {
@@ -2038,6 +2044,13 @@ void EditorController::evaluate_command(std::string_view text)
         state_ = state_.with_vim(std::move(vim));
     }
     state_ = state_.with_command_message(result.value().message);
+}
+
+void EditorController::run_palette_request(const core::ExPaletteRequest &request)
+{
+    const bool active = request.scope == core::PaletteScope::tabs && request.query.empty();
+    open_palette(core::palette_input_for(core::PaletteQuery{request.scope, request.query}),
+                 active ? state_.active_tab() : 0);
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。

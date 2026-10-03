@@ -89,6 +89,8 @@ SIMD の組み込み関数を書ける唯一の場所。関数ごとに `[[gnu::
 
 振る舞いの調整を持つ。ポートの宣言・状態の所有者（`EditorState` / `VimState`）・意図を受ける reducer・表示値の生成・結果型。
 `EditorState` は本文と独立した任意の `CommandInput`（`CommandLine` / `CommandPalette` の和型）と結果メッセージも所有する。ExとCtrl+Pは入力編集・コマンド候補・`evaluate_ex` を共有し、相対フォント変更もcontrollerの `persist_settings` を共用する（ADR 0022 / 0023）。
+
+Ex の `:e` / `:b` / `:ls` は core の `ExPaletteRequest`（出どころと検索文字）を controller の `run_palette_request` → `open_palette` に写す。記号への変換は `palette_input_for` が `palette_marks` を逆引きし、候補生成・照合・確定は Ctrl+P と同じ経路を使う（ADR 0064）。
 ワーカーへの要求値と完了の受け取り（版番号）もここ（ADR 0004）。Win32・永続化・ファイル・スレッドを知らない。
 
 ### `src/adapters/win32`

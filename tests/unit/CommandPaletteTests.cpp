@@ -95,8 +95,9 @@ void verify_palette_choices()
 {
     const auto all = choices_for(":");
     expect(all.size() == core::ex_command_candidates().size(), "Ex and palette share the catalog");
-    // 空の入力の点数は候補の長さなので、最も短いタブの一覧 `tabs`（ADR 0057 の決定 7）が先頭。
-    expect(all.front().command == "tabs" && all.at(1).command == "tabnew",
+    // 設定候補の点数は長さ、同点は文字列の順。ls、edit、tabs の順になる（ADR 0064）。
+    expect(all.front().command == "ls" && all.at(1).command == "edit" &&
+               all.at(2).command == "tabs",
            "empty query has deterministic ranking");
     for (const auto &theme : core::builtin_themes)
     {

@@ -1,6 +1,7 @@
 #include "ExResult.hpp"
 
 #include "BuiltinThemes.hpp"
+#include "ExPaletteName.hpp"
 #include "ExTabName.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
@@ -260,7 +261,41 @@ tab_command(std::string_view text)
     }
     return tab_result(row.value(), argument);
 }
-// colorscheme と set のほか（Vim の強調の止め方とタブの命令）。どれにも当たらなければ
+constexpr std::array<ExPaletteName, 5> palette_names{{
+    {"edit", 1, PaletteScope::files},
+    {"buffer", 1, PaletteScope::tabs},
+    {"ls", 2, PaletteScope::tabs},
+    {"files", 5, PaletteScope::tabs},
+    {"buffers", 7, PaletteScope::tabs},
+}};
+
+// !・範囲・+cmd を普通の名前として消費しない。引数の直接実行はせず、共通の一覧へ渡す。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+palette_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    const std::size_t letters = leading(text.substr(range), is_letter);
+    const auto name = text.substr(range, letters);
+    const auto row = std::ranges::find_if(
+        palette_names, [name](const ExPaletteName &entry)
+        { return name.size() >= entry.shortest && entry.name.starts_with(name); });
+    if (row == palette_names.end())
+    {
+        return std::nullopt;
+    }
+    const auto suffix = text.substr(range + letters);
+    const auto query = trimmed(suffix);
+    if (range > 0 || (!suffix.empty() && suffix.front() != ' ') || query.starts_with('!') ||
+        query.starts_with('+'))
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    return ExResult{std::nullopt, std::nullopt,
+                    std::nullopt, DisplayText::parse(row->name).value(),
+                    std::nullopt, ExPaletteRequest{row->scope, std::string(query)}};
+}
+
+// colorscheme と set のほか（Vim の強調の止め方とタブ・ファイルの命令）。どれにも当たらなければ
 // unknown_command。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 remaining_command(std::string_view text, std::string_view name, std::string_view argument)
@@ -274,6 +309,11 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     if (tab.has_value())
     {
         return std::move(tab).value();
+    }
+    auto palette = palette_command(text);
+    if (palette.has_value())
+    {
+        return std::move(palette).value();
     }
     return std::unexpected(ExFailure::unknown_command);
 }
@@ -318,6 +358,10 @@ std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
         "colorscheme",     "set fontsize=", "set guifont=",   "set incsearch",
         "set noincsearch", "set hlsearch",  "set nohlsearch", "tabs",
         "tabnew",          "tabnext",       "tabprevious",    "tabclose"};
+    for (const ExPaletteName &name : palette_names)
+    {
+        candidates.emplace_back(name.name);
+    }
     for (const auto &name : themes.names())
     {
         candidates.push_back("colorscheme " + name);

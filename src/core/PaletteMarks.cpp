@@ -19,6 +19,17 @@ PaletteQuery palette_query_of(std::string_view input) noexcept
     return PaletteQuery{found->scope, input.substr(1)};
 }
 
+std::string palette_input_for(const PaletteQuery &query)
+{
+    const auto mark = std::ranges::find(palette_marks, query.scope, &PaletteMark::scope);
+    if (mark != palette_marks.end())
+    {
+        return std::string(1, mark->mark) + std::string(query.query);
+    }
+    const bool escape = palette_query_of(query.query).scope != PaletteScope::files;
+    return (escape ? " " : "") + std::string(query.query);
+}
+
 DisplayText palette_mark_hint()
 {
     std::string hint;

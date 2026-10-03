@@ -2471,3 +2471,32 @@ hideが2026-10-03 15:37 JSTに前面操作を了承した後、`python D:/NeNeNi
 測定直前のPNG5枚 `palette-2026-10-03T06-38-*.png` すべてを読み、暖機fと **1 / 5000** の表示を確認した。5枚のSHA-256もすべて `5873681DFF7C111BA6876363CC5D835A9E70F0CE908FB405C4967A42BB12B5E9` で一致。打鍵区間で5000候補が揃っていることを証明する。15:38 JSTにhideへ前面操作終了を通知済み。
 
 自己レビュー: 既存の原子的な保存、パス同一性、開く経路、閉じたenum、状態の所有を維持した。追加されたI/OはBookmarkPortのread/writeに限定し、通常の起動/開く/保存/入力/切替/終了では呼ばないことを契約で確認。完全同時の複数窓の競合はADRで明示した範囲外。最終製品は実測した `764fa20` と同一で、以後の文書変更では成功済みの検証を再実行しない。PR #279に同じ検証と再利用根拠を記録する。
+
+## 5-ce — Exから共通のファイル一覧（Issue #280・ADR 0064）
+
+### 対象・依存・退行の根拠
+
+FR-006 / D5 / D28の最後の入口を実装。`ExResult`の型付き一覧要求→`EditorController::run_palette_request`→既存`open_palette`を使う。`:e`は全候補、`:b` / `:ls`はタブ、引数は検索欄。`palette_marks`の逆引きも同じ表を使い、全候補の検索で先頭の記号を文字として保持する。候補列・照合器・読み込み・描画・IME処理・port・保存形式は変更しない。
+
+固定した手元のVim 9.1（2024-01-03 build）の非対話probeを36ケース実行した。`python D:/NeNeNib/scripts/probe-ex-files.py`、`out/probes/ex-files-2026-10-03.json`。`e`〜`edit`、`b`〜`buffer`、`ls` / `files` / `buffers`の綴りを採用し、`fi` / `file` / `l` / `lis`が別命令であることを確認。Vimの直接open・reload・番号切替はFR-006の一覧を優先して実装しない。
+
+### 自動検証
+
+Windows 11・clang-cl 19.1.5の既存Debug環境（clang-tidy・ASan・UBSan）。各scopeは`build/nib_tests.exe <scope>`で実行した。
+
+| 確認する退行 | コマンド | 結果・記録 |
+| --- | --- | --- |
+| 新しい公開型・controllerとの接続・静的規則 | `. ./eng/toolchain.ps1; cmake --build build --target nib_tests NeNeNib` | 成功、`out/280-build02.log`。テストの期待値修正後は`--target nib_tests`のみ再ビルド、`out/280-build03.log` |
+| Exの名前・引数・拒否・256 bytes・記号と日本語・出どころ・選択・本文/undo/register・遅延open | `--ex-files` | 82 checks成功、`out/280-ex-files.log` |
+| 共有Ex評価器と補完が既存設定を壊さない | `--ex-settings` | 195 checks成功、`out/280-ex-settings.log` |
+| OpenTabListの共通化と既存Exタブ命令 | `--tabs` | 291 checks成功、`out/280-tabs.log` |
+| 候補追加の順・共通入力・IME・照合の境界 | `--command-palette` | 356 checks成功、`out/280-command-palette-fixed.log` |
+| モジュール境界・型・規約 | `python eng/conformance.py --build-dir build` | 0 violations、`out/280-conformance.log` |
+| core/applicationにOS依存を足さない | `python eng/symbols.py --build-dir build --require core application` | 2 libraries / 0 violations、`out/280-symbols.log` |
+| 変更C++の整形 | `clang-format --dry-run --Werror <変更C++>` | 終了0 |
+
+初回ビルドでは新しいテストのoptional参照を静的解析が検出し、確認してから読む形へ修正した（`out/280-build01.log`）。初回`--command-palette`ではサナが書いた同点時の期待順が1件失敗。既存の設定候補は文字列順であることをコードで確認し、期待値を`ls, edit, tabs`へ直した。製品の順は変えていない。成功した他のscopeは再実行していない。
+
+再利用: #278の5000候補ベンチ（5有効試行・中央値2.708ms、`out/speed/2026-10-03T06-38-44Z.json`）を再利用する。ファイル候補の生成・`listed_positions`・`CommandPalette`・描画・adapter・計測器・環境は同一。新しい逆変換は一覧を開く時だけで、打鍵区間へ入らない。Exの設定候補は5件増えたが全ファイルの照合対象には含まれない。全件Vim再生・全性能ベンチは不要。成功済みの実装・対象テスト・関連依存を変えない文書/PR/mergeの工程では再測定しない。
+
+規則: ARC-001 / ARC-003 / ARC-004 / ARC-010 / ARC-012 / CPP-002 / CPP-004 / CPP-011 / CPP-012 / QLT-001 / QLT-012 / QLT-013。Waivers: none。Vimの互換範囲はADR 0064に明記。実機とRelease・保護対象の比較はこの時点では未実施。

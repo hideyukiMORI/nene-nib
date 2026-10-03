@@ -39,7 +39,11 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   those files. Open tabs, bookmarks and history entries are not repeated, and hidden, system and known non-text
   files are excluded. Unknown extensions and extensionless names remain available. After 8192 files
   have been read, a notice stays visible until the palette closes; the limit counts files before
-  extension and duplicate filtering. Bookmarks and Vim `:e`, `:b`, `:ls` are planned.
+  extension and duplicate filtering. Vim `:e` / `:edit` opens the same all-files palette;
+  `:b` / `:buffer` and `:ls` / `:files` / `:buffers` show open tabs. Arguments seed the search
+  (`:b memo` filters tabs); press Enter to choose a result. These commands do not reload files,
+  expand paths or switch directly by number. Bang, ranges and `+cmd` are not supported.
+  See [ADR 0064](docs/adr/0064-ex-file-commands-open-the-shared-palette.md).
 - **FR-007 Markdown preview** — planned (md4c is not in the tree yet).
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS; CRLF / LF kept as read; unsaved mark and
   "save?" prompt. Done.

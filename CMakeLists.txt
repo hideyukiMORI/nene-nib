@@ -91,6 +91,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/UserThemeValuesTests.cpp
     tests/unit/CommandPaletteTests.cpp
     tests/unit/ExSettingsTests.cpp
+    tests/unit/ExFileTests.cpp
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
     tests/unit/SessionTests.cpp

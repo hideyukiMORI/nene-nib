@@ -6,6 +6,7 @@
 #include "PaletteScope.hpp"
 
 #include <array>
+#include <string>
 #include <string_view>
 
 namespace nenenib::core
@@ -23,6 +24,9 @@ inline constexpr std::array<PaletteMark, 5> palette_marks{{
 // 入力の先頭の 1 文字を表で引く。表にあればその出どころと残りの文字、無ければ files と入力の全体。
 // 呼び出し元で先頭の文字を見ない。
 [[nodiscard]] PaletteQuery palette_query_of(std::string_view input) noexcept;
+
+// 出どころを同じ表で記号へ戻す。files の先頭の記号は空白を前置して検索文字として残す。
+[[nodiscard]] std::string palette_input_for(const PaletteQuery &query);
 
 // 検索欄の案内（`# タブ　* ブックマーク　@ 履歴　/ フォルダ　:
 // 設定`）。記号と名前の間は半角の空白、項目の間は全角の空白 U+3000。
