@@ -80,6 +80,8 @@ using nenenib::core::builtin_themes;
 using nenenib::core::BuiltinTheme;
 using nenenib::core::byte_order_mark;
 using nenenib::core::CaretMotion;
+using nenenib::core::CaretMoveRequest;
+using nenenib::core::CaretUnit;
 using nenenib::core::code_point_at;
 using nenenib::core::code_point_count;
 using nenenib::core::collapsed_at;
@@ -722,69 +724,127 @@ void verify_line_endings()
 void verify_caret_characters()
 {
     const auto text = buffer_of("a\xE6\x97\xA5\r\nbc");
-    expect(moved_caret(text, Offset{0}, CaretMotion::next_character, 1) == Offset{1},
+    expect(moved_caret(text, Offset{0},
+                       CaretMoveRequest{CaretMotion::next_character, 1, CaretUnit::code_point}) ==
+               Offset{1},
            "right over one ASCII byte");
-    expect(moved_caret(text, Offset{1}, CaretMotion::next_character, 1) == Offset{4},
+    expect(moved_caret(text, Offset{1},
+                       CaretMoveRequest{CaretMotion::next_character, 1, CaretUnit::code_point}) ==
+               Offset{4},
            "right over a three-byte glyph");
-    expect(moved_caret(text, Offset{4}, CaretMotion::next_character, 1) == Offset{6},
+    expect(moved_caret(text, Offset{4},
+                       CaretMoveRequest{CaretMotion::next_character, 1, CaretUnit::code_point}) ==
+               Offset{6},
            "right at the line end jumps over the whole CRLF");
-    expect(moved_caret(text, Offset{8}, CaretMotion::next_character, 1) == Offset{8},
+    expect(moved_caret(text, Offset{8},
+                       CaretMoveRequest{CaretMotion::next_character, 1, CaretUnit::code_point}) ==
+               Offset{8},
            "right at the end of the buffer does not move");
-    expect(moved_caret(text, Offset{4}, CaretMotion::previous_character, 1) == Offset{1},
+    expect(moved_caret(text, Offset{4},
+                       CaretMoveRequest{CaretMotion::previous_character, 1,
+                                        CaretUnit::code_point}) == Offset{1},
            "left over a three-byte glyph");
-    expect(moved_caret(text, Offset{6}, CaretMotion::previous_character, 1) == Offset{4},
+    expect(moved_caret(text, Offset{6},
+                       CaretMoveRequest{CaretMotion::previous_character, 1,
+                                        CaretUnit::code_point}) == Offset{4},
            "left at a line start goes to the end of the line above");
-    expect(moved_caret(text, Offset{0}, CaretMotion::previous_character, 1) == Offset{0},
+    expect(moved_caret(text, Offset{0},
+                       CaretMoveRequest{CaretMotion::previous_character, 1,
+                                        CaretUnit::code_point}) == Offset{0},
            "left at the start of the buffer does not move");
 }
 
 void verify_caret_lines()
 {
     const auto text = buffer_of("alpha\r\nxy\r\nomega");
-    expect(moved_caret(text, Offset{3}, CaretMotion::next_line, 1) == Offset{9},
+    expect(moved_caret(text, Offset{3},
+                       CaretMoveRequest{CaretMotion::next_line, 1, CaretUnit::code_point}) ==
+               Offset{9},
            "down keeps the column when the next line is shorter");
-    expect(moved_caret(text, Offset{3}, CaretMotion::next_line, 1) ==
+    expect(moved_caret(text, Offset{3},
+                       CaretMoveRequest{CaretMotion::next_line, 1, CaretUnit::code_point}) ==
                text.offset_of(TextPosition{LineNumber{2}, Column{4}}),
            "down clamps the column to the line end");
-    expect(moved_caret(text, Offset{13}, CaretMotion::previous_line, 1) == Offset{9},
+    expect(moved_caret(text, Offset{13},
+                       CaretMoveRequest{CaretMotion::previous_line, 1, CaretUnit::code_point}) ==
+               Offset{9},
            "up keeps the column");
-    expect(moved_caret(text, Offset{2}, CaretMotion::previous_line, 1) == Offset{2},
+    expect(moved_caret(text, Offset{2},
+                       CaretMoveRequest{CaretMotion::previous_line, 1, CaretUnit::code_point}) ==
+               Offset{2},
            "up on the first line stays on the first line");
-    expect(moved_caret(text, Offset{13}, CaretMotion::next_line, 1) == Offset{13},
+    expect(moved_caret(text, Offset{13},
+                       CaretMoveRequest{CaretMotion::next_line, 1, CaretUnit::code_point}) ==
+               Offset{13},
            "down on the last line stays on the last line");
-    expect(moved_caret(text, Offset{3}, CaretMotion::line_start, 1) == Offset{0}, "Home");
-    expect(moved_caret(text, Offset{3}, CaretMotion::line_end, 1) == Offset{5},
+    expect(moved_caret(text, Offset{3},
+                       CaretMoveRequest{CaretMotion::line_start, 1, CaretUnit::code_point}) ==
+               Offset{0},
+           "Home");
+    expect(moved_caret(text, Offset{3},
+                       CaretMoveRequest{CaretMotion::line_end, 1, CaretUnit::code_point}) ==
+               Offset{5},
            "End stops before the CRLF");
-    expect(moved_caret(text, Offset{3}, CaretMotion::document_start, 1) == Offset{0}, "Ctrl+Home");
-    expect(moved_caret(text, Offset{3}, CaretMotion::document_end, 1) == Offset{16}, "Ctrl+End");
-    expect(moved_caret(text, Offset{13}, CaretMotion::page_up, 1) == Offset{9},
+    expect(moved_caret(text, Offset{3},
+                       CaretMoveRequest{CaretMotion::document_start, 1, CaretUnit::code_point}) ==
+               Offset{0},
+           "Ctrl+Home");
+    expect(moved_caret(text, Offset{3},
+                       CaretMoveRequest{CaretMotion::document_end, 1, CaretUnit::code_point}) ==
+               Offset{16},
+           "Ctrl+End");
+    expect(moved_caret(text, Offset{13},
+                       CaretMoveRequest{CaretMotion::page_up, 1, CaretUnit::code_point}) ==
+               Offset{9},
            "PgUp of one line keeps the column and clamps it to the shorter line");
-    expect(moved_caret(text, Offset{13}, CaretMotion::page_up, 9) == Offset{2},
+    expect(moved_caret(text, Offset{13},
+                       CaretMoveRequest{CaretMotion::page_up, 9, CaretUnit::code_point}) ==
+               Offset{2},
            "a page larger than the buffer stops at the first line");
-    expect(moved_caret(text, Offset{0}, CaretMotion::page_down, 2) == Offset{11},
+    expect(moved_caret(text, Offset{0},
+                       CaretMoveRequest{CaretMotion::page_down, 2, CaretUnit::code_point}) ==
+               Offset{11},
            "PgDn moves a page");
-    expect(moved_caret(text, Offset{0}, CaretMotion::page_down, 9) == Offset{11},
+    expect(moved_caret(text, Offset{0},
+                       CaretMoveRequest{CaretMotion::page_down, 9, CaretUnit::code_point}) ==
+               Offset{11},
            "a page larger than the buffer stops at the last line");
 }
 
 void verify_caret_words()
 {
     const auto text = buffer_of("one two  three\r\nnext");
-    expect(moved_caret(text, Offset{0}, CaretMotion::next_word, 1) == Offset{4},
+    expect(moved_caret(text, Offset{0},
+                       CaretMoveRequest{CaretMotion::next_word, 1, CaretUnit::code_point}) ==
+               Offset{4},
            "Ctrl+Right skips the word and the space after it");
-    expect(moved_caret(text, Offset{4}, CaretMotion::next_word, 1) == Offset{9},
+    expect(moved_caret(text, Offset{4},
+                       CaretMoveRequest{CaretMotion::next_word, 1, CaretUnit::code_point}) ==
+               Offset{9},
            "Ctrl+Right skips two spaces");
-    expect(moved_caret(text, Offset{9}, CaretMotion::next_word, 1) == Offset{14},
+    expect(moved_caret(text, Offset{9},
+                       CaretMoveRequest{CaretMotion::next_word, 1, CaretUnit::code_point}) ==
+               Offset{14},
            "Ctrl+Right stops at the line end");
-    expect(moved_caret(text, Offset{14}, CaretMotion::next_word, 1) == Offset{16},
+    expect(moved_caret(text, Offset{14},
+                       CaretMoveRequest{CaretMotion::next_word, 1, CaretUnit::code_point}) ==
+               Offset{16},
            "Ctrl+Right at the line end moves to the next line");
-    expect(moved_caret(text, Offset{14}, CaretMotion::previous_word, 1) == Offset{9},
+    expect(moved_caret(text, Offset{14},
+                       CaretMoveRequest{CaretMotion::previous_word, 1, CaretUnit::code_point}) ==
+               Offset{9},
            "Ctrl+Left goes to the start of the current word");
-    expect(moved_caret(text, Offset{9}, CaretMotion::previous_word, 1) == Offset{4},
+    expect(moved_caret(text, Offset{9},
+                       CaretMoveRequest{CaretMotion::previous_word, 1, CaretUnit::code_point}) ==
+               Offset{4},
            "Ctrl+Left skips the spaces before the word");
-    expect(moved_caret(text, Offset{16}, CaretMotion::previous_word, 1) == Offset{14},
+    expect(moved_caret(text, Offset{16},
+                       CaretMoveRequest{CaretMotion::previous_word, 1, CaretUnit::code_point}) ==
+               Offset{14},
            "Ctrl+Left at a line start goes to the line above");
-    expect(moved_caret(text, Offset{0}, CaretMotion::previous_word, 1) == Offset{0},
+    expect(moved_caret(text, Offset{0},
+                       CaretMoveRequest{CaretMotion::previous_word, 1, CaretUnit::code_point}) ==
+               Offset{0},
            "Ctrl+Left at the start of the buffer does not move");
 }
 
@@ -1739,6 +1799,13 @@ void verify_palette()
 }
 
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。
+void verify_caret_movement_contracts()
+{
+    verify_caret_characters();
+    verify_caret_lines();
+    verify_caret_words();
+}
+
 void verify_text_and_caret()
 {
     verify_display_text_accepts_multibyte();

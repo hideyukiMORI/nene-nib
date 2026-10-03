@@ -133,7 +133,12 @@ void verify_ex_files_scope();
 void verify_vim_block_contracts();
 void verify_vim_block_scope();
 
+// OrdinaryCharacterTests.cpp
+void verify_ordinary_character_contracts();
+void verify_ordinary_character_scope();
+
 // CoreTests.cpp
+void verify_caret_movement_contracts();
 void verify_display_text_accepts_ascii();
 void verify_history_coalescing();
 void verify_history_absorbing();
