@@ -473,6 +473,8 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     gutter_format_ = std::move(gutter);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
+    body_layouts_.clear();
+    previous_body_layouts_.clear();
     return {};
 }
 
@@ -696,8 +698,30 @@ void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
 Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
                                                          const core::BodyLayout &body)
 {
-    return text_layout(text, code_format_.Get(),
-                       core::LayoutRect{0, 0, core::width_of(body.content), body.line_height});
+    const core::LayoutRect area{0, 0, core::width_of(body.content), body.line_height};
+    const auto matches = [text, area](const BodyTextLayout &entry)
+    {
+        // 前の列から移した要素のlayoutは空。同じ空行として拾わない。
+        return entry.layout && entry.area == area && entry.text == text;
+    };
+    const auto current = std::ranges::find_if(body_layouts_, matches);
+    if (current != body_layouts_.end())
+    {
+        return current->layout;
+    }
+    const auto previous = std::ranges::find_if(previous_body_layouts_, matches);
+    if (previous != previous_body_layouts_.end())
+    {
+        body_layouts_.push_back(std::move(*previous));
+        return body_layouts_.back().layout;
+    }
+    auto made = text_layout(text, code_format_.Get(), area);
+    if (!made)
+    {
+        return nullptr;
+    }
+    body_layouts_.push_back(BodyTextLayout{std::string(text), area, std::move(made)});
+    return body_layouts_.back().layout;
 }
 
 Direct2DRenderer::TextLayout Direct2DRenderer::text_layout(std::string_view text,
@@ -1426,6 +1450,8 @@ void Direct2DRenderer::draw_palette(const application::EditorFrame &frame,
 std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface)
 {
+    previous_body_layouts_.swap(body_layouts_);
+    body_layouts_.clear();
     context_->SetTarget(surface);
     context_->BeginDraw();
     context_->Clear(unpainted());
@@ -1442,6 +1468,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
         draw_palette(
             frame, core::palette_layout(width, height, dpi_, frame.command_palette.value().total));
     }
+    previous_body_layouts_.clear();
     const auto ended = context_->EndDraw();
     context_->SetTarget(nullptr);
     if (FAILED(ended))

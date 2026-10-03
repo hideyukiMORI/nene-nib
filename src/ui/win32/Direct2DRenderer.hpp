@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BodyLayout.hpp"
+#include "BodyTextLayout.hpp"
 #include "ClauseEmphasis.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
@@ -29,6 +30,7 @@
 #include <memory>
 #include <span>
 #include <string_view>
+#include <vector>
 #include <wrl/client.h>
 
 namespace nenenib::ui::win32
@@ -198,6 +200,9 @@ class Direct2DRenderer final
     TextFormat command_format_;
     TextFormat gutter_format_;
     TextFormat code_format_;
+    // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
+    std::vector<BodyTextLayout> body_layouts_;
+    std::vector<BodyTextLayout> previous_body_layouts_;
     WaitableHandle latency_{nullptr, &::CloseHandle};
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;

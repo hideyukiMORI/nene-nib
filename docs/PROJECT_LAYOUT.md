@@ -107,6 +107,8 @@ Ex の保存・終了は core の `ExDocumentName` の表から `ExDocumentVerb`
 
 application が作った表示値を Direct2D / DirectWrite で描き、キー・マウス・IME の操作を意図として渡す（ARC-011・CPP-017）。可変性の隔離区画（ARC-005）。
 
+本文の文字組み資源はDirect2DRendererの`layout_of`が所有し、現在/直前の描画で使う全文と幾何が一致するときだけ再利用する。フォント・DPI変更で破棄し、画面を離れた資源は次の描画で手放す。本文の正本や編集状態は持たない（ADR 0069）。
+
 ### `src/app`
 
 依存を結ぶ。端末出力と終了コードを扱ってよい唯一の場所（ARC-006）。

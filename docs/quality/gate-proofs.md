@@ -2739,3 +2739,110 @@ PR #289を統合したclean mainは`088481b0c79436e9616445559aa4268225bd2ac0`。
 統合するのはSPECIFICATION・ADR/索引・設計・日報/current・本節・実測JSONだけ。`git diff --exit-code checkpoint/pre-split-20261003 -- src tests eng CMakeLists.txt`は終了0。`python eng/protected-diff.py --base 088481b --head 7e14f8d`も終了0（`out/290-protected.log` / `out/protected/7e14f8d.json`）で、fixtures 1853→1853、metadata/deleted/changed/addedはいずれも0、files changed none、scopes 33 / same 0 / 未測33。exeを渡しておらず、全scopeの件数を測った証明ではない。
 
 文書の規則ID/リンク/状態・空白の不整合だけを対象に、追記後の`conformance.document_checks(root, inventory(root), rules)`は違反0（`out/290-doc-conformance.log`）。`git diff --check`も終了0。製品の実装・試験・関連依存は区切りのタグと同じなので、5-chの製品検証とReleaseを再利用し、文書の統合を理由に製品テストや72試行を再実行しない。全件テスト・新しいVim oracle・IME/クリップボードの試験は選んでいない。製品schema変更なし、実測記録JSONを追加。Waivers: none。
+
+## 5-ck — 長い行の文字組み再利用（Issue #291・ADR 0069）
+
+2026-10-03〜04。FR-012 / FR-015 / FR-017 / D12 / D14 / D15 / ARC-001 / ARC-004 / ARC-007 / ARC-011 / CPP-011 / CPP-012 / CPP-016 / CPP-017 / QLT-001 / QLT-012 / QLT-013 / QLT-014。hideの続行指示に沿い、単体で原因の計測・修正・表示検証・split再比較を実施した。
+
+### 原因の切り分けと製品の差分
+
+`test/291-render-profile`で既存TimingPort/Milestoneだけに一時計測点を追加し、controller.apply、frame生成、UTF-16、layout作成、DrawTextLayout、EndDraw、待機と提示を分けた。時計はadaptersのQPCだけ。容量は一時的に65536へ増やし、全試行で未到達を確認した。最初の計測版は節目の関数長制限で落ち、未使用の3節目を除いて修正した。抑制と閾値変更はない。
+
+`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`でfedf727、続いてGetMetricsを先行させる比較版a0b2c57を生成し、各々終了0。ログは`out/291-profile-build-2.log` / `out/291-shaping-build.log`、メタデータは`out/release/<SHA>.json`。各版に`python D:/NeNeNib/scripts/291-render-profile.py --release out/release/<SHA>.json`を実行（後者は`--name shaped`）、各6本を固定して終了0。各版は空文書3本＋長い日本語行3本、1280×800 / DPI120 / Cascadia Code13.5pt。全202入力・1文字の独立・節目の組を確認した。
+
+長い行の中央値は325.999ms、19行のDrawTextLayoutが322.712ms。GetMetricsの先行版では文字組みを含むlayout作成が311.463ms、DrawTextLayoutが9.890ms。frame生成0.705ms、待機0.001msに対して、同じ表示行を毎回組み直すことが支配的だった。全段階の試行値は[実測JSON](long-line-render-2026-10-04.json)のprofileに保存した。
+
+製品の修正はa1a0e4d50a7c9eb784652a4d5ee65e11e7953e0dのui/win32の3ファイル。BodyTextLayoutとDirect2DRenderer.cpp / .hppに、全文・幅・行高が一致する現在/直前のlayoutの再使用と、書式再生成時の破棄を入れた。通常行・IME・クリックは既存layout_ofの一本。文字の範囲、fallback、描画API、編集状態、schemaは変更しない。計測点・先行GetMetrics・2枠試作は製品へ入れない。
+
+### 対象にした表示の検証
+
+退行の対象は、再使用によって古い文字・位置・書式が残ることと、共有layoutに選択等の表示が混入すること。`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`はa1a0e4dで終了0（`out/291-cache-build.log`）、警告とclang-tidyは既存設定。1307648 bytes、SHA-256 `20BDE40B142DCC16409E5CE4973B1FBA91B5FB739FB474835BDD35A88CF0FC4D`。
+
+変更3ファイルへclang-formatのdry-run、conformance.source_checksを選び、ADR 0069へdocument_checksを実行して違反0。型の配置・禁止API・抑制・文書契約を確認するためで、無関係なcore/applicationの全件テストは実行しない。
+
+`python D:/NeNeNib/scripts/291-layout-visual.py --executable <Release> --name before|after`を591b99fとa1a0e4dへ実行し、`--compare`は終了0。22場面の本文/ステータス全画素が一致（`out/291-visual/comparison.json`）。Tab、結合文字、異体字、絵文字、制御文字、双方向文字を含むfixtureで、再描画・入力・Backspace・改行・undo・3か所のクリック・選択・スクロール往復・窓幅往復・Vimのブロックキャレット・検索・フォントサイズ/名・テーマを確認した。刺激で画像が変わることと、設定の実保存値も検査した。初回の検証スクリプトはguifontの`:h<pt>`を欠き設定変更を検出できず停止したため、スクリプトだけを修正して再実施した。失敗した記録はbefore-invalid-fontへ保存した。
+
+既存`eng/verify-window.py`のverify_imeだけを専用profileで呼び、終了0（`out/291-visual/ime/result.json`）。日本語IMEの実入力で下線189画素、変換後の強調186画素、確定後の下線0を確認し、IMEの開閉状態を元の0へ戻した。DPIは実機120で、別DPIへの実移動とdevice lostの実機再現はしていない。フォント変更と同じ資源破棄へ通るコードを確認した。
+
+### 通常版とsplitの固定比較
+
+Oは変更前591b99f、Aは修正通常版a1a0e4d、S/H/Vは4d60d79 / 58a48fb / fc0b4c0。試作は#290と同じ矩形・クリップ・同じframeの二度描画で、各Refをbuild-release.ps1で生成して終了0。Sは143.923秒、Hは176.354秒、Vは178.419秒。H/Vは隔離したworktreeから生成した。メタデータと全hashは実測JSONに保存し、ビルドを全て終了してから測った。
+
+測定前にIssueへ3本文×6組×5版＝90本、奇数O/A/S/H/V・偶数V/H/S/A/O、欠測は記録して再試行なし、O/Aの前半後半の安定を要する通常版比較、#290と同じsplit条件を記録した。
+`python D:/NeNeNib/scripts/291-paired-render.py --manifest D:/NeNeNib/evidence/291-paired/manifest.json`は終了0。通常版の改善とsplitを一度に測り、別々の測定を重複させなかった。窓は1280×800、DPI120、各回新規profile、fixtureと字体は#290と同じ。測定器は既存keys_trialを共用した。
+
+`python D:/NeNeNib/scripts/291-render-audit.py`は終了0（out/291-render-audit.log）。90試行のうち87本は正確な202入力、暖機/1文字の独立、200文字後の提示、rawからの時間再計算、寸法/DPIを検証した。empty-3-O、empty-3-S、long-japanese-2-Oは207入力だったため欠測として保持した。値の補完・試行の置き換え・再試行はない。全て測れている修正通常版Aは3条件とも6本。
+
+観測された1文字 / 200文字の中央値（ms）。Oの空/長行とSの空は5本、他は6本。欠測がある数値も見せるが、性能受入の合格値とはしない。
+
+| 本文 | O 変更前 | A 修正版 | S 1枠試作 | H 上下 | V 左右 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 空文書 | 0.893 / 3.708 | 0.852 / 3.339 | 0.798 / 3.277 | 0.914 / 4.094 | 0.830 / 3.393 |
+| 16MiB短行 | 1.770 / 9.800 | 1.171 / 9.520 | 1.140 / 8.564 | 1.157 / 8.704 | 1.720 / 8.992 |
+| 長い日本語行 | 333.784 / 485.280 | 28.616 / 186.354 | 28.941 / 194.542 | 28.309 / 182.767 | 38.173 / 198.512 |
+
+長行の1文字の観測中央値は91.43%小さく、対応が取れた5組は全て292〜321ms短縮した。200文字も同じ5組が全て285〜314ms短縮した。ただし通常版の厳格比較は、空/長行のOに欠測、短行のOの200文字に前半11.005ms→後半9.219msの揺れ1.786ms（許容0.980ms）があり、3条件とも保留。成功したAの18本を失敗扱いにはしないが、O/Aの安定が必要という事前条件を外して合格にしない。
+
+splitはAの6本が全条件で安定していた。空のH/Vと短行のS/Hは事前条件内。空のSは欠測、短行のVは1文字追加0.549msが0.5msを越える。長行のSは200文字追加8.188msが許容18.6354ms以内でも5/6で増えたため、少差の一貫した増加を保留する条件に該当。H/Vの1文字の合計28.309 / 38.173msは2ms条件外で、Vの200文字追加12.1575msも1ms条件外。splitの製品採用と文書/枠の所有移行は引き続き保留する。同じ文字列を両枠へ出すため、cacheを共有できる有利な条件であり、独立した文書の費用は未測。
+
+### 証拠、自己レビューと受入状態
+
+profile.bundleとsplit-recheck.bundleはgit bundle verifyで成功し、共にmainの936b50bを必要な親として保存した。後者は修正元a1a0e4dも含むため、試作枝を消してもソースを復元できる。各試作の差分も保存した。
+全235ファイルの束は`D:/NeNeNib/evidence/291-render/long-line-render-evidence.zip`、9082031 bytes、SHA-256 `6e1fe550cf41204aa58a3e739ff39ede1eae2fb384833f89e4f870bd239397e1`。ZIPのCRC検査は成功。exeは含めず、全Releaseの生成元とhash、fixture、raw時刻、画像、ソースbundle、測定器を含む。
+
+自己レビュー: 本文/履歴を複製せず描画資源だけをuiに置く（ARC-001 / 004 / 011）。時刻と追加の非決定的入力を製品へ足さない（ARC-007）。COMはComPtr、移した空のlayoutは一致対象から除外し、フォント名/サイズ/DPIの書式再生成とframe終端で破棄する（CPP-016）。全ての本文の描画/IME/hit testがlayout_ofに通り、選択/検索の処理は共有layoutを書き換えない。CPP-011 / 012は型の配置と通常Releaseの静的解析で確認した。
+
+90試行の時点では実装・表示検証済み、性能受入とmergeは保留。draft PRで差分と証拠を保持した。ゲート/既存速度基準値/schemaの変更なし、Waivers: none。00:40にhideから、測定中にキーボードを操作していたとの回答を得た。予定外の入力があった3本は欠測のまま保存した。
+
+文書の整合はconformance.document_checksで違反0（`out/291-doc-conformance.log`）、`git diff --check`は終了0。`git diff --exit-code a1a0e4d -- src tests eng CMakeLists.txt`も終了0で、文書をまとめた後も検証対象の実装と依存は変わっていない。
+
+再利用: a1a0e4d以降の変更は文書だけで、製品の3ファイル・対象検証・関連依存は不変。22場面の一致、IME、Releaseと今回の測定をPR工程だけの理由で繰り返さない。残るリスクは、編集した長い行と初めて見える行の全文字組み、frame生成、同じ描画の再実行、表示行ぶんの資源保持、DPI/device lostの実機未確認、および欠測/対照揺れによる厳格比較の未判定。
+
+### 手動入力のない時間に行った通常版36本の別比較
+
+00:47にIssueへ別計画を先に保存し、hideの「いいよ」を受けて00:53〜00:57に実施。O/Aだけを3本文×6組＝36本、奇数O/A・偶数A/Oの順に固定した。以前の90本は上書き・補完せず、バイナリ、fixture、窓、DPI、字体、keys_trialと判定条件は同じ。表示22場面、IME、Release、split比較は再利用して繰り返していない。
+
+`python D:/NeNeNib/scripts/291-normal-paired.py --manifest D:/NeNeNib/evidence/291-normal-paired/manifest.json`は終了0。続く`python D:/NeNeNib/scripts/291-normal-audit.py`も終了0（`out/291-normal-audit.log`）。36本全て正確な202入力で欠測なし。暖機/1文字の独立、raw時刻からの再計算、窓1280×800 / DPI120も一致した。実測JSONのnormalRecomparisonに原記録と監査を追加した。
+
+| 本文 | O 変更前 1文字 / 200文字 ms | A 修正版 1文字 / 200文字 ms | 事前条件での判定 |
+| --- | ---: | ---: | --- |
+| 空文書 | 0.8895 / 3.5225 | 0.8095 / 3.8920 | Aの200文字が前半/後半で不安定のため保留 |
+| 16MiB短行 | 1.8190 / 10.1640 | 1.4485 / 8.7405 | O/Aとも安定、受入条件内 |
+| 長い日本語行 | 333.9125 / 498.3855 | 30.2085 / 194.2555 | O/Aとも安定、受入条件内 |
+
+長行の1文字は90.95%、200文字は61.02%短縮し、両方とも対応する6組全てで短縮した。短行も1文字6/6、200文字5/6で短縮した。
+空文書は中央値の増分が1文字-0.0800ms、200文字+0.3695msで許容内だが、Aの200文字の前半4.494ms→後半3.256msの差1.238msが許容0.500msを超えた。Oの200文字は前半3.537ms→後半3.508msで安定。今回も空文書全体を保留とし、中央値だけで合格にしない。入力混入による欠測は解消したが、この揺れの原因は未特定であり、退行確定とも無関係な測定ノイズとも断定しない。追加の再試行は行わない。
+
+別比較の束は`D:/NeNeNib/evidence/291-normal-paired/normal-render-evidence.zip`、57ファイル、1105344 bytes、SHA-256 `73580c19e1ec17ed7a1c7b1b7cc6a654e267dbc51c706a65c3f69c3ceb5547e5`。CRC検査成功。36本のraw、画像、fixture、測定器、事前計画、Releaseメタデータを含み、ソースは元の235ファイルの束をhashで参照する。
+
+**現在の残件は空文書の連続入力の安定性。** [PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)はdraftを維持し、性能受入全体とmergeは保留。splitの採用保留も変わらない。成功した短行・長行と表示確認は保存して再利用し、原因を特定せず合格まで測り直すことはしない。基準値・閾値・schemaは変更せず、waiverなし。
+
+追記後は文書の規則参照とPRの検証記録だけを確認した。document_checksは違反0（`out/291-normal-doc-conformance.log`）、`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-long-line-rendering.md --pr-body`と`git diff --check`は終了0。製品・対象テスト・依存はa1a0e4dから変わらず、アプリの再検証は行っていない。
+
+### 並行作業がある環境での空文書の内訳診断
+
+hideから他の作業が並行しGPUも使われているとの説明と続行指示を受けた。01:14にIssueへ固定12試行の診断計画を先に保存し、他プロセスや設定を変えずに実施した。共有負荷はhideからの説明であり、GPU占有率を別途計測したものではない。
+
+変更前の計装版fedf727を再利用し、同じ計測点だけをa1a0e4dへ重ねた2d8a10eを`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`で生成、終了0（`out/291-empty-profile-build.log`）。151.036秒、1308160 bytes、SHA-256 `88F95A6BE15095518474CDAF659C74781EE10F948008DF5C5115F4B04A8476DC`。2版の製品コードの追加/削除行が、検証済みのcache修正だけであることも比較した。最終的な製品枝には計装を入れない。GetMetrics先行版は使っていない。
+
+`python D:/NeNeNib/scripts/291-empty-diagnostic.py`を01:19〜01:20に実行して終了0。空文書6組、奇数O/A・偶数A/Oの12本は全て202入力、欠測なし。単打の独立、全節目の対、rawからの時間再計算、1280×800 / DPI120を確認した。節目数はOが709、Aが706で容量65536に未到達。集計処理は先に保存済みのprofileのrawでも確認した。単打・200文字全体・最後の入力以降を分解し、重なるUTF変換/文字組み/描画の区間を二重加算していない。各区間はQPCの経過時間で、CPUの実使用時間ではない。
+
+最後の入力から提示までに含まれる各区間の中央値（ms）。各行を別々に中央値へ取っているため合計は一致しない。
+
+| 区間 | O 変更前 | A 修正版 |
+| --- | ---: | ---: |
+| 本文描画 | 0.2495 | 0.1460 |
+| EndDraw | 0.3460 | 0.3165 |
+| 交換鎖の待機 | 0.0010 | 0.0010 |
+| Presentを含む提示 | 0.0480 | 0.0595 |
+| 最後の入力から提示まで全体 | 1.0275 | 0.9565 |
+
+本文描画は単打・連続入力とも対応する6組全てで短縮した。修正版の連続入力後の全体は0.929〜1.039msで、前回の1.536〜2.456msの跳ねは再現していない。修正版の第6組の単打だけは1.266msで、Presentを含む区間0.312msやstatus描画を含む区間0.404msなど複数箇所が長かったが、これを前回の連続入力と同一原因とは扱わない。
+
+**追加の製品修正を入れる根拠は得られなかった。** 今回の修正部分は短縮したが、前回の揺れの原因は未特定。共有GPU負荷が原因だとも、この診断で通常版の空文書の受入が済んだとも主張しない。PR #293はdraftのまま、共有負荷が落ち着いた時の通常版の空文書確認を残件にする。12本を繰り返さず、短行・長行・表示・IME・splitは再利用する。
+
+全記録は実測JSONのemptyDiagnostic。束は`D:/NeNeNib/evidence/291-empty-diagnostic/empty-diagnostic-evidence.zip`、27ファイル、106822 bytes、SHA-256 `4f148c785fe116bae1f3ca454ff802aebefee76cc16ad50495a79db05a547112`、CRC成功。raw、画像、事前計画、測定器、Releaseメタデータ、検証済みgit bundleと差分を含む。製品コードはa1a0e4dのまま、受入条件・schemaは変更せず、waiverなし。
+
+文書追記後のdocument_checksは違反0（`out/291-empty-diagnostic-doc-conformance.log`）、PR本文のgit-conventions.pyと`git diff --check`は終了0。`git diff --exit-code dcf5811 -- src tests eng CMakeLists.txt`も終了0で、製品枝に計装が混入していない。文書のための製品テストは追加していない。
+
+2026-10-04 02時台、hideの区切りの依頼で日報と引き継ぎ書を整理した。対象はCLAUDEの最新リンク、reports / handoffs / todoと本記録。リンク・規則参照の退行だけをdocument_checksで確認し、違反0（`out/291-handoff-doc-conformance.log`）。PR本文のgit-conventions.py、`git diff --check`、`git diff --exit-code 5e96aa7 -- src tests eng CMakeLists.txt`も終了0。製品・対象テスト・依存は不変で、ビルド・アプリ検証は再利用した。PR #293はdraft、空文書の通常版確認を残して区切る。
