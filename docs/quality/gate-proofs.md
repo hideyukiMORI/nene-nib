@@ -2864,3 +2864,33 @@ hideの続行・分担指示により、設計サナが既存の状態・受入�
 再利用の根拠: `Get-FileHash -Algorithm SHA256 build/release-a1a0e4d/NeNeNib.exe,build/release-591b99f/NeNeNib.exe`で既存metadataと一致、`git diff --exit-code a1a0e4d HEAD -- src tests eng CMakeLists.txt`も終了0。成功済みのRelease、表示22場面、IME、短行・長行、split比較を再実行しない。製品・schema・性能閾値の変更なし。適用はQLT-001 / QLT-012 / QLT-013 / QLT-014 / CNF-006 / GIT-004、Waivers: none。空文書の性能受入とmerge、splitの採用は未完了のまま。
 
 準備の文書更新では、リンク・規則参照の退行だけを`conformance.document_checks(root, inventory(root), rules)`で確認し、違反0（`out/291-empty-prepare-doc-conformance.log`）。PR本文は`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-empty-prepared.md --pr-body`が終了0、`git diff --check`も終了0。製品テストは追加していない。追加worktreeは無く、未実施の固定計画を持つ出力と、未実行の準備履歴を持つ`D:/NeNeNib/outputs/291-empty-acceptance-preparation-history-20261004-evening/`を残す。#291の受理・統合後に証拠の収載を確認して整理し、ブランチとcommitは保持する。
+
+### 通常版の空文書12本の結果（2026-10-04 22時台）
+
+hideの「今作業してるエージェントが少ないからテストしてみて」を受け、夕方にIssueへ登録した固定計画を22:01:28〜22:02:50に一度だけ実行した。22:02:52に前面操作の終了を伝えた。稼働エージェントが少ないという申告は記録するが、GPU占有率や他プロセス負荷は測っておらず、無負荷環境とは扱わない。他の作業の停止・追加ビルドは行っていない。
+
+`python -u D:/NeNeNib/scripts/291-empty-acceptance.py --run`は終了0（`out/291-empty-acceptance-run.log`）。通常版O=591b99f / A=a1a0e4dの6組12本は全て有効。`python D:/NeNeNib/scripts/291-empty-acceptance-audit.py`は終了2（`out/291-empty-acceptance-audit.log`）、理由は欠測ではなく事前の安定条件未達。全12本で202入力・暖機/単打の独立・200文字後の提示・時刻rawからの再計算・到着幅・入力前/終了前の1280×800 / DPI120・新規profileの設定ファイル不在を確認した。planの依存hashとReleaseは不変。追加試行は0。
+
+| 指標 | O 変更前の中央値 ms | A 修正版の中央値 ms | A-O ms | O基準の許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1文字 | 1.0515 | 1.0470 | -0.0045 | 0.10515 |
+| 200文字 | 3.6825 | 3.4670 | -0.2155 | 0.50000 |
+
+中央値の差は両方とも許容内だが、両版の安定性を必要とする条件を満たさない。
+
+| 対象 | 前半3本中央値 ms | 後半3本中央値 ms | 絶対差 ms | 許容幅 ms | 判定 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| O 1文字 | 0.999 | 1.081 | 0.082 | 0.10515 | 安定 |
+| O 200文字 | 4.202 | 3.638 | 0.564 | 0.50000 | 不安定 |
+| A 1文字 | 1.122 | 0.876 | 0.246 | 0.10470 | 不安定 |
+| A 200文字 | 3.347 | 3.656 | 0.309 | 0.50000 | 安定 |
+
+したがって通常版の空文書は引き続きhold。修正版の中央値悪化や入力欠落を検出したという結果ではなく、対照も含む揺れにより性能比較の受入を確定できない。揺れの原因は未特定で、GPU・他作業・製品のいずれとも断定しない。現在の条件を緩めず、同じ試行を繰り返さない。
+
+SOLの実装サナが読み取り専用で独立に再計算し、12本の入力・提示・寸法/DPI・profile・hashとhold判定が一致。200文字の途中の提示は全12本0枚。到着幅の前半/後半中央値はO 2.960/2.594ms、A 2.369/2.675ms、最後の入力→提示はO 1.130/1.046ms、A 0.963/0.981msだった。中央値の分解を足して原因の寄与率とは扱わない。報告は`D:/NeNeNib/outputs/291-empty-acceptance-review/review.txt`、SHA-256 `d1af1fc83e99d47a4e3c29c193e92d17820fd58aa16de12db7e9eea74f8e6800`。レビューでGUI・再測定・ビルドは行っていない。
+
+原記録と監査は実測JSONの`emptyAcceptance`へ追加し、既存の全sectionを値比較で不変と確認した。証拠の束は`D:/NeNeNib/evidence/291-empty-acceptance/empty-acceptance-evidence.zip`、65ファイル、67478 bytes、SHA-256 `c5eeb7923c1acd4455d827d160028baf45c3dbb557b43fc6821eb584b268498b`、CRC成功。全12本のraw/observation/profile、plan、runner/監査、共用測定器、Releaseメタデータ、ログ、実行時の申告、独立レビューを含み、exeは含めない。旧90本・36本・計装診断12本・準備の束は置換しない。
+
+製品はa1a0e4dのまま。成功済みのRelease・表示22場面・IME・短行・長行・split比較を再利用し、今回の未達で無関係な検証を追加しない。PR #293はdraft、mergeとsplit採用は保留。schema・基準値・受入条件の変更なし。適用はADR 0069 / QLT-001 / QLT-012 / QLT-013 / QLT-014、Waivers: none。追加worktreeは無く、未受理のrawを持つ実行領域と独立レビュー出力は#291の受理・証拠収載後の整理まで保持する。
+
+記録更新の検証は文書参照とJSONの追加範囲に限定した。document_checksは違反0（`out/291-empty-result-doc-conformance.log`）、`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-empty-result.md --pr-body`と`git diff --check`は終了0。実測JSONは更新前のHEADと全既存sectionを値比較して一致し、追加はemptyAcceptanceだけ、12本有効とholdをそのまま保持している。

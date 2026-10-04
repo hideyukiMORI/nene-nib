@@ -14193,5 +14193,1110 @@
       "extraProductionChange": false,
       "acceptanceDecision": "Unchanged: instrumented diagnostic does not replace normal release speed acceptance; empty document remains on hold."
     }
+  },
+  "emptyAcceptance": {
+    "plan": {
+      "issue": 291,
+      "rules": [
+        "QLT-001",
+        "QLT-012",
+        "QLT-013",
+        "QLT-014",
+        "ADR-0069"
+      ],
+      "preparedAt": "2026-10-04T09:34:17.182517+00:00",
+      "outputDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening",
+      "trialCount": 12,
+      "schedule": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O"
+        }
+      ],
+      "fixture": "empty",
+      "documentArgument": null,
+      "windowSize": [
+        1280,
+        800
+      ],
+      "clientSize": [
+        1280,
+        800
+      ],
+      "dpi": 120,
+      "fontFamily": "Cascadia Code",
+      "fontSizePt": 13.5,
+      "settingsFileMustBeAbsent": true,
+      "fontEvidence": "New profile without settings.v1 uses default_editor_settings (EditorSettings.cpp) and default_points=13.5 (FontSize.hpp); verified releases reused unchanged. This is configured family/size, not an observation of fallback glyph fonts.",
+      "burstSpanLimitMs": 50.0,
+      "expectedInputs": 202,
+      "floorsMs": {
+        "singleMs": 0.1,
+        "burstMs": 0.5
+      },
+      "percent": 10,
+      "stability": "O and A: abs(median(first 3)-median(last 3)) <= max(floor, median(all 6)*10%)",
+      "comparison": "A median - O median <= max(floor, O median*10%) for both metrics",
+      "measurement": "eng/measure-speed.py.keys_trial once per scheduled trial; no bench_keys retry loop",
+      "geometryEvidence": "observation.json captures Win32 geometry/DPI before input and before canonical close; timing raw does not contain geometry",
+      "noRetry": true,
+      "dependenciesSha256": {
+        "D:\\NeNeNib\\scripts\\291-empty-acceptance.py": "6b8226fdfbc6a4f0e1082f5abafd5278b9a92b52858dd58339dff983df509e10",
+        "D:\\NeNeNib\\scripts\\291-empty-acceptance-audit.py": "9f382496c5906ec9a91f19ab8c9ff725e0c2c1d405d85edf44cc04e63998c8ff",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\eng\\measure-speed.py": "0a07ab8dc659b15d56cf9c353925a3eb9cb4cac757d418a06ec1a54f934660fd",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\eng\\window_driver.py": "59bab4f9fc39564f0472a0f846c1db03819b0dfcab0f25483d799116ec47a328",
+        "D:\\NeNeNib\\evidence\\291-normal-paired\\manifest.json": "6fb4973e8baf7f117526af8ab34c8bfd704e34df32fbff5112648b0e203f73b3",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\src\\core\\EditorSettings.cpp": "323ba029fe449423e8781a3c9d5ccabc2457ae9f50c320861a9aac5a7dfd1a63",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\src\\core\\FontSize.hpp": "beb60f2df3e2f1b9314b35acc6079c21db30d84e63709202785b119441173dc5"
+      }
+    },
+    "record": {
+      "issue": 291,
+      "startedAt": "2026-10-04T13:01:28.529417+00:00",
+      "manifest": {
+        "O": {
+          "commit": "591b99fa7bbd2b6a4149fe45b81c81cafeb3e03a",
+          "sha256": "312B55BE0A62F8593CEB95AF1EDC87EB13C3BB7C7E39A739948A43DF939C66E6",
+          "bytes": 1302528,
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          },
+          "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-591b99f\\NeNeNib.exe"
+        },
+        "A": {
+          "commit": "a1a0e4d50a7c9eb784652a4d5ee65e11e7953e0d",
+          "sha256": "20BDE40B142DCC16409E5CE4973B1FBA91B5FB739FB474835BDD35A88CF0FC4D",
+          "bytes": 1307648,
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          },
+          "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-a1a0e4d\\NeNeNib.exe"
+        }
+      },
+      "planSha256": "b51905ea80ee7086f1dadcafc969fed634edc1fb154e9a0d616033c7ae84e6ef",
+      "machine": {
+        "fingerprint": "bc8a356f37c68491",
+        "cpu": "Intel(R) Core(TM) i9-10850K CPU @ 3.60GHz",
+        "gpu": "NVIDIA GeForce RTX 3090",
+        "dpi": 120
+      },
+      "trials": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-1-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-1-O\\profile",
+          "singleMs": 1.038,
+          "burstMs": 5.192,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 4.062,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-1-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-1-A\\profile",
+          "singleMs": 1.526,
+          "burstMs": 3.347,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.348,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-2-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-2-A\\profile",
+          "singleMs": 0.972,
+          "burstMs": 3.395,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.432,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-2-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-2-O\\profile",
+          "singleMs": 0.945,
+          "burstMs": 4.202,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.96,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-3-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-3-O\\profile",
+          "singleMs": 0.999,
+          "burstMs": 3.346,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.328,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-3-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-3-A\\profile",
+          "singleMs": 1.122,
+          "burstMs": 3.314,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.369,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-4-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-4-A\\profile",
+          "singleMs": 0.876,
+          "burstMs": 4.27,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 3.127,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-4-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-4-O\\profile",
+          "singleMs": 1.165,
+          "burstMs": 3.638,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.594,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-5-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-5-O\\profile",
+          "singleMs": 1.081,
+          "burstMs": 3.408,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.362,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-5-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-5-A\\profile",
+          "singleMs": 0.861,
+          "burstMs": 3.539,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.583,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-6-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-6-A\\profile",
+          "singleMs": 1.176,
+          "burstMs": 3.656,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.675,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-6-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-6-O\\profile",
+          "singleMs": 1.065,
+          "burstMs": 3.727,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.619,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        }
+      ],
+      "finishedAt": "2026-10-04T13:02:50.533338+00:00"
+    },
+    "audit": {
+      "inputAudit": [
+        {
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-1-O\\marks-keys.json",
+          "rawSha256": "af46098d7901f1d157b9e4d604e49b5c13307e4449d6e1937d782ac7dd1a8fd3",
+          "singleMs": 1.038,
+          "burstMs": 5.192,
+          "arrivalSpanMs": 4.062,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1611618,
+          "singlePresentedUs": 2111479,
+          "burstPresentedUs": 2416920,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-1-A\\marks-keys.json",
+          "rawSha256": "90234882887161251a6c137d161e55b57e5cd526cbe7b28943f36ef725995fd8",
+          "singleMs": 1.526,
+          "burstMs": 3.347,
+          "arrivalSpanMs": 2.348,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1616178,
+          "singlePresentedUs": 2116182,
+          "burstPresentedUs": 2419065,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-2-A\\marks-keys.json",
+          "rawSha256": "ddefd4012fdae4880bf12e2ef7e1f7f620cfd5bb8228f35d5e7b70eeef89cc7e",
+          "singleMs": 0.972,
+          "burstMs": 3.395,
+          "arrivalSpanMs": 2.432,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1613920,
+          "singlePresentedUs": 2113511,
+          "burstPresentedUs": 2416618,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-2-O\\marks-keys.json",
+          "rawSha256": "cf1baba9f8fe363c954d3c57bf7b0afb5ebd7d1b0b14bb5fea51e62700b5aa6e",
+          "singleMs": 0.945,
+          "burstMs": 4.202,
+          "arrivalSpanMs": 2.96,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1599665,
+          "singlePresentedUs": 2099200,
+          "burstPresentedUs": 2403596,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-3-O\\marks-keys.json",
+          "rawSha256": "ec1601d4f822a744d0e49c603c4be187a3ded49ae252847012fff40d94324234",
+          "singleMs": 0.999,
+          "burstMs": 3.346,
+          "arrivalSpanMs": 2.328,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1601574,
+          "singlePresentedUs": 2101518,
+          "burstPresentedUs": 2404462,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-3-A\\marks-keys.json",
+          "rawSha256": "0d6940a932b03eeeda4a58eb8a700c1827875b7e2b804b8e883c3447af4b1ae9",
+          "singleMs": 1.122,
+          "burstMs": 3.314,
+          "arrivalSpanMs": 2.369,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1621738,
+          "singlePresentedUs": 2122045,
+          "burstPresentedUs": 2424966,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-4-A\\marks-keys.json",
+          "rawSha256": "a9231428e877ac275f0d1e380552ecef42ffc401f07c1f94425730e32685329c",
+          "singleMs": 0.876,
+          "burstMs": 4.27,
+          "arrivalSpanMs": 3.127,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1599417,
+          "singlePresentedUs": 2099475,
+          "burstPresentedUs": 2404050,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-4-O\\marks-keys.json",
+          "rawSha256": "b4266d16003f48a50b7cb1062f8c62f88ddd85e341eb1cf7746b544d1f524bc1",
+          "singleMs": 1.165,
+          "burstMs": 3.638,
+          "arrivalSpanMs": 2.594,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1604336,
+          "singlePresentedUs": 2104614,
+          "burstPresentedUs": 2407947,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-5-O\\marks-keys.json",
+          "rawSha256": "3ade8b303808deffa7e8e0b066bc362309a36c749556d23c7118f1d2401c5948",
+          "singleMs": 1.081,
+          "burstMs": 3.408,
+          "arrivalSpanMs": 2.362,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1610383,
+          "singlePresentedUs": 2110060,
+          "burstPresentedUs": 2413552,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-5-A\\marks-keys.json",
+          "rawSha256": "adc1e73d74ac6eb020f5179ea575c6ee9d9a590d0528775b5983683594d54944",
+          "singleMs": 0.861,
+          "burstMs": 3.539,
+          "arrivalSpanMs": 2.583,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1635821,
+          "singlePresentedUs": 2135542,
+          "burstPresentedUs": 2438992,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-6-A\\marks-keys.json",
+          "rawSha256": "f3e9aeb54a8d0f90728eed9a17cff9c27953a29bcae4f42bd823a731308fed84",
+          "singleMs": 1.176,
+          "burstMs": 3.656,
+          "arrivalSpanMs": 2.675,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1601002,
+          "singlePresentedUs": 2100834,
+          "burstPresentedUs": 2404242,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-acceptance-20261004-evening\\empty-6-O\\marks-keys.json",
+          "rawSha256": "ef49b1f6c0bbbaae62b88534fc12d4a142ddb0e47dad018a047d50e49c700e6f",
+          "singleMs": 1.065,
+          "burstMs": 3.727,
+          "arrivalSpanMs": 2.619,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1605698,
+          "singlePresentedUs": 2105410,
+          "burstPresentedUs": 2409072,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        }
+      ],
+      "errors": [],
+      "judgment": {
+        "controls": {
+          "O": {
+            "singleMs": {
+              "samples": [
+                1.038,
+                0.945,
+                0.999,
+                1.165,
+                1.081,
+                1.065
+              ],
+              "count": 6,
+              "medianMs": 1.0514999999999999,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 0.999,
+              "lastHalfMedianMs": 1.081,
+              "driftMs": 0.08199999999999996,
+              "limitMs": 0.10515,
+              "stable": true
+            },
+            "burstMs": {
+              "samples": [
+                5.192,
+                4.202,
+                3.346,
+                3.638,
+                3.408,
+                3.727
+              ],
+              "count": 6,
+              "medianMs": 3.6825,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 4.202,
+              "lastHalfMedianMs": 3.638,
+              "driftMs": 0.5640000000000001,
+              "limitMs": 0.5,
+              "stable": false
+            }
+          },
+          "A": {
+            "singleMs": {
+              "samples": [
+                1.526,
+                0.972,
+                1.122,
+                0.876,
+                0.861,
+                1.176
+              ],
+              "count": 6,
+              "medianMs": 1.0470000000000002,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 1.122,
+              "lastHalfMedianMs": 0.876,
+              "driftMs": 0.2460000000000001,
+              "limitMs": 0.10470000000000002,
+              "stable": false
+            },
+            "burstMs": {
+              "samples": [
+                3.347,
+                3.395,
+                3.314,
+                4.27,
+                3.539,
+                3.656
+              ],
+              "count": 6,
+              "medianMs": 3.467,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 3.347,
+              "lastHalfMedianMs": 3.656,
+              "driftMs": 0.30900000000000016,
+              "limitMs": 0.5,
+              "stable": true
+            }
+          }
+        },
+        "comparisons": {
+          "singleMs": {
+            "medianDeltaMs": -0.0044999999999997264,
+            "limitMs": 0.10515,
+            "pairedDeltasMs": [
+              0.488,
+              0.027000000000000024,
+              0.12300000000000011,
+              -0.28900000000000003,
+              -0.21999999999999997,
+              0.11099999999999999
+            ],
+            "withinNumericLimit": true,
+            "stableControls": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDeltaMs": -0.21550000000000002,
+            "limitMs": 0.5,
+            "pairedDeltasMs": [
+              -1.8450000000000002,
+              -0.8069999999999999,
+              -0.03200000000000003,
+              0.6319999999999997,
+              0.13100000000000023,
+              -0.07099999999999973
+            ],
+            "withinNumericLimit": true,
+            "stableControls": false,
+            "decision": "hold"
+          }
+        },
+        "decision": "hold"
+      },
+      "rawRecordSha256": "b35f2dc78822a6c24dc201bf64652fe8e684d80c92f3d4df56c63d3ecdfc878b"
+    },
+    "executionContext": {
+      "userInstruction": "今作業してるエージェントが少ないからテストしてみて",
+      "loadContext": "User reported fewer active agents. GPU utilization and other process load were not measured; no zero-load claim.",
+      "otherProcessesStopped": false,
+      "runCommand": "python D:/NeNeNib/scripts/291-empty-acceptance.py --run",
+      "runExitCode": 0,
+      "auditCommand": "python D:/NeNeNib/scripts/291-empty-acceptance-audit.py",
+      "auditExitCode": 2,
+      "retryCount": 0,
+      "foregroundFinishedAtJst": "2026-10-04 22:02:52 JST",
+      "interpretation": "12 valid trials; median differences within limits, but O burst and A single half-to-half stability limits exceeded; hold."
+    },
+    "artifact": {
+      "path": "D:\\NeNeNib\\evidence\\291-empty-acceptance\\empty-acceptance-evidence.zip",
+      "fileCount": 65,
+      "bytes": 67478,
+      "sha256": "c5eeb7923c1acd4455d827d160028baf45c3dbb557b43fc6821eb584b268498b",
+      "crc": "pass",
+      "executablesIncluded": false
+    },
+    "independentReview": {
+      "path": "D:/NeNeNib/outputs/291-empty-acceptance-review/review.txt",
+      "sha256": "d1af1fc83e99d47a4e3c29c193e92d17820fd58aa16de12db7e9eea74f8e6800"
+    },
+    "interpretation": {
+      "validTrials": 12,
+      "missingTrials": 0,
+      "retryCount": 0,
+      "medianDifferencesWithinLimits": true,
+      "originalBurstStable": false,
+      "cacheSingleStable": false,
+      "sharedGpuCauseIdentified": false,
+      "extraProductionChange": false,
+      "acceptanceDecision": "hold: original burst and cache single half-to-half drift exceed pre-registered stability limits."
+    }
   }
 }
