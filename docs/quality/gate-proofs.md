@@ -2894,3 +2894,29 @@ SOLの実装サナが読み取り専用で独立に再計算し、12本の入力
 製品はa1a0e4dのまま。成功済みのRelease・表示22場面・IME・短行・長行・split比較を再利用し、今回の未達で無関係な検証を追加しない。PR #293はdraft、mergeとsplit採用は保留。schema・基準値・受入条件の変更なし。適用はADR 0069 / QLT-001 / QLT-012 / QLT-013 / QLT-014、Waivers: none。追加worktreeは無く、未受理のrawを持つ実行領域と独立レビュー出力は#291の受理・証拠収載後の整理まで保持する。
 
 記録更新の検証は文書参照とJSONの追加範囲に限定した。document_checksは違反0（`out/291-empty-result-doc-conformance.log`）、`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-empty-result.md --pr-body`と`git diff --check`は終了0。実測JSONは更新前のHEADと全既存sectionを値比較して一致し、追加はemptyAcceptanceだけ、12本有効とholdをそのまま保持している。
+
+### hideの追加指示による通常版の空文書12本（2026-10-04 22:15）
+
+hideの「もう一回やってみて」を受け、先のholdと原記録を残したまま、同条件の別計画をIssueへ先に記録した。環境を改善したと確認できたための再試行ではない。runnerはOUTPUTとAUDITORの参照先2行だけを変更し、監査器は同一。`D:/NeNeNib/scripts/291-empty-repeat-20261004-2214/291-empty-acceptance.py --prepare`と同所の監査器`--self-check`は終了0。
+
+`python -u D:/NeNeNib/scripts/291-empty-repeat-20261004-2214/291-empty-acceptance.py --run`を22:15:31〜22:16:52に実行し終了0。同所の`291-empty-acceptance-audit.py`は終了2。全12本の入力・提示・寸法/DPI・profile・hashは有効だが、4条件全てで前後半の安定条件を満たさずhold。固定計画内の追加試行は0。22:16:53に前面操作の終了を伝えた。
+
+| 指標 | O 変更前の中央値 ms | A 修正版の中央値 ms | A-O ms | O基準の許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1文字 | 1.1290 | 1.0145 | -0.1145 | 0.11290 |
+| 200文字 | 4.4215 | 4.0865 | -0.3350 | 0.50000 |
+
+| 対象 | 前半3本中央値 ms | 後半3本中央値 ms | 絶対差 ms | 許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| O 1文字 | 1.188 | 1.070 | 0.118 | 0.11290 |
+| A 1文字 | 1.084 | 0.859 | 0.225 | 0.10145 |
+| O 200文字 | 3.641 | 4.450 | 0.809 | 0.50000 |
+| A 200文字 | 3.717 | 4.471 | 0.754 | 0.50000 |
+
+SOLの実装サナの独立再計算でも、全rawの有効性とholdが一致。報告は`D:/NeNeNib/outputs/291-empty-repeat-review-2214/review.txt`、SHA-256 `76d5cf09b2f37b9316b69a89d54317d2f169a188f039b27a20c0c6bd791133c1`。実測JSONの`emptyAcceptanceRepeat`へ別sectionで収載し、前の結果を置き換えていない。
+
+証拠の束は`D:/NeNeNib/evidence/291-empty-repeat-2214/empty-repeat-evidence.zip`、65ファイル、65782 bytes、SHA-256 `3a56d4071794e28f53e12b9aad830ef7fc17868d6a4348cb2828e819c67bd4d4`、CRC成功。raw・監査・plan・測定器・実行時の申告・Releaseメタデータ・独立レビューを保持し、exeは含めない。出力`D:/NeNeNib/outputs/291-empty-repeat-20261004-2214/`と独立レビューは未受理の証拠として保持する。
+
+この比較でも製品退行やGPU起因は確定していない。製品はa1a0e4dのまま、PR #293はdraft。成功済みの関連検証は再利用し、受入条件・基準値・schemaは変更していない。適用はADR 0069 / QLT-001 / QLT-012 / QLT-013 / QLT-014、Waivers: none。
+
+記録更新はdocument_checksが違反0（`D:/NeNeNib/outputs/291-empty-repeat-20261004-2214/doc-check.txt`）、PR本文の`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-repeat-result.md --pr-body`が終了0。実測JSONの既存sectionを更新前HEADと値比較して全て一致し、追加はemptyAcceptanceRepeatだけ。`git diff --exit-code a1a0e4d HEAD -- src tests eng CMakeLists.txt`も終了0で、記録のための製品テストを追加していない。

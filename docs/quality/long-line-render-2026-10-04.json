@@ -15298,5 +15298,1108 @@
       "extraProductionChange": false,
       "acceptanceDecision": "hold: original burst and cache single half-to-half drift exceed pre-registered stability limits."
     }
+  },
+  "emptyAcceptanceRepeat": {
+    "plan": {
+      "issue": 291,
+      "rules": [
+        "QLT-001",
+        "QLT-012",
+        "QLT-013",
+        "QLT-014",
+        "ADR-0069"
+      ],
+      "preparedAt": "2026-10-04T13:14:53.615451+00:00",
+      "outputDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214",
+      "trialCount": 12,
+      "schedule": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O"
+        }
+      ],
+      "fixture": "empty",
+      "documentArgument": null,
+      "windowSize": [
+        1280,
+        800
+      ],
+      "clientSize": [
+        1280,
+        800
+      ],
+      "dpi": 120,
+      "fontFamily": "Cascadia Code",
+      "fontSizePt": 13.5,
+      "settingsFileMustBeAbsent": true,
+      "fontEvidence": "New profile without settings.v1 uses default_editor_settings (EditorSettings.cpp) and default_points=13.5 (FontSize.hpp); verified releases reused unchanged. This is configured family/size, not an observation of fallback glyph fonts.",
+      "burstSpanLimitMs": 50.0,
+      "expectedInputs": 202,
+      "floorsMs": {
+        "singleMs": 0.1,
+        "burstMs": 0.5
+      },
+      "percent": 10,
+      "stability": "O and A: abs(median(first 3)-median(last 3)) <= max(floor, median(all 6)*10%)",
+      "comparison": "A median - O median <= max(floor, O median*10%) for both metrics",
+      "measurement": "eng/measure-speed.py.keys_trial once per scheduled trial; no bench_keys retry loop",
+      "geometryEvidence": "observation.json captures Win32 geometry/DPI before input and before canonical close; timing raw does not contain geometry",
+      "noRetry": true,
+      "dependenciesSha256": {
+        "D:\\NeNeNib\\scripts\\291-empty-repeat-20261004-2214\\291-empty-acceptance.py": "d396ba484eb5aa9fd3a969aeca9e5142c288f9c7484d590afca6e170b423b62c",
+        "D:\\NeNeNib\\scripts\\291-empty-repeat-20261004-2214\\291-empty-acceptance-audit.py": "9f382496c5906ec9a91f19ab8c9ff725e0c2c1d405d85edf44cc04e63998c8ff",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\eng\\measure-speed.py": "0a07ab8dc659b15d56cf9c353925a3eb9cb4cac757d418a06ec1a54f934660fd",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\eng\\window_driver.py": "59bab4f9fc39564f0472a0f846c1db03819b0dfcab0f25483d799116ec47a328",
+        "D:\\NeNeNib\\evidence\\291-normal-paired\\manifest.json": "6fb4973e8baf7f117526af8ab34c8bfd704e34df32fbff5112648b0e203f73b3",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\src\\core\\EditorSettings.cpp": "323ba029fe449423e8781a3c9d5ccabc2457ae9f50c320861a9aac5a7dfd1a63",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\src\\core\\FontSize.hpp": "beb60f2df3e2f1b9314b35acc6079c21db30d84e63709202785b119441173dc5"
+      }
+    },
+    "record": {
+      "issue": 291,
+      "startedAt": "2026-10-04T13:15:31.869375+00:00",
+      "manifest": {
+        "O": {
+          "commit": "591b99fa7bbd2b6a4149fe45b81c81cafeb3e03a",
+          "sha256": "312B55BE0A62F8593CEB95AF1EDC87EB13C3BB7C7E39A739948A43DF939C66E6",
+          "bytes": 1302528,
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          },
+          "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-591b99f\\NeNeNib.exe"
+        },
+        "A": {
+          "commit": "a1a0e4d50a7c9eb784652a4d5ee65e11e7953e0d",
+          "sha256": "20BDE40B142DCC16409E5CE4973B1FBA91B5FB739FB474835BDD35A88CF0FC4D",
+          "bytes": 1307648,
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          },
+          "executable": "C:\\Users\\info\\WORKS\\NeNeNib\\build\\release-a1a0e4d\\NeNeNib.exe"
+        }
+      },
+      "planSha256": "f926a50577df732547bff3c42abcbfa71b3b5b324e6384cfd280dc30dafbfbcc",
+      "machine": {
+        "fingerprint": "bc8a356f37c68491",
+        "cpu": "Intel(R) Core(TM) i9-10850K CPU @ 3.60GHz",
+        "gpu": "NVIDIA GeForce RTX 3090",
+        "dpi": 120
+      },
+      "trials": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-1-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-1-O\\profile",
+          "singleMs": 1.376,
+          "burstMs": 3.641,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.51,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-1-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-1-A\\profile",
+          "singleMs": 1.124,
+          "burstMs": 3.666,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.725,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-2-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-2-A\\profile",
+          "singleMs": 0.945,
+          "burstMs": 4.456,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 3.251,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-2-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-2-O\\profile",
+          "singleMs": 1.188,
+          "burstMs": 4.606,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 3.278,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-3-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-3-O\\profile",
+          "singleMs": 1.033,
+          "burstMs": 3.477,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.388,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-3-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-3-A\\profile",
+          "singleMs": 1.084,
+          "burstMs": 3.717,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.563,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-4-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-4-A\\profile",
+          "singleMs": 1.125,
+          "burstMs": 3.684,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.667,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-4-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-4-O\\profile",
+          "singleMs": 1.383,
+          "burstMs": 4.393,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 2.864,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-5-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-5-O\\profile",
+          "singleMs": 1.054,
+          "burstMs": 4.45,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 3.161,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-5-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-5-A\\profile",
+          "singleMs": 0.859,
+          "burstMs": 5.404,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 4.525,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-6-A",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-6-A\\profile",
+          "singleMs": 0.828,
+          "burstMs": 4.471,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 3.306,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O",
+          "rawDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-6-O",
+          "profileDirectory": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-6-O\\profile",
+          "singleMs": 1.07,
+          "burstMs": 5.524,
+          "settingsBeforeAbsent": true,
+          "arrivalSpanMs": 4.248,
+          "delivered": 202,
+          "settingsAfterAbsent": true,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d"
+        }
+      ],
+      "finishedAt": "2026-10-04T13:16:52.332300+00:00"
+    },
+    "audit": {
+      "inputAudit": [
+        {
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-1-O\\marks-keys.json",
+          "rawSha256": "a8e45d3724045fc9c07e2931286e72040829fddb87c9a82ba02d75eaa4c4e624",
+          "singleMs": 1.376,
+          "burstMs": 3.641,
+          "arrivalSpanMs": 2.51,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1602005,
+          "singlePresentedUs": 2101762,
+          "burstPresentedUs": 2405125,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-1-A\\marks-keys.json",
+          "rawSha256": "2328460a1a46183d782630fa588788de50313ca559c49241f7265439297619b0",
+          "singleMs": 1.124,
+          "burstMs": 3.666,
+          "arrivalSpanMs": 2.725,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1613825,
+          "singlePresentedUs": 2114157,
+          "burstPresentedUs": 2417561,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-2-A\\marks-keys.json",
+          "rawSha256": "93b0b603a95b91286d45e195170c3152f3f80a1a2a6a0834537f6620cf76643e",
+          "singleMs": 0.945,
+          "burstMs": 4.456,
+          "arrivalSpanMs": 3.251,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1600114,
+          "singlePresentedUs": 2099600,
+          "burstPresentedUs": 2404534,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-2-O\\marks-keys.json",
+          "rawSha256": "5acfbe3319b14bb72f5badc871f03b8838858cfa736c91713d77de0bd135b9ea",
+          "singleMs": 1.188,
+          "burstMs": 4.606,
+          "arrivalSpanMs": 3.278,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1607811,
+          "singlePresentedUs": 2107977,
+          "burstPresentedUs": 2412280,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-3-O\\marks-keys.json",
+          "rawSha256": "731bac8896a64948657afb132fbc3a5e71c2e77c5e82f63f2739fdbc9aa4f882",
+          "singleMs": 1.033,
+          "burstMs": 3.477,
+          "arrivalSpanMs": 2.388,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1608306,
+          "singlePresentedUs": 2108173,
+          "burstPresentedUs": 2411356,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-3-A\\marks-keys.json",
+          "rawSha256": "ce1361000ab58e9c62674a9fa2260365ef0b701c32b74ee4c7c66a247467618f",
+          "singleMs": 1.084,
+          "burstMs": 3.717,
+          "arrivalSpanMs": 2.563,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1606366,
+          "singlePresentedUs": 2106337,
+          "burstPresentedUs": 2409881,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-4-A\\marks-keys.json",
+          "rawSha256": "f45dc067295ce53ea1d9e80da634c6717f6bb404b0dcb542aac15169a042c58b",
+          "singleMs": 1.125,
+          "burstMs": 3.684,
+          "arrivalSpanMs": 2.667,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1597146,
+          "singlePresentedUs": 2097165,
+          "burstPresentedUs": 2400548,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-4-O\\marks-keys.json",
+          "rawSha256": "d806ad4fa88b1b1c5d665bdcea9e46ea176e1d1a937b6c220ca2074ea557a3d2",
+          "singleMs": 1.383,
+          "burstMs": 4.393,
+          "arrivalSpanMs": 2.864,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1603145,
+          "singlePresentedUs": 2103477,
+          "burstPresentedUs": 2407457,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-5-O\\marks-keys.json",
+          "rawSha256": "63301cc40dcbf66fa00b2dca51ceaef9c5217a19bc84919f63452e3a1a13c3a0",
+          "singleMs": 1.054,
+          "burstMs": 4.45,
+          "arrivalSpanMs": 3.161,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1606880,
+          "singlePresentedUs": 2106924,
+          "burstPresentedUs": 2411343,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-5-A\\marks-keys.json",
+          "rawSha256": "27c6837a4640db99719d5aec3550dd73d6b6a1d39765574d332fb1442519e52f",
+          "singleMs": 0.859,
+          "burstMs": 5.404,
+          "arrivalSpanMs": 4.525,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1607629,
+          "singlePresentedUs": 2107055,
+          "burstPresentedUs": 2413022,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-6-A\\marks-keys.json",
+          "rawSha256": "4704d519c3f54a7911ad4b79a2ee725d58869d63f076e51fa69c3febb231a644",
+          "singleMs": 0.828,
+          "burstMs": 4.471,
+          "arrivalSpanMs": 3.306,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1606193,
+          "singlePresentedUs": 2105726,
+          "burstPresentedUs": 2410561,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-empty-repeat-20261004-2214\\empty-6-O\\marks-keys.json",
+          "rawSha256": "b8384d4a6fa9d60de2791157a6e056a1a8d245e2226881e4d9ee2d78e7d66dc8",
+          "singleMs": 1.07,
+          "burstMs": 5.524,
+          "arrivalSpanMs": 4.248,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1609030,
+          "singlePresentedUs": 2109450,
+          "burstPresentedUs": 2415381,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        }
+      ],
+      "errors": [],
+      "judgment": {
+        "controls": {
+          "O": {
+            "singleMs": {
+              "samples": [
+                1.376,
+                1.188,
+                1.033,
+                1.383,
+                1.054,
+                1.07
+              ],
+              "count": 6,
+              "medianMs": 1.129,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 1.188,
+              "lastHalfMedianMs": 1.07,
+              "driftMs": 0.11799999999999988,
+              "limitMs": 0.1129,
+              "stable": false
+            },
+            "burstMs": {
+              "samples": [
+                3.641,
+                4.606,
+                3.477,
+                4.393,
+                4.45,
+                5.524
+              ],
+              "count": 6,
+              "medianMs": 4.4215,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 3.641,
+              "lastHalfMedianMs": 4.45,
+              "driftMs": 0.8090000000000002,
+              "limitMs": 0.5,
+              "stable": false
+            }
+          },
+          "A": {
+            "singleMs": {
+              "samples": [
+                1.124,
+                0.945,
+                1.084,
+                1.125,
+                0.859,
+                0.828
+              ],
+              "count": 6,
+              "medianMs": 1.0145,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 1.084,
+              "lastHalfMedianMs": 0.859,
+              "driftMs": 0.2250000000000001,
+              "limitMs": 0.10145,
+              "stable": false
+            },
+            "burstMs": {
+              "samples": [
+                3.666,
+                4.456,
+                3.717,
+                3.684,
+                5.404,
+                4.471
+              ],
+              "count": 6,
+              "medianMs": 4.0865,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 3.717,
+              "lastHalfMedianMs": 4.471,
+              "driftMs": 0.754,
+              "limitMs": 0.5,
+              "stable": false
+            }
+          }
+        },
+        "comparisons": {
+          "singleMs": {
+            "medianDeltaMs": -0.11450000000000005,
+            "limitMs": 0.1129,
+            "pairedDeltasMs": [
+              -0.2519999999999998,
+              -0.243,
+              0.051000000000000156,
+              -0.258,
+              -0.19500000000000006,
+              -0.2420000000000001
+            ],
+            "withinNumericLimit": true,
+            "stableControls": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDeltaMs": -0.33499999999999996,
+            "limitMs": 0.5,
+            "pairedDeltasMs": [
+              0.02499999999999991,
+              -0.14999999999999947,
+              0.2400000000000002,
+              -0.7089999999999996,
+              0.9539999999999997,
+              -1.053
+            ],
+            "withinNumericLimit": true,
+            "stableControls": false,
+            "decision": "hold"
+          }
+        },
+        "decision": "hold"
+      },
+      "rawRecordSha256": "8cad2249618d9816bfa916c1a2d11887811eb20e879b795a18f04fb732393721"
+    },
+    "executionContext": {
+      "userInstruction": "もう一回やってみて",
+      "reason": "Explicit user-requested repeat; no demonstrated environmental fix. Prior hold retained.",
+      "runExitCode": 0,
+      "auditExitCode": 2,
+      "fixedTrialCount": 12,
+      "extraTrialsWithinPlan": 0,
+      "foregroundFinishedAtJst": "2026-10-04 22:16:53 JST",
+      "sourceChange": "Runner OUTPUT/AUDITOR path lines only; auditor identical.",
+      "gpuLoadMeasuredDuringTrials": false
+    },
+    "artifact": {
+      "path": "D:\\NeNeNib\\evidence\\291-empty-repeat-2214\\empty-repeat-evidence.zip",
+      "fileCount": 65,
+      "bytes": 65782,
+      "sha256": "3a56d4071794e28f53e12b9aad830ef7fc17868d6a4348cb2828e819c67bd4d4",
+      "crc": "pass",
+      "executablesIncluded": false
+    },
+    "independentReview": {
+      "path": "D:\\NeNeNib\\outputs\\291-empty-repeat-review-2214\\review.txt",
+      "sha256": "76d5cf09b2f37b9316b69a89d54317d2f169a188f039b27a20c0c6bd791133c1"
+    },
+    "interpretation": {
+      "validTrials": 12,
+      "missingTrials": 0,
+      "allFourControlsStable": false,
+      "medianDifferencesWithinLimits": true,
+      "previousHoldRetained": true,
+      "causeIdentified": false,
+      "extraProductionChange": false,
+      "acceptanceDecision": "hold: all four half-to-half controls exceed the same pre-registered stability limits."
+    }
   }
 }
