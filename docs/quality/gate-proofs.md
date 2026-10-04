@@ -2920,3 +2920,59 @@ SOLの実装サナの独立再計算でも、全rawの有効性とholdが一致�
 この比較でも製品退行やGPU起因は確定していない。製品はa1a0e4dのまま、PR #293はdraft。成功済みの関連検証は再利用し、受入条件・基準値・schemaは変更していない。適用はADR 0069 / QLT-001 / QLT-012 / QLT-013 / QLT-014、Waivers: none。
 
 記録更新はdocument_checksが違反0（`D:/NeNeNib/outputs/291-empty-repeat-20261004-2214/doc-check.txt`）、PR本文の`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-repeat-result.md --pr-body`が終了0。実測JSONの既存sectionを更新前HEADと値比較して全て一致し、追加はemptyAcceptanceRepeatだけ。`git diff --exit-code a1a0e4d HEAD -- src tests eng CMakeLists.txt`も終了0で、記録のための製品テストを追加していない。
+
+### 揺れの所在を調べる内訳診断とOS追跡の制約（2026-10-04 23時台）
+
+hideの原因調査指示と「進めて」を受け、保存済み通常raw24本の分解・コード追跡に続いて、既存計装O=fedf727 / A=2d8a10eの固定6組12本を実施した。事前planと依存hashは`D:/NeNeNib/outputs/291-empty-stage-investigation-20261004/plan.json`、SHA-256 `69e8bf6758fbdc8edc14655f99ae2b6f1ab4e7ba466bb5c71b40cab5aebafc6b`。旧stage解析を変更せず再利用し、`--prepare`と既存raw再解析で一致を確認してから開始した。
+
+`python -B -u D:/NeNeNib/scripts/291-empty-stage-investigation-20261004.py --run --plan-sha256 69e8bf6758fbdc8edc14655f99ae2b6f1ab4e7ba466bb5c71b40cab5aebafc6b`は23:11:52〜23:13:13、終了0（`D:/NeNeNib/outputs/291-empty-investigation-20261004/stage-run.log`）。全12本で202入力・暖機/単打の独立・提示・段階マークの対・1280×800 / DPI120・設定不在を確認。欠測0、追加試行0。23:13:13に前面操作終了を通知した。計装版の経過時間であり、通常版の性能受入へ代用しない。
+
+O第2組の200文字は4.830ms、そのうち最初〜最後の入力受信が3.816ms。199入力間隔の内訳は、input→apply開始の合計0.020ms、apply内1.411ms、apply終了→次input2.385ms。最後の区間はほかのO5本で1.121〜1.148msだった。100µs以上の入力間隔が5か所あり、最大220µsは第53→54文字（apply6µs / apply後214µs）。単一の約1ms停止ではなく、主な増加がapply後へ分散していた。
+
+apply後にはIME方針反映・再描画要求・題名更新判定・告知/終了判定・frameや一時文字列の解放・メッセージループ・OSの実行待ちが含まれる。controller.apply内のframe生成はapply側に計上済み。この入力経路はO/Aで同じで、途中に本文cacheを実行する経路はない。ただしOS待ちと未計装のCPU処理はまだ区別できない。
+
+O第1組の単打1.863msではEndDrawが1.108ms（ほかのOは0.180〜0.277ms）だった。API内部のCPU処理・driver処理・GPU待ち・OSの実行待ちはrawだけでは識別できず、全ての単打の揺れが同じ箇所に出たわけでもない。測定した単打/連続入力の交換鎖Waitは0〜0.003msで、この待機の長さは今回の大きな増加を説明しない。
+
+本文bodyは単打・連続入力とも全6対応組でAが短縮。中央値は単打O/A=0.2445/0.1185ms、連続入力後O/A=0.2600/0.1395ms。**今回のcacheを揺れの原因と判断する証拠は得られなかった。OSコンディションは有力な候補だが未確定**。独立再計算でも全raw/hash/段階/summaryと解釈が一致。報告は`D:/NeNeNib/outputs/291-empty-investigation-20261004/stage-review.txt`、SHA-256 `e01795a77cfdc3da3b5fdb0dd63d1b5cb3e5276f9441673fd84e74eefcc768b7`。
+
+hideのOS条件についての問いを受け、診断専用のWPR設定`D:/NeNeNib/scripts/291-os-waits.wprp`を準備。単一32MiB collectorでCSwitch/ReadyThread/ProcessThread/ThreadPriority/Loader/CpuConfig/Power/DPC/Interruptのみを記録する設定は`wpr -profiledetails`終了0。独自`NeNeNib291Capability`のstartを1回だけ試み、`0x80070005 Access is denied`で拒否された。直後のstatusは独自session不在、ETL未取得。現在の権限ではOS実行状態の裏付けを取得できない。他session操作・権限変更・OS設定変更・再試行は行っていない。詳細は`D:/NeNeNib/outputs/291-os-wait-trace-preparation-20261004/capability-result.json`。これは原因診断のための外部観測であり、ADR 0011の正典の性能測定をETWへ置換するものではない。
+
+実測JSONの`emptyStageInvestigation`へ別sectionで保存。証拠の束は`D:/NeNeNib/evidence/291-empty-stage-investigation-20261004/empty-stage-investigation-evidence.zip`、66ファイル、348776 bytes、SHA-256 `78d37a60b4a53742e4b17ed493110f749ae947a12df885c59c606003ad5e48a9`、CRC成功。raw/plan/trial/profile/測定器/Release metadata/通常rawと入力間隔の分解/独立レビュー/OS追跡の拒否記録と、旧計装・通常比較2回の証拠の束を含む。exeは含めない。
+
+製品はa1a0e4dのまま、追加の修正・ビルドは行っていない。通常版のholdとdraft PR #293を維持。成功済みRelease・表示・IME・短行・長行を再利用し、受入条件・基準値・schemaは不変。適用はADR 0011/0069、QLT-001/012/013/014、ARC-007、Waivers: none。追加worktreeなし。未解決の調査資料と未受理の証拠をD領域に保持する。
+
+
+### 入力後段の切り分けと重複無効化の改善（2026-10-04 23:27以降）
+
+hideの「30分くらい放置するので自由にテスト・検証・改善」の指示で、設計サナが判断・計測・受理を担当し、既に指名されたSOLの実装サナが隔離した計装/通常版候補と読み取りレビューを担当した。前面操作は23:52:08に終了を伝えた。他プロセスの停止、OS設定や権限の変更は行っていない。
+
+まず通常の入力経路と同じ計装Aへ入力後段6節目を足し、固定12本を23:37:32〜23:38:57に実行した。全202入力の順序、199区間の分解、途中描画/提示なし、1280×800・DPI120、新規profileの設定不在、raw/依存hashを確認し、欠測0。199区間の合計の中央値はapply 1.4745ms、invalidate 0.5785ms、messageLoop 0.7090ms。第12試行はburst 6.373msのうちarrival 5.448ms、tail 0.925msで、invalidate 1.317ms・messageLoop 2.309msが増えた。境界elapsedには隣接処理や計測費用が含まれ、messageLoopをOS待ち時間そのものとは扱わない。WPR権限拒否を迂回していない。
+
+改善は`EditorWindow.cpp/.hpp`の2ファイルに限定した。同じ`invalidate()`入口で、全クライアント領域の`InvalidateRect`が成功したときだけ窓の`paint_pending_`を立て、次の`WM_PAINT`まで重複API要求を省く。`paint()`は常に実行し、`ValidateRect`直後・描画前に解除して再入による次要求を残す。失敗時は次の変更で再要求できる。本文/編集状態の所有やWM_PAINT集約は不変で、ADR 0011の決定6へ実装詳細を追記した。根拠となる契約は[InvalidateRect](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-invalidaterect)と[ValidateRect](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-validaterect)。
+
+計装版A=`4d8040a`、同じ計測点で重複を省くB=`790e1bd`を固定6組12本（奇数A/B・偶数B/A）で比較した。欠測0、全試行202入力、途中描画/提示0。invalidate区間合計の中央値は0.6555→0.0190msで、対応6組すべて短縮。burst全体は4.438→3.567ms、短縮4/6組。singleは1.0520→1.0635ms、短縮3/6組。重複処理の軽減は確認できるが、全体が安定して改善したとは言わない。B第2組のmessageLoopは2.217msで、揺れは残った。
+
+通常版候補は`a1fd1e16440352111f37797874d0e8029df9276f`、Release SHA-256 `FAEA73967345B4AD655E26AE68DD45506DAECD9A07A815F28FB8651163955D83`、1307648 bytes。計装点は含まない。O=`591b99f`対A=この候補を新しい固定6組12本で比較し、既存runner/監査の入力・幾何観測・判定式をそのまま再利用した。旧A=`a1a0e4d`との比較ではない。全12本有効だが**性能受入はhold**。
+
+| 指標 | O 中央値 ms | 候補A 中央値 ms | A-O ms | O基準の許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1文字 | 0.9685 | 1.1080 | +0.1395 | 0.1000 |
+| 200文字 | 4.4880 | 3.4830 | -1.0050 | 0.5000 |
+
+O単打は前半0.962→後半1.238ms、差0.276>許容0.1ms。A連続入力は前半3.033→後半3.627ms、差0.594>許容0.5ms。さらに単打の中央値差も許容を超える。Oも不安定なので恒常的な製品退行やOS原因は確定せず、有利なburst中央値だけで合格にしない。各固定計画内の追加試行は0で、過去のholdと全rawを保持する。
+
+| 検証コマンドと対象 | 確認する退行・結果 |
+| --- | --- |
+| 各D worktreeで`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`、変更ファイルのclang-format、`git diff --check` | enum/入力経路の警告・型・整形。最初の計装`322924c`はmilestone_name 71行でclang-tidy失敗。不要な本文内部6節目を除いた`4d8040a`、`790e1bd`、通常`a1fd1e1`は終了0。抑制・閾値変更なし。各成功版は1回生成 |
+| `python -B D:/NeNeNib/scripts/291-post-apply-diagnostic.py --self-check`、`--prepare`、`--run --plan-sha256 c21ad1776b2a5f95a250157f8ca95f80c8489f421c9f0234a8f0b54dee807a0b` | 境界解析の正例、欠落・順序誤り負例と実測12本。終了0。旧本文内部4段階は未計測と明記し0埋めしない |
+| `python -B D:/NeNeNib/scripts/291-coalesce-paired.py --prepare --a <4d8040a.json> --b <790e1bd.json>`、`--run --plan-sha256 441fe056f31961beed88a22164346a02708af91fdd3c73dc98beade039f4fb46` | 同じ計測点で重複要求区間の比較。終了0・12本有効、前述の数値。raw/依存/集計の独立再計算も一致 |
+| `python -B D:/NeNeNib/scripts/291-coalesce-visual.py --exe <各exe> --name A` / `--name B` / `--compare` | 無効化の抑止や解除漏れ。両版正常終了、12場面の本文/ステータス全画素一致。編集→次paint編集、外部再描画→編集、縮小/拡大、最小化復帰→編集、モード、字体サイズ、テーマを確認。独立した刺激が画に出たことも検査。代表3画像を目視 |
+| `python -B D:/NeNeNib/scripts/291-coalesce-normal-acceptance.py --prepare` / `--run` / `--audit` | 計装なしの通常性能。準備/自己確認/実測は終了0。監査は非0（hold、外側PowerShellの終了値1）。全12有効、安定条件と単打数値条件未達。失敗を隠す再実行はしない |
+| `python -B D:/NeNeNib/scripts/291-coalesce-ime.py` | 共通invalidateを通るIME変換中/確定の描画漏れ。既存verify_imeを1回呼び、実鍵で変換・Space・Enter、確定後下線0、通常/Vim NORMAL/INSERTの開閉、開始時IME状態への復元、正常終了。終了0 |
+| `git diff --exit-code a1fd1e16440352111f37797874d0e8029df9276f -- src tests eng CMakeLists.txt` | 作業枝へ取り込んだソースと検証済み通常候補の同一性。終了0。文書・commit変更だけでビルド/GUIを再実行しない |
+
+旧layout-only版の22場面、短行・長行の数値、split試作は歴史的な成功記録として保持。今回の候補では共通入力経路が変わるため、旧短行・長行の性能値を新候補の実測値とは呼ばない。今回追加した変更には上の12場面とIME、空文書固定比較を対応させた。core/application全件、起動、大容量open、splitを今回の変更のために再試行しない。
+
+証拠は`D:/NeNeNib/evidence/291-coalesce-improvement-20261004/coalesce-improvement-evidence.zip`。211ファイル・3750342 bytes、SHA-256 `615974ded12f7581f7fa08a8c6e1377191f08bbc0c95de7f62a69f703d2838e7`、CRC成功。細分診断/計装比較/通常比較の全rawと計画、24画像、IME画像、測定器、依存源、独立レビュー、失敗を含むビルド記録、3枝のgit bundleを収載。bundleの必要な親は`936b50b`で`git bundle verify`終了0。23:11の証拠束も入れ、以前の原記録を置き換えない。
+
+判断: 重複削減の実装を作業枝へ保存し、PR #293はdraftのまま。空文書の性能受入・merge・split採用は保留。DPI物理遷移、device lost、描画中の実再入、InvalidateRect失敗は実機未再現。OS由来の断定も未了。適用は#291 / ADR 0011・0069 / ARC-001・004・007・011 / CPP-012・017 / QLT-001・012・013・014 / CNF-006 / GIT-004、Waivers: none。

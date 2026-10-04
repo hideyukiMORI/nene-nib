@@ -191,6 +191,8 @@ class EditorWindow final
     bool work_waiting_ = false;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
+    // 成功した全クライアントの無効化だけを覚え、次の WM_PAINT まで重複要求をまとめる。
+    bool paint_pending_ = false;
     ATOM class_ = 0;
     UINT dpi_ = 96;
     bool rendering_failed_ = false;

@@ -35,6 +35,7 @@ Vim エンジンと IME の縦切りに入る前に、いまの速さを測っ�
 6. **描画は `WM_PAINT` で 1 回**: 意図を適用したら `InvalidateRect(nullptr, FALSE)` だけ行い、`WM_PAINT` で `controller_.frame()` を描いて `Present`。Windows は入力メッセージが残っている間 `WM_PAINT` を出さないので、
    まとめて来た入力は 1 フレームで描ける。1 打鍵のときは入力の直後に `WM_PAINT` が来るので遅延は変わらない（ベンチ②で確かめる）。`WM_SIZE` / `WM_DPICHANGED` / 外観の変更も同じ経路
    （`WM_DPICHANGED` の後に再描画していなかった穴もここで塞がる）。`WM_PAINT` では `BeginPaint` / `EndPaint` ではなく `ValidateRect` を使う（device lost で `present` → `abandon` → `DestroyWindow` が `BeginPaint` と `EndPaint` の間で走るのを避ける）
+   2026-10-04、#291の内訳診断に基づき、同じ`invalidate`入口で、成功した全クライアント無効化が描画待ちの間は重複したAPI要求を省く。待ち状態は窓だけが持ち、`paint`の`ValidateRect`直後・描画開始前に解除する。描画中の再要求を残し、OS由来の`WM_PAINT`も常に処理する。失敗した無効化は待ち状態にしない。これは既存の1フレームへの集約の実装詳細であり、描く入口・時期・対象範囲は変えない。
 7. **計測の窓の駆動は `eng/verify-window.py` と同じ道具**（起動・`PostMessageW`・窓の検出）を共有モジュール `eng/window_driver.py` に出して使う。第 2 の駆動器を書かない（ARC-001 / ARC-012）。
    反例（QLT-014）は `--check --reference <path> --values <path>` の経路で「基準値の複製を 1 本だけ厳しくすると終了 1」を示し、証明用ツリーで exe も窓も要らない
 8. **測るのは `Present` が返るまで**で、実際のスキャンアウト（光るまで）ではない。waitable swap chain（最大遅延 1）なので、画面に出るのは最大 1 vsync 後。ETW / PresentMon は使わない
