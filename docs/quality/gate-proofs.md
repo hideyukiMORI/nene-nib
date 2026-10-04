@@ -2976,3 +2976,35 @@ O単打は前半0.962→後半1.238ms、差0.276>許容0.1ms。A連続入力は�
 証拠は`D:/NeNeNib/evidence/291-coalesce-improvement-20261004/coalesce-improvement-evidence.zip`。211ファイル・3750342 bytes、SHA-256 `615974ded12f7581f7fa08a8c6e1377191f08bbc0c95de7f62a69f703d2838e7`、CRC成功。細分診断/計装比較/通常比較の全rawと計画、24画像、IME画像、測定器、依存源、独立レビュー、失敗を含むビルド記録、3枝のgit bundleを収載。bundleの必要な親は`936b50b`で`git bundle verify`終了0。23:11の証拠束も入れ、以前の原記録を置き換えない。
 
 判断: 重複削減の実装を作業枝へ保存し、PR #293はdraftのまま。空文書の性能受入・merge・split採用は保留。DPI物理遷移、device lost、描画中の実再入、InvalidateRect失敗は実機未再現。OS由来の断定も未了。適用は#291 / ADR 0011・0069 / ARC-001・004・007・011 / CPP-012・017 / QLT-001・012・013・014 / CNF-006 / GIT-004、Waivers: none。
+
+### 保存済み単打の再解析（2026-10-05 00時台）
+
+hideの約10分の調査依頼を受け、既存3実験の単打36本をrawから再解析した。製品commitは`dda40e4`のまま、追加のアプリ起動・計測・ビルド・製品変更は行っていない。対象は23:11の元版O対layout再利用A、23:37の入力後段細分版A、23:44の同じ計装によるA対重複無効化削減B。異なる実験の母集団は混ぜない。
+
+| 確認する誤りと対象 | 実行したコマンド・結果・証拠 |
+| --- | --- |
+| rawの取り違え、単打/burstの混在、区間の欠落・重複・不正な集計 | `python -B D:/NeNeNib/scripts/291-single-decomposition-20261005.py`、終了0。source/raw hash、各202入力、単打がburst前に提示済み、各節目1回・順序、11隣接区間の和と元singleMsの一致を全36本で確認。handler補助分解は11区間へ重ねて加算しない |
+| 解析実装に依存した見落とし | 読み取り専用の独立レビューで36 rawから区間、合計、variant中央値、各対応差を再計算し一致。COM参照の保持と解放位置もソース照合。`D:/NeNeNib/outputs/291-single-decomposition-20261005/review.txt` |
+| 証拠束への原記録の取り違えと破損 | `python -B D:/NeNeNib/scripts/291-single-decomposition-archive-20261005.py`、終了0。収載元hash照合とZIP CRC成功。再測定ではない |
+
+集計は`D:/NeNeNib/outputs/291-single-decomposition-20261005/decomposition.json`、解釈は同じ場所の`findings.txt`。解析スクリプトSHA-256は`45cce9ba2a9fde0966bb28281813c106354d8947c5eda7cddde49410890dacdd`。
+
+| 同一実験内の単打区間 | 元版/候補の中央値 ms | 確認できた範囲 |
+| --- | ---: | --- |
+| 23:11 O→layout再利用Aの本文body | 0.2445→0.1185 | body単独の短縮を全描画の短縮とはしない |
+| 同じO→Aのbody終了→EndDraw開始 | 0.2430→0.3030 | 対応A-Oは+0.069/+0.064/+0.014/+0.054/+0.064/+0.124ms、全6組で増加 |
+| 同じO→Aの各試行のbodyと後段の合計 | 0.4875→0.4225 | 対応差は-0.042/-0.032/-0.178/-0.073/-0.062/-0.021ms、全6組で短縮。中央値同士を足した値ではない |
+| 23:44 A→重複無効化削減Bの入力受信→handler戻り | 0.0370→0.0360 | この計装実験では中央値の増加なし |
+| 同じA→Bのapply後handler / handler戻り→paint | 0.0160→0.0155 / 0.0260→0.0250 | flag追加が通常版の悪化と無関係だと証明したものではない |
+
+23:44のB第4組は単打全体でAより+0.497ms。増分は本文後+0.207ms、本文前+0.076ms、本文+0.063ms、提示/戻り+0.063ms、EndDraw+0.058msなどに分布し、入力handlerの増分は+0.031ms。単一の区間だけへ原因を帰属しない。
+
+ソース上、元版は`draw_plain_line` / `draw_composed_line`のローカルCOM参照を関数終了時にReleaseする。再利用版はlayoutを保持し、前フレームの未再利用layoutをステータス/palette描画後の`previous_body_layouts_.clear()`で破棄する。この寿命と位置の変化により費用がbodyから後段へ移る可能性がある。ただし最終参照解放、Direct2D内部の参照保持、実際の破棄費用は未観測。後段にはステータス/palette・clear・実行待ちが含まれるため「解放時間」とは呼ばない。bodyと後段の合計も短縮しており、改善が全部見かけの移動だったとも断定しない。
+
+通常版O=`591b99f`対候補`a1fd1e1`で残る単打+0.1395msへ、別の計装実験の内訳を遡及して割り当てない。通常版の数値許容と安定条件の未達、OS原因未確定、WPR権限拒否は未解消。性能受入・merge・split採用はholdのまま。
+
+次回案は同じ出力先の`next-diagnostic-plan.json`。**未実装・未ビルド・未実行**で、`draw_status_bar`直後と`previous_body_layouts_.clear()`直後の2節目を追加し、既存のbody/EndDraw境界と組み合わせる。D側の隔離worktreeで既存TimingPort/Win32 adapterと入力driverを使い、破棄順序は変えない。現在候補1版・固定12本・202入力・1280×800/DPI120・新規既定profileの区間診断を想定。新しい前面操作時間の調整と実行前のhash/出力先固定が必要で、通常版受入条件の代用にはしない。
+
+恒久証拠は`D:/NeNeNib/evidence/291-single-decomposition-20261005/single-decomposition-evidence.zip`。45ファイル、497764 bytes、SHA-256 `ad6eb10b3d759d424439a73e1418383996a4a96aea12e7f6dbe196df0f02c8bd`。解析・所見・次回案・独立レビュー、3実験の元集計と36 raw、解析/梱包スクリプトを収載。CRC成功は同じ場所の`archive.json`に記録済み。既存の原記録・証拠を置き換えていない。
+
+今回の日報・引き継ぎ保存は文書と参照先だけを変更し、関連する製品・テスト・依存は不変。`git diff --check`は終了0、新しい2文書のローカルリンクと見出し参照6件、および日報のIssue要約6行を`python -B -`の限定照合で確認した。先行するRelease/静的検査/表示/IMEの成功結果と性能holdをそのまま再利用し、アプリの再起動や全件検証は行わない。適用は#291 / ADR 0011・0069 / QLT-001・012・013・014 / GIT-003・004。製品schemaと受入幅の変更なし、Waivers: none。
