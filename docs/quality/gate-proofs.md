@@ -2846,3 +2846,21 @@ hideから他の作業が並行しGPUも使われているとの説明と続行�
 文書追記後のdocument_checksは違反0（`out/291-empty-diagnostic-doc-conformance.log`）、PR本文のgit-conventions.pyと`git diff --check`は終了0。`git diff --exit-code dcf5811 -- src tests eng CMakeLists.txt`も終了0で、製品枝に計装が混入していない。文書のための製品テストは追加していない。
 
 2026-10-04 02時台、hideの区切りの依頼で日報と引き継ぎ書を整理した。対象はCLAUDEの最新リンク、reports / handoffs / todoと本記録。リンク・規則参照の退行だけをdocument_checksで確認し、違反0（`out/291-handoff-doc-conformance.log`）。PR本文のgit-conventions.py、`git diff --check`、`git diff --exit-code 5e96aa7 -- src tests eng CMakeLists.txt`も終了0。製品・対象テスト・依存は不変で、ビルド・アプリ検証は再利用した。PR #293はdraft、空文書の通常版確認を残して区切る。
+
+### 空文書限定の測定準備（2026-10-04夕方、実測なし）
+
+hideの続行・分担指示により、設計サナが既存の状態・受入条件・コード経路をレビューし、SOLの実装サナがrunnerと監査を準備した。その後hideから「今は操作中。測定の準備まで進めて」と指示があり、窓の起動、前面操作、入力、実測を一切行っていない。Issue #291に固定計画を追記し、PR #293はdraftを維持する。
+
+対象は未判定の通常版の空文書のみ。O=591b99f / A=a1a0e4d、6組12本、奇数O/A・偶数A/O、1280×800 / DPI120、設定ファイルのない新規profileで既定Cascadia Code13.5pt。既存`eng/measure-speed.py.keys_trial`を各試行1回だけ呼ぶ。202入力と暖機/単打の独立、200文字後の提示、rawから再計算した時間、既存50ms以内の到着幅を監査する。寸法/DPIは時刻raw自体には無く、入力前と閉じる直前の`observation.json`で照合する。
+
+受入条件は前計画を維持する。O/A各6本が揃い、各版の前半3本/後半3本の中央値差が単打max(0.1ms,その版の全6中央値の10%)、200文字max(0.5ms,同10%)以内で、A-Oの中央値差もO基準の同許容幅以内のときだけaccepted。欠測・不安定はholdとし、追加試行・上書き・合格までの反復を拒否する。GPU負荷の有無は開始時にhideと確認し、他の作業を停止しない。
+
+新しい道具だけを対象に、`python D:/NeNeNib/scripts/291-empty-acceptance.py --prepare`、`python D:/NeNeNib/scripts/291-empty-acceptance-audit.py --self-check`を実行し、両方終了0。合成rawの正例と、未完了JSON・提示欠落・入力不足・単打の独立性欠如、判定の安定した正例と不安定・許容差超過・欠測・実際に順序を入れ替えた反例を確認した。これは監査器の動作確認であり、製品性能の受入ではない。結果は出力領域の`self-check.json`。設計レビューで設定ファイルを書かない従来条件と、過去の準備版を実行領域に混ぜないことを確認した。
+
+実行領域は`D:/NeNeNib/outputs/291-empty-acceptance-20261004-evening/`で、現在は`manifest.json` / `plan.json` / `self-check.json`のみ。開始記録・試行profile・rawは無い。runner SHA-256は`6b8226fdfbc6a4f0e1082f5abafd5278b9a92b52858dd58339dff983df509e10`、監査は`9f382496c5906ec9a91f19ab8c9ff725e0c2c1d405d85edf44cc04e63998c8ff`、固定planは`b51905ea80ee7086f1dadcafc969fed634edc1fb154e9a0d616033c7ae84e6ef`。自己確認が参照したコードと現行コード、plan内の依存hashが全て一致することを親でも確認した。
+
+準備の証拠は`D:/NeNeNib/evidence/291-empty-acceptance-preparation/preparation-evidence.zip`。16ファイル、41561 bytes、SHA-256 `49bee5c0b1ba378875bd58aab19e9b9bede62aba814fc2a791e7fef83201815c`、ZIPのCRC成功。runner・監査・現行plan/manifest/自己確認・置き換えた未実行の準備記録・事前計画・Releaseメタデータ・共用測定器を収載した。実測を含まない束として区別する。
+
+再利用の根拠: `Get-FileHash -Algorithm SHA256 build/release-a1a0e4d/NeNeNib.exe,build/release-591b99f/NeNeNib.exe`で既存metadataと一致、`git diff --exit-code a1a0e4d HEAD -- src tests eng CMakeLists.txt`も終了0。成功済みのRelease、表示22場面、IME、短行・長行、split比較を再実行しない。製品・schema・性能閾値の変更なし。適用はQLT-001 / QLT-012 / QLT-013 / QLT-014 / CNF-006 / GIT-004、Waivers: none。空文書の性能受入とmerge、splitの採用は未完了のまま。
+
+準備の文書更新では、リンク・規則参照の退行だけを`conformance.document_checks(root, inventory(root), rules)`で確認し、違反0（`out/291-empty-prepare-doc-conformance.log`）。PR本文は`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-empty-prepared.md --pr-body`が終了0、`git diff --check`も終了0。製品テストは追加していない。追加worktreeは無く、未実施の固定計画を持つ出力と、未実行の準備履歴を持つ`D:/NeNeNib/outputs/291-empty-acceptance-preparation-history-20261004-evening/`を残す。#291の受理・統合後に証拠の収載を確認して整理し、ブランチとcommitは保持する。
