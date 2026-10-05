@@ -1,5 +1,5 @@
-#include "BodyGlyphCollector.hpp"
 #include "Direct2DRenderer.hpp"
+#include "BodyGlyphCollector.hpp"
 
 #include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
@@ -468,7 +468,8 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     Microsoft::WRL::ComPtr<IDWriteFontFallback> system;
     Microsoft::WRL::ComPtr<IDWriteTextFormat2> code_version;
     if (FAILED(dwrite_->GetSystemFontFallback(&system)) || FAILED(code.As(&code_version)) ||
-        FAILED(code_version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get())))
+        FAILED(
+            code_version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get())))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -757,7 +758,8 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
         return nullptr;
     }
     BodyTextLayout entry{std::string(text), area, std::move(made)};
-    auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(static_cast<float>(core::width_of(area)));
+    auto collector =
+        Microsoft::WRL::Make<BodyGlyphCollector>(static_cast<float>(core::width_of(area)));
     if (collector && SUCCEEDED(entry.layout->Draw(nullptr, collector.Get(), 0, 0)))
     {
         entry.glyphs = collector->take();
@@ -770,23 +772,29 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
 void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area)
 {
     const auto entry = std::ranges::find_if(body_layouts_, [text](const BodyTextLayout &value)
-                                           { return value.layout.Get() == text; });
+                                            { return value.layout.Get() == text; });
     const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
     if (entry == body_layouts_.end() || !entry->glyphs_ready)
     {
         context_->DrawTextLayout(origin, text, brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         return;
     }
-    context_->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y,
-        static_cast<float>(area.right), static_cast<float>(area.bottom)), D2D1_ANTIALIAS_MODE_ALIASED);
+    context_->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, static_cast<float>(area.right),
+                                              static_cast<float>(area.bottom)),
+                                  D2D1_ANTIALIAS_MODE_ALIASED);
     for (const auto &stored : entry->glyphs)
     {
-        const DWRITE_GLYPH_RUN run{stored.face.Get(), stored.em,
-            static_cast<UINT32>(stored.indices.size()), stored.indices.data(),
-            stored.advances.data(), stored.offsets.empty() ? nullptr : stored.offsets.data(),
-            stored.sideways, stored.bidi};
-        context_->DrawGlyphRun(D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y),
-                               &run, brush_.Get(), stored.measuring);
+        const DWRITE_GLYPH_RUN run{stored.face.Get(),
+                                   stored.em,
+                                   static_cast<UINT32>(stored.indices.size()),
+                                   stored.indices.data(),
+                                   stored.advances.data(),
+                                   stored.offsets.empty() ? nullptr : stored.offsets.data(),
+                                   stored.sideways,
+                                   stored.bidi};
+        context_->DrawGlyphRun(
+            D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run,
+            brush_.Get(), stored.measuring);
     }
     context_->PopAxisAlignedClip();
 }
