@@ -8,7 +8,7 @@ namespace nenenib::ui::win32
 struct FontFallbackKey
 {
     std::wstring text;
-    std::wstring locale;
+    std::wstring locale_name;
     std::wstring family;
     Microsoft::WRL::ComPtr<IDWriteFontCollection> collection;
     Microsoft::WRL::ComPtr<IDWriteNumberSubstitution> substitution;

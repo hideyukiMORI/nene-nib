@@ -37,4 +37,4 @@ WVR-NNNN-short-kebab-title.md
 
 | Waiver | 規則 | Scope | 解除条件 | 期限 |
 | --- | --- | --- | --- | --- |
-| — | — | — | 有効な waiver は無い | — |
+| [WVR-0001](WVR-0001-directwrite-fallback-com-signature.md) | CPP-012 | FontFallbackCache.cpp#FontFallbackCache::MapCharacters | COM境界の削除または固定ABI規則の受理 | 2026-11-04 |

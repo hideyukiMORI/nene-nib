@@ -40,14 +40,14 @@ bool complete_source(const FontFallbackRequest &request)
 
 bool source_properties(const FontFallbackRequest &request, FontFallbackKey &key)
 {
-    const WCHAR *locale = nullptr;
+    const WCHAR *locale_name = nullptr;
     UINT32 length = 0;
-    if (FAILED(request.source->GetLocaleName(0, &length, &locale)) || length < request.length ||
-        !bounded_name(locale))
+    if (FAILED(request.source->GetLocaleName(0, &length, &locale_name)) ||
+        length < request.length || !bounded_name(locale_name))
     {
         return false;
     }
-    key.locale = locale;
+    key.locale_name = locale_name;
     if (FAILED(request.source->GetNumberSubstitution(0, &length, &key.substitution)) ||
         length < request.length)
     {
@@ -90,8 +90,8 @@ std::optional<FontFallbackKey> fallback_key(const FontFallbackRequest &request)
 
 bool operator==(const FontFallbackKey &left, const FontFallbackKey &right) noexcept
 {
-    return left.text == right.text && left.locale == right.locale && left.family == right.family &&
-           left.collection.Get() == right.collection.Get() &&
+    return left.text == right.text && left.locale_name == right.locale_name &&
+           left.family == right.family && left.collection.Get() == right.collection.Get() &&
            left.substitution.Get() == right.substitution.Get() &&
            left.direction == right.direction && left.weight == right.weight &&
            left.style == right.style && left.stretch == right.stretch;

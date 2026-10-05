@@ -32,6 +32,8 @@ void FontFallbackCache::retain(FontFallbackEntry entry)
     next_ = (next_ + 1) % maximum_entries;
 }
 
+// Waiver: WVR-0001
+// NOLINTNEXTLINE(readability-function-size)
 HRESULT STDMETHODCALLTYPE FontFallbackCache::MapCharacters(
     IDWriteTextAnalysisSource *source, UINT32 position, UINT32 length,
     IDWriteFontCollection *collection, const WCHAR *family, DWRITE_FONT_WEIGHT weight,
@@ -40,6 +42,12 @@ HRESULT STDMETHODCALLTYPE FontFallbackCache::MapCharacters(
 {
     const FontFallbackRequest request{source, position, length, collection,
                                       family, weight,   style,  stretch};
+    return map(request, mapped_length, mapped_font, scale);
+}
+
+HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mapped_length,
+                               IDWriteFont **mapped_font, FLOAT *scale)
+{
     auto key = fallback_key(request);
     if (key.has_value())
     {
@@ -51,9 +59,9 @@ HRESULT STDMETHODCALLTYPE FontFallbackCache::MapCharacters(
             return entry->font.CopyTo(mapped_font);
         }
     }
-    const HRESULT result =
-        system_->MapCharacters(source, position, length, collection, family, weight, style, stretch,
-                               mapped_length, mapped_font, scale);
+    const HRESULT result = system_->MapCharacters(
+        request.source, request.position, request.length, request.collection, request.family,
+        request.weight, request.style, request.stretch, mapped_length, mapped_font, scale);
     if (result == S_OK && key.has_value())
     {
         retain(FontFallbackEntry{std::move(key.value()), *mapped_length, *mapped_font, *scale});

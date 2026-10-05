@@ -20,6 +20,8 @@ class FontFallbackCache final
                                             FLOAT *scale) noexcept override;
 
   private:
+    [[nodiscard]] HRESULT map(const FontFallbackRequest &request, UINT32 *mapped_length,
+                              IDWriteFont **mapped_font, FLOAT *scale);
     [[nodiscard]] const FontFallbackEntry *find(const FontFallbackKey &key) const;
     void retain(FontFallbackEntry entry);
     Microsoft::WRL::ComPtr<IDWriteFontFallback> system_;
