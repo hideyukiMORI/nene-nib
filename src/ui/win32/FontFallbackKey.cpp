@@ -27,7 +27,7 @@ bool bounded_name(const WCHAR *name)
 bool complete_source(const FontFallbackRequest &request)
 {
     Microsoft::WRL::ComPtr<IDWriteTextAnalysisSource1> extended;
-    if (SUCCEEDED(request.source->QueryInterface(IID_PPV_ARGS(&extended))))
+    if (request.source->QueryInterface(IID_PPV_ARGS(&extended)) != E_NOINTERFACE)
     {
         return false;
     }
