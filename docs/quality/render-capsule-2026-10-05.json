@@ -1,0 +1,1611 @@
+{
+  "issue": 291,
+  "date": "2026-10-05",
+  "measuredProductionCommit": "311e78b09a6ea351049200bf38e65a3017a7872d",
+  "formattedProductionCommit": "f42a95dedf1650382fb44a320895ddcea499a3d5",
+  "comparison": "O=0dfad49 status capsule; A=311e78b font/glyph/width; S/H/V=ADR0068 bounded same-frame probes",
+  "summary": {
+    "empty": {
+      "O": {
+        "singleMs": {
+          "values": [
+            0.742,
+            1.285,
+            0.722,
+            0.737,
+            0.721,
+            0.786
+          ],
+          "medianMs": 0.7395,
+          "maxMs": 1.285,
+          "pairedDeltaFromA": [
+            0.05799999999999994,
+            0.5559999999999999,
+            -0.050000000000000044,
+            -0.0050000000000000044,
+            0.139,
+            0.03500000000000003
+          ],
+          "positivePairs": 4,
+          "driftMs": 0.0050000000000000044,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            3.239,
+            3.081,
+            3.348,
+            3.216,
+            3.879,
+            3.121
+          ],
+          "medianMs": 3.2275,
+          "maxMs": 3.879,
+          "pairedDeltaFromA": [
+            0.08599999999999985,
+            -0.008000000000000007,
+            0.2639999999999998,
+            0.07800000000000029,
+            1.1389999999999998,
+            -0.21799999999999997
+          ],
+          "positivePairs": 4,
+          "driftMs": 0.022999999999999687,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "A": {
+        "singleMs": {
+          "values": [
+            0.684,
+            0.729,
+            0.772,
+            0.742,
+            0.582,
+            0.751
+          ],
+          "medianMs": 0.7355,
+          "maxMs": 0.772,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.013000000000000012,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            3.153,
+            3.089,
+            3.084,
+            3.138,
+            2.74,
+            3.339
+          ],
+          "medianMs": 3.1135,
+          "maxMs": 3.339,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.04899999999999993,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "S": {
+        "singleMs": {
+          "values": [
+            0.771,
+            0.814,
+            0.735,
+            0.771,
+            0.743,
+            0.75
+          ],
+          "medianMs": 0.7605,
+          "maxMs": 0.814,
+          "pairedDeltaFromA": [
+            0.08699999999999997,
+            0.08499999999999996,
+            -0.03700000000000003,
+            0.029000000000000026,
+            0.16100000000000003,
+            -0.0010000000000000009
+          ],
+          "positivePairs": 4,
+          "driftMs": 0.02100000000000002,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            3.151,
+            3.123,
+            3.152,
+            3.193,
+            3.285,
+            3.191
+          ],
+          "medianMs": 3.1715,
+          "maxMs": 3.285,
+          "pairedDeltaFromA": [
+            -0.002000000000000224,
+            0.03400000000000025,
+            0.06800000000000006,
+            0.05500000000000016,
+            0.5449999999999999,
+            -0.14800000000000013
+          ],
+          "positivePairs": 4,
+          "driftMs": 0.04200000000000026,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "H": {
+        "singleMs": {
+          "values": [
+            0.739,
+            0.745,
+            0.779,
+            0.743,
+            0.762,
+            0.676
+          ],
+          "medianMs": 0.744,
+          "maxMs": 0.779,
+          "pairedDeltaFromA": [
+            0.05499999999999994,
+            0.016000000000000014,
+            0.007000000000000006,
+            0.0010000000000000009,
+            0.18000000000000005,
+            -0.07499999999999996
+          ],
+          "positivePairs": 5,
+          "driftMs": 0.0020000000000000018,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            3.14,
+            3.069,
+            3.064,
+            2.718,
+            3.152,
+            3.072
+          ],
+          "medianMs": 3.0705,
+          "maxMs": 3.152,
+          "pairedDeltaFromA": [
+            -0.0129999999999999,
+            -0.020000000000000018,
+            -0.020000000000000018,
+            -0.41999999999999993,
+            0.4119999999999999,
+            -0.2669999999999999
+          ],
+          "positivePairs": 1,
+          "driftMs": 0.0030000000000001137,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "V": {
+        "singleMs": {
+          "values": [
+            0.764,
+            0.734,
+            0.759,
+            0.746,
+            0.741,
+            0.651
+          ],
+          "medianMs": 0.7435,
+          "maxMs": 0.764,
+          "pairedDeltaFromA": [
+            0.07999999999999996,
+            0.0050000000000000044,
+            -0.013000000000000012,
+            0.0040000000000000036,
+            0.15900000000000003,
+            -0.09999999999999998
+          ],
+          "positivePairs": 4,
+          "driftMs": 0.018000000000000016,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            3.213,
+            3.191,
+            3.267,
+            3.224,
+            3.502,
+            3.429
+          ],
+          "medianMs": 3.2455,
+          "maxMs": 3.502,
+          "pairedDeltaFromA": [
+            0.06000000000000005,
+            0.10199999999999987,
+            0.18299999999999983,
+            0.0860000000000003,
+            0.7619999999999996,
+            0.08999999999999986
+          ],
+          "positivePairs": 6,
+          "driftMs": 0.21599999999999975,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      }
+    },
+    "16mib": {
+      "O": {
+        "singleMs": {
+          "values": [
+            1.278,
+            1.298,
+            1.246,
+            1.267,
+            1.263,
+            1.259
+          ],
+          "medianMs": 1.265,
+          "maxMs": 1.298,
+          "pairedDeltaFromA": [
+            0.02100000000000013,
+            0.42700000000000005,
+            0.004999999999999893,
+            0.0239999999999998,
+            0.019999999999999796,
+            -0.10000000000000009
+          ],
+          "positivePairs": 5,
+          "driftMs": 0.015000000000000124,
+          "limitMs": 0.1265,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            8.588,
+            9.247,
+            8.516,
+            7.758,
+            8.628,
+            10.179
+          ],
+          "medianMs": 8.608,
+          "maxMs": 10.179,
+          "pairedDeltaFromA": [
+            1.2989999999999995,
+            3.002,
+            1.407,
+            0.6699999999999999,
+            1.4500000000000002,
+            3.0550000000000006
+          ],
+          "positivePairs": 6,
+          "driftMs": 0.040000000000000924,
+          "limitMs": 0.8608000000000001,
+          "stable": true
+        }
+      },
+      "A": {
+        "singleMs": {
+          "values": [
+            1.257,
+            0.871,
+            1.241,
+            1.243,
+            1.243,
+            1.359
+          ],
+          "medianMs": 1.243,
+          "maxMs": 1.359,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.0020000000000000018,
+          "limitMs": 0.12430000000000002,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            7.289,
+            6.245,
+            7.109,
+            7.088,
+            7.178,
+            7.124
+          ],
+          "medianMs": 7.1165,
+          "maxMs": 7.289,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.01499999999999968,
+          "limitMs": 0.7116500000000001,
+          "stable": true
+        }
+      },
+      "S": {
+        "singleMs": {
+          "values": [
+            1.242,
+            1.217,
+            1.237,
+            0.951,
+            1.143,
+            1.258
+          ],
+          "medianMs": 1.227,
+          "maxMs": 1.258,
+          "pairedDeltaFromA": [
+            -0.014999999999999902,
+            0.3460000000000001,
+            -0.0040000000000000036,
+            -0.29200000000000015,
+            -0.10000000000000009,
+            -0.10099999999999998
+          ],
+          "positivePairs": 1,
+          "driftMs": 0.09400000000000008,
+          "limitMs": 0.12270000000000002,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            5.865,
+            7.342,
+            7.157,
+            7.045,
+            8.229,
+            7.45
+          ],
+          "medianMs": 7.249499999999999,
+          "maxMs": 8.229,
+          "pairedDeltaFromA": [
+            -1.4239999999999995,
+            1.0969999999999995,
+            0.04800000000000004,
+            -0.04300000000000015,
+            1.0509999999999993,
+            0.3260000000000005
+          ],
+          "positivePairs": 4,
+          "driftMs": 0.29300000000000015,
+          "limitMs": 0.72495,
+          "stable": true
+        }
+      },
+      "H": {
+        "singleMs": {
+          "values": [
+            1.207,
+            1.236,
+            1.224,
+            1.243,
+            1.208,
+            1.241
+          ],
+          "medianMs": 1.23,
+          "maxMs": 1.243,
+          "pairedDeltaFromA": [
+            -0.04999999999999982,
+            0.365,
+            -0.017000000000000126,
+            0.0,
+            -0.03500000000000014,
+            -0.11799999999999988
+          ],
+          "positivePairs": 1,
+          "driftMs": 0.017000000000000126,
+          "limitMs": 0.123,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            7.195,
+            7.206,
+            8.287,
+            6.527,
+            7.092,
+            7.904
+          ],
+          "medianMs": 7.2005,
+          "maxMs": 8.287,
+          "pairedDeltaFromA": [
+            -0.09399999999999942,
+            0.9610000000000003,
+            1.1780000000000008,
+            -0.5609999999999999,
+            -0.0860000000000003,
+            0.7800000000000002
+          ],
+          "positivePairs": 3,
+          "driftMs": 0.11400000000000077,
+          "limitMs": 0.7200500000000001,
+          "stable": true
+        }
+      },
+      "V": {
+        "singleMs": {
+          "values": [
+            1.65,
+            1.854,
+            1.672,
+            1.649,
+            1.602,
+            1.932
+          ],
+          "medianMs": 1.661,
+          "maxMs": 1.932,
+          "pairedDeltaFromA": [
+            0.393,
+            0.9830000000000001,
+            0.4309999999999998,
+            0.4059999999999999,
+            0.359,
+            0.573
+          ],
+          "positivePairs": 6,
+          "driftMs": 0.02299999999999991,
+          "limitMs": 0.16610000000000003,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            7.341,
+            7.45,
+            6.085,
+            7.454,
+            7.921,
+            8.327
+          ],
+          "medianMs": 7.452,
+          "maxMs": 8.327,
+          "pairedDeltaFromA": [
+            0.05200000000000049,
+            1.205,
+            -1.024,
+            0.36599999999999966,
+            0.7430000000000003,
+            1.2030000000000003
+          ],
+          "positivePairs": 5,
+          "driftMs": 0.5800000000000001,
+          "limitMs": 0.7452000000000001,
+          "stable": true
+        }
+      }
+    },
+    "long-japanese": {
+      "O": {
+        "singleMs": {
+          "values": [
+            28.02,
+            28.645,
+            32.491,
+            27.459,
+            29.337,
+            28.423
+          ],
+          "medianMs": 28.534,
+          "maxMs": 32.491,
+          "pairedDeltaFromA": [
+            20.387,
+            20.538,
+            25.585,
+            20.625999999999998,
+            21.347,
+            22.732999999999997
+          ],
+          "positivePairs": 6,
+          "driftMs": 0.2220000000000013,
+          "limitMs": 2.8534,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            173.709,
+            176.108,
+            181.212,
+            174.3,
+            174.238,
+            175.933
+          ],
+          "medianMs": 175.1165,
+          "maxMs": 181.212,
+          "pairedDeltaFromA": [
+            81.8,
+            84.95400000000001,
+            88.84599999999999,
+            83.22600000000001,
+            81.499,
+            84.85199999999999
+          ],
+          "positivePairs": 6,
+          "driftMs": 1.8079999999999927,
+          "limitMs": 17.51165,
+          "stable": true
+        }
+      },
+      "A": {
+        "singleMs": {
+          "values": [
+            7.633,
+            8.107,
+            6.906,
+            6.833,
+            7.99,
+            5.69
+          ],
+          "medianMs": 7.2695,
+          "maxMs": 8.107,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.7999999999999998,
+          "limitMs": 0.72695,
+          "stable": false
+        },
+        "burstMs": {
+          "values": [
+            91.909,
+            91.154,
+            92.366,
+            91.074,
+            92.739,
+            91.081
+          ],
+          "medianMs": 91.5315,
+          "maxMs": 92.739,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.828000000000003,
+          "limitMs": 9.15315,
+          "stable": true
+        }
+      },
+      "S": {
+        "singleMs": {
+          "values": [
+            7.124,
+            7.723,
+            7.562,
+            6.976,
+            7.09,
+            7.084
+          ],
+          "medianMs": 7.106999999999999,
+          "maxMs": 7.723,
+          "pairedDeltaFromA": [
+            -0.5090000000000003,
+            -0.38399999999999945,
+            0.6560000000000006,
+            0.1429999999999998,
+            -0.9000000000000004,
+            1.3939999999999992
+          ],
+          "positivePairs": 3,
+          "driftMs": 0.47800000000000065,
+          "limitMs": 0.7107,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            90.435,
+            89.601,
+            90.715,
+            91.036,
+            89.802,
+            90.34
+          ],
+          "medianMs": 90.3875,
+          "maxMs": 91.036,
+          "pairedDeltaFromA": [
+            -1.4740000000000038,
+            -1.5529999999999973,
+            -1.6509999999999962,
+            -0.0379999999999967,
+            -2.9369999999999976,
+            -0.7409999999999997
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.09499999999999886,
+          "limitMs": 9.03875,
+          "stable": true
+        }
+      },
+      "H": {
+        "singleMs": {
+          "values": [
+            5.378,
+            6.752,
+            7.744,
+            6.855,
+            6.708,
+            6.907
+          ],
+          "medianMs": 6.8035,
+          "maxMs": 7.744,
+          "pairedDeltaFromA": [
+            -2.255,
+            -1.3549999999999995,
+            0.8380000000000001,
+            0.02200000000000024,
+            -1.282,
+            1.2169999999999996
+          ],
+          "positivePairs": 3,
+          "driftMs": 0.10300000000000065,
+          "limitMs": 0.68035,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            90.881,
+            89.049,
+            89.514,
+            89.732,
+            90.685,
+            89.177
+          ],
+          "medianMs": 89.62299999999999,
+          "maxMs": 90.881,
+          "pairedDeltaFromA": [
+            -1.0280000000000058,
+            -2.1049999999999898,
+            -2.852000000000004,
+            -1.3419999999999987,
+            -2.054000000000002,
+            -1.9039999999999964
+          ],
+          "positivePairs": 0,
+          "driftMs": 0.21800000000000352,
+          "limitMs": 8.962299999999999,
+          "stable": true
+        }
+      },
+      "V": {
+        "singleMs": {
+          "values": [
+            6.054,
+            6.546,
+            6.031,
+            6.273,
+            6.964,
+            7.683
+          ],
+          "medianMs": 6.4094999999999995,
+          "maxMs": 7.683,
+          "pairedDeltaFromA": [
+            -1.5789999999999997,
+            -1.560999999999999,
+            -0.875,
+            -0.5600000000000005,
+            -1.0259999999999998,
+            1.9929999999999994
+          ],
+          "positivePairs": 1,
+          "driftMs": 0.9100000000000001,
+          "limitMs": 0.64095,
+          "stable": false
+        },
+        "burstMs": {
+          "values": [
+            90.727,
+            97.414,
+            91.255,
+            92.916,
+            91.055,
+            91.508
+          ],
+          "medianMs": 91.38149999999999,
+          "maxMs": 97.414,
+          "pairedDeltaFromA": [
+            -1.1820000000000022,
+            6.260000000000005,
+            -1.1110000000000042,
+            1.8419999999999987,
+            -1.6839999999999975,
+            0.4269999999999925
+          ],
+          "positivePairs": 3,
+          "driftMs": 0.2530000000000001,
+          "limitMs": 9.13815,
+          "stable": true
+        }
+      }
+    }
+  },
+  "judgments": {
+    "empty": {
+      "normal": "within unchanged criteria",
+      "normalReasons": [],
+      "split": "within unchanged bounded-probe criteria",
+      "splitReasons": []
+    },
+    "16mib": {
+      "normal": "within unchanged criteria",
+      "normalReasons": [],
+      "split": "within unchanged bounded-probe criteria",
+      "splitReasons": []
+    },
+    "long-japanese": {
+      "normal": "hold",
+      "normalReasons": [
+        "A singleMs stability failed"
+      ],
+      "split": "hold",
+      "splitReasons": [
+        "A singleMs stability failed",
+        "H single total exceeds 2ms",
+        "V single total exceeds 2ms"
+      ]
+    }
+  },
+  "overall": "hold; keep PR draft and split unadopted",
+  "plan": {
+    "path": "D:\\NeNeNib\\outputs\\291-capsule-combined-20261005\\plan.json",
+    "sha256": "1e3e019fa7c922f8499bedf365e992afe8067818d6e3f0794c264267150f7017",
+    "record": {
+      "issue": 291,
+      "preparedAt": "2026-10-05T14:09:47.868080+00:00",
+      "releases": {
+        "O": {
+          "recordedAt": "2026-10-05T12-18-51Z",
+          "ref": "HEAD",
+          "commit": "0dfad49d9f79e2efd7f165a35e9221f999c4a441",
+          "shortCommit": "0dfad49",
+          "subject": "fix(ui): ステータスの文字組みを固定枠に保持する (#291)",
+          "head": "0dfad49d9f79e2efd7f165a35e9221f999c4a441",
+          "builtFromWorktree": false,
+          "buildDirectory": "build/release-0dfad49",
+          "executable": "D:\\NeNeNib\\worktrees\\291-status-layout-capsule-20261005\\build\\release-0dfad49\\NeNeNib.exe",
+          "sha256": "A68628E8E48D9D83063B26ECA1F8FE00E42797A74DB7C7369389EAE6A51918AE",
+          "bytes": 1311744,
+          "seconds": {
+            "configure": 1.683,
+            "build": 128.518,
+            "total": 130.202
+          },
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          }
+        },
+        "A": {
+          "recordedAt": "2026-10-05T14-04-37Z",
+          "ref": "HEAD",
+          "commit": "311e78b09a6ea351049200bf38e65a3017a7872d",
+          "shortCommit": "311e78b",
+          "subject": "fix(ui): 解析拡張の取得失敗はOSへ委譲する (#291)",
+          "head": "311e78b09a6ea351049200bf38e65a3017a7872d",
+          "builtFromWorktree": false,
+          "buildDirectory": "build/release-311e78b",
+          "executable": "D:\\NeNeNib\\worktrees\\291-display-width-capsule-20261005\\build\\release-311e78b\\NeNeNib.exe",
+          "sha256": "5F2CFF9C74C37FC4BBE2D43E7481AC1CABBBDA7ADA8744B5E30EE37504AECB66",
+          "bytes": 1399296,
+          "seconds": {
+            "configure": 1.709,
+            "build": 190.274,
+            "total": 191.984
+          },
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          }
+        },
+        "S": {
+          "recordedAt": "2026-10-05T14-05-43Z",
+          "ref": "HEAD",
+          "commit": "dad9ab07dac6efcaa55cc9f305c2056705ec2d86",
+          "shortCommit": "dad9ab0",
+          "subject": "test: 文字組み再利用後の単枠試作を測る (#291)",
+          "head": "dad9ab07dac6efcaa55cc9f305c2056705ec2d86",
+          "builtFromWorktree": false,
+          "buildDirectory": "build/release-dad9ab0",
+          "executable": "D:\\NeNeNib\\worktrees\\291-capsule-split-single-20261005\\build\\release-dad9ab0\\NeNeNib.exe",
+          "sha256": "627BED15F424EBFDB263BE3721987ABE6BCC715ECFB57AF7EE9AE5343A8B1BEF",
+          "bytes": 1399296,
+          "seconds": {
+            "configure": 2.618,
+            "build": 199.681,
+            "total": 202.299
+          },
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          }
+        },
+        "H": {
+          "recordedAt": "2026-10-05T14-05-43Z",
+          "ref": "HEAD",
+          "commit": "c1ef96c3843bed25df59f5b84c2d23b809740a08",
+          "shortCommit": "c1ef96c",
+          "subject": "test: 文字組み再利用後の上下二枠を測る (#291)",
+          "head": "c1ef96c3843bed25df59f5b84c2d23b809740a08",
+          "builtFromWorktree": false,
+          "buildDirectory": "build/release-c1ef96c",
+          "executable": "D:\\NeNeNib\\worktrees\\291-capsule-split-horizontal-20261005\\build\\release-c1ef96c\\NeNeNib.exe",
+          "sha256": "6B2006B8AA2902222587A9DFCA7352176849FDFCEE5729A6925AC50BC733269C",
+          "bytes": 1399296,
+          "seconds": {
+            "configure": 2.592,
+            "build": 200.871,
+            "total": 203.463
+          },
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          }
+        },
+        "V": {
+          "recordedAt": "2026-10-05T14-05-43Z",
+          "ref": "HEAD",
+          "commit": "9bb7d68efe18dfa089832df0255f5233cf57d8b0",
+          "shortCommit": "9bb7d68",
+          "subject": "test: 文字組み再利用後の左右二枠を測る (#291)",
+          "head": "9bb7d68efe18dfa089832df0255f5233cf57d8b0",
+          "builtFromWorktree": false,
+          "buildDirectory": "build/release-9bb7d68",
+          "executable": "D:\\NeNeNib\\worktrees\\291-capsule-split-vertical-20261005\\build\\release-9bb7d68\\NeNeNib.exe",
+          "sha256": "D7873BB470A3C42A9D92BC93A50D1601941F554A9123A2D6FB0FFA576A92E1AB",
+          "bytes": 1399296,
+          "seconds": {
+            "configure": 2.013,
+            "build": 195.936,
+            "total": 197.949
+          },
+          "toolchain": {
+            "compiler": "clang-cl",
+            "llvm": "19.1.5",
+            "cmake": "3.31.6-msvc6",
+            "ninja": "1.12.1",
+            "msvcToolset": "14.44.35207"
+          }
+        }
+      },
+      "schedule": [
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "S",
+          "name": "empty-1-S"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "H",
+          "name": "empty-1-H"
+        },
+        {
+          "fixture": "empty",
+          "group": 1,
+          "variant": "V",
+          "name": "empty-1-V"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "V",
+          "name": "empty-2-V"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "H",
+          "name": "empty-2-H"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "S",
+          "name": "empty-2-S"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "S",
+          "name": "empty-3-S"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "H",
+          "name": "empty-3-H"
+        },
+        {
+          "fixture": "empty",
+          "group": 3,
+          "variant": "V",
+          "name": "empty-3-V"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "V",
+          "name": "empty-4-V"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "H",
+          "name": "empty-4-H"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "S",
+          "name": "empty-4-S"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "S",
+          "name": "empty-5-S"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "H",
+          "name": "empty-5-H"
+        },
+        {
+          "fixture": "empty",
+          "group": 5,
+          "variant": "V",
+          "name": "empty-5-V"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "V",
+          "name": "empty-6-V"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "H",
+          "name": "empty-6-H"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "S",
+          "name": "empty-6-S"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A"
+        },
+        {
+          "fixture": "empty",
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O"
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "O",
+          "name": "16mib-1-O"
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "A",
+          "name": "16mib-1-A"
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "S",
+          "name": "16mib-1-S"
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "H",
+          "name": "16mib-1-H"
+        },
+        {
+          "fixture": "16mib",
+          "group": 1,
+          "variant": "V",
+          "name": "16mib-1-V"
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "V",
+          "name": "16mib-2-V"
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "H",
+          "name": "16mib-2-H"
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "S",
+          "name": "16mib-2-S"
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "A",
+          "name": "16mib-2-A"
+        },
+        {
+          "fixture": "16mib",
+          "group": 2,
+          "variant": "O",
+          "name": "16mib-2-O"
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "O",
+          "name": "16mib-3-O"
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "A",
+          "name": "16mib-3-A"
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "S",
+          "name": "16mib-3-S"
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "H",
+          "name": "16mib-3-H"
+        },
+        {
+          "fixture": "16mib",
+          "group": 3,
+          "variant": "V",
+          "name": "16mib-3-V"
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "V",
+          "name": "16mib-4-V"
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "H",
+          "name": "16mib-4-H"
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "S",
+          "name": "16mib-4-S"
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "A",
+          "name": "16mib-4-A"
+        },
+        {
+          "fixture": "16mib",
+          "group": 4,
+          "variant": "O",
+          "name": "16mib-4-O"
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "O",
+          "name": "16mib-5-O"
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "A",
+          "name": "16mib-5-A"
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "S",
+          "name": "16mib-5-S"
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "H",
+          "name": "16mib-5-H"
+        },
+        {
+          "fixture": "16mib",
+          "group": 5,
+          "variant": "V",
+          "name": "16mib-5-V"
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "V",
+          "name": "16mib-6-V"
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "H",
+          "name": "16mib-6-H"
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "S",
+          "name": "16mib-6-S"
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "A",
+          "name": "16mib-6-A"
+        },
+        {
+          "fixture": "16mib",
+          "group": 6,
+          "variant": "O",
+          "name": "16mib-6-O"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "O",
+          "name": "long-japanese-1-O"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "A",
+          "name": "long-japanese-1-A"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "S",
+          "name": "long-japanese-1-S"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "H",
+          "name": "long-japanese-1-H"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 1,
+          "variant": "V",
+          "name": "long-japanese-1-V"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "V",
+          "name": "long-japanese-2-V"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "H",
+          "name": "long-japanese-2-H"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "S",
+          "name": "long-japanese-2-S"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "A",
+          "name": "long-japanese-2-A"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 2,
+          "variant": "O",
+          "name": "long-japanese-2-O"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "O",
+          "name": "long-japanese-3-O"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "A",
+          "name": "long-japanese-3-A"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "S",
+          "name": "long-japanese-3-S"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "H",
+          "name": "long-japanese-3-H"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 3,
+          "variant": "V",
+          "name": "long-japanese-3-V"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "V",
+          "name": "long-japanese-4-V"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "H",
+          "name": "long-japanese-4-H"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "S",
+          "name": "long-japanese-4-S"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "A",
+          "name": "long-japanese-4-A"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 4,
+          "variant": "O",
+          "name": "long-japanese-4-O"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "O",
+          "name": "long-japanese-5-O"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "A",
+          "name": "long-japanese-5-A"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "S",
+          "name": "long-japanese-5-S"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "H",
+          "name": "long-japanese-5-H"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 5,
+          "variant": "V",
+          "name": "long-japanese-5-V"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "V",
+          "name": "long-japanese-6-V"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "H",
+          "name": "long-japanese-6-H"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "S",
+          "name": "long-japanese-6-S"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "A",
+          "name": "long-japanese-6-A"
+        },
+        {
+          "fixture": "long-japanese",
+          "group": 6,
+          "variant": "O",
+          "name": "long-japanese-6-O"
+        }
+      ],
+      "fixtures": {
+        "empty": null,
+        "16mib": "D:\\NeNeNib\\evidence\\290-split\\documents\\large.txt",
+        "long-japanese": "D:\\NeNeNib\\evidence\\290-split\\documents\\long-japanese.txt"
+      },
+      "geometry": [
+        1280,
+        800,
+        120
+      ],
+      "expectedInputs": 202,
+      "dependenciesSha256": {
+        "D:\\NeNeNib\\scripts\\291-capsule-combined-20261005.py": "43efe7ad12d17a80f6b3451e2231af2a1b985fc969cc252bc6b9ddfe2bc7d57c",
+        "D:\\NeNeNib\\scripts\\291-empty-acceptance.py": "6b8226fdfbc6a4f0e1082f5abafd5278b9a92b52858dd58339dff983df509e10",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\eng\\measure-speed.py": "0a07ab8dc659b15d56cf9c353925a3eb9cb4cac757d418a06ec1a54f934660fd",
+        "C:\\Users\\info\\WORKS\\NeNeNib\\eng\\window_driver.py": "59bab4f9fc39564f0472a0f846c1db03819b0dfcab0f25483d799116ec47a328",
+        "D:\\NeNeNib\\briefs\\291-capsule-combined-manifest-20261005.json": "9e780b1f65c8ed20426972f4f4e733926ecb8416f11e15208226ec2a5839ee4c",
+        "D:\\NeNeNib\\worktrees\\291-status-layout-capsule-20261005\\out\\release\\0dfad49.json": "4bc9d98a9b01d5aee94f306d56664520a42fc0f5ec7198e483513e25a354d29a",
+        "D:\\NeNeNib\\worktrees\\291-display-width-capsule-20261005\\out\\release\\311e78b.json": "cb4854765483efb3556f5085108d1adc4ff341d9b2a87af8bb7c3882e1751b17",
+        "D:\\NeNeNib\\worktrees\\291-capsule-split-single-20261005\\out\\release\\dad9ab0.json": "ee8aaec348d304972f0d02757153a9f5c3f466524010d3937d651af71f60c661",
+        "D:\\NeNeNib\\worktrees\\291-capsule-split-horizontal-20261005\\out\\release\\c1ef96c.json": "caef366828f7fd2e6d5826d75f255fb9ae9b462c9cfd924228b379225a2c9514",
+        "D:\\NeNeNib\\worktrees\\291-capsule-split-vertical-20261005\\out\\release\\9bb7d68.json": "400349ca26e3ddbfd9c7645392105d9743b4410d322cbeab7559ddbe1a539137",
+        "D:\\NeNeNib\\evidence\\290-split\\documents\\large.txt": "e0cfa5bd4f828d8e26fa1f476ef0467e80fb9014993c07eb18935fcf6959fdaf",
+        "D:\\NeNeNib\\evidence\\290-split\\documents\\long-japanese.txt": "ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32a6c5"
+      },
+      "noRetry": true,
+      "measurement": "Unchanged keys_trial. Input receipt to Present return, not photon latency. All raw retained. Empty burst arrival <=50ms; long-file burst span is descriptive.",
+      "stability": "abs(median(first3)-median(last3)) <= max(median(all6)*0.1, floor); floors single 0.1ms, burst 0.5ms; all controls reported separately",
+      "splitCriteria": "ADR0068 unchanged: S-A delta <=max(0.1ms,10%) single / max(0.5ms,10%) burst; >=5/6 positive pairs holds. H/V-A single delta<=0.5ms,total<=2ms; burst delta<=1ms. A instability or missing holds. Same frame only, no independent document/controller cost."
+    }
+  },
+  "paired": {
+    "path": "D:\\NeNeNib\\outputs\\291-capsule-combined-20261005\\paired.json",
+    "sha256": "f7009fd95093e7a9726b8ee544f0b702004b68260f8770b9788114fcbb667482",
+    "validTrials": 90,
+    "missingTrials": 0
+  },
+  "tail": {
+    "path": "D:\\NeNeNib\\outputs\\291-render-final-tail-20261005\\analysis.json",
+    "sha256": "712928871e27460c34b67dcfca948e740a422bb81d3d4901ce3db069df19cc2b",
+    "record": {
+      "valid": true,
+      "errors": [],
+      "summary": {
+        "O": {
+          "count": 240,
+          "medianMs": 32.4595,
+          "maxMs": 37.644,
+          "p95Ms": 36.362,
+          "p99Ms": 37.198,
+          "over2Ms": 240,
+          "over5Ms": 240,
+          "over16_7Ms": 240
+        },
+        "A": {
+          "count": 240,
+          "medianMs": 6.875,
+          "maxMs": 7.978,
+          "p95Ms": 7.513,
+          "p99Ms": 7.652,
+          "over2Ms": 240,
+          "over5Ms": 240,
+          "over16_7Ms": 0
+        }
+      },
+      "recordSha256": "c07307c62220a0383d8d9f09cc6c5fb7e7ac7a14e3afae1c8caddcc84fdad4a0",
+      "planSha256": "ab9d7f27cd523adfe2c0fc203f8d8cba1fd0ecbdbb3947a45af2cb0220db980d",
+      "interpretation": "Fixed 240 measured keys per variant; inputs within a launch are correlated; maximum is observed only, not a worst-case guarantee; excludes WM_CHAR queue delay and physical pixel latency"
+    }
+  },
+  "visual": {
+    "empty-A": {
+      "size": [
+        1280,
+        800
+      ],
+      "changedPixels": 0,
+      "bbox": null
+    },
+    "empty-S": {
+      "size": [
+        1280,
+        800
+      ],
+      "changedPixels": 0,
+      "bbox": null
+    },
+    "16mib-A": {
+      "size": [
+        1280,
+        800
+      ],
+      "changedPixels": 0,
+      "bbox": null
+    },
+    "16mib-S": {
+      "size": [
+        1280,
+        800
+      ],
+      "changedPixels": 0,
+      "bbox": null
+    },
+    "long-japanese-A": {
+      "size": [
+        1280,
+        800
+      ],
+      "changedPixels": 0,
+      "bbox": null
+    },
+    "long-japanese-S": {
+      "size": [
+        1280,
+        800
+      ],
+      "changedPixels": 0,
+      "bbox": null
+    }
+  },
+  "archive": {
+    "issue": 291,
+    "archive": "D:\\NeNeNib\\evidence\\291-render-capsule-20261005\\render-capsule-evidence.zip",
+    "sha256": "4ea93d57c3a7ddf6d9a8ca01bd5f7d71a033f05607a18bef7fb88648c07c1bad",
+    "bytes": 46224978,
+    "sourceFileCount": 1023,
+    "zipEntryCount": 1024,
+    "crcPassed": true,
+    "allEntryHashesMatched": true,
+    "bundlePrerequisite": "936b50b",
+    "includesFailedAndRejectedExperiments": true,
+    "measuredExecutablesIncluded": true
+  },
+  "activeWaivers": [
+    "WVR-0001",
+    "WVR-0002"
+  ],
+  "reuse": "Formatting and own-header include order only after 311e78b; f42a95d Release rebuilt. No behavior/test/dependency change requires runtime rerun.",
+  "limits": [
+    "same frame/strings reused across split panes; independent document/controller/scroll costs unmeasured",
+    "QPC input_received to Present return; no OS queue/physical pixel latency",
+    "240 correlated samples per variant; observed maximum is not a worst-case bound",
+    "physical DPI transition/device loss/allocation exhaustion not reproduced"
+  ]
+}

@@ -186,6 +186,13 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 依頼書は `D:\NeNeNib\briefs\`、1 回限りのスクリプトは `D:\NeNeNib\scripts\`、実機の確認の profile と文書は `D:\NeNeNib\evidence\`（施主指示 2026-09-30。C ドライブの Temp と scratchpad を使わない）。道具の出力と席の報告はリポジトリの `out/`。
 D は HDD で、そこに置いた profile では保存の書き込みが遅い（履歴の 1 回が 30〜40 ms・最初は数百 ms）。撮影のスクリプトは、書き込みを伴う操作の後に 1.5 秒待つ。
 
+### 本文の字体・字形・幅の高速化も同じ正本に閉じる
+
+字体選択はOSのMapCharactersだけ。FontFallbackCacheは完結した同じ要求のS_OKだけを最大128件再利用し、拡張sourceや未知の取得失敗は委譲する（ADR 0071）。
+BodyGlyphCollectorはDirectWriteが決めた所有字形と位置をそのまま保持する。完全に画面外のrunだけ保守的に除き、未対応装飾は収集全体を棄却する。Tabの0字形をDrawGlyphRunへ渡さない（ADR 0073）。
+display_widthのBMP索引はDisplayWidthRangeの正本からコンパイル時生成する。意味の表・実行時初期化・別の呼出し経路を増やさない（ADR 0074）。SDK固定ABIのwaiverはWVR-0001/0002の署名だけ。
+長行の高速化は確認したが、総合性能受理・main統合・split採用は保留。最新の根拠は[gate-proofs 5-cm](docs/quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074)。
+
 ### ADR を書く前に仕様の施主決定を読み直す
 
 仕様（SPECIFICATION.md の D 番号と FR）にある施主の決定と違う形は、設計席が決めない。書く前に施主へ確かめる（ADR 0058 の末尾・Ctrl+Tab の順で 1 本ぶんの手戻りになった）。
