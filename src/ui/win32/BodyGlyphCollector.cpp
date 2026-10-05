@@ -63,7 +63,8 @@ bool BodyGlyphCollector::outside(const DWRITE_GLYPH_RUN &run, FLOAT x) const
 HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin,
                                     DWRITE_MEASURING_MODE mode)
 {
-    if (outside(run, origin.x))
+    // Tabは原点を進めるだけの0字形run。Direct2Dへ渡すとE_INVALIDARGになる。
+    if (run.glyphCount == 0 || outside(run, origin.x))
     {
         return S_OK;
     }
