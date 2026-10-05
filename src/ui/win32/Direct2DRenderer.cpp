@@ -1,3 +1,4 @@
+#include "BodyGlyphCollector.hpp"
 #include "Direct2DRenderer.hpp"
 
 #include "DevicePixels.hpp"
@@ -755,8 +756,39 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
     {
         return nullptr;
     }
-    body_layouts_.push_back(BodyTextLayout{std::string(text), area, std::move(made)});
+    BodyTextLayout entry{std::string(text), area, std::move(made)};
+    auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(static_cast<float>(core::width_of(area)));
+    if (collector && SUCCEEDED(entry.layout->Draw(nullptr, collector.Get(), 0, 0)))
+    {
+        entry.glyphs = collector->take();
+        entry.glyphs_ready = true;
+    }
+    body_layouts_.push_back(std::move(entry));
     return body_layouts_.back().layout;
+}
+
+void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area)
+{
+    const auto entry = std::ranges::find_if(body_layouts_, [text](const BodyTextLayout &value)
+                                           { return value.layout.Get() == text; });
+    const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
+    if (entry == body_layouts_.end() || !entry->glyphs_ready)
+    {
+        context_->DrawTextLayout(origin, text, brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        return;
+    }
+    context_->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y,
+        static_cast<float>(area.right), static_cast<float>(area.bottom)), D2D1_ANTIALIAS_MODE_ALIASED);
+    for (const auto &stored : entry->glyphs)
+    {
+        const DWRITE_GLYPH_RUN run{stored.face.Get(), stored.em,
+            static_cast<UINT32>(stored.indices.size()), stored.indices.data(),
+            stored.advances.data(), stored.offsets.empty() ? nullptr : stored.offsets.data(),
+            stored.sideways, stored.bidi};
+        context_->DrawGlyphRun(D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y),
+                               &run, brush_.Get(), stored.measuring);
+    }
+    context_->PopAxisAlignedClip();
 }
 
 Direct2DRenderer::TextLayout Direct2DRenderer::text_layout(std::string_view text,
@@ -1043,9 +1075,7 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
         return;
     }
     brush_->SetColor(to_color(frame.palette.text));
-    context_->DrawTextLayout(
-        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
-        brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    draw_body_text(text.Get(), area);
     const UINT32 base = utf16_at(shown, at);
     // 置き換えた文字は変換中の行でも muted（ADR 0040 の決定 4）。IME の節とは重ならない。
     draw_replaced(
@@ -1073,9 +1103,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
         draw_line_selection(frame, text.Get(), area, line);
     }
     brush_->SetColor(to_color(frame.palette.text));
-    context_->DrawTextLayout(
-        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text.Get(),
-        brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    draw_body_text(text.Get(), area);
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_current_match(frame, text.Get(), area, line);
     if (line.number == frame.caret.position.line && !frame.command_line.has_value())

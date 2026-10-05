@@ -107,6 +107,7 @@ class Direct2DRenderer final
     void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
+    void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
     [[nodiscard]] TextLayout text_layout(std::string_view text, IDWriteTextFormat *format,
                                          const core::LayoutRect &area);

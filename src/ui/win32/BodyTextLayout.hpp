@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BodyGlyphRun.hpp"
 #include "LayoutRect.hpp"
 
 #include <dwrite.h>
@@ -15,5 +16,7 @@ struct BodyTextLayout
     std::string text;
     core::LayoutRect area;
     Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
+    std::vector<BodyGlyphRun> glyphs{};
+    bool glyphs_ready = false;
 };
 } // namespace nenenib::ui::win32
