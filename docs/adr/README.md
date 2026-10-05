@@ -85,3 +85,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0067](0067-ex-filenames-share-atomic-save-policy.md) | Ex のファイル名は共通保存へ渡し、新規作成を原子的に守る | 受理 |
 | [0068](0068-split-starts-with-a-bounded-render-probe.md) | split は文書タブを維持する案と限定した描画試作から判断する | 受理（実験方法・製品採用は未決） |
 | [0074](0074-index-display-width-from-the-canonical-ranges.md) | 表示幅のBMP索引は正本の範囲表から作る | 受理（設計・独立構成の性能受理は保留） |
+| [0070](0070-status-text-layouts-stay-in-a-fixed-renderer-cache.md) | ステータスの文字組みは描画器の固定枠に保持する | 受理（設計・独立構成の性能受理は保留） |
