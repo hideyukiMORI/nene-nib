@@ -3,8 +3,8 @@
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
-> 再開地点は[2026-10-05の引き継ぎ](../handoffs/2026-10-05.md)。#291は文字組み再利用と重複無効化削減を作業枝へ保存済み。最新通常候補の単打数値許容と安定条件が未達でhold、PR #293はdraft。mergeとsplit採用は保留。
-> 次は本文描画後のステータス表示と古いlayout解放を分ける診断。保存済み記録の解析と次回案まで準備済みで、追加計測は未実施。通常版の悪化とOS原因は未確定。
+> 再開地点は[2026-10-05の引き継ぎ](../handoffs/2026-10-05.md)。#291は本文の文字組み再利用・重複無効化削減に加え、ステータスの固定7枠をローカル作業枝へ保存済み。通常単打の中央値・観測最大値が短縮し、22場面の表示比較も一致した。
+> 最新の通常比較は対照版の200文字入力の安定条件で総合hold。PR #293はdraft、main統合とsplit採用は保留。実測は[gate-proofs 5-cl](../quality/gate-proofs.md#5-cl--ステータスの固定枠と単打分布issue-291adr-0070)。
 
 ## 運用（2026-10-03）
 
@@ -23,7 +23,7 @@
 | 6 | #284 基本Exの保存と終了（ADR 0066） | **実装・検証済み**。対象1365 checks・Release・実機7場面/保存内容/3回の正常終了を受理。[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)、[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066) |
 | 7 | #286 Exのファイル名付き保存とsaveas（ADR 0067・D39） | **実装・検証済み**。対象991 checks・Release・実機8場面/保存内容/3回の正常終了を受理。名前は保存成功時だけ更新。[PR #287](https://github.com/hideyukiMORI/nene-nib/pull/287)。[gate-proofs 5-ch](../quality/gate-proofs.md#5-ch--名前付きex保存issue-286adr-0067) |
 | 8 | #288 split前の区切り / #290 範囲・判定条件・限定描画試作（D40・ADR 0068） | **下準備・試作済み、製品採用は保留**。注釈付き`checkpoint/pre-split-20261003`を保存。長い日本語行で左右分割の費用が増え、事前条件を満たさない。[準備資料](../design/2026-10-03-split-preparation.md) / [gate-proofs 5-cj](../quality/gate-proofs.md#5-cj--splitの下準備と限定した描画費用issue-290adr-0068) |
-| 9 | #291 長い日本語行の単画面の入力遅延（ADR 0069） | **文字組み再利用と重複無効化の修正・表示検証済み、性能受入hold**。最新通常候補は単打の数値許容と安定条件未達。次は本文後のステータス表示とlayout解放の切り分け。[PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)はdraft、mergeとsplit採用は保留。[gate-proofs 5-ck](../quality/gate-proofs.md#5-ck--長い行の文字組み再利用issue-291adr-0069) |
+| 9 | #291 長い日本語行の単画面の入力遅延（ADR 0069・0070） | **ステータス固定枠も実装・表示検証済み、通常単打の改善を確認**。既存総合判定は対照版burstの安定条件でhold。[PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)はdraft、今回分はローカル保存。mergeとsplit採用は保留。[gate-proofs 5-cl](../quality/gate-proofs.md#5-cl--ステータスの固定枠と単打分布issue-291adr-0070) |
 | 10 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
@@ -46,7 +46,7 @@ splitの下準備はD40でhide了承済み。本実装は試作結果から保�
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
 | 既定の `nib_tests` | scope 33。全件checksは最新差分で未測（過去の全件実測19449 checks）。`--bookmarks` 40 / `--ex-files` 82 / `--ordinary-characters` 233 / `--ex-document` 204 / `--ex-write-path` 90 checksを対象実行で確認（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-ch](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | mainは0068まで。#291の作業枝は0069（表示中の本文layoutの再利用）まで。split製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
+| ADR | mainは0068まで。#291の作業枝は0070（ステータスの固定枠）まで。split製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |

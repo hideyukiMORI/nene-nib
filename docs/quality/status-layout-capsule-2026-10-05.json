@@ -1,0 +1,1775 @@
+{
+  "issue": 291,
+  "date": "2026-10-05",
+  "productionCommit": "0dfad49d9f79e2efd7f165a35e9221f999c4a441",
+  "comparison": "O=a1fd1e1 (previous candidate), A=0dfad49 (status layout capsule)",
+  "normal": {
+    "path": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\audit.json",
+    "sha256": "43da2ef6a8560274243bc90ae044083e3a0d2333bbb76ca3081a551db997c1b4",
+    "record": {
+      "inputAudit": [
+        {
+          "group": 1,
+          "variant": "O",
+          "name": "empty-1-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-1-O\\marks-keys.json",
+          "rawSha256": "8730b3e6e836c02d7f636e23f1cda725294cc51092046561aac1d483d11a6045",
+          "singleMs": 1.107,
+          "burstMs": 3.773,
+          "arrivalSpanMs": 2.59,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 2118762,
+          "singlePresentedUs": 2618315,
+          "burstPresentedUs": 2921925,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 1,
+          "variant": "A",
+          "name": "empty-1-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-1-A\\marks-keys.json",
+          "rawSha256": "f464c34cc40a458bd298664094f4809efb0f6e4746f023d6ed0ef72be9eec8ca",
+          "singleMs": 0.729,
+          "burstMs": 3.212,
+          "arrivalSpanMs": 2.381,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1596522,
+          "singlePresentedUs": 2096147,
+          "burstPresentedUs": 2399539,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 2,
+          "variant": "A",
+          "name": "empty-2-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-2-A\\marks-keys.json",
+          "rawSha256": "6794864ec3e13ee9753a8e5687565b6ed390332f4a38067e11156dbf3fd2e480",
+          "singleMs": 0.721,
+          "burstMs": 3.178,
+          "arrivalSpanMs": 2.392,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1597254,
+          "singlePresentedUs": 2096958,
+          "burstPresentedUs": 2400796,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 2,
+          "variant": "O",
+          "name": "empty-2-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-2-O\\marks-keys.json",
+          "rawSha256": "39ca76c44a08881e3c2f0270ed00f1863f86e2a063579f7bf98236e34bfaed44",
+          "singleMs": 1.1,
+          "burstMs": 3.552,
+          "arrivalSpanMs": 2.394,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1588608,
+          "singlePresentedUs": 2088427,
+          "burstPresentedUs": 2392211,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 3,
+          "variant": "O",
+          "name": "empty-3-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-3-O\\marks-keys.json",
+          "rawSha256": "f8674ea2483e1a290ce8d0cc04e5d0ee309b3e0d1289ad5b288db73ee59a9948",
+          "singleMs": 0.911,
+          "burstMs": 2.711,
+          "arrivalSpanMs": 1.746,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1593231,
+          "singlePresentedUs": 2093285,
+          "burstPresentedUs": 2396081,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 3,
+          "variant": "A",
+          "name": "empty-3-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-3-A\\marks-keys.json",
+          "rawSha256": "abc463366dd31fd254d1741a7cdfb0efd43697f138402cc5ab4d928de3f60fa8",
+          "singleMs": 0.735,
+          "burstMs": 3.16,
+          "arrivalSpanMs": 2.342,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1597283,
+          "singlePresentedUs": 2096889,
+          "burstPresentedUs": 2400578,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 4,
+          "variant": "A",
+          "name": "empty-4-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-4-A\\marks-keys.json",
+          "rawSha256": "2ce708b176797afeb589d48b5062c0592d1a5f3d3818beb379f74fc99f8111a4",
+          "singleMs": 0.671,
+          "burstMs": 2.737,
+          "arrivalSpanMs": 2.051,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1598254,
+          "singlePresentedUs": 2097910,
+          "burstPresentedUs": 2401084,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 4,
+          "variant": "O",
+          "name": "empty-4-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-4-O\\marks-keys.json",
+          "rawSha256": "7bb57ddd62ffb5748fb21e048379fc18abcdc0bb01847be18c1e0c732b069db5",
+          "singleMs": 1.071,
+          "burstMs": 3.582,
+          "arrivalSpanMs": 2.425,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1595360,
+          "singlePresentedUs": 2094430,
+          "burstPresentedUs": 2397889,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 5,
+          "variant": "O",
+          "name": "empty-5-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-5-O\\marks-keys.json",
+          "rawSha256": "4f7a15a585d23bd7e9bd4a2257c9de2fa73fa7bb8cae6ba61a5591eabdb87ddf",
+          "singleMs": 1.095,
+          "burstMs": 2.756,
+          "arrivalSpanMs": 1.775,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1601283,
+          "singlePresentedUs": 2101062,
+          "burstPresentedUs": 2404096,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 5,
+          "variant": "A",
+          "name": "empty-5-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-5-A\\marks-keys.json",
+          "rawSha256": "75ed554c9bbe5808363914903470019b9ca75f9d4f973118cf4ea5f53d2d3ff8",
+          "singleMs": 0.758,
+          "burstMs": 3.577,
+          "arrivalSpanMs": 2.829,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1591726,
+          "singlePresentedUs": 2091345,
+          "burstPresentedUs": 2395325,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 6,
+          "variant": "A",
+          "name": "empty-6-A",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-6-A\\marks-keys.json",
+          "rawSha256": "dbec8fe1254ba008deb9bed1e84c5f307c40b3360ad10187b4bc73a6f79e67c0",
+          "singleMs": 0.737,
+          "burstMs": 2.459,
+          "arrivalSpanMs": 1.748,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1588355,
+          "singlePresentedUs": 2088035,
+          "burstPresentedUs": 2390658,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        },
+        {
+          "group": 6,
+          "variant": "O",
+          "name": "empty-6-O",
+          "valid": true,
+          "errors": [],
+          "rawPath": "D:\\NeNeNib\\outputs\\291-status-layout-normal-20261005\\empty-6-O\\marks-keys.json",
+          "rawSha256": "65b07d83e2cceef6fe10c428534371089b773dc629bf6355865b4ac1ab1f15ac",
+          "singleMs": 1.073,
+          "burstMs": 2.922,
+          "arrivalSpanMs": 1.973,
+          "inputs": 202,
+          "isolatedWarmupAndSingle": true,
+          "warmupPresentedUs": 1590412,
+          "singlePresentedUs": 2090152,
+          "burstPresentedUs": 2392915,
+          "observationSha256": "e56c6f6f078a7c33955375efd1950d1dba2f681307e8130905fae629cbbcbb2d",
+          "observations": {
+            "beforeInput": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            },
+            "beforeClose": {
+              "window": [
+                80,
+                80,
+                1360,
+                880
+              ],
+              "client": [
+                0,
+                0,
+                1280,
+                800
+              ],
+              "dpi": 120
+            }
+          }
+        }
+      ],
+      "errors": [],
+      "judgment": {
+        "controls": {
+          "O": {
+            "singleMs": {
+              "samples": [
+                1.107,
+                1.1,
+                0.911,
+                1.071,
+                1.095,
+                1.073
+              ],
+              "count": 6,
+              "medianMs": 1.084,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 1.1,
+              "lastHalfMedianMs": 1.073,
+              "driftMs": 0.027000000000000135,
+              "limitMs": 0.10840000000000001,
+              "stable": true
+            },
+            "burstMs": {
+              "samples": [
+                3.773,
+                3.552,
+                2.711,
+                3.582,
+                2.756,
+                2.922
+              ],
+              "count": 6,
+              "medianMs": 3.237,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 3.552,
+              "lastHalfMedianMs": 2.922,
+              "driftMs": 0.6299999999999999,
+              "limitMs": 0.5,
+              "stable": false
+            }
+          },
+          "A": {
+            "singleMs": {
+              "samples": [
+                0.729,
+                0.721,
+                0.735,
+                0.671,
+                0.758,
+                0.737
+              ],
+              "count": 6,
+              "medianMs": 0.732,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 0.729,
+              "lastHalfMedianMs": 0.737,
+              "driftMs": 0.008000000000000007,
+              "limitMs": 0.1,
+              "stable": true
+            },
+            "burstMs": {
+              "samples": [
+                3.212,
+                3.178,
+                3.16,
+                2.737,
+                3.577,
+                2.459
+              ],
+              "count": 6,
+              "medianMs": 3.169,
+              "firstHalfCount": 3,
+              "lastHalfCount": 3,
+              "firstHalfMedianMs": 3.178,
+              "lastHalfMedianMs": 2.737,
+              "driftMs": 0.44099999999999984,
+              "limitMs": 0.5,
+              "stable": true
+            }
+          }
+        },
+        "comparisons": {
+          "singleMs": {
+            "medianDeltaMs": -0.3520000000000001,
+            "limitMs": 0.10840000000000001,
+            "pairedDeltasMs": [
+              -0.378,
+              -0.3790000000000001,
+              -0.17600000000000005,
+              -0.3999999999999999,
+              -0.33699999999999997,
+              -0.33599999999999997
+            ],
+            "withinNumericLimit": true,
+            "stableControls": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDeltaMs": -0.06800000000000006,
+            "limitMs": 0.5,
+            "pairedDeltasMs": [
+              -0.5609999999999999,
+              -0.3740000000000001,
+              0.4490000000000003,
+              -0.8449999999999998,
+              0.8210000000000002,
+              -0.4630000000000001
+            ],
+            "withinNumericLimit": true,
+            "stableControls": false,
+            "decision": "hold"
+          }
+        },
+        "decision": "hold"
+      },
+      "rawRecordSha256": "c64de4f95f86972c6771c82c8f5fe5848f955ba21c7c92ea6ed07eec0ea8217f",
+      "comparisonIdentity": "O is unchanged current normal a1fd1e1; A is status-layout reuse 0dfad49; both already include body reuse and pending invalidation"
+    }
+  },
+  "isolatedSingles": {
+    "path": "D:\\NeNeNib\\outputs\\291-status-layout-tail-20261005\\analysis.json",
+    "sha256": "1129ccae75ac79dd8afb8a2392974a7ba8eafb9d5445674128f5535defac1b36",
+    "record": {
+      "valid": true,
+      "errors": [],
+      "summary": {
+        "O": {
+          "count": 240,
+          "medianMs": 1.025,
+          "maxMs": 1.766,
+          "p95Ms": 1.206,
+          "p99Ms": 1.662,
+          "over2Ms": 0,
+          "over5Ms": 0,
+          "over16_7Ms": 0
+        },
+        "A": {
+          "count": 240,
+          "medianMs": 0.6415,
+          "maxMs": 1.243,
+          "p95Ms": 0.796,
+          "p99Ms": 1.123,
+          "over2Ms": 0,
+          "over5Ms": 0,
+          "over16_7Ms": 0
+        }
+      },
+      "recordSha256": "a26445c075ad1ac52980ee1c287ee101738c4d3a48636e2bd59334f225f82a77",
+      "planSha256": "d93799904ba29460c868c231a053e4e0f56c2ae204fc15a8d19e9729ecd2d8e2",
+      "interpretation": "Fixed 240 measured keys per variant; inputs within a launch are correlated; maximum is observed only, not a worst-case guarantee; excludes WM_CHAR queue delay and physical pixel latency"
+    }
+  },
+  "visual": {
+    "path": "D:\\NeNeNib\\outputs\\291-status-layout-visual-20261005\\comparison.json",
+    "sha256": "758fef976d62b4409330aa4958301d8a7ba626387477a64a10b92f3348cd0421",
+    "record": {
+      "allEqual": true,
+      "comparisons": [
+        {
+          "label": "01-initial",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803",
+          "candidatePngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803"
+        },
+        {
+          "label": "02-same-repaint",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803",
+          "candidatePngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803"
+        },
+        {
+          "label": "03-column-ten",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "a1c3d8d25733141f9a9518785b0955a74a1223a3efc1ef1032a992582110dc17",
+          "candidatePngSha256": "a1c3d8d25733141f9a9518785b0955a74a1223a3efc1ef1032a992582110dc17"
+        },
+        {
+          "label": "04-next-column",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "43dc542e612e23ef8943521a366e12cb96681b6f3e9e7beb9ba10487392aaee3",
+          "candidatePngSha256": "43dc542e612e23ef8943521a366e12cb96681b6f3e9e7beb9ba10487392aaee3"
+        },
+        {
+          "label": "05-next-line",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "02806ad6f3dce96406eacf94586e524bc938a355fb42ef106585ef038fb53664",
+          "candidatePngSha256": "02806ad6f3dce96406eacf94586e524bc938a355fb42ef106585ef038fb53664"
+        },
+        {
+          "label": "06-vim-normal",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "7cd97c74c776952b8f800b44dff48977b5494c19248f0204e9adbf5f91658e3c",
+          "candidatePngSha256": "7cd97c74c776952b8f800b44dff48977b5494c19248f0204e9adbf5f91658e3c"
+        },
+        {
+          "label": "07-recording-normal-seven-slots",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "3894ccda706353e705e7314952de79ca92a06922f7019076bfd37681ab0cd5db",
+          "candidatePngSha256": "3894ccda706353e705e7314952de79ca92a06922f7019076bfd37681ab0cd5db"
+        },
+        {
+          "label": "08-recording-insert-seven-slots",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "ce11c8cd0822804cf14044d296cfcfa4273d0c660850aaadac3965a3a182ef68",
+          "candidatePngSha256": "ce11c8cd0822804cf14044d296cfcfa4273d0c660850aaadac3965a3a182ef68"
+        },
+        {
+          "label": "09-recording-stopped",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "8a53ea38452ef6375fde34b805a8d2f921f361291040bf198881d8be654674ec",
+          "candidatePngSha256": "8a53ea38452ef6375fde34b805a8d2f921f361291040bf198881d8be654674ec"
+        },
+        {
+          "label": "10-notice-replaces-labels",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "3b9979ce9854113f5d8a5637b376b840c124fd5282104d4ac9899237be66fb11",
+          "candidatePngSha256": "3b9979ce9854113f5d8a5637b376b840c124fd5282104d4ac9899237be66fb11"
+        },
+        {
+          "label": "11-labels-after-notice",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca",
+          "candidatePngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca"
+        },
+        {
+          "label": "12-command-replaces-labels",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "85bd3f7690bb518234181c4517a530930548a7ac110f4a24e0919e259e1ac506",
+          "candidatePngSha256": "85bd3f7690bb518234181c4517a530930548a7ac110f4a24e0919e259e1ac506"
+        },
+        {
+          "label": "13-labels-after-command",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca",
+          "candidatePngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca"
+        },
+        {
+          "label": "14-narrow",
+          "changedBodyStatusPixels": 0,
+          "width": 920,
+          "height": 660,
+          "originalPngSha256": "ae14545d08e3008f6403b7719107686af1d3bb56bb0447a83d8e91f2c5dbe01a",
+          "candidatePngSha256": "ae14545d08e3008f6403b7719107686af1d3bb56bb0447a83d8e91f2c5dbe01a"
+        },
+        {
+          "label": "15-wide",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca",
+          "candidatePngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca"
+        },
+        {
+          "label": "16-theme-changes-color",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "48ca6ec3dd83d9fb3cea6aac8628b3bea43d4ba586a9a687604f5652dfdd6889",
+          "candidatePngSha256": "48ca6ec3dd83d9fb3cea6aac8628b3bea43d4ba586a9a687604f5652dfdd6889"
+        },
+        {
+          "label": "17-body-font-size",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "c3e670c3e85798d520dcea9c3f3e80226d7f2583dde35fde2f78d2c737d0fc9e",
+          "candidatePngSha256": "c3e670c3e85798d520dcea9c3f3e80226d7f2583dde35fde2f78d2c737d0fc9e"
+        },
+        {
+          "label": "18-body-font-family",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "55bab120f0a8aba4a18e7a1b3a6e5efaa34920e1f15029c3d37840f09de5011a",
+          "candidatePngSha256": "55bab120f0a8aba4a18e7a1b3a6e5efaa34920e1f15029c3d37840f09de5011a"
+        },
+        {
+          "label": "19-body-font-restored",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "5f4bc68860671ba77d41f74f560bda47d17384c79e38b55de3a6918782f94ec8",
+          "candidatePngSha256": "5f4bc68860671ba77d41f74f560bda47d17384c79e38b55de3a6918782f94ec8"
+        },
+        {
+          "label": "20-palette-status",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "9539ed2050566e25b38beb69a02b2c578ae4c591a3777248bd038b2d6f234d6e",
+          "candidatePngSha256": "9539ed2050566e25b38beb69a02b2c578ae4c591a3777248bd038b2d6f234d6e"
+        },
+        {
+          "label": "21-palette-closed",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "31ae8f12806f823c901570f7a70eee5c2f55dc5ff1495a57b28811c46bf6b4cc",
+          "candidatePngSha256": "31ae8f12806f823c901570f7a70eee5c2f55dc5ff1495a57b28811c46bf6b4cc"
+        },
+        {
+          "label": "22-back-to-ordinary",
+          "changedBodyStatusPixels": 0,
+          "width": 1280,
+          "height": 800,
+          "originalPngSha256": "8ee1c0f59ef66c048c2b3f29cdd236a72bede2b6371fca2a6700f0679fdfaecc",
+          "candidatePngSha256": "8ee1c0f59ef66c048c2b3f29cdd236a72bede2b6371fca2a6700f0679fdfaecc"
+        }
+      ],
+      "source": "Existing window_driver and verify-window geometry; fixed 22 targeted states per version.",
+      "limitations": "No physical DPI transition, device loss, or forced DirectWrite allocation failure. Title excluded."
+    }
+  },
+  "diagnosticBefore": {
+    "path": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\diagnosis.json",
+    "sha256": "72553f10f7bfb041c3a7b418e772a195d6097645b93bcd64fc621414ea6b1cb8",
+    "record": {
+      "purpose": "Separate status drawing from retirement of previous body layouts; diagnosis only.",
+      "errors": [],
+      "trials": [
+        {
+          "name": "empty-1-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.815,
+          "stagesMs": {
+            "beforeBodyMs": 0.18,
+            "bodyMs": 0.1,
+            "statusMs": 0.3,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.127,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.106
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-1-A\\marks-keys.json",
+          "rawSha256": "2e5919529a67f3a0678dc573505950a90f6bf04adeb5d14c60e2d844afc05954",
+          "burstMs": 3.641,
+          "inputs": 202
+        },
+        {
+          "name": "empty-2-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.975,
+          "stagesMs": {
+            "beforeBodyMs": 0.29,
+            "bodyMs": 0.108,
+            "statusMs": 0.305,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.159,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.111
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-2-A\\marks-keys.json",
+          "rawSha256": "528be6554ea5b34249522b3510f5cec5e38294d75024fd7c45c38d75eb7b8aa6",
+          "burstMs": 3.488,
+          "inputs": 202
+        },
+        {
+          "name": "empty-3-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.835,
+          "stagesMs": {
+            "beforeBodyMs": 0.2,
+            "bodyMs": 0.097,
+            "statusMs": 0.282,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.14,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.001,
+            "presentMs": 0.113
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-3-A\\marks-keys.json",
+          "rawSha256": "68f609042a57e3a40af3ffd0cc47d5a970a5a465d9c67c8b8276afe8787a612e",
+          "burstMs": 3.455,
+          "inputs": 202
+        },
+        {
+          "name": "empty-4-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.833,
+          "stagesMs": {
+            "beforeBodyMs": 0.198,
+            "bodyMs": 0.099,
+            "statusMs": 0.282,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.14,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.112
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-4-A\\marks-keys.json",
+          "rawSha256": "2c01b285629eb104215467149ecc3e465355afe18b5a3184786bb29c80db759b",
+          "burstMs": 4.011,
+          "inputs": 202
+        },
+        {
+          "name": "empty-5-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.88,
+          "stagesMs": {
+            "beforeBodyMs": 0.213,
+            "bodyMs": 0.099,
+            "statusMs": 0.278,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.163,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.0,
+            "presentMs": 0.125
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-5-A\\marks-keys.json",
+          "rawSha256": "4795d951e452d3b8d4c0da5618d49e14ccbf378e767c369039e41b80398fd1da",
+          "burstMs": 3.95,
+          "inputs": 202
+        },
+        {
+          "name": "empty-6-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.805,
+          "stagesMs": {
+            "beforeBodyMs": 0.193,
+            "bodyMs": 0.101,
+            "statusMs": 0.278,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.125,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.0,
+            "presentMs": 0.106
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-6-A\\marks-keys.json",
+          "rawSha256": "80a9ff009dd031d307704bf9413fb8d4750be997aff19fd4dfd12171a98629fd",
+          "burstMs": 3.483,
+          "inputs": 202
+        },
+        {
+          "name": "empty-7-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.964,
+          "stagesMs": {
+            "beforeBodyMs": 0.254,
+            "bodyMs": 0.119,
+            "statusMs": 0.321,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.152,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.116
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-7-A\\marks-keys.json",
+          "rawSha256": "9c478813e2dccecbdf93e6e9e4f68544588f6219b5363d8435d4fe7434e11b1f",
+          "burstMs": 3.507,
+          "inputs": 202
+        },
+        {
+          "name": "empty-8-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.832,
+          "stagesMs": {
+            "beforeBodyMs": 0.211,
+            "bodyMs": 0.101,
+            "statusMs": 0.278,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.13,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.109
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-8-A\\marks-keys.json",
+          "rawSha256": "1f2a957381fc5ea32205ba00a8877ae0d81617e7858120f716e4c718b648ddf6",
+          "burstMs": 3.624,
+          "inputs": 202
+        },
+        {
+          "name": "empty-9-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.864,
+          "stagesMs": {
+            "beforeBodyMs": 0.219,
+            "bodyMs": 0.099,
+            "statusMs": 0.299,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.134,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.0,
+            "presentMs": 0.111
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-9-A\\marks-keys.json",
+          "rawSha256": "86f1fbed28d1c920b2605931733011062b0f3a8425690b2b0d008f99e49e7375",
+          "burstMs": 3.477,
+          "inputs": 202
+        },
+        {
+          "name": "empty-10-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.826,
+          "stagesMs": {
+            "beforeBodyMs": 0.199,
+            "bodyMs": 0.1,
+            "statusMs": 0.28,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.134,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.11
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-10-A\\marks-keys.json",
+          "rawSha256": "c959339ee289f331ab11ae49386728b0340881894d3f097f8deaac8cb8ed4945",
+          "burstMs": 3.516,
+          "inputs": 202
+        },
+        {
+          "name": "empty-11-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.997,
+          "stagesMs": {
+            "beforeBodyMs": 0.279,
+            "bodyMs": 0.116,
+            "statusMs": 0.32,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.156,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.124
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-11-A\\marks-keys.json",
+          "rawSha256": "dfdefdc9677b12438904bfe13ce32262fe05b78b3ec256fba718a9368c3c8023",
+          "burstMs": 5.198,
+          "inputs": 202
+        },
+        {
+          "name": "empty-12-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.845,
+          "stagesMs": {
+            "beforeBodyMs": 0.215,
+            "bodyMs": 0.1,
+            "statusMs": 0.282,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.136,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.11
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-before-20261005\\empty-12-A\\marks-keys.json",
+          "rawSha256": "1766473c7d3bc08d73d668bdc1f37b76f8dd4982d574749e3057480e555c8ed0",
+          "burstMs": 4.013,
+          "inputs": 202
+        }
+      ],
+      "validCount": 12,
+      "summary": {
+        "beforeBodyMs": {
+          "samples": [
+            0.18,
+            0.29,
+            0.2,
+            0.198,
+            0.213,
+            0.193,
+            0.254,
+            0.211,
+            0.219,
+            0.199,
+            0.279,
+            0.215
+          ],
+          "medianMs": 0.212,
+          "maxMs": 0.29
+        },
+        "bodyMs": {
+          "samples": [
+            0.1,
+            0.108,
+            0.097,
+            0.099,
+            0.099,
+            0.101,
+            0.119,
+            0.101,
+            0.099,
+            0.1,
+            0.116,
+            0.1
+          ],
+          "medianMs": 0.1,
+          "maxMs": 0.119
+        },
+        "statusMs": {
+          "samples": [
+            0.3,
+            0.305,
+            0.282,
+            0.282,
+            0.278,
+            0.278,
+            0.321,
+            0.278,
+            0.299,
+            0.28,
+            0.32,
+            0.282
+          ],
+          "medianMs": 0.282,
+          "maxMs": 0.321
+        },
+        "retirementMs": {
+          "samples": [
+            0.001,
+            0.001,
+            0.001,
+            0.001,
+            0.001,
+            0.001,
+            0.001,
+            0.002,
+            0.001,
+            0.002,
+            0.001,
+            0.001
+          ],
+          "medianMs": 0.001,
+          "maxMs": 0.002
+        },
+        "endDrawMs": {
+          "samples": [
+            0.127,
+            0.159,
+            0.14,
+            0.14,
+            0.163,
+            0.125,
+            0.152,
+            0.13,
+            0.134,
+            0.134,
+            0.156,
+            0.136
+          ],
+          "medianMs": 0.138,
+          "maxMs": 0.163
+        },
+        "beforeWaitMs": {
+          "samples": [
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.001,
+            0.001,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "medianMs": 0.0,
+          "maxMs": 0.001
+        },
+        "waitMs": {
+          "samples": [
+            0.001,
+            0.001,
+            0.001,
+            0.001,
+            0.0,
+            0.0,
+            0.001,
+            0.001,
+            0.0,
+            0.001,
+            0.001,
+            0.001
+          ],
+          "medianMs": 0.001,
+          "maxMs": 0.001
+        },
+        "presentMs": {
+          "samples": [
+            0.106,
+            0.111,
+            0.113,
+            0.112,
+            0.125,
+            0.106,
+            0.116,
+            0.109,
+            0.111,
+            0.11,
+            0.124,
+            0.11
+          ],
+          "medianMs": 0.111,
+          "maxMs": 0.125
+        }
+      },
+      "planSha256": "2200da908b577adcd06c3fe59f33e9c1d24a3ca9a4160cff69bb1229c1b229a4",
+      "recordSha256": "4f12434c5f0e5ff2dfc6c445af70da35254696eaa01de020e98e2a705c04f562",
+      "interpretation": "Elapsed includes scheduling/mark overhead. Retirement includes an inactive palette branch. No normal-build acceptance or attribution to OS/COM internals."
+    }
+  },
+  "diagnosticAfter": {
+    "path": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\diagnosis.json",
+    "sha256": "a466177cd7cce467c2e8bb0a9cddb69bf746df93af2a2b541a4ac244afc8607f",
+    "record": {
+      "purpose": "Separate status drawing from retirement of previous body layouts; diagnosis only.",
+      "errors": [],
+      "trials": [
+        {
+          "name": "empty-1-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.752,
+          "stagesMs": {
+            "beforeBodyMs": 0.236,
+            "bodyMs": 0.05,
+            "statusMs": 0.077,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.214,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.172
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-1-A\\marks-keys.json",
+          "rawSha256": "4cf17998a31ed4d3892484f4fdf606457b6ddecdd5eab8788c67552e86afc28f",
+          "burstMs": 3.175,
+          "inputs": 202
+        },
+        {
+          "name": "empty-2-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.743,
+          "stagesMs": {
+            "beforeBodyMs": 0.241,
+            "bodyMs": 0.049,
+            "statusMs": 0.078,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.218,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.001,
+            "presentMs": 0.153
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-2-A\\marks-keys.json",
+          "rawSha256": "7827d0af53a0ab62e48d3d6add99393d54784bf44bfa9a3e33796ac05fa994b5",
+          "burstMs": 3.384,
+          "inputs": 202
+        },
+        {
+          "name": "empty-3-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.738,
+          "stagesMs": {
+            "beforeBodyMs": 0.238,
+            "bodyMs": 0.049,
+            "statusMs": 0.077,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.211,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.002,
+            "presentMs": 0.159
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-3-A\\marks-keys.json",
+          "rawSha256": "f186b3c272ee8b5b3139ff1ffd9735349d135a9de07d2ade0fd965d0d960dfc6",
+          "burstMs": 4.134,
+          "inputs": 202
+        },
+        {
+          "name": "empty-4-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.581,
+          "stagesMs": {
+            "beforeBodyMs": 0.235,
+            "bodyMs": 0.038,
+            "statusMs": 0.058,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.123,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.125
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-4-A\\marks-keys.json",
+          "rawSha256": "083c487e24e6df127ff70565e5fd5a315712c4031bdc4cb713140d488496175d",
+          "burstMs": 2.323,
+          "inputs": 202
+        },
+        {
+          "name": "empty-5-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.736,
+          "stagesMs": {
+            "beforeBodyMs": 0.224,
+            "bodyMs": 0.048,
+            "statusMs": 0.078,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.219,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.164
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-5-A\\marks-keys.json",
+          "rawSha256": "8a704bd97b2d2beb94955170d870627a12873c36895671ed49f7822801fc7670",
+          "burstMs": 3.16,
+          "inputs": 202
+        },
+        {
+          "name": "empty-6-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 1.229,
+          "stagesMs": {
+            "beforeBodyMs": 0.248,
+            "bodyMs": 0.084,
+            "statusMs": 0.269,
+            "retirementMs": 0.014,
+            "endDrawMs": 0.437,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.002,
+            "presentMs": 0.174
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-6-A\\marks-keys.json",
+          "rawSha256": "e7c735975e87e14854d83361af6f28771e25a04a6fad4636396a9b5bed8aca45",
+          "burstMs": 3.211,
+          "inputs": 202
+        },
+        {
+          "name": "empty-7-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.896,
+          "stagesMs": {
+            "beforeBodyMs": 0.325,
+            "bodyMs": 0.052,
+            "statusMs": 0.084,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.238,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.001,
+            "presentMs": 0.193
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-7-A\\marks-keys.json",
+          "rawSha256": "b4ae90f4f6ce1b899e261ce7cb8d2d97051c386dbf0280f0cd155aed12374cf5",
+          "burstMs": 3.519,
+          "inputs": 202
+        },
+        {
+          "name": "empty-8-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.723,
+          "stagesMs": {
+            "beforeBodyMs": 0.223,
+            "bodyMs": 0.048,
+            "statusMs": 0.078,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.217,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.002,
+            "presentMs": 0.154
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-8-A\\marks-keys.json",
+          "rawSha256": "75d7eceb836f7c3ed2719efe6aabc401fae846f6018466cc2bf11211ae833d09",
+          "burstMs": 2.445,
+          "inputs": 202
+        },
+        {
+          "name": "empty-9-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.729,
+          "stagesMs": {
+            "beforeBodyMs": 0.228,
+            "bodyMs": 0.051,
+            "statusMs": 0.076,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.214,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.157
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-9-A\\marks-keys.json",
+          "rawSha256": "c1205eafbc4cf68c084209c8c4ea0807573fd32b213bf71b90da19873bb333c5",
+          "burstMs": 3.227,
+          "inputs": 202
+        },
+        {
+          "name": "empty-10-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.737,
+          "stagesMs": {
+            "beforeBodyMs": 0.235,
+            "bodyMs": 0.048,
+            "statusMs": 0.076,
+            "retirementMs": 0.001,
+            "endDrawMs": 0.215,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.161
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-10-A\\marks-keys.json",
+          "rawSha256": "f009ca5ecab74d74acea3eaeeee87dfdf29095c592a065e6ae8e13623cc7e7fd",
+          "burstMs": 2.844,
+          "inputs": 202
+        },
+        {
+          "name": "empty-11-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.722,
+          "stagesMs": {
+            "beforeBodyMs": 0.222,
+            "bodyMs": 0.049,
+            "statusMs": 0.077,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.214,
+            "beforeWaitMs": 0.0,
+            "waitMs": 0.001,
+            "presentMs": 0.157
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-11-A\\marks-keys.json",
+          "rawSha256": "d99295ff74af4283e374e5f5ce8c43b78144ac0a8151640f23f14a732068d6a7",
+          "burstMs": 3.14,
+          "inputs": 202
+        },
+        {
+          "name": "empty-12-A",
+          "valid": true,
+          "errors": [],
+          "totalMs": 0.723,
+          "stagesMs": {
+            "beforeBodyMs": 0.226,
+            "bodyMs": 0.048,
+            "statusMs": 0.077,
+            "retirementMs": 0.002,
+            "endDrawMs": 0.21,
+            "beforeWaitMs": 0.001,
+            "waitMs": 0.001,
+            "presentMs": 0.158
+          },
+          "rawPath": "D:\\NeNeNib\\outputs\\291-render-capsule-diagnosis-after-20261005\\empty-12-A\\marks-keys.json",
+          "rawSha256": "5c944e44962f307a44d69dde8961e48f87ea3dd9db0e80f4ad42727a06909248",
+          "burstMs": 3.142,
+          "inputs": 202
+        }
+      ],
+      "validCount": 12,
+      "summary": {
+        "beforeBodyMs": {
+          "samples": [
+            0.236,
+            0.241,
+            0.238,
+            0.235,
+            0.224,
+            0.248,
+            0.325,
+            0.223,
+            0.228,
+            0.235,
+            0.222,
+            0.226
+          ],
+          "medianMs": 0.235,
+          "maxMs": 0.325
+        },
+        "bodyMs": {
+          "samples": [
+            0.05,
+            0.049,
+            0.049,
+            0.038,
+            0.048,
+            0.084,
+            0.052,
+            0.048,
+            0.051,
+            0.048,
+            0.049,
+            0.048
+          ],
+          "medianMs": 0.049,
+          "maxMs": 0.084
+        },
+        "statusMs": {
+          "samples": [
+            0.077,
+            0.078,
+            0.077,
+            0.058,
+            0.078,
+            0.269,
+            0.084,
+            0.078,
+            0.076,
+            0.076,
+            0.077,
+            0.077
+          ],
+          "medianMs": 0.077,
+          "maxMs": 0.269
+        },
+        "retirementMs": {
+          "samples": [
+            0.002,
+            0.002,
+            0.002,
+            0.001,
+            0.002,
+            0.014,
+            0.002,
+            0.001,
+            0.002,
+            0.001,
+            0.002,
+            0.002
+          ],
+          "medianMs": 0.002,
+          "maxMs": 0.014
+        },
+        "endDrawMs": {
+          "samples": [
+            0.214,
+            0.218,
+            0.211,
+            0.123,
+            0.219,
+            0.437,
+            0.238,
+            0.217,
+            0.214,
+            0.215,
+            0.214,
+            0.21
+          ],
+          "medianMs": 0.2145,
+          "maxMs": 0.437
+        },
+        "beforeWaitMs": {
+          "samples": [
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001
+          ],
+          "medianMs": 0.0,
+          "maxMs": 0.001
+        },
+        "waitMs": {
+          "samples": [
+            0.001,
+            0.001,
+            0.002,
+            0.001,
+            0.001,
+            0.002,
+            0.001,
+            0.002,
+            0.001,
+            0.001,
+            0.001,
+            0.001
+          ],
+          "medianMs": 0.001,
+          "maxMs": 0.002
+        },
+        "presentMs": {
+          "samples": [
+            0.172,
+            0.153,
+            0.159,
+            0.125,
+            0.164,
+            0.174,
+            0.193,
+            0.154,
+            0.157,
+            0.161,
+            0.157,
+            0.158
+          ],
+          "medianMs": 0.1585,
+          "maxMs": 0.193
+        }
+      },
+      "planSha256": "2e5a7ff5a3ed525060b8cf7ed86b12aab20c59a3e7c5b847cd6a394357288870",
+      "recordSha256": "eb40937eb3b9a0e2e0ced64f92f43ff33756bdd8e09407b039968337efc99b75",
+      "interpretation": "Elapsed includes scheduling/mark overhead. Retirement includes an inactive palette branch. No normal-build acceptance or attribution to OS/COM internals."
+    }
+  },
+  "archive": {
+    "issue": 291,
+    "archive": "D:\\NeNeNib\\evidence\\291-status-layout-capsule-20261005\\status-layout-capsule-evidence.zip",
+    "sha256": "ec9e7369ac0f303bf42d41a9f5a1c6f0a9650a96f50c7b128285a6b746a0228b",
+    "bytes": 3271724,
+    "sourceFileCount": 315,
+    "zipEntryCount": 316,
+    "crcPassed": true,
+    "allEntryHashesMatched": true,
+    "bundlePrerequisite": "936b50b",
+    "measuredExecutablesIncluded": true
+  },
+  "status": "single-input improvement observed; existing combined acceptance hold because O burst half-median drift 0.630ms exceeds 0.500ms",
+  "limitations": [
+    "No absolute worst-case guarantee; 240 measured single inputs per variant",
+    "QPC input_received through frame_presented excludes queue delay before receipt and physical display latency",
+    "Diagnostic populations at different times are not normal acceptance",
+    "Candidate long-line/16MiB performance not measured",
+    "Physical DPI transition, device loss and forced DirectWrite creation failure not reproduced"
+  ],
+  "waivers": []
+}

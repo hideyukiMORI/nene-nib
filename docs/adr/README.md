@@ -85,3 +85,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0067](0067-ex-filenames-share-atomic-save-policy.md) | Ex のファイル名は共通保存へ渡し、新規作成を原子的に守る | 受理 |
 | [0068](0068-split-starts-with-a-bounded-render-probe.md) | split は文書タブを維持する案と限定した描画試作から判断する | 受理（実験方法・製品採用は未決） |
 | [0069](0069-reuse-visible-body-text-layouts.md) | 表示中の本文の文字組みを描画器が再利用する | 受理 |
+| [0070](0070-status-text-layouts-stay-in-a-fixed-renderer-cache.md) | ステータスの文字組みは描画器の固定枠に保持する | 受理 |
