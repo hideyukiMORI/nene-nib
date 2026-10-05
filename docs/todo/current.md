@@ -3,7 +3,7 @@
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
-> 再開地点は[2026-10-05の引き継ぎ](../handoffs/2026-10-05.md)。#291は字体選択・可視字形・幅索引まで実装し、長行の単打と連続入力を大幅に短縮した。通常版とsplitの固定90本、長行単打各240本、表示/IME/対象契約を検証済み。
+> 再開地点は[2026-10-06の引き継ぎ](../handoffs/2026-10-06.md)。#291は字体選択・可視字形・幅索引まで実装し、長行の単打と連続入力を大幅に短縮した。通常版とsplitの固定90本、長行単打各240本、表示/IME/対象契約を検証済み。
 > 長行の安定条件とsplit総時間2msが未達で、PR #293はdraft、main統合とsplit採用は保留。[gate-proofs 5-cm](../quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074)。
 
 ## 運用（2026-10-03）
@@ -12,6 +12,8 @@
 - 繰り返す手順は `eng/` のスクリプト、道具の出力は `out/`。依頼書の型は [`docs/templates/implementation-seat-brief.md`](../templates/implementation-seat-brief.md)。過去の ADR 0038 / 0039 にある固定モデルや一律の分担より、現在の AGENTS.md と hide の指示を優先する。
 
 ## いまの Issue と次の順
+
+2026-10-06追記: #291から分離した#294幅索引（[PR #296](https://github.com/hideyukiMORI/nene-nib/pull/296)）と#295ステータス（[PR #297](https://github.com/hideyukiMORI/nene-nib/pull/297)）も独立構成の比較で保留。両方Draft、main未変更。[最新引き継ぎ](../handoffs/2026-10-06.md)。
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
@@ -46,7 +48,7 @@ splitの下準備はD40でhide了承済み。本実装は試作結果から保�
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
 | 既定の `nib_tests` | scope 33。全件checksは最新差分で未測（過去の全件実測19449 checks）。`--bookmarks` 40 / `--ex-files` 82 / `--ordinary-characters` 233 / `--ex-document` 204 / `--ex-write-path` 90 checksを対象実行で確認（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-ch](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | mainは0068まで。#291の作業枝は0070（ステータスの固定枠）まで。split製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
+| ADR | mainは0068まで。#291の作業枝は0074まで（0072は実験不採用）。#294は0074、#295は0070を独立構成へ分離し性能受理を保留。split製品採用も保留 | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
