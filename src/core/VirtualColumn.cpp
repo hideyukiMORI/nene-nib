@@ -5,6 +5,7 @@
 #include "Utf8.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -17,6 +18,27 @@ namespace
 // Vim の既定。設定にはしない（ADR 0034 の決定 4）。
 constexpr std::size_t tab_stop = 8;
 constexpr char32_t tab_character = U'\t';
+
+// 正本の範囲表からコンパイル時に作るBMPの索引。意味の表を複製しない（ADR 0074）。
+[[nodiscard]] constexpr auto bmp_width_index()
+{
+    std::array<DisplayWidth, 0x10000> index{};
+    index.fill(DisplayWidth::single);
+    for (const auto &range : display_width_ranges)
+    {
+        if (range.first >= index.size())
+        {
+            break;
+        }
+        const auto last = std::min(static_cast<std::size_t>(range.last), index.size() - 1);
+        for (std::size_t value = range.first; value <= last; ++value)
+        {
+            index.at(value) = range.width;
+        }
+    }
+    return index;
+}
+constexpr auto bmp_widths = bmp_width_index();
 
 [[nodiscard]] std::size_t cells_of(DisplayWidth width) noexcept
 {
@@ -81,6 +103,10 @@ constexpr char32_t tab_character = U'\t';
 
 DisplayWidth display_width(char32_t value) noexcept
 {
+    if (value < bmp_widths.size())
+    {
+        return bmp_widths[value];
+    }
     const auto found =
         std::ranges::lower_bound(display_width_ranges, value, {}, &DisplayWidthRange::last);
     if (found != display_width_ranges.end() && found->first <= value)

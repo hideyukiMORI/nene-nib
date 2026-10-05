@@ -2,6 +2,7 @@
 #include "Column.hpp"
 #include "DisplayLine.hpp"
 #include "DisplayWidth.hpp"
+#include "DisplayWidthRange.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "Offset.hpp"
@@ -67,6 +68,24 @@ using nenenib::core::source_column;
 [[nodiscard]] bool starts_are(const DisplayLine &line, std::initializer_list<std::size_t> starts)
 {
     return std::ranges::equal(line.starts, starts);
+}
+
+// 順序走査で正本の全範囲と空隙を照合する。索引側の境界と補助平面への接続を検査する。
+void verify_display_width_index()
+{
+    const auto &ranges = core::display_width_ranges;
+    std::size_t at = 0;
+    for (char32_t value = 0; value <= 0x10FFFF; ++value)
+    {
+        while (at < ranges.size() && ranges.at(at).last < value)
+        {
+            ++at;
+        }
+        const DisplayWidth expected = at < ranges.size() && ranges.at(at).first <= value
+                                          ? ranges.at(at).width
+                                          : DisplayWidth::single;
+        expect(display_width(value) == expected, "every code point retains its canonical width");
+    }
 }
 
 void verify_display_line_notation()
@@ -200,6 +219,7 @@ void verify_display_line_mapping()
 
 void verify_display_line()
 {
+    verify_display_width_index();
     verify_display_line_notation();
     verify_display_line_controls();
     verify_display_line_widths();
