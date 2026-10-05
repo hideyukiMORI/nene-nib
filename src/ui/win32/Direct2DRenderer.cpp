@@ -2,6 +2,7 @@
 
 #include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
+#include "FontFallbackCache.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "PaletteLayout.hpp"
@@ -460,6 +461,13 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     const auto made_gutter =
         make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
     if (FAILED(made_code) || FAILED(made_gutter))
+    {
+        return std::unexpected(RenderFailure::directwrite);
+    }
+    Microsoft::WRL::ComPtr<IDWriteFontFallback> system;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat2> code_version;
+    if (FAILED(dwrite_->GetSystemFontFallback(&system)) || FAILED(code.As(&code_version)) ||
+        FAILED(code_version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get())))
     {
         return std::unexpected(RenderFailure::directwrite);
     }

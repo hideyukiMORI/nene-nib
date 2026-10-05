@@ -169,7 +169,8 @@ add_test(NAME nib_folders COMMAND nib_folder_tests WORKING_DIRECTORY ${CMAKE_BIN
 set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
-    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp)
+    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp
+    src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
