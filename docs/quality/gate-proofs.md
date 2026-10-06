@@ -53,6 +53,7 @@ Phase 0 の言語の実測（114 記録）は [phase0-results.json](phase0-resul
 | CNF-007 | 固定 manifest を置く・manifest の版をリテラルで書く・どこからも読み込まれない設定ファイル | tests/conformance の configuration_checks / version_metadata_checks 正例・反例 | 固定 `NeNeNib.manifest` と版リテラルを CNF-007、正例（`@PROJECT_VERSION_*@` から導出）は指摘 0（P11・P26・Issue #3） |
 | CNF-010 | `tests/vim/fixtures.json` の 1 文字を変える（fixture 名の末尾 `s` → `z`。長さは変えない）・生成物から SHA の行を消す・本数だけ違う行を書く | `python eng/conformance.py`（1 文字の実測）/ tests/conformance の fixture_digest_checks 正例・反例 | 2026-09-18: 1 文字変えると `CNF-010: tests/vim/VimFixtures.hpp: recorded digest 15758fd4… is not 3277c07b…; regenerate` で `Conformance: 1 violation(s)`・終了 1。戻すと `0 violation(s)`・終了 0。記述なし・本数不一致・正例（oracle の `header()` が書いた行）は `tests/conformance` の 5 件（Issue #44）。2026-09-29（Issue #229・ADR 0054）: 生成物 `tests/vim/VimKeyNames.hpp` の `<Left>` の行を `arrow_right` に書き換えると `CNF-010: tests/vim/VimKeyNames.hpp: line 27: ... is not the generated ...; run eng/vim-oracle.py --key-names` で `1 violation(s)`・終了 1、消すと `the generated key names are missing` で終了 1、戻すと 0 violations。反例は 5-bn |
 | CNF-011 | `tests/vim/fixtures.json` を古い形に戻す（indent 2・空の `"settings": []` を足す・キー順を入れ替える・区切りの後に空白・`\u` エスケープ・1 行に全部・CRLF・末尾改行を消す）・未知のキー / キー不足 / 壊れた JSON / 不正な `viewport` | `python -X utf8 eng/conformance.py`（実リポジトリの実測）/ tests/conformance の fixture_format_checks 正例・反例 | 2026-09-22: 実物の 1 件に `"settings":[]` を足すと `CNF-011: tests/vim/fixtures.json: line 3: '  {"name":"h-with-a-count","text":"alpha","keys":"$3h","sett...' is not the canonical '  {"name":"h-with-a-count","text":"alpha","keys":"$3h"},'; run eng/vim-oracle.py --format` と CNF-010 の SHA 不一致で `Conformance: 2 violation(s)`・終了 1。末尾改行を消すと `no newline at the end of the file`（行の指摘は重ねない）で同じく終了 1。戻すと `0 violation(s)`・終了 0。反例 15 通りと正例（oracle の `canonical_fixtures_json` が書いたバイト列そのまま）は `tests/conformance` の 5 件（Issue #98） |
+| CNF-012 | 表に無い method・関数名が印と違う・本体 7 行・NOLINT に別の check・置き場が違う（ほかに印の文法 4 通り・本体の無い宣言・空行とコメントを数える） | `python eng/conformance.py`（実リポジトリの実測）/ tests/conformance の `SdkAbiChecks` 正例・反例 | 2026-10-06: 実物の `BodyGlyphCollector.cpp` の印を `IDWriteTextRenderer::DrawGlyphRuns` に変えると `CNF-012: ... line 90: IDWriteTextRenderer::DrawGlyphRuns is not in eng/sdk-abi-signatures.json` と `CNF-003: ... line 91: missing valid, scoped waiver` で終了 1。戻すと `0 violation(s)`・終了 0。本体 6 行ちょうど・早期 return の境界・`tests/ui/` は指摘 0、印の無い NOLINT は CNF-003（Issue #299・ADR 0076・5-cr） |
 | QLT-014 | 基準値の複製を 1 本だけ厳しくして `eng/measure-speed.py --check --reference <複製> --values <測った値>` | eng/prove-gates.py（`prove_speed_reference`。exe も窓も要らない経路） | `QLT-014: startup-first-frame: 100.000 ms exceeds 12.500 ms` で非 0、戻した複製は 0（P27・Issue #16・2026-09-16）。実機の `--check` は `Speed: 4 benches checked, 0 regression(s)`。CI（指紋 `e7a87d5b6ac1e14b`・ADR 0016・Issue #47）は基準値を足したので `Speed: 5 benches checked, N regression(s), N unmeasurable` の判定に変わる。CI の実 run（PR #48・run 35357889836）: attempt 1 は指紋 `196309bb`（EPYC 9V45）に当たり `Speed: no reference for 196309bbf27c16b1 (AMD EPYC 9V45 96-Core Processor); recorded only -- QLT-014 is not judged on this host` が本文とまとめの 2 回出て終了 0、artifact `speed-records`（3,058 バイト・90 日）が上がった。attempt 2（rerun）は指紋 `e7a87d5b`（EPYC 7763）に当たり **`Speed: 5 benches checked, 0 regression(s), 0 unmeasurable`**（起動 34.535 / 窓 25.129 / single 1.374 / burst 2.829 / 16 MiB 86.696 ms・欠測 0）で、CI で基準値との判定が動いた。手元では CI の 16 run のログを `out/speed/*.json` の形に起こして `--check --values` に流した（2026-09-18・Issue #47）: 指紋 `e7a87d5b` の #24 以降の 7 run は全部 `Speed: 5 benches checked, 0 regression(s), 0 unmeasurable`・終了 0、他の 5 つの指紋の 6 run は `Speed: no reference for <指紋> (<CPU>); recorded only -- QLT-014 is not judged on this host`・終了 0 |
 
 ### 1-b. 反例の一覧（planned の部分証明を含む）
@@ -88,6 +89,7 @@ Phase 0 の言語の実測（114 記録）は [phase0-results.json](phase0-resul
 | P24 | ARC-007 | 実物の `nenenib_core.lib` に `system_clock::now()` を呼ぶ翻訳単位を足して再ビルド | `eng/prove-gates.py`（実ビルド → `eng/symbols.py --build-dir --require core application`） | `ARC-007: core: non-deterministic input symbol _Xtime_get_ticks (real static library)` で非 0。戻すと `2 libraries checked, 0 violation(s)`（Issue #3） |
 | P25 | QLT-009 | `nib_tests --coverage-negative` で失敗系を省く | `eng/coverage.py`（測定ビルド） | 25/64 分岐＝39.06% で非 0。全テストで 61/64＝95.31% が 0（Issue #3） |
 | P26 | CNF-007 | 固定 manifest・版リテラル | `tests/conformance`（version_metadata_checks） | 反例 2 件を CNF-007、正例は指摘 0（Issue #3） |
+| P28 | CNF-012 | 表に無い method・関数名が印と違う・本体 7 行・NOLINT に別の check・置き場が違う | `tests/conformance`（SdkAbiChecks） | 5 つとも CNF-012。別の check を混ぜた NOLINT は CNF-003 も。印の無い NOLINT は CNF-003。本体 6 行ちょうどは指摘 0（Issue #299） |
 
 **復帰の確認**: 2026-09-15。P1〜P4・P8・P13〜P21・P24 は `eng/prove-gates.py` が各反例の直後に元へ戻して build / configure / clang-format / symbols を再実行し、
 終了コード 0 を確かめた（26 反例）。P5〜P7・P9〜P12・P22・P23・P26 は正例テストが同じ suite にある（86 テスト）。P25 は `eng/coverage.py` が反例のあとに全テストの計測で 0 を確かめる。
@@ -3308,6 +3310,20 @@ CTest は回していない（`--display-line` と `--vim-virtual-column` は同
 
 統合の後に残す仕事: #298 長い行のベンチ・#299 SDK の固定署名の恒久規則（期限 2026-11-04）・#300 保持の契約の試験と取り付けの失敗。split の採用は保留のまま。PR #296 / #297 は #293 に含まれるので統合せずに閉じる。
 適用: #291 / ADR 0075 / D41 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / QLT-014 / GIT-003 / GIT-004。製品コード・保存 schema・基準値・許容の変更なし。Waivers: WVR-0001 / WVR-0002（変更なし）。
+
+## 5-cr — SDK が固定した COM の署名の印（Issue #299・ADR 0076）
+
+確認する退行: CNF-003 の waiver の要求に例外を作るので、(1) 印の無い NOLINT とほかの check を混ぜた NOLINT が今までどおり落ちること、(2) 印の形・表・置き場・本体の行数が外れたら CNF-012 で落ちること、(3) 既存の 5 か所が clang-tidy で今までどおり黙ること、(4) 製品のコードの行が変わらないこと。
+
+- `python eng/test-conformance.py` → `Ran 253 tests`・`OK`。`SdkAbiChecks` の 13 件: 正例 4（1 行の `E_NOTIMPL`・本体 6 行ちょうど・`if` の早期 return を含む境界・`tests/ui/`）、反例 9（表に無い method・関数名が印と違う・本体 7 行・空行とコメントを数えて 7 行・NOLINT に `bugprone-x` を混ぜる（CNF-003 も）・置き場が `src/application/`・印の文法 4 通り・本体の無い宣言・印の無い NOLINT は CNF-003）。
+- 実リポジトリの反例: `BodyGlyphCollector.cpp` の印を `DrawGlyphRuns` に変えると `CNF-012 ... is not in eng/sdk-abi-signatures.json` と `CNF-003 ... missing valid, scoped waiver`・終了 1。戻すと `Conformance: 0 violation(s)`・終了 0。
+- WVR-0001 / WVR-0002 は `Status: removed`・索引は「なし」。閉じた後の `python eng/conformance.py` は 0 violation（CNF-004 の指摘 0）。
+- `. ./eng/toolchain.ps1` の後 Debug で `cmake --build build --target nenenib_window` → 終了 0。clang-tidy（`CXX_CLANG_TIDY`）は `FontFallbackCache.cpp` と `BodyGlyphCollector.cpp` で何も出さない。
+- `git diff -U0 src` は 10 行（5 か所の `// Waiver: WVR-000N` → `// SDK-ABI: ...` の削除と追加だけ）。`clang-format --dry-run --Werror` と `git diff --check` は終了 0。
+- 表の「SDK の引数の数」は Windows SDK 10.0.26100.0 の `dwrite_2.h`（`MapCharacters` 11）と `dwrite.h`（`DrawGlyphRun` 7・`DrawUnderline` 5・`DrawStrikethrough` 5・`DrawInlineObject` 7）を読んで書いた。機械では照合しない。
+- やっていない: Release・GUI・速さ・全件の CTest（製品のコードの行が不変で、実行ファイルに入る差分が無い）。
+
+適用: #299 / ADR 0076 / CPP-012 / CPP-015 / CPP-019 / CNF-003 / CNF-004 / CNF-012 / QLT-010。`.clang-tidy` の閾値と check の一覧は変更なし。Waivers: none。
 
 ## 5-cs — 長い行の 1 打鍵のベンチと実機の基準値（Issue #298・ADR 0075）
 

@@ -145,6 +145,87 @@ class SourceChecks(unittest.TestCase):
                       self.details("#include <thread>", "src/core/Worker.hpp"))
 
 
+def sdk_abi_source(mark="// SDK-ABI: IDWriteTextRenderer::DrawUnderline",
+                   suppression="// NOLINTNEXTLINE(readability-function-size)",
+                   name="DrawUnderline", body_lines=1):
+    body = "".join("    return E_NOTIMPL;\n" for _ in range(body_lines))
+    return (f"namespace nenenib::ui::win32\n{{\n{mark}\n{suppression}\n"
+            f"HRESULT STDMETHODCALLTYPE BodyGlyphCollector::{name}(void *, FLOAT, FLOAT,\n"
+            f"                                                const DWRITE_UNDERLINE *,\n"
+            f"                                                IUnknown *) noexcept\n"
+            f"{{\n{body}}}\n}} // namespace nenenib::ui::win32\n")
+
+
+class SdkAbiChecks(unittest.TestCase):
+    """CNF-012: the SDK-ABI mark stands for a waiver only at a thin boundary (CPP-019・ADR 0076)."""
+
+    SIGNATURES = cnf.sdk_abi_signatures(ROOT)
+    PATH = "src/ui/win32/BodyGlyphCollector.cpp"
+
+    def findings(self, source, path=PATH):
+        return [str(f) for f in cnf.source_checks(path, source, RULES, {}, self.SIGNATURES)]
+
+    def assert_cnf012(self, source, detail, path=PATH):
+        found = self.findings(source, path)
+        self.assertTrue(any(f.startswith("CNF-012") and detail in f for f in found), found)
+
+    def test_cnf012_positive(self):
+        self.assertEqual([], self.findings(sdk_abi_source()))
+
+    def test_cnf012_six_body_lines_pass(self):
+        self.assertEqual([], self.findings(sdk_abi_source(body_lines=6)))
+
+    def test_cnf012_tests_ui_passes(self):
+        self.assertEqual([], self.findings(sdk_abi_source(), "tests/ui/FakeRenderer.cpp"))
+
+    def test_cnf012_early_return_boundary_passes(self):
+        source = sdk_abi_source().replace(
+            "    return E_NOTIMPL;\n",
+            "    if (effect != nullptr)\n    {\n        return E_NOTIMPL;\n    }\n    return collect();\n")
+        self.assertEqual([], self.findings(source))
+
+    def test_cnf012_method_not_in_table(self):
+        self.assert_cnf012(sdk_abi_source(mark="// SDK-ABI: IDWriteTextRenderer::DrawSomething",
+                                          name="DrawSomething"),
+                           "is not in eng/sdk-abi-signatures.json")
+
+    def test_cnf012_definition_name_differs(self):
+        self.assert_cnf012(sdk_abi_source(name="DrawStrikethrough"), "<Class>::DrawUnderline(")
+
+    def test_cnf012_seven_body_lines(self):
+        self.assert_cnf012(sdk_abi_source(body_lines=7), "body has 7 lines; at most 6")
+
+    def test_cnf012_body_counts_comment_and_blank_lines(self):
+        source = sdk_abi_source(body_lines=5).replace("{\n    return", "{\n\n    // note\n    return", 1)
+        self.assert_cnf012(source, "body has 7 lines")
+
+    def test_cnf012_suppression_mixes_another_check(self):
+        source = sdk_abi_source(suppression="// NOLINTNEXTLINE(readability-function-size,bugprone-x)")
+        self.assert_cnf012(source, "the next line must be exactly")
+        self.assertIn("CNF-003", {f.split(":")[0] for f in self.findings(source)})
+
+    def test_cnf012_wrong_place(self):
+        self.assert_cnf012(sdk_abi_source(), "allowed only under", "src/application/Renderer.cpp")
+
+    def test_cnf012_loose_mark_grammar(self):
+        for mark in ["// SDK-ABI:  IDWriteTextRenderer::DrawUnderline",
+                     "// SDK-ABI: IDWriteTextRenderer::DrawUnderline ",
+                     "    // SDK-ABI: IDWriteTextRenderer::DrawUnderline",
+                     "// SDK-ABI: DrawUnderline"]:
+            with self.subTest(mark=mark):
+                self.assert_cnf012(sdk_abi_source(mark=mark), "the mark must be exactly")
+
+    def test_cnf012_declaration_without_body(self):
+        source = ("// SDK-ABI: IDWriteTextRenderer::DrawUnderline\n"
+                  "// NOLINTNEXTLINE(readability-function-size)\n"
+                  "HRESULT BodyGlyphCollector::DrawUnderline(void *, FLOAT) noexcept;\n")
+        self.assert_cnf012(source, "has no definition body")
+
+    def test_cnf003_unmarked_suppression_still_needs_a_waiver(self):
+        source = sdk_abi_source(mark="// Boundary of IDWriteTextRenderer")
+        self.assertIn("CNF-003", {f.split(":")[0] for f in self.findings(source)})
+
+
 class RepositoryChecks(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

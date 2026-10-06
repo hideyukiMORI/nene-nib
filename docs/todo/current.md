@@ -27,7 +27,7 @@
 | 8 | #288 split前の区切り / #290 範囲・判定条件・限定描画試作（D40・ADR 0068） | **下準備・試作済み、製品採用は保留**。注釈付き`checkpoint/pre-split-20261003`を保存。長い日本語行で左右分割の費用が増え、事前条件を満たさない。[準備資料](../design/2026-10-03-split-preparation.md) / [gate-proofs 5-cj](../quality/gate-proofs.md#5-cj--splitの下準備と限定した描画費用issue-290adr-0068) |
 | 9 | #291 長い日本語行の単画面の入力遅延（ADR 0069〜0075、0072は実験不採用） | **済み**。文字組み・ステータス・字体選択・可視字形・幅索引。長行の 1 打鍵 約 326 → 約 7 ms。独立レビュー・速さのゲート 7 本・試用で受理（D41）。[PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)、[gate-proofs 5-cq](../quality/gate-proofs.md#5-cq--改善一式の統合の受理issue-291adr-0075施主決定-d41) |
 | 10 | #298 長い行の 1 打鍵を速さのゲートに足す（ADR 0075 決定 7） | **済み**。8 本目 `key-to-frame-single-long-line`・実機の基準値 5.431 ms（床 2 ms が効く）。CI の指紋は記録だけ。[PR #301](https://github.com/hideyukiMORI/nene-nib/pull/301)、[gate-proofs 5-cs](../quality/gate-proofs.md#5-cs--長い行の-1-打鍵のベンチと実機の基準値issue-298adr-0075) |
-| 11 | #299 SDK の固定署名の恒久規則（WVR-0001 / 0002 の期限 2026-11-04） | 未着手。期限の前に main へ |
+| 11 | #299 SDK の固定署名の恒久規則（ADR 0076・CPP-019・CNF-012） | **済み**。SDK が固定した COM の署名は印 `// SDK-ABI:` と表 `eng/sdk-abi-signatures.json` で受け、本体 6 行以内を機械が見る。WVR-0001 / 0002 は閉じて waiver は none。[PR #302](https://github.com/hideyukiMORI/nene-nib/pull/302)、[gate-proofs 5-cr](../quality/gate-proofs.md) |
 | 12 | #300 字体選択と字形の保持の契約を CTest へ・取り付けの失敗で窓を終わらせない | 未着手 |
 | 13 | 操作の案内とヘルプ（Ctrl+P / F1・設定で消せる） | 現物調査済み・未起票。見た目の案を hide が選んでから |
 | 14 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |

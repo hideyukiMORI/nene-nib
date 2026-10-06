@@ -157,6 +157,7 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 ### CNF-003 — 抑制と waiver の結び付け
 
 `#pragma clang diagnostic` / `#pragma warning` / `_Pragma` / `__pragma` / `NOLINT` 系のファイル単位の抑制を拒否。行単位（`NOLINTNEXTLINE`）には直前行の有効な waiver と検査名を要求する。
+例外は、CNF-012 が正しいと認めた `// SDK-ABI:` の印の直後の `// NOLINTNEXTLINE(readability-function-size)` の 1 行だけ。印の無い NOLINT と、印の後でもほかの check を混ぜた NOLINT は今までどおり CNF-003。
 
 - 対応する規則: CPP-015
 - 機械強制: **planned**（`eng/conformance.py`）
@@ -234,6 +235,24 @@ Vim を要らずに全文を作り直せるので、SHA の 1 行ではなく全
 - 対応する規則: QLT-013
 - 機械強制: **active**（`eng/conformance.py` の `fixture_format_checks`。正例・反例は `tests/conformance` がゲートで回る。正例は oracle の `canonical_fixtures_json` が書いたバイト列をそのまま読ませる）
 
+### CNF-012 — SDK が固定した COM の署名の印
+
+C++ のソースの `// SDK-ABI:` を含む行ごとに次を確かめ、1 つでも外れたら CNF-012（CPP-019・[ADR 0076](adr/0076-sdk-fixed-com-signatures-are-a-permanent-boundary-rule.md)・Issue #299）。
+
+- 行が `// SDK-ABI: <Interface>::<Method>` ちょうど（行頭から・空白 1 つ・末尾に何も無い）
+- ファイルが `src/ui/win32/` か `tests/ui/` の下
+- `<Interface>::<Method>` が `eng/sdk-abi-signatures.json` の表にある
+- 次の行が `// NOLINTNEXTLINE(readability-function-size)` ちょうど（ほかの check を混ぜない）
+- その次の行で始まる定義が `<Class>::<Method>(` の形で、関数名が印の `Method` と同じ
+- 本体が 6 行以内。定義の `{` の行の次から対応する `}` の行の前までを数え、空行とコメントも 1 行に数える。`{` と `}` の対応は字下げではなく、コメントと文字列を除いた括弧の数で取る
+
+印が正しいときだけ、その次の `NOLINTNEXTLINE` は CNF-003 の waiver の要求から外れる。
+**表の「SDK の引数の数」は機械では照合しない**（字句では署名の引数を数えられない）。ループと保持（キャッシュの操作）を書かないことも見ない。どちらもレビュー事項。
+本体 6 行・入れ子 3 の上限で関数の長さと入れ子は越えられず、認知的複雑度の検査は抑制されないので、抑制が実際に効くのは引数の数だけになる（ADR 0076）。
+
+- 対応する規則: CPP-019 / CPP-015
+- 機械強制: **active**（`eng/conformance.py` の `sdk_abi_checks`。正例・反例は `tests/conformance` の `SdkAbiChecks` がゲートで回る。2026-10-06・Issue #299）
+
 🔴 **検出語は検査器のソースに直書きしない**（検査器が自分自身を違反として報告する。前例: xi-tools 初版で 7 件の自己検出）。
 🔴 **テストソースは検査対象から外す**（テストは意図的な違反を書く場所）。
 
@@ -276,6 +295,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CPP-016 | planned | `-Werror=vla-cxx-extension`・clang-tidy NewDeleteLeaks / use-after-move・ASan / UBSan |
 | CPP-017 | planned | platformLibraries（GDI を結べない） |
 | CPP-018 | planned | clang-cl の target feature 検査 ＋ CNF-009 |
+| CPP-019 | planned | CNF-012（表の引数の数とループ・保持はレビュー事項） |
 | GIT-001 | planned | PR テンプレート＋CI（`Closes #N`） |
 | GIT-002 | planned | ruleset＋CI（head ブランチ名） |
 | GIT-003 | planned | `.githooks/commit-msg`＋CI（全コミットと PR タイトル） |
@@ -305,6 +325,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-009 | active | eng/conformance.py / tests/conformance |
 | CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `tests/vim/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054） |
 | CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
+| CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
 
 ---
 

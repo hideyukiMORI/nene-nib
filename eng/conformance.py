@@ -93,7 +93,81 @@ def concurrency_and_simd(path: str, text: str, rules: dict) -> list[Finding]:
     return findings
 
 
-def source_checks(path: str, text: str, rules: dict, waivers: dict) -> list[Finding]:
+SDK_ABI_MARK = re.compile(r"// SDK-ABI: ([A-Za-z_]\w*)::([A-Za-z_]\w*)")
+SDK_ABI_SUPPRESSION = "// NOLINTNEXTLINE(readability-function-size)"
+SDK_ABI_PATHS = ("src/ui/win32/", "tests/ui/")
+SDK_ABI_BODY_LINES = 6
+
+
+def sdk_abi_signatures(root: Path) -> frozenset[str]:
+    """The one table of COM methods whose parameter count the Windows SDK fixes (CPP-019)."""
+    table = json.loads((root / "eng/sdk-abi-signatures.json").read_text(encoding="utf-8"))
+    return frozenset(f"{row['interface']}::{row['method']}" for row in table["signatures"])
+
+
+def body_line_count(code_lines: list[str], start: int) -> int | None:
+    """Lines strictly between the definition's `{` and its matching `}`, counted by braces.
+
+    `start` is the 0-based line where the definition begins. None when a `;` ends it first
+    (a declaration) or the braces never close.
+    """
+    depth, opened = 0, None
+    for number in range(start, len(code_lines)):
+        for character in code_lines[number]:
+            if opened is None and character == ";":
+                return None
+            if character == "{":
+                depth += 1
+                opened = number if opened is None else opened
+            elif character == "}" and opened is not None:
+                depth -= 1
+                if depth == 0:
+                    return max(number - opened - 1, 0)
+    return None
+
+
+def sdk_abi_mark_problem(path: str, lines: list[str], code_lines: list[str], index: int,
+                         signatures: frozenset[str]) -> str | None:
+    """CNF-012: what is wrong with the `// SDK-ABI:` mark on 0-based line `index`, if anything."""
+    mark = SDK_ABI_MARK.fullmatch(lines[index])
+    if not mark:
+        return "the mark must be exactly `// SDK-ABI: <Interface>::<Method>`"
+    if not path.startswith(SDK_ABI_PATHS):
+        return "the mark is allowed only under " + " or ".join(SDK_ABI_PATHS)
+    if f"{mark[1]}::{mark[2]}" not in signatures:
+        return f"{mark[1]}::{mark[2]} is not in eng/sdk-abi-signatures.json"
+    if index + 1 >= len(lines) or lines[index + 1] != SDK_ABI_SUPPRESSION:
+        return f"the next line must be exactly `{SDK_ABI_SUPPRESSION}`"
+    start = index + 2
+    definition = re.search(r"\b[A-Za-z_]\w*::([A-Za-z_]\w*)\s*\(", code_lines[start]) if start < len(code_lines) else None
+    if not definition or definition[1] != mark[2]:
+        return f"the definition that follows must be `<Class>::{mark[2]}(`"
+    body = body_line_count(code_lines, start)
+    if body is None:
+        return f"{mark[2]} has no definition body"
+    if body > SDK_ABI_BODY_LINES:
+        return f"{mark[2]} body has {body} lines; at most {SDK_ABI_BODY_LINES}"
+    return None
+
+
+def sdk_abi_checks(path: str, text: str, signatures: frozenset[str]) -> tuple[list[Finding], set[int]]:
+    """CNF-012 findings, and the 1-based NOLINTNEXTLINE lines a valid mark covers instead of a waiver."""
+    lines = text.splitlines()
+    code_lines = cpp_code(text).splitlines()
+    findings, covered = [], set()
+    for index, line in enumerate(lines):
+        if "SDK-ABI:" not in line:
+            continue
+        problem = sdk_abi_mark_problem(path, lines, code_lines, index, signatures)
+        if problem:
+            findings.append(Finding("CNF-012", path, f"line {index + 1}: {problem}"))
+        else:
+            covered.add(index + 2)
+    return findings, covered
+
+
+def source_checks(path: str, text: str, rules: dict, waivers: dict,
+                  signatures: frozenset[str] = frozenset()) -> list[Finding]:
     findings = []
     code = cpp_code(text.replace("\\\n", ""))
     production = path.startswith("src/")
@@ -120,6 +194,8 @@ def source_checks(path: str, text: str, rules: dict, waivers: dict) -> list[Find
             if Path(include).name in rules["platformHeaders"]:
                 findings.append(Finding("ARC-003", path, f"platform header {include}"))
     findings.extend(concurrency_and_simd(path, text, rules))
+    sdk_findings, sdk_covered = sdk_abi_checks(path, text, signatures)
+    findings.extend(sdk_findings)
     raw_lines = text.splitlines()
     code_lines = cpp_code(text).splitlines()
     for number, line in enumerate(raw_lines, 1):
@@ -127,7 +203,7 @@ def source_checks(path: str, text: str, rules: dict, waivers: dict) -> list[Find
         comment = line[line.index("//"):] if "//" in line else ""
         if re.search(rules["suppressionPragmaPattern"], code_line) or re.search(rules["broadSuppressionPattern"], comment):
             findings.append(Finding("CNF-003", path, f"line {number}: broad suppression is forbidden"))
-        if rules["lineSuppressionToken"] in comment:
+        if rules["lineSuppressionToken"] in comment and number not in sdk_covered:
             previous = raw_lines[number - 2] if number > 1 else ""
             match = re.fullmatch(r"\s*// Waiver: (WVR-\d{4})\s*", previous)
             waiver = waivers.get(match[1]) if match else None
@@ -471,9 +547,11 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(key_names_checks(root))
     findings.extend(fixture_format_checks(root))
     findings.extend(architecture_checks(root, paths, build_dir))
+    signatures = sdk_abi_signatures(root)
     for path in paths:
         if path.suffix in rules["cppExtensions"]:
-            findings.extend(source_checks(path.as_posix(), (root / path).read_text(encoding="utf-8"), rules, waivers))
+            findings.extend(source_checks(path.as_posix(), (root / path).read_text(encoding="utf-8"),
+                                          rules, waivers, signatures))
     return findings
 
 

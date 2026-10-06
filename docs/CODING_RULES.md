@@ -111,7 +111,7 @@ COM の `__uuidof` / `IID_PPV_ARGS` は `src/ui/win32` と `src/adapters/win32` 
 | 認知的複雑度（関数） | 10 | clang-tidy `readability-function-cognitive-complexity`（T7） |
 | 関数の長さ | 60 行 | clang-tidy `readability-function-size.LineThreshold`（T8） |
 | ネストの深さ | 3 | clang-tidy `readability-function-size.NestingThreshold` |
-| 引数の数 | 4 | clang-tidy `readability-function-size.ParameterThreshold` |
+| 引数の数 | 4（SDK が固定した COM の署名は CPP-019 の境界だけ対象外） | clang-tidy `readability-function-size.ParameterThreshold` |
 | bool の制御引数（公開 API） | 禁止 | planned（意味と公開境界の検査は未実装） |
 
 Vim のキー列 → 動作のような大きな分岐は `constexpr` の**表**で書く。60 分岐の `switch` は関数長で落ち、同じ表は通る（T8。[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。
@@ -144,6 +144,7 @@ flip model の frame latency waitable object を `WaitForSingleObjectEx` で待�
 
 抑制には**直前行の `// Waiver: WVR-NNNN`** と有効な waiver 台帳の項目が両方そろっているときにだけ書ける。
 ファイル単位・ディレクトリ単位の抑制、静的解析の除外設定、lint の baseline は禁止。
+直前行が `// SDK-ABI: <Interface>::<Method>` の `NOLINTNEXTLINE(readability-function-size)` は抑制の例外（waiver）ではなく、CPP-019 の書き方である（CNF-012 が見る）。
 
 - 機械強制: **planned** → CNF-003 / CNF-004
 - 機械強制: **不能**（抑制機能そのものの禁止。`#pragma clang diagnostic ignored` は `-Werror` で指定した診断も抑制できる（M7-suppression-clang-hole）。ADR 0003）
@@ -179,6 +180,25 @@ target 単位の `/arch` は付けない。同じ処理には必ず組み込み�
 （[ADR 0006](adr/0006-speed-gate-simd-and-table-driven-dispatch.md)）。
 
 - 機械強制: **planned** → target feature の無い関数の組み込み関数はコンパイルエラー（S1-avx2-without-target-clang。`/arch` 無しの target と `[[gnu::target]]` で S2 / S4）。SIMD ヘッダの置き場は CNF-009 の字句検査。fallback の存在はレビュー事項
+
+### CPP-019 — SDK が固定した COM の署名は境界で受けて、すぐ中へ渡す
+
+Windows SDK が決めた COM のインターフェース（`IDWriteFontFallback::MapCharacters` は 11 引数）を実装する関数は、引数の数を自分で減らせない。
+その関数だけは CPP-012 の引数の数の上限の対象から外す（[ADR 0076](adr/0076-sdk-fixed-com-signatures-are-a-permanent-boundary-rule.md)）。
+本体は **6 行以内**で、要求値を組んで 4 引数以内の関数へ渡すか、未対応の引数を境界で断る（`E_NOTIMPL` などを返す）だけにする。ループと保持（キャッシュの操作）は書かない。
+6 行では関数の長さ 60 行と入れ子 3 を越えられないので、抑制が実際に効くのは引数の数だけになる。認知的複雑度の検査は抑制の対象ではなく、今までどおり掛かる。
+
+書き方は 1 つ。定義のすぐ前の 2 行を、この順で書く。
+
+```cpp
+// SDK-ABI: IDWriteFontFallback::MapCharacters
+// NOLINTNEXTLINE(readability-function-size)
+```
+
+印の `Interface::Method` は `eng/sdk-abi-signatures.json` の表（interface・method・SDK の引数の数・宣言のあるヘッダ）に載っているものだけ。表に行を足すのは PR のレビュー事項。
+置き場は COM を書いてよい `src/ui/win32/` と `tests/ui/` だけ。
+
+- 機械強制: **planned** → CNF-012 が印の文法・表・次の行の抑制・定義の関数名・本体 6 行・置き場を見る（2026-10-06・Issue #299）。表の引数の数と実際の署名の照合、ループと保持を書かないことはレビュー事項
 
 ---
 

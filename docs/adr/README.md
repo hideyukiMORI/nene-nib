@@ -91,3 +91,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0073](0073-visible-body-glyph-capsule.md) | 本文の可視字形の保持 | 受理・性能総合hold |
 | [0074](0074-index-display-width-from-the-canonical-ranges.md) | 正本の幅表からBMP索引を生成 | 受理・性能総合hold |
 | [0075](0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) | 性能改善の統合は正式な速さのゲートと効果の大きさで受理し、事前実験の保留は記録として残す | 受理 |
+| [0076](0076-sdk-fixed-com-signatures-are-a-permanent-boundary-rule.md) | SDK が固定した COM の署名は恒久の境界の規則にし、waiver を閉じる | 受理 |

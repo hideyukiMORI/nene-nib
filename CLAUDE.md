@@ -190,7 +190,7 @@ D は HDD で、そこに置いた profile では保存の書き込みが遅い�
 
 字体選択はOSのMapCharactersだけ。FontFallbackCacheは完結した同じ要求のS_OKだけを最大128件再利用し、拡張sourceや未知の取得失敗は委譲する（ADR 0071）。
 BodyGlyphCollectorはDirectWriteが決めた所有字形と位置をそのまま保持する。完全に画面外のrunだけ保守的に除き、未対応装飾は収集全体を棄却する。Tabの0字形をDrawGlyphRunへ渡さない（ADR 0073）。
-display_widthのBMP索引はDisplayWidthRangeの正本からコンパイル時生成する。意味の表・実行時初期化・別の呼出し経路を増やさない（ADR 0074）。SDK固定ABIのwaiverはWVR-0001/0002の署名だけ（期限 2026-11-04・恒久規則は #299）。
+display_widthのBMP索引はDisplayWidthRangeの正本からコンパイル時生成する。意味の表・実行時初期化・別の呼出し経路を増やさない（ADR 0074）。SDKが固定したCOMの署名は `// SDK-ABI: <Interface>::<Method>` と `NOLINTNEXTLINE(readability-function-size)` の2行で受け、本体6行以内で中へ渡す。印は `eng/sdk-abi-signatures.json` の表にあるものだけ（CPP-019・CNF-012・ADR 0076）。
 長行の高速化の main 統合は、独立レビュー・正式な速さのゲート・CI・施主の試用の 4 つで受理した（ADR 0075・D41）。前の実験の `hold` は記録として残し、split の採用は保留のまま。根拠は[gate-proofs 5-cm](docs/quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074)と[5-cq](docs/quality/gate-proofs.md#5-cq--改善一式の統合の受理issue-291adr-0075施主決定-d41)。
 
 ### 測定の揺れの条件は小さな差を守るためのもの。確かな改善の統合を止めない

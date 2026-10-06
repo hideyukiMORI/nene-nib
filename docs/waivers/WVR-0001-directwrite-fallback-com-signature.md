@@ -1,6 +1,6 @@
 # WVR-0001: DirectWrite字体選択のCOM署名
 
-- Status: active
+- Status: removed
 - Rule: CPP-012
 - Issue: #291
 - Owner: NeNeNibサナ
@@ -34,3 +34,7 @@ COM境界の11引数はWindows SDKのABIで固定される。
 
 引数を構造体へ変更するとCOM契約に一致しない。内部の実処理は構造体で渡す。
 ゲート全体の閾値変更・ファイル除外・広い抑制は使わない。
+
+## 閉じた記録
+
+2026-10-06・Issue #299 で removed にした。SDK が固定した COM の署名は期限つきの例外ではなく変わらない事実なので、恒久の規則 CPP-019 と機械の検査 CNF-012（[ADR 0076](../adr/0076-sdk-fixed-com-signatures-are-a-permanent-boundary-rule.md)）に置き換えた。抑制の直前行は `// Waiver: WVR-NNNN` から `// SDK-ABI: <Interface>::<Method>` へ 1 対 1 で置き換え、コードの行は変えていない。この台帳は経緯として残す。
