@@ -28,7 +28,7 @@
 | 9 | #291 長い日本語行の単画面の入力遅延（ADR 0069〜0075、0072は実験不採用） | **済み**。文字組み・ステータス・字体選択・可視字形・幅索引。長行の 1 打鍵 約 326 → 約 7 ms。独立レビュー・速さのゲート 7 本・試用で受理（D41）。[PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)、[gate-proofs 5-cq](../quality/gate-proofs.md#5-cq--改善一式の統合の受理issue-291adr-0075施主決定-d41) |
 | 10 | #298 長い行の 1 打鍵を速さのゲートに足す（ADR 0075 決定 7） | **済み**。8 本目 `key-to-frame-single-long-line`・実機の基準値 5.431 ms（床 2 ms が効く）。CI の指紋は記録だけ。[PR #301](https://github.com/hideyukiMORI/nene-nib/pull/301)、[gate-proofs 5-cs](../quality/gate-proofs.md#5-cs--長い行の-1-打鍵のベンチと実機の基準値issue-298adr-0075) |
 | 11 | #299 SDK の固定署名の恒久規則（ADR 0076・CPP-019・CNF-012） | **済み**。SDK が固定した COM の署名は印 `// SDK-ABI:` と表 `eng/sdk-abi-signatures.json` で受け、本体 6 行以内を機械が見る。WVR-0001 / 0002 は閉じて waiver は none。[PR #302](https://github.com/hideyukiMORI/nene-nib/pull/302)、[gate-proofs 5-cr](../quality/gate-proofs.md) |
-| 12 | #300 字体選択と字形の保持の契約を CTest へ・取り付けの失敗で窓を終わらせない | 未着手 |
+| 12 | #300 字体選択と字形の保持の契約を CTest へ・取り付けの失敗で窓を終わらせない（ADR 0077） | **済み**。CTest `nib_window`（1521 checks・窓を作らない）。試験で「装飾を断っても字形の保持が残る」破れが見つかり、棄却の印で直した。22 場面 0 画素差・速さ 8 本は基準内。[PR #305](https://github.com/hideyukiMORI/nene-nib/pull/305)、[gate-proofs 5-ct](../quality/gate-proofs.md) |
 | 13 | 操作の案内とヘルプ（Ctrl+P / F1・設定で消せる） | 現物調査済み・未起票。見た目の案を hide が選んでから |
 | 14 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
