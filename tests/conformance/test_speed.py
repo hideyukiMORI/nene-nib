@@ -294,16 +294,27 @@ class RepeatedTrialTests(unittest.TestCase):
 class BenchTableTests(unittest.TestCase):
     """The bench names are one table: --bench, --check, --adopt and the reference all read it."""
 
-    def test_the_table_names_the_seven_benches(self):
+    def test_the_table_names_the_eight_benches(self):
         self.assertEqual(("startup-first-frame", "startup-window-shown", "key-to-frame-single",
                           "key-to-frame-burst-200", "open-large-file-16mib",
-                          "key-to-frame-burst-200-16mib", "key-to-frame-palette-5000"), speed.BENCHES)
+                          "key-to-frame-burst-200-16mib", "key-to-frame-palette-5000",
+                          "key-to-frame-single-long-line"), speed.BENCHES)
 
     def test_the_reference_describes_every_bench_of_the_table(self):
         """eng/prove-gates.py builds its QLT-014 proof from these descriptions (ADR 0044 decision 6)."""
         reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
         self.assertEqual(list(speed.BENCHES), list(reference["benches"]))
         self.assertIn("ADR 0044", reference["benches"]["key-to-frame-burst-200-16mib"])
+        self.assertIn("ADR 0075", reference["benches"][speed.LONG_LINE_BENCH])
+
+    def test_the_real_machine_judges_the_long_line_bench_by_the_floor(self):
+        """#298: adopted with --adopt --bench (gate-proofs 5-cs); QLT-014 says the floor decides."""
+        reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
+        adopted = reference["machines"]["bc8a356f37c68491"]["values"][speed.LONG_LINE_BENCH]
+        self.assertLessEqual(adopted["minimumMs"], adopted["medianMs"])
+        self.assertLessEqual(adopted["medianMs"], adopted["maximumMs"])
+        tolerance = reference["tolerance"]
+        self.assertLess(adopted["medianMs"] * tolerance["percent"] / 100.0, tolerance["floorMs"])
 
     def test_a_machine_without_the_new_reference_is_judged_on_the_rest(self):
         """A reference adopted before the sixth bench existed compares the five it has."""
@@ -439,11 +450,12 @@ class SelectedMeasurementTests(unittest.TestCase):
         document.stat.return_value.st_size = 123
         boundaries = {name: mock.Mock() for name in
                       ("become_dpi_aware", "prepare", "large_document", "palette_document",
-                       "stamp", "machine", "bench_startup", "bench_keys", "bench_large_file",
-                       "bench_palette")}
+                       "long_line_document", "stamp", "machine", "bench_startup", "bench_keys",
+                       "bench_large_file", "bench_palette", "bench_long_line")}
         boundaries["prepare"].return_value = Path("exe"), {}, Path("folder")
         boundaries["large_document"].return_value = document
         boundaries["palette_document"].return_value = Path("f0000.txt")
+        boundaries["long_line_document"].return_value = Path("long-japanese.txt")
         boundaries["stamp"].return_value = "test"
         boundaries["machine"].return_value = record({})["machine"]
         boundaries["bench_startup"].return_value = {
@@ -453,13 +465,14 @@ class SelectedMeasurementTests(unittest.TestCase):
             else ({speed.LARGE_BURST_BENCH: 6.0}, {}))
         boundaries["bench_large_file"].return_value = {"open-large-file-16mib": 5.0}, {}
         boundaries["bench_palette"].return_value = {speed.PALETTE_BENCH: 7.0}, {}
+        boundaries["bench_long_line"].return_value = {speed.LONG_LINE_BENCH: 8.0}, {}
         with mock.patch.multiple(speed, **boundaries):
             written = speed.measure(Path("build"), 1, bench)
         return written, boundaries
 
     def test_each_selection_runs_only_its_shared_stimulus_and_records_only_that_value(self):
         groups = ("bench_startup", "bench_startup", "bench_keys", "bench_keys",
-                  "bench_large_file", "bench_keys", "bench_palette")
+                  "bench_large_file", "bench_keys", "bench_palette", "bench_long_line")
         for index, (name, group) in enumerate(zip(speed.BENCHES, groups)):
             with self.subTest(bench=name):
                 written, calls = self.scripted_measurement(name)
@@ -473,15 +486,19 @@ class SelectedMeasurementTests(unittest.TestCase):
                 self.assertEqual(is_large, "document" in written)
                 self.assertEqual(int(name == speed.PALETTE_BENCH),
                                  calls["palette_document"].call_count)
+                self.assertEqual(int(name == speed.LONG_LINE_BENCH),
+                                 calls["long_line_document"].call_count)
                 self.assertEqual(set(speed.BREAKDOWN_BENCHES).intersection({name}),
                                  set(written["breakdown"]))
 
-    def test_no_selection_runs_all_trials_and_records_seven_values(self):
+    def test_no_selection_runs_all_trials_and_records_eight_values(self):
         written, calls = self.scripted_measurement(None)
         self.assertEqual(list(speed.BENCHES), list(written["values"]))
         self.assertEqual(2, calls["bench_keys"].call_count)
-        for name in ("bench_startup", "bench_large_file", "bench_palette"):
+        for name in ("bench_startup", "bench_large_file", "bench_palette", "bench_long_line"):
             calls[name].assert_called_once()
+        calls["bench_long_line"].assert_called_once_with(
+            Path("exe"), {}, Path("folder"), Path("long-japanese.txt"))
 
     def test_gather_forwards_the_selection_to_measure(self):
         arguments = mock.Mock(values=None, executable=Path("build"), repetitions=5,
@@ -498,7 +515,9 @@ class PartialRecordTests(unittest.TestCase):
     def test_an_old_six_bench_record_is_described_and_compared_without_fabricating_the_seventh(self):
         written = record({})
         del written["values"][speed.PALETTE_BENCH]
+        del written["values"][speed.LONG_LINE_BENCH]
         self.assertNotIn(speed.PALETTE_BENCH, speed.describe(written))
+        self.assertNotIn(speed.LONG_LINE_BENCH, speed.describe(written))
         self.assertIs(written, speed.selected_record(written, None))
         self.assertEqual(([], []), speed.compare(REFERENCE, written["values"], reference_values()))
         self.assertEqual(6, len(speed.compared_benches(written["values"], reference_values())))
@@ -509,7 +528,7 @@ class PartialRecordTests(unittest.TestCase):
         selected = speed.selected_record(written, "startup-first-frame")
         self.assertEqual({"startup-first-frame"}, set(selected["values"]))
         self.assertEqual({"startup-first-frame": {"origin": 1}}, selected["breakdown"])
-        self.assertEqual(7, len(written["values"]))
+        self.assertEqual(8, len(written["values"]))
         self.assertEqual(2, len(written["breakdown"]))
 
     def test_a_requested_value_absent_from_the_record_is_rejected_explicitly(self):
@@ -583,6 +602,109 @@ class PartialRecordTests(unittest.TestCase):
             self.assertEqual(0, speed.check(arguments))
         self.assertIn(f"no reference for {speed.PALETTE_BENCH} on test; recorded only", output.getvalue())
         self.assertIn("0 benches checked", output.getvalue())
+
+
+class LongLineDocumentTests(unittest.TestCase):
+    """#298: the document is #291's fixture byte for byte; no window is opened here."""
+
+    def test_the_constants_give_the_fixture_of_issue_291(self):
+        line = (speed.LONG_LINE_SENTENCE * speed.LONG_LINE_REPEATS).encode("utf-8")
+        self.assertEqual(2070, len(speed.LONG_LINE_SENTENCE * speed.LONG_LINE_REPEATS))
+        self.assertEqual(6210, len(line))
+        body = b"".join(f"{index:06d} ".encode("ascii") + line + b"\r\n"
+                        for index in range(speed.LONG_LINE_LINES))
+        self.assertEqual(6_219_000, len(body))
+        self.assertFalse(body.startswith(b"\xef\xbb\xbf"))
+        self.assertEqual(speed.LONG_LINE_SHA256, speed.hashlib.sha256(body).hexdigest())
+
+    def test_a_document_of_another_digest_is_not_measured(self):
+        folder = ROOT / "out/conformance/speed-long-line"
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            with mock.patch.object(speed, "LONG_LINE_LINES", 2), \
+                    self.assertRaisesRegex(SystemExit, "is not measured"):
+                speed.long_line_document(folder)
+            written = (folder / "long-japanese.txt").read_bytes()
+            line = (speed.LONG_LINE_SENTENCE * speed.LONG_LINE_REPEATS).encode("utf-8")
+            self.assertEqual(b"000000 " + line + b"\r\n000001 " + line + b"\r\n", written)
+        finally:
+            (folder / "long-japanese.txt").unlink(missing_ok=True)
+            folder.rmdir()
+
+
+class LongLineTrialTests(unittest.TestCase):
+    """bench_long_line against a scripted keys_trial; nothing is started (#298)."""
+
+    def bench(self, trials: list) -> tuple[dict, dict, str, list]:
+        outcomes = iter(trials)
+        opened = []
+
+        def scripted(executable, environment, folder, document):
+            opened.append(document)
+            outcome = next(outcomes)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        written = io.StringIO()
+        with mock.patch.object(speed, "keys_trial", scripted), \
+                contextlib.redirect_stdout(written):
+            values, parts = speed.bench_long_line(Path("exe"), {}, Path("folder"),
+                                                  Path("long-japanese.txt"))
+        return values, parts, written.getvalue(), opened
+
+    def test_only_the_single_keystroke_of_the_shared_trial_is_the_value(self):
+        values, parts, _, opened = self.bench([(7.3, 900.0, 300.0, speed.BURST_KEYS + 2)])
+        self.assertEqual({speed.LONG_LINE_BENCH: 7.3}, values)
+        self.assertEqual({}, parts)
+        self.assertEqual([Path("long-japanese.txt")], opened)
+
+    def test_a_failed_burst_does_not_repeat_or_drop_the_single(self):
+        values, _, written, opened = self.bench([(7.3, None, 0.0, 7)])
+        self.assertEqual({speed.LONG_LINE_BENCH: 7.3}, values)
+        self.assertEqual(1, len(opened))
+        self.assertNotIn("repeating", written)
+
+    def test_an_unanswered_single_is_missing(self):
+        values, _, _, _ = self.bench([(None, None, 0.0, 1)])
+        self.assertEqual({speed.LONG_LINE_BENCH: None}, values)
+
+    def test_an_unobserved_trial_is_repeated_and_then_missing(self):
+        unobserved = speed.TrialNotObserved("the unsaved confirmation never came up")
+        values, _, written, opened = self.bench([unobserved] * speed.BURST_ATTEMPTS)
+        self.assertEqual({speed.LONG_LINE_BENCH: None}, values)
+        self.assertEqual(speed.BURST_ATTEMPTS, len(opened))
+        self.assertIn("repeating the trial (1/3)", written)
+        self.assertIn(f"this trial of {speed.LONG_LINE_BENCH} is missing", written)
+
+    def test_a_trial_after_an_unobserved_one_is_the_value(self):
+        values, _, _, _ = self.bench([speed.TrialNotObserved("no finished measurement file"),
+                                      (7.1, None, 0.0, 7)])
+        self.assertEqual({speed.LONG_LINE_BENCH: 7.1}, values)
+
+    def test_check_records_a_valid_long_line_without_a_reference_and_passes(self):
+        path = mock.Mock()
+        references = reference_values()
+        del references[speed.LONG_LINE_BENCH]
+        path.read_text.return_value = json.dumps(dict(REFERENCE,
+                                                      machines={"test": {"values": references}}))
+        written = speed.selected_record(record({}), speed.LONG_LINE_BENCH)
+        output = io.StringIO()
+        with mock.patch.object(speed, "gather", return_value=written), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(0, speed.check(mock.Mock(reference=path)))
+        self.assertIn(f"no reference for {speed.LONG_LINE_BENCH} on test; recorded only",
+                      output.getvalue())
+        self.assertIn("0 benches checked", output.getvalue())
+
+    def test_the_floor_decides_the_long_line_tolerance(self):
+        """25 % of 7.27 ms is 1.82 ms, under the 2 ms floor: 9.2 passes and 9.3 is a regression."""
+        recorded = {speed.LONG_LINE_BENCH: {"medianMs": 7.27}}
+        for measured, regressions in ((9.2, 0), (9.3, 1)):
+            with self.subTest(measured=measured):
+                values = {speed.LONG_LINE_BENCH: {"medianMs": measured}}
+                findings, _ = speed.compare(REFERENCE, values, recorded)
+                self.assertEqual(regressions, len(findings))
 
 
 if __name__ == "__main__":
