@@ -206,6 +206,13 @@ display_widthのBMP索引はDisplayWidthRangeの正本からコンパイル時�
 
 `eng/measure-speed.py` と、`eng/verify-window.py` の `<C-v>` や鍵の検査は、テスト用の窓を最前面に出して本物のキー入力を送る。施主が打っている文字がその窓へ入る。実機のクリップボードを書き換える確認も同じく先に確かめる。
 
+### 操作を足すのは `EditorOperation` に 1 値。鍵と一覧の文字は core の表の行
+
+操作の名前・読み・説明は `operation_texts`、鍵とモードは `operation_bindings`（上から見て最初に当たる行が勝つ）。実行は ui の `EditorWindow::run_operation` の 1 本で、鍵で押しても F1 の一覧（Ctrl+P の面の `?`）から選んでも同じ（ADR 0078）。
+controller に操作ごとの実行を書かない。一覧で選ぶと controller は `operation_request` を 1 意図だけ立て、ui が `deliver` の終わりで読む（`close_request` と同じ形）。
+鍵の表示名（`Ctrl+Shift+S`）は `key_chord_label` が作る。文字列を別に書かない。ui の `press_control_key` に表の操作の `case` を足さない（`operation_chord` に鍵を足す）。
+タブとブックマークの鍵は `tab_command_for` と `toggles_bookmark` が同じ表を読む。コピー・貼り付け・Vim の鍵はまだ表の外にあり、一覧に載せるときに表へ移す。
+
 ### 速さを測る間は、同じ機械のほかの席とビルドを止める
 
 `eng/measure-speed.py` は基準値との比較なので、機械が混んでいると製品が同じでも起動のベンチが落ちる（#300 で実測: 測定の途中に別の席がビルドを始め、起動の 3 本が約 25% 遅くなった）。

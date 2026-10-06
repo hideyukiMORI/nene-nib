@@ -1,0 +1,23 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-06T14:25:00Z" },
+  "title": "NeNe Nib 操作の案内とヘルプ",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 960, "h": 560, "title": "いま（案内なし）" },
+    "HintA.dc.html": { "x": 1040, "y": 0, "w": 960, "h": 560, "title": "案内 A: ステータスバーに常に出す" },
+    "HintB.dc.html": { "x": 2080, "y": 0, "w": 960, "h": 560, "title": "案内 B: 空の文書にだけ出す" },
+    "HelpList.dc.html": { "x": 0, "y": 1000, "w": 960, "h": 560, "title": "ヘルプ 1: 操作の一覧（Ctrl+P の面）" },
+    "HelpSheet.dc.html": { "x": 1040, "y": 1000, "w": 960, "h": 560, "title": "ヘルプ 2: 早見表の 1 枚" },
+    "HelpTab.dc.html": { "x": 2080, "y": 1000, "w": 960, "h": 560, "title": "ヘルプ 3: ヘルプの文書をタブで開く" }
+  },
+  "order": ["Main.dc.html", "HintA.dc.html", "HintB.dc.html", "HelpList.dc.html", "HelpSheet.dc.html", "HelpTab.dc.html"],
+  "notes": {
+    "row-hint": { "x": 0, "y": -300, "text": "案内の置き場", "kind": "title1", "maxW": 3040 },
+    "row-help": { "x": 0, "y": 700, "text": "F1 のヘルプの形", "kind": "title1", "maxW": 3040 },
+    "ask-hint": { "x": 3120, "y": 0, "w": 420, "text": "決めてほしいこと ①\n\nA と B は併用できます（空の文書では B、ふだんは A）。どちらも同じ設定 1 つで消せます。\n\nA・B・両方 のどれにしますか。" },
+    "ask-help": { "x": 3120, "y": 1000, "w": 420, "text": "決めてほしいこと ②\n\nF1 で開くものを 1・2・3 のどれにしますか。\n\n1 は探せて、その場で実行できます。2 は一目で見渡せます。3 は長い説明が書けます。" }
+  },
+  "designSystems": []
+}

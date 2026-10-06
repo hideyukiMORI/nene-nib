@@ -1004,7 +1004,8 @@ void verify_ime_stance_table()
     const std::array<std::optional<CommandInput>, 4> inputs{
         std::nullopt, CommandInput{nenenib::core::CommandLine::empty()},
         CommandInput{nenenib::core::SearchLine::opened(nenenib::core::VimSearchDirection::forward)},
-        CommandInput{nenenib::core::CommandPalette::opened({}, "", 0)}};
+        CommandInput{
+            nenenib::core::CommandPalette::opened({}, "", nenenib::core::EditMode::ordinary)}};
     const std::array<ImeStance, 4> typed{ImeStance::as_left, ImeStance::closed, ImeStance::closed,
                                          ImeStance::closed_once};
     const std::array<ImeStance, 4> blocked{ImeStance::closed, ImeStance::closed, ImeStance::closed,

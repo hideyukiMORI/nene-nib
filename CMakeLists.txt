@@ -45,7 +45,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp
-    src/core/ModeLabel.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
+    src/core/KeyChord.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/ScrollBounds.cpp src/core/SearchLine.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
@@ -100,7 +100,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/SessionTests.cpp
     tests/unit/BookmarkTests.cpp
     tests/unit/HistoryTests.cpp
-    tests/unit/BackgroundWorkTests.cpp)
+    tests/unit/BackgroundWorkTests.cpp
+    tests/unit/OperationsTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)

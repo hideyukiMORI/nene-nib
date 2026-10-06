@@ -53,6 +53,7 @@ namespace
     case core::PaletteScope::bookmarks:
     case core::PaletteScope::history:
     case core::PaletteScope::folder:
+    case core::PaletteScope::operations:
         return {};
     }
     std::unreachable();
