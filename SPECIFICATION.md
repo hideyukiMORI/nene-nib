@@ -94,7 +94,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | FR-015 | 速さの退行はゲートが落とす | QLT-014。測るのは差分が速さに関わるときと `check.ps1 -Full` の明示実行（QLT-001 / ADR 0021）。CI の必須 check は測らない |
 | FR-017 | 本文のフォントサイズを 8〜40 pt の範囲で変更できる。Ctrl+`+` / Ctrl+`-` / Ctrl+`0` と Ctrl+ホイール、`:set fontsize=<pt>`。値は設定に保存し、DPI と掛け合わせて描く。フォント名の変更は同じ設定の縦切りで扱う | D14 |
 | FR-016 | `:colorscheme <name>` で組み込みテーマ（ubuntu-aubergine / neutral-light / solarized-dark / solarized-light / monokai / dracula / one-dark / night-owl / night-owl-light）を切り替え、設定に保存する。`:colorscheme system` で OS 追従に戻す。Ctrl+P の `:` 接頭辞からも同じ一覧 | D13。計画は docs/plans/2026-09-15-colorschemes.md。利用者のテーマファイルはC4a/b（#68 / #70・ADR 0024 / 0025）で同じ選択へ接続 |
-| FR-018 | F1 で操作の一覧を開き、その場で実行できる。操作の案内を空の文書とステータスバーに出し、設定で消せる（D42・D43） | D42 / D43。[採用案](docs/design/2026-10-06-guide.md)。Issue #303（操作の一覧）と #304（案内と設定）で実装する |
+| FR-018 | F1 で操作の一覧を開き、その場で実行できる。操作の案内を空の文書とステータスバーに出し、設定で消せる（D42・D43） | D42 / D43。[採用案](docs/design/2026-10-06-guide.md)。操作の一覧は実装済み（Issue #303・ADR 0078）。案内と設定は Issue #304 |
 
 ## 5. Vim の範囲
 

@@ -42,6 +42,14 @@
 | 3 | ui: `KeyChord` の写し・F1・`run_operation`・決定 13 の鍵の移し替え・`deliver` の終わりで頼みを読む・行の右端の鍵の描画 | Debug / Release のビルド。実機の画と鍵の確認は設計席 |
 | 4 | 検証の記録・PR の本文 | — |
 
+## 実装で決めたこと（2026-10-07）
+
+- **Alt と組んだ鍵は操作にしない。** 鍵の写し（`operation_chord` を呼ぶ `held_chord`）は Alt が押されているとき何も返さない。前は Ctrl+Alt+O・S・Z・Y が効いていたが、AltGr で文字を打つ配列で保存や undo が誤って走るので、文字の大きさ・タブ・ブックマークの鍵の今の守りに揃えた。
+- **`?` の面での Ctrl+D は何もしない。** `:` の面と同じ扱い（`bookmark_toggle_allowed`）。
+- **面がモードを持つ。** 一覧は開いたときのモードで作る。`CommandPalette::opened` は引数が 5 つになるので `selected` を外し、呼ぶ側が `selected_at` を付ける（結果は同じ）。
+- **鍵の文字の書式を 1 つ足した。** 本文の字体・UI の 12 DIP の左寄せ（`key_format_`）。gutter の書式は右寄せなので流用しない。
+- 検証は [gate-proofs 5-cu](../quality/gate-proofs.md)。
+
 ## 判定の限界
 
 - 「一覧からの実行が鍵と同じ」は、ui の関数が 1 つであることで保つ。ui の試験は無いので、実機で操作ごとに確かめる（QLT-013）。
