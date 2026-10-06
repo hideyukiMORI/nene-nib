@@ -307,12 +307,14 @@ class BenchTableTests(unittest.TestCase):
         self.assertIn("ADR 0044", reference["benches"]["key-to-frame-burst-200-16mib"])
         self.assertIn("ADR 0075", reference["benches"][speed.LONG_LINE_BENCH])
 
-    def test_no_machine_has_a_long_line_reference_before_it_is_measured(self):
-        """#298: the reference is adopted on the real machine with --adopt --bench, never written."""
+    def test_the_real_machine_judges_the_long_line_bench_by_the_floor(self):
+        """#298: adopted with --adopt --bench (gate-proofs 5-cs); QLT-014 says the floor decides."""
         reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
-        for fingerprint, machine in reference["machines"].items():
-            with self.subTest(machine=fingerprint):
-                self.assertNotIn(speed.LONG_LINE_BENCH, machine["values"])
+        adopted = reference["machines"]["bc8a356f37c68491"]["values"][speed.LONG_LINE_BENCH]
+        self.assertLessEqual(adopted["minimumMs"], adopted["medianMs"])
+        self.assertLessEqual(adopted["medianMs"], adopted["maximumMs"])
+        tolerance = reference["tolerance"]
+        self.assertLess(adopted["medianMs"] * tolerance["percent"] / 100.0, tolerance["floorMs"])
 
     def test_a_machine_without_the_new_reference_is_judged_on_the_rest(self):
         """A reference adopted before the sixth bench existed compares the five it has."""
