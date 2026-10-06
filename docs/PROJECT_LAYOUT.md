@@ -120,7 +120,7 @@ application が作った表示値を Direct2D / DirectWrite で描き、キー�
 | 種類 | 置き場 |
 | --- | --- |
 | production | `src/core` / `src/application` / `src/adapters/win32` / `src/ui/win32` / `src/app`（2026-09-15 の最初の縦切りで全層を作った。ADR 0007。Win32 の版 metadata だけを `src/app` の template から build 下へ生成する） |
-| テスト | `tests/build`（C++23 基盤のスモーク）/ `tests/unit`（OS 非依存の中核。ASan / UBSan 付き。`--coverage-negative` で失敗系を省く反例。Vim の fixture もここ）/ `tests/conformance`（検査器自身の正例・反例。規約検査の対象外だが決定性の禁止は適用する） |
+| テスト | `tests/build`（C++23 基盤のスモーク）/ `tests/unit`（OS 非依存の中核。ASan / UBSan 付き。`--coverage-negative` で失敗系を省く反例。Vim の fixture もここ）/ `tests/conformance`（検査器自身の正例・反例。規約検査の対象外だが決定性の禁止は適用する）/ `tests/ui`（module `window_tests`・CTest `nib_window`。ui/win32 の描画の保持の契約を窓を作らずに試す。OS の資源は DirectWrite の factory と WIC のソフトウェアの描画先まで・ADR 0077） |
 | 検査設定 | `.clang-format` / `.clang-tidy` / `eng/*.json`。参照の一覧は `eng/config-bindings.json`（CNF-007） |
 | 実測と証明 | `eng/measure-language.ps1` ＋ `eng/probes/language.json`（Phase 0）/ `eng/prove-gates.py`（ゲートの反例の証明。`check.ps1 -Full` の中で走り、関連する変更のときに選ぶ）/ `eng/protected-diff.py`（base と head の間の保護対象の差分と scope ごとの checks 数を `out/protected/` に記録する。ゲートではない・Issue #130） / `eng/usage-report.py`（transcript の usage を席ごとに turns・文脈の最大・cache read・seat_tokens で集計し `out/usage/` に記録する。読むだけ・ゲートではない・Issue #146）。結果は `docs/quality/` |
 | 生成物 | `build/`（CMake・オブジェクト・検証 exe）/ `out/`（Phase 0 の実測・証明 fixture・測定ビルド・出力）。製品 C++ コードの生成は未採用 |

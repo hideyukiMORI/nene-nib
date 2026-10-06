@@ -41,3 +41,9 @@ split採用条件は変えない。現在残る描画費用は別の実験とし
 ## 2026-10-05の検証結果
 
 対象の表示/IME/契約/通常Release比較を完了した。実装の高速化は確認できたが、長行の前後半安定条件で性能の総合受理とmain統合は保留。[gate-proofs 5-cm](../quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074)に成功・失敗・再利用・未確認範囲を記録した。
+
+## 2026-10-07の追記（Issue #300・ADR 0077）
+
+- 取り付けは最善の努力。`GetSystemFontFallback` → `As<IDWriteTextFormat2>` → `SetFontFallback` のどれかが失敗しても窓を終わらせず、OS の既定の字体選択の書式のまま続ける（`Direct2DRenderer::attach_font_fallback`）。成功したときの呼び出しの列と順は変えていない。
+- 限界: `WM_FONTCHANGE` は扱わない。フォントの設定か DPI が変わるか、起動し直すまで、起動中のフォントの追加・削除は反映されない。
+- 一致条件・上限・対象外・OS の失敗は `tests/ui`（CTest `nib_window`）が替え玉で守る。

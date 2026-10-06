@@ -114,6 +114,7 @@ CI 成功は製品テストの実行を意味しない。関連入力の不変�
 
 単体テストは表示サーバ・実機・実 GPU・実 OS 資源・実物の Vim を必要としない。単体テストが通ったことを「実機で動く」の証拠として扱わない。
 表示・DPI・IME・実 GPU の遅延・oracle の再生成を伴う確認は [quality/gate-proofs.md](quality/gate-proofs.md) に環境と手順を書いて別に記録する。
+ui/win32 の描画の保持の契約（CTest `nib_window`・`tests/ui`・ADR 0077）は窓・GPU を使わず、DirectWrite の factory と WIC のソフトウェアの描画先だけで回す。インストール済みのフォントに依る検査は環境依存と名付け、無い機械では `not measured (environment)` と 1 行言って数に入れない。
 
 - 機械強制: **planned**
 
@@ -345,6 +346,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 規約検査 | NeNe Nib 固有 | `eng/conformance.py` |
 | 検査自身のテスト | 規約検査・シンボル検査・カバレッジ判定・実ツールの正例・反例 | unittest / eng/prove-gates.py |
 | 単体テスト | C++23 基盤のスモークと中核の振る舞い | CTest / tests/build・tests/unit（ASan / UBSan 付き・`-fno-sanitize-recover=all`。OS 資源と表示は使わない） |
+| 描画の保持の契約 | 字体選択の保持（鍵・上限・OS の失敗）と字形の保持（棄却・画面外・画素の一致）を窓を作らずに | CTest `nib_window` / tests/ui（DirectWrite の factory と WIC のソフトウェアの描画先まで。フォントに依る検査は環境依存で、測れないときは 1 行言って数えない・ADR 0077） |
 | カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
 | 速さ | 4 本のベンチ（基準値の鍵 5 つ）の退行 | `eng/measure-speed.py --check`（一致する指紋の基準値で比較。必要な変更で選んで実行・QLT-014） |
 | 依存 | 道具の版と実行時依存 0 | tool-versions.json / architecture.json / `/MT`（R1） |

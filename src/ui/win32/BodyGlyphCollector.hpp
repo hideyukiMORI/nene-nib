@@ -1,5 +1,6 @@
 #pragma once
 #include "BodyGlyphRun.hpp"
+#include <optional>
 #include <wrl/implements.h>
 namespace nenenib::ui::win32
 {
@@ -9,7 +10,10 @@ class BodyGlyphCollector final
 {
   public:
     explicit BodyGlyphCollector(FLOAT width);
-    [[nodiscard]] std::vector<BodyGlyphRun> take();
+    // 集めた字形。未対応の callback を 1 つでも受けたら（棄却の印）、部分の字形を渡さず nullopt。
+    // IDWriteTextLayout::Draw は callback の HRESULT を無視して S_OK を返すので、
+    // 字形で描けるかはここだけが決める（ADR 0073 の追記）。
+    [[nodiscard]] std::optional<std::vector<BodyGlyphRun>> take();
     HRESULT STDMETHODCALLTYPE IsPixelSnappingDisabled(void *, BOOL *disabled) noexcept override;
     HRESULT STDMETHODCALLTYPE GetCurrentTransform(void *,
                                                   DWRITE_MATRIX *transform) noexcept override;
@@ -28,7 +32,10 @@ class BodyGlyphCollector final
   private:
     [[nodiscard]] bool outside(const DWRITE_GLYPH_RUN &run, FLOAT x) const;
     HRESULT collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin, DWRITE_MEASURING_MODE mode);
+    // 失敗の HRESULT なら棄却の印を立てる。HRESULT はそのまま返す。
+    HRESULT settle(HRESULT result) noexcept;
     FLOAT width_;
     std::vector<BodyGlyphRun> runs_;
+    bool rejected_ = false;
 };
 } // namespace nenenib::ui::win32
