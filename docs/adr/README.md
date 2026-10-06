@@ -90,3 +90,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0072（実験記録）](../quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074) | 行bitmapの保持（原ADRは隔離実験枝と証拠bundle） | 最終候補に不採用 |
 | [0073](0073-visible-body-glyph-capsule.md) | 本文の可視字形の保持 | 受理・性能総合hold |
 | [0074](0074-index-display-width-from-the-canonical-ranges.md) | 正本の幅表からBMP索引を生成 | 受理・性能総合hold |
+| [0075](0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) | 性能改善の統合は正式な速さのゲートと効果の大きさで受理し、事前実験の保留は記録として残す | 受理 |
