@@ -93,3 +93,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0075](0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) | 性能改善の統合は正式な速さのゲートと効果の大きさで受理し、事前実験の保留は記録として残す | 受理 |
 | [0076](0076-sdk-fixed-com-signatures-are-a-permanent-boundary-rule.md) | SDK が固定した COM の署名は恒久の境界の規則にし、waiver を閉じる | 受理 |
 | [0077](0077-render-cache-contracts-are-tested-without-a-window.md) | 描画の保持の契約は窓を作らない試験で守り、字体選択の保持の取り付けは最善の努力にする | 受理 |
+| [0078](0078-operations-are-one-table-for-keys-and-the-f1-list.md) | 操作は core の 1 つの表に持ち、鍵と F1 の一覧が同じ 1 本の道で実行する | 受理 |
