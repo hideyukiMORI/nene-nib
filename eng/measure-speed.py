@@ -1,4 +1,4 @@
-"""Measure the seven speed benches and compare them with this machine's reference (QLT-014).
+"""Measure the eight speed benches and compare them with this machine's reference (QLT-014).
 
 ADR 0011: the editor marks milestones (Issue #19 added the eight startup stages to the original
 input_received / frame_presented), the Win32 timing adapter turns them into a measurement file when
@@ -17,6 +17,10 @@ through eng/window_driver.py, and reads the file back.
                             document never sees a large piece table or a long add buffer)
   key-to-frame-palette-5000  one WM_CHAR in Ctrl+P over a folder with 5000 files -> the next frame
                             (candidate arrival is assumed after a fixed wait, not observed)
+  key-to-frame-single-long-line
+                            the same trial as key-to-frame-single after a document of 1000 long
+                            Japanese lines (#291's fixture, checked by SHA-256) is open; only its
+                            single keystroke becomes a value (#298 / ADR 0075 decision 7)
 
 --bench selects the stimulus to measure and the value to record, compare or adopt. Without it,
 every bench runs. Related benches share their existing trial, but only the selected value is kept.
@@ -100,13 +104,21 @@ LARGE_LINE_BYTES = 84
 LARGE_SECONDS = 60.0
 PALETTE_FILES = 5000
 PALETTE_WAIT_SECONDS = 1.5
+# #291 の長い日本語行の文書を 1 バイトも違えずに作る（#298）。行は「6 桁の番号と空白」と同じ短文の
+# 90 回の連結で、1 行 6217 bytes（2077 code points）＋ CRLF・1000 行・BOM なし・6,219,000 bytes。
+LONG_LINE_SENTENCE = "日本語の長い行と分割表示の文字組みを測定する。"
+LONG_LINE_REPEATS = 90
+LONG_LINE_LINES = 1000
+LONG_LINE_SHA256 = "ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32a6c5"
 MICROSECONDS_PER_MILLISECOND = 1000.0
 DISPLAY_ADAPTERS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000"
 CENTRAL_PROCESSOR = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 BENCHES = ("startup-first-frame", "startup-window-shown", "key-to-frame-single",
            "key-to-frame-burst-200", "open-large-file-16mib", "key-to-frame-burst-200-16mib",
-           "key-to-frame-palette-5000")
+           "key-to-frame-palette-5000", "key-to-frame-single-long-line")
 PALETTE_BENCH = "key-to-frame-palette-5000"
+# 長い行の 1 打鍵は key-to-frame-single と同じ試行（keys_trial）で、違うのは開く文書だけ（#298）。
+LONG_LINE_BENCH = "key-to-frame-single-long-line"
 # 打鍵のベンチは 1 本の試行の経路を共有し、開く本文だけが違う（ADR 0044 決定 6）。
 # 16 MiB の試行の 1 打鍵は暖機と同じ扱いで、値にするのは 200 打鍵だけ。
 EMPTY_BURST_BENCH = "key-to-frame-burst-200"
@@ -190,6 +202,30 @@ def palette_document(folder: Path) -> Path:
         if not path.is_file():
             path.write_text("nib\n", encoding="utf-8")
     return directory / "f0000.txt"
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def long_line_document(folder: Path) -> Path:
+    """#291's long Japanese document byte for byte; any other digest stops before a trial (#298)."""
+    path = folder / "long-japanese.txt"
+    if path.is_file() and file_sha256(path) == LONG_LINE_SHA256:
+        return path
+    line = LONG_LINE_SENTENCE * LONG_LINE_REPEATS
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        for index in range(LONG_LINE_LINES):
+            handle.write(f"{index:06d} {line}\r\n")
+    digest = file_sha256(path)
+    if digest != LONG_LINE_SHA256:
+        raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {LONG_LINE_SHA256};"
+                         f" {LONG_LINE_BENCH} is not measured")
+    return path
 
 
 def report_path(folder: Path, name: str) -> Path:
@@ -425,6 +461,27 @@ def bench_palette(executable: Path, environment: dict, folder: Path,
     return {PALETTE_BENCH: value}, {}
 
 
+def bench_long_line(executable: Path, environment: dict, folder: Path,
+                    document: Path) -> tuple[dict, dict]:
+    """key-to-frame-single over the long Japanese document: the same trial, another document.
+
+    keys_trial posts the same warmup, single keystroke and 200 keystrokes as key-to-frame-single;
+    only the single becomes a value here, so the 200 never decide whether the trial is repeated.
+    A trial that delivered no observation is repeated as bench_keys repeats it (Issue #36), and a
+    trial whose single keystroke was not answered by a frame is missing (#298).
+    """
+    for attempt in range(BURST_ATTEMPTS):
+        try:
+            single, _, _, _ = keys_trial(executable, environment, folder, document)
+        except TrialNotObserved as unobserved:
+            print(f"Speed: {unobserved}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
+            continue
+        return {LONG_LINE_BENCH: single}, {}
+    print(f"Speed: no trial was observed in {BURST_ATTEMPTS} attempts;"
+          f" this trial of {LONG_LINE_BENCH} is missing")
+    return {LONG_LINE_BENCH: None}, {}
+
+
 def keys_trial(executable: Path, environment: dict, folder: Path,
                document: Path | None = None) -> tuple[float | None, float | None, float, int]:
     """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
@@ -539,7 +596,7 @@ def judged_samples(measured: dict) -> int | None:
 
 
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
-                document: Path | None, palette: Path | None):
+                document: Path | None, palette: Path | None, long_line: Path | None = None):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -551,6 +608,8 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_keys(executable, environment, folder, document)
     if PALETTE_BENCH in names:
         yield bench_palette(executable, environment, folder, palette)
+    if LONG_LINE_BENCH in names:
+        yield bench_long_line(executable, environment, folder, long_line)
 
 
 def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
@@ -561,6 +620,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
                 if any(name in names for name in ("open-large-file-16mib", LARGE_BURST_BENCH))
                 else None)
     palette = palette_document(folder) if PALETTE_BENCH in names else None
+    # 文書の SHA-256 が #291 と違えば、どの試行も始める前に落ちる（#298）。
+    long_line = long_line_document(folder) if LONG_LINE_BENCH in names else None
     samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in names}
@@ -568,7 +629,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
     # 16 MiB の 200 打鍵の到着の幅も同じ形で残す（#179）。
     segments: dict = {name: {} for name in BREAKDOWN_BENCHES if name in names}
     for _ in range(repetitions):
-        for values, parts in run_benches(executable, environment, folder, names, document, palette):
+        for values, parts in run_benches(executable, environment, folder, names, document, palette,
+                                         long_line):
             for name, value in values.items():
                 if name not in samples:
                     continue

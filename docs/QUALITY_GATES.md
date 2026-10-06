@@ -127,6 +127,7 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 基準値の無い host は記録だけで通るが、`Speed: no reference for <指紋> (<CPU>); recorded only -- QLT-014 is not judged on this host` を出して黙らない。
 刺激が窓に届かなかった試行は値にせず**欠測**として記録し、有効な試行が 3 本に満たないベンチは「退行」ではなく**計測不能**として
 退行と別の終了コード 2 でゲートを落とす（Issue #30。どちらでも落ちるが、直す先が違うので別の文で言う）。
+長い日本語行の 1 打鍵 `key-to-frame-single-long-line`（#291 の文書を道具が作って SHA-256 で照合・`key-to-frame-single` と同じ試行・[ADR 0075](adr/0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) 決定 7・#298）は、許容に床 2 ms が効く（7.27 ms の 25% は 1.82 ms で床より小さく、床は約 27% にあたる）。基準値を実機で `--adopt --bench` で採用するまでは、どの指紋でも記録だけ。
 
 - 機械強制: **active**（施主の実機と、CI の指紋 `e7a87d5b`。[ADR 0011](adr/0011-speed-measurement-timing-port-and-paint-coalescing.md)・Issue #16／[ADR 0016](adr/0016-ci-speed-reference-per-host-fingerprint.md)・Issue #47。`eng/check.ps1` が Release の exe で `eng/measure-speed.py --check` を走らせ、
   `eng/perf-reference.json` に指紋の一致する機械では基準値との比較で落ちる。**CI で active なのは指紋 `e7a87d5b`（AMD EPYC 7763）の run だけ**で、他の指紋の host は記録だけ・打鍵 2 本は許容の floor 2 ms に飲まれて判定にならない — どちらも **planned**。
