@@ -74,6 +74,9 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> create_text_formats();
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
+    // 本文の書式に字体選択の保持（ADR 0071）を取り付ける。最善の努力で、どこかで失敗したら
+    // OS の既定の fallback の書式のまま続ける（ADR 0077 の決定 5）。
+    void attach_font_fallback(const TextFormat &format);
     void align_text_formats();
     // 書式（か layout）の領域に入りきらない文字列を文字単位で切って末尾に「…」を付ける。
     // タブの題名（docs/design/2026-09-29-tabs.md 第 2 節）と一覧の場所（ADR 0057 の決定 7）が

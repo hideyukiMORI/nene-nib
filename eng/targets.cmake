@@ -64,7 +64,7 @@ function(nenenib_target target module kind)
     target_compile_options(${target} PRIVATE ${NENENIB_CXX_OPTIONS}
                            "$<$<CONFIG:Debug>:${NENENIB_SANITIZE_OPTIONS}>")
     target_include_directories(${target} PUBLIC "${CMAKE_SOURCE_DIR}/${module_path}")
-    if(module MATCHES "^(adapters_win32|ui_win32|app)$")
+    if(module MATCHES "^(adapters_win32|ui_win32|app|window_tests)$")
         target_compile_definitions(${target} PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     endif()
 endfunction()

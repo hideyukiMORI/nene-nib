@@ -180,6 +180,20 @@ foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32)
     nenenib_system_link(nenenib_window ${library})
 endforeach()
 
+# Issue #300: ui/win32 の描画の保持（字体選択 ADR 0071・字形 ADR 0073）の契約を窓を作らずに確かめる
+# （ADR 0077）。OS の資源は DirectWrite の factory と WIC のソフトウェアの描画先まで。
+nenenib_target(nib_window_tests window_tests EXECUTABLE
+    tests/ui/NibWindowTests.cpp tests/ui/WindowChecks.cpp tests/ui/DirectWriteFactory.cpp
+    tests/ui/ScriptedTextSource.cpp tests/ui/ScriptedFontFallback.cpp tests/ui/SoftwareTarget.cpp
+    tests/ui/FallbackKeyTests.cpp tests/ui/FallbackCacheTests.cpp
+    tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp)
+nenenib_link(nib_window_tests nenenib_core)
+nenenib_link(nib_window_tests nenenib_window)
+foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
+    nenenib_system_link(nib_window_tests ${library})
+endforeach()
+add_test(NAME nib_window COMMAND nib_window_tests)
+
 nenenib_target(NeNeNib app EXECUTABLE src/app/Main.cpp src/app/NeNeNib.rc)
 set_source_files_properties("${NENENIB_MANIFEST}" PROPERTIES GENERATED TRUE)
 target_sources(NeNeNib PRIVATE "${NENENIB_MANIFEST}")

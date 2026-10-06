@@ -7,9 +7,21 @@
 namespace nenenib::ui::win32
 {
 BodyGlyphCollector::BodyGlyphCollector(FLOAT width) : width_(width) {}
-std::vector<BodyGlyphRun> BodyGlyphCollector::take()
+std::optional<std::vector<BodyGlyphRun>> BodyGlyphCollector::take()
 {
+    if (rejected_)
+    {
+        return std::nullopt;
+    }
     return std::move(runs_);
+}
+HRESULT BodyGlyphCollector::settle(HRESULT result) noexcept
+{
+    if (FAILED(result))
+    {
+        rejected_ = true;
+    }
+    return result;
 }
 HRESULT STDMETHODCALLTYPE BodyGlyphCollector::IsPixelSnappingDisabled(void *,
                                                                       BOOL *disabled) noexcept
@@ -97,9 +109,9 @@ HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawGlyphRun(void *, FLOAT x, FLOA
 {
     if (effect != nullptr)
     {
-        return E_NOTIMPL;
+        return settle(E_NOTIMPL);
     }
-    return collect(*run, D2D1_POINT_2F{x, y}, mode);
+    return settle(collect(*run, D2D1_POINT_2F{x, y}, mode));
 }
 // SDK-ABI: IDWriteTextRenderer::DrawUnderline
 // NOLINTNEXTLINE(readability-function-size)
@@ -107,7 +119,7 @@ HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawUnderline(void *, FLOAT, FLOAT
                                                             const DWRITE_UNDERLINE *,
                                                             IUnknown *) noexcept
 {
-    return E_NOTIMPL;
+    return settle(E_NOTIMPL);
 }
 // SDK-ABI: IDWriteTextRenderer::DrawStrikethrough
 // NOLINTNEXTLINE(readability-function-size)
@@ -115,7 +127,7 @@ HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawStrikethrough(void *, FLOAT, F
                                                                 const DWRITE_STRIKETHROUGH *,
                                                                 IUnknown *) noexcept
 {
-    return E_NOTIMPL;
+    return settle(E_NOTIMPL);
 }
 // SDK-ABI: IDWriteTextRenderer::DrawInlineObject
 // NOLINTNEXTLINE(readability-function-size)
@@ -123,6 +135,6 @@ HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawInlineObject(void *, FLOAT, FL
                                                                IDWriteInlineObject *, BOOL, BOOL,
                                                                IUnknown *) noexcept
 {
-    return E_NOTIMPL;
+    return settle(E_NOTIMPL);
 }
 } // namespace nenenib::ui::win32

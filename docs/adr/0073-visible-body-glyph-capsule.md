@@ -18,3 +18,14 @@ WVR-0002はSDK固定ABIだけに限定する。性能・画素一致の結果は
 ## 2026-10-05の検証結果
 
 対象の表示/IME/契約/通常Release比較を完了した。実装の高速化は確認できたが、長行の前後半安定条件で性能の総合受理とmain統合は保留。[gate-proofs 5-cm](../quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074)に成功・失敗・再利用・未確認範囲を記録した。
+
+## 2026-10-07の追記（Issue #300・ADR 0077）
+
+`IDWriteTextLayout::Draw` は callback の HRESULT を無視して S_OK を返す（2026-10-07・`nib_window` の試験で実測。下線・取り消し線・inline object・effect つきの run のどれでも S_OK）。
+そのため「未対応のコールバックでは収集全体を棄却」は `Draw` の戻り値では決まっていなかった。棄却は collector の印で決める。
+未対応の callback と effect つきの run と収集の失敗は印を立て、`BodyGlyphCollector::take` は印が立っていたら部分の字形を渡さず nullopt を返し、
+`Direct2DRenderer::layout_of` はその行を `DrawTextLayout` で描く。字形で描けるかを決めるのは `take` の 1 か所。
+装飾も effect も無い行（今の本文のすべて）の呼び出しの列・順・結果は変わらない。
+
+字形の経路と `DrawTextLayout` の画素が一致する前提は、描画先が 96 DPI（`core::reference_dpi`）・変換が恒等・行の原点が整数の 3 つ。
+collector の `GetPixelsPerDip` は 1、`GetCurrentTransform` は恒等を返す。前提は `draw_body_text` のコメントに書き、`tests/ui` が 96 と collector の値を確かめる。

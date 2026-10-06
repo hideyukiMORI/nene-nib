@@ -465,14 +465,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     {
         return std::unexpected(RenderFailure::directwrite);
     }
-    Microsoft::WRL::ComPtr<IDWriteFontFallback> system;
-    Microsoft::WRL::ComPtr<IDWriteTextFormat2> code_version;
-    if (FAILED(dwrite_->GetSystemFontFallback(&system)) || FAILED(code.As(&code_version)) ||
-        FAILED(
-            code_version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get())))
-    {
-        return std::unexpected(RenderFailure::directwrite);
-    }
+    attach_font_fallback(code);
     const std::array<TextFormat, 2> every{code, gutter};
     for (const auto &format : every)
     {
@@ -488,6 +481,21 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     body_layouts_.clear();
     previous_body_layouts_.clear();
     return {};
+}
+
+void Direct2DRenderer::attach_font_fallback(const TextFormat &format)
+{
+    // 保持は速さのためだけにある。取り付けられなくても OS の既定の fallback で
+    // 同じ字体を選べるので、窓を終わらせない（ADR 0077 の決定 5）。
+    // 成功したときの呼び出しの列と順は ADR 0071 のまま。
+    Microsoft::WRL::ComPtr<IDWriteFontFallback> system;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat2> version;
+    if (FAILED(dwrite_->GetSystemFontFallback(&system)) || FAILED(format.As(&version)))
+    {
+        return;
+    }
+    static_cast<void>(
+        version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get()));
 }
 
 void Direct2DRenderer::set_tab_stops(IDWriteTextFormat *format)
@@ -760,15 +768,24 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
     BodyTextLayout entry{std::string(text), area, std::move(made)};
     auto collector =
         Microsoft::WRL::Make<BodyGlyphCollector>(static_cast<float>(core::width_of(area)));
-    if (collector && SUCCEEDED(entry.layout->Draw(nullptr, collector.Get(), 0, 0)))
-    {
-        entry.glyphs = collector->take();
-        entry.glyphs_ready = true;
-    }
+    // Draw は callback の失敗を返さないので、字形で描けるかは collector の take() が決める
+    // （ADR 0073 の追記）。棄却なら字形を持たず DrawTextLayout で描く。
+    auto taken = collector && SUCCEEDED(entry.layout->Draw(nullptr, collector.Get(), 0, 0))
+                     ? collector->take()
+                     : std::nullopt;
+    entry.glyphs_ready = taken.has_value();
+    entry.glyphs = std::move(taken).value_or(std::vector<BodyGlyphRun>{});
     body_layouts_.push_back(std::move(entry));
     return body_layouts_.back().layout;
 }
 
+// 保持した字形で描いた画素が DrawTextLayout と一致するのは、
+// 次の 3 つがそろうときだけ（ADR 0073）。
+// (1) 描画先の DPI が core::reference_dpi（96）で、collector の GetPixelsPerDip が 1。
+// (2) 描画先の変換が恒等で、collector の GetCurrentTransform も恒等。
+// (3) 行の原点 area.left / area.top が整数の画素。
+// どれかを変えるときは字形の保持をやめるか、collector の答えを同じ値から出す。
+// tests/ui が (1) と (2) の collector 側の値を確かめる。
 void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area)
 {
     const auto entry = std::ranges::find_if(body_layouts_, [text](const BodyTextLayout &value)
