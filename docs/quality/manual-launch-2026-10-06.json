@@ -1,0 +1,14 @@
+{
+  "launchedAt": "2026-10-06T00:15:30.2523651+09:00",
+  "issue": 291,
+  "sourceCommit": "f42a95dedf1650382fb44a320895ddcea499a3d5",
+  "documentationHead": "728eb084d7f1c100f181eb55d54448ce8a52ac46",
+  "executable": "D:/NeNeNib/worktrees/291-display-width-capsule-20261005/build/release-f42a95d/NeNeNib.exe",
+  "sha256": "44B017F33241E320BC5F182CEEB1CAFC6899255F898C0AC943703BC04F023900",
+  "processId": 568,
+  "mainWindowHandle": 462050,
+  "mainWindowTitle": "NeNe Nib",
+  "waitForInputIdle": true,
+  "profile": "Inherited normal user environment; no profile override or measurement arguments.",
+  "status": "Launched for hide manual testing; feedback pending. Leave this process and its worktree running."
+}

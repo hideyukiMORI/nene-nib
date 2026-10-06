@@ -1,0 +1,1181 @@
+{
+  "issues": [
+    294,
+    295
+  ],
+  "status": "HOLD; main merge not accepted",
+  "measuredAt": "2026-10-05",
+  "sources": {
+    "mainEquivalent": "591b99f",
+    "main": "936b50b",
+    "width": "36a1c9c",
+    "status": "1883e27"
+  },
+  "archive": {
+    "archive": "D:\\NeNeNib\\evidence\\294-295-main-isolation-20261005\\main-isolation-evidence.zip",
+    "sha256": "e4afca114af9083a75a61ca744c72ac7829a30fa70c65c3be84b3c4125975717",
+    "bytes": 3823656,
+    "files": 306,
+    "allEntryHashesVerified": true,
+    "zipCrcVerified": true,
+    "bundlePrerequisite": "936b50b",
+    "status": "Both candidates HOLD; no merge; all D worktrees retained while acceptance is incomplete."
+  },
+  "audit": {
+    "planSha256": "46acf2eb4ecfefc6d8fccea28b835a140c527fbc76a90ded8a90fde2cbdeac2f",
+    "pairedSha256": "449e253bc3b191b66689f3c94cbd6144503bb80d0d27ce3166b3cfc9910eade0",
+    "rawAudit": [
+      {
+        "name": "empty-1-O",
+        "valid": false,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-1-O\\marks-keys.json",
+        "rawSha256": "3037f80ead075ef074018bf74a19b8a085cea0b4624c9c73a35ff7909eecfe16",
+        "inputCount": 212,
+        "markCount": 232,
+        "errors": [
+          "AssertionError: "
+        ],
+        "parserRejected": true
+      },
+      {
+        "name": "empty-1-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-1-A\\marks-keys.json",
+        "rawSha256": "7e47d3e7aecebd12b06fb34859f29e10a2667d65f2fd3fb04a0139b366dffc07",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-1-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-1-S\\marks-keys.json",
+        "rawSha256": "2cc35fc6eb11bc82fd06878c9df995ab7adc0943980e67db1b475381d1e791f3",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-2-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-2-S\\marks-keys.json",
+        "rawSha256": "0fcc0998f4b3f40f4021b9a39cc9156ddbda303a05d190c522fbc9031d70e49a",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-2-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-2-A\\marks-keys.json",
+        "rawSha256": "ce08a888df8b28af86bbab0c126956b0ee8476d34d7d9c28db26a61574d5179c",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-2-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-2-O\\marks-keys.json",
+        "rawSha256": "16a8a55f1fa5eb2cd6849b926c6c1c44871634387038cd9b2198407dfc11bd45",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-3-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-3-O\\marks-keys.json",
+        "rawSha256": "622859d9015129d92ffd43f67bf01da339b23c2abde9aa38f091f9a324e24038",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-3-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-3-A\\marks-keys.json",
+        "rawSha256": "696a45049da438d4dfa4aa90b6a32bf65885492568635a8ee211dff6d27d5878",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-3-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-3-S\\marks-keys.json",
+        "rawSha256": "8ff0e70e5002109a51b7bf11529e74bceebdfa4a6bb7e9c41c52e7f0d34868f9",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-4-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-4-S\\marks-keys.json",
+        "rawSha256": "c800ccc6cdbd8870a31b1ba1c9b48307b7e54c2a40067b32e1b0262af7f77cbf",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-4-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-4-A\\marks-keys.json",
+        "rawSha256": "2af368ea48d6a3475b9b3d4241ace932bbba8430ed8fdc1db5fe9887c03e49e0",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-4-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-4-O\\marks-keys.json",
+        "rawSha256": "c82523a17264375764e95aa7c2737d82cd44573da1c89af82d055cb621d233ab",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-5-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-5-O\\marks-keys.json",
+        "rawSha256": "3bf557f7bf79b6c4e803be312db8047dd5ed7d08b443b8fdbc69a8d37499db63",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-5-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-5-A\\marks-keys.json",
+        "rawSha256": "053539b30893868084559d4908f64bba168d860ff3f0a6a886e55e42e0952cd8",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-5-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-5-S\\marks-keys.json",
+        "rawSha256": "14735ab1588f08fa1a4965d0501a23630ac4e2344bbb618931dff14214c36ef6",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-6-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-6-S\\marks-keys.json",
+        "rawSha256": "70770091a561ce73229d57e39479cc11c6ac27faf072574db4be36461fa8314b",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-6-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-6-A\\marks-keys.json",
+        "rawSha256": "dadcf037a8761e682a640eceae8bdb08f3ebe786b68dfef3bc03df89838c727d",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "empty-6-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\empty-6-O\\marks-keys.json",
+        "rawSha256": "b520c22533b3df36faaf6c8439f677ae478e596898bc40267680d46e69d5931c",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-1-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-1-O\\marks-keys-large.json",
+        "rawSha256": "4a2aae8831a5f644646dedf1cb60c1da3b1b037fd7925d8433dc8c730db3b6e6",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-1-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-1-A\\marks-keys-large.json",
+        "rawSha256": "484d8333a037b99681a27c6a35d7e0d703b337755cd3e603e6207b1b18062f4f",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-1-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-1-S\\marks-keys-large.json",
+        "rawSha256": "bc7b3a481017454c5342a1403977938d0615e78934ff1e248c772c0487ef9c89",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-2-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-2-S\\marks-keys-large.json",
+        "rawSha256": "e85eb5b85d02f94731991376588cc0315844c49649eee396d6fe7dd272f58efe",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-2-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-2-A\\marks-keys-large.json",
+        "rawSha256": "f8ab6f6497fb0557a645fa3e36b4eb4a6b7ffe93c900655bd0c85647c1a61736",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-2-O",
+        "valid": false,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-2-O\\marks-keys-large.json",
+        "rawSha256": "c97e1100649988656365ae73dc1eabc93003e62d8cc1aff5c934961548075753",
+        "inputCount": 206,
+        "markCount": 224,
+        "errors": [
+          "AssertionError: "
+        ],
+        "parserRejected": true
+      },
+      {
+        "name": "16mib-3-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-3-O\\marks-keys-large.json",
+        "rawSha256": "285f35e17fabcdee9871363457a93fc24e6bf4af0ea3d2b4545e10c18db50188",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-3-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-3-A\\marks-keys-large.json",
+        "rawSha256": "edeed157371c0c95ea301ac0ceadd739fedaeb42f1b7a3e2b800e3f2041a441b",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-3-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-3-S\\marks-keys-large.json",
+        "rawSha256": "6a0fbf0542e94da0262c030dd0832dac262337d1571f8e19677c6afe54c731bd",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-4-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-4-S\\marks-keys-large.json",
+        "rawSha256": "42ccea8601d248a9e137396e0424d426890f49cc6cdcd4337437bf53ffe6be3f",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-4-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-4-A\\marks-keys-large.json",
+        "rawSha256": "1347b754dcf2e98b7187576438124e566edacbbec4def31392e00fab91e584b1",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-4-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-4-O\\marks-keys-large.json",
+        "rawSha256": "49e8cebed9f7b09dd08367ec7a0a7f7d5af76e2ed3aa9359e4972fca841ab759",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-5-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-5-O\\marks-keys-large.json",
+        "rawSha256": "611eac2443d0659c96b5556ce1cc5df34c425b4b6cec867fb96fc0735d90f680",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-5-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-5-A\\marks-keys-large.json",
+        "rawSha256": "4136721ba4453c7b68b6b0f72814ab11e1829669e9389fba3e5c32675258d649",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-5-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-5-S\\marks-keys-large.json",
+        "rawSha256": "3e8b3e06a964d9f2e80b6226febde37f6c1a45a3dc13b6bbca38a2546134364c",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-6-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-6-S\\marks-keys-large.json",
+        "rawSha256": "8a27aa7b707b059e93c87cde57f087843adf78f04394e6a1a6fc785f741f35e9",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-6-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-6-A\\marks-keys-large.json",
+        "rawSha256": "332223faadf0c76e0cd9f394f5ee46a04d2e634fc1297cbeebb12a9b487b9b78",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "16mib-6-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\16mib-6-O\\marks-keys-large.json",
+        "rawSha256": "9f2825c2c20a166e6719d77b63d2b9f34ab82d8c8c55c6a161dfc4a90741f3b2",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-1-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-1-O\\marks-keys-large.json",
+        "rawSha256": "a075bf1b9aa429a005a1229dd99015f0577b4d2664f9e09d070cef89d5d43bbf",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-1-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-1-A\\marks-keys-large.json",
+        "rawSha256": "e3a9e9e979169142ba539ac6babf5b38b9ea9caad3e1c20c9b4b12f57f2e304c",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-1-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-1-S\\marks-keys-large.json",
+        "rawSha256": "b05623169bbcbd07c072f58b097cafeb83493b635ec7d945681129f905623f2f",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-2-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-2-S\\marks-keys-large.json",
+        "rawSha256": "a0adf163a44c1e7dc084cebd99f1e5a42050cb804a65fc4852904534c7ae8e7b",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-2-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-2-A\\marks-keys-large.json",
+        "rawSha256": "d27c80ea8e4a97f6d1fd14b607aabbc5986c1b51a7a1299f24a7a36ff3377f2c",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-2-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-2-O\\marks-keys-large.json",
+        "rawSha256": "cdf8eff3b57a0374959f87a9b4aecb695b4b7d2869b5f5b3efa4c43fe1caa52d",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-3-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-3-O\\marks-keys-large.json",
+        "rawSha256": "bdaa70cbe777216083d03b26052719e4313aa600e17b868aa97603088b1c815d",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-3-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-3-A\\marks-keys-large.json",
+        "rawSha256": "68eba41a1618a620219f6c119fd8f539289435b739542a2a0915d4be2f4b9cc6",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-3-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-3-S\\marks-keys-large.json",
+        "rawSha256": "4fed040503b8d002ea2cc11b795fdabd820bdfba613fc4032ed45460939d6fba",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-4-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-4-S\\marks-keys-large.json",
+        "rawSha256": "ae869b9e4db32c672ea4ffd5d40eb2c87b0a0fea743d9a2748fe5627b01aec50",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-4-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-4-A\\marks-keys-large.json",
+        "rawSha256": "0d2326d55d82fa1de0dfb49d3afeb60b8d3162baec15b727e8d2ee5e1fea9aa9",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-4-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-4-O\\marks-keys-large.json",
+        "rawSha256": "f79b63637d10f0acb4b6783fa0b41c0cb73647c2f410e1ba9251dff3acb43e2f",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-5-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-5-O\\marks-keys-large.json",
+        "rawSha256": "93f50e4c143d700f97dbf6c2eedbb4592825b4e03686a37329c9b969b8f92667",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-5-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-5-A\\marks-keys-large.json",
+        "rawSha256": "30a3ea31e0d27510f11b1564243df353791251582752a91002855324d18a550a",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-5-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-5-S\\marks-keys-large.json",
+        "rawSha256": "9272351d1b163a396726e63a4b08ad95c29f7944e1c41f2f58d1826c7b613dfc",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-6-S",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-6-S\\marks-keys-large.json",
+        "rawSha256": "329af3ac003ea2de60dd33a3906df96ef59e77afb3dab8a86c049e221599197b",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-6-A",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-6-A\\marks-keys-large.json",
+        "rawSha256": "af8b638a1b1f452621e756f99e13c5f6c4858848640dfd3ab304531a11056df6",
+        "inputCount": 202,
+        "markCount": 217
+      },
+      {
+        "name": "long-japanese-6-O",
+        "valid": true,
+        "rawPath": "D:\\NeNeNib\\outputs\\294-295-main-comparison-20261005\\long-japanese-6-O\\marks-keys-large.json",
+        "rawSha256": "0a270b18dbd6350ca2e2220a674ba9b1f5c9e4481d7a515960255bdfc30f497e",
+        "inputCount": 202,
+        "markCount": 217
+      }
+    ],
+    "summary": {
+      "empty": {
+        "O": {
+          "singleMs": {
+            "valid": 5,
+            "values": [
+              1.209,
+              0.939,
+              1.061,
+              0.955,
+              1.183
+            ],
+            "medianMs": 1.061,
+            "maxMs": 1.209,
+            "driftMs": null,
+            "limitMs": 0.1061,
+            "stable": false
+          },
+          "burstMs": {
+            "valid": 5,
+            "values": [
+              4.854,
+              3.338,
+              8.505,
+              4.297,
+              3.534
+            ],
+            "medianMs": 4.297,
+            "maxMs": 8.505,
+            "driftMs": null,
+            "limitMs": 0.5,
+            "stable": false
+          }
+        },
+        "A": {
+          "singleMs": {
+            "valid": 6,
+            "values": [
+              1.535,
+              1.274,
+              1.25,
+              0.953,
+              0.998,
+              1.011
+            ],
+            "medianMs": 1.1305,
+            "maxMs": 1.535,
+            "driftMs": 0.276,
+            "limitMs": 0.11305000000000001,
+            "stable": false
+          },
+          "burstMs": {
+            "valid": 6,
+            "values": [
+              4.371,
+              4.457,
+              3.441,
+              5.268,
+              3.768,
+              5.319
+            ],
+            "medianMs": 4.414,
+            "maxMs": 5.319,
+            "driftMs": 0.8969999999999994,
+            "limitMs": 0.5,
+            "stable": false
+          }
+        },
+        "S": {
+          "singleMs": {
+            "valid": 6,
+            "values": [
+              0.654,
+              0.619,
+              0.854,
+              0.542,
+              0.537,
+              0.625
+            ],
+            "medianMs": 0.622,
+            "maxMs": 0.854,
+            "driftMs": 0.11199999999999999,
+            "limitMs": 0.1,
+            "stable": false
+          },
+          "burstMs": {
+            "valid": 6,
+            "values": [
+              4.079,
+              3.016,
+              4.262,
+              3.017,
+              4.011,
+              5.19
+            ],
+            "medianMs": 4.045,
+            "maxMs": 5.19,
+            "driftMs": 0.06799999999999962,
+            "limitMs": 0.5,
+            "stable": true
+          }
+        }
+      },
+      "16mib": {
+        "O": {
+          "singleMs": {
+            "valid": 5,
+            "values": [
+              2.006,
+              1.856,
+              2.256,
+              2.381,
+              2.244
+            ],
+            "medianMs": 2.244,
+            "maxMs": 2.381,
+            "driftMs": null,
+            "limitMs": 0.22440000000000004,
+            "stable": false
+          },
+          "burstMs": {
+            "valid": 5,
+            "values": [
+              11.533,
+              10.44,
+              10.549,
+              11.057,
+              11.502
+            ],
+            "medianMs": 11.057,
+            "maxMs": 11.533,
+            "driftMs": null,
+            "limitMs": 1.1057000000000001,
+            "stable": false
+          }
+        },
+        "A": {
+          "singleMs": {
+            "valid": 6,
+            "values": [
+              1.754,
+              1.877,
+              1.96,
+              1.829,
+              1.744,
+              2.349
+            ],
+            "medianMs": 1.853,
+            "maxMs": 2.349,
+            "driftMs": 0.04800000000000004,
+            "limitMs": 0.18530000000000002,
+            "stable": true
+          },
+          "burstMs": {
+            "valid": 6,
+            "values": [
+              7.969,
+              7.599,
+              7.568,
+              7.362,
+              7.784,
+              8.116
+            ],
+            "medianMs": 7.6915,
+            "maxMs": 8.116,
+            "driftMs": 0.1849999999999996,
+            "limitMs": 0.76915,
+            "stable": true
+          }
+        },
+        "S": {
+          "singleMs": {
+            "valid": 6,
+            "values": [
+              1.923,
+              1.458,
+              1.41,
+              1.579,
+              1.456,
+              2.189
+            ],
+            "medianMs": 1.5185,
+            "maxMs": 2.189,
+            "driftMs": 0.121,
+            "limitMs": 0.15185,
+            "stable": true
+          },
+          "burstMs": {
+            "valid": 6,
+            "values": [
+              9.271,
+              7.494,
+              8.146,
+              7.718,
+              7.025,
+              8.887
+            ],
+            "medianMs": 7.932,
+            "maxMs": 9.271,
+            "driftMs": 0.4280000000000008,
+            "limitMs": 0.7932000000000001,
+            "stable": true
+          }
+        }
+      },
+      "long-japanese": {
+        "O": {
+          "singleMs": {
+            "valid": 6,
+            "values": [
+              314.008,
+              320.42,
+              312.946,
+              318.99,
+              338.816,
+              315.49
+            ],
+            "medianMs": 317.24,
+            "maxMs": 338.816,
+            "driftMs": 4.982000000000028,
+            "limitMs": 31.724000000000004,
+            "stable": true
+          },
+          "burstMs": {
+            "valid": 6,
+            "values": [
+              468.935,
+              465.723,
+              460.966,
+              468.626,
+              459.207,
+              466.371
+            ],
+            "medianMs": 466.047,
+            "maxMs": 468.935,
+            "driftMs": 0.6479999999999677,
+            "limitMs": 46.60470000000001,
+            "stable": true
+          }
+        },
+        "A": {
+          "singleMs": {
+            "valid": 6,
+            "values": [
+              313.558,
+              314.193,
+              317.469,
+              321.378,
+              312.001,
+              315.699
+            ],
+            "medianMs": 314.946,
+            "maxMs": 321.378,
+            "driftMs": 1.5060000000000286,
+            "limitMs": 31.494600000000005,
+            "stable": true
+          },
+          "burstMs": {
+            "valid": 6,
+            "values": [
+              397.164,
+              398.379,
+              424.966,
+              404.742,
+              395.856,
+              401.046
+            ],
+            "medianMs": 399.7125,
+            "maxMs": 424.966,
+            "driftMs": 2.666999999999973,
+            "limitMs": 39.97125,
+            "stable": true
+          }
+        },
+        "S": {
+          "singleMs": {
+            "valid": 6,
+            "values": [
+              317.577,
+              310.509,
+              314.41,
+              315.225,
+              321.431,
+              311.706
+            ],
+            "medianMs": 314.8175,
+            "maxMs": 321.431,
+            "driftMs": 0.8149999999999977,
+            "limitMs": 31.48175,
+            "stable": true
+          },
+          "burstMs": {
+            "valid": 6,
+            "values": [
+              401.962,
+              395.746,
+              396.513,
+              396.713,
+              396.36,
+              396.993
+            ],
+            "medianMs": 396.613,
+            "maxMs": 401.962,
+            "driftMs": 0.20000000000004547,
+            "limitMs": 39.661300000000004,
+            "stable": true
+          }
+        }
+      }
+    },
+    "decisions": [
+      {
+        "issue": 294,
+        "result": "HOLD",
+        "checks": [
+          {
+            "fixture": "empty",
+            "metric": "singleMs",
+            "baseline": "O",
+            "candidate": "A",
+            "complete": false,
+            "baselineStable": false,
+            "candidateStable": false,
+            "deltaMs": 0.06950000000000012,
+            "limitMs": 0.1061,
+            "pass_": false
+          },
+          {
+            "fixture": "empty",
+            "metric": "burstMs",
+            "baseline": "O",
+            "candidate": "A",
+            "complete": false,
+            "baselineStable": false,
+            "candidateStable": false,
+            "deltaMs": 0.11699999999999999,
+            "limitMs": 0.5,
+            "pass_": false
+          },
+          {
+            "fixture": "16mib",
+            "metric": "singleMs",
+            "baseline": "O",
+            "candidate": "A",
+            "complete": false,
+            "baselineStable": false,
+            "candidateStable": true,
+            "deltaMs": -0.39100000000000024,
+            "limitMs": 0.22440000000000004,
+            "pass_": false
+          },
+          {
+            "fixture": "16mib",
+            "metric": "burstMs",
+            "baseline": "O",
+            "candidate": "A",
+            "complete": false,
+            "baselineStable": false,
+            "candidateStable": true,
+            "deltaMs": -3.365500000000001,
+            "limitMs": 1.1057000000000001,
+            "pass_": false
+          },
+          {
+            "fixture": "long-japanese",
+            "metric": "singleMs",
+            "baseline": "O",
+            "candidate": "A",
+            "complete": true,
+            "baselineStable": true,
+            "candidateStable": true,
+            "deltaMs": -2.2939999999999827,
+            "limitMs": 31.724000000000004,
+            "pass_": true
+          },
+          {
+            "fixture": "long-japanese",
+            "metric": "burstMs",
+            "baseline": "O",
+            "candidate": "A",
+            "complete": true,
+            "baselineStable": true,
+            "candidateStable": true,
+            "deltaMs": -66.33450000000005,
+            "limitMs": 46.60470000000001,
+            "pass_": true
+          }
+        ]
+      },
+      {
+        "issue": 295,
+        "result": "HOLD",
+        "checks": [
+          {
+            "fixture": "empty",
+            "metric": "singleMs",
+            "baseline": "A",
+            "candidate": "S",
+            "complete": true,
+            "baselineStable": false,
+            "candidateStable": false,
+            "deltaMs": -0.5085000000000001,
+            "limitMs": 0.11305000000000001,
+            "pass_": false
+          },
+          {
+            "fixture": "empty",
+            "metric": "burstMs",
+            "baseline": "A",
+            "candidate": "S",
+            "complete": true,
+            "baselineStable": false,
+            "candidateStable": true,
+            "deltaMs": -0.3689999999999998,
+            "limitMs": 0.5,
+            "pass_": false
+          },
+          {
+            "fixture": "16mib",
+            "metric": "singleMs",
+            "baseline": "A",
+            "candidate": "S",
+            "complete": true,
+            "baselineStable": true,
+            "candidateStable": true,
+            "deltaMs": -0.3345,
+            "limitMs": 0.18530000000000002,
+            "pass_": true
+          },
+          {
+            "fixture": "16mib",
+            "metric": "burstMs",
+            "baseline": "A",
+            "candidate": "S",
+            "complete": true,
+            "baselineStable": true,
+            "candidateStable": true,
+            "deltaMs": 0.24050000000000082,
+            "limitMs": 0.76915,
+            "pass_": true
+          },
+          {
+            "fixture": "long-japanese",
+            "metric": "singleMs",
+            "baseline": "A",
+            "candidate": "S",
+            "complete": true,
+            "baselineStable": true,
+            "candidateStable": true,
+            "deltaMs": -0.12850000000003092,
+            "limitMs": 31.494600000000005,
+            "pass_": true
+          },
+          {
+            "fixture": "long-japanese",
+            "metric": "burstMs",
+            "baseline": "A",
+            "candidate": "S",
+            "complete": true,
+            "baselineStable": true,
+            "candidateStable": true,
+            "deltaMs": -3.0994999999999777,
+            "limitMs": 39.97125,
+            "pass_": true
+          }
+        ]
+      }
+    ],
+    "captures": [
+      {
+        "fixture": "empty",
+        "before": "O",
+        "after": "A",
+        "changedPixelsBelowTitle": 929,
+        "beforeSha256": "78d1ead2a17d9131d0a25735c767a3d18e5c5813d4ae143eec1a5a49e522005b",
+        "afterSha256": "24ca23a5c889f0e49ca057021cb9d9c8062260a2aeaebf13f07688ddddd0be35"
+      },
+      {
+        "fixture": "empty",
+        "before": "A",
+        "after": "S",
+        "changedPixelsBelowTitle": 0,
+        "beforeSha256": "24ca23a5c889f0e49ca057021cb9d9c8062260a2aeaebf13f07688ddddd0be35",
+        "afterSha256": "24ca23a5c889f0e49ca057021cb9d9c8062260a2aeaebf13f07688ddddd0be35"
+      },
+      {
+        "fixture": "16mib",
+        "before": "O",
+        "after": "A",
+        "changedPixelsBelowTitle": 0,
+        "beforeSha256": "464ad6213b3652a53dd1f988713f0b563fc5d21a1a0300fcb099d146a1297117",
+        "afterSha256": "464ad6213b3652a53dd1f988713f0b563fc5d21a1a0300fcb099d146a1297117"
+      },
+      {
+        "fixture": "16mib",
+        "before": "A",
+        "after": "S",
+        "changedPixelsBelowTitle": 0,
+        "beforeSha256": "464ad6213b3652a53dd1f988713f0b563fc5d21a1a0300fcb099d146a1297117",
+        "afterSha256": "464ad6213b3652a53dd1f988713f0b563fc5d21a1a0300fcb099d146a1297117"
+      },
+      {
+        "fixture": "long-japanese",
+        "before": "O",
+        "after": "A",
+        "changedPixelsBelowTitle": 0,
+        "beforeSha256": "91bd223d203ade7aa8d323e913b6bd3183f09b4eb62afaa9f07ced0ec4be8f70",
+        "afterSha256": "91bd223d203ade7aa8d323e913b6bd3183f09b4eb62afaa9f07ced0ec4be8f70"
+      },
+      {
+        "fixture": "long-japanese",
+        "before": "A",
+        "after": "S",
+        "changedPixelsBelowTitle": 0,
+        "beforeSha256": "91bd223d203ade7aa8d323e913b6bd3183f09b4eb62afaa9f07ced0ec4be8f70",
+        "afterSha256": "91bd223d203ade7aa8d323e913b6bd3183f09b4eb62afaa9f07ced0ec4be8f70"
+      }
+    ],
+    "noRetries": true,
+    "invalidRetained": true,
+    "limitations": "Input receipt to Present return, not photon latency. Descriptive partial statistics never establish acceptance. Original fixed thresholds unchanged."
+  },
+  "visual": {
+    "allEqual": true,
+    "comparisons": [
+      {
+        "label": "01-initial",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803",
+        "candidatePngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803"
+      },
+      {
+        "label": "02-same-repaint",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803",
+        "candidatePngSha256": "70dacbf8977b1924d89aad8bc33dd3c01b6fc5800b7f39753775def9a6a6b803"
+      },
+      {
+        "label": "03-column-ten",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "a1c3d8d25733141f9a9518785b0955a74a1223a3efc1ef1032a992582110dc17",
+        "candidatePngSha256": "a1c3d8d25733141f9a9518785b0955a74a1223a3efc1ef1032a992582110dc17"
+      },
+      {
+        "label": "04-next-column",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "43dc542e612e23ef8943521a366e12cb96681b6f3e9e7beb9ba10487392aaee3",
+        "candidatePngSha256": "43dc542e612e23ef8943521a366e12cb96681b6f3e9e7beb9ba10487392aaee3"
+      },
+      {
+        "label": "05-next-line",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "02806ad6f3dce96406eacf94586e524bc938a355fb42ef106585ef038fb53664",
+        "candidatePngSha256": "02806ad6f3dce96406eacf94586e524bc938a355fb42ef106585ef038fb53664"
+      },
+      {
+        "label": "06-vim-normal",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "7cd97c74c776952b8f800b44dff48977b5494c19248f0204e9adbf5f91658e3c",
+        "candidatePngSha256": "7cd97c74c776952b8f800b44dff48977b5494c19248f0204e9adbf5f91658e3c"
+      },
+      {
+        "label": "07-recording-normal-seven-slots",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "3894ccda706353e705e7314952de79ca92a06922f7019076bfd37681ab0cd5db",
+        "candidatePngSha256": "3894ccda706353e705e7314952de79ca92a06922f7019076bfd37681ab0cd5db"
+      },
+      {
+        "label": "08-recording-insert-seven-slots",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "ce11c8cd0822804cf14044d296cfcfa4273d0c660850aaadac3965a3a182ef68",
+        "candidatePngSha256": "ce11c8cd0822804cf14044d296cfcfa4273d0c660850aaadac3965a3a182ef68"
+      },
+      {
+        "label": "09-recording-stopped",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "8a53ea38452ef6375fde34b805a8d2f921f361291040bf198881d8be654674ec",
+        "candidatePngSha256": "8a53ea38452ef6375fde34b805a8d2f921f361291040bf198881d8be654674ec"
+      },
+      {
+        "label": "10-notice-replaces-labels",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "3b9979ce9854113f5d8a5637b376b840c124fd5282104d4ac9899237be66fb11",
+        "candidatePngSha256": "3b9979ce9854113f5d8a5637b376b840c124fd5282104d4ac9899237be66fb11"
+      },
+      {
+        "label": "11-labels-after-notice",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca",
+        "candidatePngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca"
+      },
+      {
+        "label": "12-command-replaces-labels",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "85bd3f7690bb518234181c4517a530930548a7ac110f4a24e0919e259e1ac506",
+        "candidatePngSha256": "85bd3f7690bb518234181c4517a530930548a7ac110f4a24e0919e259e1ac506"
+      },
+      {
+        "label": "13-labels-after-command",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca",
+        "candidatePngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca"
+      },
+      {
+        "label": "14-narrow",
+        "changedBodyStatusPixels": 0,
+        "width": 920,
+        "height": 660,
+        "originalPngSha256": "ae14545d08e3008f6403b7719107686af1d3bb56bb0447a83d8e91f2c5dbe01a",
+        "candidatePngSha256": "ae14545d08e3008f6403b7719107686af1d3bb56bb0447a83d8e91f2c5dbe01a"
+      },
+      {
+        "label": "15-wide",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca",
+        "candidatePngSha256": "e8f1a54a4588d82fefd9e41c7c3f9707ae22680f50b3127ca53b218018df18ca"
+      },
+      {
+        "label": "16-theme-changes-color",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "48ca6ec3dd83d9fb3cea6aac8628b3bea43d4ba586a9a687604f5652dfdd6889",
+        "candidatePngSha256": "48ca6ec3dd83d9fb3cea6aac8628b3bea43d4ba586a9a687604f5652dfdd6889"
+      },
+      {
+        "label": "17-body-font-size",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "c3e670c3e85798d520dcea9c3f3e80226d7f2583dde35fde2f78d2c737d0fc9e",
+        "candidatePngSha256": "c3e670c3e85798d520dcea9c3f3e80226d7f2583dde35fde2f78d2c737d0fc9e"
+      },
+      {
+        "label": "18-body-font-family",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "55bab120f0a8aba4a18e7a1b3a6e5efaa34920e1f15029c3d37840f09de5011a",
+        "candidatePngSha256": "55bab120f0a8aba4a18e7a1b3a6e5efaa34920e1f15029c3d37840f09de5011a"
+      },
+      {
+        "label": "19-body-font-restored",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "5f4bc68860671ba77d41f74f560bda47d17384c79e38b55de3a6918782f94ec8",
+        "candidatePngSha256": "5f4bc68860671ba77d41f74f560bda47d17384c79e38b55de3a6918782f94ec8"
+      },
+      {
+        "label": "20-palette-status",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "a62f31c5a5d29fd8eaf27377bc79d8985e056d89263ff3ed95b0974a2e98e9e5",
+        "candidatePngSha256": "a62f31c5a5d29fd8eaf27377bc79d8985e056d89263ff3ed95b0974a2e98e9e5"
+      },
+      {
+        "label": "21-palette-closed",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "31ae8f12806f823c901570f7a70eee5c2f55dc5ff1495a57b28811c46bf6b4cc",
+        "candidatePngSha256": "31ae8f12806f823c901570f7a70eee5c2f55dc5ff1495a57b28811c46bf6b4cc"
+      },
+      {
+        "label": "22-back-to-ordinary",
+        "changedBodyStatusPixels": 0,
+        "width": 1280,
+        "height": 800,
+        "originalPngSha256": "8ee1c0f59ef66c048c2b3f29cdd236a72bede2b6371fca2a6700f0679fdfaecc",
+        "candidatePngSha256": "8ee1c0f59ef66c048c2b3f29cdd236a72bede2b6371fca2a6700f0679fdfaecc"
+      }
+    ],
+    "source": "Existing window_driver and verify-window geometry; fixed 22 targeted states per version.",
+    "limitations": "No physical DPI transition, device loss, or forced DirectWrite allocation failure. Title excluded."
+  },
+  "reuse": {
+    "source": "c637acc",
+    "displayLineChecks": 1114301,
+    "vimVirtualColumnChecks": 424,
+    "unchanged": "git diff --exit-code c637acc 36a1c9c -- src/core src/application tests eng; CMake difference is only unrelated UI source registrations"
+  },
+  "constraints": "No retry, no threshold change, no baseline update. Partial statistics are descriptive. No full suite. Schema unchanged. Waivers: none."
+}

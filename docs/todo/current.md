@@ -3,6 +3,8 @@
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
+> 再開地点は[2026-10-06の引き継ぎ](../handoffs/2026-10-06.md)。#291 の改善一式は ADR 0075（施主決定 D41）の 4 条件で統合を受理した。長行の 1 打鍵は約 326 ms → 約 7 ms。[gate-proofs 5-cq](../quality/gate-proofs.md#5-cq--改善一式の統合の受理issue-291adr-0075施主決定-d41)。
+> 前の実験の `hold`（5-ck〜5-co）は記録として残す。split の採用は保留のまま。
 
 ## 運用（2026-10-03）
 
@@ -10,6 +12,8 @@
 - 繰り返す手順は `eng/` のスクリプト、道具の出力は `out/`。依頼書の型は [`docs/templates/implementation-seat-brief.md`](../templates/implementation-seat-brief.md)。過去の ADR 0038 / 0039 にある固定モデルや一律の分担より、現在の AGENTS.md と hide の指示を優先する。
 
 ## いまの Issue と次の順
+
+2026-10-06: #291 を統合し、分離した #294 / #295（PR #296 / #297）は #293 に含まれるので統合せずに閉じる。残す仕事は #298 / #299 / #300。[最新引き継ぎ](../handoffs/2026-10-06.md)。
 
 | 順 | Issue | 状態 |
 | --- | --- | --- |
@@ -21,8 +25,12 @@
 | 6 | #284 基本Exの保存と終了（ADR 0066） | **実装・検証済み**。対象1365 checks・Release・実機7場面/保存内容/3回の正常終了を受理。[PR #285](https://github.com/hideyukiMORI/nene-nib/pull/285)、[gate-proofs 5-cg](../quality/gate-proofs.md#5-cg--exの保存と終了issue-284adr-0066) |
 | 7 | #286 Exのファイル名付き保存とsaveas（ADR 0067・D39） | **実装・検証済み**。対象991 checks・Release・実機8場面/保存内容/3回の正常終了を受理。名前は保存成功時だけ更新。[PR #287](https://github.com/hideyukiMORI/nene-nib/pull/287)。[gate-proofs 5-ch](../quality/gate-proofs.md#5-ch--名前付きex保存issue-286adr-0067) |
 | 8 | #288 split前の区切り / #290 範囲・判定条件・限定描画試作（D40・ADR 0068） | **下準備・試作済み、製品採用は保留**。注釈付き`checkpoint/pre-split-20261003`を保存。長い日本語行で左右分割の費用が増え、事前条件を満たさない。[準備資料](../design/2026-10-03-split-preparation.md) / [gate-proofs 5-cj](../quality/gate-proofs.md#5-cj--splitの下準備と限定した描画費用issue-290adr-0068) |
-| 9 | #291 長い日本語行の単画面の入力遅延 | **未着手**。splitより先に既存描画の主な費用を特定する候補。#290から分離し、追加修正はしていない |
-| 10 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
+| 9 | #291 長い日本語行の単画面の入力遅延（ADR 0069〜0075、0072は実験不採用） | **済み**。文字組み・ステータス・字体選択・可視字形・幅索引。長行の 1 打鍵 約 326 → 約 7 ms。独立レビュー・速さのゲート 7 本・試用で受理（D41）。[PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)、[gate-proofs 5-cq](../quality/gate-proofs.md#5-cq--改善一式の統合の受理issue-291adr-0075施主決定-d41) |
+| 10 | #298 長い行の 1 打鍵を速さのゲートに足す（ADR 0075 決定 7） | 未着手。測るときは hide に確かめる |
+| 11 | #299 SDK の固定署名の恒久規則（WVR-0001 / 0002 の期限 2026-11-04） | 未着手。期限の前に main へ |
+| 12 | #300 字体選択と字形の保持の契約を CTest へ・取り付けの失敗で窓を終わらせない | 未着手 |
+| 13 | 操作の案内とヘルプ（Ctrl+P / F1・設定で消せる） | 現物調査済み・未起票。見た目の案を hide が選んでから |
+| 14 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
 
@@ -44,7 +52,7 @@ splitの下準備はD40でhide了承済み。本実装は試作結果から保�
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
 | 既定の `nib_tests` | scope 33。全件checksは最新差分で未測（過去の全件実測19449 checks）。`--bookmarks` 40 / `--ex-files` 82 / `--ordinary-characters` 233 / `--ex-document` 204 / `--ex-write-path` 90 checksを対象実行で確認（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-ch](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0068 まで（splitの実験方法。製品採用は保留） | [`docs/adr/README.md`](../adr/README.md) |
+| ADR | 0075 まで（0072 は実験不採用）。split の製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |

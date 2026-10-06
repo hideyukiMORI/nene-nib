@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BodyLayout.hpp"
+#include "BodyTextLayout.hpp"
 #include "ClauseEmphasis.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
@@ -12,12 +13,14 @@
 #include "RenderFailure.hpp"
 #include "RgbColor.hpp"
 #include "StatusBarLayout.hpp"
+#include "StatusTextLayout.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
 
 #include <windows.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <d2d1_3.h>
@@ -29,6 +32,7 @@
 #include <memory>
 #include <span>
 #include <string_view>
+#include <vector>
 #include <wrl/client.h>
 
 namespace nenenib::ui::win32
@@ -86,6 +90,8 @@ class Direct2DRenderer final
     void fill_rounded(const core::LayoutRect &area, core::RgbColor color, float radius);
     void write(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
                core::RgbColor color);
+    void write_status(std::string_view text, IDWriteTextFormat *format,
+                      const core::LayoutRect &area, core::RgbColor color);
     // 欄の右端に寄せて書き、欄の外は切る。幅 0 の欄には何も書かない。
     void write_right(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
                      core::RgbColor color);
@@ -101,6 +107,7 @@ class Direct2DRenderer final
     void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
+    void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
     [[nodiscard]] TextLayout text_layout(std::string_view text, IDWriteTextFormat *format,
                                          const core::LayoutRect &area);
@@ -198,6 +205,13 @@ class Direct2DRenderer final
     TextFormat command_format_;
     TextFormat gutter_format_;
     TextFormat code_format_;
+    // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
+    std::vector<BodyTextLayout> body_layouts_;
+    std::vector<BodyTextLayout> previous_body_layouts_;
+    // 右の3項目と通常/Vim・モード・録画の4ラベル。描画順に照合し、変化した枠だけ作り直す。
+    static constexpr std::size_t status_label_count = 4;
+    std::array<StatusTextLayout, core::status_item_count + status_label_count> status_layouts_{};
+    std::size_t status_layout_cursor_ = 0;
     WaitableHandle latency_{nullptr, &::CloseHandle};
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;

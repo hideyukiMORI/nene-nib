@@ -1375,9 +1375,10 @@ void EditorWindow::finish_tab_action(std::optional<std::size_t> close_request, b
 
 void EditorWindow::invalidate() noexcept
 {
-    if (window_ != nullptr)
+    if (window_ != nullptr && !paint_pending_)
     {
-        InvalidateRect(window_, nullptr, FALSE);
+        // 失敗した要求は覚えず、次の変更で同じ入口から再要求する。
+        paint_pending_ = InvalidateRect(window_, nullptr, FALSE) != FALSE;
     }
 }
 
@@ -1385,6 +1386,8 @@ void EditorWindow::paint()
 {
     // 無効領域を先に消してから描く。描いている間に来た変更は次の WM_PAINT が拾う。
     ValidateRect(window_, nullptr);
+    // 描画中の再要求を落とさないよう、present より前に次の無効化を受け付ける。
+    paint_pending_ = false;
     present(controller_.frame());
 }
 

@@ -2739,3 +2739,572 @@ PR #289を統合したclean mainは`088481b0c79436e9616445559aa4268225bd2ac0`。
 統合するのはSPECIFICATION・ADR/索引・設計・日報/current・本節・実測JSONだけ。`git diff --exit-code checkpoint/pre-split-20261003 -- src tests eng CMakeLists.txt`は終了0。`python eng/protected-diff.py --base 088481b --head 7e14f8d`も終了0（`out/290-protected.log` / `out/protected/7e14f8d.json`）で、fixtures 1853→1853、metadata/deleted/changed/addedはいずれも0、files changed none、scopes 33 / same 0 / 未測33。exeを渡しておらず、全scopeの件数を測った証明ではない。
 
 文書の規則ID/リンク/状態・空白の不整合だけを対象に、追記後の`conformance.document_checks(root, inventory(root), rules)`は違反0（`out/290-doc-conformance.log`）。`git diff --check`も終了0。製品の実装・試験・関連依存は区切りのタグと同じなので、5-chの製品検証とReleaseを再利用し、文書の統合を理由に製品テストや72試行を再実行しない。全件テスト・新しいVim oracle・IME/クリップボードの試験は選んでいない。製品schema変更なし、実測記録JSONを追加。Waivers: none。
+
+## 5-ck — 長い行の文字組み再利用（Issue #291・ADR 0069）
+
+2026-10-03〜04。FR-012 / FR-015 / FR-017 / D12 / D14 / D15 / ARC-001 / ARC-004 / ARC-007 / ARC-011 / CPP-011 / CPP-012 / CPP-016 / CPP-017 / QLT-001 / QLT-012 / QLT-013 / QLT-014。hideの続行指示に沿い、単体で原因の計測・修正・表示検証・split再比較を実施した。
+
+### 原因の切り分けと製品の差分
+
+`test/291-render-profile`で既存TimingPort/Milestoneだけに一時計測点を追加し、controller.apply、frame生成、UTF-16、layout作成、DrawTextLayout、EndDraw、待機と提示を分けた。時計はadaptersのQPCだけ。容量は一時的に65536へ増やし、全試行で未到達を確認した。最初の計測版は節目の関数長制限で落ち、未使用の3節目を除いて修正した。抑制と閾値変更はない。
+
+`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`でfedf727、続いてGetMetricsを先行させる比較版a0b2c57を生成し、各々終了0。ログは`out/291-profile-build-2.log` / `out/291-shaping-build.log`、メタデータは`out/release/<SHA>.json`。各版に`python D:/NeNeNib/scripts/291-render-profile.py --release out/release/<SHA>.json`を実行（後者は`--name shaped`）、各6本を固定して終了0。各版は空文書3本＋長い日本語行3本、1280×800 / DPI120 / Cascadia Code13.5pt。全202入力・1文字の独立・節目の組を確認した。
+
+長い行の中央値は325.999ms、19行のDrawTextLayoutが322.712ms。GetMetricsの先行版では文字組みを含むlayout作成が311.463ms、DrawTextLayoutが9.890ms。frame生成0.705ms、待機0.001msに対して、同じ表示行を毎回組み直すことが支配的だった。全段階の試行値は[実測JSON](long-line-render-2026-10-04.json)のprofileに保存した。
+
+製品の修正はa1a0e4d50a7c9eb784652a4d5ee65e11e7953e0dのui/win32の3ファイル。BodyTextLayoutとDirect2DRenderer.cpp / .hppに、全文・幅・行高が一致する現在/直前のlayoutの再使用と、書式再生成時の破棄を入れた。通常行・IME・クリックは既存layout_ofの一本。文字の範囲、fallback、描画API、編集状態、schemaは変更しない。計測点・先行GetMetrics・2枠試作は製品へ入れない。
+
+### 対象にした表示の検証
+
+退行の対象は、再使用によって古い文字・位置・書式が残ることと、共有layoutに選択等の表示が混入すること。`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`はa1a0e4dで終了0（`out/291-cache-build.log`）、警告とclang-tidyは既存設定。1307648 bytes、SHA-256 `20BDE40B142DCC16409E5CE4973B1FBA91B5FB739FB474835BDD35A88CF0FC4D`。
+
+変更3ファイルへclang-formatのdry-run、conformance.source_checksを選び、ADR 0069へdocument_checksを実行して違反0。型の配置・禁止API・抑制・文書契約を確認するためで、無関係なcore/applicationの全件テストは実行しない。
+
+`python D:/NeNeNib/scripts/291-layout-visual.py --executable <Release> --name before|after`を591b99fとa1a0e4dへ実行し、`--compare`は終了0。22場面の本文/ステータス全画素が一致（`out/291-visual/comparison.json`）。Tab、結合文字、異体字、絵文字、制御文字、双方向文字を含むfixtureで、再描画・入力・Backspace・改行・undo・3か所のクリック・選択・スクロール往復・窓幅往復・Vimのブロックキャレット・検索・フォントサイズ/名・テーマを確認した。刺激で画像が変わることと、設定の実保存値も検査した。初回の検証スクリプトはguifontの`:h<pt>`を欠き設定変更を検出できず停止したため、スクリプトだけを修正して再実施した。失敗した記録はbefore-invalid-fontへ保存した。
+
+既存`eng/verify-window.py`のverify_imeだけを専用profileで呼び、終了0（`out/291-visual/ime/result.json`）。日本語IMEの実入力で下線189画素、変換後の強調186画素、確定後の下線0を確認し、IMEの開閉状態を元の0へ戻した。DPIは実機120で、別DPIへの実移動とdevice lostの実機再現はしていない。フォント変更と同じ資源破棄へ通るコードを確認した。
+
+### 通常版とsplitの固定比較
+
+Oは変更前591b99f、Aは修正通常版a1a0e4d、S/H/Vは4d60d79 / 58a48fb / fc0b4c0。試作は#290と同じ矩形・クリップ・同じframeの二度描画で、各Refをbuild-release.ps1で生成して終了0。Sは143.923秒、Hは176.354秒、Vは178.419秒。H/Vは隔離したworktreeから生成した。メタデータと全hashは実測JSONに保存し、ビルドを全て終了してから測った。
+
+測定前にIssueへ3本文×6組×5版＝90本、奇数O/A/S/H/V・偶数V/H/S/A/O、欠測は記録して再試行なし、O/Aの前半後半の安定を要する通常版比較、#290と同じsplit条件を記録した。
+`python D:/NeNeNib/scripts/291-paired-render.py --manifest D:/NeNeNib/evidence/291-paired/manifest.json`は終了0。通常版の改善とsplitを一度に測り、別々の測定を重複させなかった。窓は1280×800、DPI120、各回新規profile、fixtureと字体は#290と同じ。測定器は既存keys_trialを共用した。
+
+`python D:/NeNeNib/scripts/291-render-audit.py`は終了0（out/291-render-audit.log）。90試行のうち87本は正確な202入力、暖機/1文字の独立、200文字後の提示、rawからの時間再計算、寸法/DPIを検証した。empty-3-O、empty-3-S、long-japanese-2-Oは207入力だったため欠測として保持した。値の補完・試行の置き換え・再試行はない。全て測れている修正通常版Aは3条件とも6本。
+
+観測された1文字 / 200文字の中央値（ms）。Oの空/長行とSの空は5本、他は6本。欠測がある数値も見せるが、性能受入の合格値とはしない。
+
+| 本文 | O 変更前 | A 修正版 | S 1枠試作 | H 上下 | V 左右 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 空文書 | 0.893 / 3.708 | 0.852 / 3.339 | 0.798 / 3.277 | 0.914 / 4.094 | 0.830 / 3.393 |
+| 16MiB短行 | 1.770 / 9.800 | 1.171 / 9.520 | 1.140 / 8.564 | 1.157 / 8.704 | 1.720 / 8.992 |
+| 長い日本語行 | 333.784 / 485.280 | 28.616 / 186.354 | 28.941 / 194.542 | 28.309 / 182.767 | 38.173 / 198.512 |
+
+長行の1文字の観測中央値は91.43%小さく、対応が取れた5組は全て292〜321ms短縮した。200文字も同じ5組が全て285〜314ms短縮した。ただし通常版の厳格比較は、空/長行のOに欠測、短行のOの200文字に前半11.005ms→後半9.219msの揺れ1.786ms（許容0.980ms）があり、3条件とも保留。成功したAの18本を失敗扱いにはしないが、O/Aの安定が必要という事前条件を外して合格にしない。
+
+splitはAの6本が全条件で安定していた。空のH/Vと短行のS/Hは事前条件内。空のSは欠測、短行のVは1文字追加0.549msが0.5msを越える。長行のSは200文字追加8.188msが許容18.6354ms以内でも5/6で増えたため、少差の一貫した増加を保留する条件に該当。H/Vの1文字の合計28.309 / 38.173msは2ms条件外で、Vの200文字追加12.1575msも1ms条件外。splitの製品採用と文書/枠の所有移行は引き続き保留する。同じ文字列を両枠へ出すため、cacheを共有できる有利な条件であり、独立した文書の費用は未測。
+
+### 証拠、自己レビューと受入状態
+
+profile.bundleとsplit-recheck.bundleはgit bundle verifyで成功し、共にmainの936b50bを必要な親として保存した。後者は修正元a1a0e4dも含むため、試作枝を消してもソースを復元できる。各試作の差分も保存した。
+全235ファイルの束は`D:/NeNeNib/evidence/291-render/long-line-render-evidence.zip`、9082031 bytes、SHA-256 `6e1fe550cf41204aa58a3e739ff39ede1eae2fb384833f89e4f870bd239397e1`。ZIPのCRC検査は成功。exeは含めず、全Releaseの生成元とhash、fixture、raw時刻、画像、ソースbundle、測定器を含む。
+
+自己レビュー: 本文/履歴を複製せず描画資源だけをuiに置く（ARC-001 / 004 / 011）。時刻と追加の非決定的入力を製品へ足さない（ARC-007）。COMはComPtr、移した空のlayoutは一致対象から除外し、フォント名/サイズ/DPIの書式再生成とframe終端で破棄する（CPP-016）。全ての本文の描画/IME/hit testがlayout_ofに通り、選択/検索の処理は共有layoutを書き換えない。CPP-011 / 012は型の配置と通常Releaseの静的解析で確認した。
+
+90試行の時点では実装・表示検証済み、性能受入とmergeは保留。draft PRで差分と証拠を保持した。ゲート/既存速度基準値/schemaの変更なし、Waivers: none。00:40にhideから、測定中にキーボードを操作していたとの回答を得た。予定外の入力があった3本は欠測のまま保存した。
+
+文書の整合はconformance.document_checksで違反0（`out/291-doc-conformance.log`）、`git diff --check`は終了0。`git diff --exit-code a1a0e4d -- src tests eng CMakeLists.txt`も終了0で、文書をまとめた後も検証対象の実装と依存は変わっていない。
+
+再利用: a1a0e4d以降の変更は文書だけで、製品の3ファイル・対象検証・関連依存は不変。22場面の一致、IME、Releaseと今回の測定をPR工程だけの理由で繰り返さない。残るリスクは、編集した長い行と初めて見える行の全文字組み、frame生成、同じ描画の再実行、表示行ぶんの資源保持、DPI/device lostの実機未確認、および欠測/対照揺れによる厳格比較の未判定。
+
+### 手動入力のない時間に行った通常版36本の別比較
+
+00:47にIssueへ別計画を先に保存し、hideの「いいよ」を受けて00:53〜00:57に実施。O/Aだけを3本文×6組＝36本、奇数O/A・偶数A/Oの順に固定した。以前の90本は上書き・補完せず、バイナリ、fixture、窓、DPI、字体、keys_trialと判定条件は同じ。表示22場面、IME、Release、split比較は再利用して繰り返していない。
+
+`python D:/NeNeNib/scripts/291-normal-paired.py --manifest D:/NeNeNib/evidence/291-normal-paired/manifest.json`は終了0。続く`python D:/NeNeNib/scripts/291-normal-audit.py`も終了0（`out/291-normal-audit.log`）。36本全て正確な202入力で欠測なし。暖機/1文字の独立、raw時刻からの再計算、窓1280×800 / DPI120も一致した。実測JSONのnormalRecomparisonに原記録と監査を追加した。
+
+| 本文 | O 変更前 1文字 / 200文字 ms | A 修正版 1文字 / 200文字 ms | 事前条件での判定 |
+| --- | ---: | ---: | --- |
+| 空文書 | 0.8895 / 3.5225 | 0.8095 / 3.8920 | Aの200文字が前半/後半で不安定のため保留 |
+| 16MiB短行 | 1.8190 / 10.1640 | 1.4485 / 8.7405 | O/Aとも安定、受入条件内 |
+| 長い日本語行 | 333.9125 / 498.3855 | 30.2085 / 194.2555 | O/Aとも安定、受入条件内 |
+
+長行の1文字は90.95%、200文字は61.02%短縮し、両方とも対応する6組全てで短縮した。短行も1文字6/6、200文字5/6で短縮した。
+空文書は中央値の増分が1文字-0.0800ms、200文字+0.3695msで許容内だが、Aの200文字の前半4.494ms→後半3.256msの差1.238msが許容0.500msを超えた。Oの200文字は前半3.537ms→後半3.508msで安定。今回も空文書全体を保留とし、中央値だけで合格にしない。入力混入による欠測は解消したが、この揺れの原因は未特定であり、退行確定とも無関係な測定ノイズとも断定しない。追加の再試行は行わない。
+
+別比較の束は`D:/NeNeNib/evidence/291-normal-paired/normal-render-evidence.zip`、57ファイル、1105344 bytes、SHA-256 `73580c19e1ec17ed7a1c7b1b7cc6a654e267dbc51c706a65c3f69c3ceb5547e5`。CRC検査成功。36本のraw、画像、fixture、測定器、事前計画、Releaseメタデータを含み、ソースは元の235ファイルの束をhashで参照する。
+
+**現在の残件は空文書の連続入力の安定性。** [PR #293](https://github.com/hideyukiMORI/nene-nib/pull/293)はdraftを維持し、性能受入全体とmergeは保留。splitの採用保留も変わらない。成功した短行・長行と表示確認は保存して再利用し、原因を特定せず合格まで測り直すことはしない。基準値・閾値・schemaは変更せず、waiverなし。
+
+追記後は文書の規則参照とPRの検証記録だけを確認した。document_checksは違反0（`out/291-normal-doc-conformance.log`）、`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-long-line-rendering.md --pr-body`と`git diff --check`は終了0。製品・対象テスト・依存はa1a0e4dから変わらず、アプリの再検証は行っていない。
+
+### 並行作業がある環境での空文書の内訳診断
+
+hideから他の作業が並行しGPUも使われているとの説明と続行指示を受けた。01:14にIssueへ固定12試行の診断計画を先に保存し、他プロセスや設定を変えずに実施した。共有負荷はhideからの説明であり、GPU占有率を別途計測したものではない。
+
+変更前の計装版fedf727を再利用し、同じ計測点だけをa1a0e4dへ重ねた2d8a10eを`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`で生成、終了0（`out/291-empty-profile-build.log`）。151.036秒、1308160 bytes、SHA-256 `88F95A6BE15095518474CDAF659C74781EE10F948008DF5C5115F4B04A8476DC`。2版の製品コードの追加/削除行が、検証済みのcache修正だけであることも比較した。最終的な製品枝には計装を入れない。GetMetrics先行版は使っていない。
+
+`python D:/NeNeNib/scripts/291-empty-diagnostic.py`を01:19〜01:20に実行して終了0。空文書6組、奇数O/A・偶数A/Oの12本は全て202入力、欠測なし。単打の独立、全節目の対、rawからの時間再計算、1280×800 / DPI120を確認した。節目数はOが709、Aが706で容量65536に未到達。集計処理は先に保存済みのprofileのrawでも確認した。単打・200文字全体・最後の入力以降を分解し、重なるUTF変換/文字組み/描画の区間を二重加算していない。各区間はQPCの経過時間で、CPUの実使用時間ではない。
+
+最後の入力から提示までに含まれる各区間の中央値（ms）。各行を別々に中央値へ取っているため合計は一致しない。
+
+| 区間 | O 変更前 | A 修正版 |
+| --- | ---: | ---: |
+| 本文描画 | 0.2495 | 0.1460 |
+| EndDraw | 0.3460 | 0.3165 |
+| 交換鎖の待機 | 0.0010 | 0.0010 |
+| Presentを含む提示 | 0.0480 | 0.0595 |
+| 最後の入力から提示まで全体 | 1.0275 | 0.9565 |
+
+本文描画は単打・連続入力とも対応する6組全てで短縮した。修正版の連続入力後の全体は0.929〜1.039msで、前回の1.536〜2.456msの跳ねは再現していない。修正版の第6組の単打だけは1.266msで、Presentを含む区間0.312msやstatus描画を含む区間0.404msなど複数箇所が長かったが、これを前回の連続入力と同一原因とは扱わない。
+
+**追加の製品修正を入れる根拠は得られなかった。** 今回の修正部分は短縮したが、前回の揺れの原因は未特定。共有GPU負荷が原因だとも、この診断で通常版の空文書の受入が済んだとも主張しない。PR #293はdraftのまま、共有負荷が落ち着いた時の通常版の空文書確認を残件にする。12本を繰り返さず、短行・長行・表示・IME・splitは再利用する。
+
+全記録は実測JSONのemptyDiagnostic。束は`D:/NeNeNib/evidence/291-empty-diagnostic/empty-diagnostic-evidence.zip`、27ファイル、106822 bytes、SHA-256 `4f148c785fe116bae1f3ca454ff802aebefee76cc16ad50495a79db05a547112`、CRC成功。raw、画像、事前計画、測定器、Releaseメタデータ、検証済みgit bundleと差分を含む。製品コードはa1a0e4dのまま、受入条件・schemaは変更せず、waiverなし。
+
+文書追記後のdocument_checksは違反0（`out/291-empty-diagnostic-doc-conformance.log`）、PR本文のgit-conventions.pyと`git diff --check`は終了0。`git diff --exit-code dcf5811 -- src tests eng CMakeLists.txt`も終了0で、製品枝に計装が混入していない。文書のための製品テストは追加していない。
+
+2026-10-04 02時台、hideの区切りの依頼で日報と引き継ぎ書を整理した。対象はCLAUDEの最新リンク、reports / handoffs / todoと本記録。リンク・規則参照の退行だけをdocument_checksで確認し、違反0（`out/291-handoff-doc-conformance.log`）。PR本文のgit-conventions.py、`git diff --check`、`git diff --exit-code 5e96aa7 -- src tests eng CMakeLists.txt`も終了0。製品・対象テスト・依存は不変で、ビルド・アプリ検証は再利用した。PR #293はdraft、空文書の通常版確認を残して区切る。
+
+### 空文書限定の測定準備（2026-10-04夕方、実測なし）
+
+hideの続行・分担指示により、設計サナが既存の状態・受入条件・コード経路をレビューし、SOLの実装サナがrunnerと監査を準備した。その後hideから「今は操作中。測定の準備まで進めて」と指示があり、窓の起動、前面操作、入力、実測を一切行っていない。Issue #291に固定計画を追記し、PR #293はdraftを維持する。
+
+対象は未判定の通常版の空文書のみ。O=591b99f / A=a1a0e4d、6組12本、奇数O/A・偶数A/O、1280×800 / DPI120、設定ファイルのない新規profileで既定Cascadia Code13.5pt。既存`eng/measure-speed.py.keys_trial`を各試行1回だけ呼ぶ。202入力と暖機/単打の独立、200文字後の提示、rawから再計算した時間、既存50ms以内の到着幅を監査する。寸法/DPIは時刻raw自体には無く、入力前と閉じる直前の`observation.json`で照合する。
+
+受入条件は前計画を維持する。O/A各6本が揃い、各版の前半3本/後半3本の中央値差が単打max(0.1ms,その版の全6中央値の10%)、200文字max(0.5ms,同10%)以内で、A-Oの中央値差もO基準の同許容幅以内のときだけaccepted。欠測・不安定はholdとし、追加試行・上書き・合格までの反復を拒否する。GPU負荷の有無は開始時にhideと確認し、他の作業を停止しない。
+
+新しい道具だけを対象に、`python D:/NeNeNib/scripts/291-empty-acceptance.py --prepare`、`python D:/NeNeNib/scripts/291-empty-acceptance-audit.py --self-check`を実行し、両方終了0。合成rawの正例と、未完了JSON・提示欠落・入力不足・単打の独立性欠如、判定の安定した正例と不安定・許容差超過・欠測・実際に順序を入れ替えた反例を確認した。これは監査器の動作確認であり、製品性能の受入ではない。結果は出力領域の`self-check.json`。設計レビューで設定ファイルを書かない従来条件と、過去の準備版を実行領域に混ぜないことを確認した。
+
+実行領域は`D:/NeNeNib/outputs/291-empty-acceptance-20261004-evening/`で、現在は`manifest.json` / `plan.json` / `self-check.json`のみ。開始記録・試行profile・rawは無い。runner SHA-256は`6b8226fdfbc6a4f0e1082f5abafd5278b9a92b52858dd58339dff983df509e10`、監査は`9f382496c5906ec9a91f19ab8c9ff725e0c2c1d405d85edf44cc04e63998c8ff`、固定planは`b51905ea80ee7086f1dadcafc969fed634edc1fb154e9a0d616033c7ae84e6ef`。自己確認が参照したコードと現行コード、plan内の依存hashが全て一致することを親でも確認した。
+
+準備の証拠は`D:/NeNeNib/evidence/291-empty-acceptance-preparation/preparation-evidence.zip`。16ファイル、41561 bytes、SHA-256 `49bee5c0b1ba378875bd58aab19e9b9bede62aba814fc2a791e7fef83201815c`、ZIPのCRC成功。runner・監査・現行plan/manifest/自己確認・置き換えた未実行の準備記録・事前計画・Releaseメタデータ・共用測定器を収載した。実測を含まない束として区別する。
+
+再利用の根拠: `Get-FileHash -Algorithm SHA256 build/release-a1a0e4d/NeNeNib.exe,build/release-591b99f/NeNeNib.exe`で既存metadataと一致、`git diff --exit-code a1a0e4d HEAD -- src tests eng CMakeLists.txt`も終了0。成功済みのRelease、表示22場面、IME、短行・長行、split比較を再実行しない。製品・schema・性能閾値の変更なし。適用はQLT-001 / QLT-012 / QLT-013 / QLT-014 / CNF-006 / GIT-004、Waivers: none。空文書の性能受入とmerge、splitの採用は未完了のまま。
+
+準備の文書更新では、リンク・規則参照の退行だけを`conformance.document_checks(root, inventory(root), rules)`で確認し、違反0（`out/291-empty-prepare-doc-conformance.log`）。PR本文は`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-empty-prepared.md --pr-body`が終了0、`git diff --check`も終了0。製品テストは追加していない。追加worktreeは無く、未実施の固定計画を持つ出力と、未実行の準備履歴を持つ`D:/NeNeNib/outputs/291-empty-acceptance-preparation-history-20261004-evening/`を残す。#291の受理・統合後に証拠の収載を確認して整理し、ブランチとcommitは保持する。
+
+### 通常版の空文書12本の結果（2026-10-04 22時台）
+
+hideの「今作業してるエージェントが少ないからテストしてみて」を受け、夕方にIssueへ登録した固定計画を22:01:28〜22:02:50に一度だけ実行した。22:02:52に前面操作の終了を伝えた。稼働エージェントが少ないという申告は記録するが、GPU占有率や他プロセス負荷は測っておらず、無負荷環境とは扱わない。他の作業の停止・追加ビルドは行っていない。
+
+`python -u D:/NeNeNib/scripts/291-empty-acceptance.py --run`は終了0（`out/291-empty-acceptance-run.log`）。通常版O=591b99f / A=a1a0e4dの6組12本は全て有効。`python D:/NeNeNib/scripts/291-empty-acceptance-audit.py`は終了2（`out/291-empty-acceptance-audit.log`）、理由は欠測ではなく事前の安定条件未達。全12本で202入力・暖機/単打の独立・200文字後の提示・時刻rawからの再計算・到着幅・入力前/終了前の1280×800 / DPI120・新規profileの設定ファイル不在を確認した。planの依存hashとReleaseは不変。追加試行は0。
+
+| 指標 | O 変更前の中央値 ms | A 修正版の中央値 ms | A-O ms | O基準の許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1文字 | 1.0515 | 1.0470 | -0.0045 | 0.10515 |
+| 200文字 | 3.6825 | 3.4670 | -0.2155 | 0.50000 |
+
+中央値の差は両方とも許容内だが、両版の安定性を必要とする条件を満たさない。
+
+| 対象 | 前半3本中央値 ms | 後半3本中央値 ms | 絶対差 ms | 許容幅 ms | 判定 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| O 1文字 | 0.999 | 1.081 | 0.082 | 0.10515 | 安定 |
+| O 200文字 | 4.202 | 3.638 | 0.564 | 0.50000 | 不安定 |
+| A 1文字 | 1.122 | 0.876 | 0.246 | 0.10470 | 不安定 |
+| A 200文字 | 3.347 | 3.656 | 0.309 | 0.50000 | 安定 |
+
+したがって通常版の空文書は引き続きhold。修正版の中央値悪化や入力欠落を検出したという結果ではなく、対照も含む揺れにより性能比較の受入を確定できない。揺れの原因は未特定で、GPU・他作業・製品のいずれとも断定しない。現在の条件を緩めず、同じ試行を繰り返さない。
+
+SOLの実装サナが読み取り専用で独立に再計算し、12本の入力・提示・寸法/DPI・profile・hashとhold判定が一致。200文字の途中の提示は全12本0枚。到着幅の前半/後半中央値はO 2.960/2.594ms、A 2.369/2.675ms、最後の入力→提示はO 1.130/1.046ms、A 0.963/0.981msだった。中央値の分解を足して原因の寄与率とは扱わない。報告は`D:/NeNeNib/outputs/291-empty-acceptance-review/review.txt`、SHA-256 `d1af1fc83e99d47a4e3c29c193e92d17820fd58aa16de12db7e9eea74f8e6800`。レビューでGUI・再測定・ビルドは行っていない。
+
+原記録と監査は実測JSONの`emptyAcceptance`へ追加し、既存の全sectionを値比較で不変と確認した。証拠の束は`D:/NeNeNib/evidence/291-empty-acceptance/empty-acceptance-evidence.zip`、65ファイル、67478 bytes、SHA-256 `c5eeb7923c1acd4455d827d160028baf45c3dbb557b43fc6821eb584b268498b`、CRC成功。全12本のraw/observation/profile、plan、runner/監査、共用測定器、Releaseメタデータ、ログ、実行時の申告、独立レビューを含み、exeは含めない。旧90本・36本・計装診断12本・準備の束は置換しない。
+
+製品はa1a0e4dのまま。成功済みのRelease・表示22場面・IME・短行・長行・split比較を再利用し、今回の未達で無関係な検証を追加しない。PR #293はdraft、mergeとsplit採用は保留。schema・基準値・受入条件の変更なし。適用はADR 0069 / QLT-001 / QLT-012 / QLT-013 / QLT-014、Waivers: none。追加worktreeは無く、未受理のrawを持つ実行領域と独立レビュー出力は#291の受理・証拠収載後の整理まで保持する。
+
+記録更新の検証は文書参照とJSONの追加範囲に限定した。document_checksは違反0（`out/291-empty-result-doc-conformance.log`）、`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-empty-result.md --pr-body`と`git diff --check`は終了0。実測JSONは更新前のHEADと全既存sectionを値比較して一致し、追加はemptyAcceptanceだけ、12本有効とholdをそのまま保持している。
+
+### hideの追加指示による通常版の空文書12本（2026-10-04 22:15）
+
+hideの「もう一回やってみて」を受け、先のholdと原記録を残したまま、同条件の別計画をIssueへ先に記録した。環境を改善したと確認できたための再試行ではない。runnerはOUTPUTとAUDITORの参照先2行だけを変更し、監査器は同一。`D:/NeNeNib/scripts/291-empty-repeat-20261004-2214/291-empty-acceptance.py --prepare`と同所の監査器`--self-check`は終了0。
+
+`python -u D:/NeNeNib/scripts/291-empty-repeat-20261004-2214/291-empty-acceptance.py --run`を22:15:31〜22:16:52に実行し終了0。同所の`291-empty-acceptance-audit.py`は終了2。全12本の入力・提示・寸法/DPI・profile・hashは有効だが、4条件全てで前後半の安定条件を満たさずhold。固定計画内の追加試行は0。22:16:53に前面操作の終了を伝えた。
+
+| 指標 | O 変更前の中央値 ms | A 修正版の中央値 ms | A-O ms | O基準の許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1文字 | 1.1290 | 1.0145 | -0.1145 | 0.11290 |
+| 200文字 | 4.4215 | 4.0865 | -0.3350 | 0.50000 |
+
+| 対象 | 前半3本中央値 ms | 後半3本中央値 ms | 絶対差 ms | 許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| O 1文字 | 1.188 | 1.070 | 0.118 | 0.11290 |
+| A 1文字 | 1.084 | 0.859 | 0.225 | 0.10145 |
+| O 200文字 | 3.641 | 4.450 | 0.809 | 0.50000 |
+| A 200文字 | 3.717 | 4.471 | 0.754 | 0.50000 |
+
+SOLの実装サナの独立再計算でも、全rawの有効性とholdが一致。報告は`D:/NeNeNib/outputs/291-empty-repeat-review-2214/review.txt`、SHA-256 `76d5cf09b2f37b9316b69a89d54317d2f169a188f039b27a20c0c6bd791133c1`。実測JSONの`emptyAcceptanceRepeat`へ別sectionで収載し、前の結果を置き換えていない。
+
+証拠の束は`D:/NeNeNib/evidence/291-empty-repeat-2214/empty-repeat-evidence.zip`、65ファイル、65782 bytes、SHA-256 `3a56d4071794e28f53e12b9aad830ef7fc17868d6a4348cb2828e819c67bd4d4`、CRC成功。raw・監査・plan・測定器・実行時の申告・Releaseメタデータ・独立レビューを保持し、exeは含めない。出力`D:/NeNeNib/outputs/291-empty-repeat-20261004-2214/`と独立レビューは未受理の証拠として保持する。
+
+この比較でも製品退行やGPU起因は確定していない。製品はa1a0e4dのまま、PR #293はdraft。成功済みの関連検証は再利用し、受入条件・基準値・schemaは変更していない。適用はADR 0069 / QLT-001 / QLT-012 / QLT-013 / QLT-014、Waivers: none。
+
+記録更新はdocument_checksが違反0（`D:/NeNeNib/outputs/291-empty-repeat-20261004-2214/doc-check.txt`）、PR本文の`python eng/git-conventions.py D:/NeNeNib/briefs/pr-291-repeat-result.md --pr-body`が終了0。実測JSONの既存sectionを更新前HEADと値比較して全て一致し、追加はemptyAcceptanceRepeatだけ。`git diff --exit-code a1a0e4d HEAD -- src tests eng CMakeLists.txt`も終了0で、記録のための製品テストを追加していない。
+
+### 揺れの所在を調べる内訳診断とOS追跡の制約（2026-10-04 23時台）
+
+hideの原因調査指示と「進めて」を受け、保存済み通常raw24本の分解・コード追跡に続いて、既存計装O=fedf727 / A=2d8a10eの固定6組12本を実施した。事前planと依存hashは`D:/NeNeNib/outputs/291-empty-stage-investigation-20261004/plan.json`、SHA-256 `69e8bf6758fbdc8edc14655f99ae2b6f1ab4e7ba466bb5c71b40cab5aebafc6b`。旧stage解析を変更せず再利用し、`--prepare`と既存raw再解析で一致を確認してから開始した。
+
+`python -B -u D:/NeNeNib/scripts/291-empty-stage-investigation-20261004.py --run --plan-sha256 69e8bf6758fbdc8edc14655f99ae2b6f1ab4e7ba466bb5c71b40cab5aebafc6b`は23:11:52〜23:13:13、終了0（`D:/NeNeNib/outputs/291-empty-investigation-20261004/stage-run.log`）。全12本で202入力・暖機/単打の独立・提示・段階マークの対・1280×800 / DPI120・設定不在を確認。欠測0、追加試行0。23:13:13に前面操作終了を通知した。計装版の経過時間であり、通常版の性能受入へ代用しない。
+
+O第2組の200文字は4.830ms、そのうち最初〜最後の入力受信が3.816ms。199入力間隔の内訳は、input→apply開始の合計0.020ms、apply内1.411ms、apply終了→次input2.385ms。最後の区間はほかのO5本で1.121〜1.148msだった。100µs以上の入力間隔が5か所あり、最大220µsは第53→54文字（apply6µs / apply後214µs）。単一の約1ms停止ではなく、主な増加がapply後へ分散していた。
+
+apply後にはIME方針反映・再描画要求・題名更新判定・告知/終了判定・frameや一時文字列の解放・メッセージループ・OSの実行待ちが含まれる。controller.apply内のframe生成はapply側に計上済み。この入力経路はO/Aで同じで、途中に本文cacheを実行する経路はない。ただしOS待ちと未計装のCPU処理はまだ区別できない。
+
+O第1組の単打1.863msではEndDrawが1.108ms（ほかのOは0.180〜0.277ms）だった。API内部のCPU処理・driver処理・GPU待ち・OSの実行待ちはrawだけでは識別できず、全ての単打の揺れが同じ箇所に出たわけでもない。測定した単打/連続入力の交換鎖Waitは0〜0.003msで、この待機の長さは今回の大きな増加を説明しない。
+
+本文bodyは単打・連続入力とも全6対応組でAが短縮。中央値は単打O/A=0.2445/0.1185ms、連続入力後O/A=0.2600/0.1395ms。**今回のcacheを揺れの原因と判断する証拠は得られなかった。OSコンディションは有力な候補だが未確定**。独立再計算でも全raw/hash/段階/summaryと解釈が一致。報告は`D:/NeNeNib/outputs/291-empty-investigation-20261004/stage-review.txt`、SHA-256 `e01795a77cfdc3da3b5fdb0dd63d1b5cb3e5276f9441673fd84e74eefcc768b7`。
+
+hideのOS条件についての問いを受け、診断専用のWPR設定`D:/NeNeNib/scripts/291-os-waits.wprp`を準備。単一32MiB collectorでCSwitch/ReadyThread/ProcessThread/ThreadPriority/Loader/CpuConfig/Power/DPC/Interruptのみを記録する設定は`wpr -profiledetails`終了0。独自`NeNeNib291Capability`のstartを1回だけ試み、`0x80070005 Access is denied`で拒否された。直後のstatusは独自session不在、ETL未取得。現在の権限ではOS実行状態の裏付けを取得できない。他session操作・権限変更・OS設定変更・再試行は行っていない。詳細は`D:/NeNeNib/outputs/291-os-wait-trace-preparation-20261004/capability-result.json`。これは原因診断のための外部観測であり、ADR 0011の正典の性能測定をETWへ置換するものではない。
+
+実測JSONの`emptyStageInvestigation`へ別sectionで保存。証拠の束は`D:/NeNeNib/evidence/291-empty-stage-investigation-20261004/empty-stage-investigation-evidence.zip`、66ファイル、348776 bytes、SHA-256 `78d37a60b4a53742e4b17ed493110f749ae947a12df885c59c606003ad5e48a9`、CRC成功。raw/plan/trial/profile/測定器/Release metadata/通常rawと入力間隔の分解/独立レビュー/OS追跡の拒否記録と、旧計装・通常比較2回の証拠の束を含む。exeは含めない。
+
+製品はa1a0e4dのまま、追加の修正・ビルドは行っていない。通常版のholdとdraft PR #293を維持。成功済みRelease・表示・IME・短行・長行を再利用し、受入条件・基準値・schemaは不変。適用はADR 0011/0069、QLT-001/012/013/014、ARC-007、Waivers: none。追加worktreeなし。未解決の調査資料と未受理の証拠をD領域に保持する。
+
+
+### 入力後段の切り分けと重複無効化の改善（2026-10-04 23:27以降）
+
+hideの「30分くらい放置するので自由にテスト・検証・改善」の指示で、設計サナが判断・計測・受理を担当し、既に指名されたSOLの実装サナが隔離した計装/通常版候補と読み取りレビューを担当した。前面操作は23:52:08に終了を伝えた。他プロセスの停止、OS設定や権限の変更は行っていない。
+
+まず通常の入力経路と同じ計装Aへ入力後段6節目を足し、固定12本を23:37:32〜23:38:57に実行した。全202入力の順序、199区間の分解、途中描画/提示なし、1280×800・DPI120、新規profileの設定不在、raw/依存hashを確認し、欠測0。199区間の合計の中央値はapply 1.4745ms、invalidate 0.5785ms、messageLoop 0.7090ms。第12試行はburst 6.373msのうちarrival 5.448ms、tail 0.925msで、invalidate 1.317ms・messageLoop 2.309msが増えた。境界elapsedには隣接処理や計測費用が含まれ、messageLoopをOS待ち時間そのものとは扱わない。WPR権限拒否を迂回していない。
+
+改善は`EditorWindow.cpp/.hpp`の2ファイルに限定した。同じ`invalidate()`入口で、全クライアント領域の`InvalidateRect`が成功したときだけ窓の`paint_pending_`を立て、次の`WM_PAINT`まで重複API要求を省く。`paint()`は常に実行し、`ValidateRect`直後・描画前に解除して再入による次要求を残す。失敗時は次の変更で再要求できる。本文/編集状態の所有やWM_PAINT集約は不変で、ADR 0011の決定6へ実装詳細を追記した。根拠となる契約は[InvalidateRect](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-invalidaterect)と[ValidateRect](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-validaterect)。
+
+計装版A=`4d8040a`、同じ計測点で重複を省くB=`790e1bd`を固定6組12本（奇数A/B・偶数B/A）で比較した。欠測0、全試行202入力、途中描画/提示0。invalidate区間合計の中央値は0.6555→0.0190msで、対応6組すべて短縮。burst全体は4.438→3.567ms、短縮4/6組。singleは1.0520→1.0635ms、短縮3/6組。重複処理の軽減は確認できるが、全体が安定して改善したとは言わない。B第2組のmessageLoopは2.217msで、揺れは残った。
+
+通常版候補は`a1fd1e16440352111f37797874d0e8029df9276f`、Release SHA-256 `FAEA73967345B4AD655E26AE68DD45506DAECD9A07A815F28FB8651163955D83`、1307648 bytes。計装点は含まない。O=`591b99f`対A=この候補を新しい固定6組12本で比較し、既存runner/監査の入力・幾何観測・判定式をそのまま再利用した。旧A=`a1a0e4d`との比較ではない。全12本有効だが**性能受入はhold**。
+
+| 指標 | O 中央値 ms | 候補A 中央値 ms | A-O ms | O基準の許容幅 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1文字 | 0.9685 | 1.1080 | +0.1395 | 0.1000 |
+| 200文字 | 4.4880 | 3.4830 | -1.0050 | 0.5000 |
+
+O単打は前半0.962→後半1.238ms、差0.276>許容0.1ms。A連続入力は前半3.033→後半3.627ms、差0.594>許容0.5ms。さらに単打の中央値差も許容を超える。Oも不安定なので恒常的な製品退行やOS原因は確定せず、有利なburst中央値だけで合格にしない。各固定計画内の追加試行は0で、過去のholdと全rawを保持する。
+
+| 検証コマンドと対象 | 確認する退行・結果 |
+| --- | --- |
+| 各D worktreeで`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`、変更ファイルのclang-format、`git diff --check` | enum/入力経路の警告・型・整形。最初の計装`322924c`はmilestone_name 71行でclang-tidy失敗。不要な本文内部6節目を除いた`4d8040a`、`790e1bd`、通常`a1fd1e1`は終了0。抑制・閾値変更なし。各成功版は1回生成 |
+| `python -B D:/NeNeNib/scripts/291-post-apply-diagnostic.py --self-check`、`--prepare`、`--run --plan-sha256 c21ad1776b2a5f95a250157f8ca95f80c8489f421c9f0234a8f0b54dee807a0b` | 境界解析の正例、欠落・順序誤り負例と実測12本。終了0。旧本文内部4段階は未計測と明記し0埋めしない |
+| `python -B D:/NeNeNib/scripts/291-coalesce-paired.py --prepare --a <4d8040a.json> --b <790e1bd.json>`、`--run --plan-sha256 441fe056f31961beed88a22164346a02708af91fdd3c73dc98beade039f4fb46` | 同じ計測点で重複要求区間の比較。終了0・12本有効、前述の数値。raw/依存/集計の独立再計算も一致 |
+| `python -B D:/NeNeNib/scripts/291-coalesce-visual.py --exe <各exe> --name A` / `--name B` / `--compare` | 無効化の抑止や解除漏れ。両版正常終了、12場面の本文/ステータス全画素一致。編集→次paint編集、外部再描画→編集、縮小/拡大、最小化復帰→編集、モード、字体サイズ、テーマを確認。独立した刺激が画に出たことも検査。代表3画像を目視 |
+| `python -B D:/NeNeNib/scripts/291-coalesce-normal-acceptance.py --prepare` / `--run` / `--audit` | 計装なしの通常性能。準備/自己確認/実測は終了0。監査は非0（hold、外側PowerShellの終了値1）。全12有効、安定条件と単打数値条件未達。失敗を隠す再実行はしない |
+| `python -B D:/NeNeNib/scripts/291-coalesce-ime.py` | 共通invalidateを通るIME変換中/確定の描画漏れ。既存verify_imeを1回呼び、実鍵で変換・Space・Enter、確定後下線0、通常/Vim NORMAL/INSERTの開閉、開始時IME状態への復元、正常終了。終了0 |
+| `git diff --exit-code a1fd1e16440352111f37797874d0e8029df9276f -- src tests eng CMakeLists.txt` | 作業枝へ取り込んだソースと検証済み通常候補の同一性。終了0。文書・commit変更だけでビルド/GUIを再実行しない |
+
+旧layout-only版の22場面、短行・長行の数値、split試作は歴史的な成功記録として保持。今回の候補では共通入力経路が変わるため、旧短行・長行の性能値を新候補の実測値とは呼ばない。今回追加した変更には上の12場面とIME、空文書固定比較を対応させた。core/application全件、起動、大容量open、splitを今回の変更のために再試行しない。
+
+証拠は`D:/NeNeNib/evidence/291-coalesce-improvement-20261004/coalesce-improvement-evidence.zip`。211ファイル・3750342 bytes、SHA-256 `615974ded12f7581f7fa08a8c6e1377191f08bbc0c95de7f62a69f703d2838e7`、CRC成功。細分診断/計装比較/通常比較の全rawと計画、24画像、IME画像、測定器、依存源、独立レビュー、失敗を含むビルド記録、3枝のgit bundleを収載。bundleの必要な親は`936b50b`で`git bundle verify`終了0。23:11の証拠束も入れ、以前の原記録を置き換えない。
+
+判断: 重複削減の実装を作業枝へ保存し、PR #293はdraftのまま。空文書の性能受入・merge・split採用は保留。DPI物理遷移、device lost、描画中の実再入、InvalidateRect失敗は実機未再現。OS由来の断定も未了。適用は#291 / ADR 0011・0069 / ARC-001・004・007・011 / CPP-012・017 / QLT-001・012・013・014 / CNF-006 / GIT-004、Waivers: none。
+
+### 保存済み単打の再解析（2026-10-05 00時台）
+
+hideの約10分の調査依頼を受け、既存3実験の単打36本をrawから再解析した。製品commitは`dda40e4`のまま、追加のアプリ起動・計測・ビルド・製品変更は行っていない。対象は23:11の元版O対layout再利用A、23:37の入力後段細分版A、23:44の同じ計装によるA対重複無効化削減B。異なる実験の母集団は混ぜない。
+
+| 確認する誤りと対象 | 実行したコマンド・結果・証拠 |
+| --- | --- |
+| rawの取り違え、単打/burstの混在、区間の欠落・重複・不正な集計 | `python -B D:/NeNeNib/scripts/291-single-decomposition-20261005.py`、終了0。source/raw hash、各202入力、単打がburst前に提示済み、各節目1回・順序、11隣接区間の和と元singleMsの一致を全36本で確認。handler補助分解は11区間へ重ねて加算しない |
+| 解析実装に依存した見落とし | 読み取り専用の独立レビューで36 rawから区間、合計、variant中央値、各対応差を再計算し一致。COM参照の保持と解放位置もソース照合。`D:/NeNeNib/outputs/291-single-decomposition-20261005/review.txt` |
+| 証拠束への原記録の取り違えと破損 | `python -B D:/NeNeNib/scripts/291-single-decomposition-archive-20261005.py`、終了0。収載元hash照合とZIP CRC成功。再測定ではない |
+
+集計は`D:/NeNeNib/outputs/291-single-decomposition-20261005/decomposition.json`、解釈は同じ場所の`findings.txt`。解析スクリプトSHA-256は`45cce9ba2a9fde0966bb28281813c106354d8947c5eda7cddde49410890dacdd`。
+
+| 同一実験内の単打区間 | 元版/候補の中央値 ms | 確認できた範囲 |
+| --- | ---: | --- |
+| 23:11 O→layout再利用Aの本文body | 0.2445→0.1185 | body単独の短縮を全描画の短縮とはしない |
+| 同じO→Aのbody終了→EndDraw開始 | 0.2430→0.3030 | 対応A-Oは+0.069/+0.064/+0.014/+0.054/+0.064/+0.124ms、全6組で増加 |
+| 同じO→Aの各試行のbodyと後段の合計 | 0.4875→0.4225 | 対応差は-0.042/-0.032/-0.178/-0.073/-0.062/-0.021ms、全6組で短縮。中央値同士を足した値ではない |
+| 23:44 A→重複無効化削減Bの入力受信→handler戻り | 0.0370→0.0360 | この計装実験では中央値の増加なし |
+| 同じA→Bのapply後handler / handler戻り→paint | 0.0160→0.0155 / 0.0260→0.0250 | flag追加が通常版の悪化と無関係だと証明したものではない |
+
+23:44のB第4組は単打全体でAより+0.497ms。増分は本文後+0.207ms、本文前+0.076ms、本文+0.063ms、提示/戻り+0.063ms、EndDraw+0.058msなどに分布し、入力handlerの増分は+0.031ms。単一の区間だけへ原因を帰属しない。
+
+ソース上、元版は`draw_plain_line` / `draw_composed_line`のローカルCOM参照を関数終了時にReleaseする。再利用版はlayoutを保持し、前フレームの未再利用layoutをステータス/palette描画後の`previous_body_layouts_.clear()`で破棄する。この寿命と位置の変化により費用がbodyから後段へ移る可能性がある。ただし最終参照解放、Direct2D内部の参照保持、実際の破棄費用は未観測。後段にはステータス/palette・clear・実行待ちが含まれるため「解放時間」とは呼ばない。bodyと後段の合計も短縮しており、改善が全部見かけの移動だったとも断定しない。
+
+通常版O=`591b99f`対候補`a1fd1e1`で残る単打+0.1395msへ、別の計装実験の内訳を遡及して割り当てない。通常版の数値許容と安定条件の未達、OS原因未確定、WPR権限拒否は未解消。性能受入・merge・split採用はholdのまま。
+
+次回案は同じ出力先の`next-diagnostic-plan.json`。**未実装・未ビルド・未実行**で、`draw_status_bar`直後と`previous_body_layouts_.clear()`直後の2節目を追加し、既存のbody/EndDraw境界と組み合わせる。D側の隔離worktreeで既存TimingPort/Win32 adapterと入力driverを使い、破棄順序は変えない。現在候補1版・固定12本・202入力・1280×800/DPI120・新規既定profileの区間診断を想定。新しい前面操作時間の調整と実行前のhash/出力先固定が必要で、通常版受入条件の代用にはしない。
+
+恒久証拠は`D:/NeNeNib/evidence/291-single-decomposition-20261005/single-decomposition-evidence.zip`。45ファイル、497764 bytes、SHA-256 `ad6eb10b3d759d424439a73e1418383996a4a96aea12e7f6dbe196df0f02c8bd`。解析・所見・次回案・独立レビュー、3実験の元集計と36 raw、解析/梱包スクリプトを収載。CRC成功は同じ場所の`archive.json`に記録済み。既存の原記録・証拠を置き換えていない。
+
+今回の日報・引き継ぎ保存は文書と参照先だけを変更し、関連する製品・テスト・依存は不変。`git diff --check`は終了0、新しい2文書のローカルリンクと見出し参照6件、および日報のIssue要約6行を`python -B -`の限定照合で確認した。先行するRelease/静的検査/表示/IMEの成功結果と性能holdをそのまま再利用し、アプリの再起動や全件検証は行わない。適用は#291 / ADR 0011・0069 / QLT-001・012・013・014 / GIT-003・004。製品schemaと受入幅の変更なし、Waivers: none。
+
+## 5-cl — ステータスの固定枠と単打分布（Issue #291・ADR 0070）
+
+2026-10-05夜、hideから対象を局所的に閉じて速度と安定性を改善する指示と、食事中に改善・計測を進める許可を受け、現在のサナが単体で実装・検証した。前面操作は21:34 JSTに終了。通常版は`a1fd1e1`を対照O、ステータス固定枠を加えた`0dfad49d9f79e2efd7f165a35e9221f999c4a441`を候補Aと呼ぶ。Oにも本文layout再利用と重複無効化削減が入っており、元の`591b99f`との比較ではない。
+
+### 対象と実装
+
+本文後の区間を分けた計装版`5476c66`で、ステータス描画は単打中央値0.282ms・最大0.321ms、前フレームの本文layout解放は0.001ms・最大0.002msだった。対象をステータスに絞り、`Direct2DRenderer.cpp/.hpp`と新しい`StatusTextLayout.hpp`で最大7枠を所有する。`draw_status_bar`で枠位置を戻し、文字列全文・書式・幅・高さが同じ枠のUTF変換と文字組み生成を省く。色と原点は毎回使う。UI書式再作成前に全枠を破棄し、作成失敗では古い表示を出さない。コマンド入力の専用layout、本文cache、解放位置、入力経路は変更しない。
+
+通常候補Releaseは1311744 bytes、SHA-256 `A68628E8E48D9D83063B26ECA1F8FE00E42797A74DB7C7369389EAE6A51918AE`。既存の作業枝`fix/291-long-line-rendering`を検証済みcommitへfast-forwardした。計装は診断枝だけに保持する。main・remote PRへの反映は行っていない。
+
+### 表示・構造の検証
+
+| 実行したコマンドと対象 | 確認する退行・結果 |
+| --- | --- |
+| 各D worktreeで`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` | 型・所有・警告・clang-tidy・リンク。診断前`5476c66`、通常`0dfad49`、診断後`9c617c0`の3版が終了0。通常版total 130.202s、診断後129.643s。記録は証拠束の`logs/`と`releases/` |
+| `clang-format --dry-run --Werror src/ui/win32/Direct2DRenderer.hpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/StatusTextLayout.hpp`、`git diff --check` | 変更したC++の整形。終了0 |
+| `python -B -`で既存conformanceの`waiver_checks`・`document_checks`と変更した3ソースの`source_checks`を呼ぶ限定検査 | 新しい型・状態とADRが規約に従うこと。0 findings、終了0。`291-status-layout-conformance-20261005.log` |
+| `python -B D:/NeNeNib/scripts/291-status-layout-visual-20261005.py --exe <a1fd1e1のexe> --name A`、`--exe <0dfad49のexe> --name B`、`--compare` | キャッシュの誤一致、変更されたラベルや色の描画漏れ、枠上限。22場面ずつ正常終了、本文/ステータスの差分0画素。ここだけA/Bは旧版/新版。7枠を使うNORMAL/INSERT録画、停止、通知、Ex入力、通常/Vim、桁上がり、改行、幅変更、テーマ、フォント、paletteを含む。重要な状態間で画素が変化したことも確認。代表画像4枚を目視 |
+| `python -B eng/protected-diff.py --base e40742a --head 0dfad49` | 保護対象を変更していないこと。終了0、fixture 1853→1853、metadata/deleted/changed/added=0、protected files changed none。scopeは33・件数未測33。製品全件テストを追加せず、件数不変とは主張しない |
+
+自己レビューでは、`write_status`がステータスからだけ呼ばれること、通常6枠・録画最大7枠・通知4枠・Ex入力時3枠で上限を越えないこと、書式変更前の破棄、layoutを外部へ貸さず変更しないこと、色と原点をキャッシュ条件に入れないことを確認した。公開API、保存形式、基準値、waiverは変更していない。
+
+### 計装なしの固定6組12試行
+
+`python -B D:/NeNeNib/scripts/291-status-layout-normal-20261005.py --prepare` / `--run` / `--audit`。準備・解析器の正例/負例・実測は終了0、監査は非0（Pythonの判定hold、外側PowerShellの終了値1）。既存`keys_trial`と監査を再利用し、奇数O/A・偶数A/O、新規profile、1280×800 / DPI120 / 既定Cascadia Code 13.5ptで固定。全12本で202入力、暖機/単打の独立、提示、raw再計算、入力前/終了前の幾何、設定不在、hashを確認。欠測0・追加試行0。
+
+| 指標 | O 中央値 / 最大 ms | A 中央値 / 最大 ms | 対応組でAが短縮 |
+| --- | ---: | ---: | ---: |
+| 単打 | 1.084 / 1.107 | 0.732 / 0.758 | 6/6 |
+| 200文字 | 3.237 / 3.773 | 3.169 / 3.577 | 4/6 |
+
+単打中央値は32.5%短縮。O単打の前後半差0.027ms、A単打0.008ms、A burst 0.441msは既存の安定幅内だった。一方O burstは前半3.552→後半2.922ms、差0.630msが許容0.500msを越えた。**既存総合判定はhold**であり、単打改善を総合合格と言い換えない。通常入力の恒常的な最悪時間やOS原因はこの実験では確定しない。
+
+### 各版240回の独立単打
+
+通常の固定試行とは別に、1起動あたり暖機1文字+40文字、名目100ms間隔、6組12起動の計画を実行前に固定した。`python -B D:/NeNeNib/scripts/291-status-layout-tail-20261005.py --prepare` / `--run` / `--analyze`は全て終了0。解析器は正例と5負例で入力不足/余分・提示欠落・非単調時刻・次入力との混在を拒否。各rawはちょうど41入力、暖機も含め全入力が次入力前に提示済みで、上限4096marks未満。全480単打が有効、除外・再試行なし。
+
+| 分布（nearest-rank） | O ms | A ms | 短縮率 |
+| --- | ---: | ---: | ---: |
+| 中央値 | 1.0250 | 0.6415 | 37.4% |
+| p95 | 1.206 | 0.796 | 34.0% |
+| p99 | 1.662 | 1.123 | 32.4% |
+| 観測最大値 | 1.766 | 1.243 | 29.6% |
+
+起動ごとの中央値と最大値も全6対応組でAが短縮。2ms・5ms・16.7ms超は両版とも0/240であり、遅延件数が減った証拠とはしない。閾値は分布を説明するための数値で、受入幅を置き換えない。文書は空から41文字へ増え、1起動内の値には相関がある。C++のQPCで`input_received`から`frame_presented`までを測り、WM_CHAR受信前の待ちや実画素の発光までの時間は含まない。最大値はこの240回の観測値で、絶対的な最悪時間の保証ではない。
+
+### 同じ計測点による削減箇所の確認
+
+`python -B D:/NeNeNib/scripts/291-render-capsule-diagnostic-20261005.py --output <before/afterの出力先> --prepare <Release metadata>` / `--run` / `--analyze`。元候補に計装を加えた`5476c66`と、新候補に同じ計装を加えた`9c617c0`で各12本、全て有効、終了0。9節目の順序と一意性、隣接8区間の和が単打全体と一致すること、202入力と提示、幾何、既定profileを確認した。解析器の4負例も拒否した。
+
+ステータス区間の中央値は0.282→0.077ms、最大は0.321→0.269ms。本文layout解放は0.001→0.002ms、最大0.002→0.014ms。候補の第6試行は単打1.229msで、status 0.269ms・EndDraw 0.437msなどの増加を含み、そのまま保存した。前後は別時刻の診断群で、本文・EndDraw・Presentの分布も変わっている。通常版の短縮全量を特定区間へ割り当てたり、計装版を通常版の性能受入へ代用したりしない。
+
+### 証拠・再利用・残る範囲
+
+集計と原記録の参照/hashは[`status-layout-capsule-2026-10-05.json`](status-layout-capsule-2026-10-05.json)。原記録は`D:/NeNeNib/outputs/291-status-layout-normal-20261005`、`291-status-layout-tail-20261005`、`291-status-layout-visual-20261005`、`291-render-capsule-diagnosis-before-20261005`、`291-render-capsule-diagnosis-after-20261005`。事前plan、全rawとtrial、依存源、44画像、測定器、4版のRelease exe/metadata、ビルド記録、4枝のgit bundleを`D:/NeNeNib/evidence/291-status-layout-capsule-20261005/status-layout-capsule-evidence.zip`へ収載した。315原ファイル+manifest、3271724 bytes、SHA-256 `ec9e7369ac0f303bf42d41a9f5a1c6f0a9650a96f50c7b128285a6b746a0228b`。`python -B D:/NeNeNib/scripts/291-status-layout-archive-20261005.py`は終了0、全entry hash・ZIP CRC・bundle verify成功（親`936b50b`が必要）。以前の失敗や証拠束を置換していない。
+
+今回の変更はWin32ステータス描画に閉じるため、core/application全件・無関係な起動/大容量open/IME/splitは再実行しない。文書・集計・commitだけが変わる工程では、検証済み`0dfad49`の実装・試験・依存の成功を再利用する。今回の候補の長行/16MiB性能は未測であり、過去候補の値を今回の実測値にしない。物理DPI遷移、device lost、DirectWrite作成失敗の実再現は未実施。最大7枠の保持メモリと、変更された文字列を組む費用は残る。
+
+性能の総合受入とmain統合は保留。今回の3追加worktree（`291-render-capsule-profile-20261005`、`291-status-layout-capsule-20261005`、`291-status-layout-profile-20261005`）はD側にあり、未統合の診断/実装と測定済みReleaseの参照先なので保持する。完了後は保存済み証拠と稼働参照を確認して整理する。適用は#291 / FR-015 / ADR 0011・0069・0070 / ARC-001・004・005・008・011 / CPP-003・012・016・017 / QLT-001・012・013・014 / GIT-003・004、Waivers: none。
+
+記録の保存では`python -B -`で文書/waiver検査0 findings、追加・変更したローカルリンク9件、原記録5集計の内容/hash一致とZIP hash一致を確認した。`git diff --check`と`git diff --exit-code 0dfad49 -- src tests eng CMakeLists.txt`も終了0。ログは`D:/NeNeNib/outputs/291-status-layout-document-check-20261005.log`。検証後の製品変更はなく、文書commitのためのアプリ再実行はしていない。
+
+
+## 5-cm — 字体選択・可視字形・表示幅とsplit再評価（Issue #291・ADR 0071・0073・0074）
+
+2026-10-05夜、hideの「思いつく対応を全てやってみて」を受け、長行の残費用を診断して複数案を隔離実装した。
+通常候補は大幅に短縮したが、**長行単打の前後半安定条件とsplitの総時間2ms条件が未達なので、性能の総合受理・main統合・split採用は保留**。閾値・性能基準値・過去の失敗記録は変更していない。
+集計と各版の全6値、判定理由、実行前plan、exeの生成元/hashは[`render-capsule-2026-10-05.json`](render-capsule-2026-10-05.json)。
+
+### 実装と試した案
+
+正典は既存の `display_width` → `DisplayLine` → `layout_of` → DirectWriteの経路。
+`FontFallbackCache/Key/Entry/Request` は完結した最大256 UTF-16単位のOS字体選択を128件まで保持し、範囲外・未知のsource・OS失敗は同じOSへ委譲する。
+`BodyGlyphCollector/Run` はDirectWriteの所有済み字形・位置を保持し、保守的な上界で画面外と証明できるrunの描画だけを省く。未知の装飾は収集全体を棄却して既存DrawTextLayoutを使う。0字形のTabは描画APIを呼ばない。
+`VirtualColumn.cpp` は唯一の `DisplayWidthRange.hpp` から65536 byteのBMP索引をコンパイル時生成し、BMP外は従来の検索を使う。文字幅の意味の表を増やしていない。
+`Direct2DRenderer` / `BodyTextLayout` とCMakeの所有先へ接続し、`DisplayLineTests.cpp` に全コードポイントの正本照合を追加した。公開のsplit機能・保存schema・別の状態所有者は追加していない。
+
+| 案 | 観測と判断 |
+| --- | --- |
+| OS fallbackの明示設定、font axis/optical size、locale指定 | 独立DirectWrite診断では約16〜19msの文字組みが残り、採用しない |
+| 観測した字体を全区間へ先に指定・runをまとめる | 約0.56msへ短縮するが、遠端の位置/HitTestに最大0.16015625px差。文字位置を変えるため不採用。collectionを省く全量MapCharactersはASCIIの字体も変わり、同じcollectionを渡す版は約142ms。いずれも不採用 |
+| 完結したOS字体選択要求の保持 | 診断で字形・位置・全UTF-16位置のHitTestが一致。通常Releaseの長行単打28.5385→16.5005ms（各6本）。採用する通常候補に含める |
+| 透明な行bitmap | Consolasの3場面で2〜18画素にRGB各1階調差。不採用 |
+| 背景と文字を合成済みの不透明bitmap | 22場面一致、通常単打28.461→7.9965ms。ただし200文字の1本は292.590ms（入力到着範囲285.567ms）で保持。選択/検索で通常描画へ戻る条件とbitmap資源を増やすため、最終候補は字形保持へ一本化。実験枝のADR 0072と全記録を保存 |
+| 可視字形の保持 | Tabの0字形でE_INVALIDARGになった初版を修正し、22場面一致。通常単打28.5585→7.6505ms。候補単打の前後半差1.677msは許容0.76505ms外で、成功に読み替えない |
+| 正本の幅表からBMP索引を生成 | 全1114112コードポイント一致。volatile入力の診断で同じ結果を45.42〜46.08→7.46〜7.56msで求めた。最初の定数ループはコンパイラが外へ移せるため速度根拠から除外し、記録を残した。最終通常候補に含める |
+
+各行の通常比較は別時刻の固定6組で、bitmapと字形保持の数値差を直接の優劣の証明にしない。安全な全文字組みの範囲を壊す先頭切り捨て、欠字になるfallback無効化は採用しない。
+
+### 変更範囲の検証
+
+| コマンド・対象 | 回帰の理由と実結果 |
+| --- | --- |
+| 各候補で `pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` | SDKのCOM境界、CMake追加、実際の最適化構成を確認。字体保持の初回54403dfは固定11引数のtidy違反で失敗し、4行の境界へ閉じWVR-0001適用後の382800fは成功。字形9900507、幅c637acc、最終311e78b、整形後f42a95d、S/H/VのReleaseは成功。全ビルドログを保存 |
+| 実ソース `FontFallbackCache.cpp` / `FontFallbackKey.cpp` を `clang-cl /std:c++latest /Od /MT /W4 /WX -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all` でContractsStrict.cppと実行 | 誤一致・借用寿命・失敗の記憶・上限越えを防ぐ。604 checks成功。全文/属性/COM identity、範囲/名前上限、prefix/tail、QIのE_FAIL、OSのE_FAIL/S_FALSE、null font/scale、128件FIFOを確認。独立診断exeであり製品Releaseではない |
+| 実ソースBodyGlyphCollectorを同sanitizerでGlyphPixels.cppと実行 | 収集後の参照寿命、clipによる欠け、代替描画。3字体×3サイズ×4幅×5文字列の180画素対、1131保持runが全て0差。layout/format/collectorを破棄後に所有字形を描いた。3未対応コールバックの拒否も成功 |
+| `cmake -S . -B build/debug-width -G Ninja -DCMAKE_BUILD_TYPE=Debug` / `cmake --build build/debug-width --target nib_tests`、`build/debug-width/nib_tests.exe --display-line` / `--vim-virtual-column` | 幅の索引が表示文字列と仮想桁の意味を変えないこと。Debug ASan/UBSan、display-line 1114301 checks、vim-virtual-column 424 checks成功。他scopeは実行しない |
+| `291-font-fallback-visual-20261005.py` と `291-visible-glyph-fixed-visual-20261005.py` の前後比較 | 編集・クリック・選択・検索・scroll・幅・3書式・テーマ・多言語/結合/Tab/双方向の表示を確認。各22場面で本文/ステータス0画素差。比較元22画像は同じ0dfad49の成功結果を再利用。初版71a2577の起動失敗も記録し、Tab修正後だけ再実行 |
+| `python -B D:/NeNeNib/scripts/291-render-final-ime-20261005.py` | composed行の新描画経路とIME状態復元。311e78bで実キーによる日本語入力・Space変換・Enter確定、対象文節、ink/下線522/189→確定651/0、通常/Vim切替とIME開閉復元が成功。verify_imeだけを呼び、関係ないGUI試験は実行しない |
+| 変更ソースの `git-clang-format`、既存conformanceのsource/document/waiver/architecture限定呼出し | 整形と新規型/翻訳単位の所有、規則の遵守。整形後0差、0 findings。誤ったPython module登録で検査補助が1回失敗し、sys.modulesへの登録を直したconformance2で成功。製品不具合と混同しない |
+
+独立sanitizer診断2種は起動時に `interception_win: unhandled instruction` の警告を出した。終了0で検査は成功しsanitizer違反の報告はなかったが、全OS呼出しの完全な計装を主張しない。ログをそのまま保存した。
+
+通常実測は **311e78b**、SHA-256 `5F2CFF9C74C37FC4BBE2D43E7481AC1CABBBDA7ADA8744B5E30EE37504AECB66`、1399296 bytes。
+製品ソースの保存版 **f42a95d** はその後の空白整形とown-headerのinclude順だけで、対象差分を機械照合した。Releaseを再ビルドして成功、SHA-256 `44B017F33241E320BC5F182CEEB1CAFC6899255F898C0AC943703BC04F023900`、同bytes。動作・試験・依存が変わらないので、画素/IME/性能を再実行しない（QLT-001 / QLT-012）。
+
+### 最終通常版とsplitの固定90試行
+
+`python -B D:/NeNeNib/scripts/291-capsule-combined-20261005.py --output D:/NeNeNib/outputs/291-capsule-combined-20261005 --manifest D:/NeNeNib/briefs/291-capsule-combined-manifest-20261005.json --prepare` / 同outputの `--run` は終了0。
+3本文×6組×O/A/S/H/V、奇数O→A→S→H→V・偶数逆順。既存 `keys_trial` / driver、1280×800 / DPI120 / Cascadia Code 13.5pt、新規profileを実行前固定。
+Oは0dfad49、Aは311e78b、Sはdad9ab0、Hはc1ef96c、Vは9bb7d68。全90本が有効、各202入力、時刻単調・暖機と単打の独立・最終提示・記録上限4096未満・幾何・hashを確認。欠測/除外/再試行0。解析器は正例と5負例を確認。
+空文書burstの到着範囲50ms条件を維持。長文書の到着範囲は記録し、空文書の条件を転用しない。
+
+| 本文・指標 | O 中央値 / 最大 ms | A 中央値 / 最大 ms |
+| --- | ---: | ---: |
+| 空文書・単打 | 0.7395 / 1.285 | 0.7355 / 0.772 |
+| 空文書・200文字 | 3.2275 / 3.879 | 3.1135 / 3.339 |
+| 16 MiB短行・単打 | 1.2650 / 1.298 | 1.2430 / 1.359 |
+| 16 MiB短行・200文字 | 8.6080 / 10.179 | 7.1165 / 7.289 |
+| 長い日本語行・単打 | 28.5340 / 32.491 | 7.2695 / 8.107 |
+| 長い日本語行・200文字 | 175.1165 / 181.212 | 91.5315 / 92.739 |
+
+長行単打の中央値は74.5%、200文字は47.7%短縮し、両指標とも対応6組全て短縮した。空文書/短行の通常比較は従来条件内。
+長行A単打は前半/後半中央値差0.800msが許容0.72695msを超える。速度改善は確認できるが、**総合holdを維持**する。OS等への原因帰属はしていない。
+
+| 本文 | A 通常 | S 1枠試作 | H 上下 | V 左右 |
+| --- | ---: | ---: | ---: | ---: |
+| 空文書・単打 ms | 0.7355 | 0.7605 | 0.7440 | 0.7435 |
+| 16 MiB短行・単打 ms | 1.2430 | 1.2270 | 1.2300 | 1.6610 |
+| 長い日本語行・単打 ms | 7.2695 | 7.1070 | 6.8035 | 6.4095 |
+| 空文書・200文字 ms | 3.1135 | 3.1715 | 3.0705 | 3.2455 |
+| 16 MiB短行・200文字 ms | 7.1165 | 7.2495 | 7.2005 | 7.4520 |
+| 長い日本語行・200文字 ms | 91.5315 | 90.3875 | 89.6230 | 91.3815 |
+
+空文書と16 MiBはSの許容/一貫悪化条件、H/Vの増分と2ms条件内。長行はA安定条件に加えH/V総時間が2ms外なのでsplit不採用。V単打自身にも前後半差0.910ms > 許容0.64095msがある。
+各本文のO/A/S初期画面は本文/ステータス0画素差、H/Vの配置も保存画像で確認。Hは合計表示行数が19→18となり、Vは同じ行を同じ幅で共有するため、Aより小さな観測値を「二つの独立文書でも軽い」と解釈しない。独立文書・scroll・2つ目のframe生成・所有移行は未測。
+
+### 長行単打の分布
+
+`python -B D:/NeNeNib/scripts/291-render-final-tail-20261005.py --prepare` / `--run` / `--analyze` は終了0。固定6組、各起動暖機1+40文字、名目100ms間隔で各版240件。長行fixtureへ追記し、通常の202入力試行とは別の実験。解析器5負例と、全41入力が次入力前に提示されたことを確認。全480件有効、除外・再試行なし。
+runnerの継承によるtrial名の `empty-*` は識別ラベルだけで、実際の起動引数・fixture hash・planのstimulusは長い日本語文書で固定されている。
+
+| 指標 | O ms | A ms |
+| --- | ---: | ---: |
+| 中央値 | 32.4595 | 6.8750 |
+| p95（nearest-rank） | 36.362 | 7.513 |
+| p99 | 37.198 | 7.652 |
+| 観測最大 | 37.644 | 7.978 |
+| 16.7ms超 | 240/240 | 0/240 |
+
+2ms/5ms超は両版240/240。しきい値は説明用で、受理条件を変更しない。入力受信からPresentの戻りまでをC++のQPCで測り、Pythonは刺激と集計だけ。OSの入力queue滞留・物理的な発光時間を含まず、240件と起動内の相関から恒常的な最悪時間を保証しない。
+
+### 保存と残る範囲
+
+`python -B D:/NeNeNib/scripts/291-render-capsule-archive-20261005.py` は終了0。
+`D:/NeNeNib/evidence/291-render-capsule-20261005/render-capsule-evidence.zip` は1023原ファイル+manifest、46224978 bytes、SHA-256 `4ea93d57c3a7ddf6d9a8ca01bd5f7d71a033f05607a18bef7fb88648c07c1bad`。
+全entryのSHA、ZIP CRC、git bundle verify成功（親936b50bが必要）。失敗した起動・bitmap画素差・遅い試行・定数ループ診断・全候補のexe/metadata・scripts・fixtures・raw・profiles・画像・9枝を含む。後続の集計と文書検査は同evidenceの補足へ保存する。
+`291-render-capsule-record-20261005.py` で保存90本のschedule、raw hash、全指標を再計算し一致した。測定の追加はしていない。
+
+初回/編集行の全文字組み、長行ごとのDisplayLine再生成と入力ごとのframe生成は残る。字体の区切りを変えずに全文字組みを部分化する設計、frameの重複生成を省く設計は追加の所有/IME契約を要し、今回完了とはしない。物理DPI遷移・device lost・確保失敗の実再現も未了。
+新規8 worktreeと従来の比較元は未受理・main未統合で、測定済みexeへの参照もあるためD側に保持する。具体的なパスは引き継ぎと証拠のworktree-inventory.jsonに記載。技術受理・統合・必要反映が完了したら安全確認後に整理する。
+適用: #291 / ADR 0068・0071・0073・0074 / ARC-001・007・011 / CPP-012・016・017 / QLT-001・004・012・013・014 / GIT-003・004。
+保存schema変更なし。Waivers: **WVR-0001 / WVR-0002**（SDK固定COM署名の引数数のみ、2026-11-04期限）。ゲート閾値・抑制範囲を広げていない。
+
+追加の `python -B eng/protected-diff.py --base d620e1a --head f42a95d` は終了0。fixture 1853→1853、metadata/deleted/changed/added=0、保護ファイル変更なし。scope33の比較件数は未測で、件数不変とは主張しない。文書保存では `291-render-capsule-document-check-20261005.py` が終了0、document/waiver 0 findings、追加ローカル参照15件、plan/raw/tail/ZIP hash一致、製品差分なしとwhitespaceを確認した。全件テストは実行していない。
+
+## 5-cn — 表示幅索引のmain構成への分離（Issue #294）
+
+2026-10-05夜のhideの「可能なものはマージして」を受け、#291の`c637acc`から幅索引だけをmain `936b50b`上へ分離した。ソース`36a1c9c`、変更は`VirtualColumn.cpp`・`DisplayLineTests.cpp`・ADR 0074。本文cache・字体・字形・splitは含まない。
+
+**判定: HOLD。main未統合。** 固定54回のうち52回が有効。`empty-1-O`は212入力、`16mib-2-O`は206入力で予定202入力に一致せず無効。最初の空文書の撮影にも予定外の本文がある。入力の発生元は特定していない。この2回を正常値へ補完せず、全原記録を保存した。
+
+| 対象 | main O → 幅索引 A・中央値 ms | 判定 |
+| --- | --- | --- |
+| 空文書 単打 / 200文字 | 1.061 / 4.297 → 1.1305 / 4.414 | Oは5回の記述値。A単打の前後半差0.276 > 0.11305、burst差0.897 > 0.5。保留 |
+| 16MiB短行 単打 / 200文字 | 2.244 / 11.057 → 1.853 / 7.6915 | Oは5回の記述値。比較不完備のため保留 |
+| 日本語長行 単打 / 200文字 | 317.240 / 466.047 → 314.946 / 399.7125 | 両版6回有効、安定条件と中央値増分は事前条件内 |
+
+範囲と退行の根拠: 幅の意味と直接の利用先（表示行・Vim仮想桁）、main描画と組み合わせた入力費用。全件テストは選んでいない。入力受領からPresent復帰までであり、光の遅延ではない。
+
+- `git diff --exit-code c637acc 36a1c9c -- src/core src/application tests eng`成功。CMakeの差は未採用UI翻訳単位の登録だけで、対象のcompile設定/依存に変更なし。既存`build/debug-width/nib_tests.exe --display-line` 1114301 checks、`--vim-virtual-column` 424 checksを再利用（元の実行ログもarchiveに保存）。コマンドの元のbuild所在は#291のarchiveとRelease記録を参照。
+- `pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`成功、162.307秒、1368064 byte、SHA-256 `18D1D1013A0E94060EF753F84B662536428D33D75BA2C88D30F2208095BE5190`。`out/release/36a1c9c.json`。
+- main `936b50b`と既存Release `591b99f`の`src tests eng CMakeLists.txt`一致を`git diff --exit-code`で確認して基準exeを再利用。
+- `python -B D:/NeNeNib/scripts/294-295-main-comparison-20261005.py --output D:/NeNeNib/outputs/294-295-main-comparison-20261005 --run`は54回完了後に無効2回のassertで終了1。予定・入力・版・依存hashを先に固定。再試行なし。`294-295-main-audit-20261005.py`成功、全54原記録を再集計しHOLDを確認。空文書O/Aは929画素差（予定外入力）、16MiB/長行のO/Aは本文・ステータス0画素差。
+- `294-295-isolated-static-20261005.py`成功、変更2ソース・所有/依存・文書/waiverで0 findings。LLVM 19.1.5の`git-clang-format --diff 936b50b 36a1c9c -- src/core/VirtualColumn.cpp tests/unit/DisplayLineTests.cpp`は差分なし。`git diff --check`成功。
+- `python -B eng/protected-diff.py --base 936b50b --head 36a1c9c`成功。fixture 1853→1853、metadata/deleted/changed/added各0、protected files none。scope33は未測33（全件checks同一とは主張しない）。`out/protected/36a1c9c.json`。
+
+規則: ARC-001 / CPP-016 / QLT-001 / QLT-004 / QLT-012 / QLT-013 / QLT-014 / GIT-003 / GIT-004。保存schema・基準値・ゲートは変更なし。Waivers: none。元の`fix/291-long-line-rendering`とPR #293は未統合のまま。
+
+機械記録: [main-isolation-2026-10-05.json](main-isolation-2026-10-05.json)。全証拠は`D:/NeNeNib/evidence/294-295-main-isolation-20261005/main-isolation-evidence.zip`（306 files + manifest、SHA-256 `e4afca114af9083a75a61ca744c72ac7829a30fa70c65c3be84b3c4125975717`）。全entry hash / ZIP CRC / bundle検証成功。候補ソース・3版の実測exe・全raw・22場面比較・失敗記録を保存。
+
+## 5-co — ステータス固定枠のmain構成への分離（Issue #295）
+
+幅索引のみの`36a1c9c`へ、#291の`0dfad49`からステータス保持だけを分離した`1883e27`。変更は`Direct2DRenderer.cpp/.hpp`・`StatusTextLayout.hpp`・ADR 0070。本文はmainの既存経路で、本文cache・重複無効化削減・字体cache・字形保持・splitは含まない。
+
+**判定: HOLD。main未統合。** #294に依存するDraft候補。固定比較のA/Sは各18回すべて有効だが、空文書単打の前後半差はA 0.276 > 0.11305ms、S 0.112 > 0.1ms。A burstも0.897 > 0.5ms。中央値改善だけでは安定条件を代替しない。#294自体にも基準側欠測がある。原記録と予定は5-cnの同一archiveへ保存し、再試行・基準更新なし。
+
+| 対象 | 幅索引 A → ステータス追加 S・中央値 ms |
+| --- | --- |
+| 空文書 単打 / 200文字 | 1.1305 / 4.414 → 0.622 / 4.045 |
+| 16MiB短行 単打 / 200文字 | 1.853 / 7.6915 → 1.5185 / 7.932 |
+| 日本語長行 単打 / 200文字 | 314.946 / 399.7125 → 314.8175 / 396.613 |
+
+範囲と退行の根拠: 7枠の上限・文字列/書式/寸法照合、表示の更新、main本文経路との描画費用。無関係なcore/IME/split全件は実行していない。
+
+- `pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`成功、143.992秒、1372160 byte、SHA-256 `B4B8FBFFAB0ABE41E39508E2EE9E37EBAFD9BFF37B2BF37135C8438080C7779D`。`out/release/1883e27.json`。
+- `python -B D:/NeNeNib/scripts/295-status-isolated-visual-20261005.py --exe <A/Sの実測exe> --name <A/B>`を各1回、`--compare`成功。通常/Vim・桁上がり・7枠録画・通知・Ex入力・幅・テーマ・フォント・palette切替など22場面/44撮影で、本文とステータスは全場面0画素差。刺激で変化する場面が変わることも確認。原点/色/文字更新の直接境界を確認した。
+- `294-295-isolated-static-20261005.py`成功、変更3ソース・所有/依存・文書/waiverで0 findings。LLVM 19.1.5の`git-clang-format --diff 36a1c9c 1883e27 -- src/ui/win32/Direct2DRenderer.cpp src/ui/win32/Direct2DRenderer.hpp src/ui/win32/StatusTextLayout.hpp`差分なし。`git diff --check`成功。
+- `python -B eng/protected-diff.py --base 36a1c9c --head 1883e27`成功。fixture 1853→1853、metadata/deleted/changed/added各0、protected files none。scope33は未測33。`out/protected/1883e27.json`。
+- 自己レビュー: 通常6枠、録画時7枠、通知4枠、Ex入力3枠で固定上限内。UI書式再生成前に全枠破棄。借用書式は同一性比較専用。作成失敗で古い枠を出さない。実際のDPI遷移・device lost・割当失敗は未再現。
+
+規則: ARC-001 / ARC-011 / CPP-012 / CPP-016 / QLT-001 / QLT-004 / QLT-012 / QLT-013 / QLT-014 / GIT-003 / GIT-004。保存schema・基準値・ゲートは変更なし。Waivers: none。main統合前の文書追記やcommit SHA変更だけでは成功済み検証を再実行しない。
+
+## 5-cp — 改善一式の手動試用を開始（Issue #291）
+
+2026-10-06 00:15:30 JST、hideの明示依頼で改善一式の通常Releaseを起動した。生成元`f42a95d`、exeは`D:/NeNeNib/worktrees/291-display-width-capsule-20261005/build/release-f42a95d/NeNeNib.exe`。起動記録は[manual-launch-2026-10-06.json](manual-launch-2026-10-06.json)。main統合・性能受理の保留は継続し、実機試用の結果は未受領。
+
+- 対象と理由: 試用するexeの版の取り違えと起動失敗を確認する。`git diff --exit-code f42a95d HEAD -- src tests eng CMakeLists.txt`成功。`Get-FileHash -LiteralPath <exe> -Algorithm SHA256`がRelease記録の`44B017F33241E320BC5F182CEEB1CAFC6899255F898C0AC943703BC04F023900`と一致した。
+- `Start-Process -FilePath <exe> -WorkingDirectory C:/Users/info/WORKS/NeNeNib -WindowStyle Normal -PassThru`で起動。`WaitForInputIdle(10000)`がtrue、プロセス継続とウィンドウhandle `462050`を確認。起動時PID `568`。通常環境を継承し、profile上書き・測定引数なし。
+- 再利用: 現在の製品入力と同一の既存Releaseを使用。追加変更は日報・引き継ぎ・状態要約・起動記録のみで、アプリの自動テスト・再ビルド・性能再測定は選ばない。文書は差分空白・リンク・JSONと原記録の一致を確認する。
+- 規則: QLT-001 / QLT-012 / QLT-013 / GIT-003 / GIT-004。製品コード・保存schema・基準値・waiverは変更なし。既存WVR-0001/0002はSDK署名の局所抑制のまま。
+
+起動後はアプリを開いたままhideへ渡した。2026-10-06 00:21:14 JSTに`@(Get-Process NeNeNib -ErrorAction SilentlyContinue).Count`で0件を確認した。こちらでは終了・再起動を行っていない。終了理由と利用者の試用結果は未受領。worktreeは未統合の候補として保持する。起動確認は利用者の受理や性能合格を意味しない。
+
+## 5-cq — 改善一式の統合の受理（Issue #291・ADR 0075・施主決定 D41）
+
+2026-10-06 夜、設計席が日報と引き継ぎから再開し、止まっていた理由を保存済みの記録から計算し直した。hide が「昨夜の試用は問題なかった」「統合の決め方はおすすめで進める」「速さの検査は準備ができ次第回してよい」と答えた（D41）。
+**5-ck〜5-co の `hold` は、その実験の事前条件に対する結果としてそのまま残す。** この節は main へ入れるかを ADR 0075 の 4 つで決めた記録で、過去の判定の上書きではない。
+
+### 揺れの条件の読み直し（新しい測定なし）
+
+`docs/quality/render-capsule-2026-10-05.json` の `summary` の 12 指標（3 本文 × O / A × 1 打鍵 / 200 文字）を、`plan.record.stability` の式のまま計算し直した。
+
+| 本文・版・指標 | 6 本の値 ms（測った順） | 許容 ms | 前後半の差 ms | 判定 |
+| --- | --- | ---: | ---: | --- |
+| 長行・O・1 打鍵 | 28.020 / 28.645 / 32.491 / 27.459 / 29.337 / 28.423 | 2.8534 | 0.222 | 条件内 |
+| 長行・A・1 打鍵 | 7.633 / 8.107 / 6.906 / 6.833 / 7.990 / 5.690 | 0.72695 | 0.800 | 外れ |
+| ほかの 10 指標（空文書・16 MiB 短行の O / A、長行の 200 文字） | JSON のとおり | — | 0.002〜1.808 | すべて条件内 |
+
+A の 6 値は単調ではなく、3 本ずつに分けるどの分け方でも許容を越える（値の散らばりが約 1 ms、許容が 0.73 ms）。O は 5 ms 散っても許容 2.85 ms に収まる。条件が値に比例して縮むために、速くなった版だけが外れた。
+差 21.26 ms は散らばりの 20 倍を越え、6 組すべてで短縮。別の固定実験（各 240 打鍵・`tail`）では A の観測最大 7.978 ms、O は 240 件すべてが 16.7 ms 超。
+空文書と 16 MiB 短行は 8 指標すべてが条件内で、A の中央値は O 以下（0.7395 → 0.7355 / 3.2275 → 3.1135 / 1.2650 → 1.2430 / 8.6080 → 7.1165 ms）。
+O は `0dfad49`（文字組みとステータスの再利用まで）で main ではない。main からの悪化が無いことは、次の正式なゲートで示す（ADR 0075 決定 4）。
+
+### 正式な速さのゲート（QLT-014）
+
+確認する退行: 描画の経路と無効化のまとめ方を変えたので、既存の 7 本（起動・1 打鍵・200 打鍵・16 MiB・Ctrl+P の 5000 件）が基準値から悪化していないこと。
+対象: Release `f42a95d`（`D:/NeNeNib/worktrees/291-display-width-capsule-20261005/build/release-f42a95d/NeNeNib.exe`・SHA-256 `44B017F33241E320BC5F182CEEB1CAFC6899255F898C0AC943703BC04F023900` を実行の直前に照合）。
+`git diff --exit-code f42a95d HEAD -- src tests eng CMakeLists.txt` と `git diff --exit-code main HEAD -- eng` はどちらも終了 0（製品は試用版と同じ・計測器と基準値は main と同じ）。
+実行の直前にビルドとテストのプロセスが 0 件・CPU の負荷 8% を確かめ、hide の了承の後に 1 回だけ回した。
+
+`python eng/measure-speed.py --check --executable <上の exe>` → **7 benches checked, 0 regression(s), 0 unmeasurable**・終了 0。記録 `out/speed/2026-10-06T14-00-58Z.json`・ログ `out/291-rina-speed-f42a95d.log`。指紋 `bc8a356f37c68491`。
+
+| ベンチ | 基準値 ms | 今回の中央値 ms（最小〜最大） |
+| --- | ---: | --- |
+| startup-first-frame | 191.488 | 201.062（195.290〜245.217） |
+| startup-window-shown | 34.933 | 35.306（31.309〜45.079） |
+| key-to-frame-single | 0.906 | 0.642（0.492〜0.654） |
+| key-to-frame-burst-200 | 2.695 | 3.120（2.714〜3.175） |
+| open-large-file-16mib | 249.783 | 244.790（241.787〜257.211） |
+| key-to-frame-burst-200-16mib | 7.411 | 5.580（4.315〜6.215） |
+| key-to-frame-palette-5000 | 2.630 | 2.070（2.045〜2.359） |
+
+基準値と許容（25% / 床 2 ms）は変えていない。採用（`--adopt`）もしていない。Ctrl+P の 5 枚の PNG のうち `palette-2026-10-06T14-00-27Z-31360.png` を設計席が見て、暖機の `f` と件数 **1 / 5000** を確かめた。
+起動の 1 本目 245.217 ms は 5 本の最大で、中央値は許容内。原因は調べていない。
+
+### 再利用（QLT-012）
+
+表示 22 場面の 0 画素差・IME の変換と確定・sanitizer の契約 604 checks・字形 180 画素対・`--display-line` 1114301 checks・`--vim-virtual-column` 424 checks・`protected-diff`（fixture 1853 → 1853）は 5-cm の成功をそのまま使う。製品の入力が `f42a95d` から変わっていないので実行し直していない。
+
+### 独立レビュー
+
+書いた席（Codex）とは別の実装席（Opus）が、結論を渡されずに `git diff main...f42a95d -- src tests CMakeLists.txt`（18 ファイル・+663 / −21）を読んだ。読むだけで、ビルド・実行はしていない。報告は `out/reports/review-291.md`、依頼書は `D:/NeNeNib/briefs/review-291-rina-20261006.md`。
+
+- **統合を止める: 0 件。** 保持する 4 つ（本文の layout の現在と直前・ステータスの 7 枠・字体選択の 128 件・字形）を、フォント・DPI・テーマ・device lost・幅・IME・選択と検索のそれぞれで追い、古い結果が出る道・解放済みを触る道・借用が保持より長生きする道は見つからなかった。無効化をまとめる変更で `paint_pending_` が true のまま固まる道も無い。規則 ID の違反と色のリテラルも無い。
+- 統合の後で直せる 4 件: waiver の期限 2026-11-04（→ #299）・字体選択の保持の取り付けの失敗で窓が終わる・起動中のフォントの追加が表示中の行に反映されない・保持の契約の試験がリポジトリに無い（→ #300）。
+- 所見 7 件のうち、字形の経路の前提（96 DPI・恒等変換・整数の原点）を機械が守っていない点は #300 に入れた。
+
+設計席は L2 の該当箇所（`Direct2DRenderer.cpp` の `create_body_formats`）を読み、書式を作れなかったときの既存の失敗（`RenderFailure::directwrite`）と同じ扱いであること・Windows 11 専用（D1）で `IDWriteTextFormat2` が必ずあることから、統合を止めないと判断した。製品を `f42a95d` から動かすと表示・IME・速さの成功を使えなくなるので、直すのは #300 で行う。
+
+### Debug 構成のビルドとシンボル（レビューの所見 O6）
+
+確認する退行: 新しい翻訳単位（`BodyGlyphCollector.cpp`・`FontFallbackCache.cpp`・`FontFallbackKey.cpp`）が Debug（ASan / UBSan・clang-tidy）で通ること、core に足した索引が core の外へ許可の無いシンボルを出さないこと（ARC-003 / ARC-007）、実際のビルドグラフの依存方向（ARC-002）。5-cm は Release と `nib_tests` の 2 scope だけだった。
+
+`. ./eng/toolchain.ps1` の後、`cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug` → `cmake --build build`（全 target・80 手順・clang-tidy 込み）は終了 0。新しい 3 つの翻訳単位と `Direct2DRenderer.cpp`・`EditorWindow.cpp`・`VirtualColumn.cpp` を Debug で作り直し、`NeNeNib.exe` と `nib_tests.exe` を含む全 exe がリンクした（`out/291-rina-debug-build.log`）。
+`python eng/conformance.py --build-dir build` → `Conformance: 0 violation(s)`。`python eng/symbols.py --build-dir build --require core application` → `Symbols: 2 libraries checked, 0 violation(s)`。文書を足した後の `python eng/conformance.py` も 0 violation(s)。
+CTest は回していない（`--display-line` と `--vim-virtual-column` は同じソースの成功を再利用・ほかの scope は差分が触れない）。
+
+### 4 つの条件の結果
+
+| ADR 0075 の条件 | 結果 |
+| --- | --- |
+| 独立レビュー | 統合を止める所見 0 件（`out/reports/review-291.md`） |
+| 正式な速さのゲート | 7 benches checked・0 regression・0 unmeasurable |
+| 必須 check | Ready の後の run（PR #293） |
+| 施主の実機の試用 | 2026-10-06・Release `f42a95d`・「問題なかった」 |
+
+統合の後に残す仕事: #298 長い行のベンチ・#299 SDK の固定署名の恒久規則（期限 2026-11-04）・#300 保持の契約の試験と取り付けの失敗。split の採用は保留のまま。PR #296 / #297 は #293 に含まれるので統合せずに閉じる。
+適用: #291 / ADR 0075 / D41 / QLT-001 / QLT-010 / QLT-012 / QLT-013 / QLT-014 / GIT-003 / GIT-004。製品コード・保存 schema・基準値・許容の変更なし。Waivers: WVR-0001 / WVR-0002（変更なし）。

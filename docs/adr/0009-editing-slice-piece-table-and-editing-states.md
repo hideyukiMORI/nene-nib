@@ -23,7 +23,7 @@ CPP-014 は「内部表現は Phase 3 の piece table の ADR で決める」と
 4. **選択は anchor と caret の 2 つの位置**で、Shift+移動が anchor を固定する。選択中の入力は削除 → 挿入を 1 つの undo 単位にする
 5. **クリップボードはポート**（`ClipboardPort`。application が宣言し、adapters/win32 が Unicode テキストで実装。Loupe と同じ）。中核はクリップボードを知らない
 6. **描画は見えている行だけ。** 縦スクロールの量は application が所有し（`ScrollState`。上限は core の純関数）、UI はホイール 3 行とキャレット追従の意図を出す。
-   折り返しと横スクロールは持たない（長い行は切る）。1 行ごとに DirectWrite の layout を作って描き、キャッシュは QLT-014 の計測で必要が出てから
+   折り返しと横スクロールは持たない（長い行は切る）。1 行ごとに DirectWrite の layout を作って描き、キャッシュは QLT-014 の計測で必要が出てから。#291の測定を根拠に、表示中の本文layoutの再利用を[ADR 0069](0069-reuse-visible-body-text-layouts.md)で追加した
 7. **編集中の状態の見た目は採用案のとおり。** キャレットは通常モードとINSERT がバー、NORMAL がブロック。選択・検索の当たり・IME の変換中・`:` の行は
    採用案の表（`search` / `ime` のトークンを `Palette` に足して 16 にする）。`:` の行は**案 A**（ステータスバーの左側が置き換わる）
 8. 改行は読んだ形を保つ（ARC-009）。新規の本文は CRLF。文字コードはこの縦切りでは UTF-8 だけ（Shift_JIS の判別はファイルの縦切り・D8）
