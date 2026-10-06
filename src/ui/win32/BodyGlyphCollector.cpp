@@ -87,7 +87,7 @@ HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F o
     runs_.push_back(std::move(stored));
     return S_OK;
 }
-// Waiver: WVR-0002
+// SDK-ABI: IDWriteTextRenderer::DrawGlyphRun
 // NOLINTNEXTLINE(readability-function-size)
 HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawGlyphRun(void *, FLOAT x, FLOAT y,
                                                            DWRITE_MEASURING_MODE mode,
@@ -101,7 +101,7 @@ HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawGlyphRun(void *, FLOAT x, FLOA
     }
     return collect(*run, D2D1_POINT_2F{x, y}, mode);
 }
-// Waiver: WVR-0002
+// SDK-ABI: IDWriteTextRenderer::DrawUnderline
 // NOLINTNEXTLINE(readability-function-size)
 HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawUnderline(void *, FLOAT, FLOAT,
                                                             const DWRITE_UNDERLINE *,
@@ -109,7 +109,7 @@ HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawUnderline(void *, FLOAT, FLOAT
 {
     return E_NOTIMPL;
 }
-// Waiver: WVR-0002
+// SDK-ABI: IDWriteTextRenderer::DrawStrikethrough
 // NOLINTNEXTLINE(readability-function-size)
 HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawStrikethrough(void *, FLOAT, FLOAT,
                                                                 const DWRITE_STRIKETHROUGH *,
@@ -117,7 +117,7 @@ HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawStrikethrough(void *, FLOAT, F
 {
     return E_NOTIMPL;
 }
-// Waiver: WVR-0002
+// SDK-ABI: IDWriteTextRenderer::DrawInlineObject
 // NOLINTNEXTLINE(readability-function-size)
 HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawInlineObject(void *, FLOAT, FLOAT,
                                                                IDWriteInlineObject *, BOOL, BOOL,

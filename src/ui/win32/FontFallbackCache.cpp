@@ -32,7 +32,7 @@ void FontFallbackCache::retain(FontFallbackEntry entry)
     next_ = (next_ + 1) % maximum_entries;
 }
 
-// Waiver: WVR-0001
+// SDK-ABI: IDWriteFontFallback::MapCharacters
 // NOLINTNEXTLINE(readability-function-size)
 HRESULT STDMETHODCALLTYPE FontFallbackCache::MapCharacters(
     IDWriteTextAnalysisSource *source, UINT32 position, UINT32 length,

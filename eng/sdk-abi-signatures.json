@@ -1,0 +1,9 @@
+{
+  "signatures": [
+    {"interface": "IDWriteFontFallback", "method": "MapCharacters", "parameters": 11, "header": "dwrite_2.h"},
+    {"interface": "IDWriteTextRenderer", "method": "DrawGlyphRun", "parameters": 7, "header": "dwrite.h"},
+    {"interface": "IDWriteTextRenderer", "method": "DrawUnderline", "parameters": 5, "header": "dwrite.h"},
+    {"interface": "IDWriteTextRenderer", "method": "DrawStrikethrough", "parameters": 5, "header": "dwrite.h"},
+    {"interface": "IDWriteTextRenderer", "method": "DrawInlineObject", "parameters": 7, "header": "dwrite.h"}
+  ]
+}

@@ -35,8 +35,7 @@ WVR-NNNN-short-kebab-title.md
 
 ## 有効な waiver の索引
 
-| Waiver | 規則 | Scope | 解除条件 | 期限 |
-| --- | --- | --- | --- | --- |
-| [WVR-0001](WVR-0001-directwrite-fallback-com-signature.md) | CPP-012 | FontFallbackCache.cpp#FontFallbackCache::MapCharacters | COM境界の削除または固定ABI規則の受理 | 2026-11-04 |
+なし。
 
-| [WVR-0002](WVR-0002-directwrite-renderer-com-signatures.md) | CPP-012 | BodyGlyphCollector.cpp#COM描画境界4宣言 | 境界削除または固定ABI規則受理 | 2026-11-04 |
+閉じた waiver は台帳の `Status` を `removed` にしてこの索引から外し、閉じた理由を台帳に書いて、ファイルはこのディレクトリに残す（CNF-004 は索引にある ID が有効であることを求める）。
+2026-10-06 に DirectWrite の COM 署名の 2 件を閉じ、恒久の規則 CPP-019 と検査 CNF-012 に置き換えた（[ADR 0076](../adr/0076-sdk-fixed-com-signatures-are-a-permanent-boundary-rule.md)）。
