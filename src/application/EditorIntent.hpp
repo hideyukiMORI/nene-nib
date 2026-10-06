@@ -20,6 +20,7 @@
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "OpenOperationList.hpp"
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
@@ -57,5 +58,5 @@ using EditorIntent =
                  SubmitCommand, CancelCommand, PasteCommand, OpenCommandPalette,
                  ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
                  WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth,
-                 OpenTabList, EndSession, WorkCompleted, ToggleBookmark>;
+                 OpenTabList, EndSession, WorkCompleted, ToggleBookmark, OpenOperationList>;
 } // namespace nenenib::application

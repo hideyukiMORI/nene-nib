@@ -2,7 +2,11 @@
 
 #include "CommandMatch.hpp"
 #include "ExResult.hpp"
+#include "KeyChord.hpp"
 #include "Offset.hpp"
+#include "OperationBindings.hpp"
+#include "OperationText.hpp"
+#include "OperationTexts.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -73,7 +77,8 @@ namespace
     const auto kind = command == "set fontsize=" || command == "set guifont="
                           ? CommandChoiceKind::fill
                           : CommandChoiceKind::execute;
-    return CommandChoice{label, std::move(command), kind};
+    return CommandChoice{label,        std::move(command), kind, std::nullopt,
+                         std::nullopt, std::nullopt,       {}};
 }
 
 [[nodiscard]] std::string lowered(std::string_view text)
@@ -101,8 +106,8 @@ namespace
     std::unreachable();
 }
 
-// 出どころで絞るのはこの 1 つ（ADR 0060 の決定 3）。files は印のある候補の全部、commands の候補は
-// 列に無い（Ex のコマンドは palette_choices が作る）。
+// 出どころで絞るのはこの 1 つ（ADR 0060 の決定 3）。files は印のある候補の全部、commands と
+// operations の候補は列に無い（Ex のコマンドは palette_choices、操作は operation_choices が作る）。
 [[nodiscard]] bool in_scope(const std::optional<PaletteOrigin> &origin, PaletteScope scope) noexcept
 {
     if (!origin.has_value())
@@ -120,6 +125,7 @@ namespace
     case PaletteScope::history:
     case PaletteScope::folder:
     case PaletteScope::commands:
+    case PaletteScope::operations:
         return scope_of(origin.value()) == scope;
     }
     std::unreachable();
@@ -185,6 +191,36 @@ using ScoredPosition = std::pair<std::size_t, std::size_t>;
     return positions;
 }
 
+// 操作の一覧の 1 行（ADR 0078 の決定 6）。鍵はモードで見せる鍵の表示名、無ければ空。
+[[nodiscard]] CommandChoice operation_choice_of(const OperationText &text, EditMode mode)
+{
+    const auto chord = shown_chord(text.operation, mode);
+    return CommandChoice{DisplayText::parse(text.name).value(),
+                         {},
+                         CommandChoiceKind::operate,
+                         DisplayText::parse(text.description).value(),
+                         std::nullopt,
+                         text.operation,
+                         chord.has_value() ? key_chord_label(chord.value()) : std::string{}};
+}
+
+// 名前・読み・鍵の表示名のうち一番良い点（ADR 0078 の決定 6）。どれにも当たらなければ無し。
+[[nodiscard]] std::optional<std::size_t>
+operation_score(std::string_view query, const CommandChoice &choice, std::string_view reading)
+{
+    std::optional<std::size_t> best;
+    for (const std::string &field :
+         {lowered(choice.label.text()), lowered(reading), lowered(choice.key)})
+    {
+        const auto score = match_score(query, field);
+        if (score.has_value() && (!best.has_value() || score.value() < best.value()))
+        {
+            best = score;
+        }
+    }
+    return best;
+}
+
 [[nodiscard]] bool before(const CommandMatch &left, const CommandMatch &right)
 {
     if (left.score != right.score)
@@ -225,6 +261,34 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
     if (choices.empty() && query.starts_with("colorscheme "))
     {
         return {choice_of(std::string(query))};
+    }
+    return choices;
+}
+
+std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mode)
+{
+    std::vector<CommandChoice> available;
+    std::vector<ScoredPosition> scored;
+    for (const OperationText &text : operation_texts)
+    {
+        if (!operation_available(text.operation, mode))
+        {
+            continue;
+        }
+        CommandChoice choice = operation_choice_of(text, mode);
+        const auto score = query.empty() ? std::optional<std::size_t>{0}
+                                         : operation_score(query, choice, text.reading);
+        if (score.has_value())
+        {
+            scored.emplace_back(available.size(), score.value());
+            available.push_back(std::move(choice));
+        }
+    }
+    std::vector<CommandChoice> choices;
+    choices.reserve(available.size());
+    for (const std::size_t position : in_score_order(std::move(scored)))
+    {
+        choices.push_back(std::move(available.at(position)));
     }
     return choices;
 }

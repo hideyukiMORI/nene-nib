@@ -949,7 +949,11 @@ void EditorController::begin_intent(bool keeps_message)
 {
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
-    state_ = state_.with_failure(std::nullopt).with_closing(false).with_close_request(std::nullopt);
+    // 一覧で頼まれた操作も同じく 1 意図だけ（ADR 0078 の決定 8）。
+    state_ = state_.with_failure(std::nullopt)
+                 .with_closing(false)
+                 .with_close_request(std::nullopt)
+                 .with_operation_request(std::nullopt);
     unreached_tabs_ = 0;
     if (state_.command_message().has_value() && !keeps_message)
     {
@@ -1717,6 +1721,20 @@ void EditorController::accept(const OpenTabList &)
     run_palette_request(core::ExPaletteRequest{core::PaletteScope::tabs, {}});
 }
 
+// 開いている入力行（検索の preview も）は取消と同じ道で閉じてから開く（ADR 0078 の決定 9）。
+void EditorController::accept(const OpenOperationList &)
+{
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    if (command_line_active())
+    {
+        accept(CancelCommand{});
+    }
+    run_palette_request(core::ExPaletteRequest{core::PaletteScope::operations, {}});
+}
+
 // 面を開く（ADR 0062 の決定 14）。前の面のときに届いて残った分は collect で捨てる（たまりが空で
 // ないと次の列挙の合図が来ない）。券を進めてから頼むので、前の面の分は券で見分けて捨てられる。
 void EditorController::open_palette(std::string_view input, std::size_t selected)
@@ -1726,7 +1744,8 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
     auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     request_folder(entries);
     state_ = state_.with_command_input(
-        core::CommandPalette::opened(std::move(entries), input, selected, state_.themes()));
+        core::CommandPalette::opened(std::move(entries), input, state_.mode(), state_.themes())
+            .selected_at(selected));
     if (!bookmarks)
     {
         state_ = state_.with_command_message(
@@ -1794,10 +1813,13 @@ void EditorController::append_folder_choices(const std::vector<core::FilePath> &
         {
             continue;
         }
-        choices.push_back(
-            core::CommandChoice{core::tab_title_for(file, core::SaveState::saved),
-                                std::string(file.text()), core::CommandChoiceKind::open,
-                                core::tab_folder_for(file), core::PaletteOrigin::folder});
+        choices.push_back(core::CommandChoice{core::tab_title_for(file, core::SaveState::saved),
+                                              std::string(file.text()),
+                                              core::CommandChoiceKind::open,
+                                              core::tab_folder_for(file),
+                                              core::PaletteOrigin::folder,
+                                              std::nullopt,
+                                              {}});
     }
 }
 
@@ -1818,7 +1840,9 @@ EditorController::palette_tabs(const FileBookmarks &bookmarks) const
             named ? std::string(view.path.value().text()) : "tabnext " + std::to_string(index + 1),
             named ? core::CommandChoiceKind::open : core::CommandChoiceKind::execute,
             core::tab_folder_for(view.path),
-            marked ? core::PaletteOrigin::bookmarked_tab : core::PaletteOrigin::tab});
+            marked ? core::PaletteOrigin::bookmarked_tab : core::PaletteOrigin::tab,
+            std::nullopt,
+            {}});
     }
     return entries;
 }
@@ -1831,10 +1855,13 @@ void EditorController::append_bookmark_choices(const FileBookmarks &bookmarks,
     {
         if (!open_tab_of(path).has_value() && !bookmarks_contain(listed, path, ports_.files))
         {
-            entries.push_back(
-                core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
-                                    std::string(path.text()), core::CommandChoiceKind::open,
-                                    core::tab_folder_for(path), core::PaletteOrigin::bookmark});
+            entries.push_back(core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
+                                                  std::string(path.text()),
+                                                  core::CommandChoiceKind::open,
+                                                  core::tab_folder_for(path),
+                                                  core::PaletteOrigin::bookmark,
+                                                  std::nullopt,
+                                                  {}});
             listed.files.push_back(path);
         }
     }
@@ -1854,10 +1881,13 @@ EditorController::palette_entries(const FileBookmarks &bookmarks) const
     {
         if (!open_tab_of(path).has_value() && !bookmarks_contain(bookmarks, path, ports_.files))
         {
-            entries.push_back(
-                core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
-                                    std::string(path.text()), core::CommandChoiceKind::open,
-                                    core::tab_folder_for(path), core::PaletteOrigin::history});
+            entries.push_back(core::CommandChoice{core::tab_title_for(path, core::SaveState::saved),
+                                                  std::string(path.text()),
+                                                  core::CommandChoiceKind::open,
+                                                  core::tab_folder_for(path),
+                                                  core::PaletteOrigin::history,
+                                                  std::nullopt,
+                                                  {}});
         }
     }
     return entries;
@@ -1981,6 +2011,12 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         {
             open_listed(path.value(), choice.origin);
         }
+        return;
+    case core::CommandChoiceKind::operate:
+        // 面を閉じて頼まれた操作を 1 意図だけ立てる。実行は ui の run_operation で、controller は
+        // 操作ごとの分岐を持たない（ADR 0078 の決定 7・8）。
+        close_command_input();
+        state_ = state_.with_operation_request(choice.operation);
         return;
     case core::CommandChoiceKind::fill:
         break;
@@ -3256,6 +3292,7 @@ EditorFrame EditorController::frame() const
                        state_.tab_scroll(),
                        state_.hovered(),
                        state_.closing(),
-                       state_.close_request()};
+                       state_.close_request(),
+                       state_.operation_request()};
 }
 } // namespace nenenib::application

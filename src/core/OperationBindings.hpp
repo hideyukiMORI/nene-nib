@@ -16,8 +16,12 @@ namespace nenenib::core
 // 上から見て最初に当たる行が勝つ。Ctrl+W は通常モードでだけ閉じる（ADR 0056 の決定 10）。
 // ブックマークは通常 Ctrl+D / Vim Ctrl+Shift+D（ADR 0063）。元に戻す・やり直すは通常モードだけ
 // （Vim は u と Ctrl-r）。通常 / Vim の切り替えの鍵は未定（D10）で、一覧からだけ実行する。
-inline constexpr std::array<OperationBinding, 18> operation_bindings{{
+// 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
+// 最初の行なので、一覧に見える鍵は Shift なしのまま。
+inline constexpr std::array<OperationBinding, 25> operation_bindings{{
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, false, OperationKey::o}},
+    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
     {EditorOperation::save, OperationModes::both, KeyChord{true, false, OperationKey::s}},
     {EditorOperation::save_as, OperationModes::both, KeyChord{true, true, OperationKey::s}},
     {EditorOperation::new_tab, OperationModes::both, KeyChord{true, false, OperationKey::t}},
@@ -27,17 +31,30 @@ inline constexpr std::array<OperationBinding, 18> operation_bindings{{
     {EditorOperation::recent_tab_back, OperationModes::both,
      KeyChord{true, true, OperationKey::tab}},
     {EditorOperation::list_files, OperationModes::both, KeyChord{true, false, OperationKey::p}},
+    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::list_files, OperationModes::both, KeyChord{true, true, OperationKey::p}},
     {EditorOperation::list_operations, OperationModes::both,
      KeyChord{false, false, OperationKey::f1}},
     {EditorOperation::toggle_bookmark, OperationModes::ordinary,
      KeyChord{true, false, OperationKey::d}},
     {EditorOperation::toggle_bookmark, OperationModes::vim, KeyChord{true, true, OperationKey::d}},
     {EditorOperation::undo, OperationModes::ordinary, KeyChord{true, false, OperationKey::z}},
+    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::undo, OperationModes::ordinary, KeyChord{true, true, OperationKey::z}},
     {EditorOperation::redo, OperationModes::ordinary, KeyChord{true, false, OperationKey::y}},
+    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::redo, OperationModes::ordinary, KeyChord{true, true, OperationKey::y}},
     {EditorOperation::font_larger, OperationModes::both, KeyChord{true, false, OperationKey::plus}},
+    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::font_larger, OperationModes::both, KeyChord{true, true, OperationKey::plus}},
     {EditorOperation::font_smaller, OperationModes::both,
      KeyChord{true, false, OperationKey::minus}},
+    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::font_smaller, OperationModes::both,
+     KeyChord{true, true, OperationKey::minus}},
     {EditorOperation::font_reset, OperationModes::both, KeyChord{true, false, OperationKey::zero}},
+    // Shift を見ていなかった今の振る舞いを保つ行。
+    {EditorOperation::font_reset, OperationModes::both, KeyChord{true, true, OperationKey::zero}},
     {EditorOperation::toggle_mode, OperationModes::both, std::nullopt},
 }};
 

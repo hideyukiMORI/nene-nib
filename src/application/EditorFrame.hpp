@@ -7,6 +7,7 @@
 #include "CompositionView.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "ImeStance.hpp"
 #include "InputLineView.hpp"
@@ -76,6 +77,10 @@ struct EditorFrame
     // 1 回だけ立つ。ui は意図を送った結果を受ける 1 か所でこれを見て、× と同じ閉じる流れ
     // （未保存なら確認・最後の 1 本なら窓を閉じる）を呼ぶ。controller はタブを閉じない。
     std::optional<std::size_t> close_request;
+    // 操作の一覧で選ばれた操作（ADR 0078 の決定 8）。close_request と同じく 1 意図の 1 回だけ立つ。
+    // ui は意図を送った結果を受ける 1 か所でこれを見て run_operation を呼ぶ。controller は操作を
+    // 実行しない。
+    std::optional<core::EditorOperation> operation_request;
 };
 
 // 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

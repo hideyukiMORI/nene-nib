@@ -441,6 +441,19 @@ EditorState EditorState::with_close_request(std::optional<std::size_t> position)
     return next;
 }
 
+const std::optional<core::EditorOperation> &EditorState::operation_request() const noexcept
+{
+    return operation_request_;
+}
+
+EditorState
+EditorState::with_operation_request(std::optional<core::EditorOperation> operation) const
+{
+    EditorState next(*this);
+    next.operation_request_ = operation;
+    return next;
+}
+
 std::int32_t EditorState::title_bar_width() const noexcept
 {
     return title_bar_width_;

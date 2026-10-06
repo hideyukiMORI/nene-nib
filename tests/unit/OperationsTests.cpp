@@ -1,5 +1,7 @@
 // Issue #303 / ADR 0078。操作の割り当ての表・文字の表・鍵の表示名だけを測る。時計・ファイル・乱数を
 // 使わない。
+#include "CommandChoice.hpp"
+#include "CommandChoiceKind.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "KeyChord.hpp"
@@ -18,6 +20,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -41,7 +44,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 22> chord_rows{{
+constexpr std::array<ChordRow, 28> chord_rows{{
     {ctrl(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
     {ctrl_shift(OperationKey::s), EditorOperation::save_as, EditorOperation::save_as},
@@ -61,7 +64,14 @@ constexpr std::array<ChordRow, 22> chord_rows{{
     {ctrl(OperationKey::plus), EditorOperation::font_larger, EditorOperation::font_larger},
     {ctrl(OperationKey::minus), EditorOperation::font_smaller, EditorOperation::font_smaller},
     {ctrl(OperationKey::zero), EditorOperation::font_reset, EditorOperation::font_reset},
-    {ctrl_shift(OperationKey::o), std::nullopt, std::nullopt},
+    // Shift を見ていなかった今の振る舞いを保つ行（Vim の Ctrl+Shift+Z / Y は値なし）。
+    {ctrl_shift(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
+    {ctrl_shift(OperationKey::p), EditorOperation::list_files, EditorOperation::list_files},
+    {ctrl_shift(OperationKey::z), EditorOperation::undo, std::nullopt},
+    {ctrl_shift(OperationKey::y), EditorOperation::redo, std::nullopt},
+    {ctrl_shift(OperationKey::plus), EditorOperation::font_larger, EditorOperation::font_larger},
+    {ctrl_shift(OperationKey::minus), EditorOperation::font_smaller, EditorOperation::font_smaller},
+    {ctrl_shift(OperationKey::zero), EditorOperation::font_reset, EditorOperation::font_reset},
     {KeyChord{false, false, OperationKey::o}, std::nullopt, std::nullopt},
     {ctrl(OperationKey::f1), std::nullopt, std::nullopt},
     {ctrl_shift(OperationKey::w), std::nullopt, std::nullopt},
@@ -198,6 +208,100 @@ void verify_texts()
     expect(nenenib::core::operation_text(EditorOperation::save).reading == "ほぞん",
            "the reading of save is hiragana");
 }
+[[nodiscard]] std::vector<Operation>
+operations_of(const std::vector<nenenib::core::CommandChoice> &choices)
+{
+    std::vector<Operation> operations;
+    for (const auto &choice : choices)
+    {
+        operations.push_back(choice.operation);
+    }
+    return operations;
+}
+
+// 空の入力の一覧で operation の行の「名前|説明|鍵」。行が無ければ "<missing>"。
+[[nodiscard]] std::string row_text(EditorOperation operation, EditMode mode)
+{
+    for (const auto &choice : nenenib::core::operation_choices("", mode))
+    {
+        if (choice.operation == operation)
+        {
+            const auto detail = choice.detail.has_value() ? choice.detail.value().text() : "";
+            return std::string(choice.label.text()) + "|" + std::string(detail) + "|" + choice.key;
+        }
+    }
+    return "<missing>";
+}
+
+// 空の入力の一覧で operation の行の鍵の表示名。行が無ければ "<missing>"。
+[[nodiscard]] std::string key_for(EditorOperation operation, EditMode mode)
+{
+    for (const auto &choice : nenenib::core::operation_choices("", mode))
+    {
+        if (choice.operation == operation)
+        {
+            return choice.key;
+        }
+    }
+    return "<missing>";
+}
+
+// 操作の一覧の候補（ADR 0078 の決定 6・11）。空の入力は表の順でモードの使える操作だけ、入力は
+// 名前・読み・鍵の表示名に当てて良い順、どれにも当たらなければ外す。
+void verify_operation_choices()
+{
+    const auto ordinary = nenenib::core::operation_choices("", EditMode::ordinary);
+    const auto vim = nenenib::core::operation_choices("", EditMode::vim);
+    expect(ordinary.size() == 16 && vim.size() == 14,
+           "an empty query lists every operation available in the mode");
+    std::vector<Operation> in_order;
+    for (const auto &text : nenenib::core::operation_texts)
+    {
+        in_order.emplace_back(text.operation);
+    }
+    expect(operations_of(ordinary) == in_order, "an empty query keeps the order of the table");
+    expect(std::ranges::none_of(vim,
+                                [](const nenenib::core::CommandChoice &choice)
+                                {
+                                    return choice.operation == EditorOperation::undo ||
+                                           choice.operation == EditorOperation::redo;
+                                }),
+           "the vim list has no undo and no redo");
+    expect(std::ranges::all_of(ordinary,
+                               [](const nenenib::core::CommandChoice &choice)
+                               {
+                                   return choice.kind ==
+                                              nenenib::core::CommandChoiceKind::operate &&
+                                          choice.command.empty() && !choice.origin.has_value() &&
+                                          choice.detail.has_value();
+                               }),
+           "every row operates, carries no command and no origin and shows the description");
+    expect(row_text(EditorOperation::save, EditMode::ordinary) ==
+               "保存|いまのファイルに上書きします|Ctrl+S",
+           "a row shows the name, the description and the key label");
+    const auto saved = nenenib::core::operation_choices("ほぞん", EditMode::ordinary);
+    expect(operations_of(saved) ==
+               std::vector<Operation>{EditorOperation::save, EditorOperation::save_as},
+           "the reading finds save and save as, the closer one first");
+    const auto keyed = nenenib::core::operation_choices("ctrl+s", EditMode::ordinary);
+    expect(keyed.size() >= 2 && keyed.at(0).operation == EditorOperation::save &&
+               keyed.at(1).operation == EditorOperation::save_as,
+           "the key label finds Ctrl+S before Ctrl+Shift+S");
+    expect(operations_of(nenenib::core::operation_choices("f1", EditMode::vim)) ==
+               std::vector<Operation>{EditorOperation::list_operations},
+           "F1 finds the operation list");
+    expect(nenenib::core::operation_choices("qqq", EditMode::ordinary).empty(),
+           "a query that hits nothing lists nothing");
+    expect(nenenib::core::operation_choices("上書き", EditMode::ordinary).empty(),
+           "the description is not matched");
+    expect(key_for(EditorOperation::close_tab, EditMode::ordinary) == "Ctrl+W" &&
+               key_for(EditorOperation::close_tab, EditMode::vim) == "Ctrl+F4",
+           "close tab shows Ctrl+W in the ordinary mode and Ctrl+F4 in vim");
+    expect(key_for(EditorOperation::toggle_mode, EditMode::ordinary).empty(),
+           "an operation without a key shows no key");
+    expect(key_for(EditorOperation::font_larger, EditMode::ordinary) == "Ctrl++",
+           "a key kept with Shift is not the shown key");
+}
 } // namespace
 
 void verify_operations_scope()
@@ -207,5 +311,6 @@ void verify_operations_scope()
     verify_labels();
     verify_no_shared_key();
     verify_texts();
+    verify_operation_choices();
 }
 } // namespace nenenib::tests

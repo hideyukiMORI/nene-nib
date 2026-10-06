@@ -2,6 +2,7 @@
 
 #include "CommandChoice.hpp"
 #include "CommandLine.hpp"
+#include "EditMode.hpp"
 #include "PaletteScope.hpp"
 
 #include <cstddef>
@@ -19,10 +20,11 @@ namespace nenenib::core
 class CommandPalette final
 {
   public:
-    // 開くのはこの 1 本。input は最初の入力、selected は最初の結果の中の位置で、範囲の外
-    // なら先頭。
+    // 開くのはこの 1 本。input は最初の入力で、選択は先頭（最初の選択は selected_at で動かす）。
+    // mode は開いたときの編集モードで、`?` の操作の一覧がモードで使える操作を選ぶのに読む
+    // （ADR 0078 の決定 11）。
     [[nodiscard]] static CommandPalette opened(std::vector<CommandChoice> entries,
-                                               std::string_view input, std::size_t selected,
+                                               std::string_view input, EditMode mode,
                                                ThemeCatalog themes = ThemeCatalog::builtins());
     [[nodiscard]] PaletteScope scope() const noexcept;
     [[nodiscard]] const CommandLine &input() const noexcept;
@@ -49,13 +51,14 @@ class CommandPalette final
   private:
     using Entries = std::shared_ptr<const std::vector<CommandChoice>>;
     // 絞り込みの結果（ADR 0062 の決定 1）。ファイルの候補（files・tabs・history）は entries_ の
-    // 中の位置の列で、候補の写しを作らない。設定のコマンド（commands）は palette_choices の値の列。
+    // 中の位置の列で、候補の写しを作らない。設定のコマンド（commands）は palette_choices の値の列、
+    // 操作の一覧（operations）は operation_choices の値の列。
     using Result = std::variant<std::vector<std::size_t>, std::vector<CommandChoice>>;
-    CommandPalette(CommandLine input, std::size_t selected, Entries entries,
+    CommandPalette(CommandLine input, std::size_t selected, EditMode mode, Entries entries,
                    std::shared_ptr<const Result> result);
     // 入力が変わる道（opened・inserted・edited・filled）はこの 1 本で結果を 1 回作る。選択は先頭。
-    [[nodiscard]] static CommandPalette filtered(CommandLine input, Entries entries);
-    [[nodiscard]] static Result result_of(const CommandLine &input,
+    [[nodiscard]] static CommandPalette filtered(CommandLine input, EditMode mode, Entries entries);
+    [[nodiscard]] static Result result_of(const CommandLine &input, EditMode mode,
                                           const std::vector<CommandChoice> &entries);
     // 選択だけを動かす道（moved・selected_at）はこの 1 本で、前の結果をそのまま共有する。
     [[nodiscard]] CommandPalette reselected(std::size_t selected) const;
@@ -64,6 +67,8 @@ class CommandPalette final
     [[nodiscard]] const CommandChoice &row(std::size_t index) const;
     CommandLine input_;
     std::size_t selected_;
+    // 開いたときの編集モード（面を開いている間は変わらない）。
+    EditMode mode_;
     // 開くときに受け取った候補の列（ADR 0060 の決定 1）。入力が変わっても同じ列を指し、変わるのは
     // extended が後ろへ伸ばすときだけ（ADR 0062 の決定 16）。
     Entries entries_;

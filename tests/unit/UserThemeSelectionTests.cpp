@@ -148,7 +148,9 @@ void verify_user_theme_commands()
     expect(line.text() == "colorscheme my-theme", "Ex Tab completes user theme");
     line = line.edited(core::CommandEdit::backspace);
     expect(line.completions().front() == "colorscheme my-theme", "editing preserves catalog");
-    auto palette = core::CommandPalette::opened({}, ":", 0, catalog).inserted("my-t").value();
+    auto palette = core::CommandPalette::opened({}, ":", core::EditMode::ordinary, catalog)
+                       .inserted("my-t")
+                       .value();
     const auto found = palette.choice_at(0);
     expect(found.has_value() && found.value().command == "colorscheme my-theme",
            "palette finds the same user theme");

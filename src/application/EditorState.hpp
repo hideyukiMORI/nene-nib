@@ -7,6 +7,7 @@
 #include "DocumentState.hpp"
 #include "EditHistory.hpp"
 #include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "FileFailure.hpp"
 #include "LineEnding.hpp"
@@ -134,6 +135,11 @@ class EditorState final
     // 1 意図だけ立ち、状態は変えない（閉じるのは ui が × と同じ閉じる流れで行う）。
     [[nodiscard]] const std::optional<std::size_t> &close_request() const noexcept;
     [[nodiscard]] EditorState with_close_request(std::optional<std::size_t> position) const;
+    // 操作の一覧で選ばれた操作（ADR 0078 の決定 8）。close_request と同じく 1 意図だけ立ち、
+    // 状態は変えない（実行するのは ui の run_operation）。
+    [[nodiscard]] const std::optional<core::EditorOperation> &operation_request() const noexcept;
+    [[nodiscard]] EditorState
+    with_operation_request(std::optional<core::EditorOperation> operation) const;
     // 帯（ADR 0056 の決定 2）。帯の幅は ui が知らせる DIP で、まだ知らないあいだは 0。送り量は
     // DIP。マウスを載せている要素は、載せていなければ nullopt。
     [[nodiscard]] std::int32_t title_bar_width() const noexcept;
@@ -182,6 +188,7 @@ class EditorState final
     bool tab_walk_ = false;
     bool closing_ = false;
     std::optional<std::size_t> close_request_;
+    std::optional<core::EditorOperation> operation_request_;
     std::int32_t title_bar_width_ = 0;
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;

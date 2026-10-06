@@ -150,6 +150,9 @@ class EditorController final
     // 開いているタブの一覧（「∨」と `:tabs`・ADR 0060 の決定 6）。Ctrl+P と同じ列を入力 `#` で
     // 開き、アクティブなタブの行を選ぶ。
     void accept(const OpenTabList &);
+    // 操作の一覧（F1・ADR 0078 の決定 9）。`:ls` と同じ口で入力 `?` の面を開く。入力行や面が
+    // 開いていれば、取り消してから `?` の面に置き換える。
+    void accept(const OpenOperationList &);
     // 面を開く 2 つの意図の 1 本。前の面の残りを collect で捨て、券を進め、同じフォルダを頼む
     // （ADR 0062 の決定 14）。input と selected は CommandPalette::opened へ渡す。
     void open_palette(std::string_view input, std::size_t selected);
