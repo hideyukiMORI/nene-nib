@@ -6,7 +6,9 @@
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
+#include "EditorOperation.hpp"
 #include "FilePath.hpp"
+#include "FontSizeAdjustment.hpp"
 #include "HistoryDirection.hpp"
 #include "ImeOpenState.hpp"
 #include "ImeStance.hpp"
@@ -91,6 +93,7 @@ class EditorWindow final
     // タブを閉じる流れ（未保存なら切り替えて確かめる・ADR 0056 の決定 6）。
     void close_tab(std::size_t tab);
     void finish_tab_action(std::optional<std::size_t> close_request, bool closing);
+    void finish_operation(std::optional<core::EditorOperation> operation_request);
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);
@@ -118,6 +121,13 @@ class EditorWindow final
     void type_text(std::string utf8);
     void press_key(WPARAM word);
     [[nodiscard]] bool press_bookmark_key(WPARAM word, LPARAM data);
+    // F1（操作の一覧・ADR 0078 の決定 9）。扱ったら true。
+    [[nodiscard]] bool press_help_key(WPARAM word, LPARAM data);
+    // 鍵と一覧が実行する唯一の口（ADR 0078 の決定 7）。
+    void run_operation(core::EditorOperation operation);
+    void walk_recent_tab(core::TabCommand command);
+    void adjust_font(core::FontSizeAdjustment adjustment);
+    void toggle_mode();
     // タブの鍵（ADR 0056 の決定 10）。扱ったら true。
     [[nodiscard]] bool press_tab_key(WPARAM word);
     void run_tab_command(core::TabCommand command);

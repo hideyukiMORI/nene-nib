@@ -48,6 +48,10 @@ constexpr float space_probe_width = 1000.0F;
 constexpr float recording_gap_dips = 12.0F;
 // 一覧の行の題名と場所（`detail`）のあいだ（ADR 0057 の決定 7）。
 constexpr float palette_detail_gap_dips = 12.0F;
+// 一覧の行の右端の鍵の枠（docs/design/2026-10-06-guide.md の 5 節・ADR 0078 の決定 12）。
+constexpr float palette_key_padding_dips = 9.0F;
+constexpr float palette_key_height_dips = 20.0F;
+constexpr float palette_key_radius_dips = 5.0F;
 constexpr DWORD latency_timeout_milliseconds = 1000;
 constexpr float full_channel = 255.0F;
 
@@ -457,16 +461,18 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     const float ratio = core::font_size_ratio(settings.font_size);
     TextFormat code;
     TextFormat gutter;
+    TextFormat key;
     const auto made_code = make_format(face, core::font_size_dips(settings.font_size),
                                        DWRITE_FONT_WEIGHT_NORMAL, code);
     const auto made_gutter =
         make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
-    if (FAILED(made_code) || FAILED(made_gutter))
+    const auto made_key = make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, key);
+    if (FAILED(made_code) || FAILED(made_gutter) || FAILED(made_key))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
     attach_font_fallback(code);
-    const std::array<TextFormat, 2> every{code, gutter};
+    const std::array<TextFormat, 3> every{code, gutter, key};
     for (const auto &format : every)
     {
         format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -476,6 +482,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     set_tab_stops(code.Get());
     code_format_ = std::move(code);
     gutter_format_ = std::move(gutter);
+    key_format_ = std::move(key);
     formatted_size_ = settings.font_size;
     formatted_family_ = settings.font_family;
     body_layouts_.clear();
@@ -1413,7 +1420,9 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
         return;
     }
     const auto &choice = palette.rows.at(index - palette.first);
-    const auto label = core::palette_row_label(row, dpi_, choice.origin.has_value());
+    // 右端の欄は補足（印）か操作の鍵（ADR 0078 の決定 12）。両方を持つ行は無い。
+    const auto label =
+        core::palette_row_label(row, dpi_, choice.origin.has_value() || !choice.key.empty());
     context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
     write(choice.label.text(), command_format_.Get(), label, frame.palette.text);
     draw_palette_detail(frame, choice, label);
@@ -1423,6 +1432,47 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
         write_right(core::palette_origin_label(choice.origin.value()), status_format_.Get(),
                     core::palette_row_note(row, dpi_), frame.palette.muted);
     }
+    if (!choice.key.empty())
+    {
+        draw_palette_key(frame, choice.key, core::palette_row_note(row, dpi_));
+    }
+}
+
+void Direct2DRenderer::draw_palette_key(const application::EditorFrame &frame, std::string_view key,
+                                        const core::LayoutRect &note)
+{
+    // 文字の左右 9 DIP・高さ 20 DIP・角丸 5 DIP の枠を、右端を欄の右端に揃えて行の縦の中央に置く。
+    // 幅は左寄せの書式の layout で測る（右寄せの書式で測らない・#258）。
+    // 欄より広ければ欄の幅で切る。
+    if (core::width_of(note) <= 0 || core::height_of(note) <= 0)
+    {
+        return;
+    }
+    const auto shown = text_layout(key, key_format_.Get(), note);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!shown || FAILED(shown->GetMetrics(&metrics)))
+    {
+        return;
+    }
+    const float padding = scaled(palette_key_padding_dips);
+    const float stroke = scaled(1.0F);
+    const auto right = static_cast<float>(note.right);
+    const float width =
+        std::min(metrics.width + (padding * 2.0F), static_cast<float>(core::width_of(note)));
+    const float middle = static_cast<float>(note.top + note.bottom) / 2.0F;
+    const float half_height = scaled(palette_key_height_dips) / 2.0F;
+    const D2D1_RECT_F box{right - width + (stroke / 2.0F), middle - half_height,
+                          right - (stroke / 2.0F), middle + half_height};
+    const float radius = scaled(palette_key_radius_dips);
+    brush_->SetColor(to_color(frame.palette.background));
+    context_->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brush_.Get());
+    brush_->SetColor(to_color(frame.palette.panel_border));
+    context_->DrawRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brush_.Get(), stroke);
+    brush_->SetColor(to_color(frame.palette.text));
+    context_->PushAxisAlignedClip(box, D2D1_ANTIALIAS_MODE_ALIASED);
+    context_->DrawTextLayout(D2D1::Point2F(right - width + padding, static_cast<float>(note.top)),
+                             shown.Get(), brush_.Get());
+    context_->PopAxisAlignedClip();
 }
 
 void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame,

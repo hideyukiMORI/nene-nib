@@ -187,6 +187,9 @@ class Direct2DRenderer final
                              std::size_t index);
     void draw_palette_detail(const application::EditorFrame &frame,
                              const core::CommandChoice &choice, const core::LayoutRect &label);
+    // 行の右端の欄に操作の鍵を枠つきで描く（ADR 0078 の決定 12）。保持しない。
+    void draw_palette_key(const application::EditorFrame &frame, std::string_view key,
+                          const core::LayoutRect &note);
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
@@ -207,6 +210,8 @@ class Direct2DRenderer final
     TextFormat mode_format_;
     TextFormat command_format_;
     TextFormat gutter_format_;
+    // 面の行の右端の鍵。本文の字体・UI の大きさ・左寄せ（幅を測るので右寄せにしない）。
+    TextFormat key_format_;
     TextFormat code_format_;
     // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
     std::vector<BodyTextLayout> body_layouts_;

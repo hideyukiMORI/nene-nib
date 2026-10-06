@@ -1927,7 +1927,9 @@ bool EditorController::bookmark_toggle_allowed() const
         return true;
     }
     const auto *palette = std::get_if<core::CommandPalette>(&input.value());
-    return palette != nullptr && palette->scope() != core::PaletteScope::commands;
+    // 設定のコマンド（:）と操作の一覧（?）の面にはファイルが無いので、何も出さず何もしない。
+    return palette != nullptr && palette->scope() != core::PaletteScope::commands &&
+           palette->scope() != core::PaletteScope::operations;
 }
 
 void EditorController::accept(const ToggleBookmark &)

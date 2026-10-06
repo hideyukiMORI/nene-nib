@@ -311,6 +311,21 @@ void verify_ignored_inputs()
            "palette composition ignores the shortcut too");
 }
 
+// ADR 0078: 操作の一覧（?）はファイルの面ではないので、設定のコマンドと同じく何もしない。
+void verify_operation_list_ignored()
+{
+    Editing editing;
+    open_file(editing);
+    static_cast<void>(palette(editing, "?"));
+    const auto reads = editing.bookmarks().reads();
+    const auto frame = editing.controller().apply(app::ToggleBookmark{});
+    expect(frame.command_palette.has_value() &&
+               frame.command_line.value_or(core::InputLineView{}).text == "?" &&
+               !frame.command_message.has_value() && editing.bookmarks().reads() == reads &&
+               editing.bookmarks().writes() == 0,
+           "the operation list ignores the shortcut like settings candidates");
+}
+
 void verify_vim_pending()
 {
     Editing editing;
@@ -337,6 +352,7 @@ void verify_bookmarks_contracts()
     verify_failures();
     verify_missing_and_open();
     verify_ignored_inputs();
+    verify_operation_list_ignored();
     verify_vim_pending();
 }
 

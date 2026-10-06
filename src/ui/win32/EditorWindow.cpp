@@ -18,19 +18,25 @@
 #include "EndSession.hpp"
 #include "FileDialog.hpp"
 #include "FileFailure.hpp"
-#include "FontShortcut.hpp"
+#include "FontSizeAdjustment.hpp"
+#include "KeyChord.hpp"
 #include "KeyMotion.hpp"
 #include "KeyVimSpecial.hpp"
 #include "Milestone.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "OpenOperationList.hpp"
+#include "OperationBindings.hpp"
+#include "OperationShortcut.hpp"
 #include "PointTitleBar.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
+#include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
 #include "SettleRecentTab.hpp"
@@ -128,6 +134,16 @@ constexpr char32_t tab_character = U'\t';
 [[nodiscard]] bool held(int key) noexcept
 {
     return (GetKeyState(key) & key_down_mask) != 0;
+}
+
+// いま押されている修飾と仮想キー → 操作の鍵。Alt と組んだ鍵は写さない（ADR 0078 の決定 2）。
+[[nodiscard]] std::optional<core::KeyChord> held_chord(WPARAM word)
+{
+    if (held(VK_MENU))
+    {
+        return std::nullopt;
+    }
+    return operation_chord(word, held(VK_CONTROL), held(VK_SHIFT));
 }
 
 [[nodiscard]] std::optional<core::CaretMotion> motion_for(std::span<const KeyMotion> table,
@@ -718,7 +734,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     {
     case WM_KEYDOWN:
         timing_.mark(core::Milestone::input_received);
-        if (!press_bookmark_key(word, data))
+        if (!press_bookmark_key(word, data) && !press_help_key(word, data))
         {
             press_key(word);
         }
@@ -1335,6 +1351,8 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     // 作り直す前に読んでおく。
     const auto close_request = frame.close_request;
     const bool closing = frame.closing;
+    // 一覧で選んだ操作も同じく意図を送った結果の frame にだけ載る（ADR 0078 の決定 8）。
+    const auto operation_request = frame.operation_request;
     if (font_change)
     {
         if (std::holds_alternative<application::AdjustFontSize>(intent))
@@ -1354,7 +1372,18 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     invalidate();
     update_title(frame);
     announce(frame);
+    finish_operation(operation_request);
     finish_tab_action(close_request, closing);
+}
+
+// 一覧から頼まれた操作は鍵と同じ run_operation へ。その中の send は operation_request が空なので
+// 再入は 1 段で止まる（ADR 0078 の決定 8）。
+void EditorWindow::finish_operation(std::optional<core::EditorOperation> operation_request)
+{
+    if (operation_request.has_value())
+    {
+        run_operation(operation_request.value());
+    }
 }
 
 // frame を写し終えてから閉じる。窓を壊した後は古い frame で題名を上書きしない（ADR 0066）。
@@ -1596,6 +1625,28 @@ bool EditorWindow::press_bookmark_key(WPARAM word, LPARAM data)
     return true;
 }
 
+// F1 は入力行や面が開いていても効く（ADR 0078 の決定 9）。長押しの反復では送らない
+// （ブックマークの鍵と同じ守り）。変換中の守りは controller にある。
+bool EditorWindow::press_help_key(WPARAM word, LPARAM data)
+{
+    const auto chord = held_chord(word);
+    if (!chord.has_value() || chord.value().key != core::OperationKey::f1)
+    {
+        return false;
+    }
+    const auto operation = core::operation_for(chord.value(), mode_);
+    if (!operation.has_value())
+    {
+        return false;
+    }
+    constexpr LPARAM repeated_key_bit = LPARAM{1} << 30;
+    if ((data & repeated_key_bit) == 0)
+    {
+        run_operation(operation.value());
+    }
+    return true;
+}
+
 void EditorWindow::press_key(WPARAM word)
 {
     if (controller_.command_line_active())
@@ -1607,13 +1658,13 @@ void EditorWindow::press_key(WPARAM word)
     {
         return;
     }
-    const auto font = font_shortcut(word);
-    if (held(VK_CONTROL) && !held(VK_MENU) && font.has_value())
+    // 操作の鍵は core の表の 1 本で引き、run_operation の 1 本で実行する（ADR 0078 の決定 13）。
+    const auto chord = held_chord(word);
+    const auto operation =
+        chord.has_value() ? core::operation_for(chord.value(), mode_) : std::nullopt;
+    if (operation.has_value())
     {
-        if (!application::composing(controller_.frame()))
-        {
-            send(application::AdjustFontSize{font.value(), 1});
-        }
+        run_operation(operation.value());
         return;
     }
     if (held(VK_CONTROL))
@@ -1802,11 +1853,6 @@ void EditorWindow::press_plain_key(WPARAM word)
 
 void EditorWindow::press_control_key(WPARAM word)
 {
-    if (word == 'P' && !held(VK_MENU))
-    {
-        send(application::OpenCommandPalette{});
-        return;
-    }
     if (mode_ == core::EditMode::vim)
     {
         const auto special = vim_control_key(word, vim_mode_);
@@ -1836,29 +1882,105 @@ void EditorWindow::press_control_key(WPARAM word)
     case 'V':
         send(application::ClipboardAction{application::ClipboardOperation::paste});
         return;
-    case 'Z':
-        send_history(core::HistoryDirection::undo);
-        return;
-    case 'Y':
-        send_history(core::HistoryDirection::redo);
-        return;
     case 'R':
         send_vim_redo();
-        return;
-    case 'O':
-        open_document();
-        return;
-    case 'S':
-        if (held(VK_SHIFT))
-        {
-            save_document_as();
-            return;
-        }
-        save_document();
         return;
     default:
         break;
     }
+}
+
+// 鍵と一覧が実行する唯一の口（ADR 0078 の決定 7）。中身は今ある ui の関数と意図をそのまま使い、
+// controller に操作ごとの分岐を書かない。
+void EditorWindow::run_operation(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::open_file:
+        open_document();
+        return;
+    case core::EditorOperation::save:
+        save_document();
+        return;
+    case core::EditorOperation::save_as:
+        save_document_as();
+        return;
+    case core::EditorOperation::new_tab:
+        run_tab_command(core::TabCommand::open);
+        return;
+    case core::EditorOperation::close_tab:
+        run_tab_command(core::TabCommand::close);
+        return;
+    case core::EditorOperation::recent_tab:
+        walk_recent_tab(core::TabCommand::next);
+        return;
+    case core::EditorOperation::recent_tab_back:
+        walk_recent_tab(core::TabCommand::previous);
+        return;
+    case core::EditorOperation::list_files:
+        send(application::OpenCommandPalette{});
+        return;
+    case core::EditorOperation::list_operations:
+        send(application::OpenOperationList{});
+        return;
+    case core::EditorOperation::toggle_bookmark:
+        send(application::ToggleBookmark{});
+        return;
+    case core::EditorOperation::undo:
+        send_history(core::HistoryDirection::undo);
+        return;
+    case core::EditorOperation::redo:
+        send_history(core::HistoryDirection::redo);
+        return;
+    case core::EditorOperation::font_larger:
+        adjust_font(core::FontSizeAdjustment::increase);
+        return;
+    case core::EditorOperation::font_smaller:
+        adjust_font(core::FontSizeAdjustment::decrease);
+        return;
+    case core::EditorOperation::font_reset:
+        adjust_font(core::FontSizeAdjustment::reset);
+        return;
+    case core::EditorOperation::toggle_mode:
+        toggle_mode();
+        return;
+    }
+    std::unreachable();
+}
+
+// 鍵（Ctrl+Tab）は Ctrl を離したときに確定する。一覧から（Ctrl を押していない）は 1 歩で確定する
+// （ADR 0078 の決定 10）。
+void EditorWindow::walk_recent_tab(core::TabCommand command)
+{
+    run_tab_command(command);
+    if (!held(VK_CONTROL))
+    {
+        send(application::SettleRecentTab{});
+    }
+}
+
+// 保存の失敗の知らせは deliver が AdjustFontSize の後に出す。変換中は送らない（今の鍵と同じ）。
+void EditorWindow::adjust_font(core::FontSizeAdjustment adjustment)
+{
+    if (!application::composing(controller_.frame()))
+    {
+        send(application::AdjustFontSize{adjustment, 1});
+    }
+}
+
+// ステータスバーのトグルのクリックと同じ意図で、いまの反対を選ぶ。
+void EditorWindow::toggle_mode()
+{
+    switch (mode_)
+    {
+    case core::EditMode::ordinary:
+        send(application::SelectEditMode{core::EditMode::vim});
+        return;
+    case core::EditMode::vim:
+        send(application::SelectEditMode{core::EditMode::ordinary});
+        return;
+    }
+    std::unreachable();
 }
 
 void EditorWindow::send_history(core::HistoryDirection direction)
