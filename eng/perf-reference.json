@@ -56,6 +56,11 @@
           "medianMs": 2.63,
           "minimumMs": 2.526,
           "maximumMs": 2.715
+        },
+        "key-to-frame-single-long-line": {
+          "medianMs": 5.431,
+          "minimumMs": 5.348,
+          "maximumMs": 6.658
         }
       }
     },
