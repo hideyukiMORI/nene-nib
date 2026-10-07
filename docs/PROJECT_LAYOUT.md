@@ -124,4 +124,4 @@ application が作った表示値を Direct2D / DirectWrite で描き、キー�
 | 検査設定 | `.clang-format` / `.clang-tidy` / `eng/*.json`。参照の一覧は `eng/config-bindings.json`（CNF-007） |
 | 実測と証明 | `eng/measure-language.ps1` ＋ `eng/probes/language.json`（Phase 0）/ `eng/prove-gates.py`（ゲートの反例の証明。`check.ps1 -Full` の中で走り、関連する変更のときに選ぶ）/ `eng/protected-diff.py`（base と head の間の保護対象の差分と scope ごとの checks 数を `out/protected/` に記録する。ゲートではない・Issue #130） / `eng/usage-report.py`（transcript の usage を席ごとに turns・文脈の最大・cache read・seat_tokens で集計し `out/usage/` に記録する。読むだけ・ゲートではない・Issue #146）。結果は `docs/quality/` |
 | 生成物 | `build/`（CMake・オブジェクト・検証 exe）/ `out/`（Phase 0 の実測・証明 fixture・測定ビルド・出力）。製品 C++ コードの生成は未採用 |
-| 利用者データ | `%LOCALAPPDATA%\NeNeNib\`。`settings.v1` は ADR 0020 の UTF-8 / version=1（テーマ・本文フォント名・pt）。`session.v1`（前回のタブ・ADR 0059）と `history.v1`（閉じたファイルの履歴・ADR 0060）は採用済み。`bookmarks.v1`（明示登録・ADR 0063）も採用済み。リポジトリには入れない |
+| 利用者データ | `%LOCALAPPDATA%\NeNeNib\`。設定の正本は `settings.v2`（UTF-8 / version=2、テーマ・本文フォント名・pt・guide）。v2が無いときだけ旧 `settings.v1` を読み、最初の設定変更でv2だけへ保存する。v1は残す（ADR 0020 / 0079）。`session.v1`（前回のタブ・ADR 0059）と `history.v1`（閉じたファイルの履歴・ADR 0060）は採用済み。`bookmarks.v1`（明示登録・ADR 0063）も採用済み。リポジトリには入れない |
