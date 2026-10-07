@@ -13,6 +13,7 @@
 #include "InputLineView.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "OperationGuide.hpp"
 #include "Palette.hpp"
 #include "SettingsIssue.hpp"
 #include "StatusItems.hpp"
@@ -81,6 +82,7 @@ struct EditorFrame
     // ui は意図を送った結果を受ける 1 か所でこれを見て run_operation を呼ぶ。controller は操作を
     // 実行しない。
     std::optional<core::EditorOperation> operation_request;
+    core::OperationGuide guide;
 };
 
 // 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

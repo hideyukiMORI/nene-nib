@@ -7,8 +7,10 @@
 #include "CommandLayout.hpp"
 #include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
+#include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
+#include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "RenderFailure.hpp"
 #include "RgbColor.hpp"
@@ -72,6 +74,7 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> bind_composition(HWND window);
     [[nodiscard]] std::expected<void, RenderFailure> create_context();
     [[nodiscard]] std::expected<void, RenderFailure> create_text_formats();
+    [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
     // 本文の書式に字体選択の保持（ADR 0071）を取り付ける。最善の努力で、どこかで失敗したら
@@ -167,6 +170,10 @@ class Direct2DRenderer final
     void draw_line(const application::EditorFrame &frame, const core::BodyLayout &body,
                    std::size_t index);
     void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
+    void draw_body_guide(const application::EditorFrame &frame,
+                         const core::OperationGuideLayout &guide);
+    void draw_status_guide(const application::EditorFrame &frame,
+                           const core::OperationGuideLayout &guide);
     void draw_status_bar(const application::EditorFrame &frame,
                          const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
@@ -190,6 +197,8 @@ class Direct2DRenderer final
     // 行の右端の欄に操作の鍵を枠つきで描く（ADR 0078 の決定 12）。保持しない。
     void draw_palette_key(const application::EditorFrame &frame, std::string_view key,
                           const core::LayoutRect &note);
+    void draw_keycap(std::string_view key, IDWriteTextFormat *format, const core::LayoutRect &area,
+                     const KeycapStyle &style);
     void draw_palette_footer(const application::EditorFrame &frame, const core::LayoutRect &area);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
@@ -212,13 +221,17 @@ class Direct2DRenderer final
     TextFormat gutter_format_;
     // 面の行の右端の鍵。本文の字体・UI の大きさ・左寄せ（幅を測るので右寄せにしない）。
     TextFormat key_format_;
+    TextFormat guide_key_format_;
+    TextFormat guide_label_format_;
+    TextFormat guide_note_format_;
+    TextFormat guide_status_format_;
     TextFormat code_format_;
     // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
     std::vector<BodyTextLayout> body_layouts_;
     std::vector<BodyTextLayout> previous_body_layouts_;
-    // 右の3項目と通常/Vim・モード・録画の4ラベル。描画順に照合し、変化した枠だけ作り直す。
-    static constexpr std::size_t status_label_count = 4;
-    std::array<StatusTextLayout, core::status_item_count + status_label_count> status_layouts_{};
+    // 通常6枠と案内4枠。録画時は案内が無く7枠（ADR 0079）。
+    static constexpr std::size_t status_layout_count = 10;
+    std::array<StatusTextLayout, status_layout_count> status_layouts_{};
     std::size_t status_layout_cursor_ = 0;
     WaitableHandle latency_{nullptr, &::CloseHandle};
     RECT caret_rectangle_{};

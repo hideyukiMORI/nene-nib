@@ -321,6 +321,7 @@ class EditorController final
     [[nodiscard]] std::optional<CompositionView> command_composed() const;
     // 録画中のマクロの名前。通常モードでは録画が止まっているので出さない（ADR 0046 の決定 8）。
     [[nodiscard]] std::optional<char> recording_name() const;
+    [[nodiscard]] core::GuideContext guide_context() const noexcept;
     // Vim の NORMAL では IME を切ってあるので変換は来ないはずだが、来たら捨てる（決定 4）。
     // Ex の行と検索の行でも捨て、面が開いていれば受ける（ADR 0061 の決定 3）。
     [[nodiscard]] bool composition_ignored() const noexcept;

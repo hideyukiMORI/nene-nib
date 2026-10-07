@@ -3262,6 +3262,22 @@ DocumentView EditorController::active_document_view() const
                         document.encoding, save_state, state_.last_failure()};
 }
 
+core::GuideContext EditorController::guide_context() const noexcept
+{
+    if (state_.settings().guide == core::GuideVisibility::hidden ||
+        state_.command_input().has_value() || state_.command_message().has_value() ||
+        recording_name().has_value() || state_.composition().has_value())
+    {
+        return core::GuideContext::hidden;
+    }
+    if (!state_.document().path.has_value() && state_.text().size_bytes() == 0 &&
+        state_.history().size() == 0)
+    {
+        return core::GuideContext::untouched_untitled;
+    }
+    return core::GuideContext::other;
+}
+
 EditorFrame EditorController::frame() const
 {
     const auto caret = state_.text().position_of(state_.selection().caret);
@@ -3295,6 +3311,7 @@ EditorFrame EditorController::frame() const
                        state_.hovered(),
                        state_.closing(),
                        state_.close_request(),
-                       state_.operation_request()};
+                       state_.operation_request(),
+                       core::operation_guide(guide_context(), state_.mode())};
 }
 } // namespace nenenib::application

@@ -445,12 +445,40 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
         return std::unexpected(RenderFailure::directwrite);
     }
     align_text_formats();
+    const auto guide = create_guide_formats(interface_face);
+    if (!guide)
+    {
+        return guide;
+    }
     if (FAILED(trim_by_character(tab_format_.Get())))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
     return create_body_formats(core::EditorSettings{formatted_size_, formatted_family_,
                                                     std::nullopt, core::GuideVisibility::shown});
+}
+
+std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const wchar_t *face)
+{
+    const auto key = make_format(family(L"Cascadia Code", L"Consolas"), 12.5F,
+                                 DWRITE_FONT_WEIGHT_NORMAL, guide_key_format_);
+    const auto label = make_format(face, 13.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_label_format_);
+    const auto note = make_format(face, 11.5F, DWRITE_FONT_WEIGHT_NORMAL, guide_note_format_);
+    const auto status =
+        make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, guide_status_format_);
+    if (FAILED(key) || FAILED(label) || FAILED(note) || FAILED(status))
+    {
+        return std::unexpected(RenderFailure::directwrite);
+    }
+    const std::array<TextFormat, 4> every{guide_key_format_, guide_label_format_,
+                                          guide_note_format_, guide_status_format_};
+    for (const auto &format : every)
+    {
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    }
+    guide_note_format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    return {};
 }
 
 std::expected<void, RenderFailure>
@@ -1190,6 +1218,54 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
     }
 }
 
+void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
+                                       const core::OperationGuideLayout &guide)
+{
+    const auto *body = std::get_if<core::BodyGuideLayout>(&guide);
+    if (body == nullptr)
+    {
+        return;
+    }
+    const KeycapStyle style{
+        9.0F, 20.0F, 5.0F, frame.palette.panel, frame.palette.panel_border, frame.palette.text};
+    for (std::size_t index = 0; index < body->rows.size(); ++index)
+    {
+        const auto &row = body->rows.at(index);
+        const auto &entry = frame.guide.entries.at(index);
+        context_->PushAxisAlignedClip(to_rect(row.key), D2D1_ANTIALIAS_MODE_ALIASED);
+        draw_keycap(entry.key, guide_key_format_.Get(), row.key, style);
+        context_->PopAxisAlignedClip();
+        context_->PushAxisAlignedClip(to_rect(row.label), D2D1_ANTIALIAS_MODE_ALIASED);
+        write(entry.body_name, guide_label_format_.Get(), row.label, frame.palette.muted);
+        context_->PopAxisAlignedClip();
+    }
+    context_->PushAxisAlignedClip(to_rect(body->note), D2D1_ANTIALIAS_MODE_ALIASED);
+    write("打ち始めると消えます", guide_note_format_.Get(), body->note, frame.palette.muted);
+    context_->PopAxisAlignedClip();
+}
+
+void Direct2DRenderer::draw_status_guide(const application::EditorFrame &frame,
+                                         const core::OperationGuideLayout &guide)
+{
+    const auto *status = std::get_if<core::StatusGuideLayout>(&guide);
+    if (status == nullptr)
+    {
+        return;
+    }
+    constexpr std::array<std::size_t, 2> entries{0, 2};
+    for (std::size_t index = 0; index < status->rows.size(); ++index)
+    {
+        const auto &row = status->rows.at(index);
+        const auto &entry = frame.guide.entries.at(entries.at(index));
+        context_->PushAxisAlignedClip(to_rect(row.key), D2D1_ANTIALIAS_MODE_ALIASED);
+        write_status(entry.key, status_format_.Get(), row.key, frame.palette.text);
+        context_->PopAxisAlignedClip();
+        context_->PushAxisAlignedClip(to_rect(row.label), D2D1_ANTIALIAS_MODE_ALIASED);
+        write_status(entry.short_name, guide_status_format_.Get(), row.label, frame.palette.muted);
+        context_->PopAxisAlignedClip();
+    }
+}
+
 void Direct2DRenderer::draw_toggle(const application::EditorFrame &frame,
                                    const core::StatusBarLayout &layout)
 {
@@ -1441,6 +1517,15 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
 void Direct2DRenderer::draw_palette_key(const application::EditorFrame &frame, std::string_view key,
                                         const core::LayoutRect &note)
 {
+    draw_keycap(key, key_format_.Get(), note,
+                KeycapStyle{palette_key_padding_dips, palette_key_height_dips,
+                            palette_key_radius_dips, frame.palette.background,
+                            frame.palette.panel_border, frame.palette.text});
+}
+
+void Direct2DRenderer::draw_keycap(std::string_view key, IDWriteTextFormat *format,
+                                   const core::LayoutRect &note, const KeycapStyle &style)
+{
     // 文字の左右 9 DIP・高さ 20 DIP・角丸 5 DIP の枠を、右端を欄の右端に揃えて行の縦の中央に置く。
     // 幅は左寄せの書式の layout で測る（右寄せの書式で測らない・#258）。
     // 欄より広ければ欄の幅で切る。
@@ -1448,27 +1533,27 @@ void Direct2DRenderer::draw_palette_key(const application::EditorFrame &frame, s
     {
         return;
     }
-    const auto shown = text_layout(key, key_format_.Get(), note);
+    const auto shown = text_layout(key, format, note);
     DWRITE_TEXT_METRICS metrics{};
     if (!shown || FAILED(shown->GetMetrics(&metrics)))
     {
         return;
     }
-    const float padding = scaled(palette_key_padding_dips);
+    const float padding = scaled(style.padding);
     const float stroke = scaled(1.0F);
     const auto right = static_cast<float>(note.right);
     const float width =
         std::min(metrics.width + (padding * 2.0F), static_cast<float>(core::width_of(note)));
     const float middle = static_cast<float>(note.top + note.bottom) / 2.0F;
-    const float half_height = scaled(palette_key_height_dips) / 2.0F;
+    const float half_height = scaled(style.height) / 2.0F;
     const D2D1_RECT_F box{right - width + (stroke / 2.0F), middle - half_height,
                           right - (stroke / 2.0F), middle + half_height};
-    const float radius = scaled(palette_key_radius_dips);
-    brush_->SetColor(to_color(frame.palette.background));
+    const float radius = scaled(style.radius);
+    brush_->SetColor(to_color(style.face));
     context_->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brush_.Get());
-    brush_->SetColor(to_color(frame.palette.panel_border));
+    brush_->SetColor(to_color(style.border));
     context_->DrawRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brush_.Get(), stroke);
-    brush_->SetColor(to_color(frame.palette.text));
+    brush_->SetColor(to_color(style.text));
     context_->PushAxisAlignedClip(box, D2D1_ANTIALIAS_MODE_ALIASED);
     context_->DrawTextLayout(D2D1::Point2F(right - width + padding, static_cast<float>(note.top)),
                              shown.Get(), brush_.Get());
@@ -1599,9 +1684,13 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto height = static_cast<std::int32_t>(size.height);
     const auto title = core::title_bar_layout(application::title_bar_input(frame, width, dpi_));
     const auto status = core::status_bar_layout(width, height, dpi_);
+    const auto body = core::body_layout(width, height, dpi_, frame.settings.font_size);
+    const auto guide = core::operation_guide_layout(frame.guide.context, body, status, dpi_);
     draw_title_bar(frame, title);
-    draw_body(frame, core::body_layout(width, height, dpi_, frame.settings.font_size));
+    draw_body(frame, body);
+    draw_body_guide(frame, guide);
     draw_status_bar(frame, status);
+    draw_status_guide(frame, guide);
     if (frame.command_palette.has_value())
     {
         draw_palette(
