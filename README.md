@@ -3,10 +3,11 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-10-03):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
+> **Status (2026-10-08):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
 > built-in themes, and the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search with
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
-> and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. Markdown
+> and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
+> available operations; a new untitled document and the status bar show optional shortcut hints. Markdown
 > preview and files above 64 MiB are still planned. Nothing to download yet (Phase 4).
 
 ## What works today
@@ -37,7 +38,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT` and `:tabnext` `:tabnew` `:tabclose`. Done; reordering by drag is planned.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, fuzzy-matched by name and then by folder.
   A leading mark narrows the list: `#` shows the tabs only, `:` shows the settings commands (themes,
-  `set fontsize=`, `set guifont=`). Closed files are kept in a history of up to 100 files, listed
+  `set fontsize=`, `set guifont=`, `set guide`, `set noguide`). Closed files are kept in a history of up to 100 files, listed
   newest first after the tabs; `@` shows the history only. A file that no longer exists is reported
   in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
   off and leaves it to the user after that, and matching walks code points, so a character never matches
@@ -76,7 +77,11 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-016 colorscheme** — nine built-in themes plus up to 128 user themes from
   `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`; `:colorscheme <name>` / `system`, Tab completion, Ctrl+P. Done.
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v1`. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v2`. Done.
+- **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
+  descriptions and shortcuts; type to filter, then press Enter to run one. An untouched untitled document
+  shows three shortcut hints. Otherwise, the status bar shows compact hints when space permits.
+  `:set noguide` hides both; `:set guide` restores them. Done.
 
 ## Using the settings commands
 
@@ -85,9 +90,15 @@ to switch, or `colorscheme system` to follow Windows. `Tab` / `Shift+Tab` cycle 
 Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Enter` applies;
 `Esc` cancels. Left/Right, Home/End, Backspace/Delete and single-line `Ctrl+V` edit the command.
 Press `Ctrl+P` in either editing mode to choose the same commands from a filtered list.
+Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
+
+Settings are saved in `settings.v2`. If it is absent, the editor reads the older `settings.v1` with hints
+enabled. The first actual settings change writes the new file; the older file is left intact for older
+versions. A broken new file is reported and blocks settings writes until repaired and restarted.
 
 The settings file format and failure behavior are specified in
-[ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md); command behavior is in
+[ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md) and the migration in
+[ADR 0079](docs/adr/0079-operation-guides-and-settings-migration.md); command behavior is in
 [ADR 0022](docs/adr/0022-ex-command-line-and-settings-evaluation.md) and
 [ADR 0023](docs/adr/0023-command-palette-and-shared-input-session.md).
 Put a [user-theme file](docs/design/user-theme-format.md) in the themes folder, restart, then choose it through
