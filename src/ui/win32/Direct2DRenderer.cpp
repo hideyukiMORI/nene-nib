@@ -449,8 +449,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     {
         return std::unexpected(RenderFailure::directwrite);
     }
-    return create_body_formats(
-        core::EditorSettings{formatted_size_, formatted_family_, std::nullopt});
+    return create_body_formats(core::EditorSettings{formatted_size_, formatted_family_,
+                                                    std::nullopt, core::GuideVisibility::shown});
 }
 
 std::expected<void, RenderFailure>

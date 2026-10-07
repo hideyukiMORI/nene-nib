@@ -198,10 +198,10 @@ class ProfileReset(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             profile = Path(directory) / "NeNeNib"
             profile.mkdir()
-            for name in ("session.v1", "history.v1", "bookmarks.v1", "settings.v1"):
+            for name in ("session.v1", "history.v1", "bookmarks.v1", "settings.v1", "settings.v2"):
                 (profile / name).write_text("kept", encoding="utf-8")
             self.assertTrue(forget_session({"LOCALAPPDATA": directory}))
-            self.assertEqual([p.name for p in profile.iterdir()], ["settings.v1"])
+            self.assertEqual(sorted(p.name for p in profile.iterdir()), ["settings.v1", "settings.v2"])
             self.assertFalse(forget_session({"LOCALAPPDATA": directory}))
 
     def test_own_profile_is_never_deleted(self):

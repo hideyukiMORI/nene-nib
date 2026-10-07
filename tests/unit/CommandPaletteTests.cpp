@@ -240,6 +240,32 @@ void verify_palette_controller()
            "palette work adds no body undo entries");
 }
 
+void verify_palette_guide()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(InsertText{"body"}));
+    const auto before = controller.apply(app::SelectAll{});
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{":set noguide"}));
+    const auto hidden = controller.apply(app::SubmitCommand{});
+    expect(hidden.settings.guide == core::GuideVisibility::hidden &&
+               editor.settings().writes() == 1,
+           "palette executes noguide through shared Ex persistence");
+    expect(hidden.lines.front().text == "body" && hidden.caret == before.caret &&
+               hidden.lines.front().selection == before.lines.front().selection,
+           "palette guide preserves body caret and selection");
+    editor.settings().fail(app::SettingsFailure::unwritable);
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{":set guide"}));
+    const auto failed = controller.apply(app::SubmitCommand{});
+    expect(failed.settings.guide == core::GuideVisibility::hidden &&
+               failed.settings_failure.has_value(),
+           "palette keeps guide on persistence failure");
+    expect(applied(controller, HistoryAction{HistoryDirection::undo}).empty(),
+           "palette guide adds no text undo entries");
+}
+
 void verify_palette_unknown_theme()
 {
     Editing editor;
@@ -1396,6 +1422,7 @@ void verify_command_palette()
     verify_palette_editing();
     verify_palette_geometry();
     verify_palette_controller();
+    verify_palette_guide();
     verify_palette_unknown_theme();
     verify_palette_input_isolation();
     verify_palette_vim_modes();

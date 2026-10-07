@@ -11,7 +11,7 @@
 
 namespace nenenib::adapters::win32
 {
-std::expected<core::FilePath, application::SettingsFailure> local_settings_path()
+std::expected<SettingsPaths, application::SettingsFailure> local_settings_paths()
 {
     using Failure = application::SettingsFailure;
     constexpr wchar_t variable[] = L"LOCALAPPDATA";
@@ -32,22 +32,23 @@ std::expected<core::FilePath, application::SettingsFailure> local_settings_path(
     {
         return std::unexpected(Failure::location_unavailable);
     }
-    const auto path = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v1");
-    if (!path)
+    const auto current = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v2");
+    const auto previous = core::FilePath::parse(utf8.value() + "/NeNeNib/settings.v1");
+    if (!current || !previous)
     {
         return std::unexpected(Failure::location_unavailable);
     }
-    return path.value();
+    return SettingsPaths{current.value(), previous.value()};
 }
 
 std::optional<core::FilePath> beside_local_settings(std::string_view name)
 {
-    const auto settings = local_settings_path();
+    const auto settings = local_settings_paths();
     if (!settings)
     {
         return std::nullopt;
     }
-    const auto path = settings.value().text();
+    const auto path = settings.value().current.text();
     const auto parent = path.substr(0, path.find_last_of("/\\") + 1);
     auto beside = core::FilePath::parse(std::string(parent) + std::string(name));
     if (!beside)
