@@ -200,7 +200,7 @@ def main():
     shutil.copy2(args.executable, executable)
     profile = Path(tempfile.mkdtemp(prefix="profile-", dir=output)).resolve()
     environment = dict(os.environ, LOCALAPPDATA=str(profile), APPDATA=str(profile))
-    settings = profile / "NeNeNib/settings.v1"
+    settings = profile / "NeNeNib/settings.v2"
     document = output / "palette-document.txt"
     original = "\ncommand palette stays separate\n"
     document.write_text(original, encoding="utf-8", newline="\n")

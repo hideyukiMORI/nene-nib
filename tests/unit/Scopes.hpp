@@ -36,6 +36,9 @@ void verify_background_work_scope();
 // OperationsTests.cpp
 void verify_operations_scope();
 
+// GuideTests.cpp
+void verify_guide_scope();
+
 // VimDotTests.cpp
 void verify_vim_dot_contracts();
 void verify_vim_dot_scope();

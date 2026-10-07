@@ -7,13 +7,14 @@ namespace nenenib::core
 bool same_settings(const EditorSettings &left, const EditorSettings &right) noexcept
 {
     return left.font_size.points() == right.font_size.points() &&
-           left.font_family.text() == right.font_family.text() && left.theme == right.theme;
+           left.font_family.text() == right.font_family.text() && left.theme == right.theme &&
+           left.guide == right.guide;
 }
 
 EditorSettings default_editor_settings()
 {
     return EditorSettings{default_font_size(), DisplayText::parse("Cascadia Code").value(),
-                          std::nullopt};
+                          std::nullopt, GuideVisibility::shown};
 }
 
 Theme selected_theme(const EditorSettings &settings, Appearance system_appearance) noexcept

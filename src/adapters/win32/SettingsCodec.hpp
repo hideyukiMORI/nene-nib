@@ -2,6 +2,7 @@
 
 #include "EditorSettings.hpp"
 #include "SettingsIssue.hpp"
+#include "SettingsVersion.hpp"
 #include "ThemeCatalog.hpp"
 
 #include <expected>
@@ -11,7 +12,7 @@
 namespace nenenib::adapters::win32
 {
 [[nodiscard]] std::expected<core::EditorSettings, application::SettingsIssue>
-decode_settings(std::string_view bytes,
+decode_settings(std::string_view bytes, SettingsVersion version,
                 const core::ThemeCatalog &themes = core::ThemeCatalog::builtins());
 [[nodiscard]] std::string encode_settings(const core::EditorSettings &settings);
 } // namespace nenenib::adapters::win32

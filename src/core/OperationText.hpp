@@ -14,5 +14,7 @@ struct OperationText
     std::string_view name;
     std::string_view reading;
     std::string_view description;
+    // 未指定なら通常名を使う。操作一覧の名前・検索対象には加えない（ADR 0079）。
+    std::string_view short_name{};
 };
 } // namespace nenenib::core

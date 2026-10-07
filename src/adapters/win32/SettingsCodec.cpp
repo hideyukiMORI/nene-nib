@@ -6,6 +6,7 @@
 
 #include <format>
 #include <optional>
+#include <utility>
 
 namespace nenenib::adapters::win32
 {
@@ -34,6 +35,11 @@ assign_field(SettingsFields &fields, std::string_view key, std::string_view valu
     if (key == "font_size")
     {
         fields.font_size = value;
+        return {};
+    }
+    if (key == "guide")
+    {
+        fields.guide = value;
         return {};
     }
     return std::unexpected(Failure::malformed);
@@ -88,17 +94,59 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
     return size.value();
 }
 
+[[nodiscard]] std::expected<core::GuideVisibility, Failure> guide_from(const SettingsFields &fields,
+                                                                       SettingsVersion version)
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+        if (fields.guide.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        return core::GuideVisibility::shown;
+    case SettingsVersion::v2:
+        if (fields.guide == "on")
+        {
+            return core::GuideVisibility::shown;
+        }
+        if (fields.guide == "off")
+        {
+            return core::GuideVisibility::hidden;
+        }
+        return std::unexpected(Failure::malformed);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::string_view version_text(SettingsVersion version)
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+        return "1";
+    case SettingsVersion::v2:
+        return "2";
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] std::expected<core::EditorSettings, application::SettingsIssue>
-validated(const SettingsFields &fields, const core::ThemeCatalog &themes)
+validated(const SettingsFields &fields, SettingsVersion version, const core::ThemeCatalog &themes)
 {
     if (!fields.version.has_value() || !fields.colorscheme.has_value() ||
         !fields.font_family.has_value() || !fields.font_size.has_value())
     {
         return std::unexpected(Failure::malformed);
     }
-    if (fields.version.value() != "1")
+    if (fields.version.value() != version_text(version))
     {
         return std::unexpected(Failure::unsupported_version);
+    }
+    const auto guide = guide_from(fields, version);
+    if (!guide)
+    {
+        return std::unexpected(guide.error());
     }
     const auto theme = theme_from(fields.colorscheme.value(), themes);
     if (!theme)
@@ -115,26 +163,36 @@ validated(const SettingsFields &fields, const core::ThemeCatalog &themes)
     {
         return std::unexpected(size.error());
     }
-    return core::EditorSettings{size.value(), family.value(), theme.value()};
+    return core::EditorSettings{size.value(), family.value(), theme.value(), guide.value()};
 }
 } // namespace
 
 std::expected<core::EditorSettings, application::SettingsIssue>
-decode_settings(std::string_view bytes, const core::ThemeCatalog &themes)
+decode_settings(std::string_view bytes, SettingsVersion version, const core::ThemeCatalog &themes)
 {
     const auto fields = read_fields(bytes);
     if (!fields)
     {
         return std::unexpected(fields.error());
     }
-    return validated(fields.value(), themes);
+    return validated(fields.value(), version, themes);
 }
 
 std::string encode_settings(const core::EditorSettings &settings)
 {
     const auto theme =
         settings.theme.has_value() ? settings.theme.value().name() : std::string_view{"system"};
-    return std::format("version=1\ncolorscheme={}\nfont_family={}\nfont_size={}\n", theme,
-                       settings.font_family.text(), settings.font_size.points());
+    std::string_view guide;
+    switch (settings.guide)
+    {
+    case core::GuideVisibility::shown:
+        guide = "on";
+        break;
+    case core::GuideVisibility::hidden:
+        guide = "off";
+        break;
+    }
+    return std::format("version=2\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n", theme,
+                       settings.font_family.text(), settings.font_size.points(), guide);
 }
 } // namespace nenenib::adapters::win32

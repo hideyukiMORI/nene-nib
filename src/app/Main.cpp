@@ -132,7 +132,7 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32FileAdapter files;
     nenenib::adapters::win32::Win32CodePageAdapter code_pages;
     nenenib::adapters::win32::Win32SettingsAdapter settings(
-        files, nenenib::adapters::win32::local_settings_path());
+        files, nenenib::adapters::win32::local_settings_paths());
     nenenib::adapters::win32::Win32ThemeAdapter themes(
         files, nenenib::adapters::win32::local_theme_directory());
     // 前回のタブの一覧は窓が閉じるときに書き、ファイルの引数が無い起動で controller が読む

@@ -92,7 +92,8 @@ def main():
     light.write_text(theme("hide-light", True), encoding="utf-8")
     (directory / "broken.v1.theme").write_text("version=1\n", encoding="utf-8")
     environment = dict(os.environ, LOCALAPPDATA=str(profile), APPDATA=str(profile))
-    settings = profile / "NeNeNib/settings.v1"
+    settings = profile / "NeNeNib/settings.v2"
+    previous = profile / "NeNeNib/settings.v1"
     document = output / "theme-document.txt"
     original = "\nuser themes leave this document intact\n"
     document.write_text(original, encoding="utf-8", newline="\n")
@@ -111,8 +112,9 @@ def main():
         print("Startup notice screenshot captured with initial document")
         return
     if args.only == "saved-error":
-        settings.write_text("version=1\ncolorscheme=hide-light\nfont_family=Consolas\nfont_size=13.5\n", encoding="utf-8")
-        verify_saved_error(executable, environment, document, settings, light, output)
+        previous.write_text("version=1\ncolorscheme=hide-light\nfont_family=Consolas\nfont_size=13.5\n", encoding="utf-8")
+        verify_saved_error(executable, environment, document, previous, light, output)
+        assert not settings.exists(), "blocked v1 must not create v2"
         result = {"brokenSavedThemeNamedAndWriteBlocked": True}
         (output / "saved-error-results.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(result, indent=2))

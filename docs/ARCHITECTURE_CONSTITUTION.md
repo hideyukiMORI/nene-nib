@@ -95,7 +95,7 @@
 | Vim の保留・レジスタ・検索記憶・移動量の設定 | 排他的な次キー待ち（文字検索またはprefix）、行内検索の対象と種別、半画面の明示行数 | application（`EditorState::vim`） | core の純関数の結果（ADR 0012 / 0019 / 0026 / 0027） |
 | 縦スクロール | 表示中の先頭行と表示行数 | application（`EditorState::scroll`） | スクロール・表示行数の意図と Vim の画面移動の効果（ADR 0019）。engine へ渡す view は借用で保存しない |
 | ワーカーの結果（索引・ハイライト・md 変換） | 版番号付きの派生値 | application | ワーカー完了の意図。古い版は捨てる（ADR 0004） |
-| 本文フォント・テーマ設定 | pt・フォント名・任意のテーマ（無しは OS 追従） | application（`EditorState::settings`） | `SettingsPort` の読込と、設定変更を保存した結果。UI は `EditorFrame` の値を写す（ADR 0020） |
+| エディタ設定 | pt・フォント名・任意のテーマ（無しは OS 追従）・操作の案内の表示 | application（`EditorState::settings`） | `SettingsPort` の読込と、設定変更を保存した結果。UI は `EditorFrame` の値を写す（ADR 0020 / 0079） |
 | 履歴・ブックマーク | 保存される値 | application | 変更の意図と保存ポートの結果 |
 
 同じ事実を 2 つの区分に独立して持たない。派生値は再計算するか、無効化を明示したキャッシュにする。

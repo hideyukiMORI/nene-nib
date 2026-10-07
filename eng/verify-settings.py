@@ -114,7 +114,7 @@ def verify_click(window, body: dict, document: Path) -> None:
 
 
 def verify_font(executable: Path, environment: dict, output: Path) -> dict:
-    settings = Path(environment["LOCALAPPDATA"]) / "NeNeNib/settings.v1"
+    settings = Path(environment["LOCALAPPDATA"]) / "NeNeNib/settings.v2"
     document = output / "font-document.txt"
     document.write_text("\nabcdefghij\n三行目\n", encoding="utf-8", newline="\n")
     appearance = VIEW.expected_appearance()
@@ -138,7 +138,7 @@ def verify_font(executable: Path, environment: dict, output: Path) -> dict:
         stop(process)
     result["imeAtEnlargedSize"] = VIEW.verify_ime(executable, environment, appearance, output, 21.5)
     # A manually selected theme and family take the same startup settings path.
-    settings.write_text("version=1\ncolorscheme=neutral-light\nfont_family=Consolas\nfont_size=18\n",
+    settings.write_text("version=2\ncolorscheme=neutral-light\nfont_family=Consolas\nfont_size=18\nguide=on\n",
                         encoding="utf-8", newline="\n")
     process, window, _ = start(executable, environment)
     try:

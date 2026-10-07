@@ -136,9 +136,32 @@ namespace
                     DisplayText::parse(incsearch ? "incsearch=on" : "incsearch=off").value()};
 }
 
+[[nodiscard]] ExResult guide_result(EditorSettings settings, GuideVisibility guide)
+{
+    settings.guide = guide;
+    switch (guide)
+    {
+    case GuideVisibility::shown:
+        return ExResult{settings, std::nullopt, std::nullopt,
+                        DisplayText::parse("guide=on").value()};
+    case GuideVisibility::hidden:
+        return ExResult{settings, std::nullopt, std::nullopt,
+                        DisplayText::parse("guide=off").value()};
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
+    if (option == "guide")
+    {
+        return guide_result(settings, GuideVisibility::shown);
+    }
+    if (option == "noguide")
+    {
+        return guide_result(settings, GuideVisibility::hidden);
+    }
     if (option.starts_with("fontsize="))
     {
         return set_font_size(option.substr(9), settings);
@@ -460,9 +483,9 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
 {
     std::vector<std::string> candidates{
-        "colorscheme",     "set fontsize=", "set guifont=",   "set incsearch",
-        "set noincsearch", "set hlsearch",  "set nohlsearch", "tabs",
-        "tabnew",          "tabnext",       "tabprevious",    "tabclose"};
+        "colorscheme",  "set fontsize=",  "set guifont=", "set incsearch", "set noincsearch",
+        "set hlsearch", "set nohlsearch", "set guide",    "set noguide",   "tabs",
+        "tabnew",       "tabnext",        "tabprevious",  "tabclose"};
     for (const ExPaletteName &name : palette_names)
     {
         candidates.emplace_back(name.name);
@@ -503,7 +526,9 @@ DisplayText ex_failure_message(ExFailure failure)
     case ExFailure::unknown_command:
         return DisplayText::parse("Unknown command").value();
     case ExFailure::unknown_option:
-        return DisplayText::parse("Use set fontsize=, set guifont= or set (no)hlsearch").value();
+        return DisplayText::parse(
+                   "Use set fontsize=, set guifont=, set (no)hlsearch or set (no)guide")
+            .value();
     case ExFailure::unknown_theme:
         return DisplayText::parse("Unknown colorscheme (Tab lists names)").value();
     case ExFailure::invalid_font_size:

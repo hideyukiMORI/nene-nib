@@ -338,6 +338,53 @@ void verify_ex_controller()
            "commands add no text undo entry");
 }
 
+void verify_guide_settings()
+{
+    expect(core::default_editor_settings().guide == core::GuideVisibility::shown,
+           "guide is shown by default");
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply(InsertText{"body"}));
+    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::vim}));
+    const auto before = controller.frame();
+    const auto hidden = run_ex(controller, "set noguide");
+    expect(hidden.settings.guide == core::GuideVisibility::hidden &&
+               editor.settings().writes() == 1,
+           "noguide persists hidden guide through shared settings path");
+    expect(hidden.lines.front().text == "body" && hidden.caret == before.caret &&
+               hidden.lines.front().selection == before.lines.front().selection,
+           "guide setting preserves text selection and caret");
+    static_cast<void>(run_ex(controller, "set noguide"));
+    expect(editor.settings().writes() == 1, "same guide setting does not save");
+    for (const auto command : {"set fontsize=18", "set guifont=Consolas:h19", "colorscheme dracula",
+                               "colorscheme system"})
+    {
+        expect(run_ex(controller, command).settings.guide == core::GuideVisibility::hidden,
+               "font and theme commands preserve guide");
+    }
+    expect(controller.apply(app::AdjustFontSize{core::FontSizeAdjustment::increase, 1})
+                   .settings.guide == core::GuideVisibility::hidden,
+           "relative font size also preserves guide");
+    editor.settings().fail(app::SettingsFailure::unwritable);
+    expect(run_ex(controller, "set guide").settings.guide == core::GuideVisibility::hidden,
+           "failed save keeps guide hidden");
+    editor.settings().fail(std::nullopt);
+    expect(run_ex(controller, "set guide").settings.guide == core::GuideVisibility::shown,
+           "guide returns only after successful save");
+    expect(applied(controller, HistoryAction{HistoryDirection::undo}).empty(),
+           "guide commands add no body undo entries");
+    expect(core::command_completions("set g") ==
+                   std::vector<std::string>{"set guifont=", "set guide"} &&
+               core::command_completions("set nog") == std::vector<std::string>{"set noguide"},
+           "guide commands are in shared Ex completion catalog");
+    auto saved = core::default_editor_settings();
+    saved.guide = core::GuideVisibility::hidden;
+    Editing restored{SettingsReading{saved}};
+    expect(restored.controller().frame().settings.guide == core::GuideVisibility::hidden &&
+               restored.settings().writes() == 0,
+           "loading hidden guide preserves it without saving");
+}
+
 void verify_ex_input_isolation()
 {
     Editing editor;
@@ -473,6 +520,7 @@ void verify_ex_settings()
     verify_command_editing();
     verify_command_completions();
     verify_ex_controller();
+    verify_guide_settings();
     verify_ex_input_isolation();
     verify_ex_tab_names();
     verify_ex_tab_arguments();
