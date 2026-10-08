@@ -494,7 +494,9 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
                                        DWRITE_FONT_WEIGHT_NORMAL, code);
     const auto made_gutter =
         make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, gutter);
-    const auto made_key = make_format(face, ui_text_dips * ratio, DWRITE_FONT_WEIGHT_NORMAL, key);
+    // 面の行の名前・説明（`command_format_`）と右端の欄（112 DIP）は本文の大きさに追従しないので、
+    // 鍵も倍率を掛けない 12 DIP に固定する（ADR 0078 の決定 12・#312）。
+    const auto made_key = make_format(face, ui_text_dips, DWRITE_FONT_WEIGHT_NORMAL, key);
     if (FAILED(made_code) || FAILED(made_gutter) || FAILED(made_key))
     {
         return std::unexpected(RenderFailure::directwrite);

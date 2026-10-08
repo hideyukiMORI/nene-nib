@@ -3,7 +3,7 @@
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
-> 再開地点は[2026-10-08の引き継ぎ](../handoffs/2026-10-08.md)。#291・#298・#299・#300・#303・#304 に続き、#309（PR #317）と #312（PR #316）は実装と自動の検証を受理し、実機の撮影・Ready・CI・merge が残る（撮影は hide が機械が空いたと言ってから）。
+> 再開地点は[2026-10-08の引き継ぎ](../handoffs/2026-10-08.md)。#291・#298・#299・#300・#303・#304 に続き、#312（PR #316）は撮影まで受理して統合。#309（PR #317）は撮影まで受理し Ready・CI・merge が残る。
 > 高速化の 5 件は hide が承認し #320〜#324 を起票済み（着手は後日・#309 / #312 の後）。split の採用は保留のまま。
 
 ## 運用（2026-10-03）
@@ -32,7 +32,7 @@
 | 13 | #303 F1 で操作の一覧を開き、その場で実行する（D43・ADR 0078） | **済み**。操作の名前・鍵・実行を core の 1 つの表（`operation_bindings` `operation_texts`）に寄せ、鍵と一覧が ui の `run_operation` の 1 本で実行する。F1 と Ctrl+P の面の `?`。対象の試験・速さ 8 本・実機 31 場面を受理。[gate-proofs 5-cu](../quality/gate-proofs.md) |
 | 14 | #304 操作の案内を空の文書とステータスバーに出し、設定 `guide` で消せるようにする（D42） | **実装・検証済み**。操作表から本文/ステータスを排他的に表示し、設定は旧v1を残してv2へ保存。ADR 0079・[PR #313](https://github.com/hideyukiMORI/nene-nib/pull/313)・[gate-proofs 5-cv](../quality/gate-proofs.md) |
 | 15 | #309 Ctrl+P の面の「候補なし」の文字を行の名前の左端にそろえる | **実装・自動の検証を受理**。0 件の文字を `palette_row_label` の欄に書く（ADR 0060 決定 9）。[PR #317](https://github.com/hideyukiMORI/nene-nib/pull/317)（draft・`b9ef1b1`）。実機の撮影 → Ready → CI → merge が残る |
-| 16 | #312 本文の文字拡大でF1の長いキー表示が切れる | **実装・自動の検証を受理**。鍵の書式に本文の倍率を掛けず 12 DIP（ADR 0078 決定 12 に 1 文）。[PR #316](https://github.com/hideyukiMORI/nene-nib/pull/316)（draft・`315b153`）。実機の撮影 → Ready → CI → merge が残る |
+| 16 | #312 本文の文字拡大でF1の長いキー表示が切れる | **済み**。鍵の書式に本文の倍率を掛けず 12 DIP（ADR 0078 決定 12 に 1 文）。13.5 pt は 0 画素差・24 pt で `Ctrl+Shift+S` が欄に収まる。[PR #316](https://github.com/hideyukiMORI/nene-nib/pull/316)、[gate-proofs 5-cw](../quality/gate-proofs.md#5-cw--f1-の鍵の文字を本文の倍率で拡大しないissue-312adr-0078-決定-12) |
 | 17 | 高速化の 5 件（2026-10-08 の調査・hide 承認・**着手は後日**） | #320 開く道の無駄 3 つ（S・推定 20〜35 ms）→ #321 1 打鍵の `EditorState` の 7 回の写し（S）→ #324 描画の小さな無駄（S）→ #322 frame の二重構築（ADR が先）→ #323 undo の履歴の複製の崖（ベンチと ADR が先）。まとめは `out/reports/probe-speed-summary-20261008.md`（写し `D:/NeNeNib/evidence/speed-review-20261008/`） |
 | 18 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
