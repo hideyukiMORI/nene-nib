@@ -1607,7 +1607,10 @@ void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &fram
     const auto &palette = frame.command_palette.value();
     if (palette.total == 0)
     {
-        write("候補なし", mode_format_.Get(), core::palette_row(layout, 0), frame.palette.muted);
+        // 行の名前と同じ欄に書く（ADR 0060 の決定 9）。面の左端に寄せない。#309
+        write("候補なし", mode_format_.Get(),
+              core::palette_row_label(core::palette_row(layout, 0), dpi_, false),
+              frame.palette.muted);
         return;
     }
     const auto start = core::palette_first_visible(layout, palette.selected);
