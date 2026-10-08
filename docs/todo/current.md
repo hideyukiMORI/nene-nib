@@ -3,8 +3,8 @@
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
-> 再開地点は[2026-10-08の引き継ぎ](../handoffs/2026-10-08.md)。#291・#298・#299・#300・#303に続き、#304（操作の案内と設定 `guide`）は実装・対象検証を受理（[PR #313](https://github.com/hideyukiMORI/nene-nib/pull/313)・[gate-proofs 5-cv](../quality/gate-proofs.md)）。
-> 次は #309（「候補なし」の位置）、続いて #312（本文拡大時のF1キー表示）。split の採用は保留のまま。
+> 再開地点は[2026-10-08の引き継ぎ](../handoffs/2026-10-08.md)。#291・#298・#299・#300・#303・#304 に続き、#309（PR #317）と #312（PR #316）は実装と自動の検証を受理し、実機の撮影・Ready・CI・merge が残る（撮影は hide が機械が空いたと言ってから）。
+> 高速化の見直し（調査だけ・`out/reports/probe-speed-summary-20261008.md`）は hide の判断待ちで未起票。split の採用は保留のまま。
 
 ## 運用（2026-10-03）
 
@@ -31,9 +31,10 @@
 | 12 | #300 字体選択と字形の保持の契約を CTest へ・取り付けの失敗で窓を終わらせない（ADR 0077） | **済み**。CTest `nib_window`（1521 checks・窓を作らない）。試験で「装飾を断っても字形の保持が残る」破れが見つかり、棄却の印で直した。22 場面 0 画素差・速さ 8 本は基準内。[PR #305](https://github.com/hideyukiMORI/nene-nib/pull/305)、[gate-proofs 5-ct](../quality/gate-proofs.md) |
 | 13 | #303 F1 で操作の一覧を開き、その場で実行する（D43・ADR 0078） | **済み**。操作の名前・鍵・実行を core の 1 つの表（`operation_bindings` `operation_texts`）に寄せ、鍵と一覧が ui の `run_operation` の 1 本で実行する。F1 と Ctrl+P の面の `?`。対象の試験・速さ 8 本・実機 31 場面を受理。[gate-proofs 5-cu](../quality/gate-proofs.md) |
 | 14 | #304 操作の案内を空の文書とステータスバーに出し、設定 `guide` で消せるようにする（D42） | **実装・検証済み**。操作表から本文/ステータスを排他的に表示し、設定は旧v1を残してv2へ保存。ADR 0079・[PR #313](https://github.com/hideyukiMORI/nene-nib/pull/313)・[gate-proofs 5-cv](../quality/gate-proofs.md) |
-| 15 | #309 Ctrl+P の面の「候補なし」の文字を行の名前の左端にそろえる | 未着手。小さな見た目の直し |
-| 16 | #312 本文の文字拡大でF1の長いキー表示が切れる | 未着手。旧Releaseの比較画像で確認した既存の表示問題 |
-| 17 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
+| 15 | #309 Ctrl+P の面の「候補なし」の文字を行の名前の左端にそろえる | **実装・自動の検証を受理**。0 件の文字を `palette_row_label` の欄に書く（ADR 0060 決定 9）。[PR #317](https://github.com/hideyukiMORI/nene-nib/pull/317)（draft・`b9ef1b1`）。実機の撮影 → Ready → CI → merge が残る |
+| 16 | #312 本文の文字拡大でF1の長いキー表示が切れる | **実装・自動の検証を受理**。鍵の書式に本文の倍率を掛けず 12 DIP（ADR 0078 決定 12 に 1 文）。[PR #316](https://github.com/hideyukiMORI/nene-nib/pull/316)（draft・`315b153`）。実機の撮影 → Ready → CI → merge が残る |
+| 17 | 高速化の見直し（2026-10-08 の調査・未起票） | hide の判断待ち。候補 5 群: 開く道の無駄 3 つ（推定 20〜35 ms）・1 打鍵の状態の 7 回の写し・frame の二重構築（ADR）・undo の履歴の複製の崖（ベンチと ADR）・描画の小さな無駄。まとめは `out/reports/probe-speed-summary-20261008.md`（写し `D:/NeNeNib/evidence/speed-review-20261008/`） |
+| 18 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
 
