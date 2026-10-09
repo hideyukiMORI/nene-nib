@@ -97,3 +97,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0079](0079-operation-guides-and-settings-migration.md) | 操作の案内は操作表から描き、設定は旧版を残して移行する | 受理 |
 | [0081](0081-consume-temporary-editor-state-through-one-update-path.md) | 一時的なエディタ状態は同じ更新経路へ所有権を渡し、不要な置換を省く | 受理 |
 | [0084](0084-intent-delivery-does-not-build-visible-lines.md) | 意図の反映値は行を作らず、描画と当たり判定でだけ frame を作る | 受理 |
+| [0085](0085-completed-history-edits-are-private-immutable-values.md) | 確定済み履歴の編集は私有の不変値として共有する | 受理（工程1の設計、性能・製品統合は別） |
