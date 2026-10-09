@@ -1,6 +1,6 @@
 # ADR 0092 — CP932変換は上限内の出力を一回で書く
 
-- 状態: 設計受理・固定比較後に製品採否を判断
+- 状態: 受理・#341で製品採用
 - 日付: 2026-10-09
 - Issue: #340
 - 影響する規則: ARC-003 / ARC-007 / ARC-010 / CPP-003 / CPP-005 / CPP-007 / CPP-016 / QLT-001 / QLT-012 / QLT-014
@@ -26,3 +26,5 @@ Microsoftの[Windowsコードページ一覧](https://learn.microsoft.com/en-us/
 
 A、A+B、A+B+Cを別commit・同じharnessで比較し、全結果を残す。DBCS入力のwide容量上限は実使用の最大二倍となり、sizeを実writtenへ縮めてもcapacityの縮小は強制しない。性能がこのメモリ費用に見合わなければCを不採用にできる。
 逆方向from_utf8の既存int narrowingと二回目OS戻り値未確認はこの決定の外に残す。入力上限の拒否もCの採否に含み、C不採用時に直ったと報告しない。
+
+2026-10-10採否: B→Cの固定CP932区間は58699.5→47816.5us、対応after/before比中央値0.827020。DBCSのwide要求容量が実使用の最大二倍となる代償を受け、Cを採用した。RSSやpeak memoryを測った倍率ではない。code-pages22 checks、統合の実CP932保存と正式8本の0退行を確認した。A/Bとの別比較の改善率を足さない。数値と全証拠は[gate-proofs 5-db/5-dc](../quality/gate-proofs.md)。
