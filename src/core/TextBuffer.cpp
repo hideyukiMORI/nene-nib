@@ -28,14 +28,11 @@ using Window = std::span<const Offset>;
 // 改行なので数が狂わない・ADR 0009 / 0036）。走査するのは足す text だけ（ADR 0047 の決定 4）。
 void newlines_in(std::string_view text, std::size_t base, std::vector<Offset> &index)
 {
-    // 走査は自前で書く。std::string_view::find は MSVC STL の __std_find_trivial_1 を残し、
-    // それが core の許可シンボル（eng/symbol-allowlist.json）に無いので ARC-003 が落ちる。
-    for (std::size_t at = 0; at < text.size(); ++at)
+    std::size_t at = text.find(newline);
+    while (at != std::string_view::npos)
     {
-        if (text[at] == newline)
-        {
-            index.push_back(Offset{base + at});
-        }
+        index.push_back(Offset{base + at});
+        at = text.find(newline, at + 1);
     }
 }
 
@@ -68,6 +65,8 @@ void newlines_in(std::string_view text, std::size_t base, std::vector<Offset> &i
     {
         auto chunk = std::make_shared<AddChunk>();
         chunk->bytes.reserve(std::max(chunk_bytes, text.size()));
+        // 初めて作る索引だけ容量を取る。既存 add の追記は vector の伸長に任せる（ADR 0080）。
+        chunk->newlines.reserve(static_cast<std::size_t>(std::ranges::count(text, newline)));
         chunks.push_back(std::move(chunk));
         fill = 0;
     }
@@ -140,24 +139,47 @@ TextBuffer TextBuffer::empty()
 
 std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view text)
 {
-    const auto validated = validate_utf8(text);
+    std::string owned(text);
+    const auto validated = validate_utf8(owned);
     if (!validated)
     {
         return std::unexpected(validated.error());
     }
-    auto original = std::make_shared<const std::string>(text);
-    // original の索引は本文を 1 度だけ走査して作り、以後の値はこれを共有する（ADR 0047 の決定 1）。
+    return from_validated_utf8(std::move(owned));
+}
+
+std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text)
+{
+    switch (text.encoding_)
+    {
+    case TextEncoding::utf8:
+        break;
+    case TextEncoding::utf8_bom:
+        text.bytes_.erase(0, byte_order_mark().size());
+        break;
+    case TextEncoding::shift_jis:
+        return std::unexpected(TextFailure::invalid_utf8);
+    }
+    return from_validated_utf8(std::move(text.bytes_));
+}
+
+TextBuffer TextBuffer::from_validated_utf8(std::string text)
+{
+    auto original = std::make_shared<const std::string>(std::move(text));
+    // original の索引はここでだけ作り、以後の値はこれを共有する（ADR 0047 / 0080）。
     auto newlines = std::make_shared<std::vector<Offset>>();
-    newlines_in(text, 0, *newlines);
+    newlines->reserve(static_cast<std::size_t>(std::ranges::count(*original, newline)));
+    newlines_in(*original, 0, *newlines);
     std::vector<Piece> pieces;
-    if (!text.empty())
+    if (!original->empty())
     {
         pieces.push_back(
-            Piece{PieceSource::original, 0, Offset{0}, text.size(), 0, newlines->size()});
+            Piece{PieceSource::original, 0, Offset{0}, original->size(), 0, newlines->size()});
     }
     // 改行の形はここで 1 度だけ判別する。以後は本文が持ち回り、開く経路は自分で判別しない
     // （ADR 0036 の決定 1 / ADR 0010 の決定 4）。
-    return TextBuffer(original, std::move(newlines), std::move(pieces), detect_line_ending(text));
+    const LineEnding ending = detect_line_ending(*original);
+    return TextBuffer(std::move(original), std::move(newlines), std::move(pieces), ending);
 }
 
 std::string_view TextBuffer::view_of(const Piece &piece) const noexcept

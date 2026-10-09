@@ -55,9 +55,18 @@ void verify_vim_scope_contracts()
     }
 }
 
+void verify_file_text_scope()
+{
+    verify_detected_text_contracts();
+    verify_text_buffer_read_contracts();
+    verify_document_read_contracts();
+}
+
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 35> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 37> scopes{{
+        {"--utf8", verify_utf8_scope},
+        {"--file-text", verify_file_text_scope},
         {"--display-line", verify_display_line_scope},
         {"--vim-dot", verify_vim_dot_scope},
         {"--vim-macro", verify_vim_macro_scope},
@@ -151,6 +160,7 @@ int main(int argc, char **argv)
     {
         return report();
     }
+    nenenib::tests::verify_detected_text_contracts();
     verify_text_and_caret();
     verify_display_line();
     verify_display_line_views();

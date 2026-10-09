@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
+#include <cstring>
 
 namespace nenenib::core
 {
@@ -31,6 +33,28 @@ constexpr char32_t continuation_mask = 0x3F;
 [[nodiscard]] constexpr unsigned char byte_at(std::string_view text, std::size_t index) noexcept
 {
     return static_cast<unsigned char>(text[index]);
+}
+
+// ASCII の連続区間だけをまとめて数える。残りが word 全体に足りるときだけ memcpy で読み、
+// アラインメント・別名参照・末尾の先読みを要求しない（ADR 0086）。非 ASCII は scan が検証する。
+[[nodiscard]] std::size_t ascii_end(std::string_view text, std::size_t index) noexcept
+{
+    constexpr std::uint64_t high_bits = 0x8080808080808080ULL;
+    while (text.size() - index >= sizeof(std::uint64_t))
+    {
+        std::uint64_t word = 0;
+        std::memcpy(&word, text.data() + index, sizeof(word));
+        if ((word & high_bits) != 0)
+        {
+            break;
+        }
+        index += sizeof(word);
+    }
+    while (index < text.size() && byte_at(text, index) < 0x80U)
+    {
+        ++index;
+    }
+    return index;
 }
 
 [[nodiscard]] constexpr std::size_t sequence_length(unsigned char lead) noexcept
@@ -143,6 +167,13 @@ std::expected<std::size_t, TextFailure> validate_utf8(std::string_view text) noe
     std::size_t code_points = 0;
     while (index < text.size())
     {
+        if (byte_at(text, index) < 0x80U)
+        {
+            const std::size_t next = ascii_end(text, index);
+            code_points += next - index;
+            index = next;
+            continue;
+        }
         const auto length = scan(text, index);
         if (!length)
         {

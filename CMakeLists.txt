@@ -43,7 +43,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
-    src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
+    src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp
     src/core/KeyChord.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/ScrollBounds.cpp src/core/SearchLine.cpp
@@ -65,6 +65,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/NibTests.cpp
     tests/unit/TestSupport.cpp
     tests/unit/VimTestSupport.cpp
+    tests/unit/DetectedTextTests.cpp
     tests/unit/CoreTests.cpp
     tests/unit/ApplicationTests.cpp
     tests/unit/VimEngineTests.cpp

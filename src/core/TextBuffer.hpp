@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AddChunk.hpp"
+#include "DetectedText.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
@@ -21,12 +22,13 @@ namespace nenenib::core
 // original（読んだ本文）と add（入力）の 2 本は shared_ptr で共有し、複製するのは piece の列だけ。
 // add は固定長の chunk の列で、末尾の chunk を伸ばすのはその先端を知っている値だけ（ADR 0044）。
 // 改行の索引は original と各 chunk に 1 本ずつで、piece はその窓だけを持つ（ADR 0047）。
-// 生成経路は empty と from_utf8 の 2 つだけで、どちらも不変条件（正しい UTF-8）を守る（CPP-007）。
+// 生 UTF-8 と判定済みの所有値を受け取り、同じ構築経路で正しい UTF-8 を保つ（ADR 0080）。
 class TextBuffer final
 {
   public:
     [[nodiscard]] static TextBuffer empty();
     [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(std::string_view text);
+    [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(DetectedText text);
 
     [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
     [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;
@@ -57,6 +59,8 @@ class TextBuffer final
     [[nodiscard]] TextPosition position_of(Offset at) const;
 
   private:
+    [[nodiscard]] static TextBuffer from_validated_utf8(std::string text);
+
     using Buffer = std::shared_ptr<const std::string>;
     using Chunks = std::vector<std::shared_ptr<AddChunk>>;
     using Index = std::shared_ptr<const std::vector<Offset>>;

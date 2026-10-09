@@ -2551,24 +2551,24 @@ void EditorController::accept(const RefreshAppearance &)
     state_ = state_.with_appearance(appearance_or_dark(ports_.appearance));
 }
 
-std::expected<std::string, FileFailure> EditorController::decoded(core::TextEncoding encoding,
-                                                                  std::string_view bytes)
+std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::DetectedText text)
 {
-    switch (encoding)
+    switch (text.encoding())
     {
     case core::TextEncoding::utf8:
-        return std::string(bytes);
     case core::TextEncoding::utf8_bom:
-        return std::string(core::without_byte_order_mark(bytes));
+        return core::TextBuffer::from_utf8(std::move(text))
+            .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
     case core::TextEncoding::shift_jis:
         break;
     }
-    auto converted = ports_.code_pages.to_utf8(bytes);
+    auto converted = ports_.code_pages.to_utf8(text.bytes());
     if (!converted)
     {
         return std::unexpected(file_failure_of(converted.error()));
     }
-    return std::move(converted).value();
+    return core::TextBuffer::from_utf8(converted.value())
+        .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
 }
 
 std::expected<std::string, FileFailure> EditorController::encoded(core::TextEncoding encoding,
@@ -2601,22 +2601,18 @@ EditorController::read_document(const core::FilePath &path)
     {
         return std::unexpected(bytes.error());
     }
-    const auto encoding = core::detect_encoding(bytes.value());
-    if (!encoding)
+    auto detected = core::DetectedText::from_bytes(bytes.value());
+    if (!detected)
     {
         return std::unexpected(FileFailure::undecodable);
     }
-    const auto utf8 = decoded(encoding.value(), bytes.value());
-    if (!utf8)
-    {
-        return std::unexpected(utf8.error());
-    }
-    auto text = core::TextBuffer::from_utf8(utf8.value());
+    const core::TextEncoding encoding = detected.value().encoding();
+    auto text = decoded(std::move(detected).value());
     if (!text)
     {
-        return std::unexpected(FileFailure::undecodable);
+        return std::unexpected(text.error());
     }
-    return std::pair{std::move(text).value(), Document{path, encoding.value(), std::size_t{0}}};
+    return std::pair{std::move(text).value(), Document{path, encoding, std::size_t{0}}};
 }
 
 // 同じファイルを開いているタブの帯の位置（決定 5 の (a)）。比べ方は FilePort が OS の規則で決める。

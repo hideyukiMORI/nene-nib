@@ -222,6 +222,81 @@ void verify_utf8_validation()
            "a broken four-byte sequence is rejected");
 }
 
+void verify_utf8_ascii_byte_tails(char byte)
+{
+    for (std::size_t offset = 0; offset < 16; ++offset)
+    {
+        for (std::size_t length = 0; length <= 33; ++length)
+        {
+            const std::string storage =
+                std::string(offset, 'x') + std::string(length, byte) + "\xFF";
+            const std::string_view input = std::string_view(storage).substr(offset, length);
+            const auto result = validate_utf8(input);
+            expect(result.has_value() && result.value() == length,
+                   "ASCII subviews count NUL and tails without reading the next invalid byte");
+        }
+    }
+}
+
+void verify_utf8_ascii_tails()
+{
+    constexpr std::array<char, 3> bytes{'a', '\0', '\x7F'};
+    for (const char byte : bytes)
+    {
+        verify_utf8_ascii_byte_tails(byte);
+    }
+}
+
+void verify_utf8_ascii_to_multibyte()
+{
+    constexpr std::array<std::string_view, 8> scalars{
+        "\x7F",         "\xC2\x80",     "\xDF\xBF",         "\xE0\xA0\x80",
+        "\xED\x9F\xBF", "\xEE\x80\x80", "\xF0\x90\x80\x80", "\xF4\x8F\xBF\xBF"};
+    for (std::size_t prefix = 0; prefix <= 24; ++prefix)
+    {
+        for (const std::string_view scalar : scalars)
+        {
+            const std::string input = std::string(prefix, 'a') + std::string(scalar) +
+                                      std::string(17, 'b') + std::string(scalar);
+            const auto result = validate_utf8(input);
+            expect(result.has_value() && result.value() == prefix + 19,
+                   "valid scalar ranges retain their count at every ASCII word boundary");
+        }
+    }
+}
+
+void verify_utf8_ascii_to_invalid()
+{
+    constexpr std::array<std::string_view, 15> invalid{"\x80",
+                                                       "\xBF",
+                                                       "\xC0\x80",
+                                                       "\xC1\xBF",
+                                                       "\xC2",
+                                                       "\xE0\x80\x80",
+                                                       "\xE6\x97",
+                                                       "\xE6\x28\xA5",
+                                                       "\xED\xA0\x80",
+                                                       "\xF0\x80\x80\x80",
+                                                       "\xF0\x9F\x96",
+                                                       "\xF4\x90\x80\x80",
+                                                       "\xF5\x80\x80\x80",
+                                                       "\xF8",
+                                                       "\xFF"};
+    for (std::size_t prefix = 0; prefix <= 24; ++prefix)
+    {
+        for (const std::string_view tail : invalid)
+        {
+            const std::string input = std::string(prefix, 'a') + std::string(tail);
+            const auto at_end = validate_utf8(input);
+            const auto followed = validate_utf8(input + std::string(17, 'b'));
+            expect(!at_end.has_value() && at_end.error() == TextFailure::invalid_utf8,
+                   "invalid UTF-8 at every ASCII word boundary is rejected at the end");
+            expect(!followed.has_value() && followed.error() == TextFailure::invalid_utf8,
+                   "ASCII after an invalid sequence never makes it valid");
+        }
+    }
+}
+
 void verify_utf8_counting()
 {
     expect(code_point_count("") == 0, "no bytes, no code points");
@@ -1798,6 +1873,29 @@ void verify_palette()
            "the Ubuntu orange accent is the same in both appearances");
 }
 
+// 開く本文・改行索引と add の追記だけの対象指定（ADR 0080）。既存の試験を共有する。
+void verify_text_buffer_read_contracts()
+{
+    verify_buffer_creation();
+    verify_buffer_insertion();
+    verify_buffer_erasure();
+    verify_buffer_lines();
+    verify_buffer_crlf_split();
+    verify_buffer_positions();
+    verify_buffer_round_trip();
+    verify_buffer_scale();
+    verify_buffer_add_branches();
+    verify_buffer_chunk_growth();
+    verify_buffer_oversized_and_restored();
+    verify_buffer_shared_index_edits();
+    verify_buffer_chunk_line_numbers();
+    verify_buffer_index_branches();
+    verify_encoding_labels();
+    verify_encoding_detection();
+    verify_line_ending_detection();
+    verify_line_ending_model();
+}
+
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。
 void verify_caret_movement_contracts()
 {
@@ -1806,17 +1904,26 @@ void verify_caret_movement_contracts()
     verify_caret_words();
 }
 
-void verify_text_and_caret()
+// UTF 検証とその直接の境界だけを選ぶ。既定実行も同じ関数を呼ぶ（ADR 0086）。
+void verify_utf8_scope()
 {
     verify_display_text_accepts_multibyte();
     verify_display_text_lengths();
     verify_display_text_rejects();
     verify_utf8_validation();
+    verify_utf8_ascii_tails();
+    verify_utf8_ascii_to_multibyte();
+    verify_utf8_ascii_to_invalid();
     verify_utf8_counting();
     verify_utf8_walking();
     verify_utf16_encoding();
     verify_utf16_rejects();
     verify_utf16_round_trip();
+}
+
+void verify_text_and_caret()
+{
+    verify_utf8_scope();
     verify_buffer_creation();
     verify_buffer_insertion();
     verify_buffer_erasure();

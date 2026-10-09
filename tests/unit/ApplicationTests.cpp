@@ -700,6 +700,23 @@ void verify_document_open_failures()
            "a port that returns broken UTF-8 is undecodable");
 }
 
+void verify_document_open_boundaries()
+{
+    Editing empty;
+    empty.files().hold(std::string(byte_order_mark()));
+    const auto bom = empty.controller().apply(OpenDocument{sample_path()});
+    expect(bom.document.encoding == TextEncoding::utf8_bom && bom.lines.at(0).text.empty(),
+           "a BOM-only file opens as an empty UTF-8 BOM document");
+    Editing nul;
+    nul.files().hold(std::string("a\0b\n", 4));
+    static_cast<void>(nul.controller().apply(OpenDocument{sample_path()}));
+    static_cast<void>(nul.controller().apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    expect(nul.files().written() == std::string("a\0b\n", 4),
+           "opening preserves embedded NUL and the trailing newline in the model");
+    expect_open_failure(std::string(byte_order_mark()) + "\x93\xFA", FileFailure::undecodable,
+                        "an invalid BOM file is not decoded as CP932 by the controller");
+}
+
 void verify_document_save()
 {
     Editing editing;
@@ -1089,6 +1106,15 @@ void verify_editor_state()
            "with_edit leaves the source alone");
 }
 
+void verify_document_read_contracts()
+{
+    verify_document_open();
+    verify_document_open_encodings();
+    verify_document_open_failures();
+    verify_document_open_boundaries();
+    verify_document_save_contracts();
+}
+
 void verify_document_save_contracts()
 {
     verify_document_save();
@@ -1121,6 +1147,7 @@ void verify_controller_intents()
     verify_document_open();
     verify_document_open_encodings();
     verify_document_open_failures();
+    verify_document_open_boundaries();
     verify_document_save();
     verify_document_save_encodings();
     verify_document_save_failures();
