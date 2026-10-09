@@ -23,7 +23,8 @@ class CommandPalette final
     // 開くのはこの 1 本。input は最初の入力で、選択は先頭（最初の選択は selected_at で動かす）。
     // mode は開いたときの編集モードで、`?` の操作の一覧がモードで使える操作を選ぶのに読む
     // （ADR 0078 の決定 11）。
-    [[nodiscard]] static CommandPalette opened(std::vector<CommandChoice> entries,
+    // 生の候補は rvalue でも一度防御コピーし、移管前の可変 alias を私有値へ持ち込まない。
+    [[nodiscard]] static CommandPalette opened(const std::vector<CommandChoice> &entries,
                                                std::string_view input, EditMode mode,
                                                ThemeCatalog themes = ThemeCatalog::builtins());
     [[nodiscard]] PaletteScope scope() const noexcept;
@@ -45,8 +46,8 @@ class CommandPalette final
     // 候補の列の後ろへ more を足した面（ADR 0062 の決定 16）。前の列の順と位置は変えず、結果は
     // filtered の 1 本で作り直す。選択は伸ばす前に選んでいた候補と同じ候補（列の中の位置で探す）、
     // 伸ばす前の結果が空なら先頭、設定のコマンド（commands）は番号のまま。入力は変えない。
-    // more が空なら同じ面を返す。
-    [[nodiscard]] CommandPalette extended(std::vector<CommandChoice> more) const;
+    // more が空なら同じ面を返す。新しい生の候補は一度防御コピーする（ADR 0091）。
+    [[nodiscard]] CommandPalette extended(const std::vector<CommandChoice> &more) const;
 
   private:
     using Entries = std::shared_ptr<const std::vector<CommandChoice>>;
@@ -56,10 +57,16 @@ class CommandPalette final
     using Result = std::variant<std::vector<std::size_t>, std::vector<CommandChoice>>;
     CommandPalette(CommandLine input, std::size_t selected, EditMode mode, Entries entries,
                    std::shared_ptr<const Result> result);
-    // 入力が変わる道（opened・inserted・edited・filled）はこの 1 本で結果を 1 回作る。選択は先頭。
+    // 新しい候補列は全件を一度照合する。選択は先頭。
     [[nodiscard]] static CommandPalette filtered(CommandLine input, EditMode mode, Entries entries);
     [[nodiscard]] static Result result_of(const CommandLine &input, EditMode mode,
                                           const std::vector<CommandChoice> &entries);
+    // 同じ候補列での入力更新は一つの道。本文不変なら共有し、末尾延長なら前の位置だけを再採点する。
+    [[nodiscard]] CommandPalette refiltered(CommandLine input) const;
+    [[nodiscard]] Result updated_result(const CommandLine &input,
+                                        const std::vector<std::size_t> &positions) const;
+    [[nodiscard]] Result updated_result(const CommandLine &input,
+                                        const std::vector<CommandChoice> &choices) const;
     // 選択だけを動かす道（moved・selected_at）はこの 1 本で、前の結果をそのまま共有する。
     [[nodiscard]] CommandPalette reselected(std::size_t selected) const;
     [[nodiscard]] CommandPalette moved(CommandEdit direction) const;

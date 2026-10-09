@@ -10,9 +10,11 @@
 #include "Utf8.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -21,11 +23,6 @@ namespace nenenib::core
 {
 namespace
 {
-[[nodiscard]] char lower_ascii(char letter) noexcept
-{
-    return letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter + ('a' - 'A')) : letter;
-}
-
 [[nodiscard]] char32_t lower_code_point(char32_t value) noexcept
 {
     return value >= U'A' && value <= U'Z' ? value + (U'a' - U'A') : value;
@@ -38,7 +35,7 @@ namespace
 {
     for (Offset at = from; at.value < command.size(); at = next_code_point(command, at))
     {
-        if (code_point_at(command, at) == wanted)
+        if (lower_code_point(code_point_at(command, at)) == wanted)
         {
             return at;
         }
@@ -79,13 +76,6 @@ namespace
                           : CommandChoiceKind::execute;
     return CommandChoice{label,        std::move(command), kind, std::nullopt,
                          std::nullopt, std::nullopt,       {}};
-}
-
-[[nodiscard]] std::string lowered(std::string_view text)
-{
-    std::string lower(text);
-    std::ranges::transform(lower, lower.begin(), lower_ascii);
-    return lower;
 }
 
 // 出どころの印が見せる出どころ（ADR 0060 の決定 3）。印が増えたらここが落ちる（CPP-002）。
@@ -145,13 +135,13 @@ constexpr std::size_t location_only_penalty = std::numeric_limits<std::size_t>::
     std::string located(choice.detail.value().text());
     located += '\\';
     located += choice.label.text();
-    return lowered(located);
+    return located;
 }
 
 [[nodiscard]] std::optional<std::size_t> listed_score(std::string_view query,
                                                       const CommandChoice &choice)
 {
-    const auto named = match_score(query, lowered(choice.label.text()));
+    const auto named = match_score(query, choice.label.text());
     if (named.has_value())
     {
         return named;
@@ -191,6 +181,30 @@ using ScoredPosition = std::pair<std::size_t, std::size_t>;
     return positions;
 }
 
+// 全件と前の結果は対象位置だけが違い、出どころ・採点・同点の順はこの一つで決める（ADR 0091）。
+template <std::ranges::input_range Positions>
+[[nodiscard]] std::vector<std::size_t> scored_positions(const std::vector<CommandChoice> &entries,
+                                                        PaletteScope scope, std::string_view query,
+                                                        const Positions &positions)
+{
+    std::vector<ScoredPosition> scored;
+    for (const std::size_t position : positions)
+    {
+        const CommandChoice &entry = entries.at(position);
+        if (!in_scope(entry.origin, scope))
+        {
+            continue;
+        }
+        const auto score =
+            query.empty() ? std::optional<std::size_t>{0} : listed_score(query, entry);
+        if (score.has_value())
+        {
+            scored.emplace_back(position, score.value());
+        }
+    }
+    return in_score_order(std::move(scored));
+}
+
 // 操作の一覧の 1 行（ADR 0078 の決定 6）。鍵はモードで見せる鍵の表示名、無ければ空。
 [[nodiscard]] CommandChoice operation_choice_of(const OperationText &text, EditMode mode)
 {
@@ -209,8 +223,8 @@ using ScoredPosition = std::pair<std::size_t, std::size_t>;
 operation_score(std::string_view query, const CommandChoice &choice, std::string_view reading)
 {
     std::optional<std::size_t> best;
-    for (const std::string &field :
-         {lowered(choice.label.text()), lowered(reading), lowered(choice.key)})
+    const std::array<std::string_view, 3> fields{choice.label.text(), reading, choice.key};
+    for (const std::string_view field : fields)
     {
         const auto score = match_score(query, field);
         if (score.has_value() && (!best.has_value() || score.value() < best.value()))
@@ -314,21 +328,14 @@ std::string_view palette_origin_label(PaletteOrigin origin) noexcept
 std::vector<std::size_t> listed_positions(const std::vector<CommandChoice> &entries,
                                           PaletteScope scope, std::string_view query)
 {
-    std::vector<ScoredPosition> scored;
-    for (std::size_t position = 0; position < entries.size(); ++position)
-    {
-        const CommandChoice &entry = entries.at(position);
-        if (!in_scope(entry.origin, scope))
-        {
-            continue;
-        }
-        const auto score =
-            query.empty() ? std::optional<std::size_t>{0} : listed_score(query, entry);
-        if (score.has_value())
-        {
-            scored.emplace_back(position, score.value());
-        }
-    }
-    return in_score_order(std::move(scored));
+    return scored_positions(entries, scope, query,
+                            std::views::iota(std::size_t{0}, entries.size()));
+}
+
+std::vector<std::size_t> listed_positions(const std::vector<CommandChoice> &entries,
+                                          PaletteScope scope, std::string_view query,
+                                          std::span<const std::size_t> positions)
+{
+    return scored_positions(entries, scope, query, positions);
 }
 } // namespace nenenib::core

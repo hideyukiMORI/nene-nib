@@ -106,3 +106,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0088](0088-vim-registers-are-private-immutable-snapshots.md) | Vimレジスタ本文は私有の不変snapshotで共有する | 受理・#334で採用 |
 | [0089](0089-recorded-vim-keys-are-private-immutable-chunks.md) | 記録したVim鍵列は私有の不変chunkとして共有する | 受理・#334で採用 |
 | [0090](0090-block-caret-and-recording-reuse-retained-text.md) | ブロックカーソルと録画表示も保持済みの文字を使う | 受理・#334で採用 |
+| [0091](0091-palette-filtering-reuses-the-previous-candidate-set.md) | 一覧の照合は小文字の写しを作らず前の候補集合を再利用する | 受理・#341で採用 |
+| [0092](0092-cp932-conversion-writes-the-bounded-output-once.md) | CP932変換は上限内の出力を一回で書く | 受理・#341で採用 |
