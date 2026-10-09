@@ -194,9 +194,8 @@ inserted_after_delete(const std::string &input, application::TimingPort &timing)
 namespace
 {
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
-validated(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
+validated(const std::string &input, std::size_t expected, application::TimingPort &timing)
 {
-    const std::size_t expected = workload == ProbeWorkload::validate_ascii ? 16800000U : 2079000U;
     timing.mark(core::Milestone::probe_started);
     const auto result = core::validate_utf8(input);
     timing.mark(core::Milestone::probe_finished);
@@ -313,8 +312,9 @@ run_workload(ProbeWorkload workload, const std::string &input, application::Timi
     case ProbeWorkload::insert_after_delete_large:
         return inserted_after_delete(input, timing);
     case ProbeWorkload::validate_ascii:
+        return validated(input, 16800000U, timing);
     case ProbeWorkload::validate_japanese:
-        return validated(workload, input, timing);
+        return validated(input, 2079000U, timing);
     }
     std::unreachable();
 }
