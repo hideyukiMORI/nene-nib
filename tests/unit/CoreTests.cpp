@@ -896,9 +896,15 @@ void verify_history_input_ownership()
     expect(history.undone().redo().value() == expected,
            "redo also returns an independent owning edit");
     auto applied = history.applied(0);
+    expect(applied.has_value(), "an applied entry exists before the current position");
+    if (!applied.has_value())
+    {
+        return;
+    }
     applied.value().removed[0] = 'p';
     applied.value().inserted[0] = 'p';
-    expect(history.applied(0).value() == expected,
+    const auto unchanged = history.applied(0);
+    expect(unchanged.has_value() && unchanged.value() == expected,
            "applied returns ownership rather than a shared mutable entry");
     expect(!history.applied(1).has_value() && !history.undone().applied(0).has_value(),
            "applied only exposes edits before the current position");
