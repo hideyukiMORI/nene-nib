@@ -96,3 +96,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0078](0078-operations-are-one-table-for-keys-and-the-f1-list.md) | 操作は core の 1 つの表に持ち、鍵と F1 の一覧が同じ 1 本の道で実行する | 受理 |
 | [0079](0079-operation-guides-and-settings-migration.md) | 操作の案内は操作表から描き、設定は旧版を残して移行する | 受理 |
 | [0080](0080-detected-file-text-owns-the-validated-bytes.md) | 文字コードを判定した本文が検証済みのバイト列を所有し、本文へ移す | 受理 |
+| [0086](0086-ascii-runs-stay-inside-the-utf8-validator.md) | ASCIIの連続区間はUTF-8検証の正典の中でまとめて数える | 受理（比較後に採否判断） |
