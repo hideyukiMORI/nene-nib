@@ -62,3 +62,33 @@ hide は他の作業がある機械でも、規約の範囲で固定入力の対
 道具の対象試験で、短い自己比較・壊れた marks・片側の失敗・checksum の違いを確認する。
 変更 target の Debug / Release、対象の規約・依存・整形・シンボルを確認する。実機窓・正式 speed・全件回帰・coverage・oracle は実装席では実行しない。
 この比較は UI / GPU / 実ファイル I/O の遅延を測らず、正式 QLT-014 を置き換えない。小さい差だけで採用を決めない。既存 perf-reference と許容は変えない。
+
+## 第3段階 — buffer / palette / 入力変換の固定12本（Issue #337）
+
+親設計席が2026-10-09の実装briefで受理した固定定義。旧12本の関数本体・入力・期待値を保持し、同じrun_workload・TimingPort・metadata・比較器に追加する。製品source・toolchain・flags・allowlist・fixture・正式基準値は変更しない。
+
+### 新12固定処理（命名は下記固定）
+
+1. buffer-line-text-scattered-crlf-4096: (a×78+CRLF)×4096。外でi=0..4095の80*i+1をbへ1byte置換。実piece_count、準備後本文、4097行を外で照合。計測は行1..30のline_textを一巡し事前用意array<string,30>へ格納。全戻り値の破棄/hash/検証は外。期待は各78bytes=a+b+a×76。
+2. buffer-line-text-scattered-lf-4096: 同じLF版、stride79。孤立CRを混ぜず改行違いの退行区間として別名。
+3. buffer-position-long-utf8-57344: a日本語🖋×4096。1piece準備。position_of(Offset{57344})を128回、事前用意array<TextPosition,128>へ。すべてline1/column20481。cp数を候補の位置計数関数で期待生成しない。
+4. buffer-position-scattered-utf8-57344: 同じinputの14*i先頭aをbへ外で置換してfragmented snapshot。期待bytes/count/positionは上と同じ。準備後本文hashを外で確認し、入力hashは元inputと固定準備規則をmetadata/文書で対応づける。
+5. palette-listed-name-5000: 5000 entries、label=ENTRY_<5桁i>_ABCDEFGHIJKLMNOPQRSTUV.txt、detail=D:\\ZROOT\\LONG_DIRECTORY_COMPONENT\\GROUP_00、folder/open、query=entry、scope=files。listed_positions一回だけ計測、位置0..4999全件同順を外で検証。
+6. palette-listed-location-5000: 上のquery=zroot。名前にZは無い。全5000を場所一致させ同じ期待順。
+7. palette-append-narrow-5000-to-50: detail無しfolder/open 5000entries。i<50 QX_Y_<5桁i>_file.txt、i<500 QX_N_<5桁i>_file.txt、残りAA_N_<5桁i>_file.txt。opened(input=qx)で500件を外で準備。inserted(y)一回を計測、50件/位置0..49/input=qxy/selected0を全確認。
+8. palette-caret-left-5000: 上と同じopened(qx).selected_at(7)。edited(left)一回を計測、500件同順/input=qx/caret byte1/selected0。shares_result_withを共通期待に使わない。
+9. codepage-to-utf8-cp932-japanese-16mib: bytes93 FA 96 7B×4194304、16,777,216bytesを準備。実Win32CodePageAdapter::to_utf8一回のみ計測、期待UTF8日本×4194304（25,165,824bytes）を外で完全照合/hash。台本CodePagePortは不可。
+10. utf16-to-utf8-japanese-8m-units: 日本×4194304（8,388,608units）を外で作りcore::to_utf8一回。結果は上の期待と同じ。
+11. utf16-to-utf8-ascii-8m-units: L'a'×8,388,608units、期待a同数。
+12. utf16-to-utf8-supplementary-8m-units: U+1F58Bのsurrogate pair×4,194,304（8,388,608units）、期待UTF8の🖋×同数（16,777,216bytes）。
+
+UTF16 inputHashはWindowsUTF16LEの標準byte列をinput_ofから生成し、run側で明示unitへ構成する。host wchar_t memoryを雑にreinterpretしてhashしない。palette inputHashはquery/scopeと全entryのlabel/detail/識別値を含む固定直列化。タブ/改行を含まないこの固定fixtureなら明示delimiterで十分、run側は同じinput bytesからentriesを組み立てる。実際に使わない説明文だけをinputHashにしない。
+
+すべて入力生成/編集準備/候補生成/結果容器準備は計測の前。結果値を外へ保持、完全照合/結果hash/破棄はprobe_finishedの後。計測中のstring/vector内の必須allocationはその処理の費用として含める。毎反復同じ準備状態から開始。既存のchecksum/2marks/metadataを共用。準備費用が大きくても既存harnessの区間を勝手に広げない。正しさsmoke時に全runの壁時計も参考として報告し、親が最終固定反復数を事前決定する。
+
+
+paletteの直列化はUTF-8で、headerは `files<TAB>query<LF>`、各entryは `folder<TAB>open<TAB>probe-<5桁i><TAB>label<TAB>detail<LF>` の順。detail無しは空欄。実際のdetail表示値は `D:\ZROOT\LONG_DIRECTORY_COMPONENT\GROUP_00`（各区切り1 backslash）。runはこの直列化のqueryと全entryから値を構築する。識別値は0〜4999で一意、operation無し・key空を固定する。UTF16LEは明示したunitから下位byte・上位byteの順で生成し、runも2byteからunitを復元する。
+
+準備後本文を元入力から独立した固定期待列と完全照合し、fragmented行入力は8193 pieces、fragmented UTF8入力は8192 pieces、連続UTF8入力は1 pieceを確認する。piece数は準備の観測で、結果checksumには含めない。計測前に戻り値の容器を準備し、終了markの後に全文・順序・位置とchecksumを確認する。
+
+新12本のみDebug/Release各warmup1＋sample1で正しさを確認する。比較器の対象試験、File API依存、symbols core/application、差分整形・保護対象・旧12のGit一致を確認する。clean commit後の明示Release configureでmetadataを固定する。製品exeはbuild/起動せず、製品source baseはeef5aad。CLI全体の参考壁時計を残し、固定反復数・長い性能比較・採否・独立レビュー・統合は親が担当する。新しい正式速度ゲートや合否閾値を設けない。

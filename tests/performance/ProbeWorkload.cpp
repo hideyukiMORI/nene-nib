@@ -1,5 +1,7 @@
 #include "ProbeWorkload.hpp"
 
+#include "ScopedProbe.hpp"
+
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
@@ -318,7 +320,7 @@ vim_inserted_while_recording(const std::string &input, application::TimingPort &
 
 std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
 {
-    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 12> names{{
+    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 24> names{{
         {"controller-open-utf8-16mib", ProbeWorkload::controller_open},
         {"buffer-from-utf8-16mib", ProbeWorkload::buffer_create},
         {"controller-insert-200", ProbeWorkload::controller_insert},
@@ -331,6 +333,18 @@ std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
         {"controller-vim-insert-200-register-16mib", ProbeWorkload::vim_register_large},
         {"controller-vim-record-insert-200", ProbeWorkload::vim_record_small},
         {"controller-vim-record-insert-2000", ProbeWorkload::vim_record_large},
+        {"buffer-line-text-scattered-crlf-4096", ProbeWorkload::scattered_crlf_lines},
+        {"buffer-line-text-scattered-lf-4096", ProbeWorkload::scattered_lf_lines},
+        {"buffer-position-long-utf8-57344", ProbeWorkload::long_position},
+        {"buffer-position-scattered-utf8-57344", ProbeWorkload::scattered_position},
+        {"palette-listed-name-5000", ProbeWorkload::listed_name},
+        {"palette-listed-location-5000", ProbeWorkload::listed_location},
+        {"palette-append-narrow-5000-to-50", ProbeWorkload::palette_narrow},
+        {"palette-caret-left-5000", ProbeWorkload::palette_left},
+        {"codepage-to-utf8-cp932-japanese-16mib", ProbeWorkload::codepage_japanese},
+        {"utf16-to-utf8-japanese-8m-units", ProbeWorkload::utf16_japanese},
+        {"utf16-to-utf8-ascii-8m-units", ProbeWorkload::utf16_ascii},
+        {"utf16-to-utf8-supplementary-8m-units", ProbeWorkload::utf16_supplementary},
     }};
     for (const auto &[text, workload] : names)
     {
@@ -418,6 +432,19 @@ std::string input_of(ProbeWorkload workload)
         return std::string(200U, 'x');
     case ProbeWorkload::vim_record_large:
         return std::string(2000U, 'x');
+    case ProbeWorkload::scattered_crlf_lines:
+    case ProbeWorkload::scattered_lf_lines:
+    case ProbeWorkload::long_position:
+    case ProbeWorkload::scattered_position:
+    case ProbeWorkload::listed_name:
+    case ProbeWorkload::listed_location:
+    case ProbeWorkload::palette_narrow:
+    case ProbeWorkload::palette_left:
+    case ProbeWorkload::codepage_japanese:
+    case ProbeWorkload::utf16_japanese:
+    case ProbeWorkload::utf16_ascii:
+    case ProbeWorkload::utf16_supplementary:
+        return scoped_input_of(workload);
     }
     std::unreachable();
 }
@@ -448,6 +475,19 @@ run_workload(ProbeWorkload workload, const std::string &input, application::Timi
     case ProbeWorkload::vim_record_small:
     case ProbeWorkload::vim_record_large:
         return vim_inserted_while_recording(input, timing);
+    case ProbeWorkload::scattered_crlf_lines:
+    case ProbeWorkload::scattered_lf_lines:
+    case ProbeWorkload::long_position:
+    case ProbeWorkload::scattered_position:
+    case ProbeWorkload::listed_name:
+    case ProbeWorkload::listed_location:
+    case ProbeWorkload::palette_narrow:
+    case ProbeWorkload::palette_left:
+    case ProbeWorkload::codepage_japanese:
+    case ProbeWorkload::utf16_japanese:
+    case ProbeWorkload::utf16_ascii:
+    case ProbeWorkload::utf16_supplementary:
+        return run_scoped_workload(workload, input, timing);
     }
     std::unreachable();
 }
