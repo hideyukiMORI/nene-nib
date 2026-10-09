@@ -293,7 +293,7 @@ void verify_vim_switch_discards_pending()
     expect(vim.mode == VimMode::normal && vim.macro_recording.has_value() &&
                added.recording == std::optional<char>{'a'},
            "VISUAL ends but the macro keeps recording across the switch");
-    expect(vim.last_search.has_value() && vim.unnamed_register.text == "one",
+    expect(vim.last_search.has_value() && vim.unnamed_register.value().text == "one",
            "the last search and the registers belong to the window");
     vim_replay(controller, "p");
     expect(vim_body(controller.frame()) == "one", "a yank in one tab puts in another");

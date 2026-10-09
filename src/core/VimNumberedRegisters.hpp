@@ -1,6 +1,6 @@
 #pragma once
 
-#include "VimRegister.hpp"
+#include "VimRegisterSnapshot.hpp"
 
 #include <array>
 #include <cstddef>
@@ -15,7 +15,8 @@ inline constexpr std::size_t vim_numbered_count = 10;
 // 空のレジスタは VimRegister{"", uninitialized}。書くのは registers_written の 1 本だけ。
 struct VimNumberedRegisters
 {
-    std::array<VimRegister, vim_numbered_count> registers;
+    std::array<VimRegisterSnapshot, vim_numbered_count> registers =
+        empty_vim_registers(std::make_index_sequence<vim_numbered_count>{});
 };
 
 // 数字の名前 → 表の位置。`0`〜`9` だけが位置を持つ。

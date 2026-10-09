@@ -94,7 +94,7 @@ void verify_copy_and_same_file()
     auto &controller = editing.controller();
     vim_replay(controller, "yyA!<Esc>");
     const auto before = controller.frame();
-    const auto held = controller.vim_state().unnamed_register.text;
+    const auto held = controller.vim_state().unnamed_register.value().text;
     auto frame = run_ex(controller, "w copy.txt");
     expect(editing.files().written_path() == target_path().text() &&
                editing.files().written() == "alpha!\n" &&
@@ -102,7 +102,8 @@ void verify_copy_and_same_file()
            "a copy uses the resolved target with create-only policy");
     expect(frame.document.path == before.document.path &&
                frame.document.save_state == core::SaveState::modified &&
-               frame.caret == before.caret && controller.vim_state().unnamed_register.text == held,
+               frame.caret == before.caret &&
+               controller.vim_state().unnamed_register.value().text == held,
            "copying retains the current identity, save point, caret and register");
     expect(message(run_ex(controller, "q")).starts_with("E37"),
            "the original document is still unsaved after a copy");

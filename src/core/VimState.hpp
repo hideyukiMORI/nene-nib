@@ -10,8 +10,8 @@
 #include "VimNamedRegisters.hpp"
 #include "VimNumberedRegisters.hpp"
 #include "VimPendingOperator.hpp"
-#include "VimRegister.hpp"
 #include "VimRegisterSelection.hpp"
+#include "VimRegisterSnapshot.hpp"
 #include "VimRepeatRecord.hpp"
 #include "VimSearchHighlight.hpp"
 #include "VimSearchPattern.hpp"
@@ -59,7 +59,7 @@ struct VimState
     // redo_VIsual_busy と同じで、再生の矩形は左上と幅を「選択の角」ではなく記録から取る
     // （短い行へ畳まれた角からは幅が読めない・Issue #112 で実測）。
     std::optional<VimBlockExtent> replayed_block;
-    VimRegister unnamed_register;
+    VimRegisterSnapshot unnamed_register;
     // 名前つきレジスタとマクロ（ADR 0046 の決定 1・ADR 0048 の決定 1・6）。registers は a〜z の
     // 本文の表（マクロも本文で持つ）、macro_recording は `q{a-z}` から `q` までの録画中の鍵、
     // last_macro は `@@` が繰り返す直前の名前。`.` の記録とは独立で、どれも鍵を食べ終わっても
@@ -68,18 +68,18 @@ struct VimState
     // 数字レジスタ `"0`〜`"9` と小削除 `"-`（ADR 0050 の決定 1）。名前つきと同じく
     // vim_resting_from が持ち越し、書くのは registers_written だけ。
     VimNumberedRegisters numbered;
-    VimRegister small_delete;
+    VimRegisterSnapshot small_delete;
     // `"+` `"*` の写し（ADR 0051 の決定 2）。controller が vim_clipboard_loaded で OS の本文を
     // 置き、engine は普通のレジスタとして読む。selected_register と同じく命令が終わると消え
     // （vim_resting_from は持ち越さない）、OS が正のままである。
-    VimRegister clipboard;
+    VimRegisterSnapshot clipboard;
     std::optional<VimMacroRecording> macro_recording;
     std::optional<char> last_macro;
 };
 
 // 鍵を 1 つ食べ終わったあとの NORMAL。回数・オペレータ・欲しい列は空で、無名レジスタだけ残る。
 // Vim モードに入るときも、通常モードへ戻して保留を捨てるときも、この 1 つの形に寄せる。
-[[nodiscard]] inline VimState vim_resting_state(VimRegister unnamed_register)
+[[nodiscard]] inline VimState vim_resting_state(VimRegisterSnapshot unnamed_register)
 {
     return VimState{VimMode::normal,
                     std::nullopt,
@@ -99,16 +99,23 @@ struct VimState
                     std::move(unnamed_register),
                     VimNamedRegisters{},
                     VimNumberedRegisters{},
-                    VimRegister{"", VimRegisterKind::uninitialized},
-                    VimRegister{"", VimRegisterKind::uninitialized},
+                    VimRegisterSnapshot::from(VimRegister{"", VimRegisterKind::uninitialized}),
+                    VimRegisterSnapshot::from(VimRegister{"", VimRegisterKind::uninitialized}),
                     std::nullopt,
                     std::nullopt};
+}
+
+// rawの入口は一度だけ防御コピーし、snapshotを受ける正典へ渡す。
+[[nodiscard]] inline VimState vim_resting_state(const VimRegister &unnamed_register)
+{
+    return vim_resting_state(VimRegisterSnapshot::from(unnamed_register));
 }
 
 // 通常の鍵の完了は 'scroll' の明示値と直前の文字検索・検索パターンと強調・incsearch
 // の有無とマクロ（ADR 0046）を捨てない。 Vim モードへ初めて入る 初期化だけが vim_resting_state
 // を直接使い、空の値から始める。文字待ちは持ち越さない。
-[[nodiscard]] inline VimState vim_resting_from(const VimState &state, VimRegister unnamed_register)
+[[nodiscard]] inline VimState vim_resting_from(const VimState &state,
+                                               VimRegisterSnapshot unnamed_register)
 {
     VimState next = vim_resting_state(std::move(unnamed_register));
     next.scroll_lines = state.scroll_lines;
@@ -122,6 +129,12 @@ struct VimState
     next.macro_recording = state.macro_recording;
     next.last_macro = state.last_macro;
     return next;
+}
+
+[[nodiscard]] inline VimState vim_resting_from(const VimState &state,
+                                               const VimRegister &unnamed_register)
+{
+    return vim_resting_from(state, VimRegisterSnapshot::from(unnamed_register));
 }
 
 // Vim の window-local 'scroll' は実際の表示高が変わったときだけ半画面の既定へ戻る。

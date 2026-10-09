@@ -1,6 +1,6 @@
 #pragma once
 
-#include "VimRegister.hpp"
+#include "VimRegisterSnapshot.hpp"
 
 #include <array>
 #include <cstddef>
@@ -16,7 +16,8 @@ inline constexpr std::size_t vim_register_count = 26;
 // VimRegister{"", uninitialized}。無名レジスタは VimState.unnamed_register が別に持つ。
 struct VimNamedRegisters
 {
-    std::array<VimRegister, vim_register_count> registers;
+    std::array<VimRegisterSnapshot, vim_register_count> registers =
+        empty_vim_registers(std::make_index_sequence<vim_register_count>{});
 };
 
 // レジスタの名前 → 表の位置。小文字と大文字（追記）は同じ位置で、ほかの鍵は位置を持たない。

@@ -146,9 +146,10 @@ void verify_vim_search_highlight_carry()
     expect(rested.highlight == VimSearchHighlight::on, "the resting state starts on");
     VimState suspended = rested;
     suspended.highlight = VimSearchHighlight::suspended;
-    expect(nenenib::core::vim_resting_from(suspended, suspended.unnamed_register).highlight ==
-               VimSearchHighlight::suspended,
-           "finishing a key does not forget the suspension");
+    expect(
+        nenenib::core::vim_resting_from(suspended, suspended.unnamed_register.value()).highlight ==
+            VimSearchHighlight::suspended,
+        "finishing a key does not forget the suspension");
     expect(nenenib::core::vim_after_resize(suspended, 10, 20).highlight ==
                VimSearchHighlight::suspended,
            "a resize does not forget it either");

@@ -89,7 +89,7 @@ constexpr std::array<ClipboardWrite, 8> clipboard_writes{{
 
 [[nodiscard]] const VimRegister &numbered(const VimState &state, std::size_t index)
 {
-    return state.numbered.registers.at(index);
+    return state.numbered.registers.at(index).value();
 }
 
 [[nodiscard]] std::string crlf_of(std::string_view text)
@@ -122,12 +122,12 @@ void verify_clipboard_read_table()
         open_vim_document(editing, "X1\nX2");
         editing.clipboard().hold(held(os_text));
         vim_replay(editing.controller(), "\"+3");
-        const VimRegister &copy = editing.controller().vim_state().clipboard;
+        const VimRegister &copy = editing.controller().vim_state().clipboard.value();
         expect(copy.text == text && copy.kind == kind,
                "the clipboard text folds CRLF and a trailing newline makes it linewise");
         expect(editing.clipboard().reads() == 1, "\"+3 reads the clipboard right before 3");
         vim_replay(editing.controller(), "<Esc>");
-        expect(unused(editing.controller().vim_state().clipboard), "Esc drops the copy");
+        expect(unused(editing.controller().vim_state().clipboard.value()), "Esc drops the copy");
     }
 }
 
@@ -143,7 +143,7 @@ void verify_clipboard_put()
         expect(whole_vim_body(editing.controller()) == expected,
                "\"+p pastes the clipboard text as read");
         expect(editing.clipboard().writes() == 0, "\"+p does not write the clipboard");
-        expect(unused(editing.controller().vim_state().clipboard),
+        expect(unused(editing.controller().vim_state().clipboard.value()),
                "the copy is gone after the command");
     }
 }
@@ -177,12 +177,12 @@ void verify_clipboard_written_text()
         Editing unix_like;
         open_vim_document(unix_like, std::string(text));
         vim_replay(unix_like.controller(), keys);
-        const VimRegister &unnamed = unix_like.controller().vim_state().unnamed_register;
+        const VimRegister &unnamed = unix_like.controller().vim_state().unnamed_register.value();
         expect(unnamed.text == lf && unnamed.kind == kind,
                "the unnamed register takes what \"+ takes");
         expect(unix_like.clipboard().writes() == 1, "\"+ writes the clipboard once");
         expect(written_text(unix_like) == lf, "an LF document puts LF on the clipboard");
-        expect(unused(unix_like.controller().vim_state().clipboard),
+        expect(unused(unix_like.controller().vim_state().clipboard.value()),
                "writing does not leave a copy in the state");
         Editing windows_like;
         open_vim_document(windows_like, crlf_of(text));
@@ -204,7 +204,7 @@ void verify_clipboard_written_registers()
     vim_replay(line.controller(), "\"+dd");
     const VimState &once = line.controller().vim_state();
     expect(numbered(once, 1).text == "one\n" && unused(numbered(once, 0)) &&
-               unused(once.small_delete),
+               unused(once.small_delete.value()),
            "\"+dd fills \"1 and leaves \"0 and \"- alone");
     vim_replay(line.controller(), "\"+dd");
     const VimState &twice = line.controller().vim_state();
@@ -216,7 +216,7 @@ void verify_clipboard_written_registers()
     open_vim_document(character, "one\ntwo");
     vim_replay(character.controller(), "\"+x");
     const VimState &small = character.controller().vim_state();
-    expect(unused(numbered(small, 1)) && unused(small.small_delete),
+    expect(unused(numbered(small, 1)) && unused(small.small_delete.value()),
            "\"+x inside a line leaves \"1 and \"- alone");
 }
 
@@ -229,7 +229,7 @@ void verify_clipboard_write_refused()
     vim_replay(editing.controller(), "\"+dd");
     const VimState &state = editing.controller().vim_state();
     expect(whole_vim_body(editing.controller()) == "two", "a refused write still deletes");
-    expect(state.unnamed_register.text == "one\n" && numbered(state, 1).text == "one\n",
+    expect(state.unnamed_register.value().text == "one\n" && numbered(state, 1).text == "one\n",
            "a refused write still fills the unnamed register and \"1");
     expect(editing.clipboard().writes() == 1, "the refused write was tried once");
 }
@@ -317,7 +317,8 @@ void verify_clipboard_block()
     vim_replay(unix_like.controller(), "<C-v>jl\"+y");
     expect(unix_like.clipboard().writes() == 1 && written_text(unix_like) == "ab\nef",
            "a block \"+y writes its rows joined with LF in an LF document");
-    expect(unix_like.controller().vim_state().unnamed_register.kind == VimRegisterKind::block,
+    expect(unix_like.controller().vim_state().unnamed_register.value().kind ==
+               VimRegisterKind::block,
            "the unnamed register keeps the block");
     vim_replay(unix_like.controller(), "\"+p");
     expect(whole_vim_body(unix_like.controller()) == "aab\nefbcd\nefgh\nijkl",

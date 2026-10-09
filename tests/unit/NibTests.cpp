@@ -21,8 +21,9 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 26> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 27> contracts{{
         {"--vim-dot", verify_vim_dot_contracts},
+        {"--vim-register-snapshot", verify_vim_register_snapshot_contracts},
         {"--vim-macro", verify_vim_macro_contracts},
         {"--vim-clipboard", verify_vim_clipboard_contracts},
         {"--vim-search", verify_vim_search_contracts},
@@ -64,7 +65,7 @@ void verify_file_text_scope()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 40> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 41> scopes{{
         {"--utf8", verify_utf8_scope},
         {"--file-text", verify_file_text_scope},
         {"--edit-history", verify_edit_history_scope},
@@ -72,6 +73,7 @@ void verify_file_text_scope()
         {"--utf16", verify_utf16_scope},
         {"--display-line", verify_display_line_scope},
         {"--vim-dot", verify_vim_dot_scope},
+        {"--vim-register-snapshot", verify_vim_register_snapshot_contracts},
         {"--vim-macro", verify_vim_macro_scope},
         {"--vim-clipboard", verify_vim_clipboard_scope},
         {"--vim-search", verify_vim_search_scope},

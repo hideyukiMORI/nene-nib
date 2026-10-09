@@ -1145,7 +1145,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
 // yank は `"0` へ置く。選択の無い削除・変更はここでは何も書かない。`"_` は呼び出し元が先に返す。
 // `"+` `"*` は表へ置かない（OS へ出す本文は registers_written が組にして返す・ADR 0051 の決定 6）。
 [[nodiscard]] std::expected<VimState, VimRepeatFailure>
-named_written(VimState state, const VimRegister &value, VimOperator operation)
+named_written(VimState state, const VimRegisterSnapshot &value, VimOperator operation)
 {
     if (!state.selected_register.has_value())
     {
@@ -1180,14 +1180,19 @@ named_written(VimState state, const VimRegister &value, VimOperator operation)
     case VimRegisterTarget::named:
         break;
     }
-    VimRegister &target = state.registers.registers.at(vim_register_index(name).value_or(0));
-    const std::optional<VimRegister> written =
-        selection.append ? appended_register(target, value) : value;
+    VimRegisterSnapshot &target =
+        state.registers.registers.at(vim_register_index(name).value_or(0));
+    if (!selection.append)
+    {
+        target = value;
+        return state;
+    }
+    const std::optional<VimRegister> written = appended_register(target.value(), value.value());
     if (!written.has_value())
     {
         return std::unexpected(VimRepeatFailure::refused);
     }
-    target = written.value();
+    target = VimRegisterSnapshot::from(written.value());
     return state;
 }
 
@@ -1200,11 +1205,11 @@ named_written(VimState state, const VimRegister &value, VimOperator operation)
 
 // `"1` の規則（決定 3 の 2）。削除と変更で、値が 1 行に収まらないか検索の移動なら、`"1`〜`"8` を
 // `"2`〜`"9` へ繰り下げて（`"9` は捨てる）`"1` へ今回の値を置く。
-[[nodiscard]] VimState shifted_into_first(VimState state, const VimRegister &value,
+[[nodiscard]] VimState shifted_into_first(VimState state, const VimRegisterSnapshot &value,
                                           VimOperator operation, VimNumberedRule rule)
 {
     if (operation == VimOperator::yank ||
-        (rule == VimNumberedRule::by_extent && !spans_lines(value)))
+        (rule == VimNumberedRule::by_extent && !spans_lines(value.value())))
     {
         return state;
     }
@@ -1215,10 +1220,11 @@ named_written(VimState state, const VimRegister &value, VimOperator operation)
 }
 
 // `"-` の規則（決定 3 の 3）。選択の無い削除と変更で、値が 1 行に収まるときだけ小削除へ置く。
-[[nodiscard]] VimState small_delete_written(VimState state, const VimRegister &value,
+[[nodiscard]] VimState small_delete_written(VimState state, const VimRegisterSnapshot &value,
                                             VimOperator operation)
 {
-    if (operation == VimOperator::yank || state.selected_register.has_value() || spans_lines(value))
+    if (operation == VimOperator::yank || state.selected_register.has_value() ||
+        spans_lines(value.value()))
     {
         return state;
     }
@@ -1227,7 +1233,8 @@ named_written(VimState state, const VimRegister &value, VimOperator operation)
 }
 
 // 無名へ写す値（決定 3 の 4）。追記なら表の追記後の全体、ほかは今回の値。
-[[nodiscard]] VimRegister unnamed_written(const VimState &state, const VimRegister &value)
+[[nodiscard]] VimRegisterSnapshot unnamed_written(const VimState &state,
+                                                  const VimRegisterSnapshot &value)
 {
     if (!state.selected_register.has_value())
     {
@@ -1273,15 +1280,16 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
     {
         return WrittenRegisters{vim_resting_from(state, state.unnamed_register), std::nullopt};
     }
-    auto named = named_written(state, value.value(), operation);
+    const VimRegisterSnapshot snapshot = VimRegisterSnapshot::from(value.value());
+    auto named = named_written(state, snapshot, operation);
     if (!named.has_value())
     {
         return std::unexpected(named.error());
     }
     const VimState written = small_delete_written(
-        shifted_into_first(std::move(named).value(), value.value(), operation, rule), value.value(),
+        shifted_into_first(std::move(named).value(), snapshot, operation, rule), snapshot,
         operation);
-    return WrittenRegisters{vim_resting_from(written, unnamed_written(written, value.value())),
+    return WrittenRegisters{vim_resting_from(written, unnamed_written(written, snapshot)),
                             clipboard_written(state, value.value())};
 }
 
@@ -2002,25 +2010,27 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
 {
     if (!chosen.has_value())
     {
-        return state.unnamed_register;
+        return state.unnamed_register.value();
     }
     const VimRegisterSelection selection = chosen.value();
     switch (selection.target)
     {
     case VimRegisterTarget::named:
-        return state.registers.registers.at(
-            vim_register_index(static_cast<char32_t>(selection.name)).value_or(0));
+        return state.registers.registers
+            .at(vim_register_index(static_cast<char32_t>(selection.name)).value_or(0))
+            .value();
     case VimRegisterTarget::unnamed:
-        return state.unnamed_register;
+        return state.unnamed_register.value();
     case VimRegisterTarget::black_hole:
         return VimRegister{"", VimRegisterKind::uninitialized};
     case VimRegisterTarget::numbered:
-        return state.numbered.registers.at(
-            vim_numbered_index(static_cast<char32_t>(selection.name)).value_or(0));
+        return state.numbered.registers
+            .at(vim_numbered_index(static_cast<char32_t>(selection.name)).value_or(0))
+            .value();
     case VimRegisterTarget::small_delete:
-        return state.small_delete;
+        return state.small_delete.value();
     case VimRegisterTarget::clipboard:
-        return state.clipboard;
+        return state.clipboard.value();
     }
     std::unreachable();
 }
@@ -2773,7 +2783,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (numbered.has_value())
     {
         next.numbered.registers.at(numbered.value()) =
-            VimRegister{text, VimRegisterKind::characters};
+            VimRegisterSnapshot::from(VimRegister{text, VimRegisterKind::characters});
         return VimStep{std::move(next), VimNoEffect{}};
     }
     const auto index = vim_register_index(static_cast<char32_t>(recording.name));
@@ -2781,9 +2791,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return VimStep{std::move(next), VimNoEffect{}};
     }
-    VimRegister &target = next.registers.registers.at(index.value());
-    target = recording.append ? appended_recording(target, text)
-                              : VimRegister{text, VimRegisterKind::characters};
+    VimRegisterSnapshot &target = next.registers.registers.at(index.value());
+    target = VimRegisterSnapshot::from(recording.append
+                                           ? appended_recording(target.value(), text)
+                                           : VimRegister{text, VimRegisterKind::characters});
     return VimStep{std::move(next), VimNoEffect{}};
 }
 
@@ -4512,9 +4523,9 @@ VimState vim_register_stored(const VimState &state, char name, const VimRegister
     if (numbered.has_value() || name == '-')
     {
         VimState next = state;
-        VimRegister &target =
+        VimRegisterSnapshot &target =
             numbered.has_value() ? next.numbered.registers.at(numbered.value()) : next.small_delete;
-        target = value;
+        target = VimRegisterSnapshot::from(value);
         return next;
     }
     const auto index = vim_register_index(static_cast<char32_t>(name));
@@ -4523,8 +4534,9 @@ VimState vim_register_stored(const VimState &state, char name, const VimRegister
         return state;
     }
     VimState next = state;
-    VimRegister &target = next.registers.registers.at(index.value());
-    target = name >= 'A' && name <= 'Z' ? appended_recording(target, value.text) : value;
+    VimRegisterSnapshot &target = next.registers.registers.at(index.value());
+    target = VimRegisterSnapshot::from(
+        name >= 'A' && name <= 'Z' ? appended_recording(target.value(), value.text) : value);
     return next;
 }
 
@@ -4546,7 +4558,7 @@ bool vim_reads_clipboard(const VimState &state) noexcept
 VimState vim_clipboard_loaded(const VimState &state, VimRegister value)
 {
     VimState next = state;
-    next.clipboard = std::move(value);
+    next.clipboard = VimRegisterSnapshot::from(value);
     return next;
 }
 

@@ -180,13 +180,14 @@ void expect_state_values(const EditorState &left, const EditorState &right)
                left.appearance() == right.appearance() &&
                same_settings(left.settings(), right.settings()),
            "state updates preserve viewport and window settings");
-    expect(left.vim().mode == right.vim().mode &&
-               left.vim().unnamed_register.text == right.vim().unnamed_register.text &&
-               left.vim().unnamed_register.kind == right.vim().unnamed_register.kind &&
-               left.vim().registers.registers.at(0).text ==
-                   right.vim().registers.registers.at(0).text &&
-               left.vim().last_macro == right.vim().last_macro,
-           "state updates preserve the owned Vim values");
+    expect(
+        left.vim().mode == right.vim().mode &&
+            left.vim().unnamed_register.value().text == right.vim().unnamed_register.value().text &&
+            left.vim().unnamed_register.value().kind == right.vim().unnamed_register.value().kind &&
+            left.vim().registers.registers.at(0).value().text ==
+                right.vim().registers.registers.at(0).value().text &&
+            left.vim().last_macro == right.vim().last_macro,
+        "state updates preserve the owned Vim values");
     expect(left.tab_count() == right.tab_count() && left.active_tab() == right.active_tab() &&
                left.parked() == right.parked() && left.tab_walking() == right.tab_walking() &&
                std::ranges::equal(left.recency().order(), right.recency().order()),
@@ -203,8 +204,8 @@ void expect_state_values(const EditorState &left, const EditorState &right)
 {
     using nenenib::application::Document;
     auto vim = empty_vim_state();
-    vim.unnamed_register =
-        nenenib::core::VimRegister{"owned", nenenib::core::VimRegisterKind::characters};
+    vim.unnamed_register = nenenib::core::VimRegisterSnapshot::from(
+        nenenib::core::VimRegister{"owned", nenenib::core::VimRegisterKind::characters});
     vim.registers.registers.at(0) = vim.unnamed_register;
     vim.last_macro = 'a';
     const auto history =
@@ -263,7 +264,10 @@ void verify_consuming_updates()
                         [](auto &&value)
                         {
                             auto vim = value.vim();
-                            vim.unnamed_register.text = "changed";
+                            vim.unnamed_register =
+                                nenenib::core::VimRegisterSnapshot::from(nenenib::core::VimRegister{
+                                    "changed", vim.unnamed_register.value().kind,
+                                    vim.unnamed_register.value().width});
                             return std::forward<decltype(value)>(value).with_vim(std::move(vim));
                         });
     verify_state_update(
