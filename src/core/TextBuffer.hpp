@@ -68,6 +68,7 @@ class TextBuffer final
     TextBuffer(Buffer original, Index original_newlines, std::vector<Piece> pieces,
                LineEnding ending);
     [[nodiscard]] std::string_view view_of(const Piece &piece) const noexcept;
+    [[nodiscard]] char byte_at(Offset at) const noexcept;
     [[nodiscard]] const std::string &buffer_of(const Piece &piece) const noexcept;
     // piece が指すバッファの改行の索引。窓 [newline_begin, newline_end) の添字はこの列の中を指す。
     [[nodiscard]] const std::vector<Offset> &index_of(const Piece &piece) const noexcept;

@@ -60,6 +60,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -506,6 +507,118 @@ void verify_buffer_round_trip()
     }
     expect(text.text_range(Offset{7}, Offset{11}) == "beta", "text_range reads a slice");
     expect(text.text_range(Offset{5}, Offset{5}).empty(), "an empty range reads nothing");
+}
+
+void verify_buffer_range_bounds()
+{
+    constexpr auto largest = std::numeric_limits<std::size_t>::max();
+    constexpr std::array<std::pair<OffsetRange, std::string_view>, 15> cases{{
+        {{Offset{0}, Offset{0}}, ""},
+        {{Offset{3}, Offset{3}}, ""},
+        {{Offset{5}, Offset{2}}, ""},
+        {{Offset{6}, Offset{6}}, ""},
+        {{Offset{6}, Offset{9}}, ""},
+        {{Offset{9}, Offset{10}}, ""},
+        {{Offset{0}, Offset{99}}, "abcdef"},
+        {{Offset{2}, Offset{99}}, "cdef"},
+        {{Offset{99}, Offset{largest}}, ""},
+        {{Offset{largest}, Offset{largest}}, ""},
+        {{Offset{largest}, Offset{0}}, ""},
+        {{Offset{0}, Offset{largest}}, "abcdef"},
+        {{Offset{2}, Offset{largest}}, "cdef"},
+        {{Offset{0}, Offset{1}}, "a"},
+        {{Offset{5}, Offset{6}}, "f"},
+    }};
+    const auto text = buffer_of("abcdef");
+    const auto empty = TextBuffer::empty();
+    for (const auto &[range, expected] : cases)
+    {
+        expect(text.text_range(range.begin, range.end) == expected,
+               "range bounds keep their existing clamp and empty semantics");
+        expect(empty.text_range(range.begin, range.end).empty(),
+               "every range of an empty buffer is empty");
+    }
+}
+
+void verify_buffer_range_pieces()
+{
+    const auto original = buffer_of("ab\r\ncd\r\nef\r\n");
+    const auto split = original.replaced(Offset{2}, Offset{3}, "\r")
+                           .replaced(Offset{6}, Offset{7}, "\r")
+                           .replaced(Offset{10}, Offset{11}, "\r");
+    expect(split.piece_count() == 7, "each CR is in an add piece before an original LF");
+    constexpr std::array<std::pair<OffsetRange, std::string_view>, 6> cases{{
+        {{Offset{0}, Offset{2}}, "ab"},
+        {{Offset{1}, Offset{5}}, "b\r\nc"},
+        {{Offset{2}, Offset{4}}, "\r\n"},
+        {{Offset{4}, Offset{9}}, "cd\r\ne"},
+        {{Offset{9}, Offset{12}}, "f\r\n"},
+        {{Offset{6}, Offset{11}}, "\r\nef\r"},
+    }};
+    for (const auto &[range, expected] : cases)
+    {
+        expect(split.text_range(range.begin, range.end) == expected,
+               "ranges read the head, middle and tail across separate CR and LF pieces");
+    }
+    constexpr std::array<std::string_view, 4> lines{"ab", "cd", "ef", ""};
+    for (std::size_t index = 0; index < lines.size(); ++index)
+    {
+        const LineNumber line{index + 1};
+        expect(split.line_text(line) == lines[index], "a split CRLF still ends its content");
+        expect(split.line_end(line).value == std::min(index * 4 + 2, std::size_t{12}),
+               "content ends and the trailing empty line keep their known offsets");
+    }
+    expect(original.text() == "ab\r\ncd\r\nef\r\n" && original.piece_count() == 1,
+           "the old snapshot is unchanged by fragmentation");
+    const auto lf = buffer_of("ab\ncd\r\nef").replaced(Offset{5}, Offset{6}, "\r");
+    expect(lf.line_text(LineNumber{2}) == "cd\r" && lf.line_end(LineNumber{2}) == Offset{6},
+           "an LF document keeps an isolated CR in a separate piece");
+    expect(lf.position_of(Offset{6}) == TextPosition{LineNumber{2}, Column{4}},
+           "the isolated CR adds a column before the LF");
+    const auto terminal = buffer_of("a\r\nb\r").replaced(Offset{4}, Offset{5}, "\r");
+    expect(terminal.line_text(LineNumber{2}) == "b" &&
+               terminal.line_end(LineNumber{2}) == Offset{4},
+           "the existing CRLF model also strips a terminal CR without a following LF");
+    expect(buffer_of("\r\n").line_text(LineNumber{1}).empty(),
+           "a line containing only its CRLF has no content");
+}
+
+void verify_buffer_range_positions()
+{
+    constexpr std::string_view raw = "a日本🖋\r\nz";
+    const auto original = buffer_of(raw);
+    const auto split = original.replaced(Offset{2}, Offset{3}, raw.substr(2, 1))
+                           .replaced(Offset{9}, Offset{10}, raw.substr(9, 1));
+    expect(split.piece_count() == 5 && split.text() == raw,
+           "same-byte replacements split a BMP scalar and a supplementary scalar");
+    constexpr std::array<TextPosition, 15> positions{{
+        {LineNumber{1}, Column{1}},
+        {LineNumber{1}, Column{2}},
+        {LineNumber{1}, Column{3}},
+        {LineNumber{1}, Column{3}},
+        {LineNumber{1}, Column{3}},
+        {LineNumber{1}, Column{4}},
+        {LineNumber{1}, Column{4}},
+        {LineNumber{1}, Column{4}},
+        {LineNumber{1}, Column{5}},
+        {LineNumber{1}, Column{5}},
+        {LineNumber{1}, Column{5}},
+        {LineNumber{1}, Column{5}},
+        {LineNumber{1}, Column{6}},
+        {LineNumber{2}, Column{1}},
+        {LineNumber{2}, Column{2}},
+    }};
+    for (std::size_t byte = 0; byte < positions.size(); ++byte)
+    {
+        expect(original.position_of(Offset{byte}) == positions[byte],
+               "known positions retain the current byte-prefix meaning inside UTF-8 and CRLF");
+        expect(split.position_of(Offset{byte}) == positions[byte],
+               "fragmented scalars count the same non-continuation bytes");
+    }
+    expect(split.position_of(Offset{std::numeric_limits<std::size_t>::max()}) == positions.back(),
+           "the largest offset clamps to the known last position");
+    expect(original.piece_count() == 1 && original.text() == raw,
+           "partial-scalar fragmentation leaves the old snapshot unchanged");
 }
 
 void verify_buffer_scale()
@@ -1997,6 +2110,30 @@ void verify_text_buffer_read_contracts()
     verify_line_ending_model();
 }
 
+// 同じ本文範囲の契約を対象指定と既定実行へつなぐ（Issue #338）。
+void verify_buffer_scope()
+{
+    verify_buffer_creation();
+    verify_buffer_insertion();
+    verify_buffer_erasure();
+    verify_buffer_lines();
+    verify_buffer_crlf_split();
+    verify_buffer_positions();
+    verify_buffer_round_trip();
+    verify_buffer_scale();
+    verify_buffer_add_branches();
+    verify_buffer_chunk_growth();
+    verify_buffer_oversized_and_restored();
+    verify_buffer_shared_index_edits();
+    verify_buffer_chunk_line_numbers();
+    verify_buffer_index_branches();
+    verify_line_ending_detection();
+    verify_line_ending_model();
+    verify_buffer_range_bounds();
+    verify_buffer_range_pieces();
+    verify_buffer_range_positions();
+}
+
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。
 void verify_caret_movement_contracts()
 {
@@ -2042,20 +2179,7 @@ void verify_utf8_scope()
 void verify_text_and_caret()
 {
     verify_utf8_scope();
-    verify_buffer_creation();
-    verify_buffer_insertion();
-    verify_buffer_erasure();
-    verify_buffer_lines();
-    verify_buffer_crlf_split();
-    verify_buffer_positions();
-    verify_buffer_round_trip();
-    verify_buffer_scale();
-    verify_buffer_add_branches();
-    verify_buffer_chunk_growth();
-    verify_buffer_oversized_and_restored();
-    verify_buffer_shared_index_edits();
-    verify_buffer_chunk_line_numbers();
-    verify_buffer_index_branches();
+    verify_buffer_scope();
     verify_offset_types();
     verify_selection();
     verify_line_endings();
@@ -2066,8 +2190,6 @@ void verify_text_and_caret()
     verify_vim_recorded_keys_scope();
     verify_encoding_labels();
     verify_encoding_detection();
-    verify_line_ending_detection();
-    verify_line_ending_model();
     verify_file_path();
     verify_tab_titles();
     verify_save_state_of_document();
