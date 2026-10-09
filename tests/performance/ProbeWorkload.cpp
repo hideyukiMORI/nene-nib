@@ -2,6 +2,7 @@
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorFrame.hpp"
 #include "FilePath.hpp"
@@ -11,8 +12,17 @@
 #include "OpenDocument.hpp"
 #include "SaveDocument.hpp"
 #include "SelectAll.hpp"
+#include "SelectEditMode.hpp"
+#include "StoreVimRegister.hpp"
 #include "TextBuffer.hpp"
 #include "Utf8.hpp"
+#include "VimCharacter.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
+#include "VimMode.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
+#include "VimSpecialKey.hpp"
 #include "VisibleLines.hpp"
 
 #include <array>
@@ -20,6 +30,7 @@
 #include <format>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::tests::performance
@@ -207,9 +218,107 @@ validated(const std::string &input, std::size_t expected, application::TimingPor
 }
 } // namespace
 
+namespace
+{
+// 準備・照合の文字キーも製品の入口へ流す。Vim harnessの別経路は作らない。
+void vim_characters(Editing &editing, std::u32string_view keys)
+{
+    for (const char32_t key : keys)
+    {
+        static_cast<void>(
+            editing.controller().apply(application::VimKeyPress{core::VimCharacter{key}}));
+    }
+}
+
+void vim_escape(Editing &editing)
+{
+    static_cast<void>(
+        editing.controller().apply(application::VimKeyPress{core::VimSpecialKey::escape}));
+}
+
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+vim_inserted(Editing &editing, std::size_t count, application::TimingPort &timing)
+{
+    const application::VimKeyPress intent{core::VimCharacter{U'x'}};
+    std::optional<decltype(editing.controller().apply(intent))> delivered;
+    timing.mark(core::Milestone::probe_started);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        delivered = editing.controller().apply(intent);
+    }
+    timing.mark(core::Milestone::probe_finished);
+    const auto frame = editing.controller().frame();
+    const std::string expected(count, 'x');
+    if (!delivered.has_value() || delivered.value().document.last_failure.has_value() ||
+        frame.mode != core::EditMode::vim || frame.vim_mode != core::VimMode::insert ||
+        frame.total_lines != 1 || frame.caret.position.line.value != 1 ||
+        frame.caret.position.column.value != count + 1 || !saved_equals(editing, expected))
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(editing.files().written());
+}
+
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+vim_inserted_with_register(const std::string &input, application::TimingPort &timing)
+{
+    Editing editing;
+    static_cast<void>(editing.controller().apply(application::VisibleLines{30}));
+    static_cast<void>(editing.controller().apply(application::SelectEditMode{core::EditMode::vim}));
+    static_cast<void>(editing.controller().apply(application::StoreVimRegister{
+        'a', core::VimRegister{input, core::VimRegisterKind::characters}}));
+    vim_characters(editing, U"i");
+    const auto result = vim_inserted(editing, insert_count, timing);
+    if (!result.has_value())
+    {
+        return std::unexpected(result.error());
+    }
+    vim_escape(editing);
+    vim_characters(editing, U"\"ap");
+    const std::string pasted = std::string(insert_count, 'x') + input;
+    if (!saved_equals(editing, pasted))
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    const auto pasted_checksum = checksum_of(editing.files().written());
+    vim_characters(editing, U"u");
+    if (!saved_equals(editing, std::string(insert_count, 'x')))
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return result.value() ^ pasted_checksum;
+}
+
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+vim_inserted_while_recording(const std::string &input, application::TimingPort &timing)
+{
+    Editing editing;
+    static_cast<void>(editing.controller().apply(application::VisibleLines{30}));
+    static_cast<void>(editing.controller().apply(application::SelectEditMode{core::EditMode::vim}));
+    vim_characters(editing, U"qai");
+    const auto result = vim_inserted(editing, input.size(), timing);
+    if (!result.has_value() || editing.files().written() != input)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    vim_escape(editing);
+    vim_characters(editing, U"qu");
+    if (!saved_equals(editing, ""))
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    vim_characters(editing, U"@a");
+    if (!saved_equals(editing, input))
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(editing.files().written());
+}
+} // namespace
+
 std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
 {
-    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 8> names{{
+    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 12> names{{
         {"controller-open-utf8-16mib", ProbeWorkload::controller_open},
         {"buffer-from-utf8-16mib", ProbeWorkload::buffer_create},
         {"controller-insert-200", ProbeWorkload::controller_insert},
@@ -218,6 +327,10 @@ std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
         {"controller-insert-200-after-delete-16mib", ProbeWorkload::insert_after_delete_large},
         {"utf8-validate-ascii-16mib", ProbeWorkload::validate_ascii},
         {"utf8-validate-japanese-6mib", ProbeWorkload::validate_japanese},
+        {"controller-vim-insert-200-register-1mib", ProbeWorkload::vim_register_small},
+        {"controller-vim-insert-200-register-16mib", ProbeWorkload::vim_register_large},
+        {"controller-vim-record-insert-200", ProbeWorkload::vim_record_small},
+        {"controller-vim-record-insert-2000", ProbeWorkload::vim_record_large},
     }};
     for (const auto &[text, workload] : names)
     {
@@ -297,6 +410,14 @@ std::string input_of(ProbeWorkload workload)
         return japanese_line();
     case ProbeWorkload::validate_japanese:
         return japanese_input();
+    case ProbeWorkload::vim_register_small:
+        return std::string(1048576U, 'r');
+    case ProbeWorkload::vim_register_large:
+        return std::string(16777216U, 'r');
+    case ProbeWorkload::vim_record_small:
+        return std::string(200U, 'x');
+    case ProbeWorkload::vim_record_large:
+        return std::string(2000U, 'x');
     }
     std::unreachable();
 }
@@ -321,6 +442,12 @@ run_workload(ProbeWorkload workload, const std::string &input, application::Timi
         return validated(input, 16800000U, timing);
     case ProbeWorkload::validate_japanese:
         return validated(input, 2079000U, timing);
+    case ProbeWorkload::vim_register_small:
+    case ProbeWorkload::vim_register_large:
+        return vim_inserted_with_register(input, timing);
+    case ProbeWorkload::vim_record_small:
+    case ProbeWorkload::vim_record_large:
+        return vim_inserted_while_recording(input, timing);
     }
     std::unreachable();
 }
