@@ -57,7 +57,8 @@ void verify_vim_scope_contracts()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 36> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 37> scopes{{
+        {"--edit-history", verify_edit_history_scope},
         {"--application", verify_application_scope},
         {"--display-line", verify_display_line_scope},
         {"--vim-dot", verify_vim_dot_scope},

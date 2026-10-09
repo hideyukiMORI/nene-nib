@@ -872,6 +872,101 @@ void verify_history_travel()
     expect(EditHistory::empty().size() == 0, "a new history is empty");
 }
 
+void verify_history_input_ownership()
+{
+    const Edit expected{Offset{5}, std::string(96, 'r'), std::string(96, 'i'), Offset{3}};
+    Edit input = expected;
+    char *removed_alias = input.removed.data();
+    char *inserted_alias = input.inserted.data();
+    const auto history = EditHistory::empty().pushed(input, EditBoundary::separate);
+    removed_alias[17] = 'x';
+    inserted_alias[29] = 'y';
+    input.at = Offset{99};
+    input.restore = Offset{98};
+    expect(history.undo().value() == expected,
+           "push owns a defensive copy of external text and fields, including old data aliases");
+    auto returned = history.undo().value();
+    returned.removed[0] = 'z';
+    returned.inserted[0] = 'z';
+    returned.restore = Offset{97};
+    expect(history.undo().value() == expected, "mutating an undo result cannot alter its entry");
+    auto redone = history.undone().redo().value();
+    redone.removed[0] = 'q';
+    redone.inserted[0] = 'q';
+    expect(history.undone().redo().value() == expected,
+           "redo also returns an independent owning edit");
+    auto applied = history.applied(0);
+    applied.value().removed[0] = 'p';
+    applied.value().inserted[0] = 'p';
+    expect(history.applied(0).value() == expected,
+           "applied returns ownership rather than a shared mutable entry");
+    expect(!history.applied(1).has_value() && !history.undone().applied(0).has_value(),
+           "applied only exposes edits before the current position");
+}
+
+void verify_history_coalesced_branches()
+{
+    const Edit deleted{Offset{0}, std::string(96, 'r'), "", Offset{8}};
+    const Edit typed{Offset{0}, "", std::string(96, 'a'), Offset{7}};
+    const auto prefix = EditHistory::empty().pushed(deleted, EditBoundary::separate);
+    const auto original = prefix.pushed(typed, EditBoundary::coalesce);
+    const auto left =
+        original.pushed(Edit{Offset{96}, "", "x", Offset{96}}, EditBoundary::coalesce);
+    const auto right =
+        original.pushed(Edit{Offset{96}, "", "y", Offset{95}}, EditBoundary::coalesce);
+    const Edit left_edit{Offset{0}, "", typed.inserted + "x", Offset{7}};
+    const Edit right_edit{Offset{0}, "", typed.inserted + "y", Offset{7}};
+    expect(left.undo().value() == left_edit && right.undo().value() == right_edit,
+           "two coalesced branches own their different tails and retain the first restore");
+    expect(original.undo().value() == typed && prefix.undo().value() == deleted,
+           "coalescing never mutates either old snapshot");
+    const Edit replacement{Offset{0}, "", "z", Offset{4}};
+    const auto rewritten = left.undone().pushed(replacement, EditBoundary::coalesce);
+    expect(rewritten.size() == 2 && rewritten.position() == 2 &&
+               rewritten.undo().value() == replacement &&
+               rewritten.redo().error() == HistoryFailure::nothing_to_redo,
+           "a push after undo drops only that branch's redo tail and opens a closed unit");
+    expect(left.undone().redo().value() == left_edit && right.undo().value() == right_edit &&
+               original.undo().value() == typed,
+           "redo truncation leaves the sibling and all earlier snapshots unchanged");
+    expect(rewritten.undone().undo().value() == deleted &&
+               original.undone().undo().value() == deleted,
+           "the completed deletion survives travel and branching unchanged");
+}
+
+void verify_history_absorbed_branches()
+{
+    const Edit first{Offset{5}, std::string(96, 'r'), "abcd", Offset{2}};
+    const auto original = EditHistory::empty().pushed(first, EditBoundary::absorb);
+    const Edit inside{Offset{6}, "b", "XY", Offset{6}};
+    const auto left = original.pushed(inside, EditBoundary::absorb);
+    const auto right = original.pushed(Edit{Offset{4}, "x", "", Offset{4}}, EditBoundary::absorb);
+    expect(left.undo().value() == Edit{Offset{5}, first.removed, "aXYcd", Offset{2}},
+           "an absorbed replacement only changes its new branch and keeps the first restore");
+    expect(right.undo().value() == Edit{Offset{4}, "x" + first.removed, "abcd", Offset{2}},
+           "a preceding deletion owns the expanded removed text in its own branch");
+    const auto saved = original.sealed();
+    const auto after_save = saved.pushed(inside, EditBoundary::absorb);
+    expect(saved.size() == 1 && saved.position() == 1 && after_save.size() == 2 &&
+               after_save.undo().value() == inside,
+           "save closes an absorb unit without altering its entry or saved position");
+    expect(after_save.undone().undo().value() == first && original.undo().value() == first &&
+               saved.undo().value() == first,
+           "saved and old snapshots retain their complete original edit");
+}
+
+void verify_history_empty_entries()
+{
+    const auto empty = EditHistory::empty();
+    expect(empty.undo().error() == HistoryFailure::nothing_to_undo &&
+               empty.redo().error() == HistoryFailure::nothing_to_redo &&
+               !empty.applied(0).has_value(),
+           "an empty history has typed absence rather than a null entry");
+    expect(empty.sealed().size() == 0 && empty.undone().position() == 0 &&
+               empty.redone().position() == 0,
+           "empty travel and sealing never manufacture an entry");
+}
+
 // ---------------------------------------------------------------- スクロール
 
 void verify_scroll_bounds()
@@ -1806,6 +1901,18 @@ void verify_caret_movement_contracts()
     verify_caret_words();
 }
 
+// 履歴の同じ契約を selector と既定実行から呼ぶ（ADR 0085）。
+void verify_edit_history_scope()
+{
+    verify_history_coalescing();
+    verify_history_absorbing();
+    verify_history_travel();
+    verify_history_input_ownership();
+    verify_history_coalesced_branches();
+    verify_history_absorbed_branches();
+    verify_history_empty_entries();
+}
+
 void verify_text_and_caret()
 {
     verify_display_text_accepts_multibyte();
@@ -1837,9 +1944,7 @@ void verify_text_and_caret()
     verify_caret_characters();
     verify_caret_lines();
     verify_caret_words();
-    verify_history_coalescing();
-    verify_history_absorbing();
-    verify_history_travel();
+    verify_edit_history_scope();
     verify_encoding_labels();
     verify_encoding_detection();
     verify_line_ending_detection();
