@@ -42,6 +42,7 @@
 #include "VimPatternFailure.hpp"
 #include "VimPrefix.hpp"
 #include "VimPutSide.hpp"
+#include "VimRecordedKeys.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimRegisterSelection.hpp"
@@ -2744,7 +2745,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     const char32_t name = macro_name_of(key).value_or(char32_t{});
     if (vim_numbered_index(name).has_value())
     {
-        next.macro_recording = VimMacroRecording{static_cast<char>(name), {}, false};
+        next.macro_recording =
+            VimMacroRecording{static_cast<char>(name), VimRecordedKeys::from({}), false};
         return VimStep{std::move(next), VimNoEffect{}};
     }
     const auto index = vim_register_index(name);
@@ -2752,8 +2754,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return failed(VimStep{std::move(next), VimNoEffect{}}, VimRepeatFailure::refused);
     }
-    next.macro_recording = VimMacroRecording{
-        static_cast<char>(U'a' + index.value()), {}, name >= U'A' && name <= U'Z'};
+    next.macro_recording =
+        VimMacroRecording{static_cast<char>(U'a' + index.value()), VimRecordedKeys::from({}),
+                          name >= U'A' && name <= U'Z'};
     return VimStep{std::move(next), VimNoEffect{}};
 }
 
@@ -2778,7 +2781,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 {
     VimState next = finished_input_wait(state);
     next.macro_recording = std::nullopt;
-    const std::string text = vim_register_text(recording.keys);
+    const std::string text = vim_register_text(recording.keys.owned_keys());
     const auto numbered = vim_numbered_index(static_cast<char32_t>(recording.name));
     if (numbered.has_value())
     {
@@ -2992,8 +2995,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     next.mode = visual_mode_of(extent);
     next.wanted_column = replayed_wanted(extent);
     next.replayed_block = replayed_extent(extent);
-    next.recording = VimRepeatRecord{std::nullopt, {}, extent};
-    return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys), extent}};
+    next.recording = VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), extent};
+    return VimStep{std::move(next), VimReplay{numbered_advanced(record.keys.owned_keys()), extent}};
 }
 
 // `.`。直前の変更が無ければ何も起きない。回数は `.` に付いた回数が優先で、無ければ記録の回数。
@@ -3009,8 +3012,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return replayed_visual(state, record, record.visual.value());
     }
     const std::optional<VimCount> count = state.count.has_value() ? state.count : record.count;
-    return VimStep{vim_resting_from(state, state.unnamed_register),
-                   VimReplay{replayed_keys(count, numbered_advanced(record.keys)), std::nullopt}};
+    return VimStep{
+        vim_resting_from(state, state.unnamed_register),
+        VimReplay{replayed_keys(count, numbered_advanced(record.keys.owned_keys())), std::nullopt}};
 }
 
 // u / Ctrl-r / `.`。どれも済んだ編集をもう一度たどる（ADR 0030 の決定 6）。
@@ -4265,7 +4269,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 
 [[nodiscard]] VimRepeatRecord appended(VimRepeatRecord record, VimKey key)
 {
-    record.keys.push_back(replayable(std::move(key)));
+    record.keys = record.keys.appended(replayable(std::move(key)));
     return record;
 }
 
@@ -4318,7 +4322,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         // 取り直した記録は VISUAL の大きさを持たない（固定 Vim も `vlcZ<Home>Y<Esc>.` を
         // ただの挿入として繰り返す・Issue #91 で実測）。
-        next.recording = VimRepeatRecord{std::nullopt, {VimKey{VimCharacter{U'i'}}}, std::nullopt};
+        next.recording = VimRepeatRecord{
+            std::nullopt, VimRecordedKeys::from({}).appended(VimKey{VimCharacter{U'i'}}),
+            std::nullopt};
         return next;
     }
     next.recording = appended(before.recording.value(), key);
@@ -4410,7 +4416,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return step;
     }
     VimRepeatRecord record = before.recording.value_or(
-        VimRepeatRecord{std::nullopt, {}, visual_extent_of(before, view)});
+        VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), visual_extent_of(before, view)});
     record = appended(std::move(record), key);
     if (waiting || step.next.mode == VimMode::insert)
     {
@@ -4468,7 +4474,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return step;
     }
-    step.next.macro_recording.value().keys.push_back(replayable(std::move(key)));
+    auto &recording = step.next.macro_recording.value();
+    recording.keys = recording.keys.appended(replayable(std::move(key)));
     return step;
 }
 

@@ -428,8 +428,8 @@ void verify_incsearch_hop_inert()
     expect(vim_body(controller.frame()) == "beta gamma\ndelta beta",
            "d/be with a hop deletes up to the hopped match");
     const auto &change = controller.vim_state().last_change;
-    const auto keys =
-        change.has_value() ? change.value().keys : std::vector<nenenib::core::VimKey>{};
+    const auto keys = change.has_value() ? change.value().keys.owned_keys()
+                                         : std::vector<nenenib::core::VimKey>{};
     expect(!keys.empty() && std::ranges::all_of(keys, startless),
            "the `.` record keeps the search key without the hop start");
 }

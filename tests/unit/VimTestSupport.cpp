@@ -228,8 +228,9 @@ void store_vim_fixture_macro(EditorController &controller, const VimFixture &fix
     }
     applied(controller,
             nenenib::application::StoreVimRegister{
-                macro.name, VimRegister{nenenib::core::vim_register_text(recording.value().keys),
-                                        VimRegisterKind::characters}});
+                macro.name,
+                VimRegister{nenenib::core::vim_register_text(recording.value().keys.owned_keys()),
+                            VimRegisterKind::characters}});
 }
 
 [[nodiscard]] std::string whole_vim_body(EditorController &controller)
@@ -277,7 +278,7 @@ void open_vim_document(Editing &editing, std::string text)
         return false;
     }
     const auto &record = state.last_change.value();
-    return record.count == count && record.keys == vim_keys_of(keys);
+    return record.count == count && record.keys.owned_keys() == vim_keys_of(keys);
 }
 
 // 期待値は固定 Vim 9.1 の 218 ケース（out/issue100-oracle）から取った。fixture にできない

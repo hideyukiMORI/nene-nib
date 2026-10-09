@@ -65,9 +65,10 @@ void verify_file_text_scope()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 41> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 42> scopes{{
         {"--utf8", verify_utf8_scope},
         {"--file-text", verify_file_text_scope},
+        {"--vim-recorded-keys", verify_vim_recorded_keys_scope},
         {"--edit-history", verify_edit_history_scope},
         {"--application", verify_application_scope},
         {"--utf16", verify_utf16_scope},

@@ -1,11 +1,10 @@
 #pragma once
 
 #include "VimCount.hpp"
-#include "VimKey.hpp"
+#include "VimRecordedKeys.hpp"
 #include "VimVisualExtent.hpp"
 
 #include <optional>
-#include <vector>
 
 namespace nenenib::core
 {
@@ -16,7 +15,7 @@ namespace nenenib::core
 struct VimRepeatRecord
 {
     std::optional<VimCount> count;
-    std::vector<VimKey> keys;
+    VimRecordedKeys keys = VimRecordedKeys::from({});
     std::optional<VimVisualExtent> visual;
 };
 } // namespace nenenib::core
