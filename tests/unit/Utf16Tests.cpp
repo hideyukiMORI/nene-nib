@@ -68,6 +68,30 @@ void verify_failures_and_long_text()
     expect(core::utf16_length(long_text).value() == core::to_utf16(long_text).value().size(),
            "long text measurement matches the existing conversion");
 }
+
+void verify_long_utf8_output()
+{
+    const std::wstring japanese(4096, L'\x65e5');
+    const std::wstring ascii(8192, L'a');
+    std::wstring supplementary;
+    std::string japanese_bytes;
+    std::string supplementary_bytes;
+    for (std::size_t repeat = 0; repeat < 4096; ++repeat)
+    {
+        japanese_bytes += "\xe6\x97\xa5";
+        supplementary += L"\xd83d\xdd8b";
+        supplementary_bytes += "\xf0\x9f\x96\x8b";
+    }
+    const auto converted_japanese = core::to_utf8(japanese);
+    const auto converted_ascii = core::to_utf8(ascii);
+    const auto converted_supplementary = core::to_utf8(supplementary);
+    expect(converted_japanese && converted_japanese.value() == japanese_bytes,
+           "long Japanese UTF-16 converts to known three-byte scalars");
+    expect(converted_ascii && converted_ascii.value() == std::string(8192, 'a'),
+           "long ASCII UTF-16 converts to known single-byte scalars");
+    expect(converted_supplementary && converted_supplementary.value() == supplementary_bytes,
+           "long surrogate pairs convert to known four-byte scalars");
+}
 } // namespace
 
 void verify_utf16_scope()
@@ -75,5 +99,6 @@ void verify_utf16_scope()
     verify_utf16_conversions();
     verify_lengths();
     verify_failures_and_long_text();
+    verify_long_utf8_output();
 }
 } // namespace nenenib::tests

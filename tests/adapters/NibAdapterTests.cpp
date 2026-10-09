@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace
 {
@@ -264,6 +265,62 @@ void verify_code_pages(Win32CodePageAdapter &code_pages)
     const auto broken = code_pages.to_utf8("\xFF\xFF");
     expect(!broken.has_value() && broken.error() == CodePageFailure::undecodable,
            "bytes that are not CP932 are undecodable");
+}
+
+void verify_code_page_bytes(Win32CodePageAdapter &code_pages)
+{
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 5> cases{{
+        {"ASCII\r\n", "ASCII\r\n"},
+        {"\x93\xfa\x96\x7b\x8c\xea", "日本語"},
+        {"\xb6\xc5", "ｶﾅ"},
+        {std::string_view{"a\0b", 3}, std::string_view{"a\0b", 3}},
+        {std::string_view{"A\xb6\x93\xfa\0Z", 6}, std::string_view{"Aｶ日\0Z", 9}},
+    }};
+    for (const auto &[cp932, utf8] : cases)
+    {
+        const auto decoded = code_pages.to_utf8(cp932);
+        expect(decoded && decoded.value() == utf8, "explicit CP932 bytes decode exactly");
+        const auto encoded = code_pages.from_utf8(utf8);
+        expect(encoded && encoded.value() == cp932, "explicit UTF-8 bytes encode exactly");
+    }
+    const auto empty = code_pages.to_utf8("");
+    expect(empty && empty.value().empty(), "empty CP932 decoding succeeds");
+    for (const auto broken : {"\x81\x30", "\x82", "A\x82"})
+    {
+        const auto decoded = code_pages.to_utf8(broken);
+        expect(!decoded && decoded.error() == CodePageFailure::undecodable,
+               "invalid pairs and trailing lead bytes are rejected");
+    }
+}
+
+void verify_code_page_independent_calls(Win32CodePageAdapter &code_pages)
+{
+    std::string cp932;
+    std::string utf8;
+    for (std::size_t repeat = 0; repeat < 4096; ++repeat)
+    {
+        cp932 += "\x93\xfa\x96\x7b\x8c\xea";
+        utf8 += "日本語";
+    }
+    const auto first = code_pages.to_utf8(cp932);
+    const auto short_text = code_pages.to_utf8("x");
+    const auto empty = code_pages.to_utf8("");
+    const auto failed = code_pages.to_utf8("\x82");
+    const auto repeated = code_pages.to_utf8(cp932);
+    expect(first && first.value() == utf8, "long CP932 input has all expected UTF-8 bytes");
+    expect(short_text && short_text.value() == "x", "short decoding retains no previous tail");
+    expect(empty && empty.value().empty(), "empty decoding retains no previous tail");
+    expect(!failed && failed.error() == CodePageFailure::undecodable,
+           "a rejected call does not become an empty success");
+    expect(repeated && repeated.value() == utf8 && first && first.value() == utf8,
+           "repeated long decoding preserves independently owned previous results");
+}
+
+void verify_code_page_scope(Win32CodePageAdapter &code_pages)
+{
+    verify_code_pages(code_pages);
+    verify_code_page_bytes(code_pages);
+    verify_code_page_independent_calls(code_pages);
 }
 
 // 節目を積むのは bind のあとだけで、JSON はデストラクタが 1 度だけ書く（ADR 0011 の決定 2）。
@@ -730,24 +787,48 @@ void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
     verify_create_only(files);
     verify_resolved_write(files);
     verify_failed_replacement(files);
-    verify_code_pages(code_pages);
+    verify_code_page_scope(code_pages);
     verify_absolute_path();
     verify_same_file(files);
     verify_read_boundaries(files);
+}
+
+bool known_scope(std::string_view scope)
+{
+    return scope == "--settings-codec" || scope == "--settings" || scope == "--files" ||
+           scope == "--code-pages";
+}
+
+int run_memory_tests(std::string_view scope)
+{
+    if (scope == "--code-pages")
+    {
+        Win32CodePageAdapter code_pages;
+        verify_code_page_scope(code_pages);
+        std::printf("Code page adapter: %zu checks, %zu failures\n", check_count(),
+                    failure_count());
+        return test_result();
+    }
+    verify_settings_codec();
+    verify_bad_settings_fields();
+    verify_bad_settings_values();
+    verify_settings_versions();
+    std::printf("Settings codec: %zu checks, %zu failures\n", check_count(), failure_count());
+    return test_result();
 }
 } // namespace
 
 int main(int argc, char **argv)
 {
     const std::string_view scope = argc == 2 ? argv[1] : "";
-    if (scope == "--settings-codec")
+    if (argc > 2 || (argc == 2 && !known_scope(scope)))
     {
-        verify_settings_codec();
-        verify_bad_settings_fields();
-        verify_bad_settings_values();
-        verify_settings_versions();
-        std::printf("Settings codec: %zu checks, %zu failures\n", check_count(), failure_count());
-        return test_result();
+        std::fprintf(stderr, "Unknown adapter test scope\n");
+        return 1;
+    }
+    if (scope == "--code-pages" || scope == "--settings-codec")
+    {
+        return run_memory_tests(scope);
     }
     reset_folder();
     Win32FileAdapter files;
