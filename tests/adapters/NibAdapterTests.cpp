@@ -130,6 +130,26 @@ void verify_utf8_files(Win32FileAdapter &files)
                       TextEncoding::utf8_bom);
 }
 
+void verify_read_boundaries(Win32FileAdapter &files)
+{
+    const FilePath path = path_of("nib-adapter-files/utf8.txt");
+    expect(files.write(path, "").has_value(), "an empty file can be written");
+    const auto empty = files.read(path, 0);
+    expect(empty.has_value() && empty.value().empty(), "zero-byte reads succeed at a zero limit");
+    expect(files.write(path, "x").has_value(), "a one-byte file can be written");
+    expect(files.read(path, 0).error() == FileFailure::too_large,
+           "nonempty files are rejected before a zero-length read");
+    expect(files.read(path, 1).value() == "x", "a one-byte read accepts the exact limit");
+    const std::string bytes("a\0b\n", 4);
+    expect(files.write(path, bytes).has_value(), "binary NUL bytes can be written");
+    expect(files.read(path, bytes.size()).value() == bytes,
+           "the initialized read length includes NUL and a trailing newline");
+    expect(files.read(path, bytes.size() - 1).error() == FileFailure::too_large,
+           "one byte above the limit is rejected");
+    expect(files.write(path, "z").has_value() && files.read(path, 32).value() == "z",
+           "a small file does not retain the previous read's longer tail");
+}
+
 void verify_shift_jis_file(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
 {
     const auto encoded = code_pages.from_utf8("日本語\n改行");
@@ -713,6 +733,7 @@ void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
     verify_code_pages(code_pages);
     verify_absolute_path();
     verify_same_file(files);
+    verify_read_boundaries(files);
 }
 } // namespace
 

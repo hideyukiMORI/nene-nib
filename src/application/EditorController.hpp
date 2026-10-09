@@ -5,6 +5,7 @@
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
 #include "CompositionView.hpp"
+#include "DetectedText.hpp"
 #include "Document.hpp"
 #include "DocumentView.hpp"
 #include "EditBoundary.hpp"
@@ -330,9 +331,8 @@ class EditorController final
     // 確定した文字列を Vim の打鍵として流す。`.` の再生とマクロが後で自然に載る（決定 4）。
     void type_as_vim_keys(std::string_view utf8);
     void fail(FileFailure failure);
-    // バイト列 ↔ UTF-8 の本文。BOM の着脱はここ、CP932 の変換はポートの向こう（決定 2・5）。
-    [[nodiscard]] std::expected<std::string, FileFailure> decoded(core::TextEncoding encoding,
-                                                                  std::string_view bytes);
+    // 判定済みの列を本文へ渡す。CP932 の変換だけはポートの向こう（ADR 0080）。
+    [[nodiscard]] std::expected<core::TextBuffer, FileFailure> decoded(core::DetectedText text);
     [[nodiscard]] std::expected<std::string, FileFailure> encoded(core::TextEncoding encoding,
                                                                   std::string_view utf8);
 

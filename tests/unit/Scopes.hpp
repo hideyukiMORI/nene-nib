@@ -8,6 +8,11 @@
 
 namespace nenenib::tests
 {
+// ADR 0080: 判定済み所有値と、読み込み・改行索引の既存契約。
+void verify_detected_text_contracts();
+void verify_text_buffer_read_contracts();
+void verify_document_read_contracts();
+
 // DisplayLineTests.cpp
 void verify_display_line();
 void verify_display_line_views();

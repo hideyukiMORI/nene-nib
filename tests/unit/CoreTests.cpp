@@ -1798,6 +1798,29 @@ void verify_palette()
            "the Ubuntu orange accent is the same in both appearances");
 }
 
+// 開く本文・改行索引と add の追記だけの対象指定（ADR 0080）。既存の試験を共有する。
+void verify_text_buffer_read_contracts()
+{
+    verify_buffer_creation();
+    verify_buffer_insertion();
+    verify_buffer_erasure();
+    verify_buffer_lines();
+    verify_buffer_crlf_split();
+    verify_buffer_positions();
+    verify_buffer_round_trip();
+    verify_buffer_scale();
+    verify_buffer_add_branches();
+    verify_buffer_chunk_growth();
+    verify_buffer_oversized_and_restored();
+    verify_buffer_shared_index_edits();
+    verify_buffer_chunk_line_numbers();
+    verify_buffer_index_branches();
+    verify_encoding_labels();
+    verify_encoding_detection();
+    verify_line_ending_detection();
+    verify_line_ending_model();
+}
+
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。
 void verify_caret_movement_contracts()
 {
