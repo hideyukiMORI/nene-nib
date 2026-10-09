@@ -11,6 +11,9 @@ namespace nenenib::tests
 // ADR 0085: 履歴の所有・単位の合成・分岐・保存境界。
 void verify_edit_history_scope();
 
+// ADR 0089: 記録した鍵列の所有・境界・snapshot 分岐。
+void verify_vim_recorded_keys_scope();
+
 // DisplayLineTests.cpp
 void verify_display_line();
 void verify_display_line_views();

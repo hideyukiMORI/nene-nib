@@ -1951,6 +1951,7 @@ void verify_text_and_caret()
     verify_caret_lines();
     verify_caret_words();
     verify_edit_history_scope();
+    verify_vim_recorded_keys_scope();
     verify_encoding_labels();
     verify_encoding_detection();
     verify_line_ending_detection();

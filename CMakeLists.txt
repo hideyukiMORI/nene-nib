@@ -51,7 +51,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
     src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimKeyTable.cpp src/core/VimPattern.cpp src/core/VimRegisterText.cpp
-    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp
+    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp)
@@ -66,6 +66,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/TestSupport.cpp
     tests/unit/VimTestSupport.cpp
     tests/unit/CoreTests.cpp
+    tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp
     tests/unit/EditorDeliveryTests.cpp
     tests/unit/VimEngineTests.cpp

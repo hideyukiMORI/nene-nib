@@ -1024,7 +1024,7 @@ void verify_vim_tab_steps()
            "a failing gt in VISUAL keeps VISUAL");
     const auto after_change = tab_step("xgt", three);
     expect(after_change.next.last_change.has_value() &&
-               after_change.next.last_change.value().keys == vim_keys_of("x"),
+               after_change.next.last_change.value().keys.owned_keys() == vim_keys_of("x"),
            "gt keeps the last change for the dot");
 }
 
