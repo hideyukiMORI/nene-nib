@@ -3668,3 +3668,9 @@ caretはbefore1process20試料535〜1216us、after1process20試料0〜3us（0が
 全候補の未実験、caretの分解能未満、B ASCII/A移管の利益未確認、一覧入口copyの区間外、B/Cの要求容量増を5-dbと採否台帳から継承する。peak memory、物理DPI遷移、device-loss/COM失敗注入は未測。独立レビュー・実機対象確認・正式8本を満たし、必須CIを確認してsquash mergeする。以後文書だけなら関連source/test/toolの一致を確認して成功証拠を再利用する。規則ARC-001/003/004/005/007/012、CPP-003/005/007/008/012/016、QLT-001/012/013/014、GIT-003/004、D41。waiver none。
 
 恒久証拠は `D:/NeNeNib/evidence/speed-optimizations-20261009/append-20261010-wave2/`。元path/commit/全file SHAのmanifestと最終main/PR対応、削除前監査を保存する。main統合・収載・必要反映の完了後、追加作業木と一時出力を整理しbranch/commitを保持する。
+
+**統合・収載の実結果。** [PR #342](https://github.com/hideyukiMORI/nene-nib/pull/342)のhead310163cで必須checkが[run37950695621](https://github.com/hideyukiMORI/nene-nib/actions/runs/37950695621)に成功し、00:18:50 JSTにsquash mergeした。mainは `b79c9e6aa9b6444295725441db5e850db2c5bc85`、本体ff-only同期後clean。`git diff --quiet HEAD 2993bb4 -- src tests eng CMakeLists.txt` は0で、実測済み製品入力の一致を確認。文書だけの310163cと統合SHAを理由に製品検証を再実行していない。#337〜#341はclosed。
+
+第二陣archiveの本manifest5637file/96,820,501bytesは全元/先SHA一致、manifest SHA256 `ea3032adebf8994fa375be6cbcfee63850181b3d1f17a6d2d47405f6e5a0bbc4`。最終reviewの1fileは `supplement-341-review/`、確定docs8file/報告/PR本文とmain対応は `supplement-341-final/` に独立追補する。元のmain manifestを上書きして原結果を消さない。cleanupの詳細は同恒久先の監査へ残し、branch/commitは保持する。
+
+00:23:38 JSTまでに#337〜#340のD作業木4件と、完全収載済みのreview4件/batch4原出力を削除。`D:/NeNeNib/outputs/cleanup-speed-wave2-20261010/cleanup-result.json` は全remove exit0、4枝/commit保持、本体clean、live/links/未保存/唯一未収載なしを記録する。最終#341作業木と今回の他の重複出力は文書PR #343の統合後までに整理し、終了時の監査とmain SHAは恒久archiveのcloseoutへ追記する。
