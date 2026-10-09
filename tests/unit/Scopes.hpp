@@ -8,6 +8,9 @@
 
 namespace nenenib::tests
 {
+// Utf16Tests.cpp（長さの測定と既存変換の直接境界、ADR 0083）。
+void verify_utf16_scope();
+void verify_utf16_conversions();
 // DisplayLineTests.cpp
 void verify_display_line();
 void verify_display_line_views();

@@ -1806,6 +1806,13 @@ void verify_caret_movement_contracts()
     verify_caret_words();
 }
 
+void verify_utf16_conversions()
+{
+    verify_utf16_encoding();
+    verify_utf16_rejects();
+    verify_utf16_round_trip();
+}
+
 void verify_text_and_caret()
 {
     verify_display_text_accepts_multibyte();
@@ -1814,9 +1821,7 @@ void verify_text_and_caret()
     verify_utf8_validation();
     verify_utf8_counting();
     verify_utf8_walking();
-    verify_utf16_encoding();
-    verify_utf16_rejects();
-    verify_utf16_round_trip();
+    verify_utf16_scope();
     verify_buffer_creation();
     verify_buffer_insertion();
     verify_buffer_erasure();

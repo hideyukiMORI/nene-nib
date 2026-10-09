@@ -7,6 +7,7 @@
 #include "CommandLayout.hpp"
 #include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
+#include "GutterTextLayouts.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
@@ -73,6 +74,7 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> create_swap_chain(HWND window);
     [[nodiscard]] std::expected<void, RenderFailure> bind_composition(HWND window);
     [[nodiscard]] std::expected<void, RenderFailure> create_context();
+    [[nodiscard]] std::expected<void, RenderFailure> acquire_surface();
     [[nodiscard]] std::expected<void, RenderFailure> create_text_formats();
     [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
     [[nodiscard]] std::expected<void, RenderFailure>
@@ -98,6 +100,7 @@ class Direct2DRenderer final
                core::RgbColor color);
     void write_status(std::string_view text, IDWriteTextFormat *format,
                       const core::LayoutRect &area, core::RgbColor color);
+    void write_gutter(std::string_view text, const core::LayoutRect &area, core::RgbColor color);
     // 欄の右端に寄せて書き、欄の外は切る。幅 0 の欄には何も書かない。
     void write_right(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
                      core::RgbColor color);
@@ -192,8 +195,11 @@ class Direct2DRenderer final
                               const core::PaletteLayout &layout);
     void draw_palette_choice(const application::EditorFrame &frame, const core::LayoutRect &row,
                              std::size_t index);
+    void draw_palette_label(const application::EditorFrame &frame,
+                            const core::CommandChoice &choice, const core::LayoutRect &label);
     void draw_palette_detail(const application::EditorFrame &frame,
-                             const core::CommandChoice &choice, const core::LayoutRect &label);
+                             const core::CommandChoice &choice, const core::LayoutRect &label,
+                             IDWriteTextLayout *title);
     // 行の右端の欄に操作の鍵を枠つきで描く（ADR 0078 の決定 12）。保持しない。
     void draw_palette_key(const application::EditorFrame &frame, std::string_view key,
                           const core::LayoutRect &note);
@@ -211,6 +217,8 @@ class Direct2DRenderer final
     Microsoft::WRL::ComPtr<IDCompositionVisual> visual_;
     Microsoft::WRL::ComPtr<ID2D1Factory7> factory_;
     Microsoft::WRL::ComPtr<ID2D1DeviceContext6> context_;
+    // buffer 0 の寿命の間だけ保持し、ResizeBuffers の前に解放する（ADR 0083）。
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> surface_;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush_;
     Microsoft::WRL::ComPtr<IDWriteFactory7> dwrite_;
     TextFormat tab_format_;
@@ -229,6 +237,7 @@ class Direct2DRenderer final
     // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
     std::vector<BodyTextLayout> body_layouts_;
     std::vector<BodyTextLayout> previous_body_layouts_;
+    GutterTextLayouts gutter_layouts_;
     // 通常6枠と案内4枠。録画時は案内が無く7枠（ADR 0079）。
     static constexpr std::size_t status_layout_count = 10;
     std::array<StatusTextLayout, status_layout_count> status_layouts_{};

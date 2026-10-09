@@ -2,6 +2,7 @@
 
 #include "TextFailure.hpp"
 
+#include <cstddef>
 #include <expected>
 #include <string>
 #include <string_view>
@@ -14,6 +15,9 @@ namespace nenenib::core
 
 // 正しい UTF-8 を UTF-16 へ。不正な UTF-8 は invalid_utf8 で返す（空は空）。
 [[nodiscard]] std::expected<std::wstring, TextFailure> to_utf16(std::string_view utf8);
+
+// 同じ検証とサロゲートの規則で単位数だけを測る。文字列を確保しない（ADR 0083）。
+[[nodiscard]] std::expected<std::size_t, TextFailure> utf16_length(std::string_view utf8);
 
 // 正しい UTF-16 を UTF-8 へ。対になっていないサロゲートは invalid_utf16 で返す（空は空）。
 [[nodiscard]] std::expected<std::string, TextFailure> to_utf8(std::wstring_view utf16);

@@ -66,6 +66,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/TestSupport.cpp
     tests/unit/VimTestSupport.cpp
     tests/unit/CoreTests.cpp
+    tests/unit/Utf16Tests.cpp
     tests/unit/ApplicationTests.cpp
     tests/unit/VimEngineTests.cpp
     tests/unit/DisplayLineTests.cpp
@@ -173,7 +174,7 @@ set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp
-    src/ui/win32/BodyGlyphCollector.cpp)
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/GutterTextLayouts.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
@@ -188,6 +189,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/NibWindowTests.cpp tests/ui/WindowChecks.cpp tests/ui/DirectWriteFactory.cpp
     tests/ui/ScriptedTextSource.cpp tests/ui/ScriptedFontFallback.cpp tests/ui/SoftwareTarget.cpp
     tests/ui/FallbackKeyTests.cpp tests/ui/FallbackCacheTests.cpp
+    tests/ui/GutterLayoutTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_window)
