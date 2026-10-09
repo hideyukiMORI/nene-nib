@@ -210,3 +210,20 @@ nenenib_system_link(NeNeNib user32)
 nenenib_system_link(NeNeNib ole32)
 nenenib_system_link(NeNeNib shell32)
 set_property(TARGET NeNeNib PROPERTY WIN32_EXECUTABLE TRUE)
+
+# ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用し、CTest に登録しない。
+nenenib_target(nib_perf_probes performance_tests EXECUTABLE
+    tests/performance/ProbeMain.cpp tests/performance/ProbeWorkload.cpp)
+nenenib_link(nib_perf_probes nenenib_core)
+nenenib_link(nib_perf_probes nenenib_application)
+nenenib_link(nib_perf_probes nenenib_adapters)
+target_include_directories(nib_perf_probes PRIVATE "${CMAKE_SOURCE_DIR}/tests/unit")
+execute_process(COMMAND git -C "${CMAKE_SOURCE_DIR}" rev-parse HEAD
+    OUTPUT_VARIABLE NIB_PROBE_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND git -C "${CMAKE_SOURCE_DIR}" status --porcelain --untracked-files=no
+    OUTPUT_VARIABLE NIB_PROBE_DIRTY OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+file(SHA256 "${CMAKE_SOURCE_DIR}/eng/tool-versions.json" NIB_PROBE_TOOLCHAIN_HASH)
+target_compile_definitions(nib_perf_probes PRIVATE
+    NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
+    NIB_PROBE_COMPILER="${CMAKE_CXX_COMPILER_VERSION}" NIB_PROBE_CONFIGURATION="$<CONFIG>"
+    NIB_PROBE_TOOLCHAIN_HASH="${NIB_PROBE_TOOLCHAIN_HASH}")

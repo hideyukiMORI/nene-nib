@@ -96,5 +96,6 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0078](0078-operations-are-one-table-for-keys-and-the-f1-list.md) | 操作は core の 1 つの表に持ち、鍵と F1 の一覧が同じ 1 本の道で実行する | 受理 |
 | [0079](0079-operation-guides-and-settings-migration.md) | 操作の案内は操作表から描き、設定は旧版を残して移行する | 受理 |
 | [0081](0081-consume-temporary-editor-state-through-one-update-path.md) | 一時的なエディタ状態は同じ更新経路へ所有権を渡し、不要な置換を省く | 受理 |
+| [0082](0082-scoped-probes-compare-identical-work-without-a-window.md) | 同じ固定処理を窓なしで前後比較する | 受理 |
 | [0084](0084-intent-delivery-does-not-build-visible-lines.md) | 意図の反映値は行を作らず、描画と当たり判定でだけ frame を作る | 受理 |
 | [0085](0085-completed-history-edits-are-private-immutable-values.md) | 確定済み履歴の編集は私有の不変値として共有する | 受理（工程1の設計、性能・製品統合は別） |
