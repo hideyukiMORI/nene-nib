@@ -18,6 +18,9 @@
 5. 上記以外は既存result_ofによる完全照合。削除/途中挿入/scope変更、commands/operationsの所有候補は完全照合へ戻す。openedは全候補、extendedは新しいentriesの全候補を同じfiltered経路で照合し、同一候補の選択を維持する。結果variantの処理は型別overloadとstd::visitで両型を列挙し、catch-allを設けない。entries/modeは同じpalette値の中で固定で、遅延mutable cacheやqueryの別正本を持たない。
 6. 部分列照合ではquery末尾延長により一致集合は増えない。以前に名前/場所どちらにも一致しなかったentryが、長いqueryで新たに一致することはない。queryの空白を無視してもこの包含は保たれる。ただしscopeはraw入力のprefixから推測せず、正典のpalette_query_ofの結果を使う。
 7. ADR0062の内部観測契約のうち、left/home等の本文不変編集でresultを作り直す期待だけを置き換える。同じresultを共有し、caret/選択reset/候補内容・順序は以前と同じことを確認する。既存のBackspaceによる本文変更、入力追加/filledによる本文変更の再生成は維持。外部の動き、fixtureや照合期待を緩める変更ではない。
+8. **候補の不変性は公開入口の防御コピーで成立させる。** `opened`と`extended`の生の候補列は`const std::vector<CommandChoice>&`で借り、呼出し中に一度だけコピーして私有所有する。rvalueで渡されても生の配列/要素文字列をmoveで受理しない。開くときはshared const vectorへコピーし、追加到着は私有grownへ旧列と新列をコピーする。私有のgrown/resultは外へ可変参照を出さず従来どおり内部moveできる。生列をby-valueで受けた後さらにコピーする二重境界は作らない。外部APIのsignature変更はこの二口だけで、呼び出しの引数式と返却値の契約は保つ。
+
+独立レビューで、旧openedのvector move前の要素pointerやextendedの長いcommand/keyのdata pointerが、移管後の候補を変更できると判明した。以前にもsnapshot不変条件を破る穴で、今回のsubsetはさらに「前の不一致は後も対象外」という判断へ影響する。CPP-003/ADR0080に従って入口を保護し、規則や入力集合の約束を緩めない。元rawと保持済みaliasを変更してもopened/extendedと後続の絞込結果が変わらない反例を追加する。候補作成/到着でコピー一回の費用は必要条件として残し、毎入力のコピーには戻さない。
 
 ## 対象検証と採否
 
