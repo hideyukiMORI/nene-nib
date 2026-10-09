@@ -149,5 +149,72 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(PROBES.fnv1a64(data), fnv)
 
 
+    def test_stage_three_registry_and_unknown_names(self):
+        self.assertEqual(len(PROBES.WORKLOADS), 24)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 24)
+        for workload in ("buffer-line-text-scattered-crlf-4095", "palette-listed-name-4999", "unknown"):
+            with self.subTest(workload=workload), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(workload)
+
+    def test_stage_three_buffer_inputs(self):
+        crlf = PROBES.fixed_input("buffer-line-text-scattered-crlf-4096")
+        lf = PROBES.fixed_input("buffer-line-text-scattered-lf-4096")
+        self.assertEqual(crlf, (b"a" * 78 + b"\r\n") * 4096)
+        self.assertEqual(lf, (b"a" * 78 + b"\n") * 4096)
+        self.assertEqual((len(crlf), len(lf)), (327680, 323584))
+        position = PROBES.fixed_input("buffer-position-long-utf8-57344")
+        self.assertEqual(position, PROBES.fixed_input("buffer-position-scattered-utf8-57344"))
+        self.assertEqual(position.decode("utf-8"), "a日本語🖋" * 4096)
+        self.assertEqual((len(position), len(position.decode("utf-8"))), (57344, 20480))
+
+    def test_stage_three_palette_serialization(self):
+        for workload, query in (("palette-listed-name-5000", "entry"),
+                                ("palette-listed-location-5000", "zroot")):
+            rows = PROBES.fixed_input(workload).decode("utf-8").splitlines()
+            self.assertEqual(rows[0], f"files\t{query}")
+            self.assertEqual(len(rows), 5001)
+            for index, row in enumerate(rows[1:]):
+                self.assertEqual(row.split("\t"), ["folder", "open", f"probe-{index:05d}",
+                    f"ENTRY_{index:05d}_ABCDEFGHIJKLMNOPQRSTUV.txt",
+                    r"D:\ZROOT\LONG_DIRECTORY_COMPONENT\GROUP_00"])
+                self.assertNotIn("Z", row.split("\t")[3])
+        data = PROBES.fixed_input("palette-append-narrow-5000-to-50")
+        self.assertEqual(data, PROBES.fixed_input("palette-caret-left-5000"))
+        rows = data.decode("utf-8").splitlines()
+        self.assertEqual(rows[0], "files\tqx")
+        labels = [row.split("\t")[3] for row in rows[1:]]
+        self.assertEqual(sum(label.startswith("QX_") for label in labels), 500)
+        self.assertEqual(sum(label.startswith("QX_Y_") for label in labels), 50)
+        self.assertEqual([row.split("\t")[2] for row in rows[1:]],
+                         [f"probe-{index:05d}" for index in range(5000)])
+        self.assertTrue(all(row.endswith("\t") for row in rows[1:]))
+
+    def test_stage_three_conversion_bytes_and_units(self):
+        cases = (("codepage-to-utf8-cp932-japanese-16mib", "cp932", "日本" * 4194304),
+                 ("utf16-to-utf8-japanese-8m-units", "utf-16-le", "日本" * 4194304),
+                 ("utf16-to-utf8-ascii-8m-units", "utf-16-le", "a" * 8388608),
+                 ("utf16-to-utf8-supplementary-8m-units", "utf-16-le", "🖋" * 4194304))
+        for workload, encoding, expected in cases:
+            with self.subTest(workload=workload):
+                data = PROBES.fixed_input(workload)
+                self.assertEqual(len(data), 16777216)
+                self.assertEqual(data.decode(encoding), expected)
+
+    def test_stage_three_metadata_uses_actual_serialized_input(self):
+        self.options.workload = "palette-caret-left-5000"
+        result = self.runner([str(self.options.before), self.options.workload, "2",
+                              str(self.folder / "new-marks.json")], 1.0)
+        data = PROBES.fixed_input(self.options.workload)
+        expected = {"inputBytes": len(data), "inputHashAlgorithm": "fnv1a64",
+                    "inputHash": PROBES.fnv1a64(data)}
+        request = {"workload": self.options.workload, "iterations": 2, "commit": COMMIT}
+        self.assertEqual(PROBES.metadata_from(result.stdout, request, expected)["inputBytes"], len(data))
+        metadata = json.loads(result.stdout)
+        for key, value in (("inputBytes", len(data) + 1), ("inputHash", "0"),
+                           ("workload", "palette-listed-name-5000")):
+            with self.subTest(key=key), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.metadata_from(json.dumps({**metadata, key: value}), request, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
