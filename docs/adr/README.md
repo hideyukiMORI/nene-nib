@@ -95,3 +95,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0077](0077-render-cache-contracts-are-tested-without-a-window.md) | 描画の保持の契約は窓を作らない試験で守り、字体選択の保持の取り付けは最善の努力にする | 受理 |
 | [0078](0078-operations-are-one-table-for-keys-and-the-f1-list.md) | 操作は core の 1 つの表に持ち、鍵と F1 の一覧が同じ 1 本の道で実行する | 受理 |
 | [0079](0079-operation-guides-and-settings-migration.md) | 操作の案内は操作表から描き、設定は旧版を残して移行する | 受理 |
+| [0081](0081-consume-temporary-editor-state-through-one-update-path.md) | 一時的なエディタ状態は同じ更新経路へ所有権を渡し、不要な置換を省く | 受理 |
