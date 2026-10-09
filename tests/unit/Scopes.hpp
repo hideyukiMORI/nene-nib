@@ -19,6 +19,9 @@ void verify_document_read_contracts();
 // Utf16Tests.cpp（長さの測定と既存変換の直接境界、ADR 0083）。
 void verify_utf16_scope();
 void verify_utf16_conversions();
+// ADR 0085: 履歴の所有・単位の合成・分岐・保存境界。
+void verify_edit_history_scope();
+
 // DisplayLineTests.cpp
 void verify_display_line();
 void verify_display_line_views();

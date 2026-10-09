@@ -100,4 +100,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0082](0082-scoped-probes-compare-identical-work-without-a-window.md) | 同じ固定処理を窓なしで前後比較する | 受理 |
 | [0083](0083-reuse-gutter-layouts-and-swap-chain-target.md) | 行番号の文字組みと描画先を寿命の内で再利用する | 受理 |
 | [0084](0084-intent-delivery-does-not-build-visible-lines.md) | 意図の反映値は行を作らず、描画と当たり判定でだけ frame を作る | 受理 |
+| [0085](0085-completed-history-edits-are-private-immutable-values.md) | 確定済み履歴の編集は私有の不変値として共有する | 受理（工程1の設計、性能・製品統合は別） |
 | [0086](0086-ascii-runs-stay-inside-the-utf8-validator.md) | ASCIIの連続区間はUTF-8検証の正典の中でまとめて数える | 受理（比較後に採否判断） |
