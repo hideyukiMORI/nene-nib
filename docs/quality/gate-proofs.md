@@ -3636,7 +3636,7 @@ caretはbefore1process20試料535〜1216us、after1process20試料0〜3us（0が
 
 全26候補の採否と未実験の理由は[有限台帳](../design/2026-10-10-speed-candidate-disposition.md)。規則 ARC-001/002/003/004/005/007/012、CPP-003/005/007/008/012/016、QLT-001/012/013/014、GIT-003/004、D41。保存schema・閾値・allowlist・fixture期待値不変。waiver none。全証拠はD側恒久archiveへSHA/path/commit対応付きで追収載する。
 
-## 5-dc — 行取得・候補照合・文字コード変換の統合受理（Issue #341・D41）
+## 5-dc — 行取得・候補照合・文字コード変換の統合受理（Issue #341・PR #342・D41）
 
 製品source `2993bb482e7cf117aefe269226eac606d0e72b1c` は5-dbの4部品の和。独立レビュー `D:/NeNeNib/outputs/341-review/review-341.md` は各作業木673fileを照合し、製品と機能testの計14fileの変更が各成功時と一致すること、本文byte位置と候補indexを混ぜないこと、CP932→UTF8→TextBufferの防御境界が残ることを確認した。最終ログ追補を含めP0/P1/P2なし。部品scopeをもう一度走らせる根拠となる新しい結合差分はなく、`out/341-component-reuse-proof.json` と意味境界レビューを根拠に5-dbの成功結果を再利用した。
 
