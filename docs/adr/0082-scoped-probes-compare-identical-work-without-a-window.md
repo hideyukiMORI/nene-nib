@@ -73,7 +73,7 @@ hide は他の作業がある機械でも、規約の範囲で固定入力の対
 2. buffer-line-text-scattered-lf-4096: 同じLF版、stride79。孤立CRを混ぜず改行違いの退行区間として別名。
 3. buffer-position-long-utf8-57344: a日本語🖋×4096。1piece準備。position_of(Offset{57344})を128回、事前用意array<TextPosition,128>へ。すべてline1/column20481。cp数を候補の位置計数関数で期待生成しない。
 4. buffer-position-scattered-utf8-57344: 同じinputの14*i先頭aをbへ外で置換してfragmented snapshot。期待bytes/count/positionは上と同じ。準備後本文hashを外で確認し、入力hashは元inputと固定準備規則をmetadata/文書で対応づける。
-5. palette-listed-name-5000: 5000 entries、label=ENTRY_<5桁i>_ABCDEFGHIJKLMNOPQRSTUV.txt、detail=D:\\ZROOT\\LONG_DIRECTORY_COMPONENT\\GROUP_00、folder/open、query=entry、scope=files。listed_positions一回だけ計測、位置0..4999全件同順を外で検証。
+5. palette-listed-name-5000: 5000 entries、label=ENTRY_<5桁i>_ABCDEFGHIJKLMNOPQRSTUV.txt、detail=D:\ZROOT\LONG_DIRECTORY_COMPONENT\GROUP_00、folder/open、query=entry、scope=files。listed_positions一回だけ計測、位置0..4999全件同順を外で検証。
 6. palette-listed-location-5000: 上のquery=zroot。名前にZは無い。全5000を場所一致させ同じ期待順。
 7. palette-append-narrow-5000-to-50: detail無しfolder/open 5000entries。i<50 QX_Y_<5桁i>_file.txt、i<500 QX_N_<5桁i>_file.txt、残りAA_N_<5桁i>_file.txt。opened(input=qx)で500件を外で準備。inserted(y)一回を計測、50件/位置0..49/input=qxy/selected0を全確認。
 8. palette-caret-left-5000: 上と同じopened(qx).selected_at(7)。edited(left)一回を計測、500件同順/input=qx/caret byte1/selected0。shares_result_withを共通期待に使わない。
