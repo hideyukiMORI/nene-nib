@@ -75,12 +75,12 @@ CommandPalette::CommandPalette(CommandLine input, std::size_t selected, EditMode
 {
 }
 
-CommandPalette CommandPalette::opened(std::vector<CommandChoice> entries, std::string_view input,
-                                      EditMode mode, ThemeCatalog themes)
+CommandPalette CommandPalette::opened(const std::vector<CommandChoice> &entries,
+                                      std::string_view input, EditMode mode, ThemeCatalog themes)
 {
     const auto empty = CommandLine::empty(std::move(themes));
     return filtered(empty.inserted(input).value_or(empty), mode,
-                    std::make_shared<const std::vector<CommandChoice>>(std::move(entries)));
+                    std::make_shared<const std::vector<CommandChoice>>(entries));
 }
 
 CommandPalette CommandPalette::filtered(CommandLine input, EditMode mode, Entries entries)
@@ -114,6 +114,38 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input, EditM
 CommandPalette CommandPalette::reselected(std::size_t selected) const
 {
     return CommandPalette(input_, selected, mode_, entries_, result_);
+}
+
+CommandPalette CommandPalette::refiltered(CommandLine input) const
+{
+    if (input.text() == input_.text())
+    {
+        return CommandPalette(std::move(input), 0, mode_, entries_, result_);
+    }
+    auto result = std::make_shared<const Result>(
+        std::visit([this, &input](const auto &previous) { return updated_result(input, previous); },
+                   *result_));
+    return CommandPalette(std::move(input), 0, mode_, entries_, std::move(result));
+}
+
+CommandPalette::Result
+CommandPalette::updated_result(const CommandLine &input,
+                               const std::vector<std::size_t> &positions) const
+{
+    const PaletteQuery before = palette_query_of(input_.text());
+    const PaletteQuery next = palette_query_of(input.text());
+    if (next.scope == before.scope && next.query.starts_with(before.query))
+    {
+        return Result{listed_positions(*entries_, next.scope, next.query, positions)};
+    }
+    return result_of(input, mode_, *entries_);
+}
+
+CommandPalette::Result
+CommandPalette::updated_result(const CommandLine &input,
+                               const std::vector<CommandChoice> & /*choices*/) const
+{
+    return result_of(input, mode_, *entries_);
 }
 
 PaletteScope CommandPalette::scope() const noexcept
@@ -180,7 +212,7 @@ std::expected<CommandPalette, ExFailure> CommandPalette::inserted(std::string_vi
     {
         return std::unexpected(next.error());
     }
-    return filtered(next.value(), mode_, entries_);
+    return refiltered(next.value());
 }
 
 CommandPalette CommandPalette::moved(CommandEdit direction) const
@@ -207,7 +239,7 @@ CommandPalette CommandPalette::edited(CommandEdit edit) const
     case CommandEdit::end:
     case CommandEdit::backspace:
     case CommandEdit::erase:
-        return filtered(input_.edited(edit), mode_, entries_);
+        return refiltered(input_.edited(edit));
     }
     std::unreachable();
 }
@@ -229,10 +261,10 @@ std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view
     {
         return std::unexpected(input.error());
     }
-    return filtered(input.value(), mode_, entries_);
+    return refiltered(input.value());
 }
 
-CommandPalette CommandPalette::extended(std::vector<CommandChoice> more) const
+CommandPalette CommandPalette::extended(const std::vector<CommandChoice> &more) const
 {
     if (more.empty())
     {
@@ -241,8 +273,7 @@ CommandPalette CommandPalette::extended(std::vector<CommandChoice> more) const
     auto grown = std::make_shared<std::vector<CommandChoice>>();
     grown->reserve(entries_->size() + more.size());
     grown->insert(grown->end(), entries_->begin(), entries_->end());
-    grown->insert(grown->end(), std::make_move_iterator(more.begin()),
-                  std::make_move_iterator(more.end()));
+    grown->insert(grown->end(), more.begin(), more.end());
     const auto kept = std::visit([this](const auto &result)
                                  { return entry_position(result, selected_); }, *result_);
     const CommandPalette next = filtered(input_, mode_, std::move(grown));

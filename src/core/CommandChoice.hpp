@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -44,4 +45,8 @@ struct CommandChoice
 // 作らない（ADR 0062 の決定 1）。
 [[nodiscard]] std::vector<std::size_t> listed_positions(const std::vector<CommandChoice> &entries,
                                                         PaletteScope scope, std::string_view query);
+// 同じ候補列の有効な位置だけを、同じ採点と元位置の順で照合する（ADR 0091）。位置は保持しない。
+[[nodiscard]] std::vector<std::size_t> listed_positions(const std::vector<CommandChoice> &entries,
+                                                        PaletteScope scope, std::string_view query,
+                                                        std::span<const std::size_t> positions);
 } // namespace nenenib::core
