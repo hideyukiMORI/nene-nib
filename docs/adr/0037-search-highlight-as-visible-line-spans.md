@@ -19,7 +19,7 @@ hide の要望（2026-09-22 の実機確認）: 検索したら全一致の背�
 
 1. **状態**: `VimState` に `highlight`（閉じた enum `VimSearchHighlight { on, off, suspended }`・既定 `on`・施主決定 D17）。`:set hlsearch` → `on`、`:set nohlsearch` → `off`、`:nohlsearch`（`:noh`）→ `on` のときだけ `suspended`。検索の鍵（`/ ? n N * #` の確定・見つからなくても）は `suspended` を `on` に戻す（Vim の `:help :nohlsearch` と同じ。`off` は戻さない）。設定の永続化（C2）には載せない（範囲外）。
 2. **Ex**: `ExResult` に `std::optional<VimSearchHighlight>` を足し、`:set hlsearch` / `:set nohlsearch` / `:nohlsearch` / `:noh` が返す。controller は既存の Ex の写しの中で `VimState` へ置く（Ex の経路は 1 本のまま。`set` の補完候補に `hlsearch` / `nohlsearch` を足す）。通常モードでは `:` が無いので触れない。
-3. **一致の計算**: core の純関数 `vim_line_matches(line_text, pattern) -> std::vector<OffsetRange>`（行内・0 桁目から重ならない列・ADR 0032 の決定 4 の追記と同じ走査）を照合器から公開し、`vim_search` もそれを使う（走査の規則を 2 か所に書かない）。application は `EditorFrame` を作るときに、`highlight == on` かつ `last_search` があり Vim モードのときだけ、**見えている行だけ**に対して呼ぶ。パターンは `VimPattern::parse` の結果をフレームごとに 1 回だけ作る（解析に失敗する `last_search` は無い。あれば強調しない）。
+3. **一致の計算**: core の純関数 `vim_line_matches(line_text, pattern) -> std::vector<OffsetRange>`（行内・0 桁目から重ならない列・ADR 0032 の決定 4 の追記と同じ走査）を照合器から公開する。全件の列と検索の前後の移動は、同じ private な列挙を使う（走査の規則を 2 か所に書かない）。検索は選ぶ位置が決まったら列挙を止め、全件の vector を作らない（2026-10-10・Issue #349、下記追記）。application は `EditorFrame` を作るときに、`highlight == on` かつ `last_search` があり Vim モードのときだけ、**見えている行だけ**に対して呼ぶ。パターンは `VimPattern::parse` の結果をフレームごとに 1 回だけ作る（解析に失敗する `last_search` は無い。あれば強調しない）。
 4. **行ごとの列**: `LineView` に `matches`（`SelectionSpan` の列・桁は既存の `span_of` 1 本で作る）と `current_match`（`std::optional<SelectionSpan>`）を足す。現在の一致は「キャレットを含む一致」（`begin <= caret < end`・長さ 0 なら `begin == caret`）で、無ければ空。`SelectionSpan` の型は選択と共用する（新しい型を増やさない）。
 5. **描画**: renderer は本文の前に `matches` を `palette.search` で塗り（既存の選択の塗りと同じ 1 本の経路）、その上に選択を塗る（重なる所は選択が優先）。`current_match` は `palette.accent` の 1 DIP の枠を面の内側に描く（キャレットのブロックは今までどおり最後）。行をまたぐ一致は無い（照合は行内）。ui/win32 に色のリテラルを書かない。
 6. **追従**: フレームは本文から毎回作るので、編集・スクロール・テーマ切替に自動で追従する。`incsearch`（入力中の強調）は範囲外。通常モード（Vim でない）では強調しない。
@@ -29,7 +29,7 @@ hide の要望（2026-09-22 の実機確認）: 検索したら全一致の背�
 ## 強制
 
 - 3 値の写し漏れ・`ExResult` の写し漏れ: **active**（`switch` の網羅性・CPP-002）
-- 走査の規則が 1 か所であること・見えている行だけを数えること: **active**（対象 unit・`vim_search` が `vim_line_matches` を使う契約）
+- 走査の規則が 1 か所であること・見えている行だけを数えること: **active**（対象 unit・全件と検索の移動が同じ行頭からの非重複一致を使う契約。実装の経路が一つであること自体はレビューする）
 - 桁が `span_of` 1 本で作られること（全角・Tab・CRLF で選択と同じ桁）: **active**（application の unit）
 - 色がトークンから来ること: **active**（既存の字句検査・ui/win32 の色リテラル禁止）
 - 期待値が本物の Vim の答えであること: **不能**（強調は Vim の報告に無い。`v:hlsearch` の遷移だけ実測）
@@ -86,3 +86,15 @@ ARC-007 でここに書けない）」と定めているので、対象 unit に
 | 本文全体の一致を engine が持つ | 16 MiB で 1 打鍵ごとに走査が要る。見えている行だけで足りる |
 | 強調のオン・オフを `EditorSettings`（永続化）に載せる | C2 の schema が変わる。Vim も `hlsearch` は起動時の既定に戻る |
 | renderer が本文から一致を探す | renderer は写すだけ（ARC-011）。桁の計算が `span_of` と 2 本になる |
+
+## 追記 — 一致の列挙は必要な位置で止める（2026-10-10・Issue #349）
+
+設計席の事前決定。`VimSearch.cpp` の翻訳単位内に停止可能な列挙を一つ置き、`vim_line_matches`、前向きの最初の一致、後ろ向きの最後の一致がそれを使う。公開APIと`VimPattern::matched`は変えない。
+
+- 列挙は必ず行内byte0から始める。`matched`の戻り値を渡し、非空一致ならend、空一致なら既存`next_code_point`へ進め、次位置が行長以上なら止める。空行でも最初の照合を一回行う。
+- 全件を求める側は各範囲をvectorへ足して継続する。前向きはbeginがlower以上の最初を覚えて停止。後ろ向きはbeginがupper未満の最後を更新し、upper以上の一致で停止する。
+- callbackの継続/停止はprivateな実装詳細であり、coreへ可変状態の所有者や新しい公開builderを足さない。列挙が借用やcallbackを保存することもない。
+- キャレット位置から直接`matched`を始める案は採らない。`ababa`の`aba`、`aaaa`の`aa`、貪欲一致や空一致で既存の答えが変わるためである。
+- 対象は検索移動での不要な列挙とvector確保だけ。解析の保持、照合器の最悪時、検索spanの位置換算は別の候補とする。
+
+検索・検索強調・入力中検索の直接契約、重なり/空一致/空行/行末/count/折返しを確認する。#346の同一harnessで多くの一致を持つ長行の前/中/後と前後方向を固定比較する。未測定時点では速度利益を主張しない。正式ゲート・独立レビュー・実機・CIによる採否はD41に従う。基準値/許容/fixture期待値/schema/抑制は変更しない。
