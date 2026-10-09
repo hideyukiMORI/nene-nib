@@ -36,6 +36,9 @@ hide は他の作業がある機械でも、規約の範囲で固定入力の対
    1MiB は84 byte行を12483行（1048572 bytes・約1MiB）、16MiB は既存の200000行（16800000 bytes・約16MiB）を使い、実 bytes と入力 hash を必ず記録する。
    毎回新しい Editing で OpenDocument → SelectAll → DeleteText を区間外に行い、frame と保存で空本文を確かめる。履歴を残して200 InsertText のみを計測する。
    最終本文は200文字、Undoで空、もう一度Undoで元の全文、Redo二回で200文字へ戻ることを区間外の保存と hash で確認する。正式 GUI の新ベンチや基準値採用の代用にしない。
+9. #330 の ASCII 検証候補を比較するため、最終追加として `utf8-validate-ascii-16mib` / `utf8-validate-japanese-6mib` を含め、初期 scope を八つで固定する。
+   ASCII は既存の16800000bytesを再利用し、期待 codepoint 数も16800000。日本語は既存の長行6217bytesとCRLFを1000行（6219000bytes・2079000 codepoints）生成する。
+   `validate_utf8` だけを計測し、期待countとchecksumの確認・生成・hashは区間外。非ASCIIへの悪化を直接見るための二本で、長い比較は親が行う。
 
 ## 検証と限界
 
