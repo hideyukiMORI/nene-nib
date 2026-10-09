@@ -906,7 +906,8 @@ void verify_document_open_boundaries()
     Editing nul;
     nul.files().hold(std::string("a\0b\n", 4));
     static_cast<void>(nul.controller().apply_frame(OpenDocument{sample_path()}));
-    static_cast<void>(nul.controller().apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(
+        nul.controller().apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(nul.files().written() == std::string("a\0b\n", 4),
            "opening preserves embedded NUL and the trailing newline in the model");
     expect_open_failure(std::string(byte_order_mark()) + "\x93\xFA", FileFailure::undecodable,
