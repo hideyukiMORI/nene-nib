@@ -32,6 +32,10 @@ hide は他の作業がある機械でも、規約の範囲で固定入力の対
 7. 同じ harness を main と候補に載せて比較する。#329 は main 起点で完結し、候補への取り込みと長い実測は親が行う。
    開発 target の Debug / Release は固定 `eng/toolchain.ps1` と同じ CMake 警告・静的解析を使い、target だけ並列2で build する。
    製品 exe 専用の `eng/build-release.ps1` は使わず、この開発 target の CMake Release build を製品 Release と呼ばない。
+8. #323 の前計測のため、親設計席の追加決定で `controller-insert-200-after-delete-1mib` / `controller-insert-200-after-delete-16mib` を同じ初回 harness に含める。
+   1MiB は84 byte行を12483行（1048572 bytes・約1MiB）、16MiB は既存の200000行（16800000 bytes・約16MiB）を使い、実 bytes と入力 hash を必ず記録する。
+   毎回新しい Editing で OpenDocument → SelectAll → DeleteText を区間外に行い、frame と保存で空本文を確かめる。履歴を残して200 InsertText のみを計測する。
+   最終本文は200文字、Undoで空、もう一度Undoで元の全文、Redo二回で200文字へ戻ることを区間外の保存と hash で確認する。正式 GUI の新ベンチや基準値採用の代用にしない。
 
 ## 検証と限界
 
