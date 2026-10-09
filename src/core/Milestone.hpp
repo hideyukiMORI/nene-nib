@@ -23,7 +23,9 @@ enum class Milestone : std::uint8_t
     context_created,
     text_formats_created,
     input_received,
-    frame_presented
+    frame_presented,
+    probe_started,
+    probe_finished
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -53,6 +55,10 @@ enum class Milestone : std::uint8_t
         return "input_received";
     case Milestone::frame_presented:
         return "frame_presented";
+    case Milestone::probe_started:
+        return "probe_started";
+    case Milestone::probe_finished:
+        return "probe_finished";
     }
     std::unreachable();
 }
