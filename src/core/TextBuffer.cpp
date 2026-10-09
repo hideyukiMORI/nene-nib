@@ -24,6 +24,32 @@ using Chunks = std::vector<std::shared_ptr<AddChunk>>;
 // 索引のうち 1 つの piece の範囲に入る部分（ADR 0047 の決定 2）。
 using Window = std::span<const Offset>;
 
+// 本文の半開範囲と各 piece の非空の交差だけを、その呼び出し中に読む（Issue #338）。
+// offset / length は piece 内の位置。借用を保存せず、本文外の end で容量も取らない。
+template <typename Visitor>
+void visit_text_range(std::span<const Piece> pieces, Offset begin, Offset end, Visitor &&visitor)
+{
+    if (begin.value >= end.value)
+    {
+        return;
+    }
+    std::size_t absolute = 0;
+    for (const auto &piece : pieces)
+    {
+        if (absolute >= end.value)
+        {
+            break;
+        }
+        const std::size_t from = std::max(absolute, begin.value);
+        const std::size_t to = std::min(absolute + piece.length, end.value);
+        if (from < to)
+        {
+            visitor(piece, from - absolute, to - from);
+        }
+        absolute += piece.length;
+    }
+}
+
 // 行索引の素。text の '\n' のバイト位置を base からの位置として索引の末尾へ足す（CRLF は 1 つの
 // 改行なので数が狂わない・ADR 0009 / 0036）。走査するのは足す text だけ（ADR 0047 の決定 4）。
 void newlines_in(std::string_view text, std::size_t base, std::vector<Offset> &index)
@@ -299,16 +325,26 @@ std::size_t TextBuffer::piece_count() const noexcept
 std::string TextBuffer::text_range(Offset begin, Offset end) const
 {
     std::string result;
-    std::size_t absolute = 0;
-    for (const auto &piece : pieces_)
+    visit_text_range(pieces_, begin, end,
+                     [this, &result](const Piece &piece, std::size_t offset, std::size_t length)
+                     { result.append(view_of(piece).substr(offset, length)); });
+    return result;
+}
+
+char TextBuffer::byte_at(Offset at) const noexcept
+{
+    char result = '\0';
+    bool found = false;
+    visit_text_range(pieces_, at, Offset{at.value + 1},
+                     [this, &result, &found](const Piece &piece, std::size_t offset, std::size_t)
+                     {
+                         result = view_of(piece)[offset];
+                         found = true;
+                     });
+    // 唯一の caller は 0 <= stop-1 < size_bytes_ を満たす。範囲外の代替文字は返さない。
+    if (!found)
     {
-        const std::size_t from = std::max(absolute, begin.value);
-        const std::size_t to = std::min(absolute + piece.length, end.value);
-        if (from < to)
-        {
-            result.append(view_of(piece).substr(from - absolute, to - from));
-        }
-        absolute += piece.length;
+        std::unreachable();
     }
     return result;
 }
@@ -378,8 +414,7 @@ Offset TextBuffer::line_end(LineNumber line) const noexcept
     // CRLF の '\r' は行の内容ではない。表示もキャレットもここで止める（ADR 0009 の決定 8）。
     // LF の本文では '\r' は 1 文字なので外さない。この 1 つの分岐が改行の模型の正本で、
     // line_terminator_end / line_text / position_of / offset_of はこれに従う（ADR 0036 の決定 2）。
-    if (ending_ == LineEnding::crlf && stop > start &&
-        text_range(Offset{stop - 1}, Offset{stop}).front() == carriage_return)
+    if (ending_ == LineEnding::crlf && stop > start && byte_at(Offset{stop - 1}) == carriage_return)
     {
         --stop;
     }
@@ -395,8 +430,13 @@ TextPosition TextBuffer::position_of(Offset at) const
 {
     const std::size_t clamped = std::min(at.value, size_bytes_);
     const LineNumber line{newlines_before(clamped) + 1};
-    const std::string prefix = text_range(line_start(line), Offset{clamped});
-    return TextPosition{line, Column{code_point_count(prefix) + 1}};
+    std::size_t code_points = 0;
+    // 非継続 byte の個数は任意の byte 分割で加法的。途中 offset / piece も丸めない。
+    visit_text_range(
+        pieces_, line_start(line), Offset{clamped},
+        [this, &code_points](const Piece &piece, std::size_t offset, std::size_t length)
+        { code_points += code_point_count(view_of(piece).substr(offset, length)); });
+    return TextPosition{line, Column{code_points + 1}};
 }
 
 Offset TextBuffer::offset_of(const TextPosition &position) const
