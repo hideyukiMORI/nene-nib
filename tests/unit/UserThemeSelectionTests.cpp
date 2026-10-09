@@ -170,11 +170,11 @@ void verify_user_theme_controller()
 {
     Editing editor{std::nullopt, user_catalog()};
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"body"}));
+    static_cast<void>(controller.apply_frame(InsertText{"body"}));
     const auto before = controller.frame();
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":my-t"}));
-    auto frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":my-t"}));
+    auto frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.settings.theme == user_choice("my-theme") && frame.appearance == Appearance::light,
            "controller applies user theme and appearance");
     expect(editor.settings().writes() == 1 &&
@@ -183,16 +183,16 @@ void verify_user_theme_controller()
            "controller persists the resolved choice once");
     expect(frame.lines.front().text == "body" && frame.caret == before.caret,
            "theme leaves body and caret intact");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":broken"}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":broken"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.command_message.value_or(fixed_text("none")).text() ==
                    "broken: Invalid RGB or RGBA color" &&
                editor.settings().writes() == 1,
            "failed selection reports reason without writing settings");
     expect(frame.settings.theme == user_choice("my-theme"),
            "failed selection keeps previous appearance");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
     expect(applied(controller, HistoryAction{HistoryDirection::undo}) == "",
            "theme commands do not enter document history");
 }
@@ -237,9 +237,9 @@ void verify_theme_startup_notice()
     expect(frame.command_message.value_or(fixed_text("none")).text() ==
                "invalid_name.v1.theme: invalid name",
            "startup diagnostic survives initial file opening");
-    frame = controller.apply(VisibleLines{8});
+    frame = controller.apply_frame(VisibleLines{8});
     expect(frame.command_message.has_value(), "first layout retains startup diagnostic");
-    frame = controller.apply(InsertText{"x"});
+    frame = controller.apply_frame(InsertText{"x"});
     expect(!frame.command_message.has_value() && themes.reads() == 1,
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
@@ -264,9 +264,9 @@ void verify_blocked_theme_noop()
     Editing editor{SettingsReading{std::unexpect, failure}};
     editor.settings().fail(failure);
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":colorscheme system"}));
-    const auto frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":colorscheme system"}));
+    const auto frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.settings_failure == failure,
            "same-setting command cannot clear blocked startup error");
     expect(frame.command_message.value_or(fixed_text("none")).text() ==

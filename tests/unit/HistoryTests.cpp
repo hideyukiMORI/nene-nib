@@ -332,12 +332,13 @@ void verify_record_failures()
     applied(editing.controller(), VisibleLines{3});
     open_work(editing, "abc");
     editing.history().fail(FileHistoryFailure::unwritable);
-    const EditorFrame closed = editing.controller().apply(CloseTab{2});
+    const EditorFrame closed = editing.controller().apply_frame(CloseTab{2});
     expect(editing.history().writes() == 1 && !editing.history().written().has_value() &&
                closed.tabs.size() == 2 && closed.active_tab == 1 && notice_of(closed) == "none" &&
                !closed.document.last_failure.has_value(),
            "a failed history write changes neither the tabs nor the notices");
-    const EditorFrame ended = editing.controller().apply(EndSession{SessionEnd::window_closed});
+    const EditorFrame ended =
+        editing.controller().apply_frame(EndSession{SessionEnd::window_closed});
     expect(ended.tabs.size() == 2 && notice_of(ended) == "none" && editing.session().writes() == 1,
            "a failed history write at the end still writes the list once");
     editing.history().fail(std::nullopt);

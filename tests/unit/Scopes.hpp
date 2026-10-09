@@ -21,6 +21,9 @@ void verify_display_line();
 void verify_display_line_views();
 void verify_display_line_scope();
 
+// EditorDeliveryTests.cpp
+void verify_delivery_contracts();
+
 // TabsTests.cpp
 void verify_tabs_contracts();
 void verify_tabs_scope();
@@ -162,6 +165,7 @@ void verify_look();
 
 // ApplicationTests.cpp
 void verify_document_save_contracts();
+void verify_application_scope();
 void verify_editor_state();
 void verify_controller_intents();
 

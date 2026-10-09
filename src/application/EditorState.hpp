@@ -63,14 +63,24 @@ class EditorState final
 
     [[nodiscard]] EditorState with_appearance(core::Appearance appearance) const;
     [[nodiscard]] EditorState with_mode(core::EditMode mode) const;
-    [[nodiscard]] EditorState with_vim(core::VimState vim) const;
-    [[nodiscard]] EditorState with_selection(const core::Selection &selection) const;
-    [[nodiscard]] EditorState with_scroll(const ScrollState &scroll) const;
-    // 本文と選択と履歴は 1 つの編集で必ず一緒に動くので、まとめて次状態にする。
-    [[nodiscard]] EditorState with_edit(core::TextBuffer text, const core::Selection &selection,
-                                        core::EditHistory history) const;
-    [[nodiscard]] EditorState with_history(core::EditHistory history) const;
-    [[nodiscard]] EditorState with_document(Document document) const;
+    // lvalue は元を保ち、所有権を渡した一時値は同じ更新経路で消費する（ADR 0081）。
+    [[nodiscard]] EditorState with_vim(core::VimState vim) const &;
+    [[nodiscard]] EditorState with_vim(core::VimState vim) &&;
+    [[nodiscard]] EditorState with_selection(core::Selection selection) const &;
+    [[nodiscard]] EditorState with_selection(core::Selection selection) &&;
+    [[nodiscard]] EditorState with_scroll(ScrollState scroll) const &;
+    [[nodiscard]] EditorState with_scroll(ScrollState scroll) &&;
+    // 本文・選択・履歴・文書の保存位置を 1 つの編集で一緒に反映する。
+    [[nodiscard]] EditorState with_edit(core::TextBuffer text, core::Selection selection,
+                                        core::EditHistory history, Document document) const &;
+    [[nodiscard]] EditorState with_edit(core::TextBuffer text, core::Selection selection,
+                                        core::EditHistory history, Document document) &&;
+    [[nodiscard]] EditorState with_history(core::EditHistory history) const &;
+    [[nodiscard]] EditorState with_history(core::EditHistory history) &&;
+    [[nodiscard]] EditorState with_document(Document document) const &;
+    [[nodiscard]] EditorState with_document(Document document) &&;
+    // 1 意図だけの失敗・終了・閉じる要求・操作要求を 1 回の写しで戻す。
+    [[nodiscard]] EditorState with_intent_cleared() const;
     [[nodiscard]] EditorState with_composition(std::optional<core::Composition> composition) const;
     [[nodiscard]] EditorState with_failure(std::optional<FileFailure> failure) const;
     [[nodiscard]] EditorState with_settings(core::EditorSettings settings) const;

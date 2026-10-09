@@ -185,7 +185,7 @@ void verify_lists()
     const auto ticket = editing.folders().requests().back().ticket;
     editing.folders().serve(app::FolderBatch{
         ticket, {file_path("C:\\notes\\folder.txt")}, app::FolderProgress::complete});
-    frame = controller.apply(app::WorkCompleted{});
+    frame = controller.apply_frame(app::WorkCompleted{});
     expect(listed_count(frame) == 5 && editing.files().reads() == 2,
            "the existing worker path appends folder candidates without opening them");
     applied(controller, app::CancelCommand{});
@@ -193,7 +193,7 @@ void verify_lists()
     expect(listed_count(frame) == 1 && listed_selection(frame) == 0 &&
                input_text(frame) == "#alpha" && frame.active_tab == 1,
            "a buffer query filters before any switch");
-    frame = controller.apply(app::SubmitCommand{});
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.active_tab == 0 && !frame.command_palette.has_value() &&
                editing.files().reads() == 2,
            "confirming an already open file switches without rereading");
@@ -212,12 +212,12 @@ void verify_open_and_preserve()
                editing.files().reads() == 2,
            "opening a query preserves the dirty document and defers file reading");
     editing.files().hold("marked");
-    frame = controller.apply(app::SubmitCommand{});
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.tabs.size() == 3 && vim_body(frame) == "marked" && editing.files().reads() == 3,
            "confirming a closed file uses the existing open route");
     applied(controller, app::SwitchTab{1});
     frame = run_ex(controller, "e");
-    frame = controller.apply(app::CancelCommand{});
+    frame = controller.apply_frame(app::CancelCommand{});
     expect(frame.caret == before.caret && frame.document.save_state == before.document.save_state &&
                vim_body(frame) == "beta!" &&
                controller.vim_state().unnamed_register.text == saved_register,
@@ -242,14 +242,14 @@ void verify_literal_query_and_empty_result()
     applied(controller, app::CancelCommand{});
     frame = run_ex(controller, "ls absent");
     expect(listed_count(frame) == 0, "an unmatched query shows an empty list");
-    frame = controller.apply(app::SubmitCommand{});
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.command_palette.has_value() && frame.tabs.size() == 2 &&
                editing.files().reads() == 2,
            "Enter with no match opens no document");
     applied(controller, app::CancelCommand{});
     applied(controller, app::OpenCommandPalette{});
     applied(controller, app::CommandText{":edit"});
-    frame = controller.apply(app::SubmitCommand{});
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.command_palette.has_value() && input_text(frame).empty(),
            "the command candidate also opens the same all-files palette");
 }

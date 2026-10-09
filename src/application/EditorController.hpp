@@ -9,6 +9,7 @@
 #include "Document.hpp"
 #include "DocumentView.hpp"
 #include "EditBoundary.hpp"
+#include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorPorts.hpp"
@@ -57,14 +58,23 @@
 
 namespace nenenib::application
 {
-// 状態遷移はここだけ（ARC-004 / ARC-011）。UI は apply の返す EditorFrame を写す。
+// 状態遷移はここだけ（ARC-004 / ARC-011）。UI は apply の返す EditorDelivery を写す。
 // 意図は閉じた和型で、std::visit の写し先が足りなければコンパイルが落ちる（CPP-002 / ADR 0009）。
 class EditorController final
 {
   public:
     // 起動引数のファイルは順にタブで開く（ADR 0056 の決定 13）。どれも通常の OpenDocument を通る。
     explicit EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial = {});
-    [[nodiscard]] EditorFrame apply(const EditorIntent &intent);
+    [[nodiscard]] EditorDelivery apply(const EditorIntent &intent);
+    // 試験が意図を流して完全な描画値を読む薄い組み合わせ（ADR 0084）。
+    [[nodiscard]] EditorFrame apply_frame(const EditorIntent &intent);
+    // 本文の行を作らず、現在状態の共通反映欄だけを所有値として読む（ADR 0084）。
+    [[nodiscard]] EditorDelivery delivery() const;
+    // composition の有無だけを読む。本文と入力行のどちらに載せるかには依らない。
+    [[nodiscard]] bool is_composing() const noexcept;
+    // frame と同じ tab_views の薄い入口。本文の行は作らない。
+    [[nodiscard]] std::vector<DocumentView> documents() const;
+    [[nodiscard]] std::optional<CommandPaletteView> command_palette_view() const;
     // 試験の harness が Vim の鍵を 1 つ打つ口（ADR 0048 の決定 8）。窓の VimKeyPress と違い、
     // 入力行が開いていれば再生と同じ command_key の写しで入力行へ入る。
     [[nodiscard]] EditorFrame press_vim_key(const core::VimKey &key);
@@ -247,7 +257,6 @@ class EditorController final
     // アクティブな文書の表示値。frame と一覧の候補が同じ 1 本を使う。
     [[nodiscard]] DocumentView active_document_view() const;
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;
-    [[nodiscard]] std::optional<CommandPaletteView> command_palette_view() const;
     // frame の知らせ（ADR 0062 の決定 17）。状態の知らせが先で、無ければ面が開いていて今の券が
     // 打ち切られたときの 1 行。判断はここだけ（ARC-001）。
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;

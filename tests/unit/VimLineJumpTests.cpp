@@ -93,7 +93,7 @@ void verify_vim_line_jump_text_edges()
 {
     Editing empty;
     EditorController &empty_controller = empty.controller();
-    static_cast<void>(empty_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(empty_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(empty_controller, "Ggg");
     expect(empty_controller.frame().caret.position == TextPosition{LineNumber{1}, Column{1}},
            "G and gg stay at the only position in an empty document");
@@ -101,12 +101,13 @@ void verify_vim_line_jump_text_edges()
     Editing trailing;
     EditorController &trailing_controller = trailing.controller();
     trailing.files().hold(Bytes{std::string("one\r\n")});
-    static_cast<void>(trailing_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(trailing_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(trailing_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(trailing_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(trailing_controller, "G");
     expect(trailing_controller.frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
            "G reaches the trailing empty CRLF line");
-    static_cast<void>(trailing_controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(
+        trailing_controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(trailing.files().written() == "one\r\n",
            "a line jump preserves the trailing CRLF bytes");
 }
@@ -190,8 +191,8 @@ void verify_vim_line_jump_continuations()
         Editing editing;
         EditorController &controller = editing.controller();
         editing.files().hold(Bytes{std::string("one\ntwo\n  three")});
-        static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-        static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+        static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+        static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
         vim_replay(controller, keys);
         expect(controller.frame().caret.position == TextPosition{LineNumber{3}, Column{3}},
                "a separately delivered G works after an unsupported g suffix");
@@ -200,8 +201,8 @@ void verify_vim_line_jump_continuations()
     Editing visual;
     EditorController &visual_controller = visual.controller();
     visual.files().hold(Bytes{std::string("abcd\nx\nabcdef")});
-    static_cast<void>(visual_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(visual_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(visual_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(visual_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(visual_controller, "v$g<Esc>jj");
     const TextPosition visual_position = visual_controller.frame().caret.position;
     expect(visual_controller.vim_state().mode == VimMode::visual &&
@@ -210,12 +211,12 @@ void verify_vim_line_jump_continuations()
 
     Editing toggled;
     EditorController &toggle_controller = toggled.controller();
-    static_cast<void>(toggle_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(toggle_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(toggle_controller, "g");
     expect(waits_for_prefix(toggle_controller.vim_state(), VimPrefix::g),
            "the controller exposes a pending g prefix");
-    static_cast<void>(toggle_controller.apply(SelectEditMode{EditMode::ordinary}));
-    static_cast<void>(toggle_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(toggle_controller.apply_frame(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(toggle_controller.apply_frame(SelectEditMode{EditMode::vim}));
     expect(!toggle_controller.vim_state().input_wait.has_value(),
            "a mode toggle cancels a pending g prefix");
 }
@@ -225,15 +226,15 @@ void verify_vim_line_jump_operator_undo()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("one\r\ntwo\r\nthree")});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "2Gdgg");
     expect(vim_body(controller.frame()) == "three",
            "dgg edits through the shared linewise operator path");
     vim_replay(controller, "u");
     expect(whole_vim_body(controller) == "one\ntwo\nthree",
            "one undo restores the complete line-jump edit");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "one\r\ntwo\r\nthree",
            "undo restores the original CRLF bytes");
 }

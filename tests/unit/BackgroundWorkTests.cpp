@@ -154,7 +154,7 @@ void expect_unmoved(Editing &editing, const char *description)
     const std::string before = printed(editing.controller().frame());
     const auto requests = editing.folders().requests().size();
     const auto collects = editing.folders().collects();
-    const std::string after = printed(editing.controller().apply(WorkCompleted{}));
+    const std::string after = printed(editing.controller().apply_frame(WorkCompleted{}));
     expect(before == after && editing.folders().requests().size() == requests &&
                editing.folders().collects() == collects + 1,
            description);
@@ -204,7 +204,7 @@ void verify_work_keeps_idle_and_notice()
         app::FileHistory{{core::FilePath::parse("C:\\docs\\gone.txt").value()}});
     applied(controller, app::OpenCommandPalette{});
     applied(controller, app::CommandText{"@"});
-    const auto failed = controller.apply(app::SubmitCommand{});
+    const auto failed = controller.apply_frame(app::SubmitCommand{});
     expect(failed.command_message.has_value(), "a missing history file leaves one notice line");
     expect_unmoved(editing, "the signal keeps the notice line");
     applied(controller, app::SelectEditMode{core::EditMode::vim});
@@ -228,7 +228,7 @@ void verify_work_keeps_tab_walk()
     applied(controller, app::WalkRecentTab{core::TabStep::next});
     expect_unmoved(editing, "the signal during the walk keeps the frame");
     expect(controller.tab_walking(), "the signal does not settle the walk");
-    const auto third = controller.apply(app::WalkRecentTab{core::TabStep::next});
+    const auto third = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
     expect(!third.lines.empty() && third.lines.front().text == "b" && controller.tab_walking(),
            "the next walk after the signal reaches the third tab in the order");
     applied(controller, app::SettleRecentTab{});
@@ -360,7 +360,7 @@ EditorFrame deliver(Editing &editing, std::initializer_list<std::string_view> fi
                     app::FolderProgress progress)
 {
     editing.folders().serve(batch_of(editing.folders().requests().back().ticket, files, progress));
-    return editing.controller().apply(WorkCompleted{});
+    return editing.controller().apply_frame(WorkCompleted{});
 }
 
 // 面の行の窓（確定の文字列と出どころの補足）。
@@ -413,7 +413,7 @@ void verify_folder_tail()
     expect(frame.command_palette.value_or(app::CommandPaletteView{}).selected == 0 &&
                !frame.command_message.has_value(),
            "a delivery keeps the first row selected and leaves no notice");
-    const auto folder = editing.controller().apply(app::CommandText{"/"});
+    const auto folder = editing.controller().apply_frame(app::CommandText{"/"});
     expect(rows_of(folder) == "C:\\work\\n.txt<同じフォルダ>|C:\\work\\z.md<同じフォルダ>|C:"
                               "\\work\\.png<同じフォルダ>|",
            "the slash shows only the same folder");
@@ -432,7 +432,7 @@ void verify_folder_stale()
     applied(controller, app::OpenCommandPalette{});
     const auto opened = printed(controller.frame());
     folders.serve(batch_of(first, {"C:\\work\\old.txt"}, app::FolderProgress::complete));
-    expect(printed(controller.apply(WorkCompleted{})) == opened,
+    expect(printed(controller.apply_frame(WorkCompleted{})) == opened,
            "a batch of an older ticket is dropped");
     folders.serve(batch_of(folders.requests().back().ticket, {"C:\\work\\late.txt"},
                            app::FolderProgress::complete));
@@ -493,7 +493,7 @@ void verify_folder_order()
         batch_of(ticket, {"C:\\work\\c.txt", "C:\\work\\b.txt"}, app::FolderProgress::more));
     joined.folders().serve(
         batch_of(ticket, {"C:\\work\\e.txt", "C:\\work\\d.txt"}, app::FolderProgress::complete));
-    const auto one = joined.controller().apply(WorkCompleted{});
+    const auto one = joined.controller().apply_frame(WorkCompleted{});
     expect(rows_of(two) == "C:\\work\\a.txt<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|C:"
                            "\\work\\b.txt<同じフォルダ>|"
                            "C:\\work\\e.txt<同じフォルダ>|C:\\work\\d.txt<同じフォルダ>|",
@@ -517,32 +517,32 @@ void verify_folder_truncated_stays()
                               {"C:\\work\\b.txt", "C:\\work\\c.txt", "C:\\work\\d.txt",
                                "C:\\work\\e.txt", "C:\\work\\f.txt"},
                               app::FolderProgress::truncated));
-    const auto typed = controller.apply(app::CommandText{"c"});
+    const auto typed = controller.apply_frame(app::CommandText{"c"});
     expect(optional_text(typed.command_message) == truncated_notice,
            "the notice stays after a typed letter");
-    const auto down = controller.apply(app::EditCommand{core::CommandEdit::complete_next});
-    const auto up = controller.apply(app::EditCommand{core::CommandEdit::complete_previous});
+    const auto down = controller.apply_frame(app::EditCommand{core::CommandEdit::complete_next});
+    const auto up = controller.apply_frame(app::EditCommand{core::CommandEdit::complete_previous});
     expect(optional_text(down.command_message) == truncated_notice &&
                optional_text(up.command_message) == truncated_notice,
            "the notice stays after moving the selection");
-    const auto erased = controller.apply(app::EditCommand{core::CommandEdit::backspace});
+    const auto erased = controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
     expect(optional_text(erased.command_message) == truncated_notice,
            "the notice stays after a backspace");
-    const auto slash = controller.apply(app::CommandText{"/"});
+    const auto slash = controller.apply_frame(app::CommandText{"/"});
     expect(optional_text(slash.command_message) == truncated_notice &&
                rows_of(slash).starts_with("C:\\work\\b.txt<同じフォルダ>|"),
            "the notice stays when the slash shows only the same folder");
-    const auto refused = controller.apply(app::CommandText{std::string(300, 'a')});
+    const auto refused = controller.apply_frame(app::CommandText{std::string(300, 'a')});
     expect(refused.command_message.has_value() &&
                optional_text(refused.command_message) != truncated_notice,
            "a state notice shows once over the truncated notice");
-    const auto back = controller.apply(app::EditCommand{core::CommandEdit::complete_next});
+    const auto back = controller.apply_frame(app::EditCommand{core::CommandEdit::complete_next});
     expect(optional_text(back.command_message) == truncated_notice,
            "the next intent shows the truncated notice again");
-    const auto closed = controller.apply(app::CancelCommand{});
+    const auto closed = controller.apply_frame(app::CancelCommand{});
     expect(!closed.command_message.has_value() && !closed.command_palette.has_value(),
            "the closed palette leaves no notice anywhere");
-    expect(!controller.apply(WorkCompleted{}).command_message.has_value(),
+    expect(!controller.apply_frame(WorkCompleted{}).command_message.has_value(),
            "a signal after closing tells nothing");
 }
 
@@ -558,10 +558,10 @@ void verify_folder_truncated_reopened()
     const auto old = folders.requests().back().ticket;
     static_cast<void>(deliver(editing, {"C:\\work\\b.txt"}, app::FolderProgress::truncated));
     applied(controller, app::CancelCommand{});
-    const auto reopened = controller.apply(app::OpenCommandPalette{});
+    const auto reopened = controller.apply_frame(app::OpenCommandPalette{});
     expect(!reopened.command_message.has_value(), "a reopened palette starts without the notice");
     folders.serve(batch_of(old, {"C:\\work\\c.txt"}, app::FolderProgress::truncated));
-    expect(!controller.apply(WorkCompleted{}).command_message.has_value(),
+    expect(!controller.apply_frame(WorkCompleted{}).command_message.has_value(),
            "a truncated batch of an older ticket tells nothing");
     for (const auto progress :
          {app::FolderProgress::more, app::FolderProgress::complete, app::FolderProgress::failed})
@@ -609,7 +609,7 @@ void verify_folder_commands_scope()
     applied(controller, app::OpenCommandPalette{});
     applied(controller, app::CommandText{":"});
     static_cast<void>(deliver(editing, {"C:\\work\\c.txt"}, app::FolderProgress::complete));
-    const auto erased = controller.apply(app::EditCommand{core::CommandEdit::backspace});
+    const auto erased = controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
     expect(rows_of(erased) == "C:\\work\\a.txt<開いているタブ>|C:\\work\\c.txt<同じフォルダ>|",
            "a batch delivered under the colon is listed once the colon is erased");
     applied(controller, app::CancelCommand{});
@@ -633,7 +633,7 @@ void verify_folder_open()
     applied(controller, app::OpenCommandPalette{});
     static_cast<void>(deliver(editing, {"C:\\work\\z.md"}, app::FolderProgress::complete));
     applied(controller, app::CommandText{"/"});
-    const auto opened = controller.apply(app::SubmitCommand{});
+    const auto opened = controller.apply_frame(app::SubmitCommand{});
     expect(opened.document.title.text() == "z.md" && opened.tabs.size() == 2 &&
                !opened.lines.empty() && opened.lines.front().text == "zed",
            "a folder row opens the file in a new tab");
@@ -641,7 +641,7 @@ void verify_folder_open()
     applied(controller, app::OpenCommandPalette{});
     static_cast<void>(deliver(editing, {"C:\\work\\gone.txt"}, app::FolderProgress::complete));
     applied(controller, app::CommandText{"/"});
-    const auto missing = controller.apply(app::SubmitCommand{});
+    const auto missing = controller.apply_frame(app::SubmitCommand{});
     expect(optional_text(missing.command_message) == "開けませんでした: gone.txt",
            "a missing folder file leaves one notice line");
     expect(editing.history().reads() == reads + 1 && editing.history().writes() == 0,

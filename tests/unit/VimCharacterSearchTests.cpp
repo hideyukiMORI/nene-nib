@@ -229,8 +229,8 @@ void verify_vim_character_search_mode_lifetime()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("a:b;c")});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "f:");
     expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{2}} &&
                !controller.frame().command_line.has_value(),
@@ -240,8 +240,8 @@ void verify_vim_character_search_mode_lifetime()
     vim_replay(controller, "f");
     expect(controller.vim_state().input_wait.has_value(),
            "the engine exposes the pending target state before a mode toggle");
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     expect(!controller.vim_state().input_wait.has_value() &&
                last_search_is(controller.vim_state(), VimCharacterSearchKind::find_forward, U':'),
            "mode toggles cancel a wait and preserve completed search history");
@@ -252,8 +252,8 @@ void verify_vim_character_search_crlf_and_undo()
     Editing crlf;
     EditorController &crlf_controller = crlf.controller();
     crlf.files().hold(Bytes{std::string("ax\r\nx")});
-    static_cast<void>(crlf_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(crlf_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(crlf_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(crlf_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(crlf_controller, "fx;");
     expect(crlf_controller.frame().caret.position == TextPosition{LineNumber{1}, Column{2}},
            "a repeated character search does not cross a CRLF line boundary");
@@ -261,8 +261,8 @@ void verify_vim_character_search_crlf_and_undo()
     Editing undo;
     EditorController &undo_controller = undo.controller();
     undo.files().hold(Bytes{std::string("abxc")});
-    static_cast<void>(undo_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(undo_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(undo_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(undo_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(undo_controller, "dfx");
     expect(vim_body(undo_controller.frame()) == "c",
            "a character-search operator edits through the canonical range effect");
@@ -276,8 +276,8 @@ void verify_vim_register_initial_and_empty_yank()
     Editing empty;
     EditorController &empty_controller = empty.controller();
     empty.files().hold(Bytes{std::string("abc")});
-    static_cast<void>(empty_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(empty_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(empty_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(empty_controller.apply_frame(SelectEditMode{EditMode::vim}));
     expect(empty_controller.vim_state().unnamed_register.kind == VimRegisterKind::uninitialized,
            "a new editor starts with an uninitialized unnamed register");
     vim_replay(empty_controller, "pP");
@@ -288,8 +288,8 @@ void verify_vim_register_initial_and_empty_yank()
     Editing yank;
     EditorController &yank_controller = yank.controller();
     yank.files().hold(Bytes{std::string("ax")});
-    static_cast<void>(yank_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(yank_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(yank_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(yank_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(yank_controller, "yyy0");
     expect(yank_controller.vim_state().unnamed_register.text.empty() &&
                yank_controller.vim_state().unnamed_register.kind == VimRegisterKind::characters,
@@ -304,8 +304,8 @@ void verify_vim_register_empty_remove_and_change()
         Editing editing;
         EditorController &controller = editing.controller();
         editing.files().hold(Bytes{std::string("ax")});
-        static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-        static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+        static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+        static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
         vim_replay(controller, keys);
         expect(vim_body(controller.frame()) == "ax" &&
                    controller.vim_state().unnamed_register.text == "ax\n" &&
@@ -319,8 +319,8 @@ void verify_vim_register_regular_operations()
     Editing deleting;
     EditorController &delete_controller = deleting.controller();
     deleting.files().hold(Bytes{std::string("abc")});
-    static_cast<void>(delete_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(delete_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(delete_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(delete_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(delete_controller, "dl");
     expect(vim_body(delete_controller.frame()) == "bc" &&
                vim_register_kind(delete_controller.vim_state().unnamed_register) == "v",
@@ -329,8 +329,8 @@ void verify_vim_register_regular_operations()
     Editing changing;
     EditorController &change_controller = changing.controller();
     changing.files().hold(Bytes{std::string("abc")});
-    static_cast<void>(change_controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(change_controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(change_controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(change_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(change_controller, "clx<Esc>");
     expect(vim_body(change_controller.frame()) == "xbc" &&
                vim_register_kind(change_controller.vim_state().unnamed_register) == "v",
@@ -341,8 +341,8 @@ void verify_vim_register_regular_operations()
         Editing putting;
         EditorController &put_controller = putting.controller();
         putting.files().hold(Bytes{std::string("abc")});
-        static_cast<void>(put_controller.apply(OpenDocument{sample_path()}));
-        static_cast<void>(put_controller.apply(SelectEditMode{EditMode::vim}));
+        static_cast<void>(put_controller.apply_frame(OpenDocument{sample_path()}));
+        static_cast<void>(put_controller.apply_frame(SelectEditMode{EditMode::vim}));
         vim_replay(put_controller, keys);
         expect(vim_body(put_controller.frame()) == "aabc" &&
                    vim_register_kind(put_controller.vim_state().unnamed_register) == "v",

@@ -72,9 +72,9 @@ using nenenib::core::VirtualColumn;
 {
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string(text)});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     return controller;
 }
 
@@ -151,11 +151,11 @@ void verify_vim_block_line_endings()
     vim_replay(controller, "<C-v>jld");
     expect(controller.vim_state().unnamed_register.text == "ab\nde",
            "the block register holds LF only");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "c\r\nf\r\nghi",
            "the block delete kept the CRLF line endings");
     vim_replay(controller, "G$p");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "c\r\nf\r\nghiab\r\n   de",
            "and the line the block paste added came back as CRLF");
 }
