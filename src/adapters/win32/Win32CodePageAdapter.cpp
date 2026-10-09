@@ -3,6 +3,7 @@
 #include "Utf16.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <utility>
 
 namespace nenenib::adapters::win32
@@ -20,16 +21,24 @@ constexpr UINT code_page_932 = 932;
     {
         return std::wstring{};
     }
-    const auto bytes = static_cast<int>(text.size());
-    const int length =
-        MultiByteToWideChar(code_page_932, MB_ERR_INVALID_CHARS, text.data(), bytes, nullptr, 0);
-    if (length <= 0)
+    if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
     {
         return std::unexpected(Failure::undecodable);
     }
-    std::wstring wide(static_cast<std::size_t>(length), L'\0');
-    if (MultiByteToWideChar(code_page_932, MB_ERR_INVALID_CHARS, text.data(), bytes, wide.data(),
-                            length) != length)
+    const auto bytes = static_cast<int>(text.size());
+    std::wstring wide;
+    int written = 0;
+    // CP932は1〜2bytesからUTF16一単位へ写るので、入力bytesが出力単位の上限（ADR0092）。
+    wide.resize_and_overwrite(text.size(),
+                              [&](wchar_t *data, std::size_t) noexcept
+                              {
+                                  written = MultiByteToWideChar(code_page_932, MB_ERR_INVALID_CHARS,
+                                                                text.data(), bytes, data, bytes);
+                                  return written > 0 && written <= bytes
+                                             ? static_cast<std::size_t>(written)
+                                             : std::size_t{0};
+                              });
+    if (written <= 0 || written > bytes)
     {
         return std::unexpected(Failure::undecodable);
     }
