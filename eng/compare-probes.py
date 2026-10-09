@@ -17,7 +17,19 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "controller-insert-200-after-delete-1mib", "controller-insert-200-after-delete-16mib",
              "utf8-validate-ascii-16mib", "utf8-validate-japanese-6mib",
              "controller-vim-insert-200-register-1mib", "controller-vim-insert-200-register-16mib",
-             "controller-vim-record-insert-200", "controller-vim-record-insert-2000")
+             "controller-vim-record-insert-200", "controller-vim-record-insert-2000",
+             "buffer-line-text-scattered-crlf-4096",
+             "buffer-line-text-scattered-lf-4096",
+             "buffer-position-long-utf8-57344",
+             "buffer-position-scattered-utf8-57344",
+             "palette-listed-name-5000",
+             "palette-listed-location-5000",
+             "palette-append-narrow-5000-to-50",
+             "palette-caret-left-5000",
+             "codepage-to-utf8-cp932-japanese-16mib",
+             "utf16-to-utf8-japanese-8m-units",
+             "utf16-to-utf8-ascii-8m-units",
+             "utf16-to-utf8-supplementary-8m-units")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -60,6 +72,44 @@ def fixed_input(workload: str) -> bytes:
         return b"x" * 200
     if workload == "controller-vim-record-insert-2000":
         return b"x" * 2000
+    return scoped_fixed_input(workload)
+
+
+def scoped_palette_input(query: str, detail: str) -> bytes:
+    rows = [f"files\t{query}\n"]
+    for index in range(5000):
+        if detail:
+            label = f"ENTRY_{index:05d}_ABCDEFGHIJKLMNOPQRSTUV.txt"
+        elif index < 50:
+            label = f"QX_Y_{index:05d}_file.txt"
+        elif index < 500:
+            label = f"QX_N_{index:05d}_file.txt"
+        else:
+            label = f"AA_N_{index:05d}_file.txt"
+        rows.append(f"folder\topen\tprobe-{index:05d}\t{label}\t{detail}\n")
+    return "".join(rows).encode("utf-8")
+
+
+def scoped_fixed_input(workload: str) -> bytes:
+    if workload == "buffer-line-text-scattered-crlf-4096":
+        return (b"a" * 78 + b"\r\n") * 4096
+    if workload == "buffer-line-text-scattered-lf-4096":
+        return (b"a" * 78 + b"\n") * 4096
+    if workload in ("buffer-position-long-utf8-57344", "buffer-position-scattered-utf8-57344"):
+        return "a日本語🖋".encode("utf-8") * 4096
+    if workload in ("palette-listed-name-5000", "palette-listed-location-5000"):
+        query = "entry" if workload == "palette-listed-name-5000" else "zroot"
+        return scoped_palette_input(query, r"D:\ZROOT\LONG_DIRECTORY_COMPONENT\GROUP_00")
+    if workload in ("palette-append-narrow-5000-to-50", "palette-caret-left-5000"):
+        return scoped_palette_input("qx", "")
+    if workload == "codepage-to-utf8-cp932-japanese-16mib":
+        return b"\x93\xfa\x96\x7b" * 4194304
+    if workload == "utf16-to-utf8-japanese-8m-units":
+        return b"\xe5\x65\x2c\x67" * 4194304
+    if workload == "utf16-to-utf8-ascii-8m-units":
+        return b"a\0" * 8388608
+    if workload == "utf16-to-utf8-supplementary-8m-units":
+        return b"\x3d\xd8\x8b\xdd" * 4194304
     raise ProbeNotObserved("unknown workload")
 
 

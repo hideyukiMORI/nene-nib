@@ -25,7 +25,19 @@ enum class ProbeWorkload : std::uint8_t
     vim_register_small,
     vim_register_large,
     vim_record_small,
-    vim_record_large
+    vim_record_large,
+    scattered_crlf_lines,
+    scattered_lf_lines,
+    long_position,
+    scattered_position,
+    listed_name,
+    listed_location,
+    palette_narrow,
+    palette_left,
+    codepage_japanese,
+    utf16_japanese,
+    utf16_ascii,
+    utf16_supplementary
 };
 
 [[nodiscard]] std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept;
