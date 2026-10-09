@@ -102,3 +102,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0084](0084-intent-delivery-does-not-build-visible-lines.md) | 意図の反映値は行を作らず、描画と当たり判定でだけ frame を作る | 受理 |
 | [0085](0085-completed-history-edits-are-private-immutable-values.md) | 確定済み履歴の編集は私有の不変値として共有する | 受理（工程1の設計、性能・製品統合は別） |
 | [0086](0086-ascii-runs-stay-inside-the-utf8-validator.md) | ASCIIの連続区間はUTF-8検証の正典の中でまとめて数える | 受理（比較後に採否判断） |
+| [0090](0090-block-caret-and-recording-reuse-retained-text.md) | ブロックカーソルと録画表示も保持済みの文字を使う | 受理（比較後に採否判断） |
