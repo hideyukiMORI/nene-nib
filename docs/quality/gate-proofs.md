@@ -3511,3 +3511,80 @@ hideの「閉じた小さな部分を対応前後で比べる」指示に従い�
 **証拠と再利用。** 実装commit `4a42aa09c160d441283a23b214de725082c19a52`。cleanで明示configure後、build中のソース変更なし。Release probe SHA256 `d602d19400243299a55bc33663d2919c087ec8117bdad004802171d33714e928`。`D:/NeNeNib/evidence/329-scoped-probes/` に実装報告・全対象ログ・最小実行JSON・probe exeを収載した。以後はこの記録と進捗文書だけで、src/tests/eng/CMakeListsの一致をもって成功結果を再利用する。configure時のcommit/dirtyは自動追跡されないので、比較版はclean commit→明示configure→buildで作る。
 
 規則: ARC-001/002/003/007、CPP-002/005/007/012/016、QLT-001/012/013/014、GIT-003/004。ADR 0082、PROJECT_LAYOUT、利用文書を追加。製品設定schema・perf-referenceは不変。waiver: none。
+
+## 5-cz — 読込・状態・履歴・描画の閉じた比較（Issue #320〜#324・#330・#333・#335）
+
+hideが2026-10-09に設計・判断をAstraの設計サナへ委ね、背景席での実装・調査・検証を指定した。その後「閉じた小さな部分の対応前後で、規約内の高速化を試す」と指定した。設計サナが先行ADR・同一harnessの比較計画・採否を担当し、実装と別の席が各差分をレビューした。分担は今回の指定範囲だけで、次の既定にはしない。
+
+**経路と退行。** #320は検証済み所有値DetectedTextからTextBufferへ移し、改行索引と実FilePortの不要な初期化を減らす。#321は一時EditorStateを正典の更新経路へ渡す。#322は意図の反映値EditorDeliveryから可視行を分け、実描画/当たり判定でframeを作る。#323は確定済み履歴、Vimレジスタ本文、記録した鍵列を私有の不変値として共有する。#330は同じUTF8 validatorでASCII連続区間を数える。#324/#335は行番号・描画先・mode文字組みを寿命内で保持し、block caretも本文glyph経路へ通す。文字コード・BOM・改行・保存印・旧snapshot・undo/redo・Vim記録/再生・選択・clip・失敗時の再試行を直接の退行対象とした。
+
+先行設計はADR0080/0081/0083/0084/0085/0086/0088/0089/0090。内部公開APIと所有者の変更を記録し、製品の保存schema・基準値・許容・抑制・allowlistは変更しない。比較器の追加4workloadはADR0082に先行追記し、旧8workloadを変更せずDebug/Release各warmup1/sample1、比較器9テスト、独立レビューを確認した。
+
+| 対象と回帰の範囲 | 実行コマンドと成功結果（各作業木のout/reportsが全command/logを記録） |
+| --- | --- |
+| #320 所有移管・read長さ・encoding/保存 | 固定toolchain Debug対象build、`build/nib_tests.exe --file-text` 293、buildをcwdに `nib_adapter_tests.exe --files` 74 |
+| #321 状態更新・一意の要求・公開caller | `build/nib_tests.exe --application` 15749、`--tabs` 291、`--operations` 516、`--background-work` 89、`--vim-search-incremental` 141 |
+| #322 delivery/frame・IME snapshot・公開caller | 同じ5対象が15980/291/516/89/141。旧試験20fileの554呼出しをapply_frameへ機械置換した証拠を保存、期待値不変 |
+| #323 履歴 | `--edit-history` 50、`--application` 15980。確定後の旧値、undo/redo、分岐、保存印を確認 |
+| #323 レジスタ | `--vim-register-snapshot` 150、`--application` 15980、`--vim-macro` 1735、`--vim-clipboard` 191。raw入力/取得後の変更から隔離し、copy-only xvalueでも元を保つ |
+| #323 鍵列 | `--vim-recorded-keys` 44、`--application` 15980、`--vim-dot` 1619、`--vim-macro` 1735、`--vim-search-incremental` 141。64鍵境界、旧値、分岐、search文字所有を確認 |
+| #330 UTF8 | `--utf8` 2646、`--file-text` 293。word境界/端数/offset/NUL/非ASCII/不正列。既存scalar検査を維持 |
+| #324 描画・UTF16 | `--utf16` 68、`--display-line` 1114303、`nib_window_tests.exe` 1560/0 failure/0 not measured。C4復元後もdisplay-lineだけ再確認 |
+| #335 block clip・mode資源 | `nib_window_tests.exe` 2280/0 failure/0 not measured。既存180組×4clipの720比較を追加、Debug製品もbuild成功 |
+| 依存/規約/保護 | 各採用差分でconformance/File API 0、固定clang-format/whitespace成功。変更したcore/applicationのsymbols 2libraries/0。protected fixture1853件の内容/metadata/増減は不変。全scope件数比較は未測 |
+
+初回失敗と修正は捨てていない。#320の追加試験が後続fixtureを壊した順序、#321/#322/#324の追加試験のlint/include、#323 factoryのinline解析と新試験のuse-after-move/nesting、#330の初期configure/buildは各報告と最初のlogに残す。抑制や基準変更で通していない。copy-only値を再読する新試験は非const xvalueを明示し、将来本物のmoveで元が壊れれば落ちる契約を維持した。
+
+**固定前後比較。** 同じtoolchain・入力・harnessでABBA 3block。通常20sample/実行（各側120）、大きい履歴・register・2000鍵は3（各側18）。warmup1は区間外、本文/undo/redo/countを区間外で照合し、全sample・対応比・metadata・exe/入力hash・marksを保存。下表は局所処理の中央値、単位us。別batchの数字を直列に足した改善率や起動全体の改善率にはしない。
+
+| 候補と固定処理 | before → after | 対応after/before比中央値 | 判断 |
+| --- | --- | --- | --- |
+| #320 メモリFilePortから16MiBを開く | 49063.5 → 23901.5 | 0.488439 | 採用 |
+| #321 通常200入力 | 1048 → 541 | 0.517074 | 採用 |
+| #321 16MiB削除後200入力 | 5515758 → 1365361 | 0.244605 | コピー減、残る崖は#323で処理 |
+| #322 通常200入力 | 572 → 287 | 0.514500 | 採用 |
+| #323 履歴1MiB/16MiB削除後200入力 | 95850.5 → 301 / 1511898.5 → 304.5 | 0.003129 / 0.000210 | 保持サイズ由来の崖を除去 |
+| #323 register1MiB/16MiB保持200入力 | 196116 → 3716.5 / 2858266 → 3582 | 0.019023 / 0.001286 | 採用 |
+| #323 録画200/2000入力 | 2454.5 → 1123 / 150990.5 → 13902.5 | 0.459314 / 0.092829 | 採用、全ての入力費用を定数化したとはしない |
+| #330 ASCII16.8MB検証 | 15741 → 1345.5 | 0.086486 | 採用 |
+| #330 日本語6.219MB検証 | 5812.5 → 5626 | 0.965417 | 分布が重なり改善の主張なし |
+| #330 メモリFilePortから16MiBを開く | 26135.5 → 10069 | 0.393079 | 採用 |
+| #324 C4表示行の再encode省略 | 20 → 21 | 1.050000 | 改善せず不採用、元の実装へ復元 |
+| #333 ThinLTO buffer/open/入力/表示 | 7105→7266.5 / 11271.5→11566.5 / 512.5→520.5 / 20→18 | 1.009759 / 1.007808 / 0.964231 / 0.900000 | 主要区間の明瞭な改善なし、製品不採用 |
+
+#335は窓なしprobeで描画を測れないため、同じ多言語80行でNORMAL移動/録画移動をABBA・各側120入力、全12起動/45marks照合で比較した。input_received→frame_presentedは16988→16798us（0.978760）、17317→16614us（0.957283）。分布が重なるので高速化の量は主張せず、同じ保持資源と描画経路への集約として採用。全22本文/ステータス画像比較は0画素差。R2/R4/R5/R6個別の速度量は未測で、統合の正式8本と画素/契約で確認する。
+
+batch3の冒頭8秒にregister席のRelease conformanceが重なった。`environment-note.json`に時刻を記録し、sampleは一つも捨てず測り直していない。register普通入力308.5→391us（対応比1.26418）を清浄な単独比較や改善として使わない。履歴の普通入力290→317.5usなど小さい区間の揺れも原記録に保持し、正式受理は5-daで判断する。外部案件の機械負荷は管理していない。
+
+#333は実bitcodeのsymbolsが303違反。address表示を読み取り診断で補正してもcompiler由来`__ImageBase`がcore/application各1件残った。parser/allowlistを広げず不採用。構築と12workloadの短い正しさ確認、PE import同一、15872bytes縮小は確認したが、採用しない候補の全Release契約は実行していない。ADR0087は実験記録だけを収載、ThinLTO flagsは統合しない。
+
+証拠は `D:/NeNeNib/evidence/speed-optimizations-20261009/`。3batchのplan/result/rawと各component out/report/製品/probe/独立レビューをsource-commit-mappingとSHA manifestで対応付ける。作業木名や文書commitをexeのcommitと同一視しない。候補C5〜C9/IO9、D2/R8/B3、tint_runs等は別調査であり、この工程ですべての候補を実験済みとはしない。
+
+## 5-da — 高速化一式の統合受理（Issue #334・PR #336・D41）
+
+採用差分を統合した製品commit `a64a5d473dffd72c32c4b5936e25073bc590ca27`。manual解決はADR索引、CMakeへの新TU、NibTestsの42selectors（旧35保持、新7）と既定契約接続。VimStepは受理済み2枝の正確な和、renderer/UIは#335の579e21bと同一。独立レビュー `D:/NeNeNib/outputs/334-review/review-334-integration.md` はP0/P1/P2なし。
+
+**統合で追加確認した境界。** 最初の合成でfile-text295/utf8 2693/edit-history50/application15989、最後の合成でregister-snapshot150/recorded-keys44/application15989/macro1735が全成功。固定toolchain Debug `cmake --build build --target nib_tests NeNeNib --parallel 2`、`python -B eng/conformance.py --build-dir build` 0、`python -B eng/symbols.py --build-dir build --require core application` 2/0、protected1853件不変。結果はout/334-test-*.logと334-final-*.log。componentのdot/clipboard/search等は個々の契約の成功証拠として再利用し、共通状態の合成を新しいapplication/macroで確認した。依存全体が不変とは主張しない。renderer/WICは同一source/試験/環境なので#335の2280成功を再利用する。
+
+**Release。** `CMAKE_BUILD_PARALLEL_LEVEL=1; pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD` が成功。`build/release-a64a5d4/NeNeNib.exe`、SHA256 `B977BC8791CBA1D1925ABB50B55EF2D441F5470857191E9FEDD6628DE820F285`、1455104bytes。以後は文書だけで、src/tests/eng/CMakeListsの一致を確認してReady/mergeで成功結果を再利用する。
+
+**hideの機械で設計席が試用。** `D:/NeNeNib/scripts/334-visible-speed-visual-20261009.py` により#320の206769f（描画sourceは変更前mainと同じ）とa64a5d4を専用profile・120DPIで撮影。既存の文字/編集/undo/選択/scroll/字体/テーマ22場面に、録画、F1標準/24pt、Ctrl+P候補あり/なし、最小化復元、録画中resizeを加えた35場面。`--compare` はすべて本文/ステータス0画素差。afterはsettings.v2と正常終了0も確認、代表画像を設計席が目視した。beforeの撮影後に旧診断のsettings.v1読取りが落ちたため、全35画像と実settings.v2を別検証で確認した。撮り直さず、旧logも保存。beforeの正常終了は未観測と記録した。
+
+`D:/NeNeNib/scripts/334-read-save-20261009.py` は実FilePortでUTF8/UTF8 BOM/CP932、CRLF/LFの本文を開きXを入力して保存し、全byte一致/dirty印解消/正常終了0を各確認。初回の既存1.2秒待ち検証は一時ファイル生成中に失敗した。製品を変更せず、完了状態を最大20秒観測する診断に直しbefore2a31bb4/aftera64a5d4の各3件を確認した（after観測0.95/0.83/0.11秒）。最初の失敗・runner・一時ファイルを残す。これは機能診断で速度の再試行や基準変更ではない。
+
+**正式速度。** 読込・通常/Vim状態・frame・共有rendererに跨る差分なので、正式8本がそれぞれ異なる直接経路を覆う。全件テストではなく、この8本を一回だけ選んだ。build/runtime/大きいcopy終了後、`python -B eng/measure-speed.py --check --executable <上記Release>` が終了0。`out/speed/2026-10-09T13-38-37Z.json`、指紋bc8a356f37c68491（i9-10850K/RTX3090/120DPI）、各5sample、欠測0。palette画像に候補5000件を確認した。
+
+| 正式bench | 中央値ms | min〜max ms |
+| --- | --- | --- |
+| startup-first-frame | 228.385 | 217.271〜256.032 |
+| startup-window-shown | 37.163 | 34.963〜42.978 |
+| key-to-frame-single | 0.545 | 0.511〜1.320 |
+| key-to-frame-burst-200 | 1.781 | 1.615〜1.872 |
+| open-large-file-16mib | 243.259 | 230.405〜298.825 |
+| key-to-frame-burst-200-16mib | 1.859 | 1.793〜3.521 |
+| key-to-frame-palette-5000 | 2.300 | 2.206〜3.886 |
+| key-to-frame-single-long-line | 4.831 | 4.725〜6.316 |
+
+8 checked / 0 regression / 0 unmeasurable。各5sampleと内訳を保持し、正式道具の最終marks保存を全試行raw保存とは呼ばない。旧基準の既存失敗#331を上書きせず、本候補の結果として別記録にした。perf-reference/許容は不変。
+
+残る限界: GPU device lossと物理DPI遷移/COM失敗注入は未再現。activeな履歴の入力文字列、Vimの回数付き入力など残る成長費用は別候補。hide本人が操作したとは記録しない。独立レビュー・正式8本・設計席の実機試用を満たし、必須CIを確認してsquash mergeする。規則 ARC-001/002/004/005/007/008/011/012、CPP-003/005/007/008/012/016/017/018、QLT-001/012/013/014、GIT-003/004、D41。waiver none。
