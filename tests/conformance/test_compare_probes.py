@@ -1,6 +1,7 @@
 """Focused protocol and fixed-order checks for the local comparison tool (#329)."""
 
 import argparse
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -127,6 +128,25 @@ class ProbeComparisonTests(unittest.TestCase):
         self.assertEqual(len(ascii_input.decode("utf-8")), 16800000)
         self.assertEqual(len(japanese), 6219000)
         self.assertEqual(len(japanese.decode("utf-8")), 2079000)
+
+    def test_stage_two_fixed_vim_inputs(self):
+        cases = (
+            ("controller-vim-insert-200-register-1mib", b"r", 1048576,
+             "1f763ea478ec75459ed5b2b86463a21ebffe4c3ce8604d1e8c8ca7018f091ab1", "17443442650570171173"),
+            ("controller-vim-insert-200-register-16mib", b"r", 16777216,
+             "d578db1458827855ca402ad0a78c5bb8003d9302409d547f814f0a690c10dadd", "7866584971205550885"),
+            ("controller-vim-record-insert-200", b"x", 200,
+             "aa20c23e3201834050679e1d88941b9a6fed0557c9a705cb2c315e2e63fd486d", "7989751381043797061"),
+            ("controller-vim-record-insert-2000", b"x", 2000,
+             "5c0e0ea421571c300b5df6aec0a118b5c3dc02e0683a546341d5efc689df2f58", "5526198219355535973"))
+        for workload, byte, count, sha256, fnv in cases:
+            with self.subTest(workload=workload):
+                self.assertIn(workload, PROBES.WORKLOADS)
+                data = PROBES.fixed_input(workload)
+                self.assertEqual(data, byte * count)
+                self.assertEqual(len(data), count)
+                self.assertEqual(hashlib.sha256(data).hexdigest(), sha256)
+                self.assertEqual(PROBES.fnv1a64(data), fnv)
 
 
 if __name__ == "__main__":
