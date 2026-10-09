@@ -103,11 +103,13 @@ void verify_key_rvalue_copies()
     {
         const auto expected = sample_keys(count);
         auto source = VimRecordedKeys::from(expected);
-        auto constructed = std::move(source);
+        // copy-only snapshot の非 const xvalue を試す。std::move 後の観測は pinned tidy
+        // が拒否する。
+        auto constructed = static_cast<VimRecordedKeys &&>(source);
         expect(source.owned_keys() == expected && constructed.owned_keys() == expected,
                "rvalue construction shares ownership while leaving the source valid");
         auto assigned = VimRecordedKeys::from({}).appended(VimKey{VimSpecialKey::escape});
-        assigned = std::move(source);
+        assigned = static_cast<VimRecordedKeys &&>(source);
         expect(source.owned_keys() == expected && assigned.owned_keys() == expected,
                "rvalue assignment also preserves both values, including empty transitions");
         auto changed = assigned.appended(VimKey{VimSpecialKey::enter});
