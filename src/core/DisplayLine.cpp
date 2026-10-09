@@ -46,7 +46,7 @@ constexpr char32_t hex_mask = 0xF;
 }
 
 // 1 つの code point を描画の文字列へ足し、足した描画の code point 数を返す。
-[[nodiscard]] std::size_t append_display(std::string &out, char32_t value, std::string_view source)
+[[nodiscard]] std::size_t append_display(std::string &out, char32_t value)
 {
     switch (display_width(value))
     {
@@ -64,7 +64,7 @@ constexpr char32_t hex_mask = 0xF;
     case DisplayWidth::single:
         break;
     }
-    out.append(source);
+    append_utf8(out, value);
     return 1;
 }
 } // namespace
@@ -79,10 +79,8 @@ DisplayLine display_line(std::string_view text)
     while (at < text.size())
     {
         line.starts.push_back(position);
-        const std::size_t next = next_code_point(text, Offset{at}).value;
-        position +=
-            append_display(line.text, code_point_at(text, Offset{at}), text.substr(at, next - at));
-        at = next;
+        position += append_display(line.text, code_point_at(text, Offset{at}));
+        at = next_code_point(text, Offset{at}).value;
     }
     line.starts.push_back(position);
     return line;
