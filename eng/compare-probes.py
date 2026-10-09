@@ -15,7 +15,9 @@ import sys
 WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "controller-insert-200", "display-line-long",
              "controller-insert-200-after-delete-1mib", "controller-insert-200-after-delete-16mib",
-             "utf8-validate-ascii-16mib", "utf8-validate-japanese-6mib")
+             "utf8-validate-ascii-16mib", "utf8-validate-japanese-6mib",
+             "controller-vim-insert-200-register-1mib", "controller-vim-insert-200-register-16mib",
+             "controller-vim-record-insert-200", "controller-vim-record-insert-2000")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -50,6 +52,14 @@ def fixed_input(workload: str) -> bytes:
         return ("000000 " + "日本語の長い行と分割表示の文字組みを測定する。" * 90).encode("utf-8")
     if workload == "utf8-validate-japanese-6mib":
         return (fixed_input("display-line-long") + b"\r\n") * 1000
+    if workload == "controller-vim-insert-200-register-1mib":
+        return b"r" * 1048576
+    if workload == "controller-vim-insert-200-register-16mib":
+        return b"r" * 16777216
+    if workload == "controller-vim-record-insert-200":
+        return b"x" * 200
+    if workload == "controller-vim-record-insert-2000":
+        return b"x" * 2000
     raise ProbeNotObserved("unknown workload")
 
 

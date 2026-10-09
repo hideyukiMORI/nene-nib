@@ -40,6 +40,23 @@ hide は他の作業がある機械でも、規約の範囲で固定入力の対
    ASCII は既存の16800000bytesを再利用し、期待 codepoint 数も16800000。日本語は既存の長行6217bytesとCRLFを1000行（6219000bytes・2079000 codepoints）生成する。
    `validate_utf8` だけを計測し、期待countとchecksumの確認・生成・hashは区間外。非ASCIIへの悪化を直接見るための二本で、長い比較は親が行う。
 
+## 初期8本の固定batch完了後の第2段階（Issue #323）
+
+初期8本の定義・入力・区間・期待値・batch結果を固定したまま、Vimの登録本文と録画/ドット記録のコピーコストを見る4本を追加する。製品source/APIと所有実装には触れず、同じharness変更をbefore/candidate双方へ取り込む。
+
+- `controller-vim-insert-200-register-1mib`: 入力はASCII `r`の1048576bytes。
+- `controller-vim-insert-200-register-16mib`: 入力はASCII `r`の16777216bytes。
+- `controller-vim-record-insert-200`: 入力はASCII `x`の200bytes。
+- `controller-vim-record-insert-2000`: 入力はASCII `x`の2000bytes。
+
+登録2本は各反復で新しいEditing、VisibleLines30、Vim選択、StoreVimRegisterでaへ文字単位入力を置き、空本文でiへ入る。区間内は200個のVimKeyPress{x}をprimary applyへ流し、最後の所有反映値を保持する。区間外で失敗無し・INSERT・1行・caret列201・保存本文x200を確認する。Esc→名指しa→pでx200+入力の全文を保存照合し、undoでx200へ戻ることも確認する。checksumは確認済みx200と貼付後の全文を含む。レジスタのLFのみの契約に従い、既存CRLF入力を転用しない。
+
+録画2本は各反復で新しい空Editing、VisibleLines30、Vim選択、q a iを区間外に与える。区間内は入力byte数と同数のVimKeyPress{x}をprimary applyへ流す。区間外でINSERT・caret列count+1・保存全文を確認し、Esc→qで録画を止める。uで空に戻し、@aを同じ既存キー入口から再生して入力と同じ全文を照合する。checksumへ確認済み全文を含む。
+
+1warmupは既存のまま。準備・照合・undo・録画停止・再生は区間外。閉じたenum/name/input/runとPythonの固定生成式を網羅更新する。新4本だけDebug/Release各warmup1+sample1で動作確認し、metadata/marks/固定input/hash/checksumを照合する。旧8本や失敗検出の期待値は変更しない。長い比較と性能受理は親が行い、短い実行を正式速度ゲートの合格と扱わない。
+
+製品2dbd106と旧比較器a2ea9ceはDの保管先へコピーしSHAを確認してから新targetをbuildする。製品targetを再buildしない。harness変更をclean commitし、既存Debug/Release builddirへ明示configureしてbuild metadataを更新する。
+
 ## 検証と限界
 
 道具の対象試験で、短い自己比較・壊れた marks・片側の失敗・checksum の違いを確認する。
