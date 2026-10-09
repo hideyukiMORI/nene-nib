@@ -22,6 +22,9 @@ class SoftwareTarget final
     [[nodiscard]] float dpi() const;
     // DrawTextLayout（D2D1_DRAW_TEXT_OPTIONS_CLIP）の経路。失敗したら空。
     [[nodiscard]] Pixels text_layout(IDWriteTextLayout *layout, D2D1_POINT_2F origin);
+    // ブロックカーソルの既存経路: callerのclipだけでNONEのlayoutを描く。
+    [[nodiscard]] Pixels clipped_layout(IDWriteTextLayout *layout, D2D1_POINT_2F origin,
+                                        D2D1_RECT_F clip);
     // DrawTextW と DrawTextLayout の既定 options の比較（行番号・題名、ADR 0083）。
     [[nodiscard]] Pixels text_w(std::wstring_view text, IDWriteTextFormat *format,
                                 const core::LayoutRect &area);
