@@ -8,6 +8,9 @@
 
 namespace nenenib::tests
 {
+// UTF 検証と表示値/UTF-16の直接の境界（ADR 0086）。
+void verify_utf8_scope();
+
 // ADR 0080: 判定済み所有値と、読み込み・改行索引の既存契約。
 void verify_detected_text_contracts();
 void verify_text_buffer_read_contracts();
