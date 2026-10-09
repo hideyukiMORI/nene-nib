@@ -75,12 +75,12 @@ CommandPalette::CommandPalette(CommandLine input, std::size_t selected, EditMode
 {
 }
 
-CommandPalette CommandPalette::opened(std::vector<CommandChoice> entries, std::string_view input,
-                                      EditMode mode, ThemeCatalog themes)
+CommandPalette CommandPalette::opened(const std::vector<CommandChoice> &entries,
+                                      std::string_view input, EditMode mode, ThemeCatalog themes)
 {
     const auto empty = CommandLine::empty(std::move(themes));
     return filtered(empty.inserted(input).value_or(empty), mode,
-                    std::make_shared<const std::vector<CommandChoice>>(std::move(entries)));
+                    std::make_shared<const std::vector<CommandChoice>>(entries));
 }
 
 CommandPalette CommandPalette::filtered(CommandLine input, EditMode mode, Entries entries)
@@ -264,7 +264,7 @@ std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view
     return refiltered(input.value());
 }
 
-CommandPalette CommandPalette::extended(std::vector<CommandChoice> more) const
+CommandPalette CommandPalette::extended(const std::vector<CommandChoice> &more) const
 {
     if (more.empty())
     {
@@ -273,8 +273,7 @@ CommandPalette CommandPalette::extended(std::vector<CommandChoice> more) const
     auto grown = std::make_shared<std::vector<CommandChoice>>();
     grown->reserve(entries_->size() + more.size());
     grown->insert(grown->end(), entries_->begin(), entries_->end());
-    grown->insert(grown->end(), std::make_move_iterator(more.begin()),
-                  std::make_move_iterator(more.end()));
+    grown->insert(grown->end(), more.begin(), more.end());
     const auto kept = std::visit([this](const auto &result)
                                  { return entry_position(result, selected_); }, *result_);
     const CommandPalette next = filtered(input_, mode_, std::move(grown));

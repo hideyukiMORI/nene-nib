@@ -768,6 +768,61 @@ void verify_palette_refilter_boundaries()
            "extending and narrowing leave the previous candidate snapshots unchanged");
 }
 
+void verify_palette_opened_owns_candidates()
+{
+    std::vector<core::CommandChoice> raw{tab_choice("AB", 1), tab_choice("cx", 2)};
+    raw.front().command = std::string(80, 'm');
+    raw.front().key = std::string(80, 'k');
+    core::CommandChoice *const elements = raw.data();
+    char *const command = raw.front().command.data();
+    char *const key = raw.front().key.data();
+    const auto palette = core::CommandPalette::opened(
+        static_cast<std::vector<core::CommandChoice> &&>(raw), "a", core::EditMode::ordinary);
+    elements[1].label = core::DisplayText::parse("AB").value();
+    command[0] = 'n';
+    key[0] = 'q';
+    const auto first = palette.choice_at(0);
+    expect(palette.count() == 1 && first.has_value() &&
+               first.value().command == std::string(80, 'm') &&
+               first.value().key == std::string(80, 'k'),
+           "opened copies raw candidates even when called with an xvalue and retained aliases");
+    const auto narrowed = palette.inserted("b").value();
+    const auto narrowed_choice = narrowed.choice_at(0);
+    expect(narrowed.count() == 1 && narrowed_choice.has_value() &&
+               narrowed_choice.value().command == std::string(80, 'm'),
+           "a changed external candidate cannot alter the incremental result");
+    const auto complete = palette.edited(core::CommandEdit::home).edited(core::CommandEdit::erase);
+    const auto last = complete.choice_at(1);
+    expect(complete.count() == 2 && last.has_value() && last.value().label.text() == "cx",
+           "full refiltering sees the same original candidate snapshot");
+}
+
+void verify_palette_extended_owns_candidates()
+{
+    const auto before =
+        core::CommandPalette::opened({tab_choice("Ax", 1)}, "a", core::EditMode::ordinary);
+    std::vector<core::CommandChoice> more{tab_choice("AB", 2)};
+    more.front().command = std::string(80, 'm');
+    more.front().key = std::string(80, 'k');
+    char *const command = more.front().command.data();
+    char *const key = more.front().key.data();
+    const auto grown = before.extended(static_cast<std::vector<core::CommandChoice> &&>(more));
+    command[0] = 'n';
+    key[0] = 'q';
+    const auto added = grown.choice_at(1);
+    expect(grown.count() == 2 && added.has_value() &&
+               added.value().command == std::string(80, 'm') &&
+               added.value().key == std::string(80, 'k'),
+           "extended copies string storage instead of adopting mutable raw buffer aliases");
+    const auto narrowed = grown.inserted("b").value();
+    const auto narrowed_choice = narrowed.choice_at(0);
+    const auto previous_choice = before.choice_at(0);
+    expect(narrowed.count() == 1 && narrowed_choice.has_value() &&
+               narrowed_choice.value().command == std::string(80, 'm') && before.count() == 1 &&
+               previous_choice.has_value() && previous_choice.value().command == "tabnext 1",
+           "narrowing the extended snapshot preserves both new and previous candidates");
+}
+
 // Ctrl+P と「∨」は同じ列を開き、Enter はタブを切り替え、`:` の後ろは今までどおり（決定 6）。
 void verify_palette_entries_controller()
 {
@@ -1575,6 +1630,8 @@ void verify_command_palette()
     verify_palette_incremental_results();
     verify_palette_input_reuse();
     verify_palette_refilter_boundaries();
+    verify_palette_opened_owns_candidates();
+    verify_palette_extended_owns_candidates();
     verify_palette_entries_controller();
     verify_palette_notes_geometry();
     verify_palette_hint_view();
