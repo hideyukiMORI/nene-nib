@@ -59,14 +59,24 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
     {
         return std::unexpected(Failure::too_large);
     }
-    std::string bytes(static_cast<std::size_t>(size.QuadPart), '\0');
-    DWORD done = 0;
-    if (!bytes.empty() &&
-        ReadFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &done, nullptr) == 0)
+    const auto requested = static_cast<std::size_t>(size.QuadPart);
+    std::string bytes;
+    BOOL read = TRUE;
+    bytes.resize_and_overwrite(
+        requested,
+        [&](char *data, std::size_t) noexcept
+        {
+            DWORD done = 0;
+            if (requested != 0)
+            {
+                read = ReadFile(file.get(), data, static_cast<DWORD>(requested), &done, nullptr);
+            }
+            return read != 0 ? static_cast<std::size_t>(done) : std::size_t{0};
+        });
+    if (read == 0)
     {
         return std::unexpected(Failure::unreadable);
     }
-    bytes.resize(done);
     return bytes;
 }
 

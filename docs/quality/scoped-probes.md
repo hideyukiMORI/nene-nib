@@ -36,3 +36,16 @@ ABBAを固定回数だけ実行し、全sample・対応するafter/before ratio�
 道具の短い検証は `python -m unittest discover -s tests/conformance -p test_compare_probes.py`。
 実際の自己比較は `display-line-long --iterations 1 --blocks 1` の4processだけで十分。
 長い比較、実機の試用、正式な速さのゲートは親設計席で行う。
+
+## 第2段階: 初期8本の固定比較後のVimコピー前計測（#323）
+
+初期8本は定義・結果を保持する。ADR0082の第2段階として追加した4本だけを、同じharnessでbefore/candidateへ適用する。
+
+| workload | 固定入力 | 区間内 |
+| --- | --- | --- |
+| controller-vim-insert-200-register-1mib | ASCII r 1048576bytes | VimKeyPress{x}を200回 |
+| controller-vim-insert-200-register-16mib | ASCII r 16777216bytes | VimKeyPress{x}を200回 |
+| controller-vim-record-insert-200 | ASCII x 200bytes | VimKeyPress{x}を200回 |
+| controller-vim-record-insert-2000 | ASCII x 2000bytes | VimKeyPress{x}を2000回 |
+
+登録は名前aの文字単位、録画はq a iを区間前に準備。区間後の保存・frame・Esc・貼付/undo・録画停止/再生で本文とcaretを確認する。準備と確認は時間に含めない。各processは従来通りwarmup1回を含み、iterationsで指定したsampleだけをmarksへ記録する。1sampleの短い動作確認は性能比較・正式速度ゲートを代替しない。

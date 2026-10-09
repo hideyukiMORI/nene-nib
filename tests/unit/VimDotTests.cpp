@@ -178,7 +178,7 @@ void verify_vim_dot_modes()
     }
     const auto &record = state.last_change.value();
     return record.visual.has_value() && record.visual.value() == extent &&
-           record.keys == vim_keys_of(keys) && !record.count.has_value();
+           record.keys.owned_keys() == vim_keys_of(keys) && !record.count.has_value();
 }
 
 [[nodiscard]] nenenib::core::VimVisualExtent characters_extent(std::size_t lines,

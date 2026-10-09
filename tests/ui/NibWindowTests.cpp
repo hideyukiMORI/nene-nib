@@ -18,6 +18,7 @@ int main()
     ui::verify_fallback_cache();
     ui::verify_glyph_collector();
     ui::verify_glyph_pixels();
+    ui::verify_gutter_layouts();
     if (SUCCEEDED(initialized))
     {
         CoUninitialize();

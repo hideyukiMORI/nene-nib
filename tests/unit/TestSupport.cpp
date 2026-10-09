@@ -94,7 +94,7 @@ TextBuffer buffer_of(std::string_view text)
 // 意図を 1 つ流し、見えている行を '|' でつないで返す。表示値だけで振る舞いを測る（ARC-011）。
 std::string applied(EditorController &controller, const nenenib::application::EditorIntent &intent)
 {
-    const auto frame = controller.apply(intent);
+    const auto frame = controller.apply_frame(intent);
     std::string joined;
     for (const auto &line : frame.lines)
     {
@@ -123,9 +123,9 @@ FilePath sample_path()
 
 app::EditorFrame run_ex(EditorController &controller, std::string text)
 {
-    static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{U':'}}));
-    static_cast<void>(controller.apply(app::CommandText{std::move(text)}));
-    return controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}}));
+    static_cast<void>(controller.apply_frame(app::CommandText{std::move(text)}));
+    return controller.apply_frame(app::SubmitCommand{});
 }
 
 std::vector<core::CommandChoice> choices_for(std::string_view query)

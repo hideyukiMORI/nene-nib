@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -38,8 +39,10 @@ class EditHistory final
     [[nodiscard]] std::size_t position() const noexcept;
 
   private:
-    EditHistory(std::vector<Edit> edits, std::size_t position, EditBoundary tail);
-    std::vector<Edit> edits_;
+    // 外部 Edit は push で防御コピーし、確定済み本文は私有の const 値として共有する（ADR 0085）。
+    using Entry = std::shared_ptr<const Edit>;
+    EditHistory(std::vector<Entry> edits, std::size_t position, EditBoundary tail);
+    std::vector<Entry> edits_;
     // edits_[0, position_) が本文に適用済み。position_ より後ろは redo で戻せる編集。
     std::size_t position_;
     // 末尾の単位がまだ続いているか。separate で閉じた単位には次の入力も混ざらない（ADR 0009）。

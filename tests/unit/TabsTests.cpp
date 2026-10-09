@@ -163,7 +163,7 @@ void verify_new_tab()
            "the window starts with one untitled tab");
     applied(controller, VisibleLines{10});
     applied(controller, InsertText{"alpha"});
-    const auto added = controller.apply(NewTab{});
+    const auto added = controller.apply_frame(NewTab{});
     expect(added.tabs.size() == 2 && added.active_tab == 1,
            "NewTab adds a tab to the right and activates it");
     expect(vim_body(added).empty() && added.document.title.text() == "無題" &&
@@ -173,7 +173,7 @@ void verify_new_tab()
                added.tabs.at(0).save_state == SaveState::modified,
            "the band lists both tabs and the parked one keeps its unsaved mark");
     applied(controller, SwitchTab{0});
-    const auto middle = controller.apply(NewTab{});
+    const auto middle = controller.apply_frame(NewTab{});
     expect(middle.tabs.size() == 3 && middle.active_tab == 1 && titled(middle, 2, "無題") &&
                titled(middle, 0, "● 無題"),
            "NewTab inserts right of the active tab, not at the end");
@@ -191,14 +191,14 @@ void verify_switch_keeps_each_document()
     applied(controller, ScrollLines{2});
     applied(controller, NewTab{});
     applied(controller, InsertText{"b"});
-    const auto back = controller.apply(SwitchTab{0});
+    const auto back = controller.apply_frame(SwitchTab{0});
     expect(back.active_tab == 0 && back.first_visible.value == 3 && back.total_lines == 6 &&
                caret_at(back, 1, 2),
            "switching back restores the body, the caret and the scroll of that document");
     expect(back.document.title.text() == "● note.txt" && titled(back, 1, "● 無題") &&
                back.document.path.has_value(),
            "each tab keeps its own path and unsaved mark");
-    const auto other = controller.apply(SwitchTab{1});
+    const auto other = controller.apply_frame(SwitchTab{1});
     expect(vim_body(other) == "b" && caret_at(other, 1, 2) && other.first_visible.value == 1,
            "the other document keeps its own body, caret and scroll");
 }
@@ -236,21 +236,21 @@ void verify_close_moves_active()
     EditorController &controller = editing.controller();
     open_four_tabs(controller);
     applied(controller, SwitchTab{1});
-    const auto right = controller.apply(CloseTab{1});
+    const auto right = controller.apply_frame(CloseTab{1});
     expect(right.tabs.size() == 3 && right.active_tab == 1 && first_line(right) == "c",
            "closing the active tab activates its right neighbour");
-    const auto left_closed = controller.apply(CloseTab{0});
+    const auto left_closed = controller.apply_frame(CloseTab{0});
     expect(left_closed.tabs.size() == 2 && left_closed.active_tab == 0 &&
                first_line(left_closed) == "c",
            "closing a tab left of the active one keeps the active document");
     applied(controller, SwitchTab{1});
-    const auto last = controller.apply(CloseTab{1});
+    const auto last = controller.apply_frame(CloseTab{1});
     expect(last.tabs.size() == 1 && last.active_tab == 0 && first_line(last) == "c",
            "closing the rightmost active tab activates its left neighbour");
-    const auto outside = controller.apply(CloseTab{5});
+    const auto outside = controller.apply_frame(CloseTab{5});
     expect(outside.tabs.size() == 1 && !outside.closing && first_line(outside) == "c",
            "closing a position outside the band does nothing");
-    expect(controller.apply(SwitchTab{3}).active_tab == 0,
+    expect(controller.apply_frame(SwitchTab{3}).active_tab == 0,
            "switching to a position outside the band does nothing");
 }
 
@@ -260,7 +260,7 @@ void verify_close_right_of_active()
     EditorController &controller = editing.controller();
     open_four_tabs(controller);
     applied(controller, SwitchTab{0});
-    const auto closed = controller.apply(CloseTab{2});
+    const auto closed = controller.apply_frame(CloseTab{2});
     expect(closed.tabs.size() == 3 && closed.active_tab == 0 && first_line(closed) == "a" &&
                titled(closed, 2, "● 無題"),
            "closing a tab right of the active one keeps the active position");
@@ -273,11 +273,12 @@ void verify_last_tab_closes_window()
     EditorController &controller = editing.controller();
     applied(controller, VisibleLines{10});
     applied(controller, InsertText{"keep"});
-    const auto closing = controller.apply(CloseTab{0});
+    const auto closing = controller.apply_frame(CloseTab{0});
     expect(closing.closing && closing.tabs.size() == 1 && vim_body(closing) == "keep" &&
                closing.document.save_state == SaveState::modified,
            "closing the last tab asks the window to close and changes nothing else");
-    expect(!controller.apply(ScrollLines{0}).closing, "the request lasts for that intent only");
+    expect(!controller.apply_frame(ScrollLines{0}).closing,
+           "the request lasts for that intent only");
 }
 
 // 切り替えは Vim の保留・回数・VISUAL・INSERT を捨て、窓全体の値を残す（決定 4）。
@@ -287,17 +288,17 @@ void verify_vim_switch_discards_pending()
     open_vim_document(editing, "one two\nthree");
     EditorController &controller = editing.controller();
     vim_replay(controller, "/two<CR>0yiwqavl");
-    const auto added = controller.apply(NewTab{});
+    const auto added = controller.apply_frame(NewTab{});
     const auto &vim = controller.vim_state();
     expect(vim.mode == VimMode::normal && vim.macro_recording.has_value() &&
                added.recording == std::optional<char>{'a'},
            "VISUAL ends but the macro keeps recording across the switch");
-    expect(vim.last_search.has_value() && vim.unnamed_register.text == "one",
+    expect(vim.last_search.has_value() && vim.unnamed_register.value().text == "one",
            "the last search and the registers belong to the window");
     vim_replay(controller, "p");
     expect(vim_body(controller.frame()) == "one", "a yank in one tab puts in another");
     vim_replay(controller, "2d");
-    const auto back = controller.apply(SwitchTab{0});
+    const auto back = controller.apply_frame(SwitchTab{0});
     expect(!controller.vim_state().count.has_value() && !controller.vim_state().pending.has_value(),
            "the count and the pending operator are dropped");
     expect(vim_body(back) == "one two\nthree" && caret_at(back, 1, 2) &&
@@ -316,11 +317,11 @@ void verify_vim_switch_leaves_insert()
     vim_replay(controller, "ione<Esc>");
     applied(controller, SwitchTab{0});
     vim_replay(controller, "A!");
-    const auto away = controller.apply(SwitchTab{1});
+    const auto away = controller.apply_frame(SwitchTab{1});
     expect(controller.vim_state().mode == VimMode::normal &&
                !controller.vim_state().insert_repeat.has_value() && vim_body(away) == "one",
            "switching out of INSERT lands in NORMAL");
-    const auto back = controller.apply(SwitchTab{0});
+    const auto back = controller.apply_frame(SwitchTab{0});
     expect(vim_body(back) == "one two!\nthree" && caret_at(back, 1, 8),
            "the NORMAL caret rests on the last character of the line");
     vim_replay(controller, "u");
@@ -360,16 +361,16 @@ void verify_switch_closes_input()
     applied(controller, NewTab{});
     vim_replay(controller, "/on");
     expect(controller.command_line_active(), "the search line is open before the switch");
-    const auto searched = controller.apply(SwitchTab{0});
+    const auto searched = controller.apply_frame(SwitchTab{0});
     expect(!searched.command_line.has_value() && !controller.command_line_active() &&
                caret_at(searched, 1, 1),
            "switching cancels the search line and its preview");
     vim_replay(controller, ":");
-    expect(!controller.apply(WalkRecentTab{TabStep::next}).command_line.has_value(),
+    expect(!controller.apply_frame(WalkRecentTab{TabStep::next}).command_line.has_value(),
            "switching cancels the Ex line");
     applied(controller, SelectEditMode{EditMode::ordinary});
     applied(controller, ComposeText{composed_of("あ", {}, 0)});
-    const auto composed = controller.apply(SwitchTab{0});
+    const auto composed = controller.apply_frame(SwitchTab{0});
     expect(!composed.composition.has_value() && vim_body(composed) == "one two\nthree",
            "switching drops the composition without typing it");
 }
@@ -381,8 +382,9 @@ void verify_parked_references()
     state = state.with_new_tab();
     const auto first = state.parked().at(0);
     const auto second = state.parked().at(1);
-    const auto edited = state.with_edit(
-        buffer_of("x"), nenenib::core::collapsed_at(nenenib::core::Offset{1}), state.history());
+    const auto edited =
+        state.with_edit(buffer_of("x"), nenenib::core::collapsed_at(nenenib::core::Offset{1}),
+                        state.history(), state.document());
     expect(edited.parked().at(0) == first && edited.parked().at(1) == second,
            "editing the active document shares the parked bundles");
     const auto switched = state.with_switched(1);
@@ -424,12 +426,12 @@ void verify_open_same_file()
     applied(controller, VisibleLines{10});
     applied(controller, OpenDocument{sample_path()});
     applied(controller, InsertText{"x"});
-    const auto again = controller.apply(OpenDocument{sample_path()});
+    const auto again = controller.apply_frame(OpenDocument{sample_path()});
     expect(again.tabs.size() == 1 && again.active_tab == 0 && vim_body(again) == "xone" &&
                again.document.title.text() == "● note.txt" && editing.files().reads() == 1,
            "opening the active file again keeps its unsaved body and mark without rereading");
     applied(controller, NewTab{});
-    const auto back = controller.apply(OpenDocument{sample_path()});
+    const auto back = controller.apply_frame(OpenDocument{sample_path()});
     expect(back.tabs.size() == 2 && back.active_tab == 0 && vim_body(back) == "xone" &&
                titled(back, 0, "● note.txt") && titled(back, 1, "無題") &&
                editing.files().reads() == 1,
@@ -445,7 +447,7 @@ void verify_open_same_file_by_port()
     editing.files().treat_as_same("C:\\WORK\\NOTE.TXT", "C:\\work\\note.txt");
     applied(controller, open_at("C:\\WORK\\NOTE.TXT"));
     applied(controller, NewTab{});
-    const auto frame = controller.apply(OpenDocument{sample_path()});
+    const auto frame = controller.apply_frame(OpenDocument{sample_path()});
     expect(frame.tabs.size() == 2 && frame.active_tab == 0 && titled(frame, 0, "NOTE.TXT") &&
                editing.files().reads() == 1,
            "a path the port calls the same file switches instead of opening a second tab");
@@ -456,13 +458,13 @@ void verify_open_into_blank_untitled()
 {
     Editing blank;
     blank.files().hold(Bytes{std::string("one")});
-    const auto into = blank.controller().apply(OpenDocument{sample_path()});
+    const auto into = blank.controller().apply_frame(OpenDocument{sample_path()});
     expect(into.tabs.size() == 1 && into.document.title.text() == "note.txt",
            "a blank untitled tab takes the opened file");
     Editing typed;
     typed.files().hold(Bytes{std::string("one")});
     applied(typed.controller(), InsertText{"a"});
-    const auto beside = typed.controller().apply(OpenDocument{sample_path()});
+    const auto beside = typed.controller().apply_frame(OpenDocument{sample_path()});
     expect(beside.tabs.size() == 2 && beside.active_tab == 1 && titled(beside, 0, "● 無題") &&
                vim_body(beside) == "one",
            "an untitled tab with an edit keeps its text and the file opens in a new tab");
@@ -470,7 +472,7 @@ void verify_open_into_blank_untitled()
     undone.files().hold(Bytes{std::string("one")});
     applied(undone.controller(), InsertText{"a"});
     applied(undone.controller(), HistoryAction{HistoryDirection::undo});
-    const auto kept = undone.controller().apply(OpenDocument{sample_path()});
+    const auto kept = undone.controller().apply_frame(OpenDocument{sample_path()});
     expect(kept.tabs.size() == 2 && kept.active_tab == 1,
            "an untitled tab whose edit was undone still has history and is not reused");
 }
@@ -483,12 +485,12 @@ void verify_open_right_of_active()
     hold_three(editing.files());
     applied(controller, VisibleLines{10});
     applied(controller, open_at("C:\\work\\a.txt"));
-    const auto second = controller.apply(open_at("C:\\work\\b.txt"));
+    const auto second = controller.apply_frame(open_at("C:\\work\\b.txt"));
     expect(second.tabs.size() == 2 && second.active_tab == 1 && vim_body(second) == "b" &&
                titled(second, 0, "a.txt"),
            "a file opened from a file tab gets a new tab to the right");
     applied(controller, SwitchTab{0});
-    const auto middle = controller.apply(open_at("C:\\work\\c.txt"));
+    const auto middle = controller.apply_frame(open_at("C:\\work\\c.txt"));
     expect(middle.tabs.size() == 3 && middle.active_tab == 1 && titled(middle, 0, "a.txt") &&
                titled(middle, 1, "c.txt") && titled(middle, 2, "b.txt") &&
                middle.document.save_state == SaveState::saved,
@@ -504,14 +506,14 @@ void verify_open_failure_adds_no_tab()
     applied(controller, open_at("C:\\work\\a.txt"));
     applied(controller, NewTab{});
     applied(controller, InsertText{"b"});
-    const auto failed = controller.apply(open_at("C:\\work\\missing.txt"));
+    const auto failed = controller.apply_frame(open_at("C:\\work\\missing.txt"));
     expect(failed.tabs.size() == 2 && failed.active_tab == 1 && vim_body(failed) == "b" &&
                failed.document.last_failure == FileFailure::not_found,
            "a file that cannot be read adds no tab and reports the failure");
-    expect(!controller.apply(VisibleLines{10}).document.last_failure.has_value(),
+    expect(!controller.apply_frame(VisibleLines{10}).document.last_failure.has_value(),
            "the failure stays for one intent");
     Editing blank;
-    const auto untitled = blank.controller().apply(open_at("C:\\work\\missing.txt"));
+    const auto untitled = blank.controller().apply_frame(open_at("C:\\work\\missing.txt"));
     expect(untitled.tabs.size() == 1 && untitled.document.title.text() == "無題" &&
                untitled.document.last_failure == FileFailure::not_found,
            "a failed open leaves the blank untitled tab as it was");
@@ -573,7 +575,7 @@ void verify_unsaved_tabs_in_band_order()
            "one saved tab asks nothing when the window closes");
     open_four_tabs(controller);
     applied(controller, SwitchTab{1});
-    const auto band = controller.apply(NewTab{});
+    const auto band = controller.apply_frame(NewTab{});
     expect(band.tabs.size() == 5 &&
                next_unsaved_tab(band.tabs, 0) == std::optional<std::size_t>{0} &&
                next_unsaved_tab(band.tabs, 2) == std::optional<std::size_t>{3} &&
@@ -585,7 +587,7 @@ void verify_unsaved_tabs_in_band_order()
     for (auto next = next_unsaved_tab(controller.frame().tabs, from); next.has_value();
          next = next_unsaved_tab(controller.frame().tabs, from))
     {
-        const auto shown = controller.apply(SwitchTab{next.value()});
+        const auto shown = controller.apply_frame(SwitchTab{next.value()});
         expect(shown.active_tab == next.value() && shown.document.save_state == SaveState::modified,
                "the tab asked about is the one the window shows");
         asked.push_back(next.value());
@@ -617,20 +619,21 @@ void verify_band_scroll()
            "the band starts unscrolled with nothing hovered");
     open_nine_tabs(controller);
     expect(controller.frame().tab_scroll == 0, "an unknown band width keeps the scroll at 0");
-    expect(controller.apply(ScrollTabs{-1}).tab_scroll == 0,
+    expect(controller.apply_frame(ScrollTabs{-1}).tab_scroll == 0,
            "the wheel does nothing before the band width is known");
-    expect(controller.apply(TitleBarWidth{1200}).tab_scroll == 150,
+    expect(controller.apply_frame(TitleBarWidth{1200}).tab_scroll == 150,
            "the band width scrolls the active last tab into view");
-    expect(controller.apply(SwitchTab{0}).tab_scroll == 0,
+    expect(controller.apply_frame(SwitchTab{0}).tab_scroll == 0,
            "switching to the first tab scrolls it into view");
-    expect(controller.apply(ScrollTabs{-1}).tab_scroll == 122, "one notch scrolls one tab");
-    expect(controller.apply(ScrollTabs{-3}).tab_scroll == 150, "the wheel stops at the end");
-    expect(controller.apply(WalkRecentTab{TabStep::next}).tab_scroll == 150,
+    expect(controller.apply_frame(ScrollTabs{-1}).tab_scroll == 122, "one notch scrolls one tab");
+    expect(controller.apply_frame(ScrollTabs{-3}).tab_scroll == 150, "the wheel stops at the end");
+    expect(controller.apply_frame(WalkRecentTab{TabStep::next}).tab_scroll == 150,
            "a visible active tab keeps the scroll");
-    expect(controller.apply(NewTab{}).tab_scroll == 272, "a new tab at the end is scrolled in");
-    expect(controller.apply(CloseTab{9}).tab_scroll == 150,
+    expect(controller.apply_frame(NewTab{}).tab_scroll == 272,
+           "a new tab at the end is scrolled in");
+    expect(controller.apply_frame(CloseTab{9}).tab_scroll == 150,
            "closing clamps the scroll to the shorter strip");
-    expect(controller.apply(TitleBarWidth{2000}).tab_scroll == 0,
+    expect(controller.apply_frame(TitleBarWidth{2000}).tab_scroll == 0,
            "a band wide enough for every tab does not scroll");
 }
 
@@ -641,16 +644,18 @@ void verify_band_hover()
     EditorController &controller = editing.controller();
     open_four_tabs(controller);
     const TitleBarTarget third{TitleBarHit::tab, 2};
-    expect(controller.apply(PointTitleBar{third}).hovered == std::optional{third},
+    expect(controller.apply_frame(PointTitleBar{third}).hovered == std::optional{third},
            "the pointed element is in the frame");
-    const auto closed_other = controller.apply(CloseTab{1});
+    const auto closed_other = controller.apply_frame(CloseTab{1});
     expect(closed_other.hovered == std::optional{third},
            "closing another tab keeps the hover where the pointer is");
-    static_cast<void>(controller.apply(PointTitleBar{TitleBarTarget{TitleBarHit::tab_close, 1}}));
-    const auto closed_hovered = controller.apply(CloseTab{1});
+    static_cast<void>(
+        controller.apply_frame(PointTitleBar{TitleBarTarget{TitleBarHit::tab_close, 1}}));
+    const auto closed_hovered = controller.apply_frame(CloseTab{1});
     expect(!closed_hovered.hovered.has_value(), "closing the hovered tab forgets the hover");
-    static_cast<void>(controller.apply(PointTitleBar{TitleBarTarget{TitleBarHit::add_tab, 0}}));
-    expect(!controller.apply(PointTitleBar{std::nullopt}).hovered.has_value(),
+    static_cast<void>(
+        controller.apply_frame(PointTitleBar{TitleBarTarget{TitleBarHit::add_tab, 0}}));
+    expect(!controller.apply_frame(PointTitleBar{std::nullopt}).hovered.has_value(),
            "leaving the band clears the hover");
 }
 
@@ -664,7 +669,7 @@ void verify_band_pointer()
     applied(controller, NewTab{});
     applied(controller, TitleBarWidth{1200});
     const TitleBarTarget closer{TitleBarHit::tab_close, 1};
-    const auto frame = controller.apply(PointTitleBar{closer});
+    const auto frame = controller.apply_frame(PointTitleBar{closer});
     const TitleBarInput input = title_bar_input(frame, 1800, 144);
     expect(input.width == 1800 && input.dpi == 144 && input.tab_count == 5 && input.active == 4 &&
                input.scroll_dips == frame.tab_scroll && input.hovered == std::optional{closer},
@@ -1024,7 +1029,7 @@ void verify_tab_recency_keeps_every_tab()
     std::string bodies = first_line(controller.frame());
     for (std::size_t step = 1; step < count; ++step)
     {
-        bodies += first_line(controller.apply(WalkRecentTab{TabStep::next}));
+        bodies += first_line(controller.apply_frame(WalkRecentTab{TabStep::next}));
     }
     for (std::size_t step = 1; step < count; ++step)
     {
@@ -1041,7 +1046,7 @@ void verify_walk_recent_tabs()
     EditorController &controller = editing.controller();
     open_four_tabs(controller);
     expect(recent_bodies(controller) == "dcba", "each new tab goes to the front of the order");
-    const auto walked = controller.apply(WalkRecentTab{TabStep::next});
+    const auto walked = controller.apply_frame(WalkRecentTab{TabStep::next});
     expect(first_line(walked) == "c" && walked.active_tab == 2 && controller.tab_walking(),
            "one walk goes to the tab used before");
     applied(controller, SettleRecentTab{});
@@ -1052,7 +1057,7 @@ void verify_walk_recent_tabs()
     expect(first_line(controller.frame()) == "d" && recent_bodies(controller) == "dcba",
            "press and release again goes back to the tab before");
     applied(controller, WalkRecentTab{TabStep::next});
-    const auto held = controller.apply(WalkRecentTab{TabStep::next});
+    const auto held = controller.apply_frame(WalkRecentTab{TabStep::next});
     expect(first_line(held) == "b" && held.active_tab == 1,
            "the second walk with Ctrl held reaches the third tab in the order");
     applied(controller, SettleRecentTab{});
@@ -1064,12 +1069,12 @@ void verify_walk_recent_tabs()
     applied(controller, SettleRecentTab{});
     expect(first_line(controller.frame()) == "b" && recent_bodies(controller) == "bdca",
            "four walks over four tabs wrap back to the start");
-    const auto reverse = controller.apply(WalkRecentTab{TabStep::previous});
+    const auto reverse = controller.apply_frame(WalkRecentTab{TabStep::previous});
     expect(first_line(reverse) == "a", "previous walks to the least recently used tab");
     applied(controller, SettleRecentTab{});
     expect(recent_bodies(controller) == "abdc", "and settling moves it to the front");
-    expect(first_line(controller.apply(WalkRecentTab{TabStep::next})) == "b" &&
-               first_line(controller.apply(WalkRecentTab{TabStep::previous})) == "a",
+    expect(first_line(controller.apply_frame(WalkRecentTab{TabStep::next})) == "b" &&
+               first_line(controller.apply_frame(WalkRecentTab{TabStep::previous})) == "a",
            "next and previous walk back and forth over the same frozen order");
     applied(controller, SettleRecentTab{});
 }
@@ -1082,7 +1087,7 @@ void verify_walk_interrupted()
     EditorController &controller = editing.controller();
     open_four_tabs(controller);
     applied(controller, WalkRecentTab{TabStep::next});
-    const auto clicked = controller.apply(SwitchTab{0});
+    const auto clicked = controller.apply_frame(SwitchTab{0});
     expect(first_line(clicked) == "a" && !controller.tab_walking() &&
                recent_bodies(controller) == "acdb",
            "a click during the walk settles it and moves the clicked tab to the front");
@@ -1111,7 +1116,7 @@ void verify_recent_after_open_and_close()
     applied(controller, NewTab{});
     applied(controller, InsertText{"n"});
     expect(recent_bodies(controller) == "nbdca", "a new tab right of the active one is the newest");
-    const auto closed = controller.apply(CloseTab{2});
+    const auto closed = controller.apply_frame(CloseTab{2});
     expect(first_line(closed) == "c" && recent_bodies(controller) == "cbda",
            "closing the active tab moves its right neighbour to the front");
     applied(controller, CloseTab{0});
@@ -1165,7 +1170,7 @@ void verify_settle_without_walk()
     EditorController &controller = editing.controller();
     applied(controller, VisibleLines{10});
     applied(controller, InsertText{"a"});
-    const auto alone = controller.apply(WalkRecentTab{TabStep::next});
+    const auto alone = controller.apply_frame(WalkRecentTab{TabStep::next});
     expect(alone.active_tab == 0 && first_line(alone) == "a" && controller.tab_walking(),
            "walking with one tab stays on it");
     applied(controller, SettleRecentTab{});
@@ -1173,7 +1178,7 @@ void verify_settle_without_walk()
     open_four_tabs(controller);
     applied(controller, SelectEditMode{EditMode::vim});
     const auto failed_frame = run_ex(controller, "tabnext 9");
-    const auto settled = controller.apply(SettleRecentTab{});
+    const auto settled = controller.apply_frame(SettleRecentTab{});
     expect(settled.active_tab == failed_frame.active_tab && settled.tabs.size() == 4 &&
                first_line(settled) == first_line(failed_frame) &&
                settled.tab_scroll == failed_frame.tab_scroll &&
@@ -1193,15 +1198,15 @@ void verify_walk_settles_before_other_intents()
     applied(controller, WalkRecentTab{TabStep::next});
     applied(controller, PointTitleBar{TitleBarTarget{TitleBarHit::tab, 1}});
     applied(controller, VisibleLines{12});
-    const auto third = controller.apply(WalkRecentTab{TabStep::next});
+    const auto third = controller.apply_frame(WalkRecentTab{TabStep::next});
     expect(first_line(third) == "b" && controller.tab_walking(),
            "hovering the band and resizing during the walk keep it going to the third tab");
     applied(controller, SettleRecentTab{});
     applied(controller, WalkRecentTab{TabStep::next});
-    const auto typed = controller.apply(InsertText{"x"});
+    const auto typed = controller.apply_frame(InsertText{"x"});
     expect(first_line(typed) == "dx" && !controller.tab_walking(),
            "typing during the walk settles it and edits the reached tab");
-    expect(first_line(controller.apply(WalkRecentTab{TabStep::next})) == "b",
+    expect(first_line(controller.apply_frame(WalkRecentTab{TabStep::next})) == "b",
            "the next walk after typing goes back to the tab the walk left");
     applied(controller, SettleRecentTab{});
     expect(recent_bodies(controller) == "bdxca", "and the order is the settled one");
@@ -1312,7 +1317,7 @@ void verify_vim_tab_keys_after_operator()
     const auto visual = active_after(controller, "gt");
     expect(visual == 1 && controller.vim_state().mode == VimMode::normal,
            "gt in VISUAL switches the tab and ends VISUAL");
-    const auto back = controller.apply(SwitchTab{0});
+    const auto back = controller.apply_frame(SwitchTab{0});
     expect(back.lines.at(0).selection.presence == nenenib::core::SelectionPresence::absent,
            "the tab left from VISUAL keeps no selection");
 }
@@ -1426,13 +1431,13 @@ void verify_ex_tab_open_and_close()
     EditorController &controller = editing.controller();
     const auto opened = run_ex(controller, "tabnew");
     expect(opened.tabs.size() == 4 && opened.active_tab == 1 && vim_body(opened).empty() &&
-               first_line(controller.apply(SwitchTab{2})) == "bravo",
+               first_line(controller.apply_frame(SwitchTab{2})) == "bravo",
            ":tabnew adds an empty tab right of the active one and moves there");
     const auto closing = run_ex(controller, "tabclose");
     expect(closing.close_request == std::optional<std::size_t>{2} && closing.tabs.size() == 4 &&
                closing.active_tab == 2 && first_line(closing) == "bravo" && !closing.closing,
            ":tabclose asks to close the active tab and leaves the state alone");
-    expect(!controller.apply(VisibleLines{10}).close_request.has_value(),
+    expect(!controller.apply_frame(VisibleLines{10}).close_request.has_value(),
            "the close request lasts one intent");
     expect(!run_ex(controller, "tabc").closing && controller.frame().tabs.size() == 4,
            "the abbreviation asks the same way");
@@ -1487,7 +1492,7 @@ void verify_tab_list_rows()
     applied(controller, NewTab{});
     vim_replay(controller, "ix<Esc>");
     applied(controller, SwitchTab{1});
-    const auto listed = controller.apply(nenenib::application::OpenTabList{});
+    const auto listed = controller.apply_frame(nenenib::application::OpenTabList{});
     const auto &palette = listed.command_palette;
     const auto &line = listed.command_line;
     expect(palette.has_value() && line.has_value() && palette.value().total == 3 &&
@@ -1496,7 +1501,7 @@ void verify_tab_list_rows()
            "it lists every tab with the active one selected and the tabs mark as input");
     expect(rows_follow_band(listed),
            "each row has the band title and opens its tab by the canonical route");
-    const auto chosen = controller.apply(nenenib::application::ActivateCommandChoice{0});
+    const auto chosen = controller.apply_frame(nenenib::application::ActivateCommandChoice{0});
     expect(chosen.active_tab == 0 && !chosen.command_palette.has_value() &&
                !chosen.command_line.has_value(),
            "running a row switches to that tab and closes the list");
@@ -1535,32 +1540,33 @@ void verify_tab_list_entries()
     applied(controller, NewTab{});
     applied(controller, NewTab{});
     const std::vector<std::string> all{std::string(sample_path().text()), "tabnext 2", "tabnext 3"};
-    expect(listed_commands(controller.apply(OpenTabList{})) == all, "OpenTabList opens the list");
-    expect(!controller.apply(OpenTabList{}).command_palette.has_value(),
+    expect(listed_commands(controller.apply_frame(OpenTabList{})) == all,
+           "OpenTabList opens the list");
+    expect(!controller.apply_frame(OpenTabList{}).command_palette.has_value(),
            "OpenTabList closes the open list");
     expect(listed_commands(run_ex(controller, "tabs")) == all, ":tabs opens the same list");
-    expect(!controller.apply(OpenCommandPalette{}).command_palette.has_value(),
+    expect(!controller.apply_frame(OpenCommandPalette{}).command_palette.has_value(),
            "Ctrl+P closes the open list");
-    expect(listed_commands(controller.apply(OpenCommandPalette{})) == all,
+    expect(listed_commands(controller.apply_frame(OpenCommandPalette{})) == all,
            "Ctrl+P opens the same entries with an empty input");
     applied(controller, CommandText{":tabs"});
-    expect(listed_commands(controller.apply(SubmitCommand{})) == all,
+    expect(listed_commands(controller.apply_frame(SubmitCommand{})) == all,
            "the Ctrl+P candidate tabs opens the same list");
     applied(controller, CommandText{"NOTE"});
     const auto filtered = controller.frame();
     expect(listed_commands(filtered) == std::vector<std::string>{std::string(sample_path().text())},
            "typing filters the rows by title, ignoring case");
-    const auto ran = controller.apply(SubmitCommand{});
+    const auto ran = controller.apply_frame(SubmitCommand{});
     expect(ran.active_tab == 0 && !ran.command_palette.has_value(), "Enter runs the selected row");
     applied(controller, OpenTabList{});
-    const auto up = controller.apply(
+    const auto up = controller.apply_frame(
         nenenib::application::EditCommand{nenenib::core::CommandEdit::complete_previous});
     expect(up.command_palette.has_value() && up.command_palette.value().selected == 2,
            "moving up from the first row wraps to the last");
     applied(controller, nenenib::application::CancelCommand{});
     applied(controller, SelectEditMode{EditMode::ordinary});
     applied(controller, ComposeText{composed_of("あ", {}, 0)});
-    expect(!controller.apply(OpenTabList{}).command_palette.has_value(),
+    expect(!controller.apply_frame(OpenTabList{}).command_palette.has_value(),
            "the list does not open during a composition");
 }
 } // namespace

@@ -4,6 +4,7 @@
 #include "Direct2DRenderer.hpp"
 #include "EditMode.hpp"
 #include "EditorController.hpp"
+#include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
@@ -65,7 +66,7 @@ class EditorWindow final
                  application::TimingPort &timing);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
-    void apply_backdrop(const application::EditorFrame &frame);
+    void apply_backdrop(const application::EditorDelivery &frame);
     void place_at_screen_centre();
     static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM word, LPARAM data) noexcept;
     LRESULT dispatch(UINT message, WPARAM word, LPARAM data) noexcept;
@@ -144,7 +145,7 @@ class EditorWindow final
     void end_composition();
     void place_candidate_window();
     // frame の構え（ImeStance）を実行する。決めるのは application（ADR 0061 の決定 2）。
-    void follow_ime(const application::EditorFrame &frame);
+    void follow_ime(const application::EditorDelivery &frame);
     void close_ime();
     void restore_ime();
     // IME の側に残った変換を取り消す（ImmNotifyIME の CPS_CANCEL・ADR 0061 の決定 3）。
@@ -163,9 +164,9 @@ class EditorWindow final
     void remember_session(application::SessionEnd reason);
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
     [[nodiscard]] bool confirm_discard();
-    void update_title(const application::EditorFrame &frame);
-    void announce(const application::EditorFrame &frame);
-    void announce_settings(const application::EditorFrame &frame);
+    void update_title(const application::EditorDelivery &frame);
+    void announce(const application::EditorDelivery &frame);
+    void announce_settings(const application::EditorDelivery &frame);
     void offer_utf8(const core::FilePath &path);
     void turn_wheel(WPARAM word, LPARAM data);
     [[nodiscard]] bool over_title_bar(LPARAM data) const;

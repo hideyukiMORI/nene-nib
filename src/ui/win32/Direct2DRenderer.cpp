@@ -120,10 +120,11 @@ constexpr float full_channel = 255.0F;
     return byte;
 }
 
-// バイト位置を DirectWrite の UTF-16 の位置へ。変換はここでだけ起きる（CPP-014）。
+// バイト位置を DirectWrite の UTF-16 の位置へ。単位数は core の正典で測る（CPP-014）。
 [[nodiscard]] UINT32 utf16_at(std::string_view text, std::size_t byte)
 {
-    return static_cast<UINT32>(widen(text.substr(0, std::min(byte, text.size()))).size());
+    return static_cast<UINT32>(
+        core::utf16_length(text.substr(0, std::min(byte, text.size()))).value_or(0));
 }
 
 [[nodiscard]] UINT32 utf16_offset(std::string_view text, core::Column column)
@@ -484,6 +485,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_guide_formats(const 
 std::expected<void, RenderFailure>
 Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
 {
+    // 書式の寿命をキーに含める。生成が失敗しても古い行番号資源は持ち越さない。
+    gutter_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
@@ -594,6 +597,13 @@ void Direct2DRenderer::write(std::string_view text, IDWriteTextFormat *format,
 void Direct2DRenderer::write_status(std::string_view text, IDWriteTextFormat *format,
                                     const core::LayoutRect &area, core::RgbColor color)
 {
+    draw_status_text(status_text_layout(text, format, area), area, color);
+}
+
+const StatusTextLayout &Direct2DRenderer::status_text_layout(std::string_view text,
+                                                             IDWriteTextFormat *format,
+                                                             const core::LayoutRect &area)
+{
     auto &entry = status_layouts_.at(status_layout_cursor_);
     ++status_layout_cursor_;
     const core::LayoutRect bounds{0, 0, core::width_of(area), core::height_of(area)};
@@ -603,12 +613,22 @@ void Direct2DRenderer::write_status(std::string_view text, IDWriteTextFormat *fo
         if (!made)
         {
             entry = {};
-            return;
+            return entry;
         }
         entry.text.assign(text);
         entry.area = bounds;
         entry.format = format;
         entry.layout = std::move(made);
+    }
+    return entry;
+}
+
+void Direct2DRenderer::draw_status_text(const StatusTextLayout &entry, const core::LayoutRect &area,
+                                        core::RgbColor color)
+{
+    if (!entry.layout)
+    {
+        return;
     }
     brush_->SetColor(to_color(color));
     context_->DrawTextLayout(
@@ -634,6 +654,26 @@ void Direct2DRenderer::write_right(std::string_view text, IDWriteTextFormat *for
         D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), shown.Get(),
         brush_.Get());
     context_->PopAxisAlignedClip();
+}
+
+void Direct2DRenderer::write_gutter(std::string_view text, const core::LayoutRect &area,
+                                    core::RgbColor color)
+{
+    const auto retained = gutter_layouts_.lookup(text, area);
+    auto layout = retained.value_or(nullptr);
+    if (!layout)
+    {
+        layout = text_layout(text, gutter_format_.Get(), area);
+        gutter_layouts_.retain(text, area, layout);
+    }
+    if (!layout)
+    {
+        return;
+    }
+    brush_->SetColor(to_color(color));
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), layout.Get(),
+        brush_.Get());
 }
 
 void Direct2DRenderer::draw_cross(const core::LayoutRect &box, float half, float stroke)
@@ -823,19 +863,24 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
 // (3) 行の原点 area.left / area.top が整数の画素。
 // どれかを変えるときは字形の保持をやめるか、collector の答えを同じ値から出す。
 // tests/ui が (1) と (2) の collector 側の値を確かめる。
-void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area)
+void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
+                                      D2D1_DRAW_TEXT_OPTIONS options)
 {
     const auto entry = std::ranges::find_if(body_layouts_, [text](const BodyTextLayout &value)
                                             { return value.layout.Get() == text; });
     const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
     if (entry == body_layouts_.end() || !entry->glyphs_ready)
     {
-        context_->DrawTextLayout(origin, text, brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        context_->DrawTextLayout(origin, text, brush_.Get(), options);
         return;
     }
-    context_->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, static_cast<float>(area.right),
-                                              static_cast<float>(area.bottom)),
-                                  D2D1_ANTIALIAS_MODE_ALIASED);
+    if (options == D2D1_DRAW_TEXT_OPTIONS_CLIP)
+    {
+        context_->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y,
+                                                  static_cast<float>(area.right),
+                                                  static_cast<float>(area.bottom)),
+                                      D2D1_ANTIALIAS_MODE_ALIASED);
+    }
     for (const auto &stored : entry->glyphs)
     {
         const DWRITE_GLYPH_RUN run{stored.face.Get(),
@@ -850,7 +895,10 @@ void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::Layou
             D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run,
             brush_.Get(), stored.measuring);
     }
-    context_->PopAxisAlignedClip();
+    if (options == D2D1_DRAW_TEXT_OPTIONS_CLIP)
+    {
+        context_->PopAxisAlignedClip();
+    }
 }
 
 Direct2DRenderer::TextLayout Direct2DRenderer::text_layout(std::string_view text,
@@ -1033,12 +1081,10 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
     const auto radius = static_cast<float>(core::to_pixels(block_radius_dips, dpi_));
     brush_->SetColor(to_color(frame.palette.accent));
     context_->FillRoundedRectangle(D2D1::RoundedRect(block, radius, radius), brush_.Get());
-    // 覆った 1 文字だけを on_accent で描き直す。切り抜きの中に行の layout をもう一度通す。
+    // 覆った 1 文字だけを on_accent で描き直す。字形とfallbackは本文と同じ一経路を通す。
     context_->PushAxisAlignedClip(block, D2D1_ANTIALIAS_MODE_ALIASED);
     brush_->SetColor(to_color(frame.palette.on_accent));
-    context_->DrawTextLayout(
-        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), text,
-        brush_.Get());
+    draw_body_text(text, area, D2D1_DRAW_TEXT_OPTIONS_NONE);
     context_->PopAxisAlignedClip();
 }
 
@@ -1188,17 +1234,17 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
     {
         fill(row, frame.palette.current_line);
     }
-    write(std::to_string(line.number.value), gutter_format_.Get(),
-          core::LayoutRect{
-              body.gutter.left, row.top,
-              body.gutter.right -
-                  core::to_pixels(static_cast<std::int32_t>(
-                                      static_cast<float>(gutter_padding_dips) *
-                                          core::font_size_ratio(frame.settings.font_size) +
-                                      0.5F),
-                                  dpi_),
-              row.bottom},
-          frame.palette.gutter);
+    write_gutter(std::to_string(line.number.value),
+                 core::LayoutRect{
+                     body.gutter.left, row.top,
+                     body.gutter.right -
+                         core::to_pixels(static_cast<std::int32_t>(
+                                             static_cast<float>(gutter_padding_dips) *
+                                                 core::font_size_ratio(frame.settings.font_size) +
+                                             0.5F),
+                                         dpi_),
+                     row.bottom},
+                 frame.palette.gutter);
     const core::LayoutRect area{body.content.left, row.top, body.content.right, row.bottom};
     // 変換中の文字列はキャレットの行にだけ差し込まれる（ADR 0014 の決定 2）。
     if (on_caret_line && frame.composition.has_value())
@@ -1313,22 +1359,23 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
         return;
     }
     draw_toggle(frame, layout);
-    write_status(frame.mode_label, mode_format_.Get(), layout.mode, frame.palette.text);
-    draw_recording(frame, layout);
+    const auto &mode = status_text_layout(frame.mode_label, mode_format_.Get(), layout.mode);
+    draw_status_text(mode, layout.mode, frame.palette.text);
+    draw_recording(frame, layout, mode);
 }
 
 // 録画中のマクロ（ADR 0046 の決定 8）。モード表示の文字の直後から右の項目の手前までに、
 // Vim のコマンド行と同じ `recording @a` を muted で書く。色はトークンだけ（ADR 0008 決定 8）。
 void Direct2DRenderer::draw_recording(const application::EditorFrame &frame,
-                                      const core::StatusBarLayout &layout)
+                                      const core::StatusBarLayout &layout,
+                                      const StatusTextLayout &mode)
 {
     if (!frame.recording.has_value())
     {
         return;
     }
-    const auto label = text_layout(frame.mode_label, mode_format_.Get(), layout.mode);
     DWRITE_TEXT_METRICS metrics{};
-    if (!label || FAILED(label->GetMetrics(&metrics)))
+    if (!mode.layout || FAILED(mode.layout->GetMetrics(&metrics)))
     {
         return;
     }
@@ -1502,8 +1549,7 @@ void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame
     const auto label =
         core::palette_row_label(row, dpi_, choice.origin.has_value() || !choice.key.empty());
     context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
-    write(choice.label.text(), command_format_.Get(), label, frame.palette.text);
-    draw_palette_detail(frame, choice, label);
+    draw_palette_label(frame, choice, label);
     context_->PopAxisAlignedClip();
     if (choice.origin.has_value())
     {
@@ -1562,9 +1608,30 @@ void Direct2DRenderer::draw_keycap(std::string_view key, IDWriteTextFormat *form
     context_->PopAxisAlignedClip();
 }
 
+void Direct2DRenderer::draw_palette_label(const application::EditorFrame &frame,
+                                          const core::CommandChoice &choice,
+                                          const core::LayoutRect &label)
+{
+    if (!choice.detail.has_value())
+    {
+        write(choice.label.text(), command_format_.Get(), label, frame.palette.text);
+        return;
+    }
+    const auto title = text_layout(choice.label.text(), command_format_.Get(), label);
+    if (!title)
+    {
+        return;
+    }
+    brush_->SetColor(to_color(frame.palette.text));
+    context_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(label.left), static_cast<float>(label.top)), title.Get(),
+        brush_.Get());
+    draw_palette_detail(frame, choice, label, title.Get());
+}
+
 void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame,
                                            const core::CommandChoice &choice,
-                                           const core::LayoutRect &label)
+                                           const core::LayoutRect &label, IDWriteTextLayout *title)
 {
     // 場所は題名の後ろに 12 DIP 空けて muted で書き、行の右端で文字単位に切る（ADR 0057 の
     // 決定 7）。題名が入りきらない行には書かない。detail の無い行（Ex の候補）は何もしない。
@@ -1572,7 +1639,6 @@ void Direct2DRenderer::draw_palette_detail(const application::EditorFrame &frame
     {
         return;
     }
-    const auto title = text_layout(choice.label.text(), command_format_.Get(), label);
     DWRITE_TEXT_METRICS metrics{};
     if (!title || FAILED(title->GetMetrics(&metrics)))
     {
@@ -1681,6 +1747,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
 {
     previous_body_layouts_.swap(body_layouts_);
     body_layouts_.clear();
+    gutter_layouts_.begin();
     context_->SetTarget(surface);
     context_->BeginDraw();
     context_->Clear(unpainted());
@@ -1702,6 +1769,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
             frame, core::palette_layout(width, height, dpi_, frame.command_palette.value().total));
     }
     previous_body_layouts_.clear();
+    gutter_layouts_.end();
     const auto ended = context_->EndDraw();
     context_->SetTarget(nullptr);
     if (FAILED(ended))
@@ -1711,12 +1779,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     return {};
 }
 
-std::expected<void, RenderFailure> Direct2DRenderer::render(const application::EditorFrame &frame)
+std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()
 {
-    const auto formatted = set_font(frame.settings);
-    if (!formatted)
+    if (surface_ != nullptr)
     {
-        return formatted;
+        return {};
     }
     Microsoft::WRL::ComPtr<IDXGISurface> surface;
     const auto acquired = swap_chain_->GetBuffer(0, IID_PPV_ARGS(&surface));
@@ -1735,7 +1802,23 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     {
         return std::unexpected(classify(mapped));
     }
-    const auto drawn = draw(frame, bitmap.Get());
+    surface_ = std::move(bitmap);
+    return {};
+}
+
+std::expected<void, RenderFailure> Direct2DRenderer::render(const application::EditorFrame &frame)
+{
+    const auto formatted = set_font(frame.settings);
+    if (!formatted)
+    {
+        return formatted;
+    }
+    const auto acquired = acquire_surface();
+    if (!acquired)
+    {
+        return acquired;
+    }
+    const auto drawn = draw(frame, surface_.Get());
     if (!drawn)
     {
         return drawn;
@@ -1773,6 +1856,7 @@ core::Column Direct2DRenderer::column_at(const application::LineView &line,
 std::expected<void, RenderFailure> Direct2DRenderer::resize(UINT width, UINT height)
 {
     context_->SetTarget(nullptr);
+    surface_.Reset();
     const auto resized = swap_chain_->ResizeBuffers(
         0, width == 0 ? 1U : width, height == 0 ? 1U : height, DXGI_FORMAT_UNKNOWN,
         static_cast<UINT>(DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT));

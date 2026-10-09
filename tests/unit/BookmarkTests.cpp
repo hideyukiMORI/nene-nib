@@ -95,7 +95,7 @@ app::EditorFrame palette(Editing &editing, std::string_view query)
 {
     applied(editing.controller(), app::CancelCommand{});
     applied(editing.controller(), app::OpenCommandPalette{});
-    return editing.controller().apply(app::CommandText{std::string(query)});
+    return editing.controller().apply_frame(app::CommandText{std::string(query)});
 }
 
 void verify_editing()
@@ -149,7 +149,7 @@ void verify_quiet_and_current()
     expect(editing.bookmarks().reads() == 0 && editing.bookmarks().writes() == 0,
            "startup, open, text, save and tab switching perform no bookmark I/O");
     const auto before = controller.frame();
-    const auto added = controller.apply(app::ToggleBookmark{});
+    const auto added = controller.apply_frame(app::ToggleBookmark{});
     expect(stored(editing) == "C:\\work\\a.txt|" && editing.bookmarks().reads() == 1 &&
                editing.bookmarks().writes() == 1,
            "an explicit toggle reads then writes the current named file once");
@@ -193,7 +193,7 @@ void verify_palette_sources()
         app::FolderBatch{editing.folders().requests().back().ticket,
                          {path_of("C:\\work\\b.txt"), path_of("C:\\work\\d.txt")},
                          app::FolderProgress::complete});
-    frame = editing.controller().apply(app::WorkCompleted{});
+    frame = editing.controller().apply_frame(app::WorkCompleted{});
     expect(rows(frame) == "C:\\work\\a.txt|C:\\work\\b.txt|C:\\work\\c.txt|C:\\work\\d.txt|",
            "folder delivery excludes the registered file");
     const auto reads = editing.bookmarks().reads();
@@ -210,12 +210,12 @@ void verify_selected_toggle()
     editing.history().serve(app::FileHistory{{path_of("C:\\other\\b.txt")}});
     static_cast<void>(palette(editing, "@"));
     const auto reads = editing.files().reads();
-    auto frame = editing.controller().apply(app::ToggleBookmark{});
+    auto frame = editing.controller().apply_frame(app::ToggleBookmark{});
     expect(stored(editing) == "C:\\other\\b.txt|" && !frame.command_palette.has_value() &&
                frame.active_tab == 0 && frame.tabs.size() == 1 && editing.files().reads() == reads,
            "toggling a selected history file registers it without opening or switching");
     static_cast<void>(palette(editing, "*"));
-    frame = editing.controller().apply(app::ToggleBookmark{});
+    frame = editing.controller().apply_frame(app::ToggleBookmark{});
     expect(stored(editing).empty() && !frame.command_palette.has_value(),
            "the same selection command removes a bookmark");
     expect(rows(palette(editing, "*")).empty(), "reopening refreshes the removed list");
@@ -226,16 +226,16 @@ void verify_failures()
     Editing editing;
     open_file(editing);
     editing.bookmarks().serve(std::unexpected(app::FileBookmarksFailure::malformed));
-    auto frame = editing.controller().apply(app::ToggleBookmark{});
+    auto frame = editing.controller().apply_frame(app::ToggleBookmark{});
     expect(editing.bookmarks().writes() == 0 && frame.command_message.has_value(),
            "a read failure warns and never overwrites the file");
-    frame = editing.controller().apply(app::OpenCommandPalette{});
+    frame = editing.controller().apply_frame(app::OpenCommandPalette{});
     expect(rows(frame) == "C:\\work\\a.txt|" && frame.command_message.has_value(),
            "a broken list still allows other candidates with a warning");
     editing.bookmarks().serve(marked({"C:\\other.txt"}));
     editing.bookmarks().fail(app::FileBookmarksFailure::unwritable);
     static_cast<void>(palette(editing, "*oth"));
-    frame = editing.controller().apply(app::ToggleBookmark{});
+    frame = editing.controller().apply_frame(app::ToggleBookmark{});
     expect(frame.command_palette.has_value() &&
                frame.command_line.value_or(core::InputLineView{}).text == "*oth" &&
                rows(frame) == "C:\\other.txt|" && frame.command_palette.value().selected == 0 &&
@@ -250,7 +250,7 @@ void verify_missing_and_open()
     open_file(editing);
     editing.bookmarks().serve(marked({"C:\\gone.txt", "C:\\work\\a.txt"}));
     static_cast<void>(palette(editing, "*gone"));
-    auto frame = editing.controller().apply(app::SubmitCommand{});
+    auto frame = editing.controller().apply_frame(app::SubmitCommand{});
     expect(frame.command_message.has_value() && editing.bookmarks().writes() == 0 &&
                frame.tabs.size() == 1,
            "a missing file warns without removing its registration");
@@ -263,7 +263,7 @@ void verify_missing_and_open()
     open_file(editing, "C:\\work\\b.txt");
     const auto reads = editing.files().reads();
     static_cast<void>(palette(editing, "*"));
-    frame = editing.controller().apply(app::SubmitCommand{});
+    frame = editing.controller().apply_frame(app::SubmitCommand{});
     expect(frame.active_tab == 0 && frame.tabs.size() == 2 && editing.files().reads() == reads,
            "opening a bookmarked tab switches to it without a read or duplicate tab");
 }
@@ -272,13 +272,13 @@ void verify_ignored_inputs()
 {
     Editing editing;
     auto &controller = editing.controller();
-    auto frame = controller.apply(app::ToggleBookmark{});
+    auto frame = controller.apply_frame(app::ToggleBookmark{});
     expect(frame.command_message.has_value() && editing.bookmarks().reads() == 0,
            "an untitled document asks for a named file without I/O");
     open_file(editing);
     static_cast<void>(palette(editing, ":set"));
     const auto reads = editing.bookmarks().reads();
-    frame = controller.apply(app::ToggleBookmark{});
+    frame = controller.apply_frame(app::ToggleBookmark{});
     expect(frame.command_palette.has_value() &&
                frame.command_line.value_or(core::InputLineView{}).text == ":set" &&
                !frame.command_message.has_value() && editing.bookmarks().reads() == reads,
@@ -289,7 +289,7 @@ void verify_ignored_inputs()
     {
         vim_replay(controller, key);
         const auto before = controller.frame().command_line.value_or(core::InputLineView{}).text;
-        frame = controller.apply(app::ToggleBookmark{});
+        frame = controller.apply_frame(app::ToggleBookmark{});
         expect(frame.command_line.value_or(core::InputLineView{}).text == before &&
                    editing.bookmarks().reads() == reads,
                "Ex and search input ignore the shortcut");
@@ -297,7 +297,7 @@ void verify_ignored_inputs()
     }
     applied(controller, app::SelectEditMode{core::EditMode::ordinary});
     applied(controller, app::ComposeText{composed_of("あ", {}, 0)});
-    frame = controller.apply(app::ToggleBookmark{});
+    frame = controller.apply_frame(app::ToggleBookmark{});
     expect(frame.composition.has_value() && editing.bookmarks().reads() == reads &&
                editing.bookmarks().writes() == 0,
            "IME composition ignores the shortcut");
@@ -305,7 +305,7 @@ void verify_ignored_inputs()
     static_cast<void>(palette(editing, "*"));
     const auto palette_reads = editing.bookmarks().reads();
     applied(controller, app::ComposeText{composed_of("あ", {}, 0)});
-    frame = controller.apply(app::ToggleBookmark{});
+    frame = controller.apply_frame(app::ToggleBookmark{});
     expect(frame.command_composition.has_value() && editing.bookmarks().reads() == palette_reads &&
                editing.bookmarks().writes() == 0,
            "palette composition ignores the shortcut too");
@@ -318,7 +318,7 @@ void verify_operation_list_ignored()
     open_file(editing);
     static_cast<void>(palette(editing, "?"));
     const auto reads = editing.bookmarks().reads();
-    const auto frame = editing.controller().apply(app::ToggleBookmark{});
+    const auto frame = editing.controller().apply_frame(app::ToggleBookmark{});
     expect(frame.command_palette.has_value() &&
                frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                !frame.command_message.has_value() && editing.bookmarks().reads() == reads &&

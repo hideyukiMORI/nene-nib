@@ -17,10 +17,15 @@ constexpr char32_t first_supplementary = 0x10000;
 constexpr unsigned int surrogate_shift = 10U;
 constexpr char32_t low_surrogate_mask = 0x3FF;
 
+[[nodiscard]] constexpr std::size_t scalar_units(char32_t value) noexcept
+{
+    return value < first_supplementary ? 1 : 2;
+}
+
 // 検証済みの code point を UTF-16 の 1〜2 単位へ。U+10000 以上だけがサロゲートペアになる。
 void append_utf16(std::wstring &utf16, char32_t value)
 {
-    if (value < first_supplementary)
+    if (scalar_units(value) == 1)
     {
         utf16.push_back(static_cast<wchar_t>(value));
         return;
@@ -94,5 +99,20 @@ std::expected<std::string, TextFailure> to_utf8(std::wstring_view utf16)
         append_utf8(utf8, scalar.value());
     }
     return utf8;
+}
+
+std::expected<std::size_t, TextFailure> utf16_length(std::string_view utf8)
+{
+    const auto validated = validate_utf8(utf8);
+    if (!validated)
+    {
+        return std::unexpected(validated.error());
+    }
+    std::size_t units = 0;
+    for (std::size_t at = 0; at < utf8.size(); at = next_code_point(utf8, Offset{at}).value)
+    {
+        units += scalar_units(code_point_at(utf8, Offset{at}));
+    }
+    return units;
 }
 } // namespace nenenib::core

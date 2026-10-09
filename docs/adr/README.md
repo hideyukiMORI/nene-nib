@@ -95,4 +95,14 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0077](0077-render-cache-contracts-are-tested-without-a-window.md) | 描画の保持の契約は窓を作らない試験で守り、字体選択の保持の取り付けは最善の努力にする | 受理 |
 | [0078](0078-operations-are-one-table-for-keys-and-the-f1-list.md) | 操作は core の 1 つの表に持ち、鍵と F1 の一覧が同じ 1 本の道で実行する | 受理 |
 | [0079](0079-operation-guides-and-settings-migration.md) | 操作の案内は操作表から描き、設定は旧版を残して移行する | 受理 |
+| [0080](0080-detected-file-text-owns-the-validated-bytes.md) | 文字コードを判定した本文が検証済みのバイト列を所有し、本文へ移す | 受理 |
+| [0081](0081-consume-temporary-editor-state-through-one-update-path.md) | 一時的なエディタ状態は同じ更新経路へ所有権を渡し、不要な置換を省く | 受理 |
 | [0082](0082-scoped-probes-compare-identical-work-without-a-window.md) | 同じ固定処理を窓なしで前後比較する | 受理 |
+| [0083](0083-reuse-gutter-layouts-and-swap-chain-target.md) | 行番号の文字組みと描画先を寿命の内で再利用する | 受理 |
+| [0084](0084-intent-delivery-does-not-build-visible-lines.md) | 意図の反映値は行を作らず、描画と当たり判定でだけ frame を作る | 受理 |
+| [0085](0085-completed-history-edits-are-private-immutable-values.md) | 確定済み履歴の編集は私有の不変値として共有する | 受理・#334で採用 |
+| [0086](0086-ascii-runs-stay-inside-the-utf8-validator.md) | ASCIIの連続区間はUTF-8検証の正典の中でまとめて数える | 受理・#334で採用 |
+| [0087](0087-release-thinlto-keeps-symbol-boundaries.md) | ReleaseのThinLTOとシンボル境界の実験 | 製品不採用・実験記録 |
+| [0088](0088-vim-registers-are-private-immutable-snapshots.md) | Vimレジスタ本文は私有の不変snapshotで共有する | 受理・#334で採用 |
+| [0089](0089-recorded-vim-keys-are-private-immutable-chunks.md) | 記録したVim鍵列は私有の不変chunkとして共有する | 受理・#334で採用 |
+| [0090](0090-block-caret-and-recording-reuse-retained-text.md) | ブロックカーソルと録画表示も保持済みの文字を使う | 受理・#334で採用 |

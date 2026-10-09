@@ -8,10 +8,30 @@
 
 namespace nenenib::tests
 {
+// UTF 検証と表示値/UTF-16の直接の境界（ADR 0086）。
+void verify_utf8_scope();
+
+// ADR 0080: 判定済み所有値と、読み込み・改行索引の既存契約。
+void verify_detected_text_contracts();
+void verify_text_buffer_read_contracts();
+void verify_document_read_contracts();
+
+// Utf16Tests.cpp（長さの測定と既存変換の直接境界、ADR 0083）。
+void verify_utf16_scope();
+void verify_utf16_conversions();
+// ADR 0085: 履歴の所有・単位の合成・分岐・保存境界。
+void verify_edit_history_scope();
+
+// ADR 0089: 記録した鍵列の所有・境界・snapshot 分岐。
+void verify_vim_recorded_keys_scope();
+
 // DisplayLineTests.cpp
 void verify_display_line();
 void verify_display_line_views();
 void verify_display_line_scope();
+
+// EditorDeliveryTests.cpp
+void verify_delivery_contracts();
 
 // TabsTests.cpp
 void verify_tabs_contracts();
@@ -44,6 +64,7 @@ void verify_vim_dot_contracts();
 void verify_vim_dot_scope();
 
 // VimMacroTests.cpp
+void verify_vim_register_snapshot_contracts();
 void verify_vim_macro_contracts();
 void verify_vim_macro_scope();
 
@@ -154,6 +175,7 @@ void verify_look();
 
 // ApplicationTests.cpp
 void verify_document_save_contracts();
+void verify_application_scope();
 void verify_editor_state();
 void verify_controller_intents();
 

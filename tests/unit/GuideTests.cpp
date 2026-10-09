@@ -92,46 +92,47 @@ void verify_document_context()
     Editing editor;
     auto &controller = editor.controller();
     expect_context(controller.frame(), GuideContext::untouched_untitled);
-    expect_context(controller.apply(app::InsertText{"a"}), GuideContext::other);
-    const auto undone = controller.apply(app::HistoryAction{core::HistoryDirection::undo});
+    expect_context(controller.apply_frame(app::InsertText{"a"}), GuideContext::other);
+    const auto undone = controller.apply_frame(app::HistoryAction{core::HistoryDirection::undo});
     expect(undone.lines.front().text.empty(), "undo returned the document to zero bytes");
     expect_context(undone, GuideContext::other);
-    expect_context(controller.apply(app::NewTab{}), GuideContext::untouched_untitled);
-    expect_context(controller.apply(app::SwitchTab{0}), GuideContext::other);
-    expect_context(controller.apply(app::SwitchTab{1}), GuideContext::untouched_untitled);
+    expect_context(controller.apply_frame(app::NewTab{}), GuideContext::untouched_untitled);
+    expect_context(controller.apply_frame(app::SwitchTab{0}), GuideContext::other);
+    expect_context(controller.apply_frame(app::SwitchTab{1}), GuideContext::untouched_untitled);
     editor.files().hold(std::string{});
-    const auto opened = controller.apply(app::OpenDocument{sample_path()});
+    const auto opened = controller.apply_frame(app::OpenDocument{sample_path()});
     expect(opened.document.path.has_value() && opened.lines.front().text.empty(),
            "opened file is named and empty");
     expect_context(opened, GuideContext::other);
-    expect_context(controller.apply(app::NewTab{}), GuideContext::untouched_untitled);
+    expect_context(controller.apply_frame(app::NewTab{}), GuideContext::untouched_untitled);
 }
 
 void verify_sessions_and_ime()
 {
     Editing editor;
     auto &controller = editor.controller();
-    expect_context(controller.apply(app::ComposeText{composed_of("あ", {}, 0)}),
+    expect_context(controller.apply_frame(app::ComposeText{composed_of("あ", {}, 0)}),
                    GuideContext::hidden);
-    expect_context(controller.apply(app::CancelComposition{}), GuideContext::untouched_untitled);
-    expect_context(controller.apply(app::OpenCommandPalette{}), GuideContext::hidden);
-    const auto composed = controller.apply(app::ComposeText{composed_of("あ", {}, 0)});
+    expect_context(controller.apply_frame(app::CancelComposition{}),
+                   GuideContext::untouched_untitled);
+    expect_context(controller.apply_frame(app::OpenCommandPalette{}), GuideContext::hidden);
+    const auto composed = controller.apply_frame(app::ComposeText{composed_of("あ", {}, 0)});
     expect(composed.command_composition.has_value(), "palette IME uses the command composition");
     expect_context(composed, GuideContext::hidden);
-    expect_context(controller.apply(app::CancelCommand{}), GuideContext::untouched_untitled);
-    expect_context(controller.apply(app::OpenOperationList{}), GuideContext::hidden);
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    expect_context(controller.apply(app::SelectEditMode{core::EditMode::vim}),
+    expect_context(controller.apply_frame(app::CancelCommand{}), GuideContext::untouched_untitled);
+    expect_context(controller.apply_frame(app::OpenOperationList{}), GuideContext::hidden);
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    expect_context(controller.apply_frame(app::SelectEditMode{core::EditMode::vim}),
                    GuideContext::untouched_untitled);
     expect_context(controller.press_vim_key(core::VimCharacter{U':'}), GuideContext::hidden);
-    static_cast<void>(controller.apply(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
     expect_context(controller.press_vim_key(core::VimCharacter{U'/'}), GuideContext::hidden);
-    static_cast<void>(controller.apply(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
     expect_context(controller.press_vim_key(core::VimCharacter{U'i'}),
                    GuideContext::untouched_untitled);
-    expect_context(controller.apply(app::ComposeText{composed_of("あ", {}, 0)}),
+    expect_context(controller.apply_frame(app::ComposeText{composed_of("あ", {}, 0)}),
                    GuideContext::hidden);
-    static_cast<void>(controller.apply(app::CancelComposition{}));
+    static_cast<void>(controller.apply_frame(app::CancelComposition{}));
     expect_context(controller.press_vim_key(core::VimCharacter{U'a'}), GuideContext::other);
 }
 
@@ -139,7 +140,7 @@ void verify_recording_and_notice()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{core::EditMode::vim}));
     static_cast<void>(controller.press_vim_key(core::VimCharacter{U'q'}));
     const auto recording = controller.press_vim_key(core::VimCharacter{U'a'});
     expect(recording.recording.has_value(), "recording starts before guide suppression check");
@@ -149,24 +150,24 @@ void verify_recording_and_notice()
     const auto notice = run_ex(controller, "unknown");
     expect(notice.command_message.has_value(), "invalid command creates a one-line notice");
     expect_context(notice, GuideContext::hidden);
-    expect_context(controller.apply(app::VisibleLines{12}), GuideContext::hidden);
-    expect_context(controller.apply(app::NewTab{}), GuideContext::untouched_untitled);
+    expect_context(controller.apply_frame(app::VisibleLines{12}), GuideContext::hidden);
+    expect_context(controller.apply_frame(app::NewTab{}), GuideContext::untouched_untitled);
 }
 
 void verify_guide_setting_context()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{core::EditMode::vim}));
     static_cast<void>(run_ex(controller, "set noguide"));
-    expect_context(controller.apply(app::NewTab{}), GuideContext::hidden);
+    expect_context(controller.apply_frame(app::NewTab{}), GuideContext::hidden);
     editor.settings().fail(app::SettingsFailure::unwritable);
     static_cast<void>(run_ex(controller, "set guide"));
-    expect_context(controller.apply(app::NewTab{}), GuideContext::hidden);
+    expect_context(controller.apply_frame(app::NewTab{}), GuideContext::hidden);
     editor.settings().fail(std::nullopt);
     const auto success = run_ex(controller, "set guide");
     expect_context(success, GuideContext::hidden);
-    expect_context(controller.apply(app::NewTab{}), GuideContext::untouched_untitled);
+    expect_context(controller.apply_frame(app::NewTab{}), GuideContext::untouched_untitled);
     auto saved = core::default_editor_settings();
     saved.guide = core::GuideVisibility::hidden;
     Editing restored{SettingsReading{saved}};

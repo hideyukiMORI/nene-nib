@@ -72,9 +72,9 @@ using nenenib::core::VirtualColumn;
 {
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string(text)});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     return controller;
 }
 
@@ -112,9 +112,9 @@ void verify_vim_block_short_lines()
     Editing editing;
     EditorController &controller = vim_block_editor(editing, "abcdef\ngh\nij");
     vim_replay(controller, "3l<C-v>jjly");
-    expect(controller.vim_state().unnamed_register.text == "cd\n\n",
+    expect(controller.vim_state().unnamed_register.value().text == "cd\n\n",
            "the rows that end before the block put nothing in the register");
-    expect(vim_register_kind(controller.vim_state().unnamed_register) == "\0262",
+    expect(vim_register_kind(controller.vim_state().unnamed_register.value()) == "\0262",
            "and the register is a block two columns wide");
     expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{3}},
            "the yank leaves the caret at the top left corner");
@@ -149,13 +149,13 @@ void verify_vim_block_line_endings()
     Editing editing;
     EditorController &controller = vim_block_editor(editing, "abc\r\ndef\r\nghi");
     vim_replay(controller, "<C-v>jld");
-    expect(controller.vim_state().unnamed_register.text == "ab\nde",
+    expect(controller.vim_state().unnamed_register.value().text == "ab\nde",
            "the block register holds LF only");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "c\r\nf\r\nghi",
            "the block delete kept the CRLF line endings");
     vim_replay(controller, "G$p");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "c\r\nf\r\nghiab\r\n   de",
            "and the line the block paste added came back as CRLF");
 }

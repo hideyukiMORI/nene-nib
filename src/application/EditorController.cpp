@@ -887,7 +887,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     return true;
 }
 
-EditorFrame EditorController::apply(const EditorIntent &intent)
+EditorDelivery EditorController::apply(const EditorIntent &intent)
 {
     settle_tab_walk_before(keeps_tab_walk(intent));
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
@@ -904,7 +904,23 @@ EditorFrame EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<WorkCompleted>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
+    return delivery();
+}
+
+EditorFrame EditorController::apply_frame(const EditorIntent &intent)
+{
+    static_cast<void>(apply(intent));
     return frame();
+}
+
+bool EditorController::is_composing() const noexcept
+{
+    return state_.composition().has_value();
+}
+
+std::vector<DocumentView> EditorController::documents() const
+{
+    return tab_views(state_, active_document_view());
 }
 
 // fixture と契約の harness が打つ 1 鍵（ADR 0048 の決定 8）。入力行の写しは再生と同じ
@@ -950,10 +966,11 @@ void EditorController::begin_intent(bool keeps_message)
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
     // 一覧で頼まれた操作も同じく 1 意図だけ（ADR 0078 の決定 8）。
-    state_ = state_.with_failure(std::nullopt)
-                 .with_closing(false)
-                 .with_close_request(std::nullopt)
-                 .with_operation_request(std::nullopt);
+    if (state_.last_failure().has_value() || state_.closing() ||
+        state_.close_request().has_value() || state_.operation_request().has_value())
+    {
+        state_ = state_.with_intent_cleared();
+    }
     unreached_tabs_ = 0;
     if (state_.command_message().has_value() && !keeps_message)
     {
@@ -1046,9 +1063,10 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
     const core::Offset caret{range.begin.value + text.size()};
     const std::size_t before = state_.history().position();
-    const auto edited = state_.with_edit(std::move(next), core::collapsed_at(caret),
-                                         state_.history().pushed(edit, boundary));
-    state_ = edited.with_document(after_edit_at(edited.document(), before));
+    auto history = state_.history().pushed(edit, boundary);
+    auto document = after_edit_at(state_.document(), before);
+    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
+                              std::move(document));
     follow_caret();
 }
 
@@ -1080,7 +1098,11 @@ void EditorController::follow_position(core::TextPosition position)
                                           : scroll_extent_for(state_.mode());
     const auto within = core::first_visible_within(followed, state_.text().line_count(),
                                                    scroll.visible_lines, extent);
-    state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
+    const ScrollState next{within, scroll.visible_lines};
+    if (!(next == scroll))
+    {
+        state_ = state_.with_scroll(next);
+    }
 }
 
 void EditorController::accept(const InsertText &intent)
@@ -1288,8 +1310,8 @@ void EditorController::undo_edit()
     const core::Offset end{at.value + edit.value().inserted.size()};
     auto next = state_.text().replaced(at, end, edit.value().removed);
     const core::Offset caret{at.value + edit.value().removed.size()};
-    state_ =
-        state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone());
+    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
+                              state_.document());
     follow_caret();
 }
 
@@ -1304,8 +1326,8 @@ void EditorController::redo_edit()
     const core::Offset end{at.value + edit.value().removed.size()};
     auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
-    state_ =
-        state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone());
+    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
+                              state_.document());
     follow_caret();
 }
 
@@ -2551,24 +2573,24 @@ void EditorController::accept(const RefreshAppearance &)
     state_ = state_.with_appearance(appearance_or_dark(ports_.appearance));
 }
 
-std::expected<std::string, FileFailure> EditorController::decoded(core::TextEncoding encoding,
-                                                                  std::string_view bytes)
+std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::DetectedText text)
 {
-    switch (encoding)
+    switch (text.encoding())
     {
     case core::TextEncoding::utf8:
-        return std::string(bytes);
     case core::TextEncoding::utf8_bom:
-        return std::string(core::without_byte_order_mark(bytes));
+        return core::TextBuffer::from_utf8(std::move(text))
+            .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
     case core::TextEncoding::shift_jis:
         break;
     }
-    auto converted = ports_.code_pages.to_utf8(bytes);
+    auto converted = ports_.code_pages.to_utf8(text.bytes());
     if (!converted)
     {
         return std::unexpected(file_failure_of(converted.error()));
     }
-    return std::move(converted).value();
+    return core::TextBuffer::from_utf8(converted.value())
+        .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
 }
 
 std::expected<std::string, FileFailure> EditorController::encoded(core::TextEncoding encoding,
@@ -2601,22 +2623,18 @@ EditorController::read_document(const core::FilePath &path)
     {
         return std::unexpected(bytes.error());
     }
-    const auto encoding = core::detect_encoding(bytes.value());
-    if (!encoding)
+    auto detected = core::DetectedText::from_bytes(bytes.value());
+    if (!detected)
     {
         return std::unexpected(FileFailure::undecodable);
     }
-    const auto utf8 = decoded(encoding.value(), bytes.value());
-    if (!utf8)
-    {
-        return std::unexpected(utf8.error());
-    }
-    auto text = core::TextBuffer::from_utf8(utf8.value());
+    const core::TextEncoding encoding = detected.value().encoding();
+    auto text = decoded(std::move(detected).value());
     if (!text)
     {
-        return std::unexpected(FileFailure::undecodable);
+        return std::unexpected(text.error());
     }
-    return std::pair{std::move(text).value(), Document{path, encoding.value(), std::size_t{0}}};
+    return std::pair{std::move(text).value(), Document{path, encoding, std::size_t{0}}};
 }
 
 // 同じファイルを開いているタブの帯の位置（決定 5 の (a)）。比べ方は FilePort が OS の規則で決める。
@@ -3278,40 +3296,58 @@ core::GuideContext EditorController::guide_context() const noexcept
     return core::GuideContext::other;
 }
 
+EditorDelivery EditorController::delivery() const
+{
+    const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
+    return EditorDelivery{theme.appearance,
+                          state_.mode(),
+                          state_.vim().mode,
+                          ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input()),
+                          composed(),
+                          command_composed(),
+                          active_document_view(),
+                          state_.settings(),
+                          state_.settings_failure(),
+                          command_message(),
+                          state_.closing(),
+                          state_.close_request(),
+                          state_.operation_request()};
+}
+
 EditorFrame EditorController::frame() const
 {
+    auto delivered = delivery();
     const auto caret = state_.text().position_of(state_.selection().caret);
-    const auto &document = state_.document();
-    const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
-    DocumentView active = active_document_view();
-    auto tabs = tab_views(state_, active);
-    return EditorFrame{visible_lines(),
-                       CaretView{caret, caret_shape_for(state_.mode(), state_.vim().mode)},
-                       state_.scroll().first_visible,
-                       state_.text().line_count(),
-                       theme.appearance,
-                       theme.ui,
-                       state_.mode(),
-                       state_.vim().mode,
-                       ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input()),
-                       core::mode_label(state_.mode(), state_.vim().mode),
-                       recording_name(),
-                       composed(),
-                       command_composed(),
-                       std::move(active),
-                       core::status_items_for(caret, document.encoding, state_.line_ending()),
-                       state_.settings(),
-                       state_.settings_failure(),
-                       command_line_view(),
-                       command_message(),
-                       command_palette_view(),
-                       std::move(tabs),
-                       state_.active_tab(),
-                       state_.tab_scroll(),
-                       state_.hovered(),
-                       state_.closing(),
-                       state_.close_request(),
-                       state_.operation_request(),
-                       core::operation_guide(guide_context(), state_.mode())};
+    const auto &theme = core::selected_theme(delivered.settings, delivered.appearance);
+    auto tabs = tab_views(state_, delivered.document);
+    return EditorFrame{
+        visible_lines(),
+        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode)},
+        state_.scroll().first_visible,
+        state_.text().line_count(),
+        delivered.appearance,
+        theme.ui,
+        delivered.mode,
+        delivered.vim_mode,
+        delivered.ime,
+        core::mode_label(delivered.mode, delivered.vim_mode),
+        recording_name(),
+        std::move(delivered.composition),
+        std::move(delivered.command_composition),
+        delivered.document,
+        core::status_items_for(caret, delivered.document.encoding, state_.line_ending()),
+        std::move(delivered.settings),
+        std::move(delivered.settings_failure),
+        command_line_view(),
+        std::move(delivered.command_message),
+        command_palette_view(),
+        std::move(tabs),
+        state_.active_tab(),
+        state_.tab_scroll(),
+        state_.hovered(),
+        delivered.closing,
+        delivered.close_request,
+        delivered.operation_request,
+        core::operation_guide(guide_context(), delivered.mode)};
 }
 } // namespace nenenib::application

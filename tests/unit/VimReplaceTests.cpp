@@ -83,7 +83,8 @@ void verify_vim_replace_waiting()
     const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 3}};
     VimState initial = empty_vim_state();
     initial.count = nenenib::core::VimCount{2};
-    initial.unnamed_register = {"saved", VimRegisterKind::characters};
+    initial.unnamed_register = nenenib::core::VimRegisterSnapshot::from(
+        nenenib::core::VimRegister{"saved", VimRegisterKind::characters});
     const auto waiting = vim_step(initial, view, VimKey{VimCharacter{U'r'}});
     expect(waits_for_prefix(waiting.next, VimPrefix::r) && waiting.next.count == initial.count &&
                std::holds_alternative<nenenib::core::VimNoEffect>(waiting.effect),
@@ -92,7 +93,8 @@ void verify_vim_replace_waiting()
     expect(std::holds_alternative<nenenib::core::VimReplaceRange>(replaced.effect),
            "a digit after r is its target character");
     expect(replaced.next.mode == VimMode::normal && !replaced.next.input_wait.has_value() &&
-               !replaced.next.count.has_value() && replaced.next.unnamed_register.text == "saved",
+               !replaced.next.count.has_value() &&
+               replaced.next.unnamed_register.value().text == "saved",
            "replacement consumes transient input without overwriting the register");
     initial.count = nenenib::core::VimCount{std::numeric_limits<std::size_t>::max()};
     const auto too_many = vim_step(initial, view, VimKey{VimCharacter{U'r'}});

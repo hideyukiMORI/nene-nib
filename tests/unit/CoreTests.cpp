@@ -222,6 +222,81 @@ void verify_utf8_validation()
            "a broken four-byte sequence is rejected");
 }
 
+void verify_utf8_ascii_byte_tails(char byte)
+{
+    for (std::size_t offset = 0; offset < 16; ++offset)
+    {
+        for (std::size_t length = 0; length <= 33; ++length)
+        {
+            const std::string storage =
+                std::string(offset, 'x') + std::string(length, byte) + "\xFF";
+            const std::string_view input = std::string_view(storage).substr(offset, length);
+            const auto result = validate_utf8(input);
+            expect(result.has_value() && result.value() == length,
+                   "ASCII subviews count NUL and tails without reading the next invalid byte");
+        }
+    }
+}
+
+void verify_utf8_ascii_tails()
+{
+    constexpr std::array<char, 3> bytes{'a', '\0', '\x7F'};
+    for (const char byte : bytes)
+    {
+        verify_utf8_ascii_byte_tails(byte);
+    }
+}
+
+void verify_utf8_ascii_to_multibyte()
+{
+    constexpr std::array<std::string_view, 8> scalars{
+        "\x7F",         "\xC2\x80",     "\xDF\xBF",         "\xE0\xA0\x80",
+        "\xED\x9F\xBF", "\xEE\x80\x80", "\xF0\x90\x80\x80", "\xF4\x8F\xBF\xBF"};
+    for (std::size_t prefix = 0; prefix <= 24; ++prefix)
+    {
+        for (const std::string_view scalar : scalars)
+        {
+            const std::string input = std::string(prefix, 'a') + std::string(scalar) +
+                                      std::string(17, 'b') + std::string(scalar);
+            const auto result = validate_utf8(input);
+            expect(result.has_value() && result.value() == prefix + 19,
+                   "valid scalar ranges retain their count at every ASCII word boundary");
+        }
+    }
+}
+
+void verify_utf8_ascii_to_invalid()
+{
+    constexpr std::array<std::string_view, 15> invalid{"\x80",
+                                                       "\xBF",
+                                                       "\xC0\x80",
+                                                       "\xC1\xBF",
+                                                       "\xC2",
+                                                       "\xE0\x80\x80",
+                                                       "\xE6\x97",
+                                                       "\xE6\x28\xA5",
+                                                       "\xED\xA0\x80",
+                                                       "\xF0\x80\x80\x80",
+                                                       "\xF0\x9F\x96",
+                                                       "\xF4\x90\x80\x80",
+                                                       "\xF5\x80\x80\x80",
+                                                       "\xF8",
+                                                       "\xFF"};
+    for (std::size_t prefix = 0; prefix <= 24; ++prefix)
+    {
+        for (const std::string_view tail : invalid)
+        {
+            const std::string input = std::string(prefix, 'a') + std::string(tail);
+            const auto at_end = validate_utf8(input);
+            const auto followed = validate_utf8(input + std::string(17, 'b'));
+            expect(!at_end.has_value() && at_end.error() == TextFailure::invalid_utf8,
+                   "invalid UTF-8 at every ASCII word boundary is rejected at the end");
+            expect(!followed.has_value() && followed.error() == TextFailure::invalid_utf8,
+                   "ASCII after an invalid sequence never makes it valid");
+        }
+    }
+}
+
 void verify_utf8_counting()
 {
     expect(code_point_count("") == 0, "no bytes, no code points");
@@ -870,6 +945,107 @@ void verify_history_travel()
         twice.pushed(Edit{Offset{0}, "", "z", Offset{0}}, EditBoundary::separate);
     expect(rewritten.size() == 1, "a new edit after undo drops the redo tail");
     expect(EditHistory::empty().size() == 0, "a new history is empty");
+}
+
+void verify_history_input_ownership()
+{
+    const Edit expected{Offset{5}, std::string(96, 'r'), std::string(96, 'i'), Offset{3}};
+    Edit input = expected;
+    char *removed_alias = input.removed.data();
+    char *inserted_alias = input.inserted.data();
+    const auto history = EditHistory::empty().pushed(input, EditBoundary::separate);
+    removed_alias[17] = 'x';
+    inserted_alias[29] = 'y';
+    input.at = Offset{99};
+    input.restore = Offset{98};
+    expect(history.undo().value() == expected,
+           "push owns a defensive copy of external text and fields, including old data aliases");
+    auto returned = history.undo().value();
+    returned.removed[0] = 'z';
+    returned.inserted[0] = 'z';
+    returned.restore = Offset{97};
+    expect(history.undo().value() == expected, "mutating an undo result cannot alter its entry");
+    auto redone = history.undone().redo().value();
+    redone.removed[0] = 'q';
+    redone.inserted[0] = 'q';
+    expect(history.undone().redo().value() == expected,
+           "redo also returns an independent owning edit");
+    auto applied = history.applied(0);
+    expect(applied.has_value(), "an applied entry exists before the current position");
+    if (!applied.has_value())
+    {
+        return;
+    }
+    applied.value().removed[0] = 'p';
+    applied.value().inserted[0] = 'p';
+    const auto unchanged = history.applied(0);
+    expect(unchanged.has_value() && unchanged.value() == expected,
+           "applied returns ownership rather than a shared mutable entry");
+    expect(!history.applied(1).has_value() && !history.undone().applied(0).has_value(),
+           "applied only exposes edits before the current position");
+}
+
+void verify_history_coalesced_branches()
+{
+    const Edit deleted{Offset{0}, std::string(96, 'r'), "", Offset{8}};
+    const Edit typed{Offset{0}, "", std::string(96, 'a'), Offset{7}};
+    const auto prefix = EditHistory::empty().pushed(deleted, EditBoundary::separate);
+    const auto original = prefix.pushed(typed, EditBoundary::coalesce);
+    const auto left =
+        original.pushed(Edit{Offset{96}, "", "x", Offset{96}}, EditBoundary::coalesce);
+    const auto right =
+        original.pushed(Edit{Offset{96}, "", "y", Offset{95}}, EditBoundary::coalesce);
+    const Edit left_edit{Offset{0}, "", typed.inserted + "x", Offset{7}};
+    const Edit right_edit{Offset{0}, "", typed.inserted + "y", Offset{7}};
+    expect(left.undo().value() == left_edit && right.undo().value() == right_edit,
+           "two coalesced branches own their different tails and retain the first restore");
+    expect(original.undo().value() == typed && prefix.undo().value() == deleted,
+           "coalescing never mutates either old snapshot");
+    const Edit replacement{Offset{0}, "", "z", Offset{4}};
+    const auto rewritten = left.undone().pushed(replacement, EditBoundary::coalesce);
+    expect(rewritten.size() == 2 && rewritten.position() == 2 &&
+               rewritten.undo().value() == replacement &&
+               rewritten.redo().error() == HistoryFailure::nothing_to_redo,
+           "a push after undo drops only that branch's redo tail and opens a closed unit");
+    expect(left.undone().redo().value() == left_edit && right.undo().value() == right_edit &&
+               original.undo().value() == typed,
+           "redo truncation leaves the sibling and all earlier snapshots unchanged");
+    expect(rewritten.undone().undo().value() == deleted &&
+               original.undone().undo().value() == deleted,
+           "the completed deletion survives travel and branching unchanged");
+}
+
+void verify_history_absorbed_branches()
+{
+    const Edit first{Offset{5}, std::string(96, 'r'), "abcd", Offset{2}};
+    const auto original = EditHistory::empty().pushed(first, EditBoundary::absorb);
+    const Edit inside{Offset{6}, "b", "XY", Offset{6}};
+    const auto left = original.pushed(inside, EditBoundary::absorb);
+    const auto right = original.pushed(Edit{Offset{4}, "x", "", Offset{4}}, EditBoundary::absorb);
+    expect(left.undo().value() == Edit{Offset{5}, first.removed, "aXYcd", Offset{2}},
+           "an absorbed replacement only changes its new branch and keeps the first restore");
+    expect(right.undo().value() == Edit{Offset{4}, "x" + first.removed, "abcd", Offset{2}},
+           "a preceding deletion owns the expanded removed text in its own branch");
+    const auto saved = original.sealed();
+    const auto after_save = saved.pushed(inside, EditBoundary::absorb);
+    expect(saved.size() == 1 && saved.position() == 1 && after_save.size() == 2 &&
+               after_save.undo().value() == inside,
+           "save closes an absorb unit without altering its entry or saved position");
+    expect(after_save.undone().undo().value() == first && original.undo().value() == first &&
+               saved.undo().value() == first,
+           "saved and old snapshots retain their complete original edit");
+}
+
+void verify_history_empty_entries()
+{
+    const auto empty = EditHistory::empty();
+    expect(empty.undo().error() == HistoryFailure::nothing_to_undo &&
+               empty.redo().error() == HistoryFailure::nothing_to_redo &&
+               !empty.applied(0).has_value(),
+           "an empty history has typed absence rather than a null entry");
+    expect(empty.sealed().size() == 0 && empty.undone().position() == 0 &&
+               empty.redone().position() == 0,
+           "empty travel and sealing never manufacture an entry");
 }
 
 // ---------------------------------------------------------------- スクロール
@@ -1798,6 +1974,29 @@ void verify_palette()
            "the Ubuntu orange accent is the same in both appearances");
 }
 
+// 開く本文・改行索引と add の追記だけの対象指定（ADR 0080）。既存の試験を共有する。
+void verify_text_buffer_read_contracts()
+{
+    verify_buffer_creation();
+    verify_buffer_insertion();
+    verify_buffer_erasure();
+    verify_buffer_lines();
+    verify_buffer_crlf_split();
+    verify_buffer_positions();
+    verify_buffer_round_trip();
+    verify_buffer_scale();
+    verify_buffer_add_branches();
+    verify_buffer_chunk_growth();
+    verify_buffer_oversized_and_restored();
+    verify_buffer_shared_index_edits();
+    verify_buffer_chunk_line_numbers();
+    verify_buffer_index_branches();
+    verify_encoding_labels();
+    verify_encoding_detection();
+    verify_line_ending_detection();
+    verify_line_ending_model();
+}
+
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。
 void verify_caret_movement_contracts()
 {
@@ -1806,17 +2005,43 @@ void verify_caret_movement_contracts()
     verify_caret_words();
 }
 
-void verify_text_and_caret()
+void verify_utf16_conversions()
+{
+    verify_utf16_encoding();
+    verify_utf16_rejects();
+    verify_utf16_round_trip();
+}
+
+// 履歴の同じ契約を selector と既定実行から呼ぶ（ADR 0085）。
+void verify_edit_history_scope()
+{
+    verify_history_coalescing();
+    verify_history_absorbing();
+    verify_history_travel();
+    verify_history_input_ownership();
+    verify_history_coalesced_branches();
+    verify_history_absorbed_branches();
+    verify_history_empty_entries();
+}
+
+// UTF 検証とその直接の境界だけを選ぶ。既定実行も同じ関数を呼ぶ（ADR 0086）。
+void verify_utf8_scope()
 {
     verify_display_text_accepts_multibyte();
     verify_display_text_lengths();
     verify_display_text_rejects();
     verify_utf8_validation();
+    verify_utf8_ascii_tails();
+    verify_utf8_ascii_to_multibyte();
+    verify_utf8_ascii_to_invalid();
     verify_utf8_counting();
     verify_utf8_walking();
-    verify_utf16_encoding();
-    verify_utf16_rejects();
-    verify_utf16_round_trip();
+    verify_utf16_scope();
+}
+
+void verify_text_and_caret()
+{
+    verify_utf8_scope();
     verify_buffer_creation();
     verify_buffer_insertion();
     verify_buffer_erasure();
@@ -1837,9 +2062,8 @@ void verify_text_and_caret()
     verify_caret_characters();
     verify_caret_lines();
     verify_caret_words();
-    verify_history_coalescing();
-    verify_history_absorbing();
-    verify_history_travel();
+    verify_edit_history_scope();
+    verify_vim_recorded_keys_scope();
     verify_encoding_labels();
     verify_encoding_detection();
     verify_line_ending_detection();

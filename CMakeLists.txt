@@ -43,15 +43,15 @@ nenenib_target(nenenib_core core STATIC
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
-    src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
+    src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp
     src/core/KeyChord.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/ScrollBounds.cpp src/core/SearchLine.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
-    src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimKeyTable.cpp src/core/VimPattern.cpp src/core/VimRegisterText.cpp
-    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp
+    src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimKeyTable.cpp src/core/VimPattern.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp
+    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp)
@@ -65,11 +65,16 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/NibTests.cpp
     tests/unit/TestSupport.cpp
     tests/unit/VimTestSupport.cpp
+    tests/unit/DetectedTextTests.cpp
     tests/unit/CoreTests.cpp
+    tests/unit/Utf16Tests.cpp
+    tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp
+    tests/unit/EditorDeliveryTests.cpp
     tests/unit/VimEngineTests.cpp
     tests/unit/DisplayLineTests.cpp
     tests/unit/VimDotTests.cpp
+    tests/unit/VimRegisterSnapshotTests.cpp
     tests/unit/VimMacroTests.cpp
     tests/unit/VimClipboardTests.cpp
     tests/unit/VimSearchTests.cpp
@@ -173,7 +178,7 @@ set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp
-    src/ui/win32/BodyGlyphCollector.cpp)
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/GutterTextLayouts.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
@@ -188,6 +193,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/NibWindowTests.cpp tests/ui/WindowChecks.cpp tests/ui/DirectWriteFactory.cpp
     tests/ui/ScriptedTextSource.cpp tests/ui/ScriptedFontFallback.cpp tests/ui/SoftwareTarget.cpp
     tests/ui/FallbackKeyTests.cpp tests/ui/FallbackCacheTests.cpp
+    tests/ui/GutterLayoutTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_window)

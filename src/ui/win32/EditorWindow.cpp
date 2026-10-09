@@ -515,7 +515,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     place_at_screen_centre();
     // 起動引数の結果を先に控える。最初の描画が出す VisibleLines の意図で last_failure は消える
     // （ADR 0010 の決定 9）。
-    const auto opened = controller_.frame();
+    const auto opened = controller_.delivery();
     apply_backdrop(opened);
     timing_.mark(core::Milestone::backdrop_applied);
     // 配置してから見せる。生成時に (0,0) で見せない（ADR 0008 の決定 7）。device の生成は
@@ -529,17 +529,17 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
         return rendering;
     }
     // 題名は起動引数で開いた文書にも追従する（ADR 0010 の決定 13）。
-    update_title(controller_.frame());
+    update_title(controller_.delivery());
     // 開けなかった理由も 1 行出す。窓が出てから出すので、利用者は空の無題で作業を続けられる。
     announce(opened);
     announce_settings(opened);
     return {};
 }
 
-void EditorWindow::apply_backdrop(const application::EditorFrame &frame)
+void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
 {
     // Mica の明暗は DWM が持つので、表示値の外観をそのまま伝える。色は渡さない（ADR 0008）。
-    const BOOL dark = frame.appearance == core::Appearance::dark ? TRUE : FALSE;
+    const BOOL dark = delivery.appearance == core::Appearance::dark ? TRUE : FALSE;
     DwmSetWindowAttribute(window_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
                           static_cast<DWORD>(sizeof(dark)));
     // Mica は Windows 11 22H2 以降。掛からない環境でも帯は不透明の title_bar で塗るので（D16）、
@@ -560,7 +560,8 @@ std::expected<void, WindowFailure> EditorWindow::start_rendering()
     renderer_ = std::make_unique<Direct2DRenderer>(std::move(renderer).value());
     // 帯の幅は最初の描画の前に知らせる（アクティブなタブが見える送り量に直る・ADR 0056 の決定 8）。
     static_cast<void>(controller_.apply(application::TitleBarWidth{title_bar_width()}));
-    if (!draw_frame(controller_.apply(application::VisibleLines{body_lines()})))
+    static_cast<void>(controller_.apply(application::VisibleLines{body_lines()}));
+    if (!draw_frame(controller_.frame()))
     {
         return std::unexpected(WindowFailure::render);
     }
@@ -928,7 +929,7 @@ void EditorWindow::hover(const std::optional<core::TitleBarTarget> &target)
 void EditorWindow::close_tab(std::size_t tab)
 {
     // 未保存なら映してから確かめる。取り消しか保存の失敗なら閉じない（ADR 0056 の決定 6）。
-    if (application::tab_unsaved(controller_.frame().tabs, tab))
+    if (application::tab_unsaved(controller_.documents(), tab))
     {
         send(application::SwitchTab{tab});
         if (!confirm_discard())
@@ -1014,7 +1015,7 @@ void EditorWindow::click_client(LPARAM data)
     {
         send(application::CancelCommand{});
     }
-    if (controller_.frame().command_message.has_value() && in_status)
+    if (controller_.delivery().command_message.has_value() && in_status)
     {
         send(application::CancelCommand{});
         return;
@@ -1032,7 +1033,7 @@ void EditorWindow::click_client(LPARAM data)
         break;
     }
     const auto body = core::body_layout(client.right, client.bottom, dpi_,
-                                        controller_.frame().settings.font_size);
+                                        controller_.delivery().settings.font_size);
     if (core::contains(body.band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data);
@@ -1043,12 +1044,12 @@ void EditorWindow::click_palette(LPARAM data)
 {
     RECT client{};
     GetClientRect(window_, &client);
-    const auto frame = controller_.frame();
-    if (!frame.command_palette.has_value())
+    const auto view = controller_.command_palette_view();
+    if (!view.has_value())
     {
         return;
     }
-    const auto &palette = frame.command_palette.value();
+    const auto &palette = view.value();
     const auto layout = core::palette_layout(client.right, client.bottom, dpi_, palette.total);
     const auto hit = core::palette_hit(layout, low_word_of(data), high_word_of(data));
     if (hit.has_value())
@@ -1095,8 +1096,8 @@ void EditorWindow::place_caret(LPARAM data)
 void EditorWindow::refresh_appearance()
 {
     // 状態遷移は controller だけが行い、窓は返ってきた表示値を写す（ARC-011）。
-    const auto frame = controller_.apply(application::RefreshAppearance{});
-    apply_backdrop(frame);
+    const auto delivery = controller_.apply(application::RefreshAppearance{});
+    apply_backdrop(delivery);
     invalidate();
 }
 
@@ -1130,7 +1131,7 @@ std::size_t EditorWindow::body_lines() const
     RECT client{};
     GetClientRect(window_, &client);
     return core::body_layout(client.right, client.bottom, dpi_,
-                             controller_.frame().settings.font_size)
+                             controller_.delivery().settings.font_size)
         .visible_lines;
 }
 
@@ -1195,7 +1196,7 @@ void EditorWindow::send_composition(const core::Composition &composition)
 
 void EditorWindow::end_composition()
 {
-    if (!application::composing(controller_.frame()))
+    if (!controller_.is_composing())
     {
         return;
     }
@@ -1224,11 +1225,11 @@ void EditorWindow::place_candidate_window()
 
 // 構えは application の ime_stance_of が決めて frame に載せる。ui はその値を実行するだけで、
 // モードや入力行の有無から IME を決めない（ADR 0061 の決定 2）。
-void EditorWindow::follow_ime(const application::EditorFrame &frame)
+void EditorWindow::follow_ime(const application::EditorDelivery &delivery)
 {
     const auto previous = ime_stance_;
-    ime_stance_ = frame.ime;
-    switch (frame.ime)
+    ime_stance_ = delivery.ime;
+    switch (delivery.ime)
     {
     case application::ImeStance::as_left:
         restore_ime();
@@ -1334,44 +1335,44 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
                              std::holds_alternative<application::SubmitCommand>(intent) ||
                              std::holds_alternative<application::ActivateCommandChoice>(intent);
     const float previous_size =
-        font_change ? controller_.frame().settings.font_size.points() : 0.0F;
-    auto frame = controller_.apply(intent);
+        font_change ? controller_.delivery().settings.font_size.points() : 0.0F;
+    auto delivery = controller_.apply(intent);
     // 面が閉じて入力行の変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
     // の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
-    // 変換の無い frame に CancelComposition を送るだけ（再入は 1 段で止まる）。
+    // 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。
     const bool command_composed = command_composing_;
-    command_composing_ = frame.command_composition.has_value();
+    command_composing_ = delivery.command_composition.has_value();
     if (command_composed && !command_composing_ &&
         !std::holds_alternative<application::CommitText>(intent) &&
         !std::holds_alternative<application::CancelComposition>(intent))
     {
         cancel_ime_composition();
     }
-    // 閉じたいタブは意図を送った結果の frame にだけ載る（ADR 0057 の決定 6）。下で frame を
+    // 閉じたいタブは意図を送った結果の delivery にだけ載る（ADR 0057 の決定 6）。下で delivery を
     // 作り直す前に読んでおく。
-    const auto close_request = frame.close_request;
-    const bool closing = frame.closing;
-    // 一覧で選んだ操作も同じく意図を送った結果の frame にだけ載る（ADR 0078 の決定 8）。
-    const auto operation_request = frame.operation_request;
+    const auto close_request = delivery.close_request;
+    const bool closing = delivery.closing;
+    // 一覧で選んだ操作も同じく意図を送った結果の delivery にだけ載る（ADR 0078 の決定 8）。
+    const auto operation_request = delivery.operation_request;
     if (font_change)
     {
         if (std::holds_alternative<application::AdjustFontSize>(intent))
         {
-            announce_settings(frame);
+            announce_settings(delivery);
         }
-        apply_backdrop(frame);
-        if (frame.settings.font_size.points() != previous_size)
+        apply_backdrop(delivery);
+        if (delivery.settings.font_size.points() != previous_size)
         {
-            frame = controller_.apply(application::VisibleLines{body_lines()});
+            delivery = controller_.apply(application::VisibleLines{body_lines()});
         }
     }
-    follow_ime(frame);
-    mode_ = frame.mode;
-    vim_mode_ = frame.vim_mode;
+    follow_ime(delivery);
+    mode_ = delivery.mode;
+    vim_mode_ = delivery.vim_mode;
     // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
     invalidate();
-    update_title(frame);
-    announce(frame);
+    update_title(delivery);
+    announce(delivery);
     finish_operation(operation_request);
     finish_tab_action(close_request, closing);
 }
@@ -1420,9 +1421,9 @@ void EditorWindow::paint()
     present(controller_.frame());
 }
 
-void EditorWindow::update_title(const application::EditorFrame &frame)
+void EditorWindow::update_title(const application::EditorDelivery &delivery)
 {
-    std::wstring title = widen(frame.document.title.text()) + title_suffix;
+    std::wstring title = widen(delivery.document.title.text()) + title_suffix;
     if (title == window_title_)
     {
         return;
@@ -1431,27 +1432,27 @@ void EditorWindow::update_title(const application::EditorFrame &frame)
     SetWindowTextW(window_, window_title_.c_str());
 }
 
-void EditorWindow::announce(const application::EditorFrame &frame)
+void EditorWindow::announce(const application::EditorDelivery &delivery)
 {
-    if (!frame.document.last_failure.has_value())
+    if (!delivery.document.last_failure.has_value())
     {
         return;
     }
-    const auto failure = frame.document.last_failure.value();
-    if (failure == application::FileFailure::unencodable && frame.document.path.has_value())
+    const auto failure = delivery.document.last_failure.value();
+    if (failure == application::FileFailure::unencodable && delivery.document.path.has_value())
     {
-        offer_utf8(frame.document.path.value());
+        offer_utf8(delivery.document.path.value());
         return;
     }
     MessageBoxW(window_, reason_of(failure), product_name, MB_OK | MB_ICONWARNING);
 }
 
-void EditorWindow::announce_settings(const application::EditorFrame &frame)
+void EditorWindow::announce_settings(const application::EditorDelivery &delivery)
 {
-    if (frame.settings_failure.has_value())
+    if (delivery.settings_failure.has_value())
     {
-        MessageBoxW(window_, settings_notice(frame.settings_failure.value()).c_str(), product_name,
-                    MB_OK | MB_ICONWARNING);
+        MessageBoxW(window_, settings_notice(delivery.settings_failure.value()).c_str(),
+                    product_name, MB_OK | MB_ICONWARNING);
     }
 }
 
@@ -1480,32 +1481,32 @@ void EditorWindow::open_document()
 
 void EditorWindow::save_document()
 {
-    const auto frame = controller_.frame();
-    if (!frame.document.path.has_value())
+    const auto delivery = controller_.delivery();
+    if (!delivery.document.path.has_value())
     {
         save_document_as();
         return;
     }
-    send(application::SaveDocument{frame.document.path.value(), frame.document.encoding});
+    send(application::SaveDocument{delivery.document.path.value(), delivery.document.encoding});
 }
 
 void EditorWindow::save_document_as()
 {
-    const auto frame = controller_.frame();
-    const std::wstring suggested = frame.document.path.has_value()
-                                       ? widen(frame.document.path.value().file_name())
+    const auto delivery = controller_.delivery();
+    const std::wstring suggested = delivery.document.path.has_value()
+                                       ? widen(delivery.document.path.value().file_name())
                                        : std::wstring(untitled_file);
     const auto chosen = choose_file_to_save(window_, suggested);
     if (!chosen.has_value())
     {
         return;
     }
-    send(application::SaveDocument{chosen.value(), frame.document.encoding});
+    send(application::SaveDocument{chosen.value(), delivery.document.encoding});
 }
 
 bool EditorWindow::confirm_discard()
 {
-    if (controller_.frame().document.save_state == core::SaveState::saved)
+    if (controller_.delivery().document.save_state == core::SaveState::saved)
     {
         return true;
     }
@@ -1521,7 +1522,7 @@ bool EditorWindow::confirm_discard()
     }
     // 保存に失敗したか取り消したときは、まだ未保存のままなので続けない。
     save_document();
-    return controller_.frame().document.save_state == core::SaveState::saved;
+    return controller_.delivery().document.save_state == core::SaveState::saved;
 }
 
 void EditorWindow::close_window()
@@ -1529,8 +1530,8 @@ void EditorWindow::close_window()
     // 未保存のタブを帯の左から順に映して確かめる（#237）。取り消しか保存の失敗でそこで止め、
     // 窓を閉じない。それまでに保存したタブは保存されたまま。
     std::size_t from = 0;
-    for (auto next = application::next_unsaved_tab(controller_.frame().tabs, from);
-         next.has_value(); next = application::next_unsaved_tab(controller_.frame().tabs, from))
+    for (auto next = application::next_unsaved_tab(controller_.documents(), from); next.has_value();
+         next = application::next_unsaved_tab(controller_.documents(), from))
     {
         send(application::SwitchTab{next.value()});
         if (!confirm_discard())
@@ -1618,7 +1619,7 @@ bool EditorWindow::press_bookmark_key(WPARAM word, LPARAM data)
         return false;
     }
     constexpr LPARAM repeated_key_bit = LPARAM{1} << 30;
-    if ((data & repeated_key_bit) == 0 && !application::composing(controller_.frame()))
+    if ((data & repeated_key_bit) == 0 && !controller_.is_composing())
     {
         send(application::ToggleBookmark{});
     }
@@ -1962,7 +1963,7 @@ void EditorWindow::walk_recent_tab(core::TabCommand command)
 // 保存の失敗の知らせは deliver が AdjustFontSize の後に出す。変換中は送らない（今の鍵と同じ）。
 void EditorWindow::adjust_font(core::FontSizeAdjustment adjustment)
 {
-    if (!application::composing(controller_.frame()))
+    if (!controller_.is_composing())
     {
         send(application::AdjustFontSize{adjustment, 1});
     }

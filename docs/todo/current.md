@@ -3,8 +3,8 @@
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
-> 再開地点は[2026-10-09の引き継ぎ](../handoffs/2026-10-09.md)。#291・#298・#299・#300・#303・#304 に続き、#309（PR #317）と #312（PR #316）は撮影まで受理して統合。次は高速化の #320 から（承認済み・着手は後日）。
-> 高速化の 5 件は hide が承認し #320〜#324 を起票済み（着手は後日・#309 / #312 の後）。split の採用は保留のまま。
+> 再開地点は[2026-10-09の引き継ぎ](../handoffs/2026-10-09.md)。#320〜#324・#330・#335の採用候補は#334 / PR #336へ統合し、独立レビュー・正式8本・実機35場面と保存3通りを確認済み。結果は[gate-proofs 5-cz/5-da](../quality/gate-proofs.md#5-cz--読込状態履歴描画の閉じた比較issue-320324330333335)。
+> hideの「閉じた処理の前後比較で規約内の高速化を試す」指示を継続中。残るC5〜C9/文字コード変換の候補を調査。C4とThinLTOは不採用、splitの採用も保留のまま。
 
 ## 運用（2026-10-03）
 
@@ -33,7 +33,9 @@
 | 14 | #304 操作の案内を空の文書とステータスバーに出し、設定 `guide` で消せるようにする（D42） | **実装・検証済み**。操作表から本文/ステータスを排他的に表示し、設定は旧v1を残してv2へ保存。ADR 0079・[PR #313](https://github.com/hideyukiMORI/nene-nib/pull/313)・[gate-proofs 5-cv](../quality/gate-proofs.md) |
 | 15 | #309 Ctrl+P の面の「候補なし」の文字を行の名前の左端にそろえる | **済み**。0 件の文字を `palette_row_label` の欄に書く（ADR 0060 決定 9）。候補 1 件の面は 0 画素差、0 件の面は 3 場面で左端がそろう。[PR #317](https://github.com/hideyukiMORI/nene-nib/pull/317)、[gate-proofs 5-cx](../quality/gate-proofs.md#5-cx--ctrlp-の面の候補なしを行の名前の欄に書くissue-309adr-0060-決定-9) |
 | 16 | #312 本文の文字拡大でF1の長いキー表示が切れる | **済み**。鍵の書式に本文の倍率を掛けず 12 DIP（ADR 0078 決定 12 に 1 文）。13.5 pt は 0 画素差・24 pt で `Ctrl+Shift+S` が欄に収まる。[PR #316](https://github.com/hideyukiMORI/nene-nib/pull/316)、[gate-proofs 5-cw](../quality/gate-proofs.md#5-cw--f1-の鍵の文字を本文の倍率で拡大しないissue-312adr-0078-決定-12) |
-| 17 | 高速化の 5 件（2026-10-08 の調査・hide 承認・**着手は後日**） | #320 開く道の無駄 3 つ（S・推定 20〜35 ms）→ #321 1 打鍵の `EditorState` の 7 回の写し（S）→ #324 描画の小さな無駄（S）→ #322 frame の二重構築（ADR が先）→ #323 undo の履歴の複製の崖（ベンチと ADR が先）。まとめは `out/reports/probe-speed-summary-20261008.md`（写し `D:/NeNeNib/evidence/speed-review-20261008/`） |
+| 17 | 高速化 #320〜#324・#330・#335 | **実装・対象検証・局所比較済み**。#334 / PR #336で統合受理。履歴/レジスタの保持サイズ由来の入力の崖を除去し、鍵列も共有。全比較値と採否はgate-proofs 5-cz、正式8本・35場面は5-da。全候補を実験済みとはしない |
+| 18 | #333 ThinLTO | **実験不採用**。実bitcodeの現シンボル検査に未対応で、主要局所区間の明瞭な利益もなし。ゲート・allowlist・製品flagsを変更しない |
+| 19 | #331 既存版の混雑時open正式ゲート失敗 | 既存の失敗記録を保持。新候補a64a5d4の正式8本成功とは分ける |
 | 18 | その他の候補: 一般Exの残り / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
@@ -50,13 +52,13 @@
 
 splitの下準備はD40でhide了承済み。本実装は試作結果から保留。その他の候補の順は未確認。open の一覧は `gh issue list --state open` が正。
 
-## いまの数字（2026-10-03・差分ごとの検証済み実装）
+## いまの数字（2026-10-09・差分ごとの検証済み実装）
 
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | scope 33。全件checksは最新差分で未測（過去の全件実測19449 checks）。`--bookmarks` 40 / `--ex-files` 82 / `--ordinary-characters` 233 / `--ex-document` 204 / `--ex-write-path` 90 checksを対象実行で確認（`--vim-clipboard` `--vim-characters` `--tabs` が 2026-09-29・`--session` `--history` が 2026-09-30・`--background-work` が 2026-10-02 に新規・1 scope = 1 翻訳単位・表は `NibTests.cpp`・ADR 0042。前回のタブの一覧の adapter は CTest `nib_sessions`・#252。閉じたファイルの履歴の adapter は CTest `nib_histories`・#259。ワーカーとフォルダの列挙の adapter は CTest `nib_folders`・#271） | [gate-proofs 5-bd 〜 5-ch](../quality/gate-proofs.md)。前後比較は `python eng/protected-diff.py --base <ref> --build`（#130・`out/protected/<短い SHA>.json`） |
-| ADR | 0078 まで（0072 は実験不採用）。split の製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
+| 既定の `nib_tests` | selectors42（旧35と新7）。新規はfile-text/application/utf16/utf8/edit-history/vim-register-snapshot/vim-recorded-keys。全件checksは未測。統合で直接境界を選び、個別成功と使い分ける | [gate-proofs 5-cz/5-da](../quality/gate-proofs.md)・NibTests.cppが正本 |
+| ADR | 0090まで（0072/0087は実験不採用）。splitの製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |

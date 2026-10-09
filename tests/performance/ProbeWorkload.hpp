@@ -21,7 +21,11 @@ enum class ProbeWorkload : std::uint8_t
     insert_after_delete_small,
     insert_after_delete_large,
     validate_ascii,
-    validate_japanese
+    validate_japanese,
+    vim_register_small,
+    vim_register_large,
+    vim_record_small,
+    vim_record_large
 };
 
 [[nodiscard]] std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept;

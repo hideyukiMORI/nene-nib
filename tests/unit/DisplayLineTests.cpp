@@ -113,6 +113,11 @@ void verify_display_line_notation()
     const DisplayLine nbsp = display_line("\u00a0");
     expect(nbsp.text == "\u00a0" && starts_are(nbsp, {0, 1}),
            "U+00A0 right after the C1 range stays one character");
+    const DisplayLine supplementary = display_line("😀a");
+    expect(supplementary.text == "😀a" && starts_are(supplementary, {0, 1, 2}),
+           "a supplementary scalar keeps its original bytes and one display position");
+    expect(display_position(supplementary, 1) == 1 && source_column(supplementary, 1) == 1,
+           "supplementary scalar positions map in both directions");
 }
 
 // C1 制御文字（U+0080〜U+009F）は Vim と同じ `<85>` の 4 文字（Issue #147・ADR 0040 補足）。

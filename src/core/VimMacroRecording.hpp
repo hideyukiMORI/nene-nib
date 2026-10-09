@@ -1,8 +1,6 @@
 #pragma once
 
-#include "VimKey.hpp"
-
-#include <vector>
+#include "VimRecordedKeys.hpp"
 
 namespace nenenib::core
 {
@@ -12,7 +10,7 @@ namespace nenenib::core
 struct VimMacroRecording
 {
     char name;
-    std::vector<VimKey> keys;
+    VimRecordedKeys keys = VimRecordedKeys::from({});
     bool append;
 };
 } // namespace nenenib::core

@@ -146,9 +146,10 @@ void verify_vim_search_highlight_carry()
     expect(rested.highlight == VimSearchHighlight::on, "the resting state starts on");
     VimState suspended = rested;
     suspended.highlight = VimSearchHighlight::suspended;
-    expect(nenenib::core::vim_resting_from(suspended, suspended.unnamed_register).highlight ==
-               VimSearchHighlight::suspended,
-           "finishing a key does not forget the suspension");
+    expect(
+        nenenib::core::vim_resting_from(suspended, suspended.unnamed_register.value()).highlight ==
+            VimSearchHighlight::suspended,
+        "finishing a key does not forget the suspension");
     expect(nenenib::core::vim_after_resize(suspended, 10, 20).highlight ==
                VimSearchHighlight::suspended,
            "a resize does not forget it either");
@@ -163,8 +164,8 @@ void verify_vim_search_highlight_carry()
     EditorController &controller = session.controller();
     vim_replay(controller, "/beta<CR>");
     static_cast<void>(run_ex(controller, "noh"));
-    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::ordinary}));
-    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
     expect(highlight_is(controller, VimSearchHighlight::suspended),
            "leaving and re-entering Vim mode keeps it, like the remembered pattern");
 }
@@ -249,13 +250,13 @@ void verify_search_highlight_line_scope()
     open_vim_document(session, "beta one\nbeta two\nbeta three\nbeta four");
     EditorController &controller = session.controller();
     vim_replay(controller, "/beta<CR>");
-    static_cast<void>(controller.apply(VisibleLines{2}));
+    static_cast<void>(controller.apply_frame(VisibleLines{2}));
     const auto narrow = controller.frame();
     expect(narrow.lines.size() == 2, "only the visible lines are in the frame");
     expect(frame_matches(narrow, 0) == std::vector<MatchSpan>{{1, 5}} &&
                frame_matches(narrow, 1) == std::vector<MatchSpan>{{1, 5}},
            "and only those lines are scanned");
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
     static_cast<void>(run_ex(controller, "nohlsearch"));
     expect(frame_matches(controller.frame(), 0).empty() &&
                !controller.frame().lines.at(0).current_match.has_value(),
@@ -265,7 +266,7 @@ void verify_search_highlight_line_scope()
     static_cast<void>(run_ex(controller, "set nohlsearch"));
     expect(frame_matches(controller.frame(), 0).empty(), "and so does an option that is off");
     static_cast<void>(run_ex(controller, "set hlsearch"));
-    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::ordinary}));
     expect(frame_matches(controller.frame(), 0).empty(),
            "the ordinary mode has no search, so it highlights nothing");
 }
