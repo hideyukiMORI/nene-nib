@@ -3,6 +3,7 @@
 #include "Utf16.hpp"
 
 #include <cstddef>
+#include <utility>
 
 namespace nenenib::adapters::win32
 {
@@ -43,12 +44,12 @@ std::expected<std::string, Failure> Win32CodePageAdapter::to_utf8(std::string_vi
     {
         return std::unexpected(wide.error());
     }
-    const auto utf8 = core::to_utf8(wide.value());
+    auto utf8 = core::to_utf8(wide.value());
     if (!utf8)
     {
         return std::unexpected(Failure::undecodable);
     }
-    return utf8.value();
+    return std::move(utf8).value();
 }
 
 std::expected<std::string, Failure> Win32CodePageAdapter::from_utf8(std::string_view utf8)
