@@ -255,6 +255,29 @@ namespace
     }
     return input;
 }
+
+[[nodiscard]] std::string japanese_line()
+{
+    std::string line = "000000 ";
+    for (std::size_t repeat = 0; repeat < 90; ++repeat)
+    {
+        line += "日本語の長い行と分割表示の文字組みを測定する。";
+    }
+    return line;
+}
+
+[[nodiscard]] std::string japanese_input()
+{
+    const std::string line = japanese_line();
+    std::string input;
+    input.reserve((line.size() + 2) * 1000);
+    for (std::size_t repeat = 0; repeat < 1000; ++repeat)
+    {
+        input += line;
+        input += "\r\n";
+    }
+    return input;
+}
 } // namespace
 
 std::string input_of(ProbeWorkload workload)
@@ -271,26 +294,9 @@ std::string input_of(ProbeWorkload workload)
     case ProbeWorkload::controller_insert:
         return std::string(insert_count, 'a');
     case ProbeWorkload::display_long:
+        return japanese_line();
     case ProbeWorkload::validate_japanese:
-    {
-        std::string line = "000000 ";
-        for (std::size_t repeat = 0; repeat < 90; ++repeat)
-        {
-            line += "日本語の長い行と分割表示の文字組みを測定する。";
-        }
-        if (workload == ProbeWorkload::display_long)
-        {
-            return line;
-        }
-        std::string input;
-        input.reserve((line.size() + 2) * 1000);
-        for (std::size_t repeat = 0; repeat < 1000; ++repeat)
-        {
-            input += line;
-            input += "\r\n";
-        }
-        return input;
-    }
+        return japanese_input();
     }
     std::unreachable();
 }
