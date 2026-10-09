@@ -190,13 +190,13 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
         return;
     }
     const auto &viewport = fixture.viewport.value();
-    static_cast<void>(controller.apply(VisibleLines{viewport.visible_lines}));
-    static_cast<void>(
-        controller.apply(PlaceCaret{vim_fixture_position(fixture), SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply_frame(VisibleLines{viewport.visible_lines}));
+    static_cast<void>(controller.apply_frame(
+        PlaceCaret{vim_fixture_position(fixture), SelectionAnchoring::collapse}));
     const std::int64_t current = static_cast<std::int64_t>(controller.frame().first_visible.value);
     const std::int64_t requested = static_cast<std::int64_t>(viewport.first_visible);
     static_cast<void>(
-        controller.apply(ScrollLines{static_cast<std::int32_t>(requested - current)}));
+        controller.apply_frame(ScrollLines{static_cast<std::int32_t>(requested - current)}));
 }
 
 // fixture の `register`（ADR 0046 の決定 6・oracle の `let @a = "…"`）。記法の鍵を VimKey の列へ
@@ -234,9 +234,9 @@ void store_vim_fixture_macro(EditorController &controller, const VimFixture &fix
 
 [[nodiscard]] std::string whole_vim_body(EditorController &controller)
 {
-    static_cast<void>(controller.apply(VisibleLines{controller.frame().total_lines}));
+    static_cast<void>(controller.apply_frame(VisibleLines{controller.frame().total_lines}));
     const std::int64_t first = static_cast<std::int64_t>(controller.frame().first_visible.value);
-    static_cast<void>(controller.apply(ScrollLines{static_cast<std::int32_t>(1 - first)}));
+    static_cast<void>(controller.apply_frame(ScrollLines{static_cast<std::int32_t>(1 - first)}));
     return vim_body(controller.frame());
 }
 

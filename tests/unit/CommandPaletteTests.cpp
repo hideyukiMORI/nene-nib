@@ -203,37 +203,37 @@ void verify_palette_controller()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"body"}));
-    const auto before = controller.apply(app::SelectAll{});
-    auto frame = controller.apply(app::OpenCommandPalette{});
+    static_cast<void>(controller.apply_frame(InsertText{"body"}));
+    const auto before = controller.apply_frame(app::SelectAll{});
+    auto frame = controller.apply_frame(app::OpenCommandPalette{});
     expect(frame.command_palette.has_value() && frame.command_line.has_value(),
            "ordinary mode opens shared input");
     expect(frame.caret == before.caret &&
                frame.lines.front().selection == before.lines.front().selection,
            "opening keeps body selection and caret");
-    static_cast<void>(controller.apply(app::CommandText{":fz"}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::CommandText{":fz"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == ":set fontsize=",
            "Enter on a fill candidate stages the value");
     expect(frame.command_palette.has_value() && editor.settings().writes() == 0,
            "fill does not save");
-    static_cast<void>(controller.apply(app::CommandText{"18"}));
-    frame = controller.apply(app::ActivateCommandChoice{0});
+    static_cast<void>(controller.apply_frame(app::CommandText{"18"}));
+    frame = controller.apply_frame(app::ActivateCommandChoice{0});
     expect(!frame.command_line.has_value() && frame.settings.font_size.points() == 18 &&
                editor.settings().writes() == 1,
            "click activation shares Ex evaluation and persistence");
     expect(frame.lines.front().selection == before.lines.front().selection &&
                frame.lines.front().text == "body",
            "execution preserves body and selection");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":set fontsize=90"}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":set fontsize=90"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.command_message.has_value() && editor.settings().writes() == 1,
            "invalid value uses Ex failure and does not save");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":drac"}));
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":drac"}));
     editor.settings().fail(app::SettingsFailure::unwritable);
-    frame = controller.apply(app::SubmitCommand{});
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.command_message.has_value() && !frame.settings.theme.has_value(),
            "failed save keeps the previous theme");
     expect(applied(controller, HistoryAction{HistoryDirection::undo}).empty(),
@@ -244,11 +244,11 @@ void verify_palette_guide()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"body"}));
-    const auto before = controller.apply(app::SelectAll{});
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":set noguide"}));
-    const auto hidden = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(InsertText{"body"}));
+    const auto before = controller.apply_frame(app::SelectAll{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":set noguide"}));
+    const auto hidden = controller.apply_frame(app::SubmitCommand{});
     expect(hidden.settings.guide == core::GuideVisibility::hidden &&
                editor.settings().writes() == 1,
            "palette executes noguide through shared Ex persistence");
@@ -256,9 +256,9 @@ void verify_palette_guide()
                hidden.lines.front().selection == before.lines.front().selection,
            "palette guide preserves body caret and selection");
     editor.settings().fail(app::SettingsFailure::unwritable);
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":set guide"}));
-    const auto failed = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":set guide"}));
+    const auto failed = controller.apply_frame(app::SubmitCommand{});
     expect(failed.settings.guide == core::GuideVisibility::hidden &&
                failed.settings_failure.has_value(),
            "palette keeps guide on persistence failure");
@@ -272,9 +272,9 @@ void verify_palette_unknown_theme()
     auto &controller = editor.controller();
     for (const auto query : {"colorscheme missing", "colorscheme systemx", "colorscheme dracula|q"})
     {
-        static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-        static_cast<void>(controller.apply(app::CommandText{":" + std::string(query)}));
-        const auto frame = controller.apply(app::SubmitCommand{});
+        static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+        static_cast<void>(controller.apply_frame(app::CommandText{":" + std::string(query)}));
+        const auto frame = controller.apply_frame(app::SubmitCommand{});
         const auto expected = core::evaluate_ex(query, frame.settings, frame.appearance);
         expect(!frame.command_palette.has_value() && frame.command_message.has_value(),
                "invalid explicit theme closes with an error");
@@ -292,42 +292,42 @@ void verify_palette_input_isolation()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"body"}));
-    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 0)}));
-    auto frame = controller.apply(app::OpenCommandPalette{});
+    static_cast<void>(controller.apply_frame(InsertText{"body"}));
+    static_cast<void>(controller.apply_frame(ComposeText{composed_of("あ", {}, 0)}));
+    auto frame = controller.apply_frame(app::OpenCommandPalette{});
     expect(!frame.command_palette.has_value() && frame.composition.has_value(),
            "active composition prevents opening");
-    static_cast<void>(controller.apply(CancelComposition{}));
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 0)}));
-    frame = controller.apply(CommitText{"界"});
+    static_cast<void>(controller.apply_frame(CancelComposition{}));
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(ComposeText{composed_of("あ", {}, 0)}));
+    frame = controller.apply_frame(CommitText{"界"});
     expect(!frame.composition.has_value() && frame.lines.front().text == "body",
            "late IME events cannot edit the body");
     expect(frame.command_line.value_or(core::InputLineView{}).text == "界" &&
                !frame.command_composition.has_value(),
            "the commit goes into the palette query instead (ADR 0061)");
-    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
-    static_cast<void>(controller.apply(app::CommandText{":"}));
+    static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":"}));
     editor.clipboard().hold(std::string("set guifont=MS Gothic:h17"));
-    frame = controller.apply(app::PasteCommand{});
+    frame = controller.apply_frame(app::PasteCommand{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == ":set guifont=MS Gothic:h17",
            "paste targets the palette query");
     editor.clipboard().hold(std::string("\nbody leak"));
-    frame = controller.apply(app::PasteCommand{});
+    frame = controller.apply_frame(app::PasteCommand{});
     expect(frame.command_message.has_value(),
            "invalid paste reports inline without replacing input");
-    frame = controller.apply(app::OpenCommandPalette{});
+    frame = controller.apply_frame(app::OpenCommandPalette{});
     expect(!frame.command_palette.has_value() && editor.settings().writes() == 0,
            "Ctrl+P again cancels");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
-    frame = controller.apply(app::EditCommand{core::CommandEdit::backspace});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::backspace}));
+    frame = controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
     expect(frame.command_palette.has_value(), "backspace in an empty palette keeps it open");
-    static_cast<void>(controller.apply(app::CommandText{"!"}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::CommandText{"!"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.command_palette.has_value() && editor.settings().writes() == 0,
            "Enter with no candidates is harmless");
-    frame = controller.apply(app::ActivateCommandChoice{90});
+    frame = controller.apply_frame(app::ActivateCommandChoice{90});
     expect(frame.command_palette.has_value(), "stale row activation is ignored");
 }
 
@@ -337,17 +337,17 @@ void verify_palette_vim_modes()
     {
         Editing editor;
         auto &controller = editor.controller();
-        static_cast<void>(controller.apply(InsertText{"body"}));
-        static_cast<void>(controller.apply(app::SelectEditMode{EditMode::vim}));
-        static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{entry}}));
+        static_cast<void>(controller.apply_frame(InsertText{"body"}));
+        static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{entry}}));
         const auto before = controller.frame();
         const auto vim = controller.vim_state();
-        static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-        auto frame = controller.apply(app::VimKeyPress{core::VimCharacter{U'x'}});
+        static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+        auto frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'x'}});
         expect(frame.lines.front().text == "body" && frame.vim_mode == before.vim_mode,
                "palette blocks body Vim commands without resetting mode");
-        static_cast<void>(controller.apply(app::CommandText{":drac"}));
-        frame = controller.apply(app::SubmitCommand{});
+        static_cast<void>(controller.apply_frame(app::CommandText{":drac"}));
+        frame = controller.apply_frame(app::SubmitCommand{});
         expect(frame.settings.theme == core::ThemeChoice::from(core::BuiltinTheme::dracula),
                "theme executes in every Vim state");
         expect(frame.caret == before.caret &&
@@ -365,12 +365,12 @@ void verify_palette_vim_modes()
     }
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{U':'}}));
-    auto frame = controller.apply(app::OpenCommandPalette{});
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}}));
+    auto frame = controller.apply_frame(app::OpenCommandPalette{});
     expect(frame.command_palette.has_value(), "palette replaces an Ex input session");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    frame = controller.apply(app::VimKeyPress{core::VimCharacter{U':'}});
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
     expect(frame.command_line.has_value() && !frame.command_palette.has_value(),
            "Ex still opens independently after palette cancellation");
 }
@@ -635,14 +635,14 @@ void verify_palette_entries_controller()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"one"}));
-    static_cast<void>(controller.apply(app::NewTab{}));
-    static_cast<void>(controller.apply(InsertText{"two"}));
-    static_cast<void>(controller.apply(app::NewTab{}));
-    static_cast<void>(controller.apply(InsertText{"three"}));
-    static_cast<void>(controller.apply(app::SwitchTab{1}));
+    static_cast<void>(controller.apply_frame(InsertText{"one"}));
+    static_cast<void>(controller.apply_frame(app::NewTab{}));
+    static_cast<void>(controller.apply_frame(InsertText{"two"}));
+    static_cast<void>(controller.apply_frame(app::NewTab{}));
+    static_cast<void>(controller.apply_frame(InsertText{"three"}));
+    static_cast<void>(controller.apply_frame(app::SwitchTab{1}));
     const std::vector<std::string> all{"tabnext 1", "tabnext 2", "tabnext 3"};
-    auto frame = controller.apply(app::OpenCommandPalette{});
+    auto frame = controller.apply_frame(app::OpenCommandPalette{});
     const auto opened = frame.command_palette.value_or(app::CommandPaletteView{});
     bool marked = frame.command_palette.has_value();
     for (const auto &choice : opened.rows)
@@ -655,34 +655,34 @@ void verify_palette_entries_controller()
                frame.command_line.value_or(core::InputLineView{}).completions.empty() &&
                opened.selected == 0,
            "Ctrl+P opens with an empty input on the first row without Ex completions");
-    frame = controller.apply(app::SubmitCommand{});
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.active_tab == 0 && !frame.command_palette.has_value() &&
                frame.lines.front().text == "one",
            "Enter on a Ctrl+P row switches to that tab");
-    frame = controller.apply(app::OpenTabList{});
+    frame = controller.apply_frame(app::OpenTabList{});
     const auto listed = frame.command_palette.value_or(app::CommandPaletteView{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "#" && listed.selected == 0 &&
                whole_commands_of(listed) == all,
            "the tab list opens the same entries behind the hash mark on the active tab");
-    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
-    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::complete_next}));
+    static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::complete_next}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.active_tab == 2 && !frame.command_palette.has_value() &&
                frame.lines.front().text == "three",
            "Enter on a tab list row switches like SwitchTab");
-    frame = controller.apply(app::OpenTabList{});
+    frame = controller.apply_frame(app::OpenTabList{});
     expect(frame.command_palette.value_or(app::CommandPaletteView{}).selected == 2,
            "the tab list selects the active tab");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    frame = controller.apply(app::CommandText{":colo"});
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    frame = controller.apply_frame(app::CommandText{":colo"});
     expect(frame.command_line.value_or(core::InputLineView{}).completions ==
                core::CommandLine::empty().inserted(":colo").value().completions(),
            "the colon mark keeps the Ex completions of its input");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{":colorscheme dracula"}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":colorscheme dracula"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.settings.theme == core::ThemeChoice::from(core::BuiltinTheme::dracula) &&
                !frame.command_palette.has_value() && frame.active_tab == 2,
            "a command behind the colon mark changes the theme as before");
@@ -734,17 +734,17 @@ void verify_palette_hint_view()
     auto &controller = editor.controller();
     const auto hint_of = [](const app::EditorFrame &frame)
     { return frame.command_palette.value_or(app::CommandPaletteView{}).hint; };
-    auto frame = controller.apply(app::OpenCommandPalette{});
+    auto frame = controller.apply_frame(app::OpenCommandPalette{});
     const auto opened = hint_of(frame);
     expect(opened.has_value() && opened.value().text() == core::palette_mark_hint().text(),
            "Ctrl+P opens with the mark hint");
-    frame = controller.apply(app::CommandText{"a"});
+    frame = controller.apply_frame(app::CommandText{"a"});
     expect(frame.command_palette.has_value() && !hint_of(frame).has_value(),
            "one typed character hides the hint");
-    frame = controller.apply(app::EditCommand{core::CommandEdit::backspace});
+    frame = controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
     expect(hint_of(frame).has_value(), "an emptied input shows the hint again");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    frame = controller.apply(app::OpenTabList{});
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    frame = controller.apply_frame(app::OpenTabList{});
     expect(frame.command_palette.has_value() && !hint_of(frame).has_value(),
            "the tab list behind the hash mark has no hint");
 }
@@ -800,7 +800,7 @@ void verify_palette_history_rows()
     Editing editor;
     open_history_editor(editor);
     auto &controller = editor.controller();
-    auto frame = controller.apply(app::OpenCommandPalette{});
+    auto frame = controller.apply_frame(app::OpenCommandPalette{});
     const auto opened = palette_of(frame);
     expect(whole_commands_of(opened) ==
                std::vector<std::string>{"C:\\work\\a.txt", "C:\\docs\\x.txt", "C:\\docs\\y.txt"},
@@ -812,22 +812,22 @@ void verify_palette_history_rows()
            "a history row has the file name, its folder, the open kind and the history origin");
     expect(editor.history().reads() == 1 && editor.history().writes() == 0,
            "opening the palette reads the history once and writes nothing");
-    frame = controller.apply(app::CommandText{"@"});
+    frame = controller.apply_frame(app::CommandText{"@"});
     expect(whole_commands_of(palette_of(frame)) ==
                std::vector<std::string>{"C:\\docs\\x.txt", "C:\\docs\\y.txt"},
            "the at mark lists only the history");
-    frame = controller.apply(app::CommandText{"y"});
+    frame = controller.apply_frame(app::CommandText{"y"});
     expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"C:\\docs\\y.txt"},
            "a query behind the at mark filters the history");
-    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
-    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::backspace}));
-    frame = controller.apply(app::CommandText{"#"});
+    static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::backspace}));
+    frame = controller.apply_frame(app::CommandText{"#"});
     expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"C:\\work\\a.txt"},
            "the hash mark lists only the tabs");
     expect(editor.history().reads() == 1, "typing in the palette never reads the history again");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
     editor.history().serve(HistoryReading{std::unexpected(app::FileHistoryFailure::malformed)});
-    frame = controller.apply(app::OpenCommandPalette{});
+    frame = controller.apply_frame(app::OpenCommandPalette{});
     expect(whole_commands_of(palette_of(frame)) == std::vector<std::string>{"C:\\work\\a.txt"} &&
                notice_of(frame) == "none",
            "an unreadable history opens the palette with the tabs only and no notice");
@@ -841,21 +841,21 @@ void verify_palette_history_open()
     editor.files().hold_at("C:\\docs\\x.txt", Bytes{"x"});
     editor.files().hold_at("C:\\docs\\big.txt",
                            Bytes{std::unexpected(app::FileFailure::too_large)});
-    static_cast<void>(controller.apply(InsertText{"one"}));
+    static_cast<void>(controller.apply_frame(InsertText{"one"}));
     editor.history().serve(history_of({"C:\\docs\\x.txt"}));
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"@"}));
-    auto frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"@"}));
+    auto frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.tabs.size() == 2 && frame.active_tab == 1 && !frame.command_palette.has_value() &&
                frame.lines.front().text == "x" && editor.history().writes() == 0,
            "a history row opens in a new tab, closes the palette and records nothing");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.tabs.size() == 2 && frame.active_tab == 0, "a tab row still switches tabs");
     editor.history().serve(history_of({"C:\\docs\\gone.txt", "C:\\docs\\big.txt"}));
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"@gone"}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"@gone"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.tabs.size() == 2 && frame.active_tab == 0 && !frame.command_palette.has_value() &&
                notice_of(frame) == "開けませんでした: gone.txt" &&
                !frame.document.last_failure.has_value(),
@@ -863,9 +863,9 @@ void verify_palette_history_open()
     expect(editor.history().writes() == 1 &&
                history_text(editor.history().read()) == "C:\\docs\\big.txt|",
            "a missing file leaves the history in one write");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{"@big"}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"@big"}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(frame.tabs.size() == 2 && notice_of(frame) == "開けませんでした: big.txt" &&
                !frame.document.last_failure.has_value() && editor.history().writes() == 1 &&
                history_text(editor.history().read()) == "C:\\docs\\big.txt|",
@@ -876,10 +876,11 @@ void verify_palette_history_open()
 void open_palette_over_body(Editing &editor, bool vim)
 {
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"body"}));
+    static_cast<void>(controller.apply_frame(InsertText{"body"}));
     editor.history().serve(history_of({"C:\\docs\\メモ.txt", "C:\\docs\\notes.md"}));
-    static_cast<void>(controller.apply(SelectEditMode{vim ? EditMode::vim : EditMode::ordinary}));
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(
+        controller.apply_frame(SelectEditMode{vim ? EditMode::vim : EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
 }
 
 // 面が開いている間の変換は面の入力欄のもの。確定は打った文字と同じ道で入り、本文にも engine
@@ -890,8 +891,8 @@ void verify_palette_commit(bool vim)
     open_palette_over_body(editor, vim);
     auto &controller = editor.controller();
     const auto mode = controller.frame().vim_mode;
-    static_cast<void>(controller.apply(app::EditCommand{core::CommandEdit::complete_next}));
-    auto frame = controller.apply(ComposeText{composed_of("めも", {}, 6)});
+    static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::complete_next}));
+    auto frame = controller.apply_frame(ComposeText{composed_of("めも", {}, 6)});
     expect(frame.command_composition.has_value() && !frame.composition.has_value() &&
                app::composing(frame),
            "a composition in the palette is shown on the input line only");
@@ -900,7 +901,7 @@ void verify_palette_commit(bool vim)
                palette_of(frame).total == 3 && palette_of(frame).rows.size() == 3 &&
                frame.lines.front().text == "body",
            "the composition neither filters the list nor touches the body");
-    frame = controller.apply(CommitText{"メモ"});
+    frame = controller.apply_frame(CommitText{"メモ"});
     expect(!app::composing(frame) &&
                frame.command_line.value_or(core::InputLineView{}).text == "メモ",
            "the commit goes into the palette query");
@@ -918,13 +919,13 @@ void verify_palette_closing_composition(bool vim)
     Editing editor;
     open_palette_over_body(editor, vim);
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 3)}));
-    auto frame = controller.apply(app::CancelCommand{});
+    static_cast<void>(controller.apply_frame(ComposeText{composed_of("あ", {}, 3)}));
+    auto frame = controller.apply_frame(app::CancelCommand{});
     expect(!frame.command_palette.has_value() && !app::composing(frame),
            "closing the palette drops its composition");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 3)}));
-    frame = controller.apply(app::SubmitCommand{});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(ComposeText{composed_of("あ", {}, 3)}));
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(!frame.command_palette.has_value() && !app::composing(frame),
            "submitting the palette drops its composition");
 }
@@ -935,13 +936,13 @@ void verify_palette_commit_limits()
     Editing editor;
     open_palette_over_body(editor, false);
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(CommitText{"メモ"}));
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    auto frame = controller.apply(HistoryAction{HistoryDirection::undo});
+    static_cast<void>(controller.apply_frame(CommitText{"メモ"}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    auto frame = controller.apply_frame(HistoryAction{HistoryDirection::undo});
     expect(frame.lines.front().text.empty(), "undo still only sees the typed body");
-    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
-    static_cast<void>(controller.apply(app::CommandText{std::string(250, 'a')}));
-    frame = controller.apply(CommitText{"日本語"});
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{std::string(250, 'a')}));
+    frame = controller.apply_frame(CommitText{"日本語"});
     expect(frame.command_line.value_or(core::InputLineView{}).text == std::string(250, 'a') &&
                frame.command_message.has_value() && !app::composing(frame),
            "a commit past the input limit is refused with a notice");
@@ -952,17 +953,17 @@ void verify_input_lines_drop_composition()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     for (const auto entry : {U':', U'/'})
     {
-        static_cast<void>(controller.apply(VimKeyPress{core::VimCharacter{entry}}));
-        auto frame = controller.apply(ComposeText{composed_of("あ", {}, 3)});
+        static_cast<void>(controller.apply_frame(VimKeyPress{core::VimCharacter{entry}}));
+        auto frame = controller.apply_frame(ComposeText{composed_of("あ", {}, 3)});
         expect(frame.command_line.has_value() && !app::composing(frame),
                "the Ex and search lines still drop the composition");
-        frame = controller.apply(CommitText{"界"});
+        frame = controller.apply_frame(CommitText{"界"});
         expect(frame.command_line.value_or(core::InputLineView{}).text.empty(),
                "and drop the commit");
-        static_cast<void>(controller.apply(app::CancelCommand{}));
+        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
     }
 }
 
@@ -975,14 +976,14 @@ void verify_palette_hint_composing()
     auto &controller = editor.controller();
     auto frame = controller.frame();
     expect(palette_of(frame).hint.has_value(), "an opened palette shows the mark hint");
-    frame = controller.apply(ComposeText{composed_of("あ", {}, 3)});
+    frame = controller.apply_frame(ComposeText{composed_of("あ", {}, 3)});
     expect(frame.command_composition.has_value() && !palette_of(frame).hint.has_value(),
            "a composition in the palette hides the mark hint");
-    frame = controller.apply(CancelComposition{});
+    frame = controller.apply_frame(CancelComposition{});
     expect(!app::composing(frame) && palette_of(frame).hint.has_value(),
            "a cancelled composition shows the hint again");
-    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 3)}));
-    frame = controller.apply(CommitText{"メモ"});
+    static_cast<void>(controller.apply_frame(ComposeText{composed_of("あ", {}, 3)}));
+    frame = controller.apply_frame(CommitText{"メモ"});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "メモ" &&
                !palette_of(frame).hint.has_value(),
            "a committed query keeps the hint hidden");
@@ -1312,10 +1313,12 @@ void verify_palette_view_window()
         applied(controller, app::NewTab{});
     }
     applied(controller, app::SwitchTab{0});
-    bool follows = window_follows_tabs(palette_of(controller.apply(app::OpenCommandPalette{})), 0);
+    bool follows =
+        window_follows_tabs(palette_of(controller.apply_frame(app::OpenCommandPalette{})), 0);
     for (std::size_t selected = 1; selected < 12; ++selected)
     {
-        const auto frame = controller.apply(app::EditCommand{core::CommandEdit::complete_next});
+        const auto frame =
+            controller.apply_frame(app::EditCommand{core::CommandEdit::complete_next});
         follows = follows && window_follows_tabs(palette_of(frame), selected);
     }
     expect(follows, "the frame carries at most eight rows of the result around the selection");
@@ -1347,37 +1350,37 @@ void verify_operation_list_opens()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(app::VisibleLines{10}));
-    static_cast<void>(controller.apply(InsertText{"one"}));
-    static_cast<void>(controller.apply(app::NewTab{}));
-    static_cast<void>(controller.apply(app::ToggleBookmark{}));
+    static_cast<void>(controller.apply_frame(app::VisibleLines{10}));
+    static_cast<void>(controller.apply_frame(InsertText{"one"}));
+    static_cast<void>(controller.apply_frame(app::NewTab{}));
+    static_cast<void>(controller.apply_frame(app::ToggleBookmark{}));
     expect(controller.frame().command_message.has_value(), "an untitled bookmark leaves a message");
-    auto frame = controller.apply(app::OpenOperationList{});
+    auto frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                frame.command_palette.value_or(app::CommandPaletteView{}).selected == 0 &&
                frame.command_palette.value_or(app::CommandPaletteView{}).total == 16 &&
                operation_row(frame, 0) == core::EditorOperation::open_file,
            "the operation list opens behind the question mark on the first row");
     expect(!frame.command_message.has_value(), "the operation list clears the one-line message");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    static_cast<void>(controller.apply(app::WalkRecentTab{core::TabStep::next}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::WalkRecentTab{core::TabStep::next}));
     expect(controller.tab_walking(), "Ctrl+Tab walks");
-    frame = controller.apply(app::OpenOperationList{});
+    frame = controller.apply_frame(app::OpenOperationList{});
     expect(!controller.tab_walking() && frame.command_palette.has_value(),
            "the operation list settles the walk");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    static_cast<void>(controller.apply(app::OpenTabList{}));
-    frame = controller.apply(app::OpenOperationList{});
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::OpenTabList{}));
+    frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                operation_row(frame, 0).has_value(),
            "the operation list replaces an open tab list");
-    frame = controller.apply(app::OpenOperationList{});
+    frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?",
            "the operation list stays open when asked again");
-    static_cast<void>(controller.apply(app::CancelCommand{}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(VimKeyPress{VimCharacter{U':'}}));
-    frame = controller.apply(app::OpenOperationList{});
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimCharacter{U':'}}));
+    frame = controller.apply_frame(app::OpenOperationList{});
     const auto vim_list = frame.command_palette.value_or(app::CommandPaletteView{});
     const auto &vim_rows = vim_list.rows;
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 14 &&
@@ -1391,26 +1394,26 @@ void verify_operation_request()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(app::VisibleLines{10}));
-    static_cast<void>(controller.apply(app::OpenOperationList{}));
-    auto frame = controller.apply(app::CommandText{"ほぞん"});
+    static_cast<void>(controller.apply_frame(app::VisibleLines{10}));
+    static_cast<void>(controller.apply_frame(app::OpenOperationList{}));
+    auto frame = controller.apply_frame(app::CommandText{"ほぞん"});
     expect(operation_row(frame, 0) == core::EditorOperation::save &&
                operation_row(frame, 1) == core::EditorOperation::save_as,
            "the reading narrows the list to save and save as");
     expect(!frame.operation_request.has_value(), "typing requests nothing");
-    frame = controller.apply(app::SubmitCommand{});
+    frame = controller.apply_frame(app::SubmitCommand{});
     expect(!frame.command_palette.has_value() && !frame.command_line.has_value() &&
                frame.operation_request == core::EditorOperation::save,
            "Enter closes the list and requests the operation");
-    frame = controller.apply(app::VisibleLines{10});
+    frame = controller.apply_frame(app::VisibleLines{10});
     expect(!frame.operation_request.has_value(),
            "the next intent clears the request like the close request");
-    static_cast<void>(controller.apply(app::OpenOperationList{}));
-    frame = controller.apply(app::ActivateCommandChoice{2});
+    static_cast<void>(controller.apply_frame(app::OpenOperationList{}));
+    frame = controller.apply_frame(app::ActivateCommandChoice{2});
     expect(!frame.command_palette.has_value() &&
                frame.operation_request == core::EditorOperation::save_as,
            "a click on a row requests that operation");
-    frame = controller.apply(InsertText{"x"});
+    frame = controller.apply_frame(InsertText{"x"});
     expect(!frame.operation_request.has_value() && frame.lines.front().text == "x",
            "the request lasts one intent and the controller runs nothing");
 }

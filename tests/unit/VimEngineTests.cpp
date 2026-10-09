@@ -210,15 +210,15 @@ void verify_vim_caret_shapes()
 {
     Editing editing;
     EditorController &controller = editing.controller();
-    const auto vim = controller.apply(SelectEditMode{EditMode::vim});
+    const auto vim = controller.apply_frame(SelectEditMode{EditMode::vim});
     expect(vim.caret.shape == CaretShape::block, "NORMAL draws a block");
     expect(vim.mode_label == "NORMAL", "NORMAL names itself on the status bar");
-    const auto inserting = controller.apply(VimKeyPress{VimKey{VimCharacter{U'i'}}});
+    const auto inserting = controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'i'}}});
     expect(inserting.caret.shape == CaretShape::bar, "INSERT draws a bar");
     expect(inserting.mode_label == "INSERT", "INSERT names itself on the status bar");
-    const auto back = controller.apply(VimKeyPress{VimKey{VimSpecialKey::escape}});
+    const auto back = controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::escape}});
     expect(back.caret.shape == CaretShape::block, "Esc brings the block back");
-    const auto ordinary = controller.apply(SelectEditMode{EditMode::ordinary});
+    const auto ordinary = controller.apply_frame(SelectEditMode{EditMode::ordinary});
     expect(ordinary.caret.shape == CaretShape::bar && ordinary.mode_label == "通常",
            "the ordinary mode takes its own caret and label back");
 }
@@ -230,9 +230,9 @@ void verify_vim_visual_selection_and_clipboard()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("abc\ndef")});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "vl");
     const auto characters = controller.frame();
     expect(characters.mode_label == "VISUAL" && characters.caret.shape == CaretShape::block,
@@ -265,10 +265,10 @@ void verify_vim_mode_entry()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("abc")});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
     static_cast<void>(
-        controller.apply(MoveCaret{CaretMotion::line_end, SelectionAnchoring::collapse}));
-    const auto entered = controller.apply(SelectEditMode{EditMode::vim});
+        controller.apply_frame(MoveCaret{CaretMotion::line_end, SelectionAnchoring::collapse}));
+    const auto entered = controller.apply_frame(SelectEditMode{EditMode::vim});
     expect(entered.caret.position.column == Column{3},
            "entering Vim pulls the caret back onto the last character");
     vim_replay(controller, "2d");
@@ -277,7 +277,7 @@ void verify_vim_mode_entry()
            "the operator carries its own count and waits for the motion");
     vim_replay(controller, "3");
     expect(controller.vim_state().count.has_value(), "the motion's count is counted on its own");
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
     expect(!controller.vim_state().count.has_value() && !controller.vim_state().pending.has_value(),
            "leaving Vim drops what was pending");
     expect(controller.vim_state().mode == VimMode::normal, "and the mode goes back to NORMAL");
@@ -290,8 +290,8 @@ void verify_vim_undo_boundaries()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("hello")});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "iab<Esc>ic<Esc>");
     expect(vim_body(controller.frame()) == "acbhello", "two inserts land where Vim puts them");
     vim_replay(controller, "u");
@@ -340,30 +340,30 @@ void verify_vim_other_keys()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("one\ntwo")});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     // Backspace は行をまたぐ h（ADR 0049）で、fixture の `space-bs-*` が守る。
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::enter}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::enter}}));
     expect(vim_body(controller.frame()) == "one\ntwo", "Enter does not edit in NORMAL");
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{2}},
            "the arrows move like j and l");
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_up}}));
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_up}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{1}},
            "the arrows move like k and h");
     vim_replay(controller, "i");
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimCharacter{U'\t'}}}));
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::control_r}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'\t'}}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::control_r}}));
     expect(vim_body(controller.frame()) == "\tone\ntwo", "Tab inserts a tab and Ctrl-r is ignored");
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_down}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_right}}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{3}},
            "the arrows still move in INSERT");
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_up}}));
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_up}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{2}},
            "and up and left too");
 }
@@ -561,31 +561,31 @@ void verify_vim_viewport_state_lifetime()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{vim_lines(30)});
-    static_cast<void>(controller.apply(VisibleLines{10}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(
+    static_cast<void>(controller.apply_frame(VisibleLines{10}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(
         PlaceCaret{TextPosition{LineNumber{10}, Column{1}}, SelectionAnchoring::collapse}));
-    static_cast<void>(controller.apply(ScrollLines{5}));
+    static_cast<void>(controller.apply_frame(ScrollLines{5}));
     vim_replay(controller, "3<C-d>j<C-d><Esc><C-u>");
     expect(controller.vim_state().scroll_lines.value_or(nenenib::core::VimCount{0}).value == 3,
            "ordinary Vim commands preserve an explicit half-page amount");
-    static_cast<void>(controller.apply(VisibleLines{10}));
+    static_cast<void>(controller.apply_frame(VisibleLines{10}));
     expect(controller.vim_state().scroll_lines.has_value(),
            "a repeated notification of the same height preserves it");
 
     editing.files().hold(Bytes{vim_lines(30)});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
     expect(controller.vim_state().scroll_lines.has_value(), "opening another file preserves it");
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     expect(controller.vim_state().scroll_lines.has_value(), "mode toggles preserve it");
 
-    static_cast<void>(controller.apply(ScrollLines{100}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(ScrollLines{100}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
     expect(controller.frame().first_visible == LineNumber{21},
            "ordinary mode restores the filled-viewport scroll bound");
-    static_cast<void>(controller.apply(VisibleLines{11}));
+    static_cast<void>(controller.apply_frame(VisibleLines{11}));
     expect(!controller.vim_state().scroll_lines.has_value(),
            "a real height change resets the explicit half-page amount");
 }
@@ -595,15 +595,15 @@ void verify_vim_visual_scroll_recovers_viewport()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{vim_lines(30)});
-    static_cast<void>(controller.apply(VisibleLines{10}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(
+    static_cast<void>(controller.apply_frame(VisibleLines{10}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(
         PlaceCaret{TextPosition{LineNumber{10}, Column{1}}, SelectionAnchoring::collapse}));
-    static_cast<void>(controller.apply(ScrollLines{5}));
+    static_cast<void>(controller.apply_frame(ScrollLines{5}));
     vim_replay(controller, "v");
-    static_cast<void>(controller.apply(ScrollLines{15}));
-    const auto frame = controller.apply(VimKeyPress{VimKey{VimSpecialKey::control_d}});
+    static_cast<void>(controller.apply_frame(ScrollLines{15}));
+    const auto frame = controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::control_d}});
     expect(frame.vim_mode == VimMode::visual && frame.first_visible == LineNumber{15} &&
                frame.caret.position.line == LineNumber{15},
            "VISUAL Ctrl-d brings a wheel-hidden caret into its returned viewport");
@@ -614,20 +614,20 @@ void verify_vim_follow_at_document_end()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{vim_lines(30)});
-    static_cast<void>(controller.apply(VisibleLines{10}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(
+    static_cast<void>(controller.apply_frame(VisibleLines{10}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(
         PlaceCaret{TextPosition{LineNumber{15}, Column{1}}, SelectionAnchoring::collapse}));
-    static_cast<void>(controller.apply(ScrollLines{5}));
+    static_cast<void>(controller.apply_frame(ScrollLines{5}));
     vim_replay(controller, "99j");
     expect(controller.frame().caret.position.line == LineNumber{30} &&
                controller.frame().first_visible == LineNumber{21},
            "an automatic jump fills the last viewport");
 
-    static_cast<void>(controller.apply(
+    static_cast<void>(controller.apply_frame(
         PlaceCaret{TextPosition{LineNumber{30}, Column{1}}, SelectionAnchoring::collapse}));
-    static_cast<void>(controller.apply(ScrollLines{9}));
+    static_cast<void>(controller.apply_frame(ScrollLines{9}));
     vim_replay(controller, "<C-f>k");
     expect(controller.frame().caret.position.line == LineNumber{29} &&
                controller.frame().first_visible == LineNumber{29},
@@ -641,21 +641,21 @@ void verify_vim_caret_placement()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("alpha\nbeta")});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(
         PlaceCaret{TextPosition{LineNumber{1}, Column{99}}, SelectionAnchoring::extend}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{1}, Column{5}},
            "a click past the line end lands on the last character");
     expect(controller.frame().lines.at(0).selection.presence == SelectionPresence::absent,
            "Shift does not open a selection in Vim mode");
     static_cast<void>(
-        controller.apply(MoveCaret{CaretMotion::document_end, SelectionAnchoring::extend}));
+        controller.apply_frame(MoveCaret{CaretMotion::document_end, SelectionAnchoring::extend}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{4}},
            "Ctrl+End settles onto the last character too");
     vim_replay(controller, "i");
-    static_cast<void>(controller.apply(
+    static_cast<void>(controller.apply_frame(
         PlaceCaret{TextPosition{LineNumber{2}, Column{99}}, SelectionAnchoring::collapse}));
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{5}},
            "INSERT may sit past the last character");
@@ -669,9 +669,9 @@ void verify_vim_fixture(const VimFixture &fixture)
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string(fixture.text)});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     arrange_vim_viewport(controller, fixture);
     store_vim_fixture_macro(controller, fixture);
     // oracle は鍵を 1 本の :normal! で流すので、鍵が失敗したら残りを流さない（Issue #230）。
@@ -710,8 +710,8 @@ void verify_vim_insert_undo_unit()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("hello")});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "ia<BS>b<Esc>");
     expect(vim_body(controller.frame()) == "bhello", "the backspace ate the character before it");
     vim_replay(controller, "u");
@@ -727,8 +727,8 @@ void verify_vim_change_undo_unit()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("hello world")});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "cwbye<Esc>");
     expect(vim_body(controller.frame()) == "bye world", "cw changed the first word");
     vim_replay(controller, "u");
@@ -743,10 +743,10 @@ void verify_vim_insert_motion_breaks_the_unit()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("hello")});
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "ia");
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::arrow_left}}));
     vim_replay(controller, "b<Esc>");
     expect(vim_body(controller.frame()) == "bahello", "the arrow moved back before the insert");
     vim_replay(controller, "u");
@@ -761,20 +761,20 @@ void verify_vim_put_line_endings()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("one\r\ntwo\r\nthree")});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "dd");
     expect(controller.vim_state().unnamed_register.text == "one\n", "the register holds LF only");
     expect(controller.vim_state().unnamed_register.kind == VimRegisterKind::lines,
            "and it knows it is a line");
     vim_replay(controller, "p");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "two\r\none\r\nthree", "the put line came back as CRLF");
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
            "the caret sits on the line that was put");
     vim_replay(controller, "jp");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "two\r\none\r\nthree\r\none",
            "putting after the last line brings the CRLF with it");
     expect(controller.frame().caret.position == TextPosition{LineNumber{4}, Column{1}},
@@ -786,20 +786,20 @@ void verify_vim_crlf()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("one\r\ntwo\r\nthree")});
-    static_cast<void>(controller.apply(VisibleLines{vim_visible_lines}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{vim_visible_lines}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "$");
     expect(controller.frame().caret.position.column == Column{3},
            "$ stops on the last character, not on the CR");
     vim_replay(controller, "x");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "on\r\ntwo\r\nthree", "x left the CRLF alone");
     vim_replay(controller, "jdd");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "on\r\nthree", "dd took the whole CRLF with the line");
     vim_replay(controller, "jdd");
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(editing.files().written() == "on", "dd on the last line took the CRLF before it");
     verify_vim_crlf_documents();
 }
@@ -892,9 +892,9 @@ void verify_vim_insert_page_move_breaks_undo()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(Bytes{std::string("x\nx")});
-    static_cast<void>(controller.apply(VisibleLines{2}));
-    static_cast<void>(controller.apply(OpenDocument{sample_path()}));
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VisibleLines{2}));
+    static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "ia<PageDown>b<Esc>u");
     expect(whole_vim_body(controller) == "ax\nx",
            "undo after INSERT PageDown takes back only the second insertion");

@@ -432,7 +432,7 @@ void verify_controller_refresh()
     EditorController controller(nenenib::application::EditorPorts{
         port, board, files, code_pages, settings, themes, session, history, folders, bookmarks});
     port.script(Reading{Appearance::dark});
-    const auto frame = controller.apply(RefreshAppearance{});
+    const auto frame = controller.apply_frame(RefreshAppearance{});
     expect(frame.palette.background == RgbColor{0x30, 0x0A, 0x24},
            "RefreshAppearance re-reads the port");
     expect(frame.appearance == Appearance::dark, "the frame carries the appearance for DWM");
@@ -683,7 +683,8 @@ void open_at_end(Editing &editing, std::string text)
 // 本文のバイト列そのもの。保存の口へ出して替え玉が受けたものを読む（改行の形まで見る）。
 [[nodiscard]] std::string saved_body(Editing &editing)
 {
-    static_cast<void>(editing.controller().apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(
+        editing.controller().apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     return editing.files().written();
 }
 
@@ -775,7 +776,7 @@ void verify_controller_frame()
 {
     Editing editing;
     EditorController &controller = editing.controller();
-    const auto frame = controller.apply(VisibleLines{5});
+    const auto frame = controller.apply_frame(VisibleLines{5});
     expect(frame.lines.size() == 1 && frame.lines.at(0).number == LineNumber{1},
            "an empty buffer shows one line");
     expect(frame.lines.at(0).text.empty(), "the only line is empty");
@@ -786,7 +787,7 @@ void verify_controller_frame()
     expect(frame.status_items.at(2).text() == "CRLF", "a new buffer writes CRLF");
     expect(frame.caret == CaretView{TextPosition{LineNumber{1}, Column{1}}, CaretShape::bar},
            "the caret starts at the origin as a bar");
-    const auto vim = controller.apply(SelectEditMode{EditMode::vim});
+    const auto vim = controller.apply_frame(SelectEditMode{EditMode::vim});
     expect(vim.caret.shape == CaretShape::block, "the Vim caret is a block");
     expect(!(vim.caret == frame.caret), "caret views compare on the shape too");
 }
@@ -797,11 +798,11 @@ void verify_controller_mode_selection()
     EditorController &controller = editing.controller();
     expect(controller.frame().mode == EditMode::ordinary, "the editor starts in ordinary mode");
     expect(controller.frame().mode_label == "通常", "the initial label is 通常");
-    const auto vim = controller.apply(SelectEditMode{EditMode::vim});
+    const auto vim = controller.apply_frame(SelectEditMode{EditMode::vim});
     expect(vim.mode == EditMode::vim && vim.mode_label == "NORMAL", "select vim enters vim mode");
-    const auto again = controller.apply(SelectEditMode{EditMode::vim});
+    const auto again = controller.apply_frame(SelectEditMode{EditMode::vim});
     expect(again.mode == EditMode::vim, "selecting the mode already in force changes nothing");
-    const auto ordinary = controller.apply(SelectEditMode{EditMode::ordinary});
+    const auto ordinary = controller.apply_frame(SelectEditMode{EditMode::ordinary});
     expect(ordinary.mode == EditMode::ordinary, "select ordinary returns to ordinary");
     expect(ordinary.palette.background == RgbColor{0x30, 0x0A, 0x24},
            "the palette survives the mode change");
@@ -812,7 +813,7 @@ void verify_document_open()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(std::string("一行目\r\n二行目"));
-    const auto frame = controller.apply(OpenDocument{sample_path()});
+    const auto frame = controller.apply_frame(OpenDocument{sample_path()});
     expect(editing.files().read_path() == "C:\\work\\note.txt", "the path went through the port");
     expect(editing.files().read_limit() == 64U * 1024U * 1024U,
            "the 64 MiB limit is handed to the port, not measured after the read");
@@ -833,22 +834,22 @@ void verify_document_open_encodings()
 {
     Editing with_bom;
     with_bom.files().hold(std::string(byte_order_mark()) + "本文\nつづき");
-    const auto bom = with_bom.controller().apply(OpenDocument{sample_path()});
+    const auto bom = with_bom.controller().apply_frame(OpenDocument{sample_path()});
     expect(bom.document.encoding == TextEncoding::utf8_bom, "the BOM is remembered");
     expect(bom.lines.at(0).text == "本文", "the BOM is not part of the body");
     expect(bom.status_items.at(2).text() == "LF", "an LF file keeps LF");
     Editing japanese;
     japanese.files().hold(std::string("\x93\xFA\x96\x7B"));
     japanese.code_pages().decode_to(std::string("日本"));
-    const auto read = japanese.controller().apply(OpenDocument{sample_path()});
+    const auto read = japanese.controller().apply_frame(OpenDocument{sample_path()});
     expect(read.document.encoding == TextEncoding::shift_jis, "CP932 bytes open as Shift_JIS");
     expect(read.lines.at(0).text == "日本", "the port turned them into UTF-8");
     expect(read.status_items.at(1).text() == "Shift_JIS", "the status bar says so");
     // 開いてもモードは保たれる（決定 8）。
     Editing vim;
     vim.files().hold(std::string("x"));
-    static_cast<void>(vim.controller().apply(SelectEditMode{EditMode::vim}));
-    const auto kept = vim.controller().apply(OpenDocument{sample_path()});
+    static_cast<void>(vim.controller().apply_frame(SelectEditMode{EditMode::vim}));
+    const auto kept = vim.controller().apply_frame(OpenDocument{sample_path()});
     expect(kept.mode == EditMode::vim, "opening a file keeps the editing mode");
 }
 
@@ -856,7 +857,7 @@ void expect_open_failure(Bytes content, FileFailure expected, const char *descri
 {
     Editing editing;
     editing.files().hold(std::move(content));
-    const auto frame = editing.controller().apply(OpenDocument{sample_path()});
+    const auto frame = editing.controller().apply_frame(OpenDocument{sample_path()});
     expect(frame.document.last_failure.has_value() &&
                frame.document.last_failure.value() == expected,
            description);
@@ -882,14 +883,14 @@ void verify_document_open_failures()
     Editing refused;
     refused.files().hold(std::string("\x93\xFA"));
     refused.code_pages().decode_to(std::unexpected(CodePageFailure::unencodable));
-    const auto frame = refused.controller().apply(OpenDocument{sample_path()});
+    const auto frame = refused.controller().apply_frame(OpenDocument{sample_path()});
     expect(frame.document.last_failure.has_value() &&
                frame.document.last_failure.value() == FileFailure::unencodable,
            "the code page port carries its own reason out");
     Editing broken;
     broken.files().hold(std::string("\x93\xFA"));
     broken.code_pages().decode_to(std::string("\xFF"));
-    const auto invalid = broken.controller().apply(OpenDocument{sample_path()});
+    const auto invalid = broken.controller().apply_frame(OpenDocument{sample_path()});
     expect(invalid.document.last_failure.has_value() &&
                invalid.document.last_failure.value() == FileFailure::undecodable,
            "a port that returns broken UTF-8 is undecodable");
@@ -903,7 +904,7 @@ void verify_document_save()
     expect(controller.frame().document.save_state == SaveState::modified,
            "typing marks it unsaved");
     expect(controller.frame().document.title.text() == "● 無題", "the mark is on the tab");
-    const auto saved = controller.apply(SaveDocument{sample_path(), TextEncoding::utf8});
+    const auto saved = controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8});
     expect(editing.files().written() == "あ", "the body went to the port as UTF-8");
     expect(editing.files().written_path() == "C:\\work\\note.txt", "to the path in the intent");
     expect(saved.document.save_state == SaveState::saved, "saving clears the mark");
@@ -919,14 +920,14 @@ void verify_document_save_encodings()
     Editing with_bom;
     applied(with_bom.controller(), InsertText{"あ"});
     static_cast<void>(
-        with_bom.controller().apply(SaveDocument{sample_path(), TextEncoding::utf8_bom}));
+        with_bom.controller().apply_frame(SaveDocument{sample_path(), TextEncoding::utf8_bom}));
     expect(with_bom.files().written() == std::string(byte_order_mark()) + "あ",
            "a BOM file keeps its BOM");
     Editing japanese;
     applied(japanese.controller(), InsertText{"日"});
     japanese.code_pages().encode_to(std::string("\x93\xFA"));
     const auto frame =
-        japanese.controller().apply(SaveDocument{sample_path(), TextEncoding::shift_jis});
+        japanese.controller().apply_frame(SaveDocument{sample_path(), TextEncoding::shift_jis});
     expect(japanese.code_pages().encoded_from() == "日", "the body went through the code page");
     expect(japanese.files().written() == "\x93\xFA", "the CP932 bytes are what is written");
     expect(frame.document.save_state == SaveState::saved, "the save took");
@@ -938,7 +939,7 @@ void verify_document_save_failures()
     applied(refused.controller(), InsertText{"😀"});
     refused.code_pages().encode_to(std::unexpected(CodePageFailure::unencodable));
     const auto frame =
-        refused.controller().apply(SaveDocument{sample_path(), TextEncoding::shift_jis});
+        refused.controller().apply_frame(SaveDocument{sample_path(), TextEncoding::shift_jis});
     expect(frame.document.last_failure.has_value() &&
                frame.document.last_failure.value() == FileFailure::unencodable,
            "a character CP932 cannot hold is unencodable");
@@ -949,7 +950,7 @@ void verify_document_save_failures()
     applied(unwritable.controller(), InsertText{"a"});
     unwritable.files().refuse_writes(FileFailure::unwritable);
     const auto failed =
-        unwritable.controller().apply(SaveDocument{sample_path(), TextEncoding::utf8});
+        unwritable.controller().apply_frame(SaveDocument{sample_path(), TextEncoding::utf8});
     expect(failed.document.last_failure.has_value() &&
                failed.document.last_failure.value() == FileFailure::unwritable,
            "a port that cannot write says so");
@@ -970,7 +971,7 @@ void verify_save_state_transitions()
     expect(controller.frame().document.save_state == SaveState::saved,
            "undo back to the start clears the mark");
     applied(controller, InsertText{"a"});
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(controller.frame().document.save_state == SaveState::saved, "saved again");
     applied(controller, HistoryAction{HistoryDirection::undo});
     expect(controller.frame().document.save_state == SaveState::modified,
@@ -994,7 +995,7 @@ void verify_unreachable_save_point()
     applied(controller, InsertText{"a"});
     applied(controller, NewLine{});
     applied(controller, InsertText{"b"});
-    static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
+    static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
     applied(controller, HistoryAction{HistoryDirection::undo});
     applied(controller, HistoryAction{HistoryDirection::undo});
     expect(controller.frame().document.save_state == SaveState::modified,
@@ -1011,9 +1012,9 @@ void verify_document_failure_clearing()
     Editing editing;
     EditorController &controller = editing.controller();
     editing.files().hold(std::unexpected(FileFailure::not_found));
-    const auto failed = controller.apply(OpenDocument{sample_path()});
+    const auto failed = controller.apply_frame(OpenDocument{sample_path()});
     expect(failed.document.last_failure.has_value(), "the failure is on the frame that made it");
-    const auto next = controller.apply(InsertText{"a"});
+    const auto next = controller.apply_frame(InsertText{"a"});
     expect(!next.document.last_failure.has_value(), "the next intent clears the failure");
     expect(!controller.frame().document.last_failure.has_value(),
            "and reading the frame again does not bring it back");
@@ -1116,7 +1117,7 @@ void verify_composition_ordinary()
     EditorController &controller = editing.controller();
     applied(controller, VisibleLines{10});
     applied(controller, InsertText{"a"});
-    const auto composing = controller.apply(ComposeText{composed_of(
+    const auto composing = controller.apply_frame(ComposeText{composed_of(
         "にほん", {clause_of(0, 3, ClauseEmphasis::other), clause_of(3, 9, ClauseEmphasis::target)},
         3)});
     expect(composing.lines.at(0).text == "a", "the buffer does not carry the composed text");
@@ -1125,7 +1126,7 @@ void verify_composition_ordinary()
     expect(applied(controller, HistoryAction{HistoryDirection::undo}) == "",
            "undo while composing still only sees the typed 'a'");
     applied(controller, HistoryAction{HistoryDirection::redo});
-    const auto committed = controller.apply(CommitText{"日本"});
+    const auto committed = controller.apply_frame(CommitText{"日本"});
     expect(committed.lines.at(0).text == "a日本", "the commit lands in the buffer");
     expect(!committed.composition.has_value(), "and the composition is gone");
     expect(applied(controller, HistoryAction{HistoryDirection::undo}) == "a",
@@ -1139,19 +1140,19 @@ void verify_composition_cancelling()
 {
     Editing editing;
     EditorController &controller = editing.controller();
-    const auto composing = controller.apply(ComposeText{composed_of("あ", {}, 0)});
+    const auto composing = controller.apply_frame(ComposeText{composed_of("あ", {}, 0)});
     expect(composing.composition.has_value(), "the composition is on the frame");
-    expect(!controller.apply(CancelComposition{}).composition.has_value(),
+    expect(!controller.apply_frame(CancelComposition{}).composition.has_value(),
            "CancelComposition takes it away");
-    expect(!controller.apply(CancelComposition{}).composition.has_value(),
+    expect(!controller.apply_frame(CancelComposition{}).composition.has_value(),
            "and cancelling again does nothing");
-    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 0)}));
-    expect(!controller.apply(SelectEditMode{EditMode::vim}).composition.has_value(),
+    static_cast<void>(controller.apply_frame(ComposeText{composed_of("あ", {}, 0)}));
+    expect(!controller.apply_frame(SelectEditMode{EditMode::vim}).composition.has_value(),
            "changing the editing mode drops the composition");
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
-    static_cast<void>(controller.apply(ComposeText{composed_of("あ", {}, 0)}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(ComposeText{composed_of("あ", {}, 0)}));
     editing.files().hold(Bytes{std::string("x")});
-    expect(!controller.apply(OpenDocument{sample_path()}).composition.has_value(),
+    expect(!controller.apply_frame(OpenDocument{sample_path()}).composition.has_value(),
            "opening a file drops the composition");
 }
 
@@ -1162,11 +1163,11 @@ void verify_composition_vim_normal()
     EditorController &controller = editing.controller();
     applied(controller, VisibleLines{10});
     applied(controller, InsertText{"abc"});
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
-    const auto composing = controller.apply(ComposeText{composed_of("に", {}, 0)});
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    const auto composing = controller.apply_frame(ComposeText{composed_of("に", {}, 0)});
     expect(!composing.composition.has_value(), "NORMAL drops the composition");
     expect(composing.vim_mode == VimMode::normal, "the frame carries the Vim mode for the window");
-    const auto committed = controller.apply(CommitText{"日本"});
+    const auto committed = controller.apply_frame(CommitText{"日本"});
     expect(committed.lines.at(0).text == "abc", "NORMAL drops the committed text too");
     expect(controller.vim_state().mode == VimMode::normal, "and stays in NORMAL");
 }
@@ -1177,19 +1178,19 @@ void verify_composition_vim_insert()
     Editing editing;
     EditorController &controller = editing.controller();
     applied(controller, VisibleLines{10});
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimCharacter{U'i'}}}));
-    const auto composing = controller.apply(ComposeText{composed_of("にほん", {}, 9)});
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'i'}}}));
+    const auto composing = controller.apply_frame(ComposeText{composed_of("にほん", {}, 9)});
     expect(composed_summary(composing) == "にほん@9|O0-9",
            "INSERT shows the composition like ordinary mode");
     expect(composing.vim_mode == VimMode::insert, "the frame says INSERT");
     expect(composing.lines.at(0).text.empty(), "the buffer is still empty while composing");
-    const auto committed = controller.apply(CommitText{"日本語"});
+    const auto committed = controller.apply_frame(CommitText{"日本語"});
     expect(committed.lines.at(0).text == "日本語", "the commit goes through the Vim engine");
     expect(!committed.composition.has_value(), "and the composition is gone");
     expect(controller.vim_state().mode == VimMode::insert, "INSERT is still INSERT afterwards");
     expect(committed.caret.position.column == Column{4}, "the caret sits past the three glyphs");
-    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimSpecialKey::escape}}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimSpecialKey::escape}}));
     vim_replay(controller, "x");
     expect(controller.frame().lines.at(0).text == "日本",
            "Vim sees the committed text as characters it typed itself");
@@ -1235,20 +1236,21 @@ void verify_ime_stance_frame()
     Editing editing;
     EditorController &controller = editing.controller();
     expect(controller.frame().ime == ImeStance::as_left, "ordinary mode leaves the IME as it was");
-    expect(controller.apply(OpenCommandPalette{}).ime == ImeStance::closed_once,
+    expect(controller.apply_frame(OpenCommandPalette{}).ime == ImeStance::closed_once,
            "Ctrl+P closes the IME once in ordinary mode");
-    expect(controller.apply(nenenib::application::CancelCommand{}).ime == ImeStance::as_left,
+    expect(controller.apply_frame(nenenib::application::CancelCommand{}).ime == ImeStance::as_left,
            "closing the palette returns to as_left");
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     expect(controller.frame().ime == ImeStance::closed, "Vim NORMAL keeps the IME closed");
-    expect(controller.apply(OpenCommandPalette{}).ime == ImeStance::closed_once,
+    expect(controller.apply_frame(OpenCommandPalette{}).ime == ImeStance::closed_once,
            "Ctrl+P closes the IME once in Vim NORMAL");
-    expect(controller.apply(OpenCommandPalette{}).ime == ImeStance::closed,
+    expect(controller.apply_frame(OpenCommandPalette{}).ime == ImeStance::closed,
            "Ctrl+P again returns to closed");
-    expect(controller.apply(VimKeyPress{VimKey{VimCharacter{U':'}}}).ime == ImeStance::closed,
+    expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U':'}}}).ime == ImeStance::closed,
            "the Ex line keeps the IME closed");
-    static_cast<void>(controller.apply(nenenib::application::CancelCommand{}));
-    expect(controller.apply(VimKeyPress{VimKey{VimCharacter{U'i'}}}).ime == ImeStance::as_left,
+    static_cast<void>(controller.apply_frame(nenenib::application::CancelCommand{}));
+    expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'i'}}}).ime ==
+               ImeStance::as_left,
            "Vim INSERT leaves the IME as it was");
 }
 
@@ -1311,6 +1313,7 @@ void verify_application_scope()
 
 void verify_controller_intents()
 {
+    verify_delivery_contracts();
     verify_font_geometry();
     verify_controller_initial_appearance();
     verify_controller_read_failures();

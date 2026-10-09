@@ -119,11 +119,11 @@ void verify_settings_loading()
            "saved font settings are restored");
     expect(frame.appearance == Appearance::light, "an explicit theme overrides the system");
     editor.appearance().script(Reading{Appearance::dark});
-    const auto refreshed = editor.controller().apply(RefreshAppearance{});
+    const auto refreshed = editor.controller().apply_frame(RefreshAppearance{});
     expect(refreshed.appearance == Appearance::light, "system refresh preserves an explicit theme");
     expect(editor.settings().writes() == 0, "loading and system refresh never rewrite settings");
     const auto held_frame = frame;
-    static_cast<void>(editor.controller().apply(InsertText{"abc"}));
+    static_cast<void>(editor.controller().apply_frame(InsertText{"abc"}));
     expect(held_frame.settings.font_family.text() == "Consolas",
            "a retained frame owns its font name");
 }
@@ -134,10 +134,10 @@ void verify_settings_adjustment()
     using nenenib::core::FontSizeAdjustment;
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"abc"}));
-    static_cast<void>(controller.apply(SelectAll{}));
+    static_cast<void>(controller.apply_frame(InsertText{"abc"}));
+    static_cast<void>(controller.apply_frame(SelectAll{}));
     const auto before = controller.frame();
-    const auto larger = controller.apply(AdjustFontSize{FontSizeAdjustment::increase, 1});
+    const auto larger = controller.apply_frame(AdjustFontSize{FontSizeAdjustment::increase, 1});
     expect(larger.settings.font_size.points() == 14.5F && editor.settings().writes() == 1,
            "a changed point size is persisted once");
     const auto &written = editor.settings().written();
@@ -148,9 +148,9 @@ void verify_settings_adjustment()
            "font adjustment preserves text and caret");
     expect(larger.lines.front().selection.presence == before.lines.front().selection.presence,
            "font adjustment preserves the selection");
-    const auto reset = controller.apply(AdjustFontSize{FontSizeAdjustment::reset, 1});
+    const auto reset = controller.apply_frame(AdjustFontSize{FontSizeAdjustment::reset, 1});
     expect(reset.settings.font_size.points() == 13.5F, "reset restores the default");
-    static_cast<void>(controller.apply(AdjustFontSize{FontSizeAdjustment::reset, 1}));
+    static_cast<void>(controller.apply_frame(AdjustFontSize{FontSizeAdjustment::reset, 1}));
     expect(editor.settings().writes() == 2, "resetting the same size does not write again");
     expect(applied(controller, HistoryAction{HistoryDirection::undo}).empty(),
            "settings changes do not consume text undo steps");
@@ -165,20 +165,22 @@ void verify_settings_failures()
     auto &controller = unreadable.controller();
     expect(controller.frame().settings_failure == SettingsFailure::unsupported_version,
            "a bad settings version is exposed in the startup frame");
-    static_cast<void>(controller.apply(VisibleLines{20}));
+    static_cast<void>(controller.apply_frame(VisibleLines{20}));
     expect(controller.frame().settings_failure == SettingsFailure::unsupported_version,
            "layout notifications cannot swallow the startup diagnostic");
     unreadable.settings().fail(SettingsFailure::unsupported_version);
-    const auto refused = controller.apply(AdjustFontSize{FontSizeAdjustment::increase, 1});
+    const auto refused = controller.apply_frame(AdjustFontSize{FontSizeAdjustment::increase, 1});
     expect(refused.settings.font_size.points() == 13.5F && refused.settings_failure.has_value(),
            "a failed write leaves the displayed setting unchanged");
     Editing editor;
     editor.settings().fail(SettingsFailure::unwritable);
-    const auto failed = editor.controller().apply(AdjustFontSize{FontSizeAdjustment::decrease, 1});
+    const auto failed =
+        editor.controller().apply_frame(AdjustFontSize{FontSizeAdjustment::decrease, 1});
     expect(failed.settings_failure == SettingsFailure::unwritable,
            "write failure is a typed result");
     editor.settings().fail(std::nullopt);
-    const auto retried = editor.controller().apply(AdjustFontSize{FontSizeAdjustment::decrease, 1});
+    const auto retried =
+        editor.controller().apply_frame(AdjustFontSize{FontSizeAdjustment::decrease, 1});
     expect(retried.settings.font_size.points() == 12.5F && !retried.settings_failure.has_value(),
            "a later successful save clears the diagnostic");
 }
@@ -306,8 +308,8 @@ void verify_ex_controller()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"preserved"}));
-    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(InsertText{"preserved"}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
     const auto before = controller.frame();
     const auto result = run_ex(controller, "set guifont=Consolas:h18.5");
     expect(result.settings.font_size.points() == 18.5F && editor.settings().writes() == 1,
@@ -323,7 +325,7 @@ void verify_ex_controller()
     static_cast<void>(run_ex(controller, "set guifont=Consolas:h18.5"));
     static_cast<void>(run_ex(controller, "colorscheme"));
     expect(editor.settings().writes() == 1, "same settings and queries do not write");
-    const auto notified = controller.apply(VisibleLines{12});
+    const auto notified = controller.apply_frame(VisibleLines{12});
     expect(notified.command_message.has_value(), "layout notification preserves the result");
     const auto changed = run_ex(controller, "colorscheme neutral-light");
     expect(changed.appearance == Appearance::light, "Ex updates the palette immediately");
@@ -344,8 +346,8 @@ void verify_guide_settings()
            "guide is shown by default");
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"body"}));
-    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(InsertText{"body"}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
     const auto before = controller.frame();
     const auto hidden = run_ex(controller, "set noguide");
     expect(hidden.settings.guide == core::GuideVisibility::hidden &&
@@ -362,7 +364,7 @@ void verify_guide_settings()
         expect(run_ex(controller, command).settings.guide == core::GuideVisibility::hidden,
                "font and theme commands preserve guide");
     }
-    expect(controller.apply(app::AdjustFontSize{core::FontSizeAdjustment::increase, 1})
+    expect(controller.apply_frame(app::AdjustFontSize{core::FontSizeAdjustment::increase, 1})
                    .settings.guide == core::GuideVisibility::hidden,
            "relative font size also preserves guide");
     editor.settings().fail(app::SettingsFailure::unwritable);
@@ -389,36 +391,36 @@ void verify_ex_input_isolation()
 {
     Editing editor;
     auto &controller = editor.controller();
-    static_cast<void>(controller.apply(InsertText{"body"}));
-    static_cast<void>(controller.apply(app::SelectEditMode{EditMode::vim}));
-    static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{U'y'}}));
-    static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{U'y'}}));
+    static_cast<void>(controller.apply_frame(InsertText{"body"}));
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'y'}}));
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'y'}}));
     const auto saved_register = controller.vim_state().unnamed_register.text;
-    auto frame = controller.apply(app::VimKeyPress{core::VimCharacter{U':'}});
+    auto frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
     expect(frame.command_line.has_value(), "NORMAL colon opens a separate line");
-    frame = controller.apply(app::EditCommand{core::CommandEdit::backspace});
+    frame = controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
     expect(!frame.command_line.has_value(), "empty backspace cancels");
-    static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{U':'}}));
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}}));
     editor.clipboard().hold(std::string("set fontsize=19"));
-    frame = controller.apply(app::PasteCommand{});
+    frame = controller.apply_frame(app::PasteCommand{});
     expect(frame.command_line.has_value(), "paste keeps the command active");
     expect(frame.command_line.value_or(core::InputLineView{}).text == "set fontsize=19",
            "clipboard goes to Ex");
     editor.clipboard().hold(std::string("\nBAD"));
-    frame = controller.apply(app::PasteCommand{});
+    frame = controller.apply_frame(app::PasteCommand{});
     expect(frame.command_message.has_value() && frame.lines.front().text == "body",
            "multiline paste is rejected");
-    frame = controller.apply(app::CancelCommand{});
+    frame = controller.apply_frame(app::CancelCommand{});
     expect(!frame.command_line.has_value() && editor.settings().writes() == 0,
            "cancel does not save");
     expect(controller.vim_state().unnamed_register.text == saved_register,
            "command input preserves the register");
-    static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{U'2'}}));
-    frame = controller.apply(app::VimKeyPress{core::VimCharacter{U':'}});
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'2'}}));
+    frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
     expect(!frame.command_line.has_value(),
            "unsupported counted Ex does not execute as an uncounted command");
-    static_cast<void>(controller.apply(app::VimKeyPress{core::VimCharacter{U'v'}}));
-    frame = controller.apply(app::VimKeyPress{core::VimCharacter{U':'}});
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'v'}}));
+    frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
     expect(!frame.command_line.has_value() && frame.vim_mode == core::VimMode::visual,
            "visual ranges are not interpreted");
 }

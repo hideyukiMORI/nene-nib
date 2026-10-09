@@ -99,7 +99,7 @@ void verify_incsearch_typed_cases()
         open_vim_document(session, "alpha beta\nbeta gamma\ndelta beta");
         EditorController &controller = session.controller();
         vim_replay(controller, "/");
-        static_cast<void>(controller.apply(app::CommandText{std::string(item.typed)}));
+        static_cast<void>(controller.apply_frame(app::CommandText{std::string(item.typed)}));
         const auto typing = controller.frame();
         const auto current = frame_current(typing);
         if (item.line.has_value())
@@ -138,7 +138,7 @@ void verify_incsearch_frame()
                frame_matches(typing, 1) == std::vector<MatchSpan>{{1, 3}} &&
                frame_matches(typing, 2) == std::vector<MatchSpan>{{7, 9}},
            "every visible match of the typed pattern is painted");
-    static_cast<void>(controller.apply(app::CommandText{"t"}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"t"}));
     expect(frame_matches(controller.frame(), 1) == std::vector<MatchSpan>{{1, 4}} &&
                frame_current(controller.frame()) ==
                    std::optional{std::pair{std::size_t{0}, MatchSpan{7, 10}}},
@@ -199,7 +199,7 @@ void verify_incsearch_scroll()
            "the view follows the previewed match out of sight");
     expect(caret_at(typing, 1, 1), "while the caret itself stays on the first line");
     const std::size_t shown = first_line_of(typing);
-    static_cast<void>(controller.apply(app::CommandText{"x"}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"x"}));
     expect(first_line_of(controller.frame()) == 1 && frame_paints_nothing(controller.frame()),
            "a pattern that stops matching goes back to where typing began");
     vim_replay(controller, "<BS>");
@@ -220,7 +220,7 @@ void verify_incsearch_scroll()
     expect(first_line_of(previewed) == first_line_of(unpreviewed),
            "and shows the same view, because the search starts from the view before typing");
     vim_replay(controller, "gg/tar");
-    static_cast<void>(controller.apply(VisibleLines{8}));
+    static_cast<void>(controller.apply_frame(VisibleLines{8}));
     vim_replay(controller, "<Esc>");
     expect(first_line_of(controller.frame()) == 1 && controller.frame().lines.size() == 8,
            "a resize while typing keeps the new height and restores the first line only");
@@ -277,7 +277,7 @@ void verify_incsearch_option()
     expect(frame_current(controller.frame()) ==
                std::optional{std::pair{std::size_t{1}, MatchSpan{6, 9}}},
            "and typing previews again");
-    static_cast<void>(controller.apply(SelectEditMode{EditMode::ordinary}));
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::ordinary}));
     expect(frame_paints_nothing(controller.frame()) && !controller.frame().command_line.has_value(),
            "leaving Vim while typing takes the preview away with the input line");
 }
@@ -309,7 +309,7 @@ void verify_incsearch_hlsearch()
 // Ctrl-G / Ctrl-T（ADR 0043 の決定 2）。向きは本文の順で `/` `?` に依らず、文字は入れない。
 void hop(EditorController &controller, VimSearchDirection relative)
 {
-    static_cast<void>(controller.apply(app::SearchHop{relative}));
+    static_cast<void>(controller.apply_frame(app::SearchHop{relative}));
 }
 
 [[nodiscard]] bool current_is(const EditorFrame &frame, std::size_t line, MatchSpan span)
@@ -411,7 +411,7 @@ void verify_incsearch_hop_inert()
     expect(frame_paints_nothing(controller.frame()) && typed_text(controller.frame()) == "zz",
            "without a match a hop does nothing and types nothing");
     vim_replay(controller, "<Esc>:");
-    static_cast<void>(controller.apply(app::CommandText{"set"}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"set"}));
     hop(controller, VimSearchDirection::forward);
     expect(typed_text(controller.frame()) == "set", "the Ex input line ignores a hop");
     vim_replay(controller, "<Esc>");

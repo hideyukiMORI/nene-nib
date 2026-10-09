@@ -223,7 +223,7 @@ void verify_positions_and_unsaved()
     open_files(editing, "b");
     applied(editing.controller(),
             PlaceCaret{TextPosition{LineNumber{3}, Column{1}}, SelectionAnchoring::collapse});
-    const EditorFrame edited = editing.controller().apply(InsertText{"yy"});
+    const EditorFrame edited = editing.controller().apply_frame(InsertText{"yy"});
     expect(edited.document.title.text() == "● b.txt", "the active file has unsaved changes");
     expect(written(closed_window(editing)) == "a.txt@2:2/3#1 b.txt@3:3/1#0 >1",
            "a parked tab keeps its caret and first line and an unsaved file is listed");
@@ -287,7 +287,7 @@ void verify_write_failure_changes_nothing()
     applied(controller, SelectEditMode{EditMode::vim});
     const EditorFrame before = run_ex(controller, "tabnext 9");
     editing.session().fail(SessionFailure::unwritable);
-    const EditorFrame after = controller.apply(EndSession{SessionEnd::window_closed});
+    const EditorFrame after = controller.apply_frame(EndSession{SessionEnd::window_closed});
     const auto message = [](const EditorFrame &frame)
     {
         return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
@@ -578,7 +578,7 @@ void verify_restore_band()
     expect(saved, "no restored tab is unsaved");
     expect(written(closed_window(editing)) == "a.txt@2:2/3#1 b.txt@4:1/2#0 c.txt@1:1/1#2 >1",
            "the list writes unloaded tabs at their remembered positions and ranks");
-    const EditorFrame walked = controller.apply(WalkRecentTab{TabStep::next});
+    const EditorFrame walked = controller.apply_frame(WalkRecentTab{TabStep::next});
     expect(walked.active_tab == 0 && controller.tab_walking() && editing.files().reads() == 2 &&
                caret_at(walked, 2, 2),
            "a walk step towards an unloaded tab reads it and walks there");
@@ -611,7 +611,7 @@ void verify_restore_clamps()
     Editing editing(listed({listed_tab("a", TextPosition{LineNumber{1}, Column{2}}, 1, 0)}, 0),
                     [&full](ScriptedFiles &files)
                     { files.hold_at("C:\\work\\a.txt", Bytes{full}); });
-    const EditorFrame typed = editing.controller().apply(InsertText{"x"});
+    const EditorFrame typed = editing.controller().apply_frame(InsertText{"x"});
     expect(vim_body(typed) == "あxいう", "a full-width line keeps the caret between characters");
     const EditorFrame blank = restored_one("", TextPosition{LineNumber{5}, Column{5}}, 5);
     expect(caret_at(blank, 1, 1) && blank.first_visible.value == 1,
@@ -677,12 +677,12 @@ void verify_switch_reads()
 {
     Editing clicked(three_listed(1), hold_three);
     auto &controller = clicked.controller();
-    const EditorFrame first = controller.apply(SwitchTab{0});
+    const EditorFrame first = controller.apply_frame(SwitchTab{0});
     expect(titles(first) == "a.txt b.txt c.txt >0" && first.document.title.text() == "a.txt" &&
                caret_at(first, 2, 2) && first.first_visible.value == 3 &&
                clicked.files().reads() == 2 && clicked.files().read_path() == "C:\\work\\a.txt",
            "a click on an unloaded tab reads it and shows its caret and first line");
-    const EditorFrame back = controller.apply(SwitchTab{1});
+    const EditorFrame back = controller.apply_frame(SwitchTab{1});
     expect(back.document.title.text() == "b.txt" && caret_at(back, 4, 1) &&
                clicked.files().reads() == 2,
            "switching back to a loaded tab reads nothing");
@@ -702,13 +702,13 @@ void verify_switch_reads()
 
     Editing listed_tabs(three_listed(1), hold_three);
     applied(listed_tabs.controller(), OpenTabList{});
-    const EditorFrame chosen = listed_tabs.controller().apply(ActivateCommandChoice{0});
+    const EditorFrame chosen = listed_tabs.controller().apply_frame(ActivateCommandChoice{0});
     expect(chosen.active_tab == 0 && chosen.document.title.text() == "a.txt" &&
                !chosen.command_palette.has_value() && listed_tabs.files().reads() == 2,
            "a row of the tab list reads the unloaded tab");
 
     Editing opened(three_listed(1), hold_three);
-    const EditorFrame same = opened.controller().apply(open_at("C:\\work\\c.txt"));
+    const EditorFrame same = opened.controller().apply_frame(open_at("C:\\work\\c.txt"));
     expect(titles(same) == "a.txt b.txt c.txt >2" && opened.files().reads() == 2,
            "opening the file of an unloaded tab switches there and reads it once");
 }
@@ -719,26 +719,26 @@ void verify_walk_reaches()
     Editing walking(three_listed(1), hold_three);
     auto &controller = walking.controller();
     applied(controller, WalkRecentTab{TabStep::next});
-    const EditorFrame second = controller.apply(WalkRecentTab{TabStep::next});
+    const EditorFrame second = controller.apply_frame(WalkRecentTab{TabStep::next});
     expect(second.active_tab == 2 && controller.tab_walking() && walking.files().reads() == 3,
            "each walk step reads the tab it reaches");
-    const EditorFrame settled = controller.apply(SettleRecentTab{});
+    const EditorFrame settled = controller.apply_frame(SettleRecentTab{});
     expect(settled.active_tab == 2 && !controller.tab_walking(), "the walk settles as before");
 
     Editing missing(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "a"); });
     auto &walker = missing.controller();
-    const EditorFrame dropped = walker.apply(WalkRecentTab{TabStep::next});
+    const EditorFrame dropped = walker.apply_frame(WalkRecentTab{TabStep::next});
     expect(titles(dropped) == "b.txt c.txt >0" && !walker.tab_walking() &&
                notice(dropped) == "開けませんでした: a.txt",
            "an unreadable walk target is dropped and the walk stays on the current tab");
-    const EditorFrame next = walker.apply(WalkRecentTab{TabStep::next});
+    const EditorFrame next = walker.apply_frame(WalkRecentTab{TabStep::next});
     expect(next.active_tab == 1 && next.document.title.text() == "c.txt" && walker.tab_walking() &&
                notice(next) == "none",
            "the next step goes to the neighbour in the order after the drop");
 
     Editing mid(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "c"); });
     applied(mid.controller(), WalkRecentTab{TabStep::next});
-    const EditorFrame stuck = mid.controller().apply(WalkRecentTab{TabStep::next});
+    const EditorFrame stuck = mid.controller().apply_frame(WalkRecentTab{TabStep::next});
     expect(titles(stuck) == "a.txt b.txt >0" && mid.controller().tab_walking(),
            "a drop in the middle of a walk keeps walking");
 }
@@ -749,7 +749,7 @@ void verify_switch_unreadable()
     Editing editing(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "ac"); });
     auto &controller = editing.controller();
     applied(controller, OpenCommandPalette{});
-    const EditorFrame first = controller.apply(SwitchTab{0});
+    const EditorFrame first = controller.apply_frame(SwitchTab{0});
     expect(titles(first) == "b.txt c.txt >0" && first.document.title.text() == "b.txt" &&
                caret_at(first, 4, 1) && notice(first) == "開けませんでした: a.txt" &&
                first.command_palette.has_value() && !first.document.last_failure.has_value(),
@@ -767,7 +767,7 @@ void verify_switch_unreadable()
            "gt towards an unreadable tab stays and notices");
 
     Editing opened(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "a"); });
-    const EditorFrame same = opened.controller().apply(open_at("C:\\work\\a.txt"));
+    const EditorFrame same = opened.controller().apply_frame(open_at("C:\\work\\a.txt"));
     expect(titles(same) == "b.txt c.txt >0" && notice(same) == "開けませんでした: a.txt" &&
                !same.document.last_failure.has_value() && opened.files().reads() == 2,
            "opening the file of an unreadable tab only notices and does not read it twice");
@@ -777,23 +777,23 @@ void verify_switch_unreadable()
 void verify_close_reaches()
 {
     Editing right(three_listed(1), hold_three);
-    const EditorFrame closed = right.controller().apply(CloseTab{1});
+    const EditorFrame closed = right.controller().apply_frame(CloseTab{1});
     expect(titles(closed) == "a.txt c.txt >1" && closed.document.title.text() == "c.txt" &&
                right.files().reads() == 2 && !closed.closing,
            "closing the active tab reads its right neighbour");
     Editing left(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "c"); });
-    const EditorFrame fallback = left.controller().apply(CloseTab{1});
+    const EditorFrame fallback = left.controller().apply_frame(CloseTab{1});
     expect(titles(fallback) == "a.txt >0" && caret_at(fallback, 2, 2) &&
                notice(fallback) == "開けませんでした: c.txt" && !fallback.closing &&
                left.files().reads() == 3,
            "an unreadable neighbour is dropped and the next neighbour is read");
     Editing none(three_listed(1), [](ScriptedFiles &files) { hold_without(files, "ac"); });
-    const EditorFrame blank = none.controller().apply(CloseTab{1});
+    const EditorFrame blank = none.controller().apply_frame(CloseTab{1});
     expect(titles(blank) == "無題 >0" && !blank.closing &&
                notice(blank) == "開けませんでした: a.txt（ほか 1 件）",
            "when no neighbour can be read one untitled tab stays and the window stays open");
     Editing parked(three_listed(1), hold_three);
-    const EditorFrame aside = parked.controller().apply(CloseTab{0});
+    const EditorFrame aside = parked.controller().apply_frame(CloseTab{0});
     expect(titles(aside) == "b.txt c.txt >0" && parked.files().reads() == 1,
            "closing an unloaded tab that is not active reads nothing");
 }

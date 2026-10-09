@@ -160,7 +160,8 @@ void verify_quit_guards()
     const auto forced = run_ex(controller, "q!");
     expect(forced.closing && forced.tabs.size() == 1 && editing.files().written_path().empty(),
            "forced quit closes the last tab without writing");
-    expect(!controller.apply(app::VisibleLines{10}).closing, "closing lasts for one intent only");
+    expect(!controller.apply_frame(app::VisibleLines{10}).closing,
+           "closing lasts for one intent only");
 }
 
 void verify_clean_and_untitled()
@@ -289,7 +290,7 @@ void verify_palette_write()
     auto &controller = editing.controller();
     applied(controller, app::OpenCommandPalette{});
     applied(controller, app::CommandText{":write"});
-    const auto frame = controller.apply(app::SubmitCommand{});
+    const auto frame = controller.apply_frame(app::SubmitCommand{});
     expect(editing.files().written() == "alpha" && !frame.command_palette.has_value() &&
                !frame.closing,
            "the shared command palette executes the same write operation");
