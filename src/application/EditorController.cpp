@@ -950,10 +950,11 @@ void EditorController::begin_intent(bool keeps_message)
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
     // 一覧で頼まれた操作も同じく 1 意図だけ（ADR 0078 の決定 8）。
-    state_ = state_.with_failure(std::nullopt)
-                 .with_closing(false)
-                 .with_close_request(std::nullopt)
-                 .with_operation_request(std::nullopt);
+    if (state_.last_failure().has_value() || state_.closing() ||
+        state_.close_request().has_value() || state_.operation_request().has_value())
+    {
+        state_ = state_.with_intent_cleared();
+    }
     unreached_tabs_ = 0;
     if (state_.command_message().has_value() && !keeps_message)
     {
@@ -1046,9 +1047,10 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
     const core::Offset caret{range.begin.value + text.size()};
     const std::size_t before = state_.history().position();
-    const auto edited = state_.with_edit(std::move(next), core::collapsed_at(caret),
-                                         state_.history().pushed(edit, boundary));
-    state_ = edited.with_document(after_edit_at(edited.document(), before));
+    auto history = state_.history().pushed(edit, boundary);
+    auto document = after_edit_at(state_.document(), before);
+    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
+                              std::move(document));
     follow_caret();
 }
 
@@ -1080,7 +1082,11 @@ void EditorController::follow_position(core::TextPosition position)
                                           : scroll_extent_for(state_.mode());
     const auto within = core::first_visible_within(followed, state_.text().line_count(),
                                                    scroll.visible_lines, extent);
-    state_ = state_.with_scroll(ScrollState{within, scroll.visible_lines});
+    const ScrollState next{within, scroll.visible_lines};
+    if (!(next == scroll))
+    {
+        state_ = state_.with_scroll(next);
+    }
 }
 
 void EditorController::accept(const InsertText &intent)
@@ -1288,8 +1294,8 @@ void EditorController::undo_edit()
     const core::Offset end{at.value + edit.value().inserted.size()};
     auto next = state_.text().replaced(at, end, edit.value().removed);
     const core::Offset caret{at.value + edit.value().removed.size()};
-    state_ =
-        state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone());
+    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
+                              state_.document());
     follow_caret();
 }
 
@@ -1304,8 +1310,8 @@ void EditorController::redo_edit()
     const core::Offset end{at.value + edit.value().removed.size()};
     auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
-    state_ =
-        state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone());
+    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
+                              state_.document());
     follow_caret();
 }
 

@@ -154,6 +154,7 @@ void verify_look();
 
 // ApplicationTests.cpp
 void verify_document_save_contracts();
+void verify_application_scope();
 void verify_editor_state();
 void verify_controller_intents();
 

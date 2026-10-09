@@ -395,8 +395,9 @@ void verify_restored_state()
                unloaded_name(state, 9) == "-",
            "the restored tabs are unloaded in band order and the active one is not");
     expect(order_of(state) == "0321", "the restored tabs join the order behind the active tab");
-    const auto edited = state.with_edit(
-        buffer_of("x"), nenenib::core::collapsed_at(nenenib::core::Offset{1}), state.history());
+    const auto edited =
+        state.with_edit(buffer_of("x"), nenenib::core::collapsed_at(nenenib::core::Offset{1}),
+                        state.history(), state.document());
     expect(edited.parked() == state.parked(),
            "typing into the active document shares the unloaded tabs");
 }

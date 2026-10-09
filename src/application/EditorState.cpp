@@ -254,48 +254,85 @@ EditorState EditorState::with_command_message(std::optional<core::DisplayText> m
     return next;
 }
 
-EditorState EditorState::with_vim(core::VimState vim) const
+EditorState EditorState::with_vim(core::VimState vim) const &
 {
-    EditorState next(*this);
-    next.vim_ = std::move(vim);
-    return next;
+    return EditorState(*this).with_vim(std::move(vim));
 }
 
-EditorState EditorState::with_selection(const core::Selection &selection) const
+EditorState EditorState::with_vim(core::VimState vim) &&
 {
-    EditorState next(*this);
-    next.selection_ = selection;
-    return next;
+    vim_ = std::move(vim);
+    return std::move(*this);
 }
 
-EditorState EditorState::with_scroll(const ScrollState &scroll) const
+EditorState EditorState::with_selection(core::Selection selection) const &
 {
-    EditorState next(*this);
-    next.scroll_ = scroll;
-    return next;
+    return EditorState(*this).with_selection(selection);
 }
 
-EditorState EditorState::with_edit(core::TextBuffer text, const core::Selection &selection,
-                                   core::EditHistory history) const
+EditorState EditorState::with_selection(core::Selection selection) &&
 {
-    EditorState next(*this);
-    next.text_ = std::move(text);
-    next.selection_ = selection;
-    next.history_ = std::move(history);
-    return next;
+    selection_ = selection;
+    return std::move(*this);
 }
 
-EditorState EditorState::with_history(core::EditHistory history) const
+EditorState EditorState::with_scroll(ScrollState scroll) const &
 {
-    EditorState next(*this);
-    next.history_ = std::move(history);
-    return next;
+    return EditorState(*this).with_scroll(scroll);
 }
 
-EditorState EditorState::with_document(Document document) const
+EditorState EditorState::with_scroll(ScrollState scroll) &&
+{
+    scroll_ = scroll;
+    return std::move(*this);
+}
+
+EditorState EditorState::with_edit(core::TextBuffer text, core::Selection selection,
+                                   core::EditHistory history, Document document) const &
+{
+    return EditorState(*this).with_edit(std::move(text), selection, std::move(history),
+                                        std::move(document));
+}
+
+EditorState EditorState::with_edit(core::TextBuffer text, core::Selection selection,
+                                   core::EditHistory history, Document document) &&
+{
+    text_ = std::move(text);
+    selection_ = selection;
+    history_ = std::move(history);
+    document_ = std::move(document);
+    return std::move(*this);
+}
+
+EditorState EditorState::with_history(core::EditHistory history) const &
+{
+    return EditorState(*this).with_history(std::move(history));
+}
+
+EditorState EditorState::with_history(core::EditHistory history) &&
+{
+    history_ = std::move(history);
+    return std::move(*this);
+}
+
+EditorState EditorState::with_document(Document document) const &
+{
+    return EditorState(*this).with_document(std::move(document));
+}
+
+EditorState EditorState::with_document(Document document) &&
+{
+    document_ = std::move(document);
+    return std::move(*this);
+}
+
+EditorState EditorState::with_intent_cleared() const
 {
     EditorState next(*this);
-    next.document_ = std::move(document);
+    next.last_failure_ = std::nullopt;
+    next.closing_ = false;
+    next.close_request_ = std::nullopt;
+    next.operation_request_ = std::nullopt;
     return next;
 }
 

@@ -381,8 +381,9 @@ void verify_parked_references()
     state = state.with_new_tab();
     const auto first = state.parked().at(0);
     const auto second = state.parked().at(1);
-    const auto edited = state.with_edit(
-        buffer_of("x"), nenenib::core::collapsed_at(nenenib::core::Offset{1}), state.history());
+    const auto edited =
+        state.with_edit(buffer_of("x"), nenenib::core::collapsed_at(nenenib::core::Offset{1}),
+                        state.history(), state.document());
     expect(edited.parked().at(0) == first && edited.parked().at(1) == second,
            "editing the active document shares the parked bundles");
     const auto switched = state.with_switched(1);

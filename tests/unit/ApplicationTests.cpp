@@ -86,6 +86,7 @@
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <expected>
@@ -157,6 +158,200 @@ using nenenib::core::TextPosition;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
+
+// 消費した入力そのものは読まず、保持した元と返された値を観測する（ADR 0081）。
+void expect_state_values(const EditorState &left, const EditorState &right)
+{
+    const auto &left_message = left.command_message();
+    const auto &right_message = right.command_message();
+    expect(left.text().text() == right.text().text() && left.line_ending() == right.line_ending() &&
+               left.selection() == right.selection(),
+           "state updates preserve the text and selection value");
+    expect(left.history().size() == right.history().size() &&
+               left.history().position() == right.history().position() &&
+               left.history().undo() == right.history().undo() &&
+               left.history().redo() == right.history().redo(),
+           "state updates preserve applied and redo history");
+    expect(left.document().path == right.document().path &&
+               left.document().encoding == right.document().encoding &&
+               left.document().saved_position == right.document().saved_position,
+           "state updates preserve the document and save point");
+    expect(left.scroll() == right.scroll() && left.mode() == right.mode() &&
+               left.appearance() == right.appearance() &&
+               same_settings(left.settings(), right.settings()),
+           "state updates preserve viewport and window settings");
+    expect(left.vim().mode == right.vim().mode &&
+               left.vim().unnamed_register.text == right.vim().unnamed_register.text &&
+               left.vim().unnamed_register.kind == right.vim().unnamed_register.kind &&
+               left.vim().registers.registers.at(0).text ==
+                   right.vim().registers.registers.at(0).text &&
+               left.vim().last_macro == right.vim().last_macro,
+           "state updates preserve the owned Vim values");
+    expect(left.tab_count() == right.tab_count() && left.active_tab() == right.active_tab() &&
+               left.parked() == right.parked() && left.tab_walking() == right.tab_walking() &&
+               std::ranges::equal(left.recency().order(), right.recency().order()),
+           "state updates share parked bundles and preserve MRU");
+    expect(left.last_failure() == right.last_failure() && left.closing() == right.closing() &&
+               left.close_request() == right.close_request() &&
+               left.operation_request() == right.operation_request() && left_message.has_value() &&
+               right_message.has_value() &&
+               left_message.value().text() == right_message.value().text(),
+           "state updates preserve intent requests and messages");
+}
+
+[[nodiscard]] EditorState state_for_update()
+{
+    using nenenib::application::Document;
+    auto vim = empty_vim_state();
+    vim.unnamed_register =
+        nenenib::core::VimRegister{"owned", nenenib::core::VimRegisterKind::characters};
+    vim.registers.registers.at(0) = vim.unnamed_register;
+    vim.last_macro = 'a';
+    const auto history =
+        EditHistory::empty().pushed(Edit{Offset{0}, "", "one", Offset{0}}, EditBoundary::separate);
+    return EditorState::create(Appearance::dark, EditMode::vim)
+        .with_new_tab()
+        .with_edit(buffer_of("one"), Selection{Offset{1}, Offset{3}}, history,
+                   Document{sample_path(), TextEncoding::utf8_bom, 1})
+        .with_vim(std::move(vim))
+        .with_scroll(ScrollState{LineNumber{1}, 5})
+        .with_walked(1)
+        .with_failure(FileFailure::unwritable)
+        .with_closing(true)
+        .with_close_request(0)
+        .with_operation_request(nenenib::core::EditorOperation::save)
+        .with_command_message(nenenib::core::DisplayText::parse("kept").value());
+}
+
+void verify_state_update(const EditorState &source, const auto &update)
+{
+    const auto saved = source;
+    const auto copied = update(source);
+    auto consumed = source;
+    const auto moved = update(std::move(consumed));
+    expect_state_values(copied, moved);
+    expect_state_values(source, saved);
+}
+
+void verify_consuming_updates()
+{
+    const auto source = state_for_update();
+    verify_state_update(
+        source, [](auto &&value)
+        { return std::forward<decltype(value)>(value).with_selection(collapsed_at(Offset{2})); });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            return std::forward<decltype(value)>(value).with_scroll(
+                                ScrollState{LineNumber{2}, 7});
+                        });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            auto history = value.history().undone();
+                            return std::forward<decltype(value)>(value).with_history(
+                                std::move(history));
+                        });
+    verify_state_update(
+        source,
+        [](auto &&value)
+        {
+            return std::forward<decltype(value)>(value).with_document(
+                nenenib::application::Document{std::nullopt, TextEncoding::utf8, std::nullopt});
+        });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            auto vim = value.vim();
+                            vim.unnamed_register.text = "changed";
+                            return std::forward<decltype(value)>(value).with_vim(std::move(vim));
+                        });
+    verify_state_update(
+        source,
+        [](auto &&value)
+        {
+            auto history = value.history().undone();
+            return std::forward<decltype(value)>(value).with_edit(
+                buffer_of("two"), collapsed_at(Offset{3}), std::move(history),
+                nenenib::application::Document{std::nullopt, TextEncoding::utf8, std::nullopt});
+        });
+}
+
+void verify_self_borrowed_updates()
+{
+    const auto source = state_for_update();
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            const auto &selection = value.selection();
+                            return std::forward<decltype(value)>(value).with_selection(selection);
+                        });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            const auto &scroll = value.scroll();
+                            return std::forward<decltype(value)>(value).with_scroll(scroll);
+                        });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            const auto &history = value.history();
+                            return std::forward<decltype(value)>(value).with_history(history);
+                        });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            const auto &document = value.document();
+                            return std::forward<decltype(value)>(value).with_document(document);
+                        });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            const auto &vim = value.vim();
+                            return std::forward<decltype(value)>(value).with_vim(vim);
+                        });
+    verify_state_update(source,
+                        [](auto &&value)
+                        {
+                            const auto &text = value.text();
+                            const auto &selection = value.selection();
+                            const auto &history = value.history();
+                            const auto &document = value.document();
+                            const auto scroll = value.scroll();
+                            return std::forward<decltype(value)>(value)
+                                .with_edit(text, selection, history, document)
+                                .with_scroll(scroll);
+                        });
+}
+
+void verify_intent_cleared()
+{
+    using nenenib::core::EditorOperation;
+    const auto source = state_for_update();
+    for (unsigned fields = 0; fields < 16; ++fields)
+    {
+        const auto pending =
+            source
+                .with_failure((fields & 1U) != 0 ? std::optional{FileFailure::unwritable}
+                                                 : std::nullopt)
+                .with_closing((fields & 2U) != 0)
+                .with_close_request((fields & 4U) != 0 ? std::optional<std::size_t>{0}
+                                                       : std::nullopt)
+                .with_operation_request((fields & 8U) != 0 ? std::optional{EditorOperation::save}
+                                                           : std::nullopt);
+        const auto cleared = pending.with_intent_cleared();
+        const auto expected = pending.with_failure(std::nullopt)
+                                  .with_closing(false)
+                                  .with_close_request(std::nullopt)
+                                  .with_operation_request(std::nullopt);
+        expect_state_values(cleared, expected);
+        expect(pending.closing() == ((fields & 2U) != 0) &&
+                   pending.last_failure().has_value() == ((fields & 1U) != 0) &&
+                   pending.close_request().has_value() == ((fields & 4U) != 0) &&
+                   pending.operation_request().has_value() == ((fields & 8U) != 0),
+               "clearing any combination leaves its source unchanged");
+    }
+}
 
 void verify_font_geometry()
 {
@@ -777,6 +972,12 @@ void verify_save_state_transitions()
     applied(controller, InsertText{"a"});
     static_cast<void>(controller.apply(SaveDocument{sample_path(), TextEncoding::utf8}));
     expect(controller.frame().document.save_state == SaveState::saved, "saved again");
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    expect(controller.frame().document.save_state == SaveState::modified,
+           "undo preserves the future save point");
+    applied(controller, HistoryAction{HistoryDirection::redo});
+    expect(controller.frame().document.save_state == SaveState::saved,
+           "redo reaches the preserved save point");
     // sealed() が無いと、この 1 打鍵が保存時点の単位に混ざって位置が動かない（決定 7）。
     applied(controller, InsertText{"b"});
     expect(controller.frame().document.save_state == SaveState::modified,
@@ -890,7 +1091,8 @@ void verify_composition_state()
         EditorState::create(Appearance::dark, EditMode::ordinary)
             .with_edit(buffer_of("hi"), collapsed_at(Offset{2}),
                        EditHistory::empty().pushed(Edit{Offset{0}, "", "hi", Offset{0}},
-                                                   EditBoundary::separate));
+                                                   EditBoundary::separate),
+                       nenenib::application::Document{std::nullopt, TextEncoding::utf8, 0});
     expect(!state.composition().has_value(), "a state starts without a composition");
     const auto composing = state.with_composition(composed_of("あ", {}, 0));
     const auto &held = composing.composition();
@@ -1065,6 +1267,9 @@ void verify_composition()
 
 void verify_editor_state()
 {
+    verify_consuming_updates();
+    verify_self_borrowed_updates();
+    verify_intent_cleared();
     const auto state = EditorState::create(Appearance::light, EditMode::ordinary);
     const auto next = state.with_appearance(Appearance::dark);
     expect(state.appearance() == Appearance::light, "with_appearance leaves the source alone");
@@ -1083,8 +1288,8 @@ void verify_editor_state()
     expect(scrolled.scroll() == ScrollState{LineNumber{3}, 5},
            "with_scroll returns the next state");
     expect(!(scrolled.scroll() == state.scroll()), "scroll states compare on both parts");
-    const auto edited =
-        state.with_edit(buffer_of("hi"), collapsed_at(Offset{2}), EditHistory::empty());
+    const auto edited = state.with_edit(buffer_of("hi"), collapsed_at(Offset{2}),
+                                        EditHistory::empty(), state.document());
     expect(edited.text().text() == "hi" && state.text().size_bytes() == 0,
            "with_edit leaves the source alone");
 }
@@ -1096,6 +1301,12 @@ void verify_document_save_contracts()
     verify_document_save_failures();
     verify_save_state_transitions();
     verify_unreachable_save_point();
+}
+
+void verify_application_scope()
+{
+    verify_editor_state();
+    verify_controller_intents();
 }
 
 void verify_controller_intents()
