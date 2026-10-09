@@ -72,6 +72,17 @@ SoftwareTarget::Pixels SoftwareTarget::text_layout(IDWriteTextLayout *layout, D2
     return finish();
 }
 
+SoftwareTarget::Pixels SoftwareTarget::clipped_layout(IDWriteTextLayout *layout,
+                                                      D2D1_POINT_2F origin, D2D1_RECT_F clip)
+{
+    target_->BeginDraw();
+    target_->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+    target_->PushAxisAlignedClip(clip, D2D1_ANTIALIAS_MODE_ALIASED);
+    target_->DrawTextLayout(origin, layout, brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+    target_->PopAxisAlignedClip();
+    return finish();
+}
+
 SoftwareTarget::Pixels
 SoftwareTarget::glyph_runs(const std::vector<nenenib::ui::win32::BodyGlyphRun> &runs,
                            D2D1_POINT_2F origin, D2D1_RECT_F clip)

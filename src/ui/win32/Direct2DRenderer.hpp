@@ -100,6 +100,11 @@ class Direct2DRenderer final
                core::RgbColor color);
     void write_status(std::string_view text, IDWriteTextFormat *format,
                       const core::LayoutRect &area, core::RgbColor color);
+    [[nodiscard]] const StatusTextLayout &status_text_layout(std::string_view text,
+                                                             IDWriteTextFormat *format,
+                                                             const core::LayoutRect &area);
+    void draw_status_text(const StatusTextLayout &entry, const core::LayoutRect &area,
+                          core::RgbColor color);
     void write_gutter(std::string_view text, const core::LayoutRect &area, core::RgbColor color);
     // 欄の右端に寄せて書き、欄の外は切る。幅 0 の欄には何も書かない。
     void write_right(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
@@ -116,7 +121,8 @@ class Direct2DRenderer final
     void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
-    void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area);
+    void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
+                        D2D1_DRAW_TEXT_OPTIONS options = D2D1_DRAW_TEXT_OPTIONS_CLIP);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
     [[nodiscard]] TextLayout text_layout(std::string_view text, IDWriteTextFormat *format,
                                          const core::LayoutRect &area);
@@ -180,7 +186,8 @@ class Direct2DRenderer final
     void draw_status_bar(const application::EditorFrame &frame,
                          const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
-    void draw_recording(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
+    void draw_recording(const application::EditorFrame &frame, const core::StatusBarLayout &layout,
+                        const StatusTextLayout &mode);
     void draw_status_left(const application::EditorFrame &frame,
                           const core::StatusBarLayout &layout);
     void draw_command(const application::EditorFrame &frame, const core::LayoutRect &area);

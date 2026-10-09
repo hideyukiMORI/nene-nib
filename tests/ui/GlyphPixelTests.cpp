@@ -106,6 +106,26 @@ Layout layout_of(IDWriteFactory2 &factory, IDWriteTextFormat *format, const std:
     return layout;
 }
 
+// callerが置いた狭いclipでも、NONEのlayoutと保持glyphが同じ画素を描く。
+void verify_block_clips(SoftwareTarget &target, IDWriteTextLayout *layout,
+                        const std::vector<win32::BodyGlyphRun> &runs, FLOAT width)
+{
+    const auto right = origin.x + width;
+    const auto bottom = origin.y + line_height;
+    const std::array<D2D1_RECT_F, 4> clips{
+        D2D1::RectF(origin.x, origin.y, origin.x + 1, bottom),
+        D2D1::RectF(origin.x + 3, origin.y, origin.x + 15, bottom),
+        D2D1::RectF(origin.x + width / 2, origin.y, origin.x + width / 2 + 9, bottom),
+        D2D1::RectF(right - 3, origin.y, right, bottom)};
+    for (const auto clip : clips)
+    {
+        const auto expected = target.clipped_layout(layout, origin, clip);
+        const auto drawn = target.glyph_runs(runs, origin, clip);
+        expect(!expected.empty() && expected == drawn,
+               "block clip retains the exact pixels of DrawTextLayout without layout clipping");
+    }
+}
+
 // 字体選択を保持する書式（cached）と OS の既定の書式（plain）の組。
 void verify_case(IDWriteFactory2 &factory, SoftwareTarget &target,
                  const std::array<Format, 2> &formats, const std::wstring &text)
@@ -125,6 +145,7 @@ void verify_case(IDWriteFactory2 &factory, SoftwareTarget &target,
         const auto taken = collector->take();
         expect(taken.has_value(), "a line without decorations is not rejected");
         const auto runs = taken.value_or(std::vector<win32::BodyGlyphRun>{});
+        verify_block_clips(target, cached.Get(), runs, width);
         const auto expected = target.text_layout(cached.Get(), origin);
         const auto chosen = target.text_layout(plain.Get(), origin);
         cached.Reset();
