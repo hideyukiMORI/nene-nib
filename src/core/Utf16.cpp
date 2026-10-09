@@ -87,7 +87,11 @@ std::expected<std::wstring, TextFailure> to_utf16(std::string_view utf8)
 std::expected<std::string, TextFailure> to_utf8(std::wstring_view utf16)
 {
     std::string utf8;
-    utf8.reserve(utf16.size());
+    constexpr std::size_t maximum_bytes_per_unit = 3;
+    const auto reserved = utf16.size() <= utf8.max_size() / maximum_bytes_per_unit
+                              ? utf16.size() * maximum_bytes_per_unit
+                              : utf16.size();
+    utf8.reserve(reserved);
     std::size_t index = 0;
     while (index < utf16.size())
     {
