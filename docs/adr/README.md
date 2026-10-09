@@ -99,3 +99,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0082](0082-scoped-probes-compare-identical-work-without-a-window.md) | 同じ固定処理を窓なしで前後比較する | 受理 |
 | [0084](0084-intent-delivery-does-not-build-visible-lines.md) | 意図の反映値は行を作らず、描画と当たり判定でだけ frame を作る | 受理 |
 | [0085](0085-completed-history-edits-are-private-immutable-values.md) | 確定済み履歴の編集は私有の不変値として共有する | 受理（工程1の設計、性能・製品統合は別） |
+| [0089](0089-recorded-vim-keys-are-private-immutable-chunks.md) | 記録したVim鍵列は私有の不変chunkとして共有する | 受理（工程3の設計、性能・製品統合は別） |
