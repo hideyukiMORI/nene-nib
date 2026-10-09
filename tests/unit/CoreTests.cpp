@@ -1904,6 +1904,13 @@ void verify_caret_movement_contracts()
     verify_caret_words();
 }
 
+void verify_utf16_conversions()
+{
+    verify_utf16_encoding();
+    verify_utf16_rejects();
+    verify_utf16_round_trip();
+}
+
 // UTF 検証とその直接の境界だけを選ぶ。既定実行も同じ関数を呼ぶ（ADR 0086）。
 void verify_utf8_scope()
 {
@@ -1916,9 +1923,7 @@ void verify_utf8_scope()
     verify_utf8_ascii_to_invalid();
     verify_utf8_counting();
     verify_utf8_walking();
-    verify_utf16_encoding();
-    verify_utf16_rejects();
-    verify_utf16_round_trip();
+    verify_utf16_scope();
 }
 
 void verify_text_and_caret()

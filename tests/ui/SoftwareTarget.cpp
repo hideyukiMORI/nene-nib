@@ -95,4 +95,27 @@ SoftwareTarget::glyph_runs(const std::vector<nenenib::ui::win32::BodyGlyphRun> &
     target_->PopAxisAlignedClip();
     return finish();
 }
+
+SoftwareTarget::Pixels SoftwareTarget::text_w(std::wstring_view text, IDWriteTextFormat *format,
+                                              const core::LayoutRect &area)
+{
+    target_->BeginDraw();
+    target_->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+    target_->DrawTextW(text.data(), static_cast<UINT32>(text.size()), format,
+                       D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
+                                   static_cast<float>(area.right), static_cast<float>(area.bottom)),
+                       brush_.Get());
+    return finish();
+}
+
+SoftwareTarget::Pixels SoftwareTarget::plain_layout(IDWriteTextLayout *layout,
+                                                    const core::LayoutRect &area)
+{
+    target_->BeginDraw();
+    target_->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+    target_->DrawTextLayout(
+        D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top)), layout,
+        brush_.Get());
+    return finish();
+}
 } // namespace nenenib::tests::ui

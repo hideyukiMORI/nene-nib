@@ -16,6 +16,9 @@ void verify_detected_text_contracts();
 void verify_text_buffer_read_contracts();
 void verify_document_read_contracts();
 
+// Utf16Tests.cpp（長さの測定と既存変換の直接境界、ADR 0083）。
+void verify_utf16_scope();
+void verify_utf16_conversions();
 // DisplayLineTests.cpp
 void verify_display_line();
 void verify_display_line_views();

@@ -16,4 +16,5 @@ void verify_fallback_keys();
 void verify_fallback_cache();
 void verify_glyph_collector();
 void verify_glyph_pixels();
+void verify_gutter_layouts();
 } // namespace nenenib::tests::ui
