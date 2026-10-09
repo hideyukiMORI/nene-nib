@@ -339,8 +339,8 @@ void verify_vim_search_word()
 [[nodiscard]] bool register_is(const EditorController &controller, std::string_view text,
                                std::string_view kind)
 {
-    return controller.vim_state().unnamed_register.text == text &&
-           vim_register_kind(controller.vim_state().unnamed_register) == kind;
+    return controller.vim_state().unnamed_register.value().text == text &&
+           vim_register_kind(controller.vim_state().unnamed_register.value()) == kind;
 }
 
 // 決定 3 の到達位置・向き・回数。

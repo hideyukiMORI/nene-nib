@@ -686,9 +686,10 @@ void verify_vim_fixture(const VimFixture &fixture)
     expect(vim_byte_column(std::string(fixture.expected_text), frame.caret.position) ==
                static_cast<std::size_t>(fixture.column),
            (name + ": column").c_str());
-    expect(controller.vim_state().unnamed_register.text == fixture.register_text,
+    expect(controller.vim_state().unnamed_register.value().text == fixture.register_text,
            (name + ": register").c_str());
-    expect(vim_register_kind(controller.vim_state().unnamed_register) == fixture.register_kind,
+    expect(vim_register_kind(controller.vim_state().unnamed_register.value()) ==
+               fixture.register_kind,
            (name + ": register kind").c_str());
     if (fixture.viewport.has_value())
     {
@@ -765,8 +766,9 @@ void verify_vim_put_line_endings()
     static_cast<void>(controller.apply_frame(OpenDocument{sample_path()}));
     static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(controller, "dd");
-    expect(controller.vim_state().unnamed_register.text == "one\n", "the register holds LF only");
-    expect(controller.vim_state().unnamed_register.kind == VimRegisterKind::lines,
+    expect(controller.vim_state().unnamed_register.value().text == "one\n",
+           "the register holds LF only");
+    expect(controller.vim_state().unnamed_register.value().kind == VimRegisterKind::lines,
            "and it knows it is a line");
     vim_replay(controller, "p");
     static_cast<void>(controller.apply_frame(SaveDocument{sample_path(), TextEncoding::utf8}));
@@ -847,7 +849,7 @@ void verify_vim_viewport_mode_edges()
            "an unchanged height preserves the half-page amount");
     expect(!nenenib::core::vim_after_resize(remembered, 10, 11).scroll_lines.has_value(),
            "a changed height resets the half-page amount");
-    expect(nenenib::core::vim_resting_from(remembered, remembered.unnamed_register)
+    expect(nenenib::core::vim_resting_from(remembered, remembered.unnamed_register.value())
                .scroll_lines.has_value(),
            "resting transitions preserve the half-page amount");
 

@@ -205,7 +205,7 @@ void verify_open_and_preserve()
     prepare_files(editing);
     auto &controller = editing.controller();
     vim_replay(controller, "yyA!<Esc>");
-    const auto saved_register = controller.vim_state().unnamed_register.text;
+    const auto saved_register = controller.vim_state().unnamed_register.value().text;
     const auto before = controller.frame();
     auto frame = run_ex(controller, "edit bookmark");
     expect(listed_count(frame) == 1 && frame.active_tab == 1 && vim_body(frame) == "beta!" &&
@@ -220,7 +220,7 @@ void verify_open_and_preserve()
     frame = controller.apply_frame(app::CancelCommand{});
     expect(frame.caret == before.caret && frame.document.save_state == before.document.save_state &&
                vim_body(frame) == "beta!" &&
-               controller.vim_state().unnamed_register.text == saved_register,
+               controller.vim_state().unnamed_register.value().text == saved_register,
            "cancel restores document position and preserves dirty state and Vim register");
     vim_replay(controller, "u");
     expect(vim_body(controller.frame()) == "beta",

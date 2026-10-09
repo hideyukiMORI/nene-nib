@@ -278,11 +278,13 @@ void verify_vim_register_initial_and_empty_yank()
     empty.files().hold(Bytes{std::string("abc")});
     static_cast<void>(empty_controller.apply_frame(OpenDocument{sample_path()}));
     static_cast<void>(empty_controller.apply_frame(SelectEditMode{EditMode::vim}));
-    expect(empty_controller.vim_state().unnamed_register.kind == VimRegisterKind::uninitialized,
+    expect(empty_controller.vim_state().unnamed_register.value().kind ==
+               VimRegisterKind::uninitialized,
            "a new editor starts with an uninitialized unnamed register");
     vim_replay(empty_controller, "pP");
     expect(vim_body(empty_controller.frame()) == "abc" &&
-               empty_controller.vim_state().unnamed_register.kind == VimRegisterKind::uninitialized,
+               empty_controller.vim_state().unnamed_register.value().kind ==
+                   VimRegisterKind::uninitialized,
            "p and P keep an uninitialized empty register as a no-op");
 
     Editing yank;
@@ -291,8 +293,9 @@ void verify_vim_register_initial_and_empty_yank()
     static_cast<void>(yank_controller.apply_frame(OpenDocument{sample_path()}));
     static_cast<void>(yank_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(yank_controller, "yyy0");
-    expect(yank_controller.vim_state().unnamed_register.text.empty() &&
-               yank_controller.vim_state().unnamed_register.kind == VimRegisterKind::characters,
+    expect(yank_controller.vim_state().unnamed_register.value().text.empty() &&
+               yank_controller.vim_state().unnamed_register.value().kind ==
+                   VimRegisterKind::characters,
            "a successful empty characterwise yank clears a seeded register as characterwise");
 }
 
@@ -308,8 +311,8 @@ void verify_vim_register_empty_remove_and_change()
         static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
         vim_replay(controller, keys);
         expect(vim_body(controller.frame()) == "ax" &&
-                   controller.vim_state().unnamed_register.text == "ax\n" &&
-                   controller.vim_state().unnamed_register.kind == VimRegisterKind::lines,
+                   controller.vim_state().unnamed_register.value().text == "ax\n" &&
+                   controller.vim_state().unnamed_register.value().kind == VimRegisterKind::lines,
                "an empty backward-till delete or change preserves a seeded line register");
     }
 }
@@ -323,7 +326,7 @@ void verify_vim_register_regular_operations()
     static_cast<void>(delete_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(delete_controller, "dl");
     expect(vim_body(delete_controller.frame()) == "bc" &&
-               vim_register_kind(delete_controller.vim_state().unnamed_register) == "v",
+               vim_register_kind(delete_controller.vim_state().unnamed_register.value()) == "v",
            "a regular delete still writes a characterwise register");
 
     Editing changing;
@@ -333,7 +336,7 @@ void verify_vim_register_regular_operations()
     static_cast<void>(change_controller.apply_frame(SelectEditMode{EditMode::vim}));
     vim_replay(change_controller, "clx<Esc>");
     expect(vim_body(change_controller.frame()) == "xbc" &&
-               vim_register_kind(change_controller.vim_state().unnamed_register) == "v",
+               vim_register_kind(change_controller.vim_state().unnamed_register.value()) == "v",
            "a regular change still writes a characterwise register");
 
     for (const std::string_view keys : {std::string_view{"ylp"}, std::string_view{"ylP"}})
@@ -345,7 +348,7 @@ void verify_vim_register_regular_operations()
         static_cast<void>(put_controller.apply_frame(SelectEditMode{EditMode::vim}));
         vim_replay(put_controller, keys);
         expect(vim_body(put_controller.frame()) == "aabc" &&
-                   vim_register_kind(put_controller.vim_state().unnamed_register) == "v",
+                   vim_register_kind(put_controller.vim_state().unnamed_register.value()) == "v",
                "regular yank and characterwise p or P still share the initialized register");
     }
 }

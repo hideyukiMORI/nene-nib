@@ -91,7 +91,8 @@ void verify_vim_text_object_waiting()
     const auto buffer = TextBuffer::from_utf8("alpha beta gamma").value();
     const VimEditorView view{buffer, collapsed_at(Offset{6}), VimViewport{LineNumber{1}, 8}};
     VimState initial = empty_vim_state();
-    initial.unnamed_register = {"saved", VimRegisterKind::characters};
+    initial.unnamed_register = nenenib::core::VimRegisterSnapshot::from(
+        nenenib::core::VimRegister{"saved", VimRegisterKind::characters});
     const auto pending = vim_step(vim_step(initial, view, VimKey{VimCharacter{U'2'}}).next, view,
                                   VimKey{VimCharacter{U'd'}});
     const auto inner = vim_step(pending.next, view, VimKey{VimCharacter{U'i'}});
@@ -160,8 +161,8 @@ void verify_vim_text_object_visual()
     expect(controller.vim_state().mode == VimMode::visual,
            "a linewise inner block keeps VISUAL characterwise (measured against Vim 9.1)");
     vim_replay(controller, "y");
-    expect(controller.vim_state().unnamed_register.text == "  body one\n  body two\n" &&
-               controller.vim_state().unnamed_register.kind == VimRegisterKind::characters,
+    expect(controller.vim_state().unnamed_register.value().text == "  body one\n  body two\n" &&
+               controller.vim_state().unnamed_register.value().kind == VimRegisterKind::characters,
            "the VISUAL selection reaches through the last line break");
     vim_replay(controller, "Vi(");
     expect(controller.vim_state().mode == VimMode::visual,
@@ -174,10 +175,10 @@ void verify_vim_text_object_visual()
     expect(other.frame().lines.at(0).selection.presence != SelectionPresence::absent,
            "viw selects the word under the caret");
     vim_replay(other, "iwy");
-    expect(other.vim_state().unnamed_register.text == "alpha ",
+    expect(other.vim_state().unnamed_register.value().text == "alpha ",
            "a second iw grows the selection by one more chunk");
     vim_replay(other, "2lvi(y");
-    expect(other.vim_state().unnamed_register.text == "p",
+    expect(other.vim_state().unnamed_register.value().text == "p",
            "an object that is not found leaves the one-character selection alone");
 }
 
@@ -245,19 +246,19 @@ void verify_vim_text_object_residuals()
     open_vim_document(editing, "alpha beta gamma");
     EditorController &controller = editing.controller();
     vim_replay(controller, "2lv9iwy");
-    expect(controller.vim_state().unnamed_register.text == "alpha beta gamma",
+    expect(controller.vim_state().unnamed_register.value().text == "alpha beta gamma",
            "a count that runs out leaves the selection it managed to build (measured)");
     vim_replay(controller, "<Esc>02lvl9iwy");
-    expect(controller.vim_state().unnamed_register.text == "pha beta gamma",
+    expect(controller.vim_state().unnamed_register.value().text == "pha beta gamma",
            "a forward selection keeps its anchor when the count runs out");
     vim_replay(controller, "<Esc>04lvhh9iwy");
-    expect(controller.vim_state().unnamed_register.text == "alpha",
+    expect(controller.vim_state().unnamed_register.value().text == "alpha",
            "a backward selection keeps its anchor and the caret stops at the start of the text");
     vim_replay(controller, "<Esc>09lvhh9iwy");
-    expect(controller.vim_state().unnamed_register.text == "alpha beta",
+    expect(controller.vim_state().unnamed_register.value().text == "alpha beta",
            "the backward walk crosses as many units as it can before it gives up");
     vim_replay(controller, "<Esc>02lV9iwy");
-    expect(controller.vim_state().unnamed_register.kind == VimRegisterKind::lines,
+    expect(controller.vim_state().unnamed_register.value().kind == VimRegisterKind::lines,
            "a cancelled object in linewise VISUAL stays linewise");
     vim_replay(controller, "<Esc>0x");
     vim_replay(controller, "d9iw");
@@ -267,7 +268,7 @@ void verify_vim_text_object_residuals()
     open_vim_document(blocks, "if {a; b;} else");
     EditorController &other = blocks.controller();
     vim_replay(other, "5lvl9i{y");
-    expect(other.vim_state().unnamed_register.text == "; ",
+    expect(other.vim_state().unnamed_register.value().text == "; ",
            "a block that is not found leaves the selection and the caret alone");
 }
 
@@ -279,25 +280,25 @@ void verify_vim_text_object_quote_pairs()
     open_vim_document(editing, "a \"bb\" c \"dd\" e");
     EditorController &controller = editing.controller();
     vim_replay(controller, "3lvhi\"y");
-    expect(controller.vim_state().unnamed_register.text == "\"b",
+    expect(controller.vim_state().unnamed_register.value().text == "\"b",
            "a backward selection on the first quote of the line cancels (measured on Vim 9.1)");
     vim_replay(controller, "<Esc>02lvhi\"y");
-    expect(controller.vim_state().unnamed_register.text == " \"",
+    expect(controller.vim_state().unnamed_register.value().text == " \"",
            "a backward selection with no quote before the caret cancels");
     vim_replay(controller, "<Esc>012lvli\"y");
-    expect(controller.vim_state().unnamed_register.text == "\" ",
+    expect(controller.vim_state().unnamed_register.value().text == "\" ",
            "a forward selection with no pair after the caret cancels");
     Editing odd;
     open_vim_document(odd, "it's a 'quoted' word");
     EditorController &other = odd.controller();
     vim_replay(other, "16lvhi'y");
-    expect(other.vim_state().unnamed_register.text == " w",
+    expect(other.vim_state().unnamed_register.value().text == " w",
            "a backward selection past the last unpaired quote cancels");
     Editing across;
     open_vim_document(across, "x \"aa\" y\nz \"bb\" w");
     EditorController &two_lines = across.controller();
     vim_replay(two_lines, "j7lvki\"y");
-    expect(two_lines.vim_state().unnamed_register.text == "y\nz \"bb\" w",
+    expect(two_lines.vim_state().unnamed_register.value().text == "y\nz \"bb\" w",
            "a selection whose ends are on two lines cancels (quotes are read within one line)");
 }
 

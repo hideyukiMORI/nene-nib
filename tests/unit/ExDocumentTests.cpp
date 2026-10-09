@@ -126,7 +126,7 @@ void verify_write_and_undo()
     open_named(editing);
     vim_replay(controller, "yyA!<Esc>");
     const auto before = controller.frame();
-    const auto held = controller.vim_state().unnamed_register.text;
+    const auto held = controller.vim_state().unnamed_register.value().text;
     const auto saved = run_ex(controller, "write");
     expect(editing.files().written() == "alpha!" &&
                editing.files().written_path() == sample_path().text(),
@@ -134,7 +134,8 @@ void verify_write_and_undo()
     expect(saved.document.save_state == core::SaveState::saved && message(saved) == "Written" &&
                !saved.closing,
            "a successful write stays open and reports success");
-    expect(saved.caret == before.caret && controller.vim_state().unnamed_register.text == held,
+    expect(saved.caret == before.caret &&
+               controller.vim_state().unnamed_register.value().text == held,
            "saving keeps the caret and register");
     expect(applied(controller, app::HistoryAction{core::HistoryDirection::undo}) == "alpha",
            "saving keeps the previous undo entry");

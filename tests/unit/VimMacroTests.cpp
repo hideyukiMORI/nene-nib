@@ -104,7 +104,8 @@ constexpr std::array<MacroCase, 9> recorded_cases{{
 
 [[nodiscard]] const VimRegister &named_register(const VimState &state, char32_t name)
 {
-    return state.registers.registers.at(nenenib::core::vim_register_index(name).value_or(0));
+    return state.registers.registers.at(nenenib::core::vim_register_index(name).value_or(0))
+        .value();
 }
 
 // レジスタの本文を再生と同じ写しで鍵列に戻した値（ADR 0048 の決定 7）。
@@ -259,7 +260,7 @@ void verify_macro_append()
 
 [[nodiscard]] const VimRegister &numbered_register(const VimState &state, std::size_t index)
 {
-    return state.numbered.registers.at(index);
+    return state.numbered.registers.at(index).value();
 }
 
 // `q{0-9}` はその数字へ文字単位で録る（ADR 0050 の決定 6・probe 2 の Q10）。追記も繰り下がりも
@@ -274,13 +275,13 @@ void verify_macro_numbered_recording()
     const VimState &zero = controller.vim_state();
     expect(numbered_register(zero, 0).text == "l" &&
                numbered_register(zero, 0).kind == VimRegisterKind::characters &&
-               zero.unnamed_register.text == "abcdef\n" &&
-               zero.unnamed_register.kind == VimRegisterKind::lines,
+               zero.unnamed_register.value().text == "abcdef\n" &&
+               zero.unnamed_register.value().kind == VimRegisterKind::lines,
            "q0lq records l into 0 and leaves the unnamed yank");
     vim_replay(controller, "jddq1lq");
     const VimState &one = controller.vim_state();
     expect(numbered_register(one, 1).text == "l" && numbered_register(one, 2).text.empty() &&
-               one.unnamed_register.text == "second\n",
+               one.unnamed_register.value().text == "second\n",
            "q1lq replaces 1 without shifting 1 into 2 and leaves the unnamed delete");
     vim_replay(controller, "q9xq");
     expect(numbered_register(controller.vim_state(), 9).text == "x" &&
@@ -288,7 +289,7 @@ void verify_macro_numbered_recording()
            "q9xq records x into 9");
     vim_replay(controller, "q-l");
     expect(!controller.vim_state().macro_recording.has_value() &&
-               controller.vim_state().small_delete.text == "b" &&
+               controller.vim_state().small_delete.value().text == "b" &&
                caret_at(controller.frame(), 1, 3),
            "q- refuses and the next l moves");
 }
@@ -306,8 +307,8 @@ void verify_macro_numbered_stored()
     applied(controller, stored_text('-', "lrZ"));
     const VimState &stored = controller.vim_state();
     expect(numbered_register(stored, 0).text == "x" && numbered_register(stored, 9).text == "lx" &&
-               stored.small_delete.text == "lrZ" &&
-               stored.small_delete.kind == VimRegisterKind::characters,
+               stored.small_delete.value().text == "lrZ" &&
+               stored.small_delete.value().kind == VimRegisterKind::characters,
            "0 9 and - are replaced");
     vim_replay(controller, "@-");
     expect(whole_vim_body(controller) == "aZcdefgh" &&
@@ -553,7 +554,7 @@ void verify_recording_meets_registers()
         const VimState &state = editing.controller().vim_state();
         const RegisterOutcome &outcome = recording_register_outcomes.at(index);
         expect(named_register(state, U'a').kind == outcome.first &&
-                   state.unnamed_register.text == outcome.second,
+                   state.unnamed_register.value().text == outcome.second,
                (std::string(sample.keys) + ": register kinds").c_str());
     }
     verify_recorded_left_pasted();
@@ -590,14 +591,14 @@ void verify_register_block_append_refused()
     const VimState &into_lines = controller.vim_state();
     expect(named_register(into_lines, U'a').text == "abcd\n" &&
                named_register(into_lines, U'a').kind == VimRegisterKind::lines &&
-               into_lines.unnamed_register.text == "abcd\n" &&
+               into_lines.unnamed_register.value().text == "abcd\n" &&
                into_lines.mode == VimMode::visual_block,
            "a block yank appended to a lines register is refused and the block selection stays");
     vim_replay(controller, "<Esc>gg<C-v>j\"by\"Byy");
     const VimState &into_block = controller.vim_state();
     expect(named_register(into_block, U'b').kind == VimRegisterKind::block &&
                named_register(into_block, U'b').text == "a\ne" &&
-               into_block.unnamed_register.kind == VimRegisterKind::block &&
+               into_block.unnamed_register.value().kind == VimRegisterKind::block &&
                whole_vim_body(controller) == "abcd\nefgh" && into_block.mode == VimMode::normal,
            "a line yank appended to a block register is refused and both registers stay");
 }
@@ -699,7 +700,7 @@ void verify_clipboard_read_predicate()
            "q+ is not a recording name");
     const VimState stored = nenenib::core::vim_register_stored(
         empty, '+', VimRegister{"x", VimRegisterKind::characters});
-    expect(register_unused(stored.clipboard), "vim_register_stored does not take +");
+    expect(register_unused(stored.clipboard.value()), "vim_register_stored does not take +");
 }
 
 // 写しを置いてから貼る（決定 5・probe の B3 と B4）。前置きの鍵・OS の本文・貼る鍵・貼った本文。
@@ -739,7 +740,7 @@ void verify_clipboard_put()
         expect(put_into("X1\nX2", step) == expected, "\"+p pastes the clipboard text as read");
         expect(!step.clipboard.has_value() && !step.failure.has_value(),
                "\"+p does not write the clipboard");
-        expect(register_unused(step.next.clipboard), "the copy is gone after the command");
+        expect(register_unused(step.next.clipboard.value()), "the copy is gone after the command");
     }
     expect(dot_record_is(clipboard_put("\"+", "abc", "p").next, std::nullopt, "\"+p"),
            "\"+p is recorded for . with its name, which reads the clipboard again");
@@ -752,9 +753,9 @@ void verify_clipboard_put()
     expect(empty.failure.has_value() && std::holds_alternative<VimNoEffect>(empty.effect),
            "\"+p of an empty text is refused");
     const VimStep held = clipboard_put("\"+", "abc", "3");
-    expect(held.next.clipboard.text == "abc", "the copy stays while the command is typed");
-    expect(register_unused(core_steps(held.next, text, caret, "<Esc>").next.clipboard),
-           "Esc drops the copy");
+    expect(held.next.clipboard.value().text == "abc", "the copy stays while the command is typed");
+    const auto escaped = core_steps(held.next, text, caret, "<Esc>");
+    expect(register_unused(escaped.next.clipboard.value()), "Esc drops the copy");
 }
 
 // `@+` `@*` と `@@`（決定 5・probe の B8）。`@` の待ちに置いた写しを鍵列にして再生する。
@@ -802,30 +803,32 @@ void verify_clipboard_written()
         expect(yank.clipboard.has_value() &&
                    register_is(yank.clipboard.value(), "one\n", VimRegisterKind::lines),
                "\"+yy writes the line to the clipboard");
-        expect(register_is(yank.next.unnamed_register, "one\n", VimRegisterKind::lines) &&
+        expect(register_is(yank.next.unnamed_register.value(), "one\n", VimRegisterKind::lines) &&
                    register_unused(numbered_register(yank.next, 0)) &&
-                   register_unused(yank.next.clipboard),
+                   register_unused(yank.next.clipboard.value()),
                "\"+yy fills the unnamed register but not \"0 or the copy");
     }
     const VimStep line = core_steps(empty, text, caret, "\"+dd");
     expect(line.clipboard.has_value() &&
                register_is(line.clipboard.value(), "one\n", VimRegisterKind::lines) &&
                register_is(numbered_register(line.next, 1), "one\n", VimRegisterKind::lines) &&
-               register_is(line.next.unnamed_register, "one\n", VimRegisterKind::lines) &&
+               register_is(line.next.unnamed_register.value(), "one\n", VimRegisterKind::lines) &&
                register_unused(numbered_register(line.next, 0)) &&
-               register_unused(line.next.small_delete),
+               register_unused(line.next.small_delete.value()),
            "\"+dd writes the clipboard, \"1 and the unnamed register");
     const VimStep character = core_steps(empty, text, caret, "\"+x");
     expect(character.clipboard.has_value() &&
                register_is(character.clipboard.value(), "o", VimRegisterKind::characters) &&
-               register_is(character.next.unnamed_register, "o", VimRegisterKind::characters) &&
+               register_is(character.next.unnamed_register.value(), "o",
+                           VimRegisterKind::characters) &&
                register_unused(numbered_register(character.next, 1)) &&
-               register_unused(character.next.small_delete),
+               register_unused(character.next.small_delete.value()),
            "\"+x writes the clipboard and the unnamed register but not \"- or \"1");
     const VimStep change = core_steps(empty, text, caret, "\"+cw");
     expect(change.clipboard.has_value() &&
                register_is(change.clipboard.value(), "one", VimRegisterKind::characters) &&
-               change.next.mode == VimMode::insert && register_unused(change.next.small_delete),
+               change.next.mode == VimMode::insert &&
+               register_unused(change.next.small_delete.value()),
            "\"+cw writes the clipboard and enters INSERT");
     const VimStep word = core_steps(empty, buffer_of("hello world"), caret, "\"+yw");
     expect(word.clipboard.has_value() &&

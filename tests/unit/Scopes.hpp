@@ -50,6 +50,7 @@ void verify_vim_dot_contracts();
 void verify_vim_dot_scope();
 
 // VimMacroTests.cpp
+void verify_vim_register_snapshot_contracts();
 void verify_vim_macro_contracts();
 void verify_vim_macro_scope();
 

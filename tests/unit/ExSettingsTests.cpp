@@ -395,7 +395,7 @@ void verify_ex_input_isolation()
     static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
     static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'y'}}));
     static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'y'}}));
-    const auto saved_register = controller.vim_state().unnamed_register.text;
+    const auto saved_register = controller.vim_state().unnamed_register.value().text;
     auto frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});
     expect(frame.command_line.has_value(), "NORMAL colon opens a separate line");
     frame = controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
@@ -413,7 +413,7 @@ void verify_ex_input_isolation()
     frame = controller.apply_frame(app::CancelCommand{});
     expect(!frame.command_line.has_value() && editor.settings().writes() == 0,
            "cancel does not save");
-    expect(controller.vim_state().unnamed_register.text == saved_register,
+    expect(controller.vim_state().unnamed_register.value().text == saved_register,
            "command input preserves the register");
     static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U'2'}}));
     frame = controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}});

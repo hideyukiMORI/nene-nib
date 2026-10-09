@@ -127,8 +127,8 @@ void verify_vim_line_jump_saturated_count()
     const auto waiting = vim_step(state, view, VimKey{VimCharacter{U'g'}});
     const auto jumped = vim_step(waiting.next, view, VimKey{VimCharacter{U'g'}});
     expect(std::get<VimMoveTo>(jumped.effect).caret == buffer.line_start(LineNumber{2}) &&
-               jumped.next.unnamed_register.text == "two\nthree\n" &&
-               jumped.next.unnamed_register.kind == VimRegisterKind::lines,
+               jumped.next.unnamed_register.value().text == "two\nthree\n" &&
+               jumped.next.unnamed_register.value().kind == VimRegisterKind::lines,
            "a saturated operator-motion count clamps to the final document line");
 }
 } // namespace
