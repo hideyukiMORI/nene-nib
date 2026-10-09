@@ -191,15 +191,34 @@ inserted_after_delete(const std::string &input, application::TimingPort &timing)
 }
 } // namespace
 
+namespace
+{
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+validated(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
+{
+    const std::size_t expected = workload == ProbeWorkload::validate_ascii ? 16800000U : 2079000U;
+    timing.mark(core::Milestone::probe_started);
+    const auto result = core::validate_utf8(input);
+    timing.mark(core::Milestone::probe_finished);
+    if (!result.has_value() || result.value() != expected)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum_of(input) ^ static_cast<std::uint64_t>(result.value());
+}
+} // namespace
+
 std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
 {
-    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 6> names{{
+    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 8> names{{
         {"controller-open-utf8-16mib", ProbeWorkload::controller_open},
         {"buffer-from-utf8-16mib", ProbeWorkload::buffer_create},
         {"controller-insert-200", ProbeWorkload::controller_insert},
         {"display-line-long", ProbeWorkload::display_long},
         {"controller-insert-200-after-delete-1mib", ProbeWorkload::insert_after_delete_small},
         {"controller-insert-200-after-delete-16mib", ProbeWorkload::insert_after_delete_large},
+        {"utf8-validate-ascii-16mib", ProbeWorkload::validate_ascii},
+        {"utf8-validate-japanese-6mib", ProbeWorkload::validate_japanese},
     }};
     for (const auto &[text, workload] : names)
     {
@@ -246,17 +265,30 @@ std::string input_of(ProbeWorkload workload)
     case ProbeWorkload::controller_open:
     case ProbeWorkload::buffer_create:
     case ProbeWorkload::insert_after_delete_large:
+    case ProbeWorkload::validate_ascii:
         return large_input(large_lines);
     case ProbeWorkload::insert_after_delete_small:
         return large_input((1024U * 1024U) / large_line_bytes);
     case ProbeWorkload::controller_insert:
         return std::string(insert_count, 'a');
     case ProbeWorkload::display_long:
+    case ProbeWorkload::validate_japanese:
     {
-        std::string input = "000000 ";
+        std::string line = "000000 ";
         for (std::size_t repeat = 0; repeat < 90; ++repeat)
         {
-            input += "日本語の長い行と分割表示の文字組みを測定する。";
+            line += "日本語の長い行と分割表示の文字組みを測定する。";
+        }
+        if (workload == ProbeWorkload::display_long)
+        {
+            return line;
+        }
+        std::string input;
+        input.reserve((line.size() + 2) * 1000);
+        for (std::size_t repeat = 0; repeat < 1000; ++repeat)
+        {
+            input += line;
+            input += "\r\n";
         }
         return input;
     }
@@ -280,6 +312,9 @@ run_workload(ProbeWorkload workload, const std::string &input, application::Timi
     case ProbeWorkload::insert_after_delete_small:
     case ProbeWorkload::insert_after_delete_large:
         return inserted_after_delete(input, timing);
+    case ProbeWorkload::validate_ascii:
+    case ProbeWorkload::validate_japanese:
+        return validated(workload, input, timing);
     }
     std::unreachable();
 }

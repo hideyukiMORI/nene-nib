@@ -120,6 +120,14 @@ class ProbeComparisonTests(unittest.TestCase):
         self.assertEqual(len(PROBES.fixed_input("controller-insert-200-after-delete-1mib")), 1048572)
         self.assertEqual(len(PROBES.fixed_input("controller-insert-200-after-delete-16mib")), 16800000)
 
+    def test_fixed_utf8_validation_counts(self):
+        ascii_input = PROBES.fixed_input("utf8-validate-ascii-16mib")
+        japanese = PROBES.fixed_input("utf8-validate-japanese-6mib")
+        self.assertEqual(len(ascii_input), 16800000)
+        self.assertEqual(len(ascii_input.decode("utf-8")), 16800000)
+        self.assertEqual(len(japanese), 6219000)
+        self.assertEqual(len(japanese.decode("utf-8")), 2079000)
+
 
 if __name__ == "__main__":
     unittest.main()

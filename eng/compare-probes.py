@@ -14,7 +14,8 @@ import sys
 
 WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "controller-insert-200", "display-line-long",
-             "controller-insert-200-after-delete-1mib", "controller-insert-200-after-delete-16mib")
+             "controller-insert-200-after-delete-1mib", "controller-insert-200-after-delete-16mib",
+             "utf8-validate-ascii-16mib", "utf8-validate-japanese-6mib")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -38,7 +39,7 @@ def load_json(text: str):
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in (*WORKLOADS[:2], *WORKLOADS[4:]):
+    if workload in (*WORKLOADS[:2], *WORKLOADS[4:7]):
         filler = "nenenib speed sample line for the open-large-file bench "
         lines = (1024 * 1024) // 84 if workload.endswith("delete-1mib") else 200000
         return "".join((f"{line:06d} " + filler + filler)[:82] + "\r\n"
@@ -47,6 +48,8 @@ def fixed_input(workload: str) -> bytes:
         return b"a" * 200
     if workload == "display-line-long":
         return ("000000 " + "日本語の長い行と分割表示の文字組みを測定する。" * 90).encode("utf-8")
+    if workload == "utf8-validate-japanese-6mib":
+        return (fixed_input("display-line-long") + b"\r\n") * 1000
     raise ProbeNotObserved("unknown workload")
 
 

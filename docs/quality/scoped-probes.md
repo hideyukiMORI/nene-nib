@@ -22,7 +22,9 @@ python eng/compare-probes.py --before D:/NeNeNib/worktrees/before/build/probes-r
 ```
 
 場面は `controller-open-utf8-16mib` / `buffer-from-utf8-16mib` / `controller-insert-200` /
-`display-line-long` / `controller-insert-200-after-delete-1mib` / `controller-insert-200-after-delete-16mib`。
+`display-line-long` / `controller-insert-200-after-delete-1mib` / `controller-insert-200-after-delete-16mib` /
+`utf8-validate-ascii-16mib` / `utf8-validate-japanese-6mib`。
+UTF-8検証は16800000 ASCII bytes・同数codepointsと、6219000日本語bytes・2079000codepointsの二本。
 削除後の1MiBは1048572bytes、16MiBは16800000bytesなので、名称は近似で実bytesが正本。
 
 各 process は計測前のwarmupを一回行い、その後の固定回数だけを測る。入力の実FNV-1a64を、Pythonが生成した同じ固定列のhashと照合し、その列のSHA256も記録する。

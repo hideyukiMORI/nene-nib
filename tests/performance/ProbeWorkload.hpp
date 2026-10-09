@@ -19,7 +19,9 @@ enum class ProbeWorkload : std::uint8_t
     controller_insert,
     display_long,
     insert_after_delete_small,
-    insert_after_delete_large
+    insert_after_delete_large,
+    validate_ascii,
+    validate_japanese
 };
 
 [[nodiscard]] std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept;
