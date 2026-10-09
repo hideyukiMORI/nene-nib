@@ -117,6 +117,11 @@ application が作った表示値を Direct2D / DirectWrite で描き、キー�
 
 ## 4. ソースの置き場
 
+開発用 `performance_tests`（`tests/performance/`・target `nib_perf_probes`）は
+core / application / adapters_win32 と unit_tests のヘッダへ依存する（ADR 0082・Issue #329）。
+時計と測定ファイルの出力は既存 Win32TimingAdapter のみ。窓を作らず、CTest の既定に登録しない。
+unit_tests の cpp や実行 target は借用せず、製品モジュールからこの開発用 module への依存は認めない。
+
 | 種類 | 置き場 |
 | --- | --- |
 | production | `src/core` / `src/application` / `src/adapters/win32` / `src/ui/win32` / `src/app`（2026-09-15 の最初の縦切りで全層を作った。ADR 0007。Win32 の版 metadata だけを `src/app` の template から build 下へ生成する） |
