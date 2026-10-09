@@ -56,10 +56,16 @@ class CommandPalette final
     using Result = std::variant<std::vector<std::size_t>, std::vector<CommandChoice>>;
     CommandPalette(CommandLine input, std::size_t selected, EditMode mode, Entries entries,
                    std::shared_ptr<const Result> result);
-    // 入力が変わる道（opened・inserted・edited・filled）はこの 1 本で結果を 1 回作る。選択は先頭。
+    // 新しい候補列は全件を一度照合する。選択は先頭。
     [[nodiscard]] static CommandPalette filtered(CommandLine input, EditMode mode, Entries entries);
     [[nodiscard]] static Result result_of(const CommandLine &input, EditMode mode,
                                           const std::vector<CommandChoice> &entries);
+    // 同じ候補列での入力更新は一つの道。本文不変なら共有し、末尾延長なら前の位置だけを再採点する。
+    [[nodiscard]] CommandPalette refiltered(CommandLine input) const;
+    [[nodiscard]] Result updated_result(const CommandLine &input,
+                                        const std::vector<std::size_t> &positions) const;
+    [[nodiscard]] Result updated_result(const CommandLine &input,
+                                        const std::vector<CommandChoice> &choices) const;
     // 選択だけを動かす道（moved・selected_at）はこの 1 本で、前の結果をそのまま共有する。
     [[nodiscard]] CommandPalette reselected(std::size_t selected) const;
     [[nodiscard]] CommandPalette moved(CommandEdit direction) const;

@@ -66,6 +66,7 @@
 #include "WalkRecentTab.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <expected>
 #include <optional>
@@ -616,9 +617,9 @@ void verify_palette_result_shared()
            "typing and filling rebuild the result");
     const auto typed = palette.inserted("n").value();
     expect(!typed.edited(CommandEdit::backspace).shares_result_with(typed) &&
-               !typed.edited(CommandEdit::left).shares_result_with(typed) &&
-               !typed.edited(CommandEdit::home).shares_result_with(typed),
-           "editing the input rebuilds the result");
+               typed.edited(CommandEdit::left).shares_result_with(typed) &&
+               typed.edited(CommandEdit::home).shares_result_with(typed),
+           "changing text rebuilds the result while caret-only edits share it (ADR 0091)");
     const auto last = palette.choice_at(3);
     expect(palette.count() == 4 && last.has_value() && last.value().command == "tabnext 4" &&
                !palette.choice_at(4).has_value(),
@@ -628,6 +629,143 @@ void verify_palette_result_shared()
                    std::vector<std::string>{"tabnext 3", "tabnext 4"} &&
                palette.rows(4, 1).empty() && palette.rows(0, 0).empty(),
            "a row range is cut at the end of the result");
+}
+
+[[nodiscard]] bool same_choice(const core::CommandChoice &left, const core::CommandChoice &right)
+{
+    const bool same_detail =
+        left.detail.has_value() == right.detail.has_value() &&
+        (!left.detail.has_value() ||
+         (right.detail.has_value() && left.detail.value().text() == right.detail.value().text()));
+    return left.label.text() == right.label.text() && left.command == right.command &&
+           left.kind == right.kind && same_detail && left.origin == right.origin &&
+           left.operation == right.operation && left.key == right.key;
+}
+
+[[nodiscard]] bool same_rows(const core::CommandPalette &left, const core::CommandPalette &right)
+{
+    return left.count() == right.count() &&
+           std::ranges::equal(rows_of(left), rows_of(right), same_choice);
+}
+
+[[nodiscard]] std::vector<core::CommandChoice> filtering_entries()
+{
+    std::vector<core::CommandChoice> entries{tab_choice("Ax", 1, "D:\\AB\\Z"),
+                                             tab_choice("AB", 2),
+                                             tab_choice("aB", 3),
+                                             tab_choice("abc", 4),
+                                             tab_choice("日本A😀B", 5, "D:\\日本😀"),
+                                             tab_choice("Z.txt", 6, "D:\\A"),
+                                             tab_choice("Ab", 7),
+                                             tab_choice("memo", 8)};
+    entries.at(2).origin = core::PaletteOrigin::history;
+    entries.at(3).origin = core::PaletteOrigin::folder;
+    entries.at(4).origin = core::PaletteOrigin::bookmarked_tab;
+    entries.at(5).origin = core::PaletteOrigin::folder;
+    entries.at(6).origin = core::PaletteOrigin::bookmark;
+    return entries;
+}
+
+void verify_palette_incremental_results()
+{
+    const auto entries = filtering_entries();
+    const std::array<std::pair<std::string_view, std::string_view>, 13> queries{{{"", "a"},
+                                                                                 {"a", "b"},
+                                                                                 {"#a", "b"},
+                                                                                 {"*a", "b"},
+                                                                                 {"@a", "b"},
+                                                                                 {"/a", "b"},
+                                                                                 {":co", "lo"},
+                                                                                 {"?c", "trl"},
+                                                                                 {"日本", "😀"},
+                                                                                 {"a ", "b"},
+                                                                                 {" a", "b"},
+                                                                                 {"zq", "x"},
+                                                                                 {"#", "A"}}};
+    for (const auto &[initial, suffix] : queries)
+    {
+        const auto before =
+            core::CommandPalette::opened(entries, initial, core::EditMode::ordinary);
+        const auto after = before.inserted(suffix).value();
+        const auto complete = core::CommandPalette::opened(
+            entries, std::string(initial) + std::string(suffix), core::EditMode::ordinary);
+        expect(same_rows(after, complete) && after.selected() == 0 &&
+                   after.input().text() == complete.input().text(),
+               "appending a query preserves every fully scored row in every source");
+        const auto unchanged =
+            core::CommandPalette::opened(entries, initial, core::EditMode::ordinary);
+        expect(same_rows(before, unchanged) && before.input().text() == initial,
+               "filtering a new snapshot does not change the previous result");
+    }
+    const auto named = core::CommandPalette::opened(entries, "a", core::EditMode::ordinary);
+    const auto located = named.inserted("b").value();
+    expect(commands_of(rows_of(located)) == std::vector<std::string>{"tabnext 2", "tabnext 3",
+                                                                     "tabnext 7", "tabnext 4",
+                                                                     "tabnext 5", "tabnext 1"},
+           "a former name hit becomes a location hit and is rescored behind every name hit");
+    const std::array<std::size_t, 3> reversed{6, 2, 1};
+    expect(core::listed_positions(entries, core::PaletteScope::files, "ab", reversed) ==
+               std::vector<std::size_t>{1, 2, 6},
+           "a subset is ordered by original entry position rather than the old result order");
+}
+
+void verify_palette_input_reuse()
+{
+    using core::CommandEdit;
+    const auto entries = filtering_entries();
+    for (const std::string_view input : {"a", ":co", "?c"})
+    {
+        const auto before =
+            core::CommandPalette::opened(entries, input, core::EditMode::ordinary).selected_at(1);
+        const std::array<std::pair<CommandEdit, std::size_t>, 4> edits{
+            {{CommandEdit::left, input.size() - 1},
+             {CommandEdit::right, input.size()},
+             {CommandEdit::home, 0},
+             {CommandEdit::end, input.size()}}};
+        for (const auto &[edit, caret] : edits)
+        {
+            const auto after = before.edited(edit);
+            expect(after.shares_result_with(before) && same_rows(after, before) &&
+                       after.input().text() == input && after.input().caret().value == caret &&
+                       after.selected() == 0,
+                   "caret editing shares the result and preserves the old caret and reset rules");
+        }
+        const auto first = before.edited(CommandEdit::home);
+        const auto unchanged = first.edited(CommandEdit::backspace);
+        expect(unchanged.shares_result_with(first) && same_rows(unchanged, first) &&
+                   unchanged.input().caret().value == 0,
+               "backspace at the beginning keeps the same text and result");
+        const auto empty = before.inserted("").value();
+        expect(empty.shares_result_with(before) && same_rows(empty, before) &&
+                   empty.selected() == 0,
+               "inserting nothing keeps the result and still resets the selection");
+    }
+}
+
+void verify_palette_refilter_boundaries()
+{
+    using core::CommandEdit;
+    const auto entries = filtering_entries();
+    for (const std::string_view input : {"ab", "#a", "@a", "*a", "/a", ":a", "?c"})
+    {
+        const auto before = core::CommandPalette::opened(entries, input, core::EditMode::ordinary);
+        const auto removed = before.edited(CommandEdit::home).edited(CommandEdit::erase);
+        const auto complete =
+            core::CommandPalette::opened(entries, removed.input().text(), core::EditMode::ordinary);
+        expect(same_rows(removed, complete) && removed.selected() == 0,
+               "removing a prefix or source mark fully refilters the entries");
+        const auto inserted = before.edited(CommandEdit::left).inserted("x").value();
+        const auto from_scratch = core::CommandPalette::opened(entries, inserted.input().text(),
+                                                               core::EditMode::ordinary);
+        expect(same_rows(inserted, from_scratch), "inserting in the middle uses the full matcher");
+    }
+    const auto before = core::CommandPalette::opened(entries, "ab", core::EditMode::ordinary);
+    const auto grown = before.extended({tab_choice("ABx", 9)});
+    const auto narrowed = grown.inserted("x").value();
+    expect(commands_of(rows_of(narrowed)) == std::vector<std::string>{"tabnext 9", "tabnext 1"},
+           "newly arrived entries participate in the next narrowed query");
+    expect(before.count() == 6 && grown.count() == 7,
+           "extending and narrowing leave the previous candidate snapshots unchanged");
 }
 
 // Ctrl+P と「∨」は同じ列を開き、Enter はタブを切り替え、`:` の後ろは今までどおり（決定 6）。
@@ -1434,6 +1572,9 @@ void verify_command_palette()
     verify_listed_code_points();
     verify_palette_sources();
     verify_palette_result_shared();
+    verify_palette_incremental_results();
+    verify_palette_input_reuse();
+    verify_palette_refilter_boundaries();
     verify_palette_entries_controller();
     verify_palette_notes_geometry();
     verify_palette_hint_view();
