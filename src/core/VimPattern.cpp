@@ -3,9 +3,11 @@
 #include "Offset.hpp"
 #include "Utf8.hpp"
 #include "VimPatternAtomKind.hpp"
+#include "VimPatternEvaluation.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <span>
@@ -109,26 +111,6 @@ constexpr std::array<VimPatternRange, 2> blank_ranges{{{U' ', U' '}, {U'\t', U'\
         return false;
     }
     return at >= line.size() || class_at(line, at) != before;
-}
-
-[[nodiscard]] bool anchored(std::string_view line, const VimPatternAtom &atom, std::size_t at)
-{
-    switch (atom.kind)
-    {
-    case VimPatternAtomKind::line_start:
-        return at == 0;
-    case VimPatternAtomKind::line_end:
-        return at >= line.size();
-    case VimPatternAtomKind::word_start:
-        return starts_a_word(line, at);
-    case VimPatternAtomKind::word_end:
-        return ends_a_word(line, at);
-    case VimPatternAtomKind::literal:
-    case VimPatternAtomKind::any:
-    case VimPatternAtomKind::set:
-        return false;
-    }
-    std::unreachable();
 }
 
 [[nodiscard]] std::optional<VimPatternFailure> escape_failure(char32_t code) noexcept
@@ -331,6 +313,31 @@ VimPattern::VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPattern
 {
 }
 
+bool VimPattern::is_zero_width(VimPatternAtomKind kind) noexcept
+{
+    return zero_width(kind);
+}
+
+bool VimPattern::anchored(std::string_view line, const VimPatternAtom &atom, std::size_t at)
+{
+    switch (atom.kind)
+    {
+    case VimPatternAtomKind::line_start:
+        return at == 0;
+    case VimPatternAtomKind::line_end:
+        return at >= line.size();
+    case VimPatternAtomKind::word_start:
+        return starts_a_word(line, at);
+    case VimPatternAtomKind::word_end:
+        return ends_a_word(line, at);
+    case VimPatternAtomKind::literal:
+    case VimPatternAtomKind::any:
+    case VimPatternAtomKind::set:
+        return false;
+    }
+    std::unreachable();
+}
+
 std::expected<VimPattern, VimPatternFailure> VimPattern::parse(std::string_view pattern,
                                                                VimSearchDirection separator)
 {
@@ -364,6 +371,26 @@ bool VimPattern::in_set(const VimPatternAtom &atom, char32_t code) const
     return found != atom.negated;
 }
 
+bool VimPattern::consumes(const VimPatternAtom &atom, char32_t code) const
+{
+    switch (atom.kind)
+    {
+    case VimPatternAtomKind::any:
+        return true;
+    case VimPatternAtomKind::literal:
+        return code == atom.code;
+    case VimPatternAtomKind::set:
+        return in_set(atom, code);
+    // 幅の無い原子は 1 文字も食べない。
+    case VimPatternAtomKind::line_start:
+    case VimPatternAtomKind::line_end:
+    case VimPatternAtomKind::word_start:
+    case VimPatternAtomKind::word_end:
+        return false;
+    }
+    std::unreachable();
+}
+
 std::optional<std::size_t> VimPattern::stepped(std::string_view line, const VimPatternAtom &atom,
                                                std::size_t at) const
 {
@@ -373,73 +400,41 @@ std::optional<std::size_t> VimPattern::stepped(std::string_view line, const VimP
     }
     const char32_t code = code_point_at(line, Offset{at});
     const std::size_t next = next_code_point(line, Offset{at}).value;
-    switch (atom.kind)
-    {
-    case VimPatternAtomKind::any:
-        return next;
-    case VimPatternAtomKind::literal:
-        return code == atom.code ? std::optional<std::size_t>{next} : std::nullopt;
-    case VimPatternAtomKind::set:
-        return in_set(atom, code) ? std::optional<std::size_t>{next} : std::nullopt;
-    // 幅の無い原子は 1 文字も食べない。
-    case VimPatternAtomKind::line_start:
-    case VimPatternAtomKind::line_end:
-    case VimPatternAtomKind::word_start:
-    case VimPatternAtomKind::word_end:
-        return std::nullopt;
-    }
-    std::unreachable();
+    return consumes(atom, code) ? std::optional<std::size_t>{next} : std::nullopt;
 }
 
-std::vector<std::size_t>
-VimPattern::repeated_stops(std::string_view line, const VimPatternAtom &atom, std::size_t at) const
+std::optional<std::size_t> VimPattern::matched_sequence(std::string_view line, std::size_t at) const
 {
-    std::vector<std::size_t> stops{at};
-    std::size_t scan = at;
-    for (auto next = stepped(line, atom, scan); next.has_value(); next = stepped(line, atom, scan))
+    for (const VimPatternAtom &atom : atoms_)
     {
-        scan = next.value();
-        stops.push_back(scan);
-    }
-    return stops;
-}
-
-std::optional<std::size_t> VimPattern::matched_atoms(std::string_view line, std::size_t index,
-                                                     std::size_t at) const
-{
-    if (index >= atoms_.size())
-    {
-        return at;
-    }
-    const VimPatternAtom atom = atoms_.at(index);
-    if (zero_width(atom.kind))
-    {
-        return anchored(line, atom, at) ? matched_atoms(line, index + 1, at) : std::nullopt;
-    }
-    if (!atom.repeated)
-    {
-        const auto next = stepped(line, atom, at);
-        return next.has_value() ? matched_atoms(line, index + 1, next.value()) : std::nullopt;
-    }
-    // 貪欲に伸ばしてから後戻りする（`/f.*e` が行頭から一致するのはこれ・実測）。
-    const std::vector<std::size_t> stops = repeated_stops(line, atom, at);
-    for (auto stop = stops.rbegin(); stop != stops.rend(); ++stop)
-    {
-        const auto end = matched_atoms(line, index + 1, *stop);
-        if (end.has_value())
+        const auto next =
+            is_zero_width(atom.kind)
+                ? (anchored(line, atom, at) ? std::optional<std::size_t>{at} : std::nullopt)
+                : stepped(line, atom, at);
+        if (!next.has_value())
         {
-            return end;
+            return std::nullopt;
         }
+        at = next.value();
     }
-    return std::nullopt;
+    return at;
 }
 
 std::optional<VimPatternMatch> VimPattern::matched(std::string_view line, std::size_t from) const
 {
+    if (from > line.size())
+    {
+        return std::nullopt;
+    }
+    if (std::ranges::any_of(atoms_, [](const VimPatternAtom &atom) { return atom.repeated; }))
+    {
+        VimPatternEvaluation evaluation(*this, line);
+        return evaluation.matched(from);
+    }
     std::size_t at = from;
     while (at <= line.size())
     {
-        const auto end = matched_atoms(line, 0, at);
+        const auto end = matched_sequence(line, at);
         if (end.has_value())
         {
             return VimPatternMatch{at, end.value()};

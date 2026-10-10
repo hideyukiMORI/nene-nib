@@ -46,7 +46,14 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "search-forward-tail-many-4096",
              "search-backward-head-many-4096",
              "search-backward-middle-many-4096",
-             "search-backward-tail-many-4096")
+             "search-backward-tail-many-4096",
+             "pattern-star-miss-1024",
+             "pattern-star-miss-2048",
+             "pattern-star-miss-4096",
+             "pattern-multistar-miss-32",
+             "pattern-greedy-hit-4096",
+             "pattern-literal-tail-4102",
+             "pattern-literal-long-4096")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -97,6 +104,12 @@ def fixed_input(workload: str) -> bytes:
         return "a日本語🖋".encode("utf-8") * 4096
     if workload in WORKLOADS[35:41]:
         return "a日本語🖋 ".encode("utf-8") * 4096
+    if workload in WORKLOADS[41:46]:
+        return b"a" * (1024, 2048, 4096, 32, 4096)[WORKLOADS.index(workload) - 41]
+    if workload == "pattern-literal-tail-4102":
+        return b"x" * 4096 + b"needle"
+    if workload == "pattern-literal-long-4096":
+        return b"a" * 4096
     return scoped_fixed_input(workload)
 
 

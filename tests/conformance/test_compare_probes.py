@@ -149,13 +149,31 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(PROBES.fnv1a64(data), fnv)
 
 
+    def test_stage_five_pattern_inputs(self):
+        cases = (("pattern-star-miss-1024", b"a" * 1024),
+                 ("pattern-star-miss-2048", b"a" * 2048),
+                 ("pattern-star-miss-4096", b"a" * 4096),
+                 ("pattern-multistar-miss-32", b"a" * 32),
+                 ("pattern-greedy-hit-4096", b"a" * 4096),
+                 ("pattern-literal-tail-4102", b"x" * 4096 + b"needle"),
+                 ("pattern-literal-long-4096", b"a" * 4096))
+        self.assertEqual(tuple(name for name, _ in cases), PROBES.WORKLOADS[41:])
+        self.assertEqual(len(PROBES.WORKLOADS), 48)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 48)
+        for name, expected in cases:
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), expected)
+        for name in ("pattern-star-miss-1023", "pattern-literal-tail-4101", "pattern-greedy-hit-4095"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
     def test_stage_four_registry_and_fixed_inputs(self):
-        self.assertEqual(len(PROBES.WORKLOADS), 41)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 41)
+        self.assertEqual(len(PROBES.WORKLOADS[:41]), 41)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:41])), 41)
         groups = ((PROBES.WORKLOADS[24:26], PROBES.fixed_input("controller-open-utf8-16mib"), 16800000),
                   (PROBES.WORKLOADS[26:31], (b"a" * 78 + b"\r\n") * 4096, 327680),
                   (PROBES.WORKLOADS[31:35], "a日本語🖋".encode("utf-8") * 4096, 57344),
-                  (PROBES.WORKLOADS[35:], "a日本語🖋 ".encode("utf-8") * 4096, 61440))
+                  (PROBES.WORKLOADS[35:41], "a日本語🖋 ".encode("utf-8") * 4096, 61440))
         for names, expected, size in groups:
             for name in names:
                 with self.subTest(workload=name):

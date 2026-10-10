@@ -139,3 +139,28 @@ input=(a日本語🖋 + 半角space)*4096、61440bytes/24576codepoints/1line、1
 
 
 新17本だけDebug/Release各warmup1+sample1で検証する。長いABBA・GUI・製品Releaseは親設計席が担当する。結果容器の破棄は終了mark後、0usは補正せず正しさsmokeと比較の分解能判定を区別する。Waivers: none。
+## 第5段階 — VimPattern::matchedの固定7本とdispatchの正本表（Issue #350）
+
+親設計席が2026-10-10のbriefで受理した決定。#346のref/exe/SHA/rawを固定保管してから別branchで実装する。
+
+### 固定入力・区間・期待
+
+旧41本の入力/処理本体/引数/区間/期待値/結果を変更せず、次の7本を追加。製品source/flags/基準値/抑制/allowlistは変更しない。VimPattern::parseは区間外、patternを保持。fromはすべて0。区間前array<optional<VimPatternMatch>,16>を用意し、16回matched(input,0)を格納する区間のみ計時。全16戻り値を区間外でpresence/begin/end完全照合。checksumはchecksum_of(input)へ各結果のpresence+begin+endを加算（一致無しは0を加算）、unsigned既存型。pattern文字列の独立FNVはstderrへ出す。inputHashは実本文のbyte列。
+
+| name | input | pattern | expected |
+| --- | --- | --- | --- |
+| pattern-star-miss-1024 | ASCII a×1024 | a*b | 不一致 |
+| pattern-star-miss-2048 | ASCII a×2048 | a*b | 不一致 |
+| pattern-star-miss-4096 | ASCII a×4096 | a*b | 不一致 |
+| pattern-multistar-miss-32 | ASCII a×32 | a*a*a*a*b | 不一致 |
+| pattern-greedy-hit-4096 | ASCII a×4096 | a.*a | begin0/end4096 |
+| pattern-literal-tail-4102 | ASCII x×4096 + needle | needle | begin4096/end4102 |
+| pattern-literal-long-4096 | ASCII a×4096 | ASCII a×4096 | begin0/end4096 |
+
+入力生成/parse/array準備/全照合/checksum/破棄は外。prepared stateを再利用するのは同じmatched呼出し内16回だけ、workload毎反復はfresh parse。新7本Debug/Release各warmup1+sample1で完全照合。比較器の固定定義Python対象試験と旧41静的対応一致を記録。新しい基準値/合否閾値を作らない。長いABBA/GUIは親。
+
+### dispatchの構造
+
+CPP012上限により型付き正本1表へ移す案を採用。ProbeDispatch.hppの1aggregateにenum/name/input factory/runnerを持ち、名前も同じrowへ集約。factory (ProbeWorkload)、runner (ProbeWorkload,const string&,TimingPort&)で統一。既存signatureの薄いprivate wrapperだけ追加し、本体/引数不変。constexpr検査でrow index==enum underlyingと重複/欠落、表sizeを検査。
+
+**閉じたenumのcompiler網羅性は残す。** 配列size/最終enumのstatic_assertだけではenum末尾追加を検出できない。private checked_index(ProbeWorkload)に48個のcaseを全部列挙し、全caseを1つのreturn static_cast<size_t>(workload)へ集約、switch外std::unreachable、default/else無し。input/runはこの1本を経て表へアクセスする。48case+1returnなら通常整形で60行内に収まる見込み。規約の抑制や型のfake count enumeratorは足さない。実際に上限を越える場合は実装前に相談。

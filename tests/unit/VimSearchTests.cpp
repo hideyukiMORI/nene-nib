@@ -171,6 +171,69 @@ void verify_vim_pattern_subset()
            "the search is case sensitive (noignorecase)");
 }
 
+[[nodiscard]] bool match_range_is(std::string_view pattern, std::string_view line, std::size_t from,
+                                  core::VimPatternMatch expected)
+{
+    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    expect(parsed.has_value(), "the priority test uses a supported pattern");
+    if (!parsed.has_value())
+    {
+        return false;
+    }
+    const auto match = parsed.value().matched(line, from);
+    return match.has_value() && match.value().begin == expected.begin &&
+           match.value().end == expected.end;
+}
+
+void verify_vim_pattern_priority()
+{
+    expect(match_range_is(".*a", "baacaa", 0, {0, 6}),
+           "a greedy consuming branch continues beyond its first acceptance");
+    expect(match_range_is("a*b*", "baaabbb", 0, {0, 1}),
+           "the leftmost beginning wins over a later longer match");
+    expect(match_range_is("a*.*a*", "aaabaa", 0, {0, 6}),
+           "several stars retain greedy priority after their paths meet");
+    expect(match_range_is(".*a.*b", "ababbz", 0, {0, 5}),
+           "two greedy stars stop at the last fitting suffix");
+    expect(match_range_is("a*a*a*b", "aaab", 0, {0, 4}),
+           "repeated identical atoms back off to a successful suffix");
+    expect(match_range_is("a*a*a*", "aaab", 0, {0, 3}),
+           "an early empty acceptance cannot replace a higher priority consuming branch");
+    expect(match_range_is("ab*bc*", "abbbccx", 0, {0, 6}),
+           "a greedy repeated atom leaves the required following literal");
+    expect(match_range_is("[ab]*a", "abba", 0, {0, 4}),
+           "a repeated set shares the same consuming priority");
+    expect(match_range_is("\\<a*b*\\>", " aaabb!", 0, {1, 6}),
+           "word conditions surround repeated atoms at the same byte position");
+    expect(match_range_is("[日本]*本", "日日本本z", 0, {0, 12}),
+           "a greedy set and suffix advance through complete Japanese code points");
+    expect(match_range_is("日*🖋*", "日日🖋🖋x", 0, {0, 14}),
+           "BMP and supplementary repetitions preserve byte endpoints");
+}
+
+void verify_vim_pattern_evaluation_bounds()
+{
+    expect(match_range_is(".*", "a🖋b", 1, {1, 6}),
+           "a nonzero starting byte remains the leftmost eligible beginning");
+    expect(match_range_is(".*", "a🖋b", 6, {6, 6}),
+           "a repeated pattern accepts empty text at the line end");
+    expect(match_range_is(".*", "", 0, {0, 0}), "an empty line permits an empty repetition");
+    expect(match_range_is("", "a🖋b", 6, {6, 6}),
+           "an empty pattern accepts the starting byte without a frontier");
+    const auto repeated = VimPattern::parse(".*", VimSearchDirection::forward).value();
+    expect(!repeated.matched("a🖋b", 7).has_value(),
+           "a starting byte beyond the line cannot match an empty repetition");
+    const auto plain = VimPattern::parse("", VimSearchDirection::forward).value();
+    expect(!plain.matched("a🖋b", 7).has_value(),
+           "a starting byte beyond the line cannot match an empty sequence");
+    const auto anchored_pattern = VimPattern::parse("^a*$", VimSearchDirection::forward).value();
+    expect(!anchored_pattern.matched("baa", 0).has_value(),
+           "a failed line-start condition cannot seed a later match");
+    const std::string literal(16384, 'a');
+    expect(match_range_is(literal, " " + literal, 0, {1, literal.size() + 1}),
+           "a long literal is evaluated iteratively without a recursive stack");
+}
+
 // 語の境界は iskeyword ではなく文字の種類の表で切る（決定 4 の追記・ADR 0031 の決定 2）。
 void verify_vim_pattern_word_boundaries()
 {
@@ -760,6 +823,8 @@ void verify_vim_search_contracts()
     verify_vim_search_empty_lines();
     verify_ex_incsearch_commands();
     verify_vim_pattern_subset();
+    verify_vim_pattern_priority();
+    verify_vim_pattern_evaluation_bounds();
     verify_vim_pattern_word_boundaries();
     verify_vim_pattern_rejections();
     verify_vim_search_scan();

@@ -54,7 +54,14 @@ enum class ProbeWorkload : std::uint8_t
     search_forward_tail,
     search_backward_head,
     search_backward_middle,
-    search_backward_tail
+    search_backward_tail,
+    pattern_star_small,
+    pattern_star_middle,
+    pattern_star_large,
+    pattern_multistar,
+    pattern_greedy,
+    pattern_literal_tail,
+    pattern_literal_long
 };
 
 [[nodiscard]] std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept;
