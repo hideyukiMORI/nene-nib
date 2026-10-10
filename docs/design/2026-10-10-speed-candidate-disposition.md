@@ -1,6 +1,6 @@
 # 高速化26候補の採否 — 2026-10-10
 
-原調査のC1〜C9・R1〜R8・IO1〜IO9を同じ番号で追う。19件は全部または一部を採用、2件は実験不採用、5件は本工程で見送り。R3の採用はblockだけで、tintは未実験。C1/R1等の重複を独立の速度効果として加算しない。全ての将来の最適化や全26件の速度実験を尽くしたという記録ではない。
+原調査のC1〜C9・R1〜R8・IO1〜IO9を同じ番号で追う。19件は全部または一部を採用、2件は実験不採用、5件は本工程で見送り。R3はblockに続き#362でtintも専用比較して採用した（gate-proofs 5-dk）。C1/R1等の重複を独立の速度効果として加算しない。全ての将来の最適化や全26件の速度実験を尽くしたという記録ではない。
 
 数値・コマンド・検証の正本は[gate-proofs 5-cz〜5-dc](../quality/gate-proofs.md#5-cz--読込状態履歴描画の閉じた比較issue-320324330333335)。詳細な旧台帳・調査・固定plan・全raw・前後exeは `D:/NeNeNib/evidence/speed-optimizations-20261009/` にSHA/元パス/commit対応付きで収載する。
 
@@ -11,13 +11,13 @@
 | C3 | 履歴・レジスタ・記録鍵列の深いcopy | #323採用。private不変値を共有。成長中の入力やpointer列等の残る費用はある |
 | C4 | display_lineの再encode省略 | #324実験不採用。20→21usで利益未確認、元の実装へ復元済み |
 | C5 | 行取得時のpiece再走査 | #338採用。範囲走査を共用し、必要な位置で終える。全piece索引の追加ではない |
-| C6 | 候補ごとのlowercase写し | #339採用。ASCII case比較を同じ照合器内で行う。場所＋名前の連結は残る |
+| C6 | 候補ごとのlowercase写し | #339採用。ASCII case比較を同じ照合器内で行う。場所＋名前の一時連結も#358の固定Count案で除去（5-di） |
 | C7 | query追加時の全候補照合 | #339採用。不変候補の前結果を部分対象として再採点。削除/途中編集/出どころ変更/候補到着は全照合 |
 | C8 | frameごとのpattern再parse | 未実験で見送り。行loop前に一回であり、#322で捨てるframe分は既に除去。下記の所有設計が先 |
 | C9 | position_ofのprefix文字列copy | #338採用。pieceのviewを同じ文字数計数へ渡す |
 | R1 | deliverとpaintの二重frame | C1と同じ#322。独立の改善量を加算しない |
 | R2 | 行番号の反復文字組み | #324採用。現在/直前の保持値と既存失効境界を使用。単独速度は未分離 |
-| R3 | block/tintの行全体再描画 | #335でblockを保持glyph経路へ。tint_runsは未実験・未変更 |
+| R3 | block/tintの行全体再描画 | #335でblock、#362でtintを既存保持glyph経路へ。tintは混在長行で大幅短縮、ASCII横ばい/短行4.5µs増（5-dk） |
 | R4 | palette題名の二度文字組み | #324採用。同じlocal layoutで描画と計測。単独速度は未分離 |
 | R5 | 毎frameのGetBuffer/bitmap作成 | #324採用。所有する描画先を既存resize/device境界まで保持。単独速度は未分離 |
 | R6 | UTF16位置換算のprefix確保 | #324採用。既存のscalar検証と長さ計数を共用。単独速度は未分離 |
@@ -41,7 +41,7 @@
 
 C8に必要なのは、入力中SearchLineと確定したVimSearchPatternの異なる寿命、空の再利用、向き、未対応構文、IME、highlight切替を一つの不変の解析済み所有値へ閉じる設計。公開aggregateのraw文字列へ可変cacheだけを足す案は採らない。正規のimmutable値を設計すること自体は禁止されていない。検索専用の前後比較と、通常state copyへの費用も含めて判断する必要があり、本工程では未実装・未実験として残した。
 
-R3の残るtint_runsは本文と一覧入力行のIME文節/置換範囲を描く。一覧入力行はbody_layoutsと同じ保持対象ではないため、blockで成功した結果をtintの証拠へ転用しない。本文/一覧の変換、双方向run、origin/clip/NONE/fallbackを同じframeで比較する専用確認が必要であり、未実験として残した。
+R3のtint_runsは#362で専用比較した。本文/一覧の実IME、双方向run、origin/clip/NONE/fallbackを37場面で確認し、通常Releaseの混在1024置換は約1793→20.6ms、120組すべて短縮。ASCIIは横ばい、短行は4.5µs増。一覧入力行はbody_layoutsへ登録せず既存fallbackを保ち、取得成功の空glyph列と取得不可を区別する。blockの成功をtintの代用にせず、新しい実機同値/計測/独立レビューで採用した。全入力/任意字体/DPI/資源失敗/RSSは未測（gate-proofs 5-dk）。
 
 R8の復帰用ime_open_をOS現在値のcacheと見なさず、focus/TSF/context/言語変更の通知保証を先に設計する。IO6は初回呼出しへ費用を移すだけになり得るので、起動と初回frame、依存欠落の失敗を同時に確認する必要がある。IO7は文書が編集可能になるまでを評価し、空画面の早出しだけを同じ仕事の高速化としない。IO8は共有可変core/rendererや第二decoderで迂回せず、typed portの状態遷移とqueue/read/変換/適用全体を先に規定する。これらの見送りは永久禁止や利益なしの実証とは区別する。
 
