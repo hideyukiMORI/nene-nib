@@ -202,6 +202,29 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(len(expected), size)
                 self.assertEqual(PROBES.fnv1a64(expected), fnv)
 
+    def test_status_items_inputs_and_registry(self):
+        cases = (
+            ('status-items-utf8-crlf-1024', b'UTF-8|CRLF|1|1', 14, '2425243683614802670'),
+            ('status-items-bom-lf-1024', b'UTF-8 BOM|LF|9|24', 17, '1768796593162922628'),
+            ('status-items-sjis-crlf-1024', b'Shift_JIS|CRLF|123|456', 22, '8885631928267894942'),
+            ('status-items-max-utf8-lf-1024', b'UTF-8|LF|18446744073709551615|18446744073709551615', 50, '13581726349480759485'),
+            ('status-items-large-bom-crlf-1024', b'UTF-8 BOM|CRLF|123456|654321', 28, '7783354242304457080'),
+            ('status-items-sjis-lf-1024', b'Shift_JIS|LF|1|1', 16, '1943232094207065852'),
+        )
+        self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[76:82])
+        self.assertEqual(len(PROBES.WORKLOADS), 82)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 82)
+        for name, expected, size, fnv in cases:
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), expected)
+                self.assertEqual(len(expected), size)
+                self.assertEqual(PROBES.fnv1a64(expected), fnv)
+
+    def test_status_items_invalid_names(self):
+        for name in ("status-items-utf8-crlf-1023", "status-items-unknown-1024"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
     def test_frame_document_inputs_and_registry(self):
         cases = (
             ('frame-document-short-saved-256', b'C:\\nib-probe\\frame-document.txt', 31, '3165114504819470625'),
@@ -210,8 +233,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('frame-document-untitled-256', b'', 0, '14695981039346656037'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[72:76])
-        self.assertEqual(len(PROBES.WORKLOADS), 76)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 76)
+        self.assertEqual(len(PROBES.WORKLOADS[:76]), 76)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:76])), 76)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
