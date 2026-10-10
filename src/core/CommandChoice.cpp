@@ -4,6 +4,7 @@
 #include "ExResult.hpp"
 #include "KeyChord.hpp"
 #include "Offset.hpp"
+#include "OffsetRange.hpp"
 #include "OperationBindings.hpp"
 #include "OperationText.hpp"
 #include "OperationTexts.hpp"
@@ -15,6 +16,7 @@
 #include <limits>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -43,13 +45,36 @@ namespace
     return std::nullopt;
 }
 
+// 完結した UTF-8 の区間を借り、既存の scalar 走査の始点と終点を全体のバイト位置へ戻す。
+[[nodiscard]] std::optional<OffsetRange> code_point_from(std::span<const std::string_view> command,
+                                                         Offset from, char32_t wanted) noexcept
+{
+    std::size_t prefix = 0;
+    for (const std::string_view part : command)
+    {
+        const Offset local{from.value > prefix ? from.value - prefix : 0};
+        const auto found = code_point_from(part, local, wanted);
+        if (found.has_value())
+        {
+            return OffsetRange{Offset{prefix + found.value().value},
+                               Offset{prefix + next_code_point(part, found.value()).value}};
+        }
+        prefix += part.size();
+    }
+    return std::nullopt;
+}
+
 // query のコードポイントを順に候補の中から探す部分列の照合。空白は飛ばし、ASCII は大文字と
 // 小文字を区別しない。点は候補の長さと飛ばした量の和で、最初の文字までは 4 倍（単位はバイト）。
 [[nodiscard]] std::optional<std::size_t> match_score(std::string_view query,
-                                                     std::string_view command)
+                                                     std::span<const std::string_view> command)
 {
     Offset at{0};
-    std::size_t score = command.size();
+    std::size_t score = 0;
+    for (const std::string_view part : command)
+    {
+        score += part.size();
+    }
     for (Offset letter{0}; letter.value < query.size(); letter = next_code_point(query, letter))
     {
         const char32_t wanted = lower_code_point(code_point_at(query, letter));
@@ -62,10 +87,17 @@ namespace
         {
             return std::nullopt;
         }
-        score += (found.value().value - at.value) * (at.value == 0 ? 4 : 1);
-        at = next_code_point(command, found.value());
+        score += (found.value().begin.value - at.value) * (at.value == 0 ? 4 : 1);
+        at = found.value().end;
     }
     return score;
+}
+
+[[nodiscard]] std::optional<std::size_t> match_score(std::string_view query,
+                                                     std::string_view command)
+{
+    const std::array<std::string_view, 1> parts{command};
+    return match_score(query, parts);
 }
 
 [[nodiscard]] CommandChoice choice_of(std::string command)
@@ -125,19 +157,7 @@ namespace
 // 和で、DisplayText の上限（256 バイト）の数倍にしかならないので、この大きさなら必ず後ろになる。
 constexpr std::size_t location_only_penalty = std::numeric_limits<std::size_t>::max() / 2;
 
-// 「場所＋名前」の文字（場所・区切り 1 文字・名前）。場所の無い候補は無し。
-[[nodiscard]] std::optional<std::string> located_name(const CommandChoice &choice)
-{
-    if (!choice.detail.has_value())
-    {
-        return std::nullopt;
-    }
-    std::string located(choice.detail.value().text());
-    located += '\\';
-    located += choice.label.text();
-    return located;
-}
-
+// 名前を先に照合し、不一致のときだけ場所・区切り・名前を借りて同じ点を付ける。
 [[nodiscard]] std::optional<std::size_t> listed_score(std::string_view query,
                                                       const CommandChoice &choice)
 {
@@ -146,12 +166,13 @@ constexpr std::size_t location_only_penalty = std::numeric_limits<std::size_t>::
     {
         return named;
     }
-    const auto located = located_name(choice);
-    if (!located.has_value())
+    if (!choice.detail.has_value())
     {
         return std::nullopt;
     }
-    const auto score = match_score(query, located.value());
+    const std::array<std::string_view, 3> located{choice.detail.value().text(), "\\",
+                                                  choice.label.text()};
+    const auto score = match_score(query, located);
     if (!score.has_value())
     {
         return std::nullopt;
