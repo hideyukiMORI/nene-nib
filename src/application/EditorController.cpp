@@ -3247,6 +3247,10 @@ std::vector<LineView> EditorController::visible_lines() const
     const auto block = block_selection();
     const auto pattern = search_pattern();
     std::vector<LineView> lines;
+    if (first <= last)
+    {
+        lines.reserve(last - first + 1);
+    }
     for (std::size_t number = first; number <= last; ++number)
     {
         const core::LineNumber line{number};
