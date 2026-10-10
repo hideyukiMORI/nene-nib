@@ -13,15 +13,14 @@ namespace
 // 2 種類あって「最後のどちらか」を探すからである。
 [[nodiscard]] std::size_t name_start(std::string_view text) noexcept
 {
-    std::size_t start = 0;
-    for (std::size_t index = 0; index < text.size(); ++index)
+    for (std::size_t index = text.size(); index > 0; --index)
     {
-        if (text[index] == '\\' || text[index] == '/')
+        if (text[index - 1] == '\\' || text[index - 1] == '/')
         {
-            start = index + 1;
+            return index;
         }
     }
-    return start;
+    return 0;
 }
 } // namespace
 
