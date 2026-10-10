@@ -108,3 +108,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0090](0090-block-caret-and-recording-reuse-retained-text.md) | ブロックカーソルと録画表示も保持済みの文字を使う | 受理・#334で採用 |
 | [0091](0091-palette-filtering-reuses-the-previous-candidate-set.md) | 一覧の照合は小文字の写しを作らず前の候補集合を再利用する | 受理・#341で採用 |
 | [0092](0092-cp932-conversion-writes-the-bounded-output-once.md) | CP932変換は上限内の出力を一回で書く | 受理・#341で採用 |
+| [0093](0093-pattern-evaluation-keeps-prioritized-states-per-position.md) | 検索の照合は文字位置ごとに優先順を保った状態を一度ずつ評価する | 技術受理・#353 |
+| [0094](0094-column-offset-stops-on-the-shared-piece-walk.md) | 桁からbyte位置への変換は共通の断片走査を必要な境界で止める | 技術受理・#353 |

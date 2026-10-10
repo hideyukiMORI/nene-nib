@@ -3727,3 +3727,69 @@ hideの継続実験と今回の分担指定に従い、設計席が入力/区間
 配置/失敗/探索誤り/実行順の詳細はjournal.md。worktree checkout完了待ち前のcherry-pick拒否も保持し、clean確認後に残りと未適用設計を取り込んだ。元の事前設計commitは実装より前で不変。採用済み・整理済みとするのはD41と収載/監査の完了後とする。
 
 - 恒久証跡を`D:/NeNeNib/evidence/speed-optimizations-20261010-wave3/snapshot-1005/`へ収載し、997file/265,043,842bytesのコピー元/先SHA256一致を確認。manifest SHA256 `a8f4bdf49326557f43dcc138ed32429e738c69f2677976c08b766a504a48296b`。`files/`以下はD:/NeNeNibからの元pathを保持し、source/には6枝のHEADを保存。348A/350は未受理実験の時点snapshotとして含む。B1の古いtest exeは上書き済みであり、現存AのexeをB1のものと表示しない。再生成可能なobject/cacheは収載対象外。PR #352のCI後にmainへ統合し、完了した347/349/351の作業木は未保存/未追跡/無視file・リンク・稼働参照と取込を監査してから整理する。枝とcommitは保持する。
+
+## 5-df — 桁位置と照合器の固定比較（#348A / #350）
+
+規則ARC-001/003/005/007/008/009/012、CPP-002/004/005/008/012/014/016、QLT-001/008/012/013/014、D41。ADR0094を先行してoffsetを共通visitorの停止へ移し、ADR0093を先行して照合の再帰をprivate優先状態列へ移した。原記録は`D:/NeNeNib/outputs/20261010-speed-stability/`、有限比較は`outputs/20261010-pattern-design/`。基準値/fixture/schema/抑制/allowlist不変、waiver none。
+
+### 桁位置の比較
+
+`python compare-offset-a.py`の事前planで20iterations・3 ABBA blocks・warmup1区間外・120対応組を固定。各区間は128回の同じ変換と全結果照合、通常Release。B1時点a2d534dとA追加2e719acの比較であり、B1のraw/exeを上書きしない。全4条件observed、外側retry/除外なし。
+
+| 条件（57344bytes） | before中央値µs | after中央値µs | 対応比中央値 | 短縮組/120 |
+| --- | ---: | ---: | ---: | ---: |
+| 長行先頭 | 155.5 | 1 | 0.006667 | 120 |
+| 長行中央 | 3328.5 | 3118 | 0.933786 | 111 |
+| 長行末尾 | 6516 | 6272.5 | 0.964706 | 108 |
+| 8193断片中央 | 8968 | 5719.5 | 0.636695 | 120 |
+
+先頭after1〜3µsは分解能近傍。中央と末尾の全試料改善は主張しない。初回nesting4の拒否をflattenし、symbolsの未初期化失敗は正規toolchainを初期化して確認した。buffer-range282checksと規約/symbols成功。独立`review-348-a.md`は受理阻害なし。要求容量やRSS改善の計測は行っていない。
+
+### 照合器の初期比較と失敗
+
+同じ48workloadのharness（追加7はADR0082で先行固定）を旧製品とcd972c8候補へ適用。`python compare-pattern-350.py`は5iterations・3 ABBA・30対応組、1区間16matchedを事前固定した。正常6条件は全観測。
+
+| 条件 | before中央値µs | 初期候補中央値µs | 対応比中央値 | 短縮組/30 |
+| --- | ---: | ---: | ---: | ---: |
+| a*b不一致1024 | 168273 | 505 | 0.003012 | 30 |
+| a*b不一致2048 | 654599.5 | 1007 | 0.001538 | 30 |
+| a*b不一致4096 | 2558359 | 2012 | 0.000787 | 30 |
+| a*a*a*a*b不一致32 | 352023 | 40 | 0.000112 | 30 |
+| a.*a成功4096 | 1282.5 | 2066 | 1.610136 | 0 |
+| literal末尾4102 | 622 | 458 | 0.734727 | 29 |
+
+旧4096literalは最初のDebug smokeでASan stack-overflow、Release smokeで0xC00000FD。いずれもwarmup中でmetadata/marksなし。既知失敗を再試行せず比較の7本目は欠測、比率は作らない。候補単独は同じ4096literalの完全照合/marks/正常終了を確認。harness初回のnesting4拒否とgenerator抽出誤りを残し、表/期待/flagsを変えず補助関数の境界を直した。製品初回のnesting/optional診断と修正も保持。最終3検索scope1606checks成功。
+
+### 同位置消費の共有と採否
+
+初期greedyの悪化を受け、ADR0093追加決定ea09079を先にcommitし、0bd669fで消費判定を共用した。優先順/4vector/意味は不変。同位置の文字取得/前進を一度にする。`python compare-shared-consumption.py`は20iterations・3 ABBA・120対応組、16matched/区間を事前固定。正常な初期候補と最終候補の7条件に加え、旧版対最終版のgreedyだけを直接比較した。全8observed/外側retryなし。
+
+| 条件 | 初期中央値µs | 最終中央値µs | 対応比中央値 | 短縮組/120 |
+| --- | ---: | ---: | ---: | ---: |
+| a*b不一致1024 | 505 | 396 | 0.783810 | 120 |
+| a*b不一致2048 | 1008 | 787 | 0.780318 | 120 |
+| a*b不一致4096 | 2011 | 1572 | 0.781701 | 116 |
+| 複数star不一致32 | 40 | 31 | 0.756757 | 120 |
+| greedy成功4096 | 2059 | 1632 | 0.792031 | 120 |
+| literal末尾4102 | 458 | 458 | 1.000000 | 50（同値25/遅い45） |
+| literal4096 | 377 | 377 | 1.000000 | 23（同値41/遅い56） |
+
+別の直接比較の旧版→最終版greedyは1212→1633µs、対応比1.350581（範囲1.003688〜2.111511）、全120組で遅い。中央値差421µs/16=26.3125µs/照合は算術値でGUI応答の実測ではない。初期悪化61%を隠さず、異なるbatchを合成して改善率を作らない。再帰と組合せ探索を除く安定性、原子数に閉じた保持量を優先し、greedy約35%の代償込みで採用する。全条件高速化・平均/体感無影響・RSS改善は主張しない。
+
+共用消費後のDebug検索3scope1606checks、source規約と完成core.libのsymbols成功。最初にobjectを渡したsymbolsで内部6参照が未宣言扱いとなったrawも保持し、allowlistは変更しない。新Release probe112steps成功、exe SHA256 `22AB4579BDA49379DA20C2CCC6CD893D1742581375E40D6087316A3D809F9BD4`。公開APIの有限C++は同じ14token/短本文/anchor/from系列1,382,940行、23,202,990bytesを旧版・初期版・共用版で全byte一致確認。SHA256 `8b4e57d670b3c41a636ae3ce4c0e028e1a7bf1d37e47645481b33dbea4f8f7c1`。`finite-cpp-shared-comparison.json`、build/run scriptと初回compile/link指定失敗も保存。これは有限範囲のC++比較でVim oracleや任意入力の証明ではない。UTF8検証済本文/codepoint先頭の既存前提外へ保証を拡張しない。
+
+## 5-dg — 桁位置と照合器の統合受理（#353）
+
+先行#351は[PR #352](https://github.com/hideyukiMORI/nene-nib/pull/352)で10:05:23 JSTに必須CI成功後squash merge。main `d5ef4ee3ed28b002d61d8b8a6aabcd90cc8bdeb8`へ同期し、347/349/351の3作業木は証拠収載/監査後に削除、枝とcommitは保持。受理JSON/CI/clean監査は恒久先`acceptance-351/`。5-deの進行中記載は当時の時点で、現在の状態は本節を優先する。
+
+#353は#348Aと#350最終差分をd5ef4eeへ統合したsource `b8fd7cb9575a33a31aa06eb93749dbac75f16559`。VimSearchはmainと同一、matcher4filesは0bd669fと同一。Aの共有visitor、#349列挙と新照合器が同居するため、旧単独試験をそのまま使わず次の直接5scopeを一度確認した。
+
+- `pwsh -NoProfile -File D:/NeNeNib/outputs/20261010-speed-stability/verify-353.ps1 -ExpectedHead b8fd7cb9575a33a31aa06eb93749dbac75f16559`：通常Debug/tidy/ASan/UBSan123steps、buffer-range282、ordinary-characters233、vim-search1409、vim-search-highlight76、vim-search-incremental141、計2141checks成功。ordinary-charactersは上下/ページ移動と編集callerを含む。対象source12と実CMake File APIの規約違反0、完成core/applicationのsymbols2libraries違反0。protected-diff base d5ef4ee/head b8fd7cbはfixture1853不変/protected filesnone、44scope全件は未測。出力はverify-353/と作業木out/protected。
+- `pwsh -NoProfile -File eng/build-release.ps1 -Ref refactor/353-position-pattern-integration`：通常Release114steps成功、`out/release/b8fd7cb.json`。exe1448960bytes、SHA256 `73711B91ED238647F1B9A89B283E7C70AE7606149500E204839070B0E9680CEF`。buildの並行状況を速度比較に使わない。
+- `python verify-353-boundaries.py --label before/after --executable <固定exe>`と`--compare`：先行351の保存済み製品と統合製品で、短/長行の上下移動、断片編集、非重複n/N、greedy、文字集合star、語境界、preview取消、空行、日本語後方検索、Vim縦移動の19場面を本文/ステータス0画素差で確認。7刺激遷移は非0、前後2process正常終了。候補単独4096文字語の*→n→Nを5場面で確認し正常終了。画像を目視し、元文書/profile不変。保存機能は今回の範囲外。
+- GUI初回の12場面後にfixture鍵parserが語境界記法を拒否した。製品失敗とはせずscript/rawを保持し、v2はその入力だけwrite_text+Enterへ変更。旧版から全19場面を確認し直した。速度値へ転用しない。
+- `python run-formal-353.py`：Aが変えた共通walkerを通る4編集条件をformal-353-plan.jsonに先行固定。起動/open/paletteは刺激が変更関数を呼ばず繰り返さない。正規`eng/measure-speed.py --check --bench`の各5sample、同じ指紋bc8a356f37c68491の実reference/25%許容/2ms床で全件終了0、0退行/0計測不能。中央値は1打鍵0.623ms、200打鍵2.104ms、16MiB200打鍵2.198ms、長い日本語行1打鍵5.435ms。raw全sample/log/終了時marksをformal-353へ保持し、全試行marks保存とはしない。この正式刺激でmatcherは測らず、別の局所比較と直接実機で確認する。
+- 計測前後の環境JSON、事前固定plan、source/exe/reference/scriptのhashを保存。同機i9-10850K/RTX3090/120dpi、HP推奨plan不変、build/test/GUI/重いcopy/hashを止め他の重いprocess0。すべての試料/初回失敗を保持し、成功までの測り直しなし。
+- 別作者のread-only独立レビューはA、#350初期、tradeoff、共用消費後と統合を確認しP0/P1/P2なし。`outputs/20261010-review-wave3/`に全報告。共用後のレビューは自身のA著作を除き、Aは既存の別作者レビューを使用。製品検証・正式4結果は関連source/test/toolchain/referenceが不変の文書更新/push/review/mergeで再実行しない。
+
+残る限界はgreedy直接比較約35%悪化、有限入力の同値確認、原子数×本文長の仕事量、RSS未測。4vector要求はA/A/A+1/A+1で実capacityを測定したとはしない。schema/速度基準/fixture期待/抑制/allowlist変更なし、waiver none。恒久収載とCI/main反映は後続の受理記録へ追記する。
