@@ -621,22 +621,27 @@ constexpr std::array<ProbeDispatch, 48> dispatches{{
      matched_pattern},
 }};
 
+[[nodiscard]] constexpr bool name_is_unique(std::size_t index)
+{
+    for (std::size_t previous = 0; previous < index; ++previous)
+    {
+        if (dispatches[index].name == dispatches[previous].name)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] constexpr bool dispatch_is_complete()
 {
     for (std::size_t index = 0; index < dispatches.size(); ++index)
     {
         const auto &row = dispatches[index];
         if (static_cast<std::size_t>(row.workload) != index || row.name.empty() ||
-            row.input == nullptr || row.run == nullptr)
+            row.input == nullptr || row.run == nullptr || !name_is_unique(index))
         {
             return false;
-        }
-        for (std::size_t previous = 0; previous < index; ++previous)
-        {
-            if (row.name == dispatches[previous].name)
-            {
-                return false;
-            }
         }
     }
     return true;
