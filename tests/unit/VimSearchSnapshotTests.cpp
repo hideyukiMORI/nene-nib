@@ -162,11 +162,12 @@ void verify_search_empty_direction_reuse()
     vim_replay(controller, "n");
     expect(search_offset_rejected(controller.frame()), "repeat reads the same remembered failure");
     vim_replay(controller, "/<CR>");
-    expect(caret_at(controller.frame(), 1U, 1U) &&
-               controller.vim_state().last_search.value().parsed().has_value() &&
+    const auto restored = controller.vim_state().last_search;
+    expect(caret_at(controller.frame(), 1U, 1U) && restored.has_value() &&
+               restored.value().parsed().has_value() &&
                controller.frame().lines.front().matches.size() == 2U,
            "empty forward confirmation reparses the raw text back into a success");
-    expect(forward.has_value() && forward.value().parsed().has_value() &&
+    expect(forward.has_value() && backward.has_value() && forward.value().parsed().has_value() &&
                !backward.value().parsed().has_value(),
            "saved success and failure owners survive later search confirmations");
 }
@@ -180,11 +181,12 @@ void verify_search_typing_does_not_fall_back()
     const auto remembered = controller.vim_state().last_search;
     vim_replay(controller, "/\\(");
     const auto invalid = controller.frame();
+    const auto typing = controller.vim_state().last_search;
     expect(invalid.command_line.has_value() && invalid.lines.front().matches.empty() &&
                !invalid.lines.front().current_match.has_value(),
            "invalid input owns no pattern and does not borrow the previous confirmed value");
-    expect(remembered.has_value() && controller.vim_state().last_search.has_value() &&
-               &remembered.value().parsed() == &controller.vim_state().last_search.value().parsed(),
+    expect(remembered.has_value() && typing.has_value() &&
+               &remembered.value().parsed() == &typing.value().parsed(),
            "typing does not replace the remembered owner");
     vim_replay(controller, "<Esc>");
     expect(controller.frame().lines.front().matches.size() == 2U,
@@ -200,21 +202,26 @@ void verify_search_long_word_and_tabs()
     vim_replay(controller, "*");
     expect(caret_at(controller.frame(), 1U, 4098U), "word search reaches the second long word");
     const auto remembered = controller.vim_state().last_search;
-    expect(remembered.has_value() && remembered.value().text() == "\\<" + word + "\\>" &&
+    expect(remembered.has_value(), "word search remembers its generated pattern");
+    if (!remembered.has_value())
+    {
+        return;
+    }
+    expect(remembered.value().text() == "\\<" + word + "\\>" &&
                remembered.value().parsed().has_value(),
            "word search owns its generated 4100-byte pattern beyond the typed input limit");
     static_cast<void>(controller.apply(application::SelectEditMode{core::EditMode::ordinary}));
     static_cast<void>(controller.apply(application::NewTab{}));
-    expect(controller.vim_state().last_search.has_value() &&
-               &controller.vim_state().last_search.value().parsed() == &remembered.value().parsed(),
+    const auto other_tab = controller.vim_state().last_search;
+    expect(other_tab.has_value() && &other_tab.value().parsed() == &remembered.value().parsed(),
            "ordinary mode and a new tab retain the same window search owner");
     static_cast<void>(controller.apply(application::SwitchTab{0U}));
     static_cast<void>(controller.apply(application::SelectEditMode{core::EditMode::vim}));
     vim_replay(controller, "#");
-    expect(caret_at(controller.frame(), 1U, 1U) &&
-               controller.vim_state().last_search.value().direction() ==
-                   VimSearchDirection::backward &&
-               controller.vim_state().last_search.value().text() == remembered.value().text(),
+    const auto backward = controller.vim_state().last_search;
+    expect(caret_at(controller.frame(), 1U, 1U) && backward.has_value() &&
+               backward.value().direction() == VimSearchDirection::backward &&
+               backward.value().text() == remembered.value().text(),
            "backward word search creates the same bounded raw value in its own direction");
     expect(remembered.value().direction() == VimSearchDirection::forward,
            "the previous long owner survives the later backward confirmation");
