@@ -24,13 +24,13 @@ ARC-001/002/003/004/005/007/008/011、CPP-002/003/004/005/006/007/008/011/012/01
 
 ## 取得前の固定比較
 
-旧57workloadを保ち、新しい閉enumの8条件をADR0082の同じ表/TimingPort/比較器へ追加する。before/after同一harness、main bfa1b32の製品がbefore。入力hashは実際の検索pattern bytes（a/4096個のa/未検索の空bytes）、本文・操作・oracleも同一harnessの固定literalとする。
+旧57workloadを保ち、新しい閉enumの8条件をADR0082の同じ表/TimingPort/比較器へ追加する。before/after同一harness、main bfa1b32の製品がbefore。入力hashは実際の検索pattern bytes（a/256個のa/未検索の空bytes）、本文・操作・oracleも同一harnessの固定literalとする。
 
 | 条件名 | 固定処理 |
 | --- | --- |
 | search-snapshot-frame-short-64 | 本文a xのCRLF3行、pattern aを確定、caret1/1、3行viewport、const frame生成破棄64回 |
-| search-snapshot-frame-long-64 | 本文x、pattern a×4096を確定し報せをhで消す、1行viewport、const frame生成破棄64回 |
-| search-snapshot-repeat-long-64 | 本文a×4096 + 空白x空白 + a×4096、同長pattern、caret1/1、nNを32組（64keys） |
+| search-snapshot-frame-long-64 | 本文x、pattern a×256を確定し報せをhで消す、1行viewport、const frame生成破棄64回 |
+| search-snapshot-repeat-long-64 | 本文a×256 + 空白x空白 + a×256、同長pattern、caret1/1、nNを32組（64keys） |
 | search-snapshot-retained-long-200 | 空本文で長patternを覚え、通常モードでInsertText{x}200回 |
 | search-snapshot-retained-short-200 | 上と同じ、短pattern a |
 | search-snapshot-unsearched-200 | 空本文/検索履歴なし、通常InsertText{x}200回 |
@@ -60,3 +60,9 @@ VimStepのsearch_fromはlast_searchをconst参照し、stored expectedの失敗�
 新probeはSnapshot APIを一切使わず、既存controller intentとframe/saveの公開値だけで準備・計測・照合する。旧57登録/関数本体/入力/区間は保持し、新SearchSnapshotWorkloadの8caseを一つの65行表へ末尾追加する。新enumの網羅switchを加え、旧型のindex範囲は変えない。名前/型/関数/sizeをconstexprで強制し、新case欠落のcompiler反例だけを追加する。既存の型不一致/未知alternative拒否はテンプレート/visitor本体不変の証拠を照合して#367成功を再利用する。
 
 固定採否はこのADRの表と条件で凍結する。局所の3利益条件と5費用条件、通常製品の同値/必要な正式速度/独立レビューが成立したときだけ採用する。未達を後から緩めず、欠測なら保留。保持量はraw文字列に加え解析した原子列/集合範囲/共有制御領域が検索寿命まで残る。payloadのO(A+R)という構造の説明とallocatorの実capacity/RSSを区別する。
+
+## 取得前レビューによる入力の修正（20:19 JST）
+
+最初の設計commit 41fae51はraw a×4096を利益条件にしたが、独立読取レビューで通常SearchLineのInputTextはDisplayText::maximum_bytes=256に制限されると確認した。まだbuild/速度取得前である。3利益条件のpatternをa×256、repeat本文を同256文字の2語へ変更し、全8条件・反復・採否の数値は維持する。最初の設計はcommitへ残す。共通harnessは各long条件の準備前に / → CommandText{256文字} → SubmitCommandという正規入力の到達を区間外で検証する。候補APIは参照せず、記憶の詳細は型固有unit/公開検索動作で確かめる。
+
+4096文字語の * / # は正規経路で上限を通らず生成できるため、長い所有と検索意味の契約試験に残すが、今回の速度利益には数えない。空再利用は a? のforward成功→backward失敗→forward成功、入力中無効patternは古い確定値へ戻らないことを守る。raw/atoms/ranges/共有制御領域は通常モード・タブ移動でも残り、最後の共有所有者の解放まで保持する。
