@@ -2,7 +2,8 @@
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
-> 2026-10-10 18:26 JST: hideの追記指示により、次回は#364の独立再実験と結果別対応 → #367のdispatch設計からの再開 → 当日の継続改善の順に進める（#370）。最新の実施指示は[引き継ぎ冒頭](../handoffs/2026-10-10.md)。この指示保存では実験を開始していない。旧#364の不採用記録は維持し、再評価結果と分ける。
+> 2026-10-10 19:03 JST: #372 / ADR0101で#364を独立再評価し、撮影不成立・入力外乱により保留。受理済み製品#362を維持し、#367のdispatch設計から再開する。詳細は[引き継ぎ冒頭](../handoffs/2026-10-10.md)とgate-proofs 5-dm。旧6px差は今回同じ旧exeでも生じ、製品差へ帰属しない。#365/#373を未解決として残す。
+> 18:26 JST時点の再開指示（履歴）: hideの追記指示により、次回は#364の独立再実験と結果別対応 → #367のdispatch設計からの再開 → 当日の継続改善の順に進める（#370）。最新の実施指示は[引き継ぎ冒頭](../handoffs/2026-10-10.md)。この指示保存では実験を開始していない。旧#364の不採用記録は維持し、再評価結果と分ける。
 > 18:04 JST時点の停止記録（#368）: #367は先行ADR0100と未完成の計測器草案まで。dispatchの網羅性と関数長上限を両立する設計が未決、製品/build/GUI/速度測定は未実行。D作業木・出力・briefとSHA照合済みsnapshotを保持した。その後の再開指示は上記#370を優先する。
 > 第三陣は#351 / PR #352と#353 / PR #354でmain統合/恒久収載/作業木整理済み。greedy約35%悪化と旧長literal失敗も含む記録はgate-proofs 5-df/5-dg。#355の行span投影と#356の固定frame5条件もPR #357でmain反映/収載/整理済み（gate-proofs 5-dh）。場所照合#358はPR #359でmain統合/恒久収載/整理済み（5-di）。描画端点#360はPR #361でmain統合/恒久収載/整理済み（5-dj）。着色glyph経路#362はPR #363でmain反映/収載/整理済み（5-dk）。画面外clip#364は固定条件未達で不採用、製品を戻しPR #366で記録統合/恒久収載/整理まで完了（5-dl）。外部IME overlay差#365は未解決の別Issue。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
@@ -45,12 +46,13 @@
 | 23 | 場所照合の一時連結 #358 | PR #359でmain反映/収載/整理済み。名前/場所を短縮、末尾絞込約2µs増加は残る（5-di） |
 | 24 | renderer端点 #360 | PR #361でmain反映/収載/整理済み。密な検索/置換の応答を短縮（5-dj） |
 | 25 | 着色glyph経路 #362 | PR #363でmain反映/収載/整理済み。混在長行を短縮、ASCII横ばい/短行4.5µs増（5-dk） |
-| 26 | 画面外clip #364 | 旧実験は不採用、PR #366で記録統合/収載/整理済み（5-dl）。入力混入の申告を踏まえ、#370の指示により独立再実験する。まだ未着手 |
-| 27 | 外部IME候補overlayの画素差 #365 | 原6px差/所有診断を保存。生成原因は未特定 |
+| 26 | 画面外clip #364 | 旧実験は不採用、PR #366で記録統合/収載/整理済み（5-dl）。独立再評価#372は撮影不成立と入力外乱で保留（5-dm）。製品採用なし |
+| 27 | 外部IME候補overlayの画素差 #365 | 同旧exeでも同じ6px差を確認。候補窓列挙の見落とし・完全画素取得・OS内部原因が未解決 |
 | 28 | 多行frameの予約 #367 | ADR0100先行・計測器草案、dispatch設計未決。#364再評価の処分後にここから再開する。製品/build/GUI/速度は未実行、D作業物を保持 |
 | 29 | 一時停止の日報・引き継ぎ #368 | PR #369で保存・main統合・収載・文書用作業木整理済み |
 | 30 | 再実験と継続改善の再開指示 #370 | 新しい根拠、固定再実験、採用/不採用/保留、その後の#367と継続改善の順を指示書へ保存 |
-| 31 | その他: 一般Ex / 複雑な書記素境界 | 未起票 |
+| 31 | session入力変化の出所 #373 | #372の固定系列を無効停止。出所は不明、再試行せず記録 |
+| 32 | その他: 一般Ex / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
 
@@ -72,7 +74,7 @@ splitの下準備はD40でhide了承済み。本実装は試作結果から保�
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
 | 既定の `nib_tests` | selectors45。既存選択契約を直接呼ぶframe-selectionを追加。全件checksは未測。直接境界の個別成功と使い分ける | [gate-proofs 5-cz〜5-de](../quality/gate-proofs.md)・NibTests.cppが正本 |
-| ADR | 0099まで（0072/0087/0099は実験不採用）。splitの製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
+| ADR | 0101まで（0100は#367作業木、0101は実験保留、0072/0087/0099は実験不採用）。splitの製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
