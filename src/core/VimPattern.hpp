@@ -39,6 +39,7 @@ class VimPattern final
     [[nodiscard]] static bool is_zero_width(VimPatternAtomKind kind) noexcept;
     [[nodiscard]] static bool anchored(std::string_view line, const VimPatternAtom &atom,
                                        std::size_t at);
+    [[nodiscard]] bool consumes(const VimPatternAtom &atom, char32_t code) const;
     // 1 文字を食べる原子。幅の無い原子は何も食べない。
     [[nodiscard]] std::optional<std::size_t>
     stepped(std::string_view line, const VimPatternAtom &atom, std::size_t at) const;

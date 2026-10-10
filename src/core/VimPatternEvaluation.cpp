@@ -53,6 +53,7 @@ VimPatternEvaluation::expanded(std::vector<std::size_t> &order,
 void VimPatternEvaluation::advanced()
 {
     const std::size_t before = at_;
+    const char32_t code = code_point_at(line_, Offset{before});
     at_ = next_code_point(line_, Offset{before}).value;
     next_.clear();
     std::ranges::fill(next_begins_, std::nullopt);
@@ -60,7 +61,7 @@ void VimPatternEvaluation::advanced()
     {
         const VimPatternAtom &atom = pattern_.atoms_.at(index);
         const auto begin = current_begins_.at(index);
-        if (!begin.has_value() || !pattern_.stepped(line_, atom, before).has_value())
+        if (!begin.has_value() || !pattern_.consumes(atom, code))
         {
             continue;
         }

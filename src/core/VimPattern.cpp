@@ -371,6 +371,26 @@ bool VimPattern::in_set(const VimPatternAtom &atom, char32_t code) const
     return found != atom.negated;
 }
 
+bool VimPattern::consumes(const VimPatternAtom &atom, char32_t code) const
+{
+    switch (atom.kind)
+    {
+    case VimPatternAtomKind::any:
+        return true;
+    case VimPatternAtomKind::literal:
+        return code == atom.code;
+    case VimPatternAtomKind::set:
+        return in_set(atom, code);
+    // 幅の無い原子は 1 文字も食べない。
+    case VimPatternAtomKind::line_start:
+    case VimPatternAtomKind::line_end:
+    case VimPatternAtomKind::word_start:
+    case VimPatternAtomKind::word_end:
+        return false;
+    }
+    std::unreachable();
+}
+
 std::optional<std::size_t> VimPattern::stepped(std::string_view line, const VimPatternAtom &atom,
                                                std::size_t at) const
 {
@@ -380,22 +400,7 @@ std::optional<std::size_t> VimPattern::stepped(std::string_view line, const VimP
     }
     const char32_t code = code_point_at(line, Offset{at});
     const std::size_t next = next_code_point(line, Offset{at}).value;
-    switch (atom.kind)
-    {
-    case VimPatternAtomKind::any:
-        return next;
-    case VimPatternAtomKind::literal:
-        return code == atom.code ? std::optional<std::size_t>{next} : std::nullopt;
-    case VimPatternAtomKind::set:
-        return in_set(atom, code) ? std::optional<std::size_t>{next} : std::nullopt;
-    // 幅の無い原子は 1 文字も食べない。
-    case VimPatternAtomKind::line_start:
-    case VimPatternAtomKind::line_end:
-    case VimPatternAtomKind::word_start:
-    case VimPatternAtomKind::word_end:
-        return std::nullopt;
-    }
-    std::unreachable();
+    return consumes(atom, code) ? std::optional<std::size_t>{next} : std::nullopt;
 }
 
 std::optional<std::size_t> VimPattern::matched_sequence(std::string_view line, std::size_t at) const
