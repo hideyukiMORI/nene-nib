@@ -41,6 +41,16 @@ production コード・ビルド・依存・方針・利用者向けドキュメ
 
 ## 3. ブランチとコミット
 
+### 統合件名の転記をなくす計画（#384・実装待ち）
+
+PR383の統合時に、正しいPRtitleのIssue番号382を手指定のsquash subjectでPR番号383へ取り違えた。
+main38bc5b6の履歴は改変せず、PR/Issue/日報へ関係を残す。
+`eng/merge-pr.py`を統合入口として設け、GitHubから取得したPRtitleを既存`git-conventions.py`で検証し、一字不変でsubjectへ渡す。
+PR番号と期待headを必須にし、返却番号/OPEN/ready/main/head一致、titleとClosesのIssue一致、必須checks成功を確認する。
+既定はplan出力、明示`--execute`だけで`gh pr merge --squash --match-head-commit`へ進む。任意subject/管理者override/auto/branch削除は設けない。
+引数はshellを通さず配列で渡し、失敗を再試行しない。計画段階では道具を実装済みと扱わない。
+限定した道具試験と必要な独立読取レビューで実装を確認し、当PRを同じ道具で統合する。製品検証は実行しない。
+
 Issue・ブランチ・コミット・PR の形は [COMMIT_CONVENTIONS.md](COMMIT_CONVENTIONS.md)（GIT-001〜004）だけが定める。ここには複製しない。
 1 つの PR にアーキテクチャ移行・無関係な整理・依存更新・機能追加を混ぜない。
 
