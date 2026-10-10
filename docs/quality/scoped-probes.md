@@ -62,7 +62,7 @@ ABBAを固定回数だけ実行し、全sample・対応するafter/before ratio�
 結果checksumは空320、2行448、30行9792、120行15552。
 display_lineやcapacityを期待値生成に使わない。
 
-同一harnessをbeforeとafterへ使い、before製品sourceはmain8252cb1と一致させる。
+同一harnessをbeforeとafterへ使い、before製品sourceはmain decd4f1（#362受理済み、旧8252cb1と同じsrc）と一致させる。
 対象Python検査は旧stage-six境界と新4入力/registry/不正名だけ。
 Debugの新4条件各1iterationとRelease同一exeの各iterations1/blocks1は道具の動作確認である。
 既存のwarmup/marks/metadata/欠測/timeout/許容は不変で、空inputBytes0も完全一致で照合する。
