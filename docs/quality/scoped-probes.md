@@ -115,3 +115,11 @@ before b6de932 / after b82b0edは同じharness/入力/区間/flagsを使用。pa
 既存status assertionsへ--status-itemsをつなぐだけで、defaultのverify_look/旧45selectors/全既存assertionsは不変。成功済み検証は関連入力が不変なら工程だけで再実行しない。
 
 before c2c7cdc / after 9c6031aは同じharness/入力/区間/191flagsを使い、7条件各120組の全条件が成立。3利益は対応比.962963/.972727/.981911、最大行桁1024回+3µsとframe256回+4µsは費用として許容。全84process/3360marks/840組を原記録から再計算し一致。結果・失敗・再利用はgate-proofs 5-dr、局所値を正式GUI速度へ代用しない。
+
+
+## 名前の末尾探索（#386・ADR0106）
+
+旧82条件を維持し、FileNameWorkloadの7条件を同じtyped表へ追加する。file-name-windows-4096 / deep-ascii / mixed-utf8 / bare-short / bare-long / trailing / root（後ろ6件もfile-name-接頭辞と-4096接尾辞）。
+入力bytes/FNV/名前literal/借用offset/checksum/分類は[ADR0106](../adr/0106-file-name-search-stops-at-the-last-separator.md)で先行固定。parseは区間外、file_name取得4096回とbytes/端のunsigned byte checksumが区間内、内容と借用位置の前後oracleは区間外。
+既存frame-document-short-saved-256/long-saved-256を直接caller費用として同時比較する。20iterations/ABBA3/各120組、3利益/6費用、一度取得。新7/旧2のDebugと変更前Releaseの各1iterationは正しさだけを見る。
+既存file_path/tab_title assertionsへ--file-pathをつなぐ。defaultのverify_text_and_caret/旧46selectors/全既存assertionsは不変。関連入力不変の成功は工程だけで再実行しない。

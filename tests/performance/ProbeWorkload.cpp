@@ -1,6 +1,7 @@
 #include "ProbeWorkload.hpp"
 
 #include "BufferProbe.hpp"
+#include "FileNameProbe.hpp"
 #include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
 #include "FrameRowsProbe.hpp"
@@ -673,6 +674,22 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(FileNameWorkload workload)
+{
+    switch (workload)
+    {
+    case FileNameWorkload::windows:
+    case FileNameWorkload::deep_ascii:
+    case FileNameWorkload::mixed_utf8:
+    case FileNameWorkload::bare_short:
+    case FileNameWorkload::bare_long:
+    case FileNameWorkload::trailing:
+    case FileNameWorkload::root:
+        return 82U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -688,7 +705,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 82> dispatches{{
+constexpr std::array<ProbeDispatch, 89> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -856,6 +873,20 @@ constexpr std::array<ProbeDispatch, 82> dispatches{{
                      status_items_input, fixed_status_items},
     ProbeDispatchRow{StatusItemsWorkload::sjis_lf, "status-items-sjis-lf-1024", status_items_input,
                      fixed_status_items},
+    ProbeDispatchRow{FileNameWorkload::windows, "file-name-windows-4096", file_name_input,
+                     fixed_file_name},
+    ProbeDispatchRow{FileNameWorkload::deep_ascii, "file-name-deep-ascii-4096", file_name_input,
+                     fixed_file_name},
+    ProbeDispatchRow{FileNameWorkload::mixed_utf8, "file-name-mixed-utf8-4096", file_name_input,
+                     fixed_file_name},
+    ProbeDispatchRow{FileNameWorkload::bare_short, "file-name-bare-short-4096", file_name_input,
+                     fixed_file_name},
+    ProbeDispatchRow{FileNameWorkload::bare_long, "file-name-bare-long-4096", file_name_input,
+                     fixed_file_name},
+    ProbeDispatchRow{FileNameWorkload::trailing, "file-name-trailing-4096", file_name_input,
+                     fixed_file_name},
+    ProbeDispatchRow{FileNameWorkload::root, "file-name-root-4096", file_name_input,
+                     fixed_file_name},
 }};
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
@@ -888,7 +919,7 @@ constexpr std::array<ProbeDispatch, 82> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 82U);
+static_assert(dispatches.size() == 89U);
 static_assert(dispatch_is_complete());
 
 } // namespace

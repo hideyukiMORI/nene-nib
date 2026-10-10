@@ -65,9 +65,10 @@ void verify_file_text_scope()
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 46> scopes{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 47> scopes{{
         {"--utf8", verify_utf8_scope},
         {"--status-items", verify_status_items_scope},
+        {"--file-path", verify_file_path_scope},
         {"--buffer-range", verify_buffer_scope},
         {"--file-text", verify_file_text_scope},
         {"--file-save", verify_document_save_contracts},

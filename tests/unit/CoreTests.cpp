@@ -2283,6 +2283,13 @@ void verify_utf8_scope()
     verify_utf16_scope();
 }
 
+// 既存の経路と題名の契約を直接選ぶ。既定の呼出しは変えない（Issue #386）。
+void verify_file_path_scope()
+{
+    verify_file_path();
+    verify_tab_titles();
+}
+
 void verify_text_and_caret()
 {
     verify_utf8_scope();
