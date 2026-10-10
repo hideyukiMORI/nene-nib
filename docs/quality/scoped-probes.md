@@ -81,3 +81,14 @@ frame64は生成/破棄/field checksum、操作64/200はapplyが区間内、最�
 新APIから期待値を生成しない。新enum case欠落の正規compiler拒否と旧57のsource不変を確認する。
 Debug8条件各1iteration・Release同一exe各iterations1/blocks1は道具確認であり、時間値を利益に使わない。
 20iterations/ABBA3/各120組は一度だけ取得し、全raw/失敗を保持、除外/補完/再取得しない。実施結果はgate-proofs 5-do。
+
+## 検索preview位置の固定比較（#378・ADR0103）
+
+旧65条件を保ち、PreviewCaretWorkloadの7条件を同じtyped表へ追加する。
+preview-caret-long-30-64 / long-120-64 / short-30-64 / confirmed-30-64 / unsearched-30-64 / absent-30-64 / disabled-30-64（各後半名にもpreview-caret-接頭辞）。
+入力/独立oracle/2利益・5費用は[ADR0103](../adr/0103-preview-offset-is-resolved-once-per-frame.md)を正本とする。
+本文の先頭は日×1024+z+Tab+🖋+U+0001、後続119行z x、CRLF/末尾改行なし。shortだけ日×1。
+長3674bytes/FNV3943064766360993406、短605bytes/FNV5659432768607348982。
+const frame64回の生成/破棄/field checksumを区間内、全文/表示map/span/current/caret/入力行/設定/履歴のliteral期待値照合を前後区間外に置く。checksum30行9792/120行15552。
+before28bc1ffはmain dff0d5cと同製品。after13655cbと同じharness/入力/区間/flagsを使う。新7Debug/変更前Release各1iterationは道具の動作確認で時間値を利益にしない。
+固定20iterations/ABBA3/各120組を一度取得、全raw/失敗を保持。旧65/selector/template/入力の不変証拠と新enum欠落のcompiler拒否を保存。結果はgate-proofs 5-dp。

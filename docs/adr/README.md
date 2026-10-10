@@ -118,3 +118,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0100](0100-visible-lines-reserve-only-the-existing-row-range.md) | 表示行一覧は既存の生成範囲ぶんを一度予約する | 技術受理・#367 |
 | [0101](0101-tint-clip-reevaluation-detects-input-and-preserves-product-pixels.md) | 画面外clipの再評価では入力混入と製品全画素を先に検証する | 実験保留・#372 |
 | [0102](0102-remembered-search-owns-one-immutable-parsed-value.md) | 確定した検索は文字列・方向・解析結果を一つの不変値として共有する | 技術受理・#376 |
+| [0103](0103-preview-offset-is-resolved-once-per-frame.md) | 検索プレビューの位置変換は一画面に一度だけ行う | 技術受理・#378 |
