@@ -134,6 +134,12 @@ void verify_search_state_branches()
            "only the new state branch changes its remembered search");
 }
 
+[[nodiscard]] bool search_offset_rejected(const application::EditorFrame &frame)
+{
+    return frame.command_message.has_value() &&
+           frame.command_message.value().text() == "Search offset is not supported";
+}
+
 void verify_search_empty_direction_reuse()
 {
     Editing editing;
@@ -149,13 +155,12 @@ void verify_search_empty_direction_reuse()
                !backward.value().parsed().has_value() &&
                backward.value().parsed().error() == core::VimPatternFailure::offset,
            "empty backward confirmation remembers its newly parsed failure");
-    expect(message_is(controller.frame(), "Search offset is not supported") &&
+    expect(search_offset_rejected(controller.frame()) &&
                controller.frame().lines.front().matches.empty() &&
                caret_at(controller.frame(), 1U, 6U),
            "the failed direction neither moves nor paints the previous successful parse");
     vim_replay(controller, "n");
-    expect(message_is(controller.frame(), "Search offset is not supported"),
-           "repeat reads the same remembered failure");
+    expect(search_offset_rejected(controller.frame()), "repeat reads the same remembered failure");
     vim_replay(controller, "/<CR>");
     expect(caret_at(controller.frame(), 1U, 1U) &&
                controller.vim_state().last_search.value().parsed().has_value() &&
