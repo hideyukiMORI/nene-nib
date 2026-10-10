@@ -2,10 +2,10 @@
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
-> 第三陣は#351 / PR #352と#353 / PR #354でmain統合/恒久収載/作業木整理済み。greedy約35%悪化と旧長literal失敗も含む記録はgate-proofs 5-df/5-dg。#355の行span投影と#356の固定frame5条件もPR #357でmain反映/収載/整理済み（gate-proofs 5-dh）。場所照合#358はPR #359でmain統合/恒久収載/整理済み（5-di）。描画端点#360を技術受理し、CI/main/整理へ進む（5-dj）。
+> 第三陣は#351 / PR #352と#353 / PR #354でmain統合/恒久収載/作業木整理済み。greedy約35%悪化と旧長literal失敗も含む記録はgate-proofs 5-df/5-dg。#355の行span投影と#356の固定frame5条件もPR #357でmain反映/収載/整理済み（gate-proofs 5-dh）。場所照合#358はPR #359でmain統合/恒久収載/整理済み（5-di）。描画端点#360はPR #361でmain統合/恒久収載/整理済み（5-dj）。着色glyph経路#362を技術受理し、CI/main/整理へ進む（5-dk）。
 > Issue ごとの経緯は[日報](../reports/)、コマンドと数字は [gate-proofs](../quality/gate-proofs.md)。ここには書かない（Issue #124）。
 > 再開地点は[2026-10-10の引き継ぎ](../handoffs/2026-10-10.md)。高速化の第一陣は#334 / PR #336へ統合済み。第二陣#337〜#340は#341で統合受理し、正式8本・追加25場面と保存3通りを確認した。結果は[gate-proofs 5-db/5-dc](../quality/gate-proofs.md)。
-> hideの「閉じた処理の前後比較で規約内の高速化を試す」指示に沿って26候補を整理した。[採否の正本](../design/2026-10-10-speed-candidate-disposition.md)は19件を全部/一部採用、2件を実験不採用、5件を未実験で見送り。C8、R3のtint、R8、IO6〜IO8の未実験を明記し、全26件を速度実験済みとはしない。splitも保留。
+> hideの「閉じた処理の前後比較で規約内の高速化を試す」指示に沿って26候補を整理した。[採否の正本](../design/2026-10-10-speed-candidate-disposition.md)は19件を全部/一部採用、2件を実験不採用、5件を未実験で見送り。R3のtintは#362で追加比較して採用。C8、R8、IO6〜IO8の未実験を明記し、全26件を速度実験済みとはしない。splitも保留。
 
 ## 運用（2026-10-03）
 
@@ -41,8 +41,9 @@
 | 21 | 高速化第三陣 #346〜#351 | 保存・collect・検索列挙はPR #352で統合/整理済み。offset Aと照合器も#353 / PR #354で統合/収載/整理済み。代償と限界を5-df/5-dgに保持 |
 | 22 | 行内span #355 / 固定frame比較 #356 | PR #357で統合/収載/整理済み。直接検証・固定5比較・GUI・正式4成功（5-dh） |
 | 23 | 場所照合の一時連結 #358 | PR #359でmain反映/収載/整理済み。名前/場所を短縮、末尾絞込約2µs増加は残る（5-di） |
-| 24 | renderer端点 #360 | 技術受理。密な検索/置換の描画応答を短縮、34画面同一・正式編集4成功（5-dj） |
-| 25 | その他の候補: 置換tint / 一般Ex / 複雑な書記素境界 | 未起票 |
+| 24 | renderer端点 #360 | PR #361でmain反映/収載/整理済み。密な検索/置換の応答を短縮（5-dj） |
+| 25 | 着色glyph経路 #362 | 技術受理。混在長行を大幅短縮、ASCII横ばい/短行4.5µs増を記録。37場面同一（5-dk） |
+| 26 | その他の候補: 画面外clip / 一般Ex / 複雑な書記素境界 | 未起票 |
 
 2026-10-02 に統合（11 回目の区切り）: #264 Ctrl+P の面の日本語入力（ADR 0061・施主決定 D31・D32・PR #269）・#270 面は絞り込みの結果を持ち frame には見えている行だけ（ADR 0062・施主決定 D33・D34 も仕様へ・PR #273）・#271 裏のワーカー 1 本とフォルダの列挙（ADR 0062・PR #274）。
 
@@ -64,7 +65,7 @@ splitの下準備はD40でhide了承済み。本実装は試作結果から保�
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
 | 既定の `nib_tests` | selectors45。既存選択契約を直接呼ぶframe-selectionを追加。全件checksは未測。直接境界の個別成功と使い分ける | [gate-proofs 5-cz〜5-de](../quality/gate-proofs.md)・NibTests.cppが正本 |
-| ADR | 0097まで（0072/0087は実験不採用）。splitの製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
+| ADR | 0098まで（0072/0087は実験不採用）。splitの製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |
