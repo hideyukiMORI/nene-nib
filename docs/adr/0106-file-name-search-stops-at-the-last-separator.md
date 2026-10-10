@@ -39,7 +39,7 @@ ARC-001/004/007/008/011、CPP-002/004/005/007/008/011/012/014/016、QLT-001/002/
 - tabs/command-palette scopeはfile名/場所を使う候補の表示・切替の直接callerとして一度確認する。adapter/theme/UIの分岐は不変であり、新しい名前oracleとGUIにより同一の入力名を確認し、無関係なテーマ/IO全件は回さない。
 - 新入力/不正名と旧status/frame登録のPython対象試験、旧82input/function/typed表不変証明、新enum欠落の実compiler拒否。新enum以外のdispatch設計は変えない。
 - 正規Release before/afterとDebug/tidy/ASan/UBSan/no-recover、対象3scopeと新7/旧2callerの各1iteration。変更source整形/規約、実CMake依存/core・application symbols、protected-diff。baseline/実flags/toolsを記録する。
-- 通常Releaseはeng/build-release.ps1。GUIは短いASCII/長い日本語親経路のsaved/modified/一覧/選択/undoの場面を操作前に別固定planへ確定し、私有profile/同input/前後exe hash/全client無mask/全文copy/全PNG目視/LastInput・foreground・title・mode・IME・client guards/正常終了を要求する。正式key-to-frame-singleだけ初回5試料、他7未測。表示名は共通frameのcallerであり長行本文や検索全件は対象外。
+- 通常Releaseはeng/build-release.ps1。GUIは短いASCII/長い日本語親経路のsaved/modified/一覧/選択/undoの場面を操作前に別固定planへ確定し、私有profile/同input/前後exe hash/全client無mask/全文copy/全PNG目視/LastInput・foreground・title・mode・IME・client guards/正常終了を要求する。正式key-to-frame-single-long-lineだけ初回5試料、他7未測。名前のある文書のframeが直接callerであり、既存正式指標の該当する単発入力を使う。本文/検索の全件回帰は行わない。
 - build/test/hash/copy/GUIを性能系列と並走しない。成功した実装/入力/依存/環境が不変なら工程/文書/SHA変更だけで再実行しない。
 
 ## 採否・記録・整理
@@ -47,3 +47,9 @@ ARC-001/004/007/008/011、CPP-002/004/005/007/008/011/012/014/016、QLT-001/002/
 単体実行、判断に不確実性がある場合だけ必要な独立読取レビュー。D:/NeNeNib/worktrees/386-file-name、D:/NeNeNib/outputs/20261010-file-name。通常PR/必須CI、eng/merge-pr.pyのplan確認→同expected-headでexecute、main/恒久収載後に絶対D path/取込/未保存/ignored/唯一成果/稼働/linkを監査整理しbranch/commitを保持する。
 
 全実験/失敗/判断は日報/引継ぎへ残す。前件#384の実tool plan/execute成功・Issue384の正subject・CI38060262470/main0c1d399・snapshot-384/23:38:23の整理も追記する。#365/#373は未解決。schema/設定/許容/抑制/allowlist/正規化/TabTitleコピー/公開factory/全件回帰は対象外。
+
+## 23:52〜23:54 JST・採取前の訂正
+
+初版の正式singleはkeys_trial(document=None)が無題でname_ofはfile_nameを呼ばず、今回の直接経路を通らない。sourceを確認し、固定SHAの名前ある文書を渡す既存long-lineだけへ訂正した。性能試料はまだ0、局所9条件/閾値/GUIは不変。初版wrapper/auditはOUT/raw/formal-plan-initialへ保存。
+
+before初回buildは新name_matchesの5引数がCPP-012（閾値4）で拒否された。入力全文の前後照合をrunnerへ移し、name_matchesは名前内容/借用位置の4引数にする。初版b8273cc/全build logs/flags/新cppを保持し、入力/区間/oracle要件は変えない。製品未変更、exeなし、性能試料0。Python対象4tests/old82証明/dispatch正例とcase欠落拒否は関連入力不変で再利用。

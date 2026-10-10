@@ -49,10 +49,9 @@ constexpr std::array<FileNameCase, 7> cases{{
 }
 
 [[nodiscard]] bool name_matches(const core::FilePath &path, std::string_view name,
-                                std::string_view input, std::string_view expected,
-                                std::size_t offset)
+                                std::string_view expected, std::size_t offset)
 {
-    return path.text() == input && name == expected && name.data() == path.text().data() + offset;
+    return name == expected && name.data() == path.text().data() + offset;
 }
 
 [[nodiscard]] std::uint64_t name_checksum(std::string_view name)
@@ -86,7 +85,7 @@ std::expected<std::uint64_t, ProbeFailure> fixed_file_name(FileNameWorkload work
     const auto &path = parsed.value();
     const auto expected = repeated(sample.name, sample.name_repetitions);
     const auto initial = path.file_name();
-    if (!name_matches(path, initial, input, expected, sample.offset))
+    if (path.text() != input || !name_matches(path, initial, expected, sample.offset))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
@@ -98,9 +97,9 @@ std::expected<std::uint64_t, ProbeFailure> fixed_file_name(FileNameWorkload work
         checksum += name_checksum(name);
     }
     timing.mark(core::Milestone::probe_finished);
-    if (checksum != sample.checksum ||
-        !name_matches(path, initial, input, expected, sample.offset) ||
-        !name_matches(path, path.file_name(), input, expected, sample.offset))
+    if (checksum != sample.checksum || path.text() != input ||
+        !name_matches(path, initial, expected, sample.offset) ||
+        !name_matches(path, path.file_name(), expected, sample.offset))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
