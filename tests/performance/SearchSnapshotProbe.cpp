@@ -107,33 +107,40 @@ void prepare_snapshot(Editing &editing, std::size_t index, const std::string &in
     return {};
 }
 
-[[nodiscard]] bool snapshot_line_equal(const application::LineView &line, std::size_t index,
-                                       bool finished)
+[[nodiscard]] bool snapshot_display_map_equal(const core::DisplayLine &display)
 {
-    const bool three_rows = index == 0U || index == 7U;
-    const std::string body = is_insertion(index) && finished ? std::string(200U, 'x')
-                             : three_rows                    ? "a x"
-                                                             : snapshot_body(index);
-    const auto matches = snapshot_matches(index, finished);
-    const std::size_t current = index == 7U ? 2U : 1U;
-    const auto expected = !matches.empty() && line.number.value == current
-                              ? std::optional{matches.front()}
-                              : std::nullopt;
-    if (line.text != body || line.display.text != body ||
-        line.display.starts.size() != body.size() + 1U ||
-        line.selection != core::no_selection_span() || line.matches != matches ||
-        line.current_match != expected)
+    for (std::size_t at = 0; at < display.starts.size(); ++at)
     {
-        return false;
-    }
-    for (std::size_t at = 0; at < line.display.starts.size(); ++at)
-    {
-        if (line.display.starts.at(at) != at)
+        if (display.starts.at(at) != at)
         {
             return false;
         }
     }
     return true;
+}
+
+[[nodiscard]] std::string snapshot_line_body(std::size_t index, bool finished)
+{
+    if (is_insertion(index) && finished)
+    {
+        return std::string(200U, 'x');
+    }
+    return index == 0U || index == 7U ? "a x" : snapshot_body(index);
+}
+
+[[nodiscard]] bool snapshot_line_equal(const application::LineView &line, std::size_t index,
+                                       bool finished)
+{
+    const std::string body = snapshot_line_body(index, finished);
+    const auto matches = snapshot_matches(index, finished);
+    const std::size_t current = index == 7U ? 2U : 1U;
+    const auto expected = !matches.empty() && line.number.value == current
+                              ? std::optional{matches.front()}
+                              : std::nullopt;
+    return line.text == body && line.display.text == body &&
+           line.display.starts.size() == body.size() + 1U &&
+           line.selection == core::no_selection_span() && line.matches == matches &&
+           line.current_match == expected && snapshot_display_map_equal(line.display);
 }
 
 [[nodiscard]] bool snapshot_input_equal(const application::EditorFrame &frame, std::size_t index)
