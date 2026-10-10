@@ -115,3 +115,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0097](0097-renderer-positions-advance-through-the-display-line.md) | 描画の桁変換は表示行の端点を順に数える | 技術受理・#360 |
 | [0098](0098-tinted-text-reuses-the-body-glyph-path.md) | 色を塗り直す文字も本文の字形経路を使う | 技術受理・#362 |
 | [0099](0099-tint-clips-outside-the-current-target-are-skipped.md) | 現在の描画面の完全外側にある着色clipを省く | 実験不採用・#364 |
+| [0100](0100-visible-lines-reserve-only-the-existing-row-range.md) | 表示行一覧は既存の生成範囲ぶんを一度予約する | 提案・#367 |
