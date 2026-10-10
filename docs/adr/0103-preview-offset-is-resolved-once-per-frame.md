@@ -36,7 +36,7 @@ ARC-001/002/003/007/008/011、CPP-002/004/006/008/011/012/016、QLT-001/002/004/
 
 新probe登録/入力のPython対象試験、実compilerの新enum欠落反例、既存65登録/区間/入力不変証明。正規Release/Debug+tidy+ASan/UBSan、新7probe各1iteration、既存--vim-search-highlight/--vim-search-incremental（投影・preview更新/取消/hlsearch/方向/無効入力）。製品差分/規約/実依存/symbolを確認する。
 
-通常Releaseでpreviewの位置/更新/取消/確定・hlsearch off・incsearch off・無効入力・通常表示の限定GUIを事前台本で固定し全製品画素と本文を比較する。正式速度はkey-to-frame-singleとkey-to-frame-single-long-lineを選ぶ。selectedなしのframe共通経路に追加引数/分岐が入る影響を、普通/長行の直接入力→frameで覆う。他のstartup/device/file/palette経路の変更はなく、その成功結果を再実行しない。基準/許容は不変。
+通常Releaseでpreviewの位置/更新/取消/確定・hlsearch off・incsearch off・無効入力・通常表示の限定GUIを事前台本で固定し全製品画素と本文を比較する。正式速度はkey-to-frame-singleとkey-to-frame-single-long-lineを選ぶ。selectedなしのframe共通経路に追加引数/分岐が入る影響を、普通/長行の直接入力→frameで覆う。他のstartup/file/palette callerも同じframeを通るが、selectedなしの同じ変更枝を普通/長行入力で代表確認する。他指標は今回未測とし、前の成功を今回の実測へ置き換えない。基準/許容は不変。
 
 必要な独立レビューは読取専用。単体実装、D:/NeNeNib/worktrees/<issue>-preview-caret と D:/NeNeNib/outputs/20261010-preview-caret を利用。採否・PR/CI/main・恒久収載後、未保存/ignored/唯一成果/稼働参照/linkを監査して作業物を整理、branch/commit/原記録保持。全実験・失敗・判断を日報/引き継ぎへ残す。
 

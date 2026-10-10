@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FrameRowsWorkload.hpp"
+#include "PreviewCaretWorkload.hpp"
 #include "ProbeWorkload.hpp"
 #include "SearchSnapshotWorkload.hpp"
 
@@ -8,7 +9,8 @@
 
 namespace nenenib::tests::performance
 {
-using ProbeSelection = std::variant<ProbeWorkload, FrameRowsWorkload, SearchSnapshotWorkload>;
+using ProbeSelection =
+    std::variant<ProbeWorkload, FrameRowsWorkload, SearchSnapshotWorkload, PreviewCaretWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

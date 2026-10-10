@@ -202,6 +202,34 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(len(expected), size)
                 self.assertEqual(PROBES.fnv1a64(expected), fnv)
 
+    def test_preview_caret_inputs_and_registry(self):
+        cases = (
+            ("preview-caret-long-30-64", 3674, "3943064766360993406"),
+            ("preview-caret-long-120-64", 3674, "3943064766360993406"),
+            ("preview-caret-short-30-64", 605, "5659432768607348982"),
+            ("preview-caret-confirmed-30-64", 3674, "3943064766360993406"),
+            ("preview-caret-unsearched-30-64", 3674, "3943064766360993406"),
+            ("preview-caret-absent-30-64", 3674, "3943064766360993406"),
+            ("preview-caret-disabled-30-64", 3674, "3943064766360993406"),
+        )
+        self.assertEqual(tuple(name for name, _, _ in cases), PROBES.WORKLOADS[65:72])
+        self.assertEqual(len(PROBES.WORKLOADS), 72)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 72)
+        for name, size, fnv in cases:
+            count = 1 if name == "preview-caret-short-30-64" else 1024
+            expected = bytes.fromhex("e6 97 a5") * count + bytes.fromhex("7a 09 f0 9f 96 8b 01")
+            expected += b"\r\nz x" * 119
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), expected)
+                self.assertEqual(len(expected), size)
+                self.assertEqual(PROBES.fnv1a64(expected), fnv)
+
+    def test_preview_caret_invalid_names(self):
+        for name in ("preview-caret-long-31-64", "preview-caret-short-30-63",
+                     "preview-caret-disabled-30-65"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
     def test_search_snapshot_inputs_and_registry(self):
         cases = (
             ("search-snapshot-frame-short-64", 1, "12638187200555641996"),
@@ -214,8 +242,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ("search-snapshot-typing-frame-short-64", 1, "12638187200555641996"),
         )
         self.assertEqual(tuple(name for name, _, _ in cases), PROBES.WORKLOADS[57:65])
-        self.assertEqual(len(PROBES.WORKLOADS), 65)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 65)
+        self.assertEqual(len(PROBES.WORKLOADS[:65]), 65)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:65])), 65)
         for name, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), b"a" * size)

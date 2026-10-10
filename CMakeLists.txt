@@ -225,7 +225,8 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/PaletteProbe.cpp tests/performance/ConversionProbe.cpp
     tests/performance/SearchProbe.cpp tests/performance/PatternProbe.cpp
     tests/performance/FrameProbe.cpp tests/performance/FrameRowsProbe.cpp
-    tests/performance/SearchSnapshotProbe.cpp)
+    tests/performance/SearchSnapshotProbe.cpp
+    tests/performance/PreviewCaretProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

@@ -4,6 +4,7 @@
 #include "FrameProbe.hpp"
 #include "FrameRowsProbe.hpp"
 #include "PatternProbe.hpp"
+#include "PreviewCaretProbe.hpp"
 #include "ProbeDispatch.hpp"
 #include "ProbeSelection.hpp"
 #include "ScopedProbe.hpp"
@@ -626,6 +627,22 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(PreviewCaretWorkload workload)
+{
+    switch (workload)
+    {
+    case PreviewCaretWorkload::long_thirty:
+    case PreviewCaretWorkload::long_full:
+    case PreviewCaretWorkload::short_thirty:
+    case PreviewCaretWorkload::confirmed:
+    case PreviewCaretWorkload::unsearched:
+    case PreviewCaretWorkload::absent:
+    case PreviewCaretWorkload::disabled:
+        return 65U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -641,7 +658,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 65> dispatches{{
+constexpr std::array<ProbeDispatch, 72> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -775,6 +792,20 @@ constexpr std::array<ProbeDispatch, 65> dispatches{{
     ProbeDispatchRow{SearchSnapshotWorkload::typing_frame_short,
                      "search-snapshot-typing-frame-short-64", search_snapshot_input,
                      probed_search_snapshot},
+    ProbeDispatchRow{PreviewCaretWorkload::long_thirty, "preview-caret-long-30-64",
+                     preview_caret_input, probed_preview_caret},
+    ProbeDispatchRow{PreviewCaretWorkload::long_full, "preview-caret-long-120-64",
+                     preview_caret_input, probed_preview_caret},
+    ProbeDispatchRow{PreviewCaretWorkload::short_thirty, "preview-caret-short-30-64",
+                     preview_caret_input, probed_preview_caret},
+    ProbeDispatchRow{PreviewCaretWorkload::confirmed, "preview-caret-confirmed-30-64",
+                     preview_caret_input, probed_preview_caret},
+    ProbeDispatchRow{PreviewCaretWorkload::unsearched, "preview-caret-unsearched-30-64",
+                     preview_caret_input, probed_preview_caret},
+    ProbeDispatchRow{PreviewCaretWorkload::absent, "preview-caret-absent-30-64",
+                     preview_caret_input, probed_preview_caret},
+    ProbeDispatchRow{PreviewCaretWorkload::disabled, "preview-caret-disabled-30-64",
+                     preview_caret_input, probed_preview_caret},
 }};
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
@@ -807,7 +838,7 @@ constexpr std::array<ProbeDispatch, 65> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 65U);
+static_assert(dispatches.size() == 72U);
 static_assert(dispatch_is_complete());
 
 } // namespace
