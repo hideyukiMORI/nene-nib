@@ -618,6 +618,11 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) { return row.name; }, dispatch);
 }
 
+[[nodiscard]] ProbeSelection dispatch_workload(const ProbeDispatch &dispatch)
+{
+    return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
+}
+
 constexpr std::array<ProbeDispatch, 57> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
@@ -778,8 +783,7 @@ std::optional<ProbeSelection> workload_of(std::string_view name) noexcept
     {
         if (dispatch_name(row) == name)
         {
-            return std::visit([](const auto &value) -> ProbeSelection { return value.workload; },
-                              row);
+            return dispatch_workload(row);
         }
     }
     return std::nullopt;
