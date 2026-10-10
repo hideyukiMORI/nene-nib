@@ -1,6 +1,6 @@
 # ADR 0105 — 固定のステータスラベルは検証器へ直接借用する
 
-- 状態: proposed（取得前固定計画）
+- 状態: 技術受理（固定3利益/4費用・対象契約・GUI・正式single成立）
 - 日付: 2026-10-10
 - Issue: #382
 - 基準: main a866f710a6ca108398da882ca3fbfb4e4b17ceec
@@ -47,3 +47,9 @@ utf8-crlf、bom-lf、sjis-crlfを3利益とする。残り3を費用にする。
 単体で設計/実装/検証/自己レビューし、判断の不確実性がある場合だけ必要な独立読取レビューを使う。D:/NeNeNib/worktrees/382-status-labelsとoutputs/20261010-status-labelsを使う。通常PR/必須CI/main統合/恒久収載後、絶対D path/取込/未保存/ignored/唯一成果/稼働/linkを監査して追加物を整理しbranch/commitを保持する。全実験/失敗/判断と前件#380のarchive長path失敗/復旧/整理も日報/引き継ぎへ記す。関連入力不変の成功は工程/文書/SHA変更だけで再実行しない。
 
 数値format、DisplayText公開factory、TabTitleのclip/所有経路、永続cache、C8入力parse保持、#365/#373、全件回帰は対象外。
+
+## 2026-10-10 23:13 JSTの採否
+
+harness c2c7cdc/製品9c6031aで全7条件を一度取得し成立。3利益の対応比.962963/.972727/.981911、短縮110/104/104組。最大行桁1024回+3µs、frame256回+4µsの費用を許容する。既存8checks/新6+旧caller probe、GUI6対0px・全16PNG目視・12本文一致、正式single.626ms/5有効/基準内。単体で差分/寿命/oracle/全rawを自己レビューして技術受理。公開API/schema不変、waiver none。通常PR/CI/main/収載/整理へ進む。
+
+Debug初回native呼出しだけ配列bindingで本体前に失敗、原転記を残して同一PowerShell内の直接呼出しで未開始buildを成功させた。前件#380のarchive長path失敗/復旧も含む全記録と限界は[gate-proofs 5-dr](../quality/gate-proofs.md#5-dr--固定ステータスラベルの一時コピーを省くissue-382adr0105)。取得前の条件は上記から変更しない。

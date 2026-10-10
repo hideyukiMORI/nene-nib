@@ -2,6 +2,7 @@
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
+> 2026-10-10 23:13 JST: #382の固定ステータスラベル借用は3利益/4費用・既存8checks・GUI6対0px・正式single成立、単体自己レビューで技術受理。最大行桁/直接frameの小幅費用も記録。通常PR/CI/main/恒久収載/監査整理後もhideの停止まで継続（gate-proofs 5-dr）。#380はPR381で統合/収載/長path失敗復旧/整理済み。#365/#373未解決。
 > 2026-10-10 22:36 JST: #380の文書表示値移管は固定2利益/2費用、16300checks、新4probe、GUI8対0px、正式singleが成立。独立最終レビューでP0/P1/P2なし、技術受理。通常PR/CI/main/収載/整理後もhideの停止まで継続（gate-proofs 5-dq）。#378はPR379で統合/収載/整理済み。#365/#373は未解決。
 > 21:55 JST時点の履歴: #378の検索preview位置変換を技術受理。固定2利益/5費用、224checks、新7probe、12画面0px、正式2指標が成立。通常PR/CI/main/収載/整理後もhideの停止まで改善継続（gate-proofs 5-dp）。#376はPR377で統合/収載/整理済み。#365/#373は未解決。
 > 21:05 JST時点の履歴: #376の確定検索共有を技術受理。固定3利益/5費用、2002checks、新8probe、原13＋補足2のGUI、正式8指標が成立。通常PR/CI/main統合/恒久収載/整理後もhideの停止まで改善継続（gate-proofs 5-do）。#367はPR375で統合/収載/整理済み。#365/#373は未解決。
@@ -76,8 +77,8 @@ splitの下準備はD40でhide了承済み。本実装は試作結果から保�
 | 項目 | 値 | 正本 |
 | --- | --- | --- |
 | Vim fixture | 1853 件（`undo-caret-*` 109 件・`combining-*` 92 件を含む・`macro-*` 20 件は `register` 欄で再生だけ・`register-*` は数字と小削除の 82 件を含む・`space-*`。`"+` `"*` は fixture にできず契約） | `tests/vim/VimFixtures.hpp` の 5 行目（CNF-010） |
-| 既定の `nib_tests` | selectors45。既存選択契約を直接呼ぶframe-selectionを追加。全件checksは未測。直接境界の個別成功と使い分ける | [gate-proofs 5-cz〜5-de](../quality/gate-proofs.md)・NibTests.cppが正本 |
-| ADR | 0101まで（0100は#367技術受理、0101は実験保留、0072/0087/0099は実験不採用）。splitの製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
+| 既定の `nib_tests` | selectors46。既存status8項目を直接呼ぶstatus-itemsを追加。default/旧45入口/既存assertions不変、全件checksは未測。直接境界の個別成功と使い分ける | [gate-proofs 5-cz〜5-de](../quality/gate-proofs.md)・NibTests.cppが正本 |
+| ADR | 0105まで（0100/0102〜0105は技術受理、0101は実験保留、0072/0087/0099は実験不採用）。splitの製品採用は保留 | [`docs/adr/README.md`](../adr/README.md) |
 | 見た目の確認 | `python eng/verify-window.py [--open <file>] [--vim] --capture <dir> --keys "<鍵>"` → PNG を Read で見る・`eng/compare-frames.py --regions --expect`。撮影は同じ機械で 1 席ずつ（覆われると `covered` で終了 1・#140） | #131・[gate-proofs 5-al](../quality/gate-proofs.md) |
 | 実機用 Release | `pwsh -NoProfile -File eng/build-release.ps1 -Ref main` → `build/release-<短い SHA>/NeNeNib.exe` と `out/release/<短い SHA>.json`（起動は設計席） | [ADR 0038](../adr/0038-model-per-seat-and-scripted-preparation.md) 決定 5・#129 |
 | 席の消費 | `python eng/usage-report.py --since <日付>` → 席ごとの turns・最大文脈・cache_read・seat_tokens | #146・[gate-proofs 5-an](../quality/gate-proofs.md) |

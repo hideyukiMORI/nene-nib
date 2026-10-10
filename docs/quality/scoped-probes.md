@@ -113,3 +113,5 @@ before b6de932 / after b82b0edは同じharness/入力/区間/flagsを使用。pa
 全input bytes/hash/行桁/3表示literal/各code point数/checksumは[ADR0105](../adr/0105-fixed-status-labels-are-borrowed-by-the-validator.md)で先行固定。3値arrayの生成・破棄1024回+長さ/checksumだけを区間内、前後oracleと保持値照合を区間外にする。
 既存frame-document-short-saved-256を直接caller費用として同時比較する。20iterations/ABBA3/各120組、3利益/4費用、全raw/失敗保存、一度取得。新6Debug/変更前Releaseと旧frame-document短各1iterationは道具確認のみ。
 既存status assertionsへ--status-itemsをつなぐだけで、defaultのverify_look/旧45selectors/全既存assertionsは不変。成功済み検証は関連入力が不変なら工程だけで再実行しない。
+
+before c2c7cdc / after 9c6031aは同じharness/入力/区間/191flagsを使い、7条件各120組の全条件が成立。3利益は対応比.962963/.972727/.981911、最大行桁1024回+3µsとframe256回+4µsは費用として許容。全84process/3360marks/840組を原記録から再計算し一致。結果・失敗・再利用はgate-proofs 5-dr、局所値を正式GUI速度へ代用しない。
