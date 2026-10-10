@@ -49,11 +49,13 @@
 #include <cstddef>
 #include <deque>
 #include <expected>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::application
@@ -319,11 +321,16 @@ class EditorController final
     // 矩形 VISUAL のあいだだけ値を持つ（ADR 0035 の決定 2・8）。描く選択も Ctrl+C / Ctrl+X も
     // 同じ行ごとの範囲を使う。
     [[nodiscard]] std::optional<core::VimBlockRange> block_selection() const;
-    // 検索の当たりを強調するパターン（ADR 0037 の決定 3）。Vim モードで強調が on で、
-    // 解析できる last_search があるときだけ値を持ち、フレームごとに 1 回だけ作る。
-    [[nodiscard]] std::optional<core::VimPattern> search_pattern() const;
+    // 検索強調の値（ADR 0037 / 0102）。入力中は解析値を所有し、確定後は保持結果を借用する。
+    // 選択した値と借用はvisible_linesの同期呼出し内だけ生存する。
+    using SearchPattern =
+        std::variant<core::VimPattern, std::reference_wrapper<const core::VimPattern>>;
+    [[nodiscard]] std::optional<SearchPattern> search_pattern() const;
+    [[nodiscard]] static const core::VimPattern &frame_pattern(const core::VimPattern &pattern);
+    [[nodiscard]] static const core::VimPattern &
+    frame_pattern(std::reference_wrapper<const core::VimPattern> pattern);
     [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const std::optional<core::VimPattern> &pattern) const;
+                                     const core::VimPattern *pattern) const;
     [[nodiscard]] std::vector<LineView> visible_lines() const;
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。

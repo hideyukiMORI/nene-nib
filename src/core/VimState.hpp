@@ -14,7 +14,7 @@
 #include "VimRegisterSnapshot.hpp"
 #include "VimRepeatRecord.hpp"
 #include "VimSearchHighlight.hpp"
-#include "VimSearchPattern.hpp"
+#include "VimSearchSnapshot.hpp"
 #include "VimWantedColumn.hpp"
 
 #include <cstddef>
@@ -36,9 +36,9 @@ struct VimState
     // vim_resting_from で消える（`register` は予約語なので selected_register）。
     std::optional<VimRegisterSelection> selected_register;
     std::optional<VimCharacterSearch> last_character_search;
-    // 直前の検索（パターンと打たれた向き・ADR 0032 の決定 3）。`n` / `N` がこれを使い、
+    // 直前の検索（文字列・向き・解析結果の不変値、ADR 0102）。`n` / `N` がこれを使い、
     // 見つからなかった検索も覚える（次の `n` が同じ失敗を繰り返すのが Vim と同じ・実測）。
-    std::optional<VimSearchPattern> last_search;
+    std::optional<VimSearchSnapshot> last_search;
     // 検索の当たりを強調するか（ADR 0037 の決定 1）。既定は on で、Ex の `:set (no)hlsearch` と
     // `:nohlsearch` だけが変え、検索の鍵が suspended を on へ戻す。永続化はしない。
     VimSearchHighlight highlight;
