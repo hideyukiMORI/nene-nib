@@ -644,6 +644,86 @@ void verify_buffer_range_positions()
            "partial-scalar fragmentation leaves the old snapshot unchanged");
 }
 
+void verify_buffer_offset_pieces()
+{
+    constexpr std::string_view raw = "xé日🖋y";
+    const auto original = buffer_of(raw);
+    auto split = original;
+    for (std::size_t byte = raw.size() - 1; byte > 1; --byte)
+    {
+        split = split.replaced(Offset{byte - 1}, Offset{byte}, raw.substr(byte - 1, 1));
+    }
+    expect(split.piece_count() == 11 && split.text() == raw,
+           "reverse same-byte edits divide two, three and four-byte scalars into separate pieces");
+    constexpr std::array<std::size_t, 8> offsets{0, 0, 1, 3, 6, 10, 11, 11};
+    for (std::size_t column = 0; column < offsets.size(); ++column)
+    {
+        const TextPosition position{LineNumber{1}, Column{column}};
+        expect(original.offset_of(position) == Offset{offsets[column]},
+               "columns retain the known contiguous scalar boundaries and clamp");
+        expect(split.offset_of(position) == Offset{offsets[column]},
+               "columns cross every continuation piece before returning a scalar boundary");
+    }
+    expect(split.offset_of(TextPosition{
+               LineNumber{1}, Column{std::numeric_limits<std::size_t>::max()}}) == Offset{11},
+           "the largest column stops at the fragmented line end");
+    expect(original.piece_count() == 1 && original.text() == raw,
+           "fragmented offset queries leave the original snapshot unchanged");
+}
+
+void verify_buffer_offset_lines()
+{
+    const auto original = buffer_of("a\r\n\r\nb\r");
+    const auto split = original.replaced(Offset{6}, Offset{7}, "\r")
+                           .replaced(Offset{3}, Offset{4}, "\r")
+                           .replaced(Offset{1}, Offset{2}, "\r");
+    constexpr std::array<std::pair<TextPosition, Offset>, 9> cases{{
+        {{LineNumber{1}, Column{0}}, Offset{0}},
+        {{LineNumber{1}, Column{99}}, Offset{1}},
+        {{LineNumber{2}, Column{0}}, Offset{3}},
+        {{LineNumber{2}, Column{1}}, Offset{3}},
+        {{LineNumber{2}, Column{99}}, Offset{3}},
+        {{LineNumber{3}, Column{0}}, Offset{5}},
+        {{LineNumber{3}, Column{99}}, Offset{6}},
+        {{LineNumber{99}, Column{0}}, Offset{7}},
+        {{LineNumber{99}, Column{99}}, Offset{7}},
+    }};
+    for (const auto &[position, expected] : cases)
+    {
+        expect(split.offset_of(position) == expected,
+               "CRLF, empty lines, a terminal CR and out-of-range lines retain their bounds");
+    }
+    const auto lf = buffer_of("a\nb\rc\n").replaced(Offset{3}, Offset{4}, "\r");
+    expect(lf.offset_of(TextPosition{LineNumber{2}, Column{4}}) == Offset{5},
+           "an isolated CR in an LF line remains a column");
+    expect(lf.offset_of(TextPosition{LineNumber{3}, Column{99}}) == Offset{6},
+           "a trailing empty LF line keeps its end");
+    expect(original.text() == "a\r\n\r\nb\r" && original.piece_count() == 1,
+           "offset queries keep the prior line snapshot unchanged");
+}
+
+void verify_buffer_offset_leading_continuation()
+{
+    constexpr std::string_view raw = "a🖋b";
+    const auto original = buffer_of(raw);
+    const auto partial = original.erase(Offset{0}, Offset{2});
+    const auto split = partial.replaced(Offset{2}, Offset{3}, raw.substr(4, 1))
+                           .replaced(Offset{1}, Offset{2}, raw.substr(3, 1));
+    expect(split.piece_count() == 4 && split.text() == raw.substr(2),
+           "raw erasure leaves three leading continuation bytes across separate pieces");
+    constexpr std::array<std::size_t, 5> offsets{0, 0, 3, 4, 4};
+    for (std::size_t column = 0; column < offsets.size(); ++column)
+    {
+        const TextPosition position{LineNumber{1}, Column{column}};
+        expect(partial.offset_of(position) == Offset{offsets[column]},
+               "the first continuation group still counts as one step in the raw byte model");
+        expect(split.offset_of(position) == Offset{offsets[column]},
+               "splitting the leading continuation group does not add columns");
+    }
+    expect(original.text() == raw && original.piece_count() == 1,
+           "raw byte erasure and offset queries leave the valid original snapshot unchanged");
+}
+
 void verify_buffer_scale()
 {
     // QLT-014 は planned のまま。ここは「終わること」だけを見る（時間は out/ の使い捨てで測る）。
@@ -2156,6 +2236,9 @@ void verify_buffer_scope()
     verify_buffer_range_bounds();
     verify_buffer_range_pieces();
     verify_buffer_range_positions();
+    verify_buffer_offset_pieces();
+    verify_buffer_offset_lines();
+    verify_buffer_offset_leading_continuation();
 }
 
 // 本文まわり（Utf8・TextBuffer・キャレット・履歴・スクロール）をまとめて回す。

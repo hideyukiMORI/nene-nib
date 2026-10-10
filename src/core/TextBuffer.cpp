@@ -42,9 +42,9 @@ void visit_text_range(std::span<const Piece> pieces, Offset begin, Offset end, V
         }
         const std::size_t from = std::max(absolute, begin.value);
         const std::size_t to = std::min(absolute + piece.length, end.value);
-        if (from < to)
+        if (from < to && !visitor(piece, from - absolute, to - from))
         {
-            visitor(piece, from - absolute, to - from);
+            return;
         }
         absolute += piece.length;
     }
@@ -260,7 +260,10 @@ void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t 
 {
     visit_text_range(pieces_, Offset{from}, Offset{to},
                      [this, &out](const Piece &piece, std::size_t offset, std::size_t length)
-                     { out.push_back(clipped(piece, offset, length)); });
+                     {
+                         out.push_back(clipped(piece, offset, length));
+                         return true;
+                     });
 }
 
 TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text) const
@@ -319,7 +322,10 @@ std::string TextBuffer::text_range(Offset begin, Offset end) const
     std::string result;
     visit_text_range(pieces_, begin, end,
                      [this, &result](const Piece &piece, std::size_t offset, std::size_t length)
-                     { result.append(view_of(piece).substr(offset, length)); });
+                     {
+                         result.append(view_of(piece).substr(offset, length));
+                         return true;
+                     });
     return result;
 }
 
@@ -332,6 +338,7 @@ char TextBuffer::byte_at(Offset at) const noexcept
                      {
                          result = view_of(piece)[offset];
                          found = true;
+                         return true;
                      });
     // 唯一の caller は 0 <= stop-1 < size_bytes_ を満たす。範囲外の代替文字は返さない。
     if (!found)
@@ -427,19 +434,40 @@ TextPosition TextBuffer::position_of(Offset at) const
     visit_text_range(
         pieces_, line_start(line), Offset{clamped},
         [this, &code_points](const Piece &piece, std::size_t offset, std::size_t length)
-        { code_points += code_point_count(view_of(piece).substr(offset, length)); });
+        {
+            code_points += code_point_count(view_of(piece).substr(offset, length));
+            return true;
+        });
     return TextPosition{line, Column{code_points + 1}};
 }
 
 Offset TextBuffer::offset_of(const TextPosition &position) const
 {
     const Offset start = line_start(position.line);
-    const std::string content = text_range(start, line_end(position.line));
-    std::size_t byte = 0;
-    for (std::size_t step = 1; step < position.column.value && byte < content.size(); ++step)
+    if (position.column.value <= 1)
     {
-        byte = next_code_point(content, Offset{byte}).value;
+        return start;
     }
-    return Offset{start.value + byte};
+    std::size_t remaining = position.column.value - 1;
+    std::size_t consumed = 0;
+    visit_text_range(
+        pieces_, start, line_end(position.line),
+        [this, &remaining, &consumed](const Piece &piece, std::size_t offset, std::size_t length)
+        {
+            const auto slice = view_of(piece).substr(offset, length);
+            std::size_t byte = 0;
+            if (consumed != 0 && !is_boundary(slice, Offset{0}))
+            {
+                byte = next_code_point(slice, Offset{0}).value;
+            }
+            while (remaining > 0 && byte < slice.size())
+            {
+                byte = next_code_point(slice, Offset{byte}).value;
+                --remaining;
+            }
+            consumed += byte;
+            return remaining > 0 || byte == slice.size();
+        });
+    return Offset{start.value + consumed};
 }
 } // namespace nenenib::core
