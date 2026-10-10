@@ -12,7 +12,7 @@ R3のblockはADR0090で保持glyphへ統一したが、tint_runsは通常本文�
 ## 決定
 
 1. tint_runs内のDrawTextLayout一呼出しを既存draw_body_text(text, area, D2D1_DRAW_TEXT_OPTIONS_NONE)へ置換し、不要になるorigin localだけ削除する。brushの色、runs_of、範囲順、callerのclipのpush/pop、paint順を保つ。
-2. draw_body_text/BodyGlyphCollector/cacheの実装を変更しない。通常本文とIME合成行はlayout_ofで現在frameに登録された同じlayoutを使う。保持glyphがあれば同じ全保持runを描き、glyphが無い/未登録なら従来のDrawTextLayout(NONE)へ戻る。glyph切出し/色ごとのcache/新decoder/描画方式の分岐は追加しない。
+2. draw_body_text/BodyGlyphCollector/cacheの実装を変更しない。通常本文とIME合成行はlayout_ofで現在frameに登録された同じlayoutを使う。glyphs_readyなら同じ全保持runを描き、保持glyphが利用不可（!glyphs_ready）/未登録なら従来のDrawTextLayout(NONE)へ戻る。取得成功の空runは正常な空描画でありfallback条件とはしない。glyph切出し/色ごとのcache/新decoder/描画方式の分岐は追加しない。
 3. command/palette入力欄のlayoutは本文保持に登録しない。したがって既存lookup missが正規fallbackを選び、中央寄せ/高さ調整/整数に揃えたIME原点とcaller clipを保つ。本文保持へ入力欄を混ぜない。
 4. 製品contextは96dpi・恒等変換・整数area原点、collectorは同じ前提のまま（ADR0073/0077）。OS windowのDPI120は文字寸法へ適用されるがcontextの96dpiとは別である。描画/HitTest/所有/失効/透明度/brush/設定schema/警告/flags/基準/許容/fixture/抑制を変えない。
 
@@ -24,7 +24,9 @@ R3のblockはADR0090で保持glyphへ統一したが、tint_runsは通常本文�
 
 ## 固定性能比較と正式gateの再利用
 
-前版は#360 ca4ad39の保存済み通常Release（現main3b114d6と製品/test/flags一致）、後版も通常Release。既存製品--measure/window_driverと#360の入力対応harnessを使い、`a\x01 `×1024、`日a🖋\u200b `×1024、`a\x01 `×2を固定する（すべて末尾CRLF）。検索/a<CR>準備後、n/Nの暖機一組、20回の交互n/N、0.4秒間隔、ABBA×3で各120対応組を一度比較する。原marksを次inputまでで分割し、暖機2と計測20すべてのframe到達、試料と区間値の一致を確認。画像の到達と復帰、全trial相互の同値を検査し、全試料/失敗/遅い組を残す。起動/準備/検索生成を含めず、GPU完了ではない製品応答として扱う。
+前版は#360 ca4ad39の保存済み通常Release（現main3b114d6と製品/test/flags一致）、後版も通常Release。既存製品--measure/window_driverと#360の入力対応harnessを使い、`a\x01 `×1024、`日a🖋\u200b `×1024、`a\x01 `×2を固定する（すべて末尾CRLF）。検索/a<CR>準備後に先頭のaへ固定してから、n/Nの暖機一組、20回の交互n/N、ABBA×3で各120対応組を一度比較する。ASCII/短行はgg0、混在はgg0lで開始し、準備input数は7/8/7。間隔はASCII/短行0.4秒、混在3秒。原marksを次inputまでで分割し、暖機2と計測20すべてのframe到達、試料と区間値の一致を確認。画像の到達と復帰、全trial相互の同値を検査し、全試料/失敗/遅い組を残す。起動/準備/検索生成を含めず、GPU完了ではない製品応答として扱う。
+
+正式比較前の旧版だけの道具確認で、混在は約1.8秒frameのため初回0.4秒間隔では入力が合流した。短行2一致は検索が第2一致から始まり折返し通知で画像復帰が変わった。初回raw/script/planを保持し、3秒間隔と開始位置を訂正。第二版の混在はgg0が日でありaでないため、lを追加した第三版を別名で確認した。ASCII/短行の第二版成功は再実行せず再利用。元の3文書/ABBA/20回/比較区間は維持し、速度比較の選別や合格までの再測定ではない。継承planに残った旧source/GUI metadataも初回ファイルを残して対象Issueの値へ訂正した。
 
 正式gateの#360のsingle/burst200/burst200-16MiB/single-long-line成功を再利用する案を先行固定する。これらの入力はIMEを作らず、制御置換のない本文と空文書であり、今回変更するtint_runsへ入らない。基点からdraw_body_text/collector/幾何/本文経路/道具/入力/flagsを変えないことを機械照合し、独立レビューで経路を確認する。共通の描画経路を変える追加修正が必要ならこの再利用根拠は失効し、その直接境界を選び直す。単にcommit/工程が違うだけで既存全8benchを回さず、正式gate未実行の候補を実行済みとも記さない。
 
