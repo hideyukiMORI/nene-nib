@@ -84,6 +84,16 @@ void prepare_frame(Editing &editing, std::size_t index, const std::string &input
            !frame.document.last_failure.has_value();
 }
 
+[[nodiscard]] std::size_t expected_display_start(std::size_t index, std::size_t at)
+{
+    if (index != 1U)
+    {
+        return at;
+    }
+    constexpr std::array<std::size_t, 6> mixed{0U, 1U, 2U, 3U, 4U, 6U};
+    return at == 24576U ? 28672U : 7U * (at / 6U) + mixed.at(at % 6U);
+}
+
 [[nodiscard]] bool display_equals(const application::LineView &line, std::size_t index,
                                   const std::string &input)
 {
@@ -94,12 +104,9 @@ void prepare_frame(Editing &editing, std::size_t index, const std::string &input
     {
         return false;
     }
-    constexpr std::array<std::size_t, 6> mixed{0U, 1U, 2U, 3U, 4U, 6U};
     for (std::size_t at = 0; at < size; ++at)
     {
-        const std::size_t position =
-            index == 1U ? (at == 24576U ? 28672U : 7U * (at / 6U) + mixed.at(at % 6U)) : at;
-        if (line.display.starts.at(at) != position)
+        if (line.display.starts.at(at) != expected_display_start(index, at))
         {
             return false;
         }
