@@ -929,7 +929,6 @@ void Direct2DRenderer::tint_runs(IDWriteTextLayout *text, const core::LayoutRect
 {
     std::array<DWRITE_HIT_TEST_METRICS, selection_run_maximum> runs{};
     const std::size_t drawn = runs_of(text, area, range, std::span(runs));
-    const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
     brush_->SetColor(to_color(color));
     for (std::size_t index = 0; index < drawn; ++index)
     {
@@ -938,7 +937,7 @@ void Direct2DRenderer::tint_runs(IDWriteTextLayout *text, const core::LayoutRect
                                                   run.left + run.width,
                                                   static_cast<float>(area.bottom)),
                                       D2D1_ANTIALIAS_MODE_ALIASED);
-        context_->DrawTextLayout(origin, text, brush_.Get());
+        draw_body_text(text, area, D2D1_DRAW_TEXT_OPTIONS_NONE);
         context_->PopAxisAlignedClip();
     }
 }
