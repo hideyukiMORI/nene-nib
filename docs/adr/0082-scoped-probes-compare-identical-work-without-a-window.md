@@ -164,3 +164,23 @@ input=(a日本語🖋 + 半角space)*4096、61440bytes/24576codepoints/1line、1
 CPP012上限により型付き正本1表へ移す案を採用。ProbeDispatch.hppの1aggregateにenum/name/input factory/runnerを持ち、名前も同じrowへ集約。factory (ProbeWorkload)、runner (ProbeWorkload,const string&,TimingPort&)で統一。既存signatureの薄いprivate wrapperだけ追加し、本体/引数不変。constexpr検査でrow index==enum underlyingと重複/欠落、表sizeを検査。
 
 **閉じたenumのcompiler網羅性は残す。** 配列size/最終enumのstatic_assertだけではenum末尾追加を検出できない。private checked_index(ProbeWorkload)に48個のcaseを全部列挙し、全caseを1つのreturn static_cast<size_t>(workload)へ集約、switch外std::unreachable、default/else無し。input/runはこの1本を経て表へアクセスする。48case+1returnなら通常整形で60行内に収まる見込み。規約の抑制や型のfake count enumeratorは足さない。実際に上限を越える場合は実装前に相談。
+
+## 行内spanの固定比較（2026-10-10・#356、製品#355より先に固定）
+
+main163c314の照合器を前後で共通に使い、`EditorController::frame()`を一回だけ`probe_started/finished`で囲む。入力生成、ScriptedFilesからのopen、VisibleLines{1}、mode/検索/選択の準備、全戻り値照合と破棄は区間外。公開applyを使い準備のframe生成を省く。反復数/ABBA順/timeoutは短い正しさsmokeの費用を見た後、比較実行より先にplanへ固定する。harnessの入力/区間/期待はこの時点で固定し、候補結果へ合わせない。
+
+| 固定名 | UTF8本文 | 一致と選択（1始まり原文桁） |
+| --- | --- | --- |
+| frame-search-dense-ascii-8192 | `a x `を8192回、32768bytes | aの8192面、i番目[4i+1,4i+2)、caret1、current[1,2)、選択absent |
+| frame-search-dense-mixed-4096 | `日a\t🖋\x01 `を4096回、45056bytes | aの4096面、[6i+2,6i+3)、caret2、current[2,3)、選択absent |
+| frame-search-sparse-tail-32768 | xを32767回+a、32768bytes | 末尾の1面[32768,32769)、caret32768、current同じ、選択absent |
+| frame-selection-ascii-32768 | 1本目と同じ | 通常mode、PlaceCaret8193 collapse→24577 extend、選択[8193,24577)、caret24577、matches/currentなし |
+| frame-search-visual-ascii-8192 | 1本目と同じ | aの8192面、検索確定後caret8193、v→16384l、VISUAL選択[8193,24578)、caret24577、current[24577,24578) |
+
+検索はSelectEditMode(vim)→VimKeyPress(VimSearchPattern{"a",forward,nullopt})で確定し、PlaceCaret collapseで指定caretへ置く。VISUALだけはその後にvと数字16384とlを通常のVimKeyPressで送り、inclusive終端を確認する。windowやfixture入力行parserは使わない。全条件line.number/first_visible/total_lines/lines.sizeは1、command_line/compositionはなし。mode/visualとcaret位置、原本文、全SelectionSpan、matchesの順と全端点、currentの有無/全端点を完全照合する。
+
+ASCII displayは原本文と同じ、startsは0..32768。混合displayは`日a\t🖋^A `を4096回（49152bytes/28672codepoints）、startsは各unitの7i+[0,1,2,3,4,6]と最後28672（24577要素）。Tab/emojiの原文桁は各1、制御文字だけ表示幅2となる。display本文/全startsも独立期待と照合し、期待をframe自身や候補helperから生成しない。
+
+checksumはuint64の剰余和でFNV(input)+FNV(display)+全startsの和+全match(begin+end)の和+present選択/現在面の両端の和+4（line.number/first_visible/total_lines/lines.size）+caret.line+caret.column+matches.size+選択presence(0/1)+current有無(0/1)。上から`4762729787238942292`、`18084650234477590103`、`13493547337114145917`、`4762729786970564179`、`4762729787239048792`。独立Pythonの入力/期待算術をDの事前計画へ保存。完全照合が正本でchecksumだけを正しさの根拠にしない。
+
+旧48workloadとregistry/input/factory/runnerの意味を保持し、5本だけ追加する。新5のDebug/通常Release各1iteration+warmup1の短い完全照合を行う。通常flags/TimingPort/metadata/checker不変。全初回失敗/未観測を保持し、正式速度やGUIの利益へ直接転用しない。規則ARC-001/007/011、CPP-002/005/012/016、QLT-001/012/014。
