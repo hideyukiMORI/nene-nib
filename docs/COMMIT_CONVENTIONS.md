@@ -53,6 +53,12 @@ PR には目的・変更の要約・使った正典経路・規則 ID・検証�
 push・レビュー・merge・担当変更・文書追記・SHA 変更だけでは成功済み検証を繰り返さない。
 CI の必須 `check` は Git 規約・検証記録の存在・差分の空白を確認する。記録の妥当性はレビューし、CI 成功を製品テストの実行証拠とは扱わない。
 
+統合操作は `eng/merge-pr.py <PR番号> --expected-head <40桁SHA>` のplanを確認してから、同じ指定に `--execute` を付ける（#384）。
+件名は取得したPRtitleを既存の検査器で検証し、title末尾と唯一の`Closes #N`が指すIssue番号を照合して、一字不変で渡す。
+PR番号を件名のIssue番号へ転記せず、任意のsubject引数も設けない。ready/OPEN/main/期待head/必須checks成功が揃わなければ統合しない。
+repoは正本へ明示固定し、Unicode改行を含む複数論理行とmerge queueを拒否する。完了は同repoのMERGED状態とmergeCommitを読み取って確認する。
+失敗を再試行せず、timeout等で成否不明ならPRを読み取って確認する。GitHub UIや直接CLIまでの全経路を強制するものではないため、機械強制の状態をactiveへ変更しない。
+
 - 機械強制: **planned**（PR テンプレート・必須 check・ruleset の squash-only）
 
 ---

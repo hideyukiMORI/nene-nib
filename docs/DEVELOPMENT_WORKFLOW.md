@@ -34,22 +34,34 @@ production コード・ビルド・依存・方針・利用者向けドキュメ
 9. PR を **draft** で出す
 10. 影響した規則 ID を 1 つずつ自己レビューする
 11. 必要な検証と再利用根拠を PR に記録して Ready にする。工程・文書・SHA の変更だけで測り直さない
-12. Git 規約・検証記録・空白を確認する必須 check が通り、記録の妥当性をレビューしてから squash merge する
+12. Git 規約・検証記録・空白を確認する必須 check が通り、記録の妥当性をレビューしてから、下記の `eng/merge-pr.py` で squash merge する
 13. 作業木を畳み、ローカル枝を消す（remote 枝はマージで自動的に消える）
 
 ---
 
 ## 3. ブランチとコミット
 
-### 統合件名の転記をなくす計画（#384・実装待ち）
+### 統合件名をPRタイトルから取得する（#384）
 
 PR383の統合時に、正しいPRtitleのIssue番号382を手指定のsquash subjectでPR番号383へ取り違えた。
 main38bc5b6の履歴は改変せず、PR/Issue/日報へ関係を残す。
-`eng/merge-pr.py`を統合入口として設け、GitHubから取得したPRtitleを既存`git-conventions.py`で検証し、一字不変でsubjectへ渡す。
+`eng/merge-pr.py`を統合入口とし、GitHubから取得したPRtitleを既存`git-conventions.py`で検証して、一字不変でsubjectへ渡す。
 PR番号と期待headを必須にし、返却番号/OPEN/ready/main/head一致、titleとClosesのIssue一致、必須checks成功を確認する。
+対象repoは道具の一つの定数`github.com/hideyukiMORI/nene-nib`から全read/mergeへ明示し、`GH_REPO`やdefault remoteに委ねない。
+branch rulesを同repoから読み、未取得/不正やmerge queueがある場合は止める。件名の単行判定は既存validatorと同じ`splitlines()`で行う。
 既定はplan出力、明示`--execute`だけで`gh pr merge --squash --match-head-commit`へ進む。任意subject/管理者override/auto/branch削除は設けない。
-引数はshellを通さず配列で渡し、失敗を再試行しない。計画段階では道具を実装済みと扱わない。
-限定した道具試験と必要な独立読取レビューで実装を確認し、当PRを同じ道具で統合する。製品検証は実行しない。
+引数はshellを通さず配列で渡し、失敗を再試行しない。実行中のtimeout等は成否不明として、PRの実状態を読んでから次を判断する。
+必須check成功は検証記録の真実性を保証しないため、手順11〜12のレビューを省略しない。
+
+```text
+python eng/merge-pr.py <PR番号> --expected-head <40桁のhead SHA>
+python eng/merge-pr.py <PR番号> --expected-head <同じhead SHA> --execute
+```
+
+最初のplanに表示された対象/head/件名/checksを確認する。実行時もPRを読み直し、headの競合はGitHub側の`--match-head-commit`で拒否する。
+終了0だけで完了とはせず、同repoのPR番号/headがMERGEDでmergeCommitが得られたことを読み取る。未確認なら再試行せず成否不明として扱う。
+PR metadata/rulesの読取と統合は原子的ではないため、操作中にこれらを並行変更しない。競合時に自動復旧やqueueの取消は行わない。
+GitHub UIや直接のgh操作まで機械強制するものではなく、規約のplanned/不能の区別は維持する。
 
 Issue・ブランチ・コミット・PR の形は [COMMIT_CONVENTIONS.md](COMMIT_CONVENTIONS.md)（GIT-001〜004）だけが定める。ここには複製しない。
 1 つの PR にアーキテクチャ移行・無関係な整理・依存更新・機能追加を混ぜない。
