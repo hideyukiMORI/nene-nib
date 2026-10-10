@@ -3793,3 +3793,5 @@ hideの継続実験と今回の分担指定に従い、設計席が入力/区間
 - 別作者のread-only独立レビューはA、#350初期、tradeoff、共用消費後と統合を確認しP0/P1/P2なし。`outputs/20261010-review-wave3/`に全報告。共用後のレビューは自身のA著作を除き、Aは既存の別作者レビューを使用。製品検証・正式4結果は関連source/test/toolchain/referenceが不変の文書更新/push/review/mergeで再実行しない。
 
 残る限界はgreedy直接比較約35%悪化、有限入力の同値確認、原子数×本文長の仕事量、RSS未測。4vector要求はA/A/A+1/A+1で実capacityを測定したとはしない。schema/速度基準/fixture期待/抑制/allowlist変更なし、waiver none。恒久収載とCI/main反映は後続の受理記録へ追記する。
+
+- #353恒久snapshotを`D:/NeNeNib/evidence/speed-optimizations-20261010-wave3/snapshot-353/`へ収載。1248file/285,653,640bytesのコピー元/先SHA一致、manifest SHA256 `72c90e21046512e2dc7c0786c0497e6ddd10a559210f3f1dcc64350cd86c78b7`。4枝のsource、原出力、前後probe、統合製品/Debug試験exe、全失敗/script/reviewを保持。消した347/349の旧exeは先行snapshot-1005のhash一致を確認し参照する。後続の文書/CI/main/整理はacceptance-353へ追補する。
