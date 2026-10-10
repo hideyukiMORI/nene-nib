@@ -114,3 +114,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0096](0096-palette-location-matching-borrows-complete-text-segments.md) | 一覧の場所照合は完結した文字列の区間を借りて読む | 技術受理・#358 |
 | [0097](0097-renderer-positions-advance-through-the-display-line.md) | 描画の桁変換は表示行の端点を順に数える | 技術受理・#360 |
 | [0098](0098-tinted-text-reuses-the-body-glyph-path.md) | 色を塗り直す文字も本文の字形経路を使う | 技術受理・#362 |
+| [0099](0099-tint-clips-outside-the-current-target-are-skipped.md) | 現在の描画面の完全外側にある着色clipを省く | 提案・#364 |
