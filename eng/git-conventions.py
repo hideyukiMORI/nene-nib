@@ -26,6 +26,19 @@ def validate_pr(body: str) -> list[str]:
             if not re.search(rf"^{re.escape(field)}:[ \t]*\S[^\r\n]*\r?$", body, re.M)]
 
 
+def validate_merge_title(title: str, body: str) -> list[str]:
+    """The squash subject is the PR title, naming its one closing Issue (#384)."""
+    errors = validate(title, title_only=True)
+    if title.splitlines() != [title]:
+        errors.append("GIT-003: PR title must be a single line")
+    if errors:
+        return errors
+    issue = re.search(r"\(#([1-9]\d*)\)$", title).group(1)
+    if re.findall(r"\bCloses #([1-9]\d*)\b", body) != [issue]:
+        errors.append("GIT-001: PR title must name the one Issue closed by its body")
+    return errors
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("message_file", type=Path)
