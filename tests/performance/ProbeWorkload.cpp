@@ -11,6 +11,7 @@
 #include "ScopedProbe.hpp"
 #include "SearchProbe.hpp"
 #include "SearchSnapshotProbe.hpp"
+#include "StatusItemsProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -657,6 +658,21 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(StatusItemsWorkload workload)
+{
+    switch (workload)
+    {
+    case StatusItemsWorkload::utf8_crlf:
+    case StatusItemsWorkload::bom_lf:
+    case StatusItemsWorkload::sjis_crlf:
+    case StatusItemsWorkload::max_utf8_lf:
+    case StatusItemsWorkload::large_bom_crlf:
+    case StatusItemsWorkload::sjis_lf:
+        return 76U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -672,7 +688,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 76> dispatches{{
+constexpr std::array<ProbeDispatch, 82> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -828,6 +844,18 @@ constexpr std::array<ProbeDispatch, 76> dispatches{{
                      frame_document_input, framed_documents},
     ProbeDispatchRow{FrameDocumentWorkload::untitled, "frame-document-untitled-256",
                      frame_document_input, framed_documents},
+    ProbeDispatchRow{StatusItemsWorkload::utf8_crlf, "status-items-utf8-crlf-1024",
+                     status_items_input, fixed_status_items},
+    ProbeDispatchRow{StatusItemsWorkload::bom_lf, "status-items-bom-lf-1024", status_items_input,
+                     fixed_status_items},
+    ProbeDispatchRow{StatusItemsWorkload::sjis_crlf, "status-items-sjis-crlf-1024",
+                     status_items_input, fixed_status_items},
+    ProbeDispatchRow{StatusItemsWorkload::max_utf8_lf, "status-items-max-utf8-lf-1024",
+                     status_items_input, fixed_status_items},
+    ProbeDispatchRow{StatusItemsWorkload::large_bom_crlf, "status-items-large-bom-crlf-1024",
+                     status_items_input, fixed_status_items},
+    ProbeDispatchRow{StatusItemsWorkload::sjis_lf, "status-items-sjis-lf-1024", status_items_input,
+                     fixed_status_items},
 }};
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
@@ -860,7 +888,7 @@ constexpr std::array<ProbeDispatch, 76> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 76U);
+static_assert(dispatches.size() == 82U);
 static_assert(dispatch_is_complete());
 
 } // namespace

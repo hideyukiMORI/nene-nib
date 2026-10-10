@@ -58,3 +58,7 @@ C8入力中parse保持とは別に、同じpreview位置のUTF-8prefix走査を�
 ## 追加実験: 一時文書表示値の所有移管 #380
 
 既存deliveryのDocumentViewをtab表示へcopyした後、encoding enumを退避してframeへmoveする。title/pathの余分な複製を省き、表示値をstateから作る第二経路を増やさない。short/long savedの256frame対応比.938144/.945205、短縮118/114組、failed/untitledの費用も条件内。16300checks/GUI8対0px/正式singleが成立、独立最終レビューでP0/P1/P2なし、技術受理（[gate-proofs 5-dq](../quality/gate-proofs.md#5-dq--一時の文書表示値をframeへ所有移管するissue-380adr0104)）。元26件の20採用/2実験不採用/4未実験を変更しない。永続cache/公開API/schemaなし、C8入力parse保持とは別件。
+
+## 追加実験: 固定ステータスラベルの一時コピー #382
+
+private fixedをstring_view借用にし、encoding/endingの一時string2つを省く。検証・所有化はDisplayText::parse一経路、数値format/array不変。3利益の1024array対応比.962963/.972727/.981911、短縮110/104/104組。最大行桁1024回+3µsと直接frame256回+4µsを事前費用内として許容する。既存8checks/GUI6対0px/正式single成立、単体自己レビューで技術受理（[gate-proofs 5-dr](../quality/gate-proofs.md#5-dr--固定ステータスラベルの一時コピーを省くissue-382adr0105)）。元26件の採否件数は不変。to_chars/stack buffer、公開factory追加、TabTitle clipは今回未実験で見送る。

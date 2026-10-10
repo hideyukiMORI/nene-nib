@@ -105,3 +105,13 @@ checksumは14592/82176/83200/3328。新4Debug/変更前Release各1iterationは�
 
 before b6de932 / after b82b0edは同じharness/入力/区間/flagsを使用。pathのFNV1a64はshort3165114504819470625、long/failed3259355916674798828、untitled14695981039346656037。
 各120組の2利益/2費用が成立。最初の環境読取だけはUTF-8/cp932で失敗し、probe試料0/原本を保全。出力先だけを変えて-X utf8で未取得系列を一度取得した。結果と全失敗はgate-proofs 5-dq、局所値を正式GUI速度へ代用しない。
+
+
+## 固定ステータスラベル借用の比較（#382・ADR0105）
+
+旧76条件を保持し、StatusItemsWorkloadの6条件を同じtyped表へ追加する。status-items-utf8-crlf-1024 / bom-lf / sjis-crlf / max-utf8-lf / large-bom-crlf / sjis-lf（後ろ5件もstatus-items-接頭辞と-1024接尾辞）。
+全input bytes/hash/行桁/3表示literal/各code point数/checksumは[ADR0105](../adr/0105-fixed-status-labels-are-borrowed-by-the-validator.md)で先行固定。3値arrayの生成・破棄1024回+長さ/checksumだけを区間内、前後oracleと保持値照合を区間外にする。
+既存frame-document-short-saved-256を直接caller費用として同時比較する。20iterations/ABBA3/各120組、3利益/4費用、全raw/失敗保存、一度取得。新6Debug/変更前Releaseと旧frame-document短各1iterationは道具確認のみ。
+既存status assertionsへ--status-itemsをつなぐだけで、defaultのverify_look/旧45selectors/全既存assertionsは不変。成功済み検証は関連入力が不変なら工程だけで再実行しない。
+
+before c2c7cdc / after 9c6031aは同じharness/入力/区間/191flagsを使い、7条件各120組の全条件が成立。3利益は対応比.962963/.972727/.981911、最大行桁1024回+3µsとframe256回+4µsは費用として許容。全84process/3360marks/840組を原記録から再計算し一致。結果・失敗・再利用はgate-proofs 5-dr、局所値を正式GUI速度へ代用しない。

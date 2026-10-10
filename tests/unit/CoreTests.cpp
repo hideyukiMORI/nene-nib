@@ -2305,6 +2305,12 @@ void verify_text_and_caret()
     verify_body_layout();
 }
 
+// 既存のstatus契約を対象実行へつなぐ。既定実行はverify_lookが呼ぶ（Issue #382）。
+void verify_status_items_scope()
+{
+    verify_status_items();
+}
+
 void verify_look()
 {
     verify_color_equality();

@@ -79,7 +79,13 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "frame-document-short-saved-256",
              "frame-document-long-saved-256",
              "frame-document-long-failed-256",
-             "frame-document-untitled-256")
+             "frame-document-untitled-256",
+             "status-items-utf8-crlf-1024",
+             "status-items-bom-lf-1024",
+             "status-items-sjis-crlf-1024",
+             "status-items-max-utf8-lf-1024",
+             "status-items-large-bom-crlf-1024",
+             "status-items-sjis-lf-1024")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -161,6 +167,16 @@ def fixed_input(workload: str) -> bytes:
         if workload == "frame-document-short-saved-256":
             return b"C:\\nib-probe\\frame-document.txt"
         return b"C:\\nib-probe\\" + b"segment\\" * 20 + b"a" * 64 + b".txt"
+    if workload in WORKLOADS[76:82]:
+        inputs = (
+            b'UTF-8|CRLF|1|1',
+            b'UTF-8 BOM|LF|9|24',
+            b'Shift_JIS|CRLF|123|456',
+            b'UTF-8|LF|18446744073709551615|18446744073709551615',
+            b'UTF-8 BOM|CRLF|123456|654321',
+            b'Shift_JIS|LF|1|1',
+        )
+        return inputs[WORKLOADS[76:82].index(workload)]
     return scoped_fixed_input(workload)
 
 
