@@ -930,9 +930,14 @@ void Direct2DRenderer::tint_runs(IDWriteTextLayout *text, const core::LayoutRect
     std::array<DWRITE_HIT_TEST_METRICS, selection_run_maximum> runs{};
     const std::size_t drawn = runs_of(text, area, range, std::span(runs));
     brush_->SetColor(to_color(color));
+    const auto width = context_->GetSize().width;
     for (std::size_t index = 0; index < drawn; ++index)
     {
         const auto &run = runs.at(index);
+        if (run.left > width || run.left + run.width < 0)
+        {
+            continue;
+        }
         context_->PushAxisAlignedClip(D2D1::RectF(run.left, static_cast<float>(area.top),
                                                   run.left + run.width,
                                                   static_cast<float>(area.bottom)),
