@@ -53,7 +53,12 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "pattern-multistar-miss-32",
              "pattern-greedy-hit-4096",
              "pattern-literal-tail-4102",
-             "pattern-literal-long-4096")
+             "pattern-literal-long-4096",
+             "frame-search-dense-ascii-8192",
+             "frame-search-dense-mixed-4096",
+             "frame-search-sparse-tail-32768",
+             "frame-selection-ascii-32768",
+             "frame-search-visual-ascii-8192")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -110,6 +115,13 @@ def fixed_input(workload: str) -> bytes:
         return b"x" * 4096 + b"needle"
     if workload == "pattern-literal-long-4096":
         return b"a" * 4096
+    if workload in ("frame-search-dense-ascii-8192", "frame-selection-ascii-32768",
+                    "frame-search-visual-ascii-8192"):
+        return b"a x " * 8192
+    if workload == "frame-search-dense-mixed-4096":
+        return "日a\t🖋\x01 ".encode("utf-8") * 4096
+    if workload == "frame-search-sparse-tail-32768":
+        return b"x" * 32767 + b"a"
     return scoped_fixed_input(workload)
 
 

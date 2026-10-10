@@ -305,6 +305,32 @@ void verify_search_highlight_columns()
                frame_matches(anchored.controller().frame(), 1).empty(),
            "a zero-length match has no face to paint");
 }
+// 選択を先に投影しても、最初の一致で行内cursorを前へ戻す（ADR 0095）。
+void verify_search_highlight_backward_selection()
+{
+    Editing mixed;
+    open_vim_document(mixed, "日😀\t\x01"
+                             "beta beta");
+    EditorController &controller = mixed.controller();
+    vim_replay(controller, "/beta<CR>$v5h");
+    const auto backward = controller.frame();
+    expect(backward.mode_label == "VISUAL" && caret_at(backward, 1, 8),
+           "VISUAL moves backward from the last character into the first match");
+    expect(backward.lines.at(0).selection == core::SelectionSpan{core::SelectionPresence::present,
+                                                                 core::Column{8}, core::Column{14}},
+           "the backward inclusive selection is projected before the earlier matches");
+    expect(frame_matches(backward, 0) == std::vector<MatchSpan>{{5, 9}, {10, 14}},
+           "both ordered matches keep raw code point columns after the cursor reset");
+    expect(current_match_is(backward, 0, MatchSpan{5, 9}),
+           "the first match remains current at the backward caret");
+    vim_replay(controller, "o");
+    const auto swapped = controller.frame();
+    expect(swapped.lines.at(0).selection == backward.lines.at(0).selection &&
+               frame_matches(swapped, 0) == std::vector<MatchSpan>{{5, 9}, {10, 14}},
+           "swapping VISUAL endpoints preserves selection and every match");
+    expect(current_match_is(swapped, 0, MatchSpan{10, 14}),
+           "the swapped caret makes the last match current");
+}
 } // namespace
 
 void verify_vim_search_highlight_contracts()
@@ -316,6 +342,7 @@ void verify_vim_search_highlight_contracts()
     verify_search_highlight_frame();
     verify_search_highlight_line_scope();
     verify_search_highlight_columns();
+    verify_search_highlight_backward_selection();
 }
 
 void verify_vim_search_highlight_scope()

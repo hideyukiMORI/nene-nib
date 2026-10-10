@@ -20,7 +20,7 @@ hide の要望（2026-09-22 の実機確認）: 検索したら全一致の背�
 1. **状態**: `VimState` に `highlight`（閉じた enum `VimSearchHighlight { on, off, suspended }`・既定 `on`・施主決定 D17）。`:set hlsearch` → `on`、`:set nohlsearch` → `off`、`:nohlsearch`（`:noh`）→ `on` のときだけ `suspended`。検索の鍵（`/ ? n N * #` の確定・見つからなくても）は `suspended` を `on` に戻す（Vim の `:help :nohlsearch` と同じ。`off` は戻さない）。設定の永続化（C2）には載せない（範囲外）。
 2. **Ex**: `ExResult` に `std::optional<VimSearchHighlight>` を足し、`:set hlsearch` / `:set nohlsearch` / `:nohlsearch` / `:noh` が返す。controller は既存の Ex の写しの中で `VimState` へ置く（Ex の経路は 1 本のまま。`set` の補完候補に `hlsearch` / `nohlsearch` を足す）。通常モードでは `:` が無いので触れない。
 3. **一致の計算**: core の純関数 `vim_line_matches(line_text, pattern) -> std::vector<OffsetRange>`（行内・0 桁目から重ならない列・ADR 0032 の決定 4 の追記と同じ走査）を照合器から公開する。全件の列と検索の前後の移動は、同じ private な列挙を使う（走査の規則を 2 か所に書かない）。検索は選ぶ位置が決まったら列挙を止め、全件の vector を作らない（2026-10-10・Issue #349、下記追記）。application は `EditorFrame` を作るときに、`highlight == on` かつ `last_search` があり Vim モードのときだけ、**見えている行だけ**に対して呼ぶ。パターンは `VimPattern::parse` の結果をフレームごとに 1 回だけ作る（解析に失敗する `last_search` は無い。あれば強調しない）。
-4. **行ごとの列**: `LineView` に `matches`（`SelectionSpan` の列・桁は既存の `span_of` 1 本で作る）と `current_match`（`std::optional<SelectionSpan>`）を足す。現在の一致は「キャレットを含む一致」（`begin <= caret < end`・長さ 0 なら `begin == caret`）で、無ければ空。`SelectionSpan` の型は選択と共用する（新しい型を増やさない）。
+4. **行ごとの列**: `LineView` に `matches`（`SelectionSpan` の列・桁は既存の `LineSpanEvaluation::span` 1 本で作る）と `current_match`（`std::optional<SelectionSpan>`）を足す。現在の一致は「キャレットを含む一致」（`begin <= caret < end`・長さ 0 なら `begin == caret`）で、無ければ空。`SelectionSpan` の型は選択と共用する（新しい型を増やさない）。
 5. **描画**: renderer は本文の前に `matches` を `palette.search` で塗り（既存の選択の塗りと同じ 1 本の経路）、その上に選択を塗る（重なる所は選択が優先）。`current_match` は `palette.accent` の 1 DIP の枠を面の内側に描く（キャレットのブロックは今までどおり最後）。行をまたぐ一致は無い（照合は行内）。ui/win32 に色のリテラルを書かない。
 6. **追従**: フレームは本文から毎回作るので、編集・スクロール・テーマ切替に自動で追従する。`incsearch`（入力中の強調）は範囲外。通常モード（Vim でない）では強調しない。
 7. **速さ**: 見えている行 × パターンの照合だけ（本文全体は走らない）。1 打鍵の予算（0.9 ms）に対して、見えている 60 行程度の照合は十分小さい見込み。`measure-speed.py --check` を 1 回と、`last_search` を立てた状態の 1 打鍵を対象 unit で 1 回だけ時間を記録する（基準値には足さない）。
@@ -30,7 +30,7 @@ hide の要望（2026-09-22 の実機確認）: 検索したら全一致の背�
 
 - 3 値の写し漏れ・`ExResult` の写し漏れ: **active**（`switch` の網羅性・CPP-002）
 - 走査の規則が 1 か所であること・見えている行だけを数えること: **active**（対象 unit・全件と検索の移動が同じ行頭からの非重複一致を使う契約。実装の経路が一つであること自体はレビューする）
-- 桁が `span_of` 1 本で作られること（全角・Tab・CRLF で選択と同じ桁）: **active**（application の unit）
+- 桁が `LineSpanEvaluation::span` 1 本で作られること（全角・Tab・CRLF で選択と同じ桁）: **active**（application の unit）
 - 色がトークンから来ること: **active**（既存の字句検査・ui/win32 の色リテラル禁止）
 - 期待値が本物の Vim の答えであること: **不能**（強調は Vim の報告に無い。`v:hlsearch` の遷移だけ実測）
 
@@ -56,7 +56,7 @@ help（`:help 'hlsearch'` / `:help :nohlsearch`）と実測だけを根拠にし
    これが無いと `:set nohlsearch` → `:noh` → 検索で強調が復活して実測と食い違う。
 2. **長さ 0 の一致は数えるが塗らない。** `searchcount()` で測ると `abc` の `/a*` は 3、`abc\ndef`
    の `/^` は 2 で、走査は長さ 0 の一致も 1 つと数えて 1 文字進む（`vim_line_matches` はそのまま
-   返す）。面が無いので `span_of` が `absent` を返し、application がそこで落とす。決定 4 の
+   返す）。面が無いので `LineSpanEvaluation::span` が `absent` を返し、application がそこで落とす。決定 4 の
    「長さ 0 なら `begin == caret`」は結果として使われない。
 3. **`aaaa` の `/aa` は 2 つである**（依頼書の例は 1 つとあったが、`searchcount()` の実測は 2）。
    走査は一致の終わりから数え直すので `ababa` の `/aba` だけが 1 つになる。
@@ -85,7 +85,7 @@ ARC-007 でここに書けない）」と定めているので、対象 unit に
 | 新しいトークン `current_search` を足す | `accent` の枠で足りる。9 テーマぶんの値を増やさない（ADR 0017） |
 | 本文全体の一致を engine が持つ | 16 MiB で 1 打鍵ごとに走査が要る。見えている行だけで足りる |
 | 強調のオン・オフを `EditorSettings`（永続化）に載せる | C2 の schema が変わる。Vim も `hlsearch` は起動時の既定に戻る |
-| renderer が本文から一致を探す | renderer は写すだけ（ARC-011）。桁の計算が `span_of` と 2 本になる |
+| renderer が本文から一致を探す | renderer は写すだけ（ARC-011）。桁の計算が `LineSpanEvaluation::span` と 2 本になる |
 
 ## 追記 — 一致の列挙は必要な位置で止める（2026-10-10・Issue #349）
 

@@ -157,13 +157,31 @@ class ProbeComparisonTests(unittest.TestCase):
                  ("pattern-greedy-hit-4096", b"a" * 4096),
                  ("pattern-literal-tail-4102", b"x" * 4096 + b"needle"),
                  ("pattern-literal-long-4096", b"a" * 4096))
-        self.assertEqual(tuple(name for name, _ in cases), PROBES.WORKLOADS[41:])
-        self.assertEqual(len(PROBES.WORKLOADS), 48)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 48)
+        self.assertEqual(tuple(name for name, _ in cases), PROBES.WORKLOADS[41:48])
+        self.assertEqual(len(PROBES.WORKLOADS[:48]), 48)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:48])), 48)
         for name, expected in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
         for name in ("pattern-star-miss-1023", "pattern-literal-tail-4101", "pattern-greedy-hit-4095"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
+    def test_stage_six_frame_inputs(self):
+        cases = (("frame-search-dense-ascii-8192", b"a x " * 8192, "2381364893216809765"),
+                 ("frame-search-dense-mixed-4096", "日a\t🖋\x01 ".encode("utf-8") * 4096,
+                  "10068659747010089765"),
+                 ("frame-search-sparse-tail-32768", b"x" * 32767 + b"a", "6746773668288547386"),
+                 ("frame-selection-ascii-32768", b"a x " * 8192, "2381364893216809765"),
+                 ("frame-search-visual-ascii-8192", b"a x " * 8192, "2381364893216809765"))
+        self.assertEqual(tuple(name for name, _, _ in cases), PROBES.WORKLOADS[48:])
+        self.assertEqual(len(PROBES.WORKLOADS), 53)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 53)
+        for name, expected, fnv in cases:
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), expected)
+                self.assertEqual(PROBES.fnv1a64(expected), fnv)
+        for name in ("frame-search-dense-ascii-8191", "frame-search-sparse-tail-32767"):
             with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
                 PROBES.fixed_input(name)
 

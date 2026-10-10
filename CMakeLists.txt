@@ -58,7 +58,8 @@ nenenib_target(nenenib_core core STATIC
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
-    src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp)
+    src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp
+    src/application/LineSpanEvaluation.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -221,7 +222,8 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/ProbeMain.cpp tests/performance/ProbeWorkload.cpp
     tests/performance/ScopedProbe.cpp tests/performance/BufferProbe.cpp
     tests/performance/PaletteProbe.cpp tests/performance/ConversionProbe.cpp
-    tests/performance/SearchProbe.cpp tests/performance/PatternProbe.cpp)
+    tests/performance/SearchProbe.cpp tests/performance/PatternProbe.cpp
+    tests/performance/FrameProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)
