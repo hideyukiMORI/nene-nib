@@ -700,6 +700,23 @@ void verify_vim_find_match()
                     "an empty body has no match backwards either");
 }
 
+void verify_vim_search_empty_lines()
+{
+    using enum VimSearchDirection;
+    expect_match(match_found("", "^", {at_position(1, 1), forward, 1}), at_position(1, 1), true,
+                 "an empty line still has its anchored match when searching forward");
+    expect_match(match_found("", "$", {at_position(1, 1), backward, 1}), at_position(1, 1), true,
+                 "an empty line still has its anchored match when searching backward");
+    expect_match(match_found("a\n\nb", "^", {at_position(1, 1), forward, 1}), at_position(2, 1),
+                 false, "forward search reaches the empty line without wrapping");
+    expect_match(match_found("a\n\nb", "^", {at_position(3, 1), backward, 1}), at_position(2, 1),
+                 false, "backward search reaches the empty line without wrapping");
+    expect_match(match_found("a\n\nb", "^", {at_position(1, 1), forward, 2}), at_position(3, 1),
+                 false, "a forward count continues after an empty-line match");
+    expect_match(match_found("a\n\nb", "^", {at_position(3, 1), backward, 2}), at_position(1, 1),
+                 false, "a backward count continues after an empty-line match");
+}
+
 // `:set incsearch` / `:set noincsearch`（ADR 0041 の決定 6）。hlsearch と同じ経路で評価し、
 // 設定にも強調にも触れない。既定は on で、Vim の鍵を食べ終えても持ち越す。
 void verify_ex_incsearch_commands()
@@ -740,6 +757,7 @@ void verify_ex_incsearch_commands()
 void verify_vim_search_contracts()
 {
     verify_vim_find_match();
+    verify_vim_search_empty_lines();
     verify_ex_incsearch_commands();
     verify_vim_pattern_subset();
     verify_vim_pattern_word_boundaries();
