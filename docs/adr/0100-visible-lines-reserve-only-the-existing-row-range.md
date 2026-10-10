@@ -13,7 +13,7 @@
 
 ## 固定した閉じた比較
 
-既存ADR0082のprobe dispatch/TimingPort/Win32TimingAdapter/compare-probesだけへ4workloadを末尾追加する。beforeとafterは完全に同じharnessを使う。beforeの製品はmain8252cb1（#362の受理済み内容）、#364候補をbeforeにしない。
+既存ADR0082のprobe dispatch/TimingPort/Win32TimingAdapter/compare-probesだけへ4workloadを末尾追加する。beforeとafterは完全に同じharnessを使う。beforeの製品はmain decd4f1（#362の受理済み内容で旧8252cb1と同一src tree）、#364候補をbeforeにしない。
 
 unitはUTF-8 `a日\t🖋\x01 row`、区切りCRLF、tailはASCII `tail`。emptyは空bytes、shortはunit+CRLF+tail、30と120は(unit+CRLF)×119+tailで全120行。同一ordinary編集状態・caret1行1列・検索/選択/IMEなし。viewportと期待行数を次に固定する。
 
@@ -29,6 +29,20 @@ unitはUTF-8 `a日\t🖋\x01 row`、区切りCRLF、tailはASCII `tail`。empty�
 20iterations、ABBA×3、各120対応組を一度だけ。全試料/原marks/失敗を保存し、0usの補正、外れ値除外、試行数の事後変更、成功までの再試行をしない。測定単位は64回分の生成・破棄と固定checksumであり、UI応答/1frame純時間ではない。
 
 30行と120行の双方が、対応比中央値<1、各ABBA cycleの対応比中央値<1、120組中90組以上短縮という条件を満たす場合だけ利益の候補とする。空/2行の費用を併記し、正式製品への費用・同値・レビューと合わせて採否を決める。固定条件未達なら製品を戻して記録する。
+
+2026-10-10再開時・新probe取得前の追加固定: 空/2行も各120組を要求し、それぞれ対応差中央値(after−before)≤50µsかつ対応比中央値≤1.10を費用の上限とする。1sampleは64回生成/破棄なので1frameやUIの許容ではなく、今回だけの局所費用の採否条件。QLT-014の基準/許容は変更しない。
+
+## dispatchの未決を解く設計（2026-10-10再開時・実装前）
+
+旧ProbeWorkloadの53caseを列挙するchecked_indexは通常整形で60行となり、新4caseの直接追加はCPP-012に収まらない。ADR0082の「実装前に相談」に対する現在の設計判断として、既存53enum/各本体/引数/入力/区間/順/名前は保ち、多行生成4条件だけFrameRowsWorkloadという別の閉じたenumにする。数値・文字列・fake countへの置換、switchのdefault、抑制、閾値変更はしない。
+
+- 外部の選択値ProbeSelectionは`variant<ProbeWorkload, FrameRowsWorkload>`。名前から選ぶ入口は従来どおり登録表一つを走査する。製品API/CLI/JSON schema/測定器は変えない。
+- 登録表は57行の一つだけ。各行は`ProbeDispatchRow<型>`（その型の値、名前、同じ型を受けるinput factory、runner）をvariantへ保持する。型付き行により別familyのenumと関数pointerの混在はコンパイル不可。旧53行の4要素は変えず、新4行だけ末尾へ追加する。
+- 旧checked_index(ProbeWorkload)の網羅switchは53caseのまま維持し、新checked_index(FrameRowsWorkload)は4caseを明記する。新enumの表indexは旧53行の後ろ。選択値へのvisitorはこの二つの型付きoverloadへだけ転送し、別名selection_indexに置く。ProbeSelectionを受けるchecked_index fallbackを作らず、新variant alternativeはoverload不足でコンパイル拒否する。
+- constexprで各行のindex/型対応・名前重複/空・null関数・表sizeを検査する。run/inputは同じ選択indexから同じ登録行を訪問し、その行が所有する型付き値を渡す。測定する本体へ変更を入れず、variant訪問/表の選択は元から計測markの外。
+- 固定四条件のDebug/Release correctnessに加え、この構造変更の直接証明として、旧53行の値/旧処理本体一致、両enumのcase網羅、variant alternative追加時の拒否、登録型不一致の拒否を限定した正例/反例で確認する。正規compiler/clang-tidy/formatを使用し、反例はDの専用出力へ置く。全旧53性能を測り直す理由にはしない。
+
+これは新4条件を意味のある型へ分けて同じ表に載せる設計であり、計測器の並行した実装経路を作らない。before/afterへ完全に同じharnessを使う。必要な独立レビューは読取専用でこの型と計測区間の不変性を確認する。
 
 ## 直接検証と再利用
 
