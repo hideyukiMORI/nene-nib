@@ -54,3 +54,7 @@ R3の採用済みglyph経路とは別の追加実験。tintのtarget外clip省�
 ## 追加実験: 検索preview位置の反復変換 #378
 
 C8入力中parse保持とは別に、同じpreview位置のUTF-8prefix走査を可視行ごとから一画面一度へ移した。新しい永続cacheなし。固定長30/120行の64frameで対応比.337326/.177893、各120組短縮、5費用条件も成立。直接契約/GUI12場面/正式2指標と独立レビューにより技術受理（[gate-proofs 5-dp](../quality/gate-proofs.md#5-dp--検索プレビューの位置変換を一画面に一度へ移すissue-378adr0103)）。元26件の20採用/2実験不採用/4未実験を変更しない。C8入力中parse保持、R8、IO6〜IO8は未実験のまま。
+
+## 追加実験: 一時文書表示値の所有移管 #380
+
+既存deliveryのDocumentViewをtab表示へcopyした後、encoding enumを退避してframeへmoveする。title/pathの余分な複製を省き、表示値をstateから作る第二経路を増やさない。short/long savedの256frame対応比.938144/.945205、短縮118/114組、failed/untitledの費用も条件内。16300checks/GUI8対0px/正式singleが成立、独立最終レビューでP0/P1/P2なし、技術受理（[gate-proofs 5-dq](../quality/gate-proofs.md#5-dq--一時の文書表示値をframeへ所有移管するissue-380adr0104)）。元26件の20採用/2実験不採用/4未実験を変更しない。永続cache/公開API/schemaなし、C8入力parse保持とは別件。

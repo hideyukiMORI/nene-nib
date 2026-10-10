@@ -75,7 +75,11 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "preview-caret-confirmed-30-64",
              "preview-caret-unsearched-30-64",
              "preview-caret-absent-30-64",
-             "preview-caret-disabled-30-64")
+             "preview-caret-disabled-30-64",
+             "frame-document-short-saved-256",
+             "frame-document-long-saved-256",
+             "frame-document-long-failed-256",
+             "frame-document-untitled-256")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -151,6 +155,12 @@ def fixed_input(workload: str) -> bytes:
     if workload in WORKLOADS[65:72]:
         count = 1 if workload == "preview-caret-short-30-64" else 1024
         return ("日" * count + "z\t🖋\x01" + "\r\nz x" * 119).encode("utf-8")
+    if workload in WORKLOADS[72:76]:
+        if workload == "frame-document-untitled-256":
+            return b""
+        if workload == "frame-document-short-saved-256":
+            return b"C:\\nib-probe\\frame-document.txt"
+        return b"C:\\nib-probe\\" + b"segment\\" * 20 + b"a" * 64 + b".txt"
     return scoped_fixed_input(workload)
 
 
