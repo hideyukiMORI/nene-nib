@@ -112,4 +112,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0094](0094-column-offset-stops-on-the-shared-piece-walk.md) | 桁からbyte位置への変換は共通の断片走査を必要な境界で止める | 技術受理・#353 |
 | [0095](0095-visible-line-spans-advance-through-the-owned-line.md) | 行の選択と検索の桁は所有済み本文の端点を順に数える | 技術受理・#355 |
 | [0096](0096-palette-location-matching-borrows-complete-text-segments.md) | 一覧の場所照合は完結した文字列の区間を借りて読む | 技術受理・#358 |
-| [0097](0097-renderer-positions-advance-through-the-display-line.md) | 描画の桁変換は表示行の端点を順に数える | 設計固定・#360実測待ち |
+| [0097](0097-renderer-positions-advance-through-the-display-line.md) | 描画の桁変換は表示行の端点を順に数える | 技術受理・#360 |
