@@ -30,16 +30,18 @@ class VimPattern final
                                                          std::size_t from) const;
 
   private:
+    friend class VimPatternEvaluation;
+
     VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPatternRange> ranges);
-    // index 番目の原子から at で照合して、一致した末尾を返す。`*` は貪欲に伸ばして後戻りする。
-    [[nodiscard]] std::optional<std::size_t> matched_atoms(std::string_view line, std::size_t index,
-                                                           std::size_t at) const;
+    // 反復のない原子列を順に評価する。選択肢がないので状態列の確保も再帰も不要。
+    [[nodiscard]] std::optional<std::size_t> matched_sequence(std::string_view line,
+                                                              std::size_t at) const;
+    [[nodiscard]] static bool is_zero_width(VimPatternAtomKind kind) noexcept;
+    [[nodiscard]] static bool anchored(std::string_view line, const VimPatternAtom &atom,
+                                       std::size_t at);
     // 1 文字を食べる原子。幅の無い原子は何も食べない。
     [[nodiscard]] std::optional<std::size_t>
     stepped(std::string_view line, const VimPatternAtom &atom, std::size_t at) const;
-    // `*` が止まれる位置の列（0 回から最長まで）。
-    [[nodiscard]] std::vector<std::size_t>
-    repeated_stops(std::string_view line, const VimPatternAtom &atom, std::size_t at) const;
     [[nodiscard]] bool in_set(const VimPatternAtom &atom, char32_t code) const;
 
     std::vector<VimPatternAtom> atoms_;
