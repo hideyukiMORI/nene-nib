@@ -437,6 +437,29 @@ void verify_buffer_erasure()
     expect(mixed.erase(Offset{3}, Offset{5}).text() == "abcdef", "erase exactly one whole piece");
 }
 
+void verify_buffer_replacement_bounds()
+{
+    const auto original = buffer_of("ab\r\ncd\r\nef");
+    const auto split =
+        original.replaced(Offset{2}, Offset{3}, "\r").replaced(Offset{6}, Offset{7}, "\r");
+    expect(split.replaced(Offset{0}, Offset{2}, "x").text() == "x\r\ncd\r\nef",
+           "a head replacement keeps every following piece");
+    expect(split.replaced(Offset{8}, Offset{99}, "x").text() == "ab\r\ncd\r\nx",
+           "a tail replacement clamps its end and keeps the preceding pieces");
+    expect(split.replaced(Offset{3}, Offset{7}, "x\n").text() == "ab\rx\n\nef",
+           "a replacement across newline pieces preserves the unclipped sides");
+    expect(split.replaced(Offset{6}, Offset{2}, "x").text() == "ab\r\ncdx\r\nef",
+           "a reversed replacement is an insertion at its begin");
+    expect(split.replaced(Offset{99}, Offset{99}, "x").text() == "ab\r\ncd\r\nefx",
+           "a replacement beyond the buffer appends at the clamped begin");
+    const auto erased = split.replaced(Offset{0}, Offset{99}, "");
+    expect(erased.text().empty() && erased.piece_count() == 0 && erased.line_count() == 1,
+           "deleting all fragmented text leaves no pieces and one empty line");
+    expect(original.text() == "ab\r\ncd\r\nef" && split.text() == original.text() &&
+               split.line_text(LineNumber{2}) == "cd",
+           "replacement branches preserve the original and fragmented snapshots");
+}
+
 void verify_buffer_lines()
 {
     const auto text = buffer_of("one\r\ntwo\r\nthree");
@@ -2116,6 +2139,7 @@ void verify_buffer_scope()
     verify_buffer_creation();
     verify_buffer_insertion();
     verify_buffer_erasure();
+    verify_buffer_replacement_bounds();
     verify_buffer_lines();
     verify_buffer_crlf_split();
     verify_buffer_positions();

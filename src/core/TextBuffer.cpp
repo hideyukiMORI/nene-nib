@@ -258,17 +258,9 @@ Piece TextBuffer::clipped(const Piece &piece, std::size_t from, std::size_t leng
 
 void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const
 {
-    std::size_t absolute = 0;
-    for (const auto &piece : pieces_)
-    {
-        const std::size_t begin = std::max(absolute, from);
-        const std::size_t end = std::min(absolute + piece.length, to);
-        if (begin < end)
-        {
-            out.push_back(clipped(piece, begin - absolute, end - begin));
-        }
-        absolute += piece.length;
-    }
+    visit_text_range(pieces_, Offset{from}, Offset{to},
+                     [this, &out](const Piece &piece, std::size_t offset, std::size_t length)
+                     { out.push_back(clipped(piece, offset, length)); });
 }
 
 TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text) const
