@@ -61,7 +61,12 @@ enum class ProbeWorkload : std::uint8_t
     pattern_multistar,
     pattern_greedy,
     pattern_literal_tail,
-    pattern_literal_long
+    pattern_literal_long,
+    frame_dense_ascii,
+    frame_dense_mixed,
+    frame_sparse_tail,
+    frame_selection,
+    frame_search_visual
 };
 
 [[nodiscard]] std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept;

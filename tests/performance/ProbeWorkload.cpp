@@ -1,6 +1,7 @@
 #include "ProbeWorkload.hpp"
 
 #include "BufferProbe.hpp"
+#include "FrameProbe.hpp"
 #include "PatternProbe.hpp"
 #include "ProbeDispatch.hpp"
 #include "ScopedProbe.hpp"
@@ -529,7 +530,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return vim_inserted_while_recording(input, timing);
 }
 
-constexpr std::array<ProbeDispatch, 48> dispatches{{
+constexpr std::array<ProbeDispatch, 53> dispatches{{
     {ProbeWorkload::controller_open, "controller-open-utf8-16mib", large_probe_input, run_opened},
     {ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input, run_buffered},
     {ProbeWorkload::controller_insert, "controller-insert-200", insert_probe_input, run_inserted},
@@ -619,6 +620,15 @@ constexpr std::array<ProbeDispatch, 48> dispatches{{
      matched_pattern},
     {ProbeWorkload::pattern_literal_long, "pattern-literal-long-4096", pattern_probe_input,
      matched_pattern},
+    {ProbeWorkload::frame_dense_ascii, "frame-search-dense-ascii-8192", frame_probe_input,
+     framed_line},
+    {ProbeWorkload::frame_dense_mixed, "frame-search-dense-mixed-4096", frame_probe_input,
+     framed_line},
+    {ProbeWorkload::frame_sparse_tail, "frame-search-sparse-tail-32768", frame_probe_input,
+     framed_line},
+    {ProbeWorkload::frame_selection, "frame-selection-ascii-32768", frame_probe_input, framed_line},
+    {ProbeWorkload::frame_search_visual, "frame-search-visual-ascii-8192", frame_probe_input,
+     framed_line},
 }};
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
@@ -646,7 +656,7 @@ constexpr std::array<ProbeDispatch, 48> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 48U);
+static_assert(dispatches.size() == 53U);
 static_assert(dispatch_is_complete());
 
 [[nodiscard]] std::size_t checked_index(ProbeWorkload workload)
@@ -701,6 +711,11 @@ static_assert(dispatch_is_complete());
     case ProbeWorkload::pattern_greedy:
     case ProbeWorkload::pattern_literal_tail:
     case ProbeWorkload::pattern_literal_long:
+    case ProbeWorkload::frame_dense_ascii:
+    case ProbeWorkload::frame_dense_mixed:
+    case ProbeWorkload::frame_sparse_tail:
+    case ProbeWorkload::frame_selection:
+    case ProbeWorkload::frame_search_visual:
         return static_cast<std::size_t>(workload);
     }
     std::unreachable();
