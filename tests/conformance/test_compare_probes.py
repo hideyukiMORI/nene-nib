@@ -202,6 +202,28 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(len(expected), size)
                 self.assertEqual(PROBES.fnv1a64(expected), fnv)
 
+    def test_frame_document_inputs_and_registry(self):
+        cases = (
+            ('frame-document-short-saved-256', b'C:\\nib-probe\\frame-document.txt', 31, '3165114504819470625'),
+            ('frame-document-long-saved-256', b'C:\\nib-probe\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt', 241, '3259355916674798828'),
+            ('frame-document-long-failed-256', b'C:\\nib-probe\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\segment\\aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt', 241, '3259355916674798828'),
+            ('frame-document-untitled-256', b'', 0, '14695981039346656037'),
+        )
+        self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[72:76])
+        self.assertEqual(len(PROBES.WORKLOADS), 76)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 76)
+        for name, expected, size, fnv in cases:
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), expected)
+                self.assertEqual(len(expected), size)
+                self.assertEqual(PROBES.fnv1a64(expected), fnv)
+
+    def test_frame_document_invalid_names(self):
+        for name in ("frame-document-long-saved-255", "frame-document-short-saved-64",
+                     "frame-document-unknown-256"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
     def test_preview_caret_inputs_and_registry(self):
         cases = (
             ("preview-caret-long-30-64", 3674, "3943064766360993406"),
@@ -213,8 +235,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ("preview-caret-disabled-30-64", 3674, "3943064766360993406"),
         )
         self.assertEqual(tuple(name for name, _, _ in cases), PROBES.WORKLOADS[65:72])
-        self.assertEqual(len(PROBES.WORKLOADS), 72)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 72)
+        self.assertEqual(len(PROBES.WORKLOADS[:72]), 72)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:72])), 72)
         for name, size, fnv in cases:
             count = 1 if name == "preview-caret-short-30-64" else 1024
             expected = bytes.fromhex("e6 97 a5") * count + bytes.fromhex("7a 09 f0 9f 96 8b 01")

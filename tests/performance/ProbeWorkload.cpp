@@ -1,6 +1,7 @@
 #include "ProbeWorkload.hpp"
 
 #include "BufferProbe.hpp"
+#include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
 #include "FrameRowsProbe.hpp"
 #include "PatternProbe.hpp"
@@ -643,6 +644,19 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(FrameDocumentWorkload workload)
+{
+    switch (workload)
+    {
+    case FrameDocumentWorkload::short_saved:
+    case FrameDocumentWorkload::long_saved:
+    case FrameDocumentWorkload::long_failed:
+    case FrameDocumentWorkload::untitled:
+        return 72U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -658,7 +672,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 72> dispatches{{
+constexpr std::array<ProbeDispatch, 76> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -806,6 +820,14 @@ constexpr std::array<ProbeDispatch, 72> dispatches{{
                      preview_caret_input, probed_preview_caret},
     ProbeDispatchRow{PreviewCaretWorkload::disabled, "preview-caret-disabled-30-64",
                      preview_caret_input, probed_preview_caret},
+    ProbeDispatchRow{FrameDocumentWorkload::short_saved, "frame-document-short-saved-256",
+                     frame_document_input, framed_documents},
+    ProbeDispatchRow{FrameDocumentWorkload::long_saved, "frame-document-long-saved-256",
+                     frame_document_input, framed_documents},
+    ProbeDispatchRow{FrameDocumentWorkload::long_failed, "frame-document-long-failed-256",
+                     frame_document_input, framed_documents},
+    ProbeDispatchRow{FrameDocumentWorkload::untitled, "frame-document-untitled-256",
+                     frame_document_input, framed_documents},
 }};
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
@@ -838,7 +860,7 @@ constexpr std::array<ProbeDispatch, 72> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 72U);
+static_assert(dispatches.size() == 76U);
 static_assert(dispatch_is_complete());
 
 } // namespace

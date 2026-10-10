@@ -92,3 +92,13 @@ preview-caret-long-30-64 / long-120-64 / short-30-64 / confirmed-30-64 / unsearc
 const frame64回の生成/破棄/field checksumを区間内、全文/表示map/span/current/caret/入力行/設定/履歴のliteral期待値照合を前後区間外に置く。checksum30行9792/120行15552。
 before28bc1ffはmain dff0d5cと同製品。after13655cbと同じharness/入力/区間/flagsを使う。新7Debug/変更前Release各1iterationは道具の動作確認で時間値を利益にしない。
 固定20iterations/ABBA3/各120組を一度取得、全raw/失敗を保持。旧65/selector/template/入力の不変証拠と新enum欠落のcompiler拒否を保存。結果はgate-proofs 5-dp。
+
+
+## 文書表示値の所有移管の固定比較（#380・ADR0104）
+
+旧72条件を保持してFrameDocumentWorkloadの4条件を同じtyped表へ追加する。
+frame-document-short-saved-256 / long-saved-256 / long-failed-256 / untitled-256（各名にframe-document-接頭辞）。
+入力metadataは固定path31/241/241/0bytes、本文・encoding・保存/失敗値・独立期待値は[ADR0104](../adr/0104-temporary-document-view-is-moved-into-the-frame.md)を正本とする。
+const frame256回の生成/破棄とdocument/status/tabs/linesの長さchecksumを区間内、準備・前後の全文/表示map/document全欄/status/tabs/delivery保有値照合を区間外に置く。
+checksumは14592/82176/83200/3328。新4Debug/変更前Release各1iterationは道具確認のみ。
+固定20iterations/ABBA3/120組、2利益/2費用条件で一度取得し、全raw/失敗を保持する。旧72の入力/区間/selector不変と新enum欠落の実compiler拒否を確認する。
