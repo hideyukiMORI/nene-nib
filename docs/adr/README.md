@@ -121,3 +121,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0103](0103-preview-offset-is-resolved-once-per-frame.md) | 検索プレビューの位置変換は一画面に一度だけ行う | 技術受理・#378 |
 | [0104](0104-temporary-document-view-is-moved-into-the-frame.md) | 一時の文書表示値はframeへ所有を移す | 技術受理・#380 |
 | [0105](0105-fixed-status-labels-are-borrowed-by-the-validator.md) | 固定のステータスラベルは検証器へ直接借用する | 技術受理・#382 |
+| [0106](0106-file-name-search-stops-at-the-last-separator.md) | ファイル名の探索は末尾の区切りで止める | 技術受理・#386 |

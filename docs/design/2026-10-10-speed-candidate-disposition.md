@@ -62,3 +62,8 @@ C8入力中parse保持とは別に、同じpreview位置のUTF-8prefix走査を�
 ## 追加実験: 固定ステータスラベルの一時コピー #382
 
 private fixedをstring_view借用にし、encoding/endingの一時string2つを省く。検証・所有化はDisplayText::parse一経路、数値format/array不変。3利益の1024array対応比.962963/.972727/.981911、短縮110/104/104組。最大行桁1024回+3µsと直接frame256回+4µsを事前費用内として許容する。既存8checks/GUI6対0px/正式single成立、単体自己レビューで技術受理（[gate-proofs 5-dr](../quality/gate-proofs.md#5-dr--固定ステータスラベルの一時コピーを省くissue-382adr0105)）。元26件の採否件数は不変。to_chars/stack buffer、公開factory追加、TabTitle clipは今回未実験で見送る。
+
+
+## 追加実験: ファイル名の末尾探索 #386
+
+FilePath::name_startだけを末尾の区切りで止め、公開API/parse/借用寿命を保つ。3利益4096取得の対応比.166667/.009488/.016147と6費用が成立、裸長はほぼ横ばい。806checks/GUI6対0px（原失敗保持と限定再開）/正式long-line成立。取得復旧の必要な独立レビューで指摘なし、技術受理（gate-proofs 5-dt）。元26件の採否件数は変更せず、局所倍率をUI全体へ換算しない。TabTitle copy案は未実験。

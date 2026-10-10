@@ -123,3 +123,5 @@ before c2c7cdc / after 9c6031aは同じharness/入力/区間/191flagsを使い�
 入力bytes/FNV/名前literal/借用offset/checksum/分類は[ADR0106](../adr/0106-file-name-search-stops-at-the-last-separator.md)で先行固定。parseは区間外、file_name取得4096回とbytes/端のunsigned byte checksumが区間内、内容と借用位置の前後oracleは区間外。
 既存frame-document-short-saved-256/long-saved-256を直接caller費用として同時比較する。20iterations/ABBA3/各120組、3利益/6費用、一度取得。新7/旧2のDebugと変更前Releaseの各1iterationは正しさだけを見る。
 既存file_path/tab_title assertionsへ--file-pathをつなぐ。defaultのverify_text_and_caret/旧46selectors/全既存assertionsは不変。関連入力不変の成功は工程だけで再実行しない。
+
+before a1630ab / after 9388207で9条件各120組の3利益/6費用が成立。全108process/2160durations/4320marks/1080組を原記録から再計算一致。通常/深いASCII/混在UTF8の4096取得は対応比.166667/.009488/.016147、裸長は.998854でほぼ横ばい。失敗/GUIの限定再開/正式1指標/限界はgate-proofs 5-dt。

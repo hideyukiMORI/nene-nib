@@ -1,6 +1,6 @@
 # ADR 0106 — ファイル名の探索は末尾の区切りで止める
 
-- 状態: 実験前計画（採用は同値性と固定利益/費用の成立後）
+- 状態: 技術受理（2026-10-11・固定3利益/6費用、同値性、正式1指標、取得復旧の独立レビュー成立）
 - 日付: 2026-10-10
 - Issue: #386
 - 基準: main 0c1d399e2e830ac9653e609e377bc0704fb17619
@@ -53,3 +53,11 @@ ARC-001/004/007/008/011、CPP-002/004/005/007/008/011/012/014/016、QLT-001/002/
 初版の正式singleはkeys_trial(document=None)が無題でname_ofはfile_nameを呼ばず、今回の直接経路を通らない。sourceを確認し、固定SHAの名前ある文書を渡す既存long-lineだけへ訂正した。性能試料はまだ0、局所9条件/閾値/GUIは不変。初版wrapper/auditはOUT/raw/formal-plan-initialへ保存。
 
 before初回buildは新name_matchesの5引数がCPP-012（閾値4）で拒否された。入力全文の前後照合をrunnerへ移し、name_matchesは名前内容/借用位置の4引数にする。初版b8273cc/全build logs/flags/新cppを保持し、入力/区間/oracle要件は変えない。製品未変更、exeなし、性能試料0。Python対象4tests/old82証明/dispatch正例とcase欠落拒否は関連入力不変で再利用。
+
+## 2026-10-11の結果と採用
+
+同一harness a1630ab / 製品9388207で全9条件各120組を一度取得、3利益/6費用成立。局所4096取得の通常/深いASCII/混在UTF8は比.166667/.009488/.016147、裸長は.998854でほぼ横ばい。全108run/4320marks/1080pairsをrawから再計算一致。--file-path/tabs/command-paletteの806checksと新7+旧2probe、正規build/sanitizer/symbolsが成立。
+
+GUI初回before5場面後に未送信<Up>notationを拒否した原記録を保持。同PID/HWND/LastInput/全RGB一致を要求し、別planで未実行最後1場面だけ再開、未着手after6は初回取得。6対0px/本文12/100guards/4mode/2正常close、親16PNG目視。取得復旧の独立読取レビューでP0/P1/P2なし、閉じたIMEの固定6場面の同値性として受理。初回一括成功とはしない。
+
+正式long-line初回5試料中央値5.079ms、基準5.431/上限7.431、欠測/退行0。他7未測。局所率をUI全体へ換算せず、裸長の横ばいも残して採用する。詳細・全失敗・再利用はgate-proofs 5-dt。API/schema不変、waiver none。通常PR/必須CI/main/恒久収載/監査整理後もhideの停止まで改善継続。
