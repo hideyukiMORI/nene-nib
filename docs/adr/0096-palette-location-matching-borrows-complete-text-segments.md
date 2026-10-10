@@ -22,7 +22,7 @@ ADR0091で小文字の写しと同じ候補の再評価を減らした後も、`
 
 ## 対象検証と採否
 
-通常Debug/tidy/ASan/UBSan、直接`--command-palette`/`--operations`/`--ex-settings`、変更sourceの規約/整形と完成core symbols。共通scorerのファイル一覧・操作名/読み/鍵・Ex候補のcallerを選ぶ。背景I/O/候補所有/rendererは変えないため全回帰は既定にしない。既存契約に不足する境界だけ追加し、旧assert/selectorを削除しない。
+通常Debug/tidy/ASan/UBSan、直接`--command-palette`/`--operations`、変更sourceの規約/整形と完成core symbols。共通scorerのファイル一覧・操作名/読み/鍵・Ex候補のcallerを選ぶ。Ex候補はcommand-palette内の既存verify_palette_choicesが直接確認する。ex-settingsのCommandLine.completionsはExResult::command_completionsのprefix照合であり、今回のscorerを通らないので実行範囲へ加えない。背景I/O/候補所有/rendererは変えないため全回帰は既定にしない。既存契約に不足する境界だけ追加し、旧assert/selectorを削除しない。
 
 直接GUIでは同じ一覧/検索入力の候補順・表示・通常/場所の跨境界を確認し、正式速度は変更した照合と直接callerが含まれるpalette5000を選ぶ。公開操作一覧/Exは直接scopeと必要な画面刺激で確認する。独立レビュー/通常Release/CIを含め、利益がなければ不採用とする。関連入力不変の成功結果は文書/push/review/merge理由で繰り返さない。基準/許容/fixture/抑制/allowlistは変更しない。
 
