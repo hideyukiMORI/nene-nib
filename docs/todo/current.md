@@ -2,6 +2,7 @@
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。
+> 2026-10-10 23:33 JST: #384はPRtitleから統合subjectを一字不変で渡す入口を実装。初版の独立P2（repo/Unicode）を原記録保存して修正、新10＋既存6の直接testsと独立レビューで技術受理。当PRの新道具plan/execute・CI/main/収載/整理後は速度改善へ戻りhideの停止まで継続。#382はPR383で統合/収載/整理済みだがsubject番号誤記を#384へ記録（gate-proofs 5-ds）。
 > 2026-10-10 23:13 JST: #382の固定ステータスラベル借用は3利益/4費用・既存8checks・GUI6対0px・正式single成立、単体自己レビューで技術受理。最大行桁/直接frameの小幅費用も記録。通常PR/CI/main/恒久収載/監査整理後もhideの停止まで継続（gate-proofs 5-dr）。#380はPR381で統合/収載/長path失敗復旧/整理済み。#365/#373未解決。
 > 2026-10-10 22:36 JST: #380の文書表示値移管は固定2利益/2費用、16300checks、新4probe、GUI8対0px、正式singleが成立。独立最終レビューでP0/P1/P2なし、技術受理。通常PR/CI/main/収載/整理後もhideの停止まで継続（gate-proofs 5-dq）。#378はPR379で統合/収載/整理済み。#365/#373は未解決。
 > 21:55 JST時点の履歴: #378の検索preview位置変換を技術受理。固定2利益/5費用、224checks、新7probe、12画面0px、正式2指標が成立。通常PR/CI/main/収載/整理後もhideの停止まで改善継続（gate-proofs 5-dp）。#376はPR377で統合/収載/整理済み。#365/#373は未解決。
