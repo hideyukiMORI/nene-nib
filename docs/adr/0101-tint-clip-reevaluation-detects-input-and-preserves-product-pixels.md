@@ -17,6 +17,7 @@
 2. 各checkpointで既存Exの`:w <新しい検査用path>`による名前付き文書の別名コピーをDに保存し、全bytesを固定入力と照合する。保存前にも未保存印を検査する。`SaveIdentity::retain_document`により原文書の名前/未保存状態は変えない。初回は検索前、暖機前は検索/anchor準備後、最後は計測後の画像取得後。書込み後1.5秒待つ。暖機前のコピー後は同じanchorを再送して通知とcaretを揃える。コピー・検査・撮影・再anchor・待機は計測値に含めないが、暖機状態への影響は両版で同じになる新しい実験条件として明記する。
 3. OSの`GetLastInputInfo`を窓操作開始前とcheckpointで読む。性能台本のclick/鍵はPostMessageだけなので、この期間のtickの変化は外部入力としてそのtrialを無効にする。値は単調増加を仮定せず等値だけを比較する。別sessionの入力、同tickを意図した偽装を網羅するセキュリティ監査ではない。補助として全予定送信数と原input marks数、正常終了、全body copy、title、画像の一致を独立に確認する。
 4. 各phaseのpost鍵数、Returnに対応するKEYDOWN/CHAR二markを記録し、準備・暖機・測定・終了後検査の区間を明示する。各暖機2入力と計測20入力は、次のinputより前にframeがあることを原marksで要求する。0us補正、outlier除外、不足補完、後続frameの流用はしない。
+   さらに窓作成前の`timing.bind`を確認し、`driver.start`直後のQPCを製品originの上界として保存する。warm n撮影・暖機後検査・計測後検査の各開始QPCより、`origin上界 + ceil((frame相対µs+1)×frequency/1e6)`が小さいことを要求する。µs切捨てを保守的に包み、描画と観測が重ならないと証明できない試行は欠測にする。
 5. 旧版の正しいsmoke ready画像と新readyの本文/statusを照合し、ASCII/短行は1行1桁のa、混在は1行2桁のaが開始点であることを目視でも確認する。warm nで変化しnN往復で戻ることと、前後全trialの同じcheckpoint画像が完全一致することを確認する。新しい共通D絶対pathは本文/statusへ表示しない。名前と保存済み状態をtitleで別に検査する。
 6. trial中に混入/dirty/遮蔽を検出したら計測を有効値にしない。元record/画像/既存marks/台本を残し、未保存確認を無視して正常終了扱いにしない。想定外の未保存内容が残る窓は即座に破棄せず、その状態を保全して系列を停止する。既知の合成入力だけのnegative proofは専用profileで清掃できるが、その終了は正常trialへ数えない。
 
@@ -32,6 +33,7 @@ computer-useのWGC取得はnative pipe unavailableで使用不能だった。新
 - 候補窓を`SetWindowPos(SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOOWNERZORDER)`で製品矩形の右側へ一時移し、十分な画面内余白があり全矩形が非交差であることを確認する。製品窓は移動/resize/再作成しない。IMEをcancel/commitせず、foreground/IME open/title/client寸法/入力欄の未遮蔽画素が同一であることを確認する。移した後にも遮蔽が無いことを前後二度検査し、全clientを撮る。終了時に元の矩形へ復元し、復元結果を記録する。失敗してもfinallyで復元を試みる。
 - 取得前後にroot窓を辿り、製品より上にある可視窓の矩形とclientが交差しないことを確かめる。root/窓の消失・順序変化・不明な透明窓があれば合格へ救済せず保留。DWMの影が製品に掛からないよう候補窓との余白を64px以上確保する。合成の原画像と移動後の全画像、幾何/所有/復元記録を保存する。
 - A1/A2の全製品画素が一致し、移動前に見えていた入力欄の画素が不変、Bの全製品画素も一致して初めてこの境界を同値とする。OS候補の原bitmap自体の差は別に報告し、その差を製品差と断定しない。隠れた製品画素を取得できない、移動がcompositionを変える、所有や遮蔽を証明できない場合は保留。結果後の範囲/閾値変更は禁止。
+- IME色/target色と場面到達は保存したproduct画像から検査し、復元後の別captureで代用しない。想定外の未保存状態・確認dialogでは性能trialと同じく窓とPIDを保全して系列を停止する。
 
 右端clipの旧49幅・本文/本文IME31場面・一覧の成功5場面は同一source/exe/test/依存/必要環境を照合して成功を再利用する。新取得は撮影問題の6場面×A1/A2/Bと、入力監視を追加した性能trial内画像に限定する。旧86場面の全再実行やDebugの工程理由の再buildを行わない。
 
