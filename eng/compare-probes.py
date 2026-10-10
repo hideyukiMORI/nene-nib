@@ -85,7 +85,14 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "status-items-sjis-crlf-1024",
              "status-items-max-utf8-lf-1024",
              "status-items-large-bom-crlf-1024",
-             "status-items-sjis-lf-1024")
+             "status-items-sjis-lf-1024",
+             "file-name-windows-4096",
+             "file-name-deep-ascii-4096",
+             "file-name-mixed-utf8-4096",
+             "file-name-bare-short-4096",
+             "file-name-bare-long-4096",
+             "file-name-trailing-4096",
+             "file-name-root-4096")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -177,6 +184,17 @@ def fixed_input(workload: str) -> bytes:
             b'Shift_JIS|LF|1|1',
         )
         return inputs[WORKLOADS[76:82].index(workload)]
+    if workload in WORKLOADS[82:89]:
+        inputs = (
+            b"C:\\Users\\hide\\Documents\\NeNeNib\\projects\\editor\\note.txt",
+            b"C:\\" + b"segment\\" * 128 + b"note.txt",
+            ("C:/" + "資料\\階層/" * 64 + "日誌🖋.txt").encode("utf-8"),
+            b"note.txt",
+            b"a" * 1024,
+            b"C:\\" + b"segment\\" * 128,
+            b"/",
+        )
+        return inputs[WORKLOADS[82:89].index(workload)]
     return scoped_fixed_input(workload)
 
 
