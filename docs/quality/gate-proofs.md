@@ -3845,3 +3845,11 @@ main163c314で残る一致端点ごとの行頭prefix計数を、private `LineSp
 恒久先`D:/NeNeNib/evidence/speed-optimizations-20261010-wave3/snapshot-355/`へ464file/109,888,672bytesを元先SHA照合して収載。manifest SHA256 `ca6a47f3c00c986a23a511fb16596955199e199c56ffba2aa90157b421b1516a`。全原出力/初回失敗/script/レビュー/前後probe/製品とDebug exe/2枝source/実build設定を保持。旧製品GUI baselineはsnapshot-353に保持。後続のprotected/最終文書/CI/main/削除前監査は`acceptance-355/`へ追補する。
 
 技術受理時点ではCI/main反映と2作業木の整理が残る。枝/commitを保持し、main一致、絶対Dパス、未保存/未追跡/ignored/唯一成果物/稼働参照/リンクを確認してから削除する。今後の候補はrendererのUTF16端点反復と場所検索の連結であり、今回の採用へ混ぜない。
+
+### #355 / #356のmain反映と整理（11:15 JST）
+
+[PR #357](https://github.com/hideyukiMORI/nene-nib/pull/357)は[必須CI run38016069217](https://github.com/hideyukiMORI/nene-nib/actions/runs/38016069217)成功後、11:12:58 JSTにsquash merge。main1aff4150d9c0a9b794d01cf3020b8cc8f946936fへff同期し、受理HEAD1d1fa01dfac8bc429a35572a7ad643b14bae481bと全tree一致、本体cleanを確認。#355/356はclosed。製品/検証内容はfdae17dから不変で、工程理由の再試験をしていない。
+
+acceptance-355へPR/CI/最終main source/後続protectedと文書/統合監査を追補。355/356の2worktreeは絶対Dパス、clean/未追跡無し、links/稼働参照無しを監査。ignored357/371件中out37/55件は全archive hash一致。固定source/製品/probe/Debug exe/build設定を保持し、生成cacheを分類して2worktreeを削除、枝/commit保持を確認した。不要となった一時出力297file、archive結果JSON、依頼書2本も全て元先SHA/稼働参照/linksを確認して削除。恒久snapshot-355とacceptance-355が正本で、以前の作業パスは存在しない。
+
+文書生成script初回はPython encoding名utf8-sigの誤りで本文変更前に停止し、utf-8-sigへ訂正した。統合監査初回のADR0082 pathはclosed-probesという不在名で空diffだったため、初期JSONを保存し、正しいscoped-probesを両commitに存在確認した上で一致を確認した。いずれも製品・試料を変更/再実行していない。全監査/整理JSONとscriptはacceptance-355へ保持。
