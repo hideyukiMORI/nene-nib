@@ -13,14 +13,16 @@ R3のblockはADR0090で保持glyphへ統一したが、tint_runsは通常本文�
 
 1. tint_runs内のDrawTextLayout一呼出しを既存draw_body_text(text, area, D2D1_DRAW_TEXT_OPTIONS_NONE)へ置換し、不要になるorigin localだけ削除する。brushの色、runs_of、範囲順、callerのclipのpush/pop、paint順を保つ。
 2. draw_body_text/BodyGlyphCollector/cacheの実装を変更しない。通常本文とIME合成行はlayout_ofで現在frameに登録された同じlayoutを使う。glyphs_readyなら同じ全保持runを描き、保持glyphが利用不可（!glyphs_ready）/未登録なら従来のDrawTextLayout(NONE)へ戻る。取得成功の空runは正常な空描画でありfallback条件とはしない。glyph切出し/色ごとのcache/新decoder/描画方式の分岐は追加しない。
-3. command/palette入力欄のlayoutは本文保持に登録しない。したがって既存lookup missが正規fallbackを選び、中央寄せ/高さ調整/整数に揃えたIME原点とcaller clipを保つ。本文保持へ入力欄を混ぜない。
+3. 入力欄のlayoutは本文保持に登録しない。IMEが実際に到達する一覧入力欄では既存lookup missが正規fallbackを選び、中央寄せ/高さ調整/整数に揃えたIME原点とcaller clipを保つ。Ex/検索入力は既存ImeStance::closedとcomposition_ignoredによりIMEを受けないため、そのIME描画を実機到達として数えない。本文保持へ入力欄を混ぜない。
 4. 製品contextは96dpi・恒等変換・整数area原点、collectorは同じ前提のまま（ADR0073/0077）。OS windowのDPI120は文字寸法へ適用されるがcontextの96dpiとは別である。描画/HitTest/所有/失効/透明度/brush/設定schema/警告/flags/基準/許容/fixture/抑制を変えない。
 
 ## 直接検証
 
 通常Debugの実製品を正規tidy/ASan/UBSanでbuildし、変更sourceのformat/conformanceを確認する。新source/target/API/試験口を追加しない。既存WICのNONE+caller clip画素比較は同じdraw/collector/試験の成功を再利用し、変更されていない1521等の全scopeを一律に再実行しない。実Rendererの到達とGPU/ClearTypeの同値は次の実機比較で別に確かめる。
 
-通常Release前後で同じ文書/設定/絶対path/1280×800/DPI120/刺激の本文/statusを完全画素比較する。固定入力はASCII制御文字、BMP/補助平面/結合文字/Tab、双方向文字、複数置換、右端clipを含める。選択/検索/current/blockの重なり、幅/字体/サイズ/テーマも対象とする。実日本語IMEは本文と検索/一覧の入力欄でcomposition/Space/確定またはcancelを記録し、元のIME open statusへ戻す。刺激の差分と本文/設定の不変、正常終了を保存する。異なるOS候補や差を成功まで撮り直さない。
+通常Release前後で同じ文書/設定/絶対path/1280×800/DPI120/刺激の本文/statusを完全画素比較する。固定入力はASCII制御文字、BMP/補助平面/結合文字/Tab、双方向文字、複数置換、右端clipを含める。選択/検索/current/blockの重なり、幅/字体/サイズ/テーマも対象とする。実日本語IMEは本文と一覧の入力欄でcomposition/Space/確定またはcancelを記録し、元のIME open statusへ戻す。変換前のother節と横溢れも確認する。刺激の差分と本文/設定の不変、正常終了を保存する。異なるOS候補や差を成功まで撮り直さない。
+
+初回の旧版GUI道具は検索欄もIMEを受けると誤認し、other色が0のため未到達として失敗を記録した。画像にはASCIIのnihongoが現れ、既存ImeStanceとcomposition_ignoredの拒否を確認した。製品不具合や変更後の退行とは扱わず、初回script/rawを保持して直接範囲を本文/一覧へ訂正する。未実行だった一覧は別folderで採る。
 
 ## 固定性能比較と正式gateの再利用
 
