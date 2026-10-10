@@ -509,6 +509,26 @@ void verify_listed_choices()
            "the folder and the name are searched together");
 }
 
+// 場所・区切り・名前は一つのバイト座標で照合する（ADR 0096）。区間を越えても点を変えない。
+void verify_listed_location_segments()
+{
+    const std::vector<core::CommandChoice> boundary{tab_choice("😀本.txt", 1, "道A"),
+                                                    tab_choice("😀本.txt", 2, "道B")};
+    expect(core::listed_positions(boundary, core::PaletteScope::files, "a\\😀本") ==
+               std::vector<std::size_t>{0},
+           "a location tail, separator and Unicode name match across all three segments");
+    const std::vector<core::CommandChoice> byte_gaps{tab_choice("B", 1, "A日"),
+                                                     tab_choice("B", 2, "Axx")};
+    expect(core::listed_positions(byte_gaps, core::PaletteScope::files, "AB") ==
+               std::vector<std::size_t>{1, 0},
+           "a cross-segment skip counts Japanese bytes rather than characters");
+    const std::vector<core::CommandChoice> first_gaps{tab_choice("xxxB", 1, "xA"),
+                                                      tab_choice("B", 2, "Axxxx")};
+    expect(core::listed_positions(first_gaps, core::PaletteScope::files, "A\\B") ==
+               std::vector<std::size_t>{1, 0},
+           "the first location skip keeps its fourfold weight across segment boundaries");
+}
+
 // 照合はコードポイントの境目で行う（ADR 0061 の決定 6）。日本語の query は日本語の名前に当たり、
 // 別の文字の継続バイトにまたがる並びには当たらない。ASCII の点は今までと同じ。
 void verify_listed_code_points()
@@ -1624,6 +1644,7 @@ void verify_command_palette()
     verify_palette_vim_modes();
     verify_palette_marks();
     verify_listed_choices();
+    verify_listed_location_segments();
     verify_listed_code_points();
     verify_palette_sources();
     verify_palette_result_shared();
