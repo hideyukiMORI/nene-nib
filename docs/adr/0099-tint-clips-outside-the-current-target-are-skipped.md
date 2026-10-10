@@ -22,9 +22,9 @@ Microsoft一次資料（2026-10-10確認）: [GetSize](https://learn.microsoft.c
 
 通常Debug製品を正規tidy/ASan/UBSanでbuildし、変更sourceのformat/conformanceを確認する。原文の厳密な二挿入以外とsrc/tests/eng/CMake/flagsの不変を機械照合する。既存collector試験は変更されず、その成功を再利用する。
 
-#362通常Releaseの成功37場面は同一文書bytes/設定/字体/テーマ/DPI/画面寸法/刺激/道具/比較領域を照合し、旧版画像を再利用する。新しい作業folderに伴う文書絶対pathの差は明示し、本文/statusへ出ないことをsourceとbasename一致から確認する。旧metadataを書き換えない。変更後通常ReleaseとDebugは実Rendererで制御置換/BMP/補助平面/結合文字/Tab/双方向文字/選択/検索/ブロック、本文IMEと横溢れする一覧IMEを確認する。旧条件が一致しない場面は再利用しない。
+#362通常Releaseの成功した本文27＋本文IME4の31場面は同一文書bytes/設定/字体/テーマ/DPI/画面寸法/刺激/道具/比較領域を照合し、旧版画像を再利用する。新しい作業folderに伴う文書絶対pathの差は明示し、本文/statusへ出ないことをsourceとbasename一致から確認する。旧metadataを書き換えない。一覧IMEの旧empty場面には候補locationの絶対folderが表示されるため、その6場面は新共通pathで前後を採る。変更後通常ReleaseとDebugは実Rendererで制御置換/BMP/補助平面/結合文字/Tab/双方向文字/選択/検索/ブロック、本文IMEと横溢れする一覧IMEを確認する。旧条件が一致しない場面は再利用しない。
 
-新しい直接境界として長いASCII制御置換行を1px刻みにresizeする固定sweepを通常Release前後とDebugで採る。右端の完全外側/部分交差/可視とtarget再作成を画素比較する。左側の横overflowは既存の実IME一覧とsourceの経路を確認し、完全左外側への到達を保証できなければ未測として残す。IME open statusを戻し、文書/設定不変と正常終了を記録する。
+新しい直接境界として長いASCII制御置換行を640〜688の49幅へ1px刻みにresizeする固定sweepを通常Release前後とDebugで採り、実capture/client寸法を記録する。最終列への着色画素の到達と非到達を調べ、右端の部分clip/可視とtarget再作成を画素比較する。画面の完全外側の置換も同じ長い行に含むが、内部HitTestの厳密な端点等値や完全左外側の実到達を画像から測定済みとはしない。左側の横overflowは既存の実IME一覧とsourceの経路を確認し、完全左外側への到達を保証できなければ未測として残す。IME open statusを戻し、文書/設定不変と正常終了を記録する。
 
 性能は#362採用済み通常Release9218124と新版通常Release。同じASCII1024/混在1024/短行2、検索/a<CR>、先頭aへのgg0/gg0l/gg0、暖機nN、計測20回n/N、ABBA×3/各120組を固定。前版は混在も短縮済みのため全ケース0.4秒間隔にし、#362の3秒条件の数字と直接比較しない。暖機と計測の各frameが次inputまでに来ること、全試料・画像往復・失敗を保存する。比較は一回で、成功までの再試行や試料選別をしない。
 
