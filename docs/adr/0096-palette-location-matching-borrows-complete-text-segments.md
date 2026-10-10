@@ -29,3 +29,13 @@ ADR0091で小文字の写しと同じ候補の再評価を減らした後も、`
 ## 限界
 
 区間数は現在の私有callerの1または3に閉じる。queryの各scalarで区間列を辿る固定費用は残り、別の位置索引やcacheを導入しない。所有候補の作成/到着費用、一覧描画、IME、RSS/capacity、全操作の速度は未測。今回の手法を任意に分割したbyte列の汎用decoderとして扱わない。
+
+## 初回の結果と固定区間数の追試設計（11:41 JST）
+
+初回08116c3は直接1011checks/独立レビュー/17画面本文・status0画素差/正式palette中央値1.984ms・0退行・0計測不能。固定3比較（20iterations×3ABBA/120対応組）は、名前332→363.5us・対応比中央値1.089419127、場所1348→963us・0.710424595、末尾絞込38→40us・1.054054054。全試料/遅い組/欠測なしをD原記録へ保持する。正式gate成功だけで名前の悪化を消さず、初回をそのまま採用しない。
+
+次の独立した実装候補では、決定1/2のspanにコンパイル時の区間数を保持する。`code_point_from`区間overloadと`match_score`の一つの本体を`template <std::size_t Count>`にし、引数は`std::span<const std::string_view, Count>`。既存stack arrayから`std::span{parts}`/`std::span{located}`を渡す。現在のcallerはCount1または3であり、この既知の個数を消して実行時の区間数として扱う必要がない。
+
+scalar走査、prefix/local変換、begin/end、score式、所有、全ての関数本体の実行文は維持する。Count専用分岐・template特殊化・別scorer・decoder・cache・flags・harness・閾値を追加しない。1/3のコンパイラ生成実体は一つのtemplateソースから生成し、意味の実装を複製しない。速度効果は未確認の仮説で、初回試料を更新/除去したり同じ実装を繰り返し測ったりしない。
+
+新候補の変更sourceを通常Debug/tidy/ASanUBSanで増分buildし、同じ2scope1011checksを一度実行する。試験内容は意味を変えないため追加しないが、製品sourceが変わるので前の実行結果だけでは代用しない。通常Release/同buildprobe、同じ前後17画面/短い正しさsmoke3、独立差分レビューの後、旧基準fdae17d対新候補で同じ3条件・20iterations×3ABBA/timeout180を一度測る。初回候補の時間値と比較表を残し、新旧を直接対応させていない実験間の改善率は主張しない。正式速度は同じpalette5000の1条件/5sample/既存基準。新候補で利益が無い場合も記録し、閾値や固定入力を変えて合格を取りにいかない。
