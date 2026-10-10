@@ -115,4 +115,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0097](0097-renderer-positions-advance-through-the-display-line.md) | 描画の桁変換は表示行の端点を順に数える | 技術受理・#360 |
 | [0098](0098-tinted-text-reuses-the-body-glyph-path.md) | 色を塗り直す文字も本文の字形経路を使う | 技術受理・#362 |
 | [0099](0099-tint-clips-outside-the-current-target-are-skipped.md) | 現在の描画面の完全外側にある着色clipを省く | 実験不採用・#364 |
-| [0101](0101-tint-clip-reevaluation-detects-input-and-preserves-product-pixels.md) | 画面外clipの再評価では入力混入と製品全画素を先に検証する | 実験保留・#372（0100は#367の作業木に保持） |
+| [0100](0100-visible-lines-reserve-only-the-existing-row-range.md) | 表示行一覧は既存の生成範囲ぶんを一度予約する | 技術受理・#367 |
+| [0101](0101-tint-clip-reevaluation-detects-input-and-preserves-product-pixels.md) | 画面外clipの再評価では入力混入と製品全画素を先に検証する | 実験保留・#372 |
