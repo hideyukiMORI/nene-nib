@@ -10,6 +10,7 @@
 #include "GutterTextLayouts.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
+#include "LineUtf16Evaluation.hpp"
 #include "LineView.hpp"
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
@@ -140,9 +141,13 @@ class Direct2DRenderer final
     // 範囲の当たり矩形を内側 1 DIP の枠で囲む（検索の現在の当たり・ADR 0037 の決定 5）。
     void outline_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
                       DWRITE_TEXT_RANGE range, float stroke);
-    // 行の中の範囲。桁は application が span_of 1 本で作ってある（ADR 0037 の決定 4）。
+    // 行の中の範囲。桁は application の LineSpanEvaluation が作ってある（ADR 0095）。
     [[nodiscard]] static DWRITE_TEXT_RANGE range_of(const application::LineView &line,
-                                                    const core::SelectionSpan &span);
+                                                    const core::SelectionSpan &span,
+                                                    LineUtf16Evaluation &positions);
+    // 置換した文字の UTF-16 範囲。IME の差し込み位置以降は inserted.length だけずらす。
+    [[nodiscard]] static std::vector<DWRITE_TEXT_RANGE>
+    replaced_ranges(const core::DisplayLine &line, DWRITE_TEXT_RANGE inserted);
     // 検索の当たりの面。選択より先に塗るので、重なる所は選択が勝つ（ADR 0037 の決定 5）。
     void draw_line_matches(const application::EditorFrame &frame, IDWriteTextLayout *text,
                            const core::LayoutRect &area, const application::LineView &line);

@@ -109,17 +109,6 @@ constexpr float full_channel = 255.0F;
     return value > 0 ? static_cast<UINT>(value) : 1U;
 }
 
-// 桁（code point・1 始まり）を本文のバイト位置へ。行の中の走査はここ 1 本（CPP-014）。
-[[nodiscard]] std::size_t byte_of_column(std::string_view text, core::Column column)
-{
-    std::size_t byte = 0;
-    for (std::size_t step = 1; step < column.value && byte < text.size(); ++step)
-    {
-        byte = core::next_code_point(text, core::Offset{byte}).value;
-    }
-    return byte;
-}
-
 // バイト位置を DirectWrite の UTF-16 の位置へ。単位数は core の正典で測る（CPP-014）。
 [[nodiscard]] UINT32 utf16_at(std::string_view text, std::size_t byte)
 {
@@ -127,12 +116,7 @@ constexpr float full_channel = 255.0F;
         core::utf16_length(text.substr(0, std::min(byte, text.size()))).value_or(0));
 }
 
-[[nodiscard]] UINT32 utf16_offset(std::string_view text, core::Column column)
-{
-    return utf16_at(text, byte_of_column(text, column));
-}
-
-// UTF-16 の位置より前に code point がいくつあるか。utf16_offset の逆（CPP-014）。
+// UTF-16 の位置より前に code point がいくつあるか。桁から UTF-16 への変換の逆（CPP-014）。
 [[nodiscard]] std::size_t code_points_before(std::string_view text, UINT32 position)
 {
     std::size_t byte = 0;
@@ -163,27 +147,6 @@ constexpr float full_channel = 255.0F;
 {
     return core::SelectionSpan{span.presence, displayed(line, span.begin),
                                displayed(line, span.end)};
-}
-
-// 置き換えた文字（`is_replaced` の桁）の UTF-16 の範囲。IME の変換中の行では inserted に
-// 変換中の文字列が差し込んであるので、その位置以降の範囲を長さぶん右へずらす（#152）。
-// 本文だけの行は長さ 0 の inserted を渡す。差し込み位置は桁の境目なので範囲をまたがない。
-[[nodiscard]] std::vector<DWRITE_TEXT_RANGE> replaced_ranges(const core::DisplayLine &line,
-                                                             DWRITE_TEXT_RANGE inserted)
-{
-    std::vector<DWRITE_TEXT_RANGE> ranges;
-    for (std::size_t column = 0; column + 1 < line.starts.size(); ++column)
-    {
-        if (!core::is_replaced(line, column))
-        {
-            continue;
-        }
-        const UINT32 from = utf16_offset(line.text, core::Column{line.starts.at(column) + 1});
-        const UINT32 stop = utf16_offset(line.text, core::Column{line.starts.at(column + 1) + 1});
-        const UINT32 shift = from >= inserted.startPosition ? inserted.length : 0U;
-        ranges.push_back(DWRITE_TEXT_RANGE{from + shift, stop - from});
-    }
-    return ranges;
 }
 
 [[nodiscard]] float caret_x(IDWriteTextLayout *text, UINT32 position) noexcept
@@ -998,12 +961,35 @@ void Direct2DRenderer::outline_runs(IDWriteTextLayout *text, const core::LayoutR
 }
 
 DWRITE_TEXT_RANGE Direct2DRenderer::range_of(const application::LineView &line,
-                                             const core::SelectionSpan &span)
+                                             const core::SelectionSpan &span,
+                                             LineUtf16Evaluation &positions)
 {
     const core::SelectionSpan shown = displayed(line.display, span);
-    const UINT32 from = utf16_offset(line.display.text, shown.begin);
-    const UINT32 stop = utf16_offset(line.display.text, shown.end);
+    const UINT32 from = positions.units_of(shown.begin);
+    const UINT32 stop = positions.units_of(shown.end);
     return DWRITE_TEXT_RANGE{from, stop - from};
+}
+
+// 置き換えた文字（`is_replaced` の桁）の UTF-16 の範囲。IME の変換中の行では inserted に
+// 変換中の文字列が差し込んであるので、その位置以降の範囲を長さぶん右へずらす（#152）。
+// 本文だけの行は長さ 0 の inserted を渡す。差し込み位置は桁の境目なので範囲をまたがない。
+std::vector<DWRITE_TEXT_RANGE> Direct2DRenderer::replaced_ranges(const core::DisplayLine &line,
+                                                                 DWRITE_TEXT_RANGE inserted)
+{
+    std::vector<DWRITE_TEXT_RANGE> ranges;
+    LineUtf16Evaluation positions(line.text);
+    for (std::size_t column = 0; column + 1 < line.starts.size(); ++column)
+    {
+        if (!core::is_replaced(line, column))
+        {
+            continue;
+        }
+        const UINT32 from = positions.units_of(core::Column{line.starts.at(column) + 1});
+        const UINT32 stop = positions.units_of(core::Column{line.starts.at(column + 1) + 1});
+        const UINT32 shift = from >= inserted.startPosition ? inserted.length : 0U;
+        ranges.push_back(DWRITE_TEXT_RANGE{from + shift, stop - from});
+    }
+    return ranges;
 }
 
 void Direct2DRenderer::draw_line_matches(const application::EditorFrame &frame,
@@ -1011,9 +997,10 @@ void Direct2DRenderer::draw_line_matches(const application::EditorFrame &frame,
                                          const application::LineView &line)
 {
     brush_->SetColor(to_color(frame.palette.search));
+    LineUtf16Evaluation positions(line.display.text);
     for (const auto &span : line.matches)
     {
-        fill_runs(text, area, range_of(line, span));
+        fill_runs(text, area, range_of(line, span, positions));
     }
 }
 
@@ -1026,14 +1013,16 @@ void Direct2DRenderer::draw_current_match(const application::EditorFrame &frame,
         return;
     }
     brush_->SetColor(to_color(frame.palette.accent));
-    outline_runs(text, area, range_of(line, line.current_match.value()), scaled(1.0F));
+    LineUtf16Evaluation positions(line.display.text);
+    outline_runs(text, area, range_of(line, line.current_match.value(), positions), scaled(1.0F));
 }
 
 void Direct2DRenderer::draw_line_selection(const application::EditorFrame &frame,
                                            IDWriteTextLayout *text, const core::LayoutRect &area,
                                            const application::LineView &line)
 {
-    const DWRITE_TEXT_RANGE range = range_of(line, line.selection);
+    LineUtf16Evaluation positions(line.display.text);
+    const DWRITE_TEXT_RANGE range = range_of(line, line.selection, positions);
     const UINT32 stop = range.startPosition + range.length;
     brush_->SetColor(to_color(frame.palette.selection));
     fill_runs(text, area, range);
@@ -1068,9 +1057,10 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
     // 幅は桁の描画上の範囲。両端を displayed で写してから HitTestTextPosition で引く（ADR 0040 の
     // 決定 3）。行末では両端が同じ位置になり、既定の最小幅に畳む。
     const core::Column column = frame.caret.position.column;
-    const float begin = caret_x(text, utf16_offset(line.text, displayed(line, column)));
+    LineUtf16Evaluation positions(line.text);
+    const float begin = caret_x(text, positions.units_of(displayed(line, column)));
     const float end =
-        caret_x(text, utf16_offset(line.text, displayed(line, core::Column{column.value + 1})));
+        caret_x(text, positions.units_of(displayed(line, core::Column{column.value + 1})));
     const float left = static_cast<float>(area.left) + begin;
     const float width =
         std::max(end - begin, static_cast<float>(core::to_pixels(block_minimum_dips, dpi_)));
@@ -1091,11 +1081,12 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                   const core::LayoutRect &area, const core::DisplayLine &line)
 {
+    LineUtf16Evaluation positions(line.text);
     switch (frame.caret.shape)
     {
     case core::CaretShape::bar:
         draw_bar_caret(frame, text, area,
-                       utf16_offset(line.text, displayed(line, frame.caret.position.column)));
+                       positions.units_of(displayed(line, frame.caret.position.column)));
         return;
     case core::CaretShape::block:
         draw_block_caret(frame, text, area, line);
@@ -1173,8 +1164,10 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     }
     const auto &composition = frame.composition.value();
     // 差し込み位置も描画用の行の桁へ写してから探す（ADR 0040 の決定 3）。
-    const std::size_t at =
-        byte_of_column(line.display.text, displayed(line.display, frame.caret.position.column));
+    LineUtf16Evaluation positions(line.display.text);
+    const core::Column column = displayed(line.display, frame.caret.position.column);
+    const std::size_t at = positions.byte_of(column);
+    const UINT32 base = positions.units_of(column);
     std::string shown(line.display.text);
     shown.insert(at, composition.utf8);
     const auto text = layout_of(shown, body);
@@ -1184,7 +1177,6 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     }
     brush_->SetColor(to_color(frame.palette.text));
     draw_body_text(text.Get(), area);
-    const UINT32 base = utf16_at(shown, at);
     // 置き換えた文字は変換中の行でも muted（ADR 0040 の決定 4）。IME の節とは重ならない。
     draw_replaced(
         frame, text.Get(), area,
