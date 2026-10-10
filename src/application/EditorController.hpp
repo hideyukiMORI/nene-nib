@@ -330,7 +330,7 @@ class EditorController final
     [[nodiscard]] static const core::VimPattern &
     frame_pattern(std::reference_wrapper<const core::VimPattern> pattern);
     [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern) const;
+                                     const core::VimPattern *pattern, core::Offset caret) const;
     [[nodiscard]] std::vector<LineView> visible_lines() const;
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。

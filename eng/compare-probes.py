@@ -68,7 +68,14 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "search-snapshot-retained-short-200",
              "search-snapshot-unsearched-200",
              "search-snapshot-commit-short-64",
-             "search-snapshot-typing-frame-short-64")
+             "search-snapshot-typing-frame-short-64",
+             "preview-caret-long-30-64",
+             "preview-caret-long-120-64",
+             "preview-caret-short-30-64",
+             "preview-caret-confirmed-30-64",
+             "preview-caret-unsearched-30-64",
+             "preview-caret-absent-30-64",
+             "preview-caret-disabled-30-64")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -141,6 +148,9 @@ def fixed_input(workload: str) -> bytes:
     if workload in WORKLOADS[57:65]:
         index = WORKLOADS.index(workload) - 57
         return b"" if index == 5 else b"a" * (256 if 1 <= index <= 3 else 1)
+    if workload in WORKLOADS[65:72]:
+        count = 1 if workload == "preview-caret-short-30-64" else 1024
+        return ("日" * count + "z\t🖋\x01" + "\r\nz x" * 119).encode("utf-8")
     return scoped_fixed_input(workload)
 
 

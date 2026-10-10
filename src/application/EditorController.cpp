@@ -3212,7 +3212,7 @@ EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> p
 // （ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent を返すので落ちる。
 // 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
 LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern) const
+                                     const core::VimPattern *pattern, core::Offset caret) const
 {
     const core::TextBuffer &text = state_.text();
     std::string body = text.line_text(line);
@@ -3229,7 +3229,6 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
     // 今の一致はキャレットを含む一致。incsearch の入力中は preview の当たりを含む一致（ADR 0041
     // の決定 4）。全一致の面は hlsearch が on のときだけで、off の入力中は今の当たりの枠だけ
     // （Vim と同じ）。入力中でなければ off の search_pattern は何も返さない。
-    const std::size_t caret = previewed_offset(state_).value_or(state_.selection().caret).value;
     for (const auto &match : core::vim_line_matches(view.text, *pattern))
     {
         const core::OffsetRange found{core::Offset{start.value + match.begin.value},
@@ -3240,7 +3239,7 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
             continue;
         }
         view.matches.push_back(span);
-        if (found.begin.value <= caret && caret < found.end.value)
+        if (found.begin.value <= caret.value && caret.value < found.end.value)
         {
             view.current_match = span;
         }
@@ -3266,6 +3265,9 @@ std::vector<LineView> EditorController::visible_lines() const
         pattern.has_value()
             ? std::visit([](const auto &value) { return &frame_pattern(value); }, pattern.value())
             : nullptr;
+    const core::Offset caret = selected != nullptr && first <= last
+                                   ? previewed_offset(state_).value_or(state_.selection().caret)
+                                   : state_.selection().caret;
     std::vector<LineView> lines;
     if (first <= last)
     {
@@ -3274,7 +3276,7 @@ std::vector<LineView> EditorController::visible_lines() const
     for (std::size_t number = first; number <= last; ++number)
     {
         const core::LineNumber line{number};
-        lines.push_back(line_view(line, block_row(block, line, range), selected));
+        lines.push_back(line_view(line, block_row(block, line, range), selected, caret));
     }
     return lines;
 }
