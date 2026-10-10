@@ -194,13 +194,38 @@ class ProbeComparisonTests(unittest.TestCase):
                  ("frame-rows-120-64", (unit + b"\r\n") * 119 + b"tail", 1908,
                   "11632098944160318499"))
         self.assertEqual(tuple(name for name, _, _, _ in cases), PROBES.WORKLOADS[53:57])
-        self.assertEqual(len(PROBES.WORKLOADS), 57)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 57)
+        self.assertEqual(len(PROBES.WORKLOADS[:57]), 57)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:57])), 57)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
                 self.assertEqual(len(expected), size)
                 self.assertEqual(PROBES.fnv1a64(expected), fnv)
+
+    def test_search_snapshot_inputs_and_registry(self):
+        cases = (
+            ("search-snapshot-frame-short-64", 1, "12638187200555641996"),
+            ("search-snapshot-frame-long-64", 256, "18242136092491110437"),
+            ("search-snapshot-repeat-long-64", 256, "18242136092491110437"),
+            ("search-snapshot-retained-long-200", 256, "18242136092491110437"),
+            ("search-snapshot-retained-short-200", 1, "12638187200555641996"),
+            ("search-snapshot-unsearched-200", 0, "14695981039346656037"),
+            ("search-snapshot-commit-short-64", 1, "12638187200555641996"),
+            ("search-snapshot-typing-frame-short-64", 1, "12638187200555641996"),
+        )
+        self.assertEqual(tuple(name for name, _, _ in cases), PROBES.WORKLOADS[57:65])
+        self.assertEqual(len(PROBES.WORKLOADS), 65)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 65)
+        for name, size, fnv in cases:
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), b"a" * size)
+                self.assertEqual(PROBES.fnv1a64(b"a" * size), fnv)
+
+    def test_search_snapshot_invalid_names(self):
+        for name in ("search-snapshot-frame-long-63", "search-snapshot-retained-long-201",
+                     "search-snapshot-typing-frame-short-65"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
 
     def test_frame_rows_invalid_names(self):
         for name in ("frame-rows-empty-63", "frame-rows-short-65", "frame-rows-31-64",

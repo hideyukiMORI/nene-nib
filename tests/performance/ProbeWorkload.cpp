@@ -8,6 +8,7 @@
 #include "ProbeSelection.hpp"
 #include "ScopedProbe.hpp"
 #include "SearchProbe.hpp"
+#include "SearchSnapshotProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -608,6 +609,23 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(SearchSnapshotWorkload workload)
+{
+    switch (workload)
+    {
+    case SearchSnapshotWorkload::frame_short:
+    case SearchSnapshotWorkload::frame_long:
+    case SearchSnapshotWorkload::repeat_long:
+    case SearchSnapshotWorkload::retained_long:
+    case SearchSnapshotWorkload::retained_short:
+    case SearchSnapshotWorkload::unsearched:
+    case SearchSnapshotWorkload::commit_short:
+    case SearchSnapshotWorkload::typing_frame_short:
+        return 57U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -623,7 +641,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 57> dispatches{{
+constexpr std::array<ProbeDispatch, 65> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -740,6 +758,23 @@ constexpr std::array<ProbeDispatch, 57> dispatches{{
                      framed_rows},
     ProbeDispatchRow{FrameRowsWorkload::frame_rows_full, "frame-rows-120-64", frame_rows_input,
                      framed_rows},
+    ProbeDispatchRow{SearchSnapshotWorkload::frame_short, "search-snapshot-frame-short-64",
+                     search_snapshot_input, probed_search_snapshot},
+    ProbeDispatchRow{SearchSnapshotWorkload::frame_long, "search-snapshot-frame-long-64",
+                     search_snapshot_input, probed_search_snapshot},
+    ProbeDispatchRow{SearchSnapshotWorkload::repeat_long, "search-snapshot-repeat-long-64",
+                     search_snapshot_input, probed_search_snapshot},
+    ProbeDispatchRow{SearchSnapshotWorkload::retained_long, "search-snapshot-retained-long-200",
+                     search_snapshot_input, probed_search_snapshot},
+    ProbeDispatchRow{SearchSnapshotWorkload::retained_short, "search-snapshot-retained-short-200",
+                     search_snapshot_input, probed_search_snapshot},
+    ProbeDispatchRow{SearchSnapshotWorkload::unsearched, "search-snapshot-unsearched-200",
+                     search_snapshot_input, probed_search_snapshot},
+    ProbeDispatchRow{SearchSnapshotWorkload::commit_short, "search-snapshot-commit-short-64",
+                     search_snapshot_input, probed_search_snapshot},
+    ProbeDispatchRow{SearchSnapshotWorkload::typing_frame_short,
+                     "search-snapshot-typing-frame-short-64", search_snapshot_input,
+                     probed_search_snapshot},
 }};
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
@@ -772,7 +807,7 @@ constexpr std::array<ProbeDispatch, 57> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 57U);
+static_assert(dispatches.size() == 65U);
 static_assert(dispatch_is_complete());
 
 } // namespace
