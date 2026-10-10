@@ -2,12 +2,13 @@
 
 #include "FrameRowsWorkload.hpp"
 #include "ProbeWorkload.hpp"
+#include "SearchSnapshotWorkload.hpp"
 
 #include <variant>
 
 namespace nenenib::tests::performance
 {
-using ProbeSelection = std::variant<ProbeWorkload, FrameRowsWorkload>;
+using ProbeSelection = std::variant<ProbeWorkload, FrameRowsWorkload, SearchSnapshotWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

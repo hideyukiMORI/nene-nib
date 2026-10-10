@@ -67,3 +67,17 @@ display_lineやcapacityを期待値生成に使わない。
 Debugの新4条件各1iterationとRelease同一exeの各iterations1/blocks1は道具の動作確認である。
 既存のwarmup/marks/metadata/欠測/timeout/許容は不変で、空inputBytes0も完全一致で照合する。
 長いABBA・実機・正式速度・採否は親設計席が担当し、短い自己比較から利益を判断しない。
+
+
+## 確定検索の不変共有の固定比較（#376・ADR0102）
+
+旧57条件を保持し、SearchSnapshotWorkloadの8条件だけを同じ型付き表へ追加する。
+入力/操作/oracle/3利益・5費用の固定条件は[ADR0102](../adr/0102-remembered-search-owns-one-immutable-parsed-value.md)を正本とする。
+before07c346cはmain bfa1b32と同じ製品、afterc9d1e17と計測器/入力/区間は同一。
+名前のframe-short/commit-short/typing-frame-short/retained-shortはa（1byte、FNV12638187200555641996）、
+frame-long/repeat-long/retained-longはa×256（256bytes、FNV18242136092491110437）、unsearchedは空（FNV14695981039346656037）。
+各long準備では正規SearchLineへの256byte入力の到達を区間外で検査する。
+frame64は生成/破棄/field checksum、操作64/200はapplyが区間内、最後のdelivery破棄と前後の全文/行/map/span/current/caret/mode/message oracleは区間外。
+新APIから期待値を生成しない。新enum case欠落の正規compiler拒否と旧57のsource不変を確認する。
+Debug8条件各1iteration・Release同一exe各iterations1/blocks1は道具確認であり、時間値を利益に使わない。
+20iterations/ABBA3/各120組は一度だけ取得し、全raw/失敗を保持、除外/補完/再取得しない。実施結果はgate-proofs 5-do。

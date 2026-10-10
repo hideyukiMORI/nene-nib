@@ -156,8 +156,7 @@ void verify_incsearch_frame()
     expect(caret_at(landed, 1, 7) && !landed.command_line.has_value(),
            "Enter lands on the match the preview showed");
     const auto &remembered = controller.vim_state().last_search;
-    expect(remembered.has_value() &&
-               remembered.value_or(nenenib::core::VimSearchPattern{}).pattern == "be",
+    expect(remembered.has_value() && remembered.value().text() == "be",
            "only Enter remembers the pattern");
     expect(frame_current(landed) == std::optional{std::pair{std::size_t{0}, MatchSpan{7, 9}}},
            "after Enter the current match is the one under the caret");
@@ -344,9 +343,9 @@ void verify_incsearch_hops()
     expect(current_is(controller.frame(), 2, {7, 9}), "a second Ctrl-G moves on again");
     vim_replay(controller, "<CR>");
     expect(caret_at(controller.frame(), 3, 7), "Enter lands where the hops showed");
-    expect(controller.vim_state().last_search ==
-               std::optional{nenenib::core::VimSearchPattern{"be", VimSearchDirection::forward,
-                                                             std::nullopt}},
+    const auto &remembered = controller.vim_state().last_search;
+    expect(remembered.has_value() && remembered.value().text() == "be" &&
+               remembered.value().direction() == VimSearchDirection::forward,
            "the remembered search carries no start, so n searches from the caret");
     vim_replay(controller, "gg/be");
     hop(controller, VimSearchDirection::backward);

@@ -819,6 +819,7 @@ void verify_ex_incsearch_commands()
 
 void verify_vim_search_contracts()
 {
+    verify_vim_search_snapshot_contracts();
     verify_vim_find_match();
     verify_vim_search_empty_lines();
     verify_ex_incsearch_commands();

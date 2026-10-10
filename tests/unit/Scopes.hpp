@@ -72,6 +72,9 @@ void verify_vim_macro_scope();
 void verify_vim_clipboard_contracts();
 void verify_vim_clipboard_scope();
 
+// VimSearchSnapshotTests.cpp
+void verify_vim_search_snapshot_contracts();
+
 // VimSearchTests.cpp
 void verify_vim_search_contracts();
 void verify_vim_search_scope();

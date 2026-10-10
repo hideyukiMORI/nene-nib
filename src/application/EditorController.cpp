@@ -3170,13 +3170,18 @@ std::optional<char> EditorController::recording_name() const
     return recording.value().append ? static_cast<char>(name - 'a' + 'A') : name;
 }
 
-std::optional<core::VimPattern> EditorController::search_pattern() const
+std::optional<EditorController::SearchPattern> EditorController::search_pattern() const
 {
     // 入力中は入力のパターンで塗る。解析できなければ何も塗らない（ADR 0041 の決定 4）。
     const core::SearchLine *typing = previewed_line(state_);
     if (state_.mode() == core::EditMode::vim && typing != nullptr)
     {
-        return typed_pattern(*typing);
+        auto parsed = typed_pattern(*typing);
+        if (!parsed.has_value())
+        {
+            return std::nullopt;
+        }
+        return SearchPattern{std::move(parsed).value()};
     }
     const auto &remembered = state_.vim().last_search;
     if (state_.mode() != core::EditMode::vim ||
@@ -3184,19 +3189,30 @@ std::optional<core::VimPattern> EditorController::search_pattern() const
     {
         return std::nullopt;
     }
-    auto parsed = core::VimPattern::parse(remembered.value().pattern, remembered.value().direction);
+    const auto &parsed = remembered.value().parsed();
     if (!parsed)
     {
         return std::nullopt;
     }
-    return std::move(parsed).value();
+    return SearchPattern{std::cref(parsed.value())};
+}
+
+const core::VimPattern &EditorController::frame_pattern(const core::VimPattern &pattern)
+{
+    return pattern;
+}
+
+const core::VimPattern &
+EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> pattern)
+{
+    return pattern.get();
 }
 
 // 見えている 1 行ぶんの表示値。選択と検索は所有済み本文の同じ LineSpanEvaluation で投影する
 // （ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent を返すので落ちる。
 // 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
 LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const std::optional<core::VimPattern> &pattern) const
+                                     const core::VimPattern *pattern) const
 {
     const core::TextBuffer &text = state_.text();
     std::string body = text.line_text(line);
@@ -3206,7 +3222,7 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
     const core::Offset start = text.line_start(line);
     LineSpanEvaluation projection(view.text, start, text.line_terminator_end(line));
     view.selection = projection.span(range);
-    if (!pattern.has_value())
+    if (pattern == nullptr)
     {
         return view;
     }
@@ -3214,7 +3230,7 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
     // の決定 4）。全一致の面は hlsearch が on のときだけで、off の入力中は今の当たりの枠だけ
     // （Vim と同じ）。入力中でなければ off の search_pattern は何も返さない。
     const std::size_t caret = previewed_offset(state_).value_or(state_.selection().caret).value;
-    for (const auto &match : core::vim_line_matches(view.text, pattern.value()))
+    for (const auto &match : core::vim_line_matches(view.text, *pattern))
     {
         const core::OffsetRange found{core::Offset{start.value + match.begin.value},
                                       core::Offset{start.value + match.end.value}};
@@ -3246,6 +3262,10 @@ std::vector<LineView> EditorController::visible_lines() const
     const core::OffsetRange range = highlighted_range();
     const auto block = block_selection();
     const auto pattern = search_pattern();
+    const core::VimPattern *selected =
+        pattern.has_value()
+            ? std::visit([](const auto &value) { return &frame_pattern(value); }, pattern.value())
+            : nullptr;
     std::vector<LineView> lines;
     if (first <= last)
     {
@@ -3254,7 +3274,7 @@ std::vector<LineView> EditorController::visible_lines() const
     for (std::size_t number = first; number <= last; ++number)
     {
         const core::LineNumber line{number};
-        lines.push_back(line_view(line, block_row(block, line, range), pattern));
+        lines.push_back(line_view(line, block_row(block, line, range), selected));
     }
     return lines;
 }

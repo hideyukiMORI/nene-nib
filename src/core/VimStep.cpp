@@ -38,7 +38,6 @@
 #include "VimNamedRegisters.hpp"
 #include "VimNumberedRegisters.hpp"
 #include "VimNumberedRule.hpp"
-#include "VimPattern.hpp"
 #include "VimPatternFailure.hpp"
 #include "VimPrefix.hpp"
 #include "VimPutSide.hpp"
@@ -62,6 +61,7 @@
 #include "VimSearchNoticeKind.hpp"
 #include "VimSearchPattern.hpp"
 #include "VimSearchRequest.hpp"
+#include "VimSearchSnapshot.hpp"
 #include "VimSelect.hpp"
 #include "VimSwitchTab.hpp"
 #include "VimTextObject.hpp"
@@ -3197,7 +3197,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return state;
 }
 
-// パターンは last_search が正本。解析して回数ぶん探し、着いた先へ 1 本で流す（決定 3・4）。
+// 解析済みの last_search が正本。回数ぶん探し、着いた先へ 1 本で流す（決定 3・4）。
 [[nodiscard]] VimStep search_from(const VimState &state, const VimEditorView &view,
                                   const VimSearchRequest &request)
 {
@@ -3205,8 +3205,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
     }
-    const VimSearchPattern remembered = state.last_search.value();
-    const auto parsed = VimPattern::parse(remembered.pattern, remembered.direction);
+    const auto &remembered = state.last_search.value();
+    const auto &parsed = remembered.parsed();
     if (!parsed)
     {
         return search_noticed(state, VimSearchNotice{VimSearchNoticeKind::unsupported_pattern,
@@ -3217,8 +3217,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                                     request.direction, resolved_count(state)});
     if (!hit.has_value())
     {
-        return search_noticed(state,
-                              VimSearchNotice{hit.error(), remembered.pattern, std::nullopt});
+        return search_noticed(
+            state, VimSearchNotice{hit.error(), std::string{remembered.text()}, std::nullopt});
     }
     const Offset destination = view.text.offset_of(hit.value().position);
     VimStep step = state.pending.has_value() ? search_operated(state, view, request, destination)
@@ -3233,15 +3233,15 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                    const VimSearchPattern &key)
 {
     const VimState state = search_highlighted(original);
-    const std::string previous =
-        state.last_search.has_value() ? state.last_search.value().pattern : std::string{};
-    const std::string pattern = key.pattern.empty() ? previous : key.pattern;
+    const std::string_view previous =
+        state.last_search.has_value() ? state.last_search.value().text() : std::string_view{};
+    const std::string_view pattern = key.pattern.empty() ? previous : std::string_view{key.pattern};
     if (pattern.empty())
     {
         return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
     }
     VimState remembered = state;
-    remembered.last_search = VimSearchPattern{pattern, key.direction, std::nullopt};
+    remembered.last_search = VimSearchSnapshot::from(pattern, key.direction);
     // incsearch の Ctrl-G / Ctrl-T が起点を動かしていればそこから探す。範囲の端は元のキャレット
     // （ADR 0043 の決定 3）。
     const Offset caret = view.selection.caret;
@@ -3258,7 +3258,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return search_noticed(state, notice_of(VimSearchNoticeKind::no_previous_pattern));
     }
-    const VimSearchDirection remembered = state.last_search.value().direction;
+    const VimSearchDirection remembered = state.last_search.value().direction();
     const VimSearchDirection direction =
         action == VimAction::repeat_search ? remembered : opposite(remembered);
     const Offset caret = view.selection.caret;
@@ -3279,9 +3279,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                              ? VimSearchDirection::forward
                                              : VimSearchDirection::backward;
     VimState remembered = state;
-    remembered.last_search =
-        VimSearchPattern{"\\<" + view.text.text_range(word.value().begin, word.value().end) + "\\>",
-                         direction, std::nullopt};
+    remembered.last_search = VimSearchSnapshot::from(
+        "\\<" + view.text.text_range(word.value().begin, word.value().end) + "\\>", direction);
     // 探し始めるのは語の先頭だが、範囲の端は元のキャレットである（実測）。
     return search_from(remembered, view,
                        VimSearchRequest{word.value().begin, view.selection.caret, direction});
