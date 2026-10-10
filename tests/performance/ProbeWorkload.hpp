@@ -37,7 +37,24 @@ enum class ProbeWorkload : std::uint8_t
     codepage_japanese,
     utf16_japanese,
     utf16_ascii,
-    utf16_supplementary
+    utf16_supplementary,
+    controller_save,
+    controller_save_bom,
+    erase_scattered_head,
+    erase_scattered_middle,
+    erase_scattered_tail,
+    erase_scattered_all,
+    erase_single_middle,
+    offset_long_head,
+    offset_long_middle,
+    offset_long_end,
+    offset_scattered_middle,
+    search_forward_head,
+    search_forward_middle,
+    search_forward_tail,
+    search_backward_head,
+    search_backward_middle,
+    search_backward_tail
 };
 
 [[nodiscard]] std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept;

@@ -1,6 +1,8 @@
 #include "ProbeWorkload.hpp"
 
+#include "BufferProbe.hpp"
 #include "ScopedProbe.hpp"
+#include "SearchProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -70,6 +72,46 @@ constexpr std::size_t insert_count = 200;
         return std::unexpected(ProbeFailure::wrong_result);
     }
     return checksum_of(editing.files().written());
+}
+
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+saved(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
+{
+    const auto encoding = workload == ProbeWorkload::controller_save ? core::TextEncoding::utf8
+                                                                     : core::TextEncoding::utf8_bom;
+    Editing editing;
+    editing.files().hold(input);
+    static_cast<void>(editing.controller().apply(application::VisibleLines{30}));
+    const auto opened = editing.controller().apply(application::OpenDocument{probe_path()});
+    if (opened.document.last_failure.has_value())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    const std::string expected =
+        (encoding == core::TextEncoding::utf8_bom ? "\xEF\xBB\xBF" : "") + input;
+    const application::SaveDocument intent{probe_path(), encoding};
+    timing.mark(core::Milestone::probe_started);
+    const auto delivered = editing.controller().apply(intent);
+    timing.mark(core::Milestone::probe_finished);
+    const auto frame = editing.controller().frame();
+    if (delivered.document.last_failure.has_value() || delivered.document.encoding != encoding ||
+        delivered.document.save_state != core::SaveState::saved ||
+        !delivered.document.path.has_value() || delivered.document.path.value() != probe_path() ||
+        delivered.document.title.text() != opened.document.title.text() ||
+        frame.total_lines != large_lines + 1U || frame.status_items.at(2U).text() != "CRLF" ||
+        editing.files().written_path() != probe_path().text() ||
+        editing.files().written() != expected)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    const auto checksum = checksum_of(editing.files().written());
+    static_cast<void>(editing.controller().apply(
+        application::SaveDocument{probe_path(), core::TextEncoding::utf8}));
+    if (editing.files().written() != input)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum;
 }
 
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure> buffered(const std::string &input,
@@ -320,7 +362,7 @@ vim_inserted_while_recording(const std::string &input, application::TimingPort &
 
 std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
 {
-    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 24> names{{
+    constexpr std::array<std::pair<std::string_view, ProbeWorkload>, 41> names{{
         {"controller-open-utf8-16mib", ProbeWorkload::controller_open},
         {"buffer-from-utf8-16mib", ProbeWorkload::buffer_create},
         {"controller-insert-200", ProbeWorkload::controller_insert},
@@ -345,6 +387,23 @@ std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
         {"utf16-to-utf8-japanese-8m-units", ProbeWorkload::utf16_japanese},
         {"utf16-to-utf8-ascii-8m-units", ProbeWorkload::utf16_ascii},
         {"utf16-to-utf8-supplementary-8m-units", ProbeWorkload::utf16_supplementary},
+        {"controller-save-utf8-16mib", ProbeWorkload::controller_save},
+        {"controller-save-utf8-bom-16mib", ProbeWorkload::controller_save_bom},
+        {"buffer-erase-scattered-head-4096", ProbeWorkload::erase_scattered_head},
+        {"buffer-erase-scattered-middle-4096", ProbeWorkload::erase_scattered_middle},
+        {"buffer-erase-scattered-tail-4096", ProbeWorkload::erase_scattered_tail},
+        {"buffer-erase-scattered-all-4096", ProbeWorkload::erase_scattered_all},
+        {"buffer-erase-single-middle-4096", ProbeWorkload::erase_single_middle},
+        {"buffer-offset-long-head-57344", ProbeWorkload::offset_long_head},
+        {"buffer-offset-long-middle-57344", ProbeWorkload::offset_long_middle},
+        {"buffer-offset-long-end-57344", ProbeWorkload::offset_long_end},
+        {"buffer-offset-scattered-middle-57344", ProbeWorkload::offset_scattered_middle},
+        {"search-forward-head-many-4096", ProbeWorkload::search_forward_head},
+        {"search-forward-middle-many-4096", ProbeWorkload::search_forward_middle},
+        {"search-forward-tail-many-4096", ProbeWorkload::search_forward_tail},
+        {"search-backward-head-many-4096", ProbeWorkload::search_backward_head},
+        {"search-backward-middle-many-4096", ProbeWorkload::search_backward_middle},
+        {"search-backward-tail-many-4096", ProbeWorkload::search_backward_tail},
     }};
     for (const auto &[text, workload] : names)
     {
@@ -411,6 +470,8 @@ std::string input_of(ProbeWorkload workload)
 {
     switch (workload)
     {
+    case ProbeWorkload::controller_save:
+    case ProbeWorkload::controller_save_bom:
     case ProbeWorkload::controller_open:
     case ProbeWorkload::buffer_create:
     case ProbeWorkload::insert_after_delete_large:
@@ -445,6 +506,24 @@ std::string input_of(ProbeWorkload workload)
     case ProbeWorkload::utf16_ascii:
     case ProbeWorkload::utf16_supplementary:
         return scoped_input_of(workload);
+    case ProbeWorkload::erase_scattered_head:
+    case ProbeWorkload::erase_scattered_middle:
+    case ProbeWorkload::erase_scattered_tail:
+    case ProbeWorkload::erase_scattered_all:
+    case ProbeWorkload::erase_single_middle:
+        return crlf_buffer_input();
+    case ProbeWorkload::offset_long_head:
+    case ProbeWorkload::offset_long_middle:
+    case ProbeWorkload::offset_long_end:
+    case ProbeWorkload::offset_scattered_middle:
+        return position_buffer_input();
+    case ProbeWorkload::search_forward_head:
+    case ProbeWorkload::search_forward_middle:
+    case ProbeWorkload::search_forward_tail:
+    case ProbeWorkload::search_backward_head:
+    case ProbeWorkload::search_backward_middle:
+    case ProbeWorkload::search_backward_tail:
+        return search_buffer_input();
     }
     std::unreachable();
 }
@@ -488,6 +567,27 @@ run_workload(ProbeWorkload workload, const std::string &input, application::Timi
     case ProbeWorkload::utf16_ascii:
     case ProbeWorkload::utf16_supplementary:
         return run_scoped_workload(workload, input, timing);
+    case ProbeWorkload::controller_save:
+    case ProbeWorkload::controller_save_bom:
+        return saved(workload, input, timing);
+    case ProbeWorkload::erase_scattered_head:
+    case ProbeWorkload::erase_scattered_middle:
+    case ProbeWorkload::erase_scattered_tail:
+    case ProbeWorkload::erase_scattered_all:
+    case ProbeWorkload::erase_single_middle:
+        return erased_buffer(workload, input, timing);
+    case ProbeWorkload::offset_long_head:
+    case ProbeWorkload::offset_long_middle:
+    case ProbeWorkload::offset_long_end:
+    case ProbeWorkload::offset_scattered_middle:
+        return queried_offset(workload, input, timing);
+    case ProbeWorkload::search_forward_head:
+    case ProbeWorkload::search_forward_middle:
+    case ProbeWorkload::search_forward_tail:
+    case ProbeWorkload::search_backward_head:
+    case ProbeWorkload::search_backward_middle:
+    case ProbeWorkload::search_backward_tail:
+        return searched_buffer(workload, input, timing);
     }
     std::unreachable();
 }

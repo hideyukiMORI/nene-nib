@@ -2594,14 +2594,15 @@ std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::Det
 }
 
 std::expected<std::string, FileFailure> EditorController::encoded(core::TextEncoding encoding,
-                                                                  std::string_view utf8)
+                                                                  std::string utf8)
 {
     switch (encoding)
     {
     case core::TextEncoding::utf8:
-        return std::string(utf8);
+        return utf8;
     case core::TextEncoding::utf8_bom:
-        return std::string(core::byte_order_mark()) + std::string(utf8);
+        utf8.insert(0, core::byte_order_mark());
+        return utf8;
     case core::TextEncoding::shift_jis:
         break;
     }

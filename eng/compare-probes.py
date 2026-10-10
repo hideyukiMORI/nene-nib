@@ -29,7 +29,24 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "codepage-to-utf8-cp932-japanese-16mib",
              "utf16-to-utf8-japanese-8m-units",
              "utf16-to-utf8-ascii-8m-units",
-             "utf16-to-utf8-supplementary-8m-units")
+             "utf16-to-utf8-supplementary-8m-units",
+             "controller-save-utf8-16mib",
+             "controller-save-utf8-bom-16mib",
+             "buffer-erase-scattered-head-4096",
+             "buffer-erase-scattered-middle-4096",
+             "buffer-erase-scattered-tail-4096",
+             "buffer-erase-scattered-all-4096",
+             "buffer-erase-single-middle-4096",
+             "buffer-offset-long-head-57344",
+             "buffer-offset-long-middle-57344",
+             "buffer-offset-long-end-57344",
+             "buffer-offset-scattered-middle-57344",
+             "search-forward-head-many-4096",
+             "search-forward-middle-many-4096",
+             "search-forward-tail-many-4096",
+             "search-backward-head-many-4096",
+             "search-backward-middle-many-4096",
+             "search-backward-tail-many-4096")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -72,6 +89,14 @@ def fixed_input(workload: str) -> bytes:
         return b"x" * 200
     if workload == "controller-vim-record-insert-2000":
         return b"x" * 2000
+    if workload in WORKLOADS[24:26]:
+        return fixed_input("controller-open-utf8-16mib")
+    if workload in WORKLOADS[26:31]:
+        return (b"a" * 78 + b"\r\n") * 4096
+    if workload in WORKLOADS[31:35]:
+        return "a日本語🖋".encode("utf-8") * 4096
+    if workload in WORKLOADS[35:41]:
+        return "a日本語🖋 ".encode("utf-8") * 4096
     return scoped_fixed_input(workload)
 
 

@@ -92,3 +92,50 @@ paletteの直列化はUTF-8で、headerは `files<TAB>query<LF>`、各entryは `
 準備後本文を元入力から独立した固定期待列と完全照合し、fragmented行入力は8193 pieces、fragmented UTF8入力は8192 pieces、連続UTF8入力は1 pieceを確認する。piece数は準備の観測で、結果checksumには含めない。計測前に戻り値の容器を準備し、終了markの後に全文・順序・位置とchecksumを確認する。
 
 新12本のみDebug/Release各warmup1＋sample1で正しさを確認する。比較器の対象試験、File API依存、symbols core/application、差分整形・保護対象・旧12のGit一致を確認する。clean commit後の明示Release configureでmetadataを固定する。製品exeはbuild/起動せず、製品source baseはeef5aad。CLI全体の参考壁時計を残し、固定反復数・長い性能比較・採否・独立レビュー・統合は親が担当する。新しい正式速度ゲートや合否閾値を設けない。
+
+## 第4段階 — 保存・erase・offset_of・検索の固定17本（Issue #346）
+
+親設計席が2026-10-10の実装briefで受理した決定。既存24本は不変。同じmarks・metadata・warmup・完全照合と比較器を使用し、製品API/flags/allowlist/正式基準値を変更しない。
+
+#### 固定17workload
+
+#### 保存2本
+
+- controller-save-utf8-16mib
+- controller-save-utf8-bom-16mib
+
+入力は既存controller-open-utf8-16mibと同じ16800000bytesの200000 CRLF行（BOM版もinput bytesは同じBOM無し本文）。各反復fresh EditingでVisibleLines30、ScriptedFiles.hold(input)、OpenDocumentを区間外に行う。区間内はSaveDocument{同じprobe_path,utf8又はutf8_bom}のprimary apply一回のみ。戻りEditorUpdateとwrittenは終了mark後まで保持。計測は内部encoded単体ではなくtext()/encoded/ScriptedFiles::writeのcopy/状態更新を含む保存経路、frame生成は区間外。外でfailureなし・encoding一致・dirtyでない・名前同じ・本文/改行不変を確認。writtenはUTF8=input、BOM=EF BB BF+inputの全byte一致を独立に確認。checksumは実written全文。変換失敗/実file原子性は製品unit/実機側で確認し、このprobeの速度区間へ混ぜない。
+
+#### collect/erase5本
+
+- buffer-erase-scattered-head-4096
+- buffer-erase-scattered-middle-4096
+- buffer-erase-scattered-tail-4096
+- buffer-erase-scattered-all-4096
+- buffer-erase-single-middle-4096
+
+inputは既存crlf_buffer_input=(a*78+CRLF)*4096、327680bytes。scatteredはi=0..4095の80*i+1をbに1byte置換して8193pieceを準備。singleは1pieceの元inputをそのまま使う。prepared全文/piece_count/4097linesを区間外で照合。
+位置: head=0、middle=163840、tail=327677（最後の行の末尾a）、all=[0,327680)。head/middle/tail/singleは指定位置の1byteだけ削除。区間前にvector<TextBuffer>をreserve(16)し、同じ不変なprepared sourceへeraseを16回、結果をemplaceして保持する区間だけを計時。全16結果のtext/size/line_count/line_endingと旧snapshot全文不変は終了mark後に確認・checksum化・破棄する。1byte削除期待はpreparedのstd::stringを指定位置でeraseしたもの（製品eraseを期待値生成に使わない）。allの期待は空/1line/CRLF、ほかは4097lines/CRLF。metadataのinputHashは元input、準備規則とpreparedHash/piece数をstderrへ出す。input生成/準備/期待/vector reserveは区間外。
+
+#### offset_of4本
+
+- buffer-offset-long-head-57344
+- buffer-offset-long-middle-57344
+- buffer-offset-long-end-57344
+- buffer-offset-scattered-middle-57344
+
+input=(a日本語🖋)*4096、57344bytes/20480codepoints/1line。scatteredだけ既存の14*i先頭a→b置換で8192pieces、期待本文=(b日本語🖋)*4096。head column2→byte1、middle column10241→byte28672、end column20481→byte57344。scatteredはmiddleと同じ期待。各反復でfresh準備し区間前にarray<Offset,128>を用意、同じTextPosition{line1,固定column}へのoffset_ofを128回実行して格納。完全一致とchecksum、準備の本文/piece数/line_countは外で確認。column0/1/範囲外/UTF8途中pieceは製品unitが担当。
+
+#### 検索6本
+
+- search-forward-head-many-4096
+- search-forward-middle-many-4096
+- search-forward-tail-many-4096
+- search-backward-head-many-4096
+- search-backward-middle-many-4096
+- search-backward-tail-many-4096
+
+input=(a日本語🖋 + 半角space)*4096、61440bytes/24576codepoints/1line、1piece。patternはaをforward separatorでparseし区間外に保持。要求のdirectionは名前どおり、count=1、from line1、columnはhead1/middle12289/tail24571（0始まり一致i=0/2048/4095）。区間前array<expected<VimSearchHit,VimSearchNoticeKind>,16>を用意（構築が難しければreserve済vectorへemplaceでよい）、vim_find_match16回を区間内で保持。外の期待: forward head7/no wrap、middle12295/no wrap、tail1/wrap。backward head24571/wrap、middle12283/no wrap、tail24565/no wrap。全戻り値/旧本文不変を外で確認し位置とwrappedをchecksumへ含める。準備/parse/結果照合は外。count/greedy/empty等は製品対象unitで守る。
+
+
+新17本だけDebug/Release各warmup1+sample1で検証する。長いABBA・GUI・製品Releaseは親設計席が担当する。結果容器の破棄は終了mark後、0usは補正せず正しさsmokeと比較の分解能判定を区別する。Waivers: none。

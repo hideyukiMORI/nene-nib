@@ -22,18 +22,41 @@ namespace
                                    : next_code_point(content, Offset{match.begin}).value;
 }
 
+template <typename Visitor>
+void visit_line_matches(std::string_view line, const VimPattern &pattern, const Visitor &visitor)
+{
+    std::size_t at = 0;
+    while (true)
+    {
+        const auto match = pattern.matched(line, at);
+        if (!match.has_value() || !visitor(match.value()))
+        {
+            return;
+        }
+        at = advanced(line, match.value());
+        if (at >= line.size())
+        {
+            return;
+        }
+    }
+}
+
 // 行の中で lower 桁以降にある最も左の一致の始まり。
 [[nodiscard]] std::optional<std::size_t> first_match(std::string_view content,
                                                      const VimPattern &pattern, std::size_t lower)
 {
-    for (const auto &match : vim_line_matches(content, pattern))
-    {
-        if (match.begin.value >= lower)
-        {
-            return match.begin.value;
-        }
-    }
-    return std::nullopt;
+    std::optional<std::size_t> found;
+    visit_line_matches(content, pattern,
+                       [&found, lower](const VimPatternMatch &match)
+                       {
+                           if (match.begin < lower)
+                           {
+                               return true;
+                           }
+                           found = match.begin;
+                           return false;
+                       });
+    return found;
 }
 
 // 行の中で upper 桁より前にある最後の一致の始まり。
@@ -41,14 +64,16 @@ namespace
                                                     const VimPattern &pattern, std::size_t upper)
 {
     std::optional<std::size_t> found;
-    for (const auto &match : vim_line_matches(content, pattern))
-    {
-        if (match.begin.value >= upper)
-        {
-            return found;
-        }
-        found = match.begin.value;
-    }
+    visit_line_matches(content, pattern,
+                       [&found, upper](const VimPatternMatch &match)
+                       {
+                           if (match.begin >= upper)
+                           {
+                               return false;
+                           }
+                           found = match.begin;
+                           return true;
+                       });
     return found;
 }
 
@@ -123,21 +148,13 @@ namespace
 std::vector<OffsetRange> vim_line_matches(std::string_view line, const VimPattern &pattern)
 {
     std::vector<OffsetRange> matches;
-    std::size_t at = 0;
-    while (true)
-    {
-        const auto match = pattern.matched(line, at);
-        if (!match.has_value())
-        {
-            return matches;
-        }
-        matches.push_back(OffsetRange{Offset{match.value().begin}, Offset{match.value().end}});
-        at = advanced(line, match.value());
-        if (at >= line.size())
-        {
-            return matches;
-        }
-    }
+    visit_line_matches(line, pattern,
+                       [&matches](const VimPatternMatch &match)
+                       {
+                           matches.push_back(OffsetRange{Offset{match.begin}, Offset{match.end}});
+                           return true;
+                       });
+    return matches;
 }
 
 std::expected<VimSearchHit, VimSearchNoticeKind>

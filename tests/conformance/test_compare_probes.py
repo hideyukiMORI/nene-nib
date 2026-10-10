@@ -149,9 +149,27 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(PROBES.fnv1a64(data), fnv)
 
 
+    def test_stage_four_registry_and_fixed_inputs(self):
+        self.assertEqual(len(PROBES.WORKLOADS), 41)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 41)
+        groups = ((PROBES.WORKLOADS[24:26], PROBES.fixed_input("controller-open-utf8-16mib"), 16800000),
+                  (PROBES.WORKLOADS[26:31], (b"a" * 78 + b"\r\n") * 4096, 327680),
+                  (PROBES.WORKLOADS[31:35], "a日本語🖋".encode("utf-8") * 4096, 57344),
+                  (PROBES.WORKLOADS[35:], "a日本語🖋 ".encode("utf-8") * 4096, 61440))
+        for names, expected, size in groups:
+            for name in names:
+                with self.subTest(workload=name):
+                    data = PROBES.fixed_input(name)
+                    self.assertEqual(data, expected)
+                    self.assertEqual(len(data), size)
+        for name in ("buffer-erase-scattered-head-4095", "buffer-offset-long-head-57343",
+                     "search-forward-head-many-4095", "controller-save-utf8-16mb"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
     def test_stage_three_registry_and_unknown_names(self):
-        self.assertEqual(len(PROBES.WORKLOADS), 24)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 24)
+        self.assertEqual(len(PROBES.WORKLOADS[:24]), 24)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:24])), 24)
         for workload in ("buffer-line-text-scattered-crlf-4095", "palette-listed-name-4999", "unknown"):
             with self.subTest(workload=workload), self.assertRaises(PROBES.ProbeNotObserved):
                 PROBES.fixed_input(workload)

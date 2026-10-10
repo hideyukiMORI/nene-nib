@@ -3674,3 +3674,56 @@ caretはbefore1process20試料535〜1216us、after1process20試料0〜3us（0が
 第二陣archiveの本manifest5637file/96,820,501bytesは全元/先SHA一致、manifest SHA256 `ea3032adebf8994fa375be6cbcfee63850181b3d1f17a6d2d47405f6e5a0bbc4`。最終reviewの1fileは `supplement-341-review/`、確定docs8file/報告/PR本文とmain対応は `supplement-341-final/` に独立追補する。元のmain manifestを上書きして原結果を消さない。cleanupの詳細は同恒久先の監査へ残し、branch/commitは保持する。
 
 00:23:38 JSTまでに#337〜#340のD作業木4件と、完全収載済みのreview4件/batch4原出力を削除。`D:/NeNeNib/outputs/cleanup-speed-wave2-20261010/cleanup-result.json` は全remove exit0、4枝/commit保持、本体clean、live/links/未保存/唯一未収載なしを記録する。最終#341作業木と今回の他の重複出力は文書PR #343の統合後までに整理し、終了時の監査とmain SHAは恒久archiveのcloseoutへ追記する。
+
+## 5-dd — 保存・断片収集・検索列挙の第三陣局所比較（#346〜#349）
+
+hideの継続実験と今回の分担指定に従い、設計席が入力/区間/採否を決め、別席が実装と対象試験を行った。規則ARC-001/003/007/009、CPP-002/003/005/012/016、QLT-001/008/012/013/014、GIT-003/004。ADR0037の列挙共有とADR0082の固定harnessを使用。waiver none。公開API、設定schema、速度基準/許容、fixture期待値、抑制/allowlistは不変。
+
+### 対象と正しさ
+
+- #346：ADR0082 stage4をf09289dで先行決定し、a93e0e6で固定17処理を追加。既存24処理は37項目の静的一致で保持を確認。Debug/Releaseの追加17smokeは各17成功、Pythonの新定義1試験成功。準備・期待生成・全結果照合・破棄は区間外、実呼出しと結果保持だけがTimingPortの2marks内。保存のFilePort内部copyは計測へ含む。実機I/O時間の測定ではない。
+- #347：5ee45bdでprivate encodedがtext()の生成stringを所有として受け、UTF8は移管、BOMは同じ値の先頭へ追加。CP932の同期借用と外部raw防御copyは不変。`nib_tests --file-save`38 / `--ex-document`206 / `--ex-write-path`90、計334checks成功。
+- #348 B1：812c835でcollectを既存visit_text_rangeへ集め、空範囲と終端で停止。reserveや集計融合は含めない。`nib_tests --buffer-range`235checks成功。head/tail/断片・改行交差/逆順/本文外/全削除と旧snapshotを直接確認。
+- #349：設計fdce98cの後de51fb9で、行頭からの非重複一致列挙をprivateな停止可能処理へ集めた。first/lastと全件強調が同じ列を使い、caretから直接照合しない。`--vim-search`1374 / `--vim-search-highlight`76 / `--vim-search-incremental`141、計1591checks成功。
+- 各製品差分の通常Debug/tidy/ASan/UBSan、関連source規約/File API/symbolsは成功。独立read-only reviewは製品3件とharnessを別作者の席で実施し、受理を止める所見なし。自己実装を独立認定した扱いにしない。
+
+### 固定比較と結果
+
+`compare-wave3.py batch-347-348b1-349 --execute`が既存`eng/compare-probes.py`へ固定の各20反復×ABBA3block（12process、120対応組）を渡した。warmup各1は区間外。全席のbuild/test/GUI/重いcopyを止め、前後環境を記録。13条件すべてobserved、欠測/外側retryなし。全sample・metadata・marks・完全checksum・exe SHAを保持する。beforeは同じ41処理harnessのa93e0e6、afterは各製品へ同じharnessを取り込んだbd507e9/a2d534d/d20602d。比は対応組after/beforeの中央値で、列の時間は全sampleの中央値なので両者の商とは限らない。
+
+| 固定処理 | before µs | after µs | 対応比中央値 | 短縮した組/120 |
+| --- | ---: | ---: | ---: | ---: |
+| UTF8保存16.8MB | 8354.5 | 5197.5 | 0.625208 | 118 |
+| UTF8 BOM保存16.8MB | 9298.5 | 6150.0 | 0.657926 | 116 |
+| 8193断片・先頭erase16回 | 2639.5 | 2659.5 | 1.001508 | 58 |
+| 同・中央erase16回 | 2892.5 | 2700.0 | 0.954840 | 86 |
+| 同・末尾erase16回 | 2678.5 | 2786.0 | 1.052850 | 38 |
+| 同・全文erase16回 | 224.0 | 2.0 | 0.008316 | 120 |
+| 1断片・中央erase16回 | 4.0 | 4.0 | 1.000000 | 同値主体 |
+| 前方検索・先頭 | 6432.0 | 56.0 | 0.008857 | 120 |
+| 前方検索・中央 | 7297.0 | 3288.5 | 0.454514 | 120 |
+| 前方検索・末尾 | 13948.0 | 6202.5 | 0.445879 | 120 |
+| 後方検索・先頭 | 12975.0 | 5243.0 | 0.407485 | 120 |
+| 後方検索・中央 | 7272.0 | 3317.5 | 0.458164 | 120 |
+| 後方検索・末尾 | 8152.0 | 6595.5 | 0.806687 | 120 |
+
+保存2条件と検索6条件で短縮を観測。B1は全文削除の不要走査を除く一方、末尾条件は約5%遅い（16回の中央値差107.5µs、1回あたり約6.7µs）。この代償を消さず採否へ含める。先頭と1断片に改善は主張しない。全文削除のafter1〜2µsは分解能に近く、桁数の多い改善率を保証しない。全値の分布・範囲はsummary.jsonと各comparison JSONが正本。BOMの再確保可能性、piece列生成/集計、行所有copyは残り、RSS/ゼロcopy/全入力の速度を保証しない。
+
+### 証拠と残る受理
+
+原記録は `D:/NeNeNib/outputs/20261010-speed-stability/`、harness `outputs/20261010-probes/`、実装 `outputs/20261010-save-path/`・`outputs/20261010-buffer-paths/`・`outputs/20261010-search-enumeration/`、独立レビュー `outputs/20261010-review-wave3/`。恒久先は `D:/NeNeNib/evidence/speed-optimizations-20261010-wave3/` へ元path/SHA対応付きで収載する。収載前の追加作業木は保持する。#348Aのoffsetと#350照合器は別の入力/commit/計測/受理であり、この13条件の成功に混ぜない。
+
+## 5-de — 第三陣3件の統合と直接実機確認（#351・進行中）
+
+統合sourceは`c907c7a3bc312ef57f0c9aa81909a6b8b2ff01b7`。変更した製品は#347/#348B1/#349だけ。`351-reuse-identity.json`で各成功時の全変更source/testと共通toolchain/flags/規約/referenceの14項目が一致。保存は本文を読むだけでcollectを呼ばず、検索移動も本文を編集しないため、部品の334/235/1591checksをQLT-012により再利用する。統合した操作の結合は下記の実機で確認した。
+
+- `pwsh -NoProfile -File eng/build-release.ps1 -Ref refactor/351-speed-integration`：通常Release113steps成功。`out/release/c907c7a.json`、exe1445888bytes、SHA256 `057E588D33C9F2391CD996773A74A6AF412F062A0B9A1BB02D9340FCE61E9A0B`。製品flags/依存は変更なし。
+- `python eng/protected-diff.py --base d692c2e --head c907c7a`：fixture1853不変、protected filesnone、終了0。selectorはfile-saveを追加して44。exeを渡していない43既存scopeは未測であり、全件同数を主張しない。
+- `verify-351-boundaries.py --label before/after --executable <固定exe>` と `--compare`：旧製品2993bb4と統合製品を同じprofile設定/120dpi/1280×800で比較。通常編集、UTF8/UTF8 BOM/CP932の:w実保存、非重複検索の次/前/折返し、a*入力中preview/取消の18場面が本文/ステータス0画素差。両版の3保存は独立expectedと全byte一致、6process正常終了、settings不変。7操作遷移に非0画素変化を確認し、届かなかった刺激を一致の根拠にしていない。画像も直接目視した。
+- GUIの初回はCtrl+S後0.5秒の確認で旧版の保存が未反映、保存入口を:wへ切り替えた2回目は0.5秒の読取で共有拒否。元script/画面/文書/失敗recordを保持。v2からv3では本文/期待/製品/操作を保ち、保存完了と共有解除を最大15秒待つ同期へ直して上記成功。Ctrl+Sの未反映原因を特定したとはしない。待ち時間は性能値に転用しない。
+- computer-useの@oai/skyはnative pipe不在で接続できず、再初期化後も同じだった。入力操作は行われず、既存window_driver/verify-windowの専用CLIを使用。失敗を隠してcomputer-use成功とは記さない。
+- 正式QLT-014はcollectを通る空文書1打鍵/200打鍵/16MiB200打鍵/長い日本語行1打鍵の4条件を選び、`formal-351-plan.json`に測定前固定。起動/open/paletteの刺激は変更した関数を呼ばず、QLT-001により繰り返さない。基準値/25%許容/2ms床を変えず各5試行の正規`eng/measure-speed.py --check --bench`で判定する。正式4条件は各5試行で全件基準内、0退行/0計測不能。中央値は空文書1打鍵0.646ms、200打鍵2.073ms、16MiB200打鍵2.248ms、長い日本語行1打鍵5.950ms。指紋bc8a356f37c68491の既存基準で判定し、参考記録だけの成功とは区別した。CI・main統合・恒久収載は継続中。全試料はformal-351各logと4つの正規out/speed JSONへ保持。既存runnerが繰り返し上書きするmarksは各bench終了時にsnapshotを取り、全試行のmarksを保持したとは主張しない。
+
+配置/失敗/探索誤り/実行順の詳細はjournal.md。worktree checkout完了待ち前のcherry-pick拒否も保持し、clean確認後に残りと未適用設計を取り込んだ。元の事前設計commitは実装より前で不変。採用済み・整理済みとするのはD41と収載/監査の完了後とする。
+
+- 恒久証跡を`D:/NeNeNib/evidence/speed-optimizations-20261010-wave3/snapshot-1005/`へ収載し、997file/265,043,842bytesのコピー元/先SHA256一致を確認。manifest SHA256 `a8f4bdf49326557f43dcc138ed32429e738c69f2677976c08b766a504a48296b`。`files/`以下はD:/NeNeNibからの元pathを保持し、source/には6枝のHEADを保存。348A/350は未受理実験の時点snapshotとして含む。B1の古いtest exeは上書き済みであり、現存AのexeをB1のものと表示しない。再生成可能なobject/cacheは収載対象外。PR #352のCI後にmainへ統合し、完了した347/349/351の作業木は未保存/未追跡/無視file・リンク・稼働参照と取込を監査してから整理する。枝とcommitは保持する。

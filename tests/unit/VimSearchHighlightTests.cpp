@@ -68,6 +68,10 @@ void verify_vim_line_matches()
            "a zero-length match counts and steps one character");
     expect(matches_of("abc", "^") == std::vector<MatchSpan>{{0, 0}}, "the line start matches once");
     expect(matches_of("abc", "$") == std::vector<MatchSpan>{{3, 3}}, "and so does the line end");
+    expect(matches_of("", "^") == std::vector<MatchSpan>{{0, 0}},
+           "the first match is visited even when the line is empty");
+    expect(matches_of("abc", ".*") == std::vector<MatchSpan>{{0, 3}},
+           "reaching the line end does not add another empty match");
     expect(matches_of("abc", "zzz").empty(), "a pattern that is not there has no match");
     expect(matches_of("あいう かきく", "あいう") == std::vector<MatchSpan>{{0, 9}},
            "a multibyte match is measured in bytes");
