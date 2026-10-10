@@ -46,8 +46,10 @@ namespace
 }
 
 // 完結した UTF-8 の区間を借り、既存の scalar 走査の始点と終点を全体のバイト位置へ戻す。
-[[nodiscard]] std::optional<OffsetRange> code_point_from(std::span<const std::string_view> command,
-                                                         Offset from, char32_t wanted) noexcept
+template <std::size_t Count>
+[[nodiscard]] std::optional<OffsetRange>
+code_point_from(std::span<const std::string_view, Count> command, Offset from,
+                char32_t wanted) noexcept
 {
     std::size_t prefix = 0;
     for (const std::string_view part : command)
@@ -66,8 +68,9 @@ namespace
 
 // query のコードポイントを順に候補の中から探す部分列の照合。空白は飛ばし、ASCII は大文字と
 // 小文字を区別しない。点は候補の長さと飛ばした量の和で、最初の文字までは 4 倍（単位はバイト）。
-[[nodiscard]] std::optional<std::size_t> match_score(std::string_view query,
-                                                     std::span<const std::string_view> command)
+template <std::size_t Count>
+[[nodiscard]] std::optional<std::size_t>
+match_score(std::string_view query, std::span<const std::string_view, Count> command)
 {
     Offset at{0};
     std::size_t score = 0;
@@ -97,7 +100,7 @@ namespace
                                                      std::string_view command)
 {
     const std::array<std::string_view, 1> parts{command};
-    return match_score(query, parts);
+    return match_score(query, std::span{parts});
 }
 
 [[nodiscard]] CommandChoice choice_of(std::string command)
@@ -172,7 +175,7 @@ constexpr std::size_t location_only_penalty = std::numeric_limits<std::size_t>::
     }
     const std::array<std::string_view, 3> located{choice.detail.value().text(), "\\",
                                                   choice.label.text()};
-    const auto score = match_score(query, located);
+    const auto score = match_score(query, std::span{located});
     if (!score.has_value())
     {
         return std::nullopt;
