@@ -1,0 +1,16 @@
+#pragma once
+
+#include "FrameRowsWorkload.hpp"
+#include "ProbeWorkload.hpp"
+
+#include <variant>
+
+namespace nenenib::tests::performance
+{
+using ProbeSelection = std::variant<ProbeWorkload, FrameRowsWorkload>;
+
+[[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
+[[nodiscard]] std::string input_of(ProbeSelection workload);
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+run_workload(ProbeSelection workload, const std::string &input, application::TimingPort &timing);
+} // namespace nenenib::tests::performance

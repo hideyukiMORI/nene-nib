@@ -174,14 +174,37 @@ class ProbeComparisonTests(unittest.TestCase):
                  ("frame-search-sparse-tail-32768", b"x" * 32767 + b"a", "6746773668288547386"),
                  ("frame-selection-ascii-32768", b"a x " * 8192, "2381364893216809765"),
                  ("frame-search-visual-ascii-8192", b"a x " * 8192, "2381364893216809765"))
-        self.assertEqual(tuple(name for name, _, _ in cases), PROBES.WORKLOADS[48:])
-        self.assertEqual(len(PROBES.WORKLOADS), 53)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 53)
+        self.assertEqual(tuple(name for name, _, _ in cases), PROBES.WORKLOADS[48:53])
+        self.assertEqual(len(PROBES.WORKLOADS[:53]), 53)
+        self.assertEqual(len(set(PROBES.WORKLOADS[:53])), 53)
         for name, expected, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
                 self.assertEqual(PROBES.fnv1a64(expected), fnv)
         for name in ("frame-search-dense-ascii-8191", "frame-search-sparse-tail-32767"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
+    def test_frame_rows_inputs_and_registry(self):
+        unit = bytes.fromhex("61 e6 97 a5 09 f0 9f 96 8b 01 20 72 6f 77")
+        cases = (("frame-rows-empty-64", b"", 0, "14695981039346656037"),
+                 ("frame-rows-short-64", unit + b"\r\ntail", 20, "17662855059157275171"),
+                 ("frame-rows-30-64", (unit + b"\r\n") * 119 + b"tail", 1908,
+                  "11632098944160318499"),
+                 ("frame-rows-120-64", (unit + b"\r\n") * 119 + b"tail", 1908,
+                  "11632098944160318499"))
+        self.assertEqual(tuple(name for name, _, _, _ in cases), PROBES.WORKLOADS[53:57])
+        self.assertEqual(len(PROBES.WORKLOADS), 57)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 57)
+        for name, expected, size, fnv in cases:
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), expected)
+                self.assertEqual(len(expected), size)
+                self.assertEqual(PROBES.fnv1a64(expected), fnv)
+
+    def test_frame_rows_invalid_names(self):
+        for name in ("frame-rows-empty-63", "frame-rows-short-65", "frame-rows-31-64",
+                     "frame-rows-121-64"):
             with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
                 PROBES.fixed_input(name)
 

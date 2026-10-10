@@ -58,7 +58,9 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "frame-search-dense-mixed-4096",
              "frame-search-sparse-tail-32768",
              "frame-selection-ascii-32768",
-             "frame-search-visual-ascii-8192")
+             "frame-search-visual-ascii-8192",
+             "frame-rows-empty-64", "frame-rows-short-64",
+             "frame-rows-30-64", "frame-rows-120-64")
 ORDER = ("before", "after", "after", "before")
 
 
@@ -122,6 +124,12 @@ def fixed_input(workload: str) -> bytes:
         return "日a\t🖋\x01 ".encode("utf-8") * 4096
     if workload == "frame-search-sparse-tail-32768":
         return b"x" * 32767 + b"a"
+    if workload == "frame-rows-empty-64":
+        return b""
+    if workload == "frame-rows-short-64":
+        return "a日\t🖋\x01 row\r\ntail".encode("utf-8")
+    if workload in ("frame-rows-30-64", "frame-rows-120-64"):
+        return "a日\t🖋\x01 row\r\n".encode("utf-8") * 119 + b"tail"
     return scoped_fixed_input(workload)
 
 

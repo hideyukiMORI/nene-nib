@@ -49,3 +49,21 @@ ABBAを固定回数だけ実行し、全sample・対応するafter/before ratio�
 | controller-vim-record-insert-2000 | ASCII x 2000bytes | VimKeyPress{x}を2000回 |
 
 登録は名前aの文字単位、録画はq a iを区間前に準備。区間後の保存・frame・Esc・貼付/undo・録画停止/再生で本文とcaretを確認する。準備と確認は時間に含めない。各processは従来通りwarmup1回を含み、iterationsで指定したsampleだけをmarksへ記録する。1sampleの短い動作確認は性能比較・正式速度ゲートを代替しない。
+
+## 表示行一覧の固定比較（#367・ADR0100）
+
+既存53条件を保持して `frame-rows-empty-64` / `frame-rows-short-64` /
+`frame-rows-30-64` / `frame-rows-120-64` を末尾へ追加する。
+入力・viewport・全行の独立期待値と採否条件は
+[ADR0100](../adr/0100-visible-lines-reserve-only-the-existing-row-range.md)を正本とする。
+各sampleは同じconst controllerのframeを64回生成し、その反復内で破棄する。
+反復とlines.size/first_visible/total_lines/caret.line/caret.columnの和も区間内である。
+準備・入力生成・固定literalとの全行照合は区間外で、前後双方を照合する。
+結果checksumは空320、2行448、30行9792、120行15552。
+display_lineやcapacityを期待値生成に使わない。
+
+同一harnessをbeforeとafterへ使い、before製品sourceはmain8252cb1と一致させる。
+対象Python検査は旧stage-six境界と新4入力/registry/不正名だけ。
+Debugの新4条件各1iterationとRelease同一exeの各iterations1/blocks1は道具の動作確認である。
+既存のwarmup/marks/metadata/欠測/timeout/許容は不変で、空inputBytes0も完全一致で照合する。
+長いABBA・実機・正式速度・採否は親設計席が担当し、短い自己比較から利益を判断しない。

@@ -2,8 +2,10 @@
 
 #include "BufferProbe.hpp"
 #include "FrameProbe.hpp"
+#include "FrameRowsProbe.hpp"
 #include "PatternProbe.hpp"
 #include "ProbeDispatch.hpp"
+#include "ProbeSelection.hpp"
 #include "ScopedProbe.hpp"
 #include "SearchProbe.hpp"
 
@@ -39,6 +41,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 namespace nenenib::tests::performance
 {
@@ -530,136 +533,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return vim_inserted_while_recording(input, timing);
 }
 
-constexpr std::array<ProbeDispatch, 53> dispatches{{
-    {ProbeWorkload::controller_open, "controller-open-utf8-16mib", large_probe_input, run_opened},
-    {ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input, run_buffered},
-    {ProbeWorkload::controller_insert, "controller-insert-200", insert_probe_input, run_inserted},
-    {ProbeWorkload::display_long, "display-line-long", display_probe_input, run_displayed},
-    {ProbeWorkload::insert_after_delete_small, "controller-insert-200-after-delete-1mib",
-     deleted_small_input, run_after_delete},
-    {ProbeWorkload::insert_after_delete_large, "controller-insert-200-after-delete-16mib",
-     large_probe_input, run_after_delete},
-    {ProbeWorkload::validate_ascii, "utf8-validate-ascii-16mib", large_probe_input,
-     run_validated_ascii},
-    {ProbeWorkload::validate_japanese, "utf8-validate-japanese-6mib", validation_japanese_input,
-     run_validated_japanese},
-    {ProbeWorkload::vim_register_small, "controller-vim-insert-200-register-1mib",
-     register_small_input, run_registered},
-    {ProbeWorkload::vim_register_large, "controller-vim-insert-200-register-16mib",
-     register_large_input, run_registered},
-    {ProbeWorkload::vim_record_small, "controller-vim-record-insert-200", record_small_input,
-     run_recorded},
-    {ProbeWorkload::vim_record_large, "controller-vim-record-insert-2000", record_large_input,
-     run_recorded},
-    {ProbeWorkload::scattered_crlf_lines, "buffer-line-text-scattered-crlf-4096", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::scattered_lf_lines, "buffer-line-text-scattered-lf-4096", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::long_position, "buffer-position-long-utf8-57344", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::scattered_position, "buffer-position-scattered-utf8-57344", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::listed_name, "palette-listed-name-5000", scoped_input_of, run_scoped_workload},
-    {ProbeWorkload::listed_location, "palette-listed-location-5000", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::palette_narrow, "palette-append-narrow-5000-to-50", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::palette_left, "palette-caret-left-5000", scoped_input_of, run_scoped_workload},
-    {ProbeWorkload::codepage_japanese, "codepage-to-utf8-cp932-japanese-16mib", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::utf16_japanese, "utf16-to-utf8-japanese-8m-units", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::utf16_ascii, "utf16-to-utf8-ascii-8m-units", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::utf16_supplementary, "utf16-to-utf8-supplementary-8m-units", scoped_input_of,
-     run_scoped_workload},
-    {ProbeWorkload::controller_save, "controller-save-utf8-16mib", large_probe_input, saved},
-    {ProbeWorkload::controller_save_bom, "controller-save-utf8-bom-16mib", large_probe_input,
-     saved},
-    {ProbeWorkload::erase_scattered_head, "buffer-erase-scattered-head-4096", crlf_probe_input,
-     erased_buffer},
-    {ProbeWorkload::erase_scattered_middle, "buffer-erase-scattered-middle-4096", crlf_probe_input,
-     erased_buffer},
-    {ProbeWorkload::erase_scattered_tail, "buffer-erase-scattered-tail-4096", crlf_probe_input,
-     erased_buffer},
-    {ProbeWorkload::erase_scattered_all, "buffer-erase-scattered-all-4096", crlf_probe_input,
-     erased_buffer},
-    {ProbeWorkload::erase_single_middle, "buffer-erase-single-middle-4096", crlf_probe_input,
-     erased_buffer},
-    {ProbeWorkload::offset_long_head, "buffer-offset-long-head-57344", position_probe_input,
-     queried_offset},
-    {ProbeWorkload::offset_long_middle, "buffer-offset-long-middle-57344", position_probe_input,
-     queried_offset},
-    {ProbeWorkload::offset_long_end, "buffer-offset-long-end-57344", position_probe_input,
-     queried_offset},
-    {ProbeWorkload::offset_scattered_middle, "buffer-offset-scattered-middle-57344",
-     position_probe_input, queried_offset},
-    {ProbeWorkload::search_forward_head, "search-forward-head-many-4096", search_probe_input,
-     searched_buffer},
-    {ProbeWorkload::search_forward_middle, "search-forward-middle-many-4096", search_probe_input,
-     searched_buffer},
-    {ProbeWorkload::search_forward_tail, "search-forward-tail-many-4096", search_probe_input,
-     searched_buffer},
-    {ProbeWorkload::search_backward_head, "search-backward-head-many-4096", search_probe_input,
-     searched_buffer},
-    {ProbeWorkload::search_backward_middle, "search-backward-middle-many-4096", search_probe_input,
-     searched_buffer},
-    {ProbeWorkload::search_backward_tail, "search-backward-tail-many-4096", search_probe_input,
-     searched_buffer},
-    {ProbeWorkload::pattern_star_small, "pattern-star-miss-1024", pattern_probe_input,
-     matched_pattern},
-    {ProbeWorkload::pattern_star_middle, "pattern-star-miss-2048", pattern_probe_input,
-     matched_pattern},
-    {ProbeWorkload::pattern_star_large, "pattern-star-miss-4096", pattern_probe_input,
-     matched_pattern},
-    {ProbeWorkload::pattern_multistar, "pattern-multistar-miss-32", pattern_probe_input,
-     matched_pattern},
-    {ProbeWorkload::pattern_greedy, "pattern-greedy-hit-4096", pattern_probe_input,
-     matched_pattern},
-    {ProbeWorkload::pattern_literal_tail, "pattern-literal-tail-4102", pattern_probe_input,
-     matched_pattern},
-    {ProbeWorkload::pattern_literal_long, "pattern-literal-long-4096", pattern_probe_input,
-     matched_pattern},
-    {ProbeWorkload::frame_dense_ascii, "frame-search-dense-ascii-8192", frame_probe_input,
-     framed_line},
-    {ProbeWorkload::frame_dense_mixed, "frame-search-dense-mixed-4096", frame_probe_input,
-     framed_line},
-    {ProbeWorkload::frame_sparse_tail, "frame-search-sparse-tail-32768", frame_probe_input,
-     framed_line},
-    {ProbeWorkload::frame_selection, "frame-selection-ascii-32768", frame_probe_input, framed_line},
-    {ProbeWorkload::frame_search_visual, "frame-search-visual-ascii-8192", frame_probe_input,
-     framed_line},
-}};
-
-[[nodiscard]] constexpr bool name_is_unique(std::size_t index)
-{
-    for (std::size_t previous = 0; previous < index; ++previous)
-    {
-        if (dispatches[index].name == dispatches[previous].name)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-[[nodiscard]] constexpr bool dispatch_is_complete()
-{
-    for (std::size_t index = 0; index < dispatches.size(); ++index)
-    {
-        const auto &row = dispatches[index];
-        if (static_cast<std::size_t>(row.workload) != index || row.name.empty() ||
-            row.input == nullptr || row.run == nullptr || !name_is_unique(index))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-static_assert(dispatches.size() == 53U);
-static_assert(dispatch_is_complete());
-
-[[nodiscard]] std::size_t checked_index(ProbeWorkload workload)
+[[nodiscard]] constexpr std::size_t checked_index(ProbeWorkload workload)
 {
     switch (workload)
     {
@@ -720,28 +594,208 @@ static_assert(dispatch_is_complete());
     }
     std::unreachable();
 }
+
+[[nodiscard]] constexpr std::size_t checked_index(FrameRowsWorkload workload)
+{
+    switch (workload)
+    {
+    case FrameRowsWorkload::frame_rows_empty:
+    case FrameRowsWorkload::frame_rows_short:
+    case FrameRowsWorkload::frame_rows_thirty:
+    case FrameRowsWorkload::frame_rows_full:
+        return 53U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
+{
+    return std::visit([](auto value) { return checked_index(value); }, workload);
+}
+
+[[nodiscard]] constexpr std::string_view dispatch_name(const ProbeDispatch &dispatch)
+{
+    return std::visit([](const auto &row) { return row.name; }, dispatch);
+}
+
+constexpr std::array<ProbeDispatch, 57> dispatches{{
+    ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
+                     large_probe_input, run_opened},
+    ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
+                     run_buffered},
+    ProbeDispatchRow{ProbeWorkload::controller_insert, "controller-insert-200", insert_probe_input,
+                     run_inserted},
+    ProbeDispatchRow{ProbeWorkload::display_long, "display-line-long", display_probe_input,
+                     run_displayed},
+    ProbeDispatchRow{ProbeWorkload::insert_after_delete_small,
+                     "controller-insert-200-after-delete-1mib", deleted_small_input,
+                     run_after_delete},
+    ProbeDispatchRow{ProbeWorkload::insert_after_delete_large,
+                     "controller-insert-200-after-delete-16mib", large_probe_input,
+                     run_after_delete},
+    ProbeDispatchRow{ProbeWorkload::validate_ascii, "utf8-validate-ascii-16mib", large_probe_input,
+                     run_validated_ascii},
+    ProbeDispatchRow{ProbeWorkload::validate_japanese, "utf8-validate-japanese-6mib",
+                     validation_japanese_input, run_validated_japanese},
+    ProbeDispatchRow{ProbeWorkload::vim_register_small, "controller-vim-insert-200-register-1mib",
+                     register_small_input, run_registered},
+    ProbeDispatchRow{ProbeWorkload::vim_register_large, "controller-vim-insert-200-register-16mib",
+                     register_large_input, run_registered},
+    ProbeDispatchRow{ProbeWorkload::vim_record_small, "controller-vim-record-insert-200",
+                     record_small_input, run_recorded},
+    ProbeDispatchRow{ProbeWorkload::vim_record_large, "controller-vim-record-insert-2000",
+                     record_large_input, run_recorded},
+    ProbeDispatchRow{ProbeWorkload::scattered_crlf_lines, "buffer-line-text-scattered-crlf-4096",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::scattered_lf_lines, "buffer-line-text-scattered-lf-4096",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::long_position, "buffer-position-long-utf8-57344",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::scattered_position, "buffer-position-scattered-utf8-57344",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::listed_name, "palette-listed-name-5000", scoped_input_of,
+                     run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::listed_location, "palette-listed-location-5000",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::palette_narrow, "palette-append-narrow-5000-to-50",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::palette_left, "palette-caret-left-5000", scoped_input_of,
+                     run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::codepage_japanese, "codepage-to-utf8-cp932-japanese-16mib",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::utf16_japanese, "utf16-to-utf8-japanese-8m-units",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::utf16_ascii, "utf16-to-utf8-ascii-8m-units", scoped_input_of,
+                     run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::utf16_supplementary, "utf16-to-utf8-supplementary-8m-units",
+                     scoped_input_of, run_scoped_workload},
+    ProbeDispatchRow{ProbeWorkload::controller_save, "controller-save-utf8-16mib",
+                     large_probe_input, saved},
+    ProbeDispatchRow{ProbeWorkload::controller_save_bom, "controller-save-utf8-bom-16mib",
+                     large_probe_input, saved},
+    ProbeDispatchRow{ProbeWorkload::erase_scattered_head, "buffer-erase-scattered-head-4096",
+                     crlf_probe_input, erased_buffer},
+    ProbeDispatchRow{ProbeWorkload::erase_scattered_middle, "buffer-erase-scattered-middle-4096",
+                     crlf_probe_input, erased_buffer},
+    ProbeDispatchRow{ProbeWorkload::erase_scattered_tail, "buffer-erase-scattered-tail-4096",
+                     crlf_probe_input, erased_buffer},
+    ProbeDispatchRow{ProbeWorkload::erase_scattered_all, "buffer-erase-scattered-all-4096",
+                     crlf_probe_input, erased_buffer},
+    ProbeDispatchRow{ProbeWorkload::erase_single_middle, "buffer-erase-single-middle-4096",
+                     crlf_probe_input, erased_buffer},
+    ProbeDispatchRow{ProbeWorkload::offset_long_head, "buffer-offset-long-head-57344",
+                     position_probe_input, queried_offset},
+    ProbeDispatchRow{ProbeWorkload::offset_long_middle, "buffer-offset-long-middle-57344",
+                     position_probe_input, queried_offset},
+    ProbeDispatchRow{ProbeWorkload::offset_long_end, "buffer-offset-long-end-57344",
+                     position_probe_input, queried_offset},
+    ProbeDispatchRow{ProbeWorkload::offset_scattered_middle, "buffer-offset-scattered-middle-57344",
+                     position_probe_input, queried_offset},
+    ProbeDispatchRow{ProbeWorkload::search_forward_head, "search-forward-head-many-4096",
+                     search_probe_input, searched_buffer},
+    ProbeDispatchRow{ProbeWorkload::search_forward_middle, "search-forward-middle-many-4096",
+                     search_probe_input, searched_buffer},
+    ProbeDispatchRow{ProbeWorkload::search_forward_tail, "search-forward-tail-many-4096",
+                     search_probe_input, searched_buffer},
+    ProbeDispatchRow{ProbeWorkload::search_backward_head, "search-backward-head-many-4096",
+                     search_probe_input, searched_buffer},
+    ProbeDispatchRow{ProbeWorkload::search_backward_middle, "search-backward-middle-many-4096",
+                     search_probe_input, searched_buffer},
+    ProbeDispatchRow{ProbeWorkload::search_backward_tail, "search-backward-tail-many-4096",
+                     search_probe_input, searched_buffer},
+    ProbeDispatchRow{ProbeWorkload::pattern_star_small, "pattern-star-miss-1024",
+                     pattern_probe_input, matched_pattern},
+    ProbeDispatchRow{ProbeWorkload::pattern_star_middle, "pattern-star-miss-2048",
+                     pattern_probe_input, matched_pattern},
+    ProbeDispatchRow{ProbeWorkload::pattern_star_large, "pattern-star-miss-4096",
+                     pattern_probe_input, matched_pattern},
+    ProbeDispatchRow{ProbeWorkload::pattern_multistar, "pattern-multistar-miss-32",
+                     pattern_probe_input, matched_pattern},
+    ProbeDispatchRow{ProbeWorkload::pattern_greedy, "pattern-greedy-hit-4096", pattern_probe_input,
+                     matched_pattern},
+    ProbeDispatchRow{ProbeWorkload::pattern_literal_tail, "pattern-literal-tail-4102",
+                     pattern_probe_input, matched_pattern},
+    ProbeDispatchRow{ProbeWorkload::pattern_literal_long, "pattern-literal-long-4096",
+                     pattern_probe_input, matched_pattern},
+    ProbeDispatchRow{ProbeWorkload::frame_dense_ascii, "frame-search-dense-ascii-8192",
+                     frame_probe_input, framed_line},
+    ProbeDispatchRow{ProbeWorkload::frame_dense_mixed, "frame-search-dense-mixed-4096",
+                     frame_probe_input, framed_line},
+    ProbeDispatchRow{ProbeWorkload::frame_sparse_tail, "frame-search-sparse-tail-32768",
+                     frame_probe_input, framed_line},
+    ProbeDispatchRow{ProbeWorkload::frame_selection, "frame-selection-ascii-32768",
+                     frame_probe_input, framed_line},
+    ProbeDispatchRow{ProbeWorkload::frame_search_visual, "frame-search-visual-ascii-8192",
+                     frame_probe_input, framed_line},
+    ProbeDispatchRow{FrameRowsWorkload::frame_rows_empty, "frame-rows-empty-64", frame_rows_input,
+                     framed_rows},
+    ProbeDispatchRow{FrameRowsWorkload::frame_rows_short, "frame-rows-short-64", frame_rows_input,
+                     framed_rows},
+    ProbeDispatchRow{FrameRowsWorkload::frame_rows_thirty, "frame-rows-30-64", frame_rows_input,
+                     framed_rows},
+    ProbeDispatchRow{FrameRowsWorkload::frame_rows_full, "frame-rows-120-64", frame_rows_input,
+                     framed_rows},
+}};
+
+[[nodiscard]] constexpr bool name_is_unique(std::size_t index)
+{
+    for (std::size_t previous = 0; previous < index; ++previous)
+    {
+        if (dispatch_name(dispatches[index]) == dispatch_name(dispatches[previous]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] constexpr bool dispatch_is_complete()
+{
+    for (std::size_t index = 0; index < dispatches.size(); ++index)
+    {
+        const bool valid = std::visit(
+            [index](const auto &row)
+            {
+                return checked_index(row.workload) == index && !row.name.empty() &&
+                       row.input != nullptr && row.run != nullptr;
+            },
+            dispatches[index]);
+        if (!valid || !name_is_unique(index))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+static_assert(dispatches.size() == 57U);
+static_assert(dispatch_is_complete());
+
 } // namespace
 
-std::optional<ProbeWorkload> workload_of(std::string_view name) noexcept
+std::optional<ProbeSelection> workload_of(std::string_view name) noexcept
 {
     for (const auto &row : dispatches)
     {
-        if (row.name == name)
+        if (dispatch_name(row) == name)
         {
-            return row.workload;
+            return std::visit([](const auto &value) -> ProbeSelection { return value.workload; },
+                              row);
         }
     }
     return std::nullopt;
 }
 
-std::string input_of(ProbeWorkload workload)
+std::string input_of(ProbeSelection workload)
 {
-    return dispatches.at(checked_index(workload)).input(workload);
+    return std::visit([](const auto &row) { return row.input(row.workload); },
+                      dispatches.at(selection_index(workload)));
 }
 
 std::expected<std::uint64_t, ProbeFailure>
-run_workload(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
+run_workload(ProbeSelection workload, const std::string &input, application::TimingPort &timing)
 {
-    return dispatches.at(checked_index(workload)).run(workload, input, timing);
+    return std::visit([&input, &timing](const auto &row)
+                      { return row.run(row.workload, input, timing); },
+                      dispatches.at(selection_index(workload)));
 }
 } // namespace nenenib::tests::performance
