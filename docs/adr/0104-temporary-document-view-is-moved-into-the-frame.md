@@ -1,6 +1,6 @@
 # ADR 0104 — 一時の文書表示値はframeへ所有を移す
 
-- 状態: proposed（取得前の固定計画）
+- 状態: 技術受理
 - 日付: 2026-10-10
 - Issue: #380
 - 基準: main6195a1547db60ee4aa0f96b5d7c84957dc559398
@@ -48,3 +48,13 @@ GUIはshort/longのsaved・modified・保存復帰とuntitled/tabの範囲に限
 単体実装、必要な独立レビューだけ読取専用。D:/NeNeNib/worktrees/380-frame-document、outputs/20261010-frame-documentで作業する。全実験/失敗/判断を日報/引き継ぎへ記録する。PR/必須CI/main統合/恒久収載後、未保存/ignored/唯一成果/稼働参照/link/絶対pathを監査整理、branch/commitを保持する。関連入力が不変の成功結果は工程/文書/SHA変更だけで再実行しない。
 
 永続cache、tab表示API、本文/検索、C8入力parse保持、#365/#373、他候補の再測定、全件回帰は対象外。
+
+## 取得結果（22:36 JST）
+
+before b6de932 / 製品 b82b0ed。短/長savedの256frameは291→272µs / 332→314µs、対応比中央値.938144/.945205、短縮118/114組、全3cycle比<1。failed/untitledの費用比.932738/.994220、差-19/-1µsも事前条件内。無題cycle2=1も残す。各120対応組を一度取得、除外/補完なし。局所値をUI全体や単独1frameの改善率としない。
+
+初回起動はpowercfgがUTF-8、Pythonがcp932で、環境読取中に停止。probe起動/性能試料0を保存物とscript順序で確認。原script/生bytes/失敗stderr/空のprocessログを保持し、出力先だけ別にして-X utf8で未取得系列を取得した。元の固定計画/製品/入力/harness/採否は不変。
+
+Debug/tidy/ASan/UBSan、--application16009/--tabs291の16300checks、新4probe、source/実依存/symbol/旧72不変/新enum拒否、通常Releaseが成功。GUI8対全client0px、16全文copy一致、親24PNG全目視、132checkpoint/8実modeRGB/2正常終了。正式single5有効の中央値.629ms、基準.906/上限2.906、欠測0/退行0。他7指標未測。
+
+未実行GUI台本の:b 1をpalette queryとするP2は、原scriptを保全して2箇所を:tabnext 1へ修正・再固定、取得前レビューで解消。新enumの実compilerは正例0/欠落1だが監査の旧regex残存で初回script1、原本を保持して読み取り監査で実診断を照合、再compilerなし。全結果とコマンドは[gate-proofs 5-dq](../quality/gate-proofs.md#5-dq--一時の文書表示値をframeへ所有移管するissue-380adr0104)。独立最終レビューでP0/P1/P2なし、技術受理。

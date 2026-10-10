@@ -102,3 +102,6 @@ frame-document-short-saved-256 / long-saved-256 / long-failed-256 / untitled-256
 const frame256回の生成/破棄とdocument/status/tabs/linesの長さchecksumを区間内、準備・前後の全文/表示map/document全欄/status/tabs/delivery保有値照合を区間外に置く。
 checksumは14592/82176/83200/3328。新4Debug/変更前Release各1iterationは道具確認のみ。
 固定20iterations/ABBA3/120組、2利益/2費用条件で一度取得し、全raw/失敗を保持する。旧72の入力/区間/selector不変と新enum欠落の実compiler拒否を確認する。
+
+before b6de932 / after b82b0edは同じharness/入力/区間/flagsを使用。pathのFNV1a64はshort3165114504819470625、long/failed3259355916674798828、untitled14695981039346656037。
+各120組の2利益/2費用が成立。最初の環境読取だけはUTF-8/cp932で失敗し、probe試料0/原本を保全。出力先だけを変えて-X utf8で未取得系列を一度取得した。結果と全失敗はgate-proofs 5-dq、局所値を正式GUI速度へ代用しない。
