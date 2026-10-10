@@ -13,4 +13,8 @@ queried_lines(const std::string &input, application::TimingPort &timing);
 queried_long_position(const std::string &input, application::TimingPort &timing);
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 queried_scattered_position(const std::string &input, application::TimingPort &timing);
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+erased_buffer(ProbeWorkload workload, const std::string &input, application::TimingPort &timing);
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+queried_offset(ProbeWorkload workload, const std::string &input, application::TimingPort &timing);
 } // namespace nenenib::tests::performance

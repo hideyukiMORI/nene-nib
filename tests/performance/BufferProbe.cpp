@@ -5,6 +5,7 @@
 
 #include <array>
 #include <iostream>
+#include <vector>
 
 namespace nenenib::tests::performance
 {
@@ -140,5 +141,128 @@ queried_scattered_position(const std::string &input, application::TimingPort &ti
         return std::unexpected(ProbeFailure::wrong_result);
     }
     return positions_of(text, repeated("b日本語🖋"), timing);
+}
+namespace
+{
+[[nodiscard]] bool prepared_equals(const core::TextBuffer &text, std::string_view expected,
+                                   std::size_t pieces)
+{
+    return text.text() == expected && text.size_bytes() == expected.size() &&
+           text.piece_count() == pieces;
+}
+
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+erased_results(const core::TextBuffer &text, core::Offset begin, core::Offset end,
+               application::TimingPort &timing)
+{
+    const std::string original = text.text();
+    std::string expected = original;
+    expected.erase(begin.value, end.value - begin.value);
+    std::vector<core::TextBuffer> observed;
+    observed.reserve(16U);
+    timing.mark(core::Milestone::probe_started);
+    for (std::size_t index = 0; index < 16U; ++index)
+    {
+        observed.emplace_back(text.erase(begin, end));
+    }
+    timing.mark(core::Milestone::probe_finished);
+    std::uint64_t checksum = checksum_of(original);
+    for (const auto &result : observed)
+    {
+        const std::string bytes = result.text();
+        if (bytes != expected || result.size_bytes() != expected.size() ||
+            result.line_count() != (expected.empty() ? 1U : 4097U) ||
+            result.line_ending() != core::LineEnding::crlf)
+        {
+            return std::unexpected(ProbeFailure::wrong_result);
+        }
+        checksum += checksum_of(bytes) + result.size_bytes() + result.line_count();
+    }
+    if (text.text() != original)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum;
+}
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+offsets_of(const core::TextBuffer &text, const core::TextPosition &position, core::Offset expected,
+           application::TimingPort &timing)
+{
+    const std::string original = text.text();
+    std::array<core::Offset, 128> observed{};
+    timing.mark(core::Milestone::probe_started);
+    for (auto &offset : observed)
+    {
+        offset = text.offset_of(position);
+    }
+    timing.mark(core::Milestone::probe_finished);
+    std::uint64_t checksum = checksum_of(original);
+    for (const auto offset : observed)
+    {
+        if (offset.value != expected.value)
+        {
+            return std::unexpected(ProbeFailure::wrong_result);
+        }
+        checksum += offset.value;
+    }
+    if (text.text() != original)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum;
+}
+} // namespace
+
+std::expected<std::uint64_t, ProbeFailure>
+erased_buffer(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
+{
+    const auto parsed = core::TextBuffer::from_utf8(input);
+    if (!parsed.has_value() || input != crlf_buffer_input())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    const bool single = workload == ProbeWorkload::erase_single_middle;
+    const auto text = single ? parsed.value() : fragmented(parsed.value(), 80U, 1U);
+    const std::string expected = single ? input : repeated("ab" + std::string(76U, 'a') + "\r\n");
+    if (!prepared_equals(text, expected, single ? 1U : 8193U) || text.line_count() != 4097U ||
+        text.line_ending() != core::LineEnding::crlf)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    constexpr std::array<std::size_t, 5> begins{0U, 163840U, 327677U, 0U, 163840U};
+    constexpr std::array<std::size_t, 5> ends{1U, 163841U, 327678U, 327680U, 163841U};
+    const std::size_t index = static_cast<std::size_t>(workload) -
+                              static_cast<std::size_t>(ProbeWorkload::erase_scattered_head);
+    std::cerr << "preparation=" << (single ? "single" : "replace(80*i+1,1,b);i=0..4095")
+              << " preparedPieces=" << text.piece_count()
+              << " preparedHash=" << checksum_of(expected) << '\n';
+    return erased_results(text, core::Offset{begins.at(index)}, core::Offset{ends.at(index)},
+                          timing);
+}
+
+std::expected<std::uint64_t, ProbeFailure>
+queried_offset(ProbeWorkload workload, const std::string &input, application::TimingPort &timing)
+{
+    const auto parsed = core::TextBuffer::from_utf8(input);
+    if (!parsed.has_value() || input != position_buffer_input())
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    const bool scattered = workload == ProbeWorkload::offset_scattered_middle;
+    const auto text = scattered ? fragmented(parsed.value(), 14U, 0U) : parsed.value();
+    const std::string expected = scattered ? repeated("b日本語🖋") : input;
+    if (!prepared_equals(text, expected, scattered ? 8192U : 1U) || text.line_count() != 1U)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    constexpr std::array<std::size_t, 4> columns{2U, 10241U, 20481U, 10241U};
+    constexpr std::array<std::size_t, 4> offsets{1U, 28672U, 57344U, 28672U};
+    const std::size_t index = static_cast<std::size_t>(workload) -
+                              static_cast<std::size_t>(ProbeWorkload::offset_long_head);
+    const core::TextPosition position{core::LineNumber{1U}, core::Column{columns.at(index)}};
+    std::cerr << "preparation=" << (scattered ? "replace(14*i,1,b);i=0..4095" : "single")
+              << " preparedPieces=" << text.piece_count()
+              << " preparedHash=" << checksum_of(expected) << '\n';
+    return offsets_of(text, position, core::Offset{offsets.at(index)}, timing);
 }
 } // namespace nenenib::tests::performance

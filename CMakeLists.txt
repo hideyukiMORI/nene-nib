@@ -220,7 +220,8 @@ set_property(TARGET NeNeNib PROPERTY WIN32_EXECUTABLE TRUE)
 nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/ProbeMain.cpp tests/performance/ProbeWorkload.cpp
     tests/performance/ScopedProbe.cpp tests/performance/BufferProbe.cpp
-    tests/performance/PaletteProbe.cpp tests/performance/ConversionProbe.cpp)
+    tests/performance/PaletteProbe.cpp tests/performance/ConversionProbe.cpp
+    tests/performance/SearchProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)
