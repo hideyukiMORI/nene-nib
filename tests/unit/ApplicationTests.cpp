@@ -153,6 +153,7 @@ using nenenib::core::SaveState;
 using nenenib::core::Selection;
 using nenenib::core::SelectionAnchoring;
 using nenenib::core::SelectionPresence;
+using nenenib::core::SelectionSpan;
 using nenenib::core::TextEncoding;
 using nenenib::core::TextPosition;
 using nenenib::core::VimCharacter;
@@ -579,6 +580,68 @@ void verify_controller_place_caret()
             PlaceCaret{TextPosition{LineNumber{9}, Column{99}}, SelectionAnchoring::collapse});
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{3}},
            "a position past the buffer clamps to the nearest one");
+}
+
+// 空行を挟む選択と、line_endが決めた末尾CRの扱い（ADR 0095）。
+void verify_frame_selection_line_ends()
+{
+    for (const auto text : {"a\r\n\r\nb\r", "a\n\nb\r"})
+    {
+        Editing editing;
+        EditorController &controller = editing.controller();
+        editing.files().hold(std::string(text));
+        applied(controller, VisibleLines{10});
+        applied(controller, OpenDocument{sample_path()});
+        applied(controller, SelectAll{});
+        const auto all = controller.frame();
+        expect(all.lines.at(0).selection ==
+                   SelectionSpan{SelectionPresence::present, Column{1}, Column{3}},
+               "selecting the first line includes exactly one newline column");
+        expect(all.lines.at(1).text.empty() &&
+                   all.lines.at(1).selection ==
+                       SelectionSpan{SelectionPresence::present, Column{1}, Column{2}},
+               "an empty line has one selected newline column");
+        expect(all.lines.at(2).selection ==
+                   SelectionSpan{SelectionPresence::present, Column{1}, Column{3}},
+               "SelectAll includes terminal CR as content or one terminator column");
+        expect(all.lines.at(2).text == (text[1] == '\r' ? "b" : "b\r"),
+               "the owned line keeps the canonical CRLF or LF content boundary");
+        applied(controller,
+                PlaceCaret{TextPosition{LineNumber{1}, Column{2}}, SelectionAnchoring::collapse});
+        applied(controller,
+                PlaceCaret{TextPosition{LineNumber{3}, Column{2}}, SelectionAnchoring::extend});
+        const auto partial = controller.frame();
+        expect(partial.lines.at(0).selection ==
+                   SelectionSpan{SelectionPresence::present, Column{2}, Column{3}},
+               "a cross-line selection can begin on the terminator");
+        expect(partial.lines.at(1).selection ==
+                   SelectionSpan{SelectionPresence::present, Column{1}, Column{2}},
+               "the middle empty line keeps its one terminator column");
+        expect(partial.lines.at(2).selection ==
+                   SelectionSpan{SelectionPresence::present, Column{1}, Column{2}},
+               "an end before terminal CR selects only the final content character");
+    }
+}
+
+void verify_frame_selection_mixed_columns()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    editing.files().hold(std::string("日😀\t\x01\u200bZ\nend"));
+    applied(controller, VisibleLines{10});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{1}, Column{2}}, SelectionAnchoring::collapse});
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{1}, Column{6}}, SelectionAnchoring::extend});
+    const auto mixed = controller.frame();
+    expect(mixed.lines.at(0).text == "日😀\t\x01\u200bZ",
+           "selection projection borrows the raw mixed line without rewriting it");
+    expect(mixed.lines.at(0).selection ==
+               SelectionSpan{SelectionPresence::present, Column{2}, Column{6}},
+           "emoji, Tab, control and format characters each count as one source column");
+    expect(mixed.lines.at(1).selection.presence == SelectionPresence::absent,
+           "a same-line selection leaves the following line absent");
 }
 
 void verify_controller_cancel_selection()
@@ -1342,6 +1405,17 @@ void verify_application_scope()
     verify_controller_intents();
 }
 
+void verify_frame_selection_scope()
+{
+    verify_controller_selection();
+    verify_controller_place_caret();
+    verify_controller_cancel_selection();
+    verify_controller_frame();
+    verify_controller_mode_selection();
+    verify_frame_selection_line_ends();
+    verify_frame_selection_mixed_columns();
+}
+
 void verify_controller_intents()
 {
     verify_delivery_contracts();
@@ -1352,17 +1426,13 @@ void verify_controller_intents()
     verify_controller_typing();
     verify_controller_undo();
     verify_controller_deletion();
-    verify_controller_selection();
-    verify_controller_place_caret();
-    verify_controller_cancel_selection();
+    verify_frame_selection_scope();
     verify_controller_clipboard();
     verify_controller_clipboard_failures();
     verify_clipboard_line_feeds();
     verify_controller_paste_line_endings();
     verify_controller_paste_undo_and_failure();
     verify_controller_scrolling();
-    verify_controller_frame();
-    verify_controller_mode_selection();
     verify_document_open();
     verify_document_open_encodings();
     verify_document_open_failures();

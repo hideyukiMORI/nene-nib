@@ -26,6 +26,7 @@
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
 #include "ImeStance.hpp"
+#include "LineSpanEvaluation.hpp"
 #include "ModeLabel.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
 #include "Palette.hpp"
@@ -307,27 +308,6 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     const auto newlines =
         static_cast<std::size_t>(std::count(utf8.begin(), utf8.begin() + inside, '\n'));
     return core::Offset{caret.value + newlines * (newline_bytes - 1)};
-}
-
-// 1 行ぶんの選択の面。行をまたぐ選択はその行の内容の終わりから 1 桁ぶんはみ出して改行を示す。
-// 範囲は呼ぶ側が決める（通常モードは選択そのまま・VISUAL は Vim の規則。ADR 0018 の決定 5）。
-[[nodiscard]] core::SelectionSpan span_of(const core::TextBuffer &text,
-                                          const core::OffsetRange &range, core::LineNumber line)
-{
-    const core::Offset start = text.line_start(line);
-    const core::Offset content_end = text.line_end(line);
-    const std::size_t begin = std::max(range.begin.value, start.value);
-    const std::size_t end = std::min(range.end.value, text.line_terminator_end(line).value);
-    if (begin >= end)
-    {
-        return core::no_selection_span();
-    }
-    const core::Column first =
-        text.position_of(core::Offset{std::min(begin, content_end.value)}).column;
-    const core::Column last = end > content_end.value
-                                  ? core::Column{text.position_of(content_end).column.value + 1}
-                                  : text.position_of(core::Offset{end}).column;
-    return core::SelectionSpan{core::SelectionPresence::present, first, last};
 }
 
 // 描く範囲。矩形のあいだだけ行ごとの範囲へ差し替わる（ADR 0035 の決定 8）。短い行の右側
@@ -3212,8 +3192,8 @@ std::optional<core::VimPattern> EditorController::search_pattern() const
     return std::move(parsed).value();
 }
 
-// 見えている 1 行ぶんの表示値。検索の当たりは行の中だけを数え、桁は選択と同じ span_of で作る
-// （ADR 0037 の決定 3・4）。塗る面を持たない長さ 0 の一致は span_of が absent を返すので落ちる。
+// 見えている 1 行ぶんの表示値。選択と検索は所有済み本文の同じ LineSpanEvaluation で投影する
+// （ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent を返すので落ちる。
 // 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
 LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
                                      const std::optional<core::VimPattern> &pattern) const
@@ -3221,22 +3201,24 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
     const core::TextBuffer &text = state_.text();
     std::string body = text.line_text(line);
     core::DisplayLine display = core::display_line(body);
-    LineView view{line, std::move(body), std::move(display), span_of(text, range, line),
+    LineView view{line, std::move(body), std::move(display), core::no_selection_span(),
                   {},   std::nullopt};
+    const core::Offset start = text.line_start(line);
+    LineSpanEvaluation projection(view.text, start, text.line_terminator_end(line));
+    view.selection = projection.span(range);
     if (!pattern.has_value())
     {
         return view;
     }
-    const std::size_t start = text.line_start(line).value;
     // 今の一致はキャレットを含む一致。incsearch の入力中は preview の当たりを含む一致（ADR 0041
     // の決定 4）。全一致の面は hlsearch が on のときだけで、off の入力中は今の当たりの枠だけ
     // （Vim と同じ）。入力中でなければ off の search_pattern は何も返さない。
     const std::size_t caret = previewed_offset(state_).value_or(state_.selection().caret).value;
     for (const auto &match : core::vim_line_matches(view.text, pattern.value()))
     {
-        const core::OffsetRange found{core::Offset{start + match.begin.value},
-                                      core::Offset{start + match.end.value}};
-        const core::SelectionSpan span = span_of(text, found, line);
+        const core::OffsetRange found{core::Offset{start.value + match.begin.value},
+                                      core::Offset{start.value + match.end.value}};
+        const core::SelectionSpan span = projection.span(found);
         if (span.presence != core::SelectionPresence::present)
         {
             continue;
