@@ -8,6 +8,7 @@
 #include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
 #include "FrameRowsProbe.hpp"
+#include "PaletteChoiceProbe.hpp"
 #include "PatternProbe.hpp"
 #include "PreviewCaretProbe.hpp"
 #include "ProbeDispatch.hpp"
@@ -770,6 +771,24 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(PaletteChoiceWorkload workload)
+{
+    switch (workload)
+    {
+    case PaletteChoiceWorkload::builtin_all:
+    case PaletteChoiceWorkload::custom_all:
+    case PaletteChoiceWorkload::miss:
+    case PaletteChoiceWorkload::short_query:
+    case PaletteChoiceWorkload::theme:
+    case PaletteChoiceWorkload::direct_fill:
+    case PaletteChoiceWorkload::direct_long:
+    case PaletteChoiceWorkload::fallback_long:
+    case PaletteChoiceWorkload::custom_narrow:
+        return 129U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -785,7 +804,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 129> dispatches{{
+constexpr std::array<ProbeDispatch, 138> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1049,6 +1068,24 @@ constexpr std::array<ProbeDispatch, 129> dispatches{{
                      completion_prefix_input, probed_completion_prefix},
     ProbeDispatchRow{CompletionPrefixWorkload::empty_seeded, "completion-prefix-empty-seeded-4096",
                      completion_prefix_input, probed_completion_prefix},
+    ProbeDispatchRow{PaletteChoiceWorkload::builtin_all, "palette-choice-builtin-all-512",
+                     palette_choice_input, probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::custom_all, "palette-choice-custom-all-128",
+                     palette_choice_input, probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::miss, "palette-choice-miss-1024", palette_choice_input,
+                     probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::short_query, "palette-choice-short-1024",
+                     palette_choice_input, probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::theme, "palette-choice-theme-512", palette_choice_input,
+                     probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::direct_fill, "palette-choice-direct-fill-1024",
+                     palette_choice_input, probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::direct_long, "palette-choice-direct-long-1024",
+                     palette_choice_input, probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::fallback_long, "palette-choice-fallback-long-512",
+                     palette_choice_input, probed_palette_choice},
+    ProbeDispatchRow{PaletteChoiceWorkload::custom_narrow, "palette-choice-custom-narrow-128",
+                     palette_choice_input, probed_palette_choice},
 }};
 
 constexpr auto dispatch_names = []
@@ -1091,7 +1128,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 129U);
+static_assert(dispatches.size() == 138U);
 static_assert(dispatch_is_complete());
 
 } // namespace
