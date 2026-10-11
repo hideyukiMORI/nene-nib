@@ -1,6 +1,6 @@
 # いまのタスク — NeNe Nib
 
-> **2026-10-11 16:07 JST**: hideの停止まで改善継続。#398はPR399/main72e6863・収載・監査整理済み。#400操作候補一致後所有を初回2利益/8費用・1530checks/30oracle・GUI18対0px/36PNGで技術受理。ほぞん1024回で約51.79%、qqq1024回で約63.17%局所短縮。新正式取得0、旧files palette5000限定reuse。通常統合/収載/整理へ進み実完了はwave4/acceptance-400。最新は[10月11日の引き継ぎ](../handoffs/2026-10-11.md)、全証拠gate-proofs 5-dz。以下は履歴。
+> **2026-10-11 17:16 JST・停止指示有効**: hideの17:05指定により、#402の区切り・日報引継ぎ・統合・収載・監査整理を最後にいったん停止。新しい実験はhideの再開指示待ち。朝からの先行6件はmain統合/整理済み、#402は初回3利益/4費用・24checks/21oracle・正式single5試料・GUI12対0px/24PNGで技術受理し完了処理だけ実施。失敗throw案も原証拠保存、expected/valueへ改訂。実完了wave4/acceptance-402/closeout.md、最新[引き継ぎ](../handoffs/2026-10-11.md)、全証拠gate-proofs 5-ea。以下は過去の履歴。
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。

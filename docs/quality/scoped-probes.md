@@ -175,3 +175,13 @@ PaletteChoiceWorkload閉enum9値、旧129条件の定義/順を保持し登録13
 queryほぞん（返却2候補）の1024回生成・破棄区間で約51.79%、qqq（返却0候補）の同1024回で約63.17%短縮。全件を含む費用8条件は[gate-proofs 5-dz](../quality/gate-proofs.md#5-dz--一致した操作候補だけ表示値を所有するissue-400adr0112)。局所率を合算/UI全体へ換算しない。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変で限定reuseし、新exeの正式速度/全8成功とはしない。
 
 OperationChoiceWorkload閉enum10値、旧138条件の定義/順を保持し登録148。全10pure、120runs/2400durations/4800marks/1200pairsを原raw再計算。全58行literal/metadata/checksum/両codepoints/保持viewとquery所有元寿命終了後の返却所有を区間外に確認。
+
+## ステータス数値の局所組み立て（#402・ADR0113）
+
+#402 / ADR0113。StatusItems.cppの行・桁表示だけでto_string所有値の連結を除き、局所50byte範囲に固定literalと2個のunsigned十進数をstd::to_charsで書く。private helperは実ecをexpectedへ保持し、最大桁数を保証したcallerでvalue()を使う。書込済み範囲だけを既存fixed→DisplayText::parseで検証・所有し、stack viewは返さない。他製品525files/公開API/入力値/表示文言・順/encoding/ending/validator/settings/schema/flags/allowlistは不変、waiver none。
+
+先行設計e2ca247ffbe05ca9823a55490b096a6fd544a104、harness3433f1f5e92af5ef337a5a860b4ee26c91493d8c、失敗製品42fed2957cd1e7f20a44752ced87aae27ea39727、失敗後設計00847fd8a729093402980e79ffb412b5bd1dedca、修正版製品cf27a3ad2aacc0ffd3384fa8cee7a6522c80b41f。初回3利益/4費用、Debug --status-items 24checks（旧8+境界16）/3構成21oracle、既存148probe/47selector/default/1853fixtures保持、GUI12対0px/24PNG・12本文copy・272checkpoint・24mode・2正常close・親全画像目視で2026-10-11 17:16 JSTに技術受理。
+
+3項目の生成・破棄1024回という各局所区間は行123/桁456で約30.48%、size_t最大値同士で約41.69%、行123456/桁654321で約29.29%短縮。encoding/endingも各入力の一部であり、数値長だけの単因子比較ではない。費用4条件と全数値は[gate-proofs 5-ea](../quality/gate-proofs.md#5-ea--ステータス位置の数値を局所領域から所有するissue-402adr0113)。局所率の加算/UI全体への換算はしない。共通status callerの正式key-to-frame-singleを初回5試料[0.609, 0.673, 0.551, 0.519, 0.652]msで新取得し、中央値0.609ms/基準0.906ms/上限2.906ms、欠測0。元基準内の確認であり変更前後のUI改善率ではない。他7正式指標は未測。
+
+既存148登録を保持、追加probe/enum/runner0。既存7条件を固定3利益/4費用へ分類し84runs/1680durations/3360marks/840pairsを原raw再計算。3構成21oracleと新16境界assertion、正式single5試料は別の証拠。

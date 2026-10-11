@@ -1637,6 +1637,31 @@ void verify_milestone()
     }
 }
 
+void verify_status_position_boundary(const TextPosition &caret, std::string_view expected,
+                                     std::size_t bytes, std::size_t code_points)
+{
+    const auto held = status_items_for(caret, TextEncoding::utf8, LineEnding::crlf);
+    const auto view = held.at(0).text();
+    static_cast<void>(status_items_for(TextPosition{LineNumber{123456}, Column{654321}},
+                                       TextEncoding::utf8_bom, LineEnding::lf));
+    expect(held.at(0).text() == expected, "a later call preserves the owned caret label");
+    expect(view == expected, "a later call preserves the borrowed caret label view");
+    expect(view.size() == bytes, "the caret label contains exactly the expected bytes");
+    expect(held.at(0).code_point_count() == code_points,
+           "the caret label counts the expected code points");
+}
+
+void verify_status_position_boundaries()
+{
+    verify_status_position_boundary(TextPosition{LineNumber{0}, Column{0}}, "行 0, 桁 0", 12U, 8U);
+    verify_status_position_boundary(TextPosition{LineNumber{10}, Column{100}}, "行 10, 桁 100", 15U,
+                                    11U);
+    verify_status_position_boundary(TextPosition{LineNumber{99}, Column{999}}, "行 99, 桁 999", 15U,
+                                    11U);
+    verify_status_position_boundary(TextPosition{LineNumber{100}, Column{999}}, "行 100, 桁 999",
+                                    16U, 12U);
+}
+
 void verify_status_items()
 {
     const auto items = status_items_for(TextPosition{LineNumber{1}, Column{1}}, TextEncoding::utf8,
@@ -2354,6 +2379,7 @@ void verify_text_and_caret()
 void verify_status_items_scope()
 {
     verify_status_items();
+    verify_status_position_boundaries();
 }
 
 void verify_look()
@@ -2371,6 +2397,7 @@ void verify_look()
     verify_edit_mode();
     verify_milestone();
     verify_status_items();
+    verify_status_position_boundaries();
     verify_device_pixels();
     verify_rect_geometry();
     verify_title_bar_rectangles();
