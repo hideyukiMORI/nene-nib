@@ -42,29 +42,37 @@ constexpr std::string_view ellipsis = "…";
     std::unreachable();
 }
 
-[[nodiscard]] std::string clipped(std::string text)
+[[nodiscard]] DisplayText clipped(std::string_view text, std::string_view prefix)
 {
-    if (text.size() <= DisplayText::maximum_bytes)
+    const bool fits = text.size() <= DisplayText::maximum_bytes - prefix.size();
+    if (prefix.empty() && fits)
     {
-        return text;
+        return DisplayText::parse(text).value();
     }
-    Offset cut{DisplayText::maximum_bytes - ellipsis.size()};
-    while (!is_boundary(text, cut))
+    Offset cut{text.size()};
+    std::string_view suffix;
+    if (!fits)
     {
-        cut = previous_code_point(text, cut);
+        cut = Offset{DisplayText::maximum_bytes - ellipsis.size() - prefix.size()};
+        while (!is_boundary(text, cut))
+        {
+            cut = previous_code_point(text, cut);
+        }
+        suffix = ellipsis;
     }
-    text.resize(cut.value);
-    text += ellipsis;
-    return text;
+    std::string shown;
+    shown.reserve(prefix.size() + cut.value + suffix.size());
+    shown += prefix;
+    shown += text.substr(0, cut.value);
+    shown += suffix;
+    // 材料は検証済みの経路と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+    return DisplayText::parse(shown).value();
 }
 } // namespace
 
 DisplayText tab_title_for(const std::optional<FilePath> &path, SaveState state)
 {
-    std::string title(mark_of(state));
-    title += name_of(path);
-    // 材料は検証済みの経路と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
-    return DisplayText::parse(clipped(std::move(title))).value();
+    return clipped(name_of(path), mark_of(state));
 }
 
 std::optional<DisplayText> tab_folder_for(const std::optional<FilePath> &path)
@@ -85,6 +93,6 @@ std::optional<DisplayText> tab_folder_for(const std::optional<FilePath> &path)
     {
         return std::nullopt;
     }
-    return DisplayText::parse(clipped(std::string(folder))).value();
+    return clipped(folder, std::string_view{});
 }
 } // namespace nenenib::core

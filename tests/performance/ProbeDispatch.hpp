@@ -8,6 +8,7 @@
 #include "ProbeWorkload.hpp"
 #include "SearchSnapshotWorkload.hpp"
 #include "StatusItemsWorkload.hpp"
+#include "TabDisplayWorkload.hpp"
 
 #include <variant>
 
@@ -17,5 +18,5 @@ using ProbeDispatch =
     std::variant<ProbeDispatchRow<ProbeWorkload>, ProbeDispatchRow<FrameRowsWorkload>,
                  ProbeDispatchRow<SearchSnapshotWorkload>, ProbeDispatchRow<PreviewCaretWorkload>,
                  ProbeDispatchRow<FrameDocumentWorkload>, ProbeDispatchRow<StatusItemsWorkload>,
-                 ProbeDispatchRow<FileNameWorkload>>;
+                 ProbeDispatchRow<FileNameWorkload>, ProbeDispatchRow<TabDisplayWorkload>>;
 } // namespace nenenib::tests::performance

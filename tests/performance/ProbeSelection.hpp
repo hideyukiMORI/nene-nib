@@ -7,6 +7,7 @@
 #include "ProbeWorkload.hpp"
 #include "SearchSnapshotWorkload.hpp"
 #include "StatusItemsWorkload.hpp"
+#include "TabDisplayWorkload.hpp"
 
 #include <variant>
 
@@ -14,7 +15,7 @@ namespace nenenib::tests::performance
 {
 using ProbeSelection =
     std::variant<ProbeWorkload, FrameRowsWorkload, SearchSnapshotWorkload, PreviewCaretWorkload,
-                 FrameDocumentWorkload, StatusItemsWorkload, FileNameWorkload>;
+                 FrameDocumentWorkload, StatusItemsWorkload, FileNameWorkload, TabDisplayWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

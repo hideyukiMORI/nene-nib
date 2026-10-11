@@ -67,3 +67,9 @@ private fixedをstring_view借用にし、encoding/endingの一時string2つを�
 ## 追加実験: ファイル名の末尾探索 #386
 
 FilePath::name_startだけを末尾の区切りで止め、公開API/parse/借用寿命を保つ。3利益4096取得の対応比.166667/.009488/.016147と6費用が成立、裸長はほぼ横ばい。806checks/GUI6対0px（原失敗保持と限定再開）/正式long-line成立。取得復旧の必要な独立レビューで指摘なし、技術受理（gate-proofs 5-dt）。元26件の採否件数は変更せず、局所倍率をUI全体へ換算しない。TabTitle copy案は未実験。
+
+## 追加実験: タブ表示の一時所有範囲 #388
+
+TabTitleの私有helperをbounded組立へ替え、prefixなしfitの一時copyと省略されるsuffixのcopyを省いた。同じDisplayText::parseを維持。固定3利益/10費用成立、1024表示生成・破棄の通常/深いASCII/日本語で約27.57/4.29/2.06%短縮。failed frameは横ばい。812checks/GUI原9+補足1対0px/正式long-line上限内で技術受理（gate-proofs 5-du）。正式中央値5.939msは基準5.431msより遅く、UI全体の速度利益とはしない。元26件の採否件数は不変。
+
+C8入力中parse保持はnoincsearch費用と所有の正本設計を理由に引き続き未実験。C2のcommand入力で成功済み一時値をby-valueへ渡すcopyを次の読取候補として調査したが、まだ設計固定/実装/測定はない。#365/#373・R8・IO6〜IO8の処分は変えない。

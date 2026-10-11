@@ -13,6 +13,7 @@
 #include "SearchProbe.hpp"
 #include "SearchSnapshotProbe.hpp"
 #include "StatusItemsProbe.hpp"
+#include "TabDisplayProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -690,6 +691,24 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(TabDisplayWorkload workload)
+{
+    switch (workload)
+    {
+    case TabDisplayWorkload::ordinary_saved:
+    case TabDisplayWorkload::deep_saved:
+    case TabDisplayWorkload::wide_saved:
+    case TabDisplayWorkload::short_saved:
+    case TabDisplayWorkload::exact_saved:
+    case TabDisplayWorkload::modified_boundary:
+    case TabDisplayWorkload::folder_wide:
+    case TabDisplayWorkload::root_saved:
+    case TabDisplayWorkload::untitled_modified:
+        return 89U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -705,7 +724,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 89> dispatches{{
+constexpr std::array<ProbeDispatch, 98> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -887,6 +906,24 @@ constexpr std::array<ProbeDispatch, 89> dispatches{{
                      fixed_file_name},
     ProbeDispatchRow{FileNameWorkload::root, "file-name-root-4096", file_name_input,
                      fixed_file_name},
+    ProbeDispatchRow{TabDisplayWorkload::ordinary_saved, "tab-display-ordinary-saved-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::deep_saved, "tab-display-deep-saved-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::wide_saved, "tab-display-wide-saved-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::short_saved, "tab-display-short-saved-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::exact_saved, "tab-display-exact-saved-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::modified_boundary, "tab-display-modified-boundary-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::folder_wide, "tab-display-folder-wide-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::root_saved, "tab-display-root-saved-1024",
+                     tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{TabDisplayWorkload::untitled_modified, "tab-display-untitled-modified-1024",
+                     tab_display_input, fixed_tab_display},
 }};
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
@@ -919,7 +956,7 @@ constexpr std::array<ProbeDispatch, 89> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 89U);
+static_assert(dispatches.size() == 98U);
 static_assert(dispatch_is_complete());
 
 } // namespace
