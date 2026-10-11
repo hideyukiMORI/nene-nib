@@ -1,6 +1,6 @@
 # ADR 0109 — Ex補完の候補は一致を確かめてから所有する
 
-- 状態: 設計受理・実験前（性能・製品採用は未判定）
+- 状態: 技術受理（2026-10-11 12:57 JST、統合・収載・整理は別記録）
 - 日付: 2026-10-11
 - Issue: #394
 - 基準: main 5d22ceb376396aba360c14d24b35fd4fe170655c
@@ -79,3 +79,9 @@ hideの今回の明示指示によりAstraが設計/採否、SOLがharness/製�
 #392はPR393/main5d22cebに統合、wave4/snapshot-392の6295records/155241400bytesを全SHA収載し、12:04:12 JSTに追加WT/OUT/t392を監査整理済み。branch/commitを保持し、実結果はacceptance-392。次候補調査/規範の独立再照合と訂正は同snapshot内に原文ごと保存した。
 
 採用時は通常draft PR→必要レビュー/Ready/必須CI→eng/merge-pr.py plan/同expected-head execute→main同期→恒久収載→絶対D path/取込/dirty・untracked・ignored/唯一成果/稼働/linkを監査して追加WT/OUT/t394を整理する。branch/commitは保持。成功済みの実装/入力/依存/必要環境が不変なら工程/文書/commit SHAだけで再試験しない。#365/#373・C8入力parse保持・R8・IO6〜IO8の状態は変えず、hideの停止まで改善を継続する。
+
+## 実施結果
+
+harness5c3ccfd / 製品4d9aaef、固定3利益/10費用が初回で成立。option/missの1024候補生成・破棄で約91.73/94.01%、custom-narrowの128回で約74.66%短縮。全builtin1024回は対応+15µs、controller-fill64は+19µsで事前費用内。817checks/39oracle、旧110probe/47selector/1853fixture保持、GUI21対0px/14本文copy/全42PNG親目視が成立し技術受理。
+
+新正式取得0。ExResultを呼ばないfiles palette5000の旧#392中央値2.159msを、関連source/112compile commands/tool/input/host等の不変確認により限定再利用した。新exeの正式測定やEx UI改善率としない。全コマンド・13条件・費用・失敗準備/訂正・限界・再利用は[gate-proofs 5-dw](../quality/gate-proofs.md#5-dw--ex補完の候補は一致後に所有するissue-394adr0109)。API/settings/schema変更なし、waiver none。統合/恒久収載/監査整理の実完了はwave4/acceptance-394へ残す。
