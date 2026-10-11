@@ -101,7 +101,19 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              "tab-display-modified-boundary-1024",
              "tab-display-folder-wide-1024",
              "tab-display-root-saved-1024",
-             "tab-display-untitled-modified-1024")
+             "tab-display-untitled-modified-1024",
+             'command-input-search-long-1024',
+             'command-input-ex-long-1024',
+             'command-input-palette-long-1024',
+             'command-input-search-short-1024',
+             'command-input-ex-short-1024',
+             'command-input-palette-short-1024',
+             'command-input-ex-left-long-1024',
+             'command-input-palette-fill-long-1024',
+             'command-input-controller-search-64',
+             'command-input-controller-ex-64',
+             'command-input-controller-palette-64',
+             'command-input-controller-fill-64')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -125,6 +137,22 @@ def load_json(text: str):
 
 
 def fixed_input(workload: str) -> bytes:
+    if workload in WORKLOADS[98:110]:
+        inputs = (
+            b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            b'a',
+            b'a',
+            b'a',
+            b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\xf0\x9f\x96\x8b',
+            b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            b'a',
+            b'a',
+            b'a',
+            b':fz',
+        )
+        return inputs[WORKLOADS[98:110].index(workload)]
     if workload in (*WORKLOADS[:2], *WORKLOADS[4:7]):
         filler = "nenenib speed sample line for the open-large-file bench "
         lines = (1024 * 1024) // 84 if workload.endswith("delete-1mib") else 200000

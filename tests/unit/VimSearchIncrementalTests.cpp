@@ -8,6 +8,7 @@
 #include "LineView.hpp"
 #include "Scopes.hpp"
 #include "SearchHop.hpp"
+#include "SearchLine.hpp"
 #include "SelectEditMode.hpp"
 #include "TestSupport.hpp"
 #include "VimKey.hpp"
@@ -77,6 +78,51 @@ frame_current(const EditorFrame &frame)
 
 // 打った途中の各入力で、当たりの位置・本文とキャレットの不変・報せ無し・Esc の巻き戻し（決定
 // 3・5）。
+void verify_search_line_input_ownership()
+{
+    const auto source = core::SearchLine::opened(VimSearchDirection::forward)
+                            .inserted(std::string(253U, 'a'))
+                            .value();
+    const std::string_view source_view = source.text();
+    const auto maximum = source.inserted("日");
+    expect(maximum.has_value() && maximum.value().text() == std::string(253U, 'a') + "日" &&
+               maximum.value().caret().value == 256U && source.text() == std::string(253U, 'a') &&
+               source_view == source.text() && source.caret().value == 253U,
+           "SearchLine accepts exactly 256 bytes and preserves its source");
+    const auto overlong = maximum.value().inserted("X");
+    expect(!overlong && overlong.error() == core::ExFailure::too_long &&
+               maximum.value().text() == std::string(253U, 'a') + "日" &&
+               maximum.value().caret().value == 256U,
+           "SearchLine rejects overflow without consuming the full source");
+    const auto invalid = source.inserted("\xFF");
+    expect(!invalid && invalid.error() == core::ExFailure::invalid_text &&
+               source_view == source.text() && source.caret().value == 253U,
+           "SearchLine rejects invalid UTF-8 without consuming its source");
+    const auto newline = source.inserted("\n");
+    expect(!newline && newline.error() == core::ExFailure::invalid_text &&
+               source_view == source.text() && source.caret().value == 253U,
+           "SearchLine rejects line breaks without consuming its source");
+    const auto backward = core::SearchLine::opened(VimSearchDirection::backward)
+                              .inserted("a日🖋z")
+                              .value()
+                              .edited(core::CommandEdit::left)
+                              .edited(core::CommandEdit::left);
+    const std::string_view backward_view = backward.text();
+    const auto middle = backward.inserted("界");
+    expect(middle.has_value() && middle.value().text() == "a日界🖋z" &&
+               middle.value().caret().value == 7U &&
+               middle.value().direction() == VimSearchDirection::backward &&
+               backward.text() == "a日🖋z" && backward.caret().value == 4U &&
+               backward.direction() == VimSearchDirection::backward && backward_view == "a日🖋z",
+           "SearchLine inserts at a scalar boundary and preserves backward input and direction");
+    const auto empty = backward.inserted("");
+    expect(empty.has_value() && empty.value().text() == "a日🖋z" &&
+               empty.value().caret().value == 4U &&
+               empty.value().direction() == VimSearchDirection::backward &&
+               backward_view == "a日🖋z",
+           "SearchLine preserves text, caret and direction for empty insertion");
+}
+
 void verify_incsearch_typed_cases()
 {
     constexpr std::array<IncsearchCase, 12> cases{{
@@ -464,6 +510,7 @@ void verify_incsearch_hop_scroll()
 
 void verify_vim_search_incremental_contracts()
 {
+    verify_search_line_input_ownership();
     verify_incsearch_typed_cases();
     verify_incsearch_frame();
     verify_incsearch_scroll();

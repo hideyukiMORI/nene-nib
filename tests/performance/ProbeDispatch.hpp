@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CommandInputWorkload.hpp"
 #include "FileNameWorkload.hpp"
 #include "FrameDocumentWorkload.hpp"
 #include "FrameRowsWorkload.hpp"
@@ -18,5 +19,6 @@ using ProbeDispatch =
     std::variant<ProbeDispatchRow<ProbeWorkload>, ProbeDispatchRow<FrameRowsWorkload>,
                  ProbeDispatchRow<SearchSnapshotWorkload>, ProbeDispatchRow<PreviewCaretWorkload>,
                  ProbeDispatchRow<FrameDocumentWorkload>, ProbeDispatchRow<StatusItemsWorkload>,
-                 ProbeDispatchRow<FileNameWorkload>, ProbeDispatchRow<TabDisplayWorkload>>;
+                 ProbeDispatchRow<FileNameWorkload>, ProbeDispatchRow<TabDisplayWorkload>,
+                 ProbeDispatchRow<CommandInputWorkload>>;
 } // namespace nenenib::tests::performance
