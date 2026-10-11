@@ -1,0 +1,1903 @@
+{
+  "issue": 404,
+  "date": "2026-10-11",
+  "status": "hold",
+  "baseMain": "4f8db90e7a44fa7a34aec81a86461dc6e4f1418c",
+  "releases": {
+    "A": {
+      "recordedAt": "2026-10-11T07-52-16Z",
+      "ref": "cf27a3ad2aacc0ffd3384fa8cee7a6522c80b41f",
+      "commit": "cf27a3ad2aacc0ffd3384fa8cee7a6522c80b41f",
+      "shortCommit": "cf27a3a",
+      "subject": "refactor(core): 数値変換の不変条件を既存と同じ検査付き取得で守る (#402)",
+      "head": "cf27a3ad2aacc0ffd3384fa8cee7a6522c80b41f",
+      "builtFromWorktree": false,
+      "buildDirectory": "build/release-cf27a3a",
+      "executable": "D:\\NeNeNib\\evidence\\speed-optimizations-20261011-wave4\\snapshot-402\\files\\worktrees\\402-status-number\\build\\release-cf27a3a\\NeNeNib.exe",
+      "sha256": "3DC8A0A8FEEC808609B30D6D1FEEA870801BB093CC507628AC12F2B9025A2B5C",
+      "bytes": 1444864,
+      "seconds": {
+        "configure": 2.887,
+        "build": 265.692,
+        "total": 268.579
+      },
+      "toolchain": {
+        "compiler": "clang-cl",
+        "llvm": "19.1.5",
+        "cmake": "3.31.6-msvc6",
+        "ninja": "1.12.1",
+        "msvcToolset": "14.44.35207"
+      },
+      "sourceRecord": "D:\\NeNeNib\\evidence\\speed-optimizations-20261011-wave4\\snapshot-402\\files\\worktrees\\402-status-number\\out\\release\\cf27a3a.json"
+    },
+    "S": {
+      "recordedAt": "2026-10-11T08-56-30Z",
+      "ref": "a165a25b4af328d626724a4f3f2b4adf672db1ef",
+      "commit": "a165a25b4af328d626724a4f3f2b4adf672db1ef",
+      "shortCommit": "a165a25",
+      "subject": "test(perf): 最新描画経路に旧一枠試作を適用する (#404)",
+      "head": "a165a25b4af328d626724a4f3f2b4adf672db1ef",
+      "builtFromWorktree": false,
+      "buildDirectory": "build/release-a165a25",
+      "executable": "D:\\NeNeNib\\worktrees\\404-split-s\\build\\release-a165a25\\NeNeNib.exe",
+      "sha256": "4CB90ABC1F6EDD34B0FA303140BD84E5D5E30AC062B73DBFAB29377A38305E4B",
+      "bytes": 1444864,
+      "seconds": {
+        "configure": 2.323,
+        "build": 304.072,
+        "total": 306.396
+      },
+      "toolchain": {
+        "compiler": "clang-cl",
+        "llvm": "19.1.5",
+        "cmake": "3.31.6-msvc6",
+        "ninja": "1.12.1",
+        "msvcToolset": "14.44.35207"
+      },
+      "sourceRecord": "D:\\NeNeNib\\worktrees\\404-split-s\\out\\release\\a165a25.json"
+    },
+    "H": {
+      "recordedAt": "2026-10-11T08-56-33Z",
+      "ref": "887c04f0177f43e065f6cf81ddfbad14d320a533",
+      "commit": "887c04f0177f43e065f6cf81ddfbad14d320a533",
+      "shortCommit": "887c04f",
+      "subject": "test(perf): 旧試作の上下二枠を比較用に固定する (#404)",
+      "head": "887c04f0177f43e065f6cf81ddfbad14d320a533",
+      "builtFromWorktree": false,
+      "buildDirectory": "build/release-887c04f",
+      "executable": "D:\\NeNeNib\\worktrees\\404-split-h\\build\\release-887c04f\\NeNeNib.exe",
+      "sha256": "DE96F0853478E5AD2C0655ADA8F2D8B7930F55CF9B2AD598EA6A34954AF6516F",
+      "bytes": 1445376,
+      "seconds": {
+        "configure": 1.996,
+        "build": 304.476,
+        "total": 306.472
+      },
+      "toolchain": {
+        "compiler": "clang-cl",
+        "llvm": "19.1.5",
+        "cmake": "3.31.6-msvc6",
+        "ninja": "1.12.1",
+        "msvcToolset": "14.44.35207"
+      },
+      "sourceRecord": "D:\\NeNeNib\\worktrees\\404-split-h\\out\\release\\887c04f.json"
+    },
+    "V": {
+      "recordedAt": "2026-10-11T08-56-33Z",
+      "ref": "2fa7e4fc307af4c880567477350ab19df85f6ae6",
+      "commit": "2fa7e4fc307af4c880567477350ab19df85f6ae6",
+      "shortCommit": "2fa7e4f",
+      "subject": "test(perf): 旧試作の左右二枠を比較用に固定する (#404)",
+      "head": "2fa7e4fc307af4c880567477350ab19df85f6ae6",
+      "builtFromWorktree": false,
+      "buildDirectory": "build/release-2fa7e4f",
+      "executable": "D:\\NeNeNib\\worktrees\\404-split-v\\build\\release-2fa7e4f\\NeNeNib.exe",
+      "sha256": "A52A3897D128DE4E31A02F3D418CE3A9A37989ECDA2E6C48F8881057A7511662",
+      "bytes": 1445376,
+      "seconds": {
+        "configure": 2.038,
+        "build": 303.629,
+        "total": 305.666
+      },
+      "toolchain": {
+        "compiler": "clang-cl",
+        "llvm": "19.1.5",
+        "cmake": "3.31.6-msvc6",
+        "ninja": "1.12.1",
+        "msvcToolset": "14.44.35207"
+      },
+      "sourceRecord": "D:\\NeNeNib\\worktrees\\404-split-v\\out\\release\\2fa7e4f.json"
+    }
+  },
+  "measurement": {
+    "startedUtc": "2026-10-11T09:03:35.127798+00:00",
+    "finishedUtc": "2026-10-11T09:11:52.985782+00:00",
+    "trialCount": 72,
+    "validTrials": 72,
+    "inputs": 14544,
+    "marks": 15624,
+    "retries": 0,
+    "exclusions": 0,
+    "geometry": [
+      1280,
+      800,
+      120
+    ],
+    "fontFamily": "Cascadia Code",
+    "fontSizePt": 13.5,
+    "machine": {
+      "fingerprint": "bc8a356f37c68491",
+      "cpu": "Intel(R) Core(TM) i9-10850K CPU @ 3.60GHz",
+      "gpu": "NVIDIA GeForce RTX 3090",
+      "dpi": 120
+    },
+    "power": "電源設定の GUID: 48684d4a-8524-4093-8a63-ea7132b79c1c  (HP推奨)",
+    "lastInputBefore": 30592843,
+    "lastInputAfter": 30592843,
+    "stimulus": "Unchanged old keys_trial; warmup w, single a, 200 b. Receipt to Present return, not photon latency. Empty burst arrival <=50ms. File burst arrival descriptive.",
+    "schedule": [
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "A",
+        "name": "empty-1-A"
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "S",
+        "name": "empty-1-S"
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "H",
+        "name": "empty-1-H"
+      },
+      {
+        "fixture": "empty",
+        "group": 1,
+        "variant": "V",
+        "name": "empty-1-V"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "V",
+        "name": "empty-2-V"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "H",
+        "name": "empty-2-H"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "S",
+        "name": "empty-2-S"
+      },
+      {
+        "fixture": "empty",
+        "group": 2,
+        "variant": "A",
+        "name": "empty-2-A"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "A",
+        "name": "empty-3-A"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "S",
+        "name": "empty-3-S"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "H",
+        "name": "empty-3-H"
+      },
+      {
+        "fixture": "empty",
+        "group": 3,
+        "variant": "V",
+        "name": "empty-3-V"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "V",
+        "name": "empty-4-V"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "H",
+        "name": "empty-4-H"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "S",
+        "name": "empty-4-S"
+      },
+      {
+        "fixture": "empty",
+        "group": 4,
+        "variant": "A",
+        "name": "empty-4-A"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "A",
+        "name": "empty-5-A"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "S",
+        "name": "empty-5-S"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "H",
+        "name": "empty-5-H"
+      },
+      {
+        "fixture": "empty",
+        "group": 5,
+        "variant": "V",
+        "name": "empty-5-V"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "V",
+        "name": "empty-6-V"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "H",
+        "name": "empty-6-H"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "S",
+        "name": "empty-6-S"
+      },
+      {
+        "fixture": "empty",
+        "group": 6,
+        "variant": "A",
+        "name": "empty-6-A"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "A",
+        "name": "16mib-1-A"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "S",
+        "name": "16mib-1-S"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "H",
+        "name": "16mib-1-H"
+      },
+      {
+        "fixture": "16mib",
+        "group": 1,
+        "variant": "V",
+        "name": "16mib-1-V"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "V",
+        "name": "16mib-2-V"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "H",
+        "name": "16mib-2-H"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "S",
+        "name": "16mib-2-S"
+      },
+      {
+        "fixture": "16mib",
+        "group": 2,
+        "variant": "A",
+        "name": "16mib-2-A"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "A",
+        "name": "16mib-3-A"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "S",
+        "name": "16mib-3-S"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "H",
+        "name": "16mib-3-H"
+      },
+      {
+        "fixture": "16mib",
+        "group": 3,
+        "variant": "V",
+        "name": "16mib-3-V"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "V",
+        "name": "16mib-4-V"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "H",
+        "name": "16mib-4-H"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "S",
+        "name": "16mib-4-S"
+      },
+      {
+        "fixture": "16mib",
+        "group": 4,
+        "variant": "A",
+        "name": "16mib-4-A"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "A",
+        "name": "16mib-5-A"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "S",
+        "name": "16mib-5-S"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "H",
+        "name": "16mib-5-H"
+      },
+      {
+        "fixture": "16mib",
+        "group": 5,
+        "variant": "V",
+        "name": "16mib-5-V"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "V",
+        "name": "16mib-6-V"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "H",
+        "name": "16mib-6-H"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "S",
+        "name": "16mib-6-S"
+      },
+      {
+        "fixture": "16mib",
+        "group": 6,
+        "variant": "A",
+        "name": "16mib-6-A"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "A",
+        "name": "long-japanese-1-A"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "S",
+        "name": "long-japanese-1-S"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "H",
+        "name": "long-japanese-1-H"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 1,
+        "variant": "V",
+        "name": "long-japanese-1-V"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "V",
+        "name": "long-japanese-2-V"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "H",
+        "name": "long-japanese-2-H"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "S",
+        "name": "long-japanese-2-S"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 2,
+        "variant": "A",
+        "name": "long-japanese-2-A"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "A",
+        "name": "long-japanese-3-A"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "S",
+        "name": "long-japanese-3-S"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "H",
+        "name": "long-japanese-3-H"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 3,
+        "variant": "V",
+        "name": "long-japanese-3-V"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "V",
+        "name": "long-japanese-4-V"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "H",
+        "name": "long-japanese-4-H"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "S",
+        "name": "long-japanese-4-S"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 4,
+        "variant": "A",
+        "name": "long-japanese-4-A"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "A",
+        "name": "long-japanese-5-A"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "S",
+        "name": "long-japanese-5-S"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "H",
+        "name": "long-japanese-5-H"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 5,
+        "variant": "V",
+        "name": "long-japanese-5-V"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "V",
+        "name": "long-japanese-6-V"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "H",
+        "name": "long-japanese-6-H"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "S",
+        "name": "long-japanese-6-S"
+      },
+      {
+        "fixture": "long-japanese",
+        "group": 6,
+        "variant": "A",
+        "name": "long-japanese-6-A"
+      }
+    ],
+    "fixtureIdentity": {
+      "16mib": {
+        "bytes": 16800000,
+        "sha256": "e0cfa5bd4f828d8e26fa1f476ef0467e80fb9014993c07eb18935fcf6959fdaf",
+        "mtimeNs": 1791034662645873200
+      },
+      "long-japanese": {
+        "bytes": 6219000,
+        "sha256": "ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32a6c5",
+        "mtimeNs": 1791034662655579900
+      }
+    }
+  },
+  "guards": {
+    "machineUnchanged": true,
+    "powerUnchanged": true,
+    "lastInputUnchanged": true,
+    "dependenciesUnchanged": true,
+    "executablesUnchanged": true
+  },
+  "thresholds": {
+    "AStabilityPercent": 10,
+    "AStabilitySingleFloorMs": 0.1,
+    "AStabilityBurstFloorMs": 0.5,
+    "SSingleFloorMs": 0.1,
+    "SBurstFloorMs": 0.5,
+    "SPercent": 10,
+    "SPositivePairHold": 5,
+    "HVSingleDeltaMs": 0.5,
+    "HVSingleTotalMs": 2,
+    "HVBurstDeltaMs": 1
+  },
+  "reuseProof": {
+    "AProductSourceIdentical": true,
+    "oldWindowDriverIdentical": true,
+    "oldExistingFunctionsChanged": [
+      "run_benches",
+      "measure"
+    ],
+    "oldConstantsChanged": [
+      "BENCHES"
+    ],
+    "oldBodyPartitionAndDrawFunctionsIdentical": true,
+    "SHVDifferOnlyByPartitionConstants": true,
+    "normalizedCompileCommandsIdentical": true,
+    "compileCommandCount": 200,
+    "normalization": "Source/build root and exact NIB_PROBE_COMMIT identity only. The latter belongs to unbuilt nib_perf_probes, not the measured NeNeNib target."
+  },
+  "summary": {
+    "empty": {
+      "A": {
+        "singleMs": {
+          "values": [
+            0.487,
+            0.53,
+            0.559,
+            0.693,
+            0.687,
+            0.631
+          ],
+          "count": 6,
+          "medianMs": 0.595,
+          "minMs": 0.487,
+          "maxMs": 0.693,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "firstHalfMedian": 0.53,
+          "lastHalfMedian": 0.687,
+          "driftMs": 0.15700000000000003,
+          "limitMs": 0.1,
+          "stable": false
+        },
+        "burstMs": {
+          "values": [
+            2.081,
+            2.066,
+            2.068,
+            2.096,
+            1.747,
+            1.976
+          ],
+          "count": 6,
+          "medianMs": 2.067,
+          "minMs": 1.747,
+          "maxMs": 2.096,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "firstHalfMedian": 2.068,
+          "lastHalfMedian": 1.976,
+          "driftMs": 0.09200000000000008,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "S": {
+        "singleMs": {
+          "values": [
+            0.795,
+            0.574,
+            0.667,
+            0.697,
+            0.595,
+            0.708
+          ],
+          "count": 6,
+          "medianMs": 0.6819999999999999,
+          "minMs": 0.574,
+          "maxMs": 0.795,
+          "pairedDeltaFromA": [
+            0.30800000000000005,
+            0.04399999999999993,
+            0.10799999999999998,
+            0.0040000000000000036,
+            -0.09200000000000008,
+            0.07699999999999996
+          ],
+          "positivePairs": 5,
+          "firstHalfMedian": 0.667,
+          "lastHalfMedian": 0.697,
+          "driftMs": 0.029999999999999916,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            2.468,
+            2.048,
+            2.049,
+            1.552,
+            2.148,
+            1.649
+          ],
+          "count": 6,
+          "medianMs": 2.0484999999999998,
+          "minMs": 1.552,
+          "maxMs": 2.468,
+          "pairedDeltaFromA": [
+            0.387,
+            -0.017999999999999794,
+            -0.019000000000000128,
+            -0.544,
+            0.401,
+            -0.32699999999999996
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 2.049,
+          "lastHalfMedian": 1.649,
+          "driftMs": 0.3999999999999999,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "H": {
+        "singleMs": {
+          "values": [
+            0.694,
+            0.702,
+            0.736,
+            0.713,
+            0.69,
+            0.628
+          ],
+          "count": 6,
+          "medianMs": 0.698,
+          "minMs": 0.628,
+          "maxMs": 0.736,
+          "pairedDeltaFromA": [
+            0.20699999999999996,
+            0.17199999999999993,
+            0.17699999999999994,
+            0.020000000000000018,
+            0.0029999999999998916,
+            -0.0030000000000000027
+          ],
+          "positivePairs": 5,
+          "firstHalfMedian": 0.702,
+          "lastHalfMedian": 0.69,
+          "driftMs": 0.01200000000000001,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            2.169,
+            2.079,
+            1.633,
+            2.05,
+            1.678,
+            1.801
+          ],
+          "count": 6,
+          "medianMs": 1.9255,
+          "minMs": 1.633,
+          "maxMs": 2.169,
+          "pairedDeltaFromA": [
+            0.08800000000000008,
+            0.013000000000000345,
+            -0.43500000000000005,
+            -0.04600000000000026,
+            -0.06900000000000017,
+            -0.17500000000000004
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 2.079,
+          "lastHalfMedian": 1.801,
+          "driftMs": 0.27800000000000025,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "V": {
+        "singleMs": {
+          "values": [
+            0.718,
+            0.696,
+            0.687,
+            0.676,
+            0.538,
+            0.802
+          ],
+          "count": 6,
+          "medianMs": 0.6915,
+          "minMs": 0.538,
+          "maxMs": 0.802,
+          "pairedDeltaFromA": [
+            0.23099999999999998,
+            0.16599999999999993,
+            0.128,
+            -0.016999999999999904,
+            -0.14900000000000002,
+            0.17100000000000004
+          ],
+          "positivePairs": 4,
+          "firstHalfMedian": 0.696,
+          "lastHalfMedian": 0.676,
+          "driftMs": 0.019999999999999907,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            2.08,
+            2.179,
+            1.61,
+            2.029,
+            1.575,
+            1.627
+          ],
+          "count": 6,
+          "medianMs": 1.8279999999999998,
+          "minMs": 1.575,
+          "maxMs": 2.179,
+          "pairedDeltaFromA": [
+            -0.0009999999999998899,
+            0.11299999999999999,
+            -0.45799999999999996,
+            -0.06700000000000017,
+            -0.17200000000000015,
+            -0.349
+          ],
+          "positivePairs": 1,
+          "firstHalfMedian": 2.08,
+          "lastHalfMedian": 1.627,
+          "driftMs": 0.45300000000000007,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      }
+    },
+    "16mib": {
+      "A": {
+        "singleMs": {
+          "values": [
+            0.868,
+            0.923,
+            0.875,
+            0.874,
+            0.87,
+            0.878
+          ],
+          "count": 6,
+          "medianMs": 0.8745,
+          "minMs": 0.868,
+          "maxMs": 0.923,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "firstHalfMedian": 0.875,
+          "lastHalfMedian": 0.874,
+          "driftMs": 0.0010000000000000009,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            2.419,
+            2.327,
+            2.233,
+            2.331,
+            2.257,
+            2.203
+          ],
+          "count": 6,
+          "medianMs": 2.292,
+          "minMs": 2.203,
+          "maxMs": 2.419,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "firstHalfMedian": 2.327,
+          "lastHalfMedian": 2.257,
+          "driftMs": 0.06999999999999984,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "S": {
+        "singleMs": {
+          "values": [
+            0.79,
+            0.869,
+            0.884,
+            0.963,
+            0.863,
+            1.188
+          ],
+          "count": 6,
+          "medianMs": 0.8765000000000001,
+          "minMs": 0.79,
+          "maxMs": 1.188,
+          "pairedDeltaFromA": [
+            -0.07799999999999996,
+            -0.05400000000000005,
+            0.009000000000000008,
+            0.08899999999999997,
+            -0.007000000000000006,
+            0.30999999999999994
+          ],
+          "positivePairs": 3,
+          "firstHalfMedian": 0.869,
+          "lastHalfMedian": 0.963,
+          "driftMs": 0.09399999999999997,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            2.326,
+            2.336,
+            2.866,
+            2.427,
+            2.45,
+            2.342
+          ],
+          "count": 6,
+          "medianMs": 2.3845,
+          "minMs": 2.326,
+          "maxMs": 2.866,
+          "pairedDeltaFromA": [
+            -0.09299999999999997,
+            0.008999999999999897,
+            0.633,
+            0.09600000000000009,
+            0.19300000000000006,
+            0.13900000000000023
+          ],
+          "positivePairs": 5,
+          "firstHalfMedian": 2.336,
+          "lastHalfMedian": 2.427,
+          "driftMs": 0.09100000000000019,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "H": {
+        "singleMs": {
+          "values": [
+            0.863,
+            0.837,
+            0.853,
+            0.866,
+            0.87,
+            0.903
+          ],
+          "count": 6,
+          "medianMs": 0.8645,
+          "minMs": 0.837,
+          "maxMs": 0.903,
+          "pairedDeltaFromA": [
+            -0.0050000000000000044,
+            -0.08600000000000008,
+            -0.02200000000000002,
+            -0.008000000000000007,
+            0.0,
+            0.025000000000000022
+          ],
+          "positivePairs": 1,
+          "firstHalfMedian": 0.853,
+          "lastHalfMedian": 0.87,
+          "driftMs": 0.017000000000000015,
+          "limitMs": 0.1,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            1.751,
+            2.304,
+            2.032,
+            2.329,
+            2.4,
+            2.333
+          ],
+          "count": 6,
+          "medianMs": 2.3165,
+          "minMs": 1.751,
+          "maxMs": 2.4,
+          "pairedDeltaFromA": [
+            -0.6680000000000001,
+            -0.02300000000000013,
+            -0.20100000000000007,
+            -0.0019999999999997797,
+            0.1429999999999998,
+            0.13000000000000034
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 2.032,
+          "lastHalfMedian": 2.333,
+          "driftMs": 0.30100000000000016,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      },
+      "V": {
+        "singleMs": {
+          "values": [
+            1.193,
+            0.909,
+            1.192,
+            1.177,
+            1.179,
+            1.163
+          ],
+          "count": 6,
+          "medianMs": 1.178,
+          "minMs": 0.909,
+          "maxMs": 1.193,
+          "pairedDeltaFromA": [
+            0.32500000000000007,
+            -0.014000000000000012,
+            0.31699999999999995,
+            0.30300000000000005,
+            0.30900000000000005,
+            0.28500000000000003
+          ],
+          "positivePairs": 5,
+          "firstHalfMedian": 1.192,
+          "lastHalfMedian": 1.177,
+          "driftMs": 0.014999999999999902,
+          "limitMs": 0.1178,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            2.319,
+            2.326,
+            2.504,
+            2.31,
+            2.281,
+            1.766
+          ],
+          "count": 6,
+          "medianMs": 2.3145,
+          "minMs": 1.766,
+          "maxMs": 2.504,
+          "pairedDeltaFromA": [
+            -0.10000000000000009,
+            -0.0009999999999998899,
+            0.2709999999999999,
+            -0.020999999999999908,
+            0.02400000000000002,
+            -0.43699999999999983
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 2.326,
+          "lastHalfMedian": 2.281,
+          "driftMs": 0.04499999999999993,
+          "limitMs": 0.5,
+          "stable": true
+        }
+      }
+    },
+    "long-japanese": {
+      "A": {
+        "singleMs": {
+          "values": [
+            6.827,
+            5.52,
+            6.696,
+            6.761,
+            6.878,
+            6.21
+          ],
+          "count": 6,
+          "medianMs": 6.7285,
+          "minMs": 5.52,
+          "maxMs": 6.878,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "firstHalfMedian": 6.696,
+          "lastHalfMedian": 6.761,
+          "driftMs": 0.06500000000000039,
+          "limitMs": 0.6728500000000001,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            7.986,
+            7.219,
+            8.04,
+            6.995,
+            6.782,
+            6.018
+          ],
+          "count": 6,
+          "medianMs": 7.107,
+          "minMs": 6.018,
+          "maxMs": 8.04,
+          "pairedDeltaFromA": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "positivePairs": 0,
+          "firstHalfMedian": 7.986,
+          "lastHalfMedian": 6.782,
+          "driftMs": 1.2039999999999997,
+          "limitMs": 0.7107000000000001,
+          "stable": false
+        }
+      },
+      "S": {
+        "singleMs": {
+          "values": [
+            6.11,
+            5.313,
+            6.307,
+            6.691,
+            6.597,
+            6.449
+          ],
+          "count": 6,
+          "medianMs": 6.378,
+          "minMs": 5.313,
+          "maxMs": 6.691,
+          "pairedDeltaFromA": [
+            -0.7169999999999996,
+            -0.20699999999999985,
+            -0.38899999999999935,
+            -0.07000000000000028,
+            -0.2809999999999997,
+            0.23899999999999988
+          ],
+          "positivePairs": 1,
+          "firstHalfMedian": 6.11,
+          "lastHalfMedian": 6.597,
+          "driftMs": 0.4870000000000001,
+          "limitMs": 0.6378,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            7.264,
+            7.147,
+            7.232,
+            6.449,
+            7.6,
+            7.324
+          ],
+          "count": 6,
+          "medianMs": 7.248,
+          "minMs": 6.449,
+          "maxMs": 7.6,
+          "pairedDeltaFromA": [
+            -0.7219999999999995,
+            -0.07200000000000006,
+            -0.8079999999999989,
+            -0.5460000000000003,
+            0.8179999999999996,
+            1.306
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 7.232,
+          "lastHalfMedian": 7.324,
+          "driftMs": 0.09199999999999964,
+          "limitMs": 0.7248000000000001,
+          "stable": true
+        }
+      },
+      "H": {
+        "singleMs": {
+          "values": [
+            5.532,
+            6.217,
+            6.31,
+            6.317,
+            6.355,
+            6.278
+          ],
+          "count": 6,
+          "medianMs": 6.294,
+          "minMs": 5.532,
+          "maxMs": 6.355,
+          "pairedDeltaFromA": [
+            -1.295,
+            0.6970000000000001,
+            -0.3860000000000001,
+            -0.44399999999999995,
+            -0.5229999999999997,
+            0.06799999999999962
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 6.217,
+          "lastHalfMedian": 6.317,
+          "driftMs": 0.10000000000000053,
+          "limitMs": 0.6294,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            7.219,
+            5.981,
+            6.945,
+            5.768,
+            7.031,
+            6.77
+          ],
+          "count": 6,
+          "medianMs": 6.8575,
+          "minMs": 5.768,
+          "maxMs": 7.219,
+          "pairedDeltaFromA": [
+            -0.7669999999999995,
+            -1.2380000000000004,
+            -1.0949999999999989,
+            -1.2270000000000003,
+            0.24899999999999967,
+            0.7519999999999998
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 6.945,
+          "lastHalfMedian": 6.77,
+          "driftMs": 0.1750000000000007,
+          "limitMs": 0.6857500000000001,
+          "stable": true
+        }
+      },
+      "V": {
+        "singleMs": {
+          "values": [
+            6.366,
+            6.183,
+            6.325,
+            6.347,
+            6.463,
+            6.741
+          ],
+          "count": 6,
+          "medianMs": 6.3565000000000005,
+          "minMs": 6.183,
+          "maxMs": 6.741,
+          "pairedDeltaFromA": [
+            -0.4610000000000003,
+            0.6630000000000003,
+            -0.37099999999999955,
+            -0.4139999999999997,
+            -0.41500000000000004,
+            0.5309999999999997
+          ],
+          "positivePairs": 2,
+          "firstHalfMedian": 6.325,
+          "lastHalfMedian": 6.463,
+          "driftMs": 0.1379999999999999,
+          "limitMs": 0.63565,
+          "stable": true
+        },
+        "burstMs": {
+          "values": [
+            7.688,
+            7.258,
+            7.491,
+            7.404,
+            7.191,
+            7.359
+          ],
+          "count": 6,
+          "medianMs": 7.3815,
+          "minMs": 7.191,
+          "maxMs": 7.688,
+          "pairedDeltaFromA": [
+            -0.29800000000000004,
+            0.0389999999999997,
+            -0.5489999999999995,
+            0.4089999999999998,
+            0.4089999999999998,
+            1.3410000000000002
+          ],
+          "positivePairs": 4,
+          "firstHalfMedian": 7.491,
+          "lastHalfMedian": 7.359,
+          "driftMs": 0.13199999999999967,
+          "limitMs": 0.7381500000000001,
+          "stable": true
+        }
+      }
+    }
+  },
+  "judgment": {
+    "empty": {
+      "complete": true,
+      "fixtureStable": false,
+      "comparisons": {
+        "S": {
+          "singleMs": {
+            "medianDelta": 0.08699999999999997,
+            "limit": 0.1,
+            "withinNumericLimit": true,
+            "positivePairs": 5,
+            "consistentSmallIncrease": true,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": -0.018500000000000405,
+            "limit": 0.5,
+            "withinNumericLimit": true,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          }
+        },
+        "H": {
+          "singleMs": {
+            "medianDelta": 0.10299999999999998,
+            "limit": 0.5,
+            "withinNumericLimit": true,
+            "positivePairs": 5,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": -0.14150000000000018,
+            "limit": 1,
+            "withinNumericLimit": true,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          }
+        },
+        "V": {
+          "singleMs": {
+            "medianDelta": 0.09650000000000003,
+            "limit": 0.5,
+            "withinNumericLimit": true,
+            "positivePairs": 4,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": -0.23900000000000032,
+            "limit": 1,
+            "withinNumericLimit": true,
+            "positivePairs": 1,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          }
+        }
+      }
+    },
+    "16mib": {
+      "complete": true,
+      "fixtureStable": true,
+      "comparisons": {
+        "S": {
+          "singleMs": {
+            "medianDelta": 0.0020000000000000018,
+            "limit": 0.1,
+            "withinNumericLimit": true,
+            "positivePairs": 3,
+            "consistentSmallIncrease": false,
+            "decision": "within-probe-limits"
+          },
+          "burstMs": {
+            "medianDelta": 0.09250000000000025,
+            "limit": 0.5,
+            "withinNumericLimit": true,
+            "positivePairs": 5,
+            "consistentSmallIncrease": true,
+            "decision": "hold"
+          }
+        },
+        "H": {
+          "singleMs": {
+            "medianDelta": -0.010000000000000009,
+            "limit": 0.5,
+            "withinNumericLimit": true,
+            "positivePairs": 1,
+            "consistentSmallIncrease": false,
+            "decision": "within-probe-limits"
+          },
+          "burstMs": {
+            "medianDelta": 0.02450000000000019,
+            "limit": 1,
+            "withinNumericLimit": true,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "within-probe-limits"
+          }
+        },
+        "V": {
+          "singleMs": {
+            "medianDelta": 0.3034999999999999,
+            "limit": 0.5,
+            "withinNumericLimit": true,
+            "positivePairs": 5,
+            "consistentSmallIncrease": false,
+            "decision": "within-probe-limits"
+          },
+          "burstMs": {
+            "medianDelta": 0.022499999999999964,
+            "limit": 1,
+            "withinNumericLimit": true,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "within-probe-limits"
+          }
+        }
+      }
+    },
+    "long-japanese": {
+      "complete": true,
+      "fixtureStable": false,
+      "comparisons": {
+        "S": {
+          "singleMs": {
+            "medianDelta": -0.35050000000000026,
+            "limit": 0.6728500000000001,
+            "withinNumericLimit": true,
+            "positivePairs": 1,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": 0.14100000000000001,
+            "limit": 0.7107000000000001,
+            "withinNumericLimit": true,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          }
+        },
+        "H": {
+          "singleMs": {
+            "medianDelta": -0.4345000000000008,
+            "limit": 0.5,
+            "withinNumericLimit": false,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": -0.24950000000000028,
+            "limit": 1,
+            "withinNumericLimit": true,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          }
+        },
+        "V": {
+          "singleMs": {
+            "medianDelta": -0.3719999999999999,
+            "limit": 0.5,
+            "withinNumericLimit": false,
+            "positivePairs": 2,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          },
+          "burstMs": {
+            "medianDelta": 0.27449999999999974,
+            "limit": 1,
+            "withinNumericLimit": true,
+            "positivePairs": 4,
+            "consistentSmallIncrease": false,
+            "decision": "hold"
+          }
+        }
+      }
+    }
+  },
+  "visual": {
+    "captureCount": 12,
+    "viewedOriginal": true,
+    "ASExactPairs": 3,
+    "HVBodyOnlyPairs": 6,
+    "maskPixels": 0,
+    "pixelComparisons": [
+      {
+        "fixture": "empty",
+        "variant": "S",
+        "differentPixels": 0,
+        "bounds": null,
+        "regions": {
+          "body": {
+            "differentPixels": 0,
+            "bounds": null
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "empty",
+        "variant": "H",
+        "differentPixels": 45949,
+        "bounds": {
+          "x": 0,
+          "y": 422,
+          "w": 1280,
+          "h": 36
+        },
+        "regions": {
+          "body": {
+            "differentPixels": 45949,
+            "bounds": {
+              "x": 0,
+              "y": 422,
+              "w": 1280,
+              "h": 36
+            }
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "empty",
+        "variant": "V",
+        "differentPixels": 128,
+        "bounds": {
+          "x": 682,
+          "y": 68,
+          "w": 31,
+          "h": 30
+        },
+        "regions": {
+          "body": {
+            "differentPixels": 128,
+            "bounds": {
+              "x": 682,
+              "y": 68,
+              "w": 31,
+              "h": 30
+            }
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "16mib",
+        "variant": "S",
+        "differentPixels": 0,
+        "bounds": null,
+        "regions": {
+          "body": {
+            "differentPixels": 0,
+            "bounds": null
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "16mib",
+        "variant": "H",
+        "differentPixels": 116325,
+        "bounds": {
+          "x": 0,
+          "y": 397,
+          "w": 1280,
+          "h": 347
+        },
+        "regions": {
+          "body": {
+            "differentPixels": 116325,
+            "bounds": {
+              "x": 0,
+              "y": 397,
+              "w": 1280,
+              "h": 347
+            }
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "16mib",
+        "variant": "V",
+        "differentPixels": 96835,
+        "bounds": {
+          "x": 640,
+          "y": 68,
+          "w": 640,
+          "h": 676
+        },
+        "regions": {
+          "body": {
+            "differentPixels": 96835,
+            "bounds": {
+              "x": 640,
+              "y": 68,
+              "w": 640,
+              "h": 676
+            }
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "long-japanese",
+        "variant": "S",
+        "differentPixels": 0,
+        "bounds": null,
+        "regions": {
+          "body": {
+            "differentPixels": 0,
+            "bounds": null
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "long-japanese",
+        "variant": "H",
+        "differentPixels": 156694,
+        "bounds": {
+          "x": 0,
+          "y": 397,
+          "w": 1280,
+          "h": 345
+        },
+        "regions": {
+          "body": {
+            "differentPixels": 156694,
+            "bounds": {
+              "x": 0,
+              "y": 397,
+              "w": 1280,
+              "h": 345
+            }
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      },
+      {
+        "fixture": "long-japanese",
+        "variant": "V",
+        "differentPixels": 140187,
+        "bounds": {
+          "x": 640,
+          "y": 68,
+          "w": 640,
+          "h": 674
+        },
+        "regions": {
+          "body": {
+            "differentPixels": 140187,
+            "bounds": {
+              "x": 640,
+              "y": 68,
+              "w": 640,
+              "h": 674
+            }
+          }
+        },
+        "outside": {
+          "differentPixels": 0,
+          "bounds": null
+        }
+      }
+    ],
+    "limits": [
+      "撮影は各本文の初組・入力前だけ。全打鍵後の画素同一性は未検証。",
+      "操作案内は製品の全体配置を1組だけ残す。上下試作では下枠の先頭行と重なる。案内は暖機1字で消え単打/200字の計測にはない。",
+      "同じframeと本文だけ。独立文書・scroll・IME・hit test・所有移行は未検証。",
+      "左右の行末clipは幅による予定の差。全文の横方向表示やfallback実字体は未検証。"
+    ]
+  },
+  "priorComparison": {
+    "date": "2026-10-05",
+    "source": "docs/quality/render-capsule-2026-10-05.json",
+    "sha256": "7794ac8534d94fab14c1a36d663991072659b35cb7d8ac28f502c8c2169ece24",
+    "values": {
+      "empty": {
+        "A": {
+          "singleMs": {
+            "previousMs": 0.7355,
+            "currentMs": 0.595,
+            "shorterPercent": 19.102651257647864
+          },
+          "burstMs": {
+            "previousMs": 3.1135,
+            "currentMs": 2.067,
+            "shorterPercent": 33.61169102296451
+          }
+        },
+        "S": {
+          "singleMs": {
+            "previousMs": 0.7605,
+            "currentMs": 0.6819999999999999,
+            "shorterPercent": 10.32215647600263
+          },
+          "burstMs": {
+            "previousMs": 3.1715,
+            "currentMs": 2.0484999999999998,
+            "shorterPercent": 35.40911240737822
+          }
+        },
+        "H": {
+          "singleMs": {
+            "previousMs": 0.744,
+            "currentMs": 0.698,
+            "shorterPercent": 6.182795698924737
+          },
+          "burstMs": {
+            "previousMs": 3.0705,
+            "currentMs": 1.9255,
+            "shorterPercent": 37.29034359224882
+          }
+        },
+        "V": {
+          "singleMs": {
+            "previousMs": 0.7435,
+            "currentMs": 0.6915,
+            "shorterPercent": 6.99394754539342
+          },
+          "burstMs": {
+            "previousMs": 3.2455,
+            "currentMs": 1.8279999999999998,
+            "shorterPercent": 43.67585888152827
+          }
+        }
+      },
+      "16mib": {
+        "A": {
+          "singleMs": {
+            "previousMs": 1.243,
+            "currentMs": 0.8745,
+            "shorterPercent": 29.646017699115045
+          },
+          "burstMs": {
+            "previousMs": 7.1165,
+            "currentMs": 2.292,
+            "shorterPercent": 67.7931567484016
+          }
+        },
+        "S": {
+          "singleMs": {
+            "previousMs": 1.227,
+            "currentMs": 0.8765000000000001,
+            "shorterPercent": 28.565607171964135
+          },
+          "burstMs": {
+            "previousMs": 7.249499999999999,
+            "currentMs": 2.3845,
+            "shorterPercent": 67.10807641906338
+          }
+        },
+        "H": {
+          "singleMs": {
+            "previousMs": 1.23,
+            "currentMs": 0.8645,
+            "shorterPercent": 29.71544715447154
+          },
+          "burstMs": {
+            "previousMs": 7.2005,
+            "currentMs": 2.3165,
+            "shorterPercent": 67.8286230122908
+          }
+        },
+        "V": {
+          "singleMs": {
+            "previousMs": 1.661,
+            "currentMs": 1.178,
+            "shorterPercent": 29.07886815171584
+          },
+          "burstMs": {
+            "previousMs": 7.452,
+            "currentMs": 2.3145,
+            "shorterPercent": 68.94122383252818
+          }
+        }
+      },
+      "long-japanese": {
+        "A": {
+          "singleMs": {
+            "previousMs": 7.2695,
+            "currentMs": 6.7285,
+            "shorterPercent": 7.442052410757272
+          },
+          "burstMs": {
+            "previousMs": 91.5315,
+            "currentMs": 7.107,
+            "shorterPercent": 92.23545992363285
+          }
+        },
+        "S": {
+          "singleMs": {
+            "previousMs": 7.106999999999999,
+            "currentMs": 6.378,
+            "shorterPercent": 10.25749261291683
+          },
+          "burstMs": {
+            "previousMs": 90.3875,
+            "currentMs": 7.248,
+            "shorterPercent": 91.98119208961415
+          }
+        },
+        "H": {
+          "singleMs": {
+            "previousMs": 6.8035,
+            "currentMs": 6.294,
+            "shorterPercent": 7.48879253325494
+          },
+          "burstMs": {
+            "previousMs": 89.62299999999999,
+            "currentMs": 6.8575,
+            "shorterPercent": 92.34850429019336
+          }
+        },
+        "V": {
+          "singleMs": {
+            "previousMs": 6.4094999999999995,
+            "currentMs": 6.3565000000000005,
+            "shorterPercent": 0.8268975739137097
+          },
+          "burstMs": {
+            "previousMs": 91.38149999999999,
+            "currentMs": 7.3815,
+            "shorterPercent": 91.92232563483856
+          }
+        }
+      }
+    },
+    "limitation": "別日・別版の参考比較。10月5日以後の全変更を含み、本日の7件や個別変更の因果効果・同日A/Bではない。"
+  },
+  "evidence": {
+    "root": "D:/NeNeNib/evidence/split-recheck-20261011/snapshot-404/files/outputs/20261011-split-recheck",
+    "closeout": "D:/NeNeNib/evidence/split-recheck-20261011/acceptance-404/closeout.md",
+    "planSha256": "d459d8a78378f53a05d3e8c1e4bea1ee3dd0566bdc495b066eff9e506f3c9048",
+    "rawAuditSha256": "cd25c694ba4daaf9410a39db676c241620400e95905d7c3a201e603e1f4912fa",
+    "visualAuditSha256": "a4556c2442778a699b007ecc9a47c81dced0b6f0b6b046edae64b78bd79986af"
+  },
+  "nonAdoption": "ADR0068/0075のsplit採用保留を維持する。今回の依頼は旧試験による現状確認だけ。正式QLT-014判定・独立文書/所有移行・製品split採用は行っていない。",
+  "remainingRisks": [
+    "同じframe・同じ文字列の再利用に有利な条件。二つ目frame生成・独立scroll・文書/undo/save/IME/hit test/sessionは未検証。",
+    "上下は9行ずつで計18行、通常/1枠は19行。行数減少も数値に含む。",
+    "空文書のA単打と長行のA連続入力に前後半の揺れ。Sの空単打と16MiB連続入力は正差5/6。",
+    "長行H/V単打総時間は約6.3msで旧2ms条件外。",
+    "入力受信からPresentの復帰まで。OSの入力待ち・画面が光るまでを含まない。",
+    "撮影は各本文の初組・入力前だけ。全打鍵後の画素同一性は未検証。",
+    "操作案内は製品の全体配置を1組だけ残す。上下試作では下枠の先頭行と重なる。案内は暖機1字で消え単打/200字の計測にはない。",
+    "同じframeと本文だけ。独立文書・scroll・IME・hit test・所有移行は未検証。",
+    "左右の行末clipは幅による予定の差。全文の横方向表示やfallback実字体は未検証。"
+  ],
+  "waivers": "none"
+}
