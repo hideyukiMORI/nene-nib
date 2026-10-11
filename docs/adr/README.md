@@ -129,4 +129,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0111](0111-palette-choices-transfer-owned-values.md) | パレット候補は所有値をコピーせず渡す | 技術受理・#398 |
 | [0112](0112-operation-choices-own-only-matched-display-values.md) | 一致した操作候補だけ表示値を所有する | 技術受理・#400 |
 | [0113](0113-status-position-uses-local-decimal-storage.md) | ステータス位置の数値を局所領域から所有する | 技術受理・#402 |
-| [0114](0114-wrapped-rows-share-the-body-text-layout.md) | 折り返した画面行は本文の文字組みを共有して求める | 提案・#410 |
+| [0114](0114-wrapped-rows-share-the-body-text-layout.md) | 折り返した画面行は本文の文字組みを共有して求める | 技術受理・#410 |

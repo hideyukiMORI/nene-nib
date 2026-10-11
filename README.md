@@ -3,17 +3,17 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-10-08):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
+> **Status (2026-10-11):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
 > built-in themes, and the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search with
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
 > and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
 > available operations; a new untitled document and the status bar show optional shortcut hints. Markdown
-> preview and files above 64 MiB are still planned. Nothing to download yet (Phase 4).
+> preview and files above 64 MiB are still planned. The first beta package is being prepared in #413.
 
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). The numbers below are as of `main` on 2026-09-29 and are kept in
+[`docs/adr/`](docs/adr/README.md). The supported features below include the wrapped-editing beta candidate and are kept in
 `docs/todo/current.md`; the measurements behind them are in `docs/quality/gate-proofs.md`.
 
 - **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
