@@ -974,11 +974,21 @@ constexpr std::array<ProbeDispatch, 110> dispatches{{
                      command_input_input, probed_command_input},
 }};
 
+constexpr auto dispatch_names = []
+{
+    std::array<std::string_view, dispatches.size()> names{};
+    for (std::size_t index = 0; index < dispatches.size(); ++index)
+    {
+        names.at(index) = dispatch_name(dispatches.at(index));
+    }
+    return names;
+}();
+
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
 {
     for (std::size_t previous = 0; previous < index; ++previous)
     {
-        if (dispatch_name(dispatches[index]) == dispatch_name(dispatches[previous]))
+        if (dispatch_names[index] == dispatch_names[previous])
         {
             return false;
         }

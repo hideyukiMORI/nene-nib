@@ -76,8 +76,6 @@ frame_current(const EditorFrame &frame)
     return frame.lines.empty() ? 0 : frame.lines.front().number.value;
 }
 
-// 打った途中の各入力で、当たりの位置・本文とキャレットの不変・報せ無し・Esc の巻き戻し（決定
-// 3・5）。
 void verify_search_line_input_ownership()
 {
     const auto source = core::SearchLine::opened(VimSearchDirection::forward)
@@ -123,6 +121,8 @@ void verify_search_line_input_ownership()
            "SearchLine preserves text, caret and direction for empty insertion");
 }
 
+// 打った途中の各入力で、当たりの位置・本文とキャレットの不変・報せ無し・Esc の巻き戻し（決定
+// 3・5）。
 void verify_incsearch_typed_cases()
 {
     constexpr std::array<IncsearchCase, 12> cases{{

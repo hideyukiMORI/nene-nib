@@ -113,19 +113,31 @@ constexpr std::array<CommandInputSample, 12> cases{{
            !view.completion_index.has_value();
 }
 
-[[nodiscard]] application::CommandInput opened_input(const CommandInputSample &sample)
+[[nodiscard]] application::CommandInput opened_input(CommandInputWorkload workload,
+                                                     const CommandInputSample &sample)
 {
-    if (sample.alternative == 0U)
+    switch (workload)
     {
+    case CommandInputWorkload::search_long:
+    case CommandInputWorkload::search_short:
+        return core::SearchLine::opened(core::VimSearchDirection::forward)
+            .inserted(sample.input)
+            .value();
+    case CommandInputWorkload::ex_long:
+    case CommandInputWorkload::ex_short:
         return core::CommandLine::empty().inserted(sample.input).value();
-    }
-    if (sample.alternative == 1U)
-    {
+    case CommandInputWorkload::palette_long:
+    case CommandInputWorkload::palette_short:
         return core::CommandPalette::opened({}, sample.input, core::EditMode::ordinary);
+    case CommandInputWorkload::ex_left_long:
+    case CommandInputWorkload::palette_fill_long:
+    case CommandInputWorkload::controller_search:
+    case CommandInputWorkload::controller_ex:
+    case CommandInputWorkload::controller_palette:
+    case CommandInputWorkload::controller_fill:
+        break;
     }
-    return core::SearchLine::opened(core::VimSearchDirection::forward)
-        .inserted(sample.input)
-        .value();
+    std::unreachable();
 }
 
 [[nodiscard]] std::uint64_t input_checksum(const core::SearchLine &line)
@@ -149,9 +161,10 @@ constexpr std::array<CommandInputSample, 12> cases{{
 }
 
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
-inserted_probe(const CommandInputSample &sample, application::TimingPort &timing)
+inserted_probe(CommandInputWorkload workload, const CommandInputSample &sample,
+               application::TimingPort &timing)
 {
-    const auto source = opened_input(sample);
+    const auto source = opened_input(workload, sample);
     const auto source_view = application::input_line_of(source);
     const auto initial = application::inserted_command(source, "日🖋").value();
     const auto held_view = application::input_line_of(initial);
@@ -266,7 +279,7 @@ std::expected<std::uint64_t, ProbeFailure> probed_command_input(CommandInputWork
     case CommandInputWorkload::search_short:
     case CommandInputWorkload::ex_short:
     case CommandInputWorkload::palette_short:
-        return inserted_probe(sample, timing);
+        return inserted_probe(workload, sample, timing);
     case CommandInputWorkload::ex_left_long:
         return left_probe(sample, timing);
     case CommandInputWorkload::palette_fill_long:
