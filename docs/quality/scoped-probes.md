@@ -133,3 +133,11 @@ before a1630ab / after 9388207で9条件各120組の3利益/6費用が成立。�
 title+folderの生成・破棄1024回と長さ/checksumを区間内、parse/入力生成/前後の全文・code point・元path・保持値照合を区間外とする。既存frame-document短saved/長saved/長failed/untitledの4条件を直接caller費用として使う。旧47selector/default/旧assertionsは保持し、file-pathへ独立UTF-8境界6checksを追加した。
 
 before3d599b7/after346796a、20iterations/ABBA3/各120組を一度取得し、3利益/10費用の全条件が成立。156runs/3120durations/6240marks/1560pairsを原rawから再計算一致。通常/深いASCII/日本語の対応比.724293/.957055/.979378。failed frameは横ばい。812checks/39oracle/GUI原9+補足1/正式long-lineと全失敗・限界・再利用はgate-proofs 5-du。局所率をUI全体へ換算しない。
+
+## 完成したコマンド入力の所有移管（#392・ADR0108）
+
+旧98条件の順/入力/本体/期待を維持し、CommandInputWorkloadの閉enum12条件を同じtyped dispatchへ追加。command-input-search/ex/palette-long/short-1024の6、ex-left-long-1024、palette-fill-long-1024、controller-search/ex/palette/fill-64の4。独立bytes/FNV/SHA/code points/caret/checksumと区間は[ADR0108](../adr/0108-completed-command-input-transfers-ownership.md)で先行固定した。
+
+最初8条件は同じimmutable入力から生成/破棄1024回、Controllerはbody a x aと固定64cycle。oracle/入力生成は区間外。controller-fillは再open/entry/filter/folder requestと足場vector成長も含み、fill単独と呼ばない。旧palette-append-narrow-5000-to-50を費用として定義不変で追加。旧47selector/default/assertionsを維持し、SearchLine不足契約6checksだけを追加した。
+
+before aa4763d / after c6ce1ce、20iterations/ABBA3/各120組の初回13条件で3利益/10費用成立。156runs/3120durations/6240marks/1560pairsを原rawから再計算一致。長Search/Ex/Palette対応比.489933/.589109/.639037、短Search横ばい、Controller Ex+2µs/fill全cycle+5µsは事前費用内。851checks/39oracle/GUI/正式指標、harnessのconstexpr/tidy失敗と是正、全コマンド/限界/再利用はgate-proofs 5-dv。局所率のUI換算なし。

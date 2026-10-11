@@ -1,6 +1,6 @@
 # ADR 0108 — 完成したコマンド入力は既存の所有先へ移す
 
-- 状態: 設計受理・実験前（性能・製品採用は未判定）
+- 状態: 技術受理（2026-10-11 11:47 JST、統合・収載・整理は別記録）
 - 日付: 2026-10-11
 - Issue: #392
 - 基準: main c203f0e7d6f22221f6f31e3db340838486e86998
@@ -82,3 +82,9 @@ hideの今回の明示分担に従い、Astraが設計/採否、SOLが実装と�
 #388はPR391/main c203f0eへ統合、wave4/snapshot-388の703records/111398935bytesを全SHAで恒久収載、10:35:05 JSTに追加WT/OUT/専用入力を監査整理済み。branch/commitは保持し、実証拠はwave4/acceptance-388。
 
 本件も全試行/失敗/未測/代償を日報・引き継ぎ・qualityへ記録する。採用時はdraft PR/Ready/必須CI/eng/merge-pr.py plan→同expected-head execute/main同期/恒久収載後、絶対D path/取込/未保存/未追跡/ignored/唯一成果/稼働/linkを監査して追加物を整理する。branch/commit保持。C8入力parse保持・R8・IO6〜IO8は未実験、#365/#373は未解決。hideの停止まで改善を継続する。
+
+## 実施結果
+
+最終harness aa4763d / 製品c6ce1ce。3利益/10費用の固定条件、Debug851checks、39oracle、旧98/47/1853fixture保持、GUI10対0px/20本文/66PNG、正式palette5000初回5試料中央値2.159ms（基準2.630/上限4.630）が成立し技術受理。長いSearch/Ex/Paletteを1024回生成/破棄する局所区間は対応比.489933/.589109/.639037。短Searchは横ばい、Controller Exは+2µs、fill固定cycleは+5µsで事前費用内。局所率をUI全体に換算しない。
+
+110登録によるconstexpr上限とoptional guardのbefore build失敗を原source/全native rawごと保存し、上限・gateを緩めず是正した。GUIはBMPのみ、正式入力の出所保証はcanonical chord区間外に限る。全コマンド・13条件・是正・限界・再利用は[gate-proofs 5-dv](../quality/gate-proofs.md#5-dv--完成したコマンド入力の所有を移すissue-392adr0108)。公開API/schema/waiver変更なし。統合・恒久収載・監査整理の完了証拠はwave4/acceptance-392へ残す。

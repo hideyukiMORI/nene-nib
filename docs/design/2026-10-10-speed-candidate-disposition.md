@@ -73,3 +73,9 @@ FilePath::name_startだけを末尾の区切りで止め、公開API/parse/借�
 TabTitleの私有helperをbounded組立へ替え、prefixなしfitの一時copyと省略されるsuffixのcopyを省いた。同じDisplayText::parseを維持。固定3利益/10費用成立、1024表示生成・破棄の通常/深いASCII/日本語で約27.57/4.29/2.06%短縮。failed frameは横ばい。812checks/GUI原9+補足1対0px/正式long-line上限内で技術受理（gate-proofs 5-du）。正式中央値5.939msは基準5.431msより遅く、UI全体の速度利益とはしない。元26件の採否件数は不変。
 
 C8入力中parse保持はnoincsearch費用と所有の正本設計を理由に引き続き未実験。C2のcommand入力で成功済み一時値をby-valueへ渡すcopyを次の読取候補として調査したが、まだ設計固定/実装/測定はない。#365/#373・R8・IO6〜IO8の処分は変えない。
+
+## 追加実験: 完成したcommand入力の所有移管 #392
+
+上のC2読取段階から先行ADR0108で5files/8境界を固定し、完成済み局所値を既存constructor/refiltered/variant/with_command_inputへ移した。元state/borrow/防御copy/失敗保持はそのまま。固定3利益/10費用が成立し、長Search/Ex/Paletteの1024生成・破棄で約51.01/41.09/36.10%短縮。短Search横ばい、Controller Ex+2µs/fill全cycle+5µsも記録。851checks/39oracle/GUI10対0px/正式palette5000中央値2.159msで技術受理（gate-proofs 5-dv）。正式値は過去基準との比較で、本変更のUI改善率ではない。
+
+元26件の20採用/2実験不採用/4未実験は変更しない。C8入力中parse保持は未実験。次はEx補完catalogのprefixを先に照合して一致する文字列だけ生成する案を読取設計中で、未Issue/未実装/未測定。通常files palette5000はその経路を通らず、正式指標/再利用の根拠を先に確認する。#365/#373・R8・IO6〜IO8の処分は不変。
