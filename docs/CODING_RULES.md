@@ -136,7 +136,7 @@ flip model の frame latency waitable object を `WaitForSingleObjectEx` で待�
 
 テキストの内部表現は **UTF-8** に固定する（[ADR 0009](adr/0009-editing-slice-piece-table-and-editing-states.md)。位置はバイトの `Offset`・行の `LineNumber`・code point の `Column` の専用型で、境界でだけ変換する）。Win32 の `W` 系 API と DirectWrite の境界（ui / adapters）
 でだけ変換し、`A` 系 API と `setlocale` を呼ばない。日時は使わない（履歴の時刻は adapters が `FILETIME` を受け、core は不透明な値として扱う）。
-数値の書式は `std::format` に固定し、`printf` 系を使わない。
+数値の書式は `std::format` に固定し、`printf` 系を使わない。 core / application では [ADR 0022](adr/0022-ex-command-line-and-settings-evaluation.md) のロケール参照拒否が優先する。ステータスの行・桁表示は [ADR 0113](adr/0113-status-position-uses-local-decimal-storage.md) の局所領域への `std::to_chars` と既存 `DisplayText::parse` の一経路で生成する。他の既存数値表示の移行は同ADRの対象外であり、機械強制の状態・許可シンボルは変更しない。
 
 - 機械強制: **planned** → `setlocale` / `locale` は ARC-007 のシンボル検査（L1-locale）。`A` 系 API と `printf` 系は CNF の字句検査で拒否する予定
 
