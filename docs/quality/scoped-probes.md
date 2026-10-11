@@ -125,3 +125,11 @@ before c2c7cdc / after 9c6031aは同じharness/入力/区間/191flagsを使い�
 既存file_path/tab_title assertionsへ--file-pathをつなぐ。defaultのverify_text_and_caret/旧46selectors/全既存assertionsは不変。関連入力不変の成功は工程だけで再実行しない。
 
 before a1630ab / after 9388207で9条件各120組の3利益/6費用が成立。全108process/2160durations/4320marks/1080組を原記録から再計算一致。通常/深いASCII/混在UTF8の4096取得は対応比.166667/.009488/.016147、裸長は.998854でほぼ横ばい。失敗/GUIの限定再開/正式1指標/限界はgate-proofs 5-dt。
+
+## タブ表示の所有範囲（#388・ADR0107）
+
+旧89条件を維持し、TabDisplayWorkloadの新9条件を同じtyped dispatchへ追加する。tab-display-ordinary-saved / deep-saved / wide-saved / short-saved / exact-saved / modified-boundary / folder-wide / root-saved / untitled-modified（全てtab-display-接頭辞、-1024接尾辞）。入力bytes/FNV/独立title・folder literal/code points/optional/checksum/分類は[ADR0107](../adr/0107-tab-display-owns-only-the-clipped-range.md)で先行固定。
+
+title+folderの生成・破棄1024回と長さ/checksumを区間内、parse/入力生成/前後の全文・code point・元path・保持値照合を区間外とする。既存frame-document短saved/長saved/長failed/untitledの4条件を直接caller費用として使う。旧47selector/default/旧assertionsは保持し、file-pathへ独立UTF-8境界6checksを追加した。
+
+before3d599b7/after346796a、20iterations/ABBA3/各120組を一度取得し、3利益/10費用の全条件が成立。156runs/3120durations/6240marks/1560pairsを原rawから再計算一致。通常/深いASCII/日本語の対応比.724293/.957055/.979378。failed frameは横ばい。812checks/39oracle/GUI原9+補足1/正式long-lineと全失敗・限界・再利用はgate-proofs 5-du。局所率をUI全体へ換算しない。

@@ -1,6 +1,6 @@
 # ADR 0107 — タブ表示は省略後の範囲だけを一時所有する
 
-- 状態: 設計受理・実験前（性能・製品採用は未判定）
+- 状態: 技術受理（固定利益・費用・正しさ・表示・正式指標を確認）
 - 日付: 2026-10-11
 - Issue: #388
 - 基準: main 6536c9681a5b911a1cf8e69ab6cfe193721fa23e
@@ -72,3 +72,11 @@ ARC-001/004/007/008/011、CPP-002/004/005/007/008/011/012/014/016、QLT-001/002/
 D:/NeNeNib/worktrees/388-tab-display、D:/NeNeNib/outputs/20261011-tab-displayを用い、本体mainへ直接書かない。全試行・失敗・判断・コマンド・結果を記録し、日報/引き継ぎ/qualityへ収載する。技術受理後は通常draft PR/Ready/必須CI、eng/merge-pr.pyのplan→同expected-headでexecute、main同期を行う。恒久収載後に絶対D path/取込/未保存/未追跡/ignored/唯一成果/稼働/linkを監査して追加物を整理する。branch/commitは保持する。未完了物は理由とpathを引き継ぐ。
 
 旧#365/#373の未解決、C8入力中parse保持、R8、IO6〜IO8、splitの未採用状態は本件で変更しない。
+
+## 実験結果と採用（2026-10-11）
+
+同一harness3d599b7→製品346796aの一度の固定比較で3利益/10費用が成立し技術受理。1024表示生成・破棄の通常/深いASCII/日本語対応比.724293/.957055/.979378、短縮116/111/107組。failed frameは横ばい。812checks/39oracle/strict build/tidy/sanitizer/既存保護/独立レビューが成立。
+
+GUI原9対は0pxだが長題名がfolder欄を隠すため、同親f.txtの別1場面を先に固定して補足し0px。全26PNG目視/20本文copy/4正常close。folder全文の画面表示は主張せず独立core oracleで照合する。正式long-line5試料中央値5.939ms、基準5.431/上限7.431内。UI速度向上の証拠とはしない。他7指標未測。
+
+全build native stdoutの保存不足、証明scriptの初回誤り、補足監査の計数訂正を残す。成功済みbuild/GUI/性能は再取得しない。コマンド・数値・raw所在・制限・再利用は[gate-proofs 5-du](../quality/gate-proofs.md#5-du--タブ表示は省略後の範囲だけを所有するissue-388adr0107)。
