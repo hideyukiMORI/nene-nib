@@ -31,12 +31,12 @@ VimSearchDirection SearchLine::direction() const noexcept
 
 std::expected<SearchLine, ExFailure> SearchLine::inserted(std::string_view text) const
 {
-    const auto next = inserted_input(input_, text);
+    auto next = inserted_input(input_, text);
     if (!next)
     {
         return std::unexpected(next.error());
     }
-    return SearchLine(next.value(), direction_);
+    return SearchLine(std::move(next).value(), direction_);
 }
 
 SearchLine SearchLine::edited(CommandEdit edit) const

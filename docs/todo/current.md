@@ -1,6 +1,6 @@
 # いまのタスク — NeNe Nib
 
-> **2026-10-11 09:32 JST再開・10:23 JST技術受理**: hideの明示再開により改善継続中。今回指定のAstra設計/SOL・LUNA分担を適用。#388のタブ表示の一時所有縮小は固定3利益/10費用、812checks、GUI原9+補足1対0px、正式long-line上限内で技術受理。通常PR/CI/main/恒久収載/監査整理へ。実結果はwave4/acceptance-388。次はC2のcommand入力copyを読取評価、まだ実装/測定なし。最新状態は[10月11日の引き継ぎ](../handoffs/2026-10-11.md)、全証拠はgate-proofs 5-du。以下の00:36停止と#388未着手は再開前の履歴。
+> **2026-10-11 11:47 JST**: hideの09:32再開に従い改善継続中。#388はPR391/main c203f0e・恒久収載・監査整理済み（acceptance-388）。#392の完成command入力所有移管を固定3利益/10費用・851checks・GUI10対0px・正式palette5000で技術受理。通常PR/CI/main/収載/整理へ進み、実結果はwave4/acceptance-392に記録する。次はEx補完のprefix先照合を読取設計中、未実装・未測。最新状態は[10月11日の引き継ぎ](../handoffs/2026-10-11.md)、証拠はgate-proofs 5-dv。以下は時点ごとの履歴。
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。

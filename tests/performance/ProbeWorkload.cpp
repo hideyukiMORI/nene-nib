@@ -1,6 +1,7 @@
 #include "ProbeWorkload.hpp"
 
 #include "BufferProbe.hpp"
+#include "CommandInputProbe.hpp"
 #include "FileNameProbe.hpp"
 #include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
@@ -709,6 +710,27 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(CommandInputWorkload workload)
+{
+    switch (workload)
+    {
+    case CommandInputWorkload::search_long:
+    case CommandInputWorkload::ex_long:
+    case CommandInputWorkload::palette_long:
+    case CommandInputWorkload::search_short:
+    case CommandInputWorkload::ex_short:
+    case CommandInputWorkload::palette_short:
+    case CommandInputWorkload::ex_left_long:
+    case CommandInputWorkload::palette_fill_long:
+    case CommandInputWorkload::controller_search:
+    case CommandInputWorkload::controller_ex:
+    case CommandInputWorkload::controller_palette:
+    case CommandInputWorkload::controller_fill:
+        return 98U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -724,7 +746,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 98> dispatches{{
+constexpr std::array<ProbeDispatch, 110> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -924,13 +946,49 @@ constexpr std::array<ProbeDispatch, 98> dispatches{{
                      tab_display_input, fixed_tab_display},
     ProbeDispatchRow{TabDisplayWorkload::untitled_modified, "tab-display-untitled-modified-1024",
                      tab_display_input, fixed_tab_display},
+    ProbeDispatchRow{CommandInputWorkload::search_long, "command-input-search-long-1024",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::ex_long, "command-input-ex-long-1024",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::palette_long, "command-input-palette-long-1024",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::search_short, "command-input-search-short-1024",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::ex_short, "command-input-ex-short-1024",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::palette_short, "command-input-palette-short-1024",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::ex_left_long, "command-input-ex-left-long-1024",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::palette_fill_long,
+                     "command-input-palette-fill-long-1024", command_input_input,
+                     probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::controller_search, "command-input-controller-search-64",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::controller_ex, "command-input-controller-ex-64",
+                     command_input_input, probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::controller_palette,
+                     "command-input-controller-palette-64", command_input_input,
+                     probed_command_input},
+    ProbeDispatchRow{CommandInputWorkload::controller_fill, "command-input-controller-fill-64",
+                     command_input_input, probed_command_input},
 }};
+
+constexpr auto dispatch_names = []
+{
+    std::array<std::string_view, dispatches.size()> names{};
+    for (std::size_t index = 0; index < dispatches.size(); ++index)
+    {
+        names.at(index) = dispatch_name(dispatches.at(index));
+    }
+    return names;
+}();
 
 [[nodiscard]] constexpr bool name_is_unique(std::size_t index)
 {
     for (std::size_t previous = 0; previous < index; ++previous)
     {
-        if (dispatch_name(dispatches[index]) == dispatch_name(dispatches[previous]))
+        if (dispatch_names[index] == dispatch_names[previous])
         {
             return false;
         }
@@ -956,7 +1014,7 @@ constexpr std::array<ProbeDispatch, 98> dispatches{{
     }
     return true;
 }
-static_assert(dispatches.size() == 98U);
+static_assert(dispatches.size() == 110U);
 static_assert(dispatch_is_complete());
 
 } // namespace

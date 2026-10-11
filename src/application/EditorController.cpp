@@ -1644,13 +1644,13 @@ void EditorController::accept(const CommandText &intent)
     {
         return;
     }
-    const auto next = inserted_command(input.value(), intent.utf8);
+    auto next = inserted_command(input.value(), intent.utf8);
     if (!next)
     {
         state_ = state_.with_command_message(core::ex_failure_message(next.error()));
         return;
     }
-    state_ = state_.with_command_input(next.value());
+    state_ = state_.with_command_input(std::move(next).value());
     update_search_preview();
 }
 
@@ -2025,13 +2025,13 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
     case core::CommandChoiceKind::fill:
         break;
     }
-    const auto next = palette.filled(choice.command);
+    auto next = palette.filled(choice.command);
     if (!next)
     {
         state_ = state_.with_command_message(core::ex_failure_message(next.error()));
         return;
     }
-    state_ = state_.with_command_input(next.value());
+    state_ = state_.with_command_input(std::move(next).value());
 }
 
 void EditorController::accept(const PasteCommand &)

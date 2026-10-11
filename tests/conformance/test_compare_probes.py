@@ -202,6 +202,37 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(len(expected), size)
                 self.assertEqual(PROBES.fnv1a64(expected), fnv)
 
+    def test_command_input_inputs_and_registry(self):
+        cases = (
+            ('command-input-search-long-1024', b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 240, '10285162318351609365', '9b3043905ca79556acb1d2d12f9a4c0bed8ced2bd1a82e7cdf26743069be53e3'),
+            ('command-input-ex-long-1024', b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 240, '10285162318351609365', '9b3043905ca79556acb1d2d12f9a4c0bed8ced2bd1a82e7cdf26743069be53e3'),
+            ('command-input-palette-long-1024', b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 240, '10285162318351609365', '9b3043905ca79556acb1d2d12f9a4c0bed8ced2bd1a82e7cdf26743069be53e3'),
+            ('command-input-search-short-1024', b'a', 1, '12638187200555641996', 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'),
+            ('command-input-ex-short-1024', b'a', 1, '12638187200555641996', 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'),
+            ('command-input-palette-short-1024', b'a', 1, '12638187200555641996', 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'),
+            ('command-input-ex-left-long-1024', b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\xf0\x9f\x96\x8b', 244, '14968357790484435179', 'a2e3393a196799747e1c6d91151ec79b38d2a00b72ab41421c934ac08627132b'),
+            ('command-input-palette-fill-long-1024', b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 240, '10285162318351609365', '9b3043905ca79556acb1d2d12f9a4c0bed8ced2bd1a82e7cdf26743069be53e3'),
+            ('command-input-controller-search-64', b'a', 1, '12638187200555641996', 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'),
+            ('command-input-controller-ex-64', b'a', 1, '12638187200555641996', 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'),
+            ('command-input-controller-palette-64', b'a', 1, '12638187200555641996', 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'),
+            ('command-input-controller-fill-64', b':fz', 3, '11941784898562763057', 'd58613416642baf2b9a49d9ee7107e85ac886af97e0086632f0892ef85fc331b'),
+        )
+        self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[98:110])
+        self.assertEqual(len(PROBES.WORKLOADS), 110)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 110)
+        for name, expected, size, fnv, sha in cases:
+            with self.subTest(workload=name):
+                self.assertEqual(PROBES.fixed_input(name), expected)
+                self.assertEqual(len(expected), size)
+                self.assertEqual(PROBES.fnv1a64(expected), fnv)
+                self.assertEqual(hashlib.sha256(expected).hexdigest(), sha)
+
+    def test_command_input_invalid_names(self):
+        for name in ("command-input-search-long-1023", "command-input-unknown-1024",
+                     "command-input-controller-fill-63"):
+            with self.subTest(workload=name), self.assertRaises(PROBES.ProbeNotObserved):
+                PROBES.fixed_input(name)
+
     def test_tab_display_inputs_and_registry(self):
         cases = (
             ('tab-display-ordinary-saved-1024', b'C:\\Users\\hide\\Documents\\NeNeNib\\projects\\editor\\aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt', 116, '7839206126360133014'),
@@ -215,8 +246,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('tab-display-untitled-modified-1024', b'', 0, '14695981039346656037'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[89:98])
-        self.assertEqual(len(PROBES.WORKLOADS), 98)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 98)
+        self.assertEqual(len(PROBES.WORKLOADS), 110)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 110)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
@@ -239,8 +270,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('file-name-root-4096', b'/', 1, '12638123428881205758'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[82:89])
-        self.assertEqual(len(PROBES.WORKLOADS), 98)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 98)
+        self.assertEqual(len(PROBES.WORKLOADS), 110)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 110)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
