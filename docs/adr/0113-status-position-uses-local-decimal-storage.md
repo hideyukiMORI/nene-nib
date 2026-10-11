@@ -1,6 +1,6 @@
 # ADR 0113 — ステータス位置の数値は局所領域で組み立てる
 
-- 状態: 設計承認（実験branchの実装を許可。初回比較・関連検証の前であり、製品の技術受理・main統合は未実施）
+- 状態: 技術受理（2026-10-11 17:16 JST、統合・収載・整理は別記録）
 - 日付: 2026-10-11
 - Issue: #402
 - 基準: main b13a04b41e708fb198a6b61bdbf84a31f2499278
@@ -46,3 +46,13 @@ GUIは既存driverと私有profile、同一bodyの6encoding×ending場面で1/1�
 ARC-001/003/004/007/008/010/011/012、CPP-001/002/004/005/007/008/011/012/014/016、QLT-001/002/004/007/008/010/012/013/014、GIT-001〜004。関連ADR0021/0022/0070/0105。API/settings/schema変更なし、waiver none。hideの明示分担に従い親が設計採否、SOLが実装/対象検証、必要な独立読取レビューを行う。
 
 D:/NeNeNib/worktrees/402-status-numberとoutputs/20261011-status-numberを使う。全試行/失敗/原証拠と前件#400の統合・収載・整理を日報/引き継ぎへ残す。技術受理後は通常draftPR/Ready/CI/squash/main同期/恒久収載。取込/dirty/untracked/ignored/唯一成果/稼働/links/絶対D対象を監査して追加領域を整理しbranch/commitを保持する。旧成功は入力不変の限り工程/SHAだけで再実行しない。他数値caller/公開factory/cache/#365/#373/全件回帰は対象外。
+
+## 実施結果
+
+#402 / ADR0113。StatusItems.cppの行・桁表示だけでto_string所有値の連結を除き、局所50byte範囲に固定literalと2個のunsigned十進数をstd::to_charsで書く。private helperは実ecをexpectedへ保持し、最大桁数を保証したcallerでvalue()を使う。書込済み範囲だけを既存fixed→DisplayText::parseで検証・所有し、stack viewは返さない。他製品525files/公開API/入力値/表示文言・順/encoding/ending/validator/settings/schema/flags/allowlistは不変、waiver none。
+
+先行設計e2ca247ffbe05ca9823a55490b096a6fd544a104、harness3433f1f5e92af5ef337a5a860b4ee26c91493d8c、失敗製品42fed2957cd1e7f20a44752ced87aae27ea39727、失敗後設計00847fd8a729093402980e79ffb412b5bd1dedca、修正版製品cf27a3ad2aacc0ffd3384fa8cee7a6522c80b41f。初回3利益/4費用、Debug --status-items 24checks（旧8+境界16）/3構成21oracle、既存148probe/47selector/default/1853fixtures保持、GUI12対0px/24PNG・12本文copy・272checkpoint・24mode・2正常close・親全画像目視で2026-10-11 17:16 JSTに技術受理。
+
+3項目の生成・破棄1024回という各局所区間は行123/桁456で約30.48%、size_t最大値同士で約41.69%、行123456/桁654321で約29.29%短縮。encoding/endingも各入力の一部であり、数値長だけの単因子比較ではない。費用4条件と全数値は[gate-proofs 5-ea](../quality/gate-proofs.md#5-ea--ステータス位置の数値を局所領域から所有するissue-402adr0113)。局所率の加算/UI全体への換算はしない。共通status callerの正式key-to-frame-singleを初回5試料[0.609, 0.673, 0.551, 0.519, 0.652]msで新取得し、中央値0.609ms/基準0.906ms/上限2.906ms、欠測0。元基準内の確認であり変更前後のUI改善率ではない。他7正式指標は未測。
+
+全失敗・費用・原証拠はgate-proofs 5-ea。実統合/収載/整理はwave4/acceptance-402。
