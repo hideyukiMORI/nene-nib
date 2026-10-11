@@ -83,6 +83,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   shows three shortcut hints. Otherwise, the status bar shows compact hints when space permits.
   `:set noguide` hides both; `:set guide` restores them. Done.
 - **FR-019 wrapping** — on by default. `:set wrap` / `:set nowrap` (also in Ctrl+P settings) changes the display without inserting newlines. Ordinary Up/Down, Home/End and pages follow screen rows; Vim `j/k` and `0/$` keep logical-line meaning, while H/M/L and page motions use the wrapped viewport. Selection, IME composition and hit testing share the body layout. Per-tab wrapped scroll positions are saved in `session.v2`; an existing v1 is read and preserved. Known existing Vim column mismatches are tracked in [#411](https://github.com/hideyukiMORI/nene-nib/issues/411).
+- **FR-020 file drop** — drop one or more files from Explorer onto the window to open them in tabs, in either editing mode. Unsaved tabs are kept; a file already open selects its existing tab. A file that cannot be read reports the existing error and the remaining files are still opened. Directories are not opened as documents.
 
 ## Using the settings commands
 

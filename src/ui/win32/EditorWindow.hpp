@@ -158,6 +158,7 @@ class EditorWindow final
     void send_history(core::HistoryDirection direction);
     void send_vim_redo();
     void open_document();
+    void open_dropped_files(WPARAM word);
     void save_document();
     void save_document_as();
     void close_window();
