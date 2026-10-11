@@ -1,6 +1,6 @@
 # ADR 0111 — パレット候補は所有値をコピーせず渡す
 
-- 状態: 設計固定・実測前（2026-10-11）
+- 状態: 技術受理（2026-10-11 15:07 JST、統合・収載・整理は別記録）
 - Issue: #398
 - 基準: main4f6419ebd93c0b634692b6ccf311cd0ab783d966
 
@@ -51,3 +51,13 @@ GUI beforeは#396通常Release（製品1ec1264、SHA2c1401d0f87a316c044fbaa87f77
 canonical files palette5000はlisted_positions側でpalette_choices/choice_ofを呼ばない。QLT-001/012とADR0021に従い、旧#392一指標（旧5試料中央値2.159ms/上限4.630ms）だけを関連source/caller/112compile commands/tool/input/host/power不変の証明により限定reuseする。旧c6からの製品差分はExResult.cpp/CommandLine.cpp/CommandChoice.cppに限定し、CommandLineとCommandChoiceの指定箇所以外全文、files側関数は不変と照合する。新正式測定/正式8全成功/commands UI速度と呼ばない。基準/閾値/観測器を変更しない。
 
 hideの現在の明示分担に従いAstraが設計・採否・排他測定/GUI/統合、SOLが実装/対象検証と別席のGUI準備・レビュー、LUNAが独立読取。先行ADR→harness→before→製品を別commit。採用時はdraft PR/最終独立レビュー/Ready/必須CI/eng/merge-pr.py planと同head execute/main同期/恒久収載/絶対D path・取込・未保存/未追跡/無視・唯一成果・稼働/link監査整理まで完了する。branch/commit保持。全試行/費用/未測/限界を日報・引き継ぎへ残し、成功結果を工程/文書/SHAだけで再実行しない。元26候補、C8/R8/IO6〜IO8、#365/#373の処分不変。hideの停止まで継続する。
+
+## 実施結果
+
+#398 / ADR0111。CommandChoice.cppのpalette_choicesは一時owning vectorの要素をauto &で受け、一致したcommandを既存choice_ofへmoveする。choice_ofはDisplayTextを非constで所有し、返却値へmoveする。二箇所以外の全文と他製品source、rank/同点順/parse/kind/catalog/input/返却所有は不変。direct/fallbackのinitializer_list返却copyは残る。API/settings/schema/cache/正本経路の変更なし、waiver none。
+
+先行設計55f51ace45b2fe4882338552e482e1fd4fce15cd、最終harnessd353aee3f30a092fbc6ed8b143b85fe64579dcc0、製品5cc97270646d0cf705a81f15ab3be04dbad1f141。初回2利益/8費用、Debug既存592checks/30oracle、旧129probe/47selector/default/assertions/1853fixtures保持、GUI21対0px/42PNG・14本文copy・232checkpoint・42mode・2正常close・親全画像目視で2026-10-11 15:07 JSTに技術受理。
+
+空queryのbuiltin36候補を512回生成・破棄する固定区間で約10.54%、custom失敗名256を含む292候補を128回で約17.06%短縮。異なる回数の局所率を合算/直接比較したりUI全体へ換算しない。費用8条件と全試行は[gate-proofs 5-dy](../quality/gate-proofs.md#5-dy--パレット候補の所有値をmoveで渡すissue-398adr0111)。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変により限定reuse。新exeの正式速度/全8成功ではない。
+
+実統合/収載/整理はwave4/acceptance-398。
