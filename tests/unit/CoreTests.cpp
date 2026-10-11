@@ -2065,6 +2065,43 @@ void verify_file_path()
            "different paths do not compare equal");
 }
 
+void verify_tab_title_boundaries()
+{
+    const std::array<std::string, 6> names{{
+        std::string(252U, 'a'),
+        std::string(253U, 'a'),
+        std::string(257U, 'a'),
+        std::string(250U, 'a') + "🖋.txt",
+        std::string(248U, 'a') + "🖋.txt",
+        std::string(250U, 'a') + "日.txt",
+    }};
+    const std::array<SaveState, 6> states{{
+        SaveState::modified,
+        SaveState::modified,
+        SaveState::saved,
+        SaveState::saved,
+        SaveState::modified,
+        SaveState::saved,
+    }};
+    const std::array<std::string, 6> expected{{
+        "● " + std::string(252U, 'a'),
+        "● " + std::string(249U, 'a') + "…",
+        std::string(253U, 'a') + "…",
+        std::string(250U, 'a') + "…",
+        "● " + std::string(248U, 'a') + "…",
+        std::string(250U, 'a') + "日…",
+    }};
+    constexpr std::array<std::size_t, 6> code_points{254U, 252U, 254U, 251U, 251U, 252U};
+    for (std::size_t index = 0; index < names.size(); ++index)
+    {
+        const auto title =
+            tab_title_for(FilePath::parse(names.at(index)).value(), states.at(index));
+        expect(title.text() == expected.at(index) &&
+                   title.code_point_count() == code_points.at(index),
+               "the exact title and code point count preserve the marked UTF-8 boundary");
+    }
+}
+
 void verify_tab_titles()
 {
     expect(tab_title_for(std::nullopt, SaveState::saved).text() == "無題",
@@ -2092,6 +2129,7 @@ void verify_tab_titles()
     expect(validate_utf8(wide_clipped.text()).has_value(),
            "the clip lands on a code point boundary");
     expect(wide_clipped.text().starts_with("● "), "the mark survives the clip");
+    verify_tab_title_boundaries();
 }
 
 void verify_save_state_of_document()
