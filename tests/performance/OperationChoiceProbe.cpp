@@ -1,0 +1,356 @@
+#include "OperationChoiceProbe.hpp"
+#include "CommandChoice.hpp"
+#include "Milestone.hpp"
+#include "OperationChoiceSample.hpp"
+#include <array>
+#include <vector>
+namespace nenenib::tests::performance
+{
+namespace
+{
+constexpr std::array<OperationChoiceExpected, 2> expected_0{
+    {{core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
+      15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 0> expected_1{{
+
+}};
+constexpr std::array<OperationChoiceExpected, 16> expected_2{
+    {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
+      "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
+      15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::new_tab, 3U, "新しいタブ", 5U, "空の文書を新しいタブで開きます", 15U,
+      "Ctrl+T", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_tab, 4U, "タブを閉じる", 6U, "いまのタブを閉じます", 10U,
+      "Ctrl+W", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
+      14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
+      "最近使った順を逆にたどります", 14U, "Ctrl+Shift+Tab", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::list_files, 7U, "ファイルとタブの一覧", 10U,
+      "タブ・ブックマーク・履歴・同じフォルダから探します", 25U, "Ctrl+P", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::toggle_bookmark, 9U, "ブックマークに付ける・外す", 13U,
+      "いまのファイルをブックマークに付け外しします", 22U, "Ctrl+D", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::undo, 10U, "元に戻す", 4U, "直前の編集を取り消します", 12U, "Ctrl+Z",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::redo, 11U, "やり直す", 4U, "取り消した編集をもう一度行います", 16U,
+      "Ctrl+Y", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_larger, 12U, "文字を大きく", 6U, "本文の文字を 1 段大きくします",
+      16U, "Ctrl++", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_smaller, 13U, "文字を小さく", 6U, "本文の文字を 1 段小さくします",
+      16U, "Ctrl+-", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_reset, 14U, "文字の大きさを戻す", 9U,
+      "本文の文字を既定の大きさに戻します", 17U, "Ctrl+0", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
+      "編集のしかたを通常と Vim で切り替えます", 22U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 14> expected_3{
+    {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
+      "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
+      15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::new_tab, 3U, "新しいタブ", 5U, "空の文書を新しいタブで開きます", 15U,
+      "Ctrl+T", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_tab, 4U, "タブを閉じる", 6U, "いまのタブを閉じます", 10U,
+      "Ctrl+F4", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
+      14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
+      "最近使った順を逆にたどります", 14U, "Ctrl+Shift+Tab", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::list_files, 7U, "ファイルとタブの一覧", 10U,
+      "タブ・ブックマーク・履歴・同じフォルダから探します", 25U, "Ctrl+P", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::toggle_bookmark, 9U, "ブックマークに付ける・外す", 13U,
+      "いまのファイルをブックマークに付け外しします", 22U, "Ctrl+Shift+D", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_larger, 12U, "文字を大きく", 6U, "本文の文字を 1 段大きくします",
+      16U, "Ctrl++", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_smaller, 13U, "文字を小さく", 6U, "本文の文字を 1 段小さくします",
+      16U, "Ctrl+-", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_reset, 14U, "文字の大きさを戻す", 9U,
+      "本文の文字を既定の大きさに戻します", 17U, "Ctrl+0", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
+      "編集のしかたを通常と Vim で切り替えます", 22U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 16> expected_4{
+    {{core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
+      "編集のしかたを通常と Vim で切り替えます", 22U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
+      "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::new_tab, 3U, "新しいタブ", 5U, "空の文書を新しいタブで開きます", 15U,
+      "Ctrl+T", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_tab, 4U, "タブを閉じる", 6U, "いまのタブを閉じます", 10U,
+      "Ctrl+W", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::list_files, 7U, "ファイルとタブの一覧", 10U,
+      "タブ・ブックマーク・履歴・同じフォルダから探します", 25U, "Ctrl+P", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::toggle_bookmark, 9U, "ブックマークに付ける・外す", 13U,
+      "いまのファイルをブックマークに付け外しします", 22U, "Ctrl+D", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::undo, 10U, "元に戻す", 4U, "直前の編集を取り消します", 12U, "Ctrl+Z",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::redo, 11U, "やり直す", 4U, "取り消した編集をもう一度行います", 16U,
+      "Ctrl+Y", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_larger, 12U, "文字を大きく", 6U, "本文の文字を 1 段大きくします",
+      16U, "Ctrl++", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_smaller, 13U, "文字を小さく", 6U, "本文の文字を 1 段小さくします",
+      16U, "Ctrl+-", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::font_reset, 14U, "文字の大きさを戻す", 9U,
+      "本文の文字を既定の大きさに戻します", 17U, "Ctrl+0", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
+      14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
+      15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
+      "最近使った順を逆にたどります", 14U, "Ctrl+Shift+Tab", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 4> expected_5{
+    {{core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
+      15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::toggle_bookmark, 9U, "ブックマークに付ける・外す", 13U,
+      "いまのファイルをブックマークに付け外しします", 22U, "Ctrl+Shift+D", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
+      "最近使った順を逆にたどります", 14U, "Ctrl+Shift+Tab", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 5> expected_6{
+    {{core::EditorOperation::close_tab, 4U, "タブを閉じる", 6U, "いまのタブを閉じます", 10U,
+      "Ctrl+W", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::new_tab, 3U, "新しいタブ", 5U, "空の文書を新しいタブで開きます", 15U,
+      "Ctrl+T", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
+      14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::list_files, 7U, "ファイルとタブの一覧", 10U,
+      "タブ・ブックマーク・履歴・同じフォルダから探します", 25U, "Ctrl+P", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
+      "最近使った順を逆にたどります", 14U, "Ctrl+Shift+Tab", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 1> expected_7{
+    {{core::EditorOperation::close_tab, 4U, "タブを閉じる", 6U, "いまのタブを閉じます", 10U,
+      "Ctrl+F4", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 0> expected_8{{
+
+}};
+constexpr std::array<OperationChoiceExpected, 0> expected_9{{
+
+}};
+constexpr std::array<OperationChoiceSample, 10> samples{
+    {{"ほぞん", core::EditMode::ordinary, 1024U, 186368U, expected_0,
+      "operation-choice-v1\nreading-"
+      "ordinary\nordinary\nほぞん\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68"
+      "820d98\n"},
+     {"qqq", core::EditMode::ordinary, 1024U, 1024U, expected_1,
+      "operation-choice-v1\nmiss-"
+      "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
+      "d98\n"},
+     {"", core::EditMode::ordinary, 256U, 441088U, expected_2,
+      "operation-choice-v1\nall-"
+      "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
+      "\n"},
+     {"", core::EditMode::vim, 256U, 396544U, expected_3,
+      "operation-choice-v1\nall-"
+      "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
+     {" ", core::EditMode::ordinary, 256U, 441088U, expected_4,
+      "operation-choice-v1\nspace-ordinary\nordinary\n "
+      "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
+     {"cTrL+s", core::EditMode::vim, 1024U, 486400U, expected_5,
+      "operation-choice-v1\nkey-vim\nvim\ncTrL+"
+      "s\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
+     {"タブ", core::EditMode::ordinary, 1024U, 569344U, expected_6,
+      "operation-choice-v1\nname-"
+      "ordinary\nordinary\nタブ\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f6882"
+      "0d98\n"},
+     {"CTRL+F4", core::EditMode::vim, 1024U, 79872U, expected_7,
+      "operation-choice-v1\nclose-key-vim\nvim\nCTRL+"
+      "F4\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
+     {"上書き", core::EditMode::ordinary, 1024U, 1024U, expected_8,
+      "operation-choice-v1\ndescription-"
+      "miss\nordinary\n上書き\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d"
+      "98\n"},
+     {"ヘルプ", core::EditMode::ordinary, 1024U, 1024U, expected_9,
+      "operation-choice-v1\nshort-name-"
+      "miss\nordinary\nヘルプ\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d"
+      "98\n"}}};
+
+[[nodiscard]] bool display_equal(const core::CommandChoice &choice,
+                                 const OperationChoiceExpected &expected)
+{
+    if (!choice.detail.has_value())
+    {
+        return false;
+    }
+    const auto &detail = choice.detail.value();
+    return choice.label.text() == expected.label &&
+           choice.label.code_point_count() == expected.label_code_points &&
+           detail.text() == expected.detail &&
+           detail.code_point_count() == expected.detail_code_points;
+}
+[[nodiscard]] bool choice_equal(const core::CommandChoice &choice,
+                                const OperationChoiceExpected &expected)
+{
+    if (!choice.operation.has_value())
+    {
+        return false;
+    }
+    const auto operation = choice.operation.value();
+    return operation == expected.operation &&
+           static_cast<std::size_t>(operation) == expected.operation_ordinal &&
+           choice.command == expected.command && choice.kind == expected.kind &&
+           choice.origin == expected.origin && choice.key == expected.key &&
+           display_equal(choice, expected);
+}
+[[nodiscard]] bool result_equal(std::span<const core::CommandChoice> result,
+                                const OperationChoiceSample &sample)
+{
+    if (result.size() != sample.expected.size())
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < result.size(); ++index)
+    {
+        if (!choice_equal(result[index], sample.expected[index]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+[[nodiscard]] std::vector<std::string_view> held_views(std::span<const core::CommandChoice> choices)
+{
+    std::vector<std::string_view> views;
+    for (const auto &choice : choices)
+    {
+        if (!choice.detail.has_value())
+        {
+            return {};
+        }
+        views.emplace_back(choice.label.text());
+        views.emplace_back(choice.detail.value().text());
+        views.emplace_back(choice.key);
+    }
+    return views;
+}
+[[nodiscard]] bool views_equal(std::span<const std::string_view> views,
+                               const OperationChoiceSample &sample)
+{
+    if (views.size() != sample.expected.size() * 3U)
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < sample.expected.size(); ++index)
+    {
+        const auto &expected = sample.expected[index];
+        const auto offset = index * 3U;
+        if (views[offset] != expected.label || views[offset + 1U] != expected.detail ||
+            views[offset + 2U] != expected.key)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+[[nodiscard]] std::uint64_t choice_checksum(const core::CommandChoice &choice)
+{
+    std::uint64_t result =
+        choice.label.text().size() + choice.label.code_point_count() + choice.key.size();
+    if (choice.detail.has_value())
+    {
+        const auto &detail = choice.detail.value();
+        result += detail.text().size() + detail.code_point_count();
+    }
+    if (choice.operation.has_value())
+    {
+        result += static_cast<std::uint64_t>(choice.operation.value()) + 1U;
+    }
+    return result;
+}
+[[nodiscard]] std::uint64_t result_checksum(std::span<const core::CommandChoice> choices)
+{
+    std::uint64_t result = 1U + choices.size();
+    for (const auto &choice : choices)
+    {
+        result += choice_checksum(choice);
+    }
+    return result;
+}
+[[nodiscard]] std::vector<core::CommandChoice> detached_choices(const OperationChoiceSample &sample)
+{
+    const std::string query(sample.query);
+    return core::operation_choices(query, sample.mode);
+}
+[[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
+pure_probe(const OperationChoiceSample &sample, application::TimingPort &timing)
+{
+    const std::string query(sample.query);
+    const auto mode = sample.mode;
+    const auto held = core::operation_choices(query, mode);
+    const auto views = held_views(held);
+    const auto detached = detached_choices(sample);
+    const auto detached_views = held_views(detached);
+    if (!result_equal(held, sample) || !views_equal(views, sample) ||
+        !result_equal(detached, sample) || !views_equal(detached_views, sample))
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    std::uint64_t checksum = 0;
+    timing.mark(core::Milestone::probe_started);
+    for (std::size_t index = 0; index < sample.rounds; ++index)
+    {
+        const auto choices = core::operation_choices(query, mode);
+        checksum += result_checksum(choices);
+    }
+    timing.mark(core::Milestone::probe_finished);
+    if (checksum != sample.checksum || query != sample.query || mode != sample.mode ||
+        !result_equal(core::operation_choices(query, mode), sample) ||
+        !result_equal(held, sample) || !views_equal(views, sample) ||
+        !result_equal(detached, sample) || !views_equal(detached_views, sample))
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return checksum;
+}
+} // namespace
+std::string operation_choice_input(OperationChoiceWorkload workload)
+{
+    return std::string(samples.at(static_cast<std::size_t>(workload)).metadata);
+}
+std::expected<std::uint64_t, ProbeFailure> probed_operation_choice(OperationChoiceWorkload workload,
+                                                                   const std::string &input,
+                                                                   application::TimingPort &timing)
+{
+    const auto &sample = samples.at(static_cast<std::size_t>(workload));
+    if (input != sample.metadata)
+    {
+        return std::unexpected(ProbeFailure::wrong_result);
+    }
+    return pure_probe(sample, timing);
+}
+} // namespace nenenib::tests::performance
