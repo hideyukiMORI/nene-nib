@@ -1,6 +1,6 @@
 # ADR 0110 — 補完prefixは同期呼び出しの間だけ借用する
 
-- 状態: 設計固定・実測前（2026-10-11）
+- 状態: 技術受理（2026-10-11 13:57 JST、統合・収載・整理は別記録）
 - Issue: #396
 - 基準: main062f973041afb02f4551f7fcb36d1e7f5012d222
 
@@ -20,7 +20,7 @@ OUT=D:/NeNeNib/outputs/20261011-completion-prefix、WT=D:/NeNeNib/worktrees/396-
 
 | workloadのcompletion-prefix-以降 | 準備入力 / 操作 | 公開text bytes / caret / index | metadata bytes / FNV1a64 | checksum | 分類 |
 | --- | --- | --- | --- | ---: | --- |
-| long-miss-4096 | edit C:\\nib-probe\\ + 日79個 + Z / raw | 256 / 256 / なし | 414 / 17899993968014254022 | 4096 | benefit |
+| long-miss-4096 | edit C:\nib-probe\ + 日79個 + Z / raw | 256 / 256 / なし | 414 / 17899993968014254022 | 4096 | benefit |
 | theme-raw-4096 | colorscheme drac / raw | 16 / 16 / なし | 174 / 6355724148303210051 | 86016 | cost |
 | theme-seeded-4096 | colorscheme drac / Tab1 | 19 / 19 / 0 | 179 / 9157927312824126276 | 86016 | cost |
 | short-raw-4096 | set f / raw | 5 / 5 / なし | 163 / 5146725973529891191 | 61440 | cost |
@@ -47,3 +47,11 @@ GUI beforeは#394通常Release（製品4d9aaef、SHA239b624debca978767756a739dfd
 QLT001/012とADR0021を優先し、無関係な正式8指標を再取得しない。files scopeはcompletions_ofのguardから空を返し今回のcompletionsを呼ばない。#392 key-to-frame-palette-5000初回成功（5試料中央値2.159ms/上限4.630ms・71PNG目視済み）を関連source/caller/input/tool/112 production compile flags/host不変の証拠とともに一指標だけ限定再利用する。旧c6ce1ceからの製品差分はExResult.cppとCommandLine.cppで、files scopeのinsert/parse/filter等は不変と確認する。新exeの正式測定・正式8全成功・Ex UI速度と呼ばない。新基準/閾値/観測経路を足さず、範囲を越える差分が必要になれば測定前に再評価する。
 
 hideの現在の分担指示に基づきAstraが設計/採否、SOLがharness/製品/対象検証、別SOLがGUI準備と独立レビュー、LUNAが読取照合を担当する。先行ADR→harness→before→製品を別commitで保持する。採用時はdraft PR/独立レビュー/Ready/必須CI/eng/merge-pr.py planと同head execute/main同期/恒久収載/絶対D path・取込・未保存/未追跡/無視ファイル・唯一成果・稼働・リンクの監査整理まで完了する。branch/commit保持、成功検証は工程/文書/SHAだけで再実行しない。全試行/費用/未測/制約を日報・引き継ぎ・qualityへ残す。#365/#373・C8・R8・IO6〜IO8の処分は変えずhideの停止まで継続する。
+
+## 実施結果
+
+#396はADR0110/harness1917db4/製品1ec1264。CommandLine::completionsだけでoptionalの一時string copyをconst参照へ置換し、同期APIへ渡す。completed()の所有seed、空engaged seed、返却所有と他製品全文は不変。初回1利益/9費用、817既存checks/30oracle、旧122条件/47selector/1853fixtures保持、GUI21対0px/14本文copy/232checkpoint/30mode/2正常close/親全42PNG目視で2026-10-11 13:57 JSTに技術受理。
+
+256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/gate-proofs.md#5-dx--補完prefixを同期呼出しの間だけ借用するissue-396adr0110)。API/settings/schema変更なし、waiver none。
+
+統合/恒久収載/監査整理の実完了はwave4/acceptance-396。

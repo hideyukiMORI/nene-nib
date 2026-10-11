@@ -85,3 +85,11 @@ C8入力中parse保持はnoincsearch費用と所有の正本設計を理由に�
 C2の追加評価としてADR0109を先行固定し、ExResult.cppの唯一の候補列挙でprefix一致後に所有する。nullopt全候補と空prefix、quit!、失敗custom名、順序/返却所有を維持。固定3利益/10費用、817checks/39oracle/GUI21対0px・42PNG目視で2026-10-11 12:57 JSTに技術受理。option/miss1024回は約91.73/94.01%、custom-narrow128回は約74.66%短縮。全builtin1024回+15µs、controller-fill64+19µsは事前費用内（gate-proofs 5-dw）。UI全体へ換算しない。
 
 新正式取得0。直接経路でないfiles palette5000の旧#392結果だけをsource/caller/flags/tool/input/host不変により限定再利用し、新exeの正式測定としない。元26件の20採用/2実験不採用/4未実験は不変。次はCommandLine::completionsのvalue_or所有copyを読取調査中で未Issue/未実装/未測。空palette hint reserveも未実験。C8/R8/IO6〜IO8、#365/#373の処分は変えない。
+
+## 追加実験: 補完prefix借用 #396
+
+#396はADR0110/harness1917db4/製品1ec1264。CommandLine::completionsだけでoptionalの一時string copyをconst参照へ置換し、同期APIへ渡す。completed()の所有seed、空engaged seed、返却所有と他製品全文は不変。初回1利益/9費用、817既存checks/30oracle、旧122条件/47selector/1853fixtures保持、GUI21対0px/14本文copy/232checkpoint/30mode/2正常close/親全42PNG目視で2026-10-11 13:57 JSTに技術受理。
+
+256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/gate-proofs.md#5-dx--補完prefixを同期呼出しの間だけ借用するissue-396adr0110)。API/settings/schema変更なし、waiver none。
+
+C2の追加評価。元26件の20採用/2実験不採用/4未実験は不変。次はCommandChoice候補所有copyを読取調査済みだが未Issue/未実装/未測。全候補順の独立oracleを将来設計で補う。C8/R8/IO6〜IO8、#365/#373の処分不変。
