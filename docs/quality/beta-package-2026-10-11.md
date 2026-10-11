@@ -24,3 +24,6 @@ python -B eng/test-package-release.py --work-dir D:/NeNeNib/outputs/20261011-bet
 `package-tool-03`はmainと同じcommitのD側detached作業木を許す境界を追加して8 tests成功（2.045秒）。`package-tool-04`は外部のビルド/PE検査の境界をfixtureへ置いた全梱包フローの正例を追加し、9 tests成功（2.691秒）。生成したZIP名・展開3点のbytes・READMEの版置換・SHA256SUMS・package.jsonと、公開/起動を行わないことを照合した。fixture exeを実製品とは扱わず、実製品のZIP生成はmain統合後に実施する。原記録は同commands配下、fixtureはtool-tests-03/04。
 
 自己レビューで、CMake唯一の数値版、既存Release入口だけの呼出し、production依存グラフ、clean/remote-main/新規出力/リンクの拒否、完全な3項目/bytes照合、公開操作を持たないことを確認。製品コード/保存schema/性能基準は変更していない。関連入力が不変の結果をPR/CI/mainでも再利用する。
+
+
+PowerShellの正規入口そのものも`package-entry-refusal-01`で実行し、未保存変更を理由にexit 1、指定出力が存在しないことを確認した。これは意図した反例の成功で、梱包成功とは数えない。#410はPR412/main9afca7fa2622cbdf8072658071faca0d90730b78へ統合済み。梱包枝をmainへrebaseした際のADR一覧競合は0114/0115の両行を残して解消し、検証済みツール8ファイルのbytes不変を照合して9 testsを再利用する。rebase前commitはbuild/413-package-baseに保持した。

@@ -8,7 +8,7 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
 > and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
 > available operations; a new untitled document and the status bar show optional shortcut hints. Markdown
-> preview and files above 64 MiB are still planned. The first beta package is being prepared in #413.
+> preview and files above 64 MiB are still planned. Beta downloads are listed on the [Releases page](https://github.com/hideyukiMORI/nene-nib/releases).
 
 ## What works today
 
