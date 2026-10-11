@@ -27,7 +27,7 @@ class BodyTextLayouts final : public application::TextLayoutPort
     [[nodiscard]] std::expected<TextLayout, application::TextLayoutFailure>
     get(const application::TextLayoutRequest &request);
     // 描画時だけ字形を保持する。位置を調べただけの画面外の行には字形を複製しない。
-    [[nodiscard]] const BodyTextLayout *glyphs_of(IDWriteTextLayout *layout);
+    [[nodiscard]] const BodyTextLayout *glyphs_of(IDWriteTextLayout *layout, float left = 0);
     void begin_frame();
     void end_frame();
 

@@ -741,7 +741,9 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
 void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
                                       D2D1_DRAW_TEXT_OPTIONS options)
 {
-    const auto *entry = body_text_.glyphs_of(text);
+    const auto left =
+        std::max(static_cast<float>(core::width_of(area)) - text->GetMaxWidth(), 0.0F);
+    const auto *entry = body_text_.glyphs_of(text, left);
 
     const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
     if (entry == nullptr || !entry->glyphs_ready)

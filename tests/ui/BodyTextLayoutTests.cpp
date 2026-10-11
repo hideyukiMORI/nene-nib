@@ -181,6 +181,58 @@ void check_wrapped_pixels(BodyTextLayouts &layouts, const core::EditorSettings &
     }
 }
 
+void check_horizontal_pixel_case(BodyTextLayouts &layouts, const app::TextLayoutRequest &request,
+                                 SoftwareTarget &target)
+{
+    const auto layout = layouts.get(request);
+    expect(layout.has_value(), "a complete unwrapped layout is available for horizontal scrolling");
+    if (!layout)
+    {
+        return;
+    }
+    constexpr D2D1_RECT_F clip{7, 9, 79, 67};
+    for (const auto left : {0, 125, 800, 0})
+    {
+        const auto *entry = layouts.glyphs_of(layout.value().Get(), static_cast<float>(left));
+        expect(entry != nullptr && entry->glyphs_ready,
+               "visible glyphs are collected at the requested horizontal position");
+        if (entry == nullptr || !entry->glyphs_ready)
+        {
+            return;
+        }
+        const D2D1_POINT_2F origin{static_cast<float>(7 - left), 9};
+        const auto expected = target.clipped_layout(layout.value().Get(), origin, clip);
+        const auto drawn = target.glyph_runs(entry->glyphs, origin, clip);
+        expect(!expected.empty() && expected == drawn,
+               "horizontal glyph collection and returning left retain every DirectWrite pixel");
+    }
+}
+
+void check_horizontal_pixels(BodyTextLayouts &layouts, core::EditorSettings settings)
+{
+    settings.wrapping = core::LineWrapping::no_wrap;
+    SoftwareTarget target;
+    expect(target.ready(), "horizontal glyph verification creates an offscreen software target");
+    if (!target.ready())
+    {
+        return;
+    }
+    constexpr std::array<std::string_view, 3> texts{
+        "日本語の長い行を折り返して日本語の続きを表示する。",
+        "abc\tdef Café á 😀 漢字 אבג العربية end abcdefghijklmnop",
+        "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"};
+    for (const auto text : texts)
+    {
+        std::string repeated;
+        for (int index = 0; index < 6; ++index)
+        {
+            repeated += text;
+        }
+        check_horizontal_pixel_case(layouts, app::TextLayoutRequest{repeated, settings, narrow},
+                                    target);
+    }
+}
+
 } // namespace
 
 void verify_body_text_layouts()
@@ -198,6 +250,7 @@ void verify_body_text_layouts()
     check_resources(layouts, settings);
     check_input_retention(layouts, settings);
     check_wrapped_pixels(layouts, settings);
+    check_horizontal_pixels(layouts, settings);
     const auto invalid =
         layouts.get(app::TextLayoutRequest{std::string_view{"\xff", 1}, settings, narrow});
     expect(!invalid.has_value(), "invalid display text is an explicit layout failure");

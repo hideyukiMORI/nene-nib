@@ -9,7 +9,7 @@ class BodyGlyphCollector final
           Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IDWriteTextRenderer>
 {
   public:
-    explicit BodyGlyphCollector(FLOAT width);
+    explicit BodyGlyphCollector(FLOAT width, FLOAT left = 0);
     // 集めた字形。未対応の callback を 1 つでも受けたら（棄却の印）、部分の字形を渡さず nullopt。
     // IDWriteTextLayout::Draw は callback の HRESULT を無視して S_OK を返すので、
     // 字形で描けるかはここだけが決める（ADR 0073 の追記）。
@@ -35,6 +35,7 @@ class BodyGlyphCollector final
     // 失敗の HRESULT なら棄却の印を立てる。HRESULT はそのまま返す。
     HRESULT settle(HRESULT result) noexcept;
     FLOAT width_;
+    FLOAT left_;
     std::vector<BodyGlyphRun> runs_;
     bool rejected_ = false;
 };

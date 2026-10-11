@@ -8,7 +8,6 @@
 #include "Utf16.hpp"
 
 #include <algorithm>
-#include <limits>
 #include <string>
 #include <utility>
 
@@ -298,25 +297,24 @@ BodyTextLayouts::hit(const application::TextLayoutRequest &request, core::TextLo
                                                               : core::CaretAffinity::leading};
 }
 
-const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout)
+const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, float left)
 {
     auto *found = find(layout);
     if (found == nullptr || !style_.has_value())
     {
         return nullptr;
     }
-    if (!found->glyphs_tried)
+    if (!found->glyphs_tried || found->glyph_left != left)
     {
-        const auto width = style_.value().wrapping == core::LineWrapping::no_wrap
-                               ? std::numeric_limits<float>::max()
-                               : static_cast<float>(core::width_of(found->area));
-        auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(width);
+        const auto width = static_cast<float>(core::width_of(found->area));
+        auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(width, left);
         auto taken = collector && SUCCEEDED(layout->Draw(nullptr, collector.Get(), 0, 0))
                          ? collector->take()
                          : std::nullopt;
         found->glyphs_ready = taken.has_value();
         found->glyphs = std::move(taken).value_or(std::vector<BodyGlyphRun>{});
         found->glyphs_tried = true;
+        found->glyph_left = left;
     }
     return found;
 }

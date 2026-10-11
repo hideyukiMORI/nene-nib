@@ -93,8 +93,8 @@ Use `set fontsize=18` or `set guifont=Cascadia Code:h18` for the body font. `Ent
 Press `Ctrl+P` in either editing mode to choose the same commands from a filtered list.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v2`. If it is absent, the editor reads the older `settings.v1` with hints
-enabled. The first actual settings change writes the new file; the older file is left intact for older
+Settings are saved in `settings.v3`. If it is absent, the editor reads `settings.v2`, then `settings.v1`
+only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
 versions. A broken new file is reported and blocks settings writes until repaired and restarted.
 
 The settings file format and failure behavior are specified in

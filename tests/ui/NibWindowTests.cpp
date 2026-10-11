@@ -19,6 +19,11 @@ int main(int argc, char **argv)
     {
         ui::verify_body_text_layouts();
     }
+    if (argc == 2 && std::string_view(argv[1]) == "--glyphs")
+    {
+        ui::verify_glyph_collector();
+        ui::verify_glyph_pixels();
+    }
     if (argc == 1)
     {
         ui::verify_fallback_keys();
@@ -28,7 +33,8 @@ int main(int argc, char **argv)
         ui::verify_gutter_layouts();
         ui::verify_body_text_layouts();
     }
-    ui::expect(argc == 1 || (argc == 2 && std::string_view(argv[1]) == "--text-layout"),
+    ui::expect(argc == 1 || (argc == 2 && (std::string_view(argv[1]) == "--text-layout" ||
+                                           std::string_view(argv[1]) == "--glyphs")),
                "window verification selector is known");
     if (SUCCEEDED(initialized))
     {
