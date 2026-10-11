@@ -881,7 +881,7 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
     }
     return core::ThemeCatalog::from(std::move(records)).value();
 }
-[[nodiscard]] bool builtin_names_equal(std::span<const std::string> names)
+[[nodiscard]] bool builtin_names_equal(const std::vector<std::string> &names)
 {
     for (std::size_t index = 0; index < builtin_names.size(); ++index)
     {
