@@ -5085,3 +5085,15 @@ AQ−A0対応中央値−0.0730msは閾値以下だが、AP−AQ+0.1505/AP−A0+
 ### 保存・終了
 
 本体は計画/報告/JSON/gate-proofs/日報/引き継ぎの6文書。製品挙動・API/settings schema不変、診断rawだけticks/frequency/drop/clockFailed/detailを追加。計測source11filesはtest/406-trace-a,h,vに保持しmainへ統合しない。全旧新build/metadata/raw/失敗/script/source/Git bundleをSHA付きで恒久収載し、4worktreeと一時OUTの絶対path・dirty/untracked/ignored・唯一成果・稼働参照/linkを監査して整理する。実統合/収載/整理はD:/NeNeNib/evidence/single-breakdown-20261011/acceptance-406/closeout.md。branch/commit保持。この区切りで停止し、次候補を自動開始しない。
+
+## 5-ed — 正式リリースまでのロードマップ（Issue #408）
+
+hideの保存依頼に従い、[ロードマップ](../plans/2026-10-11-release-roadmap.md)とtodo/current・日報・引き継ぎ、本節の5文書を更新する。範囲整理→大容量編集の成立性確認→大容量対応→日常編集→split→Markdown→併用確認と公開の順と理由、各段階の成果と条件、性能評価、縮小案、再開地点を記録する。
+
+D7/D40・FR-007/FR-013・ADR0004/0010/0068/0075との境界を自己照合する。既存仕様・旧split判定hold・性能閾値を変更せず、実装や測定を開始しない。関連規則はQLT-001/QLT-010/QLT-012、GIT-001〜004。Waivers: none。製品挙動・API・schemaの変更なし。
+
+変更文書の規則ID・相対リンク・記録先の欠落と空白を確認するため、既存conformance.document_checksへ変更5ファイルを渡す `python -B -X utf8 D:/NeNeNib/outputs/20261011-release-roadmap/verify-docs.py` と `git diff --cached --check` を選ぶ。依頼との自己照合では段階0〜6、2枠、ソース編集へのプレビュー追従、初版閲覧先行の縮小判断、数値条件未確定、実装未着手を確認する。文書のみなのでアプリのテスト・build・実機起動・性能測定は実行しない。
+
+結果と5ファイルのSHAは同OUTのdocument-checks.json、実command/cwd/native exit/stdout/stderrはcommands/に保存する。自己レビューはself-review.md。初回の対象検証後、関連文書・検査器・規則が不変ならpush/レビュー/mergeで結果を再利用する。必須CIはGit規約・検証記録・空白の確認で、製品テストの証明にはしない。
+
+恒久先はD:/NeNeNib/evidence/release-roadmap-20261011。main統合後に変更5文書・command原記録・Issue/PR内容・branchのGit bundleを収載してSHAを照合し、追加D:/NeNeNib/worktrees/408-release-roadmapとOUTだけを絶対path・未保存/未追跡/無視ファイル・稼働参照・リンクを確認して整理する。branch/commit保持。実完了は恒久先closeout.jsonに記録し、次の機能作業へ自動で進まない。
