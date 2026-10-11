@@ -197,13 +197,16 @@ computer-use 無しで見た目を確かめるときは `python eng/verify-windo
 製品の版入力は **`CMakeLists.txt` の `project(... VERSION)`** だけとする。設定画面・manifest・VERSIONINFO・配布物名はビルドがそこから導出し、
 2 か所目に手で書かない。配布物の正規生成経路は次の 1 本である。
 
-```text
-（未実測。Phase 4 で公開スクリプトを書いてから決める。参照実装は nene-loupe の eng/package-release.ps1）
+```powershell
+pwsh -NoProfile -File eng/package-release.ps1 -Beta 1 -OutputDirectory D:/NeNeNib/releases/<task-id> -Verification docs/quality/<accepted-record>.md
 ```
 
-このコマンドは固定した toolchain で **単一ゲートとは別のビルドディレクトリ** に clean build し、規約検査とテストを通し、
+Issue #413 / ADR 0115。ベータ番号だけを指定し、数値版はCMakeから導出する。cleanなmain（同じcommitのD側detached作業木も可）とGitHub上の現在のmainの一致を要求する。
+`-Preview`はcleanな作業ブランチで梱包ツールを確かめるためだけに使い、公開用として扱わない。
+このコマンドは固定した toolchain と既存`eng/build-release.ps1 -Ref HEAD`で **単一ゲートとは別のビルドディレクトリ** に clean build し、追跡済みの規約検査とテストの記録を参照し、
 成果物を検査（アーキテクチャ・宣言外の動的依存が無いこと・埋め込み版の一致・同梱一覧の完全一致）してから
-公開用ディレクトリ（Phase 4 で決める）へ配布物と `SHA256SUMS` を作る。配布物の直下は **実行ファイル・利用者向け `README.txt`・`LICENSE` だけ**とする（Loupe と同じ。Phase 4 で実測してから確定）。
+`D:/NeNeNib/releases`または`D:/NeNeNib/outputs`配下の新規ディレクトリへ配布物と `SHA256SUMS` を作る。既存出力・既存Releaseビルド・親のリンク/ジャンクションは拒否し、自動で消さない。配布物の直下は **`NeNeNib.exe`・利用者向け `README.txt`・`LICENSE` だけ**とする。
+作成したZIPを新規の`extracted`フォルダへ展開して全bytesを照合し、版・commit・SHA・依存・署名状態・検証記録のSHAを`package.json`へ残す。梱包コマンド自体は起動・タグ作成・公開を行わない。
 公開物の検査と開発中の検証は対象を明記する。関連入力が不変の検証は再利用し、最終 HEAD という理由だけで全件を追加しない（QLT-012）。
 
 公開は squash 統合後の clean な `main` から同じコマンドで作り直し、短い実機起動を確認してから
