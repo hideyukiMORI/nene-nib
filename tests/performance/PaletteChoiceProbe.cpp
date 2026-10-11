@@ -881,6 +881,17 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
     }
     return core::ThemeCatalog::from(std::move(records)).value();
 }
+[[nodiscard]] bool builtin_names_equal(std::span<const std::string> names)
+{
+    for (std::size_t index = 0; index < builtin_names.size(); ++index)
+    {
+        if (names.at(index) != builtin_names.at(index))
+        {
+            return false;
+        }
+    }
+    return true;
+}
 [[nodiscard]] bool catalog_equal(const core::ThemeCatalog &catalog,
                                  const PaletteChoiceSample &sample)
 {
@@ -891,12 +902,9 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
     {
         return false;
     }
-    for (std::size_t index = 0; index < builtin_names.size(); ++index)
+    if (!builtin_names_equal(names))
     {
-        if (names.at(index) != builtin_names.at(index))
-        {
-            return false;
-        }
+        return false;
     }
     if (!records.empty() && records.size() != custom_names.size())
     {
