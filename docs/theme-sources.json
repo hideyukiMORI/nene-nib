@@ -1,0 +1,4043 @@
+[
+  {
+    "name": "blue",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFD700",
+      "background": "#000087",
+      "cursor": "#00FF00",
+      "selection": "#008787",
+      "current_line": "#005FAF",
+      "line_number": "#5FFFFF",
+      "comment": "#8A8A8A",
+      "keyword": "#FFFFFF",
+      "string": "#5FFFFF",
+      "number": "#5FFFFF",
+      "type": "#FFA500",
+      "function": "#BCBCBC",
+      "constant": "#5FFFFF",
+      "operators": "#FFA500",
+      "error": "#FF7F50",
+      "warning": "#D787D7"
+    },
+    "accent": "#BCBCBC",
+    "gutter_background": "#00006C",
+    "source": {
+      "author": "Original author Steven Vertigan <steven@vertigan.wattle.id.au>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/blue.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "comment": {
+        "source": "#878787",
+        "adapted": "#8A8A8A"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "catppuccin",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#CDD6F4",
+      "background": "#1E1E2E",
+      "cursor": "#F5E0DC",
+      "selection": "#45475A",
+      "current_line": "#2A2B3C",
+      "line_number": "#80818E",
+      "comment": "#9399B2",
+      "keyword": "#CBA6F7",
+      "string": "#A6E3A1",
+      "number": "#FAB387",
+      "type": "#F9E2AF",
+      "function": "#89B4FA",
+      "constant": "#FAB387",
+      "operators": "#89DCEB",
+      "error": "#F38BA8",
+      "warning": "#F9E2AF"
+    },
+    "accent": "#F2CDCD",
+    "gutter_background": "#181825",
+    "source": {
+      "author": "The Catppuccin Community <catppuccin.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/catppuccin.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#45475a",
+        "adapted": "#80818E"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "darkblue",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#C0C0C0",
+      "background": "#000040",
+      "cursor": "#FFFF60",
+      "selection": "#FFFFFF",
+      "current_line": "#666666",
+      "line_number": "#90F020",
+      "comment": "#80A0FF",
+      "keyword": "#FFFF60",
+      "string": "#FFA0A0",
+      "number": "#FFA0A0",
+      "type": "#90F020",
+      "function": "#90FFF0",
+      "constant": "#FFA0A0",
+      "operators": "#FFFF60",
+      "error": "#FFA0A0",
+      "warning": "#FF0000"
+    },
+    "accent": "#90FFF0",
+    "gutter_background": "#11114D",
+    "source": {
+      "author": "Original author Bohdan Vlasyuk <bohdan@vstu.edu.ua>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/darkblue.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {},
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "default",
+    "appearance": "dark",
+    "body": {
+      "background": "#000000",
+      "foreground": "#FFFFFF",
+      "comment": "#80A0FF",
+      "keyword": "#FFFF60",
+      "string": "#FFA0A0",
+      "number": "#FFA0A0",
+      "type": "#60FF60",
+      "function": "#40FFFF",
+      "constant": "#FFA0A0",
+      "operators": "#FFFF60",
+      "error": "#FF6060",
+      "warning": "#FFFF60",
+      "cursor": "#40FFFF",
+      "selection": "#134C4C",
+      "current_line": "#111111",
+      "line_number": "#999999"
+    },
+    "accent": "#40FFFF",
+    "gutter_background": "#101010",
+    "source": {
+      "author": "Vim contributors",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/default.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {},
+    "notes": [
+      "GUI dark default; roles from src/highlight.c"
+    ]
+  },
+  {
+    "name": "delek",
+    "appearance": "light",
+    "body": {
+      "foreground": "#000000",
+      "background": "#FFFFFF",
+      "cursor": "#000000",
+      "selection": "#D0D0D0",
+      "current_line": "#E4E4E4",
+      "line_number": "#A52A2A",
+      "comment": "#EE0000",
+      "keyword": "#0000FF",
+      "string": "#008A00",
+      "number": "#008A00",
+      "type": "#0000FF",
+      "function": "#008383",
+      "constant": "#008A00",
+      "operators": "#0000FF",
+      "error": "#EE0000",
+      "warning": "#CD00CD"
+    },
+    "accent": "#008B8B",
+    "gutter_background": "#F0F0F0",
+    "source": {
+      "author": "Original author David Schweikert <david@schweikert.ch>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/delek.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "string": {
+        "source": "#00cd00",
+        "adapted": "#008A00"
+      },
+      "number": {
+        "source": "#00cd00",
+        "adapted": "#008A00"
+      },
+      "function": {
+        "source": "#008b8b",
+        "adapted": "#008383"
+      },
+      "constant": {
+        "source": "#00cd00",
+        "adapted": "#008A00"
+      },
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#EE0000"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "desert",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#333333",
+      "cursor": "#F0E68C",
+      "selection": "#6B8E24",
+      "current_line": "#666666",
+      "line_number": "#909090",
+      "comment": "#6DCEEB",
+      "keyword": "#F0E68C",
+      "string": "#FFA0A0",
+      "number": "#FFA0A0",
+      "type": "#BDB76B",
+      "function": "#89FB98",
+      "constant": "#FFA0A0",
+      "operators": "#F0E68C",
+      "error": "#FF6B6B",
+      "warning": "#D98383"
+    },
+    "accent": "#89FB98",
+    "gutter_background": "#292929",
+    "source": {
+      "author": "Original author Hans Fugal <hans@fugal.net>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/desert.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#666666",
+        "adapted": "#909090"
+      },
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#FF6B6B"
+      },
+      "warning": {
+        "source": "#cd5c5c",
+        "adapted": "#D98383"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "elflord",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#00FFFF",
+      "background": "#000000",
+      "cursor": "#00FFFF",
+      "selection": "#A9A9A9",
+      "current_line": "#3A3A3A",
+      "line_number": "#FFFF00",
+      "comment": "#80A0FF",
+      "keyword": "#B45A5A",
+      "string": "#FF00FF",
+      "number": "#FF00FF",
+      "type": "#60FF60",
+      "function": "#FFFFFF",
+      "constant": "#FF00FF",
+      "operators": "#FF0000",
+      "error": "#FFFFFF",
+      "warning": "#FF0000"
+    },
+    "accent": "#40FFFF",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "original author Ron Aaron <ron@ronware.org>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/elflord.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "keyword": {
+        "source": "#aa4444",
+        "adapted": "#B45A5A"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "evening",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#333333",
+      "cursor": "#00FF00",
+      "selection": "#999999",
+      "current_line": "#666666",
+      "line_number": "#FFFF00",
+      "comment": "#80A0FF",
+      "keyword": "#FFFF60",
+      "string": "#FFA0A0",
+      "number": "#FFA0A0",
+      "type": "#00FF00",
+      "function": "#00FFFF",
+      "constant": "#FFA0A0",
+      "operators": "#FFFF60",
+      "error": "#FF6B6B",
+      "warning": "#FF6B6B"
+    },
+    "accent": "#00FFFF",
+    "gutter_background": "#292929",
+    "source": {
+      "author": "Original author Bram Moolenaar <Bram@vim.org>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/evening.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#FF6B6B"
+      },
+      "warning": {
+        "source": "#ff0000",
+        "adapted": "#FF6B6B"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "habamax",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#C7C7C7",
+      "background": "#1C1C1C",
+      "cursor": "#EEEEEE",
+      "selection": "#1A3456",
+      "current_line": "#303030",
+      "line_number": "#808080",
+      "comment": "#858585",
+      "keyword": "#AF87AF",
+      "string": "#87AF87",
+      "number": "#D7AF87",
+      "type": "#5F87AF",
+      "function": "#87AFAF",
+      "constant": "#D7AF87",
+      "operators": "#AF87AF",
+      "error": "#AF87AF",
+      "warning": "#D75F87"
+    },
+    "accent": "#87AFAF",
+    "gutter_background": "#171717",
+    "source": {
+      "author": "Maxim Kim <habamax@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/habamax.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#585858",
+        "adapted": "#808080"
+      },
+      "comment": {
+        "source": "#767676",
+        "adapted": "#858585"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "industry",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#DADADA",
+      "background": "#000000",
+      "cursor": "#DADADA",
+      "selection": "#6C6C6C",
+      "current_line": "#6C6C6C",
+      "line_number": "#FFFF00",
+      "comment": "#00AFAF",
+      "keyword": "#FFFFFF",
+      "string": "#00FFFF",
+      "number": "#00FFFF",
+      "type": "#00FF00",
+      "function": "#00FF00",
+      "constant": "#00FFFF",
+      "operators": "#FFFFFF",
+      "error": "#FFFFFF",
+      "warning": "#FF0000"
+    },
+    "accent": "#FF00FF",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Original author Shian Lee.",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/industry.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {},
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "koehler",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#000000",
+      "cursor": "#00FF00",
+      "selection": "#666666",
+      "current_line": "#555555",
+      "line_number": "#FFFF00",
+      "comment": "#80A0FF",
+      "keyword": "#FFFF60",
+      "string": "#FFA0A0",
+      "number": "#FFA0A0",
+      "type": "#60FF60",
+      "function": "#40FFFF",
+      "constant": "#FFA0A0",
+      "operators": "#FFFF60",
+      "error": "#D83838",
+      "warning": "#FF0000"
+    },
+    "accent": "#40FFFF",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "original author Ron Aaron <ron@ronware.org>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/koehler.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "error": {
+        "source": "#cd0000",
+        "adapted": "#D83838"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "lunaperche",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#C6C6C6",
+      "background": "#000000",
+      "cursor": "#C6C6C6",
+      "selection": "#104070",
+      "current_line": "#262626",
+      "line_number": "#7C7C7C",
+      "comment": "#5FAFFF",
+      "keyword": "#E4E4E4",
+      "string": "#FFD787",
+      "number": "#FF87FF",
+      "type": "#5FD75F",
+      "function": "#C6C6C6",
+      "constant": "#FF87FF",
+      "operators": "#E4E4E4",
+      "error": "#FF5F5F",
+      "warning": "#FF5F5F"
+    },
+    "accent": "#E4E4E4",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Maxim Kim <habamax@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/lunaperche.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#585858",
+        "adapted": "#7C7C7C"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "morning",
+    "appearance": "light",
+    "body": {
+      "foreground": "#000000",
+      "background": "#E4E4E4",
+      "cursor": "#2E8B57",
+      "selection": "#D0D0D0",
+      "current_line": "#D3D3D3",
+      "line_number": "#A52A2A",
+      "comment": "#0000FF",
+      "keyword": "#A52A2A",
+      "string": "#B600B6",
+      "number": "#B600B6",
+      "type": "#267248",
+      "function": "#007272",
+      "constant": "#B600B6",
+      "operators": "#A52A2A",
+      "error": "#CF0000",
+      "warning": "#6A0DAD"
+    },
+    "accent": "#008787",
+    "gutter_background": "#E5E5E5",
+    "source": {
+      "author": "Original author Bram Moolenaar <Bram@vim.org>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/morning.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "string": {
+        "source": "#ff00ff",
+        "adapted": "#B600B6"
+      },
+      "number": {
+        "source": "#ff00ff",
+        "adapted": "#B600B6"
+      },
+      "type": {
+        "source": "#2e8b57",
+        "adapted": "#267248"
+      },
+      "function": {
+        "source": "#008787",
+        "adapted": "#007272"
+      },
+      "constant": {
+        "source": "#ff00ff",
+        "adapted": "#B600B6"
+      },
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#CF0000"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "murphy",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#87FF87",
+      "background": "#000000",
+      "cursor": "#87FF87",
+      "selection": "#005F00",
+      "current_line": "#444444",
+      "line_number": "#FFFF00",
+      "comment": "#FFA700",
+      "keyword": "#FFFF00",
+      "string": "#FFFFFF",
+      "number": "#FFFFFF",
+      "type": "#BCBCBC",
+      "function": "#00FFFF",
+      "constant": "#FFFFFF",
+      "operators": "#FFFF00",
+      "error": "#FFFFFF",
+      "warning": "#FFA700"
+    },
+    "accent": "#00FFFF",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Original author Ron Aaron <ron@ronware.org>.",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/murphy.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {},
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "novum",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#E0E2EA",
+      "background": "#14161B",
+      "cursor": "#E0E2EA",
+      "selection": "#4F5258",
+      "current_line": "#37393F",
+      "line_number": "#7B7D81",
+      "comment": "#9B9EA4",
+      "keyword": "#E0E2EA",
+      "string": "#B3F6C0",
+      "number": "#E0E2EA",
+      "type": "#E0E2EA",
+      "function": "#8CF8F7",
+      "constant": "#E0E2EA",
+      "operators": "#E0E2EA",
+      "error": "#EEF1F8",
+      "warning": "#FCE094"
+    },
+    "accent": "#A6DBFF",
+    "gutter_background": "#101216",
+    "source": {
+      "author": "Charan Mandati <charancuz008@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/novum.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#4f5258",
+        "adapted": "#7B7D81"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "pablo",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#000000",
+      "cursor": "#FFFFFF",
+      "selection": "#A9A9A9",
+      "current_line": "#3A3A3A",
+      "line_number": "#7F7F7F",
+      "comment": "#808080",
+      "keyword": "#C0C000",
+      "string": "#00FFFF",
+      "number": "#00FFFF",
+      "type": "#00C000",
+      "function": "#00C0C0",
+      "constant": "#00FFFF",
+      "operators": "#C0C000",
+      "error": "#FFFFFF",
+      "warning": "#FF0000"
+    },
+    "accent": "#00C0C0",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Ron Aaron <ron@ronware.org>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/pablo.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {},
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "peachpuff",
+    "appearance": "light",
+    "body": {
+      "foreground": "#000000",
+      "background": "#FFDAB9",
+      "cursor": "#000000",
+      "selection": "#CCCCCC",
+      "current_line": "#F5C195",
+      "line_number": "#CD0000",
+      "comment": "#406090",
+      "keyword": "#A52A2A",
+      "string": "#C00058",
+      "number": "#C00058",
+      "type": "#267147",
+      "function": "#006E6E",
+      "constant": "#C00058",
+      "operators": "#A52A2A",
+      "error": "#CA0000",
+      "warning": "#B100B1"
+    },
+    "accent": "#008B8B",
+    "gutter_background": "#FFDCBD",
+    "source": {
+      "author": "Original author David Ne\\v{c}as (Yeti) <yeti@physics.muni.cz>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/peachpuff.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "type": {
+        "source": "#2e8b57",
+        "adapted": "#267147"
+      },
+      "function": {
+        "source": "#008b8b",
+        "adapted": "#006E6E"
+      },
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#CA0000"
+      },
+      "warning": {
+        "source": "#cd00cd",
+        "adapted": "#B100B1"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "quiet",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#DADADA",
+      "background": "#000000",
+      "cursor": "#DADADA",
+      "selection": "#414141",
+      "current_line": "#303030",
+      "line_number": "#7C7C7C",
+      "comment": "#757575",
+      "keyword": "#DADADA",
+      "string": "#DADADA",
+      "number": "#DADADA",
+      "type": "#DADADA",
+      "function": "#DADADA",
+      "constant": "#DADADA",
+      "operators": "#DADADA",
+      "error": "#FF005F",
+      "warning": "#DADADA"
+    },
+    "accent": "#DADADA",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Maxence Weynans <neutaaaaan@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/quiet.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "selection": {
+        "source": "#000000",
+        "adapted": "#414141"
+      },
+      "line_number": {
+        "source": "#585858",
+        "adapted": "#7C7C7C"
+      },
+      "comment": {
+        "source": "#707070",
+        "adapted": "#757575"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "retrobox",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#EBDBB2",
+      "background": "#1C1C1C",
+      "cursor": "#FBF1C7",
+      "selection": "#2A405A",
+      "current_line": "#303030",
+      "line_number": "#8A7E75",
+      "comment": "#928374",
+      "keyword": "#FB5944",
+      "string": "#B8BB26",
+      "number": "#D3869B",
+      "type": "#FABD2F",
+      "function": "#B8BB26",
+      "constant": "#D3869B",
+      "operators": "#8EC07C",
+      "error": "#FB5944",
+      "warning": "#FB5944"
+    },
+    "accent": "#83A598",
+    "gutter_background": "#171717",
+    "source": {
+      "author": "Maxim Kim <habamax@gmail.com>, ported from gruvbox8 of Lifepillar <lifepillar@lifepillar.me>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/retrobox.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#7c6f64",
+        "adapted": "#8A7E75"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "ron",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#00FFFF",
+      "background": "#000000",
+      "cursor": "#60A060",
+      "selection": "#004C4C",
+      "current_line": "#666666",
+      "line_number": "#A9A9A9",
+      "comment": "#00FF00",
+      "keyword": "#ADD8E6",
+      "string": "#00FFFF",
+      "number": "#00FFFF",
+      "type": "#2E8B57",
+      "function": "#00FFFF",
+      "constant": "#00FFFF",
+      "operators": "#FFA500",
+      "error": "#FF0000",
+      "warning": "#FFFF00"
+    },
+    "accent": "#00FFFF",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "original author Ron Aaron <ron@ronware.org>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/ron.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {},
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "shine",
+    "appearance": "light",
+    "body": {
+      "foreground": "#000000",
+      "background": "#FFFFFF",
+      "cursor": "#000000",
+      "selection": "#A8A8A8",
+      "current_line": "#DADADA",
+      "line_number": "#6D6D6D",
+      "comment": "#767676",
+      "keyword": "#2D8654",
+      "string": "#986B6B",
+      "number": "#986B6B",
+      "type": "#2D8654",
+      "function": "#008383",
+      "constant": "#986B6B",
+      "operators": "#2D8654",
+      "error": "#EE0000",
+      "warning": "#6A0DAD"
+    },
+    "accent": "#008B8B",
+    "gutter_background": "#F0F0F0",
+    "source": {
+      "author": "Original author is Yasuhiro Matsumoto <mattn.jp@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/shine.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#767676",
+        "adapted": "#6D6D6D"
+      },
+      "comment": {
+        "source": "#a8a8a8",
+        "adapted": "#767676"
+      },
+      "keyword": {
+        "source": "#2e8b57",
+        "adapted": "#2D8654"
+      },
+      "string": {
+        "source": "#a07070",
+        "adapted": "#986B6B"
+      },
+      "number": {
+        "source": "#a07070",
+        "adapted": "#986B6B"
+      },
+      "type": {
+        "source": "#2e8b57",
+        "adapted": "#2D8654"
+      },
+      "function": {
+        "source": "#008b8b",
+        "adapted": "#008383"
+      },
+      "constant": {
+        "source": "#a07070",
+        "adapted": "#986B6B"
+      },
+      "operators": {
+        "source": "#2e8b57",
+        "adapted": "#2D8654"
+      },
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#EE0000"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "slate",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#262626",
+      "cursor": "#D7D787",
+      "selection": "#5F8700",
+      "current_line": "#333333",
+      "line_number": "#868686",
+      "comment": "#8C8C8C",
+      "keyword": "#678DD9",
+      "string": "#87D7FF",
+      "number": "#FFAFAF",
+      "type": "#678DD9",
+      "function": "#FFD7AF",
+      "constant": "#FFAFAF",
+      "operators": "#D7875F",
+      "error": "#FF4949",
+      "warning": "#FF8787"
+    },
+    "accent": "#FF8787",
+    "gutter_background": "#1F1F1F",
+    "source": {
+      "author": "Original maintainer Ralph Amissah <ralph@amissah.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/slate.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#666666",
+        "adapted": "#868686"
+      },
+      "comment": {
+        "source": "#666666",
+        "adapted": "#8C8C8C"
+      },
+      "keyword": {
+        "source": "#5f87d7",
+        "adapted": "#678DD9"
+      },
+      "type": {
+        "source": "#5f87d7",
+        "adapted": "#678DD9"
+      },
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#FF4949"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "sorbet",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#DADADA",
+      "background": "#161821",
+      "cursor": "#DADADA",
+      "selection": "#000000",
+      "current_line": "#363841",
+      "line_number": "#7B7B9C",
+      "comment": "#AF87D7",
+      "keyword": "#87AFD7",
+      "string": "#D7AF5F",
+      "number": "#D75F5F",
+      "type": "#87AFD7",
+      "function": "#87D75F",
+      "constant": "#D75F5F",
+      "operators": "#87AFD7",
+      "error": "#FF5F5F",
+      "warning": "#DADADA"
+    },
+    "accent": "#87D75F",
+    "gutter_background": "#12141B",
+    "source": {
+      "author": "Maxence Weynans <neutaaaaan@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/sorbet.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#5f5f87",
+        "adapted": "#7B7B9C"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "torte",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#CCCCCC",
+      "background": "#000000",
+      "cursor": "#00FF00",
+      "selection": "#A9A9A9",
+      "current_line": "#666666",
+      "line_number": "#7F7F7F",
+      "comment": "#80A0FF",
+      "keyword": "#FFFF60",
+      "string": "#FFA0A0",
+      "number": "#FFA0A0",
+      "type": "#60FF60",
+      "function": "#40FFFF",
+      "constant": "#FFA0A0",
+      "operators": "#FFFF60",
+      "error": "#FFFFFF",
+      "warning": "#FF0000"
+    },
+    "accent": "#40FFFF",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Original maintainer Thorsten Maerz <info@netztorte.de>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/torte.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {},
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "unokai",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#F8F8F2",
+      "background": "#282923",
+      "cursor": "#DADADA",
+      "selection": "#3A5D60",
+      "current_line": "#3A392F",
+      "line_number": "#8A8A8A",
+      "comment": "#928F80",
+      "keyword": "#FA4D8B",
+      "string": "#E6DB74",
+      "number": "#AE81FF",
+      "type": "#FD971F",
+      "function": "#A6E22E",
+      "constant": "#AE81FF",
+      "operators": "#FA4D8B",
+      "error": "#FA4D8B",
+      "warning": "#FA4D8B"
+    },
+    "accent": "#66D9EF",
+    "gutter_background": "#20211C",
+    "source": {
+      "author": "k-37 <60838818+k-37@users.noreply.github.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/unokai.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "selection": {
+        "source": "#282923",
+        "adapted": "#3A5D60"
+      },
+      "comment": {
+        "source": "#74705d",
+        "adapted": "#928F80"
+      },
+      "keyword": {
+        "source": "#f92672",
+        "adapted": "#FA4D8B"
+      },
+      "operators": {
+        "source": "#f92672",
+        "adapted": "#FA4D8B"
+      },
+      "error": {
+        "source": "#f92672",
+        "adapted": "#FA4D8B"
+      },
+      "warning": {
+        "source": "#f92672",
+        "adapted": "#FA4D8B"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "wildcharm",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#D0D0D0",
+      "background": "#000000",
+      "cursor": "#FFFFFF",
+      "selection": "#204060",
+      "current_line": "#262626",
+      "line_number": "#7C7C7C",
+      "comment": "#767676",
+      "keyword": "#00AFFF",
+      "string": "#00D75F",
+      "number": "#00D75F",
+      "type": "#FFAF00",
+      "function": "#FF87FF",
+      "constant": "#00D75F",
+      "operators": "#00AFFF",
+      "error": "#DC2173",
+      "warning": "#FFAF00"
+    },
+    "accent": "#FF87FF",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Maxim Kim <habamax@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/wildcharm.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "line_number": {
+        "source": "#585858",
+        "adapted": "#7C7C7C"
+      },
+      "error": {
+        "source": "#d7005f",
+        "adapted": "#DC2173"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "zaibatsu",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#0E0024",
+      "cursor": "#FFFF5F",
+      "selection": "#5FD7FF",
+      "current_line": "#362B49",
+      "line_number": "#AFAFFF",
+      "comment": "#AFAFFF",
+      "keyword": "#FFAFFF",
+      "string": "#FFFF5F",
+      "number": "#FFFF5F",
+      "type": "#FF5FAF",
+      "function": "#87FFFF",
+      "constant": "#FFFF5F",
+      "operators": "#FFAFFF",
+      "error": "#DF3838",
+      "warning": "#FFAFFF"
+    },
+    "accent": "#87FFFF",
+    "gutter_background": "#1E1133",
+    "source": {
+      "author": "Romain Lafourcade <romainlafourcade@gmail.com>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/zaibatsu.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "error": {
+        "source": "#d70000",
+        "adapted": "#DF3838"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "zellner",
+    "appearance": "light",
+    "body": {
+      "foreground": "#000000",
+      "background": "#FFFFFF",
+      "cursor": "#000000",
+      "selection": "#FFFF00",
+      "current_line": "#E5E5E5",
+      "line_number": "#A52A2A",
+      "comment": "#EE0000",
+      "keyword": "#A52A2A",
+      "string": "#CF00CF",
+      "number": "#CF00CF",
+      "type": "#0000FF",
+      "function": "#0000FF",
+      "constant": "#CF00CF",
+      "operators": "#A52A2A",
+      "error": "#EE0000",
+      "warning": "#A020F0"
+    },
+    "accent": "#0000FF",
+    "gutter_background": "#F0F0F0",
+    "source": {
+      "author": "Original author Ron Aaron <ron@ronware.org>",
+      "license": "Vim license; palette adaptation",
+      "url": "https://github.com/vim/vim/blob/99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe/runtime/colors/zellner.vim",
+      "repository": "vim/vim",
+      "commit": "99b9dd00cd180bade5b8b08c00e4e8ae2e553dbe"
+    },
+    "group": "Vim",
+    "adjustments": {
+      "comment": {
+        "source": "#ff0000",
+        "adapted": "#EE0000"
+      },
+      "string": {
+        "source": "#ff00ff",
+        "adapted": "#CF00CF"
+      },
+      "number": {
+        "source": "#ff00ff",
+        "adapted": "#CF00CF"
+      },
+      "constant": {
+        "source": "#ff00ff",
+        "adapted": "#CF00CF"
+      },
+      "error": {
+        "source": "#ff0000",
+        "adapted": "#EE0000"
+      }
+    },
+    "notes": [
+      "first complete GUI variant; linked or missing roles use the nearest Vim role"
+    ]
+  },
+  {
+    "name": "abyss",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#6688CC",
+      "background": "#000C18",
+      "cursor": "#DDBB88",
+      "selection": "#770811",
+      "current_line": "#082050",
+      "line_number": "#5E7B98",
+      "comment": "#6B77A6",
+      "keyword": "#577DA4",
+      "string": "#22AA44",
+      "number": "#F280D0",
+      "type": "#FFEEBB",
+      "function": "#DDBB88",
+      "constant": "#F280D0",
+      "operators": "#6688CC",
+      "error": "#B75D6F",
+      "warning": "#F280D0"
+    },
+    "accent": "#596F99",
+    "gutter_background": "#060621",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-abyss/themes/abyss-color-theme.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#406385",
+        "adapted": "#5E7B98"
+      },
+      "comment": {
+        "source": "#384887",
+        "adapted": "#6B77A6"
+      },
+      "keyword": {
+        "source": "#225588",
+        "adapted": "#577DA4"
+      },
+      "error": {
+        "source": "#A22D44",
+        "adapted": "#B75D6F"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-dark-2026",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#BBBEBF",
+      "background": "#121314",
+      "cursor": "#BBBEBF",
+      "selection": "#245C73",
+      "current_line": "#242526",
+      "line_number": "#858889",
+      "comment": "#8B949E",
+      "keyword": "#DCDCAA",
+      "string": "#A5D6FF",
+      "number": "#B5CEA8",
+      "type": "#4EC9B0",
+      "function": "#D2A8FF",
+      "constant": "#569CD6",
+      "operators": "#D7BA7D",
+      "error": "#FFA198",
+      "warning": "#B5CEA8"
+    },
+    "accent": "#2D6E8A",
+    "gutter_background": "#1C1D1E",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/2026-dark.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-light-2026",
+    "appearance": "light",
+    "body": {
+      "foreground": "#202020",
+      "background": "#FFFFFF",
+      "cursor": "#202020",
+      "selection": "#BFD9F2",
+      "current_line": "#FAFAFA",
+      "line_number": "#606060",
+      "comment": "#6E7781",
+      "keyword": "#EE0000",
+      "string": "#0000FF",
+      "number": "#098658",
+      "type": "#267F99",
+      "function": "#8250DF",
+      "constant": "#0000FF",
+      "operators": "#EE0000",
+      "error": "#82071E",
+      "warning": "#098658"
+    },
+    "accent": "#0069CC",
+    "gutter_background": "#F2F2F2",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/2026-light.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-dark-modern",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#CCCCCC",
+      "background": "#1F1F1F",
+      "cursor": "#CCCCCC",
+      "selection": "#163955",
+      "current_line": "#2B2B2B",
+      "line_number": "#7B828C",
+      "comment": "#6A9955",
+      "keyword": "#DCDCAA",
+      "string": "#D16969",
+      "number": "#B5CEA8",
+      "type": "#4EC9B0",
+      "function": "#DCDCAA",
+      "constant": "#569CD6",
+      "operators": "#D7BA7D",
+      "error": "#F44747",
+      "warning": "#B5CEA8"
+    },
+    "accent": "#0078D4",
+    "gutter_background": "#181818",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/dark_modern.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#6E7681",
+        "adapted": "#7B828C"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-dark-plus",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#D4D4D4",
+      "background": "#1E1E1E",
+      "cursor": "#D4D4D4",
+      "selection": "#575748",
+      "current_line": "#2A2A2A",
+      "line_number": "#8C8C8C",
+      "comment": "#6A9955",
+      "keyword": "#DCDCAA",
+      "string": "#D16969",
+      "number": "#B5CEA8",
+      "type": "#4EC9B0",
+      "function": "#DCDCAA",
+      "constant": "#569CD6",
+      "operators": "#D7BA7D",
+      "error": "#F44747",
+      "warning": "#B5CEA8"
+    },
+    "accent": "#DCDCAA",
+    "gutter_background": "#181818",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/dark_plus.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-dark",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#D4D4D4",
+      "background": "#1E1E1E",
+      "cursor": "#D4D4D4",
+      "selection": "#2E4355",
+      "current_line": "#2A2A2A",
+      "line_number": "#8C8C8C",
+      "comment": "#6A9955",
+      "keyword": "#569CD6",
+      "string": "#D16969",
+      "number": "#B5CEA8",
+      "type": "#9CDCFE",
+      "function": "#569CD6",
+      "constant": "#569CD6",
+      "operators": "#569CD6",
+      "error": "#F44747",
+      "warning": "#B5CEA8"
+    },
+    "accent": "#569CD6",
+    "gutter_background": "#181818",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/dark_vs.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-high-contrast",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#000000",
+      "cursor": "#FFFFFF",
+      "selection": "#FFFFFF",
+      "current_line": "#111111",
+      "line_number": "#999999",
+      "comment": "#7CA668",
+      "keyword": "#C586C0",
+      "string": "#D16969",
+      "number": "#B5CEA8",
+      "type": "#4EC9B0",
+      "function": "#DCDCAA",
+      "constant": "#569CD6",
+      "operators": "#569CD6",
+      "error": "#F44747",
+      "warning": "#B5CEA8"
+    },
+    "accent": "#DCDCAA",
+    "gutter_background": "#111111",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/hc_black.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-high-contrast-light",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#D4D4D4",
+      "background": "#1E1E1E",
+      "cursor": "#D4D4D4",
+      "selection": "#31224D",
+      "current_line": "#2A2A2A",
+      "line_number": "#8C8C8C",
+      "comment": "#858585",
+      "keyword": "#F24444",
+      "string": "#6389AF",
+      "number": "#4B9479",
+      "type": "#5D8E9D",
+      "function": "#9675D3",
+      "constant": "#6389AF",
+      "operators": "#F24444",
+      "error": "#CD695C",
+      "warning": "#4B9479"
+    },
+    "accent": "#5E2CBC",
+    "gutter_background": "#181818",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/hc_light.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#515151",
+        "adapted": "#858585"
+      },
+      "keyword": {
+        "source": "#EE0000",
+        "adapted": "#F24444"
+      },
+      "string": {
+        "source": "#0F4A85",
+        "adapted": "#6389AF"
+      },
+      "number": {
+        "source": "#096d48",
+        "adapted": "#4B9479"
+      },
+      "type": {
+        "source": "#185E73",
+        "adapted": "#5D8E9D"
+      },
+      "function": {
+        "source": "#5e2cbc",
+        "adapted": "#9675D3"
+      },
+      "constant": {
+        "source": "#0F4A85",
+        "adapted": "#6389AF"
+      },
+      "operators": {
+        "source": "#EE0000",
+        "adapted": "#F24444"
+      },
+      "error": {
+        "source": "#B5200D",
+        "adapted": "#CD695C"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-light-modern",
+    "appearance": "light",
+    "body": {
+      "foreground": "#3B3B3B",
+      "background": "#FFFFFF",
+      "cursor": "#3B3B3B",
+      "selection": "#B3CFEA",
+      "current_line": "#F2F2F2",
+      "line_number": "#6B737E",
+      "comment": "#008000",
+      "keyword": "#EE0000",
+      "string": "#0000FF",
+      "number": "#098658",
+      "type": "#267F99",
+      "function": "#795E26",
+      "constant": "#0000FF",
+      "operators": "#EE0000",
+      "error": "#CD3131",
+      "warning": "#098658"
+    },
+    "accent": "#005FB8",
+    "gutter_background": "#F8F8F8",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/light_modern.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#6E7681",
+        "adapted": "#6B737E"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-light-plus",
+    "appearance": "light",
+    "body": {
+      "foreground": "#000000",
+      "background": "#FFFFFF",
+      "cursor": "#000000",
+      "selection": "#D7CFBE",
+      "current_line": "#EEEEEE",
+      "line_number": "#666666",
+      "comment": "#008000",
+      "keyword": "#EE0000",
+      "string": "#0000FF",
+      "number": "#098658",
+      "type": "#267F99",
+      "function": "#795E26",
+      "constant": "#0000FF",
+      "operators": "#EE0000",
+      "error": "#CD3131",
+      "warning": "#098658"
+    },
+    "accent": "#795E26",
+    "gutter_background": "#F0F0F0",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/light_plus.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "vscode-light",
+    "appearance": "light",
+    "body": {
+      "foreground": "#000000",
+      "background": "#FFFFFF",
+      "cursor": "#000000",
+      "selection": "#B3B3FF",
+      "current_line": "#EEEEEE",
+      "line_number": "#666666",
+      "comment": "#008000",
+      "keyword": "#0000FF",
+      "string": "#0000FF",
+      "number": "#098658",
+      "type": "#0451A5",
+      "function": "#0000FF",
+      "constant": "#0000FF",
+      "operators": "#0000FF",
+      "error": "#CD3131",
+      "warning": "#098658"
+    },
+    "accent": "#0000FF",
+    "gutter_background": "#F0F0F0",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-defaults/themes/light_vs.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "kimbie-dark",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#D3AF86",
+      "background": "#221A0F",
+      "cursor": "#D3AF86",
+      "selection": "#63492E",
+      "current_line": "#5E452B",
+      "line_number": "#A18D75",
+      "comment": "#A57B4D",
+      "keyword": "#A4797B",
+      "string": "#998158",
+      "number": "#F79A32",
+      "type": "#F06431",
+      "function": "#8AB1B0",
+      "constant": "#998158",
+      "operators": "#A4797B",
+      "error": "#E0506C",
+      "warning": "#F79A32"
+    },
+    "accent": "#A57A4C",
+    "gutter_background": "#362712",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-kimbie-dark/themes/kimbie-dark-color-theme.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#a57a4c",
+        "adapted": "#A57B4D"
+      },
+      "keyword": {
+        "source": "#98676a",
+        "adapted": "#A4797B"
+      },
+      "string": {
+        "source": "#7e602c",
+        "adapted": "#998158"
+      },
+      "constant": {
+        "source": "#7e602c",
+        "adapted": "#998158"
+      },
+      "operators": {
+        "source": "#98676a",
+        "adapted": "#A4797B"
+      },
+      "error": {
+        "source": "#dc3958",
+        "adapted": "#E0506C"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "monokai-dimmed",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#C5C8C6",
+      "background": "#1E1E1E",
+      "cursor": "#C07020",
+      "selection": "#434548",
+      "current_line": "#303030",
+      "line_number": "#8E8F8E",
+      "comment": "#9A9B99",
+      "keyword": "#9D79A6",
+      "string": "#9AA83A",
+      "number": "#6089B4",
+      "type": "#C56B6B",
+      "function": "#CE6A05",
+      "constant": "#568F8F",
+      "operators": "#9D79A6",
+      "error": "#FF2F26",
+      "warning": "#6089B4"
+    },
+    "accent": "#3655B5",
+    "gutter_background": "#272727",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-monokai-dimmed/themes/dimmed-monokai-color-theme.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "keyword": {
+        "source": "#9872A2",
+        "adapted": "#9D79A6"
+      },
+      "type": {
+        "source": "#9B0000",
+        "adapted": "#C56B6B"
+      },
+      "function": {
+        "source": "#CE6700",
+        "adapted": "#CE6A05"
+      },
+      "constant": {
+        "source": "#408080",
+        "adapted": "#568F8F"
+      },
+      "operators": {
+        "source": "#9872A2",
+        "adapted": "#9D79A6"
+      },
+      "error": {
+        "source": "#FF0B00",
+        "adapted": "#FF2F26"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "quiet-light",
+    "appearance": "light",
+    "body": {
+      "foreground": "#333333",
+      "background": "#F5F5F5",
+      "cursor": "#54494B",
+      "selection": "#C9D0D9",
+      "current_line": "#E4F6D4",
+      "line_number": "#6D705B",
+      "comment": "#3E7E24",
+      "keyword": "#4B69C6",
+      "string": "#4B69C6",
+      "number": "#9C5D27",
+      "type": "#7A3E9D",
+      "function": "#AA3731",
+      "constant": "#9C5D27",
+      "operators": "#707070",
+      "error": "#660000",
+      "warning": "#9C5D27"
+    },
+    "accent": "#9769DC",
+    "gutter_background": "#F2F2F2",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-quietlight/themes/quietlight-color-theme.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#448C27",
+        "adapted": "#3E7E24"
+      },
+      "operators": {
+        "source": "#777777",
+        "adapted": "#707070"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "red",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#F8F8F8",
+      "background": "#390000",
+      "cursor": "#970000",
+      "selection": "#750000",
+      "current_line": "#610000",
+      "line_number": "#B76969",
+      "comment": "#E7C0C0",
+      "keyword": "#F13636",
+      "string": "#FFB454",
+      "number": "#F8F8F8",
+      "type": "#96DD3B",
+      "function": "#FFB454",
+      "constant": "#FFE862",
+      "operators": "#F8F8F8",
+      "error": "#FFFFFF",
+      "warning": "#F8F8F8"
+    },
+    "accent": "#BD4444",
+    "gutter_background": "#330000",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-red/themes/Red-color-theme.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#ff777788",
+        "adapted": "#B76969"
+      },
+      "keyword": {
+        "source": "#f12727ff",
+        "adapted": "#F13636"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "tomorrow-night-blue",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#002451",
+      "cursor": "#FFFFFF",
+      "selection": "#003F8E",
+      "current_line": "#00346E",
+      "line_number": "#99A8BA",
+      "comment": "#798BBA",
+      "keyword": "#EBBBFF",
+      "string": "#D1F1A9",
+      "number": "#FFC58F",
+      "type": "#FFEEAD",
+      "function": "#BBDAFF",
+      "constant": "#FFC58F",
+      "operators": "#99FFFF",
+      "error": "#CD9731",
+      "warning": "#FFC58F"
+    },
+    "accent": "#BBDAFF",
+    "gutter_background": "#001C40",
+    "source": {
+      "author": "Microsoft and theme contributors",
+      "license": "MIT",
+      "url": "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/extensions/theme-tomorrow-night-blue/themes/tomorrow-night-blue-color-theme.json",
+      "repository": "microsoft/vscode",
+      "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#7285B7",
+        "adapted": "#798BBA"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "monalisa",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#F6D666",
+      "background": "#120B0D",
+      "cursor": "#F6D666",
+      "selection": "#2F2327",
+      "current_line": "#362127",
+      "line_number": "#A18954",
+      "comment": "#817A77",
+      "keyword": "#928F4E",
+      "string": "#BB8A3E",
+      "number": "#C16E31",
+      "type": "#A76C43",
+      "function": "#7F7D59",
+      "constant": "#B4616B",
+      "operators": "#837A5F",
+      "error": "#CA5443",
+      "warning": "#C16E31"
+    },
+    "accent": "#F6D666",
+    "gutter_background": "#201519",
+    "source": {
+      "author": "Patrick Dewey and contributors",
+      "license": "MIT",
+      "url": "https://github.com/ptdewey/monalisa-nvim/blob/2ffe6db37fcad17da0d210f5b3a357712d0b8a2b/fnl/monalisa/init.fnl",
+      "repository": "ptdewey/monalisa-nvim",
+      "commit": "2ffe6db37fcad17da0d210f5b3a357712d0b8a2b"
+    },
+    "group": "MonaLisa",
+    "adjustments": {
+      "comment": {
+        "source": "#514743",
+        "adapted": "#817A77"
+      },
+      "type": {
+        "source": "#9a5727",
+        "adapted": "#A76C43"
+      },
+      "function": {
+        "source": "#636135",
+        "adapted": "#7F7D59"
+      },
+      "constant": {
+        "source": "#9e333f",
+        "adapted": "#B4616B"
+      },
+      "operators": {
+        "source": "#6a5f3f",
+        "adapted": "#837A5F"
+      }
+    },
+    "notes": [
+      "Dark original syntax colors are adjusted for legibility; unrelated to the MonoLisa font"
+    ]
+  },
+  {
+    "name": "catppuccin-latte",
+    "appearance": "light",
+    "body": {
+      "background": "#EFF1F5",
+      "foreground": "#4C4F69",
+      "cursor": "#DC8A78",
+      "selection": "#ACB0BE",
+      "current_line": "#CCD0DA",
+      "line_number": "#656774",
+      "comment": "#6A6C7D",
+      "keyword": "#8839EF",
+      "string": "#327D22",
+      "number": "#BC4A09",
+      "type": "#986114",
+      "function": "#1E63EE",
+      "constant": "#BC4A09",
+      "operators": "#0376A3",
+      "error": "#D20F39",
+      "warning": "#986114"
+    },
+    "accent": "#1E66F5",
+    "gutter_background": "#E6E9EF",
+    "source": {
+      "author": "Catppuccin contributors",
+      "license": "MIT",
+      "url": "https://github.com/catppuccin/palette/blob/07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd/palette.json",
+      "repository": "catppuccin/palette",
+      "commit": "07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#8c8fa1",
+        "adapted": "#656774"
+      },
+      "comment": {
+        "source": "#7c7f93",
+        "adapted": "#6A6C7D"
+      },
+      "string": {
+        "source": "#40a02b",
+        "adapted": "#327D22"
+      },
+      "number": {
+        "source": "#fe640b",
+        "adapted": "#BC4A09"
+      },
+      "type": {
+        "source": "#df8e1d",
+        "adapted": "#986114"
+      },
+      "function": {
+        "source": "#1e66f5",
+        "adapted": "#1E63EE"
+      },
+      "constant": {
+        "source": "#fe640b",
+        "adapted": "#BC4A09"
+      },
+      "operators": {
+        "source": "#04a5e5",
+        "adapted": "#0376A3"
+      },
+      "warning": {
+        "source": "#df8e1d",
+        "adapted": "#986114"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "catppuccin-frappe",
+    "appearance": "dark",
+    "body": {
+      "background": "#303446",
+      "foreground": "#C6D0F5",
+      "cursor": "#F2D5CF",
+      "selection": "#626880",
+      "current_line": "#414559",
+      "line_number": "#8B93AD",
+      "comment": "#949CBB",
+      "keyword": "#CA9EE6",
+      "string": "#A6D189",
+      "number": "#EF9F76",
+      "type": "#E5C890",
+      "function": "#8CAAEE",
+      "constant": "#EF9F76",
+      "operators": "#99D1DB",
+      "error": "#E78284",
+      "warning": "#E5C890"
+    },
+    "accent": "#8CAAEE",
+    "gutter_background": "#292C3C",
+    "source": {
+      "author": "Catppuccin contributors",
+      "license": "MIT",
+      "url": "https://github.com/catppuccin/palette/blob/07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd/palette.json",
+      "repository": "catppuccin/palette",
+      "commit": "07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#838ba7",
+        "adapted": "#8B93AD"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "catppuccin-macchiato",
+    "appearance": "dark",
+    "body": {
+      "background": "#24273A",
+      "foreground": "#CAD3F5",
+      "cursor": "#F4DBD6",
+      "selection": "#5B6078",
+      "current_line": "#363A4F",
+      "line_number": "#8087A2",
+      "comment": "#939AB7",
+      "keyword": "#C6A0F6",
+      "string": "#A6DA95",
+      "number": "#F5A97F",
+      "type": "#EED49F",
+      "function": "#8AADF4",
+      "constant": "#F5A97F",
+      "operators": "#91D7E3",
+      "error": "#ED8796",
+      "warning": "#EED49F"
+    },
+    "accent": "#8AADF4",
+    "gutter_background": "#1E2030",
+    "source": {
+      "author": "Catppuccin contributors",
+      "license": "MIT",
+      "url": "https://github.com/catppuccin/palette/blob/07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd/palette.json",
+      "repository": "catppuccin/palette",
+      "commit": "07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd"
+    },
+    "group": "IDE",
+    "adjustments": {},
+    "notes": []
+  },
+  {
+    "name": "nord",
+    "appearance": "dark",
+    "body": {
+      "background": "#2E3440",
+      "foreground": "#D8DEE9",
+      "cursor": "#D8DEE9",
+      "selection": "#434C5E",
+      "current_line": "#3B4252",
+      "line_number": "#AAAFB8",
+      "comment": "#979CA8",
+      "keyword": "#81A1C1",
+      "string": "#A3BE8C",
+      "number": "#B691AF",
+      "type": "#8FBCBB",
+      "function": "#88C0D0",
+      "constant": "#81A1C1",
+      "operators": "#81A1C1",
+      "error": "#CF888F",
+      "warning": "#EBCB8B"
+    },
+    "accent": "#88C0D0",
+    "gutter_background": "#3B4252",
+    "source": {
+      "author": "Arctic Ice Studio and Sven Greb",
+      "license": "MIT",
+      "url": "https://github.com/nordtheme/nord/blob/1cef71605416a222e57225b544540ce0fcec18d4/src/nord.scss",
+      "repository": "nordtheme/nord",
+      "commit": "1cef71605416a222e57225b544540ce0fcec18d4"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#4c566a",
+        "adapted": "#AAAFB8"
+      },
+      "comment": {
+        "source": "#4c566a",
+        "adapted": "#979CA8"
+      },
+      "number": {
+        "source": "#b48ead",
+        "adapted": "#B691AF"
+      },
+      "error": {
+        "source": "#bf616a",
+        "adapted": "#CF888F"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "gruvbox",
+    "appearance": "dark",
+    "body": {
+      "background": "#282828",
+      "foreground": "#EBDBB2",
+      "selection": "#504945",
+      "current_line": "#3C3836",
+      "line_number": "#938475",
+      "comment": "#9A8C7F",
+      "keyword": "#FB5340",
+      "string": "#B8BB26",
+      "number": "#D3869B",
+      "type": "#FABD2F",
+      "function": "#B8BB26",
+      "constant": "#D3869B",
+      "operators": "#FE8019",
+      "error": "#FB5340",
+      "warning": "#FE8019",
+      "cursor": "#B8BB26"
+    },
+    "accent": "#B8BB26",
+    "gutter_background": "#1D2021",
+    "source": {
+      "author": "Pavel Pertsev",
+      "license": "MIT",
+      "url": "https://github.com/morhetz/gruvbox/blob/ef8864bb42bf244f0295d1c5a403b27e3d139695/colors/gruvbox.vim",
+      "repository": "morhetz/gruvbox",
+      "commit": "ef8864bb42bf244f0295d1c5a403b27e3d139695"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#928374",
+        "adapted": "#938475"
+      },
+      "comment": {
+        "source": "#928374",
+        "adapted": "#9A8C7F"
+      },
+      "keyword": {
+        "source": "#fb4934",
+        "adapted": "#FB5340"
+      },
+      "error": {
+        "source": "#fb4934",
+        "adapted": "#FB5340"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "gruvbox-light",
+    "appearance": "light",
+    "body": {
+      "background": "#FBF1C7",
+      "foreground": "#3C3836",
+      "selection": "#D5C4A1",
+      "current_line": "#EBDBB2",
+      "line_number": "#6A5F54",
+      "comment": "#786C60",
+      "keyword": "#9D0006",
+      "string": "#75700E",
+      "number": "#8F3F71",
+      "type": "#976211",
+      "function": "#75700E",
+      "constant": "#8F3F71",
+      "operators": "#AF3A03",
+      "error": "#9D0006",
+      "warning": "#AF3A03",
+      "cursor": "#79740E"
+    },
+    "accent": "#79740E",
+    "gutter_background": "#EBDBB2",
+    "source": {
+      "author": "Pavel Pertsev",
+      "license": "MIT",
+      "url": "https://github.com/morhetz/gruvbox/blob/ef8864bb42bf244f0295d1c5a403b27e3d139695/colors/gruvbox.vim",
+      "repository": "morhetz/gruvbox",
+      "commit": "ef8864bb42bf244f0295d1c5a403b27e3d139695"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#928374",
+        "adapted": "#6A5F54"
+      },
+      "comment": {
+        "source": "#928374",
+        "adapted": "#786C60"
+      },
+      "string": {
+        "source": "#79740e",
+        "adapted": "#75700E"
+      },
+      "type": {
+        "source": "#b57614",
+        "adapted": "#976211"
+      },
+      "function": {
+        "source": "#79740e",
+        "adapted": "#75700E"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "tokyo-night",
+    "appearance": "dark",
+    "body": {
+      "background": "#1A1B26",
+      "foreground": "#C0CAF5",
+      "selection": "#292E42",
+      "current_line": "#292E42",
+      "line_number": "#7B8095",
+      "comment": "#7B82A2",
+      "keyword": "#BB9AF7",
+      "string": "#9ECE6A",
+      "number": "#FF9E64",
+      "type": "#2AC3DE",
+      "function": "#7AA2F7",
+      "constant": "#FF9E64",
+      "operators": "#89DDFF",
+      "error": "#DD5757",
+      "warning": "#E0AF68",
+      "cursor": "#7AA2F7"
+    },
+    "accent": "#7AA2F7",
+    "gutter_background": "#16161E",
+    "source": {
+      "author": "Folke Lemaitre and Tokyo Night contributors",
+      "license": "MIT",
+      "url": "https://github.com/folke/tokyonight.nvim/blob/cdc07ac78467a233fd62c493de29a17e0cf2b2b6/lua/tokyonight/colors/night.lua",
+      "repository": "folke/tokyonight.nvim",
+      "commit": "cdc07ac78467a233fd62c493de29a17e0cf2b2b6"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#3b4261",
+        "adapted": "#7B8095"
+      },
+      "comment": {
+        "source": "#565f89",
+        "adapted": "#7B82A2"
+      },
+      "error": {
+        "source": "#db4b4b",
+        "adapted": "#DD5757"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "tokyo-night-storm",
+    "appearance": "dark",
+    "body": {
+      "background": "#24283B",
+      "foreground": "#C0CAF5",
+      "selection": "#292E42",
+      "current_line": "#292E42",
+      "line_number": "#878B9E",
+      "comment": "#888FAC",
+      "keyword": "#BB9AF7",
+      "string": "#9ECE6A",
+      "number": "#FF9E64",
+      "type": "#2AC3DE",
+      "function": "#7AA2F7",
+      "constant": "#FF9E64",
+      "operators": "#89DDFF",
+      "error": "#E16B6B",
+      "warning": "#E0AF68",
+      "cursor": "#7AA2F7"
+    },
+    "accent": "#7AA2F7",
+    "gutter_background": "#1F2335",
+    "source": {
+      "author": "Folke Lemaitre and Tokyo Night contributors",
+      "license": "MIT",
+      "url": "https://github.com/folke/tokyonight.nvim/blob/cdc07ac78467a233fd62c493de29a17e0cf2b2b6/lua/tokyonight/colors/storm.lua",
+      "repository": "folke/tokyonight.nvim",
+      "commit": "cdc07ac78467a233fd62c493de29a17e0cf2b2b6"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#3b4261",
+        "adapted": "#878B9E"
+      },
+      "comment": {
+        "source": "#565f89",
+        "adapted": "#888FAC"
+      },
+      "error": {
+        "source": "#db4b4b",
+        "adapted": "#E16B6B"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "tokyo-night-moon",
+    "appearance": "dark",
+    "body": {
+      "background": "#222436",
+      "foreground": "#C8D3F5",
+      "selection": "#2F334D",
+      "current_line": "#2F334D",
+      "line_number": "#83879B",
+      "comment": "#828AB7",
+      "keyword": "#C099FF",
+      "string": "#C3E88D",
+      "number": "#FF966C",
+      "type": "#65BCFF",
+      "function": "#82AAFF",
+      "constant": "#FF966C",
+      "operators": "#89DDFF",
+      "error": "#D36C7E",
+      "warning": "#FFC777",
+      "cursor": "#82AAFF"
+    },
+    "accent": "#82AAFF",
+    "gutter_background": "#1E2030",
+    "source": {
+      "author": "Folke Lemaitre and Tokyo Night contributors",
+      "license": "MIT",
+      "url": "https://github.com/folke/tokyonight.nvim/blob/cdc07ac78467a233fd62c493de29a17e0cf2b2b6/lua/tokyonight/colors/moon.lua",
+      "repository": "folke/tokyonight.nvim",
+      "commit": "cdc07ac78467a233fd62c493de29a17e0cf2b2b6"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#3b4261",
+        "adapted": "#83879B"
+      },
+      "comment": {
+        "source": "#636da6",
+        "adapted": "#828AB7"
+      },
+      "error": {
+        "source": "#c53b53",
+        "adapted": "#D36C7E"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "tokyo-night-light",
+    "appearance": "light",
+    "body": {
+      "foreground": "#343B59",
+      "background": "#E6E7ED",
+      "cursor": "#363C4D",
+      "selection": "#D7D9E1",
+      "current_line": "#DCDEE3",
+      "line_number": "#5C5D64",
+      "comment": "#606269",
+      "keyword": "#4F4168",
+      "string": "#65676E",
+      "number": "#965027",
+      "type": "#33635C",
+      "function": "#2959AA",
+      "constant": "#965027",
+      "operators": "#65359D",
+      "error": "#B63E3E",
+      "warning": "#8F5E15"
+    },
+    "accent": "#CED0D7",
+    "gutter_background": "#D6D8DF",
+    "source": {
+      "author": "Enkia",
+      "license": "MIT",
+      "url": "https://github.com/enkia/tokyo-night-vscode-theme/blob/7c0f11eaef322f293621ca7befe462214b7ea468/themes/tokyo-night-light-color-theme.json",
+      "repository": "enkia/tokyo-night-vscode-theme",
+      "commit": "7c0f11eaef322f293621ca7befe462214b7ea468"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#9da0ab",
+        "adapted": "#5C5D64"
+      },
+      "string": {
+        "source": "#888b94",
+        "adapted": "#65676E"
+      },
+      "error": {
+        "source": "#bd4040",
+        "adapted": "#B63E3E"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "github-dark",
+    "appearance": "dark",
+    "body": {
+      "background": "#0D1117",
+      "foreground": "#C9D1D9",
+      "cursor": "#58A6FF",
+      "selection": "#13233A",
+      "current_line": "#161B22",
+      "line_number": "#6F7782",
+      "comment": "#8B949E",
+      "keyword": "#FF7B72",
+      "string": "#A5D6FF",
+      "number": "#79C0FF",
+      "type": "#FFA657",
+      "function": "#D2A8FF",
+      "constant": "#79C0FF",
+      "operators": "#FF7B72",
+      "error": "#F85149",
+      "warning": "#D29922"
+    },
+    "accent": "#D2A8FF",
+    "gutter_background": "#010409",
+    "source": {
+      "author": "GitHub and Primer contributors",
+      "license": "MIT",
+      "url": "https://github.com/primer/github-vscode-theme/blob/cd78e5e4e7bcf132a6f428ae0f32264bb1b729cf/src/theme.js",
+      "repository": "primer/github-vscode-theme",
+      "commit": "cd78e5e4e7bcf132a6f428ae0f32264bb1b729cf"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#6e7681",
+        "adapted": "#6F7782"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "github-light",
+    "appearance": "light",
+    "body": {
+      "background": "#FFFFFF",
+      "foreground": "#24292F",
+      "cursor": "#0969DA",
+      "selection": "#DDF4FF",
+      "current_line": "#F6F8FA",
+      "line_number": "#6A737C",
+      "comment": "#6E7781",
+      "keyword": "#CF222E",
+      "string": "#0A3069",
+      "number": "#0550AE",
+      "type": "#953800",
+      "function": "#8250DF",
+      "constant": "#0550AE",
+      "operators": "#CF222E",
+      "error": "#CF222E",
+      "warning": "#9A6700"
+    },
+    "accent": "#8250DF",
+    "gutter_background": "#F6F8FA",
+    "source": {
+      "author": "GitHub and Primer contributors",
+      "license": "MIT",
+      "url": "https://github.com/primer/github-vscode-theme/blob/cd78e5e4e7bcf132a6f428ae0f32264bb1b729cf/src/theme.js",
+      "repository": "primer/github-vscode-theme",
+      "commit": "cd78e5e4e7bcf132a6f428ae0f32264bb1b729cf"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#6e7781",
+        "adapted": "#6A737C"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "github-dark-dimmed",
+    "appearance": "dark",
+    "body": {
+      "background": "#22272E",
+      "foreground": "#ADBAC7",
+      "cursor": "#539BF5",
+      "selection": "#273549",
+      "current_line": "#2D333B",
+      "line_number": "#7F8892",
+      "comment": "#838F9B",
+      "keyword": "#F47067",
+      "string": "#96D0FF",
+      "number": "#6CB6FF",
+      "type": "#F69D50",
+      "function": "#DCBDFB",
+      "constant": "#6CB6FF",
+      "operators": "#F47067",
+      "error": "#E7625B",
+      "warning": "#C69026"
+    },
+    "accent": "#DCBDFB",
+    "gutter_background": "#1C2128",
+    "source": {
+      "author": "GitHub and Primer contributors",
+      "license": "MIT",
+      "url": "https://github.com/primer/github-vscode-theme/blob/cd78e5e4e7bcf132a6f428ae0f32264bb1b729cf/src/theme.js",
+      "repository": "primer/github-vscode-theme",
+      "commit": "cd78e5e4e7bcf132a6f428ae0f32264bb1b729cf"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#636e7b",
+        "adapted": "#7F8892"
+      },
+      "comment": {
+        "source": "#768390",
+        "adapted": "#838F9B"
+      },
+      "error": {
+        "source": "#e5534b",
+        "adapted": "#E7625B"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "one-light",
+    "appearance": "light",
+    "body": {
+      "background": "#FAFAFA",
+      "foreground": "#383A42",
+      "line_number": "#6C6C70",
+      "comment": "#727377",
+      "keyword": "#A626A4",
+      "string": "#408140",
+      "number": "#986801",
+      "type": "#9B6A01",
+      "function": "#3B6EDD",
+      "constant": "#986801",
+      "operators": "#017BAF",
+      "error": "#CA1243",
+      "warning": "#9B6A01",
+      "cursor": "#4078F2",
+      "selection": "#C3D3F8",
+      "current_line": "#EDEDEE"
+    },
+    "accent": "#4078F2",
+    "gutter_background": "#F0F0F1",
+    "source": {
+      "author": "Atom",
+      "license": "MIT",
+      "url": "https://github.com/atom/one-light-syntax/blob/d84579027410c576086dfca14d934c4bd74b0438/styles/colors.less",
+      "repository": "atom/one-light-syntax",
+      "commit": "d84579027410c576086dfca14d934c4bd74b0438"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#A0A1A7",
+        "adapted": "#6C6C70"
+      },
+      "comment": {
+        "source": "#A0A1A7",
+        "adapted": "#727377"
+      },
+      "string": {
+        "source": "#50A14F",
+        "adapted": "#408140"
+      },
+      "type": {
+        "source": "#C18401",
+        "adapted": "#9B6A01"
+      },
+      "function": {
+        "source": "#4078F2",
+        "adapted": "#3B6EDD"
+      },
+      "operators": {
+        "source": "#0184BC",
+        "adapted": "#017BAF"
+      },
+      "warning": {
+        "source": "#C18401",
+        "adapted": "#9B6A01"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "intellij-light",
+    "appearance": "light",
+    "body": {
+      "background": "#FFFFFF",
+      "foreground": "#000000",
+      "cursor": "#000000",
+      "selection": "#5974AB",
+      "current_line": "#FFFAE3",
+      "line_number": "#6D6D6D",
+      "comment": "#767676",
+      "keyword": "#000080",
+      "string": "#008000",
+      "number": "#0000FF",
+      "type": "#000080",
+      "function": "#000000",
+      "constant": "#660E7A",
+      "operators": "#000000",
+      "error": "#CA4A4A",
+      "warning": "#937012"
+    },
+    "accent": "#000000",
+    "gutter_background": "#F0F0F0",
+    "source": {
+      "author": "JetBrains",
+      "license": "Apache-2.0; palette adaptation",
+      "url": "https://github.com/JetBrains/intellij-community/blob/8886d47ff4b7a538583b793ba29e9cc642ae01d9/platform/platform-resources/src/DefaultColorSchemesManager.xml",
+      "repository": "JetBrains/intellij-community",
+      "commit": "8886d47ff4b7a538583b793ba29e9cc642ae01d9"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#999999",
+        "adapted": "#6D6D6D"
+      },
+      "comment": {
+        "source": "#808080",
+        "adapted": "#767676"
+      },
+      "error": {
+        "source": "#E05252",
+        "adapted": "#CA4A4A"
+      },
+      "warning": {
+        "source": "#BE9117",
+        "adapted": "#937012"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "darcula",
+    "appearance": "dark",
+    "body": {
+      "background": "#2B2B2B",
+      "foreground": "#A9B7C6",
+      "cursor": "#BBBBBB",
+      "selection": "#214283",
+      "current_line": "#323232",
+      "line_number": "#999B9D",
+      "comment": "#939393",
+      "keyword": "#CF803E",
+      "string": "#809971",
+      "number": "#6897BB",
+      "type": "#CF803E",
+      "function": "#FFC66D",
+      "constant": "#A587B5",
+      "operators": "#A9B7C6",
+      "error": "#E46D6D",
+      "warning": "#BE9117"
+    },
+    "accent": "#FFC66D",
+    "gutter_background": "#313335",
+    "source": {
+      "author": "JetBrains",
+      "license": "Apache-2.0; palette adaptation",
+      "url": "https://github.com/JetBrains/intellij-community/blob/8886d47ff4b7a538583b793ba29e9cc642ae01d9/platform/platform-resources/src/DefaultColorSchemesManager.xml",
+      "repository": "JetBrains/intellij-community",
+      "commit": "8886d47ff4b7a538583b793ba29e9cc642ae01d9"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#606366",
+        "adapted": "#999B9D"
+      },
+      "comment": {
+        "source": "#808080",
+        "adapted": "#939393"
+      },
+      "keyword": {
+        "source": "#cc7832",
+        "adapted": "#CF803E"
+      },
+      "string": {
+        "source": "#6a8759",
+        "adapted": "#809971"
+      },
+      "type": {
+        "source": "#cc7832",
+        "adapted": "#CF803E"
+      },
+      "constant": {
+        "source": "#9876aa",
+        "adapted": "#A587B5"
+      },
+      "error": {
+        "source": "#E05252",
+        "adapted": "#E46D6D"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "rose-pine",
+    "appearance": "dark",
+    "body": {
+      "background": "#191724",
+      "foreground": "#E0DEF4",
+      "cursor": "#EBBCBA",
+      "selection": "#26233A",
+      "current_line": "#1F1D2E",
+      "line_number": "#88849B",
+      "comment": "#827E96",
+      "keyword": "#4F889F",
+      "string": "#F6C177",
+      "number": "#F6C177",
+      "type": "#9CCFD8",
+      "function": "#EBBCBA",
+      "constant": "#C4A7E7",
+      "operators": "#908CAA",
+      "error": "#EB6F92",
+      "warning": "#F6C177"
+    },
+    "accent": "#EBBCBA",
+    "gutter_background": "#1F1D2E",
+    "source": {
+      "author": "Rosé Pine contributors",
+      "license": "MIT",
+      "url": "https://github.com/rose-pine/palette/blob/92af52b465ab6e47437aca223c9b8d3009a2023b/palette.json",
+      "repository": "rose-pine/palette",
+      "commit": "92af52b465ab6e47437aca223c9b8d3009a2023b"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#6e6a86",
+        "adapted": "#88849B"
+      },
+      "comment": {
+        "source": "#6e6a86",
+        "adapted": "#827E96"
+      },
+      "keyword": {
+        "source": "#31748f",
+        "adapted": "#4F889F"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "rose-pine-moon",
+    "appearance": "dark",
+    "body": {
+      "background": "#232136",
+      "foreground": "#E0DEF4",
+      "cursor": "#EA9A97",
+      "selection": "#393552",
+      "current_line": "#2A273F",
+      "line_number": "#928FA4",
+      "comment": "#8B879E",
+      "keyword": "#4593B3",
+      "string": "#F6C177",
+      "number": "#F6C177",
+      "type": "#9CCFD8",
+      "function": "#EA9A97",
+      "constant": "#C4A7E7",
+      "operators": "#908CAA",
+      "error": "#EB6F92",
+      "warning": "#F6C177"
+    },
+    "accent": "#EA9A97",
+    "gutter_background": "#2A273F",
+    "source": {
+      "author": "Rosé Pine contributors",
+      "license": "MIT",
+      "url": "https://github.com/rose-pine/palette/blob/92af52b465ab6e47437aca223c9b8d3009a2023b/palette.json",
+      "repository": "rose-pine/palette",
+      "commit": "92af52b465ab6e47437aca223c9b8d3009a2023b"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#6e6a86",
+        "adapted": "#928FA4"
+      },
+      "comment": {
+        "source": "#6e6a86",
+        "adapted": "#8B879E"
+      },
+      "keyword": {
+        "source": "#3e8fb0",
+        "adapted": "#4593B3"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "rose-pine-dawn",
+    "appearance": "light",
+    "body": {
+      "background": "#FAF4ED",
+      "foreground": "#464261",
+      "cursor": "#D7827E",
+      "selection": "#F2E9E1",
+      "current_line": "#FFFAF3",
+      "line_number": "#767280",
+      "comment": "#716D7B",
+      "keyword": "#286983",
+      "string": "#966522",
+      "number": "#966522",
+      "type": "#467881",
+      "function": "#9D5F5C",
+      "constant": "#7B6890",
+      "operators": "#716D89",
+      "error": "#A25A6E",
+      "warning": "#966522"
+    },
+    "accent": "#D7827E",
+    "gutter_background": "#FFFAF3",
+    "source": {
+      "author": "Rosé Pine contributors",
+      "license": "MIT",
+      "url": "https://github.com/rose-pine/palette/blob/92af52b465ab6e47437aca223c9b8d3009a2023b/palette.json",
+      "repository": "rose-pine/palette",
+      "commit": "92af52b465ab6e47437aca223c9b8d3009a2023b"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#9893a5",
+        "adapted": "#767280"
+      },
+      "comment": {
+        "source": "#9893a5",
+        "adapted": "#716D7B"
+      },
+      "string": {
+        "source": "#ea9d34",
+        "adapted": "#966522"
+      },
+      "number": {
+        "source": "#ea9d34",
+        "adapted": "#966522"
+      },
+      "type": {
+        "source": "#56949f",
+        "adapted": "#467881"
+      },
+      "function": {
+        "source": "#d7827e",
+        "adapted": "#9D5F5C"
+      },
+      "constant": {
+        "source": "#907aa9",
+        "adapted": "#7B6890"
+      },
+      "operators": {
+        "source": "#797593",
+        "adapted": "#716D89"
+      },
+      "error": {
+        "source": "#b4637a",
+        "adapted": "#A25A6E"
+      },
+      "warning": {
+        "source": "#ea9d34",
+        "adapted": "#966522"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "everforest-dark",
+    "appearance": "dark",
+    "body": {
+      "background": "#2D353B",
+      "foreground": "#D3C6AA",
+      "selection": "#543A48",
+      "current_line": "#343F44",
+      "line_number": "#86938A",
+      "comment": "#939F97",
+      "keyword": "#E67E80",
+      "string": "#A7C080",
+      "number": "#D699B6",
+      "type": "#DBBC7F",
+      "function": "#A7C080",
+      "constant": "#D699B6",
+      "operators": "#E69875",
+      "error": "#E67E80",
+      "warning": "#DBBC7F",
+      "cursor": "#A7C080"
+    },
+    "accent": "#A7C080",
+    "gutter_background": "#232A2E",
+    "source": {
+      "author": "Sainnhe Park",
+      "license": "MIT",
+      "url": "https://github.com/sainnhe/everforest/blob/85a86eb62409e3ec88713bff3d1b9d7374e112e4/autoload/everforest.vim",
+      "repository": "sainnhe/everforest",
+      "commit": "85a86eb62409e3ec88713bff3d1b9d7374e112e4"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#859289",
+        "adapted": "#86938A"
+      },
+      "comment": {
+        "source": "#859289",
+        "adapted": "#939F97"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "everforest-light",
+    "appearance": "light",
+    "body": {
+      "background": "#FDF6E3",
+      "foreground": "#5C6A72",
+      "selection": "#EAEDC8",
+      "current_line": "#F4F0D9",
+      "line_number": "#636B62",
+      "comment": "#6A7369",
+      "keyword": "#C44441",
+      "string": "#697801",
+      "number": "#AA508E",
+      "type": "#946A00",
+      "function": "#697801",
+      "constant": "#AA508E",
+      "operators": "#AE591B",
+      "error": "#C44441",
+      "warning": "#946A00",
+      "cursor": "#8DA101"
+    },
+    "accent": "#8DA101",
+    "gutter_background": "#EFEBD4",
+    "source": {
+      "author": "Sainnhe Park",
+      "license": "MIT",
+      "url": "https://github.com/sainnhe/everforest/blob/85a86eb62409e3ec88713bff3d1b9d7374e112e4/autoload/everforest.vim",
+      "repository": "sainnhe/everforest",
+      "commit": "85a86eb62409e3ec88713bff3d1b9d7374e112e4"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#939f91",
+        "adapted": "#636B62"
+      },
+      "comment": {
+        "source": "#939f91",
+        "adapted": "#6A7369"
+      },
+      "keyword": {
+        "source": "#f85552",
+        "adapted": "#C44441"
+      },
+      "string": {
+        "source": "#8da101",
+        "adapted": "#697801"
+      },
+      "number": {
+        "source": "#df69ba",
+        "adapted": "#AA508E"
+      },
+      "type": {
+        "source": "#dfa000",
+        "adapted": "#946A00"
+      },
+      "function": {
+        "source": "#8da101",
+        "adapted": "#697801"
+      },
+      "constant": {
+        "source": "#df69ba",
+        "adapted": "#AA508E"
+      },
+      "operators": {
+        "source": "#f57d26",
+        "adapted": "#AE591B"
+      },
+      "error": {
+        "source": "#f85552",
+        "adapted": "#C44441"
+      },
+      "warning": {
+        "source": "#dfa000",
+        "adapted": "#946A00"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "kanagawa",
+    "appearance": "dark",
+    "body": {
+      "background": "#1F1F28",
+      "foreground": "#DCD7BA",
+      "comment": "#888781",
+      "keyword": "#957FB8",
+      "string": "#98BB6C",
+      "number": "#D27E99",
+      "type": "#7AA89F",
+      "function": "#7E9CD8",
+      "constant": "#FFA066",
+      "operators": "#E6C384",
+      "error": "#EC4F4F",
+      "warning": "#FF9E3B",
+      "line_number": "#818079",
+      "cursor": "#7E9CD8",
+      "selection": "#3B445C",
+      "current_line": "#2C2B32"
+    },
+    "accent": "#7E9CD8",
+    "gutter_background": "#16161D",
+    "source": {
+      "author": "Rebelot and Kanagawa contributors",
+      "license": "MIT",
+      "url": "https://github.com/rebelot/kanagawa.nvim/blob/bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3/lua/kanagawa/colors.lua",
+      "repository": "rebelot/kanagawa.nvim",
+      "commit": "bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#727169",
+        "adapted": "#888781"
+      },
+      "error": {
+        "source": "#E82424",
+        "adapted": "#EC4F4F"
+      },
+      "line_number": {
+        "source": "#727169",
+        "adapted": "#818079"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "kanagawa-dragon",
+    "appearance": "dark",
+    "body": {
+      "background": "#181616",
+      "foreground": "#C5C9C5",
+      "comment": "#7A827A",
+      "keyword": "#8992A7",
+      "string": "#8A9A7B",
+      "number": "#A292A3",
+      "type": "#8EA4A2",
+      "function": "#8BA4B0",
+      "constant": "#B6927B",
+      "operators": "#C4B28A",
+      "error": "#C4746E",
+      "warning": "#B98D7B",
+      "line_number": "#777F77",
+      "cursor": "#8BA4B0",
+      "selection": "#3A4044",
+      "current_line": "#242222"
+    },
+    "accent": "#8BA4B0",
+    "gutter_background": "#12120F",
+    "source": {
+      "author": "Rebelot and Kanagawa contributors",
+      "license": "MIT",
+      "url": "https://github.com/rebelot/kanagawa.nvim/blob/bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3/lua/kanagawa/colors.lua",
+      "repository": "rebelot/kanagawa.nvim",
+      "commit": "bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#737c73",
+        "adapted": "#7A827A"
+      },
+      "line_number": {
+        "source": "#737c73",
+        "adapted": "#777F77"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "kanagawa-lotus",
+    "appearance": "light",
+    "body": {
+      "background": "#F2ECBC",
+      "foreground": "#545464",
+      "comment": "#6D6A5E",
+      "keyword": "#624C83",
+      "string": "#5A6F40",
+      "number": "#A0516C",
+      "type": "#51706B",
+      "function": "#4D699B",
+      "constant": "#A05600",
+      "operators": "#706B3C",
+      "error": "#BA3C4E",
+      "warning": "#A05600",
+      "line_number": "#646156",
+      "cursor": "#4D699B",
+      "selection": "#C1C5B3",
+      "current_line": "#E7E2B6"
+    },
+    "accent": "#4D699B",
+    "gutter_background": "#E5DDB0",
+    "source": {
+      "author": "Rebelot and Kanagawa contributors",
+      "license": "MIT",
+      "url": "https://github.com/rebelot/kanagawa.nvim/blob/bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3/lua/kanagawa/colors.lua",
+      "repository": "rebelot/kanagawa.nvim",
+      "commit": "bb85e4bfc8d89b0e62c8fa53ccdd13d12e2f77b3"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#716e61",
+        "adapted": "#6D6A5E"
+      },
+      "string": {
+        "source": "#6f894e",
+        "adapted": "#5A6F40"
+      },
+      "number": {
+        "source": "#b35b79",
+        "adapted": "#A0516C"
+      },
+      "type": {
+        "source": "#597b75",
+        "adapted": "#51706B"
+      },
+      "constant": {
+        "source": "#cc6d00",
+        "adapted": "#A05600"
+      },
+      "operators": {
+        "source": "#77713f",
+        "adapted": "#706B3C"
+      },
+      "error": {
+        "source": "#c84053",
+        "adapted": "#BA3C4E"
+      },
+      "warning": {
+        "source": "#cc6d00",
+        "adapted": "#A05600"
+      },
+      "line_number": {
+        "source": "#716e61",
+        "adapted": "#646156"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "material-oceanic",
+    "appearance": "dark",
+    "body": {
+      "background": "#263238",
+      "foreground": "#B0BEC5",
+      "comment": "#899AA3",
+      "line_number": "#7B8F98",
+      "keyword": "#C792EA",
+      "string": "#C3E88D",
+      "number": "#F78C6C",
+      "type": "#FFCB6B",
+      "function": "#82AAFF",
+      "constant": "#F07178",
+      "operators": "#89DDFF",
+      "error": "#FF607B",
+      "warning": "#FFCB6B",
+      "cursor": "#82AAFF",
+      "selection": "#415673",
+      "current_line": "#2F3B41"
+    },
+    "accent": "#82AAFF",
+    "gutter_background": "#1E272C",
+    "source": {
+      "author": "Material Theme / Mallowigi and Equinusocio",
+      "license": "published palette colors; names attributed to their authors",
+      "url": "https://material-theme.com/docs/reference/color-palette/"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#546E7A",
+        "adapted": "#899AA3"
+      },
+      "line_number": {
+        "source": "#546E7A",
+        "adapted": "#7B8F98"
+      },
+      "error": {
+        "source": "#FF5370",
+        "adapted": "#FF607B"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "material-darker",
+    "appearance": "dark",
+    "body": {
+      "background": "#212121",
+      "foreground": "#B0BEC5",
+      "comment": "#888888",
+      "line_number": "#828282",
+      "keyword": "#C792EA",
+      "string": "#C3E88D",
+      "number": "#F78C6C",
+      "type": "#FFCB6B",
+      "function": "#82AAFF",
+      "constant": "#F07178",
+      "operators": "#89DDFF",
+      "error": "#FF5370",
+      "warning": "#FFCB6B",
+      "cursor": "#82AAFF",
+      "selection": "#3E4A63",
+      "current_line": "#2B2B2C"
+    },
+    "accent": "#82AAFF",
+    "gutter_background": "#1A1A1A",
+    "source": {
+      "author": "Material Theme / Mallowigi and Equinusocio",
+      "license": "published palette colors; names attributed to their authors",
+      "url": "https://material-theme.com/docs/reference/color-palette/"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#616161",
+        "adapted": "#888888"
+      },
+      "line_number": {
+        "source": "#616161",
+        "adapted": "#828282"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "material-lighter",
+    "appearance": "light",
+    "body": {
+      "background": "#FAFAFA",
+      "foreground": "#546E7A",
+      "comment": "#68757B",
+      "line_number": "#6A777D",
+      "keyword": "#7C4DFF",
+      "string": "#627C3C",
+      "number": "#BC5336",
+      "type": "#9B6821",
+      "function": "#5774A4",
+      "constant": "#D53632",
+      "operators": "#2A7D83",
+      "error": "#D53632",
+      "warning": "#9B6821",
+      "cursor": "#6182B8",
+      "selection": "#CDD6E7",
+      "current_line": "#EFF1F2"
+    },
+    "accent": "#6182B8",
+    "gutter_background": "#FFFFFF",
+    "source": {
+      "author": "Material Theme / Mallowigi and Equinusocio",
+      "license": "published palette colors; names attributed to their authors",
+      "url": "https://material-theme.com/docs/reference/color-palette/"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#AABFC9",
+        "adapted": "#68757B"
+      },
+      "line_number": {
+        "source": "#AABFC9",
+        "adapted": "#6A777D"
+      },
+      "string": {
+        "source": "#91B859",
+        "adapted": "#627C3C"
+      },
+      "number": {
+        "source": "#F76D47",
+        "adapted": "#BC5336"
+      },
+      "type": {
+        "source": "#F6A434",
+        "adapted": "#9B6821"
+      },
+      "function": {
+        "source": "#6182B8",
+        "adapted": "#5774A4"
+      },
+      "constant": {
+        "source": "#E53935",
+        "adapted": "#D53632"
+      },
+      "operators": {
+        "source": "#39ADB5",
+        "adapted": "#2A7D83"
+      },
+      "error": {
+        "source": "#E53935",
+        "adapted": "#D53632"
+      },
+      "warning": {
+        "source": "#F6A434",
+        "adapted": "#9B6821"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "material-palenight",
+    "appearance": "dark",
+    "body": {
+      "background": "#292D3E",
+      "foreground": "#A6ACCD",
+      "comment": "#8E93B0",
+      "line_number": "#8389A9",
+      "keyword": "#C792EA",
+      "string": "#C3E88D",
+      "number": "#F78C6C",
+      "type": "#FFCB6B",
+      "function": "#82AAFF",
+      "constant": "#F07178",
+      "operators": "#89DDFF",
+      "error": "#FF5975",
+      "warning": "#FFCB6B",
+      "cursor": "#82AAFF",
+      "selection": "#435277",
+      "current_line": "#313548"
+    },
+    "accent": "#82AAFF",
+    "gutter_background": "#202331",
+    "source": {
+      "author": "Material Theme / Mallowigi and Equinusocio",
+      "license": "published palette colors; names attributed to their authors",
+      "url": "https://material-theme.com/docs/reference/color-palette/"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#676E95",
+        "adapted": "#8E93B0"
+      },
+      "line_number": {
+        "source": "#676E95",
+        "adapted": "#8389A9"
+      },
+      "error": {
+        "source": "#FF5370",
+        "adapted": "#FF5975"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "material-deep-ocean",
+    "appearance": "dark",
+    "body": {
+      "background": "#0F111A",
+      "foreground": "#8F93A2",
+      "comment": "#717CB4",
+      "line_number": "#7681B7",
+      "keyword": "#C792EA",
+      "string": "#C3E88D",
+      "number": "#F78C6C",
+      "type": "#FFCB6B",
+      "function": "#82AAFF",
+      "constant": "#F07178",
+      "operators": "#89DDFF",
+      "error": "#FF5370",
+      "warning": "#FFCB6B",
+      "cursor": "#82AAFF",
+      "selection": "#313E5E",
+      "current_line": "#171A23"
+    },
+    "accent": "#82AAFF",
+    "gutter_background": "#191A26",
+    "source": {
+      "author": "Material Theme / Mallowigi and Equinusocio",
+      "license": "published palette colors; names attributed to their authors",
+      "url": "https://material-theme.com/docs/reference/color-palette/"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#717CB4",
+        "adapted": "#7681B7"
+      }
+    },
+    "notes": []
+  },
+  {
+    "name": "ayu-dark",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#BFBDB6",
+      "background": "#10141C",
+      "cursor": "#E6B450",
+      "selection": "#193155",
+      "current_line": "#161A24",
+      "line_number": "#777C88",
+      "comment": "#76808A",
+      "keyword": "#F29668",
+      "string": "#39BAE6",
+      "number": "#FF8F40",
+      "type": "#39BAE6",
+      "function": "#E6C08A",
+      "constant": "#D2A6FF",
+      "operators": "#F29668",
+      "error": "#D95757",
+      "warning": "#E6B450"
+    },
+    "accent": "#E6B450",
+    "gutter_background": "#0D1017",
+    "source": {
+      "author": "Ayu Theme and Yihui Hu",
+      "license": "MIT",
+      "url": "https://github.com/ayu-theme/vscode-ayu/blob/2c6feb7215bf7ca6c8c9a51066f255025df3a5b9/ayu-dark.json",
+      "repository": "ayu-theme/vscode-ayu",
+      "commit": "2c6feb7215bf7ca6c8c9a51066f255025df3a5b9"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#5a6378a6",
+        "adapted": "#777C88"
+      },
+      "comment": {
+        "source": "#5a6673",
+        "adapted": "#76808A"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "ayu-mirage",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#CCCAC2",
+      "background": "#242936",
+      "cursor": "#FFCC66",
+      "selection": "#2B4768",
+      "current_line": "#1A1F29",
+      "line_number": "#858B95",
+      "comment": "#8692A2",
+      "keyword": "#F29E74",
+      "string": "#5CCFE6",
+      "number": "#FFA659",
+      "type": "#5CCFE6",
+      "function": "#D9BE98",
+      "constant": "#DFBFFF",
+      "operators": "#F29E74",
+      "error": "#FF6666",
+      "warning": "#FFCC66"
+    },
+    "accent": "#FFCC66",
+    "gutter_background": "#1F2430",
+    "source": {
+      "author": "Ayu Theme and Yihui Hu",
+      "license": "MIT",
+      "url": "https://github.com/ayu-theme/vscode-ayu/blob/2c6feb7215bf7ca6c8c9a51066f255025df3a5b9/ayu-mirage.json",
+      "repository": "ayu-theme/vscode-ayu",
+      "commit": "2c6feb7215bf7ca6c8c9a51066f255025df3a5b9"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#707a8c80",
+        "adapted": "#858B95"
+      },
+      "comment": {
+        "source": "#6e7c8f",
+        "adapted": "#8692A2"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "ayu-light",
+    "appearance": "light",
+    "body": {
+      "foreground": "#5C6166",
+      "background": "#FCFCFC",
+      "cursor": "#F29718",
+      "selection": "#D7E4F6",
+      "current_line": "#F0F1F3",
+      "line_number": "#707377",
+      "comment": "#737375",
+      "keyword": "#9B685D",
+      "string": "#3B7D93",
+      "number": "#AF5E23",
+      "type": "#3B7D93",
+      "function": "#9F6830",
+      "constant": "#8866AA",
+      "operators": "#9B685D",
+      "error": "#CB4747",
+      "warning": "#A56711"
+    },
+    "accent": "#F29718",
+    "gutter_background": "#F8F9FA",
+    "source": {
+      "author": "Ayu Theme and Yihui Hu",
+      "license": "MIT",
+      "url": "https://github.com/ayu-theme/vscode-ayu/blob/2c6feb7215bf7ca6c8c9a51066f255025df3a5b9/ayu-light.json",
+      "repository": "ayu-theme/vscode-ayu",
+      "commit": "2c6feb7215bf7ca6c8c9a51066f255025df3a5b9"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "line_number": {
+        "source": "#828e9f66",
+        "adapted": "#707377"
+      },
+      "comment": {
+        "source": "#adaeb1",
+        "adapted": "#737375"
+      },
+      "keyword": {
+        "source": "#f2a191",
+        "adapted": "#9B685D"
+      },
+      "string": {
+        "source": "#55b4d4",
+        "adapted": "#3B7D93"
+      },
+      "number": {
+        "source": "#fa8532",
+        "adapted": "#AF5E23"
+      },
+      "type": {
+        "source": "#55b4d4",
+        "adapted": "#3B7D93"
+      },
+      "function": {
+        "source": "#e59645",
+        "adapted": "#9F6830"
+      },
+      "constant": {
+        "source": "#a37acc",
+        "adapted": "#8866AA"
+      },
+      "operators": {
+        "source": "#f2a191",
+        "adapted": "#9B685D"
+      },
+      "error": {
+        "source": "#e65050",
+        "adapted": "#CB4747"
+      },
+      "warning": {
+        "source": "#f29718",
+        "adapted": "#A56711"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "cobalt2",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#FFFFFF",
+      "background": "#193549",
+      "cursor": "#FFC600",
+      "selection": "#0050A4",
+      "current_line": "#1F4662",
+      "line_number": "#AAAAAA",
+      "comment": "#309EFF",
+      "keyword": "#FF9D00",
+      "string": "#A5FF90",
+      "number": "#FFFFFF",
+      "type": "#FB94FF",
+      "function": "#FF9D00",
+      "constant": "#FF638D",
+      "operators": "#FFFFFF",
+      "error": "#CB8989",
+      "warning": "#FFC600"
+    },
+    "accent": "#0D3A58",
+    "gutter_background": "#162F42",
+    "source": {
+      "author": "Wes Bos",
+      "license": "MIT",
+      "url": "https://github.com/wesbos/cobalt2-vscode/blob/c4e9574372b85afad1682ed0fdd1ac0411c62512/theme/cobalt2.json",
+      "repository": "wesbos/cobalt2-vscode",
+      "commit": "c4e9574372b85afad1682ed0fdd1ac0411c62512"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "comment": {
+        "source": "#0088ff",
+        "adapted": "#309EFF"
+      },
+      "constant": {
+        "source": "#ff628c",
+        "adapted": "#FF638D"
+      },
+      "error": {
+        "source": "#A22929",
+        "adapted": "#CB8989"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "synthwave-84",
+    "appearance": "dark",
+    "body": {
+      "foreground": "#D4D4D4",
+      "background": "#262335",
+      "cursor": "#F97E72",
+      "selection": "#413F4E",
+      "current_line": "#322F40",
+      "line_number": "#888690",
+      "comment": "#848BBD",
+      "keyword": "#72F1B8",
+      "string": "#FF8B39",
+      "number": "#2EE2FA",
+      "type": "#FE4551",
+      "function": "#36F9F6",
+      "constant": "#F97E72",
+      "operators": "#F1F0F2",
+      "error": "#FE4551",
+      "warning": "#63C89E"
+    },
+    "accent": "#1F212B",
+    "gutter_background": "#241B2F",
+    "source": {
+      "author": "Robb Owen",
+      "license": "MIT",
+      "url": "https://github.com/robb0wen/synthwave-vscode/blob/ecfa2fe1279f7233663fa3f98a96e6756000567b/themes/synthwave-color-theme.json",
+      "repository": "robb0wen/synthwave-vscode",
+      "commit": "ecfa2fe1279f7233663fa3f98a96e6756000567b"
+    },
+    "group": "IDE",
+    "adjustments": {
+      "type": {
+        "source": "#fe4450",
+        "adapted": "#FE4551"
+      },
+      "error": {
+        "source": "#fe4450",
+        "adapted": "#FE4551"
+      }
+    },
+    "notes": [
+      "TextMate roles mapped to the existing 16 SyntaxPalette roles"
+    ]
+  },
+  {
+    "name": "alloy-core",
+    "appearance": "dark",
+    "body": {
+      "comment": "#A99791",
+      "keyword": "#F27769",
+      "string": "#E9C46A",
+      "number": "#91CBD1",
+      "type": "#EABF76",
+      "function": "#6ACAD7",
+      "constant": "#DA9B78",
+      "operators": "#D6C5BC",
+      "error": "#FF7773",
+      "warning": "#E4AF55",
+      "background": "#19151B",
+      "foreground": "#F3E9DC",
+      "line_number": "#A99791",
+      "cursor": "#E4AF55",
+      "selection": "#55432C",
+      "current_line": "#282328"
+    },
+    "accent": "#E4AF55",
+    "gutter_background": "#100E14",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-colorschemes.md"
+    },
+    "group": "Cinema",
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "verdant-rage",
+    "appearance": "dark",
+    "body": {
+      "comment": "#9BAA9C",
+      "keyword": "#B8A2D7",
+      "string": "#B7DA89",
+      "number": "#D0AEDC",
+      "type": "#8FC5A5",
+      "function": "#ABDFA3",
+      "constant": "#CAA4DA",
+      "operators": "#C0CDAF",
+      "error": "#F49388",
+      "warning": "#DBCA7B",
+      "background": "#14201B",
+      "foreground": "#E4ECD9",
+      "line_number": "#9BAA9C",
+      "cursor": "#9ACE6A",
+      "selection": "#3C5432",
+      "current_line": "#222E28"
+    },
+    "accent": "#9ACE6A",
+    "gutter_background": "#203129",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-colorschemes.md"
+    },
+    "group": "Cinema",
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "scarlet-web",
+    "appearance": "dark",
+    "body": {
+      "comment": "#90A0B9",
+      "keyword": "#F17C7A",
+      "string": "#B5CC99",
+      "number": "#E8B985",
+      "type": "#8BB8E8",
+      "function": "#6CC3E8",
+      "constant": "#D4A8DA",
+      "operators": "#B5C6E1",
+      "error": "#FF8A83",
+      "warning": "#EAC477",
+      "background": "#121C31",
+      "foreground": "#E8ECF3",
+      "line_number": "#90A0B9",
+      "cursor": "#EA716D",
+      "selection": "#523543",
+      "current_line": "#202A3E"
+    },
+    "accent": "#EA716D",
+    "gutter_background": "#0A1325",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-colorschemes.md"
+    },
+    "group": "Cinema",
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "relic-sand",
+    "appearance": "light",
+    "body": {
+      "comment": "#71654D",
+      "keyword": "#9B4328",
+      "string": "#536641",
+      "number": "#8B4F54",
+      "type": "#765C24",
+      "function": "#38696C",
+      "constant": "#8D5341",
+      "operators": "#5B5142",
+      "error": "#B3312C",
+      "warning": "#875F15",
+      "background": "#F1E4C6",
+      "foreground": "#3A2C20",
+      "line_number": "#786B51",
+      "cursor": "#945025",
+      "selection": "#D6B896",
+      "current_line": "#E5D8BB"
+    },
+    "accent": "#945025",
+    "gutter_background": "#FFF4DB",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-colorschemes.md"
+    },
+    "group": "Cinema",
+    "adjustments": {
+      "comment": {
+        "source": "#786B51",
+        "adapted": "#71654D"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "soap-rebellion",
+    "appearance": "dark",
+    "body": {
+      "comment": "#9BAA98",
+      "keyword": "#F39BAD",
+      "string": "#CDD87B",
+      "number": "#EAAF89",
+      "type": "#A3C6BA",
+      "function": "#EEC8D0",
+      "constant": "#D6B4E2",
+      "operators": "#ADBCAE",
+      "error": "#F67F8F",
+      "warning": "#DDD67F",
+      "background": "#1B2524",
+      "foreground": "#E1E8D6",
+      "line_number": "#9BAA98",
+      "cursor": "#F39BAD",
+      "selection": "#5B484D",
+      "current_line": "#283230"
+    },
+    "accent": "#F39BAD",
+    "gutter_background": "#121B1A",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-colorschemes.md"
+    },
+    "group": "Cinema",
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "code-rain",
+    "appearance": "dark",
+    "body": {
+      "comment": "#7B9F86",
+      "keyword": "#66D890",
+      "string": "#B6E899",
+      "number": "#7FD7BF",
+      "type": "#A9DBC9",
+      "function": "#8DF1BC",
+      "constant": "#D3E6A0",
+      "operators": "#87B99B",
+      "error": "#F2959C",
+      "warning": "#D7D78F",
+      "background": "#08130E",
+      "foreground": "#C9E9CD",
+      "line_number": "#7B9F86",
+      "cursor": "#75E59A",
+      "selection": "#285238",
+      "current_line": "#15211B"
+    },
+    "accent": "#75E59A",
+    "gutter_background": "#102319",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-colorschemes.md"
+    },
+    "group": "Cinema",
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "arcane-library",
+    "appearance": "dark",
+    "body": {
+      "comment": "#989CB5",
+      "keyword": "#C5A0DF",
+      "string": "#B6CA97",
+      "number": "#DEB17D",
+      "type": "#97BDD9",
+      "function": "#DCCA95",
+      "constant": "#D5A2B4",
+      "operators": "#B6B9D0",
+      "error": "#EA8990",
+      "warning": "#DEBF79",
+      "background": "#181B30",
+      "foreground": "#EAE2D1",
+      "line_number": "#989CB5",
+      "cursor": "#D8B778",
+      "selection": "#514945",
+      "current_line": "#26283B"
+    },
+    "accent": "#D8B778",
+    "gutter_background": "#0F1325",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-colorschemes.md"
+    },
+    "group": "Cinema",
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  }
+]

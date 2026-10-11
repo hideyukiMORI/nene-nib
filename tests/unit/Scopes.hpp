@@ -180,6 +180,7 @@ void verify_palette();
 void verify_text_and_caret();
 void verify_look();
 void verify_status_items_scope();
+void verify_theme_scope();
 void verify_file_path_scope();
 
 // ApplicationTests.cpp

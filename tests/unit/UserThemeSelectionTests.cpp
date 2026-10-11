@@ -41,6 +41,7 @@
 #include "ThemeChoice.hpp"
 #include "ThemeDerivation.hpp"
 #include "ThemeDocument.hpp"
+#include "ThemeExpectations.hpp"
 #include "ThemeFailure.hpp"
 #include "ThemeLookupFailure.hpp"
 #include "ThemeName.hpp"
@@ -98,8 +99,10 @@ void verify_theme_catalog()
 {
     auto catalog = user_catalog();
     const auto names = catalog.names();
-    expect(names.size() == core::builtin_themes.size() + 3 && names.at(9) == "broken" &&
-               names.at(10) == "my-theme" && names.at(11) == "z-theme",
+    expect(names.size() == core::builtin_themes.size() + 3 &&
+               names.at(core::builtin_themes.size()) == "broken" &&
+               names.at(core::builtin_themes.size() + 1) == "my-theme" &&
+               names.at(core::builtin_themes.size() + 2) == "z-theme",
            "user names follow builtins in sorted order");
     const auto choice = catalog.find(user_name("my_theme")).value();
     const auto copy = catalog;
@@ -282,61 +285,27 @@ void verify_blocked_theme_noop()
 void verify_user_completion_order()
 {
     const auto catalog = user_catalog();
-    expect(core::ex_command_candidates(catalog) ==
-               std::vector<std::string>{"colorscheme",
-                                        "set fontsize=",
-                                        "set guifont=",
-                                        "set incsearch",
-                                        "set noincsearch",
-                                        "set hlsearch",
-                                        "set nohlsearch",
-                                        "set guide",
-                                        "set noguide",
-                                        "tabs",
-                                        "tabnew",
-                                        "tabnext",
-                                        "tabprevious",
-                                        "tabclose",
-                                        "set wrap",
-                                        "set nowrap",
-                                        "edit",
-                                        "buffer",
-                                        "ls",
-                                        "files",
-                                        "buffers",
-                                        "write",
-                                        "quit",
-                                        "quit!",
-                                        "wq",
-                                        "xit",
-                                        "exit",
-                                        "saveas",
-                                        "colorscheme ubuntu-aubergine",
-                                        "colorscheme neutral-light",
-                                        "colorscheme solarized-dark",
-                                        "colorscheme solarized-light",
-                                        "colorscheme monokai",
-                                        "colorscheme dracula",
-                                        "colorscheme one-dark",
-                                        "colorscheme night-owl",
-                                        "colorscheme night-owl-light",
-                                        "colorscheme broken",
-                                        "colorscheme my-theme",
-                                        "colorscheme z-theme",
-                                        "colorscheme system"},
-           "all custom candidates include failed records in exact order");
-    expect(core::command_completions("colorscheme ", catalog) ==
-               std::vector<std::string>{
-                   "colorscheme ubuntu-aubergine", "colorscheme neutral-light",
-                   "colorscheme solarized-dark", "colorscheme solarized-light",
-                   "colorscheme monokai", "colorscheme dracula", "colorscheme one-dark",
-                   "colorscheme night-owl", "colorscheme night-owl-light", "colorscheme broken",
-                   "colorscheme my-theme", "colorscheme z-theme", "colorscheme system"},
-           "theme prefix retains builtins and sorted custom names");
+    auto themes = expected_theme_commands();
+    themes.pop_back();
+    for (const auto name : {"broken", "my-theme", "z-theme", "system"})
+    {
+        themes.push_back("colorscheme " + std::string{name});
+    }
+    expect(core::command_completions("colorscheme ", catalog) == themes,
+           "theme prefix retains all builtins and sorted custom names");
+    auto all = core::ex_command_candidates();
+    all.pop_back();
+    for (const auto name : {"broken", "my-theme", "z-theme", "system"})
+    {
+        all.push_back("colorscheme " + std::string{name});
+    }
+    expect(core::ex_command_candidates(catalog) == all,
+           "custom catalog extends the verified built-in catalog in exact order");
     expect(core::command_completions("colorscheme broken", catalog) ==
                std::vector<std::string>{"colorscheme broken"},
            "failed custom name remains a completion");
 }
+
 } // namespace
 
 void verify_user_theme_selection()

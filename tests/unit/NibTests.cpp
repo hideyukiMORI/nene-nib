@@ -65,7 +65,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 49> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 50> scopes{{
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--utf8", verify_utf8_scope},
@@ -99,6 +99,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 49> scopes{{
     {"--vim-line-jump-recovery", verify_vim_line_jump_recovery},
     {"--vim-virtual-column", verify_vim_virtual_column_scope},
     {"--vim-characters", verify_vim_character_scope},
+    {"--themes", verify_theme_scope},
     {"--user-theme-selection", verify_user_theme_selection},
     {"--user-theme-values", verify_user_theme_values},
     {"--command-palette", verify_command_palette},

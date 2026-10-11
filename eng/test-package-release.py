@@ -104,6 +104,7 @@ class PackageTests(unittest.TestCase):
         (root / "eng/release").mkdir(parents=True)
         (root / "CMakeLists.txt").write_text("project(NeNeNib VERSION 1.2.3 LANGUAGES CXX)")
         (root / "LICENSE").write_bytes(b"fixture license")
+        (root / "THIRD_PARTY_NOTICES.txt").write_bytes(b"fixture palette notices")
         (root / "eng/release/README.txt.in").write_text("fixture @VERSION@")
         (root / "eng/architecture.json").write_text(json.dumps({"runtimeDependencies": [],
             "modules": {"app": {"dependencies": []}}, "platformLibraries": {"app": ["kernel32"]}}))
@@ -137,6 +138,8 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(archive.name, "NeNeNib-1.2.3-beta.2-windows-x64.zip")
         self.assertEqual((output / "extracted/NeNeNib.exe").read_bytes(), binary)
         self.assertEqual((output / "extracted/README.txt").read_text(), "fixture 1.2.3-beta.2")
+        self.assertEqual((output / "extracted/THIRD_PARTY_NOTICES.txt").read_bytes(),
+                         b"fixture palette notices")
         record = json.loads((output / "package.json").read_text())
         self.assertTrue(record["preview"] and record["extractedBytesMatch"])
         self.assertFalse(record["launched"] or record["published"])

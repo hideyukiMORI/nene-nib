@@ -12,7 +12,7 @@ import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
-ENTRIES = ("NeNeNib.exe", "README.txt", "LICENSE")
+ENTRIES = ("NeNeNib.exe", "README.txt", "LICENSE", "THIRD_PARTY_NOTICES.txt")
 REMOTE = "https://github.com/hideyukiMORI/nene-nib.git"
 OUTPUT_ROOTS = (Path("D:/NeNeNib/outputs"), Path("D:/NeNeNib/releases"))
 
@@ -149,7 +149,8 @@ def package(args: argparse.Namespace) -> Path:
     readme = (ROOT / "eng/release/README.txt.in").read_text(encoding="utf-8")
     contents = {"NeNeNib.exe": binary,
                 "README.txt": readme.replace("@VERSION@", release_version).encode("utf-8"),
-                "LICENSE": (ROOT / "LICENSE").read_bytes()}
+                "LICENSE": (ROOT / "LICENSE").read_bytes(),
+                "THIRD_PARTY_NOTICES.txt": (ROOT / "THIRD_PARTY_NOTICES.txt").read_bytes()}
     archive = output / f"NeNeNib-{release_version}-windows-x64.zip"
     with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         for name in ENTRIES:
