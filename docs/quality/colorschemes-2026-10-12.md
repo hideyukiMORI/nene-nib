@@ -54,3 +54,13 @@ push/レビュー/merge/文書追記で製品と試験の関連入力が変わ�
 Python/TypeScriptの言語解析は未実装。構文色の準備まで。Vimは調査時の28標準名と各テーマの代表GUI配色を採用し、全cterm/明暗変種は網羅しない。新しい予約名と既存利用者テーマの衝突では従来の予約名エラーを返し、ファイルは変更しない。公開済みbeta.2の内容はこの変更で更新しない。
 
 正規梱包・統合・恒久収載/整理の最終結果はこの記録への追記と恒久先`closeout.json`で記録する。Issue #408の別機能を開始しない。
+
+## ローカル確認用ZIP
+
+`pwsh -NoProfile -File eng/package-release.ps1 -Beta 3 -Preview -OutputDirectory D:/NeNeNib/releases/419-colorschemes-preview -Verification docs/quality/colorschemes-2026-10-12.md` をcleanな製品commit `ad23bd89727da336b71b3a318204ebe3f7791258` で実行。365.170秒、exit 0。正規Release経路、x64/埋め込み版0.1.0/12宣言Windows DLL、直下4エントリと展開bytesの一致を確認した。
+
+ZIP: `NeNeNib-0.1.0-beta.3-windows-x64.zip`、630542 bytes、SHA256 `0a397c25d14b688e76fa5b6d919546db721d20083bf17dd2243c55861e8f2c8c`。同じディレクトリの`package.json`/`SHA256SUMS`/`pe-inspection.txt`が正規記録。`NeNeNib.exe`、`README.txt`、`LICENSE`、`THIRD_PARTY_NOTICES.txt`を含む。未署名。preview=true、公開していない。
+
+梱包後のexeは起動していない。実画面確認は上記の同じ製品ソースで作ったReleaseの結果を再利用する。梱包後の変更は状態文書・リンク・記録だけで、製品/試験/依存/検証環境の変更はない。公開済みbeta.2のtag/assetは変更しない。
+
+自己レビューで単一色表、型の依存方向、利用者テーマ省略互換性、現在行と欄の描画順、出典保持、限定検証と再利用を照合。後続の文書だけはcanonical `conformance.document_checks`と`git diff --cached --check`を確認する。通常PR/必須check/正規merge後のmain SHA、恒久収載の全SHA照合、作業木/出力の監査整理の実結果は`D:/NeNeNib/evidence/colorschemes-20261012/closeout.json`へ記録する。

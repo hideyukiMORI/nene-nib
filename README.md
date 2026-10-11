@@ -3,7 +3,7 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-10-11):** ordinary editing, file open/save, Japanese IME, persisted settings with nine
+> **Status (2026-10-12):** ordinary editing, file open/save, Japanese IME, persisted settings with 95
 > built-in themes, and the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search with
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
 > and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
