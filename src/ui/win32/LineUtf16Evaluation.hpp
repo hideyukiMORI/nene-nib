@@ -10,15 +10,18 @@
 namespace nenenib::ui::win32
 {
 class Direct2DRenderer;
+class BodyTextLayouts;
 
 // 所有済み表示行を、同期描画の位置変換中だけ借用する（ADR 0097）。
 class LineUtf16Evaluation
 {
     friend class Direct2DRenderer;
+    friend class BodyTextLayouts;
 
     explicit LineUtf16Evaluation(std::string_view text);
     [[nodiscard]] std::size_t byte_of(core::Column column);
     [[nodiscard]] std::uint32_t units_of(core::Column column);
+    [[nodiscard]] core::Column column_of(std::uint32_t units);
     void move_to(core::Column column);
 
     std::string_view text_;

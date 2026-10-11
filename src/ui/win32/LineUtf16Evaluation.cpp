@@ -21,6 +21,24 @@ std::uint32_t LineUtf16Evaluation::units_of(core::Column column)
     return static_cast<std::uint32_t>(units_);
 }
 
+core::Column LineUtf16Evaluation::column_of(std::uint32_t units)
+{
+    if (units < units_)
+    {
+        byte_ = core::Offset{0};
+        column_ = core::Column{1};
+        units_ = 0;
+    }
+    while (byte_.value < text_.size() && units_ < units)
+    {
+        const auto next = core::next_code_point(text_, byte_);
+        units_ += next.value - byte_.value >= 4 ? 2U : 1U;
+        byte_ = next;
+        ++column_.value;
+    }
+    return column_;
+}
+
 void LineUtf16Evaluation::move_to(core::Column column)
 {
     const core::Column target{std::max(column.value, std::size_t{1})};

@@ -5,6 +5,7 @@
 #include "SettingsCodec.hpp"
 #include "Utf16.hpp"
 
+#include <array>
 #include <cstddef>
 #include <utility>
 
@@ -14,6 +15,8 @@ namespace
 {
 using Failure = application::SettingsFailure;
 constexpr std::size_t maximum_settings_bytes = 4096;
+constexpr std::array<SettingsVersion, 3> reading_order{SettingsVersion::v3, SettingsVersion::v2,
+                                                       SettingsVersion::v1};
 
 [[nodiscard]] std::expected<std::wstring, Failure> lock_name(const core::FilePath &path)
 {
@@ -58,18 +61,20 @@ Win32SettingsAdapter::read_source(const core::ThemeCatalog &themes)
     {
         return std::unexpected(paths_.error());
     }
-    auto bytes = read_bytes(paths_.value().current);
-    source_ = SettingsVersion::v2;
-    if (bytes && !bytes.value().has_value())
+    for (const auto version : reading_order)
     {
-        bytes = read_bytes(paths_.value().previous);
-        source_ = SettingsVersion::v1;
+        const auto bytes = read_bytes(settings_path(paths_.value(), version));
+        if (!bytes)
+        {
+            return std::unexpected(bytes.error());
+        }
+        source_ = version;
+        original_ = bytes.value();
+        if (original_.has_value())
+        {
+            break;
+        }
     }
-    if (!bytes)
-    {
-        return std::unexpected(bytes.error());
-    }
-    original_ = bytes.value();
     if (!original_.has_value())
     {
         return std::nullopt;
@@ -96,34 +101,23 @@ Win32SettingsAdapter::read(const core::ThemeCatalog &themes)
 
 std::expected<void, Failure> Win32SettingsAdapter::check_snapshot()
 {
-    const auto current = read_bytes(paths_.value().current);
-    if (!current)
+    const std::optional<std::string> missing;
+    for (const auto version : reading_order)
     {
-        return std::unexpected(current.error());
-    }
-    switch (source_)
-    {
-    case SettingsVersion::v2:
-        if (current.value() != original_)
+        const auto bytes = read_bytes(settings_path(paths_.value(), version));
+        if (!bytes)
+        {
+            return std::unexpected(bytes.error());
+        }
+        const auto &expected = version == source_ ? original_ : missing;
+        if (bytes.value() != expected)
         {
             return std::unexpected(Failure::changed_externally);
         }
-        return {};
-    case SettingsVersion::v1:
-        if (current.value().has_value())
+        if (version == source_)
         {
-            return std::unexpected(Failure::changed_externally);
+            return {};
         }
-        const auto previous = read_bytes(paths_.value().previous);
-        if (!previous)
-        {
-            return std::unexpected(previous.error());
-        }
-        if (previous.value() != original_)
-        {
-            return std::unexpected(Failure::changed_externally);
-        }
-        return {};
     }
     std::unreachable();
 }
@@ -143,14 +137,15 @@ Win32SettingsAdapter::write_locked(const core::EditorSettings &settings)
         return std::unexpected(Failure::unwritable);
     }
     original_ = bytes;
-    source_ = SettingsVersion::v2;
+    source_ = SettingsVersion::v3;
     return {};
 }
 
 std::expected<void, Failure>
-Win32SettingsAdapter::write_previous_locked(const core::EditorSettings &settings)
+Win32SettingsAdapter::write_through(const core::EditorSettings &settings, std::size_t index)
 {
-    const auto name = lock_name(paths_.value().previous);
+    const auto version = reading_order.at(index);
+    const auto name = lock_name(settings_path(paths_.value(), version));
     if (!name)
     {
         return std::unexpected(name.error());
@@ -161,7 +156,11 @@ Win32SettingsAdapter::write_previous_locked(const core::EditorSettings &settings
     {
         return std::unexpected(Failure::unwritable);
     }
-    return write_locked(settings);
+    if (version == source_)
+    {
+        return write_locked(settings);
+    }
+    return write_through(settings, index + 1);
 }
 
 std::expected<void, application::SettingsIssue>
@@ -171,25 +170,7 @@ Win32SettingsAdapter::write(const core::EditorSettings &settings)
     {
         return std::unexpected(blocked_.value());
     }
-    const auto name = lock_name(paths_.value().current);
-    if (!name)
-    {
-        return std::unexpected(name.error());
-    }
-    // 新版、移行元の順で、共有無し・待機無しのlockを取得する。
-    const FileHandle lock(CreateFileW(name.value().c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
-                                      FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (!lock.valid())
-    {
-        return std::unexpected(Failure::unwritable);
-    }
-    switch (source_)
-    {
-    case SettingsVersion::v1:
-        return write_previous_locked(settings);
-    case SettingsVersion::v2:
-        return write_locked(settings);
-    }
-    std::unreachable();
+    // 新版から読込元まで共有無し・待機無しで取得する。旧版の不在も競合検査に含める。
+    return write_through(settings, 0);
 }
 } // namespace nenenib::adapters::win32

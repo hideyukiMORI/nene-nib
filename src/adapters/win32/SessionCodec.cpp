@@ -6,8 +6,10 @@
 
 #include <array>
 #include <charconv>
+#include <cmath>
 #include <format>
 #include <optional>
+#include <span>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -20,6 +22,11 @@ using Failure = application::SessionFailure;
 using application::Session;
 using application::SessionTab;
 using Lines = std::vector<std::string_view>;
+
+[[nodiscard]] bool supported_version(std::string_view version) noexcept
+{
+    return version == "1" || version == "2";
+}
 
 // 符号も空白も無い 10 進だけを受ける。
 [[nodiscard]] std::optional<std::size_t> number_of(std::string_view text)
@@ -55,20 +62,46 @@ using Lines = std::vector<std::string_view>;
     return value;
 }
 
-// 先頭の 4 欄を `,` で切り、残りの全体をパスにする。
-[[nodiscard]] std::optional<SessionTab> tab_of(std::string_view line)
+[[nodiscard]] std::optional<float> horizontal_of(std::string_view text)
 {
-    std::array<std::string_view, 4> fields{};
-    for (auto &field : fields)
+    float value = 0;
+    const auto *const end = text.data() + text.size();
+    const auto [stop, error] = std::from_chars(text.data(), end, value);
+    if (text.empty() || error != std::errc{} || stop != end || !std::isfinite(value) || value < 0)
     {
-        const auto separator = line.find(',');
-        if (separator == std::string_view::npos)
-        {
-            return std::nullopt;
-        }
-        field = line.substr(0, separator);
-        line.remove_prefix(separator + 1);
+        return std::nullopt;
     }
+    return value;
+}
+
+[[nodiscard]] std::optional<core::CaretAffinity> affinity_of(std::string_view text)
+{
+    if (text == "leading")
+    {
+        return core::CaretAffinity::leading;
+    }
+    if (text == "trailing")
+    {
+        return core::CaretAffinity::trailing;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::string_view affinity_text(core::CaretAffinity affinity)
+{
+    switch (affinity)
+    {
+    case core::CaretAffinity::leading:
+        return "leading";
+    case core::CaretAffinity::trailing:
+        return "trailing";
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::optional<SessionTab> base_tab(std::span<const std::string_view> fields,
+                                                 std::string_view line)
+{
     const auto row = counted(fields[0]);
     const auto column = counted(fields[1]);
     const auto first = counted(fields[2]);
@@ -83,6 +116,44 @@ using Lines = std::vector<std::string_view>;
         std::move(path).value(),
         core::TextPosition{core::LineNumber{row.value()}, core::Column{column.value()}},
         core::LineNumber{first.value()}, recency.value()};
+}
+
+[[nodiscard]] std::optional<SessionTab> wrapped_tab(SessionTab tab,
+                                                    std::span<const std::string_view> fields)
+{
+    const auto row = number_of(fields[4]);
+    const auto horizontal = horizontal_of(fields[5]);
+    const auto affinity = affinity_of(fields[6]);
+    if (!row.has_value() || !horizontal.has_value() || !affinity.has_value())
+    {
+        return std::nullopt;
+    }
+    tab.first_row = row.value();
+    tab.horizontal = horizontal.value();
+    tab.affinity = affinity.value();
+    return tab;
+}
+
+// v1は4欄、v2は7欄。その残りの全体をパスにする。
+[[nodiscard]] std::optional<SessionTab> tab_of(std::string_view line, bool wrapped)
+{
+    std::array<std::string_view, 7> fields{};
+    for (auto &field : std::span(fields).first(wrapped ? 7U : 4U))
+    {
+        const auto separator = line.find(',');
+        if (separator == std::string_view::npos)
+        {
+            return std::nullopt;
+        }
+        field = line.substr(0, separator);
+        line.remove_prefix(separator + 1);
+    }
+    auto tab = base_tab(fields, line);
+    if (!tab.has_value() || !wrapped)
+    {
+        return tab;
+    }
+    return wrapped_tab(std::move(tab).value(), fields);
 }
 
 // 順位は 0 から数えて重複も飛びも無い（タブの数と同じ数の順列）。
@@ -100,7 +171,8 @@ using Lines = std::vector<std::string_view>;
     return true;
 }
 
-[[nodiscard]] std::expected<std::vector<SessionTab>, Failure> tabs_of(const Lines &lines)
+[[nodiscard]] std::expected<std::vector<SessionTab>, Failure> tabs_of(const Lines &lines,
+                                                                      bool wrapped)
 {
     if (lines.size() - 2 > maximum_session_tabs)
     {
@@ -110,7 +182,7 @@ using Lines = std::vector<std::string_view>;
     tabs.reserve(lines.size() - 2);
     for (std::size_t index = 2; index < lines.size(); ++index)
     {
-        auto tab = tab_of(lines.at(index));
+        auto tab = tab_of(lines.at(index), wrapped);
         if (!tab.has_value())
         {
             return std::unexpected(Failure::malformed);
@@ -153,7 +225,7 @@ std::expected<Session, Failure> decode_session(std::string_view bytes)
     {
         return std::unexpected(Failure::malformed);
     }
-    if (version.value() != "1")
+    if (!supported_version(version.value()))
     {
         return std::unexpected(Failure::unsupported_version);
     }
@@ -166,7 +238,7 @@ std::expected<Session, Failure> decode_session(std::string_view bytes)
     {
         return std::unexpected(active.error());
     }
-    auto tabs = tabs_of(lines);
+    auto tabs = tabs_of(lines, version.value() == "2");
     if (!tabs)
     {
         return std::unexpected(tabs.error());
@@ -186,11 +258,13 @@ std::expected<std::string, Failure> encode_session(const Session &session)
     {
         return std::unexpected(Failure::too_large);
     }
-    std::string bytes = std::format("version=1\nactive={}\n", session.active);
+    std::string bytes = std::format("version=2\nactive={}\n", session.active);
     for (const SessionTab &tab : session.tabs)
     {
-        bytes += std::format("{},{},{},{},{}\n", tab.caret.line.value, tab.caret.column.value,
-                             tab.first_visible.value, tab.recency, tab.path.text());
+        bytes +=
+            std::format("{},{},{},{},{},{},{},{}\n", tab.caret.line.value, tab.caret.column.value,
+                        tab.first_visible.value, tab.recency, tab.first_row, tab.horizontal,
+                        affinity_text(tab.affinity), tab.path.text());
         if (bytes.size() > maximum_session_bytes)
         {
             return std::unexpected(Failure::too_large);

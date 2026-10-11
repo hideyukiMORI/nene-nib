@@ -6,7 +6,9 @@
 #include <utility>
 namespace nenenib::ui::win32
 {
-BodyGlyphCollector::BodyGlyphCollector(FLOAT width) : width_(width) {}
+BodyGlyphCollector::BodyGlyphCollector(FLOAT width, FLOAT left) : width_(left + width), left_(left)
+{
+}
 std::optional<std::vector<BodyGlyphRun>> BodyGlyphCollector::take()
 {
     if (rejected_)
@@ -70,7 +72,7 @@ bool BodyGlyphCollector::outside(const DWRITE_GLYPH_RUN &run, FLOAT x) const
         }
     }
     bound += offset;
-    return x + bound < 0 || x - bound > width_;
+    return x + bound < left_ || x - bound > width_;
 }
 HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin,
                                     DWRITE_MEASURING_MODE mode)

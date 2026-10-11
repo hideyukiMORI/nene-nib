@@ -8,7 +8,7 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
 {
     return left.font_size.points() == right.font_size.points() &&
            left.font_family.text() == right.font_family.text() && left.theme == right.theme &&
-           left.guide == right.guide;
+           left.guide == right.guide && left.wrapping == right.wrapping;
 }
 
 EditorSettings default_editor_settings()

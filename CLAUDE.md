@@ -155,7 +155,7 @@ Vim の `gt` `gT`・Ex の `tabnext` `tabprevious`・一覧の実行は `tab_des
 前回のタブは「まだ読んでいない文書」`UnloadedDocument` として脇に並ぶ（`ParkedTab` は束とこれの和型で、中身を読む所は `std::visit`・ADR 0059）。
 タブが切り替わる入口（`SwitchTab`・`WalkRecentTab`・`CloseTab` の後の隣・起動）は、状態を動かす前に `EditorController::reach_tab` を呼ぶ。読めなければ帯から外して 1 行知らせ、切り替えない。
 `EditorState` はまだ読んでいない文書へ切り替えない（指されたら何も変えない）。切り替えの入口を足すときは、先に `reach_tab` を呼ぶ。
-一覧 `session.v1` を書くのは窓を閉じるときの意図 `EndSession` だけ。道具は `eng/window_driver.py` の `start` が起動の前に自分の profile の一覧を消す（復元の検査だけ `keep_session=True`）。
+一覧 `session.v2`（v1は不在時の読込だけ・ADR 0114）を書くのは窓を閉じるときの意図 `EndSession` だけ。道具は `eng/window_driver.py` の `start` が起動の前に自分の profile の一覧を消す（復元の検査だけ `keep_session=True`）。
 
 ### Ctrl+P の出どころを足すのは、記号の表に 1 行・候補の列に 1 種類
 

@@ -12,6 +12,7 @@
 #include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScriptedTextLayouts.hpp"
 #include "ScriptedThemes.hpp"
 #include "ThemeCatalog.hpp"
 
@@ -30,9 +31,9 @@ class Editing final
     explicit Editing(SettingsReading reading = std::nullopt,
                      nenenib::core::ThemeCatalog themes = nenenib::core::ThemeCatalog::builtins())
         : settings_(std::move(reading)), themes_(std::move(themes)),
-          controller_(nenenib::application::EditorPorts{appearance_, clipboard_, files_,
-                                                        code_pages_, settings_, themes_, session_,
-                                                        history_, folders_, bookmarks_})
+          controller_(nenenib::application::EditorPorts{
+              appearance_, clipboard_, files_, code_pages_, settings_, themes_, session_, history_,
+              folders_, bookmarks_, text_layouts_})
     {
     }
 
@@ -93,15 +94,20 @@ class Editing final
         return code_pages_;
     }
 
+    [[nodiscard]] ScriptedTextLayouts &text_layouts() noexcept
+    {
+        return text_layouts_;
+    }
+
   private:
     // controller より先に宣言したポートは、この時点でもう出来ている。
     [[nodiscard]] nenenib::application::EditorPorts
     prepared_ports(const std::function<void(ScriptedFiles &)> &prepare)
     {
         prepare(files_);
-        return nenenib::application::EditorPorts{appearance_, clipboard_, files_,   code_pages_,
-                                                 settings_,   themes_,    session_, history_,
-                                                 folders_,    bookmarks_};
+        return nenenib::application::EditorPorts{appearance_, clipboard_, files_,       code_pages_,
+                                                 settings_,   themes_,    session_,     history_,
+                                                 folders_,    bookmarks_, text_layouts_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -114,6 +120,7 @@ class Editing final
     ScriptedHistory history_;
     ScriptedFolders folders_;
     ScriptedBookmarks bookmarks_;
+    ScriptedTextLayouts text_layouts_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

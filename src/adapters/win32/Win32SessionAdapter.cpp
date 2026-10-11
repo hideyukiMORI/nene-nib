@@ -14,29 +14,34 @@ namespace
 using Failure = application::SessionFailure;
 } // namespace
 
-std::expected<core::FilePath, Failure> local_session_path()
+std::expected<SessionPaths, Failure> local_session_paths()
 {
-    auto path = beside_local_settings("session.v1");
-    if (!path.has_value())
+    auto current = beside_local_settings("session.v2");
+    auto legacy = beside_local_settings("session.v1");
+    if (!current.has_value() || !legacy.has_value())
     {
         return std::unexpected(Failure::location_unavailable);
     }
-    return std::move(path).value();
+    return SessionPaths{std::move(current).value(), std::move(legacy).value()};
 }
 
 Win32SessionAdapter::Win32SessionAdapter(application::FilePort &files,
-                                         std::expected<core::FilePath, Failure> path)
-    : files_(files), path_(std::move(path))
+                                         std::expected<SessionPaths, Failure> paths)
+    : files_(files), paths_(std::move(paths))
 {
 }
 
 std::expected<std::optional<application::Session>, Failure> Win32SessionAdapter::read()
 {
-    if (!path_)
+    if (!paths_)
     {
-        return std::unexpected(path_.error());
+        return std::unexpected(paths_.error());
     }
-    const auto bytes = files_.read(path_.value(), maximum_session_bytes);
+    auto bytes = files_.read(paths_.value().current, maximum_session_bytes);
+    if (!bytes && bytes.error() == application::FileFailure::not_found)
+    {
+        bytes = files_.read(paths_.value().legacy, maximum_session_bytes);
+    }
     if (!bytes)
     {
         if (bytes.error() == application::FileFailure::not_found)
@@ -59,21 +64,21 @@ std::expected<std::optional<application::Session>, Failure> Win32SessionAdapter:
 
 std::expected<void, Failure> Win32SessionAdapter::write(const application::Session &session)
 {
-    if (!path_)
+    if (!paths_)
     {
-        return std::unexpected(path_.error());
+        return std::unexpected(paths_.error());
     }
     const auto bytes = encode_session(session);
     if (!bytes)
     {
         return std::unexpected(bytes.error());
     }
-    const auto wide = core::to_utf16(path_.value().text());
+    const auto wide = core::to_utf16(paths_.value().current.text());
     if (!wide || !ensure_parent_directory(wide.value()))
     {
         return std::unexpected(Failure::unwritable);
     }
-    if (!files_.write(path_.value(), bytes.value()))
+    if (!files_.write(paths_.value().current, bytes.value()))
     {
         return std::unexpected(Failure::unwritable);
     }

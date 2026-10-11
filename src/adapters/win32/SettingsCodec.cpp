@@ -37,6 +37,11 @@ assign_field(SettingsFields &fields, std::string_view key, std::string_view valu
         fields.font_size = value;
         return {};
     }
+    if (key == "wrap")
+    {
+        fields.wrap = value;
+        return {};
+    }
     if (key == "guide")
     {
         fields.guide = value;
@@ -106,6 +111,7 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
         }
         return core::GuideVisibility::shown;
     case SettingsVersion::v2:
+    case SettingsVersion::v3:
         if (fields.guide == "on")
         {
             return core::GuideVisibility::shown;
@@ -113,6 +119,32 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
         if (fields.guide == "off")
         {
             return core::GuideVisibility::hidden;
+        }
+        return std::unexpected(Failure::malformed);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::expected<core::LineWrapping, Failure> wrap_from(const SettingsFields &fields,
+                                                                   SettingsVersion version)
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+    case SettingsVersion::v2:
+        if (fields.wrap.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        return core::LineWrapping::wrap;
+    case SettingsVersion::v3:
+        if (fields.wrap == "on")
+        {
+            return core::LineWrapping::wrap;
+        }
+        if (fields.wrap == "off")
+        {
+            return core::LineWrapping::no_wrap;
         }
         return std::unexpected(Failure::malformed);
     }
@@ -127,6 +159,8 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
         return "1";
     case SettingsVersion::v2:
         return "2";
+    case SettingsVersion::v3:
+        return "3";
     }
     std::unreachable();
 }
@@ -142,6 +176,11 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     if (fields.version.value() != version_text(version))
     {
         return std::unexpected(Failure::unsupported_version);
+    }
+    const auto wrap = wrap_from(fields, version);
+    if (!wrap)
+    {
+        return std::unexpected(wrap.error());
     }
     const auto guide = guide_from(fields, version);
     if (!guide)
@@ -163,7 +202,8 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     {
         return std::unexpected(size.error());
     }
-    return core::EditorSettings{size.value(), family.value(), theme.value(), guide.value()};
+    return core::EditorSettings{size.value(), family.value(), theme.value(), guide.value(),
+                                wrap.value()};
 }
 } // namespace
 
@@ -192,7 +232,18 @@ std::string encode_settings(const core::EditorSettings &settings)
         guide = "off";
         break;
     }
-    return std::format("version=2\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n", theme,
-                       settings.font_family.text(), settings.font_size.points(), guide);
+    std::string_view wrap;
+    switch (settings.wrapping)
+    {
+    case core::LineWrapping::wrap:
+        wrap = "on";
+        break;
+    case core::LineWrapping::no_wrap:
+        wrap = "off";
+        break;
+    }
+    return std::format(
+        "version=3\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\nwrap={}\n", theme,
+        settings.font_family.text(), settings.font_size.points(), guide, wrap);
 }
 } // namespace nenenib::adapters::win32

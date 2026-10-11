@@ -253,18 +253,6 @@ constexpr std::array<LRESULT, 9> border_codes{HTNOWHERE, HTLEFT,       HTRIGHT,
     return border_codes.at(row * 3U + column);
 }
 
-// クリックした y から見えている行の並びの何番目か。行より下は最も近い（最後の）行に寄せる。
-[[nodiscard]] std::size_t row_index(const core::BodyLayout &body, std::int32_t y,
-                                    std::size_t count) noexcept
-{
-    if (y <= body.content.top)
-    {
-        return 0;
-    }
-    const auto row = static_cast<std::size_t>((y - body.content.top) / body.line_height);
-    return std::min(row, count - 1);
-}
-
 // ---------------------------------------------------------------- IMM32（ADR 0014）
 
 // 長さを先に取ってからバッファに読む。ImmGetCompositionStringW はバイト数を返す。
@@ -454,8 +442,8 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                           application::TimingPort &timing)
-    : instance_(instance), controller_(controller), timing_(timing)
+                           application::TimingPort &timing, BodyTextLayouts &text_layouts)
+    : instance_(instance), controller_(controller), timing_(timing), text_layouts_(text_layouts)
 {
 }
 
@@ -474,9 +462,10 @@ EditorWindow::~EditorWindow()
 
 std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
 EditorWindow::create(HINSTANCE instance, application::EditorController &controller,
-                     application::TimingPort &timing)
+                     application::TimingPort &timing, BodyTextLayouts &text_layouts)
 {
-    auto window = std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, timing));
+    auto window =
+        std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, timing, text_layouts));
     const auto ready = window->initialize();
     if (!ready)
     {
@@ -552,7 +541,7 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
 
 std::expected<void, WindowFailure> EditorWindow::start_rendering()
 {
-    auto renderer = Direct2DRenderer::create(window_, dpi_, timing_);
+    auto renderer = Direct2DRenderer::create(window_, dpi_, timing_, text_layouts_);
     if (!renderer)
     {
         return std::unexpected(WindowFailure::render);
@@ -560,8 +549,8 @@ std::expected<void, WindowFailure> EditorWindow::start_rendering()
     renderer_ = std::make_unique<Direct2DRenderer>(std::move(renderer).value());
     // 帯の幅は最初の描画の前に知らせる（アクティブなタブが見える送り量に直る・ADR 0056 の決定 8）。
     static_cast<void>(controller_.apply(application::TitleBarWidth{title_bar_width()}));
-    static_cast<void>(controller_.apply(application::VisibleLines{body_lines()}));
-    if (!draw_frame(controller_.frame()))
+    static_cast<void>(controller_.apply(body_view()));
+    if (!draw_frame())
     {
         return std::unexpected(WindowFailure::render);
     }
@@ -626,6 +615,8 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_MOUSEMOVE:
     case WM_MOUSELEAVE:
     case WM_MOUSEWHEEL:
+    case WM_CAPTURECHANGED:
+    case WM_TIMER:
         return pointer_message(message, word, data);
     case WM_GETMINMAXINFO:
     case WM_SETTINGCHANGE:
@@ -673,6 +664,7 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         }
         return 0;
     case WM_DESTROY:
+        end_selection_drag();
         PostQuitMessage(0);
         return 0;
     case work_message:
@@ -734,6 +726,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     switch (message)
     {
     case WM_KEYDOWN:
+        end_selection_drag();
         timing_.mark(core::Milestone::input_received);
         if (!press_bookmark_key(word, data) && !press_help_key(word, data))
         {
@@ -741,6 +734,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         }
         return 0;
     case WM_CHAR:
+        end_selection_drag();
         timing_.mark(core::Milestone::input_received);
         type_character(word);
         return 0;
@@ -751,6 +745,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         }
         break;
     case WM_KILLFOCUS:
+        end_selection_drag();
         settle_tab_walk();
         break;
     default:
@@ -777,6 +772,8 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         click_client(data);
         return 0;
     case WM_LBUTTONUP:
+        drag_selection(data);
+        end_selection_drag();
         release_title_bar(data);
         return 0;
     case WM_MBUTTONDOWN:
@@ -786,6 +783,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         middle_click(data);
         return 0;
     case WM_MOUSEMOVE:
+        drag_selection(data);
         point_at(data);
         return 0;
     case WM_MOUSELEAVE:
@@ -793,6 +791,15 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case WM_MOUSEWHEEL:
         turn_wheel(word, data);
+        return 0;
+    case WM_CAPTURECHANGED:
+        end_selection_drag();
+        return 0;
+    case WM_TIMER:
+        if (word == selection_timer)
+        {
+            scroll_selection();
+        }
         return 0;
     default:
         break;
@@ -1037,6 +1044,7 @@ void EditorWindow::click_client(LPARAM data)
     if (core::contains(body.band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data);
+        begin_selection_drag();
     }
 }
 
@@ -1066,31 +1074,9 @@ void EditorWindow::click_palette(LPARAM data)
 
 void EditorWindow::place_caret(LPARAM data)
 {
-    if (renderer_ == nullptr)
-    {
-        return;
-    }
-    RECT client{};
-    GetClientRect(window_, &client);
-    const auto frame = controller_.frame();
-    const auto body =
-        core::body_layout(client.right, client.bottom, dpi_, frame.settings.font_size);
-    if (!renderer_->set_font(frame.settings))
-    {
-        abandon();
-        return;
-    }
-    if (frame.lines.empty())
-    {
-        return;
-    }
-    // 行番号の欄や行より左のクリックは行頭に寄せる（最も近い位置）。
-    const auto &line = frame.lines.at(row_index(body, high_word_of(data), frame.lines.size()));
-    const auto column =
-        renderer_->column_at(line, body, std::max(low_word_of(data), body.content.left));
     const auto anchoring =
         held(VK_SHIFT) ? core::SelectionAnchoring::extend : core::SelectionAnchoring::collapse;
-    send(application::PlaceCaret{core::TextPosition{line.number, column}, anchoring});
+    point_text(POINT{low_word_of(data), high_word_of(data)}, anchoring);
 }
 
 void EditorWindow::refresh_appearance()
@@ -1116,7 +1102,7 @@ void EditorWindow::resize()
     }
     // 何行入るかは application が持つ。窓は寸法から数えた行数を意図として渡すだけ（ADR 0009）。
     send(application::TitleBarWidth{title_bar_width()});
-    send(application::VisibleLines{body_lines()});
+    send(body_view());
 }
 
 std::int32_t EditorWindow::title_bar_width() const
@@ -1126,13 +1112,15 @@ std::int32_t EditorWindow::title_bar_width() const
     return core::to_dips(client.right, dpi_);
 }
 
-std::size_t EditorWindow::body_lines() const
+application::VisibleLines EditorWindow::body_view() const
 {
     RECT client{};
     GetClientRect(window_, &client);
-    return core::body_layout(client.right, client.bottom, dpi_,
-                             controller_.delivery().settings.font_size)
-        .visible_lines;
+    const auto body = core::body_layout(client.right, client.bottom, dpi_,
+                                        controller_.delivery().settings.font_size);
+    return application::VisibleLines{
+        body.visible_lines,
+        core::TextViewGeometry{std::max(core::width_of(body.content), 1), body.line_height, dpi_}};
 }
 
 // ---------------------------------------------------------------- IMM32（ADR 0014）
@@ -1337,6 +1325,11 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const float previous_size =
         font_change ? controller_.delivery().settings.font_size.points() : 0.0F;
     auto delivery = controller_.apply(intent);
+    if (delivery.layout_failure.has_value())
+    {
+        abandon();
+        return;
+    }
     // 面が閉じて入力行の変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
     // の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
     // 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。
@@ -1363,7 +1356,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
         apply_backdrop(delivery);
         if (delivery.settings.font_size.points() != previous_size)
         {
-            delivery = controller_.apply(application::VisibleLines{body_lines()});
+            delivery = controller_.apply(body_view());
         }
     }
     follow_ime(delivery);
@@ -1418,7 +1411,7 @@ void EditorWindow::paint()
     ValidateRect(window_, nullptr);
     // 描画中の再要求を落とさないよう、present より前に次の無効化を受け付ける。
     paint_pending_ = false;
-    present(controller_.frame());
+    present();
 }
 
 void EditorWindow::update_title(const application::EditorDelivery &delivery)
@@ -2084,15 +2077,21 @@ void EditorWindow::change_dpi(WPARAM word, LPARAM data)
     }
     // 物理画素の大きさが変わらなくても DIP の幅は変わる（ADR 0056 の決定 8）。
     send(application::TitleBarWidth{title_bar_width()});
+    send(body_view());
     invalidate();
 }
 
-std::expected<void, RenderFailure> EditorWindow::draw_frame(const application::EditorFrame &frame)
+std::expected<void, RenderFailure> EditorWindow::draw_frame()
 {
-    const auto drawn = renderer_->render(frame);
+    text_layouts_.begin_frame();
+    const auto frame = controller_.frame();
+    const auto drawn =
+        frame.layout_failure.has_value()
+            ? std::expected<void, RenderFailure>{std::unexpected(RenderFailure::directwrite)}
+            : renderer_->render(frame);
+    text_layouts_.end_frame();
     if (drawn)
     {
-        // Present が返った直後の 1 点だけが「描けた」節目（ADR 0011 の決定 1・8）。
         timing_.mark(core::Milestone::frame_presented);
         if (application::composing(frame))
         {
@@ -2102,13 +2101,13 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame(const application::E
     return drawn;
 }
 
-void EditorWindow::present(const application::EditorFrame &frame)
+void EditorWindow::present()
 {
     if (renderer_ == nullptr)
     {
         return;
     }
-    const auto drawn = draw_frame(frame);
+    const auto drawn = draw_frame();
     if (drawn)
     {
         return;

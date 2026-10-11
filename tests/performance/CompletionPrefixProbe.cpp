@@ -19,7 +19,7 @@ constexpr std::array<std::string_view, 1> expected_1{"colorscheme dracula"};
 constexpr std::array<std::string_view, 1> expected_2{"colorscheme dracula"};
 constexpr std::array<std::string_view, 1> expected_3{"set fontsize="};
 constexpr std::array<std::string_view, 1> expected_4{"set fontsize="};
-constexpr std::array<std::string_view, 26> expected_5{"colorscheme",
+constexpr std::array<std::string_view, 28> expected_5{"colorscheme",
                                                       "set fontsize=",
                                                       "set guifont=",
                                                       "set incsearch",
@@ -33,6 +33,8 @@ constexpr std::array<std::string_view, 26> expected_5{"colorscheme",
                                                       "tabnext",
                                                       "tabprevious",
                                                       "tabclose",
+                                                      "set wrap",
+                                                      "set nowrap",
                                                       "edit",
                                                       "buffer",
                                                       "ls",
@@ -45,7 +47,7 @@ constexpr std::array<std::string_view, 26> expected_5{"colorscheme",
                                                       "xit",
                                                       "exit",
                                                       "saveas"};
-constexpr std::array<std::string_view, 26> expected_6{"colorscheme",
+constexpr std::array<std::string_view, 28> expected_6{"colorscheme",
                                                       "set fontsize=",
                                                       "set guifont=",
                                                       "set incsearch",
@@ -59,6 +61,8 @@ constexpr std::array<std::string_view, 26> expected_6{"colorscheme",
                                                       "tabnext",
                                                       "tabprevious",
                                                       "tabclose",
+                                                      "set wrap",
+                                                      "set nowrap",
                                                       "edit",
                                                       "buffer",
                                                       "ls",
@@ -111,12 +115,12 @@ constexpr std::array<CompletionPrefixSample, 7> samples{{
     {"", "", 0U, std::nullopt, expected_5,
      "mode=raw\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n",
-     925696U},
+     1007616U},
     {"", "colorscheme", 11U, 0U, expected_6,
      "mode=tab-next\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-"
      "light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-"
      "light\n",
-     925696U},
+     1007616U},
 }};
 [[nodiscard]] bool catalog_equal(const core::ThemeCatalog &catalog)
 {

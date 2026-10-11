@@ -2,9 +2,13 @@
 
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
+#include "VimDisplayNavigation.hpp"
 #include "VimKeySource.hpp"
+#include "VimLayoutView.hpp"
 #include "VimTabs.hpp"
 #include "VimViewport.hpp"
+
+#include <optional>
 
 namespace nenenib::core
 {
@@ -19,5 +23,7 @@ struct VimEditorView
     VimKeySource source = VimKeySource::typed;
     // タブの本数と今の位置（ADR 0057 の決定 2）。既定はタブ 1 本の今の位置 0。
     VimTabs tabs = VimTabs{0, 1};
+    VimLayoutView layout{};
+    std::optional<VimDisplayNavigation> navigation = std::nullopt;
 };
 } // namespace nenenib::core

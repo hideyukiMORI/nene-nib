@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CaretAffinity.hpp"
 #include "FilePath.hpp"
 #include "LineNumber.hpp"
 #include "TextPosition.hpp"
@@ -17,5 +18,8 @@ struct SessionTab
     core::TextPosition caret;
     core::LineNumber first_visible;
     std::size_t recency;
+    std::size_t first_row = 0;
+    float horizontal = 0;
+    core::CaretAffinity affinity = core::CaretAffinity::leading;
 };
 } // namespace nenenib::application

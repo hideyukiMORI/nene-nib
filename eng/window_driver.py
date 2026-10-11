@@ -207,7 +207,7 @@ def forget_session(environment: dict) -> bool:
     if own and os.path.normcase(os.path.abspath(profile)) == os.path.normcase(os.path.abspath(own)):
         return False
     deleted = False
-    for name in ("session.v1", "history.v1", "bookmarks.v1"):
+    for name in ("session.v2", "session.v1", "history.v1", "bookmarks.v1"):
         listed = Path(profile) / "NeNeNib" / name
         if listed.is_file():
             listed.unlink()

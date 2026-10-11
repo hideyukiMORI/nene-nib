@@ -1,3 +1,4 @@
+#include "ScriptedTextLayouts.hpp"
 // scope `--session` の単体テスト（ADR 0042 決定 2・ADR 0059 の決定 1〜6）。状態から前回のタブの
 // 一覧を作る読み取りと、窓が閉じていくときの意図 EndSession。まだ読んでいない文書の状態の関数と、
 // 起動で前回のタブを戻す手順。
@@ -519,9 +520,10 @@ void verify_recency_ranked()
     ScriptedHistory history;
     ScriptedFolders folders;
     ScriptedBookmarks bookmarks;
+    ScriptedTextLayouts text_layouts;
     const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
                                                   settings, themes, session, history, folders,
-                                                  bookmarks},
+                                                  bookmarks, text_layouts},
                                       initial);
     return controller.frame();
 }
@@ -558,6 +560,33 @@ void verify_restore_branches()
 }
 
 // 戻った後の帯・アクティブ・位置・使った順。読むのはアクティブの 1 本だけ（決定 6・D25・D27）。
+void verify_restore_wrapped_position()
+{
+    auto tab = listed_tab("a", TextPosition{LineNumber{1}, Column{9}}, 1, 0);
+    tab.first_row = 1;
+    tab.horizontal = 24.5F;
+    tab.affinity = core::CaretAffinity::trailing;
+    Editing editing(listed({tab}, 0), [](ScriptedFiles &files)
+                    { files.hold_at("C:\\work\\a.txt", Bytes{"abcdefghijklmnop\nx\ny"}); });
+    static_cast<void>(closed_window(editing));
+    const auto &before = editing.session().written();
+    expect(before.has_value() && before.value().tabs.front().first_row == 1 &&
+               before.value().tabs.front().horizontal == 24.5F &&
+               before.value().tabs.front().affinity == core::CaretAffinity::trailing,
+           "startup keeps restored screen coordinates until geometry is available");
+    auto &controller = editing.controller();
+    const auto frame = controller.apply_frame(VisibleLines{2, core::TextViewGeometry{40, 20, 96}});
+    expect(frame.lines.front().screen_row == -1 && frame.caret.position.column == Column{9} &&
+               frame.caret.affinity == core::CaretAffinity::trailing && frame.horizontal == 0,
+           "the first known geometry restores the partly visible row and boundary affinity");
+    applied(controller, NewTab{});
+    static_cast<void>(closed_window(editing));
+    const auto &parked = editing.session().written();
+    expect(parked.has_value() && parked.value().tabs.front().first_row == 1 &&
+               parked.value().tabs.front().affinity == core::CaretAffinity::trailing,
+           "parking the restored tab preserves its screen position for session writing");
+}
+
 void verify_restore_band()
 {
     Editing editing(three_listed(1), hold_three);
@@ -828,6 +857,7 @@ void verify_session_contracts()
     verify_recency_ranked();
     verify_restore_branches();
     verify_restore_band();
+    verify_restore_wrapped_position();
     verify_restore_clamps();
     verify_restore_unreadable();
     verify_switch_reads();

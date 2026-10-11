@@ -1,11 +1,14 @@
 #pragma once
 
+#include "ComposedLine.hpp"
 #include "DisplayLine.hpp"
 #include "LineNumber.hpp"
 #include "SelectionSpan.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace nenenib::application
@@ -25,5 +28,14 @@ struct LineView
     core::SelectionSpan selection;
     std::vector<core::SelectionSpan> matches;
     std::optional<core::SelectionSpan> current_match;
+    std::optional<ComposedLine> composed{};
+    std::int64_t screen_row = 0;
+    std::size_t screen_rows = 1;
 };
+
+[[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept
+{
+    return line.composed.has_value() ? std::string_view(line.composed.value().text)
+                                     : std::string_view(line.display.text);
+}
 } // namespace nenenib::application

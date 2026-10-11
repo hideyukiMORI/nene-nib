@@ -151,9 +151,32 @@ namespace
     std::unreachable();
 }
 
+[[nodiscard]] ExResult wrap_result(EditorSettings settings, LineWrapping wrapping)
+{
+    settings.wrapping = wrapping;
+    switch (wrapping)
+    {
+    case LineWrapping::wrap:
+        return ExResult{settings, std::nullopt, std::nullopt,
+                        DisplayText::parse("wrap=on").value()};
+    case LineWrapping::no_wrap:
+        return ExResult{settings, std::nullopt, std::nullopt,
+                        DisplayText::parse("wrap=off").value()};
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
+    if (option == "wrap")
+    {
+        return wrap_result(settings, LineWrapping::wrap);
+    }
+    if (option == "nowrap")
+    {
+        return wrap_result(settings, LineWrapping::no_wrap);
+    }
     if (option == "guide")
     {
         return guide_result(settings, GuideVisibility::shown);
@@ -445,10 +468,11 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     }
     return std::unexpected(ExFailure::unknown_command);
 }
-constexpr std::array<std::string_view, 14> fixed_candidates{
-    "colorscheme",  "set fontsize=",  "set guifont=", "set incsearch", "set noincsearch",
-    "set hlsearch", "set nohlsearch", "set guide",    "set noguide",   "tabs",
-    "tabnew",       "tabnext",        "tabprevious",  "tabclose"};
+constexpr std::array<std::string_view, 16> fixed_candidates{
+    "colorscheme",     "set fontsize=", "set guifont=",   "set incsearch",
+    "set noincsearch", "set hlsearch",  "set nohlsearch", "set guide",
+    "set noguide",     "tabs",          "tabnew",         "tabnext",
+    "tabprevious",     "tabclose",      "set wrap",       "set nowrap"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

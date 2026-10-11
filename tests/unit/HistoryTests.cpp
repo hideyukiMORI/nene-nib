@@ -1,3 +1,4 @@
+#include "ScriptedTextLayouts.hpp"
 // scope `--history` の単体テスト（ADR 0042 決定 2・ADR 0060 の決定 8）。閉じたファイルの履歴を
 // 書き換える純関数 history_recorded / history_forgotten と、履歴の替え玉の往復。
 #include "Appearance.hpp"
@@ -363,9 +364,10 @@ void verify_quiet_paths()
         ScriptedHistory history;
         ScriptedFolders folders;
         ScriptedBookmarks bookmarks;
+        ScriptedTextLayouts text_layouts;
         const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
                                                       settings, themes, session, history, folders,
-                                                      bookmarks},
+                                                      bookmarks, text_layouts},
                                           {work_open('a'), work_open('b')});
         expect(controller.frame().tabs.size() == 2 && history.reads() == 0 &&
                    history.writes() == 0 && folders.requests().empty() && folders.collects() == 0,

@@ -4,6 +4,7 @@
 #include "DisplayText.hpp"
 #include "FontSize.hpp"
 #include "GuideVisibility.hpp"
+#include "LineWrapping.hpp"
 #include "Theme.hpp"
 #include "ThemeChoice.hpp"
 
@@ -18,6 +19,7 @@ struct EditorSettings
     // 無しはsystem。選択済みのテーマは生存する配色を共有する（ADR 0025）。
     std::optional<ThemeChoice> theme;
     GuideVisibility guide;
+    LineWrapping wrapping = LineWrapping::wrap;
 };
 
 [[nodiscard]] EditorSettings default_editor_settings();

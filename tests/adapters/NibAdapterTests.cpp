@@ -52,7 +52,7 @@ constexpr std::size_t read_limit = 64U * 1024U * 1024U;
 constexpr wchar_t folder[] = L"nib-adapter-files";
 constexpr wchar_t recorded_marks[] = L"nib-adapter-files/timing.json";
 constexpr wchar_t unrecorded_marks[] = L"nib-adapter-files/silent.json";
-constexpr std::array<const wchar_t *, 10> file_names{
+constexpr std::array<const wchar_t *, 12> file_names{
     L"nib-adapter-files/utf8.txt",
     L"nib-adapter-files/bom.txt",
     L"nib-adapter-files/sjis.txt",
@@ -62,7 +62,9 @@ constexpr std::array<const wchar_t *, 10> file_names{
     L"nib-adapter-files/settings/settings.v1",
     L"nib-adapter-files/settings/settings.v1.lock",
     L"nib-adapter-files/settings/settings.v2",
-    L"nib-adapter-files/settings/settings.v2.lock"};
+    L"nib-adapter-files/settings/settings.v2.lock",
+    L"nib-adapter-files/settings/settings.v3",
+    L"nib-adapter-files/settings/settings.v3.lock"};
 
 std::size_t &failure_count()
 {
@@ -367,7 +369,7 @@ void verify_timing_marks(Win32FileAdapter &files)
 void verify_settings_codec()
 {
     const auto defaults = default_editor_settings();
-    const auto decoded = decode_settings(encode_settings(defaults), SettingsVersion::v2);
+    const auto decoded = decode_settings(encode_settings(defaults), SettingsVersion::v3);
     expect(decoded.has_value() && same_settings(decoded.value(), defaults),
            "default settings round trip");
     const auto custom = decode_settings("\xEF\xBB\xBF\r\nversion = 1\r\n"
@@ -382,7 +384,7 @@ void verify_settings_codec()
     expect(custom.value().font_family.text() == "日本語 Font=Test" &&
                custom.value().font_size.points() == 21.25F,
            "custom settings retain their values");
-    const auto round_trip = decode_settings(encode_settings(custom.value()), SettingsVersion::v2);
+    const auto round_trip = decode_settings(encode_settings(custom.value()), SettingsVersion::v3);
     expect(round_trip.has_value() && same_settings(round_trip.value(), custom.value()),
            "custom settings round trip including an explicit theme");
 }
@@ -392,14 +394,14 @@ void verify_bad_settings_fields()
     const std::string valid = encode_settings(default_editor_settings());
     for (const auto suffix : {"version=1\n", "unknown=yes\n", "broken\n"})
     {
-        const auto result = decode_settings(valid + suffix, SettingsVersion::v2);
+        const auto result = decode_settings(valid + suffix, SettingsVersion::v3);
         expect(!result && result.error() == SettingsFailure::malformed,
                "duplicate keys, unknown keys and lines without equals are malformed");
     }
     const auto missing = decode_settings("version=1\n", SettingsVersion::v1);
     expect(!missing && missing.error() == SettingsFailure::malformed, "missing fields fail");
     const auto version =
-        decode_settings("version=3\n" + valid.substr(valid.find('\n') + 1), SettingsVersion::v2);
+        decode_settings("version=4\n" + valid.substr(valid.find('\n') + 1), SettingsVersion::v3);
     expect(!version && version.error() == SettingsFailure::unsupported_version,
            "an unknown version is incompatible");
     const auto theme = decode_settings("version=1\ncolorscheme=missing\nfont_family=Consolas\n"
@@ -435,39 +437,53 @@ void verify_settings_versions()
 {
     auto settings = default_editor_settings();
     settings.guide = nenenib::core::GuideVisibility::hidden;
+    settings.wrapping = nenenib::core::LineWrapping::no_wrap;
     const auto bytes = encode_settings(settings);
-    const auto decoded = decode_settings(bytes, SettingsVersion::v2);
+    const auto decoded = decode_settings(bytes, SettingsVersion::v3);
     expect(decoded && same_settings(decoded.value(), settings),
-           "hidden guide round trips through v2");
-    expect(bytes.starts_with("version=2\n") && bytes.ends_with("guide=off\n"),
-           "v2 writer emits canonical schema");
-    const auto legacy = bytes.substr(0, bytes.rfind("guide="));
-    const auto missing = decode_settings(legacy, SettingsVersion::v2);
-    expect(!missing && missing.error() == SettingsFailure::malformed, "v2 requires guide field");
-    for (const auto guide : {"", "true", "ON", "shown", "on off"})
+           "guide and wrapping round trip through v3");
+    expect(bytes.starts_with("version=3\n") && bytes.ends_with("guide=off\nwrap=off\n"),
+           "v3 writer emits the canonical six-field schema");
+    const auto common = bytes.substr(bytes.find('\n') + 1);
+    const auto v2 = "version=2\n" + common.substr(0, common.rfind("wrap="));
+    const auto old = decode_settings(v2, SettingsVersion::v2);
+    expect(old && old.value().guide == nenenib::core::GuideVisibility::hidden &&
+               old.value().wrapping == nenenib::core::LineWrapping::wrap,
+           "v2 preserves guide and initializes wrapping on");
+    const auto extra = decode_settings(v2 + "wrap=off\n", SettingsVersion::v2);
+    expect(!extra && extra.error() == SettingsFailure::malformed, "v2 rejects a wrap field");
+    const auto no_wrap = bytes.substr(0, bytes.rfind("wrap="));
+    expect(!decode_settings(no_wrap, SettingsVersion::v3), "v3 requires wrap");
+    for (const auto value : {"", "true", "ON", "shown", "on off"})
     {
-        const auto bad = decode_settings(legacy + "guide=" + guide + "\n", SettingsVersion::v2);
-        expect(!bad && bad.error() == SettingsFailure::malformed,
-               "invalid guide values are refused");
+        const auto bad = decode_settings(no_wrap + "wrap=" + value + "\n", SettingsVersion::v3);
+        expect(!bad && bad.error() == SettingsFailure::malformed, "invalid wrap value refused");
     }
-    const auto duplicated = decode_settings(bytes + "guide=on\n", SettingsVersion::v2);
-    expect(!duplicated && duplicated.error() == SettingsFailure::malformed,
-           "duplicate guide refused");
-    const auto old = "version=1\n" + legacy.substr(legacy.find('\n') + 1);
-    const auto wrong_old = decode_settings(old, SettingsVersion::v2);
+    const auto prefix = v2.substr(0, v2.rfind("guide="));
+    expect(!decode_settings(prefix, SettingsVersion::v2), "v2 still requires guide");
+    for (const auto value : {"", "true", "ON", "shown", "on off"})
+    {
+        expect(!decode_settings(prefix + "guide=" + value + "\n", SettingsVersion::v2),
+               "invalid v2 guide value refused");
+    }
+    expect(!decode_settings(bytes + "wrap=on\n", SettingsVersion::v3), "duplicate wrap refused");
+    expect(!decode_settings(bytes + "guide=on\n", SettingsVersion::v3), "duplicate guide refused");
+    const auto v1 = "version=1\n" + common.substr(0, common.rfind("guide="));
+    expect(!decode_settings(v1 + "guide=on\n", SettingsVersion::v1), "v1 rejects guide");
+    expect(!decode_settings(v1 + "wrap=on\n", SettingsVersion::v1), "v1 rejects wrap");
+    const auto wrong_old = decode_settings(v1, SettingsVersion::v3);
     const auto wrong_new = decode_settings(bytes, SettingsVersion::v1);
     expect(!wrong_old && wrong_old.error() == SettingsFailure::unsupported_version && !wrong_new &&
                wrong_new.error() == SettingsFailure::unsupported_version,
            "expected filename version must match document version");
-    const auto old_extra = decode_settings(old + "guide=on\n", SettingsVersion::v1);
-    expect(!old_extra && old_extra.error() == SettingsFailure::malformed, "v1 rejects guide key");
 }
 
 void verify_settings_restart(Win32FileAdapter &files)
 {
-    const auto path = path_of("nib-adapter-files/settings/settings.v2");
+    const auto path = path_of("nib-adapter-files/settings/settings.v3");
     Win32SettingsAdapter first(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v1")});
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v2"),
+                             path_of("nib-adapter-files/settings/settings.v1")});
     const auto premature = first.write(default_editor_settings());
     expect(!premature && premature.error() == SettingsFailure::not_loaded,
            "writing before loading is refused");
@@ -479,7 +495,8 @@ void verify_settings_restart(Win32FileAdapter &files)
     settings.font_size = nenenib::core::FontSize::from_points(21.25F).value();
     expect(first.write(settings).has_value(), "first write creates the settings directory");
     Win32SettingsAdapter restarted(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v1")});
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v2"),
+                             path_of("nib-adapter-files/settings/settings.v1")});
     const auto restored = restarted.read();
     expect(restored.has_value(), "a fresh adapter reads the saved file");
     const auto loaded = restored.value_or(std::nullopt);
@@ -495,13 +512,14 @@ void verify_settings_restart(Win32FileAdapter &files)
 
 void verify_settings_lock(Win32FileAdapter &files)
 {
-    const auto path = path_of("nib-adapter-files/settings/settings.v2");
+    const auto path = path_of("nib-adapter-files/settings/settings.v3");
     Win32SettingsAdapter settings(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v1")});
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v2"),
+                             path_of("nib-adapter-files/settings/settings.v1")});
     expect(settings.read().has_value(), "the settings adapter loads before lock checks");
     const auto before = files.read(path, 4096);
     {
-        const FileHandle lock(CreateFileW(L"nib-adapter-files/settings/settings.v2.lock",
+        const FileHandle lock(CreateFileW(L"nib-adapter-files/settings/settings.v3.lock",
                                           GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
                                           FILE_ATTRIBUTE_NORMAL, nullptr));
         expect(lock.valid(), "the competing lock is acquired");
@@ -511,14 +529,14 @@ void verify_settings_lock(Win32FileAdapter &files)
         expect(files.read(path, 4096) == before, "lock failure leaves the original bytes intact");
     }
     expect(settings.write(default_editor_settings()).has_value(), "a released lock allows retry");
-    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v2", FILE_ATTRIBUTE_READONLY) !=
+    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v3", FILE_ATTRIBUTE_READONLY) !=
                0,
            "the settings file becomes read only");
     const auto refused = settings.write(default_editor_settings());
     expect(!refused && refused.error() == SettingsFailure::unwritable,
            "read-only files refuse save");
     expect(files.read(path, 4096) == before, "failed replacement preserves settings bytes");
-    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v2", FILE_ATTRIBUTE_NORMAL) !=
+    expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v3", FILE_ATTRIBUTE_NORMAL) !=
                0,
            "the test restores the original attributes");
 }
@@ -526,10 +544,11 @@ void verify_settings_lock(Win32FileAdapter &files)
 void verify_rejected_settings(Win32FileAdapter &files, std::string_view bytes,
                               SettingsFailure expected)
 {
-    const auto path = path_of("nib-adapter-files/settings/settings.v2");
+    const auto path = path_of("nib-adapter-files/settings/settings.v3");
     expect(files.write(path, bytes).has_value(), "the invalid settings fixture is written");
     Win32SettingsAdapter settings(
-        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v1")});
+        files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v2"),
+                             path_of("nib-adapter-files/settings/settings.v1")});
     const auto loaded = settings.read();
     expect(!loaded && loaded.error() == expected, "invalid settings return their typed failure");
     const auto written = settings.write(default_editor_settings());
@@ -551,6 +570,7 @@ void verify_settings_failures(Win32FileAdapter &files)
     expect(!unavailable.write(default_editor_settings()), "an unavailable location cannot save");
     Win32SettingsAdapter directory(
         files, SettingsPaths{path_of("nib-adapter-files/settings"),
+                             path_of("nib-adapter-files/settings/settings.v2"),
                              path_of("nib-adapter-files/settings/settings.v1")});
     const auto unreadable = directory.read();
     expect(!unreadable && unreadable.error() == SettingsFailure::unreadable,
@@ -563,17 +583,19 @@ constexpr std::string_view previous_bytes =
 
 SettingsPaths settings_paths()
 {
-    return {path_of("nib-adapter-files/settings/settings.v2"),
+    return {path_of("nib-adapter-files/settings/settings.v3"),
+            path_of("nib-adapter-files/settings/settings.v2"),
             path_of("nib-adapter-files/settings/settings.v1")};
 }
 
 void reset_settings(Win32FileAdapter &files, std::optional<std::string_view> previous)
 {
+    static_cast<void>(DeleteFileW(L"nib-adapter-files/settings/settings.v3"));
     static_cast<void>(DeleteFileW(L"nib-adapter-files/settings/settings.v2"));
     static_cast<void>(DeleteFileW(L"nib-adapter-files/settings/settings.v1"));
     if (previous.has_value())
     {
-        expect(files.write(settings_paths().previous, previous.value()).has_value(),
+        expect(files.write(settings_paths().legacy, previous.value()).has_value(),
                "prepare previous settings bytes");
     }
 }
@@ -590,11 +612,11 @@ void verify_migration_success(Win32FileAdapter &files)
            "v1 retains settings and initializes shown guide");
     expect(!files.read(settings_paths().current, 4096), "loading v1 does not migrate eagerly");
     loaded.guide = nenenib::core::GuideVisibility::hidden;
-    expect(store.write(loaded).has_value(), "first changed settings migrate into v2");
-    expect(files.read(settings_paths().previous, 4096).value_or("") == previous_bytes,
+    expect(store.write(loaded).has_value(), "first changed settings migrate into v3");
+    expect(files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
            "migration leaves v1 bytes unchanged");
     expect(files.read(settings_paths().current, 4096).value_or("") == encode_settings(loaded),
-           "migration writes v2 including hidden guide");
+           "migration writes v3 including hidden guide");
     // Both reading and locking v1 now fail: current saves must not touch either.
     const FileHandle old_file(CreateFileW(L"nib-adapter-files/settings/settings.v1", GENERIC_WRITE,
                                           0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
@@ -618,7 +640,7 @@ void verify_migration_conflict(Win32FileAdapter &files, std::optional<std::strin
     expect(store.read().has_value(), "load migration snapshot before external v1 edit");
     if (after.has_value())
     {
-        expect(files.write(settings_paths().previous, after.value()).has_value(),
+        expect(files.write(settings_paths().legacy, after.value()).has_value(),
                "old editor creates or changes v1");
     }
     if (!after.has_value())
@@ -631,8 +653,8 @@ void verify_migration_conflict(Win32FileAdapter &files, std::optional<std::strin
     const auto result = store.write(changed);
     expect(!result && result.error() == SettingsFailure::changed_externally,
            "v1 change creation and deletion each block migration");
-    expect(!files.read(settings_paths().current, 4096), "refused migration creates no v2");
-    const auto remaining = files.read(settings_paths().previous, 4096);
+    expect(!files.read(settings_paths().current, 4096), "refused migration creates no v3");
+    const auto remaining = files.read(settings_paths().legacy, 4096);
     expect(after.has_value() ? remaining && remaining.value() == after.value() : !remaining,
            "refused migration preserves externally edited v1 bytes");
 }
@@ -642,7 +664,8 @@ void verify_migration_locks(Win32FileAdapter &files)
     reset_settings(files, previous_bytes);
     Win32SettingsAdapter store(files, settings_paths());
     expect(store.read().has_value(), "load migration before lock checks");
-    for (const auto name : {L"nib-adapter-files/settings/settings.v2.lock",
+    for (const auto name : {L"nib-adapter-files/settings/settings.v3.lock",
+                            L"nib-adapter-files/settings/settings.v2.lock",
                             L"nib-adapter-files/settings/settings.v1.lock"})
     {
         const FileHandle held(CreateFileW(name, GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
@@ -652,7 +675,7 @@ void verify_migration_locks(Win32FileAdapter &files)
         expect(!result && result.error() == SettingsFailure::unwritable,
                "either migration lock blocks saving without waiting");
         expect(!files.read(settings_paths().current, 4096) &&
-                   files.read(settings_paths().previous, 4096).value_or("") == previous_bytes,
+                   files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
                "lock refusal leaves current absent and previous bytes intact");
     }
     const FileHandle previous(CreateFileW(L"nib-adapter-files/settings/settings.v1", GENERIC_WRITE,
@@ -662,7 +685,7 @@ void verify_migration_locks(Win32FileAdapter &files)
     const auto result = store.write(default_editor_settings());
     expect(!result && result.error() == SettingsFailure::unreadable,
            "migration snapshot read failure blocks save");
-    expect(!files.read(settings_paths().current, 4096), "read failure creates no v2");
+    expect(!files.read(settings_paths().current, 4096), "read failure creates no v3");
 }
 
 void verify_previous_rejection(Win32FileAdapter &files, std::string_view invalid,
@@ -675,7 +698,7 @@ void verify_previous_rejection(Win32FileAdapter &files, std::string_view invalid
     expect(!reading && reading.error() == failure && !writing && writing.error() == failure,
            "invalid v1 load blocks all later writes");
     expect(!files.read(settings_paths().current, 4096) &&
-               files.read(settings_paths().previous, read_limit).value_or("") == invalid,
+               files.read(settings_paths().legacy, read_limit).value_or("") == invalid,
            "invalid previous bytes remain untouched and current remains absent");
 }
 
@@ -691,7 +714,7 @@ void verify_migration_current_created(Win32FileAdapter &files)
     expect(!result && result.error() == SettingsFailure::changed_externally,
            "new current settings block stale migration");
     expect(files.read(settings_paths().current, 4096).value_or("") == external &&
-               files.read(settings_paths().previous, 4096).value_or("") == previous_bytes,
+               files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
            "refused migration preserves both external current and original previous");
 }
 
@@ -700,10 +723,10 @@ void verify_migration_write_failure(Win32FileAdapter &files)
     reset_settings(files, previous_bytes);
     Win32SettingsAdapter store(files, settings_paths());
     expect(store.read().has_value(), "load previous before failed migration write");
-    const auto occupied = path_of("nib-adapter-files/settings/settings.v2.nib-tmp");
+    const auto occupied = path_of("nib-adapter-files/settings/settings.v3.nib-tmp");
     expect(files.write(occupied, "occupied").has_value(), "occupy atomic write temporary name");
     {
-        const FileHandle held(CreateFileW(L"nib-adapter-files/settings/settings.v2.nib-tmp",
+        const FileHandle held(CreateFileW(L"nib-adapter-files/settings/settings.v3.nib-tmp",
                                           GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
                                           FILE_ATTRIBUTE_NORMAL, nullptr));
         expect(held.valid(), "hold atomic write temporary file without sharing");
@@ -711,16 +734,96 @@ void verify_migration_write_failure(Win32FileAdapter &files)
         expect(!result && result.error() == SettingsFailure::unwritable,
                "failed atomic migration write is reported");
         expect(!files.read(settings_paths().current, 4096) &&
-                   files.read(settings_paths().previous, 4096).value_or("") == previous_bytes,
+                   files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
                "failed migration write preserves current absence and previous bytes");
     }
-    expect(DeleteFileW(L"nib-adapter-files/settings/settings.v2.nib-tmp") != 0,
+    expect(DeleteFileW(L"nib-adapter-files/settings/settings.v3.nib-tmp") != 0,
            "remove only occupied test temporary file");
     expect(store.write(default_editor_settings()).has_value(), "failed write keeps retry snapshot");
 }
 
+constexpr std::string_view v2_bytes =
+    "version=2\ncolorscheme=system\nfont_family=Consolas\nfont_size=18\nguide=off\n";
+
+void verify_v2_migration(Win32FileAdapter &files)
+{
+    reset_settings(files, previous_bytes);
+    expect(files.write(settings_paths().previous, v2_bytes).has_value(),
+           "prepare v2 migration source");
+    Win32SettingsAdapter store(files, settings_paths());
+    const auto reading = store.read();
+    const auto loaded = reading.value_or(std::nullopt).value_or(default_editor_settings());
+    expect(reading && loaded.font_size.points() == 18 &&
+               loaded.guide == nenenib::core::GuideVisibility::hidden &&
+               loaded.wrapping == nenenib::core::LineWrapping::wrap,
+           "v2 takes precedence over v1 and initializes wrapping");
+    expect(!files.read(settings_paths().current, 4096), "reading v2 does not migrate eagerly");
+    auto changed = loaded;
+    changed.wrapping = nenenib::core::LineWrapping::no_wrap;
+    expect(store.write(changed).has_value(), "v2 can migrate to v3 with wrapping disabled");
+    expect(files.read(settings_paths().previous, 4096).value_or("") == v2_bytes &&
+               files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
+           "v3 migration preserves both older files byte for byte");
+    const auto saved = decode_settings(files.read(settings_paths().current, 4096).value_or(""),
+                                       SettingsVersion::v3);
+    expect(saved && same_settings(saved.value(), changed), "migrated v3 holds the chosen wrapping");
+    const FileHandle old_lock(CreateFileW(L"nib-adapter-files/settings/settings.v2.lock",
+                                          GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr));
+    expect(old_lock.valid() && store.write(loaded).has_value(),
+           "after migration v2 lock is irrelevant");
+}
+
+void verify_v2_conflicts(Win32FileAdapter &files)
+{
+    reset_settings(files, previous_bytes);
+    Win32SettingsAdapter old(files, settings_paths());
+    expect(old.read().has_value(), "load v1 while v2 and v3 are absent");
+    expect(files.write(settings_paths().previous, v2_bytes).has_value(),
+           "another version creates v2");
+    const auto raced = old.write(default_editor_settings());
+    expect(!raced && raced.error() == SettingsFailure::changed_externally &&
+               !files.read(settings_paths().current, 4096),
+           "an intervening v2 creation blocks migration from v1");
+    Win32SettingsAdapter active(files, settings_paths());
+    expect(active.read().has_value(), "load the existing v2 snapshot");
+    expect(files.write(settings_paths().previous, std::string(v2_bytes) + "\n").has_value(),
+           "externally change v2 bytes");
+    const auto changed = active.write(default_editor_settings());
+    expect(!changed && changed.error() == SettingsFailure::changed_externally,
+           "v2 changes block stale migration");
+    Win32SettingsAdapter removed(files, settings_paths());
+    expect(removed.read().has_value(), "load updated v2 snapshot");
+    expect(DeleteFileW(L"nib-adapter-files/settings/settings.v2") != FALSE, "remove v2 externally");
+    const auto erased = removed.write(default_editor_settings());
+    expect(!erased && erased.error() == SettingsFailure::changed_externally,
+           "v2 deletion blocks stale migration");
+}
+
+void verify_v2_rejection(Win32FileAdapter &files)
+{
+    reset_settings(files, previous_bytes);
+    expect(files.write(settings_paths().previous, "invalid").has_value(), "prepare malformed v2");
+    Win32SettingsAdapter broken(files, settings_paths());
+    const auto reading = broken.read();
+    expect(!reading && reading.error() == SettingsFailure::malformed,
+           "malformed v2 never falls back to valid v1");
+    expect(!broken.write(default_editor_settings()) &&
+               files.read(settings_paths().previous, 4096).value_or("") == "invalid",
+           "malformed v2 blocks writes and preserves the source");
+    expect(files.write(settings_paths().previous, v2_bytes).has_value(), "restore valid v2");
+    Win32SettingsAdapter current(files, settings_paths());
+    expect(current.read().has_value(), "load v2 before a lower-version change");
+    expect(files.write(settings_paths().legacy, "invalid").has_value(), "change lower v1 version");
+    expect(current.write(default_editor_settings()).has_value(),
+           "a v1 change does not invalidate the higher v2 snapshot");
+}
+
 void verify_settings_migration(Win32FileAdapter &files)
 {
+    verify_v2_migration(files);
+    verify_v2_conflicts(files);
+    verify_v2_rejection(files);
     verify_migration_success(files);
     verify_migration_conflict(
         files, previous_bytes,
@@ -739,14 +842,14 @@ void verify_settings_migration(Win32FileAdapter &files)
     reset_settings(files, previous_bytes);
     verify_rejected_settings(files, "invalid", SettingsFailure::malformed);
     // Valid v1 must not conceal an unreadable current path.
-    const FileHandle current(CreateFileW(L"nib-adapter-files/settings/settings.v2", GENERIC_WRITE,
+    const FileHandle current(CreateFileW(L"nib-adapter-files/settings/settings.v3", GENERIC_WRITE,
                                          0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
                                          nullptr));
     Win32SettingsAdapter blocked(files, settings_paths());
     const auto reading = blocked.read();
     expect(current.valid() && !reading && reading.error() == SettingsFailure::unreadable,
-           "unreadable v2 never falls back to valid v1");
-    expect(!blocked.write(default_editor_settings()), "unreadable v2 blocks later writes");
+           "unreadable v3 never falls back to valid v1");
+    expect(!blocked.write(default_editor_settings()), "unreadable v3 blocks later writes");
 }
 
 void verify_absolute_path()

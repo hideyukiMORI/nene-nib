@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FilePort.hpp"
+#include "SessionPaths.hpp"
 #include "SessionPort.hpp"
 
 #include <expected>
@@ -8,16 +9,16 @@
 
 namespace nenenib::adapters::win32
 {
-// 前回のタブの一覧の置き場（ADR 0059 の決定 2）。設定と同じ親の session.v1。
-[[nodiscard]] std::expected<core::FilePath, application::SessionFailure> local_session_path();
+// 前回のタブの一覧の置き場（ADR 0059 / 0114）。設定と同じ親の session.v2 と v1。
+[[nodiscard]] std::expected<SessionPaths, application::SessionFailure> local_session_paths();
 
-// session.v1 を FilePort で読み書きする。設定と違い、lock も「外で変わっていたら上書きしない」も
+// session.v2 を書き、無いときだけv1を読む。設定と違い、lock も「外で変わっていたら上書きしない」も
 // 持たない（窓を 2 つ開いていたら後から閉じたほうが残る・ADR 0059 の決定 2）。
 class Win32SessionAdapter final : public application::SessionPort
 {
   public:
     Win32SessionAdapter(application::FilePort &files,
-                        std::expected<core::FilePath, application::SessionFailure> path);
+                        std::expected<SessionPaths, application::SessionFailure> paths);
     [[nodiscard]] std::expected<std::optional<application::Session>, application::SessionFailure>
     read() override;
     [[nodiscard]] std::expected<void, application::SessionFailure>
@@ -25,6 +26,6 @@ class Win32SessionAdapter final : public application::SessionPort
 
   private:
     application::FilePort &files_;
-    std::expected<core::FilePath, application::SessionFailure> path_;
+    std::expected<SessionPaths, application::SessionFailure> paths_;
 };
 } // namespace nenenib::adapters::win32

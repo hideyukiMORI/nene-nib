@@ -699,6 +699,12 @@ void verify_vim_fixture(const VimFixture &fixture)
             controller.vim_state().scroll_lines.value_or(nenenib::core::VimCount{fallback}).value;
         expect(scroll_lines == fixture.viewport.value().expected_scroll_lines,
                (name + ": scroll lines").c_str());
+        if (fixture.viewport.value().wrap_columns > 0)
+        {
+            expect(frame.lines.front().screen_row ==
+                       -static_cast<std::int64_t>(fixture.viewport.value().expected_first_row),
+                   (name + ": first wrapped row").c_str());
+        }
     }
     const std::string body = whole_vim_body(controller);
     expect(body == fixture.expected_text, (name + ": body").c_str());

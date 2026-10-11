@@ -3,6 +3,7 @@
 
 namespace nenenib::tests::ui
 {
+void verify_body_text_layouts();
 // 1 つの確かめ。外れたら 1 行書いて数える（落とすのは main の終わり）。
 void expect(bool condition, const char *message);
 // 環境依存の検査（QLT-013）がこの機械では測れなかった。数に入れずに 1 行言う。

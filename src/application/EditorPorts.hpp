@@ -9,6 +9,7 @@
 #include "HistoryPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
+#include "TextLayoutPort.hpp"
 #include "ThemePort.hpp"
 
 namespace nenenib::application
@@ -27,5 +28,6 @@ struct EditorPorts
     // 同じフォルダを裏で読む（ADR 0062 の決定 10）。
     FolderPort &folders;
     BookmarkPort &bookmarks;
+    TextLayoutPort &text_layouts;
 };
 } // namespace nenenib::application

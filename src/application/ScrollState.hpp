@@ -12,10 +12,13 @@ struct ScrollState
 {
     core::LineNumber first_visible;
     std::size_t visible_lines;
+    std::size_t first_row = 0;
+    float horizontal = 0;
 };
 
 [[nodiscard]] constexpr bool operator==(const ScrollState &left, const ScrollState &right) noexcept
 {
-    return left.first_visible == right.first_visible && left.visible_lines == right.visible_lines;
+    return left.first_visible == right.first_visible && left.visible_lines == right.visible_lines &&
+           left.first_row == right.first_row && left.horizontal == right.horizontal;
 }
 } // namespace nenenib::application
