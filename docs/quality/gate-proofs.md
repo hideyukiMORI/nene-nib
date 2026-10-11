@@ -5157,3 +5157,5 @@ themes5585、ex-settings573、user-theme-values21、user-theme-selection97、the
 レンダラー/選択/保存の実装、旧95配色、梱包機構は不変なので#419の実画面7件と梱包9 testsを再利用。新30色の契約と名称境界だけを対象にし、全件Vim/編集/性能は実施しない。Python/TypeScriptは役割の準備まで、保存schema不変。
 
 ローカルpreview ZIPを正規経路で作り、公開beta.2は変更しない。統合/恒久収載/監査整理の実結果はD:/NeNeNib/evidence/cinema30-20261012/closeout.json。枝/commitとZIPは保持する。
+
+#421の正規preview ZIPは製品commit b38a011で梱包成功（226.603秒、634904 bytes）。版/DLL/4エントリ/展開bytesを照合。PR422へ記録し、製品不変の結果を再利用する。
