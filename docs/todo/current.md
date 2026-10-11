@@ -1,5 +1,9 @@
 # いまのタスク — NeNe Nib
 
+> **2026-10-11 18:18 JST・#404の限定再評価後に停止**
+
+> hideの17:49指定で旧split試験を最新main相当A/S/H/Vで72試行、全raw/12画面を確認。長行H/V単打6.2940/6.3565msで総2ms未到達、空/長行のAの揺れとS正差5/6もあり旧判定hold。試作は製品へ採らず、結果文書の統合・恒久収載・整理だけを完了して停止する。継続改善の自動再開なし。先行#402はPR403/main4f8db90で統合/整理済み。最新[引き継ぎ](../handoffs/2026-10-11.md)、[実測](../quality/split-render-2026-10-11.json)、gate-proofs 5-eb。実完了D:/NeNeNib/evidence/split-recheck-20261011/acceptance-404/closeout.md。以下は過去の履歴。
+
 > **2026-10-11 17:16 JST・停止指示有効**: hideの17:05指定により、#402の区切り・日報引継ぎ・統合・収載・監査整理を最後にいったん停止。新しい実験はhideの再開指示待ち。朝からの先行6件はmain統合/整理済み、#402は初回3利益/4費用・24checks/21oracle・正式single5試料・GUI12対0px/24PNGで技術受理し完了処理だけ実施。失敗throw案も原証拠保存、expected/valueへ改訂。実完了wave4/acceptance-402/closeout.md、最新[引き継ぎ](../handoffs/2026-10-11.md)、全証拠gate-proofs 5-ea。以下は過去の履歴。
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
