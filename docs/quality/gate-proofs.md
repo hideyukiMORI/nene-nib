@@ -5119,3 +5119,11 @@ D44に従い、共通BodyTextLayouts/TextLayoutPortと画面行/論理行、care
 `python -B eng/test-package-release.py --work-dir D:/NeNeNib/outputs/20261011-beta-package/tool-tests-04`: 9 tests成功、2.691秒。初回のjunction見落としをlstatで修正し、同じ範囲の正例/反例を確認。外部build/PE境界だけfixture化した全梱包の正例ではZIP/README版/展開3点/SHA256SUMS/package.jsonを照合。実PEはpackage-inspection-01で49f3393 Releaseを読取り、x64/0.1.0/12 Windows DLL/NotSignedを確認（6.114秒）。実dirty呼出しとPowerShell入口は出力/build前に拒否。全原失敗・commandsと再利用は[詳細](beta-package-2026-10-11.md)。ソースcommit変更だけで製品テストを再実行しない。
 
 main統合後の実ZIP生成・起動・公開/再取得はこれから行い、結果はD:/NeNeNib/evidence/wrap-beta-20261011のrelease/closeoutへ収載する。署名・インストーラ・自動更新は未対応。ベータの利用者向けREADMEはeng/release/README.txt.inが正本で、通常/Vim/IME/折り返し/保存場所と制限を同梱する。
+
+## 5-eg — 初回ベータの公開と再取得（Issue #410 / #413）
+
+PR412/main9afca7f、PR414/main6e1043fを必須CI成功後に正規merge入口で統合。2026-10-11 23:58:23 JST、clean main6e1043fのannotated tag `v0.1.0-beta.1`をGitHub pre-releaseへ公開した。規則D44/FR-019、ARC-001/002、QLT-001/011/012/013/014、GIT-001〜004、ADR0114/0115、waiver none。
+
+package-main-01: 正規`eng/package-release.ps1 -Beta 1`、345.268秒、exit 0。x64/埋め込み版/12宣言DLL/ZIP直下3点/展開bytes成功。release-smoke-01: 展開exe、隔離profile、日本語長行、DPI120のPNG目視、正常終了/本文不変、1.191秒、exit 0。release-download-01: ZIP/SHA256SUMSの再取得bytes・asset digest・ZIP全項目・remote tag commit照合、1.162秒、exit 0。ZIP SHA `5428ba6669c1fdaf6b1dec2a10c61fee0a3a0e55b33ec2137f78ae8bb4c4ca06`。
+
+実コマンドと原記録・配布物の所在・成功再利用・限界は[公開記録](beta-release-2026-10-11.md)。製品/保存schema/基準に追加変更なし。記録文書だけの差分は正典document_checks、公開値照合、diff --checkで確認し、製品テストを追加しない。恒久収載/監査整理の実結果はD:/NeNeNib/evidence/wrap-beta-20261011/closeout.json、branch/commit/公開ZIP保持。
