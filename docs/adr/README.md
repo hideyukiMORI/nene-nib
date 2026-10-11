@@ -130,4 +130,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0112](0112-operation-choices-own-only-matched-display-values.md) | 一致した操作候補だけ表示値を所有する | 技術受理・#400 |
 | [0113](0113-status-position-uses-local-decimal-storage.md) | ステータス位置の数値を局所領域から所有する | 技術受理・#402 |
 | [0114](0114-wrapped-rows-share-the-body-text-layout.md) | 折り返した画面行は本文の文字組みを共有して求める | 技術受理・#410 |
-| [0115](0115-beta-package-from-clean-main.md) | ベータ配布物は受理済みmainの同じRelease経路から作る | 技術受理・#413 |
+| [0115](0115-beta-package-from-clean-main.md) | ベータ配布物は受理済みmainの同じRelease経路から作る | 受理・#413、初回ベータ公開済み |

@@ -8,12 +8,12 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
 > and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
 > available operations; a new untitled document and the status bar show optional shortcut hints. Markdown
-> preview and files above 64 MiB are still planned. Beta downloads are listed on the [Releases page](https://github.com/hideyukiMORI/nene-nib/releases).
+> preview and files above 64 MiB are still planned. [v0.1.0-beta.1 is available](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.1) for Windows 11 x64.
 
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
-[`docs/adr/`](docs/adr/README.md). The supported features below include the wrapped-editing beta candidate and are kept in
+[`docs/adr/`](docs/adr/README.md). The supported features below include the published wrapped-editing beta and are kept in
 `docs/todo/current.md`; the measurements behind them are in `docs/quality/gate-proofs.md`.
 
 - **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
