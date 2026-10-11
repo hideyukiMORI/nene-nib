@@ -207,12 +207,12 @@ std::size_t CommandPalette::selected() const noexcept
 
 std::expected<CommandPalette, ExFailure> CommandPalette::inserted(std::string_view text) const
 {
-    const auto next = input_.inserted(text);
+    auto next = input_.inserted(text);
     if (!next)
     {
         return std::unexpected(next.error());
     }
-    return refiltered(next.value());
+    return refiltered(std::move(next).value());
 }
 
 CommandPalette CommandPalette::moved(CommandEdit direction) const
@@ -256,12 +256,12 @@ CommandPalette CommandPalette::selected_at(std::size_t index) const
 // 候補の列を持ったまま、入力を `:<command>` にする（ADR 0060 の決定 5）。
 std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view command) const
 {
-    const auto input = CommandLine::empty(input_.catalog()).inserted(":" + std::string(command));
+    auto input = CommandLine::empty(input_.catalog()).inserted(":" + std::string(command));
     if (!input)
     {
         return std::unexpected(input.error());
     }
-    return refiltered(input.value());
+    return refiltered(std::move(input).value());
 }
 
 CommandPalette CommandPalette::extended(const std::vector<CommandChoice> &more) const

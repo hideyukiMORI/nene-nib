@@ -78,12 +78,12 @@ std::expected<CommandInput, core::ExFailure> inserted_command(const CommandInput
     return std::visit(
         [text](const auto &value) -> std::expected<CommandInput, core::ExFailure>
         {
-            const auto next = value.inserted(text);
+            auto next = value.inserted(text);
             if (!next)
             {
                 return std::unexpected(next.error());
             }
-            return CommandInput{next.value()};
+            return CommandInput{std::move(next).value()};
         },
         input);
 }

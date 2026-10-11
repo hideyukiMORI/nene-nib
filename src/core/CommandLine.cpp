@@ -49,12 +49,13 @@ std::optional<std::size_t> CommandLine::completion_index() const noexcept
 std::expected<CommandLine, ExFailure> CommandLine::inserted(std::string_view text) const
 {
     // 文字列とキャレットの規則は検索の入力行と共用する（ADR 0032 の決定 1・ARC-001）。
-    const auto next = inserted_input(InputText{text_, caret_}, text);
+    auto next = inserted_input(InputText{text_, caret_}, text);
     if (!next)
     {
         return std::unexpected(next.error());
     }
-    return CommandLine(next.value().text, next.value().caret, themes_);
+    const auto caret = next.value().caret;
+    return CommandLine(std::move(next).value().text, caret, themes_);
 }
 
 CommandLine CommandLine::completed(CommandEdit direction) const
@@ -82,7 +83,8 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     {
         return completed(edit);
     }
-    const InputText next = edited_input(InputText{text_, caret_}, edit);
-    return CommandLine(next.text, next.caret, themes_);
+    InputText next = edited_input(InputText{text_, caret_}, edit);
+    const auto caret = next.caret;
+    return CommandLine(std::move(next.text), caret, themes_);
 }
 } // namespace nenenib::core
