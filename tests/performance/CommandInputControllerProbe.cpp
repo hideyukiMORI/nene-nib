@@ -118,7 +118,7 @@ const std::array<ControllerCase, 4> controller_cases{{
 {
     if (!sample.palette_count.has_value())
     {
-        return !frame.command_palette.has_value() && frame.command_line.value().completions.empty();
+        return !frame.command_palette.has_value();
     }
     if (!frame.command_palette.has_value())
     {
@@ -128,7 +128,7 @@ const std::array<ControllerCase, 4> controller_cases{{
     if (sample.palette_count.value() == 0U)
     {
         return palette.rows.empty() && palette.total == 0U && palette.selected == 0U &&
-               palette.first == 0U && frame.command_line.value().completions.empty();
+               palette.first == 0U;
     }
     if (palette.rows.size() != 1U || palette.total != 1U || palette.selected != 0U ||
         palette.first != 0U)
@@ -137,7 +137,7 @@ const std::array<ControllerCase, 4> controller_cases{{
     }
     const auto &choice = palette.rows.at(0U);
     return choice.kind == core::CommandChoiceKind::fill && choice.command == "set fontsize=" &&
-           choice.label.text() == "set fontsize=" && frame.command_line.value().completions.empty();
+           choice.label.text() == "set fontsize=";
 }
 
 [[nodiscard]] bool frame_equal(const application::EditorFrame &frame, const ControllerCase &sample,
@@ -152,9 +152,9 @@ const std::array<ControllerCase, 4> controller_cases{{
            document_equal(frame.tabs.at(0U)) && frame.active_tab == 0U && line.text == input &&
            line.caret.value == input.size() && core::code_point_count(line.text) == input.size() &&
            line.prompt == sample.prompt && !line.completion_index.has_value() &&
-           palette_equal(frame, sample) && !frame.composition.has_value() &&
-           !frame.command_composition.has_value() && !frame.command_message.has_value() &&
-           !frame.settings_failure.has_value() &&
+           line.completions.empty() && palette_equal(frame, sample) &&
+           !frame.composition.has_value() && !frame.command_composition.has_value() &&
+           !frame.command_message.has_value() && !frame.settings_failure.has_value() &&
            core::same_settings(frame.settings, core::default_editor_settings()) &&
            frame.status_items.at(0U).text() == "行 1, 桁 1" &&
            frame.status_items.at(1U).text() == "UTF-8" &&
@@ -230,7 +230,7 @@ std::expected<std::uint64_t, ProbeFailure> probed_controller_input(CommandInputW
     prepare_controller(editing, sample, input);
     const auto initial = editing.controller().frame();
     const auto delivered = editing.controller().delivery();
-    if (!controller_equal(editing, sample, input))
+    if (!initial.command_line.has_value() || !controller_equal(editing, sample, input))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
