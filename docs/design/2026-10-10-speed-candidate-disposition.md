@@ -93,3 +93,13 @@ C2の追加評価としてADR0109を先行固定し、ExResult.cppの唯一の�
 256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/gate-proofs.md#5-dx--補完prefixを同期呼出しの間だけ借用するissue-396adr0110)。API/settings/schema変更なし、waiver none。
 
 C2の追加評価。元26件の20採用/2実験不採用/4未実験は不変。次はCommandChoice候補所有copyを読取調査済みだが未Issue/未実装/未測。全候補順の独立oracleを将来設計で補う。C8/R8/IO6〜IO8、#365/#373の処分不変。
+
+## 追加実験: パレット候補の所有移譲 #398
+
+#398 / ADR0111。CommandChoice.cppのpalette_choicesは一時owning vectorの要素をauto &で受け、一致したcommandを既存choice_ofへmoveする。choice_ofはDisplayTextを非constで所有し、返却値へmoveする。二箇所以外の全文と他製品source、rank/同点順/parse/kind/catalog/input/返却所有は不変。direct/fallbackのinitializer_list返却copyは残る。API/settings/schema/cache/正本経路の変更なし、waiver none。
+
+先行設計55f51ace45b2fe4882338552e482e1fd4fce15cd、最終harnessd353aee3f30a092fbc6ed8b143b85fe64579dcc0、製品5cc97270646d0cf705a81f15ab3be04dbad1f141。初回2利益/8費用、Debug既存592checks/30oracle、旧129probe/47selector/default/assertions/1853fixtures保持、GUI21対0px/42PNG・14本文copy・232checkpoint・42mode・2正常close・親全画像目視で2026-10-11 15:07 JSTに技術受理。
+
+空queryのbuiltin36候補を512回生成・破棄する固定区間で約10.54%、custom失敗名256を含む292候補を128回で約17.06%短縮。異なる回数の局所率を合算/直接比較したりUI全体へ換算しない。費用8条件と全試行は[gate-proofs 5-dy](../quality/gate-proofs.md#5-dy--パレット候補の所有値をmoveで渡すissue-398adr0111)。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変により限定reuse。新exeの正式速度/全8成功ではない。
+
+C2の追加評価、元26件の20採用/2実験不採用/4未実験は不変。operation_choices案は読取のみ。opened/extendedの防御copy削除はADR0091に反するため見送り。C8/R8/IO6〜IO8、#365/#373の処分不変。

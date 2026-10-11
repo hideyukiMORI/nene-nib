@@ -1,6 +1,6 @@
 # いまのタスク — NeNe Nib
 
-> **2026-10-11 13:57 JST**: hideの停止まで改善継続。#394はPR395/main062f973・収載・監査整理済み（acceptance-394）。#396補完prefix借用を初回1利益/9費用・817checks・30oracle・GUI21対0px/42PNGで技術受理。長prefix4096回で約38.03%短縮、UI全体へ換算しない。新正式取得0、旧files palette5000限定reuse。通常統合/収載/整理へ進み実結果はwave4/acceptance-396。次はCommandChoice候補所有copyを読取調査済み、未実装/未測。最新は[10月11日の引き継ぎ](../handoffs/2026-10-11.md)、証拠gate-proofs 5-dx。以下は時点ごとの履歴。
+> **2026-10-11 15:07 JST**: hideの停止まで改善継続。#396はPR397/main4f6419e・収載・監査整理済み。#398パレット候補所有移譲を初回2利益/8費用・592checks/30oracle・GUI21対0px/42PNGで技術受理。builtin36候補512回で約10.54%、custom292候補128回で約17.06%局所短縮。新正式取得0、旧files palette5000限定reuse。通常統合/収載/整理へ進み実完了はwave4/acceptance-398。次operation_choicesは読取のみ。最新は[10月11日の引き継ぎ](../handoffs/2026-10-11.md)、全証拠gate-proofs 5-dy。以下は履歴。
 
 > GitHub Issue が正。ここは要約であり、Markdown のチェックリストをタスク状態として扱わない。
 > 更新は実測でだけ行う。検証は差分から選び、関連入力が不変の成功結果を再利用する（QLT-001 / QLT-012・[ADR 0021](../adr/0021-diff-scoped-verification-and-result-reuse.md)）。

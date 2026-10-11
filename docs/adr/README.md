@@ -126,3 +126,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0108](0108-completed-command-input-transfers-ownership.md) | 完成したコマンド入力は既存の所有先へ移す | 技術受理・#392 |
 | [0109](0109-ex-completion-owns-only-matching-candidates.md) | Ex補完の候補は一致を確かめてから所有する | 技術受理・#394 |
 | [0110](0110-completion-prefix-is-borrowed-for-the-synchronous-call.md) | 補完prefixは同期呼び出しの間だけ借用する | 技術受理・#396 |
+| [0111](0111-palette-choices-transfer-owned-values.md) | パレット候補は所有値をコピーせず渡す | 技術受理・#398 |

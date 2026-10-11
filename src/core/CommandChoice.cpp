@@ -105,12 +105,12 @@ match_score(std::string_view query, std::span<const std::string_view, Count> com
 
 [[nodiscard]] CommandChoice choice_of(std::string command)
 {
-    const auto label = DisplayText::parse(command).value();
+    auto label = DisplayText::parse(command).value();
     const auto kind = command == "set fontsize=" || command == "set guifont="
                           ? CommandChoiceKind::fill
                           : CommandChoiceKind::execute;
-    return CommandChoice{label,        std::move(command), kind, std::nullopt,
-                         std::nullopt, std::nullopt,       {}};
+    return CommandChoice{std::move(label), std::move(command), kind, std::nullopt,
+                         std::nullopt,     std::nullopt,       {}};
 }
 
 // 出どころの印が見せる出どころ（ADR 0060 の決定 3）。印が増えたらここが落ちる（CPP-002）。
@@ -282,7 +282,7 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
         return {choice_of(std::string(query))};
     }
     std::vector<CommandMatch> matches;
-    for (auto command : ex_command_candidates(input.catalog()))
+    for (auto &command : ex_command_candidates(input.catalog()))
     {
         const auto score = match_score(query, command);
         if (score.has_value())
