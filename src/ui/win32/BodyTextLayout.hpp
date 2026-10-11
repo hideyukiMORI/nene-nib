@@ -18,5 +18,7 @@ struct BodyTextLayout
     Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
     std::vector<BodyGlyphRun> glyphs{};
     bool glyphs_ready = false;
+    bool glyphs_tried = false;
+    std::size_t rows = 1;
 };
 } // namespace nenenib::ui::win32

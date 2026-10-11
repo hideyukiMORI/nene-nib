@@ -7,18 +7,29 @@
 
 #include <cstdio>
 #include <objbase.h>
+#include <string_view>
 
-int main()
+int main(int argc, char **argv)
 {
     namespace ui = nenenib::tests::ui;
     // WIC の factory を作るために COM を初期化する（描画先はメモリの bitmap だけ）。
     const HRESULT initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     ui::expect(SUCCEEDED(initialized), "COM is initialized for the software target");
-    ui::verify_fallback_keys();
-    ui::verify_fallback_cache();
-    ui::verify_glyph_collector();
-    ui::verify_glyph_pixels();
-    ui::verify_gutter_layouts();
+    if (argc == 2 && std::string_view(argv[1]) == "--text-layout")
+    {
+        ui::verify_body_text_layouts();
+    }
+    if (argc == 1)
+    {
+        ui::verify_fallback_keys();
+        ui::verify_fallback_cache();
+        ui::verify_glyph_collector();
+        ui::verify_glyph_pixels();
+        ui::verify_gutter_layouts();
+        ui::verify_body_text_layouts();
+    }
+    ui::expect(argc == 1 || (argc == 2 && std::string_view(argv[1]) == "--text-layout"),
+               "window verification selector is known");
     if (SUCCEEDED(initialized))
     {
         CoUninitialize();

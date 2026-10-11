@@ -1,0 +1,52 @@
+#pragma once
+
+#include "BodyTextLayout.hpp"
+#include "BodyTextStyle.hpp"
+#include "TextLayoutPort.hpp"
+
+#include <dwrite_3.h>
+#include <expected>
+#include <optional>
+#include <vector>
+#include <wrl/client.h>
+
+namespace nenenib::ui::win32
+{
+// 合成ルートが1つを持ち、applicationの位置解決とrendererが同じ資源を借りる。
+// 構築ではOS資源を作らない。最初に文字組みが必要になったときだけ初期化する。
+class BodyTextLayouts final : public application::TextLayoutPort
+{
+  public:
+    using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
+    [[nodiscard]] std::expected<std::size_t, application::TextLayoutFailure>
+    rows(const application::TextLayoutRequest &request) override;
+    [[nodiscard]] std::expected<core::TextLocation, application::TextLayoutFailure>
+    locate(const application::TextLayoutRequest &request, core::DisplayCaret caret) override;
+    [[nodiscard]] std::expected<core::DisplayCaret, application::TextLayoutFailure>
+    hit(const application::TextLayoutRequest &request, core::TextLocation point) override;
+    [[nodiscard]] std::expected<TextLayout, application::TextLayoutFailure>
+    get(const application::TextLayoutRequest &request);
+    // 描画時だけ字形を保持する。位置を調べただけの画面外の行には字形を複製しない。
+    [[nodiscard]] const BodyTextLayout *glyphs_of(IDWriteTextLayout *layout);
+    void begin_frame();
+    void end_frame();
+
+  private:
+    using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
+    [[nodiscard]] std::expected<void, application::TextLayoutFailure>
+    prepare(const application::TextLayoutRequest &request);
+    [[nodiscard]] bool matches_style(const application::TextLayoutRequest &request) const;
+    [[nodiscard]] HRESULT make_format(const application::TextLayoutRequest &request);
+    [[nodiscard]] std::wstring family(std::string_view requested) const;
+    void attach_fallback();
+    [[nodiscard]] HRESULT set_spacing(const application::TextLayoutRequest &request);
+    [[nodiscard]] std::expected<BodyTextLayout, application::TextLayoutFailure>
+    make_layout(const application::TextLayoutRequest &request);
+
+    Microsoft::WRL::ComPtr<IDWriteFactory7> factory_;
+    TextFormat format_;
+    std::optional<BodyTextStyle> style_;
+    std::vector<BodyTextLayout> current_;
+    std::vector<BodyTextLayout> previous_;
+};
+} // namespace nenenib::ui::win32
