@@ -229,7 +229,8 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/PreviewCaretProbe.cpp tests/performance/FrameDocumentProbe.cpp
     tests/performance/StatusItemsProbe.cpp
     tests/performance/FileNameProbe.cpp tests/performance/TabDisplayProbe.cpp
-    tests/performance/CommandInputProbe.cpp tests/performance/CommandInputControllerProbe.cpp)
+    tests/performance/CommandInputProbe.cpp tests/performance/CommandInputControllerProbe.cpp
+    tests/performance/ExCompletionProbe.cpp tests/performance/ExCompletionFrameProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

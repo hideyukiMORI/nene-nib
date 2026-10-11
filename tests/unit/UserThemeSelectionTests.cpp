@@ -275,12 +275,70 @@ void verify_blocked_theme_noop()
     expect(editor.settings().writes() == 1 && !editor.settings().written().has_value(),
            "same value still consults the blocked settings port");
 }
+
+void verify_user_completion_order()
+{
+    const auto catalog = user_catalog();
+    expect(core::ex_command_candidates(catalog) ==
+               std::vector<std::string>{"colorscheme",
+                                        "set fontsize=",
+                                        "set guifont=",
+                                        "set incsearch",
+                                        "set noincsearch",
+                                        "set hlsearch",
+                                        "set nohlsearch",
+                                        "set guide",
+                                        "set noguide",
+                                        "tabs",
+                                        "tabnew",
+                                        "tabnext",
+                                        "tabprevious",
+                                        "tabclose",
+                                        "edit",
+                                        "buffer",
+                                        "ls",
+                                        "files",
+                                        "buffers",
+                                        "write",
+                                        "quit",
+                                        "quit!",
+                                        "wq",
+                                        "xit",
+                                        "exit",
+                                        "saveas",
+                                        "colorscheme ubuntu-aubergine",
+                                        "colorscheme neutral-light",
+                                        "colorscheme solarized-dark",
+                                        "colorscheme solarized-light",
+                                        "colorscheme monokai",
+                                        "colorscheme dracula",
+                                        "colorscheme one-dark",
+                                        "colorscheme night-owl",
+                                        "colorscheme night-owl-light",
+                                        "colorscheme broken",
+                                        "colorscheme my-theme",
+                                        "colorscheme z-theme",
+                                        "colorscheme system"},
+           "all custom candidates include failed records in exact order");
+    expect(core::command_completions("colorscheme ", catalog) ==
+               std::vector<std::string>{
+                   "colorscheme ubuntu-aubergine", "colorscheme neutral-light",
+                   "colorscheme solarized-dark", "colorscheme solarized-light",
+                   "colorscheme monokai", "colorscheme dracula", "colorscheme one-dark",
+                   "colorscheme night-owl", "colorscheme night-owl-light", "colorscheme broken",
+                   "colorscheme my-theme", "colorscheme z-theme", "colorscheme system"},
+           "theme prefix retains builtins and sorted custom names");
+    expect(core::command_completions("colorscheme broken", catalog) ==
+               std::vector<std::string>{"colorscheme broken"},
+           "failed custom name remains a completion");
+}
 } // namespace
 
 void verify_user_theme_selection()
 {
     verify_theme_catalog();
     verify_user_theme_commands();
+    verify_user_completion_order();
     verify_user_theme_controller();
     verify_theme_startup_notice();
     verify_blocked_theme_noop();

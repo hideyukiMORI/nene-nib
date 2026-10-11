@@ -509,6 +509,114 @@ void verify_ex_tab_arguments()
                "Not supported",
            "the bare message has no input");
 }
+
+const auto completion_all = std::vector<std::string>{"colorscheme",
+                                                     "set fontsize=",
+                                                     "set guifont=",
+                                                     "set incsearch",
+                                                     "set noincsearch",
+                                                     "set hlsearch",
+                                                     "set nohlsearch",
+                                                     "set guide",
+                                                     "set noguide",
+                                                     "tabs",
+                                                     "tabnew",
+                                                     "tabnext",
+                                                     "tabprevious",
+                                                     "tabclose",
+                                                     "edit",
+                                                     "buffer",
+                                                     "ls",
+                                                     "files",
+                                                     "buffers",
+                                                     "write",
+                                                     "quit",
+                                                     "quit!",
+                                                     "wq",
+                                                     "xit",
+                                                     "exit",
+                                                     "saveas",
+                                                     "colorscheme ubuntu-aubergine",
+                                                     "colorscheme neutral-light",
+                                                     "colorscheme solarized-dark",
+                                                     "colorscheme solarized-light",
+                                                     "colorscheme monokai",
+                                                     "colorscheme dracula",
+                                                     "colorscheme one-dark",
+                                                     "colorscheme night-owl",
+                                                     "colorscheme night-owl-light",
+                                                     "colorscheme system"};
+const auto completion_ordinary = std::vector<std::string>{"colorscheme",
+                                                          "set fontsize=",
+                                                          "set guifont=",
+                                                          "set incsearch",
+                                                          "set noincsearch",
+                                                          "set hlsearch",
+                                                          "set nohlsearch",
+                                                          "set guide",
+                                                          "set noguide",
+                                                          "tabs",
+                                                          "tabnew",
+                                                          "tabnext",
+                                                          "tabprevious",
+                                                          "tabclose",
+                                                          "edit",
+                                                          "buffer",
+                                                          "ls",
+                                                          "files",
+                                                          "buffers",
+                                                          "write",
+                                                          "quit",
+                                                          "quit!",
+                                                          "wq",
+                                                          "xit",
+                                                          "exit",
+                                                          "saveas"};
+const auto completion_themes =
+    std::vector<std::string>{"colorscheme ubuntu-aubergine", "colorscheme neutral-light",
+                             "colorscheme solarized-dark",   "colorscheme solarized-light",
+                             "colorscheme monokai",          "colorscheme dracula",
+                             "colorscheme one-dark",         "colorscheme night-owl",
+                             "colorscheme night-owl-light",  "colorscheme system"};
+
+void verify_completion_candidate_boundaries()
+{
+    expect(core::ex_command_candidates() == completion_all,
+           "all candidates retain the full builtin order");
+    expect(core::command_completions("") == completion_ordinary,
+           "empty prefix retains only ordinary names");
+    expect(core::command_completions("col") == std::vector<std::string>{"colorscheme"},
+           "raw prefix boundary col");
+    expect(core::command_completions("colorscheme") == std::vector<std::string>{"colorscheme"},
+           "raw prefix boundary colorscheme");
+    expect(core::command_completions("colorscheme ") == completion_themes,
+           "raw prefix boundary colorscheme ");
+    expect(core::command_completions("colorscheme d") ==
+               std::vector<std::string>{"colorscheme dracula"},
+           "raw prefix boundary colorscheme d");
+    expect(core::command_completions("colorscheme dracula") ==
+               std::vector<std::string>{"colorscheme dracula"},
+           "raw prefix boundary colorscheme dracula");
+    expect(core::command_completions("colorscheme draculax") == std::vector<std::string>{},
+           "raw prefix boundary colorscheme draculax");
+    expect(core::command_completions("Colorscheme") == std::vector<std::string>{},
+           "raw prefix boundary Colorscheme");
+    expect(core::command_completions(" colorscheme") == std::vector<std::string>{},
+           "raw prefix boundary  colorscheme");
+    expect(core::command_completions(":colorscheme") == std::vector<std::string>{},
+           "raw prefix boundary :colorscheme");
+    expect(core::command_completions("q") == std::vector<std::string>{"quit", "quit!"},
+           "raw prefix boundary q");
+    expect(core::command_completions("quit!") == std::vector<std::string>{"quit!"},
+           "raw prefix boundary quit!");
+    expect(core::command_completions("quit!!") == std::vector<std::string>{},
+           "raw prefix boundary quit!!");
+    expect(core::command_completions("colorscheme system") ==
+               std::vector<std::string>{"colorscheme system"},
+           "raw prefix boundary colorscheme system");
+    expect(core::command_completions("colorscheme systemx") == std::vector<std::string>{},
+           "raw prefix boundary colorscheme systemx");
+}
 } // namespace
 
 void verify_ex_settings()
@@ -521,6 +629,7 @@ void verify_ex_settings()
     verify_ex_rejections();
     verify_command_editing();
     verify_command_completions();
+    verify_completion_candidate_boundaries();
     verify_ex_controller();
     verify_guide_settings();
     verify_ex_input_isolation();
