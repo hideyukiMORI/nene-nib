@@ -1,6 +1,6 @@
 # ADR 0113 — ステータス位置の数値は局所領域で組み立てる
 
-- 状態: 提案（初回比較・関連検証の前）
+- 状態: 設計承認（実験branchの実装を許可。初回比較・関連検証の前であり、製品の技術受理・main統合は未実施）
 - 日付: 2026-10-11
 - Issue: #402
 - 基準: main b13a04b41e708fb198a6b61bdbf84a31f2499278
@@ -35,7 +35,7 @@ CPP-014のstd::format一般文には、受理済ADR0022のcore/application local
 
 before Release、製品通常Release、製品Debug ASan/UBSan/no-recoverで既存7probeを各1iteration、Debug --status-itemsだけを実行。全encoding/ending・max・所有保持は6pure oracle、frameの全fieldsはcaller oracleが直接境界を担うため無関係なunit scope/全件回帰は実行しない。変更C++のformat/tidy/規約、実CMake graph/core/application symbols、protected-diffを確認。通常Releaseはeng/build-release.ps1の40桁Ref/cleanから作る。構成別flagsは原captureへ保持し同一と主張しない。
 
-GUIは既存driverと私有profile、同一bodyの6encoding×ending場面で1/1、9/24、10/100、99/999、100/999、123/456を事前固定する。本文は124行×1000codepoints、先頭「日界」+998個x、改行は場面encoding/endingどおり。本物のキーでVim count gg/0/count l後、指定ordinary/Vimへ移る。captionをcopy前に取り、copy用:wは私有コピーだけ。前後全client無mask、mode/caret/元bytesmtime/本文copy/settings/LastInput/正常終了を確認し親が全原PNGを見る。0とsize_t最大は型契約でありGUIへ不可能値を注入しない。操作計画をafter取得前に固定し、順序・欠測を保持する。
+GUIは既存driverと私有profile、同一bodyの6encoding×ending場面で1/1、9/24、10/100、99/999、100/999、123/456を事前固定する。本文は124行×1000codepoints、先頭「日界」+998個x、改行は場面encoding/endingどおり。本物のキーでVim count gg/0/count l後、指定ordinary/Vimへ移る。captionをcopy前に取り、copy用:wは私有コピーだけ。前後全client無mask、mode/ステータス位置/元bytesmtime/本文copy/settings/LastInput/正常終了を確認し親が全原PNGを見る。本文の水平scrollは現行UIに無く長桁caretはclipされるため、GUIで確認するのはステータスの行桁literalであり、画面外の本文caretが可視だったとは主張しない。内部位置の全域と0/size_t最大はcore型契約で確認し、GUIへ不可能値を注入しない。captionは同位置・同mode・入力面なしのbeforeguardを兼ね、copy後に同位置へ復帰したafterguardを別に取る（各side12画像、前後12対/24原PNG、24mode/12本文copy/2正常close）。操作計画をafter取得前に固定し、順序・欠測を保持する。
 
 正式は共通status callerのkey-to-frame-singleを既存measure-speed.py --benchで初回5試料新取得し、元基準に照合。他7正式指標は未測。旧files結果はこの変更へreuseしない。純粋比較・正式・GUI取得中は他agent/build/test/hash/copyを停止する。
 
