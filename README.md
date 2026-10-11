@@ -3,7 +3,7 @@
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
-> **Status (2026-10-12):** ordinary editing, file open/save, Japanese IME, persisted settings with 95
+> **Status (2026-10-12):** ordinary editing, file open/save, Japanese IME, persisted settings with 125
 > built-in themes, and the Vim NORMAL / INSERT / VISUAL core (motions, operators, text objects, search with
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
 > and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
@@ -74,10 +74,10 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   `eng/perf-reference.json` (startup 191 ms, window visible 35 ms, one keystroke 0.9 ms, 16 MiB file 250 ms on the
   reference machine). `--bench <name>` selects one measurement, including input in a 5000-file palette.
   Run on demand and in `-Full`; the required CI check does not measure.
-- **FR-016 colorscheme** — 95 built-in themes plus up to 128 user themes from
+- **FR-016 colorscheme** — 125 built-in themes plus up to 128 user themes from
   `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`; `:colorscheme <name>` / `system`, Tab completion, Ctrl+P. Done.
   Includes all 28 Vim standard names, VS Code defaults, popular IDE palettes, MonaLisa,
-  and seven original film-inspired palettes. Each has a separate gutter background.
+  and 37 original film-inspired palettes. Each has a separate gutter background.
   [Catalog and sources](docs/design/2026-10-12-colorschemes.md) ·
   [Interactive color study](docs/design/colorschemes.html) (open the downloaded HTML locally).
   Syntax colors are prepared for future language highlighting; parsing is not implemented yet.

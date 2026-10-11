@@ -4039,5 +4039,1260 @@
     "notes": [
       "Original palette; film imagery and trademarks are not bundled"
     ]
+  },
+  {
+    "name": "royal-kinetic",
+    "appearance": "dark",
+    "body": {
+      "comment": "#9684B3",
+      "keyword": "#C69AFF",
+      "string": "#78DACA",
+      "number": "#D7B17D",
+      "type": "#B7A5EC",
+      "function": "#A1DBEE",
+      "constant": "#E7A7D0",
+      "operators": "#BCAFCF",
+      "error": "#F191AB",
+      "warning": "#E9C07B",
+      "foreground": "#E6DFF3",
+      "background": "#110E1C",
+      "cursor": "#B582F5",
+      "selection": "#42305D",
+      "current_line": "#1F1C2B",
+      "line_number": "#9684B3"
+    },
+    "accent": "#B582F5",
+    "gutter_background": "#1D162D",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "royal-kinetic",
+      "film": "Black Panther",
+      "ja": "ブラックパンサー",
+      "url": "https://marvel.disney.co.jp/movie/blackpanther"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "arena-sunset",
+    "appearance": "dark",
+    "body": {
+      "comment": "#90AA9A",
+      "keyword": "#F5AA75",
+      "string": "#C7D976",
+      "number": "#EAB87A",
+      "type": "#7DD1CB",
+      "function": "#EADB9A",
+      "constant": "#E3A8C4",
+      "operators": "#B5CABA",
+      "error": "#F49187",
+      "warning": "#EED875",
+      "foreground": "#ECE8CF",
+      "background": "#192C29",
+      "cursor": "#F09068",
+      "selection": "#594A3B",
+      "current_line": "#273934",
+      "line_number": "#90AA9A"
+    },
+    "accent": "#F09068",
+    "gutter_background": "#10231F",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "arena-sunset",
+      "film": "Thor: Ragnarok",
+      "ja": "マイティ・ソー バトルロイヤル",
+      "url": "https://marvel.disney.co.jp/movie/thor-br"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "cosmic-mixtape",
+    "appearance": "dark",
+    "body": {
+      "comment": "#9F89B2",
+      "keyword": "#ECA7DA",
+      "string": "#9EDACE",
+      "number": "#F6B98D",
+      "type": "#9CCAF2",
+      "function": "#C5B0F5",
+      "constant": "#DDC288",
+      "operators": "#C5ACCE",
+      "error": "#F592B2",
+      "warning": "#F1CB83",
+      "foreground": "#EEE0F5",
+      "background": "#251630",
+      "cursor": "#E68BCD",
+      "selection": "#5E395F",
+      "current_line": "#33243D",
+      "line_number": "#9F89B2"
+    },
+    "accent": "#E68BCD",
+    "gutter_background": "#1A1025",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "cosmic-mixtape",
+      "film": "Guardians of the Galaxy Vol. 2",
+      "ja": "ガーディアンズ・オブ・ギャラクシー：リミックス",
+      "url": "https://marvel.disney.co.jp/movie/gog-remix"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "prism-sanctum",
+    "appearance": "dark",
+    "body": {
+      "comment": "#83AAA0",
+      "keyword": "#F4B672",
+      "string": "#B7D39A",
+      "number": "#E99A7C",
+      "type": "#86CCC6",
+      "function": "#E9D497",
+      "constant": "#CBB2E5",
+      "operators": "#B5C8B8",
+      "error": "#F4927D",
+      "warning": "#F5D586",
+      "foreground": "#E9E9D7",
+      "background": "#102825",
+      "cursor": "#EDA657",
+      "selection": "#524D34",
+      "current_line": "#1F3531",
+      "line_number": "#83AAA0"
+    },
+    "accent": "#EDA657",
+    "gutter_background": "#0B1C1D",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "prism-sanctum",
+      "film": "Doctor Strange",
+      "ja": "ドクター・ストレンジ",
+      "url": "https://marvel.disney.co.jp/movie/dr-strange"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "winter-sentinel",
+    "appearance": "dark",
+    "body": {
+      "comment": "#8FA4B3",
+      "keyword": "#A6CFE2",
+      "string": "#B5CABC",
+      "number": "#E3AAA7",
+      "type": "#8CCBCD",
+      "function": "#D2DEDC",
+      "constant": "#BCBCE0",
+      "operators": "#A8BDCA",
+      "error": "#F0959C",
+      "warning": "#E3C498",
+      "foreground": "#DDE8EF",
+      "background": "#142431",
+      "cursor": "#8FB9CB",
+      "selection": "#38505F",
+      "current_line": "#22313E",
+      "line_number": "#8FA4B3"
+    },
+    "accent": "#8FB9CB",
+    "gutter_background": "#0D1925",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "winter-sentinel",
+      "film": "Captain America: The Winter Soldier",
+      "ja": "キャプテン・アメリカ／ウィンター・ソルジャー",
+      "url": "https://marvel.disney.co.jp/movie/captain-america2"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "infinite-dusk",
+    "appearance": "dark",
+    "body": {
+      "comment": "#A895B1",
+      "keyword": "#DCB0EB",
+      "string": "#E3C28F",
+      "number": "#EFAD91",
+      "type": "#B1C6E9",
+      "function": "#F5D19B",
+      "constant": "#E9ADC6",
+      "operators": "#C3B3CC",
+      "error": "#F49BAD",
+      "warning": "#E5CB94",
+      "foreground": "#F0E2E8",
+      "background": "#2C1D32",
+      "cursor": "#DDA286",
+      "selection": "#61444B",
+      "current_line": "#392A3E",
+      "line_number": "#A895B1"
+    },
+    "accent": "#DDA286",
+    "gutter_background": "#201327",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "infinite-dusk",
+      "film": "Avengers: Infinity War",
+      "ja": "アベンジャーズ／インフィニティ・ウォー",
+      "url": "https://marvel.disney.co.jp/movie/avengers-iw"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "stellar-pilot",
+    "appearance": "dark",
+    "body": {
+      "comment": "#8E9AB6",
+      "keyword": "#F09C97",
+      "string": "#E0C983",
+      "number": "#B4D2DF",
+      "type": "#A3BDEB",
+      "function": "#F2DBA2",
+      "constant": "#E6ACC5",
+      "operators": "#C0C9DA",
+      "error": "#FA9195",
+      "warning": "#EAC46B",
+      "foreground": "#EDE7D9",
+      "background": "#141E35",
+      "cursor": "#D6B766",
+      "selection": "#4E4B43",
+      "current_line": "#232C40",
+      "line_number": "#8E9AB6"
+    },
+    "accent": "#D6B766",
+    "gutter_background": "#0D1428",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "stellar-pilot",
+      "film": "Captain Marvel",
+      "ja": "キャプテン・マーベル",
+      "url": "https://marvel.disney.co.jp/movie/captain-marvel"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "quantum-honey",
+    "appearance": "dark",
+    "body": {
+      "comment": "#AFA18A",
+      "keyword": "#E9C16A",
+      "string": "#D0D5A3",
+      "number": "#E99F8D",
+      "type": "#A6C6CA",
+      "function": "#F2D996",
+      "constant": "#D4B5A7",
+      "operators": "#C8BDA5",
+      "error": "#F59A84",
+      "warning": "#EBD27D",
+      "foreground": "#EEE6D3",
+      "background": "#282218",
+      "cursor": "#E4B651",
+      "selection": "#604E29",
+      "current_line": "#352F25",
+      "line_number": "#AFA18A"
+    },
+    "accent": "#E4B651",
+    "gutter_background": "#1D1912",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "quantum-honey",
+      "film": "Ant-Man and the Wasp",
+      "ja": "アントマン＆ワスプ",
+      "url": "https://marvel.disney.co.jp/movie/antman-wasp"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "crimson-mercenary",
+    "appearance": "dark",
+    "body": {
+      "comment": "#A98E96",
+      "keyword": "#F49CA3",
+      "string": "#D3C4AE",
+      "number": "#E9AD90",
+      "type": "#B9C2D5",
+      "function": "#EBD3C8",
+      "constant": "#C9AECF",
+      "operators": "#C8ABB4",
+      "error": "#F29D87",
+      "warning": "#E2C085",
+      "foreground": "#EDE1DC",
+      "background": "#27161B",
+      "cursor": "#E57D85",
+      "selection": "#60343A",
+      "current_line": "#342428",
+      "line_number": "#A98E96"
+    },
+    "accent": "#E57D85",
+    "gutter_background": "#190D12",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "crimson-mercenary",
+      "film": "Deadpool",
+      "ja": "デッドプール",
+      "url": "https://www.20thcenturystudios.com/movies/deadpool"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "last-outlaw",
+    "appearance": "dark",
+    "body": {
+      "comment": "#A99A85",
+      "keyword": "#E2B17D",
+      "string": "#B9C39D",
+      "number": "#DBA28C",
+      "type": "#C5B995",
+      "function": "#EBD4A2",
+      "constant": "#C8B0A3",
+      "operators": "#C0AE99",
+      "error": "#EB9C8B",
+      "warning": "#E3C07C",
+      "foreground": "#E8DDC9",
+      "background": "#2A221C",
+      "cursor": "#CAA06A",
+      "selection": "#5A4733",
+      "current_line": "#372F28",
+      "line_number": "#A99A85"
+    },
+    "accent": "#CAA06A",
+    "gutter_background": "#1D1712",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "last-outlaw",
+      "film": "Logan",
+      "ja": "LOGAN／ローガン",
+      "url": "https://www.20thcenturystudios.com/movies/logan"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "ivory-agent",
+    "appearance": "light",
+    "body": {
+      "comment": "#696D6E",
+      "keyword": "#963A3D",
+      "string": "#46635C",
+      "number": "#8A532C",
+      "type": "#385C78",
+      "function": "#6B4A62",
+      "constant": "#7E4A42",
+      "operators": "#555F68",
+      "error": "#AC343C",
+      "warning": "#805E1D",
+      "foreground": "#31363B",
+      "background": "#F2EFE8",
+      "cursor": "#A73837",
+      "selection": "#DCB9B3",
+      "current_line": "#E5E3DC",
+      "line_number": "#616566"
+    },
+    "accent": "#A73837",
+    "gutter_background": "#E3E2DC",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "ivory-agent",
+      "film": "Black Widow",
+      "ja": "ブラック・ウィドウ",
+      "url": "https://marvel.disney.co.jp/movie/blackwidow"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "celestial-brass",
+    "appearance": "light",
+    "body": {
+      "comment": "#6C695C",
+      "keyword": "#705538",
+      "string": "#596246",
+      "number": "#866042",
+      "type": "#466368",
+      "function": "#725275",
+      "constant": "#8F4C45",
+      "operators": "#5F6258",
+      "error": "#A04438",
+      "warning": "#786014",
+      "foreground": "#343631",
+      "background": "#EEE8D8",
+      "cursor": "#9B7836",
+      "selection": "#D6C7A8",
+      "current_line": "#E1DCCD",
+      "line_number": "#615E52"
+    },
+    "accent": "#9B7836",
+    "gutter_background": "#DDD8C8",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "celestial-brass",
+      "film": "Eternals",
+      "ja": "エターナルズ",
+      "url": "https://marvel.disney.co.jp/movie/eternals"
+    },
+    "adjustments": {
+      "comment": {
+        "source": "#6F6C5E",
+        "adapted": "#6C695C"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "amber-haze",
+    "appearance": "dark",
+    "body": {
+      "comment": "#B69788",
+      "keyword": "#F3B179",
+      "string": "#81CFD8",
+      "number": "#E6C08D",
+      "type": "#A4C8D9",
+      "function": "#F6D2A3",
+      "constant": "#E9A89D",
+      "operators": "#C8B2A0",
+      "error": "#F79586",
+      "warning": "#EAD278",
+      "foreground": "#F1E0CF",
+      "background": "#301C18",
+      "cursor": "#EAA25C",
+      "selection": "#67442C",
+      "current_line": "#3D2924",
+      "line_number": "#B69788"
+    },
+    "accent": "#EAA25C",
+    "gutter_background": "#21130F",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "amber-haze",
+      "film": "Blade Runner 2049",
+      "ja": "ブレードランナー2049",
+      "url": "https://www.warnerbros.com/movies/blade-runner-2049"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "desert-oracle",
+    "appearance": "light",
+    "body": {
+      "comment": "#71624D",
+      "keyword": "#88562D",
+      "string": "#5C6747",
+      "number": "#92543F",
+      "type": "#47646A",
+      "function": "#76612F",
+      "constant": "#78546B",
+      "operators": "#6A6252",
+      "error": "#A04533",
+      "warning": "#786015",
+      "foreground": "#463C31",
+      "background": "#EBE0C9",
+      "cursor": "#9D702F",
+      "selection": "#D4BF9B",
+      "current_line": "#E0D5BF",
+      "line_number": "#615442"
+    },
+    "accent": "#9D702F",
+    "gutter_background": "#D9C9AC",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "desert-oracle",
+      "film": "Dune",
+      "ja": "DUNE／デューン 砂の惑星",
+      "url": "https://www.warnerbros.com/movies/dune"
+    },
+    "adjustments": {
+      "comment": {
+        "source": "#756650",
+        "adapted": "#71624D"
+      },
+      "number": {
+        "source": "#985741",
+        "adapted": "#92543F"
+      },
+      "function": {
+        "source": "#78622F",
+        "adapted": "#76612F"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "chrome-wasteland",
+    "appearance": "dark",
+    "body": {
+      "comment": "#98A9AC",
+      "keyword": "#EDBA82",
+      "string": "#BCCDA6",
+      "number": "#F0A582",
+      "type": "#82CCD8",
+      "function": "#F1D5A2",
+      "constant": "#CBB4D1",
+      "operators": "#B3C8C9",
+      "error": "#F8987F",
+      "warning": "#E8CE89",
+      "foreground": "#E8E0C9",
+      "background": "#253239",
+      "cursor": "#E6AC72",
+      "selection": "#5E564A",
+      "current_line": "#323E43",
+      "line_number": "#98A9AC"
+    },
+    "accent": "#E6AC72",
+    "gutter_background": "#19262E",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "chrome-wasteland",
+      "film": "Mad Max: Fury Road",
+      "ja": "マッドマックス 怒りのデス・ロード",
+      "url": "https://www.warnerbros.com/movies/mad-max-fury-road"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "neon-grid",
+    "appearance": "dark",
+    "body": {
+      "comment": "#76A6B4",
+      "keyword": "#8DE5ED",
+      "string": "#B7DCD1",
+      "number": "#F2B36C",
+      "type": "#8CBEE7",
+      "function": "#B5EAF1",
+      "constant": "#E7CA8B",
+      "operators": "#93C4D0",
+      "error": "#F19483",
+      "warning": "#EDCF78",
+      "foreground": "#D9F0F2",
+      "background": "#061D27",
+      "cursor": "#6EDDEC",
+      "selection": "#255662",
+      "current_line": "#142B35",
+      "line_number": "#76A6B4"
+    },
+    "accent": "#6EDDEC",
+    "gutter_background": "#0B2B37",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "neon-grid",
+      "film": "TRON: Legacy",
+      "ja": "トロン：レガシー",
+      "url": "https://movies.disney.com/tron-legacy"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "biolume-forest",
+    "appearance": "dark",
+    "body": {
+      "comment": "#7CA0BB",
+      "keyword": "#A8B4F0",
+      "string": "#A0DDBE",
+      "number": "#DAD884",
+      "type": "#82D0E4",
+      "function": "#C0E6DE",
+      "constant": "#C3A5DF",
+      "operators": "#9CBFD4",
+      "error": "#EF98B3",
+      "warning": "#E3D277",
+      "foreground": "#D5E8F1",
+      "background": "#0C2038",
+      "cursor": "#69CDD9",
+      "selection": "#275368",
+      "current_line": "#1A2E44",
+      "line_number": "#7CA0BB"
+    },
+    "accent": "#69CDD9",
+    "gutter_background": "#07162B",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "biolume-forest",
+      "film": "Avatar",
+      "ja": "アバター",
+      "url": "https://www.20thcenturystudios.com/movies/avatar"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "pastel-concierge",
+    "appearance": "light",
+    "body": {
+      "comment": "#80616D",
+      "keyword": "#894A70",
+      "string": "#5B6B55",
+      "number": "#955C41",
+      "type": "#586782",
+      "function": "#7B526F",
+      "constant": "#915759",
+      "operators": "#796075",
+      "error": "#B83B5B",
+      "warning": "#86601E",
+      "foreground": "#543D4C",
+      "background": "#F6E7E6",
+      "cursor": "#A34D70",
+      "selection": "#DEB9C3",
+      "current_line": "#EBDCDC",
+      "line_number": "#725762"
+    },
+    "accent": "#A34D70",
+    "gutter_background": "#E9D2D7",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "pastel-concierge",
+      "film": "The Grand Budapest Hotel",
+      "ja": "グランド・ブダペスト・ホテル",
+      "url": "https://www.searchlightpictures.com/thegrandbudapesthotel"
+    },
+    "adjustments": {
+      "comment": {
+        "source": "#856571",
+        "adapted": "#80616D"
+      },
+      "number": {
+        "source": "#995E42",
+        "adapted": "#955C41"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "twilight-jazz",
+    "appearance": "dark",
+    "body": {
+      "comment": "#9698BD",
+      "keyword": "#C4AFF1",
+      "string": "#E9D88D",
+      "number": "#EAA6BB",
+      "type": "#91C3E5",
+      "function": "#EDE0A6",
+      "constant": "#C1C6F0",
+      "operators": "#B5B7D6",
+      "error": "#F39AAE",
+      "warning": "#EBD27E",
+      "foreground": "#E9E4F2",
+      "background": "#1C2146",
+      "cursor": "#E4C86B",
+      "selection": "#585351",
+      "current_line": "#2A2E52",
+      "line_number": "#9698BD"
+    },
+    "accent": "#E4C86B",
+    "gutter_background": "#141733",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "twilight-jazz",
+      "film": "La La Land",
+      "ja": "ラ・ラ・ランド",
+      "url": "https://www.lionsgate.com/la-la-land-sweeps"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "noir-vigil",
+    "appearance": "dark",
+    "body": {
+      "comment": "#A28F95",
+      "keyword": "#E89A92",
+      "string": "#CCBCA7",
+      "number": "#E1AF8C",
+      "type": "#AAB6C5",
+      "function": "#E8CFB3",
+      "constant": "#D0ADB8",
+      "operators": "#BEACB0",
+      "error": "#F59389",
+      "warning": "#E1BC80",
+      "foreground": "#E5DCDD",
+      "background": "#1D181A",
+      "cursor": "#D57972",
+      "selection": "#543534",
+      "current_line": "#2B2527",
+      "line_number": "#A28F95"
+    },
+    "accent": "#D57972",
+    "gutter_background": "#120F11",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "noir-vigil",
+      "film": "The Batman",
+      "ja": "THE BATMAN－ザ・バットマン－",
+      "url": "https://www.warnerbros.com/movies/the-batman"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "carnival-ashes",
+    "appearance": "dark",
+    "body": {
+      "comment": "#99AD96",
+      "keyword": "#DCA189",
+      "string": "#C9D08C",
+      "number": "#E7BD77",
+      "type": "#9DC6B5",
+      "function": "#E9D59A",
+      "constant": "#D1A4AF",
+      "operators": "#B9C7AA",
+      "error": "#ED988B",
+      "warning": "#DFD078",
+      "foreground": "#E3E5CF",
+      "background": "#20332A",
+      "cursor": "#C9AC62",
+      "selection": "#52573A",
+      "current_line": "#2D3F35",
+      "line_number": "#99AD96"
+    },
+    "accent": "#C9AC62",
+    "gutter_background": "#14241C",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "carnival-ashes",
+      "film": "Joker",
+      "ja": "ジョーカー",
+      "url": "https://www.warnerbros.com/movies/joker"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "orbital-frost",
+    "appearance": "light",
+    "body": {
+      "comment": "#5C707B",
+      "keyword": "#3F6282",
+      "string": "#4B7069",
+      "number": "#7D6252",
+      "type": "#3E6A7C",
+      "function": "#536083",
+      "constant": "#765874",
+      "operators": "#5C6D7C",
+      "error": "#A24D55",
+      "warning": "#806623",
+      "foreground": "#35434E",
+      "background": "#EBF0F3",
+      "cursor": "#52738B",
+      "selection": "#BECBD4",
+      "current_line": "#DFE4E8",
+      "line_number": "#53656F"
+    },
+    "accent": "#52738B",
+    "gutter_background": "#D7E0E7",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "orbital-frost",
+      "film": "Interstellar",
+      "ja": "インターステラー",
+      "url": "https://www.warnerbros.co.jp/home_entertainment/k4hjvhjawk2/"
+    },
+    "adjustments": {
+      "comment": {
+        "source": "#657A87",
+        "adapted": "#5C707B"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "folded-city",
+    "appearance": "dark",
+    "body": {
+      "comment": "#93A9B5",
+      "keyword": "#A6C5DE",
+      "string": "#ACCCC2",
+      "number": "#D8A795",
+      "type": "#9BC6CB",
+      "function": "#C6DBDF",
+      "constant": "#C7B5D3",
+      "operators": "#AFC5CE",
+      "error": "#EC9B9A",
+      "warning": "#DBC397",
+      "foreground": "#DEE8EB",
+      "background": "#202F3A",
+      "cursor": "#91B6C8",
+      "selection": "#415764",
+      "current_line": "#2D3B46",
+      "line_number": "#93A9B5"
+    },
+    "accent": "#91B6C8",
+    "gutter_background": "#16212B",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "folded-city",
+      "film": "Inception",
+      "ja": "インセプション",
+      "url": "https://www.warnerbros.com/movies/inception"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "midnight-drive",
+    "appearance": "dark",
+    "body": {
+      "comment": "#8EB0AC",
+      "keyword": "#ABDACF",
+      "string": "#D9D8A6",
+      "number": "#E2BFA0",
+      "type": "#A0CEDD",
+      "function": "#ECE2B5",
+      "constant": "#CDBAD7",
+      "operators": "#B3CDC5",
+      "error": "#ED9D9F",
+      "warning": "#E3D28D",
+      "foreground": "#E7E6D3",
+      "background": "#12343C",
+      "cursor": "#BCD8C9",
+      "selection": "#456566",
+      "current_line": "#204046",
+      "line_number": "#8EB0AC"
+    },
+    "accent": "#BCD8C9",
+    "gutter_background": "#0B252E",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "midnight-drive",
+      "film": "Drive",
+      "ja": "ドライヴ",
+      "url": "https://www.sonypictures.com/movies/drive"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "editorial-cafe",
+    "appearance": "light",
+    "body": {
+      "comment": "#596F67",
+      "keyword": "#326D6A",
+      "string": "#5B6F42",
+      "number": "#935D3E",
+      "type": "#496B87",
+      "function": "#846048",
+      "constant": "#89576B",
+      "operators": "#5D6D64",
+      "error": "#A44A43",
+      "warning": "#7D671E",
+      "foreground": "#364A48",
+      "background": "#E5EDE7",
+      "cursor": "#4F7D75",
+      "selection": "#B8CCC5",
+      "current_line": "#D9E2DC",
+      "line_number": "#50635C"
+    },
+    "accent": "#4F7D75",
+    "gutter_background": "#CDDDD5",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "editorial-cafe",
+      "film": "The French Dispatch",
+      "ja": "フレンチ・ディスパッチ",
+      "url": "https://www.searchlightpictures.com/thefrenchdispatch"
+    },
+    "adjustments": {
+      "comment": {
+        "source": "#647C73",
+        "adapted": "#596F67"
+      },
+      "number": {
+        "source": "#965E3F",
+        "adapted": "#935D3E"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "striped-haunt",
+    "appearance": "light",
+    "body": {
+      "comment": "#746779",
+      "keyword": "#6F477E",
+      "string": "#526A38",
+      "number": "#8E583A",
+      "type": "#4D637B",
+      "function": "#7E5369",
+      "constant": "#786128",
+      "operators": "#685D72",
+      "error": "#A63F53",
+      "warning": "#7B631D",
+      "foreground": "#332B40",
+      "background": "#EFEDEA",
+      "cursor": "#775383",
+      "selection": "#CBBFCC",
+      "current_line": "#E2E0DF",
+      "line_number": "#645969"
+    },
+    "accent": "#775383",
+    "gutter_background": "#D9D5DB",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "striped-haunt",
+      "film": "Beetlejuice",
+      "ja": "ビートルジュース",
+      "url": "https://www.warnerbros.com/movies/beetlejuice"
+    },
+    "adjustments": {
+      "comment": {
+        "source": "#786B7E",
+        "adapted": "#746779"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "curious-garden",
+    "appearance": "light",
+    "body": {
+      "comment": "#616D57",
+      "keyword": "#775482",
+      "string": "#466B55",
+      "number": "#965739",
+      "type": "#3B7180",
+      "function": "#775D3D",
+      "constant": "#8C536E",
+      "operators": "#606E5B",
+      "error": "#AC454B",
+      "warning": "#806220",
+      "foreground": "#3A4840",
+      "background": "#E7EEDD",
+      "cursor": "#527F70",
+      "selection": "#BBCDBD",
+      "current_line": "#DBE3D3",
+      "line_number": "#58634F"
+    },
+    "accent": "#527F70",
+    "gutter_background": "#D0DFC8",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "curious-garden",
+      "film": "Alice in Wonderland",
+      "ja": "アリス・イン・ワンダーランド",
+      "url": "https://movies.disney.com/alice-in-wonderland-2010"
+    },
+    "adjustments": {
+      "comment": {
+        "source": "#6B7960",
+        "adapted": "#616D57"
+      },
+      "operators": {
+        "source": "#61705C",
+        "adapted": "#606E5B"
+      }
+    },
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "tidebound-gold",
+    "appearance": "dark",
+    "body": {
+      "comment": "#A7A38A",
+      "keyword": "#E8BF80",
+      "string": "#BDC59C",
+      "number": "#DCA38A",
+      "type": "#9DBFBA",
+      "function": "#E6D59A",
+      "constant": "#C7AEBD",
+      "operators": "#BDBBA5",
+      "error": "#EE9C8E",
+      "warning": "#E2CC86",
+      "foreground": "#E9DFC7",
+      "background": "#292B23",
+      "cursor": "#D8B56F",
+      "selection": "#5D5439",
+      "current_line": "#36372E",
+      "line_number": "#A7A38A"
+    },
+    "accent": "#D8B56F",
+    "gutter_background": "#1B1F18",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "tidebound-gold",
+      "film": "Pirates of the Caribbean: The Curse of the Black Pearl",
+      "ja": "パイレーツ・オブ・カリビアン／呪われた海賊たち",
+      "url": "https://movies.disney.com/pirates-of-the-caribbean-the-curse-of-the-black-pearl"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "velvet-cabaret",
+    "appearance": "dark",
+    "body": {
+      "comment": "#B29398",
+      "keyword": "#F0A6AA",
+      "string": "#E7CE9A",
+      "number": "#EBAF7D",
+      "type": "#D0B8E0",
+      "function": "#F5DAB1",
+      "constant": "#EBAABF",
+      "operators": "#D1B4AE",
+      "error": "#F69494",
+      "warning": "#EBD186",
+      "foreground": "#F1DED5",
+      "background": "#351820",
+      "cursor": "#E2B375",
+      "selection": "#684639",
+      "current_line": "#42252C",
+      "line_number": "#B29398"
+    },
+    "accent": "#E2B375",
+    "gutter_background": "#240E16",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "velvet-cabaret",
+      "film": "Moulin Rouge!",
+      "ja": "ムーラン・ルージュ",
+      "url": "https://www.20thcenturystudios.com/movies/moulin-rouge"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
+  },
+  {
+    "name": "lagoon-whisper",
+    "appearance": "dark",
+    "body": {
+      "comment": "#8DAFA6",
+      "keyword": "#B0D5C5",
+      "string": "#D2D8B0",
+      "number": "#DBA996",
+      "type": "#8BC9D6",
+      "function": "#E1E7CC",
+      "constant": "#C2B9D7",
+      "operators": "#AACBC4",
+      "error": "#EC9DA6",
+      "warning": "#DDD28F",
+      "foreground": "#DBE9DF",
+      "background": "#103437",
+      "cursor": "#8BC6BC",
+      "selection": "#345F5E",
+      "current_line": "#1E4042",
+      "line_number": "#8DAFA6"
+    },
+    "accent": "#8BC6BC",
+    "gutter_background": "#09262C",
+    "source": {
+      "author": "NeNe Nib",
+      "license": "MIT; original palette",
+      "url": "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/2026-10-12-cinema-collection.md"
+    },
+    "group": "Cinema",
+    "inspiration": {
+      "name": "lagoon-whisper",
+      "film": "The Shape of Water",
+      "ja": "シェイプ・オブ・ウォーター",
+      "url": "https://www.searchlightpictures.com/theshapeofwater"
+    },
+    "adjustments": {},
+    "notes": [
+      "Original palette; film imagery and trademarks are not bundled"
+    ]
   }
 ]

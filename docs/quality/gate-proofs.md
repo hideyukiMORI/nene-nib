@@ -5147,3 +5147,13 @@ themes4235、ex-settings483、command-palette583、user-theme-values21、user-th
 了承された03:20〜03:25内に、暗い/明るい映画テーマとMonaLisa、折り返し/空文書/縮小/設定復元を実画面で確認。7枚すべての行番号背景330画素とテーマ値が一致した。確認用の2プロセスは03:23:27までに終了。HTML見本は95件のC++表から抽出し、製品の言語解析の証拠には使わない。
 
 clean製品commitから正規preview ZIPを作り、x64/版/DLL/4エントリ/展開一致を確認。原値は詳細とD:/NeNeNib/releases/419-colorschemes-preview/package.json。公開beta.2は不変。関連入力不変のテストは文書追記/push/レビュー/mergeで再利用し、全件や性能へ広げない。恒久先D:/NeNeNib/evidence/colorschemes-20261012、統合/収載/整理の実結果はcloseout.json。branch/commitと確認用ZIPを保持する。
+
+## 5-ej — 映画の着想30種を追加し125配色へ（Issue #421・ADR 0117）
+
+既存95種の名前/順序/全色を維持し、Marvel12作品・その他18作品から独自30種を既存Theme/ThemeCatalogへ追加した。暗色22・明色8。FR-016、ARC-001/002/003/007/009、CPP-002/003/011/012/014/016、QLT-001/002/004/008/011/012/013、GIT-001〜004、Waivers none。
+
+themes5585、ex-settings573、user-theme-values21、user-theme-selection97、theme-codec544、command-palette613 checksが成功。通常Debug/tidy/ASan/UBSan、C++6ファイル整形、規約0違反、core symbols0違反。旧95件のC++全要素とコンパイル済み色、新30件と設計値を照合し、125件のHTML見本と新30枚のカードを目視した。[対象・コマンド・証跡・準備失敗の記録](cinema30-2026-10-12.md)。
+
+レンダラー/選択/保存の実装、旧95配色、梱包機構は不変なので#419の実画面7件と梱包9 testsを再利用。新30色の契約と名称境界だけを対象にし、全件Vim/編集/性能は実施しない。Python/TypeScriptは役割の準備まで、保存schema不変。
+
+ローカルpreview ZIPを正規経路で作り、公開beta.2は変更しない。統合/恒久収載/監査整理の実結果はD:/NeNeNib/evidence/cinema30-20261012/closeout.json。枝/commitとZIPは保持する。

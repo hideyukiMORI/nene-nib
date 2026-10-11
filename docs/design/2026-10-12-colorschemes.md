@@ -2,6 +2,8 @@
 
 Issue #419、FR-016、ADR 0117。既存Theme/ThemeCatalogを使い、色の出典と編集画面への適応を記録する。
 
+現在は#421の[映画30種追加](2026-10-12-cinema-collection.md)により**全125種・映画37種**。以下の#419時点95種に追加30種を合わせた構成で、既存95種の色と順序は変更していない。
+
 ## 収載の基準
 
 Vim標準は[公式runtime/colors](https://github.com/vim/vim/tree/master/runtime/colors)の調査時点28名称を対象にする。
@@ -34,11 +36,13 @@ Python/TypeScriptの後続ハイライトはSyntaxPaletteの既存役割へ接�
 
 ## 見本と色表
 
-[配色見本（HTML）](colorschemes.html)をダウンロードしてブラウザで開く。外部通信なしで全95種の検索・分類・明暗の絞り込み、Python/TypeScriptの役割見本と現在の単色本文の切り替えができる。映画7種とMonaLisaは比較カードも置く。
+[配色見本（HTML）](colorschemes.html)をダウンロードしてブラウザで開く。外部通信なしで全125種の検索・分類・明暗の絞り込み、Python/TypeScriptの役割見本と現在の単色本文の切り替えができる。映画37種とMonaLisaは比較カードも置き、追加30種を先頭に並べる。
 
-色の正本は `src/core/BuiltinThemes.hpp` の `builtin_themes` と、その本文トークン定数 `BuiltinThemePalettes.hpp`。HTMLはC++の表をコンパイルして取り出した95件のスナップショットで、製品の描画経路や言語解析の代替実装ではない。出典調査の記録 [theme-sources.json](../theme-sources.json) は今回追加した86件の値・役割・出典・調整履歴であり、ビルドや実行時には読まない。
+色の正本は `src/core/BuiltinThemes.hpp` の `builtin_themes` と、その本文トークン定数 `BuiltinThemePalettes.hpp`。HTMLはC++の表をコンパイルして取り出した125件のスナップショットで、製品の描画経路や言語解析の代替実装ではない。出典調査の記録 [theme-sources.json](../theme-sources.json) は#419の86件と#421の30件、計116件の値・役割・出典・調整履歴であり、ビルドや実行時には読まない。
 
-### 収載名
+### 初回95種の収載名
+
+追加30種は[映画コレクションの一覧](2026-10-12-cinema-collection.md)を参照する。
 
 既存9種: `ubuntu-aubergine`, `neutral-light`, `solarized-dark`, `solarized-light`, `monokai`, `dracula`, `one-dark`, `night-owl`, `night-owl-light`。
 
@@ -87,7 +91,7 @@ GitHub配色の実体は公式テーマが使う `@primer/primitives` 7.10.0。n
 
 UIは既存の整数`derive_ui`で一貫して導出する。行番号背景は上流指定または本文の階調から選び、数字と現在行の前景の両方を4.5:1以上とする。通常番号の`ui.gutter`と将来の本文役割`body.line_number`は別の意味である。新規テーマでは同じ番号色を採り、既存9種では本文の原色を維持してUI側だけ調整する。
 
-黒/白の背景を持つ配色では、帯やパネルが本文と同色でも有効である。`on_accent`は本文背景ではなくaccentとの区別を確認する。本文前景、通常/現在行番号のコントラストと、行番号背景の区別は全95種で検査する。
+黒/白の背景を持つ配色では、帯やパネルが本文と同色でも有効である。`on_accent`は本文背景ではなくaccentとの区別を確認する。本文前景、通常/現在行番号のコントラストと、行番号背景の区別は全125種で検査する。
 
 ### 既存9種の行番号欄
 
@@ -123,4 +127,4 @@ UIは既存の整数`derive_ui`で一貫して導出する。行番号背景は�
 
 利用者テーマv1には任意の `ui.gutter_background=#RRGGBB` を追加できる。省略時は最終的な`ui.background`と同じ背景になる。古いアプリは追加キーを未知として拒否する。新しい必須キーや形式版の変更はない。
 
-95種の組み込み名と`system`は予約名。従来の利用者テーマが追加名と同じ場合は組み込みが選ばれ、利用者ファイルは上書きせず予約名エラーを表示する。利用者側のファイル名と`name`を別の同じ名前へ変更すれば選択できる。
+125種の組み込み名と`system`は予約名。従来の利用者テーマが追加名と同じ場合は組み込みが選ばれ、利用者ファイルは上書きせず予約名エラーを表示する。利用者側のファイル名と`name`を別の同じ名前へ変更すれば選択できる。

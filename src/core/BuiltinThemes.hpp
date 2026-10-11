@@ -15,7 +15,7 @@
 #include <string_view>
 #include <utility>
 
-// 組み込み 95 テーマの唯一の表（ADR 0017 の決定 6）。名前の表も同じ配列で、Ex の補完（C3）・
+// 組み込み 125 テーマの唯一の表（ADR 0017 の決定 6）。名前の表も同じ配列で、Ex の補完（C3）・
 // Ctrl+P・設定の検証（C2）はここを引く（ARC-001）。
 // 本文トークンは各テーマが公開している役割の割り当てから写し、割り当ての無い役割は同じテーマの
 // 近い色で埋めて行のコメントに「埋めた」と書く。テーマの実装コードは写さない（決定 2）。
@@ -247,10 +247,10 @@ inline constexpr RgbColor one_dark_accent{0x61, 0xAF, 0xEF};  // hue-2 blue（�
 inline constexpr RgbColor night_owl_accent{0x82, 0xAA, 0xFF}; // blue（関数名の色）
 inline constexpr RgbColor light_owl_accent{0x48, 0x76, 0xD6}; // blue（関数名の色）
 
-// ---------------------------------------------------------------- 95 テーマの表（決定 6）
+// ---------------------------------------------------------------- 125 テーマの表（決定 6）
 
 // 並びは BuiltinTheme の並びそのもの（下の static_assert が対応を機械で留める）。
-inline constexpr std::array<Theme, 95> builtin_themes{{
+inline constexpr std::array<Theme, 125> builtin_themes{{
     {.name = "ubuntu-aubergine",
      .appearance = Appearance::dark,
      .ui = with_gutter(ubuntu_aubergine_palette, RgbColor{0x27, 0x08, 0x1D},
@@ -1218,6 +1218,307 @@ inline constexpr std::array<Theme, 95> builtin_themes{{
                 .license = "MIT; original palette",
                 .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
                        "2026-10-12-colorschemes.md"}},
+    {.name = "royal-kinetic",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(royal_kinetic_body.background, royal_kinetic_body.foreground,
+                                 RgbColor{0xB5, 0x82, 0xF5}, Appearance::dark),
+                       RgbColor{0x1D, 0x16, 0x2D}, royal_kinetic_body.line_number),
+     .body = royal_kinetic_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "arena-sunset",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(arena_sunset_body.background, arena_sunset_body.foreground,
+                                 RgbColor{0xF0, 0x90, 0x68}, Appearance::dark),
+                       RgbColor{0x10, 0x23, 0x1F}, arena_sunset_body.line_number),
+     .body = arena_sunset_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "cosmic-mixtape",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(cosmic_mixtape_body.background, cosmic_mixtape_body.foreground,
+                                 RgbColor{0xE6, 0x8B, 0xCD}, Appearance::dark),
+                       RgbColor{0x1A, 0x10, 0x25}, cosmic_mixtape_body.line_number),
+     .body = cosmic_mixtape_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "prism-sanctum",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(prism_sanctum_body.background, prism_sanctum_body.foreground,
+                                 RgbColor{0xED, 0xA6, 0x57}, Appearance::dark),
+                       RgbColor{0x0B, 0x1C, 0x1D}, prism_sanctum_body.line_number),
+     .body = prism_sanctum_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "winter-sentinel",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(winter_sentinel_body.background, winter_sentinel_body.foreground,
+                                 RgbColor{0x8F, 0xB9, 0xCB}, Appearance::dark),
+                       RgbColor{0x0D, 0x19, 0x25}, winter_sentinel_body.line_number),
+     .body = winter_sentinel_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "infinite-dusk",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(infinite_dusk_body.background, infinite_dusk_body.foreground,
+                                 RgbColor{0xDD, 0xA2, 0x86}, Appearance::dark),
+                       RgbColor{0x20, 0x13, 0x27}, infinite_dusk_body.line_number),
+     .body = infinite_dusk_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "stellar-pilot",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(stellar_pilot_body.background, stellar_pilot_body.foreground,
+                                 RgbColor{0xD6, 0xB7, 0x66}, Appearance::dark),
+                       RgbColor{0x0D, 0x14, 0x28}, stellar_pilot_body.line_number),
+     .body = stellar_pilot_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "quantum-honey",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(quantum_honey_body.background, quantum_honey_body.foreground,
+                                 RgbColor{0xE4, 0xB6, 0x51}, Appearance::dark),
+                       RgbColor{0x1D, 0x19, 0x12}, quantum_honey_body.line_number),
+     .body = quantum_honey_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "crimson-mercenary",
+     .appearance = Appearance::dark,
+     .ui =
+         with_gutter(derive_ui(crimson_mercenary_body.background, crimson_mercenary_body.foreground,
+                               RgbColor{0xE5, 0x7D, 0x85}, Appearance::dark),
+                     RgbColor{0x19, 0x0D, 0x12}, crimson_mercenary_body.line_number),
+     .body = crimson_mercenary_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "last-outlaw",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(last_outlaw_body.background, last_outlaw_body.foreground,
+                                 RgbColor{0xCA, 0xA0, 0x6A}, Appearance::dark),
+                       RgbColor{0x1D, 0x17, 0x12}, last_outlaw_body.line_number),
+     .body = last_outlaw_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "ivory-agent",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(ivory_agent_body.background, ivory_agent_body.foreground,
+                                 RgbColor{0xA7, 0x38, 0x37}, Appearance::light),
+                       RgbColor{0xE3, 0xE2, 0xDC}, ivory_agent_body.line_number),
+     .body = ivory_agent_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "celestial-brass",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(celestial_brass_body.background, celestial_brass_body.foreground,
+                                 RgbColor{0x9B, 0x78, 0x36}, Appearance::light),
+                       RgbColor{0xDD, 0xD8, 0xC8}, celestial_brass_body.line_number),
+     .body = celestial_brass_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "amber-haze",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(amber_haze_body.background, amber_haze_body.foreground,
+                                 RgbColor{0xEA, 0xA2, 0x5C}, Appearance::dark),
+                       RgbColor{0x21, 0x13, 0x0F}, amber_haze_body.line_number),
+     .body = amber_haze_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "desert-oracle",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(desert_oracle_body.background, desert_oracle_body.foreground,
+                                 RgbColor{0x9D, 0x70, 0x2F}, Appearance::light),
+                       RgbColor{0xD9, 0xC9, 0xAC}, desert_oracle_body.line_number),
+     .body = desert_oracle_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "chrome-wasteland",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(chrome_wasteland_body.background, chrome_wasteland_body.foreground,
+                                 RgbColor{0xE6, 0xAC, 0x72}, Appearance::dark),
+                       RgbColor{0x19, 0x26, 0x2E}, chrome_wasteland_body.line_number),
+     .body = chrome_wasteland_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "neon-grid",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(neon_grid_body.background, neon_grid_body.foreground,
+                                 RgbColor{0x6E, 0xDD, 0xEC}, Appearance::dark),
+                       RgbColor{0x0B, 0x2B, 0x37}, neon_grid_body.line_number),
+     .body = neon_grid_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "biolume-forest",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(biolume_forest_body.background, biolume_forest_body.foreground,
+                                 RgbColor{0x69, 0xCD, 0xD9}, Appearance::dark),
+                       RgbColor{0x07, 0x16, 0x2B}, biolume_forest_body.line_number),
+     .body = biolume_forest_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "pastel-concierge",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(pastel_concierge_body.background, pastel_concierge_body.foreground,
+                                 RgbColor{0xA3, 0x4D, 0x70}, Appearance::light),
+                       RgbColor{0xE9, 0xD2, 0xD7}, pastel_concierge_body.line_number),
+     .body = pastel_concierge_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "twilight-jazz",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(twilight_jazz_body.background, twilight_jazz_body.foreground,
+                                 RgbColor{0xE4, 0xC8, 0x6B}, Appearance::dark),
+                       RgbColor{0x14, 0x17, 0x33}, twilight_jazz_body.line_number),
+     .body = twilight_jazz_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "noir-vigil",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(noir_vigil_body.background, noir_vigil_body.foreground,
+                                 RgbColor{0xD5, 0x79, 0x72}, Appearance::dark),
+                       RgbColor{0x12, 0x0F, 0x11}, noir_vigil_body.line_number),
+     .body = noir_vigil_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "carnival-ashes",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(carnival_ashes_body.background, carnival_ashes_body.foreground,
+                                 RgbColor{0xC9, 0xAC, 0x62}, Appearance::dark),
+                       RgbColor{0x14, 0x24, 0x1C}, carnival_ashes_body.line_number),
+     .body = carnival_ashes_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "orbital-frost",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(orbital_frost_body.background, orbital_frost_body.foreground,
+                                 RgbColor{0x52, 0x73, 0x8B}, Appearance::light),
+                       RgbColor{0xD7, 0xE0, 0xE7}, orbital_frost_body.line_number),
+     .body = orbital_frost_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "folded-city",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(folded_city_body.background, folded_city_body.foreground,
+                                 RgbColor{0x91, 0xB6, 0xC8}, Appearance::dark),
+                       RgbColor{0x16, 0x21, 0x2B}, folded_city_body.line_number),
+     .body = folded_city_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "midnight-drive",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(midnight_drive_body.background, midnight_drive_body.foreground,
+                                 RgbColor{0xBC, 0xD8, 0xC9}, Appearance::dark),
+                       RgbColor{0x0B, 0x25, 0x2E}, midnight_drive_body.line_number),
+     .body = midnight_drive_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "editorial-cafe",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(editorial_cafe_body.background, editorial_cafe_body.foreground,
+                                 RgbColor{0x4F, 0x7D, 0x75}, Appearance::light),
+                       RgbColor{0xCD, 0xDD, 0xD5}, editorial_cafe_body.line_number),
+     .body = editorial_cafe_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "striped-haunt",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(striped_haunt_body.background, striped_haunt_body.foreground,
+                                 RgbColor{0x77, 0x53, 0x83}, Appearance::light),
+                       RgbColor{0xD9, 0xD5, 0xDB}, striped_haunt_body.line_number),
+     .body = striped_haunt_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "curious-garden",
+     .appearance = Appearance::light,
+     .ui = with_gutter(derive_ui(curious_garden_body.background, curious_garden_body.foreground,
+                                 RgbColor{0x52, 0x7F, 0x70}, Appearance::light),
+                       RgbColor{0xD0, 0xDF, 0xC8}, curious_garden_body.line_number),
+     .body = curious_garden_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "tidebound-gold",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(tidebound_gold_body.background, tidebound_gold_body.foreground,
+                                 RgbColor{0xD8, 0xB5, 0x6F}, Appearance::dark),
+                       RgbColor{0x1B, 0x1F, 0x18}, tidebound_gold_body.line_number),
+     .body = tidebound_gold_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "velvet-cabaret",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(velvet_cabaret_body.background, velvet_cabaret_body.foreground,
+                                 RgbColor{0xE2, 0xB3, 0x75}, Appearance::dark),
+                       RgbColor{0x24, 0x0E, 0x16}, velvet_cabaret_body.line_number),
+     .body = velvet_cabaret_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
+    {.name = "lagoon-whisper",
+     .appearance = Appearance::dark,
+     .ui = with_gutter(derive_ui(lagoon_whisper_body.background, lagoon_whisper_body.foreground,
+                                 RgbColor{0x8B, 0xC6, 0xBC}, Appearance::dark),
+                       RgbColor{0x09, 0x26, 0x2C}, lagoon_whisper_body.line_number),
+     .body = lagoon_whisper_body,
+     .source = {.author = "NeNe Nib",
+                .license = "MIT; original palette",
+                .url = "https://github.com/hideyukiMORI/nene-nib/blob/main/docs/design/"
+                       "2026-10-12-cinema-collection.md"}},
 }};
 
 // 表と enum は同じ添字で引く（ARC-001）。
@@ -1336,6 +1637,36 @@ static_assert(theme_of(BuiltinTheme::relic_sand).name == "relic-sand");
 static_assert(theme_of(BuiltinTheme::soap_rebellion).name == "soap-rebellion");
 static_assert(theme_of(BuiltinTheme::code_rain).name == "code-rain");
 static_assert(theme_of(BuiltinTheme::arcane_library).name == "arcane-library");
+static_assert(theme_of(BuiltinTheme::royal_kinetic).name == "royal-kinetic");
+static_assert(theme_of(BuiltinTheme::arena_sunset).name == "arena-sunset");
+static_assert(theme_of(BuiltinTheme::cosmic_mixtape).name == "cosmic-mixtape");
+static_assert(theme_of(BuiltinTheme::prism_sanctum).name == "prism-sanctum");
+static_assert(theme_of(BuiltinTheme::winter_sentinel).name == "winter-sentinel");
+static_assert(theme_of(BuiltinTheme::infinite_dusk).name == "infinite-dusk");
+static_assert(theme_of(BuiltinTheme::stellar_pilot).name == "stellar-pilot");
+static_assert(theme_of(BuiltinTheme::quantum_honey).name == "quantum-honey");
+static_assert(theme_of(BuiltinTheme::crimson_mercenary).name == "crimson-mercenary");
+static_assert(theme_of(BuiltinTheme::last_outlaw).name == "last-outlaw");
+static_assert(theme_of(BuiltinTheme::ivory_agent).name == "ivory-agent");
+static_assert(theme_of(BuiltinTheme::celestial_brass).name == "celestial-brass");
+static_assert(theme_of(BuiltinTheme::amber_haze).name == "amber-haze");
+static_assert(theme_of(BuiltinTheme::desert_oracle).name == "desert-oracle");
+static_assert(theme_of(BuiltinTheme::chrome_wasteland).name == "chrome-wasteland");
+static_assert(theme_of(BuiltinTheme::neon_grid).name == "neon-grid");
+static_assert(theme_of(BuiltinTheme::biolume_forest).name == "biolume-forest");
+static_assert(theme_of(BuiltinTheme::pastel_concierge).name == "pastel-concierge");
+static_assert(theme_of(BuiltinTheme::twilight_jazz).name == "twilight-jazz");
+static_assert(theme_of(BuiltinTheme::noir_vigil).name == "noir-vigil");
+static_assert(theme_of(BuiltinTheme::carnival_ashes).name == "carnival-ashes");
+static_assert(theme_of(BuiltinTheme::orbital_frost).name == "orbital-frost");
+static_assert(theme_of(BuiltinTheme::folded_city).name == "folded-city");
+static_assert(theme_of(BuiltinTheme::midnight_drive).name == "midnight-drive");
+static_assert(theme_of(BuiltinTheme::editorial_cafe).name == "editorial-cafe");
+static_assert(theme_of(BuiltinTheme::striped_haunt).name == "striped-haunt");
+static_assert(theme_of(BuiltinTheme::curious_garden).name == "curious-garden");
+static_assert(theme_of(BuiltinTheme::tidebound_gold).name == "tidebound-gold");
+static_assert(theme_of(BuiltinTheme::velvet_cabaret).name == "velvet-cabaret");
+static_assert(theme_of(BuiltinTheme::lagoon_whisper).name == "lagoon-whisper");
 
 // 名前は小文字ハイフンで、`_` も同じ名前として受ける（決定 6）。正規化はここ 1 か所。
 // 大文字小文字は区別する（名前は小文字だけ）。
