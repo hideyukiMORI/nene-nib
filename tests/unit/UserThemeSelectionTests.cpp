@@ -1,3 +1,4 @@
+#include "ScriptedTextLayouts.hpp"
 // scope `--user-theme-selection` の単体テスト（ADR 0042 決定 2）。
 #include "Appearance.hpp"
 #include "BuiltinTheme.hpp"
@@ -228,9 +229,11 @@ void verify_theme_startup_notice()
     ScriptedHistory history;
     ScriptedFolders folders;
     ScriptedBookmarks bookmarks;
+    ScriptedTextLayouts text_layouts;
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{app::EditorPorts{appearance, clipboard, files, pages, settings,
-                                                 themes, session, history, folders, bookmarks},
+                                                 themes, session, history, folders, bookmarks,
+                                                 text_layouts},
                                 initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -244,8 +247,8 @@ void verify_theme_startup_notice()
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
     const EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
-                                                       themes, session, history, folders,
-                                                       bookmarks},
+                                                       themes, session, history, folders, bookmarks,
+                                                       text_layouts},
                                       initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,
@@ -294,6 +297,8 @@ void verify_user_completion_order()
                                         "tabnext",
                                         "tabprevious",
                                         "tabclose",
+                                        "set wrap",
+                                        "set nowrap",
                                         "edit",
                                         "buffer",
                                         "ls",

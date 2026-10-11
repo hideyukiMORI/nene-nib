@@ -17,9 +17,9 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 `docs/todo/current.md`; the measurements behind them are in `docs/quality/gate-proofs.md`.
 
 - **FR-001 one `.exe`, no runtime dependency** — C++23 with clang-cl, Win32, Direct2D / DirectWrite. Done.
-- **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret. Arrow keys and Delete group combining accents, Japanese voicing marks and common variation selectors; Backspace removes accents individually and a selector with its preceding code point. Complex emoji and language-specific grapheme rules remain outside this first stage ([ADR 0065](docs/adr/0065-ordinary-combining-character-boundaries.md)).
+- **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret and drag to select (including reverse selection and scrolling outside the body). Arrow keys and Delete group combining accents, Japanese voicing marks and common variation selectors; Backspace removes accents individually and a selector with its preceding code point. Complex emoji and language-specific grapheme rules remain outside this first stage ([ADR 0065](docs/adr/0065-ordinary-combining-character-boundaries.md)).
 - **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1853 oracle-generated
-  fixtures in `tests/vim/` are checked by CTest. Implemented: `h j k l 0 $ ^ w b e W B E ge gE gg G` (a character includes its combining marks), Home / End,
+  fixtures in `tests/vim/` are checked by CTest, with another 78 fixtures for wrapped viewport movement. Implemented: `h j k l 0 $ ^ w b e W B E ge gE gg G` (a character includes its combining marks), Home / End,
   `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x X r`, `d c y` + motion, `dd cc yy`,
   `D C Y`, `p P` with typed registers (unnamed, named `"a`-`"z` / `"A`-`"Z`, numbered `"0`-`"9`, small delete `"-`,
   black hole `"_`, clipboard `"+` `"*`), macros `q @ @@`, `i a I A o O` with counts, `.` (also in VISUAL), text objects
@@ -27,7 +27,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   with `hlsearch` and `incsearch` on by default (`:noh`, `:set (no)hlsearch`, `:set (no)incsearch`, Ctrl-G / Ctrl-T), virtual columns (Tab = 8, wide = 2), `u` / Ctrl-r,
   `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, block `p P`, `.`), literal CR in LF files, Esc everywhere.
   Not yet: `it ip is`, `:s :g`, read-only registers, `J s S R`, `> < gu gU`, autoindent,
-  drag-to-select, block `I A c C`, further Ex commands (ranges, pipes, history, forced overwrite).
+  Vim drag-to-select, `gj gk g0 g$`, block `I A c C`, further Ex commands (ranges, pipes, history, forced overwrite).
   Basic Ex `:w`, `:q`, `:q!`, `:wq` and `:x` work on the current tab. `:q` refuses unsaved changes;
   `:wq` always writes, while `:x` writes only changes. These saves accept filenames: `:w name` names an
   untitled document or writes a copy while retaining a named document's unsaved state; `:saveas name`
@@ -38,7 +38,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT` and `:tabnext` `:tabnew` `:tabclose`. Done; reordering by drag is planned.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, fuzzy-matched by name and then by folder.
   A leading mark narrows the list: `#` shows the tabs only, `:` shows the settings commands (themes,
-  `set fontsize=`, `set guifont=`, `set guide`, `set noguide`). Closed files are kept in a history of up to 100 files, listed
+  `set fontsize=`, `set guifont=`, `set guide`, `set noguide`, `set wrap`, `set nowrap`). Closed files are kept in a history of up to 100 files, listed
   newest first after the tabs; `@` shows the history only. A file that no longer exists is reported
   in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
   off and leaves it to the user after that, and matching walks code points, so a character never matches
@@ -77,11 +77,12 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-016 colorscheme** — nine built-in themes plus up to 128 user themes from
   `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`; `:colorscheme <name>` / `system`, Tab completion, Ctrl+P. Done.
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v2`. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v3`. The previous v2/v1 files are read only when newer versions are absent and are preserved. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. An untouched untitled document
   shows three shortcut hints. Otherwise, the status bar shows compact hints when space permits.
   `:set noguide` hides both; `:set guide` restores them. Done.
+- **FR-019 wrapping** — on by default. `:set wrap` / `:set nowrap` (also in Ctrl+P settings) changes the display without inserting newlines. Ordinary Up/Down, Home/End and pages follow screen rows; Vim `j/k` and `0/$` keep logical-line meaning, while H/M/L and page motions use the wrapped viewport. Selection, IME composition and hit testing share the body layout. Per-tab wrapped scroll positions are saved in `session.v2`; an existing v1 is read and preserved. Known existing Vim column mismatches are tracked in [#411](https://github.com/hideyukiMORI/nene-nib/issues/411).
 
 ## Using the settings commands
 

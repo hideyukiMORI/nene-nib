@@ -43,6 +43,9 @@ class EditorState final
     [[nodiscard]] const core::Selection &selection() const noexcept;
     [[nodiscard]] const core::EditHistory &history() const noexcept;
     [[nodiscard]] const ScrollState &scroll() const noexcept;
+    [[nodiscard]] core::CaretAffinity caret_affinity() const noexcept;
+    [[nodiscard]] EditorState with_caret_affinity(core::CaretAffinity affinity) const &;
+    [[nodiscard]] EditorState with_caret_affinity(core::CaretAffinity affinity) &&;
     // 改行の形は本文が持つ。状態は写しを持たない（判別の経路を 1 本にする・ADR 0036 の決定 1）。
     [[nodiscard]] core::LineEnding line_ending() const noexcept;
     [[nodiscard]] core::Appearance appearance() const noexcept;
@@ -180,6 +183,7 @@ class EditorState final
     core::Selection selection_;
     core::EditHistory history_;
     ScrollState scroll_;
+    core::CaretAffinity caret_affinity_ = core::CaretAffinity::leading;
     core::Appearance appearance_;
     core::EditMode mode_;
     core::VimState vim_;

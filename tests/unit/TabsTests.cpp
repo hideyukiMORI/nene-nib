@@ -1,3 +1,4 @@
+#include "ScriptedTextLayouts.hpp"
 // scope `--tabs` の単体テスト（ADR 0042 決定 2・ADR 0056）。状態・切り替え・閉じる（決定 1〜4・
 // 6・7）と、開く（決定 5）と起動（決定 13）。
 #include "ActivateCommandChoice.hpp"
@@ -531,9 +532,10 @@ void verify_open_failure_adds_no_tab()
     ScriptedHistory history;
     ScriptedFolders folders;
     ScriptedBookmarks bookmarks;
+    ScriptedTextLayouts text_layouts;
     const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
                                                   settings, themes, session, history, folders,
-                                                  bookmarks},
+                                                  bookmarks, text_layouts},
                                       initial);
     return controller.frame();
 }
@@ -1148,9 +1150,10 @@ void verify_recent_after_startup()
     ScriptedHistory history;
     ScriptedFolders folders;
     ScriptedBookmarks bookmarks;
+    ScriptedTextLayouts text_layouts;
     EditorController controller(
         EditorPorts{appearance, clipboard, files, code_pages, settings, themes, session, history,
-                    folders, bookmarks},
+                    folders, bookmarks, text_layouts},
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});
     expect(recent_bodies(controller) == "cba", "three arguments leave the last one most recent");

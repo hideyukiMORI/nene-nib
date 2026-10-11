@@ -51,7 +51,7 @@ constexpr std::array<std::string_view, 256> custom_names{
     "user-0238", "user-0239", "user-0240", "user-0241", "user-0242", "user-0243", "user-0244",
     "user-0245", "user-0246", "user-0247", "user-0248", "user-0249", "user-0250", "user-0251",
     "user-0252", "user-0253", "user-0254", "user-0255"};
-constexpr std::array<PaletteChoiceExpected, 36> expected_0{{
+constexpr std::array<PaletteChoiceExpected, 38> expected_0{{
     {"ls", "ls", 2U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt, std::nullopt,
      ""},
     {"wq", "wq", 2U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt, std::nullopt,
@@ -82,9 +82,13 @@ constexpr std::array<PaletteChoiceExpected, 36> expected_0{{
      std::nullopt, ""},
     {"tabnext", "tabnext", 7U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
      std::nullopt, ""},
+    {"set wrap", "set wrap", 8U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
+     std::nullopt, ""},
     {"tabclose", "tabclose", 8U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
      std::nullopt, ""},
     {"set guide", "set guide", 9U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
+     std::nullopt, ""},
+    {"set nowrap", "set nowrap", 10U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
      std::nullopt, ""},
     {"colorscheme", "colorscheme", 11U, core::CommandChoiceKind::execute, std::nullopt,
      std::nullopt, std::nullopt, ""},
@@ -125,7 +129,7 @@ constexpr std::array<PaletteChoiceExpected, 36> expected_0{{
     {"colorscheme ubuntu-aubergine", "colorscheme ubuntu-aubergine", 28U,
      core::CommandChoiceKind::execute, std::nullopt, std::nullopt, std::nullopt, ""},
 }};
-constexpr std::array<PaletteChoiceExpected, 292> expected_1{{
+constexpr std::array<PaletteChoiceExpected, 294> expected_1{{
     {"ls", "ls", 2U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt, std::nullopt,
      ""},
     {"wq", "wq", 2U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt, std::nullopt,
@@ -156,9 +160,13 @@ constexpr std::array<PaletteChoiceExpected, 292> expected_1{{
      std::nullopt, ""},
     {"tabnext", "tabnext", 7U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
      std::nullopt, ""},
+    {"set wrap", "set wrap", 8U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
+     std::nullopt, ""},
     {"tabclose", "tabclose", 8U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
      std::nullopt, ""},
     {"set guide", "set guide", 9U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
+     std::nullopt, ""},
+    {"set nowrap", "set nowrap", 10U, core::CommandChoiceKind::execute, std::nullopt, std::nullopt,
      std::nullopt, ""},
     {"colorscheme", "colorscheme", 11U, core::CommandChoiceKind::execute, std::nullopt,
      std::nullopt, std::nullopt, ""},
@@ -749,10 +757,10 @@ constexpr std::array<PaletteChoiceExpected, 1> expected_8{{
      std::nullopt, std::nullopt, std::nullopt, ""},
 }};
 constexpr std::array<PaletteChoiceSample, 9> samples{{
-    {":", 512U, 677888U, expected_0, 0U,
+    {":", 512U, 706560U, expected_0, 0U,
      "builtin-all\n:\n512\nbuiltins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
      "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-    {":", 128U, 2266624U, expected_1, 256U,
+    {":", 128U, 2273792U, expected_1, 256U,
      "custom-all\n:\n128\ncustom256-invalid-color\nubuntu-aubergine\nneutral-light\nsolarized-"
      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\nuser-"
      "0000\nuser-0001\nuser-0002\nuser-0003\nuser-0004\nuser-0005\nuser-0006\nuser-0007\nuser-"

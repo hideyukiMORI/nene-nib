@@ -92,7 +92,7 @@ def main():
     light.write_text(theme("hide-light", True), encoding="utf-8")
     (directory / "broken.v1.theme").write_text("version=1\n", encoding="utf-8")
     environment = dict(os.environ, LOCALAPPDATA=str(profile), APPDATA=str(profile))
-    settings = profile / "NeNeNib/settings.v2"
+    settings = profile / "NeNeNib/settings.v3"
     previous = profile / "NeNeNib/settings.v1"
     document = output / "theme-document.txt"
     original = "\nuser themes leave this document intact\n"

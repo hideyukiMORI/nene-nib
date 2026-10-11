@@ -46,7 +46,7 @@ class EditorWindow final
   public:
     [[nodiscard]] static std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
     create(HINSTANCE instance, application::EditorController &controller,
-           application::TimingPort &timing);
+           application::TimingPort &timing, BodyTextLayouts &text_layouts);
     ~EditorWindow();
     EditorWindow(const EditorWindow &) = delete;
     EditorWindow(EditorWindow &&) = delete;
@@ -63,7 +63,7 @@ class EditorWindow final
 
   private:
     EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                 application::TimingPort &timing);
+                 application::TimingPort &timing, BodyTextLayouts &text_layouts);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
     void apply_backdrop(const application::EditorDelivery &frame);
@@ -100,13 +100,17 @@ class EditorWindow final
     void click_client(LPARAM data);
     void click_palette(LPARAM data);
     void place_caret(LPARAM data);
+    void point_text(POINT point, core::SelectionAnchoring anchoring);
+    void begin_selection_drag();
+    void end_selection_drag();
+    void drag_selection(LPARAM data);
+    void scroll_selection();
     // 描く唯一の口。Present が返った直後に frame_presented を打つ（ADR 0011 の決定 1）。
-    [[nodiscard]] std::expected<void, RenderFailure>
-    draw_frame(const application::EditorFrame &frame);
+    [[nodiscard]] std::expected<void, RenderFailure> draw_frame();
     void paint();
     // 意図の適用で変わった見た目は、次の WM_PAINT でまとめて描く（決定 6）。
     void invalidate() noexcept;
-    void present(const application::EditorFrame &frame);
+    void present();
     void abandon();
     void refresh_appearance();
     void resize();
@@ -172,11 +176,12 @@ class EditorWindow final
     [[nodiscard]] bool over_title_bar(LPARAM data) const;
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);
-    [[nodiscard]] std::size_t body_lines() const;
+    [[nodiscard]] application::VisibleLines body_view() const;
 
     HINSTANCE instance_;
     application::EditorController &controller_;
     application::TimingPort &timing_;
+    BodyTextLayouts &text_layouts_;
     // 題名は変わったときだけ OS へ渡す。毎フレーム SetWindowTextW を呼ばない（決定 13）。
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
@@ -187,6 +192,10 @@ class EditorWindow final
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;
     std::optional<core::TitleBarTarget> middle_pressed_;
+    // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。
+    bool selecting_ = false;
+    POINT selection_point_{};
+    static constexpr UINT_PTR selection_timer = 1;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。

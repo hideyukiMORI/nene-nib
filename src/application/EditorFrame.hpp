@@ -17,6 +17,7 @@
 #include "Palette.hpp"
 #include "SettingsIssue.hpp"
 #include "StatusItems.hpp"
+#include "TextLayoutFailure.hpp"
 #include "TitleBarInput.hpp"
 #include "TitleBarTarget.hpp"
 #include "VimMode.hpp"
@@ -83,6 +84,8 @@ struct EditorFrame
     // 実行しない。
     std::optional<core::EditorOperation> operation_request;
     core::OperationGuide guide;
+    std::optional<TextLayoutFailure> layout_failure{};
+    float horizontal = 0;
 };
 
 // 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CaretAffinity.hpp"
 #include "CaretShape.hpp"
 #include "TextPosition.hpp"
 
@@ -10,10 +11,12 @@ struct CaretView
 {
     core::TextPosition position;
     core::CaretShape shape;
+    core::CaretAffinity affinity = core::CaretAffinity::leading;
 };
 
 [[nodiscard]] constexpr bool operator==(const CaretView &left, const CaretView &right) noexcept
 {
-    return left.position == right.position && left.shape == right.shape;
+    return left.position == right.position && left.shape == right.shape &&
+           left.affinity == right.affinity;
 }
 } // namespace nenenib::application

@@ -1,4 +1,5 @@
 #include "BodyTextLayouts.hpp"
+#include "SoftwareTarget.hpp"
 #include "WindowChecks.hpp"
 
 #include "EditorSettings.hpp"
@@ -113,6 +114,73 @@ void check_resources(BodyTextLayouts &layouts, const core::EditorSettings &setti
                "the shared wrapped layout retains its two-dimensional glyph positions");
     }
 }
+
+void check_input_retention(BodyTextLayouts &layouts, const core::EditorSettings &settings)
+{
+    const auto request = app::TextLayoutRequest{"one retained input", settings, narrow};
+    const auto first = layouts.get(request);
+    const auto second = layouts.get(app::TextLayoutRequest{"another input", settings, narrow});
+    const auto replaced = layouts.get(request);
+    expect(first && second && replaced && first.value() != replaced.value(),
+           "consecutive inputs retain only the latest pending layout");
+    layouts.begin_frame();
+    const auto shown = layouts.get(request);
+    layouts.end_frame();
+    expect(shown && replaced && shown.value() == replaced.value(),
+           "the latest pending input becomes the exact drawn layout");
+    layouts.begin_frame();
+    const auto empty = layouts.get(app::TextLayoutRequest{"", settings, narrow});
+    layouts.end_frame();
+    const auto expired = layouts.get(request);
+    expect(empty && expired && shown && expired.value() != shown.value(),
+           "a line absent from the next frame is released from the cache");
+}
+
+void check_wrapped_pixel_case(BodyTextLayouts &layouts, const app::TextLayoutRequest &request,
+                              SoftwareTarget &target)
+{
+    const auto layout = layouts.get(request);
+    expect(layout.has_value(), "the shared wrapped layout is available for pixel comparison");
+    if (!layout)
+    {
+        return;
+    }
+    const auto *entry = layouts.glyphs_of(layout.value().Get());
+    expect(entry != nullptr && entry->glyphs_ready,
+           "wrapped glyph collection is retained by the shared body cache");
+    if (entry == nullptr || !entry->glyphs_ready)
+    {
+        return;
+    }
+    constexpr D2D1_RECT_F clip{7, 9, 79, 67};
+    for (const auto row : {0, 1, 3})
+    {
+        const D2D1_POINT_2F origin{7, static_cast<float>(9 - row * narrow.line_height)};
+        const auto expected = target.clipped_layout(layout.value().Get(), origin, clip);
+        const auto drawn = target.glyph_runs(entry->glyphs, origin, clip);
+        expect(!expected.empty() && expected == drawn,
+               "wrapped and partly hidden rows retain every DirectWrite pixel");
+    }
+}
+
+void check_wrapped_pixels(BodyTextLayouts &layouts, const core::EditorSettings &settings)
+{
+    SoftwareTarget target;
+    expect(target.ready(), "wrapped glyph verification creates an offscreen software target");
+    if (!target.ready())
+    {
+        return;
+    }
+    constexpr std::array<std::string_view, 3> texts{
+        "日本語の長い行を折り返して日本語の続きを表示する。",
+        "abc\tdef Café á 😀 漢字 אבג العربية end abcdefghijklmnop",
+        "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"};
+    for (const auto text : texts)
+    {
+        check_wrapped_pixel_case(layouts, app::TextLayoutRequest{text, settings, narrow}, target);
+    }
+}
+
 } // namespace
 
 void verify_body_text_layouts()
@@ -128,6 +196,8 @@ void verify_body_text_layouts()
     check_rows(layouts, settings);
     check_unicode(layouts, settings);
     check_resources(layouts, settings);
+    check_input_retention(layouts, settings);
+    check_wrapped_pixels(layouts, settings);
     const auto invalid =
         layouts.get(app::TextLayoutRequest{std::string_view{"\xff", 1}, settings, narrow});
     expect(!invalid.has_value(), "invalid display text is an explicit layout failure");

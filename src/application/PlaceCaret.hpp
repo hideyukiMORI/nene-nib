@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CaretAffinity.hpp"
 #include "SelectionAnchoring.hpp"
 #include "TextPosition.hpp"
 
@@ -11,5 +12,6 @@ struct PlaceCaret
 {
     core::TextPosition position;
     core::SelectionAnchoring anchoring;
+    core::CaretAffinity affinity = core::CaretAffinity::leading;
 };
 } // namespace nenenib::application

@@ -34,6 +34,8 @@ struct VimStep
     // のと同じに、controller は効果を写す前にキャレット（選択は畳む）をここへ置く。空はいまの
     // キャレットのまま。書くのはオペレータと VISUAL の d x c r（決定 8〜10）。
     std::optional<Offset> restore = std::nullopt;
+    // 必要な行の文字組みを値で要求する。同じ状態と鍵で解決し直すまで効果は適用しない。
+    std::optional<LineNumber> layout_request = std::nullopt;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の

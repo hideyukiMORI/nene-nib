@@ -1,5 +1,7 @@
 #pragma once
 
+#include "TextLayoutFailure.hpp"
+
 #include "Appearance.hpp"
 #include "CompositionView.hpp"
 #include "DocumentView.hpp"
@@ -31,5 +33,6 @@ struct EditorDelivery
     bool closing;
     std::optional<std::size_t> close_request;
     std::optional<core::EditorOperation> operation_request;
+    std::optional<TextLayoutFailure> layout_failure{};
 };
 } // namespace nenenib::application

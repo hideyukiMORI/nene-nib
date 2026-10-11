@@ -1,5 +1,7 @@
 #pragma once
 
+#include "TextViewGeometry.hpp"
+
 #include <cstddef>
 
 namespace nenenib::application
@@ -8,5 +10,6 @@ namespace nenenib::application
 struct VisibleLines
 {
     std::size_t lines;
+    core::TextViewGeometry geometry{};
 };
 } // namespace nenenib::application

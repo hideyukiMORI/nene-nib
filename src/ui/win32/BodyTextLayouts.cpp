@@ -4,9 +4,11 @@
 #include "DevicePixels.hpp"
 #include "FontFallbackCache.hpp"
 #include "LineUtf16Evaluation.hpp"
+#include "TextLayoutPoint.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -17,18 +19,6 @@ namespace
 constexpr auto unavailable = application::TextLayoutFailure::unavailable;
 constexpr float tab_stop_spaces = 8.0F;
 constexpr float spacing_probe_width = 1000.0F;
-
-[[nodiscard]] bool trailing(core::CaretAffinity affinity) noexcept
-{
-    switch (affinity)
-    {
-    case core::CaretAffinity::leading:
-        return false;
-    case core::CaretAffinity::trailing:
-        return true;
-    }
-    std::unreachable();
-}
 
 [[nodiscard]] DWRITE_WORD_WRAPPING wrapping(core::LineWrapping value) noexcept
 {
@@ -60,6 +50,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     }
     current_.clear();
     previous_.clear();
+    pending_.reset();
     style_.reset();
     if (!factory_)
     {
@@ -207,13 +198,44 @@ BodyTextLayouts::get(const application::TextLayoutRequest &request)
         current_.push_back(std::move(*previous));
         return current_.back().layout;
     }
+    if (pending_.has_value() && matches(pending_.value()))
+    {
+        auto entry = std::move(pending_).value();
+        pending_.reset();
+        return retain(std::move(entry));
+    }
     auto made = make_layout(request);
     if (!made)
     {
         return std::unexpected(made.error());
     }
-    current_.push_back(std::move(made).value());
-    return current_.back().layout;
+    return retain(std::move(made).value());
+}
+
+BodyTextLayouts::TextLayout BodyTextLayouts::retain(BodyTextLayout entry)
+{
+    if (collecting_)
+    {
+        current_.push_back(std::move(entry));
+        return current_.back().layout;
+    }
+    pending_ = std::move(entry);
+    return pending_.value().layout;
+}
+
+BodyTextLayout *BodyTextLayouts::find(IDWriteTextLayout *layout)
+{
+    const auto found = std::ranges::find_if(current_, [layout](const BodyTextLayout &entry)
+                                            { return entry.layout.Get() == layout; });
+    if (found != current_.end())
+    {
+        return &*found;
+    }
+    if (pending_.has_value() && pending_.value().layout.Get() == layout)
+    {
+        return &pending_.value();
+    }
+    return nullptr;
 }
 
 std::expected<std::size_t, application::TextLayoutFailure>
@@ -224,9 +246,12 @@ BodyTextLayouts::rows(const application::TextLayoutRequest &request)
     {
         return std::unexpected(layout.error());
     }
-    const auto found = std::ranges::find_if(current_, [&layout](const BodyTextLayout &entry)
-                                            { return entry.layout == layout.value(); });
-    return found->rows;
+    const auto *entry = find(layout.value().Get());
+    if (entry == nullptr)
+    {
+        std::unreachable();
+    }
+    return entry->rows;
 }
 
 std::expected<core::TextLocation, application::TextLayoutFailure>
@@ -239,17 +264,14 @@ BodyTextLayouts::locate(const application::TextLayoutRequest &request, core::Dis
     }
     LineUtf16Evaluation positions(request.text);
     const auto units = positions.units_of(caret.column);
-    const bool after = trailing(caret.affinity) && units > 0;
-    DWRITE_HIT_TEST_METRICS metrics{};
-    float x = 0;
-    float y = 0;
-    if (FAILED(layout.value()->HitTestTextPosition(units - (after ? 1U : 0U), after ? TRUE : FALSE,
-                                                   &x, &y, &metrics)))
+    const auto point = text_layout_point(layout.value().Get(), units, caret.affinity);
+    if (!point)
     {
         return std::unexpected(unavailable);
     }
     const auto height = static_cast<float>(std::max(request.geometry.line_height, 1));
-    return core::TextLocation{static_cast<std::size_t>(std::max(y, 0.0F) / height), x};
+    return core::TextLocation{static_cast<std::size_t>(std::max(point.value().y, 0.0F) / height),
+                              point.value().x};
 }
 
 std::expected<core::DisplayCaret, application::TextLayoutFailure>
@@ -278,16 +300,17 @@ BodyTextLayouts::hit(const application::TextLayoutRequest &request, core::TextLo
 
 const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout)
 {
-    const auto found = std::ranges::find_if(current_, [layout](const BodyTextLayout &entry)
-                                            { return entry.layout.Get() == layout; });
-    if (found == current_.end())
+    auto *found = find(layout);
+    if (found == nullptr || !style_.has_value())
     {
         return nullptr;
     }
     if (!found->glyphs_tried)
     {
-        auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(
-            static_cast<float>(core::width_of(found->area)));
+        const auto width = style_.value().wrapping == core::LineWrapping::no_wrap
+                               ? std::numeric_limits<float>::max()
+                               : static_cast<float>(core::width_of(found->area));
+        auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(width);
         auto taken = collector && SUCCEEDED(layout->Draw(nullptr, collector.Get(), 0, 0))
                          ? collector->take()
                          : std::nullopt;
@@ -295,17 +318,20 @@ const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout)
         found->glyphs = std::move(taken).value_or(std::vector<BodyGlyphRun>{});
         found->glyphs_tried = true;
     }
-    return &*found;
+    return found;
 }
 
 void BodyTextLayouts::begin_frame()
 {
     previous_.swap(current_);
     current_.clear();
+    collecting_ = true;
 }
 
 void BodyTextLayouts::end_frame()
 {
     previous_.clear();
+    pending_.reset();
+    collecting_ = false;
 }
 } // namespace nenenib::ui::win32

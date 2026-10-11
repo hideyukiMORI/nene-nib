@@ -2,6 +2,7 @@
 
 #include "BodyLayout.hpp"
 #include "BodyTextLayout.hpp"
+#include "BodyTextLayouts.hpp"
 #include "ClauseEmphasis.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
@@ -49,13 +50,10 @@ class Direct2DRenderer final
   public:
     // 起動の節目は initialize の中で打つので、計測器は create からそのまま通す（Issue #19）。
     [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
-    create(HWND window, std::uint32_t dpi, application::TimingPort &timing);
+    create(HWND window, std::uint32_t dpi, application::TimingPort &timing,
+           BodyTextLayouts &text_layouts);
     [[nodiscard]] std::expected<void, RenderFailure> render(const application::EditorFrame &frame);
     [[nodiscard]] std::expected<void, RenderFailure> resize(UINT width, UINT height);
-    // 本文のクリックを桁へ写す唯一の経路。DirectWrite の当たり判定は描く側が持つ（ARC-011）。
-    // 当たり判定は描画用の行で引き、本文の桁へ戻して返す（ADR 0040 の決定 3）。
-    [[nodiscard]] core::Column column_at(const application::LineView &line,
-                                         const core::BodyLayout &body, std::int32_t x);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
     [[nodiscard]] std::expected<void, RenderFailure> set_font(const core::EditorSettings &settings);
     // 最後に描いたキャレットの物理画素。窓が IME の候補窓をその直下に置く（ADR 0014 の決定 6）。
@@ -68,7 +66,7 @@ class Direct2DRenderer final
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
-    Direct2DRenderer() = default;
+    explicit Direct2DRenderer(BodyTextLayouts &text_layouts);
     [[nodiscard]] std::expected<void, RenderFailure> initialize(HWND window,
                                                                 application::TimingPort &timing);
     [[nodiscard]] std::expected<void, RenderFailure> create_device();
@@ -80,17 +78,11 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
     [[nodiscard]] std::expected<void, RenderFailure>
     create_body_formats(const core::EditorSettings &settings);
-    // 本文の書式に字体選択の保持（ADR 0071）を取り付ける。最善の努力で、どこかで失敗したら
-    // OS の既定の fallback の書式のまま続ける（ADR 0077 の決定 5）。
-    void attach_font_fallback(const TextFormat &format);
     void align_text_formats();
     // 書式（か layout）の領域に入りきらない文字列を文字単位で切って末尾に「…」を付ける。
     // タブの題名（docs/design/2026-09-29-tabs.md 第 2 節）と一覧の場所（ADR 0057 の決定 7）が
     // 同じ設定を使う。
     [[nodiscard]] HRESULT trim_by_character(IDWriteTextFormat *format);
-    // 本文の書式の tab stop を空白 8 個ぶんにする。本文の書式を作るたびにここだけを通る
-    // （ADR 0045 の決定 1）。測れないときは既定のまま。
-    void set_tab_stops(IDWriteTextFormat *format);
     [[nodiscard]] const wchar_t *family(const wchar_t *preferred, const wchar_t *fallback) const;
     [[nodiscard]] HRESULT make_format(const wchar_t *face, float size_dips,
                                       DWRITE_FONT_WEIGHT weight, TextFormat &format);
@@ -124,13 +116,13 @@ class Direct2DRenderer final
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
                         D2D1_DRAW_TEXT_OPTIONS options = D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body);
+    [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body,
+                                       const core::EditorSettings &settings);
     [[nodiscard]] TextLayout text_layout(std::string_view text, IDWriteTextFormat *format,
                                          const core::LayoutRect &area);
-    // 1 行の中の範囲の当たり矩形。折り返さないので数は少なく、上限を超えた分は描かない。
-    [[nodiscard]] std::size_t runs_of(IDWriteTextLayout *text, const core::LayoutRect &area,
-                                      DWRITE_TEXT_RANGE range,
-                                      std::span<DWRITE_HIT_TEST_METRICS> runs);
+    // 折り返し・双方向の全矩形。固定数の上限で選択やIMEの下線を切らない。
+    [[nodiscard]] std::vector<DWRITE_HIT_TEST_METRICS>
+    runs_of(IDWriteTextLayout *text, const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
     void fill_runs(IDWriteTextLayout *text, const core::LayoutRect &area, DWRITE_TEXT_RANGE range);
     // 範囲の下端に太さ thickness の帯を引く（IME の文節の下線・ADR 0014 の決定 7）。
     void underline_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
@@ -245,10 +237,9 @@ class Direct2DRenderer final
     TextFormat guide_label_format_;
     TextFormat guide_note_format_;
     TextFormat guide_status_format_;
-    TextFormat code_format_;
     // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
-    std::vector<BodyTextLayout> body_layouts_;
-    std::vector<BodyTextLayout> previous_body_layouts_;
+    BodyTextLayouts &body_text_;
+    std::optional<RenderFailure> text_failure_;
     GutterTextLayouts gutter_layouts_;
     // 通常6枠と案内4枠。録画時は案内が無く7枠（ADR 0079）。
     static constexpr std::size_t status_layout_count = 10;
@@ -257,6 +248,7 @@ class Direct2DRenderer final
     WaitableHandle latency_{nullptr, &::CloseHandle};
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;
+    std::int32_t body_line_height_ = 1;
     std::uint32_t dpi_ = 96;
     // DirectWrite 資源の無効化キー。設定の所有者は EditorState（ADR 0020）。
     core::FontSize formatted_size_ = core::default_font_size();

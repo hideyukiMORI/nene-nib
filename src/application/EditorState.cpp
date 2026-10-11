@@ -139,6 +139,22 @@ const ScrollState &EditorState::scroll() const noexcept
     return scroll_;
 }
 
+core::CaretAffinity EditorState::caret_affinity() const noexcept
+{
+    return caret_affinity_;
+}
+
+EditorState EditorState::with_caret_affinity(core::CaretAffinity affinity) const &
+{
+    return EditorState(*this).with_caret_affinity(affinity);
+}
+
+EditorState EditorState::with_caret_affinity(core::CaretAffinity affinity) &&
+{
+    caret_affinity_ = affinity;
+    return std::move(*this);
+}
+
 core::LineEnding EditorState::line_ending() const noexcept
 {
     return text_.line_ending();
@@ -273,6 +289,7 @@ EditorState EditorState::with_selection(core::Selection selection) const &
 EditorState EditorState::with_selection(core::Selection selection) &&
 {
     selection_ = selection;
+    caret_affinity_ = core::CaretAffinity::leading;
     return std::move(*this);
 }
 
@@ -299,6 +316,7 @@ EditorState EditorState::with_edit(core::TextBuffer text, core::Selection select
 {
     text_ = std::move(text);
     selection_ = selection;
+    caret_affinity_ = core::CaretAffinity::leading;
     history_ = std::move(history);
     document_ = std::move(document);
     return std::move(*this);
@@ -355,6 +373,7 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     EditorState next(*this);
     next.text_ = std::move(text);
     next.selection_ = core::collapsed_at(core::Offset{0});
+    next.caret_affinity_ = core::CaretAffinity::leading;
     next.history_ = core::EditHistory::empty();
     next.scroll_ = ScrollState{core::LineNumber{first_line}, scroll_.visible_lines};
     next.document_ = std::move(document);
@@ -535,9 +554,10 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
     const auto save_state = save_state_of(document_, history.position());
     DocumentView view{core::tab_title_for(document_.path, save_state), document_.path,
                       document_.encoding, save_state, std::nullopt};
-    return std::make_shared<const DocumentState>(DocumentState{
-        text_, core::collapsed_at(selection_.caret), std::move(history), document_,
-        scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view)});
+    return std::make_shared<const DocumentState>(
+        DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
+                      scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
+                      scroll_.first_row, scroll_.horizontal, caret_affinity_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -548,7 +568,8 @@ void EditorState::spread(const DocumentState &tab)
     selection_ = tab.selection;
     history_ = tab.history.sealed();
     document_ = tab.document;
-    scroll_ = ScrollState{tab.first_visible, scroll_.visible_lines};
+    scroll_ = ScrollState{tab.first_visible, scroll_.visible_lines, tab.first_row, tab.horizontal};
+    caret_affinity_ = tab.affinity;
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 

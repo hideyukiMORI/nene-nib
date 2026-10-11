@@ -69,7 +69,7 @@ the command line, the second tab clicked and the caret put on line 3, and the wi
 without arguments must show three tabs with the second active, its title and the current line on
 row 3 (restoreBack.png), and a click on the third reads it (restoreThird.png); with the first file
 deleted, a click on its tab leaves two tabs and a one-line notice (restoreMissing.png); a start with
-one file argument shows that file alone (D24). These launches keep the profile's session.v1
+one file argument shows that file alone (D24). These launches keep the profile's session.v2
 (window_driver.start with keep_session) and use posted messages only.
 Python standard library and ctypes only.
 """
@@ -1614,9 +1614,9 @@ def remember_three(executable: Path, environment: dict, appearance: str,
         step["closeExitCode"] = closed_cleanly(window, process)
     finally:
         stop(process)
-    listed = Path(environment["LOCALAPPDATA"]) / "NeNeNib" / "session.v1"
+    listed = Path(environment["LOCALAPPDATA"]) / "NeNeNib" / "session.v2"
     step["listWritten"] = listed.is_file()
-    assert step["listWritten"], "closing the window wrote no session.v1"
+    assert step["listWritten"], "closing the window wrote no session.v2"
     return step
 
 

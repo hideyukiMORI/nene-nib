@@ -28,13 +28,13 @@ class Win32SettingsAdapter final : public application::SettingsPort
     read_source(const core::ThemeCatalog &themes);
     [[nodiscard]] std::expected<void, application::SettingsFailure> check_snapshot();
     [[nodiscard]] std::expected<void, application::SettingsFailure>
-    write_previous_locked(const core::EditorSettings &settings);
+    write_through(const core::EditorSettings &settings, std::size_t index);
     [[nodiscard]] std::expected<void, application::SettingsFailure>
     write_locked(const core::EditorSettings &settings);
 
     application::FilePort &files_;
     std::expected<SettingsPaths, application::SettingsFailure> paths_;
-    SettingsVersion source_{SettingsVersion::v2};
+    SettingsVersion source_{SettingsVersion::v3};
     std::optional<std::string> original_;
     std::optional<application::SettingsIssue> blocked_{application::SettingsFailure::not_loaded};
 };

@@ -36,6 +36,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -183,6 +184,31 @@ void vim_normal(EditorController &controller, std::string_view keys)
            std::get<VimPrefix>(state.input_wait.value()) == prefix;
 }
 
+namespace
+{
+void arrange_wrapped_viewport(EditorController &controller, const VimFixture &fixture,
+                              const VimViewportFixture &viewport)
+{
+    const auto width = static_cast<std::int32_t>(viewport.wrap_columns * 10);
+    static_cast<void>(controller.apply(
+        VisibleLines{viewport.visible_lines, nenenib::core::TextViewGeometry{width, 20, 96}}));
+    static_cast<void>(
+        controller.apply(PlaceCaret{vim_fixture_position(fixture), SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(ScrollLines{std::numeric_limits<std::int32_t>::min()}));
+    for (std::size_t index = 0; index <= fixture.text.size(); ++index)
+    {
+        const auto frame = controller.frame();
+        if (frame.first_visible.value == viewport.first_visible &&
+            frame.lines.front().screen_row == 0)
+        {
+            return;
+        }
+        static_cast<void>(controller.apply(ScrollLines{1}));
+    }
+    expect(false, "the wrapped oracle viewport can be arranged");
+}
+} // namespace
+
 void arrange_vim_viewport(EditorController &controller, const VimFixture &fixture)
 {
     if (!fixture.viewport.has_value())
@@ -190,6 +216,11 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
         return;
     }
     const auto &viewport = fixture.viewport.value();
+    if (viewport.wrap_columns > 0)
+    {
+        arrange_wrapped_viewport(controller, fixture, viewport);
+        return;
+    }
     static_cast<void>(controller.apply_frame(VisibleLines{viewport.visible_lines}));
     static_cast<void>(controller.apply_frame(
         PlaceCaret{vim_fixture_position(fixture), SelectionAnchoring::collapse}));

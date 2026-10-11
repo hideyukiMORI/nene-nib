@@ -52,14 +52,14 @@ nenenib_target(nenenib_core core STATIC
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
     src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimKeyTable.cpp src/core/VimPattern.cpp src/core/VimPatternEvaluation.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
-    src/core/VimStep.cpp src/core/VimTextObjectRange.cpp
+    src/core/VimStep.cpp src/core/VimScreenGeometry.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp
-    src/application/LineSpanEvaluation.cpp)
+    src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/EditorView.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -71,6 +71,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/Utf16Tests.cpp
     tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp
+    tests/unit/WrappedViewTests.cpp
+    tests/unit/VimWrappedTests.cpp
     tests/unit/EditorDeliveryTests.cpp
     tests/unit/VimEngineTests.cpp
     tests/unit/DisplayLineTests.cpp
@@ -119,7 +121,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/ThemeCodec.cpp src/adapters/win32/ThemeContrast.cpp
     src/adapters/win32/Win32ThemeAdapter.cpp
     src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
-    src/adapters/win32/SettingsCodec.cpp src/adapters/win32/Win32SettingsAdapter.cpp
+    src/adapters/win32/SettingsCodec.cpp src/adapters/win32/SettingsPaths.cpp src/adapters/win32/Win32SettingsAdapter.cpp
     src/adapters/win32/ParentDirectory.cpp src/adapters/win32/SessionCodec.cpp
     src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp
     src/adapters/win32/BookmarkCodec.cpp src/adapters/win32/Win32BookmarkAdapter.cpp
@@ -178,9 +180,9 @@ add_test(NAME nib_folders COMMAND nib_folder_tests WORKING_DIRECTORY ${CMAKE_BIN
 set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
-    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/FileDialog.cpp
+    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/LineUtf16Evaluation.cpp)
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/LineUtf16Evaluation.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。

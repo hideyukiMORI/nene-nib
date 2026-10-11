@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CaretAffinity.hpp"
 #include "Document.hpp"
 #include "DocumentView.hpp"
 #include "EditHistory.hpp"
@@ -27,5 +28,8 @@ struct DocumentState
     std::optional<core::VimWantedColumn> wanted_column;
     std::optional<core::VimCount> scroll_lines;
     DocumentView view;
+    std::size_t first_row = 0;
+    float horizontal = 0;
+    core::CaretAffinity affinity = core::CaretAffinity::leading;
 };
 } // namespace nenenib::application

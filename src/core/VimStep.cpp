@@ -1,4 +1,5 @@
 #include "VimStep.hpp"
+#include "VimScreenGeometry.hpp"
 
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
@@ -497,6 +498,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] LineNumber screen_line(const VimEditorView &view, VimScreenPosition position,
                                      std::size_t count) noexcept
 {
+    if (view.navigation.has_value())
+    {
+        return view.navigation.value().caret;
+    }
     const LineNumber first = first_view_line(view);
     const LineNumber last = last_view_line(view);
     switch (position)
@@ -2441,9 +2446,26 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
                    VimNavigate{navigated_selection(state, view.selection, caret), first}};
 }
 
+[[nodiscard]] VimStep displayed_navigation(const VimState &state, const VimEditorView &view,
+                                           const VimDisplayNavigation &target)
+{
+    auto step = target.preserve_column
+                    ? navigated_at(state, view, target.first, view.selection.caret)
+                    : navigated(state, view, target.first, target.caret);
+    if (target.scroll_lines.has_value())
+    {
+        step.next.scroll_lines = VimCount{target.scroll_lines.value()};
+    }
+    return step;
+}
+
 [[nodiscard]] VimStep half_page_step(const VimState &state, const VimEditorView &view,
                                      VimScrollDirection direction)
 {
+    if (view.navigation.has_value())
+    {
+        return displayed_navigation(state, view, view.navigation.value());
+    }
     const std::size_t fallback =
         std::max<std::size_t>(view.viewport.visible_lines / 2, single_step);
     const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
@@ -2475,6 +2497,10 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
 [[nodiscard]] VimStep page_step(const VimState &state, const VimEditorView &view,
                                 VimScrollDirection direction)
 {
+    if (view.navigation.has_value())
+    {
+        return displayed_navigation(state, view, view.navigation.value());
+    }
     const LineNumber first = page_top(view, count_of(state.count), direction);
     if (first == view.viewport.first_visible)
     {
@@ -3417,8 +3443,34 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return operated(state, view, motion.value());
 }
 
-[[nodiscard]] VimStep acted(const VimState &state, const VimEditorView &view, VimAction action)
+[[nodiscard]] std::expected<VimEditorView, LineNumber>
+display_view(const VimState &state, const VimEditorView &view, VimAction action)
 {
+    auto navigation = vim_display_navigation(state, view, action);
+    if (!navigation)
+    {
+        return std::unexpected(navigation.error());
+    }
+    auto result = view;
+    result.navigation = std::move(navigation).value();
+    return result;
+}
+
+[[nodiscard]] VimStep requested_layout(const VimState &state, LineNumber line)
+{
+    auto step = VimStep{state, VimNoEffect{}};
+    step.layout_request = line;
+    return step;
+}
+
+[[nodiscard]] VimStep acted(const VimState &state, const VimEditorView &input, VimAction action)
+{
+    const auto displayed = display_view(state, input, action);
+    if (!displayed)
+    {
+        return requested_layout(state, displayed.error());
+    }
+    const auto &view = displayed.value();
     if (state.pending.has_value())
     {
         return pending_step(state, view, action);
@@ -3642,9 +3694,15 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 }
 
 // VISUAL の写し先（決定 7・決定 8）。行に効く命令・挿入・履歴・Ex は VISUAL では効かない。
-[[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &view,
+[[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &input,
                                    VimAction action)
 {
+    const auto displayed = display_view(state, input, action);
+    if (!displayed)
+    {
+        return requested_layout(state, displayed.error());
+    }
+    const auto &view = displayed.value();
     const auto group = vim_group_for(action);
     if (!group.has_value())
     {
@@ -4575,7 +4633,11 @@ std::size_t vim_search_count(const VimState &state) noexcept
 
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    return macro_recorded(state, view, vim_recorded(state, view, stepped(state, view, key), key),
-                          key);
+    auto step = stepped(state, view, key);
+    if (step.layout_request.has_value())
+    {
+        return step;
+    }
+    return macro_recorded(state, view, vim_recorded(state, view, std::move(step), key), key);
 }
 } // namespace nenenib::core

@@ -45,6 +45,8 @@
 #include "VimSearchPattern.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
+#include "VimStep.hpp"
+#include "VisualTextView.hpp"
 
 #include <cstddef>
 #include <deque>
@@ -129,6 +131,8 @@ class EditorController final
     // 1 鍵を engine へ流して効果を写す唯一の経路（ADR 0030 の決定 7）。打った鍵も再生の鍵も
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
+    [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
+    measured_vim_step(const core::VimKey &key) const;
     void load_vim_clipboard();
     void send_vim_clipboard(const std::optional<core::VimRegister> &written);
     // 再生のあいだに積んだ編集を 1 つの undo 単位に畳む（ADR 0046 の決定 3）。
@@ -302,7 +306,12 @@ class EditorController final
 
     void replace(const core::OffsetRange &range, std::string_view text,
                  core::EditBoundary boundary);
-    void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring);
+    void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
+                       core::CaretAffinity affinity = core::CaretAffinity::leading);
+    void accept(const PointText &intent);
+    [[nodiscard]] bool move_visual(const MoveCaret &intent);
+    [[nodiscard]] VisualTextView visual_view() const;
+    void clamp_scroll();
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
@@ -331,7 +340,7 @@ class EditorController final
     frame_pattern(std::reference_wrapper<const core::VimPattern> pattern);
     [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
                                      const core::VimPattern *pattern, core::Offset caret) const;
-    [[nodiscard]] std::vector<LineView> visible_lines() const;
+    [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines() const;
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。
     [[nodiscard]] std::optional<CompositionView> composed() const;
@@ -354,6 +363,9 @@ class EditorController final
 
     EditorPorts ports_;
     EditorState state_;
+    core::TextViewGeometry view_geometry_{};
+    std::optional<TextLayoutFailure> layout_failure_;
+    std::optional<float> wanted_x_;
     // `.` と `@` の再生で流す鍵の列と、それぞれの鍵の入れ子の深さ（ADR 0046 の決定 3・4）。
     // replay_depth_ はいま流している鍵の深さで、再生の外（打った鍵）では空。どれも
     // perform(VimReplay) と queue_nested_replay だけが書く。

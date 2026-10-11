@@ -13,5 +13,6 @@ struct SettingsFields
     std::optional<std::string_view> font_family;
     std::optional<std::string_view> font_size;
     std::optional<std::string_view> guide;
+    std::optional<std::string_view> wrap;
 };
 } // namespace nenenib::adapters::win32

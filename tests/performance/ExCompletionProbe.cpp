@@ -57,7 +57,7 @@ constexpr std::array<std::string_view, 0> expected_1{
 
 };
 constexpr std::array<std::string_view, 1> expected_2{"colorscheme user-0123"};
-constexpr std::array<std::string_view, 26> expected_3{"colorscheme",
+constexpr std::array<std::string_view, 28> expected_3{"colorscheme",
                                                       "set fontsize=",
                                                       "set guifont=",
                                                       "set incsearch",
@@ -71,6 +71,8 @@ constexpr std::array<std::string_view, 26> expected_3{"colorscheme",
                                                       "tabnext",
                                                       "tabprevious",
                                                       "tabclose",
+                                                      "set wrap",
+                                                      "set nowrap",
                                                       "edit",
                                                       "buffer",
                                                       "ls",
@@ -83,16 +85,16 @@ constexpr std::array<std::string_view, 26> expected_3{"colorscheme",
                                                       "xit",
                                                       "exit",
                                                       "saveas"};
-constexpr std::array<std::string_view, 8> expected_4{
-    "set fontsize=", "set guifont=",   "set incsearch", "set noincsearch",
-    "set hlsearch",  "set nohlsearch", "set guide",     "set noguide"};
+constexpr std::array<std::string_view, 10> expected_4{
+    "set fontsize=",  "set guifont=", "set incsearch", "set noincsearch", "set hlsearch",
+    "set nohlsearch", "set guide",    "set noguide",   "set wrap",        "set nowrap"};
 constexpr std::array<std::string_view, 10> expected_5{
     "colorscheme ubuntu-aubergine", "colorscheme neutral-light",
     "colorscheme solarized-dark",   "colorscheme solarized-light",
     "colorscheme monokai",          "colorscheme dracula",
     "colorscheme one-dark",         "colorscheme night-owl",
     "colorscheme night-owl-light",  "colorscheme system"};
-constexpr std::array<std::string_view, 36> expected_6{"colorscheme",
+constexpr std::array<std::string_view, 38> expected_6{"colorscheme",
                                                       "set fontsize=",
                                                       "set guifont=",
                                                       "set incsearch",
@@ -106,6 +108,8 @@ constexpr std::array<std::string_view, 36> expected_6{"colorscheme",
                                                       "tabnext",
                                                       "tabprevious",
                                                       "tabclose",
+                                                      "set wrap",
+                                                      "set nowrap",
                                                       "edit",
                                                       "buffer",
                                                       "ls",
@@ -218,7 +222,7 @@ constexpr std::array<std::string_view, 266> expected_7{
     "colorscheme user-0249",        "colorscheme user-0250",     "colorscheme user-0251",
     "colorscheme user-0252",        "colorscheme user-0253",     "colorscheme user-0254",
     "colorscheme user-0255",        "colorscheme system"};
-constexpr std::array<std::string_view, 292> expected_8{"colorscheme",
+constexpr std::array<std::string_view, 294> expected_8{"colorscheme",
                                                        "set fontsize=",
                                                        "set guifont=",
                                                        "set incsearch",
@@ -232,6 +236,8 @@ constexpr std::array<std::string_view, 292> expected_8{"colorscheme",
                                                        "tabnext",
                                                        "tabprevious",
                                                        "tabclose",
+                                                       "set wrap",
+                                                       "set nowrap",
                                                        "edit",
                                                        "buffer",
                                                        "ls",
@@ -511,7 +517,7 @@ constexpr std::array<std::string_view, 292> expected_8{"colorscheme",
                                                        "colorscheme user-0255",
                                                        "colorscheme system"};
 constexpr std::array<std::string_view, 1> expected_9{"set fontsize="};
-constexpr std::array<std::string_view, 26> expected_10{"colorscheme",
+constexpr std::array<std::string_view, 28> expected_10{"colorscheme",
                                                        "set fontsize=",
                                                        "set guifont=",
                                                        "set incsearch",
@@ -525,6 +531,8 @@ constexpr std::array<std::string_view, 26> expected_10{"colorscheme",
                                                        "tabnext",
                                                        "tabprevious",
                                                        "tabclose",
+                                                       "set wrap",
+                                                       "set nowrap",
                                                        "edit",
                                                        "buffer",
                                                        "ls",
@@ -584,10 +592,10 @@ const std::array<ExCompletionSample, 12> samples{
       "0232\nuser-0233\nuser-0234\nuser-0235\nuser-0236\nuser-0237\nuser-0238\nuser-0239\nuser-"
       "0240\nuser-0241\nuser-0242\nuser-0243\nuser-0244\nuser-0245\nuser-0246\nuser-0247\nuser-"
       "0248\nuser-0249\nuser-0250\nuser-0251\nuser-0252\nuser-0253\nuser-0254\nuser-0255\n"},
-     {"", 1024U, 231424U, expected_3,
+     {"", 1024U, 251904U, expected_3,
       "mode=prefix\nprefix=\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
       "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"set ", 1024U, 110592U, expected_4,
+     {"set ", 1024U, 131072U, expected_4,
       "mode=prefix\nprefix=set "
       "\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
       "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
@@ -595,7 +603,7 @@ const std::array<ExCompletionSample, 12> samples{
       "mode=prefix\nprefix=colorscheme "
       "\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
       "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"", 1024U, 477184U, expected_6,
+     {"", 1024U, 497664U, expected_6,
       "mode=all\nprefix=\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
       "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
      {"colorscheme ", 128U, 751744U, expected_7,
@@ -634,7 +642,7 @@ const std::array<ExCompletionSample, 12> samples{
       "0232\nuser-0233\nuser-0234\nuser-0235\nuser-0236\nuser-0237\nuser-0238\nuser-0239\nuser-"
       "0240\nuser-0241\nuser-0242\nuser-0243\nuser-0244\nuser-0245\nuser-0246\nuser-0247\nuser-"
       "0248\nuser-0249\nuser-0250\nuser-0251\nuser-0252\nuser-0253\nuser-0254\nuser-0255\n"},
-     {"", 128U, 780544U, expected_8,
+     {"", 128U, 783104U, expected_8,
       "mode=all\nprefix=\ncatalog=custom-256-invalid-color\nubuntu-aubergine\nneutral-"
       "light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-"
       "light\nuser-0000\nuser-0001\nuser-0002\nuser-0003\nuser-0004\nuser-0005\nuser-0006\nuser-"
@@ -675,7 +683,7 @@ const std::array<ExCompletionSample, 12> samples{
       "f\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
       "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\nbody=a x "
       "a\npath=C:\\nib-probe\\probe.txt\nvisible=1\neditor-mode=vim\n"},
-     {"", 64U, 15040U, expected_10,
+     {"", 64U, 16320U, expected_10,
       "mode=frame-ex\nprefix=\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
       "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\nbody=a x "
       "a\npath=C:\\nib-probe\\probe.txt\nvisible=1\neditor-mode=vim\n"},

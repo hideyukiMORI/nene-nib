@@ -32,6 +32,7 @@ using Failure = nenenib::application::SessionFailure;
 constexpr wchar_t folder[] = L"nib-session-files";
 constexpr wchar_t profile[] = L"nib-session-files/profile";
 constexpr wchar_t listed[] = L"nib-session-files/profile/session.v1";
+constexpr wchar_t legacy[] = L"nib-session-files/profile/legacy.v1";
 constexpr wchar_t large[] = L"nib-session-files/large.v1";
 
 std::size_t &failures()
@@ -66,6 +67,7 @@ void remove_file(const std::wstring &name)
 void reset_folder()
 {
     remove_file(listed);
+    remove_file(legacy);
     remove_file(large);
     RemoveDirectoryW(profile);
     RemoveDirectoryW(folder);
@@ -75,6 +77,7 @@ void reset_folder()
 void clean_folder()
 {
     remove_file(listed);
+    remove_file(legacy);
     remove_file(large);
     RemoveDirectoryW(profile);
     expect(RemoveDirectoryW(folder) != 0, "the temporary folder is removed");
@@ -96,10 +99,18 @@ SessionTab tab_of(std::string_view path, std::array<std::size_t, 4> numbers)
         core::LineNumber{numbers.at(2)}, numbers.at(3)};
 }
 
+adapters::SessionPaths paths_of(core::FilePath current)
+{
+    return adapters::SessionPaths{std::move(current),
+                                  path_of("nib-session-files/profile/legacy.v1")};
+}
+
 bool same_tab(const SessionTab &left, const SessionTab &right)
 {
     return left.path == right.path && left.caret == right.caret &&
-           left.first_visible == right.first_visible && left.recency == right.recency;
+           left.first_visible == right.first_visible && left.recency == right.recency &&
+           left.first_row == right.first_row && left.horizontal == right.horizontal &&
+           left.affinity == right.affinity;
 }
 
 bool same_session(const Session &left, const Session &right)
@@ -140,13 +151,37 @@ void verify_round_trips()
     round_trip(Session{{tab_of("C:\\a.txt", {2, 3, 1, 0})}, 0}, "one tab round trips");
     round_trip(three_tabs(), "spaces, Japanese, commas and equals signs in paths round trip");
     const auto bytes = adapters::encode_session(three_tabs());
-    expect(
-        bytes.value_or(std::string{}) ==
-            "version=1\nactive=1\n12,5,3,1,C:\\work\\a b\\日本語.txt\n1,1,1,0,D:/notes/x,y=z.md\n"
-            "400,17,380,2,\\\\server\\share\\log, 2026=09.txt\n",
-        "the list is written with LF in band order");
+    expect(bytes.value_or(std::string{}) ==
+               "version=2\nactive=1\n12,5,3,1,0,0,leading,C:\\work\\a "
+               "b\\日本語.txt\n1,1,1,0,0,0,leading,D:/notes/x,y=z.md\n"
+               "400,17,380,2,0,0,leading,\\\\server\\share\\log, 2026=09.txt\n",
+           "the list is written with LF in band order");
     const auto empty = adapters::encode_session(Session{{}, 0});
-    expect(empty.value_or(std::string{}) == "version=1\nactive=0\n", "an empty list is two lines");
+    expect(empty.value_or(std::string{}) == "version=2\nactive=0\n", "an empty list is two lines");
+}
+
+void verify_wrapped_round_trip()
+{
+    auto session = three_tabs();
+    auto &tab = session.tabs.front();
+    tab.first_row = 17;
+    tab.horizontal = 125.25F;
+    tab.affinity = core::CaretAffinity::trailing;
+    round_trip(session, "wrapped row, horizontal offset and caret affinity round trip");
+    const auto old = adapters::decode_session("version=1\nactive=0\n1,2,1,0,C:/old.txt\n");
+    expect(old && old.value().tabs.front().first_row == 0 &&
+               old.value().tabs.front().horizontal == 0 &&
+               old.value().tabs.front().affinity == core::CaretAffinity::leading,
+           "v1 supplies the initial screen row and leading affinity");
+    const std::array<std::string_view, 5> invalid = {"0,nan,leading", "0,inf,leading",
+                                                     "0,-1,leading", "-1,0,leading", "0,0,unknown"};
+    for (const auto fields : invalid)
+    {
+        const auto decoded = adapters::decode_session(
+            std::format("version=2\nactive=0\n1,1,1,0,{},C:/a.txt\n", fields));
+        expect(!decoded && decoded.error() == Failure::malformed,
+               "invalid v2 screen fields are refused");
+    }
 }
 
 void verify_line_ends()
@@ -171,7 +206,7 @@ void rejected(std::string_view bytes, Failure failure, const char *message)
 void verify_rejected_headers()
 {
     rejected("", Failure::malformed, "an empty file is malformed");
-    rejected("version=2\nactive=0\n", Failure::unsupported_version, "another version is refused");
+    rejected("version=3\nactive=0\n", Failure::unsupported_version, "another version is refused");
     rejected("active=0\nversion=1\n", Failure::malformed, "the version comes first");
     rejected("version=1\n", Failure::malformed, "the active line is required");
     rejected("version=1\nactive=x\n", Failure::malformed, "active must be a number");
@@ -239,7 +274,8 @@ void verify_limits()
 
 void verify_adapter_round_trip(adapters::Win32FileAdapter &files)
 {
-    adapters::Win32SessionAdapter session(files, path_of("nib-session-files/profile/session.v1"));
+    adapters::Win32SessionAdapter session(
+        files, paths_of(path_of("nib-session-files/profile/session.v1")));
     const auto missing = session.read();
     expect(missing.has_value() && !missing.value().has_value(), "a missing list is no list");
     expect(session.write(three_tabs()).has_value(), "the first write creates the profile folder");
@@ -252,25 +288,46 @@ void verify_adapter_round_trip(adapters::Win32FileAdapter &files)
            "the empty list is read back as an empty list, not as no list");
 }
 
+void verify_adapter_migration(adapters::Win32FileAdapter &files)
+{
+    remove_file(listed);
+    const auto paths = paths_of(path_of("nib-session-files/profile/session.v1"));
+    const std::string old = "version=1\nactive=0\n3,2,1,0,C:/old.txt\n";
+    expect(files.write(paths.legacy, old).has_value(), "a legacy list is prepared");
+    adapters::Win32SessionAdapter adapter(files, paths);
+    const auto restored = adapter.read().value_or(std::nullopt);
+    expect(restored.has_value() && restored.value().tabs.front().caret.line.value == 3,
+           "a missing current file reads the legacy list");
+    expect(adapter.write(three_tabs()).has_value(), "closing writes the current version");
+    expect(files.read(paths.legacy, 1024).value_or("") == old, "the legacy bytes remain unchanged");
+    const auto current = adapter.read().value_or(std::nullopt);
+    expect(current.has_value() && current.value().tabs.size() == 3,
+           "the current list has priority over the legacy list");
+    expect(files.write(paths.current, "broken").has_value(), "a broken current file is prepared");
+    const auto broken = adapter.read();
+    expect(!broken && broken.error() == Failure::malformed,
+           "a broken current file never falls back to the legacy list");
+}
+
 void verify_adapter_failures(adapters::Win32FileAdapter &files)
 {
     const auto large_path = path_of("nib-session-files/large.v1");
     expect(
         files.write(large_path, std::string(adapters::maximum_session_bytes + 1, 'x')).has_value(),
         "the oversized fixture is written");
-    adapters::Win32SessionAdapter oversized(files, large_path);
+    adapters::Win32SessionAdapter oversized(files, paths_of(large_path));
     const auto too_large = oversized.read();
     expect(!too_large && too_large.error() == Failure::too_large, "a file over 1 MiB is refused");
     expect(files.write(large_path, "version=3\nactive=0\n").has_value(), "a v3 list is written");
     const auto version = oversized.read();
     expect(!version && version.error() == Failure::unsupported_version,
            "the adapter reports another version");
-    adapters::Win32SessionAdapter directory(files, path_of("nib-session-files/profile"));
+    adapters::Win32SessionAdapter directory(files, paths_of(path_of("nib-session-files/profile")));
     const auto unreadable = directory.read();
     expect(!unreadable && unreadable.error() == Failure::unreadable,
            "a folder is not mistaken for a missing list");
-    adapters::Win32SessionAdapter deeper(files,
-                                         path_of("nib-session-files/missing/deeper/session.v1"));
+    adapters::Win32SessionAdapter deeper(
+        files, paths_of(path_of("nib-session-files/missing/deeper/session.v1")));
     const auto unwritable = deeper.write(three_tabs());
     expect(!unwritable && unwritable.error() == Failure::unwritable,
            "only one missing folder level is created");
@@ -288,6 +345,7 @@ void verify_adapter_failures(adapters::Win32FileAdapter &files)
 int main()
 {
     verify_round_trips();
+    verify_wrapped_round_trip();
     verify_line_ends();
     verify_rejected_headers();
     verify_rejected_tabs();
@@ -295,6 +353,7 @@ int main()
     reset_folder();
     adapters::Win32FileAdapter files;
     verify_adapter_round_trip(files);
+    verify_adapter_migration(files);
     verify_adapter_failures(files);
     clean_folder();
     std::printf("Session adapter: %zu checks, %zu failures\n", checks(), failures());

@@ -42,11 +42,16 @@ class BodyTextLayouts final : public application::TextLayoutPort
     [[nodiscard]] HRESULT set_spacing(const application::TextLayoutRequest &request);
     [[nodiscard]] std::expected<BodyTextLayout, application::TextLayoutFailure>
     make_layout(const application::TextLayoutRequest &request);
+    [[nodiscard]] TextLayout retain(BodyTextLayout entry);
+    [[nodiscard]] BodyTextLayout *find(IDWriteTextLayout *layout);
 
     Microsoft::WRL::ComPtr<IDWriteFactory7> factory_;
     TextFormat format_;
     std::optional<BodyTextStyle> style_;
     std::vector<BodyTextLayout> current_;
     std::vector<BodyTextLayout> previous_;
+    // 描画前の連続入力は最後の1行だけ。途中の変更行を蓄積しない。
+    std::optional<BodyTextLayout> pending_;
+    bool collecting_ = false;
 };
 } // namespace nenenib::ui::win32

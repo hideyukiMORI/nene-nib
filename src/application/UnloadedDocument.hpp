@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CaretAffinity.hpp"
 #include "DocumentView.hpp"
 #include "FilePath.hpp"
 #include "LineNumber.hpp"
@@ -18,5 +19,8 @@ struct UnloadedDocument
     core::TextPosition caret;
     core::LineNumber first_visible;
     DocumentView view;
+    std::size_t first_row = 0;
+    float horizontal = 0;
+    core::CaretAffinity affinity = core::CaretAffinity::leading;
 };
 } // namespace nenenib::application

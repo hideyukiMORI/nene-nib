@@ -1,6 +1,7 @@
 // 合成ルート（ARC-006）。ポートに実装を結び、窓を作り、メッセージループを回し、終了コードを返す。
 // 端末出力の代わりは「起動できなかった理由 1 行」の MessageBoxW だけで、ログには使わない。
 #include "AbsolutePath.hpp"
+#include "BodyTextLayouts.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
 #include "LocalSettingsPath.hpp"
@@ -138,7 +139,7 @@ int run(HINSTANCE instance)
     // 前回のタブの一覧は窓が閉じるときに書き、ファイルの引数が無い起動で controller が読む
     // （ADR 0059 の決定 2・3・6）。
     nenenib::adapters::win32::Win32SessionAdapter session(
-        files, nenenib::adapters::win32::local_session_path());
+        files, nenenib::adapters::win32::local_session_paths());
     // 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む。起動の道では読まない
     // （ADR 0060 の決定 8）。
     nenenib::adapters::win32::Win32HistoryAdapter history(
@@ -150,14 +151,17 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
+    nenenib::ui::win32::BodyTextLayouts text_layouts;
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
-                                          themes, session, history, folders, bookmarks},
+                                          themes, session, history, folders, bookmarks,
+                                          text_layouts},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
-    const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing);
+    const auto window =
+        nenenib::ui::win32::EditorWindow::create(instance, controller, timing, text_layouts);
     if (!window)
     {
         return report(reason_of(window.error()));
