@@ -125,7 +125,14 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'ex-completion-all-custom-128',
              'ex-completion-frame-ex-option-64',
              'ex-completion-frame-ex-empty-64',
-             'ex-completion-frame-palette-64')
+             'ex-completion-frame-palette-64',
+             'completion-prefix-long-miss-4096',
+             'completion-prefix-theme-raw-4096',
+             'completion-prefix-theme-seeded-4096',
+             'completion-prefix-short-raw-4096',
+             'completion-prefix-short-seeded-4096',
+             'completion-prefix-empty-raw-4096',
+             'completion-prefix-empty-seeded-4096')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -149,6 +156,16 @@ def load_json(text: str):
 
 
 def fixed_input(workload: str) -> bytes:
+    if workload in WORKLOADS[122:129]:
+        return (
+            b'mode=raw\ninput=edit C:\\nib-probe\\\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5Z\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
+            b'mode=raw\ninput=colorscheme drac\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
+            b'mode=tab-next\ninput=colorscheme drac\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
+            b'mode=raw\ninput=set f\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
+            b'mode=tab-next\ninput=set f\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
+            b'mode=raw\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
+            b'mode=tab-next\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
+        )[WORKLOADS.index(workload) - 122]
     if workload in WORKLOADS[110:122]:
         inputs = (
             b'mode=prefix\nprefix=set f\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',
