@@ -1,6 +1,6 @@
 # ADR 0112 — 操作候補の表示値は一致した行だけ所有する
 
-- 状態: 先行設計、未実装・未計測・採否未定
+- 状態: 技術受理（2026-10-11 16:07 JST、統合・収載・整理は別記録）
 - Issue: #400
 - 基準: main72e68633badafc69b03d84456a85068001793e30
 
@@ -50,3 +50,13 @@ GUIはfixed6scene: ordinary全件/ほぞん/qqq/空白、Vim全件/cTrL+s。F1�
 canonical files palette5000はlisted_positions側でoperation_choicesを呼ばない。旧#392の一指標（旧5試料中央値2.159ms/上限4.630ms）だけをsource/caller/112compile commands/tool/input/host/power不変で限定reuseする。同一TU layoutの新実行性能は未測であり、新正式測定/正式8全成功/操作UI速度とは呼ばない。CommandChoice.cppの今回三範囲に加え旧#398二箇所を明示して逆照合し、files関連関数と他本文が不変であることを示す。旧CommandLine/ExResultの限定証明も維持する。
 
 hideの現行分担に沿いAstraが設計/採否/排他計測GUI/統合、SOLが実装対象検証と独立別席レビューGUI準備、LUNAが読取レビュー。先行ADR→harness→before→製品を別commit。採用なら日報5〜8行/引き継ぎ/全コマンド/費用/未測/失敗原記録を収載、draft/最終レビュー/Ready/必須CI/正規merge-pr.py plan+同head execute/main clean同期/恒久収載/絶対D targetとdirty/untracked/ignored/唯一成果物/稼働参照/link監査/整理まで行う。branch/commitを保持する。工程/文書/SHAだけで成功検証を繰り返さない。#398はPR399/main72e6863・snapshot398/acceptance398・15:17:16JST監査整理完了。#365/#373/元26候補は不変。hideの停止まで継続する。
+
+## 実施結果
+
+#400 / ADR0112。operation_choicesは利用可能な操作のkeyを一度生成し、静的name/readingとそのkeyを既存scorekernelへ借用する。一致した行だけ従来のDisplayText::parseでname/descriptionを所有し、同じkeyを返却値へmoveする。CommandChoice.cppの三関数以外と他製品source525filesは不変。空query、mode別鍵、全fields、同点順、返却所有を維持し、description/short_nameは従来どおり照合しない。公開API/settings/schema/table/cache/防御copy/正本経路の変更なし、waiver none。
+
+先行設計5cedb47d70d9684aa907740e16f33bc90c636ba3、harness333b4de6a439107a3a5277b8e838a7ffbbccbbf9、製品f8cbda10cc806f4b1f2420fc4c8405bac8688db7。初回2利益/8費用、Debug既存1530checks/30oracle、旧138probe/47selector/default/assertions/1853fixtures保持、GUI18対0px/36PNG・12本文copy・264checkpoint・36mode・2正常close・親全画像目視で2026-10-11 16:07 JSTに技術受理。
+
+queryほぞん（返却2候補）の1024回生成・破棄区間で約51.79%、qqq（返却0候補）の同1024回で約63.17%短縮。全件を含む費用8条件は[gate-proofs 5-dz](../quality/gate-proofs.md#5-dz--一致した操作候補だけ表示値を所有するissue-400adr0112)。局所率を合算/UI全体へ換算しない。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変で限定reuseし、新exeの正式速度/全8成功とはしない。
+
+実統合/収載/整理はwave4/acceptance-400。
