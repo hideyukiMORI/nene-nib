@@ -11,6 +11,70 @@ The film-inspired themes are original NeNe Nib palettes, with independent names.
 Film imagery, logos, characters and dialogue are not distributed. No affiliation
 with the films or theme authors is represented.
 
+Additional original cinema palettes (#421):
+  royal-kinetic (inspired by Black Panther)
+  Reference: https://marvel.disney.co.jp/movie/blackpanther
+  arena-sunset (inspired by Thor: Ragnarok)
+  Reference: https://marvel.disney.co.jp/movie/thor-br
+  cosmic-mixtape (inspired by Guardians of the Galaxy Vol. 2)
+  Reference: https://marvel.disney.co.jp/movie/gog-remix
+  prism-sanctum (inspired by Doctor Strange)
+  Reference: https://marvel.disney.co.jp/movie/dr-strange
+  winter-sentinel (inspired by Captain America: The Winter Soldier)
+  Reference: https://marvel.disney.co.jp/movie/captain-america2
+  infinite-dusk (inspired by Avengers: Infinity War)
+  Reference: https://marvel.disney.co.jp/movie/avengers-iw
+  stellar-pilot (inspired by Captain Marvel)
+  Reference: https://marvel.disney.co.jp/movie/captain-marvel
+  quantum-honey (inspired by Ant-Man and the Wasp)
+  Reference: https://marvel.disney.co.jp/movie/antman-wasp
+  crimson-mercenary (inspired by Deadpool)
+  Reference: https://www.20thcenturystudios.com/movies/deadpool
+  last-outlaw (inspired by Logan)
+  Reference: https://www.20thcenturystudios.com/movies/logan
+  ivory-agent (inspired by Black Widow)
+  Reference: https://marvel.disney.co.jp/movie/blackwidow
+  celestial-brass (inspired by Eternals)
+  Reference: https://marvel.disney.co.jp/movie/eternals
+  amber-haze (inspired by Blade Runner 2049)
+  Reference: https://www.warnerbros.com/movies/blade-runner-2049
+  desert-oracle (inspired by Dune)
+  Reference: https://www.warnerbros.com/movies/dune
+  chrome-wasteland (inspired by Mad Max: Fury Road)
+  Reference: https://www.warnerbros.com/movies/mad-max-fury-road
+  neon-grid (inspired by TRON: Legacy)
+  Reference: https://movies.disney.com/tron-legacy
+  biolume-forest (inspired by Avatar)
+  Reference: https://www.20thcenturystudios.com/movies/avatar
+  pastel-concierge (inspired by The Grand Budapest Hotel)
+  Reference: https://www.searchlightpictures.com/thegrandbudapesthotel
+  twilight-jazz (inspired by La La Land)
+  Reference: https://www.lionsgate.com/la-la-land-sweeps
+  noir-vigil (inspired by The Batman)
+  Reference: https://www.warnerbros.com/movies/the-batman
+  carnival-ashes (inspired by Joker)
+  Reference: https://www.warnerbros.com/movies/joker
+  orbital-frost (inspired by Interstellar)
+  Reference: https://www.warnerbros.co.jp/home_entertainment/k4hjvhjawk2/
+  folded-city (inspired by Inception)
+  Reference: https://www.warnerbros.com/movies/inception
+  midnight-drive (inspired by Drive)
+  Reference: https://www.sonypictures.com/movies/drive
+  editorial-cafe (inspired by The French Dispatch)
+  Reference: https://www.searchlightpictures.com/thefrenchdispatch
+  striped-haunt (inspired by Beetlejuice)
+  Reference: https://www.warnerbros.com/movies/beetlejuice
+  curious-garden (inspired by Alice in Wonderland)
+  Reference: https://movies.disney.com/alice-in-wonderland-2010
+  tidebound-gold (inspired by Pirates of the Caribbean: The Curse of the Black Pearl)
+  Reference: https://movies.disney.com/pirates-of-the-caribbean-the-curse-of-the-black-pearl
+  velvet-cabaret (inspired by Moulin Rouge!)
+  Reference: https://www.20thcenturystudios.com/movies/moulin-rouge
+  lagoon-whisper (inspired by The Shape of Water)
+  Reference: https://www.searchlightpictures.com/theshapeofwater
+These original palettes are covered by the project MIT license.
+No film imagery, logos or dialogue are included; no endorsement is implied.
+
 Original NeNe Nib palettes: ubuntu-aubergine, neutral-light, alloy-core,
 verdant-rage, scarlet-web, relic-sand, soap-rebellion, code-rain, arcane-library.
 Copyright (c) NeNe Nib contributors; licensed under the repository MIT license.

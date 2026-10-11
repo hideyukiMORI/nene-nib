@@ -150,7 +150,7 @@ void verify_palette_editing()
     palette = palette.edited(CommandEdit::complete_next);
     expect(palette.selected() == 0 && palette.input().text() == ":",
            "next wraps without changing query");
-    palette = palette.selected_at(4).inserted("drac").value();
+    palette = palette.selected_at(4).inserted("dracula").value();
     expect(palette.selected() == 0 && palette.count() == 1, "filter resets the selected row");
     expect(palette.selected_at(50).selected() == 0, "invalid row leaves selection intact");
     palette = palette.filled("set fontsize=").value();

@@ -8,7 +8,7 @@
 namespace nenenib::tests
 {
 // Explicit accepted inventory; deliberately independent of the production table.
-inline constexpr std::array<std::string_view, 95> expected_theme_names{{
+inline constexpr std::array<std::string_view, 125> expected_theme_names{{
     "ubuntu-aubergine",
     "neutral-light",
     "solarized-dark",
@@ -104,6 +104,36 @@ inline constexpr std::array<std::string_view, 95> expected_theme_names{{
     "soap-rebellion",
     "code-rain",
     "arcane-library",
+    "royal-kinetic",
+    "arena-sunset",
+    "cosmic-mixtape",
+    "prism-sanctum",
+    "winter-sentinel",
+    "infinite-dusk",
+    "stellar-pilot",
+    "quantum-honey",
+    "crimson-mercenary",
+    "last-outlaw",
+    "ivory-agent",
+    "celestial-brass",
+    "amber-haze",
+    "desert-oracle",
+    "chrome-wasteland",
+    "neon-grid",
+    "biolume-forest",
+    "pastel-concierge",
+    "twilight-jazz",
+    "noir-vigil",
+    "carnival-ashes",
+    "orbital-frost",
+    "folded-city",
+    "midnight-drive",
+    "editorial-cafe",
+    "striped-haunt",
+    "curious-garden",
+    "tidebound-gold",
+    "velvet-cabaret",
+    "lagoon-whisper",
 }};
 
 inline std::vector<std::string> expected_theme_commands()

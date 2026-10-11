@@ -23,7 +23,7 @@ ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイム
 
 表示とIME
   Ctrl+Pの「:」で配色・字体・文字サイズ・操作ヒントを変更できます。
-  配色は95種。Vim標準・IDE定番・MonaLisa・映画から着想した独自配色を含みます。
+  配色は125種。Vim標準・IDE定番・MonaLisa・映画から着想した独自配色を含みます。
   例: :colorscheme monalisa / code-rain / gruvbox / vscode-dark-modern
   言語別の構文ハイライトは今後対応予定です。
   配色の出典・許諾文はTHIRD_PARTY_NOTICES.txtを参照してください。

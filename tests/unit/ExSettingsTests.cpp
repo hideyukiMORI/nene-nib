@@ -564,7 +564,8 @@ void verify_completion_candidate_boundaries()
     expect(core::command_completions("colorscheme d") ==
                std::vector<std::string>{"colorscheme dracula", "colorscheme darkblue",
                                         "colorscheme default", "colorscheme delek",
-                                        "colorscheme desert", "colorscheme darcula"},
+                                        "colorscheme desert", "colorscheme darcula",
+                                        "colorscheme desert-oracle"},
            "raw prefix boundary colorscheme d");
     expect(core::command_completions("colorscheme dracula") ==
                std::vector<std::string>{"colorscheme dracula"},
