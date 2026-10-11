@@ -6,6 +6,7 @@
 #include "FileNameWorkload.hpp"
 #include "FrameDocumentWorkload.hpp"
 #include "FrameRowsWorkload.hpp"
+#include "OperationChoiceWorkload.hpp"
 #include "PaletteChoiceWorkload.hpp"
 #include "PreviewCaretWorkload.hpp"
 #include "ProbeWorkload.hpp"
@@ -21,7 +22,7 @@ using ProbeSelection =
     std::variant<ProbeWorkload, FrameRowsWorkload, SearchSnapshotWorkload, PreviewCaretWorkload,
                  FrameDocumentWorkload, StatusItemsWorkload, FileNameWorkload, TabDisplayWorkload,
                  CommandInputWorkload, ExCompletionWorkload, CompletionPrefixWorkload,
-                 PaletteChoiceWorkload>;
+                 PaletteChoiceWorkload, OperationChoiceWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

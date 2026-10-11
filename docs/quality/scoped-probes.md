@@ -165,3 +165,13 @@ CompletionPrefixWorkload閉enum7値、旧122条件の順/入力/期待を保持�
 空queryのbuiltin36候補を512回生成・破棄する固定区間で約10.54%、custom失敗名256を含む292候補を128回で約17.06%短縮。異なる回数の局所率を合算/直接比較したりUI全体へ換算しない。費用8条件と全試行は[gate-proofs 5-dy](../quality/gate-proofs.md#5-dy--パレット候補の所有値をmoveで渡すissue-398adr0111)。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変により限定reuse。新exeの正式速度/全8成功ではない。
 
 PaletteChoiceWorkload閉enum9値、旧129条件の定義/順を保持し登録138。2利益8費用の120runs/2400durations/4800marks/1200pairsを原raw再計算。新9pureと旧controller-fill64の回数/意味を分離。全literal/metadata/checksum/originと生成元寿命終了後の所有は区間外に確認。harness失敗/中断2と最終成功を別記録に保持。
+
+## 操作候補の一致後所有（#400・ADR0112）
+
+#400 / ADR0112。operation_choicesは利用可能な操作のkeyを一度生成し、静的name/readingとそのkeyを既存scorekernelへ借用する。一致した行だけ従来のDisplayText::parseでname/descriptionを所有し、同じkeyを返却値へmoveする。CommandChoice.cppの三関数以外と他製品source525filesは不変。空query、mode別鍵、全fields、同点順、返却所有を維持し、description/short_nameは従来どおり照合しない。公開API/settings/schema/table/cache/防御copy/正本経路の変更なし、waiver none。
+
+先行設計5cedb47d70d9684aa907740e16f33bc90c636ba3、harness333b4de6a439107a3a5277b8e838a7ffbbccbbf9、製品f8cbda10cc806f4b1f2420fc4c8405bac8688db7。初回2利益/8費用、Debug既存1530checks/30oracle、旧138probe/47selector/default/assertions/1853fixtures保持、GUI18対0px/36PNG・12本文copy・264checkpoint・36mode・2正常close・親全画像目視で2026-10-11 16:07 JSTに技術受理。
+
+queryほぞん（返却2候補）の1024回生成・破棄区間で約51.79%、qqq（返却0候補）の同1024回で約63.17%短縮。全件を含む費用8条件は[gate-proofs 5-dz](../quality/gate-proofs.md#5-dz--一致した操作候補だけ表示値を所有するissue-400adr0112)。局所率を合算/UI全体へ換算しない。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変で限定reuseし、新exeの正式速度/全8成功とはしない。
+
+OperationChoiceWorkload閉enum10値、旧138条件の定義/順を保持し登録148。全10pure、120runs/2400durations/4800marks/1200pairsを原raw再計算。全58行literal/metadata/checksum/両codepoints/保持viewとquery所有元寿命終了後の返却所有を区間外に確認。

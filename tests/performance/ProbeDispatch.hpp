@@ -6,6 +6,7 @@
 #include "FileNameWorkload.hpp"
 #include "FrameDocumentWorkload.hpp"
 #include "FrameRowsWorkload.hpp"
+#include "OperationChoiceWorkload.hpp"
 #include "PaletteChoiceWorkload.hpp"
 #include "PreviewCaretWorkload.hpp"
 #include "ProbeDispatchRow.hpp"
@@ -25,5 +26,6 @@ using ProbeDispatch =
                  ProbeDispatchRow<FileNameWorkload>, ProbeDispatchRow<TabDisplayWorkload>,
                  ProbeDispatchRow<CommandInputWorkload>, ProbeDispatchRow<ExCompletionWorkload>,
                  ProbeDispatchRow<CompletionPrefixWorkload>,
-                 ProbeDispatchRow<PaletteChoiceWorkload>>;
+                 ProbeDispatchRow<PaletteChoiceWorkload>,
+                 ProbeDispatchRow<OperationChoiceWorkload>>;
 } // namespace nenenib::tests::performance

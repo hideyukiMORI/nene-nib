@@ -8,6 +8,7 @@
 #include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
 #include "FrameRowsProbe.hpp"
+#include "OperationChoiceProbe.hpp"
 #include "PaletteChoiceProbe.hpp"
 #include "PatternProbe.hpp"
 #include "PreviewCaretProbe.hpp"
@@ -789,6 +790,25 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(OperationChoiceWorkload workload)
+{
+    switch (workload)
+    {
+    case OperationChoiceWorkload::reading_ordinary:
+    case OperationChoiceWorkload::miss_ordinary:
+    case OperationChoiceWorkload::all_ordinary:
+    case OperationChoiceWorkload::all_vim:
+    case OperationChoiceWorkload::space_ordinary:
+    case OperationChoiceWorkload::key_vim:
+    case OperationChoiceWorkload::name_ordinary:
+    case OperationChoiceWorkload::close_key_vim:
+    case OperationChoiceWorkload::description_miss:
+    case OperationChoiceWorkload::short_name_miss:
+        return 138U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -804,7 +824,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 138> dispatches{{
+constexpr std::array<ProbeDispatch, 148> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1086,6 +1106,29 @@ constexpr std::array<ProbeDispatch, 138> dispatches{{
                      palette_choice_input, probed_palette_choice},
     ProbeDispatchRow{PaletteChoiceWorkload::custom_narrow, "palette-choice-custom-narrow-128",
                      palette_choice_input, probed_palette_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::reading_ordinary,
+                     "operation-choice-reading-ordinary-1024", operation_choice_input,
+                     probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::miss_ordinary, "operation-choice-miss-ordinary-1024",
+                     operation_choice_input, probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::all_ordinary, "operation-choice-all-ordinary-256",
+                     operation_choice_input, probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::all_vim, "operation-choice-all-vim-256",
+                     operation_choice_input, probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::space_ordinary, "operation-choice-space-ordinary-256",
+                     operation_choice_input, probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::key_vim, "operation-choice-key-vim-1024",
+                     operation_choice_input, probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::name_ordinary, "operation-choice-name-ordinary-1024",
+                     operation_choice_input, probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::close_key_vim, "operation-choice-close-key-vim-1024",
+                     operation_choice_input, probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::description_miss,
+                     "operation-choice-description-miss-1024", operation_choice_input,
+                     probed_operation_choice},
+    ProbeDispatchRow{OperationChoiceWorkload::short_name_miss,
+                     "operation-choice-short-name-miss-1024", operation_choice_input,
+                     probed_operation_choice},
 }};
 
 constexpr auto dispatch_names = []
@@ -1128,7 +1171,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 138U);
+static_assert(dispatches.size() == 148U);
 static_assert(dispatch_is_complete());
 
 } // namespace

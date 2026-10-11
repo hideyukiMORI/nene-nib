@@ -141,7 +141,17 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'palette-choice-direct-fill-1024',
              'palette-choice-direct-long-1024',
              'palette-choice-fallback-long-512',
-             'palette-choice-custom-narrow-128')
+             'palette-choice-custom-narrow-128',
+             'operation-choice-reading-ordinary-1024',
+             'operation-choice-miss-ordinary-1024',
+             'operation-choice-all-ordinary-256',
+             'operation-choice-all-vim-256',
+             'operation-choice-space-ordinary-256',
+             'operation-choice-key-vim-1024',
+             'operation-choice-name-ordinary-1024',
+             'operation-choice-close-key-vim-1024',
+             'operation-choice-description-miss-1024',
+             'operation-choice-short-name-miss-1024')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -165,6 +175,19 @@ def load_json(text: str):
 
 
 def fixed_input(workload: str) -> bytes:
+    if workload in WORKLOADS[138:148]:
+        return (
+            b'operation-choice-v1\nreading-ordinary\nordinary\n\xe3\x81\xbb\xe3\x81\x9e\xe3\x82\x93\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nmiss-ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nall-ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nall-vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nspace-ordinary\nordinary\n \n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nkey-vim\nvim\ncTrL+s\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nname-ordinary\nordinary\n\xe3\x82\xbf\xe3\x83\x96\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nclose-key-vim\nvim\nCTRL+F4\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\ndescription-miss\nordinary\n\xe4\xb8\x8a\xe6\x9b\xb8\xe3\x81\x8d\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+            b'operation-choice-v1\nshort-name-miss\nordinary\n\xe3\x83\x98\xe3\x83\xab\xe3\x83\x97\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',
+        )[WORKLOADS.index(workload) - 138]
     if workload in WORKLOADS[129:138]:
         return (
             b'builtin-all\n:\n512\nbuiltins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n',

@@ -230,24 +230,23 @@ template <std::ranges::input_range Positions>
 }
 
 // 操作の一覧の 1 行（ADR 0078 の決定 6）。鍵はモードで見せる鍵の表示名、無ければ空。
-[[nodiscard]] CommandChoice operation_choice_of(const OperationText &text, EditMode mode)
+[[nodiscard]] CommandChoice operation_choice_of(const OperationText &text, std::string key)
 {
-    const auto chord = shown_chord(text.operation, mode);
     return CommandChoice{DisplayText::parse(text.name).value(),
                          {},
                          CommandChoiceKind::operate,
                          DisplayText::parse(text.description).value(),
                          std::nullopt,
                          text.operation,
-                         chord.has_value() ? key_chord_label(chord.value()) : std::string{}};
+                         std::move(key)};
 }
 
 // 名前・読み・鍵の表示名のうち一番良い点（ADR 0078 の決定 6）。どれにも当たらなければ無し。
 [[nodiscard]] std::optional<std::size_t>
-operation_score(std::string_view query, const CommandChoice &choice, std::string_view reading)
+operation_score(std::string_view query, const OperationText &text, std::string_view key)
 {
     std::optional<std::size_t> best;
-    const std::array<std::string_view, 3> fields{choice.label.text(), reading, choice.key};
+    const std::array<std::string_view, 3> fields{text.name, text.reading, key};
     for (const std::string_view field : fields)
     {
         const auto score = match_score(query, field);
@@ -313,13 +312,14 @@ std::vector<CommandChoice> operation_choices(std::string_view query, EditMode mo
         {
             continue;
         }
-        CommandChoice choice = operation_choice_of(text, mode);
-        const auto score = query.empty() ? std::optional<std::size_t>{0}
-                                         : operation_score(query, choice, text.reading);
+        const auto chord = shown_chord(text.operation, mode);
+        auto key = chord.has_value() ? key_chord_label(chord.value()) : std::string{};
+        const auto score =
+            query.empty() ? std::optional<std::size_t>{0} : operation_score(query, text, key);
         if (score.has_value())
         {
             scored.emplace_back(available.size(), score.value());
-            available.push_back(std::move(choice));
+            available.push_back(operation_choice_of(text, std::move(key)));
         }
     }
     std::vector<CommandChoice> choices;
