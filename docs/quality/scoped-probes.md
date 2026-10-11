@@ -141,3 +141,9 @@ before3d599b7/after346796a、20iterations/ABBA3/各120組を一度取得し、3�
 最初8条件は同じimmutable入力から生成/破棄1024回、Controllerはbody a x aと固定64cycle。oracle/入力生成は区間外。controller-fillは再open/entry/filter/folder requestと足場vector成長も含み、fill単独と呼ばない。旧palette-append-narrow-5000-to-50を費用として定義不変で追加。旧47selector/default/assertionsを維持し、SearchLine不足契約6checksだけを追加した。
 
 before aa4763d / after c6ce1ce、20iterations/ABBA3/各120組の初回13条件で3利益/10費用成立。156runs/3120durations/6240marks/1560pairsを原rawから再計算一致。長Search/Ex/Palette対応比.489933/.589109/.639037、短Search横ばい、Controller Ex+2µs/fill全cycle+5µsは事前費用内。851checks/39oracle/GUI/正式指標、harnessのconstexpr/tidy失敗と是正、全コマンド/限界/再利用はgate-proofs 5-dv。局所率のUI換算なし。
+
+## Ex補完候補の一致後所有（#394・ADR0109）
+
+ExCompletionWorkloadの閉enum12条件を既存typed dispatchへ追加し、旧110条件の順/入力/本体/期待を維持して登録122。builtin pureは1024回、custom256名pureは128回、直接controller.frameは64回。metadataはmode/prefix/catalog全名とframe足場を直列化し、独立bytes/FNV/SHA・全候補literal順・checksumを固定した。入力/期待生成とoracleは区間外。所有結果と借用viewの不変性も確認する。
+
+新9pure/3frameと既存command-input-controller-fill-64の13条件を同一harness前後20iterations/ABBA3/各120対応組で一度取得。3利益/10費用成立、原156runs/3120durations/6240marks/1560pairs再計算一致。全builtin1024回の+15µsとfill64の+19µsも費用として保持。旧47selector/default/assertions、1853fixtureは不変。817checks/39oracle/GUIと全コマンド・入力・限界・限定正式再利用はADR0109とgate-proofs 5-dw。局所率をUI全体に換算しない。

@@ -79,3 +79,9 @@ C8入力中parse保持はnoincsearch費用と所有の正本設計を理由に�
 上のC2読取段階から先行ADR0108で5files/8境界を固定し、完成済み局所値を既存constructor/refiltered/variant/with_command_inputへ移した。元state/borrow/防御copy/失敗保持はそのまま。固定3利益/10費用が成立し、長Search/Ex/Paletteの1024生成・破棄で約51.01/41.09/36.10%短縮。短Search横ばい、Controller Ex+2µs/fill全cycle+5µsも記録。851checks/39oracle/GUI10対0px/正式palette5000中央値2.159msで技術受理（gate-proofs 5-dv）。正式値は過去基準との比較で、本変更のUI改善率ではない。
 
 元26件の20採用/2実験不採用/4未実験は変更しない。C8入力中parse保持は未実験。次はEx補完catalogのprefixを先に照合して一致する文字列だけ生成する案を読取設計中で、未Issue/未実装/未測定。通常files palette5000はその経路を通らず、正式指標/再利用の根拠を先に確認する。#365/#373・R8・IO6〜IO8の処分は不変。
+
+## 追加実験: Ex補完候補の一致後所有 #394
+
+C2の追加評価としてADR0109を先行固定し、ExResult.cppの唯一の候補列挙でprefix一致後に所有する。nullopt全候補と空prefix、quit!、失敗custom名、順序/返却所有を維持。固定3利益/10費用、817checks/39oracle/GUI21対0px・42PNG目視で2026-10-11 12:57 JSTに技術受理。option/miss1024回は約91.73/94.01%、custom-narrow128回は約74.66%短縮。全builtin1024回+15µs、controller-fill64+19µsは事前費用内（gate-proofs 5-dw）。UI全体へ換算しない。
+
+新正式取得0。直接経路でないfiles palette5000の旧#392結果だけをsource/caller/flags/tool/input/host不変により限定再利用し、新exeの正式測定としない。元26件の20採用/2実験不採用/4未実験は不変。次はCommandLine::completionsのvalue_or所有copyを読取調査中で未Issue/未実装/未測。空palette hint reserveも未実験。C8/R8/IO6〜IO8、#365/#373の処分は変えない。

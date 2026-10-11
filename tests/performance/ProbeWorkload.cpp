@@ -2,6 +2,7 @@
 
 #include "BufferProbe.hpp"
 #include "CommandInputProbe.hpp"
+#include "ExCompletionProbe.hpp"
 #include "FileNameProbe.hpp"
 #include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
@@ -731,6 +732,27 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(ExCompletionWorkload workload)
+{
+    switch (workload)
+    {
+    case ExCompletionWorkload::option:
+    case ExCompletionWorkload::miss:
+    case ExCompletionWorkload::custom_narrow:
+    case ExCompletionWorkload::empty:
+    case ExCompletionWorkload::set_wide:
+    case ExCompletionWorkload::theme_wide:
+    case ExCompletionWorkload::all_builtins:
+    case ExCompletionWorkload::custom_wide:
+    case ExCompletionWorkload::all_custom:
+    case ExCompletionWorkload::frame_ex_option:
+    case ExCompletionWorkload::frame_ex_empty:
+    case ExCompletionWorkload::frame_palette:
+        return 110U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -746,7 +768,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 110> dispatches{{
+constexpr std::array<ProbeDispatch, 122> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -972,6 +994,30 @@ constexpr std::array<ProbeDispatch, 110> dispatches{{
                      probed_command_input},
     ProbeDispatchRow{CommandInputWorkload::controller_fill, "command-input-controller-fill-64",
                      command_input_input, probed_command_input},
+    ProbeDispatchRow{ExCompletionWorkload::option, "ex-completion-option-1024", ex_completion_input,
+                     probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::miss, "ex-completion-miss-1024", ex_completion_input,
+                     probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::custom_narrow, "ex-completion-custom-narrow-128",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::empty, "ex-completion-empty-1024", ex_completion_input,
+                     probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::set_wide, "ex-completion-set-wide-1024",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::theme_wide, "ex-completion-theme-wide-1024",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::all_builtins, "ex-completion-all-builtins-1024",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::custom_wide, "ex-completion-custom-wide-128",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::all_custom, "ex-completion-all-custom-128",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::frame_ex_option, "ex-completion-frame-ex-option-64",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::frame_ex_empty, "ex-completion-frame-ex-empty-64",
+                     ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{ExCompletionWorkload::frame_palette, "ex-completion-frame-palette-64",
+                     ex_completion_input, probed_ex_completion},
 }};
 
 constexpr auto dispatch_names = []
@@ -1014,7 +1060,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 110U);
+static_assert(dispatches.size() == 122U);
 static_assert(dispatch_is_complete());
 
 } // namespace
