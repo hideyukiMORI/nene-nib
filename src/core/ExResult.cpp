@@ -445,6 +445,85 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     }
     return std::unexpected(ExFailure::unknown_command);
 }
+constexpr std::array<std::string_view, 14> fixed_candidates{
+    "colorscheme",  "set fontsize=",  "set guifont=", "set incsearch", "set noincsearch",
+    "set hlsearch", "set nohlsearch", "set guide",    "set noguide",   "tabs",
+    "tabnew",       "tabnext",        "tabprevious",  "tabclose"};
+
+[[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
+                                  std::string_view suffix = {})
+{
+    if (!prefix.has_value())
+    {
+        return true;
+    }
+    const auto text = prefix.value();
+    if (text.size() <= stem.size())
+    {
+        return stem.starts_with(text);
+    }
+    return text.starts_with(stem) && suffix.starts_with(text.substr(stem.size()));
+}
+
+void append_document_candidates(std::vector<std::string> &candidates,
+                                std::optional<std::string_view> prefix)
+{
+    for (const ExDocumentName &name : document_names)
+    {
+        if (prefix_matches(prefix, name.name))
+        {
+            candidates.emplace_back(name.name);
+        }
+        if (name.verb == ExDocumentVerb::quit && prefix_matches(prefix, name.name, "!"))
+        {
+            candidates.emplace_back(std::string(name.name) + "!");
+        }
+    }
+}
+
+void append_theme_candidates(std::vector<std::string> &candidates, const ThemeCatalog &themes,
+                             std::optional<std::string_view> prefix)
+{
+    if (prefix.has_value() && !prefix.value().starts_with("colorscheme "))
+    {
+        return;
+    }
+    for (const auto &name : themes.names())
+    {
+        if (prefix_matches(prefix, "colorscheme ", name))
+        {
+            candidates.push_back("colorscheme " + name);
+        }
+    }
+    if (prefix_matches(prefix, "colorscheme ", "system"))
+    {
+        candidates.emplace_back("colorscheme system");
+    }
+}
+
+[[nodiscard]] std::vector<std::string> matching_candidates(const ThemeCatalog &themes,
+                                                           std::optional<std::string_view> prefix)
+{
+    std::vector<std::string> candidates;
+    candidates.reserve(fixed_candidates.size());
+    for (const auto name : fixed_candidates)
+    {
+        if (prefix_matches(prefix, name))
+        {
+            candidates.emplace_back(name);
+        }
+    }
+    for (const ExPaletteName &name : palette_names)
+    {
+        if (prefix_matches(prefix, name.name))
+        {
+            candidates.emplace_back(name.name);
+        }
+    }
+    append_document_candidates(candidates, prefix);
+    append_theme_candidates(candidates, themes, prefix);
+    return candidates;
+}
 } // namespace
 
 std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
@@ -482,41 +561,12 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
 
 std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
 {
-    std::vector<std::string> candidates{
-        "colorscheme",  "set fontsize=",  "set guifont=", "set incsearch", "set noincsearch",
-        "set hlsearch", "set nohlsearch", "set guide",    "set noguide",   "tabs",
-        "tabnew",       "tabnext",        "tabprevious",  "tabclose"};
-    for (const ExPaletteName &name : palette_names)
-    {
-        candidates.emplace_back(name.name);
-    }
-    for (const ExDocumentName &name : document_names)
-    {
-        candidates.emplace_back(name.name);
-        if (name.verb == ExDocumentVerb::quit)
-        {
-            candidates.emplace_back(std::string(name.name) + "!");
-        }
-    }
-    for (const auto &name : themes.names())
-    {
-        candidates.push_back("colorscheme " + name);
-    }
-    candidates.emplace_back("colorscheme system");
-    return candidates;
+    return matching_candidates(themes, std::nullopt);
 }
 
 std::vector<std::string> command_completions(std::string_view prefix, const ThemeCatalog &themes)
 {
-    auto candidates = ex_command_candidates(themes);
-    std::erase_if(candidates,
-                  [prefix](const std::string &candidate)
-                  {
-                      return !candidate.starts_with(prefix) ||
-                             (candidate.starts_with("colorscheme ") &&
-                              !prefix.starts_with("colorscheme "));
-                  });
-    return candidates;
+    return matching_candidates(themes, prefix);
 }
 
 DisplayText ex_failure_message(ExFailure failure)
