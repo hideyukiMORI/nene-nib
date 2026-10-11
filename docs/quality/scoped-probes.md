@@ -147,3 +147,11 @@ before aa4763d / after c6ce1ce、20iterations/ABBA3/各120組の初回13条件�
 ExCompletionWorkloadの閉enum12条件を既存typed dispatchへ追加し、旧110条件の順/入力/本体/期待を維持して登録122。builtin pureは1024回、custom256名pureは128回、直接controller.frameは64回。metadataはmode/prefix/catalog全名とframe足場を直列化し、独立bytes/FNV/SHA・全候補literal順・checksumを固定した。入力/期待生成とoracleは区間外。所有結果と借用viewの不変性も確認する。
 
 新9pure/3frameと既存command-input-controller-fill-64の13条件を同一harness前後20iterations/ABBA3/各120対応組で一度取得。3利益/10費用成立、原156runs/3120durations/6240marks/1560pairs再計算一致。全builtin1024回の+15µsとfill64の+19µsも費用として保持。旧47selector/default/assertions、1853fixtureは不変。817checks/39oracle/GUIと全コマンド・入力・限界・限定正式再利用はADR0109とgate-proofs 5-dw。局所率をUI全体に換算しない。
+
+## 補完prefix借用（#396・ADR0110）
+
+#396はADR0110/harness1917db4/製品1ec1264。CommandLine::completionsだけでoptionalの一時string copyをconst参照へ置換し、同期APIへ渡す。completed()の所有seed、空engaged seed、返却所有と他製品全文は不変。初回1利益/9費用、817既存checks/30oracle、旧122条件/47selector/1853fixtures保持、GUI21対0px/14本文copy/232checkpoint/30mode/2正常close/親全42PNG目視で2026-10-11 13:57 JSTに技術受理。
+
+256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/gate-proofs.md#5-dx--補完prefixを同期呼出しの間だけ借用するissue-396adr0110)。API/settings/schema変更なし、waiver none。
+
+CompletionPrefixWorkload閉enum7値、旧122条件の順/入力/期待を保持し登録129。pure7は4096回、既存直接frame3は64回。metadata独立bytes/FNV/SHAとliteral/checksum/保持所有を区間外確認。20iterations/ABBA3/各120組の初回120runs/2400durations/4800marks/1200pairsを原raw再計算。旧fill64は今回関数を計測内に呼ばないため除外。

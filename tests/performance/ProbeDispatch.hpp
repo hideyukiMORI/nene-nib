@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CommandInputWorkload.hpp"
+#include "CompletionPrefixWorkload.hpp"
 #include "ExCompletionWorkload.hpp"
 #include "FileNameWorkload.hpp"
 #include "FrameDocumentWorkload.hpp"
@@ -21,5 +22,6 @@ using ProbeDispatch =
                  ProbeDispatchRow<SearchSnapshotWorkload>, ProbeDispatchRow<PreviewCaretWorkload>,
                  ProbeDispatchRow<FrameDocumentWorkload>, ProbeDispatchRow<StatusItemsWorkload>,
                  ProbeDispatchRow<FileNameWorkload>, ProbeDispatchRow<TabDisplayWorkload>,
-                 ProbeDispatchRow<CommandInputWorkload>, ProbeDispatchRow<ExCompletionWorkload>>;
+                 ProbeDispatchRow<CommandInputWorkload>, ProbeDispatchRow<ExCompletionWorkload>,
+                 ProbeDispatchRow<CompletionPrefixWorkload>>;
 } // namespace nenenib::tests::performance

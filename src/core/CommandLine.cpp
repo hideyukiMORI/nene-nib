@@ -34,7 +34,8 @@ Offset CommandLine::caret() const noexcept
 
 std::vector<std::string> CommandLine::completions() const
 {
-    return command_completions(completion_seed_.value_or(text_), themes_);
+    const auto &prefix = completion_seed_.has_value() ? completion_seed_.value() : text_;
+    return command_completions(prefix, themes_);
 }
 
 std::optional<std::size_t> CommandLine::completion_index() const noexcept

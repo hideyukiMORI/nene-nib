@@ -48,6 +48,29 @@ class ProbeComparisonTests(unittest.TestCase):
         Path(command[3]).write_text(json.dumps({"qpcFrequency": 1000000, "marks": marks}), encoding="utf-8")
         return subprocess.CompletedProcess(command, 0, json.dumps(metadata), "")
 
+    def test_completion_prefix_fixed_inputs(self) -> None:
+        cases = (
+            ('completion-prefix-long-miss-4096', b'mode=raw\ninput=edit C:\\nib-probe\\\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5Z\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', 'cb386e0d366e4241d2a28fc2cf93fea60ee05cfa9d9611f5f0a594f1ca72c439', 414, '17899993968014254022'),
+            ('completion-prefix-theme-raw-4096', b'mode=raw\ninput=colorscheme drac\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', '405dcf07b55a336d216344f812f97831d6b00c31a29253547523f891983e519e', 174, '6355724148303210051'),
+            ('completion-prefix-theme-seeded-4096', b'mode=tab-next\ninput=colorscheme drac\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', 'dbc1247a7a1ea0ed7cfddf74837d094d824d336e479405b10a823c1dd6228ac4', 179, '9157927312824126276'),
+            ('completion-prefix-short-raw-4096', b'mode=raw\ninput=set f\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', '1cf960f7f144aae7ec776ca5e0933d505443827b64242fa43a13ba3322f9c1ab', 163, '5146725973529891191'),
+            ('completion-prefix-short-seeded-4096', b'mode=tab-next\ninput=set f\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', '509e2b051917c692b26ff795f7c5a599ce3192e4343e4798aae2309e97021c5c', 168, '4940635072069788562'),
+            ('completion-prefix-empty-raw-4096', b'mode=raw\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', 'd27b11e75b76da09bb146accc8d6fb8bbf5c170e286cefee3169396f031f90ed', 158, '7231983662249126709'),
+            ('completion-prefix-empty-seeded-4096', b'mode=tab-next\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', '4bfaa8c17714520ba3eaa11d8fb9205defeff22f215f19afcffd5c96cfb05bf8', 163, '16657912587326077742'),
+        )
+        self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[122:129])
+        for name, expected, sha, size, fnv in cases:
+            actual = PROBES.fixed_input(name)
+            self.assertEqual(actual, expected)
+            self.assertEqual(hashlib.sha256(actual).hexdigest(), sha)
+            self.assertEqual(len(actual), size)
+            self.assertEqual(str(PROBES.fnv1a64(actual)), fnv)
+
+    def test_completion_prefix_bad_name(self) -> None:
+        for name in ("completion-prefix-missing-4096", "Completion-prefix-long-miss-4096"):
+            with self.assertRaises(ValueError):
+                PROBES.fixed_input(name)
+
     def test_ex_completion_fixed_inputs(self):
         cases = (
             ('ex-completion-option-1024', b'mode=prefix\nprefix=set f\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n', 'b9355144eb7c0346bbfc5509d1e7fc9c08e30e4e900de239f853818a06bbcb38', 155, '4958441773274844346'),
@@ -246,8 +269,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('command-input-controller-fill-64', b':fz', 3, '11941784898562763057', 'd58613416642baf2b9a49d9ee7107e85ac886af97e0086632f0892ef85fc331b'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[98:110])
-        self.assertEqual(len(PROBES.WORKLOADS), 122)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 122)
+        self.assertEqual(len(PROBES.WORKLOADS), 129)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 129)
         for name, expected, size, fnv, sha in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
@@ -274,8 +297,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('tab-display-untitled-modified-1024', b'', 0, '14695981039346656037'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[89:98])
-        self.assertEqual(len(PROBES.WORKLOADS), 122)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 122)
+        self.assertEqual(len(PROBES.WORKLOADS), 129)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 129)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
@@ -298,8 +321,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('file-name-root-4096', b'/', 1, '12638123428881205758'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[82:89])
-        self.assertEqual(len(PROBES.WORKLOADS), 122)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 122)
+        self.assertEqual(len(PROBES.WORKLOADS), 129)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 129)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)

@@ -2,6 +2,7 @@
 
 #include "BufferProbe.hpp"
 #include "CommandInputProbe.hpp"
+#include "CompletionPrefixProbe.hpp"
 #include "ExCompletionProbe.hpp"
 #include "FileNameProbe.hpp"
 #include "FrameDocumentProbe.hpp"
@@ -753,6 +754,22 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(CompletionPrefixWorkload workload)
+{
+    switch (workload)
+    {
+    case CompletionPrefixWorkload::long_miss:
+    case CompletionPrefixWorkload::theme_raw:
+    case CompletionPrefixWorkload::theme_seeded:
+    case CompletionPrefixWorkload::short_raw:
+    case CompletionPrefixWorkload::short_seeded:
+    case CompletionPrefixWorkload::empty_raw:
+    case CompletionPrefixWorkload::empty_seeded:
+        return 122U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -768,7 +785,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 122> dispatches{{
+constexpr std::array<ProbeDispatch, 129> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1018,6 +1035,20 @@ constexpr std::array<ProbeDispatch, 122> dispatches{{
                      ex_completion_input, probed_ex_completion},
     ProbeDispatchRow{ExCompletionWorkload::frame_palette, "ex-completion-frame-palette-64",
                      ex_completion_input, probed_ex_completion},
+    ProbeDispatchRow{CompletionPrefixWorkload::long_miss, "completion-prefix-long-miss-4096",
+                     completion_prefix_input, probed_completion_prefix},
+    ProbeDispatchRow{CompletionPrefixWorkload::theme_raw, "completion-prefix-theme-raw-4096",
+                     completion_prefix_input, probed_completion_prefix},
+    ProbeDispatchRow{CompletionPrefixWorkload::theme_seeded, "completion-prefix-theme-seeded-4096",
+                     completion_prefix_input, probed_completion_prefix},
+    ProbeDispatchRow{CompletionPrefixWorkload::short_raw, "completion-prefix-short-raw-4096",
+                     completion_prefix_input, probed_completion_prefix},
+    ProbeDispatchRow{CompletionPrefixWorkload::short_seeded, "completion-prefix-short-seeded-4096",
+                     completion_prefix_input, probed_completion_prefix},
+    ProbeDispatchRow{CompletionPrefixWorkload::empty_raw, "completion-prefix-empty-raw-4096",
+                     completion_prefix_input, probed_completion_prefix},
+    ProbeDispatchRow{CompletionPrefixWorkload::empty_seeded, "completion-prefix-empty-seeded-4096",
+                     completion_prefix_input, probed_completion_prefix},
 }};
 
 constexpr auto dispatch_names = []
@@ -1060,7 +1091,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 122U);
+static_assert(dispatches.size() == 129U);
 static_assert(dispatch_is_complete());
 
 } // namespace

@@ -125,3 +125,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0107](0107-tab-display-owns-only-the-clipped-range.md) | タブ表示は省略後の範囲だけを一時所有する | 技術受理・#388 |
 | [0108](0108-completed-command-input-transfers-ownership.md) | 完成したコマンド入力は既存の所有先へ移す | 技術受理・#392 |
 | [0109](0109-ex-completion-owns-only-matching-candidates.md) | Ex補完の候補は一致を確かめてから所有する | 技術受理・#394 |
+| [0110](0110-completion-prefix-is-borrowed-for-the-synchronous-call.md) | 補完prefixは同期呼び出しの間だけ借用する | 技術受理・#396 |
