@@ -180,23 +180,24 @@ add_test(NAME nib_folders COMMAND nib_folder_tests WORKING_DIRECTORY ${CMAKE_BIN
 set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
-    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp
+    src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/LineUtf16Evaluation.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
 # imm32: IMM32 の変換文字列と候補窓（ADR 0014 の決定 1）。IME は窓への入力なので ui/win32 に置く。
-foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32)
+# shell32: WM_DROPFILES の名前と転送メモリだけを扱う（ADR 0116）。
+foreach(library IN ITEMS user32 d2d1 dwrite dxgi d3d11 dcomp dwmapi imm32 ole32 shell32)
     nenenib_system_link(nenenib_window ${library})
 endforeach()
 
 # Issue #300: ui/win32 の描画の保持（字体選択 ADR 0071・字形 ADR 0073）の契約を窓を作らずに確かめる
-# （ADR 0077）。OS の資源は DirectWrite の factory と WIC のソフトウェアの描画先まで。
+# （ADR 0077）。OS 資源は DirectWrite / WIC とメモリ上の DROPFILES（ADR 0116）。
 nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/NibWindowTests.cpp tests/ui/WindowChecks.cpp tests/ui/DirectWriteFactory.cpp
     tests/ui/ScriptedTextSource.cpp tests/ui/ScriptedFontFallback.cpp tests/ui/SoftwareTarget.cpp
-    tests/ui/FallbackKeyTests.cpp tests/ui/FallbackCacheTests.cpp
+    tests/ui/FallbackKeyTests.cpp tests/ui/FallbackCacheTests.cpp tests/ui/FileDropTests.cpp
     tests/ui/GutterLayoutTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp tests/ui/BodyTextLayoutTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)

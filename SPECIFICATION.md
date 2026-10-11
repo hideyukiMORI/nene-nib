@@ -97,6 +97,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | FR-016 | `:colorscheme <name>` で組み込みテーマ（ubuntu-aubergine / neutral-light / solarized-dark / solarized-light / monokai / dracula / one-dark / night-owl / night-owl-light）を切り替え、設定に保存する。`:colorscheme system` で OS 追従に戻す。Ctrl+P の `:` 接頭辞からも同じ一覧 | D13。計画は docs/plans/2026-09-15-colorschemes.md。利用者のテーマファイルはC4a/b（#68 / #70・ADR 0024 / 0025）で同じ選択へ接続 |
 | FR-018 | F1 で操作の一覧を開き、その場で実行できる。操作の案内を空の文書とステータスバーに出し、設定で消せる（D42・D43） | D42 / D43。[採用案](docs/design/2026-10-06-guide.md)。操作の一覧は Issue #303・ADR 0078。案内と設定は Issue #304・ADR 0079。未編集の無題では本文、それ以外では余白があるときステータスに出し、入力面・変換中・通知中は隠す。ADR 0114では `settings.v3`（折り返し設定を追加）を優先し、不在のときだけv2→v1を読む。実変更時にv3だけを保存し、旧版を保持する |
 | FR-019 | 本文を画面幅で折り返す（既定オン）。`:set wrap` / `:set nowrap` とCtrl+Pの共通設定候補で切り替える。本文・undoは不変。画面行と論理行を区別し、描画・移動・選択・IME・スクロールに同じ文字組みを使う | D44・ADR 0114。通常の上下/Home/End/ページは画面行、Vimのj/k・0/$は論理行。gj/gk/g0/g$は未対応 |
+| FR-020 | 窓へファイルをドラッグ＆ドロップして開く。複数ファイルはOSの順序で開き、既存タブと未保存の編集を既存の開く規則で保持する | 施主指示 2026-10-12・Issue #416・ADR 0116。対応済みbeta.2のZIPも公開する |
 
 ## 5. Vim の範囲
 

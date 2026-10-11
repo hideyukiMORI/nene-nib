@@ -17,6 +17,7 @@
 #include "EditorIntent.hpp"
 #include "EndSession.hpp"
 #include "FileDialog.hpp"
+#include "FileDrop.hpp"
 #include "FileFailure.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "KeyChord.hpp"
@@ -490,9 +491,10 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // 枠は WM_NCCALCSIZE で消すが、Snap・影・最小化の動きのために WS_THICKFRAME を残す（ADR
     // 0008）。 WS_EX_NOREDIRECTIONBITMAP: 再描画面を持たないので DirectComposition
     // のアルファがそのまま通る。
-    window_ = CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP, class_name, L"NeNe Nib",
-                              WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, design_width_dips,
-                              design_height_dips, nullptr, nullptr, instance_, nullptr);
+    window_ =
+        CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP | WS_EX_ACCEPTFILES, class_name, L"NeNe Nib",
+                        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, design_width_dips,
+                        design_height_dips, nullptr, nullptr, instance_, nullptr);
     if (window_ == nullptr)
     {
         return std::unexpected(WindowFailure::creation);
@@ -627,6 +629,9 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
         return 1;
     case WM_PAINT:
         paint();
+        return 0;
+    case WM_DROPFILES:
+        open_dropped_files(word);
         return 0;
     case WM_KEYDOWN:
     case WM_KEYUP:
@@ -1470,6 +1475,26 @@ void EditorWindow::open_document()
         return;
     }
     send(application::OpenDocument{chosen.value()});
+}
+
+void EditorWindow::open_dropped_files(WPARAM word)
+{
+    // 通知の modal loop に入る前に OS の転送メモリを解放する（ADR 0116）。
+    const auto paths = take_dropped_files(std::bit_cast<HDROP>(word));
+    end_selection_drag();
+    for (const auto &path : paths)
+    {
+        if (window_ == nullptr)
+        {
+            break;
+        }
+        if (!path)
+        {
+            MessageBoxW(window_, reason_of(path.error()), product_name, MB_OK | MB_ICONWARNING);
+            continue;
+        }
+        send(application::OpenDocument{path.value()});
+    }
 }
 
 void EditorWindow::save_document()

@@ -12,5 +12,5 @@
     "performance_tests": {"path": "tests/performance", "dependencies": ["core", "application", "adapters_win32", "unit_tests"]}
   },
   "runtimeDependencies": [],
-  "platformLibraries": {"adapters_win32": ["kernel32", "shell32", "advapi32", "ole32", "user32"], "ui_win32": ["user32", "d2d1", "dwrite", "dxgi", "d3d11", "dcomp", "dwmapi", "imm32", "ole32"], "app": ["user32", "ole32", "shell32"], "window_tests": ["ole32", "d2d1", "dwrite", "windowscodecs"]}
+  "platformLibraries": {"adapters_win32": ["kernel32", "shell32", "advapi32", "ole32", "user32"], "ui_win32": ["user32", "d2d1", "dwrite", "dxgi", "d3d11", "dcomp", "dwmapi", "imm32", "ole32", "shell32"], "app": ["user32", "ole32", "shell32"], "window_tests": ["ole32", "d2d1", "dwrite", "windowscodecs"]}
 }
