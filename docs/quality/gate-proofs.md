@@ -5137,3 +5137,13 @@ UIのWS_EX_ACCEPTFILES / WM_DROPFILESを既存の変換/FilePath/OpenDocumentへ
 2026-10-12 02:16:59 JSTにv0.1.0-beta.2を公開。clean mainから正規梱包355.693秒、配布exe起動/正常終了/本文不変1.207秒、再取得/公開照合1.773秒/1.190秒、各exit0。ZIP SHA55fef1fc41823ccd068fa9078d3b892c4860d2250e08ee6e2d2289f5c8a69e0c、608411 bytes。12宣言Windows DLL、ZIP直下3点、remote tag commitとGitHub digestまで一致。[公開記録](beta2-release-2026-10-12.md)。
 
 既存tabs291と梱包9 testsは関連入力不変の前回結果を再利用し、全件/無関係な性能は選ばない。文書の記録は正典document_checksと公開値/空白だけを照合する。恒久先D:/NeNeNib/evidence/file-drop-20261012、実整理結果はcloseout.json。branch/commit/tagと公開ZIPを保持する。
+
+## 5-ei — 配色95種と行番号の背景（Issue #419・ADR 0117）
+
+既存Theme/ThemeCatalogを9→95へ拡充し、Vim標準28、IDE50、MonaLisa、映画着想7種を追加した。行番号背景を独立したPaletteトークンとし、現在行の帯を本文へ限定する。構文16役割は全件で保持し、Python/TypeScriptの解析は未実装と区別する。FR-016、ARC-001/002/003/004/007/009/011、CPP-002/003/004/005/011/012/014/016、QLT-001/002/004/008/009/011/012/013、GIT-001〜004、Waivers none。
+
+themes4235、ex-settings483、command-palette583、user-theme-values21、user-theme-selection97、theme codec514 checksと梱包9 tests成功。通常Debug/tidy/ASan/UBSan、Release、変更整形、規約0違反、core/application symbols0違反を確認。新しい短名redの同点順、増加した補完期待、梱包fixtureの初回失敗は直し、関係scopeだけ再実行した。コマンド・依存範囲・結果・原ログと再利用根拠の正本は[詳細](colorschemes-2026-10-12.md)。
+
+了承された03:20〜03:25内に、暗い/明るい映画テーマとMonaLisa、折り返し/空文書/縮小/設定復元を実画面で確認。7枚すべての行番号背景330画素とテーマ値が一致した。確認用の2プロセスは03:23:27までに終了。HTML見本は95件のC++表から抽出し、製品の言語解析の証拠には使わない。
+
+clean製品commitから正規preview ZIPを作り、x64/版/DLL/4エントリ/展開一致を確認。原値は詳細とD:/NeNeNib/releases/419-colorschemes-preview/package.json。公開beta.2は不変。関連入力不変のテストは文書追記/push/レビュー/mergeで再利用し、全件や性能へ広げない。恒久先D:/NeNeNib/evidence/colorschemes-20261012、統合/収載/整理の実結果はcloseout.json。branch/commitと確認用ZIPを保持する。

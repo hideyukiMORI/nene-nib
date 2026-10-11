@@ -6,7 +6,7 @@
 
 namespace nenenib::core
 {
-// テーマ 1 つ分の表示トークン 17 個（docs/design/2026-09-15-look.md 第 3 節と
+// テーマ 1 つ分の表示トークン 18 個（docs/design/2026-09-15-look.md 第 3 節と
 // docs/design/2026-09-15-editing-look.md 第 2 節の search / ime と、docs/design/2026-09-29-tabs.md
 // 第 4 節の tab_hover）。
 // どのメンバーも単独で妥当な色なので公開 aggregate（ADR 0007 / ADR 0008）。
@@ -17,6 +17,8 @@ struct Palette
     RgbColor text;
     RgbColor muted;
     RgbColor gutter;
+    // 数字の色とは別に、行番号欄の面を持つ（ADR 0117）。
+    RgbColor gutter_background;
     RgbColor current_line;
     RgbColor title_bar;
     RgbColor tab_active;

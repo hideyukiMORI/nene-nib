@@ -94,6 +94,26 @@ void verify_colors()
     }
 }
 
+void verify_gutter_background()
+{
+    const auto plain = adapters::decode_theme(fixture(), name_of()).value();
+    expect(plain.ui.gutter_background == plain.ui.background,
+           "legacy themes keep the body background in the gutter");
+    const auto overridden =
+        adapters::decode_theme(fixture() + "ui.background=#201020\n", name_of()).value();
+    expect(overridden.ui.gutter_background == core::RgbColor{0x20, 0x10, 0x20},
+           "the omitted gutter key follows the overridden body background");
+    const auto explicit_color =
+        adapters::decode_theme(fixture() + "ui.gutter_background=#102030\nui.background=#201020\n",
+                               name_of())
+            .value();
+    expect(explicit_color.ui.gutter_background == core::RgbColor{0x10, 0x20, 0x30},
+           "an explicit gutter background is independent of key order");
+    rejected(fixture() + "ui.gutter_background=#12345\n", Failure::invalid_color);
+    rejected(fixture() + "ui.gutter_background=#102030\nui.gutter_background=#203040\n",
+             Failure::duplicate_key);
+}
+
 void verify_body()
 {
     const auto document = adapters::decode_theme(fixture(), name_of()).value();
@@ -478,6 +498,7 @@ int main(int argc, char **argv)
     verify_catalog_loading();
     verify_colors();
     verify_body();
+    verify_gutter_background();
     verify_overrides();
     verify_tab_hover_default();
     verify_owned_view();

@@ -94,7 +94,7 @@ static_assert(static_cast<std::size_t>(Appearance::light) == 0,
 static_assert(static_cast<std::size_t>(Appearance::dark) == 1,
               "ui_mix_weights の添字は Appearance の並びそのもの");
 
-// 本文の 3 色と明暗から UI トークン 17 個を導く決定的な純関数（ADR 0017 の決定 4）。
+// 本文の 3 色と明暗から UI トークン 18 個を導く決定的な純関数（ADR 0017 / 0117）。
 // 有名テーマは本文の色しか定義しないので、タイトルバー・ステータスバー・パネルはここが決める。
 // 導出した見た目は仮で、C3 の絵で hide が見る（D12）。
 [[nodiscard]] constexpr Palette derive_ui(RgbColor background, RgbColor foreground, RgbColor accent,
@@ -107,6 +107,7 @@ static_assert(static_cast<std::size_t>(Appearance::dark) == 1,
         .text = foreground,
         .muted = mix(foreground, background, weights.muted),
         .gutter = mix(foreground, background, weights.gutter),
+        .gutter_background = background,
         .current_line = mix(background, foreground, weights.current_line),
         .title_bar = title_bar,
         .tab_active = background,
@@ -122,5 +123,14 @@ static_assert(static_cast<std::size_t>(Appearance::dark) == 1,
         .search = RgbaColor{mix(accent, mix_white, weights.search_white), weights.search_alpha},
         .ime = mix(foreground, accent, weights.ime),
     };
+}
+
+// 組み込みの行番号欄の面と数字だけを、テーマの表で選んだ色へ写す（ADR 0117）。
+[[nodiscard]] constexpr Palette with_gutter(Palette palette, RgbColor background,
+                                            RgbColor foreground) noexcept
+{
+    palette.gutter_background = background;
+    palette.gutter = foreground;
+    return palette;
 }
 } // namespace nenenib::core

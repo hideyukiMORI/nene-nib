@@ -47,6 +47,7 @@
 #include "TextPosition.hpp"
 #include "Theme.hpp"
 #include "ThemeDerivation.hpp"
+#include "ThemeExpectations.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarInput.hpp"
 #include "TitleBarLayout.hpp"
@@ -1373,7 +1374,7 @@ void verify_dark_palette_tokens()
     expect(palette_for(Appearance::dark).background == dark.background,
            "dark maps to the aubergine theme");
     expect(dark.muted == RgbColor{0xB8, 0xA9, 0xB3}, "dark muted");
-    expect(dark.gutter == RgbColor{0x7A, 0x66, 0x75}, "dark gutter");
+    expect(dark.gutter == RgbColor{0x8B, 0x79, 0x86}, "dark gutter");
     expect(dark.current_line == RgbColor{0x3E, 0x1A, 0x32}, "dark current line");
     expect(dark.title_bar == RgbColor{0x1E, 0x05, 0x16},
            "dark title bar band is the deep aubergine (D16)");
@@ -1418,7 +1419,7 @@ void verify_light_palette_tokens()
     expect(palette_for(Appearance::light).background == light.background,
            "light maps to the neutral theme");
     expect(light.muted == RgbColor{0x5C, 0x65, 0x70}, "light muted");
-    expect(light.gutter == RgbColor{0x9A, 0xA3, 0xAD}, "light gutter");
+    expect(light.gutter == RgbColor{0x63, 0x69, 0x6F}, "light gutter");
     expect(light.current_line == RgbColor{0xE6, 0xE8, 0xEC}, "light current line");
     expect(light.title_bar == RgbColor{0xE1, 0xE4, 0xE9},
            "light title bar band is one step deeper than the body (D16)");
@@ -1481,17 +1482,14 @@ std::array<RgbColor, 15> body_filled_tokens(const SyntaxPalette &body)
 }
 
 // 背景そのものと、背景と同じであることが決まっている tab_active（D16）を除いた UI トークン
-// 14 個。selection / search は α を除いて色だけを見る。
-std::array<RgbColor, 14> ui_filled_tokens(const Palette &ui)
+// 10 個。on_accent は accent 上で検査する。黒/白の面は本文と同色でも有効（ADR 0117）。
+std::array<RgbColor, 10> ui_filled_tokens(const Palette &ui)
 {
-    return {ui.text,         ui.muted,     ui.gutter,
-            ui.current_line, ui.title_bar, ui.status,
-            ui.accent,       ui.toggle,    ui.selection.color,
-            ui.on_accent,    ui.panel,     ui.panel_border,
-            ui.search.color, ui.ime};
+    return {ui.text,   ui.muted,           ui.gutter,       ui.current_line, ui.accent,
+            ui.toggle, ui.selection.color, ui.panel_border, ui.search.color, ui.ime};
 }
 
-// ADR 0017 の決定 7: 9 テーマ全部で本文と UI の前景／背景が 4.5:1 以上。
+// ADR 0017 / 0117: 全テーマで本文・UI・行番号の前景／背景が 4.5:1 以上。
 void verify_theme_contrast()
 {
     for (const Theme &theme : builtin_themes)
@@ -1501,6 +1499,33 @@ void verify_theme_contrast()
                (name + ": the body foreground clears 4.5:1 over its background").c_str());
         expect(contrast_ratio(theme.ui.text, theme.ui.background) >= 4.5,
                (name + ": the UI text clears 4.5:1 over its background").c_str());
+        expect(contrast_ratio(theme.ui.gutter, theme.ui.gutter_background) >= 4.5,
+               (name + ": normal line numbers clear 4.5:1").c_str());
+        expect(contrast_ratio(theme.ui.text, theme.ui.gutter_background) >= 4.5,
+               (name + ": current line numbers clear 4.5:1").c_str());
+        expect(!(theme.ui.gutter_background == theme.ui.background),
+               (name + ": the gutter has its own background").c_str());
+        expect(!(theme.ui.on_accent == theme.ui.accent),
+               (name + ": text on an accent differs from that accent").c_str());
+    }
+}
+
+void verify_added_syntax_contrast()
+{
+    // 既存9件の本文色は保持する。ADR 0117で足した色の10役割だけを対象にする。
+    for (std::size_t index = static_cast<std::size_t>(BuiltinTheme::blue);
+         index < builtin_themes.size(); ++index)
+    {
+        const auto &theme = builtin_themes.at(index);
+        const auto &body = theme.body;
+        const std::array tokens{body.comment, body.keyword,  body.string,   body.number,
+                                body.type,    body.function, body.constant, body.operators,
+                                body.error,   body.warning};
+        for (const auto token : tokens)
+        {
+            expect(contrast_ratio(token, body.background) >= 4.5,
+                   (std::string{theme.name} + ": added syntax roles clear 4.5:1").c_str());
+        }
     }
 }
 
@@ -1536,7 +1561,12 @@ void verify_theme_names()
         expect(found.has_value() && static_cast<std::size_t>(found.value()) == index,
                (name + ": the name round-trips to its own row").c_str());
     }
-    expect(builtin_themes.size() == 9, "the built-in table holds the nine themes of decision 6");
+    expect(builtin_themes.size() == expected_theme_names.size(), "ADR 0117 inventory size");
+    for (std::size_t index = 0; index < expected_theme_names.size(); ++index)
+    {
+        expect(builtin_themes.at(index).name == expected_theme_names.at(index),
+               "every accepted theme is present in the specified order");
+    }
 }
 
 void verify_theme_name_spellings()
@@ -1547,7 +1577,7 @@ void verify_theme_name_spellings()
            "every underscore is normalised, not just the first");
     expect(theme_named("ubuntu-aubergine") == std::optional{BuiltinTheme::ubuntu_aubergine},
            "the hyphen spelling is the name itself");
-    expect(!theme_named("gruvbox").has_value(), "an unknown name selects no theme");
+    expect(!theme_named("missing-theme").has_value(), "an unknown name selects no theme");
     expect(!theme_named("").has_value(), "the empty name selects no theme");
     expect(!theme_named("Dracula").has_value(), "the names are lowercase only");
     expect(!theme_named("dracula-dark").has_value(), "a longer name does not match a prefix");
@@ -1564,6 +1594,8 @@ void verify_theme_derivation()
     static_assert(derived.accent == RgbColor{0xE9, 0x54, 0x20}, "the accent passes through");
     static_assert(derived.tab_active == derived.background, "the active tab carries the ground");
     static_assert(derived.on_accent == RgbColor{0xFF, 0xFF, 0xFF}, "white sits on the orange");
+    static_assert(derived.gutter_background == derived.background,
+                  "unspecified gutter background preserves the old surface");
     const Palette adopted = theme_of(BuiltinTheme::ubuntu_aubergine).ui;
     expect(derived.background == adopted.background && derived.text == adopted.text &&
                derived.accent == adopted.accent && derived.tab_active == adopted.tab_active,
@@ -2382,7 +2414,7 @@ void verify_status_items_scope()
     verify_status_position_boundaries();
 }
 
-void verify_look()
+void verify_theme_scope()
 {
     verify_color_equality();
     verify_rgba_equality();
@@ -2390,10 +2422,16 @@ void verify_look()
     verify_light_palette_tokens();
     verify_tab_hover_tokens();
     verify_theme_contrast();
+    verify_added_syntax_contrast();
     verify_theme_tokens_filled();
     verify_theme_names();
     verify_theme_name_spellings();
     verify_theme_derivation();
+}
+
+void verify_look()
+{
+    verify_theme_scope();
     verify_edit_mode();
     verify_milestone();
     verify_status_items();

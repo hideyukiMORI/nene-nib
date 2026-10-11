@@ -1157,7 +1157,7 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
     const auto top = row_pixel(body, line.screen_row);
     const auto bottom =
         row_pixel(body, line.screen_row + static_cast<std::int64_t>(line.screen_rows));
-    const core::LayoutRect row{body.band.left, top, body.band.right, bottom};
+    const core::LayoutRect row{body.content.left, top, body.content.right, bottom};
     if (line.number == frame.caret.position.line)
     {
         fill(row, frame.palette.current_line);
@@ -1170,7 +1170,8 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
     write_gutter(std::to_string(line.number.value),
                  core::LayoutRect{body.gutter.left, top, body.gutter.right - padding,
                                   top + body.line_height},
-                 frame.palette.gutter);
+                 line.number == frame.caret.position.line ? frame.palette.text
+                                                          : frame.palette.gutter);
     const auto horizontal = static_cast<std::int32_t>(std::min(
         frame.horizontal, static_cast<float>(std::numeric_limits<std::int32_t>::max() / 2)));
     const core::LayoutRect area{body.content.left - horizontal, top, body.content.right, bottom};
@@ -1190,6 +1191,7 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
                                  const core::BodyLayout &body)
 {
     fill(body.band, frame.palette.background);
+    fill(body.gutter, frame.palette.gutter_background);
     caret_width_ = body.caret_width;
     body_line_height_ = body.line_height;
     const core::LayoutRect visible{body.band.left, body.content.top, body.band.right,

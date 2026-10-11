@@ -132,3 +132,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0114](0114-wrapped-rows-share-the-body-text-layout.md) | 折り返した画面行は本文の文字組みを共有して求める | 技術受理・#410 |
 | [0115](0115-beta-package-from-clean-main.md) | ベータ配布物は受理済みmainの同じRelease経路から作る | 受理・#413、初回ベータ公開済み |
 | [0116](0116-file-drop-enters-the-existing-open-path.md) | ファイルのドロップは既存の開く意図へ渡す | 受理・#416 |
+| [0117](0117-expanded-colorschemes-and-gutter-background.md) | 配色の拡充と行番号背景は既存のTheme表へ集約する | 技術受理・#419 |

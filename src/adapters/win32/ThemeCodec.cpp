@@ -172,6 +172,11 @@ ui_from(const KeyValueFields &fields, const core::SyntaxPalette &body, core::App
     {
         ui.tab_hover = ui.tab_active;
     }
+    // 旧 v1 の欄は本文と同じ面。ui.background の上書きにも従う（ADR 0117）。
+    if (!fields.contains("ui.gutter_background"))
+    {
+        ui.gutter_background = ui.background;
+    }
     const auto rgba = override_colors(ui, fields, ui_rgba_fields, decode_rgba);
     if (!rgba)
     {

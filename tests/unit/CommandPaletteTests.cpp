@@ -109,12 +109,16 @@ void verify_palette_choices()
     {
         const auto matched = choices_for(theme.name);
         expect(matched.front().command == "colorscheme " + std::string(theme.name),
-               "every built-in theme is reachable");
+               (std::string{theme.name} + ": an exact theme name is ranked first").c_str());
     }
     expect(choices_for(":ntrl-l").front().command == "colorscheme neutral-light",
            "subsequence finds a theme");
     expect(choices_for("DRAC").front().command == "colorscheme dracula",
            "ASCII case insensitive search");
+    expect(choices_for("RED").front().command == "colorscheme red",
+           "an exact short theme name wins over tied subsequences regardless of case");
+    expect(choices_for(":colorscheme red").front().command == "colorscheme red",
+           "the explicit command still reaches the exact short theme");
     expect(choices_for("colorscheme drac").front().command == "colorscheme dracula",
            "command prefix still permits partial theme names");
     expect(choices_for("colorscheme missing").front().command == "colorscheme missing",

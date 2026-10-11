@@ -103,6 +103,24 @@ match_score(std::string_view query, std::span<const std::string_view, Count> com
     return match_score(query, std::span{parts});
 }
 
+// 短い名前も別テーマの部分列に負けない。利用者テーマも同じ候補で扱う（ADR 0117）。
+[[nodiscard]] std::optional<std::size_t> command_score(std::string_view query,
+                                                       std::string_view command)
+{
+    constexpr std::string_view prefix = "colorscheme ";
+    if (command.starts_with(prefix) &&
+        std::ranges::equal(query, command.substr(prefix.size()),
+                           [](char left, char right)
+                           {
+                               return lower_code_point(static_cast<unsigned char>(left)) ==
+                                      lower_code_point(static_cast<unsigned char>(right));
+                           }))
+    {
+        return 0;
+    }
+    return match_score(query, command);
+}
+
 [[nodiscard]] CommandChoice choice_of(std::string command)
 {
     auto label = DisplayText::parse(command).value();
@@ -283,7 +301,7 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
     std::vector<CommandMatch> matches;
     for (auto &command : ex_command_candidates(input.catalog()))
     {
-        const auto score = match_score(query, command);
+        const auto score = command_score(query, command);
         if (score.has_value())
         {
             matches.push_back(CommandMatch{choice_of(std::move(command)), score.value()});

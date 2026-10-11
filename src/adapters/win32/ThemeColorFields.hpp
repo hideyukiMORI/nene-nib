@@ -27,11 +27,12 @@ inline constexpr std::array<ColorField<core::RgbColor, core::SyntaxPalette>, 16>
     {"body.warning", &core::SyntaxPalette::warning},
 }};
 
-inline constexpr std::array<ColorField<core::RgbColor, core::Palette>, 15> ui_rgb_fields{{
+inline constexpr std::array<ColorField<core::RgbColor, core::Palette>, 16> ui_rgb_fields{{
     {"ui.background", &core::Palette::background},
     {"ui.text", &core::Palette::text},
     {"ui.muted", &core::Palette::muted},
     {"ui.gutter", &core::Palette::gutter},
+    {"ui.gutter_background", &core::Palette::gutter_background},
     {"ui.current_line", &core::Palette::current_line},
     {"ui.title_bar", &core::Palette::title_bar},
     {"ui.tab_active", &core::Palette::tab_active},
