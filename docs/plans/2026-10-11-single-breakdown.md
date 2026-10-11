@@ -1,0 +1,54 @@
+# 長い日本語行の単打内訳を測る限定調査（Issue #406）
+
+2026-10-11 18:44 JST、測定・計測用ソース変更前に固定。依頼者 hide、単体実行。#404 は完了済み、main `18f3c4b22503c4f2db03e62623a7ea81ebcd0bb0` を起点とする。以前の継続改善を再開せず、本調査の記録統合と整理で停止する。
+
+## 境界と比較元
+
+前回の正本は [5-eb](../quality/gate-proofs.md#5-eb--最新実装で旧split描画試験を再評価issue-404)、[実測JSON](../quality/split-render-2026-10-11.json)、`D:/NeNeNib/evidence/split-recheck-20261011/acceptance-404/closeout.md`。#404 の通常 A と上下 H、左右 V の正規 Release を再利用し、SHA、source、flags を照合する。S は旧値を文脈として残し、今回は実行しない。H/V は同じ frame と文字列の再利用試作であり、独立文書の性能ではない。
+
+`input_received` は窓の `WM_CHAR` 受信時、`frame_presented` は `Present(1,0)` から renderer を戻った直後。実際には入力節目の記録後の処理から、Present 後の成功確認と戻りまでを含む。OSへのpostから受信までと発光までを含まない。追加のPresent復帰節目と既存終端との差も残す。
+
+## 固定する条件と回数
+
+- 文書: 前回の `long-japanese.txt`、6,219,000 bytes、SHA-256 `ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32a6c5`。1,000行、本文1行6,217 bytes＋CRLF。入力開始位置は先頭。原本を保存操作の対象にしない。
+- 窓/クライアント1280×800、DPI120、座標(80,80)、Cascadia Code 13.5pt、毎回新しい私有profile、通常モード、IME合成なし。暖機 `w`、その後 `a` を1字だけ。前回と同じ driver の `PostMessageW` と待機秒数を使い、200字の後段を省く。起動や暖機は単打の集計対象外だが原時刻列へ保存する。
+- A は19行、H は9行×2、V は19行×2。Hの行数減少を隠さない。独立frame/scroll/文書/IME/hit test/所有移行は今回の対象外。
+- 長行は6ブロック、各ブロック7条件: A0（通常Release）、AQ（計測版・追加節目の時計と記録を止める）、AP（計測版・全節目）、H0/HP、V0/VP。奇数は A0,AQ,AP,H0,HP,V0,VP、偶数は完全逆順。計42試行。各条件で1起動・暖機1字・測定1字。全試行を一度だけ行う。
+- 必要対照は空文書だけで、A0,AQ,APを3ブロック、奇数順/偶数逆順、計9試行。総51試行。空文書は計測負荷の対照でありsplit採用判定をしない。旧72試行、16MiB、200字、正式8指標を一律に繰り返さない。
+- build・hash・copy・道具の自己検証を全て終えてから測る。開始前に1秒間隔のCPU負荷を3本採り、各10%未満かつcompiler/linker/ninja不在を確認する。満たせなければその事実を保存して測定は始めない。測定中のhost/power/LastInput/窓幾何/前面と5点の覆いを記録する。人の入力や外乱を黙って除外しない。
+
+## 計測用変更
+
+既存 `TimingPort::mark` と `Win32TimingAdapter` を使い、実時計の取得・環境読み取り・出力は adapters/win32 だけ。UIは節目を打つだけ。追加節目は閉じたMilestone一覧で、入れ子の開始/終了を保持する。記録は起動前に固定容量を確保し、drop数とQPC失敗数を保存する。原QPC tickと周波数も保持する。終了後にJSON化し、単打区間でファイルへ書かない。
+
+AQは同じexeで追加のport呼び出しと判定を残し、adapterで追加時計/記録を止める。A0との差はコード配置・call・判定・事前容量の違いを含む。AP−AQは追加の時計/記録の影響、AP−A0は全計測変更の影響として対にする。HP−H0とVP−V0も直接比較する。微小な時間を一律に差し引いて補正値を捏造しない。
+
+機能の戻り値・実行順・文字列範囲・layoutのキー・glyph・描画・待機/Present条件を変えない。新しいGetMetrics等の強制評価は足さない。字体fallbackとglyph callbackは内部を測るだけ。計測用コードは隔離branchにだけ置き、通常mainへ統合しない。
+
+## 区間の定義と重複
+
+| 分類 | 計測する境界 | 解釈上の限界 |
+| --- | --- | --- |
+| 編集 | `EditorWindow::deliver`内の`EditorController::apply` | 状態遷移・undoと軽いEditorDeliveryの生成を含む。純粋な挿入命令だけではない |
+| 文字列準備 | paintの`controller.frame()`、`text_layout`内のUTF-8→UTF-16 | frameには可視行・表示桁・status等の表示値生成も含む |
+| 文字組み | `layout_of`照合/保持、CreateTextLayout、layoutのDraw→BodyGlyphCollector、fallback、glyph収集 | GPUへ描くDrawではなくDirectWriteの遅延評価と字形収集。親子を重複加算せず、callback以外のDirectWrite内部は残差として示す |
+| 描画 | `draw_body_text`、EndDraw | GPUへの指示とflushのCPU側経過時間。GPU実行時間そのものではない |
+| 待ち | 入力処理終了→paint入口、swap-chain WaitForSingleObjectEx、Present呼出し | 最初はmessage-loop/OS gapであり純粋なsleepとは断定しない。PresentはAPI内の仕事と待ちが未分離 |
+| その他 | renderer設定/表面取得、資源解放等の明示区間 | 選んだスコープの境界を記録する |
+| 未分類 | 上記外の残差、本文外UI描画の未分離部分等 | 空欄や0へ隠さず残す |
+
+親スコープから子の和を引いたexclusive時間で、同じ試行の全時間と一致させる。どのイベント間隔も一度だけ分類し、負値・不正入れ子・終端超過・dropを監査する。重複はinclusive表にだけ存在し、その表は足さない。各分類の中央値は参考分布であり、それらを足して総時間としない。総時間の中央値は各試行の既存input→frameを直接計算する。原µsの丸め差とtick精度も残す。
+
+## 判定を先に固定
+
+- 全値、順番、min/max、中央値、各対応差を保存する。n=6/3からp95を出さない。欠測・失敗・外れ値を除去/置換せず、各試行へ原因と到達段階を記録。欠測があれば有効数を明記し、予定本数の正常完了を装わない。系列の再試行と合格までの追加測定はしない。
+- 前後半3本の中央値差と `max(0.10ms, 全6本中央値の10%)` を比較し、長行の揺れとして記録する。この値は旧2msの基準を緩めるものではない。
+- 計測影響は同ブロックの対応差と全分布で示す。絶対中央値差が `max(0.10ms, 通常版中央値の2%)` を越えた比較は「無視できない」と名付ける。下回っても無負荷とは宣言せず、区間ごとの偏りとコード配置の限界を残す。
+- 支配区間は全6本の大きさと割合から決め、file/functionへ結ぶ。削減候補は実測時間による理論上限と、未実装の実現可能な幅を分ける。中央値同士の加算、別試行の最短値の合成、通常版の総時間から計測版の区間を機械的に減算しない。
+- 結論は「2 msを狙える具体策がある／まだ判断材料が不足／現条件では厳しい」のいずれかを数値で選ぶ。旧H/Vの約4.3ms・68%短縮に根拠があるかを明示する。最も大きい区間を0にした仮想値は上限試算であり、達成した改善として扱わない。split採用判定は保留を維持する。
+
+## 必要な検証・保存・停止
+
+計測版は `eng/build-release.ps1 -Ref <40hex>` のstrict Release、変更ファイル整形、必要なconformance/symbolsだけ。分類器には欠測・不正入れ子・drop・総和の短い正反例を置く。各A/H/Vの通常版と計測版の初ブロックで`wa`入力後の画面を撮り、原PNG目視と無mask画素比較を行う。これで計測変更が対象画面を壊していないかを確認する。無関係なアプリテストを足さない。
+
+作業木 `D:/NeNeNib/worktrees/406-*`、一時出力 `D:/NeNeNib/outputs/20261011-single-breakdown`。原記録・全失敗・plan/scripts・source/差分/refs・Release/metadata/flags・画像を `D:/NeNeNib/evidence/single-breakdown-20261011/` へSHA付きで恒久収載する。調査記録は通常draft PR→Ready→必須CI→`eng/merge-pr.py`→main同期。日報/引き継ぎ更新。整理前に絶対path・取込/意図的未統合・dirty/untracked/ignored・唯一成果物・稼働参照/linkを確認し、不要なworktree/一時出力を消しbranch/commitを保持する。恒久的高速化やsplit実装へ進まず停止する。Waivers: none。
