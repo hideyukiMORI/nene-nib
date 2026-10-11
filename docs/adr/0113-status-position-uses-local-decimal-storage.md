@@ -15,7 +15,7 @@ StatusItems.cppのcaret_positionはto_stringの所有値を連結し、fixed→D
 
 局所配列はprefix「行 」4bytes、separator「, 桁 」6bytes、2*(numeric_limits<size_t>::digits10+1)で容量を導く。Windows x64では50bytes、最大20桁×2をNULなしで含む。各to_charsの範囲を最大桁数内へ限定し、ec==std::errc{}を確認したptrだけを後段へ渡す。literal copyはこの容量証明の範囲内。終端は書き込まれたptrとの差で求め、未使用byteをparseへ渡さない。0も現公開wrapperが保持できるので拒否しない。
 
-最大桁数を確保したunsigned十進変換の容量不足はプログラム不変条件の破れ。private helperはec失敗時にstd::logic_errorを投げ、部分出力・黙った代替書式・結果型の公開追加をしない（CPP-005）。原則到達不能だが分岐を消さず、Debug ASan/UBSanと最大/0/桁境界を検証する。既存symbol gateを緩めず、新しい外部依存を求めるなら候補を止めて設計へ戻る。
+最大桁数を確保したunsigned十進変換の容量不足はプログラム不変条件の破れ。private decimal_endはstd::expected<char *, std::errc>を返し、ec失敗時はstd::unexpected(result.ec)、成功時だけresult.ptrを返す。呼出側は容量を証明した固定extentでのみ使い、既存fixedのparseと同じvalue()で不変条件を確認する。標準のchecked accessによって失敗を表し、明示throw・未定義動作・部分出力・黙った代替書式・結果型の公開追加をしない（CPP-005）。期待される入力失敗を無視する経路ではない。原則到達不能でもec分岐を消さず、Debug ASan/UBSanと最大/0/桁境界を検証する。既存symbol gateを緩めず、新しい外部依存を求めるなら候補を止めて設計へ戻る。
 
 CPP-014のstd::format一般文には、受理済ADR0022のcore/application locale拒否が優先する。今回の位置表示はこのADRのto_chars→既存DisplayTextという一経路へ置換し、旧caret_positionのto_string経路を同時に除く。CPP-014にその狭い関係を明記する。他の既存数値callerを一括移行せず、formatのcore導入・allowlist/抑制/警告/機械強制状態/閾値変更はしない。plannedはplannedのまま。これは新gateで通らない実装を許す変更ではない。
 
@@ -40,6 +40,8 @@ GUIは既存driverと私有profile、同一bodyの6encoding×ending場面で1/1�
 正式は共通status callerのkey-to-frame-singleを既存measure-speed.py --benchで初回5試料新取得し、元基準に照合。他7正式指標は未測。旧files結果はこの変更へreuseしない。純粋比較・正式・GUI取得中は他agent/build/test/hash/copyを停止する。
 
 ## 記録・規則・整理
+
+16:41 JSTの最初の製品42fed2957cd1e7f20a44752ced87aae27ea39727は、std::logic_errorの明示throwが通常Releaseの既存clang-tidyにcannot use 'throw' with exceptions disabledとして拒否され、40/117工程で停止した。Release成功・後続probe・Debug・性能・GUIの結果は無い。flags/allowlist/抑制を変えず、失敗source/原command/exit/stdout/stderr/部分build/FileAPI/無exeをimplementation/after-release-failed-product-v1へ保存した。上のexpected/checked accessはこの失敗後の設計改訂である。先行harness3433f1fのbefore buildと7oracleは入力が不変なので再利用する。比較前にharnessから修正版までの全差分を監査し、製品差分はStatusItems.cpp、その他はこのADRの改訂だけとする。初回固定7条件・判定・計測区間は変更しない。失敗buildを成功buildとして収載せず、最終証拠と一緒に保持する。
 
 ARC-001/003/004/007/008/010/011/012、CPP-001/002/004/005/007/008/011/012/014/016、QLT-001/002/004/007/008/010/012/013/014、GIT-001〜004。関連ADR0021/0022/0070/0105。API/settings/schema変更なし、waiver none。hideの明示分担に従い親が設計採否、SOLが実装/対象検証、必要な独立読取レビューを行う。
 
