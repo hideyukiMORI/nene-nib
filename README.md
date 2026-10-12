@@ -97,7 +97,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-015 speed** — Release benchmarks in `eng/measure-speed.py` against per-machine references in
   `eng/perf-reference.json` (startup 191 ms, window visible 35 ms, one keystroke 0.9 ms, 16 MiB file 250 ms on the
   reference machine). `--bench <name>` selects one measurement, including input in a 5000-file palette.
-  Run on demand and in `-Full`; the required CI check does not measure.
+  Run on demand and in `-Full`; merge CI does not measure.
 - **FR-016 colorscheme** — 125 built-in themes plus up to 128 user themes from
   `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`; `:colorscheme <name>` / `system`, Tab completion, Ctrl+P. Done.
   Includes all 28 Vim standard names, VS Code defaults, popular IDE palettes, MonaLisa,
@@ -159,8 +159,9 @@ This repository follows the AYANE strict policy: **one meaning, one canonical im
 
 Select the smallest checks for the changed behavior and its direct dependencies/callers, and record
 the regression rationale and results in the PR. Reuse successful results when the relevant inputs
-are unchanged; CI validates Git conventions, verification records and whitespace without repeating
-product tests. Documentation-only changes need no application tests. See `docs/QUALITY_GATES.md`.
+are unchanged. CI runs only immediately before merging non-document changes through `eng/merge-pr.py`;
+it validates Git conventions, verification records and whitespace without repeating product tests.
+Documentation-only changes skip CI entirely; diff inspection and necessary visual review suffice. See `docs/QUALITY_GATES.md`.
 
 For a new Vim fixture group, regenerate just that group with
 `python eng/vim-oracle.py --regenerate --only <name-prefix> --reuse-ref <commit>`.

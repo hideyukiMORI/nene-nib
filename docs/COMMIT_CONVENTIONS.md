@@ -3,7 +3,7 @@
 > Status: normative（規範）/ 2026-09-15 初版
 > 出典: NeNeCommander `docs/COMMIT_CONVENTIONS.md`（GIT-001〜004・`commit-msg` フックで機械強制）
 
-変更の経路は一つである: Issue → 焦点を持つブランチ → 一貫したコミット → PR → 必須 check → squash merge → 同期した綺麗な `main`。
+変更の経路は一つである: Issue → 焦点を持つブランチ → 一貫したコミット → PR → マージ直前のCI（文書のみなら不要）→ squash merge → 同期した綺麗な `main`。
 
 読み方（**active / planned / 不能 / 不採用**）は [ARCHITECTURE_CONSTITUTION.md](ARCHITECTURE_CONSTITUTION.md) 第 0 節と同じ。
 
@@ -51,15 +51,16 @@ PR には目的・変更の要約・使った正典経路・規則 ID・検証�
 
 実装中とレビュー中は draft。必要な差分検証と結果・再利用の根拠がそろったら Ready にする（QLT-001 / QLT-012）。
 push・レビュー・merge・担当変更・文書追記・SHA 変更だけでは成功済み検証を繰り返さない。
-CI の必須 `check` は Git 規約・検証記録の存在・差分の空白を確認する。記録の妥当性はレビューし、CI 成功を製品テストの実行証拠とは扱わない。
+CIは非文書変更のマージ直前だけ起動し、Git規約・検証記録の存在・差分の空白を確認する。文書のみならCIを起動せず、差分と必要な目視で確認する（QLT-012・ADR 0118）。記録の妥当性はレビューし、CI成功を製品テストの実行証拠とは扱わない。
 
 統合操作は `eng/merge-pr.py <PR番号> --expected-head <40桁SHA>` のplanを確認してから、同じ指定に `--execute` を付ける（#384）。
 件名は取得したPRtitleを既存の検査器で検証し、title末尾と唯一の`Closes #N`が指すIssue番号を照合して、一字不変で渡す。
-PR番号を件名のIssue番号へ転記せず、任意のsubject引数も設けない。ready/OPEN/main/期待head/必須checks成功が揃わなければ統合しない。
+PR番号を件名のIssue番号へ転記せず、任意のsubject引数も設けない。ready/OPEN/main/期待headを確認し、非文書変更は手動workflowの対象run成功がなければ統合しない。
+planではCIも起動しない。`--execute`が文書判定・必要なCI・統合を進める。CI待機が切れたら表示された`--ci-run <ID>`で同じrunを確認する。
 repoは正本へ明示固定し、Unicode改行を含む複数論理行とmerge queueを拒否する。完了は同repoのMERGED状態とmergeCommitを読み取って確認する。
 失敗を再試行せず、timeout等で成否不明ならPRを読み取って確認する。GitHub UIや直接CLIまでの全経路を強制するものではないため、機械強制の状態をactiveへ変更しない。
 
-- 機械強制: **planned**（PR テンプレート・必須 check・ruleset の squash-only）
+- 機械強制: **planned**（PRテンプレート・対象別CIを扱う統合道具・rulesetのsquash-only。全PR一律のrequired status checkは置かない）
 
 ---
 

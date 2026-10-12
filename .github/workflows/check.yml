@@ -1,20 +1,29 @@
 name: Check
+run-name: 'Merge PR #${{ inputs.pr_number }} at ${{ inputs.expected_head }}'
 
 on:
-  pull_request:
-    types: [ready_for_review, synchronize, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request being merged
+        required: true
+        type: string
+      expected_head:
+        description: Exact reviewed head SHA
+        required: true
+        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: check-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: merge-check-${{ inputs.pr_number }}
+  cancel-in-progress: false
 
 jobs:
   check:
     name: check
-    if: github.event.pull_request.draft == false
     runs-on: windows-2022
     timeout-minutes: 5
     steps:
@@ -22,7 +31,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.expected_head }}
       - name: Read pinned Python version
         id: versions
         shell: pwsh
@@ -33,12 +42,13 @@ jobs:
         with:
           python-version: ${{ steps.versions.outputs.python }}
       # 実装の検証結果は PR に記録し、入力が不変なら再利用する（ADR 0021）。
-      # イベントで変わる Git / PR メタデータだけを検査し、製品テストを再実行しない。
+      # 正典の merge-pr.py が非文書変更のマージ直前だけ起動する（ADR 0118）。
       - name: Git conventions and verification record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_PR: ${{ inputs.pr_number }}
+          MERGE_HEAD: ${{ inputs.expected_head }}
         shell: pwsh
         run: |
-          pwsh -NoProfile -File ./eng/validate-git.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $event = Get-Content -LiteralPath $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
-          git diff --check "$($event.pull_request.base.sha)...HEAD"
+          pwsh -NoProfile -File ./eng/validate-git.ps1 -PullRequest $env:MERGE_PR -ExpectedHead $env:MERGE_HEAD
           exit $LASTEXITCODE

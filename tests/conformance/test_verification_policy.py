@@ -80,7 +80,11 @@ class VerificationPolicy(unittest.TestCase):
     def test_ci_and_hooks_do_not_invoke_product_checks(self):
         workflow = (ROOT / ".github/workflows/check.yml").read_text(encoding="utf-8")
         self.assertIn("./eng/validate-git.ps1", workflow)
-        self.assertIn("git diff --check", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("-PullRequest $env:MERGE_PR -ExpectedHead $env:MERGE_HEAD", workflow)
+        for trigger in ("pull_request:", "push:", "ready_for_review", "synchronize", "edited"):
+            self.assertNotIn(trigger, workflow)
+        self.assertIn('git diff --check "$base...HEAD"', (ROOT / "eng/validate-git.ps1").read_text(encoding="utf-8"))
         for command in ("check.ps1", "ctest", "cmake --build", "measure-speed", "coverage.py"):
             self.assertNotIn(command, workflow)
         self.assertEqual((ROOT / ".githooks/pre-commit").read_text(encoding="utf-8").strip(),
@@ -88,18 +92,24 @@ class VerificationPolicy(unittest.TestCase):
         self.assertFalse((ROOT / ".githooks/pre-push").exists())
         self.assertFalse((ROOT / ".githooks/pre-merge-commit").exists())
 
-    def test_pr_event_uses_the_record_validator(self):
+    def test_merge_dispatch_uses_the_record_validator_and_expected_head(self):
         title = "ci(verification): 差分に必要な検証を選ぶ (#61)"
         body = "Closes #61\n目的:\n使った正典経路:\n規則 ID:\nWaivers: none\n残るリスク:\n" + RECORD
         with tempfile.TemporaryDirectory() as directory:
             event = Path(directory) / "event.json"
-            for text, success in ((body, True), (body.replace("再利用: 初回検証", "再利用:"), False)):
-                event.write_text(json.dumps({"pull_request": {
-                    "head": {"ref": "ci/61-diff-driven-verification"},
-                    "base": {"sha": "origin/main"}, "draft": False, "title": title, "body": text,
-                }}), encoding="utf-8")
-                result = run_tool(["pwsh", "-NoProfile", "-File", str(ROOT / "eng/validate-git.ps1")],
-                                  GITHUB_EVENT_PATH=str(event))
+            head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+            command = ("function global:gh { Get-Content -LiteralPath $env:NIB_TEST_PR_RESPONSE -Raw; $global:LASTEXITCODE=0 }; "
+                       "& $env:NIB_TEST_VALIDATOR -PullRequest 61 -ExpectedHead $env:NIB_TEST_HEAD")
+            for text, pr_head, success in ((body, head, True), (body.replace("再利用: 初回検証", "再利用:"), head, False),
+                                           (body, "0" * 40, False)):
+                event.write_text(json.dumps({"number": 61, "state": "open",
+                    "head": {"ref": "ci/61-diff-driven-verification", "sha": pr_head,
+                             "repo": {"full_name": "hideyukiMORI/nene-nib"}},
+                    "base": {"sha": "origin/main", "ref": "main"}, "draft": False, "title": title, "body": text,
+                }), encoding="utf-8")
+                result = run_tool(["pwsh", "-NoProfile", "-Command", command],
+                                  NIB_TEST_PR_RESPONSE=str(event), NIB_TEST_VALIDATOR=str(ROOT / "eng/validate-git.ps1"),
+                                  NIB_TEST_HEAD=head)
                 with self.subTest(success=success):
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     if not success:

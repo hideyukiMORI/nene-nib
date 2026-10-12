@@ -1,4 +1,4 @@
-"""Use the validated PR title verbatim as the squash subject (GIT-003 / GIT-004)."""
+"""Merge once, running CI only at this boundary and only for non-document changes."""
 
 import argparse
 import importlib.util
@@ -10,6 +10,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY = "github.com/hideyukiMORI/nene-nib"
+HOST, REPO_NAME = REPOSITORY.split("/", 1)
+API_ROOT = f"repos/{REPO_NAME}"
+PR_FIELDS = "number,title,body,headRefOid,headRefName,state,isDraft,baseRefName,baseRefOid,changedFiles,isCrossRepository"
 SPEC = importlib.util.spec_from_file_location("git_conventions", ROOT / "eng/git-conventions.py")
 CONVENTIONS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONVENTIONS)
@@ -21,7 +24,8 @@ class MergeRefused(ValueError):
 
 def run_gh(arguments: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(["gh", *arguments], cwd=ROOT, shell=False, capture_output=True,
-                          text=True, encoding="utf-8", timeout=60, check=False)
+                          text=True, encoding="utf-8",
+                          timeout=600 if arguments[:2] == ["run", "watch"] else 60, check=False)
 
 
 def read_json(arguments: list[str], runner) -> object:
@@ -35,8 +39,7 @@ def pr_command(action: str, number: int, *arguments: str) -> list[str]:
     return ["pr", action, str(number), "--repo", REPOSITORY, *arguments]
 
 
-def merge_command(number: int, expected_head: str, record: dict, checks: list,
-                  rules: list) -> list[str]:
+def merge_command(number: int, expected_head: str, record: dict, rules: list) -> list[str]:
     if not isinstance(record, dict):
         raise MergeRefused("PR response is not an object")
     expected = {"number": number, "headRefOid": expected_head, "state": "OPEN",
@@ -50,9 +53,6 @@ def merge_command(number: int, expected_head: str, record: dict, checks: list,
     errors = CONVENTIONS.validate_merge_title(title, body) + CONVENTIONS.validate_pr(body)
     if errors:
         raise MergeRefused("; ".join(errors))
-    if not isinstance(checks, list) or not checks or any(
-            not isinstance(check, dict) or check.get("state") != "SUCCESS" for check in checks):
-        raise MergeRefused("Required checks are missing or not all successful")
     if not isinstance(rules, list) or not rules or any(
             not isinstance(rule, dict) or not isinstance(rule.get("type"), str) for rule in rules):
         raise MergeRefused("Branch rules are missing or malformed")
@@ -60,6 +60,64 @@ def merge_command(number: int, expected_head: str, record: dict, checks: list,
         raise MergeRefused("Merge queues are not supported by this synchronous merge tool")
     return pr_command("merge", number, "--squash", "--match-head-commit", expected_head,
                       "--subject", title)
+
+
+def api_command(path: str, *arguments: str) -> list[str]:
+    return ["api", "--hostname", HOST, f"{API_ROOT}/{path}", *arguments]
+
+
+def documentation_only(pages: object, expected_count: int) -> bool:
+    """Use the complete changed-file list, including the old path of a rename."""
+    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+        raise MergeRefused("Changed-file pages are malformed")
+    files = [entry for page in pages for entry in page]
+    if type(expected_count) is not int or expected_count <= 0 or len(files) != expected_count:
+        raise MergeRefused("Changed-file list is empty or incomplete")
+    paths = []
+    for entry in files:
+        if not isinstance(entry, dict) or not isinstance(entry.get("filename"), str):
+            raise MergeRefused("Changed-file entry is malformed")
+        paths.append(entry["filename"])
+        if entry.get("status") == "renamed":
+            if not isinstance(entry.get("previous_filename"), str):
+                raise MergeRefused("Renamed file is missing its previous path")
+            paths.append(entry["previous_filename"])
+    if any(not path or path.startswith("/") or "\\" in path or
+           any(part in ("", ".", "..") for part in path.split("/")) for path in paths):
+        raise MergeRefused("Changed-file path is malformed")
+    return all(path.startswith("docs/") or ("/" not in path and path.endswith(".md")) or
+               path in ("LICENSE", "THIRD_PARTY_NOTICES.txt") for path in paths)
+
+
+def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> dict:
+    if record.get("isCrossRepository") is not False or not record.get("headRefName"):
+        raise MergeRefused("Merge CI requires a branch in the canonical repository")
+    if run_id is None:
+        response = read_json(api_command("actions/workflows/check.yml/dispatches", "--method", "POST",
+                             "-H", "X-GitHub-Api-Version: 2026-03-10", "-f", f"ref={record['headRefName']}",
+                             "-f", f"inputs[pr_number]={number}", "-f", f"inputs[expected_head]={head}",
+                             "-F", "return_run_details=true"), runner)
+        if not isinstance(response, dict) or type(response.get("workflow_run_id")) is not int:
+            raise MergeRefused("CI dispatch outcome unknown: inspect Actions before dispatching again")
+        run_id = response["workflow_run_id"]
+    print(json.dumps({"ciRun": run_id, "resume": f"--ci-run {run_id}"}), flush=True)
+    run = read_json(api_command(f"actions/runs/{run_id}"), runner)
+    expected = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml", "head_sha": head,
+                "head_branch": record["headRefName"], "display_title": f"Merge PR #{number} at {head}"}
+    if not isinstance(run, dict):
+        raise MergeRefused("CI run response is malformed")
+    # Dispatch can return before GitHub resolves the input-based run name.
+    # Observe completion before validating the final run identity.
+    if run.get("status") != "completed":
+        result = runner(["run", "watch", str(run_id), "--repo", REPOSITORY, "--exit-status", "--interval", "5"])
+        if result.returncode:
+            raise MergeRefused(f"CI did not succeed: {result.stderr.strip()} {result.stdout.strip()}")
+        run = read_json(api_command(f"actions/runs/{run_id}"), runner)
+    if not isinstance(run, dict) or run.get("status") != "completed" or run.get("conclusion") != "success" or \
+            any(run.get(key) != value for key, value in expected.items()) or \
+            not isinstance(run.get("repository"), dict) or run["repository"].get("full_name") != REPO_NAME:
+        raise MergeRefused("CI has not completed successfully for the expected head")
+    return {"id": run_id, "url": run.get("html_url"), "conclusion": "success"}
 
 
 def positive_number(value: str) -> int:
@@ -79,22 +137,33 @@ def main(argv=None, runner=run_gh) -> int:
     parser.add_argument("number", type=positive_number)
     parser.add_argument("--expected-head", type=commit_hash, required=True)
     parser.add_argument("--execute", action="store_true", help="execute once; otherwise only print the plan")
+    parser.add_argument("--ci-run", type=positive_number, help="resume a previously dispatched merge CI run")
     options = parser.parse_args(argv)
     executing = False
     try:
-        record = read_json(pr_command("view", options.number, "--json",
-                                      "number,title,body,headRefOid,state,isDraft,baseRefName"), runner)
-        checks = read_json(pr_command("checks", options.number, "--required", "--json",
-                                      "name,state,link"), runner)
-        host, repository = REPOSITORY.split("/", 1)
-        rules = read_json(["api", "--hostname", host, f"repos/{repository}/rules/branches/main"], runner)
-        command = merge_command(options.number, options.expected_head, record, checks, rules)
+        record = read_json(pr_command("view", options.number, "--json", PR_FIELDS), runner)
+        rules = read_json(api_command("rules/branches/main"), runner)
+        command = merge_command(options.number, options.expected_head, record, rules)
+        pages = read_json(api_command(f"pulls/{options.number}/files?per_page=100", "--paginate", "--slurp"), runner)
+        docs_only = documentation_only(pages, record.get("changedFiles"))
+        if docs_only and any(rule["type"] == "required_status_checks" for rule in rules):
+            raise MergeRefused("Documentation-only merge is still blocked by required status checks in the ruleset")
         print(json.dumps({"execute": options.execute, "repository": REPOSITORY, "number": options.number,
                           "head": options.expected_head, "subject": record["title"],
-                          "requiredChecks": checks, "branchRules": rules, "command": ["gh", *command]},
+                          "ci": "skip (documentation only)" if docs_only else "run before merge",
+                          "branchRules": rules, "command": ["gh", *command]},
                          ensure_ascii=False), flush=True)
         if not options.execute:
             return 0
+        if not docs_only:
+            print(json.dumps({"verifiedCI": run_ci(options.number, options.expected_head, record,
+                                                  runner, options.ci_run)}), flush=True)
+        latest = read_json(pr_command("view", options.number, "--json", PR_FIELDS), runner)
+        if latest != record:
+            raise MergeRefused("PR changed during merge preparation; inspect it before continuing")
+        latest_rules = read_json(api_command("rules/branches/main"), runner)
+        if latest_rules != rules:
+            raise MergeRefused("Branch rules changed during merge preparation")
         executing = True
         result = runner(command)
         print(json.dumps({"mergeExit": result.returncode, "stdout": result.stdout,
