@@ -15,7 +15,7 @@
 | 1 | #410 / PR412 折り返し・通常ドラッグ | PR412/main9afca7fへ統合済み。対象契約/実IME/画面と、修正後のnowrap/wrap性能が成立 |
 | 2 | #413 ベータ配布 | PR414/main6e1043f、[v0.1.0-beta.1](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.1)を公開。ZIP/起動/再取得照合成功。収載/整理は恒久先closeout.jsonを参照 |
 | 完了 | #419 配色95種と行番号欄 | 対象検証/実画面/確認用ZIPが成立。[設計と一覧](../design/2026-10-12-colorschemes.md)、[検証](../quality/colorschemes-2026-10-12.md)。統合/整理の実状態は恒久先closeout.json |
-| 次 | #408 / #436 / #438 正式リリースの[ロードマップ](../plans/2026-10-11-release-roadmap.md) | 範囲整理→大容量成立性→大容量→日常編集（構文色・ドラッグ移動・横ホイール・設定モーダル・日英表示。細いスクロールバーは候補）→split→Markdown→併用確認/公開 |
+| 進行 | #440 正式リリースの範囲と試験計画 | [段階0・事前計画](../plans/2026-10-12-release-scope-and-large-file-probe.md)。2GiBを目安に本文/I/Oの試作A→応答性B。以後は[ロードマップ](../plans/2026-10-11-release-roadmap.md)の大容量→日常編集→split→Markdown→公開 |
 | 完了 | #416 / PR417 ファイルのドロップとbeta.2 | main8da81e3へ受理、[beta.2](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2)を公開/再取得照合済み。[公開記録](../quality/beta2-release-2026-10-12.md) |
 | 完了 | #432 125テーマ入りbeta.3 | [beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)を公開/起動/再取得照合済み。[公開記録](../quality/beta3-release-2026-10-12.md) |
 | 完了 | #434 本文の左余白 | 既定8 DIP、文字サイズ/DPI追従。対象契約と実画面が成立。[検証](../quality/body-padding-2026-10-12.md)。公開beta.3への反映は別 |
@@ -37,6 +37,6 @@
 
 ## 段階
 
-D44の初回ベータに続き、ファイルドロップと125テーマを含むbeta.3を公開済み。配布物はD:/NeNeNib/releases/v0.1.0-beta.3/、公開/整理結果はD:/NeNeNib/evidence/beta3-release-432/closeout.json。正式版の次の機能作業は自動で開始しない。
+D44の初回ベータに続き、ファイルドロップと125テーマを含むbeta.3を公開済み。配布物はD:/NeNeNib/releases/v0.1.0-beta.3/、公開/整理結果はD:/NeNeNib/evidence/beta3-release-432/closeout.json。2026-10-12のhideの開始指示により、正式版の段階0から再開中。構文色の優先対象はPython・JavaScript/TypeScript・JSON・Markdown・C/C++。
 
 #423は紹介用の実機PNG3枚とREADME掲載。[撮影条件/個人情報確認](../quality/showcase-2026-10-12.md)。撮影中の保存待ちは#424へ分離し、この作業で修正しない。
