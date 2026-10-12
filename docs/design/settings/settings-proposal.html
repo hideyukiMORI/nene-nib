@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeNe Nib — 設定画面案（未実装）</title>
+<style>
+/* Design reference only. No editor/settings I/O or product behavior. */
+:root{color-scheme:dark;--bg:#300a24;--text:#eeeeec;--muted:#b8a9b3;--gutter:#7a6675;--line:#3e1a32;--title:#1e0516;--status:#26071d;--accent:#e95420;--toggle:#4a1e3d;--panel:#3b1430;--border:#5a2a4c;--shade:rgba(13,3,10,.52)}
+:root.light{color-scheme:light;--bg:#f4f5f7;--text:#1b1f24;--muted:#5c6570;--gutter:#9aa3ad;--line:#e6e8ec;--title:#e1e4e9;--status:#e9ebef;--toggle:#dfe3e8;--panel:#fff;--border:#d5d9e0;--shade:rgba(27,31,36,.24)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{font-family:'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px}button{font:inherit;color:inherit;border:0}svg{flex-shrink:0}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{width:100%;height:100%;position:relative;display:grid;grid-template-rows:40px 1fr 28px}.caption{display:flex;align-items:end;gap:2px;padding-left:8px;background:var(--title)}.tab{width:166px;height:32px;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;background:var(--bg);border-bottom:2px solid var(--accent);font-size:12px}.plus{height:40px;width:32px;font-size:20px;background:none;color:var(--muted)}.spacer{flex:1}.entry{align-self:center;display:flex;align-items:center;gap:7px;white-space:nowrap;height:30px;padding:0 12px;margin-right:8px;border-radius:5px;color:var(--text);background:var(--toggle)}.window-button{align-self:stretch;width:46px;display:grid;place-items:center;background:none;color:var(--muted);font-size:17px}
+.document{padding-top:12px;overflow:hidden;font-family:'Cascadia Code','Yu Gothic UI',monospace;font-size:18px;line-height:29px}.line{display:flex;white-space:pre}.line:nth-child(4){background:var(--line)}.number{width:56px;flex:0 0 56px;text-align:right;padding-right:16px;font-size:14px;color:var(--gutter)}.line-text{padding-left:8px}.status{display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--status);color:var(--muted);font-size:12px}.mode{padding:2px 9px;border-radius:4px;background:var(--accent);color:white}.status .detail{margin-left:auto}
+.veil{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:24px;background:var(--shade)}.dialog{width:580px;max-width:100%;max-height:100%;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:12px;background:var(--panel);box-shadow:0 18px 64px #0005;overflow:hidden}.dialog-head{display:flex;align-items:center;gap:12px;padding:22px 24px 18px;flex:0 0 auto}.dialog-icon{width:36px;height:36px;border:1px solid var(--border);border-radius:9px;display:grid;place-items:center;color:var(--accent)}h1{font-size:20px;font-weight:600;letter-spacing:.01em;margin:0 0 3px}.subtitle{color:var(--muted);font-size:12px;margin:0}.close{margin-left:auto;align-self:flex-start;background:none;color:var(--muted);width:28px;height:28px;display:grid;place-items:center}
+.fields{padding:0 24px 18px;overflow-y:auto;min-height:0;scrollbar-color:var(--border) transparent;scrollbar-width:thin}.setting{display:grid;grid-template-columns:1fr 244px;align-items:center;gap:20px;min-height:50px}.setting-language{padding-bottom:14px;margin-bottom:12px;border-bottom:1px solid var(--border)}.label{font-weight:600;font-size:13px;line-height:20px}.hint{font-size:11.5px;line-height:18px;color:var(--muted);margin-top:2px;font-weight:400}.section-label{font-size:11.5px;color:var(--muted);letter-spacing:.06em;margin:12px 0 2px}.field{min-height:34px;display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid var(--border);border-radius:5px;background:var(--bg);line-height:18px}.field .arrow{margin-left:auto;display:block;width:7px;height:7px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(45deg);margin-top:-3px}.font-value{font-family:'Cascadia Code',Consolas,monospace;font-size:12.5px}.size-control{display:flex;align-items:center;gap:9px}.size-control .field{width:95px;justify-content:space-between}.step{display:grid;place-items:center;border:1px solid var(--border);border-radius:4px;height:30px;width:30px;color:var(--muted);font-size:17px;background:var(--bg)}.unit{color:var(--muted);font-size:12px}
+.switch-row{grid-template-columns:1fr auto;min-height:60px}.switch-value{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px}.switch{height:22px;width:40px;border-radius:12px;background:var(--accent);padding:3px;display:flex;justify-content:flex-end}.switch.off{background:var(--toggle);border:1px solid var(--border);justify-content:flex-start;padding:2px}.switch i{display:block;width:16px;height:16px;border-radius:50%;background:white}.preview{background:var(--bg);border:1px solid var(--border);border-radius:7px;margin-top:13px;padding:13px 15px}.preview-title{font-size:10.5px;letter-spacing:.04em;color:var(--muted);margin-bottom:7px}.preview-text{font-family:'Cascadia Code','Yu Gothic UI',monospace;font-size:18px;line-height:26px;letter-spacing:.015em}.preview-caret{display:inline-block;height:20px;width:2px;background:var(--accent);vertical-align:-3px;margin-left:4px}.reset{margin-top:12px;background:none;border:0;padding:4px 0;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:3px}.error{margin-top:10px;display:flex;align-items:flex-start;gap:9px;padding:11px 12px;border:1px solid var(--accent);border-radius:6px;line-height:19px;font-size:12px}.error svg{margin-top:1px;color:var(--accent)}.error strong{font-weight:600}.error p{margin:2px 0 0;color:var(--muted)}.dialog-foot{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:15px 24px;border-top:1px solid var(--border);flex:0 0 auto}.foot-note{margin-right:auto;color:var(--muted);font-size:11px}.action{min-width:84px;padding:8px 17px;line-height:18px;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-weight:600;font-size:12px}.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+@media(max-width:620px){.veil{padding:8px}.dialog{border-radius:8px}.dialog-head{padding:12px 14px;gap:9px}.dialog-icon{width:30px;height:30px}h1{font-size:17px}.subtitle{font-size:10.5px}.fields{padding:0 14px 12px}.setting{grid-template-columns:1fr;gap:7px;padding:8px 0}.setting-language{margin-bottom:8px;padding-bottom:12px}.field{min-height:32px}.switch-row{grid-template-columns:1fr auto;gap:12px;min-height:68px}.dialog-foot{padding:9px 14px;gap:8px}.foot-note{display:none}.action{min-width:76px;padding:6px 15px}.hint{font-size:11px}.entry{margin-right:2px;padding:0 7px}.window-button{width:34px}.tab{width:128px}.plus{width:26px}.caption{gap:0;padding-left:4px}.status{gap:8px;padding:0 8px}.status .encoding{display:none}}
+@media(max-height:300px){.dialog-head{padding:7px 12px}.dialog-icon,.subtitle{display:none}h1{font-size:15px;margin:0}.close{width:24px;height:24px}.dialog-foot{padding:7px 12px}.action{padding:4px 12px;line-height:18px}.fields{padding-bottom:8px}.setting-language{padding-top:7px}.label{font-size:12px}.hint{font-size:10.5px;line-height:15px}.preview{margin-top:8px}}
+</style>
+</head>
+<body>
+<main class="app" id="app" aria-label="設定画面の静的な設計案"></main>
+<script>
+const scene = new URLSearchParams(location.search).get('scene') || 'ja';
+const english = scene === 'en' || scene === 'en-small';
+const error = scene === 'error' || scene === 'small-error';
+const text = english ? {
+ title:'Settings', subtitle:'Make this editor feel like yours.', entry:'Settings', file:'Notes.txt', normal:'Normal', position:'Ln 4, Col 1',
+ language:'Display language', languageHint:'Menu and message language', appearance:'Appearance', theme:'Theme', themeValue:'Follow Windows',
+ font:'Editor font', size:'Font size', editing:'Editing', wrap:'Word wrap', wrapHint:'Fit long lines to the window.', guide:'Operation hints', guideHint:'Show helpful shortcuts while editing.',
+ on:'On', preview:'FONT PREVIEW', reset:'Restore defaults', cancel:'Cancel', save:'Save', note:'Changes take effect when saved.',
+ failure:'Could not save settings.', reason:'Your changes have not been applied. You can keep editing or cancel.'
+} : {
+ title:'設定', subtitle:'いつもの編集を、使いやすく。', entry:'設定', file:'日々のメモ.txt', normal:'通常', position:'行 4, 桁 1',
+ language:'表示言語', languageHint:'メニューやメッセージの言語', appearance:'外観', theme:'テーマ', themeValue:'Windowsに合わせる',
+ font:'本文フォント', size:'文字サイズ', editing:'編集', wrap:'行の折り返し', wrapHint:'長い行を画面幅に合わせて表示します。', guide:'操作案内', guideHint:'編集に役立つキー操作を表示します。',
+ on:'オン', preview:'表示の見本', reset:'既定に戻す', cancel:'キャンセル', save:'保存', note:'保存すると変更が反映されます。',
+ failure:'設定を保存できませんでした。', reason:'変更は反映されていません。入力した内容はこの画面に残っています。'
+};
+document.documentElement.lang = english ? 'en' : 'ja';
+document.documentElement.classList.toggle('light', english);
+const gear = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-.5 3-2 .9-2.6-1-2 3.4L4 11v2l-2.1 1.7 2 3.4 2.6-1 2 .9.5 3h4l.5-3 2-.9 2.6 1 2-3.4L18 13v-2l2.1-1.7-2-3.4-2.6 1-2-.9L13 3Z"/><circle cx="11" cy="12" r="3"/></svg>';
+const close = '<svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8"/></svg>';
+const warning = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="8" cy="8" r="6.3"/><path d="M8 4.2v4.6M8 10.6v1"/></svg>';
+const field = value => `<div class="field">${value}<i class="arrow"></i></div>`;
+const toggle = () => `<div class="switch-value"><span>${text.on}</span><span class="switch"><i></i></span></div>`;
+const lines = english ? ['# A little room to think', '', 'Keep the tools simple.', 'Let the words take shape.', '', 'One thought at a time.'] : ['# 考えごとのつづき', '', '道具は、いつも手になじむものを。', '書きたいことに、静かに向き合う。', '', 'ひとつずつ、言葉にしていく。'];
+document.getElementById('app').innerHTML = `
+ <div class="caption"><div class="tab"><span>${text.file}</span><span>×</span></div><button class="plus" tabindex="-1">＋</button><div class="spacer"></div><button class="entry" tabindex="-1">${gear}${text.entry}</button><div class="window-button">−</div><div class="window-button">□</div><div class="window-button">×</div></div>
+ <div class="document">${lines.map((line,index)=>`<div class="line"><span class="number">${index+1}</span><span class="line-text">${line}</span></div>`).join('')}</div>
+ <div class="status"><span class="mode">${text.normal}</span><span>Vim</span><span class="detail">${text.position}</span><span class="encoding">UTF-8</span><span>LF</span></div>
+ <div class="veil"><section class="dialog" aria-label="${text.title}">
+  <header class="dialog-head"><div class="dialog-icon">${gear}</div><div><h1>${text.title}</h1><p class="subtitle">${text.subtitle}</p></div><button class="close" aria-label="Close">${close}</button></header>
+  <div class="fields" id="fields">
+   <div class="setting setting-language"><div><div class="label">${text.language}</div><div class="hint">${text.languageHint}</div></div>${field(english?'English':'日本語')}</div>
+   <div class="section-label">${text.appearance}</div>
+   <div class="setting"><div class="label">${text.theme}</div>${field(text.themeValue)}</div>
+   <div class="setting"><div class="label">${text.font}</div>${field('<span class="font-value">Cascadia Code</span>')}</div>
+   <div class="setting"><div class="label">${text.size}</div><div class="size-control"><div class="field"><span>${error?'15.5':'13.5'}</span><span class="unit">pt</span></div><span class="step">−</span><span class="step">＋</span></div></div>
+   <div class="section-label">${text.editing}</div>
+   <div class="setting switch-row"><div><div class="label">${text.wrap}</div><div class="hint">${text.wrapHint}</div></div>${toggle()}</div>
+   <div class="setting switch-row"><div><div class="label">${text.guide}</div><div class="hint">${text.guideHint}</div></div>${toggle()}</div>
+   <div class="preview"><div class="preview-title">${text.preview}</div><div class="preview-text" style="font-size:${error?'20.667':'18'}px">Aa あいうえお 123<span class="preview-caret"></span></div></div>
+   <button class="reset">${text.reset}</button>
+   ${error?`<div class="error" id="error">${warning}<div><strong>${text.failure}</strong><p>${text.reason}</p></div></div>`:''}
+  </div>
+  <footer class="dialog-foot"><span class="foot-note">${text.note}</span><button class="action">${text.cancel}</button><button class="action primary">${text.save}</button></footer>
+ </section></div>`;
+// Static views for the design document, not a behavioral prototype.
+if (error) document.getElementById('fields').scrollTop = 100000;
+</script>
+</body>
+</html>
