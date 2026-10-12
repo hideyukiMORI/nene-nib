@@ -18,6 +18,7 @@
 | 次 | #408 正式リリースのロードマップ | 次の開始指示待ち。範囲整理→大容量成立性→大容量→日常編集→split→Markdown→併用確認/公開 |
 | 完了 | #416 / PR417 ファイルのドロップとbeta.2 | main8da81e3へ受理、[beta.2](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2)を公開/再取得照合済み。[公開記録](../quality/beta2-release-2026-10-12.md) |
 | 完了 | #432 125テーマ入りbeta.3 | [beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)を公開/起動/再取得照合済み。[公開記録](../quality/beta3-release-2026-10-12.md) |
+| 完了 | #434 本文の左余白 | 既定8 DIP、文字サイズ/DPI追従。対象契約と実画面が成立。[検証](../quality/body-padding-2026-10-12.md)。公開beta.3への反映は別 |
 
 ## いまの数字と保存形式
 
