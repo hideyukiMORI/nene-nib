@@ -90,6 +90,8 @@ splitは大容量の本文を複製せず参照するため、本文・undo・�
 
 最初の作業である**初版の対応範囲案と、1GB超の閲覧・編集・保存を確かめる限定試験の計画**を[#440の計画](2026-10-12-release-scope-and-large-file-probe.md)へ具体化した。hide指定の入力目安は2GiB、構文色はPython・JavaScript/TypeScript・JSON・Markdown・C/C++。次は本文・索引・読み書きの限定試作Aへ進み、その後に実際の窓での応答性Bを確認する。splitの新条件はhide採用の[ADR 0120](../adr/0120-split-acceptance-is-relative-and-tail-bounded.md)へ固定した。製品採用と実機測定の時間調整は計画に沿って行う。#408はロードマップ保存だけで完了したIssueとして保持する。
 
+2026-10-12 20:47、hideの指示で試験を保留。#442の断片保存は統合済み、#446 / PR447の改行索引は性能未成立でdraftを維持する。試験に依存しない#450の[元本文の所有と読込失敗の設計](../design/2026-10-12-large-file-source-ownership.md)を先行し、次の分割検証・読込境界のADRと必要なAPI移行を具体化する。これを段階1A完了や次段階の製品採用とは扱わない。
+
 ## 根拠となる正本
 
 - [SPECIFICATION](../../SPECIFICATION.md) D7 / D40、FR-002 / FR-007 / FR-013、初版の範囲と第6節のシンタックスハイライト方針。
