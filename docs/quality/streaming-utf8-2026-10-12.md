@@ -79,3 +79,19 @@ ARC-001・CPP-014に従って、UTF-8の意味を既存`Utf8.cpp`へ集約する
 日本語の全6 processで変更後の中央値が増加しているため、この候補は受理しない。正式QLT-014とは別の局所比較だが、約27%の増加を無視して統合しない。`ascii.json` / `japanese.json`と各`.runs`、両exeは保持する。未実行のGUI openは修正後へ移し、この候補を同じ条件で測り直さない。
 
 Release objectの`llvm-objdump --disassemble --demangle --no-show-raw-insn`を比較すると、旧版は2/3/4-byte列の継続byte検査を展開しているが、候補は`min(length, remaining)`で上限が変わるループを毎文字回している。これは原因候補であり、この観測だけで27%の全量を説明したとは扱わない。末尾が未完かを先に分け、継続byte検査は同じprivate helperで共有して、完成した符号列の固定上限を保つ方針で修正する。入力の長さ判定・拒否・復号・未完列の意味は維持し、第二のvalidatorを作らない。変更後は両契約scopeと変更objectの境界検査を確認し、同じbefore/同じ回数の新しい比較を一度行う。
+
+27cc383では14,228 checksとsymbols/conformanceが再び成功。しかし固定比較のASCIIは1112.5→1225.0 µs/対応比1.102459、日本語は5485.0→10541.5 µs/1.923092となった。`scan`が展開されず文字ごとの関数呼出しになっていることを生成コードでも確認したため、この案も不採用。`*-tail.json`と実行ファイルを保持する。
+
+次は同じ`scan`の長さ1〜4のループ内で、各byteを読む直前に残長を確認する。未完と完成で呼び口を分けず、追加したhelperは撤去する。途中の不正byteの即時拒否とEOFの意味を保ちながら、可変上限のループと追加の呼出しを避ける。コンパイラ専用属性やflags、基準値には頼らず、対象契約と同じ固定比較で確認する。
+
+### 2026-10-13の終了点
+
+01:36 JST、hideの「区切りのいいところで日報と引き継ぎ書を書いて今日は終わり」に従い、上記3案目の短い対象検証で終了する。追加のRelease build・性能測定・GUI open・Ready/mergeは行わない。
+
+3案目は`cmake --build build --target nib_tests NeNeNib --parallel 4`が4 stepsで成功。通常のDebug/tidy/ASan/UBSan条件で`--utf8`13,921、`--file-text`307の計14,228 checksが成功し、`symbols.py --build-dir build --require core application`は2 libraries/0違反、`conformance.py --build-dir build`は0違反。`clang-format --dry-run --Werror src/core/Utf8.cpp`も成功。ログは`build-byte-guard.log`、`utf8-byte-guard.log`、`file-text-byte-guard.log`、`symbols-byte-guard.log`、`conformance-byte-guard.log`、`contracts-byte-guard-result.json`。ソース変更に対する確認であり、文書追記・pushで繰り返さない。
+
+**現在の機能契約は成功したが、3案目の性能は未測定で、技術受理していない。** 初回・2案目の性能悪化は未解消として扱う。GUI openも未実行。次回は新しいclean commitのprobeを通常Releaseで作り、同じbefore e5f8e70、同じ2入力/ABBA×3/20標本を事前固定して比較する。良好な結果を得るための同一候補の再試行はしない。
+
+`build/release-abb38e0`は2案目のprobe用へ再configure済み。中の`nib_perf_probes.exe`は27cc383（SHA-256 `846537a479f35c530d6910342b4187d4131c04029689a2a813eb6cc868f08e93`）、`NeNeNib.exe`は初回abb38e0（`32c0bfaa261bff4bdab814ff553f61327e7cfc9466ad0442994f4f5bfc47566a`）であり、3案目の製品として起動しない。初回exe/configは出力の`initial-abb38e0/`へ分離保存済み。終了時のログ・全測定値・各exe・版対応は恒久先の`checkpoint-20261013/`へ収載する。
+
+未受理のため、作業木`452-streaming-utf8`、比較元`452-utf8-before-e5f8e70`と準備/再開出力は保持する。次回はhideの再開指示と実機測定時間帯を確認する。日付・担当変更だけでは続きを起動しない。保存schemaと公開beta.3は不変。Waivers: none。
