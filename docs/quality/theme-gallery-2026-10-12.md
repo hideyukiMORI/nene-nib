@@ -41,3 +41,20 @@ GitHubはHTMLをその場で実行しないので、カタログはダウンロ�
 既存の公開方法を維持し、GitHub Pagesなどの設定は追加していない。
 今回の画像は配色見本であり、製品画面そのものではない。構文解析とbeta.3の公開は本件の対象外。
 統合と作業木整理の記録は同じ証跡先の`closeout.json`へ保存し、ブランチとcommitを保持する。
+
+## 代表ダーク4種の差し替え（Issue #428）
+
+hideの指定に従い、代表の暗色を`alloy-core`、`code-rain`、`monalisa`、`red`の順へ変更した。
+既存HTMLの`featured`、READMEの紹介文、同じ生成テンプレートによるSVGの上段を揃えた。
+明色4件とSVGの下段、125件の色データは変更前のmain `8a7b33a`と完全一致。
+規則はGIT-001〜004、QLT-001/012、ADR 0117。Waivers: none。製品・保存形式・公開方式は変更しない。
+
+差し替え順の誤り・色の転記誤り・明色への混入を確認するため、
+`python D:/NeNeNib/scripts/verify-featured-dark-428.py`を実行して成功した。
+HTMLの差分が暗色4件だけであること、指定順・明暗4/4・全125件、SVGの色一致・明色部分の文字列完全一致、
+READMEの暗色紹介文だけの変更、正典`document_checks` 0違反、`git diff --check`成功を確認した。
+ChromeでSVGの8件の名前・配色・文章・配置を目視確認した。
+証跡は`D:/NeNeNib/evidence/theme-gallery-dark-428/`の`static-verification.json`と`overview-preview.jpg`。
+ギャラリーの操作とCSSは不変なので、検索・キーボード・狭幅はPR #427の成功結果を再利用する。
+文書追記後は変更Markdownと空白だけを確認する。製品テストと再ビルドは不要。
+GitHub READMEへの反映・統合・作業木整理は同じ証跡先の`closeout.json`へ記録する。
