@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="640" viewBox="0 0 1440 640" role="img" aria-labelledby="title description">
+<title id="title">Eight NeNe Nib theme color samples</title>
+<desc id="description">Four dark themes above four light themes, with the same sample text. These are palette samples, not application screenshots.</desc>
+<rect width="1440" height="640" fill="#151619"/>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="32" y="49" fill="#EBEDF1" font-size="30" font-weight="600">Find your theme.</text>
+<text x="1408" y="46" fill="#B7BDC8" text-anchor="end" font-size="17">NeNe Nib · 4 dark / 4 light</text>
+<g transform="translate(32 82)" data-theme="ubuntu-aubergine">
+<defs><clipPath id="card-0"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-0)">
+<rect width="329" height="242" fill="#300A24"/>
+<rect width="329" height="78" fill="#1E0516"/>
+<text x="20" y="34" fill="#EEEEEC" font-size="20" font-weight="600">ubuntu-aubergine</text>
+<text x="20" y="60" fill="#EEEEEC" font-size="14">Dark</text>
+<rect y="78" width="329" height="3" fill="#E95420"/>
+<rect y="81" width="37" height="161" fill="#27081D"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#8B7986">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#EEEEEC">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#8B7986"/>
+</g>
+<g transform="translate(381 82)" data-theme="catppuccin">
+<defs><clipPath id="card-1"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-1)">
+<rect width="329" height="242" fill="#1E1E2E"/>
+<rect width="329" height="78" fill="#13131D"/>
+<text x="20" y="34" fill="#CDD6F4" font-size="20" font-weight="600">catppuccin</text>
+<text x="20" y="60" fill="#CDD6F4" font-size="14">Dark</text>
+<rect y="78" width="329" height="3" fill="#F2CDCD"/>
+<rect y="81" width="37" height="161" fill="#181825"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#80818E">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#CDD6F4">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#80818E"/>
+</g>
+<g transform="translate(730 82)" data-theme="tokyo-night">
+<defs><clipPath id="card-2"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-2)">
+<rect width="329" height="242" fill="#1A1B26"/>
+<rect width="329" height="78" fill="#111118"/>
+<text x="20" y="34" fill="#C0CAF5" font-size="20" font-weight="600">tokyo-night</text>
+<text x="20" y="60" fill="#C0CAF5" font-size="14">Dark</text>
+<rect y="78" width="329" height="3" fill="#7AA2F7"/>
+<rect y="81" width="37" height="161" fill="#16161E"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#7B8095">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#C0CAF5">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#7B8095"/>
+</g>
+<g transform="translate(1079 82)" data-theme="nord">
+<defs><clipPath id="card-3"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-3)">
+<rect width="329" height="242" fill="#2E3440"/>
+<rect width="329" height="78" fill="#1D2128"/>
+<text x="20" y="34" fill="#D8DEE9" font-size="20" font-weight="600">nord</text>
+<text x="20" y="60" fill="#D8DEE9" font-size="14">Dark</text>
+<rect y="78" width="329" height="3" fill="#88C0D0"/>
+<rect y="81" width="37" height="161" fill="#3B4252"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#AAAFB8">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#D8DEE9">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#AAAFB8"/>
+</g>
+<g transform="translate(32 346)" data-theme="rose-pine-dawn">
+<defs><clipPath id="card-4"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-4)">
+<rect width="329" height="242" fill="#FAF4ED"/>
+<rect width="329" height="78" fill="#E6E1DB"/>
+<text x="20" y="34" fill="#464261" font-size="20" font-weight="600">rose-pine-dawn</text>
+<text x="20" y="60" fill="#464261" font-size="14">Light</text>
+<rect y="78" width="329" height="3" fill="#D7827E"/>
+<rect y="81" width="37" height="161" fill="#FFFAF3"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#767280">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#464261">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#767280"/>
+</g>
+<g transform="translate(381 346)" data-theme="everforest-light">
+<defs><clipPath id="card-5"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-5)">
+<rect width="329" height="242" fill="#FDF6E3"/>
+<rect width="329" height="78" fill="#E9E3D1"/>
+<text x="20" y="34" fill="#5C6A72" font-size="20" font-weight="600">everforest-light</text>
+<text x="20" y="60" fill="#5C6A72" font-size="14">Light</text>
+<rect y="78" width="329" height="3" fill="#8DA101"/>
+<rect y="81" width="37" height="161" fill="#EFEBD4"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#636B62">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#5C6A72">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#636B62"/>
+</g>
+<g transform="translate(730 346)" data-theme="gruvbox-light">
+<defs><clipPath id="card-6"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-6)">
+<rect width="329" height="242" fill="#FBF1C7"/>
+<rect width="329" height="78" fill="#E7DEB8"/>
+<text x="20" y="34" fill="#3C3836" font-size="20" font-weight="600">gruvbox-light</text>
+<text x="20" y="60" fill="#3C3836" font-size="14">Light</text>
+<rect y="78" width="329" height="3" fill="#79740E"/>
+<rect y="81" width="37" height="161" fill="#EBDBB2"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#6A5F54">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#3C3836">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#6A5F54"/>
+</g>
+<g transform="translate(1079 346)" data-theme="github-light">
+<defs><clipPath id="card-7"><rect width="329" height="242" rx="10"/></clipPath></defs>
+<g clip-path="url(#card-7)">
+<rect width="329" height="242" fill="#FFFFFF"/>
+<rect width="329" height="78" fill="#EBEBEB"/>
+<text x="20" y="34" fill="#24292F" font-size="20" font-weight="600">github-light</text>
+<text x="20" y="60" fill="#24292F" font-size="14">Light</text>
+<rect y="78" width="329" height="3" fill="#8250DF"/>
+<rect y="81" width="37" height="161" fill="#F6F8FA"/>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="15" fill="#6A737C">
+<text x="14" y="119">1</text><text x="14" y="156">2</text><text x="14" y="193">3</text>
+</g>
+<g font-family="Cascadia Code, Consolas, monospace" font-size="17" fill="#24292F">
+<text x="53" y="119">A moment of focus.</text>
+<text x="53" y="156">Make room for words.</text>
+<text x="53" y="193">NeNe Nib</text>
+</g></g>
+<rect x=".5" y=".5" width="328" height="241" rx="10" fill="none" stroke="#6A737C"/>
+</g>
+<text x="32" y="623" fill="#B7BDC8" font-size="14">Color samples from the built-in palettes · Explore all 125 in the HTML gallery</text>
+</g></svg>

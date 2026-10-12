@@ -20,6 +20,20 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 
 Screenshots use the default font and size in a development build; [capture details](docs/quality/showcase-2026-10-12.md).
 
+## Find your theme
+
+![Eight NeNe Nib theme color samples, with four dark palettes above four light palettes.](docs/images/nib-theme-gallery.svg)
+
+Start with eight favorites: Ubuntu Aubergine, Catppuccin, Tokyo Night and Nord for dark backgrounds;
+Rosé Pine Dawn, Everforest Light, Gruvbox Light and GitHub Light for light backgrounds.
+
+**[Explore the theme gallery](docs/design/colorschemes.html)** — download the HTML and open it in your browser.
+Compare all 125 themes, filter by name or appearance, and select a card for a larger color preview.
+The image and gallery show color samples, not application screenshots. The gallery works offline and starts
+with the current plain-text colors; syntax colors are optional design samples.
+[Theme names and sources](docs/design/2026-10-12-colorschemes.md) are also available as a text list.
+The 125-theme collection is in the development build; the published beta.2 contains nine themes.
+
 ## What works today
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
