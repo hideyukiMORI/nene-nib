@@ -104,16 +104,18 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
     run = read_json(api_command(f"actions/runs/{run_id}"), runner)
     expected = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml", "head_sha": head,
                 "head_branch": record["headRefName"], "display_title": f"Merge PR #{number} at {head}"}
-    if not isinstance(run, dict) or any(run.get(key) != value for key, value in expected.items()) or \
-            not isinstance(run.get("repository"), dict) or run["repository"].get("full_name") != REPO_NAME:
-        raise MergeRefused("CI run does not match this PR, workflow, repository and expected head")
+    if not isinstance(run, dict):
+        raise MergeRefused("CI run response is malformed")
+    # Dispatch can return before GitHub resolves the input-based run name.
+    # Observe completion before validating the final run identity.
     if run.get("status") != "completed":
         result = runner(["run", "watch", str(run_id), "--repo", REPOSITORY, "--exit-status", "--interval", "5"])
         if result.returncode:
             raise MergeRefused(f"CI did not succeed: {result.stderr.strip()} {result.stdout.strip()}")
         run = read_json(api_command(f"actions/runs/{run_id}"), runner)
     if not isinstance(run, dict) or run.get("status") != "completed" or run.get("conclusion") != "success" or \
-            any(run.get(key) != value for key, value in expected.items()):
+            any(run.get(key) != value for key, value in expected.items()) or \
+            not isinstance(run.get("repository"), dict) or run["repository"].get("full_name") != REPO_NAME:
         raise MergeRefused("CI has not completed successfully for the expected head")
     return {"id": run_id, "url": run.get("html_url"), "conclusion": "success"}
 

@@ -36,6 +36,7 @@ class MergeBoundary(unittest.TestCase):
                merge_timeout=False, rules=None, merged=None, rules_exit=0, files=None, run=None,
                latest=None, ci_run=None, dispatch_exit=0, watch_exit=0):
         calls = []
+        run_responses = copy.deepcopy(run) if isinstance(run, list) else None
 
         def runner(arguments):
             calls.append(arguments)
@@ -48,7 +49,7 @@ class MergeBoundary(unittest.TestCase):
                 elif path.endswith("/dispatches"):
                     value, code = {"workflow_run_id": 101}, dispatch_exit
                 elif "/actions/runs/" in path:
-                    value, code = RUN if run is None else run, 0
+                    value, code = (run_responses.pop(0) if run_responses is not None else RUN if run is None else run), 0
                 else:
                     self.fail(f"Unexpected API: {arguments}")
                 return subprocess.CompletedProcess(arguments, code, json.dumps(value), "rules error" if code else "")
@@ -171,6 +172,12 @@ class MergeBoundary(unittest.TestCase):
         result, calls, output, error = self.invoke(ci_run=101, execute=True)
         self.assertEqual(result, 0, error)
         self.assertFalse(any("POST" in call for call in calls))
+
+    def test_queued_run_metadata_is_validated_after_completion(self):
+        result, calls, output, error = self.invoke(run=[{"status": "queued"}, RUN], execute=True)
+        self.assertEqual(result, 0, error)
+        self.assertEqual(sum(call[:2] == ["run", "watch"] for call in calls), 1)
+        self.assertEqual(sum("POST" in call for call in calls), 1)
 
     def test_ci_dispatch_failure_or_watch_failure_does_not_retry_or_merge(self):
         for options in ({"dispatch_exit": 1}, {"run": dict(RUN, status="in_progress"), "watch_exit": 1}):

@@ -5177,3 +5177,5 @@ hideの2026-10-12指定。PRイベント起動を廃止し、`merge-pr.py --exec
 2026-10-12 12:36 JST、main ruleset `23337476`の`required_status_checks`だけを削除し、読戻し一致を確認。PR必須・squash・未解決レビュー拒否・削除/force push禁止を維持した。
 設定前後は`D:/NeNeNib/evidence/merge-ci-430/ruleset-before.json`と`ruleset-after.json`。対象別CIは正典の統合道具で強制し、GitHub UI/直接CLI全体への強制とは主張しない。
 本PRのマージ直前の手動CIを実接続確認として使い、実行・統合・整理の結果は同証跡先の`closeout.json`へ保存する。Waivers: none。
+
+PR431の作成・Readyではrun 0。最初の手動run `38200540150`は成功したが、起動直後の情報照合が先走って統合道具が停止した。完了を待ってから対象情報を照合する位置へ修正し、同じ道具試験にqueued→完了の反例を追加。17 tests成功（0.043秒）。PowerShell入口の2 testsは不変なので再利用する。
