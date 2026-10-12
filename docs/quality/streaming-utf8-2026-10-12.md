@@ -66,3 +66,16 @@ ARC-001・CPP-014に従って、UTF-8の意味を既存`Utf8.cpp`へ集約する
 | `clang-format --dry-run --Werror src/core/Utf8.cpp` | 成功 | 修正した本体の整形。未変更の他5ファイルは準備時の結果を再利用 |
 
 合計14,228 checks。最初の2scope実行は不要な`ASAN_OPTIONS=detect_leaks=0`をプロセスへ渡してしまったため採用せず、overrideを外した通常のsanitizer環境で両scopeを一度確認し直した。初回ログも保持し、採用記録は`utf8-default.log` / `file-text-default.log` / `contracts-default-result.json`。以後は関連実装・入力/環境が不変なら再実行しない。全件回帰・coverage・Vim oracleは選択していない。
+
+### 初回の局所性能比較と修正方針
+
+変更前e5f8e70、変更後abb38e0の通常Releaseで、事前固定した2入力をABBA×3/各20標本で測定。両入力とも全240標本を観測し、入力/出力checksum/compiler/toolchainが一致した。
+
+| 入力 | before中央値（µs） | after中央値（µs） | 対応after/before比の中央値 |
+|---|---:|---:|---:|
+| ASCII 16,800,000 bytes | 1095.0 | 1109.0 | 1.015476 |
+| 日本語 6,219,000 bytes | 5552.0 | 7038.5 | 1.268325 |
+
+日本語の全6 processで変更後の中央値が増加しているため、この候補は受理しない。正式QLT-014とは別の局所比較だが、約27%の増加を無視して統合しない。`ascii.json` / `japanese.json`と各`.runs`、両exeは保持する。未実行のGUI openは修正後へ移し、この候補を同じ条件で測り直さない。
+
+Release objectの`llvm-objdump --disassemble --demangle --no-show-raw-insn`を比較すると、旧版は2/3/4-byte列の継続byte検査を展開しているが、候補は`min(length, remaining)`で上限が変わるループを毎文字回している。これは原因候補であり、この観測だけで27%の全量を説明したとは扱わない。末尾が未完かを先に分け、継続byte検査は同じprivate helperで共有して、完成した符号列の固定上限を保つ方針で修正する。入力の長さ判定・拒否・復号・未完列の意味は維持し、第二のvalidatorを作らない。変更後は両契約scopeと変更objectの境界検査を確認し、同じbefore/同じ回数の新しい比較を一度行う。
