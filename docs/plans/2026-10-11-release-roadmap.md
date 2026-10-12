@@ -88,7 +88,7 @@ splitは大容量の本文を複製せず参照するため、本文・undo・�
 
 ## 直近の再開地点
 
-最初の作業である**初版の対応範囲案と、1GB超の閲覧・編集・保存を確かめる限定試験の計画**を[#440の計画](2026-10-12-release-scope-and-large-file-probe.md)へ具体化した。hide指定の入力目安は2GiB、構文色はPython・JavaScript/TypeScript・JSON・Markdown・C/C++。次は本文・索引・読み書きの限定試作Aへ進み、その後に実際の窓での応答性Bを確認する。split採用条件の判断と実機測定の時間調整は計画に沿って行う。#408はロードマップ保存だけで完了したIssueとして保持する。
+最初の作業である**初版の対応範囲案と、1GB超の閲覧・編集・保存を確かめる限定試験の計画**を[#440の計画](2026-10-12-release-scope-and-large-file-probe.md)へ具体化した。hide指定の入力目安は2GiB、構文色はPython・JavaScript/TypeScript・JSON・Markdown・C/C++。次は本文・索引・読み書きの限定試作Aへ進み、その後に実際の窓での応答性Bを確認する。splitの新条件はhide採用の[ADR 0120](../adr/0120-split-acceptance-is-relative-and-tail-bounded.md)へ固定した。製品採用と実機測定の時間調整は計画に沿って行う。#408はロードマップ保存だけで完了したIssueとして保持する。
 
 ## 根拠となる正本
 
