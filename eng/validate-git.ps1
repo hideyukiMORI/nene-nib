@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param()
+param(
+    [ValidateRange(1, [int]::MaxValue)][int]$PullRequest,
+    [ValidatePattern('^[0-9a-f]{40}$')][string]$ExpectedHead
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -18,9 +21,25 @@ try {
     $branch = & git branch --show-current
     if ($LASTEXITCODE -ne 0) { throw 'GIT-002: cannot read branch.' }
     $base = 'origin/main'
-    if ($env:GITHUB_EVENT_PATH) {
-        $event = Get-Content -LiteralPath $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
-        if (-not $event.PSObject.Properties['pull_request']) { throw 'GIT-004: CI requires a pull request event.' }
+    if ($PullRequest) {
+        if (-not $ExpectedHead) { throw 'GIT-004: expected head is required for merge CI.' }
+        $raw = & gh api --hostname github.com "repos/hideyukiMORI/nene-nib/pulls/$PullRequest"
+        if ($LASTEXITCODE -ne 0) { throw 'GIT-004: cannot read the merge target.' }
+        $pull = $raw | ConvertFrom-Json
+        if ($pull.number -ne $PullRequest -or $pull.state -ne 'open' -or $pull.draft -or
+            $pull.base.ref -ne 'main' -or $pull.head.sha -cne $ExpectedHead -or
+            $pull.head.repo.full_name -cne 'hideyukiMORI/nene-nib') {
+            throw 'GIT-004: merge target is not the expected open ready PR.'
+        }
+        $checkedHead = & git rev-parse HEAD
+        if ($LASTEXITCODE -ne 0 -or $checkedHead -cne $ExpectedHead) { throw 'GIT-004: checkout head differs.' }
+        $event = [pscustomobject]@{ pull_request = $pull }
+    }
+    elseif ($env:GITHUB_EVENT_PATH) {
+        throw 'GIT-004: CI requires an explicit pull request and expected head.'
+    }
+    else { $event = $null }
+    if ($event) {
         $branch = $event.pull_request.head.ref
         $base = $event.pull_request.base.sha
         if ($event.pull_request.draft) { throw 'QLT-012: merge checks run for ready pull requests.' }
@@ -48,6 +67,10 @@ try {
         Set-Content -LiteralPath out/git/message.txt -Value $message -Encoding utf8NoBOM
         & python eng/git-conventions.py out/git/message.txt
         if ($LASTEXITCODE -ne 0) { throw "GIT-003: invalid commit $commit" }
+    }
+    if ($PullRequest) {
+        & git diff --check "$base...HEAD"
+        if ($LASTEXITCODE -ne 0) { throw 'GIT-004: whitespace errors in the merge diff.' }
     }
     Write-Host "Git conventions passed ($($commits.Count) new commit(s))."
 }

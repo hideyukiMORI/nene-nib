@@ -43,9 +43,9 @@ Then the active issue, the relevant accepted ADRs, and any active waivers.
 - Documentation/comment/rule changes need no application runtime tests. Hook/tool changes need only focused checks of that tool.
 - Full verification is exceptional: explain the scope and why narrower checks cannot cover it before using `pwsh -NoProfile -File ./eng/check.ps1 -Full -Reason '...'`. No routine approval request is required. Calling it without these arguments fails before running tools.
 - Fix failures caused by this change. Record demonstrably unrelated existing failures with evidence in a separate issue and continue the current work. Never retry until green or start unrelated repairs/full reruns.
-- Record scope, regression rationale, command/result/evidence and reuse rationale in the PR. CI checks Git conventions, this record and whitespace; hooks stay lightweight and do not repeat product tests.
+- Record scope, regression rationale, command/result/evidence and reuse rationale in the PR. CI runs only at merge through `eng/merge-pr.py`, checking Git conventions, this record and whitespace. Documentation-only changes skip CI entirely; use diff inspection and necessary visual review without bespoke verification scripts or long records. Hooks stay lightweight and do not repeat product tests.
 
-The normative policy is QLT-001 / QLT-012 in `docs/QUALITY_GATES.md` and ADR 0021.
+The normative policy is QLT-001 / QLT-012 in `docs/QUALITY_GATES.md` and ADRs 0021 / 0118.
 It supersedes older full-gate/final-HEAD instructions in reports, handoffs and ADRs.
 
 ## Required completion report
