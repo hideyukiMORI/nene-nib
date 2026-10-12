@@ -1,3 +1,4 @@
+#include "BodyLayout.hpp"
 #include "CancelComposition.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
@@ -57,6 +58,32 @@ void verify_wrapped_rows()
         controller.apply_frame(ScrollLines{std::numeric_limits<std::int32_t>::min()});
     expect(start.lines.front().number == LineNumber{1} && start.lines.front().screen_row == 0,
            "the minimum signed scroll amount clamps to the document start");
+}
+
+void verify_padded_body_view()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_view(controller, "abcdefghij");
+    const auto body = body_layout(110, 180, 96, default_font_size());
+    static_cast<void>(controller.apply(VisibleLines{
+        body.visible_lines, TextViewGeometry{width_of(body.content), body.line_height, 96}}));
+    const auto wrapped = controller.frame();
+    expect(wrapped.lines.front().screen_rows == 3 && wrapped.lines.front().text == "abcdefghij",
+           "the padded body width wraps the same text into three visual rows");
+    const auto margin =
+        controller.apply_frame(PointText{static_cast<float>(body.gutter.right - body.content.left),
+                                         0, SelectionAnchoring::collapse});
+    expect(margin.caret.position.column == Column{1},
+           "clicking the padding lands at the start of the visual row");
+    const auto second_row = controller.apply_frame(PointText{0, 1, SelectionAnchoring::collapse});
+    expect(second_row.caret.position.column == Column{5},
+           "the second visual row starts after the four characters that fit the padded width");
+    const auto selected = controller.apply_frame(PointText{10, 0, SelectionAnchoring::extend});
+    expect(selected.caret.position.column == Column{2} &&
+               selected.lines.front().selection.begin == Column{2} &&
+               selected.lines.front().selection.end == Column{5},
+           "dragging back across the padded wrap boundary preserves the anchor");
 }
 
 void verify_wrapped_motion()
@@ -226,6 +253,7 @@ void verify_unwrapped_drag()
 void verify_wrapped_view_scope()
 {
     verify_wrapped_rows();
+    verify_padded_body_view();
     verify_wrapped_motion();
     verify_wrapped_selection();
     verify_wrapped_composition();

@@ -1352,19 +1352,32 @@ void verify_vim_scroll_follow_thresholds()
 
 void verify_body_layout()
 {
+    using nenenib::core::FontSize;
     const auto layout = body_layout(640, 360, 96, nenenib::core::default_font_size());
     expect(layout.band == LayoutRect{0, 40, 640, 332}, "the body sits between the two bands");
     expect(layout.gutter == LayoutRect{0, 52, 56, 332}, "the gutter is 56 DIP wide");
-    expect(layout.content == LayoutRect{56, 52, 640, 332}, "the content starts after the gutter");
+    expect(layout.content == LayoutRect{64, 52, 640, 332},
+           "the content starts eight DIP after the gutter");
     expect(layout.line_height == 29 && layout.caret_width == 2, "13.5 pt makes a 29 DIP row");
     expect(layout.visible_lines == 9, "280 pixels hold nine 29 DIP lines");
     expect(body_line_rect(layout, 0) == LayoutRect{0, 52, 640, 81}, "the first row");
     expect(body_line_rect(layout, 2) == LayoutRect{0, 110, 640, 139}, "the third row");
     const auto scaled = body_layout(800, 450, 120, nenenib::core::default_font_size());
+    expect(scaled.content.left - scaled.gutter.right == 10, "the body padding scales with the DPI");
     expect(scaled.line_height == 36, "29 DIP rounds to 36 pixels at 125 percent");
     expect(scaled.visible_lines == 9, "the taller window holds the same nine lines");
     const auto tiny = body_layout(640, 40, 96, nenenib::core::default_font_size());
     expect(tiny.visible_lines == 0, "a window with no body holds no lines");
+    const auto small = body_layout(640, 360, 96, FontSize::from_points(8).value());
+    const auto large = body_layout(1280, 720, 192, FontSize::from_points(40).value());
+    expect(small.content.left - small.gutter.right == 5 &&
+               large.content.left - large.gutter.right == 48,
+           "body padding follows the minimum and maximum font sizes and DPI");
+    const auto narrow = body_layout(60, 360, 96, nenenib::core::default_font_size());
+    const auto gutter_only = body_layout(50, 360, 96, nenenib::core::default_font_size());
+    expect(narrow.content.left == narrow.content.right &&
+               gutter_only.content.left == gutter_only.content.right,
+           "padding and gutter leave an empty rather than inverted narrow content area");
 }
 
 // 採用案の配色表（docs/design/2026-09-15-look.md 第 3 節と編集の採用案 第 2 節）の全トークン。
@@ -2385,6 +2398,11 @@ void verify_file_path_scope()
     verify_tab_titles();
 }
 
+void verify_body_layout_scope()
+{
+    verify_body_layout();
+}
+
 void verify_text_and_caret()
 {
     verify_utf8_scope();
@@ -2404,7 +2422,7 @@ void verify_text_and_caret()
     verify_save_state_of_document();
     verify_scroll_bounds();
     verify_vim_scroll_follow_thresholds();
-    verify_body_layout();
+    verify_body_layout_scope();
 }
 
 // 既存のstatus契約を対象実行へつなぐ。既定実行はverify_lookが呼ぶ（Issue #382）。

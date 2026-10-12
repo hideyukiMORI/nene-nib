@@ -65,7 +65,8 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 50> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 51> scopes{{
+    {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--utf8", verify_utf8_scope},
