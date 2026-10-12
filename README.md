@@ -24,7 +24,7 @@ Screenshots use the default font and size in a development build; [capture detai
 
 ![Eight NeNe Nib theme color samples, with four dark palettes above four light palettes.](docs/images/nib-theme-gallery.svg)
 
-Start with eight favorites: Ubuntu Aubergine, Catppuccin, Tokyo Night and Nord for dark backgrounds;
+Start with eight favorites: Alloy Core, Code Rain, MonaLisa and Red for dark backgrounds;
 Rosé Pine Dawn, Everforest Light, Gruvbox Light and GitHub Light for light backgrounds.
 
 **[Explore the theme gallery](docs/design/colorschemes.html)** — download the HTML and open it in your browser.
