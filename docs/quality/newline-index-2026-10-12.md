@@ -43,3 +43,18 @@
 2026-10-12 20:18 JSTにhideが実機測定を許可し、他エージェントの並行作業で負荷が安定しない可能性を伝えた。固定4コマンドの初回は全て`window unavailable; recorded only`となり、速度の値は得られていない。終了0を性能合格に数えない。測定用窓が可視・応答中でも既存の通常版が先に見つかる、同class先頭1窓だけの選択が原因（[修正記録 #448](window-owner-2026-10-12.md)）。
 
 #448 / PR449 / main843822aの修正を取り込み、同じ4項目を同じ順/各5回で1組測る。変更したのはdriverの窓所有選択だけ。初回ログ/入力/profileを`out/speed-unobserved`へ保持し、新しい専用profileで開始する。旧試行の失敗を消す再試行ではなく、計測器修正後の最初の測定。製品commit2b4de9652a76a118d7fd04f73caf07fb9f4a1f21のRelease（SHA-256 `0d74775a7e1f14fa41e827cfabb14147169673ccda9745e75bd2b03aef4b8bf9`、1,529,344 bytes）と対象9ファイルは不変。対象テストは再利用する。測定前のdriver/参照値/設定/ReleaseのSHAは`perf-preflight-fixed.json`へ記録する。並行作業ありの条件を結果にも併記する。
+
+## 修正後の実機結果と保留
+
+2026-10-12 20:32〜20:36 JST、`measurementCommit`は6387764、上記の同じReleaseを使用。4コマンドを固定順で実行したが、各5回を完了する前に全コマンドが例外終了した。
+
+| bench | 結果 |
+|---|---|
+| key-to-frame-single | 200打鍵の到着幅811.0 msの試行を既存の規定で無効化。その後、終了待ち15秒と後片付け5秒でTimeoutExpired、exit 1 |
+| key-to-frame-single-long-line | 終了待ち15秒と後片付け5秒でTimeoutExpired、exit 1 |
+| key-to-frame-burst-200-16mib | 終了待ち15秒と後片付け5秒でTimeoutExpired、exit 1 |
+| open-large-file-16mib | 終了待ち15秒と後片付け5秒でTimeoutExpired、exit 1 |
+
+窓所有選択の修正後は測定対象へ到達したが、集約JSONと正式な中央値を得ていない。初回と修正後のログ、残存raw marks、Release metadata、全入力SHAを保持する。並行作業ありの条件であり、負荷・I/O・製品側の原因は未分離。終了timeoutを性能退行の数値や合格値へ読み替えず、同条件での追加測定はしない。20:36 JST時点で残っていたNeNeNibは既存通常版PID21624だけで、測定用プロセスは残存しなかった。
+
+PR447はdraft・main未統合で保持。次は落ち着いた時間帯で、終了待ちを含めて測定が成立するか確認する。必要なら同じ環境の変更前後を固定した計画で切り分ける。対象契約29,162 checksは成功のまま再利用できるが、速度の採用条件は未達成。未完了の`D:/NeNeNib/worktrees/446-newline-index`と`D:/NeNeNib/outputs/newline-index-20261012/`はRelease・入力・未成立ログを再確認するため保持する。

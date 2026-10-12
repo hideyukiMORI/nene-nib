@@ -17,7 +17,7 @@
 | 完了 | #419 配色95種と行番号欄 | 対象検証/実画面/確認用ZIPが成立。[設計と一覧](../design/2026-10-12-colorschemes.md)、[検証](../quality/colorschemes-2026-10-12.md)。統合/整理の実状態は恒久先closeout.json |
 | 完了 | #440 正式リリースの範囲と試験計画 | [段階0・事前計画](../plans/2026-10-12-release-scope-and-large-file-probe.md)。2GiBを目安に本文/I/Oの試作A→応答性B。以後は[ロードマップ](../plans/2026-10-11-release-roadmap.md)の大容量→日常編集→split→Markdown→公開 |
 | 完了 | #442 UTF-8保存の断片化 | 段階1Aの最初の土台。本文断片を既存FilePortの同じ一時ファイル/置換経路へ接続。[696 checksと境界](../quality/chunked-save-2026-10-12.md)。次は元本文の所有・行索引・読込。2GiB実測・上限変更・非同期化は後続 |
-| 進行中 | #446 改行索引の容量制限 | 段階1A。source byte数に比例するbit索引へ置換。2GiBの索引payloadは計算上288MiB。[29,162 checks/規約成功](../quality/newline-index-2026-10-12.md)、実機性能待ち。実private bytes・本文所有・読込は後続 |
+| 進行中 | #446 改行索引の容量制限 | 段階1A。source byte数に比例するbit索引へ置換。2GiBの索引payloadは計算上288MiB。[29,162 checks/規約成功](../quality/newline-index-2026-10-12.md)、実機4条件は終了timeoutで未成立、PR447はdraft。実private bytes・本文所有・読込は後続 |
 | 完了 | #443 splitの新条件 | D45・[ADR 0120](../adr/0120-split-acceptance-is-relative-and-tail-bounded.md)。中央値の追加`max(1ms, 単画面の25%)`以内かつp95 16.7ms以内をhideが採用。同一/別文書を分けた新試験は未実施、旧holdを維持 |
 | 完了 | #416 / PR417 ファイルのドロップとbeta.2 | main8da81e3へ受理、[beta.2](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2)を公開/再取得照合済み。[公開記録](../quality/beta2-release-2026-10-12.md) |
 | 完了 | #432 125テーマ入りbeta.3 | [beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)を公開/起動/再取得照合済み。[公開記録](../quality/beta3-release-2026-10-12.md) |

@@ -1,6 +1,6 @@
 # ADR 0121 — 改行索引の容量は本文のバイト数で制限する
 
-- 状態: 設計決定・対象契約確認済み、実機性能待ち
+- 状態: 設計決定・対象契約確認済み、実機性能未成立で保留
 - 日付: 2026-10-12
 - Issue: #446
 - 影響する規則: ARC-001 / ARC-003 / ARC-005 / ARC-007 / ARC-009 / ARC-012 / CPP-003 / CPP-008 / CPP-011 / CPP-012 / CPP-018 / QLT-001 / QLT-010 / QLT-012 / QLT-014
@@ -29,3 +29,5 @@ Debugのclang-tidy/ASan/UBSan、変更ファイル整形、core/application symb
 ADR 0047決定1/3/5とADR 0080決定6の物理表現・検索方法を本ADRで置き換える。sourceごとの共有、piece窓、本文を再走査しない意味は維持する。細かい二次集計は問い合わせを8 wordへ制限するためで、4096 byte間隔の260 MiB案より28 MiB使う。疎な文書の索引増加、全LFでの構築時間、atの追加演算は測定で判断する。2 GiBの実private bytes合格や非同期応答性の達成は本ADRだけでは主張しない。
 
 **実装中の確認。** 固定MSVC STLの実行時`std::popcount` / `std::countr_zero`は`__isa_available`を参照した（NewlineIndex.cpp.objのllvm-nm出力）。許可シンボルを追加せず、標準関数をconstexpr表の生成にだけ用いる。実行時はscalarの表参照とシフトだけで、CPU別の経路を追加しない。
+
+**2026-10-12実機結果。** 並行作業ありの条件で窓選択の不具合を#448で修正した後、4ベンチとも終了待ちtimeoutとなり、正式な性能値を確定できなかった。[全記録](../quality/newline-index-2026-10-12.md)。基準値を変えず、PR447のmain統合を保留する。
