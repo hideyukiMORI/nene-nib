@@ -37,3 +37,9 @@
 検証はこの変更への初回。成功後は実装・テスト・関連依存・必要環境が同一なら、文書追加/commit/push/review/mergeによる再実行をしない。保存schema・基準値・閾値・許可シンボル・既存Vim fixtureを変更しない。Waivers: none。64 MiB読込上限、同期I/O、本文の所有コピー、2 GiB A/B試験は後続。
 
 対象契約の合計は29,162 checks。ログの恒久収載先は`D:/NeNeNib/evidence/newline-index-446/`（統合時に原本とSHAを照合する）。
+
+## 初回未測と測定器修正後の条件
+
+2026-10-12 20:18 JSTにhideが実機測定を許可し、他エージェントの並行作業で負荷が安定しない可能性を伝えた。固定4コマンドの初回は全て`window unavailable; recorded only`となり、速度の値は得られていない。終了0を性能合格に数えない。測定用窓が可視・応答中でも既存の通常版が先に見つかる、同class先頭1窓だけの選択が原因（[修正記録 #448](window-owner-2026-10-12.md)）。
+
+#448 / PR449 / main843822aの修正を取り込み、同じ4項目を同じ順/各5回で1組測る。変更したのはdriverの窓所有選択だけ。初回ログ/入力/profileを`out/speed-unobserved`へ保持し、新しい専用profileで開始する。旧試行の失敗を消す再試行ではなく、計測器修正後の最初の測定。製品commit2b4de9652a76a118d7fd04f73caf07fb9f4a1f21のRelease（SHA-256 `0d74775a7e1f14fa41e827cfabb14147169673ccda9745e75bd2b03aef4b8bf9`、1,529,344 bytes）と対象9ファイルは不変。対象テストは再利用する。測定前のdriver/参照値/設定/ReleaseのSHAは`perf-preflight-fixed.json`へ記録する。並行作業ありの条件を結果にも併記する。
