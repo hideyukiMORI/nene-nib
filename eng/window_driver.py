@@ -66,7 +66,6 @@ class BITMAPINFO(c.Structure):
 
 
 api(user, "SetProcessDpiAwarenessContext", w.BOOL, w.HANDLE)
-api(user, "FindWindowW", w.HWND, w.LPCWSTR, w.LPCWSTR)
 api(user, "FindWindowExW", w.HWND, w.HWND, w.HWND, w.LPCWSTR, w.LPCWSTR)
 api(user, "GetWindowThreadProcessId", w.DWORD, w.HWND, c.POINTER(w.DWORD))
 api(user, "IsWindowVisible", w.BOOL, w.HWND)
@@ -215,6 +214,19 @@ def forget_session(environment: dict) -> bool:
     return deleted
 
 
+def owned_window(pid: int, class_name: str) -> int:
+    """The first visible window of this class owned by this process, or 0 (#448)."""
+    child = None
+    while True:
+        child = user.FindWindowExW(None, child, class_name, None)
+        if not child:
+            return 0
+        owner = w.DWORD()
+        user.GetWindowThreadProcessId(child, c.byref(owner))
+        if owner.value == pid and user.IsWindowVisible(child):
+            return child
+
+
 def start(executable: Path, environment: dict, arguments: list[str] | None = None,
           seconds: float = 5.0, *,
           keep_session: bool = False) -> tuple[subprocess.Popen, int, list[int]]:
@@ -228,12 +240,9 @@ def start(executable: Path, environment: dict, arguments: list[str] | None = Non
     process = subprocess.Popen([str(executable), *(arguments or [])], env=environment)
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        window = user.FindWindowW(WINDOW_CLASS, None)
-        if window and user.IsWindowVisible(window):
-            owner = w.DWORD()
-            user.GetWindowThreadProcessId(window, c.byref(owner))
-            if owner.value == process.pid:
-                return process, window, rectangle(window, user.GetWindowRect)
+        window = owned_window(process.pid, WINDOW_CLASS)
+        if window:
+            return process, window, rectangle(window, user.GetWindowRect)
         if process.poll() is not None:
             raise WindowUnavailable(f"NeNeNib exited before showing a window: {process.returncode}")
         time.sleep(0.05)
@@ -381,15 +390,7 @@ def assert_uncovered(window) -> None:
 
 def owned_dialog(pid: int) -> int:
     """The visible MessageBoxW of that process, if one is up."""
-    child = None
-    while True:
-        child = user.FindWindowExW(None, child, DIALOG_CLASS, None)
-        if not child:
-            return 0
-        owner = w.DWORD()
-        user.GetWindowThreadProcessId(child, c.byref(owner))
-        if owner.value == pid and user.IsWindowVisible(child):
-            return child
+    return owned_window(pid, DIALOG_CLASS)
 
 
 def await_dialog(process, seconds: float = 2.5) -> int:
