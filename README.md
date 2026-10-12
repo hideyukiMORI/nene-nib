@@ -11,7 +11,7 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > highlighting, `.` repeat, blockwise VISUAL) work. Several tabs in the title bar come back on the next start,
 > and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
 > available operations; a new untitled document and the status bar show optional shortcut hints. Markdown
-> preview and files above 64 MiB are still planned. [v0.1.0-beta.2 is available](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2) for Windows 11 x64.
+> preview and files above 64 MiB are still planned. [v0.1.0-beta.3 is available](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3) for Windows 11 x64.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -32,7 +32,7 @@ Compare all 125 themes, filter by name or appearance, and select a card for a la
 The image and gallery show color samples, not application screenshots. The gallery works offline and starts
 with the current plain-text colors; syntax colors are optional design samples.
 [Theme names and sources](docs/design/2026-10-12-colorschemes.md) are also available as a text list.
-The 125-theme collection is in the development build; the published beta.2 contains nine themes.
+All 125 themes are included in the published v0.1.0-beta.3.
 
 ## What works today
 
