@@ -1007,6 +1007,43 @@ void verify_document_save()
     expect(!saved.document.last_failure.has_value(), "a good save reports nothing");
 }
 
+void verify_document_save_segments()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold(std::string("a\r\n日本\nz"));
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{2}, Column{1}}, SelectionAnchoring::collapse});
+    applied(controller, InsertText{"X"});
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8_bom});
+    expect(editing.files().written() == std::string(byte_order_mark()) + "a\r\nX日本\nz",
+           "fragmented saving preserves BOM, mixed newlines and trailing content");
+    expect(editing.files().written_segments() == std::vector<std::size_t>{3, 3, 1, 8},
+           "UTF-8 BOM and body pieces reach the port without a flattened body");
+    applied(controller, HistoryAction{HistoryDirection::undo});
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "a\r\n日本\nz",
+           "saving after undo writes the restored bytes");
+    applied(controller, HistoryAction{HistoryDirection::redo});
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "a\r\nX日本\nz" &&
+               editing.files().written_segments().size() == 3,
+           "redo preserves piece order for plain UTF-8 saving");
+}
+
+void verify_document_save_empty()
+{
+    Editing editing;
+    applied(editing.controller(), SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written().empty() && editing.files().written_segments().empty(),
+           "an empty UTF-8 body writes an empty segment list");
+    applied(editing.controller(), SaveDocument{sample_path(), TextEncoding::utf8_bom});
+    expect(editing.files().written() == byte_order_mark() &&
+               editing.files().written_segments() == std::vector<std::size_t>{3},
+           "an empty BOM body writes only the BOM segment");
+}
+
 void verify_document_save_encodings()
 {
     Editing with_bom;
@@ -1399,6 +1436,8 @@ void verify_document_read_contracts()
 
 void verify_document_save_contracts()
 {
+    verify_document_save_segments();
+    verify_document_save_empty();
     verify_document_save();
     verify_document_save_encodings();
     verify_document_save_failures();
@@ -1440,15 +1479,7 @@ void verify_controller_intents()
     verify_controller_paste_line_endings();
     verify_controller_paste_undo_and_failure();
     verify_controller_scrolling();
-    verify_document_open();
-    verify_document_open_encodings();
-    verify_document_open_failures();
-    verify_document_open_boundaries();
-    verify_document_save();
-    verify_document_save_encodings();
-    verify_document_save_failures();
-    verify_save_state_transitions();
-    verify_unreachable_save_point();
+    verify_document_read_contracts();
     verify_document_failure_clearing();
     verify_vim_engine();
     verify_composition();

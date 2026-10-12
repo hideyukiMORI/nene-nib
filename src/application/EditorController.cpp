@@ -2617,25 +2617,32 @@ std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::Det
         .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
 }
 
-std::expected<std::string, FileFailure> EditorController::encoded(core::TextEncoding encoding,
-                                                                  std::string utf8)
+std::expected<void, FileFailure> EditorController::write_utf8_document(const SaveDocument &intent)
 {
-    switch (encoding)
+    auto parts = state_.text().segments();
+    if (intent.encoding == core::TextEncoding::utf8_bom)
+    {
+        parts.insert(parts.begin(), core::byte_order_mark());
+    }
+    return ports_.files.write(intent.path, parts, intent.mode);
+}
+
+std::expected<void, FileFailure> EditorController::write_document(const SaveDocument &intent)
+{
+    switch (intent.encoding)
     {
     case core::TextEncoding::utf8:
-        return utf8;
     case core::TextEncoding::utf8_bom:
-        utf8.insert(0, core::byte_order_mark());
-        return utf8;
+        return write_utf8_document(intent);
     case core::TextEncoding::shift_jis:
         break;
     }
-    auto converted = ports_.code_pages.from_utf8(utf8);
+    const auto converted = ports_.code_pages.from_utf8(state_.text().text());
     if (!converted)
     {
         return std::unexpected(file_failure_of(converted.error()));
     }
-    return std::move(converted).value();
+    return ports_.files.write(intent.path, converted.value(), intent.mode);
 }
 
 // 読んで復号した本文と文書。上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは
@@ -2790,13 +2797,8 @@ void EditorController::accept(const SaveDocument &intent)
 
 std::expected<void, FileFailure> EditorController::save_document(const SaveDocument &intent)
 {
-    const auto bytes = encoded(intent.encoding, state_.text().text());
-    if (!bytes)
-    {
-        return std::unexpected(bytes.error());
-    }
     // 書けなかったときは本文も文書も変えない。元のファイルも adapters が守る（決定 6）。
-    const auto written = ports_.files.write(intent.path, bytes.value(), intent.mode);
+    const auto written = write_document(intent);
     if (!written)
     {
         return std::unexpected(written.error());

@@ -241,6 +241,26 @@ void verify_resolved_write(Win32FileAdapter &files)
            "relative and resolved paths read the same bytes");
 }
 
+void verify_segmented_write(Win32FileAdapter &files)
+{
+    const auto path = path_of("nib-adapter-files/replaced.txt");
+    constexpr std::array<std::string_view, 5> parts{"", "a\r", "\n日", "本\n",
+                                                    std::string_view("z\0", 2)};
+    expect(files.write(path, parts, FileWriteMode::replace).has_value(),
+           "byte fragments are written as one file");
+    expect(files.read(path, read_limit).value_or(std::string{}) ==
+               std::string("a\r\n日本\nz\0", 12),
+           "fragment boundaries do not change UTF-8, CRLF or NUL bytes");
+    expect(files.write(path, parts, FileWriteMode::create_new).error() ==
+               FileFailure::already_exists,
+           "segmented create_new preserves an existing target");
+    const std::array<std::string_view, 0> empty{};
+    expect(files.write(path, empty, FileWriteMode::replace).has_value() &&
+               files.read(path, 0).value_or("not empty").empty(),
+           "an empty segment list replaces with an empty file");
+    expect(files.write(path, "resolved").has_value(), "restore the replacement fixture");
+}
+
 void verify_failed_replacement(Win32FileAdapter &files)
 {
     const auto path = path_of("nib-adapter-files/replaced.txt");
@@ -249,7 +269,9 @@ void verify_failed_replacement(Win32FileAdapter &files)
                                           FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                           FILE_ATTRIBUTE_NORMAL, nullptr));
         expect(held.valid(), "hold the target without sharing replacement");
-        expect(!files.write(path, "must not replace"), "a locked target refuses replacement");
+        constexpr std::array<std::string_view, 2> parts{"must not ", "replace"};
+        expect(!files.write(path, parts, FileWriteMode::replace),
+               "a locked target refuses replacement after all fragments are written");
     }
     expect(files.read(path, read_limit).value_or(std::string{}) == "resolved",
            "failed replacement retains the complete original file");
@@ -889,6 +911,7 @@ void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
     verify_failures(files);
     verify_create_only(files);
     verify_resolved_write(files);
+    verify_segmented_write(files);
     verify_failed_replacement(files);
     verify_code_page_scope(code_pages);
     verify_absolute_path();

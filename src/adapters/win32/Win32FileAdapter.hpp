@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -23,7 +24,7 @@ class Win32FileAdapter final : public application::FilePort
     [[nodiscard]] std::expected<std::string, application::FileFailure>
     read(const core::FilePath &path, std::size_t maximum_bytes) override;
     [[nodiscard]] std::expected<void, application::FileFailure>
-    write(const core::FilePath &path, std::string_view bytes,
+    write(const core::FilePath &path, std::span<const std::string_view> parts,
           application::FileWriteMode mode) override;
     [[nodiscard]] std::expected<core::FilePath, application::FileFailure>
     resolve(const core::FilePath &path) override;

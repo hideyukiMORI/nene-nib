@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -32,8 +33,16 @@ class FilePort
     {
         return write(path, bytes, FileWriteMode::replace);
     }
+    [[nodiscard]] std::expected<void, FileFailure> write(const core::FilePath &path,
+                                                         std::string_view bytes, FileWriteMode mode)
+    {
+        return write(path, std::span<const std::string_view>(&bytes, 1), mode);
+    }
+    // 断片を順に連結したbytesを書く唯一の実装口（ADR 0119）。空列/空断片も許す。
+    // 列と参照先は呼出し中だけ借用し、実装は返却後に保持しない。
     [[nodiscard]] virtual std::expected<void, FileFailure>
-    write(const core::FilePath &path, std::string_view bytes, FileWriteMode mode) = 0;
+    write(const core::FilePath &path, std::span<const std::string_view> parts,
+          FileWriteMode mode) = 0;
     [[nodiscard]] virtual std::expected<core::FilePath, FileFailure>
     resolve(const core::FilePath &path) = 0;
     // 2 つの経路が同じファイルを指すか（ADR 0056 の決定 5）。比べ方は OS の規則で、adapters が

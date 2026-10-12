@@ -10,6 +10,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -82,6 +83,11 @@ class ScriptedFiles final : public FilePort
         return written_;
     }
 
+    [[nodiscard]] const std::vector<std::size_t> &written_segments() const noexcept
+    {
+        return written_segments_;
+    }
+
     [[nodiscard]] const std::string &written_path() const noexcept
     {
         return written_path_;
@@ -107,8 +113,9 @@ class ScriptedFiles final : public FilePort
         return found == by_path_.end() ? content_ : found->second;
     }
 
-    [[nodiscard]] std::expected<void, FileFailure>
-    write(const FilePath &path, std::string_view bytes, FileWriteMode mode) override
+    [[nodiscard]] std::expected<void, FileFailure> write(const FilePath &path,
+                                                         std::span<const std::string_view> parts,
+                                                         FileWriteMode mode) override
     {
         write_mode_ = mode;
         if (write_failure_.has_value())
@@ -116,7 +123,13 @@ class ScriptedFiles final : public FilePort
             return std::unexpected(write_failure_.value());
         }
         written_path_ = std::string(path.text());
-        written_ = std::string(bytes);
+        written_.clear();
+        written_segments_.clear();
+        for (const std::string_view part : parts)
+        {
+            written_.append(part);
+            written_segments_.push_back(part.size());
+        }
         return {};
     }
 
@@ -142,6 +155,7 @@ class ScriptedFiles final : public FilePort
     FileWriteMode write_mode_ = FileWriteMode::replace;
     std::optional<FileFailure> write_failure_;
     std::string written_;
+    std::vector<std::size_t> written_segments_;
     std::string written_path_;
     std::string read_path_;
     std::size_t read_limit_ = 0;

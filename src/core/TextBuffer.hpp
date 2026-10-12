@@ -43,6 +43,11 @@ class TextBuffer final
     [[nodiscard]] std::size_t line_count() const noexcept;
     [[nodiscard]] std::size_t piece_count() const noexcept;
 
+    // 本文順の借用。列だけを所有し、文字はこの値の生存中だけ有効（ADR 0119）。
+    // 同期処理でだけ使い、この値の破棄・代入・移動を越えて保持しない。
+    [[nodiscard]] std::vector<std::string_view> segments() const &;
+    std::vector<std::string_view> segments() const && = delete;
+
     [[nodiscard]] std::string text() const;
     [[nodiscard]] std::string text_range(Offset begin, Offset end) const;
     // 行の文字列。piece をまたぐので string_view では返せない（ADR 0009）。末尾の改行は含まない。

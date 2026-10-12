@@ -134,4 +134,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0116](0116-file-drop-enters-the-existing-open-path.md) | ファイルのドロップは既存の開く意図へ渡す | 受理・#416 |
 | [0117](0117-expanded-colorschemes-and-gutter-background.md) | 配色の拡充と行番号背景は既存のTheme表へ集約する | 技術受理・#419 |
 | [0118](0118-ci-only-at-merge-except-documentation.md) | CIはマージ直前だけ、文書のみなら起動しない | 受理・#430、hide明示指定 |
+| [0119](0119-utf8-save-borrows-piece-segments.md) | UTF-8保存は本文の断片を同期呼出し中だけ借用する | 受理・#442 |
 | [0120](0120-split-acceptance-is-relative-and-tail-bounded.md) | splitは単画面との差とp95を分けて採用判断する | 採用条件受理・#443、製品採用/測定は未了 |
