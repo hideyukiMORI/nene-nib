@@ -2,7 +2,7 @@
 
 2026-10-12 / Issue #452 / [ADR 0122](../adr/0122-utf8-validation-retains-only-the-unfinished-sequence.md)。
 
-## 現在の状態
+## 2026-10-12の準備時点
 
 **試験はhide指示で保留。実装と契約試験コードの準備段階で、技術受理していない。** Debug/Release build、clang-tidy、ASan/UBSan、単体試験、symbols、conformance、実機性能、CIは未実行。成功件数や性能値はまだない。draftのままmainへ統合しない。
 
@@ -40,3 +40,29 @@ ARC-001・CPP-014に従って、UTF-8の意味を既存`Utf8.cpp`へ集約する
 ## 保存先
 
 作業木は`D:/NeNeNib/worktrees/452-streaming-utf8`、準備出力は`D:/NeNeNib/outputs/streaming-utf8-20261012`。未検証・未統合のため保持し、受理後に恒久収載と安全確認を行って整理する。mainと公開版は変更しない。
+
+## 2026-10-13再開時の条件
+
+00:50 JST、hideが他の作業を減らして試験を再開。#446の受理済みmain `e5f8e709eef61d88ebcdbd943d93e837ad0d348f`を取り込んでからDebugの対象targetをbuildする。改行索引は前後双方に含め、UTF-8変更の比較へ混ぜない。出力は`D:/NeNeNib/outputs/streaming-utf8-resume-20261013/`、恒久先は`D:/NeNeNib/evidence/streaming-utf8-452/`。
+
+初回buildは`expected<optional<size_t>>`からの同じoptionalの確認と取得をclang-tidyが対応付けられず、`bugprone-unchecked-optional-access`を2箇所で検出した。optionalを一度だけ局所const値へ取り出し、その値を確認してから読む形へ修正する。診断の抑制や設定変更はしない。初回ログを`build.log`、修正後を`build-optional-fixed.log`へ分ける。
+
+### 性能比較の事前計画
+
+- 変更前は上記main e5f8e70、変更後は対象契約が成功したclean commitで固定し、実行前に`perf-plan.json`へfull SHAと両exe SHA-256を記録する。両版のharness/入力/flagsを揃える。
+- `nib_perf_probes`は固定toolchainと通常CMake Release、target指定/並列2（ADR0082）。`eng/compare-probes.py`の`utf8-validate-ascii-16mib`、`utf8-validate-japanese-6mib`をこの順で各1回。既定のABBA×3 blocks、各processに区間外warmup1と20 samples、timeout60秒。全240値/各版120値とchecksum/入力hashを保存し、外れ値を除かない。独自の合否閾値を作らず、悪化が見えた場合は原因を調べ、同じ候補を合格まで測り直さない。
+- 製品は`eng/build-release.ps1 -Ref <変更後commit>`で作り、`eng/measure-speed.py --check --bench open-large-file-16mib --repetitions 5 --executable <exe>`を新規専用profileで1回。既存QLT-014の基準/閾値を維持する。#446のopen成功値は旧validatorなので変更後の合格には代用しない。
+- buildと測定を重ねない。ホストの独占利用は保証せず、他作業を減らしたという条件と限界を残す。今回は一括走査と直接の読込への影響を確認する。分割FilePortは未実装であり、2GiBの完成読込や非同期応答性を測ったとは扱わない。
+
+### 対象契約・静的検査
+
+| コマンド | 結果 | 直接確認した退行 |
+|---|---|---|
+| `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug` / `cmake --build build --target nib_tests NeNeNib --parallel 4` | optional局所値の修正後に成功。clang-cl19.1.5/clang-tidy/ASan/UBSan | 変更型と実装、既存利用targetとの結線と安全性 |
+| `build/nib_tests.exe --utf8` | 13,921 checks成功 | 全2/3分割と1-byte断片、拒否/EOF、不変性/所有、ASCII境界、一括の直接caller |
+| `build/nib_tests.exe --file-text` | 307 checks成功 | BOM/文字コード判定、所有本文、読込の直接caller |
+| `python eng/symbols.py --build-dir build --require core application` | 2 libraries/0違反 | 外部OS/CPU/並行性の混入 |
+| `python eng/conformance.py --build-dir build` | 0違反 | CMake File APIで実依存とソース所有、新しい型/文書の規約 |
+| `clang-format --dry-run --Werror src/core/Utf8.cpp` | 成功 | 修正した本体の整形。未変更の他5ファイルは準備時の結果を再利用 |
+
+合計14,228 checks。最初の2scope実行は不要な`ASAN_OPTIONS=detect_leaks=0`をプロセスへ渡してしまったため採用せず、overrideを外した通常のsanitizer環境で両scopeを一度確認し直した。初回ログも保持し、採用記録は`utf8-default.log` / `file-text-default.log` / `contracts-default-result.json`。以後は関連実装・入力/環境が不変なら再実行しない。全件回帰・coverage・Vim oracleは選択していない。
