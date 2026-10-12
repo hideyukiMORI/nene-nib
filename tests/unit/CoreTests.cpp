@@ -2298,6 +2298,34 @@ void verify_palette()
            "the Ubuntu orange accent is the same in both appearances");
 }
 
+namespace
+{
+void verify_buffer_segments()
+{
+    const auto empty = TextBuffer::empty();
+    expect(empty.segments().empty(), "empty text has no borrowed segments");
+    const auto original = buffer_of("a\r\n日本\nz");
+    const auto inserted = original.insert(Offset{3}, "X");
+    const auto parts = inserted.segments();
+    expect(parts.size() == 3 && parts.at(0) == "a\r\n" && parts.at(1) == "X" &&
+               parts.at(2) == "日本\nz",
+           "segments preserve original/add order, mixed newlines and UTF-8");
+    expect(parts.at(0).data() == original.segments().at(0).data(),
+           "original segments borrow the same storage rather than copy bytes");
+    const auto erased = inserted.erase(Offset{1}, Offset{3});
+    expect(erased.segments().at(0) == "a" && parts.at(0) == "a\r\n",
+           "clipping a later version does not alter an earlier borrowed range");
+    const auto first = empty.insert(Offset{0}, "a");
+    const auto borrowed = first.segments();
+    const auto second = first.insert(Offset{1}, "b");
+    const auto branch = first.insert(Offset{1}, "c");
+    expect(borrowed.at(0) == "a" && second.segments().at(0) == "ab" && branch.text() == "ac",
+           "append and diverging edits keep a live snapshot's borrowed prefix");
+    expect(borrowed.at(0).data() == second.segments().at(0).data(),
+           "append within an add chunk does not relocate the borrowed prefix");
+}
+} // namespace
+
 // 開く本文・改行索引と add の追記だけの対象指定（ADR 0080）。既存の試験を共有する。
 void verify_text_buffer_read_contracts()
 {
@@ -2324,6 +2352,7 @@ void verify_text_buffer_read_contracts()
 // 同じ本文範囲の契約を対象指定と既定実行へつなぐ（Issue #338）。
 void verify_buffer_scope()
 {
+    verify_buffer_segments();
     verify_buffer_creation();
     verify_buffer_insertion();
     verify_buffer_erasure();

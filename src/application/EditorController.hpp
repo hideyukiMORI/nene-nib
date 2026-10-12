@@ -358,8 +358,8 @@ class EditorController final
     void fail(FileFailure failure);
     // 判定済みの列を本文へ渡す。CP932 の変換だけはポートの向こう（ADR 0080）。
     [[nodiscard]] std::expected<core::TextBuffer, FileFailure> decoded(core::DetectedText text);
-    [[nodiscard]] std::expected<std::string, FileFailure> encoded(core::TextEncoding encoding,
-                                                                  std::string utf8);
+    [[nodiscard]] std::expected<void, FileFailure> write_document(const SaveDocument &intent);
+    [[nodiscard]] std::expected<void, FileFailure> write_utf8_document(const SaveDocument &intent);
 
     EditorPorts ports_;
     EditorState state_;

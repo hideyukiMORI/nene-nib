@@ -15,8 +15,8 @@
 | 1 | #410 / PR412 折り返し・通常ドラッグ | PR412/main9afca7fへ統合済み。対象契約/実IME/画面と、修正後のnowrap/wrap性能が成立 |
 | 2 | #413 ベータ配布 | PR414/main6e1043f、[v0.1.0-beta.1](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.1)を公開。ZIP/起動/再取得照合成功。収載/整理は恒久先closeout.jsonを参照 |
 | 完了 | #419 配色95種と行番号欄 | 対象検証/実画面/確認用ZIPが成立。[設計と一覧](../design/2026-10-12-colorschemes.md)、[検証](../quality/colorschemes-2026-10-12.md)。統合/整理の実状態は恒久先closeout.json |
-| 進行 | #440 正式リリースの範囲と試験計画 | [段階0・事前計画](../plans/2026-10-12-release-scope-and-large-file-probe.md)。2GiBを目安に本文/I/Oの試作A→応答性B。以後は[ロードマップ](../plans/2026-10-11-release-roadmap.md)の大容量→日常編集→split→Markdown→公開 |
-| 進行 | #442 UTF-8保存の断片化 | 段階1Aの最初の土台。本文断片を既存FilePortの同じ一時ファイル/置換経路へ接続。2GiB実測・読込上限変更・非同期化は後続 |
+| 完了 | #440 正式リリースの範囲と試験計画 | [段階0・事前計画](../plans/2026-10-12-release-scope-and-large-file-probe.md)。2GiBを目安に本文/I/Oの試作A→応答性B。以後は[ロードマップ](../plans/2026-10-11-release-roadmap.md)の大容量→日常編集→split→Markdown→公開 |
+| 完了 | #442 UTF-8保存の断片化 | 段階1Aの最初の土台。本文断片を既存FilePortの同じ一時ファイル/置換経路へ接続。[696 checksと境界](../quality/chunked-save-2026-10-12.md)。次は元本文の所有・行索引・読込。2GiB実測・上限変更・非同期化は後続 |
 | 完了 | #443 splitの新条件 | D45・[ADR 0120](../adr/0120-split-acceptance-is-relative-and-tail-bounded.md)。中央値の追加`max(1ms, 単画面の25%)`以内かつp95 16.7ms以内をhideが採用。同一/別文書を分けた新試験は未実施、旧holdを維持 |
 | 完了 | #416 / PR417 ファイルのドロップとbeta.2 | main8da81e3へ受理、[beta.2](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2)を公開/再取得照合済み。[公開記録](../quality/beta2-release-2026-10-12.md) |
 | 完了 | #432 125テーマ入りbeta.3 | [beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)を公開/起動/再取得照合済み。[公開記録](../quality/beta3-release-2026-10-12.md) |
@@ -39,6 +39,6 @@
 
 ## 段階
 
-D44の初回ベータに続き、ファイルドロップと125テーマを含むbeta.3を公開済み。配布物はD:/NeNeNib/releases/v0.1.0-beta.3/、公開/整理結果はD:/NeNeNib/evidence/beta3-release-432/closeout.json。2026-10-12のhideの開始指示により、正式版の段階0から再開中。構文色の優先対象はPython・JavaScript/TypeScript・JSON・Markdown・C/C++。
+D44の初回ベータに続き、ファイルドロップと125テーマを含むbeta.3を公開済み。配布物はD:/NeNeNib/releases/v0.1.0-beta.3/、公開/整理結果はD:/NeNeNib/evidence/beta3-release-432/closeout.json。2026-10-12のhideの開始指示により段階0を記録し、段階1Aの保存の土台まで完了。元本文の所有・索引・読込と2GiB試作は次の区切り。構文色の優先対象はPython・JavaScript/TypeScript・JSON・Markdown・C/C++。
 
 #423は紹介用の実機PNG3枚とREADME掲載。[撮影条件/個人情報確認](../quality/showcase-2026-10-12.md)。撮影中の保存待ちは#424へ分離し、この作業で修正しない。

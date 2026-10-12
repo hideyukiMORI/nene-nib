@@ -95,7 +95,21 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
         }
         written += done;
     }
-    // 置き換える前にディスクへ届かせる。ここで落ちても元のファイルはまだ触っていない（決定 6）。
+    return {};
+}
+
+[[nodiscard]] std::expected<void, Failure> write_parts(const FileHandle &file,
+                                                       std::span<const std::string_view> parts)
+{
+    for (const std::string_view part : parts)
+    {
+        const auto written = write_all(file, part);
+        if (!written)
+        {
+            return written;
+        }
+    }
+    // 全断片の後に1回だけ届かせる。置換前なので失敗しても元は残る（ADR 0119）。
     if (FlushFileBuffers(file.get()) == 0)
     {
         return std::unexpected(Failure::unwritable);
@@ -172,7 +186,8 @@ std::expected<std::string, Failure> Win32FileAdapter::read(const core::FilePath 
 }
 
 std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
-                                                     std::string_view bytes, Mode mode)
+                                                     std::span<const std::string_view> parts,
+                                                     Mode mode)
 {
     const std::wstring target = widen(path.text());
     if (target.empty())
@@ -194,7 +209,7 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
             // 作れなかった一時ファイルは自分のものではないので消さない（ADR 0067）。
             return std::unexpected(failure_of(GetLastError(), Failure::unwritable));
         }
-        written = write_all(file, bytes);
+        written = write_parts(file, parts);
     }
     if (!written)
     {

@@ -317,6 +317,17 @@ std::size_t TextBuffer::piece_count() const noexcept
     return pieces_.size();
 }
 
+std::vector<std::string_view> TextBuffer::segments() const &
+{
+    std::vector<std::string_view> result;
+    result.reserve(pieces_.size());
+    for (const auto &piece : pieces_)
+    {
+        result.push_back(view_of(piece));
+    }
+    return result;
+}
+
 std::string TextBuffer::text_range(Offset begin, Offset end) const
 {
     std::string result;
