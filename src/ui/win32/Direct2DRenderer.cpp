@@ -1157,7 +1157,7 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
     const auto top = row_pixel(body, line.screen_row);
     const auto bottom =
         row_pixel(body, line.screen_row + static_cast<std::int64_t>(line.screen_rows));
-    const core::LayoutRect row{body.content.left, top, body.content.right, bottom};
+    const core::LayoutRect row{body.gutter.right, top, body.content.right, bottom};
     if (line.number == frame.caret.position.line)
     {
         fill(row, frame.palette.current_line);
