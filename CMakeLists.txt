@@ -69,6 +69,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/DetectedTextTests.cpp
     tests/unit/CoreTests.cpp
     tests/unit/Utf16Tests.cpp
+    tests/unit/Utf8ValidationTests.cpp
     tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp
     tests/unit/WrappedViewTests.cpp

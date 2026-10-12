@@ -14,6 +14,8 @@ void verify_vim_wrapped_scope();
 void verify_vim_wrapped_contracts();
 // UTF 検証と表示値/UTF-16の直接の境界（ADR 0086）。
 void verify_utf8_scope();
+// ADR 0122: 分割位置、EOF、未完列の所有と進捗の分岐。--utf8と既定実行が同じ契約を呼ぶ。
+void verify_utf8_stream_contracts();
 
 // ADR 0080: 判定済み所有値と、読み込み・改行索引の既存契約。
 void verify_detected_text_contracts();

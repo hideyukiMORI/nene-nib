@@ -1,9 +1,13 @@
 #include "Utf8.hpp"
 
+#include "Utf8Validation.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
+#include <optional>
 
 namespace nenenib::core
 {
@@ -63,7 +67,7 @@ constexpr char32_t continuation_mask = 0x3F;
     {
         return 1;
     }
-    if (lead >= 0xC0U && lead < 0xE0U)
+    if (lead >= 0xC2U && lead < 0xE0U)
     {
         return 2;
     }
@@ -71,11 +75,11 @@ constexpr char32_t continuation_mask = 0x3F;
     {
         return 3;
     }
-    if (lead >= 0xF0U && lead < 0xF8U)
+    if (lead >= 0xF0U && lead <= 0xF4U)
     {
         return 4;
     }
-    // 0x80-0xBF は孤立した継続バイト、0xF8 以降は UTF-8 に存在しない先頭バイト。
+    // 孤立継続、過長しか作れないC0/C1、最大値を超えるF5以降は先頭になれない。
     return 0;
 }
 
@@ -110,29 +114,108 @@ constexpr char32_t continuation_mask = 0x3F;
     return value;
 }
 
-[[nodiscard]] std::expected<std::size_t, TextFailure> scan(std::string_view text,
-                                                           std::size_t index) noexcept
+// 値なしは断片末尾の未完列。全文の終端かどうかはUtf8Validation::finishだけが決める。
+[[nodiscard]] std::expected<std::optional<std::size_t>, TextFailure>
+scan(std::string_view text, std::size_t index) noexcept
 {
     const unsigned char lead = byte_at(text, index);
     const std::size_t length = sequence_length(lead);
-    if (length == 0 || text.size() - index < length)
+    if (length == 0)
     {
         return std::unexpected(TextFailure::invalid_utf8);
     }
-    for (std::size_t offset = 1; offset < length; ++offset)
+    const std::size_t available = std::min(length, text.size() - index);
+    for (std::size_t offset = 1; offset < available; ++offset)
     {
         if (!continuation(byte_at(text, index + offset)))
         {
             return std::unexpected(TextFailure::invalid_utf8);
         }
     }
+    if (available < length)
+    {
+        return std::optional<std::size_t>{};
+    }
     if (!encodable(decode(text, index, length), length))
     {
         return std::unexpected(TextFailure::invalid_utf8);
     }
-    return length;
+    return std::optional<std::size_t>{length};
+}
+
+// 前の未完列を先に埋める。余分にコピーした次の文字は消費せず、通常の走査へ戻す。
+[[nodiscard]] std::expected<std::size_t, TextFailure>
+continued_sequence(std::array<char, 4> &pending, std::size_t &size, std::string_view text,
+                   std::size_t &code_points) noexcept
+{
+    if (size == 0)
+    {
+        return 0;
+    }
+    const std::size_t previous = size;
+    const std::size_t appended = std::min(pending.size() - size, text.size());
+    std::copy_n(text.data(), appended, pending.data() + size);
+    size += appended;
+    const auto length = scan(std::string_view(pending.data(), size), 0);
+    if (!length)
+    {
+        return std::unexpected(length.error());
+    }
+    if (!length.value().has_value())
+    {
+        return appended;
+    }
+    size = 0;
+    ++code_points;
+    return length.value().value() - previous;
 }
 } // namespace
+
+[[nodiscard]] std::expected<Utf8Validation, TextFailure>
+continued_utf8(const Utf8Validation &before, std::string_view text) noexcept
+{
+    if (text.empty())
+    {
+        return before;
+    }
+    if (text.size() > std::numeric_limits<std::size_t>::max() - before.bytes_seen_)
+    {
+        return std::unexpected(TextFailure::too_long);
+    }
+    Utf8Validation next = before;
+    next.bytes_seen_ += text.size();
+    const auto continued =
+        continued_sequence(next.pending_, next.pending_size_, text, next.code_points_);
+    if (!continued)
+    {
+        return std::unexpected(continued.error());
+    }
+    std::size_t index = continued.value();
+    while (index < text.size())
+    {
+        if (byte_at(text, index) < 0x80U)
+        {
+            const std::size_t end = ascii_end(text, index);
+            next.code_points_ += end - index;
+            index = end;
+            continue;
+        }
+        const auto length = scan(text, index);
+        if (!length)
+        {
+            return std::unexpected(length.error());
+        }
+        if (!length.value().has_value())
+        {
+            next.pending_size_ = text.size() - index;
+            std::copy_n(text.data() + index, next.pending_size_, next.pending_.data());
+            return next;
+        }
+        index += length.value().value();
+        ++next.code_points_;
+    }
+    return next;
+}
 
 // 閉じた選択肢ではなく値の範囲なので早期 return で並べる（CPP-002 の else 禁止は掛からない）。
 void append_utf8(std::string &utf8, char32_t value)
@@ -163,26 +246,12 @@ void append_utf8(std::string &utf8, char32_t value)
 
 std::expected<std::size_t, TextFailure> validate_utf8(std::string_view text) noexcept
 {
-    std::size_t index = 0;
-    std::size_t code_points = 0;
-    while (index < text.size())
+    const auto progress = Utf8Validation::empty().with_bytes(text);
+    if (!progress)
     {
-        if (byte_at(text, index) < 0x80U)
-        {
-            const std::size_t next = ascii_end(text, index);
-            code_points += next - index;
-            index = next;
-            continue;
-        }
-        const auto length = scan(text, index);
-        if (!length)
-        {
-            return std::unexpected(length.error());
-        }
-        index += length.value();
-        ++code_points;
+        return std::unexpected(progress.error());
     }
-    return code_points;
+    return progress.value().finish();
 }
 
 std::size_t code_point_count(std::string_view text) noexcept

@@ -14,6 +14,7 @@ namespace nenenib::core
 // 桁の数えもここを通る。<locale> / <codecvt> は使わない（ADR 0007）。
 
 // 正しい UTF-8 なら code point の数を返す。過長符号化・サロゲート・U+10FFFF 超は拒否する。
+// 断片の続きはUtf8Validationで渡せる。この一括入口も同じ走査とEOF確定を使う（ADR 0122）。
 [[nodiscard]] std::expected<std::size_t, TextFailure> validate_utf8(std::string_view text) noexcept;
 
 // 検証済みの本文の code point の数。継続バイト以外を数えるだけなので分岐を持たない。

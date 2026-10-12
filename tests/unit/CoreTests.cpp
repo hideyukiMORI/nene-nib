@@ -2412,6 +2412,7 @@ void verify_utf8_scope()
     verify_display_text_lengths();
     verify_display_text_rejects();
     verify_utf8_validation();
+    verify_utf8_stream_contracts();
     verify_utf8_ascii_tails();
     verify_utf8_ascii_to_multibyte();
     verify_utf8_ascii_to_invalid();

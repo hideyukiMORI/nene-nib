@@ -13,6 +13,7 @@
 | 順 | 対象 | 状態 |
 |---|---|---|
 | 保留 | #446 / PR447 改行索引 | 対象契約29,162 checks成功、実機性能の有効な集計が得られずdraft維持。試験はhide指示で保留。原ログとReleaseをD側に保持し、同じ契約試験は再実行しない |
+| 実装準備 | #452 分割UTF-8検証 | [ADR 0122](../adr/0122-utf8-validation-retains-only-the-unfinished-sequence.md)。不変の進捗と一つの走査、境界の試験コードを追加。試験保留のため未build/未実行・draft保持 |
 | 設計 | #450 元本文の所有と読込失敗 | [段階1Aの設計案](../design/2026-10-12-large-file-source-ownership.md)。退避の寿命、範囲取得、失敗時保持、保存版と実装順を整理。API採用・実装・試験は未了 |
 | 1 | #410 / PR412 折り返し・通常ドラッグ | PR412/main9afca7fへ統合済み。対象契約/実IME/画面と、修正後のnowrap/wrap性能が成立 |
 | 2 | #413 ベータ配布 | PR414/main6e1043f、[v0.1.0-beta.1](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.1)を公開。ZIP/起動/再取得照合成功。収載/整理は恒久先closeout.jsonを参照 |
