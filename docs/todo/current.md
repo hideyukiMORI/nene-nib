@@ -13,7 +13,9 @@
 | 順 | 対象 | 状態 |
 |---|---|---|
 | 保留 | #446 / PR447 改行索引 | 対象契約29,162 checks成功、実機性能の有効な集計が得られずdraft維持。試験はhide指示で保留。原ログとReleaseをD側に保持し、同じ契約試験は再実行しない |
+| 保留 | #452 / PR453 分割UTF-8検証 | 実装・対象試験コードをdraftに保存。整形と差分確認のみ、ビルド・試験は未実施。main未統合 |
 | 設計 | #450 元本文の所有と読込失敗 | [段階1Aの設計案](../design/2026-10-12-large-file-source-ownership.md)。退避の寿命、範囲取得、失敗時保持、保存版と実装順を整理。API採用・実装・試験は未了 |
+| 設計 | #454 設定モーダルと日英表示 | [操作設計案](../design/2026-10-12-settings-dialog-and-language.md)。6項目、保存/取消/失敗、日英化する表示と実装順を具体化。画面選択・ADR・実装は後続。アプリ試験・ビルド・CIなしで進める文書作業 |
 | 1 | #410 / PR412 折り返し・通常ドラッグ | PR412/main9afca7fへ統合済み。対象契約/実IME/画面と、修正後のnowrap/wrap性能が成立 |
 | 2 | #413 ベータ配布 | PR414/main6e1043f、[v0.1.0-beta.1](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.1)を公開。ZIP/起動/再取得照合成功。収載/整理は恒久先closeout.jsonを参照 |
 | 完了 | #419 配色95種と行番号欄 | 対象検証/実画面/確認用ZIPが成立。[設計と一覧](../design/2026-10-12-colorschemes.md)、[検証](../quality/colorschemes-2026-10-12.md)。統合/整理の実状態は恒久先closeout.json |
