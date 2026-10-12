@@ -161,13 +161,14 @@ continued_sequence(std::array<char, 4> &pending, std::size_t &size, std::string_
     {
         return std::unexpected(length.error());
     }
-    if (!length.value().has_value())
+    const auto complete = length.value();
+    if (!complete.has_value())
     {
         return appended;
     }
     size = 0;
     ++code_points;
-    return length.value().value() - previous;
+    return complete.value() - previous;
 }
 } // namespace
 
@@ -205,13 +206,14 @@ continued_utf8(const Utf8Validation &before, std::string_view text) noexcept
         {
             return std::unexpected(length.error());
         }
-        if (!length.value().has_value())
+        const auto complete = length.value();
+        if (!complete.has_value())
         {
             next.pending_size_ = text.size() - index;
             std::copy_n(text.data() + index, next.pending_size_, next.pending_.data());
             return next;
         }
-        index += length.value().value();
+        index += complete.value();
         ++next.code_points_;
     }
     return next;
