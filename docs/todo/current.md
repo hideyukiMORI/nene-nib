@@ -1,19 +1,19 @@
 # いまのタスク — NeNe Nib
 
-2026-10-12。Issueが正本。経緯は[日報](../reports/2026-10-12.md)、根拠は[gate-proofs](../quality/gate-proofs.md)、現在の区切りは[引き継ぎ](../handoffs/2026-10-12.md)を参照する。
+2026-10-13。Issueが正本。経緯は[日報](../reports/2026-10-12.md)、根拠は[gate-proofs](../quality/gate-proofs.md)、現在の区切りは[引き継ぎ](../handoffs/2026-10-12.md)を参照する。
 
 ## 運用
 
 - サナ単体で進める。変更した機能と直接の境界を検証し、関連入力が不変の成功結果を再利用する（QLT-001/012）。
 - CIはマージ直前だけ。README・文書のみならマージ時もCI不要で、差分と必要な目視で確認する（#430・ADR 0118）。
-- 実機画面・性能はhideの他案件と時間帯を調整する。2026-10-12 20:47の指示で試験は保留し、独立した設計を進める。追加worktree/出力はD:/NeNeNib配下、完了後に恒久収載・監査整理。branch/commitを保持する。
+- 実機画面・性能はhideの他案件と時間帯を調整する。2026-10-13 00:50のhide指示で対象試験を再開。追加worktree/出力はD:/NeNeNib配下、完了後に恒久収載・監査整理。branch/commitを保持する。
 
 ## いまのIssueと次の順
 
 | 順 | 対象 | 状態 |
 |---|---|---|
-| 保留 | #446 / PR447 改行索引 | 対象契約29,162 checks成功、実機性能の有効な集計が得られずdraft維持。試験はhide指示で保留。原ログとReleaseをD側に保持し、同じ契約試験は再実行しない |
-| 保留 | #452 / PR453 分割UTF-8検証 | 実装・対象試験コードをdraftに保存。整形と差分確認のみ、ビルド・試験は未実施。main未統合 |
+| 受理 | #446 / PR447 改行索引 | [29,162 checksと実機4条件](../quality/newline-index-2026-10-12.md)。入力/長行/openは基準内。連打は変更前も基準超過のため#460へ分離。索引payloadは2GiB時に計算上288MiB、実容量試験は後続 |
+| 検証再開 | #452 / PR453 分割UTF-8検証 | 実装・対象試験コードをdraftに保存。次はビルドとUTF-8/読込境界・性能の対象検証。main未統合 |
 | 設計 | #450 元本文の所有と読込失敗 | [段階1Aの設計案](../design/2026-10-12-large-file-source-ownership.md)。退避の寿命、範囲取得、失敗時保持、保存版と実装順を整理。API採用・実装・試験は未了 |
 | 設計 | #454 設定モーダルと日英表示 | [操作設計案](../design/2026-10-12-settings-dialog-and-language.md)を統合済み。6項目、保存/取消/失敗、日英化する表示と実装順を具体化。画面/schema案は#456へ進み、状態/IME/全翻訳の実装設計・採用は後続 |
 | 設計 | #456 設定画面と版付き言語設定 | [日英・保存失敗・最小窓の画面案](../design/2026-10-12-settings-dialog-boards.md)と[ADR 0123案](../adr/0123-ui-language-is-a-versioned-setting.md)を具体化。settings.v4は提案のみ。画像は資料の描画で製品試験ではなく、見た目の採用・実装は未了 |
@@ -23,7 +23,6 @@
 | 完了 | #419 配色95種と行番号欄 | 対象検証/実画面/確認用ZIPが成立。[設計と一覧](../design/2026-10-12-colorschemes.md)、[検証](../quality/colorschemes-2026-10-12.md)。統合/整理の実状態は恒久先closeout.json |
 | 完了 | #440 正式リリースの範囲と試験計画 | [段階0・事前計画](../plans/2026-10-12-release-scope-and-large-file-probe.md)。2GiBを目安に本文/I/Oの試作A→応答性B。以後は[ロードマップ](../plans/2026-10-11-release-roadmap.md)の大容量→日常編集→split→Markdown→公開 |
 | 完了 | #442 UTF-8保存の断片化 | 段階1Aの最初の土台。本文断片を既存FilePortの同じ一時ファイル/置換経路へ接続。[696 checksと境界](../quality/chunked-save-2026-10-12.md)。次は元本文の所有・行索引・読込。2GiB実測・上限変更・非同期化は後続 |
-| 進行中 | #446 改行索引の容量制限 | 段階1A。source byte数に比例するbit索引へ置換。2GiBの索引payloadは計算上288MiB。[29,162 checks/規約成功](../quality/newline-index-2026-10-12.md)、実機4条件は終了timeoutで未成立、PR447はdraft。実private bytes・本文所有・読込は後続 |
 | 完了 | #443 splitの新条件 | D45・[ADR 0120](../adr/0120-split-acceptance-is-relative-and-tail-bounded.md)。中央値の追加`max(1ms, 単画面の25%)`以内かつp95 16.7ms以内をhideが採用。同一/別文書を分けた新試験は未実施、旧holdを維持 |
 | 完了 | #416 / PR417 ファイルのドロップとbeta.2 | main8da81e3へ受理、[beta.2](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2)を公開/再取得照合済み。[公開記録](../quality/beta2-release-2026-10-12.md) |
 | 完了 | #432 125テーマ入りbeta.3 | [beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)を公開/起動/再取得照合済み。[公開記録](../quality/beta3-release-2026-10-12.md) |
@@ -42,7 +41,7 @@
 
 ## 動かないものと残る制限
 
-64 MiB超、split、Markdownは未対応。Vimのgj/gk/g0/g$とVimドラッグも未対応。既存のVim桁差は#411、外部IME overlay差は#365、既存#373は未解決。旧splitの総2ms判定holdをこのベータで変更しない。
+64 MiB超、split、Markdownは未対応。Vimのgj/gk/g0/g$とVimドラッグも未対応。既存のVim桁差は#411、外部IME overlay差は#365、既存#373は未解決。16MiB連打の既存速度基準超過は#460。旧splitの総2ms判定holdをこのベータで変更しない。
 
 ## 段階
 
