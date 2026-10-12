@@ -1,6 +1,9 @@
 # NeNe Nib
 
 A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
+
+![NeNe Nib displays its README in Vim NORMAL mode with two document tabs.](docs/images/nib-vim.png)
+
 C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
 
 > **Status (2026-10-12):** ordinary editing, file open/save, Japanese IME, persisted settings with 125
@@ -9,6 +12,13 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > and Ctrl+P lists the open tabs, bookmarks, recently closed files and files in the current folder. F1 lists
 > available operations; a new untitled document and the status bar show optional shortcut hints. Markdown
 > preview and files above 64 MiB are still planned. [v0.1.0-beta.2 is available](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2) for Windows 11 x64.
+
+<p>
+  <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
+  <img src="docs/images/nib-light.png" width="49%" alt="NeNe Nib wraps Japanese specification text in ordinary editing mode with its light theme.">
+</p>
+
+Screenshots use the default font and size in a development build; [capture details](docs/quality/showcase-2026-10-12.md).
 
 ## What works today
 
