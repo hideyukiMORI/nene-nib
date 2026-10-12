@@ -19,7 +19,7 @@
 
 ## いまの数字と保存形式
 
-- 組み込み配色95種。行番号背景を本文と区別。利用者theme v1へ任意キー`ui.gutter_background`を追加し、省略時は本文背景。Python/TypeScriptの構文色は準備済み、解析は未実装。
+- mainの組み込み配色は125種（#421 / PR422統合済み）。公開beta.2は9種、beta.3はローカルpreviewのみ。行番号背景を本文と区別。利用者theme v1の任意キー`ui.gutter_background`は省略時に本文背景。構文色は準備済み、解析は未実装。
 - Vimの既存oracle 1853件を保持し、折り返しviewportの78件を追加。今回の対象scopeは`--wrapped-view`と`--vim-wrapped`。
 - 設定はsettings.v3、セッションはsession.v2。新形式が無いときだけ旧版を読み、旧版を保存時も残す。
 - ファイルのドロップは通常/Vim共通。新しい対象scopeは`nib_window_tests --file-drop`の15 checks。実窓通知経路は確認済み、Explorerの物理ジェスチャは操作ツール制約で未測。
@@ -33,3 +33,5 @@
 ## 段階
 
 D44の初回ベータに続き、ファイルドロップ対応beta.2を公開済み。配色拡充#419はローカル確認用ZIPまで。D:/NeNeNib/evidence/colorschemes-20261012/closeout.jsonが今回の統合/整理結果の所在。正式版の次の機能作業は自動で開始しない。
+
+#423は紹介用の実機PNG3枚とREADME掲載。[撮影条件/個人情報確認](../quality/showcase-2026-10-12.md)。beta.3の公開日は未決。撮影中の保存待ちは#424へ分離し、この作業で修正しない。
