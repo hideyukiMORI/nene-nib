@@ -5185,3 +5185,16 @@ PR431の作成・Readyではrun 0。最初の手動run `38200540150`は成功し
 本文開始位置へ既定8 DIPの余白を加え、字体サイズ/DPIと有効な本文幅を正典body_layoutで決める。現在行の背景は余白も覆う。保存schema変更なし、Waivers none。
 `nib_tests --body-layout`13、`--wrapped-view`35、`nib_window_tests --text-layout`961 checks、Debug/tidy/ASan/UBSan、対象6ファイルの整形が成功。[コマンド・根拠・証跡](body-padding-2026-10-12.md)。
 hide了承の16時ごろ、16:00:48〜55 JSTに隔離profileで前後を撮影。MonaLisa、Cascadia Code/13.5pt、120 DPI/1000×680。余白10px、余白/本文クリック後の保存内容一致、正常終了を確認した。製品入力が不変なら結果を再利用する。
+
+## 5-en — 改行索引の受理と既存連打基準超過（Issue #446・#460）
+
+2026-10-13再開。実装・試験・関連依存/道具とexe SHAの不変を照合し、29,162 checksと境界検査を再利用した。`eng/measure-speed.py --check --bench <対象> --repetitions 5 --executable <変更後exe>`を4対象に各1回。通常入力0.613ms、長行6.341ms、open 213.292msは既存基準内、16MiB連打15.468msは上限9.264msを超過。各5標本・欠測0。初回/timeoutの失敗記録は保持する。
+変更前7b117e2を`eng/build-release.ps1 -Ref 7b117e21b88d3c15df1ccea7327674fdd78a590c`で作り、失敗した連打だけ同じ道具・新規profile・5標本で測定すると15.349msで同じ基準超過。既存問題を#460へ分離した。0.119ms差は時間帯の異なる比較で因果を断定せず、全項目合格とは扱わない。[全コマンド・標本・版と限界](newline-index-2026-10-12.md)。
+PR447のhead b5218ba、必須CI38275473024、正規merge e5f8e709eef61d88ebcdbd943d93e837ad0d348fを確認。75ファイル95,162,688 bytesをD:/NeNeNib/evidence/newline-index-446/resume-20261013へ収載・SHA照合後、追加作業木と2出力を監査整理した。closeout-20261013.jsonを参照。ARC/CPP/QLTの詳細はADR0121、QLT-012に従う既存失敗分離。Waivers none。
+
+## 5-eo — 分割UTF-8は機能確認後、性能未受理で保持（Issue #452）
+
+最新head `6c2c13f8b4d721d2f56a4fb3f1fdb08752b05c87`は3案目。`cmake --build build --target nib_tests NeNeNib --parallel 4`がDebug/clang-cl19.1.5/tidy/ASan/UBSanで成功。`build/nib_tests.exe --utf8`13,921 + `--file-text`307 = 14,228 checks成功。`python eng/symbols.py --build-dir build --require core application`は2 libraries/0違反、`python eng/conformance.py --build-dir build`は0違反。変更Utf8.cppのformatと差分空白も成功。分割/EOF/不正列/所有と既存UTF-8/文字コード/読込の直接境界だけを選択し、全件は実行しない。
+既存`compare-probes.py`、before e5f8e70、ABBA×3/各process20標本/全240値で、初回abb38e0のASCII中央値1095.0→1109.0µs・対応比1.015476、日本語5552.0→7038.5µs・1.268325。2案目27cc383はASCII1112.5→1225.0µs・1.102459、日本語5485.0→10541.5µs・1.923092。2案とも不採用。正式GUI速度ゲートとは別の局所比較だが悪化を無視して受理しない。
+3案目のRelease性能/GUI openは未実行。hideの01:36終了指示に従いPR453をdraftのまま保持し、CI/mergeを実行しない。[詳細記録](https://github.com/hideyukiMORI/nene-nib/blob/6c2c13f8b4d721d2f56a4fb3f1fdb08752b05c87/docs/quality/streaming-utf8-2026-10-12.md)。110ファイル87,749,691 bytesの原ログ/標本/exe/configをD:/NeNeNib/evidence/streaming-utf8-452/checkpoint-20261013へ収載・SHA照合した。
+初回の不要なASAN_OPTIONS指定下の結果は採用せず、overrideなしで確認し直した。最新検証も通常環境。最新ソース変更後の成功契約は関連入力が不変なら次回へ再利用し、過去候補の性能は流用しない。対象規則FR-008/013・ARC/CPPはADR0122、QLT-001/008/012/013/014。保存schema不変、Waivers none。
