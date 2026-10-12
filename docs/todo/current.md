@@ -15,7 +15,7 @@
 | 1 | #410 / PR412 折り返し・通常ドラッグ | PR412/main9afca7fへ統合済み。対象契約/実IME/画面と、修正後のnowrap/wrap性能が成立 |
 | 2 | #413 ベータ配布 | PR414/main6e1043f、[v0.1.0-beta.1](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.1)を公開。ZIP/起動/再取得照合成功。収載/整理は恒久先closeout.jsonを参照 |
 | 完了 | #419 配色95種と行番号欄 | 対象検証/実画面/確認用ZIPが成立。[設計と一覧](../design/2026-10-12-colorschemes.md)、[検証](../quality/colorschemes-2026-10-12.md)。統合/整理の実状態は恒久先closeout.json |
-| 次 | #408 / #436 正式リリースの[ロードマップ](../plans/2026-10-11-release-roadmap.md) | 範囲整理→大容量成立性→大容量→日常編集（構文色・選択テキストのドラッグ＆ドロップ・横ホイールを含む。細いスクロールバーは候補）→split→Markdown→併用確認/公開 |
+| 次 | #408 / #436 / #438 正式リリースの[ロードマップ](../plans/2026-10-11-release-roadmap.md) | 範囲整理→大容量成立性→大容量→日常編集（構文色・ドラッグ移動・横ホイール・設定モーダル・日英表示。細いスクロールバーは候補）→split→Markdown→併用確認/公開 |
 | 完了 | #416 / PR417 ファイルのドロップとbeta.2 | main8da81e3へ受理、[beta.2](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.2)を公開/再取得照合済み。[公開記録](../quality/beta2-release-2026-10-12.md) |
 | 完了 | #432 125テーマ入りbeta.3 | [beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)を公開/起動/再取得照合済み。[公開記録](../quality/beta3-release-2026-10-12.md) |
 | 完了 | #434 本文の左余白 | 既定8 DIP、文字サイズ/DPI追従。対象契約と実画面が成立。[検証](../quality/body-padding-2026-10-12.md)。公開beta.3への反映は別 |
@@ -27,6 +27,7 @@
 - 設定はsettings.v3、セッションはsession.v2。新形式が無いときだけ旧版を読み、旧版を保存時も残す。
 - ファイルのドロップは通常/Vim共通。新しい対象scopeは`nib_window_tests --file-drop`の15 checks。実窓通知経路は確認済み、Explorerの物理ジェスチャは操作ツール制約で未測。
 - 折り返しは既定オン。Ex/共通Ctrl+P設定の`set wrap` / `set nowrap`で切り替える。
+- 設定モーダル・日英表示切り替えは未実装。段階3でコマンド知識なしの設定操作を加える。
 - 縦のホイール・ページ移動と、折り返しなしのカーソル追従横スクロールは対応済み。手動の横スクロール・スクロールバー・選択テキストのドラッグ＆ドロップは未実装。
 - 性能は[5-eeと全記録](../quality/gate-proofs.md#5-ee--折り返しと通常モードのドラッグissue-410adr-0114)。機械と表示条件を跨ぐ値を同等の高速化率として扱わない。
 
