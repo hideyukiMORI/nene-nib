@@ -114,20 +114,6 @@ constexpr char32_t continuation_mask = 0x3F;
     return value;
 }
 
-// length は断片内に収まる。完成列と未完の末尾で同じ継続byteの判定を使う。
-[[nodiscard]] bool has_continuations(std::string_view text, std::size_t index,
-                                     std::size_t length) noexcept
-{
-    for (std::size_t offset = 1; offset < length; ++offset)
-    {
-        if (!continuation(byte_at(text, index + offset)))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 // 値なしは断片末尾の未完列。全文の終端かどうかはUtf8Validation::finishだけが決める。
 [[nodiscard]] std::expected<std::optional<std::size_t>, TextFailure>
 scan(std::string_view text, std::size_t index) noexcept
@@ -139,15 +125,18 @@ scan(std::string_view text, std::size_t index) noexcept
         return std::unexpected(TextFailure::invalid_utf8);
     }
     const std::size_t remaining = text.size() - index;
-    if (remaining < length)
+    for (std::size_t offset = 1; offset < length; ++offset)
     {
-        if (!has_continuations(text, index, remaining))
+        if (offset >= remaining)
+        {
+            return std::optional<std::size_t>{};
+        }
+        if (!continuation(byte_at(text, index + offset)))
         {
             return std::unexpected(TextFailure::invalid_utf8);
         }
-        return std::optional<std::size_t>{};
     }
-    if (!has_continuations(text, index, length) || !encodable(decode(text, index, length), length))
+    if (!encodable(decode(text, index, length), length))
     {
         return std::unexpected(TextFailure::invalid_utf8);
     }
