@@ -14,15 +14,12 @@ namespace nenenib::core
 {
 namespace
 {
-constexpr char newline = '\n';
 constexpr char carriage_return = '\r';
 // add の chunk の大きさ（ADR 0044 の決定 2 / 7）。これより大きい 1 回の挿入はその 1 本だけの chunk
 // になる。
 constexpr std::size_t chunk_bytes = std::size_t{64} * 1024U;
 
 using Chunks = std::vector<std::shared_ptr<AddChunk>>;
-// 索引のうち 1 つの piece の範囲に入る部分（ADR 0047 の決定 2）。
-using Window = std::span<const Offset>;
 
 // 本文の半開範囲と各 piece の非空の交差だけを、その呼び出し中に読む（Issue #338）。
 // offset / length は piece 内の位置。借用を保存せず、本文外の end で容量も取らない。
@@ -50,31 +47,6 @@ void visit_text_range(std::span<const Piece> pieces, Offset begin, Offset end, V
     }
 }
 
-// 行索引の素。text の '\n' のバイト位置を base からの位置として索引の末尾へ足す（CRLF は 1 つの
-// 改行なので数が狂わない・ADR 0009 / 0036）。走査するのは足す text だけ（ADR 0047 の決定 4）。
-void newlines_in(std::string_view text, std::size_t base, std::vector<Offset> &index)
-{
-    std::size_t at = text.find(newline);
-    while (at != std::string_view::npos)
-    {
-        index.push_back(Offset{base + at});
-        at = text.find(newline, at + 1);
-    }
-}
-
-[[nodiscard]] Window window_of(const std::vector<Offset> &index, const Piece &piece) noexcept
-{
-    return Window(index).subspan(piece.newline_begin, piece.newline_end - piece.newline_begin);
-}
-
-// 窓の中で limit（バッファの中の位置）より前にある改行の数。二分探索で本文は読まない。
-[[nodiscard]] std::size_t counted_below(Window window, std::size_t limit) noexcept
-{
-    const auto bound =
-        std::ranges::lower_bound(window, limit, {}, [](Offset entry) { return entry.value; });
-    return static_cast<std::size_t>(bound - window.begin());
-}
-
 // 末尾の chunk をその場で伸ばせるか（ADR 0044 の決定 2）。bytes.size() が自分の知る長さと違えば
 // 別の値が先に伸ばしたしるしで、上書きせず新しい chunk を始める。確保した容量は超えない。
 [[nodiscard]] bool extends_in_place(const Chunks &chunks, std::size_t fill,
@@ -82,30 +54,6 @@ void newlines_in(std::string_view text, std::size_t base, std::vector<Offset> &i
 {
     return !chunks.empty() && chunks.back()->bytes.size() == fill && fill <= chunk_bytes &&
            length <= chunk_bytes - fill;
-}
-
-// 入力を add に書き、それを指す piece を返す。add の複製は起きない（ADR 0044 の決定 2）。
-[[nodiscard]] Piece appended(Chunks &chunks, std::size_t &fill, std::string_view text)
-{
-    if (!extends_in_place(chunks, fill, text.size()))
-    {
-        auto chunk = std::make_shared<AddChunk>();
-        chunk->bytes.reserve(std::max(chunk_bytes, text.size()));
-        // 初めて作る索引だけ容量を取る。既存 add の追記は vector の伸長に任せる（ADR 0080）。
-        chunk->newlines.reserve(static_cast<std::size_t>(std::ranges::count(text, newline)));
-        chunks.push_back(std::move(chunk));
-        fill = 0;
-    }
-    // 索引は bytes と同じ先端の条件でだけ伸びるので、いつも bytes の '\n' と一致する（ADR 0047 の
-    // 決定 1）。
-    AddChunk &chunk = *chunks.back();
-    const std::size_t start = fill;
-    const std::size_t first = chunk.newlines.size();
-    chunk.bytes.append(text);
-    newlines_in(text, start, chunk.newlines);
-    fill += text.size();
-    const std::size_t last = chunk.newlines.size();
-    return Piece{PieceSource::add, chunks.size() - 1, Offset{start}, text.size(), first, last};
 }
 
 // 末尾の add piece に続く入力は piece を増やさずに伸ばす。連続した入力で列が膨らまない。
@@ -147,6 +95,28 @@ void append_insertion(std::vector<Piece> &out, Piece piece)
 }
 } // namespace
 
+// 入力を add に書き、それを指す piece を返す。add の複製は起きない（ADR 0044 の決定 2）。
+Piece TextBuffer::appended(Chunks &chunks, std::size_t &fill, std::string_view text)
+{
+    if (!extends_in_place(chunks, fill, text.size()))
+    {
+        auto chunk = std::make_shared<AddChunk>();
+        chunk->bytes.reserve(std::max(chunk_bytes, text.size()));
+        chunks.push_back(std::move(chunk));
+        fill = 0;
+    }
+    // 索引は bytes と同じ先端の条件でだけ伸びるので、いつも bytes の '\n' と一致する（ADR 0047 の
+    // 決定 1）。
+    AddChunk &chunk = *chunks.back();
+    const std::size_t start = fill;
+    const std::size_t first = chunk.newlines.size();
+    chunk.bytes.append(text);
+    chunk.newlines.append(text);
+    fill += text.size();
+    const std::size_t last = chunk.newlines.size();
+    return Piece{PieceSource::add, chunks.size() - 1, Offset{start}, text.size(), first, last};
+}
+
 // add は空の列で始まり、最初の挿入が 1 本目の chunk を作る（ADR 0044）。
 TextBuffer::TextBuffer(Buffer original, Index original_newlines, std::vector<Piece> pieces,
                        LineEnding ending)
@@ -159,8 +129,8 @@ TextBuffer::TextBuffer(Buffer original, Index original_newlines, std::vector<Pie
 TextBuffer TextBuffer::empty()
 {
     return TextBuffer(std::make_shared<const std::string>(),
-                      std::make_shared<const std::vector<Offset>>(), std::vector<Piece>{},
-                      LineEnding::crlf);
+                      std::make_shared<const NewlineIndex>(NewlineIndex::empty()),
+                      std::vector<Piece>{}, LineEnding::crlf);
 }
 
 std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view text)
@@ -193,9 +163,7 @@ TextBuffer TextBuffer::from_validated_utf8(std::string text)
 {
     auto original = std::make_shared<const std::string>(std::move(text));
     // original の索引はここでだけ作り、以後の値はこれを共有する（ADR 0047 / 0080）。
-    auto newlines = std::make_shared<std::vector<Offset>>();
-    newlines->reserve(static_cast<std::size_t>(std::ranges::count(*original, newline)));
-    newlines_in(*original, 0, *newlines);
+    auto newlines = std::make_shared<const NewlineIndex>(NewlineIndex::from_text(*original));
     std::vector<Piece> pieces;
     if (!original->empty())
     {
@@ -227,7 +195,7 @@ const std::string &TextBuffer::buffer_of(const Piece &piece) const noexcept
     std::unreachable();
 }
 
-const std::vector<Offset> &TextBuffer::index_of(const Piece &piece) const noexcept
+const NewlineIndex &TextBuffer::index_of(const Piece &piece) const noexcept
 {
     switch (piece.source)
     {
@@ -239,21 +207,21 @@ const std::vector<Offset> &TextBuffer::index_of(const Piece &piece) const noexce
     std::unreachable();
 }
 
-// 切った側の窓は索引を 2 回二分探索して求める。本文は読まない（ADR 0047 の決定 3）。
+// 切った側の窓はsource全体のbit索引で求める。本文は読まない（ADR 0121）。
 Piece TextBuffer::clipped(const Piece &piece, std::size_t from, std::size_t length) const
 {
     if (from == 0 && length == piece.length)
     {
         return piece;
     }
-    const Window window = window_of(index_of(piece), piece);
+    const auto &index = index_of(piece);
     const std::size_t begin = piece.start.value + from;
     return Piece{piece.source,
                  piece.chunk,
                  Offset{begin},
                  length,
-                 piece.newline_begin + counted_below(window, begin),
-                 piece.newline_begin + counted_below(window, begin + length)};
+                 index.count_before(begin),
+                 index.count_before(begin + length)};
 }
 
 void TextBuffer::collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const
@@ -390,8 +358,8 @@ std::size_t TextBuffer::newlines_before(std::size_t at) const noexcept
     {
         if (absolute + piece.length >= at)
         {
-            return count + counted_below(window_of(index_of(piece), piece),
-                                         piece.start.value + (at - absolute));
+            return count + index_of(piece).count_before(piece.start.value + (at - absolute)) -
+                   piece.newline_begin;
         }
         count += piece.newline_end - piece.newline_begin;
         absolute += piece.length;

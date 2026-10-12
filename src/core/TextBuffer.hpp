@@ -68,7 +68,9 @@ class TextBuffer final
 
     using Buffer = std::shared_ptr<const std::string>;
     using Chunks = std::vector<std::shared_ptr<AddChunk>>;
-    using Index = std::shared_ptr<const std::vector<Offset>>;
+    using Index = std::shared_ptr<const NewlineIndex>;
+
+    [[nodiscard]] static Piece appended(Chunks &chunks, std::size_t &fill, std::string_view text);
 
     TextBuffer(Buffer original, Index original_newlines, std::vector<Piece> pieces,
                LineEnding ending);
@@ -76,14 +78,14 @@ class TextBuffer final
     [[nodiscard]] char byte_at(Offset at) const noexcept;
     [[nodiscard]] const std::string &buffer_of(const Piece &piece) const noexcept;
     // piece が指すバッファの改行の索引。窓 [newline_begin, newline_end) の添字はこの列の中を指す。
-    [[nodiscard]] const std::vector<Offset> &index_of(const Piece &piece) const noexcept;
+    [[nodiscard]] const NewlineIndex &index_of(const Piece &piece) const noexcept;
     void collect(std::vector<Piece> &out, std::size_t from, std::size_t to) const;
     [[nodiscard]] Piece clipped(const Piece &piece, std::size_t from, std::size_t length) const;
     [[nodiscard]] std::size_t newline_offset(std::size_t index) const noexcept;
     [[nodiscard]] std::size_t newlines_before(std::size_t at) const noexcept;
 
     Buffer original_;
-    // original の '\n' の位置の昇順。from_utf8 で 1 度だけ作り、値のあいだで共有する（ADR 0047）。
+    // original の '\n' のbit索引。from_utf8 で 1 度だけ作り、値のあいだで共有する（ADR 0121）。
     Index original_newlines_;
     Chunks add_;
     // 末尾の chunk の、この値が知っている書き込み済みの長さ（ADR 0044 の決定 2）。
