@@ -95,3 +95,13 @@ Release objectの`llvm-objdump --disassemble --demangle --no-show-raw-insn`を�
 `build/release-abb38e0`は2案目のprobe用へ再configure済み。中の`nib_perf_probes.exe`は27cc383（SHA-256 `846537a479f35c530d6910342b4187d4131c04029689a2a813eb6cc868f08e93`）、`NeNeNib.exe`は初回abb38e0（`32c0bfaa261bff4bdab814ff553f61327e7cfc9466ad0442994f4f5bfc47566a`）であり、3案目の製品として起動しない。初回exe/configは出力の`initial-abb38e0/`へ分離保存済み。終了時のログ・全測定値・各exe・版対応は恒久先の`checkpoint-20261013/`へ収載する。
 
 未受理のため、作業木`452-streaming-utf8`、比較元`452-utf8-before-e5f8e70`と準備/再開出力は保持する。次回はhideの再開指示と実機測定時間帯を確認する。日付・担当変更だけでは続きを起動しない。保存schemaと公開beta.3は不変。Waivers: none。
+
+### 2026-10-13夜の再開 — Release probeと拒否時点の契約
+
+clean版`6c2c13f8b4d721d2f56a4fb3f1fdb08752b05c87`のまま固定`eng/toolchain.ps1`を通し、通常CMake Releaseの専用`build/release-6c2c13f-evening`を新規configure。`cmake --build build/release-6c2c13f-evening --target nib_perf_probes --parallel 2`は135 stepsで成功。製品Releaseとは呼ばず、製品exeのbuild/起動はしていない。before e5f8e70のprobe SHA-256は`80411092cd16f21ec44b0f0699e97e6ae4f07b5495e34e9a1f7e67e244d893b9`、afterは`fc758760b92d6b50c00850fa249174424aff3eb3e1d411f19b108c2186f9a29e`。
+
+出力`D:/NeNeNib/outputs/streaming-utf8-evening-20261013/perf-plan-byte-guard.json`へ両commit/exe/flags/tool/input hashとASCII→日本語、ABBA×3/20 samples/warmup1/timeout60を実測前に固定した。両版harnessとtool hash、既存2入力、Utf8/ProbeMain/ProbeWorkloadの正規化compile flagsが一致。最新`checkpoint-20261013/checkpoint.json`のsourceHashes全456件も実ファイルと一致し、初回の`verified-sources.json`は最新契約の根拠に使わない。生成コードではscanの展開を確認したが、性能成功とは扱わない。
+
+独立レビューでは実装欠陥を指摘せず、`validated_parts`だけでは拒否時点を区別できない契約の不足を確認。`tests/unit/Utf8ValidationTests.cpp`だけにE0 80、ED A0、F4 90 80の途中追加成功、EOF拒否、最後の80追加時の`invalid_utf8`と失敗後の旧pending/base不変を18 checks追加した。固定clang-formatの整形/検査、既存Debugの`cmake --build build --target nib_tests --parallel 2`（変更objectとlinkの2 steps）、通常ASan/UBSan条件の`build/nib_tests.exe --utf8`は13,939 checksで成功。`git diff --check`も成功。ASAN_OPTIONS等overrideなし。
+
+製品source・関連依存・harness・入力は変更せず、追加テストと2文書だけの変更。既存`--file-text`307 checks、symbols/conformanceの成功を再利用し、他scopeや製品を再実行しない。固定probeも6c2c13f版として保持し、テストのcommitに誤って付け替えず再configureしない。原ログ、固定plan、スクリプト、生成コード、両probe/configとcommit/source対応の恒久先は`D:/NeNeNib/evidence/streaming-utf8-452/checkpoint-evening-20261013/`。**性能比較・GUI openは測定時間帯の回答待ちで未実行、PR453はdraft・技術受理未了。** 初回/2案目の失敗値を残し、未完了worktree/outputsは削除しない。Waivers: none。
