@@ -2,6 +2,8 @@
 
 2026-10-12 / Issue #450 / ロードマップ段階1A。
 
+**2026-10-13の接続契約:** 資源予約・全callerの準備/確定・保存revisionは#468/[ADR0127](../adr/0127-large-file-integration-reserves-prepares-and-commits.md)と[移行表](2026-10-13-large-file-integration-map.md)を正本とする。下記は候補比較の原案であり、未決点と進捗は後の契約/currentを優先する。製品API・2GiB・性能は未受理。
+
 **状態: 設計案。公開API・所有の変更を受理したADRではない。** hideの「試験は保留して他に着手できるものを着手して」という20:47 JSTの指示に従い、実機試験に依存しない設計を先行する。実装前に下記の未決点を解き、該当ADRと呼出し元の移行範囲を確定する。
 
 基準はmain `843822a`。#442のUTF-8断片保存は統合済み。#446 / [PR447](https://github.com/hideyukiMORI/nene-nib/pull/447)の改行索引は対象契約を確認済みだが、実機性能の有効な集計が得られずdraftのまま保留する。並行負荷だけが原因とは確定していない。今回、その再試行・統合・基準値変更は行わない。
@@ -102,6 +104,8 @@ UTF-8検証に失敗した大容量入力を、直ちに「壊れたUTF-8」と�
 2026-10-13: 単位1の分割UTF-8は#452 / PR453で機能契約確認済み、性能未受理。読込完了の境界は性能確認と独立に#463 / [ADR0124](../adr/0124-file-read-completes-the-declared-size.md)へ切り出した。既存同期readの短い成功を残り取得へ進め、宣言長が揃う前の0進捗/失敗を `unreadable` にする。これは退避資源・非同期read・2GiB対応の受理ではない。
 
 単位2の最初の境界は#465 / [ADR0125](../adr/0125-source-resource-lifetime-is-probed-before-product-ports.md)で固定する。製品portを先に追加せず、隔離ブランチの同期資源で、封印・元path変更・受付済みrangeの保持・release・取消・故障を確認する。[実結果と限界](../quality/source-resource-2026-10-13.md)をmainへ収載し、試作コードはmainへ取り込まない。この限定実験は文字コードを解釈しないため、検証済み元本文の成立や単位2全体の完了ではない。
+
+続いて#467/[ADR0126](../adr/0126-overlapped-cancellation-drains-before-release.md)で発行中の取消と最後のpinまでの保持を138契約で観測した。[結果](../quality/overlapped-cancel-2026-10-13.md)にはASan診断#469の留保も含む。#468では予算・temp所有確認・need継続・全callerの一回確定・保存版/履歴分岐を設計した。次の小実験は資源台帳と退避回収であり、本文取得と保存版の移行は同じ製品候補が揃ってから統合する。未使用APIや別の本文経路を先にmainへ足さない。
 
 | 単位 | 成果と正典経路 | 次へ進む条件 |
 | --- | --- | --- |
