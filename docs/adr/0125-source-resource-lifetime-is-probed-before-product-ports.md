@@ -34,7 +34,20 @@ Win32Workerは固定1本・FIFOで、一つのjobが戻るまで次へ進まな�
 | 受付済み範囲要求 | 同じtoken、範囲、退避の保持参照 | 完了/取消/破棄で保持を解く。release後も既存要求は実行可能 |
 | 完了値 | token、範囲、防御コピーした不変bytes | 退避をpinしない。別資源のtokenと一致しない |
 
-資源の参照管理とOS処理はadapter内だけで行う。共有するのは封印後のOS資源の寿命であり、applicationの可変本文を共有することではない。生成taskや範囲要求のmove後/二重実行、releaseの再要求も閉じた失敗または明記した冪等終了として扱う。
+資源の参照管理とOS処理はadapter内だけで行う。共有するのは封印後のOS資源の寿命であり、applicationの可変本文を共有することではない。生成task・封印資源の所有者・範囲要求はmove-onlyとし、IDと完了値だけを不変の値としてコピーできる。move元は資源を持たない閉鎖状態になる。
+
+| 操作対象と状態 | 操作の結果 |
+| --- | --- |
+| 生成taskが作成中 | `take`は`not_ready`で状態を維持。`cancel`で全資源を解放して取消状態へ |
+| 生成taskが引渡し待ち | `step`はI/Oなしで完成を返す。`take`は一回だけ成功。`cancel`は未公開退避を破棄 |
+| 生成taskが取消済み | `step`/`take`は`cancelled`、二重`cancel`は無作用 |
+| 生成taskが失敗済み・引渡し済み・move元 | `step`/`take`は`unavailable`、`cancel`は無作用 |
+| 封印所有者がrelease済み・move元 | 新規`request`は`unavailable`、`release`は無作用 |
+| 範囲要求が未実行 | `run`は成功/失敗のどちらでも一回で消費し、保持を解く。`cancel`は保持を解いて取消状態へ |
+| 範囲要求が取消済み | `run`は`cancelled`、二重`cancel`は無作用 |
+| 範囲要求が実行済み・move元 | `run`は`consumed`、`cancel`は無作用 |
+
+move代入で置き換えられた側が持っていた資源も解放する。公開済みの資源や受付済みの別要求を、元の生成taskや所有者への終了操作で取り消さない。
 
 ## 事前に固定する小さい検証
 

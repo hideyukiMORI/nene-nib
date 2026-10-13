@@ -130,6 +130,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp
+    src/adapters/win32/ProbeSourceIo.cpp src/adapters/win32/ProbeSourceTask.cpp
+    src/adapters/win32/ProbeSealedSource.cpp src/adapters/win32/ProbeRangeRead.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
@@ -146,6 +148,12 @@ nenenib_link(nib_adapter_tests nenenib_core)
 nenenib_link(nib_adapter_tests nenenib_application)
 nenenib_link(nib_adapter_tests nenenib_adapters)
 add_test(NAME nib_adapters COMMAND nib_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# ADR0125: isolated experimental branch only; never merge this target into product main.
+nenenib_target(nib_source_resource_probe adapter_tests EXECUTABLE tests/adapters/NibSourceResourceProbe.cpp)
+nenenib_link(nib_source_resource_probe nenenib_core)
+nenenib_link(nib_source_resource_probe nenenib_application)
+nenenib_link(nib_source_resource_probe nenenib_adapters)
 
 nenenib_target(nib_theme_tests adapter_tests EXECUTABLE tests/adapters/ThemeCodecTests.cpp)
 nenenib_link(nib_theme_tests nenenib_core)
