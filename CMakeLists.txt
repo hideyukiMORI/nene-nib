@@ -130,6 +130,10 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32AppearanceAdapter.cpp
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp
+    src/adapters/win32/ProbeOverlappedStorage.cpp src/adapters/win32/ProbeReadTransport.cpp
+    src/adapters/win32/ProbeNativeReadTransport.cpp src/adapters/win32/ProbeScriptReadTransport.cpp
+    src/adapters/win32/ProbeReadControl.cpp src/adapters/win32/ProbeReadOwner.cpp
+    src/adapters/win32/ProbePipeFixture.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
@@ -146,6 +150,14 @@ nenenib_link(nib_adapter_tests nenenib_core)
 nenenib_link(nib_adapter_tests nenenib_application)
 nenenib_link(nib_adapter_tests nenenib_adapters)
 add_test(NAME nib_adapters COMMAND nib_adapter_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# ADR0126 isolated experiment only; product main receives documents, not this target.
+nenenib_target(nib_overlapped_cancel_probe adapter_tests EXECUTABLE tests/adapters/NibOverlappedCancelProbe.cpp)
+nenenib_link(nib_overlapped_cancel_probe nenenib_core)
+nenenib_link(nib_overlapped_cancel_probe nenenib_application)
+nenenib_link(nib_overlapped_cancel_probe nenenib_adapters)
+add_test(NAME nib_overlapped_cancel COMMAND nib_overlapped_cancel_probe WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_overlapped_cancel PROPERTIES TIMEOUT 60)
 
 nenenib_target(nib_theme_tests adapter_tests EXECUTABLE tests/adapters/ThemeCodecTests.cpp)
 nenenib_link(nib_theme_tests nenenib_core)
