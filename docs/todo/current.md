@@ -15,7 +15,8 @@
 | 受理 | #446 / PR447 改行索引 | [29,162 checksと実機4条件](../quality/newline-index-2026-10-12.md)。入力/長行/openは基準内。連打は変更前も基準超過のため#460へ分離。索引payloadは2GiB時に計算上288MiB、実容量試験は後続 |
 | 測定待ち | #452 / PR453 分割UTF-8検証 | draft `7d8cf09`。拒否時点の18契約を追加しUTF-8 13,939 checks成功、file-text 307は再利用。3案目のRelease probeと固定planを準備済み。性能/GUI openは未実行、main未統合 |
 | 技術受理 | #463 宣言サイズまでの読込 | [ADR0124](../adr/0124-file-read-completes-the-declared-size.md)。既存readの短い成功を続行し、不足時は失敗にする。[追加40を含む139契約と境界検査](../quality/complete-file-read-2026-10-13.md)成功。統合/恒久収載/整理は `D:/NeNeNib/evidence/complete-file-read-463/closeout.json` |
-| 設計 | #450 元本文の所有と読込失敗 | [段階1Aの設計案](../design/2026-10-12-large-file-source-ownership.md)。単位1の読込完了境界を#463へ切出し。退避資源・取消・範囲取得・全caller移行は後続。2GiB受理前 |
+| 限定実験 | #465 退避資源の封印と解放 | [ADR0125](../adr/0125-source-resource-lifetime-is-probed-before-product-ports.md)に基づく同期資源の228契約成功。[実結果と限界](../quality/source-resource-2026-10-13.md)。実験コードは専用branchへ保存し、mainにはADR/結果だけ収載。OS取消・製品API・2GiBは後続 |
+| 設計 | #450 元本文の所有と読込失敗 | [段階1Aの設計案](../design/2026-10-12-large-file-source-ownership.md)。単位1の読込完了境界#463はPR464/main957d74bへ統合済み。単位2の同期資源寿命を#465で確認。次は個別I/O取消/回収と予算、正典UTF-8/索引の結合、全caller移行の契約。2GiB受理前 |
 | 設計 | #454 設定モーダルと日英表示 | [操作設計案](../design/2026-10-12-settings-dialog-and-language.md)を統合済み。6項目、保存/取消/失敗、日英化する表示と実装順を具体化。画面/schema案は#456へ進み、状態/IME/全翻訳の実装設計・採用は後続 |
 | 設計 | #456 設定画面と版付き言語設定 | [日英・保存失敗・最小窓の画面案](../design/2026-10-12-settings-dialog-boards.md)と[ADR 0123案](../adr/0123-ui-language-is-a-versioned-setting.md)を具体化。settings.v4は提案のみ。画像は資料の描画で製品試験ではなく、見た目の採用・実装は未了 |
 | 次回候補 | 日英の全表示文言 | 操作名・案内・エラーの全対訳を整理する案。22:54の会話で提案した段階で未着手。試験の再開指示ではない |
