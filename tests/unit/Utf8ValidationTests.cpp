@@ -152,6 +152,34 @@ void verify_branches_and_rejected_append()
     expect(base.finish() == Result{7}, "neither branch changes the base count");
 }
 
+void verify_scalar_rejection_timing()
+{
+    constexpr std::array<std::string_view, 3> prefixes{"\xE0\x80", "\xED\xA0", "\xF4\x90\x80"};
+    const auto empty = Utf8Validation::empty();
+    for (const auto prefix : prefixes)
+    {
+        const auto appended = empty.with_bytes(prefix);
+        expect(appended.has_value(), "scalar range is not rejected before the sequence completes");
+        if (!appended)
+        {
+            continue;
+        }
+        const auto pending = appended.value();
+        expect(pending.finish() == Result{std::unexpected(TextFailure::invalid_utf8)},
+               "EOF rejects the unfinished scalar sequence");
+        const auto rejected = pending.with_bytes("\x80");
+        expect(!rejected.has_value() && rejected.error() == TextFailure::invalid_utf8,
+               "the final continuation rejects overlong, surrogate and out-of-range scalars");
+        expect(pending.finish() == Result{std::unexpected(TextFailure::invalid_utf8)},
+               "rejected completion leaves the original pending sequence unfinished");
+        const auto repeated = pending.with_bytes("\x80");
+        expect(!repeated.has_value() && repeated.error() == TextFailure::invalid_utf8,
+               "repeating completion observes the unchanged pending scalar bytes");
+        expect(empty.finish() == Result{0},
+               "pending and rejected branches preserve the empty base");
+    }
+}
+
 void verify_pending_ownership()
 {
     std::string source = "a\xE6\x97";
@@ -219,6 +247,7 @@ void verify_utf8_stream_contracts()
     verify_invalid_partitions();
     verify_empty_parts_and_finish();
     verify_branches_and_rejected_append();
+    verify_scalar_rejection_timing();
     verify_pending_ownership();
     verify_tail_then_next_sequence();
     verify_one_byte_chunks();
