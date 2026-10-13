@@ -3,6 +3,7 @@
 // 一時フォルダの名前は固定で、冒頭で消して作り直す。時刻も乱数も使わない（ARC-007）。
 #include "AbsolutePath.hpp"
 #include "CodePageFailure.hpp"
+#include "CompleteFileRead.hpp"
 #include "EncodingFailure.hpp"
 #include "FileFailure.hpp"
 #include "FileHandle.hpp"
@@ -17,9 +18,13 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdio>
+#include <expected>
+#include <limits>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -151,6 +156,88 @@ void verify_read_boundaries(Win32FileAdapter &files)
            "one byte above the limit is rejected");
     expect(files.write(path, "z").has_value() && files.read(path, 32).value() == "z",
            "a small file does not retain the previous read's longer tail");
+}
+
+void expect_read_steps(std::span<const std::expected<std::size_t, FileFailure>> steps,
+                       bool succeeds)
+{
+    const std::string_view input("a\0bcde", 6);
+    std::size_t calls = 0;
+    std::size_t received = 0;
+    const auto result = nenenib::adapters::win32::complete_file_read(
+        input.size(),
+        [&](std::span<char> target) noexcept -> std::expected<std::size_t, FileFailure>
+        {
+            expect(target.size() == input.size() - received,
+                   "each read requests only the declared bytes still missing");
+            const auto index = calls;
+            ++calls;
+            if (index >= steps.size())
+            {
+                return std::unexpected(FileFailure::unreadable);
+            }
+            const auto step = steps[index];
+            if (!step)
+            {
+                return step;
+            }
+            const auto copied = (std::min)(step.value(), target.size());
+            std::copy_n(input.data() + received, copied, target.data());
+            received += copied;
+            return step;
+        });
+    expect(calls == steps.size(), "completion or failure stops at the expected read call");
+    if (succeeds)
+    {
+        expect(result.has_value() && result.value() == input,
+               "complete reads preserve every byte including NUL in the correct position");
+    }
+    if (!succeeds)
+    {
+        expect(!result.has_value() && result.error() == FileFailure::unreadable,
+               "an incomplete read returns unreadable without exposing partial bytes");
+    }
+}
+
+void verify_complete_read_steps()
+{
+    using Step = std::expected<std::size_t, FileFailure>;
+    const Step failure = std::unexpected(FileFailure::access_denied);
+    expect_read_steps(std::array<Step, 1>{6}, true);
+    expect_read_steps(std::array<Step, 2>{2, 4}, true);
+    expect_read_steps(std::array<Step, 3>{1, 2, 3}, true);
+    expect_read_steps(std::array<Step, 1>{0}, false);
+    expect_read_steps(std::array<Step, 2>{2, 0}, false);
+    expect_read_steps(std::array<Step, 1>{failure}, false);
+    expect_read_steps(std::array<Step, 2>{2, failure}, false);
+    expect_read_steps(std::array<Step, 1>{7}, false);
+    expect_read_steps(std::array<Step, 2>{2, 5}, false);
+    std::size_t calls = 0;
+    const auto empty = nenenib::adapters::win32::complete_file_read(
+        0,
+        [&calls](std::span<char>) noexcept -> Step
+        {
+            ++calls;
+            return std::unexpected(FileFailure::unreadable);
+        });
+    expect(empty.has_value() && empty.value().empty() && calls == 0,
+           "an empty declaration succeeds without invoking the read operation");
+}
+
+void verify_read_request_size()
+{
+    using nenenib::adapters::win32::file_read_request_size;
+    const auto maximum = static_cast<std::size_t>((std::numeric_limits<DWORD>::max)());
+    expect(file_read_request_size(0) == 0, "zero remaining bytes request nothing");
+    expect(file_read_request_size(read_limit) == read_limit,
+           "a complete 64 MiB read keeps its single request");
+    expect(file_read_request_size(maximum - 1) == maximum - 1,
+           "one byte below DWORD maximum is not split");
+    expect(file_read_request_size(maximum) == maximum, "DWORD maximum fits one read request");
+    expect(file_read_request_size(maximum + 1) == maximum,
+           "one byte above DWORD maximum is capped without allocating that input");
+    expect(file_read_request_size((std::numeric_limits<std::size_t>::max)()) == maximum,
+           "the request cap does not overflow at size_t maximum");
 }
 
 void verify_shift_jis_file(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
@@ -917,6 +1004,8 @@ void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
     verify_absolute_path();
     verify_same_file(files);
     verify_read_boundaries(files);
+    verify_complete_read_steps();
+    verify_read_request_size();
 }
 
 bool known_scope(std::string_view scope)
