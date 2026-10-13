@@ -1,6 +1,6 @@
 # ADR 0126 — OVERLAPPEDの取消要求と最終完了を分けて資源を回収する
 
-- 状態: 提案（隔離実験の契約を固定。実結果と製品採用は未確認）
+- 状態: 受理（隔離実験の寿命・取消契約。製品採用とASanの全検査範囲は未受理）
 - 日付: 2026-10-13
 - Issue: #467
 - 影響する規則: ARC-001 / ARC-002 / ARC-003 / ARC-004 / ARC-005 / ARC-007 / ARC-008 / ARC-010 / ARC-012 / CPP-003 / CPP-005 / CPP-006 / CPP-007 / CPP-008 / CPP-011 / CPP-012 / CPP-013 / CPP-016 / QLT-001 / QLT-002 / QLT-004 / QLT-008 / QLT-012 / QLT-013
@@ -73,6 +73,6 @@ client open失敗時も未完connectをcancel/drainしてから閉じる。read�
 
 ## 強制と結果
 
-実行前に契約と順序を固定した。専用targetのDebug/tidy/ASan/UBSanで所有とメモリ境界、専用CTestで上記遷移とpipe、変更C++のformatとFileAPI conformanceで規約境界を確認する。必要な独立レビューで制御mutexと資源pinの範囲を確認する。結果は追記するまで未確認であり、製品向け強制をactiveにはしない。成功結果は関連入力不変ならcommit/push/文書統合のために再実行しない。waiverなし。
+実行前に契約と順序を固定し、専用targetの固定Debug/tidy/ASan/UBSan build、138 checks / 0 failures、format、FileAPI conformance 0 violationsを確認した。実pipeでpending→exact取消→abortedと、即時TRUE→3bytes取得を観測した。独立レビューの指摘は解消した。[実結果](../quality/overlapped-cancel-2026-10-13.md)がコマンド・失敗ログ・限界の正本である。ASan interceptionの非致命的診断は#469へ記録し、ASan無警告や全検査成立とは扱わない。製品向け強制をactiveにはしない。成功後にログ取得だけを目的にCTestを一度余分に再実行した手順違反も記録する。以後は関連入力不変の結果を再利用し、commit/push/文書統合のために再実行しない。waiverなし。
 
 作業先は`D:/NeNeNib/worktrees/467-overlapped-cancel-contract`と`D:/NeNeNib/worktrees/467-overlapped-cancel-probe`、出力は`D:/NeNeNib/outputs/overlapped-cancel-contract-20261013`、恒久先は`D:/NeNeNib/evidence/overlapped-cancel-467`。実験branchとcommitを保存し、main文書統合と証拠収載後に取込・未保存物・稼働参照を監査して追加worktreeと不要出力を整理する。
