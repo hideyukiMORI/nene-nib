@@ -5198,3 +5198,13 @@ PR447のhead b5218ba、必須CI38275473024、正規merge e5f8e709eef61d88ebcdbd9
 既存`compare-probes.py`、before e5f8e70、ABBA×3/各process20標本/全240値で、初回abb38e0のASCII中央値1095.0→1109.0µs・対応比1.015476、日本語5552.0→7038.5µs・1.268325。2案目27cc383はASCII1112.5→1225.0µs・1.102459、日本語5485.0→10541.5µs・1.923092。2案とも不採用。正式GUI速度ゲートとは別の局所比較だが悪化を無視して受理しない。
 3案目のRelease性能/GUI openは未実行。hideの01:36終了指示に従いPR453をdraftのまま保持し、CI/mergeを実行しない。[詳細記録](https://github.com/hideyukiMORI/nene-nib/blob/6c2c13f8b4d721d2f56a4fb3f1fdb08752b05c87/docs/quality/streaming-utf8-2026-10-12.md)。110ファイル87,749,691 bytesの原ログ/標本/exe/configをD:/NeNeNib/evidence/streaming-utf8-452/checkpoint-20261013へ収載・SHA照合した。
 初回の不要なASAN_OPTIONS指定下の結果は採用せず、overrideなしで確認し直した。最新検証も通常環境。最新ソース変更後の成功契約は関連入力が不変なら次回へ再利用し、過去候補の性能は流用しない。対象規則FR-008/013・ARC/CPPはADR0122、QLT-001/008/012/013/014。保存schema不変、Waivers none。
+
+2026-10-13夜の更新: PR453を `7d8cf09` へ更新。製品は3案目のまま、scalar拒否時点18契約を追加してUTF-8 13,939 checks成功。file-text 307と既存境界検査は再利用。Release probeを生成し固定planへSHA/条件を収載したが、性能/GUIは未測定。準備証拠は `D:/NeNeNib/evidence/streaming-utf8-452/checkpoint-evening-20261013`。
+
+## 5-ep — 宣言サイズまで読み込んでから成功を返す（Issue #463・ADR0124）
+
+既存FilePortの同期readで、短い成功は残りへ進み、0進捗/失敗/過大返却は `unreadable`。反復をadapter内の一つのhelperに集約し、所有stringは全量成功だけ返す。空0回・通常完全read1回、64MiB上限・文字コード・保存schemaを維持する。
+
+固定clang-cl 19.1.5のDebug/tidy/ASan/UBSanで対象build成功、`nib_adapter_tests.exe --files` は追加40を含む139 checks/0 failures、変更C++4ファイルformat、FileAPIを含むconformance 0違反。初回nesting4>3と次のWindows min/max衝突はコードで修正し、原ログを保持した。独立レビューも残る指摘なし。[実行コマンド・失敗と修正・範囲と再利用](complete-file-read-2026-10-13.md)。
+
+速度改善を主張せず、GUI・性能・2GiB・無関係な全件を実行しない。#452の性能待ちから独立して受理する。ARC/CPP詳細はADR0124、QLT-001/002/004/008/012/013、Waivers none。統合/収載/監査整理は `D:/NeNeNib/evidence/complete-file-read-463/closeout.json`。

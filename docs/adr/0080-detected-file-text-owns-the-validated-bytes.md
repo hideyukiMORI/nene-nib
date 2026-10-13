@@ -5,6 +5,8 @@
 - Issue: #320
 - 影響する規則: ARC-001 / ARC-003 / ARC-007 / ARC-008 / ARC-009 / CPP-003 / CPP-005 / CPP-007 / CPP-016 / CPP-018 / QLT-001 / QLT-012 / QLT-014
 
+2026-10-13追記: 決定5の短い成功readの扱いは[ADR0124](0124-file-read-completes-the-declared-size.md)で更新する。宣言サイズまで取得した場合だけ成功し、不足したまま0進捗/失敗となれば `unreadable`。下記は当初の判断記録である。
+
 ## 文脈
 
 ファイルを開く共通経路 `read_document` は、UTF-8 の本文を `detect_encoding` と `TextBuffer::from_utf8` で二度検証し、復号と本文の生成で二度複製していた。

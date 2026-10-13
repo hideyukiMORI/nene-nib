@@ -138,3 +138,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0120](0120-split-acceptance-is-relative-and-tail-bounded.md) | splitは単画面との差とp95を分けて採用判断する | 採用条件受理・#443、製品採用/測定は未了 |
 | [0121](0121-newline-index-is-bounded-by-source-bytes.md) | 改行索引の容量は本文のバイト数で制限する | 技術受理・#446、既存の速度基準超過は#460へ分離 |
 | [0123](0123-ui-language-is-a-versioned-setting.md) | 表示言語は版付き設定に持ち、OSの観測値から明示操作時に解決する | 提案・#456、未実装/技術受理前 |
+| [0124](0124-file-read-completes-the-declared-size.md) | 宣言サイズを取得し終えるまで読込を成功にしない | 受理・#463、対象139契約と境界検査成功 |
