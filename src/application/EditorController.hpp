@@ -139,6 +139,10 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
     measured_vim_step(const core::VimKey &key);
+    // engine の要求（表示領域か行の画面行数）に 1 つ応えて view へ置く（ADR 0129 の決定 2）。
+    [[nodiscard]] std::expected<void, TextLayoutFailure>
+    answered_vim_request(const core::VimStep &step, core::VimEditorView &view,
+                         std::vector<core::VimLineRows> &rows);
     void load_vim_clipboard();
     void send_vim_clipboard(const std::optional<core::VimRegister> &written);
     // 再生のあいだに積んだ編集を 1 つの undo 単位に畳む（ADR 0046 の決定 3）。

@@ -102,7 +102,7 @@ void verify_vim_visual_wanted_continuations()
 void verify_vim_visual_wanted_counted()
 {
     const auto buffer = TextBuffer::from_utf8("abcd\nabcdef\nxy").value();
-    const VimEditorView view{buffer, collapsed_at(Offset{3}), VimViewport{LineNumber{1}, 3}};
+    const VimEditorView view{buffer, collapsed_at(Offset{3}), VimViewport{LineNumber{1}, 3, 0}};
     VimState state = empty_vim_state();
     state.wanted_column =
         nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
@@ -145,14 +145,14 @@ void verify_vim_visual_wanted_blocked_expansion()
     state.wanted_column =
         nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
     state.count = nenenib::core::VimCount{2};
-    const VimEditorView empty{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 2}};
+    const VimEditorView empty{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 2, 0}};
     const auto character = vim_step(state, empty, VimKey{VimCharacter{U'v'}});
     expect(character.next.wanted_column == state.wanted_column,
            "blocked horizontal expansion on an empty line preserves the wish");
     const auto down = vim_step(character.next, empty, VimKey{VimCharacter{U'j'}});
     expect(std::get<VimSelect>(down.effect).selection == Selection{Offset{0}, Offset{7}},
            "the next independent key reaches the longer line's NUL column");
-    const VimEditorView last{buffer, collapsed_at(Offset{6}), VimViewport{LineNumber{1}, 2}};
+    const VimEditorView last{buffer, collapsed_at(Offset{6}), VimViewport{LineNumber{1}, 2, 0}};
     const auto line = vim_step(state, last, VimKey{VimCharacter{U'V'}});
     expect(std::get<VimSelect>(line.effect).selection == Selection{Offset{6}, Offset{6}},
            "2V at EOF does not move the caret to the NUL column");

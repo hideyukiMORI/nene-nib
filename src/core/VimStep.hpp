@@ -36,6 +36,9 @@ struct VimStep
     std::optional<Offset> restore = std::nullopt;
     // 必要な行の文字組みを値で要求する。同じ状態と鍵で解決し直すまで効果は適用しない。
     std::optional<LineNumber> layout_request = std::nullopt;
+    // 表示領域を値で要求する（ADR 0129 の決定 1）。立てた step は効果なし・状態そのままで、
+    // controller が viewport を渡して同じ鍵を流し直す。layout_request と同時には立てない。
+    bool viewport_request = false;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の
@@ -77,6 +80,10 @@ struct VimStep
 // 使う回数と同じ値で、incsearch の preview と Ctrl-G / Ctrl-T が同じ回数で探すために読む
 // （ADR 0043 の決定 1・2）。
 [[nodiscard]] std::size_t vim_search_count(const VimState &state) noexcept;
+
+// 表示領域を読む口の 1 本（ADR 0129 の決定 1）。画面を読む鍵（vim_reads_viewport）は入口で
+// 無ければ viewport_request を立てて返るので、読む所へ来るときは値がある。無い値は読まれない。
+[[nodiscard]] VimViewport vim_viewport_of(const VimEditorView &view) noexcept;
 
 // Vim エンジンの唯一の入口（ARC-001）。純関数で、時刻・OS・スレッドを持たない（ARC-007）。
 // 本文・選択・表示領域を 1 回だけ借用する（ADR 0019 の決定 1）。NORMAL / INSERT は

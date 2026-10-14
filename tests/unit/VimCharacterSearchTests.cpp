@@ -96,27 +96,28 @@ void verify_vim_character_search_history()
     const auto &buffer = text.value();
     const VimState state = empty_vim_state();
     const auto first_waiting = vim_step(
-        state, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}},
+        state, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64, 0}},
         VimKey{VimCharacter{U'f'}});
     const auto first =
         vim_step(first_waiting.next,
-                 VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}},
+                 VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64, 0}},
                  VimKey{VimCharacter{U'x'}});
-    const auto repeated = vim_step(
-        first.next, VimEditorView{buffer, collapsed_at(Offset{1}), VimViewport{LineNumber{1}, 64}},
-        VimKey{VimCharacter{U';'}});
+    const auto repeated =
+        vim_step(first.next,
+                 VimEditorView{buffer, collapsed_at(Offset{1}), VimViewport{LineNumber{1}, 64, 0}},
+                 VimKey{VimCharacter{U';'}});
     expect(std::get<VimMoveTo>(repeated.effect).caret == Offset{3} &&
                last_search_is(repeated.next, VimCharacterSearchKind::find_forward, U'x'),
            "; repeats forward without changing the stored search");
     const auto opposite =
         vim_step(repeated.next,
-                 VimEditorView{buffer, collapsed_at(Offset{3}), VimViewport{LineNumber{1}, 64}},
+                 VimEditorView{buffer, collapsed_at(Offset{3}), VimViewport{LineNumber{1}, 64, 0}},
                  VimKey{VimCharacter{U','}});
     expect(std::get<VimMoveTo>(opposite.effect).caret == Offset{1} &&
                last_search_is(opposite.next, VimCharacterSearchKind::find_forward, U'x'),
            ", reverses this invocation while preserving the stored direction");
     const auto absent = vim_step(
-        state, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}},
+        state, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64, 0}},
         VimKey{VimCharacter{U';'}});
     expect(std::holds_alternative<VimNoEffect>(absent.effect),
            "repeat without a stored character search does nothing");
@@ -127,7 +128,7 @@ void verify_vim_character_search_failure()
     const auto text = TextBuffer::from_utf8("abc");
     expect(text.has_value(), "the failed-search sample parses");
     const auto &buffer = text.value();
-    const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}};
+    const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64, 0}};
     VimState state = empty_vim_state();
     state.last_character_search =
         nenenib::core::VimCharacterSearch{VimCharacterSearchKind::till_backward, U'x'};
@@ -154,7 +155,7 @@ void verify_vim_character_search_cancellation()
     expect(text.has_value(), "the cancellation sample parses");
     const auto &buffer = text.value();
     const Selection selection{Offset{0}, Offset{1}};
-    const VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, 64}};
+    const VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, 64, 0}};
     VimState visual = empty_vim_state();
     visual.mode = VimMode::visual;
     visual.last_character_search =
@@ -189,7 +190,7 @@ void verify_vim_character_search_control_targets()
     const auto text = TextBuffer::from_utf8("abc\r\ndef");
     expect(text.has_value(), "the special-target CRLF sample parses");
     const auto &buffer = text.value();
-    const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}};
+    const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64, 0}};
     constexpr std::array targets{std::pair{VimSpecialKey::enter, char32_t{0x0D}},
                                  std::pair{VimSpecialKey::control_r, char32_t{0x12}},
                                  std::pair{VimSpecialKey::control_d, char32_t{0x04}},
@@ -216,7 +217,7 @@ void verify_vim_character_search_large_count()
     waiting.count = nenenib::core::VimCount{std::numeric_limits<std::size_t>::max()};
     waiting.input_wait = VimInputWait{VimCharacterSearchKind::find_forward};
     const auto searched = vim_step(
-        waiting, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64}},
+        waiting, VimEditorView{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 64, 0}},
         VimKey{VimCharacter{U'x'}});
     expect(std::holds_alternative<VimNoEffect>(searched.effect) &&
                last_search_is(searched.next, VimCharacterSearchKind::find_forward, U'x') &&
@@ -360,7 +361,7 @@ void verify_vim_character_search_waiting()
     expect(text.has_value(), "the character-search sample parses");
     const auto &buffer = text.value();
     const Selection at_start = collapsed_at(Offset{0});
-    const VimEditorView view{buffer, at_start, VimViewport{LineNumber{1}, 64}};
+    const VimEditorView view{buffer, at_start, VimViewport{LineNumber{1}, 64, 0}};
     VimState state = empty_vim_state();
     state.wanted_column =
         nenenib::core::VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
