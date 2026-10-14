@@ -25,7 +25,16 @@ enum class Milestone : std::uint8_t
     input_received,
     frame_presented,
     probe_started,
-    probe_finished
+    probe_finished,
+    // 実験（#460）: 連打の 1 打鍵の内訳。
+    intent_begun,
+    intent_applied,
+    intent_delivered,
+    layout_begun,
+    layout_made,
+    frame_begun,
+    frame_built,
+    frame_drawn
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -59,6 +68,22 @@ enum class Milestone : std::uint8_t
         return "probe_started";
     case Milestone::probe_finished:
         return "probe_finished";
+    case Milestone::intent_begun:
+        return "intent_begun";
+    case Milestone::intent_applied:
+        return "intent_applied";
+    case Milestone::intent_delivered:
+        return "intent_delivered";
+    case Milestone::layout_begun:
+        return "layout_begun";
+    case Milestone::layout_made:
+        return "layout_made";
+    case Milestone::frame_begun:
+        return "frame_begun";
+    case Milestone::frame_built:
+        return "frame_built";
+    case Milestone::frame_drawn:
+        return "frame_drawn";
     }
     std::unreachable();
 }
