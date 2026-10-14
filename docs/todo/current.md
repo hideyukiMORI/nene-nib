@@ -1,18 +1,18 @@
 # いまのタスク — NeNe Nib
 
-2026-10-13夜の区切り。Issueが正本。経緯は[日報](../reports/2026-10-13.md)、次回の入口は[引き継ぎ](../handoffs/2026-10-13.md)、検証は[gate-proofs](../quality/gate-proofs.md)と各品質記録を参照する。
+2026-10-14の区切り。Issueが正本。経緯は[日報](../reports/2026-10-14.md)、次回の入口は[引き継ぎ](../handoffs/2026-10-14.md)、検証は[gate-proofs](../quality/gate-proofs.md)と各品質記録を参照する。
 
 ## 運用
 
-- hideの区切り指示により日報/引き継ぎ・main同期・完了物の整理で終了する。既定はサナ単体。10月13日夜のAstra設計/SOL実装分担を他案件や次回へ無条件に継承しない。
+- hideの21:43の依頼により日報/引き継ぎを記録し、文書のmain統合・収載・作業木の監査整理で今回を閉じる。既定はサナ単体。本セッションのAstra設計/SOL実装分担を他案件や次回へ無条件に継承しない。
 - 対象と直接の境界だけを検証し、関連入力不変の成功結果は再利用する（QLT-001/012）。文書のみならCI/製品試験不要。#467のログ取得だけの追加CTestは手順違反として記録済み。
-- 追加worktree/出力はD:/NeNeNib配下。完了後に恒久収載・監査整理し、branch/commitを保持する。実機/性能の時間帯調整は未完了。
+- 追加worktree/出力はD:/NeNeNib配下。完了後に恒久収載・監査整理し、branch/commitを保持する。#452は未受理のため2作業木とoutputsを保持。次回は現在の時間帯/負荷を調整する。
 
 ## いまのIssueと次の順
 
 | 対象 | 状態・再開点 |
 | --- | --- |
-| #452 / PR453 分割UTF-8 | draft `7d8cf09`、性能未受理。対象UTF-8 13,939 checks成功、file-text 307再利用。3案目Release probeと固定planは保持済み。比較2条件→良好なら製品open。2作業木/原ログは残す |
+| #452 / PR453 分割UTF-8 | draft `8fc6538`、製品main未統合。[候補の品質記録](https://github.com/hideyukiMORI/nene-nib/blob/8fc6538df30a5da9f19a5321b5958b9e5f5ad8b8/docs/quality/streaming-utf8-2026-10-12.md)。4案目348cfb3は14,246 checks/静的検査/独立レビュー成功、probe/製品Release準備済み。負荷未安定で局所比較/正式openは0回、性能は未知・未受理。再開は引き継ぎ参照 |
 | #450 / #468 本文の接続 | [ADR0127](../adr/0127-large-file-integration-reserves-prepares-and-commits.md)と[全caller移行表](../design/2026-10-13-large-file-integration-map.md)を設計。次は資源台帳/退避回収の小実験と正典UTF-8/索引の結合。本文取得と保存版は同じ製品候補で統合。製品移行/2GiB未受理 |
 | #467 / PR470 取消実験 | ADR0126と[138契約の結果](../quality/overlapped-cancel-2026-10-13.md)をmain統合。実験コードは専用branch。実disk取消性・100msは未受理。恒久先はD:/NeNeNib/evidence/overlapped-cancel-467 |
 | #469 ASan診断 | #467で非致命的interception診断。静的にはUCRT frexp+4と強く整合するが最終hook/全検査範囲未確認。既存EXE/PDB/ログから切り分ける。無関係な既存不具合と断定しない |
