@@ -139,3 +139,21 @@ hideが実機は空いていると伝えたため、保持済み3案目6c2c13f�
 | 固定`clang-format --dry-run --Werror src/core/Utf8.cpp` / `git diff --check` | 成功。変更した本体の整形と差分の空白 |
 
 計14,246 checks。ログと実行script、検証したUtf8.cpp SHAは上記出力の`debug-build.log` / `utf8.log` / `file-text.log` / `symbols.log` / `conformance.log` / `contracts-result.json`。#463の139契約は入力不変を照合して再利用し、無関係なscope・全件回帰・Vim oracle・coverageは実行していない。実装・テスト・関連依存/必要な環境が変わらなければ、文書・commit・push・レビュー・mergeだけを理由にこの成功を繰り返さない。次はclean候補の新規専用Release probeと生成コードを準備し、同じ固定2条件を事前計画へする。4案目の性能・製品GUI open・全体受理は未了。
+
+#### 本日の準備の終点 — 4案目は測定前で保持
+
+実装と上記成功結果をclean `348cfb3ac5e1f00889a0ce655e07c187e8db8f6d`へ保存した。`python eng/protected-diff.py --base 60c9a8da67ce3fb0f76ef6f7368db5241b8c9093 --head HEAD`を静的モードで1回実行しexit 0。fixtures1853→1853、metadata/deleted/changed/addedは全0、保護対象ファイルは変更なし。`out/protected/348cfb3.json`の52scope件数は全て未測であり、実際に実行した13,939/307以外を成功扱いにしない。
+
+同じclean版から通常CMake Releaseの専用`build/release-scalar-fold-20261014-348cfb3`へ`nib_perf_probes`を並列2でbuildし、135 steps成功。probe SHA-256は`4e4eec418d415f7167e47240d3fb5a28c86eb33e2ac396b3b5bee387d10e33ac`。before e5f8e70のprobeは`80411092cd16f21ec44b0f0699e97e6ae4f07b5495e34e9a1f7e67e244d893b9`のまま。生成コードは`scan`/`decoded_continuation`を展開し、文字ごとの追加callは無い。offset1/2/3のbyteを各1回読み、検査と値への追加に共用してからscalar判定を行う。残るcall relocationはpending/tailを写す`memcpy`だけで、ASCIIの8byte走査命令列も維持した。生成コードは性能成功の代用ではない。
+
+実測前の`perf-plan-scalar-fold.json`へ両commit/exe、tool/harness/input SHA、flags、ASCII→日本語/ABBA×3/各20 samples/warmup1/timeout60を固定した。採否文言の初稿は「局所悪化が解消してから製品open」と書いていたが、**測定前に**設計席が本件のAPI/機能リファクタリングの採用条件を明確化した。局所比較は効果と分布を事実として報告し、新しい自動閾値や比が1を超えるだけで拒否するゲートを作らない。実際の増加は隠さず、設計席が大きさと原因を判断し、必要な正式QLT-014 openへ進む。採用には対象契約・独立レビュー・正式openが必要で、改善率の主張を前提にしない。既存の基準/閾値、入力、exe、flags、回数、順序は変更していない。初稿を`perf-plan-scalar-fold-initial.json`（SHA-256 `3db6c1104e6e384fd2a89ec6dafb221a215d6a944c298de2c82f2fe4021eaaa4`）へ保存し、最終planのSHAは`f57cb130c986a47c06f126b5215b9139cfbb6c535f05f450defdc514c71ef306`。両hashと理由は`plan-clarification.json`に記録した。
+
+実測前のexe/config/tool実体9件、tool/harness75件、両入力のbytes/FNV/SHAは全一致、sourceはcleanだったが、CPU3標本が16/40/35%のためprobe起動前で止めた。読み取り診断では約8秒のCPU deltaでWindowsTerminalが全20logical換算約5.45%を占め、Chrome/Dropbox/Claude/他の実装プロセスにも活動があった。診断後の3標本は24/26/22%。この観測だけで活動の原因や他案件を特定せず、preflightの一時負荷だけとも断定しない。アプリを閉じたり、任意のプロセスを終了したりしていない。
+
+待機中に正式openに必要な製品を先に準備する順序変更を`operational-order-adjustment.json`へ**4案目の測定0回の時点で**記録した。clean348cfb3の新規`build/release-348cfb3`で正典`pwsh -NoProfile -File eng/build-release.ps1 -Ref HEAD`を`CMAKE_BUILD_PARALLEL_LEVEL=2`として実行し、NeNeNib target127 steps成功、configure59.631秒/build404.221秒/total463.852秒。`NeNeNib.exe`は1,529,856 bytes、SHA-256 `82d8102968ad4280ca74afe365c0883b9a0800a83fb3e5adee5842012d983857`。正規記録は`out/release/348cfb3.json`で、製品は起動していない。過去のexe/builddirを上書きせず、probe計画も変更していない。
+
+build完了という状態変化後に10秒idleを置いた1回の確認は22/15/9%。下がる傾向があったため、設計席の明示指示で45秒のsleep（25+20秒、間にhash/収載/CIMなし）を一度置いてから3標本を確認したが24/25/11%で、低負荷へ安定したとは判断できなかった。各確認でbuild/testプロセスは不在。元の全値と理由を個別JSONへ残し、低い値が出るまでpollすることはしない。専有環境とは主張しない。
+
+**4案目の局所比較と正式QLT-014 openはそれぞれ0回。性能は失敗ではなく未知・未受理で、PR453はdraft・Ready/CI/main統合は未了。** 今回のhideの測定許可と実機が空いているとの申告は時点付きで記録し、次回はその時点の時間帯/負荷を確認する。実装・対象契約・独立レビュー・probe/製品Releaseは準備済みで保持する。
+
+本節とADR状態/currentだけの後続commitは文書変更であり、src/tests/eng/CMakeとの差分0を照合してbuild/検証版348cfb3との対応を記録する。成功済み契約を再実行・再build・再configureしない。恒久先は新規`D:/NeNeNib/evidence/streaming-utf8-452/checkpoint-scalar-fold-20261014/`。現在の全原ログ、両plan、負荷確認、script、レビュー、assembly、PR本文、正確な両probe/configと製品exe/正規記録をSHA照合して収載する。初回/2案目と3案目の以前のcheckpointは参照として保持し上書きしない。未受理候補と実行物が必要なため2作業木とoutputsは削除せず、技術受理・main統合・必要反映・恒久収載後の安全監査まで残す。保存schemaの変更なし。Waivers: none。
