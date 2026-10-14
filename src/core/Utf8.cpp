@@ -102,6 +102,11 @@ constexpr char32_t continuation_mask = 0x3F;
            (value < first_surrogate || value > last_surrogate);
 }
 
+[[nodiscard]] constexpr char32_t decoded_continuation(char32_t value, unsigned char byte) noexcept
+{
+    return (value << continuation_shift) | static_cast<char32_t>(byte & continuation_mask);
+}
+
 // 長さの分かっている列を値へ。継続バイトの形は呼び出し側が確かめてから来る。
 [[nodiscard]] constexpr char32_t decode(std::string_view text, std::size_t index,
                                         std::size_t length) noexcept
@@ -109,7 +114,7 @@ constexpr char32_t continuation_mask = 0x3F;
     char32_t value = lead_value(byte_at(text, index), length);
     for (std::size_t offset = 1; offset < length; ++offset)
     {
-        value = (value << 6U) | static_cast<char32_t>(byte_at(text, index + offset) & 0x3FU);
+        value = decoded_continuation(value, byte_at(text, index + offset));
     }
     return value;
 }
@@ -125,18 +130,21 @@ scan(std::string_view text, std::size_t index) noexcept
         return std::unexpected(TextFailure::invalid_utf8);
     }
     const std::size_t remaining = text.size() - index;
+    char32_t value = lead_value(lead, length);
     for (std::size_t offset = 1; offset < length; ++offset)
     {
         if (offset >= remaining)
         {
             return std::optional<std::size_t>{};
         }
-        if (!continuation(byte_at(text, index + offset)))
+        const unsigned char byte = byte_at(text, index + offset);
+        if (!continuation(byte))
         {
             return std::unexpected(TextFailure::invalid_utf8);
         }
+        value = decoded_continuation(value, byte);
     }
-    if (!encodable(decode(text, index, length), length))
+    if (!encodable(value, length))
     {
         return std::unexpected(TextFailure::invalid_utf8);
     }
