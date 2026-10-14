@@ -17,7 +17,7 @@ using Navigation = std::expected<VimDisplayNavigation, LineNumber>;
 
 [[nodiscard]] std::size_t height_of(const VimEditorView &view) noexcept
 {
-    return std::max<std::size_t>(view.viewport.visible_lines, 1);
+    return std::max<std::size_t>(vim_viewport_of(view).visible_lines, 1);
 }
 
 [[nodiscard]] std::expected<std::size_t, LineNumber> rows_of(const VimEditorView &view,
@@ -45,7 +45,8 @@ using Navigation = std::expected<VimDisplayNavigation, LineNumber>;
     {
         return rows;
     }
-    const auto skipped = line == view.viewport.first_visible ? view.layout.first_row : 0;
+    const auto skipped =
+        line == vim_viewport_of(view).first_visible ? vim_viewport_of(view).first_row : 0;
     return rows.value() - std::min(skipped, rows.value() - 1);
 }
 
@@ -104,7 +105,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
 [[nodiscard]] Navigation screen_target(const VimState &state, const VimEditorView &view,
                                        VimScreenKind kind)
 {
-    const auto window = window_of(view, view.viewport.first_visible);
+    const auto window = window_of(view, vim_viewport_of(view).first_visible);
     if (!window)
     {
         return std::unexpected(window.error());
@@ -131,7 +132,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
 // 全体が見える行を単位に半画面分だけ送る。1行が大きくても最初の1行は送る。
 [[nodiscard]] Navigation half_down(const VimEditorView &view, std::size_t amount)
 {
-    auto first = view.viewport.first_visible;
+    auto first = vim_viewport_of(view).first_visible;
     auto caret = view.text.position_of(view.selection.caret).line;
     bool moved = false;
     while (amount > 0)
@@ -165,7 +166,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
 
 [[nodiscard]] Navigation half_up(const VimEditorView &view, std::size_t amount)
 {
-    auto first = view.viewport.first_visible;
+    auto first = vim_viewport_of(view).first_visible;
     auto caret = view.text.position_of(view.selection.caret).line;
     bool moved = false;
     while (amount > 0 && first.value > 1)
@@ -219,7 +220,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     auto &result = target.value();
     result.preserve_column = result.caret == view.text.position_of(view.selection.caret).line;
     if (state.count.has_value() &&
-        (result.first != view.viewport.first_visible || !result.preserve_column))
+        (result.first != vim_viewport_of(view).first_visible || !result.preserve_column))
     {
         result.scroll_lines = amount;
     }
@@ -333,7 +334,7 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
 [[nodiscard]] Navigation page_target(const VimState &state, const VimEditorView &view,
                                      VimScreenKind kind)
 {
-    VimDisplayNavigation result{view.viewport.first_visible,
+    VimDisplayNavigation result{vim_viewport_of(view).first_visible,
                                 view.text.position_of(view.selection.caret).line, true};
     const bool down = kind == VimScreenKind::page_down;
     const auto count = std::min(vim_search_count(state), view.text.line_count());
@@ -385,6 +386,11 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     std::unreachable();
 }
 } // namespace
+
+bool vim_reads_viewport(VimAction action) noexcept
+{
+    return screen_kind(action).has_value();
+}
 
 std::expected<std::optional<VimDisplayNavigation>, LineNumber>
 vim_display_navigation(const VimState &state, const VimEditorView &view, VimAction action)

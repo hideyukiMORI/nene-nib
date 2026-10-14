@@ -11,7 +11,6 @@ namespace nenenib::core
 struct VimLayoutView
 {
     bool enabled = false;
-    std::size_t first_row = 0;
     std::span<const VimLineRows> lines{};
 };
 } // namespace nenenib::core

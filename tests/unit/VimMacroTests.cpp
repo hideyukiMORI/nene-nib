@@ -611,7 +611,7 @@ void verify_register_block_append_refused()
 [[nodiscard]] VimStep core_steps(const VimState &state, const TextBuffer &text,
                                  const Selection &selection, std::string_view keys)
 {
-    const VimEditorView view{text, selection, VimViewport{LineNumber{1}, vim_visible_lines}};
+    const VimEditorView view{text, selection, VimViewport{LineNumber{1}, vim_visible_lines, 0}};
     VimStep step{state, VimNoEffect{}};
     for (const VimKey &key : vim_keys_of(keys))
     {

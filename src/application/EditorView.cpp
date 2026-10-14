@@ -36,6 +36,26 @@ namespace
     }
     std::unreachable();
 }
+
+// engine が求めた行の画面行数を、行の順の列へ足す。同じ行を 2 度求めたら往復が止まらないので失敗。
+[[nodiscard]] std::expected<void, TextLayoutFailure>
+measured_rows(std::vector<core::VimLineRows> &rows, core::LineNumber line,
+              const VisualTextView &text)
+{
+    const auto found = std::ranges::lower_bound(
+        rows, line.value, {}, [](const core::VimLineRows &value) { return value.line.value; });
+    if (found != rows.end() && found->line == line)
+    {
+        return std::unexpected(TextLayoutFailure::unavailable);
+    }
+    const auto count = text.rows(line);
+    if (!count)
+    {
+        return std::unexpected(count.error());
+    }
+    rows.insert(found, core::VimLineRows{line, count.value()});
+    return {};
+}
 } // namespace
 
 // view はスクロールを読むので、頼まれた追従を先に解決する（ADR 0128 の決定 2）。
@@ -110,37 +130,47 @@ void EditorController::accept(const PointText &intent)
 std::expected<core::VimStep, TextLayoutFailure>
 EditorController::measured_vim_step(const core::VimKey &key)
 {
-    const auto &scroll = settled_scroll();
     std::vector<core::VimLineRows> rows;
+    // 表示領域は engine が求めたときだけ渡す（ADR 0129 の決定 2）。追従を解決するのはその時だけ。
     core::VimEditorView view{
         state_.text(),
         state_.selection(),
-        core::VimViewport{scroll.first_visible, scroll.visible_lines},
+        std::nullopt,
         replay_depth_.has_value() ? core::VimKeySource::replayed : core::VimKeySource::typed,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
         core::VimLayoutView{view_geometry_.width > 0 &&
                                 state_.settings().wrapping == core::LineWrapping::wrap,
-                            scroll.first_row, rows}};
+                            rows}};
     auto step = core::vim_step(state_.vim(), view, key);
-    const auto text = visual_view();
-    while (step.layout_request.has_value())
+    // どちらの要求も同じ鍵をもう一度流す。viewport は 1 度渡したら以後の往復でも渡したまま。
+    while (step.viewport_request || step.layout_request.has_value())
     {
-        const auto line = step.layout_request.value();
-        const auto found = std::ranges::lower_bound(
-            rows, line.value, {}, [](const core::VimLineRows &value) { return value.line.value; });
-        if (found != rows.end() && found->line == line)
+        const auto answered = answered_vim_request(step, view, rows);
+        if (!answered)
         {
-            return std::unexpected(TextLayoutFailure::unavailable);
+            return std::unexpected(answered.error());
         }
-        const auto count = text.rows(line);
-        if (!count)
-        {
-            return std::unexpected(count.error());
-        }
-        rows.insert(found, core::VimLineRows{line, count.value()});
-        view.layout.lines = rows;
         step = core::vim_step(state_.vim(), view, key);
     }
     return step;
+}
+
+std::expected<void, TextLayoutFailure>
+EditorController::answered_vim_request(const core::VimStep &step, core::VimEditorView &view,
+                                       std::vector<core::VimLineRows> &rows)
+{
+    if (step.layout_request.has_value())
+    {
+        const auto measured = measured_rows(rows, step.layout_request.value(), visual_view());
+        view.layout.lines = rows;
+        return measured;
+    }
+    if (view.viewport.has_value())
+    {
+        return std::unexpected(TextLayoutFailure::unavailable);
+    }
+    const auto &scroll = settled_scroll();
+    view.viewport = core::VimViewport{scroll.first_visible, scroll.visible_lines, scroll.first_row};
+    return {};
 }
 } // namespace nenenib::application
