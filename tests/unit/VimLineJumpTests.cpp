@@ -123,7 +123,7 @@ void verify_vim_line_jump_saturated_count()
         nenenib::core::VimCount{std::numeric_limits<std::size_t>::max()}};
     state.count = nenenib::core::VimCount{std::numeric_limits<std::size_t>::max()};
     const VimEditorView view{buffer, collapsed_at(buffer.line_start(LineNumber{2})),
-                             VimViewport{LineNumber{1}, 64}};
+                             VimViewport{LineNumber{1}, 64, 0}};
     const auto waiting = vim_step(state, view, VimKey{VimCharacter{U'g'}});
     const auto jumped = vim_step(waiting.next, view, VimKey{VimCharacter{U'g'}});
     expect(std::get<VimMoveTo>(jumped.effect).caret == buffer.line_start(LineNumber{2}) &&
@@ -139,7 +139,7 @@ void verify_vim_line_jump_waiting()
     expect(text.has_value(), "the prefix-wait sample parses");
     const auto &buffer = text.value();
     const Selection selection = collapsed_at(buffer.line_start(LineNumber{2}));
-    const VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, 64}};
+    const VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, 64, 0}};
     VimState state = empty_vim_state();
     state.last_character_search =
         nenenib::core::VimCharacterSearch{VimCharacterSearchKind::find_forward, U'x'};
