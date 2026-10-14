@@ -1,6 +1,7 @@
 #include "Win32FileAdapter.hpp"
 
 #include "AbsolutePath.hpp"
+#include "CompleteFileRead.hpp"
 #include "FileHandle.hpp"
 #include "Utf16.hpp"
 
@@ -60,24 +61,18 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
         return std::unexpected(Failure::too_large);
     }
     const auto requested = static_cast<std::size_t>(size.QuadPart);
-    std::string bytes;
-    BOOL read = TRUE;
-    bytes.resize_and_overwrite(
+    return complete_file_read(
         requested,
-        [&](char *data, std::size_t) noexcept
+        [&file](std::span<char> target) noexcept -> std::expected<std::size_t, Failure>
         {
             DWORD done = 0;
-            if (requested != 0)
+            if (ReadFile(file.get(), target.data(), static_cast<DWORD>(target.size()), &done,
+                         nullptr) == 0)
             {
-                read = ReadFile(file.get(), data, static_cast<DWORD>(requested), &done, nullptr);
+                return std::unexpected(Failure::unreadable);
             }
-            return read != 0 ? static_cast<std::size_t>(done) : std::size_t{0};
+            return static_cast<std::size_t>(done);
         });
-    if (read == 0)
-    {
-        return std::unexpected(Failure::unreadable);
-    }
-    return bytes;
 }
 
 [[nodiscard]] std::expected<void, Failure> write_all(const FileHandle &file, std::string_view bytes)

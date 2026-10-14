@@ -139,3 +139,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0121](0121-newline-index-is-bounded-by-source-bytes.md) | 改行索引の容量は本文のバイト数で制限する | 技術受理・#446、既存の速度基準超過は#460へ分離 |
 | [0122](0122-utf8-validation-retains-only-the-unfinished-sequence.md) | 分割UTF-8検証は未完の符号列だけを保持する | 限定実装・#452、検証再開/技術受理前 |
 | [0123](0123-ui-language-is-a-versioned-setting.md) | 表示言語は版付き設定に持ち、OSの観測値から明示操作時に解決する | 提案・#456、未実装/技術受理前 |
+| [0124](0124-file-read-completes-the-declared-size.md) | 宣言サイズを取得し終えるまで読込を成功にしない | 受理・#463、対象139契約と境界検査成功 |
+| [0125](0125-source-resource-lifetime-is-probed-before-product-ports.md) | 退避資源の寿命を製品portへ入れる前に小さく確かめる | 限定実験受理・#465、同期228契約成功/製品API採用前 |

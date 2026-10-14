@@ -5185,3 +5185,34 @@ PR431の作成・Readyではrun 0。最初の手動run `38200540150`は成功し
 本文開始位置へ既定8 DIPの余白を加え、字体サイズ/DPIと有効な本文幅を正典body_layoutで決める。現在行の背景は余白も覆う。保存schema変更なし、Waivers none。
 `nib_tests --body-layout`13、`--wrapped-view`35、`nib_window_tests --text-layout`961 checks、Debug/tidy/ASan/UBSan、対象6ファイルの整形が成功。[コマンド・根拠・証跡](body-padding-2026-10-12.md)。
 hide了承の16時ごろ、16:00:48〜55 JSTに隔離profileで前後を撮影。MonaLisa、Cascadia Code/13.5pt、120 DPI/1000×680。余白10px、余白/本文クリック後の保存内容一致、正常終了を確認した。製品入力が不変なら結果を再利用する。
+
+## 5-en — 改行索引の受理と既存連打基準超過（Issue #446・#460）
+
+2026-10-13再開。実装・試験・関連依存/道具とexe SHAの不変を照合し、29,162 checksと境界検査を再利用した。`eng/measure-speed.py --check --bench <対象> --repetitions 5 --executable <変更後exe>`を4対象に各1回。通常入力0.613ms、長行6.341ms、open 213.292msは既存基準内、16MiB連打15.468msは上限9.264msを超過。各5標本・欠測0。初回/timeoutの失敗記録は保持する。
+変更前7b117e2を`eng/build-release.ps1 -Ref 7b117e21b88d3c15df1ccea7327674fdd78a590c`で作り、失敗した連打だけ同じ道具・新規profile・5標本で測定すると15.349msで同じ基準超過。既存問題を#460へ分離した。0.119ms差は時間帯の異なる比較で因果を断定せず、全項目合格とは扱わない。[全コマンド・標本・版と限界](newline-index-2026-10-12.md)。
+PR447のhead b5218ba、必須CI38275473024、正規merge e5f8e709eef61d88ebcdbd943d93e837ad0d348fを確認。75ファイル95,162,688 bytesをD:/NeNeNib/evidence/newline-index-446/resume-20261013へ収載・SHA照合後、追加作業木と2出力を監査整理した。closeout-20261013.jsonを参照。ARC/CPP/QLTの詳細はADR0121、QLT-012に従う既存失敗分離。Waivers none。
+
+## 5-eo — 分割UTF-8は機能確認後、性能未受理で保持（Issue #452）
+
+最新head `6c2c13f8b4d721d2f56a4fb3f1fdb08752b05c87`は3案目。`cmake --build build --target nib_tests NeNeNib --parallel 4`がDebug/clang-cl19.1.5/tidy/ASan/UBSanで成功。`build/nib_tests.exe --utf8`13,921 + `--file-text`307 = 14,228 checks成功。`python eng/symbols.py --build-dir build --require core application`は2 libraries/0違反、`python eng/conformance.py --build-dir build`は0違反。変更Utf8.cppのformatと差分空白も成功。分割/EOF/不正列/所有と既存UTF-8/文字コード/読込の直接境界だけを選択し、全件は実行しない。
+既存`compare-probes.py`、before e5f8e70、ABBA×3/各process20標本/全240値で、初回abb38e0のASCII中央値1095.0→1109.0µs・対応比1.015476、日本語5552.0→7038.5µs・1.268325。2案目27cc383はASCII1112.5→1225.0µs・1.102459、日本語5485.0→10541.5µs・1.923092。2案とも不採用。正式GUI速度ゲートとは別の局所比較だが悪化を無視して受理しない。
+3案目のRelease性能/GUI openは未実行。hideの01:36終了指示に従いPR453をdraftのまま保持し、CI/mergeを実行しない。[詳細記録](https://github.com/hideyukiMORI/nene-nib/blob/6c2c13f8b4d721d2f56a4fb3f1fdb08752b05c87/docs/quality/streaming-utf8-2026-10-12.md)。110ファイル87,749,691 bytesの原ログ/標本/exe/configをD:/NeNeNib/evidence/streaming-utf8-452/checkpoint-20261013へ収載・SHA照合した。
+初回の不要なASAN_OPTIONS指定下の結果は採用せず、overrideなしで確認し直した。最新検証も通常環境。最新ソース変更後の成功契約は関連入力が不変なら次回へ再利用し、過去候補の性能は流用しない。対象規則FR-008/013・ARC/CPPはADR0122、QLT-001/008/012/013/014。保存schema不変、Waivers none。
+
+2026-10-13夜の更新: PR453を `7d8cf09` へ更新。製品は3案目のまま、scalar拒否時点18契約を追加してUTF-8 13,939 checks成功。file-text 307と既存境界検査は再利用。Release probeを生成し固定planへSHA/条件を収載したが、性能/GUIは未測定。準備証拠は `D:/NeNeNib/evidence/streaming-utf8-452/checkpoint-evening-20261013`。
+
+## 5-ep — 宣言サイズまで読み込んでから成功を返す（Issue #463・ADR0124）
+
+既存FilePortの同期readで、短い成功は残りへ進み、0進捗/失敗/過大返却は `unreadable`。反復をadapter内の一つのhelperに集約し、所有stringは全量成功だけ返す。空0回・通常完全read1回、64MiB上限・文字コード・保存schemaを維持する。
+
+固定clang-cl 19.1.5のDebug/tidy/ASan/UBSanで対象build成功、`nib_adapter_tests.exe --files` は追加40を含む139 checks/0 failures、変更C++4ファイルformat、FileAPIを含むconformance 0違反。初回nesting4>3と次のWindows min/max衝突はコードで修正し、原ログを保持した。独立レビューも残る指摘なし。[実行コマンド・失敗と修正・範囲と再利用](complete-file-read-2026-10-13.md)。
+
+速度改善を主張せず、GUI・性能・2GiB・無関係な全件を実行しない。#452の性能待ちから独立して受理する。ARC/CPP詳細はADR0124、QLT-001/002/004/008/012/013、Waivers none。統合/収載/監査整理は `D:/NeNeNib/evidence/complete-file-read-463/closeout.json`。
+
+## 5-eq — 私有退避の資源寿命を製品外で確認（Issue #465・ADR0125）
+
+試作commit `73b0b74f6069c247b61df52f886a66078a09d48a`で、元ファイルを有界の同期stepで私有退避へコピーし、全量成功後だけ封印する。範囲要求の受付時に資源を保持し、owner release後も既存要求を実行できる。完了bytes/IDは資源を保持せず、元path差し替えや退避削除後も変わらない。
+
+固定clang-cl 19.1.5、専用targetのDebug/tidy/ASan/UBSan build、`nib_source_resource_probe.exe` 228 checks/0 failures、C++16ファイルformat、conformance 0違反。初回の試験側複雑度12/入れ子4違反を関数抽出で直し、失敗ログを保存。独立レビューで終了状態とmove代入の不足を補完し、未解決指摘なし。試験input/2spool/空folderは削除済み。[コマンド・SHA・範囲・再利用](source-resource-2026-10-13.md)。
+
+実験コード/CMakeは専用branchに保存し、mainへはADR・結果・進捗文書だけ。製品API/機械強制は追加しない。OS取消・100ms・2GiB・製品temp/予算・UTF-8/索引・全caller移行は未確認で、#452の性能待ちも維持。ARC/CPPはADR0125、QLT-001/012/013、保存schema変更なし、Waivers none。文書差分/目視で統合しCI不要。恒久証拠と監査整理は`D:/NeNeNib/evidence/source-resource-465/closeout.json`。
