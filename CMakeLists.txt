@@ -222,6 +222,10 @@ nenenib_system_link(NeNeNib user32)
 nenenib_system_link(NeNeNib ole32)
 nenenib_system_link(NeNeNib shell32)
 set_property(TARGET NeNeNib PROPERTY WIN32_EXECUTABLE TRUE)
+# ADR 0130: 窓を見せた後にしか要らない描画と文字組みの DLL は遅延読み込みにする（製品の target だけ）。
+target_link_options(NeNeNib PRIVATE /DELAYLOAD:d3d11.dll /DELAYLOAD:d2d1.dll /DELAYLOAD:dcomp.dll
+    /DELAYLOAD:dxgi.dll /DELAYLOAD:DWrite.dll)
+target_link_libraries(NeNeNib PRIVATE delayimp)
 
 # ADR 0082: 開発用の閉じた比較。unit は inline の足場だけ借用し、CTest に登録しない。
 nenenib_target(nib_perf_probes performance_tests EXECUTABLE
