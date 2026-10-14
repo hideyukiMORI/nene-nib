@@ -23,7 +23,7 @@
 1. **追従は「頼む」と「解決する」を分ける。** `follow_caret()` / `follow_position(p)` は追従したい位置を `pending_follow_` に置くだけで、layout を作らない。後から来た頼みは前の頼みを置き換える（最後に頼んだ位置だけが意味を持つ）。
 2. **解決するのはスクロールを読む直前の 1 か所。** controller の中で `state_.scroll()` を読む所と `visual_view()` を作る所は、private の `settled_scroll()`（非 const・保留があれば `followed()` を計算して `state_` に写し、失敗は `layout_failure_` に置く）を通す。`state_.scroll()` を直接読まない（ARC-012: 読む道は 1 本）。
 3. **`frame()` は解決してから作る。** `frame()` は非 const にし、先頭で解決する。`const EditorController` から `frame()` を読んでいた試験は非 const に直す（`delivery()` / `documents()` / `title_bar_input()` などスクロールを読まない口は const のまま）。
-4. **解決の順と結果は即時と同じ。** 解決はその時点の state（本文・選択・モード・見えている行数）で `followed()` を 1 回呼ぶ。意図の列の中でスクロールを読む意図（画面行の移動・`ScrollLines`・`VisibleLines`・Vim の鍵・マウスの `PlaceCaret`・frame）は読む前に解決するので、観測できる値は即時の実装と一致する。一致しないのは「読まれないまま次の頼みで置き換わった追従」だけで、これは画面に出ない。
+4. **解決はその時点の state で 1 回。** 解決はその時点の state（本文・選択・モード・見えている行数）で `followed()` を 1 回呼ぶ。スクロールを読む意図（画面行の移動・`ScrollLines`・`VisibleLines`・Vim の鍵・マウスの `PlaceCaret`・frame）は読む前に解決するので、それらが見る値は解決済みである。読まれないまま続いた複数の頼み（打鍵・undo/redo・IME の確定が 1 枚の WM_PAINT の前に続いたとき）は最後の 1 つだけが効く。通常モードの追従は今のスクロールからの最小の移動なので、即時の実装が途中の画面を経由して着いた位置とは違い得る（例: undo で 20 行目へ跳んでから次の undo で 5 行目へ戻ると、即時は 5 行目を先頭に、遅延は元の画面のまま）。どちらもキャレットは見えており、Vim の鍵は毎回解決するので fixture には出ない。
 5. **Vim の鍵は毎回解決する（本 ADR の範囲外の費用）。** `measured_vim_step` は `VimViewport` を engine に渡すので、Vim の鍵はスクロールを読む意図に当たる。Vim INSERT の連打はこの ADR では速くならない。engine が viewport を `layout_request` と同じ要求の形で後から求める案は後続の Issue。
 6. **基準値・許容・ゲートは変えない。** 連打の 2 本が既存の基準に戻ることを正式な QLT-014 で示す。`--adopt` はしない。
 
@@ -40,7 +40,7 @@
 
 - 窓で連続する WM_CHAR をまとめて 1 つの `InsertText` にする: 1 打鍵 = 1 意図の原則（ADR 0009）と Vim の鍵の記録・再生の単位を変える。
 - キャレット行の幅を文字数や字体の最大幅で見積もって layout を省く: 別の文字幅表を持たない（ADR 0114 の決定 3）。
-- 状態遷移そのものを WM_PAINT まで遅らせる: ADR 0084 が却下済み。本 ADR が遅らせるのは追従の解決だけで、本文・選択・IME・保存・終了は即時のまま。
+- 状態遷移そのものを WM_PAINT まで遅らせる: ADR 0084 が却下済み。本 ADR が遅らせるのは追従の解決（`TextLayoutPort` の呼び出し）だけで、本文・選択・IME・保存・終了は即時のまま。ADR 0084 の文脈の「状態遷移とポート呼び出しを省略・延期しない」は、スクロール追従の解決に限って本 ADR で改める。
 - `mutable` で const の `frame()` から解決する: CPP-003 が禁じる。
 
 ## 検証
