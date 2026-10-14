@@ -86,7 +86,7 @@ class EditorController final
     // 同じに流し、鍵が閉じた失敗で終わったら残りの鍵を流さない。窓で打った鍵は失敗しても
     // 次の鍵が走るので、この口は通らない。
     [[nodiscard]] EditorFrame press_vim_keys(std::span<const core::VimKey> keys);
-    [[nodiscard]] EditorFrame frame() const;
+    [[nodiscard]] EditorFrame frame();
     [[nodiscard]] bool command_line_active() const noexcept;
     [[nodiscard]] bool command_palette_active() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
@@ -132,7 +132,7 @@ class EditorController final
     // ここを通り、鍵が閉じた失敗で終わったら理由を返す（ADR 0046 の決定 3）。
     [[nodiscard]] std::optional<core::VimRepeatFailure> step_vim(const core::VimKey &key);
     [[nodiscard]] std::expected<core::VimStep, TextLayoutFailure>
-    measured_vim_step(const core::VimKey &key) const;
+    measured_vim_step(const core::VimKey &key);
     void load_vim_clipboard();
     void send_vim_clipboard(const std::optional<core::VimRegister> &written);
     // 再生のあいだに積んだ編集を 1 つの undo 単位に畳む（ADR 0046 の決定 3）。
@@ -310,13 +310,17 @@ class EditorController final
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
     [[nodiscard]] bool move_visual(const MoveCaret &intent);
-    [[nodiscard]] VisualTextView visual_view() const;
+    [[nodiscard]] VisualTextView visual_view();
     void clamp_scroll();
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
+    // 追従は頼むだけで、スクロールを読む直前に 1 回だけ解決する（ADR 0128 の決定 1・2）。
     void follow_caret();
     void follow_position(core::TextPosition position);
+    void settle_follow();
+    // controller がスクロールを読む道はこの 1 本（ADR 0128 の決定 2）。
+    [[nodiscard]] const ScrollState &settled_scroll();
     // incsearch の preview（ADR 0041 の決定 3・5）。
     void update_search_preview();
     void restore_search_origin(const ScrollState &origin);
@@ -339,8 +343,8 @@ class EditorController final
     [[nodiscard]] static const core::VimPattern &
     frame_pattern(std::reference_wrapper<const core::VimPattern> pattern);
     [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern, core::Offset caret) const;
-    [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines() const;
+                                     const core::VimPattern *pattern, core::Offset caret);
+    [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines();
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。
     [[nodiscard]] std::optional<CompositionView> composed() const;
@@ -365,6 +369,8 @@ class EditorController final
     EditorState state_;
     core::TextViewGeometry view_geometry_{};
     std::optional<TextLayoutFailure> layout_failure_;
+    // 頼まれてまだ解決していない追従の位置。後の頼みが前の頼みを置き換える（ADR 0128 の決定 1）。
+    std::optional<core::TextPosition> pending_follow_;
     std::optional<float> wanted_x_;
     // `.` と `@` の再生で流す鍵の列と、それぞれの鍵の入れ子の深さ（ADR 0046 の決定 3・4）。
     // replay_depth_ はいま流している鍵の深さで、再生の外（打った鍵）では空。どれも

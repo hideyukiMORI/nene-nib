@@ -533,10 +533,10 @@ void verify_open_failure_adds_no_tab()
     ScriptedFolders folders;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
-    const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
-                                                  settings, themes, session, history, folders,
-                                                  bookmarks, text_layouts},
-                                      initial);
+    EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
+                                            themes, session, history, folders, bookmarks,
+                                            text_layouts},
+                                initial);
     return controller.frame();
 }
 
@@ -789,7 +789,7 @@ void verify_band_release_after_scroll()
 }
 
 // 状態から読む配置の入力は、表示値から作る入力と 6 つの欄で一致する（ADR 0056 の決定 9）。
-[[nodiscard]] bool same_band_input(const EditorController &controller)
+[[nodiscard]] bool same_band_input(EditorController &controller)
 {
     const TitleBarInput read = controller.title_bar_input(1800, 144);
     const TitleBarInput built = title_bar_input(controller.frame(), 1800, 144);

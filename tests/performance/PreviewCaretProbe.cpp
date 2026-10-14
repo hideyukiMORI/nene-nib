@@ -167,7 +167,7 @@ void prepare_preview(Editing &editing, PreviewCaretWorkload workload, const std:
            !frame.document.last_failure.has_value() && preview_input_equal(frame, workload);
 }
 
-[[nodiscard]] bool preview_state_equal(const application::EditorController &controller,
+[[nodiscard]] bool preview_state_equal(application::EditorController &controller,
                                        PreviewCaretWorkload workload)
 {
     const auto vim = controller.vim_state();
@@ -199,7 +199,7 @@ void prepare_preview(Editing &editing, PreviewCaretWorkload workload, const std:
            editing.files().written() == input;
 }
 
-[[nodiscard]] std::uint64_t preview_frames(const application::EditorController &controller,
+[[nodiscard]] std::uint64_t preview_frames(application::EditorController &controller,
                                            application::TimingPort &timing)
 {
     std::uint64_t checksum = 0;

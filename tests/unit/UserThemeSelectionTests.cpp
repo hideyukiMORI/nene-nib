@@ -249,10 +249,10 @@ void verify_theme_startup_notice()
     expect(!frame.command_message.has_value() && themes.reads() == 1,
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
-    const EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
-                                                       themes, session, history, folders, bookmarks,
-                                                       text_layouts},
-                                      initial};
+    EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
+                                                 themes, session, history, folders, bookmarks,
+                                                 text_layouts},
+                                initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,
            "failed settings do not prevent opening initial document");

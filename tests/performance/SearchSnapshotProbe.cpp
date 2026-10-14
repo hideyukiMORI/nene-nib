@@ -205,7 +205,7 @@ void prepare_snapshot(Editing &editing, std::size_t index, const std::string &in
 [[nodiscard]] bool snapshot_state_equal(Editing &editing, std::size_t index, bool finished)
 {
     const bool remembered = index != 5U && index != 7U && (index != 6U || finished);
-    const auto &controller = editing.controller();
+    auto &controller = editing.controller();
     return controller.vim_state().last_search.has_value() == remembered &&
            snapshot_frame_equal(controller.frame(), index, finished);
 }
@@ -228,7 +228,7 @@ void prepare_snapshot(Editing &editing, std::size_t index, const std::string &in
     return std::unexpected(ProbeFailure::wrong_result);
 }
 
-[[nodiscard]] std::uint64_t snapshot_frames(const application::EditorController &controller,
+[[nodiscard]] std::uint64_t snapshot_frames(application::EditorController &controller,
                                             application::TimingPort &timing)
 {
     std::uint64_t checksum = 0;

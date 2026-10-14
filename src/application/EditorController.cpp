@@ -1085,12 +1085,25 @@ void EditorController::follow_caret()
     follow_position(state_.text().position_of(state_.selection().caret));
 }
 
-// 位置が見える範囲に入るようにスクロールする。キャレットと incsearch の preview が同じ計算を
-// 使う（ADR 0041 の決定 3）。
+// 位置が見える範囲に入るようにスクロールすることを頼む。キャレットと incsearch の preview が
+// 同じ計算を使う（ADR 0041 の決定 3）。layout は作らず、解決はスクロールを読む所で 1 回だけ
+// （ADR 0128 の決定 1・2）。
 void EditorController::follow_position(core::TextPosition position)
 {
+    pending_follow_ = position;
+}
+
+// 保留を先に空にしてから view を作るので、visual_view() の先頭の解決へ再入しない。解決はその
+// 時点の state で 1 回（ADR 0128 の決定 4）。
+void EditorController::settle_follow()
+{
+    const auto pending = std::exchange(pending_follow_, std::nullopt);
+    if (!pending.has_value())
+    {
+        return;
+    }
     const auto followed =
-        visual_view().followed(core::TextCaret{position, state_.caret_affinity()},
+        visual_view().followed(core::TextCaret{pending.value(), state_.caret_affinity()},
                                scroll_follow_for(state_.mode()), scroll_extent_for(state_.mode()));
     if (!followed)
     {
@@ -1101,6 +1114,12 @@ void EditorController::follow_position(core::TextPosition position)
     {
         state_ = state_.with_scroll(followed.value());
     }
+}
+
+const ScrollState &EditorController::settled_scroll()
+{
+    settle_follow();
+    return state_.scroll();
 }
 
 void EditorController::accept(const InsertText &intent)
@@ -1117,7 +1136,7 @@ void EditorController::accept(const MoveCaret &intent)
     }
     const core::Offset caret =
         core::moved_caret(state_.text(), state_.selection().caret,
-                          core::CaretMoveRequest{intent.motion, state_.scroll().visible_lines,
+                          core::CaretMoveRequest{intent.motion, settled_scroll().visible_lines,
                                                  caret_unit(state_.mode())});
     move_caret_to(caret, anchoring_in(state_.mode(), intent.anchoring));
     settle_vim_caret();
@@ -1335,7 +1354,7 @@ void EditorController::redo_edit()
 
 void EditorController::accept(const ScrollLines &intent)
 {
-    const auto &scroll = state_.scroll();
+    const auto &scroll = settled_scroll();
     const auto moved = visual_view().shifted(
         core::VisualPosition{scroll.first_visible, scroll.first_row}, intent.lines);
     if (!moved)
@@ -1351,11 +1370,11 @@ void EditorController::accept(const ScrollLines &intent)
 void EditorController::clamp_scroll()
 {
     // 起動時は幅が未確定。保存した画面行を最初のVisibleLinesまで保つ。
-    if (view_geometry_.width <= 0 && state_.scroll().first_row > 0)
+    if (view_geometry_.width <= 0 && settled_scroll().first_row > 0)
     {
         return;
     }
-    const auto &scroll = state_.scroll();
+    const auto &scroll = settled_scroll();
     const auto within =
         visual_view().constrained(core::VisualPosition{scroll.first_visible, scroll.first_row},
                                   scroll_extent_for(state_.mode()));
@@ -1371,10 +1390,11 @@ void EditorController::clamp_scroll()
 void EditorController::accept(const VisibleLines &intent)
 {
     const std::size_t lines = std::max<std::size_t>(intent.lines, 1);
+    // 前の頼みは前の寸法で解決してから寸法を替える（ADR 0128 の決定 4）。
+    const std::size_t previous = settled_scroll().visible_lines;
     view_geometry_ = intent.geometry;
-    state_ =
-        state_.with_vim(core::vim_after_resize(state_.vim(), state_.scroll().visible_lines, lines));
-    auto scroll = state_.scroll();
+    state_ = state_.with_vim(core::vim_after_resize(state_.vim(), previous, lines));
+    auto scroll = settled_scroll();
     scroll.visible_lines = lines;
     state_ = state_.with_scroll(scroll);
     clamp_scroll();
@@ -1607,9 +1627,10 @@ void EditorController::perform(const core::VimOpenCommandLine &)
 
 void EditorController::perform(const core::VimOpenSearch &effect)
 {
+    const ScrollState origin = settled_scroll();
     state_ = state_.with_command_input(core::SearchLine::opened(effect.direction));
-    state_ = state_.with_search_preview(SearchPreview{
-        std::nullopt, state_.scroll(), state_.text().position_of(state_.selection().caret)});
+    state_ = state_.with_search_preview(
+        SearchPreview{std::nullopt, origin, state_.text().position_of(state_.selection().caret)});
 }
 
 // 入力行が変わるたびに 1 か所で呼ぶ（ADR 0041 の決定 3）。画面は毎回 origin から数え直すので、
@@ -1677,8 +1698,9 @@ void EditorController::accept(const SearchHop &intent)
 // 見えている行数は入力中に窓の大きさで変わり得るので、戻すのは先頭行だけ。
 void EditorController::restore_search_origin(const ScrollState &origin)
 {
-    state_ = state_.with_scroll(ScrollState{origin.first_visible, state_.scroll().visible_lines,
-                                            origin.first_row, origin.horizontal});
+    const std::size_t visible = settled_scroll().visible_lines;
+    state_ = state_.with_scroll(
+        ScrollState{origin.first_visible, visible, origin.first_row, origin.horizontal});
 }
 
 void EditorController::accept(const CommandText &intent)
@@ -2360,8 +2382,9 @@ void EditorController::perform(const core::VimMoveTo &effect)
 
 void EditorController::perform(const core::VimNavigate &effect)
 {
+    const std::size_t visible = settled_scroll().visible_lines;
     state_ = state_.with_selection(effect.selection)
-                 .with_scroll(ScrollState{effect.first_visible, state_.scroll().visible_lines});
+                 .with_scroll(ScrollState{effect.first_visible, visible});
     state_ = state_.with_history(state_.history().sealed());
 }
 
@@ -2720,6 +2743,7 @@ std::expected<void, FileFailure> EditorController::open_document(const core::Fil
     auto [text, opened] = std::move(document).value();
     if (blank_untitled())
     {
+        settle_follow();
         state_ = state_.with_opened(std::move(text), std::move(opened));
         return {};
     }
@@ -2819,6 +2843,8 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
 
 void EditorController::leave_document()
 {
+    // 出ていく文書の追従を今の文書で解決してから置く（ADR 0128・保留を捨てない）。
+    settle_follow();
     close_replayed_unit();
     // 入力行の取消は検索の preview を閉じて入力前のスクロールへ戻し、検索なら Vim の保留も
     // 捨てる。Esc と同じ 1 本を通す（ADR 0041 の決定 5・ADR 0056 の決定 4）。
@@ -2927,6 +2953,7 @@ void EditorController::accept(const WalkRecentTab &intent)
 // 窓は閉じていく途中なので、状態を変えず何も出さない。
 void EditorController::accept(const EndSession &intent)
 {
+    settle_follow();
     static_cast<void>(ports_.session.write(ended_session(state_, intent.reason)));
     // 閉じたファイルを履歴に記録する（ADR 0060 の決定 8）。一覧の書きの後。
     remember(ended_paths(state_, intent.reason));
@@ -3262,7 +3289,7 @@ EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> p
 // （ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent を返すので落ちる。
 // 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
 LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern, core::Offset caret) const
+                                     const core::VimPattern *pattern, core::Offset caret)
 {
     const core::TextBuffer &text = state_.text();
     LineView view = visual_view().line(line);
@@ -3298,9 +3325,9 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
     return view;
 }
 
-std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visible_lines() const
+std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visible_lines()
 {
-    const ScrollState scroll = state_.scroll();
+    const ScrollState scroll = settled_scroll();
     const std::size_t total = state_.text().line_count();
     const std::size_t first = std::min(scroll.first_visible.value, total);
     const std::size_t last =
@@ -3385,8 +3412,10 @@ EditorDelivery EditorController::delivery() const
                           layout_failure_};
 }
 
-EditorFrame EditorController::frame() const
+// 頼まれた追従を解決してから作る（ADR 0128 の決定 3）。解決の失敗は failure に載る。
+EditorFrame EditorController::frame()
 {
+    const ScrollState scroll = settled_scroll();
     auto delivered = delivery();
     const auto caret = state_.text().position_of(state_.selection().caret);
     const auto &theme = core::selected_theme(delivered.settings, delivered.appearance);
@@ -3397,7 +3426,7 @@ EditorFrame EditorController::frame() const
     return EditorFrame{std::move(lines).value_or(std::vector<LineView>{}),
                        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode),
                                  state_.caret_affinity()},
-                       state_.scroll().first_visible,
+                       scroll.first_visible,
                        state_.text().line_count(),
                        delivered.appearance,
                        theme.ui,
@@ -3424,6 +3453,6 @@ EditorFrame EditorController::frame() const
                        delivered.operation_request,
                        core::operation_guide(guide_context(), delivered.mode),
                        failure,
-                       state_.scroll().horizontal};
+                       scroll.horizontal};
 }
 } // namespace nenenib::application

@@ -38,14 +38,16 @@ namespace
 }
 } // namespace
 
-VisualTextView EditorController::visual_view() const
+// view はスクロールを読むので、頼まれた追従を先に解決する（ADR 0128 の決定 2）。
+VisualTextView EditorController::visual_view()
 {
+    settle_follow();
     return VisualTextView{state_, ports_.text_layouts, view_geometry_};
 }
 
 bool EditorController::move_visual(const MoveCaret &intent)
 {
-    const auto motion = screen_motion(intent.motion, state_.scroll().visible_lines);
+    const auto motion = screen_motion(intent.motion, settled_scroll().visible_lines);
     if (view_geometry_.width <= 0 || state_.mode() != core::EditMode::ordinary ||
         !motion.has_value())
     {
@@ -86,7 +88,7 @@ void EditorController::accept(const PointText &intent)
     {
         return;
     }
-    const auto &scroll = state_.scroll();
+    const auto &scroll = settled_scroll();
     const auto row = std::clamp<std::int64_t>(intent.row, 0,
                                               static_cast<std::int64_t>(scroll.visible_lines) - 1);
     const auto view = visual_view();
@@ -106,9 +108,9 @@ void EditorController::accept(const PointText &intent)
 }
 
 std::expected<core::VimStep, TextLayoutFailure>
-EditorController::measured_vim_step(const core::VimKey &key) const
+EditorController::measured_vim_step(const core::VimKey &key)
 {
-    const auto &scroll = state_.scroll();
+    const auto &scroll = settled_scroll();
     std::vector<core::VimLineRows> rows;
     core::VimEditorView view{
         state_.text(),
