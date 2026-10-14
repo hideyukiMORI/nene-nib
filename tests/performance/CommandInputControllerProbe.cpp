@@ -210,7 +210,7 @@ void prepare_controller(Editing &editing, const ControllerCase &sample, const st
 [[nodiscard]] bool controller_equal(Editing &editing, const ControllerCase &sample,
                                     const std::string &input)
 {
-    const auto &controller = editing.controller();
+    auto &controller = editing.controller();
     const auto documents = controller.documents();
     return frame_equal(controller.frame(), sample, input) && documents.size() == 1U &&
            document_equal(documents.at(0U)) && document_equal(controller.delivery().document) &&

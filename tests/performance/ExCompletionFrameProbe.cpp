@@ -147,7 +147,7 @@ void prepare(Editing &editing, ExCompletionWorkload workload, const ExCompletion
 [[nodiscard]] bool controller_equal(Editing &editing, const ExCompletionSample &sample,
                                     core::InputLinePrompt prompt)
 {
-    const auto &controller = editing.controller();
+    auto &controller = editing.controller();
     const auto documents = controller.documents();
     return frame_equal(controller.frame(), sample, prompt) && documents.size() == 1U &&
            document_equal(documents.at(0U)) && document_equal(controller.delivery().document) &&
@@ -156,7 +156,7 @@ void prepare(Editing &editing, ExCompletionWorkload workload, const ExCompletion
            editing.history().read().value().files.empty() && controller.vim_state().incsearch &&
            controller.vim_state().highlight == core::VimSearchHighlight::on;
 }
-[[nodiscard]] std::uint64_t generated_frames(const application::EditorController &controller,
+[[nodiscard]] std::uint64_t generated_frames(application::EditorController &controller,
                                              application::TimingPort &timing)
 {
     std::uint64_t checksum = 0;

@@ -365,10 +365,10 @@ void verify_quiet_paths()
         ScriptedFolders folders;
         ScriptedBookmarks bookmarks;
         ScriptedTextLayouts text_layouts;
-        const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
-                                                      settings, themes, session, history, folders,
-                                                      bookmarks, text_layouts},
-                                          {work_open('a'), work_open('b')});
+        EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
+                                                themes, session, history, folders, bookmarks,
+                                                text_layouts},
+                                    {work_open('a'), work_open('b')});
         expect(controller.frame().tabs.size() == 2 && history.reads() == 0 &&
                    history.writes() == 0 && folders.requests().empty() && folders.collects() == 0,
                "starting with file arguments never touches the history nor the folder");
