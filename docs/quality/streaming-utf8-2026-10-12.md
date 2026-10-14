@@ -157,3 +157,18 @@ build完了という状態変化後に10秒idleを置いた1回の確認は22/15
 **4案目の局所比較と正式QLT-014 openはそれぞれ0回。性能は失敗ではなく未知・未受理で、PR453はdraft・Ready/CI/main統合は未了。** 今回のhideの測定許可と実機が空いているとの申告は時点付きで記録し、次回はその時点の時間帯/負荷を確認する。実装・対象契約・独立レビュー・probe/製品Releaseは準備済みで保持する。
 
 本節とADR状態/currentだけの後続commitは文書変更であり、src/tests/eng/CMakeとの差分0を照合してbuild/検証版348cfb3との対応を記録する。成功済み契約を再実行・再build・再configureしない。恒久先は新規`D:/NeNeNib/evidence/streaming-utf8-452/checkpoint-scalar-fold-20261014/`。現在の全原ログ、両plan、負荷確認、script、レビュー、assembly、PR本文、正確な両probe/configと製品exe/正規記録をSHA照合して収載する。初回/2案目と3案目の以前のcheckpointは参照として保持し上書きしない。未受理候補と実行物が必要なため2作業木とoutputsは削除せず、技術受理・main統合・必要反映・恒久収載後の安全監査まで残す。保存schemaの変更なし。Waivers: none。
+
+## 2026-10-15 4案目の実測（固定計画 `perf-plan-scalar-fold.json` のとおり・各 1 回）
+
+hide 外出中の指示（本日は自由に計測可・ほかの席なし）で、設計席が負荷 1〜3% を確かめてから固定計画の 2 コマンドを順に 1 回ずつ実行した（`D:/NeNeNib/outputs/perf-day-20261015/452-local-compare.log`）。before e5f8e70 / after 348cfb3、ABBA × 3 ブロック・process ごとに暖機 1 + 20 反復・各入力 240 値。外れ値除去・測り直し・新しい閾値はない。
+
+| workload | before 中央値（範囲） | after 中央値（範囲） | 対応比の中央値 |
+|---|---:|---:|---:|
+| utf8-validate-ascii-16mib | 991.0 µs（922〜1504） | 999.0 µs（910〜1189） | 1.003125 |
+| utf8-validate-japanese-6mib | 5323.5 µs（5013〜6310） | 5535.0 µs（5413〜6018） | 1.034234 |
+
+全値は `D:/NeNeNib/outputs/streaming-utf8-fix-20261014/{ascii,japanese}-scalar-fold.json`。ASCII は 3 案目の 1.105 から差なし（1.003）へ戻り、日本語は 3 案目の 1.034 と同じ 3.4%（6 MiB の検証で約 0.21 ms）の増加が残る。増加は隠さず記録する。
+
+正式な QLT-014 の open は、候補の製品 Release（`D:/NeNeNib/worktrees/452-streaming-utf8/build/release-348cfb3/NeNeNib.exe`・SHA-256 `82d81029…3857`）で `python eng/measure-speed.py --check --bench open-large-file-16mib --repetitions 5` を 1 回: 中央値 200.779 ms（200.160, 200.493, 200.779, 200.917, 216.617）・基準 249.783（上限 312.2）・退行 0・欠測 0。内訳の document_opened は 12.0 ms で、同日の main 89c582d（11.8）と #474（12.4）の間にあり、open では差が見えない。JSON は `D:/NeNeNib/outputs/perf-day-20261015/452-formal-open-348cfb3-speed.json`。
+
+設計席の評価: 本候補は分割入力の検証を同じ走査へ流す refactor で、速さの改善を主張しない。ASCII は同等、日本語の 3.4% は 16 MiB の open でも 0.6 ms 未満で画面に出ず、受理を妨げる大きさではないと判断する。基準値・許容は変えない。受理の最終判断（main への統合）は hide。
