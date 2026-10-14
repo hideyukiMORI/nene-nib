@@ -149,6 +149,11 @@ HRESULT BodyTextLayouts::set_spacing(const application::TextLayoutRequest &reque
     return format_->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, height, baseline);
 }
 
+void BodyTextLayouts::attach_timing(application::TimingPort *timing) noexcept
+{
+    timing_ = timing;
+}
+
 std::expected<BodyTextLayout, application::TextLayoutFailure>
 BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
 {
@@ -160,6 +165,10 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     const core::LayoutRect area{0, 0, std::max(request.geometry.width, 1),
                                 std::max(request.geometry.line_height, 1)};
     TextLayout made;
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::layout_begun);
+    }
     if (FAILED(factory_->CreateTextLayout(
             wide.value().c_str(), static_cast<UINT32>(wide.value().size()), format_.Get(),
             static_cast<float>(area.right), static_cast<float>(area.bottom), &made)))
@@ -170,6 +179,10 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     if (FAILED(made->GetMetrics(&metrics)))
     {
         return std::unexpected(unavailable);
+    }
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::layout_made);
     }
     BodyTextLayout entry{std::string(request.text), area, std::move(made)};
     entry.rows = std::max<std::size_t>(metrics.lineCount, 1);
