@@ -5216,3 +5216,8 @@ PR447のhead b5218ba、必須CI38275473024、正規merge e5f8e709eef61d88ebcdbd9
 固定clang-cl 19.1.5、専用targetのDebug/tidy/ASan/UBSan build、`nib_source_resource_probe.exe` 228 checks/0 failures、C++16ファイルformat、conformance 0違反。初回の試験側複雑度12/入れ子4違反を関数抽出で直し、失敗ログを保存。独立レビューで終了状態とmove代入の不足を補完し、未解決指摘なし。試験input/2spool/空folderは削除済み。[コマンド・SHA・範囲・再利用](source-resource-2026-10-13.md)。
 
 実験コード/CMakeは専用branchに保存し、mainへはADR・結果・進捗文書だけ。製品API/機械強制は追加しない。OS取消・100ms・2GiB・製品temp/予算・UTF-8/索引・全caller移行は未確認で、#452の性能待ちも維持。ARC/CPPはADR0125、QLT-001/012/013、保存schema変更なし、Waivers none。文書差分/目視で統合しCI不要。恒久証拠と監査整理は`D:/NeNeNib/evidence/source-resource-465/closeout.json`。
+
+## 5-er — キャレット追従の遅延解決で連打の基準超過を解消（Issue #474・ADR 0128）
+
+2026-10-15、main 89c582d の Release で 8 本を測り、連打 2 本だけ基準超過（空 11.266 ms・16 MiB 14.661 ms）。実験ブランチ cb18638 に節目を足して、1 打鍵の `apply` 65 µs のうち追従の DirectWrite layout が毎打鍵 1 回・50 µs と特定した。追従を頼むだけにし、スクロールを読む直前と `frame()` で 1 回解決する（`settled_scroll` の 1 本）。
+Debug（tidy / ASan / UBSan）、`--application` 16,029 checks と 11 scope、symbols 0 / conformance 0 / format 0。正式ゲートは 9bff5a3 の Release で 8 本とも基準内・退行 0: 連打 2.090 ms / 16 MiB 連打 2.227 ms、ほか 6 本は変更前と同等。[全値と条件](settled-follow-2026-10-15.md)。基準値は変えない。独立レビューと CI は PR #475、施主の試用は D41 のとおり merge の前。Waivers none。
