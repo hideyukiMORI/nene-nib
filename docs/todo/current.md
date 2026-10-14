@@ -12,7 +12,7 @@
 
 | 対象 | 状態・再開点 |
 | --- | --- |
-| #452 / PR453 分割UTF-8 | draft、性能未受理。3案目の対応比はASCII1.105407/日本語1.033577で全値を保持。4案目は検査と復号を一回にし対象14,246 checks/静的検査が成功、性能未測定。固定比較2条件→採否判断後に製品open。2作業木/原ログは残す |
+| #452 / PR453 分割UTF-8 | draft、性能未受理。4案目348cfb3は14,246 checks/静的検査/独立レビュー成功、probeと製品Release準備済み。負荷未安定で局所比較/正式openは0回、性能は未知。次回の時間帯/負荷を確認して固定比較→正式open。旧失敗値・2作業木・原ログを保持 |
 | #450 / #468 本文の接続 | [ADR0127](../adr/0127-large-file-integration-reserves-prepares-and-commits.md)と[全caller移行表](../design/2026-10-13-large-file-integration-map.md)を設計。次は資源台帳/退避回収の小実験と正典UTF-8/索引の結合。本文取得と保存版は同じ製品候補で統合。製品移行/2GiB未受理 |
 | #467 / PR470 取消実験 | ADR0126と[138契約の結果](../quality/overlapped-cancel-2026-10-13.md)をmain統合。実験コードは専用branch。実disk取消性・100msは未受理。恒久先はD:/NeNeNib/evidence/overlapped-cancel-467 |
 | #469 ASan診断 | #467で非致命的interception診断。静的にはUCRT frexp+4と強く整合するが最終hook/全検査範囲未確認。既存EXE/PDB/ログから切り分ける。無関係な既存不具合と断定しない |
