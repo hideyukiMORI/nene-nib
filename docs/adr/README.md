@@ -141,3 +141,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0124](0124-file-read-completes-the-declared-size.md) | 宣言サイズを取得し終えるまで読込を成功にしない | 受理・#463、対象139契約と境界検査成功 |
 | [0125](0125-source-resource-lifetime-is-probed-before-product-ports.md) | 退避資源の寿命を製品portへ入れる前に小さく確かめる | 限定実験受理・#465、同期228契約成功/製品API採用前 |
 | [0128](0128-caret-follow-settles-where-scroll-is-read.md) | キャレット追従はスクロールを読む所で 1 回だけ解決する | 提案・#474、連打の layout を打鍵ごとに作らない |
+| [0129](0129-vim-step-requests-the-viewport-when-needed.md) | Vim の鍵は viewport を必要なときだけ求める | 提案・#476、INSERT の連打で追従を解決しない |
