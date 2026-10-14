@@ -105,3 +105,37 @@ clean版`6c2c13f8b4d721d2f56a4fb3f1fdb08752b05c87`のまま固定`eng/toolchain.
 独立レビューでは実装欠陥を指摘せず、`validated_parts`だけでは拒否時点を区別できない契約の不足を確認。`tests/unit/Utf8ValidationTests.cpp`だけにE0 80、ED A0、F4 90 80の途中追加成功、EOF拒否、最後の80追加時の`invalid_utf8`と失敗後の旧pending/base不変を18 checks追加した。固定clang-formatの整形/検査、既存Debugの`cmake --build build --target nib_tests --parallel 2`（変更objectとlinkの2 steps）、通常ASan/UBSan条件の`build/nib_tests.exe --utf8`は13,939 checksで成功。`git diff --check`も成功。ASAN_OPTIONS等overrideなし。
 
 製品source・関連依存・harness・入力は変更せず、追加テストと2文書だけの変更。既存`--file-text`307 checks、symbols/conformanceの成功を再利用し、他scopeや製品を再実行しない。固定probeも6c2c13f版として保持し、テストのcommitに誤って付け替えず再configureしない。原ログ、固定plan、スクリプト、生成コード、両probe/configとcommit/source対応の恒久先は`D:/NeNeNib/evidence/streaming-utf8-452/checkpoint-evening-20261013/`。**性能比較・GUI openは測定時間帯の回答待ちで未実行、PR453はdraft・技術受理未了。** 初回/2案目の失敗値を残し、未完了worktree/outputsは削除しない。Waivers: none。
+
+### 2026-10-14 — 3案目の局所比較と4案目の一回走査
+
+hideが実機は空いていると伝えたため、保持済み3案目6c2c13fのprobeを固定計画どおりASCII→日本語、各1回のABBA×3/20 samples/warmup1/timeout60で比較した。beforeはe5f8e70。元planは変更せず、SHA-256 `c86f491d5ac003204662f8244cc9295c3c960847fc8d65bd05c6eae271488f78`を実行記録へ参照し、出力先と日付だけを更新した。
+
+| 入力 | before中央値（µs） | after中央値（µs） | 対応after/before比の中央値 |
+|---|---:|---:|---:|
+| ASCII 16,800,000 bytes | 1130.0 | 1248.0 | 1.105407 |
+| 日本語 6,219,000 bytes | 5572.0 | 5774.0 | 1.033577 |
+
+両条件exit 0、全240標本/各版120標本を保存し、両commit/exe SHA・input bytes/FNV/SHA・出力checksum・dirty 0・Release・compiler19.1.5/toolchainが全trialで一致した。全6 pairの対応比中央値は双方とも1を超え、process中央値ではASCII5/6、日本語6/6が増えた。前2案より日本語の増加は縮小したが、退行が解消したとは判断しない。正式QLT-014の合否ではなく局所比較であり、外れ値を除かず、同じ候補を測り直していない。
+
+実機はi9-10850K/20 logical processors、Windows 11 Pro 10.0.26300、HP推奨電源設定。測定直前のCPU負荷3標本は0/4/0%、build/testプロセスは不在。ほかのアプリを閉じず、専有環境とは主張しない。準備ラッパーはJSONを既定cp932で読んで失敗したが、probe起動前だった。UTF-8を明示して準備を修正し、その失敗も保存した。原ログ・全値・process/pair集計・plan・probe/configは`D:/NeNeNib/evidence/streaming-utf8-452/checkpoint-20261014/`へ54ファイルをSHA照合して収載。以前の失敗値とcheckpointも残す。
+
+続くhideの「対応を進めて」を受け、4案目は`src/core/Utf8.cpp`で継続byteの検査と復号を一つのループへまとめる。従来の`scan`は継続byteを検査した後、`decode`で同じbyteを再読込し長さ分岐を繰り返していた。小さいprivate `decoded_continuation`を`scan`と既存`decode`で共用し、境界確認→継続byte判定→値への追加を行う。scalar範囲は符号列が完成した後だけ判定し、E0 80/ED A0/F4 90 80の途中成功・EOF拒否・完成時拒否を維持する。新しいvalidator、専用inline属性、flags、閾値は追加しない。
+
+保持済み生成コードではbeforeのASCII内側ループと3案目はレジスタ割当以外の命令列が同じで、wordごとのstate spillは無い。入力ごとに一度だけのwrapper/state copyで約118µs増の全量を説明できない。ASCIIの原因は未確定で、この4案目もASCII改善を保証しない。ASCII走査、pending、overflow、公開API、保存schema、64MiB上限は変更しない。
+
+現在main60c9a8dを通常mergeした。内容の衝突は無かったが、既定Merge件名がGIT-003で拒否されたため、同じmergeを規約件名でab013b7として完了し初回拒否を記録した。上流#463のCompleteFileRead.hpp/Win32FileAdapter.cpp/FilePort.hpp/NibAdapterTests.cppはmainと一致し、139契約を再利用する。新しいUtf8.cppを通る`--utf8`/`--file-text`は今回確認する。出力先は`D:/NeNeNib/outputs/streaming-utf8-fix-20261014/`。4案目の対象検証とRelease probeの準備を進める段階であり、性能・GUI open・Ready/main統合は未了。Waivers: none。
+
+独立SOLの読み取りレビューはmain60c9a8dとのPR全体差分と4案目を確認し、対応が必要な指摘なし。レビューしたUtf8.cppのSHA-256は`e856410fcfca0468def0c68a8c4b7c0195242944b053f6f91dc3b87a728b5222`で、実ファイルとも一致した。最大3 bytesのpending、余分に写した次文字の再走査、完成後だけのscalar拒否、bytes_seen/countのoverflow不変条件、正典経路と既存契約の十分性を確認した。レビュー成功は実行契約や性能受理を代用しない。本件は分割所有の土台となるAPI/機能のリファクタリングであり、改善率を目的に候補を測り直すものではない。
+
+4案目の対象検証は固定clang-cl19.1.5/Debug/tidy/ASan/UBSan、通常のsanitizer環境で次のとおり成功した。既存テストは分割・拒否時点・一括/表示/UTF-16・読込境界を覆うため変更していない。
+
+| コマンド | 実結果・確認した退行 |
+|---|---|
+| `cmake --build build --target nib_tests NeNeNib --parallel 2` | 71 steps成功。変更したcoreと直接callerをcompile/link。上流FilePort.hppの更新に伴う依存再compileを含み、他scopeの実行ではない |
+| `build/nib_tests.exe --utf8` | 13,939 checks成功。全分割、未完/拒否/EOF、所有/不変性、完成後scalar拒否、ASCII、共有復号と表示/UTF-16 |
+| `build/nib_tests.exe --file-text` | 307 checks成功。BOM/文字コード判定、所有本文と読込の直接caller |
+| `python eng/symbols.py --build-dir build --require core application` | 2 libraries / 0違反。中核の外部依存を確認 |
+| `python eng/conformance.py --build-dir build` | 0違反。正典区画・宣言・実グラフを確認 |
+| 固定`clang-format --dry-run --Werror src/core/Utf8.cpp` / `git diff --check` | 成功。変更した本体の整形と差分の空白 |
+
+計14,246 checks。ログと実行script、検証したUtf8.cpp SHAは上記出力の`debug-build.log` / `utf8.log` / `file-text.log` / `symbols.log` / `conformance.log` / `contracts-result.json`。#463の139契約は入力不変を照合して再利用し、無関係なscope・全件回帰・Vim oracle・coverageは実行していない。実装・テスト・関連依存/必要な環境が変わらなければ、文書・commit・push・レビュー・mergeだけを理由にこの成功を繰り返さない。次はclean候補の新規専用Release probeと生成コードを準備し、同じ固定2条件を事前計画へする。4案目の性能・製品GUI open・全体受理は未了。
