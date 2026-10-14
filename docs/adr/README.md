@@ -140,3 +140,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0123](0123-ui-language-is-a-versioned-setting.md) | 表示言語は版付き設定に持ち、OSの観測値から明示操作時に解決する | 提案・#456、未実装/技術受理前 |
 | [0124](0124-file-read-completes-the-declared-size.md) | 宣言サイズを取得し終えるまで読込を成功にしない | 受理・#463、対象139契約と境界検査成功 |
 | [0125](0125-source-resource-lifetime-is-probed-before-product-ports.md) | 退避資源の寿命を製品portへ入れる前に小さく確かめる | 限定実験受理・#465、同期228契約成功/製品API採用前 |
+| [0130](0130-graphics-dlls-are-delay-loaded.md) | 描画と文字組みの DLL は遅延読み込みにする | 提案・#479、窓が見えるまでを 2〜4 ms 縮める |
