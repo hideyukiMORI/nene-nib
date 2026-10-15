@@ -142,3 +142,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0125](0125-source-resource-lifetime-is-probed-before-product-ports.md) | 退避資源の寿命を製品portへ入れる前に小さく確かめる | 限定実験受理・#465、同期228契約成功/製品API採用前 |
 | [0126](0126-overlapped-cancellation-drains-before-release.md) | OVERLAPPEDの取消要求と最終完了を分けて資源を回収する | 受理（隔離実験の寿命・取消契約。製品採用とASanの全検査範囲は未受理） |
 | [0127](0127-large-file-integration-reserves-prepares-and-commits.md) | 大容量本文の接続は資源を予約し、準備した操作と保存版を一度だけ確定する | 受理（製品接続の設計契約のみ。実装・実容量・性能の受理ではない） |
+| [0137](0137-autosave-every-30-seconds.md) | 未保存の編集は30秒ごとに裏で退避し、正常に閉じたら消し、起動で残っていれば1回聞く | 提案・#515、application→adapters→uiの3工程で実装中 |
