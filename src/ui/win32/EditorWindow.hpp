@@ -197,6 +197,12 @@ class EditorWindow final
     // 窓を壊す唯一の口（ADR 0059 の決定 3・ADR 0133 の決定 1）。前回のタブの一覧を書いてから壊す。
     // end_window と、最後の 1 つを閉じる close_tab が通る。デストラクタは作りかけの窓の後始末だけ。
     void leave(application::SessionEnd reason);
+    // OS の終了を問われたら exit_plan(session_end) に従って止めるか通すかを返す（ADR 0133）。
+    // end_window を通らず、leave_now でも窓を壊さない（確定の WM_ENDSESSION は一覧を書くだけ）。
+    [[nodiscard]] LRESULT query_session_end();
+    // OS の終了を止めた理由を、未保存が無くなったら外す（ADR 0133 の決定 4）。
+    // deliver の末尾と leave_now の答えが呼ぶ。
+    void release_session_block();
     // 前回のタブの一覧を書く意図を送る（leave と WM_ENDSESSION）。この後は窓へ描かない。
     void remember_session(application::SessionEnd reason);
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
@@ -259,5 +265,7 @@ class EditorWindow final
     ATOM class_ = 0;
     UINT dpi_ = 96;
     bool rendering_failed_ = false;
+    // WM_QUERYENDSESSION で ShutdownBlockReasonCreate を立てた印（ADR 0133 の決定 4）。
+    bool shutdown_blocked_ = false;
 };
 } // namespace nenenib::ui::win32

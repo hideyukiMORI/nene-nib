@@ -701,6 +701,7 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_IME_ENDCOMPOSITION:
         return compose_message(message, word, data);
     case WM_CLOSE:
+    case WM_QUERYENDSESSION:
     case WM_ENDSESSION:
     case WM_DESTROY:
     case work_message:
@@ -713,12 +714,15 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
 
 LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
 {
-    // 窓の終わりの 3 通と、裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。
+    // 窓の終わりの 4 通と、裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。
     switch (message)
     {
     case WM_CLOSE:
         close_window();
         return 0;
+    case WM_QUERYENDSESSION:
+        // ENDSESSION_CRITICAL でも同じに答える。止められるかは OS 次第（ADR 0133 の限界）。
+        return query_session_end();
     case WM_ENDSESSION:
         // OS の終了が確定したら（word が真）一覧を書く。窓は壊さない（ADR 0059 の決定 3）。
         if (word != FALSE)
@@ -1444,6 +1448,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     finish_operation(operation_request);
     finish_display_question(display_asked);
     finish_tab_action(close_request, closing);
+    release_session_block();
 }
 
 void EditorWindow::finish_display_question(bool question)
@@ -1712,7 +1717,46 @@ bool EditorWindow::confirm_unsaved_tabs(bool (EditorWindow::*confirm)())
 void EditorWindow::leave(application::SessionEnd reason)
 {
     remember_session(reason);
+    // 壊す窓に立てた OS の終了を止める理由は、ここで外す（ADR 0133 の決定 4）。確認を通り抜けたので
+    // 残る未保存は捨てると決めたもの。
+    if (shutdown_blocked_)
+    {
+        static_cast<void>(ShutdownBlockReasonDestroy(window_));
+        shutdown_blocked_ = false;
+    }
     DestroyWindow(window_);
+}
+
+LRESULT EditorWindow::query_session_end()
+{
+    const auto unsaved = application::unsaved_tab_count(controller_.documents());
+    switch (application::exit_plan(application::ExitCause::session_end, unsaved))
+    {
+    case application::ExitPlan::block_session_end:
+        // OS が「終了を妨げています」と理由を見せる。使う人が戻ってから今日の確認を通す。
+        shutdown_blocked_ =
+            ShutdownBlockReasonCreate(window_, L"保存されていない変更があります") != FALSE;
+        return FALSE;
+    case application::ExitPlan::leave_now:
+        release_session_block();
+        return TRUE;
+    case application::ExitPlan::confirm_each_tab:
+    case application::ExitPlan::confirm_each_tab_without_cancel:
+        // session_end はこの 2 つを返さない（--exit-plan）。返ったら止めるほうへ倒す。
+        return FALSE;
+    }
+    std::unreachable();
+}
+
+void EditorWindow::release_session_block()
+{
+    if (!shutdown_blocked_ || window_ == nullptr ||
+        application::unsaved_tab_count(controller_.documents()) != 0)
+    {
+        return;
+    }
+    static_cast<void>(ShutdownBlockReasonDestroy(window_));
+    shutdown_blocked_ = false;
 }
 
 void EditorWindow::remember_session(application::SessionEnd reason)

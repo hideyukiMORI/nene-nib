@@ -29,7 +29,7 @@
    | 書き込みが途中で失敗（ディスク満杯・権限なし） | 今日どおり: 一時ファイルに書いて置き換えるので元のファイルは残る。理由を見せて窓は続く（ADR 0010） |
 
 3. **描画を失った後の確認は OS のダイアログ（`MessageBoxW`・ファイルダイアログ）で出す。** 本窓は描けないままでよい（Mica の面）。確認の文言は「描画できなくなったので閉じます」で始め、取消のボタンを出さない（`MB_YESNO`）。
-4. **`WM_QUERYENDSESSION` の後に窓が続いた場合、未保存が無くなる瞬間（保存・タブを閉じる・捨てる）に `ShutdownBlockReasonDestroy` を呼ぶ。** 呼ぶのは `leave` と `deliver` の末尾の 1 か所ずつ（未保存の数が 0 になったとき）。
+4. **`WM_QUERYENDSESSION` の後に窓が続いた場合、未保存が無くなる瞬間（保存・タブを閉じる・捨てる）に `ShutdownBlockReasonDestroy` を呼ぶ。** 呼ぶのは `leave` と `deliver` の末尾の 1 か所ずつ（未保存の数が 0 になったとき）。`WM_QUERYENDSESSION` は `end_window` を通らず、`exit_plan(session_end, 未保存の数)` の値を自分で見て `FALSE` か `TRUE` を返すだけで窓を壊さない（`end_window` は `leave_now` を `DestroyWindow` として扱うので、通すと未保存 0 の問い合わせで窓を壊してしまう）。
 5. **受理: `--exit-plan` の契約（全経路 × 未保存の有無）、ui の自己レビュー（`DestroyWindow` の呼び出しが `leave` だけであることを grep で）、Debug（tidy / ASan / UBSan）、`--application` の既存契約。** 窓ありの確認（device lost の注入）は `eng/verify-window.py` には足せない（注入の口が無い）ので、施主の試用で「リモートデスクトップの切り替え」か「ディスプレイドライバの再起動（Win+Ctrl+Shift+B）」を 1 回行い、未保存の文書で確認が出ることを見る。
 
 ## 却下した選択肢
