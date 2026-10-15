@@ -6,10 +6,10 @@
 #include "EditorWindow.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
-#include "NullAutosaveAdapter.hpp"
 #include "OpenDocument.hpp"
 #include "TemporaryFiles.hpp"
 #include "Win32AppearanceAdapter.hpp"
+#include "Win32AutosaveAdapter.hpp"
 #include "Win32BookmarkAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
@@ -133,6 +133,17 @@ auto reclaimed_settings_paths()
     return paths;
 }
 
+// 窓が閉じるまで窓メッセージを配る。
+void pump_messages()
+{
+    MSG message{};
+    while (GetMessageW(&message, nullptr, 0, 0) > 0)
+    {
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -166,7 +177,8 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
-    nenenib::adapters::win32::NullAutosaveAdapter autosave;
+    nenenib::adapters::win32::Win32AutosaveAdapter autosave(
+        worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session, history, folders, bookmarks,
@@ -186,12 +198,8 @@ int run(HINSTANCE instance)
     // 「届いた」の合図も窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（決定
     // 7）。
     folders.bind(window.value()->work_signal());
-    MSG message{};
-    while (GetMessageW(&message, nullptr, 0, 0) > 0)
-    {
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
-    }
+    autosave.bind(window.value()->work_signal());
+    pump_messages();
     return window.value()->rendering_failed() ? 1 : 0;
 }
 } // namespace
