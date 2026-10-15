@@ -23,4 +23,5 @@ void verify_gutter_layouts();
 void verify_file_drop();
 void verify_grid_render();
 void verify_presented_milestones();
+void verify_device_warmup();
 } // namespace nenenib::tests::ui
