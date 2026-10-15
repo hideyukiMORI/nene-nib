@@ -49,16 +49,22 @@ namespace
 
 std::expected<TextEncoding, EncodingFailure> detect_encoding(std::string_view bytes) noexcept
 {
+    return detect_encoding(bytes, simd::AsciiNewlineScan::scalar);
+}
+
+std::expected<TextEncoding, EncodingFailure> detect_encoding(std::string_view bytes,
+                                                             simd::AsciiNewlineScan ascii) noexcept
+{
     // BOM は明示的なラベルである。後ろが正しい UTF-8 でなければ、CP932 へは落ちずに断る（決定 3）。
     if (bytes.starts_with(byte_order_mark()))
     {
-        if (validate_utf8(without_byte_order_mark(bytes)).has_value())
+        if (validate_utf8(without_byte_order_mark(bytes), ascii).has_value())
         {
             return TextEncoding::utf8_bom;
         }
         return std::unexpected(EncodingFailure::undecodable);
     }
-    if (validate_utf8(bytes).has_value())
+    if (validate_utf8(bytes, ascii).has_value())
     {
         return TextEncoding::utf8;
     }

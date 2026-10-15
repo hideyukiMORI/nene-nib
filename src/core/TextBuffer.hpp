@@ -8,6 +8,7 @@
 #include "Piece.hpp"
 #include "TextFailure.hpp"
 #include "TextPosition.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -29,6 +30,9 @@ class TextBuffer final
     [[nodiscard]] static TextBuffer empty();
     [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(std::string_view text);
     [[nodiscard]] static std::expected<TextBuffer, TextFailure> from_utf8(DetectedText text);
+    // 改行の索引を合成ルートが選んだ走査で作る（ADR 0006 の決定 2）。
+    [[nodiscard]] static std::expected<TextBuffer, TextFailure>
+    from_utf8(DetectedText text, simd::AsciiNewlineScan scan);
 
     [[nodiscard]] TextBuffer insert(Offset at, std::string_view text) const;
     [[nodiscard]] TextBuffer erase(Offset begin, Offset end) const;
@@ -64,7 +68,8 @@ class TextBuffer final
     [[nodiscard]] TextPosition position_of(Offset at) const;
 
   private:
-    [[nodiscard]] static TextBuffer from_validated_utf8(std::string text);
+    [[nodiscard]] static TextBuffer from_validated_utf8(std::string text,
+                                                        simd::AsciiNewlineScan scan);
 
     using Buffer = std::shared_ptr<const std::string>;
     using Chunks = std::vector<std::shared_ptr<AddChunk>>;

@@ -12,15 +12,18 @@
 #include "SettingsCodec.hpp"
 #include "TextEncoding.hpp"
 #include "Win32CodePageAdapter.hpp"
+#include "Win32CpuFeatures.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <windows.h>
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <expected>
 #include <limits>
@@ -28,6 +31,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -35,6 +39,7 @@ using nenenib::adapters::win32::absolute_file_path;
 using nenenib::adapters::win32::decode_settings;
 using nenenib::adapters::win32::encode_settings;
 using nenenib::adapters::win32::FileHandle;
+using nenenib::adapters::win32::read_cpu_features;
 using nenenib::adapters::win32::SettingsPaths;
 using nenenib::adapters::win32::SettingsVersion;
 using nenenib::adapters::win32::Win32CodePageAdapter;
@@ -1008,6 +1013,50 @@ void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
     verify_read_request_size();
 }
 
+// AVX2 の走査を、OS が AVX2 を報告するときだけ scalar の結果と照合する（ADR 0006）。
+void verify_avx2_marks(std::string_view text)
+{
+    using nenenib::core::simd::AsciiNewlineScan;
+    for (const std::size_t bit : {std::size_t{0}, std::size_t{33}})
+    {
+        std::vector<std::uint64_t> scalar((bit + text.size()) / 64 + 1, 0);
+        std::vector<std::uint64_t> avx2(scalar.size(), 0);
+        const auto expected =
+            nenenib::core::simd::mark_newlines(AsciiNewlineScan::scalar, text, scalar, bit);
+        const auto counted =
+            nenenib::core::simd::mark_newlines(AsciiNewlineScan::avx2, text, avx2, bit);
+        expect(counted == expected && avx2 == scalar, "the AVX2 scan marks LF like scalar");
+    }
+    for (std::size_t from = 0; from <= text.size(); ++from)
+    {
+        expect(nenenib::core::simd::ascii_end(AsciiNewlineScan::avx2, text, from) ==
+                   nenenib::core::simd::ascii_end(AsciiNewlineScan::scalar, text, from),
+               "the AVX2 scan stops at the first non-ASCII byte like scalar");
+    }
+}
+
+void verify_cpu_scan()
+{
+    const auto features = read_cpu_features();
+    const auto chosen = nenenib::core::simd::select_ascii_newline_scan(features);
+    expect(chosen == (features.avx2 ? nenenib::core::simd::AsciiNewlineScan::avx2
+                                    : nenenib::core::simd::AsciiNewlineScan::sse2),
+           "the composition root chooses the widest scan the OS reports");
+    if (!features.avx2)
+    {
+        std::printf("AVX2 scan: not reported by the OS; scalar and SSE2 are unit-tested\n");
+        return;
+    }
+    std::string text(1100, 'x');
+    for (std::size_t at = 30; at < text.size(); at += 33)
+    {
+        text.at(at) = '\n';
+    }
+    verify_avx2_marks(text);
+    text.replace(700, 3, "\xE6\x97\xA5");
+    verify_avx2_marks(text);
+}
+
 bool known_scope(std::string_view scope)
 {
     return scope == "--settings-codec" || scope == "--settings" || scope == "--files" ||
@@ -1065,6 +1114,7 @@ int main(int argc, char **argv)
         return test_result();
     }
     verify_timing_marks(files);
+    verify_cpu_scan();
     verify_settings_codec();
     verify_bad_settings_fields();
     verify_bad_settings_values();

@@ -54,7 +54,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimScreenGeometry.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
-    src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp)
+    src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/simd/AsciiNewlineScan.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
@@ -112,7 +112,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
     tests/unit/OperationsTests.cpp
-    tests/unit/GuideTests.cpp)
+    tests/unit/GuideTests.cpp tests/unit/AsciiNewlineScanTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
@@ -131,7 +131,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
-    src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp)
+    src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
+    src/adapters/win32/Win32CpuFeatures.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。

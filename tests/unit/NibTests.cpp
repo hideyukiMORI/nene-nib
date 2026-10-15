@@ -65,7 +65,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 52> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 53> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -74,6 +74,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 52> scopes{{
     {"--file-path", verify_file_path_scope},
     {"--buffer-range", verify_buffer_scope},
     {"--newline-index", verify_newline_index_scope},
+    {"--ascii-newline-scan", verify_ascii_newline_scan_scope},
     {"--file-text", verify_file_text_scope},
     {"--file-save", verify_document_save_contracts},
     {"--vim-recorded-keys", verify_vim_recorded_keys_scope},
@@ -181,6 +182,7 @@ int main(int argc, char **argv)
     }
     nenenib::tests::verify_detected_text_contracts();
     nenenib::tests::verify_newline_index_scope();
+    nenenib::tests::verify_ascii_newline_scan_scope();
     verify_text_and_caret();
     verify_display_line();
     verify_display_line_views();

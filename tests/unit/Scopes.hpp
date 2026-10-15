@@ -171,6 +171,9 @@ void verify_vim_block_scope();
 void verify_ordinary_character_contracts();
 void verify_ordinary_character_scope();
 
+// AsciiNewlineScanTests.cpp（SIMD の走査と fallback の一致・ADR 0006）。
+void verify_ascii_newline_scan_scope();
+
 // CoreTests.cpp
 void verify_buffer_scope();
 // NewlineIndexTests.cpp

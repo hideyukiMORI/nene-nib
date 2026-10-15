@@ -2603,7 +2603,7 @@ std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::Det
     {
     case core::TextEncoding::utf8:
     case core::TextEncoding::utf8_bom:
-        return core::TextBuffer::from_utf8(std::move(text))
+        return core::TextBuffer::from_utf8(std::move(text), ports_.ascii_scan)
             .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
     case core::TextEncoding::shift_jis:
         break;
@@ -2655,7 +2655,7 @@ EditorController::read_document(const core::FilePath &path)
     {
         return std::unexpected(bytes.error());
     }
-    auto detected = core::DetectedText::from_bytes(bytes.value());
+    auto detected = core::DetectedText::from_bytes(bytes.value(), ports_.ascii_scan);
     if (!detected)
     {
         return std::unexpected(FileFailure::undecodable);

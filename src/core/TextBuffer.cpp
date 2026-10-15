@@ -141,10 +141,16 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(std::string_view te
     {
         return std::unexpected(validated.error());
     }
-    return from_validated_utf8(std::move(owned));
+    return from_validated_utf8(std::move(owned), simd::AsciiNewlineScan::scalar);
 }
 
 std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text)
+{
+    return from_utf8(std::move(text), simd::AsciiNewlineScan::scalar);
+}
+
+std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text,
+                                                             simd::AsciiNewlineScan scan)
 {
     switch (text.encoding_)
     {
@@ -156,14 +162,14 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text)
     case TextEncoding::shift_jis:
         return std::unexpected(TextFailure::invalid_utf8);
     }
-    return from_validated_utf8(std::move(text.bytes_));
+    return from_validated_utf8(std::move(text.bytes_), scan);
 }
 
-TextBuffer TextBuffer::from_validated_utf8(std::string text)
+TextBuffer TextBuffer::from_validated_utf8(std::string text, simd::AsciiNewlineScan scan)
 {
     auto original = std::make_shared<const std::string>(std::move(text));
     // original の索引はここでだけ作り、以後の値はこれを共有する（ADR 0047 / 0080）。
-    auto newlines = std::make_shared<const NewlineIndex>(NewlineIndex::from_text(*original));
+    auto newlines = std::make_shared<const NewlineIndex>(NewlineIndex::from_text(*original, scan));
     std::vector<Piece> pieces;
     if (!original->empty())
     {

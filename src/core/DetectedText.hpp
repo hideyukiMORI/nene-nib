@@ -1,6 +1,7 @@
 #pragma once
 
 #include "TextEncoding.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <expected>
 #include <string>
@@ -14,6 +15,8 @@ class DetectedText final
   public:
     [[nodiscard]] static std::expected<DetectedText, EncodingFailure>
     from_bytes(std::string_view bytes);
+    [[nodiscard]] static std::expected<DetectedText, EncodingFailure>
+    from_bytes(std::string_view bytes, simd::AsciiNewlineScan ascii);
     [[nodiscard]] TextEncoding encoding() const noexcept;
     [[nodiscard]] std::string_view bytes() const & noexcept;
     [[nodiscard]] std::string_view bytes() const && = delete;

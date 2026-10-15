@@ -11,6 +11,7 @@
 #include "Win32BookmarkAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
+#include "Win32CpuFeatures.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32FolderAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
@@ -20,6 +21,7 @@
 #include "Win32TimingAdapter.hpp"
 #include "Win32Worker.hpp"
 #include "WindowFailure.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <windows.h>
 
@@ -60,6 +62,13 @@ int report(const wchar_t *reason) noexcept
 
 // 速さの計測の出力先。付いていれば Win32TimingAdapter が記録状態で動く（ADR 0011 の決定 2）。
 constexpr wchar_t measure_option[] = L"--measure";
+
+// 開いた本文の走査を CPU から 1 回選ぶ（ADR 0006 の決定 2）。core は cpuid を読まない。
+[[nodiscard]] nenenib::core::simd::AsciiNewlineScan opened_text_scan() noexcept
+{
+    return nenenib::core::simd::select_ascii_newline_scan(
+        nenenib::adapters::win32::read_cpu_features());
+}
 
 // 引数は 1 度だけ取り出して持ち回る。CommandLineToArgvW を呼ぶ場所はここだけ（ARC-001）。
 [[nodiscard]] std::vector<std::wstring> command_arguments()
@@ -155,7 +164,7 @@ int run(HINSTANCE instance)
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session, history, folders, bookmarks,
-                                          text_layouts},
+                                          text_layouts, opened_text_scan()},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

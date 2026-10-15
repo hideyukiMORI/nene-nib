@@ -76,27 +76,30 @@ NewlineIndex NewlineIndex::empty()
 
 NewlineIndex NewlineIndex::from_text(std::string_view text)
 {
+    return from_text(text, simd::AsciiNewlineScan::scalar);
+}
+
+NewlineIndex NewlineIndex::from_text(std::string_view text, simd::AsciiNewlineScan scan)
+{
     auto result = empty();
     result.words_.reserve(word_count(text.size()));
     result.counts_.reserve(text.size() / block_bytes);
-    result.append(text);
+    result.append(text, scan);
     return result;
 }
 
 void NewlineIndex::append(std::string_view text)
 {
+    append(text, simd::AsciiNewlineScan::scalar);
+}
+
+void NewlineIndex::append(std::string_view text, simd::AsciiNewlineScan scan)
+{
     words_.resize(word_count(size_bytes_ + text.size()), 0);
     while (!text.empty())
     {
         const auto part = text.substr(0, block_bytes - size_bytes_ % block_bytes);
-        std::size_t at = part.find('\n');
-        while (at != std::string_view::npos)
-        {
-            const std::size_t offset = size_bytes_ + at;
-            words_.at(offset / word_bytes) |= std::uint64_t{1} << (offset % word_bytes);
-            ++newline_count_;
-            at = part.find('\n', at + 1);
-        }
+        newline_count_ += simd::mark_newlines(scan, part, words_, size_bytes_);
         size_bytes_ += part.size();
         if (size_bytes_ % block_bytes == 0)
         {

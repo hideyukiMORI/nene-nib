@@ -15,6 +15,7 @@
 #include "ScriptedTextLayouts.hpp"
 #include "ScriptedThemes.hpp"
 #include "ThemeCatalog.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <functional>
 #include <optional>
@@ -34,6 +35,14 @@ class Editing final
           controller_(nenenib::application::EditorPorts{
               appearance_, clipboard_, files_, code_pages_, settings_, themes_, session_, history_,
               folders_, bookmarks_, text_layouts_})
+    {
+    }
+
+    // 合成ルートが選ぶ走査を注入する口（ADR 0006 の決定 2）。
+    explicit Editing(nenenib::core::simd::AsciiNewlineScan scan)
+        : controller_(nenenib::application::EditorPorts{
+              appearance_, clipboard_, files_, code_pages_, settings_, themes_, session_, history_,
+              folders_, bookmarks_, text_layouts_, scan})
     {
     }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Offset.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +18,8 @@ class NewlineIndex final
   public:
     [[nodiscard]] static NewlineIndex empty();
     [[nodiscard]] static NewlineIndex from_text(std::string_view text);
+    // 合成ルートが選んだ走査で LF を数える（ADR 0006 の決定 2）。索引の形は同じ。
+    [[nodiscard]] static NewlineIndex from_text(std::string_view text, simd::AsciiNewlineScan scan);
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] std::size_t count_before(std::size_t offset) const noexcept;
     // ordinal < size()。piece の窓内だけを読む。
@@ -26,6 +29,7 @@ class NewlineIndex final
     friend class TextBuffer;
     NewlineIndex() = default;
     void append(std::string_view text);
+    void append(std::string_view text, simd::AsciiNewlineScan scan);
 
     std::vector<std::uint64_t> words_;
     std::vector<std::size_t> counts_;

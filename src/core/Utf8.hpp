@@ -2,6 +2,7 @@
 
 #include "Offset.hpp"
 #include "TextFailure.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -15,6 +16,9 @@ namespace nenenib::core
 
 // 正しい UTF-8 なら code point の数を返す。過長符号化・サロゲート・U+10FFFF 超は拒否する。
 [[nodiscard]] std::expected<std::size_t, TextFailure> validate_utf8(std::string_view text) noexcept;
+// 同じ検証で、ASCII の連続区間を合成ルートが選んだ走査で数える（ADR 0006 の決定 2）。
+[[nodiscard]] std::expected<std::size_t, TextFailure>
+validate_utf8(std::string_view text, simd::AsciiNewlineScan ascii) noexcept;
 
 // 検証済みの本文の code point の数。継続バイト以外を数えるだけなので分岐を持たない。
 [[nodiscard]] std::size_t code_point_count(std::string_view text) noexcept;

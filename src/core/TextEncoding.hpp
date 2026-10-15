@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EncodingFailure.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -51,4 +52,6 @@ enum class TextEncoding : std::uint8_t
 // BOM → 正しい UTF-8 → CP932 として正しい、の順に見る。UTF-8 が常に勝つ（決定 3）。
 [[nodiscard]] std::expected<TextEncoding, EncodingFailure>
 detect_encoding(std::string_view bytes) noexcept;
+[[nodiscard]] std::expected<TextEncoding, EncodingFailure>
+detect_encoding(std::string_view bytes, simd::AsciiNewlineScan ascii) noexcept;
 } // namespace nenenib::core

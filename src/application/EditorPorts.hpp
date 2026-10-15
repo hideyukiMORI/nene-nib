@@ -11,6 +11,7 @@
 #include "SettingsPort.hpp"
 #include "TextLayoutPort.hpp"
 #include "ThemePort.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 namespace nenenib::application
 {
@@ -29,5 +30,7 @@ struct EditorPorts
     FolderPort &folders;
     BookmarkPort &bookmarks;
     TextLayoutPort &text_layouts;
+    // 開いた本文の検証と改行の索引の走査。合成ルートが CPU から 1 回選ぶ（ADR 0006 の決定 2）。
+    core::simd::AsciiNewlineScan ascii_scan = core::simd::AsciiNewlineScan::scalar;
 };
 } // namespace nenenib::application

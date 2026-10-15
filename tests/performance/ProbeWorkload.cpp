@@ -44,6 +44,8 @@
 #include "VimRegisterKind.hpp"
 #include "VimSpecialKey.hpp"
 #include "VisibleLines.hpp"
+#include "Win32CpuFeatures.hpp"
+#include "simd/AsciiNewlineScan.hpp"
 
 #include <array>
 #include <cstddef>
@@ -70,7 +72,7 @@ constexpr std::size_t insert_count = 200;
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure> opened(const std::string &input,
                                                                 application::TimingPort &timing)
 {
-    Editing editing;
+    Editing editing{core::simd::select_ascii_newline_scan(adapters::win32::read_cpu_features())};
     editing.files().hold(input);
     static_cast<void>(editing.controller().apply(application::VisibleLines{30}));
     const application::OpenDocument intent{probe_path()};
