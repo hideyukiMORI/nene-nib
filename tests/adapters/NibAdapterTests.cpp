@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstring>
 #include <expected>
+#include <format>
 #include <limits>
 #include <span>
 #include <string>
@@ -1016,6 +1017,132 @@ void verify_same_file(const Win32FileAdapter &files)
     expect(files.same_file(lower.value(), lower.value()), "a path is the same file as itself");
     expect(!files.same_file(lower.value(), other.value()), "different paths are different files");
 }
+// 一時ファイルの名前と回収（ADR 0135 の決定 5）。adapter は保存ごとに連番を進めるので、名前を
+// 予言する試験は新しい adapter を使う（最初の保存の連番は 1）。
+constexpr wchar_t temporaries_folder[] = L"nib-adapter-files/temporaries";
+constexpr wchar_t kept_target[] = L"nib-adapter-files/temporaries/kept.txt";
+constexpr std::array<const wchar_t *, 7> temporaries_fixtures{
+    kept_target,
+    L"nib-adapter-files/temporaries/settings.v3",
+    L"nib-adapter-files/temporaries/settings.v3.lock",
+    L"nib-adapter-files/temporaries/settings.v2.lock",
+    L"nib-adapter-files/temporaries/settings.v1.lock",
+    L"nib-adapter-files/temporaries/kept.txt.nib-tmp",
+    L"nib-adapter-files/temporaries/notes.nib-tmp"};
+
+std::wstring process_hex()
+{
+    return std::format(L"{:x}", GetCurrentProcessId());
+}
+
+std::wstring temporary_beside(std::wstring_view target, std::wstring_view tag)
+{
+    return std::wstring(target) + L".nib-tmp-" + std::wstring(tag);
+}
+
+bool file_exists(const std::wstring &name)
+{
+    return GetFileAttributesW(name.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+// 別の保存が書いている途中の一時ファイル。共有 0 で開いたまま持つ。
+FileHandle held_temporary(const std::wstring &name)
+{
+    return FileHandle(CreateFileW(name.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                  FILE_ATTRIBUTE_NORMAL, nullptr));
+}
+
+// クラッシュや電源断で残った一時ファイル。誰も開いていない。
+void leave_residue(const std::wstring &name)
+{
+    const FileHandle made(held_temporary(name));
+    expect(made.valid(), "a residue temporary file is prepared");
+}
+
+// 試験が作った名前だけを消す。残ったものがあればフォルダを消せずに落ちる。
+void remove_temporaries_folder(std::span<const std::wstring> created)
+{
+    for (const wchar_t *name : temporaries_fixtures)
+    {
+        static_cast<void>(DeleteFileW(name));
+    }
+    for (const std::wstring &name : created)
+    {
+        static_cast<void>(DeleteFileW(name.c_str()));
+    }
+    expect(RemoveDirectoryW(temporaries_folder) != 0,
+           "the temporaries folder holds nothing the test did not name");
+}
+
+// 決定 5 (a)(c): 同じ保存先の一時ファイルが別の名前で同時に在り得る。ほかの保存が共有 0 で
+// 開いたまま持つ一時ファイル（前の版の固定名・別のプロセス・プロセス ID の再利用）があっても、
+// 自分の一時ファイルを CREATE_NEW で作って保存が通り、相手のものは消さない。
+void verify_concurrent_temporaries(std::span<const std::wstring> others)
+{
+    Win32FileAdapter fresh;
+    const auto target = path_of("nib-adapter-files/temporaries/kept.txt");
+    {
+        const FileHandle legacy(held_temporary(others[0]));
+        const FileHandle other(held_temporary(others[1]));
+        const FileHandle reused(held_temporary(others[2]));
+        expect(legacy.valid() && other.valid() && reused.valid(),
+               "other savers hold their temporary files without sharing");
+        expect(fresh.write(target, "first").has_value(),
+               "a save succeeds while other savers hold temporary files for the same target");
+        expect(fresh.write(target, "second").has_value(),
+               "a replacing save also succeeds beside live temporary files");
+    }
+    expect(read_text(fresh, target, read_limit).value_or(std::string{}) == "second",
+           "the save beside live temporary files placed its own bytes");
+    expect(file_exists(others[0]) && file_exists(others[1]) && file_exists(others[2]),
+           "temporary files held open by other savers are not reclaimed");
+}
+
+// 決定 5 (b): 誰も開いていない残骸は、その保存先の保存の直前に消える。
+void verify_reclaimed_residue(const std::wstring &residue)
+{
+    Win32FileAdapter fresh;
+    leave_residue(residue);
+    expect(
+        fresh.write(path_of("nib-adapter-files/temporaries/kept.txt"), "after residue").has_value(),
+        "a save succeeds beside a residue temporary file");
+    expect(!file_exists(residue), "a residue nobody holds is reclaimed before the save");
+}
+
+// 決定 5 (d): 設定の保存も同じ adapter を通るので、設定の置き場の残骸も保存の直前に消える。
+void verify_reclaimed_settings_residue(const std::wstring &residue)
+{
+    Win32FileAdapter fresh;
+    leave_residue(residue);
+    Win32SettingsAdapter store(fresh,
+                               SettingsPaths{path_of("nib-adapter-files/temporaries/settings.v3"),
+                                             path_of("nib-adapter-files/temporaries/settings.v2"),
+                                             path_of("nib-adapter-files/temporaries/settings.v1")});
+    expect(store.read().has_value(), "absent settings read before the save");
+    expect(store.write(default_editor_settings()).has_value(), "the settings are saved");
+    expect(!file_exists(residue), "a settings residue is reclaimed by the settings save");
+}
+
+void verify_temporary_files()
+{
+    const BOOL created = CreateDirectoryW(temporaries_folder, nullptr);
+    expect(created != 0 || GetLastError() == ERROR_ALREADY_EXISTS,
+           "the temporaries folder is there");
+    const std::array<std::wstring, 5> named{
+        std::wstring(kept_target) + L".nib-tmp", temporary_beside(kept_target, L"deadbeef-1"),
+        temporary_beside(kept_target, process_hex() + L"-1"),
+        temporary_beside(kept_target, L"deadbeef-2"),
+        temporary_beside(L"nib-adapter-files/temporaries/settings.v3", L"deadbeef-3")};
+    for (const std::wstring &name : named)
+    {
+        static_cast<void>(DeleteFileW(name.c_str()));
+    }
+    verify_concurrent_temporaries(std::span(named).first(3));
+    verify_reclaimed_residue(named[3]);
+    verify_reclaimed_settings_residue(named[4]);
+    remove_temporaries_folder(named);
+}
+
 void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
 {
     verify_utf8_files(files);
@@ -1032,6 +1159,7 @@ void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
     verify_read_boundaries(files);
     verify_complete_read_steps();
     verify_read_request_size();
+    verify_temporary_files();
 }
 
 // 替え玉の OS のクリップボード（ADR 0134 の決定 4）。実機のクリップボードは触らない
