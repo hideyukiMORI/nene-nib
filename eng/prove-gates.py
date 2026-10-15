@@ -25,8 +25,10 @@ def run(command: list[str], cwd: Path, succeeds: bool, diagnostic: str = "") -> 
 
 def copy_repository_files(root: Path) -> None:
     files = ["CMakeLists.txt", "eng/targets.cmake", "eng/architecture.json", "eng/symbol-allowlist.json",
-             "eng/symbols.py", ".clang-tidy", ".clang-format", "tests/build/ToolchainSmoke.cpp"]
-    for folder in ["src", "tests/unit", "tests/adapters", "tests/ui"]:
+             "eng/symbols.py", "eng/tool-versions.json", ".clang-tidy", ".clang-format",
+             "tests/build/ToolchainSmoke.cpp"]
+    # CMakeLists.txt が configure で読むもの（#329 の nib_perf_probes は tests/performance と道具の版の SHA）。
+    for folder in ["src", "tests/unit", "tests/adapters", "tests/ui", "tests/performance"]:
         if (ROOT / folder).is_dir():
             files += [p.relative_to(ROOT).as_posix() for p in (ROOT / folder).rglob("*") if p.is_file()]
     for path in files:
@@ -72,6 +74,24 @@ BUILD_PROBES = [
      "#include <optional>\n\nstatic int read(std::optional<int> value)\n{\n    return value.value();\n}\n\n"
      "int main()\n{\n    return read(std::optional<int>(0));\n}\n",
      "bugprone-unchecked-optional-access"),
+    # Issue #516（D49）: planned だった規則の実体を反例で確かめる。optional の `*` は MSVC STL では
+    # unchecked-optional-access が見ない（引数の optional の `*value` は終了 0・2026-10-16 に再実測）ので反例に置かない。
+    ("CPP-003",
+     "int main()\n{\n    double value = 1.0;\n    return (int)value - 1;\n}\n",
+     "-Wold-style-cast"),
+    ("CPP-004",
+     "int main()\n{\n    int* pointer = 0;\n    return pointer == nullptr ? 0 : 1;\n}\n",
+     "-Wzero-as-null-pointer-constant"),
+    ("CPP-005",
+     "[[nodiscard]] static int compute()\n{\n    return 1;\n}\n\nint main()\n{\n    compute();\n    return 0;\n}\n",
+     "-Wunused-result"),
+    ("ARC-010",
+     "[[nodiscard]] static int compute()\n{\n    return 1;\n}\n\nint main()\n{\n    compute();\n    return 0;\n}\n",
+     "-Wunused-result"),
+    ("CPP-009",
+     "static int read(const long long* value)\n{\n    return *reinterpret_cast<const int*>(value);\n}\n\n"
+     "int main()\n{\n    const long long value = 0;\n    return read(&value);\n}\n",
+     "cppcoreguidelines-pro-type-reinterpret-cast"),
     ("CPP-016",
      "#include <string>\n#include <utility>\n\nint main()\n{\n    std::string first = \"x\";\n"
      "    std::string second = std::move(first);\n"
