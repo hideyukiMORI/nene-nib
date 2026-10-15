@@ -187,7 +187,7 @@ v3はwrapを含む。v3不在時だけv2、両方不在時だけv1を厳密に�
 
 ### 本窓を壊すのは `leave` だけ。描画を失っても「保存しますか」を通す
 
-`DestroyWindow(window_)` を呼ぶのは `EditorWindow::leave` の 1 か所（デストラクタの作りかけの後始末を除く）。終わり方ごとの未保存の扱いは application の `exit_plan(ExitCause, 未保存の数)` が決め、ui は値に従うだけ（ADR 0133）。
+`DestroyWindow(window_)` を呼ぶのは `EditorWindow::leave` の 1 か所（デストラクタの作りかけの後始末を除く）。終わり方ごとの未保存の扱いは application の `exit_plan(ExitCause, 未保存の数)` が決め、ui は値に従うだけ（ADR 0133）。OS の終了（`WM_QUERYENDSESSION`）は未保存があれば `ShutdownBlockReasonCreate` で止め、`end_window` を通さず窓を壊さない。
 描画の失敗は `recover()`（古い renderer を先に解放して `start_rendering`）で 1 回だけ作り直し（`present` は device lost のときだけ、サイズ・DPI・文字組みは失敗の種類を問わず）、だめなら `abandon()` が取消の無い「描画できなくなったので閉じます。保存しますか。」を通して `leave(SessionEnd::rendering_lost)` する。
 
 ### リポジトリの外の作業場所は `D:\NeNeNib\`
