@@ -8,6 +8,9 @@
 
 #include <cstddef>
 #include <expected>
+#include <map>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -15,7 +18,8 @@ namespace nenenib::tests
 {
 // 自動退避の口の替え玉（ADR 0137 の決定 8）。スレッドは持たない。store と discard
 // で受けた頼みを順に 覚え、collect・clear・remnants・read・forget の呼ばれた回数を数え、collect
-// が返す失敗を先に 仕込める（仕込んだ分は次の collect が全部を返し、その後は空）。残骸は無い。
+// が返す失敗を先に 仕込める（仕込んだ分は次の collect が全部を返し、その後は空）。残骸は remain で
+// 仕込み（既定は無し）、本文の無い残骸の read は unreadable。forget は残骸の列を変えない。
 class ScriptedAutosave final : public nenenib::application::AutosavePort
 {
   public:
@@ -45,19 +49,39 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
     remnants() override
     {
         ++remnant_reads_;
-        return std::vector<nenenib::application::AutosaveRemnant>{};
+        return remnants_;
     }
 
     [[nodiscard]] std::expected<std::vector<std::byte>, nenenib::application::AutosaveFailure>
-    read(const nenenib::application::AutosaveRemnant &) override
+    read(const nenenib::application::AutosaveRemnant &remnant) override
     {
         ++body_reads_;
-        return std::unexpected(nenenib::application::AutosaveFailure::unreadable);
+        const auto found = bodies_.find(remnant.location);
+        if (found == bodies_.end())
+        {
+            return std::unexpected(nenenib::application::AutosaveFailure::unreadable);
+        }
+        std::vector<std::byte> bytes;
+        for (const char unit : found->second)
+        {
+            bytes.push_back(static_cast<std::byte>(unit));
+        }
+        return bytes;
     }
 
-    void forget(const nenenib::application::AutosaveRemnant &) override
+    void forget(const nenenib::application::AutosaveRemnant &remnant) override
     {
-        ++forgets_;
+        forgotten_.push_back(remnant.location);
+    }
+
+    // 前回のプロセスが残した退避を 1 本足す。body が無ければ read は失敗する（数えない）。
+    void remain(nenenib::application::AutosaveRemnant remnant, std::optional<std::string> body)
+    {
+        if (body.has_value())
+        {
+            bodies_.insert_or_assign(remnant.location, std::move(body).value());
+        }
+        remnants_.push_back(std::move(remnant));
     }
 
     // 次の collect が返す失敗を足す（数えない）。
@@ -85,11 +109,20 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
     {
         return remnant_reads_;
     }
+    [[nodiscard]] std::size_t body_reads() const noexcept
+    {
+        return body_reads_;
+    }
+    // forget を受けた残骸の location（受けた順）。
+    [[nodiscard]] const std::vector<std::string> &forgotten() const noexcept
+    {
+        return forgotten_;
+    }
     // ファイルに触れる呼び出しの合計（store・discard・clear・remnants・read・forget）。
     [[nodiscard]] std::size_t touches() const noexcept
     {
         return stored_.size() + discarded_.size() + clears_ + remnant_reads_ + body_reads_ +
-               forgets_;
+               forgotten_.size();
     }
 
   private:
@@ -100,6 +133,8 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
     std::size_t clears_ = 0;
     std::size_t remnant_reads_ = 0;
     std::size_t body_reads_ = 0;
-    std::size_t forgets_ = 0;
+    std::vector<nenenib::application::AutosaveRemnant> remnants_;
+    std::map<std::string, std::string> bodies_;
+    std::vector<std::string> forgotten_;
 };
 } // namespace nenenib::tests

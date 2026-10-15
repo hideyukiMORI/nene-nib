@@ -112,10 +112,10 @@ import winreg
 from window_driver import (acknowledge_dialog, answer_question, api, ask_hit, await_dialog,
                            assert_uncovered, become_dpi_aware,
                            capture as capture_client, capture_png, click, close, covered_by,
-                           dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE, HWND_TOPMOST,
-                           IDCANCEL, IDNO, parse_keys, press, press_chord, press_combination,
+                           dialog_text, dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE,
+                           HWND_TOPMOST, IDCANCEL, IDNO, IDYES, parse_keys, press, press_chord, press_combination,
                            press_held_repeat, raise_window, rectangle, send_key_sequence,
-                           send_keys, start, stop,
+                           send_keys, start, stop, tick_autosave,
                            SWP_NOMOVE_NOSIZE_SHOW, user, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_F4,
                            VK_NEXT, VK_NIHONGO, VK_PRIOR, VK_RETURN, VK_S, VK_SHIFT, VK_SPACE,
                            VK_T, VK_TAB, VK_W, window_title, WINDOW_CLASS, WindowCovered,
@@ -2040,6 +2040,92 @@ def verify_restore(executable: Path, environment: dict, appearance: str, output:
     }
 
 
+AUTOSAVE_TEXT = "autosaved body"
+AUTOSAVE_QUESTION = "前回の未保存の編集が残っています。戻しますか。"
+
+
+def autosave_root(environment: dict) -> Path:
+    return Path(environment["LOCALAPPDATA"]) / "NeNeNib" / "autosave"
+
+
+def await_autosaved(folder: Path, text: str, seconds: float = 5.0) -> list[str]:
+    """The names of the bodies in the folder that hold exactly the text, once the worker wrote one."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if folder.is_dir():
+            found = [body.name for body in sorted(folder.glob("*.body"))
+                     if body.read_bytes() == text.encode("utf-8")]
+            if found and (folder / "autosave.v1").is_file():
+                return found
+        time.sleep(0.05)
+    return []
+
+
+def autosave_and_kill(executable: Path, environment: dict) -> dict:
+    """(a) Type into the empty untitled tab, send the tick, see the body written, then kill."""
+    process, window = started(executable, environment, keep_session=False)
+    folder = autosave_root(environment) / f"{process.pid:x}"
+    try:
+        step = {"askedOnCleanStart": bool(await_dialog(process, 0.5)), "folder": folder.name}
+        assert not step["askedOnCleanStart"], "a clean profile asked about remnants"
+        write_text(window, AUTOSAVE_TEXT)
+        time.sleep(TAB_SETTLE_SECONDS)
+        tick_autosave(window)
+        step["bodies"] = await_autosaved(folder, AUTOSAVE_TEXT)
+        assert step["bodies"], f"the tick wrote no body holding the typed text into {folder}"
+        process.kill()
+        step["killExitCode"] = process.wait(timeout=5)
+    finally:
+        stop(process)
+    step["remnantLeft"] = folder.is_dir()
+    assert step["remnantLeft"], "killing the process removed its autosave folder"
+    return step
+
+
+def restore_after_kill(executable: Path, environment: dict, appearance: str,
+                       frames: Path | None, killed: str) -> dict:
+    """(b) Start again: the question comes once, yes brings the body back as an unsaved tab."""
+    process, window = started(executable, environment, keep_session=True)
+    root = autosave_root(environment)
+    try:
+        dialog = await_dialog(process)
+        step = {"asked": bool(dialog), "question": dialog_text(dialog) if dialog else ""}
+        assert step["question"] == AUTOSAVE_QUESTION, step
+        assert dismiss_dialog(process, IDYES)
+        time.sleep(TAB_SETTLE_SECONDS)
+        step["restored"] = expect_band(window, appearance, 2, 1, "the remnant came back")
+        step["remnantForgotten"] = not (root / killed).exists()
+        assert step["remnantForgotten"], "the restored remnant was not forgotten"
+        snapshot(frames, window, "autosaveRestored")
+        # 戻った本文は未保存のタブなので、次の合図がこのプロセスの退避として同じ本文を書く。
+        tick_autosave(window)
+        step["bodiesAgain"] = await_autosaved(root / f"{process.pid:x}", AUTOSAVE_TEXT)
+        assert step["bodiesAgain"], "the restored tab does not hold the typed text"
+        close(window)
+        step["unsavedConfirmationDismissed"] = dismiss_dialog(process, IDNO)
+        assert step["unsavedConfirmationDismissed"], "the restored tab was not unsaved"
+        step["closeExitCode"] = process.wait(timeout=5)
+        assert step["closeExitCode"] == 0, step["closeExitCode"]
+    finally:
+        stop(process)
+    step["foldersAfterClose"] = sorted(path.name for path in root.iterdir()) if root.is_dir() else []
+    assert not step["foldersAfterClose"], "closing normally left autosave folders behind"
+    return step
+
+
+def verify_autosave(executable: Path, environment: dict, appearance: str,
+                    frames: Path | None) -> dict:
+    """Issue #515: autosave every 30 seconds and the startup question (ADR 0137 decisions 1 and 6).
+
+    Two launches on one profile: type, post the autosave WM_TIMER instead of waiting 30 seconds,
+    kill the process (TerminateProcess), then start again, answer yes and find the body back.
+    """
+    killed = autosave_and_kill(executable, environment)
+    return {"killed": killed,
+            "restored": restore_after_kill(executable, environment, appearance, frames,
+                                           killed["folder"])}
+
+
 def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) -> bytes:
     """Capture until the picture has changed and holds still for one more capture (await_ink's way).
 
@@ -2180,6 +2266,8 @@ def main() -> None:
                         help="run the grid section alone (Issue #546); posted messages only")
     parser.add_argument("--giant-text", action="store_true",
                         help="run the giant line text section alone (Issue #547); posted messages only")
+    parser.add_argument("--autosave", action="store_true",
+                        help="run the autosave section alone (Issue #515); posted messages only")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -2198,6 +2286,9 @@ def main() -> None:
     if arguments.giant_text and (arguments.grid or arguments.tabs or arguments.restore
                                  or arguments.keys is not None or arguments.open is not None):
         parser.error("--giant-text runs alone")
+    if arguments.autosave and (arguments.tabs or arguments.restore or arguments.keys is not None
+                               or arguments.open is not None):
+        parser.error("--autosave runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -2237,6 +2328,14 @@ def main() -> None:
     if arguments.restore:
         try:
             record = verify_restore(executable, environment, expected_appearance(), output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.autosave:
+        try:
+            record = verify_autosave(executable, environment, expected_appearance(), frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)
@@ -2295,6 +2394,8 @@ def main() -> None:
         # Issue #547: 同じ 1 行を text のまま開く。問いに「いいえ」で答える別の 1 回の起動で測る。
         result["giantText"] = verify_giant_text(executable, environment, appearance, output,
                                                 frames)
+        # Issue #515: 自動退避と起動の問い。殺して起動し直すので、別の 2 回の起動で測る。
+        result["autosave"] = verify_autosave(executable, environment, appearance, frames)
         (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                         encoding="utf-8")
         print(json.dumps(result, indent=2))

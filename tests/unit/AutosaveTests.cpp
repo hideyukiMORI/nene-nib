@@ -4,12 +4,14 @@
 #include "AutosaveId.hpp"
 #include "AutosaveLedger.hpp"
 #include "AutosavePlan.hpp"
+#include "AutosaveRemnant.hpp"
 #include "AutosaveSnapshot.hpp"
 #include "AutosaveStep.hpp"
 #include "AutosaveTick.hpp"
 #include "CaretMotion.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
+#include "DiscardAutosave.hpp"
 #include "DisplayText.hpp"
 #include "Document.hpp"
 #include "DocumentView.hpp"
@@ -29,12 +31,14 @@
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "PlaceCaret.hpp"
+#include "RestoreAutosave.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAutosave.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SessionEnd.hpp"
+#include "SwitchTab.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
@@ -297,6 +301,93 @@ void verify_tick_keeps_wanted_column()
     expect(caret_at(vim.controller().frame(), 3, 5),
            "a tick between two j keeps the Vim wanted column");
 }
+// 前回のプロセスが残した退避の 1 本。location は替え玉が本文を引く鍵。
+[[nodiscard]] app::AutosaveRemnant remnant(std::string location, std::optional<core::FilePath> path)
+{
+    auto title = core::tab_title_for(path, core::SaveState::modified);
+    return app::AutosaveRemnant{std::move(location), AutosaveId{0}, std::move(path),
+                                std::move(title)};
+}
+
+// 起動の問いに「はい」: 残骸を開くのと同じ復号で読み、帯の末尾に未保存のタブとして足し、最初に
+// 戻したタブをアクティブにする。残骸は 1 回だけ聞き、戻したら全部 forget する（決定 6）。
+void verify_restore_remnants()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    editing.autosave().remain(remnant("1f/0", sample_path()), "alpha\nbeta");
+    editing.autosave().remain(remnant("1f/1", std::nullopt),
+                              std::string(core::byte_order_mark()) + "gamma");
+    expect(controller.autosave_remnants().size() == 2 && editing.autosave().remnant_reads() == 1,
+           "the start asks the remnants once and keeps the two");
+    const auto restored = controller.apply_frame(app::RestoreAutosave{});
+    expect(restored.tabs.size() == 3 && restored.active_tab == 1,
+           "two remnants become two tabs at the end and the first of them is active");
+    expect(restored.document.path == std::optional{sample_path()} &&
+               restored.document.save_state == core::SaveState::modified &&
+               vim_body(restored) == "alpha\nbeta",
+           "the first restored tab has its path, its body and the unsaved mark");
+    expect(restored.tabs.size() == 3 &&
+               restored.tabs.at(2).save_state == core::SaveState::modified &&
+               !restored.tabs.at(2).path.has_value() &&
+               restored.tabs.at(2).encoding == core::TextEncoding::utf8_bom,
+           "the untitled remnant is decoded the way opening decodes and stays unsaved");
+    expect(editing.autosave().remnant_reads() == 1 && editing.autosave().body_reads() == 2 &&
+               editing.autosave().forgotten() == std::vector<std::string>{"1f/0", "1f/1"},
+           "restoring reads each body once, forgets every remnant and never asks the list again");
+}
+
+// 戻したタブは本文だけを持つ未保存のタブで、次の合図がこのプロセスの退避として書く（決定 2・6）。
+void verify_restored_tabs_autosave()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    editing.autosave().remain(remnant("1f/0", sample_path()), "alpha");
+    editing.autosave().remain(remnant("1f/1", std::nullopt),
+                              std::string(core::byte_order_mark()) + "gamma");
+    static_cast<void>(controller.autosave_remnants());
+    applied(controller, app::RestoreAutosave{});
+    const auto third = controller.apply_frame(app::SwitchTab{2});
+    expect(vim_body(third) == "gamma", "the untitled remnant keeps its body without the mark");
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 2,
+           "the next tick stores the two restored tabs under this process");
+}
+
+// 読めない残骸は 1 行の知らせで飛ばし、forget する（決定 6）。
+void verify_restore_unreadable()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    editing.autosave().remain(remnant("2a/0", sample_path()), std::nullopt);
+    static_cast<void>(controller.autosave_remnants());
+    const auto restored = controller.apply_frame(app::RestoreAutosave{});
+    expect(restored.tabs.size() == 1 && notice(restored) == "戻せませんでした: note.txt",
+           "an unreadable remnant adds no tab and leaves one notice line");
+    expect(editing.autosave().forgotten() == std::vector<std::string>{"2a/0"},
+           "the unreadable remnant is forgotten too");
+}
+
+// 起動の問いに「いいえ」: 残骸を読まずに全部 forget し、タブは増えない（決定 6）。
+void verify_discard_remnants()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    editing.autosave().remain(remnant("3b/0", sample_path()), "alpha");
+    editing.autosave().remain(remnant("3b/1", std::nullopt), "beta");
+    static_cast<void>(controller.autosave_remnants());
+    const auto discarded = controller.apply_frame(app::DiscardAutosave{});
+    expect(discarded.tabs.size() == 1 && editing.autosave().body_reads() == 0 &&
+               editing.autosave().forgotten() == std::vector<std::string>{"3b/0", "3b/1"},
+           "discarding forgets every remnant without reading and adds no tab");
+    applied(controller, app::RestoreAutosave{});
+    expect(editing.autosave().forgotten().size() == 2 && editing.autosave().remnant_reads() == 1,
+           "an answer after the first one has nothing left to forget");
+}
 } // namespace
 
 void verify_autosave_contracts()
@@ -307,6 +398,10 @@ void verify_autosave_contracts()
     verify_tick_encodes_and_discards();
     verify_failure_notified_once();
     verify_tick_keeps_wanted_column();
+    verify_restore_remnants();
+    verify_restored_tabs_autosave();
+    verify_restore_unreadable();
+    verify_discard_remnants();
 }
 
 void verify_autosave_scope()

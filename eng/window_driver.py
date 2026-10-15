@@ -21,6 +21,7 @@ import ctypes as c
 from ctypes import wintypes as w
 import os
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import time
@@ -115,6 +116,9 @@ IDCANCEL = 2
 WM_NCHITTEST = 0x0084
 WM_KEYDOWN = 0x0100
 WM_CHAR = 0x0102
+WM_TIMER = 0x0113
+# 窓の自動退避のタイマーの番号（src/ui/win32/WindowTimer.hpp の WindowTimer::autosave・ADR 0137）。
+AUTOSAVE_TIMER = 2
 WM_LBUTTONDOWN = 0x0201
 WM_LBUTTONUP = 0x0202
 VK_RETURN = 0x0D
@@ -198,7 +202,9 @@ def forget_session(environment: dict) -> bool:
     A tool starts from its own profile, so a list left by an earlier run must not come back in the
     next start (ADR 0059 decision 7). Nothing is deleted when the environment's LOCALAPPDATA is this
     process's own: that is the user's real list, not a tool profile. Returns whether it deleted.
-    The history and bookmarks (history.v1 / bookmarks.v1) are cleared with it (ADR 0060 / 0063).
+    The history and bookmarks (history.v1 / bookmarks.v1) are cleared with it (ADR 0060 / 0063),
+    and so is the autosave folder (ADR 0137): a remnant left by a killed run would put up the
+    startup question in the next tool's start.
     """
     profile = environment.get("LOCALAPPDATA")
     own = os.environ.get("LOCALAPPDATA")
@@ -212,6 +218,10 @@ def forget_session(environment: dict) -> bool:
         if listed.is_file():
             listed.unlink()
             deleted = True
+    autosave = Path(profile) / "NeNeNib" / "autosave"
+    if autosave.is_dir():
+        shutil.rmtree(autosave)
+        deleted = True
     return deleted
 
 
@@ -387,6 +397,18 @@ def assert_uncovered(window) -> None:
         user.GetClassNameW(other, name, len(name))
         user.GetWindowThreadProcessId(other, c.byref(owner))
     raise WindowCovered(other, name.value or "no window", owner.value, points[index])
+
+
+def tick_autosave(window) -> None:
+    """Post the autosave timer's WM_TIMER, so the 30-second tick comes now (ADR 0137 decision 8)."""
+    assert user.PostMessageW(window, WM_TIMER, AUTOSAVE_TIMER, 0)
+
+
+def dialog_text(dialog) -> str:
+    """The message of a MessageBoxW (its static text control is 0xFFFF)."""
+    buffer = c.create_unicode_buffer(512)
+    c.windll.user32.GetDlgItemTextW(w.HWND(dialog), 0xFFFF, buffer, len(buffer))
+    return buffer.value
 
 
 def owned_dialog(pid: int) -> int:
