@@ -1,6 +1,6 @@
 // 字形の保持の collector（ADR 0073）を確かめる。
 // 未対応の装飾は収集の全体を失敗させ、0 字形の run は描画へ渡さず、
-// 完全に画面外の run だけを境界つきで除く。画面外の判定は本物の face の寸法を
+// 完全に画面外の run だけを境界つきで除く（横と、#528 の縦）。画面外の判定は本物の face の寸法を
 // 読むので、フォントが 1 つも無い機械では測れない（環境依存・QLT-013）。
 #include "BodyGlyphCollector.hpp"
 #include "DevicePixels.hpp"
@@ -13,7 +13,9 @@
 #include <dwrite_1.h>
 #include <limits>
 #include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace nenenib::tests::ui
@@ -207,6 +209,132 @@ void verify_outside_bounds(IDWriteFontFace1 &face)
     expect(kept(&face, -bound * 4, TRUE, nullptr), "a sideways run is never dropped");
 }
 
+// BodyGlyphCollector の縦の境界と同じ順で同じ式を足す（glyphOffsets なし）。
+std::pair<FLOAT, FLOAT> vertical_of(const DWRITE_FONT_METRICS1 &metrics)
+{
+    const auto ascent = static_cast<float>(metrics.ascent);
+    const auto descent = static_cast<float>(metrics.descent);
+    const float margin = ascent + descent + std::abs(static_cast<float>(metrics.lineGap));
+    const float above = std::max(ascent, static_cast<float>(metrics.glyphBoxTop)) + margin;
+    const float below = std::max(descent, -static_cast<float>(metrics.glyphBoxBottom)) + margin;
+    const auto units = static_cast<float>(metrics.designUnitsPerEm);
+    return {above * run_em / units + 2, below * run_em / units + 2};
+}
+
+constexpr FLOAT drawn_top = 100;
+constexpr FLOAT drawn_bottom = 160;
+
+bool kept_at(IDWriteFontFace *face, FLOAT y, bool bounded = true)
+{
+    const Collector collector =
+        bounded ? Microsoft::WRL::Make<win32::BodyGlyphCollector>(screen_width, 0, drawn_top,
+                                                                  drawn_bottom)
+                : Microsoft::WRL::Make<win32::BodyGlyphCollector>(screen_width);
+    const DWRITE_GLYPH_RUN run{face,
+                               run_em,
+                               static_cast<UINT32>(run_indices.size()),
+                               run_indices.data(),
+                               run_advances.data(),
+                               nullptr,
+                               FALSE,
+                               0};
+    expect(collector->DrawGlyphRun(nullptr, 10, y, DWRITE_MEASURING_MODE_NATURAL, &run, nullptr,
+                                   nullptr) == S_OK,
+           "a run above or below the drawn rows is not an error");
+    const auto taken = collector->take();
+    return taken.has_value() && taken.value().size() == 1 && taken.value().front().origin.y == y;
+}
+
+// #528: 縦に描く範囲と交わらない run だけを除く。字の箱が半分かかる run は残す（保守的）。
+void verify_vertical_bounds(IDWriteFontFace1 &face)
+{
+    DWRITE_FONT_METRICS1 metrics{};
+    face.GetMetrics(&metrics);
+    const auto [above, below] = vertical_of(metrics);
+    const auto units = static_cast<float>(metrics.designUnitsPerEm);
+    const float ascent = static_cast<float>(metrics.ascent) * run_em / units;
+    const float descent = static_cast<float>(metrics.descent) * run_em / units;
+    const FLOAT up = -std::numeric_limits<FLOAT>::infinity();
+    const FLOAT down = std::numeric_limits<FLOAT>::infinity();
+    expect(kept_at(&face, drawn_top + (ascent - descent) / 2),
+           "a run whose box is half above the drawn rows is kept");
+    expect(kept_at(&face, drawn_bottom + (ascent - descent) / 2),
+           "a run whose box is half below the drawn rows is kept");
+    expect(kept_at(&face, drawn_top - below), "a run reaching the top edge is kept");
+    expect(!kept_at(&face, std::nextafter(drawn_top - below, up)),
+           "a run just above the top bound is dropped");
+    expect(kept_at(&face, drawn_bottom + above), "a run reaching the bottom edge is kept");
+    expect(!kept_at(&face, std::nextafter(drawn_bottom + above, down)),
+           "a run just below the bottom bound is dropped");
+    expect(kept_at(&face, drawn_bottom * 1000, false) &&
+               kept_at(&face, -drawn_bottom * 1000, false),
+           "a collector without drawn rows never drops a run vertically");
+}
+
+// 折り返した layout の各行の top と baseline（layout の座標）。
+std::vector<std::pair<FLOAT, FLOAT>> rows_of(const Layout &layout)
+{
+    UINT32 count = 0;
+    static_cast<void>(layout->GetLineMetrics(nullptr, 0, &count));
+    std::vector<DWRITE_LINE_METRICS> lines(count);
+    if (FAILED(layout->GetLineMetrics(lines.data(), count, &count)))
+    {
+        return {};
+    }
+    std::vector<std::pair<FLOAT, FLOAT>> rows;
+    FLOAT top = 0;
+    for (const auto &line : lines)
+    {
+        rows.emplace_back(top, top + line.baseline);
+        top += line.height;
+    }
+    return rows;
+}
+
+std::set<FLOAT> collected_baselines(const Layout &layout, FLOAT top, FLOAT bottom)
+{
+    const Collector collector =
+        Microsoft::WRL::Make<win32::BodyGlyphCollector>(screen_width, 0, top, bottom);
+    static_cast<void>(layout->Draw(nullptr, collector.Get(), 0, 0));
+    std::set<FLOAT> baselines;
+    for (const auto &run : collector->take().value_or(std::vector<win32::BodyGlyphRun>{}))
+    {
+        baselines.insert(run.origin.y);
+    }
+    return baselines;
+}
+
+bool has_baseline(const std::set<FLOAT> &baselines, FLOAT expected)
+{
+    return std::ranges::any_of(baselines, [expected](FLOAT value)
+                               { return std::abs(value - expected) < 0.5F; });
+}
+
+// #528: wrap on で行高の 100 倍を超える layout のうち、見えている 3 行の近くの run だけが集まる。
+void verify_tall_layout(IDWriteFactory2 &factory, IDWriteTextFormat *format)
+{
+    std::wstring text;
+    for (int word = 0; word < 160; ++word)
+    {
+        text += L"abcdefg ";
+    }
+    const Layout layout = layout_of(factory, format, text);
+    const auto rows = layout == nullptr ? std::vector<std::pair<FLOAT, FLOAT>>{} : rows_of(layout);
+    expect(rows.size() >= 100, "the wrapped layout is at least 100 lines tall");
+    if (rows.size() < 100)
+    {
+        return;
+    }
+    const auto baselines = collected_baselines(layout, rows.at(50).first, rows.at(53).first);
+    expect(has_baseline(baselines, rows.at(50).second) &&
+               has_baseline(baselines, rows.at(51).second) &&
+               has_baseline(baselines, rows.at(52).second),
+           "the three drawn rows are collected");
+    expect(baselines.size() < 12 && !baselines.empty() && *baselines.begin() > rows.at(44).second &&
+               *baselines.rbegin() < rows.at(59).second,
+           "rows far above and below the drawn rows are not collected");
+}
+
 Microsoft::WRL::ComPtr<IDWriteFontFace1> first_face(IDWriteFactory2 &factory)
 {
     Microsoft::WRL::ComPtr<IDWriteFontCollection> collection;
@@ -243,6 +371,7 @@ void verify_glyph_collector()
         return;
     }
     verify_layout_decorations(*factory.Get(), format.Get());
+    verify_tall_layout(*factory.Get(), format.Get());
     const auto face = first_face(*factory.Get());
     if (face == nullptr)
     {
@@ -250,5 +379,6 @@ void verify_glyph_collector()
         return;
     }
     verify_outside_bounds(*face.Get());
+    verify_vertical_bounds(*face.Get());
 }
 } // namespace nenenib::tests::ui

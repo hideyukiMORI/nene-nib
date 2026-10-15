@@ -6,6 +6,7 @@
 
 #include <dwrite_3.h>
 #include <expected>
+#include <limits>
 #include <optional>
 #include <vector>
 #include <wrl/client.h>
@@ -27,7 +28,10 @@ class BodyTextLayouts final : public application::TextLayoutPort
     [[nodiscard]] std::expected<TextLayout, application::TextLayoutFailure>
     get(const application::TextLayoutRequest &request);
     // 描画時だけ字形を保持する。位置を調べただけの画面外の行には字形を複製しない。
-    [[nodiscard]] const BodyTextLayout *glyphs_of(IDWriteTextLayout *layout, float left = 0);
+    // top / bottom は描く範囲の縦（layout の座標）。その外の run は集めない（#528）。
+    [[nodiscard]] const BodyTextLayout *glyphs_of(IDWriteTextLayout *layout, float left = 0,
+                                                  float top = std::numeric_limits<float>::lowest(),
+                                                  float bottom = std::numeric_limits<float>::max());
     void begin_frame();
     void end_frame();
 

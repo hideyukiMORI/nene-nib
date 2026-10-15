@@ -34,6 +34,7 @@
 #include <dwrite_3.h>
 #include <dxgi1_6.h>
 #include <expected>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -249,6 +250,9 @@ class Direct2DRenderer final
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
+    // 本文を描いている間だけの、描く範囲の縦（本文の上端・下端）。外では限りなし（#528）。
+    std::int32_t body_top_ = std::numeric_limits<std::int32_t>::min();
+    std::int32_t body_bottom_ = std::numeric_limits<std::int32_t>::max();
     std::uint32_t dpi_ = 96;
     // DirectWrite 資源の無効化キー。設定の所有者は EditorState（ADR 0020）。
     core::FontSize formatted_size_ = core::default_font_size();

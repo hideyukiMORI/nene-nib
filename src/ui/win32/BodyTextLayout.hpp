@@ -4,6 +4,7 @@
 #include "LayoutRect.hpp"
 
 #include <dwrite.h>
+#include <limits>
 #include <string>
 #include <wrl/client.h>
 
@@ -21,5 +22,8 @@ struct BodyTextLayout
     bool glyphs_tried = false;
     std::size_t rows = 1;
     float glyph_left = 0;
+    // 字形を集めた縦の範囲（layout の座標）。範囲が変われば集め直す（#528）。
+    float glyph_top = std::numeric_limits<float>::lowest();
+    float glyph_bottom = std::numeric_limits<float>::max();
 };
 } // namespace nenenib::ui::win32
