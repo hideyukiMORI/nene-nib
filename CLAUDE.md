@@ -198,7 +198,7 @@ v3はwrapを含む。v3不在時だけv2、両方不在時だけv1を厳密に�
 
 ### 一時ファイルは `<target>.nib-tmp-<pid>-<n>` を `CREATE_NEW` で作り、保存の直前に残骸を回収する
 
-名前と回収は `src/adapters/win32/TemporaryFiles` の 1 か所（ADR 0135）。連番は `Win32FileAdapter` が保存ごとに進め、名前が既にあれば最大 8 回まで次を試す。回収は `DeleteFileW` が通るものだけ（生きている一時ファイルは共有 0 で消えない）で、時刻で決めない。起動時は合成ルートが設定の置き場で `reclaim_temporaries_beside` を 1 回呼ぶ。固定名の一時ファイルを書かない。
+名前と回収は `src/adapters/win32/TemporaryFiles` の 1 か所（ADR 0135）。連番はプロセスで 1 つ（`next_temporary_sequence`）で、名前が既にあれば最大 8 回まで次を試す。回収は名前が `<16 進の pid>-<10 進の連番>` の形で、pid のプロセスが生きていない（`OpenProcess`・拒否は生きている側）か、自分の古い連番のものだけ。判定は純関数 `reclaimable_temporary` の 1 本で、時刻で決めない。起動時は合成ルートが設定の置き場で `reclaim_temporaries_beside` を 1 回呼ぶ。固定名の一時ファイルを書かない。
 
 ### リポジトリの外の作業場所は `D:\NeNeNib\`
 
