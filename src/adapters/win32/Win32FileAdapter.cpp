@@ -3,10 +3,12 @@
 #include "AbsolutePath.hpp"
 #include "CompleteFileRead.hpp"
 #include "FileHandle.hpp"
+#include "TemporaryFiles.hpp"
 #include "Utf16.hpp"
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace nenenib::adapters::win32
@@ -18,7 +20,8 @@ using Mode = application::FileWriteMode;
 
 // WriteFile が 1 回に受け取れるのは DWORD の分まで。上限ではなく分割で書く（決定 6）。
 constexpr std::size_t write_chunk_bytes = 32U * 1024U * 1024U;
-constexpr wchar_t temporary_suffix[] = L".nib-tmp";
+// 同じ名前が既にあれば（プロセス ID の再利用）連番を進めて試す回数（ADR 0135 の決定 2）。
+constexpr std::uint32_t temporary_attempts = 8;
 
 // UTF-8 の経路を Win32 の UTF-16 へ。変換そのものは core::to_utf16 ただ 1 本（CPP-014）。
 // 変換できない経路は空になり、呼び出し側が not_found / unwritable で断る（Issue #13）。
@@ -112,16 +115,38 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
     return {};
 }
 
-[[nodiscard]] DWORD temporary_creation(Mode mode) noexcept
+// 作れなかった一時ファイルは自分のものではないので消さない（ADR 0067）。名前が既にあれば
+// false を返し、呼び出し側が次の連番で試す（ADR 0135 の決定 2）。
+[[nodiscard]] std::expected<bool, Failure> refused_creation(DWORD error) noexcept
 {
-    switch (mode)
+    if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS)
     {
-    case Mode::replace:
-        return CREATE_ALWAYS;
-    case Mode::create_new:
-        return CREATE_NEW;
+        return false;
     }
-    std::unreachable();
+    return std::unexpected(failure_of(error, Failure::unwritable));
+}
+
+// どのモードでも CREATE_NEW・共有 0 で作り、全断片を書いて閉じる（ADR 0135 の決定 2）。
+// 書けたら true、名前が既にあれば false。
+[[nodiscard]] std::expected<bool, Failure>
+written_temporary(const std::wstring &temporary, std::span<const std::string_view> parts)
+{
+    std::expected<void, Failure> written;
+    {
+        const FileHandle file(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (!file.valid())
+        {
+            return refused_creation(GetLastError());
+        }
+        written = write_parts(file, parts);
+    }
+    if (!written)
+    {
+        DeleteFileW(temporary.c_str());
+        return std::unexpected(written.error());
+    }
+    return true;
 }
 
 // 既存なら ReplaceFileW が属性と ACL を保ったまま入れ替え、無ければ MoveFileExW で置く（決定 6）。
@@ -156,6 +181,24 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
     }
     return Failure::unwritable;
 }
+
+// 置き換えの直前に、一時ファイルがこのプロセスのこの連番のものかを名前で確かめる（決定 4）。
+[[nodiscard]] std::expected<void, Failure> placed_temporary(const std::wstring &target,
+                                                            const std::wstring &temporary,
+                                                            std::uint32_t sequence, Mode mode)
+{
+    if (!owned_temporary(temporary, target, sequence))
+    {
+        return std::unexpected(Failure::unwritable);
+    }
+    if (!placed(target, temporary, mode))
+    {
+        const auto failure = placement_failure(GetLastError(), mode);
+        DeleteFileW(temporary.c_str());
+        return std::unexpected(failure);
+    }
+    return {};
+}
 } // namespace
 
 std::expected<core::SealedBytes, Failure> Win32FileAdapter::read(const core::FilePath &path,
@@ -189,35 +232,27 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
     {
         return std::unexpected(Failure::unwritable);
     }
-    const std::wstring temporary = target + temporary_suffix;
     if (mode == Mode::create_new && GetFileAttributesW(target.c_str()) != INVALID_FILE_ATTRIBUTES)
     {
         return std::unexpected(Failure::already_exists);
     }
-    std::expected<void, Failure> written;
+    // 前の保存が残した一時ファイルを、この保存先の保存の直前に回収する（ADR 0135 の決定 3）。
+    reclaim_temporaries_of(target);
+    for (std::uint32_t attempt = 0; attempt < temporary_attempts; ++attempt)
     {
-        const FileHandle file(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr,
-                                          temporary_creation(mode), FILE_ATTRIBUTE_NORMAL,
-                                          nullptr));
-        if (!file.valid())
+        ++sequence_;
+        const std::wstring temporary = temporary_name(target, sequence_);
+        const auto written = written_temporary(temporary, parts);
+        if (!written)
         {
-            // 作れなかった一時ファイルは自分のものではないので消さない（ADR 0067）。
-            return std::unexpected(failure_of(GetLastError(), Failure::unwritable));
+            return std::unexpected(written.error());
         }
-        written = write_parts(file, parts);
+        if (written.value())
+        {
+            return placed_temporary(target, temporary, sequence_, mode);
+        }
     }
-    if (!written)
-    {
-        DeleteFileW(temporary.c_str());
-        return written;
-    }
-    if (!placed(target, temporary, mode))
-    {
-        const auto failure = placement_failure(GetLastError(), mode);
-        DeleteFileW(temporary.c_str());
-        return std::unexpected(failure);
-    }
-    return {};
+    return std::unexpected(Failure::unwritable);
 }
 
 std::expected<core::FilePath, Failure> Win32FileAdapter::resolve(const core::FilePath &path)

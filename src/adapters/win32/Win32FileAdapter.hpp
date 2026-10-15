@@ -8,6 +8,7 @@
 #include <windows.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <span>
 #include <string>
@@ -17,6 +18,7 @@ namespace nenenib::adapters::win32
 {
 // ファイルを触る唯一の場所（ARC-003 / ARC-007 / ADR 0010 の決定 1・6）。文字コードは知らない。
 // 書き込みは同じフォルダの一時ファイルに書いてから置き換えるので、途中で落ちても元は残る。
+// 一時ファイルの名前は保存ごとに進む連番を含み、残骸は保存の直前に回収する（ADR 0135）。
 // 読める上限は application が引数で渡す。書き込みに上限は無い（入力を失わせない）。
 class Win32FileAdapter final : public application::FilePort
 {
@@ -33,5 +35,8 @@ class Win32FileAdapter final : public application::FilePort
     // 短い名前（8.3）とリンクは解かない（ADR 0056 の「残る穴」）。
     [[nodiscard]] bool same_file(const core::FilePath &left,
                                  const core::FilePath &right) const override;
+
+  private:
+    std::uint32_t sequence_ = 0;
 };
 } // namespace nenenib::adapters::win32

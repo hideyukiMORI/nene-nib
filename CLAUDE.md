@@ -196,6 +196,10 @@ v3はwrapを含む。v3不在時だけv2、両方不在時だけv1を厳密に�
 `DestroyWindow(window_)` を呼ぶのは `EditorWindow::leave` の 1 か所（デストラクタの作りかけの後始末を除く）。終わり方ごとの未保存の扱いは application の `exit_plan(ExitCause, 未保存の数)` が決め、ui は値に従うだけ（ADR 0133）。OS の終了（`WM_QUERYENDSESSION`）は未保存があれば `ShutdownBlockReasonCreate` で止め、`end_window` を通さず窓を壊さない。
 描画の失敗は `recover()`（古い renderer を先に解放して `start_rendering`）で 1 回だけ作り直し（`present` は device lost のときだけ、サイズ・DPI・文字組みは失敗の種類を問わず）、だめなら `abandon()` が取消の無い「描画できなくなったので閉じます。保存しますか。」を通して `leave(SessionEnd::rendering_lost)` する。
 
+### 一時ファイルは `<target>.nib-tmp-<pid>-<n>` を `CREATE_NEW` で作り、保存の直前に残骸を回収する
+
+名前と回収は `src/adapters/win32/TemporaryFiles` の 1 か所（ADR 0135）。連番は `Win32FileAdapter` が保存ごとに進め、名前が既にあれば最大 8 回まで次を試す。回収は `DeleteFileW` が通るものだけ（生きている一時ファイルは共有 0 で消えない）で、時刻で決めない。起動時は合成ルートが設定の置き場で `reclaim_temporaries_beside` を 1 回呼ぶ。固定名の一時ファイルを書かない。
+
 ### リポジトリの外の作業場所は `D:\NeNeNib\`
 
 依頼書は `D:\NeNeNib\briefs\`、1 回限りのスクリプトは `D:\NeNeNib\scripts\`、実機の確認の profile と文書は `D:\NeNeNib\evidence\`（施主指示 2026-09-30。C ドライブの Temp と scratchpad を使わない）。道具の出力と席の報告はリポジトリの `out/`。
