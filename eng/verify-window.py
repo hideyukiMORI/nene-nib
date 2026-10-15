@@ -539,7 +539,10 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
     try:
         client = rectangle(window, user.GetClientRect)
         width, height = client[2] - client[0], client[3] - client[1]
-        centre = (width // 2, height // 2)
+        # 読む点は案内（#304・D42「打ち始めると消えます」）の外。x は client の幅の中央、y は
+        # status bar の上端（core::status_bar_layout と同じ）から 20 px 上（本文の下端の少し上）。
+        band_top = max(height - to_pixels(STATUS_BAR_DIPS, user.GetDpiForWindow(window)), 0)
+        centre = (width // 2, max(band_top - 20, 0))
         result = judge_first_paint(sample_first_paint(window, centre, background), background)
         pixels = capture(window, width, height)
         write_bitmap(output / "first-paint.bmp", pixels, width, height)
