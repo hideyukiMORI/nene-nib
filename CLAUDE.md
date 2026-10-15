@@ -47,7 +47,7 @@ Claude Code / AI エージェントがこのリポジトリで作業するため
 
 ### 裏の仕事はワーカー 1 本と型のある port。合図は使う人の操作ではない
 
-スレッドは `src/adapters/win32` の `Win32Worker` の 1 本だけで、最初の仕事を受けたときに起きる（合成では起こさない・ADR 0004 / 0062）。仕事を足すときは仕事の種類ごとの port を application に宣言する（最初は `FolderPort` の `list` と `collect`）。
+スレッドは `src/adapters/win32` の `Win32Worker` の 1 本だけで、最初の仕事を受けたときに起きる（ADR 0004 / 0062。合成ルートが起動のたびに最初の仕事として device の生成を投げるので、製品では起動で起きる・ADR 0131）。仕事を足すときは仕事の種類ごとの port を application に宣言する（最初は `FolderPort` の `list` と `collect`）。
 完了の知らせは中身の無い窓メッセージ（番号は `EditorWindow.cpp` の `work_message` の 1 か所）で、ui は意図 `WorkCompleted` を送り、中身は application が `collect()` で引く。`send` の途中で届いた合図は、いちばん外の `send` の終わりで 1 回だけ送る。
 `WorkCompleted` は Ctrl+Tab の歩き・知らせ・変換・Vim の待ちと録画・`.`・undo を動かさない（入口の `keeps_tab_walk` と `begin_intent`・契約 `--background-work`）。新しい意図を足すときは、この 2 か所にどちらの側かを決めて書く。
 adapters の試験は時計を読まない。待つのは合図の受け皿（セマフォ）で、止まらなければ CTest の `TIMEOUT` で落ちる。

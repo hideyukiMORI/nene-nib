@@ -129,6 +129,7 @@ Vim のキー列 → 動作のような大きな分岐は `constexpr` の**表**
 application はワーカーへ不変の要求値を渡し、完了は UI スレッドの意図として受ける。core / application / ui / app は
 `std::thread` / `std::async` / `std::mutex` / `std::atomic` / `CreateThread` / `_beginthreadex` / 同期原始を書かない。共有可変状態を持たない。
 flip model の frame latency waitable object を `WaitForSingleObjectEx` で待つのは提示経路の一部であって並行性の導入ではない（スレッドも共有可変状態も作らない。`src/ui/win32` の `Direct2DRenderer::render` だけが行う・ADR 0007）。
+起動の device を worker で先に作って渡す `src/ui/win32` の `DeviceWarmup` は、合成ルートが所有する単発の受け渡し箱で、書いてから event を立て・待ってから読む順序だけを Win32 の event でつける（ワーカーも UI も箱の値を同時には触らない。スレッドは作らない・[ADR 0131](adr/0131-d3d-device-is-warmed-up-on-the-worker.md)）。ui の例外はこの 2 つだけで、3 つ目は ADR で決める。
 
 - 機械強制: **active** → `eng/symbols.py --require core application` の `concurrency` 分類（`_beginthreadex` / `_Mtx_*` / `_Cnd_*` / `_Thrd_*` / `__imp_CreateThread` 等。TH1）が core / application の実ライブラリで落ちる（2026-09-15・Issue #3）。ui / app はシンボル検査の対象外で、CNF-009 の字句検査だけが見る。`std::atomic` はリンカに見えない（TH2）ので CNF-009 が並行性ヘッダの include を `src/adapters/win32` 以外の `src/` で拒否する
 
