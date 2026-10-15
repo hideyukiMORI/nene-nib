@@ -62,6 +62,7 @@ Phase 0 の言語の実測（114 記録）は [phase0-results.json](phase0-resul
 | CPP-009 | `*reinterpret_cast<const int*>(value)` | eng/prove-gates.py（clang-tidy） | 2026-10-16（Issue #516）: `error: do not use reinterpret_cast [cppcoreguidelines-pro-type-reinterpret-cast,-warnings-as-errors]` で `exitCode` 1、復帰 0（P32）。`#pragma` は CNF-003（P6）。そのほかの言語マジックの字句検査は未実装 |
 | ARC-005 | 可変グローバル `int counter = 0;` | eng/prove-gates.py（clang-tidy） | 2026-10-16（Issue #516）: `variable 'counter' is non-const and globally accessible ... [cppcoreguidelines-avoid-non-const-global-variables,-warnings-as-errors]` で `exitCode` 1、復帰 0（P21）。区画の意味はレビュー事項 |
 | CPP-016 | `int values[argc];`・`std::move` 後の再利用・所有者の無い `new` | eng/prove-gates.py（実ビルド・clang-tidy） | 2026-10-16（Issue #516）: `variable length arrays in C++ are a Clang extension [clang-diagnostic-vla-cxx-extension]`・`'first' used after it was moved [bugprone-use-after-move,-warnings-as-errors]`・`Potential leak of memory pointed to by 'value' [clang-analyzer-cplusplus.NewDeleteLeaks,-warnings-as-errors]` で各 `exitCode` 1、復帰 0（P16）。ASan / UBSan は今回反例を置いていない。所有と借用の型はレビュー事項 |
+| QLT-012 | 検証記録の欄が無い PR 本文（`git-conventions.py --pr-body` が落とす・`tests/conformance` の `GitChecks`）・CI の `build-and-test` が落ちる最終 HEAD（統合道具が `Merge refused`） | eng/validate-git.ps1 ＋ eng/merge-pr.py → check.yml の `build-and-test`（Release 全 target ＋ ctest） | 2026-10-16（Issue #514 / #532・ADR 0136）: run 38816724375 の `build-and-test` 10 分 8 秒 success（1-f に 3 run）。落ちる側は未発生（発生時に引用） |
 | CNF-001 | `ColorHelper` / `note_helper`・`utils/`・別名 | tests/conformance の `SourceChecks`（`test_cnf001_*` 5 件） | 2026-10-16（Issue #516）: `python -m unittest tests.conformance.test_conformance -k cnf001 -k cnf002 -k cnf003 -k cnf004 -k cnf005 -k GitChecks -v` が `Ran 31 tests`・`OK`・終了 0。反例は CNF-001、正例は指摘 0（P5）。マクロで生成した名前は未対応 |
 | CNF-002 | 1 ファイルに 2 型・ファイル名と違う型・名前空間の中の 2 型 | tests/conformance の `SourceChecks`（`test_cnf002_*` 6 件） | 2026-10-16（Issue #516）: 同じ実行で反例は CNF-002、入れ子と自由関数の正例は指摘 0。テンプレート等の完全な分類は未完了 |
 | CNF-003 | waiver の無い `NOLINT`・広い抑制・範囲の違う waiver | tests/conformance の `SourceChecks` / `SdkAbiChecks`（`test_cnf003_*` 6 件） | 2026-10-16（Issue #516）: 同じ実行で反例は CNF-003、有効な行単位 waiver と引用符の中の pragma は指摘 0（P6） |
@@ -124,6 +125,18 @@ P29〜P32 を足し、どの反例も `results.json` の `negative.exitCode` が
 | `src/ui/win32` / `src/app` | OS import | `__imp_CreateWindowExW` / `__imp_D3D11CreateDevice` / `__imp_CreateDXGIFactory2` / `__imp_DCompositionCreateDevice` / `__imp_D2D1CreateFactory` / `__imp_DWriteCreateFactory` / `__imp_WaitForSingleObjectEx` | 同上。字句検査（並行性ヘッダ）は ui / app にも適用される |
 
 ---
+
+### 1-f CI の製品ビルドと単体テスト（ADR 0136・D46）
+
+2026-10-16。`eng/merge-pr.py --execute` が起動した `check.yml` の run で、job `build-and-test`（windows-2022・Release 全 target ＋ `ctest --test-dir build-release --output-on-failure --no-tests=error`・9 本）が通った。QLT-012 の機械強制の証明（Issue #514 / #516・D49）。
+
+| run | PR | `check` | `build-and-test` | 結果 |
+| --- | --- | --- | --- | --- |
+| [38816724375](https://github.com/hideyukiMORI/nene-nib/actions/runs/38816724375) | #522（この job を足した PR 自身） | 19 秒 | 10 分 8 秒 | success / success |
+| [38818132949](https://github.com/hideyukiMORI/nene-nib/actions/runs/38818132949) | #524 | 18 秒 | 6 分 43 秒 | success / success |
+| [38819020180](https://github.com/hideyukiMORI/nene-nib/actions/runs/38819020180) | #526 | 20 秒 | 10 分 48 秒 | success / success |
+
+実機（i9-10850K・20 論理 core）の同じ 3 命令: configure 3.6 秒・`cmake --build build-release` 203.1 秒（230 段・警告 0）・ctest 16.6 秒（9/9）。反例（落ちる側）は、ctest が落ちる PR を merge しようとしたときに統合道具が `Merge refused` で止まることで、2026-10-16 時点では未発生（発生したら run を引用する）。
 
 ## 2. 出力の抜粋（実行結果からの引用）
 

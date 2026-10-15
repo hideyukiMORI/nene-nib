@@ -111,7 +111,7 @@ CI 成功は検証記録の代わりではなく、製品の動作も保証し�
 本件が原因の失敗は修正する。無関係と判断できる既存失敗は、その根拠と別 Issue を記録して本件を継続する。
 無関係な全件再試行や別件修正へ脱線せず、成功するまで繰り返して不安定なテストを合格扱いにしない。
 
-- 機械強制: **planned**（正典の統合道具は非文書変更でCIを要求し、文書のみなら起動しない。GitHub UIや直接CLIまで対象別に強制するものではない。結果の真偽・再利用条件・失敗との因果はレビュー事項）
+- 機械強制: **active**（`eng/validate-git.ps1` が検証記録の欄を要求し、正典の統合道具 `eng/merge-pr.py` が非文書変更で `check.yml` を起動して PR の最終 HEAD を Release で全 target ビルドし ctest を回す。初回の run 38816724375 の `build-and-test` 10 分 8 秒・成功を [gate-proofs](quality/gate-proofs.md#1-f-ci-の製品ビルドと単体テストadr-0136d46) に引用・ADR 0136・D46 / D49。守れていない部分: 文書のみなら起動しない、GitHub UI や直接 CLI の merge まで対象別に強制するものではない、結果の真偽・再利用条件・失敗との因果はレビュー事項）
 
 ### QLT-013 — 環境依存の主張は正直に名付ける
 
@@ -311,12 +311,12 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-004 | active | clang-format --dry-run --Werror |
 | QLT-005 | planned | |
 | QLT-006 | planned | |
-| QLT-007 | planned | CI の build-and-test は PR の最終 HEAD の Release ビルドと ctest（ADR 0136・初回の run を gate-proofs に引用してから active・D49） |
+| QLT-007 | planned | eng/prove-gates.py が 32 本の実ツールの反例を回す（#516）。新しいゲートに証明を要求する機械は無い（レビュー事項） |
 | QLT-008 | planned | レビュー事項 |
 | QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
 | QLT-010 | 不能 | PR の手続き |
 | QLT-011 | planned | eng/toolchain.ps1 |
-| QLT-012 | planned | validate-git.ps1 / git-conventions.py の検証記録確認。CI の build-and-test は PR の最終 HEAD の Release ビルドと ctest（ADR 0136・初回の run を gate-proofs に引用してから active・D49）。結果の真偽と入力の不変性はレビュー |
+| QLT-012 | active | validate-git.ps1 / git-conventions.py の検証記録確認 ＋ merge-pr.py → check.yml の build-and-test（PR の最終 HEAD の Release ビルドと ctest・ADR 0136・run 38816724375 を gate-proofs 1-f に引用）。結果の真偽・再利用条件・GitHub UI の直接 merge はレビュー |
 | QLT-013 | planned | |
 | QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機の指紋で判定（必要な変更で選んで実行・`-Full` の明示実行）。CI の必須 check は validate-git だけでベンチを回さず（ADR 0021）、CI の指紋 `e7a87d5b` の基準値は記録として残る。打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
 | CNF-001 | active | eng/conformance.py / tests/conformance |
