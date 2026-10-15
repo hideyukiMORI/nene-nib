@@ -1900,4 +1900,9 @@ bool Direct2DRenderer::provisional() const noexcept
 {
     return provisional_;
 }
+
+HRESULT Direct2DRenderer::wait_for_commit() const
+{
+    return composition_->WaitForCommitCompletion();
+}
 } // namespace nenenib::ui::win32

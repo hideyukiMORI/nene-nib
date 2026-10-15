@@ -146,7 +146,8 @@ void pump_messages(nenenib::ui::win32::EditorWindow &window,
         HANDLE event = warmup.event();
         const DWORD woken =
             MsgWaitForMultipleObjectsEx(1, &event, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-        // 待てなかったとき（WAIT_FAILED）も差し替える。take() が B を待つので取りこぼさない。
+        // 待てなかったとき（WAIT_FAILED）も差し替えを呼び、必ず仮を抜ける（take() が B を待つ・
+        // 本窓に作れなければ終了へ）。
         if (woken != WAIT_OBJECT_0 + 1)
         {
             window.adopt_device();

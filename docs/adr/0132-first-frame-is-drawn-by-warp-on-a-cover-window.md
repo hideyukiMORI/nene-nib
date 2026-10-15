@@ -20,11 +20,12 @@ ADR 0131 の後も起動の最初の frame は約 178 ms で、そのうち約 1
 
 1. **箱 `DeviceWarmup` は 2 段で渡す。** worker の仕事 `make()` は、まず WARP の device を作って event A を立て、次に HARDWARE の device（失敗なら 2 つ目の WARP）と DXGI factory を作って event B を立てる。`take_provisional()` は A を待って WARP を 1 回だけ渡し、`take()` は B を待って本物を 1 回だけ渡す（どちらも 2 回目は空）。stop が立っていればどちらも作らず event だけ立てる。WARP を先に作るのは、HARDWARE の生成中に始めた WARP が待たされるため。`ready()` は B を timeout 0 で見る（待たない）。
 2. **最初の renderer は WARP で、本窓の client を覆う子窓に結ぶ。** `EditorWindow::start_rendering()` は、箱が B をまだ立てていなければ（`ready()` が偽）、子窓 `CoverWindow`（`WS_CHILD | WS_VISIBLE`・`WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT`・独自の class・`WM_NCHITTEST` は `HTTRANSPARENT`・`WM_PAINT` は `ValidateRect` だけ・本窓の client と同じ大きさ）を作り、`take_provisional()` の WARP で swap chain・DirectComposition の target・D2D の context を**子窓の HWND** に作って、最初の frame をそこへ出す。本窓の HWND に WARP の swap chain や DComp の target を結ばない（上の実測の理由）。B が立っていれば（device lost の作り直し・遅い起動）、今日どおり本窓に本物で作る。
-3. **差し替えは、本窓に本物の renderer を作って同じ frame を Present・Commit してから、子窓を壊す。** `EditorWindow::adopt_device()` は、renderer が provisional のときだけ、`take()` の device で本窓に ADR 0131 の経路どおり renderer を作り（swap chain → DComp → D2D → text formats）、`draw_frame()` で同じ frame を出した後に、WARP の renderer を解放して子窓を `DestroyWindow` する。節目 `device_adopted` を足し、起動の正典順（`STARTUP_MILESTONES`）には入れない（`input_received` と同じく区間の外）。`device_created` は UI が最初の device（WARP）を手にした位置のまま。
-4. **合図は `pump_messages` が event B を待つ。** `src/app/Main.cpp` の `pump_messages` は、窓の renderer が provisional の間だけ `MsgWaitForMultipleObjectsEx`（event B と `QS_ALLINPUT`）で待ち、B が立てば `window.adopt_device()` を呼んでから届いていたメッセージを `PeekMessageW` で処理する。provisional でなくなれば今日の `GetMessageW` のループに戻り、二度と入らない。スレッド・タイマー・窓メッセージの番号を足さない。
+3. **差し替えは、本窓に本物の renderer を作って同じ frame を Present・Commit してから、子窓を壊す。** `EditorWindow::adopt_device()` は、renderer が provisional のときだけ、`take()` の device で本窓に ADR 0131 の経路どおり renderer を作り（swap chain → DComp → D2D → text formats）、`draw_frame()` で同じ frame を出し、DirectComposition の `WaitForCommitCompletion` を待ってから（Commit が DWM に取り込まれてから子窓を消す。子窓が消えた後に 1 vsync だけ Mica が見える余地を塞ぐ）、WARP の renderer を解放して子窓を `DestroyWindow` する。待つのはこの 1 か所だけで、renderer の口 `wait_for_commit` を通す。本窓に renderer を作れなければ、device lost の 2 度目と同じく終了へ（`abandon`・ADR 0007）。節目 `device_adopted` を足し、起動の正典順（`STARTUP_MILESTONES`）には入れない（`input_received` と同じく区間の外）。`device_created` は UI が最初の device（WARP）を手にした位置のまま。
+   箱に WARP が無いとき（`take_provisional` が空）や子窓が作れないときは、今日どおり本窓に本物で作り、描けた後に子窓を外す。
+4. **合図は `pump_messages` が event B を待つ。** `src/app/Main.cpp` の `pump_messages` は、窓の renderer が provisional の間だけ `MsgWaitForMultipleObjectsEx`（event B と `QS_ALLINPUT`）で待ち、B が立てば `window.adopt_device()` を呼んでから届いていたメッセージを `PeekMessageW` で処理する。provisional でなくなれば今日の `GetMessageW` のループに戻り、二度と入らない。`MsgWaitForMultipleObjectsEx` が失敗したときも `adopt_device` を呼び、必ず仮を抜ける（`take()` が B を待つ・作れなければ終了へ）。スレッド・タイマー・窓メッセージの番号を足さない。
 5. **子窓は差し替えの前の `WM_SIZE` と DPI の変更に追う。** `WM_SIZE` は子窓を client と同じ大きさに動かしてから renderer の `resize`、DPI は renderer の `set_dpi` を今日どおり呼ぶ。鍵は本窓に届く（焦点は本窓。子窓を作った直後に `SetFocus(本窓)` を戻す）。マウスは `HTTRANSPARENT` と `WS_EX_TRANSPARENT` で本窓へ落ちる（ADR 0013 の決定 5 のとおり本文のクリックは最初の frame の後に効く）。
 6. **device lost の作り直しは古い renderer を先に解放する。** `present()` の device lost の経路は `renderer_.reset()` してから `start_rendering()`（同じ HWND に DComp の target を 2 つ作らない）。箱は空なので今日どおり自分で作る（ADR 0131 の決定 3）。
-7. **差し替えの前に窓が閉じたとき・stop のとき。** 子窓は本窓と一緒に壊れ、renderer はその前に解放する。stop が立っていれば `take()` は空で、provisional の renderer は本窓に移らずそのまま終わる。
+7. **差し替えの前に窓が閉じたとき・stop のとき。** 通常の閉じ方（`close_window` の `DestroyWindow`）では子窓の HWND が本窓と一緒に先に壊れ、仮の renderer はその後に `EditorWindow` のデストラクタが解放する（`abandon` とデストラクタは renderer を先に解放する）。stop は worker が壊れるとき、つまり `pump_messages` を出た後にしか立たないので、差し替えの途中で `take()` が空になるのは worker が device を作れなかったときだけで、そのときは `Direct2DRenderer::create` が UI スレッドで自分で作って本窓へ移る（ADR 0131 の決定 3）。
 8. **受理は正式ゲート 8 本と施主の試用。** startup-first-frame と open-large-file-16mib が縮み、`key-to-frame-single` を含むほかに悪化が無いこと。基準値は変えない（縮んだ分は余裕のまま）。試用では差し替えの瞬間（起動の約 170 ms 後）に絵が揺れないことを見る。
 
 ## 却下した選択肢
@@ -37,14 +38,16 @@ ADR 0131 の後も起動の最初の frame は約 178 ms で、そのうち約 1
 
 ## 検証
 
-- 窓なしの契約: 箱の 2 段（A の後に B・stop・2 回目は空）を `--device-warmup` に足す。`--background-work` と `verify_quiet_paths` の port の回数は変わらない。
-- 窓ありの契約（`nib_window_tests`）: 起動の順（`device_created` → `frame_presented` → `device_adopted`）と、差し替えの後に鍵が本窓で描かれること。
+- 窓なしの契約: 箱の 2 段（WARP の device・stop・2 回目は空）を `nib_window_tests --device-warmup` に足す。`--background-work` と `verify_quiet_paths` の port の回数は変わらない。
+- 窓ありの契約は `nib_window_tests` ではなく `eng/verify-window.py` に置く（`nib_window_tests` は ADR 0077 のとおり窓を作らない）。first-paint の節は起動の順（`device_created` → `frame_presented` → `device_adopted`）・差し替えがあったこと・子窓が消えたことを確かめ、最初の frame の後から子窓が消えた後まで中央の画素を 10 ms ごとに読んで、本文の背景色でも Mica の面でもない「空の面」が 1 標本でも出たら落とす。`--keys` は子窓が消えてから鍵を送ることを確かめる。
+- この窓ありの契約は `eng/check.ps1` と CI には入らない。窓を最前面に出すので、施主の了承のもとで手で回す。
 - symbols（core / application は不変）・conformance・format。
-- 速さ: 正式ゲート 8 本（`key-to-frame-single` が ADR 0131 と同等であること）。差し替え前後の PNG の差。
+- 速さ: 正式ゲート 8 本（`key-to-frame-single` が ADR 0131 と同等であること）。差し替え後の PNG が #481 の本窓だけの絵と 0 画素差であること。
 
 ## 限界
 
 最初の frame は WARP の絵で、HARDWARE の絵と字の縁が数百画素ぶん違う。差し替えの瞬間に目で見える差は実測で無いが、試用で確かめる。
 差し替えまでの約 170 ms の間の鍵は WARP で描く（単打は約 1 ms）。子窓は差し替えまでしか無く、通常の経路（resize・DPI・device lost・終了）は差し替え後は今日のまま。
 GPU が無い環境では 2 つ目の WARP を本窓に結ぶので、今日と同じソフトウェア描画になる（最初の frame だけ子窓に出る）。
+`key-to-frame-single` が本物の device で測れているのは、`eng/measure-speed.py` の待ち（1.1 s）が差し替え（約 170 ms）より長いから。待ちを縮めるときは、打鍵が差し替えの後であることを条件に足す。
 HWND に最初に結んだ swap chain の種類が後の Present の経路を決める、という DWM / DXGI 側の挙動は実測に基づく推定で、文書の根拠は無い。

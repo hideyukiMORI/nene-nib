@@ -75,6 +75,9 @@ class Direct2DRenderer final
     [[nodiscard]] RECT caret_rectangle() const noexcept;
     // create_provisional で作った（WARP で子窓に描いている）とき真。
     [[nodiscard]] bool provisional() const noexcept;
+    // 最後の Commit が DWM に取り込まれるまで待つ。差し替えで子窓を壊す前の 1 か所だけが呼ぶ
+    // （ADR 0132 の決定 3）。
+    [[nodiscard]] HRESULT wait_for_commit() const;
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。
