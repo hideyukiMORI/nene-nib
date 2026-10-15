@@ -123,6 +123,8 @@ FIRST_PAINT_INTERVAL = 0.01
 # ADR 0132: 差し替えの標本は子窓が消えた後に 5 つまで読み、最長 3 秒で打ち切る。
 ADOPTION_TAIL_SAMPLES = 5
 ADOPTION_SECONDS = 3.0
+# 最初の frame の後は平らな本文の背景を読むので、各 channel の差 2 までを同じ色と見る。
+ADOPTION_STEP = 2
 # 「1 段の差」。最初のフレームの本文背景とこれ以上離れた面が見えていたら数字を報告に残す。
 FIRST_PAINT_STEP = 32
 BLACK = [0, 0, 0]
@@ -519,14 +521,15 @@ def sample_adoption(window, centre: tuple, background: list) -> list:
 
 
 def empty_surfaces(samples: list, background: list) -> list:
-    """Samples that are neither the body background nor the Mica surface (ADR 0013's reading).
+    """Samples after the first frame that are not the body background (ADR 0132).
 
-    Mica is what judge_first_paint accepts before the first frame: within one step of the body
-    background and never pure black or white. Anything else is an empty surface at the swap.
+    The point is a flat stretch of body background, so once the first frame is up every sample
+    must stay within ADOPTION_STEP of it on each channel. Mica (e.g. 32,32,32 in dark) showing
+    through for one frame at the swap is an empty surface, as are black and white.
     """
     def empty(value: list) -> bool:
         distance = max(abs(channel - ground) for channel, ground in zip(value, background))
-        return value in (BLACK, WHITE) or distance > FIRST_PAINT_STEP
+        return value in (BLACK, WHITE) or distance > ADOPTION_STEP
     return [entry for entry in samples if entry["ours"] and empty(entry["pixel"])]
 
 
