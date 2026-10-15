@@ -3,6 +3,7 @@
 #include "BodyLayout.hpp"
 #include "BodyTextLayout.hpp"
 #include "BodyTextLayouts.hpp"
+#include "BodyTextPainter.hpp"
 #include "ClauseEmphasis.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
@@ -18,7 +19,6 @@
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "RenderFailure.hpp"
-#include "ReplacedTint.hpp"
 #include "RgbColor.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusTextLayout.hpp"
@@ -119,10 +119,9 @@ class Direct2DRenderer final
     void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
-    // 行の layout の保持した字形（ADR 0073）。描く範囲の縦横は draw_body_text と同じ（#528）。
-    [[nodiscard]] const BodyTextLayout *glyph_entry(IDWriteTextLayout *text,
-                                                    const core::LayoutRect &area);
-    void draw_glyph_runs(std::span<const BodyGlyphRun> runs, D2D1_POINT_2F origin);
+    // 本文の layout を描く経路（保持した字形・範囲の描き直し・置き換え）は BodyTextPainter の
+    // 1 本（ADR 0073・#531）。本文を描いている間の縦の範囲を渡した 1 回分を作る。
+    [[nodiscard]] BodyTextPainter<ID2D1RenderTarget> body_painter();
     void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
                         D2D1_DRAW_TEXT_OPTIONS options = D2D1_DRAW_TEXT_OPTIONS_CLIP);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body,
@@ -169,17 +168,6 @@ class Direct2DRenderer final
     // ranges は描いた layout の UTF-16 の範囲（IME の変換中の行ではずらした後・#152）。
     void draw_replaced(const application::EditorFrame &frame, IDWriteTextLayout *text,
                        const core::LayoutRect &area, std::span<const DWRITE_TEXT_RANGE> ranges);
-    // 保持した字形から引いた置き換えの切り抜き。引けなければ nullopt（#531）。
-    [[nodiscard]] static std::optional<std::vector<ReplacedTint>>
-    glyph_tints(const BodyTextLayout *entry, IDWriteTextLayout *text,
-                std::span<const DWRITE_TEXT_RANGE> ranges);
-    // 保持で引けない行の置き換え。上限を超えたら見えている範囲に重なるものだけ（#531）。
-    [[nodiscard]] std::vector<DWRITE_TEXT_RANGE>
-    shown_ranges(IDWriteTextLayout *text, const core::LayoutRect &area,
-                 std::span<const DWRITE_TEXT_RANGE> ranges);
-    // 1 行の置き換えが多いときだけ見えている範囲に絞る。普通の行（`^M` が数個）は今までどおり
-    // 全部を描き、絵を変えない。1,000 は 1 行の HitTestTextRange が画面 1 枚ぶんに収まる数の目安。
-    static constexpr std::size_t replaced_hit_test_limit = 1000;
     // 注目文節は accent の 2 DIP の下線と selection と同じ面、他の文節は ime の 1 DIP の
     // 下線と ime の字色（ADR 0014 の決定 7・採用案 D15）。
     void draw_target_clause(const application::EditorFrame &frame, IDWriteTextLayout *text,
