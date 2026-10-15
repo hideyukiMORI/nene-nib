@@ -105,8 +105,8 @@ PR に「確認する退行」「対象・依存」「検証結果（コマン�
 CIは非文書変更のマージ直前だけ、`eng/merge-pr.py --execute`が`check.yml`を手動起動する（Issue #430・[ADR 0118](adr/0118-ci-only-at-merge-except-documentation.md)）。
 PR作成・Ready・push・本文編集では起動しない。`docs/`配下、ルートの`.md`、`LICENSE`、`THIRD_PARTY_NOTICES.txt`だけの変更はマージ時もCI不要。
 文書のみは差分と必要な目視で確認し、代替の検証スクリプトや長い検証記録を作らない。renameは変更前のパスも判定する。
-CIはGit規約・記録の存在・空白だけを確認する。統合道具は対象runの成功とPR/head/workflowの一致を確認してからマージする。
-CI 成功は製品テストの実行を意味しない。関連入力の不変性と検証の十分性はレビューし、フックや merge のために同じテストを繰り返さない。
+CIの`check` jobはGit規約・記録の存在・空白を確認し、並列の`build-and-test` jobはPRの最終HEADをReleaseで全targetビルドしてctestを回す（[ADR 0136](adr/0136-ci-builds-product-and-tests-in-release.md)・D46。Debug（ASan / UBSan）と速さは実機のまま）。統合道具は対象runの成功とPR/head/workflowの一致を確認してからマージする。
+CI 成功は検証記録の代わりではなく、製品の動作も保証しない。関連入力の不変性と検証の十分性はレビューし、フックや merge のために同じテストを繰り返さない。
 
 本件が原因の失敗は修正する。無関係と判断できる既存失敗は、その根拠と別 Issue を記録して本件を継続する。
 無関係な全件再試行や別件修正へ脱線せず、成功するまで繰り返して不安定なテストを合格扱いにしない。
@@ -310,12 +310,12 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-004 | active | clang-format --dry-run --Werror |
 | QLT-005 | planned | |
 | QLT-006 | planned | |
-| QLT-007 | planned | |
+| QLT-007 | planned | CI の build-and-test は PR の最終 HEAD の Release ビルドと ctest（ADR 0136・初回の run を gate-proofs に引用してから active・D49） |
 | QLT-008 | planned | レビュー事項 |
 | QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
 | QLT-010 | 不能 | PR の手続き |
 | QLT-011 | planned | eng/toolchain.ps1 |
-| QLT-012 | planned | validate-git.ps1 / git-conventions.py の検証記録確認。結果の真偽と入力の不変性はレビュー |
+| QLT-012 | planned | validate-git.ps1 / git-conventions.py の検証記録確認。CI の build-and-test は PR の最終 HEAD の Release ビルドと ctest（ADR 0136・初回の run を gate-proofs に引用してから active・D49）。結果の真偽と入力の不変性はレビュー |
 | QLT-013 | planned | |
 | QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機の指紋で判定（必要な変更で選んで実行・`-Full` の明示実行）。CI の必須 check は validate-git だけでベンチを回さず（ADR 0021）、CI の指紋 `e7a87d5b` の基準値は記録として残る。打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
 | CNF-001 | planned | eng/conformance.py / tests/conformance |
