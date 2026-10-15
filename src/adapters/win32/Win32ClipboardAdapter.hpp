@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ClipboardCalls.hpp"
 #include "ClipboardFailure.hpp"
 #include "ClipboardPort.hpp"
 
@@ -16,6 +17,9 @@ namespace nenenib::adapters::win32
 class Win32ClipboardAdapter final : public application::ClipboardPort
 {
   public:
+    Win32ClipboardAdapter() noexcept;
+    // 試験だけが替え玉の束を渡す（ADR 0134 の決定 4）。
+    explicit Win32ClipboardAdapter(ClipboardCalls calls) noexcept;
     void bind(HWND owner) noexcept;
     [[nodiscard]] std::expected<void, application::ClipboardFailure>
     write(std::string_view utf8) override;
@@ -23,6 +27,7 @@ class Win32ClipboardAdapter final : public application::ClipboardPort
 
   private:
     [[nodiscard]] std::expected<void, application::ClipboardFailure> store(HGLOBAL handle);
+    ClipboardCalls calls_;
     HWND owner_ = nullptr;
 };
 } // namespace nenenib::adapters::win32
