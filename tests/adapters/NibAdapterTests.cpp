@@ -2,6 +2,8 @@
 // （QLT-013 / ADR 0010）。中核の分岐カバレッジ（QLT-009）の対象ではない。
 // 一時フォルダの名前は固定で、冒頭で消して作り直す。時刻も乱数も使わない（ARC-007）。
 #include "AbsolutePath.hpp"
+#include "ClipboardCalls.hpp"
+#include "ClipboardFailure.hpp"
 #include "CodePageFailure.hpp"
 #include "CompleteFileRead.hpp"
 #include "EncodingFailure.hpp"
@@ -11,6 +13,7 @@
 #include "Milestone.hpp"
 #include "SettingsCodec.hpp"
 #include "TextEncoding.hpp"
+#include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
@@ -22,6 +25,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <expected>
 #include <limits>
 #include <span>
@@ -32,15 +36,19 @@
 namespace
 {
 using nenenib::adapters::win32::absolute_file_path;
+using nenenib::adapters::win32::ClipboardCalls;
 using nenenib::adapters::win32::decode_settings;
 using nenenib::adapters::win32::encode_settings;
 using nenenib::adapters::win32::FileHandle;
 using nenenib::adapters::win32::SettingsPaths;
 using nenenib::adapters::win32::SettingsVersion;
+using nenenib::adapters::win32::system_clipboard_calls;
+using nenenib::adapters::win32::Win32ClipboardAdapter;
 using nenenib::adapters::win32::Win32CodePageAdapter;
 using nenenib::adapters::win32::Win32FileAdapter;
 using nenenib::adapters::win32::Win32SettingsAdapter;
 using nenenib::adapters::win32::Win32TimingAdapter;
+using nenenib::application::ClipboardFailure;
 using nenenib::application::CodePageFailure;
 using nenenib::application::FileFailure;
 using nenenib::application::FileWriteMode;
@@ -1008,10 +1016,232 @@ void verify_files(Win32FileAdapter &files, Win32CodePageAdapter &code_pages)
     verify_read_request_size();
 }
 
+// 替え玉の OS のクリップボード（ADR 0134 の決定 4）。実機のクリップボードは触らない
+// （施主の了承が要る）。開く口は refused_opens() 回だけ断り、その後は開く。
+constexpr std::size_t always_refused = (std::numeric_limits<std::size_t>::max)();
+
+std::size_t &refused_opens()
+{
+    static std::size_t count = 0;
+    return count;
+}
+
+std::size_t &open_calls()
+{
+    static std::size_t count = 0;
+    return count;
+}
+
+std::size_t &empty_calls()
+{
+    static std::size_t count = 0;
+    return count;
+}
+
+DWORD &waited_milliseconds()
+{
+    static DWORD total = 0;
+    return total;
+}
+
+std::size_t &wait_calls()
+{
+    static std::size_t count = 0;
+    return count;
+}
+
+bool &set_refused()
+{
+    static bool refused = false;
+    return refused;
+}
+
+std::wstring &placed_text()
+{
+    static std::wstring text;
+    return text;
+}
+
+HGLOBAL &held_global()
+{
+    static HGLOBAL handle = nullptr;
+    return handle;
+}
+
+BOOL WINAPI fake_open(HWND)
+{
+    ++open_calls();
+    return open_calls() > refused_opens() ? TRUE : FALSE;
+}
+
+BOOL WINAPI fake_close()
+{
+    return TRUE;
+}
+
+BOOL WINAPI fake_empty()
+{
+    ++empty_calls();
+    placed_text().clear();
+    return TRUE;
+}
+
+// 置けたら中身を写して解放する（本物なら所有権が OS へ移る）。
+HANDLE WINAPI fake_set(UINT, HANDLE handle)
+{
+    if (set_refused())
+    {
+        return nullptr;
+    }
+    const auto *memory = static_cast<const wchar_t *>(GlobalLock(handle));
+    placed_text() = memory == nullptr ? std::wstring{} : std::wstring(memory);
+    GlobalUnlock(handle);
+    GlobalFree(handle);
+    return handle;
+}
+
+HANDLE WINAPI fake_get(UINT)
+{
+    return held_global();
+}
+
+BOOL WINAPI fake_available(UINT)
+{
+    return TRUE;
+}
+
+void WINAPI fake_wait(DWORD milliseconds)
+{
+    ++wait_calls();
+    waited_milliseconds() += milliseconds;
+}
+
+void reset_fake_clipboard(std::size_t refusals, bool refuse_set)
+{
+    refused_opens() = refusals;
+    set_refused() = refuse_set;
+    open_calls() = 0;
+    empty_calls() = 0;
+    wait_calls() = 0;
+    waited_milliseconds() = 0;
+    placed_text().clear();
+}
+
+[[nodiscard]] Win32ClipboardAdapter &faked_clipboard()
+{
+    static Win32ClipboardAdapter adapter(ClipboardCalls{
+        .open = &fake_open,
+        .close = &fake_close,
+        .empty = &fake_empty,
+        .set = &fake_set,
+        .get = &fake_get,
+        .available = &fake_available,
+        .wait = &fake_wait,
+    });
+    adapter.bind(GetDesktopWindow());
+    return adapter;
+}
+
+// 読みの替え玉が返す本文。試験の終わりにこちらで解放する。
+void hold_global_text(std::wstring_view text)
+{
+    const std::size_t bytes = (text.size() + 1) * sizeof(wchar_t);
+    held_global() = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    auto *memory = static_cast<wchar_t *>(GlobalLock(held_global()));
+    if (memory != nullptr)
+    {
+        std::memcpy(memory, std::wstring(text).c_str(), bytes);
+    }
+    GlobalUnlock(held_global());
+}
+
+void release_global_text()
+{
+    GlobalFree(held_global());
+    held_global() = nullptr;
+}
+
+// ほかのプロセスが一瞬開いている：5 回の再試行の内なら書けて読める（決定 2）。
+void verify_clipboard_open_retried()
+{
+    reset_fake_clipboard(5, false);
+    const auto written = faked_clipboard().write("abc");
+    expect(written.has_value(), "a clipboard that opens on the sixth try is written");
+    expect(placed_text() == L"abc", "the retried write places the text");
+    expect(open_calls() == 6 && wait_calls() == 5 && waited_milliseconds() == 50,
+           "the write retries five times with 10 ms between tries");
+    reset_fake_clipboard(5, false);
+    hold_global_text(L"xyz");
+    const auto read = faked_clipboard().read();
+    release_global_text();
+    expect(read.has_value() && read.value() == "xyz",
+           "a clipboard that opens on the sixth try is read");
+    expect(open_calls() == 6 && wait_calls() == 5, "the read retries through the same opening");
+}
+
+// ずっと開けない：50 ms で諦めて unavailable。前の中身は消さない（決定 2）。
+void verify_clipboard_never_opens()
+{
+    reset_fake_clipboard(always_refused, false);
+    const auto written = faked_clipboard().write("abc");
+    expect(!written && written.error() == ClipboardFailure::unavailable,
+           "a clipboard that never opens is unavailable for writing");
+    expect(open_calls() == 6 && wait_calls() == 5 && waited_milliseconds() == 50,
+           "the write gives up after five retries");
+    expect(empty_calls() == 0, "a clipboard that never opens is not emptied");
+    reset_fake_clipboard(always_refused, false);
+    const auto read = faked_clipboard().read();
+    expect(!read && read.error() == ClipboardFailure::unavailable,
+           "a clipboard that never opens is unavailable for reading");
+    expect(open_calls() == 6, "the read gives up after five retries");
+}
+
+// 空にした後で置けない：write_failed を返す（決定 3）。
+void verify_clipboard_set_refused()
+{
+    reset_fake_clipboard(0, true);
+    const auto written = faked_clipboard().write("abc");
+    expect(!written && written.error() == ClipboardFailure::write_failed,
+           "a refused SetClipboardData is a failed write");
+    expect(open_calls() == 1 && wait_calls() == 0, "an opened clipboard is not retried");
+}
+
+// 変換できない本文：開かずに unrepresentable。空文字列を置いて成功と言わない（決定 1）。
+void verify_clipboard_unrepresentable()
+{
+    constexpr std::array<std::string_view, 3> broken{"\xFF", "a\xC3", "\xED\xA0\x80"};
+    for (const std::string_view text : broken)
+    {
+        reset_fake_clipboard(0, false);
+        const auto written = faked_clipboard().write(text);
+        expect(!written && written.error() == ClipboardFailure::unrepresentable,
+               "text that cannot become UTF-16 is refused");
+        expect(open_calls() == 0 && empty_calls() == 0,
+               "unrepresentable text never opens or empties the clipboard");
+    }
+}
+
+void verify_clipboard_unbound()
+{
+    Win32ClipboardAdapter unbound(system_clipboard_calls());
+    const auto written = unbound.write("abc");
+    expect(!written && written.error() == ClipboardFailure::unavailable,
+           "an adapter without a window is unavailable");
+}
+
+void verify_clipboard()
+{
+    verify_clipboard_open_retried();
+    verify_clipboard_never_opens();
+    verify_clipboard_set_refused();
+    verify_clipboard_unrepresentable();
+    verify_clipboard_unbound();
+}
+
 bool known_scope(std::string_view scope)
 {
     return scope == "--settings-codec" || scope == "--settings" || scope == "--files" ||
-           scope == "--code-pages";
+           scope == "--code-pages" || scope == "--clipboard";
 }
 
 int run_memory_tests(std::string_view scope)
@@ -1045,6 +1275,13 @@ int main(int argc, char **argv)
     {
         return run_memory_tests(scope);
     }
+    if (scope == "--clipboard")
+    {
+        verify_clipboard();
+        std::printf("Clipboard adapter: %zu checks, %zu failures\n", check_count(),
+                    failure_count());
+        return test_result();
+    }
     reset_folder();
     Win32FileAdapter files;
     if (scope == "--settings")
@@ -1073,6 +1310,7 @@ int main(int argc, char **argv)
     verify_settings_lock(files);
     verify_settings_failures(files);
     verify_settings_migration(files);
+    verify_clipboard();
     if (failure_count() != 0)
     {
         std::fprintf(stderr, "Nib adapter tests: %zu of %zu checks failed\n", failure_count(),

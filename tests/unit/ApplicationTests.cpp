@@ -678,6 +678,13 @@ void verify_controller_cancel_selection()
            "in Vim mode Esc arrives as a VimKeyPress, so CancelSelection does nothing");
 }
 
+// 書き込みの失敗の知らせ（ADR 0134 の決定 3）。ステータスバーの 1 行に出る。
+[[nodiscard]] bool clipboard_notice_shown(EditorController &controller)
+{
+    const auto &message = controller.frame().command_message;
+    return message.has_value() && message.value().text() == "クリップボードに書けませんでした";
+}
+
 void verify_controller_clipboard()
 {
     Editing editing;
@@ -687,6 +694,7 @@ void verify_controller_clipboard()
     applied(controller, SelectAll{});
     applied(controller, ClipboardAction{ClipboardOperation::copy});
     expect(editing.clipboard().read().value() == "hello", "copy writes the selection");
+    expect(!controller.frame().command_message.has_value(), "a written copy shows no notice");
     applied(controller, MoveCaret{CaretMotion::document_end, SelectionAnchoring::collapse});
     expect(applied(controller, ClipboardAction{ClipboardOperation::paste}) == "hellohello",
            "paste inserts at the caret");
@@ -710,8 +718,24 @@ void verify_controller_clipboard_failures()
     applied(controller, SelectAll{});
     expect(applied(controller, ClipboardAction{ClipboardOperation::copy}) == "abc",
            "a refused write leaves the text alone");
+    expect(clipboard_notice_shown(controller), "a refused copy says so on the status bar");
     expect(applied(controller, ClipboardAction{ClipboardOperation::cut}) == "abc",
            "a refused write does not cut the text away");
+    expect(clipboard_notice_shown(controller), "a refused cut says so on the status bar");
+    // 開けない・変換できないも同じ 1 行（決定 1・2）。
+    const std::array<ClipboardFailure, 2> others{ClipboardFailure::unavailable,
+                                                 ClipboardFailure::unrepresentable};
+    for (const ClipboardFailure failure : others)
+    {
+        Editing failing;
+        failing.clipboard().refuse_writes(failure);
+        applied(failing.controller(), VisibleLines{10});
+        applied(failing.controller(), InsertText{"abc"});
+        applied(failing.controller(), SelectAll{});
+        applied(failing.controller(), ClipboardAction{ClipboardOperation::copy});
+        expect(clipboard_notice_shown(failing.controller()),
+               "every refused write shows the same notice");
+    }
     Editing nothing_held;
     applied(nothing_held.controller(), VisibleLines{10});
     expect(applied(nothing_held.controller(), ClipboardAction{ClipboardOperation::paste}).empty(),

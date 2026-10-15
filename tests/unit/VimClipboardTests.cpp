@@ -220,7 +220,15 @@ void verify_clipboard_written_registers()
            "\"+x inside a line leaves \"1 and \"- alone");
 }
 
-// 書けなくても本文・無名・`"1` は engine の結果のとおり（決定 7）。
+// 書き込みの失敗の知らせ（ADR 0134 の決定 3）。ステータスバーの 1 行に出る。
+[[nodiscard]] bool clipboard_notice_shown(Editing &editing)
+{
+    const auto &message = editing.controller().frame().command_message;
+    return message.has_value() && message.value().text() == "クリップボードに書けませんでした";
+}
+
+// 書けなくても本文・無名・`"1` は engine の結果のとおり（決定 7）。書けなかったことは 1 行で
+// 知らせる（ADR 0134 の決定 3）。
 void verify_clipboard_write_refused()
 {
     Editing editing;
@@ -232,6 +240,25 @@ void verify_clipboard_write_refused()
     expect(state.unnamed_register.value().text == "one\n" && numbered(state, 1).text == "one\n",
            "a refused write still fills the unnamed register and \"1");
     expect(editing.clipboard().writes() == 1, "the refused write was tried once");
+    expect(clipboard_notice_shown(editing), "a refused \"+dd says so on the status bar");
+}
+
+// yank の失敗も同じ 1 行。書けたときは何も出さない（ADR 0134 の決定 3）。
+void verify_clipboard_write_notice()
+{
+    constexpr std::array<std::string_view, 3> writers{"\"+yy", "\"*yy", "vj\"+y"};
+    for (const std::string_view keys : writers)
+    {
+        Editing yanking;
+        open_vim_document(yanking, "one\ntwo");
+        yanking.clipboard().refuse_writes(ClipboardFailure::unavailable);
+        vim_replay(yanking.controller(), keys);
+        expect(clipboard_notice_shown(yanking), "a refused clipboard yank says so");
+    }
+    Editing written;
+    open_vim_document(written, "one\ntwo");
+    vim_replay(written.controller(), "\"+yy");
+    expect(!clipboard_notice_shown(written), "a written \"+yy shows no notice");
 }
 
 // 読めない・空文字列の `"+p` は空のレジスタと同じに拒まれ、本文は変わらない（決定 3・5・B6）。
@@ -338,6 +365,7 @@ void verify_vim_clipboard_contracts()
     verify_clipboard_written_text();
     verify_clipboard_written_registers();
     verify_clipboard_write_refused();
+    verify_clipboard_write_notice();
     verify_clipboard_put_refused();
     verify_clipboard_dot();
     verify_clipboard_macro_replay();

@@ -22,6 +22,13 @@ using Failure = application::ClipboardFailure;
 }
 } // namespace
 
+Win32ClipboardAdapter::Win32ClipboardAdapter() noexcept
+    : Win32ClipboardAdapter(system_clipboard_calls())
+{
+}
+
+Win32ClipboardAdapter::Win32ClipboardAdapter(ClipboardCalls calls) noexcept : calls_(calls) {}
+
 void Win32ClipboardAdapter::bind(HWND owner) noexcept
 {
     owner_ = owner;
@@ -29,11 +36,11 @@ void Win32ClipboardAdapter::bind(HWND owner) noexcept
 
 std::expected<void, Failure> Win32ClipboardAdapter::store(HGLOBAL handle)
 {
-    if (EmptyClipboard() == 0)
+    if (calls_.empty() == 0)
     {
         return std::unexpected(Failure::write_failed);
     }
-    if (SetClipboardData(CF_UNICODETEXT, handle) == nullptr)
+    if (calls_.set(CF_UNICODETEXT, handle) == nullptr)
     {
         return std::unexpected(Failure::write_failed);
     }
@@ -63,13 +70,13 @@ std::expected<void, Failure> Win32ClipboardAdapter::write(std::string_view utf8)
     }
     std::memcpy(memory, wide.c_str(), bytes);
     GlobalUnlock(handle);
-    if (OpenClipboard(owner_) == 0)
+    if (calls_.open(owner_) == 0)
     {
         GlobalFree(handle);
         return std::unexpected(Failure::unavailable);
     }
     const auto stored = store(handle);
-    CloseClipboard();
+    calls_.close();
     // 置けたときだけ所有権がシステムへ移る。置けなければこちらで解放する。
     if (!stored)
     {
@@ -84,29 +91,29 @@ std::expected<std::string, Failure> Win32ClipboardAdapter::read()
     {
         return std::unexpected(Failure::unavailable);
     }
-    if (IsClipboardFormatAvailable(CF_UNICODETEXT) == 0)
+    if (calls_.available(CF_UNICODETEXT) == 0)
     {
         return std::unexpected(Failure::unsupported_format);
     }
-    if (OpenClipboard(owner_) == 0)
+    if (calls_.open(owner_) == 0)
     {
         return std::unexpected(Failure::unavailable);
     }
-    HANDLE handle = GetClipboardData(CF_UNICODETEXT);
+    HANDLE handle = calls_.get(CF_UNICODETEXT);
     if (handle == nullptr)
     {
-        CloseClipboard();
+        calls_.close();
         return std::unexpected(Failure::empty);
     }
     const auto *memory = static_cast<const wchar_t *>(GlobalLock(handle));
     if (memory == nullptr)
     {
-        CloseClipboard();
+        calls_.close();
         return std::unexpected(Failure::read_failed);
     }
     std::string utf8 = core::to_utf8(text_of(memory)).value_or(std::string{});
     GlobalUnlock(handle);
-    CloseClipboard();
+    calls_.close();
     return utf8;
 }
 } // namespace nenenib::adapters::win32

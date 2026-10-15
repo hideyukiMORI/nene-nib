@@ -11,6 +11,8 @@ enum class ClipboardFailure : std::uint8_t
     empty,
     unsupported_format,
     write_failed,
-    read_failed
+    read_failed,
+    // 本文を OS の形（UTF-16）に変換できない。書かずに返す（ADR 0134 の決定 1）。
+    unrepresentable
 };
 } // namespace nenenib::application
