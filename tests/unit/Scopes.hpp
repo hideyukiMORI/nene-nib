@@ -63,6 +63,9 @@ void verify_operations_scope();
 // GuideTests.cpp
 void verify_guide_scope();
 
+// ExitPlanTests.cpp（ADR 0133）
+void verify_exit_plan_scope();
+
 // VimDotTests.cpp
 void verify_vim_dot_contracts();
 void verify_vim_dot_scope();
