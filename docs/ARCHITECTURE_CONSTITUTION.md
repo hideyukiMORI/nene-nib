@@ -117,7 +117,7 @@
 
 🔴 **区画を増やさない。** 必要になったら、この表と ADR を先に変える。区画が増えるたびに検査の除外が伸びるので、伸びること自体が警告になる。
 
-- 機械強制: **planned** → 可変グローバルは clang-tidy `cppcoreguidelines-avoid-non-const-global-variables`（T6）。区画の意味はレビュー事項
+- 機械強制: **active** → 可変グローバルは clang-tidy `cppcoreguidelines-avoid-non-const-global-variables`（T6。反例は eng/prove-gates.py・2026-10-16・Issue #516）。区画の意味はレビュー事項
 
 ### ARC-006 — 合成は明示的である
 
@@ -159,7 +159,7 @@ SIMD の実装の選択（ADR 0006）とワーカーの起動（ADR 0004）も�
 期待される失敗・検証エラー・非互換・device lost は、閉じた結果型（`std::expected` / `enum class`）で返す。例外はプログラム上の欠陥・下位層の想定外に限る。
 `nullptr`・boolean・文字列・汎用例外で複数の業務的な結果を表さない。
 
-- 機械強制: **planned** → `[[nodiscard]]`＋`-Wunused-result`（C7）。失敗の意味分類はレビュー
+- 機械強制: **active** → `[[nodiscard]]`＋`-Wunused-result`（C7。反例は eng/prove-gates.py・2026-10-16・Issue #516）。失敗の意味分類はレビュー
 
 ### ARC-011 — UI は状態を描き、意図を発行する
 
