@@ -1646,7 +1646,9 @@ LRESULT EditorWindow::query_session_end()
     {
     case application::ExitPlan::block_session_end:
         // OS が「終了を妨げています」と理由を見せる。使う人が戻ってから今日の確認を通す。
+        // 立てた理由が残っている間は印を落とさない（2 回目の失敗で OS 側の理由が外れ残らない）。
         shutdown_blocked_ =
+            shutdown_blocked_ ||
             ShutdownBlockReasonCreate(window_, L"保存されていない変更があります") != FALSE;
         return FALSE;
     case application::ExitPlan::leave_now:
