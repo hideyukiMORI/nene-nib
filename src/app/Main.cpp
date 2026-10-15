@@ -2,6 +2,7 @@
 // 端末出力の代わりは「起動できなかった理由 1 行」の MessageBoxW だけで、ログには使わない。
 #include "AbsolutePath.hpp"
 #include "BodyTextLayouts.hpp"
+#include "DeviceWarmup.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
 #include "LocalSettingsPath.hpp"
@@ -118,6 +119,16 @@ initial_documents(const std::vector<std::wstring> &given)
     return documents;
 }
 
+void pump_messages()
+{
+    MSG message{};
+    while (GetMessageW(&message, nullptr, 0, 0) > 0)
+    {
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -146,8 +157,12 @@ int run(HINSTANCE instance)
         files, nenenib::adapters::win32::local_history_path());
     // 裏の仕事のワーカー 1 本と、それを借りて同じフォルダを読む adapter（ADR 0062 の決定 5・10）。
     // スレッドはここでは起きず、最初の仕事で起きる。controller より先に宣言して後に壊す
-    // （壊れる順は 窓 → controller → adapter → ワーカー）。
+    // （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
+    // device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
+    // device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
+    nenenib::ui::win32::DeviceWarmup warmup;
     nenenib::adapters::win32::Win32Worker worker;
+    worker.post([&warmup](const std::stop_token &stop) { warmup.make(stop.stop_requested()); });
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
@@ -160,8 +175,8 @@ int run(HINSTANCE instance)
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
-    const auto window =
-        nenenib::ui::win32::EditorWindow::create(instance, controller, timing, text_layouts);
+    const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing,
+                                                                 {text_layouts, warmup});
     if (!window)
     {
         return report(reason_of(window.error()));
@@ -171,12 +186,7 @@ int run(HINSTANCE instance)
     // 「届いた」の合図も窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（決定
     // 7）。
     folders.bind(window.value()->work_signal());
-    MSG message{};
-    while (GetMessageW(&message, nullptr, 0, 0) > 0)
-    {
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
-    }
+    pump_messages();
     return window.value()->rendering_failed() ? 1 : 0;
 }
 } // namespace

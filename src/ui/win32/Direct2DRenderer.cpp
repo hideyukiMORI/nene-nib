@@ -157,11 +157,11 @@ Direct2DRenderer::Direct2DRenderer(BodyTextLayouts &text_layouts) : body_text_(t
 
 std::expected<Direct2DRenderer, RenderFailure>
 Direct2DRenderer::create(HWND window, std::uint32_t dpi, application::TimingPort &timing,
-                         BodyTextLayouts &text_layouts)
+                         RendererSources sources)
 {
-    Direct2DRenderer renderer(text_layouts);
+    Direct2DRenderer renderer(sources.text_layouts);
     renderer.dpi_ = dpi;
-    const auto ready = renderer.initialize(window, timing);
+    const auto ready = renderer.initialize(window, timing, sources.warmup);
     if (!ready)
     {
         return std::unexpected(ready.error());
@@ -171,16 +171,16 @@ Direct2DRenderer::create(HWND window, std::uint32_t dpi, application::TimingPort
 
 // 段ごとに節目を打つ（Issue #19）。device lost で作り直すと同じ節目が再び積まれるが、
 // 計測器は最初の出現だけを読むので起動の内訳は濁らない。
-std::expected<void, RenderFailure> Direct2DRenderer::initialize(HWND window,
-                                                                application::TimingPort &timing)
+std::expected<void, RenderFailure>
+Direct2DRenderer::initialize(HWND window, application::TimingPort &timing, DeviceWarmup &warmup)
 {
-    const auto device = create_device();
+    auto device = create_device(warmup);
     if (!device)
     {
-        return device;
+        return std::unexpected(device.error());
     }
     timing.mark(core::Milestone::device_created);
-    const auto chain = create_swap_chain(window);
+    const auto chain = create_swap_chain(window, std::move(device).value());
     if (!chain)
     {
         return chain;
@@ -207,8 +207,21 @@ std::expected<void, RenderFailure> Direct2DRenderer::initialize(HWND window,
     return {};
 }
 
-std::expected<void, RenderFailure> Direct2DRenderer::create_device()
+std::expected<Microsoft::WRL::ComPtr<IDXGIFactory2>, RenderFailure>
+Direct2DRenderer::create_device(DeviceWarmup &warmup)
 {
+    // worker が先に作った device を 1 回だけ受け取る。device lost の作り直しでは箱は空なので、
+    // 今日どおりここで作る（ADR 0131 の決定 3）。
+    auto warmed = warmup.take();
+    if (warmed.has_value())
+    {
+        device_ = std::move(warmed.value().device);
+        if (FAILED(device_.As(&dxgi_device_)))
+        {
+            return std::unexpected(RenderFailure::device_creation);
+        }
+        return std::move(warmed.value().factory);
+    }
     constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     auto created = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0,
                                      D3D11_SDK_VERSION, &device_, nullptr, nullptr);
@@ -229,10 +242,11 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_device()
     return {};
 }
 
-std::expected<void, RenderFailure> Direct2DRenderer::create_swap_chain(HWND window)
+// factory は箱から受け取ったものを使い、無ければここで作る（ADR 0131 の決定 3）。
+std::expected<void, RenderFailure>
+Direct2DRenderer::create_swap_chain(HWND window, Microsoft::WRL::ComPtr<IDXGIFactory2> factory)
 {
-    Microsoft::WRL::ComPtr<IDXGIFactory2> factory;
-    if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory))))
+    if (!factory && FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory))))
     {
         return std::unexpected(RenderFailure::swap_chain);
     }

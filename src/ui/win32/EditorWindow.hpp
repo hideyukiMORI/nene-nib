@@ -15,6 +15,7 @@
 #include "ImeStance.hpp"
 #include "Milestone.hpp"
 #include "RenderFailure.hpp"
+#include "RendererSources.hpp"
 #include "SessionEnd.hpp"
 #include "StatusBarHit.hpp"
 #include "TabCommand.hpp"
@@ -44,9 +45,10 @@ namespace nenenib::ui::win32
 class EditorWindow final
 {
   public:
+    // sources の device の箱は worker が先に作り、最初の renderer が受け取る（ADR 0131）。
     [[nodiscard]] static std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
     create(HINSTANCE instance, application::EditorController &controller,
-           application::TimingPort &timing, BodyTextLayouts &text_layouts);
+           application::TimingPort &timing, RendererSources sources);
     ~EditorWindow();
     EditorWindow(const EditorWindow &) = delete;
     EditorWindow(EditorWindow &&) = delete;
@@ -63,7 +65,7 @@ class EditorWindow final
 
   private:
     EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                 application::TimingPort &timing, BodyTextLayouts &text_layouts);
+                 application::TimingPort &timing, RendererSources sources);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
     void apply_backdrop(const application::EditorDelivery &frame);
@@ -183,6 +185,7 @@ class EditorWindow final
     application::EditorController &controller_;
     application::TimingPort &timing_;
     BodyTextLayouts &text_layouts_;
+    DeviceWarmup &warmup_;
     // 題名は変わったときだけ OS へ渡す。毎フレーム SetWindowTextW を呼ばない（決定 13）。
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
