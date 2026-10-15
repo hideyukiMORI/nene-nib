@@ -14,6 +14,7 @@
 | --- | --- |
 | #474 / PR477 追従の遅延解決（ADR 0128） | 連打 11.3→2.1 ms・16 MiB 14.7→2.2 ms。レビュー・ゲート 8 本・CI 緑。Ready。hide の試用の後に merge。#460 は同じ原因で解消 |
 | #476 / PR478 Vim の viewport は要求で（ADR 0129） | Vim INSERT 連打 12.8→4.0 ms。レビュー・契約追加・ゲート 8 本退行 0。base は #477。merge 後に base を main へ変えて rebase・CI |
+| #485 / PR487 最初の frame は WARP で子窓に（ADR 0132） | 起動 178→40.5 ms・16 MiB open 174→52 ms・単打同等。レビュー・ゲート・差し替えの標本 3 回。draft。base は #482。merge 後に base を main へ |
 | #481 / PR482 device の先行作成（ADR 0131） | 起動 192→178 ms・16 MiB 202→174 ms。レビュー反映。draft。#477 の merge 後に rebase して CI |
 | #479 / PR480 DLL の遅延読み込み（ADR 0130） | origin −2 ms。draft。#477 の merge 後に rebase して 8 本を測り直す |
 | #452 / PR453 分割UTF-8 4案目 | 局所比較 ASCII 1.003 / 日本語 1.034・正式 open 200.8 ms 退行 0。契約・レビュー・CI 緑。Ready。速さの改善を主張しない refactor。統合は hide の判断 |
@@ -21,7 +22,7 @@
 | #469 ASan診断 | #467で非致命的interception診断。既存EXE/PDB/ログから切り分ける。無関係な既存不具合と断定しない |
 | #454 / #456 設定と日英 | [画面案](../design/2026-10-12-settings-dialog-boards.md)とADR0123は提案。未採用 |
 
-merge の順: #477 → #478 → #482 → #480 → #453（どれも独立に戻せる）。merge 後に worktree と outputs を収載・監査整理する。
+merge の順: #477 → #478 → #482 → #487 → #480 → #453（どれも独立に戻せる）。merge 後に worktree と outputs を収載・監査整理する。
 
 ## いまの数字・動かないもの・段階
 
@@ -30,4 +31,5 @@ merge の順: #477 → #478 → #482 → #480 → #453（どれも独立に戻�
 - 組み込み125テーマ、Vim oracle 1853件。settings.v3/session.v2、64MiB上限、同期FilePortを維持。保存schema変更なし。
 - 2GiB/512MiB/100ms、split、Markdown、構文解析、設定モーダル/日英切替、手動横スクロール/スクロールバー、Vim gj/gk/g0/g$・ドラッグは未対応/未受理。
 - 残る速さの候補: 16 MiB open の document_opened 12 ms（UTF-8 検証と索引）、frame の描画 0.4〜0.5 ms の内訳、ShowWindow の 9 ms は OS 側（WM_ACTIVATE の IME 文脈）で製品では縮まない。
+- #486: `eng/verify-window.py` の look の節が #304 の案内と合わず落ちる（既存失敗・未修正）。
 - 既存#411/#365/#373/#424は今回修正していない。Waivers none。
