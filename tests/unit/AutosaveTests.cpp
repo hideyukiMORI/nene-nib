@@ -7,6 +7,7 @@
 #include "AutosaveSnapshot.hpp"
 #include "AutosaveStep.hpp"
 #include "AutosaveTick.hpp"
+#include "CaretMotion.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
 #include "DisplayText.hpp"
@@ -24,18 +25,23 @@
 #include "FilePath.hpp"
 #include "InsertText.hpp"
 #include "LineNumber.hpp"
+#include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "PlaceCaret.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedAutosave.hpp"
+#include "SelectionAnchoring.hpp"
 #include "SessionEnd.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
 #include "UnloadedDocument.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
@@ -266,6 +272,31 @@ void verify_failure_notified_once()
     expect(notice(controller.apply_frame(app::WorkCompleted{})) == "自動退避できませんでした",
            "a failure after a success is told once again");
 }
+// 合図は使う人の操作ではないので、上下に動くときに狙う横位置を捨てない（決定 1）。30 秒ごとに
+// 必ず来るので、短い行をまたいでいる最中に届いても長い行で元の位置へ戻る。Vim の欲しい列も同じ。
+void verify_tick_keeps_wanted_column()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::InsertText{"abcdef\nx\nabcdef"});
+    applied(controller, app::VisibleLines{10, core::TextViewGeometry{400, 20, 96}});
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{5}},
+                                        core::SelectionAnchoring::collapse});
+    const auto down =
+        app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse};
+    applied(controller, down);
+    applied(controller, app::AutosaveTick{});
+    expect(controller.apply_frame(down).caret.position ==
+               core::TextPosition{core::LineNumber{3}, core::Column{5}},
+           "a tick between two downward moves keeps the wanted x");
+    Editing vim;
+    open_vim_document(vim, "abcdef\nx\nabcdef");
+    vim_replay(vim.controller(), "4lj");
+    applied(vim.controller(), app::AutosaveTick{});
+    vim_replay(vim.controller(), "j");
+    expect(caret_at(vim.controller().frame(), 3, 5),
+           "a tick between two j keeps the Vim wanted column");
+}
 } // namespace
 
 void verify_autosave_contracts()
@@ -275,6 +306,7 @@ void verify_autosave_contracts()
     verify_tick_stores_changes();
     verify_tick_encodes_and_discards();
     verify_failure_notified_once();
+    verify_tick_keeps_wanted_column();
 }
 
 void verify_autosave_scope()

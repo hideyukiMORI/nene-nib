@@ -806,6 +806,14 @@ constexpr std::string_view clipped_mark = "…";
            std::holds_alternative<RefreshAppearance>(intent);
 }
 
+// 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、30 秒ごとに必ず来る自動退避の
+// 合図（使う人の操作ではない・ADR 0137 の決定 1）。これ以外の意図は写す前に狙いを捨てる。
+[[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<MoveCaret>(intent) ||
+           std::holds_alternative<AutosaveTick>(intent);
+}
+
 // 状態の変換の表示値。本文と面の入力行のどちらに載せるかは呼び手が決める（ADR 0061 の決定 4）。
 [[nodiscard]] std::optional<CompositionView>
 composition_view_of(const std::optional<core::Composition> &composition)
@@ -940,7 +948,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 EditorDelivery EditorController::apply(const EditorIntent &intent)
 {
     layout_failure_.reset();
-    if (!std::holds_alternative<MoveCaret>(intent))
+    if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
     }
