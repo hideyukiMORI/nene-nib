@@ -14,6 +14,7 @@
 | --- | --- |
 | #474 / PR477 追従の遅延解決（ADR 0128） | 連打 11.3→2.1 ms・16 MiB 14.7→2.2 ms。レビュー・ゲート 8 本・CI 緑。Ready。hide の試用の後に merge。#460 は同じ原因で解消 |
 | #476 / PR478 Vim の viewport は要求で（ADR 0129） | Vim INSERT 連打 12.8→4.0 ms。レビュー・契約追加・ゲート 8 本退行 0。base は #477。merge 後に base を main へ変えて rebase・CI |
+| #492 / PR505、#493 / PR506、#494 / PR507、#496 / PR508 外部講評 P0/P1 | ADR 0133（終わり方の契約）/ 0135（一時ファイル）/ 0134（クリップボード）。505・508 はレビュー・CI 緑・Ready、506 は draft（base 505）、507 は差し戻し 1 命題。merge は hide の試用後。事実確認の表は D:/NeNeNib/outputs/winapps-review-20261015/fact-check.md |
 | #485 / PR487 最初の frame は WARP で子窓に（ADR 0132） | 起動 178→40.5 ms・16 MiB open 174→52 ms・単打同等。レビュー・ゲート・差し替えの標本 3 回。draft。base は #482。merge 後に base を main へ |
 | #481 / PR482 device の先行作成（ADR 0131） | 起動 192→178 ms・16 MiB 202→174 ms。レビュー反映。draft。#477 の merge 後に rebase して CI |
 | #479 / PR480 DLL の遅延読み込み（ADR 0130） | origin −2 ms。draft。#477 の merge 後に rebase して 8 本を測り直す |
@@ -32,4 +33,5 @@ merge の順: #477 → #478 → #482 → #487 → #480 → #453（どれも独�
 - 2GiB/512MiB/100ms、split、Markdown、構文解析、設定モーダル/日英切替、手動横スクロール/スクロールバー、Vim gj/gk/g0/g$・ドラッグは未対応/未受理。
 - 残る速さの候補: 16 MiB open の document_opened 12 ms（UTF-8 検証と索引）、frame の描画 0.4〜0.5 ms の内訳、ShowWindow の 9 ms は OS 側（WM_ACTIVATE の IME 文脈）で製品では縮まない。
 - #486: `eng/verify-window.py` の look の節が #304 の案内と合わず落ちる（既存失敗・未修正）。
+- 外部講評の施主判断（CI で製品ビルド・自動退避・巨大ファイルの分割・planned の控えめ側・文書の再編・速度目標・巨大な 1 行のベンチ）は引き継ぎの表。P4 は Issue #497〜#501。SIMD の走査と origin の削減は実験で見送り（複写の削減は #468）。
 - 既存#411/#365/#373/#424は今回修正していない。Waivers none。
