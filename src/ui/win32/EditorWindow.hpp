@@ -62,12 +62,20 @@ class EditorWindow final
     // 返す値は窓のハンドルを値で持ち、窓へ合図のメッセージを post するだけで、窓の状態に触れない
     // （ワーカーのスレッドから呼ばれる・窓が壊れた後に呼ばれても post が失敗するだけ）。
     [[nodiscard]] std::function<void()> work_signal() const;
+    // 実験（WARP の最初の frame）: renderer が WARP の仮の device で描いている間だけ真。
+    [[nodiscard]] bool provisional() const noexcept;
+    // 実験: worker の device へ差し替えて同じ frame を描き直す。in_place なら変種 B（DirectComposition
+    // を残して swap chain だけ替える）、偽なら変種 A（renderer を作り直す）。B が失敗したら A で
+    // 作り直し、B の失敗の HRESULT を返す。差し替えるものが無ければ S_FALSE。
+    [[nodiscard]] HRESULT adopt_device(bool in_place);
 
   private:
     EditorWindow(HINSTANCE instance, application::EditorController &controller,
                  application::TimingPort &timing, RendererSources sources);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
+    // 実験の変種 B の本体。S_FALSE は差し替えるものが無い（WARP のまま）。
+    [[nodiscard]] HRESULT adopt_in_place();
     void apply_backdrop(const application::EditorDelivery &frame);
     void place_at_screen_centre();
     static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM word, LPARAM data) noexcept;

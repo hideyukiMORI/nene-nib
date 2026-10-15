@@ -62,6 +62,14 @@ class Direct2DRenderer final
     // 最後に描いたキャレットの物理画素。窓が IME の候補窓をその直下に置く（ADR 0014 の決定 6）。
     // 変換中は変換中のキャレット（GCS_CURSORPOS の位置）になる。
     [[nodiscard]] RECT caret_rectangle() const noexcept;
+    // 実験（WARP の最初の frame）: worker の device がまだ無いので UI スレッドの WARP で描いている。
+    [[nodiscard]] bool provisional() const noexcept;
+    // 実験の変種 B: DirectComposition の device・target・visual を残し、箱の device で swap chain と
+    // D2D の context だけを作り直して visual の content を差し替える（Commit はしない）。
+    // 箱が空なら S_FALSE（WARP のまま）。失敗は失敗した段の HRESULT。
+    [[nodiscard]] HRESULT adopt(HWND window, DeviceWarmup &warmup);
+    // 実験の変種 B: 新しい swap chain に最初の frame を Present した後に 1 回だけ呼ぶ。
+    [[nodiscard]] HRESULT commit();
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。
@@ -256,6 +264,7 @@ class Direct2DRenderer final
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
     std::uint32_t dpi_ = 96;
+    bool provisional_ = false;
     // DirectWrite 資源の無効化キー。設定の所有者は EditorState（ADR 0020）。
     core::FontSize formatted_size_ = core::default_font_size();
     core::DisplayText formatted_family_ = core::default_editor_settings().font_family;

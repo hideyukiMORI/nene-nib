@@ -29,6 +29,11 @@ class DeviceWarmup final
     // make() を載せた後に UI スレッドから呼ぶ。make() の終わりを待ち、作れていれば 1 回だけ渡す。
     // 2 回目以降と、作れなかったときは空（呼び手は今日どおり自分で作る・決定 3）。
     [[nodiscard]] std::optional<WarmedDevice> take();
+    // 実験（WARP の最初の frame）: make() が終わっていれば真。待たない。箱が event を持てなかった
+    // ときも真（待つものが無い）。
+    [[nodiscard]] bool ready() const;
+    // 実験: 合成ルートのメッセージループが待つ event。箱が持てなかったときは nullptr。
+    [[nodiscard]] HANDLE event() const;
 
   private:
     using EventHandle = std::unique_ptr<void, decltype(&::CloseHandle)>;

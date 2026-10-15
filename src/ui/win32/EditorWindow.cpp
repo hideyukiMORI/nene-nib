@@ -2155,6 +2155,41 @@ void EditorWindow::abandon()
     }
 }
 
+bool EditorWindow::provisional() const noexcept
+{
+    return renderer_ != nullptr && renderer_->provisional();
+}
+
+HRESULT EditorWindow::adopt_in_place()
+{
+    const HRESULT adopted = renderer_->adopt(window_, warmup_);
+    if (FAILED(adopted) || adopted == S_FALSE)
+    {
+        return adopted;
+    }
+    return draw_frame() ? renderer_->commit() : E_FAIL;
+}
+
+HRESULT EditorWindow::adopt_device(bool in_place)
+{
+    if (!provisional())
+    {
+        return S_FALSE;
+    }
+    const HRESULT result = in_place ? adopt_in_place() : S_OK;
+    if (in_place && SUCCEEDED(result))
+    {
+        return result;
+    }
+    renderer_.reset();
+    if (!start_rendering())
+    {
+        abandon();
+        return E_FAIL;
+    }
+    return result;
+}
+
 bool EditorWindow::rendering_failed() const noexcept
 {
     return rendering_failed_;

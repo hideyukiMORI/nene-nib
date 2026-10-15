@@ -10,7 +10,9 @@ namespace
 void verify_stopped_make()
 {
     ::nenenib::ui::win32::DeviceWarmup warmup;
+    expect(!warmup.ready(), "the warmup box is not ready before make");
     warmup.make(true);
+    expect(warmup.ready(), "the warmup box is ready after a stopped make");
     expect(!warmup.take().has_value(), "a stopped make leaves the warmup box empty");
 }
 

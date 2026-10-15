@@ -223,6 +223,19 @@ Direct2DRenderer::create_device(DeviceWarmup &warmup)
         return std::move(warmed.value().factory);
     }
     constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    if (!warmup.ready())
+    {
+        // 実験: worker の device を待たずに UI スレッドの WARP で最初の frame を描き、
+        // 本物の device が出来たら adopt で差し替える。
+        if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, nullptr, 0,
+                                     D3D11_SDK_VERSION, &device_, nullptr, nullptr)) ||
+            FAILED(device_.As(&dxgi_device_)))
+        {
+            return std::unexpected(RenderFailure::device_creation);
+        }
+        provisional_ = true;
+        return {};
+    }
     auto created = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0,
                                      D3D11_SDK_VERSION, &device_, nullptr, nullptr);
     if (FAILED(created))
@@ -1814,5 +1827,45 @@ std::expected<void, RenderFailure> Direct2DRenderer::set_dpi(std::uint32_t dpi)
 RECT Direct2DRenderer::caret_rectangle() const noexcept
 {
     return caret_rectangle_;
+}
+
+bool Direct2DRenderer::provisional() const noexcept
+{
+    return provisional_;
+}
+
+HRESULT Direct2DRenderer::adopt(HWND window, DeviceWarmup &warmup)
+{
+    provisional_ = false;
+    auto warmed = warmup.take();
+    if (!warmed.has_value())
+    {
+        return S_FALSE;
+    }
+    context_->SetTarget(nullptr);
+    surface_.Reset();
+    brush_.Reset();
+    context_.Reset();
+    latency_.reset();
+    device_ = std::move(warmed.value().device);
+    const HRESULT queried = device_.As(&dxgi_device_);
+    if (FAILED(queried))
+    {
+        return queried;
+    }
+    if (!create_swap_chain(window, std::move(warmed.value().factory)))
+    {
+        return DXGI_ERROR_INVALID_CALL;
+    }
+    if (!create_context())
+    {
+        return D2DERR_NOT_INITIALIZED;
+    }
+    return visual_->SetContent(swap_chain_.Get());
+}
+
+HRESULT Direct2DRenderer::commit()
+{
+    return composition_->Commit();
 }
 } // namespace nenenib::ui::win32

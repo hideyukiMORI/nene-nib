@@ -49,4 +49,14 @@ std::optional<WarmedDevice> DeviceWarmup::take()
     }
     return std::exchange(warmed_, WarmedDevice{});
 }
+
+bool DeviceWarmup::ready() const
+{
+    return !ready_ || WaitForSingleObject(ready_.get(), 0) == WAIT_OBJECT_0;
+}
+
+HANDLE DeviceWarmup::event() const
+{
+    return ready_.get();
+}
 } // namespace nenenib::ui::win32

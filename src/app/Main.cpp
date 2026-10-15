@@ -5,6 +5,7 @@
 #include "DeviceWarmup.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
+#include "ExperimentLog.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
@@ -28,6 +29,8 @@
 #include <shellapi.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <format>
 #include <optional>
 #include <span>
 #include <string>
@@ -119,10 +122,45 @@ initial_documents(const std::vector<std::wstring> &given)
     return documents;
 }
 
-void pump_messages()
+// 実験: worker の device が出来た合図で、WARP の仮の device から差し替える。
+void adopt_device(nenenib::ui::win32::EditorWindow &window)
 {
+    const bool in_place = !nenenib::adapters::win32::experiment_flag(L"NIB_WARP_VARIANT_A");
+    nenenib::adapters::win32::experiment_note("warmup event");
+    const HRESULT adopted = window.adopt_device(in_place);
+    nenenib::adapters::win32::experiment_note(
+        std::format("adopted variant={} hr=0x{:08X} provisional={}", in_place ? "B" : "A",
+                    static_cast<std::uint32_t>(adopted), window.provisional()));
+}
+
+// 次のメッセージを 1 つ取る。WM_QUIT なら偽。renderer が WARP の仮の device で描いている間だけ、
+// device の箱の event もメッセージと一緒に待つ（実験・新しいスレッドとタイマーは使わない）。
+[[nodiscard]] bool next_message(nenenib::ui::win32::EditorWindow &window,
+                                nenenib::ui::win32::DeviceWarmup &warmup, bool adopting,
+                                MSG &message)
+{
+    while (adopting && window.provisional())
+    {
+        HANDLE event = warmup.event();
+        if (MsgWaitForMultipleObjectsEx(1, &event, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE) ==
+            WAIT_OBJECT_0)
+        {
+            adopt_device(window);
+        }
+        else if (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE)
+        {
+            return message.message != WM_QUIT;
+        }
+    }
+    return GetMessageW(&message, nullptr, 0, 0) > 0;
+}
+
+void pump_messages(nenenib::ui::win32::EditorWindow &window,
+                   nenenib::ui::win32::DeviceWarmup &warmup)
+{
+    const bool adopting = !nenenib::adapters::win32::experiment_flag(L"NIB_WARP_HOLD");
     MSG message{};
-    while (GetMessageW(&message, nullptr, 0, 0) > 0)
+    while (next_message(window, warmup, adopting, message))
     {
         TranslateMessage(&message);
         DispatchMessageW(&message);
@@ -186,7 +224,9 @@ int run(HINSTANCE instance)
     // 「届いた」の合図も窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（決定
     // 7）。
     folders.bind(window.value()->work_signal());
-    pump_messages();
+    nenenib::adapters::win32::experiment_note(
+        std::format("first frame provisional={}", window.value()->provisional()));
+    pump_messages(*window.value(), warmup);
     return window.value()->rendering_failed() ? 1 : 0;
 }
 } // namespace

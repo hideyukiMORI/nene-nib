@@ -131,7 +131,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32ClipboardAdapter.cpp src/adapters/win32/Win32CodePageAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
-    src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp)
+    src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
+    src/adapters/win32/ExperimentLog.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
