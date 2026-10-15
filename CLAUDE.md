@@ -118,6 +118,7 @@ MSVC STL は `__std_find_trivial_*` 等の純関数を core の外へ出す（Is
 
 `"+` `"*` は controller が `vim_step` の直前に `ClipboardPort` から読んで写し（`VimState.clipboard`）を置き、engine が書いた本文は `VimStep.clipboard` に添えて返す（ADR 0051）。
 本物の Vim の `"+` は `-es` でも実機のクリップボードを書き換えるので、fixture・probe・テストに `"+` `"*` を入れない。テストは替え玉 `ScriptedClipboard` だけ。実機を触る調査は施主の了承の後。
+書き込みの失敗は知らせにし、変換できない本文は書かない（ADR 0134）。
 
 ### `u` の後のキャレットは `Edit.restore`。`edit.at` から決めない
 

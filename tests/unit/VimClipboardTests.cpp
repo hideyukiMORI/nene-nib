@@ -235,12 +235,13 @@ void verify_clipboard_write_refused()
     open_vim_document(editing, "one\ntwo");
     editing.clipboard().refuse_writes();
     vim_replay(editing.controller(), "\"+dd");
+    // 知らせは次の意図で消えるので、本文を読む（画面を動かす）前に見る。
+    expect(clipboard_notice_shown(editing), "a refused \"+dd says so on the status bar");
     const VimState &state = editing.controller().vim_state();
     expect(whole_vim_body(editing.controller()) == "two", "a refused write still deletes");
     expect(state.unnamed_register.value().text == "one\n" && numbered(state, 1).text == "one\n",
            "a refused write still fills the unnamed register and \"1");
     expect(editing.clipboard().writes() == 1, "the refused write was tried once");
-    expect(clipboard_notice_shown(editing), "a refused \"+dd says so on the status bar");
 }
 
 // yank の失敗も同じ 1 行。書けたときは何も出さない（ADR 0134 の決定 3）。

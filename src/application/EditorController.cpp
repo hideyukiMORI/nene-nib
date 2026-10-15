@@ -664,6 +664,8 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
 }
 
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
+// クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
+constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
 constexpr std::string_view clipped_mark = "…";
 
 // 知らせの 1 行（ADR 0059 の「知らせの文言」）。others は同じ意図の中でほかに読めなかった数。
@@ -1221,13 +1223,26 @@ std::optional<core::VimBlockRange> EditorController::block_selection() const
     return core::vim_block_range_for(state_.text(), state_.selection(), state_.vim().wanted_column);
 }
 
+// 開けない・置けない・変換できないのどれも、使う人には同じ 1 行で見せる。本文は変えない
+// （ADR 0134 の決定 3・ARC-010）。成功の表示は出さない。
+bool EditorController::clipboard_written(std::string_view text)
+{
+    if (ports_.clipboard.write(text))
+    {
+        return true;
+    }
+    state_ =
+        state_.with_command_message(core::DisplayText::parse(clipboard_unwritten_notice).value());
+    return false;
+}
+
 void EditorController::copy_selection()
 {
     const auto block = block_selection();
     if (block.has_value())
     {
         // 矩形は行を文書の改行でつないで置く（ADR 0035 の決定 8）。
-        static_cast<void>(ports_.clipboard.write(
+        static_cast<void>(clipboard_written(
             with_document_newlines(core::vim_block_text(state_.text(), block.value()),
                                    core::newline_of(state_.line_ending()))));
         return;
@@ -1237,11 +1252,8 @@ void EditorController::copy_selection()
     {
         return;
     }
-    // 置けなかったことは本文を変えない。通知はまだ無いので表示値にも載せない（ARC-010）。
-    if (!ports_.clipboard.write(state_.text().text_range(range.begin, range.end)))
-    {
-        return;
-    }
+    // 置けなかったことは本文を変えず、知らせだけ出す（ADR 0134 の決定 3）。
+    static_cast<void>(clipboard_written(state_.text().text_range(range.begin, range.end)));
 }
 
 void EditorController::cut_selection()
@@ -1250,7 +1262,7 @@ void EditorController::cut_selection()
     if (block.has_value())
     {
         // 置けたときだけ切り取る。消す形は engine の `d` と同じ 1 本（ADR 0035 の決定 8）。
-        if (!ports_.clipboard.write(
+        if (!clipboard_written(
                 with_document_newlines(core::vim_block_text(state_.text(), block.value()),
                                        core::newline_of(state_.line_ending()))))
         {
@@ -1265,7 +1277,7 @@ void EditorController::cut_selection()
         return;
     }
     // 置けたときだけ切り取る。行き先の無いまま本文から消す方が損害が大きい。
-    if (!ports_.clipboard.write(state_.text().text_range(range.begin, range.end)))
+    if (!clipboard_written(state_.text().text_range(range.begin, range.end)))
     {
         return;
     }
@@ -1502,14 +1514,15 @@ void EditorController::load_vim_clipboard()
 }
 
 // `"+` へ書いた本文は文書の改行で OS へ出す（ADR 0051 の決定 7・Ctrl+C と同じ形）。書けなくても
-// 本文と無名は engine の結果のまま（copy_selection と同じ）。
+// 本文と無名は engine の結果のまま（copy_selection と同じ）で、知らせだけ出す
+// （ADR 0134 の決定 3）。
 void EditorController::send_vim_clipboard(const std::optional<core::VimRegister> &written)
 {
     if (!written.has_value())
     {
         return;
     }
-    static_cast<void>(ports_.clipboard.write(
+    static_cast<void>(clipboard_written(
         with_document_newlines(written.value().text, core::newline_of(state_.line_ending()))));
 }
 
@@ -1538,12 +1551,13 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     }
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
-    send_vim_clipboard(step.clipboard);
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
     if (step.notice.has_value())
     {
         state_ = state_.with_command_message(core::vim_search_message(step.notice.value()));
     }
+    // 書けなかった知らせは検索の報せの後に置き、同じ鍵で両方起きたら書けなかった方を見せる。
+    send_vim_clipboard(step.clipboard);
     if (before == core::VimMode::insert && before != step.next.mode)
     {
         state_ = state_.with_history(state_.history().sealed());
