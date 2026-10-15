@@ -167,6 +167,18 @@ void pump_messages(nenenib::ui::win32::EditorWindow &window,
     }
 }
 
+// 診断: NIB_WARP_DISCARD なら先に作った WARP を捨て、#481 の道（箱を待つ）で描く。
+nenenib::ui::win32::DeviceWarmup &diagnosed(nenenib::ui::win32::DeviceWarmup &warmup)
+{
+    if (nenenib::adapters::win32::experiment_flag(L"NIB_WARP_DISCARD"))
+    {
+        static_cast<void>(warmup.take_provisional());
+        // 起動の値は捨てる（窓の前で箱を待つ）。打鍵の値だけを #481 と比べる。
+        static_cast<void>(WaitForSingleObject(warmup.event(), INFINITE));
+    }
+    return warmup;
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -214,7 +226,7 @@ int run(HINSTANCE instance)
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing,
-                                                                 {text_layouts, warmup});
+                                                                 {text_layouts, diagnosed(warmup)});
     if (!window)
     {
         return report(reason_of(window.error()));
