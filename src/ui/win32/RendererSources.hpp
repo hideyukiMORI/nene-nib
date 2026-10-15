@@ -11,5 +11,7 @@ struct RendererSources final
 {
     BodyTextLayouts &text_layouts;
     DeviceWarmup &warmup;
+    // 実験 E1: WARP の最初の frame を本窓ではなく client を覆う子窓へ出す。
+    bool cover;
 };
 } // namespace nenenib::ui::win32

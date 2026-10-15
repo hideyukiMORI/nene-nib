@@ -190,6 +190,12 @@ nenenib::ui::win32::DeviceWarmup &diagnosed(nenenib::ui::win32::DeviceWarmup &wa
     return warmup;
 }
 
+// 実験 E1: NIB_WARP_COVER なら WARP の最初の frame を子窓へ出す。
+[[nodiscard]] bool cover_flag()
+{
+    return nenenib::adapters::win32::experiment_flag(L"NIB_WARP_COVER");
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -236,8 +242,8 @@ int run(HINSTANCE instance)
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);
-    const auto window = nenenib::ui::win32::EditorWindow::create(instance, controller, timing,
-                                                                 {text_layouts, diagnosed(warmup)});
+    const auto window = nenenib::ui::win32::EditorWindow::create(
+        instance, controller, timing, {text_layouts, diagnosed(warmup), cover_flag()});
     if (!window)
     {
         return report(reason_of(window.error()));

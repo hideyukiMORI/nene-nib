@@ -86,6 +86,26 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr wchar_t class_name[] = L"NeNeNib.Editor";
+// 実験 E1: WARP の最初の frame だけを受ける子窓。入力は本窓へ素通しする。
+constexpr wchar_t cover_class_name[] = L"NeNeNib.WarpCover";
+
+LRESULT CALLBACK cover_procedure(HWND window, UINT message, WPARAM word, LPARAM data) noexcept
+{
+    // OS のメッセージ番号は開いた集合なので、既定分岐だけは許される（CPP-017）。
+    switch (message)
+    {
+    case WM_NCHITTEST:
+        return HTTRANSPARENT;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT:
+        ValidateRect(window, nullptr);
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(window, message, word, data);
+}
 constexpr wchar_t product_name[] = L"NeNe Nib";
 constexpr wchar_t title_suffix[] = L" - NeNe Nib";
 constexpr wchar_t untitled_file[] = L"無題.txt";
@@ -446,7 +466,7 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
                            application::TimingPort &timing, RendererSources sources)
     : instance_(instance), controller_(controller), timing_(timing),
-      text_layouts_(sources.text_layouts), warmup_(sources.warmup)
+      text_layouts_(sources.text_layouts), warmup_(sources.warmup), cover_enabled_(sources.cover)
 {
 }
 
@@ -460,6 +480,10 @@ EditorWindow::~EditorWindow()
     if (class_ != 0)
     {
         UnregisterClassW(class_name, instance_);
+    }
+    if (cover_class_ != 0)
+    {
+        UnregisterClassW(cover_class_name, instance_);
     }
 }
 
@@ -545,7 +569,11 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
 
 std::expected<void, WindowFailure> EditorWindow::start_rendering()
 {
-    auto renderer = Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+    // 実験 E1: worker の device がまだ無ければ、WARP は子窓へ結ぶ（本窓へは結ばない）。
+    const HWND target =
+        cover_enabled_ && cover_ == nullptr && !warmup_.ready() ? create_cover() : window_;
+    auto renderer =
+        Direct2DRenderer::create(target, dpi_, timing_, {text_layouts_, warmup_, false});
     if (!renderer)
     {
         return std::unexpected(WindowFailure::render);
@@ -2173,11 +2201,58 @@ HRESULT EditorWindow::adopt_in_place()
     return draw_frame() ? renderer_->commit() : E_FAIL;
 }
 
+HWND EditorWindow::create_cover()
+{
+    if (cover_class_ == 0)
+    {
+        WNDCLASSEXW registration{};
+        registration.cbSize = static_cast<UINT>(sizeof(registration));
+        registration.hInstance = instance_;
+        registration.lpfnWndProc = cover_procedure;
+        registration.lpszClassName = cover_class_name;
+        cover_class_ = RegisterClassExW(&registration);
+    }
+    RECT client{};
+    GetClientRect(window_, &client);
+    cover_ = CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT, cover_class_name, L"",
+                             WS_CHILD | WS_VISIBLE, 0, 0, client.right, client.bottom, window_,
+                             nullptr, instance_, nullptr);
+    if (cover_ == nullptr)
+    {
+        return window_;
+    }
+    if (GetFocus() != window_)
+    {
+        SetFocus(window_);
+    }
+    return cover_;
+}
+
+HRESULT EditorWindow::adopt_cover()
+{
+    // 本窓に HARDWARE の swap chain と target を作って描いてから、子窓と WARP の物を捨てる。
+    auto provisional = std::move(renderer_);
+    const auto rendering = start_rendering();
+    provisional.reset();
+    DestroyWindow(cover_);
+    cover_ = nullptr;
+    if (!rendering)
+    {
+        abandon();
+        return E_FAIL;
+    }
+    return S_OK;
+}
+
 HRESULT EditorWindow::adopt_device(bool in_place)
 {
     if (!provisional())
     {
         return S_FALSE;
+    }
+    if (cover_ != nullptr)
+    {
+        return adopt_cover();
     }
     const HRESULT result = in_place ? adopt_in_place() : S_OK;
     if (in_place && SUCCEEDED(result))

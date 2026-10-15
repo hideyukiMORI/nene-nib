@@ -78,6 +78,9 @@ class EditorWindow final
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
     // 実験の変種 B の本体。S_FALSE は差し替えるものが無い（WARP のまま）。
     [[nodiscard]] HRESULT adopt_in_place();
+    // 実験 E1: 子窓を作って返す。作れなければ本窓。
+    [[nodiscard]] HWND create_cover();
+    [[nodiscard]] HRESULT adopt_cover();
     void apply_backdrop(const application::EditorDelivery &frame);
     void place_at_screen_centre();
     static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM word, LPARAM data) noexcept;
@@ -196,6 +199,9 @@ class EditorWindow final
     application::TimingPort &timing_;
     BodyTextLayouts &text_layouts_;
     DeviceWarmup &warmup_;
+    bool cover_enabled_ = false;
+    HWND cover_ = nullptr;
+    ATOM cover_class_ = 0;
     // 題名は変わったときだけ OS へ渡す。毎フレーム SetWindowTextW を呼ばない（決定 13）。
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
