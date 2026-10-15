@@ -79,4 +79,4 @@ D:/NeNeNib/worktrees/388-tab-display、D:/NeNeNib/outputs/20261011-tab-display�
 
 GUI原9対は0pxだが長題名がfolder欄を隠すため、同親f.txtの別1場面を先に固定して補足し0px。全26PNG目視/20本文copy/4正常close。folder全文の画面表示は主張せず独立core oracleで照合する。正式long-line5試料中央値5.939ms、基準5.431/上限7.431内。UI速度向上の証拠とはしない。他7指標未測。
 
-全build native stdoutの保存不足、証明scriptの初回誤り、補足監査の計数訂正を残す。成功済みbuild/GUI/性能は再取得しない。コマンド・数値・raw所在・制限・再利用は[gate-proofs 5-du](../quality/gate-proofs.md#5-du--タブ表示は省略後の範囲だけを所有するissue-388adr0107)。
+全build native stdoutの保存不足、証明scriptの初回誤り、補足監査の計数訂正を残す。成功済みbuild/GUI/性能は再取得しない。コマンド・数値・raw所在・制限・再利用は[gate-proofs 5-du](../quality/history/5-du-tab-display-truncated-range.md)。

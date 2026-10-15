@@ -48,4 +48,4 @@ ARC-001/002/003/007/008/011、CPP-002/004/006/008/011/012/016、QLT-001/002/004/
 
 共通harness28bc1ff、製品13655cbで固定7条件を一度だけ取得した。長30/120行の64frame生成・破棄は対応比中央値0.337326/0.177893、全3cycleで短縮し各120/120組が短縮した。5費用条件も比<=1.10かつ差<=50µsを満たした。224checksと新7Debug probe、通常Releaseの12画面全画素/全本文一致、正式単発.630ms/長行6.060ms（各5有効・欠測0・基準内）、独立読取レビューに基づき採用する。数値は局所区間でありUI全体の短縮率ではない。
 
-取得前台本のSHAはLF表現、実保存はCRLFだったため初回監査が失敗した。実bytesは取得前runtime planに一致し、CRLFだけの正規化で元SHAに一致することを証明して監査を修正した。台本/画像/原planを変更せず、再取得もしない。詳細と全command/失敗/再利用は[gate-proofs 5-dp](../quality/gate-proofs.md#5-dp--検索プレビューの位置変換を一画面に一度へ移すissue-378adr0103)。他6正式指標、全字体/DPI、RSSは今回未測。永続状態/公開API/schemaの追加なし、#365/#373は未解決、waiver none。
+取得前台本のSHAはLF表現、実保存はCRLFだったため初回監査が失敗した。実bytesは取得前runtime planに一致し、CRLFだけの正規化で元SHAに一致することを証明して監査を修正した。台本/画像/原planを変更せず、再取得もしない。詳細と全command/失敗/再利用は[gate-proofs 5-dp](../quality/history/5-dp-search-preview-position-once.md)。他6正式指標、全字体/DPI、RSSは今回未測。永続状態/公開API/schemaの追加なし、#365/#373は未解決、waiver none。

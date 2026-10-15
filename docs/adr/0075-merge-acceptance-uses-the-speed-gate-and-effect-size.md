@@ -64,4 +64,4 @@
 | 必須 check | PR #293 を Ready にした後の run |
 | 施主の実機の試用 | 「問題なかった」 |
 
-コマンド・値・再利用の根拠は [gate-proofs 5-cq](../quality/gate-proofs.md#5-cq--改善一式の統合の受理issue-291adr-0075施主決定-d41)。決定 7 のベンチは #298。
+コマンド・値・再利用の根拠は [gate-proofs 5-cq](../quality/history/5-cq-improvement-bundle-acceptance.md)。決定 7 のベンチは #298。

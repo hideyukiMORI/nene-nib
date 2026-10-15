@@ -6,7 +6,7 @@
 
 先行設計e2ca247ffbe05ca9823a55490b096a6fd544a104、harness3433f1f5e92af5ef337a5a860b4ee26c91493d8c、失敗製品42fed2957cd1e7f20a44752ced87aae27ea39727、失敗後設計00847fd8a729093402980e79ffb412b5bd1dedca、修正版製品cf27a3ad2aacc0ffd3384fa8cee7a6522c80b41f。初回3利益/4費用、Debug --status-items 24checks（旧8+境界16）/3構成21oracle、既存148probe/47selector/default/1853fixtures保持、GUI12対0px/24PNG・12本文copy・272checkpoint・24mode・2正常close・親全画像目視で2026-10-11 17:16 JSTに技術受理。
 
-3項目の生成・破棄1024回という各局所区間は行123/桁456で約30.48%、size_t最大値同士で約41.69%、行123456/桁654321で約29.29%短縮。encoding/endingも各入力の一部であり、数値長だけの単因子比較ではない。費用4条件と全数値は[gate-proofs 5-ea](../../quality/gate-proofs.md#5-ea--ステータス位置の数値を局所領域から所有するissue-402adr0113)。局所率の加算/UI全体への換算はしない。共通status callerの正式key-to-frame-singleを初回5試料[0.609, 0.673, 0.551, 0.519, 0.652]msで新取得し、中央値0.609ms/基準0.906ms/上限2.906ms、欠測0。元基準内の確認であり変更前後のUI改善率ではない。他7正式指標は未測。
+3項目の生成・破棄1024回という各局所区間は行123/桁456で約30.48%、size_t最大値同士で約41.69%、行123456/桁654321で約29.29%短縮。encoding/endingも各入力の一部であり、数値長だけの単因子比較ではない。費用4条件と全数値は[gate-proofs 5-ea](../../quality/history/5-ea-status-position-numbers-local.md)。局所率の加算/UI全体への換算はしない。共通status callerの正式key-to-frame-singleを初回5試料[0.609, 0.673, 0.551, 0.519, 0.652]msで新取得し、中央値0.609ms/基準0.906ms/上限2.906ms、欠測0。元基準内の確認であり変更前後のUI改善率ではない。他7正式指標は未測。
 
 規則: ARC-001/003/004/007/008/010/011/012、CPP-001/002/004/005/007/008/011/012/014/016、QLT-001/002/004/007/008/010/012/013/014、GIT-001〜004。関連ADR0021/0022/0070/0105。基準main b13a04b41e708fb198a6b61bdbf84a31f2499278。CPP-014の一般format文とADR0022のcore locale拒否の関係を、位置表示のto_chars→既存parseだけの狭い例外として明記した。planned/閾値/抑制/allowlistの状態変更なし。他の数値callerは移行しない。
 

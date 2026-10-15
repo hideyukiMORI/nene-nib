@@ -50,4 +50,4 @@ hideから、対象処理を小さな区画に閉じ、内部を速度と安定�
 Releaseと22場面の本文/ステータス画素一致は成功したが、空文書単打の前後半差は
 基準A 0.276ms > 0.11305ms、候補S 0.112ms > 0.1ms。中央値が改善しても事前の安定条件を
 満たさないため**性能受理・main統合は保留**。本文経路の異なる過去の分布を独立構成の合格へ流用しない。
-記録は[gate-proofs 5-co](../quality/gate-proofs.md#5-co--ステータス固定枠のmain構成への分離issue-295)。
+記録は[gate-proofs 5-co](../quality/history/5-co-status-slots-main-config.md)。

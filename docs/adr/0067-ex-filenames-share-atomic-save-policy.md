@@ -26,7 +26,7 @@ ADR 0066で引数なしの保存・終了を既存経路へ接続した。次は
 
 新規のExパス90、共有Ex文書保存204、補完候補195、Exファイル82、コマンド候補356、実adapterのファイル64、計991 checksが成功。解析・copy/adopt・失敗時のD39・保存位置/undo・終了条件・他タブの保護・文字コード/BOM/改行と、実ファイルの新規作成・既存ファイル/一時ファイルの保護・失敗した置換の後始末を確認した。
 
-Debug/tidy/ASan/UBSan、symbolsとconformanceも成功。途中の失敗と修正・各検査の必要性・再利用は[gate-proofs 5-ch](../quality/gate-proofs.md#5-ch--名前付きex保存issue-286adr-0067)に集約する。全件Vim/性能は実行しない。
+Debug/tidy/ASan/UBSan、symbolsとconformanceも成功。途中の失敗と修正・各検査の必要性・再利用は[gate-proofs 5-ch](../quality/history/5-ch-ex-named-save.md)に集約する。全件Vim/性能は実行しない。
 
 ## 却下
 

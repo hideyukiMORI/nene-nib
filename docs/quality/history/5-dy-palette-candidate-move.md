@@ -6,7 +6,7 @@
 
 先行設計55f51ace45b2fe4882338552e482e1fd4fce15cd、最終harnessd353aee3f30a092fbc6ed8b143b85fe64579dcc0、製品5cc97270646d0cf705a81f15ab3be04dbad1f141。初回2利益/8費用、Debug既存592checks/30oracle、旧129probe/47selector/default/assertions/1853fixtures保持、GUI21対0px/42PNG・14本文copy・232checkpoint・42mode・2正常close・親全画像目視で2026-10-11 15:07 JSTに技術受理。
 
-空queryのbuiltin36候補を512回生成・破棄する固定区間で約10.54%、custom失敗名256を含む292候補を128回で約17.06%短縮。異なる回数の局所率を合算/直接比較したりUI全体へ換算しない。費用8条件と全試行は[gate-proofs 5-dy](../../quality/gate-proofs.md#5-dy--パレット候補の所有値をmoveで渡すissue-398adr0111)。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変により限定reuse。新exeの正式速度/全8成功ではない。
+空queryのbuiltin36候補を512回生成・破棄する固定区間で約10.54%、custom失敗名256を含む292候補を128回で約17.06%短縮。異なる回数の局所率を合算/直接比較したりUI全体へ換算しない。費用8条件と全試行は[gate-proofs 5-dy](../../quality/history/5-dy-palette-candidate-move.md)。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変により限定reuse。新exeの正式速度/全8成功ではない。
 
 規則: ARC-001/003/004/005/007/008/011、CPP-002/004/005/007/008/011/012/014/016、QLT-001/002/004/007/008/010/012/013/014、GIT-001〜004。関連ADR0021/0023/0032/0060/0061/0062/0066/0067/0075/0081/0082/0091/0109/0110/0111。基準main4f6419ebd93c0b634692b6ccf311cd0ab783d966。C2の追加評価で元26候補の採否件数は増やさない。
 

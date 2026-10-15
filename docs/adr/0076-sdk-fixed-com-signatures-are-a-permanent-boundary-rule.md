@@ -32,7 +32,7 @@ Windows SDK が決めた COM の署名を実装する。引数の数は `MapChar
 
 ## 強制
 
-- CNF-012: **active**（`eng/conformance.py` の `sdk_abi_checks`・`tests/conformance` の `SdkAbiChecks`。反例は [gate-proofs 5-cr](../quality/gate-proofs.md#5-cr--sdk-が固定した-com-の署名の印issue-299adr-0076)）。
+- CNF-012: **active**（`eng/conformance.py` の `sdk_abi_checks`・`tests/conformance` の `SdkAbiChecks`。反例は [gate-proofs 5-cr](../quality/history/5-cr-sdk-abi-signature-mark.md)）。
 - CPP-019: **planned**。表の「SDK の引数の数」と実際の署名の照合は字句ではできない。ループと保持を書かないことも機械では見ない。どちらもレビュー事項。
 - clang-tidy の閾値と check の一覧（`.clang-tidy`）は変えていない（QLT-010）。
 

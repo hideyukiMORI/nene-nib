@@ -52,6 +52,6 @@ hideの現在の分担指示に基づきAstraが設計/採否、SOLがharness/�
 
 #396はADR0110/harness1917db4/製品1ec1264。CommandLine::completionsだけでoptionalの一時string copyをconst参照へ置換し、同期APIへ渡す。completed()の所有seed、空engaged seed、返却所有と他製品全文は不変。初回1利益/9費用、817既存checks/30oracle、旧122条件/47selector/1853fixtures保持、GUI21対0px/14本文copy/232checkpoint/30mode/2正常close/親全42PNG目視で2026-10-11 13:57 JSTに技術受理。
 
-256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/gate-proofs.md#5-dx--補完prefixを同期呼出しの間だけ借用するissue-396adr0110)。API/settings/schema変更なし、waiver none。
+256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/history/5-dx-completion-prefix-borrow.md)。API/settings/schema変更なし、waiver none。
 
 統合/恒久収載/監査整理の実完了はwave4/acceptance-396。

@@ -95,7 +95,7 @@ text_layoutのCreateTextLayout自体は2回で約0.005ms、UTF-16変換は約0.0
 
 全14原PNGを目視。通常モード・行1桁3・wa入力後の本文/キャレット/UTF-8/CRLFを確認。初回4対と修正版3対は無mask全画素0px差、1280×800。A19行/H9行×2/V19行×2。同一frame共有試作の画面一致であり独立文書splitの機能受理ではない。
 
-原コマンドのcwd・引数・開始/終了・native exit・stdout/stderrはsnapshot内outputs/20261011-single-breakdown/command-captureおよびcorrected/command-capture。実行コマンドとリスクは[gate-proofs 5-ec](gate-proofs.md#5-ec--長行単打の内訳と総2msの見通しissue-406)にまとめる。準備のcapture引数位置、File API未生成、依存凍結のpath判定、実行前format pathの失敗もsession-journalと原ログへ保持。ゲート・allowlist・除外は弱めていない。
+原コマンドのcwd・引数・開始/終了・native exit・stdout/stderrはsnapshot内outputs/20261011-single-breakdown/command-captureおよびcorrected/command-capture。実行コマンドとリスクは[gate-proofs 5-ec](history/5-ec-long-line-keystroke-breakdown.md)にまとめる。準備のcapture引数位置、File API未生成、依存凍結のpath判定、実行前format pathの失敗もsession-journalと原ログへ保持。ゲート・allowlist・除外は弱めていない。
 
 統合対象は計画・本報告・JSON・gate-proofs・日報・引き継ぎの6文書のみ。計測用11ソースの変更はtest/406-trace-a,h,vに隔離し、製品mainの振る舞い・設定schema・公開APIは変更しない。診断rawだけにtick/frequency/drop/clockFailed/detailを追加。Waivers: none。
 

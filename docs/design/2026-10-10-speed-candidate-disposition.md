@@ -2,7 +2,7 @@
 
 原調査のC1〜C9・R1〜R8・IO1〜IO9を同じ番号で追う。20件は全部または一部を採用、2件は実験不採用、4件は本工程で見送り。R3はblockに続き#362でtintも専用比較して採用した（gate-proofs 5-dk）。C1/R1等の重複を独立の速度効果として加算しない。全ての将来の最適化や全26件の速度実験を尽くしたという記録ではない。
 
-数値・コマンド・検証の正本は[gate-proofs 5-cz〜5-dc](../quality/gate-proofs.md#5-cz--読込状態履歴描画の閉じた比較issue-320324330333335)。詳細な旧台帳・調査・固定plan・全raw・前後exeは `D:/NeNeNib/evidence/speed-optimizations-20261009/` にSHA/元パス/commit対応付きで収載する。
+数値・コマンド・検証の正本は[gate-proofs 5-cz〜5-dc](../quality/history/5-cz-closed-compare-load-state-render.md)。詳細な旧台帳・調査・固定plan・全raw・前後exeは `D:/NeNeNib/evidence/speed-optimizations-20261009/` にSHA/元パス/commit対応付きで収載する。
 
 | 原ID | 候補 | 判断と範囲 |
 | --- | --- | --- |
@@ -53,15 +53,15 @@ R3の採用済みglyph経路とは別の追加実験。tintのtarget外clip省�
 
 ## 追加実験: 検索preview位置の反復変換 #378
 
-C8入力中parse保持とは別に、同じpreview位置のUTF-8prefix走査を可視行ごとから一画面一度へ移した。新しい永続cacheなし。固定長30/120行の64frameで対応比.337326/.177893、各120組短縮、5費用条件も成立。直接契約/GUI12場面/正式2指標と独立レビューにより技術受理（[gate-proofs 5-dp](../quality/gate-proofs.md#5-dp--検索プレビューの位置変換を一画面に一度へ移すissue-378adr0103)）。元26件の20採用/2実験不採用/4未実験を変更しない。C8入力中parse保持、R8、IO6〜IO8は未実験のまま。
+C8入力中parse保持とは別に、同じpreview位置のUTF-8prefix走査を可視行ごとから一画面一度へ移した。新しい永続cacheなし。固定長30/120行の64frameで対応比.337326/.177893、各120組短縮、5費用条件も成立。直接契約/GUI12場面/正式2指標と独立レビューにより技術受理（[gate-proofs 5-dp](../quality/history/5-dp-search-preview-position-once.md)）。元26件の20採用/2実験不採用/4未実験を変更しない。C8入力中parse保持、R8、IO6〜IO8は未実験のまま。
 
 ## 追加実験: 一時文書表示値の所有移管 #380
 
-既存deliveryのDocumentViewをtab表示へcopyした後、encoding enumを退避してframeへmoveする。title/pathの余分な複製を省き、表示値をstateから作る第二経路を増やさない。short/long savedの256frame対応比.938144/.945205、短縮118/114組、failed/untitledの費用も条件内。16300checks/GUI8対0px/正式singleが成立、独立最終レビューでP0/P1/P2なし、技術受理（[gate-proofs 5-dq](../quality/gate-proofs.md#5-dq--一時の文書表示値をframeへ所有移管するissue-380adr0104)）。元26件の20採用/2実験不採用/4未実験を変更しない。永続cache/公開API/schemaなし、C8入力parse保持とは別件。
+既存deliveryのDocumentViewをtab表示へcopyした後、encoding enumを退避してframeへmoveする。title/pathの余分な複製を省き、表示値をstateから作る第二経路を増やさない。short/long savedの256frame対応比.938144/.945205、短縮118/114組、failed/untitledの費用も条件内。16300checks/GUI8対0px/正式singleが成立、独立最終レビューでP0/P1/P2なし、技術受理（[gate-proofs 5-dq](../quality/history/5-dq-document-view-ownership-transfer.md)）。元26件の20採用/2実験不採用/4未実験を変更しない。永続cache/公開API/schemaなし、C8入力parse保持とは別件。
 
 ## 追加実験: 固定ステータスラベルの一時コピー #382
 
-private fixedをstring_view借用にし、encoding/endingの一時string2つを省く。検証・所有化はDisplayText::parse一経路、数値format/array不変。3利益の1024array対応比.962963/.972727/.981911、短縮110/104/104組。最大行桁1024回+3µsと直接frame256回+4µsを事前費用内として許容する。既存8checks/GUI6対0px/正式single成立、単体自己レビューで技術受理（[gate-proofs 5-dr](../quality/gate-proofs.md#5-dr--固定ステータスラベルの一時コピーを省くissue-382adr0105)）。元26件の採否件数は不変。to_chars/stack buffer、公開factory追加、TabTitle clipは今回未実験で見送る。
+private fixedをstring_view借用にし、encoding/endingの一時string2つを省く。検証・所有化はDisplayText::parse一経路、数値format/array不変。3利益の1024array対応比.962963/.972727/.981911、短縮110/104/104組。最大行桁1024回+3µsと直接frame256回+4µsを事前費用内として許容する。既存8checks/GUI6対0px/正式single成立、単体自己レビューで技術受理（[gate-proofs 5-dr](../quality/history/5-dr-status-label-copy-removal.md)）。元26件の採否件数は不変。to_chars/stack buffer、公開factory追加、TabTitle clipは今回未実験で見送る。
 
 
 ## 追加実験: ファイル名の末尾探索 #386
@@ -90,7 +90,7 @@ C2の追加評価としてADR0109を先行固定し、ExResult.cppの唯一の�
 
 #396はADR0110/harness1917db4/製品1ec1264。CommandLine::completionsだけでoptionalの一時string copyをconst参照へ置換し、同期APIへ渡す。completed()の所有seed、空engaged seed、返却所有と他製品全文は不変。初回1利益/9費用、817既存checks/30oracle、旧122条件/47selector/1853fixtures保持、GUI21対0px/14本文copy/232checkpoint/30mode/2正常close/親全42PNG目視で2026-10-11 13:57 JSTに技術受理。
 
-256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/gate-proofs.md#5-dx--補完prefixを同期呼出しの間だけ借用するissue-396adr0110)。API/settings/schema変更なし、waiver none。
+256bytesの長prefix候補なしを4096回生成・破棄する局所条件で約38.03%短縮。全10行の費用も保持し、UI全体の改善率へ換算しない。新正式取得0。files scopeが今回関数を呼ばず、関連source/112compile flags/tool/input/host等が不変な旧#392 files palette5000（中央値2.159ms/上限4.630ms）だけを限定reuse。新exeの正式測定や全8成功ではない。全試行/コマンド/費用/限界は[gate-proofs 5-dx](../quality/history/5-dx-completion-prefix-borrow.md)。API/settings/schema変更なし、waiver none。
 
 C2の追加評価。元26件の20採用/2実験不採用/4未実験は不変。次はCommandChoice候補所有copyを読取調査済みだが未Issue/未実装/未測。全候補順の独立oracleを将来設計で補う。C8/R8/IO6〜IO8、#365/#373の処分不変。
 
@@ -100,7 +100,7 @@ C2の追加評価。元26件の20採用/2実験不採用/4未実験は不変。�
 
 先行設計55f51ace45b2fe4882338552e482e1fd4fce15cd、最終harnessd353aee3f30a092fbc6ed8b143b85fe64579dcc0、製品5cc97270646d0cf705a81f15ab3be04dbad1f141。初回2利益/8費用、Debug既存592checks/30oracle、旧129probe/47selector/default/assertions/1853fixtures保持、GUI21対0px/42PNG・14本文copy・232checkpoint・42mode・2正常close・親全画像目視で2026-10-11 15:07 JSTに技術受理。
 
-空queryのbuiltin36候補を512回生成・破棄する固定区間で約10.54%、custom失敗名256を含む292候補を128回で約17.06%短縮。異なる回数の局所率を合算/直接比較したりUI全体へ換算しない。費用8条件と全試行は[gate-proofs 5-dy](../quality/gate-proofs.md#5-dy--パレット候補の所有値をmoveで渡すissue-398adr0111)。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変により限定reuse。新exeの正式速度/全8成功ではない。
+空queryのbuiltin36候補を512回生成・破棄する固定区間で約10.54%、custom失敗名256を含む292候補を128回で約17.06%短縮。異なる回数の局所率を合算/直接比較したりUI全体へ換算しない。費用8条件と全試行は[gate-proofs 5-dy](../quality/history/5-dy-palette-candidate-move.md)。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変により限定reuse。新exeの正式速度/全8成功ではない。
 
 C2の追加評価、元26件の20採用/2実験不採用/4未実験は不変。operation_choices案は読取のみ。opened/extendedの防御copy削除はADR0091に反するため見送り。C8/R8/IO6〜IO8、#365/#373の処分不変。
 
@@ -110,7 +110,7 @@ C2の追加評価、元26件の20採用/2実験不採用/4未実験は不変。o
 
 先行設計5cedb47d70d9684aa907740e16f33bc90c636ba3、harness333b4de6a439107a3a5277b8e838a7ffbbccbbf9、製品f8cbda10cc806f4b1f2420fc4c8405bac8688db7。初回2利益/8費用、Debug既存1530checks/30oracle、旧138probe/47selector/default/assertions/1853fixtures保持、GUI18対0px/36PNG・12本文copy・264checkpoint・36mode・2正常close・親全画像目視で2026-10-11 16:07 JSTに技術受理。
 
-queryほぞん（返却2候補）の1024回生成・破棄区間で約51.79%、qqq（返却0候補）の同1024回で約63.17%短縮。全件を含む費用8条件は[gate-proofs 5-dz](../quality/gate-proofs.md#5-dz--一致した操作候補だけ表示値を所有するissue-400adr0112)。局所率を合算/UI全体へ換算しない。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変で限定reuseし、新exeの正式速度/全8成功とはしない。
+queryほぞん（返却2候補）の1024回生成・破棄区間で約51.79%、qqq（返却0候補）の同1024回で約63.17%短縮。全件を含む費用8条件は[gate-proofs 5-dz](../quality/history/5-dz-matched-operation-candidates-own.md)。局所率を合算/UI全体へ換算しない。新正式取得0、旧#392 files palette5000だけをsource/caller/112compile flags/tool/input/host/power不変で限定reuseし、新exeの正式速度/全8成功とはしない。
 
 C2追加評価、元26件の20採用/2実験不採用/4未実験は不変。将来不正表の非一致parse例外と割当失敗順の限定あり。opened/extended防御copy削除はADR0091により見送り。#365/#373不変。
 
@@ -120,6 +120,6 @@ C2追加評価、元26件の20採用/2実験不採用/4未実験は不変。将�
 
 先行設計e2ca247ffbe05ca9823a55490b096a6fd544a104、harness3433f1f5e92af5ef337a5a860b4ee26c91493d8c、失敗製品42fed2957cd1e7f20a44752ced87aae27ea39727、失敗後設計00847fd8a729093402980e79ffb412b5bd1dedca、修正版製品cf27a3ad2aacc0ffd3384fa8cee7a6522c80b41f。初回3利益/4費用、Debug --status-items 24checks（旧8+境界16）/3構成21oracle、既存148probe/47selector/default/1853fixtures保持、GUI12対0px/24PNG・12本文copy・272checkpoint・24mode・2正常close・親全画像目視で2026-10-11 17:16 JSTに技術受理。
 
-3項目の生成・破棄1024回という各局所区間は行123/桁456で約30.48%、size_t最大値同士で約41.69%、行123456/桁654321で約29.29%短縮。encoding/endingも各入力の一部であり、数値長だけの単因子比較ではない。費用4条件と全数値は[gate-proofs 5-ea](../quality/gate-proofs.md#5-ea--ステータス位置の数値を局所領域から所有するissue-402adr0113)。局所率の加算/UI全体への換算はしない。共通status callerの正式key-to-frame-singleを初回5試料[0.609, 0.673, 0.551, 0.519, 0.652]msで新取得し、中央値0.609ms/基準0.906ms/上限2.906ms、欠測0。元基準内の確認であり変更前後のUI改善率ではない。他7正式指標は未測。
+3項目の生成・破棄1024回という各局所区間は行123/桁456で約30.48%、size_t最大値同士で約41.69%、行123456/桁654321で約29.29%短縮。encoding/endingも各入力の一部であり、数値長だけの単因子比較ではない。費用4条件と全数値は[gate-proofs 5-ea](../quality/history/5-ea-status-position-numbers-local.md)。局所率の加算/UI全体への換算はしない。共通status callerの正式key-to-frame-singleを初回5試料[0.609, 0.673, 0.551, 0.519, 0.652]msで新取得し、中央値0.609ms/基準0.906ms/上限2.906ms、欠測0。元基準内の確認であり変更前後のUI改善率ではない。他7正式指標は未測。
 
 ADR0105が除外した数値側の追加評価で、元26件の20採用/2実験不採用/4未実験の件数は不変。最初のthrow案のbuild失敗を保存、flagsを変更せず既存結果経路へ改訂。allocation失敗順の限定を保持。#365/#373不変。

@@ -34,7 +34,7 @@ Ctrl+Pの同じフォルダまでがmainに入り、明示的に登録したフ�
 
 ## 強制と検証
 
-2026-10-03の対象実行で、以下の自動検証は **active**。記録は [gate-proofs 5-cd](../quality/gate-proofs.md#5-cd--明示ブックマークとctrlpの共有候補issue-278adr-0063)。実機の鍵・表示・再起動と、5000候補の絞り込みもhideの了承後に成功した。
+2026-10-03の対象実行で、以下の自動検証は **active**。記録は [gate-proofs 5-cd](../quality/history/5-cd-bookmarks-palette-shared.md)。実機の鍵・表示・再起動と、5000候補の絞り込みもhideの了承後に成功した。
 
 - 新規 `--bookmarks` の契約: 更新と上限、キーの対応、I/Oの時機、保存失敗、読込失敗の保護、本文とVim状態の維持、選択候補の付け外し、消えた登録の保持、登録済みタブの `#` / `*`、各出どころの重複。
 - `nib_bookmarks`: codecの正例・反例と、専用ディレクトリの本物のadapterで往復・再作成・壊れた入力・保存失敗。

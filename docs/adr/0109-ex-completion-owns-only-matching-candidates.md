@@ -84,4 +84,4 @@ hideの今回の明示指示によりAstraが設計/採否、SOLがharness/製�
 
 harness5c3ccfd / 製品4d9aaef、固定3利益/10費用が初回で成立。option/missの1024候補生成・破棄で約91.73/94.01%、custom-narrowの128回で約74.66%短縮。全builtin1024回は対応+15µs、controller-fill64は+19µsで事前費用内。817checks/39oracle、旧110probe/47selector/1853fixture保持、GUI21対0px/14本文copy/全42PNG親目視が成立し技術受理。
 
-新正式取得0。ExResultを呼ばないfiles palette5000の旧#392中央値2.159msを、関連source/112compile commands/tool/input/host等の不変確認により限定再利用した。新exeの正式測定やEx UI改善率としない。全コマンド・13条件・費用・失敗準備/訂正・限界・再利用は[gate-proofs 5-dw](../quality/gate-proofs.md#5-dw--ex補完の候補は一致後に所有するissue-394adr0109)。API/settings/schema変更なし、waiver none。統合/恒久収載/監査整理の実完了はwave4/acceptance-394へ残す。
+新正式取得0。ExResultを呼ばないfiles palette5000の旧#392中央値2.159msを、関連source/112compile commands/tool/input/host等の不変確認により限定再利用した。新exeの正式測定やEx UI改善率としない。全コマンド・13条件・費用・失敗準備/訂正・限界・再利用は[gate-proofs 5-dw](../quality/history/5-dw-ex-completion-owned-after-match.md)。API/settings/schema変更なし、waiver none。統合/恒久収載/監査整理の実完了はwave4/acceptance-394へ残す。

@@ -74,4 +74,4 @@ VimStepのsearch_fromはlast_searchをconst参照し、stored expectedの失敗�
 
 対象2002checks・8Debug probe・正規Release・13有効GUI＋別固定補足2場面0px・正式8指標各5有効が成立。初回GUIの通常/復帰2場面は報せがクリックを消費した台本欠陥で無効として残し、実RGBによるmode到達を確認して未確認場面だけ補足した。元15場面一括成功とはしない。独立読取レビューは設計/実装/全96raw性能/GUI補足/正式30rawを確認し阻害なし。
 
-原失敗、全command/数値/採否、schemaと公開core型の変更、成功結果再利用、限界は[gate-proofs 5-do](../quality/gate-proofs.md#5-do--確定検索の解析結果を不変値として共有するissue-376adr0102)と実験journalを正本とする。通常PR/CI/main統合・恒久収載・監査整理後もhideの停止まで継続する。
+原失敗、全command/数値/採否、schemaと公開core型の変更、成功結果再利用、限界は[gate-proofs 5-do](../quality/history/5-do-search-parse-immutable-share.md)と実験journalを正本とする。通常PR/CI/main統合・恒久収載・監査整理後もhideの停止まで継続する。

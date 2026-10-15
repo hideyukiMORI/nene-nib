@@ -87,7 +87,7 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0069](0069-reuse-visible-body-text-layouts.md) | 表示中の本文の文字組みを描画器が再利用する | 受理 |
 | [0070](0070-status-text-layouts-stay-in-a-fixed-renderer-cache.md) | ステータスの文字組みは描画器の固定枠に保持する | 受理 |
 | [0071](0071-cache-complete-system-font-fallback-requests.md) | 完結した字体選択要求の固定上限保持 | 受理・性能総合hold |
-| [0072（実験記録）](../quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074) | 行bitmapの保持（原ADRは隔離実験枝と証拠bundle） | 最終候補に不採用 |
+| [0072（実験記録）](../quality/history/5-cm-font-glyph-width-split-reeval.md) | 行bitmapの保持（原ADRは隔離実験枝と証拠bundle） | 最終候補に不採用 |
 | [0073](0073-visible-body-glyph-capsule.md) | 本文の可視字形の保持 | 受理・性能総合hold |
 | [0074](0074-index-display-width-from-the-canonical-ranges.md) | 正本の幅表からBMP索引を生成 | 受理・性能総合hold |
 | [0075](0075-merge-acceptance-uses-the-speed-gate-and-effect-size.md) | 性能改善の統合は正式な速さのゲートと効果の大きさで受理し、事前実験の保留は記録として残す | 受理 |
