@@ -248,6 +248,48 @@ void verify_ex_rejections()
            "a pipe cannot be stored as part of the font name");
 }
 
+[[nodiscard]] std::string repeated(std::string_view unit, std::size_t count)
+{
+    std::string text;
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        text += unit;
+    }
+    return text;
+}
+
+// 使う人が打った `:set` の引数を表示の 1 行へ写すとき、上限の 256 バイトを超えても例外で止まらず
+// 閉じた失敗で返す（#495）。256 バイトちょうどは通り、表示の 1 行も上限の内側に収まる。
+void verify_ex_long_set_arguments()
+{
+    const auto settings = core::default_editor_settings();
+    const auto too_long = core::ExEvaluationFailure{core::ExFailure::too_long};
+    const auto family_fits = "set guifont=" + std::string(240, 'F') + ":h12";
+    const auto family = core::evaluate_ex(family_fits, settings, Appearance::dark);
+    expect(family_fits.size() == 256 && family.has_value() &&
+               family.value().message.text().size() == 252,
+           "a 256-byte guifont command is shown within the display limit");
+    const auto wide_fits = "set guifont=" + repeated("界", 80) + ":h12";
+    expect(core::evaluate_ex(wide_fits, settings, Appearance::dark).has_value(),
+           "a multibyte guifont name up to the limit is accepted");
+    const auto size_fits = "set fontsize=" + std::string(241, '0') + "12";
+    const auto size = core::evaluate_ex(size_fits, settings, Appearance::dark);
+    expect(size_fits.size() == 256 && size.has_value() && size.value().message.text().size() == 252,
+           "a 256-byte fontsize command is shown within the display limit");
+    for (const auto &text :
+         {"set guifont=" + std::string(241, 'F') + ":h12",
+          "set guifont=" + repeated("界", 81) + ":h12",
+          "set guifont=Consolas:h" + std::string(300, '1'),
+          "set fontsize=" + std::string(242, '0') + "12",
+          "set fontsize=" + std::string(4096, '0') + "9",
+          "set " + std::string(300, ' ') + "fontsize=12", "colorscheme " + std::string(300, 'd')})
+    {
+        const auto result = core::evaluate_ex(text, settings, Appearance::dark);
+        expect(!result.has_value() && result.error() == too_long,
+               "an overlong set argument is a closed failure, not an exception");
+    }
+}
+
 void verify_command_editing()
 {
     using core::CommandEdit;
@@ -600,6 +642,7 @@ void verify_ex_settings()
     verify_settings_failures();
     verify_ex_evaluation();
     verify_ex_rejections();
+    verify_ex_long_set_arguments();
     verify_command_editing();
     verify_command_completions();
     verify_completion_candidate_boundaries();
