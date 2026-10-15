@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <set>
 
 namespace nenenib::tests
 {
@@ -17,6 +18,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     rows(const nenenib::application::TextLayoutRequest &request) override
     {
         ++requests_;
+        texts_.insert(request.text.data());
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -76,6 +78,11 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     {
         return requests_;
     }
+    // rows が受けた表示文字列の番地の数。同じ行の表示値を使い回せば 1 つ（#529）。
+    [[nodiscard]] std::size_t row_texts() const noexcept
+    {
+        return texts_.size();
+    }
 
   private:
     [[nodiscard]] static std::size_t columns(const nenenib::application::TextLayoutRequest &request)
@@ -89,6 +96,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     }
 
     std::size_t requests_ = 0;
+    std::set<const char *> texts_;
     bool rejected_ = false;
 };
 } // namespace nenenib::tests
