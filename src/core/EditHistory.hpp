@@ -37,15 +37,21 @@ class EditHistory final
     [[nodiscard]] EditHistory redone() const;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] std::size_t position() const noexcept;
+    // 改訂番号（ADR 0137 の決定 2）。編集（前の単位にまとめられたときも）・undo・redo のたびに
+    // 1 増え、減らない。sealed では変わらない。位置はまとめられた編集と undo の後の別の編集で
+    // 同じ値に戻るので、「前に見たときから変わったか」は位置ではなくこれで比べる。
+    [[nodiscard]] std::size_t revision() const noexcept;
 
   private:
     // 外部 Edit は push で防御コピーし、確定済み本文は私有の const 値として共有する（ADR 0085）。
     using Entry = std::shared_ptr<const Edit>;
-    EditHistory(std::vector<Entry> edits, std::size_t position, EditBoundary tail);
+    EditHistory(std::vector<Entry> edits, std::size_t position, EditBoundary tail,
+                std::size_t revision);
     std::vector<Entry> edits_;
     // edits_[0, position_) が本文に適用済み。position_ より後ろは redo で戻せる編集。
     std::size_t position_;
     // 末尾の単位がまだ続いているか。separate で閉じた単位には次の入力も混ざらない（ADR 0009）。
     EditBoundary tail_;
+    std::size_t revision_;
 };
 } // namespace nenenib::core
