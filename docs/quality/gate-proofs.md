@@ -5220,4 +5220,4 @@ PR447のhead b5218ba、必須CI38275473024、正規merge e5f8e709eef61d88ebcdbd9
 ## 5-er — キャレット追従の遅延解決で連打の基準超過を解消（Issue #474・ADR 0128）
 
 2026-10-15、main 89c582d の Release で 8 本を測り、連打 2 本だけ基準超過（空 11.266 ms・16 MiB 14.661 ms）。実験ブランチ cb18638 に節目を足して、1 打鍵の `apply` 65 µs のうち追従の DirectWrite layout が毎打鍵 1 回・50 µs と特定した。追従を頼むだけにし、スクロールを読む直前と `frame()` で 1 回解決する（`settled_scroll` の 1 本）。
-Debug（tidy / ASan / UBSan）、`--application` 16,029 checks と 11 scope、symbols 0 / conformance 0 / format 0。正式ゲートは 9bff5a3 の Release で 8 本とも基準内・退行 0: 連打 2.090 ms / 16 MiB 連打 2.227 ms、ほか 6 本は変更前と同等。[全値と条件](settled-follow-2026-10-15.md)。基準値は変えない。独立レビューと CI は PR #475、施主の試用は D41 のとおり merge の前。Waivers none。
+Debug（tidy / ASan / UBSan）、`--application` 16,029 checks と 11 scope、symbols 0 / conformance 0 / format 0。正式ゲートは 9bff5a3 の Release で 8 本とも基準内・退行 0: 連打 2.090 ms / 16 MiB 連打 2.227 ms、ほか 6 本は変更前と同等。[全値と条件](settled-follow-2026-10-15.md)。基準値は変えない。独立レビューと CI は PR #477（API の改名で #475 を閉じて作り直した）、施主の試用は D41 のとおり merge の前。Waivers none。
