@@ -25,7 +25,7 @@ class BodyGlyphCollector final
     HRESULT STDMETHODCALLTYPE GetPixelsPerDip(void *, FLOAT *pixels) noexcept override;
     HRESULT STDMETHODCALLTYPE DrawGlyphRun(void *, FLOAT x, FLOAT y, DWRITE_MEASURING_MODE mode,
                                            const DWRITE_GLYPH_RUN *run,
-                                           const DWRITE_GLYPH_RUN_DESCRIPTION *,
+                                           const DWRITE_GLYPH_RUN_DESCRIPTION *description,
                                            IUnknown *effect) noexcept override;
     HRESULT STDMETHODCALLTYPE DrawUnderline(void *, FLOAT, FLOAT, const DWRITE_UNDERLINE *,
                                             IUnknown *) noexcept override;
@@ -36,7 +36,8 @@ class BodyGlyphCollector final
 
   private:
     [[nodiscard]] bool outside(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin) const;
-    HRESULT collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin, DWRITE_MEASURING_MODE mode);
+    HRESULT collect(const DWRITE_GLYPH_RUN &run, const DWRITE_GLYPH_RUN_DESCRIPTION *description,
+                    D2D1_POINT_2F origin, DWRITE_MEASURING_MODE mode);
     // 失敗の HRESULT なら棄却の印を立てる。HRESULT はそのまま返す。
     HRESULT settle(HRESULT result) noexcept;
     FLOAT width_;
