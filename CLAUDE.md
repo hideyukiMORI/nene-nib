@@ -52,6 +52,11 @@ Claude Code / AI エージェントがこのリポジトリで作業するため
 `WorkCompleted` は Ctrl+Tab の歩き・知らせ・変換・Vim の待ちと録画・`.`・undo を動かさない（入口の `keeps_tab_walk` と `begin_intent`・契約 `--background-work`）。新しい意図を足すときは、この 2 か所にどちらの側かを決めて書く。
 adapters の試験は時計を読まない。待つのは合図の受け皿（セマフォ）で、止まらなければ CTest の `TIMEOUT` で落ちる。
 
+### 最初の frame は WARP で子窓に描く。本窓に WARP を結ばない
+
+箱 `DeviceWarmup` は WARP（`take_provisional`）と本物（`take`）を 2 段で渡す。本物がまだなら `EditorWindow` は本窓の client を覆う子窓 `CoverWindow` に WARP の renderer を結び、`pump_messages` が箱の event を待って `adopt_device` で本窓に本物を作ってから子窓を壊す（節目 `device_adopted`）。
+本窓の HWND に WARP の swap chain を一度でも結ぶと、差し替えた後も単打が 2 倍のまま残る（ADR 0132）。device lost の作り直しは古い renderer を先に解放する。
+
 ### 網羅性検査を殺す分岐を書かない
 
 閉じた選択肢の分岐に `default` / `else` / `_` を書かない。選択肢が増えたらコンパイルが落ちるのが正しい状態（CPP-002）。

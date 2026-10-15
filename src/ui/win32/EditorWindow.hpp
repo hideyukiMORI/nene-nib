@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Composition.hpp"
+#include "CoverWindow.hpp"
 #include "Direct2DRenderer.hpp"
 #include "EditMode.hpp"
 #include "EditorController.hpp"
@@ -62,12 +63,22 @@ class EditorWindow final
     // 返す値は窓のハンドルを値で持ち、窓へ合図のメッセージを post するだけで、窓の状態に触れない
     // （ワーカーのスレッドから呼ばれる・窓が壊れた後に呼ばれても post が失敗するだけ）。
     [[nodiscard]] std::function<void()> work_signal() const;
+    // 最初の frame を WARP で子窓に描いていて、本物の device を待っている間だけ真
+    // （ADR 0132 の決定 4・合成ルートのメッセージループが読む）。
+    [[nodiscard]] bool provisional() const noexcept;
+    // 箱の event B が立ったら合成ルートが呼ぶ。仮の renderer のときだけ、本窓に本物の device で
+    // renderer を作って同じ frame を出し、仮の renderer を解放して子窓を壊す（決定 3）。
+    void adopt_device();
 
   private:
     EditorWindow(HINSTANCE instance, application::EditorController &controller,
                  application::TimingPort &timing, RendererSources sources);
     [[nodiscard]] std::expected<void, WindowFailure> initialize();
     [[nodiscard]] std::expected<void, WindowFailure> start_rendering();
+    // 本物の device がまだなら子窓に仮の renderer を、
+    // そうでなければ（仮が作れなくても）本窓に作る。
+    [[nodiscard]] std::expected<Direct2DRenderer, RenderFailure> create_renderer();
+    [[nodiscard]] std::expected<Direct2DRenderer, RenderFailure> create_provisional_renderer();
     void apply_backdrop(const application::EditorDelivery &frame);
     void place_at_screen_centre();
     static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM word, LPARAM data) noexcept;
@@ -113,6 +124,8 @@ class EditorWindow final
     // 意図の適用で変わった見た目は、次の WM_PAINT でまとめて描く（決定 6）。
     void invalidate() noexcept;
     void present();
+    // 描けなかった後。device lost だけは古い renderer を先に解放して作り直す（ADR 0132 の決定 6）。
+    void recover(RenderFailure failure);
     void abandon();
     void refresh_appearance();
     void resize();
@@ -215,6 +228,9 @@ class EditorWindow final
     bool work_waiting_ = false;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
+    // 仮の renderer を結ぶ子窓。差し替えまでしか無い（ADR 0132 の決定 2）。窓が閉じるときは
+    // デストラクタが renderer を先に解放し、子窓は本窓と一緒に壊れる（決定 7）。
+    std::unique_ptr<CoverWindow> cover_;
     // 成功した全クライアントの無効化だけを覚え、次の WM_PAINT まで重複要求をまとめる。
     bool paint_pending_ = false;
     ATOM class_ = 0;

@@ -161,7 +161,24 @@ Direct2DRenderer::create(HWND window, std::uint32_t dpi, application::TimingPort
 {
     Direct2DRenderer renderer(sources.text_layouts);
     renderer.dpi_ = dpi;
-    const auto ready = renderer.initialize(window, timing, sources.warmup);
+    return started(std::move(renderer), window, timing, sources.warmup);
+}
+
+std::expected<Direct2DRenderer, RenderFailure>
+Direct2DRenderer::create_provisional(HWND cover, std::uint32_t dpi, application::TimingPort &timing,
+                                     RendererSources sources)
+{
+    Direct2DRenderer renderer(sources.text_layouts);
+    renderer.dpi_ = dpi;
+    renderer.provisional_ = true;
+    return started(std::move(renderer), cover, timing, sources.warmup);
+}
+
+std::expected<Direct2DRenderer, RenderFailure>
+Direct2DRenderer::started(Direct2DRenderer renderer, HWND window, application::TimingPort &timing,
+                          DeviceWarmup &warmup)
+{
+    const auto ready = renderer.initialize(window, timing, warmup);
     if (!ready)
     {
         return std::unexpected(ready.error());
@@ -211,8 +228,9 @@ std::expected<Microsoft::WRL::ComPtr<IDXGIFactory2>, RenderFailure>
 Direct2DRenderer::create_device(DeviceWarmup &warmup)
 {
     // worker が先に作った device を 1 回だけ受け取る。device lost の作り直しでは箱は空なので、
-    // 今日どおりここで作る（ADR 0131 の決定 3）。
-    auto warmed = warmup.take();
+    // 今日どおりここで作る（ADR 0131 の決定 3）。仮の renderer は WARP だけを受け取り、
+    // 自分では作らない（ADR 0132 の決定 2・factory は空なので swap chain が作る）。
+    auto warmed = provisional_ ? warmup.take_provisional() : warmup.take();
     if (warmed.has_value())
     {
         device_ = std::move(warmed.value().device);
@@ -221,6 +239,10 @@ Direct2DRenderer::create_device(DeviceWarmup &warmup)
             return std::unexpected(RenderFailure::device_creation);
         }
         return std::move(warmed.value().factory);
+    }
+    if (provisional_)
+    {
+        return std::unexpected(RenderFailure::device_creation);
     }
     constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     auto created = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0,
@@ -1814,5 +1836,10 @@ std::expected<void, RenderFailure> Direct2DRenderer::set_dpi(std::uint32_t dpi)
 RECT Direct2DRenderer::caret_rectangle() const noexcept
 {
     return caret_rectangle_;
+}
+
+bool Direct2DRenderer::provisional() const noexcept
+{
+    return provisional_;
 }
 } // namespace nenenib::ui::win32

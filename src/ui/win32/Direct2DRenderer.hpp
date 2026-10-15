@@ -55,6 +55,12 @@ class Direct2DRenderer final
     [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
     create(HWND window, std::uint32_t dpi, application::TimingPort &timing,
            RendererSources sources);
+    // 起動の最初の frame のための仮の renderer（ADR 0132 の決定 2）。箱の WARP の device
+    // （take_provisional）で、本窓を覆う子窓の HWND に結ぶ。本窓の HWND を渡さない。
+    // 箱に WARP が無ければ device_creation で、呼び手は本窓に本物で作る。
+    [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
+    create_provisional(HWND cover, std::uint32_t dpi, application::TimingPort &timing,
+                       RendererSources sources);
     [[nodiscard]] std::expected<void, RenderFailure> render(const application::EditorFrame &frame);
     [[nodiscard]] std::expected<void, RenderFailure> resize(UINT width, UINT height);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
@@ -62,6 +68,8 @@ class Direct2DRenderer final
     // 最後に描いたキャレットの物理画素。窓が IME の候補窓をその直下に置く（ADR 0014 の決定 6）。
     // 変換中は変換中のキャレット（GCS_CURSORPOS の位置）になる。
     [[nodiscard]] RECT caret_rectangle() const noexcept;
+    // create_provisional で作った（WARP で子窓に描いている）とき真。
+    [[nodiscard]] bool provisional() const noexcept;
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。
@@ -70,6 +78,9 @@ class Direct2DRenderer final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
     explicit Direct2DRenderer(BodyTextLayouts &text_layouts);
+    [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
+    started(Direct2DRenderer renderer, HWND window, application::TimingPort &timing,
+            DeviceWarmup &warmup);
     [[nodiscard]] std::expected<void, RenderFailure>
     initialize(HWND window, application::TimingPort &timing, DeviceWarmup &warmup);
     // 箱から受け取った factory を返す（自分で作ったときは空・swap chain が作る）。
@@ -256,6 +267,7 @@ class Direct2DRenderer final
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
     std::uint32_t dpi_ = 96;
+    bool provisional_ = false;
     // DirectWrite 資源の無効化キー。設定の所有者は EditorState（ADR 0020）。
     core::FontSize formatted_size_ = core::default_font_size();
     core::DisplayText formatted_family_ = core::default_editor_settings().font_family;

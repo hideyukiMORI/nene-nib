@@ -119,8 +119,43 @@ initial_documents(const std::vector<std::wstring> &given)
     return documents;
 }
 
-void pump_messages()
+// 届いているメッセージを全部処理する。WM_QUIT を取ったら偽。
+[[nodiscard]] bool drain_messages()
 {
+    MSG message{};
+    while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != FALSE)
+    {
+        if (message.message == WM_QUIT)
+        {
+            return false;
+        }
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+    return true;
+}
+
+// 最初の frame を WARP で描いている間だけ、device の箱の event B もメッセージと一緒に待ち、
+// 立てば本物の device へ差し替える（ADR 0132 の決定 4）。スレッド・タイマー・窓メッセージの
+// 番号は足さない。仮でなくなれば今日の GetMessageW のループに戻り、二度と入らない。
+void pump_messages(nenenib::ui::win32::EditorWindow &window,
+                   nenenib::ui::win32::DeviceWarmup &warmup)
+{
+    while (window.provisional())
+    {
+        HANDLE event = warmup.event();
+        const DWORD woken =
+            MsgWaitForMultipleObjectsEx(1, &event, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        // 待てなかったとき（WAIT_FAILED）も差し替える。take() が B を待つので取りこぼさない。
+        if (woken != WAIT_OBJECT_0 + 1)
+        {
+            window.adopt_device();
+        }
+        if (!drain_messages())
+        {
+            return;
+        }
+    }
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0)
     {
@@ -186,7 +221,7 @@ int run(HINSTANCE instance)
     // 「届いた」の合図も窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（決定
     // 7）。
     folders.bind(window.value()->work_signal());
-    pump_messages();
+    pump_messages(*window.value(), warmup);
     return window.value()->rendering_failed() ? 1 : 0;
 }
 } // namespace
