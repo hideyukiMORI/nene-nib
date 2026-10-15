@@ -5221,3 +5221,8 @@ PR447のhead b5218ba、必須CI38275473024、正規merge e5f8e709eef61d88ebcdbd9
 
 2026-10-15、main 89c582d の Release で 8 本を測り、連打 2 本だけ基準超過（空 11.266 ms・16 MiB 14.661 ms）。実験ブランチ cb18638 に節目を足して、1 打鍵の `apply` 65 µs のうち追従の DirectWrite layout が毎打鍵 1 回・50 µs と特定した。追従を頼むだけにし、スクロールを読む直前と `frame()` で 1 回解決する（`settled_scroll` の 1 本）。
 Debug（tidy / ASan / UBSan）、`--application` 16,029 checks と 11 scope、symbols 0 / conformance 0 / format 0。正式ゲートは 9bff5a3 の Release で 8 本とも基準内・退行 0: 連打 2.090 ms / 16 MiB 連打 2.227 ms、ほか 6 本は変更前と同等。[全値と条件](settled-follow-2026-10-15.md)。基準値は変えない。独立レビューと CI は PR #477（API の改名で #475 を閉じて作り直した）、施主の試用は D41 のとおり merge の前。Waivers none。
+
+## 5-es — Vim の鍵は viewport を必要なときだけ求める（Issue #476・ADR 0129）
+
+#474 の後も Vim INSERT の 200 打鍵は 12.6 ms のまま（鍵ごとに viewport を渡すので追従が毎回解決される）。`VimEditorView.viewport` を `optional` にし、読む鍵だけ `VimStep.viewport_request` で求めて controller が解決して流し直す（`layout_request` と同じ往復）。読む口は `vim_viewport_of` の 1 本。
+Debug（tidy / ASan / UBSan）、`--application` 16,299 checks・`--vim` 1,174,044 checks（読む鍵 26・読まない鍵 11・要求は state を消費しない・折り返しの往復）と 15 scope、symbols 0 / conformance 0 / format 0。Vim INSERT の連打は 12.825 → 3.956 ms（5 試行の中央値・正式ゲートの外）。正式ゲートは bcf4e30 の Release で 8 本とも基準内・退行 0。[全値と条件](vim-viewport-2026-10-15.md)。基準値は変えない。独立レビューの F1 は ADR 0129 の限界、F2 は契約の追加（d0a4a61）で受けた。CI は PR #478 の base を main へ変えてから、施主の試用は D41 のとおり merge の前。Waivers none。
