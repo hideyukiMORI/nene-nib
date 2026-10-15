@@ -125,6 +125,18 @@ P29〜P32 を足し、どの反例も `results.json` の `negative.exitCode` が
 
 ---
 
+### 1-f CI の製品ビルドと単体テスト（ADR 0136・D46）
+
+2026-10-16。`eng/merge-pr.py --execute` が起動した `check.yml` の run で、job `build-and-test`（windows-2022・Release 全 target ＋ `ctest --test-dir build-release --output-on-failure --no-tests=error`・9 本）が通った。QLT-012 の機械強制の証明（Issue #514 / #516・D49）。
+
+| run | PR | `check` | `build-and-test` | 結果 |
+| --- | --- | --- | --- | --- |
+| [38816724375](https://github.com/hideyukiMORI/nene-nib/actions/runs/38816724375) | #522（この job を足した PR 自身） | 19 秒 | 10 分 8 秒 | success / success |
+| [38818132949](https://github.com/hideyukiMORI/nene-nib/actions/runs/38818132949) | #524 | 18 秒 | 6 分 43 秒 | success / success |
+| [38819020180](https://github.com/hideyukiMORI/nene-nib/actions/runs/38819020180) | #526 | 20 秒 | 10 分 48 秒 | success / success |
+
+実機（i9-10850K・20 論理 core）の同じ 3 命令: configure 3.6 秒・`cmake --build build-release` 203.1 秒（230 段・警告 0）・ctest 16.6 秒（9/9）。反例（落ちる側）は、ctest が落ちる PR を merge しようとしたときに統合道具が `Merge refused` で止まることで、2026-10-16 時点では未発生（発生したら run を引用する）。
+
 ## 2. 出力の抜粋（実行結果からの引用）
 
 ```
