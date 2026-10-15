@@ -1,15 +1,23 @@
 // 置き換えた文字の描き直し（ADR 0040 の決定 4）を、保持した字形 run から引く契約（#531）。
 // 1 つの置き換えに描くのは同じ行で横に交わる run だけで、描く run の数は置き換えの数 × 行の
-// run の数にならない。切り抜きは HitTestTextRange の矩形と同じ所に来る（本物の DirectWrite は
-// フォントに依るので環境依存・QLT-013）。
+// run の数にならない。製品と同じ BodyTextPainter の draw_replaced → tint_runs → draw_body_text の
+// 配線を替え玉の描画先に通して DrawGlyphRun を数える。切り抜きは HitTestTextRange の矩形と
+// 同じ所に来る（本物の DirectWrite はフォントに依るので環境依存・QLT-013）。
 #include "BodyGlyphCollector.hpp"
+#include "BodyTextLayouts.hpp"
+#include "BodyTextPainter.hpp"
+#include "CountingTarget.hpp"
 #include "DirectWriteFactory.hpp"
 #include "ReplacedTints.hpp"
 #include "WindowChecks.hpp"
 
+#include "EditorSettings.hpp"
+#include "RenderFailure.hpp"
+
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -80,10 +88,73 @@ void verify_draw_count()
     const auto tints = win32::replaced_tints(runs, ranges, line_height);
     expect(tints.has_value() && tints.value().size() == replaced,
            "every replaced range on a positioned line gets one clip");
-    // 本文で 1 回ずつ（M）と、置き換えの切り抜きの中で交わる run だけ。
+    // 本文で 1 回ずつ（M）と、置き換えの切り抜きの中で交わる run だけ。隣の run とは重ならない。
     const std::size_t calls = runs.size() + (tints.has_value() ? drawn_runs(tints.value()) : 0);
-    expect(calls <= runs.size() + 2 * replaced,
-           "DrawGlyphRun calls for R replaced ranges and M runs stay within M + 2R (not R x M)");
+    expect(calls <= runs.size() + replaced,
+           "replaced clips for R ranges and M runs draw within M + R runs (not R x M)");
+}
+
+// 家族の絵文字を置き換えの `<200d>` でつないで families 個並べた 1 行（#531 で止まった形）と、
+// 置き換えの UTF-16 の範囲。1 家族は 👨 <200d> 👩 <200d> 👧 と空白（2 + 6 + 2 + 6 + 2 + 1）。
+std::pair<std::string, Ranges> family_line(std::size_t families)
+{
+    std::string text;
+    Ranges ranges;
+    UINT32 position = 0;
+    for (std::size_t index = 0; index < families; ++index)
+    {
+        text += "\xF0\x9F\x91\xA8<200d>\xF0\x9F\x91\xA9<200d>\xF0\x9F\x91\xA7 ";
+        ranges.push_back(DWRITE_TEXT_RANGE{position + 2, 6});
+        ranges.push_back(DWRITE_TEXT_RANGE{position + 10, 6});
+        position += 19;
+    }
+    return {text, ranges};
+}
+
+// 製品と同じ配線（BodyTextPainter の draw_body_text と draw_replaced）で替え玉の描画先に描き、
+// DrawGlyphRun を数える。本文で M 回、置き換え R 個では交わる run だけ（隣の run とは重ならない）。
+// 置き換えごとに tint_runs（HitTestTextRange と行の全 run）へ戻ると M + R x M 回になって落ちる。
+void check_wired(win32::BodyTextLayouts &layouts, IDWriteTextLayout *layout,
+                 const nenenib::core::LayoutRect &area, const Ranges &ranges)
+{
+    CountingTarget target;
+    std::optional<win32::RenderFailure> failure;
+    win32::BodyTextPainter<CountingTarget> painter(target, nullptr, layouts, failure);
+    painter.draw_body_text(layout, area, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    const std::size_t body = target.glyph_runs();
+    expect(body > ranges.size() && target.text_layouts() == 0,
+           "the family line is drawn from its kept glyph runs");
+    painter.draw_replaced(layout, area, ranges);
+    const std::size_t replaced = target.glyph_runs() - body;
+    expect(replaced >= ranges.size() && target.glyph_runs() <= body + ranges.size() &&
+               target.text_layouts() == 0,
+           "draw_replaced draws M + R glyph runs for M runs and R replaced ranges (not R x M)");
+    expect(target.balanced() && !failure.has_value(),
+           "the wired replaced drawing pops every clip it pushes and does not fail");
+}
+
+// 折り返さない幅の広い 1 行で、置き換えはどれも 1 つの切り抜きになる（行をまたがない）。
+void verify_wired_draw_count()
+{
+    constexpr std::int32_t width = 20000;
+    const auto [text, ranges] = family_line(40);
+    win32::BodyTextLayouts layouts;
+    auto settings = nenenib::core::default_editor_settings();
+    settings.wrapping = nenenib::core::LineWrapping::no_wrap;
+    const nenenib::application::TextLayoutRequest request{
+        text, settings,
+        nenenib::core::TextViewGeometry{width, static_cast<std::int32_t>(line_height), 96}};
+    const auto layout = layouts.get(request);
+    const auto rows = layouts.rows(request);
+    if (!layout.has_value() || !rows.has_value())
+    {
+        unmeasured("the wired replaced drawing needs a DirectWrite body layout");
+        return;
+    }
+    const nenenib::core::LayoutRect area{0, 0, width,
+                                         static_cast<std::int32_t>(rows.value()) *
+                                             static_cast<std::int32_t>(line_height)};
+    check_wired(layouts, layout.value().Get(), area, ranges);
 }
 
 // 切り抜きは run の origin と advances の和から決まり、行の上端は行の高さの倍数。
@@ -244,6 +315,7 @@ void verify_real_layout()
 void verify_replaced_tints()
 {
     verify_draw_count();
+    verify_wired_draw_count();
     verify_clip_positions();
     verify_wrapped_range();
     verify_hidden_ranges();
