@@ -345,6 +345,8 @@ class EditorController final
     void restore_search_origin(const ScrollState &origin);
     void undo_edit();
     void redo_edit();
+    // クリップボードへ書く唯一の口。書けなければ 1 行で知らせて false（ADR 0134 の決定 3）。
+    [[nodiscard]] bool clipboard_written(std::string_view text);
     void copy_selection();
     void cut_selection();
     void paste_clipboard();
