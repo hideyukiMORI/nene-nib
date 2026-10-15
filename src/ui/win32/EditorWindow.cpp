@@ -2207,8 +2207,9 @@ bool EditorWindow::provisional() const noexcept
     return renderer_ != nullptr && renderer_->provisional();
 }
 
-// ADR 0132 の決定 3: 本窓に本物の renderer を作って同じ frame を出してから、仮の renderer を
-// 解放して子窓を壊す。本窓に作れなければ終了へ（device lost の 2 度目と同じ・ADR 0007）。
+// ADR 0132 の決定 3: 本窓に本物の renderer を作って同じ frame を出し、その Commit が DWM に
+// 取り込まれるのを待ってから、仮の renderer を解放して子窓を壊す（子窓が消えた後に 1 vsync だけ
+// Mica が見える余地を塞ぐ）。本窓に作れなければ終了へ（device lost の 2 度目と同じ・ADR 0007）。
 void EditorWindow::adopt_device()
 {
     if (!provisional())
@@ -2226,6 +2227,8 @@ void EditorWindow::adopt_device()
     const auto drawn = draw_frame();
     if (drawn)
     {
+        // 待てなくても差し替えは続ける（子窓を壊すのが 1 frame 早まるだけ）。
+        static_cast<void>(renderer_->wait_for_commit());
         timing_.mark(core::Milestone::device_adopted);
     }
     provisional_renderer.reset();

@@ -228,8 +228,9 @@ class EditorWindow final
     bool work_waiting_ = false;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
-    // 仮の renderer を結ぶ子窓。差し替えまでしか無い（ADR 0132 の決定 2）。窓が閉じるときは
-    // デストラクタが renderer を先に解放し、子窓は本窓と一緒に壊れる（決定 7）。
+    // 仮の renderer を結ぶ子窓。差し替えまでしか無い（ADR 0132 の決定 2）。差し替えの前に窓を
+    // 閉じると、子窓の HWND は本窓の DestroyWindow で先に壊れ、仮の renderer はその後に
+    // デストラクタが解放する（決定 7）。abandon とデストラクタは renderer を先に解放する。
     std::unique_ptr<CoverWindow> cover_;
     // 成功した全クライアントの無効化だけを覚え、次の WM_PAINT まで重複要求をまとめる。
     bool paint_pending_ = false;

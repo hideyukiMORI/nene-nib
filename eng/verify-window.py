@@ -120,6 +120,9 @@ CLR_INVALID = 0xFFFFFFFF
 # 黒か白が見えたら決定そのものが却下になるので、起動直後の画素の列をここに記録する。
 FIRST_PAINT_SAMPLES = 150
 FIRST_PAINT_INTERVAL = 0.01
+# ADR 0132: 差し替えの標本は子窓が消えた後に 5 つまで読み、最長 3 秒で打ち切る。
+ADOPTION_TAIL_SAMPLES = 5
+ADOPTION_SECONDS = 3.0
 # 「1 段の差」。最初のフレームの本文背景とこれ以上離れた面が見えていたら数字を報告に残す。
 FIRST_PAINT_STEP = 32
 BLACK = [0, 0, 0]
@@ -495,6 +498,38 @@ def await_cover_gone(window, seconds: float = 5.0) -> bool:
     return True
 
 
+def sample_adoption(window, centre: tuple, background: list) -> list:
+    """The centre pixel every 10 ms from the first frame until the cover child is gone (ADR 0132).
+
+    The same reading as sample_first_paint, kept for a few samples past the adoption so the moment
+    the cover is destroyed is inside the samples.
+    """
+    started = time.monotonic()
+    samples = []
+    after = 0
+    while after < ADOPTION_TAIL_SAMPLES and time.monotonic() - started < ADOPTION_SECONDS:
+        samples.append({"atMs": round((time.monotonic() - started) * 1000.0, 1),
+                        "pixel": screen_pixel(window, centre[0], centre[1]),
+                        "ours": covered_by(window) is None,
+                        "cover": cover_present(window)})
+        if not samples[-1]["cover"]:
+            after += 1
+        time.sleep(FIRST_PAINT_INTERVAL)
+    return samples
+
+
+def empty_surfaces(samples: list, background: list) -> list:
+    """Samples that are neither the body background nor the Mica surface (ADR 0013's reading).
+
+    Mica is what judge_first_paint accepts before the first frame: within one step of the body
+    background and never pure black or white. Anything else is an empty surface at the swap.
+    """
+    def empty(value: list) -> bool:
+        distance = max(abs(channel - ground) for channel, ground in zip(value, background))
+        return value in (BLACK, WHITE) or distance > FIRST_PAINT_STEP
+    return [entry for entry in samples if entry["ours"] and empty(entry["pixel"])]
+
+
 def verify_first_paint(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
     """ADR 0013: between window_shown and the first frame only the Mica backdrop is on screen."""
     marks = output / "first-paint-marks.json"
@@ -509,6 +544,11 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
         pixels = capture(window, width, height)
         write_bitmap(output / "first-paint.bmp", pixels, width, height)
         result["centrePixelAfterFirstFrame"] = pixel(pixels, width, centre[0], centre[1])
+        # 差し替えの瞬間に空の面が出ないこと（ADR 0132 の決定 3・8）。最初の frame の後から
+        # 子窓が消えた後まで、同じ中央の画素を 10 ms ごとに読む。
+        adoption = sample_adoption(window, centre, background)
+        result["adoptionSamples"] = adoption
+        result["emptyAtAdoption"] = empty_surfaces(adoption, background)
         # 差し替えた後は子窓が無く、本窓だけが描く（ADR 0132 の決定 3）。
         result["coverGoneAfterAdoption"] = await_cover_gone(window)
         close(window)
@@ -528,13 +568,13 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
         (readings["frame_presented"] - readings["window_shown"]) / 1000.0, 3)
     result["expectedBackground"] = background
     result["capture"] = "first-paint.bmp"
-    # ADR 0132: 最初の device（WARP）→ 最初の frame（子窓）→ 本窓へ差し替え の順。本物の device が
-    # 窓より先に出来た起動では差し替えが無く、子窓も作らない。
+    # ADR 0132: 最初の device（WARP）→ 最初の frame（子窓）→ 本窓へ差し替え の順。
     adopted = readings.get("device_adopted")
     result["deviceAdopted"] = adopted is not None
-    if adopted is not None:
-        assert readings["device_created"] < readings["frame_presented"] < adopted, readings
+    assert result["deviceAdopted"], f"the first frame was not drawn by WARP and adopted: {readings}"
+    assert readings["device_created"] < readings["frame_presented"] < adopted, readings
     assert result["coverGoneAfterAdoption"], "the WARP cover child outlived the adoption"
+    assert not result["emptyAtAdoption"],         f"an empty surface at the swap: {result['emptyAtAdoption']}"
     # ADR 0013 の却下の条件。ここが落ちたら、直す先はコードではなく ADR そのもの。
     assert not result["blackSeen"], f"black before the first frame: {result['blackSeen']}"
     assert not result["whiteSeen"], f"white before the first frame: {result['whiteSeen']}"
@@ -1796,6 +1836,7 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
         # 撮るたびに窓の面が自分のものかを確かめる。別の窓が覆っていたら撮らずに記録する（Issue #140）。
         # 鍵は本窓に本物の device で描く（ADR 0132）。差し替えて子窓が無くなってから撮る。
         cover_gone = await_cover_gone(window)
+        assert cover_gone, "the WARP cover child is still over the window before the keys"
         try:
             before = capture(window, width, height)
             write_png(frames / "before.png", width, height, before)
