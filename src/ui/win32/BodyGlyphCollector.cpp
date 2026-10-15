@@ -118,8 +118,9 @@ bool BodyGlyphCollector::outside(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F orig
     const auto [above, below] = vertical_reach(run, metrics);
     return origin.y + below < top_ || origin.y - above > bottom_;
 }
-HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin,
-                                    DWRITE_MEASURING_MODE mode)
+HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run,
+                                    const DWRITE_GLYPH_RUN_DESCRIPTION *description,
+                                    D2D1_POINT_2F origin, DWRITE_MEASURING_MODE mode)
 {
     // Tabは原点を進めるだけの0字形run。Direct2Dへ渡すとE_INVALIDARGになる。
     if (run.glyphCount == 0 || outside(run, origin))
@@ -136,7 +137,20 @@ HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F o
                         mode,
                         {indices.begin(), indices.end()},
                         {advances.begin(), advances.end()},
-                        {}};
+                        {},
+                        0,
+                        {},
+                        0};
+    for (const auto advance : advances)
+    {
+        stored.advance += advance;
+    }
+    if (description != nullptr && description->clusterMap != nullptr)
+    {
+        const auto clusters = std::span(description->clusterMap, description->stringLength);
+        stored.text_position = description->textPosition;
+        stored.clusters.assign(clusters.begin(), clusters.end());
+    }
     if (run.glyphOffsets != nullptr)
     {
         const auto offsets = std::span(run.glyphOffsets, run.glyphCount);
@@ -147,17 +161,15 @@ HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F o
 }
 // SDK-ABI: IDWriteTextRenderer::DrawGlyphRun
 // NOLINTNEXTLINE(readability-function-size)
-HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawGlyphRun(void *, FLOAT x, FLOAT y,
-                                                           DWRITE_MEASURING_MODE mode,
-                                                           const DWRITE_GLYPH_RUN *run,
-                                                           const DWRITE_GLYPH_RUN_DESCRIPTION *,
-                                                           IUnknown *effect) noexcept
+HRESULT STDMETHODCALLTYPE BodyGlyphCollector::DrawGlyphRun(
+    void *, FLOAT x, FLOAT y, DWRITE_MEASURING_MODE mode, const DWRITE_GLYPH_RUN *run,
+    const DWRITE_GLYPH_RUN_DESCRIPTION *description, IUnknown *effect) noexcept
 {
     if (effect != nullptr)
     {
         return settle(E_NOTIMPL);
     }
-    return settle(collect(*run, D2D1_POINT_2F{x, y}, mode));
+    return settle(collect(*run, description, D2D1_POINT_2F{x, y}, mode));
 }
 // SDK-ABI: IDWriteTextRenderer::DrawUnderline
 // NOLINTNEXTLINE(readability-function-size)

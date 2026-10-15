@@ -7,6 +7,7 @@
 #include "Milestone.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
+#include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -751,14 +752,37 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
 // (3) 行の原点 area.left / area.top が整数の画素。
 // どれかを変えるときは字形の保持をやめるか、collector の答えを同じ値から出す。
 // tests/ui が (1) と (2) の collector 側の値を確かめる。
-void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
-                                      D2D1_DRAW_TEXT_OPTIONS options)
+const BodyTextLayout *Direct2DRenderer::glyph_entry(IDWriteTextLayout *text,
+                                                    const core::LayoutRect &area)
 {
     const auto left =
         std::max(static_cast<float>(core::width_of(area)) - text->GetMaxWidth(), 0.0F);
     const auto [top, bottom] = drawn_rows(area, body_top_, body_bottom_);
-    const auto *entry = body_text_.glyphs_of(text, left, top, bottom);
+    return body_text_.glyphs_of(text, left, top, bottom);
+}
 
+void Direct2DRenderer::draw_glyph_runs(std::span<const BodyGlyphRun> runs, D2D1_POINT_2F origin)
+{
+    for (const auto &stored : runs)
+    {
+        const DWRITE_GLYPH_RUN run{stored.face.Get(),
+                                   stored.em,
+                                   static_cast<UINT32>(stored.indices.size()),
+                                   stored.indices.data(),
+                                   stored.advances.data(),
+                                   stored.offsets.empty() ? nullptr : stored.offsets.data(),
+                                   stored.sideways,
+                                   stored.bidi};
+        context_->DrawGlyphRun(
+            D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run,
+            brush_.Get(), stored.measuring);
+    }
+}
+
+void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
+                                      D2D1_DRAW_TEXT_OPTIONS options)
+{
+    const auto *entry = glyph_entry(text, area);
     const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
     if (entry == nullptr || !entry->glyphs_ready)
     {
@@ -774,20 +798,7 @@ void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::Layou
                                                   static_cast<float>(area.bottom)),
                                       D2D1_ANTIALIAS_MODE_ALIASED);
     }
-    for (const auto &stored : entry->glyphs)
-    {
-        const DWRITE_GLYPH_RUN run{stored.face.Get(),
-                                   stored.em,
-                                   static_cast<UINT32>(stored.indices.size()),
-                                   stored.indices.data(),
-                                   stored.advances.data(),
-                                   stored.offsets.empty() ? nullptr : stored.offsets.data(),
-                                   stored.sideways,
-                                   stored.bidi};
-        context_->DrawGlyphRun(
-            D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run,
-            brush_.Get(), stored.measuring);
-    }
+    draw_glyph_runs(entry->glyphs, origin);
     if (options == D2D1_DRAW_TEXT_OPTIONS_CLIP)
     {
         context_->PopAxisAlignedClip();
@@ -1055,13 +1066,92 @@ void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWrite
     std::unreachable();
 }
 
+// 置き換えの切り抜きは保持した字形 run から引き、交わる run だけを描く（#531）。範囲ごとに
+// HitTestTextRange と行の全 run を描くと、置き換えの数 × 行の長さになり、1 行の長い文書で止まる。
+std::optional<std::vector<ReplacedTint>>
+Direct2DRenderer::glyph_tints(const BodyTextLayout *entry, IDWriteTextLayout *text,
+                              std::span<const DWRITE_TEXT_RANGE> ranges)
+{
+    DWRITE_LINE_SPACING_METHOD method{};
+    float spacing = 0;
+    float baseline = 0;
+    if (entry == nullptr || !entry->glyphs_ready ||
+        FAILED(text->GetLineSpacing(&method, &spacing, &baseline)) ||
+        method != DWRITE_LINE_SPACING_METHOD_UNIFORM)
+    {
+        return std::nullopt;
+    }
+    return replaced_tints(entry->glyphs, ranges, spacing);
+}
+
+// 保持で位置を引けない行（収集の棄却・右から左など）は HitTestTextRange に戻る。置き換えが
+// replaced_hit_test_limit 個を超える行では、見えている文字の範囲（描く範囲の左上と右下の
+// HitTestPoint）に重なる置き換えだけにする。HitTestTextRange 1 回は layout の大きさに比例する
+// ので、全部に呼ぶと置き換えの数 × 行の長さになる（#531）。上限までは今までどおり全部を描く。
+std::vector<DWRITE_TEXT_RANGE>
+Direct2DRenderer::shown_ranges(IDWriteTextLayout *text, const core::LayoutRect &area,
+                               std::span<const DWRITE_TEXT_RANGE> ranges)
+{
+    if (ranges.size() <= replaced_hit_test_limit)
+    {
+        return {ranges.begin(), ranges.end()};
+    }
+    const auto left =
+        std::max(static_cast<float>(core::width_of(area)) - text->GetMaxWidth(), 0.0F);
+    const auto [top, bottom] = drawn_rows(area, body_top_, body_bottom_);
+    BOOL trailing = FALSE;
+    BOOL inside = FALSE;
+    DWRITE_HIT_TEST_METRICS first{};
+    DWRITE_HIT_TEST_METRICS last{};
+    if (FAILED(text->HitTestPoint(left, std::max(top, 0.0F), &trailing, &inside, &first)) ||
+        FAILED(text->HitTestPoint(left + text->GetMaxWidth(),
+                                  std::min(bottom, static_cast<float>(core::height_of(area))),
+                                  &trailing, &inside, &last)))
+    {
+        text_failure_ = RenderFailure::directwrite;
+        return {};
+    }
+    std::vector<DWRITE_TEXT_RANGE> shown;
+    for (const auto &range : ranges)
+    {
+        if (range.startPosition + range.length > first.textPosition &&
+            range.startPosition <= last.textPosition + last.length)
+        {
+            shown.push_back(range);
+        }
+    }
+    return shown;
+}
+
 void Direct2DRenderer::draw_replaced(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                      const core::LayoutRect &area,
                                      std::span<const DWRITE_TEXT_RANGE> ranges)
 {
-    for (const auto &range : ranges)
+    if (ranges.empty())
     {
-        tint_runs(text, area, range, frame.palette.muted);
+        return;
+    }
+    const auto *entry = glyph_entry(text, area);
+    const auto tints = glyph_tints(entry, text, ranges);
+    if (!tints.has_value())
+    {
+        for (const auto &range : shown_ranges(text, area, ranges))
+        {
+            tint_runs(text, area, range, frame.palette.muted);
+        }
+        return;
+    }
+    brush_->SetColor(to_color(frame.palette.muted));
+    const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
+    const std::span<const BodyGlyphRun> runs = entry->glyphs;
+    for (const auto &tint : tints.value())
+    {
+        context_->PushAxisAlignedClip(
+            D2D1::RectF(origin.x + tint.clip.left, origin.y + tint.clip.top,
+                        origin.x + tint.clip.right, origin.y + tint.clip.bottom),
+            D2D1_ANTIALIAS_MODE_ALIASED);
+        draw_glyph_runs(runs.subspan(tint.first, tint.last - tint.first), origin);
+        context_->PopAxisAlignedClip();
     }
 }
 
