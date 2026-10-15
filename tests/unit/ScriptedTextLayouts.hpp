@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <set>
 
 namespace nenenib::tests
 {
@@ -18,6 +19,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     {
         ++requests_;
         longest_ = std::max(longest_, request.text.size());
+        texts_.insert(request.text.data());
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -98,6 +100,11 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     {
         return requests_;
     }
+    // rows が受けた表示文字列の番地の数。同じ行の表示値を使い回せば 1 つ（#529）。
+    [[nodiscard]] std::size_t row_texts() const noexcept
+    {
+        return texts_.size();
+    }
 
     // rows / locate / hit に渡った文字列の最長のバイト数（巨大な行の窓の契約・ADR 0139）。
     [[nodiscard]] std::size_t longest() const noexcept
@@ -125,6 +132,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     std::size_t requests_ = 0;
     std::size_t longest_ = 0;
     std::size_t cells_ = 0;
+    std::set<const char *> texts_;
     bool rejected_ = false;
 };
 } // namespace nenenib::tests
