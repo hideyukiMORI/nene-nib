@@ -320,8 +320,8 @@ constexpr std::size_t grid_columns = 8;
     return core::grid_rows(index.cursor_at(text, text.line_end(number)).cell, grid_columns);
 }
 
-[[nodiscard]] bool rows_match(const app::VisualTextView &view,
-                              const core::VirtualColumnIndex &index, const core::TextBuffer &text)
+[[nodiscard]] bool rows_match(app::VisualTextView &view, const core::VirtualColumnIndex &index,
+                              const core::TextBuffer &text)
 {
     bool matched = true;
     for (std::size_t line = 1; line <= text.line_count(); ++line)
@@ -333,8 +333,7 @@ constexpr std::size_t grid_columns = 8;
     return matched;
 }
 
-[[nodiscard]] bool locations_match(const app::VisualTextView &view,
-                                   const core::VirtualColumnIndex &index,
+[[nodiscard]] bool locations_match(app::VisualTextView &view, const core::VirtualColumnIndex &index,
                                    const core::TextBuffer &text)
 {
     bool matched = true;
@@ -349,8 +348,7 @@ constexpr std::size_t grid_columns = 8;
 }
 
 // 各升の左寄りを叩いた位置が grid_byte_of と一致するか（1 行ぶん）。
-[[nodiscard]] bool line_hits_match(const app::VisualTextView &view,
-                                   const core::VirtualColumnIndex &index,
+[[nodiscard]] bool line_hits_match(app::VisualTextView &view, const core::VirtualColumnIndex &index,
                                    const core::TextBuffer &text, core::LineNumber number)
 {
     bool matched = true;
@@ -366,8 +364,8 @@ constexpr std::size_t grid_columns = 8;
     return matched;
 }
 
-[[nodiscard]] bool hits_match(const app::VisualTextView &view,
-                              const core::VirtualColumnIndex &index, const core::TextBuffer &text)
+[[nodiscard]] bool hits_match(app::VisualTextView &view, const core::VirtualColumnIndex &index,
+                              const core::TextBuffer &text)
 {
     bool matched = true;
     for (std::size_t line = 1; line <= text.line_count(); ++line)
@@ -389,7 +387,7 @@ void verify_grid_resolution()
                                                             std::size_t{0}})
                            .with_display(DisplayForm::grid);
     ScriptedTextLayouts layouts;
-    const app::VisualTextView view(state, layouts, grid_geometry);
+    app::VisualTextView view(state, layouts, grid_geometry);
     const auto index = core::VirtualColumnIndex::for_grid(text, grid_columns);
     expect(rows_match(view, index, text), "grid rows equal grid_rows of the line's cells");
     expect(locations_match(view, index, text),
@@ -402,11 +400,11 @@ void verify_grid_resolution()
             .with_opened(buffer_of(body),
                          app::Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}})
             .with_display(DisplayForm::grid);
-    const app::VisualTextView borrowed(unheld, layouts, grid_geometry);
+    app::VisualTextView borrowed(unheld, layouts, grid_geometry);
     expect(!borrowed.rows(core::LineNumber{1}).has_value(),
            "the grid view never builds an index for a text that holds none");
     const auto shown_as_text = state.with_display(DisplayForm::text);
-    const app::VisualTextView text_view(shown_as_text, layouts, grid_geometry);
+    app::VisualTextView text_view(shown_as_text, layouts, grid_geometry);
     static_cast<void>(text_view.rows(core::LineNumber{1}));
     expect(layouts.requests() == 1 && layouts.cells() == 2,
            "the text display keeps using the layout and never reads the cell");

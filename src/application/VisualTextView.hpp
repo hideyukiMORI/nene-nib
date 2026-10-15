@@ -14,7 +14,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <optional>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -27,6 +29,9 @@ namespace nenenib::application
 // rows / location / caret_at を本文が持つ仮想桁の索引（TextBuffer::virtual_columns）から GridCells
 // で答える。索引は借りるだけで作らない（持たせるのは開く道と SelectDisplay の application の 2
 // か所）。 文字組みの rows / locate / hit は呼ばない。
+// 借用の間は文書が変わらないので、行の表示値（本文の写しと display_line）は行ごとに 1 回だけ
+// 作って使い回す（#529）。保持は見えている行数 ＋ 数行までで、超えたら古いものから捨てる。
+// 保持を書き換えるので位置解決の関数は const にしない（CPP-003 は mutable を書かない）。
 class VisualTextView final
 {
   public:
@@ -34,20 +39,21 @@ class VisualTextView final
                    core::TextViewGeometry geometry);
     // 見えている 1 行の表示値（変換中の文字列はキャレットの行に差し込む）。巨大な行の錨は
     // キャレットがその行にあればキャレット、無ければ横の送りから見積もった位置（決定 3）。
+    // 呼び手が選択と当たりを書き足す写し。保持を通さずに作る（巨大な行を複製しない）。
     [[nodiscard]] LineView line(core::LineNumber number) const;
-    [[nodiscard]] std::expected<std::size_t, TextLayoutFailure> rows(core::LineNumber number) const;
+    [[nodiscard]] std::expected<std::size_t, TextLayoutFailure> rows(core::LineNumber number);
     [[nodiscard]] std::expected<core::TextLocation, TextLayoutFailure>
-    location(core::TextCaret caret) const;
+    location(core::TextCaret caret);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
-    position(core::TextCaret caret) const;
+    position(core::TextCaret caret);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
-    shifted(core::VisualPosition from, std::int64_t amount) const;
+    shifted(core::VisualPosition from, std::int64_t amount);
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure>
-    caret_at(core::VisualPosition at, float x) const;
+    caret_at(core::VisualPosition at, float x);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
-    constrained(core::VisualPosition first, core::ScrollExtent extent) const;
+    constrained(core::VisualPosition first, core::ScrollExtent extent);
     [[nodiscard]] std::expected<ScrollState, TextLayoutFailure>
-    followed(core::TextCaret caret, core::ScrollFollow follow, core::ScrollExtent extent) const;
+    followed(core::TextCaret caret, core::ScrollFollow follow, core::ScrollExtent extent);
     // 格子の升の答え手（ADR 0140 の決定 4・5）。本文が索引を持たないか 1 升を読めなければ失敗。
     // frame の画面行（GridLineRows）は位置解決と同じ GridCells を 1 frame に 1 つ借りて切り出す。
     [[nodiscard]] std::expected<GridCells, TextLayoutFailure> grid_cells() const;
@@ -56,6 +62,8 @@ class VisualTextView final
     [[nodiscard]] core::GridPoint grid_point(GridCells &cells, core::TextCaret caret) const;
 
   private:
+    using SharedLine = std::shared_ptr<const LineView>;
+    [[nodiscard]] SharedLine shown(core::LineNumber number);
     [[nodiscard]] TextLayoutRequest request(const LineView &line) const;
     // anchor を省けば line の既定の錨。巨大な行は錨の周りの窓だけを text_range で読む。
     [[nodiscard]] LineView line_at(core::LineNumber number,
@@ -84,14 +92,14 @@ class VisualTextView final
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure>
     grid_caret_at(core::VisualPosition at, float x) const;
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
-    forward(core::VisualPosition from, std::size_t amount) const;
+    forward(core::VisualPosition from, std::size_t amount);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
-    backward(core::VisualPosition from, std::size_t amount) const;
-    [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure> last() const;
+    backward(core::VisualPosition from, std::size_t amount);
+    [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure> last();
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
-    distance(core::VisualPosition first, core::VisualPosition last, std::size_t limit) const;
+    distance(core::VisualPosition first, core::VisualPosition last, std::size_t limit);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
-    followed_first(core::VisualPosition caret, core::ScrollFollow follow) const;
+    followed_first(core::VisualPosition caret, core::ScrollFollow follow);
 
     const EditorState &state_;
     TextLayoutPort &layouts_;
@@ -105,5 +113,7 @@ class VisualTextView final
     std::size_t grid_columns_ = 0;
     float cell_width_ = 0;
     std::optional<TextLayoutFailure> grid_failure_;
+    // 作った行の表示値。古い順に並び、上限を超えたら先頭を捨てる。
+    std::vector<SharedLine> shown_;
 };
 } // namespace nenenib::application

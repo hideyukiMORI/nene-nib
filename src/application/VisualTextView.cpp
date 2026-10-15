@@ -61,6 +61,8 @@ namespace
     }
     return giant_window_at(*index, text, caret.line, state.selection().caret).first.column;
 }
+// 見えている行数に足す保持の余り（画面の上下に半分かかる行と、キャレットの行）。
+constexpr std::size_t shown_margin = 4;
 } // namespace
 
 VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts,
@@ -246,6 +248,25 @@ VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
     return core::TextCaret{text.position_of(offset), affinity};
 }
 
+VisualTextView::SharedLine VisualTextView::shown(core::LineNumber number)
+{
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    const auto found = std::ranges::find_if(shown_, [number](const SharedLine &value)
+                                            { return value->number == number; });
+    if (found != shown_.end())
+    {
+        return *found;
+    }
+    // 歩きが上限を超えて戻ってきたら作り直す（正しさは変わらない）。
+    const auto limit = std::max<std::size_t>(state_.scroll().visible_lines, 1) + shown_margin;
+    if (shown_.size() >= limit)
+    {
+        shown_.erase(shown_.begin());
+    }
+    shown_.push_back(std::make_shared<const LineView>(line(number)));
+    return shown_.back();
+}
+
 TextLayoutRequest VisualTextView::request(const LineView &line) const
 {
     return TextLayoutRequest{
@@ -254,7 +275,7 @@ TextLayoutRequest VisualTextView::request(const LineView &line) const
 }
 
 // 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2）。行の全体を読まない。
-std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNumber number) const
+std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNumber number)
 {
     if (geometry_.width <= 0)
     {
@@ -269,12 +290,11 @@ std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNum
     {
         return 1;
     }
-    const auto shown = line(number);
-    return layouts_.rows(request(shown));
+    const auto made = shown(number);
+    return layouts_.rows(request(*made));
 }
 
-std::expected<core::TextLocation, TextLayoutFailure>
-VisualTextView::location(core::TextCaret caret) const
+std::expected<core::TextLocation, TextLayoutFailure> VisualTextView::location(core::TextCaret caret)
 {
     if (geometry_.width <= 0)
     {
@@ -287,19 +307,22 @@ VisualTextView::location(core::TextCaret caret) const
     // 巨大な行は位置そのものを錨にした窓で求める（incsearch の preview も窓の中に来る）。
     const auto &text = state_.text();
     const auto *index = giant_line_index(text, caret.position.line);
-    const auto shown = index == nullptr ? line(caret.position.line)
-                                        : line_at(caret.position.line,
-                                                  giant_offset_of(*index, text, caret.position));
-    auto located = layouts_.locate(request(shown), shown_caret(shown, caret, caret_));
+    // 巨大な行の窓は位置ごとに錨が違うので保持を通さない（#529 の保持は既定の錨の行だけ）。
+    const auto made =
+        index == nullptr ? shown(caret.position.line)
+                         : std::make_shared<const LineView>(line_at(
+                               caret.position.line, giant_offset_of(*index, text, caret.position)));
+    const auto &shown_line = *made;
+    auto located = layouts_.locate(request(shown_line), shown_caret(shown_line, caret, caret_));
     if (located)
     {
-        located.value().x += offset_of(shown);
+        located.value().x += offset_of(shown_line);
     }
     return located;
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
-VisualTextView::position(core::TextCaret caret) const
+VisualTextView::position(core::TextCaret caret)
 {
     const auto located = location(caret);
     if (!located)
@@ -310,7 +333,7 @@ VisualTextView::position(core::TextCaret caret) const
 }
 
 std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core::VisualPosition at,
-                                                                           float x) const
+                                                                           float x)
 {
     if (geometry_.width <= 0)
     {
@@ -322,24 +345,25 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
     {
         return grid_caret_at(at, x);
     }
-    const auto shown = line(at.line);
-    const auto local = x - offset_of(shown);
-    if (const auto outside = outside_window(shown, local); outside.has_value())
+    const auto made = shown(at.line);
+    const auto &shown_line = *made;
+    const auto local = x - offset_of(shown_line);
+    if (const auto outside = outside_window(shown_line, local); outside.has_value())
     {
         return outside.value();
     }
-    const auto hit = layouts_.hit(request(shown), core::TextLocation{at.row, local});
+    const auto hit = layouts_.hit(request(shown_line), core::TextLocation{at.row, local});
     if (!hit)
     {
         return std::unexpected(hit.error());
     }
-    const auto column = shown.composed.has_value()
-                            ? uncomposed_column(shown.composed.value(), hit.value().column)
+    const auto column = shown_line.composed.has_value()
+                            ? uncomposed_column(shown_line.composed.value(), hit.value().column)
                             : hit.value().column;
     return core::TextCaret{
-        core::TextPosition{shown.number,
-                           core::Column{core::source_column(shown.display, column.value - 1) + 1 +
-                                        shown.window.code_point}},
+        core::TextPosition{shown_line.number,
+                           core::Column{core::source_column(shown_line.display, column.value - 1) +
+                                        1 + shown_line.window.code_point}},
         hit.value().affinity};
 }
 
@@ -370,7 +394,7 @@ std::optional<core::TextCaret> VisualTextView::outside_window(const LineView &li
     return core::TextCaret{giant_position_of(*index, text, line.number, offset)};
 }
 
-std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last() const
+std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last()
 {
     const core::LineNumber number{state_.text().line_count()};
     const auto count = rows(number);
@@ -382,7 +406,7 @@ std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last() co
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
-VisualTextView::forward(core::VisualPosition from, std::size_t amount) const
+VisualTextView::forward(core::VisualPosition from, std::size_t amount)
 {
     while (true)
     {
@@ -408,7 +432,7 @@ VisualTextView::forward(core::VisualPosition from, std::size_t amount) const
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
-VisualTextView::backward(core::VisualPosition from, std::size_t amount) const
+VisualTextView::backward(core::VisualPosition from, std::size_t amount)
 {
     while (true)
     {
@@ -433,7 +457,7 @@ VisualTextView::backward(core::VisualPosition from, std::size_t amount) const
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
-VisualTextView::shifted(core::VisualPosition from, std::int64_t amount) const
+VisualTextView::shifted(core::VisualPosition from, std::int64_t amount)
 {
     from.line.value = std::clamp<std::size_t>(from.line.value, 1, state_.text().line_count());
     const auto steps = magnitude(amount);
@@ -452,7 +476,7 @@ VisualTextView::shifted(core::VisualPosition from, std::int64_t amount) const
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
-VisualTextView::constrained(core::VisualPosition first, core::ScrollExtent extent) const
+VisualTextView::constrained(core::VisualPosition first, core::ScrollExtent extent)
 {
     const auto normalized = shifted(first, 0);
     if (!normalized)
@@ -486,9 +510,8 @@ VisualTextView::constrained(core::VisualPosition first, core::ScrollExtent exten
     return highest.value() < normalized.value() ? highest : normalized;
 }
 
-std::expected<std::size_t, TextLayoutFailure> VisualTextView::distance(core::VisualPosition first,
-                                                                       core::VisualPosition last,
-                                                                       std::size_t limit) const
+std::expected<std::size_t, TextLayoutFailure>
+VisualTextView::distance(core::VisualPosition first, core::VisualPosition last, std::size_t limit)
 {
     if (last.line.value - first.line.value >= limit)
     {
@@ -515,7 +538,7 @@ std::expected<std::size_t, TextLayoutFailure> VisualTextView::distance(core::Vis
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
-VisualTextView::followed_first(core::VisualPosition caret, core::ScrollFollow follow) const
+VisualTextView::followed_first(core::VisualPosition caret, core::ScrollFollow follow)
 {
     const auto normalized = shifted(visual_first(state_.scroll()), 0);
     if (!normalized)
@@ -542,9 +565,9 @@ VisualTextView::followed_first(core::VisualPosition caret, core::ScrollFollow fo
     return backward(caret, virtual_caret.value - target.value);
 }
 
-std::expected<ScrollState, TextLayoutFailure>
-VisualTextView::followed(core::TextCaret caret, core::ScrollFollow follow,
-                         core::ScrollExtent extent) const
+std::expected<ScrollState, TextLayoutFailure> VisualTextView::followed(core::TextCaret caret,
+                                                                       core::ScrollFollow follow,
+                                                                       core::ScrollExtent extent)
 {
     const auto point = location(caret);
     if (!point)

@@ -14,11 +14,13 @@
 #include "PlaceCaret.hpp"
 #include "PointText.hpp"
 #include "Scopes.hpp"
+#include "ScriptedTextLayouts.hpp"
 #include "ScrollLines.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "VisualTextView.hpp"
 
 #include <limits>
 #include <string>
@@ -248,6 +250,30 @@ void verify_unwrapped_drag()
                left.lines.front().selection.end == Column{2},
            "dragging past the left edge returns to the start while retaining the anchor");
 }
+// #529: 1 回の位置解決の間は、同じ行の表示値（本文の写しと display_line）を 1 回だけ作る。
+// 作り直すと rows が受ける表示文字列は毎回別の写しになる（Debug の ASan は解放した領域を
+// すぐには使い回さないので、別の番地として数えられる）。
+void verify_line_view_made_once()
+{
+    const auto state =
+        EditorState::create(Appearance::dark, EditMode::ordinary)
+            .with_edit(buffer_of("abcdefghij\nkl\tmnop\n"), Selection{Offset{0}, Offset{0}},
+                       EditHistory::empty(), Document{std::nullopt, TextEncoding::utf8, 0});
+    ScriptedTextLayouts layouts;
+    VisualTextView view{state, layouts, TextViewGeometry{40, 20, 96}};
+    bool counted = true;
+    for (int repeat = 0; repeat < 8; ++repeat)
+    {
+        const auto rows = view.rows(LineNumber{1});
+        counted = counted && rows.has_value() && rows.value() == 3;
+    }
+    expect(counted && layouts.requests() == 8, "the same line is laid out on every request");
+    expect(layouts.row_texts() == 1,
+           "the same line's display text is made once while one view is borrowed");
+    static_cast<void>(view.rows(LineNumber{2}));
+    static_cast<void>(view.rows(LineNumber{1}));
+    expect(layouts.row_texts() == 2, "another line is made once and the first one is kept");
+}
 } // namespace
 
 void verify_wrapped_view_scope()
@@ -261,5 +287,6 @@ void verify_wrapped_view_scope()
     verify_wrapped_failure_and_bounds();
     verify_wrap_settings();
     verify_unwrapped_drag();
+    verify_line_view_made_once();
 }
 } // namespace nenenib::tests
