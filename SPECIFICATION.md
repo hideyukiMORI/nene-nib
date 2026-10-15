@@ -73,7 +73,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 - 巨大ファイル: メモリマップ ＋ piece table ＋ 行索引の遅延構築（ワーカー・[ADR 0004](docs/adr/0004-ui-thread-plus-one-worker.md)）
 - 見た目: Mica（`DWMWA_SYSTEMBACKDROP_TYPE`）・自前タイトルバー（タブ）・Segoe UI Variable・ライト／ダーク／アクセント色は OS 追従・DirectComposition の滑らかスクロール
 - 日本語入力: IMM32 / TSF を初版から。**変換中は Vim の鍵を奪わない**
-- 速さの見張り: ベンチ 3 本（起動→最初の描画 / キー→画面 / 1 GB を開く）を CI に置き、退行で落とす。目標値は初版を実測してから決める（[ADR 0006](docs/adr/0006-speed-gate-simd-and-table-driven-dispatch.md)・QLT-014）
+- 速さの見張り: ベンチ 8 本（起動→最初の描画・窓が見えるまで・1 打鍵・200 打鍵・16 MiB を開く・16 MiB で 200 打鍵・5000 件の面・長い行の 1 打鍵）を `eng/measure-speed.py` が施主の実機の Release で測り、`eng/perf-reference.json` の基準値からの退行でゲートを落とす（[ADR 0006](docs/adr/0006-speed-gate-simd-and-table-driven-dispatch.md)・[ADR 0016](docs/adr/0016-ci-speed-reference-per-host-fingerprint.md)・QLT-014）。CI の必須 check は `validate-git` だけで、ベンチは CI で判定しない（[ADR 0021](docs/adr/0021-diff-scoped-verification-and-result-reuse.md)）。目標値は初版を実測してから決める（未決・施主判断）
 
 ## 4. 機能要件（初版の輪郭）
 

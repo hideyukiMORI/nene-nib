@@ -216,7 +216,7 @@ Interlocked 系の組み込みや `volatile` は見ない。tests/ は対象外�
 
 `eng/vim-oracle.py` が生成物 `tests/vim/VimFixtures.hpp` の先頭に書いた 1 行（`fixtures.json` の SHA-256 と fixture の本数）を、
 実際の `tests/vim/fixtures.json` のバイト列の SHA-256 と配列の長さと突き合わせる。記述が無い・SHA が違う・本数が違う、のいずれも CNF-010（[ADR 0012](adr/0012-vim-engine-first-slice-and-oracle-fixtures.md) の決定 7・Issue #44）。
-SHA はファイルのバイト列そのままで、改行は正規化しない（`.gitattributes` の `eol=lf` が正本）。Vim を要らないので CI でも回る。
+SHA はファイルのバイト列そのままで、改行は正規化しない（`.gitattributes` の `eol=lf` が正本）。Vim が要らないので CI でも回せる（いまの CI の必須 check は validate-git だけで、この検査はローカルの `check.ps1` が回す・ADR 0021）。
 **期待値そのものが本物の Vim の答えかは見ない**（それは Vim のある機械での `--regenerate` と QLT-013 の記録）。
 
 fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-oracle.py` の `KEY_TABLE` の 1 つだけで、C++ の表 `tests/vim/VimKeyNames.hpp` はその生成物である（[ADR 0054](adr/0054-fixture-key-notation-has-one-table.md)）。
@@ -317,7 +317,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-011 | planned | eng/toolchain.ps1 |
 | QLT-012 | planned | validate-git.ps1 / git-conventions.py の検証記録確認。結果の真偽と入力の不変性はレビュー |
 | QLT-013 | planned | |
-| QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機と CI の指紋 `e7a87d5b` で判定。CI の他の指紋と打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
+| QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機の指紋で判定（必要な変更で選んで実行・`-Full` の明示実行）。CI の必須 check は validate-git だけでベンチを回さず（ADR 0021）、CI の指紋 `e7a87d5b` の基準値は記録として残る。打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
 | CNF-001 | planned | eng/conformance.py / tests/conformance |
 | CNF-002 | planned | eng/conformance.py / tests/conformance |
 | CNF-003 | planned | eng/conformance.py / tests/conformance |
