@@ -140,7 +140,8 @@ void listed_remnants(application::FilePort &files, const std::string &folder, st
     for (const AutosaveEntry &entry : entries.value())
     {
         remnants.push_back(application::AutosaveRemnant{std::format("{}/{}", name, entry.id.value),
-                                                        entry.id, entry.path, entry.title});
+                                                        entry.id, entry.path, entry.title,
+                                                        entry.caret});
     }
 }
 

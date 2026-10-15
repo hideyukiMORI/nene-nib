@@ -306,7 +306,8 @@ void verify_tick_keeps_wanted_column()
 {
     auto title = core::tab_title_for(path, core::SaveState::modified);
     return app::AutosaveRemnant{std::move(location), AutosaveId{0}, std::move(path),
-                                std::move(title)};
+                                std::move(title),
+                                core::TextPosition{core::LineNumber{1}, core::Column{1}}};
 }
 
 // 起動の問いに「はい」: 残骸を開くのと同じ復号で読み、帯の末尾に未保存のタブとして足し、最初に
@@ -356,6 +357,32 @@ void verify_restored_tabs_autosave()
            "the next tick stores the two restored tabs under this process");
 }
 
+// 戻したタブのキャレットは一覧に書いた行と桁（決定 6）。本文の範囲の外の行はセッションの復元と
+// 同じく最後の行へ寄せる（改行で終わる本文では最後の行の 1 桁が本文の末尾）。
+[[nodiscard]] core::TextPosition restored_caret(core::TextPosition caret, std::string body)
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    auto placed = remnant("4c/0", sample_path());
+    placed.caret = caret;
+    editing.autosave().remain(std::move(placed), std::move(body));
+    static_cast<void>(controller.autosave_remnants());
+    return controller.apply_frame(app::RestoreAutosave{}).caret.position;
+}
+
+void verify_restore_caret()
+{
+    expect(restored_caret(core::TextPosition{core::LineNumber{3}, core::Column{5}},
+                          "one\ntwo\nthree four\n") ==
+               core::TextPosition{core::LineNumber{3}, core::Column{5}},
+           "the restored tab puts the caret where the list wrote it");
+    expect(restored_caret(core::TextPosition{core::LineNumber{99}, core::Column{1}},
+                          "alpha\nbeta\n") ==
+               core::TextPosition{core::LineNumber{3}, core::Column{1}},
+           "a caret past the body is brought to the end of the body");
+}
+
 // 読めない残骸は 1 行の知らせで飛ばし、forget する（決定 6）。
 void verify_restore_unreadable()
 {
@@ -400,6 +427,7 @@ void verify_autosave_contracts()
     verify_tick_keeps_wanted_column();
     verify_restore_remnants();
     verify_restored_tabs_autosave();
+    verify_restore_caret();
     verify_restore_unreadable();
     verify_discard_remnants();
 }
