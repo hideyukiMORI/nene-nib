@@ -1,6 +1,8 @@
 #pragma once
 
 #include "AppearancePort.hpp"
+#include "AutosaveId.hpp"
+#include "AutosaveLedger.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
@@ -227,6 +229,18 @@ class EditorController final
     // アクティブになった直後（開く・enter_document）と apply の終わりと起動の終わりから呼ぶ。
     // Ctrl+Tab で歩いている間は判定だけして聞かない（確定で聞く）。
     void ask_display();
+    // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
+    // 動かさない。
+    void accept(const AutosaveTick &);
+    // 計画が store にした 1 タブを帯から探して頼む。まだ読んでいない文書は計画が store にしない。
+    void store_planned(AutosaveId id);
+    // 1 タブの本文を保存と同じ符号化で写して頼む（決定 4）。頼めたら真で、呼び手が帳面に
+    // 改訂番号を覚える。
+    [[nodiscard]] bool store_autosave(AutosaveId id, const core::TextBuffer &text,
+                                      const Document &document, core::TextPosition caret);
+    // worker の失敗を引き、成功するまで 1 回だけ知らせる（決定 4）。
+    void collect_autosave();
+    void notify_autosave_failure();
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);
@@ -396,7 +410,10 @@ class EditorController final
     // 判定済みの列を本文へ渡す。CP932 の変換だけはポートの向こう（ADR 0080）。
     [[nodiscard]] std::expected<core::TextBuffer, FileFailure> decoded(core::DetectedText text);
     [[nodiscard]] std::expected<void, FileFailure> write_document(const SaveDocument &intent);
-    [[nodiscard]] std::expected<void, FileFailure> write_utf8_document(const SaveDocument &intent);
+    // 本文を保存の符号化の断片にする 1 本（ADR 0010・ADR 0137 の決定
+    // 4）。保存と自動退避が共用する。 Shift_JIS は変換した本文を held に持ち、断片はそれを指す。
+    [[nodiscard]] std::expected<std::vector<std::string_view>, FileFailure>
+    encoded_parts(const core::TextBuffer &text, core::TextEncoding encoding, std::string &held);
 
     EditorPorts ports_;
     EditorState state_;
@@ -425,5 +442,11 @@ class EditorController final
     // 面が同じフォルダを頼んだ控え（ADR 0062 の決定 14・15）。券は面を開くたびに進み、ほかは
     // 面を開くときに置き直す。面が閉じている間は読まない。
     PaletteFolder palette_folder_;
+    // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
+    AutosaveLedger autosave_ledger_;
+    // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。
+    bool autosave_notified_ = false;
+    // 前に失敗を引いてから store を頼んだか。空の collect をこの後に受けたら成功とみなす。
+    bool autosave_requested_ = false;
 };
 } // namespace nenenib::application

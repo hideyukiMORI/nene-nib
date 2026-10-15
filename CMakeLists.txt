@@ -61,7 +61,8 @@ nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorView.cpp
-    src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp)
+    src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
+    src/application/AutosavePlan.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -116,6 +117,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/BookmarkTests.cpp
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
+    tests/unit/AutosaveTests.cpp
     tests/unit/OperationsTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp

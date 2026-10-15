@@ -57,6 +57,12 @@ adapters の試験は時計を読まない。待つのは合図の受け皿（�
 箱 `DeviceWarmup` は WARP（`take_provisional`）と本物（`take`）を 2 段で渡す。本物がまだなら `EditorWindow` は本窓の client を覆う子窓 `CoverWindow` に WARP の renderer を結び、`pump_messages` が箱の event を待って `adopt_device` で本窓に本物を作ってから子窓を壊す（節目 `device_adopted`）。
 本窓の HWND に WARP の swap chain を一度でも結ぶと、差し替えた後も単打が 2 倍のまま残る（ADR 0132）。device lost の作り直しは古い renderer を先に解放する。
 
+### 自動退避は合図・純関数の計画・型のある port。変わったかは改訂番号で比べる
+
+ui のタイマーが送る意図 `AutosaveTick` は `WorkCompleted` と同じく使う人の操作ではない（`keeps_tab_walk` と `begin_intent` の両方に書いてある）。何を書くかは `autosave_plan(state, ledger)` の純関数が決め、書くのは `AutosavePort` の worker（ADR 0137）。
+タブの名指しは `EditorState::autosave_ids()`（帯の順・通し番号・再利用しない）。帯の位置・パス・題名で名指ししない。「前回の退避から変わったか」は `EditHistory::revision()` で比べ、履歴の位置では比べない（まとめられた打鍵と undo の後の別の編集で位置は同じ値に戻る）。
+本文のバイト列は保存と同じ `encoded_parts` の 1 本で作る。起動・開く・切り替え・保存・打鍵の道は `AutosavePort` を呼ばない（契約 `verify_quiet_paths`）。
+
 ### 網羅性検査を殺す分岐を書かない
 
 閉じた選択肢の分岐に `default` / `else` / `_` を書かない。選択肢が増えたらコンパイルが落ちるのが正しい状態（CPP-002）。

@@ -63,6 +63,10 @@ void verify_display_scope();
 void verify_background_work_contracts();
 void verify_background_work_scope();
 
+// AutosaveTests.cpp
+void verify_autosave_contracts();
+void verify_autosave_scope();
+
 // OperationsTests.cpp
 void verify_operations_scope();
 

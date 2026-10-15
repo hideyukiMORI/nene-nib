@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AppearancePort.hpp"
+#include "AutosavePort.hpp"
 #include "BookmarkPort.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
@@ -29,5 +30,7 @@ struct EditorPorts
     FolderPort &folders;
     BookmarkPort &bookmarks;
     TextLayoutPort &text_layouts;
+    // 未保存の編集を裏で退避する（ADR 0137 の決定 4）。
+    AutosavePort &autosave;
 };
 } // namespace nenenib::application
