@@ -5216,3 +5216,8 @@ PR447のhead b5218ba、必須CI38275473024、正規merge e5f8e709eef61d88ebcdbd9
 固定clang-cl 19.1.5、専用targetのDebug/tidy/ASan/UBSan build、`nib_source_resource_probe.exe` 228 checks/0 failures、C++16ファイルformat、conformance 0違反。初回の試験側複雑度12/入れ子4違反を関数抽出で直し、失敗ログを保存。独立レビューで終了状態とmove代入の不足を補完し、未解決指摘なし。試験input/2spool/空folderは削除済み。[コマンド・SHA・範囲・再利用](source-resource-2026-10-13.md)。
 
 実験コード/CMakeは専用branchに保存し、mainへはADR・結果・進捗文書だけ。製品API/機械強制は追加しない。OS取消・100ms・2GiB・製品temp/予算・UTF-8/索引・全caller移行は未確認で、#452の性能待ちも維持。ARC/CPPはADR0125、QLT-001/012/013、保存schema変更なし、Waivers none。文書差分/目視で統合しCI不要。恒久証拠と監査整理は`D:/NeNeNib/evidence/source-resource-465/closeout.json`。
+
+## 5-ev — 起動の最初の frame は WARP で覆いの子窓に描く（Issue #485・ADR 0132）
+
+ADR 0131 の後も起動は約 178 ms で、約 150 ms は NVIDIA の `D3D11CreateDevice` 待ち。WARP の device は約 9 ms なので、worker で WARP → HARDWARE の順に作り、最初の frame は WARP で本窓を覆う子窓に出し、本物が出来たら本窓に同じ frame を出して `WaitForCommitCompletion`・`DwmFlush` の後に子窓を壊す。本窓に WARP を結ぶと差し替え後も単打が 1.25 ms のまま残るので結ばない。
+Debug（tidy / ASan / UBSan）、`--device-warmup` 13・`--application` 16,021・`--background-work` 89 checks、symbols 0 / conformance 0 / format 0。窓ありは `eng/verify-window.py`（施主の了承のもと手で）: `--keys` で子窓が鍵の前に消え、差し替えの標本 3 回で空の面 0（`DwmFlush` 前は 1 標本に Mica が出て直した）。正式ゲートは e870d0f の Release で起動 **40.5 ms**（基準 191.5）・16 MiB open **52.2 ms**（249.8）・単打 0.574・長行 5.09・窓 33.2・palette 1.94、連打 2 本は base に #474 が無い既存超過（QLT-012・#474 で解消）。[全値と条件](warp-first-frame-2026-10-15.md)。look の節の既存失敗は #486。基準値は変えない。独立レビューと CI は PR、施主の試用は D41 のとおり merge の前。Waivers none。
