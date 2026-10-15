@@ -801,7 +801,14 @@ def verify(window, appearance: str, output: Path) -> dict:
     pixels = capture(window, width, height)
     write_bitmap(output / "look-slice.bmp", pixels, width, height)
     expected = list(PALETTE[appearance])
-    centre = pixel(pixels, width, width // 2, height // 2)
+    # 本文の背景色の標本点。中央は空の文書の案内（operation_guide_layout の body_guide・
+    # 幅 228 DIP を本文帯の中央に置き、左右 16 DIP 以上の余白を残す）が描かれる（#304・D42）ので使わない。
+    # 案内の右端は中央 + 114 DIP なので、右端から 8 DIP 内側（幅 640 DIP の窓で 632 DIP）は案内の外。
+    # 縦は title_bar の下と status の上の中ほど。DIP → 物理画素は整数演算（to_pixels）。
+    # 設定 guide で案内を消す道は使わない（検査が設定に依存しない）。
+    ground_x = width - to_pixels(8, dpi)
+    ground_y = title_bar + (height - title_bar) // 2
+    centre = pixel(pixels, width, ground_x, ground_y)
     # 帯の地は「タブでも ＋ でも窓の操作でもない場所」。下の hitTest の HTCAPTION がそれを示す。
     title_pixel = pixel(pixels, width, width // 2, title_bar // 2)
     tab_pixel = pixel(pixels, width, tab[0], tab[1])
@@ -812,7 +819,7 @@ def verify(window, appearance: str, output: Path) -> dict:
     expected_tab = list(TAB_ACTIVE[appearance])
     hits = {"close": ask_hit(window, width - button // 2, title_bar // 2),
             "caption": ask_hit(window, width // 2, title_bar // 2)}
-    assert centre == expected, f"centre pixel {centre} is not the {appearance} background {expected}"
+    assert centre == expected, f"body ground pixel {centre} is not the {appearance} background {expected}"
     assert not (style & WS_POPUP), "the window must not be a WS_POPUP any more"
     assert style & WS_THICKFRAME, "WS_THICKFRAME must stay for Snap and the resize border"
     assert hits["close"] == HTCLOSE, f"the close button answered {hits['close']}"
