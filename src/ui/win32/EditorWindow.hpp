@@ -68,6 +68,8 @@ class EditorWindow final
     // を残して swap chain だけ替える）、偽なら変種 A（renderer を作り直す）。B が失敗したら A で
     // 作り直し、B の失敗の HRESULT を返す。差し替えるものが無ければ S_FALSE。
     [[nodiscard]] HRESULT adopt_device(bool in_place);
+    // 実験（D2）: renderer を変種 A と同じ形で 1 回だけ作り直して描く。
+    [[nodiscard]] bool recreate_rendering();
 
   private:
     EditorWindow(HINSTANCE instance, application::EditorController &controller,

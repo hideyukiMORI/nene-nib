@@ -1,4 +1,5 @@
 #include "EditorWindow.hpp"
+#include "ExperimentProbe.hpp"
 
 #include "PaletteLayout.hpp"
 
@@ -740,6 +741,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         }
         return 0;
     case WM_CHAR:
+        experiment_mark(0x10000U | static_cast<std::uint32_t>(word & 0xFFFFU));
         end_selection_drag();
         timing_.mark(core::Milestone::input_received);
         type_character(word);
@@ -2111,6 +2113,7 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
 {
     text_layouts_.begin_frame();
     const auto frame = controller_.frame();
+    experiment_mark(1);
     const auto drawn =
         frame.layout_failure.has_value()
             ? std::expected<void, RenderFailure>{std::unexpected(RenderFailure::directwrite)}
@@ -2188,6 +2191,17 @@ HRESULT EditorWindow::adopt_device(bool in_place)
         return E_FAIL;
     }
     return result;
+}
+
+bool EditorWindow::recreate_rendering()
+{
+    renderer_.reset();
+    if (!start_rendering())
+    {
+        abandon();
+        return false;
+    }
+    return true;
 }
 
 bool EditorWindow::rendering_failed() const noexcept

@@ -6,6 +6,7 @@
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
 #include "ExperimentLog.hpp"
+#include "ExperimentProbe.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
@@ -159,17 +160,27 @@ void pump_messages(nenenib::ui::win32::EditorWindow &window,
                    nenenib::ui::win32::DeviceWarmup &warmup)
 {
     const bool adopting = !nenenib::adapters::win32::experiment_flag(L"NIB_WARP_HOLD");
+    if (nenenib::adapters::win32::experiment_flag(L"NIB_RECREATE_ONCE"))
+    {
+        nenenib::adapters::win32::experiment_note(
+            std::format("recreated ok={}", window.recreate_rendering()));
+    }
     MSG message{};
     while (next_message(window, warmup, adopting, message))
     {
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
+    nenenib::adapters::win32::experiment_flush();
 }
 
 // 診断: NIB_WARP_DISCARD なら先に作った WARP を捨て、#481 の道（箱を待つ）で描く。
 nenenib::ui::win32::DeviceWarmup &diagnosed(nenenib::ui::win32::DeviceWarmup &warmup)
 {
+    if (nenenib::adapters::win32::experiment_flag(L"NIB_EXPERIMENT_LOG"))
+    {
+        nenenib::ui::win32::experiment_probe = &nenenib::adapters::win32::experiment_stamp;
+    }
     if (nenenib::adapters::win32::experiment_flag(L"NIB_WARP_DISCARD"))
     {
         static_cast<void>(warmup.take_provisional());

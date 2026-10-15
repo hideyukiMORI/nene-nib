@@ -1,4 +1,5 @@
 #include "Direct2DRenderer.hpp"
+#include "ExperimentProbe.hpp"
 #include "TextLayoutPoint.hpp"
 
 #include "DevicePixels.hpp"
@@ -1749,6 +1750,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     }
     gutter_layouts_.end();
     const auto ended = context_->EndDraw();
+    experiment_mark(2);
     context_->SetTarget(nullptr);
     if (text_failure_.has_value())
     {
@@ -1810,7 +1812,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     {
         return std::unexpected(RenderFailure::swap_chain);
     }
+    experiment_mark(3);
     const auto presented = swap_chain_->Present(1, 0);
+    experiment_mark(4);
     if (FAILED(presented))
     {
         return std::unexpected(classify(presented));
