@@ -14,6 +14,8 @@ namespace nenenib::core
 // body_presented は本文を描いた最初の frame が present された時で、起動の列の末尾（#546）。
 // 問いの無い文書では最初の frame_presented と同じ frame、問いのある文書では答えの後の frame
 // （ADR 0138 の決定 2）。
+// device_adopted は最初の frame を WARP で子窓に出した後、本窓に本物の device で同じ frame を
+// 出し終えた所（ADR 0132 の決定 3）。input_received と同じく起動の正典順の外。
 enum class Milestone : std::uint8_t
 {
     document_opened,
@@ -28,6 +30,7 @@ enum class Milestone : std::uint8_t
     input_received,
     frame_presented,
     body_presented,
+    device_adopted,
     probe_started,
     probe_finished
 };
@@ -61,6 +64,8 @@ enum class Milestone : std::uint8_t
         return "frame_presented";
     case Milestone::body_presented:
         return "body_presented";
+    case Milestone::device_adopted:
+        return "device_adopted";
     case Milestone::probe_started:
         return "probe_started";
     case Milestone::probe_finished:

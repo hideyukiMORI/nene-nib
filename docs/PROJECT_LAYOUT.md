@@ -109,6 +109,8 @@ application が作った表示値を Direct2D / DirectWrite で描き、キー�
 
 本文の文字組み資源はDirect2DRendererの`layout_of`が所有し、現在/直前の描画で使う全文と幾何が一致するときだけ再利用する。フォント・DPI変更で破棄し、画面を離れた資源は次の描画で手放す。本文の正本や編集状態は持たない（ADR 0069）。
 
+起動の最初の frame だけは、本窓の client を覆う子窓 `CoverWindow` に WARP の device で描き、本物の device が出来たら本窓へ差し替えて子窓を壊す（ADR 0132）。本窓の HWND には本物の device だけを結ぶ。
+
 ### `src/app`
 
 依存を結ぶ。端末出力と終了コードを扱ってよい唯一の場所（ARC-006）。

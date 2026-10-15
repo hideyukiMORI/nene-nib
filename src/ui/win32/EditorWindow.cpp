@@ -561,7 +561,7 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
 
 std::expected<void, WindowFailure> EditorWindow::start_rendering()
 {
-    auto renderer = Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+    auto renderer = create_renderer();
     if (!renderer)
     {
         return std::unexpected(WindowFailure::render);
@@ -574,7 +574,47 @@ std::expected<void, WindowFailure> EditorWindow::start_rendering()
     {
         return std::unexpected(WindowFailure::render);
     }
+    // 本窓に描けたら、仮の renderer の残した子窓（作れなかった・device lost の後）を外す。
+    if (!renderer_->provisional())
+    {
+        cover_.reset();
+    }
     return {};
+}
+
+// ADR 0132 の決定 2: 本物の device がまだなら WARP で子窓に描き、本窓に WARP を結ばない。
+// 本物が出来ていれば（device lost の作り直し・遅い起動）、今日どおり本窓に作る。
+std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_renderer()
+{
+    if (!warmup_.ready())
+    {
+        auto covered = create_provisional_renderer();
+        if (covered)
+        {
+            return covered;
+        }
+    }
+    return Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+}
+
+std::expected<Direct2DRenderer, RenderFailure> EditorWindow::create_provisional_renderer()
+{
+    if (cover_ == nullptr)
+    {
+        auto cover = CoverWindow::create(instance_, window_);
+        if (!cover)
+        {
+            return std::unexpected(RenderFailure::device_creation);
+        }
+        cover_ = std::move(cover).value();
+        // 鍵は本窓に届ける（決定 5）。子窓が焦点を取っていたら戻す。
+        if (GetFocus() == cover_->handle())
+        {
+            SetFocus(window_);
+        }
+    }
+    return Direct2DRenderer::create_provisional(cover_->handle(), dpi_, timing_,
+                                                {text_layouts_, warmup_});
 }
 
 void EditorWindow::place_at_screen_centre()
@@ -1118,6 +1158,11 @@ void EditorWindow::resize()
     }
     RECT client{};
     GetClientRect(window_, &client);
+    // 差し替えの前は子窓を client に合わせてから、そこに結んだ swap chain を合わせる（決定 5）。
+    if (cover_ != nullptr)
+    {
+        cover_->resize(client);
+    }
     if (!renderer_->resize(static_cast<UINT>(client.right), static_cast<UINT>(client.bottom)) &&
         !recover())
     {
@@ -2241,8 +2286,43 @@ void EditorWindow::present()
         return;
     }
     // device lost だけは作り直して 1 回だけやり直す。それ以外と 2 度目の失敗は終わりへ（ADR 0007 /
-    // ADR 0133）。
+    // ADR 0133）。recover は古い renderer を先に解放する。同じ HWND に DComp の target を 2 つ
+    // 作らない（ADR 0132 の決定 6）。
     if (drawn.error() != RenderFailure::device_lost || !recover())
+    {
+        abandon();
+    }
+}
+
+bool EditorWindow::provisional() const noexcept
+{
+    return renderer_ != nullptr && renderer_->provisional();
+}
+
+// ADR 0132 の決定 3: 本窓に本物の renderer を作って同じ frame を出してから、仮の renderer を
+// 解放して子窓を壊す。本窓に作れなければ終了へ（device lost の 2 度目と同じ・ADR 0007）。
+void EditorWindow::adopt_device()
+{
+    if (!provisional())
+    {
+        return;
+    }
+    auto adopted = Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
+    if (!adopted)
+    {
+        abandon();
+        return;
+    }
+    auto provisional_renderer =
+        std::exchange(renderer_, std::make_unique<Direct2DRenderer>(std::move(adopted).value()));
+    const auto drawn = draw_frame();
+    if (drawn)
+    {
+        timing_.mark(core::Milestone::device_adopted);
+    }
+    provisional_renderer.reset();
+    cover_.reset();
+    if (!drawn && (drawn.error() != RenderFailure::device_lost || !recover()))
     {
         abandon();
     }

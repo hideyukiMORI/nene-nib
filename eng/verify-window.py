@@ -503,6 +503,25 @@ def judge_first_paint(samples: list, background: list) -> dict:
             "withinOneStep": all(distance <= FIRST_PAINT_STEP for distance in distances)}
 
 
+# ADR 0132: 最初の frame を WARP で描く子窓の class（src/ui/win32/CoverWindow.cpp と同じ名前）。
+COVER_CLASS = "NeNeNib.Cover"
+
+
+def cover_present(window) -> bool:
+    """Whether the WARP cover child still sits over the client (ADR 0132 decision 2)."""
+    return bool(user.FindWindowExW(window, None, COVER_CLASS, None))
+
+
+def await_cover_gone(window, seconds: float = 5.0) -> bool:
+    """Wait until the device is adopted and the cover child is destroyed (ADR 0132 decision 3)."""
+    deadline = time.monotonic() + seconds
+    while cover_present(window):
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.05)
+    return True
+
+
 def verify_first_paint(executable: Path, environment: dict, appearance: str, output: Path) -> dict:
     """ADR 0013: between window_shown and the first frame only the Mica backdrop is on screen."""
     marks = output / "first-paint-marks.json"
@@ -517,6 +536,8 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
         pixels = capture(window, width, height)
         write_bitmap(output / "first-paint.bmp", pixels, width, height)
         result["centrePixelAfterFirstFrame"] = pixel(pixels, width, centre[0], centre[1])
+        # 差し替えた後は子窓が無く、本窓だけが描く（ADR 0132 の決定 3）。
+        result["coverGoneAfterAdoption"] = await_cover_gone(window)
         close(window)
         # 本文は打っていないので未保存の確認は出ない。
         result["exitCode"] = process.wait(timeout=5)
@@ -534,6 +555,13 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
         (readings["frame_presented"] - readings["window_shown"]) / 1000.0, 3)
     result["expectedBackground"] = background
     result["capture"] = "first-paint.bmp"
+    # ADR 0132: 最初の device（WARP）→ 最初の frame（子窓）→ 本窓へ差し替え の順。本物の device が
+    # 窓より先に出来た起動では差し替えが無く、子窓も作らない。
+    adopted = readings.get("device_adopted")
+    result["deviceAdopted"] = adopted is not None
+    if adopted is not None:
+        assert readings["device_created"] < readings["frame_presented"] < adopted, readings
+    assert result["coverGoneAfterAdoption"], "the WARP cover child outlived the adoption"
     # ADR 0013 の却下の条件。ここが落ちたら、直す先はコードではなく ADR そのもの。
     assert not result["blackSeen"], f"black before the first frame: {result['blackSeen']}"
     assert not result["whiteSeen"], f"white before the first frame: {result['whiteSeen']}"
@@ -2002,6 +2030,7 @@ def summarize_measure(report: Path) -> dict:
     shown = times("window_shown")
     inputs = times("input_received")
     presented = times("frame_presented")
+    adopted = times("device_adopted")
     origin = shown[0] if shown else 0.0
 
     def since(moments: list[float], index: int) -> float | None:
@@ -2011,7 +2040,11 @@ def summarize_measure(report: Path) -> dict:
             "firstFrameMs": since(presented, 0), "firstInputMs": since(inputs, 0),
             "lastInputMs": since(inputs, -1), "lastFrameMs": since(presented, -1),
             "framesAfterLastInput": sum(1 for moment in presented
-                                        if inputs and moment > inputs[-1])}
+                                        if inputs and moment > inputs[-1]),
+            # ADR 0132: 鍵は差し替えの後に打つので、本窓の本物の device で描かれる。
+            "deviceAdoptedMs": since(adopted, 0),
+            "inputsBeforeAdoption": sum(1 for moment in inputs
+                                        if adopted and moment < adopted[0])}
 
 
 def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
@@ -2039,6 +2072,8 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
             click(window, toggle["vim"][0], toggle["vim"][1])
             time.sleep(0.5)
         # 撮るたびに窓の面が自分のものかを確かめる。別の窓が覆っていたら撮らずに記録する（Issue #140）。
+        # 鍵は本窓に本物の device で描く（ADR 0132）。差し替えて子窓が無くなってから撮る。
+        cover_gone = await_cover_gone(window)
         try:
             before = capture(window, width, height)
             write_png(frames / "before.png", width, height, before)
@@ -2064,7 +2099,8 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
         changed = compare_frames.frames_changed(before, after)
         record = {"before": "before.png", "after": "after.png", "keys": keys, "steps": len(steps),
                   "changed": changed, "covered": False, "body": body_box, "regions": regions,
-                  "dpi": dpi, "size": {"w": width, "h": height}}
+                  "coverGoneBeforeKeys": cover_gone, "dpi": dpi,
+                  "size": {"w": width, "h": height}}
         close(window)
         # 鍵が本文を変えていれば未保存の確認が出る。変えていなければ何も出ずにそのまま閉じる。
         dismiss_dialog(process, IDNO)
