@@ -150,14 +150,14 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 `class` / `struct` / `enum` / `using` の名前とモジュール（ディレクトリ）名を字句検査する。CamelCase と snake_case の両方の語尾を見る。マクロで生成した名前は未対応。
 
 - 対応する規則: CPP-010
-- 機械強制: **planned**（`eng/conformance.py`）
+- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` にある。2026-10-16・Issue #516）
 
 ### CNF-002 — 1 ファイル 1 主要宣言
 
 名前空間直下の型定義の数と、主要型名とファイル名の一致を字句検査する。テンプレート等を含む主要宣言の完全な分類は未完了。
 
 - 対応する規則: CPP-011
-- 機械強制: **planned**（`eng/conformance.py`）
+- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` にある。2026-10-16・Issue #516）
 
 ### CNF-003 — 抑制と waiver の結び付け
 
@@ -165,14 +165,14 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 例外は、CNF-012 が正しいと認めた `// SDK-ABI:` の印の直後の `// NOLINTNEXTLINE(readability-function-size)` の 1 行だけ。印の無い NOLINT と、印の後でもほかの check を混ぜた NOLINT は今までどおり CNF-003。
 
 - 対応する規則: CPP-015
-- 機械強制: **planned**（`eng/conformance.py`）
+- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` にある。2026-10-16・Issue #516）
 
 ### CNF-004 — waiver 台帳の整合
 
 命名・必須メタデータ・索引・Scope・期限を検査。期限は UTC 日付で、Expires 当日まで有効。解除条件本文の妥当性はレビュー。
 
 - 対応する規則: CPP-015
-- 機械強制: **planned**（`eng/conformance.py`）
+- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` にある。2026-10-16・Issue #516）
 
 ### CNF-005 — baseline とゲート無力化の禁止
 
@@ -180,7 +180,7 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 名指しの `-Wno-<診断名>`（`-Wno-switch-default` / `-Wno-language-extension-token`）は無力化ではなく規則の選択なので対象外。任意のスクリプトによる迂回を網羅したとは扱わない。
 
 - 対応する規則: QLT-003
-- 機械強制: **planned**（`eng/conformance.py`）
+- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` にある。2026-10-16・Issue #516）
 
 ### CNF-006 — 文書整合
 
@@ -274,36 +274,36 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | ARC-002 | active | eng/targets.cmake（configure で宣言外の依存と OS ライブラリを拒否）＋ eng/conformance.py --build-dir（File API の実グラフ・include）。実ターゲット 6 つ |
 | ARC-003 | active | eng/symbols.py --require core application（llvm-nm ＋ eng/symbol-allowlist.json）＋ 字句検査 |
 | ARC-004 | planned | |
-| ARC-005 | planned | clang-tidy avoid-non-const-global-variables（可変グローバルのみ） |
+| ARC-005 | active | clang-tidy cppcoreguidelines-avoid-non-const-global-variables（可変グローバルのみ・eng/prove-gates.py の反例）。区画の意味はレビュー |
 | ARC-006 | planned | |
 | ARC-007 | active | eng/symbols.py の nondeterministic 分類（src/adapters/win32 だけ対象外）＋ 字句検査 |
 | ARC-008 | planned | レビュー事項 |
 | ARC-009 | planned | |
-| ARC-010 | planned | `[[nodiscard]]`＋`-Wunused-result` |
+| ARC-010 | active | `[[nodiscard]]`＋`-Wunused-result`（eng/prove-gates.py の反例）。`[[nodiscard]]` を付けたかと失敗の意味分類はレビュー |
 | ARC-011 | planned | |
 | ARC-012 | 不能 | QLT-010 の手続き |
 | CPP-001 | planned | |
 | CPP-002 | planned | clang-cl `-Wswitch-enum` / `-Wcovered-switch-default` |
-| CPP-003 | planned | `-Wold-style-cast`・clang-tidy pro-type-const-cast・misc-non-private-member-variables |
-| CPP-004 | planned | `-Wuninitialized`・`-Wzero-as-null-pointer-constant`・clang-tidy NullDereference / unchecked-optional-access |
-| CPP-005 | planned | `[[nodiscard]]`＋`-Wunused-result` |
+| CPP-003 | active | `-Wold-style-cast`・clang-tidy cppcoreguidelines-pro-type-const-cast（eng/prove-gates.py の反例）。misc-non-private-member-variables はメソッドを持つ型だけで反例は未登録、メソッドの無い aggregate と `mutable` は通る |
+| CPP-004 | active | `-Wzero-as-null-pointer-constant`・clang-tidy clang-analyzer-core.NullDereference / bugprone-unchecked-optional-access（`value()`）（eng/prove-gates.py の反例）。optional の `*` は落ちない（MSVC STL の穴・字句検査は planned）。`-Wuninitialized` は反例未登録 |
+| CPP-005 | active | `[[nodiscard]]`＋`-Wunused-result`（eng/prove-gates.py の反例）。結果型の選択と `catch` の広さはレビュー |
 | CPP-006 | planned | |
 | CPP-007 | planned | 非公開コンストラクタ。`malloc` は許可シンボル外 |
 | CPP-008 | planned | |
-| CPP-009 | planned | clang-tidy pro-type-reinterpret-cast・CNF-003 |
+| CPP-009 | active | clang-tidy cppcoreguidelines-pro-type-reinterpret-cast（eng/prove-gates.py の反例）・`#pragma` は CNF-003。そのほかの言語マジックの字句検査は planned |
 | CPP-010 | planned | CNF-001 |
 | CPP-011 | planned | CNF-002 |
 | CPP-012 | planned | clang-tidy readability-* |
 | CPP-013 | active | eng/symbols.py の concurrency 分類（core / application の実ライブラリ）＋ CNF-009 |
 | CPP-014 | planned | eng/symbols.py（setlocale / locale） |
 | CPP-015 | planned | CNF-003 ＋ CNF-004 |
-| CPP-016 | planned | `-Werror=vla-cxx-extension`・clang-tidy NewDeleteLeaks / use-after-move・ASan / UBSan |
+| CPP-016 | active | `-Werror=vla-cxx-extension`・clang-tidy clang-analyzer-cplusplus.NewDeleteLeaks / bugprone-use-after-move（eng/prove-gates.py の反例）。ASan / UBSan は Debug に結線済みだが反例は未登録。所有と借用の型はレビュー |
 | CPP-017 | planned | platformLibraries（GDI を結べない） |
 | CPP-018 | planned | clang-cl の target feature 検査 ＋ CNF-009 |
 | CPP-019 | planned | CNF-012（表の引数の数とループ・保持はレビュー事項） |
 | GIT-001 | planned | PR テンプレート＋CI（`Closes #N`） |
 | GIT-002 | planned | ruleset＋CI（head ブランチ名） |
-| GIT-003 | planned | `.githooks/commit-msg`＋CI（全コミットと PR タイトル） |
+| GIT-003 | active | `.githooks/commit-msg` → eng/validate-commit-message.ps1 → eng/git-conventions.py ＋ CI の eng/validate-git.ps1（全コミットと PR タイトル）・tests/conformance の GitChecks |
 | GIT-004 | planned | PR テンプレート＋ruleset（squash-only） |
 | QLT-001 | planned | check.ps1 の全件明示指定。検証選択の妥当性はレビュー |
 | QLT-002 | active | clang-cl・clang-tidy・clang-format と実ツール反例（eng/prove-gates.py） |
@@ -319,11 +319,11 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-012 | planned | validate-git.ps1 / git-conventions.py の検証記録確認。CI の build-and-test は PR の最終 HEAD の Release ビルドと ctest（ADR 0136・初回の run を gate-proofs に引用してから active・D49）。結果の真偽と入力の不変性はレビュー |
 | QLT-013 | planned | |
 | QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機の指紋で判定（必要な変更で選んで実行・`-Full` の明示実行）。CI の必須 check は validate-git だけでベンチを回さず（ADR 0021）、CI の指紋 `e7a87d5b` の基準値は記録として残る。打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |
-| CNF-001 | planned | eng/conformance.py / tests/conformance |
-| CNF-002 | planned | eng/conformance.py / tests/conformance |
-| CNF-003 | planned | eng/conformance.py / tests/conformance |
-| CNF-004 | planned | eng/conformance.py / tests/conformance |
-| CNF-005 | planned | eng/conformance.py / tests/conformance |
+| CNF-001 | active | eng/conformance.py / tests/conformance |
+| CNF-002 | active | eng/conformance.py / tests/conformance |
+| CNF-003 | active | eng/conformance.py / tests/conformance |
+| CNF-004 | active | eng/conformance.py / tests/conformance |
+| CNF-005 | active | eng/conformance.py / tests/conformance |
 | CNF-006 | active | eng/conformance.py / tests/conformance |
 | CNF-007 | active | eng/conformance.py / tests/conformance |
 | CNF-008 | active | eng/conformance.py / tests/conformance |

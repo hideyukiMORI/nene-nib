@@ -41,7 +41,7 @@ Conventional Commits を、この正確な形で書く。
 - 互換性を壊す公開契約の変更は `:` の前に `!` を付け、フッタに `BREAKING CHANGE:` を書く
 - 件名には「何を」ではなく**判断**を置く（例: `版は rust-toolchain.toml が正で、CI には書かない`）
 
-- 機械強制: **planned**（`.githooks/commit-msg` → `eng/validate-commit-message.ps1`。参照実装は NeNeCommander）
+- 機械強制: **active**（`.githooks/commit-msg` → `eng/validate-commit-message.ps1` → `eng/git-conventions.py`、CI は `eng/validate-git.ps1` が全コミットと PR タイトルを見る。反例は `tests/conformance` の `GitChecks` と hook の実測・2026-10-16・Issue #516。参照実装は NeNeCommander）
 - 補足: squash merge の件名も同じ形。**マージ時に人が書き換える件名が最後の穴**なので、PR タイトルを同じ形に揃え、CI が PR タイトルも検査する
 
 ### GIT-004 — PR が統合の境界

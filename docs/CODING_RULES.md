@@ -34,7 +34,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 公開フィールドを持たない。可変コレクション・配列・可変ビルダを外へ返さない。`const_cast` と `mutable` を書かない。
 外から受け取った可変データは防御的に複製して所有する。
 
-- 機械強制: **planned** → private への代入はコンパイルエラー（M2-private-clang）。C スタイルキャストは `-Wold-style-cast`（M2-cstyle-cast-clang）。`const_cast` は clang-tidy `cppcoreguidelines-pro-type-const-cast`（T4）。公開 aggregate はメソッドを持てば clang-tidy `misc-non-private-member-variables-in-classes`（T1-tidy-public-with-method）が拒否するが、メソッドの無い aggregate（T1-tidy-aggregate-hole）と `mutable`（M2-mutable-hole）は言語でも lint でも通る。`mutable` は CNF の字句検査で拒否する予定。公開 aggregate（`RgbColor` / `Palette`）に `= default` の `operator==` をメンバーで書くと lint が落ちるので、比較は非メンバーで書く（Issue #3 で実測）
+- 機械強制: **active**（C スタイルキャストと `const_cast` の 2 つ。反例は eng/prove-gates.py・2026-10-16・Issue #516）→ private への代入はコンパイルエラー（M2-private-clang）。C スタイルキャストは `-Wold-style-cast`（M2-cstyle-cast-clang）。`const_cast` は clang-tidy `cppcoreguidelines-pro-type-const-cast`（T4）。公開 aggregate はメソッドを持てば clang-tidy `misc-non-private-member-variables-in-classes`（T1-tidy-public-with-method）が拒否するが、メソッドの無い aggregate（T1-tidy-aggregate-hole）と `mutable`（M2-mutable-hole）は言語でも lint でも通る。`mutable` は CNF の字句検査で拒否する予定。公開 aggregate（`RgbColor` / `Palette`）に `= default` の `operator==` をメンバーで書くと lint が落ちるので、比較は非メンバーで書く（Issue #3 で実測）
 
 ### CPP-004 — `null` の意味は一つ
 
@@ -42,7 +42,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 「無い」を返さず、`std::optional` か結果型で返す。**`std::optional` は `value()` か `value_or()` で読み、`operator*` / `operator->` で
 読まない**（空の optional の `operator*` は clang-tidy が見ない＝T3-tidy-unchecked-optional-star-hole）。`0` をポインタにしない。
 
-- 機械強制: **planned** → 未初期化の読み出しは `-Wuninitialized`（M3-uninitialized-clang）。`0` → ポインタは `-Wzero-as-null-pointer-constant`（C6）。`nullptr` の逆参照はコンパイルが通り（M3-null-clang-hole）、clang-tidy `clang-analyzer-core.NullDereference` が拒否する（T2）。引数の optional の `value()` は `bugprone-unchecked-optional-access`（T3-tidy-unchecked-optional-value）。`operator*` の禁止は CNF の字句検査で拒否する予定
+- 機械強制: **active**（`0` → ポインタ・`nullptr` の逆参照・引数の optional の `value()` の 3 つ。反例は eng/prove-gates.py・2026-10-16・Issue #516。optional の `*` は落ちない）→ 未初期化の読み出しは `-Wuninitialized`（M3-uninitialized-clang・反例は未登録）。`0` → ポインタは `-Wzero-as-null-pointer-constant`（C6）。`nullptr` の逆参照はコンパイルが通り（M3-null-clang-hole）、clang-tidy `clang-analyzer-core.NullDereference` が拒否する（T2）。引数の optional の `value()` は `bugprone-unchecked-optional-access`（T3-tidy-unchecked-optional-value）。`operator*` の禁止は CNF の字句検査で拒否する予定
 
 ### CPP-005 — 期待される失敗は例外で表さない
 
@@ -50,7 +50,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 結果を返す関数は `[[nodiscard]]` を付け、呼び出し側は必ず分岐する。例外はプログラム上の欠陥・下位層の想定外に限り、
 広い `catch` を書かない。OS のコールバック（窓手続き・COM）は `noexcept` とし、例外を OS の枠へ流さない。
 
-- 機械強制: **planned** → `[[nodiscard]]`＋`-Wunused-result` で戻り値の無視を拒否（C7-nodiscard-clang）。結果型の選択と `catch` の広さはレビュー事項
+- 機械強制: **active** → `[[nodiscard]]`＋`-Wunused-result` で戻り値の無視を拒否（C7-nodiscard-clang。反例は eng/prove-gates.py・2026-10-16・Issue #516）。結果型の選択と `catch` の広さはレビュー事項
 
 ### CPP-006 — 汎用データバッグを禁じる
 
@@ -82,7 +82,7 @@ enum は境界で範囲検査してから受け取る（CPP-007）。
 可変長引数関数の新設・ビルド時コード生成を禁じる（使うなら ADR）。オブジェクト風マクロは `#define` より `constexpr` / `enum class` を使う。
 COM の `__uuidof` / `IID_PPV_ARGS` は `src/ui/win32` と `src/adapters/win32` の境界でだけ許す。`IUnknown**` を要求する API（`DWriteCreateFactory`）は `ComPtr<IUnknown>` で受けて `As()` で問い合わせ、`reinterpret_cast` を書かない。HWND と `this` の対応や `LPARAM` の読み替えは `std::bit_cast`（Issue #3 で実測。clang-tidy が `reinterpret_cast` を一律に拒否する）。
 
-- 機械強制: **planned** → `reinterpret_cast` は clang-tidy `cppcoreguidelines-pro-type-reinterpret-cast`（T5）。`#pragma` は CNF-003。それ以外は CNF の字句検査で拒否する予定
+- 機械強制: **active**（`reinterpret_cast` と `#pragma`）→ `reinterpret_cast` は clang-tidy `cppcoreguidelines-pro-type-reinterpret-cast`（T5。反例は eng/prove-gates.py・2026-10-16・Issue #516）。`#pragma` は CNF-003。それ以外は CNF の字句検査で拒否する予定
 
 ### CPP-010 — 名前が役割を語る
 
@@ -162,7 +162,7 @@ C++ はメモリ安全を言語で保証しない。本リポジトリでは次�
 - 単体テストと Debug 構成の全 target は AddressSanitizer と UndefinedBehaviorSanitizer 付きでビルドし、`-fno-sanitize-recover=all` で必ず落とす
 - 中核は `malloc` / `free` を呼ばない（許可シンボルに無い）
 
-- 機械強制: **planned** → VLA は `-Werror=vla-cxx-extension`（C1-vla-clang。C++ の VLA は clang の拡張として `-Wvla-cxx-extension` が拒否する。`-Werror=vla` は C++ では効かなかったので名指しを変えた・2026-09-15）。所有者の無い `new` は clang-tidy `clang-analyzer-cplusplus.NewDeleteLeaks`、所有権を失った値の再利用は `bugprone-use-after-move`（どちらも `eng/prove-gates.py` で発火を実測）。ASan / UBSan は Debug 構成の全 target に結線する（A1 / A2・`eng/targets.cmake`）。「所有と借用の型」はレビュー事項なので全体としては planned
+- 機械強制: **active**（VLA・所有者の無い `new`・`std::move` 後の再利用の 3 つ。反例は eng/prove-gates.py・2026-10-16・Issue #516）→ VLA は `-Werror=vla-cxx-extension`（C1-vla-clang。C++ の VLA は clang の拡張として `-Wvla-cxx-extension` が拒否する。`-Werror=vla` は C++ では効かなかったので名指しを変えた・2026-09-15）。所有者の無い `new` は clang-tidy `clang-analyzer-cplusplus.NewDeleteLeaks`、所有権を失った値の再利用は `bugprone-use-after-move`（どちらも `eng/prove-gates.py` で発火を実測）。ASan / UBSan は Debug 構成の全 target に結線する（A1 / A2・`eng/targets.cmake`。反例は未登録）。「所有と借用の型」はレビュー事項
 
 ### CPP-017 — ウィンドウ手続きは意図を渡し、描画は表示値を写す
 
