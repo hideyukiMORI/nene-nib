@@ -12,6 +12,9 @@ ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY = "github.com/hideyukiMORI/nene-nib"
 HOST, REPO_NAME = REPOSITORY.split("/", 1)
 API_ROOT = f"repos/{REPO_NAME}"
+# ADR 0136: CI の build-and-test は Release の全 target と ctest で 7〜11 分かかる（check.yml の上限は 45 分）。
+# 600 秒だと毎回切れて --ci-run での再開が要った（#522 / #524 / #526・Issue #533）。
+WATCH_SECONDS = 2700
 PR_FIELDS = "number,title,body,headRefOid,headRefName,state,isDraft,baseRefName,baseRefOid,changedFiles,isCrossRepository"
 SPEC = importlib.util.spec_from_file_location("git_conventions", ROOT / "eng/git-conventions.py")
 CONVENTIONS = importlib.util.module_from_spec(SPEC)
@@ -25,7 +28,8 @@ class MergeRefused(ValueError):
 def run_gh(arguments: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(["gh", *arguments], cwd=ROOT, shell=False, capture_output=True,
                           text=True, encoding="utf-8",
-                          timeout=600 if arguments[:2] == ["run", "watch"] else 60, check=False)
+                          timeout=WATCH_SECONDS if arguments[:2] == ["run", "watch"] else 60,
+                          check=False)
 
 
 def read_json(arguments: list[str], runner) -> object:
