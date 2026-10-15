@@ -62,6 +62,13 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D43 | F1 で開くヘルプは「操作の一覧」。Ctrl+P と同じ面に操作の名前・短い説明・鍵が並び、打って絞れて、Enter でその場で実行する（施主決定 2026-10-06） | [採用案](docs/design/2026-10-06-guide.md)・Issue #303。早見表の 1 枚と、ヘルプの文書をタブで開く案は採らなかった。Ctrl+P の面の行頭の `?` でも同じ一覧 |
 | D44 | 折り返し、整合するカーソル・選択・IME・スクロール、通常モードのドラッグ選択を先に実装し、ベータタグとZIPを公開する（施主指示 2026-10-11） | ADR 0114・Issue #410。正式リリースのロードマップの前に置く区切り。split・大容量・Markdownは後続。実機の画面確認・測定は他案件と時間帯を調整する |
 | D45 | splitの新しい採用条件は、既存単画面基準を維持し、入力→提示の中央値の追加時間を`max(1ms, 同条件の単画面中央値の25%)`以内、splitのp95を16.7ms以内とする（施主採用 2026-10-12） | [ADR 0120](docs/adr/0120-split-acceptance-is-relative-and-tail-bounded.md)・Issue #443。同一文書/別文書を分け、各100打鍵を事前固定。旧総2msのholdと区別する。条件の採用であり、製品採用/実測は未了 |
+| D46 | CI（GitHub Actions）で製品をビルドし単体テストを回す。速さのベンチは施主の実機のまま。差分検証（QLT-012）の方針は変えず、PR の最終 HEAD の機械の裏付けを足す（施主決定 2026-10-16） | 外部講評 2026-10-15。ADR と check.yml の変更は別 Issue |
+| D47 | 未保存の編集は 30 秒ごとに設定の置き場へ自動退避し、正常に閉じたら消す。起動で残っていれば「前回の未保存を戻しますか」を 1 回聞く（施主決定 2026-10-16） | 外部講評 P0-3。形は ADR で決めてから実装 |
+| D48 | 巨大なファイル（VimStep.cpp・EditorController.cpp）の分割は、開いている PR の merge の後に ADR で切り方（VimStep は鍵の表の単位・EditorController は意図の種類の単位）を決めてから行う（施主決定 2026-10-16） | 外部講評 P3'。急がない |
+| D49 | 規則の planned / active は、実態より控えめな側も「証明の行（gate-proofs の正例・反例）を足して active にする」で揃える。表記だけを変えない（施主決定 2026-10-16） | ADR 0001 の約束を守ったまま実態に合わせる |
+| D50 | 「いまの状態」を書く文書に混ざった過去の経緯は、日報・ADR・docs/quality/history/ へ移す。消さない（施主決定 2026-10-16） | gate-proofs.md 約 967 KB。席にまとめて行いリナが検査 |
+| D51 | 速度目標: 起動 50 ms・窓が見えるまで 40 ms・1 打鍵 1 ms・200 打鍵 3 ms・16 MiB を開く 60 ms・16 MiB で 200 打鍵 3 ms（施主の実機）。ゲートの基準値（perf-reference.json）は実測値のまま別に持つ（施主決定 2026-10-16） | 2026-10-15 の実測（起動 40・窓 33・単打 0.6・連打 2・open 52・16 MiB 連打 2 ms）に約 20% の余裕。README と仕様の「未決」を解く |
+| D52 | 1 行が巨大なファイル（1 行 16 MiB）のベンチを足して測る。ゲートの基準は 1 回測ってから決め、値がひどければ Issue にして直す順を決める（ADR 0114 が却下した分割再整形の再検討を含む）（施主決定 2026-10-16） | 外部講評 P2 |
 | D12 | 見た目は `/design` で起こした案（[採用案](docs/design/2026-09-15-look.md)・[ADR 0008](docs/adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md)）を採用。アクセントは Ubuntu 橙 #E95420（施主承認 2026-09-15） | 見た目の判断は実装の前に `/design` で画を作って施主が選ぶ（施主指示 2026-09-15） |
 
 ## 3. 技術の土台（ADR で確定したもの）
@@ -73,7 +80,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 - 巨大ファイル: メモリマップ ＋ piece table ＋ 行索引の遅延構築（ワーカー・[ADR 0004](docs/adr/0004-ui-thread-plus-one-worker.md)）
 - 見た目: Mica（`DWMWA_SYSTEMBACKDROP_TYPE`）・自前タイトルバー（タブ）・Segoe UI Variable・ライト／ダーク／アクセント色は OS 追従・DirectComposition の滑らかスクロール
 - 日本語入力: IMM32 / TSF を初版から。**変換中は Vim の鍵を奪わない**
-- 速さの見張り: ベンチ 8 本（起動→最初の描画・窓が見えるまで・1 打鍵・200 打鍵・16 MiB を開く・16 MiB で 200 打鍵・5000 件の面・長い行の 1 打鍵）を `eng/measure-speed.py` が施主の実機の Release で測り、`eng/perf-reference.json` の基準値からの退行でゲートを落とす（[ADR 0006](docs/adr/0006-speed-gate-simd-and-table-driven-dispatch.md)・[ADR 0016](docs/adr/0016-ci-speed-reference-per-host-fingerprint.md)・QLT-014）。CI の必須 check は `validate-git` だけで、ベンチは CI で判定しない（[ADR 0021](docs/adr/0021-diff-scoped-verification-and-result-reuse.md)）。目標値は初版を実測してから決める（未決・施主判断）
+- 速さの見張り: ベンチ 8 本（起動→最初の描画・窓が見えるまで・1 打鍵・200 打鍵・16 MiB を開く・16 MiB で 200 打鍵・5000 件の面・長い行の 1 打鍵）を `eng/measure-speed.py` が施主の実機の Release で測り、`eng/perf-reference.json` の基準値からの退行でゲートを落とす（[ADR 0006](docs/adr/0006-speed-gate-simd-and-table-driven-dispatch.md)・[ADR 0016](docs/adr/0016-ci-speed-reference-per-host-fingerprint.md)・QLT-014）。CI の必須 check は `validate-git` だけで、ベンチは CI で判定しない（[ADR 0021](docs/adr/0021-diff-scoped-verification-and-result-reuse.md)）。目標値は D51（施主決定 2026-10-16）
 
 ## 4. 機能要件（初版の輪郭）
 
