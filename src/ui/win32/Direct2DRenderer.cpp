@@ -212,16 +212,6 @@ Direct2DRenderer::create_device(DeviceWarmup &warmup)
 {
     // worker が先に作った device を 1 回だけ受け取る。device lost の作り直しでは箱は空なので、
     // 今日どおりここで作る（ADR 0131 の決定 3）。
-    auto warmed = warmup.take();
-    if (warmed.has_value())
-    {
-        device_ = std::move(warmed.value().device);
-        if (FAILED(device_.As(&dxgi_device_)))
-        {
-            return std::unexpected(RenderFailure::device_creation);
-        }
-        return std::move(warmed.value().factory);
-    }
     constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     if (!warmup.ready())
     {
@@ -235,6 +225,16 @@ Direct2DRenderer::create_device(DeviceWarmup &warmup)
         }
         provisional_ = true;
         return {};
+    }
+    auto warmed = warmup.take();
+    if (warmed.has_value())
+    {
+        device_ = std::move(warmed.value().device);
+        if (FAILED(device_.As(&dxgi_device_)))
+        {
+            return std::unexpected(RenderFailure::device_creation);
+        }
+        return std::move(warmed.value().factory);
     }
     auto created = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0,
                                      D3D11_SDK_VERSION, &device_, nullptr, nullptr);
