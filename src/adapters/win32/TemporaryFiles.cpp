@@ -85,21 +85,6 @@ constexpr std::wstring_view temporary_marker = L".nib-tmp-";
     return static_cast<std::uint32_t>(value);
 }
 
-// 無い pid（ERROR_INVALID_PARAMETER）か、開けて終わっているものだけが生きていない。拒否
-// （ERROR_ACCESS_DENIED）とほかの失敗は消さない側に倒す。
-[[nodiscard]] bool process_alive(std::uint32_t pid) noexcept
-{
-    const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (process == nullptr)
-    {
-        return GetLastError() != ERROR_INVALID_PARAMETER;
-    }
-    DWORD code = 0;
-    const BOOL read = GetExitCodeProcess(process, &code);
-    static_cast<void>(CloseHandle(process));
-    return read == 0 || code == STILL_ACTIVE;
-}
-
 // 名前から `.nib-tmp-` の後ろを取り出す。prefix が空なら最後の `.nib-tmp-` の後ろ。
 [[nodiscard]] std::optional<std::wstring_view> suffix_of(std::wstring_view name,
                                                          std::wstring_view prefix)
@@ -182,6 +167,26 @@ bool reclaimable_temporary(std::wstring_view suffix, std::uint32_t self, std::ui
         return sequence.value() <= issued;
     }
     return !alive(pid.value());
+}
+
+// 無い pid（ERROR_INVALID_PARAMETER）か、開けて終わっているものだけが生きていない。拒否
+// （ERROR_ACCESS_DENIED）とほかの失敗は消さない側に倒す。
+bool process_alive(std::uint32_t pid) noexcept
+{
+    const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (process == nullptr)
+    {
+        return GetLastError() != ERROR_INVALID_PARAMETER;
+    }
+    DWORD code = 0;
+    const BOOL read = GetExitCodeProcess(process, &code);
+    static_cast<void>(CloseHandle(process));
+    return read == 0 || code == STILL_ACTIVE;
+}
+
+std::optional<std::uint32_t> process_id_of(std::wstring_view text) noexcept
+{
+    return number_of(text, 16);
 }
 
 bool owned_temporary(const std::wstring &temporary, const std::wstring &target,

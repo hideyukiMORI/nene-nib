@@ -142,7 +142,10 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
-    src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp)
+    src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
+    src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
+    src/adapters/win32/AutosaveShelf.cpp
+    src/adapters/win32/Win32AutosaveAdapter.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
@@ -190,6 +193,15 @@ nenenib_link(nib_folder_tests nenenib_application)
 nenenib_link(nib_folder_tests nenenib_adapters)
 add_test(NAME nib_folders COMMAND nib_folder_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
+
+# Issue #515: 自動退避の置き場を本物のフォルダとワーカー 1 本で測る（ADR 0137 の決定 8）。時刻は読まず、
+# 合図の受け皿だけを待つので、止まらないときはこの制限時間で落ちる。
+nenenib_target(nib_autosave_tests adapter_tests EXECUTABLE tests/adapters/AutosaveAdapterTests.cpp)
+nenenib_link(nib_autosave_tests nenenib_core)
+nenenib_link(nib_autosave_tests nenenib_application)
+nenenib_link(nib_autosave_tests nenenib_adapters)
+add_test(NAME nib_autosave COMMAND nib_autosave_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_autosave PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
