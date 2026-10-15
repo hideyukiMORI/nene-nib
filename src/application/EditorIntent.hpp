@@ -2,6 +2,7 @@
 
 #include "ActivateCommandChoice.hpp"
 #include "AdjustFontSize.hpp"
+#include "AutosaveTick.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
@@ -58,5 +59,5 @@ using EditorIntent = std::variant<
     AdjustFontSize, CommandText, EditCommand, SubmitCommand, CancelCommand, PasteCommand,
     OpenCommandPalette, ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
     WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth, OpenTabList,
-    EndSession, WorkCompleted, ToggleBookmark, OpenOperationList, PointText>;
+    EndSession, WorkCompleted, AutosaveTick, ToggleBookmark, OpenOperationList, PointText>;
 } // namespace nenenib::application

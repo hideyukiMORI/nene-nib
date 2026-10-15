@@ -6,6 +6,7 @@
 #include "EditorWindow.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
+#include "NullAutosaveAdapter.hpp"
 #include "OpenDocument.hpp"
 #include "TemporaryFiles.hpp"
 #include "Win32AppearanceAdapter.hpp"
@@ -165,10 +166,11 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
+    nenenib::adapters::win32::NullAutosaveAdapter autosave;
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session, history, folders, bookmarks,
-                                          text_layouts},
+                                          text_layouts, autosave},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

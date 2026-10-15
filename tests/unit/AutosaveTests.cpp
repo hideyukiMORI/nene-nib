@@ -1,0 +1,284 @@
+// 自動退避の計画と controller の結線（ADR 0137 の決定 2〜5・8）。
+#include "Appearance.hpp"
+#include "AutosaveFailure.hpp"
+#include "AutosaveId.hpp"
+#include "AutosaveLedger.hpp"
+#include "AutosavePlan.hpp"
+#include "AutosaveSnapshot.hpp"
+#include "AutosaveStep.hpp"
+#include "AutosaveTick.hpp"
+#include "CloseTab.hpp"
+#include "Column.hpp"
+#include "DisplayText.hpp"
+#include "Document.hpp"
+#include "DocumentView.hpp"
+#include "Edit.hpp"
+#include "EditBoundary.hpp"
+#include "EditHistory.hpp"
+#include "EditMode.hpp"
+#include "Editing.hpp"
+#include "EditorController.hpp"
+#include "EditorFrame.hpp"
+#include "EditorState.hpp"
+#include "EndSession.hpp"
+#include "FilePath.hpp"
+#include "InsertText.hpp"
+#include "LineNumber.hpp"
+#include "NewTab.hpp"
+#include "Offset.hpp"
+#include "SaveDocument.hpp"
+#include "SaveState.hpp"
+#include "Scopes.hpp"
+#include "ScriptedAutosave.hpp"
+#include "SessionEnd.hpp"
+#include "TabTitle.hpp"
+#include "TestSupport.hpp"
+#include "TextEncoding.hpp"
+#include "TextPosition.hpp"
+#include "UnloadedDocument.hpp"
+#include "VisibleLines.hpp"
+#include "WorkCompleted.hpp"
+
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace nenenib::tests
+{
+namespace
+{
+namespace app = nenenib::application;
+namespace core = nenenib::core;
+using app::AutosaveId;
+using app::AutosaveLedger;
+using app::AutosaveStep;
+using app::EditorState;
+
+using Plan = std::vector<std::pair<AutosaveId, AutosaveStep>>;
+
+[[nodiscard]] char step_letter(AutosaveStep step)
+{
+    switch (step)
+    {
+    case AutosaveStep::store:
+        return 's';
+    case AutosaveStep::discard:
+        return 'd';
+    case AutosaveStep::keep:
+        return 'k';
+    }
+    std::unreachable();
+}
+
+// 計画を「番号と仕事の頭文字」の列で読む（例: "0s 1k 7d"）。
+[[nodiscard]] std::string printed(const Plan &plan)
+{
+    std::string text;
+    for (const auto &[id, step] : plan)
+    {
+        if (!text.empty())
+        {
+            text += ' ';
+        }
+        text += std::to_string(id.value);
+        text += step_letter(step);
+    }
+    return text;
+}
+
+[[nodiscard]] std::string planned(const EditorState &state, const AutosaveLedger &ledger)
+{
+    return printed(app::autosave_plan(state, ledger));
+}
+
+[[nodiscard]] EditorState fresh()
+{
+    return EditorState::create(core::Appearance::dark, core::EditMode::ordinary);
+}
+
+// アクティブな文書に 1 打鍵ぶんの編集を積む（本文は計画に関わらないので触らない）。
+[[nodiscard]] EditorState typed(const EditorState &state, core::EditBoundary boundary)
+{
+    const std::size_t at = state.history().position();
+    return state.with_history(
+        state.history().pushed(core::Edit{core::Offset{at}, "", "x", core::Offset{at}}, boundary));
+}
+
+[[nodiscard]] EditorState saved(const EditorState &state)
+{
+    return state.with_document(
+        app::Document{sample_path(), core::TextEncoding::utf8, state.history().position()});
+}
+
+[[nodiscard]] app::UnloadedDocument unloaded()
+{
+    const core::FilePath path = sample_path();
+    return app::UnloadedDocument{
+        path, core::TextPosition{core::LineNumber{1}, core::Column{1}}, core::LineNumber{1},
+        app::DocumentView{core::tab_title_for(path, core::SaveState::saved), path,
+                          core::TextEncoding::utf8, core::SaveState::saved, std::nullopt}};
+}
+
+// 決定 2 の表（読み込み済みのアクティブ）。
+void verify_plan_active()
+{
+    const EditorState clean = fresh();
+    expect(planned(clean, {}) == "0k", "an untouched tab without a remnant is kept");
+    const EditorState once = typed(clean, core::EditBoundary::coalesce);
+    expect(planned(once, {}) == "0s", "an unsaved tab never stored is stored");
+    const AutosaveLedger stored{{AutosaveId{0}, once.history().revision()}};
+    expect(planned(once, stored) == "0k", "an unsaved tab unchanged since its store is kept");
+    const EditorState folded = typed(once, core::EditBoundary::coalesce);
+    expect(folded.history().position() == once.history().position() &&
+               planned(folded, stored) == "0s",
+           "a keystroke folded into the same undo unit is stored again");
+    const EditorState undone = once.with_history(once.history().undone());
+    const EditorState branched = typed(undone, core::EditBoundary::separate);
+    expect(branched.history().position() == once.history().position() &&
+               planned(branched, stored) == "0s",
+           "another edit after undo at the same place is stored again");
+    const EditorState kept = saved(folded);
+    expect(planned(kept, stored) == "0d", "a saved tab with a remnant is discarded");
+    expect(planned(kept, {}) == "0k", "a saved tab without a remnant is kept");
+}
+
+// 脇の束・閉じたタブ・まだ読んでいない文書。
+void verify_plan_tabs()
+{
+    const EditorState two = typed(fresh(), core::EditBoundary::coalesce).with_new_tab();
+    expect(two.autosave_ids().size() == 2 && two.autosave_ids().at(1) == AutosaveId{1},
+           "a new tab takes the next number");
+    expect(planned(two, {}) == "0s 1k", "an unsaved parked tab is stored like the active one");
+    const AutosaveLedger closed{{AutosaveId{7}, 3}};
+    expect(planned(two, closed) == "0s 1k 7d", "a remnant of a closed tab is discarded");
+    const EditorState restored = fresh().with_restored({unloaded()});
+    expect(planned(restored, {}) == "0k 1k", "a tab not read yet is kept");
+    expect(planned(restored, AutosaveLedger{{AutosaveId{1}, 0}}) == "0k 1d",
+           "a tab not read yet with a remnant is discarded");
+    const EditorState reopened = two.with_closed(1).with_new_tab();
+    expect(reopened.autosave_ids().size() == 2 && reopened.autosave_ids().at(1) == AutosaveId{2},
+           "the number of a closed tab is never reused");
+    const EditorState switched = two.with_switched(0);
+    expect(switched.autosave_ids() == two.autosave_ids(), "switching keeps the numbers in place");
+}
+
+[[nodiscard]] std::string bytes_of(const app::AutosaveSnapshot &snapshot)
+{
+    std::string text;
+    for (const std::byte byte : snapshot.bytes)
+    {
+        text += static_cast<char>(byte);
+    }
+    return text;
+}
+
+// 合図で頼み、変わっていなければ頼まない（決定 2・7）。
+void verify_tick_stores_changes()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().touches() == 0, "a tick over an untouched tab asks nothing");
+    applied(controller, app::InsertText{"ab"});
+    applied(controller, app::AutosaveTick{});
+    const auto &stored = editing.autosave().stored();
+    expect(stored.size() == 1 && bytes_of(stored.back()) == "ab" &&
+               !stored.back().path.has_value() && stored.back().id == AutosaveId{0},
+           "a tick stores the unsaved body of the untitled tab");
+    expect(stored.back().caret == core::TextPosition{core::LineNumber{1}, core::Column{3}},
+           "the stored caret is the line and the 1-based column");
+    expect(stored.back().title.text() ==
+               core::tab_title_for(std::nullopt, core::SaveState::modified).text(),
+           "the stored title carries the unsaved mark");
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 1, "a tick without a change stores nothing");
+    applied(controller, app::InsertText{"c"});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 2 &&
+               bytes_of(editing.autosave().stored().back()) == "abc",
+           "a keystroke in the same undo unit is stored on the next tick");
+}
+
+// 保存と同じ符号化（決定 4）・保存したら消す・閉じたら消す（決定 2）・閉じる窓で片付ける（決定
+// 5）。
+void verify_tick_encodes_and_discards()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"ab"});
+    applied(controller, app::SaveDocument{sample_path(), core::TextEncoding::utf8_bom});
+    applied(controller, app::InsertText{"c"});
+    applied(controller, app::AutosaveTick{});
+    const std::string bom_abc = std::string(core::byte_order_mark()) + "abc";
+    expect(editing.autosave().stored().size() == 1 &&
+               bytes_of(editing.autosave().stored().back()) == bom_abc &&
+               editing.autosave().stored().back().path.has_value(),
+           "the stored body is encoded the same way as saving");
+    applied(controller, app::SaveDocument{sample_path(), core::TextEncoding::utf8_bom});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().discarded() == std::vector<AutosaveId>{AutosaveId{0}},
+           "a tab saved after its store is discarded");
+    applied(controller, app::NewTab{});
+    applied(controller, app::InsertText{"z"});
+    applied(controller, app::AutosaveTick{});
+    applied(controller, app::CloseTab{1});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().discarded().size() == 2 &&
+               editing.autosave().discarded().back() == AutosaveId{1},
+           "the remnant of a closed tab is discarded on the next tick");
+    applied(controller, app::EndSession{app::SessionEnd::window_closed});
+    expect(editing.autosave().clears() == 1, "ending the session clears the autosave once");
+}
+
+[[nodiscard]] std::string notice(const app::EditorFrame &frame)
+{
+    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                             : std::string("none");
+}
+
+// 失敗は成功するまで 1 回だけ知らせる（決定 4）。
+void verify_failure_notified_once()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"a"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().fail(app::AutosaveFailure::unwritable);
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "自動退避できませんでした",
+           "a failed store leaves one notice line");
+    applied(controller, app::InsertText{"b"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().fail(app::AutosaveFailure::unwritable);
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
+           "a second failure before any success is not told again");
+    applied(controller, app::InsertText{"c"});
+    applied(controller, app::AutosaveTick{});
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
+           "a store that succeeded tells nothing");
+    applied(controller, app::InsertText{"d"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().fail(app::AutosaveFailure::location_unavailable);
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "自動退避できませんでした",
+           "a failure after a success is told once again");
+}
+} // namespace
+
+void verify_autosave_contracts()
+{
+    verify_plan_active();
+    verify_plan_tabs();
+    verify_tick_stores_changes();
+    verify_tick_encodes_and_discards();
+    verify_failure_notified_once();
+}
+
+void verify_autosave_scope()
+{
+    verify_autosave_contracts();
+}
+} // namespace nenenib::tests

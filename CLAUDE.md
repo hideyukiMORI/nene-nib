@@ -52,6 +52,12 @@ Claude Code / AI エージェントがこのリポジトリで作業するため
 `WorkCompleted` は Ctrl+Tab の歩き・知らせ・変換・Vim の待ちと録画・`.`・undo を動かさない（入口の `keeps_tab_walk` と `begin_intent`・契約 `--background-work`）。新しい意図を足すときは、この 2 か所にどちらの側かを決めて書く。
 adapters の試験は時計を読まない。待つのは合図の受け皿（セマフォ）で、止まらなければ CTest の `TIMEOUT` で落ちる。
 
+### 自動退避は合図・純関数の計画・型のある port。変わったかは改訂番号で比べる
+
+ui のタイマーが送る意図 `AutosaveTick` は `WorkCompleted` と同じく使う人の操作ではない（`keeps_tab_walk` と `begin_intent` の両方に書いてある）。何を書くかは `autosave_plan(state, ledger)` の純関数が決め、書くのは `AutosavePort` の worker（ADR 0137）。
+タブの名指しは `EditorState::autosave_ids()`（帯の順・通し番号・再利用しない）。帯の位置・パス・題名で名指ししない。「前回の退避から変わったか」は `EditHistory::revision()` で比べ、履歴の位置では比べない（まとめられた打鍵と undo の後の別の編集で位置は同じ値に戻る）。
+本文のバイト列は保存と同じ `encoded_parts` の 1 本で作る。起動・開く・切り替え・保存・打鍵の道は `AutosavePort` を呼ばない（契約 `verify_quiet_paths`）。
+
 ### 網羅性検査を殺す分岐を書かない
 
 閉じた選択肢の分岐に `default` / `else` / `_` を書かない。選択肢が増えたらコンパイルが落ちるのが正しい状態（CPP-002）。
