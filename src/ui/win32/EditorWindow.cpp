@@ -16,6 +16,8 @@
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
 #include "EndSession.hpp"
+#include "ExitCause.hpp"
+#include "ExitPlan.hpp"
 #include "FileDialog.hpp"
 #include "FileDrop.hpp"
 #include "FileFailure.hpp"
@@ -1100,7 +1102,8 @@ void EditorWindow::resize()
     }
     RECT client{};
     GetClientRect(window_, &client);
-    if (!renderer_->resize(static_cast<UINT>(client.right), static_cast<UINT>(client.bottom)))
+    if (!renderer_->resize(static_cast<UINT>(client.right), static_cast<UINT>(client.bottom)) &&
+        !recover())
     {
         abandon();
         return;
@@ -1330,9 +1333,8 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const float previous_size =
         font_change ? controller_.delivery().settings.font_size.points() : 0.0F;
     auto delivery = controller_.apply(intent);
-    if (delivery.layout_failure.has_value())
+    if (!survives_layout(delivery))
     {
-        abandon();
         return;
     }
     // 面が閉じて入力行の変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
@@ -1524,6 +1526,11 @@ void EditorWindow::save_document_as()
 
 bool EditorWindow::confirm_discard()
 {
+    // 確認の間に描画を失ったら、終わりは abandon が持つ（窓はもう壊れているかもしれない）。
+    if (rendering_failed_)
+    {
+        return false;
+    }
     if (controller_.delivery().document.save_state == core::SaveState::saved)
     {
         return true;
@@ -1543,22 +1550,75 @@ bool EditorWindow::confirm_discard()
     return controller_.delivery().document.save_state == core::SaveState::saved;
 }
 
+bool EditorWindow::confirm_lost_tab()
+{
+    // 取消は無い（窓は描けないので続けられない）。保存に失敗したか保存先を選ばなかったときは、
+    // 理由（announce のダイアログ）を見せた後でもう一度聞く。
+    while (controller_.delivery().document.save_state != core::SaveState::saved)
+    {
+        const int answer = MessageBoxW(window_, L"描画できなくなったので閉じます。保存しますか。",
+                                       product_name, MB_YESNO | MB_ICONWARNING);
+        if (answer != IDYES)
+        {
+            return true;
+        }
+        save_document();
+    }
+    return true;
+}
+
 void EditorWindow::close_window()
 {
-    // 未保存のタブを帯の左から順に映して確かめる（#237）。取り消しか保存の失敗でそこで止め、
-    // 窓を閉じない。それまでに保存したタブは保存されたまま。
+    // 描画を失った後の終わりは abandon が持つ。その確認の間に届いた WM_CLOSE は見送る。
+    if (rendering_failed_)
+    {
+        return;
+    }
+    end_window(application::ExitCause::user_close, application::SessionEnd::window_closed);
+}
+
+void EditorWindow::end_window(application::ExitCause cause, application::SessionEnd reason)
+{
+    const auto unsaved = application::unsaved_tab_count(controller_.documents());
+    switch (application::exit_plan(cause, unsaved))
+    {
+    case application::ExitPlan::leave_now:
+        break;
+    case application::ExitPlan::confirm_each_tab:
+        // 取り消しか保存の失敗でそこで止め、窓を閉じない。それまでに保存したタブは保存されたまま。
+        if (!confirm_unsaved_tabs(&EditorWindow::confirm_discard))
+        {
+            return;
+        }
+        break;
+    case application::ExitPlan::confirm_each_tab_without_cancel:
+        if (!confirm_unsaved_tabs(&EditorWindow::confirm_lost_tab))
+        {
+            return;
+        }
+        break;
+    case application::ExitPlan::block_session_end:
+        // OS の終了を止めるのは WM_QUERYENDSESSION の受け手（#493）。窓は続ける。
+        return;
+    }
+    leave(reason);
+}
+
+bool EditorWindow::confirm_unsaved_tabs(bool (EditorWindow::*confirm)())
+{
     std::size_t from = 0;
     for (auto next = application::next_unsaved_tab(controller_.documents(), from); next.has_value();
          next = application::next_unsaved_tab(controller_.documents(), from))
     {
         send(application::SwitchTab{next.value()});
-        if (!confirm_discard())
+        // 映す途中で窓が壊れたら（入れ子の終わりが済んだら）続けない。
+        if (window_ == nullptr || !std::invoke(confirm, this))
         {
-            return;
+            return false;
         }
         from = next.value() + 1;
     }
-    leave(application::SessionEnd::window_closed);
+    return window_ != nullptr;
 }
 
 void EditorWindow::leave(application::SessionEnd reason)
@@ -2095,7 +2155,7 @@ void EditorWindow::change_dpi(WPARAM word, LPARAM data)
     SetWindowPos(window_, nullptr, suggested->left, suggested->top,
                  suggested->right - suggested->left, suggested->bottom - suggested->top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
-    if (renderer_ != nullptr && !renderer_->set_dpi(dpi_))
+    if (renderer_ != nullptr && !renderer_->set_dpi(dpi_) && !recover())
     {
         abandon();
         return;
@@ -2137,21 +2197,47 @@ void EditorWindow::present()
     {
         return;
     }
-    // device lost だけは作り直して 1 回だけやり直す。それ以外と 2 度目の失敗は終了へ（ADR 0007）。
-    if (drawn.error() != RenderFailure::device_lost || !start_rendering())
+    // device lost だけは作り直して 1 回だけやり直す。それ以外と 2 度目の失敗は終わりへ（ADR 0007 /
+    // ADR 0133）。
+    if (drawn.error() != RenderFailure::device_lost || !recover())
     {
         abandon();
     }
 }
 
+bool EditorWindow::recover()
+{
+    // 古い renderer（swap chain と device）を先に手放してから作る。2 つを同時に持たない。
+    renderer_.reset();
+    return start_rendering().has_value();
+}
+
+bool EditorWindow::survives_layout(const application::EditorDelivery &delivery)
+{
+    // 文字組みの失敗も 1 回だけ作り直し、作り直せたら意図の残りを写す（ADR 0133）。描画を失った後の
+    // 終わりの途中（保存）では作り直さず、保存の失敗の理由を見せるために残りを写す。
+    if (!delivery.layout_failure.has_value() || rendering_failed_ || recover())
+    {
+        return true;
+    }
+    abandon();
+    return false;
+}
+
 void EditorWindow::abandon()
 {
+    // 終わりの確認の中（保存・タブの切り替え）で届いた失敗は、いま進んでいる終わりに任せる。
+    if (rendering_failed_)
+    {
+        return;
+    }
     rendering_failed_ = true;
     renderer_.reset();
-    if (window_ != nullptr)
+    if (window_ == nullptr)
     {
-        DestroyWindow(window_);
+        return;
     }
+    end_window(application::ExitCause::rendering_lost, application::SessionEnd::rendering_lost);
 }
 
 bool EditorWindow::rendering_failed() const noexcept
