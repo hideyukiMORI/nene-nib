@@ -16,13 +16,13 @@
 
 ## 決定
 
-1. **本窓を壊すのは `EditorWindow::leave(SessionEnd)` の 1 か所だけ。** `DestroyWindow(window_)` を呼ぶのはここだけで、`abandon()` からの直接の呼び出しをやめる。`leave` は一覧を書く（`remember_session`）→ `DestroyWindow` の順のまま。閉じる理由は `SessionEnd` に閉じた値として持つ（既存の `window_closed` に、描画を失った `rendering_lost` を足す。OS の終了は既存の値のまま）。
+1. **本窓を壊すのは `EditorWindow::leave(SessionEnd)` の 1 か所だけ。** `DestroyWindow(window_)` を呼ぶのはここと、作りかけの窓（初期化の途中で失敗した `EditorWindow`）を後始末するデストラクタだけで、`abandon()` からの直接の呼び出しをやめる。デストラクタは一覧を書かない（使う人の文書がまだ無く、書くと誤った一覧になる）。`leave` は一覧を書く（`remember_session`）→ `DestroyWindow` の順のまま。閉じる理由は `SessionEnd` に閉じた値として持つ（既存の `window_closed` に、描画を失った `rendering_lost` を足す。OS の終了は既存の値のまま）。
 2. **終わり方ごとのデータの扱いは次の表のとおりで、表は application の純関数 `exit_plan(ExitCause, unsaved_tabs)` が返す閉じた `enum class ExitPlan` で表す。** ui はその値に従って動くだけで、ui に表を書かない（テストは `--exit-plan` で全組み合わせ）。
 
    | 経路 | 契約 |
    |---|---|
    | 使う人が閉じる（×・Alt+F4・`WM_CLOSE`・最後のタブの ×・`:q`） | 今日どおり: 未保存のタブを順に映して「保存しますか」（保存／捨てる／取消）。取消か保存の失敗でそこで止め、窓は続く。`confirm_each_tab` |
-   | 描画を失う（device lost・サイズ変更の失敗・DPI 変更の失敗・文字組みの失敗） | まず作り直しを **1 回** 試す（今日は `present()` だけが試す。サイズ・DPI・文字組みの 3 経路も同じ `recover()` を通す）。だめなら renderer を捨てた上で、未保存のタブを順に「描画できなくなったので閉じます。保存しますか」（保存／捨てる。**取消は無い**: 窓は描けないので続けられない）。保存に失敗したら理由を見せてもう一度聞く。全部済んだら `leave(rendering_lost)`。`confirm_each_tab_without_cancel` |
+   | 描画を失う（device lost・サイズ変更の失敗・DPI 変更の失敗・文字組みの失敗） | まず作り直しを **1 回** 試す（`present()` は今日どおり device lost のときだけ、サイズ・DPI・文字組みの 3 経路は失敗の種類を問わず、同じ `recover()`＝古い renderer を先に解放してから `start_rendering`）。描画を失った後の確認の途中でまた文字組みが失敗しても作り直さない（二重の終わりを防ぐ）。だめなら renderer を捨てた上で、未保存のタブを順に「描画できなくなったので閉じます。保存しますか」（保存／捨てる。**取消は無い**: 窓は描けないので続けられない）。保存に失敗したら理由を見せてもう一度聞く。全部済んだら `leave(rendering_lost)`。`confirm_each_tab_without_cancel` |
    | OS が終わる（`WM_QUERYENDSESSION`） | 未保存のタブがあれば `ShutdownBlockReasonCreate(window, "保存されていない変更があります")` を立てて `FALSE` を返す（OS が「このアプリが終了を妨げています」を見せる）。無ければ `TRUE`。使う人が保存・閉じるで未保存が無くなったら `ShutdownBlockReasonDestroy`。`WM_ENDSESSION`（確定）は今日どおり一覧を書く。`block_session_end` ／ `leave_now` |
    | プロセスが殺される（タスクマネージャ・クラッシュ） | 該当なし。守るには定期的な退避（講評 P0-3）が要り、それは新しい機能なので施主判断（この ADR の範囲外） |
    | 途中でキャンセル（長い I/O） | 該当なし（`FilePort` は同期・ADR 0127 の計画の範囲） |
