@@ -143,3 +143,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0126](0126-overlapped-cancellation-drains-before-release.md) | OVERLAPPEDの取消要求と最終完了を分けて資源を回収する | 受理（隔離実験の寿命・取消契約。製品採用とASanの全検査範囲は未受理） |
 | [0127](0127-large-file-integration-reserves-prepares-and-commits.md) | 大容量本文の接続は資源を予約し、準備した操作と保存版を一度だけ確定する | 受理（製品接続の設計契約のみ。実装・実容量・性能の受理ではない） |
 | [0136](0136-ci-builds-product-and-tests-in-release.md) | マージ直前のCIは製品と単体テストをReleaseでビルドして回す | 提案・#514、初回のrunの成功で受理 |
+| [0138](0138-giant-line-bench.md) | 1 行が 16 MiB の文書のベンチ | 提案・#513、基準値は 1 回測ってから別の commit |
