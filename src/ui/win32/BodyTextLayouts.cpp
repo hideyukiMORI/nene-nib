@@ -468,17 +468,19 @@ BodyTextLayouts::cell(const application::TextLayoutRequest &request)
     return held.value();
 }
 
-const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, float left)
+const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, float left, float top,
+                                                 float bottom)
 {
     auto *found = find(layout);
     if (found == nullptr || !style_.has_value())
     {
         return nullptr;
     }
-    if (!found->glyphs_tried || found->glyph_left != left)
+    if (!found->glyphs_tried || found->glyph_left != left || found->glyph_top != top ||
+        found->glyph_bottom != bottom)
     {
         const auto width = static_cast<float>(core::width_of(found->area));
-        auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(width, left);
+        auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(width, left, top, bottom);
         auto taken = collector && SUCCEEDED(layout->Draw(nullptr, collector.Get(), 0, 0))
                          ? collector->take()
                          : std::nullopt;
@@ -486,6 +488,8 @@ const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, floa
         found->glyphs = std::move(taken).value_or(std::vector<BodyGlyphRun>{});
         found->glyphs_tried = true;
         found->glyph_left = left;
+        found->glyph_top = top;
+        found->glyph_bottom = bottom;
     }
     return found;
 }
