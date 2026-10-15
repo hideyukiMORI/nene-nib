@@ -12,7 +12,7 @@
 ## 決定
 
 1. **device の箱は ui/win32 の `DeviceWarmup` で、合成ルートが所有する。** `D3D11CreateDevice`（今日と同じ flags・feature levels・WARP への切り替え）と `CreateDXGIFactory2` を行う `make()` と、結果を 1 回だけ渡す `take()` を持つ。`make()` は worker の仕事の中で呼ばれ、結果（`ComPtr` 3 つと `HRESULT`）を置いてから Win32 の event を立てる。`take()` は event を待ってから読む（書いてから立てる・待ってから読むので、`<atomic>` は要らない・CNF-009）。箱は値を 1 回しか渡さず、2 回目の `take()` は空を返す。
-2. **投げるのは `run()` の 1 か所、`Win32Worker` の宣言の直後（`EditorController` の構築＝起動引数の読み込みより前）。** `worker.post([&warmup](const std::stop_token &) { warmup.make(); })`。箱は worker より前に宣言し、worker より後に壊れる（仕事が箱を借りる）。stop が立っていれば `make()` は何もしない。
+2. **投げるのは `run()` の 1 か所、`Win32Worker` の宣言の直後（`EditorController` の構築＝起動引数の読み込みより前）。** 載せる仕事は、受け取った stop の印を `warmup.make(stop.stop_requested())` と箱へ渡すだけ（`<stop_token>` を include できるのは `src/adapters/win32` だけ・CPP-013 なので、箱は印を `bool` で受ける）。箱は worker より前に宣言し、worker より後に壊れる（仕事が箱を借りる）。stop が立っていれば `make()` は device を作らず、event だけを立てる（`take()` が待ち続けない）。
 3. **renderer は箱から受け取り、無ければ今日どおり自分で作る。** `Direct2DRenderer::create_device()` の先頭で `take()` し、値があればそれを使う。device lost の作り直し（ADR 0007）は今日の経路のまま自分で作る。節目 `device_created` は UI スレッドが device を手にした位置のまま（ADR 0013 の決定 2〜4 は変えない。順番は変えず、生成を始める時点だけ前へ）。
 4. **スレッドは `Win32Worker` の 1 本のまま（ADR 0004 / 0062）。** 新しいスレッド・グローバル変数・lint の除外を持ち込まない。worker の仕事が起動のたびに 1 つ増え、その間（約 150 ms）に投げられた同じフォルダの読み込みは後ろに並ぶ。Ctrl+P を起動直後 150 ms 以内に開いた場合だけ候補が遅れ、契約 `--background-work` と `verify_quiet_paths` の port の回数は変わらない。
 5. **受理は正式ゲート 8 本。** startup-first-frame と open-large-file-16mib が縮み、ほかに悪化が無いこと。基準値は変えない。
