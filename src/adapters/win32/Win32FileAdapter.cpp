@@ -240,8 +240,8 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
     reclaim_temporaries_of(target);
     for (std::uint32_t attempt = 0; attempt < temporary_attempts; ++attempt)
     {
-        ++sequence_;
-        const std::wstring temporary = temporary_name(target, sequence_);
+        const std::uint32_t sequence = next_temporary_sequence();
+        const std::wstring temporary = temporary_name(target, sequence);
         const auto written = written_temporary(temporary, parts);
         if (!written)
         {
@@ -249,7 +249,7 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
         }
         if (written.value())
         {
-            return placed_temporary(target, temporary, sequence_, mode);
+            return placed_temporary(target, temporary, sequence, mode);
         }
     }
     return std::unexpected(Failure::unwritable);

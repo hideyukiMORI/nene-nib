@@ -41,7 +41,9 @@ using nenenib::adapters::win32::decode_settings;
 using nenenib::adapters::win32::encode_settings;
 using nenenib::adapters::win32::FileHandle;
 using nenenib::adapters::win32::FindHandle;
+using nenenib::adapters::win32::issued_temporary_sequence;
 using nenenib::adapters::win32::reclaim_temporaries_beside;
+using nenenib::adapters::win32::reclaimable_temporary;
 using nenenib::adapters::win32::SettingsPaths;
 using nenenib::adapters::win32::SettingsVersion;
 using nenenib::adapters::win32::Win32CodePageAdapter;
@@ -149,15 +151,22 @@ FileHandle held_temporary(const std::wstring &name)
 
 using HeldNames = std::vector<std::unique_ptr<FileHandle>>;
 
-// 新しい adapter の最初の保存が試す名前（連番 1〜8）を、共有 0 で開いたまま塞ぐ（ADR 0135 の
-// 決定 2）。手放すと誰も開いていない残骸になり、次の保存の直前に回収される。
-HeldNames occupy_first_names(std::wstring_view target)
+// このプロセスの次の連番の名前（ADR 0135 の決定 1）。連番はプロセスで 1 つなので、次の保存が
+// 最初に試すのは払い出し済みの連番の 1 つ後。
+std::wstring upcoming_name(std::wstring_view target, std::uint32_t ahead)
+{
+    return temporary_beside(target, process_hex() + L"-" +
+                                        std::to_wstring(issued_temporary_sequence() + ahead));
+}
+
+// 次の保存が試す 8 つの名前を、共有 0 で開いたまま塞ぐ（ADR 0135 の決定 2）。手放すと自分の
+// 古い連番の残骸になり、次の保存の直前に回収される。
+HeldNames occupy_upcoming_names(std::wstring_view target)
 {
     HeldNames held;
-    for (int sequence = 1; sequence <= 8; ++sequence)
+    for (std::uint32_t ahead = 1; ahead <= 8; ++ahead)
     {
-        const std::wstring name =
-            temporary_beside(target, process_hex() + L"-" + std::to_wstring(sequence));
+        const std::wstring name = upcoming_name(target, ahead);
         held.push_back(std::make_unique<FileHandle>(CreateFileW(
             name.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)));
         expect(held.back()->valid(), "a temporary name the save may try is held");
@@ -884,12 +893,13 @@ void verify_migration_current_created(Win32FileAdapter &files)
 void verify_migration_write_failure(Win32FileAdapter &files)
 {
     reset_settings(files, previous_bytes);
-    // 新しい adapter の最初の保存が試す 8 つの名前を、共有 0 で開いたまま塞ぐ（ADR 0135）。
+    // 次の保存が試す 8 つの名前を、共有 0 で開いたまま塞ぐ（ADR 0135）。前提: 設定の保存は
+    // `files.write` を 1 回だけ呼び、lock は CreateFileW で直に取る（連番を進めない）。
     Win32FileAdapter fresh;
     Win32SettingsAdapter store(fresh, settings_paths());
     expect(store.read().has_value(), "load previous before failed migration write");
     {
-        const HeldNames occupied = occupy_first_names(L"nib-adapter-files/settings/settings.v3");
+        const HeldNames occupied = occupy_upcoming_names(L"nib-adapter-files/settings/settings.v3");
         const auto result = store.write(default_editor_settings());
         expect(!result && result.error() == SettingsFailure::unwritable,
                "failed atomic migration write is reported");
@@ -1041,12 +1051,14 @@ void verify_same_file(const Win32FileAdapter &files)
     expect(files.same_file(lower.value(), lower.value()), "a path is the same file as itself");
     expect(!files.same_file(lower.value(), other.value()), "different paths are different files");
 }
-// 一時ファイルの名前と回収（ADR 0135 の決定 5）。adapter は保存ごとに連番を進めるので、名前を
-// 予言する試験は新しい adapter を使う（最初の保存の連番は 1）。
+// 一時ファイルの名前と回収（ADR 0135 の決定 5）。連番はプロセスで 1 つなので、名前を予言する
+// 試験は `issued_temporary_sequence` から次の連番を読む。
 constexpr wchar_t temporaries_folder[] = L"nib-adapter-files/temporaries";
 constexpr wchar_t kept_target[] = L"nib-adapter-files/temporaries/kept.txt";
-constexpr std::array<const wchar_t *, 7> temporaries_fixtures{
+constexpr wchar_t created_target[] = L"nib-adapter-files/temporaries/created.txt";
+constexpr std::array<const wchar_t *, 8> temporaries_fixtures{
     kept_target,
+    created_target,
     L"nib-adapter-files/temporaries/settings.v3",
     L"nib-adapter-files/temporaries/settings.v3.lock",
     L"nib-adapter-files/temporaries/settings.v2.lock",
@@ -1103,6 +1115,10 @@ void verify_concurrent_temporaries(std::span<const std::wstring> others)
 // 決定 5 (b): 誰も開いていない残骸は、その保存先の保存の直前に消える。
 void verify_reclaimed_residue(const std::wstring &residue)
 {
+    // pid は 4 の倍数なので 0xdeadbeef のプロセスは無い。OpenProcess で確かめてから使う。
+    const HANDLE none = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0xdeadbeefU);
+    expect(none == nullptr && GetLastError() == ERROR_INVALID_PARAMETER,
+           "no process has the pid the residue names");
     Win32FileAdapter fresh;
     leave_residue(residue);
     expect(
@@ -1130,9 +1146,20 @@ void verify_reclaimed_settings_residue(const std::wstring &residue)
 void verify_exhausted_names()
 {
     Win32FileAdapter fresh;
+    const auto created = path_of("nib-adapter-files/temporaries/created.txt");
+    {
+        const HeldNames occupied = occupy_upcoming_names(created_target);
+        const auto refused = fresh.write(created, "must not appear", FileWriteMode::create_new);
+        expect(!refused && refused.error() == FileFailure::unwritable,
+               "create_new refuses when every temporary name it may try is taken");
+        expect(!file_exists(created_target), "the destination is not partially created");
+    }
+    expect(fresh.write(created, "created", FileWriteMode::create_new).has_value(),
+           "create_new succeeds once the names are released");
+    expect(no_temporaries_of(created_target), "released names of this process are reclaimed");
     const auto target = path_of("nib-adapter-files/temporaries/kept.txt");
     {
-        const HeldNames occupied = occupy_first_names(kept_target);
+        const HeldNames occupied = occupy_upcoming_names(kept_target);
         const auto refused = fresh.write(target, "must not replace");
         expect(!refused && refused.error() == FileFailure::unwritable,
                "a save refuses when every temporary name it may try is taken");
@@ -1163,20 +1190,93 @@ void verify_reclaimed_beside(std::span<const std::wstring> residues)
     expect(file_exists(legacy), "start-up leaves names outside the temporary pattern");
 }
 
+// 決定 3: 回収するのは名前の形が `<16 進の pid>-<10 進の連番>` で、pid のプロセスが生きて
+// いないものと、自分の古い連番だけ。生きているプロセス（自分・System）の名前と、形の違う使う人
+// のファイルは、誰も開いていなくても残す。
+void verify_reclaim_rule(std::span<const std::wstring> kept)
+{
+    // System（pid 4）は常に生きている。開ければ STILL_ACTIVE、開けなければ拒否で、無いではない。
+    const HANDLE system = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 4);
+    expect(system != nullptr || GetLastError() == ERROR_ACCESS_DENIED,
+           "the System process is there");
+    if (system != nullptr)
+    {
+        CloseHandle(system);
+    }
+    Win32FileAdapter fresh;
+    const std::wstring own_older = upcoming_name(kept_target, 0);
+    for (const std::wstring &name : kept)
+    {
+        leave_residue(name);
+    }
+    leave_residue(own_older);
+    expect(fresh.write(path_of("nib-adapter-files/temporaries/kept.txt"), "after rule").has_value(),
+           "a save succeeds beside names it must not reclaim");
+    expect(!file_exists(own_older), "an older sequence of this process is reclaimed");
+    expect(file_exists(kept[0]), "a later sequence of this live process is not reclaimed");
+    expect(file_exists(kept[1]), "a residue named by a live process (System) is not reclaimed");
+    expect(file_exists(kept[2]), "a user's file outside the name form is not reclaimed");
+    expect(file_exists(kept[3]), "a pid with an uppercase digit is outside the name form");
+}
+
+// 決定 3 の名前の読み（純関数）。self は 0x1a、払い出し済みの連番は 5。
+void verify_reclaimable_names()
+{
+    constexpr auto alive = [](std::uint32_t) noexcept { return true; };
+    constexpr auto gone = [](std::uint32_t) noexcept { return false; };
+    constexpr std::uint32_t self = 0x1aU;
+    constexpr std::uint32_t issued = 5;
+    expect(reclaimable_temporary(L"deadbeef-1", self, issued, gone),
+           "a residue of a process that is gone is reclaimable");
+    expect(!reclaimable_temporary(L"deadbeef-1", self, issued, alive),
+           "a temporary file of a live process is not reclaimable");
+    expect(reclaimable_temporary(L"1a-5", self, issued, alive) &&
+               reclaimable_temporary(L"1a-1", self, issued, alive),
+           "an older sequence of this process is reclaimable without asking liveness");
+    expect(!reclaimable_temporary(L"1a-6", self, issued, gone),
+           "a sequence this process has not issued yet is not reclaimable");
+    expect(reclaimable_temporary(L"ffffffff-4294967295", self, issued, gone),
+           "the widest pid and sequence still read");
+    constexpr std::array<std::wstring_view, 14> outside{L"backup",
+                                                        L"",
+                                                        L"-1",
+                                                        L"1b-",
+                                                        L"1b",
+                                                        L"1B-1",
+                                                        L"01b-1",
+                                                        L"1b-01",
+                                                        L"1b-1x",
+                                                        L"1b-1-2",
+                                                        L"1b- 1",
+                                                        L"100000000-1",
+                                                        L"1b-4294967296",
+                                                        L"1b-1.nib-tmp-2-3"};
+    for (const std::wstring_view suffix : outside)
+    {
+        expect(!reclaimable_temporary(suffix, self, issued, gone),
+               "a name outside `<hex pid>-<decimal sequence>` is never reclaimable");
+    }
+}
+
 void verify_temporary_files()
 {
+    verify_reclaimable_names();
     const BOOL created = CreateDirectoryW(temporaries_folder, nullptr);
     expect(created != 0 || GetLastError() == ERROR_ALREADY_EXISTS,
            "the temporaries folder is there");
-    const std::array<std::wstring, 8> named{
+    const std::array<std::wstring, 12> named{
         std::wstring(kept_target) + L".nib-tmp",
         temporary_beside(kept_target, L"deadbeef-1"),
-        temporary_beside(kept_target, process_hex() + L"-1"),
+        upcoming_name(kept_target, 1),
         temporary_beside(kept_target, L"deadbeef-2"),
         temporary_beside(L"nib-adapter-files/temporaries/settings.v3", L"deadbeef-3"),
         temporary_beside(L"nib-adapter-files/temporaries/history.v1", L"deadbeef-4"),
         temporary_beside(L"nib-adapter-files/temporaries/session.v2", process_hex() + L"-9"),
-        temporary_beside(L"nib-adapter-files/temporaries/bookmarks.v1", L"deadbeef-5")};
+        temporary_beside(L"nib-adapter-files/temporaries/bookmarks.v1", L"deadbeef-5"),
+        upcoming_name(kept_target, 1000),
+        temporary_beside(kept_target, L"4-1"),
+        temporary_beside(kept_target, L"backup"),
+        temporary_beside(kept_target, L"DEADBEEF-1")};
     for (const std::wstring &name : named)
     {
         static_cast<void>(DeleteFileW(name.c_str()));
@@ -1185,7 +1285,8 @@ void verify_temporary_files()
     verify_reclaimed_residue(named[3]);
     verify_reclaimed_settings_residue(named[4]);
     verify_exhausted_names();
-    verify_reclaimed_beside(std::span(named).subspan(5));
+    verify_reclaimed_beside(std::span(named).subspan(5, 3));
+    verify_reclaim_rule(std::span(named).subspan(8));
     remove_temporaries_folder(named);
 }
 
