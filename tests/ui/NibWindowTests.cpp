@@ -1,7 +1,8 @@
 // Issue #300: ui/win32 の描画の保持（字体選択 ADR 0071・字形 ADR 0073）の契約を
 // 窓を作らずに確かめる（ADR 0077）。
 // OS 資源は DirectWrite / WIC とメモリ上の DROPFILES（ADR 0116）。
-// 窓・device・swap chain・GPU・時計・乱数・スレッド・ファイルを使わない。
+// 窓・swap chain・時計・乱数・スレッド・ファイルを使わない。device を作るのは `--device-warmup`
+// の組だけで（ADR 0131）、作れない機械では測らない。
 // フォントに結果が依る検査は「環境依存」で、測れないときは 1 行言って数えない。
 #include "WindowChecks.hpp"
 
@@ -16,7 +17,7 @@ namespace
 bool verify_selected(std::string_view selector)
 {
     namespace ui = nenenib::tests::ui;
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 7> groups{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 8> groups{{
         {"", ui::verify_fallback_keys},
         {"", ui::verify_fallback_cache},
         {"--glyphs", ui::verify_glyph_collector},
@@ -24,6 +25,7 @@ bool verify_selected(std::string_view selector)
         {"", ui::verify_gutter_layouts},
         {"--text-layout", ui::verify_body_text_layouts},
         {"--file-drop", ui::verify_file_drop},
+        {"--device-warmup", ui::verify_device_warmup},
     }};
     bool known = false;
     for (const auto &[name, verify] : groups)

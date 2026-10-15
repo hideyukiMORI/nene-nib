@@ -443,8 +443,9 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
 } // namespace
 
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
-                           application::TimingPort &timing, BodyTextLayouts &text_layouts)
-    : instance_(instance), controller_(controller), timing_(timing), text_layouts_(text_layouts)
+                           application::TimingPort &timing, RendererSources sources)
+    : instance_(instance), controller_(controller), timing_(timing),
+      text_layouts_(sources.text_layouts), warmup_(sources.warmup)
 {
 }
 
@@ -463,10 +464,10 @@ EditorWindow::~EditorWindow()
 
 std::expected<std::unique_ptr<EditorWindow>, WindowFailure>
 EditorWindow::create(HINSTANCE instance, application::EditorController &controller,
-                     application::TimingPort &timing, BodyTextLayouts &text_layouts)
+                     application::TimingPort &timing, RendererSources sources)
 {
     auto window =
-        std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, timing, text_layouts));
+        std::unique_ptr<EditorWindow>(new EditorWindow(instance, controller, timing, sources));
     const auto ready = window->initialize();
     if (!ready)
     {
@@ -543,7 +544,7 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
 
 std::expected<void, WindowFailure> EditorWindow::start_rendering()
 {
-    auto renderer = Direct2DRenderer::create(window_, dpi_, timing_, text_layouts_);
+    auto renderer = Direct2DRenderer::create(window_, dpi_, timing_, {text_layouts_, warmup_});
     if (!renderer)
     {
         return std::unexpected(WindowFailure::render);
