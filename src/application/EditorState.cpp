@@ -435,6 +435,19 @@ EditorState EditorState::with_restored(std::vector<UnloadedDocument> documents) 
     return next;
 }
 
+EditorState EditorState::with_appended(std::vector<DocumentState> documents) const
+{
+    EditorState next(*this);
+    for (DocumentState &document : documents)
+    {
+        next.recency_ = core::tab_recency_opened(next.recency_, next.tab_count());
+        next.parked_.emplace_back(std::make_shared<const DocumentState>(std::move(document)));
+        next.autosave_ids_.push_back(AutosaveId{next.next_autosave_id_++});
+    }
+    next.recency_ = core::tab_recency_touched(next.recency_, active_);
+    return next;
+}
+
 EditorState EditorState::with_loaded(std::size_t position, DocumentState bundle) const
 {
     if (!unloaded_at(position).has_value())

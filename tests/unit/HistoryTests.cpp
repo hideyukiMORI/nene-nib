@@ -384,6 +384,10 @@ void verify_quiet_paths()
     Editing editing;
     hold_work(editing.files());
     auto &controller = editing.controller();
+    // 起動の問いの前の一覧 1 回だけが、起動の道で自動退避に触れる（ADR 0137 の決定 7）。
+    expect(controller.autosave_remnants().empty() && editing.autosave().remnant_reads() == 1 &&
+               editing.autosave().touches() == 1,
+           "the start lists the autosave remnants once and touches nothing else");
     applied(controller, VisibleLines{3});
     open_work(editing, "ab");
     applied(controller, work_open('a'));
@@ -396,7 +400,7 @@ void verify_quiet_paths()
     expect(
         editing.history().reads() == 0 && editing.history().writes() == 0 &&
             editing.folders().requests().empty() && editing.folders().collects() == 0 &&
-            editing.autosave().touches() == 0 && editing.autosave().collects() == 0,
+            editing.autosave().touches() == 1 && editing.autosave().collects() == 0,
         "opening, switching, new tabs, saving and typing never touch the history, the folder nor "
         "autosave");
 }

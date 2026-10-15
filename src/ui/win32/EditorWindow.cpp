@@ -100,6 +100,10 @@ constexpr wchar_t first_printable = 0x20;
 constexpr wchar_t delete_character = 0x7F;
 // 裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。番号を持つのはここだけ。
 constexpr UINT work_message = WM_APP + 1;
+// 起動の問いを最初の frame の後に出す、自分宛ての合図（ADR 0137 の決定 6）。
+constexpr UINT autosave_question_message = WM_APP + 2;
+// 起動の問いの文言（決定 6）。ここの 1 か所だけ。
+constexpr wchar_t autosave_question[] = L"前回の未保存の編集が残っています。戻しますか。";
 // キー → キャレットの移動は表で引く（CPP-012）。Ctrl の有無は表そのものを分けて表す。
 constexpr std::array<KeyMotion, 8> plain_motions{{{VK_LEFT, core::CaretMotion::previous_character},
                                                   {VK_RIGHT, core::CaretMotion::next_character},
@@ -524,6 +528,10 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // 開けなかった理由も 1 行出す。窓が出てから出すので、利用者は空の無題で作業を続けられる。
     announce(opened);
     announce_settings(opened);
+    // 自動退避の合図は窓が壊れるまで 30 秒ごと（ADR 0137 の決定 1）。張れなければ退避しないだけ。
+    static_cast<void>(SetTimer(window_, autosave_timer, autosave_interval_milliseconds, nullptr));
+    // 起動の問いは最初の frame の後、メッセージの配りが始まってから（決定 6）。
+    static_cast<void>(PostMessageW(window_, autosave_question_message, 0, 0));
     return {};
 }
 
@@ -618,8 +626,10 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_MOUSELEAVE:
     case WM_MOUSEWHEEL:
     case WM_CAPTURECHANGED:
-    case WM_TIMER:
         return pointer_message(message, word, data);
+    case WM_TIMER:
+        receive_timer(word);
+        return 0;
     case WM_GETMINMAXINFO:
     case WM_SETTINGCHANGE:
     case WM_SIZE:
@@ -646,6 +656,7 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_ENDSESSION:
     case WM_DESTROY:
     case work_message:
+    case autosave_question_message:
         return lifetime_message(message, word, data);
     default:
         break;
@@ -670,10 +681,14 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case WM_DESTROY:
         end_selection_drag();
+        KillTimer(window_, autosave_timer);
         PostQuitMessage(0);
         return 0;
     case work_message:
         receive_work();
+        return 0;
+    case autosave_question_message:
+        offer_autosave();
         return 0;
     default:
         break;
@@ -799,12 +814,6 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case WM_CAPTURECHANGED:
         end_selection_drag();
-        return 0;
-    case WM_TIMER:
-        if (word == selection_timer)
-        {
-            scroll_selection();
-        }
         return 0;
     default:
         break;
@@ -1313,6 +1322,45 @@ void EditorWindow::receive_work()
         return;
     }
     send(application::WorkCompleted{});
+}
+
+void EditorWindow::receive_timer(WPARAM word)
+{
+    const auto timer = window_timer_of(word);
+    if (!timer.has_value())
+    {
+        return;
+    }
+    switch (timer.value())
+    {
+    case WindowTimer::selection:
+        scroll_selection();
+        return;
+    case WindowTimer::autosave:
+        send(application::AutosaveTick{});
+        return;
+    }
+}
+
+// 残骸の一覧は controller が port から 1 回だけ読む。問いが出せなかった（0）ときは答えを送らず、
+// 残骸は次の起動でもう 1 回問われる。
+void EditorWindow::offer_autosave()
+{
+    if (controller_.autosave_remnants().empty())
+    {
+        return;
+    }
+    const int answer =
+        MessageBoxW(window_, autosave_question, product_name, MB_YESNO | MB_ICONQUESTION);
+    if (answer == IDYES)
+    {
+        send(application::RestoreAutosave{});
+        return;
+    }
+    if (answer == IDNO)
+    {
+        send(application::DiscardAutosave{});
+    }
 }
 
 std::function<void()> EditorWindow::work_signal() const

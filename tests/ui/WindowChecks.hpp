@@ -19,4 +19,5 @@ void verify_glyph_collector();
 void verify_glyph_pixels();
 void verify_gutter_layouts();
 void verify_file_drop();
+void verify_window_timers();
 } // namespace nenenib::tests::ui

@@ -86,6 +86,7 @@
 #include "VimVisualReselect.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -715,17 +716,18 @@ autosave_bundle(const std::shared_ptr<const UnloadedDocument> &)
 constexpr std::string_view autosave_failed_message = "自動退避できませんでした";
 
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
+// 自動退避の残骸を読めなかった知らせ（ADR 0137 の決定 6）。
+constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
 constexpr std::string_view clipped_mark = "…";
 
-// 知らせの 1 行（ADR 0059 の「知らせの文言」）。others は同じ意図の中でほかに読めなかった数。
-// 名前は 1 行に収まるよう末尾をコードポイントの境目で落とす（題名と同じ「…」）。
-[[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
+// 名前を 1 つ載せる知らせの 1 行（ADR 0059 の「知らせの文言」）。others は同じ意図の中でほかに
+// 読めなかった数。名前は 1 行に収まるよう末尾をコードポイントの境目で落とす（題名と同じ「…」）。
+[[nodiscard]] core::DisplayText named_notice(std::string_view prefix, std::string name,
+                                             std::size_t others)
 {
     const std::string suffix =
         others == 0 ? std::string{} : "（ほか " + std::to_string(others) + " 件）";
-    std::string name(path.file_name().empty() ? path.text() : path.file_name());
-    const std::size_t room =
-        core::DisplayText::maximum_bytes - unreached_prefix.size() - suffix.size();
+    const std::size_t room = core::DisplayText::maximum_bytes - prefix.size() - suffix.size();
     if (name.size() > room)
     {
         core::Offset cut{room - clipped_mark.size()};
@@ -736,8 +738,40 @@ constexpr std::string_view clipped_mark = "…";
         name.resize(cut.value);
         name += clipped_mark;
     }
-    // 材料は検証済みの経路と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
-    return core::DisplayText::parse(std::string(unreached_prefix) + name + suffix).value();
+    // 材料は検証済みの経路・題名と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+    return core::DisplayText::parse(std::string(prefix) + name + suffix).value();
+}
+
+[[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
+{
+    return named_notice(unreached_prefix,
+                        std::string(path.file_name().empty() ? path.text() : path.file_name()),
+                        others);
+}
+
+// 読めなかった残骸の知らせ。名前は未保存の印の無い題名（無題なら「無題」）。
+[[nodiscard]] core::DisplayText unrestored_message(const AutosaveRemnant &remnant,
+                                                   std::size_t others)
+{
+    return named_notice(
+        unrestored_prefix,
+        std::string(core::tab_title_for(remnant.path, core::SaveState::saved).text()), others);
+}
+
+// 自動退避から戻した 1 タブの束（ADR 0137 の決定 6）。保存した時点は無い（未保存の印）。
+// キャレットとスクロールは先頭、履歴は空。
+[[nodiscard]] DocumentState restored_document(core::TextBuffer text, Document document)
+{
+    DocumentView view{core::tab_title_for(document.path, core::SaveState::modified), document.path,
+                      document.encoding, core::SaveState::modified, std::nullopt};
+    return DocumentState{std::move(text),
+                         core::collapsed_at(core::Offset{0}),
+                         core::EditHistory::empty(),
+                         std::move(document),
+                         core::LineNumber{1},
+                         std::nullopt,
+                         std::nullopt,
+                         std::move(view)};
 }
 
 // 帯の位置 position のタブのパス（無題なら無し）。脇の束は帯の位置からアクティブを抜いた順。
@@ -792,7 +826,8 @@ constexpr std::string_view clipped_mark = "…";
 // 寸法・外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の
 // 意図は写す前に歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
 // 裏の仕事の合図（WorkCompleted）も使う人の操作ではないので歩きを続ける（ADR 0062 の決定 7）。
-// 自動退避の合図（AutosaveTick）も同じ理由で歩きを続ける（ADR 0137 の決定 1）。
+// 自動退避の合図（AutosaveTick）も同じ理由で歩きを続ける（ADR 0137 の決定 1）。起動の問いの答え
+// （RestoreAutosave / DiscardAutosave）は使う人の操作なので、ここに書かず歩きを確定する（決定 6）。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WalkRecentTab>(intent) ||
@@ -956,7 +991,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
     // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。窓が閉じていくときの一覧の
     // 書き出しも同じ（ADR 0059 の決定 3）。裏の仕事の合図も同じ（ADR 0062 の決定 7）。
-    // 自動退避の合図も使う人の操作ではないので同じ（ADR 0137 の決定 1）。
+    // 自動退避の合図も使う人の操作ではないので同じ（ADR 0137 の決定 1）。起動の問いの答えは使う人の
+    // 操作なので、ほかの意図と同じに 1 意図の知らせを消してから写す（決定 6）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
                  std::holds_alternative<CancelComposition>(intent) ||
@@ -3025,6 +3061,79 @@ void EditorController::accept(const AutosaveTick &)
             break;
         }
     }
+}
+
+// 起動の問いの前の一覧（ADR 0137 の決定 6・7）。起動の道で自動退避に触れるのはこの 1 回だけ。
+// 読めなければ戻すものは無い（問わない）。
+const std::vector<AutosaveRemnant> &EditorController::autosave_remnants()
+{
+    autosave_remnants_ = ports_.autosave.remnants().value_or(std::vector<AutosaveRemnant>{});
+    return autosave_remnants_;
+}
+
+// 「はい」（決定 6）。覚えた残骸を順に読み、戻せた分を帯の末尾へ足してから、最初の 1 本へ
+// 切り替える。読めない残骸は知らせて飛ばす。どの残骸も読んだ後に forget する。
+void EditorController::accept(const RestoreAutosave &)
+{
+    std::vector<DocumentState> restored;
+    std::size_t unrestored = 0;
+    for (const AutosaveRemnant &remnant : std::exchange(autosave_remnants_, {}))
+    {
+        auto bundle = restored_bundle(remnant);
+        if (bundle.has_value())
+        {
+            restored.push_back(std::move(bundle).value());
+        }
+        else
+        {
+            state_ = state_.with_command_message(unrestored_message(remnant, unrestored++));
+        }
+        ports_.autosave.forget(remnant);
+    }
+    if (restored.empty())
+    {
+        return;
+    }
+    const std::size_t first = state_.tab_count();
+    state_ = state_.with_appended(std::move(restored));
+    leave_document();
+    state_ = state_.with_switched(first);
+    enter_document();
+}
+
+// 「いいえ」（決定 6）。本文を読まずに全部 forget する。
+void EditorController::accept(const DiscardAutosave &)
+{
+    for (const AutosaveRemnant &remnant : std::exchange(autosave_remnants_, {}))
+    {
+        ports_.autosave.forget(remnant);
+    }
+}
+
+// 開くのと同じ判別と復号（read_document と同じ DetectedText → decoded）。一覧のパスの符号化は
+// 使わず、本文の判別が決める。
+std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRemnant &remnant)
+{
+    const auto bytes = ports_.autosave.read(remnant);
+    if (!bytes)
+    {
+        return std::nullopt;
+    }
+    const std::span<const std::byte> body = bytes.value();
+    auto detected = core::DetectedText::from_bytes(
+        std::string_view{std::bit_cast<const char *>(body.data()), body.size()});
+    if (!detected)
+    {
+        return std::nullopt;
+    }
+    const core::TextEncoding encoding = detected.value().encoding();
+    auto text = decoded(std::move(detected).value());
+    if (!text)
+    {
+        return std::nullopt;
+    }
+    return restored_document(std::move(text).value(),
+                             Document{remnant.path, encoding, std::nullopt});
 }
 
 void EditorController::store_planned(AutosaveId id)

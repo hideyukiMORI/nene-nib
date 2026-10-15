@@ -3,12 +3,14 @@
 #include "AppearancePort.hpp"
 #include "AutosaveId.hpp"
 #include "AutosaveLedger.hpp"
+#include "AutosaveRemnant.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
 #include "Document.hpp"
+#include "DocumentState.hpp"
 #include "DocumentView.hpp"
 #include "EditBoundary.hpp"
 #include "EditorDelivery.hpp"
@@ -102,6 +104,10 @@ class EditorController final
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
+    // 前回のプロセスが残した退避（ADR 0137 の決定 6）。ui が窓を見せて最初の frame を描いた後に
+    // 1 回だけ呼ぶ。port の remnants() を 1 回呼んで列を覚え、その列を返す（失敗は空）。
+    // RestoreAutosave と DiscardAutosave はこの覚えた列を使い、port へもう 1 回聞かない。
+    [[nodiscard]] const std::vector<AutosaveRemnant> &autosave_remnants();
 
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
@@ -216,6 +222,13 @@ class EditorController final
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
+    // 起動の問いの答え（決定 6）。戻すのは覚えた残骸を順に読み、開くのと同じ復号で帯の末尾に
+    // 未保存のタブとして足し、最初に戻したタブをアクティブにする。読めない残骸は 1 行知らせて
+    // 飛ばす。どちらの答えも残骸を全部 forget する。
+    void accept(const RestoreAutosave &);
+    void accept(const DiscardAutosave &);
+    // 1 本の残骸を読んで復号した束。読めない・復号できなければ値なし。
+    [[nodiscard]] std::optional<DocumentState> restored_bundle(const AutosaveRemnant &remnant);
     // 計画が store にした 1 タブを帯から探して頼む。まだ読んでいない文書は計画が store にしない。
     void store_planned(AutosaveId id);
     // 1 タブの本文を保存と同じ符号化で写して頼む（決定 4）。頼めたら真で、呼び手が帳面に
@@ -402,6 +415,8 @@ class EditorController final
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。
     bool autosave_notified_ = false;
+    // 起動の問いの間だけ持つ残骸の列（決定 6）。autosave_remnants() が置き、答えの意図が空にする。
+    std::vector<AutosaveRemnant> autosave_remnants_;
     // 前に失敗を引いてから store を頼んだか。空の collect をこの後に受けたら成功とみなす。
     bool autosave_requested_ = false;
 };
