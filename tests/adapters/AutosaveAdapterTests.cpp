@@ -295,7 +295,7 @@ void make_folder(std::wstring_view name)
 void leave_remnants(adapters::Win32FileAdapter &files)
 {
     const std::vector<adapters::AutosaveEntry> entries{
-        {AutosaveId{7}, path_of("C:/work/b.txt"), title_of("b.txt"), caret_at(3, 1)},
+        {AutosaveId{7}, path_of("C:/work/b.txt"), title_of("b.txt"), caret_at(3, 5)},
         {AutosaveId{8}, std::nullopt, title_of("無題"), caret_at(1, 1)}};
     for (const std::wstring_view name : {L"deadbeef", L"4", L"DEADBEE1", L"deadbeed"})
     {
@@ -341,6 +341,8 @@ void verify_remnants(adapters::Win32Worker &worker, adapters::Win32FileAdapter &
                text_of(seven.value().path) == "C:/work/b.txt" &&
                seven.value().title.text() == "b.txt",
            "a remnant carries its location, path and title");
+    expect(seven.has_value() && seven.value().caret == caret_at(3, 5),
+           "a remnant carries the caret written in the list");
     const auto eight = remnant_with(listed, 8);
     expect(eight.has_value() && !eight.value().path.has_value(), "an untitled remnant has no path");
 }

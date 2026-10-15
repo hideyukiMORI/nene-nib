@@ -759,13 +759,17 @@ constexpr std::string_view clipped_mark = "…";
 }
 
 // 自動退避から戻した 1 タブの束（ADR 0137 の決定 6）。保存した時点は無い（未保存の印）。
-// キャレットとスクロールは先頭、履歴は空。
-[[nodiscard]] DocumentState restored_document(core::TextBuffer text, Document document)
+// キャレットは一覧に書いた位置を reached_bundle と同じく寄せる（行は本文の範囲へ、桁は行の中の
+// 文字の境目へ）。スクロールは先頭、履歴は空。
+[[nodiscard]] DocumentState restored_document(core::TextBuffer text, Document document,
+                                              core::TextPosition caret)
 {
+    const core::Offset placed =
+        text.offset_of(core::TextPosition{line_within(text, caret.line), caret.column});
     DocumentView view{core::tab_title_for(document.path, core::SaveState::modified), document.path,
                       document.encoding, core::SaveState::modified, std::nullopt};
     return DocumentState{std::move(text),
-                         core::collapsed_at(core::Offset{0}),
+                         core::collapsed_at(placed),
                          core::EditHistory::empty(),
                          std::move(document),
                          core::LineNumber{1},
@@ -3133,7 +3137,7 @@ std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRem
         return std::nullopt;
     }
     return restored_document(std::move(text).value(),
-                             Document{remnant.path, encoding, std::nullopt});
+                             Document{remnant.path, encoding, std::nullopt}, remnant.caret);
 }
 
 void EditorController::store_planned(AutosaveId id)
