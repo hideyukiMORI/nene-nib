@@ -7,6 +7,7 @@ or of a scripted trial: no window is opened, no editor is started, and no clock 
 """
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -303,9 +304,11 @@ class BenchTableTests(unittest.TestCase):
     def test_the_reference_describes_every_bench_of_the_table(self):
         """eng/prove-gates.py builds its QLT-014 proof from these descriptions (ADR 0044 decision 6)."""
         reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
-        self.assertEqual(list(speed.BENCHES), list(reference["benches"]))
+        self.assertEqual([*speed.BENCHES, *speed.OPTIONAL_BENCHES], list(reference["benches"]))
         self.assertIn("ADR 0044", reference["benches"]["key-to-frame-burst-200-16mib"])
         self.assertIn("ADR 0075", reference["benches"][speed.LONG_LINE_BENCH])
+        for name in speed.OPTIONAL_BENCHES:
+            self.assertIn("ADR 0138", reference["benches"][name])
 
     def test_the_real_machine_judges_the_long_line_bench_by_the_floor(self):
         """#298: adopted with --adopt --bench (gate-proofs 5-cs); QLT-014 says the floor decides."""
@@ -705,6 +708,102 @@ class LongLineTrialTests(unittest.TestCase):
                 values = {speed.LONG_LINE_BENCH: {"medianMs": measured}}
                 findings, _ = speed.compare(REFERENCE, values, recorded)
                 self.assertEqual(regressions, len(findings))
+
+
+class GiantLineTests(unittest.TestCase):
+    """ADR 0138: the one-line 16 MiB document and its two optional benches."""
+
+    def test_the_document_is_one_ascii_line_of_the_fixed_digest(self):
+        data = speed.giant_line_text().encode("ascii")
+        self.assertEqual(speed.GIANT_LINE_BYTES, len(data))
+        self.assertNotIn(b"\n", data)
+        self.assertNotIn(b"\r", data)
+        self.assertEqual(speed.GIANT_LINE_SHA256, hashlib.sha256(data).hexdigest())
+        self.assertIsInstance(json.loads(data), dict)
+
+    def test_the_optional_benches_are_not_in_the_default_set(self):
+        self.assertEqual(("open-giant-line-16mib", "key-to-frame-single-giant-line-16mib"),
+                         speed.OPTIONAL_BENCHES)
+        self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
+        self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
+
+    def test_compare_never_judges_an_optional_bench(self):
+        values = {name: {"medianMs": 9000.0} for name in speed.OPTIONAL_BENCHES}
+        recorded = {name: {"medianMs": 1.0} for name in speed.OPTIONAL_BENCHES}
+        self.assertEqual(([], []), speed.compare(REFERENCE, values, recorded))
+
+    def scripted_measurement(self, bench):
+        boundaries = {name: mock.Mock() for name in
+                      ("become_dpi_aware", "prepare", "giant_line_document", "large_document",
+                       "stamp", "machine", "bench_giant_open", "bench_giant_single")}
+        document = mock.Mock()
+        document.name = "giant-line.txt"
+        document.stat.return_value.st_size = speed.GIANT_LINE_BYTES
+        boundaries["prepare"].return_value = Path("exe"), {}, Path("folder")
+        boundaries["giant_line_document"].return_value = document
+        boundaries["stamp"].return_value = "test"
+        boundaries["machine"].return_value = record({})["machine"]
+        boundaries["bench_giant_open"].return_value = (
+            {speed.GIANT_OPEN_BENCH: 6000.0}, {speed.GIANT_OPEN_BENCH: {"origin": 10.0}})
+        boundaries["bench_giant_single"].return_value = {speed.GIANT_SINGLE_BENCH: None}, {}
+        with mock.patch.multiple(speed, **boundaries):
+            written = speed.measure(Path("build"), 1, bench)
+        return written, boundaries
+
+    def test_each_optional_bench_runs_only_its_own_trial_over_the_one_line_document(self):
+        for name, group in zip(speed.OPTIONAL_BENCHES, ("bench_giant_open", "bench_giant_single")):
+            with self.subTest(bench=name):
+                written, calls = self.scripted_measurement(name)
+                self.assertEqual({name}, set(written["values"]))
+                for candidate in ("bench_giant_open", "bench_giant_single"):
+                    self.assertEqual(int(candidate == group), calls[candidate].call_count)
+                calls["large_document"].assert_not_called()
+                self.assertEqual({"path": "giant-line.txt", "bytes": speed.GIANT_LINE_BYTES,
+                                  "lines": 1}, written["document"])
+                self.assertEqual(set(speed.BREAKDOWN_BENCHES).intersection({name}),
+                                 set(written["breakdown"]))
+
+    def test_a_single_without_an_answer_is_recorded_missing(self):
+        written, _ = self.scripted_measurement(speed.GIANT_SINGLE_BENCH)
+        self.assertEqual(1, written["values"][speed.GIANT_SINGLE_BENCH]["missing"])
+        self.assertIsNone(written["values"][speed.GIANT_SINGLE_BENCH]["medianMs"])
+
+    def test_a_timed_out_single_trial_is_missing_and_not_repeated(self):
+        error = speed.subprocess.TimeoutExpired("NeNeNib.exe", speed.LARGE_SECONDS)
+        with mock.patch.object(speed, "keys_trial", side_effect=error) as trial, \
+                contextlib.redirect_stdout(io.StringIO()):
+            values, parts = speed.bench_giant_single(Path("exe"), {}, Path("folder"), Path("g"))
+        self.assertEqual(({speed.GIANT_SINGLE_BENCH: None}, {}), (values, parts))
+        trial.assert_called_once_with(Path("exe"), {}, Path("folder"), Path("g"), burst=False)
+
+    def quiet_trial(self, entries):
+        process = mock.Mock()
+        boundaries = {name: mock.Mock() for name in
+                      ("start", "report_path", "raise_window", "take_foreground", "covered_by",
+                       "await_quiet", "write_text", "close", "dismiss_dialog", "stop",
+                       "observed_marks", "time")}
+        boundaries["start"].return_value = process, 123, []
+        boundaries["take_foreground"].return_value = True
+        boundaries["covered_by"].return_value = None
+        boundaries["await_quiet"].return_value = True
+        boundaries["dismiss_dialog"].return_value = True
+        boundaries["observed_marks"].return_value = entries
+        with mock.patch.multiple(speed, **boundaries), contextlib.redirect_stdout(io.StringIO()):
+            result = speed.keys_trial(Path("exe"), {}, Path("folder"), Path("g"), burst=False)
+        boundaries["stop"].assert_called_once_with(process)
+        self.assertEqual(["w", "a"], [call.args[1] for call in
+                                      boundaries["write_text"].call_args_list])
+        self.assertEqual(3, boundaries["await_quiet"].call_count)
+        return result
+
+    def test_the_trial_without_the_200_measures_the_single_after_the_warmup_frame(self):
+        self.assertEqual((0.5, None, 0.0, 2), self.quiet_trial(marks(2)))
+
+    def test_a_single_read_before_the_warmup_frame_is_missing(self):
+        entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                   {"milestone": "input_received", "qpcMicroseconds": 1200},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 9000}]
+        self.assertEqual((None, None, 0.0, 2), self.quiet_trial(entries))
 
 
 if __name__ == "__main__":

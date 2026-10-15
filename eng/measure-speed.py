@@ -22,6 +22,19 @@ through eng/window_driver.py, and reads the file back.
                             Japanese lines (#291's fixture, checked by SHA-256) is open; only its
                             single keystroke becomes a value (#298 / ADR 0075 decision 7)
 
+Two optional benches run only when --bench names them (OPTIONAL_BENCHES, ADR 0138); the eight
+above stay the default set and the only ones compare() judges:
+
+  open-giant-line-16mib     the same startup measurement as open-large-file-16mib with a document
+                            that is one 16,800,000 byte ASCII line (minified JSON, no newline,
+                            checked by SHA-256); a run that presents no frame within LARGE_SECONDS
+                            is missing, not a traceback
+  key-to-frame-single-giant-line-16mib
+                            the key-to-frame-single trial over that document without the 200
+                            keystrokes: the warmup character and one more, each sent only after the
+                            window thread went quiet, so the single is measured after the warmup's
+                            frame; a single that is not answered within LARGE_SECONDS is missing
+
 --bench selects the stimulus to measure and the value to record, compare or adopt. Without it,
 every bench runs. Related benches share their existing trial, but only the selected value is kept.
 The palette trial saves a PNG of the candidate count before the measured character for review;
@@ -66,6 +79,8 @@ Python standard library and ctypes only.
 from __future__ import annotations
 
 import argparse
+import ctypes as c
+from ctypes import wintypes as w
 import datetime
 import hashlib
 import json
@@ -77,9 +92,10 @@ import subprocess
 import time
 import winreg
 
-from window_driver import (become_dpi_aware, capture_png, close, covered_by, dismiss_dialog, IDNO,
-                           post_together, press_chord, raise_window, start, stop, take_foreground,
-                           user, VK_CONTROL, WindowCovered, WindowUnavailable, write_text)
+from window_driver import (api, become_dpi_aware, capture_png, close, covered_by, dismiss_dialog,
+                           IDNO, kernel, post_together, press_chord, raise_window, start, stop,
+                           take_foreground, user, VK_CONTROL, WindowCovered, WindowUnavailable,
+                           write_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "eng/perf-reference.json"
@@ -110,12 +126,28 @@ LONG_LINE_SENTENCE = "日本語の長い行と分割表示の文字組みを測�
 LONG_LINE_REPEATS = 90
 LONG_LINE_LINES = 1000
 LONG_LINE_SHA256 = "ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32a6c5"
+# 1 行が 16 MiB の文書（ADR 0138 決定 1）。ASCII だけ・改行なし・16,800,000 bytes ちょうどで、
+# minified JSON 風の鍵と値を並べ、最後の鍵の値で長さを合わせて "}" で閉じる。
+GIANT_LINE_BYTES = 16_800_000
+GIANT_LINE_VALUE = "nenenib giant line sample value"
+GIANT_LINE_SHA256 = "7888e16561252aa844dff7e65d9b9a6bfa6f64cd1324cdba255499144b0d211a"
+# 巨大な行の 1 打鍵は秒の桁になり得るので、固定の待ちではなく窓のスレッドが静かになるのを待つ。
+# 窓のスレッドの CPU 時間が QUIET_SECONDS の間に QUIET_CPU_MS しか進まなければ、描き終えたとみなす。
+QUIET_SECONDS = 0.5
+QUIET_CPU_MS = 20.0
+QUIET_POLL_SECONDS = 0.05
+THREAD_QUERY_LIMITED_INFORMATION = 0x0800
+FILE_TIME_TICKS_PER_MILLISECOND = 10_000
 MICROSECONDS_PER_MILLISECOND = 1000.0
 DISPLAY_ADAPTERS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000"
 CENTRAL_PROCESSOR = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 BENCHES = ("startup-first-frame", "startup-window-shown", "key-to-frame-single",
            "key-to-frame-burst-200", "open-large-file-16mib", "key-to-frame-burst-200-16mib",
            "key-to-frame-palette-5000", "key-to-frame-single-long-line")
+# --bench で名指ししたときだけ測る 2 本（ADR 0138 決定 4）。compare() は BENCHES だけを見る。
+GIANT_OPEN_BENCH = "open-giant-line-16mib"
+GIANT_SINGLE_BENCH = "key-to-frame-single-giant-line-16mib"
+OPTIONAL_BENCHES = (GIANT_OPEN_BENCH, GIANT_SINGLE_BENCH)
 PALETTE_BENCH = "key-to-frame-palette-5000"
 # 長い行の 1 打鍵は key-to-frame-single と同じ試行（keys_trial）で、違うのは開く文書だけ（#298）。
 LONG_LINE_BENCH = "key-to-frame-single-long-line"
@@ -132,7 +164,7 @@ STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "
                       "device_created", "swap_chain_created", "composition_bound",
                       "context_created", "text_formats_created", "frame_presented")
 # 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
-STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib")
+STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
 BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH)
 
@@ -225,6 +257,35 @@ def long_line_document(folder: Path) -> Path:
     if digest != LONG_LINE_SHA256:
         raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {LONG_LINE_SHA256};"
                          f" {LONG_LINE_BENCH} is not measured")
+    return path
+
+
+def giant_line_text() -> str:
+    """One ASCII line of 16,800,000 bytes: minified-JSON-like pairs, the last value fills the rest.
+
+    The line is "{" + n pairs of '"k000000":"<value>",' + a last pair whose value is cut to the
+    length that is left + "}". Nothing in it is a newline, so the editor sees one line (ADR 0138).
+    """
+    pair = f'"k{0:06d}":"{GIANT_LINE_VALUE}",'
+    last_overhead = len(f'"k{0:06d}":"') + len('"}')
+    count = (GIANT_LINE_BYTES - 1 - last_overhead) // len(pair)
+    filler = GIANT_LINE_BYTES - 1 - last_overhead - count * len(pair)
+    pairs = "".join(f'"k{index:06d}":"{GIANT_LINE_VALUE}",' for index in range(count))
+    last = f'"k{count:06d}":"' + (GIANT_LINE_VALUE * 2)[:filler] + '"}'
+    return "{" + pairs + last
+
+
+def giant_line_document(folder: Path) -> Path:
+    """ADR 0138's one-line document byte for byte; any other digest stops before a trial."""
+    path = folder / "giant-line.txt"
+    if path.is_file() and file_sha256(path) == GIANT_LINE_SHA256:
+        return path
+    with path.open("w", encoding="ascii", newline="") as handle:
+        handle.write(giant_line_text())
+    digest = file_sha256(path)
+    if digest != GIANT_LINE_SHA256:
+        raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {GIANT_LINE_SHA256};"
+                         f" {', '.join(OPTIONAL_BENCHES)} are not measured")
     return path
 
 
@@ -482,14 +543,64 @@ def bench_long_line(executable: Path, environment: dict, folder: Path,
     return {LONG_LINE_BENCH: None}, {}
 
 
+api(kernel, "GetThreadTimes", w.BOOL, w.HANDLE, c.POINTER(c.c_ulonglong),
+    c.POINTER(c.c_ulonglong), c.POINTER(c.c_ulonglong), c.POINTER(c.c_ulonglong))
+
+
+def thread_cpu_ms(handle) -> float | None:
+    """Kernel plus user time of that thread in ms, or None when Windows does not say."""
+    times = [c.c_ulonglong() for _ in range(4)]
+    if not kernel.GetThreadTimes(handle, *(c.byref(value) for value in times)):
+        return None
+    return (times[2].value + times[3].value) / FILE_TIME_TICKS_PER_MILLISECOND
+
+
+def await_quiet(window, seconds: float = LARGE_SECONDS) -> bool:
+    """Wait until the window thread spends almost no CPU for QUIET_SECONDS; False at the deadline.
+
+    The measurement file is only written at exit, so a running trial cannot see its frames. Over
+    the giant line one keystroke can take seconds, and a fixed sleep would post the next character
+    while the previous one is still being laid out. A quiet window thread is the observable sign
+    that it went back to its message loop after drawing; the marks still decide afterwards whether
+    the measured keystroke came after the warmup's frame (ADR 0138).
+    """
+    thread = user.GetWindowThreadProcessId(window, None)
+    handle = kernel.OpenThread(THREAD_QUERY_LIMITED_INFORMATION, False, thread) if thread else None
+    if not handle:
+        time.sleep(seconds)
+        return False
+    try:
+        deadline = time.monotonic() + seconds
+        since, used = time.monotonic(), thread_cpu_ms(handle)
+        while time.monotonic() < deadline:
+            time.sleep(QUIET_POLL_SECONDS)
+            now, current = time.monotonic(), thread_cpu_ms(handle)
+            if used is None or current is None:
+                return False
+            if current - used > QUIET_CPU_MS:
+                since, used = now, current
+            elif now - since >= QUIET_SECONDS:
+                return True
+        return False
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def keys_trial(executable: Path, environment: dict, folder: Path,
-               document: Path | None = None) -> tuple[float | None, float | None, float, int]:
+               document: Path | None = None,
+               burst: bool = True) -> tuple[float | None, float | None, float, int]:
     """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
 
     Either value is None when its own stimulus did not reach the window, and the caller repeats or
     records the trial as missing (Issue #30); the count is what the caller says in that line.
     TrialNotObserved leaves instead when the trial produced nothing to read at all (Issue #36).
+
+    With burst=False the 200 keystrokes are not sent (ADR 0138 decision 3): the trial is the
+    warmup and the single only, each posted after the window thread went quiet, and the single is
+    a value only when the warmup's frame was presented before it was read.
     """
+    if not burst:
+        return quiet_single_trial(executable, environment, folder, document)
     if document is None:
         report = report_path(folder, "keys")
         process, window, _ = start(executable, environment, ["--measure", str(report)])
@@ -538,6 +649,88 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
     if finished is None:
         return single, None, span, len(inputs)
     return single, (finished - started) / MICROSECONDS_PER_MILLISECOND, span, len(inputs)
+
+
+def quiet_single_trial(executable: Path, environment: dict, folder: Path,
+                       document: Path) -> tuple[float | None, None, float, int]:
+    """keys_trial without the 200: warmup, then one keystroke, each after the window went quiet."""
+    report = report_path(folder, "keys-giant")
+    process, window, _ = start(executable, environment,
+                               ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
+    try:
+        raise_window(window)
+        if not take_foreground(window):
+            print("Speed: the bench window did not take the foreground")
+        covering = covered_by(window)
+        if covering is not None:
+            print(f"Speed: another window covers the bench window ({covering})")
+        time.sleep(SETTLE_SECONDS)
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after opening the document")
+        write_text(window, "w")
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the warmup keystroke")
+        write_text(window, "a")
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the measured keystroke")
+        close(window)
+        if not dismiss_dialog(process, IDNO, seconds=LARGE_SECONDS):
+            raise TrialNotObserved("the unsaved confirmation never came up")
+        process.wait(timeout=LARGE_SECONDS)
+    finally:
+        stop(process)
+    marks = observed_marks(report)
+    inputs = input_indexes(marks)
+    if len(inputs) >= 2:
+        warmed = frame_after(marks, inputs[0])
+        if warmed is None or warmed > int(marks[inputs[1]]["qpcMicroseconds"]):
+            print("Speed: the measured keystroke was read before the warmup's frame was presented")
+            return None, None, 0.0, len(inputs)
+    return measured_single(marks, inputs), None, 0.0, len(inputs)
+
+
+def bench_giant_single(executable: Path, environment: dict, folder: Path,
+                       document: Path) -> tuple[dict, dict]:
+    """One keystroke at the start of the one-line 16 MiB document; never repeated (ADR 0138).
+
+    A trial can take minutes when the product cannot answer, so a trial that was not observed or
+    timed out is missing at once instead of being repeated BURST_ATTEMPTS times.
+    """
+    try:
+        single, _, _, _ = keys_trial(executable, environment, folder, document, burst=False)
+    except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
+        print(f"Speed: {unobserved}; this trial of {GIANT_SINGLE_BENCH} is missing")
+        single = None
+    return {GIANT_SINGLE_BENCH: single}, {}
+
+
+def bench_giant_open(executable: Path, environment: dict, folder: Path,
+                     document: Path) -> tuple[dict, dict]:
+    """open-large-file-16mib's measurement over the one-line document; no frame is missing.
+
+    The window is asked to close at once as in bench_large_file, and the process gets
+    LARGE_SECONDS to present its first frame and exit; one that does not is killed by stop() and
+    the trial is missing (ADR 0138 decision 4), as is a finished file without frame_presented.
+    """
+    report = report_path(folder, "giant")
+    process, window, _ = start(executable, environment,
+                               ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
+    try:
+        close(window)
+        process.wait(timeout=LARGE_SECONDS)
+    except subprocess.TimeoutExpired:
+        print(f"Speed: the editor did not exit within {LARGE_SECONDS:.0f} seconds;"
+              f" this trial of {GIANT_OPEN_BENCH} is missing")
+    finally:
+        stop(process)
+    text = report.read_text(encoding="utf-8") if report.is_file() else ""
+    marks = marks_of(text)
+    if marks is None or not any(entry["milestone"] == "frame_presented" for entry in marks):
+        print(f"Speed: no frame was presented; this trial of {GIANT_OPEN_BENCH} is missing")
+        return {GIANT_OPEN_BENCH: None}, {}
+    measured = json.loads(text)
+    return ({GIANT_OPEN_BENCH: float(measured["processCreationToFirstFrameMs"])},
+            {GIANT_OPEN_BENCH: breakdown(measured)})
 
 
 def bench_large_file(executable: Path, environment: dict, folder: Path,
@@ -596,7 +789,8 @@ def judged_samples(measured: dict) -> int | None:
 
 
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
-                document: Path | None, palette: Path | None, long_line: Path | None = None):
+                document: Path | None, palette: Path | None, long_line: Path | None = None,
+                giant: Path | None = None):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -610,6 +804,10 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_palette(executable, environment, folder, palette)
     if LONG_LINE_BENCH in names:
         yield bench_long_line(executable, environment, folder, long_line)
+    if GIANT_OPEN_BENCH in names:
+        yield bench_giant_open(executable, environment, folder, giant)
+    if GIANT_SINGLE_BENCH in names:
+        yield bench_giant_single(executable, environment, folder, giant)
 
 
 def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
@@ -622,6 +820,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
     palette = palette_document(folder) if PALETTE_BENCH in names else None
     # 文書の SHA-256 が #291 と違えば、どの試行も始める前に落ちる（#298）。
     long_line = long_line_document(folder) if LONG_LINE_BENCH in names else None
+    # 1 行 16 MiB の文書も SHA-256 が違えば測らない（ADR 0138 決定 1）。
+    giant = giant_line_document(folder) if any(name in names for name in OPTIONAL_BENCHES) else None
     samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in names}
@@ -630,7 +830,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
     segments: dict = {name: {} for name in BREAKDOWN_BENCHES if name in names}
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
-                                         long_line):
+                                         long_line, giant):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -649,6 +849,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
     if document is not None:
         record["document"] = {"path": document.name, "bytes": document.stat().st_size,
                               "lines": LARGE_LINES}
+    elif giant is not None:
+        record["document"] = {"path": giant.name, "bytes": giant.stat().st_size, "lines": 1}
     return record
 
 
@@ -663,7 +865,7 @@ def describe(record: dict) -> str:
     lines = [f"Speed: {record['repetitions']} runs on {record['machine']['fingerprint']}"
              f" ({record['machine']['cpu']} / {record['machine']['gpu']}"
              f" / {record['machine']['dpi']} dpi)"]
-    for name in BENCHES:
+    for name in (*BENCHES, *OPTIONAL_BENCHES):
         if name not in record["values"]:
             continue
         value = record["values"][name]
@@ -839,7 +1041,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--record", action="store_true", help="measure and write out/speed")
     parser.add_argument("--adopt", action="store_true", help="write the medians into the reference")
-    parser.add_argument("--bench", choices=BENCHES,
+    parser.add_argument("--bench", choices=BENCHES + OPTIONAL_BENCHES,
                         help="measure, record, compare or adopt this one bench only")
     parser.add_argument("--check", action="store_true", help="compare with this machine's reference")
     parser.add_argument("--executable", type=Path, default=ROOT / RELEASE_EXECUTABLE)
