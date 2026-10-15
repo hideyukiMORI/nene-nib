@@ -140,3 +140,5 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0123](0123-ui-language-is-a-versioned-setting.md) | 表示言語は版付き設定に持ち、OSの観測値から明示操作時に解決する | 提案・#456、未実装/技術受理前 |
 | [0124](0124-file-read-completes-the-declared-size.md) | 宣言サイズを取得し終えるまで読込を成功にしない | 受理・#463、対象139契約と境界検査成功 |
 | [0125](0125-source-resource-lifetime-is-probed-before-product-ports.md) | 退避資源の寿命を製品portへ入れる前に小さく確かめる | 限定実験受理・#465、同期228契約成功/製品API採用前 |
+| [0126](adr\0126-overlapped-cancellation-drains-before-release.md) | OVERLAPPEDの取消要求と最終完了を分けて資源を回収する | 受理（隔離実験の寿命・取消契約。製品採用とASanの全検査範囲は未受理） |
+| [0127](adr\0127-large-file-integration-reserves-prepares-and-commits.md) | 大容量本文の接続は資源を予約し、準備した操作と保存版を一度だけ確定する | 受理（製品接続の設計契約のみ。実装・実容量・性能の受理ではない） |
