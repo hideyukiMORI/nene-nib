@@ -94,10 +94,12 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   and the search line still keep the IME closed. Done.
 - **FR-013 1 GB files** — planned; files above 64 MiB are not supported yet.
 - **FR-014 Per-Monitor v2 DPI** — declared in the manifest; DIP to pixel conversion is integer-only in the core.
-- **FR-015 speed** — Release benchmarks in `eng/measure-speed.py` against per-machine references in
-  `eng/perf-reference.json` (startup 191 ms, window visible 35 ms, one keystroke 0.9 ms, 16 MiB file 250 ms on the
-  reference machine). `--bench <name>` selects one measurement, including input in a 5000-file palette.
-  Run on demand and in `-Full`; merge CI does not measure.
+- **FR-015 speed** — targets on the owner's machine (decision D51, 2026-10-16): startup 50 ms, window visible
+  40 ms, one keystroke 1 ms, 200 keystrokes 3 ms, open a 16 MiB file 60 ms, 200 keystrokes in 16 MiB 3 ms.
+  The gate is separate from the targets: Release benchmarks in `eng/measure-speed.py` compare against the recorded
+  per-machine references in `eng/perf-reference.json` (startup 191 ms, window visible 35 ms, one keystroke 0.9 ms,
+  16 MiB file 250 ms on the reference machine) and fail on regression. `--bench <name>` selects one measurement,
+  including input in a 5000-file palette. Run on demand and in `-Full`; merge CI does not measure.
 - **FR-016 colorscheme** — 125 built-in themes plus up to 128 user themes from
   `%LOCALAPPDATA%/NeNeNib/themes/<name>.v1.theme`; `:colorscheme <name>` / `system`, Tab completion, Ctrl+P. Done.
   Includes all 28 Vim standard names, VS Code defaults, popular IDE palettes, MonaLisa,
