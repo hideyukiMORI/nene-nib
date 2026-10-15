@@ -185,6 +185,10 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 v3はwrapを含む。v3不在時だけv2、両方不在時だけv1を厳密に読み、旧版のwrapは既定オン、v1のguideは既定表示にする。設定を変更するときだけv3へ書き、旧ファイルを残す。存在する新版が壊れていれば旧版へ戻らず保存を拒否し、移行保存時もlockとbytesを照合する（ADR 0114）。案内の文字と鍵は `operation_text` と `shown_chord` が正本で、rendererに文字列の別表を書かない。
 
+### 一時ファイルは `<target>.nib-tmp-<pid>-<n>` を `CREATE_NEW` で作り、保存の直前に残骸を回収する
+
+名前と回収は `src/adapters/win32/TemporaryFiles` の 1 か所（ADR 0135）。連番は `Win32FileAdapter` が保存ごとに進め、名前が既にあれば最大 8 回まで次を試す。回収は `DeleteFileW` が通るものだけ（生きている一時ファイルは共有 0 で消えない）で、時刻で決めない。起動時は合成ルートが設定の置き場で `reclaim_temporaries_beside` を 1 回呼ぶ。固定名の一時ファイルを書かない。
+
 ### リポジトリの外の作業場所は `D:\NeNeNib\`
 
 依頼書は `D:\NeNeNib\briefs\`、1 回限りのスクリプトは `D:\NeNeNib\scripts\`、実機の確認の profile と文書は `D:\NeNeNib\evidence\`（施主指示 2026-09-30。C ドライブの Temp と scratchpad を使わない）。道具の出力と席の報告はリポジトリの `out/`。

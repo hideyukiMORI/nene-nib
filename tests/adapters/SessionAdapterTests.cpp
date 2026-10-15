@@ -60,7 +60,6 @@ void expect(bool condition, const char *message)
 void remove_file(const std::wstring &name)
 {
     DeleteFileW(name.c_str());
-    DeleteFileW((name + L".nib-tmp").c_str());
 }
 
 // 固定の名前なので、前回の実行が残していたものを消してから作り直す。

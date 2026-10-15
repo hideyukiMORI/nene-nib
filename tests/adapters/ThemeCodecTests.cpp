@@ -284,7 +284,6 @@ void verify_file_loading()
     constexpr wchar_t folder[] = L"nib-theme-files";
     constexpr wchar_t file[] = L"nib-theme-files/my-theme.v1.theme";
     DeleteFileW(file);
-    DeleteFileW(L"nib-theme-files/my-theme.v1.theme.nib-tmp");
     const BOOL created = CreateDirectoryW(folder, nullptr);
     expect(created != 0 || GetLastError() == ERROR_ALREADY_EXISTS, "isolated theme folder exists");
     adapters::Win32FileAdapter files;
