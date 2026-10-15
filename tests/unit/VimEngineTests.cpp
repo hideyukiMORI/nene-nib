@@ -33,18 +33,26 @@
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
+#include "VimInsertRepeat.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimKeySource.hpp"
+#include "VimLayoutView.hpp"
+#include "VimLineRows.hpp"
+#include "VimMacroRecording.hpp"
 #include "VimMode.hpp"
 #include "VimMoveTo.hpp"
 #include "VimNavigate.hpp"
 #include "VimNewLine.hpp"
 #include "VimNoEffect.hpp"
+#include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimRegisterSelection.hpp"
+#include "VimRegisterSnapshot.hpp"
 #include "VimRemoveLines.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimRepeatRecord.hpp"
 #include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -66,10 +74,12 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -113,16 +123,26 @@ using nenenib::core::vim_visual_range;
 using nenenib::core::vim_word_end;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimEditorView;
+using nenenib::core::VimInsertRepeat;
 using nenenib::core::VimKey;
+using nenenib::core::VimKeySource;
+using nenenib::core::VimLayoutView;
+using nenenib::core::VimLineRows;
+using nenenib::core::VimMacroRecording;
 using nenenib::core::VimMode;
 using nenenib::core::VimMoveTo;
 using nenenib::core::VimNavigate;
 using nenenib::core::VimNewLine;
 using nenenib::core::VimNoEffect;
+using nenenib::core::VimPendingOperator;
 using nenenib::core::VimRegister;
 using nenenib::core::VimRegisterKind;
+using nenenib::core::VimRegisterSelection;
+using nenenib::core::VimRegisterSnapshot;
+using nenenib::core::VimRepeatRecord;
 using nenenib::core::VimSelect;
 using nenenib::core::VimState;
+using nenenib::core::VimTabs;
 using nenenib::core::VimViewport;
 using nenenib::core::VimWordClass;
 using nenenib::core::VimWordEndStop;
@@ -1092,32 +1112,97 @@ void verify_vim_tab_steps()
     return state;
 }
 
-// 画面を読む鍵は表示領域が無ければ要求だけを立てて状態を動かさず、渡して流し直すと最初から
-// 渡したのと同じ結果になる。読まない鍵は要求しない（ADR 0129 の決定 1・3）。
-void verify_vim_viewport_request()
+// 両方に値があるときだけ中身を比べる。片方だけなら違う。
+template <typename Value, typename Same>
+[[nodiscard]] bool same_optional(const std::optional<Value> &left,
+                                 const std::optional<Value> &right, Same same)
 {
-    const auto text = TextBuffer::from_utf8(vim_lines(30));
-    expect(text.has_value(), "the viewport request sample parses");
-    const auto &buffer = text.value();
-    const Selection selection = collapsed_at(buffer.line_start(LineNumber{10}));
-    const VimEditorView shown{buffer, selection, VimViewport{LineNumber{6}, 10, 0}};
-    const VimEditorView hidden{buffer, selection, std::nullopt};
-    constexpr std::array<std::pair<std::string_view, std::string_view>, 15> reading{{
-        {"", "H"},
-        {"", "M"},
-        {"", "L"},
-        {"3", "H"},
-        {"2", "L"},
-        {"d", "L"},
-        {"y2", "H"},
-        {"v", "H"},
-        {"", "<C-d>"},
-        {"5", "<C-u>"},
-        {"", "<C-f>"},
-        {"", "<C-b>"},
-        {"", "<PageDown>"},
-        {"i", "<PageDown>"},
-        {"i", "<PageUp>"},
+    if (!left.has_value() || !right.has_value())
+    {
+        return left.has_value() == right.has_value();
+    }
+    return same(left.value(), right.value());
+}
+
+[[nodiscard]] bool same_vim_register(const VimRegisterSnapshot &left,
+                                     const VimRegisterSnapshot &right)
+{
+    const VimRegister &before = left.value();
+    const VimRegister &after = right.value();
+    return before.text == after.text && before.kind == after.kind && before.width == after.width;
+}
+
+[[nodiscard]] bool same_vim_registers(const VimState &left, const VimState &right)
+{
+    return same_vim_register(left.unnamed_register, right.unnamed_register) &&
+           same_vim_register(left.small_delete, right.small_delete) &&
+           same_vim_register(left.clipboard, right.clipboard) &&
+           std::ranges::equal(left.registers.registers, right.registers.registers,
+                              same_vim_register) &&
+           std::ranges::equal(left.numbered.registers, right.numbered.registers, same_vim_register);
+}
+
+[[nodiscard]] bool same_vim_record(const std::optional<VimRepeatRecord> &left,
+                                   const std::optional<VimRepeatRecord> &right)
+{
+    return same_optional(left, right,
+                         [](const VimRepeatRecord &before, const VimRepeatRecord &after)
+                         {
+                             return before.count == after.count &&
+                                    before.visual.has_value() == after.visual.has_value() &&
+                                    before.keys.owned_keys() == after.keys.owned_keys();
+                         });
+}
+
+[[nodiscard]] bool same_vim_waits(const VimState &left, const VimState &right)
+{
+    return same_optional(
+               left.pending, right.pending,
+               [](const VimPendingOperator &before, const VimPendingOperator &after)
+               { return before.operation == after.operation && before.count == after.count; }) &&
+           same_optional(left.selected_register, right.selected_register,
+                         [](const VimRegisterSelection &before, const VimRegisterSelection &after)
+                         {
+                             return before.target == after.target && before.name == after.name &&
+                                    before.append == after.append;
+                         }) &&
+           same_optional(
+               left.insert_repeat, right.insert_repeat,
+               [](const VimInsertRepeat &before, const VimInsertRepeat &after)
+               { return before.remaining == after.remaining && before.text == after.text; }) &&
+           left.input_wait.has_value() == right.input_wait.has_value();
+}
+
+// 表示領域や文字組みを求めた step が何も消費しないこと。回数・オペレータ・レジスタ・録画・`.` の
+// 記録・欲しい列を比べる（VimState は == を持たないので欄ごと）。
+[[nodiscard]] bool same_vim_memory(const VimState &left, const VimState &right)
+{
+    return left.mode == right.mode && left.count == right.count &&
+           left.wanted_column == right.wanted_column && left.scroll_lines == right.scroll_lines &&
+           left.last_macro == right.last_macro && same_vim_waits(left, right) &&
+           same_vim_record(left.recording, right.recording) &&
+           same_vim_record(left.last_change, right.last_change) &&
+           same_optional(left.macro_recording, right.macro_recording,
+                         [](const VimMacroRecording &before, const VimMacroRecording &after)
+                         {
+                             return before.name == after.name && before.append == after.append &&
+                                    before.keys.owned_keys() == after.keys.owned_keys();
+                         }) &&
+           same_vim_registers(left, right);
+}
+
+// 画面を読む鍵は表示領域が無ければ要求だけを立てて状態を動かさず、渡して流し直すと最初から
+// 渡したのと同じ結果になる（ADR 0129 の決定 1・3）。録画・レジスタ・`.` の記録も消費しない。
+void verify_vim_viewport_reading_keys(const VimEditorView &shown, const VimEditorView &hidden)
+{
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 26> reading{{
+        {"", "H"},          {"", "M"},        {"", "L"},           {"3", "H"},
+        {"2", "L"},         {"d", "L"},       {"y2", "H"},         {"v", "H"},
+        {"", "<C-d>"},      {"5", "<C-u>"},   {"", "<C-f>"},       {"", "<C-b>"},
+        {"", "<PageDown>"}, {"", "<PageUp>"}, {"i", "<PageDown>"}, {"i", "<PageUp>"},
+        {"v", "<C-d>"},     {"V", "H"},       {"V", "M"},          {"V", "L"},
+        {"<C-v>", "H"},     {"<C-v>", "M"},   {"<C-v>", "L"},      {"xqa", "H"},
+        {"\"ayyqb", "M"},   {"\"b", "L"},
     }};
     for (const auto &[before, key] : reading)
     {
@@ -1127,12 +1212,16 @@ void verify_vim_viewport_request()
         expect(requested.viewport_request && !requested.layout_request.has_value() &&
                    std::holds_alternative<VimNoEffect>(requested.effect),
                "a key that reads the screen requests the viewport without an effect");
-        expect(requested.next.mode == state.mode && requested.next.count == state.count &&
-                   requested.next.pending.has_value() == state.pending.has_value(),
-               "the viewport request consumes neither the count nor the operator");
+        expect(same_vim_memory(requested.next, state),
+               "the viewport request consumes no count, operator, register, recording or record");
         expect(same_vim_step(vim_step(requested.next, shown, last), vim_step(state, shown, last)),
                "the answered key matches a step that had the viewport from the start");
     }
+}
+
+// 読まない鍵は要求しない（ADR 0129 の決定 1）。
+void verify_vim_viewport_blind_keys(const VimEditorView &shown, const VimEditorView &hidden)
+{
     constexpr std::array<std::pair<std::string_view, std::string_view>, 11> blind{{
         {"", "h"},
         {"", "j"},
@@ -1154,6 +1243,108 @@ void verify_vim_viewport_request()
         expect(!stepped.viewport_request && same_vim_step(stepped, vim_step(state, shown, last)),
                "a key that does not read the screen steps without the viewport");
     }
+}
+
+// 折り返しの試料の行の画面行数。行 n は 1 + n % 3 行。
+[[nodiscard]] std::vector<VimLineRows> wrapped_rows_of(std::size_t lines)
+{
+    std::vector<VimLineRows> rows;
+    for (std::size_t line = 1; line <= lines; ++line)
+    {
+        rows.push_back(VimLineRows{LineNumber{line}, 1 + (line % 3)});
+    }
+    return rows;
+}
+
+constexpr VimViewport wrapped_viewport{LineNumber{7}, 10, 1};
+
+// controller と同じ順で 1 つの要求に応える。文字組みの要求は viewport を渡した後にだけ来る。
+void answer_wrapped_request(const nenenib::core::VimStep &step, VimEditorView &view,
+                            std::vector<VimLineRows> &rows, std::span<const VimLineRows> all)
+{
+    expect(!(step.viewport_request && step.layout_request.has_value()),
+           "a step asks for one thing at a time");
+    if (step.viewport_request)
+    {
+        expect(!view.viewport.has_value(), "the viewport is requested once");
+        view.viewport = wrapped_viewport;
+        return;
+    }
+    expect(view.viewport.has_value(), "the layout request follows the viewport");
+    const LineNumber line = step.layout_request.value_or(LineNumber{1});
+    const auto found = std::ranges::lower_bound(rows, line.value, {}, [](const VimLineRows &value)
+                                                { return value.line.value; });
+    rows.insert(found, all[line.value - 1]);
+    view.layout.lines = rows;
+}
+
+// 表示領域も行の画面行数も無い所から、要求に順に応えて同じ鍵を流し直した結果。
+[[nodiscard]] nenenib::core::VimStep answered_wrapped(const VimState &state,
+                                                      const VimEditorView &hidden,
+                                                      const VimKey &key,
+                                                      std::span<const VimLineRows> all)
+{
+    std::vector<VimLineRows> rows;
+    VimEditorView view = hidden;
+    auto step = vim_step(state, view, key);
+    expect(step.viewport_request,
+           "a wrapped key that reads the screen asks for the viewport first");
+    for (std::size_t round = 0;
+         round <= all.size() && (step.viewport_request || step.layout_request.has_value()); ++round)
+    {
+        expect(same_vim_memory(step.next, state), "a wrapped request consumes nothing");
+        answer_wrapped_request(step, view, rows, all);
+        step = vim_step(state, view, key);
+    }
+    return step;
+}
+
+// 折り返しが有効でも、viewport の要求 → 行の画面行数の要求の往復に応えると、最初から全部を
+// 渡したのと同じ結果になる（ADR 0129 の決定 1・2）。
+void verify_vim_wrapped_viewport_request()
+{
+    const auto text = TextBuffer::from_utf8(vim_lines(30));
+    expect(text.has_value(), "the wrapped viewport request sample parses");
+    const auto &buffer = text.value();
+    const Selection selection = collapsed_at(buffer.line_start(LineNumber{10}));
+    const auto all = wrapped_rows_of(30);
+    const VimEditorView full{buffer,           selection,
+                             wrapped_viewport, VimKeySource::typed,
+                             VimTabs{0, 1},    VimLayoutView{true, all}};
+    const VimEditorView hidden{buffer,        selection,
+                               std::nullopt,  VimKeySource::typed,
+                               VimTabs{0, 1}, VimLayoutView{true, {}}};
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 7> keys{{
+        {"", "H"},
+        {"", "L"},
+        {"v", "M"},
+        {"V", "L"},
+        {"", "<C-d>"},
+        {"", "<C-f>"},
+        {"", "<PageUp>"},
+    }};
+    for (const auto &[before, key] : keys)
+    {
+        const VimState state = vim_state_after(before, full);
+        const VimKey last = vim_keys_of(key).front();
+        const auto answered = answered_wrapped(state, hidden, last, all);
+        expect(!answered.viewport_request && !answered.layout_request.has_value() &&
+                   same_vim_step(answered, vim_step(state, full, last)),
+               "the answered wrapped key matches a step that had everything from the start");
+    }
+}
+
+void verify_vim_viewport_request()
+{
+    const auto text = TextBuffer::from_utf8(vim_lines(30));
+    expect(text.has_value(), "the viewport request sample parses");
+    const auto &buffer = text.value();
+    const Selection selection = collapsed_at(buffer.line_start(LineNumber{10}));
+    const VimEditorView shown{buffer, selection, VimViewport{LineNumber{6}, 10, 0}};
+    const VimEditorView hidden{buffer, selection, std::nullopt};
+    verify_vim_viewport_reading_keys(shown, hidden);
+    verify_vim_viewport_blind_keys(shown, hidden);
+    verify_vim_wrapped_viewport_request();
 }
 
 } // namespace
