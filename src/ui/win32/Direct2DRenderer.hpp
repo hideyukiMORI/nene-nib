@@ -83,6 +83,8 @@ class Direct2DRenderer final
     // 箱から受け取った factory を返す（自分で作ったときは空・swap chain が作る）。
     [[nodiscard]] std::expected<Microsoft::WRL::ComPtr<IDXGIFactory2>, RenderFailure>
     create_device(DeviceWarmup &warmup);
+    [[nodiscard]] std::expected<Microsoft::WRL::ComPtr<IDXGIFactory2>, RenderFailure>
+    create_provisional_device(DeviceWarmup &warmup);
     [[nodiscard]] std::expected<void, RenderFailure>
     create_swap_chain(HWND window, Microsoft::WRL::ComPtr<IDXGIFactory2> factory);
     [[nodiscard]] std::expected<void, RenderFailure> bind_composition(HWND window);

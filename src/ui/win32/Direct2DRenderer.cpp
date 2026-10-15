@@ -215,16 +215,7 @@ Direct2DRenderer::create_device(DeviceWarmup &warmup)
     constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     if (!warmup.ready())
     {
-        // 実験: worker の device を待たずに UI スレッドの WARP で最初の frame を描き、
-        // 本物の device が出来たら adopt で差し替える。
-        if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, nullptr, 0,
-                                     D3D11_SDK_VERSION, &device_, nullptr, nullptr)) ||
-            FAILED(device_.As(&dxgi_device_)))
-        {
-            return std::unexpected(RenderFailure::device_creation);
-        }
-        provisional_ = true;
-        return {};
+        return create_provisional_device(warmup);
     }
     auto warmed = warmup.take();
     if (warmed.has_value())
@@ -252,6 +243,30 @@ Direct2DRenderer::create_device(DeviceWarmup &warmup)
     {
         return std::unexpected(RenderFailure::device_creation);
     }
+    return {};
+}
+
+// 実験: worker の device を待たずに UI スレッドの WARP で最初の frame を描き、本物の device が
+// 出来たら adopt で差し替える。WARP は箱が構築で先に作ってある（無ければここで作る）。
+std::expected<Microsoft::WRL::ComPtr<IDXGIFactory2>, RenderFailure>
+Direct2DRenderer::create_provisional_device(DeviceWarmup &warmup)
+{
+    constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    auto early = warmup.take_provisional();
+    if (early.has_value())
+    {
+        device_ = std::move(early.value().device);
+    }
+    else if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, nullptr, 0,
+                                      D3D11_SDK_VERSION, &device_, nullptr, nullptr)))
+    {
+        return std::unexpected(RenderFailure::device_creation);
+    }
+    if (FAILED(device_.As(&dxgi_device_)))
+    {
+        return std::unexpected(RenderFailure::device_creation);
+    }
+    provisional_ = true;
     return {};
 }
 

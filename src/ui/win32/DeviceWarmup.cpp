@@ -8,6 +8,7 @@ namespace nenenib::ui::win32
 // 手動リセットの event。立てたら下ろさないので、take() が何度待っても戻る。
 DeviceWarmup::DeviceWarmup() : ready_(CreateEventW(nullptr, TRUE, FALSE, nullptr), &::CloseHandle)
 {
+    make_provisional();
 }
 
 // flags・feature levels・WARP への切り替えは Direct2DRenderer::create_device と同じ（ADR 0131）。
@@ -58,5 +59,25 @@ bool DeviceWarmup::ready() const
 HANDLE DeviceWarmup::event() const
 {
     return ready_.get();
+}
+
+void DeviceWarmup::make_provisional() noexcept
+{
+    constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, nullptr, 0,
+                                 D3D11_SDK_VERSION, &provisional_.device, nullptr,
+                                 &provisional_.context)))
+    {
+        provisional_ = WarmedDevice{};
+    }
+}
+
+std::optional<WarmedDevice> DeviceWarmup::take_provisional()
+{
+    if (!provisional_.device)
+    {
+        return std::nullopt;
+    }
+    return std::exchange(provisional_, WarmedDevice{});
 }
 } // namespace nenenib::ui::win32

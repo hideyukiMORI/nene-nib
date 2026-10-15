@@ -198,7 +198,7 @@ int run(HINSTANCE instance)
     // （壊れる順は 窓 → controller → adapter → ワーカー → device の箱）。
     // device の箱は仕事に借りられるので worker より先に宣言して後に壊す。最初の仕事として
     // device を作り始め、窓を作って見せる間に重ねる（ADR 0131 の決定 2）。
-    nenenib::ui::win32::DeviceWarmup warmup;
+    nenenib::ui::win32::DeviceWarmup warmup; // 実験: 構築で WARP の device を先に作る。
     nenenib::adapters::win32::Win32Worker worker;
     worker.post([&warmup](const std::stop_token &stop) { warmup.make(stop.stop_requested()); });
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);

@@ -16,6 +16,8 @@ namespace nenenib::ui::win32
 class DeviceWarmup final
 {
   public:
+    // 実験: 構築（UI スレッド・worker の仕事を投げる前）で WARP の device を作っておく。
+    // HARDWARE の生成と同時に WARP を作ると、WARP が HARDWARE の終わりまで待たされる（約 140 ms）。
     DeviceWarmup();
     ~DeviceWarmup() = default;
     DeviceWarmup(const DeviceWarmup &) = delete;
@@ -34,13 +36,18 @@ class DeviceWarmup final
     [[nodiscard]] bool ready() const;
     // 実験: 合成ルートのメッセージループが待つ event。箱が持てなかったときは nullptr。
     [[nodiscard]] HANDLE event() const;
+    // 実験: make_provisional で作った WARP の device を 1 回だけ渡す。
+    [[nodiscard]] std::optional<WarmedDevice> take_provisional();
 
   private:
     using EventHandle = std::unique_ptr<void, decltype(&::CloseHandle)>;
 
     EventHandle ready_;
     HRESULT result_ = E_FAIL;
+    void make_provisional() noexcept;
+
     WarmedDevice warmed_;
+    WarmedDevice provisional_;
     bool taken_ = false;
 };
 } // namespace nenenib::ui::win32
