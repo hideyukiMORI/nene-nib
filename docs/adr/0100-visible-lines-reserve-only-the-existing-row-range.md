@@ -56,4 +56,4 @@ unitはUTF-8 `a日\t🖋\x01 row`、区切りCRLF、tailはASCII `tail`。empty�
 
 固定4条件各120組が成立し、30/120行の対応比中央値は0.6928231821/0.6322791141、全cycle<1、各120組短縮。空/2行も差と比の事前費用条件内。通常製品の7場面は全画素同一、正式8指標各5有効・退行0・計測不能0。独立レビューは全原marksと値/画像を確認しP0/P1/P2なし。局所の64frame生成破棄の利益を根拠に採用し、UI全体の改善率とはしない。
 
-初回before buildのnesting違反は規約内の関数抽出で修正。GUIコピーの固定待ち失敗は原記録を保持し、同じ操作の完了観測と未実施場面だけの続行を別記録した。全command/失敗/数値/再利用/未測は[gate-proofs 5-dn](../quality/gate-proofs.md#5-dn--表示行一覧の既存範囲を一度予約するissue-367adr0100)。通常PR/CI/main同期/恒久収載/監査整理はacceptance-367で追跡する。
+初回before buildのnesting違反は規約内の関数抽出で修正。GUIコピーの固定待ち失敗は原記録を保持し、同じ操作の完了観測と未実施場面だけの続行を別記録した。全command/失敗/数値/再利用/未測は[gate-proofs 5-dn](../quality/history/5-dn-display-lines-reserve.md)。通常PR/CI/main同期/恒久収載/監査整理はacceptance-367で追跡する。

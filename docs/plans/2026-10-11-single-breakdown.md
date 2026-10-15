@@ -4,7 +4,7 @@
 
 ## 境界と比較元
 
-前回の正本は [5-eb](../quality/gate-proofs.md#5-eb--最新実装で旧split描画試験を再評価issue-404)、[実測JSON](../quality/split-render-2026-10-11.json)、`D:/NeNeNib/evidence/split-recheck-20261011/acceptance-404/closeout.md`。#404 の通常 A と上下 H、左右 V の正規 Release を再利用し、SHA、source、flags を照合する。S は旧値を文脈として残し、今回は実行しない。H/V は同じ frame と文字列の再利用試作であり、独立文書の性能ではない。
+前回の正本は [5-eb](../quality/history/5-eb-old-split-render-reeval.md)、[実測JSON](../quality/split-render-2026-10-11.json)、`D:/NeNeNib/evidence/split-recheck-20261011/acceptance-404/closeout.md`。#404 の通常 A と上下 H、左右 V の正規 Release を再利用し、SHA、source、flags を照合する。S は旧値を文脈として残し、今回は実行しない。H/V は同じ frame と文字列の再利用試作であり、独立文書の性能ではない。
 
 `input_received` は窓の `WM_CHAR` 受信時、`frame_presented` は `Present(1,0)` から renderer を戻った直後。実際には入力節目の記録後の処理から、Present 後の成功確認と戻りまでを含む。OSへのpostから受信までと発光までを含まない。追加のPresent復帰節目と既存終端との差も残す。
 

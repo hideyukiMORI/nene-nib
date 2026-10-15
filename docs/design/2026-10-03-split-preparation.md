@@ -60,7 +60,7 @@ Issue #290 / D40 / [ADR 0068](../adr/0068-split-starts-with-a-bounded-render-pro
 
 ## 実測と判断
 
-2026-10-03、予定の72試行を完了。欠測・再試行なし。全試行で入力202個と暖機/1文字/200文字の描画順を生の記録から検証した。CPUはi9-10850K、GPUはRTX 3090、DPI120、窓1280×800、既定Cascadia Code 13.5pt（日本語fallbackの実フォント名は未計測）。詳細と全数値は[実測JSON](../quality/split-render-2026-10-03.json)、コマンドと証拠は[gate-proofs 5-cj](../quality/gate-proofs.md#5-cj--splitの下準備と限定した描画費用issue-290adr-0068)。
+2026-10-03、予定の72試行を完了。欠測・再試行なし。全試行で入力202個と暖機/1文字/200文字の描画順を生の記録から検証した。CPUはi9-10850K、GPUはRTX 3090、DPI120、窓1280×800、既定Cascadia Code 13.5pt（日本語fallbackの実フォント名は未計測）。詳細と全数値は[実測JSON](../quality/split-render-2026-10-03.json)、コマンドと証拠は[gate-proofs 5-cj](../quality/history/5-cj-split-prep-render-cost.md)。
 
 1文字の入力受信から提示までの中央値（ms）:
 
@@ -82,7 +82,7 @@ Issue #290 / D40 / [ADR 0068](../adr/0068-split-starts-with-a-bounded-render-pro
 
 #291で文字組みの重複が主因と分かり、ADR 0069の限定した再利用を実装した。今回のAは修正通常版、Oは変更前という別の比較である。長行のA/H/Vは1文字の観測中央値28.616 / 28.309 / 38.173msで、splitの合計2ms条件に達しない。短行のVもAに対する追加0.549msが0.5ms条件外。採用の保留を維持し、閾値を変えない。
 
-90本中3本は予定外の入力で欠測。Oの短行200文字の前半/後半にも揺れがあり、通常版修正の厳格比較も保留となった。詳細は[gate-proofs 5-ck](../quality/gate-proofs.md#5-ck--長い行の文字組み再利用issue-291adr-0069)と[実測JSON](../quality/long-line-render-2026-10-04.json)。同じframe・同じ文字列を二つの枠へ描くため、再利用を共有できる条件であり、別文書・独立スクロール・所有移行を含む値ではない。
+90本中3本は予定外の入力で欠測。Oの短行200文字の前半/後半にも揺れがあり、通常版修正の厳格比較も保留となった。詳細は[gate-proofs 5-ck](../quality/history/5-ck-long-line-text-layout-reuse.md)と[実測JSON](../quality/long-line-render-2026-10-04.json)。同じframe・同じ文字列を二つの枠へ描くため、再利用を共有できる条件であり、別文書・独立スクロール・所有移行を含む値ではない。
 
 手動入力のない時間を合わせた通常版O/Aだけの別比較36本では欠測なし。短行と長行は受入条件内で、長行の1文字は333.9125→30.2085ms。ただし空文書の連続入力に修正版の前半/後半の揺れが残り、#291の性能受入全体とmergeは保留している。splitの比較は追加していない。
 
@@ -115,4 +115,4 @@ hideの「splitの時と同じ試験」「やってみて」に従い、main `4f
 
 初組12枚の原PNGを目視し、A/Sは3対とも完全0px差、H/Vは全6対で本文だけが変化した。A/Sは19行、Hは9行ずつ計18行、Vは19行ずつで同じframeを描く。空文書の操作案内は製品の全体配置を1組だけ残したため、Hでは下枠先頭行に重なる。製品の見た目として受理せず、案内を含む枠設計は後続とする。案内は仕様上暖機1字で消える。撮影は入力前で、打鍵後の全画素同一性は未検証。
 
-全数値・原データのSHA・判定・境界は[実測JSON](../quality/split-render-2026-10-11.json)と[gate-proofs 5-eb](../quality/gate-proofs.md#5-eb--最新実装で旧split描画試験を再評価issue-404)に残す。ADR0075決定5の採用条件の再検討、別文書/独立scroll/二つ目frame生成/所有構造の移行は今回の範囲外。新しい高速化は行わず、記録の統合・恒久収載・整理で停止する。
+全数値・原データのSHA・判定・境界は[実測JSON](../quality/split-render-2026-10-11.json)と[gate-proofs 5-eb](../quality/history/5-eb-old-split-render-reeval.md)に残す。ADR0075決定5の採用条件の再検討、別文書/独立scroll/二つ目frame生成/所有構造の移行は今回の範囲外。新しい高速化は行わず、記録の統合・恒久収載・整理で停止する。

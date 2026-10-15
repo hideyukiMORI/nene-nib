@@ -40,7 +40,7 @@ split採用条件は変えない。現在残る描画費用は別の実験とし
 
 ## 2026-10-05の検証結果
 
-対象の表示/IME/契約/通常Release比較を完了した。実装の高速化は確認できたが、長行の前後半安定条件で性能の総合受理とmain統合は保留。[gate-proofs 5-cm](../quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074)に成功・失敗・再利用・未確認範囲を記録した。
+対象の表示/IME/契約/通常Release比較を完了した。実装の高速化は確認できたが、長行の前後半安定条件で性能の総合受理とmain統合は保留。[gate-proofs 5-cm](../quality/history/5-cm-font-glyph-width-split-reeval.md)に成功・失敗・再利用・未確認範囲を記録した。
 
 ## 2026-10-07の追記（Issue #300・ADR 0077）
 

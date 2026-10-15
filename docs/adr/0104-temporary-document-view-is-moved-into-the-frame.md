@@ -57,4 +57,4 @@ before b6de932 / 製品 b82b0ed。短/長savedの256frameは291→272µs / 332�
 
 Debug/tidy/ASan/UBSan、--application16009/--tabs291の16300checks、新4probe、source/実依存/symbol/旧72不変/新enum拒否、通常Releaseが成功。GUI8対全client0px、16全文copy一致、親24PNG全目視、132checkpoint/8実modeRGB/2正常終了。正式single5有効の中央値.629ms、基準.906/上限2.906、欠測0/退行0。他7指標未測。
 
-未実行GUI台本の:b 1をpalette queryとするP2は、原scriptを保全して2箇所を:tabnext 1へ修正・再固定、取得前レビューで解消。新enumの実compilerは正例0/欠落1だが監査の旧regex残存で初回script1、原本を保持して読み取り監査で実診断を照合、再compilerなし。全結果とコマンドは[gate-proofs 5-dq](../quality/gate-proofs.md#5-dq--一時の文書表示値をframeへ所有移管するissue-380adr0104)。独立最終レビューでP0/P1/P2なし、技術受理。
+未実行GUI台本の:b 1をpalette queryとするP2は、原scriptを保全して2箇所を:tabnext 1へ修正・再固定、取得前レビューで解消。新enumの実compilerは正例0/欠落1だが監査の旧regex残存で初回script1、原本を保持して読み取り監査で実診断を照合、再compilerなし。全結果とコマンドは[gate-proofs 5-dq](../quality/history/5-dq-document-view-ownership-transfer.md)。独立最終レビューでP0/P1/P2なし、技術受理。

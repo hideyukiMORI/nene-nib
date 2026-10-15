@@ -52,4 +52,4 @@ utf8-crlf、bom-lf、sjis-crlfを3利益とする。残り3を費用にする。
 
 harness c2c7cdc/製品9c6031aで全7条件を一度取得し成立。3利益の対応比.962963/.972727/.981911、短縮110/104/104組。最大行桁1024回+3µs、frame256回+4µsの費用を許容する。既存8checks/新6+旧caller probe、GUI6対0px・全16PNG目視・12本文一致、正式single.626ms/5有効/基準内。単体で差分/寿命/oracle/全rawを自己レビューして技術受理。公開API/schema不変、waiver none。通常PR/CI/main/収載/整理へ進む。
 
-Debug初回native呼出しだけ配列bindingで本体前に失敗、原転記を残して同一PowerShell内の直接呼出しで未開始buildを成功させた。前件#380のarchive長path失敗/復旧も含む全記録と限界は[gate-proofs 5-dr](../quality/gate-proofs.md#5-dr--固定ステータスラベルの一時コピーを省くissue-382adr0105)。取得前の条件は上記から変更しない。
+Debug初回native呼出しだけ配列bindingで本体前に失敗、原転記を残して同一PowerShell内の直接呼出しで未開始buildを成功させた。前件#380のarchive長path失敗/復旧も含む全記録と限界は[gate-proofs 5-dr](../quality/history/5-dr-status-label-copy-removal.md)。取得前の条件は上記から変更しない。

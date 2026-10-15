@@ -19,7 +19,7 @@ Releaseで長い行の単入力・連続入力を測定する。未測定時に�
 
 ## 2026-10-05の検証結果
 
-対象の表示/IME/契約/通常Release比較を完了した。実装の高速化は確認できたが、長行の前後半安定条件で性能の総合受理とmain統合は保留。[gate-proofs 5-cm](../quality/gate-proofs.md#5-cm--字体選択可視字形表示幅とsplit再評価issue-291adr-007100730074)に成功・失敗・再利用・未確認範囲を記録した。
+対象の表示/IME/契約/通常Release比較を完了した。実装の高速化は確認できたが、長行の前後半安定条件で性能の総合受理とmain統合は保留。[gate-proofs 5-cm](../quality/history/5-cm-font-glyph-width-split-reeval.md)に成功・失敗・再利用・未確認範囲を記録した。
 
 ## main構成への分離（Issue #294・2026-10-06）
 
@@ -28,4 +28,4 @@ main `936b50b`へこの変更だけを分離した`36a1c9c`はRelease生成に�
 display-line 1114301 checks / vim-virtual-column 424 checksをQLT-012に従って再利用した。
 通常入力の固定比較は長行の単打/200文字で事前条件内だったが、main側2回の入力混入と、
 空文書の前後半の揺れが残った。**性能受理とmain統合は保留**。再試行や閾値変更は行っていない。
-判断と全原記録は[gate-proofs 5-cn](../quality/gate-proofs.md#5-cn--表示幅索引のmain構成への分離issue-294)。
+判断と全原記録は[gate-proofs 5-cn](../quality/history/5-cn-display-width-index-main-config.md)。
