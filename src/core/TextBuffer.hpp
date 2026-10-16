@@ -47,6 +47,10 @@ class TextBuffer final
     [[nodiscard]] std::size_t size_bytes() const noexcept;
     [[nodiscard]] std::size_t line_count() const noexcept;
     [[nodiscard]] std::size_t piece_count() const noexcept;
+    // 最長の行のバイト数（LF を含まず、CR は数える）。改行の索引の 512 byte の塊の要約を
+    // piece の順に畳み、piece の端の塊だけを bit から数える。本文の文字は読まない（ADR 0047 /
+    // 0121・Issue #553）。O(塊)。
+    [[nodiscard]] std::size_t longest_line_bytes() const noexcept;
 
     // 本文順の借用。列だけを所有し、文字はこの値の生存中だけ有効（ADR 0119）。
     // 同期処理でだけ使い、この値の破棄・代入・移動を越えて保持しない。

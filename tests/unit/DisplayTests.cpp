@@ -135,6 +135,23 @@ void verify_asks_grid()
         "a shorter line in bytes that is past the threshold in code points asks");
 }
 
+// 巨大な行の無い文書は最長の行のバイト数だけで答え、行を 1 つも引かない（Issue #553）。
+// 巨大な行の文書は今日どおり行を数えて問う。
+void verify_asks_grid_reads_no_line()
+{
+    const auto threshold = core::giant_line_threshold;
+    const auto short_lines = app::asks_grid_read(buffer_of(repeated("x\n", 200'000)));
+    expect(!short_lines.first && short_lines.second == 0,
+           "200,000 short lines answer without pulling any line");
+    const auto exact =
+        app::asks_grid_read(buffer_of(repeated("a\n", 5'000) + repeated("b", threshold)));
+    expect(!exact.first && exact.second == 0,
+           "a longest line of exactly the threshold pulls no line");
+    const auto giant =
+        app::asks_grid_read(buffer_of(repeated("a\n", 5'000) + repeated("b", threshold + 1)));
+    expect(giant.first && giant.second > 0, "a giant line still asks by counting lines");
+}
+
 // 文書ごとに 1 回（決定 2）。印は 1 意図だけ立ち、同じ文書へ戻っても立たない。
 void verify_question_once()
 {
@@ -965,6 +982,7 @@ void verify_giant_mark()
 void verify_display_contracts()
 {
     verify_asks_grid();
+    verify_asks_grid_reads_no_line();
     verify_question_once();
     verify_startup_question();
     verify_select_display();
