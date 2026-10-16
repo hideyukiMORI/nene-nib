@@ -17,6 +17,7 @@
 #include "ScopedProbe.hpp"
 #include "SearchProbe.hpp"
 #include "SearchSnapshotProbe.hpp"
+#include "SearchSpanProbe.hpp"
 #include "StatusItemsProbe.hpp"
 #include "TabDisplayProbe.hpp"
 
@@ -809,6 +810,17 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(SearchSpanWorkload workload)
+{
+    switch (workload)
+    {
+    case SearchSpanWorkload::miss_16mib:
+    case SearchSpanWorkload::next_16mib:
+        return 148U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -824,7 +836,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 148> dispatches{{
+constexpr std::array<ProbeDispatch, 150> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1129,6 +1141,10 @@ constexpr std::array<ProbeDispatch, 148> dispatches{{
     ProbeDispatchRow{OperationChoiceWorkload::short_name_miss,
                      "operation-choice-short-name-miss-1024", operation_choice_input,
                      probed_operation_choice},
+    ProbeDispatchRow{SearchSpanWorkload::miss_16mib, "search-miss-16mib", search_span_input,
+                     searched_spans},
+    ProbeDispatchRow{SearchSpanWorkload::next_16mib, "search-next-16mib", search_span_input,
+                     searched_spans},
 }};
 
 constexpr auto dispatch_names = []
@@ -1171,7 +1187,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 148U);
+static_assert(dispatches.size() == 150U);
 static_assert(dispatch_is_complete());
 
 } // namespace
