@@ -4,6 +4,7 @@
 #include "AutosaveLedger.hpp"
 #include "AutosaveStep.hpp"
 #include "EditorState.hpp"
+#include "EndSession.hpp"
 
 #include <utility>
 #include <vector>
@@ -19,7 +20,8 @@ namespace nenenib::application
 autosave_plan(const EditorState &state, const AutosaveLedger &ledger);
 
 // 窓が閉じていくとき（EndSession）に退避を消してよいか（ADR 0137 の決定 5）。読み込み済みの
-// タブに未保存が 1 つも無いときだけ真。未保存が残る終わり方（OS の終了の強行・最後のタブを
-// 保存せずに閉じるなど）では偽で、退避は残骸として次の起動で問われる。
-[[nodiscard]] bool clears_autosave(const EditorState &state);
+// タブに未保存が 1 つも無いか、使う人が「保存しますか」に「いいえ」と答えて閉じた
+// （intent.unsaved_discarded）ときだけ真。確かめずに未保存が残る終わり方（OS の終了の強行）
+// では偽で、退避は残骸として次の起動で問われる。
+[[nodiscard]] bool clears_autosave(const EditorState &state, const EndSession &intent);
 } // namespace nenenib::application

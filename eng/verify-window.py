@@ -1764,17 +1764,49 @@ def restore_after_kill(executable: Path, environment: dict, appearance: str,
     return step
 
 
+def declined_then_restarted(executable: Path, environment: dict) -> dict:
+    """(c) Type, store, close and answer no: the next start asks nothing (ADR 0137 decision 5)."""
+    process, window = started(executable, environment, keep_session=False)
+    root = autosave_root(environment)
+    try:
+        step = {"askedOnStart": bool(await_dialog(process, 0.5))}
+        assert not step["askedOnStart"], "a start after a clean close asked about remnants"
+        write_text(window, AUTOSAVE_TEXT)
+        time.sleep(TAB_SETTLE_SECONDS)
+        tick_autosave(window)
+        step["bodies"] = await_autosaved(root / f"{process.pid:x}", AUTOSAVE_TEXT)
+        assert step["bodies"], "the tick wrote no body before closing"
+        close(window)
+        step["answeredNo"] = dismiss_dialog(process, IDNO)
+        assert step["answeredNo"], "closing an unsaved tab did not ask to save"
+        step["closeExitCode"] = process.wait(timeout=5)
+        assert step["closeExitCode"] == 0, step["closeExitCode"]
+    finally:
+        stop(process)
+    step["foldersAfterNo"] = sorted(path.name for path in root.iterdir()) if root.is_dir() else []
+    assert not step["foldersAfterNo"], "answering no left autosave folders behind"
+    process, _ = started(executable, environment, keep_session=False)
+    try:
+        step["askedAfterNo"] = bool(await_dialog(process, 1.0))
+        assert not step["askedAfterNo"], "the start after answering no asked about remnants"
+    finally:
+        stop(process)
+    return step
+
+
 def verify_autosave(executable: Path, environment: dict, appearance: str,
                     frames: Path | None) -> dict:
     """Issue #515: autosave every 30 seconds and the startup question (ADR 0137 decisions 1 and 6).
 
     Two launches on one profile: type, post the autosave WM_TIMER instead of waiting 30 seconds,
     kill the process (TerminateProcess), then start again, answer yes and find the body back.
+    A third launch closes an unsaved tab with "no" and the start after it asks nothing.
     """
     killed = autosave_and_kill(executable, environment)
     return {"killed": killed,
             "restored": restore_after_kill(executable, environment, appearance, frames,
-                                           killed["folder"])}
+                                           killed["folder"]),
+            "declined": declined_then_restarted(executable, environment)}
 
 
 def await_new_frame(window, before: bytes, size: tuple, seconds: float = 8.0) -> bytes:

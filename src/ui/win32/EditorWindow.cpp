@@ -676,7 +676,8 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         // OS の終了が確定したら（word が真）一覧を書く。窓は壊さない（ADR 0059 の決定 3）。
         if (word != FALSE)
         {
-            remember_session(application::SessionEnd::window_closed);
+            // 確かめずに閉じるので、捨てた印は立てない（未保存の退避は残る・ADR 0137 の決定 5）。
+            remember_session(application::EndSession{application::SessionEnd::window_closed});
         }
         return 0;
     case WM_DESTROY:
@@ -1611,15 +1612,20 @@ void EditorWindow::close_window()
 
 void EditorWindow::leave(application::SessionEnd reason)
 {
-    remember_session(reason);
+    // 来る道（close_window と最後のタブの close_tab）は未保存のタブをすべて confirm_discard で
+    // 確かめ済み。ここで残る未保存は使う人が「いいえ」と答えて捨てたもの（ADR 0137 の決定 5）。
+    remember_session(application::EndSession{
+        .reason = reason,
+        .unsaved_discarded =
+            application::next_unsaved_tab(controller_.documents(), 0).has_value()});
     DestroyWindow(window_);
 }
 
-void EditorWindow::remember_session(application::SessionEnd reason)
+void EditorWindow::remember_session(const application::EndSession &intent)
 {
     // send を通さない。send の後半（IME・題名・告知・無効化）は壊れていく窓に触れるので、
     // 一覧を書くだけの意図には要らない（書けなくても何も出さない・ADR 0059 の決定 3）。
-    static_cast<void>(controller_.apply(application::EndSession{reason}));
+    static_cast<void>(controller_.apply(intent));
 }
 
 void EditorWindow::type_character(WPARAM word)

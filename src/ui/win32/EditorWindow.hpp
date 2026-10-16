@@ -8,6 +8,7 @@
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
+#include "EndSession.hpp"
 #include "FilePath.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "HistoryDirection.hpp"
@@ -174,7 +175,7 @@ class EditorWindow final
     // close_window と、最後の 1 つを閉じる close_tab が通る。abandon とデストラクタは通らない。
     void leave(application::SessionEnd reason);
     // 前回のタブの一覧を書く意図を送る（leave と WM_ENDSESSION）。この後は窓へ描かない。
-    void remember_session(application::SessionEnd reason);
+    void remember_session(const application::EndSession &intent);
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
     [[nodiscard]] bool confirm_discard();
     void update_title(const application::EditorDelivery &frame);
