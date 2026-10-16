@@ -5,7 +5,6 @@ namespace nenenib::ui::win32
 {
 namespace
 {
-constexpr UINT32 maximum_text = 256;
 constexpr std::size_t maximum_name = 128;
 
 bool bounded_name(const WCHAR *name)
@@ -60,7 +59,7 @@ bool source_properties(const FontFallbackRequest &request, FontFallbackKey &key)
 
 std::optional<FontFallbackKey> fallback_key(const FontFallbackRequest &request)
 {
-    if (request.position != 0 || request.length == 0 || request.length > maximum_text ||
+    if (request.position != 0 || request.length == 0 || request.length > fallback_key_text_limit ||
         !bounded_name(request.family))
     {
         return std::nullopt;

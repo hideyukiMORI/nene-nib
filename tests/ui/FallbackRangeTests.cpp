@@ -8,6 +8,9 @@
 #include "BodyGlyphCollector.hpp"
 #include "BodyTextLayouts.hpp"
 #include "DirectWriteFactory.hpp"
+#include "FontFallbackKey.hpp"
+#include "PrimaryFontCoverage.hpp"
+#include "ScriptedFontFallback.hpp"
 #include "WindowChecks.hpp"
 
 #include "EditorSettings.hpp"
@@ -39,6 +42,9 @@ using win32::BodyTextLayouts;
 
 constexpr std::size_t name_capacity = 128;
 constexpr std::size_t bench_repeats = 40;
+constexpr std::size_t scattered_units = 2000;
+constexpr FLOAT unbounded_width = 1.0e6F;
+constexpr FLOAT counted_font_size = 14.0F;
 
 // 見本（ADR 0142 の決定 6）。日本語・漢字かな混在・ASCII 混在・絵文字（ZWJ の家族・国旗・VS16）・
 // 結合文字（e + U+0301・濁点 U+3099・半濁点 U+309A）・ハングル・Tab 入り・双方向・空行。
@@ -387,6 +393,69 @@ void check_assigned(BodyTextLayouts &layouts)
                                       win32::fallback_range_limit,
            "a line beyond the limit carries exactly the limit of range fonts");
 }
+// 1 つの区切りが保持の鍵の上限を超える行（約 2,000 単位）。数字と空白（Common）の間に主字体に無い
+// 漢字が点在し、AnalyzeScript は全体を Han の 1 つの区切りにする。
+std::wstring scattered_line()
+{
+    std::string line;
+    while (line.size() < scattered_units)
+    {
+        line += "0123456789 漢";
+    }
+    return core::to_utf16(line).value_or(std::wstring{});
+}
+
+// 字体選択に渡す長さを数える替え玉（OS の字体選択へ委ねる）を付けた、折り返さない本文の書式。
+Microsoft::WRL::ComPtr<IDWriteTextFormat> counted_format(IDWriteFactory2 &factory,
+                                                         ScriptedFontFallback &counter)
+{
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat1> version;
+    Microsoft::WRL::ComPtr<IDWriteFontFallback> system;
+    if (FAILED(factory.CreateTextFormat(L"Cascadia Code", nullptr, DWRITE_FONT_WEIGHT_NORMAL,
+                                        DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                        counted_font_size, L"", &format)) ||
+        FAILED(format.As(&version)) || FAILED(factory.GetSystemFontFallback(&system)) ||
+        FAILED(version->SetFontFallback(&counter)) ||
+        FAILED(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)))
+    {
+        return nullptr;
+    }
+    counter.delegate_to(system);
+    return format;
+}
+
+// 長い区切りは保持の鍵の上限までの片で字体選択へ渡し（決定 3）、当てた字形の列は当てない layout
+// と一致する。
+void check_long_segment(IDWriteFactory2 &factory)
+{
+    const auto counter = Microsoft::WRL::Make<ScriptedFontFallback>();
+    const auto wide = scattered_line();
+    const auto length = static_cast<UINT32>(wide.size());
+    const auto format = counted_format(factory, *counter.Get());
+    Layout applied;
+    if (format == nullptr ||
+        FAILED(factory.CreateTextLayout(wide.c_str(), length, format.Get(), unbounded_width,
+                                        unbounded_width, applied.GetAddressOf())))
+    {
+        expect(false, "the long segment has a counted layout");
+        return;
+    }
+    auto coverage = win32::PrimaryFontCoverage::of(factory, *format.Get());
+    counter->forget_longest();
+    const bool assigned =
+        coverage.has_value() && SUCCEEDED(coverage.value().assign(*applied.Get(), wide));
+    const auto longest = counter->longest();
+    std::printf("fallback ranges: the long segment passed at most %u UTF-16 units\n", longest);
+    expect(assigned && range_fonts(*applied.Get(), length).value_or(0) > 0,
+           "the long segment carries range fonts");
+    expect(longest > 0 && longest <= win32::fallback_key_text_limit,
+           "the font fallback receives at most the cache key limit of a long segment at once");
+    const auto plain = plain_of(factory, *applied.Get(), wide);
+    expect(plain != nullptr && same_glyphs(*applied.Get(), *plain.Get()) &&
+               !first_hit_difference(*applied.Get(), *plain.Get(), length).has_value(),
+           "the long segment keeps the glyph sequence and every hit position");
+}
 } // namespace
 
 void verify_fallback_ranges()
@@ -405,5 +474,6 @@ void verify_fallback_ranges()
     const auto bench = bench_line();
     check_geometries(layouts, bench, samples.size());
     check_assigned(layouts);
+    check_long_segment(*factory.Get());
 }
 } // namespace nenenib::tests::ui
