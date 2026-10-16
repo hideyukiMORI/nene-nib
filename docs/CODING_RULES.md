@@ -94,7 +94,7 @@ COM の `__uuidof` / `IID_PPV_ARGS` は `src/ui/win32` と `src/adapters/win32` 
 
 `Processor` や `Data` のように**文脈次第で妥当な語は機械では拒否しない**。機械が拒否してよいのは「常に禁止」だけで、判断が要る語はレビューの仕事である。
 
-- 機械強制: **planned** → CNF-001
+- 機械強制: **active** → CNF-001（「常に禁止」の語尾とモジュール名を `tests/conformance` の反例で拒否。2026-10-16・Issue #571）。文脈次第の語とマクロで生成した名前はレビュー
 
 ### CPP-011 — 1 ファイル 1 主要宣言
 
@@ -102,7 +102,7 @@ COM の `__uuidof` / `IID_PPV_ARGS` は `src/ui/win32` と `src/adapters/win32` 
 名前空間は `nenenib` の下にモジュール名（`core` / `application` / `adapters::win32` / `ui::win32`）。寄せ集めのファイルを作らない。
 **実装ファイルの無名名前空間に置く小さな `struct` も数える**（CNF-002 は名前空間の深さを見ない）。ローカルの補助は自由関数と `using` 別名で書く（Issue #3 で実測）。
 
-- 機械強制: **planned** → CNF-002
+- 機械強制: **active** → CNF-002（1 ファイル 2 型・ファイル名と違う型・名前空間の中の 2 型を `tests/conformance` の反例で拒否。2026-10-16・Issue #571）。無名名前空間の `struct` は字句検査が名前空間として数えるが、専用の反例テストは無い。テンプレート等の主要宣言の完全な分類は未完了
 
 ### CPP-012 — 複雑度に上限を置く
 
@@ -146,8 +146,8 @@ flip model の frame latency waitable object を `WaitForSingleObjectEx` で待�
 ファイル単位・ディレクトリ単位の抑制、静的解析の除外設定、lint の baseline は禁止。
 直前行が `// SDK-ABI: <Interface>::<Method>` の `NOLINTNEXTLINE(readability-function-size)` は抑制の例外（waiver）ではなく、CPP-019 の書き方である（CNF-012 が見る）。
 
-- 機械強制: **planned** → CNF-003 / CNF-004
-- 機械強制: **不能**（抑制機能そのものの禁止。`#pragma clang diagnostic ignored` は `-Werror` で指定した診断も抑制できる（M7-suppression-clang-hole）。ADR 0003）
+- 機械強制: **active** → CNF-003 / CNF-004（waiver の無い行単位の抑制・ファイル単位の抑制・期限切れや範囲外の waiver を `tests/conformance` の反例で拒否。2026-10-16・Issue #571）。waiver の理由と解除条件の妥当性はレビュー事項
+- 守れていない部分: コンパイラの抑制機能そのものは止められない（`#pragma clang diagnostic ignored` は `-Werror` で指定した診断も抑制できる（M7-suppression-clang-hole）。ADR 0003）。ソースに書いた `#pragma` / `_Pragma` / `__pragma` は CNF-003 が字句で拒否する
 
 ---
 
