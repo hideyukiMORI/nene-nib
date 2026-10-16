@@ -3,6 +3,7 @@
 #include "BodyLayout.hpp"
 #include "BodyTextLayout.hpp"
 #include "BodyTextLayouts.hpp"
+#include "BodyTextPainter.hpp"
 #include "ClauseEmphasis.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
@@ -38,6 +39,7 @@
 #include <expected>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -117,6 +119,9 @@ class Direct2DRenderer final
     void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
+    // 本文の layout を描く経路（保持した字形・範囲の描き直し・置き換え）は BodyTextPainter の
+    // 1 本（ADR 0073・#531）。本文を描いている間の縦の範囲を渡した 1 回分を作る。
+    [[nodiscard]] BodyTextPainter<ID2D1RenderTarget> body_painter();
     void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
                         D2D1_DRAW_TEXT_OPTIONS options = D2D1_DRAW_TEXT_OPTIONS_CLIP);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body,

@@ -8,6 +8,7 @@
 #include "Milestone.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
+#include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -161,19 +162,6 @@ constexpr float full_channel = 255.0F;
         return "?";
     }
     std::unreachable();
-}
-// 描く範囲の縦を layout の座標へ写す。行の全体が範囲に入るなら限りなしにして、
-// 普通の行の字形の保持を今までどおり使い回す（#528・ADR 0073 の保守的な除外に縦を足す）。
-[[nodiscard]] std::pair<float, float> drawn_rows(const core::LayoutRect &area, std::int32_t top,
-                                                 std::int32_t bottom)
-{
-    const auto from = static_cast<float>(top) - static_cast<float>(area.top);
-    const auto to = static_cast<float>(bottom) - static_cast<float>(area.top);
-    if (from <= 0 && to >= static_cast<float>(core::height_of(area)))
-    {
-        return {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max()};
-    }
-    return {from, to};
 }
 } // namespace
 
@@ -760,54 +748,18 @@ Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
     return std::move(made).value();
 }
 
-// 保持した字形で描いた画素が DrawTextLayout と一致するのは、
-// 次の 3 つがそろうときだけ（ADR 0073）。
-// (1) 描画先の DPI が core::reference_dpi（96）で、collector の GetPixelsPerDip が 1。
-// (2) 描画先の変換が恒等で、collector の GetCurrentTransform も恒等。
-// (3) 行の原点 area.left / area.top が整数の画素。
-// どれかを変えるときは字形の保持をやめるか、collector の答えを同じ値から出す。
-// tests/ui が (1) と (2) の collector 側の値を確かめる。
+BodyTextPainter<ID2D1RenderTarget> Direct2DRenderer::body_painter()
+{
+    BodyTextPainter<ID2D1RenderTarget> painter(*context_.Get(), brush_.Get(), body_text_,
+                                               text_failure_);
+    painter.set_rows(body_top_, body_bottom_);
+    return painter;
+}
+
 void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
                                       D2D1_DRAW_TEXT_OPTIONS options)
 {
-    const auto left =
-        std::max(static_cast<float>(core::width_of(area)) - text->GetMaxWidth(), 0.0F);
-    const auto [top, bottom] = drawn_rows(area, body_top_, body_bottom_);
-    const auto *entry = body_text_.glyphs_of(text, left, top, bottom);
-
-    const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
-    if (entry == nullptr || !entry->glyphs_ready)
-    {
-        context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
-        context_->DrawTextLayout(origin, text, brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
-        context_->PopAxisAlignedClip();
-        return;
-    }
-    if (options == D2D1_DRAW_TEXT_OPTIONS_CLIP)
-    {
-        context_->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y,
-                                                  static_cast<float>(area.right),
-                                                  static_cast<float>(area.bottom)),
-                                      D2D1_ANTIALIAS_MODE_ALIASED);
-    }
-    for (const auto &stored : entry->glyphs)
-    {
-        const DWRITE_GLYPH_RUN run{stored.face.Get(),
-                                   stored.em,
-                                   static_cast<UINT32>(stored.indices.size()),
-                                   stored.indices.data(),
-                                   stored.advances.data(),
-                                   stored.offsets.empty() ? nullptr : stored.offsets.data(),
-                                   stored.sideways,
-                                   stored.bidi};
-        context_->DrawGlyphRun(
-            D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run,
-            brush_.Get(), stored.measuring);
-    }
-    if (options == D2D1_DRAW_TEXT_OPTIONS_CLIP)
-    {
-        context_->PopAxisAlignedClip();
-    }
+    body_painter().draw_body_text(text, area, options);
 }
 
 Direct2DRenderer::TextLayout Direct2DRenderer::text_layout(std::string_view text,
@@ -830,29 +782,7 @@ std::vector<DWRITE_HIT_TEST_METRICS> Direct2DRenderer::runs_of(IDWriteTextLayout
                                                                const core::LayoutRect &area,
                                                                DWRITE_TEXT_RANGE range)
 {
-    if (range.length == 0)
-    {
-        return {};
-    }
-    UINT32 count = 0;
-    const auto result =
-        text->HitTestTextRange(range.startPosition, range.length, static_cast<float>(area.left),
-                               static_cast<float>(area.top), nullptr, 0, &count);
-    if (FAILED(result) && result != E_NOT_SUFFICIENT_BUFFER)
-    {
-        text_failure_ = RenderFailure::directwrite;
-        return {};
-    }
-    std::vector<DWRITE_HIT_TEST_METRICS> runs(count);
-    if (FAILED(text->HitTestTextRange(range.startPosition, range.length,
-                                      static_cast<float>(area.left), static_cast<float>(area.top),
-                                      runs.data(), count, &count)))
-    {
-        text_failure_ = RenderFailure::directwrite;
-        return {};
-    }
-    runs.resize(count);
-    return runs;
+    return body_painter().runs_of(text, area, range);
 }
 
 void Direct2DRenderer::fill_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
@@ -883,14 +813,7 @@ void Direct2DRenderer::tint_runs(IDWriteTextLayout *text, const core::LayoutRect
                                  DWRITE_TEXT_RANGE range, core::RgbColor color)
 {
     brush_->SetColor(to_color(color));
-    for (const auto &run : runs_of(text, area, range))
-    {
-        context_->PushAxisAlignedClip(
-            D2D1::RectF(run.left, run.top, run.left + run.width, run.top + run.height),
-            D2D1_ANTIALIAS_MODE_ALIASED);
-        draw_body_text(text, area, D2D1_DRAW_TEXT_OPTIONS_NONE);
-        context_->PopAxisAlignedClip();
-    }
+    body_painter().tint_runs(text, area, range);
 }
 
 void Direct2DRenderer::outline_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
@@ -1073,14 +996,18 @@ void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWrite
     std::unreachable();
 }
 
+// 置き換えの描き直しは BodyTextPainter の 1 本（保持した字形 run から切り抜きと描く run
+// を引く・#531）。
 void Direct2DRenderer::draw_replaced(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                      const core::LayoutRect &area,
                                      std::span<const DWRITE_TEXT_RANGE> ranges)
 {
-    for (const auto &range : ranges)
+    if (ranges.empty())
     {
-        tint_runs(text, area, range, frame.palette.muted);
+        return;
     }
+    brush_->SetColor(to_color(frame.palette.muted));
+    body_painter().draw_replaced(text, area, ranges);
 }
 
 void Direct2DRenderer::draw_target_clause(const application::EditorFrame &frame,

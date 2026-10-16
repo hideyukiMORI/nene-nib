@@ -17,6 +17,7 @@ void verify_fallback_keys();
 void verify_fallback_cache();
 void verify_glyph_collector();
 void verify_glyph_pixels();
+void verify_replaced_tints();
 void verify_gutter_layouts();
 void verify_file_drop();
 void verify_grid_render();
