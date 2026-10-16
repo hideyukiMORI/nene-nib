@@ -125,24 +125,41 @@ void verify_virtual_column_table()
     return at % 997 == 0 || near < 6 || near + 6 > chunk;
 }
 
-// 1 行の索引の値を、行を 1 回だけ歩いた桁と比べる。
+// 1 行の索引の値を、行を 1 回だけ歩いた桁・序数と比べる（塊の境目の前後と間引いた位置）。
+// 順引き（桁・序数）と逆引き（F1・F5）の両方で、幅のある文字は最初と最後の桁の逆引きが文字の
+// 先頭へ戻り、序数の逆引きも文字の先頭へ戻る。
 [[nodiscard]] bool sampled_line(const TextBuffer &text, const VirtualColumnIndex &index,
                                 LineNumber line)
 {
     const auto content = text.line_text(line);
     const auto start = text.line_start(line).value;
     std::size_t column = 0;
+    std::size_t ordinal = 0;
     bool same = true;
     for (std::size_t at = 0; at < content.size();
          at = core::next_code_point(content, Offset{at}).value)
     {
+        const auto advance = column_advance(core::code_point_at(content, Offset{at}), column);
+        const Offset here{start + at};
         if (sampled_at(start, at))
         {
-            same = same && index.virtual_column_at(text, Offset{start + at}) == column;
+            same = same && index.virtual_column_at(text, here) == column &&
+                   index.code_point_at(text, here) == ordinal &&
+                   index.byte_at_code_point(text, line, ordinal) == here;
         }
-        column += column_advance(core::code_point_at(content, Offset{at}), column);
+        if (sampled_at(start, at) && advance > 0)
+        {
+            same = same && index.byte_at_virtual_column(text, line, column) == here &&
+                   index.byte_at_virtual_column(text, line, column + advance - 1) == here;
+        }
+        column += advance;
+        ++ordinal;
     }
-    return same && index.virtual_column_at(text, Offset{start + content.size()}) == column;
+    const Offset end{start + content.size()};
+    return same && index.virtual_column_at(text, end) == column &&
+           index.code_point_at(text, end) == ordinal &&
+           index.byte_at_virtual_column(text, line, column).value == end.value &&
+           index.byte_at_code_point(text, line, ordinal).value == end.value;
 }
 
 void verify_sampled(const TextBuffer &text, const VirtualColumnIndex &index, const char *name)
@@ -250,6 +267,86 @@ void verify_giant_line_scans()
     expect(most <= 1 && end.scanned <= 1, "a column in a 16 MiB line walks at most one chunk");
     expect(total < 40, "plain chunks are added without walking them");
     expect(end.column == size - 16, "the 16 MiB line is one column per byte less the wide ones");
+    expect(end.code_point == size - 32, "the 16 MiB line counts one code point per character");
+    expect(index.code_point_at(text, Offset{size}) == size - 32 &&
+               index.byte_at_code_point(text, LineNumber{1}, size - 32).value == size,
+           "the ordinal of the line end maps back to the line end");
+    const auto wide = (5UL * 1024UL * 1024UL) + 1000;
+    expect(index.code_point_at(text, Offset{wide + 3}) == wide - 9 &&
+               index.byte_at_code_point(text, LineNumber{1}, wide - 10).value == wide,
+           "an ordinal after five wide characters maps back to the sixth one");
+}
+
+// 塊の列が本文を隙間なく覆い、どの塊も 128 KiB 以下で、最後の塊のほかは 16 KiB 以上（決定 4）。
+[[nodiscard]] bool well_cut(const TextBuffer &text, const VirtualColumnIndex &index)
+{
+    const auto chunks = index.chunks();
+    std::size_t next = 0;
+    bool cut = true;
+    for (std::size_t at = 0; at < chunks.size(); ++at)
+    {
+        const auto &value = chunks[at];
+        const bool last = at + 1 == chunks.size();
+        cut = cut && value.start == next && value.bytes <= 2 * chunk &&
+              (last || value.bytes >= chunk / 4);
+        next = value.start + value.bytes;
+    }
+    return cut && next == text.size_bytes();
+}
+
+// 編集で 128 KiB を越えた範囲は等しい長さに切り直し、16 KiB を下回る範囲は次の塊と合わせる（F3）。
+void verify_recut_and_merge()
+{
+    const auto line = straddling_line((4 * chunk) + 500);
+    const auto before = buffer_of(line);
+    const auto index = VirtualColumnIndex::from_text(before);
+    expect(index.chunk_count() == 5, "four chunks and a short tail");
+
+    const Offset middle{(2 * chunk) + 100};
+    const std::string large((2 * chunk) + 7, 'q');
+    const auto grown = before.replaced(middle, middle, large);
+    const auto grown_index = index.replaced(grown, middle, middle, large);
+    expect(grown_index.chunk_count() == 6 && grown_index.rebuilt_chunks() == 2,
+           "a chunk grown past 128 KiB is cut into two");
+    expect(well_cut(grown, grown_index), "every cut chunk is at most 128 KiB");
+
+    const Offset gone{chunk + 100};
+    const Offset gone_end{gone.value + (60UL * 1024UL)};
+    const auto shrunk = before.replaced(gone, gone_end, "");
+    const auto shrunk_index = index.replaced(shrunk, gone, gone_end, "");
+    expect(shrunk_index.chunk_count() == 4 && shrunk_index.rebuilt_chunks() == 1,
+           "a chunk shrunk under 16 KiB is merged with the next");
+    expect(well_cut(shrunk, shrunk_index), "a merged chunk keeps the chunks contiguous");
+    verify_sampled(shrunk, shrunk_index, "a merged chunk keeps the sums exact");
+}
+
+// 通常の複数行の文書では全ての塊が '\n' を含む。桁を引くとき写すのは、その位置の行頭から
+// 位置までだけ（塊の先頭から写さない・I4）。編集で行が増えても後ろの塊の行頭が合う。
+void verify_short_lines_copy_little()
+{
+    std::string lines;
+    for (std::size_t count = 0; lines.size() < (3 * chunk) + 1000; ++count)
+    {
+        lines.append(count % 3 == 0 ? "\t\xe6\x97\xa5x\n" : "ab\xcc\x81 line\tend\n");
+    }
+    const auto text = buffer_of(lines);
+    const auto index = VirtualColumnIndex::from_text(text);
+    const auto edited = text.replaced(Offset{10}, Offset{10}, "\n\n\t");
+    const auto edited_index = index.replaced(edited, Offset{10}, Offset{10}, "\n\n\t");
+    std::size_t most = 0;
+    bool same = true;
+    for (std::size_t at = 0; at + 20 < edited.size_bytes(); at += 1'009)
+    {
+        // どの行も 1 バイトの文字（Tab か 'a'）で始まる。行頭の次の文字の手前を引く。
+        const auto line = edited.position_of(Offset{at}).line;
+        const auto second = Offset{edited.line_start(line).value + 1};
+        const auto cursor = edited_index.cursor_at(edited, second);
+        most = std::max(most, cursor.copied);
+        same = same && (edited.line_end(line).value < second.value || cursor.code_point == 1);
+    }
+    expect(most <= 1, "a column in a short line copies only that line");
+    expect(same, "the line start inside a chunk comes from the newline index");
+    verify_sampled(edited, edited_index, "short lines after an edit keep the sums exact");
 }
 } // namespace
 
@@ -259,5 +356,7 @@ void verify_virtual_column_index_scope()
     verify_chunk_boundaries();
     verify_edits();
     verify_giant_line_scans();
+    verify_recut_and_merge();
+    verify_short_lines_copy_little();
 }
 } // namespace nenenib::tests

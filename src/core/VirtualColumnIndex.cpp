@@ -18,19 +18,25 @@ namespace nenenib::core
 {
 namespace
 {
-// 塊の大きさ（ADR 0140 の決定 4）。作るときは 64 KiB で切り、編集で伸びた塊は 2 倍を越えたら
-// 切り直す。4 分の 1 を下回った塊は次の塊と合わせて切り直す。
+// 塊の大きさ（ADR 0140 の決定 4）。作るときは 64 KiB で切り、編集で伸びた範囲は 2 倍を越えたら
+// 2 倍以下の等しい長さに切り直す。4 分の 1 を下回る範囲は次の塊と合わせて切り直す。
 constexpr std::size_t chunk_bytes = 64UL * 1024UL;
 constexpr std::size_t longest_chunk = 2 * chunk_bytes;
 constexpr std::size_t merge_bytes = chunk_bytes / 4;
 // 切り目を code point の先頭へ寄せるために余分に読むバイト数（UTF-8 の最長 4 バイト）。
 constexpr std::size_t sequence_slack = 3;
-constexpr std::size_t tab_stop = 8;
 constexpr char32_t tab_character = U'\t';
 constexpr unsigned char first_plain = 0x20;
 constexpr unsigned char last_plain = 0x7E;
 constexpr unsigned char continuation_mask = 0xC0;
 constexpr unsigned char continuation_bits = 0x80;
+
+using Measure = std::size_t VirtualColumnCursor::*;
+
+[[nodiscard]] constexpr VirtualColumnCursor zero_cursor() noexcept
+{
+    return VirtualColumnCursor{0, 0, 0, 0, 0};
+}
 
 [[nodiscard]] bool is_plain(std::string_view bytes) noexcept
 {
@@ -47,23 +53,27 @@ constexpr unsigned char continuation_bits = 0x80;
     return (static_cast<unsigned char>(value) & continuation_mask) == continuation_bits;
 }
 
-// 最後の改行の位置（無ければ npos）。STL の後ろからの検索は core の外へ別のシンボルを出すので、
-// ここで 1 バイトずつ戻る（ARC-003）。
-[[nodiscard]] std::size_t last_newline_of(std::string_view bytes) noexcept
+// '\n' の数と、最後の '\n' の位置（無ければ npos）。STL の数えと後ろからの検索は core の外へ別の
+// シンボルを出すので、ここで 1 バイトずつ数える（ARC-003）。
+[[nodiscard]] std::size_t line_breaks_of(std::string_view bytes, std::size_t &last) noexcept
 {
-    for (std::size_t at = bytes.size(); at > 0; --at)
+    std::size_t count = 0;
+    last = std::string_view::npos;
+    for (std::size_t at = 0; at < bytes.size(); ++at)
     {
-        if (bytes[at - 1] == '\n')
+        if (bytes[at] == '\n')
         {
-            return at - 1;
+            ++count;
+            last = at;
         }
     }
-    return std::string_view::npos;
+    return count;
 }
 
+// column の次の Tab の止まり。止まりの値は column_advance の 1 本から読む（ADR 0034）。
 [[nodiscard]] std::size_t next_stop(std::size_t column) noexcept
 {
-    return ((column / tab_stop) + 1) * tab_stop;
+    return column + column_advance(tab_character, column);
 }
 
 [[nodiscard]] std::ptrdiff_t signed_of(std::size_t value) noexcept
@@ -93,6 +103,7 @@ std::size_t stepped(VirtualColumnCursor &state, char32_t value, std::size_t colu
     }
     state.column += advance;
     state.cell = start + advance;
+    ++state.code_point;
     return start;
 }
 
@@ -109,10 +120,15 @@ bool walked(std::string_view bytes, VirtualColumnCursor &state, std::size_t colu
     return wide;
 }
 
+[[nodiscard]] VirtualColumnCursor start_of(const VirtualColumnChunk &chunk) noexcept
+{
+    return VirtualColumnCursor{chunk.column, chunk.cell, 0, chunk.code_point, 0};
+}
+
 // '\n' を含まず plain でもない塊の要約。最初の Tab の手前と後ろを分けて歩く。
 void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std::size_t columns)
 {
-    VirtualColumnCursor state{chunk.column, chunk.cell, 0};
+    auto state = start_of(chunk);
     const auto first_tab = bytes.find('\t');
     chunk.wide = walked(bytes.substr(0, first_tab), state, columns);
     chunk.lead = state.column - chunk.column;
@@ -125,10 +141,11 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
         chunk.rest = state.column - after_tab;
     }
     chunk.padding = (state.cell - chunk.cell) - (state.column - chunk.column);
+    chunk.code_points = state.code_point - chunk.code_point;
 }
 
 // [start, start + bytes) を state から始まる塊として要約する。'\n' を含む塊は最後の '\n' の
-// 後ろだけを歩く（そこより前の桁は次の塊に効かない）。
+// 後ろだけを歩く（そこより前の桁は次の塊に効かない）。line は呼ぶ側が付ける。
 [[nodiscard]] VirtualColumnChunk summarized(std::string_view bytes, std::size_t start,
                                             VirtualColumnCursor state, std::size_t columns)
 {
@@ -137,23 +154,27 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
     chunk.bytes = bytes.size();
     chunk.column = state.column;
     chunk.cell = state.cell;
+    chunk.code_point = state.code_point;
     chunk.plain = is_plain(bytes);
     if (chunk.plain)
     {
         chunk.lead = bytes.size();
+        chunk.code_points = bytes.size();
         return chunk;
     }
-    const auto last_newline = last_newline_of(bytes);
-    if (last_newline == std::string_view::npos)
+    std::size_t last_newline = 0;
+    chunk.line_breaks = line_breaks_of(bytes, last_newline);
+    if (chunk.line_breaks == 0)
     {
         summarize_line_part(chunk, bytes, columns);
         return chunk;
     }
-    VirtualColumnCursor tail{0, 0, 0};
+    auto tail = zero_cursor();
     static_cast<void>(walked(bytes.substr(last_newline + 1), tail, columns));
     chunk.resets = true;
     chunk.rest = tail.column;
     chunk.tail_cell = tail.cell;
+    chunk.code_points = tail.code_point;
     return chunk;
 }
 
@@ -162,23 +183,12 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
 {
     if (chunk.resets)
     {
-        return VirtualColumnCursor{chunk.rest, chunk.tail_cell, 0};
+        return VirtualColumnCursor{chunk.rest, chunk.tail_cell, 0, chunk.code_points, 0};
     }
     const auto column =
         chunk.tab ? next_stop(chunk.column + chunk.lead) + chunk.rest : chunk.column + chunk.lead;
-    return VirtualColumnCursor{column, chunk.cell + (column - chunk.column) + chunk.padding, 0};
-}
-
-// 累積の変わらない塊を、始まりのバイト位置だけずらして足す。
-void append_shifted(std::vector<VirtualColumnChunk> &out, std::span<const VirtualColumnChunk> rest,
-                    std::size_t shift)
-{
-    std::ranges::transform(rest, std::back_inserter(out),
-                           [shift](VirtualColumnChunk moved)
-                           {
-                               moved.start += shift;
-                               return moved;
-                           });
+    return VirtualColumnCursor{column, chunk.cell + (column - chunk.column) + chunk.padding, 0,
+                               chunk.code_point + chunk.code_points, 0};
 }
 
 // 始まりが変わった塊の送りの空きを読み直す必要があるか。空きは桁の 8 の余りと升の columns の
@@ -190,8 +200,30 @@ void append_shifted(std::vector<VirtualColumnChunk> &out, std::span<const Virtua
     {
         return false;
     }
-    return state.column % tab_stop != chunk.column % tab_stop ||
+    return state.column % vim_tab_stop != chunk.column % vim_tab_stop ||
            state.cell % columns != chunk.cell % columns;
+}
+
+// 塊の中で at より前の最後の行頭（無ければ塊の始まり）。塊の要約が持つ「前の '\n' の数」と
+// 「塊の中の '\n' の数」の間を、改行の索引（ADR 0047）の行頭で二分探索する。
+[[nodiscard]] std::size_t line_start_within(const TextBuffer &text, const VirtualColumnChunk &chunk,
+                                            std::size_t at)
+{
+    std::size_t low = 0;
+    std::size_t high = chunk.line_breaks;
+    while (low < high)
+    {
+        const auto middle = low + ((high - low + 1) / 2);
+        if (text.line_start(LineNumber{chunk.line + middle + 1}).value <= at)
+        {
+            low = middle;
+        }
+        else
+        {
+            high = middle - 1;
+        }
+    }
+    return low == 0 ? chunk.start : text.line_start(LineNumber{chunk.line + low + 1}).value;
 }
 } // namespace
 
@@ -210,24 +242,33 @@ VirtualColumnIndex VirtualColumnIndex::built(const TextBuffer &text, std::size_t
     VirtualColumnIndex index;
     index.columns_ = columns;
     index.chunks_.reserve((text.size_bytes() / chunk_bytes) + 1);
-    VirtualColumnCursor state{0, 0, 0};
     std::size_t start = 0;
     while (start < text.size_bytes())
     {
         const auto stop = std::min(start + chunk_bytes + sequence_slack, text.size_bytes());
         const auto bytes = text.text_range(Offset{start}, Offset{stop});
         const auto cut = cut_point(bytes, chunk_bytes);
-        index.chunks_.push_back(
-            summarized(std::string_view(bytes).substr(0, cut), start, state, columns));
-        state = end_of(index.chunks_.back());
+        auto chunk =
+            summarized(std::string_view(bytes).substr(0, cut), start, index.end_state(), columns);
+        chunk.line = index.end_line();
+        index.chunks_.push_back(chunk);
         start += cut;
     }
     index.rebuilt_ = index.chunks_.size();
     return index;
 }
 
-VirtualColumnCursor VirtualColumnIndex::append_cut(const TextBuffer &text, std::size_t begin,
-                                                   std::size_t end, VirtualColumnCursor state)
+VirtualColumnCursor VirtualColumnIndex::end_state() const noexcept
+{
+    return chunks_.empty() ? zero_cursor() : end_of(chunks_.back());
+}
+
+std::size_t VirtualColumnIndex::end_line() const noexcept
+{
+    return chunks_.empty() ? 0 : chunks_.back().line + chunks_.back().line_breaks;
+}
+
+void VirtualColumnIndex::append_cut(const TextBuffer &text, std::size_t begin, std::size_t end)
 {
     const auto bytes = text.text_range(Offset{begin}, Offset{end});
     const auto pieces = (bytes.size() + longest_chunk - 1) / longest_chunk;
@@ -237,37 +278,45 @@ VirtualColumnCursor VirtualColumnIndex::append_cut(const TextBuffer &text, std::
     while (from < view.size())
     {
         const auto cut = cut_point(view, from + target);
-        chunks_.push_back(summarized(view.substr(from, cut - from), begin + from, state, columns_));
-        state = end_of(chunks_.back());
+        auto chunk = summarized(view.substr(from, cut - from), begin + from, end_state(), columns_);
+        chunk.line = end_line();
+        chunks_.push_back(chunk);
         ++rebuilt_;
         from = cut;
     }
-    return state;
 }
 
 void VirtualColumnIndex::append_carried(const VirtualColumnIndex &old, std::size_t from,
                                         std::size_t shift, const TextBuffer &text)
 {
-    auto state = chunks_.empty() ? VirtualColumnCursor{0, 0, 0} : end_of(chunks_.back());
+    if (from >= old.chunks_.size())
+    {
+        return;
+    }
+    const auto old_line = old.chunks_.at(from).line;
+    const auto new_line = end_line();
+    auto state = end_state();
+    bool settled = false;
     for (auto at = from; at < old.chunks_.size(); ++at)
     {
         auto chunk = old.chunks_.at(at);
         chunk.start += shift;
-        // 始まりが前と同じなら、ここから後ろの累積は変わらない（ずらすだけ）。
-        if (state.column == chunk.column && state.cell == chunk.cell)
-        {
-            append_shifted(chunks_, std::span(old.chunks_).subspan(at), shift);
-            return;
-        }
-        if (needs_rescan(chunk, state, columns_))
+        chunk.line = chunk.line - old_line + new_line;
+        // 始まりが前と同じなら、ここから後ろの累積は変わらない（位置と行の数をずらすだけ）。
+        settled = settled || (state.column == chunk.column && state.cell == chunk.cell &&
+                              state.code_point == chunk.code_point);
+        if (!settled && needs_rescan(chunk, state, columns_))
         {
             const auto bytes =
                 text.text_range(Offset{chunk.start}, Offset{chunk.start + chunk.bytes});
+            const auto line = chunk.line;
             chunk = summarized(bytes, chunk.start, state, columns_);
+            chunk.line = line;
             ++rebuilt_;
         }
         chunk.column = state.column;
         chunk.cell = state.cell;
+        chunk.code_point = state.code_point;
         chunks_.push_back(chunk);
         state = end_of(chunk);
     }
@@ -297,8 +346,7 @@ VirtualColumnIndex VirtualColumnIndex::replaced(const TextBuffer &after, Offset 
     result.columns_ = columns_;
     result.chunks_.reserve(chunks_.size() + (inserted.size() / chunk_bytes) + 1);
     result.chunks_.assign(chunks_.begin(), std::next(chunks_.begin(), signed_of(first)));
-    const auto state = first == 0 ? VirtualColumnCursor{0, 0, 0} : end_of(result.chunks_.back());
-    static_cast<void>(result.append_cut(after, span_begin, new_end, state));
+    result.append_cut(after, span_begin, new_end);
     result.append_carried(*this, last + 1, new_end - old_end, after);
     return result;
 }
@@ -311,6 +359,11 @@ std::size_t VirtualColumnIndex::columns() const noexcept
 std::size_t VirtualColumnIndex::chunk_count() const noexcept
 {
     return chunks_.size();
+}
+
+std::span<const VirtualColumnChunk> VirtualColumnIndex::chunks() const noexcept
+{
+    return chunks_;
 }
 
 std::size_t VirtualColumnIndex::rebuilt_chunks() const noexcept
@@ -333,21 +386,22 @@ VirtualColumnCursor VirtualColumnIndex::cursor_at(const TextBuffer &text, Offset
 {
     if (chunks_.empty())
     {
-        return VirtualColumnCursor{0, 0, 0};
+        return zero_cursor();
     }
     const auto clamped = std::min(at.value, size_bytes());
     const auto &chunk = chunks_.at(chunk_of(clamped));
     const auto inside = clamped - chunk.start;
     if (chunk.plain || inside == 0)
     {
-        return VirtualColumnCursor{chunk.column + inside, chunk.cell + inside, 0};
+        return VirtualColumnCursor{chunk.column + inside, chunk.cell + inside, 0,
+                                   chunk.code_point + inside, 0};
     }
-    const auto bytes = text.text_range(Offset{chunk.start}, Offset{clamped});
-    const auto newline = last_newline_of(bytes);
-    const bool restarts = newline != std::string_view::npos;
-    VirtualColumnCursor state{restarts ? 0 : chunk.column, restarts ? 0 : chunk.cell, 1};
-    static_cast<void>(
-        walked(std::string_view(bytes).substr(restarts ? newline + 1 : 0), state, columns_));
+    const auto from = line_start_within(text, chunk, clamped);
+    auto state = from == chunk.start ? start_of(chunk) : zero_cursor();
+    const auto bytes = text.text_range(Offset{from}, Offset{clamped});
+    state.scanned = 1;
+    state.copied = bytes.size();
+    static_cast<void>(walked(bytes, state, columns_));
     return state;
 }
 
@@ -356,15 +410,20 @@ std::size_t VirtualColumnIndex::virtual_column_at(const TextBuffer &text, Offset
     return cursor_at(text, at).column;
 }
 
+std::size_t VirtualColumnIndex::code_point_at(const TextBuffer &text, Offset at) const
+{
+    return cursor_at(text, at).code_point;
+}
+
 std::size_t VirtualColumnIndex::scanned_until(std::string_view bytes, VirtualColumnCursor state,
-                                              std::size_t target, bool by_cell) const
+                                              std::size_t target, Measure measure) const
 {
     for (std::size_t at = 0; at < bytes.size(); at = next_code_point(bytes, Offset{at}).value)
     {
-        const auto column = state.column;
-        const auto cell = stepped(state, code_point_at(bytes, Offset{at}), columns_);
-        const auto begin = by_cell ? cell : column;
-        const auto end = by_cell ? state.cell : state.column;
+        const auto before = state.*measure;
+        const auto cell = stepped(state, core::code_point_at(bytes, Offset{at}), columns_);
+        const auto begin = measure == &VirtualColumnCursor::cell ? cell : before;
+        const auto end = state.*measure;
         if (end > begin && target < end)
         {
             return at;
@@ -374,7 +433,7 @@ std::size_t VirtualColumnIndex::scanned_until(std::string_view bytes, VirtualCol
 }
 
 Offset VirtualColumnIndex::byte_at(const TextBuffer &text, LineNumber line, std::size_t target,
-                                   bool by_cell) const
+                                   Measure measure) const
 {
     const auto line_begin = text.line_start(line).value;
     const auto line_end = text.line_end(line).value;
@@ -388,31 +447,37 @@ Offset VirtualColumnIndex::byte_at(const TextBuffer &text, LineNumber line, std:
         std::ranges::subrange(std::next(chunks_.begin(), signed_of(first + 1)),
                               std::next(chunks_.begin(), signed_of(chunk_of(line_end) + 1)));
     const auto found =
-        std::ranges::upper_bound(inside, target, {}, [by_cell](const VirtualColumnChunk &chunk)
-                                 { return by_cell ? chunk.cell : chunk.column; });
+        std::ranges::upper_bound(inside, target, {}, [measure](const VirtualColumnChunk &chunk)
+                                 { return start_of(chunk).*measure; });
     const bool from_line = found == inside.begin();
     const auto &chunk = from_line ? chunks_.at(first) : *std::prev(found);
     const auto from = from_line ? line_begin : chunk.start;
-    const VirtualColumnCursor state{from_line ? 0 : chunk.column, from_line ? 0 : chunk.cell, 0};
+    const auto state = from_line ? zero_cursor() : start_of(chunk);
     const auto stop = std::min(chunk.start + chunk.bytes, line_end);
     if (chunk.plain)
     {
-        const auto reached = target - (by_cell ? state.cell : state.column);
+        const auto reached = target - state.*measure;
         return Offset{std::min(from + reached, stop)};
     }
     const auto bytes = text.text_range(Offset{from}, Offset{stop});
-    return Offset{from + scanned_until(bytes, state, target, by_cell)};
+    return Offset{from + scanned_until(bytes, state, target, measure)};
 }
 
 Offset VirtualColumnIndex::byte_at_virtual_column(const TextBuffer &text, LineNumber line,
                                                   std::size_t column) const
 {
-    return byte_at(text, line, column, false);
+    return byte_at(text, line, column, &VirtualColumnCursor::column);
 }
 
 Offset VirtualColumnIndex::byte_at_cell(const TextBuffer &text, LineNumber line,
                                         std::size_t cell) const
 {
-    return byte_at(text, line, cell, true);
+    return byte_at(text, line, cell, &VirtualColumnCursor::cell);
+}
+
+Offset VirtualColumnIndex::byte_at_code_point(const TextBuffer &text, LineNumber line,
+                                              std::size_t ordinal) const
+{
+    return byte_at(text, line, ordinal, &VirtualColumnCursor::code_point);
 }
 } // namespace nenenib::core
