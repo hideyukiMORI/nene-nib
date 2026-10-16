@@ -466,7 +466,7 @@ def judge_first_paint(samples: list, background: list) -> dict:
     arrived = [index for index, entry in enumerate(samples)
                if entry["pixel"] == background and entry["ours"]]
     # `ours` が偽の列だけが返ったときは、別の窓が中央を覆っている（その面を測っても意味が無い）。
-    assert arrived, (f"the body background {background} never reached the centre of the window;"
+    assert arrived, (f"the body background {background} never reached the body ground point of the window;"
                      f" is another window covering it? last samples: {samples[-3:]}")
     before = [entry for entry in samples[:arrived[0]] if entry["ours"]]
     distances = [max(abs(value - ground) for value, ground in zip(entry["pixel"], background))
@@ -488,7 +488,7 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
     try:
         client = rectangle(window, user.GetClientRect)
         width, height = client[2] - client[0], client[3] - client[1]
-        centre = (width // 2, height // 2)
+        centre = body_ground_point(width, height, user.GetDpiForWindow(window))
         result = judge_first_paint(sample_first_paint(window, centre, background), background)
         pixels = capture(window, width, height)
         write_bitmap(output / "first-paint.bmp", pixels, width, height)
@@ -810,6 +810,19 @@ def status_item_box(width: int, height: int, dpi: int, index: int) -> tuple:
     return boxes[index]
 
 
+def body_ground_point(width: int, height: int, dpi: int) -> tuple:
+    """The one point where only the body background shows (shared by the look and first-paint sections).
+
+    本文の背景色の標本点。中央は空の文書の案内（operation_guide_layout の body_guide・
+    幅 228 DIP を本文帯の中央に置き、左右 16 DIP 以上の余白を残す）が描かれる（#304・D42）ので使わない。
+    案内の右端は中央 + 114 DIP なので、右端から 8 DIP 内側（幅 640 DIP の窓で 632 DIP）は案内の外。
+    縦は title_bar の下と status の上の中ほど。DIP → 物理画素は整数演算（to_pixels）。
+    設定 guide で案内を消す道は使わない（検査が設定に依存しない）。
+    """
+    title_bar = to_pixels(TITLE_BAR_DIPS, dpi)
+    return (width - to_pixels(8, dpi), title_bar + (height - title_bar) // 2)
+
+
 def verify(window, appearance: str, output: Path) -> dict:
     assert user.SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE_NOSIZE_SHOW)
     time.sleep(0.4)
@@ -825,13 +838,7 @@ def verify(window, appearance: str, output: Path) -> dict:
     pixels = capture(window, width, height)
     write_bitmap(output / "look-slice.bmp", pixels, width, height)
     expected = list(PALETTE[appearance])
-    # 本文の背景色の標本点。中央は空の文書の案内（operation_guide_layout の body_guide・
-    # 幅 228 DIP を本文帯の中央に置き、左右 16 DIP 以上の余白を残す）が描かれる（#304・D42）ので使わない。
-    # 案内の右端は中央 + 114 DIP なので、右端から 8 DIP 内側（幅 640 DIP の窓で 632 DIP）は案内の外。
-    # 縦は title_bar の下と status の上の中ほど。DIP → 物理画素は整数演算（to_pixels）。
-    # 設定 guide で案内を消す道は使わない（検査が設定に依存しない）。
-    ground_x = width - to_pixels(8, dpi)
-    ground_y = title_bar + (height - title_bar) // 2
+    ground_x, ground_y = body_ground_point(width, height, dpi)
     centre = pixel(pixels, width, ground_x, ground_y)
     # 帯の地は「タブでも ＋ でも窓の操作でもない場所」。下の hitTest の HTCAPTION がそれを示す。
     title_pixel = pixel(pixels, width, width // 2, title_bar // 2)
