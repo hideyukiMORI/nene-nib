@@ -25,10 +25,11 @@ through eng/window_driver.py, and reads the file back.
 Two optional benches run only when --bench names them (OPTIONAL_BENCHES, ADR 0138); the eight
 above stay the default set and the only ones compare() judges:
 
-  open-giant-line-16mib     the same startup measurement as open-large-file-16mib with a document
-                            that is one 16,800,000 byte ASCII line (minified JSON, no newline,
-                            checked by SHA-256); a run that presents no frame within LARGE_SECONDS
-                            is missing, not a traceback
+  open-giant-line-16mib     process creation -> the first frame that draws the body (body_presented,
+                            after the grid question is answered) over a document that is one
+                            16,800,000 byte ASCII line (minified JSON, no newline, checked by
+                            SHA-256), with the startup breakdown; a run that presents no body
+                            within LARGE_SECONDS is missing, not a traceback (#546)
   key-to-frame-single-giant-line-16mib
                             the key-to-frame-single trial over that document without the 200
                             keystrokes: the warmup character and one more, each sent only after the
@@ -163,10 +164,14 @@ LARGE_BURST_BENCH = "key-to-frame-burst-200-16mib"
 ARRIVAL_SEGMENT = "keysArrivalSpan"
 # 起動の節目の正典順（Issue #19 / core::Milestone と同じ綴り）。区間名は「到達する節目の名前」で、
 # 最初の区間 "origin" だけはプロセス生成 -> bind（loader・CRT・COM・引数）を指す。
+# 末尾の body_presented は本文を描いた最初の frame（#546）。問いの無い文書では frame_presented と
+# 同じ frame なので区間はほぼ 0、巨大な行では答えの後の本文の frame までの区間になる。
 ORIGIN_SEGMENT = "origin"
+BODY_MILESTONE = "body_presented"
 STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "window_shown",
                       "device_created", "swap_chain_created", "composition_bound",
-                      "context_created", "text_formats_created", "frame_presented")
+                      "context_created", "text_formats_created", "frame_presented",
+                      BODY_MILESTONE)
 # 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
 STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
@@ -717,15 +722,16 @@ def bench_giant_single(executable: Path, environment: dict, folder: Path,
 
 def bench_giant_open(executable: Path, environment: dict, folder: Path,
                      document: Path, grid: bool) -> tuple[dict, dict]:
-    """open-large-file-16mib's measurement over the one-line document; no frame is missing.
+    """Process creation to the first frame that draws the body (body_presented, #546).
 
-    The window is asked to close at once as in bench_large_file, and the process gets
-    LARGE_SECONDS to present its first frame and exit; one that does not is killed by stop() and
-    the trial is missing (ADR 0138 decision 4), as is a finished file without frame_presented.
-    The grid question is answered first (grid is "yes"); a trial in which it never comes up is
-    missing. The value is the first frame (processCreation to frame_presented), which the editor
-    presents while the question waits, without the body (ADR 0140 decision 2): it does not include
-    laying out the body under either answer.
+    The first frame_presented comes while the grid question waits, without the body (ADR 0140
+    decision 2), so it says nothing about laying out the body. The question is answered first
+    (grid is "yes"; a trial in which it never comes up is missing), and the window is asked to
+    close only after its thread went quiet: a WM_CLOSE posted at once would be read before the
+    WM_PAINT of the body. The process gets LARGE_SECONDS for each; one that does not exit is
+    killed by stop() and the trial is missing (ADR 0138 decision 4), as is a finished file
+    without body_presented. The value is processCreationToOriginMs plus the body_presented
+    reading, as startup-window-shown adds window_shown's.
     """
     report = report_path(folder, "giant")
     process, window, _ = start(executable, environment,
@@ -735,6 +741,8 @@ def bench_giant_open(executable: Path, environment: dict, folder: Path,
             print(f"Speed: the grid question never came up; this trial of {GIANT_OPEN_BENCH}"
                   " is missing")
             return {GIANT_OPEN_BENCH: None}, {}
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the grid answer")
         close(window)
         process.wait(timeout=LARGE_SECONDS)
     except subprocess.TimeoutExpired:
@@ -744,12 +752,13 @@ def bench_giant_open(executable: Path, environment: dict, folder: Path,
         stop(process)
     text = report.read_text(encoding="utf-8") if report.is_file() else ""
     marks = marks_of(text)
-    if marks is None or not any(entry["milestone"] == "frame_presented" for entry in marks):
-        print(f"Speed: no frame was presented; this trial of {GIANT_OPEN_BENCH} is missing")
+    if marks is None or not any(entry["milestone"] == BODY_MILESTONE for entry in marks):
+        print(f"Speed: no frame drew the body; this trial of {GIANT_OPEN_BENCH} is missing")
         return {GIANT_OPEN_BENCH: None}, {}
     measured = json.loads(text)
-    return ({GIANT_OPEN_BENCH: float(measured["processCreationToFirstFrameMs"])},
-            {GIANT_OPEN_BENCH: breakdown(measured)})
+    body = (float(measured["processCreationToOriginMs"])
+            + first_reading(marks, BODY_MILESTONE) / MICROSECONDS_PER_MILLISECOND)
+    return {GIANT_OPEN_BENCH: body}, {GIANT_OPEN_BENCH: breakdown(measured)}
 
 
 def bench_large_file(executable: Path, environment: dict, folder: Path,

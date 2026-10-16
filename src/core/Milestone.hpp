@@ -11,6 +11,9 @@ namespace nenenib::core
 // 時刻を与えるのは adapters だけ（ARC-007）。document_opened から text_formats_created までは
 // 起動の経路の正典順で、各段が返った直後に 1 つずつ打つ。
 // window_shown は ShowWindow が返った直後＝窓が見えるまで。device の生成より前に打つ（ADR 0013）。
+// body_presented は本文を描いた最初の frame が present された時で、起動の列の末尾（#546）。
+// 問いの無い文書では最初の frame_presented と同じ frame、問いのある文書では答えの後の frame
+// （ADR 0138 の決定 2）。
 enum class Milestone : std::uint8_t
 {
     document_opened,
@@ -24,6 +27,7 @@ enum class Milestone : std::uint8_t
     text_formats_created,
     input_received,
     frame_presented,
+    body_presented,
     probe_started,
     probe_finished
 };
@@ -55,6 +59,8 @@ enum class Milestone : std::uint8_t
         return "input_received";
     case Milestone::frame_presented:
         return "frame_presented";
+    case Milestone::body_presented:
+        return "body_presented";
     case Milestone::probe_started:
         return "probe_started";
     case Milestone::probe_finished:

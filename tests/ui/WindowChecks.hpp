@@ -20,4 +20,5 @@ void verify_glyph_pixels();
 void verify_gutter_layouts();
 void verify_file_drop();
 void verify_grid_render();
+void verify_presented_milestones();
 } // namespace nenenib::tests::ui
