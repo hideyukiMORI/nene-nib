@@ -80,22 +80,30 @@ Layout plain_of(IDWriteFactory2 &factory, IDWriteTextLayout &applied, const std:
     return plain;
 }
 
-// layout の全文に範囲の字体が無い（書式の family のまま）。
-bool keeps_format_family(IDWriteTextLayout &layout, UINT32 length)
+// layout の範囲の字体（書式の family と違う family の範囲）の数。読めなければ nullopt。
+std::optional<std::size_t> range_fonts(IDWriteTextLayout &layout, UINT32 length)
 {
     const auto family = family_of(layout);
+    std::size_t count = 0;
     for (UINT32 position = 0; position < length;)
     {
         std::array<wchar_t, name_capacity> name{};
         DWRITE_TEXT_RANGE range{};
         if (FAILED(layout.GetFontFamilyName(position, name.data(), name_capacity, &range)) ||
-            family != name.data() || range.length == 0)
+            range.length == 0)
         {
-            return false;
+            return std::nullopt;
         }
+        count += family != name.data() ? 1U : 0U;
         position = range.startPosition + range.length;
     }
-    return true;
+    return count;
+}
+
+// layout の全文に範囲の字体が無い（書式の family のまま）。
+bool keeps_format_family(IDWriteTextLayout &layout, UINT32 length)
+{
+    return range_fonts(layout, length).value_or(1) == 0;
 }
 
 bool same_fallback(IDWriteTextLayout &left, IDWriteTextLayout &right)
@@ -319,6 +327,29 @@ void check_geometries(BodyTextLayouts &layouts, std::string_view text, std::size
                      text, settings, wide, core::DisplayForm::text, {}, app::LineWindow{true}},
                  sample);
 }
+// 製品の layout は主字体に無い文字の区間に範囲の字体を持ち、1 行の区間は上限で止まる（決定 4）。
+void check_assigned(BodyTextLayouts &layouts)
+{
+    auto settings = core::default_editor_settings();
+    settings.wrapping = core::LineWrapping::no_wrap;
+    constexpr core::TextViewGeometry wide{900, 29, 96};
+    const auto japanese = layouts.get(app::TextLayoutRequest{"abc 日本語 def", settings, wide});
+    expect(japanese.has_value() && range_fonts(*japanese.value().Get(), 11).value_or(0) == 1,
+           "the run missing from the primary font carries the system's range font");
+    const auto ascii = layouts.get(app::TextLayoutRequest{"plain ASCII only", settings, wide});
+    expect(ascii.has_value() && range_fonts(*ascii.value().Get(), 16).value_or(1) == 0,
+           "a line the primary font covers carries no range font");
+    std::string many;
+    for (std::size_t index = 0; index < win32::fallback_range_limit + 1000; ++index)
+    {
+        many += "あ ";
+    }
+    const auto limited = layouts.get(app::TextLayoutRequest{many, settings, wide});
+    const auto length = static_cast<UINT32>(core::to_utf16(many).value_or(std::wstring{}).size());
+    expect(limited.has_value() && range_fonts(*limited.value().Get(), length).value_or(0) ==
+                                      win32::fallback_range_limit,
+           "a line beyond the limit carries exactly the limit of range fonts");
+}
 } // namespace
 
 void verify_fallback_ranges()
@@ -336,5 +367,6 @@ void verify_fallback_ranges()
     }
     const auto bench = bench_line();
     check_geometries(layouts, bench, samples.size());
+    check_assigned(layouts);
 }
 } // namespace nenenib::tests::ui
