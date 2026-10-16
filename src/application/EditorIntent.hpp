@@ -32,6 +32,7 @@
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SettleRecentTab.hpp"
 #include "StoreVimRegister.hpp"
@@ -58,5 +59,5 @@ using EditorIntent = std::variant<
     AdjustFontSize, CommandText, EditCommand, SubmitCommand, CancelCommand, PasteCommand,
     OpenCommandPalette, ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
     WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth, OpenTabList,
-    EndSession, WorkCompleted, ToggleBookmark, OpenOperationList, PointText>;
+    EndSession, WorkCompleted, ToggleBookmark, OpenOperationList, PointText, SelectDisplay>;
 } // namespace nenenib::application

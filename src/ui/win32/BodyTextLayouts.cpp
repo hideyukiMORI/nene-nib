@@ -50,6 +50,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     current_.clear();
     previous_.clear();
     pending_.reset();
+    cell_.reset();
     style_.reset();
     if (!factory_)
     {
@@ -295,6 +296,35 @@ BodyTextLayouts::hit(const application::TextLayoutRequest &request, core::TextLo
     return core::DisplayCaret{positions.column_of(units), after != FALSE
                                                               ? core::CaretAffinity::trailing
                                                               : core::CaretAffinity::leading};
+}
+
+std::expected<application::TextCell, application::TextLayoutFailure>
+BodyTextLayouts::cell(const application::TextLayoutRequest &request)
+{
+    const auto ready = prepare(request);
+    if (!ready)
+    {
+        return std::unexpected(ready.error());
+    }
+    if (cell_.has_value())
+    {
+        return cell_.value();
+    }
+    // 保持には入れない（本文の文字組みの鍵は表示文字列のまま・ADR 0114）。
+    const auto made =
+        make_layout(application::TextLayoutRequest{"0", request.settings, request.geometry});
+    if (!made)
+    {
+        return std::unexpected(made.error());
+    }
+    DWRITE_TEXT_METRICS metrics{};
+    if (FAILED(made.value().layout->GetMetrics(&metrics)) ||
+        metrics.widthIncludingTrailingWhitespace <= 0 || metrics.height <= 0)
+    {
+        return std::unexpected(unavailable);
+    }
+    cell_ = application::TextCell{metrics.widthIncludingTrailingWhitespace, metrics.height};
+    return cell_.value();
 }
 
 const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, float left)

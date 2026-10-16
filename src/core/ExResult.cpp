@@ -166,6 +166,57 @@ namespace
     std::unreachable();
 }
 
+// 表示形式は文書ごとの値で設定に載せないので settings は空のまま返す（ADR 0140 の決定 3）。
+[[nodiscard]] ExResult display_result(DisplayForm display)
+{
+    switch (display)
+    {
+    case DisplayForm::text:
+        return ExResult{.settings = std::nullopt,
+                        .highlight = std::nullopt,
+                        .incsearch = std::nullopt,
+                        .message = DisplayText::parse("display=text").value(),
+                        .display = display};
+    case DisplayForm::grid:
+        return ExResult{.settings = std::nullopt,
+                        .highlight = std::nullopt,
+                        .incsearch = std::nullopt,
+                        .message = DisplayText::parse("display=grid").value(),
+                        .display = display};
+    }
+    std::unreachable();
+}
+
+// 設定に載せない名前の option（検索の強調・incsearch・表示形式）。
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> unsaved_option(std::string_view option)
+{
+    if (option == "hlsearch")
+    {
+        return highlight_result(VimSearchHighlight::on);
+    }
+    if (option == "nohlsearch")
+    {
+        return highlight_result(VimSearchHighlight::off);
+    }
+    if (option == "incsearch")
+    {
+        return incsearch_result(true);
+    }
+    if (option == "noincsearch")
+    {
+        return incsearch_result(false);
+    }
+    if (option == "display=text")
+    {
+        return display_result(DisplayForm::text);
+    }
+    if (option == "display=grid")
+    {
+        return display_result(DisplayForm::grid);
+    }
+    return std::unexpected(ExFailure::unknown_option);
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
@@ -193,23 +244,7 @@ set_option(std::string_view option, const EditorSettings &settings)
     {
         return set_gui_font(option.substr(8), settings);
     }
-    if (option == "hlsearch")
-    {
-        return highlight_result(VimSearchHighlight::on);
-    }
-    if (option == "nohlsearch")
-    {
-        return highlight_result(VimSearchHighlight::off);
-    }
-    if (option == "incsearch")
-    {
-        return incsearch_result(true);
-    }
-    if (option == "noincsearch")
-    {
-        return incsearch_result(false);
-    }
-    return std::unexpected(ExFailure::unknown_option);
+    return unsaved_option(option);
 }
 // タブの命令の名前の表（ADR 0057 の決定 4・CPP-012）。省略は Vim 9.1 の実測のとおり「最短の形
 // から完全な形までの前方一致」で、`tabne` は tabnext（tabnew は完全一致だけ）。`tab` `tabe`
@@ -468,11 +503,11 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     }
     return std::unexpected(ExFailure::unknown_command);
 }
-constexpr std::array<std::string_view, 16> fixed_candidates{
-    "colorscheme",     "set fontsize=", "set guifont=",   "set incsearch",
-    "set noincsearch", "set hlsearch",  "set nohlsearch", "set guide",
-    "set noguide",     "tabs",          "tabnew",         "tabnext",
-    "tabprevious",     "tabclose",      "set wrap",       "set nowrap"};
+constexpr std::array<std::string_view, 18> fixed_candidates{
+    "colorscheme",  "set fontsize=",    "set guifont=",    "set incsearch", "set noincsearch",
+    "set hlsearch", "set nohlsearch",   "set guide",       "set noguide",   "tabs",
+    "tabnew",       "tabnext",          "tabprevious",     "tabclose",      "set wrap",
+    "set nowrap",   "set display=grid", "set display=text"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

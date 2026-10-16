@@ -19,6 +19,9 @@ struct StatusBarLayout
     LayoutRect toggle_vim;
     LayoutRect mode;
     std::array<LayoutRect, status_item_count> items;
+    // 表示形式の印（ADR 0140 の決定 3）。items の最初の項目の左隣で、案内の右端（items の最初の
+    // 左から 28 DIP）より右に収まる幅。右寄せで書く。
+    LayoutRect display;
     std::int32_t corner_radius;
     std::int32_t segment_radius;
 };

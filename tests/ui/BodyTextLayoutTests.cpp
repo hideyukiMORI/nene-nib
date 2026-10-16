@@ -233,6 +233,24 @@ void check_horizontal_pixels(BodyTextLayouts &layouts, core::EditorSettings sett
     }
 }
 
+// 格子の 1 升（ADR 0140・#545 の仮の実装）。本文の書式の `0` の幅と行高で、書式が同じなら同じ値。
+// 保持の行（rows の要求）には入らない。
+void check_cell(BodyTextLayouts &layouts, const core::EditorSettings &settings)
+{
+    const app::TextLayoutRequest request{"", settings, narrow};
+    const auto cell = layouts.cell(request);
+    expect(cell.has_value() && cell.value().width > 0.0F && cell.value().height > 0.0F,
+           "the grid cell has a positive width and height");
+    const auto again = layouts.cell(app::TextLayoutRequest{"ignored", settings, narrow});
+    expect(cell.has_value() && again.has_value() && again.value().width == cell.value().width &&
+               again.value().height == cell.value().height,
+           "the grid cell ignores the text and repeats for the same format");
+    const auto zero = layouts.locate(app::TextLayoutRequest{"00", settings, narrow},
+                                     core::DisplayCaret{core::Column{2}});
+    expect(cell.has_value() && zero.has_value() && zero.value().x > 0.0F &&
+               zero.value().x <= cell.value().width + 0.5F,
+           "the provisional cell is the width of the body font's zero");
+}
 } // namespace
 
 void verify_body_text_layouts()
@@ -251,6 +269,7 @@ void verify_body_text_layouts()
     check_input_retention(layouts, settings);
     check_wrapped_pixels(layouts, settings);
     check_horizontal_pixels(layouts, settings);
+    check_cell(layouts, settings);
     const auto invalid =
         layouts.get(app::TextLayoutRequest{std::string_view{"\xff", 1}, settings, narrow});
     expect(!invalid.has_value(), "invalid display text is an explicit layout failure");

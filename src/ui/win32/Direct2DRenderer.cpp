@@ -2,6 +2,7 @@
 #include "TextLayoutPoint.hpp"
 
 #include "DevicePixels.hpp"
+#include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
@@ -1275,6 +1276,12 @@ void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
     {
         write_status(frame.status_items.at(index).text(), status_format_.Get(),
                      layout.items.at(index), frame.palette.muted);
+    }
+    // 表示形式の印（ADR 0140 の決定 3）。文字は core の表、右寄せは write_right の 1 本。
+    const auto mark = core::display_form_label(frame.display);
+    if (!mark.empty())
+    {
+        write_right(mark, status_format_.Get(), layout.display, frame.palette.muted);
     }
 }
 
