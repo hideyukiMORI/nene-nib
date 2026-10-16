@@ -299,6 +299,30 @@ def prove_speed_reference(root: Path, evidence: list) -> None:
     print("QLT-014: a reference tightened on one bench is rejected; the untouched copy passed")
 
 
+# QLT-011: 複製の eng/tool-versions.json の llvm の版を 1 つずらすと、eng/toolchain.ps1 を読んだ configure が
+# clang-cl の版の照合で落ちる（configure に届かない）。照合が無い道具（vim・Windows SDK）はここでは証明しない。
+def prove_tool_versions(root: Path, evidence: list) -> None:
+    shutil.copyfile(ROOT / "eng/toolchain.ps1", root / "eng/toolchain.ps1")
+    versions_file = root / "eng/tool-versions.json"
+    original = versions_file.read_text(encoding="utf-8")
+    versions = json.loads(original)
+    actual = versions["llvm"]
+    parts = actual.split(".")
+    parts[-1] = str(int(parts[-1]) + 1)
+    shifted = ".".join(parts)
+    configure = (f". '{root / 'eng/toolchain.ps1'}'; "
+                 "cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug; exit $LASTEXITCODE")
+    command = ["pwsh", "-NoProfile", "-Command", configure]
+    versions_file.write_text(original.replace(f'"llvm": "{actual}"', f'"llvm": "{shifted}"'), encoding="utf-8")
+    diagnostic = f"QLT-011: clang-cl must be {shifted}"
+    result = run(command, root, False, diagnostic)
+    versions_file.write_text(original, encoding="utf-8")
+    restoration = run(command, root, True)
+    evidence.append({"rule": "QLT-011", "diagnostic": diagnostic + f" (tool-versions.json llvm {actual} -> {shifted})",
+                     "negative": result, "restorationExit": restoration["exitCode"]})
+    print(f"QLT-011: llvm {shifted} in the copied tool-versions.json is rejected by toolchain.ps1; restoration passed")
+
+
 def main() -> None:
     output_root = (ROOT / "out/proofs").resolve()
     output_root.mkdir(parents=True, exist_ok=True)
@@ -320,6 +344,7 @@ def main() -> None:
         prove_symbols(root, evidence)
         prove_real_libraries(root, configure, evidence)
         prove_speed_reference(root, evidence)
+        prove_tool_versions(root, evidence)
     (output_root / "results.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
                                               encoding="utf-8")
     print(f"Gate proofs passed: {len(evidence)} real-tool proofs")
