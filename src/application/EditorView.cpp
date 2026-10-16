@@ -58,7 +58,7 @@ bool EditorController::move_visual(const MoveCaret &intent)
         wanted_x_.reset();
         return false;
     }
-    const auto view = visual_view();
+    auto view = visual_view();
     const auto source = state_.text().position_of(state_.selection().caret);
     const auto point = view.location(core::TextCaret{source, state_.caret_affinity()});
     if (!point)
@@ -95,7 +95,7 @@ void EditorController::accept(const PointText &intent)
     const auto &scroll = state_.scroll();
     const auto row = std::clamp<std::int64_t>(intent.row, 0,
                                               static_cast<std::int64_t>(scroll.visible_lines) - 1);
-    const auto view = visual_view();
+    auto view = visual_view();
     const auto at = view.shifted(core::VisualPosition{scroll.first_visible, scroll.first_row}, row);
     if (!at)
     {
@@ -127,7 +127,7 @@ EditorController::measured_vim_step(const core::VimKey &key) const
                                  state_.display() == core::DisplayForm::grid),
                             scroll.first_row, rows}};
     auto step = core::vim_step(state_.vim(), view, key);
-    const auto text = visual_view();
+    auto text = visual_view();
     while (step.layout_request.has_value())
     {
         const auto line = step.layout_request.value();
