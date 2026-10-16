@@ -36,9 +36,11 @@
 #include <array>
 #include <cstddef>
 #include <expected>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::tests
 {
@@ -763,6 +765,143 @@ void verify_vim_find_match()
                     "an empty body has no match backwards either");
 }
 
+// ---------------------------------------------------------------- piece をまたぐ検索（#583）
+
+// 本文を読んでから insert で割る。行が piece をまたぐ形を作る（edits は前から順に当てる）。
+[[nodiscard]] TextBuffer
+pieced(std::string_view text, std::initializer_list<std::pair<std::size_t, std::string_view>> edits)
+{
+    const auto read = TextBuffer::from_utf8(text);
+    expect(read.has_value(), "the pieced body is valid");
+    TextBuffer buffer = read.has_value() ? read.value() : TextBuffer::empty();
+    for (const auto &[at, inserted] : edits)
+    {
+        buffer = buffer.insert(Offset{at}, inserted);
+    }
+    return buffer;
+}
+
+[[nodiscard]] std::expected<VimSearchHit, core::VimSearchNoticeKind>
+pieced_found(const TextBuffer &buffer, std::string_view pattern, const VimMatchRequest &request)
+{
+    const auto parsed = VimPattern::parse(pattern, request.direction);
+    expect(parsed.has_value(), "the pieced pattern is valid");
+    if (!parsed.has_value())
+    {
+        return std::unexpected(core::VimSearchNoticeKind::pattern_not_found);
+    }
+    return vim_find_match(buffer, parsed.value(), request);
+}
+
+// 行が piece をまたぐ当たりと、piece の端をまたぐ literal の当たり。
+void verify_vim_search_piece_lines()
+{
+    using enum VimSearchDirection;
+    // 2 行目 "gaXYmma delta" は "alpha beta\nga" "XY" "mma delta\nomega" の 3 片にまたがる。
+    const TextBuffer split = pieced("alpha beta\ngamma delta\nomega", {{13, "XY"}});
+    expect(split.piece_count() == 3 && split.line_count() == 3, "the line spans three pieces");
+    expect_match(pieced_found(split, "aXYm", {at_position(1, 1), forward, 1}), at_position(2, 2),
+                 false, "a literal across both edges of the inserted piece");
+    expect_match(pieced_found(split, "XYmma", {at_position(1, 1), forward, 1}), at_position(2, 3),
+                 false, "a literal that starts in the inserted piece");
+    expect_match(pieced_found(split, "a.Ym", {at_position(1, 1), forward, 1}), at_position(2, 2),
+                 false, "a pattern with magic across the pieces");
+    expect_match(pieced_found(split, "aXY", {at_position(2, 6), forward, 1}), at_position(2, 2),
+                 true, "the only match before the caret on a split line is found by wrapping");
+    expect_match(pieced_found(split, "XYm", {at_position(1, 1), backward, 1}), at_position(2, 3),
+                 true, "a backward search wraps to a match across the pieces");
+    expect_match(pieced_found(split, "delta", {at_position(3, 3), backward, 1}), at_position(2, 9),
+                 false, "a backward search reaches the split line");
+    // "abc\ndef" ＋ 末尾の "ghi": 当たりがちょうど piece の端をまたぐ。
+    const TextBuffer edge = pieced("abc\ndef", {{7, "ghi"}});
+    expect_match(pieced_found(edge, "fg", {at_position(1, 1), forward, 1}), at_position(2, 3),
+                 false, "a literal exactly across the edge of two pieces");
+    expect_match(pieced_found(edge, "fg", {at_position(1, 1), backward, 1}), at_position(2, 3),
+                 true, "the same literal backwards by wrapping");
+    // 1 バイトの piece は literal 長 −1 より短く、当たりは 3 片にまたがる。
+    const TextBuffer narrow = pieced("abc\ndef", {{5, "X"}});
+    expect(narrow.piece_count() == 3, "a one-byte piece in the middle of the line");
+    expect_match(pieced_found(narrow, "dXe", {at_position(1, 1), forward, 1}), at_position(2, 1),
+                 false, "a literal across a piece shorter than itself");
+    expect_match(pieced_found(narrow, "dXe", {at_position(1, 2), backward, 1}), at_position(2, 1),
+                 true, "and backwards across the same pieces");
+    expect_no_match(pieced_found(narrow, "dXf", {at_position(1, 1), forward, 1}),
+                    "the edge window does not invent a match");
+}
+
+// 後ろ向きの折り返しと、literal の候補の絞り込みが当たりを落とさないこと。
+void verify_vim_search_piece_candidates()
+{
+    using enum VimSearchDirection;
+    // "x\naaa" の 2 行目は "aa" と "a" の 2 片。後ろ向きの /aa は行頭から数えた 0 桁目に着く
+    // （rfind の 1 桁目ではない）。
+    const TextBuffer overlap = pieced("x\naa", {{4, "a"}});
+    expect_match(pieced_found(overlap, "aa", {at_position(1, 1), backward, 1}), at_position(2, 1),
+                 true, "a backward literal keeps the count from the head of the line");
+    expect_match(pieced_found(overlap, "aa", {at_position(1, 1), forward, 1}), at_position(2, 1),
+                 false, "and forwards it lands on the same match");
+    // CRLF の本文を割った行。行の内容は CR の前まで。
+    const TextBuffer crlf = pieced("ab\r\ncd\r\nef", {{5, "Z"}});
+    expect_match(pieced_found(crlf, "Zd", {at_position(1, 1), forward, 1}), at_position(2, 2),
+                 false, "a literal on a split CRLF line");
+    expect_match(pieced_found(crlf, "d$", {at_position(1, 1), forward, 1}), at_position(2, 3),
+                 false, "the dollar on a split CRLF line sits before the carriage return");
+    // 多バイトの literal が piece の端をまたぐ（"あ" "う" "い" の 3 片）。
+    const TextBuffer kana = pieced("\xe3\x81\x82\xe3\x81\x84", {{3, "\xe3\x81\x86"}});
+    expect_match(pieced_found(kana, "\xe3\x81\x86\xe3\x81\x84", {at_position(1, 1), forward, 1}),
+                 at_position(1, 2), false, "a multibyte literal across the pieces");
+    expect_match(pieced_found(kana, "\xe3\x81\x82\xe3\x81\x86", {at_position(1, 3), backward, 1}),
+                 at_position(1, 1), false, "and backwards");
+    // 同じ行に 2 つの候補があり、前向きは起点の後ろ、後ろ向きは起点の前を取る。
+    const TextBuffer twice = pieced("ab ab\nab", {{3, "Q"}});
+    expect_match(pieced_found(twice, "ab", {at_position(1, 1), forward, 1}), at_position(1, 5),
+                 false, "the second candidate on the caret line");
+    expect_match(pieced_found(twice, "ab", {at_position(2, 1), backward, 1}), at_position(1, 5),
+                 false, "the last candidate on the previous line");
+    expect_match(pieced_found(twice, "ab", {at_position(2, 1), forward, 2}), at_position(1, 5),
+                 true, "a count that wraps keeps going on the split line");
+}
+
+[[nodiscard]] bool same_hit(const std::expected<VimSearchHit, core::VimSearchNoticeKind> &left,
+                            const std::expected<VimSearchHit, core::VimSearchNoticeKind> &right)
+{
+    if (!left.has_value() || !right.has_value())
+    {
+        return left.has_value() == right.has_value();
+    }
+    return left.value().position == right.value().position &&
+           left.value().wrapped == right.value().wrapped;
+}
+
+// 多くの小さな piece に割った本文と 1 片の本文で、全ての起点と両方の向きの答えが同じ。
+void verify_vim_search_piece_equivalence()
+{
+    using enum VimSearchDirection;
+    const TextBuffer many = pieced(
+        "ab\nbab\n\naba\nb", {{1, "a"}, {5, "b"}, {9, "\n"}, {12, "ab"}, {16, "b"}, {3, "x"}});
+    const auto whole = TextBuffer::from_utf8(many.text());
+    expect(whole.has_value() && whole.value().piece_count() == 1 && many.piece_count() > 3,
+           "the same body in many pieces and in one");
+    if (!whole.has_value())
+    {
+        return;
+    }
+    constexpr std::array<std::string_view, 8> patterns{"ab", "b",  "a.b", "aba",
+                                                       "^a", "b$", "bab", "ba*"};
+    bool same = true;
+    for (const std::string_view pattern : patterns)
+    {
+        for (std::size_t at = 0; at <= 2 * many.size_bytes() + 1; ++at)
+        {
+            const VimMatchRequest request{many.position_of(Offset{at / 2}),
+                                          at % 2 == 0 ? forward : backward, 1};
+            same = same && same_hit(pieced_found(many, pattern, request),
+                                    pieced_found(whole.value(), pattern, request));
+        }
+    }
+    expect(same, "the pieces never change where a search lands");
+}
+
 void verify_vim_search_empty_lines()
 {
     using enum VimSearchDirection;
@@ -822,6 +961,9 @@ void verify_vim_search_contracts()
     verify_vim_search_snapshot_contracts();
     verify_vim_find_match();
     verify_vim_search_empty_lines();
+    verify_vim_search_piece_lines();
+    verify_vim_search_piece_candidates();
+    verify_vim_search_piece_equivalence();
     verify_ex_incsearch_commands();
     verify_vim_pattern_subset();
     verify_vim_pattern_priority();
