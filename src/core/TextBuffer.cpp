@@ -1,6 +1,7 @@
 #include "TextBuffer.hpp"
 
 #include "AddChunk.hpp"
+#include "LineLengths.hpp"
 #include "Utf8.hpp"
 #include "VirtualColumnIndex.hpp"
 #include "VirtualColumnsFailure.hpp"
@@ -337,6 +338,18 @@ std::size_t TextBuffer::line_count() const noexcept
 std::size_t TextBuffer::piece_count() const noexcept
 {
     return pieces_.size();
+}
+
+// piece の窓の要約を本文の順に畳む。piece をまたぐ行は前の tail と後の head を足す（Issue #553）。
+std::size_t TextBuffer::longest_line_bytes() const noexcept
+{
+    LineLengths lengths{};
+    for (const auto &piece : pieces_)
+    {
+        lengths = joined(
+            lengths, index_of(piece).lengths(piece.start.value, piece.start.value + piece.length));
+    }
+    return longest_of(lengths);
 }
 
 std::vector<std::string_view> TextBuffer::segments() const &
