@@ -92,16 +92,8 @@ SoftwareTarget::glyph_runs(const std::vector<nenenib::ui::win32::BodyGlyphRun> &
     target_->PushAxisAlignedClip(clip, D2D1_ANTIALIAS_MODE_ALIASED);
     for (const auto &stored : runs)
     {
-        const DWRITE_GLYPH_RUN run{stored.face.Get(),
-                                   stored.em,
-                                   static_cast<UINT32>(stored.indices.size()),
-                                   stored.indices.data(),
-                                   stored.advances.data(),
-                                   stored.offsets.empty() ? nullptr : stored.offsets.data(),
-                                   stored.sideways,
-                                   stored.bidi};
-        target_->DrawGlyphRun(D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y),
-                              &run, brush_.Get(), stored.measuring);
+        const DWRITE_GLYPH_RUN run = drawn_glyphs(stored);
+        target_->DrawGlyphRun(drawn_origin(stored, origin), &run, brush_.Get(), stored.measuring);
     }
     target_->PopAxisAlignedClip();
     return finish();
