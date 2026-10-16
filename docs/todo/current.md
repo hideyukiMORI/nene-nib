@@ -1,37 +1,44 @@
 # いまのタスク — NeNe Nib
 
-2026-10-15 の区切り。Issue が正本。経緯は[日報](../reports/2026-10-15.md)、次回の入口は[引き継ぎ](../handoffs/2026-10-15.md)、検証は [gate-proofs](../quality/gate-proofs.md) と各品質記録を参照する。
+2026-10-16 の区切り。Issue が正本。経緯は[日報](../reports/2026-10-16.md)、次回の入口は[引き継ぎ](../handoffs/2026-10-16.md)、検証は [gate-proofs](../quality/gate-proofs.md)（経緯は `docs/quality/history/`）と各品質記録を参照する。
 
 ## 運用
 
-- 2026-10-15 は hide の指示で一日中、速度と安定性の向上を試した（設計席 Fable・実装と調査は Opus の席）。成果はすべて PR で、main は変えていない。性能改善の main 統合は施主決定 D41（独立レビュー・正式ゲート・CI・hide の試用）で、merge は hide の試用の後。
-- 対象と直接の境界だけを検証し、関連入力不変の成功結果は再利用する（QLT-001/012）。基準値・許容・ゲートは一切変えない（縮んだ分は余裕のまま）。文書のみなら CI/製品試験不要。
-- 追加 worktree/出力は D:/NeNeNib 配下。merge 後に恒久収載・監査整理し、branch/commit を保持する。席の依頼書には「作業を捨てる git の命令は使わず Edit で直して報告」を書く（権限の確認で約 11 時間止まった）。
+- 2026-10-15・16 は hide の指示で一日中、速度と安定性の向上を試した（設計席 Fable・実装と調査は Opus / Sonnet の席）。製品の成果はすべて PR で、main に入れたのは CI の形・統合道具・文書・検証の道具だけ。性能改善と新機能の main 統合は施主決定 D41（独立レビュー・正式ゲート・CI・hide の試用）で、merge は hide の試用の後。
+- 対象と直接の境界だけを検証し、関連入力不変の成功結果は再利用する（QLT-001/012）。基準値・許容・ゲートは一切変えない。文書のみなら CI 不要。非文書の merge は CI で製品を Release ビルドし ctest を回す（ADR 0136・7〜11 分）。
+- 追加 worktree/出力は D:/NeNeNib 配下。merge 後に恒久収載・監査整理し、branch/commit を保持する。席の依頼書には「作業を捨てる git の命令は使わず Edit で直して報告」を書く。速さを測る間はほかの席とビルドを止める。
 
-## いまの Issue と次の順
+## hide の試用を待つ PR（merge の順）
+
+| 対象 | 状態 |
+| --- | --- |
+| #477 → #478 → #482 → #487 → #480 → #453（速さ・2026-10-15） | 起動 192→40 ms・連打 11→2 ms。昨日の引き継ぎの表のとおり |
+| #505 → #506 → #508 → #507（外部講評 P0/P1） | #507 は差し戻し反映済み（回収は生きていない pid と自分の古い連番だけ）・Ready |
+| #530（#515・自動退避・ADR 0137・D47） | 3 工程＋差し戻し 5 回・独立レビュー反映・`--autosave` 79 checks・実機の 3 節通過・起動 189.5 ms / 単打 0.634 ms（main と同等）。Ready。base #507 |
+| #536（#528）・#537（#529）・#538（#531） | 巨大な行の描画の無駄。独立レビュー対応要なし・正式ゲート 8 本は基準内（連打 2 本は既存超過）・巨大 1 行 open 5988 → 5450 / 4862 ms・1 打鍵 5317 → 4791 / 4504 ms。#538 は #536 の上 |
+
+## hide に決めてもらうこと
+
+- ADR 0139（提案）: しきい値（65,536 コードポイント）を超える巨大な行は、キャレットの周りの窓（前後 4,096）だけを同じ layout に出し、描画と位置解決が共用する。巨大な行は折り返さない。残る約 4 秒（DirectWrite の行全体の字形づけ）はこれでしか縮まない。草稿は `D:\NeNeNib\briefs\20261016\adr-0139.md`。推しは「採る」。
+
+## 残る Issue
 
 | 対象 | 状態・再開点 |
 | --- | --- |
-| #474 / PR477 追従の遅延解決（ADR 0128） | 連打 11.3→2.1 ms・16 MiB 14.7→2.2 ms。レビュー・ゲート 8 本・CI 緑。Ready。hide の試用の後に merge。#460 は同じ原因で解消 |
-| #476 / PR478 Vim の viewport は要求で（ADR 0129） | Vim INSERT 連打 12.8→4.0 ms。レビュー・契約追加・ゲート 8 本退行 0。base は #477。merge 後に base を main へ変えて rebase・CI |
-| #492 / PR505、#493 / PR506、#494 / PR507、#496 / PR508 外部講評 P0/P1 | ADR 0133（終わり方の契約）/ 0135（一時ファイル）/ 0134（クリップボード）。505・508 はレビュー・CI 緑・Ready、506 は draft（base 505）、507 は差し戻し 1 命題。merge は hide の試用後。事実確認の表は D:/NeNeNib/outputs/winapps-review-20261015/fact-check.md |
-| #485 / PR487 最初の frame は WARP で子窓に（ADR 0132） | 起動 178→40.5 ms・16 MiB open 174→52 ms・単打同等。レビュー・ゲート・差し替えの標本 3 回。draft。base は #482。merge 後に base を main へ |
-| #481 / PR482 device の先行作成（ADR 0131） | 起動 192→178 ms・16 MiB 202→174 ms。レビュー反映。draft。#477 の merge 後に rebase して CI |
-| #479 / PR480 DLL の遅延読み込み（ADR 0130） | origin −2 ms。draft。#477 の merge 後に rebase して 8 本を測り直す |
-| #452 / PR453 分割UTF-8 4案目 | 局所比較 ASCII 1.003 / 日本語 1.034・正式 open 200.8 ms 退行 0。契約・レビュー・CI 緑。Ready。速さの改善を主張しない refactor。統合は hide の判断 |
-| #450 / #468 本文の接続 | [ADR0127](../adr/0127-large-file-integration-reserves-prepares-and-commits.md)と[全caller移行表](../design/2026-10-13-large-file-integration-map.md)を設計。製品移行/2GiB未受理 |
-| #469 ASan診断 | #467で非致命的interception診断。既存EXE/PDB/ログから切り分ける。無関係な既存不具合と断定しない |
-| #454 / #456 設定と日英 | [画面案](../design/2026-10-12-settings-dialog-boards.md)とADR0123は提案。未採用 |
-
-merge の順: #477 → #478 → #482 → #487 → #480 → #453（どれも独立に戻せる）。merge 後に worktree と outputs を収載・監査整理する。
+| #527 巨大な 1 行の直す順 | (1)(2) は PR。(3) は ADR 0139 の判断後。基準値（D52）はその後 |
+| #531 置き換え文字の描画の二乗 | PR #538。残余: RTL 混在の行の fallback・置き換えの直後の結合文字 |
+| #519 堅牢性 | 54 件中 52 通過。止まった 2 件は #531 |
+| #450 / #468 本文の接続 | ADR 0127 と全 caller 移行表を設計。製品移行/2GiB 未受理 |
+| #469 ASan 診断、#424 D 側 profile、#411、#365、#373 | 未着手 |
+| #454 / #456 設定と日英 | 画面案と ADR 0123 は提案。未採用 |
+| #497〜#501 外部講評 P4 | 施主判断の後 |
 
 ## いまの数字・動かないもの・段階
 
-- 公開版は[v0.1.0-beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)。本文余白/断片保存/改行索引/読込完了は main のみで公開版へ未反映。
-- main 89c582d の実機の速さ: 起動 192 ms・窓 31 ms・単打 0.64 ms・16 MiB open 202 ms・連打 11.3 ms（基準超過・#474 で 2.1）・長行単打 6.25 ms（6 KB 行の layout 4.6 ms が床・ADR 0114 が分割再整形を却下）。
-- 組み込み125テーマ、Vim oracle 1853件。settings.v3/session.v2、64MiB上限、同期FilePortを維持。保存schema変更なし。
-- 2GiB/512MiB/100ms、split、Markdown、構文解析、設定モーダル/日英切替、手動横スクロール/スクロールバー、Vim gj/gk/g0/g$・ドラッグは未対応/未受理。
-- 残る速さの候補: 16 MiB open の document_opened 12 ms（UTF-8 検証と索引）、frame の描画 0.4〜0.5 ms の内訳、ShowWindow の 9 ms は OS 側（WM_ACTIVATE の IME 文脈）で製品では縮まない。
-- #486: `eng/verify-window.py` の look の節が #304 の案内と合わず落ちる（既存失敗・未修正）。
-- 外部講評の施主判断（CI で製品ビルド・自動退避・巨大ファイルの分割・planned の控えめ側・文書の再編・速度目標・巨大な 1 行のベンチ）は引き継ぎの表。P4 は Issue #497〜#501。SIMD の走査と origin の削減は実験で見送り（複写の削減は #468）。
-- 既存#411/#365/#373/#424は今回修正していない。Waivers none。
+- 公開版は [v0.1.0-beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)。本文余白/断片保存/改行索引/読込完了は main のみ。
+- main（製品は 89c582d のまま）の実機の速さ（2026-10-16・静かな機械）: 起動 189 ms・窓 31 ms・単打 0.61 ms・16 MiB open 201 ms・連打 11.3 ms（基準超過・#474 で 2.1）・長行単打 6.26 ms・**1 行 16 MiB は open 5.99 秒・1 打鍵 5.32 秒**（ADR 0138 の 2 本・基準値は未採用）。目標は D51。
+- CI の merge 直前の check は `check`（19 秒）と `build-and-test`（Release 全 target ＋ ctest・7〜11 分）の 2 job（ADR 0136）。`merge-pr.py` は 2,700 秒まで待つ。
+- `verify-window.py` は 2026-09-23 以来初めて全節が通る（#486 / #539）。
+- planned → active: CPP-003/004/005/009/016・ARC-005/010・CNF-001〜005・GIT-003・QLT-012（反例の証明つき・D49）。prove-gates は 32 本・205 秒。
+- 組み込み125テーマ、Vim oracle 1853件。settings.v3/session.v2、64MiB上限、同期FilePortを維持。保存schema変更なし（自動退避の `autosave.v1` は #530 で足す）。
+- 2GiB/512MiB/100ms、split、Markdown、構文解析、設定モーダル/日英切替、手動横スクロール/スクロールバー、Vim gj/gk/g0/g$・ドラッグは未対応/未受理。Waivers none。
