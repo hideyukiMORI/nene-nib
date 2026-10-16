@@ -48,8 +48,8 @@ class VisualTextView final
     // 格子の升の答え手（ADR 0140 の決定 4・5）。本文が索引を持たないか 1 升を読めなければ失敗。
     // frame の画面行（GridLineRows）は位置解決と同じ GridCells を 1 frame に 1 つ借りて切り出す。
     [[nodiscard]] std::expected<GridCells, TextLayoutFailure> grid_cells() const;
-    // キャレットが立つ格子の画面行と升（cells は grid_cells の値）。行頭に立つ trailing
-    // のキャレット は前の画面行の右端。
+    // キャレットが立つ格子の画面行と升（cells は grid_cells の値）。画面行の頭に立つ
+    // trailing のキャレットは前の画面行の右端。
     [[nodiscard]] core::GridPoint grid_point(GridCells &cells, core::TextCaret caret) const;
 
   private:

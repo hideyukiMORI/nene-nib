@@ -12,9 +12,9 @@
 namespace nenenib::application
 {
 // 1 行の見えている画面行 [first_row, end_row) を作る入力（ADR 0140 の決定 5）。frame を作る
-// 同期呼出しの間だけ状態と升の答え手（本文の索引を借りた GridCells・frame に 1
-// つ）を借用する。caret はキャレットが立つ画面行と升 （VisualTextView::grid_point
-// と同じ升）で、使うのはキャレットがこの行にあるときだけ。
+// 同期呼出しの間だけ状態と升の答え手（本文の索引を借りた GridCells・frame に 1 つ）を借用する。
+// caret はキャレットが立つ画面行と升（VisualTextView::grid_point と同じ升）で、使うのは
+// キャレットがこの行にあるときだけ。
 struct GridLineSource
 {
     const EditorState &state;
