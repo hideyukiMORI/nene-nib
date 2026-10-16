@@ -91,4 +91,17 @@ std::vector<std::pair<AutosaveId, AutosaveStep>> autosave_plan(const EditorState
     }
     return plan;
 }
+
+bool clears_autosave(const EditorState &state)
+{
+    for (std::size_t position = 0; position < state.tab_count(); ++position)
+    {
+        const auto tab = revision_at(state, position);
+        if (tab.has_value() && tab.value().first != core::SaveState::saved)
+        {
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace nenenib::application

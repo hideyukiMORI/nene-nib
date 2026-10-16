@@ -238,9 +238,12 @@ class EditorController final
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
+    // 計画を回して store と discard を頼み、帳面を進める（決定 2）。合図と復元の直後が呼ぶ。
+    void autosave_now();
     // 起動の問いの答え（決定 6）。戻すのは覚えた残骸を順に読み、開くのと同じ復号で帯の末尾に
     // 未保存のタブとして足し、最初に戻したタブをアクティブにする。読めない残骸は 1 行知らせて
-    // 飛ばす。どちらの答えも残骸を全部 forget する。
+    // 飛ばす。戻したタブは直後に退避を頼んでから forget する。どちらの答えも残骸を全部 forget
+    // する。
     void accept(const RestoreAutosave &);
     void accept(const DiscardAutosave &);
     // 1 本の残骸を読んで復号した束。読めない・復号できなければ値なし。
