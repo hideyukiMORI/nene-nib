@@ -20,8 +20,9 @@ namespace nenenib::core
 //
 // 升は桁に、格子の画面行の右端に収まらず次の画面行へ送った空き（padding）を足したもの。padding は
 // 始まりの桁の 8 の余りと升の columns の余りだけで決まり、wide（2 升以上の Tab 以外の表示）を
-// 含まない塊では 0。plain は表示できる ASCII（U+0020〜U+007E）だけの塊で、桁＝升＝コードポイント
-// ＝バイト数。
+// 含まない塊では 0。plain は表示できる ASCII（U+0020〜U+007E）と '\n' だけの塊で、行の中では
+// 桁＝升＝コードポイント＝バイト数（塊の中の桁は改行の索引の行頭からの引き算で、塊を読まない）。
+// Tab と制御文字を含む塊は ASCII でも plain でない。
 struct VirtualColumnChunk
 {
     std::size_t start = 0;
