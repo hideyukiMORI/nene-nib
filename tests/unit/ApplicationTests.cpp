@@ -19,6 +19,7 @@
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
 #include "CommandPalette.hpp"
+#include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "Composition.hpp"
@@ -75,6 +76,7 @@
 #include "SelectionAnchoring.hpp"
 #include "SelectionPresence.hpp"
 #include "SelectionSpan.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
@@ -935,6 +937,31 @@ void verify_follow_settles_before_search_origin()
            "the incsearch origin holds the settled scroll, not the one before the follow");
 }
 
+// 字の大きさを変えた設定の clamp と追従は、窓が送る新しい行高の幾何を待って 1 回だけ解決する。
+// 古い行高と新しい字の組み合わせで layout を作らないので、見える行は 1 行 1 回だけ組まれる
+// （ADR 0128 の決定 7・#582）。
+void verify_font_size_lays_out_once()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{400, 20, 96}});
+    static_cast<void>(controller.apply(InsertText{"first"}));
+    static_cast<void>(controller.apply(NewLine{}));
+    static_cast<void>(controller.apply(InsertText{"second"}));
+    static_cast<void>(controller.frame());
+    static_cast<void>(controller.apply(nenenib::application::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(nenenib::application::CommandText{":set fontsize=22"}));
+    const std::size_t before = editing.text_layouts().made();
+    static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
+    static_cast<void>(
+        controller.apply(VisibleLines{2, nenenib::core::TextViewGeometry{400, 30, 96}}));
+    const auto frame = controller.frame();
+    expect(frame.settings.font_size.points() == 22 && frame.lines.size() == 2,
+           "the new font size shows both lines");
+    expect(editing.text_layouts().made() - before == frame.lines.size(),
+           "each visible line is laid out once, with the new font and the new line height");
+}
+
 void verify_controller_frame()
 {
     Editing editing;
@@ -1570,6 +1597,7 @@ void verify_controller_intents()
     verify_controller_scrolling();
     verify_follow_settles_at_frame();
     verify_follow_settles_before_search_origin();
+    verify_font_size_lays_out_once();
     verify_document_read_contracts();
     verify_document_failure_clearing();
     verify_vim_engine();
