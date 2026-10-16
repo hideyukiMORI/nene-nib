@@ -1,5 +1,6 @@
 #include "EditorController.hpp"
 
+#include "DisplayInquiry.hpp"
 #include "ScreenMotion.hpp"
 
 #include <algorithm>
@@ -38,9 +39,12 @@ namespace
 }
 } // namespace
 
+// 問いの答えを待つ間は幅の無い窓として解決し、文字組みの port を呼ばない（ADR 0140 の決定 2）。
 VisualTextView EditorController::visual_view() const
 {
-    return VisualTextView{state_, ports_.text_layouts, view_geometry_};
+    return VisualTextView{state_, ports_.text_layouts,
+                          display_pending(state_.display_inquiry()) ? core::TextViewGeometry{}
+                                                                    : view_geometry_};
 }
 
 bool EditorController::move_visual(const MoveCaret &intent)
@@ -111,13 +115,14 @@ EditorController::measured_vim_step(const core::VimKey &key) const
     const auto &scroll = state_.scroll();
     std::vector<core::VimLineRows> rows;
     core::VimEditorView view{
-        state_.text(),
-        state_.selection(),
+        state_.text(), state_.selection(),
         core::VimViewport{scroll.first_visible, scroll.visible_lines},
         replay_depth_.has_value() ? core::VimKeySource::replayed : core::VimKeySource::typed,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
+        // 格子は常に折り返す（ADR 0140 の決定 7）。
         core::VimLayoutView{view_geometry_.width > 0 &&
-                                state_.settings().wrapping == core::LineWrapping::wrap,
+                                (state_.settings().wrapping == core::LineWrapping::wrap ||
+                                 state_.display() == core::DisplayForm::grid),
                             scroll.first_row, rows}};
     auto step = core::vim_step(state_.vim(), view, key);
     const auto text = visual_view();

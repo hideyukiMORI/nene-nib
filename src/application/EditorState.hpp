@@ -3,6 +3,8 @@
 #include "Appearance.hpp"
 #include "CommandInput.hpp"
 #include "Composition.hpp"
+#include "DisplayForm.hpp"
+#include "DisplayInquiry.hpp"
 #include "Document.hpp"
 #include "DocumentState.hpp"
 #include "EditHistory.hpp"
@@ -94,6 +96,20 @@ class EditorState final
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
     [[nodiscard]] EditorState with_opened(core::TextBuffer text, Document document) const;
+    // 表示形式（ADR 0140 の決定 2・3）。アクティブな文書のもので、開いた文書・新しいタブは text。
+    [[nodiscard]] core::DisplayForm display() const noexcept;
+    [[nodiscard]] EditorState with_display(core::DisplayForm display) const;
+    // 開いたときの問いの段階（決定 2）。アクティブな文書のもの。進めるのは controller の
+    // ask_display と accept(SelectDisplay) の 2 か所。
+    [[nodiscard]] DisplayInquiry display_inquiry() const noexcept;
+    [[nodiscard]] EditorState with_display_inquiry(DisplayInquiry inquiry) const;
+    // 本文を仮想桁の索引を持つ写しに置き換える（ADR 0140 の決定 4）。本文の中身・履歴・選択は
+    // 変えない。持たせるのは巨大な行の文書を開いたときと、格子にするときだけ。
+    [[nodiscard]] EditorState with_virtual_columns() const;
+    // 格子表示を聞く印（決定 2）。close_request と同じく 1 意図だけ立ち、with_intent_cleared
+    // が消す。
+    [[nodiscard]] bool display_question() const noexcept;
+    [[nodiscard]] EditorState with_display_question(bool question) const;
 
     // タブ（ADR 0056 の決定 1・2）。上の欄と関数はどれも「アクティブな文書」のもので、ほかの
     // タブは不変の束として脇に置く。タブの本数は脇の束の数 + 1。
@@ -184,6 +200,9 @@ class EditorState final
     core::EditHistory history_;
     ScrollState scroll_;
     core::CaretAffinity caret_affinity_ = core::CaretAffinity::leading;
+    core::DisplayForm display_ = core::DisplayForm::text;
+    DisplayInquiry display_inquiry_ = DisplayInquiry::unjudged;
+    bool display_question_ = false;
     core::Appearance appearance_;
     core::EditMode mode_;
     core::VimState vim_;

@@ -1,6 +1,7 @@
 #include "VisualTextView.hpp"
 
 #include "ComposedLine.hpp"
+#include "GridPoint.hpp"
 #include "ScrollBounds.hpp"
 #include "Utf8.hpp"
 
@@ -51,21 +52,116 @@ VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts
     : state_(state), layouts_(layouts), geometry_(geometry),
       caret_(state.text().position_of(state.selection().caret))
 {
+    if (!gridded())
+    {
+        return;
+    }
+    // 1 升の幅は ui の事実なので port から読む（ADR 0140・試作の D）。升の数は窓の幅に入る数。
+    const auto cell = layouts_.cell(TextLayoutRequest{{}, state_.settings(), geometry_});
+    if (!cell)
+    {
+        grid_failure_ = cell.error();
+        return;
+    }
+    cell_width_ = cell.value().width;
+    grid_columns_ =
+        static_cast<std::size_t>(std::max(static_cast<float>(geometry_.width) / cell_width_, 1.0F));
+}
+
+LineView VisualTextView::line_of(const EditorState &state, core::LineNumber number)
+{
+    number.value = std::clamp<std::size_t>(number.value, 1, state.text().line_count());
+    auto text = state.text().line_text(number);
+    auto display = core::display_line(text);
+    LineView result{number, std::move(text), std::move(display), core::no_selection_span(),
+                    {},     std::nullopt};
+    const auto &composition = state.composition();
+    if (!composition.has_value() || state.command_input().has_value())
+    {
+        return result;
+    }
+    const auto caret = state.text().position_of(state.selection().caret);
+    if (number == caret.line)
+    {
+        result.composed = composed_line(result.display, caret.column, composition.value());
+    }
+    return result;
 }
 
 LineView VisualTextView::line(core::LineNumber number) const
 {
-    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
-    auto text = state_.text().line_text(number);
-    auto display = core::display_line(text);
-    LineView result{number, std::move(text), std::move(display), core::no_selection_span(),
-                    {},     std::nullopt};
-    const auto &composition = state_.composition();
-    if (number == caret_.line && composition.has_value() && !state_.command_input().has_value())
+    return line_of(state_, number);
+}
+
+bool VisualTextView::gridded() const noexcept
+{
+    return state_.display() == core::DisplayForm::grid && geometry_.width > 0;
+}
+
+std::expected<GridCells, TextLayoutFailure> VisualTextView::grid() const
+{
+    if (grid_columns_ == 0)
     {
-        result.composed = composed_line(result.display, caret_.column, composition.value());
+        return std::unexpected(grid_failure_.value_or(TextLayoutFailure::unavailable));
     }
-    return result;
+    const auto index = state_.text().virtual_columns();
+    if (!index)
+    {
+        return std::unexpected(TextLayoutFailure::unavailable);
+    }
+    return GridCells{index.value().get(), state_.text(), grid_columns_};
+}
+
+std::expected<std::size_t, TextLayoutFailure>
+VisualTextView::grid_rows(core::LineNumber number) const
+{
+    auto cells = grid();
+    if (!cells)
+    {
+        return std::unexpected(cells.error());
+    }
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    return cells.value().rows(number);
+}
+
+// 行頭に立つ trailing のキャレットは前の画面行の右端に描く（文字組みの hit と同じ見え方）。
+std::expected<core::TextLocation, TextLayoutFailure>
+VisualTextView::grid_location(core::TextCaret caret) const
+{
+    auto cells = grid();
+    if (!cells)
+    {
+        return std::unexpected(cells.error());
+    }
+    const auto &text = state_.text();
+    auto point = cells.value().point_of(caret.position.line, text.offset_of(caret.position));
+    if (caret.affinity == core::CaretAffinity::trailing && point.cell == 0 && point.row > 0)
+    {
+        point = core::GridPoint{point.row - 1, grid_columns_};
+    }
+    return core::TextLocation{point.row, static_cast<float>(point.cell) * cell_width_};
+}
+
+// x は最も近い升の境目へ丸める。右端（columns）を指したら、そこに立つ文字の前に trailing で置く。
+std::expected<core::TextCaret, TextLayoutFailure>
+VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
+{
+    auto cells = grid();
+    if (!cells)
+    {
+        return std::unexpected(cells.error());
+    }
+    const auto &text = state_.text();
+    const core::LineNumber number{std::clamp<std::size_t>(at.line.value, 1, text.line_count())};
+    const auto rows = cells.value().rows(number);
+    const auto nearest = std::clamp((std::max(x, 0.0F) / cell_width_) + 0.5F, 0.0F,
+                                    static_cast<float>(grid_columns_));
+    const core::GridPoint point{std::min(at.row, rows - 1), static_cast<std::size_t>(nearest)};
+    const auto offset = cells.value().byte_of(number, point);
+    const auto affinity = point.cell == grid_columns_ && offset != text.line_end(number)
+                              ? core::CaretAffinity::trailing
+                              : core::CaretAffinity::leading;
+    return core::TextCaret{text.position_of(offset), affinity};
 }
 
 TextLayoutRequest VisualTextView::request(const LineView &line) const
@@ -79,6 +175,10 @@ std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNum
     {
         return 1;
     }
+    if (gridded())
+    {
+        return grid_rows(number);
+    }
     const auto shown = line(number);
     return layouts_.rows(request(shown));
 }
@@ -89,6 +189,10 @@ VisualTextView::location(core::TextCaret caret) const
     if (geometry_.width <= 0)
     {
         return core::TextLocation{0, static_cast<float>(caret.position.column.value - 1)};
+    }
+    if (gridded())
+    {
+        return grid_location(caret);
     }
     const auto shown = line(caret.position.line);
     return layouts_.locate(request(shown), shown_caret(shown, caret, caret_));
@@ -113,6 +217,10 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
         const core::TextPosition desired{
             at.line, core::Column{static_cast<std::size_t>(std::max(x, 0.0F)) + 1}};
         return core::TextCaret{state_.text().position_of(state_.text().offset_of(desired))};
+    }
+    if (gridded())
+    {
+        return grid_caret_at(at, x);
     }
     const auto shown = line(at.line);
     const auto hit = layouts_.hit(request(shown), core::TextLocation{at.row, x});
@@ -330,7 +438,9 @@ VisualTextView::followed(core::TextCaret caret, core::ScrollFollow follow,
     result.first_visible = first.value().line;
     result.first_row = first.value().row;
     result.horizontal = 0;
-    if (state_.settings().wrapping == core::LineWrapping::no_wrap && geometry_.width > 0)
+    // 格子は折り返すので横の送りは無い（ADR 0140 の決定 7）。
+    if (state_.settings().wrapping == core::LineWrapping::no_wrap && geometry_.width > 0 &&
+        !gridded())
     {
         const auto width = static_cast<float>(std::max(geometry_.width - 3, 1));
         const auto x = std::max(point.value().x, 0.0F);

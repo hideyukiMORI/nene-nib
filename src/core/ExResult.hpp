@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayForm.hpp"
 #include "DisplayText.hpp"
 #include "EditorSettings.hpp"
 #include "ExDocumentRequest.hpp"
@@ -23,7 +24,8 @@ namespace nenenib::core
 // 決定 4）で、どれも「変わらない」ことを空で表す。写し先は controller の Ex の経路 1 か所だけ
 // （ARC-004）。タブの命令の message は命令の完全な名前で、controller は画面に出さない（Vim も
 // 成功した切り替えでは何も出さない）。palette は共通の一覧を開く要求（ADR 0064）。
-// document は現在の文書への保存・終了（ADR 0066）。
+// document は現在の文書への保存・終了（ADR 0066）。display は現在の文書の表示形式（ADR 0140 の
+// 決定 3・設定に保存しない）。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -33,6 +35,7 @@ struct ExResult
     std::optional<ExTabRequest> tab = std::nullopt;
     std::optional<ExPaletteRequest> palette = std::nullopt;
     std::optional<ExDocumentRequest> document = std::nullopt;
+    std::optional<DisplayForm> display = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

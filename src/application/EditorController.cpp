@@ -10,7 +10,9 @@
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
+#include "DisplayInquiry.hpp"
 #include "DisplayLine.hpp"
+#include "DisplayQuestion.hpp"
 #include "DisplayText.hpp"
 #include "DocumentState.hpp"
 #include "Edit.hpp"
@@ -799,6 +801,10 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     {
         restore_session();
     }
+    // 起動の問いは最後にアクティブになった文書だけ（ADR 0140 の決定 2）。途中で開いた文書の印は
+    // 次の引数の意図が消すので、判定は起動の終わりの 1 回だけ。ほかの文書は見るときに判定する。
+    starting_ = false;
+    ask_display();
     // 初期ファイルも通常の意図を通す。その後で起動時の診断を載せ、最初の描画まで保持する。
     // 前回のタブの知らせがあればそれを残す（ステータスバーは 1 行）。
     if (!state_.command_message().has_value())
@@ -908,7 +914,9 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<EndSession>(intent) ||
                  std::holds_alternative<WorkCompleted>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
+    // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
+    ask_display();
     return delivery();
 }
 
@@ -971,8 +979,10 @@ void EditorController::begin_intent(bool keeps_message)
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
     // 一覧で頼まれた操作も同じく 1 意図だけ（ADR 0078 の決定 8）。
+    // 格子表示を聞く印も同じく 1 意図だけ（ADR 0140 の決定 2）。
     if (state_.last_failure().has_value() || state_.closing() ||
-        state_.close_request().has_value() || state_.operation_request().has_value())
+        state_.close_request().has_value() || state_.operation_request().has_value() ||
+        state_.display_question())
     {
         state_ = state_.with_intent_cleared();
     }
@@ -1092,6 +1102,10 @@ void EditorController::follow_caret()
 // 使う（ADR 0041 の決定 3）。
 void EditorController::follow_position(core::TextPosition position)
 {
+    if (display_pending(state_.display_inquiry()))
+    {
+        return;
+    }
     const auto followed =
         visual_view().followed(core::TextCaret{position, state_.caret_affinity()},
                                scroll_follow_for(state_.mode()), scroll_extent_for(state_.mode()));
@@ -1353,8 +1367,10 @@ void EditorController::accept(const ScrollLines &intent)
 
 void EditorController::clamp_scroll()
 {
-    // 起動時は幅が未確定。保存した画面行を最初のVisibleLinesまで保つ。
-    if (view_geometry_.width <= 0 && state_.scroll().first_row > 0)
+    // 起動時は幅が未確定。保存した画面行を最初のVisibleLinesまで保つ。問いの答えを待つ間も保つ
+    // （ADR 0140 の決定 2・答えの SelectDisplay が収め直す）。
+    if ((view_geometry_.width <= 0 && state_.scroll().first_row > 0) ||
+        display_pending(state_.display_inquiry()))
     {
         return;
     }
@@ -2184,8 +2200,21 @@ void EditorController::evaluate_command(std::string_view text)
             core::DisplayText::parse("Settings could not be saved").value());
         return;
     }
+    apply_unsaved_ex(result.value());
+    state_ = state_.with_command_message(result.value().message);
+}
+
+// Ex の答えのうち保存しない値（表示形式・検索の強調・incsearch）を写す。
+void EditorController::apply_unsaved_ex(const core::ExResult &result)
+{
+    // 表示形式は文書の値で、窓の問いの「はい」と同じ 1 本を通る（ADR 0140 の決定 3）。
+    const auto &display = result.display;
+    if (display.has_value())
+    {
+        accept(SelectDisplay{display.value()});
+    }
     // 検索の当たりの強調は設定ではなく Vim の状態なので、保存せずここで写す（ADR 0037 の決定 2）。
-    const auto &highlight = result.value().highlight;
+    const auto &highlight = result.highlight;
     if (highlight.has_value())
     {
         core::VimState vim = state_.vim();
@@ -2193,14 +2222,13 @@ void EditorController::evaluate_command(std::string_view text)
         state_ = state_.with_vim(std::move(vim));
     }
     // incsearch も同じく Vim の状態で、保存しない（ADR 0041 の決定 6）。
-    const auto &incsearch = result.value().incsearch;
+    const auto &incsearch = result.incsearch;
     if (incsearch.has_value())
     {
         core::VimState vim = state_.vim();
         vim.incsearch = incsearch.value();
         state_ = state_.with_vim(std::move(vim));
     }
-    state_ = state_.with_command_message(result.value().message);
 }
 
 void EditorController::run_palette_request(const core::ExPaletteRequest &request)
@@ -2725,6 +2753,7 @@ std::expected<void, FileFailure> EditorController::open_document(const core::Fil
     if (blank_untitled())
     {
         state_ = state_.with_opened(std::move(text), std::move(opened));
+        ask_display();
         return {};
     }
     leave_document();
@@ -2835,6 +2864,8 @@ void EditorController::leave_document()
 
 void EditorController::enter_document()
 {
+    // 問いは最初の本文の文字組みより前（ADR 0140 の決定 2）。下の clamp_scroll より先に判定する。
+    ask_display();
     // 見えている行数は置いていたあいだに変わり得るので、先頭行だけを今の窓の範囲へ収める。
     // キャレットを追いかけない（ScrollLines で動かしたスクロールを文書ごとに保つ）。
     clamp_scroll();
@@ -2978,6 +3009,54 @@ void EditorController::accept(const WorkCompleted &)
     }
 }
 
+// 表示形式を替えると画面行の数が替わるので、窓の寸法が届いていれば先頭行を収めてキャレットを
+// 追う（設定の折り返しを替えたときと同じ・persist_settings）。問いの答え（はい・いいえ・出せな
+// かった）もここを通り、止めていた本文の文字組みを始める（ADR 0140 の決定 2）。格子にする文書が
+// 索引を持たなければここで持たせる（決定 4）。
+void EditorController::accept(const SelectDisplay &intent)
+{
+    const bool answering = display_pending(state_.display_inquiry());
+    if (answering)
+    {
+        state_ = state_.with_display_inquiry(DisplayInquiry::answered);
+    }
+    else if (intent.display == state_.display())
+    {
+        return;
+    }
+    if (intent.display == core::DisplayForm::grid && !state_.text().has_virtual_columns())
+    {
+        state_ = state_.with_virtual_columns();
+    }
+    state_ = state_.with_display(intent.display);
+    if (view_geometry_.width > 0)
+    {
+        clamp_scroll();
+        follow_caret();
+    }
+}
+
+// 判定は文書ごとに 1 回で、改行の索引と巨大な行の数えだけ（文字組みに触れない）。巨大な行の
+// 文書は答えに依らず索引を持つ（いいえの窓の文字組みも使う・決定 4）。問いを出すのは歩きの途中
+// でも起動の途中でもないときだけで、出したら答えが来るまで本文の文字組みを止める。
+void EditorController::ask_display()
+{
+    if (starting_)
+    {
+        return;
+    }
+    if (state_.display_inquiry() == DisplayInquiry::unjudged)
+    {
+        state_ = asks_grid(state_.text())
+                     ? state_.with_virtual_columns().with_display_inquiry(DisplayInquiry::waiting)
+                     : state_.with_display_inquiry(DisplayInquiry::unneeded);
+    }
+    if (state_.display_inquiry() == DisplayInquiry::waiting && !state_.tab_walking())
+    {
+        state_ = state_.with_display_inquiry(DisplayInquiry::raised).with_display_question(true);
+    }
+}
+
 void EditorController::accept(const SettleRecentTab &)
 {
     state_ = state_.with_walk_settled();
@@ -2986,6 +3065,11 @@ void EditorController::accept(const SettleRecentTab &)
 bool EditorController::tab_walking() const noexcept
 {
     return state_.tab_walking();
+}
+
+const core::TextBuffer &EditorController::text() const noexcept
+{
+    return state_.text();
 }
 
 void EditorController::accept(const CloseTab &intent)
@@ -3269,7 +3353,7 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
                                      const core::VimPattern *pattern, core::Offset caret) const
 {
     const core::TextBuffer &text = state_.text();
-    LineView view = visual_view().line(line);
+    LineView view = VisualTextView::line_of(state_, line);
     const core::Offset start = text.line_start(line);
     LineSpanEvaluation projection(view.text, start, text.line_terminator_end(line));
     view.selection = projection.span(range);
@@ -3386,6 +3470,7 @@ EditorDelivery EditorController::delivery() const
                           state_.closing(),
                           state_.close_request(),
                           state_.operation_request(),
+                          state_.display_question(),
                           layout_failure_};
 }
 
@@ -3396,7 +3481,11 @@ EditorFrame EditorController::frame() const
     const auto &theme = core::selected_theme(delivered.settings, delivered.appearance);
     auto tabs = tab_views(state_, delivered.document);
     const auto encoding = delivered.document.encoding;
-    auto lines = visible_lines();
+    // 問いの答えを待つ間は本文の行を読まず文字組みもしない（ADR 0140 の決定 2）。renderer は
+    // display_pending を見て本文を描かない。
+    const bool pending = display_pending(state_.display_inquiry());
+    auto lines =
+        pending ? std::expected<std::vector<LineView>, TextLayoutFailure>{} : visible_lines();
     const auto failure = lines ? layout_failure_ : std::optional{lines.error()};
     return EditorFrame{std::move(lines).value_or(std::vector<LineView>{}),
                        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode),
@@ -3426,8 +3515,11 @@ EditorFrame EditorController::frame() const
                        delivered.closing,
                        delivered.close_request,
                        delivered.operation_request,
+                       delivered.display_question,
                        core::operation_guide(guide_context(), delivered.mode),
                        failure,
-                       state_.scroll().horizontal};
+                       state_.scroll().horizontal,
+                       state_.display(),
+                       pending};
 }
 } // namespace nenenib::application

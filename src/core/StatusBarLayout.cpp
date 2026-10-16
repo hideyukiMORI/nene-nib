@@ -21,6 +21,10 @@ constexpr std::int32_t segment_radius_dips = 4;
 // 右の 3 項目の幅（行と桁・文字コード・改行）。左から右へ並べた順に対応する。
 // 文字コードは「UTF-8 BOM」「Shift_JIS」まで入る幅が要る（ADR 0010 の決定 14 で 44 → 72）。
 constexpr std::array<std::int32_t, status_item_count> item_width_dips{96, 72, 36};
+// 表示形式の印（ADR 0140 の決定 3）。最初の項目の左 2 DIP から 24 DIP。案内は最初の項目の左
+// 28 DIP で終わるので重ならない。
+constexpr std::int32_t display_gap_dips = 2;
+constexpr std::int32_t display_width_dips = 24;
 
 [[nodiscard]] LayoutRect toggle_box(std::int32_t band_top, std::int32_t band_height,
                                     std::uint32_t dpi) noexcept
@@ -62,6 +66,7 @@ StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
                               toggle.left + padding + segment, toggle.bottom - padding};
     const std::int32_t vim_left = ordinary.right + padding;
     const std::int32_t mode_left = toggle.right + to_pixels(item_gap_dips, dpi);
+    const auto items = item_rects(width, band, dpi);
     return StatusBarLayout{
         .band = band,
         .toggle = toggle,
@@ -69,7 +74,11 @@ StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
         .toggle_vim = LayoutRect{vim_left, ordinary.top, vim_left + segment, ordinary.bottom},
         .mode = LayoutRect{mode_left, band.top, mode_left + to_pixels(mode_width_dips, dpi),
                            band.bottom},
-        .items = item_rects(width, band, dpi),
+        .items = items,
+        .display =
+            LayoutRect{items.front().left - to_pixels(display_gap_dips + display_width_dips, dpi),
+                       band.top, items.front().left - to_pixels(display_gap_dips, dpi),
+                       band.bottom},
         .corner_radius = to_pixels(corner_radius_dips, dpi),
         .segment_radius = to_pixels(segment_radius_dips, dpi)};
 }

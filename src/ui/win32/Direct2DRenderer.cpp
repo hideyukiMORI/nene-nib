@@ -2,6 +2,7 @@
 #include "TextLayoutPoint.hpp"
 
 #include "DevicePixels.hpp"
+#include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
@@ -1194,6 +1195,11 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
     fill(body.gutter, frame.palette.gutter_background);
     caret_width_ = body.caret_width;
     body_line_height_ = body.line_height;
+    // 問いの答えを待つ間は本文を描かない（ADR 0140 の決定 2・判定はここの 1 か所）。
+    if (frame.display_pending)
+    {
+        return;
+    }
     const core::LayoutRect visible{body.band.left, body.content.top, body.band.right,
                                    body.band.bottom};
     context_->PushAxisAlignedClip(to_rect(visible), D2D1_ANTIALIAS_MODE_ALIASED);
@@ -1275,6 +1281,12 @@ void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
     {
         write_status(frame.status_items.at(index).text(), status_format_.Get(),
                      layout.items.at(index), frame.palette.muted);
+    }
+    // 表示形式の印（ADR 0140 の決定 3）。文字は core の表、右寄せは write_right の 1 本。
+    const auto mark = core::display_form_label(frame.display);
+    if (!mark.empty())
+    {
+        write_right(mark, status_format_.Get(), layout.display, frame.palette.muted);
     }
 }
 

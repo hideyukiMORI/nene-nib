@@ -96,6 +96,10 @@ class EditorWindow final
     void close_tab(std::size_t tab);
     void finish_tab_action(std::optional<std::size_t> close_request, bool closing);
     void finish_operation(std::optional<core::EditorOperation> operation_request);
+    // 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。deliver の終わりと、起動の終わり
+    // （最初の frame の後）から呼ぶ。
+    void ask_display();
+    void finish_display_question(bool question);
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);

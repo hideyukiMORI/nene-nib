@@ -24,6 +24,9 @@ class BodyTextLayouts final : public application::TextLayoutPort
     locate(const application::TextLayoutRequest &request, core::DisplayCaret caret) override;
     [[nodiscard]] std::expected<core::DisplayCaret, application::TextLayoutFailure>
     hit(const application::TextLayoutRequest &request, core::TextLocation point) override;
+    // 仮の実装（ADR 0140・#545）: 本文の書式の `0` の幅と行高。#546 で格子の等幅の書式に替える。
+    [[nodiscard]] std::expected<application::TextCell, application::TextLayoutFailure>
+    cell(const application::TextLayoutRequest &request) override;
     [[nodiscard]] std::expected<TextLayout, application::TextLayoutFailure>
     get(const application::TextLayoutRequest &request);
     // 描画時だけ字形を保持する。位置を調べただけの画面外の行には字形を複製しない。
@@ -52,6 +55,8 @@ class BodyTextLayouts final : public application::TextLayoutPort
     std::vector<BodyTextLayout> previous_;
     // 描画前の連続入力は最後の1行だけ。途中の変更行を蓄積しない。
     std::optional<BodyTextLayout> pending_;
+    // 書式ごとに 1 回だけ測る 1 升。書式が変われば prepare が消す。
+    std::optional<application::TextCell> cell_;
     bool collecting_ = false;
 };
 } // namespace nenenib::ui::win32

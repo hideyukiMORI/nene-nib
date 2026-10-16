@@ -351,6 +351,7 @@ EditorState EditorState::with_intent_cleared() const
     next.closing_ = false;
     next.close_request_ = std::nullopt;
     next.operation_request_ = std::nullopt;
+    next.display_question_ = false;
     return next;
 }
 
@@ -377,6 +378,51 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.history_ = core::EditHistory::empty();
     next.scroll_ = ScrollState{core::LineNumber{first_line}, scroll_.visible_lines};
     next.document_ = std::move(document);
+    next.display_ = core::DisplayForm::text;
+    next.display_inquiry_ = DisplayInquiry::unjudged;
+    return next;
+}
+
+core::DisplayForm EditorState::display() const noexcept
+{
+    return display_;
+}
+
+EditorState EditorState::with_display(core::DisplayForm display) const
+{
+    EditorState next(*this);
+    next.display_ = display;
+    return next;
+}
+
+DisplayInquiry EditorState::display_inquiry() const noexcept
+{
+    return display_inquiry_;
+}
+
+EditorState EditorState::with_display_inquiry(DisplayInquiry inquiry) const
+{
+    EditorState next(*this);
+    next.display_inquiry_ = inquiry;
+    return next;
+}
+
+EditorState EditorState::with_virtual_columns() const
+{
+    EditorState next(*this);
+    next.text_ = text_.with_virtual_columns();
+    return next;
+}
+
+bool EditorState::display_question() const noexcept
+{
+    return display_question_;
+}
+
+EditorState EditorState::with_display_question(bool question) const
+{
+    EditorState next(*this);
+    next.display_question_ = question;
     return next;
 }
 
@@ -554,10 +600,10 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
     const auto save_state = save_state_of(document_, history.position());
     DocumentView view{core::tab_title_for(document_.path, save_state), document_.path,
                       document_.encoding, save_state, std::nullopt};
-    return std::make_shared<const DocumentState>(
-        DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
-                      scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
-                      scroll_.first_row, scroll_.horizontal, caret_affinity_});
+    return std::make_shared<const DocumentState>(DocumentState{
+        text_, core::collapsed_at(selection_.caret), std::move(history), document_,
+        scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
+        scroll_.first_row, scroll_.horizontal, caret_affinity_, display_, display_inquiry_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -570,6 +616,8 @@ void EditorState::spread(const DocumentState &tab)
     document_ = tab.document;
     scroll_ = ScrollState{tab.first_visible, scroll_.visible_lines, tab.first_row, tab.horizontal};
     caret_affinity_ = tab.affinity;
+    display_ = tab.display;
+    display_inquiry_ = tab.inquiry;
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 

@@ -53,6 +53,10 @@ void verify_bookmarks_scope();
 void verify_history_contracts();
 void verify_history_scope();
 
+// DisplayTests.cpp（ADR 0140 の決定 2・3・5）
+void verify_display_contracts();
+void verify_display_scope();
+
 // BackgroundWorkTests.cpp
 void verify_background_work_contracts();
 void verify_background_work_scope();

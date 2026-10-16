@@ -102,6 +102,8 @@ constexpr wchar_t first_printable = 0x20;
 constexpr wchar_t delete_character = 0x7F;
 // 裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。番号を持つのはここだけ。
 constexpr UINT work_message = WM_APP + 1;
+// 格子表示の問いの文言（ADR 0140 の決定 2）。ここの 1 か所だけ。
+constexpr wchar_t display_question[] = L"改行の無い巨大な行があります。格子表示で開きますか。";
 // キー → キャレットの移動は表で引く（CPP-012）。Ctrl の有無は表そのものを分けて表す。
 constexpr std::array<KeyMotion, 8> plain_motions{{{VK_LEFT, core::CaretMotion::previous_character},
                                                   {VK_RIGHT, core::CaretMotion::next_character},
@@ -526,6 +528,11 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // 開けなかった理由も 1 行出す。窓が出てから出すので、利用者は空の無題で作業を続けられる。
     announce(opened);
     announce_settings(opened);
+    // 起動の問い（ADR 0140 の決定 2）。答えを待つ間の frame
+    // は本文を描かない（display_pending）ので、 最初の frame
+    // は本文の文字組みを作らずに出ている。印は最初の frame の意図が消すので、起動の delivery
+    // で控えた値を読む。
+    finish_display_question(opened.display_question);
     return {};
 }
 
@@ -1354,6 +1361,8 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const bool closing = delivery.closing;
     // 一覧で選んだ操作も同じく意図を送った結果の delivery にだけ載る（ADR 0078 の決定 8）。
     const auto operation_request = delivery.operation_request;
+    // 格子表示の問いも同じ（ADR 0140 の決定 2）。
+    const bool display_asked = delivery.display_question;
     if (font_change)
     {
         if (std::holds_alternative<application::AdjustFontSize>(intent))
@@ -1374,7 +1383,27 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     update_title(delivery);
     announce(delivery);
     finish_operation(operation_request);
+    finish_display_question(display_asked);
     finish_tab_action(close_request, closing);
+}
+
+void EditorWindow::finish_display_question(bool question)
+{
+    if (question)
+    {
+        ask_display();
+    }
+}
+
+// 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。答えは必ず意図で返す: 「はい」は grid、
+// 「いいえ」と問いを出せなかったとき（0）は text。答えが届くまで controller は本文の文字組みを
+// 止めている。その中の send は印が立たないので再入は 1 段で止まる。
+void EditorWindow::ask_display()
+{
+    const int answer =
+        MessageBoxW(window_, display_question, product_name, MB_YESNO | MB_ICONQUESTION);
+    send(application::SelectDisplay{answer == IDYES ? core::DisplayForm::grid
+                                                    : core::DisplayForm::text});
 }
 
 // 一覧から頼まれた操作は鍵と同じ run_operation へ。その中の send は operation_request が空なので
