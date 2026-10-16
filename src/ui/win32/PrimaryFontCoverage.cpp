@@ -1,6 +1,7 @@
 #include "PrimaryFontCoverage.hpp"
 
 #include "DisplayWidth.hpp"
+#include "FontFallbackKey.hpp"
 #include "VirtualColumn.hpp"
 
 #include <algorithm>
@@ -31,6 +32,26 @@ constexpr unsigned surrogate_shift = 10;
     const auto high = static_cast<char32_t>(first - high_surrogate_first);
     const auto low = static_cast<char32_t>(wide[unit + 1] - low_surrogate_first);
     return {surrogate_base + (high << surrogate_shift) + low, 2U};
+}
+
+// unit の位置で前の文字が続く（サロゲートの対の後半か、幅 0 の code point）。
+[[nodiscard]] bool continues_at(std::wstring_view wide, std::size_t unit)
+{
+    const auto value = wide[unit];
+    return (value >= low_surrogate_first && value <= low_surrogate_last) ||
+           core::display_width(code_point_at(wide, unit).first) == core::DisplayWidth::zero;
+}
+
+// 区切りの start から字体選択へ 1 回に渡す長さ。保持の鍵の上限までに切り、切り目がサロゲートの対
+// や幅 0 の code point（直前の文字に従う・ADR 0053）の手前に来るなら、その文字の前まで戻す。
+[[nodiscard]] UINT32 piece_length(std::wstring_view wide, UINT32 start, UINT32 remaining)
+{
+    auto length = std::min(remaining, fallback_key_text_limit);
+    while (length > 1 && length < remaining && continues_at(wide, start + length))
+    {
+        --length;
+    }
+    return length;
 }
 
 // 書式の family の、書式の weight / stretch / style に最初に合う字体。family が無ければ nullptr。
@@ -224,15 +245,17 @@ HRESULT PrimaryFontCoverage::assign(IDWriteTextLayout &layout, std::wstring_view
     return flush(layout);
 }
 
-// 区切りの文字列を OS の字体選択へ渡し、mappedLength の分ずつ持つ。今の DirectWrite と同じ要求
-// なので FontFallbackCache の保持が効く。字体選択が失敗するか進まなければ、区切りの残りは
-// DirectWrite の代替に任せる（決定 3・5）。
+// 区切りの文字列を保持の鍵の上限までの片に切って OS の字体選択へ渡し、mappedLength の分ずつ持つ。
+// 片は保持の鍵になるので FontFallbackCache の保持が効き、長い区切りの残りを毎回走査しない。
+// 字体選択が失敗するか進まなければ、区切りの残りは DirectWrite の代替に任せる（決定 3・5）。
 HRESULT PrimaryFontCoverage::assign_segment(IDWriteTextLayout &layout, std::wstring_view wide,
                                             DWRITE_TEXT_RANGE segment)
 {
     for (UINT32 done = 0; done < segment.length;)
     {
-        source_->reset(wide.substr(segment.startPosition + done, segment.length - done));
+        source_->reset(
+            wide.substr(segment.startPosition + done,
+                        piece_length(wide, segment.startPosition + done, segment.length - done)));
         UINT32 mapped = 0;
         Microsoft::WRL::ComPtr<IDWriteFont> font;
         FLOAT scale = 1;
@@ -243,7 +266,7 @@ HRESULT PrimaryFontCoverage::assign_segment(IDWriteTextLayout &layout, std::wstr
         {
             return flush(layout);
         }
-        mapped = std::min(mapped, segment.length - done);
+        mapped = std::min(mapped, source_->length());
         const DWRITE_TEXT_RANGE range{segment.startPosition + done, mapped};
         const auto held = font != nullptr ? hold(layout, *font.Get(), scale, range) : flush(layout);
         if (FAILED(held))

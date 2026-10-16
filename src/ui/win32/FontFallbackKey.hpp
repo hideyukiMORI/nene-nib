@@ -5,6 +5,9 @@
 #include <wrl/client.h>
 namespace nenenib::ui::win32
 {
+// 保持の鍵にする本文の長さの上限（UTF-16 単位・ADR 0071）。字体選択へ渡す区切りの長さも同じ上限で
+// 切る（ADR 0142 の決定 3）。
+inline constexpr UINT32 fallback_key_text_limit = 256;
 struct FontFallbackKey
 {
     std::wstring text;
