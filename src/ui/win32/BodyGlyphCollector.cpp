@@ -16,6 +16,7 @@ std::optional<std::vector<BodyGlyphRun>> BodyGlyphCollector::take()
     {
         return std::nullopt;
     }
+    close_tail();
     return std::move(runs_);
 }
 HRESULT BodyGlyphCollector::settle(HRESULT result) noexcept
@@ -157,6 +158,50 @@ using GlyphSpan = std::pair<std::size_t, std::size_t>;
     }
     return {scaled(above, run, metrics) + offset + 2, scaled(below, run, metrics) + offset + 2};
 }
+
+// 字形の数の上限（cluster map は UINT16 で字形の番号を持つ）。
+constexpr std::size_t maximum_joined_glyphs = 0xFFFF;
+
+// 文字の位置の対応がつながるか。どちらも対応を持たないか、後の run の文字が前の run の文字の
+// 直後から始まるときだけ。
+[[nodiscard]] bool contiguous_text(const BodyGlyphRun &tail, const BodyGlyphRun &next)
+{
+    if (tail.clusters.empty() || next.clusters.empty())
+    {
+        return tail.clusters.empty() && next.clusters.empty();
+    }
+    return next.text_position == tail.text_position + static_cast<UINT32>(tail.clusters.size());
+}
+
+// tail_pen は tail の原点から送りを左から float で積んだ右端。
+[[nodiscard]] bool joinable(const BodyGlyphRun &tail, const BodyGlyphRun &next, float tail_pen)
+{
+    return tail.face.Get() == next.face.Get() && tail.em == next.em &&
+           tail.sideways == next.sideways && tail.bidi == next.bidi && tail.bidi % 2 == 0 &&
+           tail.measuring == next.measuring && tail.origin.y == next.origin.y &&
+           next.origin.x == tail_pen && tail.offsets.empty() == next.offsets.empty() &&
+           tail.indices.size() + next.indices.size() <= maximum_joined_glyphs &&
+           contiguous_text(tail, next);
+}
+
+// next の字形・送り・offset・文字の位置の対応を tail の後ろに足す。cluster map は next の値に
+// tail の字形の数を足す（置き換えの描画 #538 が引く文字と字形の対応を保つ）。
+void append(BodyGlyphRun &tail, const BodyGlyphRun &next)
+{
+    const auto shift = static_cast<UINT16>(tail.indices.size());
+    tail.indices.insert(tail.indices.end(), next.indices.begin(), next.indices.end());
+    tail.advances.insert(tail.advances.end(), next.advances.begin(), next.advances.end());
+    tail.offsets.insert(tail.offsets.end(), next.offsets.begin(), next.offsets.end());
+    for (const auto cluster : next.clusters)
+    {
+        tail.clusters.push_back(static_cast<UINT16>(cluster + shift));
+    }
+    for (const auto advance : next.advances)
+    {
+        tail.advance += advance;
+    }
+    tail.last = tail.indices.size();
+}
 } // namespace
 
 bool BodyGlyphCollector::outside(const DWRITE_GLYPH_RUN &run, const DWRITE_FONT_METRICS1 &metrics,
@@ -177,11 +222,13 @@ HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run,
     // Tabは原点を進めるだけの0字形run。Direct2Dへ渡すとE_INVALIDARGになる。
     if (run.glyphCount == 0)
     {
+        close_tail();
         return S_OK;
     }
     const auto metrics = metrics_of(run);
     if (metrics.has_value() && outside(run, metrics.value(), origin))
     {
+        close_tail();
         return S_OK;
     }
     const auto indices = std::span(run.glyphIndices, run.glyphCount);
@@ -215,15 +262,66 @@ HRESULT BodyGlyphCollector::collect(const DWRITE_GLYPH_RUN &run,
         const auto offsets = std::span(run.glyphOffsets, run.glyphCount);
         stored.offsets.assign(offsets.begin(), offsets.end());
     }
-    if (metrics.has_value())
+    const auto reach = metrics.has_value() ? std::optional<float>(glyph_reach(run, metrics.value()))
+                                           : std::nullopt;
+    if (!joined(stored, reach))
     {
-        trim(stored, glyph_reach(run, metrics.value()));
-    }
-    if (stored.first < stored.last)
-    {
-        runs_.push_back(std::move(stored));
+        open_tail(std::move(stored), reach);
     }
     return S_OK;
+}
+void BodyGlyphCollector::open_tail(BodyGlyphRun stored, std::optional<float> reach)
+{
+    close_tail();
+    tail_pen_ = stored.origin.x;
+    for (const auto advance : stored.advances)
+    {
+        tail_pen_ += advance;
+    }
+    tail_reach_ = reach;
+    tail_open_ = true;
+    runs_.push_back(std::move(stored));
+}
+// 末尾の run の描く窓を決める。窓が空なら保持しない。つなぐ間は窓を決めない（つなぐたびに全体を
+// 走査しないため）。
+void BodyGlyphCollector::close_tail()
+{
+    if (!tail_open_)
+    {
+        return;
+    }
+    tail_open_ = false;
+    auto &tail = runs_.back();
+    if (tail_reach_.has_value())
+    {
+        trim(tail, tail_reach_.value());
+    }
+    if (tail.first >= tail.last)
+    {
+        runs_.pop_back();
+    }
+}
+// 前の run と同じ face・em・measuring・bidi（左から右）・sideways・origin.y で、origin.x が前の
+// run の原点から送りを左から float で積んだ右端にちょうど等しいときだけ、後ろにつなぐ。許容は
+// 入れない（1 ulp でもずれたらつながない）。Direct2D が run の中で積むのと同じ和なので、つないだ
+// run の字形は別々に描いたときと同じ位置に来る（ADR 0073 の 2026-10-16 の決定）。
+bool BodyGlyphCollector::joined(const BodyGlyphRun &stored, std::optional<float> reach)
+{
+    if (!tail_open_ || reach.has_value() != tail_reach_.has_value() ||
+        !joinable(runs_.back(), stored, tail_pen_))
+    {
+        return false;
+    }
+    append(runs_.back(), stored);
+    for (const auto advance : stored.advances)
+    {
+        tail_pen_ += advance;
+    }
+    if (reach.has_value())
+    {
+        tail_reach_ = std::max(tail_reach_.value(), reach.value());
+    }
+    return true;
 }
 // 右から左の run は字形の順と文字の順が逆なので切らない（保守的）。1 字形の run も切らない。
 // 字形の配列は全体のまま持ち、描く窓だけを狭める。縦は run の単位のまま（#528）。

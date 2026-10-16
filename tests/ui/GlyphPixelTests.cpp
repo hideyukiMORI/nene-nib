@@ -174,6 +174,18 @@ std::wstring scrolled_line()
     return text;
 }
 
+// #586 の工程 3: 同じ face の run が隣り合って続く長い行。収集で 1 つにつながった run を、遠くへ
+// 横に送った位置で描いても DrawTextLayout と同じ画素になる（ADR 0073 の 2026-10-16 の決定）。
+std::wstring joined_line()
+{
+    std::wstring text = L"000000 ";
+    for (int index = 0; index < 60; ++index)
+    {
+        text += L"日本語の長い行と分割表示の文字組みを測定する。";
+    }
+    return text;
+}
+
 constexpr std::array<FLOAT, 4> scrolls{0.0F, 333.0F, 2000.0F, 9000.0F};
 constexpr FLOAT scrolled_width = 513;
 constexpr std::size_t scrolled_glyph_limit = 300;
@@ -189,9 +201,8 @@ std::size_t glyph_count(const std::vector<win32::BodyGlyphRun> &runs)
 }
 
 void verify_scrolled_long_line(IDWriteFactory2 &factory, SoftwareTarget &target,
-                               const Format &format)
+                               const Format &format, const std::wstring &text)
 {
-    const auto text = scrolled_line();
     const Layout layout = layout_of(factory, format.Get(), text, scrolled_width);
     auto coverage = win32::PrimaryFontCoverage::of(factory, *format.Get());
     expect(layout != nullptr && coverage.has_value() &&
@@ -233,7 +244,8 @@ void verify_family(IDWriteFactory2 &factory, SoftwareTarget &target, const wchar
         {
             verify_case(factory, target, formats, text);
         }
-        verify_scrolled_long_line(factory, target, formats.at(0));
+        verify_scrolled_long_line(factory, target, formats.at(0), scrolled_line());
+        verify_scrolled_long_line(factory, target, formats.at(0), joined_line());
     }
 }
 } // namespace

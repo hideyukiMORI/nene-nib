@@ -16,6 +16,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -438,6 +439,108 @@ void verify_trimmed_runs(IDWriteFontFace1 &face)
     verify_trimmed_offsets(face, metrics);
 }
 
+// #586 の工程 3: 隣り合う同じ face の run は、後の run の原点が前の run の原点から送りを左から
+// float で積んだ右端にちょうど等しいときだけ 1 つにつながる（ADR 0073 の 2026-10-16 の決定）。
+// 1 run は 10 字形・送り 7.3（和が float で丸まる値）で、1 字形 1 文字。
+constexpr std::size_t joined_count = 10;
+constexpr FLOAT joined_advance = 7.3F;
+constexpr FLOAT joined_origin = 11.1F;
+constexpr FLOAT joined_width = 400;
+
+// 1 つの collector に順に渡す run の 1 つ: face・原点の x・bidi の段・文字の位置。
+using JoinedPiece = std::tuple<IDWriteFontFace *, FLOAT, UINT32, UINT32>;
+
+// 原点 x から送りを左から積んだ右端（collector が比べる値）。
+FLOAT pen_after(FLOAT x)
+{
+    for (std::size_t glyph = 0; glyph < joined_count; ++glyph)
+    {
+        x += joined_advance;
+    }
+    return x;
+}
+
+std::vector<win32::BodyGlyphRun> joined_runs(std::span<const JoinedPiece> pieces)
+{
+    const Collector collector = Microsoft::WRL::Make<win32::BodyGlyphCollector>(joined_width);
+    const std::vector<UINT16> indices(joined_count, 3);
+    const std::vector<FLOAT> advances(joined_count, joined_advance);
+    std::vector<UINT16> clusters;
+    for (std::size_t glyph = 0; glyph < joined_count; ++glyph)
+    {
+        clusters.push_back(static_cast<UINT16>(glyph));
+    }
+    for (const auto &[face, x, bidi, text_position] : pieces)
+    {
+        const DWRITE_GLYPH_RUN run{face,
+                                   run_em,
+                                   static_cast<UINT32>(joined_count),
+                                   indices.data(),
+                                   advances.data(),
+                                   nullptr,
+                                   FALSE,
+                                   bidi};
+        const DWRITE_GLYPH_RUN_DESCRIPTION description{
+            L"", nullptr, static_cast<UINT32>(clusters.size()), clusters.data(), text_position};
+        static_cast<void>(collector->DrawGlyphRun(nullptr, x, 0, DWRITE_MEASURING_MODE_NATURAL,
+                                                  &run, &description, nullptr));
+    }
+    return collector->take().value_or(std::vector<win32::BodyGlyphRun>{});
+}
+
+// 3 つがつながった run: 字形・送り・文字の対応が順に並び、cluster map は前の字形の数だけ進む。
+bool whole_join(const std::vector<win32::BodyGlyphRun> &runs)
+{
+    if (runs.size() != 1)
+    {
+        return false;
+    }
+    const auto &run = runs.front();
+    FLOAT advance = 0;
+    bool clusters = run.clusters.size() == joined_count * 3;
+    for (std::size_t glyph = 0; glyph < run.advances.size(); ++glyph)
+    {
+        advance += run.advances.at(glyph);
+        clusters = clusters && static_cast<std::size_t>(run.clusters.at(glyph)) == glyph;
+    }
+    return clusters && run.origin.x == joined_origin && run.text_position == 0 &&
+           run.indices.size() == joined_count * 3 && run.advance == advance && run.first == 0 &&
+           run.last == joined_count * 3 &&
+           win32::drawn_origin(run, D2D1::Point2F(0, 0)).x == joined_origin;
+}
+
+void verify_joined_runs(IDWriteFontFace1 &face, IDWriteFontFace1 &other)
+{
+    const FLOAT second = pen_after(joined_origin);
+    const FLOAT third = pen_after(second);
+    const UINT32 next_text = joined_count;
+    const std::array<JoinedPiece, 3> exact{JoinedPiece{&face, joined_origin, 0, 0},
+                                           JoinedPiece{&face, second, 0, next_text},
+                                           JoinedPiece{&face, third, 0, next_text * 2}};
+    expect(whole_join(joined_runs(exact)), "three adjacent runs of the same face are joined");
+    auto shifted = exact;
+    const FLOAT moved = std::nextafter(second, std::numeric_limits<FLOAT>::infinity());
+    std::get<1>(shifted.at(1)) = moved;
+    std::get<1>(shifted.at(2)) = pen_after(moved);
+    const auto apart = joined_runs(shifted);
+    expect(apart.size() == 2 && apart.front().indices.size() == joined_count &&
+               apart.back().indices.size() == joined_count * 2,
+           "a run one ulp away from the pen is not joined (the next exact one is)");
+    auto faces = exact;
+    std::get<0>(faces.at(1)) = &other;
+    expect(joined_runs(faces).size() == 3, "a run of a different face is not joined");
+    auto right_to_left = exact;
+    for (auto &piece : right_to_left)
+    {
+        std::get<2>(piece) = 1;
+    }
+    expect(joined_runs(right_to_left).size() == 3, "right-to-left runs are not joined");
+    auto gap = exact;
+    std::get<3>(gap.at(1)) = next_text + 1;
+    std::get<3>(gap.at(2)) = next_text * 2 + 1;
+    expect(joined_runs(gap).size() == 2, "a run whose text does not continue is not joined");
+}
+
 // 折り返した layout の各行の top と baseline（layout の座標）。
 std::vector<std::pair<FLOAT, FLOAT>> rows_of(const Layout &layout)
 {
@@ -502,7 +605,7 @@ void verify_tall_layout(IDWriteFactory2 &factory, IDWriteTextFormat *format)
            "rows far above and below the drawn rows are not collected");
 }
 
-Microsoft::WRL::ComPtr<IDWriteFontFace1> first_face(IDWriteFactory2 &factory)
+Microsoft::WRL::ComPtr<IDWriteFontFace1> face_at(IDWriteFactory2 &factory, UINT32 index)
 {
     Microsoft::WRL::ComPtr<IDWriteFontCollection> collection;
     Microsoft::WRL::ComPtr<IDWriteFontFamily> family;
@@ -510,8 +613,8 @@ Microsoft::WRL::ComPtr<IDWriteFontFace1> first_face(IDWriteFactory2 &factory)
     Microsoft::WRL::ComPtr<IDWriteFontFace> face;
     Microsoft::WRL::ComPtr<IDWriteFontFace1> face1;
     if (FAILED(factory.GetSystemFontCollection(collection.GetAddressOf(), FALSE)) ||
-        collection->GetFontFamilyCount() == 0 ||
-        FAILED(collection->GetFontFamily(0, family.GetAddressOf())) ||
+        collection->GetFontFamilyCount() <= index ||
+        FAILED(collection->GetFontFamily(index, family.GetAddressOf())) ||
         FAILED(family->GetFirstMatchingFont(DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                             DWRITE_FONT_STYLE_NORMAL, font.GetAddressOf())) ||
         FAILED(font->CreateFontFace(face.GetAddressOf())) || FAILED(face.As(&face1)))
@@ -539,7 +642,7 @@ void verify_glyph_collector()
     }
     verify_layout_decorations(*factory.Get(), format.Get());
     verify_tall_layout(*factory.Get(), format.Get());
-    const auto face = first_face(*factory.Get());
+    const auto face = face_at(*factory.Get(), 0);
     if (face == nullptr)
     {
         unmeasured("the outside bound needs an installed font face");
@@ -548,5 +651,12 @@ void verify_glyph_collector()
     verify_outside_bounds(*face.Get());
     verify_vertical_bounds(*face.Get());
     verify_trimmed_runs(*face.Get());
+    const auto other = face_at(*factory.Get(), 1);
+    if (other == nullptr)
+    {
+        unmeasured("joining runs of different faces needs two installed font families");
+        return;
+    }
+    verify_joined_runs(*face.Get(), *other.Get());
 }
 } // namespace nenenib::tests::ui
