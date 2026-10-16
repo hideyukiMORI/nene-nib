@@ -23,6 +23,8 @@ struct EditorSettings
 };
 
 [[nodiscard]] EditorSettings default_editor_settings();
+// 格子の書式（ADR 0140 の決定 6・試作）。字体は等幅の grid_font、折り返しは升で行うので no_wrap。
+[[nodiscard]] EditorSettings grid_settings(EditorSettings settings);
 [[nodiscard]] bool same_settings(const EditorSettings &left, const EditorSettings &right) noexcept;
 [[nodiscard]] Theme selected_theme(const EditorSettings &settings,
                                    Appearance system_appearance) noexcept;

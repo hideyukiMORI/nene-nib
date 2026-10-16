@@ -14,5 +14,6 @@ struct BodyTextStyle
     float points;
     core::TextViewGeometry geometry;
     core::LineWrapping wrapping;
+    float cell = 0.0F;
 };
 } // namespace nenenib::ui::win32

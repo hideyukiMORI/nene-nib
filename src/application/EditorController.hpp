@@ -21,6 +21,8 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
+#include "GridLine.hpp"
+#include "LineDecoration.hpp"
 #include "LineView.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -309,6 +311,7 @@ class EditorController final
     void move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
+    void accept(const SelectDisplay &intent);
     [[nodiscard]] bool move_visual(const MoveCaret &intent);
     [[nodiscard]] VisualTextView visual_view() const;
     void clamp_scroll();
@@ -338,9 +341,16 @@ class EditorController final
     [[nodiscard]] static const core::VimPattern &frame_pattern(const core::VimPattern &pattern);
     [[nodiscard]] static const core::VimPattern &
     frame_pattern(std::reference_wrapper<const core::VimPattern> pattern);
-    [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern, core::Offset caret) const;
+    [[nodiscard]] LineView decorated(LineView view, const LineDecoration &marks) const;
     [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines() const;
+    [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure>
+    text_visible_lines(const LineDecoration &marks,
+                       const std::optional<core::VimBlockRange> &block) const;
+    [[nodiscard]] LineView grid_row(const core::GridLine &grid, core::VisualPosition at,
+                                    const LineDecoration &marks) const;
+    [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure>
+    grid_visible_lines(const LineDecoration &marks,
+                       const std::optional<core::VimBlockRange> &block) const;
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。
     [[nodiscard]] std::optional<CompositionView> composed() const;

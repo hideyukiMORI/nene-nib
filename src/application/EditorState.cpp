@@ -315,6 +315,7 @@ EditorState EditorState::with_edit(core::TextBuffer text, core::Selection select
                                    core::EditHistory history, Document document) &&
 {
     text_ = std::move(text);
+    grid_lines_ = std::make_shared<GridLines>();
     selection_ = selection;
     caret_affinity_ = core::CaretAffinity::leading;
     history_ = std::move(history);
@@ -372,12 +373,31 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
 {
     EditorState next(*this);
     next.text_ = std::move(text);
+    next.grid_lines_ = std::make_shared<GridLines>();
+    next.display_ = core::DisplayForm::text;
     next.selection_ = core::collapsed_at(core::Offset{0});
     next.caret_affinity_ = core::CaretAffinity::leading;
     next.history_ = core::EditHistory::empty();
     next.scroll_ = ScrollState{core::LineNumber{first_line}, scroll_.visible_lines};
     next.document_ = std::move(document);
     return next;
+}
+
+core::DisplayForm EditorState::display() const noexcept
+{
+    return display_;
+}
+
+EditorState EditorState::with_display(core::DisplayForm display) const
+{
+    EditorState next(*this);
+    next.display_ = display;
+    return next;
+}
+
+GridLines &EditorState::grid_lines() const noexcept
+{
+    return *grid_lines_;
 }
 
 std::size_t EditorState::tab_count() const noexcept
@@ -557,7 +577,7 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
     return std::make_shared<const DocumentState>(
         DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
                       scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
-                      scroll_.first_row, scroll_.horizontal, caret_affinity_});
+                      scroll_.first_row, scroll_.horizontal, caret_affinity_, display_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -565,6 +585,8 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
 void EditorState::spread(const DocumentState &tab)
 {
     text_ = tab.text;
+    grid_lines_ = std::make_shared<GridLines>();
+    display_ = tab.display;
     selection_ = tab.selection;
     history_ = tab.history.sealed();
     document_ = tab.document;

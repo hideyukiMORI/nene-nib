@@ -65,7 +65,8 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 52> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 53> scopes{{
+    {"--grid-line", verify_grid_line_scope},
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -181,6 +182,7 @@ int main(int argc, char **argv)
     }
     nenenib::tests::verify_detected_text_contracts();
     nenenib::tests::verify_newline_index_scope();
+    nenenib::tests::verify_grid_line_scope();
     verify_text_and_caret();
     verify_display_line();
     verify_display_line_views();

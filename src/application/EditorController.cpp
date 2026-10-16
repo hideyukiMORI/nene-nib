@@ -11,6 +11,7 @@
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
+#include "GridLine.hpp"
 #include "DisplayText.hpp"
 #include "DocumentState.hpp"
 #include "Edit.hpp"
@@ -2174,6 +2175,11 @@ void EditorController::evaluate_command(std::string_view text)
         run_document_request(document.value());
         return;
     }
+    const auto &display = result.value().display;
+    if (display.has_value())
+    {
+        accept(SelectDisplay{display.value()});
+    }
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {
@@ -3258,25 +3264,22 @@ EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> p
     return pattern.get();
 }
 
-// 見えている 1 行ぶんの表示値。選択と検索は所有済み本文の同じ LineSpanEvaluation で投影する
-// （ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent を返すので落ちる。
-// 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
-LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern, core::Offset caret) const
+// 行（格子では画面行の切れ端）に選択と検索の当たりを書き足す。選択と検索は所有済み本文の同じ
+// LineSpanEvaluation で投影する（ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent
+// を返すので落ちる。桁は本文の桁のまま渡す。
+LineView EditorController::decorated(LineView view, const LineDecoration &marks) const
 {
-    const core::TextBuffer &text = state_.text();
-    LineView view = visual_view().line(line);
-    const core::Offset start = text.line_start(line);
-    LineSpanEvaluation projection(view.text, start, text.line_terminator_end(line));
-    view.selection = projection.span(range);
-    if (pattern == nullptr)
+    const core::Offset start = marks.bounds.begin;
+    LineSpanEvaluation projection(view.text, start, marks.bounds.end);
+    view.selection = projection.span(marks.range);
+    if (marks.pattern == nullptr)
     {
         return view;
     }
     // 今の一致はキャレットを含む一致。incsearch の入力中は preview の当たりを含む一致（ADR 0041
     // の決定 4）。全一致の面は hlsearch が on のときだけで、off の入力中は今の当たりの枠だけ
     // （Vim と同じ）。入力中でなければ off の search_pattern は何も返さない。
-    for (const auto &match : core::vim_line_matches(view.text, *pattern))
+    for (const auto &match : core::vim_line_matches(view.text, *marks.pattern))
     {
         const core::OffsetRange found{core::Offset{start.value + match.begin.value},
                                       core::Offset{start.value + match.end.value}};
@@ -3286,7 +3289,7 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
             continue;
         }
         view.matches.push_back(span);
-        if (found.begin.value <= caret.value && caret.value < found.end.value)
+        if (found.begin.value <= marks.caret.value && marks.caret.value < found.end.value)
         {
             view.current_match = span;
         }
@@ -3300,32 +3303,46 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
 
 std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visible_lines() const
 {
-    const ScrollState scroll = state_.scroll();
-    const std::size_t total = state_.text().line_count();
-    const std::size_t first = std::min(scroll.first_visible.value, total);
-    const std::size_t last =
-        std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
-    const core::OffsetRange range = highlighted_range();
     const auto block = block_selection();
     const auto pattern = search_pattern();
     const core::VimPattern *selected =
         pattern.has_value()
             ? std::visit([](const auto &value) { return &frame_pattern(value); }, pattern.value())
             : nullptr;
-    const core::Offset caret = selected != nullptr && first <= last
+    const core::Offset caret = selected != nullptr
                                    ? previewed_offset(state_).value_or(state_.selection().caret)
                                    : state_.selection().caret;
-    std::vector<LineView> lines;
-    if (first <= last)
+    const LineDecoration marks{core::OffsetRange{core::Offset{0}, core::Offset{0}},
+                               highlighted_range(), selected, caret};
+    if (state_.display() == core::DisplayForm::grid && view_geometry_.width > 0)
     {
-        lines.reserve(last - first + 1);
+        return grid_visible_lines(marks, block);
     }
+    return text_visible_lines(marks, block);
+}
+
+// 見えている論理行ごとに 1 つ。描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。
+std::expected<std::vector<LineView>, TextLayoutFailure>
+EditorController::text_visible_lines(const LineDecoration &marks,
+                                     const std::optional<core::VimBlockRange> &block) const
+{
+    const ScrollState scroll = state_.scroll();
+    const core::TextBuffer &text = state_.text();
+    const std::size_t total = text.line_count();
+    const std::size_t first = std::min(scroll.first_visible.value, total);
+    const std::size_t last =
+        std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
+    std::vector<LineView> lines;
+    lines.reserve(last - first + 1);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
     for (std::size_t number = first;
          number <= last && row < static_cast<std::int64_t>(scroll.visible_lines); ++number)
     {
         const core::LineNumber line{number};
-        auto shown = line_view(line, block_row(block, line, range), selected, caret);
+        const LineDecoration lined{
+            core::OffsetRange{text.line_start(line), text.line_terminator_end(line)},
+            block_row(block, line, marks.range), marks.pattern, marks.caret};
+        auto shown = decorated(visual_view().line(line), lined);
         const auto count = view_geometry_.width > 0
                                ? ports_.text_layouts.rows(TextLayoutRequest{
                                      presented_text(shown), state_.settings(), view_geometry_})
@@ -3338,6 +3355,70 @@ std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visibl
         shown.screen_rows = count.value();
         row += static_cast<std::int64_t>(count.value());
         lines.push_back(std::move(shown));
+    }
+    return lines;
+}
+
+// 格子の 1 画面行の切れ端（ADR 0140 の決定 5・試作）。行の全体の表示値は作らない。
+LineView EditorController::grid_row(const core::GridLine &grid, core::VisualPosition at,
+                                    const LineDecoration &marks) const
+{
+    const core::TextBuffer &text = state_.text();
+    const auto span = grid.row_span(at.row);
+    const bool last = at.row + 1 == grid.rows();
+    std::string slice(grid.text().substr(span.byte_begin, span.byte_end - span.byte_begin));
+    auto display = core::grid_display_line(slice, span.first_virtual);
+    const core::Offset start = text.line_start(at.line);
+    const core::Offset end =
+        last ? text.line_terminator_end(at.line) : core::Offset{start.value + span.byte_end};
+    const LineDecoration lined{core::OffsetRange{core::Offset{start.value + span.byte_begin}, end},
+                               marks.range, marks.pattern, marks.caret};
+    auto shown = decorated(LineView{at.line, std::move(slice), std::move(display),
+                                    core::no_selection_span(), {}, std::nullopt},
+                           lined);
+    shown.screen_rows = 1;
+    shown.grid = GridRowView{span.column_begin, span.lead, 0.0F, at.row == 0, last};
+    return shown;
+}
+
+// 格子の見えている画面行（ADR 0140 の決定 5・試作）。画面行ごとに切れ端の LineView を 1 つ作る。
+std::expected<std::vector<LineView>, TextLayoutFailure>
+EditorController::grid_visible_lines(const LineDecoration &marks,
+                                     const std::optional<core::VimBlockRange> &block) const
+{
+    const ScrollState scroll = state_.scroll();
+    const std::size_t total = state_.text().line_count();
+    auto view = visual_view();
+    const auto width = view.cell();
+    if (!width)
+    {
+        return std::unexpected(width.error());
+    }
+    std::vector<LineView> lines;
+    core::VisualPosition at{core::LineNumber{std::clamp<std::size_t>(scroll.first_visible.value, 1, total)},
+                            scroll.first_row};
+    while (lines.size() < scroll.visible_lines && at.line.value <= total)
+    {
+        const auto made = view.grid_line(at.line);
+        if (!made)
+        {
+            return std::unexpected(made.error());
+        }
+        if (at.row >= made.value()->rows())
+        {
+            at = core::VisualPosition{core::LineNumber{at.line.value + 1}, 0};
+            continue;
+        }
+        auto shown = grid_row(*made.value(), at,
+                              LineDecoration{marks.bounds, block_row(block, at.line, marks.range),
+                                             marks.pattern, marks.caret});
+        shown.screen_row = static_cast<std::int64_t>(lines.size());
+        if (shown.grid.has_value())
+        {
+            shown.grid.value().cell = width.value();
+        }
+        lines.push_back(std::move(shown));
+        ++at.row;
     }
     return lines;
 }
@@ -3394,7 +3475,7 @@ EditorFrame EditorController::frame() const
     const auto encoding = delivered.document.encoding;
     auto lines = visible_lines();
     const auto failure = lines ? layout_failure_ : std::optional{lines.error()};
-    return EditorFrame{std::move(lines).value_or(std::vector<LineView>{}),
+    auto made = EditorFrame{std::move(lines).value_or(std::vector<LineView>{}),
                        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode),
                                  state_.caret_affinity()},
                        state_.scroll().first_visible,
@@ -3425,5 +3506,7 @@ EditorFrame EditorController::frame() const
                        core::operation_guide(guide_context(), delivered.mode),
                        failure,
                        state_.scroll().horizontal};
+    made.display = state_.display();
+    return made;
 }
 } // namespace nenenib::application

@@ -2,11 +2,13 @@
 // 端末出力の代わりは「起動できなかった理由 1 行」の MessageBoxW だけで、ログには使わない。
 #include "AbsolutePath.hpp"
 #include "BodyTextLayouts.hpp"
+#include "DisplayRequest.hpp"
 #include "EditorController.hpp"
 #include "EditorWindow.hpp"
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
+#include "SelectDisplay.hpp"
 #include "Win32AppearanceAdapter.hpp"
 #include "Win32BookmarkAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
@@ -26,6 +28,7 @@
 #include <objbase.h>
 #include <shellapi.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -60,6 +63,8 @@ int report(const wchar_t *reason) noexcept
 
 // 速さの計測の出力先。付いていれば Win32TimingAdapter が記録状態で動く（ADR 0011 の決定 2）。
 constexpr wchar_t measure_option[] = L"--measure";
+// 試作（ADR 0140）: 開いた文書を格子で見せる。問いの「はい」の代わり。
+constexpr wchar_t grid_option[] = L"--grid";
 
 // 引数は 1 度だけ取り出して持ち回る。CommandLineToArgvW を呼ぶ場所はここだけ（ARC-001）。
 [[nodiscard]] std::vector<std::wstring> command_arguments()
@@ -108,6 +113,11 @@ initial_documents(const std::vector<std::wstring> &given)
             index += 2;
             continue;
         }
+        if (given[index] == grid_option)
+        {
+            ++index;
+            continue;
+        }
         const auto path = nenenib::adapters::win32::absolute_file_path(given[index]);
         if (path.has_value())
         {
@@ -116,6 +126,18 @@ initial_documents(const std::vector<std::wstring> &given)
         ++index;
     }
     return documents;
+}
+
+// 試作（ADR 0140）: 問いの「はい」の代わりに、環境変数か引数で開いた文書を格子にする。
+void select_initial_display(nenenib::application::EditorController &controller,
+                            const std::vector<std::wstring> &given)
+{
+    if (nenenib::adapters::win32::grid_display_requested() ||
+        std::ranges::find(given, std::wstring_view(grid_option)) != given.end())
+    {
+        static_cast<void>(controller.apply(
+            nenenib::application::SelectDisplay{nenenib::core::DisplayForm::grid}));
+    }
 }
 
 int run(HINSTANCE instance)
@@ -157,6 +179,7 @@ int run(HINSTANCE instance)
                                           themes, session, history, folders, bookmarks,
                                           text_layouts},
         initial_documents(given));
+    select_initial_display(controller, given);
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
     timing.mark(nenenib::core::Milestone::document_opened);

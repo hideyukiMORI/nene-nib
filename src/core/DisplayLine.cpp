@@ -10,6 +10,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -67,6 +68,25 @@ constexpr char32_t hex_mask = 0xF;
     append_utf8(out, value);
     return 1;
 }
+
+// 格子で 1 文字が占める升（Tab を除く・GridLine と同じ表）。
+[[nodiscard]] std::size_t grid_cells(char32_t value) noexcept
+{
+    switch (display_width(value))
+    {
+    case DisplayWidth::zero:
+        return 0;
+    case DisplayWidth::single:
+        return 1;
+    case DisplayWidth::wide:
+        return 2;
+    case DisplayWidth::unprintable:
+        return format_hex_width + 2;
+    case DisplayWidth::hex:
+        return control_hex_width + 2;
+    }
+    std::unreachable();
+}
 } // namespace
 
 DisplayLine display_line(std::string_view text)
@@ -80,6 +100,37 @@ DisplayLine display_line(std::string_view text)
     {
         line.starts.push_back(position);
         position += append_display(line.text, code_point_at(text, Offset{at}));
+        at = next_code_point(text, Offset{at}).value;
+    }
+    line.starts.push_back(position);
+    return line;
+}
+
+DisplayLine grid_display_line(std::string_view text, std::size_t first_virtual)
+{
+    constexpr std::size_t tab_stop = 8;
+    DisplayLine line;
+    line.text.reserve(text.size());
+    line.starts.reserve(code_point_count(text) + 1);
+    std::size_t position = 0;
+    std::size_t virtual_column = first_virtual;
+    std::size_t at = 0;
+    while (at < text.size())
+    {
+        line.starts.push_back(position);
+        const char32_t value = code_point_at(text, Offset{at});
+        if (value == U'\t')
+        {
+            const auto advance = tab_stop - (virtual_column % tab_stop);
+            line.text.append(advance, ' ');
+            position += advance;
+            virtual_column += advance;
+        }
+        else
+        {
+            position += append_display(line.text, value);
+            virtual_column += grid_cells(value);
+        }
         at = next_code_point(text, Offset{at}).value;
     }
     line.starts.push_back(position);

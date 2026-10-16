@@ -17,6 +17,13 @@ EditorSettings default_editor_settings()
                           std::nullopt, GuideVisibility::shown};
 }
 
+EditorSettings grid_settings(EditorSettings settings)
+{
+    settings.font_family = DisplayText::parse("Cascadia Mono").value();
+    settings.wrapping = LineWrapping::no_wrap;
+    return settings;
+}
+
 Theme selected_theme(const EditorSettings &settings, Appearance system_appearance) noexcept
 {
     if (settings.theme.has_value())

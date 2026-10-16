@@ -105,6 +105,25 @@ void EditorController::accept(const PointText &intent)
     accept(PlaceCaret{caret.value().position, intent.anchoring, caret.value().affinity});
 }
 
+// 表示形式を切り替える（ADR 0140 の決定 3・試作）。画面行の位置は形式ごとに意味が違うので
+// 行の先頭へ戻し、キャレットが見える所へ送る。
+void EditorController::accept(const SelectDisplay &intent)
+{
+    if (state_.display() == intent.display)
+    {
+        return;
+    }
+    auto scroll = state_.scroll();
+    scroll.first_row = 0;
+    scroll.horizontal = 0;
+    state_ = state_.with_display(intent.display).with_scroll(scroll);
+    if (view_geometry_.width > 0)
+    {
+        clamp_scroll();
+        follow_caret();
+    }
+}
+
 std::expected<core::VimStep, TextLayoutFailure>
 EditorController::measured_vim_step(const core::VimKey &key) const
 {
@@ -117,7 +136,8 @@ EditorController::measured_vim_step(const core::VimKey &key) const
         replay_depth_.has_value() ? core::VimKeySource::replayed : core::VimKeySource::typed,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
         core::VimLayoutView{view_geometry_.width > 0 &&
-                                state_.settings().wrapping == core::LineWrapping::wrap,
+                                (state_.settings().wrapping == core::LineWrapping::wrap ||
+                                 state_.display() == core::DisplayForm::grid),
                             scroll.first_row, rows}};
     auto step = core::vim_step(state_.vim(), view, key);
     auto text = visual_view();

@@ -5,6 +5,7 @@
 #include "CommandLine.hpp"
 #include "CommandPaletteView.hpp"
 #include "CompositionView.hpp"
+#include "DisplayForm.hpp"
 #include "DocumentView.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
@@ -86,6 +87,8 @@ struct EditorFrame
     core::OperationGuide guide;
     std::optional<TextLayoutFailure> layout_failure{};
     float horizontal = 0;
+    // 表示形式（ADR 0140・試作）。grid なら lines は画面行ごとの切れ端。
+    core::DisplayForm display = core::DisplayForm::text;
 };
 
 // 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

@@ -6,6 +6,8 @@
 #include "LineUtf16Evaluation.hpp"
 #include "TextLayoutPoint.hpp"
 #include "Utf16.hpp"
+#include "Utf8.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <string>
@@ -30,6 +32,33 @@ constexpr float spacing_probe_width = 1000.0F;
     }
     std::unreachable();
 }
+// 格子で 1 文字が占める升（Tab は表示の行で空白にしてある・ADR 0140）。
+[[nodiscard]] float grid_cells(char32_t value) noexcept
+{
+    switch (core::display_width(value))
+    {
+    case core::DisplayWidth::zero:
+        return 0.0F;
+    case core::DisplayWidth::wide:
+        return 2.0F;
+    case core::DisplayWidth::single:
+    case core::DisplayWidth::unprintable:
+    case core::DisplayWidth::hex:
+        return 1.0F;
+    }
+    std::unreachable();
+}
+
+// 1 文字の送りを升数ぶんの幅にそろえる。幅 0 の文字は前の文字に重ねるので触らない。
+[[nodiscard]] HRESULT spaced_cells(IDWriteTextLayout1 *layout, DWRITE_TEXT_RANGE range,
+                                   float advance)
+{
+    if (!(advance > 0.0F))
+    {
+        return S_OK;
+    }
+    return layout->SetCharacterSpacing(0.0F, 0.0F, advance, range);
+}
 } // namespace
 
 bool BodyTextLayouts::matches_style(const application::TextLayoutRequest &request) const
@@ -37,7 +66,80 @@ bool BodyTextLayouts::matches_style(const application::TextLayoutRequest &reques
     return style_.has_value() && style_.value().family == request.settings.font_family.text() &&
            style_.value().points == request.settings.font_size.points() &&
            style_.value().geometry == request.geometry &&
-           style_.value().wrapping == request.settings.wrapping;
+           style_.value().wrapping == request.settings.wrapping &&
+           style_.value().cell == request.cell;
+}
+
+bool BodyTextLayouts::ensure_factory()
+{
+    if (factory_)
+    {
+        return true;
+    }
+    Microsoft::WRL::ComPtr<IUnknown> created;
+    return SUCCEEDED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
+                                         created.GetAddressOf())) &&
+           SUCCEEDED(created.As(&factory_));
+}
+
+std::expected<float, application::TextLayoutFailure>
+BodyTextLayouts::cell(const application::TextLayoutRequest &request)
+{
+    const std::string requested(request.settings.font_family.text());
+    const float points = request.settings.font_size.points();
+    if (cell_ > 0.0F && cell_family_ == requested && cell_points_ == points &&
+        cell_dpi_ == request.geometry.dpi)
+    {
+        return cell_;
+    }
+    if (!ensure_factory())
+    {
+        return std::unexpected(unavailable);
+    }
+    const auto face = family(requested);
+    const float size = core::font_size_dips(request.settings.font_size) *
+                       static_cast<float>(request.geometry.dpi) /
+                       static_cast<float>(core::reference_dpi);
+    TextFormat format;
+    TextLayout probe;
+    DWRITE_TEXT_METRICS metrics{};
+    if (FAILED(factory_->CreateTextFormat(face.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL,
+                                          DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                          size, L"", &format)) ||
+        FAILED(factory_->CreateTextLayout(L"0", 1, format.Get(), spacing_probe_width,
+                                          spacing_probe_width, &probe)) ||
+        FAILED(probe->GetMetrics(&metrics)) || !(metrics.widthIncludingTrailingWhitespace > 0.0F))
+    {
+        return std::unexpected(unavailable);
+    }
+    cell_family_ = requested;
+    cell_points_ = points;
+    cell_dpi_ = request.geometry.dpi;
+    cell_ = metrics.widthIncludingTrailingWhitespace;
+    return cell_;
+}
+
+HRESULT BodyTextLayouts::space_cells(IDWriteTextLayout *layout,
+                                     const application::TextLayoutRequest &request) const
+{
+    Microsoft::WRL::ComPtr<IDWriteTextLayout1> spaced;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> held(layout);
+    if (FAILED(held.As(&spaced)))
+    {
+        return E_NOINTERFACE;
+    }
+    UINT32 units = 0;
+    HRESULT result = S_OK;
+    for (std::size_t at = 0; at < request.text.size() && SUCCEEDED(result);
+         at = core::next_code_point(request.text, core::Offset{at}).value)
+    {
+        const char32_t value = core::code_point_at(request.text, core::Offset{at});
+        const UINT32 length = value > 0xFFFF ? 2U : 1U;
+        result = spaced_cells(spaced.Get(), DWRITE_TEXT_RANGE{units, length},
+                              grid_cells(value) * request.cell);
+        units += length;
+    }
+    return result;
 }
 
 std::expected<void, application::TextLayoutFailure>
@@ -51,15 +153,9 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     previous_.clear();
     pending_.reset();
     style_.reset();
-    if (!factory_)
+    if (!ensure_factory())
     {
-        Microsoft::WRL::ComPtr<IUnknown> created;
-        if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
-                                       created.GetAddressOf())) ||
-            FAILED(created.As(&factory_)))
-        {
-            return std::unexpected(unavailable);
-        }
+        return std::unexpected(unavailable);
     }
     if (FAILED(make_format(request)))
     {
@@ -67,7 +163,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     }
     style_ = BodyTextStyle{std::string(request.settings.font_family.text()),
                            request.settings.font_size.points(), request.geometry,
-                           request.settings.wrapping};
+                           request.settings.wrapping, request.cell};
     return {};
 }
 
@@ -163,6 +259,10 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     if (FAILED(factory_->CreateTextLayout(
             wide.value().c_str(), static_cast<UINT32>(wide.value().size()), format_.Get(),
             static_cast<float>(area.right), static_cast<float>(area.bottom), &made)))
+    {
+        return std::unexpected(unavailable);
+    }
+    if (request.cell > 0.0F && FAILED(space_cells(made.Get(), request)))
     {
         return std::unexpected(unavailable);
     }

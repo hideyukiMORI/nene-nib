@@ -44,7 +44,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
-    src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp
+    src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/GridLine.cpp src/core/InputText.cpp
     src/core/KeyChord.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/SearchLine.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp
@@ -59,7 +59,7 @@ nenenib_target(nenenib_core core STATIC
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp
-    src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/EditorView.cpp)
+    src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/EditorView.cpp src/application/GridLines.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -69,6 +69,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/DetectedTextTests.cpp
     tests/unit/CoreTests.cpp
     tests/unit/NewlineIndexTests.cpp
+    tests/unit/GridLineTests.cpp
     tests/unit/Utf16Tests.cpp
     tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp
@@ -121,7 +122,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/KeyValueFields.cpp src/adapters/win32/ColorCodec.cpp
     src/adapters/win32/ThemeCodec.cpp src/adapters/win32/ThemeContrast.cpp
     src/adapters/win32/Win32ThemeAdapter.cpp
-    src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
+    src/adapters/win32/AbsolutePath.cpp src/adapters/win32/DisplayRequest.cpp src/adapters/win32/LocalSettingsPath.cpp
     src/adapters/win32/SettingsCodec.cpp src/adapters/win32/SettingsPaths.cpp src/adapters/win32/Win32SettingsAdapter.cpp
     src/adapters/win32/ParentDirectory.cpp src/adapters/win32/SessionCodec.cpp
     src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp

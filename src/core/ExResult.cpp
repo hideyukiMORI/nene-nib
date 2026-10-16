@@ -166,6 +166,35 @@ namespace
     std::unreachable();
 }
 
+[[nodiscard]] ExResult display_result(DisplayForm display)
+{
+    ExResult result{std::nullopt, std::nullopt, std::nullopt,
+                    DisplayText::parse("display=text").value()};
+    switch (display)
+    {
+    case DisplayForm::text:
+        break;
+    case DisplayForm::grid:
+        result.message = DisplayText::parse("display=grid").value();
+        break;
+    }
+    result.display = display;
+    return result;
+}
+
+[[nodiscard]] std::expected<ExResult, ExEvaluationFailure> display_option(std::string_view value)
+{
+    if (value == "grid")
+    {
+        return display_result(DisplayForm::grid);
+    }
+    if (value == "text")
+    {
+        return display_result(DisplayForm::text);
+    }
+    return std::unexpected(ExFailure::unknown_option);
+}
+
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 set_option(std::string_view option, const EditorSettings &settings)
 {
@@ -468,11 +497,12 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     }
     return std::unexpected(ExFailure::unknown_command);
 }
-constexpr std::array<std::string_view, 16> fixed_candidates{
-    "colorscheme",     "set fontsize=", "set guifont=",   "set incsearch",
-    "set noincsearch", "set hlsearch",  "set nohlsearch", "set guide",
-    "set noguide",     "tabs",          "tabnew",         "tabnext",
-    "tabprevious",     "tabclose",      "set wrap",       "set nowrap"};
+constexpr std::array<std::string_view, 18> fixed_candidates{
+    "colorscheme",     "set fontsize=", "set guifont=",      "set incsearch",
+    "set noincsearch", "set hlsearch",  "set nohlsearch",    "set guide",
+    "set noguide",     "tabs",          "tabnew",            "tabnext",
+    "tabprevious",     "tabclose",      "set wrap",          "set nowrap",
+    "set display=grid", "set display=text"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})
@@ -578,7 +608,8 @@ std::expected<ExResult, ExEvaluationFailure> evaluate_ex(std::string_view text,
     }
     if (name == "set")
     {
-        return set_option(argument, settings);
+        return argument.starts_with("display=") ? display_option(argument.substr(8))
+                                                : set_option(argument, settings);
     }
     return remaining_command(text, name, argument);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EditorState.hpp"
+#include "GridLine.hpp"
 #include "LineView.hpp"
 #include "ScrollExtent.hpp"
 #include "ScrollFollow.hpp"
@@ -13,6 +14,7 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace nenenib::application
@@ -41,6 +43,12 @@ class VisualTextView final
     constrained(core::VisualPosition first, core::ScrollExtent extent);
     [[nodiscard]] std::expected<ScrollState, TextLayoutFailure>
     followed(core::TextCaret caret, core::ScrollFollow follow, core::ScrollExtent extent);
+    // 格子（ADR 0140・試作）。文書が格子で、窓の寸法が届いているときだけ真。
+    [[nodiscard]] bool gridded() const noexcept;
+    // 等幅の 1 升の物理画素。最初に要るときに 1 回だけ port に聞く。
+    [[nodiscard]] std::expected<float, TextLayoutFailure> cell();
+    [[nodiscard]] std::expected<std::shared_ptr<const core::GridLine>, TextLayoutFailure>
+    grid_line(core::LineNumber number);
 
   private:
     using SharedLine = std::shared_ptr<const LineView>;
@@ -62,5 +70,6 @@ class VisualTextView final
     core::TextPosition caret_;
     // 作った行の表示値。古い順に並び、上限を超えたら先頭を捨てる。
     std::vector<SharedLine> shown_;
+    std::optional<float> cell_;
 };
 } // namespace nenenib::application

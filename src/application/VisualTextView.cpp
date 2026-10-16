@@ -94,11 +94,54 @@ TextLayoutRequest VisualTextView::request(const LineView &line) const
     return TextLayoutRequest{presented_text(line), state_.settings(), geometry_};
 }
 
+bool VisualTextView::gridded() const noexcept
+{
+    return state_.display() == core::DisplayForm::grid && geometry_.width > 0;
+}
+
+std::expected<float, TextLayoutFailure> VisualTextView::cell()
+{
+    if (cell_.has_value())
+    {
+        return cell_.value();
+    }
+    const auto settings = core::grid_settings(state_.settings());
+    const auto measured = layouts_.cell(TextLayoutRequest{" ", settings, geometry_});
+    if (!measured)
+    {
+        return std::unexpected(measured.error());
+    }
+    cell_ = measured.value();
+    return measured.value();
+}
+
+std::expected<std::shared_ptr<const core::GridLine>, TextLayoutFailure>
+VisualTextView::grid_line(core::LineNumber number)
+{
+    const auto width = cell();
+    if (!width)
+    {
+        return std::unexpected(width.error());
+    }
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    return state_.grid_lines().line(state_.text(), number,
+                                    core::grid_columns(geometry_.width, width.value()));
+}
+
 std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNumber number)
 {
     if (geometry_.width <= 0)
     {
         return 1;
+    }
+    if (gridded())
+    {
+        const auto line = grid_line(number);
+        if (!line)
+        {
+            return std::unexpected(line.error());
+        }
+        return line.value()->rows();
     }
     const auto made = shown(number);
     return layouts_.rows(request(*made));
@@ -109,6 +152,16 @@ std::expected<core::TextLocation, TextLayoutFailure> VisualTextView::location(co
     if (geometry_.width <= 0)
     {
         return core::TextLocation{0, static_cast<float>(caret.position.column.value - 1)};
+    }
+    if (gridded())
+    {
+        const auto line = grid_line(caret.position.line);
+        if (!line)
+        {
+            return std::unexpected(line.error());
+        }
+        const auto point = line.value()->point_of(caret.position.column.value - 1, caret.affinity);
+        return core::TextLocation{point.row, static_cast<float>(point.cell) * cell_.value_or(1.0F)};
     }
     const auto made = shown(caret.position.line);
     return layouts_.locate(request(*made), shown_caret(*made, caret, caret_));
@@ -133,6 +186,20 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
         const core::TextPosition desired{
             at.line, core::Column{static_cast<std::size_t>(std::max(x, 0.0F)) + 1}};
         return core::TextCaret{state_.text().position_of(state_.text().offset_of(desired))};
+    }
+    if (gridded())
+    {
+        const auto line = grid_line(at.line);
+        if (!line)
+        {
+            return std::unexpected(line.error());
+        }
+        const auto hit = line.value()->hit(at.row, x / cell_.value_or(1.0F));
+        return core::TextCaret{
+            core::TextPosition{core::LineNumber{std::clamp<std::size_t>(
+                                   at.line.value, 1, state_.text().line_count())},
+                               hit.column},
+            hit.affinity};
     }
     const auto made = shown(at.line);
     const auto &shown_line = *made;
@@ -351,7 +418,8 @@ std::expected<ScrollState, TextLayoutFailure> VisualTextView::followed(core::Tex
     result.first_visible = first.value().line;
     result.first_row = first.value().row;
     result.horizontal = 0;
-    if (state_.settings().wrapping == core::LineWrapping::no_wrap && geometry_.width > 0)
+    if (state_.settings().wrapping == core::LineWrapping::no_wrap && geometry_.width > 0 &&
+        !gridded())
     {
         const auto width = static_cast<float>(std::max(geometry_.width - 3, 1));
         const auto x = std::max(point.value().x, 0.0F);

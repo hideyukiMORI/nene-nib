@@ -13,5 +13,7 @@ struct TextLayoutRequest
     std::string_view text;
     const core::EditorSettings &settings;
     core::TextViewGeometry geometry;
+    // 格子の 1 升の物理画素（ADR 0140 の決定 5・試作）。0 は今日どおりの文字組み。
+    float cell = 0.0F;
 };
 } // namespace nenenib::application

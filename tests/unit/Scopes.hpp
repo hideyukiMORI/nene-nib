@@ -175,6 +175,7 @@ void verify_ordinary_character_scope();
 void verify_buffer_scope();
 // NewlineIndexTests.cpp
 void verify_newline_index_scope();
+void verify_grid_line_scope();
 void verify_caret_movement_contracts();
 void verify_display_text_accepts_ascii();
 void verify_history_coalescing();

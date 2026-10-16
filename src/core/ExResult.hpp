@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DisplayForm.hpp"
 #include "DisplayText.hpp"
 #include "EditorSettings.hpp"
 #include "ExDocumentRequest.hpp"
@@ -33,6 +34,8 @@ struct ExResult
     std::optional<ExTabRequest> tab = std::nullopt;
     std::optional<ExPaletteRequest> palette = std::nullopt;
     std::optional<ExDocumentRequest> document = std::nullopt;
+    // 表示形式（ADR 0140 の決定 3・試作）。文書の状態で、保存しない。
+    std::optional<DisplayForm> display = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

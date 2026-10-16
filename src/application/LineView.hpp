@@ -2,6 +2,7 @@
 
 #include "ComposedLine.hpp"
 #include "DisplayLine.hpp"
+#include "GridRowView.hpp"
 #include "LineNumber.hpp"
 #include "SelectionSpan.hpp"
 
@@ -31,6 +32,8 @@ struct LineView
     std::optional<ComposedLine> composed{};
     std::int64_t screen_row = 0;
     std::size_t screen_rows = 1;
+    // 格子の画面行（ADR 0140・試作）。値があれば text / display はこの画面行の切れ端。
+    std::optional<GridRowView> grid{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

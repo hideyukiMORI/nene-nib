@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CaretAffinity.hpp"
+#include "DisplayForm.hpp"
 #include "Document.hpp"
 #include "DocumentView.hpp"
 #include "EditHistory.hpp"
@@ -31,5 +32,7 @@ struct DocumentState
     std::size_t first_row = 0;
     float horizontal = 0;
     core::CaretAffinity affinity = core::CaretAffinity::leading;
+    // 表示形式（ADR 0140 の決定 2・3・試作）。文書ごとに持ち、設定には保存しない。
+    core::DisplayForm display = core::DisplayForm::text;
 };
 } // namespace nenenib::application

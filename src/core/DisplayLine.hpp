@@ -22,6 +22,10 @@ struct DisplayLine
 // 本文の 1 行（`\n` を含まない検証済みの UTF-8）から描画用の行を作る。
 [[nodiscard]] DisplayLine display_line(std::string_view text);
 
+// 格子の 1 画面行の描画用の行（ADR 0140 の決定 5・試作）。display_line と同じ置き換えに加えて、
+// Tab を次の 8 の倍数までの空白にする。first_virtual は最初の文字の仮想桁（0 始まり）。
+[[nodiscard]] DisplayLine grid_display_line(std::string_view text, std::size_t first_virtual);
+
 // 本文の桁 → 描画の位置。`column` が範囲外なら描画の末尾。
 [[nodiscard]] std::size_t display_position(const DisplayLine &line, std::size_t column) noexcept;
 

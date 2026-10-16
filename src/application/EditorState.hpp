@@ -3,6 +3,7 @@
 #include "Appearance.hpp"
 #include "CommandInput.hpp"
 #include "Composition.hpp"
+#include "DisplayForm.hpp"
 #include "Document.hpp"
 #include "DocumentState.hpp"
 #include "EditHistory.hpp"
@@ -10,6 +11,7 @@
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "FileFailure.hpp"
+#include "GridLines.hpp"
 #include "LineEnding.hpp"
 #include "ParkedTab.hpp"
 #include "ScrollState.hpp"
@@ -94,6 +96,11 @@ class EditorState final
     // 開いた本文で入れ替える。履歴は空・キャレットとスクロールは先頭に戻り、
     // モードと外観は保たれる（ADR 0010 の決定 8）。
     [[nodiscard]] EditorState with_opened(core::TextBuffer text, Document document) const;
+    // 表示形式（ADR 0140 の決定 3・試作）。アクティブな文書のもの。
+    [[nodiscard]] core::DisplayForm display() const noexcept;
+    [[nodiscard]] EditorState with_display(core::DisplayForm display) const;
+    // 格子の行の保持。本文を入れ替えるたびに新しい入れ物になる（試作・保持は状態の外の副作用）。
+    [[nodiscard]] GridLines &grid_lines() const noexcept;
 
     // タブ（ADR 0056 の決定 1・2）。上の欄と関数はどれも「アクティブな文書」のもので、ほかの
     // タブは不変の束として脇に置く。タブの本数は脇の束の数 + 1。
@@ -180,6 +187,8 @@ class EditorState final
     void touch_active();
 
     core::TextBuffer text_;
+    core::DisplayForm display_ = core::DisplayForm::text;
+    std::shared_ptr<GridLines> grid_lines_ = std::make_shared<GridLines>();
     core::Selection selection_;
     core::EditHistory history_;
     ScrollState scroll_;

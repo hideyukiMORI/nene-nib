@@ -70,6 +70,17 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
                             : nenenib::core::CaretAffinity::leading};
     }
 
+    // 格子の 1 升（ADR 0140・試作）。1 code point = 10画素と同じ。
+    [[nodiscard]] std::expected<float, nenenib::application::TextLayoutFailure>
+    cell(const nenenib::application::TextLayoutRequest &) override
+    {
+        if (rejected_)
+        {
+            return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
+        }
+        return 10.0F;
+    }
+
     void reject() noexcept
     {
         rejected_ = true;
