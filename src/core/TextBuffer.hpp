@@ -8,6 +8,7 @@
 #include "Piece.hpp"
 #include "TextFailure.hpp"
 #include "TextPosition.hpp"
+#include "VirtualColumnIndex.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -22,6 +23,7 @@ namespace nenenib::core
 // original（読んだ本文）と add（入力）の 2 本は shared_ptr で共有し、複製するのは piece の列だけ。
 // add は固定長の chunk の列で、末尾の chunk を伸ばすのはその先端を知っている値だけ（ADR 0044）。
 // 改行の索引は original と各 chunk に 1 本ずつで、piece はその窓だけを持つ（ADR 0047）。
+// 仮想桁の索引は本文全体に 1 本で、編集は触れた塊だけを作り直す（ADR 0140 の決定 4）。
 // 生 UTF-8 と判定済みの所有値を受け取り、同じ構築経路で正しい UTF-8 を保つ（ADR 0080）。
 class TextBuffer final
 {
@@ -63,16 +65,21 @@ class TextBuffer final
     [[nodiscard]] Offset offset_of(const TextPosition &position) const;
     [[nodiscard]] TextPosition position_of(Offset at) const;
 
+    // 仮想桁の索引（ADR 0140 の決定 4）。改行の索引と同じく本文の不変の値で、値のあいだで共有する。
+    // 読んだときに 1 度だけ作り、replaced は触れた塊だけを作り直す。問い合わせにはこの本文を渡す。
+    [[nodiscard]] const VirtualColumnIndex &virtual_columns() const noexcept;
+
   private:
     [[nodiscard]] static TextBuffer from_validated_utf8(std::string text);
 
     using Buffer = std::shared_ptr<const std::string>;
     using Chunks = std::vector<std::shared_ptr<AddChunk>>;
     using Index = std::shared_ptr<const NewlineIndex>;
+    using Columns = std::shared_ptr<const VirtualColumnIndex>;
 
     [[nodiscard]] static Piece appended(Chunks &chunks, std::size_t &fill, std::string_view text);
 
-    TextBuffer(Buffer original, Index original_newlines, std::vector<Piece> pieces,
+    TextBuffer(Buffer original, Index original_newlines, Columns columns, std::vector<Piece> pieces,
                LineEnding ending);
     [[nodiscard]] std::string_view view_of(const Piece &piece) const noexcept;
     [[nodiscard]] char byte_at(Offset at) const noexcept;
@@ -87,6 +94,8 @@ class TextBuffer final
     Buffer original_;
     // original の '\n' のbit索引。from_utf8 で 1 度だけ作り、値のあいだで共有する（ADR 0121）。
     Index original_newlines_;
+    // 本文全体の仮想桁の部分和。空の本文は空の索引（ADR 0140 の決定 4）。
+    Columns columns_;
     Chunks add_;
     // 末尾の chunk の、この値が知っている書き込み済みの長さ（ADR 0044 の決定 2）。
     std::size_t add_fill_;

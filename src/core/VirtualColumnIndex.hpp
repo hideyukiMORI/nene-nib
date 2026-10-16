@@ -15,8 +15,8 @@ namespace nenenib::core
 class TextBuffer;
 
 // 仮想桁の部分和（ADR 0140 の決定 4・ADR 0139 の決定 6）。改行の索引（ADR 0047）と同じく
-// TextBuffer の隣に置く不変の値で、本文を約 64 KiB の塊に切り、塊ごとに桁・升・コードポイントの
-// 数の要約を持つ。塊は作るとき 64 KiB で切り、編集で 128 KiB を越えた範囲は 128 KiB 以下の等しい
+// TextBuffer が持つ不変の値で（TextBuffer::virtual_columns）、本文を約 64 KiB の塊に切り、
+// 塊ごとに桁・升・コードポイントの数の要約を持つ。塊は作るとき 64 KiB で切り、編集で 128 KiB を越えた範囲は 128 KiB 以下の等しい
 // 長さに切り直し、16 KiB を下回る範囲は次の塊と合わせる。
 // 各文字の桁は ADR 0034 の表（column_advance の 1 本）だけを見る。本文は持たず、問い合わせのたびに
 // 渡された TextBuffer から塊の 1 つだけを読む（plain の塊は読まない）。編集は replaced で、触れた
@@ -27,6 +27,8 @@ class TextBuffer;
 class VirtualColumnIndex final
 {
   public:
+    // 空の本文の索引（塊が無い）。TextBuffer::empty が持つ。
+    [[nodiscard]] static VirtualColumnIndex empty();
     [[nodiscard]] static VirtualColumnIndex from_text(const TextBuffer &text);
     [[nodiscard]] static VirtualColumnIndex for_grid(const TextBuffer &text, std::size_t columns);
 

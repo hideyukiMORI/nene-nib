@@ -1,6 +1,7 @@
 #include "VirtualColumnIndex.hpp"
 
 #include "Grid.hpp"
+#include "OffsetRange.hpp"
 #include "TextBuffer.hpp"
 #include "Utf8.hpp"
 #include "VirtualColumn.hpp"
@@ -225,7 +226,25 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
     }
     return low == 0 ? chunk.start : text.line_start(LineNumber{chunk.line + low + 1}).value;
 }
+
+// 本文の [begin, end)。本文が 1 本の piece ならその借用を、そうでなければ copied へ写して返す。
+[[nodiscard]] std::string_view window_of(const TextBuffer &text,
+                                         std::span<const std::string_view> segments,
+                                         OffsetRange range, std::string &copied)
+{
+    if (segments.size() == 1)
+    {
+        return segments.front().substr(range.begin.value, range.end.value - range.begin.value);
+    }
+    copied = text.text_range(range.begin, range.end);
+    return copied;
+}
 } // namespace
+
+VirtualColumnIndex VirtualColumnIndex::empty()
+{
+    return VirtualColumnIndex{};
+}
 
 VirtualColumnIndex VirtualColumnIndex::from_text(const TextBuffer &text)
 {
@@ -242,14 +261,17 @@ VirtualColumnIndex VirtualColumnIndex::built(const TextBuffer &text, std::size_t
     VirtualColumnIndex index;
     index.columns_ = columns;
     index.chunks_.reserve((text.size_bytes() / chunk_bytes) + 1);
+    // 読んだばかりの本文は 1 本の piece なので写さずに読む（ADR 0140 の決定 4）。
+    const auto segments = text.segments();
+    std::string copied;
     std::size_t start = 0;
     while (start < text.size_bytes())
     {
         const auto stop = std::min(start + chunk_bytes + sequence_slack, text.size_bytes());
-        const auto bytes = text.text_range(Offset{start}, Offset{stop});
+        const auto bytes =
+            window_of(text, segments, OffsetRange{Offset{start}, Offset{stop}}, copied);
         const auto cut = cut_point(bytes, chunk_bytes);
-        auto chunk =
-            summarized(std::string_view(bytes).substr(0, cut), start, index.end_state(), columns);
+        auto chunk = summarized(bytes.substr(0, cut), start, index.end_state(), columns);
         chunk.line = index.end_line();
         index.chunks_.push_back(chunk);
         start += cut;
