@@ -420,7 +420,5 @@ class EditorController final
     bool autosave_notified_ = false;
     // 起動の問いの間だけ持つ残骸の列（決定 6）。autosave_remnants() が置き、答えの意図が空にする。
     std::vector<AutosaveRemnant> autosave_remnants_;
-    // 前に失敗を引いてから store を頼んだか。空の collect をこの後に受けたら成功とみなす。
-    bool autosave_requested_ = false;
 };
 } // namespace nenenib::application

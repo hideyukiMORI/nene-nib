@@ -262,7 +262,9 @@ void verify_tick_encodes_and_discards()
                                              : std::string("none");
 }
 
-// 失敗は成功するまで 1 回だけ知らせる（決定 4）。
+// 失敗は成功するまで 1 回だけ知らせる（決定 4）。知らせを下ろすのは退避の成功の結果だけで、
+// 結果の無い合図（フォルダの WorkCompleted）では下ろさない。失敗と成功が同じ collect に来たら
+// 失敗が勝つ（独立レビュー F3）。
 void verify_failure_notified_once()
 {
     Editing editing;
@@ -270,23 +272,70 @@ void verify_failure_notified_once()
     applied(controller, app::VisibleLines{10});
     applied(controller, app::InsertText{"a"});
     applied(controller, app::AutosaveTick{});
-    editing.autosave().fail(app::AutosaveFailure::unwritable);
+    editing.autosave().fail(AutosaveId{0}, app::AutosaveFailure::unwritable);
     expect(notice(controller.apply_frame(app::WorkCompleted{})) == "自動退避できませんでした",
            "a failed store leaves one notice line");
     applied(controller, app::InsertText{"b"});
     applied(controller, app::AutosaveTick{});
-    editing.autosave().fail(app::AutosaveFailure::unwritable);
+    editing.autosave().fail(AutosaveId{0}, app::AutosaveFailure::unwritable);
     expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
            "a second failure before any success is not told again");
     applied(controller, app::InsertText{"c"});
     applied(controller, app::AutosaveTick{});
     expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
-           "a store that succeeded tells nothing");
+           "a signal without an autosave outcome tells nothing");
+    editing.autosave().fail(AutosaveId{0}, app::AutosaveFailure::unwritable);
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
+           "a signal without an autosave outcome does not lower the notice");
     applied(controller, app::InsertText{"d"});
     applied(controller, app::AutosaveTick{});
-    editing.autosave().fail(app::AutosaveFailure::location_unavailable);
+    editing.autosave().succeed(AutosaveId{0});
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
+           "a store that succeeded tells nothing");
+    applied(controller, app::InsertText{"e"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().fail(AutosaveId{0}, app::AutosaveFailure::location_unavailable);
     expect(notice(controller.apply_frame(app::WorkCompleted{})) == "自動退避できませんでした",
            "a failure after a success is told once again");
+    applied(controller, app::InsertText{"f"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().succeed(AutosaveId{0});
+    applied(controller, app::WorkCompleted{});
+    applied(controller, app::NewTab{});
+    applied(controller, app::InsertText{"g"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().fail(AutosaveId{1}, app::AutosaveFailure::unwritable);
+    editing.autosave().succeed(AutosaveId{0});
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "自動退避できませんでした",
+           "a failure and a success in one collect still tell the failure");
+    applied(controller, app::InsertText{"h"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().fail(AutosaveId{1}, app::AutosaveFailure::unwritable);
+    expect(notice(controller.apply_frame(app::WorkCompleted{})) == "none",
+           "the success of another tab beside the failure does not lower the notice");
+}
+
+// 失敗した id は帳面から外れ、本文が変わらなくても次の合図で書き直す（決定 4）。成功の後の合図は
+// 変わらなければ書かない。
+void verify_failed_store_retried()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"a"});
+    applied(controller, app::AutosaveTick{});
+    editing.autosave().fail(AutosaveId{0}, app::AutosaveFailure::unwritable);
+    applied(controller, app::WorkCompleted{});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 2 &&
+               editing.autosave().stored().back().id == AutosaveId{0} &&
+               bytes_of(editing.autosave().stored().back()) == "a",
+           "a failed store is stored again on the next tick without a change");
+    editing.autosave().succeed(AutosaveId{0});
+    applied(controller, app::WorkCompleted{});
+    applied(controller, app::AutosaveTick{});
+    expect(editing.autosave().stored().size() == 2,
+           "after the store succeeded a tick without a change stores nothing");
 }
 // 合図は使う人の操作ではないので、上下に動くときに狙う横位置を捨てない（決定 1）。30 秒ごとに
 // 必ず来るので、短い行をまたいでいる最中に届いても長い行で元の位置へ戻る。Vim の欲しい列も同じ。
@@ -486,6 +535,7 @@ void verify_autosave_contracts()
     verify_tick_stores_changes();
     verify_tick_encodes_and_discards();
     verify_failure_notified_once();
+    verify_failed_store_retried();
     verify_tick_keeps_wanted_column();
     verify_restore_remnants();
     verify_restored_tabs_autosave();

@@ -7,10 +7,10 @@ namespace nenenib::adapters::win32
 // 手で戻す event を、仕事が無い（立っている）状態で作る。
 AutosaveShelf::AutosaveShelf() : idle_(CreateEventW(nullptr, TRUE, TRUE, nullptr)) {}
 
-void AutosaveShelf::bind(std::function<void()> failed)
+void AutosaveShelf::bind(std::function<void()> finished)
 {
     const std::scoped_lock lock(mutex_);
-    failed_ = std::move(failed);
+    finished_ = std::move(finished);
 }
 
 bool AutosaveShelf::open() const
@@ -42,28 +42,25 @@ void AutosaveShelf::end()
     }
 }
 
-void AutosaveShelf::fail(application::AutosaveFailure failure)
+void AutosaveShelf::finish(application::AutosaveOutcome outcome)
 {
-    std::function<void()> failed;
+    std::function<void()> finished;
     {
         const std::scoped_lock lock(mutex_);
-        if (failures_.empty())
-        {
-            failed = failed_;
-        }
-        failures_.push_back(failure);
+        finished = finished_;
+        outcomes_.push_back(outcome);
     }
     // ロックの外で呼ぶ。合図の中から collect が呼ばれても止まらない。
-    if (failed)
+    if (finished)
     {
-        failed();
+        finished();
     }
 }
 
-std::vector<application::AutosaveFailure> AutosaveShelf::take()
+std::vector<application::AutosaveOutcome> AutosaveShelf::take()
 {
     const std::scoped_lock lock(mutex_);
-    return std::exchange(failures_, {});
+    return std::exchange(outcomes_, {});
 }
 
 bool AutosaveShelf::close(DWORD limit)
@@ -71,7 +68,7 @@ bool AutosaveShelf::close(DWORD limit)
     {
         const std::scoped_lock lock(mutex_);
         closed_ = true;
-        failed_ = nullptr;
+        finished_ = nullptr;
     }
     // event を作れなかったときは待てないので、走っている仕事が無いかだけを答える。
     if (!idle_.valid())
