@@ -47,6 +47,9 @@
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "Utf8.hpp"
+#include "VimPattern.hpp"
+#include "VimSearch.hpp"
+#include "VimSearchDirection.hpp"
 #include "VimTestSupport.hpp"
 #include "VirtualColumnIndex.hpp"
 #include "VisibleLines.hpp"
@@ -781,6 +784,106 @@ void verify_grid_composition_cluster()
            "a combining mark stays on the character before the caret, not on the composition");
 }
 
+// /abc の一致の長さの上限（食べる原子 3 つ × UTF-8 の 4 バイト）と、窓の前後の 1 code point の
+// 文脈とその整列の余り。
+constexpr std::size_t abc_longest = 12;
+constexpr std::size_t context_slack = 8;
+
+// 1 行の本文の位置の範囲 [begin, end) を、ASCII の格子の画面行 row の升の範囲へ写す。
+[[nodiscard]] std::optional<app::GridCellSpan> ascii_span(std::size_t row, std::size_t begin,
+                                                          std::size_t end)
+{
+    const auto first = row * grid_columns;
+    const auto from = std::max(begin, first);
+    const auto to = std::min(end, first + grid_columns);
+    if (from >= to)
+    {
+        return std::nullopt;
+    }
+    return app::GridCellSpan{from - first, to - first};
+}
+
+// 行の全体の一致のうち画面行 row に掛かる分の升の範囲。
+[[nodiscard]] std::vector<app::GridCellSpan>
+ascii_spans(std::size_t row, const std::vector<core::OffsetRange> &matches)
+{
+    std::vector<app::GridCellSpan> spans;
+    for (const auto &match : matches)
+    {
+        const auto span = ascii_span(row, match.begin.value, match.end.value);
+        if (span.has_value())
+        {
+            spans.push_back(span.value());
+        }
+    }
+    return spans;
+}
+
+// 見えている画面行の当たりが、行の全体を照合した一致（text の表示と同じ vim_line_matches）を
+// 升へ写したものと同じか。
+[[nodiscard]] bool grid_matches_whole_line(const EditorFrame &frame, std::string_view line,
+                                           std::string_view pattern)
+{
+    const auto parsed = core::VimPattern::parse(pattern, core::VimSearchDirection::forward);
+    if (!parsed.has_value() || frame.grid.empty())
+    {
+        return false;
+    }
+    const auto whole = core::vim_line_matches(line, parsed.value());
+    return std::ranges::all_of(frame.grid, [&whole](const app::GridRowView &row)
+                               { return row.matches == ascii_spans(row.row, whole); });
+}
+
+// 格子の当たりは見えている画面行の範囲に余裕を足した窓だけを照合する（#556）。窓の始まりの
+// `^` と `\<` は前の文字を見るので、行の途中の窓でも行の全体の照合と同じ升に出る。
+void verify_grid_marks_window()
+{
+    Editing editing;
+    const std::string line = repeated("word abc ", 70);
+    static_cast<void>(grid_frame_of(editing, line, 3));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    bool same = true;
+    for (const std::string_view pattern : {"abc", "^wo", "\\<a", "c\\>", "b*c", "d a"})
+    {
+        vim_normal(controller, "gg/" + std::string(pattern) + "<CR>");
+        for (const std::size_t at : {0U, 100U, 255U, 400U, 629U})
+        {
+            const EditorFrame shown = controller.apply_frame(
+                app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{at + 1}},
+                                core::SelectionAnchoring::collapse});
+            same = same && grid_matches_whole_line(shown, line, pattern);
+        }
+    }
+    expect(same, "the matches of the visible rows are the cells of the matches of the whole line");
+}
+
+// 16 MiB の 1 行の格子で /abc の後の frame が照合に読む本文は、見えている画面行に一致の長さの
+// 上限と文脈を前後に足した分だけ（#556・数える口 grid_searched）。
+void verify_grid_search_reads_window()
+{
+    Editing editing;
+    std::string text(sixteen_mebibytes, 'x');
+    text.replace(sixteen_mebibytes / 2 + 100, 3, "abc");
+    editing.files().hold_at(std::string(ascii_path), Bytes{std::move(text)});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, grid_geometry});
+    applied(controller, open_of(ascii_path));
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1},
+                                                           core::Column{sixteen_mebibytes / 2}},
+                                        core::SelectionAnchoring::collapse});
+    vim_normal(controller, "/abc<CR>");
+    const EditorFrame found = controller.frame();
+    const auto bound = (10 + 1) * grid_columns + 2 * (abc_longest + context_slack);
+    expect(found.grid_searched > 0 && found.grid_searched <= bound,
+           "the frame after /abc on the 16 MiB line reads only the visible rows and a margin");
+    expect(std::ranges::any_of(found.grid, [](const app::GridRowView &row)
+                               { return row.current_match.has_value(); }),
+           "the match the caret moved to is framed on the visible rows");
+}
+
 // 格子の frame は本文の索引と GridCells を借りる（決定 4・5）。16 MiB の ASCII の 1 行の真ん中で
 // frame を 10 回作っても、索引は同じ値のまま作り直さず、塊を 1 つも歩かない（割り算だけ）。
 void verify_grid_frames_borrow()
@@ -1034,6 +1137,8 @@ void verify_display_contracts()
     verify_grid_marks();
     verify_grid_composition_shifts();
     verify_grid_composition_cluster();
+    verify_grid_marks_window();
+    verify_grid_search_reads_window();
     verify_grid_frames_borrow();
     verify_quiet_open();
     verify_giant_window_length();

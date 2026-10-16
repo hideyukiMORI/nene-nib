@@ -20,6 +20,9 @@ namespace
 // vim_character_class の記号の組（0 は空白・1 は記号）。語の文字はこれより大きい値になる。
 constexpr std::uint32_t symbol_group = 1;
 
+// 食べる原子 1 つが食べる最長のバイト数（UTF-8 の 1 code point）。
+constexpr std::size_t longest_code_point = 4;
+
 // 未対応の `\` の組（ADR 0032 の決定 4）。表に無い英数字も未対応で、記号は文字そのものになる。
 constexpr std::array<char32_t, 2> group_escapes{U'(', U')'};
 constexpr std::array<char32_t, 5> quantifier_escapes{U'{', U'}', U'+', U'=', U'?'};
@@ -316,6 +319,20 @@ VimPattern::VimPattern(std::vector<VimPatternAtom> atoms, std::vector<VimPattern
 bool VimPattern::is_zero_width(VimPatternAtomKind kind) noexcept
 {
     return zero_width(kind);
+}
+
+std::optional<std::size_t> VimPattern::longest_bytes() const noexcept
+{
+    std::size_t bytes = 0;
+    for (const VimPatternAtom &atom : atoms_)
+    {
+        if (atom.repeated)
+        {
+            return std::nullopt;
+        }
+        bytes += zero_width(atom.kind) ? 0 : longest_code_point;
+    }
+    return bytes;
 }
 
 bool VimPattern::anchored(std::string_view line, const VimPatternAtom &atom, std::size_t at)

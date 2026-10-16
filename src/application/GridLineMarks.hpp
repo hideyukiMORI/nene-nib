@@ -2,6 +2,7 @@
 
 #include "OffsetRange.hpp"
 
+#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -14,5 +15,7 @@ struct GridLineMarks
     core::OffsetRange selection;
     std::vector<core::OffsetRange> matches;
     std::optional<core::OffsetRange> current;
+    // 当たりを照合するのに本文から読んだバイト数（EditorFrame::grid_searched の 1 行ぶん）。
+    std::size_t searched;
 };
 } // namespace nenenib::application

@@ -29,6 +29,7 @@
 #include "FolderBatch.hpp"
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
+#include "GiantLine.hpp"
 #include "ImeStance.hpp"
 #include "LineSpanEvaluation.hpp"
 #include "ModeLabel.hpp"
@@ -771,6 +772,66 @@ composition_view_of(const std::optional<core::Composition> &composition)
     return CompositionView{composition.value().utf8,
                            core::composition_underlines(composition.value()),
                            composition.value().cursor};
+}
+
+// 格子の照合の窓の余裕（#556）。一致の長さの上限が決まらない（`*` の繰り返し）検索は、この余裕の
+// 外へ延びる一致が窓の境目で切れる（text の表示の窓と同じ幅・ADR 0139 の限界）。
+constexpr std::size_t grid_unbounded_margin = core::giant_line_half_width;
+// 窓の前後に読み足すバイト数。窓の端を code point の境目へ寄せる分と、`^` `\<` `\>` が見る
+// 隣の 1 code point の分（UTF-8 で 4 バイトずつ）。
+constexpr std::size_t grid_context_bytes = 8;
+
+// 見えている範囲 visible に余裕 margin を前後に足し、行の内容 [line.begin, line.end) に収めた窓。
+[[nodiscard]] core::OffsetRange
+grid_search_window(core::OffsetRange line, core::OffsetRange visible, std::size_t margin) noexcept
+{
+    const auto begin =
+        visible.begin.value - std::min(visible.begin.value - line.begin.value, margin);
+    const auto end = visible.end.value + std::min(line.end.value - visible.end.value, margin);
+    return core::OffsetRange{core::Offset{begin}, core::Offset{end}};
+}
+
+// bytes の at を code point の始まりへ前に寄せる / 後ろへ寄せる。
+[[nodiscard]] std::size_t boundary_before(std::string_view bytes, std::size_t at) noexcept
+{
+    while (at > 0 && !core::is_boundary(bytes, core::Offset{at}))
+    {
+        --at;
+    }
+    return at;
+}
+
+[[nodiscard]] std::size_t boundary_after(std::string_view bytes, std::size_t at) noexcept
+{
+    while (at < bytes.size() && !core::is_boundary(bytes, core::Offset{at}))
+    {
+        ++at;
+    }
+    return at;
+}
+
+// 窓 window（読んだ bytes の中の位置）の当たりを、窓の前後の 1 code point の文脈を付けて照合し、
+// 本文の位置 read_begin から数えた本文の位置で返す。文脈は読んだ範囲の中だけで、読んだ範囲の端が
+// 行の端なら `^` `$` はそこで当たる。
+[[nodiscard]] std::vector<core::OffsetRange> grid_window_matches(std::string_view bytes,
+                                                                 core::OffsetRange window,
+                                                                 std::size_t read_begin,
+                                                                 const core::VimPattern &pattern)
+{
+    const auto from = boundary_before(bytes, window.begin.value);
+    const auto to = boundary_after(bytes, window.end.value);
+    const auto first = from == 0 ? 0 : core::previous_code_point(bytes, core::Offset{from}).value;
+    const auto last =
+        to == bytes.size() ? to : core::next_code_point(bytes, core::Offset{to}).value;
+    auto matches = core::vim_window_matches(
+        bytes.substr(first, last - first),
+        core::OffsetRange{core::Offset{from - first}, core::Offset{to - first}}, pattern);
+    for (auto &match : matches)
+    {
+        match = core::OffsetRange{core::Offset{read_begin + first + match.begin.value},
+                                  core::Offset{read_begin + first + match.end.value}};
+    }
+    return matches;
 }
 } // namespace
 
@@ -3448,25 +3509,33 @@ EditorController::screen_rows_of(const LineView &shown) const
         TextLayoutRequest{presented_text(shown), state_.settings(), view_geometry_});
 }
 
-GridLineMarks EditorController::grid_marks(core::LineNumber line,
+GridLineMarks EditorController::grid_marks(core::LineNumber line, const core::OffsetRange &visible,
                                            const core::OffsetRange &selection,
-                                           const core::VimPattern *pattern,
-                                           core::Offset caret) const
+                                           const core::VimPattern *pattern) const
 {
-    GridLineMarks marks{selection, {}, std::nullopt};
+    GridLineMarks marks{selection, {}, std::nullopt, 0};
     if (pattern == nullptr)
     {
         return marks;
     }
-    // 照合は行の全体で（`^` `$` は行の端で当たる・line_view と同じ）。塗るのは見えている画面行の
-    // 升へ写した分だけ（GridLineRows）。
+    // 照合は見えている画面行の本文の範囲に一致の長さの上限ぶんの余裕を前後に足した窓だけで、行の
+    // 全体を写さない（#556）。余裕の中で始まる一致は見えている範囲に届かないので、窓の端の文脈で
+    // 偽って当たっても塗られない。窓の始まりの前と終わりの後ろの 1 code point を文脈に読み、
+    // `^` `$` は行の端でだけ当たる。塗るのは見えている画面行の升へ写した分だけ（GridLineRows）。
     const core::TextBuffer &text = state_.text();
-    const core::Offset start = text.line_start(line);
-    const auto content = text.text_range(start, text.line_end(line));
-    for (const auto &match : core::vim_line_matches(content, *pattern))
+    const core::OffsetRange content{text.line_start(line), text.line_end(line)};
+    const auto window = grid_search_window(
+        content, visible, pattern->longest_bytes().value_or(grid_unbounded_margin));
+    const auto read = grid_search_window(content, window, grid_context_bytes);
+    const auto bytes = text.text_range(read.begin, read.end);
+    marks.searched = bytes.size();
+    const core::Offset caret = previewed_offset(state_).value_or(state_.selection().caret);
+    for (const auto &found :
+         grid_window_matches(bytes,
+                             core::OffsetRange{core::Offset{window.begin.value - read.begin.value},
+                                               core::Offset{window.end.value - read.begin.value}},
+                             read.begin.value, *pattern))
     {
-        const core::OffsetRange found{core::Offset{start.value + match.begin.value},
-                                      core::Offset{start.value + match.end.value}};
         if (found.begin.value >= found.end.value)
         {
             continue;
@@ -3503,9 +3572,6 @@ std::optional<TextLayoutFailure> EditorController::grid_visible_rows(EditorFrame
         pattern.has_value()
             ? std::visit([](const auto &value) { return &frame_pattern(value); }, pattern.value())
             : nullptr;
-    const core::Offset found = selected != nullptr
-                                   ? previewed_offset(state_).value_or(state_.selection().caret)
-                                   : state_.selection().caret;
     // 画面の下に半分かかる画面行も描く（text と同じ）。
     const auto limit = scroll.visible_lines + 1;
     std::size_t screen = 0;
@@ -3516,10 +3582,14 @@ std::optional<TextLayoutFailure> EditorController::grid_visible_rows(EditorFrame
         const auto count = cells.value().rows(line);
         const auto from = std::min(first_row, count - 1);
         const auto take = std::min(count - from, limit - screen);
-        GridLineRows(
-            GridLineSource{state_, cells.value(), line, from, from + take,
-                           static_cast<std::int64_t>(screen),
-                           grid_marks(line, block_row(block, line, range), selected, found), caret})
+        const core::OffsetRange visible{
+            cells.value().byte_of(line, core::GridPoint{from, 0}),
+            cells.value().byte_of(line, core::GridPoint{from + take, 0})};
+        auto marks = grid_marks(line, visible, block_row(block, line, range), selected);
+        frame.grid_searched += marks.searched;
+        GridLineRows(GridLineSource{state_, cells.value(), line, from, from + take,
+                                    static_cast<std::int64_t>(screen), visible, std::move(marks),
+                                    caret})
             .append_to(frame.grid);
         screen += take;
         first_row = 0;

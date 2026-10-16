@@ -360,10 +360,12 @@ class EditorController final
     // 位置解決と同じ GridCells（本文の索引を借りる）を 1 frame に 1 つ作って切り出す。
     // 失敗は升を読めないとき。
     [[nodiscard]] std::optional<TextLayoutFailure> grid_visible_rows(EditorFrame &frame) const;
-    [[nodiscard]] GridLineMarks grid_marks(core::LineNumber line,
+    // 1 行の塗る範囲。検索の当たりは見えている画面行の本文の範囲 visible に、
+    // 一致の長さの上限ぶんの余裕を前後に足した窓だけを読んで照合する（#556）。
+    // 今の当たりはキャレット（incsearch の入力中は preview の当たり）を含む当たり。
+    [[nodiscard]] GridLineMarks grid_marks(core::LineNumber line, const core::OffsetRange &visible,
                                            const core::OffsetRange &selection,
-                                           const core::VimPattern *pattern,
-                                           core::Offset caret) const;
+                                           const core::VimPattern *pattern) const;
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。
     [[nodiscard]] std::optional<CompositionView> composed() const;
