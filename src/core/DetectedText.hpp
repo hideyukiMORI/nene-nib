@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SealedBytes.hpp"
 #include "TextEncoding.hpp"
 
 #include <expected>
@@ -14,6 +15,10 @@ class DetectedText final
   public:
     [[nodiscard]] static std::expected<DetectedText, EncodingFailure>
     from_bytes(std::string_view bytes);
+    // 封印済みの列は可変の別名を持たないので、判定した列をそのまま move で保持する（ADR 0141 決定
+    // 3）。
+    [[nodiscard]] static std::expected<DetectedText, EncodingFailure>
+    from_sealed(SealedBytes &&bytes);
     [[nodiscard]] TextEncoding encoding() const noexcept;
     [[nodiscard]] std::string_view bytes() const & noexcept;
     [[nodiscard]] std::string_view bytes() const && = delete;
