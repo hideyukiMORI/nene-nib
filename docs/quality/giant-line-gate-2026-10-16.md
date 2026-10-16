@@ -75,3 +75,20 @@ Issue #513 / #527 / #528 / #529 / #531。施主の実機（i9-10850K・RTX 3090�
 | key-to-frame-single-giant-line-16mib（いいえ） | 2.173 ms（1.835〜2.178） | #557 の 2.154 と同等 |
 
 記録: `out/speed/2026-10-16T09-03-04Z.json`（8 本）、`D:/NeNeNib/worktrees/569-unify/out/speed/2026-10-16T09-03-37Z`〜`09-04-12Z.json`（巨大 1 行 4 本）。ログ `D:/NeNeNib/outputs/20261016/gate-579.log`・`giant-579.log`。基準値（D52）の採用は merge 後。
+
+## 深夜 — #585 / #587 / #588 / #590 の正式ゲート（5 試行・静かな機械・負荷 3%）
+
+| ベンチ | #585（base main） | #587（base #477） | #588（base #560） | #590（base #589・#579 の上） |
+|---|---|---|---|---|
+| startup-first-frame | 193.8 | 193.4 | 192.0 | 191.7 |
+| startup-window-shown | 33.3 | 33.1 | 31.5 | 31.4 |
+| key-to-frame-single | 0.655 | 0.638 | 0.651 | 0.641 |
+| key-to-frame-burst-200 | 11.9（既存超過） | **2.12** | 11.2（既存超過） | 10.6（既存超過） |
+| open-large-file-16mib | 201.4（`document_opened` **8.3**） | 202.3（11.2） | 213.2 | 213.8 |
+| key-to-frame-burst-200-16mib | 14.9（既存超過） | **2.21** | 14.9（既存超過） | 15.0（既存超過） |
+| key-to-frame-palette-5000 | 1.710 | 1.683 | 1.665 | 1.741 |
+| key-to-frame-single-long-line | 6.288 | 6.038 | 6.281 | **1.967** |
+| open-giant-line-16mib（はい / いいえ） | — | — | 310.7 / 311.4 | 311.0 / 312.9 |
+| key-to-frame-single-giant-line-16mib（はい / いいえ） | — | — | 0.959 / 2.165 | 1.108 / 2.246 |
+
+連打 2 本の超過は main と同じ既存の超過で #477 が直す（#587 は #477 の上なので基準内）。ログ `D:/NeNeNib/outputs/20261016/gate-{585,587,588,590}.log`・`gates-late.log`。
