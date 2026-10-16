@@ -66,8 +66,7 @@ constexpr std::string_view space = " ";
 } // namespace
 
 GridLineRows::GridLineRows(const GridLineSource &source)
-    : source_(source), columns_(std::max<std::size_t>(source.index.columns(), 1)),
-      last_row_(source.first_row)
+    : source_(source), columns_(source.cells.columns()), last_row_(source.first_row)
 {
     for (auto row = source.first_row; row < source.end_row; ++row)
     {
@@ -99,12 +98,11 @@ void GridLineRows::walk()
 {
     const auto &text = source_.state.text();
     const auto end = text.line_end(source_.line);
-    const auto begin = core::grid_byte_of(source_.index, text, source_.line,
-                                          core::GridPoint{source_.first_row, 0});
-    const auto next =
-        core::grid_byte_of(source_.index, text, source_.line, core::GridPoint{source_.end_row, 0});
+    auto &cells = source_.cells;
+    const auto begin = cells.byte_of(source_.line, core::GridPoint{source_.first_row, 0});
+    const auto next = cells.byte_of(source_.line, core::GridPoint{source_.end_row, 0});
     const core::Offset stop{std::max(std::min(next.value + peek_bytes, end.value), begin.value)};
-    const auto cursor = source_.index.cursor_at(text, begin);
+    const auto cursor = cells.cursor_at(source_.line, begin);
     column_ = cursor.column;
     cell_ = cursor.cell;
     const auto bytes = text.text_range(begin, stop);

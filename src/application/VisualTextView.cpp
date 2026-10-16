@@ -98,7 +98,7 @@ bool VisualTextView::gridded() const noexcept
     return state_.display() == core::DisplayForm::grid && geometry_.width > 0;
 }
 
-std::expected<GridCells, TextLayoutFailure> VisualTextView::grid() const
+std::expected<GridCells, TextLayoutFailure> VisualTextView::grid_cells() const
 {
     if (grid_columns_ == 0)
     {
@@ -115,7 +115,7 @@ std::expected<GridCells, TextLayoutFailure> VisualTextView::grid() const
 std::expected<std::size_t, TextLayoutFailure>
 VisualTextView::grid_rows(core::LineNumber number) const
 {
-    auto cells = grid();
+    auto cells = grid_cells();
     if (!cells)
     {
         return std::unexpected(cells.error());
@@ -124,32 +124,26 @@ VisualTextView::grid_rows(core::LineNumber number) const
     return cells.value().rows(number);
 }
 
-std::expected<std::reference_wrapper<const core::VirtualColumnIndex>, TextLayoutFailure>
-VisualTextView::grid_index() const
-{
-    if (!grid_.has_value())
-    {
-        return std::unexpected(grid_failure_.value_or(TextLayoutFailure::unavailable));
-    }
-    return std::cref(grid_.value());
-}
-
 // 行頭に立つ trailing のキャレットは前の画面行の右端に描く（文字組みの hit と同じ見え方）。
-std::expected<core::GridPoint, TextLayoutFailure>
-VisualTextView::grid_point(core::TextCaret caret) const
+core::GridPoint VisualTextView::grid_point(GridCells &cells, core::TextCaret caret) const
 {
-    auto cells = grid();
-    if (!cells)
-    {
-        return std::unexpected(cells.error());
-    }
-    const auto &text = state_.text();
-    auto point = cells.value().point_of(caret.position.line, text.offset_of(caret.position));
+    auto point = cells.point_of(caret.position.line, state_.text().offset_of(caret.position));
     if (caret.affinity == core::CaretAffinity::trailing && point.cell == 0 && point.row > 0)
     {
         point = core::GridPoint{point.row - 1, grid_columns_};
     }
     return point;
+}
+
+std::expected<core::GridPoint, TextLayoutFailure>
+VisualTextView::grid_point(core::TextCaret caret) const
+{
+    auto cells = grid_cells();
+    if (!cells)
+    {
+        return std::unexpected(cells.error());
+    }
+    return grid_point(cells.value(), caret);
 }
 
 std::expected<core::TextLocation, TextLayoutFailure>
@@ -168,7 +162,7 @@ VisualTextView::grid_location(core::TextCaret caret) const
 std::expected<core::TextCaret, TextLayoutFailure>
 VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
 {
-    auto cells = grid();
+    auto cells = grid_cells();
     if (!cells)
     {
         return std::unexpected(cells.error());

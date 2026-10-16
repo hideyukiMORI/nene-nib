@@ -35,8 +35,8 @@ above stay the default set and the only ones compare() judges:
                             window thread went quiet, so the single is measured after the warmup's
                             frame; a single that is not answered within LARGE_SECONDS is missing
 
-Both giant benches answer the grid question (ADR 0140 decision 2) that the editor puts up after its
-first frame: --grid-answer yes (the default, ADR 0140 decision 8) opens the document as the grid,
+Both giant benches answer the grid question (ADR 0140 decision 2) that the editor puts up before it
+lays out the body: --grid-answer yes (the default, ADR 0140 decision 8) opens the document as the grid,
 --grid-answer no keeps it as text. A trial in which the question never comes up is missing.
 
 --bench selects the stimulus to measure and the value to record, compare or adopt. Without it,
@@ -722,9 +722,10 @@ def bench_giant_open(executable: Path, environment: dict, folder: Path,
     The window is asked to close at once as in bench_large_file, and the process gets
     LARGE_SECONDS to present its first frame and exit; one that does not is killed by stop() and
     the trial is missing (ADR 0138 decision 4), as is a finished file without frame_presented.
-    The grid question that follows the first frame is answered first (grid is "yes"); a trial in
-    which it never comes up is missing. The value is still the first frame (processCreation to
-    frame_presented), which the editor presents before it asks.
+    The grid question is answered first (grid is "yes"); a trial in which it never comes up is
+    missing. The value is the first frame (processCreation to frame_presented), which the editor
+    presents while the question waits, without the body (ADR 0140 decision 2): it does not include
+    laying out the body under either answer.
     """
     report = report_path(folder, "giant")
     process, window, _ = start(executable, environment,

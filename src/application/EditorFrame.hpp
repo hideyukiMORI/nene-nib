@@ -99,6 +99,9 @@ struct EditorFrame
     // 格子の見えている画面行（ADR 0140 の決定 5）。display が grid のときだけ値を持ち、lines は空。
     // 画面の下に半分かかる画面行も含む。
     std::vector<GridRowView> grid{};
+    // grid を作るのに 1 文字ずつ歩いた塊の部分の数（GridCells::scanned・数える口）。ASCII の行は
+    // 割り算だけなので 0。
+    std::size_t grid_scanned = 0;
 };
 
 // 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは
