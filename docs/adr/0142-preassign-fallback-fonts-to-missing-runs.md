@@ -18,7 +18,7 @@ ADR 0071 は字体の選択を OS の `MapCharacters` だけに固定し、同�
 3. **連続区間ごとに OS の `MapCharacters` を 1 回ずつ呼び、`mappedLength` の分だけ当てる。** 呼ぶのは ADR 0071 の `FontFallbackCache` 経由（要求の全文は区間の文字列・locale と書式の weight / style / stretch は layout と同じ）。返った `IDWriteFont` の family 名を `SetFontFamilyName(range)` で当て、weight / style / stretch が書式と違えば同じ範囲に当て、`scale` が 1 でなければ `SetFontSize(size × scale, range)`。`mappedLength` が区間より短ければ残りで繰り返す。font が null（どの字体にも無い）なら何も当てない（DirectWrite が今までどおり欠字の字形を出す）。字体を選ぶ規則は増やさない（ADR 0071）。
 4. **区間の数に上限を置く。** 1 行の区間が `fallback_range_limit`（最初は 4,096）を超えたら、超えた分は当てずに DirectWrite の代替に任せる（巨大な行の窓は 16,384 文字なので上限に届き得る・費用が線形に戻るだけで意味は同じ）。上限は定数 1 つ。
 5. **`FontFallbackCache` はそのまま残す。** 当てなかった範囲（上限超・null の字体・判定の表に無い astral の文字など）は今までどおり DirectWrite が保持つきの代替を呼ぶ。経路は 2 本にならない（選ぶのは OS・保持は 1 つ・当てる場所は 1 つ）。
-6. **採用の条件は画素と位置の一致。** (a) `tests/ui` の契約: 日本語・混在・絵文字（ZWJ の連なり・国旗・VS16）・結合文字・ハングル・Tab 入り・双方向の見本で、当てた layout と当てない layout の **全 UTF-16 位置の `HitTestTextPosition` と字形の収集結果（face・index・advance・offset・origin）が一致**する。(b) `eng/compare-frames.py` で、長い行のベンチの文書・`verify-window --capture --keys` の日本語と IME の節・堅牢性の入力（`flags-100k` / `zwj-100k` / 混在）の PNG が前後で差 0。どちらかが崩れたら採用せず、差の出た見本と理由を ADR に `hold` として書く（ADR 0075 の形）。
+6. **採用の条件は画素と位置の一致。** (a) `tests/ui` の契約: 日本語・混在・絵文字（ZWJ の連なり・国旗・VS16）・結合文字・ハングル・Tab 入り・双方向の見本で、当てた layout と当てない layout の **全 UTF-16 位置の `HitTestTextPosition` と字形の列（face・字形番号・送り・offset・絶対位置）が一致**し、行数と幅も一致する。字形の列は run を順に一列に並べたもので、run の区切りは DirectWrite が文字種で切るのに対し当てた側は同じ字体がつながるので比べない。offset の null は 0 の配列と同じとみなし、位置（`HitTestTextPosition` と絶対 x・y）は float の丸め |a − b| ≤ 2 × FLT_EPSILON × max(|a|, |b|) を許す。(b) `eng/compare-frames.py` で、長い行のベンチの文書・`verify-window --capture --keys` の日本語と IME の節・堅牢性の入力（`flags-100k` / `zwj-100k` / 混在）の PNG が前後で差 0。どちらかが崩れたら採用せず、差の出た見本と理由を ADR に `hold` として書く（ADR 0075 の形）。
 7. **速さは正式ゲートで示す。** `key-to-frame-single-long-line` が基準（約 6 ms）から 1 ms 台へ下がり、ほかの 7 本と巨大 1 行の 2 本に退行が無いこと（5 試行・静かな機械・QLT-014）。基準値の更新は merge 後（D52 / D41 の形）。
 
 ## 却下した選択肢
@@ -33,4 +33,6 @@ ADR 0071 は字体の選択を OS の `MapCharacters` だけに固定し、同�
 
 - 当てた字体は「OS が今日選ぶ字体」で、OS の字体の表が変われば変わる（DirectWrite の代替と同じ依存）。
 - `HasCharacter` の表は書式ごとに作る。最初の行で BMP の bitset（8 KiB）を埋める費用は code point の出現ごとの遅延評価にする（全 BMP を一度に問い合わせない）。
+- 折り返さない行の遠い位置（約 8,000 px 先）では、run の区切りが違うので位置の累積の丸めが float の 1 ulp（約 0.001 px）違うことがある（#586 の実測）。
+- 折り返さない行では隣の run がつながるので、ADR 0073 の「完全に画面外の run を除く」が効きにくくなる（ベンチの行で 2 run / 1,007 字形・画面外の約 960 字形を描画に渡す）。run の中の画面外の字形を収集で切る工程 2 が別にある。
 - 絵文字の色の字形（COLR）や縦書きは今日の製品に無く、契約の見本にも入れない。
