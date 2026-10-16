@@ -1,5 +1,6 @@
 #pragma once
 #include "BodyGlyphRun.hpp"
+#include <limits>
 #include <optional>
 #include <wrl/implements.h>
 namespace nenenib::ui::win32
@@ -9,7 +10,11 @@ class BodyGlyphCollector final
           Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IDWriteTextRenderer>
 {
   public:
-    explicit BodyGlyphCollector(FLOAT width, FLOAT left = 0);
+    // top / bottom は描く範囲の縦（layout の座標）。既定は上下に限りなし（位置解決など、
+    // 描く範囲を渡さない呼び手は今までどおり縦に除かない）。
+    explicit BodyGlyphCollector(FLOAT width, FLOAT left = 0,
+                                FLOAT top = std::numeric_limits<FLOAT>::lowest(),
+                                FLOAT bottom = std::numeric_limits<FLOAT>::max());
     // 集めた字形。未対応の callback を 1 つでも受けたら（棄却の印）、部分の字形を渡さず nullopt。
     // IDWriteTextLayout::Draw は callback の HRESULT を無視して S_OK を返すので、
     // 字形で描けるかはここだけが決める（ADR 0073 の追記）。
@@ -30,12 +35,14 @@ class BodyGlyphCollector final
                                                BOOL, IUnknown *) noexcept override;
 
   private:
-    [[nodiscard]] bool outside(const DWRITE_GLYPH_RUN &run, FLOAT x) const;
+    [[nodiscard]] bool outside(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin) const;
     HRESULT collect(const DWRITE_GLYPH_RUN &run, D2D1_POINT_2F origin, DWRITE_MEASURING_MODE mode);
     // 失敗の HRESULT なら棄却の印を立てる。HRESULT はそのまま返す。
     HRESULT settle(HRESULT result) noexcept;
     FLOAT width_;
     FLOAT left_;
+    FLOAT top_;
+    FLOAT bottom_;
     std::vector<BodyGlyphRun> runs_;
     bool rejected_ = false;
 };

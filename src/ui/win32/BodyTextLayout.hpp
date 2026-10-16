@@ -5,6 +5,7 @@
 #include "LayoutRect.hpp"
 
 #include <dwrite.h>
+#include <limits>
 #include <string>
 #include <wrl/client.h>
 
@@ -28,5 +29,8 @@ struct BodyTextLayout
     // 巨大な行の窓の layout は折り返さない（ADR 0139 の決定 4）。同じ文字列でも折り返す layout
     // とは別。
     bool unwrapped = false;
+    // 字形を集めた縦の範囲（layout の座標）。範囲が変われば集め直す（#528）。
+    float glyph_top = std::numeric_limits<float>::lowest();
+    float glyph_bottom = std::numeric_limits<float>::max();
 };
 } // namespace nenenib::ui::win32

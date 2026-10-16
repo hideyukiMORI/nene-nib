@@ -162,6 +162,19 @@ constexpr float full_channel = 255.0F;
     }
     std::unreachable();
 }
+// 描く範囲の縦を layout の座標へ写す。行の全体が範囲に入るなら限りなしにして、
+// 普通の行の字形の保持を今までどおり使い回す（#528・ADR 0073 の保守的な除外に縦を足す）。
+[[nodiscard]] std::pair<float, float> drawn_rows(const core::LayoutRect &area, std::int32_t top,
+                                                 std::int32_t bottom)
+{
+    const auto from = static_cast<float>(top) - static_cast<float>(area.top);
+    const auto to = static_cast<float>(bottom) - static_cast<float>(area.top);
+    if (from <= 0 && to >= static_cast<float>(core::height_of(area)))
+    {
+        return {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max()};
+    }
+    return {from, to};
+}
 } // namespace
 
 Direct2DRenderer::Direct2DRenderer(BodyTextLayouts &text_layouts) : body_text_(text_layouts) {}
@@ -759,7 +772,8 @@ void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::Layou
 {
     const auto left =
         std::max(static_cast<float>(core::width_of(area)) - text->GetMaxWidth(), 0.0F);
-    const auto *entry = body_text_.glyphs_of(text, left);
+    const auto [top, bottom] = drawn_rows(area, body_top_, body_bottom_);
+    const auto *entry = body_text_.glyphs_of(text, left, top, bottom);
 
     const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
     if (entry == nullptr || !entry->glyphs_ready)
@@ -1302,6 +1316,8 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
     }
     const core::LayoutRect visible{body.band.left, body.content.top, body.band.right,
                                    body.band.bottom};
+    body_top_ = body.content.top;
+    body_bottom_ = body.content.bottom;
     context_->PushAxisAlignedClip(to_rect(visible), D2D1_ANTIALIAS_MODE_ALIASED);
     for (std::size_t index = 0; index < frame.lines.size(); ++index)
     {
@@ -1309,6 +1325,8 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
     }
     draw_grid_rows(frame, body);
     context_->PopAxisAlignedClip();
+    body_top_ = std::numeric_limits<std::int32_t>::min();
+    body_bottom_ = std::numeric_limits<std::int32_t>::max();
 }
 
 void Direct2DRenderer::draw_body_guide(const application::EditorFrame &frame,
