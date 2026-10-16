@@ -521,10 +521,10 @@ void verify_recency_ranked()
     ScriptedFolders folders;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
-    const EditorController controller(EditorPorts{appearance, clipboard, files, code_pages,
-                                                  settings, themes, session, history, folders,
-                                                  bookmarks, text_layouts},
-                                      initial);
+    EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
+                                            themes, session, history, folders, bookmarks,
+                                            text_layouts},
+                                initial);
     return controller.frame();
 }
 

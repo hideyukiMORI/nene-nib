@@ -112,7 +112,7 @@ framed_rows(FrameRowsWorkload workload, const std::string &input, application::T
     const std::size_t index = rows_index(workload);
     Editing editing;
     prepare_rows(editing, index, input);
-    const auto &controller = editing.controller();
+    auto &controller = editing.controller();
     if (!rows_equal(controller.frame(), index))
     {
         return std::unexpected(ProbeFailure::wrong_result);

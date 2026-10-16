@@ -136,7 +136,7 @@ void prepare_document(Editing &editing, FrameDocumentWorkload workload, const st
            frame.status_items.at(2U).text() == ending;
 }
 
-[[nodiscard]] bool controller_equal(const application::EditorController &controller,
+[[nodiscard]] bool controller_equal(application::EditorController &controller,
                                     FrameDocumentWorkload workload, const std::string &input)
 {
     const auto documents = controller.documents();
@@ -183,7 +183,7 @@ std::expected<std::uint64_t, ProbeFailure> framed_documents(FrameDocumentWorkloa
     }
     Editing editing;
     prepare_document(editing, workload, input);
-    const auto &controller = editing.controller();
+    auto &controller = editing.controller();
     const auto initial = controller.frame();
     const auto delivered = controller.delivery();
     if (!frame_equal(initial, workload, input) || !controller_equal(controller, workload, input))

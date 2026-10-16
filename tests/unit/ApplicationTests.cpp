@@ -78,6 +78,7 @@
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
@@ -389,15 +390,15 @@ void verify_controller_initial_appearance()
     ScriptedFolders folders;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
-    const EditorController from_light(
+    EditorController from_light(
         nenenib::application::EditorPorts{light, board, files, code_pages, settings, themes,
                                           session, history, folders, bookmarks, text_layouts});
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
     ScriptedAppearance dark{Reading{Appearance::dark}};
-    const EditorController from_dark(
-        nenenib::application::EditorPorts{dark, board, files, code_pages, settings, themes, session,
-                                          history, folders, bookmarks, text_layouts});
+    EditorController from_dark(nenenib::application::EditorPorts{dark, board, files, code_pages,
+                                                                 settings, themes, session, history,
+                                                                 folders, bookmarks, text_layouts});
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
 }
@@ -419,7 +420,7 @@ void verify_controller_read_failures()
          {AppearanceReadFailure::unavailable, AppearanceReadFailure::unreadable})
     {
         ScriptedAppearance port{Reading{std::unexpect, failure}};
-        const EditorController controller(
+        EditorController controller(
             nenenib::application::EditorPorts{port, board, files, code_pages, settings, themes,
                                               session, history, folders, bookmarks, text_layouts});
         expect(controller.frame().palette.background == dark.background,
@@ -844,6 +845,94 @@ void verify_controller_scrolling()
     expect(controller.frame().lines.size() == 1, "a window with no room still shows one line");
     applied(controller, MoveCaret{CaretMotion::document_start, SelectionAnchoring::collapse});
     expect(controller.frame().first_visible == LineNumber{1}, "the caret pulls the window back up");
+}
+
+// 意図を 1 つ送る。framed_each なら 1 意図ごとに frame を読み（即時の追従と同じ観測）、そうで
+// なければ frame を読まない（applied は frame を読むので使わない）。
+void send_intent(EditorController &controller, bool framed_each,
+                 const nenenib::application::EditorIntent &intent)
+{
+    if (framed_each)
+    {
+        static_cast<void>(controller.apply_frame(intent));
+        return;
+    }
+    static_cast<void>(controller.apply(intent));
+}
+
+// 追従は頼むだけで、frame を読むときに 1 回だけ解決する（ADR 0128）。200 打鍵を 1 枚の frame で
+// 読んでも、1 打鍵ごとに frame を読んだときと同じ所が見える。打鍵だけでは layout を作らない。
+[[nodiscard]] EditorFrame typed_burst(Editing &editing, bool framed_each)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{40, 20, 96}});
+    const std::size_t before = editing.text_layouts().requests();
+    for (std::size_t typed = 1; typed <= 200; ++typed)
+    {
+        send_intent(controller, framed_each, InsertText{"x"});
+        if (typed % 50 == 25)
+        {
+            send_intent(controller, framed_each, NewLine{});
+        }
+    }
+    if (!framed_each)
+    {
+        expect(editing.text_layouts().requests() == before,
+               "typing alone lays nothing out; the caret follow waits for the frame");
+    }
+    return controller.frame();
+}
+
+void verify_follow_settles_at_frame()
+{
+    Editing each;
+    Editing burst;
+    const auto framed = typed_burst(each, true);
+    const auto settled = typed_burst(burst, false);
+    expect(!framed.lines.empty() && !settled.lines.empty(), "both views show lines");
+    expect(framed.first_visible == settled.first_visible &&
+               framed.lines.front().screen_row == settled.lines.front().screen_row,
+           "one frame after 200 keys shows what a frame after every key shows");
+    expect(settled.first_visible.value > 1, "the frame resolved the follow and scrolled down");
+    const std::size_t read = burst.text_layouts().requests();
+    const auto again = burst.controller().frame();
+    expect(again.first_visible == settled.first_visible &&
+               again.lines.front().screen_row == settled.lines.front().screen_row,
+           "reading the frame again keeps the settled scroll");
+    expect(burst.text_layouts().requests() > read, "the frame still lays out its visible lines");
+}
+
+// incsearch の origin は解決済みのスクロール（ADR 0128 の決定 2）。追従を頼んだまま検索を開いて
+// 取り消しても、1 意図ごとに frame を読んだときと同じ所へ戻る。
+[[nodiscard]] EditorFrame searched_and_cancelled(Editing &editing, bool framed_each)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{40, 20, 96}});
+    const auto send = [&controller, framed_each](const nenenib::application::EditorIntent &intent)
+    { send_intent(controller, framed_each, intent); };
+    for (std::size_t line = 0; line < 12; ++line)
+    {
+        send(InsertText{"ab"});
+        send(NewLine{});
+    }
+    send(SelectEditMode{EditMode::vim});
+    send(VimKeyPress{VimKey{VimCharacter{U'/'}}});
+    send(VimKeyPress{VimKey{VimCharacter{U'z'}}});
+    send(VimKeyPress{VimKey{nenenib::core::VimSpecialKey::escape}});
+    return controller.frame();
+}
+
+void verify_follow_settles_before_search_origin()
+{
+    Editing each;
+    Editing burst;
+    const auto framed = searched_and_cancelled(each, true);
+    const auto settled = searched_and_cancelled(burst, false);
+    expect(framed.first_visible.value > 1, "typing twelve lines scrolled the window down");
+    expect(!framed.lines.empty() && !settled.lines.empty() &&
+               framed.first_visible == settled.first_visible &&
+               framed.lines.front().screen_row == settled.lines.front().screen_row,
+           "the incsearch origin holds the settled scroll, not the one before the follow");
 }
 
 void verify_controller_frame()
@@ -1479,6 +1568,8 @@ void verify_controller_intents()
     verify_controller_paste_line_endings();
     verify_controller_paste_undo_and_failure();
     verify_controller_scrolling();
+    verify_follow_settles_at_frame();
+    verify_follow_settles_before_search_origin();
     verify_document_read_contracts();
     verify_document_failure_clearing();
     verify_vim_engine();
