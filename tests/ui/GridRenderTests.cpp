@@ -1,11 +1,11 @@
 // 格子の描画（ADR 0140 の決定 5・#546）の契約。製品と同じ GridRowPainter を替え玉の描画先
-// （GridCountingTarget・#531 の形）に通し、見えている画面行の数だけ layout を作ること、塗る矩形が
+// （CountingTarget・#531 の形）に通し、見えている画面行の数だけ layout を作ること、塗る矩形が
 // 升の範囲から来ること（画面行をまたぐ当たりは 2 つ）を数える。字形が升の左端に立つこと（幅 2 は
 // 2 升・幅 0 は前の升）は本物の DirectWrite の layout
 // で測る（フォントに依るので環境依存・QLT-013）。
 #include "BodyTextLayouts.hpp"
+#include "CountingTarget.hpp"
 #include "GridCountingLayouts.hpp"
-#include "GridCountingTarget.hpp"
 #include "GridRowPainter.hpp"
 #include "WindowChecks.hpp"
 
@@ -29,7 +29,7 @@ namespace
 namespace core = nenenib::core;
 namespace app = nenenib::application;
 namespace win32 = nenenib::ui::win32;
-using Painter = win32::GridRowPainter<GridCountingTarget, GridCountingLayouts>;
+using Painter = win32::GridRowPainter<CountingTarget, GridCountingLayouts>;
 
 constexpr std::int32_t row_height = 20;
 constexpr core::TextViewGeometry geometry{800, row_height, 96};
@@ -96,7 +96,7 @@ std::optional<RECT> painted(Painter &painter, const app::GridRowView &row, float
 void verify_layout_per_row(win32::BodyTextLayouts &layouts, float cell,
                            const core::EditorSettings &settings)
 {
-    GridCountingTarget target;
+    CountingTarget target;
     GridCountingLayouts counting(layouts);
     std::optional<win32::RenderFailure> failure;
     Painter painter(target, nullptr, counting, failure);
@@ -116,7 +116,7 @@ void verify_layout_per_row(win32::BodyTextLayouts &layouts, float cell,
 void verify_glyph_lefts(win32::BodyTextLayouts &layouts, float cell,
                         const core::EditorSettings &settings)
 {
-    GridCountingTarget target;
+    CountingTarget target;
     GridCountingLayouts counting(layouts);
     std::optional<win32::RenderFailure> failure;
     Painter painter(target, nullptr, counting, failure);
@@ -189,7 +189,7 @@ void verify_cell_positions(win32::BodyTextLayouts &layouts, float cell)
 void verify_crossing_match(win32::BodyTextLayouts &layouts, float cell,
                            const core::EditorSettings &settings)
 {
-    GridCountingTarget target;
+    CountingTarget target;
     GridCountingLayouts counting(layouts);
     std::optional<win32::RenderFailure> failure;
     Painter painter(target, nullptr, counting, failure);
@@ -215,7 +215,7 @@ void verify_crossing_match(win32::BodyTextLayouts &layouts, float cell,
 void verify_block_caret(win32::BodyTextLayouts &layouts, float cell,
                         const core::EditorSettings &settings)
 {
-    GridCountingTarget target;
+    CountingTarget target;
     GridCountingLayouts counting(layouts);
     std::optional<win32::RenderFailure> failure;
     Painter painter(target, nullptr, counting, failure);
