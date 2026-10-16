@@ -1,7 +1,6 @@
 #include "VisualTextView.hpp"
 
 #include "ComposedLine.hpp"
-#include "Grid.hpp"
 #include "GridPoint.hpp"
 #include "ScrollBounds.hpp"
 #include "Utf8.hpp"
@@ -57,8 +56,7 @@ VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts
     {
         return;
     }
-    // 1 升の幅は ui の事実なので port から読む（ADR 0140・試作の D）。升の数は窓の幅に入る数で、
-    // 幅が替われば累積も作り直す（VirtualColumnIndex::for_grid）。
+    // 1 升の幅は ui の事実なので port から読む（ADR 0140・試作の D）。升の数は窓の幅に入る数。
     const auto cell = layouts_.cell(TextLayoutRequest{{}, state_.settings(), geometry_});
     if (!cell)
     {
@@ -66,9 +64,8 @@ VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts
         return;
     }
     cell_width_ = cell.value().width;
-    const auto columns =
+    grid_columns_ =
         static_cast<std::size_t>(std::max(static_cast<float>(geometry_.width) / cell_width_, 1.0F));
-    grid_ = core::VirtualColumnIndex::for_grid(state_.text(), columns);
 }
 
 LineView VisualTextView::line_of(const EditorState &state, core::LineNumber number)
@@ -101,33 +98,46 @@ bool VisualTextView::gridded() const noexcept
     return state_.display() == core::DisplayForm::grid && geometry_.width > 0;
 }
 
-std::expected<std::size_t, TextLayoutFailure>
-VisualTextView::grid_rows(core::LineNumber number) const
+std::expected<GridCells, TextLayoutFailure> VisualTextView::grid() const
 {
-    if (!grid_.has_value())
+    if (grid_columns_ == 0)
     {
         return std::unexpected(grid_failure_.value_or(TextLayoutFailure::unavailable));
     }
-    const auto &text = state_.text();
-    number.value = std::clamp<std::size_t>(number.value, 1, text.line_count());
-    const auto &index = grid_.value();
-    return core::grid_rows(index.cursor_at(text, text.line_end(number)).cell, index.columns());
+    const auto index = state_.text().virtual_columns();
+    if (!index)
+    {
+        return std::unexpected(TextLayoutFailure::unavailable);
+    }
+    return GridCells{index.value().get(), state_.text(), grid_columns_};
+}
+
+std::expected<std::size_t, TextLayoutFailure>
+VisualTextView::grid_rows(core::LineNumber number) const
+{
+    auto cells = grid();
+    if (!cells)
+    {
+        return std::unexpected(cells.error());
+    }
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    return cells.value().rows(number);
 }
 
 // 行頭に立つ trailing のキャレットは前の画面行の右端に描く（文字組みの hit と同じ見え方）。
 std::expected<core::TextLocation, TextLayoutFailure>
 VisualTextView::grid_location(core::TextCaret caret) const
 {
-    if (!grid_.has_value())
+    auto cells = grid();
+    if (!cells)
     {
-        return std::unexpected(grid_failure_.value_or(TextLayoutFailure::unavailable));
+        return std::unexpected(cells.error());
     }
     const auto &text = state_.text();
-    const auto &index = grid_.value();
-    auto point = core::grid_cell_of(index, text, text.offset_of(caret.position));
+    auto point = cells.value().point_of(caret.position.line, text.offset_of(caret.position));
     if (caret.affinity == core::CaretAffinity::trailing && point.cell == 0 && point.row > 0)
     {
-        point = core::GridPoint{point.row - 1, index.columns()};
+        point = core::GridPoint{point.row - 1, grid_columns_};
     }
     return core::TextLocation{point.row, static_cast<float>(point.cell) * cell_width_};
 }
@@ -136,21 +146,19 @@ VisualTextView::grid_location(core::TextCaret caret) const
 std::expected<core::TextCaret, TextLayoutFailure>
 VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
 {
-    const auto rows = grid_rows(at.line);
-    if (!rows || !grid_.has_value())
+    auto cells = grid();
+    if (!cells)
     {
-        return std::unexpected(rows ? TextLayoutFailure::unavailable : rows.error());
+        return std::unexpected(cells.error());
     }
     const auto &text = state_.text();
-    const auto &index = grid_.value();
     const core::LineNumber number{std::clamp<std::size_t>(at.line.value, 1, text.line_count())};
-    const auto columns = index.columns();
-    const auto nearest =
-        std::clamp((std::max(x, 0.0F) / cell_width_) + 0.5F, 0.0F, static_cast<float>(columns));
-    const core::GridPoint point{std::min(at.row, rows.value() - 1),
-                                static_cast<std::size_t>(nearest)};
-    const auto offset = core::grid_byte_of(index, text, number, point);
-    const auto affinity = point.cell == columns && offset != text.line_end(number)
+    const auto rows = cells.value().rows(number);
+    const auto nearest = std::clamp((std::max(x, 0.0F) / cell_width_) + 0.5F, 0.0F,
+                                    static_cast<float>(grid_columns_));
+    const core::GridPoint point{std::min(at.row, rows - 1), static_cast<std::size_t>(nearest)};
+    const auto offset = cells.value().byte_of(number, point);
+    const auto affinity = point.cell == grid_columns_ && offset != text.line_end(number)
                               ? core::CaretAffinity::trailing
                               : core::CaretAffinity::leading;
     return core::TextCaret{text.position_of(offset), affinity};

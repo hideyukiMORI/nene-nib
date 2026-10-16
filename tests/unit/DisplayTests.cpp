@@ -1,7 +1,8 @@
 // scope `--display` の単体テスト（ADR 0042 決定 2・ADR 0140 の決定 2・3・5・Issue #545）。
-// 開いたときの格子表示の問い（判定は改行の索引だけ・文書ごとに 1 回）、表示形式の意図
-// SelectDisplay と Ex の `:set display=` の往復、格子の位置解決が core の純関数と一致し文字組みの
-// port（rows / locate / hit）を呼ばないこと、開く道が文字組み以外の port に触れないこと。
+// 開いたときの格子表示の問い（判定は改行の索引だけ・文書ごとに 1 回・最初の本文の文字組みより
+// 前）、表示形式の意図 SelectDisplay と Ex の `:set display=` の往復、格子の位置解決が本文の索引を
+// 借りて core の純関数と一致し文字組みの port（rows / locate / hit）を呼ばないこと、索引を持つのは
+// 巨大な行の文書と格子の文書だけであること、開く道が文字組み以外の port に触れないこと。
 #include "CaretAffinity.hpp"
 #include "CaretMotion.hpp"
 #include "DevicePixels.hpp"
@@ -20,6 +21,8 @@
 #include "FilePath.hpp"
 #include "GiantLine.hpp"
 #include "Grid.hpp"
+#include "GridCells.hpp"
+#include "InsertText.hpp"
 #include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
@@ -45,6 +48,7 @@
 #include "WalkRecentTab.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -371,7 +375,7 @@ void verify_grid_resolution()
 {
     const std::string body =
         "abcdefghij\tk\n日本語のテキストです\n\nxe\xCC\x81y" + repeated("z", 20);
-    const auto text = buffer_of(body);
+    const auto text = buffer_of(body).with_virtual_columns();
     const auto state = app::EditorState::create(core::Appearance::dark, core::EditMode::ordinary)
                            .with_opened(text, app::Document{std::nullopt, core::TextEncoding::utf8,
                                                             std::size_t{0}})
@@ -385,10 +389,18 @@ void verify_grid_resolution()
     expect(hits_match(view, index, text), "grid hits equal grid_byte_of at the left of each cell");
     expect(layouts.requests() == 0, "the grid never asks the layout for rows, locate or hit");
     expect(layouts.cells() == 1, "the cell is read once per resolution");
+    const auto unheld =
+        state
+            .with_opened(buffer_of(body),
+                         app::Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}})
+            .with_display(DisplayForm::grid);
+    const app::VisualTextView borrowed(unheld, layouts, grid_geometry);
+    expect(!borrowed.rows(core::LineNumber{1}).has_value(),
+           "the grid view never builds an index for a text that holds none");
     const auto shown_as_text = state.with_display(DisplayForm::text);
     const app::VisualTextView text_view(shown_as_text, layouts, grid_geometry);
     static_cast<void>(text_view.rows(core::LineNumber{1}));
-    expect(layouts.requests() == 1 && layouts.cells() == 1,
+    expect(layouts.requests() == 1 && layouts.cells() == 2,
            "the text display keeps using the layout and never reads the cell");
 }
 
@@ -418,6 +430,198 @@ void verify_grid_follow()
            "the end of a 5-row line follows to the last 3 screen rows without horizontal scroll");
 }
 
+[[nodiscard]] std::string mixed_lines(std::size_t count)
+{
+    const std::array<std::string, 3> heads{"abc日本語\tdef", repeated("x", 37) + "全角",
+                                           "e\xCC\x81\x01z"};
+    std::string text;
+    for (std::size_t line = 0; line < count; ++line)
+    {
+        text += heads.at(line % heads.size());
+        text += (line % 50 == 49) ? repeated("漢", 30'000) + "\n" : "\n";
+    }
+    return text;
+}
+
+// 行 number の中の照らす位置（code point の先頭）。長い行は約 97 等分の間隔で間引く。
+[[nodiscard]] std::vector<core::Offset> probes_of(const core::TextBuffer &text,
+                                                  core::LineNumber number)
+{
+    const auto begin = text.line_start(number).value;
+    const auto all = text.text_range(core::Offset{begin}, text.line_end(number));
+    const auto stride = (all.size() / 97) + 1;
+    std::vector<core::Offset> probes;
+    core::Offset at{0};
+    std::size_t next = 0;
+    while (at.value < all.size())
+    {
+        if (at.value >= next)
+        {
+            probes.push_back(core::Offset{begin + at.value});
+            next = at.value + stride;
+        }
+        at = core::next_code_point(all, at);
+    }
+    probes.push_back(core::Offset{begin + all.size()});
+    return probes;
+}
+
+// 1 行ぶん、GridCells の答えが core の参照（for_grid の索引）と一致するか。
+[[nodiscard]] bool line_cells_match(app::GridCells &cells,
+                                    const core::VirtualColumnIndex &reference,
+                                    const core::TextBuffer &text, core::LineNumber number)
+{
+    bool matched =
+        cells.rows(number) ==
+        core::grid_rows(reference.cursor_at(text, text.line_end(number)).cell, cells.columns());
+    for (const core::Offset at : probes_of(text, number))
+    {
+        const auto shown = cells.point_of(number, at);
+        matched =
+            matched && shown == core::grid_cell_of(reference, text, at) &&
+            cells.byte_of(number, shown) == core::grid_byte_of(reference, text, number, shown);
+    }
+    return matched;
+}
+
+// GridCells（決定 4・5）は本文の索引を借り、送りを含む升を for_grid（core の参照）と同じに答える。
+// 塊をまたぐ全角・Tab・制御文字・結合文字の行で、行の中の位置と升の往復を照らす。
+void verify_grid_cells_match()
+{
+    const auto text = buffer_of(mixed_lines(120)).with_virtual_columns();
+    const auto &held = text.virtual_columns().value().get();
+    for (const std::size_t columns : {std::size_t{7}, std::size_t{80}})
+    {
+        const auto reference = core::VirtualColumnIndex::for_grid(text, columns);
+        app::GridCells cells(held, text, columns);
+        bool matched = true;
+        for (std::size_t line = 1; line <= text.line_count(); line += 7)
+        {
+            matched = line_cells_match(cells, reference, text, core::LineNumber{line}) && matched;
+        }
+        expect(matched, "GridCells answers the same cells as the grid index of core");
+    }
+}
+
+constexpr std::size_t sixteen_mebibytes = 16U * 1024U * 1024U;
+constexpr std::string_view ascii_path = "C:\\work\\ascii.txt";
+
+// 16 MiB の ASCII の 1 行（決定 4）。位置解決は索引を借り、塊を 1 つも歩かない（割り算だけ）。
+void verify_grid_cells_ascii()
+{
+    const auto text = buffer_of(std::string(sixteen_mebibytes, 'x')).with_virtual_columns();
+    app::GridCells cells(text.virtual_columns().value().get(), text, 100);
+    const core::LineNumber line{1};
+    const core::Offset middle{(sixteen_mebibytes / 2) + 3};
+    const auto point = cells.point_of(line, middle);
+    expect(point == core::GridPoint{middle.value / 100, middle.value % 100},
+           "the cell of an ASCII offset is the division by the columns");
+    expect(cells.byte_of(line, point) == middle, "the offset of an ASCII cell is the product");
+    expect(cells.rows(line) == (sixteen_mebibytes / 100) + 1,
+           "the rows are the division rounded up");
+    expect(cells.point_of(line, core::Offset{sixteen_mebibytes}) ==
+               core::GridPoint{sixteen_mebibytes / 100, sixteen_mebibytes % 100},
+           "the line end sits after the last cell");
+    expect(cells.scanned() == 0, "an ASCII line is resolved without walking any chunk");
+}
+
+[[nodiscard]] const core::VirtualColumnIndex *held_index(const app::EditorController &controller)
+{
+    const auto index = controller.text().virtual_columns();
+    return index ? &index.value().get() : nullptr;
+}
+
+// 索引を持つのは巨大な行の文書（答えに依らない）と格子にした文書だけ（決定 4）。普通の文書の
+// 編集は索引に触れない。格子の 1 打鍵は索引を作り直さない（編集は触れた塊だけ）。
+void verify_index_holders()
+{
+    Editing editing;
+    hold_documents(editing.files());
+    editing.files().hold_at(std::string(ascii_path), Bytes{std::string(sixteen_mebibytes, 'x')});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, grid_geometry});
+    applied(controller, open_of(small_path));
+    expect(!controller.text().has_virtual_columns(), "a small document holds no column index");
+    applied(controller, app::InsertText{"a"});
+    expect(!controller.text().has_virtual_columns() &&
+               controller.text().rebuilt_column_chunks() == 0,
+           "editing a document without an index touches no index");
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    expect(controller.text().has_virtual_columns(), "turning a document into the grid holds one");
+    applied(controller, open_of(giant_path));
+    expect(controller.text().has_virtual_columns(), "opening a giant line holds the index at once");
+    applied(controller, SelectDisplay{DisplayForm::text});
+    expect(controller.text().has_virtual_columns() &&
+               controller.frame().display == DisplayForm::text,
+           "answering no keeps the index for the text window");
+    applied(controller, open_of(ascii_path));
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    const auto *before = held_index(controller);
+    static_cast<void>(controller.apply(
+        app::MoveCaret{core::CaretMotion::next_character, core::SelectionAnchoring::collapse}));
+    static_cast<void>(controller.frame());
+    expect(before != nullptr && held_index(controller) == before,
+           "a grid keystroke borrows the same index without rebuilding it");
+    applied(controller, app::InsertText{"y"});
+    expect(controller.text().rebuilt_column_chunks() == 1,
+           "typing into the 16 MiB grid line rebuilds only the touched chunk");
+}
+
+// 起動の文書の問い（決定 2）。巨大な行の文書の最初の frame は本文を組まない。問いの無い文書の
+// 起動は待たない。
+void verify_startup_before_layout()
+{
+    ScriptedAppearance appearance{Reading{core::Appearance::dark}};
+    ScriptedClipboard clipboard;
+    ScriptedFiles files;
+    hold_documents(files);
+    ScriptedCodePages code_pages;
+    ScriptedSettings settings;
+    ScriptedThemes themes;
+    ScriptedSession session;
+    ScriptedHistory history;
+    ScriptedFolders folders;
+    ScriptedBookmarks bookmarks;
+    ScriptedTextLayouts text_layouts;
+    const app::EditorPorts ports{appearance, clipboard, files,   code_pages, settings,    themes,
+                                 session,    history,   folders, bookmarks,  text_layouts};
+    app::EditorController started(ports, {open_of(giant_path)});
+    expect(started.delivery().display_question, "starting with a giant line asks");
+    const auto first = started.apply(app::VisibleLines{10, grid_geometry});
+    const EditorFrame shown = started.frame();
+    expect(!first.display_question && shown.display_pending && shown.lines.empty() &&
+               text_layouts.requests() == 0,
+           "starting with a giant line draws the first frame without laying out the body");
+    app::EditorController plain(ports, {open_of(small_path)});
+    expect(!plain.delivery().display_question && !plain.frame().display_pending,
+           "starting with a small file neither asks nor waits");
+}
+
+// 問いは最初の本文の文字組みより前（決定 2・D53）。答えを待つ間は本文の文字組みの port を 1 回も
+// 呼ばず、frame は本文の行を持たず display_pending を立てる。窓の寸法が替わっても同じで、問いは
+// 1 回だけ出る。答え（いいえも）が届いてから文字組みを始める。
+void verify_question_before_layout()
+{
+    Editing editing;
+    hold_documents(editing.files());
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, grid_geometry});
+    const auto before = editing.text_layouts().requests();
+    const EditorDelivery opened = controller.apply(open_of(giant_path));
+    const EditorFrame waiting = controller.frame();
+    expect(opened.display_question && waiting.display_pending && waiting.lines.empty(),
+           "opening a giant line asks with an empty body");
+    const EditorDelivery resized = controller.apply(app::VisibleLines{12, grid_geometry});
+    expect(!resized.display_question && controller.frame().display_pending,
+           "a resize while the question is open neither asks again nor answers");
+    expect(editing.text_layouts().requests() == before, "nothing is laid out before the answer");
+    const EditorFrame answered = controller.apply_frame(SelectDisplay{DisplayForm::text});
+    expect(!answered.display_pending && !answered.lines.empty() &&
+               editing.text_layouts().requests() > before,
+           "the answer no lays out the body as text");
+    verify_startup_before_layout();
+}
+
 // 開く道は、ファイルの 1 回の読みと文字組みのほかの port に触れない（決定 2）。
 void verify_quiet_open()
 {
@@ -445,6 +649,10 @@ void verify_display_contracts()
     verify_ex_display();
     verify_status_mark();
     verify_grid_resolution();
+    verify_grid_cells_match();
+    verify_grid_cells_ascii();
+    verify_index_holders();
+    verify_question_before_layout();
     verify_grid_follow();
     verify_quiet_open();
 }

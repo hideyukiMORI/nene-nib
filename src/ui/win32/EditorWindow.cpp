@@ -102,9 +102,6 @@ constexpr wchar_t first_printable = 0x20;
 constexpr wchar_t delete_character = 0x7F;
 // 裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。番号を持つのはここだけ。
 constexpr UINT work_message = WM_APP + 1;
-// 最初の frame の後に 1 回だけ自分へ post する合図。起動の問いはこの合図で出す（ADR 0140 の
-// 決定 2・#515 の起動の問いもこの 1 本に載せる）。
-constexpr UINT first_frame_message = WM_APP + 2;
 // 格子表示の問いの文言（ADR 0140 の決定 2）。ここの 1 か所だけ。
 constexpr wchar_t display_question[] = L"改行の無い巨大な行があります。格子表示で開きますか。";
 // キー → キャレットの移動は表で引く（CPP-012）。Ctrl の有無は表そのものを分けて表す。
@@ -531,10 +528,11 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // 開けなかった理由も 1 行出す。窓が出てから出すので、利用者は空の無題で作業を続けられる。
     announce(opened);
     announce_settings(opened);
-    // 起動の問いは最初の frame の後、メッセージの配りが始まってから（ADR 0140 の決定 2）。印は
-    // 最初の frame の意図が消すので、ここで控えておく。
-    display_question_pending_ = opened.display_question;
-    static_cast<void>(PostMessageW(window_, first_frame_message, 0, 0));
+    // 起動の問い（ADR 0140 の決定 2）。答えを待つ間の frame
+    // は本文を描かない（display_pending）ので、 最初の frame
+    // は本文の文字組みを作らずに出ている。印は最初の frame の意図が消すので、起動の delivery
+    // で控えた値を読む。
+    finish_display_question(opened.display_question);
     return {};
 }
 
@@ -657,7 +655,6 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_ENDSESSION:
     case WM_DESTROY:
     case work_message:
-    case first_frame_message:
         return lifetime_message(message, word, data);
     default:
         break;
@@ -686,12 +683,6 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case work_message:
         receive_work();
-        return 0;
-    case first_frame_message:
-        if (std::exchange(display_question_pending_, false))
-        {
-            ask_display();
-        }
         return 0;
     default:
         break;
@@ -1404,16 +1395,15 @@ void EditorWindow::finish_display_question(bool question)
     }
 }
 
-// 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。「はい」だけが意図を送り、「いいえ」と問いを
-// 出せなかったとき（0）は text のまま。その中の send は印が立たないので再入は 1 段で止まる。
+// 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。答えは必ず意図で返す: 「はい」は grid、
+// 「いいえ」と問いを出せなかったとき（0）は text。答えが届くまで controller は本文の文字組みを
+// 止めている。その中の send は印が立たないので再入は 1 段で止まる。
 void EditorWindow::ask_display()
 {
     const int answer =
         MessageBoxW(window_, display_question, product_name, MB_YESNO | MB_ICONQUESTION);
-    if (answer == IDYES)
-    {
-        send(application::SelectDisplay{core::DisplayForm::grid});
-    }
+    send(application::SelectDisplay{answer == IDYES ? core::DisplayForm::grid
+                                                    : core::DisplayForm::text});
 }
 
 // 一覧から頼まれた操作は鍵と同じ run_operation へ。その中の send は operation_request が空なので

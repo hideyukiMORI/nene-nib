@@ -1195,6 +1195,11 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
     fill(body.gutter, frame.palette.gutter_background);
     caret_width_ = body.caret_width;
     body_line_height_ = body.line_height;
+    // 問いの答えを待つ間は本文を描かない（ADR 0140 の決定 2・判定はここの 1 か所）。
+    if (frame.display_pending)
+    {
+        return;
+    }
     const core::LayoutRect visible{body.band.left, body.content.top, body.band.right,
                                    body.band.bottom};
     context_->PushAxisAlignedClip(to_rect(visible), D2D1_ANTIALIAS_MODE_ALIASED);

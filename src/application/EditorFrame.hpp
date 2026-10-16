@@ -92,6 +92,9 @@ struct EditorFrame
     // 現在の文書の表示形式（ADR 0140 の決定 3）。本文の文字組みの保持は表示形式ごとに意味が違うので
     // frame の鍵に入れる。renderer は読むだけ（ステータスバーの印）。
     core::DisplayForm display = core::DisplayForm::text;
+    // 開いたときの問いの答えを待っている（ADR 0140 の決定 2）。lines は空で、renderer は本文を
+    // 描かず背景と帯とステータスバーだけを描く（本文の文字組みを作らない）。
+    bool display_pending = false;
 };
 
 // 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは
