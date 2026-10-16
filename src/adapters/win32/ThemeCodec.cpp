@@ -280,6 +280,6 @@ std::expected<core::ThemeDocument, Failure> load_theme(application::FilePort &fi
         }
         return std::unexpected(Failure::unreadable);
     }
-    return decode_theme(bytes.value(), name.value());
+    return decode_theme(bytes.value().view(), name.value());
 }
 } // namespace nenenib::adapters::win32

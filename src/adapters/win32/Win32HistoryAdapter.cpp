@@ -49,7 +49,7 @@ std::expected<application::FileHistory, Failure> Win32HistoryAdapter::read()
         }
         return std::unexpected(Failure::unreadable);
     }
-    return decode_history(bytes.value());
+    return decode_history(bytes.value().view());
 }
 
 std::expected<void, Failure> Win32HistoryAdapter::write(const application::FileHistory &history)

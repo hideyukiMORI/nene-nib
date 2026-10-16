@@ -54,7 +54,7 @@ std::expected<std::optional<application::Session>, Failure> Win32SessionAdapter:
         }
         return std::unexpected(Failure::unreadable);
     }
-    auto session = decode_session(bytes.value());
+    auto session = decode_session(bytes.value().view());
     if (!session)
     {
         return std::unexpected(session.error());
