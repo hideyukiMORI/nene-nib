@@ -1,6 +1,9 @@
 // Issue #586: 本文の layout（ADR 0142）が、同じ書式で範囲の字体を当てない layout（DirectWrite の
-// 代替のまま）と、全 UTF-16 位置の HitTestTextPosition・字形の収集・寸法で一致する契約（決定 6 の
+// 代替のまま）と、全 UTF-16 位置の HitTestTextPosition・字形の列・寸法で一致する契約（決定 6 の
 // (a)）。当てない側は製品の layout を書式として作り直した layout で、範囲の書式を持たない。
+// run の区切りは比べない（DirectWrite は文字種で切り、当てた側は同じ字体がつながる）。run を
+// 順に一列に並べた字形ごとに face・字形番号・送り・offset（null は 0 と同じ）・絶対位置を比べ、
+// 位置は float の丸め（2 × FLT_EPSILON × 大きい方）を許す。行数と幅は完全一致。
 // 字体に結果が依るので、主字体（Cascadia Code）が無い機械では測れない（環境依存・QLT-013）。
 #include "BodyGlyphCollector.hpp"
 #include "BodyTextLayouts.hpp"
@@ -12,11 +15,15 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 namespace nenenib::tests::ui
@@ -117,12 +124,19 @@ bool same_fallback(IDWriteTextLayout &left, IDWriteTextLayout &right)
            one != nullptr && one == other;
 }
 
+// 同じ位置を別の run の区切りで足した float の丸めを許す（折り返さない行の 8,000 px 先で 1 ulp）。
+bool close_to(FLOAT left, FLOAT right)
+{
+    return std::abs(left - right) <= 2 * FLT_EPSILON * std::max(std::abs(left), std::abs(right));
+}
+
 bool same_hit(const DWRITE_HIT_TEST_METRICS &left, const DWRITE_HIT_TEST_METRICS &right)
 {
     return left.textPosition == right.textPosition && left.length == right.length &&
-           left.left == right.left && left.top == right.top && left.width == right.width &&
-           left.height == right.height && left.bidiLevel == right.bidiLevel &&
-           left.isText == right.isText && left.isTrimmed == right.isTrimmed;
+           close_to(left.left, right.left) && close_to(left.top, right.top) &&
+           left.width == right.width && left.height == right.height &&
+           left.bidiLevel == right.bidiLevel && left.isText == right.isText &&
+           left.isTrimmed == right.isTrimmed;
 }
 
 // 1 つの UTF-16 位置の片側（leading / trailing）で、点と hit の寸法が一致する。
@@ -135,7 +149,7 @@ bool same_position(IDWriteTextLayout &left, IDWriteTextLayout &right, UINT32 pos
     return SUCCEEDED(left.HitTestTextPosition(position, trailing, &points[0], &points[1], &one)) &&
            SUCCEEDED(
                right.HitTestTextPosition(position, trailing, &points[2], &points[3], &other)) &&
-           points[0] == points[2] && points[1] == points[3] && same_hit(one, other);
+           close_to(points[0], points[2]) && close_to(points[1], points[3]) && same_hit(one, other);
 }
 
 // 最初に違った UTF-16 位置。全位置・leading と trailing で一致すれば nullopt。
@@ -222,31 +236,49 @@ bool same_face(IDWriteFontFace *left, IDWriteFontFace *right)
            file_key_of(*left) == file_key_of(*right);
 }
 
-bool same_offsets(const std::vector<DWRITE_GLYPH_OFFSET> &left,
-                  const std::vector<DWRITE_GLYPH_OFFSET> &right)
+// 一列に並べた 1 字形: face・字形番号・絶対位置（origin.x + 送りの和・y）・送り・offset・em・
+// bidi・sideways・measuring。
+using FlatGlyph = std::tuple<IDWriteFontFace *, UINT16, D2D1_POINT_2F, FLOAT, DWRITE_GLYPH_OFFSET,
+                             FLOAT, UINT32, BOOL, DWRITE_MEASURING_MODE>;
+
+std::vector<FlatGlyph> flat(const std::vector<win32::BodyGlyphRun> &runs)
 {
-    return std::equal(left.begin(), left.end(), right.begin(), right.end(),
-                      [](const DWRITE_GLYPH_OFFSET &one, const DWRITE_GLYPH_OFFSET &other)
-                      {
-                          return one.advanceOffset == other.advanceOffset &&
-                                 one.ascenderOffset == other.ascenderOffset;
-                      });
+    std::vector<FlatGlyph> glyphs;
+    for (const auto &run : runs)
+    {
+        FLOAT x = run.origin.x;
+        for (std::size_t index = 0; index < run.indices.size(); ++index)
+        {
+            // glyphOffsets が null の run は offsets が空で、0 の配列と同じ。
+            const auto offset =
+                run.offsets.empty() ? DWRITE_GLYPH_OFFSET{0, 0} : run.offsets.at(index);
+            glyphs.emplace_back(run.face.Get(), run.indices.at(index),
+                                D2D1_POINT_2F{x, run.origin.y}, run.advances.at(index), offset,
+                                run.em, run.bidi, run.sideways, run.measuring);
+            x += run.advances.at(index);
+        }
+    }
+    return glyphs;
 }
 
-bool same_run(const win32::BodyGlyphRun &left, const win32::BodyGlyphRun &right)
+bool same_glyph(const FlatGlyph &left, const FlatGlyph &right)
 {
-    return same_face(left.face.Get(), right.face.Get()) && left.em == right.em &&
-           left.sideways == right.sideways && left.bidi == right.bidi &&
-           left.origin.x == right.origin.x && left.origin.y == right.origin.y &&
-           left.measuring == right.measuring && left.indices == right.indices &&
-           left.advances == right.advances && same_offsets(left.offsets, right.offsets) &&
-           left.text_position == right.text_position && left.clusters == right.clusters &&
-           left.advance == right.advance;
+    const auto &[face, index, point, advance, offset, em, bidi, sideways, measuring] = left;
+    return same_face(face, std::get<0>(right)) && index == std::get<1>(right) &&
+           close_to(point.x, std::get<2>(right).x) && close_to(point.y, std::get<2>(right).y) &&
+           advance == std::get<3>(right) &&
+           offset.advanceOffset == std::get<4>(right).advanceOffset &&
+           offset.ascenderOffset == std::get<4>(right).ascenderOffset && em == std::get<5>(right) &&
+           bidi == std::get<6>(right) && sideways == std::get<7>(right) &&
+           measuring == std::get<8>(right);
 }
 
+// 横に画面外の run を除かない collector で集める。除外（ADR 0073）は run の単位なので、
+// run がつながる当てた側では効き方が変わる（#586 の残るリスク・工程 2）。ここは字形の中身を比べる。
 Glyphs glyphs_of(IDWriteTextLayout &layout)
 {
-    const auto collector = Microsoft::WRL::Make<win32::BodyGlyphCollector>(layout.GetMaxWidth());
+    const auto collector =
+        Microsoft::WRL::Make<win32::BodyGlyphCollector>(std::numeric_limits<FLOAT>::max());
     if (collector == nullptr)
     {
         return std::nullopt;
@@ -259,9 +291,13 @@ bool same_glyphs(IDWriteTextLayout &left, IDWriteTextLayout &right)
 {
     const auto one = glyphs_of(left);
     const auto other = glyphs_of(right);
-    return one.has_value() && other.has_value() &&
-           std::equal(one.value().begin(), one.value().end(), other.value().begin(),
-                      other.value().end(), same_run);
+    if (!one.has_value() || !other.has_value())
+    {
+        return false;
+    }
+    const auto first = flat(one.value());
+    const auto second = flat(other.value());
+    return std::equal(first.begin(), first.end(), second.begin(), second.end(), same_glyph);
 }
 
 void report(std::size_t sample, const char *what, UINT32 position)
@@ -308,7 +344,8 @@ void check_sample(BodyTextLayouts &layouts, const app::TextLayoutRequest &reques
     {
         report(sample, "collected glyphs", 0);
     }
-    expect(glyphs, "range fonts keep the collected faces, indices, advances, offsets and origins");
+    expect(glyphs,
+           "range fonts keep the glyph sequence: faces, indices, advances, offsets and positions");
 }
 
 // 見本を 4 つの幾何で: 狭い折り返し・広い折り返し・折り返さない設定・巨大な行の窓（ADR 0139）。
