@@ -116,6 +116,21 @@ void verify_vim_window_matches()
            "an unbounded match is cut at the window end");
     expect(window_matches_of("abcabc", 0, 2, "abc") == std::vector<MatchSpan>{{0, 2}},
            "a bounded match that crosses the window end is cut there");
+    expect(window_matches_of("あいう", 3, 9, "い") == std::vector<MatchSpan>{{3, 6}} &&
+               window_matches_of("あいう", 3, 9, "^い").empty() &&
+               window_matches_of("あいう", 3, 6, "いう") == std::vector<MatchSpan>{{3, 6}},
+           "a multibyte window is matched and cut on code point boundaries in bytes");
+    std::vector<MatchSpan> shifted;
+    for (const auto &[begin, end] : matches_of("e\xCC\x81"
+                                               "e",
+                                               "e"))
+    {
+        shifted.emplace_back(begin + 1, end + 1);
+    }
+    expect(window_matches_of("xe\xCC\x81"
+                             "e",
+                             1, 5, "e") == shifted,
+           "a combining character in the window is matched as in the whole line");
     expect(longest_of("abc") == std::optional<std::size_t>{12} &&
                longest_of("^a\\>") == std::optional<std::size_t>{4} &&
                !longest_of("ab*").has_value(),

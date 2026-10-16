@@ -1063,6 +1063,59 @@ void verify_giant_mark()
                                 [](const app::LineView &line) { return line.window.active; }),
            "a document without giant lines has no mark");
 }
+
+// text の表示の巨大な行の窓の当たりも、格子と同じく窓の前後の 1 文字を文脈に照合する（#556）。
+// 窓は語の途中から始まるので、窓の頭では `\<a` も `^a` も当たらない（行の全体の照合と同じ）。
+void verify_giant_window_marks()
+{
+    Editing editing;
+    editing.files().hold_at(std::string(giant_path),
+                            Bytes{"head\n" + repeated("ab", long_line / 2) + "\ntail"});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, text_geometry});
+    applied(controller, open_of(giant_path));
+    applied(controller, SelectDisplay{DisplayForm::text});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    const auto marks_of = [&controller](std::string_view pattern)
+    {
+        vim_normal(controller, "/" + std::string(pattern) + "<CR>");
+        return shown_line(placed(controller, 2, 100'001), 2);
+    };
+    const auto plain = marks_of("ab");
+    expect(plain.window.active && plain.window.code_point > 0 && !plain.matches.empty(),
+           "the window in the middle of the giant line paints the matches inside it");
+    expect(marks_of("\\<a").matches.empty(),
+           "\\<a does not match at the window start when the window starts inside a word");
+    expect(marks_of("^a").matches.empty(),
+           "^ matches only at the line start, not the window start");
+}
+
+// incsearch の入力中の preview も、格子の見えている範囲の窓だけを照合して今の当たりを枠にする
+// （#556）。16 MiB の 1 行で /abc を打つ途中の frame。
+void verify_grid_preview_window()
+{
+    Editing editing;
+    std::string text(sixteen_mebibytes, 'x');
+    text.replace(sixteen_mebibytes / 2 + 100, 3, "abc");
+    editing.files().hold_at(std::string(ascii_path), Bytes{std::move(text)});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, grid_geometry});
+    applied(controller, open_of(ascii_path));
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1},
+                                                           core::Column{sixteen_mebibytes / 2}},
+                                        core::SelectionAnchoring::collapse});
+    vim_replay(controller, "/abc");
+    const EditorFrame typing = controller.frame();
+    const auto bound = (10 + 1) * grid_columns + 2 * (abc_longest + context_slack);
+    expect(typing.command_line.has_value() && typing.grid_searched > 0 &&
+               typing.grid_searched <= bound &&
+               std::ranges::any_of(typing.grid, [](const app::GridRowView &row)
+                                   { return row.current_match.has_value(); }),
+           "the preview while typing /abc frames its match reading only the visible rows");
+    vim_replay(controller, "<Esc>");
+}
 } // namespace
 
 void verify_display_contracts()
@@ -1092,6 +1145,8 @@ void verify_display_contracts()
     verify_giant_window_follow();
     verify_giant_click();
     verify_giant_mark();
+    verify_giant_window_marks();
+    verify_grid_preview_window();
 }
 
 void verify_display_scope()
