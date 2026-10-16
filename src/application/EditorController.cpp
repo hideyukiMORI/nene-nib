@@ -2650,12 +2650,13 @@ std::expected<void, FileFailure> EditorController::write_document(const SaveDocu
 std::expected<std::pair<core::TextBuffer, Document>, FileFailure>
 EditorController::read_document(const core::FilePath &path)
 {
-    const auto bytes = ports_.files.read(path, maximum_file_bytes);
+    auto bytes = ports_.files.read(path, maximum_file_bytes);
     if (!bytes)
     {
         return std::unexpected(bytes.error());
     }
-    auto detected = core::DetectedText::from_bytes(bytes.value());
+    // 実験（#570）: 読んだ列の所有を移す。ADR 0080 の決定 1 に反し、製品に入れない。
+    auto detected = core::DetectedText::from_owned_bytes(std::move(bytes).value());
     if (!detected)
     {
         return std::unexpected(FileFailure::undecodable);

@@ -14,6 +14,9 @@ class DetectedText final
   public:
     [[nodiscard]] static std::expected<DetectedText, EncodingFailure>
     from_bytes(std::string_view bytes);
+    // 実験（#570）: ADR 0080 の決定 1 に反し、防御コピーをせず所有を受け取る。製品に入れない。
+    [[nodiscard]] static std::expected<DetectedText, EncodingFailure>
+    from_owned_bytes(std::string &&bytes);
     [[nodiscard]] TextEncoding encoding() const noexcept;
     [[nodiscard]] std::string_view bytes() const & noexcept;
     [[nodiscard]] std::string_view bytes() const && = delete;

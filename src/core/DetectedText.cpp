@@ -11,7 +11,12 @@ DetectedText::DetectedText(std::string bytes, TextEncoding encoding)
 
 std::expected<DetectedText, EncodingFailure> DetectedText::from_bytes(std::string_view bytes)
 {
-    std::string owned(bytes);
+    return from_owned_bytes(std::string(bytes));
+}
+
+std::expected<DetectedText, EncodingFailure> DetectedText::from_owned_bytes(std::string &&bytes)
+{
+    std::string owned(std::move(bytes));
     const auto encoding = detect_encoding(owned);
     if (!encoding)
     {
