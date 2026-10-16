@@ -23,11 +23,13 @@ namespace nenenib::ui::win32
 // 本文の layout を保持した字形で描く経路（ADR 0073）と、その上に範囲の字を描き直す経路
 // （tint_runs と置き換えの draw_replaced・ADR 0040 の決定 4・#531）を 1 つに持つ。
 // Target は製品では Direct2DRenderer の device context（ID2D1RenderTarget）で、tests/ui は
-// 描画の呼び出しを数える替え玉を渡す（#531）。色は呼び手が brush に置いてから呼ぶ。
-template <typename Target> class BodyTextPainter final
+// 描画の呼び出しを数える替え玉を渡す（#531）。Layouts は BodyTextLayouts の glyphs_of を持つ
+// 文字組みで、格子の GridRowPainter も字形を描くときはこの経路を借りる（ADR 0140 の決定 5・#569）。
+// 色は呼び手が brush に置いてから呼ぶ。
+template <typename Target, typename Layouts = BodyTextLayouts> class BodyTextPainter final
 {
   public:
-    BodyTextPainter(Target &target, ID2D1Brush *brush, BodyTextLayouts &layouts,
+    BodyTextPainter(Target &target, ID2D1Brush *brush, Layouts &layouts,
                     std::optional<RenderFailure> &failure)
         : target_(target), brush_(brush), layouts_(layouts), failure_(failure)
     {
@@ -247,7 +249,7 @@ template <typename Target> class BodyTextPainter final
 
     Target &target_;
     ID2D1Brush *brush_;
-    BodyTextLayouts &layouts_;
+    Layouts &layouts_;
     std::optional<RenderFailure> &failure_;
     std::int32_t top_ = std::numeric_limits<std::int32_t>::min();
     std::int32_t bottom_ = std::numeric_limits<std::int32_t>::max();
