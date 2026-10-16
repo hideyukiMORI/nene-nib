@@ -9,6 +9,7 @@
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
+#include "EndSession.hpp"
 #include "ExitCause.hpp"
 #include "FilePath.hpp"
 #include "FontSizeAdjustment.hpp"
@@ -212,7 +213,7 @@ class EditorWindow final
     // deliver の末尾と leave_now の答えが呼ぶ。
     void release_session_block();
     // 前回のタブの一覧を書く意図を送る（leave と WM_ENDSESSION）。この後は窓へ描かない。
-    void remember_session(application::SessionEnd reason);
+    void remember_session(const application::EndSession &intent);
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
     [[nodiscard]] bool confirm_discard();
     // 描画を失った後の「保存しますか」（ADR 0133 の決定 3）。取消は無く、保存するまでか捨てるまで

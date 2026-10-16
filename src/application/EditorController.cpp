@@ -3236,9 +3236,10 @@ void EditorController::accept(const EndSession &intent)
     static_cast<void>(ports_.session.write(ended_session(state_, intent.reason)));
     // 閉じたファイルを履歴に記録する（ADR 0060 の決定 8）。一覧の書きの後。
     remember(ended_paths(state_, intent.reason));
-    // 未保存のタブが残らない終わり方だけ退避を消す（ADR 0137 の決定 5）。残る終わり方（OS の
-    // 終了の強行など）では消さず、次の起動で問う。進行中の store の終わりは adapter が待つ。
-    if (clears_autosave(state_))
+    // 未保存のタブが残らないか、使う人が「いいえ」と答えて捨てた終わり方だけ退避を消す（ADR 0137
+    // の決定 5）。確かめずに残る終わり方（OS の終了の強行）では消さず、次の起動で問う。進行中の
+    // store の終わりは adapter が待つ。
+    if (clears_autosave(state_, intent))
     {
         ports_.autosave.clear();
     }

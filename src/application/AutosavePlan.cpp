@@ -92,8 +92,12 @@ std::vector<std::pair<AutosaveId, AutosaveStep>> autosave_plan(const EditorState
     return plan;
 }
 
-bool clears_autosave(const EditorState &state)
+bool clears_autosave(const EditorState &state, const EndSession &intent)
 {
+    if (intent.unsaved_discarded)
+    {
+        return true;
+    }
     for (std::size_t position = 0; position < state.tab_count(); ++position)
     {
         const auto tab = revision_at(state, position);

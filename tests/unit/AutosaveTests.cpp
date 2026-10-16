@@ -174,16 +174,25 @@ void verify_plan_tabs()
     expect(switched.autosave_ids() == two.autosave_ids(), "switching keeps the numbers in place");
 }
 
-// 退避を消してよい終わり方は、読み込み済みのタブに未保存が 1 つも無いときだけ（決定 5）。
+// 退避を消してよい終わり方は、読み込み済みのタブに未保存が 1 つも無いか、使う人が「いいえ」と
+// 答えて捨てたとき（決定 5）。
 void verify_clears_autosave()
 {
-    expect(app::clears_autosave(fresh()), "an untouched window may clear the autosave");
+    const app::EndSession forced{app::SessionEnd::window_closed};
+    const app::EndSession discarded{.reason = app::SessionEnd::window_closed,
+                                    .unsaved_discarded = true};
+    expect(app::clears_autosave(fresh(), forced), "an untouched window may clear the autosave");
     const EditorState once = typed(fresh(), core::EditBoundary::coalesce);
-    expect(!app::clears_autosave(once), "an unsaved active tab keeps the autosave");
-    expect(app::clears_autosave(saved(once)), "a saved tab may clear the autosave");
-    expect(!app::clears_autosave(once.with_new_tab()), "an unsaved parked tab keeps the autosave");
-    expect(app::clears_autosave(fresh().with_restored({unloaded()})),
+    expect(!app::clears_autosave(once, forced), "an unsaved active tab keeps the autosave");
+    expect(app::clears_autosave(saved(once), forced), "a saved tab may clear the autosave");
+    expect(!app::clears_autosave(once.with_new_tab(), forced),
+           "an unsaved parked tab keeps the autosave");
+    expect(app::clears_autosave(fresh().with_restored({unloaded()}), forced),
            "a tab not read yet has nothing unsaved");
+    expect(app::clears_autosave(once, discarded),
+           "an unsaved tab the user chose not to save may clear the autosave");
+    expect(app::clears_autosave(once.with_new_tab(), discarded),
+           "unsaved parked tabs the user chose not to save may clear the autosave");
 }
 
 [[nodiscard]] std::string bytes_of(const app::AutosaveSnapshot &snapshot)
@@ -478,8 +487,8 @@ void verify_discard_remnants()
     expect(editing.autosave().forgotten().size() == 2 && editing.autosave().remnant_reads() == 1,
            "an answer after the first one has nothing left to forget");
 }
-// 未保存のタブが残る終わり方（OS の終了の強行・最後のタブを閉じる途中など）では退避を消さず、
-// 残骸として次の起動で問う。未保存が残らなければ 1 回消す（決定 5）。
+// 確かめずに未保存のタブが残る終わり方（OS の終了の強行など）では退避を消さず、残骸として次の
+// 起動で問う。未保存が残らないか、使う人が「いいえ」と答えて捨てたなら 1 回消す（決定 5）。
 void verify_end_session_keeps_unsaved()
 {
     Editing forced;
@@ -506,6 +515,21 @@ void verify_end_session_keeps_unsaved()
     applied(clean.controller(), app::EndSession{app::SessionEnd::window_closed});
     expect(clean.autosave().clears() == 1,
            "an ending without any unsaved tab clears the autosave once");
+    Editing declined;
+    applied(declined.controller(), app::VisibleLines{10});
+    applied(declined.controller(), app::InsertText{"ab"});
+    applied(declined.controller(), app::AutosaveTick{});
+    applied(declined.controller(),
+            app::EndSession{.reason = app::SessionEnd::window_closed, .unsaved_discarded = true});
+    expect(declined.autosave().clears() == 1,
+           "closing the window after answering no clears the autosave once");
+    Editing declined_last;
+    applied(declined_last.controller(), app::VisibleLines{10});
+    applied(declined_last.controller(), app::InsertText{"ab"});
+    applied(declined_last.controller(),
+            app::EndSession{.reason = app::SessionEnd::last_tab_closed, .unsaved_discarded = true});
+    expect(declined_last.autosave().clears() == 1,
+           "closing the last tab after answering no clears the autosave once");
 }
 
 // 戻したタブは次の合図を待たずにこのプロセスの退避として頼み、その後に残骸を forget する
