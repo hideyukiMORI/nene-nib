@@ -90,6 +90,10 @@ class VerificationPolicy(unittest.TestCase):
         check_job, build_job = workflow.split("\n  build-and-test:", 1)
         for command in ("check.ps1", "ctest", "cmake --build", "measure-speed", "coverage.py"):
             self.assertNotIn(command, check_job)
+        # #568: check job は規約の検査より先に conformance の自己テストを回す（契約の遅れを merge 前に止める）。
+        self.assertIn("python eng/test-conformance.py", check_job)
+        self.assertLess(check_job.index("python eng/test-conformance.py"),
+                        check_job.index("./eng/validate-git.ps1"))
         for command in ("cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release",
                         "cmake --build build-release", "ctest --test-dir build-release"):
             self.assertIn(command, build_job)
