@@ -775,7 +775,8 @@ composition_view_of(const std::optional<core::Composition> &composition)
 }
 
 // 格子の照合の窓の余裕（#556）。一致の長さの上限が決まらない（`*` の繰り返し）検索は、この余裕の
-// 外へ延びる一致が窓の境目で切れる（text の表示の窓と同じ幅・ADR 0139 の限界）。
+// 外へ延びる一致が窓の境目で切れる（ADR 0140 の限界）。数は text の表示の窓と同じだが、ここでは
+// バイト（text の表示の窓はコードポイント）。
 constexpr std::size_t grid_unbounded_margin = core::giant_line_half_width;
 // 窓の前後に読み足すバイト数。窓の端を code point の境目へ寄せる分と、`^` `\<` `\>` が見る
 // 隣の 1 code point の分（UTF-8 で 4 バイトずつ）。
@@ -832,6 +833,30 @@ grid_search_window(core::OffsetRange line, core::OffsetRange visible, std::size_
                                   core::Offset{read_begin + first + match.end.value}};
     }
     return matches;
+}
+
+// text の表示の 1 行 shown の当たりを本文の位置で返す。巨大な行の窓（ADR 0139）は格子と同じく
+// 窓の前後の 1 code point を本文から文脈に読み足し、grid_window_matches で照合する（#556・
+// 照合の経路は 1 本）。窓の無い行は窓 = 行の全体なので、文脈を読み足さず shown をそのまま使う。
+[[nodiscard]] std::vector<core::OffsetRange>
+shown_matches(const core::TextBuffer &text, const LineView &shown, const core::VimPattern &pattern)
+{
+    const core::OffsetRange content{text.line_start(shown.number), text.line_end(shown.number)};
+    const core::Offset begin{content.begin.value + shown.window.byte};
+    const core::OffsetRange window{begin, core::Offset{begin.value + shown.text.size()}};
+    const auto read = grid_search_window(content, window, grid_context_bytes);
+    if (read == window)
+    {
+        return grid_window_matches(
+            shown.text, core::OffsetRange{core::Offset{0}, core::Offset{shown.text.size()}},
+            begin.value, pattern);
+    }
+    const auto bytes = text.text_range(read.begin, read.end);
+    return grid_window_matches(
+        bytes,
+        core::OffsetRange{core::Offset{window.begin.value - read.begin.value},
+                          core::Offset{window.end.value - read.begin.value}},
+        read.begin.value, pattern);
 }
 } // namespace
 
@@ -3432,10 +3457,8 @@ LineView EditorController::line_view(LineView view, const core::OffsetRange &ran
     // 今の一致はキャレットを含む一致。incsearch の入力中は preview の当たりを含む一致（ADR 0041
     // の決定 4）。全一致の面は hlsearch が on のときだけで、off の入力中は今の当たりの枠だけ
     // （Vim と同じ）。入力中でなければ off の search_pattern は何も返さない。
-    for (const auto &match : core::vim_line_matches(view.text, *pattern))
+    for (const auto &found : shown_matches(text, view, *pattern))
     {
-        const core::OffsetRange found{core::Offset{start.value + match.begin.value},
-                                      core::Offset{start.value + match.end.value}};
         const core::SelectionSpan span = projection.span(found);
         if (span.presence != core::SelectionPresence::present)
         {
