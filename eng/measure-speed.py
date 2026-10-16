@@ -35,6 +35,10 @@ above stay the default set and the only ones compare() judges:
                             window thread went quiet, so the single is measured after the warmup's
                             frame; a single that is not answered within LARGE_SECONDS is missing
 
+Both giant benches answer the grid question (ADR 0140 decision 2) that the editor puts up after its
+first frame: --grid-answer yes (the default, ADR 0140 decision 8) opens the document as the grid,
+--grid-answer no keeps it as text. A trial in which the question never comes up is missing.
+
 --bench selects the stimulus to measure and the value to record, compare or adopt. Without it,
 every bench runs. Related benches share their existing trial, but only the selected value is kept.
 The palette trial saves a PNG of the candidate count before the measured character for review;
@@ -92,8 +96,8 @@ import subprocess
 import time
 import winreg
 
-from window_driver import (api, become_dpi_aware, capture_png, close, covered_by, dismiss_dialog,
-                           IDNO, kernel, post_together, press_chord, raise_window, start, stop,
+from window_driver import (answer_question, api, become_dpi_aware, capture_png, close, covered_by,
+                           dismiss_dialog, IDNO, kernel, post_together, press_chord, raise_window, start, stop,
                            take_foreground, user, VK_CONTROL, WindowCovered, WindowUnavailable,
                            write_text)
 
@@ -588,7 +592,7 @@ def await_quiet(window, seconds: float = LARGE_SECONDS) -> bool:
 
 def keys_trial(executable: Path, environment: dict, folder: Path,
                document: Path | None = None,
-               burst: bool = True) -> tuple[float | None, float | None, float, int]:
+               burst: bool = True, grid: bool = True) -> tuple[float | None, float | None, float, int]:
     """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
 
     Either value is None when its own stimulus did not reach the window, and the caller repeats or
@@ -597,10 +601,11 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
 
     With burst=False the 200 keystrokes are not sent (ADR 0138 decision 3): the trial is the
     warmup and the single only, each posted after the window thread went quiet, and the single is
-    a value only when the warmup's frame was presented before it was read.
+    a value only when the warmup's frame was presented before it was read. That trial answers the
+    grid question first: grid=True is "yes" (ADR 0140 decision 8).
     """
     if not burst:
-        return quiet_single_trial(executable, environment, folder, document)
+        return quiet_single_trial(executable, environment, folder, document, grid)
     if document is None:
         report = report_path(folder, "keys")
         process, window, _ = start(executable, environment, ["--measure", str(report)])
@@ -652,12 +657,17 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
 
 
 def quiet_single_trial(executable: Path, environment: dict, folder: Path,
-                       document: Path) -> tuple[float | None, None, float, int]:
-    """keys_trial without the 200: warmup, then one keystroke, each after the window went quiet."""
+                       document: Path, grid: bool) -> tuple[float | None, None, float, int]:
+    """keys_trial without the 200: warmup, then one keystroke, each after the window went quiet.
+
+    The grid question is answered (grid is "yes") before anything else is sent to the window.
+    """
     report = report_path(folder, "keys-giant")
     process, window, _ = start(executable, environment,
                                ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
     try:
+        if not answer_question(process, grid, seconds=LARGE_SECONDS):
+            raise TrialNotObserved("the grid question never came up")
         raise_window(window)
         if not take_foreground(window):
             print("Speed: the bench window did not take the foreground")
@@ -690,14 +700,15 @@ def quiet_single_trial(executable: Path, environment: dict, folder: Path,
 
 
 def bench_giant_single(executable: Path, environment: dict, folder: Path,
-                       document: Path) -> tuple[dict, dict]:
+                       document: Path, grid: bool) -> tuple[dict, dict]:
     """One keystroke at the start of the one-line 16 MiB document; never repeated (ADR 0138).
 
     A trial can take minutes when the product cannot answer, so a trial that was not observed or
     timed out is missing at once instead of being repeated BURST_ATTEMPTS times.
     """
     try:
-        single, _, _, _ = keys_trial(executable, environment, folder, document, burst=False)
+        single, _, _, _ = keys_trial(executable, environment, folder, document, burst=False,
+                                     grid=grid)
     except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
         print(f"Speed: {unobserved}; this trial of {GIANT_SINGLE_BENCH} is missing")
         single = None
@@ -705,17 +716,24 @@ def bench_giant_single(executable: Path, environment: dict, folder: Path,
 
 
 def bench_giant_open(executable: Path, environment: dict, folder: Path,
-                     document: Path) -> tuple[dict, dict]:
+                     document: Path, grid: bool) -> tuple[dict, dict]:
     """open-large-file-16mib's measurement over the one-line document; no frame is missing.
 
     The window is asked to close at once as in bench_large_file, and the process gets
     LARGE_SECONDS to present its first frame and exit; one that does not is killed by stop() and
     the trial is missing (ADR 0138 decision 4), as is a finished file without frame_presented.
+    The grid question that follows the first frame is answered first (grid is "yes"); a trial in
+    which it never comes up is missing. The value is still the first frame (processCreation to
+    frame_presented), which the editor presents before it asks.
     """
     report = report_path(folder, "giant")
     process, window, _ = start(executable, environment,
                                ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
     try:
+        if not answer_question(process, grid, seconds=LARGE_SECONDS):
+            print(f"Speed: the grid question never came up; this trial of {GIANT_OPEN_BENCH}"
+                  " is missing")
+            return {GIANT_OPEN_BENCH: None}, {}
         close(window)
         process.wait(timeout=LARGE_SECONDS)
     except subprocess.TimeoutExpired:
@@ -790,7 +808,7 @@ def judged_samples(measured: dict) -> int | None:
 
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
                 document: Path | None, palette: Path | None, long_line: Path | None = None,
-                giant: Path | None = None):
+                giant: Path | None = None, grid: bool = True):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -805,12 +823,12 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
     if LONG_LINE_BENCH in names:
         yield bench_long_line(executable, environment, folder, long_line)
     if GIANT_OPEN_BENCH in names:
-        yield bench_giant_open(executable, environment, folder, giant)
+        yield bench_giant_open(executable, environment, folder, giant, grid)
     if GIANT_SINGLE_BENCH in names:
-        yield bench_giant_single(executable, environment, folder, giant)
+        yield bench_giant_single(executable, environment, folder, giant, grid)
 
 
-def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
+def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool = True) -> dict:
     names = BENCHES if bench is None else (bench,)
     become_dpi_aware()
     executable, environment, folder = prepare(build)
@@ -830,7 +848,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
     segments: dict = {name: {} for name in BREAKDOWN_BENCHES if name in names}
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
-                                         long_line, giant):
+                                         long_line, giant, grid):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -851,6 +869,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
                               "lines": LARGE_LINES}
     elif giant is not None:
         record["document"] = {"path": giant.name, "bytes": giant.stat().st_size, "lines": 1}
+        record["gridAnswer"] = "yes" if grid else "no"
     return record
 
 
@@ -972,7 +991,8 @@ def gather(arguments) -> dict:
     if arguments.values:
         record = json.loads(Path(arguments.values).read_text(encoding="utf-8"))
         return selected_record(record, arguments.bench)
-    record = measure(arguments.executable, arguments.repetitions, arguments.bench)
+    record = measure(arguments.executable, arguments.repetitions, arguments.bench,
+                     arguments.grid_answer == "yes")
     print(describe(record))
     print(f"Speed: recorded {write_record(record)}")
     return record
@@ -1048,6 +1068,8 @@ def main() -> int:
     parser.add_argument("--reference", type=Path, help="a reference file other than the canonical one")
     parser.add_argument("--values", type=Path, help="judge an earlier record instead of measuring")
     parser.add_argument("--repetitions", type=int, default=REPETITIONS)
+    parser.add_argument("--grid-answer", choices=("yes", "no"), default="yes",
+                        help="the answer the giant benches give to the grid question (ADR 0140)")
     arguments = parser.parse_args()
     if not (arguments.record or arguments.adopt or arguments.check):
         parser.error("one of --record, --adopt or --check is required")

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BodyGlyphRun.hpp"
+#include "DisplayForm.hpp"
 #include "LayoutRect.hpp"
 
 #include <dwrite.h>
@@ -21,5 +22,8 @@ struct BodyTextLayout
     bool glyphs_tried = false;
     std::size_t rows = 1;
     float glyph_left = 0;
+    // 格子の画面行は等幅の書式で升に揃えた layout（ADR 0140 の決定 5）。同じ文字列でも text
+    // とは別。
+    core::DisplayForm form = core::DisplayForm::text;
 };
 } // namespace nenenib::ui::win32

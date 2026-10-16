@@ -124,9 +124,19 @@ VisualTextView::grid_rows(core::LineNumber number) const
     return cells.value().rows(number);
 }
 
+std::expected<std::reference_wrapper<const core::VirtualColumnIndex>, TextLayoutFailure>
+VisualTextView::grid_index() const
+{
+    if (!grid_.has_value())
+    {
+        return std::unexpected(grid_failure_.value_or(TextLayoutFailure::unavailable));
+    }
+    return std::cref(grid_.value());
+}
+
 // 行頭に立つ trailing のキャレットは前の画面行の右端に描く（文字組みの hit と同じ見え方）。
-std::expected<core::TextLocation, TextLayoutFailure>
-VisualTextView::grid_location(core::TextCaret caret) const
+std::expected<core::GridPoint, TextLayoutFailure>
+VisualTextView::grid_point(core::TextCaret caret) const
 {
     auto cells = grid();
     if (!cells)
@@ -139,7 +149,19 @@ VisualTextView::grid_location(core::TextCaret caret) const
     {
         point = core::GridPoint{point.row - 1, grid_columns_};
     }
-    return core::TextLocation{point.row, static_cast<float>(point.cell) * cell_width_};
+    return point;
+}
+
+std::expected<core::TextLocation, TextLayoutFailure>
+VisualTextView::grid_location(core::TextCaret caret) const
+{
+    const auto point = grid_point(caret);
+    if (!point)
+    {
+        return std::unexpected(point.error());
+    }
+    return core::TextLocation{point.value().row,
+                              static_cast<float>(point.value().cell) * cell_width_};
 }
 
 // x は最も近い升の境目へ丸める。右端（columns）を指したら、そこに立つ文字の前に trailing で置く。

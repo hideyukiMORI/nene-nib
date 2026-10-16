@@ -22,6 +22,8 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
+#include "GridLineMarks.hpp"
+#include "GridRowView.hpp"
 #include "LineView.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -352,6 +354,13 @@ class EditorController final
     [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
                                      const core::VimPattern *pattern, core::Offset caret) const;
     [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines() const;
+    // 格子の見えている画面行（ADR 0140 の決定 5）。位置解決と同じ升の累積から切り出す。
+    [[nodiscard]] std::expected<std::vector<GridRowView>, TextLayoutFailure>
+    grid_visible_rows() const;
+    [[nodiscard]] GridLineMarks grid_marks(core::LineNumber line,
+                                           const core::OffsetRange &selection,
+                                           const core::VimPattern *pattern,
+                                           core::Offset caret) const;
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。
     [[nodiscard]] std::optional<CompositionView> composed() const;
