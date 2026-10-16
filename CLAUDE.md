@@ -205,7 +205,7 @@ display_widthのBMP索引はDisplayWidthRangeの正本からコンパイル時�
 ### 巨大な行のしきい値と仮想桁の部分和は core の 1 か所
 
 巨大な行（表示文字列が 16,384 コードポイントを超える行）のしきい値は `GiantLine.hpp` の `giant_line_threshold` の 1 つで、窓 `giant_line_window`（錨を 2,048 刻みに切り下げた中心の前後 4,096・幅は引数にしない）も同じ所で、行を写さず `VirtualColumnIndex` の序数から引く（ADR 0139 / 0140）。表示形式 `DisplayForm` は文書ごとの値で、設定に入れない。
-行頭からの仮想桁と格子の升の累積は `TextBuffer::virtual_columns()`（`VirtualColumnIndex`・約 64 KiB の塊ごとの要約）で引き、行を写して歩かない。索引は要る文書だけが `with_virtual_columns()` で持ち（既定は無し・持たない本文に問うと `VirtualColumnsFailure::not_held`）、持つ本文の `replaced` だけが触れた塊を読み直す。表示できる ASCII と改行だけの塊は歩かず改行の索引の行頭から引き算し、Tab と制御文字を含む塊は歩く。1 文字の桁は `column_advance`（`display_width` の表・Tab の止まりは `vim_tab_stop` の 1 つ）、格子の送りは `grid_placed_cell` の 1 本。升は幅 `columns` に依るので、幅が変われば `for_grid` で作り直す。
+行頭からの仮想桁と格子の升の累積は `TextBuffer::virtual_columns()`（`VirtualColumnIndex`・約 64 KiB の塊ごとの要約）で引き、行を写して歩かない。索引は要る文書だけが `with_virtual_columns()` で持ち（既定は無し・持たない本文に問うと `VirtualColumnsFailure::not_held`）、持つ本文の `replaced` だけが触れた塊を読み直す。表示できる ASCII と改行だけの塊は歩かず改行の索引の行頭から引き算し、Tab と制御文字を含む塊は歩く。1 文字の桁は `column_advance`（`display_width` の表・Tab の止まりは `vim_tab_stop` の 1 つ）、格子の送りは `grid_placed_cell` の 1 本。格子の送りは幅 `columns` に依るので索引に持たせず、application の `GridCells` が借りた索引から答える（plain の塊は足すだけ・ほかの塊だけ歩く）。frame は `GridCells` を 1 つ作って `GridLineRows` で見えている画面行を切り出し、索引を作り直さない（`EditorFrame.grid_scanned` が歩いた塊の数）。
 
 ### 測定の揺れの条件は小さな差を守るためのもの。確かな改善の統合を止めない
 
