@@ -10,6 +10,7 @@
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
+#include "GridRowView.hpp"
 #include "ImeStance.hpp"
 #include "InputLineView.hpp"
 #include "LineNumber.hpp"
@@ -95,6 +96,12 @@ struct EditorFrame
     // 開いたときの問いの答えを待っている（ADR 0140 の決定 2）。lines は空で、renderer は本文を
     // 描かず背景と帯とステータスバーだけを描く（本文の文字組みを作らない）。
     bool display_pending = false;
+    // 格子の見えている画面行（ADR 0140 の決定 5）。display が grid のときだけ値を持ち、lines は空。
+    // 画面の下に半分かかる画面行も含む。
+    std::vector<GridRowView> grid{};
+    // grid を作るのに 1 文字ずつ歩いた塊の部分の数（GridCells::scanned・数える口）。ASCII の行は
+    // 割り算だけなので 0。
+    std::size_t grid_scanned = 0;
 };
 
 // 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

@@ -98,7 +98,7 @@ bool VisualTextView::gridded() const noexcept
     return state_.display() == core::DisplayForm::grid && geometry_.width > 0;
 }
 
-std::expected<GridCells, TextLayoutFailure> VisualTextView::grid() const
+std::expected<GridCells, TextLayoutFailure> VisualTextView::grid_cells() const
 {
     if (grid_columns_ == 0)
     {
@@ -115,7 +115,7 @@ std::expected<GridCells, TextLayoutFailure> VisualTextView::grid() const
 std::expected<std::size_t, TextLayoutFailure>
 VisualTextView::grid_rows(core::LineNumber number) const
 {
-    auto cells = grid();
+    auto cells = grid_cells();
     if (!cells)
     {
         return std::unexpected(cells.error());
@@ -125,28 +125,44 @@ VisualTextView::grid_rows(core::LineNumber number) const
 }
 
 // 行頭に立つ trailing のキャレットは前の画面行の右端に描く（文字組みの hit と同じ見え方）。
-std::expected<core::TextLocation, TextLayoutFailure>
-VisualTextView::grid_location(core::TextCaret caret) const
+core::GridPoint VisualTextView::grid_point(GridCells &cells, core::TextCaret caret) const
 {
-    auto cells = grid();
-    if (!cells)
-    {
-        return std::unexpected(cells.error());
-    }
-    const auto &text = state_.text();
-    auto point = cells.value().point_of(caret.position.line, text.offset_of(caret.position));
+    auto point = cells.point_of(caret.position.line, state_.text().offset_of(caret.position));
     if (caret.affinity == core::CaretAffinity::trailing && point.cell == 0 && point.row > 0)
     {
         point = core::GridPoint{point.row - 1, grid_columns_};
     }
-    return core::TextLocation{point.row, static_cast<float>(point.cell) * cell_width_};
+    return point;
+}
+
+std::expected<core::GridPoint, TextLayoutFailure>
+VisualTextView::grid_point(core::TextCaret caret) const
+{
+    auto cells = grid_cells();
+    if (!cells)
+    {
+        return std::unexpected(cells.error());
+    }
+    return grid_point(cells.value(), caret);
+}
+
+std::expected<core::TextLocation, TextLayoutFailure>
+VisualTextView::grid_location(core::TextCaret caret) const
+{
+    const auto point = grid_point(caret);
+    if (!point)
+    {
+        return std::unexpected(point.error());
+    }
+    return core::TextLocation{point.value().row,
+                              static_cast<float>(point.value().cell) * cell_width_};
 }
 
 // x は最も近い升の境目へ丸める。右端（columns）を指したら、そこに立つ文字の前に trailing で置く。
 std::expected<core::TextCaret, TextLayoutFailure>
 VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
 {
-    auto cells = grid();
+    auto cells = grid_cells();
     if (!cells)
     {
         return std::unexpected(cells.error());

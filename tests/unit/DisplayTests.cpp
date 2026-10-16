@@ -5,6 +5,7 @@
 // 巨大な行の文書と格子の文書だけであること、開く道が文字組み以外の port に触れないこと。
 #include "CaretAffinity.hpp"
 #include "CaretMotion.hpp"
+#include "ComposeText.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayForm.hpp"
 #include "DisplayFormLabel.hpp"
@@ -42,6 +43,7 @@
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "Utf8.hpp"
+#include "VimTestSupport.hpp"
 #include "VirtualColumnIndex.hpp"
 #include "VisibleLines.hpp"
 #include "VisualTextView.hpp"
@@ -426,7 +428,8 @@ void verify_grid_follow()
         controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{41}},
                                          core::SelectionAnchoring::collapse}));
     const EditorFrame frame = controller.frame();
-    expect(!frame.lines.empty() && frame.lines.front().screen_row == -2 && frame.horizontal == 0.0F,
+    expect(!frame.grid.empty() && frame.grid.front().row == 2 &&
+               frame.grid.front().screen_row == 0 && frame.horizontal == 0.0F,
            "the end of a 5-row line follows to the last 3 screen rows without horizontal scroll");
 }
 
@@ -622,6 +625,170 @@ void verify_question_before_layout()
     verify_startup_before_layout();
 }
 
+[[nodiscard]] EditorFrame grid_frame_of(Editing &editing, std::string text, std::size_t visible)
+{
+    editing.files().hold_at(std::string(small_path), Bytes{std::move(text)});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{visible, grid_geometry});
+    applied(controller, open_of(small_path));
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    return controller.frame();
+}
+
+[[nodiscard]] bool row_is(const app::GridRowView &row, std::string_view text,
+                          const std::vector<std::size_t> &starts)
+{
+    return row.text == text && row.starts == starts;
+}
+
+[[nodiscard]] std::vector<std::size_t> counted(std::size_t count)
+{
+    std::vector<std::size_t> starts(count + 1);
+    for (std::size_t index = 0; index <= count; ++index)
+    {
+        starts.at(index) = index;
+    }
+    return starts;
+}
+
+// 格子の frame は見えている画面行だけ（決定 5）。本文の行を文字組みせず、画面の下に半分かかる
+// 画面行も 1 つ作る。各画面行は升数ぶんの文字列。
+void verify_grid_frame_rows()
+{
+    Editing editing;
+    static_cast<void>(grid_frame_of(editing, repeated("a", 200) + "\nb", 3));
+    const auto before = editing.text_layouts().requests();
+    const EditorFrame frame = editing.controller().frame();
+    expect(editing.text_layouts().requests() == before,
+           "the grid frame lays out no body line through the port");
+    expect(frame.lines.empty() && frame.grid.size() == 4,
+           "a 25-row line in 3 visible rows makes the 3 rows and the half row below");
+    bool rows = frame.grid.size() == 4;
+    for (std::size_t index = 0; rows && index < frame.grid.size(); ++index)
+    {
+        const auto &row = frame.grid.at(index);
+        rows = row.number == core::LineNumber{1} && row.row == index &&
+               row.screen_row == static_cast<std::int64_t>(index) &&
+               row_is(row, "aaaaaaaa", counted(8));
+    }
+    expect(rows, "each screen row carries its 8 cells of text and the cell of every character");
+}
+
+// 幅 2 は 2 升で、右端に収まらなければ空白を置いて次の画面行へ送る。Tab は空白の升、制御文字は
+// `^A` の 1 升ずつで置き換えの升を持つ（決定 4・ADR 0040）。
+void verify_grid_row_cells()
+{
+    Editing editing;
+    const EditorFrame frame = grid_frame_of(editing, "abcdefg\xE6\x97\xA5h\nab\tc\nx\x01y", 10);
+    expect(frame.grid.size() == 5, "the three lines take 2, 2 and 1 screen rows");
+    if (frame.grid.size() != 5)
+    {
+        return;
+    }
+    expect(row_is(frame.grid.at(0), "abcdefg ", counted(8)) &&
+               row_is(frame.grid.at(1), "\xE6\x97\xA5h", {0, 2, 3}),
+           "a wide character that does not fit is sent to the next row and takes 2 cells");
+    expect(row_is(frame.grid.at(2), "ab      ", counted(8)) &&
+               row_is(frame.grid.at(3), "c", {0, 1}),
+           "a tab is blank cells up to the next stop of 8");
+    expect(row_is(frame.grid.at(4), "x^Ay", counted(4)) &&
+               frame.grid.at(4).replaced == std::vector<app::GridCellSpan>{{1, 3}},
+           "a control character is drawn as ^A in one cell per letter and marked replaced");
+}
+
+// 本文の位置の範囲は画面行ごとの升の範囲へ写る（決定 5）。画面行をまたぐ選択と検索の当たりは
+// 画面行ごとに 1 つずつ、改行を越える選択は行の最後の画面行に印。
+void verify_grid_marks()
+{
+    Editing editing;
+    static_cast<void>(grid_frame_of(editing, "aaaaaaXYZaaaa\nb", 10));
+    auto &controller = editing.controller();
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{7}},
+                                        core::SelectionAnchoring::collapse});
+    const EditorFrame selected = controller.apply_frame(
+        app::PlaceCaret{core::TextPosition{core::LineNumber{2}, core::Column{1}},
+                        core::SelectionAnchoring::extend});
+    expect(selected.grid.size() >= 2 && selected.grid.at(0).selection == app::GridCellSpan{6, 8} &&
+               selected.grid.at(1).selection == app::GridCellSpan{0, 5} &&
+               !selected.grid.at(0).newline_selected && selected.grid.at(1).newline_selected,
+           "a selection over a row boundary and the newline is one span per row and a mark");
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_normal(controller, "gg/XYZ<CR>");
+    const EditorFrame found = controller.frame();
+    expect(found.grid.size() >= 2 &&
+               found.grid.at(0).matches == std::vector<app::GridCellSpan>{{6, 8}} &&
+               found.grid.at(1).matches == std::vector<app::GridCellSpan>{{0, 1}} &&
+               found.grid.at(0).current_match == app::GridCellSpan{6, 8} &&
+               found.grid.at(1).current_match == app::GridCellSpan{0, 1},
+           "a match over a row boundary is painted as two spans, one on each row");
+    expect(found.grid.size() >= 2 && found.grid.at(0).caret == app::GridCellSpan{6, 7} &&
+               !found.grid.at(1).caret.has_value(),
+           "the block caret is the cell of the character under it");
+}
+
+// 変換中の文字列はキャレットの升に差し込み、同じ画面行の後ろの升（文字・当たり・置き換え）を
+// 同じ升数だけずらす（決定 5・ADR 0014）。
+void verify_grid_composition_shifts()
+{
+    Editing editing;
+    static_cast<void>(grid_frame_of(editing, "aXYZ\x01", 10));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_normal(controller, "gg/XYZ<CR>0a");
+    const EditorFrame found = controller.apply_frame(app::ComposeText{composed_of("に", {}, 3)});
+    expect(!found.grid.empty() && row_is(found.grid.at(0), "aにXYZ^A", {0, 1, 3, 4, 5, 6, 7, 8}),
+           "the composition is put at the caret and the cells behind it move by its width");
+    expect(!found.grid.empty() &&
+               found.grid.at(0).matches == std::vector<app::GridCellSpan>{{3, 6}} &&
+               found.grid.at(0).current_match == app::GridCellSpan{3, 6} &&
+               found.grid.at(0).replaced == std::vector<app::GridCellSpan>{{6, 8}},
+           "a match and a replaced character behind the composition move with their cells");
+}
+
+// 差し込む位置はキャレットの前の文字の幅 0 の続き（結合文字）の後ろで、結合文字は前の文字に
+// 付いたまま変換の先頭字に付かない（ADR 0053）。
+void verify_grid_composition_cluster()
+{
+    Editing editing;
+    static_cast<void>(grid_frame_of(editing, "e\xCC\x81X", 10));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_normal(controller, "0a");
+    const EditorFrame joined = controller.apply_frame(app::ComposeText{composed_of("に", {}, 3)});
+    expect(!joined.grid.empty() &&
+               row_is(joined.grid.at(0), "e\xCC\x81\xE3\x81\xABX", {0, 1, 1, 3, 4}),
+           "a combining mark stays on the character before the caret, not on the composition");
+}
+
+// 格子の frame は本文の索引と GridCells を借りる（決定 4・5）。16 MiB の ASCII の 1 行の真ん中で
+// frame を 10 回作っても、索引は同じ値のまま作り直さず、塊を 1 つも歩かない（割り算だけ）。
+void verify_grid_frames_borrow()
+{
+    Editing editing;
+    editing.files().hold_at(std::string(ascii_path), Bytes{std::string(sixteen_mebibytes, 'x')});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, grid_geometry});
+    applied(controller, open_of(ascii_path));
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1},
+                                                           core::Column{sixteen_mebibytes / 2}},
+                                        core::SelectionAnchoring::collapse});
+    const auto *held = held_index(controller);
+    const auto rebuilt = controller.text().rebuilt_column_chunks();
+    bool borrowed = held != nullptr;
+    bool walked = false;
+    for (int frame = 0; frame < 10; ++frame)
+    {
+        const EditorFrame shown = controller.apply_frame(
+            app::MoveCaret{core::CaretMotion::next_character, core::SelectionAnchoring::collapse});
+        borrowed = borrowed && held_index(controller) == held &&
+                   controller.text().rebuilt_column_chunks() == rebuilt && !shown.grid.empty();
+        walked = walked || shown.grid_scanned != 0;
+    }
+    expect(borrowed, "ten grid frames of the 16 MiB line borrow the same index without rebuilding");
+    expect(!walked, "ten grid frames of the 16 MiB ASCII line walk no chunk");
+}
+
 // 開く道は、ファイルの 1 回の読みと文字組みのほかの port に触れない（決定 2）。
 void verify_quiet_open()
 {
@@ -654,6 +821,12 @@ void verify_display_contracts()
     verify_index_holders();
     verify_question_before_layout();
     verify_grid_follow();
+    verify_grid_frame_rows();
+    verify_grid_row_cells();
+    verify_grid_marks();
+    verify_grid_composition_shifts();
+    verify_grid_composition_cluster();
+    verify_grid_frames_borrow();
     verify_quiet_open();
 }
 

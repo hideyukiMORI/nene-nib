@@ -8,6 +8,8 @@
 #include "CommandLayout.hpp"
 #include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
+#include "GridRowPainter.hpp"
+#include "GridRowView.hpp"
 #include "GutterTextLayouts.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
@@ -176,6 +178,12 @@ class Direct2DRenderer final
     void draw_line(const application::EditorFrame &frame, const core::BodyLayout &body,
                    std::size_t index);
     void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
+    // 格子の画面行（ADR 0140 の決定 5）。本文の行（draw_line）とは別の 1 本で、frame.grid を描く。
+    using GridPainter = GridRowPainter<ID2D1DeviceContext6, BodyTextLayouts>;
+    void draw_grid_rows(const application::EditorFrame &frame, const core::BodyLayout &body);
+    void draw_grid_row(GridPainter &painter, const application::EditorFrame &frame,
+                       const core::BodyLayout &body, const application::GridRowView &row);
+    [[nodiscard]] std::int32_t gutter_padding(const core::EditorSettings &settings) const;
     void draw_body_guide(const application::EditorFrame &frame,
                          const core::OperationGuideLayout &guide);
     void draw_status_guide(const application::EditorFrame &frame,
@@ -249,6 +257,8 @@ class Direct2DRenderer final
     RECT caret_rectangle_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
+    // 格子の 1 升の幅（物理画素）。draw_grid_rows がその frame の書式で測る。
+    float grid_cell_ = 1;
     std::uint32_t dpi_ = 96;
     // DirectWrite 資源の無効化キー。設定の所有者は EditorState（ADR 0020）。
     core::FontSize formatted_size_ = core::default_font_size();

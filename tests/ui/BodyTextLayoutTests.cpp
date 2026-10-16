@@ -245,11 +245,12 @@ void check_cell(BodyTextLayouts &layouts, const core::EditorSettings &settings)
     expect(cell.has_value() && again.has_value() && again.value().width == cell.value().width &&
                again.value().height == cell.value().height,
            "the grid cell ignores the text and repeats for the same format");
-    const auto zero = layouts.locate(app::TextLayoutRequest{"00", settings, narrow},
-                                     core::DisplayCaret{core::Column{2}});
+    const auto zero =
+        layouts.locate(app::TextLayoutRequest{"00", settings, narrow, core::DisplayForm::grid},
+                       core::DisplayCaret{core::Column{2}});
     expect(cell.has_value() && zero.has_value() && zero.value().x > 0.0F &&
                zero.value().x <= cell.value().width + 0.5F,
-           "the provisional cell is the width of the body font's zero");
+           "the cell is the width of the grid font's zero");
 }
 } // namespace
 

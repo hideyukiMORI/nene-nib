@@ -1,4 +1,6 @@
 #include "EditorController.hpp"
+#include "GridLineRows.hpp"
+#include "GridLineSource.hpp"
 
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
@@ -3430,6 +3432,86 @@ std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visibl
     return lines;
 }
 
+GridLineMarks EditorController::grid_marks(core::LineNumber line,
+                                           const core::OffsetRange &selection,
+                                           const core::VimPattern *pattern,
+                                           core::Offset caret) const
+{
+    GridLineMarks marks{selection, {}, std::nullopt};
+    if (pattern == nullptr)
+    {
+        return marks;
+    }
+    // 照合は行の全体で（`^` `$` は行の端で当たる・line_view と同じ）。塗るのは見えている画面行の
+    // 升へ写した分だけ（GridLineRows）。
+    const core::TextBuffer &text = state_.text();
+    const core::Offset start = text.line_start(line);
+    const auto content = text.text_range(start, text.line_end(line));
+    for (const auto &match : core::vim_line_matches(content, *pattern))
+    {
+        const core::OffsetRange found{core::Offset{start.value + match.begin.value},
+                                      core::Offset{start.value + match.end.value}};
+        if (found.begin.value >= found.end.value)
+        {
+            continue;
+        }
+        marks.matches.push_back(found);
+        if (found.begin.value <= caret.value && caret.value < found.end.value)
+        {
+            marks.current = found;
+        }
+    }
+    if (state_.vim().highlight != core::VimSearchHighlight::on)
+    {
+        marks.matches.clear();
+    }
+    return marks;
+}
+
+std::optional<TextLayoutFailure> EditorController::grid_visible_rows(EditorFrame &frame) const
+{
+    const VisualTextView view(state_, ports_.text_layouts, view_geometry_);
+    auto cells = view.grid_cells();
+    if (!cells)
+    {
+        return cells.error();
+    }
+    const auto caret = view.grid_point(
+        cells.value(), core::TextCaret{state_.text().position_of(state_.selection().caret),
+                                       state_.caret_affinity()});
+    const ScrollState scroll = state_.scroll();
+    const core::OffsetRange range = highlighted_range();
+    const auto block = block_selection();
+    const auto pattern = search_pattern();
+    const core::VimPattern *selected =
+        pattern.has_value()
+            ? std::visit([](const auto &value) { return &frame_pattern(value); }, pattern.value())
+            : nullptr;
+    const core::Offset found = selected != nullptr
+                                   ? previewed_offset(state_).value_or(state_.selection().caret)
+                                   : state_.selection().caret;
+    // 画面の下に半分かかる画面行も描く（text と同じ）。
+    const auto limit = scroll.visible_lines + 1;
+    std::size_t screen = 0;
+    auto first_row = scroll.first_row;
+    for (core::LineNumber line{std::max<std::size_t>(scroll.first_visible.value, 1)};
+         line.value <= state_.text().line_count() && screen < limit; ++line.value)
+    {
+        const auto count = cells.value().rows(line);
+        const auto from = std::min(first_row, count - 1);
+        const auto take = std::min(count - from, limit - screen);
+        GridLineRows(
+            GridLineSource{state_, cells.value(), line, from, from + take,
+                           static_cast<std::int64_t>(screen),
+                           grid_marks(line, block_row(block, line, range), selected, found), caret})
+            .append_to(frame.grid);
+        screen += take;
+        first_row = 0;
+    }
+    frame.grid_scanned = cells.value().scanned();
+    return std::nullopt;
+}
+
 DocumentView EditorController::active_document_view() const
 {
     const auto &document = state_.document();
@@ -3482,12 +3564,15 @@ EditorFrame EditorController::frame() const
     auto tabs = tab_views(state_, delivered.document);
     const auto encoding = delivered.document.encoding;
     // 問いの答えを待つ間は本文の行を読まず文字組みもしない（ADR 0140 の決定 2）。renderer は
-    // display_pending を見て本文を描かない。
+    // display_pending を見て本文を描かない。格子では本文の行を文字組みせず、画面行は grid に載る
+    // （決定 5）。
     const bool pending = display_pending(state_.display_inquiry());
-    auto lines =
-        pending ? std::expected<std::vector<LineView>, TextLayoutFailure>{} : visible_lines();
+    const bool gridded =
+        !pending && state_.display() == core::DisplayForm::grid && view_geometry_.width > 0;
+    auto lines = pending || gridded ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
+                                    : visible_lines();
     const auto failure = lines ? layout_failure_ : std::optional{lines.error()};
-    return EditorFrame{std::move(lines).value_or(std::vector<LineView>{}),
+    EditorFrame result{std::move(lines).value_or(std::vector<LineView>{}),
                        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode),
                                  state_.caret_affinity()},
                        state_.scroll().first_visible,
@@ -3521,5 +3606,11 @@ EditorFrame EditorController::frame() const
                        state_.scroll().horizontal,
                        state_.display(),
                        pending};
+    if (gridded)
+    {
+        const auto grid_failure = grid_visible_rows(result);
+        result.layout_failure = grid_failure.has_value() ? grid_failure : result.layout_failure;
+    }
+    return result;
 }
 } // namespace nenenib::application

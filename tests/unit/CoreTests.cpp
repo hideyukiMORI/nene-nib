@@ -1662,16 +1662,16 @@ void verify_edit_mode()
 // 並びは起動の経路の正典順で、eng/measure-speed.py の STARTUP_MILESTONES と同じ。
 void verify_milestone()
 {
-    constexpr std::array<Milestone, 11> ordered{
+    constexpr std::array<Milestone, 12> ordered{
         Milestone::document_opened,   Milestone::window_created,  Milestone::backdrop_applied,
         Milestone::window_shown,      Milestone::device_created,  Milestone::swap_chain_created,
         Milestone::composition_bound, Milestone::context_created, Milestone::text_formats_created,
-        Milestone::input_received,    Milestone::frame_presented};
-    constexpr std::array<std::string_view, 11> expected_names{
+        Milestone::input_received,    Milestone::frame_presented, Milestone::body_presented};
+    constexpr std::array<std::string_view, 12> expected_names{
         "document_opened",      "window_created",     "backdrop_applied",  "window_shown",
         "device_created",       "swap_chain_created", "composition_bound", "context_created",
-        "text_formats_created", "input_received",     "frame_presented"};
-    std::array<std::string_view, 11> seen{};
+        "text_formats_created", "input_received",     "frame_presented",   "body_presented"};
+    std::array<std::string_view, 12> seen{};
     for (std::size_t index = 0; index < ordered.size(); ++index)
     {
         seen[index] = milestone_name(ordered[index]);

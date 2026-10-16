@@ -12,10 +12,10 @@
 ## 決定
 
 1. **文書は道具が作る `giant-line.txt`。** ASCII だけ・改行なし・16,800,000 bytes ちょうど。形は minified JSON 風（`{"k000000":"nenenib giant line sample value","k000001":…}` を繰り返し、最後の鍵で長さを合わせて `}` で閉じる）。`long_line_document` と同じく SHA-256 を道具に固定し、違えば測らない（#298）。
-2. **ベンチは 2 本で、1 回の試行から取る。** `open-giant-line-16mib`（プロセス生成から最初の `frame_presented` まで・起動の内訳つき・`open-large-file-16mib` と同じ経路）と `key-to-frame-single-giant-line-16mib`（文書を起動引数で開き、暖機の 1 文字の後の 1 つの WM_CHAR の `input_received` から次の `frame_presented` まで・`key-to-frame-single-long-line` と同じ経路）。キャレットは開いた直後の位置（行頭）で、打鍵は行の全体の再整形を起こす最悪の位置。
+2. **ベンチは 2 本で、1 回の試行から取る。** `open-giant-line-16mib`（プロセス生成から節目 `body_presented`＝本文を描いた最初の frame が present された時まで・起動の内訳つき。開いた直後の最初の `frame_presented` は表示形式の問い（ADR 0140 の決定 2）を待つ本文の無い frame なので値にしない。道具は問いに答え、窓のスレッドが静かになってから閉じる。`body_presented` は起動の節目の列（ADR 0013）の末尾で、問いの無い文書では最初の `frame_presented` と同じ frame・#546。`open-large-file-16mib` と `startup-first-frame` の値は今までどおり最初の `frame_presented`）と `key-to-frame-single-giant-line-16mib`（文書を起動引数で開き、暖機の 1 文字の後の 1 つの WM_CHAR の `input_received` から次の `frame_presented` まで・`key-to-frame-single-long-line` と同じ経路）。キャレットは開いた直後の位置（行頭）で、打鍵は行の全体の再整形を起こす最悪の位置。
 3. **巨大な行の打鍵の試行は 200 打鍵を送らない。** 1 打鍵が秒の桁になり得るので、200 打鍵の往復は試行の時間を何十倍にもする。`keys_trial` に「200 打鍵を送らない」選択を足し、この試行だけ暖機と 1 打鍵で終える。
 4. **最初は `--bench` で名指ししたときだけ測る（`OPTIONAL_BENCHES`）。** 既定の 8 本（`BENCHES`）には入れない。製品が 60 秒で frame を出せない場合は欠測として記録し（`LARGE_SECONDS`）、ほかのベンチを止めない。基準値（`--adopt --bench`）を 1 回測って書く commit で、`BENCHES` に移すかどうかを決める（基準値の無いベンチは `compare` が飛ばすので、移しても落ちない）。
-5. **記録の形は既存と同じ。** `out/speed/*.json` の `values` と `breakdown`、`document` の欄（bytes・lines=1）。既存 8 本の記録の鍵は変えない。
+5. **記録の形は既存と同じ。** `out/speed/*.json` の `values` と `breakdown`、`document` の欄（bytes・lines=1）。既存 8 本の `values` の鍵は変えない。起動の内訳（`breakdown`）には `body_presented` の区間が加わる（問いの無い文書では 0）。
 
 ## 却下した選択肢
 
@@ -26,7 +26,7 @@
 ## 検証
 
 - 実機の Release（main の製品 `build/release-89c582d`）で `--bench open-giant-line-16mib` と `--bench key-to-frame-single-giant-line-16mib` を各 1 回（5 試行）。欠測なら欠測の記録（`missing` の数）を残す。
-- 既存 8 本の記録の鍵の差分 0（`--bench key-to-frame-single` の JSON を前後で比べる）。
+- 既存 8 本の `values` の鍵の差分 0（`--bench key-to-frame-single` の JSON を前後で比べる）。
 
 ## 限界
 

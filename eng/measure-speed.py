@@ -25,15 +25,20 @@ through eng/window_driver.py, and reads the file back.
 Two optional benches run only when --bench names them (OPTIONAL_BENCHES, ADR 0138); the eight
 above stay the default set and the only ones compare() judges:
 
-  open-giant-line-16mib     the same startup measurement as open-large-file-16mib with a document
-                            that is one 16,800,000 byte ASCII line (minified JSON, no newline,
-                            checked by SHA-256); a run that presents no frame within LARGE_SECONDS
-                            is missing, not a traceback
+  open-giant-line-16mib     process creation -> the first frame that draws the body (body_presented,
+                            after the grid question is answered) over a document that is one
+                            16,800,000 byte ASCII line (minified JSON, no newline, checked by
+                            SHA-256), with the startup breakdown; a run that presents no body
+                            within LARGE_SECONDS is missing, not a traceback (#546)
   key-to-frame-single-giant-line-16mib
                             the key-to-frame-single trial over that document without the 200
                             keystrokes: the warmup character and one more, each sent only after the
                             window thread went quiet, so the single is measured after the warmup's
                             frame; a single that is not answered within LARGE_SECONDS is missing
+
+Both giant benches answer the grid question (ADR 0140 decision 2) that the editor puts up before it
+lays out the body: --grid-answer yes (the default, ADR 0140 decision 8) opens the document as the grid,
+--grid-answer no keeps it as text. A trial in which the question never comes up is missing.
 
 --bench selects the stimulus to measure and the value to record, compare or adopt. Without it,
 every bench runs. Related benches share their existing trial, but only the selected value is kept.
@@ -92,8 +97,8 @@ import subprocess
 import time
 import winreg
 
-from window_driver import (api, become_dpi_aware, capture_png, close, covered_by, dismiss_dialog,
-                           IDNO, kernel, post_together, press_chord, raise_window, start, stop,
+from window_driver import (answer_question, api, become_dpi_aware, capture_png, close, covered_by,
+                           dismiss_dialog, IDNO, kernel, post_together, press_chord, raise_window, start, stop,
                            take_foreground, user, VK_CONTROL, WindowCovered, WindowUnavailable,
                            write_text)
 
@@ -159,10 +164,14 @@ LARGE_BURST_BENCH = "key-to-frame-burst-200-16mib"
 ARRIVAL_SEGMENT = "keysArrivalSpan"
 # 起動の節目の正典順（Issue #19 / core::Milestone と同じ綴り）。区間名は「到達する節目の名前」で、
 # 最初の区間 "origin" だけはプロセス生成 -> bind（loader・CRT・COM・引数）を指す。
+# 末尾の body_presented は本文を描いた最初の frame（#546）。問いの無い文書では frame_presented と
+# 同じ frame なので区間はほぼ 0、巨大な行では答えの後の本文の frame までの区間になる。
 ORIGIN_SEGMENT = "origin"
+BODY_MILESTONE = "body_presented"
 STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "window_shown",
                       "device_created", "swap_chain_created", "composition_bound",
-                      "context_created", "text_formats_created", "frame_presented")
+                      "context_created", "text_formats_created", "frame_presented",
+                      BODY_MILESTONE)
 # 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
 STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
@@ -588,7 +597,7 @@ def await_quiet(window, seconds: float = LARGE_SECONDS) -> bool:
 
 def keys_trial(executable: Path, environment: dict, folder: Path,
                document: Path | None = None,
-               burst: bool = True) -> tuple[float | None, float | None, float, int]:
+               burst: bool = True, grid: bool = True) -> tuple[float | None, float | None, float, int]:
     """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
 
     Either value is None when its own stimulus did not reach the window, and the caller repeats or
@@ -597,10 +606,11 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
 
     With burst=False the 200 keystrokes are not sent (ADR 0138 decision 3): the trial is the
     warmup and the single only, each posted after the window thread went quiet, and the single is
-    a value only when the warmup's frame was presented before it was read.
+    a value only when the warmup's frame was presented before it was read. That trial answers the
+    grid question first: grid=True is "yes" (ADR 0140 decision 8).
     """
     if not burst:
-        return quiet_single_trial(executable, environment, folder, document)
+        return quiet_single_trial(executable, environment, folder, document, grid)
     if document is None:
         report = report_path(folder, "keys")
         process, window, _ = start(executable, environment, ["--measure", str(report)])
@@ -652,12 +662,17 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
 
 
 def quiet_single_trial(executable: Path, environment: dict, folder: Path,
-                       document: Path) -> tuple[float | None, None, float, int]:
-    """keys_trial without the 200: warmup, then one keystroke, each after the window went quiet."""
+                       document: Path, grid: bool) -> tuple[float | None, None, float, int]:
+    """keys_trial without the 200: warmup, then one keystroke, each after the window went quiet.
+
+    The grid question is answered (grid is "yes") before anything else is sent to the window.
+    """
     report = report_path(folder, "keys-giant")
     process, window, _ = start(executable, environment,
                                ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
     try:
+        if not answer_question(process, grid, seconds=LARGE_SECONDS):
+            raise TrialNotObserved("the grid question never came up")
         raise_window(window)
         if not take_foreground(window):
             print("Speed: the bench window did not take the foreground")
@@ -690,14 +705,15 @@ def quiet_single_trial(executable: Path, environment: dict, folder: Path,
 
 
 def bench_giant_single(executable: Path, environment: dict, folder: Path,
-                       document: Path) -> tuple[dict, dict]:
+                       document: Path, grid: bool) -> tuple[dict, dict]:
     """One keystroke at the start of the one-line 16 MiB document; never repeated (ADR 0138).
 
     A trial can take minutes when the product cannot answer, so a trial that was not observed or
     timed out is missing at once instead of being repeated BURST_ATTEMPTS times.
     """
     try:
-        single, _, _, _ = keys_trial(executable, environment, folder, document, burst=False)
+        single, _, _, _ = keys_trial(executable, environment, folder, document, burst=False,
+                                     grid=grid)
     except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
         print(f"Speed: {unobserved}; this trial of {GIANT_SINGLE_BENCH} is missing")
         single = None
@@ -705,17 +721,28 @@ def bench_giant_single(executable: Path, environment: dict, folder: Path,
 
 
 def bench_giant_open(executable: Path, environment: dict, folder: Path,
-                     document: Path) -> tuple[dict, dict]:
-    """open-large-file-16mib's measurement over the one-line document; no frame is missing.
+                     document: Path, grid: bool) -> tuple[dict, dict]:
+    """Process creation to the first frame that draws the body (body_presented, #546).
 
-    The window is asked to close at once as in bench_large_file, and the process gets
-    LARGE_SECONDS to present its first frame and exit; one that does not is killed by stop() and
-    the trial is missing (ADR 0138 decision 4), as is a finished file without frame_presented.
+    The first frame_presented comes while the grid question waits, without the body (ADR 0140
+    decision 2), so it says nothing about laying out the body. The question is answered first
+    (grid is "yes"; a trial in which it never comes up is missing), and the window is asked to
+    close only after its thread went quiet: a WM_CLOSE posted at once would be read before the
+    WM_PAINT of the body. The process gets LARGE_SECONDS for each; one that does not exit is
+    killed by stop() and the trial is missing (ADR 0138 decision 4), as is a finished file
+    without body_presented. The value is processCreationToOriginMs plus the body_presented
+    reading, as startup-window-shown adds window_shown's.
     """
     report = report_path(folder, "giant")
     process, window, _ = start(executable, environment,
                                ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
     try:
+        if not answer_question(process, grid, seconds=LARGE_SECONDS):
+            print(f"Speed: the grid question never came up; this trial of {GIANT_OPEN_BENCH}"
+                  " is missing")
+            return {GIANT_OPEN_BENCH: None}, {}
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the grid answer")
         close(window)
         process.wait(timeout=LARGE_SECONDS)
     except subprocess.TimeoutExpired:
@@ -725,12 +752,13 @@ def bench_giant_open(executable: Path, environment: dict, folder: Path,
         stop(process)
     text = report.read_text(encoding="utf-8") if report.is_file() else ""
     marks = marks_of(text)
-    if marks is None or not any(entry["milestone"] == "frame_presented" for entry in marks):
-        print(f"Speed: no frame was presented; this trial of {GIANT_OPEN_BENCH} is missing")
+    if marks is None or not any(entry["milestone"] == BODY_MILESTONE for entry in marks):
+        print(f"Speed: no frame drew the body; this trial of {GIANT_OPEN_BENCH} is missing")
         return {GIANT_OPEN_BENCH: None}, {}
     measured = json.loads(text)
-    return ({GIANT_OPEN_BENCH: float(measured["processCreationToFirstFrameMs"])},
-            {GIANT_OPEN_BENCH: breakdown(measured)})
+    body = (float(measured["processCreationToOriginMs"])
+            + first_reading(marks, BODY_MILESTONE) / MICROSECONDS_PER_MILLISECOND)
+    return {GIANT_OPEN_BENCH: body}, {GIANT_OPEN_BENCH: breakdown(measured)}
 
 
 def bench_large_file(executable: Path, environment: dict, folder: Path,
@@ -790,7 +818,7 @@ def judged_samples(measured: dict) -> int | None:
 
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
                 document: Path | None, palette: Path | None, long_line: Path | None = None,
-                giant: Path | None = None):
+                giant: Path | None = None, grid: bool = True):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -805,12 +833,12 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
     if LONG_LINE_BENCH in names:
         yield bench_long_line(executable, environment, folder, long_line)
     if GIANT_OPEN_BENCH in names:
-        yield bench_giant_open(executable, environment, folder, giant)
+        yield bench_giant_open(executable, environment, folder, giant, grid)
     if GIANT_SINGLE_BENCH in names:
-        yield bench_giant_single(executable, environment, folder, giant)
+        yield bench_giant_single(executable, environment, folder, giant, grid)
 
 
-def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
+def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool = True) -> dict:
     names = BENCHES if bench is None else (bench,)
     become_dpi_aware()
     executable, environment, folder = prepare(build)
@@ -830,7 +858,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
     segments: dict = {name: {} for name in BREAKDOWN_BENCHES if name in names}
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
-                                         long_line, giant):
+                                         long_line, giant, grid):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -851,6 +879,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None) -> dict:
                               "lines": LARGE_LINES}
     elif giant is not None:
         record["document"] = {"path": giant.name, "bytes": giant.stat().st_size, "lines": 1}
+        record["gridAnswer"] = "yes" if grid else "no"
     return record
 
 
@@ -972,7 +1001,8 @@ def gather(arguments) -> dict:
     if arguments.values:
         record = json.loads(Path(arguments.values).read_text(encoding="utf-8"))
         return selected_record(record, arguments.bench)
-    record = measure(arguments.executable, arguments.repetitions, arguments.bench)
+    record = measure(arguments.executable, arguments.repetitions, arguments.bench,
+                     arguments.grid_answer == "yes")
     print(describe(record))
     print(f"Speed: recorded {write_record(record)}")
     return record
@@ -1048,6 +1078,8 @@ def main() -> int:
     parser.add_argument("--reference", type=Path, help="a reference file other than the canonical one")
     parser.add_argument("--values", type=Path, help="judge an earlier record instead of measuring")
     parser.add_argument("--repetitions", type=int, default=REPETITIONS)
+    parser.add_argument("--grid-answer", choices=("yes", "no"), default="yes",
+                        help="the answer the giant benches give to the grid question (ADR 0140)")
     arguments = parser.parse_args()
     if not (arguments.record or arguments.adopt or arguments.check):
         parser.error("one of --record, --adopt or --check is required")
