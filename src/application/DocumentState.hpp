@@ -2,6 +2,7 @@
 
 #include "CaretAffinity.hpp"
 #include "DisplayForm.hpp"
+#include "DisplayInquiry.hpp"
 #include "Document.hpp"
 #include "DocumentView.hpp"
 #include "EditHistory.hpp"
@@ -34,7 +35,7 @@ struct DocumentState
     core::CaretAffinity affinity = core::CaretAffinity::leading;
     // 表示形式（ADR 0140 の決定 2・3）。文書ごとの値で、設定にもタブの一覧にも入れない。
     core::DisplayForm display = core::DisplayForm::text;
-    // 開いたときの問いを判定したか（決定 2）。文書ごとに 1 回だけ判定する。
-    bool asked = false;
+    // 開いたときの問いの段階（決定 2）。文書ごとに 1 回だけ判定する。
+    DisplayInquiry inquiry = DisplayInquiry::unjudged;
 };
 } // namespace nenenib::application

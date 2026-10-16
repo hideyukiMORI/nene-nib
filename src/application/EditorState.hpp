@@ -4,6 +4,7 @@
 #include "CommandInput.hpp"
 #include "Composition.hpp"
 #include "DisplayForm.hpp"
+#include "DisplayInquiry.hpp"
 #include "Document.hpp"
 #include "DocumentState.hpp"
 #include "EditHistory.hpp"
@@ -98,10 +99,13 @@ class EditorState final
     // 表示形式（ADR 0140 の決定 2・3）。アクティブな文書のもので、開いた文書・新しいタブは text。
     [[nodiscard]] core::DisplayForm display() const noexcept;
     [[nodiscard]] EditorState with_display(core::DisplayForm display) const;
-    // 開いたときの問いを判定したか（決定 2）。アクティブな文書のもの。判定するのは controller の
-    // 1 か所で、判定したら真にする。
-    [[nodiscard]] bool display_asked() const noexcept;
-    [[nodiscard]] EditorState with_display_asked() const;
+    // 開いたときの問いの段階（決定 2）。アクティブな文書のもの。進めるのは controller の
+    // ask_display と accept(SelectDisplay) の 2 か所。
+    [[nodiscard]] DisplayInquiry display_inquiry() const noexcept;
+    [[nodiscard]] EditorState with_display_inquiry(DisplayInquiry inquiry) const;
+    // 本文を仮想桁の索引を持つ写しに置き換える（ADR 0140 の決定 4）。本文の中身・履歴・選択は
+    // 変えない。持たせるのは巨大な行の文書を開いたときと、格子にするときだけ。
+    [[nodiscard]] EditorState with_virtual_columns() const;
     // 格子表示を聞く印（決定 2）。close_request と同じく 1 意図だけ立ち、with_intent_cleared
     // が消す。
     [[nodiscard]] bool display_question() const noexcept;
@@ -197,7 +201,7 @@ class EditorState final
     ScrollState scroll_;
     core::CaretAffinity caret_affinity_ = core::CaretAffinity::leading;
     core::DisplayForm display_ = core::DisplayForm::text;
-    bool display_asked_ = false;
+    DisplayInquiry display_inquiry_ = DisplayInquiry::unjudged;
     bool display_question_ = false;
     core::Appearance appearance_;
     core::EditMode mode_;

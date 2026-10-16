@@ -101,6 +101,9 @@ class EditorController final
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
+    // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
+    // 確かめるために読む。状態を変える口はここには無い。
+    [[nodiscard]] const core::TextBuffer &text() const noexcept;
 
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
@@ -214,8 +217,9 @@ class EditorController final
     void accept(const WorkCompleted &);
     // 表示形式（ADR 0140 の決定 2・3）。窓の問いの「はい」と Ex の `:set display=` が通る 1 本。
     void accept(const SelectDisplay &intent);
-    // 開いた文書に格子表示を聞くかを、アクティブな文書ごとに 1 回だけ判定する（決定 2）。apply の
-    // 終わりと起動の終わりの 2 か所から呼ぶ。Ctrl+Tab で歩いている間は判定しない（確定で判定）。
+    // 開いた文書に格子表示を聞くかを、アクティブな文書ごとに 1 回だけ判定する（決定 2）。文書が
+    // アクティブになった直後（開く・enter_document）と apply の終わりと起動の終わりから呼ぶ。
+    // Ctrl+Tab で歩いている間は判定だけして聞かない（確定で聞く）。
     void ask_display();
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);

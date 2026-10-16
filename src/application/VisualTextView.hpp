@@ -1,13 +1,13 @@
 #pragma once
 
 #include "EditorState.hpp"
+#include "GridCells.hpp"
 #include "LineView.hpp"
 #include "ScrollExtent.hpp"
 #include "ScrollFollow.hpp"
 #include "ScrollState.hpp"
 #include "TextCaret.hpp"
 #include "TextLayoutPort.hpp"
-#include "VirtualColumnIndex.hpp"
 #include "VisualPosition.hpp"
 
 #include <cstddef>
@@ -18,16 +18,17 @@
 namespace nenenib::application
 {
 // 1回の位置解決の間だけ現在の文書を借用する。スクロール/選択の状態は所有しない。
-// 格子の文書（ADR 0140 の決定 4・5）では、構築のときに 1 升を port の cell から 1 回だけ読んで
-// 升の累積（VirtualColumnIndex::for_grid）を作り、rows / location / caret_at を core の格子の
-// 純関数で答える。文字組みの rows / locate / hit は呼ばない。
+// 格子の文書（ADR 0140 の決定 4・5）では、構築のときに 1 升を port の cell から 1 回だけ読み、
+// rows / location / caret_at を本文が持つ仮想桁の索引（TextBuffer::virtual_columns）から GridCells
+// で答える。索引は借りるだけで作らない（持たせるのは開く道と SelectDisplay の application の 2
+// か所）。 文字組みの rows / locate / hit は呼ばない。
 class VisualTextView final
 {
   public:
     VisualTextView(const EditorState &state, TextLayoutPort &layouts,
                    core::TextViewGeometry geometry);
     // 見えている 1 行の表示値（変換中の文字列はキャレットの行に差し込む）。位置解決をしない
-    // frame の行はこちらを直接呼ぶ（格子の累積を作らない）。
+    // frame の行はこちらを直接呼ぶ（1 升を port から読まない）。
     [[nodiscard]] static LineView line_of(const EditorState &state, core::LineNumber number);
     [[nodiscard]] LineView line(core::LineNumber number) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure> rows(core::LineNumber number) const;
@@ -47,6 +48,8 @@ class VisualTextView final
   private:
     [[nodiscard]] TextLayoutRequest request(const LineView &line) const;
     [[nodiscard]] bool gridded() const noexcept;
+    // 格子の升の答え手。本文が索引を持たないか 1 升を読めなければ失敗。
+    [[nodiscard]] std::expected<GridCells, TextLayoutFailure> grid() const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
     grid_rows(core::LineNumber number) const;
     [[nodiscard]] std::expected<core::TextLocation, TextLayoutFailure>
@@ -67,8 +70,9 @@ class VisualTextView final
     TextLayoutPort &layouts_;
     core::TextViewGeometry geometry_;
     core::TextPosition caret_;
-    // 格子の升の累積と 1 升の幅（物理画素）。格子でなければ空。cell が読めなければ grid_failure_。
-    std::optional<core::VirtualColumnIndex> grid_;
+    // 格子の 1 画面行の升の数と 1 升の幅（物理画素）。格子でなければ 0。cell が読めなければ
+    // grid_failure_。
+    std::size_t grid_columns_ = 0;
     float cell_width_ = 0;
     std::optional<TextLayoutFailure> grid_failure_;
 };

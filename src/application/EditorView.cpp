@@ -1,5 +1,6 @@
 #include "EditorController.hpp"
 
+#include "DisplayInquiry.hpp"
 #include "ScreenMotion.hpp"
 
 #include <algorithm>
@@ -38,9 +39,12 @@ namespace
 }
 } // namespace
 
+// 問いの答えを待つ間は幅の無い窓として解決し、文字組みの port を呼ばない（ADR 0140 の決定 2）。
 VisualTextView EditorController::visual_view() const
 {
-    return VisualTextView{state_, ports_.text_layouts, view_geometry_};
+    return VisualTextView{state_, ports_.text_layouts,
+                          display_pending(state_.display_inquiry()) ? core::TextViewGeometry{}
+                                                                    : view_geometry_};
 }
 
 bool EditorController::move_visual(const MoveCaret &intent)

@@ -379,7 +379,7 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.scroll_ = ScrollState{core::LineNumber{first_line}, scroll_.visible_lines};
     next.document_ = std::move(document);
     next.display_ = core::DisplayForm::text;
-    next.display_asked_ = false;
+    next.display_inquiry_ = DisplayInquiry::unjudged;
     return next;
 }
 
@@ -395,15 +395,22 @@ EditorState EditorState::with_display(core::DisplayForm display) const
     return next;
 }
 
-bool EditorState::display_asked() const noexcept
+DisplayInquiry EditorState::display_inquiry() const noexcept
 {
-    return display_asked_;
+    return display_inquiry_;
 }
 
-EditorState EditorState::with_display_asked() const
+EditorState EditorState::with_display_inquiry(DisplayInquiry inquiry) const
 {
     EditorState next(*this);
-    next.display_asked_ = true;
+    next.display_inquiry_ = inquiry;
+    return next;
+}
+
+EditorState EditorState::with_virtual_columns() const
+{
+    EditorState next(*this);
+    next.text_ = text_.with_virtual_columns();
     return next;
 }
 
@@ -596,7 +603,7 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
     return std::make_shared<const DocumentState>(DocumentState{
         text_, core::collapsed_at(selection_.caret), std::move(history), document_,
         scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
-        scroll_.first_row, scroll_.horizontal, caret_affinity_, display_, display_asked_});
+        scroll_.first_row, scroll_.horizontal, caret_affinity_, display_, display_inquiry_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -610,7 +617,7 @@ void EditorState::spread(const DocumentState &tab)
     scroll_ = ScrollState{tab.first_visible, scroll_.visible_lines, tab.first_row, tab.horizontal};
     caret_affinity_ = tab.affinity;
     display_ = tab.display;
-    display_asked_ = tab.asked;
+    display_inquiry_ = tab.inquiry;
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 
