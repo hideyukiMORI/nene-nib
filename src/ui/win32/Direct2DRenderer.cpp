@@ -1163,11 +1163,7 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
     {
         fill(row, frame.palette.current_line);
     }
-    const auto padding = core::to_pixels(
-        static_cast<std::int32_t>(static_cast<float>(gutter_padding_dips) *
-                                      core::font_size_ratio(frame.settings.font_size) +
-                                  0.5F),
-        dpi_);
+    const auto padding = gutter_padding(frame.settings);
     write_gutter(std::to_string(line.number.value),
                  core::LayoutRect{body.gutter.left, top, body.gutter.right - padding,
                                   top + body.line_height},
@@ -1186,6 +1182,82 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
         draw_plain_line(frame, body, area, line);
     }
     context_->PopAxisAlignedClip();
+}
+
+std::int32_t Direct2DRenderer::gutter_padding(const core::EditorSettings &settings) const
+{
+    return core::to_pixels(static_cast<std::int32_t>(static_cast<float>(gutter_padding_dips) *
+                                                         core::font_size_ratio(settings.font_size) +
+                                                     0.5F),
+                           dpi_);
+}
+
+void Direct2DRenderer::draw_grid_rows(const application::EditorFrame &frame,
+                                      const core::BodyLayout &body)
+{
+    if (frame.grid.empty())
+    {
+        return;
+    }
+    const core::TextViewGeometry geometry{std::max(core::width_of(body.content), 1),
+                                          body.line_height, dpi_};
+    const auto cell = body_text_.cell(application::TextLayoutRequest{{}, frame.settings, geometry});
+    if (!cell)
+    {
+        text_failure_ = RenderFailure::directwrite;
+        return;
+    }
+    grid_cell_ = cell.value().width;
+    GridPainter painter(*context_.Get(), brush_.Get(), body_text_, text_failure_);
+    for (const auto &row : frame.grid)
+    {
+        draw_grid_row(painter, frame, body, row);
+    }
+}
+
+// 行番号は行の最初の画面行だけ。キャレットの行は画面行ごとに current_line で塗る。
+void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::EditorFrame &frame,
+                                     const core::BodyLayout &body,
+                                     const application::GridRowView &row)
+{
+    const auto top = row_pixel(body, row.screen_row);
+    const auto bottom = top + body.line_height;
+    const bool current = row.number == frame.caret.position.line;
+    if (current)
+    {
+        fill(core::LayoutRect{body.gutter.right, top, body.content.right, bottom},
+             frame.palette.current_line);
+    }
+    if (row.row == 0)
+    {
+        write_gutter(std::to_string(row.number.value),
+                     core::LayoutRect{body.gutter.left, top,
+                                      body.gutter.right - gutter_padding(frame.settings), bottom},
+                     current ? frame.palette.text : frame.palette.gutter);
+    }
+    const GridRowCanvas canvas{
+        core::LayoutRect{body.content.left, top, body.content.right, bottom},
+        grid_cell_,
+        frame.settings,
+        core::TextViewGeometry{std::max(core::width_of(body.content), 1), body.line_height, dpi_},
+        frame.palette,
+        frame.caret.shape,
+        !frame.command_line.has_value(),
+        frame.composition,
+        caret_width_,
+        core::to_pixels(caret_inset_dips, dpi_),
+        core::to_pixels(newline_mark_dips, dpi_),
+        static_cast<float>(core::to_pixels(block_radius_dips, dpi_)),
+        core::to_pixels(target_underline_dips, dpi_),
+        core::to_pixels(other_underline_dips, dpi_),
+        scaled(1.0F)};
+    context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
+    const auto caret = painter.draw(row, canvas);
+    context_->PopAxisAlignedClip();
+    if (caret.has_value())
+    {
+        caret_rectangle_ = caret.value();
+    }
 }
 
 void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
@@ -1207,6 +1279,7 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
     {
         draw_line(frame, body, index);
     }
+    draw_grid_rows(frame, body);
     context_->PopAxisAlignedClip();
 }
 

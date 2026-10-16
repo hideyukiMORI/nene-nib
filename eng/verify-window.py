@@ -71,6 +71,15 @@ row 3 (restoreBack.png), and a click on the third reads it (restoreThird.png); w
 deleted, a click on its tab leaves two tabs and a one-line notice (restoreMissing.png); a start with
 one file argument shows that file alone (D24). These launches keep the profile's session.v2
 (window_driver.start with keep_session) and use posted messages only.
+
+Issue #546 adds the grid (ADR 0140 decisions 2 and 5), which `--grid` also runs alone: the 16 MiB
+one-line document of measure-speed.py (out/speed/giant-line.txt, made and checked there) is opened
+from the command line, the grid question is answered yes (window_driver.answer_question, a posted
+IDYES), and the status bar must show the `grid` mark while every visible row is filled to the same
+right edge (gridOpen.png). End, Home, the Vim toggle, j, k and a click in the third row follow
+(gridEnd / gridHome / gridVimJ / gridClick.png; j and k do not move on a one-line document), then
+`:set display=text` takes the mark away (gridText.png, the text layout of the whole line takes
+seconds) and `:set display=grid` brings it back (gridBack.png). Posted messages only.
 Python standard library and ctypes only.
 """
 
@@ -91,7 +100,8 @@ import time
 import winreg
 
 # 窓の駆動（起動・検出・PostMessageW・確認ダイアログ・終了）は 1 本しかない（ADR 0011 の決定 7）。
-from window_driver import (acknowledge_dialog, api, ask_hit, await_dialog, become_dpi_aware,
+from window_driver import (acknowledge_dialog, answer_question, api, ask_hit, await_dialog,
+                           assert_uncovered, become_dpi_aware,
                            capture as capture_client, capture_png, click, close, covered_by,
                            dismiss_dialog, gdi, GWL_STYLE, HTCAPTION, HTCLOSE, HWND_TOPMOST,
                            IDCANCEL, IDNO, parse_keys, press, press_chord, press_combination,
@@ -107,6 +117,11 @@ _spec = importlib.util.spec_from_file_location("compare_frames",
                                                Path(__file__).resolve().parent / "compare-frames.py")
 compare_frames = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(compare_frames)
+# 1 行 16 MiB の文書は速さの道具が作って SHA-256 で確かめる 1 本（ADR 0138 決定 1）。
+_speed_spec = importlib.util.spec_from_file_location(
+    "measure_speed", Path(__file__).resolve().parent / "measure-speed.py")
+measure_speed = importlib.util.module_from_spec(_speed_spec)
+_speed_spec.loader.exec_module(measure_speed)
 
 imm = c.WinDLL("imm32", use_last_error=True)
 
@@ -1718,6 +1733,115 @@ def restore_with_argument(executable: Path, environment: dict, appearance: str,
     return step
 
 
+# 格子（Issue #546）。巨大な行を text で組み直すと秒の単位なので、待ちは速さの道具と同じ長さ。
+GRID_SECONDS = 120.0
+VK_END = 0x23
+VK_HOME = 0x24
+# src/core/StatusBarLayout.cpp の display_gap_dips / display_width_dips。印は最初の項目の左。
+DISPLAY_GAP_DIPS = 2
+DISPLAY_WIDTH_DIPS = 24
+
+
+def display_mark_box(width: int, height: int, dpi: int) -> tuple:
+    """The `grid` mark left of the first status item, mirroring core::status_bar_layout."""
+    item = status_item_box(width, height, dpi, 0)
+    return (item[0] - to_pixels(DISPLAY_GAP_DIPS + DISPLAY_WIDTH_DIPS, dpi), item[1],
+            item[0] - to_pixels(DISPLAY_GAP_DIPS, dpi), item[3])
+
+
+def grid_look(pixels: bytes, size: tuple, appearance: str) -> dict:
+    """The mark's ink and the right edge of the ink of every fully visible body row."""
+    width, height, dpi, body = size
+    grounds = [list(STATUS_BAND[appearance])]
+    row_grounds = [list(PALETTE[appearance]), list(CURRENT_LINE[appearance]), list(ACCENT)]
+    rights = []
+    for index in range(body["visibleLines"]):
+        top = body["firstRowTop"] + body["lineHeight"] * index
+        rights.append(ink_right(pixels, width, (body["gutter"], top, width, top + body["lineHeight"]),
+                                row_grounds))
+    return {"mark": ink(pixels, width, display_mark_box(width, height, dpi), grounds),
+            "rowRights": rights}
+
+
+def grid_rows_filled(look: dict, body: dict) -> bool:
+    """Every visible row holds ink and their right edges stay within one line height (a few cells)."""
+    rights = look["rowRights"]
+    return bool(rights) and min(rights) > body["gutter"] and max(rights) - min(rights) <= body["lineHeight"]
+
+
+def grid_step(window, before: bytes, size: tuple, frames: Path | None, name: str,
+              seconds: float = 8.0) -> tuple[bytes, bool]:
+    """Wait for the frame after the posted keys; save <name>.png and say whether it changed."""
+    measure_speed.await_quiet(window, seconds)
+    after = await_new_frame(window, before, size[:2], seconds)
+    snapshot(frames, window, name)
+    return after, after != before
+
+
+def grid_moves(window, opened: bytes, size: tuple, frames: Path | None) -> dict:
+    """End and Home in the ordinary mode, the Vim toggle, j and k, and a click in the third row."""
+    width, height, dpi, body = size
+    record = {}
+    press(window, VK_END)
+    ended, record["endChanged"] = grid_step(window, opened, size, frames, "gridEnd")
+    press(window, VK_HOME)
+    homed, record["homeChanged"] = grid_step(window, ended, size, frames, "gridHome")
+    record["homeReturned"] = homed == opened
+    toggle = toggle_points(width, height, dpi)
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    vim, _ = grid_step(window, homed, size, frames, "gridVim")
+    write_text(window, "j")
+    moved, record["jChanged"] = grid_step(window, vim, size, frames, "gridVimJ", seconds=2.0)
+    write_text(window, "k")
+    moved, record["kChanged"] = grid_step(window, moved, size, frames, "gridVimK", seconds=2.0)
+    click(window, body["gutter"] + to_pixels(80, dpi), row_middle(body, 2))
+    clicked, record["clickChanged"] = grid_step(window, moved, size, frames, "gridClick")
+    record["last"] = clicked
+    return record
+
+
+def verify_grid(executable: Path, environment: dict, appearance: str, output: Path,
+                frames: Path | None) -> dict:
+    """Issue #546: the 16 MiB one-line document opens as the grid after the question (ADR 0140)."""
+    folder = output.parents[0] / "speed"
+    folder.mkdir(parents=True, exist_ok=True)
+    document = measure_speed.giant_line_document(folder)
+    process, window, _ = start(executable, environment, [str(document)], seconds=GRID_SECONDS)
+    record: dict = {}
+    try:
+        record["asked"] = answer_question(process, True, seconds=GRID_SECONDS)
+        assert record["asked"], "opening the 16 MiB line did not ask about the grid"
+        raise_window(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        dpi = user.GetDpiForWindow(window)
+        size = (width, height, dpi, body_points(width, height, dpi))
+        assert_uncovered(window)
+        opened, _ = grid_step(window, b"", size, frames, "gridOpen", seconds=GRID_SECONDS)
+        record["open"] = grid_look(opened, size, appearance)
+        assert record["open"]["mark"] > 0, "the grid shows no mark on the status bar"
+        assert grid_rows_filled(record["open"], size[3]), f"grid rows {record['open']['rowRights']}"
+        moves = grid_moves(window, opened, size, frames)
+        clicked = moves.pop("last")
+        record["moves"] = moves
+        assert moves["endChanged"] and moves["homeReturned"] and moves["clickChanged"], moves
+        assert not moves["jChanged"] and not moves["kChanged"], "j or k moved on a one-line document"
+        send_key_sequence(window, ":set display=text<CR>")
+        text, _ = grid_step(window, clicked, size, frames, "gridText", seconds=GRID_SECONDS)
+        record["text"] = grid_look(text, size, appearance)
+        assert record["text"]["mark"] == 0, "`:set display=text` left the grid mark"
+        send_key_sequence(window, ":set display=grid<CR>")
+        back, _ = grid_step(window, text, size, frames, "gridBack", seconds=GRID_SECONDS)
+        record["back"] = grid_look(back, size, appearance)
+        assert record["back"]["mark"] > 0, "`:set display=grid` did not bring the mark back"
+        close(window)
+        record["exitCode"] = process.wait(timeout=GRID_SECONDS)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def verify_restore(executable: Path, environment: dict, appearance: str, output: Path,
                    frames: Path | None) -> dict:
     """Issue #253: the previous tabs come back (ADR 0059 decisions 5 and 6, D24 to D27).
@@ -1862,6 +1986,8 @@ def main() -> None:
                         help="run the tab key section alone (Issue #239); it sends real keys")
     parser.add_argument("--restore", action="store_true",
                         help="run the restore section alone (Issue #253); posted messages only")
+    parser.add_argument("--grid", action="store_true",
+                        help="run the grid section alone (Issue #546); posted messages only")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -1874,6 +2000,9 @@ def main() -> None:
     if arguments.restore and (arguments.tabs or arguments.keys is not None
                               or arguments.open is not None):
         parser.error("--restore runs alone")
+    if arguments.grid and (arguments.tabs or arguments.restore or arguments.keys is not None
+                           or arguments.open is not None):
+        parser.error("--grid runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -1888,6 +2017,14 @@ def main() -> None:
     if arguments.tabs:
         try:
             record = verify_tabs(executable, environment, expected_appearance(), output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.grid:
+        try:
+            record = verify_grid(executable, environment, expected_appearance(), output, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)
@@ -1949,6 +2086,8 @@ def main() -> None:
         result["tabs"] = verify_tabs(executable, environment, appearance, output, frames)
         # Issue #253: 前回のタブを戻す。一覧を残して起動し直すので、別の 4 回の起動で測る。
         result["restore"] = verify_restore(executable, environment, appearance, output, frames)
+        # Issue #546: 1 行 16 MiB を格子で開く。問いに答えるので別の 1 回の起動で測る。
+        result["grid"] = verify_grid(executable, environment, appearance, output, frames)
         (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                         encoding="utf-8")
         print(json.dumps(result, indent=2))

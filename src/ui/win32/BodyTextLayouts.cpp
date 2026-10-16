@@ -8,6 +8,8 @@
 #include "Utf16.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <string>
 #include <utility>
 
@@ -18,6 +20,23 @@ namespace
 constexpr auto unavailable = application::TextLayoutFailure::unavailable;
 constexpr float tab_stop_spaces = 8.0F;
 constexpr float spacing_probe_width = 1000.0F;
+// 升の幅と cluster の送りの差がこれより小さければ揃え直さない（物理画素）。
+constexpr float cell_tolerance = 0.01F;
+constexpr std::array<const wchar_t *, 2> grid_fonts{L"Cascadia Mono", L"Consolas"};
+constexpr wchar_t low_surrogate_first = 0xDC00;
+constexpr wchar_t low_surrogate_last = 0xDFFF;
+
+// UTF-16 の [from, from + length) にある code point の数（下位サロゲートを数えない）。
+[[nodiscard]] std::size_t code_points(const std::wstring &wide, UINT32 from, UINT32 length)
+{
+    std::size_t count = 0;
+    for (auto unit = from; unit < from + length && unit < wide.size(); ++unit)
+    {
+        const auto value = wide.at(unit);
+        count += value >= low_surrogate_first && value <= low_surrogate_last ? 0U : 1U;
+    }
+    return count;
+}
 
 [[nodiscard]] DWRITE_WORD_WRAPPING wrapping(core::LineWrapping value) noexcept
 {
@@ -51,6 +70,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     previous_.clear();
     pending_.reset();
     cell_.reset();
+    grid_format_.Reset();
     style_.reset();
     if (!factory_)
     {
@@ -72,18 +92,31 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     return {};
 }
 
-std::wstring BodyTextLayouts::family(std::string_view requested) const
+bool BodyTextLayouts::exists(const std::wstring &name) const
 {
-    const auto wide = core::to_utf16(requested).value();
     Microsoft::WRL::ComPtr<IDWriteFontCollection> collection;
     UINT32 index = 0;
     BOOL exists = FALSE;
-    if (SUCCEEDED(factory_->GetSystemFontCollection(&collection)) &&
-        SUCCEEDED(collection->FindFamilyName(wide.c_str(), &index, &exists)) && exists != FALSE)
+    return SUCCEEDED(factory_->GetSystemFontCollection(&collection)) &&
+           SUCCEEDED(collection->FindFamilyName(name.c_str(), &index, &exists)) && exists != FALSE;
+}
+
+std::wstring BodyTextLayouts::family(std::string_view requested) const
+{
+    auto wide = core::to_utf16(requested).value();
+    return exists(wide) ? wide : std::wstring{L"Consolas"};
+}
+
+std::wstring BodyTextLayouts::grid_family(std::string_view requested) const
+{
+    for (const auto *name : grid_fonts)
     {
-        return wide;
+        if (exists(name))
+        {
+            return name;
+        }
     }
-    return L"Consolas";
+    return family(requested);
 }
 
 HRESULT BodyTextLayouts::make_format(const application::TextLayoutRequest &request)
@@ -100,21 +133,70 @@ HRESULT BodyTextLayouts::make_format(const application::TextLayoutRequest &reque
     {
         return made;
     }
-    attach_fallback();
-    const auto spacing = set_spacing(request);
-    if (FAILED(spacing))
+    const auto finished = finish_format(format_.Get(), request);
+    if (FAILED(finished))
     {
-        return spacing;
+        return finished;
     }
     return format_->SetWordWrapping(request.geometry.width > 0 ? wrapping(request.settings.wrapping)
                                                                : DWRITE_WORD_WRAPPING_NO_WRAP);
 }
 
-void BodyTextLayouts::attach_fallback()
+// 格子は画面行ごとに 1 つの layout で、折り返しは application が升で決める（NO_WRAP）。
+HRESULT BodyTextLayouts::make_grid_format(const application::TextLayoutRequest &request)
+{
+    const auto face = grid_family(request.settings.font_family.text());
+    const float size = core::font_size_dips(request.settings.font_size) *
+                       static_cast<float>(request.geometry.dpi) /
+                       static_cast<float>(core::reference_dpi);
+    TextFormat made;
+    auto result = factory_->CreateTextFormat(face.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL,
+                                             DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                             size, L"", &made);
+    if (SUCCEEDED(result))
+    {
+        result = finish_format(made.Get(), request);
+    }
+    if (SUCCEEDED(result))
+    {
+        result = made->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    }
+    if (SUCCEEDED(result))
+    {
+        grid_format_ = std::move(made);
+    }
+    return result;
+}
+
+HRESULT BodyTextLayouts::finish_format(IDWriteTextFormat *format,
+                                       const application::TextLayoutRequest &request)
+{
+    attach_fallback(format);
+    return set_spacing(format, request);
+}
+
+IDWriteTextFormat *BodyTextLayouts::format_of(const application::TextLayoutRequest &request)
+{
+    switch (request.form)
+    {
+    case core::DisplayForm::text:
+        return format_.Get();
+    case core::DisplayForm::grid:
+        if (!grid_format_ && FAILED(make_grid_format(request)))
+        {
+            return nullptr;
+        }
+        return grid_format_.Get();
+    }
+    std::unreachable();
+}
+
+void BodyTextLayouts::attach_fallback(IDWriteTextFormat *format)
 {
     Microsoft::WRL::ComPtr<IDWriteFontFallback> system;
     Microsoft::WRL::ComPtr<IDWriteTextFormat2> version;
-    if (FAILED(factory_->GetSystemFontFallback(&system)) || FAILED(format_.As(&version)))
+    const Microsoft::WRL::ComPtr<IDWriteTextFormat> held(format);
+    if (FAILED(factory_->GetSystemFontFallback(&system)) || FAILED(held.As(&version)))
     {
         return;
     }
@@ -123,12 +205,13 @@ void BodyTextLayouts::attach_fallback()
         version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get()));
 }
 
-HRESULT BodyTextLayouts::set_spacing(const application::TextLayoutRequest &request)
+HRESULT BodyTextLayouts::set_spacing(IDWriteTextFormat *format,
+                                     const application::TextLayoutRequest &request)
 {
     TextLayout space;
     const float height = static_cast<float>(std::max(request.geometry.line_height, 1));
     const auto made =
-        factory_->CreateTextLayout(L" ", 1, format_.Get(), spacing_probe_width, height, &space);
+        factory_->CreateTextLayout(L" ", 1, format, spacing_probe_width, height, &space);
     if (FAILED(made))
     {
         return made;
@@ -140,14 +223,14 @@ HRESULT BodyTextLayouts::set_spacing(const application::TextLayoutRequest &reque
     {
         return E_FAIL;
     }
-    const auto tab = format_->SetIncrementalTabStop(
+    const auto tab = format->SetIncrementalTabStop(
         std::max(text.widthIncludingTrailingWhitespace, 1.0F) * tab_stop_spaces);
     if (FAILED(tab))
     {
         return tab;
     }
     const float baseline = (height - line.height) / 2.0F + line.baseline;
-    return format_->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, height, baseline);
+    return format->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, height, baseline);
 }
 
 std::expected<BodyTextLayout, application::TextLayoutFailure>
@@ -160,10 +243,13 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     }
     const core::LayoutRect area{0, 0, std::max(request.geometry.width, 1),
                                 std::max(request.geometry.line_height, 1)};
+    auto *format = format_of(request);
     TextLayout made;
-    if (FAILED(factory_->CreateTextLayout(
-            wide.value().c_str(), static_cast<UINT32>(wide.value().size()), format_.Get(),
-            static_cast<float>(area.right), static_cast<float>(area.bottom), &made)))
+    if (format == nullptr ||
+        FAILED(factory_->CreateTextLayout(
+            wide.value().c_str(), static_cast<UINT32>(wide.value().size()), format,
+            static_cast<float>(area.right), static_cast<float>(area.bottom), &made)) ||
+        FAILED(align_cells(made.Get(), wide.value(), request)))
     {
         return std::unexpected(unavailable);
     }
@@ -174,7 +260,48 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     }
     BodyTextLayout entry{std::string(request.text), area, std::move(made)};
     entry.rows = std::max<std::size_t>(metrics.lineCount, 1);
+    entry.form = request.form;
     return entry;
+}
+
+// cluster ごとに、送りを cells の升の幅（幅 2 は 2 升・幅 0 は前の cluster に含まれる）へ合わせる。
+// 前の空き（leading）は 0 なので字形は升の左端に立ち、後ろの空き（trailing）で差を埋める。
+HRESULT BodyTextLayouts::align_cells(IDWriteTextLayout *layout, const std::wstring &wide,
+                                     const application::TextLayoutRequest &request)
+{
+    if (request.form != core::DisplayForm::grid || request.cells.empty())
+    {
+        return S_OK;
+    }
+    const auto measured = cell(request);
+    Microsoft::WRL::ComPtr<IDWriteTextLayout1> spaced;
+    UINT32 count = 0;
+    static_cast<void>(layout->GetClusterMetrics(nullptr, 0, &count));
+    std::vector<DWRITE_CLUSTER_METRICS> clusters(count);
+    if (!measured || FAILED(Microsoft::WRL::ComPtr<IDWriteTextLayout>(layout).As(&spaced)) ||
+        FAILED(layout->GetClusterMetrics(clusters.data(), count, &count)))
+    {
+        return E_FAIL;
+    }
+    const auto last = request.cells.size() - 1;
+    UINT32 position = 0;
+    std::size_t point = 0;
+    for (const auto &cluster : clusters)
+    {
+        const auto next = std::min(point + code_points(wide, position, cluster.length), last);
+        const auto target =
+            static_cast<float>(request.cells[next] - request.cells[std::min(point, last)]) *
+            measured.value().width;
+        if (std::abs(target - cluster.width) > cell_tolerance &&
+            FAILED(spaced->SetCharacterSpacing(0, target - cluster.width, 0,
+                                               DWRITE_TEXT_RANGE{position, cluster.length})))
+        {
+            return E_FAIL;
+        }
+        position += cluster.length;
+        point = next;
+    }
+    return S_OK;
 }
 
 std::expected<BodyTextLayouts::TextLayout, application::TextLayoutFailure>
@@ -186,7 +313,7 @@ BodyTextLayouts::get(const application::TextLayoutRequest &request)
         return std::unexpected(ready.error());
     }
     const auto matches = [&request](const BodyTextLayout &entry)
-    { return entry.layout && entry.text == request.text; };
+    { return entry.layout && entry.form == request.form && entry.text == request.text; };
     const auto current = std::ranges::find_if(current_, matches);
     if (current != current_.end())
     {
@@ -311,8 +438,8 @@ BodyTextLayouts::cell(const application::TextLayoutRequest &request)
         return cell_.value();
     }
     // 保持には入れない（本文の文字組みの鍵は表示文字列のまま・ADR 0114）。
-    const auto made =
-        make_layout(application::TextLayoutRequest{"0", request.settings, request.geometry});
+    const auto made = make_layout(application::TextLayoutRequest{
+        "0", request.settings, request.geometry, core::DisplayForm::grid});
     if (!made)
     {
         return std::unexpected(made.error());

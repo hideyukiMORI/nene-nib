@@ -109,6 +109,7 @@ WINDOW_CLASS = "NeNeNib.Editor"
 DIALOG_CLASS = "#32770"
 WM_CLOSE = 0x0010
 WM_COMMAND = 0x0111
+IDYES = 6
 IDNO = 7
 IDCANCEL = 2
 WM_NCHITTEST = 0x0084
@@ -423,6 +424,15 @@ def dismiss_dialog(process, button: int, seconds: float = 2.5) -> bool:
     assert user.PostMessageW(dialog, WM_COMMAND, button, 0)
     assert dialog_closed(dialog), "the confirmation did not take the answer"
     return True
+
+
+def answer_question(process, yes: bool, seconds: float = 2.5) -> bool:
+    """Answer a yes / no MessageBoxW of that process (the grid question of ADR 0140 decision 2).
+
+    The question is found by its class and process (owned_window) and answered with a posted
+    IDYES or IDNO; the real keyboard is never touched. Returns whether a question came up.
+    """
+    return dismiss_dialog(process, IDYES if yes else IDNO, seconds)
 
 
 def acknowledge_dialog(process, seconds: float = 2.5) -> bool:
