@@ -175,17 +175,8 @@ template <typename Target, typename Layouts = BodyTextLayouts> class BodyTextPai
     {
         for (const auto &stored : runs)
         {
-            const DWRITE_GLYPH_RUN run{stored.face.Get(),
-                                       stored.em,
-                                       static_cast<UINT32>(stored.indices.size()),
-                                       stored.indices.data(),
-                                       stored.advances.data(),
-                                       stored.offsets.empty() ? nullptr : stored.offsets.data(),
-                                       stored.sideways,
-                                       stored.bidi};
-            target_.DrawGlyphRun(
-                D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run, brush_,
-                stored.measuring);
+            const DWRITE_GLYPH_RUN run = drawn_glyphs(stored);
+            target_.DrawGlyphRun(drawn_origin(stored, origin), &run, brush_, stored.measuring);
         }
     }
     // 保持した字形から引いた置き換えの切り抜き。引けなければ nullopt（#531）。

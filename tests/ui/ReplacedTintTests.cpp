@@ -49,7 +49,9 @@ win32::BodyGlyphRun run_at(D2D1_POINT_2F origin, UINT32 text_position, std::size
                             {},
                             text_position,
                             {},
-                            advance * static_cast<float>(glyphs)};
+                            advance * static_cast<float>(glyphs),
+                            0,
+                            glyphs};
     for (std::size_t index = 0; index < glyphs; ++index)
     {
         run.clusters.push_back(static_cast<UINT16>(index));
