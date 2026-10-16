@@ -15,8 +15,6 @@ namespace nenenib::core
 {
 namespace
 {
-// Vim の既定。設定にはしない（ADR 0034 の決定 4）。
-constexpr std::size_t tab_stop = 8;
 constexpr char32_t tab_character = U'\t';
 
 // 正本の範囲表からコンパイル時に作るBMPの索引。意味の表を複製しない（ADR 0074）。
@@ -116,7 +114,7 @@ std::size_t column_advance(char32_t value, std::size_t column) noexcept
 {
     if (value == tab_character)
     {
-        return tab_stop - (column % tab_stop);
+        return vim_tab_stop - (column % vim_tab_stop);
     }
     return cells_of(display_width(value));
 }

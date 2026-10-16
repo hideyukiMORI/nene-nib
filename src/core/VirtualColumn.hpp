@@ -29,6 +29,10 @@ struct VirtualColumn
     return left.value < right.value;
 }
 
+// Vim の tabstop。設定にはしない（ADR 0034 の決定 4）。Tab の止まりを決める値はここ 1 つで、
+// 仮想桁の部分和（ADR 0140）も同じ値を読む。
+inline constexpr std::size_t vim_tab_stop = 8;
+
 // 1 つの code point の表示幅（表は DisplayWidthRange.hpp・Tab はここに来ない）。
 [[nodiscard]] DisplayWidth display_width(char32_t value) noexcept;
 
