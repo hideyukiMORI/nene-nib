@@ -2,6 +2,7 @@
 
 #include "DisplayForm.hpp"
 #include "EditorSettings.hpp"
+#include "LineWindow.hpp"
 #include "TextViewGeometry.hpp"
 
 #include <cstddef>
@@ -21,5 +22,8 @@ struct TextLayoutRequest
     core::TextViewGeometry geometry;
     core::DisplayForm form = core::DisplayForm::text;
     std::span<const std::size_t> cells{};
+    // 巨大な行の窓（ADR 0139 の決定 4）。active なら text は窓の文字列で、layout は設定の
+    // 折り返しにかかわらず折り返さない（1 画面行）。保持の鍵は今日どおり文字列と書式。
+    LineWindow window{};
 };
 } // namespace nenenib::application

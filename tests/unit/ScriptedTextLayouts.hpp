@@ -17,6 +17,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     rows(const nenenib::application::TextLayoutRequest &request) override
     {
         ++requests_;
+        longest_ = std::max(longest_, request.text.size());
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -32,6 +33,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
            nenenib::core::DisplayCaret caret) override
     {
         ++requests_;
+        longest_ = std::max(longest_, request.text.size());
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -53,6 +55,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         nenenib::core::TextLocation point) override
     {
         ++requests_;
+        longest_ = std::max(longest_, request.text.size());
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -96,11 +99,23 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         return requests_;
     }
 
+    // rows / locate / hit に渡った文字列の最長のバイト数（巨大な行の窓の契約・ADR 0139）。
+    [[nodiscard]] std::size_t longest() const noexcept
+    {
+        return longest_;
+    }
+
+    void forget_longest() noexcept
+    {
+        longest_ = 0;
+    }
+
   private:
     [[nodiscard]] static std::size_t columns(const nenenib::application::TextLayoutRequest &request)
     {
+        // 巨大な行の窓は折り返さない（ADR 0139 の決定 2）。
         if (request.settings.wrapping == nenenib::core::LineWrapping::no_wrap ||
-            request.geometry.width <= 0)
+            request.geometry.width <= 0 || request.window.active)
         {
             return nenenib::core::code_point_count(request.text) + 1;
         }
@@ -108,6 +123,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     }
 
     std::size_t requests_ = 0;
+    std::size_t longest_ = 0;
     std::size_t cells_ = 0;
     bool rejected_ = false;
 };

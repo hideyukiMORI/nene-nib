@@ -177,6 +177,11 @@ ui_from(const KeyValueFields &fields, const core::SyntaxPalette &body, core::App
     {
         ui.gutter_background = ui.background;
     }
+    // 巨大な行の印を省略したテーマは、上書きした accent にも従う（ADR 0139 の決定 2）。
+    if (!fields.contains("ui.giant_mark"))
+    {
+        ui.giant_mark = ui.accent;
+    }
     const auto rgba = override_colors(ui, fields, ui_rgba_fields, decode_rgba);
     if (!rgba)
     {

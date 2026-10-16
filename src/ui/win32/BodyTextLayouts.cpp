@@ -53,9 +53,13 @@ constexpr wchar_t low_surrogate_last = 0xDFFF;
 
 bool BodyTextLayouts::matches_style(const application::TextLayoutRequest &request) const
 {
+    // 字幅（average_advance）は書式から測る値で、書式の鍵ではない（ADR 0139）。
+    const auto &geometry = style_.has_value() ? style_.value().geometry : request.geometry;
     return style_.has_value() && style_.value().family == request.settings.font_family.text() &&
            style_.value().points == request.settings.font_size.points() &&
-           style_.value().geometry == request.geometry &&
+           geometry.width == request.geometry.width &&
+           geometry.line_height == request.geometry.line_height &&
+           geometry.dpi == request.geometry.dpi &&
            style_.value().wrapping == request.settings.wrapping;
 }
 
@@ -69,7 +73,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     current_.clear();
     previous_.clear();
     pending_.reset();
-    cell_.reset();
+    cells_ = {};
     grid_format_.Reset();
     style_.reset();
     if (!factory_)
@@ -253,6 +257,11 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     {
         return std::unexpected(unavailable);
     }
+    // 巨大な行の窓は設定の折り返しにかかわらず折り返さない（ADR 0139 の決定 2）。
+    if (request.window.active && FAILED(made->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)))
+    {
+        return std::unexpected(unavailable);
+    }
     DWRITE_TEXT_METRICS metrics{};
     if (FAILED(made->GetMetrics(&metrics)))
     {
@@ -261,6 +270,7 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     BodyTextLayout entry{std::string(request.text), area, std::move(made)};
     entry.rows = std::max<std::size_t>(metrics.lineCount, 1);
     entry.form = request.form;
+    entry.unwrapped = request.window.active;
     return entry;
 }
 
@@ -313,7 +323,10 @@ BodyTextLayouts::get(const application::TextLayoutRequest &request)
         return std::unexpected(ready.error());
     }
     const auto matches = [&request](const BodyTextLayout &entry)
-    { return entry.layout && entry.form == request.form && entry.text == request.text; };
+    {
+        return entry.layout && entry.form == request.form &&
+               entry.unwrapped == request.window.active && entry.text == request.text;
+    };
     const auto current = std::ranges::find_if(current_, matches);
     if (current != current_.end())
     {
@@ -433,13 +446,14 @@ BodyTextLayouts::cell(const application::TextLayoutRequest &request)
     {
         return std::unexpected(ready.error());
     }
-    if (cell_.has_value())
+    auto &held = cells_.at(static_cast<std::size_t>(request.form));
+    if (held.has_value())
     {
-        return cell_.value();
+        return held.value();
     }
     // 保持には入れない（本文の文字組みの鍵は表示文字列のまま・ADR 0114）。
-    const auto made = make_layout(application::TextLayoutRequest{
-        "0", request.settings, request.geometry, core::DisplayForm::grid});
+    const auto made = make_layout(
+        application::TextLayoutRequest{"0", request.settings, request.geometry, request.form});
     if (!made)
     {
         return std::unexpected(made.error());
@@ -450,8 +464,8 @@ BodyTextLayouts::cell(const application::TextLayoutRequest &request)
     {
         return std::unexpected(unavailable);
     }
-    cell_ = application::TextCell{metrics.widthIncludingTrailingWhitespace, metrics.height};
-    return cell_.value();
+    held = application::TextCell{metrics.widthIncludingTrailingWhitespace, metrics.height};
+    return held.value();
 }
 
 const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, float left)

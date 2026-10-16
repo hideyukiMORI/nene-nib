@@ -233,15 +233,16 @@ void check_horizontal_pixels(BodyTextLayouts &layouts, core::EditorSettings sett
     }
 }
 
-// 格子の 1 升（ADR 0140・#545 の仮の実装）。本文の書式の `0` の幅と行高で、書式が同じなら同じ値。
-// 保持の行（rows の要求）には入らない。
+// 格子の 1 升（ADR 0140）。格子の書式の `0` の幅と行高で、書式が同じなら同じ値。
+// 保持の行（rows の要求）には入らない。text の書式の `0` は本文の字幅（ADR 0139）。
 void check_cell(BodyTextLayouts &layouts, const core::EditorSettings &settings)
 {
-    const app::TextLayoutRequest request{"", settings, narrow};
+    const app::TextLayoutRequest request{"", settings, narrow, core::DisplayForm::grid};
     const auto cell = layouts.cell(request);
     expect(cell.has_value() && cell.value().width > 0.0F && cell.value().height > 0.0F,
            "the grid cell has a positive width and height");
-    const auto again = layouts.cell(app::TextLayoutRequest{"ignored", settings, narrow});
+    const auto again =
+        layouts.cell(app::TextLayoutRequest{"ignored", settings, narrow, core::DisplayForm::grid});
     expect(cell.has_value() && again.has_value() && again.value().width == cell.value().width &&
                again.value().height == cell.value().height,
            "the grid cell ignores the text and repeats for the same format");
@@ -251,6 +252,37 @@ void check_cell(BodyTextLayouts &layouts, const core::EditorSettings &settings)
     expect(cell.has_value() && zero.has_value() && zero.value().x > 0.0F &&
                zero.value().x <= cell.value().width + 0.5F,
            "the cell is the width of the grid font's zero");
+    const auto advance = layouts.cell(app::TextLayoutRequest{"", settings, narrow});
+    const auto body = layouts.locate(app::TextLayoutRequest{"00", settings, narrow},
+                                     core::DisplayCaret{core::Column{2}});
+    expect(advance.has_value() && body.has_value() && advance.value().width > 0.0F &&
+               body.value().x <= advance.value().width + 0.5F &&
+               body.value().x + 0.5F >= advance.value().width,
+           "the text cell is the width of the body font's zero");
+}
+
+// 巨大な行の窓（ADR 0139 の決定 2・4）。折り返す設定でも窓の layout は 1 画面行で、同じ文字列の
+// 折り返す layout とは別に保持し、locate と hit の往復は窓の中で一致する。
+void check_giant_window(BodyTextLayouts &layouts, const core::EditorSettings &settings)
+{
+    const std::string text(9'000, 'm');
+    const app::TextLayoutRequest wrapped{text, settings, narrow};
+    const app::TextLayoutRequest window{
+        text, settings, narrow, core::DisplayForm::text, {}, app::LineWindow{true}};
+    const auto folded = layouts.rows(wrapped);
+    const auto single = layouts.rows(window);
+    expect(folded.has_value() && folded.value() > 1 && single.has_value() && single.value() == 1,
+           "the giant line window is one screen row while the same text wraps");
+    for (const std::size_t column : {std::size_t{1}, std::size_t{2}, std::size_t{4'500},
+                                     std::size_t{8'999}, std::size_t{9'001}})
+    {
+        check_round_trip(layouts, window, column);
+        const auto point = layouts.locate(window, core::DisplayCaret{core::Column{column}});
+        expect(point.has_value() && point.value().row == 0,
+               "every caret of the window is on its single row");
+    }
+    expect(layouts.rows(wrapped).value_or(0) == folded.value_or(1),
+           "the wrapped layout of the same text is kept apart from the window");
 }
 } // namespace
 
@@ -271,6 +303,7 @@ void verify_body_text_layouts()
     check_wrapped_pixels(layouts, settings);
     check_horizontal_pixels(layouts, settings);
     check_cell(layouts, settings);
+    check_giant_window(layouts, settings);
     const auto invalid =
         layouts.get(app::TextLayoutRequest{std::string_view{"\xff", 1}, settings, narrow});
     expect(!invalid.has_value(), "invalid display text is an explicit layout failure");

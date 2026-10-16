@@ -24,7 +24,9 @@ namespace
     case core::CaretMotion::page_down:
         return ScreenMotion{static_cast<std::int64_t>(height), std::nullopt};
     case core::CaretMotion::line_start:
-        return ScreenMotion{0, 0.0F};
+        // 行の原点より左の最小の x。巨大な行の窓の x は窓の始まりからなので、0 では行頭に
+        // 着かない（ADR 0139 の決定 4）。
+        return ScreenMotion{0, std::numeric_limits<float>::lowest()};
     case core::CaretMotion::line_end:
         return ScreenMotion{0, std::numeric_limits<float>::max()};
     case core::CaretMotion::previous_character:

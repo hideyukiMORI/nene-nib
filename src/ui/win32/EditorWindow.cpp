@@ -134,6 +134,14 @@ constexpr std::array<KeyVimSpecial, 4> vim_control_specials{
      {'B', core::VimSpecialKey::control_b}}};
 constexpr char32_t tab_character = U'\t';
 
+// 本文の行数と字幅（巨大な行の窓の見積もり・ADR 0139）を決める字の大きさと字体。
+using FontKey = std::pair<float, std::string>;
+
+[[nodiscard]] FontKey font_of(const core::EditorSettings &settings)
+{
+    return FontKey{settings.font_size.points(), std::string(settings.font_family.text())};
+}
+
 [[nodiscard]] bool held(int key) noexcept
 {
     return (GetKeyState(key) & key_down_mask) != 0;
@@ -1128,11 +1136,17 @@ application::VisibleLines EditorWindow::body_view() const
 {
     RECT client{};
     GetClientRect(window_, &client);
-    const auto body = core::body_layout(client.right, client.bottom, dpi_,
-                                        controller_.delivery().settings.font_size);
-    return application::VisibleLines{
-        body.visible_lines,
-        core::TextViewGeometry{std::max(core::width_of(body.content), 1), body.line_height, dpi_}};
+    const auto delivered = controller_.delivery();
+    const auto body =
+        core::body_layout(client.right, client.bottom, dpi_, delivered.settings.font_size);
+    core::TextViewGeometry geometry{std::max(core::width_of(body.content), 1), body.line_height,
+                                    dpi_};
+    // 本文の書式の字幅は格子の 1 升と同じ所（BodyTextLayouts::cell）で測る。巨大な行の窓の x の
+    // 見積もりに使う（ADR 0139 の決定 3）。測れなければ 0 のまま（application は 1 画素とみなす）。
+    const auto advance = text_layouts_.cell(
+        application::TextLayoutRequest{{}, delivered.settings, geometry, core::DisplayForm::text});
+    geometry.average_advance = advance.has_value() ? advance.value().width : 0.0F;
+    return application::VisibleLines{body.visible_lines, geometry};
 }
 
 // ---------------------------------------------------------------- IMM32（ADR 0014）
@@ -1334,8 +1348,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent) ||
                              std::holds_alternative<application::SubmitCommand>(intent) ||
                              std::holds_alternative<application::ActivateCommandChoice>(intent);
-    const float previous_size =
-        font_change ? controller_.delivery().settings.font_size.points() : 0.0F;
+    const auto previous_font = font_change ? font_of(controller_.delivery().settings) : FontKey{};
     auto delivery = controller_.apply(intent);
     if (delivery.layout_failure.has_value())
     {
@@ -1368,7 +1381,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
             announce_settings(delivery);
         }
         apply_backdrop(delivery);
-        if (delivery.settings.font_size.points() != previous_size)
+        if (font_of(delivery.settings) != previous_font)
         {
             delivery = controller_.apply(body_view());
         }
