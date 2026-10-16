@@ -26,6 +26,7 @@
 4. **解決はその時点の state で 1 回。** 解決はその時点の state（本文・選択・モード・見えている行数）で `followed()` を 1 回呼ぶ。スクロールを読む意図（画面行の移動・`ScrollLines`・`VisibleLines`・Vim の鍵・マウスの `PlaceCaret`・frame）は読む前に解決するので、それらが見る値は解決済みである。読まれないまま続いた複数の頼み（打鍵・undo/redo・IME の確定が 1 枚の WM_PAINT の前に続いたとき）は最後の 1 つだけが効く。通常モードの追従は今のスクロールからの最小の移動なので、即時の実装が途中の画面を経由して着いた位置とは違い得る（例: undo で 20 行目へ跳んでから次の undo で 5 行目へ戻ると、即時は 5 行目を先頭に、遅延は元の画面のまま）。どちらもキャレットは見えており、Vim の鍵は毎回解決するので fixture には出ない。
 5. **Vim の鍵は毎回解決する（本 ADR の範囲外の費用）。** `measured_vim_step` は `VimViewport` を engine に渡すので、Vim の鍵はスクロールを読む意図に当たる。Vim INSERT の連打はこの ADR では速くならない。engine が viewport を `layout_request` と同じ要求の形で後から求める案は後続の Issue。
 6. **基準値・許容・ゲートは変えない。** 連打の 2 本が既存の基準に戻ることを正式な QLT-014 で示す。`--adopt` はしない。
+7. **設定の適用で行高が変わるとき、`clamp_scroll` も頼むだけにし、新しい幾何（`VisibleLines`）が届いた後のスクロールの読みで 1 回だけ解決する**（#582）。字の大きさか字体が変わる（判定は core の `affects_line_height` の 1 本）と、`persist_settings` は `clamp_scroll()` を呼ばず `pending_clamp_` を立てて追従を頼む。`settle_follow()` が保留の clamp → 保留の追従の順で解決する（両方を空にしてから解決するので再入しない）。`accept(VisibleLines)` は保留の clamp があれば寸法を替える前に解決せず（決定 4 の例外）、寸法と行数を替えた後の `clamp_scroll` の読みで解決する。古い行高と新しい字の組み合わせで本文の layout を作らない（巨大な 1 行では layout 1 回ぶん・約 5 s を減らす）。行高に効かない設定（`colorscheme` `hlsearch` `wrap` など）は今までどおり即時に clamp する。
 
 ## 実装の形（決定の写し先）
 
@@ -35,6 +36,7 @@
 - `visual_view()` は非 const にして先頭で `settle_follow()` を呼ぶ。`settle_follow` 自身は保留を空にしてから view を作るので再入しない。`visible_lines()` / `measured_vim_step()` など const のまま `visual_view()` を呼んでいた関数は非 const にする（呼び元はすべて非 const）。
 - `frame()` は非 const。`const EditorController` から `frame()` を呼ぶ試験と probe は非 const に直す。`delivery()` `documents()` `title_bar_input()` `is_composing()` `command_palette_view()` はスクロールを読まないので const のまま。
 - スクロールを書く所（`with_scroll`）は、同じ式で `settled_scroll()` を読んでから書く（`visible_lines` の写し）。読まずに書く所を作らない。
+- 決定 7: `bool pending_clamp_` を足す。立てるのは `persist_settings` だけ（幅が確定していて `core::affects_line_height(前, 後)` のとき）。下ろすのは `settle_follow` だけ。`accept(VisibleLines)` は `pending_clamp_` が立っていれば `previous` を `state_.scroll()` から読み、寸法を替えた後の `clamp_scroll()` が解決する。
 
 ## 却下した選択肢
 
