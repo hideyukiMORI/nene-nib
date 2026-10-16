@@ -26,6 +26,7 @@
 4. **解決はその時点の state で 1 回。** 解決はその時点の state（本文・選択・モード・見えている行数）で `followed()` を 1 回呼ぶ。スクロールを読む意図（画面行の移動・`ScrollLines`・`VisibleLines`・Vim の鍵・マウスの `PlaceCaret`・frame）は読む前に解決するので、それらが見る値は解決済みである。読まれないまま続いた複数の頼み（打鍵・undo/redo・IME の確定が 1 枚の WM_PAINT の前に続いたとき）は最後の 1 つだけが効く。通常モードの追従は今のスクロールからの最小の移動なので、即時の実装が途中の画面を経由して着いた位置とは違い得る（例: undo で 20 行目へ跳んでから次の undo で 5 行目へ戻ると、即時は 5 行目を先頭に、遅延は元の画面のまま）。どちらもキャレットは見えており、Vim の鍵は毎回解決するので fixture には出ない。
 5. **Vim の鍵は毎回解決する（本 ADR の範囲外の費用）。** `measured_vim_step` は `VimViewport` を engine に渡すので、Vim の鍵はスクロールを読む意図に当たる。Vim INSERT の連打はこの ADR では速くならない。engine が viewport を `layout_request` と同じ要求の形で後から求める案は後続の Issue。
 6. **基準値・許容・ゲートは変えない。** 連打の 2 本が既存の基準に戻ることを正式な QLT-014 で示す。`--adopt` はしない。
+7. **文書を離れるときに保留は捨てる。問いの答えが頼み直す。** `pending_follow_` は controller に 1 つで文書ごとではない。巨大な行の問いを待つ間（`display_pending`・ADR 0140 の決定 2）は `settle_follow` が保留を消費しないので、そのまま文書を離れる（`leave_document` と `open_document` の `blank_untitled` の差し替え）と、次の文書の最初のスクロールの読みで前の文書の位置に追従してしまう。離れる所の 2 か所は `drop_pending_follow()` の 1 本を通り、問いの間なら保留を捨てる。失うものは無い: 同じ文書で問いに答える `SelectDisplay` が `clamp_scroll` と `follow_caret` を頼み直す。問いの無いときは今どおり離れる前に解決する。契約は `nib_tests --application` の `verify_follow_dropped_on_leaving_question`。
 
 ## 実装の形（決定の写し先）
 

@@ -332,6 +332,8 @@ class EditorController final
     void follow_caret();
     void follow_position(core::TextPosition position);
     void settle_follow();
+    // 問いの間に文書を離れるときは保留を捨てる（ADR 0128 の決定 7）。
+    void drop_pending_follow();
     // controller がスクロールを読む道はこの 1 本（ADR 0128 の決定 2）。
     [[nodiscard]] const ScrollState &settled_scroll();
     // incsearch の preview（ADR 0041 の決定 3・5）。

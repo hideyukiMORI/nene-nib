@@ -35,7 +35,9 @@
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
 #include "FileFailure.hpp"
+#include "FilePath.hpp"
 #include "FontSize.hpp"
+#include "GiantLine.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "ImeStance.hpp"
@@ -75,6 +77,7 @@
 #include "SelectionAnchoring.hpp"
 #include "SelectionPresence.hpp"
 #include "SelectionSpan.hpp"
+#include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
@@ -124,6 +127,7 @@ using nenenib::application::ScrollLines;
 using nenenib::application::ScrollState;
 using nenenib::application::SelectAll;
 using nenenib::application::SelectEditMode;
+using nenenib::application::SwitchTab;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
 using nenenib::core::body_layout;
@@ -935,6 +939,44 @@ void verify_follow_settles_before_search_origin()
            "the incsearch origin holds the settled scroll, not the one before the follow");
 }
 
+// 問いの間の保留は文書を離れるときに捨てる（ADR 0128 の決定 7）の足場。短い行の文書と巨大な行の
+// 文書を置き、短い行の文書を開いてキャレットを先頭に残したまま下へ送る。
+[[nodiscard]] LineNumber scrolled_small_document(Editing &editing)
+{
+    std::string lines;
+    for (std::size_t line = 0; line < 40; ++line)
+    {
+        lines += "line\n";
+    }
+    editing.files().hold_at("C:\\work\\lines.txt", Bytes{std::move(lines)});
+    editing.files().hold_at(
+        "C:\\work\\giant.txt",
+        Bytes{"head\n" + std::string(nenenib::core::giant_line_threshold + 1, 'x') + "\ntail"});
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{5, nenenib::core::TextViewGeometry{400, 20, 96}});
+    applied(controller,
+            OpenDocument{nenenib::core::FilePath::parse("C:\\work\\lines.txt").value()});
+    applied(controller, ScrollLines{20});
+    return controller.frame().first_visible;
+}
+
+// 巨大な行の文書で問いを待つ間に頼んだ追従は、SwitchTab で戻った文書のスクロールを動かさない。
+void verify_follow_dropped_on_leaving_question()
+{
+    Editing editing;
+    const LineNumber before = scrolled_small_document(editing);
+    expect(before.value > 1, "the small document is scrolled down with the caret at its top");
+    EditorController &controller = editing.controller();
+    expect(controller
+               .apply(OpenDocument{nenenib::core::FilePath::parse("C:\\work\\giant.txt").value()})
+               .display_question,
+           "the giant document asks");
+    applied(controller, MoveCaret{CaretMotion::document_start, SelectionAnchoring::collapse});
+    applied(controller, SwitchTab{0});
+    expect(controller.frame().first_visible == before,
+           "a follow asked while the question was open does not move the next document");
+}
+
 void verify_controller_frame()
 {
     Editing editing;
@@ -1570,6 +1612,7 @@ void verify_controller_intents()
     verify_controller_scrolling();
     verify_follow_settles_at_frame();
     verify_follow_settles_before_search_origin();
+    verify_follow_dropped_on_leaving_question();
     verify_document_read_contracts();
     verify_document_failure_clearing();
     verify_vim_engine();

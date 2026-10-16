@@ -1222,6 +1222,16 @@ void EditorController::settle_follow()
     }
 }
 
+// 問いの答えを待つ間の保留は、その文書を離れるときに捨てる。問いの答え（SelectDisplay）が
+// clamp_scroll と follow_caret を頼み直すので失うものは無い（ADR 0128 の決定 7）。
+void EditorController::drop_pending_follow()
+{
+    if (display_pending(state_.display_inquiry()))
+    {
+        pending_follow_.reset();
+    }
+}
+
 const ScrollState &EditorController::settled_scroll()
 {
     settle_follow();
@@ -2864,6 +2874,7 @@ std::expected<void, FileFailure> EditorController::open_document(const core::Fil
     auto [text, opened] = std::move(document).value();
     if (blank_untitled())
     {
+        drop_pending_follow();
         settle_follow();
         state_ = state_.with_opened(std::move(text), std::move(opened));
         ask_display();
@@ -2965,7 +2976,9 @@ std::expected<void, FileFailure> EditorController::save_document(const SaveDocum
 
 void EditorController::leave_document()
 {
-    // 出ていく文書の追従を今の文書で解決してから置く（ADR 0128・保留を捨てない）。
+    // 出ていく文書の追従を今の文書で解決してから置く（ADR 0128）。問いの間は解決できないので
+    // 保留を捨て、次の文書へ持ち越さない（ADR 0128 の決定 7）。
+    drop_pending_follow();
     settle_follow();
     close_replayed_unit();
     // 入力行の取消は検索の preview を閉じて入力前のスクロールへ戻し、検索なら Vim の保留も
