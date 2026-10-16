@@ -1329,7 +1329,9 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
                              std::holds_alternative<application::ActivateCommandChoice>(intent);
     const float previous_size =
         font_change ? controller_.delivery().settings.font_size.points() : 0.0F;
+    timing_.mark(core::Milestone::intent_begun);
     auto delivery = controller_.apply(intent);
+    timing_.mark(core::Milestone::intent_applied);
     if (delivery.layout_failure.has_value())
     {
         abandon();
@@ -1361,7 +1363,9 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
         apply_backdrop(delivery);
         if (delivery.settings.font_size.points() != previous_size)
         {
+            timing_.mark(core::Milestone::view_begun);
             delivery = controller_.apply(body_view());
+            timing_.mark(core::Milestone::view_applied);
         }
     }
     follow_ime(delivery);
@@ -1373,6 +1377,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     announce(delivery);
     finish_operation(operation_request);
     finish_tab_action(close_request, closing);
+    timing_.mark(core::Milestone::intent_delivered);
 }
 
 // 一覧から頼まれた操作は鍵と同じ run_operation へ。その中の send は operation_request が空なので
@@ -2108,12 +2113,15 @@ void EditorWindow::change_dpi(WPARAM word, LPARAM data)
 
 std::expected<void, RenderFailure> EditorWindow::draw_frame()
 {
+    timing_.mark(core::Milestone::frame_begun);
     text_layouts_.begin_frame();
     const auto frame = controller_.frame();
+    timing_.mark(core::Milestone::frame_built);
     const auto drawn =
         frame.layout_failure.has_value()
             ? std::expected<void, RenderFailure>{std::unexpected(RenderFailure::directwrite)}
             : renderer_->render(frame);
+    timing_.mark(core::Milestone::frame_drawn);
     text_layouts_.end_frame();
     if (drawn)
     {

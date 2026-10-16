@@ -118,6 +118,8 @@ initial_documents(const std::vector<std::wstring> &given)
     return documents;
 }
 
+// 実験（fontsize-probe）: 節目の接続で行数が増えた。
+// NOLINTNEXTLINE(readability-function-size)
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -134,6 +136,7 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32CodePageAdapter code_pages;
     nenenib::adapters::win32::Win32SettingsAdapter settings(
         files, nenenib::adapters::win32::local_settings_paths());
+    settings.attach_timing(&timing);
     nenenib::adapters::win32::Win32ThemeAdapter themes(
         files, nenenib::adapters::win32::local_theme_directory());
     // 前回のタブの一覧は窓が閉じるときに書き、ファイルの引数が無い起動で controller が読む
@@ -152,6 +155,7 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
+    text_layouts.attach_timing(&timing);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session, history, folders, bookmarks,

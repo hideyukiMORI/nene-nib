@@ -25,7 +25,22 @@ enum class Milestone : std::uint8_t
     input_received,
     frame_presented,
     probe_started,
-    probe_finished
+    probe_finished,
+    // 実験（fontsize-probe）: :set fontsize= の内訳。
+    intent_begun,
+    intent_applied,
+    view_begun,
+    view_applied,
+    intent_delivered,
+    layouts_reset,
+    layout_requested,
+    layout_begun,
+    layout_made,
+    frame_begun,
+    frame_built,
+    frame_drawn,
+    settings_write_begun,
+    settings_written
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -59,6 +74,34 @@ enum class Milestone : std::uint8_t
         return "probe_started";
     case Milestone::probe_finished:
         return "probe_finished";
+    case Milestone::intent_begun:
+        return "intent_begun";
+    case Milestone::intent_applied:
+        return "intent_applied";
+    case Milestone::view_begun:
+        return "view_begun";
+    case Milestone::view_applied:
+        return "view_applied";
+    case Milestone::intent_delivered:
+        return "intent_delivered";
+    case Milestone::layouts_reset:
+        return "layouts_reset";
+    case Milestone::layout_requested:
+        return "layout_requested";
+    case Milestone::layout_begun:
+        return "layout_begun";
+    case Milestone::layout_made:
+        return "layout_made";
+    case Milestone::frame_begun:
+        return "frame_begun";
+    case Milestone::frame_built:
+        return "frame_built";
+    case Milestone::frame_drawn:
+        return "frame_drawn";
+    case Milestone::settings_write_begun:
+        return "settings_write_begun";
+    case Milestone::settings_written:
+        return "settings_written";
     }
     std::unreachable();
 }

@@ -171,6 +171,20 @@ Win32SettingsAdapter::write(const core::EditorSettings &settings)
         return std::unexpected(blocked_.value());
     }
     // 新版から読込元まで共有無し・待機無しで取得する。旧版の不在も競合検査に含める。
-    return write_through(settings, 0);
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::settings_write_begun);
+    }
+    std::expected<void, application::SettingsIssue> written = write_through(settings, 0);
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::settings_written);
+    }
+    return written;
+}
+
+void Win32SettingsAdapter::attach_timing(application::TimingPort *timing) noexcept
+{
+    timing_ = timing;
 }
 } // namespace nenenib::adapters::win32

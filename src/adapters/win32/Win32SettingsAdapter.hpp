@@ -4,6 +4,7 @@
 #include "SettingsPaths.hpp"
 #include "SettingsPort.hpp"
 #include "SettingsVersion.hpp"
+#include "TimingPort.hpp"
 
 #include <expected>
 #include <optional>
@@ -20,6 +21,8 @@ class Win32SettingsAdapter final : public application::SettingsPort
     read(const core::ThemeCatalog &themes = core::ThemeCatalog::builtins()) override;
     [[nodiscard]] std::expected<void, application::SettingsIssue>
     write(const core::EditorSettings &settings) override;
+    // 実験（fontsize-probe）: 書き込みに節目を打つ。
+    void attach_timing(application::TimingPort *timing) noexcept;
 
   private:
     [[nodiscard]] std::expected<std::optional<std::string>, application::SettingsFailure>
@@ -36,6 +39,7 @@ class Win32SettingsAdapter final : public application::SettingsPort
     std::expected<SettingsPaths, application::SettingsFailure> paths_;
     SettingsVersion source_{SettingsVersion::v3};
     std::optional<std::string> original_;
+    application::TimingPort *timing_ = nullptr;
     std::optional<application::SettingsIssue> blocked_{application::SettingsFailure::not_loaded};
 };
 } // namespace nenenib::adapters::win32

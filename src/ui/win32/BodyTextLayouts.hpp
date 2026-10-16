@@ -3,6 +3,7 @@
 #include "BodyTextLayout.hpp"
 #include "BodyTextStyle.hpp"
 #include "TextLayoutPort.hpp"
+#include "TimingPort.hpp"
 
 #include <dwrite_3.h>
 #include <expected>
@@ -30,6 +31,8 @@ class BodyTextLayouts final : public application::TextLayoutPort
     [[nodiscard]] const BodyTextLayout *glyphs_of(IDWriteTextLayout *layout, float left = 0);
     void begin_frame();
     void end_frame();
+    // 実験（fontsize-probe）: layout の作成に節目を打つ。null なら打たない。
+    void attach_timing(application::TimingPort *timing) noexcept;
 
   private:
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
@@ -53,5 +56,6 @@ class BodyTextLayouts final : public application::TextLayoutPort
     // 描画前の連続入力は最後の1行だけ。途中の変更行を蓄積しない。
     std::optional<BodyTextLayout> pending_;
     bool collecting_ = false;
+    application::TimingPort *timing_ = nullptr;
 };
 } // namespace nenenib::ui::win32
