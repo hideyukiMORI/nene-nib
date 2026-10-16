@@ -14,6 +14,7 @@
 #include <limits>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,10 +28,11 @@ using Collector = Microsoft::WRL::ComPtr<win32::BodyGlyphCollector>;
 
 constexpr FLOAT screen_width = 100;
 constexpr FLOAT run_em = 20;
-constexpr std::array<UINT16, 2> run_indices{0, 0};
-constexpr std::array<FLOAT, 2> run_advances{10, -4};
-constexpr std::array<DWRITE_GLYPH_OFFSET, 2> run_offsets{DWRITE_GLYPH_OFFSET{5, 0},
-                                                         DWRITE_GLYPH_OFFSET{-7, 0}};
+// run の単位の境界を確かめる run は 1 字形（2 字形以上は描く窓を字形の単位で狭める・#586 の工程
+// 2）。
+constexpr std::array<UINT16, 1> run_indices{0};
+constexpr std::array<FLOAT, 1> run_advances{10};
+constexpr std::array<DWRITE_GLYPH_OFFSET, 1> run_offsets{DWRITE_GLYPH_OFFSET{-7, 0}};
 
 // 描画の前提（ADR 0073・draw_body_text のコメント）: DPI 96・恒等・画素の位置を丸める。
 void verify_drawing_assumptions()
@@ -185,8 +187,9 @@ bool kept(IDWriteFontFace *face, FLOAT x, BOOL sideways, const DWRITE_GLYPH_OFFS
         return false;
     }
     const auto &runs = taken.value();
-    return runs.size() == 1 && runs.front().origin.x == x && runs.front().advances.size() == 2 &&
-           runs.front().offsets.size() == (offsets == nullptr ? 0U : 2U);
+    return runs.size() == 1 && runs.front().origin.x == x &&
+           runs.front().advances.size() == run_advances.size() &&
+           runs.front().offsets.size() == (offsets == nullptr ? 0U : run_offsets.size());
 }
 
 void verify_outside_bounds(IDWriteFontFace1 &face)
@@ -269,6 +272,170 @@ void verify_vertical_bounds(IDWriteFontFace1 &face)
     expect(kept_at(&face, drawn_bottom * 1000, false) &&
                kept_at(&face, -drawn_bottom * 1000, false),
            "a collector without drawn rows never drops a run vertically");
+}
+
+// #586 の工程 2: 横に画面と交わる長い run
+// は、字形の配列を全体のまま持ち、描く窓を画面の近くに狭める。 1,000 字形・送り 10 のうち画面（幅
+// 400）に掛かるのは 300〜339 の 40 字形。
+constexpr std::size_t long_count = 1000;
+constexpr FLOAT long_advance = 10;
+constexpr FLOAT long_width = 400;
+constexpr FLOAT long_origin = -3000;
+constexpr FLOAT long_scroll = 3000;
+constexpr std::size_t long_first_inside = 300;
+constexpr std::size_t long_inside = 40;
+constexpr UINT32 long_text = 5;
+using Run = std::optional<win32::BodyGlyphRun>;
+using Clusters = std::vector<UINT16>;
+using Offsets = std::vector<DWRITE_GLYPH_OFFSET>;
+// run の bidi の段と、画面の左端（横に送った量）。
+using Placement = std::pair<UINT32, FLOAT>;
+
+// 字形の番号を字形の欄に入れる。
+std::vector<UINT16> long_indices()
+{
+    std::vector<UINT16> indices;
+    for (std::size_t glyph = 0; glyph < long_count; ++glyph)
+    {
+        indices.push_back(static_cast<UINT16>(glyph));
+    }
+    return indices;
+}
+
+// 1 文字が glyphs 字形の塊になる cluster map。
+Clusters long_clusters(std::size_t glyphs)
+{
+    Clusters clusters;
+    for (std::size_t glyph = 0; glyph < long_count; glyph += glyphs)
+    {
+        clusters.push_back(static_cast<UINT16>(glyph));
+    }
+    return clusters;
+}
+
+// 画面の左を left にずらした collector では、同じ字形が同じ所に来るように原点も left ずらす。
+Run long_kept(IDWriteFontFace *face, const Clusters &clusters, const Offsets &offsets,
+              Placement placement = {0, 0.0F})
+{
+    const auto [bidi, left] = placement;
+    const auto indices = long_indices();
+    const std::vector<FLOAT> advances(long_count, long_advance);
+    const Collector collector = Microsoft::WRL::Make<win32::BodyGlyphCollector>(long_width, left);
+    const DWRITE_GLYPH_RUN run{face,
+                               run_em,
+                               static_cast<UINT32>(long_count),
+                               indices.data(),
+                               advances.data(),
+                               offsets.empty() ? nullptr : offsets.data(),
+                               FALSE,
+                               bidi};
+    const DWRITE_GLYPH_RUN_DESCRIPTION description{
+        L"", nullptr, static_cast<UINT32>(clusters.size()), clusters.data(), long_text};
+    static_cast<void>(collector->DrawGlyphRun(nullptr, long_origin + left, 0,
+                                              DWRITE_MEASURING_MODE_NATURAL, &run,
+                                              clusters.empty() ? nullptr : &description, nullptr));
+    auto taken = collector->take();
+    if (!taken.has_value() || taken.value().size() != 1)
+    {
+        return std::nullopt;
+    }
+    return std::move(taken.value().front());
+}
+
+// 描く窓が画面の内側の 40 字形をすべて含み、両端は保守の幅（字形の箱の最大・offset の最大・2）に
+// 掛かる字形までしか含まない。字形の配列は全体のまま。
+bool trimmed_to_screen(const win32::BodyGlyphRun &run, FLOAT reach)
+{
+    const auto spare = static_cast<std::size_t>(std::ceil(reach / long_advance)) + 1;
+    return run.indices.size() == long_count && run.advances.size() == long_count &&
+           run.first <= long_first_inside && run.last >= long_first_inside + long_inside &&
+           run.last <= long_count && run.last - run.first <= long_inside + 2 * spare;
+}
+
+// 窓の先頭の字形を描く原点が、全体を描いたときのその字形の位置（原点から送りを左から積む）と同じ。
+bool same_positions(const win32::BodyGlyphRun &run, FLOAT shift = 0)
+{
+    FLOAT pen = long_origin + shift;
+    for (std::size_t glyph = 0; glyph < run.first; ++glyph)
+    {
+        pen += long_advance;
+    }
+    return run.origin.x == long_origin + shift &&
+           win32::drawn_origin(run, D2D1::Point2F(0, 0)).x == pen;
+}
+
+// 文字の位置・cluster map・送りの和は切る前のまま（置き換えの描画 #538 が引く対応）。
+bool whole_text(const win32::BodyGlyphRun &run, std::size_t glyphs)
+{
+    return run.text_position == long_text && run.clusters == long_clusters(glyphs) &&
+           run.advance == long_advance * static_cast<FLOAT>(long_count);
+}
+
+// DrawGlyphRun へ渡す形は窓の字形・送り・offset を同じ位置から指す。
+bool drawn_window(const win32::BodyGlyphRun &run)
+{
+    const auto glyphs = win32::drawn_glyphs(run);
+    const auto count = run.last - run.first;
+    return glyphs.glyphCount == count &&
+           glyphs.glyphIndices == std::span(run.indices).subspan(run.first).data() &&
+           glyphs.glyphAdvances == std::span(run.advances).subspan(run.first).data() &&
+           (run.offsets.empty()
+                ? glyphs.glyphOffsets == nullptr
+                : glyphs.glyphOffsets == std::span(run.offsets).subspan(run.first).data());
+}
+
+FLOAT reach_of(const DWRITE_FONT_METRICS1 &metrics, FLOAT offset)
+{
+    const float extent = std::max(std::abs(static_cast<float>(metrics.glyphBoxLeft)),
+                                  std::abs(static_cast<float>(metrics.glyphBoxRight)));
+    return extent * run_em / static_cast<float>(metrics.designUnitsPerEm) + 2 + offset;
+}
+
+void verify_trimmed_offsets(IDWriteFontFace1 &face, const DWRITE_FONT_METRICS1 &metrics)
+{
+    Offsets offsets(long_count, DWRITE_GLYPH_OFFSET{0, 0});
+    for (std::size_t glyph = 0; glyph < long_count; glyph += 7)
+    {
+        offsets.at(glyph) = DWRITE_GLYPH_OFFSET{-15, 3};
+    }
+    const Run run = long_kept(&face, long_clusters(1), offsets);
+    expect(run.has_value() && run.value().offsets.size() == long_count &&
+               trimmed_to_screen(run.value(), reach_of(metrics, 15)) && drawn_window(run.value()),
+           "a long run with glyph offsets passes the offsets of the window");
+    const Run unmapped = long_kept(&face, Clusters{}, Offsets{});
+    expect(unmapped.has_value() && unmapped.value().offsets.empty() &&
+               unmapped.value().clusters.empty() &&
+               trimmed_to_screen(unmapped.value(), reach_of(metrics, 0)) &&
+               drawn_window(unmapped.value()) && same_positions(unmapped.value()),
+           "a long run without offsets or a cluster map is narrowed by the glyphs alone");
+}
+
+void verify_trimmed_runs(IDWriteFontFace1 &face)
+{
+    DWRITE_FONT_METRICS1 metrics{};
+    face.GetMetrics(&metrics);
+    const FLOAT reach = reach_of(metrics, 0);
+    const Run run = long_kept(&face, long_clusters(1), Offsets{});
+    expect(run.has_value() && trimmed_to_screen(run.value(), reach),
+           "a long run draws only the glyphs near the screen");
+    expect(run.has_value() && same_positions(run.value()),
+           "the window starts where its first glyph was before the trim");
+    expect(run.has_value() && whole_text(run.value(), 1) && drawn_window(run.value()),
+           "the text position and the cluster map stay whole and drawing passes the window");
+    const Run paired = long_kept(&face, long_clusters(2), Offsets{});
+    expect(paired.has_value() && trimmed_to_screen(paired.value(), reach) &&
+               same_positions(paired.value()) && whole_text(paired.value(), 2),
+           "a run of two-glyph clusters keeps its cluster map whole");
+    const Run scrolled = long_kept(&face, long_clusters(1), Offsets{}, {0, long_scroll});
+    expect(scrolled.has_value() && run.has_value() && scrolled.value().first == run.value().first &&
+               scrolled.value().last == run.value().last &&
+               same_positions(scrolled.value(), long_scroll),
+           "a scrolled screen draws the same glyphs");
+    const Run right_to_left = long_kept(&face, long_clusters(1), Offsets{}, {1, 0.0F});
+    expect(right_to_left.has_value() && right_to_left.value().first == 0 &&
+               right_to_left.value().last == long_count && whole_text(right_to_left.value(), 1),
+           "a right-to-left run is not narrowed (the window is the whole run)");
+    verify_trimmed_offsets(face, metrics);
 }
 
 // 折り返した layout の各行の top と baseline（layout の座標）。
@@ -380,5 +547,6 @@ void verify_glyph_collector()
     }
     verify_outside_bounds(*face.Get());
     verify_vertical_bounds(*face.Get());
+    verify_trimmed_runs(*face.Get());
 }
 } // namespace nenenib::tests::ui
