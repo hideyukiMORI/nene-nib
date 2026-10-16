@@ -4,6 +4,7 @@
 #include "Utf8.hpp"
 #include "VimPatternMatch.hpp"
 
+#include <algorithm>
 #include <expected>
 #include <optional>
 #include <string>
@@ -22,10 +23,13 @@ namespace
                                    : next_code_point(content, Offset{match.begin}).value;
 }
 
+// window の始まりから数え、数え直す位置が window の終わりに達したら打ち切る。行の全体は
+// [0, 行の長さ)。
 template <typename Visitor>
-void visit_line_matches(std::string_view line, const VimPattern &pattern, const Visitor &visitor)
+void visit_matches(std::string_view line, OffsetRange window, const VimPattern &pattern,
+                   const Visitor &visitor)
 {
-    std::size_t at = 0;
+    std::size_t at = window.begin.value;
     while (true)
     {
         const auto match = pattern.matched(line, at);
@@ -34,11 +38,17 @@ void visit_line_matches(std::string_view line, const VimPattern &pattern, const 
             return;
         }
         at = advanced(line, match.value());
-        if (at >= line.size())
+        if (at >= window.end.value)
         {
             return;
         }
     }
+}
+
+template <typename Visitor>
+void visit_line_matches(std::string_view line, const VimPattern &pattern, const Visitor &visitor)
+{
+    visit_matches(line, OffsetRange{Offset{0}, Offset{line.size()}}, pattern, visitor);
 }
 
 // 行の中で lower 桁以降にある最も左の一致の始まり。
@@ -154,6 +164,24 @@ std::vector<OffsetRange> vim_line_matches(std::string_view line, const VimPatter
                            matches.push_back(OffsetRange{Offset{match.begin}, Offset{match.end}});
                            return true;
                        });
+    return matches;
+}
+
+std::vector<OffsetRange> vim_window_matches(std::string_view text, OffsetRange window,
+                                            const VimPattern &pattern)
+{
+    std::vector<OffsetRange> matches;
+    visit_matches(text, window, pattern,
+                  [&matches, window](const VimPatternMatch &match)
+                  {
+                      if (match.begin >= window.end.value)
+                      {
+                          return false;
+                      }
+                      matches.push_back(OffsetRange{Offset{match.begin},
+                                                    Offset{std::min(match.end, window.end.value)}});
+                      return true;
+                  });
     return matches;
 }
 
