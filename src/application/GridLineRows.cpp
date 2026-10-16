@@ -48,6 +48,38 @@ constexpr std::string_view space = " ";
     return starts;
 }
 
+// 差し込んだ升（from から cells 升）の後ろへ範囲をずらす。始まりが from 以降ならずらし、終わりが
+// from より後ろならずらす（from で終わる範囲は差し込みの手前のまま）。
+[[nodiscard]] GridCellSpan shifted_span(GridCellSpan span, std::size_t from,
+                                        std::size_t cells) noexcept
+{
+    return GridCellSpan{span.begin >= from ? span.begin + cells : span.begin,
+                        span.end > from ? span.end + cells : span.end};
+}
+
+void shift_spans(GridRowView &row, std::size_t from, std::size_t cells)
+{
+    const auto moved = [from, cells](GridCellSpan span) { return shifted_span(span, from, cells); };
+    row.selection = row.selection.transform(moved);
+    row.current_match = row.current_match.transform(moved);
+    std::ranges::transform(row.matches, row.matches.begin(), moved);
+    std::ranges::transform(row.replaced, row.replaced.begin(), moved);
+}
+
+// 差し込む位置: キャレットの升で始まる最初の code point の後ろの、幅 0 の code point（前の文字の
+// 結合文字）を越えた所（ADR 0053）。行頭の幅 0 は前の文字が無いので越えない。
+[[nodiscard]] std::vector<std::size_t>::iterator insertion_of(std::vector<std::size_t> &starts,
+                                                              std::size_t cell)
+{
+    const auto last = std::prev(starts.end());
+    auto first = std::ranges::lower_bound(starts.begin(), last, cell);
+    while (first != starts.begin() && first != last && *std::next(first) == *first)
+    {
+        ++first;
+    }
+    return first;
+}
+
 [[nodiscard]] GridRowView empty_row(const GridLineSource &source, std::size_t row)
 {
     return GridRowView{source.line,
@@ -299,7 +331,8 @@ void GridLineRows::mark_caret()
     rows_.at(index).caret = GridCellSpan{point.cell, point.cell + width};
 }
 
-// 変換中の文字列はキャレットの升に差し込み、後ろの升をずらす（本文の外のまま・ADR 0014）。
+// 変換中の文字列はキャレットの升に差し込み、後ろの升（文字・選択・当たり・置き換え）を同じ升数
+// だけずらす（本文の外のまま・ADR 0014）。
 void GridLineRows::compose()
 {
     const auto &state = source_.state;
@@ -313,14 +346,14 @@ void GridLineRows::compose()
     auto &row = rows_.at(point.row - source_.first_row);
     const auto inserted = composition_starts(composition.utf8, point.cell);
     const auto cells = inserted.back() - point.cell;
-    const auto first =
-        std::ranges::lower_bound(row.starts.begin(), std::prev(row.starts.end()), point.cell);
+    const auto first = insertion_of(row.starts, point.cell);
     const auto position = static_cast<std::size_t>(std::distance(row.starts.begin(), first));
     for (auto shifted = first; shifted != row.starts.end(); ++shifted)
     {
         *shifted += cells;
     }
     row.starts.insert(first, inserted.begin(), std::prev(inserted.end()));
+    shift_spans(row, point.cell, cells);
     row.text.insert(skipped(row.text, 0, position), composition.utf8);
     row.composed_at = position;
     const auto cursor = inserted.at(core::code_point_count(
