@@ -75,6 +75,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     pending_.reset();
     cells_ = {};
     grid_format_.Reset();
+    grid_coverage_.reset();
     style_.reset();
     if (!factory_)
     {
@@ -126,6 +127,7 @@ std::wstring BodyTextLayouts::grid_family(std::string_view requested) const
 HRESULT BodyTextLayouts::make_format(const application::TextLayoutRequest &request)
 {
     format_.Reset();
+    coverage_.reset();
     const auto face = family(request.settings.font_family.text());
     const float size = core::font_size_dips(request.settings.font_size) *
                        static_cast<float>(request.geometry.dpi) /
@@ -142,8 +144,14 @@ HRESULT BodyTextLayouts::make_format(const application::TextLayoutRequest &reque
     {
         return finished;
     }
-    return format_->SetWordWrapping(request.geometry.width > 0 ? wrapping(request.settings.wrapping)
-                                                               : DWRITE_WORD_WRAPPING_NO_WRAP);
+    const auto wrapped =
+        format_->SetWordWrapping(request.geometry.width > 0 ? wrapping(request.settings.wrapping)
+                                                            : DWRITE_WORD_WRAPPING_NO_WRAP);
+    if (SUCCEEDED(wrapped))
+    {
+        coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *format_.Get());
+    }
+    return wrapped;
 }
 
 // 格子は画面行ごとに 1 つの layout で、折り返しは application が升で決める（NO_WRAP）。
@@ -167,6 +175,7 @@ HRESULT BodyTextLayouts::make_grid_format(const application::TextLayoutRequest &
     }
     if (SUCCEEDED(result))
     {
+        grid_coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *made.Get());
         grid_format_ = std::move(made);
     }
     return result;
@@ -253,6 +262,7 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
         FAILED(factory_->CreateTextLayout(
             wide.value().c_str(), static_cast<UINT32>(wide.value().size()), format,
             static_cast<float>(area.right), static_cast<float>(area.bottom), &made)) ||
+        FAILED(assign_fallback(made.Get(), wide.value(), request)) ||
         FAILED(align_cells(made.Get(), wide.value(), request)))
     {
         return std::unexpected(unavailable);
@@ -272,6 +282,24 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     entry.form = request.form;
     entry.unwrapped = request.window.active;
     return entry;
+}
+
+HRESULT BodyTextLayouts::assign_fallback(IDWriteTextLayout *layout, const std::wstring &wide,
+                                         const application::TextLayoutRequest &request)
+{
+    auto &coverage = [this, &request]() -> std::optional<PrimaryFontCoverage> &
+    {
+        switch (request.form)
+        {
+        case core::DisplayForm::text:
+            return coverage_;
+        case core::DisplayForm::grid:
+            return grid_coverage_;
+        }
+        std::unreachable();
+    }();
+    // 書式の family が無いか字体選択が付いていなければ、DirectWrite の代替のまま。
+    return coverage.has_value() ? coverage.value().assign(*layout, wide) : S_OK;
 }
 
 // cluster ごとに、送りを cells の升の幅（幅 2 は 2 升・幅 0 は前の cluster に含まれる）へ合わせる。
