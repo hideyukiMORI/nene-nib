@@ -54,3 +54,24 @@ Issue #513 / #527 / #528 / #529 / #531。施主の実機（i9-10850K・RTX 3090�
 | `key-to-frame-single-giant-line-16mib` | 1.060（1.044〜1.089） | 2.154（2.124〜2.166） |
 
 記録: `D:/NeNeNib/worktrees/547-giant-window/out/speed/2026-10-16T06-22-50Z.json`（はい open）・`06-23-06Z`（はい 1 打鍵）・`06-23-11Z`（いいえ open）・`06-23-26Z`（いいえ 1 打鍵）。道具は #552 の `--grid-answer`（main の道具には無い）。基準値（D52）は merge 後にこの形で採用する。
+
+## 夜 — 積み直した鎖の先頭 #579 で 1 回（#569）
+
+#536 → #537 → #538 を D53 の鎖の先頭（#560）の上に積み直し（#575 → #576 → #577）、その上で格子の描画を `BodyTextPainter` に寄せた #579（Release 4340aa2・`D:/NeNeNib/worktrees/569-unify/build-release`）を、静かな機械（負荷 4%・ほかの席とビルドなし）で 5 試行。
+
+| ベンチ | #579 | 判定 |
+|---|---|---|
+| startup-first-frame | 189.95 ms | 基準内 |
+| startup-window-shown | 30.97 ms | 基準内 |
+| key-to-frame-single | 0.645 ms | 基準内 |
+| key-to-frame-burst-200 | 10.19 ms | 既存超過（#474 で直る・main も同じ） |
+| open-large-file-16mib | 210.98 ms（`document_opened` 20.4・#561 が鎖に無く判定 9 ms が乗る） | 基準内 |
+| key-to-frame-burst-200-16mib | 13.94 ms | 既存超過（同上） |
+| key-to-frame-palette-5000 | 1.696 ms | 基準内 |
+| key-to-frame-single-long-line | 5.545 ms | 基準内 |
+| open-giant-line-16mib（はい） | 282.47 ms（271.6〜309.8） | #557 の 311.7 と同等 |
+| key-to-frame-single-giant-line-16mib（はい） | 1.068 ms（1.032〜1.461） | #557 の 1.060 と同等 |
+| open-giant-line-16mib（いいえ） | 278.55 ms（270.7〜312.3） | #557 の 279.5 と同等 |
+| key-to-frame-single-giant-line-16mib（いいえ） | 2.173 ms（1.835〜2.178） | #557 の 2.154 と同等 |
+
+記録: `out/speed/2026-10-16T09-03-04Z.json`（8 本）、`D:/NeNeNib/worktrees/569-unify/out/speed/2026-10-16T09-03-37Z`〜`09-04-12Z.json`（巨大 1 行 4 本）。ログ `D:/NeNeNib/outputs/20261016/gate-579.log`・`giant-579.log`。基準値（D52）の採用は merge 後。
