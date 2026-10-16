@@ -543,6 +543,79 @@ void verify_held_positions_match_walk()
                "an edited held text answers position_of and offset_of like the walk");
     }
 }
+
+// 一から数えた最長の行のバイト数（'\n' を含まない）。
+[[nodiscard]] std::size_t counted_longest(std::string_view text)
+{
+    std::size_t longest = 0;
+    std::size_t current = 0;
+    for (const char byte : text)
+    {
+        current = byte == '\n' ? 0 : current + 1;
+        longest = std::max(longest, current);
+    }
+    return longest;
+}
+
+void expect_longest(const TextBuffer &buffer, const char *message)
+{
+    expect(buffer.longest_line_bytes() == counted_longest(buffer.text()), message);
+}
+
+// 塊の要約の畳み込みが一から数えた値と等しい（Issue #553）。空・改行だけ・塊の境目をまたぐ行・
+// 最後の行・CRLF の '\r'。
+void verify_longest_line_texts()
+{
+    expect(TextBuffer::empty().longest_line_bytes() == 0, "an empty text has no long line");
+    const std::string spanning = "ab\n" + std::string(1500, 'x') + "\n" + std::string(30, 'y');
+    const std::string crlf = "a\r\n" + std::string(700, 'z') + "\r\nb";
+    for (const auto &text :
+         {std::string(), std::string("\n\n\n"), std::string(511, 'x'), std::string(512, 'x'),
+          std::string(511, 'x') + "\n", std::string(1025, 'x'), spanning, crlf,
+          std::string(600, '\n') + std::string(2000, 'q') + "\n", std::string("a\nbb\nccc")})
+    {
+        expect_longest(buffer_of(text), "the folded longest line equals the counted one");
+    }
+}
+
+// 編集の後も一から数えた値と等しい（境目をまたぐ挿入・最長の行を短くする削除・行を割る改行・
+// add の chunk をまたぐ挿入・全部を消す）。
+void verify_longest_line_edits()
+{
+    const std::string text = std::string(300, 'a') + "\n" + std::string(2000, 'b') + "\n" +
+                             std::string(900, 'c') + "\n" + std::string(100, 'd');
+    const auto original = buffer_of(text);
+    expect_longest(original, "the opened text has the counted longest line");
+    const auto shortened = original.erase(Offset{400}, Offset{1900});
+    expect_longest(shortened, "erasing most of the longest line makes another line the longest");
+    const auto split = original.insert(Offset{1200}, "\n");
+    expect_longest(split, "a line break splits the longest line");
+    const auto joined = original.erase(Offset{300}, Offset{301});
+    expect_longest(joined, "joining two lines across a block boundary makes a longer line");
+    const auto grown = original.insert(Offset{3205}, std::string(70'000, 'e'));
+    expect_longest(grown, "a large insertion across add chunks extends the line");
+    expect_longest(grown.insert(Offset{3210}, "\n"), "a break inside the inserted chunk counts");
+    expect_longest(original.erase(Offset{0}, Offset{text.size()}), "erasing everything is empty");
+    auto typed = original;
+    for (std::size_t step = 0; step < 600; ++step)
+    {
+        typed = typed.insert(Offset{2100 + step}, step % 97 == 96 ? "\n" : "f");
+    }
+    expect_longest(typed, "typing many pieces keeps the counted longest line");
+    std::size_t seed = 7;
+    auto edited = original;
+    for (std::size_t step = 0; step < 200; ++step)
+    {
+        seed = (seed * 1'103'515'245U + 12'345U) % 2'147'483'648U;
+        const std::size_t at = seed % (edited.size_bytes() + 1);
+        const std::size_t length = (seed / 7) % 700;
+        edited =
+            step % 3 == 0
+                ? edited.erase(Offset{at}, Offset{at + length})
+                : edited.insert(Offset{at}, std::string(length, 'g') + (step % 2 == 0 ? "\n" : ""));
+        expect_longest(edited, "a sequence of edits keeps the counted longest line");
+    }
+}
 } // namespace
 
 void verify_newline_index_scope()
@@ -561,5 +634,7 @@ void verify_newline_index_scope()
     verify_held_columns_ascii_controls();
     verify_held_positions_giant_line();
     verify_held_positions_match_walk();
+    verify_longest_line_texts();
+    verify_longest_line_edits();
 }
 } // namespace nenenib::tests
