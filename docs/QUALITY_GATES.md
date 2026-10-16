@@ -311,7 +311,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-004 | active | clang-format --dry-run --Werror |
 | QLT-005 | planned | |
 | QLT-006 | planned | |
-| QLT-007 | planned | eng/prove-gates.py が 32 本の実ツールの反例を回す（#516）。新しいゲートに証明を要求する機械は無い（レビュー事項） |
+| QLT-007 | planned | eng/prove-gates.py が 32 本の実ツールの反例を回す（#516）。merge 直前の CI の `check` job が `eng/test-conformance.py` を回す（#568）。新しいゲートに証明を要求する機械は無い（レビュー事項） |
 | QLT-008 | planned | レビュー事項 |
 | QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
 | QLT-010 | 不能 | PR の手続き |
