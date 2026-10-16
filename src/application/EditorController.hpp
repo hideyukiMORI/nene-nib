@@ -402,6 +402,9 @@ class EditorController final
     std::optional<TextLayoutFailure> layout_failure_;
     // 頼まれてまだ解決していない追従の位置。後の頼みが前の頼みを置き換える（ADR 0128 の決定 1）。
     std::optional<core::TextPosition> pending_follow_;
+    // 行高を変えた設定が頼んだ clamp。新しい幾何が届いた後のスクロールの読みで、追従より先に
+    // 1 回だけ解決する（ADR 0128 の決定 8）。
+    bool pending_clamp_ = false;
     std::optional<float> wanted_x_;
     // `.` と `@` の再生で流す鍵の列と、それぞれの鍵の入れ子の深さ（ADR 0046 の決定 3・4）。
     // replay_depth_ はいま流している鍵の深さで、再生の外（打った鍵）では空。どれも
