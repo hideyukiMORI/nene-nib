@@ -2146,7 +2146,7 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
     text_layouts_.end_frame();
     if (drawn)
     {
-        timing_.mark(core::Milestone::frame_presented);
+        presented_.presented(frame.display_pending, timing_);
         if (application::composing(frame))
         {
             place_candidate_window();

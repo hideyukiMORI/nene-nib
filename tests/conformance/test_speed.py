@@ -505,13 +505,13 @@ class SelectedMeasurementTests(unittest.TestCase):
 
     def test_gather_forwards_the_selection_to_measure(self):
         arguments = mock.Mock(values=None, executable=Path("build"), repetitions=5,
-                              bench=speed.PALETTE_BENCH)
+                              bench=speed.PALETTE_BENCH, grid_answer="yes")
         written = speed.selected_record(record({}), speed.PALETTE_BENCH)
         with mock.patch.object(speed, "measure", return_value=written) as measure, \
                 mock.patch.object(speed, "write_record", return_value=Path("record.json")), \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(written, speed.gather(arguments))
-        measure.assert_called_once_with(Path("build"), 5, speed.PALETTE_BENCH)
+        measure.assert_called_once_with(Path("build"), 5, speed.PALETTE_BENCH, True)
 
 
 class PartialRecordTests(unittest.TestCase):
@@ -772,17 +772,20 @@ class GiantLineTests(unittest.TestCase):
         error = speed.subprocess.TimeoutExpired("NeNeNib.exe", speed.LARGE_SECONDS)
         with mock.patch.object(speed, "keys_trial", side_effect=error) as trial, \
                 contextlib.redirect_stdout(io.StringIO()):
-            values, parts = speed.bench_giant_single(Path("exe"), {}, Path("folder"), Path("g"))
+            values, parts = speed.bench_giant_single(Path("exe"), {}, Path("folder"), Path("g"),
+                                                     True)
         self.assertEqual(({speed.GIANT_SINGLE_BENCH: None}, {}), (values, parts))
-        trial.assert_called_once_with(Path("exe"), {}, Path("folder"), Path("g"), burst=False)
+        trial.assert_called_once_with(Path("exe"), {}, Path("folder"), Path("g"), burst=False,
+                                      grid=True)
 
     def quiet_trial(self, entries):
         process = mock.Mock()
         boundaries = {name: mock.Mock() for name in
-                      ("start", "report_path", "raise_window", "take_foreground", "covered_by",
-                       "await_quiet", "write_text", "close", "dismiss_dialog", "stop",
-                       "observed_marks", "time")}
+                      ("start", "report_path", "answer_question", "raise_window",
+                       "take_foreground", "covered_by", "await_quiet", "write_text", "close",
+                       "dismiss_dialog", "stop", "observed_marks", "time")}
         boundaries["start"].return_value = process, 123, []
+        boundaries["answer_question"].return_value = True
         boundaries["take_foreground"].return_value = True
         boundaries["covered_by"].return_value = None
         boundaries["await_quiet"].return_value = True
@@ -791,6 +794,8 @@ class GiantLineTests(unittest.TestCase):
         with mock.patch.multiple(speed, **boundaries), contextlib.redirect_stdout(io.StringIO()):
             result = speed.keys_trial(Path("exe"), {}, Path("folder"), Path("g"), burst=False)
         boundaries["stop"].assert_called_once_with(process)
+        boundaries["answer_question"].assert_called_once_with(process, True,
+                                                              seconds=speed.LARGE_SECONDS)
         self.assertEqual(["w", "a"], [call.args[1] for call in
                                       boundaries["write_text"].call_args_list])
         self.assertEqual(3, boundaries["await_quiet"].call_count)
@@ -804,6 +809,70 @@ class GiantLineTests(unittest.TestCase):
                    {"milestone": "input_received", "qpcMicroseconds": 1200},
                    {"milestone": "frame_presented", "qpcMicroseconds": 9000}]
         self.assertEqual((None, None, 0.0, 2), self.quiet_trial(entries))
+
+
+def giant_report(body: bool) -> str:
+    """A measurement file of the giant line: the startup marks, a frame per answer, the body last."""
+    entries = [{"milestone": name, "qpcMicroseconds": 1000 * (index + 1)}
+               for index, name in enumerate(speed.STARTUP_MILESTONES)
+               if name != "body_presented"]
+    entries.append({"milestone": "frame_presented", "qpcMicroseconds": 150000})
+    if body:
+        entries.append({"milestone": "body_presented", "qpcMicroseconds": 200000})
+    return json.dumps({"processCreationToFirstFrameMs": 30.0, "processCreationToOriginMs": 10.0,
+                       "qpcFrequency": 10000000, "marks": entries})
+
+
+class GiantOpenTrialTests(unittest.TestCase):
+    """#546: open-giant-line-16mib ends at body_presented, after the answer; never a real window."""
+
+    def trial(self, text):
+        process = mock.Mock()
+        boundaries = {name: mock.Mock() for name in
+                      ("start", "report_path", "answer_question", "await_quiet", "close", "stop")}
+        order = mock.Mock()
+        for name in ("answer_question", "await_quiet", "close"):
+            order.attach_mock(boundaries[name], name)
+        report = mock.Mock()
+        report.is_file.return_value = True
+        report.read_text.return_value = text
+        boundaries["start"].return_value = process, 123, []
+        boundaries["report_path"].return_value = report
+        boundaries["answer_question"].return_value = True
+        boundaries["await_quiet"].return_value = True
+        with mock.patch.multiple(speed, **boundaries), contextlib.redirect_stdout(io.StringIO()):
+            values, parts = speed.bench_giant_open(Path("exe"), {}, Path("folder"), Path("g"),
+                                                   False)
+        boundaries["stop"].assert_called_once_with(process)
+        self.assertEqual([mock.call.answer_question(process, False, seconds=speed.LARGE_SECONDS),
+                          mock.call.await_quiet(123),
+                          mock.call.close(123)], order.mock_calls)
+        return values[speed.GIANT_OPEN_BENCH], parts
+
+    def test_the_value_is_process_creation_to_body_presented(self):
+        value, parts = self.trial(giant_report(body=True))
+        self.assertEqual(210.0, value)
+        segments = parts[speed.GIANT_OPEN_BENCH]
+        self.assertEqual(190.0, segments["body_presented"])  # 最初の frame (10 ms) から本文まで
+        self.assertEqual(list((speed.ORIGIN_SEGMENT, *speed.STARTUP_MILESTONES)), list(segments))
+
+    def test_a_run_without_body_presented_is_missing(self):
+        value, parts = self.trial(giant_report(body=False))
+        self.assertIsNone(value)
+        self.assertEqual({}, parts)
+
+
+class MilestoneOrderTests(unittest.TestCase):
+    def test_the_startup_milestones_are_core_milestone_in_its_order(self):
+        """STARTUP_MILESTONES is core::Milestone from document_opened to body_presented (#546)."""
+        text = (ROOT / "src/core/Milestone.hpp").read_text(encoding="utf-8")
+        body = text[text.index("enum class Milestone"):]
+        body = body[body.index("{") + 1:body.index("}")]
+        names = [line.strip().rstrip(",") for line in body.splitlines() if line.strip()]
+        startup = [name for name in names[:names.index("body_presented") + 1]
+                   if name != "input_received"]
+        self.assertEqual(tuple(startup), speed.STARTUP_MILESTONES)
+        self.assertEqual("body_presented", speed.STARTUP_MILESTONES[-1])
 
 
 if __name__ == "__main__":

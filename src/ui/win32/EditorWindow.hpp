@@ -14,6 +14,7 @@
 #include "ImeOpenState.hpp"
 #include "ImeStance.hpp"
 #include "Milestone.hpp"
+#include "PresentedMilestones.hpp"
 #include "RenderFailure.hpp"
 #include "SessionEnd.hpp"
 #include "StatusBarHit.hpp"
@@ -109,7 +110,8 @@ class EditorWindow final
     void end_selection_drag();
     void drag_selection(LPARAM data);
     void scroll_selection();
-    // 描く唯一の口。Present が返った直後に frame_presented を打つ（ADR 0011 の決定 1）。
+    // 描く唯一の口。Present が返った直後に frame_presented を打ち、本文を描いた最初の frame では
+    // body_presented も打つ（ADR 0011 の決定 1・ADR 0138 の決定 2）。
     [[nodiscard]] std::expected<void, RenderFailure> draw_frame();
     void paint();
     // 意図の適用で変わった見た目は、次の WM_PAINT でまとめて描く（決定 6）。
@@ -187,6 +189,8 @@ class EditorWindow final
     application::EditorController &controller_;
     application::TimingPort &timing_;
     BodyTextLayouts &text_layouts_;
+    // present が返った frame の節目（frame_presented と本文の最初の body_presented・#546）。
+    PresentedMilestones presented_;
     // 題名は変わったときだけ OS へ渡す。毎フレーム SetWindowTextW を呼ばない（決定 13）。
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。

@@ -188,7 +188,8 @@ set_tests_properties(nib_folders PROPERTIES TIMEOUT 60)
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/LineUtf16Evaluation.cpp)
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/LineUtf16Evaluation.cpp
+    src/ui/win32/PresentedMilestones.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。
@@ -206,7 +207,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/FallbackKeyTests.cpp tests/ui/FallbackCacheTests.cpp tests/ui/FileDropTests.cpp
     tests/ui/GutterLayoutTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp tests/ui/BodyTextLayoutTests.cpp
-    tests/ui/GridRenderTests.cpp)
+    tests/ui/GridRenderTests.cpp tests/ui/PresentedMilestoneTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
