@@ -167,6 +167,8 @@ MODE_LABEL_WIDTH_DIPS = 72
 BODY_TOP_DIPS = 12
 BODY_DEFAULT_POINTS = 13.5
 BODY_GUTTER_DIPS = 56
+# src/core/BodyLayout.cpp body_left_padding_dips: the text (and the caret) start this far right of the gutter.
+BODY_LEFT_PADDING_DIPS = 8
 TYPED_LINES = 200
 PAGE_KEYS = 30
 # IME（ADR 0014）。ime トークンは src/core/BuiltinTheme.hpp の正本と同じ値。
@@ -353,7 +355,8 @@ def measure_document(window, appearance: str, rows: int, output: Path, name: str
         "title": window_title(window),
         "rowInk": [ink(pixels, width, content_box(body, index, dpi), grounds)
                    for index in range(rows + 1)],
-        "gutterInk": [ink(pixels, width, gutter_box(body, index, dpi), grounds)
+        "gutterInk": [ink(pixels, width, gutter_box(body, index, dpi),
+                         gutter_grounds(pixels, width, body, grounds))
                       for index in range(rows + 1)],
         "encodingInk": ink(pixels, width, status_item_box(width, height, dpi, 1), band),
         "endingInk": ink(pixels, width, status_item_box(width, height, dpi, 2), band),
@@ -463,7 +466,7 @@ def judge_first_paint(samples: list, background: list) -> dict:
     arrived = [index for index, entry in enumerate(samples)
                if entry["pixel"] == background and entry["ours"]]
     # `ours` が偽の列だけが返ったときは、別の窓が中央を覆っている（その面を測っても意味が無い）。
-    assert arrived, (f"the body background {background} never reached the centre of the window;"
+    assert arrived, (f"the body background {background} never reached the body ground point of the window;"
                      f" is another window covering it? last samples: {samples[-3:]}")
     before = [entry for entry in samples[:arrived[0]] if entry["ours"]]
     distances = [max(abs(value - ground) for value, ground in zip(entry["pixel"], background))
@@ -485,7 +488,7 @@ def verify_first_paint(executable: Path, environment: dict, appearance: str, out
     try:
         client = rectangle(window, user.GetClientRect)
         width, height = client[2] - client[0], client[3] - client[1]
-        centre = (width // 2, height // 2)
+        centre = body_ground_point(width, height, user.GetDpiForWindow(window))
         result = judge_first_paint(sample_first_paint(window, centre, background), background)
         pixels = capture(window, width, height)
         write_bitmap(output / "first-paint.bmp", pixels, width, height)
@@ -702,6 +705,9 @@ def body_points(width: int, height: int, dpi: int, points: float = BODY_DEFAULT_
         "firstRowTop": first,
         "lineHeight": line_height,
         "gutter": min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi), width),
+        "contentLeft": min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi)
+                           + to_pixels(int(BODY_LEFT_PADDING_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi),
+                           width),
         "bandBottom": band_bottom,
         "visibleLines": max((band_bottom - first) // line_height, 0),
     }
@@ -713,7 +719,7 @@ def row_middle(body: dict, index: int) -> int:
 
 def caret_pixel(pixels: bytes, width: int, body: dict, index: int) -> list[int]:
     """The leftmost pixel of the caret bar when the caret sits in column one."""
-    return pixel(pixels, width, body["gutter"], row_middle(body, index))
+    return pixel(pixels, width, body["contentLeft"], row_middle(body, index))
 
 
 def row_ground(pixels: bytes, width: int, body: dict, index: int) -> list[int]:
@@ -733,10 +739,28 @@ def gutter_box(body: dict, index: int, dpi: int) -> tuple:
     return (0, top, body["gutter"] - to_pixels(8, dpi), top + body["lineHeight"])
 
 
+def gutter_grounds(pixels: bytes, width: int, body: dict, grounds: list) -> list:
+    """The grounds plus the gutter's own face (#419 paints it apart from the body), sampled at its left edge."""
+    return grounds + [pixel(pixels, width, 1, row_middle(body, 1))]
+
+
 def content_box(body: dict, index: int, dpi: int) -> tuple:
     top = body["firstRowTop"] + body["lineHeight"] * index
     left = body["gutter"] + to_pixels(4, dpi)
     return (left, top, left + to_pixels(60, dpi), top + body["lineHeight"])
+
+
+def content_row_box(body: dict, index: int, width: int, dpi: int) -> tuple:
+    """Row `index` over the whole body: from the gutter's right edge to the window's right edge.
+
+    content_box is a narrow probe next to the gutter; a match painted by incsearch can sit
+    anywhere along the row, so comparisons of painted matches use the full width. Points are
+    physical pixels from body["gutter"] (already DIP -> pixels in integers) and the capture
+    width, so nothing here depends on the font size or settings (Issue #539).
+    """
+    top = body["firstRowTop"] + body["lineHeight"] * index
+    left = body["gutter"] + to_pixels(4, dpi)
+    return (left, top, width, top + body["lineHeight"])
 
 
 def mode_label_box(width: int, height: int, dpi: int) -> tuple:
@@ -771,7 +795,7 @@ def accent_count(pixels: bytes, width: int, box: tuple) -> int:
 def first_cell_box(body: dict, index: int, dpi: int) -> tuple:
     """The cell the caret covers in column one of a row."""
     top = body["firstRowTop"] + body["lineHeight"] * index
-    return (body["gutter"], top, body["gutter"] + to_pixels(10, dpi), top + body["lineHeight"])
+    return (body["contentLeft"], top, body["contentLeft"] + to_pixels(10, dpi), top + body["lineHeight"])
 
 
 def status_item_box(width: int, height: int, dpi: int, index: int) -> tuple:
@@ -784,6 +808,19 @@ def status_item_box(width: int, height: int, dpi: int, index: int) -> tuple:
         boxes[step] = (right - item, band_top, right, height)
         right -= item + to_pixels(STATUS_ITEM_GAP_DIPS, dpi)
     return boxes[index]
+
+
+def body_ground_point(width: int, height: int, dpi: int) -> tuple:
+    """The one point where only the body background shows (shared by the look and first-paint sections).
+
+    本文の背景色の標本点。中央は空の文書の案内（operation_guide_layout の body_guide・
+    幅 228 DIP を本文帯の中央に置き、左右 16 DIP 以上の余白を残す）が描かれる（#304・D42）ので使わない。
+    案内の右端は中央 + 114 DIP なので、右端から 8 DIP 内側（幅 640 DIP の窓で 632 DIP）は案内の外。
+    縦は title_bar の下と status の上の中ほど。DIP → 物理画素は整数演算（to_pixels）。
+    設定 guide で案内を消す道は使わない（検査が設定に依存しない）。
+    """
+    title_bar = to_pixels(TITLE_BAR_DIPS, dpi)
+    return (width - to_pixels(8, dpi), title_bar + (height - title_bar) // 2)
 
 
 def verify(window, appearance: str, output: Path) -> dict:
@@ -801,13 +838,7 @@ def verify(window, appearance: str, output: Path) -> dict:
     pixels = capture(window, width, height)
     write_bitmap(output / "look-slice.bmp", pixels, width, height)
     expected = list(PALETTE[appearance])
-    # 本文の背景色の標本点。中央は空の文書の案内（operation_guide_layout の body_guide・
-    # 幅 228 DIP を本文帯の中央に置き、左右 16 DIP 以上の余白を残す）が描かれる（#304・D42）ので使わない。
-    # 案内の右端は中央 + 114 DIP なので、右端から 8 DIP 内側（幅 640 DIP の窓で 632 DIP）は案内の外。
-    # 縦は title_bar の下と status の上の中ほど。DIP → 物理画素は整数演算（to_pixels）。
-    # 設定 guide で案内を消す道は使わない（検査が設定に依存しない）。
-    ground_x = width - to_pixels(8, dpi)
-    ground_y = title_bar + (height - title_bar) // 2
+    ground_x, ground_y = body_ground_point(width, height, dpi)
     centre = pixel(pixels, width, ground_x, ground_y)
     # 帯の地は「タブでも ＋ でも窓の操作でもない場所」。下の hitTest の HTCAPTION がそれを示す。
     title_pixel = pixel(pixels, width, width // 2, title_bar // 2)
@@ -900,7 +931,8 @@ def verify_typing(window, ground: dict, output: Path) -> dict:
         "rowOneGround": row_ground(after, width, body, 0),
         "rowTwoGround": row_ground(after, width, body, 1),
         "rowOneInk": ink(after, width, content_box(body, 0, dpi), grounds),
-        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi), grounds),
+        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi),
+                               gutter_grounds(before, width, body, grounds)),
         "statusInkBefore": status_before,
         "statusInkAfter": ink(after, width, status_item_box(width, height, dpi, 0),
                               [ground["status"]]),
@@ -920,7 +952,7 @@ def verify_block_caret(window, ground: dict) -> dict:
     """The Vim toggle turns the bar caret into a block one character wide (採用案 第 1 節)."""
     width, height, dpi, body = ground["size"]
     toggle = toggle_points(width, height, dpi)
-    inside_block = body["gutter"] + to_pixels(5, dpi)
+    inside_block = body["contentLeft"] + to_pixels(5, dpi)
     middle = row_middle(body, 1)
     bar = pixel(capture(window, width, height), width, inside_block, middle)
     click(window, toggle["vim"][0], toggle["vim"][1])
@@ -991,7 +1023,8 @@ def verify_backspace(window, ground: dict) -> dict:
     erased = {
         "rowOneGround": row_ground(after, width, body, 0),
         "rowTwoGround": row_ground(after, width, body, 1),
-        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi), grounds),
+        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi),
+                               gutter_grounds(after, width, body, grounds)),
         "rowOneInk": ink(after, width, content_box(body, 0, dpi), grounds),
     }
     assert erased["rowOneGround"] == ground["current"], "the caret did not return to row one"
@@ -1083,6 +1116,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     label = mode_label_box(width, height, dpi)
     cell = first_cell_box(body, 0, dpi)
     size, content = (width, height), content_box(body, 0, dpi)
+    whole_row = content_row_box(body, 0, width, dpi)
     click(window, toggle["vim"][0], toggle["vim"][1])
     time.sleep(0.5)
     normal = capture(window, width, height)
@@ -1098,6 +1132,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     write_text(window, "i")
     time.sleep(0.5)
     inserting = capture(window, width, height)
+    snapshot(frames, window, "vimInsertCaret")
     write_text(window, "hello")
     typed, typed_ink = await_ink(window, size, content, grounds, True)
     write_bitmap(output / "vim-slice.bmp", typed, width, height)
@@ -1106,6 +1141,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     write_text(window, "0")
     time.sleep(0.5)
     back = capture(window, width, height)
+    snapshot(frames, window, "vimNormalCaret")
     write_text(window, "x")
     time.sleep(0.5)
     shortened = capture(window, width, height)
@@ -1144,7 +1180,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
         snapshot(frames, window, "vimIncsearchHop")
         hop = {"status": "confirmed",
                "movedTheCurrentMatch":
-                   box_pixels(hopped, width, content) != box_pixels(previewing, width, content)}
+                   box_pixels(hopped, width, whole_row) != box_pixels(previewing, width, whole_row)}
         assert hop["movedTheCurrentMatch"], "Ctrl-G did not move the incsearch preview"
     press(window, VK_ESCAPE)
     time.sleep(0.5)
@@ -1176,7 +1212,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
             box_pixels(visual, width, label) != box_pixels(normal, width, label),
         "inkInTheSecondRowAfterVisualDelete": ink(unput, width, second_row, grounds),
         "incsearchPaintedTheFirstRow":
-            box_pixels(previewing, width, content) != box_pixels(opened, width, content),
+            box_pixels(previewing, width, whole_row) != box_pixels(opened, width, whole_row),
         "escapeTookThePreviewAway":
             box_pixels(cancelled, width, content) == box_pixels(unsearched, width, content),
         "incsearchHop": hop,
@@ -1191,7 +1227,8 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     assert result["ordinaryLabelDiffers"], "the ordinary label looks like NORMAL"
     assert result["accentInTheInsertCell"] > 0, "the INSERT caret was not drawn"
     assert result["accentInTheNormalCell"] > 2 * result["accentInTheInsertCell"], \
-        "the NORMAL caret is not wider than the INSERT bar"
+        (f"the NORMAL caret is not wider than the INSERT bar: normal={result['accentInTheNormalCell']}"
+         f" insert={result['accentInTheInsertCell']} cell={cell}")
     assert 0 < result["inkAfterRemoving"] < result["inkAfterTyping"], "0x did not remove one glyph"
     assert result["inkInTheSecondRowBeforePutting"] == 0, "the buffer had a second row already"
     assert result["inkInTheSecondRowAfterPutting"] > 0, "yyp did not put a second line"
