@@ -11,6 +11,7 @@
 #include "DeleteDirection.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayLine.hpp"
+#include "DisplayQuestion.hpp"
 #include "DisplayText.hpp"
 #include "DocumentState.hpp"
 #include "Edit.hpp"
@@ -799,6 +800,10 @@ EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocu
     {
         restore_session();
     }
+    // 起動の問いは最後にアクティブになった文書だけ（ADR 0140 の決定 2）。途中で開いた文書の印は
+    // 次の引数の意図が消すので、判定は起動の終わりの 1 回だけ。ほかの文書は見るときに判定する。
+    starting_ = false;
+    ask_display();
     // 初期ファイルも通常の意図を通す。その後で起動時の診断を載せ、最初の描画まで保持する。
     // 前回のタブの知らせがあればそれを残す（ステータスバーは 1 行）。
     if (!state_.command_message().has_value())
@@ -908,7 +913,9 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<EndSession>(intent) ||
                  std::holds_alternative<WorkCompleted>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
+    // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
+    ask_display();
     return delivery();
 }
 
@@ -971,8 +978,10 @@ void EditorController::begin_intent(bool keeps_message)
     // ファイルの失敗は 1 つの意図のあいだだけ表示値に載る（ADR 0010 の決定 9）。
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
     // 一覧で頼まれた操作も同じく 1 意図だけ（ADR 0078 の決定 8）。
+    // 格子表示を聞く印も同じく 1 意図だけ（ADR 0140 の決定 2）。
     if (state_.last_failure().has_value() || state_.closing() ||
-        state_.close_request().has_value() || state_.operation_request().has_value())
+        state_.close_request().has_value() || state_.operation_request().has_value() ||
+        state_.display_question())
     {
         state_ = state_.with_intent_cleared();
     }
@@ -2184,8 +2193,21 @@ void EditorController::evaluate_command(std::string_view text)
             core::DisplayText::parse("Settings could not be saved").value());
         return;
     }
+    apply_unsaved_ex(result.value());
+    state_ = state_.with_command_message(result.value().message);
+}
+
+// Ex の答えのうち保存しない値（表示形式・検索の強調・incsearch）を写す。
+void EditorController::apply_unsaved_ex(const core::ExResult &result)
+{
+    // 表示形式は文書の値で、窓の問いの「はい」と同じ 1 本を通る（ADR 0140 の決定 3）。
+    const auto &display = result.display;
+    if (display.has_value())
+    {
+        accept(SelectDisplay{display.value()});
+    }
     // 検索の当たりの強調は設定ではなく Vim の状態なので、保存せずここで写す（ADR 0037 の決定 2）。
-    const auto &highlight = result.value().highlight;
+    const auto &highlight = result.highlight;
     if (highlight.has_value())
     {
         core::VimState vim = state_.vim();
@@ -2193,14 +2215,13 @@ void EditorController::evaluate_command(std::string_view text)
         state_ = state_.with_vim(std::move(vim));
     }
     // incsearch も同じく Vim の状態で、保存しない（ADR 0041 の決定 6）。
-    const auto &incsearch = result.value().incsearch;
+    const auto &incsearch = result.incsearch;
     if (incsearch.has_value())
     {
         core::VimState vim = state_.vim();
         vim.incsearch = incsearch.value();
         state_ = state_.with_vim(std::move(vim));
     }
-    state_ = state_.with_command_message(result.value().message);
 }
 
 void EditorController::run_palette_request(const core::ExPaletteRequest &request)
@@ -2941,6 +2962,35 @@ void EditorController::accept(const EndSession &intent)
 // 届いた分は 1 回の extended で後ろへ足す（入力と選択は core が保つ）。
 // 打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る command_message() が出す。
 // 入力・知らせ・ほかの状態には触れない。
+// 表示形式を替えると画面行の数が替わるので、窓の寸法が届いていれば先頭行を収めてキャレットを
+// 追う（設定の折り返しを替えたときと同じ・persist_settings）。
+void EditorController::accept(const SelectDisplay &intent)
+{
+    if (intent.display == state_.display())
+    {
+        return;
+    }
+    state_ = state_.with_display(intent.display);
+    if (view_geometry_.width > 0)
+    {
+        clamp_scroll();
+        follow_caret();
+    }
+}
+
+void EditorController::ask_display()
+{
+    if (starting_ || state_.display_asked() || state_.tab_walking())
+    {
+        return;
+    }
+    state_ = state_.with_display_asked();
+    if (asks_grid(state_.text()))
+    {
+        state_ = state_.with_display_question(true);
+    }
+}
+
 void EditorController::accept(const WorkCompleted &)
 {
     const auto batches = ports_.folders.collect();
@@ -3269,7 +3319,7 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
                                      const core::VimPattern *pattern, core::Offset caret) const
 {
     const core::TextBuffer &text = state_.text();
-    LineView view = visual_view().line(line);
+    LineView view = VisualTextView::line_of(state_, line);
     const core::Offset start = text.line_start(line);
     LineSpanEvaluation projection(view.text, start, text.line_terminator_end(line));
     view.selection = projection.span(range);
@@ -3386,6 +3436,7 @@ EditorDelivery EditorController::delivery() const
                           state_.closing(),
                           state_.close_request(),
                           state_.operation_request(),
+                          state_.display_question(),
                           layout_failure_};
 }
 
@@ -3426,8 +3477,10 @@ EditorFrame EditorController::frame() const
                        delivered.closing,
                        delivered.close_request,
                        delivered.operation_request,
+                       delivered.display_question,
                        core::operation_guide(guide_context(), delivered.mode),
                        failure,
-                       state_.scroll().horizontal};
+                       state_.scroll().horizontal,
+                       state_.display()};
 }
 } // namespace nenenib::application

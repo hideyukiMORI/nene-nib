@@ -96,6 +96,10 @@ class EditorWindow final
     void close_tab(std::size_t tab);
     void finish_tab_action(std::optional<std::size_t> close_request, bool closing);
     void finish_operation(std::optional<core::EditorOperation> operation_request);
+    // 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。deliver の終わりと、起動の問いの合図
+    // （最初の frame の後）から呼ぶ。
+    void ask_display();
+    void finish_display_question(bool question);
     [[nodiscard]] LRESULT press_caption(UINT message, WPARAM word, LPARAM data) noexcept;
     void activate_caption(WPARAM word) noexcept;
     void click_client(LPARAM data);
@@ -226,6 +230,8 @@ class EditorWindow final
     // いま入れ子になっている send の数と、send の途中で届いた合図（何回届いても 1 つ）。
     std::size_t sending_depth_ = 0;
     bool work_waiting_ = false;
+    // 起動の delivery が格子表示を聞く印を持っていたか。最初の frame の後の合図で 1 回だけ読む。
+    bool display_question_pending_ = false;
     std::unique_ptr<Direct2DRenderer> renderer_;
     HWND window_ = nullptr;
     // 成功した全クライアントの無効化だけを覚え、次の WM_PAINT まで重複要求をまとめる。

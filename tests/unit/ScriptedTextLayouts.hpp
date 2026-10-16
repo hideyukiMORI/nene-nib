@@ -68,6 +68,25 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
                             : nenenib::core::CaretAffinity::leading};
     }
 
+    // 格子の 1 升（ADR 0140）。幅は 1 code point と同じ 10 画素、高さは 20 画素。rows / locate /
+    // hit の回数（requests）には数えず、別に数える。
+    [[nodiscard]] std::expected<nenenib::application::TextCell,
+                                nenenib::application::TextLayoutFailure>
+    cell(const nenenib::application::TextLayoutRequest &) override
+    {
+        ++cells_;
+        if (rejected_)
+        {
+            return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
+        }
+        return nenenib::application::TextCell{10.0F, 20.0F};
+    }
+
+    [[nodiscard]] std::size_t cells() const noexcept
+    {
+        return cells_;
+    }
+
     void reject() noexcept
     {
         rejected_ = true;
@@ -89,6 +108,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     }
 
     std::size_t requests_ = 0;
+    std::size_t cells_ = 0;
     bool rejected_ = false;
 };
 } // namespace nenenib::tests

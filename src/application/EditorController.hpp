@@ -16,6 +16,7 @@
 #include "EditorState.hpp"
 #include "ExDocumentRequest.hpp"
 #include "ExPaletteRequest.hpp"
+#include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "FileBookmarks.hpp"
 #include "FileFailure.hpp"
@@ -211,6 +212,11 @@ class EditorController final
     void accept(const EndSession &intent);
     // 裏の仕事の合図（ADR 0062 の決定 7）。使う人の操作の途中の状態を動かさない。
     void accept(const WorkCompleted &);
+    // 表示形式（ADR 0140 の決定 2・3）。窓の問いの「はい」と Ex の `:set display=` が通る 1 本。
+    void accept(const SelectDisplay &intent);
+    // 開いた文書に格子表示を聞くかを、アクティブな文書ごとに 1 回だけ判定する（決定 2）。apply の
+    // 終わりと起動の終わりの 2 か所から呼ぶ。Ctrl+Tab で歩いている間は判定しない（確定で判定）。
+    void ask_display();
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);
@@ -249,6 +255,7 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
+    void apply_unsaved_ex(const core::ExResult &result);
     // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
     void run_tab_request(const core::ExTabRequest &request);
     // Ex のファイル命令も Ctrl+P と同じ面へ渡す（ADR 0064）。
@@ -378,6 +385,8 @@ class EditorController final
     std::optional<core::TextBuffer> replay_text_;
     // 同じ意図の中で読めなかったタブの数（ADR 0059 の「知らせの文言」）。begin_intent が 0 に戻す。
     std::size_t unreached_tabs_ = 0;
+    // 起動の途中（コンストラクタの中）は表示形式の問いを判定しない（ADR 0140 の決定 2）。
+    bool starting_ = true;
     // 面が同じフォルダを頼んだ控え（ADR 0062 の決定 14・15）。券は面を開くたびに進み、ほかは
     // 面を開くときに置き直す。面が閉じている間は読まない。
     PaletteFolder palette_folder_;

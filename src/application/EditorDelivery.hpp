@@ -33,6 +33,9 @@ struct EditorDelivery
     bool closing;
     std::optional<std::size_t> close_request;
     std::optional<core::EditorOperation> operation_request;
+    // 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。close_request と同じく 1 意図の 1 回だけ
+    // 立つ。ui は意図を送った結果を受ける 1 か所でこれを見て問いを出す。
+    bool display_question = false;
     std::optional<TextLayoutFailure> layout_failure{};
 };
 } // namespace nenenib::application

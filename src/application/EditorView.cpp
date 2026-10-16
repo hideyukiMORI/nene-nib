@@ -111,13 +111,14 @@ EditorController::measured_vim_step(const core::VimKey &key) const
     const auto &scroll = state_.scroll();
     std::vector<core::VimLineRows> rows;
     core::VimEditorView view{
-        state_.text(),
-        state_.selection(),
+        state_.text(), state_.selection(),
         core::VimViewport{scroll.first_visible, scroll.visible_lines},
         replay_depth_.has_value() ? core::VimKeySource::replayed : core::VimKeySource::typed,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
+        // 格子は常に折り返す（ADR 0140 の決定 7）。
         core::VimLayoutView{view_geometry_.width > 0 &&
-                                state_.settings().wrapping == core::LineWrapping::wrap,
+                                (state_.settings().wrapping == core::LineWrapping::wrap ||
+                                 state_.display() == core::DisplayForm::grid),
                             scroll.first_row, rows}};
     auto step = core::vim_step(state_.vim(), view, key);
     const auto text = visual_view();

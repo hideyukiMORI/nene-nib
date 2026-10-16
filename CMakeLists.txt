@@ -55,12 +55,13 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimStep.cpp src/core/VimScreenGeometry.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
-    src/core/Grid.cpp src/core/GiantLine.cpp)
+    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
-    src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/EditorView.cpp)
+    src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/EditorView.cpp
+    src/application/DisplayQuestion.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -116,7 +117,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/BackgroundWorkTests.cpp
     tests/unit/OperationsTests.cpp
     tests/unit/GuideTests.cpp
-    tests/unit/ExitPlanTests.cpp)
+    tests/unit/ExitPlanTests.cpp
+    tests/unit/DisplayTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
