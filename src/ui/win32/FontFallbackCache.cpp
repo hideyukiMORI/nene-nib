@@ -45,6 +45,7 @@ HRESULT STDMETHODCALLTYPE FontFallbackCache::MapCharacters(
     return map(request, mapped_length, mapped_font, scale);
 }
 
+// NOLINTNEXTLINE(readability-function-size,readability-function-cognitive-complexity) 実験
 HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mapped_length,
                                IDWriteFont **mapped_font, FLOAT *scale)
 {

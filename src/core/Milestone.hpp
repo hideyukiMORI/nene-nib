@@ -50,6 +50,7 @@ enum class Milestone : std::uint8_t
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
+// NOLINTNEXTLINE(readability-function-size) 実験（長い行の probe）
 [[nodiscard]] constexpr std::string_view milestone_name(Milestone milestone) noexcept
 {
     switch (milestone)
