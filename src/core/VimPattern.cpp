@@ -11,6 +11,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <utility>
 
 namespace nenenib::core
@@ -331,6 +332,24 @@ std::optional<std::size_t> VimPattern::longest_bytes() const noexcept
             return std::nullopt;
         }
         bytes += zero_width(atom.kind) ? 0 : longest_code_point;
+    }
+    return bytes;
+}
+
+std::optional<std::string> VimPattern::literal_bytes() const
+{
+    if (atoms_.empty())
+    {
+        return std::nullopt;
+    }
+    std::string bytes;
+    for (const VimPatternAtom &atom : atoms_)
+    {
+        if (atom.kind != VimPatternAtomKind::literal || atom.repeated)
+        {
+            return std::nullopt;
+        }
+        append_utf8(bytes, atom.code);
     }
     return bytes;
 }
