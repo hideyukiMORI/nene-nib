@@ -297,8 +297,8 @@ void verify_file_loading()
     expect(loaded.has_value() && loaded.value().name == name_of(),
            "bounded file load decodes a theme");
     verify_filename_contract(files);
-    expect(files.read(path, adapters::maximum_theme_bytes).value_or("") == fixture(),
-           "load never writes the theme");
+    const auto reread = files.read(path, adapters::maximum_theme_bytes);
+    expect(reread.has_value() && reread.value().view() == fixture(), "load never writes the theme");
     expect(files.write(path, changed(fixture(), "name=my-theme", "name=another-theme")).has_value(),
            "mismatched name fixture written");
     const auto mismatched = adapters::load_theme(files, path);
@@ -391,7 +391,8 @@ void verify_catalog_restore(adapters::Win32FileAdapter &files, const core::Theme
         const auto writing = blocked.write(core::default_editor_settings());
         expect(!writing && writing.error() == reading.error(),
                "named startup error also blocks later writes");
-        expect(files.read(path, 4096).value() == encoded, "blocked write preserves original bytes");
+        const auto preserved = files.read(path, 4096);
+        expect(preserved.value().view() == encoded, "blocked write preserves original bytes");
     }
     remove_fixture("settings.v3");
     remove_fixture("settings.v3.lock");

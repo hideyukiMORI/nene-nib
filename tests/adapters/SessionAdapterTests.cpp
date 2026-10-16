@@ -299,7 +299,9 @@ void verify_adapter_migration(adapters::Win32FileAdapter &files)
     expect(restored.has_value() && restored.value().tabs.front().caret.line.value == 3,
            "a missing current file reads the legacy list");
     expect(adapter.write(three_tabs()).has_value(), "closing writes the current version");
-    expect(files.read(paths.legacy, 1024).value_or("") == old, "the legacy bytes remain unchanged");
+    const auto legacy_bytes = files.read(paths.legacy, 1024);
+    expect(legacy_bytes.has_value() && legacy_bytes.value().view() == old,
+           "the legacy bytes remain unchanged");
     const auto current = adapter.read().value_or(std::nullopt);
     expect(current.has_value() && current.value().tabs.size() == 3,
            "the current list has priority over the legacy list");
