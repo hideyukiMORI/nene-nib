@@ -133,6 +133,31 @@ core::Offset VisualTextView::giant_anchor(core::LineNumber number, float advance
     return state_.text().offset_of(core::TextPosition{number, core::Column{column + 1}});
 }
 
+// 巨大な行で窓の外の x を指されたら、見積もった字幅で桁を決める（Home / End・試作）。
+std::optional<core::TextCaret> VisualTextView::outside_window(const LineView &line, float x) const
+{
+    if (!line.window.active)
+    {
+        return std::nullopt;
+    }
+    const auto advance = advance_of(state_.settings(), geometry_);
+    // End は x に float の最大を渡す。桁は本文のバイト数で頭打ちにする（offset_of
+    // が行末に寄せる）。
+    const auto estimate =
+        std::min(static_cast<double>(std::max(x, 0.0F)) / static_cast<double>(advance),
+                 static_cast<double>(state_.text().size_bytes()));
+    const auto first = static_cast<double>(line.window.column);
+    const auto last = first + static_cast<double>(core::code_point_count(line.text));
+    if (estimate >= first && estimate <= last)
+    {
+        return std::nullopt;
+    }
+    const auto column = estimate < first ? std::size_t{0} : static_cast<std::size_t>(estimate);
+    const auto offset =
+        state_.text().offset_of(core::TextPosition{line.number, core::Column{column + 1}});
+    return core::TextCaret{state_.text().position_of(offset)};
+}
+
 LineView VisualTextView::giant_line(core::LineNumber number) const
 {
     const auto &text = state_.text();
@@ -237,6 +262,10 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
     }
     const auto made = shown(at.line);
     const auto &shown_line = *made;
+    if (const auto outside = outside_window(shown_line, x); outside.has_value())
+    {
+        return outside.value();
+    }
     const auto hit =
         layouts_.hit(request(shown_line), core::TextLocation{at.row, x - shown_line.window.x});
     if (!hit)
@@ -453,7 +482,9 @@ std::expected<ScrollState, TextLayoutFailure> VisualTextView::followed(core::Tex
     result.first_visible = first.value().line;
     result.first_row = first.value().row;
     result.horizontal = 0;
-    if (state_.settings().wrapping == core::LineWrapping::no_wrap && geometry_.width > 0)
+    // 巨大な行は折り返しの設定にかかわらず横に追従する（ADR 0139 の決定 2・試作）。
+    if ((state_.settings().wrapping == core::LineWrapping::no_wrap || giant(caret.position.line)) &&
+        geometry_.width > 0)
     {
         const auto width = static_cast<float>(std::max(geometry_.width - 3, 1));
         const auto x = std::max(point.value().x, 0.0F);

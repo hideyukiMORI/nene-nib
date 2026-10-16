@@ -1185,9 +1185,12 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
                  line.number == frame.caret.position.line ? frame.palette.text
                                                           : frame.palette.gutter);
     // 巨大な行は窓の始まりの見積もった x だけ原点を右へずらす（ADR 0139・試作）。
-    const auto horizontal = static_cast<std::int32_t>(
-        std::min(frame.horizontal - line.window.x,
-                 static_cast<float>(std::numeric_limits<std::int32_t>::max() / 2)));
+    // 折り返す設定では横の送りは巨大な行にだけ効く（試作）。
+    const auto shift = frame.settings.wrapping == core::LineWrapping::wrap && !line.window.active
+                           ? 0.0F
+                           : frame.horizontal;
+    const auto horizontal = static_cast<std::int32_t>(std::min(
+        shift - line.window.x, static_cast<float>(std::numeric_limits<std::int32_t>::max() / 2)));
     const core::LayoutRect area{body.content.left - horizontal, top, body.content.right, bottom};
     context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
     if (line.composed.has_value())

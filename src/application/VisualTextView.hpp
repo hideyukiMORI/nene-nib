@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace nenenib::application
@@ -51,6 +52,8 @@ class VisualTextView final
     [[nodiscard]] LineView giant_line(core::LineNumber number) const;
     [[nodiscard]] core::Offset giant_anchor(core::LineNumber number, float advance) const;
     void compose(LineView &result) const;
+    [[nodiscard]] std::optional<core::TextCaret> outside_window(const LineView &line,
+                                                                float x) const;
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
     forward(core::VisualPosition from, std::size_t amount);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
