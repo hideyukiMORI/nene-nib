@@ -61,11 +61,7 @@ constexpr auto bmp_widths = bmp_width_index();
 // 桁 `column`（1 始まり）に置いた 1 文字が伸ばす桁の数。Tab だけが今いる桁に依る。
 [[nodiscard]] std::size_t advance_of(char32_t value, std::size_t column) noexcept
 {
-    if (value == tab_character)
-    {
-        return tab_stop - ((column - 1) % tab_stop);
-    }
-    return cells_of(display_width(value));
+    return column_advance(value, column - 1);
 }
 
 // 行頭から `byte` の文字までの桁（1 始まり）＝その文字が占める最初の桁。
@@ -114,6 +110,15 @@ DisplayWidth display_width(char32_t value) noexcept
         return found->width;
     }
     return DisplayWidth::single;
+}
+
+std::size_t column_advance(char32_t value, std::size_t column) noexcept
+{
+    if (value == tab_character)
+    {
+        return tab_stop - (column % tab_stop);
+    }
+    return cells_of(display_width(value));
 }
 
 std::size_t virtual_width(std::string_view text) noexcept

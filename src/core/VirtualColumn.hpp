@@ -32,6 +32,11 @@ struct VirtualColumn
 // 1 つの code point の表示幅（表は DisplayWidthRange.hpp・Tab はここに来ない）。
 [[nodiscard]] DisplayWidth display_width(char32_t value) noexcept;
 
+// 行頭から column 桁（0 始まりの累積）の所に置いた 1 文字が伸ばす桁の数。表は display_width の
+// 1 本で、制御文字・書式用文字は display_line の置き換えの長さ（`^M` 2・`<85>` 4・`<200b>` 6）、
+// Tab は次の 8 の倍数まで（ADR 0034・ADR 0040）。仮想桁の部分和もこれを足す（ADR 0140）。
+[[nodiscard]] std::size_t column_advance(char32_t value, std::size_t column) noexcept;
+
 // `at` にある文字が占める最初の桁と最後の桁。`at` は code point の先頭でなければならない。
 // 桁を増やさない文字（結合文字）はどちらも直前の文字と同じ桁になる。
 [[nodiscard]] VirtualColumn virtual_column(const TextBuffer &text, Offset at);

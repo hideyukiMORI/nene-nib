@@ -175,6 +175,10 @@ void verify_ordinary_character_scope();
 void verify_buffer_scope();
 // NewlineIndexTests.cpp
 void verify_newline_index_scope();
+
+// VirtualColumnIndexTests.cpp / GridLineTests.cpp（ADR 0140・ADR 0139・#544）
+void verify_virtual_column_index_scope();
+void verify_grid_line_scope();
 void verify_caret_movement_contracts();
 void verify_display_text_accepts_ascii();
 void verify_history_coalescing();

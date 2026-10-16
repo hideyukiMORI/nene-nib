@@ -21,7 +21,7 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 29> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 31> contracts{{
         {"--vim-wrapped", verify_vim_wrapped_contracts},
         {"--wrapped-view", verify_wrapped_view_scope},
         {"--vim-dot", verify_vim_dot_contracts},
@@ -51,6 +51,8 @@ void verify_vim_scope_contracts()
         {"--ex-write-path", verify_ex_write_path_contracts},
         {"--operations", verify_operations_scope},
         {"--guide", verify_guide_scope},
+        {"--virtual-columns", verify_virtual_column_index_scope},
+        {"--grid-line", verify_grid_line_scope},
     }};
     for (const auto &scope : contracts)
     {
@@ -65,7 +67,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 52> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 54> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -118,6 +120,8 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 52> scopes{{
     {"--background-work", verify_background_work_scope},
     {"--operations", verify_operations_scope},
     {"--guide", verify_guide_scope},
+    {"--virtual-columns", verify_virtual_column_index_scope},
+    {"--grid-line", verify_grid_line_scope},
 }};
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
