@@ -118,8 +118,9 @@ void BodyTextLayouts::attach_fallback()
         return;
     }
     // ADR 0077: 保持を付けられなければOSの同じ字体選択で描ける。
-    static_cast<void>(
-        version->SetFontFallback(Microsoft::WRL::Make<FontFallbackCache>(system).Get()));
+    auto cache = Microsoft::WRL::Make<FontFallbackCache>(system);
+    cache->attach_timing(timing_);
+    static_cast<void>(version->SetFontFallback(cache.Get()));
 }
 
 HRESULT BodyTextLayouts::set_spacing(const application::TextLayoutRequest &request)
@@ -154,36 +155,40 @@ void BodyTextLayouts::attach_timing(application::TimingPort *timing) noexcept
     timing_ = timing;
 }
 
+void BodyTextLayouts::mark(core::Milestone milestone) const noexcept
+{
+    if (timing_ != nullptr)
+    {
+        timing_->mark(milestone);
+    }
+}
+
 std::expected<BodyTextLayout, application::TextLayoutFailure>
 BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
 {
+    mark(core::Milestone::layout_begun);
     const auto wide = core::to_utf16(request.text);
     if (!wide)
     {
         return std::unexpected(unavailable);
     }
+    mark(core::Milestone::layout_converted);
     const core::LayoutRect area{0, 0, std::max(request.geometry.width, 1),
                                 std::max(request.geometry.line_height, 1)};
     TextLayout made;
-    if (timing_ != nullptr)
-    {
-        timing_->mark(core::Milestone::layout_begun);
-    }
     if (FAILED(factory_->CreateTextLayout(
             wide.value().c_str(), static_cast<UINT32>(wide.value().size()), format_.Get(),
             static_cast<float>(area.right), static_cast<float>(area.bottom), &made)))
     {
         return std::unexpected(unavailable);
     }
+    mark(core::Milestone::layout_created);
     DWRITE_TEXT_METRICS metrics{};
     if (FAILED(made->GetMetrics(&metrics)))
     {
         return std::unexpected(unavailable);
     }
-    if (timing_ != nullptr)
-    {
-        timing_->mark(core::Milestone::layout_made);
-    }
+    mark(core::Milestone::layout_made);
     BodyTextLayout entry{std::string(request.text), area, std::move(made)};
     entry.rows = std::max<std::size_t>(metrics.lineCount, 1);
     return entry;
@@ -320,6 +325,7 @@ const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, floa
     if (!found->glyphs_tried || found->glyph_left != left)
     {
         const auto width = static_cast<float>(core::width_of(found->area));
+        mark(core::Milestone::glyphs_begun);
         auto collector = Microsoft::WRL::Make<BodyGlyphCollector>(width, left);
         auto taken = collector && SUCCEEDED(layout->Draw(nullptr, collector.Get(), 0, 0))
                          ? collector->take()
@@ -328,6 +334,7 @@ const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, floa
         found->glyphs = std::move(taken).value_or(std::vector<BodyGlyphRun>{});
         found->glyphs_tried = true;
         found->glyph_left = left;
+        mark(core::Milestone::glyphs_collected);
     }
     return found;
 }

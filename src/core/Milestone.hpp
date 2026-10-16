@@ -34,7 +34,19 @@ enum class Milestone : std::uint8_t
     layout_made,
     frame_begun,
     frame_built,
-    frame_drawn
+    frame_drawn,
+    // 実験（長い行の probe）
+    layout_converted,
+    layout_created,
+    glyphs_begun,
+    glyphs_collected,
+    fallback_hit,
+    fallback_miss_begun,
+    fallback_miss_end,
+    fallback_keyless,
+    body_draw_begun,
+    glyph_run_drawn,
+    body_draw_end
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -84,6 +96,28 @@ enum class Milestone : std::uint8_t
         return "frame_built";
     case Milestone::frame_drawn:
         return "frame_drawn";
+    case Milestone::layout_converted:
+        return "layout_converted";
+    case Milestone::layout_created:
+        return "layout_created";
+    case Milestone::glyphs_begun:
+        return "glyphs_begun";
+    case Milestone::glyphs_collected:
+        return "glyphs_collected";
+    case Milestone::fallback_hit:
+        return "fallback_hit";
+    case Milestone::fallback_miss_begun:
+        return "fallback_miss_begun";
+    case Milestone::fallback_miss_end:
+        return "fallback_miss_end";
+    case Milestone::fallback_keyless:
+        return "fallback_keyless";
+    case Milestone::body_draw_begun:
+        return "body_draw_begun";
+    case Milestone::glyph_run_drawn:
+        return "glyph_run_drawn";
+    case Milestone::body_draw_end:
+        return "body_draw_end";
     }
     std::unreachable();
 }

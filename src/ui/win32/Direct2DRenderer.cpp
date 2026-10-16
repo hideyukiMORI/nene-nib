@@ -743,6 +743,7 @@ void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::Layou
 {
     const auto left =
         std::max(static_cast<float>(core::width_of(area)) - text->GetMaxWidth(), 0.0F);
+    body_text_.mark(core::Milestone::body_draw_begun);
     const auto *entry = body_text_.glyphs_of(text, left);
 
     const auto origin = D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
@@ -751,6 +752,8 @@ void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::Layou
         context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
         context_->DrawTextLayout(origin, text, brush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
         context_->PopAxisAlignedClip();
+        body_text_.mark(core::Milestone::fallback_keyless);
+        body_text_.mark(core::Milestone::body_draw_end);
         return;
     }
     if (options == D2D1_DRAW_TEXT_OPTIONS_CLIP)
@@ -773,11 +776,13 @@ void Direct2DRenderer::draw_body_text(IDWriteTextLayout *text, const core::Layou
         context_->DrawGlyphRun(
             D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run,
             brush_.Get(), stored.measuring);
+        body_text_.mark(core::Milestone::glyph_run_drawn);
     }
     if (options == D2D1_DRAW_TEXT_OPTIONS_CLIP)
     {
         context_->PopAxisAlignedClip();
     }
+    body_text_.mark(core::Milestone::body_draw_end);
 }
 
 Direct2DRenderer::TextLayout Direct2DRenderer::text_layout(std::string_view text,

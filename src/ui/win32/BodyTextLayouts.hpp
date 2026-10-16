@@ -33,6 +33,7 @@ class BodyTextLayouts final : public application::TextLayoutPort
     void end_frame();
     // 実験（#460）: layout の作成に節目を打つ。null なら打たない。
     void attach_timing(application::TimingPort *timing) noexcept;
+    void mark(core::Milestone milestone) const noexcept;
 
   private:
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;

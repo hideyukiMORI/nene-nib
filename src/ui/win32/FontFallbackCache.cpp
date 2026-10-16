@@ -54,14 +54,27 @@ HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mappe
         const auto *entry = find(key.value());
         if (entry != nullptr)
         {
+            if (timing_ != nullptr)
+            {
+                timing_->mark(core::Milestone::fallback_hit);
+            }
             *mapped_length = entry->length;
             *scale = entry->scale;
             return entry->font.CopyTo(mapped_font);
         }
     }
+    if (timing_ != nullptr)
+    {
+        timing_->mark(key.has_value() ? core::Milestone::fallback_miss_begun
+                                      : core::Milestone::fallback_keyless);
+    }
     const HRESULT result = system_->MapCharacters(
         request.source, request.position, request.length, request.collection, request.family,
         request.weight, request.style, request.stretch, mapped_length, mapped_font, scale);
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::fallback_miss_end);
+    }
     if (result == S_OK && key.has_value())
     {
         retain(FontFallbackEntry{std::move(key.value()), *mapped_length, *mapped_font, *scale});

@@ -12,7 +12,7 @@ namespace
 {
 // 節目の置き場は bind で 1 度だけ確保する。mark は noexcept なので、そこから先は詰め替えない
 // （容量を越えた節目は捨てる。200 打鍵でも 400 に満たない）。
-constexpr std::size_t mark_capacity = 4096;
+constexpr std::size_t mark_capacity = 1U << 21U;
 constexpr std::int64_t microseconds_per_second = 1'000'000;
 constexpr std::int64_t file_time_ticks_per_second = 10'000'000;
 constexpr std::int64_t file_time_ticks_per_millisecond = 10'000;

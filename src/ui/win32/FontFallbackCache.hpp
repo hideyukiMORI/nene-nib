@@ -1,5 +1,6 @@
 #pragma once
 #include "FontFallbackEntry.hpp"
+#include "TimingPort.hpp"
 #include <cstddef>
 #include <vector>
 #include <wrl/implements.h>
@@ -18,6 +19,7 @@ class FontFallbackCache final
                                             DWRITE_FONT_STYLE style, DWRITE_FONT_STRETCH stretch,
                                             UINT32 *mapped_length, IDWriteFont **mapped_font,
                                             FLOAT *scale) noexcept override;
+    void attach_timing(application::TimingPort *timing) noexcept { timing_ = timing; }
 
   private:
     [[nodiscard]] HRESULT map(const FontFallbackRequest &request, UINT32 *mapped_length,
@@ -27,5 +29,6 @@ class FontFallbackCache final
     Microsoft::WRL::ComPtr<IDWriteFontFallback> system_;
     std::vector<FontFallbackEntry> entries_;
     std::size_t next_ = 0;
+    application::TimingPort *timing_ = nullptr;
 };
 } // namespace nenenib::ui::win32
