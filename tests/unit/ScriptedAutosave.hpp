@@ -2,6 +2,7 @@
 
 #include "AutosaveFailure.hpp"
 #include "AutosaveId.hpp"
+#include "AutosaveOutcome.hpp"
 #include "AutosavePort.hpp"
 #include "AutosaveRemnant.hpp"
 #include "AutosaveSnapshot.hpp"
@@ -18,8 +19,9 @@ namespace nenenib::tests
 {
 // 自動退避の口の替え玉（ADR 0137 の決定 8）。スレッドは持たない。store と discard
 // で受けた頼みを順に 覚え、collect・clear・remnants・read・forget の呼ばれた回数を数え、collect
-// が返す失敗を先に 仕込める（仕込んだ分は次の collect が全部を返し、その後は空）。残骸は remain で
-// 仕込み（既定は無し）、本文の無い残骸の read は unreadable。forget は残骸の列を変えない。
+// が返す結果（成功・失敗）を先に 仕込める（仕込んだ分は次の collect
+// が全部を返し、その後は空）。残骸は remain で 仕込み（既定は無し）、本文の無い残骸の read は
+// unreadable。forget は残骸の列を変えない。
 class ScriptedAutosave final : public nenenib::application::AutosavePort
 {
   public:
@@ -34,10 +36,10 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
         discarded_.push_back(id);
     }
 
-    [[nodiscard]] std::vector<nenenib::application::AutosaveFailure> collect() override
+    [[nodiscard]] std::vector<nenenib::application::AutosaveOutcome> collect() override
     {
         ++collects_;
-        return std::exchange(failures_, {});
+        return std::exchange(outcomes_, {});
     }
 
     void clear() override
@@ -86,10 +88,14 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
         remnants_.push_back(std::move(remnant));
     }
 
-    // 次の collect が返す失敗を足す（数えない）。
-    void fail(nenenib::application::AutosaveFailure failure)
+    // 次の collect が返す結果を足す（数えない）。worker が id の仕事を終えた形を仕込む。
+    void succeed(nenenib::application::AutosaveId id)
     {
-        failures_.push_back(failure);
+        outcomes_.push_back(nenenib::application::AutosaveOutcome{id, std::nullopt});
+    }
+    void fail(nenenib::application::AutosaveId id, nenenib::application::AutosaveFailure failure)
+    {
+        outcomes_.push_back(nenenib::application::AutosaveOutcome{id, failure});
     }
     [[nodiscard]] const std::vector<nenenib::application::AutosaveSnapshot> &stored() const noexcept
     {
@@ -135,7 +141,7 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
   private:
     std::vector<nenenib::application::AutosaveSnapshot> stored_;
     std::vector<nenenib::application::AutosaveId> discarded_;
-    std::vector<nenenib::application::AutosaveFailure> failures_;
+    std::vector<nenenib::application::AutosaveOutcome> outcomes_;
     std::size_t collects_ = 0;
     std::size_t clears_ = 0;
     std::size_t remnant_reads_ = 0;

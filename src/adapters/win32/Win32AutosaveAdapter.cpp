@@ -19,18 +19,18 @@ using Failure = application::AutosaveFailure;
 // 窓が閉じていくときに走っている仕事を待つ上限（ADR 0137 の決定 5）。超えたら消せるものだけ消す。
 constexpr DWORD clear_wait_milliseconds = 5000;
 
-// 仕事の外枠。閉じた後と止める合図の後は何もしない。失敗は棚に積む。
-template <typename Work> void run_job(AutosaveShelf &shelf, const std::stop_token &stop, Work work)
+// 仕事の外枠。閉じた後と止める合図の後は何もしない。終われば成否を id つきで棚に積む。
+template <typename Work>
+void run_job(AutosaveShelf &shelf, application::AutosaveId id, const std::stop_token &stop,
+             Work work)
 {
     if (stop.stop_requested() || !shelf.begin())
     {
         return;
     }
     const std::expected<void, Failure> done = work();
-    if (!done)
-    {
-        shelf.fail(done.error());
-    }
+    shelf.finish(application::AutosaveOutcome{
+        id, done.has_value() ? std::nullopt : std::optional<Failure>{done.error()}});
     shelf.end();
 }
 } // namespace
@@ -54,9 +54,9 @@ Win32AutosaveAdapter::~Win32AutosaveAdapter()
     static_cast<void>(shelf_->close(0));
 }
 
-void Win32AutosaveAdapter::bind(std::function<void()> failed)
+void Win32AutosaveAdapter::bind(std::function<void()> finished)
 {
-    shelf_->bind(std::move(failed));
+    shelf_->bind(std::move(finished));
 }
 
 void Win32AutosaveAdapter::store(application::AutosaveSnapshot snapshot)
@@ -68,7 +68,10 @@ void Win32AutosaveAdapter::store(application::AutosaveSnapshot snapshot)
     worker_.post(
         [shelf = shelf_, &files = files_, root = root_,
          snapshot = std::move(snapshot)](const std::stop_token &stop)
-        { run_job(*shelf, stop, [&] { return autosave_stored(files, root, snapshot); }); });
+        {
+            run_job(*shelf, snapshot.id, stop,
+                    [&] { return autosave_stored(files, root, snapshot); });
+        });
 }
 
 void Win32AutosaveAdapter::discard(application::AutosaveId id)
@@ -77,13 +80,14 @@ void Win32AutosaveAdapter::discard(application::AutosaveId id)
     {
         return;
     }
-    worker_.post([shelf = shelf_, &files = files_,
-                  folder = autosave_folder(root_.value(), GetCurrentProcessId()),
-                  id](const std::stop_token &stop)
-                 { run_job(*shelf, stop, [&] { return autosave_dropped(files, folder, id); }); });
+    worker_.post(
+        [shelf = shelf_, &files = files_,
+         folder = autosave_folder(root_.value(), GetCurrentProcessId()),
+         id](const std::stop_token &stop)
+        { run_job(*shelf, id, stop, [&] { return autosave_dropped(files, folder, id); }); });
 }
 
-std::vector<application::AutosaveFailure> Win32AutosaveAdapter::collect()
+std::vector<application::AutosaveOutcome> Win32AutosaveAdapter::collect()
 {
     return shelf_->take();
 }

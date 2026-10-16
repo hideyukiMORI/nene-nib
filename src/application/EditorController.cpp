@@ -2,6 +2,7 @@
 #include "GridLineRows.hpp"
 #include "GridLineSource.hpp"
 
+#include "AutosaveOutcome.hpp"
 #include "AutosavePlan.hpp"
 #include "AutosaveSnapshot.hpp"
 #include "AutosaveStep.hpp"
@@ -3388,24 +3389,32 @@ bool EditorController::store_autosave(AutosaveId id, const core::TextBuffer &tex
     ports_.autosave.store(AutosaveSnapshot{
         id, document.path, core::tab_title_for(document.path, core::SaveState::modified),
         joined_bytes(parts.value()), caret});
-    autosave_requested_ = true;
     return true;
 }
 
-// 失敗があれば 1 回だけ知らせる。store を頼んだ後に空の collect を受けたら成功とみなし、次の失敗を
-// また 1 回知らせられるようにする（決定 4）。
+// worker が終えた退避の結果を全部引く（決定 4・独立レビュー F3）。失敗した id は帳面から外し、
+// 本文が変わらなくても次の合図で書き直す。失敗が 1 つでもあれば（まだ出していなければ）1 回
+// 知らせ、失敗が無く成功が 1 つでもあれば知らせの印を下ろす（次の失敗でまた 1 回出る）。
+// 結果が無ければ（フォルダの合図）何も変えない。
 void EditorController::collect_autosave()
 {
-    const auto failures = ports_.autosave.collect();
-    if (!failures.empty())
+    const auto outcomes = ports_.autosave.collect();
+    bool failed = false;
+    for (const AutosaveOutcome &outcome : outcomes)
     {
-        autosave_requested_ = false;
+        if (outcome.failure.has_value())
+        {
+            failed = true;
+            autosave_ledger_.erase(outcome.id);
+        }
+    }
+    if (failed)
+    {
         notify_autosave_failure();
         return;
     }
-    if (autosave_requested_)
+    if (!outcomes.empty())
     {
-        autosave_requested_ = false;
         autosave_notified_ = false;
     }
 }

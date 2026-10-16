@@ -6,6 +6,7 @@
 #include "AutosaveEntry.hpp"
 #include "AutosaveFailure.hpp"
 #include "AutosaveId.hpp"
+#include "AutosaveOutcome.hpp"
 #include "AutosaveRemnant.hpp"
 #include "AutosaveSnapshot.hpp"
 #include "DisplayText.hpp"
@@ -18,6 +19,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <format>
@@ -35,6 +37,7 @@ namespace core = nenenib::core;
 namespace adapters = nenenib::adapters::win32;
 using nenenib::application::AutosaveFailure;
 using nenenib::application::AutosaveId;
+using nenenib::application::AutosaveOutcome;
 using nenenib::application::AutosaveRemnant;
 using nenenib::application::AutosaveSnapshot;
 using Signals = std::counting_semaphore<>;
@@ -183,6 +186,38 @@ std::string own_body(adapters::Win32FileAdapter &files, std::uint64_t id)
     return read_text(files, std::format("{}/{:x}/{}.body", root_text, GetCurrentProcessId(), id));
 }
 
+// 結果の列を「番号と成否」の列で読む（例: "3ok 4ok" / "1location_unavailable"）。
+std::string printed(const std::vector<AutosaveOutcome> &outcomes)
+{
+    std::string text;
+    for (const AutosaveOutcome &outcome : outcomes)
+    {
+        if (!text.empty())
+        {
+            text += ' ';
+        }
+        text += std::to_string(outcome.id.value);
+        if (!outcome.failure.has_value())
+        {
+            text += "ok";
+            continue;
+        }
+        switch (outcome.failure.value())
+        {
+        case AutosaveFailure::location_unavailable:
+            text += "location_unavailable";
+            break;
+        case AutosaveFailure::unwritable:
+            text += "unwritable";
+            break;
+        case AutosaveFailure::unreadable:
+            text += "unreadable";
+            break;
+        }
+    }
+    return text;
+}
+
 // (a) store は本文と一覧を書く。同じ番号をもう 1 回 store すると本文を置き換え、一覧は 1 行のまま。
 void verify_store(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files,
                   adapters::Win32AutosaveAdapter &autosave)
@@ -204,7 +239,8 @@ void verify_store(adapters::Win32Worker &worker, adapters::Win32FileAdapter &fil
     drain(worker);
     expect(own_body(files, 3) == "second", "a later store replaces the body");
     expect(own_entries(files).size() == 2, "a later store of the same id keeps one entry");
-    expect(autosave.collect().empty(), "successful work leaves no failure");
+    expect(printed(autosave.collect()) == "3ok 4ok 3ok",
+           "every finished store leaves one outcome without a failure, in order");
 }
 
 // (b) discard は本文を消して一覧から外す。
@@ -219,11 +255,39 @@ void verify_discard(adapters::Win32Worker &worker, adapters::Win32FileAdapter &f
            "discard removes the entry and keeps the others");
     autosave.discard(AutosaveId{99});
     drain(worker);
-    expect(own_entries(files).size() == 1 && autosave.collect().empty(),
-           "discarding an unknown id changes nothing and does not fail");
+    expect(own_entries(files).size() == 1 && printed(autosave.collect()) == "4ok 99ok",
+           "every finished discard leaves one outcome; an unknown id changes nothing and does not "
+           "fail");
 }
 
-// (c) 置き場を作れなければ、失敗が 1 件たまって合図が 1 回だけ来る。
+// (c) 仕事が終わるたびに、成功でも失敗でも結果が 1 件たまって合図が 1 回来る。置き場を作れなければ
+// 結果は location_unavailable を持つ。合図はワーカーの仕事の中で呼ばれるので、drain の後に数える。
+void verify_signals(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files)
+{
+    adapters::Win32AutosaveAdapter autosave(worker, files, root_path(root_text));
+    std::size_t signals = 0;
+    autosave.bind([&signals] { ++signals; });
+    autosave.store(snapshot(11, std::nullopt, "無題", "kept"));
+    drain(worker);
+    expect(signals == 1, "a successful store signals once");
+    expect(printed(autosave.collect()) == "11ok",
+           "a successful store leaves one outcome without a failure");
+    autosave.discard(AutosaveId{11});
+    drain(worker);
+    expect(signals == 2 && printed(autosave.collect()) == "11ok",
+           "a successful discard leaves one outcome and signals once");
+    adapters::Win32AutosaveAdapter broken(worker, files,
+                                          root_path("nib-autosave-files/missing/deeper/autosave"));
+    std::size_t failed = 0;
+    broken.bind([&failed] { ++failed; });
+    broken.store(snapshot(12, std::nullopt, "無題", "lost"));
+    drain(worker);
+    expect(failed == 1 && printed(broken.collect()) == "12location_unavailable",
+           "a failed store leaves one outcome with the failure and signals once");
+    autosave.clear();
+}
+
+// (c) 置き場を作れなければ、結果は失敗を持ち、仕事ごとに合図が 1 回来る。
 void verify_failure(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files)
 {
     adapters::Win32AutosaveAdapter broken(worker, files,
@@ -241,15 +305,15 @@ void verify_failure(adapters::Win32Worker &worker, adapters::Win32FileAdapter &f
     broken.store(snapshot(2, std::nullopt, "無題", "lost"));
     drain(worker);
     const auto first = broken.collect();
-    expect(first.size() == 2 && first[0] == AutosaveFailure::location_unavailable,
+    expect(printed(first) == "1location_unavailable 2location_unavailable",
            "a store into a folder that cannot be made fails as location_unavailable");
-    expect(signals == 1, "the signal comes once while failures are waiting");
-    expect(broken.collect().empty(), "collect empties the failures");
+    expect(signals == 2, "the signal comes once per finished store");
+    expect(broken.collect().empty(), "collect empties the outcomes");
     adapters::Win32AutosaveAdapter nowhere(worker, files, std::nullopt);
     nowhere.store(snapshot(1, std::nullopt, "無題", "lost"));
     drain(worker);
     const auto second = nowhere.collect();
-    expect(second.size() == 1 && second[0] == AutosaveFailure::location_unavailable,
+    expect(printed(second) == "1location_unavailable",
            "without a root a store fails as location_unavailable");
 }
 
@@ -262,7 +326,10 @@ void verify_clear(adapters::Win32Worker &worker, adapters::Win32AutosaveAdapter 
     autosave.store(snapshot(6, std::nullopt, "無題", "too late"));
     drain(worker);
     expect(!exists(own_folder()), "a store after clear writes nothing");
-    expect(autosave.collect().empty(), "a store after clear does not fail");
+    const auto after = autosave.collect();
+    expect(std::ranges::none_of(after, [](const AutosaveOutcome &outcome)
+                                { return outcome.failure.has_value(); }),
+           "a store after clear does not fail");
 }
 
 void write_list(adapters::Win32FileAdapter &files, std::string_view folder,
@@ -402,6 +469,7 @@ void verify_autosave()
         verify_discard(worker, files, autosave);
         verify_clear(worker, autosave);
     }
+    verify_signals(worker, files);
     verify_failure(worker, files);
     {
         adapters::Win32AutosaveAdapter autosave(worker, files, root_path(root_text));
