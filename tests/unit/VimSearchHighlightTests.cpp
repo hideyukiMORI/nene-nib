@@ -5,6 +5,8 @@
 #include "EditorController.hpp"
 #include "EditorSettings.hpp"
 #include "ExResult.hpp"
+#include "Offset.hpp"
+#include "OffsetRange.hpp"
 #include "OpenDocument.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
@@ -19,6 +21,7 @@
 #include "VisibleLines.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -77,6 +80,46 @@ void verify_vim_line_matches()
            "a multibyte match is measured in bytes");
     expect(matches_of("Foo foo", "foo") == std::vector<MatchSpan>{{4, 7}},
            "the scan is case sensitive like the search (noignorecase)");
+}
+
+[[nodiscard]] std::vector<MatchSpan> window_matches_of(std::string_view text, std::size_t from,
+                                                       std::size_t to, std::string_view pattern)
+{
+    const auto parsed = VimPattern::parse(pattern, VimSearchDirection::forward);
+    std::vector<MatchSpan> spans;
+    for (const auto &match : core::vim_window_matches(
+             text, core::OffsetRange{core::Offset{from}, core::Offset{to}}, parsed.value()))
+    {
+        spans.emplace_back(match.begin.value, match.end.value);
+    }
+    return spans;
+}
+
+[[nodiscard]] std::optional<std::size_t> longest_of(std::string_view pattern)
+{
+    return VimPattern::parse(pattern, VimSearchDirection::forward).value().longest_bytes();
+}
+
+// 行の一部の窓の中の一致（#556）。窓の前の文字は文脈で、`^` と `\<` はそれを見る。一致は窓の
+// 終わりで切れ、窓の終わりより後ろで始まる一致は数えない。
+void verify_vim_window_matches()
+{
+    expect(window_matches_of("xabc", 1, 4, "abc") == std::vector<MatchSpan>{{1, 4}},
+           "a match inside the window is found after the context");
+    expect(window_matches_of("xabc", 1, 4, "^abc").empty(),
+           "the window start after a context character is not the line start");
+    expect(window_matches_of("xabc", 1, 4, "\\<abc").empty(),
+           "the word start looks at the context character before the window");
+    expect(window_matches_of(" abc", 1, 4, "\\<abc") == std::vector<MatchSpan>{{1, 4}},
+           "a word that starts after a blank context starts a word");
+    expect(window_matches_of("aaaaaa", 0, 3, "a*") == std::vector<MatchSpan>{{0, 3}},
+           "an unbounded match is cut at the window end");
+    expect(window_matches_of("abcabc", 0, 2, "abc") == std::vector<MatchSpan>{{0, 2}},
+           "a bounded match that crosses the window end is cut there");
+    expect(longest_of("abc") == std::optional<std::size_t>{12} &&
+               longest_of("^a\\>") == std::optional<std::size_t>{4} &&
+               !longest_of("ab*").has_value(),
+           "the longest match is four bytes per consuming atom and unknown with a repeat");
 }
 
 [[nodiscard]] bool highlight_is(const EditorController &controller, VimSearchHighlight expected)
@@ -336,6 +379,7 @@ void verify_search_highlight_backward_selection()
 void verify_vim_search_highlight_contracts()
 {
     verify_vim_line_matches();
+    verify_vim_window_matches();
     verify_vim_search_highlight_state();
     verify_vim_search_highlight_carry();
     verify_ex_highlight_commands();

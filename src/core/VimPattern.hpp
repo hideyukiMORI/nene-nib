@@ -29,6 +29,10 @@ class VimPattern final
     [[nodiscard]] std::optional<VimPatternMatch> matched(std::string_view line,
                                                          std::size_t from) const;
 
+    // 一致の長さの上限（バイト・#556）。食べる原子は 1 code point（UTF-8 で 4 バイトまで）を
+    // 食べ、幅の無い原子は何も食べない。反復（`*`）を含めば決まらないので値が無い。
+    [[nodiscard]] std::optional<std::size_t> longest_bytes() const noexcept;
+
   private:
     friend class VimPatternEvaluation;
 

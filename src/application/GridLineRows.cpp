@@ -99,8 +99,8 @@ void GridLineRows::walk()
     const auto &text = source_.state.text();
     const auto end = text.line_end(source_.line);
     auto &cells = source_.cells;
-    const auto begin = cells.byte_of(source_.line, core::GridPoint{source_.first_row, 0});
-    const auto next = cells.byte_of(source_.line, core::GridPoint{source_.end_row, 0});
+    const auto begin = source_.visible.begin;
+    const auto next = source_.visible.end;
     const core::Offset stop{std::max(std::min(next.value + peek_bytes, end.value), begin.value)};
     const auto cursor = cells.cursor_at(source_.line, begin);
     column_ = cursor.column;

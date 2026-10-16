@@ -5,6 +5,7 @@
 #include "GridLineMarks.hpp"
 #include "GridPoint.hpp"
 #include "LineNumber.hpp"
+#include "OffsetRange.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +24,9 @@ struct GridLineSource
     std::size_t first_row;
     std::size_t end_row;
     std::int64_t screen_row;
+    // 見えている画面行の本文の範囲 [byte_of(first_row), byte_of(end_row))。検索の照合の窓
+    // （EditorController::grid_marks）と同じ値で、GridCells に 2 回訊かない。
+    core::OffsetRange visible;
     GridLineMarks marks;
     core::GridPoint caret;
 };
