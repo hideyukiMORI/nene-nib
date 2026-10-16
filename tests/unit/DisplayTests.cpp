@@ -725,6 +725,35 @@ void verify_grid_marks()
            "the block caret is the cell of the character under it");
 }
 
+// 格子の frame は本文の索引と GridCells を借りる（決定 4・5）。16 MiB の ASCII の 1 行の真ん中で
+// frame を 10 回作っても、索引は同じ値のまま作り直さず、塊を 1 つも歩かない（割り算だけ）。
+void verify_grid_frames_borrow()
+{
+    Editing editing;
+    editing.files().hold_at(std::string(ascii_path), Bytes{std::string(sixteen_mebibytes, 'x')});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, grid_geometry});
+    applied(controller, open_of(ascii_path));
+    applied(controller, SelectDisplay{DisplayForm::grid});
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1},
+                                                           core::Column{sixteen_mebibytes / 2}},
+                                        core::SelectionAnchoring::collapse});
+    const auto *held = held_index(controller);
+    const auto rebuilt = controller.text().rebuilt_column_chunks();
+    bool borrowed = held != nullptr;
+    bool walked = false;
+    for (int frame = 0; frame < 10; ++frame)
+    {
+        const EditorFrame shown = controller.apply_frame(
+            app::MoveCaret{core::CaretMotion::next_character, core::SelectionAnchoring::collapse});
+        borrowed = borrowed && held_index(controller) == held &&
+                   controller.text().rebuilt_column_chunks() == rebuilt && !shown.grid.empty();
+        walked = walked || shown.grid_scanned != 0;
+    }
+    expect(borrowed, "ten grid frames of the 16 MiB line borrow the same index without rebuilding");
+    expect(!walked, "ten grid frames of the 16 MiB ASCII line walk no chunk");
+}
+
 // 開く道は、ファイルの 1 回の読みと文字組みのほかの port に触れない（決定 2）。
 void verify_quiet_open()
 {
@@ -760,6 +789,7 @@ void verify_display_contracts()
     verify_grid_frame_rows();
     verify_grid_row_cells();
     verify_grid_marks();
+    verify_grid_frames_borrow();
     verify_quiet_open();
 }
 

@@ -14,7 +14,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <functional>
 #include <optional>
 
 namespace nenenib::application
@@ -46,20 +45,18 @@ class VisualTextView final
     constrained(core::VisualPosition first, core::ScrollExtent extent) const;
     [[nodiscard]] std::expected<ScrollState, TextLayoutFailure>
     followed(core::TextCaret caret, core::ScrollFollow follow, core::ScrollExtent extent) const;
-    // 格子の升の累積（格子でなければ失敗）。frame の画面行（GridLineRows）は位置解決と同じ累積から
-    // 切り出す（ADR 0140 の決定 5）。
-    [[nodiscard]] std::expected<std::reference_wrapper<const core::VirtualColumnIndex>,
-                                TextLayoutFailure>
-    grid_index() const;
-    // キャレットが立つ格子の画面行と升。行頭に立つ trailing のキャレットは前の画面行の右端。
-    [[nodiscard]] std::expected<core::GridPoint, TextLayoutFailure>
-    grid_point(core::TextCaret caret) const;
+    // 格子の升の答え手（ADR 0140 の決定 4・5）。本文が索引を持たないか 1 升を読めなければ失敗。
+    // frame の画面行（GridLineRows）は位置解決と同じ GridCells を 1 frame に 1 つ借りて切り出す。
+    [[nodiscard]] std::expected<GridCells, TextLayoutFailure> grid_cells() const;
+    // キャレットが立つ格子の画面行と升（cells は grid_cells の値）。行頭に立つ trailing
+    // のキャレット は前の画面行の右端。
+    [[nodiscard]] core::GridPoint grid_point(GridCells &cells, core::TextCaret caret) const;
 
   private:
     [[nodiscard]] TextLayoutRequest request(const LineView &line) const;
     [[nodiscard]] bool gridded() const noexcept;
-    // 格子の升の答え手。本文が索引を持たないか 1 升を読めなければ失敗。
-    [[nodiscard]] std::expected<GridCells, TextLayoutFailure> grid() const;
+    [[nodiscard]] std::expected<core::GridPoint, TextLayoutFailure>
+    grid_point(core::TextCaret caret) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
     grid_rows(core::LineNumber number) const;
     [[nodiscard]] std::expected<core::TextLocation, TextLayoutFailure>

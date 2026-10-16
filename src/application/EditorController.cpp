@@ -3464,21 +3464,17 @@ GridLineMarks EditorController::grid_marks(core::LineNumber line,
     return marks;
 }
 
-std::expected<std::vector<GridRowView>, TextLayoutFailure>
-EditorController::grid_visible_rows() const
+std::optional<TextLayoutFailure> EditorController::grid_visible_rows(EditorFrame &frame) const
 {
     const VisualTextView view(state_, ports_.text_layouts, view_geometry_);
-    const auto index = view.grid_index();
-    const auto caret = view.grid_point(core::TextCaret{
-        state_.text().position_of(state_.selection().caret), state_.caret_affinity()});
-    if (!index)
+    auto cells = view.grid_cells();
+    if (!cells)
     {
-        return std::unexpected(index.error());
+        return cells.error();
     }
-    if (!caret)
-    {
-        return std::unexpected(caret.error());
-    }
+    const auto caret = view.grid_point(
+        cells.value(), core::TextCaret{state_.text().position_of(state_.selection().caret),
+                                       state_.caret_affinity()});
     const ScrollState scroll = state_.scroll();
     const core::OffsetRange range = highlighted_range();
     const auto block = block_selection();
@@ -3492,29 +3488,24 @@ EditorController::grid_visible_rows() const
                                    : state_.selection().caret;
     // 画面の下に半分かかる画面行も描く（text と同じ）。
     const auto limit = scroll.visible_lines + 1;
-    std::vector<GridRowView> rows;
     std::size_t screen = 0;
     auto first_row = scroll.first_row;
     for (core::LineNumber line{std::max<std::size_t>(scroll.first_visible.value, 1)};
          line.value <= state_.text().line_count() && screen < limit; ++line.value)
     {
-        const auto count = view.rows(line);
-        if (!count)
-        {
-            return std::unexpected(count.error());
-        }
-        const auto from = std::min(first_row, count.value() - 1);
-        const auto take = std::min(count.value() - from, limit - screen);
+        const auto count = cells.value().rows(line);
+        const auto from = std::min(first_row, count - 1);
+        const auto take = std::min(count - from, limit - screen);
         GridLineRows(
-            GridLineSource{state_, index.value().get(), line, from, from + take,
+            GridLineSource{state_, cells.value(), line, from, from + take,
                            static_cast<std::int64_t>(screen),
-                           grid_marks(line, block_row(block, line, range), selected, found),
-                           caret.value()})
-            .append_to(rows);
+                           grid_marks(line, block_row(block, line, range), selected, found), caret})
+            .append_to(frame.grid);
         screen += take;
         first_row = 0;
     }
-    return rows;
+    frame.grid_scanned = cells.value().scanned();
+    return std::nullopt;
 }
 
 DocumentView EditorController::active_document_view() const
@@ -3576,11 +3567,7 @@ EditorFrame EditorController::frame() const
         !pending && state_.display() == core::DisplayForm::grid && view_geometry_.width > 0;
     auto lines = pending || gridded ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
                                     : visible_lines();
-    auto grid = gridded ? grid_visible_rows()
-                        : std::expected<std::vector<GridRowView>, TextLayoutFailure>{};
-    const auto failure = !lines  ? std::optional{lines.error()}
-                         : !grid ? std::optional{grid.error()}
-                                 : layout_failure_;
+    const auto failure = lines ? layout_failure_ : std::optional{lines.error()};
     EditorFrame result{std::move(lines).value_or(std::vector<LineView>{}),
                        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode),
                                  state_.caret_affinity()},
@@ -3615,7 +3602,11 @@ EditorFrame EditorController::frame() const
                        state_.scroll().horizontal,
                        state_.display(),
                        pending};
-    result.grid = std::move(grid).value_or(std::vector<GridRowView>{});
+    if (gridded)
+    {
+        const auto grid_failure = grid_visible_rows(result);
+        result.layout_failure = grid_failure.has_value() ? grid_failure : result.layout_failure;
+    }
     return result;
 }
 } // namespace nenenib::application

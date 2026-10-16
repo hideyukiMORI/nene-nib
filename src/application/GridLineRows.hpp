@@ -14,10 +14,11 @@
 
 namespace nenenib::application
 {
-// 1 行の見えている画面行を格子の升で切り出す（ADR 0140 の決定 5）。始まりは core の
-// grid_byte_of（画面行 → 本文の位置）と升の累積 cursor_at で、そこから見えている画面行の終わり
-// までだけ本文を読む。各文字の升は core の column_advance と grid_placed_cell（升の累積と同じ
-// 規則）で決め、ui は数えない。選択・検索の当たり・キャレット・変換中の文字列は、本文の位置の
+// 1 行の見えている画面行を格子の升で切り出す（ADR 0140 の決定 5）。始まりは GridCells の
+// byte_of（画面行 → 本文の位置）と升の累積 cursor_at（本文の索引を借り、ASCII の塊は割り算だけ）
+// で、そこから見えている画面行の終わりまでだけ本文を読む。各文字の升は core の column_advance と
+// grid_placed_cell（升の累積と同じ 規則）で決め、ui
+// は数えない。選択・検索の当たり・キャレット・変換中の文字列は、本文の位置の
 // 範囲を画面行ごとの升の範囲に写す。
 class GridLineRows final
 {
