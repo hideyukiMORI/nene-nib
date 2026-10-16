@@ -167,6 +167,8 @@ MODE_LABEL_WIDTH_DIPS = 72
 BODY_TOP_DIPS = 12
 BODY_DEFAULT_POINTS = 13.5
 BODY_GUTTER_DIPS = 56
+# src/core/BodyLayout.cpp body_left_padding_dips: the text (and the caret) start this far right of the gutter.
+BODY_LEFT_PADDING_DIPS = 8
 TYPED_LINES = 200
 PAGE_KEYS = 30
 # IME（ADR 0014）。ime トークンは src/core/BuiltinTheme.hpp の正本と同じ値。
@@ -353,7 +355,8 @@ def measure_document(window, appearance: str, rows: int, output: Path, name: str
         "title": window_title(window),
         "rowInk": [ink(pixels, width, content_box(body, index, dpi), grounds)
                    for index in range(rows + 1)],
-        "gutterInk": [ink(pixels, width, gutter_box(body, index, dpi), grounds)
+        "gutterInk": [ink(pixels, width, gutter_box(body, index, dpi),
+                         gutter_grounds(pixels, width, body, grounds))
                       for index in range(rows + 1)],
         "encodingInk": ink(pixels, width, status_item_box(width, height, dpi, 1), band),
         "endingInk": ink(pixels, width, status_item_box(width, height, dpi, 2), band),
@@ -702,6 +705,9 @@ def body_points(width: int, height: int, dpi: int, points: float = BODY_DEFAULT_
         "firstRowTop": first,
         "lineHeight": line_height,
         "gutter": min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi), width),
+        "contentLeft": min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi)
+                           + to_pixels(int(BODY_LEFT_PADDING_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi),
+                           width),
         "bandBottom": band_bottom,
         "visibleLines": max((band_bottom - first) // line_height, 0),
     }
@@ -713,7 +719,7 @@ def row_middle(body: dict, index: int) -> int:
 
 def caret_pixel(pixels: bytes, width: int, body: dict, index: int) -> list[int]:
     """The leftmost pixel of the caret bar when the caret sits in column one."""
-    return pixel(pixels, width, body["gutter"], row_middle(body, index))
+    return pixel(pixels, width, body["contentLeft"], row_middle(body, index))
 
 
 def row_ground(pixels: bytes, width: int, body: dict, index: int) -> list[int]:
@@ -731,6 +737,11 @@ def ink(pixels: bytes, width: int, box: tuple, grounds: list) -> int:
 def gutter_box(body: dict, index: int, dpi: int) -> tuple:
     top = body["firstRowTop"] + body["lineHeight"] * index
     return (0, top, body["gutter"] - to_pixels(8, dpi), top + body["lineHeight"])
+
+
+def gutter_grounds(pixels: bytes, width: int, body: dict, grounds: list) -> list:
+    """The grounds plus the gutter's own face (#419 paints it apart from the body), sampled at its left edge."""
+    return grounds + [pixel(pixels, width, 1, row_middle(body, 1))]
 
 
 def content_box(body: dict, index: int, dpi: int) -> tuple:
@@ -784,7 +795,7 @@ def accent_count(pixels: bytes, width: int, box: tuple) -> int:
 def first_cell_box(body: dict, index: int, dpi: int) -> tuple:
     """The cell the caret covers in column one of a row."""
     top = body["firstRowTop"] + body["lineHeight"] * index
-    return (body["gutter"], top, body["gutter"] + to_pixels(10, dpi), top + body["lineHeight"])
+    return (body["contentLeft"], top, body["contentLeft"] + to_pixels(10, dpi), top + body["lineHeight"])
 
 
 def status_item_box(width: int, height: int, dpi: int, index: int) -> tuple:
@@ -913,7 +924,8 @@ def verify_typing(window, ground: dict, output: Path) -> dict:
         "rowOneGround": row_ground(after, width, body, 0),
         "rowTwoGround": row_ground(after, width, body, 1),
         "rowOneInk": ink(after, width, content_box(body, 0, dpi), grounds),
-        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi), grounds),
+        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi),
+                               gutter_grounds(before, width, body, grounds)),
         "statusInkBefore": status_before,
         "statusInkAfter": ink(after, width, status_item_box(width, height, dpi, 0),
                               [ground["status"]]),
@@ -933,7 +945,7 @@ def verify_block_caret(window, ground: dict) -> dict:
     """The Vim toggle turns the bar caret into a block one character wide (採用案 第 1 節)."""
     width, height, dpi, body = ground["size"]
     toggle = toggle_points(width, height, dpi)
-    inside_block = body["gutter"] + to_pixels(5, dpi)
+    inside_block = body["contentLeft"] + to_pixels(5, dpi)
     middle = row_middle(body, 1)
     bar = pixel(capture(window, width, height), width, inside_block, middle)
     click(window, toggle["vim"][0], toggle["vim"][1])
@@ -1004,7 +1016,8 @@ def verify_backspace(window, ground: dict) -> dict:
     erased = {
         "rowOneGround": row_ground(after, width, body, 0),
         "rowTwoGround": row_ground(after, width, body, 1),
-        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi), grounds),
+        "gutterInkRowTwo": ink(after, width, gutter_box(body, 1, dpi),
+                               gutter_grounds(after, width, body, grounds)),
         "rowOneInk": ink(after, width, content_box(body, 0, dpi), grounds),
     }
     assert erased["rowOneGround"] == ground["current"], "the caret did not return to row one"
@@ -1112,6 +1125,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     write_text(window, "i")
     time.sleep(0.5)
     inserting = capture(window, width, height)
+    snapshot(frames, window, "vimInsertCaret")
     write_text(window, "hello")
     typed, typed_ink = await_ink(window, size, content, grounds, True)
     write_bitmap(output / "vim-slice.bmp", typed, width, height)
@@ -1120,6 +1134,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     write_text(window, "0")
     time.sleep(0.5)
     back = capture(window, width, height)
+    snapshot(frames, window, "vimNormalCaret")
     write_text(window, "x")
     time.sleep(0.5)
     shortened = capture(window, width, height)
@@ -1205,7 +1220,8 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     assert result["ordinaryLabelDiffers"], "the ordinary label looks like NORMAL"
     assert result["accentInTheInsertCell"] > 0, "the INSERT caret was not drawn"
     assert result["accentInTheNormalCell"] > 2 * result["accentInTheInsertCell"], \
-        "the NORMAL caret is not wider than the INSERT bar"
+        (f"the NORMAL caret is not wider than the INSERT bar: normal={result['accentInTheNormalCell']}"
+         f" insert={result['accentInTheInsertCell']} cell={cell}")
     assert 0 < result["inkAfterRemoving"] < result["inkAfterTyping"], "0x did not remove one glyph"
     assert result["inkInTheSecondRowBeforePutting"] == 0, "the buffer had a second row already"
     assert result["inkInTheSecondRowAfterPutting"] > 0, "yyp did not put a second line"
