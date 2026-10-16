@@ -53,7 +53,7 @@ jobs:
           pwsh -NoProfile -File ./eng/validate-git.ps1 -PullRequest $env:MERGE_PR -ExpectedHead $env:MERGE_HEAD
           exit $LASTEXITCODE
   # ADR 0136: PR の最終 HEAD が製品としてビルドでき、単体テストが通ることの機械の裏付け。
-  # 構成は Release 1 つ（check.ps1 の Release の段と同じ命令）。Debug と速さは実機のまま。
+  # 構成は Release 1 つ（実機のゲートの Release の段と同じ命令）。Debug と速さは実機のまま。
   # 道具は measure-speed.yml の build-release.ps1 と同じく toolchain.ps1 が整えて版を照合する。
   # env は step ごとに切れるので、各 step で toolchain.ps1 を読み直す。
   build-and-test:
