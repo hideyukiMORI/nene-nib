@@ -16,11 +16,12 @@ namespace
 bool verify_selected(std::string_view selector)
 {
     namespace ui = nenenib::tests::ui;
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 10> groups{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 11> groups{{
         {"", ui::verify_fallback_keys},
         {"", ui::verify_fallback_cache},
         {"--glyphs", ui::verify_glyph_collector},
         {"--glyphs", ui::verify_glyph_pixels},
+        {"--fallback-ranges", ui::verify_fallback_ranges},
         {"--replaced", ui::verify_replaced_tints},
         {"", ui::verify_gutter_layouts},
         {"--text-layout", ui::verify_body_text_layouts},

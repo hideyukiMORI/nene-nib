@@ -208,7 +208,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/GutterLayoutTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp tests/ui/BodyTextLayoutTests.cpp
     tests/ui/GridRenderTests.cpp tests/ui/PresentedMilestoneTests.cpp
-    tests/ui/ReplacedTintTests.cpp)
+    tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
