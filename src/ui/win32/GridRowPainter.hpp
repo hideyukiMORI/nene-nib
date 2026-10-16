@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BodyTextLayout.hpp"
+#include "BodyTextPainter.hpp"
 #include "GridRowCanvas.hpp"
 #include "GridRowView.hpp"
 #include "RenderFailure.hpp"
@@ -22,6 +22,7 @@ namespace nenenib::ui::win32
 // 格子の 1 画面行を描く（ADR 0140 の決定 5）。文字組みは画面行の文字列 1 つを等幅の書式で作り
 // （BodyTextLayouts が字形を升の左端へ揃える）、選択・検索の当たり・変換の文節・キャレットは
 // application が写した升の範囲の矩形から塗る。DirectWrite の位置解決（HitTest）は使わない。
+// 字形は本文と同じ BodyTextPainter で描き、格子は字形のループを持たない（#569）。
 // Target は ID2D1RenderTarget の同じ名前のメソッドを持つ描画先、Layouts は BodyTextLayouts の
 // get / glyphs_of を持つ文字組み（試験は替え玉で数える・#531 の形）。brush が空なら色を変えない。
 template <typename Target, typename Layouts> class GridRowPainter final
@@ -29,7 +30,8 @@ template <typename Target, typename Layouts> class GridRowPainter final
   public:
     GridRowPainter(Target &target, ID2D1SolidColorBrush *brush, Layouts &layouts,
                    std::optional<RenderFailure> &failure)
-        : target_(target), brush_(brush), layouts_(layouts), failure_(failure)
+        : target_(target), brush_(brush), layouts_(layouts), failure_(failure),
+          body_(target, brush, layouts, failure)
     {
     }
 
@@ -115,38 +117,17 @@ template <typename Target, typename Layouts> class GridRowPainter final
         }
     }
 
-    // 保持した字形で描く（ADR 0073）。保持できなければ layout をそのまま描く。clip があれば
-    // その中だけ。
+    // clip（無ければ行の area）の中に、本文と同じ経路で行の layout を描く（ADR 0073）。
+    // 格子の layout の幅は行の area の幅と同じなので、保持の左の鍵は 0 で本文と同じ（#569）。
     void draw_text(IDWriteTextLayout *layout, const GridRowCanvas &canvas,
                    std::optional<D2D1_RECT_F> clip)
     {
-        const auto origin = D2D1::Point2F(static_cast<float>(canvas.area.left),
-                                          static_cast<float>(canvas.area.top));
         target_.PushAxisAlignedClip(
-            clip.value_or(D2D1::RectF(origin.x, origin.y, static_cast<float>(canvas.area.right),
-                                      static_cast<float>(canvas.area.bottom))),
+            clip.value_or(D2D1::RectF(
+                static_cast<float>(canvas.area.left), static_cast<float>(canvas.area.top),
+                static_cast<float>(canvas.area.right), static_cast<float>(canvas.area.bottom))),
             D2D1_ANTIALIAS_MODE_ALIASED);
-        const auto *entry = layouts_.glyphs_of(layout, 0);
-        if (entry == nullptr || !entry->glyphs_ready)
-        {
-            target_.DrawTextLayout(origin, layout, brush_, D2D1_DRAW_TEXT_OPTIONS_NONE);
-            target_.PopAxisAlignedClip();
-            return;
-        }
-        for (const auto &stored : entry->glyphs)
-        {
-            const DWRITE_GLYPH_RUN run{stored.face.Get(),
-                                       stored.em,
-                                       static_cast<UINT32>(stored.indices.size()),
-                                       stored.indices.data(),
-                                       stored.advances.data(),
-                                       stored.offsets.empty() ? nullptr : stored.offsets.data(),
-                                       stored.sideways,
-                                       stored.bidi};
-            target_.DrawGlyphRun(
-                D2D1::Point2F(origin.x + stored.origin.x, origin.y + stored.origin.y), &run, brush_,
-                stored.measuring);
-        }
+        body_.draw_body_text(layout, canvas.area, D2D1_DRAW_TEXT_OPTIONS_NONE);
         target_.PopAxisAlignedClip();
     }
 
@@ -245,5 +226,6 @@ template <typename Target, typename Layouts> class GridRowPainter final
     ID2D1SolidColorBrush *brush_;
     Layouts &layouts_;
     std::optional<RenderFailure> &failure_;
+    BodyTextPainter<Target, Layouts> body_;
 };
 } // namespace nenenib::ui::win32

@@ -21,10 +21,11 @@ class GridCountingLayouts final
         ++gets_;
         return layouts_.get(request);
     }
-    [[nodiscard]] const nenenib::ui::win32::BodyTextLayout *glyphs_of(IDWriteTextLayout *layout,
-                                                                      float left)
+    // BodyTextPainter が本文と同じ鍵（left / top / bottom）で引く（#528・#569）。
+    [[nodiscard]] const nenenib::ui::win32::BodyTextLayout *
+    glyphs_of(IDWriteTextLayout *layout, float left, float top, float bottom)
     {
-        return layouts_.glyphs_of(layout, left);
+        return layouts_.glyphs_of(layout, left, top, bottom);
     }
     [[nodiscard]] std::size_t gets() const noexcept
     {

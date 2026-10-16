@@ -175,7 +175,7 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 ### 本文の文字組みは `BodyTextLayouts`。描画と位置解決で共用する
 
-合成ルートが1個を所有し、applicationの`TextLayoutPort`とrendererが同じDirectWrite layoutを使う（ADR 0114）。通常行・IME差し込み済み行の完全な表示文字列、幅・行高・DPI・字体・折り返し設定をキーに現在/直前のframeと最後の入力行だけを保持する。書式変更で破棄し、横位置が変われば同じlayoutから可視範囲の字形を再収集する。選択/検索で共有layoutの書式を変更せず、右寄せ・コマンド入力のlayoutをこの保持へ入れない。
+合成ルートが1個を所有し、applicationの`TextLayoutPort`とrendererが同じDirectWrite layoutを使う（ADR 0114）。通常行・IME差し込み済み行の完全な表示文字列、幅・行高・DPI・字体・折り返し設定をキーに現在/直前のframeと最後の入力行だけを保持する。書式変更で破棄し、横位置が変われば同じlayoutから可視範囲の字形を再収集する。選択/検索で共有layoutの書式を変更せず、右寄せ・コマンド入力のlayoutをこの保持へ入れない。格子の画面行も字形は同じ`BodyTextPainter`で描く（ADR 0140 の決定 5・#569）。
 
 ### ステータスの文字組みは `write_status`。保持するのは最大10枠
 
