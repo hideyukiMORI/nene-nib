@@ -118,11 +118,11 @@ Piece TextBuffer::appended(Chunks &chunks, std::size_t &fill, std::string_view t
 }
 
 // add は空の列で始まり、最初の挿入が 1 本目の chunk を作る（ADR 0044）。
-TextBuffer::TextBuffer(Buffer original, Index original_newlines, std::vector<Piece> pieces,
-                       LineEnding ending)
+TextBuffer::TextBuffer(Buffer original, Index original_newlines, Columns columns,
+                       std::vector<Piece> pieces, LineEnding ending)
     : original_(std::move(original)), original_newlines_(std::move(original_newlines)),
-      add_fill_(0), pieces_(std::move(pieces)), size_bytes_(total_length(pieces_)),
-      newline_count_(total_newlines(pieces_)), ending_(ending)
+      columns_(std::move(columns)), add_fill_(0), pieces_(std::move(pieces)),
+      size_bytes_(total_length(pieces_)), newline_count_(total_newlines(pieces_)), ending_(ending)
 {
 }
 
@@ -130,6 +130,7 @@ TextBuffer TextBuffer::empty()
 {
     return TextBuffer(std::make_shared<const std::string>(),
                       std::make_shared<const NewlineIndex>(NewlineIndex::empty()),
+                      std::make_shared<const VirtualColumnIndex>(VirtualColumnIndex::empty()),
                       std::vector<Piece>{}, LineEnding::crlf);
 }
 
@@ -173,7 +174,11 @@ TextBuffer TextBuffer::from_validated_utf8(std::string text)
     // 改行の形はここで 1 度だけ判別する。以後は本文が持ち回り、開く経路は自分で判別しない
     // （ADR 0036 の決定 1 / ADR 0010 の決定 4）。
     const LineEnding ending = detect_line_ending(*original);
-    return TextBuffer(std::move(original), std::move(newlines), std::move(pieces), ending);
+    TextBuffer result(std::move(original), std::move(newlines), nullptr, std::move(pieces), ending);
+    // 仮想桁の索引も original の索引と同じくここでだけ一から作る（ADR 0140 の決定 4）。
+    result.columns_ =
+        std::make_shared<const VirtualColumnIndex>(VirtualColumnIndex::from_text(result));
+    return result;
 }
 
 std::string_view TextBuffer::view_of(const Piece &piece) const noexcept
@@ -249,10 +254,18 @@ TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text)
     }
     collect(next, to, size_bytes_);
     // 編集はバイト列を変えても改行の形は変えない（ARC-009 / ADR 0036 の決定 1）。
-    TextBuffer result(original_, original_newlines_, std::move(next), ending_);
+    TextBuffer result(original_, original_newlines_, columns_, std::move(next), ending_);
     result.add_ = std::move(add);
     result.add_fill_ = fill;
+    // 仮想桁の索引は触れた塊だけを作り直し、後ろの塊は要約から足す（ADR 0140 の決定 4）。
+    result.columns_ = std::make_shared<const VirtualColumnIndex>(
+        columns_->replaced(result, Offset{from}, Offset{to}, text));
     return result;
+}
+
+const VirtualColumnIndex &TextBuffer::virtual_columns() const noexcept
+{
+    return *columns_;
 }
 
 TextBuffer TextBuffer::insert(Offset at, std::string_view text) const
