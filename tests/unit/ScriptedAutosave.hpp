@@ -25,6 +25,7 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
   public:
     void store(nenenib::application::AutosaveSnapshot snapshot) override
     {
+        calls_.push_back("store " + std::to_string(snapshot.id.value));
         stored_.push_back(std::move(snapshot));
     }
 
@@ -71,6 +72,7 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
 
     void forget(const nenenib::application::AutosaveRemnant &remnant) override
     {
+        calls_.push_back("forget " + remnant.location);
         forgotten_.push_back(remnant.location);
     }
 
@@ -118,6 +120,11 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
     {
         return forgotten_;
     }
+    // store と forget を受けた順（"store <番号>" / "forget <location>"）。復元の後の順を読む。
+    [[nodiscard]] const std::vector<std::string> &calls() const noexcept
+    {
+        return calls_;
+    }
     // ファイルに触れる呼び出しの合計（store・discard・clear・remnants・read・forget）。
     [[nodiscard]] std::size_t touches() const noexcept
     {
@@ -136,5 +143,6 @@ class ScriptedAutosave final : public nenenib::application::AutosavePort
     std::vector<nenenib::application::AutosaveRemnant> remnants_;
     std::map<std::string, std::string> bodies_;
     std::vector<std::string> forgotten_;
+    std::vector<std::string> calls_;
 };
 } // namespace nenenib::tests

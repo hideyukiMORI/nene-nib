@@ -17,4 +17,9 @@ namespace nenenib::application
 // keep: それ以外（未保存で変わっていない・保存済みで帳面に無い・まだ読んでいなくて帳面に無い）。
 [[nodiscard]] std::vector<std::pair<AutosaveId, AutosaveStep>>
 autosave_plan(const EditorState &state, const AutosaveLedger &ledger);
+
+// 窓が閉じていくとき（EndSession）に退避を消してよいか（ADR 0137 の決定 5）。読み込み済みの
+// タブに未保存が 1 つも無いときだけ真。未保存が残る終わり方（OS の終了の強行・最後のタブを
+// 保存せずに閉じるなど）では偽で、退避は残骸として次の起動で問われる。
+[[nodiscard]] bool clears_autosave(const EditorState &state);
 } // namespace nenenib::application

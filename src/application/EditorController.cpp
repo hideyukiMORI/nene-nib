@@ -3037,18 +3037,23 @@ void EditorController::accept(const EndSession &intent)
     static_cast<void>(ports_.session.write(ended_session(state_, intent.reason)));
     // 閉じたファイルを履歴に記録する（ADR 0060 の決定 8）。一覧の書きの後。
     remember(ended_paths(state_, intent.reason));
-    // 正常に閉じたら退避を消す（ADR 0137 の決定 5）。進行中の store の終わりは adapter が待つ。
-    ports_.autosave.clear();
+    // 未保存のタブが残らない終わり方だけ退避を消す（ADR 0137 の決定 5）。残る終わり方（OS の
+    // 終了の強行など）では消さず、次の起動で問う。進行中の store の終わりは adapter が待つ。
+    if (clears_autosave(state_))
+    {
+        ports_.autosave.clear();
+    }
 }
 
-// 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて
-// いなくても 1 回呼んでたまりを空にする。使うのは面が開いていて今の券の batch だけ。
-// 届いた分は 1 回の extended で後ろへ足す（入力と選択は core が保つ）。
-// 打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る command_message() が出す。
-// 入力・知らせ・ほかの状態には触れない。
-// 自動退避の合図（ADR 0137 の決定 1・2）。計画は純関数で、帳面を更新するのはこの道だけ。
-// 入口は歩きも知らせも残す。本文の写しは UI スレッドで作り、書くのは worker（決定 4）。
+// 自動退避の合図（ADR 0137 の決定 1・2）。入口は歩きも知らせも残す。
 void EditorController::accept(const AutosaveTick &)
+{
+    autosave_now();
+}
+
+// 計画は純関数で、帳面を更新するのはこの道だけ（合図と復元の直後）。本文の写しは UI スレッドで
+// 作り、書くのは worker（決定 4）。
+void EditorController::autosave_now()
 {
     for (const auto &[id, step] : autosave_plan(state_, autosave_ledger_))
     {
@@ -3076,33 +3081,36 @@ const std::vector<AutosaveRemnant> &EditorController::autosave_remnants()
 }
 
 // 「はい」（決定 6）。覚えた残骸を順に読み、戻せた分を帯の末尾へ足してから、最初の 1 本へ
-// 切り替える。読めない残骸は知らせて飛ばす。どの残骸も読んだ後に forget する。
+// 切り替える。読めない残骸は知らせて飛ばす。戻したタブは次の合図を待たずにこのプロセスの退避と
+// して頼み、その後にどの残骸も forget する（頼んだ書きが終わるまでの隙間は ADR の限界）。
 void EditorController::accept(const RestoreAutosave &)
 {
+    const std::vector<AutosaveRemnant> remnants = std::exchange(autosave_remnants_, {});
     std::vector<DocumentState> restored;
     std::size_t unrestored = 0;
-    for (const AutosaveRemnant &remnant : std::exchange(autosave_remnants_, {}))
+    for (const AutosaveRemnant &remnant : remnants)
     {
         auto bundle = restored_bundle(remnant);
         if (bundle.has_value())
         {
             restored.push_back(std::move(bundle).value());
+            continue;
         }
-        else
-        {
-            state_ = state_.with_command_message(unrestored_message(remnant, unrestored++));
-        }
+        state_ = state_.with_command_message(unrestored_message(remnant, unrestored++));
+    }
+    if (!restored.empty())
+    {
+        const std::size_t first = state_.tab_count();
+        state_ = state_.with_appended(std::move(restored));
+        leave_document();
+        state_ = state_.with_switched(first);
+        enter_document();
+        autosave_now();
+    }
+    for (const AutosaveRemnant &remnant : remnants)
+    {
         ports_.autosave.forget(remnant);
     }
-    if (restored.empty())
-    {
-        return;
-    }
-    const std::size_t first = state_.tab_count();
-    state_ = state_.with_appended(std::move(restored));
-    leave_document();
-    state_ = state_.with_switched(first);
-    enter_document();
 }
 
 // 「いいえ」（決定 6）。本文を読まずに全部 forget する。
@@ -3215,6 +3223,11 @@ void EditorController::notify_autosave_failure()
     state_ = state_.with_command_message(core::DisplayText::parse(autosave_failed_message).value());
 }
 
+// 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて
+// いなくても 1 回呼んでたまりを空にする。使うのは面が開いていて今の券の batch だけ。
+// 届いた分は 1 回の extended で後ろへ足す（入力と選択は core が保つ）。
+// 打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る command_message() が出す。
+// 入力・知らせ・ほかの状態には触れない。自動退避の失敗もここで引く（ADR 0137 の決定 4）。
 void EditorController::accept(const WorkCompleted &)
 {
     collect_autosave();

@@ -174,6 +174,18 @@ void verify_plan_tabs()
     expect(switched.autosave_ids() == two.autosave_ids(), "switching keeps the numbers in place");
 }
 
+// 退避を消してよい終わり方は、読み込み済みのタブに未保存が 1 つも無いときだけ（決定 5）。
+void verify_clears_autosave()
+{
+    expect(app::clears_autosave(fresh()), "an untouched window may clear the autosave");
+    const EditorState once = typed(fresh(), core::EditBoundary::coalesce);
+    expect(!app::clears_autosave(once), "an unsaved active tab keeps the autosave");
+    expect(app::clears_autosave(saved(once)), "a saved tab may clear the autosave");
+    expect(!app::clears_autosave(once.with_new_tab()), "an unsaved parked tab keeps the autosave");
+    expect(app::clears_autosave(fresh().with_restored({unloaded()})),
+           "a tab not read yet has nothing unsaved");
+}
+
 [[nodiscard]] std::string bytes_of(const app::AutosaveSnapshot &snapshot)
 {
     std::string text;
@@ -352,9 +364,11 @@ void verify_restored_tabs_autosave()
     applied(controller, app::RestoreAutosave{});
     const auto third = controller.apply_frame(app::SwitchTab{2});
     expect(vim_body(third) == "gamma", "the untitled remnant keeps its body without the mark");
+    expect(editing.autosave().stored().size() == 2,
+           "restoring stores the two restored tabs under this process at once");
     applied(controller, app::AutosaveTick{});
     expect(editing.autosave().stored().size() == 2,
-           "the next tick stores the two restored tabs under this process");
+           "the next tick has nothing new to store for the restored tabs");
 }
 
 // 戻したタブのキャレットは一覧に書いた行と桁（決定 6）。本文の範囲の外の行はセッションの復元と
@@ -415,12 +429,60 @@ void verify_discard_remnants()
     expect(editing.autosave().forgotten().size() == 2 && editing.autosave().remnant_reads() == 1,
            "an answer after the first one has nothing left to forget");
 }
+// 未保存のタブが残る終わり方（OS の終了の強行・最後のタブを閉じる途中など）では退避を消さず、
+// 残骸として次の起動で問う。未保存が残らなければ 1 回消す（決定 5）。
+void verify_end_session_keeps_unsaved()
+{
+    Editing forced;
+    applied(forced.controller(), app::VisibleLines{10});
+    applied(forced.controller(), app::InsertText{"ab"});
+    applied(forced.controller(), app::AutosaveTick{});
+    applied(forced.controller(), app::EndSession{app::SessionEnd::window_closed});
+    expect(forced.autosave().clears() == 0,
+           "an ending that leaves an unsaved tab (the OS session end) keeps the autosave");
+    Editing last;
+    applied(last.controller(), app::VisibleLines{10});
+    applied(last.controller(), app::InsertText{"ab"});
+    applied(last.controller(), app::EndSession{app::SessionEnd::last_tab_closed});
+    expect(last.autosave().clears() == 0,
+           "closing the last tab while it is unsaved keeps the autosave");
+    Editing parked;
+    applied(parked.controller(), app::VisibleLines{10});
+    applied(parked.controller(), app::InsertText{"ab"});
+    applied(parked.controller(), app::NewTab{});
+    applied(parked.controller(), app::EndSession{app::SessionEnd::window_closed});
+    expect(parked.autosave().clears() == 0, "an unsaved parked tab keeps the autosave too");
+    Editing clean;
+    applied(clean.controller(), app::VisibleLines{10});
+    applied(clean.controller(), app::EndSession{app::SessionEnd::window_closed});
+    expect(clean.autosave().clears() == 1,
+           "an ending without any unsaved tab clears the autosave once");
+}
+
+// 戻したタブは次の合図を待たずにこのプロセスの退避として頼み、その後に残骸を forget する
+// （決定 6・F2）。
+void verify_restore_stores_before_forget()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    editing.autosave().remain(remnant("5e/0", sample_path()), "alpha");
+    editing.autosave().remain(remnant("5e/1", std::nullopt), "beta");
+    editing.autosave().remain(remnant("5e/2", std::nullopt), std::nullopt);
+    static_cast<void>(controller.autosave_remnants());
+    applied(controller, app::RestoreAutosave{});
+    expect(editing.autosave().calls() == std::vector<std::string>{"store 1", "store 2",
+                                                                  "forget 5e/0", "forget 5e/1",
+                                                                  "forget 5e/2"},
+           "restoring stores the restored tabs before it forgets any remnant");
+}
 } // namespace
 
 void verify_autosave_contracts()
 {
     verify_plan_active();
     verify_plan_tabs();
+    verify_clears_autosave();
     verify_tick_stores_changes();
     verify_tick_encodes_and_discards();
     verify_failure_notified_once();
@@ -430,6 +492,8 @@ void verify_autosave_contracts()
     verify_restore_caret();
     verify_restore_unreadable();
     verify_discard_remnants();
+    verify_end_session_keeps_unsaved();
+    verify_restore_stores_before_forget();
 }
 
 void verify_autosave_scope()
