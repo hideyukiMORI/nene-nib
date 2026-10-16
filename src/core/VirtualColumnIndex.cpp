@@ -39,36 +39,33 @@ using Measure = std::size_t VirtualColumnCursor::*;
     return VirtualColumnCursor{0, 0, 0, 0, 0};
 }
 
-[[nodiscard]] bool is_plain(std::string_view bytes) noexcept
+// 塊を 1 度だけ読み、表示できる ASCII と '\n' だけか（plain）を返す。'\n' の数と最後の '\n' の
+// 位置（無ければ npos）も数える。Tab と制御文字（'\n' 以外の 0x20 未満と 0x7F）と非 ASCII は
+// 1 バイト＝1 桁でないので plain にしない。STL の数えと後ろからの検索は core の外へ別のシンボルを
+// 出すので、ここで 1 バイトずつ数える（ARC-003）。
+[[nodiscard]] bool classified(std::string_view bytes, std::size_t &breaks,
+                              std::size_t &last) noexcept
 {
-    return std::ranges::all_of(bytes,
-                               [](char value)
-                               {
-                                   const auto byte = static_cast<unsigned char>(value);
-                                   return byte >= first_plain && byte <= last_plain;
-                               });
+    bool plain = true;
+    breaks = 0;
+    last = std::string_view::npos;
+    for (std::size_t at = 0; at < bytes.size(); ++at)
+    {
+        const auto byte = static_cast<unsigned char>(bytes[at]);
+        if (byte == '\n')
+        {
+            ++breaks;
+            last = at;
+            continue;
+        }
+        plain = plain && byte >= first_plain && byte <= last_plain;
+    }
+    return plain;
 }
 
 [[nodiscard]] bool continues(char value) noexcept
 {
     return (static_cast<unsigned char>(value) & continuation_mask) == continuation_bits;
-}
-
-// '\n' の数と、最後の '\n' の位置（無ければ npos）。STL の数えと後ろからの検索は core の外へ別の
-// シンボルを出すので、ここで 1 バイトずつ数える（ARC-003）。
-[[nodiscard]] std::size_t line_breaks_of(std::string_view bytes, std::size_t &last) noexcept
-{
-    std::size_t count = 0;
-    last = std::string_view::npos;
-    for (std::size_t at = 0; at < bytes.size(); ++at)
-    {
-        if (bytes[at] == '\n')
-        {
-            ++count;
-            last = at;
-        }
-    }
-    return count;
 }
 
 // column の次の Tab の止まり。止まりの値は column_advance の 1 本から読む（ADR 0034）。
@@ -146,7 +143,8 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
 }
 
 // [start, start + bytes) を state から始まる塊として要約する。'\n' を含む塊は最後の '\n' の
-// 後ろだけを歩く（そこより前の桁は次の塊に効かない）。line は呼ぶ側が付ける。
+// 後ろだけを歩く（そこより前の桁は次の塊に効かない）。plain の塊は歩かず長さから決める。
+// line は呼ぶ側が付ける。
 [[nodiscard]] VirtualColumnChunk summarized(std::string_view bytes, std::size_t start,
                                             VirtualColumnCursor state, std::size_t columns)
 {
@@ -156,22 +154,25 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
     chunk.column = state.column;
     chunk.cell = state.cell;
     chunk.code_point = state.code_point;
-    chunk.plain = is_plain(bytes);
+    std::size_t last_newline = 0;
+    chunk.plain = classified(bytes, chunk.line_breaks, last_newline);
+    const auto tail_bytes = bytes.substr(chunk.line_breaks == 0 ? 0 : last_newline + 1);
     if (chunk.plain)
     {
-        chunk.lead = bytes.size();
-        chunk.code_points = bytes.size();
+        chunk.resets = chunk.line_breaks != 0;
+        chunk.lead = tail_bytes.size();
+        chunk.rest = chunk.resets ? tail_bytes.size() : 0;
+        chunk.tail_cell = chunk.rest;
+        chunk.code_points = tail_bytes.size();
         return chunk;
     }
-    std::size_t last_newline = 0;
-    chunk.line_breaks = line_breaks_of(bytes, last_newline);
     if (chunk.line_breaks == 0)
     {
         summarize_line_part(chunk, bytes, columns);
         return chunk;
     }
     auto tail = zero_cursor();
-    static_cast<void>(walked(bytes.substr(last_newline + 1), tail, columns));
+    static_cast<void>(walked(tail_bytes, tail, columns));
     chunk.resets = true;
     chunk.rest = tail.column;
     chunk.tail_cell = tail.cell;
@@ -240,11 +241,6 @@ void summarize_line_part(VirtualColumnChunk &chunk, std::string_view bytes, std:
     return copied;
 }
 } // namespace
-
-VirtualColumnIndex VirtualColumnIndex::empty()
-{
-    return VirtualColumnIndex{};
-}
 
 VirtualColumnIndex VirtualColumnIndex::from_text(const TextBuffer &text)
 {
@@ -412,14 +408,19 @@ VirtualColumnCursor VirtualColumnIndex::cursor_at(const TextBuffer &text, Offset
     }
     const auto clamped = std::min(at.value, size_bytes());
     const auto &chunk = chunks_.at(chunk_of(clamped));
-    const auto inside = clamped - chunk.start;
-    if (chunk.plain || inside == 0)
+    if (clamped == chunk.start)
     {
-        return VirtualColumnCursor{chunk.column + inside, chunk.cell + inside, 0,
-                                   chunk.code_point + inside, 0};
+        return start_of(chunk);
     }
     const auto from = line_start_within(text, chunk, clamped);
     auto state = from == chunk.start ? start_of(chunk) : zero_cursor();
+    // plain の塊は 1 バイト＝1 桁＝1 升＝1 コードポイントで、行頭（改行の索引）から引き算する。
+    if (chunk.plain)
+    {
+        const auto inside = clamped - from;
+        return VirtualColumnCursor{state.column + inside, state.cell + inside, 0,
+                                   state.code_point + inside, 0};
+    }
     const auto bytes = text.text_range(Offset{from}, Offset{clamped});
     state.scanned = 1;
     state.copied = bytes.size();
