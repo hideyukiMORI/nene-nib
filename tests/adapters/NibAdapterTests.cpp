@@ -119,14 +119,26 @@ FilePath path_of(std::string_view name)
     return std::move(parsed).value();
 }
 
+// 封印済みの列（ADR 0141）を比べやすい所有の文字列に写す。試験の都合の複写。
+std::expected<std::string, FileFailure> read_text(Win32FileAdapter &files, const FilePath &path,
+                                                  std::size_t maximum_bytes)
+{
+    const auto bytes = files.read(path, maximum_bytes);
+    if (!bytes)
+    {
+        return std::unexpected(bytes.error());
+    }
+    return std::string(bytes.value().view());
+}
+
 void verify_round_trip(Win32FileAdapter &files, std::string_view name, std::string_view bytes,
                        TextEncoding expected)
 {
     const FilePath path = path_of(name);
     expect(files.write(path, bytes).has_value(), "the bytes are written");
     const auto read = files.read(path, read_limit);
-    expect(read.has_value() && read.value() == bytes, "the same bytes come back");
-    const auto detected = detect_encoding(read.value_or(std::string{}));
+    expect(read.has_value() && read.value().view() == bytes, "the same bytes come back");
+    const auto detected = detect_encoding(read.has_value() ? read.value().view() : "");
     expect(detected.has_value() && detected.value() == expected, "the encoding is detected");
 }
 
@@ -143,18 +155,19 @@ void verify_read_boundaries(Win32FileAdapter &files)
     const FilePath path = path_of("nib-adapter-files/utf8.txt");
     expect(files.write(path, "").has_value(), "an empty file can be written");
     const auto empty = files.read(path, 0);
-    expect(empty.has_value() && empty.value().empty(), "zero-byte reads succeed at a zero limit");
+    expect(empty.has_value() && empty.value().size() == 0,
+           "zero-byte reads succeed at a zero limit");
     expect(files.write(path, "x").has_value(), "a one-byte file can be written");
-    expect(files.read(path, 0).error() == FileFailure::too_large,
+    expect(read_text(files, path, 0).error() == FileFailure::too_large,
            "nonempty files are rejected before a zero-length read");
-    expect(files.read(path, 1).value() == "x", "a one-byte read accepts the exact limit");
+    expect(read_text(files, path, 1).value() == "x", "a one-byte read accepts the exact limit");
     const std::string bytes("a\0b\n", 4);
     expect(files.write(path, bytes).has_value(), "binary NUL bytes can be written");
-    expect(files.read(path, bytes.size()).value() == bytes,
+    expect(read_text(files, path, bytes.size()).value() == bytes,
            "the initialized read length includes NUL and a trailing newline");
-    expect(files.read(path, bytes.size() - 1).error() == FileFailure::too_large,
+    expect(read_text(files, path, bytes.size() - 1).error() == FileFailure::too_large,
            "one byte above the limit is rejected");
-    expect(files.write(path, "z").has_value() && files.read(path, 32).value() == "z",
+    expect(files.write(path, "z").has_value() && read_text(files, path, 32).value() == "z",
            "a small file does not retain the previous read's longer tail");
 }
 
@@ -189,7 +202,7 @@ void expect_read_steps(std::span<const std::expected<std::size_t, FileFailure>> 
     expect(calls == steps.size(), "completion or failure stops at the expected read call");
     if (succeeds)
     {
-        expect(result.has_value() && result.value() == input,
+        expect(result.has_value() && result.value().view() == input,
                "complete reads preserve every byte including NUL in the correct position");
     }
     if (!succeeds)
@@ -220,7 +233,7 @@ void verify_complete_read_steps()
             ++calls;
             return std::unexpected(FileFailure::unreadable);
         });
-    expect(empty.has_value() && empty.value().empty() && calls == 0,
+    expect(empty.has_value() && empty.value().size() == 0 && calls == 0,
            "an empty declaration succeeds without invoking the read operation");
 }
 
@@ -255,7 +268,7 @@ void verify_replacement(Win32FileAdapter &files)
     const FilePath path = path_of("nib-adapter-files/replaced.txt");
     expect(files.write(path, "first content").has_value(), "the first content is written");
     expect(files.write(path, "second").has_value(), "the second content replaces it");
-    const auto read = files.read(path, read_limit);
+    const auto read = read_text(files, path, read_limit);
     expect(read.has_value() && read.value() == "second", "the replacement is what comes back");
     // 一時ファイルは置き換えのあとに残らない。
     expect(GetFileAttributesW(L"nib-adapter-files/replaced.txt.nib-tmp") == INVALID_FILE_ATTRIBUTES,
@@ -264,23 +277,23 @@ void verify_replacement(Win32FileAdapter &files)
 
 void verify_failures(Win32FileAdapter &files)
 {
-    const auto missing = files.read(path_of("nib-adapter-files/absent.txt"), read_limit);
+    const auto missing = read_text(files, path_of("nib-adapter-files/absent.txt"), read_limit);
     expect(!missing.has_value() && missing.error() == FileFailure::not_found,
            "an absent path is not_found");
-    const auto directory = files.read(path_of("nib-adapter-files"), read_limit);
+    const auto directory = read_text(files, path_of("nib-adapter-files"), read_limit);
     expect(!directory.has_value() && directory.error() == FileFailure::unreadable,
            "a folder is unreadable");
     const auto refused = files.write(path_of("nib-adapter-files/absent/deep.txt"), "x");
     expect(!refused.has_value(), "writing into a folder that is not there fails");
     // 上限は引数で来る。小さく渡せば、読む前に断ることが見える。
-    const auto capped = files.read(path_of("nib-adapter-files/utf8.txt"), 4);
+    const auto capped = read_text(files, path_of("nib-adapter-files/utf8.txt"), 4);
     expect(!capped.has_value() && capped.error() == FileFailure::too_large,
            "a file larger than the limit the caller passed is too_large");
     // 保存に上限は無い。開ける大きさを超えて貼り付けた本文も書ける。
     const FilePath big = path_of("nib-adapter-files/replaced.txt");
     expect(files.write(big, std::string(1024U * 1024U, 'z')).has_value(),
            "a body larger than the read limit still writes");
-    expect(files.read(big, read_limit).value_or(std::string{}).size() == 1024U * 1024U,
+    expect(read_text(files, big, read_limit).value_or(std::string{}).size() == 1024U * 1024U,
            "and it comes back whole");
 }
 
@@ -294,7 +307,7 @@ void verify_create_only(Win32FileAdapter &files)
     const auto refused = files.write(path, "replacement", FileWriteMode::create_new);
     expect(!refused && refused.error() == FileFailure::already_exists,
            "create_new refuses a file that already exists");
-    expect(files.read(path, read_limit).value_or(std::string{}) == "new content",
+    expect(read_text(files, path, read_limit).value_or(std::string{}) == "new content",
            "a rejected create preserves all existing bytes");
     expect(GetFileAttributesW(L"nib-adapter-files/replaced.txt.nib-tmp") == INVALID_FILE_ATTRIBUTES,
            "successful and rejected creation leave no temporary file");
@@ -303,9 +316,10 @@ void verify_create_only(Win32FileAdapter &files)
            "prepare a pre-existing temporary file");
     expect(!files.write(path, "must not write", FileWriteMode::create_new),
            "an occupied temporary name refuses the write");
-    expect(files.read(temporary, read_limit).value_or(std::string{}) == "someone else's temporary",
+    expect(read_text(files, temporary, read_limit).value_or(std::string{}) ==
+               "someone else's temporary",
            "an unowned temporary file is neither overwritten nor deleted");
-    expect(!files.read(path, read_limit), "the destination is not partially created");
+    expect(!read_text(files, path, read_limit), "the destination is not partially created");
     expect(DeleteFileW(L"nib-adapter-files/replaced.txt.nib-tmp") != 0,
            "remove only the temporary fixture we prepared");
 }
@@ -324,7 +338,7 @@ void verify_resolved_write(Win32FileAdapter &files)
            "resolved names preserve the filename and remove dot segments");
     expect(files.write(absolute.value(), "resolved", FileWriteMode::create_new).has_value(),
            "the resolved path can be created");
-    expect(files.read(input, read_limit).value_or(std::string{}) == "resolved",
+    expect(read_text(files, input, read_limit).value_or(std::string{}) == "resolved",
            "relative and resolved paths read the same bytes");
 }
 
@@ -335,7 +349,7 @@ void verify_segmented_write(Win32FileAdapter &files)
                                                     std::string_view("z\0", 2)};
     expect(files.write(path, parts, FileWriteMode::replace).has_value(),
            "byte fragments are written as one file");
-    expect(files.read(path, read_limit).value_or(std::string{}) ==
+    expect(read_text(files, path, read_limit).value_or(std::string{}) ==
                std::string("a\r\n日本\nz\0", 12),
            "fragment boundaries do not change UTF-8, CRLF or NUL bytes");
     expect(files.write(path, parts, FileWriteMode::create_new).error() ==
@@ -343,7 +357,7 @@ void verify_segmented_write(Win32FileAdapter &files)
            "segmented create_new preserves an existing target");
     const std::array<std::string_view, 0> empty{};
     expect(files.write(path, empty, FileWriteMode::replace).has_value() &&
-               files.read(path, 0).value_or("not empty").empty(),
+               read_text(files, path, 0).value_or("not empty").empty(),
            "an empty segment list replaces with an empty file");
     expect(files.write(path, "resolved").has_value(), "restore the replacement fixture");
 }
@@ -360,7 +374,7 @@ void verify_failed_replacement(Win32FileAdapter &files)
         expect(!files.write(path, parts, FileWriteMode::replace),
                "a locked target refuses replacement after all fragments are written");
     }
-    expect(files.read(path, read_limit).value_or(std::string{}) == "resolved",
+    expect(read_text(files, path, read_limit).value_or(std::string{}) == "resolved",
            "failed replacement retains the complete original file");
     expect(GetFileAttributesW(L"nib-adapter-files/replaced.txt.nib-tmp") == INVALID_FILE_ATTRIBUTES,
            "failed replacement removes the temporary file it owned");
@@ -454,7 +468,7 @@ void verify_timing_marks(Win32FileAdapter &files)
     {
         return;
     }
-    const auto bytes = files.read(recorded.value(), read_limit);
+    const auto bytes = read_text(files, recorded.value(), read_limit);
     expect(bytes.has_value(), "the bound adapter wrote its measurement file");
     const std::string_view text = bytes.has_value() ? std::string_view(bytes.value()) : "";
     expect(text.find("\"processCreationToFirstFrameMs\"") != std::string_view::npos,
@@ -470,7 +484,7 @@ void verify_timing_marks(Win32FileAdapter &files)
            "the presented milestone is in the report");
     expect(text.find("\"qpcMicroseconds\"") != std::string_view::npos,
            "each milestone carries its counter reading");
-    const auto missing = files.read(unrecorded.value(), read_limit);
+    const auto missing = read_text(files, unrecorded.value(), read_limit);
     expect(!missing.has_value() && missing.error() == FileFailure::not_found,
            "an adapter that was never bound writes nothing");
 }
@@ -615,7 +629,7 @@ void verify_settings_restart(Win32FileAdapter &files)
     const auto stale = first.write(settings);
     expect(!stale && stale.error() == SettingsFailure::changed_externally,
            "stale settings never overwrite another window's update");
-    expect(files.read(path, 4096).value_or("") == encode_settings(default_editor_settings()),
+    expect(read_text(files, path, 4096).value_or("") == encode_settings(default_editor_settings()),
            "the competing update remains intact");
 }
 
@@ -626,7 +640,7 @@ void verify_settings_lock(Win32FileAdapter &files)
         files, SettingsPaths{path, path_of("nib-adapter-files/settings/settings.v2"),
                              path_of("nib-adapter-files/settings/settings.v1")});
     expect(settings.read().has_value(), "the settings adapter loads before lock checks");
-    const auto before = files.read(path, 4096);
+    const auto before = read_text(files, path, 4096);
     {
         const FileHandle lock(CreateFileW(L"nib-adapter-files/settings/settings.v3.lock",
                                           GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
@@ -635,7 +649,8 @@ void verify_settings_lock(Win32FileAdapter &files)
         const auto result = settings.write(default_editor_settings());
         expect(!result && result.error() == SettingsFailure::unwritable,
                "a held lock refuses a write without waiting");
-        expect(files.read(path, 4096) == before, "lock failure leaves the original bytes intact");
+        expect(read_text(files, path, 4096) == before,
+               "lock failure leaves the original bytes intact");
     }
     expect(settings.write(default_editor_settings()).has_value(), "a released lock allows retry");
     expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v3", FILE_ATTRIBUTE_READONLY) !=
@@ -644,7 +659,7 @@ void verify_settings_lock(Win32FileAdapter &files)
     const auto refused = settings.write(default_editor_settings());
     expect(!refused && refused.error() == SettingsFailure::unwritable,
            "read-only files refuse save");
-    expect(files.read(path, 4096) == before, "failed replacement preserves settings bytes");
+    expect(read_text(files, path, 4096) == before, "failed replacement preserves settings bytes");
     expect(SetFileAttributesW(L"nib-adapter-files/settings/settings.v3", FILE_ATTRIBUTE_NORMAL) !=
                0,
            "the test restores the original attributes");
@@ -662,7 +677,8 @@ void verify_rejected_settings(Win32FileAdapter &files, std::string_view bytes,
     expect(!loaded && loaded.error() == expected, "invalid settings return their typed failure");
     const auto written = settings.write(default_editor_settings());
     expect(!written && written.error() == expected, "a failed load blocks later writes");
-    expect(files.read(path, read_limit).value_or("") == bytes, "invalid settings remain untouched");
+    expect(read_text(files, path, read_limit).value_or("") == bytes,
+           "invalid settings remain untouched");
 }
 
 void verify_settings_failures(Win32FileAdapter &files)
@@ -719,12 +735,13 @@ void verify_migration_success(Win32FileAdapter &files)
     expect(loaded.font_size.points() == 21.25F &&
                loaded.guide == nenenib::core::GuideVisibility::shown,
            "v1 retains settings and initializes shown guide");
-    expect(!files.read(settings_paths().current, 4096), "loading v1 does not migrate eagerly");
+    expect(!read_text(files, settings_paths().current, 4096),
+           "loading v1 does not migrate eagerly");
     loaded.guide = nenenib::core::GuideVisibility::hidden;
     expect(store.write(loaded).has_value(), "first changed settings migrate into v3");
-    expect(files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
+    expect(read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
            "migration leaves v1 bytes unchanged");
-    expect(files.read(settings_paths().current, 4096).value_or("") == encode_settings(loaded),
+    expect(read_text(files, settings_paths().current, 4096).value_or("") == encode_settings(loaded),
            "migration writes v3 including hidden guide");
     // Both reading and locking v1 now fail: current saves must not touch either.
     const FileHandle old_file(CreateFileW(L"nib-adapter-files/settings/settings.v1", GENERIC_WRITE,
@@ -762,8 +779,8 @@ void verify_migration_conflict(Win32FileAdapter &files, std::optional<std::strin
     const auto result = store.write(changed);
     expect(!result && result.error() == SettingsFailure::changed_externally,
            "v1 change creation and deletion each block migration");
-    expect(!files.read(settings_paths().current, 4096), "refused migration creates no v3");
-    const auto remaining = files.read(settings_paths().legacy, 4096);
+    expect(!read_text(files, settings_paths().current, 4096), "refused migration creates no v3");
+    const auto remaining = read_text(files, settings_paths().legacy, 4096);
     expect(after.has_value() ? remaining && remaining.value() == after.value() : !remaining,
            "refused migration preserves externally edited v1 bytes");
 }
@@ -783,8 +800,8 @@ void verify_migration_locks(Win32FileAdapter &files)
         const auto result = store.write(default_editor_settings());
         expect(!result && result.error() == SettingsFailure::unwritable,
                "either migration lock blocks saving without waiting");
-        expect(!files.read(settings_paths().current, 4096) &&
-                   files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
+        expect(!read_text(files, settings_paths().current, 4096) &&
+                   read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
                "lock refusal leaves current absent and previous bytes intact");
     }
     const FileHandle previous(CreateFileW(L"nib-adapter-files/settings/settings.v1", GENERIC_WRITE,
@@ -794,7 +811,7 @@ void verify_migration_locks(Win32FileAdapter &files)
     const auto result = store.write(default_editor_settings());
     expect(!result && result.error() == SettingsFailure::unreadable,
            "migration snapshot read failure blocks save");
-    expect(!files.read(settings_paths().current, 4096), "read failure creates no v3");
+    expect(!read_text(files, settings_paths().current, 4096), "read failure creates no v3");
 }
 
 void verify_previous_rejection(Win32FileAdapter &files, std::string_view invalid,
@@ -806,8 +823,8 @@ void verify_previous_rejection(Win32FileAdapter &files, std::string_view invalid
     const auto writing = store.write(default_editor_settings());
     expect(!reading && reading.error() == failure && !writing && writing.error() == failure,
            "invalid v1 load blocks all later writes");
-    expect(!files.read(settings_paths().current, 4096) &&
-               files.read(settings_paths().legacy, read_limit).value_or("") == invalid,
+    expect(!read_text(files, settings_paths().current, 4096) &&
+               read_text(files, settings_paths().legacy, read_limit).value_or("") == invalid,
            "invalid previous bytes remain untouched and current remains absent");
 }
 
@@ -822,8 +839,8 @@ void verify_migration_current_created(Win32FileAdapter &files)
     const auto result = store.write(default_editor_settings());
     expect(!result && result.error() == SettingsFailure::changed_externally,
            "new current settings block stale migration");
-    expect(files.read(settings_paths().current, 4096).value_or("") == external &&
-               files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
+    expect(read_text(files, settings_paths().current, 4096).value_or("") == external &&
+               read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
            "refused migration preserves both external current and original previous");
 }
 
@@ -842,8 +859,8 @@ void verify_migration_write_failure(Win32FileAdapter &files)
         const auto result = store.write(default_editor_settings());
         expect(!result && result.error() == SettingsFailure::unwritable,
                "failed atomic migration write is reported");
-        expect(!files.read(settings_paths().current, 4096) &&
-                   files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
+        expect(!read_text(files, settings_paths().current, 4096) &&
+                   read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
                "failed migration write preserves current absence and previous bytes");
     }
     expect(DeleteFileW(L"nib-adapter-files/settings/settings.v3.nib-tmp") != 0,
@@ -866,15 +883,16 @@ void verify_v2_migration(Win32FileAdapter &files)
                loaded.guide == nenenib::core::GuideVisibility::hidden &&
                loaded.wrapping == nenenib::core::LineWrapping::wrap,
            "v2 takes precedence over v1 and initializes wrapping");
-    expect(!files.read(settings_paths().current, 4096), "reading v2 does not migrate eagerly");
+    expect(!read_text(files, settings_paths().current, 4096),
+           "reading v2 does not migrate eagerly");
     auto changed = loaded;
     changed.wrapping = nenenib::core::LineWrapping::no_wrap;
     expect(store.write(changed).has_value(), "v2 can migrate to v3 with wrapping disabled");
-    expect(files.read(settings_paths().previous, 4096).value_or("") == v2_bytes &&
-               files.read(settings_paths().legacy, 4096).value_or("") == previous_bytes,
+    expect(read_text(files, settings_paths().previous, 4096).value_or("") == v2_bytes &&
+               read_text(files, settings_paths().legacy, 4096).value_or("") == previous_bytes,
            "v3 migration preserves both older files byte for byte");
-    const auto saved = decode_settings(files.read(settings_paths().current, 4096).value_or(""),
-                                       SettingsVersion::v3);
+    const auto saved = decode_settings(
+        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v3);
     expect(saved && same_settings(saved.value(), changed), "migrated v3 holds the chosen wrapping");
     const FileHandle old_lock(CreateFileW(L"nib-adapter-files/settings/settings.v2.lock",
                                           GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
@@ -892,7 +910,7 @@ void verify_v2_conflicts(Win32FileAdapter &files)
            "another version creates v2");
     const auto raced = old.write(default_editor_settings());
     expect(!raced && raced.error() == SettingsFailure::changed_externally &&
-               !files.read(settings_paths().current, 4096),
+               !read_text(files, settings_paths().current, 4096),
            "an intervening v2 creation blocks migration from v1");
     Win32SettingsAdapter active(files, settings_paths());
     expect(active.read().has_value(), "load the existing v2 snapshot");
@@ -918,7 +936,7 @@ void verify_v2_rejection(Win32FileAdapter &files)
     expect(!reading && reading.error() == SettingsFailure::malformed,
            "malformed v2 never falls back to valid v1");
     expect(!broken.write(default_editor_settings()) &&
-               files.read(settings_paths().previous, 4096).value_or("") == "invalid",
+               read_text(files, settings_paths().previous, 4096).value_or("") == "invalid",
            "malformed v2 blocks writes and preserves the source");
     expect(files.write(settings_paths().previous, v2_bytes).has_value(), "restore valid v2");
     Win32SettingsAdapter current(files, settings_paths());

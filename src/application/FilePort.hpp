@@ -3,6 +3,7 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FileWriteMode.hpp"
+#include "SealedBytes.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -26,7 +27,8 @@ class FilePort
     FilePort &operator=(FilePort &&) = delete;
 
     // 宣言サイズ全量を取得した場合だけ成功し、途中bytesは返さない（ADR 0124）。
-    [[nodiscard]] virtual std::expected<std::string, FileFailure>
+    // 成功値は core が予約して埋めた封印済みの列で、可変の口を持たない（ADR 0141 決定 2）。
+    [[nodiscard]] virtual std::expected<core::SealedBytes, FileFailure>
     read(const core::FilePath &path, std::size_t maximum_bytes) = 0;
     // 既存の保存は replace。実際の書き込みは mode 付きの一つだけ（ADR 0067）。
     [[nodiscard]] std::expected<void, FileFailure> write(const core::FilePath &path,

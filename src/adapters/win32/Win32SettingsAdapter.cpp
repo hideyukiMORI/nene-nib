@@ -41,7 +41,7 @@ Win32SettingsAdapter::read_bytes(const core::FilePath &path)
     const auto bytes = files_.read(path, maximum_settings_bytes);
     if (bytes)
     {
-        return bytes.value();
+        return std::string(bytes.value().view());
     }
     if (bytes.error() == application::FileFailure::not_found)
     {

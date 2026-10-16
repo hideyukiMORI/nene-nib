@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FileFailure.hpp"
+#include "SealedBytes.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -8,7 +9,6 @@
 #include <expected>
 #include <limits>
 #include <span>
-#include <string>
 #include <type_traits>
 
 namespace nenenib::adapters::win32
@@ -41,20 +41,20 @@ complete_file_read_into(std::span<char> target, Operation &operation) noexcept
     return {};
 }
 
+// 向け先は core が予約した封印済みの列の span。失敗の種類は外の outcome に写す（ADR 0141 決定 2）。
 template <typename Operation>
-[[nodiscard]] std::expected<std::string, application::FileFailure>
+[[nodiscard]] std::expected<core::SealedBytes, application::FileFailure>
 complete_file_read(std::size_t declared_size, Operation operation)
 {
     using Failure = application::FileFailure;
     std::expected<void, Failure> outcome;
-    std::string bytes;
-    bytes.resize_and_overwrite(declared_size,
-                               [&](char *data, std::size_t) noexcept
-                               {
-                                   outcome = complete_file_read_into(
-                                       std::span<char>(data, declared_size), operation);
-                                   return outcome.has_value() ? declared_size : std::size_t{0};
-                               });
+    auto bytes =
+        core::SealedBytes::filled(declared_size,
+                                  [&](std::span<char> target) noexcept
+                                  {
+                                      outcome = complete_file_read_into(target, operation);
+                                      return outcome.has_value() ? target.size() : std::size_t{0};
+                                  });
     if (!outcome)
     {
         return std::unexpected(outcome.error());

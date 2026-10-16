@@ -47,8 +47,8 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
-[[nodiscard]] std::expected<std::string, Failure> read_all(const FileHandle &file,
-                                                           std::size_t maximum_bytes)
+[[nodiscard]] std::expected<core::SealedBytes, Failure> read_all(const FileHandle &file,
+                                                                 std::size_t maximum_bytes)
 {
     LARGE_INTEGER size{};
     if (GetFileSizeEx(file.get(), &size) == 0)
@@ -158,8 +158,8 @@ constexpr wchar_t temporary_suffix[] = L".nib-tmp";
 }
 } // namespace
 
-std::expected<std::string, Failure> Win32FileAdapter::read(const core::FilePath &path,
-                                                           std::size_t maximum_bytes)
+std::expected<core::SealedBytes, Failure> Win32FileAdapter::read(const core::FilePath &path,
+                                                                 std::size_t maximum_bytes)
 {
     const std::wstring wide = widen(path.text());
     if (wide.empty())

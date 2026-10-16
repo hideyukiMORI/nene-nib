@@ -49,7 +49,7 @@ std::expected<application::FileBookmarks, Failure> Win32BookmarkAdapter::read()
         }
         return std::unexpected(Failure::unreadable);
     }
-    return decode_bookmarks(bytes.value());
+    return decode_bookmarks(bytes.value().view());
 }
 
 std::expected<void, Failure>

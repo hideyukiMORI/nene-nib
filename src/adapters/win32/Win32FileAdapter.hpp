@@ -3,6 +3,7 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
+#include "SealedBytes.hpp"
 
 #include <windows.h>
 
@@ -21,7 +22,7 @@ class Win32FileAdapter final : public application::FilePort
 {
   public:
     using application::FilePort::write;
-    [[nodiscard]] std::expected<std::string, application::FileFailure>
+    [[nodiscard]] std::expected<core::SealedBytes, application::FileFailure>
     read(const core::FilePath &path, std::size_t maximum_bytes) override;
     [[nodiscard]] std::expected<void, application::FileFailure>
     write(const core::FilePath &path, std::span<const std::string_view> parts,

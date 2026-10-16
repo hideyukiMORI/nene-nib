@@ -3,6 +3,7 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
+#include "SealedBytes.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -22,6 +23,7 @@ using nenenib::application::FileFailure;
 using nenenib::application::FilePort;
 using nenenib::application::FileWriteMode;
 using nenenib::core::FilePath;
+using nenenib::core::SealedBytes;
 using Bytes = std::expected<std::string, FileFailure>;
 
 // 偽のファイル。OS に触れずに「読めた」「読めない」「書けない」を作り分ける（ARC-007）。
@@ -104,13 +106,27 @@ class ScriptedFiles final : public FilePort
         return read_limit_;
     }
 
-    [[nodiscard]] Bytes read(const FilePath &path, std::size_t maximum_bytes) override
+    // 替え玉は自分の中身を封印済みの列の span へ写す。この 1 回の複写は製品の経路に無い（ADR
+    // 0141）。
+    [[nodiscard]] std::expected<SealedBytes, FileFailure> read(const FilePath &path,
+                                                               std::size_t maximum_bytes) override
     {
         read_path_ = std::string(path.text());
         read_limit_ = maximum_bytes;
         ++reads_;
         const auto found = by_path_.find(read_path_);
-        return found == by_path_.end() ? content_ : found->second;
+        const Bytes &held = found == by_path_.end() ? content_ : found->second;
+        if (!held)
+        {
+            return std::unexpected(held.error());
+        }
+        const std::string_view source = held.value();
+        return SealedBytes::filled(source.size(),
+                                   [source](std::span<char> target) noexcept
+                                   {
+                                       std::copy_n(source.data(), target.size(), target.data());
+                                       return target.size();
+                                   });
     }
 
     [[nodiscard]] std::expected<void, FileFailure> write(const FilePath &path,

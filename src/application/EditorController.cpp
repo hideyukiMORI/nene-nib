@@ -2653,12 +2653,13 @@ std::expected<void, FileFailure> EditorController::write_document(const SaveDocu
 std::expected<std::pair<core::TextBuffer, Document>, FileFailure>
 EditorController::read_document(const core::FilePath &path)
 {
-    const auto bytes = ports_.files.read(path, maximum_file_bytes);
+    auto bytes = ports_.files.read(path, maximum_file_bytes);
     if (!bytes)
     {
         return std::unexpected(bytes.error());
     }
-    auto detected = core::DetectedText::from_bytes(bytes.value());
+    // 封印済みの列をそのまま判定へ移す。複写はしない（ADR 0141 決定 4）。
+    auto detected = core::DetectedText::from_sealed(std::move(bytes).value());
     if (!detected)
     {
         return std::unexpected(FileFailure::undecodable);

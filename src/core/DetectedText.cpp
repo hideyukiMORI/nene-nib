@@ -20,6 +20,16 @@ std::expected<DetectedText, EncodingFailure> DetectedText::from_bytes(std::strin
     return DetectedText(std::move(owned), encoding.value());
 }
 
+std::expected<DetectedText, EncodingFailure> DetectedText::from_sealed(SealedBytes &&bytes)
+{
+    const auto encoding = detect_encoding(bytes.view());
+    if (!encoding)
+    {
+        return std::unexpected(encoding.error());
+    }
+    return DetectedText(std::move(bytes).release(), encoding.value());
+}
+
 TextEncoding DetectedText::encoding() const noexcept
 {
     return encoding_;
