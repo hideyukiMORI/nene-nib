@@ -1,35 +1,10 @@
 #include "FontFallbackCache.hpp"
-#include <algorithm>
 #include <utility>
 namespace nenenib::ui::win32
 {
-namespace
-{
-constexpr std::size_t maximum_entries = 128;
-}
-
 FontFallbackCache::FontFallbackCache(Microsoft::WRL::ComPtr<IDWriteFontFallback> system)
     : system_(std::move(system))
 {
-    entries_.reserve(maximum_entries);
-}
-
-const FontFallbackEntry *FontFallbackCache::find(const FontFallbackKey &key) const
-{
-    const auto found = std::ranges::find_if(entries_, [&key](const FontFallbackEntry &entry)
-                                            { return entry.key == key; });
-    return found == entries_.end() ? nullptr : &*found;
-}
-
-void FontFallbackCache::retain(FontFallbackEntry entry)
-{
-    if (entries_.size() < maximum_entries)
-    {
-        entries_.push_back(std::move(entry));
-        return;
-    }
-    entries_.at(next_) = std::move(entry);
-    next_ = (next_ + 1) % maximum_entries;
 }
 
 // SDK-ABI: IDWriteFontFallback::MapCharacters
@@ -51,7 +26,7 @@ HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mappe
     auto key = fallback_key(request);
     if (key.has_value())
     {
-        const auto *entry = find(key.value());
+        const auto *entry = table_.find(key.value());
         if (entry != nullptr)
         {
             *mapped_length = entry->length;
@@ -64,7 +39,8 @@ HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mappe
         request.weight, request.style, request.stretch, mapped_length, mapped_font, scale);
     if (result == S_OK && key.has_value())
     {
-        retain(FontFallbackEntry{std::move(key.value()), *mapped_length, *mapped_font, *scale});
+        table_.retain(
+            FontFallbackEntry{std::move(key.value()), *mapped_length, *mapped_font, *scale});
     }
     return result;
 }

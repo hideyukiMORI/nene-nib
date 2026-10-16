@@ -41,6 +41,11 @@ class BodyGlyphCollector final
     // 横に画面と交わる run の描く窓を、画面外の先頭と末尾の字形を除いた区間にする
     // （ADR 0073 の 2026-10-16 の補足）。
     void trim(BodyGlyphRun &stored, float reach) const;
+    // 直前に保持した run に stored を後ろからつなげたら true（ADR 0073 の 2026-10-16 の決定）。
+    [[nodiscard]] bool joined(const BodyGlyphRun &stored, std::optional<float> reach);
+    // 末尾を閉じて、stored を新しい末尾として保持する（窓は閉じるときに決める）。
+    void open_tail(BodyGlyphRun stored, std::optional<float> reach);
+    void close_tail();
     HRESULT collect(const DWRITE_GLYPH_RUN &run, const DWRITE_GLYPH_RUN_DESCRIPTION *description,
                     D2D1_POINT_2F origin, DWRITE_MEASURING_MODE mode);
     // 失敗の HRESULT なら棄却の印を立てる。HRESULT はそのまま返す。
@@ -50,6 +55,11 @@ class BodyGlyphCollector final
     FLOAT top_;
     FLOAT bottom_;
     std::vector<BodyGlyphRun> runs_;
+    // runs_ の末尾が直前の callback の run で、まだ描く窓を決めていないときだけ true。末尾の
+    // 送りを左から積んだ右端と、窓を決める保守の幅（寸法を読めない face は nullopt）を持つ。
+    bool tail_open_ = false;
+    FLOAT tail_pen_ = 0;
+    std::optional<float> tail_reach_;
     bool rejected_ = false;
 };
 } // namespace nenenib::ui::win32

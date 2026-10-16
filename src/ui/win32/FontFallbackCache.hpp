@@ -1,7 +1,5 @@
 #pragma once
-#include "FontFallbackEntry.hpp"
-#include <cstddef>
-#include <vector>
+#include "FontFallbackTable.hpp"
 #include <wrl/implements.h>
 namespace nenenib::ui::win32
 {
@@ -22,10 +20,7 @@ class FontFallbackCache final
   private:
     [[nodiscard]] HRESULT map(const FontFallbackRequest &request, UINT32 *mapped_length,
                               IDWriteFont **mapped_font, FLOAT *scale);
-    [[nodiscard]] const FontFallbackEntry *find(const FontFallbackKey &key) const;
-    void retain(FontFallbackEntry entry);
     Microsoft::WRL::ComPtr<IDWriteFontFallback> system_;
-    std::vector<FontFallbackEntry> entries_;
-    std::size_t next_ = 0;
+    FontFallbackTable table_;
 };
 } // namespace nenenib::ui::win32

@@ -2,6 +2,7 @@
 // 保持するのは鍵を作れた要求への OS の S_OK の答えだけで、E_FAIL と S_FALSE はそのまま返して
 // 覚えない。保持は 128 件で、超えたら古いものから FIFO で入れ替わる。
 #include "FontFallbackCache.hpp"
+#include "FontFallbackTable.hpp"
 #include "ScriptedFontFallback.hpp"
 #include "ScriptedTextSource.hpp"
 #include "SourceFault.hpp"
@@ -169,6 +170,53 @@ void verify_first_in_first_out()
     static_cast<void>(map_once(*cache.Get(), request_of(source.Get()), S_OK));
     expect(fallback->calls() == before + 1, "the next oldest text was replaced first in first out");
 }
+// #586: 表は鍵の hash の索引から入り、一致は全欄で決める。hash を同じにした別の鍵（衝突）を
+// 作り、どちらも自分の答えを引き、入れ替えで外れた枠の索引も消えることを確かめる。
+constexpr std::size_t colliding_hash = 7;
+
+win32::FontFallbackKey colliding_key(const std::wstring &text)
+{
+    return win32::FontFallbackKey{text,
+                                  L"ja-jp",
+                                  L"Cascadia Code",
+                                  nullptr,
+                                  nullptr,
+                                  DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
+                                  DWRITE_FONT_WEIGHT_NORMAL,
+                                  DWRITE_FONT_STYLE_NORMAL,
+                                  DWRITE_FONT_STRETCH_NORMAL,
+                                  colliding_hash};
+}
+
+// 表から引いた答えの scale。無ければ 0。
+FLOAT scale_of(const win32::FontFallbackTable &table, const std::wstring &text)
+{
+    const auto *entry = table.find(colliding_key(text));
+    return entry == nullptr ? 0.0F : entry->scale;
+}
+
+void verify_colliding_keys()
+{
+    win32::FontFallbackTable table;
+    table.retain(win32::FontFallbackEntry{colliding_key(L"A"), 1, nullptr, 1.0F});
+    table.retain(win32::FontFallbackEntry{colliding_key(L"B"), 1, nullptr, 2.0F});
+    expect(scale_of(table, L"A") == 1.0F && scale_of(table, L"B") == 2.0F,
+           "keys of the same hash keep their own answers");
+    expect(scale_of(table, L"C") == 0.0F, "a key of the same hash that was not retained is absent");
+    for (UINT32 index = 0; index < retained_entries - 1; ++index)
+    {
+        table.retain(win32::FontFallbackEntry{colliding_key(std::to_wstring(index)), 1, nullptr,
+                                              static_cast<FLOAT>(index + 3)});
+    }
+    expect(scale_of(table, L"A") == 0.0F && scale_of(table, L"B") == 2.0F &&
+               scale_of(table, L"126") == 129.0F,
+           "the oldest colliding key is replaced first in first out and its slot is gone");
+    const auto key = colliding_key(L"B");
+    auto rehashed = key;
+    rehashed.hash = win32::fallback_hash(key);
+    expect(table.find(rehashed) == nullptr && rehashed.hash == win32::fallback_hash(rehashed),
+           "the hash is part of the key and is made from the other fields");
+}
 } // namespace
 
 void verify_fallback_cache()
@@ -177,5 +225,6 @@ void verify_fallback_cache()
     verify_unretained_requests();
     verify_os_failures();
     verify_first_in_first_out();
+    verify_colliding_keys();
 }
 } // namespace nenenib::tests::ui
