@@ -51,7 +51,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
     src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimKeyTable.cpp src/core/VimPattern.cpp src/core/VimPatternEvaluation.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp
-    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
+    src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchWalk.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimScreenGeometry.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
@@ -247,7 +247,8 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/ExCompletionProbe.cpp tests/performance/ExCompletionFrameProbe.cpp
     tests/performance/CompletionPrefixProbe.cpp
     tests/performance/PaletteChoiceProbe.cpp
-    tests/performance/OperationChoiceProbe.cpp)
+    tests/performance/OperationChoiceProbe.cpp
+    tests/performance/SearchSpanProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

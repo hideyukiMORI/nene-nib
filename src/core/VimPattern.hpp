@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <expected>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -32,6 +33,11 @@ class VimPattern final
     // 一致の長さの上限（バイト・#556）。食べる原子は 1 code point（UTF-8 で 4 バイトまで）を
     // 食べ、幅の無い原子は何も食べない。反復（`*`）を含めば決まらないので値が無い。
     [[nodiscard]] std::optional<std::size_t> longest_bytes() const noexcept;
+
+    // 魔法の無い文字だけの列なら、その UTF-8 のバイト列（#583）。このパターンが行に当たるのは
+    // この列が行に現れるときだけなので、検索は候補の行の絞り込みに使える（当たりの位置は照合器が
+    // 決める）。空のパターンと、literal 以外の原子や `*` を含むパターンは値が無い。
+    [[nodiscard]] std::optional<std::string> literal_bytes() const;
 
   private:
     friend class VimPatternEvaluation;
