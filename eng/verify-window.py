@@ -739,6 +739,19 @@ def content_box(body: dict, index: int, dpi: int) -> tuple:
     return (left, top, left + to_pixels(60, dpi), top + body["lineHeight"])
 
 
+def content_row_box(body: dict, index: int, width: int, dpi: int) -> tuple:
+    """Row `index` over the whole body: from the gutter's right edge to the window's right edge.
+
+    content_box is a narrow probe next to the gutter; a match painted by incsearch can sit
+    anywhere along the row, so comparisons of painted matches use the full width. Points are
+    physical pixels from body["gutter"] (already DIP -> pixels in integers) and the capture
+    width, so nothing here depends on the font size or settings (Issue #539).
+    """
+    top = body["firstRowTop"] + body["lineHeight"] * index
+    left = body["gutter"] + to_pixels(4, dpi)
+    return (left, top, width, top + body["lineHeight"])
+
+
 def mode_label_box(width: int, height: int, dpi: int) -> tuple:
     """The box that holds 通常 / NORMAL / INSERT, mirroring core::status_bar_layout."""
     band_top = max(height - to_pixels(STATUS_BAR_DIPS, dpi), 0)
@@ -1083,6 +1096,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
     label = mode_label_box(width, height, dpi)
     cell = first_cell_box(body, 0, dpi)
     size, content = (width, height), content_box(body, 0, dpi)
+    whole_row = content_row_box(body, 0, width, dpi)
     click(window, toggle["vim"][0], toggle["vim"][1])
     time.sleep(0.5)
     normal = capture(window, width, height)
@@ -1144,7 +1158,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
         snapshot(frames, window, "vimIncsearchHop")
         hop = {"status": "confirmed",
                "movedTheCurrentMatch":
-                   box_pixels(hopped, width, content) != box_pixels(previewing, width, content)}
+                   box_pixels(hopped, width, whole_row) != box_pixels(previewing, width, whole_row)}
         assert hop["movedTheCurrentMatch"], "Ctrl-G did not move the incsearch preview"
     press(window, VK_ESCAPE)
     time.sleep(0.5)
@@ -1176,7 +1190,7 @@ def verify_vim(window, ground: dict, output: Path, frames: Path | None = None) -
             box_pixels(visual, width, label) != box_pixels(normal, width, label),
         "inkInTheSecondRowAfterVisualDelete": ink(unput, width, second_row, grounds),
         "incsearchPaintedTheFirstRow":
-            box_pixels(previewing, width, content) != box_pixels(opened, width, content),
+            box_pixels(previewing, width, whole_row) != box_pixels(opened, width, whole_row),
         "escapeTookThePreviewAway":
             box_pixels(cancelled, width, content) == box_pixels(unsearched, width, content),
         "incsearchHop": hop,
