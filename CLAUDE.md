@@ -185,6 +185,11 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 v3はwrapを含む。v3不在時だけv2、両方不在時だけv1を厳密に読み、旧版のwrapは既定オン、v1のguideは既定表示にする。設定を変更するときだけv3へ書き、旧ファイルを残す。存在する新版が壊れていれば旧版へ戻らず保存を拒否し、移行保存時もlockとbytesを照合する（ADR 0114）。案内の文字と鍵は `operation_text` と `shown_chord` が正本で、rendererに文字列の別表を書かない。
 
+### 本窓を壊すのは `leave` だけ。描画を失っても「保存しますか」を通す
+
+`DestroyWindow(window_)` を呼ぶのは `EditorWindow::leave` の 1 か所（デストラクタの作りかけの後始末を除く）。終わり方ごとの未保存の扱いは application の `exit_plan(ExitCause, 未保存の数)` が決め、ui は値に従うだけ（ADR 0133）。
+描画の失敗は `recover()`（古い renderer を先に解放して `start_rendering`）で 1 回だけ作り直し（`present` は device lost のときだけ、サイズ・DPI・文字組みは失敗の種類を問わず）、だめなら `abandon()` が取消の無い「描画できなくなったので閉じます。保存しますか。」を通して `leave(SessionEnd::rendering_lost)` する。
+
 ### リポジトリの外の作業場所は `D:\NeNeNib\`
 
 依頼書は `D:\NeNeNib\briefs\`、1 回限りのスクリプトは `D:\NeNeNib\scripts\`、実機の確認の profile と文書は `D:\NeNeNib\evidence\`（施主指示 2026-09-30。C ドライブの Temp と scratchpad を使わない）。道具の出力と席の報告はリポジトリの `out/`。

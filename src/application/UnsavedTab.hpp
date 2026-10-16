@@ -24,6 +24,20 @@ next_unsaved_tab(const std::vector<DocumentView> &tabs, std::size_t from)
     return std::nullopt;
 }
 
+// 未保存のタブの数。窓が終わるときの扱い（exit_plan）を決める入力（ADR 0133 の決定 2）。
+[[nodiscard]] inline std::size_t unsaved_tab_count(const std::vector<DocumentView> &tabs)
+{
+    std::size_t count = 0;
+    for (const auto &tab : tabs)
+    {
+        if (tab.save_state != core::SaveState::saved)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
 // 帯の位置 tab のタブが未保存か（範囲の外は false）。タブを閉じるとき ui はこれが true のときだけ
 // そのタブへ切り替えて「保存しますか」を出す（ADR 0056 の決定 6）。
 [[nodiscard]] inline bool tab_unsaved(const std::vector<DocumentView> &tabs, std::size_t tab)

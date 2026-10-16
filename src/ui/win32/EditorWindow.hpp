@@ -8,6 +8,7 @@
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
+#include "ExitCause.hpp"
 #include "FilePath.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "HistoryDirection.hpp"
@@ -111,6 +112,13 @@ class EditorWindow final
     // 意図の適用で変わった見た目は、次の WM_PAINT でまとめて描く（決定 6）。
     void invalidate() noexcept;
     void present();
+    // 描画を 1 回だけ作り直す（ADR 0133 の決定 2）。古い renderer を先に解放してから作る。
+    // 描画の失敗の 4 経路（present・サイズ・DPI・文字組み）がここを通ってから abandon へ行く。
+    [[nodiscard]] bool recover();
+    // 文字組みに失敗した delivery の後も描けるか。作り直せなければ abandon して false。
+    [[nodiscard]] bool survives_layout(const application::EditorDelivery &delivery);
+    // 描画を失った終わり（ADR 0133 の決定 1〜3）。renderer を捨て、未保存のタブを取消の無い確認に
+    // 通してから leave(rendering_lost) する。窓を直接は壊さない。
     void abandon();
     void refresh_appearance();
     void resize();
@@ -162,13 +170,21 @@ class EditorWindow final
     void save_document();
     void save_document_as();
     void close_window();
-    // 窓を壊す直前の 1 か所（ADR 0059 の決定 3）。前回のタブの一覧を書いてから壊す。
-    // close_window と、最後の 1 つを閉じる close_tab が通る。abandon とデストラクタは通らない。
+    // 終わり方の表（application の exit_plan）に従って確かめ、通り抜けたときだけ leave する
+    // （ADR 0133 の決定 2）。close_window と abandon が通る。
+    void end_window(application::ExitCause cause, application::SessionEnd reason);
+    // 未保存のタブを帯の左から順に映して confirm で確かめる（#237）。止められたら false。
+    [[nodiscard]] bool confirm_unsaved_tabs(bool (EditorWindow::*confirm)());
+    // 窓を壊す唯一の口（ADR 0059 の決定 3・ADR 0133 の決定 1）。前回のタブの一覧を書いてから壊す。
+    // end_window と、最後の 1 つを閉じる close_tab が通る。デストラクタは作りかけの窓の後始末だけ。
     void leave(application::SessionEnd reason);
     // 前回のタブの一覧を書く意図を送る（leave と WM_ENDSESSION）。この後は窓へ描かない。
     void remember_session(application::SessionEnd reason);
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
     [[nodiscard]] bool confirm_discard();
+    // 描画を失った後の「保存しますか」（ADR 0133 の決定 3）。取消は無く、保存するまでか捨てるまで
+    // 聞き直す。いつも true。
+    [[nodiscard]] bool confirm_lost_tab();
     void update_title(const application::EditorDelivery &frame);
     void announce(const application::EditorDelivery &frame);
     void announce_settings(const application::EditorDelivery &frame);

@@ -593,11 +593,13 @@ void rank_session_tabs(std::vector<std::optional<SessionTab>> &band,
 }
 
 // 窓が閉じていく理由ごとに覚える一覧（ADR 0059 の決定 3）。最後の 1 本を使う人が閉じたときは空。
+// 描画を失って閉じたときは窓を閉じたときと同じ（ADR 0133 の決定 1）。
 [[nodiscard]] Session ended_session(const EditorState &state, SessionEnd reason)
 {
     switch (reason)
     {
     case SessionEnd::window_closed:
+    case SessionEnd::rendering_lost:
         return session_of(state);
     case SessionEnd::last_tab_closed:
         return Session{{}, 0};
@@ -727,6 +729,7 @@ constexpr std::string_view clipped_mark = "…";
     switch (reason)
     {
     case SessionEnd::window_closed:
+    case SessionEnd::rendering_lost:
         return oldest_first_paths(state);
     case SessionEnd::last_tab_closed:
     {
