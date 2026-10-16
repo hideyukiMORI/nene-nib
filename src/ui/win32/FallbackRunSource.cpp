@@ -5,8 +5,8 @@
 
 namespace nenenib::ui::win32
 {
-FallbackRunSource::FallbackRunSource(std::wstring locale, DWRITE_READING_DIRECTION direction)
-    : locale_(std::move(locale)), direction_(direction)
+FallbackRunSource::FallbackRunSource(std::wstring language, DWRITE_READING_DIRECTION direction)
+    : language_(std::move(language)), direction_(direction)
 {
 }
 
@@ -52,7 +52,7 @@ HRESULT STDMETHODCALLTYPE FallbackRunSource::GetLocaleName(UINT32 position, UINT
                                                            const WCHAR **name) noexcept
 {
     *length = after(position);
-    *name = locale_.c_str();
+    *name = language_.c_str();
     return S_OK;
 }
 

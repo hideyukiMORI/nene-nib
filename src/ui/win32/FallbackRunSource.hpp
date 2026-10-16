@@ -13,7 +13,7 @@ class FallbackRunSource final
           Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IDWriteTextAnalysisSource>
 {
   public:
-    FallbackRunSource(std::wstring locale, DWRITE_READING_DIRECTION direction);
+    FallbackRunSource(std::wstring language, DWRITE_READING_DIRECTION direction);
     void reset(std::wstring_view text);
     [[nodiscard]] UINT32 length() const noexcept;
 
@@ -31,7 +31,7 @@ class FallbackRunSource final
   private:
     [[nodiscard]] UINT32 after(UINT32 position) const noexcept;
     std::wstring text_;
-    std::wstring locale_;
+    std::wstring language_;
     DWRITE_READING_DIRECTION direction_;
 };
 } // namespace nenenib::ui::win32
