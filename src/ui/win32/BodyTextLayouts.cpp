@@ -149,7 +149,7 @@ HRESULT BodyTextLayouts::make_format(const application::TextLayoutRequest &reque
                                                             : DWRITE_WORD_WRAPPING_NO_WRAP);
     if (SUCCEEDED(wrapped))
     {
-        coverage_ = PrimaryFontCoverage::of(*format_.Get());
+        coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *format_.Get());
     }
     return wrapped;
 }
@@ -175,7 +175,7 @@ HRESULT BodyTextLayouts::make_grid_format(const application::TextLayoutRequest &
     }
     if (SUCCEEDED(result))
     {
-        grid_coverage_ = PrimaryFontCoverage::of(*made.Get());
+        grid_coverage_ = PrimaryFontCoverage::of(*factory_.Get(), *made.Get());
         grid_format_ = std::move(made);
     }
     return result;
