@@ -202,6 +202,11 @@ BodyGlyphCollectorはDirectWriteが決めた所有字形と位置をそのまま
 display_widthのBMP索引はDisplayWidthRangeの正本からコンパイル時生成する。意味の表・実行時初期化・別の呼出し経路を増やさない（ADR 0074）。SDKが固定したCOMの署名は `// SDK-ABI: <Interface>::<Method>` と `NOLINTNEXTLINE(readability-function-size)` の2行で受け、本体6行以内で中へ渡す。印は `eng/sdk-abi-signatures.json` の表にあるものだけ（CPP-019・CNF-012・ADR 0076）。
 長行の高速化の main 統合は、独立レビュー・正式な速さのゲート・CI・施主の試用の 4 つで受理した（ADR 0075・D41）。前の実験の `hold` は記録として残し、split の採用は保留のまま。根拠は[gate-proofs 5-cm](docs/quality/history/5-cm-font-glyph-width-split-reeval.md)と[5-cq](docs/quality/history/5-cq-improvement-bundle-acceptance.md)。
 
+### 巨大な行のしきい値と仮想桁の部分和は core の 1 か所
+
+巨大な行（表示文字列が 16,384 コードポイントを超える行）のしきい値は `GiantLine.hpp` の `giant_line_threshold` の 1 つで、窓 `giant_line_window`（錨を 2,048 刻みに切り下げた中心の前後 4,096）も同じ所（ADR 0139 / 0140）。表示形式 `DisplayForm` は文書ごとの値で、設定に入れない。
+行頭からの仮想桁と格子の升の累積は `VirtualColumnIndex`（`TextBuffer` の隣の不変の値・約 64 KiB の塊ごとの要約・編集は `replaced` で触れた塊だけ読み直す）で引き、行を写して歩かない。1 文字の桁は `column_advance`（`display_width` の表）、格子の送りは `grid_placed_cell` の 1 本。升は幅 `columns` に依るので、幅が変われば `for_grid` で作り直す。
+
 ### 測定の揺れの条件は小さな差を守るためのもの。確かな改善の統合を止めない
 
 「前半 3 本と後半 3 本の中央値の差が 10% 以内」の条件は許容が値に比例して縮むので、速くなった版ほど外れる（#291 で 2 日止まった）。実験の `hold` は書き換えず、main へ入れるかは独立レビュー・正式な速さのゲート（QLT-014）・CI・施主の試用で決める（ADR 0075・D41）。
