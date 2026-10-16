@@ -25,7 +25,9 @@ namespace nenenib::core
 // vim_line_matches と同じ 1 本で、数え始めは window の始まり、window の終わりより前に始まる一致
 // だけを返し、終わりは window の終わりで切る（窓の境目で切れる・ADR 0139 の限界と同じ）。text は
 // window の前後に文脈を持てて、`^` は text の始まり・`$` は text の終わりでだけ、`\<` `\>` は
-// 隣の文字を見て当たる。位置は text の始まりからの相対バイト。
+// 隣の文字を見て当たる。位置は text の始まりからの相対バイト。数え始めが行頭でないので、一致が
+// 連続しうる検索（例 `/aa` `/\w\w` `/..`）は行頭から数えた区切りと位相がずれ得る。格子の当たり
+// （窓の余裕はバイト）と text の表示の巨大な行の窓（窓はコードポイント）が共用する 1 本。
 [[nodiscard]] std::vector<OffsetRange> vim_window_matches(std::string_view text, OffsetRange window,
                                                           const VimPattern &pattern);
 
