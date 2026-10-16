@@ -3,6 +3,7 @@
 #include "ComposedLine.hpp"
 #include "DisplayLine.hpp"
 #include "LineNumber.hpp"
+#include "LineWindow.hpp"
 #include "SelectionSpan.hpp"
 
 #include <cstdint>
@@ -31,6 +32,11 @@ struct LineView
     std::optional<ComposedLine> composed{};
     std::int64_t screen_row = 0;
     std::size_t screen_rows = 1;
+    // 巨大な行の窓（ADR 0139）。
+    LineWindow window{};
+    // この行の文字組みの原点の、本文の欄の左端からのずれ（物理画素・横の送りを引いた値）。
+    // 折り返す設定の普通の行は 0、それ以外は窓の x と横の送りから決まる（ADR 0139 の決定 5）。
+    float left = 0;
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

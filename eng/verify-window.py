@@ -80,6 +80,15 @@ right edge (gridOpen.png). End, Home, the Vim toggle, j, k and a click in the th
 (gridEnd / gridHome / gridVimJ / gridClick.png; j and k do not move on a one-line document), then
 `:set display=text` takes the mark away (gridText.png, the text layout of the whole line takes
 seconds) and `:set display=grid` brings it back (gridBack.png). Posted messages only.
+
+Issue #547 adds the text form of the same line (ADR 0139), which `--giant-text` also runs alone:
+the question is answered no (a posted IDNO), the gutter must show the giant mark `»` in the accent
+next to the line number and the whole 16 MiB line must sit on one screen row with nothing on the
+row below (giantOpen.png). End puts the caret at the right side of the body (giantEnd.png), Home
+brings back the opened picture (giantHome.png), 30 right arrows and three typed letters move and
+change the row (giantRight / giantTyped.png), then the Vim toggle, `$`, `0` and `w` follow
+(giantVimDollar / giantVimZero / giantVimW.png) with the block caret on the row each time. The
+window is closed and the unsaved question answered no. Posted messages only.
 Python standard library and ctypes only.
 """
 
@@ -1842,6 +1851,107 @@ def verify_grid(executable: Path, environment: dict, appearance: str, output: Pa
     return record
 
 
+# text の表示の巨大な行（Issue #547・ADR 0139）。src/ui/win32/Direct2DRenderer.cpp の
+# gutter_padding_dips（印はその幅に右寄せ）。
+GIANT_MARK_DIPS = 16
+VK_RIGHT = 0x27
+
+
+def accent_near(value: list) -> bool:
+    """A pixel close to the accent: the mark is one small glyph whose edges are blended."""
+    return sum(abs(channel - wanted) for channel, wanted in zip(value, ACCENT)) <= 90
+
+
+def giant_text_look(pixels: bytes, size: tuple, appearance: str) -> dict:
+    """The mark in the gutter of row 0, the ink of rows 0 and 1, and where the caret is on row 0."""
+    width, height, dpi, body = size
+    top = body["firstRowTop"]
+    bottom = top + body["lineHeight"]
+    mark = (body["gutter"] - to_pixels(GIANT_MARK_DIPS, dpi), top, body["gutter"], bottom)
+    grounds = [list(PALETTE[appearance]), list(CURRENT_LINE[appearance])]
+    row = (body["contentLeft"], top, width - 2, bottom)
+    below = (body["contentLeft"], bottom, width - 2, bottom + body["lineHeight"])
+    # 行末のキャレットは位置解決が右端の 3 画素の内に置く（普通の行と同じ）ので、右端まで見る。
+    accents = [x for y in range(top, bottom) for x in range(row[0], width)
+               if pixel(pixels, width, x, y) == list(ACCENT)]
+    return {"markAccent": sum(1 for value in box_pixels(pixels, width, mark) if accent_near(value)),
+            "rowRight": ink_right(pixels, width, row, grounds + [list(ACCENT)]),
+            # 縦棒のキャレットは行の下へ 1 画素はみ出すことがあるので、accent は地に数える。
+            "belowInk": ink(pixels, width, below, grounds + [list(ACCENT)]),
+            "caretLeft": min(accents) if accents else None,
+            "caretRight": max(accents) if accents else None,
+            "contentLeft": body["contentLeft"], "width": width}
+
+
+def giant_text_moves(window, opened: bytes, size: tuple, frames: Path | None,
+                     appearance: str) -> dict:
+    """End, Home, 30 right arrows and typing in the ordinary mode, then Vim $, 0 and w."""
+    width, height, dpi, _ = size
+    record = {}
+    press(window, VK_END)
+    ended, record["endChanged"] = grid_step(window, opened, size, frames, "giantEnd")
+    record["end"] = giant_text_look(ended, size, appearance)
+    press(window, VK_HOME)
+    homed, _ = grid_step(window, ended, size, frames, "giantHome")
+    record["homeReturned"] = homed == opened
+    press(window, VK_RIGHT, 30)
+    right, record["rightChanged"] = grid_step(window, homed, size, frames, "giantRight")
+    record["right"] = giant_text_look(right, size, appearance)
+    write_text(window, "ABC")
+    typed, record["typedChanged"] = grid_step(window, right, size, frames, "giantTyped")
+    toggle = toggle_points(width, height, dpi)
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    vim, _ = grid_step(window, typed, size, frames, "giantVim")
+    previous = vim
+    for keys, name in (("$", "giantVimDollar"), ("0", "giantVimZero"), ("w", "giantVimW")):
+        write_text(window, keys)
+        previous, record[f"{name}Changed"] = grid_step(window, previous, size, frames, name)
+        record[name] = giant_text_look(previous, size, appearance)
+    return record
+
+
+def verify_giant_text(executable: Path, environment: dict, appearance: str, output: Path,
+                      frames: Path | None) -> dict:
+    """Issue #547: the 16 MiB one-line document stays text after the question (ADR 0139)."""
+    folder = output.parents[0] / "speed"
+    folder.mkdir(parents=True, exist_ok=True)
+    document = measure_speed.giant_line_document(folder)
+    process, window, _ = start(executable, environment, [str(document)], seconds=GRID_SECONDS)
+    record: dict = {}
+    try:
+        record["asked"] = answer_question(process, False, seconds=GRID_SECONDS)
+        assert record["asked"], "opening the 16 MiB line did not ask about the grid"
+        raise_window(window)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        dpi = user.GetDpiForWindow(window)
+        size = (width, height, dpi, body_points(width, height, dpi))
+        assert_uncovered(window)
+        opened, _ = grid_step(window, b"", size, frames, "giantOpen", seconds=GRID_SECONDS)
+        record["open"] = giant_text_look(opened, size, appearance)
+        assert record["open"]["markAccent"] > 0, "the gutter shows no giant mark"
+        assert record["open"]["rowRight"] > width * 3 // 4, f"row 0 is not filled {record['open']}"
+        assert record["open"]["belowInk"] == 0, "the giant line took more than one screen row"
+        moves = giant_text_moves(window, opened, size, frames, appearance)
+        record["moves"] = moves
+        end = moves["end"]
+        assert moves["endChanged"] and end["caretRight"] is not None, "End showed no caret"
+        assert end["caretRight"] > width // 2, f"End did not put the caret on the right {end}"
+        assert moves["homeReturned"], "Home did not bring back the opened picture"
+        assert moves["rightChanged"] and moves["typedChanged"], moves
+        for name in ("giantVimDollar", "giantVimZero", "giantVimW"):
+            assert moves[f"{name}Changed"] and moves[name]["caretLeft"] is not None, (name, moves[name])
+        assert moves["giantVimDollar"]["caretRight"] > width // 2, moves["giantVimDollar"]
+        assert moves["giantVimZero"]["caretLeft"] < moves["giantVimW"]["caretLeft"], moves
+        close(window)
+        record["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
+        record["exitCode"] = process.wait(timeout=GRID_SECONDS)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def verify_restore(executable: Path, environment: dict, appearance: str, output: Path,
                    frames: Path | None) -> dict:
     """Issue #253: the previous tabs come back (ADR 0059 decisions 5 and 6, D24 to D27).
@@ -1988,6 +2098,8 @@ def main() -> None:
                         help="run the restore section alone (Issue #253); posted messages only")
     parser.add_argument("--grid", action="store_true",
                         help="run the grid section alone (Issue #546); posted messages only")
+    parser.add_argument("--giant-text", action="store_true",
+                        help="run the giant line text section alone (Issue #547); posted messages only")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -2003,6 +2115,9 @@ def main() -> None:
     if arguments.grid and (arguments.tabs or arguments.restore or arguments.keys is not None
                            or arguments.open is not None):
         parser.error("--grid runs alone")
+    if arguments.giant_text and (arguments.grid or arguments.tabs or arguments.restore
+                                 or arguments.keys is not None or arguments.open is not None):
+        parser.error("--giant-text runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -2025,6 +2140,15 @@ def main() -> None:
     if arguments.grid:
         try:
             record = verify_grid(executable, environment, expected_appearance(), output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.giant_text:
+        try:
+            record = verify_giant_text(executable, environment, expected_appearance(), output,
+                                       frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)
@@ -2088,6 +2212,9 @@ def main() -> None:
         result["restore"] = verify_restore(executable, environment, appearance, output, frames)
         # Issue #546: 1 行 16 MiB を格子で開く。問いに答えるので別の 1 回の起動で測る。
         result["grid"] = verify_grid(executable, environment, appearance, output, frames)
+        # Issue #547: 同じ 1 行を text のまま開く。問いに「いいえ」で答える別の 1 回の起動で測る。
+        result["giantText"] = verify_giant_text(executable, environment, appearance, output,
+                                                frames)
         (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                         encoding="utf-8")
         print(json.dumps(result, indent=2))

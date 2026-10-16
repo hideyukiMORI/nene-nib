@@ -94,7 +94,7 @@ static_assert(static_cast<std::size_t>(Appearance::light) == 0,
 static_assert(static_cast<std::size_t>(Appearance::dark) == 1,
               "ui_mix_weights の添字は Appearance の並びそのもの");
 
-// 本文の 3 色と明暗から UI トークン 18 個を導く決定的な純関数（ADR 0017 / 0117）。
+// 本文の 3 色と明暗から UI トークン 19 個を導く決定的な純関数（ADR 0017 / 0117）。
 // 有名テーマは本文の色しか定義しないので、タイトルバー・ステータスバー・パネルはここが決める。
 // 導出した見た目は仮で、C3 の絵で hide が見る（D12）。
 [[nodiscard]] constexpr Palette derive_ui(RgbColor background, RgbColor foreground, RgbColor accent,
@@ -122,6 +122,7 @@ static_assert(static_cast<std::size_t>(Appearance::dark) == 1,
         .panel_border = mix(background, foreground, weights.panel_border),
         .search = RgbaColor{mix(accent, mix_white, weights.search_white), weights.search_alpha},
         .ime = mix(foreground, accent, weights.ime),
+        .giant_mark = accent,
     };
 }
 

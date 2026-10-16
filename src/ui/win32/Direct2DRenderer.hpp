@@ -119,7 +119,8 @@ class Direct2DRenderer final
     void draw_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
                         D2D1_DRAW_TEXT_OPTIONS options = D2D1_DRAW_TEXT_OPTIONS_CLIP);
     [[nodiscard]] TextLayout layout_of(std::string_view text, const core::BodyLayout &body,
-                                       const core::EditorSettings &settings);
+                                       const core::EditorSettings &settings,
+                                       const application::LineWindow &window);
     [[nodiscard]] TextLayout text_layout(std::string_view text, IDWriteTextFormat *format,
                                          const core::LayoutRect &area);
     // 折り返し・双方向の全矩形。固定数の上限で選択やIMEの下線を切らない。
@@ -153,9 +154,9 @@ class Direct2DRenderer final
                         const core::LayoutRect &area, UINT32 position);
     // ブロックは本文の桁の描画上の範囲（`^M` なら 2 文字・全角なら字幅）を覆う（#151）。
     void draw_block_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                          const core::LayoutRect &area, const core::DisplayLine &line);
+                          const core::LayoutRect &area, const application::LineView &shown);
     void draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                    const core::LayoutRect &area, const core::DisplayLine &line);
+                    const core::LayoutRect &area, const application::LineView &shown);
     // 置き換えた文字（`^M`・`<200b>`）は muted の字色で描き直す。面は塗らない（ADR 0040 の決定
     // 4）。
     // ranges は描いた layout の UTF-16 の範囲（IME の変換中の行ではずらした後・#152）。

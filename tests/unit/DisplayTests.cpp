@@ -3,6 +3,9 @@
 // 前）、表示形式の意図 SelectDisplay と Ex の `:set display=` の往復、格子の位置解決が本文の索引を
 // 借りて core の純関数と一致し文字組みの port（rows / locate / hit）を呼ばないこと、索引を持つのは
 // 巨大な行の文書と格子の文書だけであること、開く道が文字組み以外の port に触れないこと。
+// 問いに「いいえ」と答えた text の表示の巨大な行（ADR 0139・Issue #547）は、錨の周りの窓だけを
+// 表示値と port に渡し、刻みをまたぐときだけ窓が替わり、窓の外の Home / End を解き、巨大な行だけ
+// 横に追って印を付け、普通の行のクリックの x を壊さないこと。
 #include "CaretAffinity.hpp"
 #include "CaretMotion.hpp"
 #include "ComposeText.hpp"
@@ -28,6 +31,7 @@
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
 #include "PlaceCaret.hpp"
+#include "PointText.hpp"
 #include "Scopes.hpp"
 #include "ScriptedTextLayouts.hpp"
 #include "SelectDisplay.hpp"
@@ -805,6 +809,192 @@ void verify_quiet_open()
                editing.bookmarks().writes() == 0 && editing.text_layouts().cells() == 0,
            "opening and asking read each file once and touch no other port");
 }
+
+// ---------------------------------------------------------------- text の表示の巨大な行（ADR
+// 0139）
+
+// 1 升 10 画素の ScriptedTextLayouts と同じ字幅で、幅 200 画素（折り返す設定は既定のまま）。
+constexpr core::TextViewGeometry text_geometry{200, 20, 96, 10.0F};
+// 4 つの塊（64 KiB）にまたがる巨大な行。
+constexpr std::size_t long_line = 200'000;
+// 窓の文字列の上限（前後 half_width と、ASCII なので 1 字 1 バイト）。
+constexpr std::size_t window_bound = 2 * core::giant_line_half_width + 1;
+// 位置解決が欄の右端に残す余白（VisualTextView::followed の幅 − 3）。
+constexpr float caret_room = 197.0F;
+
+// 開いて問いに「いいえ」と答えた、text の表示の巨大な行の文書。
+void open_giant_text(Editing &editing)
+{
+    editing.files().hold_at(std::string(giant_path),
+                            Bytes{"head\n" + repeated("x", long_line) + "\ntail"});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, text_geometry});
+    applied(controller, open_of(giant_path));
+    applied(controller, SelectDisplay{DisplayForm::text});
+}
+
+[[nodiscard]] EditorFrame placed(app::EditorController &controller, std::size_t line,
+                                 std::size_t column)
+{
+    return controller.apply_frame(
+        app::PlaceCaret{core::TextPosition{core::LineNumber{line}, core::Column{column}},
+                        core::SelectionAnchoring::collapse});
+}
+
+[[nodiscard]] EditorFrame moved(app::EditorController &controller, core::CaretMotion motion)
+{
+    return controller.apply_frame(app::MoveCaret{motion, core::SelectionAnchoring::collapse});
+}
+
+[[nodiscard]] const app::LineView &shown_line(const EditorFrame &frame, std::size_t number)
+{
+    static const app::LineView missing{core::LineNumber{0},       {}, {},
+                                       core::no_selection_span(), {}, std::nullopt};
+    const auto found = std::ranges::find_if(frame.lines, [number](const app::LineView &line)
+                                            { return line.number.value == number; });
+    return found == frame.lines.end() ? missing : *found;
+}
+
+// キャレットの、本文の欄の左端からの x（窓の中の桁 × 10 画素 + 行のずれ）。
+[[nodiscard]] float caret_screen_x(const EditorFrame &frame)
+{
+    const auto &line = shown_line(frame, frame.caret.position.line.value);
+    const auto column = frame.caret.position.column.value - 1 - line.window.code_point;
+    return (static_cast<float>(column) * 10.0F) + line.left;
+}
+
+[[nodiscard]] bool caret_on_screen(const EditorFrame &frame)
+{
+    const auto x = caret_screen_x(frame);
+    return x >= 0.0F && x <= caret_room;
+}
+
+// 決定 3・4: 巨大な行の表示値は窓の長さしか持たず、port にも窓の文字列しか渡らない。
+void verify_giant_window_length()
+{
+    Editing editing;
+    open_giant_text(editing);
+    auto &controller = editing.controller();
+    editing.text_layouts().forget_longest();
+    const EditorFrame frame = placed(controller, 2, 100'001);
+    const auto &giant = shown_line(frame, 2);
+    expect(giant.window.active && giant.text.size() <= window_bound &&
+               giant.display.text.size() <= window_bound,
+           "the giant line view holds only its window, not the 200,000 bytes of the line");
+    expect(giant.window.code_point <= 100'000 &&
+               100'000 < giant.window.code_point + giant.text.size(),
+           "the window holds the caret");
+    expect(editing.text_layouts().longest() <= window_bound,
+           "the layout port is never asked for more than the window");
+    expect(giant.screen_rows == 1, "the giant line takes one screen row even when wrapping");
+}
+
+// 決定 3: 窓は錨の 2,048 刻みで決まり、刻みをまたがなければ同じ窓、またげば替わる。
+void verify_giant_window_steps()
+{
+    Editing editing;
+    open_giant_text(editing);
+    auto &controller = editing.controller();
+    const auto first = shown_line(placed(controller, 2, 4'098), 2);
+    const auto same = shown_line(placed(controller, 2, 6'144), 2);
+    const auto next = shown_line(placed(controller, 2, 6'145), 2);
+    expect(first.window.code_point == same.window.code_point && first.text == same.text,
+           "anchors within one step share the window");
+    expect(next.window.code_point == core::giant_line_step &&
+               next.window.code_point != first.window.code_point,
+           "an anchor past the step moves the window by one step");
+}
+
+// 決定 4・5: Home / End は窓の外を索引で解き、行頭・行末に着いて、巨大な行だけ横に追う。
+void verify_giant_line_edges()
+{
+    Editing editing;
+    open_giant_text(editing);
+    auto &controller = editing.controller();
+    static_cast<void>(placed(controller, 2, 100'001));
+    const EditorFrame ended = moved(controller, core::CaretMotion::line_end);
+    const auto &end = shown_line(ended, 2);
+    expect(ended.caret.position ==
+               core::TextPosition{core::LineNumber{2}, core::Column{long_line + 1}},
+           "End outside the window reaches the end of the giant line");
+    expect(end.window.code_point + end.text.size() == long_line && caret_on_screen(ended),
+           "the window moves to the end and the caret stays on the screen while wrapping");
+    expect(!shown_line(ended, 1).window.active && shown_line(ended, 1).left == 0.0F,
+           "a short line does not scroll while the giant line follows the caret");
+    const EditorFrame homed = moved(controller, core::CaretMotion::line_start);
+    expect(homed.caret.position == core::TextPosition{core::LineNumber{2}, core::Column{1}} &&
+               shown_line(homed, 2).window.code_point == 0 && shown_line(homed, 2).left == 0.0F,
+           "Home outside the window reaches the start of the giant line");
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_normal(controller, "$");
+    const EditorFrame dollar = controller.frame();
+    expect(dollar.caret.position ==
+                   core::TextPosition{core::LineNumber{2}, core::Column{long_line}} &&
+               caret_on_screen(dollar),
+           "Vim $ shows the last character of the giant line");
+    vim_normal(controller, "0");
+    const EditorFrame zero = controller.frame();
+    expect(zero.caret.position == core::TextPosition{core::LineNumber{2}, core::Column{1}} &&
+               caret_on_screen(zero),
+           "Vim 0 comes back to the start of the giant line");
+}
+
+// 決定 5: 窓が替わっても、横の送りを隣の窓から読み替えて、キャレットは画面の中で 1 字しか動かない。
+void verify_giant_window_follow()
+{
+    Editing editing;
+    open_giant_text(editing);
+    auto &controller = editing.controller();
+    const EditorFrame before = placed(controller, 2, 6'144);
+    const EditorFrame after = moved(controller, core::CaretMotion::next_character);
+    const auto shift = caret_screen_x(after) - caret_screen_x(before);
+    expect(shown_line(after, 2).window.code_point != shown_line(before, 2).window.code_point,
+           "the next character crosses into the next window");
+    expect(caret_on_screen(before) && caret_on_screen(after) && shift >= -10.0F && shift <= 10.0F,
+           "crossing the window keeps the caret where it was on the screen");
+}
+
+// 決定 5（試作の穴 3）: 巨大な行を追った横の送りが残っても、普通の行のクリックは画面の x で
+// 解け、巨大な行のクリックは見えている窓の x で解ける。
+void verify_giant_click()
+{
+    Editing editing;
+    open_giant_text(editing);
+    auto &controller = editing.controller();
+    const EditorFrame middle = placed(controller, 2, 100'001);
+    expect(shown_line(middle, 2).left < 0.0F && shown_line(middle, 1).left == 0.0F,
+           "the giant line scrolls to the caret while the short line stays");
+    const EditorFrame head =
+        controller.apply_frame(app::PointText{20.0F, 0, core::SelectionAnchoring::collapse});
+    expect(head.caret.position == core::TextPosition{core::LineNumber{1}, core::Column{3}},
+           "a click on a short line is not shifted by the giant line's scroll");
+    const EditorFrame again = placed(controller, 2, 100'001);
+    const auto &giant = shown_line(again, 2);
+    const auto column =
+        static_cast<std::size_t>(((50.0F - giant.left) / 10.0F) + 0.5F) + giant.window.code_point;
+    const EditorFrame clicked =
+        controller.apply_frame(app::PointText{50.0F, 1, core::SelectionAnchoring::collapse});
+    expect(column < 100'000 &&
+               clicked.caret.position ==
+                   core::TextPosition{core::LineNumber{2}, core::Column{column + 1}},
+           "a click on the giant line lands under the pointer in the shown window");
+}
+
+// 決定 2: 印は巨大な行だけ。巨大な行の無い文書には付かない。
+void verify_giant_mark()
+{
+    Editing editing;
+    open_giant_text(editing);
+    const EditorFrame frame = editing.controller().frame();
+    expect(frame.lines.size() == 3 && !frame.lines.at(0).window.active &&
+               frame.lines.at(1).window.active && !frame.lines.at(2).window.active,
+           "only the giant line carries the window and its mark");
+    hold_documents(editing.files());
+    const EditorFrame small = editing.controller().apply_frame(open_of(small_path));
+    expect(std::ranges::none_of(small.lines,
+                                [](const app::LineView &line) { return line.window.active; }),
+           "a document without giant lines has no mark");
+}
 } // namespace
 
 void verify_display_contracts()
@@ -828,6 +1018,12 @@ void verify_display_contracts()
     verify_grid_composition_cluster();
     verify_grid_frames_borrow();
     verify_quiet_open();
+    verify_giant_window_length();
+    verify_giant_window_steps();
+    verify_giant_line_edges();
+    verify_giant_window_follow();
+    verify_giant_click();
+    verify_giant_mark();
 }
 
 void verify_display_scope()

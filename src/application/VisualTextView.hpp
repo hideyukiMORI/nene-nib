@@ -19,6 +19,10 @@
 namespace nenenib::application
 {
 // 1回の位置解決の間だけ現在の文書を借用する。スクロール/選択の状態は所有しない。
+// text の表示の巨大な行（ADR 0139）は錨の周りの窓だけを表示値に持ち、rows は 1。x は
+// 「キャレットの行の窓の始まり」（origin・キャレットが巨大な行に無ければ行頭）からの相対で、
+// 横の送り（ScrollState::horizontal）も同じ相対で読む（決定 5）。各行の x は行の原点からの x に
+// 行のずれ（offset_of）を足した値で、location / caret_at / followed はこの x で答える。
 // 格子の文書（ADR 0140 の決定 4・5）では、構築のときに 1 升を port の cell から 1 回だけ読み、
 // rows / location / caret_at を本文が持つ仮想桁の索引（TextBuffer::virtual_columns）から GridCells
 // で答える。索引は借りるだけで作らない（持たせるのは開く道と SelectDisplay の application の 2
@@ -28,9 +32,8 @@ class VisualTextView final
   public:
     VisualTextView(const EditorState &state, TextLayoutPort &layouts,
                    core::TextViewGeometry geometry);
-    // 見えている 1 行の表示値（変換中の文字列はキャレットの行に差し込む）。位置解決をしない
-    // frame の行はこちらを直接呼ぶ（1 升を port から読まない）。
-    [[nodiscard]] static LineView line_of(const EditorState &state, core::LineNumber number);
+    // 見えている 1 行の表示値（変換中の文字列はキャレットの行に差し込む）。巨大な行の錨は
+    // キャレットがその行にあればキャレット、無ければ横の送りから見積もった位置（決定 3）。
     [[nodiscard]] LineView line(core::LineNumber number) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure> rows(core::LineNumber number) const;
     [[nodiscard]] std::expected<core::TextLocation, TextLayoutFailure>
@@ -54,6 +57,23 @@ class VisualTextView final
 
   private:
     [[nodiscard]] TextLayoutRequest request(const LineView &line) const;
+    // anchor を省けば line の既定の錨。巨大な行は錨の周りの窓だけを text_range で読む。
+    [[nodiscard]] LineView line_at(core::LineNumber number,
+                                   std::optional<core::Offset> anchor) const;
+    [[nodiscard]] LineView giant_line(core::LineNumber number,
+                                      const core::VirtualColumnIndex &index,
+                                      std::optional<core::Offset> anchor) const;
+    void compose(LineView &result) const;
+    // 行の原点の x（行の中の x にこれを足すと位置解決の x）。描画のずれは left = これ − 横の送り。
+    [[nodiscard]] float offset_of(const LineView &line) const noexcept;
+    // 巨大な行で窓の外を指す x は、見積もった仮想桁から索引で解く（決定 4・Home / End）。
+    [[nodiscard]] std::optional<core::TextCaret> outside_window(const LineView &line,
+                                                                float local) const;
+    // 巨大な行のキャレットを追う横の送り。前の送りが隣の窓からの相対なら、そう読み替えてから
+    // 見えるかを確かめ、見えなければ今日どおり端へ寄せる（決定 5）。
+    [[nodiscard]] float giant_horizontal(core::TextCaret caret, float x, float width) const;
+    // キャレットを追う横の送り（located はキャレットの x）。
+    [[nodiscard]] float horizontal_for(core::TextCaret caret, float located) const;
     [[nodiscard]] bool gridded() const noexcept;
     [[nodiscard]] std::expected<core::GridPoint, TextLayoutFailure>
     grid_point(core::TextCaret caret) const;
@@ -77,6 +97,9 @@ class VisualTextView final
     TextLayoutPort &layouts_;
     core::TextViewGeometry geometry_;
     core::TextPosition caret_;
+    // キャレットの行の窓の始まりの仮想桁（キャレットが巨大な行に無ければ 0）と見積もりの字幅。
+    std::size_t origin_ = 0;
+    float advance_ = 1;
     // 格子の 1 画面行の升の数と 1 升の幅（物理画素）。格子でなければ 0。cell が読めなければ
     // grid_failure_。
     std::size_t grid_columns_ = 0;
