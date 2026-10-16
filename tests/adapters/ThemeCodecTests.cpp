@@ -203,6 +203,23 @@ void verify_tab_hover_default()
     expect(hovered.ui.tab_hover == core::RgbColor{0x13, 0x13, 0x13}, "UI hover tab override");
 }
 
+// giant_mark を省略したテーマは上書きした accent に従う（ADR 0139 の決定 2）。
+void verify_giant_mark_default()
+{
+    const auto overridden =
+        adapters::decode_theme(fixture() + "ui.accent=#070707\n", name_of()).value();
+    expect(overridden.ui.giant_mark == core::RgbColor{7, 7, 7},
+           "an omitted giant_mark is the overridden accent");
+    const auto plain = adapters::decode_theme(fixture(), name_of()).value();
+    expect(plain.ui.giant_mark == plain.ui.accent, "an omitted giant_mark is the derived accent");
+    const auto marked =
+        adapters::decode_theme(fixture() + "ui.accent=#070707\nui.giant_mark=#141414\n", name_of())
+            .value();
+    expect(marked.ui.giant_mark == core::RgbColor{0x14, 0x14, 0x14} &&
+               marked.ui.accent == core::RgbColor{7, 7, 7},
+           "UI giant mark override");
+}
+
 void verify_rejected_fields()
 {
     rejected("", Failure::missing_field);
@@ -502,6 +519,7 @@ int main(int argc, char **argv)
     verify_gutter_background();
     verify_overrides();
     verify_tab_hover_default();
+    verify_giant_mark_default();
     verify_owned_view();
     verify_rejected_fields();
     verify_contrast_and_limits();

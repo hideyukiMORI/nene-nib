@@ -1495,11 +1495,13 @@ std::array<RgbColor, 15> body_filled_tokens(const SyntaxPalette &body)
 }
 
 // 背景そのものと、背景と同じであることが決まっている tab_active（D16）を除いた UI トークン
-// 10 個。on_accent は accent 上で検査する。黒/白の面は本文と同色でも有効（ADR 0117）。
-std::array<RgbColor, 10> ui_filled_tokens(const Palette &ui)
+// 11 個。on_accent は accent 上で検査する。黒/白の面は本文と同色でも有効（ADR 0117）。
+// giant_mark は巨大な行の印（ADR 0139 の決定 2）。
+std::array<RgbColor, 11> ui_filled_tokens(const Palette &ui)
 {
-    return {ui.text,   ui.muted,           ui.gutter,       ui.current_line, ui.accent,
-            ui.toggle, ui.selection.color, ui.panel_border, ui.search.color, ui.ime};
+    return {ui.text,         ui.muted,  ui.gutter,          ui.current_line,
+            ui.accent,       ui.toggle, ui.selection.color, ui.panel_border,
+            ui.search.color, ui.ime,    ui.giant_mark};
 }
 
 // ADR 0017 / 0117: 全テーマで本文・UI・行番号の前景／背景が 4.5:1 以上。

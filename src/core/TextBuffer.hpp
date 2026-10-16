@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::core
@@ -64,8 +65,14 @@ class TextBuffer final
     // 次の行の先頭（最終行では本文の末尾）。改行そのものを含む半開区間の端。
     [[nodiscard]] Offset line_terminator_end(LineNumber line) const noexcept;
 
+    // 仮想桁の索引を持つ本文は索引の序数で O(塊) に解き、持たない本文は行頭から歩く（ADR 0139 の
+    // 決定 6）。TextPosition の桁はコードポイントの序数＋1 で、索引の序数と同じ単位。
     [[nodiscard]] Offset offset_of(const TextPosition &position) const;
     [[nodiscard]] TextPosition position_of(Offset at) const;
+    // 上の 2 つと同じ答えに、答えるために文字を読んだ本文のバイト数を添える（契約が O(塊) を
+    // 確かめる読む口）。position_of / offset_of はこの答えの first だけを返す。
+    [[nodiscard]] std::pair<Offset, std::size_t> offset_read(const TextPosition &position) const;
+    [[nodiscard]] std::pair<TextPosition, std::size_t> position_read(Offset at) const;
 
     // 仮想桁の索引（ADR 0140 の決定 4）。要る文書だけが持ち、既定では持たない。
     // with_virtual_columns は索引を一から作って持つ写しを返す（持っていればそのまま）。持つ本文の

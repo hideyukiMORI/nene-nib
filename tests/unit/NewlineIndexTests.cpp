@@ -1,9 +1,11 @@
+#include "Column.hpp"
 #include "LineNumber.hpp"
 #include "NewlineIndex.hpp"
 #include "Offset.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
+#include "TextPosition.hpp"
 #include "VirtualColumn.hpp"
 #include "VirtualColumnIndex.hpp"
 #include "VirtualColumnsFailure.hpp"
@@ -21,10 +23,12 @@ namespace nenenib::tests
 {
 namespace
 {
+using nenenib::core::Column;
 using nenenib::core::LineNumber;
 using nenenib::core::NewlineIndex;
 using nenenib::core::Offset;
 using nenenib::core::TextBuffer;
+using nenenib::core::TextPosition;
 using nenenib::core::VirtualColumnIndex;
 using nenenib::core::VirtualColumnsFailure;
 
@@ -448,6 +452,97 @@ void verify_original_slices()
     verify_buffer_index(edited, expected);
     verify_buffer_index(erased, expected.substr(64));
 }
+
+// 索引の塊の大きさの上限（編集で切り直す前の 128 KiB）。O(塊) の読みはこれを越えない。
+constexpr std::size_t column_chunk_limit = 2 * column_chunk;
+
+// 全角の「あ」の数。16 MiB の 1 行。
+constexpr std::size_t giant_wide_count = (16UL * 1024UL * 1024UL) / 3;
+
+// 16 MiB の全角の 1 行（塊は plain でない）と、その後ろの短い行。
+[[nodiscard]] std::string giant_wide_text()
+{
+    const std::string_view wide = "\xe3\x81\x82";
+    std::string source;
+    source.reserve((giant_wide_count * wide.size()) + 8);
+    for (std::size_t index = 0; index < giant_wide_count; ++index)
+    {
+        source.append(wide);
+    }
+    source.append("\nend");
+    return source;
+}
+
+// 索引を持つ 16 MiB の全角の 1 行で、行末の position_of と offset_of は塊の 1 つ以下しか読まない
+// （ADR 0139 の決定 6）。
+void verify_held_positions_giant_line()
+{
+    const auto text = held_buffer_of(giant_wide_text());
+    const Offset end{giant_wide_count * 3};
+    const auto [position, read] = text.position_read(end);
+    expect(position == TextPosition{LineNumber{1}, Column{giant_wide_count + 1}},
+           "the end of a held giant line is the walked position");
+    expect(read <= column_chunk_limit,
+           "position_of at the end of a held giant line reads one chunk");
+    const auto [offset, reached] = text.offset_read(position);
+    expect(offset == end, "offset_of returns to the end of a held giant line");
+    expect(reached <= column_chunk_limit,
+           "offset_of at the end of a held giant line reads one chunk");
+    const auto [past, past_read] =
+        text.offset_read(TextPosition{LineNumber{1}, Column{giant_wide_count + 9}});
+    expect(past == end && past_read <= column_chunk_limit,
+           "a column past a held giant line stops at its end from one chunk");
+    expect(text.position_of(Offset{text.size_bytes()}) == TextPosition{LineNumber{2}, Column{4}},
+           "the line after a held giant line keeps its position");
+}
+
+// walked と indexed が、塊の境目の前後（コードポイントの途中を含む）と一定の間隔の位置、
+// 行ごとの桁（行末を越える桁を含む）で同じ答えを返す。
+[[nodiscard]] bool same_positions(const TextBuffer &walked, const TextBuffer &indexed)
+{
+    bool same = true;
+    for (const auto probe : column_probes(indexed, held_of(indexed), held_of(indexed)))
+    {
+        const Offset at{probe};
+        const auto position = walked.position_of(at);
+        same = same && indexed.position_of(at) == position &&
+               indexed.offset_of(position) == walked.offset_of(position);
+    }
+    for (std::size_t number = 1; number <= walked.line_count(); number += 97)
+    {
+        const LineNumber line{number};
+        const auto width = walked.position_of(walked.line_end(line)).column.value;
+        for (const auto column : {std::size_t{0}, std::size_t{1}, std::size_t{2}, std::size_t{9},
+                                  width / 2, width, width + 3})
+        {
+            const TextPosition position{line, Column{column}};
+            same = same && indexed.offset_of(position) == walked.offset_of(position);
+        }
+    }
+    return same;
+}
+
+// 索引を持つ本文と持たない本文で、position_of と offset_of の答えが同じ（LF / CRLF・Tab・
+// 全角・結合文字・コードポイントの途中・行末を越える桁・編集の後）。
+void verify_held_positions_match_walk()
+{
+    std::string crlf;
+    for (const char byte : mixed_columns_text())
+    {
+        crlf.append(byte == '\n' ? std::string("\r\n") : std::string(1, byte));
+    }
+    for (const auto &source : {mixed_columns_text(), crlf})
+    {
+        const auto plain = buffer_of(source);
+        const auto held = plain.with_virtual_columns();
+        const Offset at{code_point_start(plain, column_chunk + 5)};
+        expect(same_positions(plain, held),
+               "a held text answers position_of and offset_of like the walk");
+        expect(same_positions(plain.insert(at, "\xe6\x97\xa5\t\n"),
+                              held.insert(at, "\xe6\x97\xa5\t\n")),
+               "an edited held text answers position_of and offset_of like the walk");
+    }
+}
 } // namespace
 
 void verify_newline_index_scope()
@@ -464,5 +559,7 @@ void verify_newline_index_scope()
     verify_columns_absent_by_default();
     verify_held_columns_ascii_lines();
     verify_held_columns_ascii_controls();
+    verify_held_positions_giant_line();
+    verify_held_positions_match_walk();
 }
 } // namespace nenenib::tests

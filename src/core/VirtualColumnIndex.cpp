@@ -13,6 +13,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::core
@@ -455,14 +456,15 @@ std::size_t VirtualColumnIndex::scanned_until(std::string_view bytes, VirtualCol
     return bytes.size();
 }
 
-Offset VirtualColumnIndex::byte_at(const TextBuffer &text, LineNumber line, std::size_t target,
-                                   Measure measure) const
+std::pair<Offset, std::size_t> VirtualColumnIndex::byte_at(const TextBuffer &text, LineNumber line,
+                                                           std::size_t target,
+                                                           Measure measure) const
 {
     const auto line_begin = text.line_start(line).value;
     const auto line_end = text.line_end(line).value;
     if (chunks_.empty())
     {
-        return Offset{line_begin};
+        return {Offset{line_begin}, 0};
     }
     // 行頭より後ろで始まる塊の始まりの累積はこの行のもの。target を越えない最後の塊から歩く。
     const auto first = chunk_of(line_begin);
@@ -480,26 +482,33 @@ Offset VirtualColumnIndex::byte_at(const TextBuffer &text, LineNumber line, std:
     if (chunk.plain)
     {
         const auto reached = target - state.*measure;
-        return Offset{std::min(from + reached, stop)};
+        return {Offset{std::min(from + reached, stop)}, 0};
     }
     const auto bytes = text.text_range(Offset{from}, Offset{stop});
-    return Offset{from + scanned_until(bytes, state, target, measure)};
+    return {Offset{from + scanned_until(bytes, state, target, measure)}, bytes.size()};
 }
 
 Offset VirtualColumnIndex::byte_at_virtual_column(const TextBuffer &text, LineNumber line,
                                                   std::size_t column) const
 {
-    return byte_at(text, line, column, &VirtualColumnCursor::column);
+    return byte_at(text, line, column, &VirtualColumnCursor::column).first;
 }
 
 Offset VirtualColumnIndex::byte_at_cell(const TextBuffer &text, LineNumber line,
                                         std::size_t cell) const
 {
-    return byte_at(text, line, cell, &VirtualColumnCursor::cell);
+    return byte_at(text, line, cell, &VirtualColumnCursor::cell).first;
 }
 
 Offset VirtualColumnIndex::byte_at_code_point(const TextBuffer &text, LineNumber line,
                                               std::size_t ordinal) const
+{
+    return reached_code_point(text, line, ordinal).first;
+}
+
+std::pair<Offset, std::size_t> VirtualColumnIndex::reached_code_point(const TextBuffer &text,
+                                                                      LineNumber line,
+                                                                      std::size_t ordinal) const
 {
     return byte_at(text, line, ordinal, &VirtualColumnCursor::code_point);
 }

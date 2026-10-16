@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::core
@@ -60,6 +61,10 @@ class VirtualColumnIndex final
     // 同じ逆引きをコードポイントの序数（0 始まり）で。行がそれより短ければ行の内容の終わり。
     [[nodiscard]] Offset byte_at_code_point(const TextBuffer &text, LineNumber line,
                                             std::size_t ordinal) const;
+    // byte_at_code_point と同じ答えに、答えるために本文から写したバイト数（塊の 1
+    // つ以下）を添える。
+    [[nodiscard]] std::pair<Offset, std::size_t>
+    reached_code_point(const TextBuffer &text, LineNumber line, std::size_t ordinal) const;
 
   private:
     VirtualColumnIndex() = default;
@@ -75,8 +80,10 @@ class VirtualColumnIndex final
     // 古い塊 from から後ろを shift バイトずらして足し、始まりの累積を最後の塊から付け直す。
     void append_carried(const VirtualColumnIndex &old, std::size_t from, std::size_t shift,
                         const TextBuffer &text);
-    [[nodiscard]] Offset byte_at(const TextBuffer &text, LineNumber line, std::size_t target,
-                                 std::size_t VirtualColumnCursor::*measure) const;
+    // 答えと、答えるために本文から写したバイト数。
+    [[nodiscard]] std::pair<Offset, std::size_t>
+    byte_at(const TextBuffer &text, LineNumber line, std::size_t target,
+            std::size_t VirtualColumnCursor::*measure) const;
     // bytes を state から歩き、measure（桁・升・序数）で target を占める文字のバイト位置を返す。
     // 見つからなければ bytes の長さ。
     [[nodiscard]] std::size_t scanned_until(std::string_view bytes, VirtualColumnCursor state,
