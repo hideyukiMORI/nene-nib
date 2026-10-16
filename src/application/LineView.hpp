@@ -3,6 +3,7 @@
 #include "ComposedLine.hpp"
 #include "DisplayLine.hpp"
 #include "LineNumber.hpp"
+#include "LineWindow.hpp"
 #include "SelectionSpan.hpp"
 
 #include <cstdint>
@@ -31,6 +32,8 @@ struct LineView
     std::optional<ComposedLine> composed{};
     std::int64_t screen_row = 0;
     std::size_t screen_rows = 1;
+    // 巨大な行なら text / display / selection / matches は窓の中だけ（ADR 0139・試作）。
+    LineWindow window{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

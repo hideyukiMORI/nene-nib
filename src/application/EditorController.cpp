@@ -3266,8 +3266,12 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
 {
     const core::TextBuffer &text = state_.text();
     LineView view = visual_view().line(line);
-    const core::Offset start = text.line_start(line);
-    LineSpanEvaluation projection(view.text, start, text.line_terminator_end(line));
+    // 巨大な行は窓の中の本文だけを持つ。選択と当たりは窓の始まりから投影する（ADR 0139・試作）。
+    const core::Offset start{text.line_start(line).value + view.window.byte};
+    const core::Offset window_end{start.value + view.text.size()};
+    const core::Offset terminator =
+        window_end == text.line_end(line) ? text.line_terminator_end(line) : window_end;
+    LineSpanEvaluation projection(view.text, start, terminator);
     view.selection = projection.span(range);
     if (pattern == nullptr)
     {
@@ -3298,6 +3302,18 @@ LineView EditorController::line_view(core::LineNumber line, const core::OffsetRa
     return view;
 }
 
+// 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2・試作）。
+std::expected<std::size_t, TextLayoutFailure>
+EditorController::screen_rows_of(const LineView &shown) const
+{
+    if (view_geometry_.width <= 0 || shown.window.active)
+    {
+        return 1;
+    }
+    return ports_.text_layouts.rows(
+        TextLayoutRequest{presented_text(shown), state_.settings(), view_geometry_});
+}
+
 std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visible_lines() const
 {
     const ScrollState scroll = state_.scroll();
@@ -3326,10 +3342,7 @@ std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visibl
     {
         const core::LineNumber line{number};
         auto shown = line_view(line, block_row(block, line, range), selected, caret);
-        const auto count = view_geometry_.width > 0
-                               ? ports_.text_layouts.rows(TextLayoutRequest{
-                                     presented_text(shown), state_.settings(), view_geometry_})
-                               : std::expected<std::size_t, TextLayoutFailure>{1};
+        const auto count = screen_rows_of(shown);
         if (!count)
         {
             return std::unexpected(count.error());

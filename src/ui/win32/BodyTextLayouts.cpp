@@ -166,6 +166,10 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     {
         return std::unexpected(unavailable);
     }
+    if (request.window.active && FAILED(made->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)))
+    {
+        return std::unexpected(unavailable);
+    }
     DWRITE_TEXT_METRICS metrics{};
     if (FAILED(made->GetMetrics(&metrics)))
     {
@@ -173,6 +177,7 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     }
     BodyTextLayout entry{std::string(request.text), area, std::move(made)};
     entry.rows = std::max<std::size_t>(metrics.lineCount, 1);
+    entry.unwrapped = request.window.active;
     return entry;
 }
 
@@ -185,7 +190,10 @@ BodyTextLayouts::get(const application::TextLayoutRequest &request)
         return std::unexpected(ready.error());
     }
     const auto matches = [&request](const BodyTextLayout &entry)
-    { return entry.layout && entry.text == request.text; };
+    {
+        return entry.layout && entry.unwrapped == request.window.active &&
+               entry.text == request.text;
+    };
     const auto current = std::ranges::find_if(current_, matches);
     if (current != current_.end())
     {

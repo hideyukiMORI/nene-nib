@@ -341,6 +341,8 @@ class EditorController final
     [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
                                      const core::VimPattern *pattern, core::Offset caret) const;
     [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines() const;
+    [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
+    screen_rows_of(const LineView &shown) const;
     // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4）。
     [[nodiscard]] std::optional<CompositionView> composed() const;

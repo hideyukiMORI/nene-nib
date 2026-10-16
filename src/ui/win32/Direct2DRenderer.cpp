@@ -110,6 +110,14 @@ constexpr float full_channel = 255.0F;
         core::utf16_length(text.substr(0, std::min(byte, text.size()))).value_or(0));
 }
 
+// 巨大な行の窓では本文の桁を窓の中の桁に写す（ADR 0139・試作）。
+[[nodiscard]] core::Column windowed_column(const application::EditorFrame &frame,
+                                           const application::LineView &shown) noexcept
+{
+    const auto source = frame.caret.position.column.value;
+    return core::Column{source - std::min(shown.window.column, source - 1)};
+}
+
 // 本文の桁（1 始まり）を描画用の行の桁へ（ADR 0040 の決定 3）。キャレット・選択・検索の当たり・
 // IME の差し込み位置はすべてここを通してから UTF-16 の位置にする。範囲外は描画の末尾に畳む。
 [[nodiscard]] core::Column displayed(const core::DisplayLine &line, core::Column column) noexcept
@@ -718,11 +726,13 @@ void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
 
 Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
                                                          const core::BodyLayout &body,
-                                                         const core::EditorSettings &settings)
+                                                         const core::EditorSettings &settings,
+                                                         const application::LineWindow &window)
 {
     auto made = body_text_.get(application::TextLayoutRequest{
         text, settings,
-        core::TextViewGeometry{std::max(core::width_of(body.content), 1), body.line_height, dpi_}});
+        core::TextViewGeometry{std::max(core::width_of(body.content), 1), body.line_height, dpi_},
+        window});
     if (!made)
     {
         text_failure_ = RenderFailure::directwrite;
@@ -984,9 +994,10 @@ void Direct2DRenderer::draw_bar_caret(const application::EditorFrame &frame,
 
 void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
                                         IDWriteTextLayout *text, const core::LayoutRect &area,
-                                        const core::DisplayLine &line)
+                                        const application::LineView &shown)
 {
-    const auto column = frame.caret.position.column;
+    const auto &line = shown.display;
+    const auto column = windowed_column(frame, shown);
     LineUtf16Evaluation positions(line.text);
     const auto begin = positions.units_of(displayed(line, column));
     const auto end = positions.units_of(displayed(line, core::Column{column.value + 1}));
@@ -1025,17 +1036,18 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
 }
 
 void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                                  const core::LayoutRect &area, const core::DisplayLine &line)
+                                  const core::LayoutRect &area, const application::LineView &shown)
 {
+    const auto &line = shown.display;
     LineUtf16Evaluation positions(line.text);
     switch (frame.caret.shape)
     {
     case core::CaretShape::bar:
         draw_bar_caret(frame, text, area,
-                       positions.units_of(displayed(line, frame.caret.position.column)));
+                       positions.units_of(displayed(line, windowed_column(frame, shown))));
         return;
     case core::CaretShape::block:
-        draw_block_caret(frame, text, area, line);
+        draw_block_caret(frame, text, area, shown);
         return;
     }
     std::unreachable();
@@ -1111,7 +1123,7 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     const auto &shown = line.composed.value();
     LineUtf16Evaluation positions(shown.text);
     const UINT32 base = positions.units_of(shown.insertion_column);
-    const auto text = layout_of(shown.text, body, frame.settings);
+    const auto text = layout_of(shown.text, body, frame.settings, line.window);
     if (!text)
     {
         return;
@@ -1129,7 +1141,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
                                        const core::BodyLayout &body, const core::LayoutRect &area,
                                        const application::LineView &line)
 {
-    const auto text = layout_of(line.display.text, body, frame.settings);
+    const auto text = layout_of(line.display.text, body, frame.settings, line.window);
     if (!text)
     {
         return;
@@ -1146,7 +1158,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
     draw_current_match(frame, text.Get(), area, line);
     if (line.number == frame.caret.position.line && !frame.command_line.has_value())
     {
-        draw_caret(frame, text.Get(), area, line.display);
+        draw_caret(frame, text.Get(), area, line);
     }
 }
 
@@ -1172,8 +1184,10 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
                                   top + body.line_height},
                  line.number == frame.caret.position.line ? frame.palette.text
                                                           : frame.palette.gutter);
-    const auto horizontal = static_cast<std::int32_t>(std::min(
-        frame.horizontal, static_cast<float>(std::numeric_limits<std::int32_t>::max() / 2)));
+    // 巨大な行は窓の始まりの見積もった x だけ原点を右へずらす（ADR 0139・試作）。
+    const auto horizontal = static_cast<std::int32_t>(
+        std::min(frame.horizontal - line.window.x,
+                 static_cast<float>(std::numeric_limits<std::int32_t>::max() / 2)));
     const core::LayoutRect area{body.content.left - horizontal, top, body.content.right, bottom};
     context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
     if (line.composed.has_value())

@@ -46,6 +46,11 @@ class VisualTextView final
     using SharedLine = std::shared_ptr<const LineView>;
     [[nodiscard]] SharedLine shown(core::LineNumber number);
     [[nodiscard]] TextLayoutRequest request(const LineView &line) const;
+    // 巨大な行は錨の周りの窓だけを読む（ADR 0139・試作）。
+    [[nodiscard]] bool giant(core::LineNumber number) const noexcept;
+    [[nodiscard]] LineView giant_line(core::LineNumber number) const;
+    [[nodiscard]] core::Offset giant_anchor(core::LineNumber number, float advance) const;
+    void compose(LineView &result) const;
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
     forward(core::VisualPosition from, std::size_t amount);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>

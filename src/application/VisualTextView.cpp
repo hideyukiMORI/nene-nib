@@ -1,10 +1,14 @@
 #include "VisualTextView.hpp"
 
 #include "ComposedLine.hpp"
+#include "DevicePixels.hpp"
+#include "FontSize.hpp"
+#include "GiantLine.hpp"
 #include "ScrollBounds.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <utility>
 
@@ -26,10 +30,10 @@ namespace
 [[nodiscard]] core::DisplayCaret shown_caret(const LineView &line, core::TextCaret caret,
                                              core::TextPosition composing)
 {
+    // 巨大な行の窓では、本文の桁を窓の中の桁に写す（ADR 0139・試作）。
+    const auto source = caret.position.column.value > 0 ? caret.position.column.value - 1 : 0;
     auto column = core::Column{
-        core::display_position(
-            line.display, caret.position.column.value > 0 ? caret.position.column.value - 1 : 0) +
-        1};
+        core::display_position(line.display, source - std::min(source, line.window.column)) + 1};
     if (line.composed.has_value())
     {
         const auto &inserted = line.composed.value();
@@ -46,6 +50,36 @@ namespace
 }
 // 見えている行数に足す保持の余り（画面の上下に半分かかる行と、キャレットの行）。
 constexpr std::size_t shown_margin = 4;
+
+// ADR 0139（試作）: 錨の桁をこの刻みに丸めた中心から窓を切る。錨は常に窓の端から刻み以上
+// 内側にあり、刻みをまたぐまで窓の文字列は変わらない（決定 6 を状態なしで近似する）。
+constexpr std::size_t giant_line_step = core::giant_line_half_width / 2;
+// 平均の字幅の見積もり（em 比・Consolas の送り幅）。application は字幅を知らない（試作の穴）。
+constexpr float average_advance_em = 0.55F;
+constexpr std::size_t utf8_longest = 4;
+constexpr std::size_t slice_margin = 64;
+
+[[nodiscard]] float advance_of(const core::EditorSettings &settings,
+                               core::TextViewGeometry geometry) noexcept
+{
+    return std::max(core::font_size_dips(settings.font_size) * static_cast<float>(geometry.dpi) /
+                        static_cast<float>(core::reference_dpi) * average_advance_em,
+                    1.0F);
+}
+
+[[nodiscard]] std::size_t walked_back(std::string_view text, std::size_t at, std::size_t steps)
+{
+    for (std::size_t step = 0; step < steps && at > 0; ++step)
+    {
+        at = core::previous_code_point(text, core::Offset{at}).value;
+    }
+    return at;
+}
+
+[[nodiscard]] float whole_pixels(float value) noexcept
+{
+    return static_cast<float>(static_cast<std::int64_t>(value));
+}
 } // namespace
 
 VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts,
@@ -58,15 +92,77 @@ VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts
 LineView VisualTextView::line(core::LineNumber number) const
 {
     number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    if (giant(number))
+    {
+        return giant_line(number);
+    }
     auto text = state_.text().line_text(number);
     auto display = core::display_line(text);
     LineView result{number, std::move(text), std::move(display), core::no_selection_span(),
                     {},     std::nullopt};
+    compose(result);
+    return result;
+}
+
+void VisualTextView::compose(LineView &result) const
+{
     const auto &composition = state_.composition();
-    if (number == caret_.line && composition.has_value() && !state_.command_input().has_value())
+    if (result.number == caret_.line && composition.has_value() &&
+        !state_.command_input().has_value())
     {
-        result.composed = composed_line(result.display, caret_.column, composition.value());
+        const auto shift = std::min(result.window.column, caret_.column.value - 1);
+        result.composed = composed_line(result.display, core::Column{caret_.column.value - shift},
+                                        composition.value());
     }
+}
+
+bool VisualTextView::giant(core::LineNumber number) const noexcept
+{
+    const auto &text = state_.text();
+    return text.line_end(number).value - text.line_start(number).value > core::giant_line_threshold;
+}
+
+core::Offset VisualTextView::giant_anchor(core::LineNumber number, float advance) const
+{
+    if (caret_.line == number)
+    {
+        return state_.selection().caret;
+    }
+    const auto column =
+        static_cast<std::size_t>(std::max(state_.scroll().horizontal, 0.0F) / advance);
+    return state_.text().offset_of(core::TextPosition{number, core::Column{column + 1}});
+}
+
+LineView VisualTextView::giant_line(core::LineNumber number) const
+{
+    const auto &text = state_.text();
+    const auto start = text.line_start(number).value;
+    const auto end = text.line_end(number).value;
+    const auto advance = advance_of(state_.settings(), geometry_);
+    const auto anchor = giant_anchor(number, advance).value;
+    const auto column = caret_.line == number
+                            ? caret_.column.value - 1
+                            : text.position_of(core::Offset{anchor}).column.value - 1;
+    const auto center_column = column / giant_line_step * giant_line_step;
+    const auto reach =
+        (core::giant_line_half_width + giant_line_step) * utf8_longest + slice_margin;
+    const auto first = anchor > start + reach ? anchor - reach : start;
+    const auto slice =
+        text.text_range(core::Offset{first}, core::Offset{std::min(anchor + reach, end)});
+    const auto center = walked_back(slice, anchor - first, column - center_column);
+    const auto range =
+        core::giant_line_window(slice, core::Offset{center}, core::giant_line_half_width);
+    const std::string_view whole(slice);
+    const auto before =
+        core::code_point_count(whole.substr(range.begin.value, center - range.begin.value));
+    LineWindow window{true, first + range.begin.value - start, center_column - before, 0.0F};
+    window.x = whole_pixels(static_cast<float>(window.column) * advance);
+    std::string shown(whole.substr(range.begin.value, range.end.value - range.begin.value));
+    auto display = core::display_line(shown);
+    LineView result{number, std::move(shown), std::move(display), core::no_selection_span(),
+                    {},     std::nullopt};
+    result.window = window;
+    compose(result);
     return result;
 }
 
@@ -91,12 +187,12 @@ VisualTextView::SharedLine VisualTextView::shown(core::LineNumber number)
 
 TextLayoutRequest VisualTextView::request(const LineView &line) const
 {
-    return TextLayoutRequest{presented_text(line), state_.settings(), geometry_};
+    return TextLayoutRequest{presented_text(line), state_.settings(), geometry_, line.window};
 }
 
 std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNumber number)
 {
-    if (geometry_.width <= 0)
+    if (geometry_.width <= 0 || giant(number))
     {
         return 1;
     }
@@ -111,7 +207,12 @@ std::expected<core::TextLocation, TextLayoutFailure> VisualTextView::location(co
         return core::TextLocation{0, static_cast<float>(caret.position.column.value - 1)};
     }
     const auto made = shown(caret.position.line);
-    return layouts_.locate(request(*made), shown_caret(*made, caret, caret_));
+    auto located = layouts_.locate(request(*made), shown_caret(*made, caret, caret_));
+    if (located)
+    {
+        located.value().x += made->window.x;
+    }
+    return located;
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
@@ -136,7 +237,8 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
     }
     const auto made = shown(at.line);
     const auto &shown_line = *made;
-    const auto hit = layouts_.hit(request(shown_line), core::TextLocation{at.row, x});
+    const auto hit =
+        layouts_.hit(request(shown_line), core::TextLocation{at.row, x - shown_line.window.x});
     if (!hit)
     {
         return std::unexpected(hit.error());
@@ -145,9 +247,9 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
                             ? uncomposed_column(shown_line.composed.value(), hit.value().column)
                             : hit.value().column;
     return core::TextCaret{
-        core::TextPosition{
-            shown_line.number,
-            core::Column{core::source_column(shown_line.display, column.value - 1) + 1}},
+        core::TextPosition{shown_line.number,
+                           core::Column{core::source_column(shown_line.display, column.value - 1) +
+                                        1 + shown_line.window.column}},
         hit.value().affinity};
 }
 

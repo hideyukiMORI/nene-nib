@@ -1,4 +1,5 @@
 // scope `--vim-characters` の単体テスト（ADR 0042 決定 2・ADR 0053）。
+#include "GiantLine.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "Scopes.hpp"
@@ -17,8 +18,10 @@ namespace nenenib::tests
 {
 namespace
 {
+using core::giant_line_window;
 using core::LineNumber;
 using core::Offset;
+using core::OffsetRange;
 using core::TextBuffer;
 using core::vim_character_end;
 using core::vim_character_start;
@@ -104,6 +107,30 @@ void verify_resting_caret_on_a_long_line()
            "a column past the line maps to the line content end");
 }
 
+// ADR 0139（試作）: 巨大な行の窓は錨の前後のコードポイント数で切り、端を Vim の 1 文字に寄せる。
+void verify_giant_line_window()
+{
+    constexpr std::string_view plain = "abcdefghij";
+    expect(giant_line_window(plain, Offset{0}, 3) == OffsetRange{Offset{0}, Offset{3}},
+           "an anchor at the line start takes only the characters after it");
+    expect(giant_line_window(plain, Offset{10}, 3) == OffsetRange{Offset{7}, Offset{10}},
+           "an anchor at the line end takes only the characters before it");
+    expect(giant_line_window(plain, Offset{5}, 2) == OffsetRange{Offset{3}, Offset{7}},
+           "an anchor in the middle takes the same count on both sides");
+
+    // "a" + e + U+0323 + U+0301 + "b": 前後 1 コードポイントで切ると結合文字の途中になる。
+    constexpr std::string_view marks = "xa"
+                                       "e\u0323\u0301"
+                                       "by";
+    expect(giant_line_window(marks, Offset{5}, 1) == OffsetRange{Offset{2}, Offset{7}},
+           "both ends move outward to the boundary of the Vim character");
+
+    // 切り出しの両端がコードポイントの途中（"あいう" の 1 byte 目と最後の 1 byte を欠く）。
+    constexpr std::string_view slice = "\x81\x82\xe3\x81\x84\xe3\x81";
+    expect(giant_line_window(slice, Offset{2}, 8) == OffsetRange{Offset{2}, Offset{5}},
+           "partial sequences at the slice edges stay outside the window");
+}
+
 void verify_vim_character_fixtures()
 {
     std::size_t selected = 0;
@@ -124,6 +151,7 @@ void verify_vim_character_contracts()
     verify_vim_character_end();
     verify_vim_character_start();
     verify_resting_caret_on_a_long_line();
+    verify_giant_line_window();
 }
 
 void verify_vim_character_scope()

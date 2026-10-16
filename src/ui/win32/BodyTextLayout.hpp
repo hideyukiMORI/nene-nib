@@ -20,6 +20,8 @@ struct BodyTextLayout
     bool glyphs_ready = false;
     bool glyphs_tried = false;
     std::size_t rows = 1;
+    // 巨大な行の窓の layout は書式の折り返しにかかわらず折り返さない（ADR 0139・試作）。
+    bool unwrapped = false;
     float glyph_left = 0;
 };
 } // namespace nenenib::ui::win32
