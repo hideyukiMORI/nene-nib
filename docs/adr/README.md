@@ -147,3 +147,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0139](0139-giant-lines-in-text-form-use-a-window.md) | text の表示では、巨大な行を折り返さず、キャレットの周りの窓だけを文字組みして印を付ける | 提案・#547（土台は #544）・D53 |
 | [0140](0140-giant-lines-open-as-grid-after-asking.md) | 巨大な行を含む文書は、聞いてから格子表示で開く | 提案・#544・D53 |
 | [0141](0141-file-read-arrives-as-sealed-bytes.md) | ファイルの読みは core が予約した封印済みの列で届き、判定と本文へ複写なしで移る | 提案・#581、正式ゲートと独立レビューで受理 |
+| [0142](0142-preassign-fallback-fonts-to-missing-runs.md) | 主字体に無い文字の連続区間には、OS の MapCharacters が選ぶ字体を layout の範囲に先に当てる | 提案・#586（採用は決定 6 の一致） |
