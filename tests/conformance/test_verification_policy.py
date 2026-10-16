@@ -85,8 +85,16 @@ class VerificationPolicy(unittest.TestCase):
         for trigger in ("pull_request:", "push:", "ready_for_review", "synchronize", "edited"):
             self.assertNotIn(trigger, workflow)
         self.assertIn('git diff --check "$base...HEAD"', (ROOT / "eng/validate-git.ps1").read_text(encoding="utf-8"))
+        # ADR 0136（D46）: check job は規約と記録だけ。build-and-test job は PR の最終 HEAD を Release で
+        # 全 target ビルドして ctest を回すが、全件ゲート・速さ・カバレッジ・Debug は呼ばない。
+        check_job, build_job = workflow.split("\n  build-and-test:", 1)
         for command in ("check.ps1", "ctest", "cmake --build", "measure-speed", "coverage.py"):
-            self.assertNotIn(command, workflow)
+            self.assertNotIn(command, check_job)
+        for command in ("cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release",
+                        "cmake --build build-release", "ctest --test-dir build-release"):
+            self.assertIn(command, build_job)
+        for command in ("check.ps1", "measure-speed", "coverage.py", "-DCMAKE_BUILD_TYPE=Debug"):
+            self.assertNotIn(command, build_job)
         self.assertEqual((ROOT / ".githooks/pre-commit").read_text(encoding="utf-8").strip(),
                          "#!/bin/sh\nexec git diff --cached --check")
         self.assertFalse((ROOT / ".githooks/pre-push").exists())
