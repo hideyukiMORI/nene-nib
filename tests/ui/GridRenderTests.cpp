@@ -236,7 +236,8 @@ void verify_grid_render()
 {
     win32::BodyTextLayouts layouts;
     const auto settings = core::default_editor_settings();
-    const auto cell = layouts.cell(app::TextLayoutRequest{{}, settings, geometry});
+    const auto cell =
+        layouts.cell(app::TextLayoutRequest{{}, settings, geometry, core::DisplayForm::grid});
     if (!cell)
     {
         unmeasured("the grid drawing needs the DirectWrite grid cell");

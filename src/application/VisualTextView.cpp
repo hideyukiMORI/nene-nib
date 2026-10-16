@@ -1,11 +1,14 @@
 #include "VisualTextView.hpp"
 
 #include "ComposedLine.hpp"
+#include "GiantLine.hpp"
+#include "GiantLineWindow.hpp"
 #include "GridPoint.hpp"
 #include "ScrollBounds.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <utility>
 
@@ -24,12 +27,13 @@ namespace
                       : static_cast<std::size_t>(amount);
 }
 
+// 巨大な行の窓では、本文の桁を窓の中の桁に写す（ADR 0139）。窓の外は窓の端に畳む。
 [[nodiscard]] core::DisplayCaret shown_caret(const LineView &line, core::TextCaret caret,
                                              core::TextPosition composing)
 {
+    const auto source = caret.position.column.value > 0 ? caret.position.column.value - 1 : 0;
     auto column = core::Column{
-        core::display_position(
-            line.display, caret.position.column.value > 0 ? caret.position.column.value - 1 : 0) +
+        core::display_position(line.display, source - std::min(source, line.window.code_point)) +
         1};
     if (line.composed.has_value())
     {
@@ -45,19 +49,33 @@ namespace
     }
     return core::DisplayCaret{column, caret.affinity};
 }
+
+// キャレットの行の窓の始まりの仮想桁（キャレットが巨大な行に無ければ 0・ADR 0139 の決定 5）。
+[[nodiscard]] std::size_t origin_of(const EditorState &state, core::TextPosition caret)
+{
+    const auto &text = state.text();
+    const auto *index = giant_line_index(text, caret.line);
+    if (index == nullptr)
+    {
+        return 0;
+    }
+    return giant_window_at(*index, text, caret.line, state.selection().caret).first.column;
+}
 } // namespace
 
 VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts,
                                core::TextViewGeometry geometry)
     : state_(state), layouts_(layouts), geometry_(geometry),
-      caret_(state.text().position_of(state.selection().caret))
+      caret_(state.text().position_of(state.selection().caret)), advance_(window_advance(geometry))
 {
     if (!gridded())
     {
+        origin_ = origin_of(state_, caret_);
         return;
     }
     // 1 升の幅は ui の事実なので port から読む（ADR 0140・試作の D）。升の数は窓の幅に入る数。
-    const auto cell = layouts_.cell(TextLayoutRequest{{}, state_.settings(), geometry_});
+    const auto cell =
+        layouts_.cell(TextLayoutRequest{{}, state_.settings(), geometry_, core::DisplayForm::grid});
     if (!cell)
     {
         grid_failure_ = cell.error();
@@ -68,29 +86,77 @@ VisualTextView::VisualTextView(const EditorState &state, TextLayoutPort &layouts
         static_cast<std::size_t>(std::max(static_cast<float>(geometry_.width) / cell_width_, 1.0F));
 }
 
-LineView VisualTextView::line_of(const EditorState &state, core::LineNumber number)
+LineView VisualTextView::line(core::LineNumber number) const
 {
-    number.value = std::clamp<std::size_t>(number.value, 1, state.text().line_count());
-    auto text = state.text().line_text(number);
+    return line_at(number, std::nullopt);
+}
+
+LineView VisualTextView::line_at(core::LineNumber number, std::optional<core::Offset> anchor) const
+{
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    if (const auto *index = giant_line_index(state_.text(), number); index != nullptr)
+    {
+        return giant_line(number, *index, anchor);
+    }
+    auto text = state_.text().line_text(number);
     auto display = core::display_line(text);
     LineView result{number, std::move(text), std::move(display), core::no_selection_span(),
                     {},     std::nullopt};
-    const auto &composition = state.composition();
-    if (!composition.has_value() || state.command_input().has_value())
-    {
-        return result;
-    }
-    const auto caret = state.text().position_of(state.selection().caret);
-    if (number == caret.line)
-    {
-        result.composed = composed_line(result.display, caret.column, composition.value());
-    }
+    compose(result);
+    result.left = offset_of(result) - state_.scroll().horizontal;
     return result;
 }
 
-LineView VisualTextView::line(core::LineNumber number) const
+// 窓の中の本文だけを text_range で読む（決定 3）。錨はキャレットか、横の送りの左端の仮想桁。
+LineView VisualTextView::giant_line(core::LineNumber number, const core::VirtualColumnIndex &index,
+                                    std::optional<core::Offset> anchor) const
 {
-    return line_of(state_, number);
+    const auto &text = state_.text();
+    if (!anchor.has_value())
+    {
+        const auto left =
+            static_cast<std::size_t>(std::max(state_.scroll().horizontal, 0.0F) / advance_);
+        anchor = number == caret_.line ? state_.selection().caret
+                                       : index.byte_at_virtual_column(text, number, origin_ + left);
+    }
+    auto [window, range] = giant_window_at(index, text, number, anchor.value());
+    window.x = window_x(window.column, origin_, advance_);
+    auto shown = text.text_range(range.begin, range.end);
+    auto display = core::display_line(shown);
+    LineView result{number, std::move(shown), std::move(display), core::no_selection_span(),
+                    {},     std::nullopt};
+    result.window = window;
+    compose(result);
+    result.left = offset_of(result) - state_.scroll().horizontal;
+    return result;
+}
+
+void VisualTextView::compose(LineView &result) const
+{
+    const auto &composition = state_.composition();
+    if (result.number != caret_.line || !composition.has_value() ||
+        state_.command_input().has_value())
+    {
+        return;
+    }
+    const auto shift = std::min(result.window.code_point, caret_.column.value - 1);
+    result.composed = composed_line(result.display, core::Column{caret_.column.value - shift},
+                                    composition.value());
+}
+
+// 折り返す設定の普通の行は送らない（原点は欄の左端・x は送りを足した値）。巨大な行は窓の x、
+// 折り返さない設定の普通の行は行頭（origin の窓から見た行頭の x）。
+float VisualTextView::offset_of(const LineView &line) const noexcept
+{
+    if (line.window.active)
+    {
+        return line.window.x;
+    }
+    if (state_.settings().wrapping == core::LineWrapping::wrap || geometry_.width <= 0)
+    {
+        return state_.scroll().horizontal;
+    }
+    return -static_cast<float>(origin_) * advance_;
 }
 
 bool VisualTextView::gridded() const noexcept
@@ -182,9 +248,12 @@ VisualTextView::grid_caret_at(core::VisualPosition at, float x) const
 
 TextLayoutRequest VisualTextView::request(const LineView &line) const
 {
-    return TextLayoutRequest{presented_text(line), state_.settings(), geometry_};
+    return TextLayoutRequest{
+        presented_text(line), state_.settings(), geometry_, core::DisplayForm::text, {},
+        line.window};
 }
 
+// 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2）。行の全体を読まない。
 std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNumber number) const
 {
     if (geometry_.width <= 0)
@@ -194,6 +263,11 @@ std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNum
     if (gridded())
     {
         return grid_rows(number);
+    }
+    number.value = std::clamp<std::size_t>(number.value, 1, state_.text().line_count());
+    if (giant_line_index(state_.text(), number) != nullptr)
+    {
+        return 1;
     }
     const auto shown = line(number);
     return layouts_.rows(request(shown));
@@ -210,8 +284,18 @@ VisualTextView::location(core::TextCaret caret) const
     {
         return grid_location(caret);
     }
-    const auto shown = line(caret.position.line);
-    return layouts_.locate(request(shown), shown_caret(shown, caret, caret_));
+    // 巨大な行は位置そのものを錨にした窓で求める（incsearch の preview も窓の中に来る）。
+    const auto &text = state_.text();
+    const auto *index = giant_line_index(text, caret.position.line);
+    const auto shown = index == nullptr ? line(caret.position.line)
+                                        : line_at(caret.position.line,
+                                                  giant_offset_of(*index, text, caret.position));
+    auto located = layouts_.locate(request(shown), shown_caret(shown, caret, caret_));
+    if (located)
+    {
+        located.value().x += offset_of(shown);
+    }
+    return located;
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure>
@@ -239,7 +323,12 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
         return grid_caret_at(at, x);
     }
     const auto shown = line(at.line);
-    const auto hit = layouts_.hit(request(shown), core::TextLocation{at.row, x});
+    const auto local = x - offset_of(shown);
+    if (const auto outside = outside_window(shown, local); outside.has_value())
+    {
+        return outside.value();
+    }
+    const auto hit = layouts_.hit(request(shown), core::TextLocation{at.row, local});
     if (!hit)
     {
         return std::unexpected(hit.error());
@@ -249,8 +338,36 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
                             : hit.value().column;
     return core::TextCaret{
         core::TextPosition{shown.number,
-                           core::Column{core::source_column(shown.display, column.value - 1) + 1}},
+                           core::Column{core::source_column(shown.display, column.value - 1) + 1 +
+                                        shown.window.code_point}},
         hit.value().affinity};
+}
+
+// 見積もった仮想桁が窓の両端の外なら、索引の逆引きで本文の位置にする（ADR 0139 の決定 4）。
+// End の x は float の最大、Home の x は最小なので、それぞれ行末と行頭に着く。
+std::optional<core::TextCaret> VisualTextView::outside_window(const LineView &line,
+                                                              float local) const
+{
+    if (!line.window.active)
+    {
+        return std::nullopt;
+    }
+    const auto estimate = static_cast<double>(line.window.column) +
+                          (static_cast<double>(local) / static_cast<double>(advance_));
+    if (local >= 0.0F && estimate < static_cast<double>(line.window.end_column))
+    {
+        return std::nullopt;
+    }
+    const auto &text = state_.text();
+    const auto *index = giant_line_index(text, line.number);
+    if (index == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto limit = static_cast<double>(text.size_bytes()) * 8.0;
+    const auto column = static_cast<std::size_t>(std::clamp(estimate, 0.0, limit));
+    const auto offset = index->byte_at_virtual_column(text, line.number, column);
+    return core::TextCaret{giant_position_of(*index, text, line.number, offset)};
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last() const
@@ -453,15 +570,59 @@ VisualTextView::followed(core::TextCaret caret, core::ScrollFollow follow,
     auto result = state_.scroll();
     result.first_visible = first.value().line;
     result.first_row = first.value().row;
-    result.horizontal = 0;
-    // 格子は折り返すので横の送りは無い（ADR 0140 の決定 7）。
-    if (state_.settings().wrapping == core::LineWrapping::no_wrap && geometry_.width > 0 &&
-        !gridded())
-    {
-        const auto width = static_cast<float>(std::max(geometry_.width - 3, 1));
-        const auto x = std::max(point.value().x, 0.0F);
-        result.horizontal = std::clamp(state_.scroll().horizontal, std::max(x - width, 0.0F), x);
-    }
+    result.horizontal = horizontal_for(caret, point.value().x);
     return result;
+}
+
+// 格子は折り返すので横の送りは無い（ADR 0140 の決定 7）。巨大な行は折り返す設定でも横に
+// 追う（ADR 0139 の決定 5）。
+float VisualTextView::horizontal_for(core::TextCaret caret, float located) const
+{
+    const bool giant = giant_line_index(state_.text(), caret.position.line) != nullptr;
+    if ((state_.settings().wrapping == core::LineWrapping::wrap && !giant) ||
+        geometry_.width <= 0 || gridded())
+    {
+        return 0;
+    }
+    const auto width = static_cast<float>(std::max(geometry_.width - 3, 1));
+    const auto x = std::max(located, 0.0F);
+    return giant ? giant_horizontal(caret, x, width)
+                 : std::clamp(state_.scroll().horizontal, std::max(x - width, 0.0F), x);
+}
+
+// 窓は錨の刻みで替わるので、前の送りはキャレットの窓の隣の窓からの相対かもしれない。前の送りと
+// その読み替えのそれぞれを、キャレットが見える最も近い送りへ寄せ、動きの最も小さいものを採る
+// （窓が替わっても画面は 1 字ぶんしか動かない・ADR 0139 の決定 5）。
+float VisualTextView::giant_horizontal(core::TextCaret caret, float x, float width) const
+{
+    const auto before = state_.scroll().horizontal;
+    const auto low = std::max(x - width, 0.0F);
+    auto best = std::clamp(before, low, x);
+    const auto &text = state_.text();
+    const auto *index = giant_line_index(text, caret.position.line);
+    if (index == nullptr || caret.position.line != caret_.line || best == before)
+    {
+        return best;
+    }
+    const auto distance = [](float from, float to) { return from < to ? to - from : from - to; };
+    auto movement = distance(before, best);
+    const auto center = index->code_point_at(text, state_.selection().caret) /
+                        core::giant_line_step * core::giant_line_step;
+    const std::array<std::size_t, 2> neighbors{
+        center + core::giant_line_step,
+        center >= core::giant_line_step ? center - core::giant_line_step : center};
+    for (const auto ordinal : neighbors)
+    {
+        const auto anchor = index->byte_at_code_point(text, caret.position.line, ordinal);
+        const auto previous = giant_window_at(*index, text, caret.position.line, anchor).first;
+        const auto shifted = before + window_x(previous.column, origin_, advance_);
+        const auto target = std::clamp(shifted, low, x);
+        if (distance(shifted, target) < movement)
+        {
+            best = target;
+            movement = distance(shifted, target);
+        }
+    }
+    return best;
 }
 } // namespace nenenib::application

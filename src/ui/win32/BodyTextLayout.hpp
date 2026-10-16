@@ -25,5 +25,8 @@ struct BodyTextLayout
     // 格子の画面行は等幅の書式で升に揃えた layout（ADR 0140 の決定 5）。同じ文字列でも text
     // とは別。
     core::DisplayForm form = core::DisplayForm::text;
+    // 巨大な行の窓の layout は折り返さない（ADR 0139 の決定 4）。同じ文字列でも折り返す layout
+    // とは別。
+    bool unwrapped = false;
 };
 } // namespace nenenib::ui::win32

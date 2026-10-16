@@ -41,7 +41,7 @@ ui.selection=#E9542047
 
 `ui.gutter_background`（行番号欄の背景）を省略すると、上書き後の`ui.background`と同じになる（ADR 0117）。通常の数字は`ui.gutter`、現在行の数字は`ui.text`で描く。追加キーは旧アプリで未知キーとして拒否される。
 
-上書きできるUI役割は `background text muted gutter gutter_background current_line title_bar tab_active tab_hover status accent selection toggle on_accent panel panel_border search ime`。`tab_hover`（マウスを載せた非アクティブなタブの面）を省略すると `tab_active` と同じ色になる（ADR 0056 の決定 12）。本文のforeground/backgroundと、上書き後のUIのtext/backgroundのコントラスト比は4.5以上が必要。低い場合は色を自動補正せずエラーとして返す。
+上書きできるUI役割は `background text muted gutter gutter_background current_line title_bar tab_active tab_hover status accent selection toggle on_accent panel panel_border search ime giant_mark`。`tab_hover`（マウスを載せた非アクティブなタブの面）を省略すると `tab_active` と同じ色になる（ADR 0056 の決定 12）。`giant_mark`（巨大な行の行番号の隣の印 `»`）を省略すると上書き後の `accent` と同じ色になる（ADR 0139 の決定 2）。追加キーなので、旧アプリでは未知キーとして拒否される。本文のforeground/backgroundと、上書き後のUIのtext/backgroundのコントラスト比は4.5以上が必要。低い場合は色を自動補正せずエラーとして返す。
 
 フォルダの直下だけを起動時に一度読む。最大128ファイルで、超えた場合は利用者テーマを一件も読み込まず注意を表示する。フォルダ列挙が途中で失敗した場合も、不完全な一覧を採用せず組み込みだけで起動し注意を表示する。ファイルの追加・編集は再起動で反映する。正規のファイル名はハイフン表記のみで、underscoreはコマンド入力で使える別表記。組み込みとsystemは予約名。[組み込み95種の一覧](2026-10-12-colorschemes.md)と同名の利用者ファイルは予約名エラーとなる。ファイルを自動変更せず、必要ならファイル名と内部nameの両方を変更する。
 

@@ -351,9 +351,11 @@ class EditorController final
     [[nodiscard]] static const core::VimPattern &frame_pattern(const core::VimPattern &pattern);
     [[nodiscard]] static const core::VimPattern &
     frame_pattern(std::reference_wrapper<const core::VimPattern> pattern);
-    [[nodiscard]] LineView line_view(core::LineNumber line, const core::OffsetRange &range,
+    [[nodiscard]] LineView line_view(LineView view, const core::OffsetRange &range,
                                      const core::VimPattern *pattern, core::Offset caret) const;
     [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines() const;
+    [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
+    screen_rows_of(const LineView &shown) const;
     // 格子の見えている画面行（ADR 0140 の決定 5）を frame の grid と grid_scanned に書く。
     // 位置解決と同じ GridCells（本文の索引を借りる）を 1 frame に 1 つ作って切り出す。
     // 失敗は升を読めないとき。

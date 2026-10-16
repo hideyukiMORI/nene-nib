@@ -26,6 +26,14 @@ constexpr std::size_t chunk_bytes = std::size_t{64} * 1024U;
 
 using Chunks = std::vector<std::shared_ptr<AddChunk>>;
 
+// UTF-8 の継続 byte（10xxxxxx）でない byte はコードポイントの先頭。
+[[nodiscard]] constexpr bool starts_code_point(char byte) noexcept
+{
+    constexpr unsigned char mask = 0xC0U;
+    constexpr unsigned char continuation = 0x80U;
+    return (static_cast<unsigned char>(byte) & mask) != continuation;
+}
+
 // 本文の半開範囲と各 piece の非空の交差だけを、その呼び出し中に読む（Issue #338）。
 // offset / length は piece 内の位置。借用を保存せず、本文外の end で容量も取らない。
 template <typename Visitor>
@@ -452,26 +460,48 @@ std::string TextBuffer::line_text(LineNumber line) const
 
 TextPosition TextBuffer::position_of(Offset at) const
 {
+    return position_read(at).first;
+}
+
+Offset TextBuffer::offset_of(const TextPosition &position) const
+{
+    return offset_read(position).first;
+}
+
+std::pair<TextPosition, std::size_t> TextBuffer::position_read(Offset at) const
+{
     const std::size_t clamped = std::min(at.value, size_bytes_);
     const LineNumber line{newlines_before(clamped) + 1};
+    const Offset start = line_start(line);
+    // 索引の序数はコードポイントの先頭で数える。途中の位置は先頭の byte を数える歩きに任せる。
+    if (columns_ != nullptr &&
+        (clamped == size_bytes_ || starts_code_point(byte_at(Offset{clamped}))))
+    {
+        const auto cursor = columns_->cursor_at(*this, Offset{clamped});
+        return {TextPosition{line, Column{cursor.code_point + 1}}, cursor.copied};
+    }
     std::size_t code_points = 0;
     // 非継続 byte の個数は任意の byte 分割で加法的。途中 offset / piece も丸めない。
     visit_text_range(
-        pieces_, line_start(line), Offset{clamped},
+        pieces_, start, Offset{clamped},
         [this, &code_points](const Piece &piece, std::size_t offset, std::size_t length)
         {
             code_points += code_point_count(view_of(piece).substr(offset, length));
             return true;
         });
-    return TextPosition{line, Column{code_points + 1}};
+    return {TextPosition{line, Column{code_points + 1}}, clamped - start.value};
 }
 
-Offset TextBuffer::offset_of(const TextPosition &position) const
+std::pair<Offset, std::size_t> TextBuffer::offset_read(const TextPosition &position) const
 {
     const Offset start = line_start(position.line);
     if (position.column.value <= 1)
     {
-        return start;
+        return {start, 0};
+    }
+    if (columns_ != nullptr)
+    {
+        return columns_->reached_code_point(*this, position.line, position.column.value - 1);
     }
     std::size_t remaining = position.column.value - 1;
     std::size_t consumed = 0;
@@ -493,6 +523,6 @@ Offset TextBuffer::offset_of(const TextPosition &position) const
             consumed += byte;
             return remaining > 0 || byte == slice.size();
         });
-    return Offset{start.value + consumed};
+    return {Offset{start.value + consumed}, consumed};
 }
 } // namespace nenenib::core

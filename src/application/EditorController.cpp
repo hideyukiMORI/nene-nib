@@ -3351,13 +3351,18 @@ EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> p
 // 見えている 1 行ぶんの表示値。選択と検索は所有済み本文の同じ LineSpanEvaluation で投影する
 // （ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent を返すので落ちる。
 // 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
-LineView EditorController::line_view(core::LineNumber line, const core::OffsetRange &range,
+LineView EditorController::line_view(LineView view, const core::OffsetRange &range,
                                      const core::VimPattern *pattern, core::Offset caret) const
 {
     const core::TextBuffer &text = state_.text();
-    LineView view = VisualTextView::line_of(state_, line);
-    const core::Offset start = text.line_start(line);
-    LineSpanEvaluation projection(view.text, start, text.line_terminator_end(line));
+    const auto line = view.number;
+    // 巨大な行は窓の中の本文だけを持つ。選択と当たりは窓の始まりから投影し、窓が行末に届かなければ
+    // 窓の終わりを行末とみなす（ADR 0139 の限界）。
+    const core::Offset start{text.line_start(line).value + view.window.byte};
+    const core::Offset window_end{start.value + view.text.size()};
+    const core::Offset terminator =
+        window_end == text.line_end(line) ? text.line_terminator_end(line) : window_end;
+    LineSpanEvaluation projection(view.text, start, terminator);
     view.selection = projection.span(range);
     if (pattern == nullptr)
     {
@@ -3410,16 +3415,15 @@ std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visibl
     {
         lines.reserve(last - first + 1);
     }
+    // text の表示の frame なので、構築は 1 升を port から読まない（格子でない）。
+    const VisualTextView visual(state_, ports_.text_layouts, view_geometry_);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
     for (std::size_t number = first;
          number <= last && row < static_cast<std::int64_t>(scroll.visible_lines); ++number)
     {
         const core::LineNumber line{number};
-        auto shown = line_view(line, block_row(block, line, range), selected, caret);
-        const auto count = view_geometry_.width > 0
-                               ? ports_.text_layouts.rows(TextLayoutRequest{
-                                     presented_text(shown), state_.settings(), view_geometry_})
-                               : std::expected<std::size_t, TextLayoutFailure>{1};
+        auto shown = line_view(visual.line(line), block_row(block, line, range), selected, caret);
+        const auto count = screen_rows_of(shown);
         if (!count)
         {
             return std::unexpected(count.error());
@@ -3430,6 +3434,18 @@ std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visibl
         lines.push_back(std::move(shown));
     }
     return lines;
+}
+
+// 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2）。
+std::expected<std::size_t, TextLayoutFailure>
+EditorController::screen_rows_of(const LineView &shown) const
+{
+    if (view_geometry_.width <= 0 || shown.window.active)
+    {
+        return 1;
+    }
+    return ports_.text_layouts.rows(
+        TextLayoutRequest{presented_text(shown), state_.settings(), view_geometry_});
 }
 
 GridLineMarks EditorController::grid_marks(core::LineNumber line,

@@ -4,6 +4,7 @@
 #include "BodyTextStyle.hpp"
 #include "TextLayoutPort.hpp"
 
+#include <array>
 #include <dwrite_3.h>
 #include <expected>
 #include <optional>
@@ -24,7 +25,9 @@ class BodyTextLayouts final : public application::TextLayoutPort
     locate(const application::TextLayoutRequest &request, core::DisplayCaret caret) override;
     [[nodiscard]] std::expected<core::DisplayCaret, application::TextLayoutFailure>
     hit(const application::TextLayoutRequest &request, core::TextLocation point) override;
-    // 格子の等幅の書式（候補の列 grid_fonts の定数）の `0` の幅と行高（ADR 0140 の決定 4〜6）。
+    // request.form の書式の `0` の幅と行高。格子は等幅の書式（候補の列 grid_fonts の定数）の
+    // 1 升（ADR 0140 の決定 4〜6）、text は本文の書式の字幅で、巨大な行の窓の x の見積もりに
+    // 使う（ADR 0139）。
     [[nodiscard]] std::expected<application::TextCell, application::TextLayoutFailure>
     cell(const application::TextLayoutRequest &request) override;
     [[nodiscard]] std::expected<TextLayout, application::TextLayoutFailure>
@@ -68,8 +71,8 @@ class BodyTextLayouts final : public application::TextLayoutPort
     std::vector<BodyTextLayout> previous_;
     // 描画前の連続入力は最後の1行だけ。途中の変更行を蓄積しない。
     std::optional<BodyTextLayout> pending_;
-    // 書式ごとに 1 回だけ測る 1 升。書式が変われば prepare が消す。
-    std::optional<application::TextCell> cell_;
+    // 書式ごとに 1 回だけ測る 1 升（添字は DisplayForm）。書式が変われば prepare が消す。
+    std::array<std::optional<application::TextCell>, 2> cells_{};
     bool collecting_ = false;
 };
 } // namespace nenenib::ui::win32
