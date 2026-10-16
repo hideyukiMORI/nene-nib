@@ -1,5 +1,8 @@
 #include "FontFallbackKey.hpp"
+#include <bit>
+#include <cstdint>
 #include <dwrite_1.h>
+#include <functional>
 #include <string_view>
 namespace nenenib::ui::win32
 {
@@ -22,6 +25,13 @@ bool bounded_name(const WCHAR *name)
         }
     }
     return false;
+}
+
+// boost の hash_combine と同じ混ぜ方。
+std::size_t mixed(std::size_t hash, std::size_t value) noexcept
+{
+    constexpr std::size_t golden = 0x9e3779b97f4a7c15U;
+    return hash ^ (value + golden + (hash << 6U) + (hash >> 2U));
 }
 
 bool complete_source(const FontFallbackRequest &request)
@@ -80,18 +90,35 @@ std::optional<FontFallbackKey> fallback_key(const FontFallbackRequest &request)
                         DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
                         request.weight,
                         request.style,
-                        request.stretch};
+                        request.stretch,
+                        0};
     if (!source_properties(request, key))
     {
         return std::nullopt;
     }
+    key.hash = fallback_hash(key);
     return key;
+}
+
+std::size_t fallback_hash(const FontFallbackKey &key) noexcept
+{
+    const std::hash<std::wstring_view> text_hash;
+    std::size_t hash = text_hash(key.text);
+    hash = mixed(hash, text_hash(key.locale_name));
+    hash = mixed(hash, text_hash(key.family));
+    hash = mixed(hash, std::bit_cast<std::uintptr_t>(key.collection.Get()));
+    hash = mixed(hash, std::bit_cast<std::uintptr_t>(key.substitution.Get()));
+    hash = mixed(hash, static_cast<std::size_t>(key.direction));
+    hash = mixed(hash, static_cast<std::size_t>(key.weight));
+    hash = mixed(hash, static_cast<std::size_t>(key.style));
+    return mixed(hash, static_cast<std::size_t>(key.stretch));
 }
 
 bool operator==(const FontFallbackKey &left, const FontFallbackKey &right) noexcept
 {
-    return left.text == right.text && left.locale_name == right.locale_name &&
-           left.family == right.family && left.collection.Get() == right.collection.Get() &&
+    return left.hash == right.hash && left.text == right.text &&
+           left.locale_name == right.locale_name && left.family == right.family &&
+           left.collection.Get() == right.collection.Get() &&
            left.substitution.Get() == right.substitution.Get() &&
            left.direction == right.direction && left.weight == right.weight &&
            left.style == right.style && left.stretch == right.stretch;
