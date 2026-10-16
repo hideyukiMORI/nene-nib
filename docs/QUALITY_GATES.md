@@ -36,7 +36,7 @@
 lint・静的解析・アーキテクチャ・依存・テスト・**速さの基準値**のいずれについても baseline を持たない。既存の違反を「無かったこと」にする経路を作らない。
 **唯一の例外機構は期限付きの狭い waiver である。**
 
-- 機械強制: **planned** → CNF-005
+- 機械強制: **active** → CNF-005（禁止された設定ファイル名と既知の無力化オプションを `tests/conformance` の反例で拒否。2026-10-16・Issue #571）。速さの基準値の扱い・任意のスクリプトによる迂回・waiver の妥当性はレビュー事項
 
 ### QLT-004 — 整形は検査であって修復ではない
 
@@ -95,7 +95,7 @@ Vim の振る舞いは oracle から生成した fixture が期待値である�
 
 道具の版は `eng/tool-versions.json` にだけ書き、`eng/toolchain.ps1` が実際の版と照合して違えば落とす。取り込む依存は tag と SHA-256 で固定する。
 
-- 機械強制: **planned**（道具の版は照合する。Windows SDK 全体の固定と取り込み依存の照合は未完了）
+- 機械強制: **active**（`eng/toolchain.ps1` が cmake・ninja・LLVM の 7 道具・python・PowerShell の下限を `eng/tool-versions.json` と照合して `QLT-011:` で落とす。反例は `eng/prove-gates.py` の `prove_tool_versions`（llvm の版を 1 つずらした複製で clang-cl の照合が落ちる）。2026-10-16・Issue #571）。守れていない部分: msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）はまだ無く tag と SHA-256 の照合は未実装
 
 ### QLT-012 — 検証の頻度は変更に従う
 
@@ -291,12 +291,12 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CPP-007 | planned | 非公開コンストラクタ。`malloc` は許可シンボル外 |
 | CPP-008 | planned | |
 | CPP-009 | active | clang-tidy cppcoreguidelines-pro-type-reinterpret-cast（eng/prove-gates.py の反例）・`#pragma` は CNF-003。そのほかの言語マジックの字句検査は planned |
-| CPP-010 | planned | CNF-001 |
-| CPP-011 | planned | CNF-002 |
+| CPP-010 | active | CNF-001（`tests/conformance` の `test_cnf001_*` 5 件・#571）。「常に禁止」の語だけ。文脈次第の語とマクロで生成した名前はレビュー |
+| CPP-011 | active | CNF-002（`tests/conformance` の `test_cnf002_*` 6 件・#571）。無名名前空間の `struct` は字句検査が名前空間として数えるが専用の反例は無い。テンプレート等の完全な分類は未完了 |
 | CPP-012 | planned | clang-tidy readability-* |
 | CPP-013 | active | eng/symbols.py の concurrency 分類（core / application の実ライブラリ）＋ CNF-009 |
 | CPP-014 | planned | eng/symbols.py（setlocale / locale） |
-| CPP-015 | planned | CNF-003 ＋ CNF-004 |
+| CPP-015 | active | CNF-003 ＋ CNF-004（`tests/conformance` の `test_cnf003_*` 6 件・`test_cnf004_*` 6 件・#571）。waiver の理由と解除条件の妥当性はレビュー |
 | CPP-016 | active | `-Werror=vla-cxx-extension`・clang-tidy clang-analyzer-cplusplus.NewDeleteLeaks / bugprone-use-after-move（eng/prove-gates.py の反例）。ASan / UBSan は Debug に結線済みだが反例は未登録。所有と借用の型はレビュー |
 | CPP-017 | planned | platformLibraries（GDI を結べない） |
 | CPP-018 | planned | clang-cl の target feature 検査 ＋ CNF-009 |
@@ -307,15 +307,15 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | GIT-004 | planned | PR テンプレート＋ruleset（squash-only） |
 | QLT-001 | planned | check.ps1 の全件明示指定。検証選択の妥当性はレビュー |
 | QLT-002 | active | clang-cl・clang-tidy・clang-format と実ツール反例（eng/prove-gates.py） |
-| QLT-003 | planned | CNF-005 |
+| QLT-003 | active | CNF-005（`tests/conformance` の `test_cnf005_*` 4 件・#571）。任意のスクリプトによる迂回は網羅しない |
 | QLT-004 | active | clang-format --dry-run --Werror |
 | QLT-005 | planned | |
 | QLT-006 | planned | |
-| QLT-007 | planned | eng/prove-gates.py が 32 本の実ツールの反例を回す（#516）。merge 直前の CI の `check` job が `eng/test-conformance.py` を回す（#568）。新しいゲートに証明を要求する機械は無い（レビュー事項） |
+| QLT-007 | planned | eng/prove-gates.py が 33 本の実ツールの反例を回す（#516・#571）。merge 直前の CI の `check` job が `eng/test-conformance.py` を回す（#568）。新しいゲートに証明を要求する機械は無い（レビュー事項） |
 | QLT-008 | planned | レビュー事項 |
 | QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
 | QLT-010 | 不能 | PR の手続き |
-| QLT-011 | planned | eng/toolchain.ps1 |
+| QLT-011 | active | eng/toolchain.ps1 ＋ eng/tool-versions.json（eng/prove-gates.py の反例・#571）。照合は cmake・ninja・LLVM・python・PowerShell の下限。msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）はまだ無く tag と SHA-256 の照合は未実装 |
 | QLT-012 | active | validate-git.ps1 / git-conventions.py の検証記録確認 ＋ merge-pr.py → check.yml の build-and-test（PR の最終 HEAD の Release ビルドと ctest・ADR 0136・run 38816724375 を gate-proofs 1-f に引用）。結果の真偽・再利用条件・GitHub UI の直接 merge はレビュー |
 | QLT-013 | planned | |
 | QLT-014 | active | eng/measure-speed.py / eng/perf-reference.json / eng/check.ps1 / eng/prove-gates.py。施主の実機の指紋で判定（必要な変更で選んで実行・`-Full` の明示実行）。CI の必須 check は validate-git だけでベンチを回さず（ADR 0021）、CI の指紋 `e7a87d5b` の基準値は記録として残る。打鍵 2 本（floor 2 ms に飲まれる）は planned（ADR 0016） |

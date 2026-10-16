@@ -68,6 +68,11 @@ Phase 0 の言語の実測（114 記録）は [phase0-results.json](phase0-resul
 | CNF-003 | waiver の無い `NOLINT`・広い抑制・範囲の違う waiver | tests/conformance の `SourceChecks` / `SdkAbiChecks`（`test_cnf003_*` 6 件） | 2026-10-16（Issue #516）: 同じ実行で反例は CNF-003、有効な行単位 waiver と引用符の中の pragma は指摘 0（P6） |
 | CNF-004 | 期限切れ・必須項目欠落・古い索引・範囲外 Scope の waiver | tests/conformance の `RepositoryChecks`（`test_cnf004_*` 6 件） | 2026-10-16（Issue #516）: 同じ実行で反例は CNF-004、期限当日と正例は指摘 0（P7）。解除条件の妥当性はレビュー事項 |
 | CNF-005 | `baseline` を名に含む設定・`/WX-`・`-Wno-error`・`-w` | tests/conformance の `RepositoryChecks`（`test_cnf005_*` 4 件） | 2026-10-16（Issue #516）: 同じ実行で反例は CNF-005、名指しの `-Wno-<診断名>` と正例は指摘 0（P9）。任意のスクリプトによる迂回は網羅しない |
+| CPP-010 | 型名 `ColorHelper` / `color_helper`・モジュール `utils/`・別名 `using ColorHelper` | CNF-001（tests/conformance の `test_cnf001_negative` / `_negative_snake` / `_module` / `_alias`・正例 `test_cnf001_positive`） | 2026-10-16（Issue #571・D49）: `python -m unittest tests.conformance.test_conformance -k cnf001 -k cnf002 -k cnf003 -k cnf004 -k cnf005 -v` が `Ran 27 tests`・`OK`・終了 0（`out/571-cnf.log`）。反例 4 件はどれも CNF-001 を assert、コメントの中の名前は指摘 0。CPP-010 の「常に禁止」の語だけを守る。文脈次第の語とマクロで生成した名前はレビュー |
+| CPP-011 | 1 ファイルに 2 型・ファイル名と違う型・名前空間の中の 2 型 | CNF-002（`test_cnf002_negative` / `_filename` / `_namespace_negative`・正例 `_positive` / `_nested_positive` / `_free_function_needs_no_prefix`） | 2026-10-16（Issue #571）: 同じ実行で反例 3 件は CNF-002 を assert、入れ子の型と自由関数は指摘 0。無名名前空間（`namespace {`）の `struct` は `primary_types` が名前空間として数えるが、専用の反例テストは無い。テンプレート等の完全な分類は未完了 |
+| CPP-015 | waiver の無い `NOLINTNEXTLINE`・`#pragma` / `_Pragma` / `__pragma` / `NOLINT` / `NOLINTBEGIN`・範囲の違う waiver・期限切れ / 項目欠落 / 古い索引 / 範囲外 Scope の waiver | CNF-003（`test_cnf003_negative` / `_broad` / `_wrong_scope` / `_unmarked_suppression_still_needs_a_waiver`）＋ CNF-004（`test_cnf004_expired` / `_missing_field` / `_stale_index` / `_bad_scope_is_not_valid`） | 2026-10-16（Issue #571）: 同じ実行で CNF-003 の反例 4 件は CNF-003 を assert。CNF-004 は `test_cnf004_expired` が CNF-004 を assert し、ほかの 3 件は `waiver_checks`（CNF-004 だけを出す関数）が指摘を返すことを assert（期限切れと範囲外 Scope は有効な waiver の集合からも外れる）、有効な行単位 waiver・引用符の中の pragma・期限当日は指摘 0。waiver の理由と解除条件の妥当性はレビュー。コンパイラの抑制機能そのものは止められない（ADR 0003） |
+| QLT-003 | `baseline.json` を置く・`/WX-` / `/wd4062` / `-Wno-error` / `-w` | CNF-005（`test_cnf005_filename` / `_option`・正例 `_positive` / `_named_warning_switch_is_not_disabling`） | 2026-10-16（Issue #571）: 同じ実行で反例は CNF-005 を assert、名指しの `-Wno-<診断名>` は指摘 0。任意のスクリプトによる迂回・速さの基準値の扱いは網羅しない（レビュー） |
+| QLT-011 | 複製の `eng/tool-versions.json` の `llvm` を `19.1.5` → `19.1.6` にずらし、`eng/toolchain.ps1` を読んでから configure | eng/prove-gates.py（`prove_tool_versions`・`pwsh -NoProfile -Command ". eng/toolchain.ps1; cmake -S . -B build ..."`） | 2026-10-16（Issue #571・D49）: `QLT-011: clang-cl must be 19.1.6; actual: clang version 19.1.5` で `results.json` の `negative.exitCode` 1（configure に届かない）、戻した複製は `restorationExit` 0（P33）。照合は cmake・ninja・LLVM 7 道具・python・PowerShell の下限。msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）はまだ無く tag と SHA-256 の照合は未実装 |
 | GIT-003 | 件名 `docs: bad subject`（Issue 番号なし・英語の説明） | `.githooks/commit-msg` → `eng/validate-commit-message.ps1` → `eng/git-conventions.py`・tests/conformance の `GitChecks` 4 件・CI の `eng/validate-git.ps1` | 2026-10-16（Issue #516）: worktree で `git commit --allow-empty -m "docs: bad subject"` が hook で `GIT-003: subject must follow the documented format and contain at most 100 characters`・終了 1（commit は作られない）。`pwsh -NoProfile -File eng/validate-commit-message.ps1 -MessageFile <悪い件名>` も同じ文で終了 1、正しい件名は終了 0（P12） |
 
 ### 1-b. 反例の一覧（planned の部分証明を含む）
@@ -108,6 +113,7 @@ Phase 0 の言語の実測（114 記録）は [phase0-results.json](phase0-resul
 | P30 | CPP-004 | `int* pointer = 0;` | `eng/prove-gates.py`（実ビルド） | `-Wzero-as-null-pointer-constant` で非 0。元のソースは 0（Issue #516） |
 | P31 | CPP-005 / ARC-010 | `[[nodiscard]]` の戻り値を捨てる | `eng/prove-gates.py`（実ビルド） | `-Wunused-result` で非 0（規則 ID ごとに 1 回ずつ）。元のソースは 0（Issue #516） |
 | P32 | CPP-009 | `reinterpret_cast` | `eng/prove-gates.py`（clang-tidy） | `cppcoreguidelines-pro-type-reinterpret-cast` で非 0。元のソースは 0（Issue #516） |
+| P33 | QLT-011 | 複製の `eng/tool-versions.json` の llvm の版を 1 つずらす | `eng/prove-gates.py`（`eng/toolchain.ps1` → configure） | `QLT-011: clang-cl must be 19.1.6` で非 0。戻すと 0（Issue #571・2026-10-16） |
 
 **復帰の確認**: 2026-09-15。P1〜P4・P8・P13〜P21・P24 は `eng/prove-gates.py` が各反例の直後に元へ戻して build / configure / clang-format / symbols を再実行し、
 終了コード 0 を確かめた（26 反例）。P5〜P7・P9〜P12・P22・P23・P26 は正例テストが同じ suite にある（86 テスト）。P25 は `eng/coverage.py` が反例のあとに全テストの計測で 0 を確かめる。
@@ -115,7 +121,8 @@ Phase 0 の言語の実測（114 記録）は [phase0-results.json](phase0-resul
 
 **2026-10-16 の再実測（Issue #516・D49）**: `python eng/prove-gates.py`（`eng/toolchain.ps1` の上）が 205 秒・終了 0 で `Gate proofs passed: 32 real-tool proofs` を出した。
 P29〜P32 を足し、どの反例も `results.json` の `negative.exitCode` が 1、`restorationExit` が 0。
-この実行の前に、#329 で CMakeLists.txt が configure 時に読むようになった `eng/tool-versions.json` と `tests/performance/` を複製の対象へ足した（無いと configure が `file SHA256 failed to read file` で落ち、証明の全体が回らなかった）。
+2026-10-16 の 2 回目（Issue #571）: P33 を足して `python eng/prove-gates.py`（`eng/toolchain.ps1` の上）が 242 秒・終了 0 で `Gate proofs passed: 33 real-tool proofs`（`out/571-prove.log`）。
+#516 の実行の前に、#329 で CMakeLists.txt が configure 時に読むようになった `eng/tool-versions.json` と `tests/performance/` を複製の対象へ足した（無いと configure が `file SHA256 failed to read file` で落ち、証明の全体が回らなかった）。
 
 **除外側の確認**: 例外区画について「禁止が効いていること」と「唯一の窓口が通ること」の両方を見る。
 
