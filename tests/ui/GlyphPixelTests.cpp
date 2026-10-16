@@ -7,12 +7,14 @@
 #include "DevicePixels.hpp"
 #include "DirectWriteFactory.hpp"
 #include "FontFallbackCache.hpp"
+#include "PrimaryFontCoverage.hpp"
 #include "SoftwareTarget.hpp"
 #include "WindowChecks.hpp"
 
 #include <array>
 #include <dwrite_3.h>
 #include <string>
+#include <vector>
 
 namespace nenenib::tests::ui
 {
@@ -158,6 +160,65 @@ void verify_case(IDWriteFactory2 &factory, SoftwareTarget &target,
     }
 }
 
+// #586 の工程 2: 字体を先に当てた（ADR 0142）折り返さない長い行は run が長くつながり、
+// 横に送った画面では run の先頭も末尾も画面の外に出る。切って保持した字形が、送った位置で
+// DrawTextLayout と同じ画素を描き、描画に渡る字形が画面の近くの分だけになる。
+std::wstring scrolled_line()
+{
+    std::wstring text = L"000000 ";
+    for (int index = 0; index < 40; ++index)
+    {
+        text += L"日本語の長い行と分割表示の文字組みを測定する。";
+        text += L"ASCII text between the Japanese runs, ";
+    }
+    return text;
+}
+
+constexpr std::array<FLOAT, 4> scrolls{0.0F, 333.0F, 2000.0F, 9000.0F};
+constexpr FLOAT scrolled_width = 513;
+constexpr std::size_t scrolled_glyph_limit = 300;
+
+std::size_t glyph_count(const std::vector<win32::BodyGlyphRun> &runs)
+{
+    std::size_t count = 0;
+    for (const auto &run : runs)
+    {
+        count += run.last - run.first;
+    }
+    return count;
+}
+
+void verify_scrolled_long_line(IDWriteFactory2 &factory, SoftwareTarget &target,
+                               const Format &format)
+{
+    const auto text = scrolled_line();
+    const Layout layout = layout_of(factory, format.Get(), text, scrolled_width);
+    auto coverage = win32::PrimaryFontCoverage::of(factory, *format.Get());
+    expect(layout != nullptr && coverage.has_value() &&
+               SUCCEEDED(coverage.value().assign(*layout.Get(), text)),
+           "the long line is laid out with the fonts assigned first");
+    if (layout == nullptr)
+    {
+        return;
+    }
+    for (const auto scroll : scrolls)
+    {
+        const auto collector =
+            Microsoft::WRL::Make<win32::BodyGlyphCollector>(scrolled_width, scroll);
+        static_cast<void>(layout->Draw(nullptr, collector.Get(), 0, 0));
+        const auto runs = collector->take().value_or(std::vector<win32::BodyGlyphRun>{});
+        const D2D1_POINT_2F shifted{origin.x - scroll, origin.y};
+        const auto clip =
+            D2D1::RectF(origin.x, origin.y, origin.x + scrolled_width, origin.y + line_height);
+        const auto expected = target.clipped_layout(layout.Get(), shifted, clip);
+        const auto drawn = target.glyph_runs(runs, shifted, clip);
+        expect(!runs.empty() && glyph_count(runs) < scrolled_glyph_limit,
+               "a scrolled long line passes only the glyphs near the screen to drawing");
+        expect(!expected.empty() && expected == drawn,
+               "trimmed glyphs of a scrolled long line draw the same pixels as DrawTextLayout");
+    }
+}
+
 void verify_family(IDWriteFactory2 &factory, SoftwareTarget &target, const wchar_t *family)
 {
     const auto texts = sample_texts();
@@ -172,6 +233,7 @@ void verify_family(IDWriteFactory2 &factory, SoftwareTarget &target, const wchar
         {
             verify_case(factory, target, formats, text);
         }
+        verify_scrolled_long_line(factory, target, formats.at(0));
     }
 }
 } // namespace
