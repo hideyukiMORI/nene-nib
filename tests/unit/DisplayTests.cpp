@@ -5,6 +5,7 @@
 // 巨大な行の文書と格子の文書だけであること、開く道が文字組み以外の port に触れないこと。
 #include "CaretAffinity.hpp"
 #include "CaretMotion.hpp"
+#include "ComposeText.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayForm.hpp"
 #include "DisplayFormLabel.hpp"
@@ -725,6 +726,40 @@ void verify_grid_marks()
            "the block caret is the cell of the character under it");
 }
 
+// 変換中の文字列はキャレットの升に差し込み、同じ画面行の後ろの升（文字・当たり・置き換え）を
+// 同じ升数だけずらす（決定 5・ADR 0014）。
+void verify_grid_composition_shifts()
+{
+    Editing editing;
+    static_cast<void>(grid_frame_of(editing, "aXYZ\x01", 10));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_normal(controller, "gg/XYZ<CR>0a");
+    const EditorFrame found = controller.apply_frame(app::ComposeText{composed_of("に", {}, 3)});
+    expect(!found.grid.empty() && row_is(found.grid.at(0), "aにXYZ^A", {0, 1, 3, 4, 5, 6, 7, 8}),
+           "the composition is put at the caret and the cells behind it move by its width");
+    expect(!found.grid.empty() &&
+               found.grid.at(0).matches == std::vector<app::GridCellSpan>{{3, 6}} &&
+               found.grid.at(0).current_match == app::GridCellSpan{3, 6} &&
+               found.grid.at(0).replaced == std::vector<app::GridCellSpan>{{6, 8}},
+           "a match and a replaced character behind the composition move with their cells");
+}
+
+// 差し込む位置はキャレットの前の文字の幅 0 の続き（結合文字）の後ろで、結合文字は前の文字に
+// 付いたまま変換の先頭字に付かない（ADR 0053）。
+void verify_grid_composition_cluster()
+{
+    Editing editing;
+    static_cast<void>(grid_frame_of(editing, "e\xCC\x81X", 10));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_normal(controller, "0a");
+    const EditorFrame joined = controller.apply_frame(app::ComposeText{composed_of("に", {}, 3)});
+    expect(!joined.grid.empty() &&
+               row_is(joined.grid.at(0), "e\xCC\x81\xE3\x81\xABX", {0, 1, 1, 3, 4}),
+           "a combining mark stays on the character before the caret, not on the composition");
+}
+
 // 格子の frame は本文の索引と GridCells を借りる（決定 4・5）。16 MiB の ASCII の 1 行の真ん中で
 // frame を 10 回作っても、索引は同じ値のまま作り直さず、塊を 1 つも歩かない（割り算だけ）。
 void verify_grid_frames_borrow()
@@ -789,6 +824,8 @@ void verify_display_contracts()
     verify_grid_frame_rows();
     verify_grid_row_cells();
     verify_grid_marks();
+    verify_grid_composition_shifts();
+    verify_grid_composition_cluster();
     verify_grid_frames_borrow();
     verify_quiet_open();
 }
