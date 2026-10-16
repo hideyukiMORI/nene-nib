@@ -47,5 +47,5 @@ collector の `GetPixelsPerDip` は 1、`GetCurrentTransform` は恒等を返す
 収集は、直前に保持した run と face・em・measuring・bidi・sideways・origin.y が同じで、後の run の origin.x が前の run の origin.x から送りを左から float で積んだ右端に**ちょうど**等しい（`==`・許容なし）ときだけ、後の run を前の run の後ろにつないで 1 つの run にする。つながないときは今のまま。
 つなぐのは左から右の run（bidi が偶数）だけで、glyph offset の有無が同じ・文字の位置が続く（cluster map がどちらも無いか、後の run の文字が前の run の直後から始まる）・字形の数が 65,535 以下のときに限る。
 つないだ run の cluster map は後の run の値に前の run の字形の数を足して続け、送りの和は左から積み続ける（置き換えの描画 #538 の対応は変わらない）。
-Direct2D が run の中で送りを積むのと同じ和の順なので、つないだ字形は別々の run で描いたときと同じ位置に来る。画素の契約（`tests/ui` の `--glyphs`）は、同じ face が続く長い行を遠くへ横に送った位置（0・333・2000・9000）でも `DrawTextLayout` と差 0。
+Direct2D が run の中で送りを積むのと同じ和の順なので、つないだ字形は別々の run で描いたときと同じ位置に来る。画素の契約（`tests/ui` の `--glyphs`）は、つないだ run を含む字体を当てた長い行を遠くへ横に送った位置（0・333・2000・9000）でも `DrawTextLayout` と差 0（つながない形との比較の診断で、その行の run は 1 行 6〜14 から 1〜3 になる）。
 描く窓（2026-10-16 の補足）は、つなぎ終えた run に対して閉じるときに 1 回決める（つなぐたびに全体を走査しない）。保守の幅はつないだ run の大きい方。

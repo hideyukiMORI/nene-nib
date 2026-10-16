@@ -163,6 +163,9 @@ void verify_case(IDWriteFactory2 &factory, SoftwareTarget &target,
 // #586 の工程 2: 字体を先に当てた（ADR 0142）折り返さない長い行は run が長くつながり、
 // 横に送った画面では run の先頭も末尾も画面の外に出る。切って保持した字形が、送った位置で
 // DrawTextLayout と同じ画素を描き、描画に渡る字形が画面の近くの分だけになる。
+// 工程 3: この行の ASCII の部分は DirectWrite が同じ face の隣り合う run に分けて渡し、収集が
+// 1 つにつなぐ（2026-10-16 の診断で 1 行 6〜14 run → 1〜3 run）。遠い横送り（9000）でも差 0 で
+// あることが、つないだ run の原点の和の順の契約になる（ADR 0073 の 2026-10-16 の決定）。
 std::wstring scrolled_line()
 {
     std::wstring text = L"000000 ";
@@ -170,18 +173,6 @@ std::wstring scrolled_line()
     {
         text += L"日本語の長い行と分割表示の文字組みを測定する。";
         text += L"ASCII text between the Japanese runs, ";
-    }
-    return text;
-}
-
-// #586 の工程 3: 同じ face の run が隣り合って続く長い行。収集で 1 つにつながった run を、遠くへ
-// 横に送った位置で描いても DrawTextLayout と同じ画素になる（ADR 0073 の 2026-10-16 の決定）。
-std::wstring joined_line()
-{
-    std::wstring text = L"000000 ";
-    for (int index = 0; index < 60; ++index)
-    {
-        text += L"日本語の長い行と分割表示の文字組みを測定する。";
     }
     return text;
 }
@@ -201,8 +192,9 @@ std::size_t glyph_count(const std::vector<win32::BodyGlyphRun> &runs)
 }
 
 void verify_scrolled_long_line(IDWriteFactory2 &factory, SoftwareTarget &target,
-                               const Format &format, const std::wstring &text)
+                               const Format &format)
 {
+    const auto text = scrolled_line();
     const Layout layout = layout_of(factory, format.Get(), text, scrolled_width);
     auto coverage = win32::PrimaryFontCoverage::of(factory, *format.Get());
     expect(layout != nullptr && coverage.has_value() &&
@@ -244,8 +236,7 @@ void verify_family(IDWriteFactory2 &factory, SoftwareTarget &target, const wchar
         {
             verify_case(factory, target, formats, text);
         }
-        verify_scrolled_long_line(factory, target, formats.at(0), scrolled_line());
-        verify_scrolled_long_line(factory, target, formats.at(0), joined_line());
+        verify_scrolled_long_line(factory, target, formats.at(0));
     }
 }
 } // namespace
