@@ -2,8 +2,13 @@
 
 #include "AddChunk.hpp"
 #include "Utf8.hpp"
+#include "VirtualColumnIndex.hpp"
+#include "VirtualColumnsFailure.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <expected>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -118,18 +123,18 @@ Piece TextBuffer::appended(Chunks &chunks, std::size_t &fill, std::string_view t
 }
 
 // add は空の列で始まり、最初の挿入が 1 本目の chunk を作る（ADR 0044）。
-TextBuffer::TextBuffer(Buffer original, Index original_newlines, std::vector<Piece> pieces,
-                       LineEnding ending)
+TextBuffer::TextBuffer(Buffer original, Index original_newlines, Columns columns,
+                       std::vector<Piece> pieces, LineEnding ending)
     : original_(std::move(original)), original_newlines_(std::move(original_newlines)),
-      add_fill_(0), pieces_(std::move(pieces)), size_bytes_(total_length(pieces_)),
-      newline_count_(total_newlines(pieces_)), ending_(ending)
+      columns_(std::move(columns)), column_rebuilds_(0), add_fill_(0), pieces_(std::move(pieces)),
+      size_bytes_(total_length(pieces_)), newline_count_(total_newlines(pieces_)), ending_(ending)
 {
 }
 
 TextBuffer TextBuffer::empty()
 {
     return TextBuffer(std::make_shared<const std::string>(),
-                      std::make_shared<const NewlineIndex>(NewlineIndex::empty()),
+                      std::make_shared<const NewlineIndex>(NewlineIndex::empty()), nullptr,
                       std::vector<Piece>{}, LineEnding::crlf);
 }
 
@@ -173,7 +178,8 @@ TextBuffer TextBuffer::from_validated_utf8(std::string text)
     // 改行の形はここで 1 度だけ判別する。以後は本文が持ち回り、開く経路は自分で判別しない
     // （ADR 0036 の決定 1 / ADR 0010 の決定 4）。
     const LineEnding ending = detect_line_ending(*original);
-    return TextBuffer(std::move(original), std::move(newlines), std::move(pieces), ending);
+    // 仮想桁の索引は要る文書だけが with_virtual_columns で持つ（ADR 0140 の決定 4）。
+    return TextBuffer(std::move(original), std::move(newlines), nullptr, std::move(pieces), ending);
 }
 
 std::string_view TextBuffer::view_of(const Piece &piece) const noexcept
@@ -249,10 +255,50 @@ TextBuffer TextBuffer::replaced(Offset begin, Offset end, std::string_view text)
     }
     collect(next, to, size_bytes_);
     // 編集はバイト列を変えても改行の形は変えない（ARC-009 / ADR 0036 の決定 1）。
-    TextBuffer result(original_, original_newlines_, std::move(next), ending_);
+    TextBuffer result(original_, original_newlines_, columns_, std::move(next), ending_);
     result.add_ = std::move(add);
     result.add_fill_ = fill;
+    // 索引を持つ本文だけが、触れた塊を作り直して後ろの塊を要約から足す（ADR 0140 の決定 4）。
+    if (columns_ != nullptr)
+    {
+        result.columns_ = std::make_shared<const VirtualColumnIndex>(
+            columns_->replaced(result, Offset{from}, Offset{to}, text));
+        result.column_rebuilds_ = result.columns_->rebuilt_chunks();
+    }
     return result;
+}
+
+TextBuffer TextBuffer::with_virtual_columns() const
+{
+    TextBuffer result = *this;
+    result.column_rebuilds_ = 0;
+    if (columns_ == nullptr)
+    {
+        result.columns_ =
+            std::make_shared<const VirtualColumnIndex>(VirtualColumnIndex::from_text(result));
+        result.column_rebuilds_ = result.columns_->rebuilt_chunks();
+    }
+    return result;
+}
+
+bool TextBuffer::has_virtual_columns() const noexcept
+{
+    return columns_ != nullptr;
+}
+
+std::expected<std::reference_wrapper<const VirtualColumnIndex>, VirtualColumnsFailure>
+TextBuffer::virtual_columns() const &
+{
+    if (columns_ == nullptr)
+    {
+        return std::unexpected(VirtualColumnsFailure::not_held);
+    }
+    return std::cref(*columns_);
+}
+
+std::size_t TextBuffer::rebuilt_column_chunks() const noexcept
+{
+    return column_rebuilds_;
 }
 
 TextBuffer TextBuffer::insert(Offset at, std::string_view text) const

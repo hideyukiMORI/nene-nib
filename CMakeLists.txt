@@ -54,7 +54,8 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimScreenGeometry.cpp src/core/VimTextObjectRange.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
-    src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp)
+    src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
+    src/core/Grid.cpp src/core/GiantLine.cpp)
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
@@ -69,6 +70,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/DetectedTextTests.cpp
     tests/unit/CoreTests.cpp
     tests/unit/NewlineIndexTests.cpp
+    tests/unit/VirtualColumnIndexTests.cpp
+    tests/unit/GridLineTests.cpp
     tests/unit/Utf16Tests.cpp
     tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp

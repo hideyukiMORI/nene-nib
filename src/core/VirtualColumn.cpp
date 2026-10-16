@@ -15,8 +15,6 @@ namespace nenenib::core
 {
 namespace
 {
-// Vim の既定。設定にはしない（ADR 0034 の決定 4）。
-constexpr std::size_t tab_stop = 8;
 constexpr char32_t tab_character = U'\t';
 
 // 正本の範囲表からコンパイル時に作るBMPの索引。意味の表を複製しない（ADR 0074）。
@@ -61,11 +59,7 @@ constexpr auto bmp_widths = bmp_width_index();
 // 桁 `column`（1 始まり）に置いた 1 文字が伸ばす桁の数。Tab だけが今いる桁に依る。
 [[nodiscard]] std::size_t advance_of(char32_t value, std::size_t column) noexcept
 {
-    if (value == tab_character)
-    {
-        return tab_stop - ((column - 1) % tab_stop);
-    }
-    return cells_of(display_width(value));
+    return column_advance(value, column - 1);
 }
 
 // 行頭から `byte` の文字までの桁（1 始まり）＝その文字が占める最初の桁。
@@ -114,6 +108,15 @@ DisplayWidth display_width(char32_t value) noexcept
         return found->width;
     }
     return DisplayWidth::single;
+}
+
+std::size_t column_advance(char32_t value, std::size_t column) noexcept
+{
+    if (value == tab_character)
+    {
+        return vim_tab_stop - (column % vim_tab_stop);
+    }
+    return cells_of(display_width(value));
 }
 
 std::size_t virtual_width(std::string_view text) noexcept
