@@ -46,7 +46,8 @@ enum class Milestone : std::uint8_t
     fallback_keyless,
     body_draw_begun,
     glyph_run_drawn,
-    body_draw_end
+    body_draw_end,
+    fallback_entered
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -119,6 +120,8 @@ enum class Milestone : std::uint8_t
         return "glyph_run_drawn";
     case Milestone::body_draw_end:
         return "body_draw_end";
+    case Milestone::fallback_entered:
+        return "fallback_entered";
     }
     std::unreachable();
 }

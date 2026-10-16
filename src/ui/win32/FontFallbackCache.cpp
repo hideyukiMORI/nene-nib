@@ -49,6 +49,10 @@ HRESULT STDMETHODCALLTYPE FontFallbackCache::MapCharacters(
 HRESULT FontFallbackCache::map(const FontFallbackRequest &request, UINT32 *mapped_length,
                                IDWriteFont **mapped_font, FLOAT *scale)
 {
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::fallback_entered);
+    }
     auto key = fallback_key(request);
     if (key.has_value())
     {
