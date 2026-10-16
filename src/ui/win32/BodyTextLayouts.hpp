@@ -2,6 +2,7 @@
 
 #include "BodyTextLayout.hpp"
 #include "BodyTextStyle.hpp"
+#include "PrimaryFontCoverage.hpp"
 #include "TextLayoutPort.hpp"
 
 #include <array>
@@ -58,6 +59,10 @@ class BodyTextLayouts final : public application::TextLayoutPort
     [[nodiscard]] HRESULT set_spacing(IDWriteTextFormat *format,
                                       const application::TextLayoutRequest &request);
     // 格子の画面行の字形を升の左端へ置く。cluster ごとの送りを request.cells の升の幅に合わせる。
+    // 主字体に無い文字の連続区間に OS が選ぶ字体を範囲で先に当てる（ADR
+    // 0142）。最初の問い合わせの前。
+    [[nodiscard]] HRESULT assign_fallback(IDWriteTextLayout *layout, const std::wstring &wide,
+                                          const application::TextLayoutRequest &request);
     [[nodiscard]] HRESULT align_cells(IDWriteTextLayout *layout, const std::wstring &wide,
                                       const application::TextLayoutRequest &request);
     [[nodiscard]] std::expected<BodyTextLayout, application::TextLayoutFailure>
@@ -69,6 +74,9 @@ class BodyTextLayouts final : public application::TextLayoutPort
     TextFormat format_;
     // 格子の等幅の書式。格子の文書を最初に描くときだけ作り、書式が変われば prepare が消す。
     TextFormat grid_format_;
+    // 書式ごとの主字体の表（ADR 0142 の決定 2）。書式を作り直すときに捨てる。
+    std::optional<PrimaryFontCoverage> coverage_;
+    std::optional<PrimaryFontCoverage> grid_coverage_;
     std::optional<BodyTextStyle> style_;
     std::vector<BodyTextLayout> current_;
     std::vector<BodyTextLayout> previous_;
