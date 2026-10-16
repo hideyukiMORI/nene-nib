@@ -484,13 +484,14 @@ character_search_position(const VimEditorView &view, const VimState &state,
 
 [[nodiscard]] LineNumber first_view_line(const VimEditorView &view) noexcept
 {
-    return LineNumber{std::min(view.viewport.first_visible.value, view.text.line_count())};
+    return LineNumber{std::min(vim_viewport_of(view).first_visible.value, view.text.line_count())};
 }
 
 [[nodiscard]] LineNumber last_view_line(const VimEditorView &view) noexcept
 {
     const std::size_t first = first_view_line(view).value;
-    const std::size_t lines = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t lines =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t remaining = view.text.line_count() - first;
     return LineNumber{first + std::min(lines - single_step, remaining)};
 }
@@ -2364,18 +2365,19 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     switch (direction)
     {
     case VimScrollDirection::up:
-        return shifted_line(view.viewport.first_visible, amount, view.text.line_count(), direction);
+        return shifted_line(vim_viewport_of(view).first_visible, amount, view.text.line_count(),
+                            direction);
     case VimScrollDirection::down:
         break;
     }
     const LineNumber last_filled =
         first_visible_within(LineNumber{view.text.line_count()}, view.text.line_count(),
-                             view.viewport.visible_lines, ScrollExtent::filled_viewport);
-    if (view.viewport.first_visible.value >= last_filled.value)
+                             vim_viewport_of(view).visible_lines, ScrollExtent::filled_viewport);
+    if (vim_viewport_of(view).first_visible.value >= last_filled.value)
     {
-        return view.viewport.first_visible;
+        return vim_viewport_of(view).first_visible;
     }
-    return shifted_line(view.viewport.first_visible, amount, last_filled.value, direction);
+    return shifted_line(vim_viewport_of(view).first_visible, amount, last_filled.value, direction);
 }
 
 [[nodiscard]] LineNumber page_top(const VimEditorView &view, std::size_t pages,
@@ -2386,22 +2388,25 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     {
         return LineNumber{view.text.line_count()};
     }
-    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t one_page = height <= 2 ? height : height - 2;
     const std::size_t amount = limited_product(one_page, pages, view.text.line_count());
-    return shifted_line(view.viewport.first_visible, amount, view.text.line_count(), direction);
+    return shifted_line(vim_viewport_of(view).first_visible, amount, view.text.line_count(),
+                        direction);
 }
 
 [[nodiscard]] LineNumber previous_page_top(const VimEditorView &view, std::size_t pages)
 {
-    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t one_page = height <= 2 ? height : height - 2;
-    const std::size_t distance = view.viewport.first_visible.value - single_step;
+    const std::size_t distance = vim_viewport_of(view).first_visible.value - single_step;
     const std::size_t steps_to_top = distance / one_page + (distance % one_page != 0 ? 1 : 0);
     const std::size_t effective = std::min(pages, steps_to_top);
     const std::size_t previous_steps = effective > 0 ? effective - single_step : 0;
     const std::size_t amount = limited_product(one_page, previous_steps, view.text.line_count());
-    return shifted_line(view.viewport.first_visible, amount, view.text.line_count(),
+    return shifted_line(vim_viewport_of(view).first_visible, amount, view.text.line_count(),
                         VimScrollDirection::up);
 }
 
@@ -2467,8 +2472,9 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         return displayed_navigation(state, view, view.navigation.value());
     }
     const std::size_t fallback =
-        std::max<std::size_t>(view.viewport.visible_lines / 2, single_step);
-    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines / 2, single_step);
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t requested =
         state.count.has_value()
             ? state.count.value().value
@@ -2479,15 +2485,16 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     const LineNumber caret_line = shifted_line(line_of(view.text, view.selection.caret), amount,
                                                view.text.line_count(), direction);
     const LineNumber followed = first_visible_for_caret(
-        requested_top, caret_line, view.viewport.visible_lines, ScrollFollow::minimal);
-    const LineNumber first = first_visible_within(
-        followed, view.text.line_count(), view.viewport.visible_lines, ScrollExtent::last_line);
+        requested_top, caret_line, vim_viewport_of(view).visible_lines, ScrollFollow::minimal);
+    const LineNumber first =
+        first_visible_within(followed, view.text.line_count(), vim_viewport_of(view).visible_lines,
+                             ScrollExtent::last_line);
     const LineNumber current_line = line_of(view.text, view.selection.caret);
     VimStep step = caret_line == current_line
                        ? navigated_at(state, view, first, view.selection.caret)
                        : navigated(state, view, first, caret_line);
     if (state.count.has_value() &&
-        (first != view.viewport.first_visible || caret_line != current_line))
+        (first != vim_viewport_of(view).first_visible || caret_line != current_line))
     {
         step.next.scroll_lines = VimCount{configured};
     }
@@ -2502,13 +2509,14 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         return displayed_navigation(state, view, view.navigation.value());
     }
     const LineNumber first = page_top(view, count_of(state.count), direction);
-    if (first == view.viewport.first_visible)
+    if (first == vim_viewport_of(view).first_visible)
     {
         const Offset caret = view.selection.caret;
         return VimStep{navigated_state(state, view.text, caret),
                        VimNavigate{view.selection, first}};
     }
-    const std::size_t height = std::max<std::size_t>(view.viewport.visible_lines, single_step);
+    const std::size_t height =
+        std::max<std::size_t>(vim_viewport_of(view).visible_lines, single_step);
     const std::size_t last =
         first.value + std::min(height - single_step, view.text.line_count() - first.value);
     LineNumber caret_line = first;
@@ -3463,8 +3471,26 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return step;
 }
 
+// 画面を読む鍵に表示領域が無ければ、効果を出さず状態もそのままで求める（ADR 0129 の決定 1）。
+// 回数や保留中のオペレータも消費しない。controller が渡して同じ鍵をもう一度流す。
+[[nodiscard]] std::optional<VimStep> requested_viewport(const VimState &state,
+                                                        const VimEditorView &view, VimAction action)
+{
+    if (view.viewport.has_value() || !vim_reads_viewport(action))
+    {
+        return std::nullopt;
+    }
+    auto step = VimStep{state, VimNoEffect{}};
+    step.viewport_request = true;
+    return step;
+}
+
 [[nodiscard]] VimStep acted(const VimState &state, const VimEditorView &input, VimAction action)
 {
+    if (auto request = requested_viewport(state, input, action))
+    {
+        return std::move(request).value();
+    }
     const auto displayed = display_view(state, input, action);
     if (!displayed)
     {
@@ -3697,6 +3723,10 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
 [[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &input,
                                    VimAction action)
 {
+    if (auto request = requested_viewport(state, input, action))
+    {
+        return std::move(request).value();
+    }
     const auto displayed = display_view(state, input, action);
     if (!displayed)
     {
@@ -3870,6 +3900,12 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
 [[nodiscard]] VimStep insert_page_moved(const VimState &state, const VimEditorView &view,
                                         VimScrollDirection direction)
 {
+    const auto action = direction == VimScrollDirection::down ? VimAction::scroll_page_down
+                                                              : VimAction::scroll_page_up;
+    if (auto request = requested_viewport(state, view, action))
+    {
+        return std::move(request).value();
+    }
     VimState next = state;
     next.insert_repeat = std::nullopt;
     return page_step(next, view, direction);
@@ -4631,10 +4667,15 @@ std::size_t vim_search_count(const VimState &state) noexcept
     return resolved_count(state);
 }
 
+VimViewport vim_viewport_of(const VimEditorView &view) noexcept
+{
+    return view.viewport.value_or(VimViewport{LineNumber{1}, 1, 0});
+}
+
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     auto step = stepped(state, view, key);
-    if (step.layout_request.has_value())
+    if (step.layout_request.has_value() || step.viewport_request)
     {
         return step;
     }

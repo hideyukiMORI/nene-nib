@@ -89,7 +89,7 @@ using nenenib::core::VirtualColumn;
 void verify_vim_text_object_waiting()
 {
     const auto buffer = TextBuffer::from_utf8("alpha beta gamma").value();
-    const VimEditorView view{buffer, collapsed_at(Offset{6}), VimViewport{LineNumber{1}, 8}};
+    const VimEditorView view{buffer, collapsed_at(Offset{6}), VimViewport{LineNumber{1}, 8, 0}};
     VimState initial = empty_vim_state();
     initial.unnamed_register = nenenib::core::VimRegisterSnapshot::from(
         nenenib::core::VimRegister{"saved", VimRegisterKind::characters});
@@ -121,7 +121,7 @@ void verify_vim_text_object_cancellation()
 {
     const auto buffer = TextBuffer::from_utf8("alpha beta gamma").value();
     const Selection selected{Offset{2}, Offset{4}};
-    const VimEditorView view{buffer, selected, VimViewport{LineNumber{1}, 8}};
+    const VimEditorView view{buffer, selected, VimViewport{LineNumber{1}, 8, 0}};
     VimState initial = empty_vim_state();
     initial.mode = VimMode::visual;
     initial.wanted_column =

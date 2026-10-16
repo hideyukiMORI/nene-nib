@@ -977,6 +977,80 @@ void verify_follow_dropped_on_leaving_question()
            "a follow asked while the question was open does not move the next document");
 }
 
+// Vim の INSERT の文字は表示領域を読まないので、鍵ごとに追従を解決せず layout も作らない
+// （ADR 0129 の決定 2・#476 の速さの根拠）。frame を 1 回読むと、1
+// 鍵ごとに読んだときと同じ所が見える。
+[[nodiscard]] EditorFrame vim_typed_burst(Editing &editing, bool framed_each)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{40, 20, 96}});
+    applied(controller, SelectEditMode{EditMode::vim});
+    send_intent(controller, framed_each, VimKeyPress{VimKey{VimCharacter{U'i'}}});
+    const std::size_t before = editing.text_layouts().requests();
+    for (std::size_t typed = 1; typed <= 200; ++typed)
+    {
+        send_intent(controller, framed_each, VimKeyPress{VimKey{VimCharacter{U'x'}}});
+        if (typed % 50 == 25)
+        {
+            send_intent(controller, framed_each,
+                        VimKeyPress{VimKey{nenenib::core::VimSpecialKey::enter}});
+        }
+    }
+    if (!framed_each)
+    {
+        expect(editing.text_layouts().requests() == before,
+               "typing in Vim INSERT lays nothing out; the caret follow waits for the frame");
+    }
+    return controller.frame();
+}
+
+void verify_vim_insert_follow_settles_at_frame()
+{
+    Editing each;
+    Editing burst;
+    const auto framed = vim_typed_burst(each, true);
+    const auto settled = vim_typed_burst(burst, false);
+    expect(!framed.lines.empty() && !settled.lines.empty(), "both Vim views show lines");
+    expect(settled.first_visible.value > 1, "the frame resolved the Vim follow and scrolled down");
+    expect(framed.first_visible == settled.first_visible &&
+               framed.lines.front().screen_row == settled.lines.front().screen_row,
+           "one frame after 200 Vim keys shows what a frame after every key shows");
+}
+
+// 画面を読む鍵（H）は、頼まれた追従をその鍵の前に解決した表示領域を読む（ADR 0129 の決定 2）。
+// frame を読まずに打った後の H も、1 鍵ごとに frame を読んだときと同じ行へ着く。
+[[nodiscard]] EditorFrame vim_typed_then_high(Editing &editing, bool framed_each)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{40, 20, 96}});
+    applied(controller, SelectEditMode{EditMode::vim});
+    const auto send = [&controller, framed_each](const VimKey &key)
+    { send_intent(controller, framed_each, VimKeyPress{key}); };
+    send(VimKey{VimCharacter{U'i'}});
+    for (std::size_t line = 0; line < 12; ++line)
+    {
+        send(VimKey{VimCharacter{U'a'}});
+        send(VimKey{VimCharacter{U'b'}});
+        send(VimKey{nenenib::core::VimSpecialKey::enter});
+    }
+    send(VimKey{nenenib::core::VimSpecialKey::escape});
+    send(VimKey{VimCharacter{U'H'}});
+    return controller.frame();
+}
+
+void verify_vim_viewport_settles_before_screen_keys()
+{
+    Editing each;
+    Editing burst;
+    const auto framed = vim_typed_then_high(each, true);
+    const auto settled = vim_typed_then_high(burst, false);
+    expect(framed.first_visible.value > 1, "typing twelve Vim lines scrolled the window down");
+    expect(settled.caret.position.line == settled.first_visible &&
+               settled.first_visible == framed.first_visible &&
+               settled.caret.position.line == framed.caret.position.line,
+           "H lands on the settled top line, not the one before the follow");
+}
+
 void verify_controller_frame()
 {
     Editing editing;
@@ -1613,6 +1687,8 @@ void verify_controller_intents()
     verify_follow_settles_at_frame();
     verify_follow_settles_before_search_origin();
     verify_follow_dropped_on_leaving_question();
+    verify_vim_insert_follow_settles_at_frame();
+    verify_vim_viewport_settles_before_screen_keys();
     verify_document_read_contracts();
     verify_document_failure_clearing();
     verify_vim_engine();

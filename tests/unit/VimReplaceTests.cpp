@@ -80,7 +80,7 @@ using nenenib::core::VirtualColumn;
 void verify_vim_replace_waiting()
 {
     const auto buffer = TextBuffer::from_utf8("abcd\nx\nabcdef").value();
-    const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 3}};
+    const VimEditorView view{buffer, collapsed_at(Offset{0}), VimViewport{LineNumber{1}, 3, 0}};
     VimState initial = empty_vim_state();
     initial.count = nenenib::core::VimCount{2};
     initial.unnamed_register = nenenib::core::VimRegisterSnapshot::from(
@@ -110,7 +110,7 @@ void verify_vim_replace_cancellation()
 {
     const auto buffer = TextBuffer::from_utf8("abcd\nx\nabcdef").value();
     const Selection selected{Offset{0}, Offset{3}};
-    const VimEditorView view{buffer, selected, VimViewport{LineNumber{1}, 3}};
+    const VimEditorView view{buffer, selected, VimViewport{LineNumber{1}, 3, 0}};
     VimState initial = empty_vim_state();
     initial.mode = VimMode::visual;
     initial.wanted_column =
