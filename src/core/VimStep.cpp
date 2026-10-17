@@ -3558,9 +3558,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                                 : std::nullopt;
 }
 
-// 文字組みの値で解く動作を、鍵を写す前に解いて view に置く。画面移動（ADR
-// 0019）と、文字組みが有効な ときの gj gk の着地（ADR 0144 の決定
-// 4・回数はオペレータ側と移動側の積）。
+// 文字組みの値で解く動作を、鍵を写す前に解いて view に置く。画面移動（ADR 0019）と、文字組みが
+// 有効なときの gj gk の着地（ADR 0144 の決定 4・回数はオペレータ側と移動側の積）。
 [[nodiscard]] std::expected<VimEditorView, VimLayoutNeed>
 display_view(const VimState &state, const VimEditorView &view, VimAction action)
 {

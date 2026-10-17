@@ -130,12 +130,20 @@ using Walk = std::pair<VisualPosition, std::size_t>;
     std::unreachable();
 }
 
-// 画面行 span の中で、行頭からの仮想桁 target（0 始まり）を占める文字の先頭（決定 3）。読むのは
-// 画面行の範囲だけで、桁は span.start_column から足す。届かなければ画面行の最後の文字で、行の最後の
-// 画面行なら行の内容の終わり（モードの寄せは呼び手）。target が無ければ画面行の末尾（$ の後）。
+// 画面行 span の中で、行頭からの仮想桁 target（0 始まり）を占める文字の先頭（決定 3）。
+// 届かなければ画面行の最後の文字で、行の最後の画面行なら行の内容の終わり（モードの寄せは
+// 呼び手）。target が無ければ画面行の末尾（$ の後）。画面行が 1 つの行は j k と同じ論理行の道で
+// 解き（索引を持つ本文は索引から・巨大な行の窓の形で行を写さない）、画面行の範囲を読むのは
+// 画面行が 2 つ以上の行だけ。
 [[nodiscard]] Offset landed(const TextBuffer &text, const VimRowSpan &span,
                             std::optional<std::size_t> target)
 {
+    if (span.rows <= 1)
+    {
+        return target.has_value()
+                   ? offset_at_virtual_column(text, span.line, VirtualColumn{target.value() + 1})
+                   : span.end;
+    }
     const std::string shown = text.text_range(span.start, span.end);
     std::size_t column = span.start_column;
     std::optional<std::size_t> last = std::nullopt;
@@ -274,7 +282,8 @@ using Moves = std::pair<Walk, Walk>;
     return forward(view, top, room.value().second);
 }
 
-// 画面行 span の終わりの仮想桁（0 始まり・幅 0 の文字は数えない）。読むのは画面行の範囲だけ。
+// 画面行 span の終わりの仮想桁（0 始まり・幅 0 の文字は数えない）。読むのは画面行の範囲だけで、
+// 呼ぶのは画面行が 2 つ以上の行の途中の画面行だけ（kept_column）。
 [[nodiscard]] std::size_t end_column(const TextBuffer &text, const VimRowSpan &span)
 {
     const std::string shown = text.text_range(span.start, span.end);
@@ -286,10 +295,11 @@ using Moves = std::pair<Walk, Walk>;
     return column;
 }
 
-// gj gk で着いた後に残す欲しい列（行頭からの仮想桁・0 始まり）。行き先の桁 target
-// を保つ。行の途中の 画面行（幅いっぱいまで埋まる）より右なら、その画面行の最後の桁に収める（Vim は
-// curswant を画面行の 幅で切ってから歩く・`k` の後の `gj`）。行の最後の画面行は短くても target
-// を保つ（Vim 9.1 の実測・ 短い最後の画面行に着いた後の `j` は元の桁へ行く）。
+// gj gk で着いた後に残す欲しい列（行頭からの仮想桁・0 始まり）。行き先の桁 target を保つ。
+// 行の途中の画面行（幅いっぱいまで埋まる）より右なら、その画面行の最後の桁（幅 − 1）に収める
+// （Vim は curswant を画面行の幅で切ってから歩く・`k` の後の `gj`）。行の最後の画面行は短くても
+// target を保つ（Vim 9.1 の実測・短い最後の画面行に着いた後の `j` は元の桁へ行く）。画面行が
+// 1 つの行は最後の画面行なので、画面行の範囲を読まない。
 [[nodiscard]] std::size_t kept_column(const TextBuffer &text, const VimRowSpan &row,
                                       std::size_t target)
 {
