@@ -2,6 +2,7 @@
 
 #include "CommandEdit.hpp"
 #include "ExFailure.hpp"
+#include "FontFamilies.hpp"
 #include "Offset.hpp"
 #include "ThemeCatalog.hpp"
 
@@ -20,6 +21,10 @@ class CommandLine final
     [[nodiscard]] static CommandLine empty(ThemeCatalog themes = ThemeCatalog::builtins());
     [[nodiscard]] const ThemeCatalog &catalog() const & noexcept;
     const ThemeCatalog &catalog() const && = delete;
+    [[nodiscard]] const FontFamilies &fonts() const & noexcept;
+    const FontFamilies &fonts() const && = delete;
+    // 同じ入力・キャレット・補完の位置で、字体の一覧だけを入れた行（#597・D58）。
+    [[nodiscard]] CommandLine with_fonts(FontFamilies fonts) const;
     [[nodiscard]] std::string_view text() const noexcept;
     [[nodiscard]] Offset caret() const noexcept;
     [[nodiscard]] std::vector<std::string> completions() const;
@@ -28,7 +33,7 @@ class CommandLine final
     [[nodiscard]] CommandLine edited(CommandEdit edit) const;
 
   private:
-    CommandLine(std::string text, Offset caret, ThemeCatalog themes);
+    CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts);
     [[nodiscard]] CommandLine completed(CommandEdit direction) const;
 
     std::string text_;
@@ -36,5 +41,6 @@ class CommandLine final
     std::optional<std::string> completion_seed_;
     std::size_t completion_index_ = 0;
     ThemeCatalog themes_;
+    FontFamilies fonts_;
 };
 } // namespace nenenib::core

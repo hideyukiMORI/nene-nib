@@ -8,6 +8,7 @@
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
+#include "SystemFontFamilies.hpp"
 #include "TemporaryFiles.hpp"
 #include "Win32AppearanceAdapter.hpp"
 #include "Win32AutosaveAdapter.hpp"
@@ -180,16 +181,23 @@ auto reclaimed_settings_paths()
     return paths;
 }
 
-int run(HINSTANCE instance)
+// --measure があれば節目の書き先を結ぶ。
+void bind_measure(nenenib::adapters::win32::Win32TimingAdapter &timing,
+                  const std::vector<std::wstring> &given)
 {
-    const std::vector<std::wstring> given = command_arguments();
-    // 節目の受け手は常に居る。--measure が無ければ何も積まない状態のまま（決定 2）。
-    nenenib::adapters::win32::Win32TimingAdapter timing;
     const std::wstring measure = option_value(given, measure_option);
     if (!measure.empty())
     {
         timing.bind(measure);
     }
+}
+
+int run(HINSTANCE instance)
+{
+    const std::vector<std::wstring> given = command_arguments();
+    // 節目の受け手は常に居る。--measure が無ければ何も積まない状態のまま（決定 2）。
+    nenenib::adapters::win32::Win32TimingAdapter timing;
+    bind_measure(timing, given);
     nenenib::adapters::win32::Win32AppearanceAdapter appearance;
     nenenib::adapters::win32::Win32ClipboardAdapter clipboard;
     nenenib::adapters::win32::Win32FileAdapter files;
@@ -217,12 +225,13 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
+    nenenib::ui::win32::SystemFontFamilies fonts;
     nenenib::adapters::win32::Win32AutosaveAdapter autosave(
         worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session, history, folders, bookmarks,
-                                          text_layouts, autosave},
+                                          text_layouts, autosave, fonts},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。

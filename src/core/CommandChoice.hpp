@@ -34,6 +34,9 @@ struct CommandChoice
 };
 
 [[nodiscard]] std::vector<CommandChoice> palette_choices(const CommandLine &input);
+// 入力行（Ex の行、または Ctrl+P の `:` で始まる行）が字体の名前の補完を求めているか（#597・D58）。
+// 真のときだけ controller が字体の一覧を読む。
+[[nodiscard]] bool completes_font_family(std::string_view input);
 // 操作の一覧の候補（ADR 0078 の決定 6・11）。操作の表のうち mode で使える操作だけで、query が
 // 空なら operation_texts の順、あれば名前・読み・鍵の表示名に match_score を当てた一番良い点の
 // 小さい順（同点は表の順）。どれにも当たらない操作は外す。説明は照合しない。

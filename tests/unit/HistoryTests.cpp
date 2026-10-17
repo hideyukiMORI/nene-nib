@@ -26,6 +26,7 @@
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
+#include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
@@ -365,21 +366,23 @@ void verify_quiet_paths()
         ScriptedHistory history;
         ScriptedFolders folders;
         ScriptedAutosave autosave;
+        ScriptedFonts fonts;
         ScriptedBookmarks bookmarks;
         ScriptedTextLayouts text_layouts;
         EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                                 themes, session, history, folders, bookmarks,
-                                                text_layouts, autosave},
+                                                text_layouts, autosave, fonts},
                                     {work_open('a'), work_open('b')});
         expect(controller.frame().tabs.size() == 2 && history.reads() == 0 &&
                    history.writes() == 0 && folders.requests().empty() && folders.collects() == 0 &&
-                   autosave.touches() == 0,
+                   autosave.touches() == 0 && fonts.lists() == 0,
                "starting with file arguments never touches the history, the folder nor autosave");
     }
     Editing restored(three_listed(), hold_work);
     expect(restored.controller().frame().tabs.size() == 3 && restored.history().reads() == 0 &&
                restored.history().writes() == 0 && restored.folders().requests().empty() &&
-               restored.folders().collects() == 0 && restored.autosave().touches() == 0,
+               restored.folders().collects() == 0 && restored.autosave().touches() == 0 &&
+               restored.fonts().lists() == 0,
            "restoring the last tabs never touches the history, the folder nor autosave");
     Editing editing;
     hold_work(editing.files());
@@ -400,7 +403,8 @@ void verify_quiet_paths()
     expect(
         editing.history().reads() == 0 && editing.history().writes() == 0 &&
             editing.folders().requests().empty() && editing.folders().collects() == 0 &&
-            editing.autosave().touches() == 1 && editing.autosave().collects() == 0,
+            editing.autosave().touches() == 1 && editing.autosave().collects() == 0 &&
+            editing.fonts().lists() == 0,
         "opening, switching, new tabs, saving and typing never touch the history, the folder nor "
         "autosave");
 }

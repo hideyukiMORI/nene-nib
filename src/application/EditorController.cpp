@@ -12,6 +12,7 @@
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
+#include "CommandInput.hpp"
 #include "CommandPalette.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
@@ -33,6 +34,7 @@
 #include "FolderBatch.hpp"
 #include "FolderProgress.hpp"
 #include "FolderRequest.hpp"
+#include "FontFamilies.hpp"
 #include "GiantLine.hpp"
 #include "ImeStance.hpp"
 #include "LineSpanEvaluation.hpp"
@@ -1878,7 +1880,8 @@ void EditorController::perform(const core::VimNoEffect &) {}
 
 void EditorController::perform(const core::VimOpenCommandLine &)
 {
-    state_ = state_.with_command_input(core::CommandLine::empty(state_.themes()));
+    state_ = state_.with_command_input(
+        core::CommandLine::empty(state_.themes()).with_fonts(given_fonts()));
 }
 
 void EditorController::perform(const core::VimOpenSearch &effect)
@@ -1979,6 +1982,7 @@ void EditorController::accept(const CommandText &intent)
         return;
     }
     state_ = state_.with_command_input(std::move(next).value());
+    reach_font_families();
     update_search_preview();
 }
 
@@ -1999,6 +2003,7 @@ void EditorController::accept(const EditCommand &intent)
         return;
     }
     state_ = state_.with_command_input(edited_command(input.value(), intent.edit));
+    reach_font_families();
     update_search_preview();
 }
 
@@ -2074,7 +2079,9 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
     auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     request_folder(entries);
     state_ = state_.with_command_input(
-        core::CommandPalette::opened(std::move(entries), input, state_.mode(), state_.themes())
+        core::CommandPalette::opened(
+            std::move(entries), input, state_.mode(),
+            core::CommandLine::empty(state_.themes()).with_fonts(given_fonts()))
             .selected_at(selected));
     if (!bookmarks)
     {
@@ -2360,6 +2367,7 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         return;
     }
     state_ = state_.with_command_input(std::move(next).value());
+    reach_font_families();
 }
 
 void EditorController::accept(const PasteCommand &)
@@ -3732,6 +3740,27 @@ void EditorController::accept(const CancelComposition &)
     {
         follow_caret();
     }
+}
+
+// 読んだ字体の一覧（まだ読んでいなければ空の列）。
+core::FontFamilies EditorController::given_fonts() const
+{
+    return font_families_.value_or(core::FontFamilies::none());
+}
+
+// 入力行が字体の補完を求めたら、字体の一覧をプロセスで 1 回だけ読んで入力行へ入れる（#597・D58）。
+// 一覧は変わらないものとして再読しない。読めなければ空の列のまま（候補は打った値だけ・知らせなし）。
+void EditorController::reach_font_families()
+{
+    const auto &input = state_.command_input();
+    if (font_families_.has_value() || !input.has_value() || !wants_font_families(input.value()))
+    {
+        return;
+    }
+    auto listed = ports_.fonts.list();
+    font_families_ = listed.has_value() ? core::FontFamilies::from(std::move(listed).value())
+                                        : core::FontFamilies::none();
+    state_ = state_.with_command_input(with_font_families(input.value(), font_families_.value()));
 }
 
 void EditorController::close_command_input()

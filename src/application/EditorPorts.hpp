@@ -7,6 +7,7 @@
 #include "CodePagePort.hpp"
 #include "FilePort.hpp"
 #include "FolderPort.hpp"
+#include "FontFamilyPort.hpp"
 #include "HistoryPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
@@ -32,5 +33,7 @@ struct EditorPorts
     TextLayoutPort &text_layouts;
     // 未保存の編集を裏で退避する（ADR 0137 の決定 4）。
     AutosavePort &autosave;
+    // `:set guifont=` の補完の字体の一覧（#597・D58）。
+    FontFamilyPort &fonts;
 };
 } // namespace nenenib::application

@@ -7,14 +7,26 @@
 
 namespace nenenib::core
 {
-CommandLine::CommandLine(std::string text, Offset caret, ThemeCatalog themes)
-    : text_(std::move(text)), caret_(caret), themes_(std::move(themes))
+CommandLine::CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts)
+    : text_(std::move(text)), caret_(caret), themes_(std::move(themes)), fonts_(std::move(fonts))
 {
 }
 
 CommandLine CommandLine::empty(ThemeCatalog themes)
 {
-    return CommandLine({}, Offset{0}, std::move(themes));
+    return CommandLine({}, Offset{0}, std::move(themes), FontFamilies::none());
+}
+
+const FontFamilies &CommandLine::fonts() const & noexcept
+{
+    return fonts_;
+}
+
+CommandLine CommandLine::with_fonts(FontFamilies fonts) const
+{
+    CommandLine next = *this;
+    next.fonts_ = std::move(fonts);
+    return next;
 }
 
 const ThemeCatalog &CommandLine::catalog() const & noexcept
@@ -35,7 +47,7 @@ Offset CommandLine::caret() const noexcept
 std::vector<std::string> CommandLine::completions() const
 {
     const auto &prefix = completion_seed_.has_value() ? completion_seed_.value() : text_;
-    return command_completions(prefix, themes_);
+    return command_completions(prefix, themes_, fonts_);
 }
 
 std::optional<std::size_t> CommandLine::completion_index() const noexcept
@@ -56,7 +68,7 @@ std::expected<CommandLine, ExFailure> CommandLine::inserted(std::string_view tex
         return std::unexpected(next.error());
     }
     const auto caret = next.value().caret;
-    return CommandLine(std::move(next).value().text, caret, themes_);
+    return CommandLine(std::move(next).value().text, caret, themes_, fonts_);
 }
 
 CommandLine CommandLine::completed(CommandEdit direction) const
@@ -72,7 +84,7 @@ CommandLine CommandLine::completed(CommandEdit direction) const
     {
         index = (completion_index_ + (backwards ? candidates.size() - 1 : 1)) % candidates.size();
     }
-    CommandLine next(candidates[index], Offset{candidates[index].size()}, themes_);
+    CommandLine next(candidates[index], Offset{candidates[index].size()}, themes_, fonts_);
     next.completion_seed_ = completion_seed_.value_or(text_);
     next.completion_index_ = index;
     return next;
@@ -86,6 +98,6 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     }
     InputText next = edited_input(InputText{text_, caret_}, edit);
     const auto caret = next.caret;
-    return CommandLine(std::move(next.text), caret, themes_);
+    return CommandLine(std::move(next.text), caret, themes_, fonts_);
 }
 } // namespace nenenib::core

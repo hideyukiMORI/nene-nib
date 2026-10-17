@@ -124,11 +124,26 @@ match_score(std::string_view query, std::span<const std::string_view, Count> com
 [[nodiscard]] CommandChoice choice_of(std::string command)
 {
     auto label = DisplayText::parse(command).value();
-    const auto kind = command == "set fontsize=" || command == "set guifont="
+    const auto kind = command == "set fontsize=" || command == guifont_command
                           ? CommandChoiceKind::fill
                           : CommandChoiceKind::execute;
     return CommandChoice{std::move(label), std::move(command), kind, std::nullopt,
                          std::nullopt,     std::nullopt,       {}};
+}
+
+// 打った値を先頭に、Ex の補完と同じ字体の候補を後ろに（D58）。字体の一覧が無ければ打った値だけ。
+[[nodiscard]] std::vector<CommandChoice> font_choices(std::string_view query,
+                                                      const CommandLine &input)
+{
+    std::vector<CommandChoice> choices{choice_of(std::string(query))};
+    for (auto &command : command_completions(query, input.catalog(), input.fonts()))
+    {
+        if (command != query)
+        {
+            choices.push_back(choice_of(std::move(command)));
+        }
+    }
+    return choices;
 }
 
 // 出どころの印が見せる出どころ（ADR 0060 の決定 3）。印が増えたらここが落ちる（CPP-002）。
@@ -286,6 +301,15 @@ operation_score(std::string_view query, const OperationText &text, std::string_v
 }
 } // namespace
 
+bool completes_font_family(std::string_view input)
+{
+    if (input.starts_with(':'))
+    {
+        input.remove_prefix(1);
+    }
+    return input.starts_with(guifont_command);
+}
+
 std::vector<CommandChoice> palette_choices(const CommandLine &input)
 {
     auto query = input.text();
@@ -294,9 +318,13 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
         query.remove_prefix(1);
     }
     // 値を直接打った場合も候補の実行文字列になり、同じEx評価が妥当性を決める。
-    if (query.starts_with("set fontsize=") || query.starts_with("set guifont="))
+    if (query.starts_with("set fontsize="))
     {
         return {choice_of(std::string(query))};
+    }
+    if (query.starts_with(guifont_command))
+    {
+        return font_choices(query, input);
     }
     std::vector<CommandMatch> matches;
     for (auto &command : ex_command_candidates(input.catalog()))

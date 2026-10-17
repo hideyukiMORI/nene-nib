@@ -8,6 +8,7 @@
 #include "ExFailure.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExTabRequest.hpp"
+#include "FontFamilies.hpp"
 #include "ThemeCatalog.hpp"
 #include "VimSearchHighlight.hpp"
 
@@ -19,6 +20,10 @@
 
 namespace nenenib::core
 {
+// 字体を変える Ex の命令の頭。補完・候補・字体の一覧を読む時機はこの 1
+// つの文字列から決める（#597）。
+inline constexpr std::string_view guifont_command = "set guifont=";
+
 // Ex の 1 命令の答え（ADR 0022）。settings は保存する設定、highlight は検索の当たりの強調、
 // incsearch は入力中の当たりの preview の有無（ADR 0041 の決定 6）、tab はタブの命令（ADR 0057 の
 // 決定 4）で、どれも「変わらない」ことを空で表す。写し先は controller の Ex の経路 1 か所だけ
@@ -41,8 +46,11 @@ struct ExResult
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance,
             const ThemeCatalog &themes = ThemeCatalog::builtins());
+// prefix が `set guifont=` で始まるときだけ、fonts の名前を `set guifont=<名前>`
+// の候補として後ろに足す （施主決定 D58）。
 [[nodiscard]] std::vector<std::string>
-command_completions(std::string_view prefix, const ThemeCatalog &themes = ThemeCatalog::builtins());
+command_completions(std::string_view prefix, const ThemeCatalog &themes = ThemeCatalog::builtins(),
+                    const FontFamilies &fonts = FontFamilies::none());
 [[nodiscard]] std::vector<std::string>
 ex_command_candidates(const ThemeCatalog &themes = ThemeCatalog::builtins());
 } // namespace nenenib::core

@@ -29,6 +29,8 @@
 #include "FileHistory.hpp"
 #include "FileHistoryFailure.hpp"
 #include "FilePath.hpp"
+#include "FontFamilies.hpp"
+#include "FontFamilyFailure.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InputLineView.hpp"
@@ -56,6 +58,7 @@
 #include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
+#include "ThemeCatalog.hpp"
 #include "ThemeChoice.hpp"
 #include "ToggleBookmark.hpp"
 #include "UnlistedExtensions.hpp"
@@ -1658,6 +1661,102 @@ void verify_operation_request()
     expect(!frame.operation_request.has_value() && frame.lines.front().text == "x",
            "the request lasts one intent and the controller runs nothing");
 }
+// #597・D58: `:set guifont=` の補完は字体の一覧を名前順で出し、全件の一覧には出さない。
+void verify_font_family_choices()
+{
+    const auto fonts =
+        core::FontFamilies::from({"Consolas", "Arial", "Consolas", "", std::string{"Bad"}});
+    expect(std::ranges::equal(fonts.names(), std::vector<std::string>{"Arial", "Consolas"}),
+           "font families are sorted, unique and displayable");
+    expect(core::completes_font_family("set guifont=") &&
+               core::completes_font_family(":set guifont=Co") &&
+               !core::completes_font_family("set guif") &&
+               !core::completes_font_family("set fontsize="),
+           "only the guifont command asks for the font families");
+    const auto themes = core::ThemeCatalog::builtins();
+    expect(
+        core::command_completions("set guifont=", themes, fonts) ==
+            std::vector<std::string>{"set guifont=", "set guifont=Arial", "set guifont=Consolas"},
+        "the guifont completion lists the families after the command");
+    expect(core::command_completions("set guifont=C", themes, fonts) ==
+               std::vector<std::string>{"set guifont=Consolas"},
+           "the guifont completion narrows by prefix");
+    expect(core::command_completions("set guifont=") == std::vector<std::string>{"set guifont="},
+           "without families the completion is the command alone");
+    expect(core::command_completions("set g", themes, fonts) ==
+               std::vector<std::string>{"set guifont=", "set guide"},
+           "families appear only once the command is typed");
+    const auto typed = core::CommandLine::empty().with_fonts(fonts).inserted(":set guifont=Co");
+    const auto choices = core::palette_choices(typed.value());
+    expect(choices.size() == 2 && choices.front().command == "set guifont=Co" &&
+               choices.at(1).command == "set guifont=Consolas" &&
+               choices.at(1).kind == core::CommandChoiceKind::execute,
+           "the palette keeps the typed value first and adds the families");
+    expect(choices_for(":set guifont=Co").size() == 1,
+           "without families the palette offers the typed value alone");
+}
+
+[[nodiscard]] std::vector<std::string> shown_completions(const app::EditorFrame &frame)
+{
+    return frame.command_line.value_or(core::InputLineView{}).completions;
+}
+
+// #597・D58: 字体の一覧を読むのは補完が求めた最初の 1 回だけ。Ctrl+P を開いただけでは読まない。
+void verify_font_family_reading()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    expect(editor.fonts().lists() == 0, "opening Ctrl+P does not list the fonts");
+    auto frame = controller.apply_frame(app::CommandText{":set guifont="});
+    const auto rows = frame.command_palette.has_value()
+                          ? commands_of(frame.command_palette.value().rows)
+                          : std::vector<std::string>{};
+    expect(editor.fonts().lists() == 1 &&
+               rows == std::vector<std::string>{"set guifont=", "set guifont=Cascadia Mono",
+                                                "set guifont=Consolas"},
+           "typing the guifont command lists the fonts once and completes them");
+    static_cast<void>(controller.apply_frame(app::CommandText{"C"}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(controller.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}}));
+    frame = controller.apply_frame(app::CommandText{"set guifont="});
+    expect(editor.fonts().lists() == 1 &&
+               shown_completions(frame) ==
+                   std::vector<std::string>{"set guifont=", "set guifont=Cascadia Mono",
+                                            "set guifont=Consolas"},
+           "the Ex line reuses the listed fonts without reading again");
+
+    Editing failing;
+    failing.fonts().serve(std::unexpected(app::FontFamilyFailure::unavailable));
+    auto &other = failing.controller();
+    applied(other, app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(other.apply_frame(app::VimKeyPress{core::VimCharacter{U':'}}));
+    frame = other.apply_frame(app::CommandText{"set guifont="});
+    static_cast<void>(other.apply_frame(app::CommandText{"C"}));
+    frame = other.apply_frame(app::EditCommand{core::CommandEdit::backspace});
+    expect(failing.fonts().lists() == 1 &&
+               shown_completions(frame) == std::vector<std::string>{"set guifont="} &&
+               !frame.command_message.has_value(),
+           "an unlisted font collection falls back to the typed value once and silently");
+}
+
+// #597: port は各 family の全ロケールの名前を返す。どの言語の名前も候補に並び、重複は 1 つに畳む。
+void verify_font_family_locales()
+{
+    Editing editor;
+    editor.fonts().serve(std::vector<std::string>{"BIZ UDGothic", "BIZ UDゴシック", "Consolas",
+                                                  "BIZ UDGothic", "Consolas"});
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    const auto frame = controller.apply_frame(app::CommandText{":set guifont="});
+    const auto rows = frame.command_palette.has_value()
+                          ? commands_of(frame.command_palette.value().rows)
+                          : std::vector<std::string>{};
+    expect(rows == std::vector<std::string>{"set guifont=", "set guifont=BIZ UDGothic",
+                                            "set guifont=BIZ UDゴシック", "set guifont=Consolas"},
+           "every localized family name is a candidate once");
+}
 } // namespace
 
 void verify_command_palette()
@@ -1699,5 +1798,8 @@ void verify_command_palette()
     verify_palette_extended_edges();
     verify_operation_list_opens();
     verify_operation_request();
+    verify_font_family_choices();
+    verify_font_family_reading();
+    verify_font_family_locales();
 }
 } // namespace nenenib::tests

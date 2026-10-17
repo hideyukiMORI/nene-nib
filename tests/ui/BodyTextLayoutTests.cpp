@@ -1,10 +1,13 @@
 #include "BodyTextLayouts.hpp"
+#include "DirectWriteFactory.hpp"
 #include "SoftwareTarget.hpp"
+#include "SystemFontFamilies.hpp"
 #include "WindowChecks.hpp"
 
 #include "EditorSettings.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <string>
@@ -284,6 +287,138 @@ void check_giant_window(BodyTextLayouts &layouts, const core::EditorSettings &se
     expect(layouts.rows(wrapped).value_or(0) == folded.value_or(1),
            "the wrapped layout of the same text is kept apart from the window");
 }
+
+// #597: 字体を変えたら本文の字体が変わる。Cascadia Code と Consolas は `0` の送りが違う。
+[[nodiscard]] std::wstring family_of_layout(BodyTextLayouts &layouts,
+                                            const app::TextLayoutRequest &request)
+{
+    const auto made = layouts.get(request);
+    std::array<wchar_t, 128> name{};
+    if (!made || FAILED(made.value()->GetFontFamilyName(0, name.data(), 128)))
+    {
+        return {};
+    }
+    return name.data();
+}
+
+void check_family_change(BodyTextLayouts &layouts, core::EditorSettings settings)
+{
+    settings.font_family = core::DisplayText::parse("Cascadia Code").value();
+    const auto cascadia = layouts.cell(app::TextLayoutRequest{"", settings, narrow});
+    const auto cascadia_name =
+        family_of_layout(layouts, app::TextLayoutRequest{"0O", settings, narrow});
+    settings.font_family = core::DisplayText::parse("Consolas").value();
+    const auto consolas = layouts.cell(app::TextLayoutRequest{"", settings, narrow});
+    const auto consolas_name =
+        family_of_layout(layouts, app::TextLayoutRequest{"0O", settings, narrow});
+    expect(cascadia_name == L"Cascadia Code", "#597 the Cascadia Code format uses Cascadia Code");
+    expect(consolas_name == L"Consolas", "#597 the Consolas format uses Consolas");
+    expect(cascadia.has_value() && consolas.has_value() &&
+               cascadia.value().width != consolas.value().width,
+           "#597 changing the family changes the body advance");
+}
+
+void check_family_pixels(BodyTextLayouts &layouts, core::EditorSettings settings)
+{
+    // 描いた画素（DrawTextLayout と保持した字形の 2 経路）も字体で変わる。
+    SoftwareTarget target;
+    const auto pixels = [&layouts, &target, &settings](const char *family)
+    {
+        settings.font_family = core::DisplayText::parse(family).value();
+        layouts.begin_frame();
+        const auto made = layouts.get(app::TextLayoutRequest{"0O iIl1 g", settings, {400, 29, 96}});
+        std::pair<SoftwareTarget::Pixels, SoftwareTarget::Pixels> drawn;
+        if (!made)
+        {
+            return drawn;
+        }
+        drawn.first = target.text_layout(made.value().Get(), D2D1::Point2F(0, 0));
+        const auto *entry = layouts.glyphs_of(made.value().Get(), 0, 0, 29);
+        if (entry != nullptr && entry->glyphs_ready)
+        {
+            drawn.second =
+                target.glyph_runs(entry->glyphs, D2D1::Point2F(0, 0), D2D1::RectF(0, 0, 400, 29));
+        }
+        return drawn;
+    };
+    const auto before = pixels("Cascadia Code");
+    const auto after = pixels("Consolas");
+    expect(!before.first.empty() && before.first != after.first,
+           "#597 the drawn layout changes with the family");
+    expect(!before.second.empty() && before.second != after.second,
+           "#597 the held glyph runs change with the family");
+}
+
+// #597: 格子の文書でも :set guifont= の字体で描く（ADR 0140 の決定 6 は字体を固定している）。
+void check_grid_family(BodyTextLayouts &layouts, core::EditorSettings settings)
+{
+    settings.font_family = core::DisplayText::parse("Cascadia Code").value();
+    const app::TextLayoutRequest code{"0O", settings, narrow, core::DisplayForm::grid};
+    const auto code_cell = layouts.cell(code);
+    const auto code_name = family_of_layout(layouts, code);
+    settings.font_family = core::DisplayText::parse("Consolas").value();
+    const app::TextLayoutRequest consolas{"0O", settings, narrow, core::DisplayForm::grid};
+    const auto consolas_cell = layouts.cell(consolas);
+    const auto consolas_name = family_of_layout(layouts, consolas);
+    expect(code_name == L"Cascadia Code", "#597 the grid draws with a monospaced guifont");
+    expect(consolas_name == L"Consolas", "#597 the grid draws with the guifont family");
+    expect(code_cell.has_value() && consolas_cell.has_value() &&
+               code_cell.value().width != consolas_cell.value().width,
+           "#597 the grid cell follows the guifont family");
+}
+
+// #597: 等幅でない字体（Segoe UI）は格子では固定の等幅字体に落ちる（D58）。
+void check_grid_proportional(BodyTextLayouts &layouts, core::EditorSettings settings)
+{
+    settings.font_family = core::DisplayText::parse("Segoe UI").value();
+    const auto name = family_of_layout(
+        layouts, app::TextLayoutRequest{"0O", settings, narrow, core::DisplayForm::grid});
+    expect(name == L"Cascadia Mono" || name == L"Consolas",
+           "#597 a proportional guifont falls back to the fixed grid font");
+    const auto text = family_of_layout(layouts, app::TextLayoutRequest{"0O", settings, narrow});
+    expect(text == L"Segoe UI", "#597 the text form still uses a proportional guifont");
+}
+
+// 字体の名前に結果が依るので、要る字体が無い機械ではその検査だけ測らない（環境依存・QLT-013）。
+// Consolas と Segoe UI は Windows 11 と CI の runner にある。Cascadia Code は標準ではない。
+void check_families(BodyTextLayouts &layouts, const core::EditorSettings &settings)
+{
+    const auto factory = directwrite_factory();
+    if (factory == nullptr)
+    {
+        unmeasured("#597 font family checks need a DirectWrite factory");
+        return;
+    }
+    const bool consolas = installed(*factory.Get(), L"Consolas");
+    if (consolas && installed(*factory.Get(), L"Cascadia Code"))
+    {
+        check_family_change(layouts, settings);
+        check_family_pixels(layouts, settings);
+        check_grid_family(layouts, settings);
+    }
+    else
+    {
+        unmeasured("#597 guifont family changes need Cascadia Code and Consolas");
+    }
+    if (consolas && installed(*factory.Get(), L"Segoe UI"))
+    {
+        check_grid_proportional(layouts, settings);
+    }
+    else
+    {
+        unmeasured("#597 the proportional grid fallback needs Consolas and Segoe UI");
+    }
+    if (!consolas)
+    {
+        unmeasured("#597 the system font family listing needs Consolas");
+        return;
+    }
+    nenenib::ui::win32::SystemFontFamilies fonts;
+    const auto listed = fonts.list();
+    expect(listed.has_value() &&
+               std::ranges::find(listed.value(), std::string("Consolas")) != listed.value().end(),
+           "#597 the system font families list the installed Consolas by its name");
+}
 } // namespace
 
 void verify_body_text_layouts()
@@ -304,6 +439,7 @@ void verify_body_text_layouts()
     check_horizontal_pixels(layouts, settings);
     check_cell(layouts, settings);
     check_giant_window(layouts, settings);
+    check_families(layouts, settings);
     const auto invalid =
         layouts.get(app::TextLayoutRequest{std::string_view{"\xff", 1}, settings, narrow});
     expect(!invalid.has_value(), "invalid display text is an explicit layout failure");

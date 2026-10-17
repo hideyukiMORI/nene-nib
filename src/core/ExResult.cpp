@@ -504,7 +504,7 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     return std::unexpected(ExFailure::unknown_command);
 }
 constexpr std::array<std::string_view, 18> fixed_candidates{
-    "colorscheme",  "set fontsize=",    "set guifont=",    "set incsearch", "set noincsearch",
+    "colorscheme",  "set fontsize=",    guifont_command,   "set incsearch", "set noincsearch",
     "set hlsearch", "set nohlsearch",   "set guide",       "set noguide",   "tabs",
     "tabnew",       "tabnext",          "tabprevious",     "tabclose",      "set wrap",
     "set nowrap",   "set display=grid", "set display=text"};
@@ -557,6 +557,23 @@ void append_theme_candidates(std::vector<std::string> &candidates, const ThemeCa
     if (prefix_matches(prefix, "colorscheme ", "system"))
     {
         candidates.emplace_back("colorscheme system");
+    }
+}
+
+// 字体の候補は字体の命令を打ち始めたときだけ（全件の一覧には出さない・D58）。
+void append_font_candidates(std::vector<std::string> &candidates, const FontFamilies &fonts,
+                            std::string_view prefix)
+{
+    if (!prefix.starts_with(guifont_command))
+    {
+        return;
+    }
+    for (const auto &name : fonts.names())
+    {
+        if (prefix_matches(prefix, guifont_command, name))
+        {
+            candidates.push_back(std::string(guifont_command) + name);
+        }
     }
 }
 
@@ -623,9 +640,12 @@ std::vector<std::string> ex_command_candidates(const ThemeCatalog &themes)
     return matching_candidates(themes, std::nullopt);
 }
 
-std::vector<std::string> command_completions(std::string_view prefix, const ThemeCatalog &themes)
+std::vector<std::string> command_completions(std::string_view prefix, const ThemeCatalog &themes,
+                                             const FontFamilies &fonts)
 {
-    return matching_candidates(themes, prefix);
+    auto candidates = matching_candidates(themes, prefix);
+    append_font_candidates(candidates, fonts, prefix);
+    return candidates;
 }
 
 DisplayText ex_failure_message(ExFailure failure)
