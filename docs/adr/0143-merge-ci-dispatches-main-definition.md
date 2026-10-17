@@ -15,6 +15,7 @@
 
 1. **dispatch の ref は `main` の 1 つ。** `run_ci` は `ref=main` で起動する。定義は main の `check.yml` だけで（ARC-001）、古い branch でも `build-and-test` が走る。検査の対象は今日どおり `inputs.expected_head`（PR の head）で、workflow の step（checkout の ref・`validate-git.ps1`）は変えない。
 2. **run の照合は入力で行う。** 期待する値は `event = workflow_dispatch`・`path = .github/workflows/check.yml`・`head_branch = main`・`display_title = Merge PR #<番号> at <expected head>`・`repository = 正典のリポジトリ`・`conclusion = success`。`head_sha` は main の先端になるので PR の head と比べない（`display_title` は `run-name` が `inputs` から作る値で、入力の head を証明する）。それ以外の照合（実行前後の PR と rules の比較・再試行しない・`--ci-run` の引き継ぎ）は ADR 0118 のまま。
+   - この ADR が置き換える記述: ADR 0118 の「fork の head を手動 workflow の ref にできないため同 repo の branch だけを受け付ける」（理由は変わるが、同 repo の branch だけという制限は `validate-git.ps1` の PR の照合のために残す）と、ADR 0136 の決定 4「`merge-pr.py` は変えない」。
 3. **PR が `check.yml` 自身を変えるときは、その PR の定義では走らない。** 変更後の定義は merge の後の最初の run で確かめる（ADR 0136 の「初回の run が通った時点で受理」と同じ形）。別の道（そのときだけ head の ref で起動する）は作らない。
 4. **道具の試験は同じ変更で直す。** `tests/conformance/test_merge_pr.py` は dispatch の `ref=main` と、`head_branch` が `main` でない run・`display_title` が違う run の拒否を確かめる。`head_sha` の不一致は拒否の理由から外す。
 
