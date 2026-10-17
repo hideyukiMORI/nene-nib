@@ -2478,3 +2478,8 @@ Debug（tidy / ASan / UBSan）、`--application` 16,029 checks と 11 scope、sy
 
 #474 の後も Vim INSERT の 200 打鍵は 12.6 ms のまま（鍵ごとに viewport を渡すので追従が毎回解決される）。`VimEditorView.viewport` を `optional` にし、読む鍵だけ `VimStep.viewport_request` で求めて controller が解決して流し直す（`layout_request` と同じ往復）。読む口は `vim_viewport_of` の 1 本。
 Debug（tidy / ASan / UBSan）、`--application` 16,299 checks・`--vim` 1,174,044 checks（読む鍵 26・読まない鍵 11・要求は state を消費しない・折り返しの往復）と 15 scope、symbols 0 / conformance 0 / format 0。Vim INSERT の連打は 12.825 → 3.956 ms（5 試行の中央値・正式ゲートの外）。正式ゲートは bcf4e30 の Release で 8 本とも基準内・退行 0。[全値と条件](vim-viewport-2026-10-15.md)。基準値は変えない。独立レビューの F1 は ADR 0129 の限界、F2 は契約の追加（d0a4a61）で受けた。CI は PR #478 の base を main へ変えてから、施主の試用は D41 のとおり merge の前。Waivers none。
+
+## 5-ev — 起動の最初の frame は WARP で覆いの子窓に描く（Issue #485・ADR 0132）
+
+ADR 0131 の後も起動は約 178 ms で、約 150 ms は NVIDIA の `D3D11CreateDevice` 待ち。WARP の device は約 9 ms なので、worker で WARP → HARDWARE の順に作り、最初の frame は WARP で本窓を覆う子窓に出し、本物が出来たら本窓に同じ frame を出して `WaitForCommitCompletion`・`DwmFlush` の後に子窓を壊す。本窓に WARP を結ぶと差し替え後も単打が 1.25 ms のまま残るので結ばない。
+Debug（tidy / ASan / UBSan）、`--device-warmup` 13・`--application` 16,021・`--background-work` 89 checks、symbols 0 / conformance 0 / format 0。窓ありは `eng/verify-window.py`（施主の了承のもと手で）: `--keys` で子窓が鍵の前に消え、差し替えの標本 3 回で空の面 0（`DwmFlush` 前は 1 標本に Mica が出て直した）。正式ゲートは e870d0f の Release で起動 **40.5 ms**（基準 191.5）・16 MiB open **52.2 ms**（249.8）・単打 0.574・長行 5.09・窓 33.2・palette 1.94、連打 2 本は base に #474 が無い既存超過（QLT-012・#474 で解消）。[全値と条件](warp-first-frame-2026-10-15.md)。look の節の既存失敗は #486。基準値は変えない。独立レビューと CI は PR、施主の試用は D41 のとおり merge の前。Waivers none。
