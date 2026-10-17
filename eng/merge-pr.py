@@ -98,7 +98,7 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
         raise MergeRefused("Merge CI requires a branch in the canonical repository")
     if run_id is None:
         response = read_json(api_command("actions/workflows/check.yml/dispatches", "--method", "POST",
-                             "-H", "X-GitHub-Api-Version: 2026-03-10", "-f", f"ref={record['headRefName']}",
+                             "-H", "X-GitHub-Api-Version: 2026-03-10", "-f", "ref=main",
                              "-f", f"inputs[pr_number]={number}", "-f", f"inputs[expected_head]={head}",
                              "-F", "return_run_details=true"), runner)
         if not isinstance(response, dict) or type(response.get("workflow_run_id")) is not int:
@@ -106,8 +106,9 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
         run_id = response["workflow_run_id"]
     print(json.dumps({"ciRun": run_id, "resume": f"--ci-run {run_id}"}), flush=True)
     run = read_json(api_command(f"actions/runs/{run_id}"), runner)
-    expected = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml", "head_sha": head,
-                "head_branch": record["headRefName"], "display_title": f"Merge PR #{number} at {head}"}
+    # ADR 0143: the definition is main's check.yml; the PR head is proven by the input-based run name.
+    expected = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml",
+                "head_branch": "main", "display_title": f"Merge PR #{number} at {head}"}
     if not isinstance(run, dict):
         raise MergeRefused("CI run response is malformed")
     # Dispatch can return before GitHub resolves the input-based run name.

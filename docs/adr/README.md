@@ -154,3 +154,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0140](0140-giant-lines-open-as-grid-after-asking.md) | 巨大な行を含む文書は、聞いてから格子表示で開く | 提案・#544・D53 |
 | [0141](0141-file-read-arrives-as-sealed-bytes.md) | ファイルの読みは core が予約した封印済みの列で届き、判定と本文へ複写なしで移る | 提案・#581、正式ゲートと独立レビューで受理 |
 | [0142](0142-preassign-fallback-fonts-to-missing-runs.md) | 主字体に無い文字の連続区間には、OS の MapCharacters が選ぶ字体を layout の範囲に先に当てる | 提案・#586（採用は決定 6 の一致） |
+| [0143](0143-merge-ci-dispatches-main-definition.md) | マージ直前の CI は main の workflow 定義で起動し、PR の head は入力で checkout する | 提案・#599 |
