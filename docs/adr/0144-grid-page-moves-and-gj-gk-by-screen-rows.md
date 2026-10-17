@@ -51,3 +51,5 @@ Vim 9.1 の `gj` `gk` の実測（probe-596・通常端末モード・`wrap`・`
 - `H` `M` `L` と `zt` `zz` `zb` の格子での意味は変えない（論理行のまま・後続）。
 - `g0` `g$` `gm` は別 Issue（todo の一覧）。
 - text 形の画面行の仮想桁は等幅の近似（proportional な字体では着く位置が Vim とずれ得る）。格子は等幅なので一致する。
+- oracle は 1 本の `:normal!` の間に再描画しないので、鍵ごとの skipcol を要する列（`7gj3gk`）は fixture にできない。Nib は鍵ごとに追従する（追補 2026-10-17・#596）。
+- Nib の画面の追従は `first_row`（ADR 0114・Vim の smoothscroll に近い）なので、長い行から下の行へ出るとき smoothscroll off の Vim の `topline` と違う。`j` でも同じ差で、fixture から外す（追補 2026-10-17・#596）。
