@@ -30,6 +30,7 @@
 #include "VimInsertBlock.hpp"
 #include "VimKeySource.hpp"
 #include "VimKeyTable.hpp"
+#include "VimLayoutNeed.hpp"
 #include "VimLineEndStop.hpp"
 #include "VimLineExtent.hpp"
 #include "VimMacroRecording.hpp"
@@ -53,8 +54,10 @@
 #include "VimRepeatRecord.hpp"
 #include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
+#include "VimRowRequest.hpp"
 #include "VimScreenPosition.hpp"
 #include "VimScrollDirection.hpp"
+#include "VimScrollUnit.hpp"
 #include "VimSearch.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSearchHit.hpp"
@@ -2451,9 +2454,35 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
                    VimNavigate{navigated_selection(state, view.selection, caret), first}};
 }
 
+// 画面行の単位の着地（ADR 0144 の決定 5・6）。置き所をモードで寄せ、先頭行の画面行も運ぶ。動かな
+// ければ欲しい列も保ち、$ の後は画面行の末尾へ着いたまま行末の欲しい列を保つ。
+[[nodiscard]] VimStep row_navigated(const VimState &state, const VimEditorView &view,
+                                    const VimDisplayNavigation &target, Offset placed)
+{
+    const Offset caret = rested_in(view.text, placed, state.mode);
+    VimState next = navigated_state(state, view.text, caret);
+    const bool line_end = state.wanted_column.has_value() &&
+                          state.wanted_column.value().wish == VimColumnWish::at_line_end;
+    if (caret == view.selection.caret || line_end)
+    {
+        next.wanted_column = state.wanted_column;
+    }
+    return VimStep{std::move(next), VimNavigate{navigated_selection(state, view.selection, caret),
+                                                target.first, target.first_row}};
+}
+
 [[nodiscard]] VimStep displayed_navigation(const VimState &state, const VimEditorView &view,
                                            const VimDisplayNavigation &target)
 {
+    if (target.placed.has_value())
+    {
+        auto step = row_navigated(state, view, target, target.placed.value());
+        if (target.scroll_lines.has_value())
+        {
+            step.next.scroll_lines = VimCount{target.scroll_lines.value()};
+        }
+        return step;
+    }
     auto step = target.preserve_column
                     ? navigated_at(state, view, target.first, view.selection.caret)
                     : navigated(state, view, target.first, target.caret);
@@ -3451,7 +3480,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return operated(state, view, motion.value());
 }
 
-[[nodiscard]] std::expected<VimEditorView, LineNumber>
+[[nodiscard]] std::expected<VimEditorView, VimLayoutNeed>
 display_view(const VimState &state, const VimEditorView &view, VimAction action)
 {
     auto navigation = vim_display_navigation(state, view, action);
@@ -3464,10 +3493,17 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return result;
 }
 
-[[nodiscard]] VimStep requested_layout(const VimState &state, LineNumber line)
+// 足りない文字組みの値を、効果を出さず状態もそのままで求める（ADR 0144 の決定 2）。行の画面行数か
+// 行の中の画面行のどちらか 1 つで、controller が答えて同じ鍵をもう一度流す。
+[[nodiscard]] VimStep requested_layout(const VimState &state, const VimLayoutNeed &need)
 {
     auto step = VimStep{state, VimNoEffect{}};
-    step.layout_request = line;
+    if (const auto *const line = std::get_if<LineNumber>(&need); line != nullptr)
+    {
+        step.layout_request = *line;
+        return step;
+    }
+    step.row_request = std::get<VimRowRequest>(need);
     return step;
 }
 
@@ -3908,6 +3944,16 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     }
     VimState next = state;
     next.insert_repeat = std::nullopt;
+    // 格子の画面行の単位は NORMAL と同じ解決を通す（ADR 0144 の決定 5）。論理行の道は今日のまま。
+    if (view.layout.enabled && view.layout.unit == VimScrollUnit::row)
+    {
+        const auto displayed = display_view(next, view, action);
+        if (!displayed)
+        {
+            return requested_layout(state, displayed.error());
+        }
+        return page_step(next, displayed.value(), direction);
+    }
     return page_step(next, view, direction);
 }
 
@@ -4675,7 +4721,7 @@ VimViewport vim_viewport_of(const VimEditorView &view) noexcept
 VimStep vim_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     auto step = stepped(state, view, key);
-    if (step.layout_request.has_value() || step.viewport_request)
+    if (step.layout_request.has_value() || step.row_request.has_value() || step.viewport_request)
     {
         return step;
     }

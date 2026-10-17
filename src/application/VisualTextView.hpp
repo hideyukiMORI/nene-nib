@@ -9,6 +9,8 @@
 #include "ScrollState.hpp"
 #include "TextCaret.hpp"
 #include "TextLayoutPort.hpp"
+#include "VimRowRequest.hpp"
+#include "VimRowSpan.hpp"
 #include "VisualPosition.hpp"
 
 #include <cstddef>
@@ -54,6 +56,11 @@ class VisualTextView final
     constrained(core::VisualPosition first, core::ScrollExtent extent);
     [[nodiscard]] std::expected<ScrollState, TextLayoutFailure>
     followed(core::TextCaret caret, core::ScrollFollow follow, core::ScrollExtent extent);
+    // engine の問い（ADR 0144 の決定 2）の答え手。位置の問いはその位置の画面行、番号の問いは
+    // その画面行（行の画面行数へ丸める）の本文の範囲と行の画面行数。格子は GridCells、text の形は
+    // 同じ文字組みの locate / hit、巨大な行の窓は 1 画面行で、行の全体を写さない。
+    [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
+    row_span(const core::VimRowRequest &request);
     // 格子の升の答え手（ADR 0140 の決定 4・5）。本文が索引を持たないか 1 升を読めなければ失敗。
     // frame の画面行（GridLineRows）は位置解決と同じ GridCells を 1 frame に 1 つ借りて切り出す。
     [[nodiscard]] std::expected<GridCells, TextLayoutFailure> grid_cells() const;
@@ -91,6 +98,11 @@ class VisualTextView final
     grid_location(core::TextCaret caret) const;
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure>
     grid_caret_at(core::VisualPosition at, float x) const;
+    // 行 number の画面行 row の始まり（行の中の位置）と、位置 at が立つ画面行。
+    [[nodiscard]] std::expected<core::Offset, TextLayoutFailure> row_start(core::LineNumber number,
+                                                                           std::size_t row);
+    [[nodiscard]] std::expected<std::size_t, TextLayoutFailure> row_of(core::LineNumber number,
+                                                                       core::Offset at);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
     forward(core::VisualPosition from, std::size_t amount);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>

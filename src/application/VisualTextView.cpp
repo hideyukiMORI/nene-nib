@@ -11,6 +11,7 @@
 #include <array>
 #include <limits>
 #include <utility>
+#include <variant>
 
 namespace nenenib::application
 {
@@ -392,6 +393,84 @@ std::optional<core::TextCaret> VisualTextView::outside_window(const LineView &li
     const auto column = static_cast<std::size_t>(std::clamp(estimate, 0.0, limit));
     const auto offset = index->byte_at_virtual_column(text, line.number, column);
     return core::TextCaret{giant_position_of(*index, text, line.number, offset)};
+}
+
+std::expected<core::VimRowSpan, TextLayoutFailure>
+VisualTextView::row_span(const core::VimRowRequest &request)
+{
+    const auto &text = state_.text();
+    const core::LineNumber number{
+        std::clamp<std::size_t>(request.line.value, 1, text.line_count())};
+    const auto count = rows(number);
+    if (!count)
+    {
+        return std::unexpected(count.error());
+    }
+    const auto *const at = std::get_if<core::Offset>(&request.target);
+    const auto row = at != nullptr ? row_of(number, *at)
+                                   : std::expected<std::size_t, TextLayoutFailure>{std::min(
+                                         std::get<std::size_t>(request.target), count.value() - 1)};
+    if (!row)
+    {
+        return std::unexpected(row.error());
+    }
+    const auto start = row_start(number, row.value());
+    const auto end = row.value() + 1 < count.value()
+                         ? row_start(number, row.value() + 1)
+                         : std::expected<core::Offset, TextLayoutFailure>{text.line_end(number)};
+    if (!start || !end)
+    {
+        return std::unexpected(!start ? start.error() : end.error());
+    }
+    return core::VimRowSpan{number, row.value(), start.value(), end.value(), count.value()};
+}
+
+// 画面行の頭は x の最小で叩いた位置（格子は升 0）。行の最初の画面行は行頭。
+std::expected<core::Offset, TextLayoutFailure> VisualTextView::row_start(core::LineNumber number,
+                                                                         std::size_t row)
+{
+    const auto &text = state_.text();
+    if (row == 0)
+    {
+        return text.line_start(number);
+    }
+    if (gridded())
+    {
+        auto cells = grid_cells();
+        if (!cells)
+        {
+            return std::unexpected(cells.error());
+        }
+        return cells.value().byte_of(number, core::GridPoint{row, 0});
+    }
+    const auto caret =
+        caret_at(core::VisualPosition{number, row}, std::numeric_limits<float>::lowest());
+    if (!caret)
+    {
+        return std::unexpected(caret.error());
+    }
+    return text.offset_of(caret.value().position);
+}
+
+std::expected<std::size_t, TextLayoutFailure> VisualTextView::row_of(core::LineNumber number,
+                                                                     core::Offset at)
+{
+    const auto &text = state_.text();
+    if (gridded())
+    {
+        auto cells = grid_cells();
+        if (!cells)
+        {
+            return std::unexpected(cells.error());
+        }
+        return cells.value().point_of(number, at).row;
+    }
+    const auto located = location(core::TextCaret{text.position_of(at)});
+    if (!located)
+    {
+        return std::unexpected(located.error());
+    }
+    return located.value().row;
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last()

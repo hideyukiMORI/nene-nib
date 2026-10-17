@@ -1,7 +1,10 @@
 #include "VimScreenGeometry.hpp"
 
 #include "VimScreenKind.hpp"
+#include "VimScreenRows.hpp"
 #include "VimScreenWindow.hpp"
+#include "VimScrollDirection.hpp"
+#include "VimScrollUnit.hpp"
 #include "VimStep.hpp"
 
 #include <algorithm>
@@ -201,12 +204,18 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     return target;
 }
 
-[[nodiscard]] Navigation half_target(const VimState &state, const VimEditorView &view,
-                                     VimScreenKind kind)
+// 半画面の量（回数・'scroll'・既定は半分）。画面の高さを越えない（ADR 0019 の決定 6）。
+[[nodiscard]] std::size_t half_amount(const VimState &state, const VimEditorView &view) noexcept
 {
     const auto fallback = std::max<std::size_t>(height_of(view) / 2, 1);
     const auto saved = state.scroll_lines.value_or(VimCount{fallback}).value;
-    const auto amount = std::min(state.count.value_or(VimCount{saved}).value, height_of(view));
+    return std::min(state.count.value_or(VimCount{saved}).value, height_of(view));
+}
+
+[[nodiscard]] Navigation half_target(const VimState &state, const VimEditorView &view,
+                                     VimScreenKind kind)
+{
+    const auto amount = half_amount(state, view);
     auto target = kind == VimScreenKind::half_up ? half_up(view, amount) : half_down(view, amount);
     if (!target)
     {
@@ -385,6 +394,80 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     }
     std::unreachable();
 }
+
+// 画面行の単位の半画面と 1 画面（ADR 0144 の決定 5）。1 画面は visible_lines 行で、回数は画面の数。
+// 回数のある半画面は、動いたときだけ 'scroll' を置き換える（論理行の道と同じ）。
+[[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
+row_target(const VimState &state, const VimEditorView &view, VimScrollDirection direction,
+           bool half)
+{
+    const auto pages = vim_search_count(state);
+    const auto height = height_of(view);
+    const auto whole = pages > std::numeric_limits<std::size_t>::max() / height
+                           ? std::numeric_limits<std::size_t>::max()
+                           : pages * height;
+    const auto amount = half ? half_amount(state, view) : whole;
+    auto target = vim_row_navigation(state, view, direction, amount);
+    if (!target)
+    {
+        return target;
+    }
+    auto &result = target.value();
+    const bool moved = result.first != vim_viewport_of(view).first_visible ||
+                       result.first_row != vim_viewport_of(view).first_row ||
+                       result.placed != std::optional{view.selection.caret};
+    if (half && state.count.has_value() && moved)
+    {
+        result.scroll_lines = amount;
+    }
+    return target;
+}
+
+// H M L は格子でも論理行のまま（ADR 0144 の限界）。
+[[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
+lined(const VimState &state, const VimEditorView &view, VimScreenKind kind)
+{
+    const auto result = resolved(state, view, kind);
+    if (!result)
+    {
+        return std::unexpected(VimLayoutNeed{result.error()});
+    }
+    return result.value();
+}
+
+[[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
+rows_resolved(const VimState &state, const VimEditorView &view, VimScreenKind kind)
+{
+    switch (kind)
+    {
+    case VimScreenKind::top:
+    case VimScreenKind::middle:
+    case VimScreenKind::bottom:
+        return lined(state, view, kind);
+    case VimScreenKind::half_up:
+        return row_target(state, view, VimScrollDirection::up, true);
+    case VimScreenKind::half_down:
+        return row_target(state, view, VimScrollDirection::down, true);
+    case VimScreenKind::page_up:
+        return row_target(state, view, VimScrollDirection::up, false);
+    case VimScreenKind::page_down:
+        return row_target(state, view, VimScrollDirection::down, false);
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
+unit_resolved(const VimState &state, const VimEditorView &view, VimScreenKind kind)
+{
+    switch (view.layout.unit)
+    {
+    case VimScrollUnit::line:
+        return lined(state, view, kind);
+    case VimScrollUnit::row:
+        return rows_resolved(state, view, kind);
+    }
+    std::unreachable();
+}
 } // namespace
 
 bool vim_reads_viewport(VimAction action) noexcept
@@ -392,7 +475,7 @@ bool vim_reads_viewport(VimAction action) noexcept
     return screen_kind(action).has_value();
 }
 
-std::expected<std::optional<VimDisplayNavigation>, LineNumber>
+std::expected<std::optional<VimDisplayNavigation>, VimLayoutNeed>
 vim_display_navigation(const VimState &state, const VimEditorView &view, VimAction action)
 {
     const auto kind = screen_kind(action);
@@ -400,7 +483,7 @@ vim_display_navigation(const VimState &state, const VimEditorView &view, VimActi
     {
         return std::nullopt;
     }
-    const auto result = resolved(state, view, kind.value());
+    const auto result = unit_resolved(state, view, kind.value());
     if (!result)
     {
         return std::unexpected(result.error());
