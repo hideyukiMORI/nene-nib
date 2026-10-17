@@ -26,6 +26,7 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FilePort.hpp"
+#include "FontFamilies.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "LineView.hpp"
@@ -420,6 +421,8 @@ class EditorController final
     [[nodiscard]] bool composition_ignored() const noexcept;
     // 入力行を閉じる 1 本。閉じるときに残っている変換は消す（ADR 0061 の決定 3）。
     void close_command_input();
+    [[nodiscard]] core::FontFamilies given_fonts() const;
+    void reach_font_families();
     // 確定した文字列を Vim の打鍵として流す。`.` の再生とマクロが後で自然に載る（決定 4）。
     void type_as_vim_keys(std::string_view utf8);
     void fail(FileFailure failure);
@@ -458,6 +461,8 @@ class EditorController final
     // 面が同じフォルダを頼んだ控え（ADR 0062 の決定 14・15）。券は面を開くたびに進み、ほかは
     // 面を開くときに置き直す。面が閉じている間は読まない。
     PaletteFolder palette_folder_;
+    // 字体の一覧（#597・D58）。補完が求めた最初の 1 回だけ読み、読めなくても再読しない。
+    std::optional<core::FontFamilies> font_families_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。

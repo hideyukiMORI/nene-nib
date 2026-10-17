@@ -1,5 +1,7 @@
 #include "CommandInput.hpp"
 
+#include "CommandChoice.hpp"
+#include "FontFamilies.hpp"
 #include "PaletteScope.hpp"
 
 #include <string>
@@ -61,6 +63,39 @@ namespace
     std::unreachable();
 }
 
+[[nodiscard]] bool wants_fonts(const core::CommandLine &line)
+{
+    return core::completes_font_family(line.text());
+}
+
+[[nodiscard]] bool wants_fonts(const core::CommandPalette &palette)
+{
+    return core::completes_font_family(palette.input().text());
+}
+
+[[nodiscard]] bool wants_fonts(const core::SearchLine & /*line*/)
+{
+    return false;
+}
+
+[[nodiscard]] CommandInput fonts_given(const core::CommandLine &line,
+                                       const core::FontFamilies &fonts)
+{
+    return line.with_fonts(fonts);
+}
+
+[[nodiscard]] CommandInput fonts_given(const core::CommandPalette &palette,
+                                       const core::FontFamilies &fonts)
+{
+    return palette.with_fonts(fonts);
+}
+
+[[nodiscard]] CommandInput fonts_given(const core::SearchLine &line,
+                                       const core::FontFamilies & /*fonts*/)
+{
+    return line;
+}
+
 [[nodiscard]] core::InputLineView view_of(const core::CommandPalette &palette)
 {
     const core::CommandLine &line = palette.input();
@@ -99,5 +134,15 @@ CommandInput edited_command(const CommandInput &input, core::CommandEdit edit)
 {
     return std::visit([edit](const auto &value) -> CommandInput { return value.edited(edit); },
                       input);
+}
+
+bool wants_font_families(const CommandInput &input)
+{
+    return std::visit([](const auto &value) { return wants_fonts(value); }, input);
+}
+
+CommandInput with_font_families(const CommandInput &input, const core::FontFamilies &fonts)
+{
+    return std::visit([&fonts](const auto &value) { return fonts_given(value, fonts); }, input);
 }
 } // namespace nenenib::application

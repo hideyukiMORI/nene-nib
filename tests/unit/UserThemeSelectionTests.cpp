@@ -30,6 +30,7 @@
 #include "ScriptedCodePages.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
+#include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
@@ -153,7 +154,8 @@ void verify_user_theme_commands()
     expect(line.text() == "colorscheme my-theme", "Ex Tab completes user theme");
     line = line.edited(core::CommandEdit::backspace);
     expect(line.completions().front() == "colorscheme my-theme", "editing preserves catalog");
-    auto palette = core::CommandPalette::opened({}, ":", core::EditMode::ordinary, catalog)
+    auto palette = core::CommandPalette::opened({}, ":", core::EditMode::ordinary,
+                                                core::CommandLine::empty(catalog))
                        .inserted("my-t")
                        .value();
     const auto found = palette.choice_at(0);
@@ -233,12 +235,13 @@ void verify_theme_startup_notice()
     ScriptedHistory history;
     ScriptedFolders folders;
     ScriptedAutosave autosave;
+    ScriptedFonts fonts;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{app::EditorPorts{appearance, clipboard, files, pages, settings,
                                                  themes, session, history, folders, bookmarks,
-                                                 text_layouts, autosave},
+                                                 text_layouts, autosave, fonts},
                                 initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -253,7 +256,7 @@ void verify_theme_startup_notice()
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
     EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
                                                  themes, session, history, folders, bookmarks,
-                                                 text_layouts, autosave},
+                                                 text_layouts, autosave, fonts},
                                 initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,

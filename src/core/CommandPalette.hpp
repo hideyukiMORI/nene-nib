@@ -3,6 +3,7 @@
 #include "CommandChoice.hpp"
 #include "CommandLine.hpp"
 #include "EditMode.hpp"
+#include "FontFamilies.hpp"
 #include "PaletteScope.hpp"
 
 #include <cstddef>
@@ -22,11 +23,11 @@ class CommandPalette final
   public:
     // 開くのはこの 1 本。input は最初の入力で、選択は先頭（最初の選択は selected_at で動かす）。
     // mode は開いたときの編集モードで、`?` の操作の一覧がモードで使える操作を選ぶのに読む
-    // （ADR 0078 の決定 11）。
+    // （ADR 0078 の決定 11）。empty は空の入力行で、テーマと字体の一覧を運ぶ（#597）。
     // 生の候補は rvalue でも一度防御コピーし、移管前の可変 alias を私有値へ持ち込まない。
     [[nodiscard]] static CommandPalette opened(const std::vector<CommandChoice> &entries,
                                                std::string_view input, EditMode mode,
-                                               ThemeCatalog themes = ThemeCatalog::builtins());
+                                               CommandLine empty = CommandLine::empty());
     [[nodiscard]] PaletteScope scope() const noexcept;
     [[nodiscard]] const CommandLine &input() const noexcept;
     // 絞り込みの結果の件数。
@@ -43,6 +44,8 @@ class CommandPalette final
     [[nodiscard]] CommandPalette edited(CommandEdit edit) const;
     [[nodiscard]] CommandPalette selected_at(std::size_t index) const;
     [[nodiscard]] std::expected<CommandPalette, ExFailure> filled(std::string_view command) const;
+    // 同じ入力と候補の列で、字体の一覧を入れて結果を作り直した面（#597・D58）。選択は先頭。
+    [[nodiscard]] CommandPalette with_fonts(FontFamilies fonts) const;
     // 候補の列の後ろへ more を足した面（ADR 0062 の決定 16）。前の列の順と位置は変えず、結果は
     // filtered の 1 本で作り直す。選択は伸ばす前に選んでいた候補と同じ候補（列の中の位置で探す）、
     // 伸ばす前の結果が空なら先頭、設定のコマンド（commands）は番号のまま。入力は変えない。

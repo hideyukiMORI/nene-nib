@@ -1,11 +1,13 @@
 #include "BodyTextLayouts.hpp"
 #include "DirectWriteFactory.hpp"
 #include "SoftwareTarget.hpp"
+#include "SystemFontFamilies.hpp"
 #include "WindowChecks.hpp"
 
 #include "EditorSettings.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <string>
@@ -303,10 +305,12 @@ void check_family_change(BodyTextLayouts &layouts, core::EditorSettings settings
 {
     settings.font_family = core::DisplayText::parse("Cascadia Code").value();
     const auto cascadia = layouts.cell(app::TextLayoutRequest{"", settings, narrow});
-    const auto cascadia_name = family_of_layout(layouts, app::TextLayoutRequest{"0O", settings, narrow});
+    const auto cascadia_name =
+        family_of_layout(layouts, app::TextLayoutRequest{"0O", settings, narrow});
     settings.font_family = core::DisplayText::parse("Consolas").value();
     const auto consolas = layouts.cell(app::TextLayoutRequest{"", settings, narrow});
-    const auto consolas_name = family_of_layout(layouts, app::TextLayoutRequest{"0O", settings, narrow});
+    const auto consolas_name =
+        family_of_layout(layouts, app::TextLayoutRequest{"0O", settings, narrow});
     expect(cascadia_name == L"Cascadia Code", "#597 the Cascadia Code format uses Cascadia Code");
     expect(consolas_name == L"Consolas", "#597 the Consolas format uses Consolas");
     expect(cascadia.has_value() && consolas.has_value() &&
@@ -332,8 +336,8 @@ void check_family_pixels(BodyTextLayouts &layouts, core::EditorSettings settings
         const auto *entry = layouts.glyphs_of(made.value().Get(), 0, 0, 29);
         if (entry != nullptr && entry->glyphs_ready)
         {
-            drawn.second = target.glyph_runs(entry->glyphs, D2D1::Point2F(0, 0),
-                                             D2D1::RectF(0, 0, 400, 29));
+            drawn.second =
+                target.glyph_runs(entry->glyphs, D2D1::Point2F(0, 0), D2D1::RectF(0, 0, 400, 29));
         }
         return drawn;
     };
@@ -389,6 +393,11 @@ void check_families(BodyTextLayouts &layouts, const core::EditorSettings &settin
     check_family_pixels(layouts, settings);
     check_grid_family(layouts, settings);
     check_grid_proportional(layouts, settings);
+    nenenib::ui::win32::SystemFontFamilies fonts;
+    const auto listed = fonts.list();
+    expect(listed.has_value() &&
+               std::ranges::find(listed.value(), std::string("Consolas")) != listed.value().end(),
+           "#597 the system font families list the installed Consolas by its en-us name");
 }
 } // namespace
 

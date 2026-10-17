@@ -76,9 +76,8 @@ CommandPalette::CommandPalette(CommandLine input, std::size_t selected, EditMode
 }
 
 CommandPalette CommandPalette::opened(const std::vector<CommandChoice> &entries,
-                                      std::string_view input, EditMode mode, ThemeCatalog themes)
+                                      std::string_view input, EditMode mode, CommandLine empty)
 {
-    const auto empty = CommandLine::empty(std::move(themes));
     return filtered(empty.inserted(input).value_or(empty), mode,
                     std::make_shared<const std::vector<CommandChoice>>(entries));
 }
@@ -256,12 +255,19 @@ CommandPalette CommandPalette::selected_at(std::size_t index) const
 // 候補の列を持ったまま、入力を `:<command>` にする（ADR 0060 の決定 5）。
 std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view command) const
 {
-    auto input = CommandLine::empty(input_.catalog()).inserted(":" + std::string(command));
+    auto input = CommandLine::empty(input_.catalog())
+                     .with_fonts(input_.fonts())
+                     .inserted(":" + std::string(command));
     if (!input)
     {
         return std::unexpected(input.error());
     }
     return refiltered(std::move(input).value());
+}
+
+CommandPalette CommandPalette::with_fonts(FontFamilies fonts) const
+{
+    return filtered(input_.with_fonts(std::move(fonts)), mode_, entries_);
 }
 
 CommandPalette CommandPalette::extended(const std::vector<CommandChoice> &more) const
