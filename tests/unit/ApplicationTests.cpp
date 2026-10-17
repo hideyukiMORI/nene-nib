@@ -19,6 +19,7 @@
 #include "CommandInput.hpp"
 #include "CommandLine.hpp"
 #include "CommandPalette.hpp"
+#include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
 #include "Composition.hpp"
@@ -77,6 +78,7 @@
 #include "SelectionAnchoring.hpp"
 #include "SelectionPresence.hpp"
 #include "SelectionSpan.hpp"
+#include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
@@ -977,6 +979,42 @@ void verify_follow_dropped_on_leaving_question()
            "a follow asked while the question was open does not move the next document");
 }
 
+// 問いの間に字の大きさを変えた設定が頼んだ clamp も、文書を離れるときに捨てる（ADR 0128 の
+// 決定 7・8）の足場。短い行の文書を下へ送ってから巨大な行の文書を開き、問いの間に字を変える
+// （resize が偽なら変えない）。SwitchTab で短い行の文書へ戻り、切り替えの間の文字組みの回数を返す。
+[[nodiscard]] std::size_t switched_back_after_question(Editing &editing, bool resize)
+{
+    const LineNumber before = scrolled_small_document(editing);
+    EditorController &controller = editing.controller();
+    expect(controller
+               .apply(OpenDocument{nenenib::core::FilePath::parse("C:\\work\\giant.txt").value()})
+               .display_question,
+           "the giant document asks");
+    if (resize)
+    {
+        static_cast<void>(controller.apply(nenenib::application::OpenCommandPalette{}));
+        static_cast<void>(controller.apply(nenenib::application::CommandText{":set fontsize=22"}));
+        static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
+    }
+    const std::size_t asked = editing.text_layouts().requests();
+    applied(controller, SwitchTab{0});
+    const std::size_t switched = editing.text_layouts().requests() - asked;
+    expect(controller.frame().first_visible == before,
+           "a clamp asked while the question was open does not move the next document");
+    return switched;
+}
+
+// 戻った文書のスクロールは切り替える前と同じで、切り替えは字を変えなかったときと同じ回数しか
+// 組まない（持ち越した clamp の文字組みをしない）。
+void verify_clamp_dropped_on_leaving_question()
+{
+    Editing resized;
+    Editing kept;
+    expect(switched_back_after_question(resized, true) ==
+               switched_back_after_question(kept, false),
+           "leaving the question drops the pending clamp with the pending follow");
+}
+
 // Vim の INSERT の文字は表示領域を読まないので、鍵ごとに追従を解決せず layout も作らない
 // （ADR 0129 の決定 2・#476 の速さの根拠）。frame を 1 回読むと、1
 // 鍵ごとに読んだときと同じ所が見える。
@@ -1049,6 +1087,31 @@ void verify_vim_viewport_settles_before_screen_keys()
                settled.first_visible == framed.first_visible &&
                settled.caret.position.line == framed.caret.position.line,
            "H lands on the settled top line, not the one before the follow");
+}
+
+// 字の大きさを変えた設定の clamp と追従は、窓が送る新しい行高の幾何を待って 1 回だけ解決する。
+// 古い行高と新しい字の組み合わせで layout を作らないので、見える行は 1 行 1 回だけ組まれる
+// （ADR 0128 の決定 8・#582）。
+void verify_font_size_lays_out_once()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{400, 20, 96}});
+    static_cast<void>(controller.apply(InsertText{"first"}));
+    static_cast<void>(controller.apply(NewLine{}));
+    static_cast<void>(controller.apply(InsertText{"second"}));
+    static_cast<void>(controller.frame());
+    static_cast<void>(controller.apply(nenenib::application::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(nenenib::application::CommandText{":set fontsize=22"}));
+    const std::size_t before = editing.text_layouts().made();
+    static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
+    static_cast<void>(
+        controller.apply(VisibleLines{2, nenenib::core::TextViewGeometry{400, 30, 96}}));
+    const auto frame = controller.frame();
+    expect(frame.settings.font_size.points() == 22 && frame.lines.size() == 2,
+           "the new font size shows both lines");
+    expect(editing.text_layouts().made() - before == frame.lines.size(),
+           "each visible line is laid out once, with the new font and the new line height");
 }
 
 void verify_controller_frame()
@@ -1687,8 +1750,10 @@ void verify_controller_intents()
     verify_follow_settles_at_frame();
     verify_follow_settles_before_search_origin();
     verify_follow_dropped_on_leaving_question();
+    verify_clamp_dropped_on_leaving_question();
     verify_vim_insert_follow_settles_at_frame();
     verify_vim_viewport_settles_before_screen_keys();
+    verify_font_size_lays_out_once();
     verify_document_read_contracts();
     verify_document_failure_clearing();
     verify_vim_engine();

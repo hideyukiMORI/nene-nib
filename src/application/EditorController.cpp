@@ -972,12 +972,22 @@ bool EditorController::persist_settings(core::EditorSettings settings)
         state_ = state_.with_settings_failure(saved.error());
         return false;
     }
+    const bool reshaped = core::affects_line_height(state_.settings(), settings);
     state_ = state_.with_settings(std::move(settings)).with_settings_failure(std::nullopt);
-    if (view_geometry_.width > 0)
+    if (view_geometry_.width <= 0)
     {
-        clamp_scroll();
-        follow_caret();
+        return true;
     }
+    if (reshaped)
+    {
+        // 古い行高のまま組まない。clamp も頼むだけにし、窓が送る新しい幾何の後に解決する
+        // （ADR 0128 の決定 8）。
+        pending_clamp_ = true;
+        follow_caret();
+        return true;
+    }
+    clamp_scroll();
+    follow_caret();
     return true;
 }
 
@@ -1195,15 +1205,21 @@ void EditorController::follow_position(core::TextPosition position)
 }
 
 // 保留を先に空にしてから view を作るので、visual_view() の先頭の解決へ再入しない。解決はその
-// 時点の state で 1 回（ADR 0128 の決定 4）。問いの答えを待つ間は文字組みせず、保留を消費せずに
-// 残して戻る。答えて表示形式が決まった後の最初のスクロールの読みで解決する（ADR 0140 の決定 2）。
+// 時点の state で 1 回（ADR 0128 の決定 4）。保留の clamp は追従より先（決定 8）。問いの答えを
+// 待つ間は文字組みせず、保留の追従と clamp を消費せずに残して戻る。答えて表示形式が決まった後の
+// 最初のスクロールの読みで解決する（ADR 0140 の決定 2）。
 void EditorController::settle_follow()
 {
     if (display_pending(state_.display_inquiry()))
     {
         return;
     }
+    const bool clamp = std::exchange(pending_clamp_, false);
     const auto pending = std::exchange(pending_follow_, std::nullopt);
+    if (clamp)
+    {
+        clamp_scroll();
+    }
     if (!pending.has_value())
     {
         return;
@@ -1222,13 +1238,15 @@ void EditorController::settle_follow()
     }
 }
 
-// 問いの答えを待つ間の保留は、その文書を離れるときに捨てる。問いの答え（SelectDisplay）が
-// clamp_scroll と follow_caret を頼み直すので失うものは無い（ADR 0128 の決定 7）。
+// 問いの答えを待つ間の保留は、追従も clamp も、その文書を離れるときに捨てる。問いの答え
+// （SelectDisplay）が clamp_scroll と follow_caret を頼み直すので失うものは無い（ADR 0128 の
+// 決定 7）。
 void EditorController::drop_pending_follow()
 {
     if (display_pending(state_.display_inquiry()))
     {
         pending_follow_.reset();
+        pending_clamp_ = false;
     }
 }
 
@@ -1508,11 +1526,13 @@ void EditorController::clamp_scroll()
 void EditorController::accept(const VisibleLines &intent)
 {
     const std::size_t lines = std::max<std::size_t>(intent.lines, 1);
-    // 前の頼みは前の寸法で解決してから寸法を替える（ADR 0128 の決定 4）。
-    const std::size_t previous = settled_scroll().visible_lines;
+    // 前の頼みは前の寸法で解決してから寸法を替える（ADR 0128 の決定 4）。行高を変えた設定の
+    // 頼みだけは新しい寸法を待ち、下の clamp_scroll の読みで解決する（決定 8）。
+    const std::size_t previous =
+        pending_clamp_ ? state_.scroll().visible_lines : settled_scroll().visible_lines;
     view_geometry_ = intent.geometry;
     state_ = state_.with_vim(core::vim_after_resize(state_.vim(), previous, lines));
-    auto scroll = settled_scroll();
+    auto scroll = state_.scroll();
     scroll.visible_lines = lines;
     state_ = state_.with_scroll(scroll);
     clamp_scroll();

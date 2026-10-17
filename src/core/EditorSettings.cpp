@@ -11,6 +11,12 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.guide == right.guide && left.wrapping == right.wrapping;
 }
 
+bool affects_line_height(const EditorSettings &before, const EditorSettings &after) noexcept
+{
+    return before.font_size.points() != after.font_size.points() ||
+           before.font_family.text() != after.font_family.text();
+}
+
 EditorSettings default_editor_settings()
 {
     return EditorSettings{default_font_size(), DisplayText::parse("Cascadia Code").value(),

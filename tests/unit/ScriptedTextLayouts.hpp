@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cstddef>
 #include <set>
+#include <string>
+#include <tuple>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -20,6 +23,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         ++requests_;
         longest_ = std::max(longest_, request.text.size());
         texts_.insert(request.text.data());
+        note(request);
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -36,6 +40,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     {
         ++requests_;
         longest_ = std::max(longest_, request.text.size());
+        note(request);
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -58,6 +63,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     {
         ++requests_;
         longest_ = std::max(longest_, request.text.size());
+        note(request);
         if (rejected_)
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
@@ -117,7 +123,34 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         longest_ = 0;
     }
 
+    // 本物の BodyTextLayouts と同じく、書式（字・折り返し・幾何）が変わると保持を捨てると見なした
+    // ときに新しく作られる layout の数（ADR 0114 の決定 7・ADR 0128）。
+    [[nodiscard]] std::size_t made() const noexcept
+    {
+        return made_;
+    }
+
   private:
+    using LayoutStyle = std::tuple<float, std::string, nenenib::core::LineWrapping,
+                                   nenenib::core::TextViewGeometry>;
+
+    void note(const nenenib::application::TextLayoutRequest &request)
+    {
+        LayoutStyle style{request.settings.font_size.points(),
+                          std::string(request.settings.font_family.text()),
+                          request.settings.wrapping, request.geometry};
+        if (style != style_)
+        {
+            style_ = std::move(style);
+            made_texts_.clear();
+        }
+        if (std::ranges::find(made_texts_, request.text) == made_texts_.end())
+        {
+            made_texts_.emplace_back(request.text);
+            ++made_;
+        }
+    }
+
     [[nodiscard]] static std::size_t columns(const nenenib::application::TextLayoutRequest &request)
     {
         // 巨大な行の窓は折り返さない（ADR 0139 の決定 2）。
@@ -133,6 +166,9 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     std::size_t longest_ = 0;
     std::size_t cells_ = 0;
     std::set<const char *> texts_;
+    std::size_t made_ = 0;
+    LayoutStyle style_{};
+    std::vector<std::string> made_texts_;
     bool rejected_ = false;
 };
 } // namespace nenenib::tests
