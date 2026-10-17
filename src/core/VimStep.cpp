@@ -26,6 +26,7 @@
 #include "VimCharacterSearchRequest.hpp"
 #include "VimCharacterSearchScan.hpp"
 #include "VimColumnWish.hpp"
+#include "VimHorizontalScroll.hpp"
 #include "VimInputWait.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimKeySource.hpp"
@@ -2201,17 +2202,10 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     std::unreachable();
 }
 
-[[nodiscard]] VimStep started_replacement(const VimState &state, const VimEditorView &view)
+// 回数が行に収まらなくても、Vim と同じく置き換える文字を 1 鍵読んでから失敗にする（nv_replace）。
+// 失敗は replaced_character が返す。Esc は待ちを取り消すだけ。
+[[nodiscard]] VimStep started_replacement(const VimState &state)
 {
-    if (state.mode == VimMode::visual_block)
-    {
-        return started_prefix(state, VimPrefix::r);
-    }
-    if (!replacement_range(state, view).has_value())
-    {
-        return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
-                      VimRepeatFailure::refused);
-    }
     return started_prefix(state, VimPrefix::r);
 }
 
@@ -3209,9 +3203,13 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return started_prefix(state, VimPrefix::g);
     }
+    if (action == VimAction::prefix_z)
+    {
+        return started_prefix(state, VimPrefix::z);
+    }
     if (action == VimAction::replace_character)
     {
-        return started_replacement(state, view);
+        return started_replacement(state);
     }
     if (action == VimAction::record_macro)
     {
@@ -3462,6 +3460,49 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                    VimSwitchTab{destination.value()}};
 }
 
+// 足りない文字組みの値を、効果を出さず状態もそのままで求める（ADR 0144 の決定 2）。行の画面行数か
+// 行の中の画面行のどちらか 1 つで、controller が答えて同じ鍵をもう一度流す。
+[[nodiscard]] VimStep requested_layout(const VimState &state, const VimLayoutNeed &need)
+{
+    auto step = VimStep{state, VimNoEffect{}};
+    if (const auto *const line = std::get_if<LineNumber>(&need); line != nullptr)
+    {
+        step.layout_request = *line;
+        return step;
+    }
+    step.row_request = std::get<VimRowRequest>(need);
+    return step;
+}
+
+// 窓と wrap off の横送り（ADR 0145 の決定 5〜7）。横に送らない文書では何もしない（失敗にしない・
+// 欲しい列も保つ）。押したときだけ欲しい列を押された位置の桁に置き、先頭行と先頭の画面行は今の値の
+// まま、新しい leftcol を first_column で返す。NORMAL と VISUAL は同じ 1 本を通る。
+[[nodiscard]] VimStep horizontal_action(const VimState &state, const VimEditorView &view,
+                                        VimAction action)
+{
+    const auto scrolled = vim_horizontal_scroll(state, view, action);
+    if (!scrolled)
+    {
+        return requested_layout(state, scrolled.error());
+    }
+    VimState next = finished_input_wait(state);
+    const std::optional<VimHorizontalScroll> &outcome = scrolled.value();
+    if (!outcome.has_value())
+    {
+        return VimStep{std::move(next), VimNoEffect{}};
+    }
+    const VimHorizontalScroll &result = outcome.value();
+    if (result.pushed)
+    {
+        next.wanted_column = VimWantedColumn{VimColumnWish::at_column,
+                                             caret_virtual_column(view.text, result.caret)};
+    }
+    const VimViewport viewport = vim_viewport_of(view);
+    return VimStep{std::move(next),
+                   VimNavigate{navigated_selection(state, view.selection, result.caret),
+                               viewport.first_visible, viewport.first_row, result.left_column}};
+}
+
 // 鍵から引いた動作を、分類ごとの写し先へ（CPP-012 / ADR 0006）。分類が増えたらここで落ちる。
 [[nodiscard]] VimStep commanded(const VimState &state, const VimEditorView &view, VimAction action)
 {
@@ -3493,6 +3534,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return search_action(state, view, action);
     case VimActionGroup::tab:
         return tab_action(state, view, action, cancelled(state));
+    case VimActionGroup::horizontal_scroll:
+        return horizontal_action(state, view, action);
     }
     std::unreachable();
 }
@@ -3517,9 +3560,10 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                    VimAction action)
 {
     const VimOperator operation = operation_of(state);
-    if (action == VimAction::prefix_g)
+    // z も次の 1 鍵まで読み、横送りの鍵ならオペレータを打ち消す（Vim の nv_zet の checkclearop）。
+    if (action == VimAction::prefix_g || action == VimAction::prefix_z)
     {
-        return started_prefix(state, VimPrefix::g);
+        return started_prefix(state, action == VimAction::prefix_g ? VimPrefix::g : VimPrefix::z);
     }
     if (action == VimAction::insert_before || action == VimAction::insert_after)
     {
@@ -3582,20 +3626,6 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     }
     result.row_landing = landing.value();
     return result;
-}
-
-// 足りない文字組みの値を、効果を出さず状態もそのままで求める（ADR 0144 の決定 2）。行の画面行数か
-// 行の中の画面行のどちらか 1 つで、controller が答えて同じ鍵をもう一度流す。
-[[nodiscard]] VimStep requested_layout(const VimState &state, const VimLayoutNeed &need)
-{
-    auto step = VimStep{state, VimNoEffect{}};
-    if (const auto *const line = std::get_if<LineNumber>(&need); line != nullptr)
-    {
-        step.layout_request = *line;
-        return step;
-    }
-    step.row_request = std::get<VimRowRequest>(need);
-    return step;
 }
 
 // 画面を読む鍵に表示領域が無ければ、効果を出さず状態もそのままで求める（ADR 0129 の決定 1）。
@@ -3884,6 +3914,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return search_action(state, view, action);
     case VimActionGroup::tab:
         return tab_action(state, view, action, visual_unchanged(state));
+    case VimActionGroup::horizontal_scroll:
+        return horizontal_action(state, view, action);
     case VimActionGroup::edit_line:
     case VimActionGroup::insert_line:
     case VimActionGroup::history:
@@ -4278,6 +4310,19 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return VimStep{finished_input_wait(state), VimNoEffect{}};
 }
 
+// z の後ろの鍵（zl zh zL zH zs ze・ADR 0145 の決定 5）。表に無い鍵は z を打ち消す（g と同じ）。
+[[nodiscard]] VimStep z_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
+{
+    const std::optional<VimAction> action = std::holds_alternative<VimCharacter>(key)
+                                                ? vim_z_action_for(std::get<VimCharacter>(key).code)
+                                                : std::nullopt;
+    if (action.has_value())
+    {
+        return completed_prefix(state, view, action.value());
+    }
+    return VimStep{finished_input_wait(state), VimNoEffect{}};
+}
+
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimPrefix prefix, VimKey key)
 {
@@ -4293,6 +4338,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return replayed_macro(state, key);
     case VimPrefix::quote:
         return selected_register(state, key);
+    case VimPrefix::z:
+        return z_prefix_step(state, view, key);
     }
     std::unreachable();
 }

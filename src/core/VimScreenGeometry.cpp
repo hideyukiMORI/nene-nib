@@ -1,5 +1,7 @@
 #include "VimScreenGeometry.hpp"
 
+#include "VimActionGroup.hpp"
+#include "VimKeyTable.hpp"
 #include "VimScreenKind.hpp"
 #include "VimScreenRows.hpp"
 #include "VimScreenWindow.hpp"
@@ -470,11 +472,16 @@ unit_resolved(const VimState &state, const VimEditorView &view, VimScreenKind ki
     }
     std::unreachable();
 }
+// 横送りの鍵（ADR 0145 の決定 2）。画面の幅と今の横位置を表示領域から読む。
+[[nodiscard]] bool scrolls_horizontally(VimAction action) noexcept
+{
+    return vim_group_for(action) == VimActionGroup::horizontal_scroll;
+}
 } // namespace
 
 bool vim_reads_viewport(VimAction action) noexcept
 {
-    return screen_kind(action).has_value();
+    return screen_kind(action).has_value() || scrolls_horizontally(action);
 }
 
 std::expected<std::optional<VimDisplayNavigation>, VimLayoutNeed>

@@ -61,6 +61,19 @@ class VisualTextView final
     // 同じ文字組みの locate / hit、巨大な行の窓は 1 画面行で、行の全体を写さない。
     [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
     row_span(const core::VimRowRequest &request);
+    // 横送りの答え手（ADR 0145 の決定 2・8・9）。horizontal_columns は本文の欄に入る升の数（平均の
+    // 字幅で割る）で、キャレットの行を横に送らないとき（wrap on の普通の行・格子・幅 0）は 0。
+    // horizontal_of_column と column_of_horizontal は升の leftcol と横の送り（画素）の
+    // 1 対で、互いに逆。巨大な行は origin からの見積もりの x、折り返さない普通の行は
+    // 同じ文字組みの locate / hit。
+    [[nodiscard]] std::size_t horizontal_columns() const;
+    [[nodiscard]] std::expected<float, TextLayoutFailure>
+    horizontal_of_column(core::LineNumber number, std::size_t column);
+    [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
+    column_of_horizontal(core::LineNumber number, float horizontal);
+    // 今の横の送りからキャレットが見える最小の送り（縦は動かさない・ADR 0145 の決定 8）。
+    [[nodiscard]] std::expected<float, TextLayoutFailure>
+    followed_horizontal(core::TextCaret caret);
     // 格子の升の答え手（ADR 0140 の決定 4・5）。本文が索引を持たないか 1 升を読めなければ失敗。
     // frame の画面行（GridLineRows）は位置解決と同じ GridCells を 1 frame に 1 つ借りて切り出す。
     [[nodiscard]] std::expected<GridCells, TextLayoutFailure> grid_cells() const;
@@ -89,6 +102,8 @@ class VisualTextView final
     [[nodiscard]] float giant_horizontal(core::TextCaret caret, float x, float width) const;
     // キャレットを追う横の送り（located はキャレットの x）。
     [[nodiscard]] float horizontal_for(core::TextCaret caret, float located) const;
+    // 行 number を横に送るか（折り返さない設定か巨大な行で、格子でも幅 0 でもない）。
+    [[nodiscard]] bool scrolls_horizontally(core::LineNumber number) const;
     [[nodiscard]] bool gridded() const noexcept;
     [[nodiscard]] std::expected<core::GridPoint, TextLayoutFailure>
     grid_point(core::TextCaret caret) const;

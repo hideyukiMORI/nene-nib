@@ -1642,6 +1642,157 @@ void verify_unlaid_display_moves()
     }
 }
 
+// ---------------------------------------------- 窓と wrap off の横送り（ADR 0145・#634）
+
+// 1 升 10 画素・幅 40 升の窓（平均の字幅も 10 画素）。
+constexpr nenenib::core::TextViewGeometry unwrapped_geometry{400, 20, 96, 10.0F};
+
+void open_unwrapped(Editing &editing, std::string text, std::size_t visible)
+{
+    editing.files().hold_at("C:\\work\\wide.txt", Bytes{std::move(text)});
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{visible, unwrapped_geometry});
+    applied(controller, OpenDocument{nenenib::core::FilePath::parse("C:\\work\\wide.txt").value()});
+    static_cast<void>(controller.apply(nenenib::application::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(nenenib::application::CommandText{":set nowrap"}));
+    static_cast<void>(controller.apply(nenenib::application::SubmitCommand{}));
+    applied(controller, SelectEditMode{EditMode::vim});
+}
+
+// 巨大な行の窓（text 形・いいえ）。折り返す設定のままでも横に送る（ADR 0139 の決定 5）。
+void open_giant_window(Editing &editing, std::string text)
+{
+    editing.files().hold_at("C:\\work\\giant.txt", Bytes{std::move(text)});
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, unwrapped_geometry});
+    applied(controller,
+            OpenDocument{nenenib::core::FilePath::parse("C:\\work\\giant.txt").value()});
+    applied(controller, nenenib::application::SelectDisplay{nenenib::core::DisplayForm::text});
+    applied(controller, SelectEditMode{EditMode::vim});
+}
+
+// 対の関数 horizontal_of_column / column_of_horizontal の往復（決定 8）。zl を 1 つずつ打つたびに
+// 横の送りがちょうど 1 升ずつ増え、揺れない。左端で半分欠けた全角の leftcol も同じ値に戻る。
+void verify_horizontal_round_trip()
+{
+    Editing editing;
+    std::string wide;
+    for (std::size_t index = 0; index < 60; ++index)
+    {
+        wide += "あ";
+    }
+    open_unwrapped(editing, std::string(300, 'a') + "\n" + wide, 3);
+    auto &controller = editing.controller();
+    bool steady = true;
+    for (std::size_t step = 1; step <= 45; ++step)
+    {
+        press_vim(controller, "zl");
+        steady = steady && controller.frame().horizontal == static_cast<float>(step * 10);
+    }
+    expect(steady && caret_of(controller) == RowPair{1, 46},
+           "each zl adds exactly one cell to the unwrapped scroll and pushes the caret");
+    place_at(controller, 2, 1);
+    for (std::size_t step = 1; step <= 5; ++step)
+    {
+        press_vim(controller, "zl");
+        steady = steady && controller.frame().horizontal == static_cast<float>(step * 10);
+    }
+    for (std::size_t step = 1; step <= 5; ++step)
+    {
+        press_vim(controller, "zh");
+        steady = steady && controller.frame().horizontal == static_cast<float>((5 - step) * 10);
+    }
+    expect(steady, "a leftcol inside a fullwidth character survives the pixel round trip");
+}
+
+// 巨大な行で押されたキャレットが錨の刻み（2,048）をまたいでも、横位置は新しい窓の始まりで計り直し、
+// 画面は窓の中にある（決定 9）。
+void verify_giant_horizontal_scroll()
+{
+    Editing editing;
+    open_giant_window(editing, std::string(nenenib::core::giant_line_threshold + 1, 'a'));
+    auto &controller = editing.controller();
+    place_at(controller, 1, 6001);
+    const auto inside = [&controller](std::size_t left)
+    {
+        const auto frame = controller.frame();
+        const auto &window = frame.lines.front().window;
+        const auto shown = window.column + static_cast<std::size_t>(frame.horizontal / 10.0F);
+        return window.active && frame.horizontal >= 0.0F && shown == left &&
+               shown + 40 <= window.end_column;
+    };
+    press_vim(controller, "zs");
+    expect(inside(6000) && caret_of(controller) == RowPair{1, 6001},
+           "zs on a giant line puts the caret at the left edge inside its window");
+    press_vim(controller, "300zl");
+    expect(inside(6300) && caret_of(controller) == RowPair{1, 6301},
+           "a caret pushed across the anchor step keeps the screen inside the new window");
+    const auto before = controller.frame().horizontal;
+    press_vim(controller, "zh");
+    expect(inside(6299) && controller.frame().horizontal == before - 10.0F &&
+               caret_of(controller) == RowPair{1, 6301},
+           "the next zh measures from the new window origin");
+}
+
+// 横に送らない文書（wrap on の普通の行・格子）では 6 鍵は何もせず、失敗にもならない（決定 2）。
+void verify_horizontal_scroll_without_columns()
+{
+    Editing wrapped;
+    wrapped.files().hold_at("C:\\work\\wrapped.txt", Bytes{std::string(300, 'a')});
+    auto &controller = wrapped.controller();
+    applied(controller, VisibleLines{3, unwrapped_geometry});
+    applied(controller,
+            OpenDocument{nenenib::core::FilePath::parse("C:\\work\\wrapped.txt").value()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    place_at(controller, 1, 100);
+    vim_normal(controller, "zlzhzLzHzszex");
+    expect(controller.text().size_bytes() == 299 && caret_of(controller) == RowPair{1, 100} &&
+               controller.frame().horizontal == 0.0F,
+           "horizontal scroll keys do nothing on a wrapped document and do not fail");
+    Editing grid;
+    open_grid_file(grid, std::string(nenenib::core::giant_line_threshold + 1, 'a'), 3);
+    place_at(grid.controller(), 1, 5);
+    vim_normal(grid.controller(), "zlzszex");
+    expect(grid.controller().text().size_bytes() == nenenib::core::giant_line_threshold &&
+               caret_of(grid.controller()) == RowPair{1, 5} &&
+               grid.controller().frame().horizontal == 0.0F,
+           "horizontal scroll keys do nothing on the grid and do not fail");
+}
+
+// 縦の移動（first_column 無し）は横位置を 0 に戻さず、キャレットが見える最小の送りへ
+// 寄せる（決定 8）。
+void verify_vertical_moves_keep_horizontal()
+{
+    Editing editing;
+    std::string text;
+    for (std::size_t line = 0; line < 12; ++line)
+    {
+        text += std::string(250, ' ') + std::string(50, 'x') + (line + 1 < 12 ? "\n" : "");
+    }
+    open_unwrapped(editing, std::move(text), 3);
+    auto &controller = editing.controller();
+    place_at(controller, 1, 251);
+    const auto before = controller.frame().horizontal;
+    press_vim(controller, "<C-f>");
+    const auto frame = controller.frame();
+    expect(before > 0.0F && frame.caret.position.line.value > 1 &&
+               frame.caret.position.column.value == 251 && frame.horizontal == before,
+           "Ctrl-f keeps the unwrapped horizontal scroll that already shows the caret");
+    press_vim(controller, "02<C-f>");
+    const auto start = controller.frame();
+    expect(start.horizontal <= 2500.0F && 2500.0F <= start.horizontal + 397.0F &&
+               start.caret.position.column.value == 251,
+           "Ctrl-f after 0 follows the caret back into view without resetting to the line start");
+}
+
+void verify_vim_horizontal_scroll()
+{
+    verify_horizontal_round_trip();
+    verify_giant_horizontal_scroll();
+    verify_horizontal_scroll_without_columns();
+    verify_vertical_moves_keep_horizontal();
+}
+
 void verify_screen_row_pages()
 {
     verify_grid_vim_pages();
@@ -1659,6 +1810,7 @@ void verify_screen_row_pages()
     verify_grid_display_lines();
     verify_giant_window_display_moves();
     verify_unlaid_display_moves();
+    verify_vim_horizontal_scroll();
 }
 
 void verify_controller_frame()

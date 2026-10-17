@@ -733,6 +733,13 @@ void verify_vim_fixture(const VimFixture &fixture)
                        -static_cast<std::int64_t>(fixture.viewport.value().expected_first_row),
                    (name + ": first wrapped row").c_str());
         }
+        // 折り返さない窓の leftcol（1 升 10 px・ADR 0145）。
+        if (fixture.viewport.value().nowrap_columns > 0)
+        {
+            expect(frame.horizontal ==
+                       static_cast<float>(fixture.viewport.value().expected_left_column * 10),
+                   (name + ": left column").c_str());
+        }
     }
     const std::string body = whole_vim_body(controller);
     expect(body == fixture.expected_text, (name + ": body").c_str());

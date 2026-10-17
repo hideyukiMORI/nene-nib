@@ -97,13 +97,18 @@ void verify_vim_replace_waiting()
                replaced.next.unnamed_register.value().text == "saved",
            "replacement consumes transient input without overwriting the register");
     initial.count = nenenib::core::VimCount{std::numeric_limits<std::size_t>::max()};
+    // Vim の nv_replace と同じく、回数が行に収まらなくても置き換える文字を 1 鍵読んでから
+    // 失敗にする（ADR 0145 の z の接頭辞・#634）。範囲を作らないので本文は確保しない。
     const auto too_many = vim_step(initial, view, VimKey{VimCharacter{U'r'}});
-    expect(!too_many.next.input_wait.has_value() && !too_many.next.count.has_value() &&
-               std::holds_alternative<nenenib::core::VimNoEffect>(too_many.effect),
-           "a replacement that exceeds the line fails before waiting or allocating");
+    expect(waits_for_prefix(too_many.next, VimPrefix::r) &&
+               std::holds_alternative<nenenib::core::VimNoEffect>(too_many.effect) &&
+               !too_many.failure.has_value(),
+           "a replacement that exceeds the line still waits for its target");
     const auto next = vim_step(too_many.next, view, VimKey{VimCharacter{U'x'}});
-    expect(std::holds_alternative<nenenib::core::VimRemoveRange>(next.effect),
-           "the next command after insufficient characters is not swallowed as an r target");
+    expect(std::holds_alternative<nenenib::core::VimNoEffect>(next.effect) &&
+               next.failure == std::optional{nenenib::core::VimRepeatFailure::refused} &&
+               !next.next.input_wait.has_value() && !next.next.count.has_value(),
+           "the target after insufficient characters is consumed and fails without allocating");
 }
 
 void verify_vim_replace_cancellation()

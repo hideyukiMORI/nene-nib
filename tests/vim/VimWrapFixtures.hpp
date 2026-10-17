@@ -2,9 +2,9 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 571d5d0631d8f290c35508e32c7084c4a0676891c70e485a0bfa81344f116111
+// wrap-fixtures.json: sha256 96d2ec86aba29b52e0ecff59d3e5f841be57954a71704f7e1f0707841830055a
 
-// measurement: sha256 9f053557610cf7a83228a3dc3f4ae067099be963dedc036b2865a66338920de0
+// measurement: sha256 91ff83fc1c58cd242d91b4b133fa117be2a16ed63d9c34a2c3420b6e6d622346
 
 // shared oracle: sha256 1a215eba48e7151c1a4e71fde284df2e051e513824f5edd407f7f8aa1f7f9b61
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 124> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 173> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -1024,5 +1024,506 @@ constexpr std::array<VimFixture, 124> vim_wrap_fixtures{{
      "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
      3, 40, "", "", VimViewportFixture{12, 1, 2, 150, 1, 6, 40, 0}},
+    {"nowrap-zl-from-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 2, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 1}},
+    {"nowrap-3zl-from-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "3zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 4, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 3}},
+    {"nowrap-zl-caret-mid",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 20, "", "", VimViewportFixture{6, 1, 1, 20, 1, 3, 0, 0, 40, 0, 1}},
+    {"nowrap-45zl-caret-mid",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "45zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 46, "", "", VimViewportFixture{6, 1, 1, 20, 1, 3, 0, 0, 40, 0, 45}},
+    {"nowrap-zh-at-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zh",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 10, "", "", VimViewportFixture{6, 1, 1, 10, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-zhx-at-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zhx",
+     "abcdefghiklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnop"
+     "qrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcde"
+     "fghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrst"
+     "uvwxyzabcdefghijklmn",
+     1, 10, "j", "v", VimViewportFixture{6, 1, 1, 10, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-zh-from-50",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zh",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 89, "", "", VimViewportFixture{6, 1, 1, 89, 1, 3, 0, 0, 40, 50, 49}},
+    {"nowrap-3zh-from-50",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "3zh",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 60, "", "", VimViewportFixture{6, 1, 1, 60, 1, 3, 0, 0, 40, 50, 47}},
+    {"nowrap-100zh-from-50",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "100zh",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 40, "", "", VimViewportFixture{6, 1, 1, 60, 1, 3, 0, 0, 40, 50, 0}},
+    {"nowrap-30zh-push",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "30zh",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 60, "", "", VimViewportFixture{6, 1, 1, 89, 1, 3, 0, 0, 40, 50, 20}},
+    {"nowrap-z-shift-l-from-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zL",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 21, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 20}},
+    {"nowrap-2z-shift-l-from-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "2zL",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 41, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 40}},
+    {"nowrap-z-shift-h-from-50",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zH",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 60, "", "", VimViewportFixture{6, 1, 1, 60, 1, 3, 0, 0, 40, 50, 30}},
+    {"nowrap-3z-shift-h-from-90",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "3zH",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 70, "", "", VimViewportFixture{6, 1, 1, 100, 1, 3, 0, 0, 40, 90, 30}},
+    {"nowrap-z-shift-h-from-10",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zH",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 30, "", "", VimViewportFixture{6, 1, 1, 30, 1, 3, 0, 0, 40, 10, 0}},
+    {"nowrap-z-shift-hx-at-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zHx",
+     "abcdefghiklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnop"
+     "qrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcde"
+     "fghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrst"
+     "uvwxyzabcdefghijklmn",
+     1, 10, "j", "v", VimViewportFixture{6, 1, 1, 10, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-zl-near-end",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 300, "", "", VimViewportFixture{6, 1, 1, 300, 1, 3, 0, 0, 40, 270, 271}},
+    {"nowrap-100zl-near-end",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "100zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 300, "", "", VimViewportFixture{6, 1, 1, 300, 1, 3, 0, 0, 40, 270, 299}},
+    {"nowrap-z-shift-l-near-end",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zL",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 300, "", "", VimViewportFixture{6, 1, 1, 300, 1, 3, 0, 0, 40, 270, 290}},
+    {"nowrap-zl-at-max",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 300, "", "", VimViewportFixture{6, 1, 1, 300, 1, 3, 0, 0, 40, 299, 299}},
+    {"nowrap-zlx-at-max",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zlx",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklm",
+     1, 299, "n", "v", VimViewportFixture{6, 1, 1, 300, 1, 3, 0, 0, 40, 299, 298}},
+    {"nowrap-400zl-from-0",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "400zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 300, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 299}},
+    {"nowrap-100zl-caret280",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "100zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 300, "", "", VimViewportFixture{6, 1, 1, 280, 1, 3, 0, 0, 40, 250, 299}},
+    {"nowrap-zs-col100",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zs",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 100, "", "", VimViewportFixture{6, 1, 1, 100, 1, 3, 0, 0, 40, 80, 99}},
+    {"nowrap-ze-col100",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "ze",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 100, "", "", VimViewportFixture{6, 1, 1, 100, 1, 3, 0, 0, 40, 80, 60}},
+    {"nowrap-ze-col10",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "ze",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 10, "", "", VimViewportFixture{6, 1, 1, 10, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-zs-col1",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "zs",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 1, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-wide-zl",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     "zl",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     1, 4, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 1}},
+    {"nowrap-wide-3zl",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     "3zl",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     1, 7, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 3}},
+    {"nowrap-wide-zs-odd",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     "zs",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     1, 31, "", "", VimViewportFixture{6, 1, 1, 31, 1, 3, 0, 0, 40, 0, 20}},
+    {"nowrap-wide-ze",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     "ze",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     1, 31, "", "", VimViewportFixture{6, 1, 1, 31, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-wide-ze-col100",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     "ze",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     1, 151, "", "", VimViewportFixture{6, 1, 1, 151, 1, 3, 0, 0, 40, 80, 62}},
+    {"nowrap-wide-zh-push",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     "zh",
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああああああああああああああああああああああああああああああああああああ"
+     "ああああああああああああ",
+     1, 58, "", "", VimViewportFixture{6, 1, 1, 58, 1, 3, 0, 0, 40, 1, 0}},
+    {"nowrap-mixed-zl",
+     "abああああああああああああああああああああああああああああああxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "2zl",
+     "abああああああああああああああああああああああああああああああxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     1, 3, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 2}},
+    {"nowrap-mixed-zs",
+     "abああああああああああああああああああああああああああああああxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "zs",
+     "abああああああああああああああああああああああああああああああxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     1, 18, "", "", VimViewportFixture{6, 1, 1, 18, 1, 3, 0, 0, 40, 0, 12}},
+    {"nowrap-vzl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "vzl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 2, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 1}},
+    {"nowrap-vzlx",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "v5zlx",
+     "ghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+     "vwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghij"
+     "klmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxy"
+     "zabcdefghijklmn",
+     1, 1, "abcdef", "v", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-5zl-j",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr"
+     "stuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefg"
+     "hijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuv"
+     "wxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmn",
+     "5zlj",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr"
+     "stuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefg"
+     "hijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuv"
+     "wxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmn",
+     2, 6, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 5}},
+    {"nowrap-zl-short-line", "short line", "5zl", "short line", 1, 6, "", "",
+     VimViewportFixture{6, 1, 1, 3, 1, 3, 0, 0, 40, 0, 5}},
+    {"nowrap-z-shift-l-short-line", "short line", "zL", "short line", 1, 10, "", "",
+     VimViewportFixture{6, 1, 1, 3, 1, 3, 0, 0, 40, 0, 9}},
+    {"nowrap-zl-multiline-short",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefgh"
+     "ijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvw"
+     "xyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"
+     "mnopqrstuvwxyzabcdefghijklmn",
+     "5zl",
+     "short\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefgh"
+     "ijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvw"
+     "xyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"
+     "mnopqrstuvwxyzabcdefghijklmn",
+     1, 5, "", "", VimViewportFixture{6, 1, 1, 3, 1, 3, 0, 0, 40, 0, 4}},
+    {"nowrap-dzl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "dzl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 1, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-dzlx",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     "dzlx",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmno"
+     "pqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd"
+     "efghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrs"
+     "tuvwxyzabcdefghijklmn",
+     1, 1, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-tab-3zl",
+     "\tabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm"
+     "nopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+     "cdefghijklmnopqr",
+     "3zl",
+     "\tabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm"
+     "nopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+     "cdefghijklmnopqr",
+     1, 2, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 3}},
+    {"nowrap-tab-end-100zl", "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx\t", "100zl",
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx\t", 1, 51, "", "",
+     VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 50}},
+    {"nowrap-tab-zs",
+     "\tabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm"
+     "nopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+     "cdefghijklmnopqr",
+     "zs",
+     "\tabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm"
+     "nopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+     "cdefghijklmnopqr",
+     1, 1, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 0}},
+    {"nowrap-tab-ze",
+     "\tabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm"
+     "nopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+     "cdefghijklmnopqr",
+     "ze",
+     "\tabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm"
+     "nopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+     "cdefghijklmnopqr",
+     1, 1, "", "", VimViewportFixture{6, 1, 1, 1, 1, 3, 0, 0, 40, 0, 0}},
+    {"wrap-zl-noop",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "jzlx",
+     "1aaaa\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5"
+     "eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     2, 1, "2", "v", VimViewportFixture{6, 1, 1, 1, 1, 3, 20, 0}},
+    {"wrap-zs-noop",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
+     "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     "j5lzszex",
+     "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n5"
+     "eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
+     2, 6, "b", "v", VimViewportFixture{6, 1, 1, 1, 1, 3, 20, 0}},
 }};
 } // namespace nenenib::tests

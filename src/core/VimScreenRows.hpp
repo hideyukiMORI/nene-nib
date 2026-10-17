@@ -4,6 +4,8 @@
 #include "VimEditorView.hpp"
 #include "VimLayoutNeed.hpp"
 #include "VimRowLanding.hpp"
+#include "VimRowRequest.hpp"
+#include "VimRowSpan.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimState.hpp"
 
@@ -17,6 +19,12 @@ namespace nenenib::core
 // 足りない行の画面行数と画面行の範囲は VimLayoutNeed で返し、状態は変えない。キャレットは送った後の
 // 画面の中に収め、行き先の画面行の中で欲しい列（curswant）の仮想桁に着く（$ の後は画面行の末尾）。
 // 先頭とキャレットのどちらも動かなければ何も変えない（失敗にしない）。
+
+// 問いの答え（view.layout.spans の中で問いに当たる画面行）。無ければその問いを
+// VimLayoutNeed で返す。画面行の問いの答えを引くのはこの 1 本（gj gk・画面移動・横送り・
+// ADR 0145 の決定 3）。
+[[nodiscard]] std::expected<VimRowSpan, VimLayoutNeed>
+vim_row_span_of(const VimEditorView &view, const VimRowRequest &request);
 
 // 1 画面（PgDn / PgUp / Ctrl-f / Ctrl-b）。先頭は本文の最初の画面行から最後の画面行が先頭になる
 // までの間で amount 行まで動き、キャレットは先頭が実際に動いた数だけ動く。

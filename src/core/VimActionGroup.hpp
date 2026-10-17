@@ -32,6 +32,9 @@ enum class VimActionGroup : std::uint8_t
     // 検索（`/` `?` `n` `N` `*` `#`・ADR 0032）。
     search,
     // `gt` `gT`（ADR 0057 の決定 2）。NORMAL と VISUAL で動き、オペレータの後ろでは打ち消す。
-    tab
+    tab,
+    // `zl` `zh` `zL` `zH` `zs` `ze`（ADR 0145 の決定 5）。NORMAL と VISUAL で動き、オペレータの後ろ
+    // では打ち消す。
+    horizontal_scroll
 };
 } // namespace nenenib::core
