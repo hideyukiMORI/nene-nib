@@ -229,6 +229,25 @@ void verify_macro_failure_stops_the_rest()
     expect(whole_vim_body(controller) == "b\ncd", "a failed typed h does not stop the typed x");
 }
 
+// 行に収まらない `3rz` は置き換える文字を 1 鍵読んでから失敗する（nv_replace・#634）。
+// 録画には打った鍵が残り、`.` の記録は前の変更のまま。再生は失敗で残りを捨てる。
+void verify_macro_records_failed_replace()
+{
+    Editing editing;
+    open_vim_document(editing, "ab\ncd\nef");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "xqa3rzjq");
+    expect(whole_vim_body(controller) == "b\ncd\nef" &&
+               macro_keys(controller.vim_state(), U'a') == vim_keys_of("3rzj"),
+           "a failed 3rz changes nothing and is recorded as typed");
+    expect(dot_record_is(controller.vim_state(), std::nullopt, "x"),
+           "a failed 3rz keeps the last change for .");
+    vim_replay(controller, ".");
+    expect(whole_vim_body(controller) == "b\nd\nef", ". repeats the x before the failed 3rz");
+    vim_replay(controller, "@a");
+    expect(caret_at(controller.frame(), 2, 1), "the replayed 3rz fails and drops the recorded j");
+}
+
 // 再帰の上限（決定 4）。終わらない再帰は 100 段で残りを捨て、報せを 1 行出す。
 void verify_macro_depth_limit()
 {
@@ -871,6 +890,7 @@ void verify_vim_macro_contracts()
     verify_macro_records_typed_keys_only();
     verify_macro_q_inside_replay();
     verify_macro_failure_stops_the_rest();
+    verify_macro_records_failed_replace();
     verify_macro_depth_limit();
     verify_macro_append();
     verify_macro_numbered_recording();

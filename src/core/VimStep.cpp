@@ -3503,6 +3503,13 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                viewport.first_visible, viewport.first_row, result.left_column}};
 }
 
+// 縦の位置合わせ（zt zz zb z<CR> z. z-）。今は何もせず失敗にもしない（ADR 0145 の限界）。回数と
+// 待ちだけを消費し、NORMAL と VISUAL は同じ 1 本を通る。
+[[nodiscard]] VimStep aligned_screen(const VimState &state)
+{
+    return VimStep{finished_input_wait(state), VimNoEffect{}};
+}
+
 // 鍵から引いた動作を、分類ごとの写し先へ（CPP-012 / ADR 0006）。分類が増えたらここで落ちる。
 [[nodiscard]] VimStep commanded(const VimState &state, const VimEditorView &view, VimAction action)
 {
@@ -3536,6 +3543,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return tab_action(state, view, action, cancelled(state));
     case VimActionGroup::horizontal_scroll:
         return horizontal_action(state, view, action);
+    case VimActionGroup::screen_alignment:
+        return aligned_screen(state);
     }
     std::unreachable();
 }
@@ -3916,6 +3925,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return tab_action(state, view, action, visual_unchanged(state));
     case VimActionGroup::horizontal_scroll:
         return horizontal_action(state, view, action);
+    case VimActionGroup::screen_alignment:
+        return aligned_screen(state);
     case VimActionGroup::edit_line:
     case VimActionGroup::insert_line:
     case VimActionGroup::history:
@@ -4310,17 +4321,33 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return VimStep{finished_input_wait(state), VimNoEffect{}};
 }
 
-// z の後ろの鍵（zl zh zL zH zs ze・ADR 0145 の決定 5）。表に無い鍵は z を打ち消す（g と同じ）。
+// z の後ろの鍵を表の文字へ。<CR> は 0x0D（z<CR>）。ほかの特別な鍵と検索の文字列は表に無い 0。
+[[nodiscard]] char32_t z_key_code(const VimKey &key) noexcept
+{
+    if (const auto *const character = std::get_if<VimCharacter>(&key); character != nullptr)
+    {
+        return character->code;
+    }
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == VimSpecialKey::enter ? carriage_return_character
+                                                                  : char32_t{0};
+}
+
+// z の後ろの鍵（zl zh zL zH zs ze・ADR 0145 の決定 5。zt zz zb z<CR> z. z- は何もしない）。Esc は
+// z を打ち消すだけ。表に無い鍵は Vim の nv_zet と同じく失敗して後ろを打ち切る。
 [[nodiscard]] VimStep z_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
-    const std::optional<VimAction> action = std::holds_alternative<VimCharacter>(key)
-                                                ? vim_z_action_for(std::get<VimCharacter>(key).code)
-                                                : std::nullopt;
+    if (const auto *const special = std::get_if<VimSpecialKey>(&key);
+        special != nullptr && *special == VimSpecialKey::escape)
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    const std::optional<VimAction> action = vim_z_action_for(z_key_code(key));
     if (action.has_value())
     {
         return completed_prefix(state, view, action.value());
     }
-    return VimStep{finished_input_wait(state), VimNoEffect{}};
+    return failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused);
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,

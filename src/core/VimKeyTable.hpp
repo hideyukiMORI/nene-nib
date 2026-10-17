@@ -22,8 +22,8 @@ namespace nenenib::core
 // g の後ろの鍵 → 動作（gg ge gE gt gT gj gk）。表に無い鍵は nullopt（g を打ち消す）。
 [[nodiscard]] std::optional<VimAction> vim_g_action_for(char32_t key) noexcept;
 
-// z の後ろの鍵 → 動作（zl zh zL zH zs ze・ADR 0145 の決定 5）。
-// 表に無い鍵は nullopt（z を打ち消す）。
+// z の後ろの鍵 → 動作（zl zh zL zH zs ze・ADR 0145 の決定 5。zt zz zb z<CR> z. z- は何もしない
+// 動作）。<CR> は 0x0D で引く。表に無い鍵は nullopt（失敗して後ろを打ち切る）。
 [[nodiscard]] std::optional<VimAction> vim_z_action_for(char32_t key) noexcept;
 
 // 語の移動がどちらの語の分類で切るか（w b e ge は word・W B E gE は big_word・Issue #222）。

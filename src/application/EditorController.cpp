@@ -2664,7 +2664,8 @@ void EditorController::perform(const core::VimMoveTo &effect)
 
 // 縦は engine の値を置く。横は first_column があればその leftcol を新しいキャレットの窓で
 // 画素にして置き（追従は呼ばない）、無ければ今の値を保ってキャレットが見える最小の送りへ
-// 1 回寄せる（ADR 0145 の決定 8・9）。
+// 1 回寄せる（ADR 0145 の決定 8・9）。横位置が求まらなければ、追従やスクロールの失敗と同じく
+// layout_failure_ に記録して描画の失敗の道へ渡す（選択と縦の位置は置いたまま・横は前の値）。
 void EditorController::perform(const core::VimNavigate &effect)
 {
     const ScrollState before = settled_scroll();

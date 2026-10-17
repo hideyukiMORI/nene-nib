@@ -125,7 +125,8 @@ using LineBounds = std::pair<Offset, Offset>;
 }
 
 // キャレットの文字が占める最初と最後の升と、Vim がキャレットを描く升（Tab だけは最後の升・
-// ADR 0034 の決定 3）。
+// ADR 0034 の決定 3）。添字は 0 が最初の升（first）、1 が最後の升（last）、2 が描く升（shown）。
+// 型を足さず tuple で持つ（1 ファイル 1 型・CPP-011）。
 using CaretCells = std::tuple<std::size_t, std::size_t, std::size_t>;
 
 // 押す前の新しい leftcol（Vim の nv_zet の zl zh zL zH zs ze）。zs はキャレットの文字の最初の升、

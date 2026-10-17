@@ -52,4 +52,5 @@ Vim 9.1 の実測（probe-634・`--not-a-term`・`nowrap`・`columns=40`・`side
 - text 形の `columns` と `left_column` は平均の字幅の近似（proportional では升が画素と一致しない・ADR 0144 の限界と同じ）。等幅の字体では一致する。押しの判定は升で行い、置いた横位置に対して追従は呼ばないので、proportional で押された文字が数画素はみ出ることはあり得る。
 - `gj` の前の欲しい列の切り詰め（ADR 0144 の限界）は `width` が入ったが、実装はこの Issue に含めない。
 - 通常モードの横送りと横ホイールは無いまま（決定 11）。
+- 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-` は `z_bindings` に何もしない動作として載せ、失敗にしない（後ろの鍵は続く・縦は後続の Issue）。Vim と違い、`z<CR>` `z.` `z-` は最初の非空白へ動かず、`{N}zt` 等の回数も行を選ばない。ほかの表に無い `z` の鍵は Vim の未知の鍵と同じく失敗して後ろを打ち切り（fixture `z-unknown-zq-cuts`）、Vim にある `z+` `z^` `z<NL>` と折り畳み・綴りの `z` の鍵もいまは同じく失敗になる。`z<Esc>` は打ち消すだけ。
 - `enabled` と `columns` は別の問い（折り返すか・横に送るか）。格子と wrap on の普通の行は columns 0、wrap off の text 形は enabled false。両方 true になるのは wrap on の文書で巨大な行の窓（text 形）にキャレットがあるときだけで、窓は 1 画面行なので `gj` `gk` は `j` `k` と同じ所に着く（ADR 0144 決定 8）。

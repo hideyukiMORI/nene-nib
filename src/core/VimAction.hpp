@@ -99,11 +99,14 @@ enum class VimAction : std::uint8_t
     scroll_half_width_right,
     scroll_half_width_left,
     scroll_caret_to_left,
-    scroll_caret_to_right
+    scroll_caret_to_right,
+    // 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-`。今は何もしない・失敗にもしない（ADR 0145 の
+    // 限界・縦の位置合わせは後続）。表に無い z の鍵と分けるための 1 値。
+    align_screen_vertically
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
 constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::scroll_caret_to_right) + 1;
+    static_cast<std::size_t>(VimAction::align_screen_vertically) + 1;
 } // namespace nenenib::core

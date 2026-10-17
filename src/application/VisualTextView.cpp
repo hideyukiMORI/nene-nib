@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <string>
 #include <utility>
 #include <variant>
 
@@ -488,9 +489,14 @@ VisualTextView::column_of_horizontal(core::LineNumber number, float horizontal)
     const auto line_start = text.line_start(number);
     auto offset = text.offset_of(hit.value().position);
     auto located = location(core::TextCaret{text.position_of(offset)});
+    // 戻すときだけ行を 1 回写す（巨大な行はここへ来ない・戻す周ごとには写さない）。
+    std::string content;
     while (located && located.value().x > horizontal && line_start < offset)
     {
-        const auto content = text.line_text(number);
+        if (content.empty())
+        {
+            content = text.line_text(number);
+        }
         offset = core::Offset{
             line_start.value +
             core::vim_character_start(content, core::Offset{offset.value - line_start.value})

@@ -35,6 +35,9 @@ enum class VimActionGroup : std::uint8_t
     tab,
     // `zl` `zh` `zL` `zH` `zs` `ze`（ADR 0145 の決定 5）。NORMAL と VISUAL で動き、オペレータの後ろ
     // では打ち消す。
-    horizontal_scroll
+    horizontal_scroll,
+    // `zt` `zz` `zb` `z<CR>` `z.` `z-`（ADR 0145 の限界）。NORMAL と VISUAL で何もせず失敗にも
+    // しない。オペレータの後ろでは範囲にならず打ち消す（Vim の checkclearop）。
+    screen_alignment
 };
 } // namespace nenenib::core
