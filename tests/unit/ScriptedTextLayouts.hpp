@@ -2,17 +2,23 @@
 
 #include "TextLayoutPort.hpp"
 #include "Utf8.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
+#include <limits>
 #include <set>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
 namespace nenenib::tests
 {
-// applicationの画面行契約用。1 code point = 10画素の決定的な文字組み。
+// applicationの画面行契約用。1 升 = 10画素の決定的な文字組み。表示文字列の code point は表示幅の升
+// （column_advance の表・全角 2・Tab は vim_tab_stop の次の止まり・幅 0 は 0）を占め、wrap では幅の
+// 升ごとに折る。行末の 1 升に入らない全角は Vim と同じく次の画面行へ送る（#596）。
 // 実際の字体/Unicodeクラスタの契約はtests/uiのDirectWriteで検証する。
 class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
 {
@@ -28,9 +34,9 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
         }
-        const auto count = nenenib::core::code_point_count(request.text);
         const auto width = columns(request);
-        return count == 0 ? 1 : (count - 1) / width + 1;
+        const auto cells = cell_starts(request.text, width).back();
+        return cells == 0 ? 1 : (cells - 1) / width + 1;
     }
 
     [[nodiscard]] std::expected<nenenib::core::TextLocation,
@@ -45,14 +51,16 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
         }
-        const auto count = nenenib::core::code_point_count(request.text);
-        const auto at = std::min(caret.column.value - 1, count);
         const auto width = columns(request);
+        const auto starts = cell_starts(request.text, width);
+        const auto count = starts.size() - 1;
+        const auto at = std::min(caret.column.value - 1, count);
+        const auto cell = starts[at];
         const bool previous =
-            at > 0 && at % width == 0 &&
+            at > 0 && cell % width == 0 &&
             (at == count || caret.affinity == nenenib::core::CaretAffinity::trailing);
-        return nenenib::core::TextLocation{at / width - (previous ? 1U : 0U),
-                                           static_cast<float>(previous ? width : at % width) *
+        return nenenib::core::TextLocation{cell / width - (previous ? 1U : 0U),
+                                           static_cast<float>(previous ? width : cell % width) *
                                                10.0F};
     }
 
@@ -68,13 +76,14 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         {
             return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
         }
-        const auto count = nenenib::core::code_point_count(request.text);
         const auto width = columns(request);
+        const auto starts = cell_starts(request.text, width);
         const auto x = std::clamp(point.x / 10.0F + 0.5F, 0.0F, static_cast<float>(width));
         const auto column = static_cast<std::size_t>(x);
-        const auto begin = std::min(point.row, count / width) * width;
+        const auto target = (std::min(point.row, starts.back() / width) * width) + column;
+        const auto before = std::lower_bound(starts.begin(), std::prev(starts.end()), target);
         return nenenib::core::DisplayCaret{
-            nenenib::core::Column{begin + std::min(column, count - begin) + 1},
+            nenenib::core::Column{static_cast<std::size_t>(before - starts.begin()) + 1},
             column == width ? nenenib::core::CaretAffinity::trailing
                             : nenenib::core::CaretAffinity::leading};
     }
@@ -151,13 +160,37 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         }
     }
 
+    // 表示文字列の各 code point が始まる升と、末尾に全体の升の数。升は行頭からの仮想桁に、行末の 1
+    // 升 に入らず次の画面行へ送った全角の空きを足したもの。
+    [[nodiscard]] static std::vector<std::size_t> cell_starts(std::string_view text,
+                                                              std::size_t width)
+    {
+        std::vector<std::size_t> starts;
+        std::size_t cell = 0;
+        std::size_t column = 0;
+        for (nenenib::core::Offset at{0}; at.value < text.size();
+             at = nenenib::core::next_code_point(text, at))
+        {
+            const char32_t value = nenenib::core::code_point_at(text, at);
+            const auto advance = nenenib::core::column_advance(value, column);
+            const bool pushed = value != U'\t' && advance > 1 && advance <= width &&
+                                (cell % width) + advance > width;
+            cell += pushed ? width - (cell % width) : 0;
+            starts.push_back(cell);
+            cell += advance;
+            column += advance;
+        }
+        starts.push_back(cell);
+        return starts;
+    }
+
     [[nodiscard]] static std::size_t columns(const nenenib::application::TextLayoutRequest &request)
     {
-        // 巨大な行の窓は折り返さない（ADR 0139 の決定 2）。
+        // 巨大な行の窓は折り返さない（ADR 0139 の決定 2）。折り返さない幅は全体の升より広い。
         if (request.settings.wrapping == nenenib::core::LineWrapping::no_wrap ||
             request.geometry.width <= 0 || request.window.active)
         {
-            return nenenib::core::code_point_count(request.text) + 1;
+            return cell_starts(request.text, std::numeric_limits<std::size_t>::max()).back() + 1;
         }
         return static_cast<std::size_t>(std::max(request.geometry.width / 10, 1));
     }

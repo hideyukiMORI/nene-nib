@@ -36,6 +36,10 @@ enum class VimMotion : std::uint8_t
     big_word_end,
     big_word_end_for_change,
     previous_word_end,
-    previous_big_word_end
+    previous_big_word_end,
+    // `gj` `gk`。画面行で上下する文字単位の exclusive な移動（ADR 0144 の決定 4）。文字組みが
+    // 無効なら engine が down / up に読み替える。
+    display_down,
+    display_up
 };
 } // namespace nenenib::core

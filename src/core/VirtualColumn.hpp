@@ -62,6 +62,7 @@ inline constexpr std::size_t vim_tab_stop = 8;
 
 // 逆引き。その桁を含む文字の先頭を返す。行がそれより短ければ行の内容の終わり（Vim が NUL を
 // 置く桁）で、空行なら行頭。欲しい列の着地はこの 1 本だけを通る（ADR 0034 の決定 2）。
+// 索引を持つ本文は行を写さず索引から引く（ADR 0140 の決定 4・ADR 0144 の決定 2）。
 [[nodiscard]] Offset offset_at_virtual_column(const TextBuffer &text, LineNumber line,
                                               VirtualColumn column);
 } // namespace nenenib::core

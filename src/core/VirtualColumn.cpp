@@ -202,6 +202,12 @@ VirtualColumn caret_virtual_column(const TextBuffer &text, Offset at)
 
 Offset offset_at_virtual_column(const TextBuffer &text, LineNumber line, VirtualColumn column)
 {
+    // 索引を持つ本文は行を写さず索引から引く（O(塊)・巨大な行の窓の gj gk・ADR 0144 の決定 2）。
+    if (text.has_virtual_columns())
+    {
+        return text.virtual_columns().value().get().byte_at_virtual_column(
+            text, line, std::max<std::size_t>(column.value, 1) - 1);
+    }
     return Offset{text.line_start(line).value + byte_at_column(text.line_text(line), column)};
 }
 } // namespace nenenib::core

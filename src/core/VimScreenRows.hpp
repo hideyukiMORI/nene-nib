@@ -3,6 +3,7 @@
 #include "VimDisplayNavigation.hpp"
 #include "VimEditorView.hpp"
 #include "VimLayoutNeed.hpp"
+#include "VimRowLanding.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimState.hpp"
 
@@ -29,4 +30,13 @@ vim_row_navigation(const VimState &state, const VimEditorView &view, VimScrollDi
 [[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
 vim_row_half_navigation(const VimState &state, const VimEditorView &view,
                         VimScrollDirection direction, std::size_t amount);
+
+// `gj` `gk` の着地（ADR 0144 の決定 3・4）。キャレットの画面行から direction へ amount 画面行
+// だけ歩き（行の端を越えたら隣の論理行の最後 / 最初の画面行へ）、行き先の画面行の中で欲しい列に
+// 着く。欲しい列の決め方は画面移動と同じ 1 本（決定 3 の追補・今の画面行の始まりからの桁）。
+// 歩き切れなければ行ける所まで動いて失敗の印を付ける。`$` の後は画面行の末尾。足りない文字組み
+// の値は VimLayoutNeed。
+[[nodiscard]] std::expected<VimRowLanding, VimLayoutNeed>
+vim_row_landing(const VimState &state, const VimEditorView &view, VimScrollDirection direction,
+                std::size_t amount);
 } // namespace nenenib::core
