@@ -22,11 +22,13 @@ namespace
 constexpr char32_t line_feed = U'\n';
 // Ctrl-r は文字としては制御文字なので、表に載せる値は名前で書く（原文に制御文字を置かない）。
 constexpr char32_t control_r_character = 0x12;
+// z<CR> の <CR>（z の後ろの特別な鍵は VimStep.cpp が文字に写してから表を引く）。
+constexpr char32_t carriage_return_character = 0x0D;
 
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 60> normal_bindings{
+constexpr std::array<VimBinding, 61> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -74,6 +76,7 @@ constexpr std::array<VimBinding, 60> normal_bindings{
      {U';', VimAction::repeat_character_search},
      {U',', VimAction::repeat_character_search_opposite},
      {U'g', VimAction::prefix_g},
+     {U'z', VimAction::prefix_z},
      {U'r', VimAction::replace_character},
      {U'.', VimAction::repeat_change},
      {U':', VimAction::open_command_line},
@@ -161,7 +164,15 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::next_tab, VimActionGroup::tab},
      {VimAction::previous_tab, VimActionGroup::tab},
      {VimAction::move_display_down, VimActionGroup::motion},
-     {VimAction::move_display_up, VimActionGroup::motion}}};
+     {VimAction::move_display_up, VimActionGroup::motion},
+     {VimAction::prefix_z, VimActionGroup::input_wait},
+     {VimAction::scroll_column_right, VimActionGroup::horizontal_scroll},
+     {VimAction::scroll_column_left, VimActionGroup::horizontal_scroll},
+     {VimAction::scroll_half_width_right, VimActionGroup::horizontal_scroll},
+     {VimAction::scroll_half_width_left, VimActionGroup::horizontal_scroll},
+     {VimAction::scroll_caret_to_left, VimActionGroup::horizontal_scroll},
+     {VimAction::scroll_caret_to_right, VimActionGroup::horizontal_scroll},
+     {VimAction::align_screen_vertically, VimActionGroup::screen_alignment}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 26> motion_bindings{
@@ -201,6 +212,22 @@ constexpr std::array<VimBinding, 7> g_bindings{{{U'g', VimAction::move_document_
                                                 {U'T', VimAction::previous_tab},
                                                 {U'j', VimAction::move_display_down},
                                                 {U'k', VimAction::move_display_up}}};
+
+// z の後ろの鍵 → 動作（ADR 0145 の決定 5）。横送りの 6 鍵と、何もしない縦の位置合わせの 6 鍵
+// （zt zz zb z<CR> z. z-・縦は後続）。ここに無い鍵は Vim と同じく失敗して後ろを打ち切る。
+constexpr std::array<VimBinding, 12> z_bindings{
+    {{U'l', VimAction::scroll_column_right},
+     {U'h', VimAction::scroll_column_left},
+     {U'L', VimAction::scroll_half_width_right},
+     {U'H', VimAction::scroll_half_width_left},
+     {U's', VimAction::scroll_caret_to_left},
+     {U'e', VimAction::scroll_caret_to_right},
+     {U't', VimAction::align_screen_vertically},
+     {U'z', VimAction::align_screen_vertically},
+     {U'b', VimAction::align_screen_vertically},
+     {carriage_return_character, VimAction::align_screen_vertically},
+     {U'.', VimAction::align_screen_vertically},
+     {U'-', VimAction::align_screen_vertically}}};
 
 // 空白だけで切る（Vim の WORD の）移動。ほかの語の移動は文字の種類の表で切る（Issue #222）。
 constexpr std::array<VimMotion, 5> big_word_motions{
@@ -281,6 +308,18 @@ static_assert(every_action_has_one_row(),
 [[nodiscard]] std::optional<VimAction> vim_g_action_for(char32_t key) noexcept
 {
     for (const VimBinding binding : g_bindings)
+    {
+        if (binding.key == key)
+        {
+            return binding.action;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimAction> vim_z_action_for(char32_t key) noexcept
+{
+    for (const VimBinding binding : z_bindings)
     {
         if (binding.key == key)
         {

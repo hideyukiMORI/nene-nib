@@ -184,7 +184,8 @@ EditorController::measured_vim_step(const core::VimKey &key)
         state_.text(), state_.selection(), std::nullopt,
         replay_depth_.has_value() ? core::VimKeySource::replayed : core::VimKeySource::typed,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
-        // 格子は常に折り返す（ADR 0140 の決定 7）。
+        // 格子は常に折り返す（ADR 0140 の決定 7）。wrap off の text 形は無効のまま（gj gk は j k・
+        // ADR 0145 の決定 4）。横送りの row_request は有効か否かに関わらず答える。
         // 格子の画面移動は画面行の単位（ADR 0144 の決定 5）。text の形は wrap でも論理行のまま。
         core::VimLayoutView{view_geometry_.width > 0 &&
                                 (state_.settings().wrapping == core::LineWrapping::wrap ||
@@ -230,8 +231,22 @@ EditorController::answered_vim_request(const core::VimStep &step, core::VimEdito
     {
         return std::unexpected(TextLayoutFailure::unavailable);
     }
-    const auto &scroll = settled_scroll();
-    view.viewport = core::VimViewport{scroll.first_visible, scroll.visible_lines, scroll.first_row};
+    const auto scroll = settled_scroll();
+    // 画面の幅（升）と今の横位置（leftcol）も同じ往復で答える（ADR 0145 の決定 2）。横に送らない
+    // 文書では幅 0 で、文字組みを呼ばない。
+    auto text = visual_view();
+    const auto columns = text.horizontal_columns();
+    const auto left =
+        columns == 0
+            ? std::expected<std::size_t, TextLayoutFailure>{0}
+            : text.column_of_horizontal(state_.text().position_of(state_.selection().caret).line,
+                                        scroll.horizontal);
+    if (!left)
+    {
+        return std::unexpected(left.error());
+    }
+    view.viewport = core::VimViewport{scroll.first_visible, scroll.visible_lines, scroll.first_row,
+                                      columns, left.value()};
     return {};
 }
 } // namespace nenenib::application

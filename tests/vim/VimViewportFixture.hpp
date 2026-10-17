@@ -15,5 +15,10 @@ struct VimViewportFixture
     // 0は旧fixtureの折り返しなし。正値は決定的な文字組み（1文字10px）の幅。
     std::uint32_t wrap_columns = 0;
     std::uint32_t expected_first_row = 0;
+    // 0は折り返す/旧fixture。正値は折り返さない窓の升の数（1升10px・ADR 0145）と、鍵の前と後の
+    // leftcol（winsaveview().leftcol）。
+    std::uint32_t nowrap_columns = 0;
+    std::uint32_t left_column = 0;
+    std::uint32_t expected_left_column = 0;
 };
 } // namespace nenenib::tests

@@ -3,6 +3,8 @@
 The original oracle owns the key notation, defaults and executable. This companion measures
 the additional display inputs (width, wrapped rows) that its nowrap fixtures do not describe.
 Existing fixtures and their measurement code remain unchanged (ADR 0114 / QLT-001).
+A viewport with "leftcol" is the nowrap form (ADR 0145): the window is "columns" cells wide,
+starts scrolled to "leftcol", and the snapshot records winsaveview().leftcol.
 """
 
 from __future__ import annotations
@@ -37,16 +39,22 @@ def script(fixture: dict, keys: str) -> str:
     snapshot = ("{'text': join(getline(1, '$'), \"\\n\"), 'line': line('.'), "
                 "'column': col('.'), 'first': line('w0'), 'scroll': &scroll, "
                 "'width': winwidth(0), 'height': winheight(0), "
-                "'skipcol': winsaveview().skipcol, 'register': getreg('\"'), "
+                "'skipcol': winsaveview().skipcol, 'leftcol': winsaveview().leftcol, "
+                "'register': getreg('\"'), "
                 "'register_kind': getregtype('\"')}")
+    unwrapped = "leftcol" in view
+    # nowrap は Nib の最小の横の追従に近い sidescroll=1（ADR 0145 の決定 10）。
+    wrapping = ("set nowrap sidescroll=1 sidescrolloff=0" if unwrapped
+                else "set wrap nolinebreak nobreakindent")
     commands = [*oracle.DEFAULT_SETTINGS,
                 f"set columns={view['columns']} lines={view['visible_lines'] + 4}",
-                "set wrap nolinebreak nobreakindent nonumber norelativenumber foldcolumn=0",
+                f"{wrapping} nonumber norelativenumber foldcolumn=0",
                 "set noshowcmd noruler scrolloff=0 scrolljump=1",
                 f"resize {view['visible_lines']}",
                 f"call cursor({view['line']}, {view['column']})",
-                "call winrestview({'lnum': %d, 'col': %d, 'topline': %d})"
-                % (view['line'], view['column'] - 1, view['first_visible']),
+                "call winrestview({'lnum': %d, 'col': %d, 'topline': %d, 'leftcol': %d})"
+                % (view['line'], view['column'] - 1, view['first_visible'],
+                   view.get('leftcol', 0)),
                 "redraw!", f"let before = {snapshot}",
                 'execute "normal! " . "%s"' % oracle.vim_keys(oracle.normal_keys(keys)),
                 "redraw!", f"let after = {snapshot}",
@@ -80,6 +88,8 @@ def run(work: Path, fixture: dict, keys: str) -> dict:
             raise RuntimeError(f"{fixture['name']}: invalid initial {input_key}: {before}")
     if before["skipcol"] != 0:
         raise RuntimeError(f"{fixture['name']}: initial line is partly hidden")
+    if before["leftcol"] != view.get("leftcol", 0):
+        raise RuntimeError(f"{fixture['name']}: invalid initial leftcol: {before}")
     return result["after"]
 
 
@@ -96,10 +106,16 @@ def row(record: dict) -> str:
     view = fixture["viewport"]
     if result["skipcol"] % view["columns"] != 0:
         raise RuntimeError(f"{fixture['name']}: fractional hidden screen line")
-    viewport = ("VimViewportFixture{%d, %d, %d, %d, %d, %d, %d, %d}" %
-                (view['visible_lines'], view['first_visible'], view['line'], view['column'],
-                 result['first'], result['scroll'], view['columns'],
-                 result['skipcol'] // view['columns']))
+    if "leftcol" in view:
+        viewport = ("VimViewportFixture{%d, %d, %d, %d, %d, %d, 0, 0, %d, %d, %d}" %
+                    (view['visible_lines'], view['first_visible'], view['line'], view['column'],
+                     result['first'], result['scroll'], view['columns'], view['leftcol'],
+                     result['leftcol']))
+    else:
+        viewport = ("VimViewportFixture{%d, %d, %d, %d, %d, %d, %d, %d}" %
+                    (view['visible_lines'], view['first_visible'], view['line'], view['column'],
+                     result['first'], result['scroll'], view['columns'],
+                     result['skipcol'] // view['columns']))
     values = [oracle.literal(fixture[key]) for key in ('name', 'text', 'keys')]
     values += [oracle.literal(result['text']), str(result['line']), str(result['column']),
                oracle.literal(result['register']), oracle.literal(result['register_kind']), viewport]

@@ -198,7 +198,8 @@ def register_of(fixture: dict) -> dict | None:
 # q が NORMAL / VISUAL のコマンドとして届くかだけを見る。迷う位置は拒む側（NORMAL / VISUAL）に倒す。
 RECORDS, NORMAL, INSERT, VISUAL = "records", "normal", "insert", "visual"
 COUNT_START, COUNT_DIGITS = frozenset("123456789"), frozenset("0123456789")
-NORMAL_ARGUMENT = frozenset("fFtTr@\"g")
+# z も次の 1 鍵を読む（`zq` は録画ではなく表に無い z の鍵・#634）。
+NORMAL_ARGUMENT = frozenset("fFtTr@\"gz")
 NORMAL_INSERT = frozenset("iaIAoOCsS")
 OPERATORS = frozenset("dcy")
 VISUAL_START = frozenset({"v", "V", "<C-v>"})

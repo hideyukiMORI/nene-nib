@@ -2662,12 +2662,32 @@ void EditorController::perform(const core::VimMoveTo &effect)
     move_caret_to(effect.caret, core::SelectionAnchoring::collapse);
 }
 
+// 縦は engine の値を置く。横は first_column があればその leftcol を新しいキャレットの窓で
+// 画素にして置き（追従は呼ばない）、無ければ今の値を保ってキャレットが見える最小の送りへ
+// 1 回寄せる（ADR 0145 の決定 8・9）。横位置が求まらなければ、追従やスクロールの失敗と同じく
+// layout_failure_ に記録して描画の失敗の道へ渡す（選択と縦の位置は置いたまま・横は前の値）。
 void EditorController::perform(const core::VimNavigate &effect)
 {
-    const std::size_t visible = settled_scroll().visible_lines;
+    const ScrollState before = settled_scroll();
     state_ = state_.with_selection(effect.selection)
-                 .with_scroll(ScrollState{effect.first_visible, visible, effect.first_row});
+                 .with_scroll(ScrollState{effect.first_visible, before.visible_lines,
+                                          effect.first_row, before.horizontal});
     state_ = state_.with_history(state_.history().sealed());
+    auto view = visual_view();
+    const auto caret = core::TextCaret{state_.text().position_of(state_.selection().caret),
+                                       state_.caret_affinity()};
+    const auto horizontal =
+        effect.first_column.has_value()
+            ? view.horizontal_of_column(caret.position.line, effect.first_column.value())
+            : view.followed_horizontal(caret);
+    if (!horizontal)
+    {
+        layout_failure_ = horizontal.error();
+        return;
+    }
+    auto scroll = state_.scroll();
+    scroll.horizontal = horizontal.value();
+    state_ = state_.with_scroll(scroll);
 }
 
 // VISUAL の選択（決定 3）。engine が決めた両端をそのまま置く。範囲にするのは表示と操作の側。

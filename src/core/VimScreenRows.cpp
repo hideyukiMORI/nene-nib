@@ -50,17 +50,6 @@ using Walk = std::pair<VisualPosition, std::size_t>;
     return span.row == std::get<std::size_t>(request.target);
 }
 
-[[nodiscard]] Needed<VimRowSpan> span_of(const VimEditorView &view, const VimRowRequest &request)
-{
-    const auto found = std::ranges::find_if(view.layout.spans, [&request](const VimRowSpan &span)
-                                            { return answers(span, request); });
-    if (found == view.layout.spans.end())
-    {
-        return std::unexpected(VimLayoutNeed{request});
-    }
-    return *found;
-}
-
 [[nodiscard]] Needed<Walk> forward(const VimEditorView &view, VisualPosition from,
                                    std::size_t amount)
 {
@@ -205,7 +194,7 @@ using Walk = std::pair<VisualPosition, std::size_t>;
         return std::unexpected(bottom.error());
     }
     const auto target = clamped(caret, top, bottom.value().first);
-    return span_of(view, VimRowRequest{target.line, target.row});
+    return vim_row_span_of(view, VimRowRequest{target.line, target.row});
 }
 
 // 送る前の画面の先頭（画面行に丸めた位置）と、キャレットの画面行。
@@ -220,7 +209,7 @@ using Moves = std::pair<Walk, Walk>;
         std::clamp<std::size_t>(viewport.first_visible.value, 1, view.text.line_count())};
     const LineNumber caret_line = view.text.position_of(view.selection.caret).line;
     const auto top = forward(view, VisualPosition{first, viewport.first_row}, 0);
-    const auto caret_row = span_of(view, VimRowRequest{caret_line, view.selection.caret});
+    const auto caret_row = vim_row_span_of(view, VimRowRequest{caret_line, view.selection.caret});
     if (!top || !caret_row)
     {
         return std::unexpected(!top ? top.error() : caret_row.error());
@@ -312,6 +301,18 @@ using Moves = std::pair<Walk, Walk>;
 }
 } // namespace
 
+std::expected<VimRowSpan, VimLayoutNeed> vim_row_span_of(const VimEditorView &view,
+                                                         const VimRowRequest &request)
+{
+    const auto found = std::ranges::find_if(view.layout.spans, [&request](const VimRowSpan &span)
+                                            { return answers(span, request); });
+    if (found == view.layout.spans.end())
+    {
+        return std::unexpected(VimLayoutNeed{request});
+    }
+    return *found;
+}
+
 std::expected<VimDisplayNavigation, VimLayoutNeed> vim_row_navigation(const VimState &state,
                                                                       const VimEditorView &view,
                                                                       VimScrollDirection direction,
@@ -357,16 +358,17 @@ std::expected<VimRowLanding, VimLayoutNeed> vim_row_landing(const VimState &stat
                                                             std::size_t amount)
 {
     const Offset caret = view.selection.caret;
-    const auto caret_row = span_of(view, VimRowRequest{view.text.position_of(caret).line, caret});
+    const auto caret_row =
+        vim_row_span_of(view, VimRowRequest{view.text.position_of(caret).line, caret});
     if (!caret_row)
     {
         return std::unexpected(caret_row.error());
     }
     const auto from = caret_row.value();
     const auto moved = walked(view, VisualPosition{from.line, from.row}, amount, direction);
-    const auto row =
-        moved ? span_of(view, VimRowRequest{moved.value().first.line, moved.value().first.row})
-              : Needed<VimRowSpan>{std::unexpected(moved.error())};
+    const auto row = moved ? vim_row_span_of(view, VimRowRequest{moved.value().first.line,
+                                                                 moved.value().first.row})
+                           : Needed<VimRowSpan>{std::unexpected(moved.error())};
     if (!row)
     {
         return std::unexpected(row.error());

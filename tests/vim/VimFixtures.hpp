@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 9c03b3d79477d134bf2db4bc1d47de7411cccc15a7af51af1daeaa5987d28a21 / 1853 fixtures
+// fixtures.json: sha256 877928b008d28daf85576d9d47666e68a4de9fa1fd93f7412ad366bf89650eff / 1864 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1853> vim_fixtures{{
+constexpr std::array<VimFixture, 1864> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1865,6 +1865,17 @@ constexpr std::array<VimFixture, 1853> vim_fixtures{{
     {"word-edge-forward-2w-exact", "abc def ghi", "2wx", "abc def hi", 1, 9, "g", "v", std::nullopt},
     {"word-edge-forward-9w-one-letter-last-word", "abc d", "9wx", "abc d", 1, 5, "", "", std::nullopt},
     {"word-edge-forward-e-trailing-blank", "abc  ", "2lex", "abc  ", 1, 5, "", "", std::nullopt},
+    {"z-unknown-zq-cuts-the-rest", "abc", "zqx", "abc", 1, 1, "", "", std::nullopt},
+    {"z-unknown-after-count-cuts-the-rest", "abc", "3zqx", "abc", 1, 1, "", "", std::nullopt},
+    {"z-escape-cancels-and-continues", "abc", "z<Esc>x", "bc", 1, 1, "a", "v", std::nullopt},
+    {"z-align-zt-continues", "abc\ndef", "jlztx", "abc\ndf", 2, 2, "e", "v", std::nullopt},
+    {"z-align-zz-continues", "abc\ndef", "jlzzx", "abc\ndf", 2, 2, "e", "v", std::nullopt},
+    {"z-align-zb-continues", "abc\ndef", "jlzbx", "abc\ndf", 2, 2, "e", "v", std::nullopt},
+    {"z-align-cr-at-first-non-blank-continues", "abc\ndef", "jz<CR>x", "abc\nef", 2, 1, "d", "v", std::nullopt},
+    {"z-align-dot-at-first-non-blank-continues", "abc\ndef", "jz.x", "abc\nef", 2, 1, "d", "v", std::nullopt},
+    {"z-align-minus-at-first-non-blank-continues", "abc\ndef", "jz-x", "abc\nef", 2, 1, "d", "v", std::nullopt},
+    {"z-align-after-operator-cuts-the-rest", "abc", "dztx", "abc", 1, 1, "", "", std::nullopt},
+    {"z-align-visual-continues", "abc", "vlztd", "c", 1, 1, "ab", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

@@ -6,11 +6,13 @@
 #include "GridPoint.hpp"
 #include "ScrollBounds.hpp"
 #include "Utf8.hpp"
+#include "VimCharacterBoundary.hpp"
 #include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <string>
 #include <utility>
 #include <variant>
 
@@ -423,10 +425,111 @@ VisualTextView::row_span(const core::VimRowRequest &request)
     {
         return std::unexpected(!start ? start.error() : end.error());
     }
-    // 画面行の始まりの仮想桁は索引から引く（O(塊)・ADR 0144 の決定 3 の追補）。
-    return core::VimRowSpan{number,        row.value(),
-                            start.value(), end.value(),
-                            count.value(), core::virtual_column(text, start.value()).value - 1};
+    // 画面行の始まりと終わりと問いの位置の仮想桁は索引から引く（O(塊)・ADR 0144 の決定 3 の追補・
+    // ADR 0145 の決定 3）。行を写さない。
+    const auto start_column = core::virtual_column(text, start.value()).value - 1;
+    const auto end_column = core::virtual_column(text, end.value()).value - 1;
+    const auto column = at != nullptr ? core::virtual_column(text, *at).value - 1 : start_column;
+    return core::VimRowSpan{number,
+                            row.value(),
+                            start.value(),
+                            end.value(),
+                            count.value(),
+                            start_column,
+                            end_column - std::min(end_column, start_column),
+                            column};
+}
+
+std::size_t VisualTextView::horizontal_columns() const
+{
+    if (!scrolls_horizontally(caret_.line))
+    {
+        return 0;
+    }
+    return std::max<std::size_t>(
+        static_cast<std::size_t>(static_cast<float>(geometry_.width) / advance_), 1);
+}
+
+// 升 column の x。巨大な行は origin からの見積もり（決定 9）、普通の行はその升を含む文字の x に、
+// 文字の中の升の分だけ平均の字幅を足す（左端で半分欠けた全角の leftcol も同じ値に戻る）。
+std::expected<float, TextLayoutFailure>
+VisualTextView::horizontal_of_column(core::LineNumber number, std::size_t column)
+{
+    const auto &text = state_.text();
+    if (giant_line_index(text, number) != nullptr)
+    {
+        return window_x(column, origin_, advance_);
+    }
+    const auto offset =
+        core::offset_at_virtual_column(text, number, core::VirtualColumn{column + 1});
+    const auto start = core::virtual_column(text, offset).value - 1;
+    const auto located = location(core::TextCaret{text.position_of(offset)});
+    if (!located)
+    {
+        return std::unexpected(located.error());
+    }
+    return located.value().x + (static_cast<float>(column - std::min(column, start)) * advance_);
+}
+
+// horizontal_of_column の逆。x を叩いた文字が x より右から始まるなら前の文字へ戻し、その文字の升に
+// 文字の中の升（平均の字幅で割って丸める）を足す。
+std::expected<std::size_t, TextLayoutFailure>
+VisualTextView::column_of_horizontal(core::LineNumber number, float horizontal)
+{
+    const auto &text = state_.text();
+    if (giant_line_index(text, number) != nullptr)
+    {
+        return origin_ + static_cast<std::size_t>((std::max(horizontal, 0.0F) / advance_) + 0.5F);
+    }
+    const auto hit = caret_at(core::VisualPosition{number, 0}, horizontal);
+    if (!hit)
+    {
+        return std::unexpected(hit.error());
+    }
+    const auto line_start = text.line_start(number);
+    auto offset = text.offset_of(hit.value().position);
+    auto located = location(core::TextCaret{text.position_of(offset)});
+    // 戻すときだけ行を 1 回写す（巨大な行はここへ来ない・戻す周ごとには写さない）。
+    std::string content;
+    while (located && located.value().x > horizontal && line_start < offset)
+    {
+        if (content.empty())
+        {
+            content = text.line_text(number);
+        }
+        offset = core::Offset{
+            line_start.value +
+            core::vim_character_start(content, core::Offset{offset.value - line_start.value})
+                .value};
+        located = location(core::TextCaret{text.position_of(offset)});
+    }
+    if (!located)
+    {
+        return std::unexpected(located.error());
+    }
+    const auto inside = std::max(horizontal - located.value().x, 0.0F) / advance_;
+    return core::virtual_column(text, offset).value - 1 + static_cast<std::size_t>(inside + 0.5F);
+}
+
+std::expected<float, TextLayoutFailure> VisualTextView::followed_horizontal(core::TextCaret caret)
+{
+    if (!scrolls_horizontally(caret.position.line))
+    {
+        return 0.0F;
+    }
+    const auto located = location(caret);
+    if (!located)
+    {
+        return std::unexpected(located.error());
+    }
+    return horizontal_for(caret, located.value().x);
+}
+
+bool VisualTextView::scrolls_horizontally(core::LineNumber number) const
+{
+    const bool giant = giant_line_index(state_.text(), number) != nullptr;
+    return !(state_.settings().wrapping == core::LineWrapping::wrap && !giant) &&
+           geometry_.width > 0 && !gridded();
 }
 
 // 画面行の頭は x の最小で叩いた位置（格子は升 0）。行の最初の画面行は行頭。
@@ -684,12 +787,11 @@ std::expected<ScrollState, TextLayoutFailure> VisualTextView::followed(core::Tex
 // 追う（ADR 0139 の決定 5）。
 float VisualTextView::horizontal_for(core::TextCaret caret, float located) const
 {
-    const bool giant = giant_line_index(state_.text(), caret.position.line) != nullptr;
-    if ((state_.settings().wrapping == core::LineWrapping::wrap && !giant) ||
-        geometry_.width <= 0 || gridded())
+    if (!scrolls_horizontally(caret.position.line))
     {
         return 0;
     }
+    const bool giant = giant_line_index(state_.text(), caret.position.line) != nullptr;
     const auto width = static_cast<float>(std::max(geometry_.width - 3, 1));
     const auto x = std::max(located, 0.0F);
     return giant ? giant_horizontal(caret, x, width)

@@ -1,12 +1,14 @@
 // Vim の単体テストが共有する足場の定義（ADR 0042 決定 1）。
 #include "VimTestSupport.hpp"
 #include "Column.hpp"
+#include "CommandText.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "PlaceCaret.hpp"
 #include "ScriptedFiles.hpp"
@@ -14,6 +16,7 @@
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StoreVimRegister.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextPosition.hpp"
@@ -48,11 +51,14 @@ namespace nenenib::tests
 {
 namespace
 {
+using nenenib::application::CommandText;
 using nenenib::application::EditorFrame;
+using nenenib::application::OpenCommandPalette;
 using nenenib::application::OpenDocument;
 using nenenib::application::PlaceCaret;
 using nenenib::application::ScrollLines;
 using nenenib::application::SelectEditMode;
+using nenenib::application::SubmitCommand;
 using nenenib::application::VimKeyPress;
 using nenenib::application::VisibleLines;
 using nenenib::core::code_point_at;
@@ -207,6 +213,36 @@ void arrange_wrapped_viewport(EditorController &controller, const VimFixture &fi
     }
     expect(false, "the wrapped oracle viewport can be arranged");
 }
+// 折り返さない窓（ADR 0145）。1 升 10 px の窓を nowrap にし、行頭から `{leftcol}zl` で横位置を
+// 置いてからキャレットを fixture の位置へ置く（見えている位置なので追従は横位置を変えない）。
+// 置けた横位置を確かめてから鍵を流す。
+void arrange_unwrapped_viewport(EditorController &controller, const VimFixture &fixture,
+                                const VimViewportFixture &viewport)
+{
+    static_cast<void>(controller.apply(OpenCommandPalette{}));
+    static_cast<void>(controller.apply(CommandText{":set nowrap"}));
+    static_cast<void>(controller.apply(SubmitCommand{}));
+    const auto width = static_cast<std::int32_t>(viewport.nowrap_columns * 10);
+    static_cast<void>(controller.apply(VisibleLines{
+        viewport.visible_lines, nenenib::core::TextViewGeometry{width, 20, 96, 10.0F}}));
+    const LineNumber line{static_cast<std::size_t>(viewport.line)};
+    static_cast<void>(
+        controller.apply(PlaceCaret{TextPosition{line, Column{1}}, SelectionAnchoring::collapse}));
+    if (viewport.left_column > 0)
+    {
+        vim_normal(controller, std::to_string(viewport.left_column) + "zl");
+    }
+    static_cast<void>(
+        controller.apply(PlaceCaret{vim_fixture_position(fixture), SelectionAnchoring::collapse}));
+    const auto current = static_cast<std::int64_t>(controller.frame().first_visible.value);
+    const auto requested = static_cast<std::int64_t>(viewport.first_visible);
+    static_cast<void>(
+        controller.apply(ScrollLines{static_cast<std::int32_t>(requested - current)}));
+    const auto frame = controller.frame();
+    expect(frame.horizontal == static_cast<float>(viewport.left_column * 10) &&
+               frame.first_visible.value == viewport.first_visible,
+           "the unwrapped oracle viewport can be arranged");
+}
 } // namespace
 
 void arrange_vim_viewport(EditorController &controller, const VimFixture &fixture)
@@ -219,6 +255,11 @@ void arrange_vim_viewport(EditorController &controller, const VimFixture &fixtur
     if (viewport.wrap_columns > 0)
     {
         arrange_wrapped_viewport(controller, fixture, viewport);
+        return;
+    }
+    if (viewport.nowrap_columns > 0)
+    {
+        arrange_unwrapped_viewport(controller, fixture, viewport);
         return;
     }
     static_cast<void>(controller.apply_frame(VisibleLines{viewport.visible_lines}));

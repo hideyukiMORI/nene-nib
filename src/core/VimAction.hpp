@@ -90,10 +90,23 @@ enum class VimAction : std::uint8_t
     previous_tab,
     // `gj` `gk`。画面行で上下する（ADR 0144 の決定 4）。行き先は画面行の問いで engine が解く。
     move_display_down,
-    move_display_up
+    move_display_up,
+    // `z` の接頭辞と、窓と wrap off の横送り `zl` `zh` `zL` `zH` `zs` `ze`（ADR 0145 の決定 5）。
+    // motion ではなく画面の操作で、新しい leftcol は engine が決める。
+    prefix_z,
+    scroll_column_right,
+    scroll_column_left,
+    scroll_half_width_right,
+    scroll_half_width_left,
+    scroll_caret_to_left,
+    scroll_caret_to_right,
+    // 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-`。今は何もしない・失敗にもしない（ADR 0145 の
+    // 限界・縦の位置合わせは後続）。表に無い z の鍵と分けるための 1 値。
+    align_screen_vertically
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::move_display_up) + 1;
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::align_screen_vertically) + 1;
 } // namespace nenenib::core
