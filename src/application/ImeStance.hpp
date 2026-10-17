@@ -15,9 +15,10 @@ enum class ImeStance : std::uint8_t
 {
     // 使う人が残した状態に戻す（通常モードと Vim の INSERT で、入力行が無いとき）。
     as_left,
-    // 閉じたままにする（Vim の NORMAL / VISUAL と、Ex の行・検索の行が開いているとき）。
+    // 閉じたままにする（Vim の NORMAL / VISUAL で、入力行が無いとき）。
     closed,
-    // 入るときに 1 度閉じて、あとは使う人に任せる（Ctrl+P の面が開いているとき・D32）。
+    // 入るときに 1 度閉じて、あとは使う人に任せる（入力行が開いているとき。Ctrl+P の面は D32・
+    // Ex の行と検索の行は D57）。
     closed_once
 };
 

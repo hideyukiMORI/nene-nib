@@ -1165,8 +1165,9 @@ void verify_palette_commit_limits()
            "a commit past the input limit is refused with a notice");
 }
 
-// Ex の行と検索の行は今までどおり変換も確定も捨てる（ADR 0061 の決定 3）。
-void verify_input_lines_drop_composition()
+// Ex の行と検索の行も面と同じく変換を入力行に載せ、確定は打った文字と同じ道で入力行に入る。
+// 閉じるときに残っている変換は消える（ADR 0061 の決定 3・4 の #635 の追記・施主決定 D57）。
+void verify_input_lines_take_composition()
 {
     Editing editor;
     auto &controller = editor.controller();
@@ -1174,13 +1175,19 @@ void verify_input_lines_drop_composition()
     for (const auto entry : {U':', U'/'})
     {
         static_cast<void>(controller.apply_frame(VimKeyPress{core::VimCharacter{entry}}));
+        static_cast<void>(controller.apply_frame(app::CommandText{"a"}));
         auto frame = controller.apply_frame(ComposeText{composed_of("あ", {}, 3)});
-        expect(frame.command_line.has_value() && !app::composing(frame),
-               "the Ex and search lines still drop the composition");
+        expect(frame.command_composition.has_value() && !frame.composition.has_value() &&
+                   frame.command_line.value_or(core::InputLineView{}).text == "a",
+               "the Ex and search lines carry the composition outside the typed text");
         frame = controller.apply_frame(CommitText{"界"});
-        expect(frame.command_line.value_or(core::InputLineView{}).text.empty(),
-               "and drop the commit");
-        static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+        expect(frame.command_line.value_or(core::InputLineView{}).text == "a界" &&
+                   !app::composing(frame) && frame.lines.front().text.empty(),
+               "the commit goes into the input line like typed text");
+        static_cast<void>(controller.apply_frame(ComposeText{composed_of("か", {}, 3)}));
+        frame = controller.apply_frame(app::CancelCommand{});
+        expect(!frame.command_line.has_value() && !app::composing(frame),
+               "closing the input line drops its composition");
     }
 }
 
@@ -1215,7 +1222,7 @@ void verify_palette_composition()
     }
     verify_palette_hint_composing();
     verify_palette_commit_limits();
-    verify_input_lines_drop_composition();
+    verify_input_lines_take_composition();
 }
 
 void verify_tab_folders()

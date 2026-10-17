@@ -259,7 +259,7 @@ class EditorWindow final
     ImeOpenState ime_open_ = ImeOpenState::unrecorded;
     // 前に実行した構え。closed_once を入るときの 1 回にするために覚える（ADR 0061 の決定 2）。
     std::optional<application::ImeStance> ime_stance_;
-    // 前の frame で面の入力行が変換中だったか。面が閉じて変換が消えた瞬間を知る（決定 3）。
+    // 前の frame で入力行が変換中だったか。入力行が閉じて変換が消えた瞬間を知る（決定 3）。
     bool command_composing_ = false;
     // いま入れ子になっている send の数と、send の途中で届いた合図（何回届いても 1 つ）。
     std::size_t sending_depth_ = 0;

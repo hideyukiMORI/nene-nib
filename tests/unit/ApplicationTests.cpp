@@ -1621,8 +1621,8 @@ void verify_composition_vim_insert()
            "Vim sees the committed text as characters it typed itself");
 }
 
-// IME の構えの表（ADR 0061 の決定 1）。入力があれば入力の種類が決め（面は closed_once・Ex と
-// 検索の行は closed）、無ければモードが決める（通常と INSERT は as_left・NORMAL / VISUAL は
+// IME の構えの表（ADR 0061 の決定 1）。入力があれば入力の種類が決め（面・Ex の行・検索の行は
+// closed_once・D57）、無ければモードが決める（通常と INSERT は as_left・NORMAL / VISUAL は
 // closed）。
 void verify_ime_stance_table()
 {
@@ -1634,10 +1634,10 @@ void verify_ime_stance_table()
         CommandInput{nenenib::core::SearchLine::opened(nenenib::core::VimSearchDirection::forward)},
         CommandInput{
             nenenib::core::CommandPalette::opened({}, "", nenenib::core::EditMode::ordinary)}};
-    const std::array<ImeStance, 4> typed{ImeStance::as_left, ImeStance::closed, ImeStance::closed,
-                                         ImeStance::closed_once};
-    const std::array<ImeStance, 4> blocked{ImeStance::closed, ImeStance::closed, ImeStance::closed,
-                                           ImeStance::closed_once};
+    const std::array<ImeStance, 4> typed{ImeStance::as_left, ImeStance::closed_once,
+                                         ImeStance::closed_once, ImeStance::closed_once};
+    const std::array<ImeStance, 4> blocked{ImeStance::closed, ImeStance::closed_once,
+                                           ImeStance::closed_once, ImeStance::closed_once};
     const std::array<VimMode, 5> vim_modes{VimMode::normal, VimMode::insert, VimMode::visual,
                                            VimMode::visual_line, VimMode::visual_block};
     for (std::size_t index = 0; index < inputs.size(); ++index)
@@ -1671,8 +1671,14 @@ void verify_ime_stance_frame()
            "Ctrl+P closes the IME once in Vim NORMAL");
     expect(controller.apply_frame(OpenCommandPalette{}).ime == ImeStance::closed,
            "Ctrl+P again returns to closed");
-    expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U':'}}}).ime == ImeStance::closed,
-           "the Ex line keeps the IME closed");
+    expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U':'}}}).ime ==
+               ImeStance::closed_once,
+           "the Ex line closes the IME once (D57)");
+    expect(controller.apply_frame(nenenib::application::CancelCommand{}).ime == ImeStance::closed,
+           "leaving the Ex line returns to closed");
+    expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'/'}}}).ime ==
+               ImeStance::closed_once,
+           "the search line closes the IME once (D57)");
     static_cast<void>(controller.apply_frame(nenenib::application::CancelCommand{}));
     expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'i'}}}).ime ==
                ImeStance::as_left,

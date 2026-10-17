@@ -1349,7 +1349,7 @@ void EditorWindow::close_ime()
     ImmReleaseContext(window_, context);
 }
 
-// 面が閉じて入力行の変換が消えたとき、IME の側に変換を残さない（ADR 0061 の決定 3）。
+// 入力行が閉じて変換が消えたとき、IME の側に変換を残さない（ADR 0061 の決定 3）。
 void EditorWindow::cancel_ime_composition()
 {
     const HIMC context = ImmGetContext(window_);
@@ -1458,7 +1458,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     {
         return;
     }
-    // 面が閉じて入力行の変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
+    // 入力行が閉じて変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
     // の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
     // 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。
     const bool command_composed = command_composing_;

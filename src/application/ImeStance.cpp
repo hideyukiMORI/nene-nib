@@ -8,14 +8,16 @@ namespace nenenib::application
 namespace
 {
 // 入力の種類ごとの構え。写し先が足りなければ std::visit がコンパイルで落ちる（CPP-002）。
+// Ex の行と検索の行は面と同じく入るときに 1 度だけ閉じる（施主決定 D57・#635・Vim の
+// imcmdline / imsearch の既定と同じ）。
 [[nodiscard]] ImeStance stance_of(const core::CommandLine &) noexcept
 {
-    return ImeStance::closed;
+    return ImeStance::closed_once;
 }
 
 [[nodiscard]] ImeStance stance_of(const core::SearchLine &) noexcept
 {
-    return ImeStance::closed;
+    return ImeStance::closed_once;
 }
 
 [[nodiscard]] ImeStance stance_of(const core::CommandPalette &) noexcept
