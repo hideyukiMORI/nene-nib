@@ -2,6 +2,7 @@
 // 裏の仕事の合図 WorkCompleted が使う人の操作の途中の状態を 1 つも動かさないことと、同じフォルダの
 // 口（list・collect）を呼ぶのが面を開く意図と合図だけであること、届いた分を面の後ろへ足すこと
 // （ADR 0062 の決定 14〜18）。
+#include "AutosaveTick.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CommandChoice.hpp"
@@ -231,6 +232,31 @@ void verify_work_keeps_tab_walk()
     const auto third = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
     expect(!third.lines.empty() && third.lines.front().text == "b" && controller.tab_walking(),
            "the next walk after the signal reaches the third tab in the order");
+    applied(controller, app::SettleRecentTab{});
+}
+
+// 自動退避の合図も歩きの途中に届いて歩きを切らない（ADR 0137 の決定 1）。未保存のタブは退避を
+// 頼むが、表示値は変わらない。
+void verify_autosave_keeps_tab_walk()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"a"});
+    for (const std::string_view body : {"b", "c", "d"})
+    {
+        applied(controller, app::NewTab{});
+        applied(controller, app::InsertText{std::string(body)});
+    }
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    const std::string before = printed(controller.frame());
+    const std::string after = printed(controller.apply_frame(app::AutosaveTick{}));
+    expect(before == after && editing.autosave().stored().size() == 4,
+           "the autosave tick during the walk stores the unsaved tabs and keeps the frame");
+    expect(controller.tab_walking(), "the autosave tick does not settle the walk");
+    const auto third = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
+    expect(!third.lines.empty() && third.lines.front().text == "b" && controller.tab_walking(),
+           "the next walk after the autosave tick reaches the third tab in the order");
     applied(controller, app::SettleRecentTab{});
 }
 
@@ -660,6 +686,7 @@ void verify_background_work_contracts()
 {
     verify_work_keeps_idle_and_notice();
     verify_work_keeps_tab_walk();
+    verify_autosave_keeps_tab_walk();
     verify_work_keeps_palette_and_composition();
     verify_work_keeps_vim_state();
     verify_folder_quiet_paths();

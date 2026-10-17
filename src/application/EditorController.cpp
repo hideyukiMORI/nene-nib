@@ -2,6 +2,10 @@
 #include "GridLineRows.hpp"
 #include "GridLineSource.hpp"
 
+#include "AutosaveOutcome.hpp"
+#include "AutosavePlan.hpp"
+#include "AutosaveSnapshot.hpp"
+#include "AutosaveStep.hpp"
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
 #include "ClipboardText.hpp"
@@ -88,6 +92,7 @@
 #include "VimVisualReselect.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -95,6 +100,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -670,20 +676,68 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
                          tab.affinity};
 }
 
+// 自動退避する本文の出どころ（ADR 0137 の決定 2）。まだ読んでいない文書は退避しない。写し先が
+// 足りなければ std::visit が落ちる（CPP-002）。
+[[nodiscard]] std::optional<std::shared_ptr<const DocumentState>>
+autosave_bundle(const std::shared_ptr<const DocumentState> &tab)
+{
+    return tab;
+}
+
+[[nodiscard]] std::optional<std::shared_ptr<const DocumentState>>
+autosave_bundle(const std::shared_ptr<const UnloadedDocument> &)
+{
+    return std::nullopt;
+}
+
+// UTF-8 の本文の断片。BOM つきは先頭に BOM を置く（保存と自動退避の共通・ADR 0137 の決定 4）。
+[[nodiscard]] std::vector<std::string_view> utf8_parts(const core::TextBuffer &text,
+                                                       core::TextEncoding encoding)
+{
+    auto parts = text.segments();
+    if (encoding == core::TextEncoding::utf8_bom)
+    {
+        parts.insert(parts.begin(), core::byte_order_mark());
+    }
+    return parts;
+}
+
+// 断片を 1 本のバイト列に写す（自動退避の写し・決定 4）。
+[[nodiscard]] std::vector<std::byte> joined_bytes(std::span<const std::string_view> parts)
+{
+    std::size_t size = 0;
+    for (const std::string_view part : parts)
+    {
+        size += part.size();
+    }
+    std::vector<std::byte> bytes;
+    bytes.reserve(size);
+    for (const std::string_view part : parts)
+    {
+        const auto view = std::as_bytes(std::span{part});
+        bytes.insert(bytes.end(), view.begin(), view.end());
+    }
+    return bytes;
+}
+
+// 自動退避の失敗の 1 行（ADR 0137 の決定 4）。
+constexpr std::string_view autosave_failed_message = "自動退避できませんでした";
+
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
 // クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
 constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
+// 自動退避の残骸を読めなかった知らせ（ADR 0137 の決定 6）。
+constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
 constexpr std::string_view clipped_mark = "…";
 
-// 知らせの 1 行（ADR 0059 の「知らせの文言」）。others は同じ意図の中でほかに読めなかった数。
-// 名前は 1 行に収まるよう末尾をコードポイントの境目で落とす（題名と同じ「…」）。
-[[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
+// 名前を 1 つ載せる知らせの 1 行（ADR 0059 の「知らせの文言」）。others は同じ意図の中でほかに
+// 読めなかった数。名前は 1 行に収まるよう末尾をコードポイントの境目で落とす（題名と同じ「…」）。
+[[nodiscard]] core::DisplayText named_notice(std::string_view prefix, std::string name,
+                                             std::size_t others)
 {
     const std::string suffix =
         others == 0 ? std::string{} : "（ほか " + std::to_string(others) + " 件）";
-    std::string name(path.file_name().empty() ? path.text() : path.file_name());
-    const std::size_t room =
-        core::DisplayText::maximum_bytes - unreached_prefix.size() - suffix.size();
+    const std::size_t room = core::DisplayText::maximum_bytes - prefix.size() - suffix.size();
     if (name.size() > room)
     {
         core::Offset cut{room - clipped_mark.size()};
@@ -694,8 +748,44 @@ constexpr std::string_view clipped_mark = "…";
         name.resize(cut.value);
         name += clipped_mark;
     }
-    // 材料は検証済みの経路と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
-    return core::DisplayText::parse(std::string(unreached_prefix) + name + suffix).value();
+    // 材料は検証済みの経路・題名と固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+    return core::DisplayText::parse(std::string(prefix) + name + suffix).value();
+}
+
+[[nodiscard]] core::DisplayText unreached_message(const core::FilePath &path, std::size_t others)
+{
+    return named_notice(unreached_prefix,
+                        std::string(path.file_name().empty() ? path.text() : path.file_name()),
+                        others);
+}
+
+// 読めなかった残骸の知らせ。名前は未保存の印の無い題名（無題なら「無題」）。
+[[nodiscard]] core::DisplayText unrestored_message(const AutosaveRemnant &remnant,
+                                                   std::size_t others)
+{
+    return named_notice(
+        unrestored_prefix,
+        std::string(core::tab_title_for(remnant.path, core::SaveState::saved).text()), others);
+}
+
+// 自動退避から戻した 1 タブの束（ADR 0137 の決定 6）。保存した時点は無い（未保存の印）。
+// キャレットは一覧に書いた位置を reached_bundle と同じく寄せる（行は本文の範囲へ、桁は行の中の
+// 文字の境目へ）。スクロールは先頭、履歴は空。
+[[nodiscard]] DocumentState restored_document(core::TextBuffer text, Document document,
+                                              core::TextPosition caret)
+{
+    const core::Offset placed =
+        text.offset_of(core::TextPosition{line_within(text, caret.line), caret.column});
+    DocumentView view{core::tab_title_for(document.path, core::SaveState::modified), document.path,
+                      document.encoding, core::SaveState::modified, std::nullopt};
+    return DocumentState{std::move(text),
+                         core::collapsed_at(placed),
+                         core::EditHistory::empty(),
+                         std::move(document),
+                         core::LineNumber{1},
+                         std::nullopt,
+                         std::nullopt,
+                         std::move(view)};
 }
 
 // 帯の位置 position のタブのパス（無題なら無し）。脇の束は帯の位置からアクティブを抜いた順。
@@ -751,16 +841,27 @@ constexpr std::string_view clipped_mark = "…";
 // 寸法・外観・帯の上のマウスとホイールのように文書もアクティブのタブも動かさない意図。これ以外の
 // 意図は写す前に歩きを確定する（Ctrl を押したまま帯の上でマウスが動いても、歩きは切れない）。
 // 裏の仕事の合図（WorkCompleted）も使う人の操作ではないので歩きを続ける（ADR 0062 の決定 7）。
+// 自動退避の合図（AutosaveTick）も同じ理由で歩きを続ける（ADR 0137 の決定 1）。起動の問いの答え
+// （RestoreAutosave / DiscardAutosave）は使う人の操作なので、ここに書かず歩きを確定する（決定 6）。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WalkRecentTab>(intent) ||
            std::holds_alternative<SettleRecentTab>(intent) ||
            std::holds_alternative<WorkCompleted>(intent) ||
+           std::holds_alternative<AutosaveTick>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<ScrollTabs>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
            std::holds_alternative<VisibleLines>(intent) ||
            std::holds_alternative<RefreshAppearance>(intent);
+}
+
+// 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、30 秒ごとに必ず来る自動退避の
+// 合図（使う人の操作ではない・ADR 0137 の決定 1）。これ以外の意図は写す前に狙いを捨てる。
+[[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<MoveCaret>(intent) ||
+           std::holds_alternative<AutosaveTick>(intent);
 }
 
 // 状態の変換の表示値。本文と面の入力行のどちらに載せるかは呼び手が決める（ADR 0061 の決定 4）。
@@ -996,7 +1097,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 EditorDelivery EditorController::apply(const EditorIntent &intent)
 {
     layout_failure_.reset();
-    if (!std::holds_alternative<MoveCaret>(intent))
+    if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
     }
@@ -1004,6 +1105,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
     // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。窓が閉じていくときの一覧の
     // 書き出しも同じ（ADR 0059 の決定 3）。裏の仕事の合図も同じ（ADR 0062 の決定 7）。
+    // 自動退避の合図も使う人の操作ではないので同じ（ADR 0137 の決定 1）。起動の問いの答えは使う人の
+    // 操作なので、ほかの意図と同じに 1 意図の知らせを消してから写す（決定 6）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
                  std::holds_alternative<CancelComposition>(intent) ||
@@ -1012,7 +1115,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<PointTitleBar>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
                  std::holds_alternative<EndSession>(intent) ||
-                 std::holds_alternative<WorkCompleted>(intent));
+                 std::holds_alternative<WorkCompleted>(intent) ||
+                 std::holds_alternative<AutosaveTick>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
@@ -2804,32 +2908,36 @@ std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::Det
         .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
 }
 
-std::expected<void, FileFailure> EditorController::write_utf8_document(const SaveDocument &intent)
+std::expected<std::vector<std::string_view>, FileFailure>
+EditorController::encoded_parts(const core::TextBuffer &text, core::TextEncoding encoding,
+                                std::string &held)
 {
-    auto parts = state_.text().segments();
-    if (intent.encoding == core::TextEncoding::utf8_bom)
-    {
-        parts.insert(parts.begin(), core::byte_order_mark());
-    }
-    return ports_.files.write(intent.path, parts, intent.mode);
-}
-
-std::expected<void, FileFailure> EditorController::write_document(const SaveDocument &intent)
-{
-    switch (intent.encoding)
+    switch (encoding)
     {
     case core::TextEncoding::utf8:
     case core::TextEncoding::utf8_bom:
-        return write_utf8_document(intent);
+        return utf8_parts(text, encoding);
     case core::TextEncoding::shift_jis:
         break;
     }
-    const auto converted = ports_.code_pages.from_utf8(state_.text().text());
+    auto converted = ports_.code_pages.from_utf8(text.text());
     if (!converted)
     {
         return std::unexpected(file_failure_of(converted.error()));
     }
-    return ports_.files.write(intent.path, converted.value(), intent.mode);
+    held = std::move(converted).value();
+    return std::vector<std::string_view>{held};
+}
+
+std::expected<void, FileFailure> EditorController::write_document(const SaveDocument &intent)
+{
+    std::string held;
+    const auto parts = encoded_parts(state_.text(), intent.encoding, held);
+    if (!parts)
+    {
+        return std::unexpected(parts.error());
+    }
+    return ports_.files.write(intent.path, parts.value(), intent.mode);
 }
 
 // 読んで復号した本文と文書。上限はここが正本で、ポートへ引数で渡す。読んでから断るのでは
@@ -3128,15 +3236,209 @@ void EditorController::accept(const EndSession &intent)
     static_cast<void>(ports_.session.write(ended_session(state_, intent.reason)));
     // 閉じたファイルを履歴に記録する（ADR 0060 の決定 8）。一覧の書きの後。
     remember(ended_paths(state_, intent.reason));
+    // 未保存のタブが残らないか、使う人が「いいえ」と答えて捨てた終わり方だけ退避を消す（ADR 0137
+    // の決定 5）。確かめずに残る終わり方（OS の終了の強行）では消さず、次の起動で問う。進行中の
+    // store の終わりは adapter が待つ。
+    if (clears_autosave(state_, intent))
+    {
+        ports_.autosave.clear();
+    }
+}
+
+// 自動退避の合図（ADR 0137 の決定 1・2）。入口は歩きも知らせも残す。
+void EditorController::accept(const AutosaveTick &)
+{
+    autosave_now();
+}
+
+// 計画は純関数で、帳面を更新するのはこの道だけ（合図と復元の直後）。本文の写しは UI スレッドで
+// 作り、書くのは worker（決定 4）。
+void EditorController::autosave_now()
+{
+    for (const auto &[id, step] : autosave_plan(state_, autosave_ledger_))
+    {
+        switch (step)
+        {
+        case AutosaveStep::store:
+            store_planned(id);
+            break;
+        case AutosaveStep::discard:
+            ports_.autosave.discard(id);
+            autosave_ledger_.erase(id);
+            break;
+        case AutosaveStep::keep:
+            break;
+        }
+    }
+}
+
+// 起動の問いの前の一覧（ADR 0137 の決定 6・7）。起動の道で自動退避に触れるのはこの 1 回だけ。
+// 読めなければ戻すものは無い（問わない）。
+const std::vector<AutosaveRemnant> &EditorController::autosave_remnants()
+{
+    autosave_remnants_ = ports_.autosave.remnants().value_or(std::vector<AutosaveRemnant>{});
+    return autosave_remnants_;
+}
+
+// 「はい」（決定 6）。覚えた残骸を順に読み、戻せた分を帯の末尾へ足してから、最初の 1 本へ
+// 切り替える。読めない残骸は知らせて飛ばす。戻したタブは次の合図を待たずにこのプロセスの退避と
+// して頼み、その後にどの残骸も forget する（頼んだ書きが終わるまでの隙間は ADR の限界）。
+void EditorController::accept(const RestoreAutosave &)
+{
+    const std::vector<AutosaveRemnant> remnants = std::exchange(autosave_remnants_, {});
+    std::vector<DocumentState> restored;
+    std::size_t unrestored = 0;
+    for (const AutosaveRemnant &remnant : remnants)
+    {
+        auto bundle = restored_bundle(remnant);
+        if (bundle.has_value())
+        {
+            restored.push_back(std::move(bundle).value());
+            continue;
+        }
+        state_ = state_.with_command_message(unrestored_message(remnant, unrestored++));
+    }
+    if (!restored.empty())
+    {
+        const std::size_t first = state_.tab_count();
+        state_ = state_.with_appended(std::move(restored));
+        leave_document();
+        state_ = state_.with_switched(first);
+        enter_document();
+        autosave_now();
+    }
+    for (const AutosaveRemnant &remnant : remnants)
+    {
+        ports_.autosave.forget(remnant);
+    }
+}
+
+// 「いいえ」（決定 6）。本文を読まずに全部 forget する。
+void EditorController::accept(const DiscardAutosave &)
+{
+    for (const AutosaveRemnant &remnant : std::exchange(autosave_remnants_, {}))
+    {
+        ports_.autosave.forget(remnant);
+    }
+}
+
+// 開くのと同じ判別と復号（read_document と同じ DetectedText → decoded）。一覧のパスの符号化は
+// 使わず、本文の判別が決める。
+std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRemnant &remnant)
+{
+    const auto bytes = ports_.autosave.read(remnant);
+    if (!bytes)
+    {
+        return std::nullopt;
+    }
+    const std::span<const std::byte> body = bytes.value();
+    auto detected = core::DetectedText::from_bytes(
+        std::string_view{std::bit_cast<const char *>(body.data()), body.size()});
+    if (!detected)
+    {
+        return std::nullopt;
+    }
+    const core::TextEncoding encoding = detected.value().encoding();
+    auto text = decoded(std::move(detected).value());
+    if (!text)
+    {
+        return std::nullopt;
+    }
+    return restored_document(std::move(text).value(),
+                             Document{remnant.path, encoding, std::nullopt}, remnant.caret);
+}
+
+void EditorController::store_planned(AutosaveId id)
+{
+    const auto &ids = state_.autosave_ids();
+    const auto position =
+        static_cast<std::size_t>(std::ranges::distance(ids.begin(), std::ranges::find(ids, id)));
+    if (position == state_.active_tab())
+    {
+        if (store_autosave(id, state_.text(), state_.document(),
+                           state_.text().position_of(state_.selection().caret)))
+        {
+            autosave_ledger_.insert_or_assign(id, state_.history().revision());
+        }
+        return;
+    }
+    const auto bundle =
+        std::visit([](const auto &tab) { return autosave_bundle(tab); },
+                   state_.parked().at(position < state_.active_tab() ? position : position - 1));
+    if (!bundle.has_value())
+    {
+        return;
+    }
+    const DocumentState &tab = *bundle.value();
+    if (store_autosave(id, tab.text, tab.document, tab.text.position_of(tab.selection.caret)))
+    {
+        autosave_ledger_.insert_or_assign(id, tab.history.revision());
+    }
+}
+
+bool EditorController::store_autosave(AutosaveId id, const core::TextBuffer &text,
+                                      const Document &document, core::TextPosition caret)
+{
+    std::string held;
+    const auto parts = encoded_parts(text, document.encoding, held);
+    if (!parts)
+    {
+        notify_autosave_failure();
+        return false;
+    }
+    // store にするのは未保存のタブだけなので、題名は未保存の印つき。
+    ports_.autosave.store(AutosaveSnapshot{
+        id, document.path, core::tab_title_for(document.path, core::SaveState::modified),
+        joined_bytes(parts.value()), caret});
+    return true;
+}
+
+// worker が終えた退避の結果を全部引く（決定 4・独立レビュー F3）。失敗した id は帳面から外し、
+// 本文が変わらなくても次の合図で書き直す。失敗が 1 つでもあれば（まだ出していなければ）1 回
+// 知らせ、失敗が無く成功が 1 つでもあれば知らせの印を下ろす（次の失敗でまた 1 回出る）。
+// 結果が無ければ（フォルダの合図）何も変えない。
+void EditorController::collect_autosave()
+{
+    const auto outcomes = ports_.autosave.collect();
+    bool failed = false;
+    for (const AutosaveOutcome &outcome : outcomes)
+    {
+        if (outcome.failure.has_value())
+        {
+            failed = true;
+            autosave_ledger_.erase(outcome.id);
+        }
+    }
+    if (failed)
+    {
+        notify_autosave_failure();
+        return;
+    }
+    if (!outcomes.empty())
+    {
+        autosave_notified_ = false;
+    }
+}
+
+void EditorController::notify_autosave_failure()
+{
+    if (autosave_notified_)
+    {
+        return;
+    }
+    autosave_notified_ = true;
+    // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
+    state_ = state_.with_command_message(core::DisplayText::parse(autosave_failed_message).value());
 }
 
 // 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて
 // いなくても 1 回呼んでたまりを空にする。使うのは面が開いていて今の券の batch だけ。
 // 届いた分は 1 回の extended で後ろへ足す（入力と選択は core が保つ）。
 // 打ち切りは今の面の欄に覚えるだけで、知らせは frame を作る command_message() が出す。
-// 入力・知らせ・ほかの状態には触れない。
+// 入力・知らせ・ほかの状態には触れない。自動退避の失敗もここで引く（ADR 0137 の決定 4）。
 void EditorController::accept(const WorkCompleted &)
 {
+    collect_autosave();
     const auto batches = ports_.folders.collect();
     const auto &input = state_.command_input();
     const auto *palette =

@@ -3,6 +3,7 @@
 #include "FilePath.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -21,6 +22,11 @@ namespace nenenib::adapters::win32
                                    std::uint32_t sequence);
 // プロセスが生きているかを答える関数。回収は OpenProcess で、試験は替え玉で答える。
 using ProcessAlive = bool (*)(std::uint32_t pid) noexcept;
+// OpenProcess の 1 本の判定（決定 3）。無い pid と終わったプロセスだけが偽で、拒否とほかの失敗は
+// 生きている側に倒す。自動退避の残骸の判定も同じ 1 本を使う（ADR 0137 の決定 6）。
+[[nodiscard]] bool process_alive(std::uint32_t pid) noexcept;
+// 作る名前と同じ形（小文字・先頭の 0 なし・32 bit に収まる）の 16 進の pid を読む。形が違えば無し。
+[[nodiscard]] std::optional<std::uint32_t> process_id_of(std::wstring_view text) noexcept;
 // 回収してよい残骸の名前か（決定 3）。suffix は `.nib-tmp-` の後ろの全部。形が作る名前と同じ
 // `<16 進の pid>-<10 進の連番>`（小文字・先頭の 0 なし・32 bit に収まる）で、(a) pid が self で
 // なく alive が偽、または (b) pid が self で連番が issued 以下（今の保存より古い）のときだけ真。

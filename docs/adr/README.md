@@ -148,6 +148,7 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0130](0130-graphics-dlls-are-delay-loaded.md) | 描画と文字組みの DLL は遅延読み込みにする | 提案・#479、窓が見えるまでを 2〜4 ms 縮める |
 | [0131](0131-d3d-device-is-warmed-up-on-the-worker.md) | D3D11 の device は worker で先に作り始め、窓を見せてから受け取る | 提案・#481、起動 −15 ms / 16 MiB −29 ms の実験 |
 | [0136](0136-ci-builds-product-and-tests-in-release.md) | マージ直前のCIは製品と単体テストをReleaseでビルドして回す | 提案・#514、初回のrunの成功で受理 |
+| [0137](0137-autosave-every-30-seconds.md) | 未保存の編集は30秒ごとに裏で退避し、正常に閉じたら消し、起動で残っていれば1回聞く | 提案・#515、application→adapters→uiの3工程で実装中 |
 | [0138](0138-giant-line-bench.md) | 1 行が 16 MiB の文書のベンチ | 提案・#513、基準値は 1 回測ってから別の commit |
 | [0139](0139-giant-lines-in-text-form-use-a-window.md) | text の表示では、巨大な行を折り返さず、キャレットの周りの窓だけを文字組みして印を付ける | 提案・#547（土台は #544）・D53 |
 | [0140](0140-giant-lines-open-as-grid-after-asking.md) | 巨大な行を含む文書は、聞いてから格子表示で開く | 提案・#544・D53 |

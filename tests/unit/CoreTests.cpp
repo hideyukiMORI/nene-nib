@@ -2255,6 +2255,30 @@ void verify_history_coalescing()
     expect(first.size() == 1, "the first edit has nothing to join");
 }
 
+namespace
+{
+// 改訂番号は編集・undo・redo のたびに増え、sealed では変わらない（ADR 0137 の決定 2）。
+// まとめられた打鍵と undo の後の別の編集は位置を同じ値に戻すが、改訂番号は戻らない。
+void verify_history_revision()
+{
+    const auto empty = EditHistory::empty();
+    expect(empty.revision() == 0, "an empty history starts at revision 0");
+    const auto typed = empty.pushed(Edit{Offset{0}, "", "a", Offset{0}}, EditBoundary::coalesce);
+    const auto more = typed.pushed(Edit{Offset{1}, "", "b", Offset{1}}, EditBoundary::coalesce);
+    expect(more.position() == typed.position() && more.revision() > typed.revision(),
+           "a keystroke folded into the unit keeps the place but moves the revision");
+    const auto sealed = more.sealed();
+    expect(sealed.revision() == more.revision(), "sealing does not move the revision");
+    const auto undone = sealed.undone();
+    expect(undone.revision() > sealed.revision(), "undo moves the revision");
+    const auto other = undone.pushed(Edit{Offset{0}, "", "z", Offset{0}}, EditBoundary::separate);
+    expect(other.position() == sealed.position() && other.revision() > undone.revision(),
+           "another edit after undo returns to the same place with a new revision");
+    const auto redone = undone.redone();
+    expect(redone.revision() > undone.revision(), "redo moves the revision");
+}
+} // namespace
+
 // INSERT の1単位。範囲内編集と直前の削除を畳み、離れていれば新しい単位（ADR 0028）。
 void verify_history_absorbing()
 {
@@ -2401,6 +2425,7 @@ void verify_utf16_conversions()
 void verify_edit_history_scope()
 {
     verify_history_coalescing();
+    verify_history_revision();
     verify_history_absorbing();
     verify_history_travel();
     verify_history_input_ownership();

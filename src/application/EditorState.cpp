@@ -441,6 +441,11 @@ const std::vector<ParkedTab> &EditorState::parked() const noexcept
     return parked_;
 }
 
+const std::vector<AutosaveId> &EditorState::autosave_ids() const noexcept
+{
+    return autosave_ids_;
+}
+
 std::size_t EditorState::parked_index_of(std::size_t position) const noexcept
 {
     // 脇の列は帯の位置からアクティブを抜いた順なので、アクティブより右は 1 つずれる。
@@ -470,6 +475,20 @@ EditorState EditorState::with_restored(std::vector<UnloadedDocument> documents) 
     {
         next.recency_ = core::tab_recency_opened(next.recency_, next.tab_count());
         next.parked_.emplace_back(std::make_shared<const UnloadedDocument>(std::move(document)));
+        next.autosave_ids_.push_back(AutosaveId{next.next_autosave_id_++});
+    }
+    next.recency_ = core::tab_recency_touched(next.recency_, active_);
+    return next;
+}
+
+EditorState EditorState::with_appended(std::vector<DocumentState> documents) const
+{
+    EditorState next(*this);
+    for (DocumentState &document : documents)
+    {
+        next.recency_ = core::tab_recency_opened(next.recency_, next.tab_count());
+        next.parked_.emplace_back(std::make_shared<const DocumentState>(std::move(document)));
+        next.autosave_ids_.push_back(AutosaveId{next.next_autosave_id_++});
     }
     next.recency_ = core::tab_recency_touched(next.recency_, active_);
     return next;
@@ -495,6 +514,7 @@ EditorState EditorState::with_dropped(std::size_t position) const
     }
     EditorState next(*this);
     next.parked_.erase(std::next(next.parked_.begin(), distance_of(parked_index_of(position))));
+    next.autosave_ids_.erase(std::next(next.autosave_ids_.begin(), distance_of(position)));
     next.recency_ = core::tab_recency_closed(recency_, position);
     next.active_ = position < active_ ? active_ - 1 : active_;
     return next;
@@ -710,6 +730,8 @@ EditorState EditorState::with_new_tab() const
     EditorState next(*this);
     next.parked_.insert(std::next(next.parked_.begin(), distance_of(active_)), parked_active());
     next.active_ = active_ + 1;
+    next.autosave_ids_.insert(std::next(next.autosave_ids_.begin(), distance_of(next.active_)),
+                              AutosaveId{next.next_autosave_id_++});
     next.spread(untitled_document());
     // 歩きの途中なら着いたタブで確定してから、新しいタブを先頭に置く（ADR 0058 の決定 2）。
     next.recency_ =
@@ -726,6 +748,7 @@ EditorState EditorState::with_closed(std::size_t position) const
     }
     EditorState next(*this);
     next.recency_ = core::tab_recency_closed(recency_, position);
+    next.autosave_ids_.erase(std::next(next.autosave_ids_.begin(), distance_of(position)));
     if (position != active_)
     {
         // 脇の束は帯の位置からアクティブを抜いた順なので、右側は 1 つ左へずれる。

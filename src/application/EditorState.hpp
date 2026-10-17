@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "AutosaveId.hpp"
 #include "CommandInput.hpp"
 #include "Composition.hpp"
 #include "DisplayForm.hpp"
@@ -120,12 +121,19 @@ class EditorState final
     // （ADR 0059 の決定 4）。frame が表示値を並べ、契約が「切り替えても動いていないタブの束は同じ
     // 参照のまま」を見るための読み取りの口。
     [[nodiscard]] const std::vector<ParkedTab> &parked() const noexcept;
+    // 帯の順の各タブの退避番号（ADR 0137 の決定 3）。タブを足す所（起動・NewTab・前回のタブの
+    // 復元・自動退避から戻した文書）が通し番号を振り、閉じる・外すが列から抜く。切り替えは帯の順を変えないので触らない。
+    // 番号は閉じても再利用しない。
+    [[nodiscard]] const std::vector<AutosaveId> &autosave_ids() const noexcept;
     // 帯の位置 position がまだ読んでいない文書なら、その値。アクティブ・範囲の外・読み込み済みは
     // 値なし。読むのは controller の reach_tab だけ（ADR 0059 の決定 5）。
     [[nodiscard]] std::optional<UnloadedDocument> unloaded_at(std::size_t position) const;
     // 前回のタブ（ADR 0059 の決定 6）。今の帯の右へ、まだ読んでいない文書を順に並べる。使った順の
     // 列にも足し、アクティブは先頭のまま。アクティブは動かさない。
     [[nodiscard]] EditorState with_restored(std::vector<UnloadedDocument> documents) const;
+    // 自動退避から戻した文書（ADR 0137 の決定 6）。今の帯の末尾へ、読み込み済みの束を順に並べる。
+    // 使った順の列にも足し、アクティブは先頭のまま。アクティブは動かさない。
+    [[nodiscard]] EditorState with_appended(std::vector<DocumentState> documents) const;
     // 帯の位置 position のまだ読んでいない文書を、読み込み済みの束に置き換える（決定 5）。
     // アクティブ・範囲の外・読み込み済みなら何も変えない。
     [[nodiscard]] EditorState with_loaded(std::size_t position, DocumentState bundle) const;
@@ -217,6 +225,8 @@ class EditorState final
     std::optional<SearchPreview> search_preview_;
     std::vector<ParkedTab> parked_;
     std::size_t active_ = 0;
+    std::vector<AutosaveId> autosave_ids_{AutosaveId{0}};
+    std::uint64_t next_autosave_id_ = 1;
     core::TabRecency recency_ = core::TabRecency::single();
     bool tab_walk_ = false;
     bool closing_ = false;

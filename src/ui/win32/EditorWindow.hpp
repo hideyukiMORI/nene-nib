@@ -9,6 +9,7 @@
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
+#include "EndSession.hpp"
 #include "ExitCause.hpp"
 #include "FilePath.hpp"
 #include "FontSizeAdjustment.hpp"
@@ -28,6 +29,7 @@
 #include "TitleBarTarget.hpp"
 #include "VimMode.hpp"
 #include "WindowFailure.hpp"
+#include "WindowTimer.hpp"
 
 #include <windows.h>
 
@@ -38,6 +40,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace nenenib::ui::win32
 {
@@ -149,6 +152,12 @@ class EditorWindow final
     void deliver(const application::EditorIntent &intent);
     // 合図のメッセージを受けた。send の途中なら覚えるだけ、そうでなければ送る。
     void receive_work();
+    // WM_TIMER を窓のタイマーへ写す。自動退避の合図は AutosaveTick を 1 回送る（ADR 0137
+    // の決定 1）。
+    void receive_timer(WPARAM word);
+    // 起動の問い（ADR 0137 の決定 6）。最初の frame の後に自分へ post した合図で 1 回だけ呼ばれる。
+    // 前回の退避が残っていれば「はい / いいえ」を聞いて、答えの意図を送る。
+    void offer_autosave();
     void type_character(WPARAM word);
     void type_text(std::string utf8);
     void press_key(WPARAM word);
@@ -204,7 +213,7 @@ class EditorWindow final
     // deliver の末尾と leave_now の答えが呼ぶ。
     void release_session_block();
     // 前回のタブの一覧を書く意図を送る（leave と WM_ENDSESSION）。この後は窓へ描かない。
-    void remember_session(application::SessionEnd reason);
+    void remember_session(const application::EndSession &intent);
     // 未保存なら聞く。閉じる・開き直すのを続けてよいときだけ true（ADR 0010 の決定 10）。
     [[nodiscard]] bool confirm_discard();
     // 描画を失った後の「保存しますか」（ADR 0133 の決定 3）。取消は無く、保存するまでか捨てるまで
@@ -240,7 +249,8 @@ class EditorWindow final
     // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。
     bool selecting_ = false;
     POINT selection_point_{};
-    static constexpr UINT_PTR selection_timer = 1;
+    static constexpr UINT_PTR selection_timer = std::to_underlying(WindowTimer::selection);
+    static constexpr UINT_PTR autosave_timer = std::to_underlying(WindowTimer::autosave);
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。

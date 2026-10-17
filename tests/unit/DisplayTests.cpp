@@ -33,6 +33,7 @@
 #include "PlaceCaret.hpp"
 #include "PointText.hpp"
 #include "Scopes.hpp"
+#include "ScriptedAutosave.hpp"
 #include "ScriptedTextLayouts.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
@@ -211,11 +212,12 @@ void verify_startup_question()
     ScriptedSession session;
     ScriptedHistory history;
     ScriptedFolders folders;
+    ScriptedAutosave autosave;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     app::EditorController controller(app::EditorPorts{appearance, clipboard, files, code_pages,
                                                       settings, themes, session, history, folders,
-                                                      bookmarks, text_layouts},
+                                                      bookmarks, text_layouts, autosave},
                                      {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
@@ -606,10 +608,12 @@ void verify_startup_before_layout()
     ScriptedSession session;
     ScriptedHistory history;
     ScriptedFolders folders;
+    ScriptedAutosave autosave;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
-    const app::EditorPorts ports{appearance, clipboard, files,   code_pages, settings,    themes,
-                                 session,    history,   folders, bookmarks,  text_layouts};
+    const app::EditorPorts ports{appearance, clipboard, files,        code_pages,
+                                 settings,   themes,    session,      history,
+                                 folders,    bookmarks, text_layouts, autosave};
     app::EditorController started(ports, {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");
     const auto first = started.apply(app::VisibleLines{10, grid_geometry});

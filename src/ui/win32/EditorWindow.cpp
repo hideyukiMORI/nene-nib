@@ -104,6 +104,10 @@ constexpr wchar_t delete_character = 0x7F;
 constexpr UINT work_message = WM_APP + 1;
 // 格子表示の問いの文言（ADR 0140 の決定 2）。ここの 1 か所だけ。
 constexpr wchar_t display_question[] = L"改行の無い巨大な行があります。格子表示で開きますか。";
+// 起動の問いを最初の frame の後に出す、自分宛ての合図（ADR 0137 の決定 6）。
+constexpr UINT autosave_question_message = WM_APP + 2;
+// 起動の問いの文言（決定 6）。ここの 1 か所だけ。
+constexpr wchar_t autosave_question[] = L"前回の未保存の編集が残っています。戻しますか。";
 // キー → キャレットの移動は表で引く（CPP-012）。Ctrl の有無は表そのものを分けて表す。
 constexpr std::array<KeyMotion, 8> plain_motions{{{VK_LEFT, core::CaretMotion::previous_character},
                                                   {VK_RIGHT, core::CaretMotion::next_character},
@@ -542,6 +546,10 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // は本文の文字組みを作らずに出ている。印は最初の frame の意図が消すので、起動の delivery
     // で控えた値を読む。
     finish_display_question(opened.display_question);
+    // 自動退避の合図は窓が壊れるまで 30 秒ごと（ADR 0137 の決定 1）。張れなければ退避しないだけ。
+    static_cast<void>(SetTimer(window_, autosave_timer, autosave_interval_milliseconds, nullptr));
+    // 起動の問いは最初の frame の後、メッセージの配りが始まってから（決定 6）。
+    static_cast<void>(PostMessageW(window_, autosave_question_message, 0, 0));
     return {};
 }
 
@@ -676,7 +684,6 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_MOUSELEAVE:
     case WM_MOUSEWHEEL:
     case WM_CAPTURECHANGED:
-    case WM_TIMER:
         return pointer_message(message, word, data);
     case WM_GETMINMAXINFO:
     case WM_SETTINGCHANGE:
@@ -704,7 +711,9 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_QUERYENDSESSION:
     case WM_ENDSESSION:
     case WM_DESTROY:
+    case WM_TIMER:
     case work_message:
+    case autosave_question_message:
         return lifetime_message(message, word, data);
     default:
         break;
@@ -714,7 +723,8 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
 
 LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
 {
-    // 窓の終わりの 4 通と、裏の仕事の「届いた」の合図（ADR 0062 の決定 7）。
+    // 窓の終わりの 4 通と、裏の仕事の「届いた」の合図（ADR 0062 の決定 7）と、自動退避の合図
+    // （ADR 0137 の決定 1・6）。
     switch (message)
     {
     case WM_CLOSE:
@@ -727,15 +737,23 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         // OS の終了が確定したら（word が真）一覧を書く。窓は壊さない（ADR 0059 の決定 3）。
         if (word != FALSE)
         {
-            remember_session(application::SessionEnd::window_closed);
+            // 確かめずに閉じるので、捨てた印は立てない（未保存の退避は残る・ADR 0137 の決定 5）。
+            remember_session(application::EndSession{application::SessionEnd::window_closed});
         }
         return 0;
     case WM_DESTROY:
         end_selection_drag();
+        KillTimer(window_, autosave_timer);
         PostQuitMessage(0);
+        return 0;
+    case WM_TIMER:
+        receive_timer(word);
         return 0;
     case work_message:
         receive_work();
+        return 0;
+    case autosave_question_message:
+        offer_autosave();
         return 0;
     default:
         break;
@@ -861,12 +879,6 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case WM_CAPTURECHANGED:
         end_selection_drag();
-        return 0;
-    case WM_TIMER:
-        if (word == selection_timer)
-        {
-            scroll_selection();
-        }
         return 0;
     default:
         break;
@@ -1389,6 +1401,45 @@ void EditorWindow::receive_work()
     send(application::WorkCompleted{});
 }
 
+void EditorWindow::receive_timer(WPARAM word)
+{
+    const auto timer = window_timer_of(word);
+    if (!timer.has_value())
+    {
+        return;
+    }
+    switch (timer.value())
+    {
+    case WindowTimer::selection:
+        scroll_selection();
+        return;
+    case WindowTimer::autosave:
+        send(application::AutosaveTick{});
+        return;
+    }
+}
+
+// 残骸の一覧は controller が port から 1 回だけ読む。問いが出せなかった（0）ときは答えを送らず、
+// 残骸は次の起動でもう 1 回問われる。
+void EditorWindow::offer_autosave()
+{
+    if (controller_.autosave_remnants().empty())
+    {
+        return;
+    }
+    const int answer =
+        MessageBoxW(window_, autosave_question, product_name, MB_YESNO | MB_ICONQUESTION);
+    if (answer == IDYES)
+    {
+        send(application::RestoreAutosave{});
+        return;
+    }
+    if (answer == IDNO)
+    {
+        send(application::DiscardAutosave{});
+    }
+}
+
 std::function<void()> EditorWindow::work_signal() const
 {
     const HWND window = window_;
@@ -1716,7 +1767,12 @@ bool EditorWindow::confirm_unsaved_tabs(bool (EditorWindow::*confirm)())
 
 void EditorWindow::leave(application::SessionEnd reason)
 {
-    remember_session(reason);
+    // 来る道（end_window と最後のタブの close_tab）は未保存のタブをすべて確かめ済み。ここで残る
+    // 未保存は使う人が「いいえ」と答えて捨てたもの（ADR 0137 の決定 5）。
+    remember_session(application::EndSession{
+        .reason = reason,
+        .unsaved_discarded =
+            application::next_unsaved_tab(controller_.documents(), 0).has_value()});
     // 壊す窓に立てた OS の終了を止める理由は、ここで外す（ADR 0133 の決定 4）。確認を通り抜けたので
     // 残る未保存は捨てると決めたもの。
     if (shutdown_blocked_)
@@ -1761,11 +1817,11 @@ void EditorWindow::release_session_block()
     shutdown_blocked_ = false;
 }
 
-void EditorWindow::remember_session(application::SessionEnd reason)
+void EditorWindow::remember_session(const application::EndSession &intent)
 {
     // send を通さない。send の後半（IME・題名・告知・無効化）は壊れていく窓に触れるので、
     // 一覧を書くだけの意図には要らない（書けなくても何も出さない・ADR 0059 の決定 3）。
-    static_cast<void>(controller_.apply(application::EndSession{reason}));
+    static_cast<void>(controller_.apply(intent));
 }
 
 void EditorWindow::type_character(WPARAM word)

@@ -1,12 +1,16 @@
 #pragma once
 
 #include "AppearancePort.hpp"
+#include "AutosaveId.hpp"
+#include "AutosaveLedger.hpp"
+#include "AutosaveRemnant.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
 #include "CommandChoice.hpp"
 #include "CompositionView.hpp"
 #include "DetectedText.hpp"
 #include "Document.hpp"
+#include "DocumentState.hpp"
 #include "DocumentView.hpp"
 #include "EditBoundary.hpp"
 #include "EditorDelivery.hpp"
@@ -106,6 +110,10 @@ class EditorController final
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
     [[nodiscard]] const core::TextBuffer &text() const noexcept;
+    // 前回のプロセスが残した退避（ADR 0137 の決定 6）。ui が窓を見せて最初の frame を描いた後に
+    // 1 回だけ呼ぶ。port の remnants() を 1 回呼んで列を覚え、その列を返す（失敗は空）。
+    // RestoreAutosave と DiscardAutosave はこの覚えた列を使い、port へもう 1 回聞かない。
+    [[nodiscard]] const std::vector<AutosaveRemnant> &autosave_remnants();
 
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
@@ -227,6 +235,28 @@ class EditorController final
     // アクティブになった直後（開く・enter_document）と apply の終わりと起動の終わりから呼ぶ。
     // Ctrl+Tab で歩いている間は判定だけして聞かない（確定で聞く）。
     void ask_display();
+    // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
+    // 動かさない。
+    void accept(const AutosaveTick &);
+    // 計画を回して store と discard を頼み、帳面を進める（決定 2）。合図と復元の直後が呼ぶ。
+    void autosave_now();
+    // 起動の問いの答え（決定 6）。戻すのは覚えた残骸を順に読み、開くのと同じ復号で帯の末尾に
+    // 未保存のタブとして足し、最初に戻したタブをアクティブにする。読めない残骸は 1 行知らせて
+    // 飛ばす。戻したタブは直後に退避を頼んでから forget する。どちらの答えも残骸を全部 forget
+    // する。
+    void accept(const RestoreAutosave &);
+    void accept(const DiscardAutosave &);
+    // 1 本の残骸を読んで復号した束。読めない・復号できなければ値なし。
+    [[nodiscard]] std::optional<DocumentState> restored_bundle(const AutosaveRemnant &remnant);
+    // 計画が store にした 1 タブを帯から探して頼む。まだ読んでいない文書は計画が store にしない。
+    void store_planned(AutosaveId id);
+    // 1 タブの本文を保存と同じ符号化で写して頼む（決定 4）。頼めたら真で、呼び手が帳面に
+    // 改訂番号を覚える。
+    [[nodiscard]] bool store_autosave(AutosaveId id, const core::TextBuffer &text,
+                                      const Document &document, core::TextPosition caret);
+    // worker の失敗を引き、成功するまで 1 回だけ知らせる（決定 4）。
+    void collect_autosave();
+    void notify_autosave_failure();
     // 帯（ADR 0056 の決定 2・3・8）。帯の幅・ホイール・マウスを載せた要素。
     void accept(const TitleBarWidth &intent);
     void accept(const ScrollTabs &intent);
@@ -396,7 +426,10 @@ class EditorController final
     // 判定済みの列を本文へ渡す。CP932 の変換だけはポートの向こう（ADR 0080）。
     [[nodiscard]] std::expected<core::TextBuffer, FileFailure> decoded(core::DetectedText text);
     [[nodiscard]] std::expected<void, FileFailure> write_document(const SaveDocument &intent);
-    [[nodiscard]] std::expected<void, FileFailure> write_utf8_document(const SaveDocument &intent);
+    // 本文を保存の符号化の断片にする 1 本（ADR 0010・ADR 0137 の決定
+    // 4）。保存と自動退避が共用する。 Shift_JIS は変換した本文を held に持ち、断片はそれを指す。
+    [[nodiscard]] std::expected<std::vector<std::string_view>, FileFailure>
+    encoded_parts(const core::TextBuffer &text, core::TextEncoding encoding, std::string &held);
 
     EditorPorts ports_;
     EditorState state_;
@@ -425,5 +458,11 @@ class EditorController final
     // 面が同じフォルダを頼んだ控え（ADR 0062 の決定 14・15）。券は面を開くたびに進み、ほかは
     // 面を開くときに置き直す。面が閉じている間は読まない。
     PaletteFolder palette_folder_;
+    // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
+    AutosaveLedger autosave_ledger_;
+    // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。
+    bool autosave_notified_ = false;
+    // 起動の問いの間だけ持つ残骸の列（決定 6）。autosave_remnants() が置き、答えの意図が空にする。
+    std::vector<AutosaveRemnant> autosave_remnants_;
 };
 } // namespace nenenib::application

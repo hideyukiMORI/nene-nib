@@ -61,14 +61,15 @@ std::optional<Edit> absorbed(const Edit &previous, const Edit &edit)
     return std::nullopt;
 }
 
-EditHistory::EditHistory(std::vector<Entry> edits, std::size_t position, EditBoundary tail)
-    : edits_(std::move(edits)), position_(position), tail_(tail)
+EditHistory::EditHistory(std::vector<Entry> edits, std::size_t position, EditBoundary tail,
+                         std::size_t revision)
+    : edits_(std::move(edits)), position_(position), tail_(tail), revision_(revision)
 {
 }
 
 EditHistory EditHistory::empty()
 {
-    return EditHistory(std::vector<Entry>{}, 0, EditBoundary::separate);
+    return EditHistory(std::vector<Entry>{}, 0, EditBoundary::separate, 0);
 }
 
 EditHistory EditHistory::pushed(const Edit &edit, EditBoundary boundary) const
@@ -81,13 +82,13 @@ EditHistory EditHistory::pushed(const Edit &edit, EditBoundary boundary) const
         if (merged.has_value())
         {
             next.back() = std::make_shared<const Edit>(std::move(merged.value()));
-            return EditHistory(std::move(next), position_, boundary);
+            return EditHistory(std::move(next), position_, boundary, revision_ + 1);
         }
     }
     // raw 入力の所有移管は受けない。呼出元に残る可変 alias からこの entry を隔離する。
     next.push_back(std::make_shared<const Edit>(edit));
     const std::size_t size = next.size();
-    return EditHistory(std::move(next), size, boundary);
+    return EditHistory(std::move(next), size, boundary, revision_ + 1);
 }
 
 std::expected<Edit, HistoryFailure> EditHistory::undo() const
@@ -119,19 +120,20 @@ std::optional<Edit> EditHistory::applied(std::size_t index) const
 
 EditHistory EditHistory::sealed() const
 {
-    return EditHistory(edits_, position_, EditBoundary::separate);
+    return EditHistory(edits_, position_, EditBoundary::separate, revision_);
 }
 
 EditHistory EditHistory::undone() const
 {
     // 履歴を動かしたら単位は閉じる。戻したあとの入力が、戻す前の入力に混ざらないようにする。
-    return EditHistory(edits_, position_ == 0 ? 0 : position_ - 1, EditBoundary::separate);
+    return EditHistory(edits_, position_ == 0 ? 0 : position_ - 1, EditBoundary::separate,
+                       revision_ + 1);
 }
 
 EditHistory EditHistory::redone() const
 {
     return EditHistory(edits_, position_ >= edits_.size() ? edits_.size() : position_ + 1,
-                       EditBoundary::separate);
+                       EditBoundary::separate, revision_ + 1);
 }
 
 std::size_t EditHistory::size() const noexcept
@@ -142,5 +144,10 @@ std::size_t EditHistory::size() const noexcept
 std::size_t EditHistory::position() const noexcept
 {
     return position_;
+}
+
+std::size_t EditHistory::revision() const noexcept
+{
+    return revision_;
 }
 } // namespace nenenib::core
