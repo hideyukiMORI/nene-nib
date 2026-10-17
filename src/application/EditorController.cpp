@@ -2666,7 +2666,7 @@ void EditorController::perform(const core::VimNavigate &effect)
 {
     const std::size_t visible = settled_scroll().visible_lines;
     state_ = state_.with_selection(effect.selection)
-                 .with_scroll(ScrollState{effect.first_visible, visible});
+                 .with_scroll(ScrollState{effect.first_visible, visible, effect.first_row});
     state_ = state_.with_history(state_.history().sealed());
 }
 

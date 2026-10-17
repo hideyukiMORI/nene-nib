@@ -53,6 +53,8 @@
 #include "VimRemoveLines.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimRepeatRecord.hpp"
+#include "VimRowSpan.hpp"
+#include "VimScrollUnit.hpp"
 #include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -66,6 +68,8 @@
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
 #include "VimWordWalk.hpp"
+#include "VirtualColumn.hpp"
+#include "VirtualColumnIndex.hpp"
 #include "VisibleLines.hpp"
 
 #include "../vim/VimFixtures.hpp"
@@ -1334,6 +1338,146 @@ void verify_vim_wrapped_viewport_request()
     }
 }
 
+// 画面行の単位（ADR 0144 の決定 2・5）。8 字ごとに折り返す 1 行 40 字の行を、controller と同じ順で
+// 問いに答えて流す。line の単位は同じ鍵で画面行を問わず、1 行の文書では動かない（今日のまま）。
+[[nodiscard]] nenenib::core::VimRowSpan row_span_of(const TextBuffer &text,
+                                                    const nenenib::core::VimRowRequest &request)
+{
+    constexpr std::size_t width = 8;
+    const std::size_t length = text.line_end(request.line).value;
+    const std::size_t rows = (length + width - 1) / width;
+    const auto *const at = std::get_if<nenenib::core::Offset>(&request.target);
+    const std::size_t row = at != nullptr ? std::min(at->value / width, rows - 1)
+                                          : std::get<std::size_t>(request.target);
+    return nenenib::core::VimRowSpan{request.line,
+                                     row,
+                                     nenenib::core::Offset{row * width},
+                                     nenenib::core::Offset{std::min((row + 1) * width, length)},
+                                     rows,
+                                     row * width};
+}
+
+[[nodiscard]] nenenib::core::VimStep rows_answered(const VimState &state, const TextBuffer &text,
+                                                   nenenib::core::VimScrollUnit unit,
+                                                   const VimKey &key)
+{
+    const Selection selection = collapsed_at(nenenib::core::Offset{2});
+    std::vector<VimLineRows> rows;
+    std::vector<nenenib::core::VimRowSpan> spans;
+    VimEditorView view{text,          selection,
+                       std::nullopt,  VimKeySource::typed,
+                       VimTabs{0, 1}, VimLayoutView{true, rows, unit, spans}};
+    auto step = vim_step(state, view, key);
+    for (std::size_t round = 0; round < 16; ++round)
+    {
+        if (step.viewport_request)
+        {
+            view.viewport = VimViewport{LineNumber{1}, 3, 0};
+        }
+        else if (step.layout_request.has_value())
+        {
+            rows.push_back(VimLineRows{step.layout_request.value(), 5});
+            view.layout.lines = rows;
+        }
+        else if (step.row_request.has_value())
+        {
+            expect(unit == nenenib::core::VimScrollUnit::row, "only the row unit asks for rows");
+            spans.push_back(row_span_of(text, step.row_request.value()));
+            view.layout.spans = spans;
+        }
+        else
+        {
+            break;
+        }
+        step = vim_step(state, view, key);
+    }
+    return step;
+}
+
+// 索引を持つ本文の桁は、行を写して数えた桁と同じ（ADR 0144・VirtualColumn の 1 本）。
+void verify_indexed_virtual_columns()
+{
+    const auto plain = TextBuffer::from_utf8("a\t\xE6\x97\xA5"
+                                             "e\xCC\x81\x01z\n\tb\xE5\x85\xA8\t\nc");
+    expect(plain.has_value(), "the indexed column sample parses");
+    const TextBuffer indexed = plain.value().with_virtual_columns();
+    const auto all = plain.value().text_range(nenenib::core::Offset{0},
+                                              nenenib::core::Offset{plain.value().size_bytes()});
+    bool same = true;
+    for (nenenib::core::Offset at{0}; at.value <= all.size();
+         at = at.value < all.size() ? nenenib::core::next_code_point(all, at)
+                                    : nenenib::core::Offset{all.size() + 1})
+    {
+        same = same &&
+               nenenib::core::caret_virtual_column(indexed, at) ==
+                   nenenib::core::caret_virtual_column(plain.value(), at) &&
+               nenenib::core::virtual_column(indexed, at) ==
+                   nenenib::core::virtual_column(plain.value(), at);
+    }
+    expect(same, "an indexed text answers the same virtual columns as a copied line");
+}
+
+// 塊（約 64 KiB）の境をまたぐ本文でも、索引の桁は行を写して数えた桁と同じ（I-5）。Tab・全角・
+// 結合文字・制御文字の並びが塊の境で割れる。境の前後と一定の間隔の位置で照合する。
+void verify_indexed_columns_across_chunks()
+{
+    std::string line;
+    while (line.size() < 200'000)
+    {
+        line += "ab\t\xE6\x97\xA5"
+                "e\xCC\x81\x01z\t";
+    }
+    const auto plain = TextBuffer::from_utf8(line + "\n" + line);
+    expect(plain.has_value(), "the chunked column sample parses");
+    const TextBuffer indexed = plain.value().with_virtual_columns();
+    const auto chunks = indexed.virtual_columns().value().get().chunks();
+    expect(chunks.size() >= 4, "the sample spans several chunks");
+    const auto all = plain.value().text_range(nenenib::core::Offset{0},
+                                              nenenib::core::Offset{plain.value().size_bytes()});
+    const auto near_boundary = [&chunks](std::size_t at)
+    {
+        return std::ranges::any_of(chunks, [at](const auto &chunk)
+                                   { return at + 64 >= chunk.start && at <= chunk.start + 64; });
+    };
+    bool same = true;
+    std::size_t checked = 0;
+    for (nenenib::core::Offset at{0}; at.value < all.size();
+         at = nenenib::core::next_code_point(all, at))
+    {
+        if (!near_boundary(at.value) && at.value % 4'099 != 0)
+        {
+            continue;
+        }
+        ++checked;
+        same = same &&
+               nenenib::core::caret_virtual_column(indexed, at) ==
+                   nenenib::core::caret_virtual_column(plain.value(), at) &&
+               nenenib::core::virtual_column(indexed, at) ==
+                   nenenib::core::virtual_column(plain.value(), at);
+    }
+    expect(same && checked > 100,
+           "an indexed text answers the same columns as a copied line across chunk boundaries");
+}
+
+void verify_vim_row_unit_pages()
+{
+    const auto text = TextBuffer::from_utf8(std::string(40, 'a'));
+    expect(text.has_value(), "the row unit sample parses");
+    const Selection origin = collapsed_at(nenenib::core::Offset{2});
+    const VimState state = vim_state_after("", VimEditorView{text.value(), origin, std::nullopt});
+    const VimKey page = vim_keys_of("<PageDown>").front();
+    const auto rowed = rows_answered(state, text.value(), nenenib::core::VimScrollUnit::row, page);
+    const auto *const down = std::get_if<VimNavigate>(&rowed.effect);
+    expect(down != nullptr && down->first_visible == LineNumber{1} && down->first_row == 3 &&
+               down->selection.caret == nenenib::core::Offset{26},
+           "the row unit PgDn moves the top and the caret 3 screen rows on the same column");
+    const auto lined = rows_answered(state, text.value(), nenenib::core::VimScrollUnit::line, page);
+    const auto *const stayed = std::get_if<VimNavigate>(&lined.effect);
+    expect(stayed != nullptr && stayed->first_row == 0 &&
+               stayed->selection.caret == nenenib::core::Offset{2},
+           "the line unit PgDn of a one-line text stays put as before");
+}
+
 void verify_vim_viewport_request()
 {
     const auto text = TextBuffer::from_utf8(vim_lines(30));
@@ -1345,6 +1489,9 @@ void verify_vim_viewport_request()
     verify_vim_viewport_reading_keys(shown, hidden);
     verify_vim_viewport_blind_keys(shown, hidden);
     verify_vim_wrapped_viewport_request();
+    verify_vim_row_unit_pages();
+    verify_indexed_virtual_columns();
+    verify_indexed_columns_across_chunks();
 }
 
 } // namespace

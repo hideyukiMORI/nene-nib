@@ -3,10 +3,12 @@
 #include "DisplayWidthRange.hpp"
 #include "TextBuffer.hpp"
 #include "Utf8.hpp"
+#include "VirtualColumnIndex.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -87,6 +89,18 @@ constexpr auto bmp_widths = bmp_width_index();
     return advance == 0 ? column : column + advance - 1;
 }
 
+// 索引を持つ本文（巨大な行の文書と格子・ADR 0140）では、行を写さずに索引の部分和から `at` の文字が
+// 占める最初の桁（1 始まり）を引く（ADR 0144）。部分和も column_advance
+// を足した値なので答えは同じ。
+[[nodiscard]] std::optional<std::size_t> indexed_column(const TextBuffer &text, Offset at)
+{
+    if (!text.has_virtual_columns())
+    {
+        return std::nullopt;
+    }
+    return text.virtual_columns().value().get().virtual_column_at(text, at) + 1;
+}
+
 // 行の内容と、その中での `at` のバイト位置。3 つの桁の関数が同じ 2 つを要る。
 [[nodiscard]] std::pair<std::string, std::size_t> line_and_byte(const TextBuffer &text, Offset at)
 {
@@ -156,6 +170,10 @@ std::size_t byte_at_column(std::string_view line, VirtualColumn column) noexcept
 
 VirtualColumn virtual_column(const TextBuffer &text, Offset at)
 {
+    if (const auto indexed = indexed_column(text, at); indexed.has_value())
+    {
+        return VirtualColumn{indexed.value()};
+    }
     const auto [line, byte] = line_and_byte(text, at);
     return column_of(line, byte);
 }
@@ -168,6 +186,15 @@ VirtualColumn virtual_column_end(const TextBuffer &text, Offset at)
 
 VirtualColumn caret_virtual_column(const TextBuffer &text, Offset at)
 {
+    if (const auto indexed = indexed_column(text, at); indexed.has_value())
+    {
+        const LineNumber line = text.position_of(at).line;
+        const bool on_tab = at.value < text.line_end(line).value &&
+                            text.text_range(at, Offset{at.value + 1}) == "	";
+        const std::size_t column = indexed.value();
+        return VirtualColumn{on_tab ? column + column_advance(tab_character, column - 1) - 1
+                                    : column};
+    }
     const auto [line, byte] = line_and_byte(text, at);
     const bool on_tab = byte < line.size() && code_point_at(line, Offset{byte}) == tab_character;
     return VirtualColumn{on_tab ? column_through(line, byte) : column_before(line, byte)};

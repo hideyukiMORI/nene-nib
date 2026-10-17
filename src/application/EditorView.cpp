@@ -42,8 +42,7 @@ namespace
 
 // engine が求めた行の画面行数を、行の順の列へ足す。同じ行を 2 度求めたら往復が止まらないので失敗。
 [[nodiscard]] std::expected<void, TextLayoutFailure>
-measured_rows(std::vector<core::VimLineRows> &rows, core::LineNumber line,
-              VisualTextView &text)
+measured_rows(std::vector<core::VimLineRows> &rows, core::LineNumber line, VisualTextView &text)
 {
     const auto found = std::ranges::lower_bound(
         rows, line.value, {}, [](const core::VimLineRows &value) { return value.line.value; });
@@ -58,6 +57,33 @@ measured_rows(std::vector<core::VimLineRows> &rows, core::LineNumber line,
     }
     rows.insert(found, core::VimLineRows{line, count.value()});
     return {};
+}
+
+// engine が求めた行の中の画面行を、答えの列へ足す（ADR 0144 の決定 2）。同じ答えを 2 度足したら
+// 往復が止まらないので失敗。
+[[nodiscard]] std::expected<void, TextLayoutFailure>
+measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &request,
+              VisualTextView &text)
+{
+    const auto span = text.row_span(request);
+    if (!span)
+    {
+        return std::unexpected(span.error());
+    }
+    const auto known = std::ranges::any_of(
+        spans, [&span](const core::VimRowSpan &value)
+        { return value.line == span.value().line && value.row == span.value().row; });
+    if (known)
+    {
+        return std::unexpected(TextLayoutFailure::unavailable);
+    }
+    spans.push_back(span.value());
+    return {};
+}
+
+[[nodiscard]] bool page_motion(core::CaretMotion motion) noexcept
+{
+    return motion == core::CaretMotion::page_up || motion == core::CaretMotion::page_down;
 }
 } // namespace
 
@@ -103,6 +129,21 @@ bool EditorController::move_visual(const MoveCaret &intent)
         layout_failure_ = caret.error();
         return true;
     }
+    // PgDn / PgUp は画面の先頭も同じ数の画面行だけ送る（ADR 0144 の決定 7）。端は本文の最初と最後の
+    // 画面行で止まり、追従（画面を埋める）がキャレットの見える範囲へ収める。
+    if (page_motion(intent.motion))
+    {
+        const auto &scroll = state_.scroll();
+        const auto top = view.shifted(core::VisualPosition{scroll.first_visible, scroll.first_row},
+                                      motion.value().rows);
+        if (!top)
+        {
+            layout_failure_ = top.error();
+            return true;
+        }
+        state_ = state_.with_scroll(ScrollState{top.value().line, scroll.visible_lines,
+                                                top.value().row, scroll.horizontal});
+    }
     move_caret_to(state_.text().offset_of(caret.value().position), intent.anchoring,
                   caret.value().affinity);
     return true;
@@ -137,23 +178,26 @@ std::expected<core::VimStep, TextLayoutFailure>
 EditorController::measured_vim_step(const core::VimKey &key)
 {
     std::vector<core::VimLineRows> rows;
+    std::vector<core::VimRowSpan> spans;
     // 表示領域は engine が求めたときだけ渡す（ADR 0129 の決定 2）。追従を解決するのはその時だけ。
     core::VimEditorView view{
-        state_.text(),
-        state_.selection(),
-        std::nullopt,
+        state_.text(), state_.selection(), std::nullopt,
         replay_depth_.has_value() ? core::VimKeySource::replayed : core::VimKeySource::typed,
         core::VimTabs{state_.active_tab(), state_.tab_count()},
         // 格子は常に折り返す（ADR 0140 の決定 7）。
+        // 格子の画面移動は画面行の単位（ADR 0144 の決定 5）。text の形は wrap でも論理行のまま。
         core::VimLayoutView{view_geometry_.width > 0 &&
                                 (state_.settings().wrapping == core::LineWrapping::wrap ||
                                  state_.display() == core::DisplayForm::grid),
-                            rows}};
+                            rows,
+                            state_.display() == core::DisplayForm::grid ? core::VimScrollUnit::row
+                                                                        : core::VimScrollUnit::line,
+                            spans}};
     auto step = core::vim_step(state_.vim(), view, key);
-    // どちらの要求も同じ鍵をもう一度流す。viewport は 1 度渡したら以後の往復でも渡したまま。
-    while (step.viewport_request || step.layout_request.has_value())
+    // どの要求も同じ鍵をもう一度流す。viewport は 1 度渡したら以後の往復でも渡したまま。
+    while (step.viewport_request || step.layout_request.has_value() || step.row_request.has_value())
     {
-        const auto answered = answered_vim_request(step, view, rows);
+        const auto answered = answered_vim_request(step, view, rows, spans);
         if (!answered)
         {
             return std::unexpected(answered.error());
@@ -165,13 +209,21 @@ EditorController::measured_vim_step(const core::VimKey &key)
 
 std::expected<void, TextLayoutFailure>
 EditorController::answered_vim_request(const core::VimStep &step, core::VimEditorView &view,
-                                       std::vector<core::VimLineRows> &rows)
+                                       std::vector<core::VimLineRows> &rows,
+                                       std::vector<core::VimRowSpan> &spans)
 {
     if (step.layout_request.has_value())
     {
         auto text = visual_view();
         const auto measured = measured_rows(rows, step.layout_request.value(), text);
         view.layout.lines = rows;
+        return measured;
+    }
+    if (step.row_request.has_value())
+    {
+        auto text = visual_view();
+        const auto measured = measured_span(spans, step.row_request.value(), text);
+        view.layout.spans = spans;
         return measured;
     }
     if (view.viewport.has_value())

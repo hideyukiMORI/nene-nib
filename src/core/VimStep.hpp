@@ -6,6 +6,7 @@
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
 #include "VimRepeatFailure.hpp"
+#include "VimRowRequest.hpp"
 #include "VimSearchNotice.hpp"
 #include "VimState.hpp"
 #include "VimWantedColumn.hpp"
@@ -36,6 +37,9 @@ struct VimStep
     std::optional<Offset> restore = std::nullopt;
     // 必要な行の文字組みを値で要求する。同じ状態と鍵で解決し直すまで効果は適用しない。
     std::optional<LineNumber> layout_request = std::nullopt;
+    // 行の中の画面行を値で要求する（ADR 0144 の決定 2）。layout_request と同じ往復で、controller が
+    // VimRowSpan を VimLayoutView.spans に積んで同じ鍵を流し直す。ほかの要求と同時には立てない。
+    std::optional<VimRowRequest> row_request = std::nullopt;
     // 表示領域を値で要求する（ADR 0129 の決定 1）。立てた step は効果なし・状態そのままで、
     // controller が viewport を渡して同じ鍵を流し直す。layout_request と同時には立てない。
     bool viewport_request = false;
