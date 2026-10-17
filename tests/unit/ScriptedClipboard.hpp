@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -24,9 +25,10 @@ class ScriptedClipboard final : public ClipboardPort
         content_ = std::move(content);
     }
 
-    void refuse_writes()
+    // 書き込みを断る。断る理由は adapter が返しうる値から選ぶ（ADR 0134）。
+    void refuse_writes(ClipboardFailure failure = ClipboardFailure::write_failed)
     {
-        writable_ = false;
+        refusal_ = failure;
     }
 
     // 書かれた回数（置けなかった試みも数える）と読まれた回数（ADR 0051 の決定 9）。
@@ -43,9 +45,9 @@ class ScriptedClipboard final : public ClipboardPort
     [[nodiscard]] std::expected<void, ClipboardFailure> write(std::string_view utf8) override
     {
         ++writes_;
-        if (!writable_)
+        if (refusal_.has_value())
         {
-            return std::unexpected(ClipboardFailure::write_failed);
+            return std::unexpected(refusal_.value());
         }
         content_ = std::string(utf8);
         return {};
@@ -59,7 +61,7 @@ class ScriptedClipboard final : public ClipboardPort
 
   private:
     Content content_{std::unexpected(ClipboardFailure::empty)};
-    bool writable_ = true;
+    std::optional<ClipboardFailure> refusal_;
     std::size_t writes_ = 0;
     std::size_t reads_ = 0;
 };
