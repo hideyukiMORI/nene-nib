@@ -2,7 +2,7 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 53d161998256a60a60856a3e4bdc5ca9eabbd1edbad0a0b57fd474a9dabb806e
+// wrap-fixtures.json: sha256 571d5d0631d8f290c35508e32c7084c4a0676891c70e485a0bfa81344f116111
 
 // measurement: sha256 9f053557610cf7a83228a3dc3f4ae067099be963dedc036b2865a66338920de0
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 122> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 124> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -998,5 +998,31 @@ constexpr std::array<VimFixture, 122> vim_wrap_fixtures{{
      "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
      "y",
      1, 170, "", "", VimViewportFixture{12, 1, 1, 151, 1, 6, 40, 0}},
+    {"wrap-visual-gj-short-last-row",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nyyyyyyyyyyyyyy"
+     "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     "y",
+     "vgjy",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nyyyyyyyyyyyyyy"
+     "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     "y",
+     1, 151, "xxxxxxxxxxxxxxxxxxxx\n", "v", VimViewportFixture{12, 1, 1, 151, 1, 6, 40, 0}},
+    {"wrap-gj-after-k-past-line",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nccccccccccccccccccccccccc"
+     "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "kgjj",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nccccccccccccccccccccccccc"
+     "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     3, 40, "", "", VimViewportFixture{12, 1, 2, 150, 1, 6, 40, 0}},
 }};
 } // namespace nenenib::tests
