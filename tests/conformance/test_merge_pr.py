@@ -24,8 +24,8 @@ RECORD = {"number": 900, "headRefOid": HEAD, "state": "OPEN", "isDraft": False,
 FILES = [[{"filename": "eng/merge-pr.py", "status": "modified"}]]
 REPOSITORY = "github.com/hideyukiMORI/nene-nib"
 RULES = [{"type": "pull_request"}, {"type": "non_fast_forward"}]
-RUN = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml", "head_sha": HEAD,
-       "head_branch": "fix/42-subject", "display_title": f"Merge PR #900 at {HEAD}",
+RUN = {"event": "workflow_dispatch", "path": ".github/workflows/check.yml", "head_sha": "c" * 40,
+       "head_branch": "main", "display_title": f"Merge PR #900 at {HEAD}",
        "repository": {"full_name": "hideyukiMORI/nene-nib"}, "status": "completed", "conclusion": "success"}
 MERGED = {"number": 900, "headRefOid": HEAD, "state": "MERGED",
           "mergeCommit": {"oid": "b" * 40}, "url": "https://github.com/hideyukiMORI/nene-nib/pull/900"}
@@ -129,10 +129,19 @@ class MergeBoundary(unittest.TestCase):
         self.assertTrue(errors)
         self.assertTrue(any("single line" in error for error in errors))
 
+    def test_dispatch_uses_main_definition_and_head_input(self):
+        result, calls, output, error = self.invoke(execute=True)
+        self.assertEqual(result, 0, error)
+        dispatches = [call for call in calls if "POST" in call]
+        self.assertEqual(len(dispatches), 1)
+        self.assertIn("ref=main", dispatches[0])
+        self.assertFalse(any(argument == f"ref={RECORD['headRefName']}" for argument in dispatches[0]))
+        self.assertIn(f"inputs[expected_head]={HEAD}", dispatches[0])
+
     def test_ci_failure_skipped_or_wrong_target_never_merges(self):
         for key, value in (("conclusion", "failure"), ("conclusion", "skipped"),
-                           ("head_sha", "b" * 40), ("event", "push"), ("path", "other.yml"),
-                           ("display_title", "Merge PR #42"), ("repository", None), ("head_branch", "main")):
+                           ("event", "push"), ("path", "other.yml"), ("display_title", "Merge PR #42"),
+                           ("repository", None), ("head_branch", "fix/42-subject")):
             with self.subTest(key=key, value=value):
                 run = dict(RUN, **{key: value})
                 result, calls, output, error = self.invoke(run=run, execute=True)
