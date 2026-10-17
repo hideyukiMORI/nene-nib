@@ -8,6 +8,7 @@
 #include "LocalSettingsPath.hpp"
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
+#include "TemporaryFiles.hpp"
 #include "Win32AppearanceAdapter.hpp"
 #include "Win32BookmarkAdapter.hpp"
 #include "Win32ClipboardAdapter.hpp"
@@ -165,6 +166,19 @@ void pump_messages(nenenib::ui::win32::EditorWindow &window,
     }
 }
 
+// 設定の置き場を求め、前の起動が残した一時ファイルをそこから回収する（ADR 0135 の決定 3 の
+// (b)）。application の port を通らないので、起動の道の port の回数（verify_quiet_paths）は
+// 変わらない。
+auto reclaimed_settings_paths()
+{
+    auto paths = nenenib::adapters::win32::local_settings_paths();
+    if (paths)
+    {
+        nenenib::adapters::win32::reclaim_temporaries_beside(paths.value().current);
+    }
+    return paths;
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -179,8 +193,7 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32ClipboardAdapter clipboard;
     nenenib::adapters::win32::Win32FileAdapter files;
     nenenib::adapters::win32::Win32CodePageAdapter code_pages;
-    nenenib::adapters::win32::Win32SettingsAdapter settings(
-        files, nenenib::adapters::win32::local_settings_paths());
+    nenenib::adapters::win32::Win32SettingsAdapter settings(files, reclaimed_settings_paths());
     nenenib::adapters::win32::Win32ThemeAdapter themes(
         files, nenenib::adapters::win32::local_theme_directory());
     // 前回のタブの一覧は窓が閉じるときに書き、ファイルの引数が無い起動で controller が読む
