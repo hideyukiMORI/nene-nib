@@ -1,6 +1,9 @@
 #include "VimScreenRows.hpp"
 
 #include "Utf8.hpp"
+#include "VimColumnWish.hpp"
+#include "VimMotionLanding.hpp"
+#include "VimRepeatFailure.hpp"
 #include "VimStep.hpp"
 #include "VirtualColumn.hpp"
 #include "VisualPosition.hpp"
@@ -270,6 +273,33 @@ using Moves = std::pair<Walk, Walk>;
     }
     return forward(view, top, room.value().second);
 }
+
+// 画面行 span の終わりの仮想桁（0 始まり・幅 0 の文字は数えない）。読むのは画面行の範囲だけ。
+[[nodiscard]] std::size_t end_column(const TextBuffer &text, const VimRowSpan &span)
+{
+    const std::string shown = text.text_range(span.start, span.end);
+    std::size_t column = span.start_column;
+    for (Offset at{0}; at.value < shown.size(); at = next_code_point(shown, at))
+    {
+        column += column_advance(code_point_at(shown, at), column);
+    }
+    return column;
+}
+
+// gj gk で着いた後に残す欲しい列（行頭からの仮想桁・0 始まり）。行き先の桁 target
+// を保つ。行の途中の 画面行（幅いっぱいまで埋まる）より右なら、その画面行の最後の桁に収める（Vim は
+// curswant を画面行の 幅で切ってから歩く・`k` の後の `gj`）。行の最後の画面行は短くても target
+// を保つ（Vim 9.1 の実測・ 短い最後の画面行に着いた後の `j` は元の桁へ行く）。
+[[nodiscard]] std::size_t kept_column(const TextBuffer &text, const VimRowSpan &row,
+                                      std::size_t target)
+{
+    if (row.row + 1 >= row.rows)
+    {
+        return target;
+    }
+    const auto end = end_column(text, row);
+    return end > row.start_column && target >= end ? end - 1 : target;
+}
 } // namespace
 
 std::expected<VimDisplayNavigation, VimLayoutNeed> vim_row_navigation(const VimState &state,
@@ -309,5 +339,39 @@ vim_row_half_navigation(const VimState &state, const VimEditorView &view,
         return std::unexpected(caret.error());
     }
     return settled(state, view, origin.value(), Moves{top.value(), caret.value()});
+}
+
+std::expected<VimRowLanding, VimLayoutNeed> vim_row_landing(const VimState &state,
+                                                            const VimEditorView &view,
+                                                            VimScrollDirection direction,
+                                                            std::size_t amount)
+{
+    const Offset caret = view.selection.caret;
+    const auto caret_row = span_of(view, VimRowRequest{view.text.position_of(caret).line, caret});
+    if (!caret_row)
+    {
+        return std::unexpected(caret_row.error());
+    }
+    const auto from = caret_row.value();
+    const auto moved = walked(view, VisualPosition{from.line, from.row}, amount, direction);
+    const auto row =
+        moved ? span_of(view, VimRowRequest{moved.value().first.line, moved.value().first.row})
+              : Needed<VimRowSpan>{std::unexpected(moved.error())};
+    if (!row)
+    {
+        return std::unexpected(row.error());
+    }
+    const auto failure =
+        moved.value().second < amount ? std::optional{VimRepeatFailure::not_moved} : std::nullopt;
+    const auto target = wanted_in(state, view, from, row.value());
+    const auto landing = VimMotionLanding{landed(view.text, row.value(), target), failure};
+    if (!target.has_value())
+    {
+        return VimRowLanding{landing,
+                             VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}}};
+    }
+    const auto kept = kept_column(view.text, row.value(), target.value());
+    return VimRowLanding{landing,
+                         VimWantedColumn{VimColumnWish::at_column, VirtualColumn{kept + 1}}};
 }
 } // namespace nenenib::core

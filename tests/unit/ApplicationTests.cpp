@@ -1269,6 +1269,21 @@ void open_grid_file(Editing &editing, std::string text, std::size_t visible)
     applied(controller, SelectEditMode{EditMode::vim});
 }
 
+// 格子の gj gk（ADR 0144 の決定 3・4・9・#596）。8 升の幅に巨大な行（「あ」と a の列・しきい値を
+// 越える）を格子で開く。0 画面行は「あ」（升 0・1）と a が 6 つ、以後の画面行は a が 8
+// つ。キャレットは 0 画面行の升 3（3 桁目）から始まる。
+void open_grid_display_line(Editing &editing)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, page_grid_geometry});
+    applied(controller,
+            InsertText{"あ" + std::string(nenenib::core::giant_line_threshold + 8, 'a')});
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{1}, Column{3}}, SelectionAnchoring::collapse});
+    applied(controller, nenenib::application::SelectDisplay{nenenib::core::DisplayForm::grid});
+    applied(controller, SelectEditMode{EditMode::vim});
+}
+
 void place_at(EditorController &controller, std::size_t line, std::size_t column)
 {
     applied(controller, PlaceCaret{TextPosition{LineNumber{line}, Column{column}},
@@ -1446,6 +1461,53 @@ void verify_ordinary_page_end()
            "ordinary PgDn in the grid stops with the last 3 screen rows shown");
 }
 
+void verify_grid_display_moves()
+{
+    Editing editing;
+    open_grid_display_line(editing);
+    EditorController &controller = editing.controller();
+    vim_normal(controller, "gj");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{0, 11},
+           "grid gj moves to the same cell of the next screen row");
+    vim_normal(controller, "gk");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{0, 3},
+           "grid gk moves back to the same cell");
+    vim_normal(controller, "3gj");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{1, 27},
+           "grid 3gj moves 3 screen rows and the view follows the caret");
+    vim_normal(controller, "0gjgk");
+    expect(grid_top_and_column(controller).second == 1,
+           "grid gk onto the right half of a wide character lands on its head");
+    vim_normal(controller, "100000gkx");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{0, 1} &&
+               controller.text().size_bytes() == nenenib::core::giant_line_threshold + 11,
+           "grid gk past the first screen row moves to it, fails and drops the next key");
+    vim_normal(controller, "$gjx");
+    expect(controller.text().size_bytes() == nenenib::core::giant_line_threshold + 11,
+           "grid gj on the last screen row fails and drops the next key");
+}
+
+void verify_grid_display_ranges()
+{
+    Editing removing;
+    open_grid_display_line(removing);
+    vim_normal(removing.controller(), "dgj");
+    expect(removing.controller().vim_state().unnamed_register.value().text == std::string(8, 'a') &&
+               grid_top_and_column(removing.controller()).second == 3,
+           "grid dgj removes up to the same cell of the next screen row, exclusive");
+    Editing selecting;
+    open_grid_display_line(selecting);
+    EditorController &controller = selecting.controller();
+    vim_normal(controller, "vgj");
+    expect(grid_top_and_column(controller).second == 11,
+           "grid vgj moves the caret to the same cell of the next screen row");
+    vim_normal(controller, "o");
+    expect(grid_top_and_column(controller).second == 3, "grid vgj keeps the anchor");
+    vim_normal(controller, "od");
+    expect(controller.vim_state().unnamed_register.value().text == std::string(9, 'a'),
+           "the VISUAL range of grid gj includes the landing character");
+}
+
 void verify_screen_row_pages()
 {
     verify_grid_vim_pages();
@@ -1457,6 +1519,8 @@ void verify_screen_row_pages()
     verify_grid_half_pages();
     verify_grid_visual_and_operator();
     verify_ordinary_page_end();
+    verify_grid_display_moves();
+    verify_grid_display_ranges();
 }
 
 void verify_controller_frame()

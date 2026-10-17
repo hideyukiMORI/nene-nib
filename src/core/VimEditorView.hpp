@@ -5,6 +5,7 @@
 #include "VimDisplayNavigation.hpp"
 #include "VimKeySource.hpp"
 #include "VimLayoutView.hpp"
+#include "VimRowLanding.hpp"
 #include "VimTabs.hpp"
 #include "VimViewport.hpp"
 
@@ -26,5 +27,7 @@ struct VimEditorView
     VimTabs tabs = VimTabs{0, 1};
     VimLayoutView layout{};
     std::optional<VimDisplayNavigation> navigation = std::nullopt;
+    // `gj` `gk` の着地（ADR 0144 の決定 4）。engine が鍵を写す前に画面行の問いで解いて置く。
+    std::optional<VimRowLanding> row_landing = std::nullopt;
 };
 } // namespace nenenib::core

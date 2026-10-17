@@ -2,7 +2,7 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 016f19eb57aae81b7ced9c580840db198417492f9c2d9df83d09dff3d8ddf6ae
+// wrap-fixtures.json: sha256 b2dd9fdd66fba72554cca0894e8a9b38a8f0f3529f83b4bcb95e0d269ffb6e40
 
 // measurement: sha256 9f053557610cf7a83228a3dc3f4ae067099be963dedc036b2865a66338920de0
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 78> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 105> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -570,5 +570,264 @@ constexpr std::array<VimFixture, 78> vim_wrap_fixtures{{
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\nZ\n12lll",
      9, 1, "9iiii\n10jjj\n11kkk\n", "V", VimViewportFixture{6, 7, 11, 2, 7, 3, 20, 0}},
+    {"wrap-gj-ascii",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "gj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 55, "", "", VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-gj-count",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "3gj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 135, "", "", VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-gj-next-line",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "5gj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     3, 15, "", "", VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-gk-ascii",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "gk",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 55, "", "", VimViewportFixture{12, 1, 2, 95, 1, 6, 40, 0}},
+    {"wrap-gk-previous-line",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "gk",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 165, "", "", VimViewportFixture{12, 1, 3, 5, 1, 6, 40, 0}},
+    {"wrap-gj-after-k",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "kgj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 40, "", "", VimViewportFixture{12, 1, 2, 95, 1, 6, 40, 0}},
+    {"wrap-gk-after-k-gj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "kgjgk",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     1, 5, "", "", VimViewportFixture{12, 1, 2, 95, 1, 6, 40, 0}},
+    {"wrap-j-after-k-gj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "kgjj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     3, 29, "", "", VimViewportFixture{12, 1, 2, 95, 1, 6, 40, 0}},
+    {"wrap-gk-after-dollar",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "$gkgk",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 120, "", "", VimViewportFixture{12, 1, 2, 1, 1, 6, 40, 0}},
+    {"wrap-gj-after-dollar",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "$3gkgjj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     3, 29, "", "", VimViewportFixture{12, 1, 2, 1, 1, 6, 40, 0}},
+    {"wrap-gj-last-row-fails",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "gjx",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     4, 1, "", "", VimViewportFixture{12, 1, 4, 1, 1, 6, 40, 0}},
+    {"wrap-gk-first-row-fails",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "gkx",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     1, 3, "", "", VimViewportFixture{12, 1, 1, 3, 1, 6, 40, 0}},
+    {"wrap-gk-count-fails",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "100gkx",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     1, 5, "", "", VimViewportFixture{12, 1, 2, 55, 1, 6, 40, 0}},
+    {"wrap-gj-count-fails",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "20gjx",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     4, 3, "", "", VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-dgj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "dgj",
+     "short\naaaaaaaaaabbbbffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmm"
+     "mmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsssssssssstttttttttt\nmid line of 30 "
+     "chars ........\nend",
+     2, 15, "bbbbbbccccccccccddddddddddeeeeeeeeeeffff", "v",
+     VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-ygk",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "ygk",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 15, "bbbbbbccccccccccddddddddddeeeeeeeeeeffff", "v",
+     VimViewportFixture{12, 1, 2, 55, 1, 6, 40, 0}},
+    {"wrap-cgj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "cgjZ<Esc>",
+     "short\naaaaaaaaaabbbbZffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmm"
+     "mmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsssssssssstttttttttt\nmid line of 30 "
+     "chars ........\nend",
+     2, 15, "bbbbbbccccccccccddddddddddeeeeeeeeeeffff", "v",
+     VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-d3gj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "d3gj",
+     "short\naaaaaaaaaabbbbnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsssssssssstttttttttt\nmid "
+     "line of 30 chars ........\nend",
+     2, 15,
+     "bbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkk"
+     "kkkllllllllllmmmmmmmmmmnnnn",
+     "v", VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-dgj-next-line",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "dgj",
+     "shoaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjj"
+     "jjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrssssss"
+     "sssstttttttttt\nmid line of 30 chars ........\nend",
+     1, 4, "rt\naaa", "v", VimViewportFixture{12, 1, 1, 4, 1, 6, 40, 0}},
+    {"wrap-dgk-previous-line",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "dgk",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqq line of 30 "
+     "chars ........\nend",
+     2, 164, "qqqqqqqrrrrrrrrrrsssssssssstttttttttt\nmid", "v",
+     VimViewportFixture{12, 1, 3, 4, 1, 6, 40, 0}},
+    {"wrap-dgj-last-row",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "dgj",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     4, 1, "", "", VimViewportFixture{12, 1, 4, 1, 1, 6, 40, 0}},
+    {"wrap-dgj-repeat",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "dgj.",
+     "short\naaaaaaaaaabbbbjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqq"
+     "qqqqrrrrrrrrrrsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 15, "ffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjj", "v",
+     VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-visual-gjd",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "vgjd",
+     "short\naaaaaaaaaabbbbfffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmm"
+     "mmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsssssssssstttttttttt\nmid line of 30 "
+     "chars ........\nend",
+     2, 15, "bbbbbbccccccccccddddddddddeeeeeeeeeefffff", "v",
+     VimViewportFixture{12, 1, 2, 15, 1, 6, 40, 0}},
+    {"wrap-visual-gky",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "vgky",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     2, 15, "bbbbbbccccccccccddddddddddeeeeeeeeeefffff", "v",
+     VimViewportFixture{12, 1, 2, 55, 1, 6, 40, 0}},
+    {"wrap-line-visual-gjd",
+     "short\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiii"
+     "iiiijjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrr"
+     "rsssssssssstttttttttt\nmid line of 30 chars ........\nend",
+     "Vgjd", "short\nend", 2, 1,
+     "aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjj"
+     "jjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrssssss"
+     "sssstttttttttt\nmid line of 30 chars ........\n",
+     "V", VimViewportFixture{12, 1, 2, 175, 1, 6, 40, 0}},
+    {"wrap-gj-skipcol",
+     "x\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiii"
+     "jjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsss"
+     "sssssssttttttttttuuuuuuuuuuvvvvvvvvvvwwwwwwwwwwxxxxxxxxxxyyyyyyyyyyzzzzzzzzzzaaaaaaaaaabbbbbb"
+     "bbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkk"
+     "kllllllllllmmmmmmmmmmnnnnnnnnnn\ny",
+     "7gj",
+     "x\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiii"
+     "jjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsss"
+     "sssssssttttttttttuuuuuuuuuuvvvvvvvvvvwwwwwwwwwwxxxxxxxxxxyyyyyyyyyyzzzzzzzzzzaaaaaaaaaabbbbbb"
+     "bbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkk"
+     "kllllllllllmmmmmmmmmmnnnnnnnnnn\ny",
+     2, 281, "", "", VimViewportFixture{5, 2, 2, 1, 2, 2, 40, 3}},
+    {"wrap-gk-skipcol-moved",
+     "x\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiii"
+     "jjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsss"
+     "sssssssttttttttttuuuuuuuuuuvvvvvvvvvvwwwwwwwwwwxxxxxxxxxxyyyyyyyyyyzzzzzzzzzzaaaaaaaaaabbbbbb"
+     "bbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkk"
+     "kllllllllllmmmmmmmmmmnnnnnnnnnn\ny",
+     "7gj5gk",
+     "x\naaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiii"
+     "jjjjjjjjjjkkkkkkkkkkllllllllllmmmmmmmmmmnnnnnnnnnnooooooooooppppppppppqqqqqqqqqqrrrrrrrrrrsss"
+     "sssssssttttttttttuuuuuuuuuuvvvvvvvvvvwwwwwwwwwwxxxxxxxxxxyyyyyyyyyyzzzzzzzzzzaaaaaaaaaabbbbbb"
+     "bbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkk"
+     "kllllllllllmmmmmmmmmmnnnnnnnnnn\ny",
+     2, 81, "", "", VimViewportFixture{5, 2, 2, 1, 2, 2, 40, 0}},
 }};
 } // namespace nenenib::tests

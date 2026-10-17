@@ -159,10 +159,12 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_previous_word_end, VimActionGroup::motion},
      {VimAction::move_previous_big_word_end, VimActionGroup::motion},
      {VimAction::next_tab, VimActionGroup::tab},
-     {VimAction::previous_tab, VimActionGroup::tab}}};
+     {VimAction::previous_tab, VimActionGroup::tab},
+     {VimAction::move_display_down, VimActionGroup::motion},
+     {VimAction::move_display_up, VimActionGroup::motion}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 24> motion_bindings{
+constexpr std::array<VimMotionBinding, 26> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -186,14 +188,19 @@ constexpr std::array<VimMotionBinding, 24> motion_bindings{
      {VimAction::move_previous_big_word, VimMotion::previous_big_word},
      {VimAction::move_big_word_end, VimMotion::big_word_end},
      {VimAction::move_previous_word_end, VimMotion::previous_word_end},
-     {VimAction::move_previous_big_word_end, VimMotion::previous_big_word_end}}};
+     {VimAction::move_previous_big_word_end, VimMotion::previous_big_word_end},
+     {VimAction::move_display_down, VimMotion::display_down},
+     {VimAction::move_display_up, VimMotion::display_up}}};
 
-// g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2）。ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 5> g_bindings{{{U'g', VimAction::move_document_first},
+// g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4）。ここに
+// 無い鍵は g を打ち消す。
+constexpr std::array<VimBinding, 7> g_bindings{{{U'g', VimAction::move_document_first},
                                                 {U'e', VimAction::move_previous_word_end},
                                                 {U'E', VimAction::move_previous_big_word_end},
                                                 {U't', VimAction::next_tab},
-                                                {U'T', VimAction::previous_tab}}};
+                                                {U'T', VimAction::previous_tab},
+                                                {U'j', VimAction::move_display_down},
+                                                {U'k', VimAction::move_display_up}}};
 
 // 空白だけで切る（Vim の WORD の）移動。ほかの語の移動は文字の種類の表で切る（Issue #222）。
 constexpr std::array<VimMotion, 5> big_word_motions{
@@ -220,11 +227,12 @@ constexpr std::array<VimTextObjectBinding, 15> text_object_bindings{
      {U'>', VimTextObject::angle}}};
 
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e E ge gE は入れる（inclusive）。
-// 行単位の j k はどちらでもないので、この表には無い。
-constexpr std::array<VimMotion, 10> exclusive_motions{
+// 行単位の j k はどちらでもないので、この表には無い。gj gk は文字単位の exclusive（ADR 0144）。
+constexpr std::array<VimMotion, 12> exclusive_motions{
     {VimMotion::left, VimMotion::right, VimMotion::line_start, VimMotion::first_non_blank,
      VimMotion::next_word, VimMotion::previous_word, VimMotion::wrap_right, VimMotion::wrap_left,
-     VimMotion::next_big_word, VimMotion::previous_big_word}};
+     VimMotion::next_big_word, VimMotion::previous_big_word, VimMotion::display_down,
+     VimMotion::display_up}};
 
 // 表の中でその動作を指す行の数。ちょうど 1 でなければ表が動作の一覧とずれている。
 [[nodiscard]] constexpr std::size_t rows_for(VimAction action) noexcept

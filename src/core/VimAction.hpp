@@ -87,10 +87,13 @@ enum class VimAction : std::uint8_t
     move_previous_big_word_end,
     // `gt` `gT`。行き先は tab_destination が決める（ADR 0057 の決定 2）。
     next_tab,
-    previous_tab
+    previous_tab,
+    // `gj` `gk`。画面行で上下する（ADR 0144 の決定 4）。行き先は画面行の問いで engine が解く。
+    move_display_down,
+    move_display_up
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::previous_tab) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::move_display_up) + 1;
 } // namespace nenenib::core
