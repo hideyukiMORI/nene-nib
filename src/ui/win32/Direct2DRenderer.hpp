@@ -7,6 +7,7 @@
 #include "ClauseEmphasis.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
+#include "DeviceWarmup.hpp"
 #include "DisplayLine.hpp"
 #include "EditorFrame.hpp"
 #include "GridRowPainter.hpp"
@@ -19,6 +20,7 @@
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
 #include "RenderFailure.hpp"
+#include "RendererSources.hpp"
 #include "RgbColor.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusTextLayout.hpp"
@@ -54,9 +56,10 @@ class Direct2DRenderer final
 {
   public:
     // 起動の節目は initialize の中で打つので、計測器は create からそのまま通す（Issue #19）。
+    // device は worker が先に作った箱から受け取り、空なら自分で作る（ADR 0131 の決定 3）。
     [[nodiscard]] static std::expected<Direct2DRenderer, RenderFailure>
     create(HWND window, std::uint32_t dpi, application::TimingPort &timing,
-           BodyTextLayouts &text_layouts);
+           RendererSources sources);
     [[nodiscard]] std::expected<void, RenderFailure> render(const application::EditorFrame &frame);
     [[nodiscard]] std::expected<void, RenderFailure> resize(UINT width, UINT height);
     [[nodiscard]] std::expected<void, RenderFailure> set_dpi(std::uint32_t dpi);
@@ -72,10 +75,13 @@ class Direct2DRenderer final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
     explicit Direct2DRenderer(BodyTextLayouts &text_layouts);
-    [[nodiscard]] std::expected<void, RenderFailure> initialize(HWND window,
-                                                                application::TimingPort &timing);
-    [[nodiscard]] std::expected<void, RenderFailure> create_device();
-    [[nodiscard]] std::expected<void, RenderFailure> create_swap_chain(HWND window);
+    [[nodiscard]] std::expected<void, RenderFailure>
+    initialize(HWND window, application::TimingPort &timing, DeviceWarmup &warmup);
+    // 箱から受け取った factory を返す（自分で作ったときは空・swap chain が作る）。
+    [[nodiscard]] std::expected<Microsoft::WRL::ComPtr<IDXGIFactory2>, RenderFailure>
+    create_device(DeviceWarmup &warmup);
+    [[nodiscard]] std::expected<void, RenderFailure>
+    create_swap_chain(HWND window, Microsoft::WRL::ComPtr<IDXGIFactory2> factory);
     [[nodiscard]] std::expected<void, RenderFailure> bind_composition(HWND window);
     [[nodiscard]] std::expected<void, RenderFailure> create_context();
     [[nodiscard]] std::expected<void, RenderFailure> acquire_surface();
