@@ -1740,6 +1740,23 @@ void verify_font_family_reading()
                !frame.command_message.has_value(),
            "an unlisted font collection falls back to the typed value once and silently");
 }
+
+// #597: port は各 family の全ロケールの名前を返す。どの言語の名前も候補に並び、重複は 1 つに畳む。
+void verify_font_family_locales()
+{
+    Editing editor;
+    editor.fonts().serve(std::vector<std::string>{"BIZ UDGothic", "BIZ UDゴシック", "Consolas",
+                                                  "BIZ UDGothic", "Consolas"});
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    const auto frame = controller.apply_frame(app::CommandText{":set guifont="});
+    const auto rows = frame.command_palette.has_value()
+                          ? commands_of(frame.command_palette.value().rows)
+                          : std::vector<std::string>{};
+    expect(rows == std::vector<std::string>{"set guifont=", "set guifont=BIZ UDGothic",
+                                            "set guifont=BIZ UDゴシック", "set guifont=Consolas"},
+           "every localized family name is a candidate once");
+}
 } // namespace
 
 void verify_command_palette()
@@ -1783,5 +1800,6 @@ void verify_command_palette()
     verify_operation_request();
     verify_font_family_choices();
     verify_font_family_reading();
+    verify_font_family_locales();
 }
 } // namespace nenenib::tests

@@ -379,25 +379,45 @@ void check_grid_proportional(BodyTextLayouts &layouts, core::EditorSettings sett
     expect(text == L"Segoe UI", "#597 the text form still uses a proportional guifont");
 }
 
-// 字体の名前に結果が依るので、3 つの字体が無い機械では測らない（環境依存・QLT-013）。
+// 字体の名前に結果が依るので、要る字体が無い機械ではその検査だけ測らない（環境依存・QLT-013）。
+// Consolas と Segoe UI は Windows 11 と CI の runner にある。Cascadia Code は標準ではない。
 void check_families(BodyTextLayouts &layouts, const core::EditorSettings &settings)
 {
     const auto factory = directwrite_factory();
-    if (factory == nullptr || !installed(*factory.Get(), L"Cascadia Code") ||
-        !installed(*factory.Get(), L"Consolas") || !installed(*factory.Get(), L"Segoe UI"))
+    if (factory == nullptr)
     {
-        unmeasured("#597 font family checks need Cascadia Code, Consolas and Segoe UI");
+        unmeasured("#597 font family checks need a DirectWrite factory");
         return;
     }
-    check_family_change(layouts, settings);
-    check_family_pixels(layouts, settings);
-    check_grid_family(layouts, settings);
-    check_grid_proportional(layouts, settings);
+    const bool consolas = installed(*factory.Get(), L"Consolas");
+    if (consolas && installed(*factory.Get(), L"Cascadia Code"))
+    {
+        check_family_change(layouts, settings);
+        check_family_pixels(layouts, settings);
+        check_grid_family(layouts, settings);
+    }
+    else
+    {
+        unmeasured("#597 guifont family changes need Cascadia Code and Consolas");
+    }
+    if (consolas && installed(*factory.Get(), L"Segoe UI"))
+    {
+        check_grid_proportional(layouts, settings);
+    }
+    else
+    {
+        unmeasured("#597 the proportional grid fallback needs Consolas and Segoe UI");
+    }
+    if (!consolas)
+    {
+        unmeasured("#597 the system font family listing needs Consolas");
+        return;
+    }
     nenenib::ui::win32::SystemFontFamilies fonts;
     const auto listed = fonts.list();
     expect(listed.has_value() &&
                std::ranges::find(listed.value(), std::string("Consolas")) != listed.value().end(),
-           "#597 the system font families list the installed Consolas by its en-us name");
+           "#597 the system font families list the installed Consolas by its name");
 }
 } // namespace
 

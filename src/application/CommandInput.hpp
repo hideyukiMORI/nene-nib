@@ -2,8 +2,8 @@
 
 #include "CommandLine.hpp"
 #include "CommandPalette.hpp"
-#include "InputLinePrompt.hpp"
 #include "FontFamilies.hpp"
+#include "InputLinePrompt.hpp"
 #include "InputLineView.hpp"
 #include "SearchLine.hpp"
 

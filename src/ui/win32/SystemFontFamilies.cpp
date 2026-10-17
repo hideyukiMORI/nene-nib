@@ -14,28 +14,44 @@ namespace
 {
 using Names = Microsoft::WRL::ComPtr<IDWriteLocalizedStrings>;
 
-// family の名前の 1 つ（en-us、無ければ最初）。読めなければ空。
-[[nodiscard]] std::string family_name(IDWriteFontCollection &collection, UINT32 index)
+// 名前の 1 つ。読めなければ空。
+[[nodiscard]] std::string localized_name(IDWriteLocalizedStrings &names, UINT32 slot)
 {
-    Microsoft::WRL::ComPtr<IDWriteFontFamily> family;
-    Names names;
-    UINT32 slot = 0;
-    BOOL found = FALSE;
     UINT32 length = 0;
-    if (FAILED(collection.GetFontFamily(index, &family)) ||
-        FAILED(family->GetFamilyNames(&names)) ||
-        FAILED(names->FindLocaleName(L"en-us", &slot, &found)) ||
-        FAILED(names->GetStringLength(found != FALSE ? slot : 0, &length)))
+    if (FAILED(names.GetStringLength(slot, &length)))
     {
         return {};
     }
     std::wstring wide(length + 1, L'\0');
-    if (FAILED(names->GetString(found != FALSE ? slot : 0, wide.data(), length + 1)))
+    if (FAILED(names.GetString(slot, wide.data(), length + 1)))
     {
         return {};
     }
     wide.resize(length);
     return core::to_utf8(wide).value_or(std::string{});
+}
+
+// family の全ロケールの名前を足す（既定ロケールは読まない・ARC-007）。読めない名前は飛ばし、
+// 重複は core::FontFamilies::from が除く。
+void append_family_names(IDWriteFontCollection &collection, UINT32 index,
+                         std::vector<std::string> &names)
+{
+    Microsoft::WRL::ComPtr<IDWriteFontFamily> family;
+    Names localized;
+    if (FAILED(collection.GetFontFamily(index, &family)) ||
+        FAILED(family->GetFamilyNames(&localized)))
+    {
+        return;
+    }
+    const auto count = localized->GetCount();
+    for (UINT32 slot = 0; slot < count; ++slot)
+    {
+        auto name = localized_name(*localized.Get(), slot);
+        if (!name.empty())
+        {
+            names.push_back(std::move(name));
+        }
+    }
 }
 } // namespace
 
@@ -59,11 +75,7 @@ std::expected<std::vector<std::string>, application::FontFamilyFailure> SystemFo
     names.reserve(count);
     for (UINT32 index = 0; index < count; ++index)
     {
-        auto name = family_name(*collection.Get(), index);
-        if (!name.empty())
-        {
-            names.push_back(std::move(name));
-        }
+        append_family_names(*collection.Get(), index, names);
     }
     return names;
 }

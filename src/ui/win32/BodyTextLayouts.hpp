@@ -27,9 +27,9 @@ class BodyTextLayouts final : public application::TextLayoutPort
     locate(const application::TextLayoutRequest &request, core::DisplayCaret caret) override;
     [[nodiscard]] std::expected<core::DisplayCaret, application::TextLayoutFailure>
     hit(const application::TextLayoutRequest &request, core::TextLocation point) override;
-    // request.form の書式の `0` の幅と行高。格子は等幅の書式（候補の列 grid_fonts の定数）の
-    // 1 升（ADR 0140 の決定 4〜6）、text は本文の書式の字幅で、巨大な行の窓の x の見積もりに
-    // 使う（ADR 0139）。
+    // request.form の書式の `0` の幅と行高。格子は等幅の書式（設定の字体が等幅ならそれ、
+    // でなければ候補の列 grid_fonts の定数・grid_family）の 1 升（ADR 0140 の決定 4〜6・
+    // D58）。text は本文の書式の字幅で、巨大な行の窓の x の見積もりに使う（ADR 0139）。
     [[nodiscard]] std::expected<application::TextCell, application::TextLayoutFailure>
     cell(const application::TextLayoutRequest &request) override;
     [[nodiscard]] std::expected<TextLayout, application::TextLayoutFailure>

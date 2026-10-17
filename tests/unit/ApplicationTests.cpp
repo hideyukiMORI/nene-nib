@@ -1043,7 +1043,8 @@ void verify_clamp_dropped_on_leaving_question()
 {
     Editing resized;
     Editing kept;
-    expect(switched_back_after_question(resized, true) == switched_back_after_question(kept, false),
+    expect(switched_back_after_question(resized, true) ==
+               switched_back_after_question(kept, false),
            "leaving the question drops the pending clamp with the pending follow");
 }
 
