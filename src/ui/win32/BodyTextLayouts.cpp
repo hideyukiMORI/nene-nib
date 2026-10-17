@@ -49,6 +49,24 @@ constexpr wchar_t low_surrogate_last = 0xDFFF;
     }
     std::unreachable();
 }
+
+// 機械にある family の既定の face が等幅か（IDWriteFont1::IsMonospacedFont）。
+[[nodiscard]] bool monospaced(IDWriteFactory7 &factory, const std::wstring &name)
+{
+    Microsoft::WRL::ComPtr<IDWriteFontCollection> collection;
+    Microsoft::WRL::ComPtr<IDWriteFontFamily> found;
+    Microsoft::WRL::ComPtr<IDWriteFont> font;
+    Microsoft::WRL::ComPtr<IDWriteFont1> version;
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    return SUCCEEDED(factory.GetSystemFontCollection(&collection)) &&
+           SUCCEEDED(collection->FindFamilyName(name.c_str(), &index, &exists)) &&
+           exists != FALSE && SUCCEEDED(collection->GetFontFamily(index, &found)) &&
+           SUCCEEDED(found->GetFirstMatchingFont(DWRITE_FONT_WEIGHT_NORMAL,
+                                                 DWRITE_FONT_STRETCH_NORMAL,
+                                                 DWRITE_FONT_STYLE_NORMAL, &font)) &&
+           SUCCEEDED(font.As(&version)) && version->IsMonospacedFont() != FALSE;
+}
 } // namespace
 
 bool BodyTextLayouts::matches_style(const application::TextLayoutRequest &request) const
@@ -112,8 +130,14 @@ std::wstring BodyTextLayouts::family(std::string_view requested) const
     return exists(wide) ? wide : std::wstring{L"Consolas"};
 }
 
+// 格子は設定の字体が等幅ならそれで描き、無いか等幅でなければ固定の等幅字体に落とす（ADR 0140 決定 6・D58）。
 std::wstring BodyTextLayouts::grid_family(std::string_view requested) const
 {
+    auto wide = core::to_utf16(requested).value();
+    if (monospaced(*factory_.Get(), wide))
+    {
+        return wide;
+    }
     for (const auto *name : grid_fonts)
     {
         if (exists(name))
