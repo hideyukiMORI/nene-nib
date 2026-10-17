@@ -2,6 +2,7 @@
 
 #include "CommandLine.hpp"
 #include "CommandPalette.hpp"
+#include "InputLinePrompt.hpp"
 #include "InputLineView.hpp"
 #include "SearchLine.hpp"
 
@@ -14,6 +15,8 @@ using CommandInput = std::variant<core::CommandLine, core::CommandPalette, core:
 
 // 入力行の見え方（ADR 0032 の決定 1）。どの選択肢もこの 1 つの値に畳んでから描く。
 [[nodiscard]] core::InputLineView input_line_of(const CommandInput &input);
+// 入力行の種類（プロンプト）だけ。input_line_of(input).prompt と同じ値を、本文を写さずに返す。
+[[nodiscard]] core::InputLinePrompt input_line_prompt_of(const CommandInput &input);
 [[nodiscard]] std::expected<CommandInput, core::ExFailure>
 inserted_command(const CommandInput &input, std::string_view text);
 [[nodiscard]] CommandInput edited_command(const CommandInput &input, core::CommandEdit edit);

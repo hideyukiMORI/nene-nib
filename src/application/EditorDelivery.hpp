@@ -9,6 +9,7 @@
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "ImeStance.hpp"
+#include "InputLinePrompt.hpp"
 #include "SettingsIssue.hpp"
 #include "VimMode.hpp"
 
@@ -24,6 +25,10 @@ struct EditorDelivery
     core::EditMode mode;
     core::VimMode vim_mode;
     ImeStance ime;
+    // 開いている入力行の種類（frame の command_line の prompt と同じ値）。ui は構えが
+    // closed_once のままでも、入力行の種類が変わったとき（Ex の確定で面が開くなど）は
+    // IME を 1 度閉じる（ADR 0061 の決定 2・#635 の差し戻し 1）。
+    std::optional<core::InputLinePrompt> input_line;
     std::optional<CompositionView> composition;
     std::optional<CompositionView> command_composition;
     DocumentView document;

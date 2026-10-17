@@ -1,4 +1,5 @@
 // scope `--vim-search-incremental` の単体テスト（ADR 0042 決定 2）。
+#include "CancelCommand.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
@@ -526,6 +527,32 @@ void verify_incsearch_composition()
     expect(typed_text(committed) == "beta" && current_is(committed, 0, MatchSpan{7, 11}),
            "the commit moves the preview like typed text");
 }
+
+// 変換を残したまま検索の行を取り消す（Esc・CancelCommand）と、hop で動いた画面も入力前へ戻り、
+// 変換も入力行と一緒に消える（ADR 0061 の #635 の追記・決定 3 の最後）。
+void verify_incsearch_composition_cancelled()
+{
+    std::string body;
+    for (std::size_t number = 1; number <= 30; ++number)
+    {
+        body += number == 25 ? "target line\n" : "plain line\n";
+    }
+    body += "last";
+    Editing session;
+    open_vim_document(session, body);
+    applied(session.controller(), VisibleLines{5});
+    EditorController &controller = session.controller();
+    vim_replay(controller, "/tar");
+    hop(controller, VimSearchDirection::forward);
+    static_cast<void>(controller.apply_frame(app::ComposeText{composed_of("ｇ", {}, 3)}));
+    expect(first_line_of(controller.frame()) > 1 && app::composing(controller.frame()),
+           "the hop moved the view and the search line is composing");
+    const auto cancelled = controller.apply_frame(app::CancelCommand{});
+    expect(first_line_of(cancelled) == 1 && caret_at(cancelled, 1, 1) &&
+               frame_paints_nothing(cancelled) && !cancelled.command_line.has_value() &&
+               !app::composing(cancelled),
+           "cancelling while composing restores the view and drops the composition");
+}
 } // namespace
 
 void verify_vim_search_incremental_contracts()
@@ -542,6 +569,7 @@ void verify_vim_search_incremental_contracts()
     verify_incsearch_hop_inert();
     verify_incsearch_hop_scroll();
     verify_incsearch_composition();
+    verify_incsearch_composition_cancelled();
 }
 
 void verify_vim_search_incremental_scope()

@@ -1306,8 +1306,8 @@ void EditorWindow::place_candidate_window()
 // モードや入力行の有無から IME を決めない（ADR 0061 の決定 2）。
 void EditorWindow::follow_ime(const application::EditorDelivery &delivery)
 {
-    const auto previous = ime_stance_;
-    ime_stance_ = delivery.ime;
+    const auto previous = input_line_;
+    input_line_ = delivery.input_line;
     switch (delivery.ime)
     {
     case application::ImeStance::as_left:
@@ -1317,8 +1317,9 @@ void EditorWindow::follow_ime(const application::EditorDelivery &delivery)
         close_ime();
         return;
     case application::ImeStance::closed_once:
-        // 入るときに 1 度だけ閉じる。続く意図では、使う人が開いた IME を閉じ直さない。
-        if (previous != application::ImeStance::closed_once)
+        // 入力行の種類が変わったとき（無し → Ex・Ex → 面・無し → 面・無し → 検索）に
+        // 1 度だけ閉じる。同じ入力行の続く意図では、使う人が開いた IME を閉じ直さない。
+        if (previous != delivery.input_line)
         {
             close_ime();
         }

@@ -1191,6 +1191,22 @@ void verify_input_lines_take_composition()
     }
 }
 
+// Ex の行でも上限（256 バイト）を越える確定は入らず、面と同じ知らせが 1 行出る（ADR 0061 の
+// 決定 3・#635 の追記・入力の上限は inserted_command の 1 本を共用）。
+void verify_ex_commit_limit()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(SelectEditMode{EditMode::vim}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{core::VimCharacter{U':'}}));
+    static_cast<void>(controller.apply_frame(app::CommandText{std::string(250, 'a')}));
+    const auto frame = controller.apply_frame(CommitText{"日本語"});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == std::string(250, 'a') &&
+               frame.command_message.has_value() && !app::composing(frame) &&
+               frame.lines.front().text.empty(),
+           "an Ex commit past the input limit is refused with a notice");
+}
+
 // 記号の案内は変換を始めたら消え、取り消して空に戻ればまた出る。確定して文字が入れば出ない
 // （ADR 0060 の決定 9・#264 の差し戻し 1）。
 void verify_palette_hint_composing()
@@ -1223,6 +1239,7 @@ void verify_palette_composition()
     verify_palette_hint_composing();
     verify_palette_commit_limits();
     verify_input_lines_take_composition();
+    verify_ex_commit_limit();
 }
 
 void verify_tab_folders()

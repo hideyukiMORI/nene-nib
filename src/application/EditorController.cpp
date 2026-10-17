@@ -1922,7 +1922,8 @@ void EditorController::accept(const StoreVimRegister &intent)
 void EditorController::accept(const SearchHop &intent)
 {
     // 変換中の鍵は IME のもの。検索の行の変換中は当たりを動かさない（ADR 0061 の #635 の追記）。
-    if (state_.composition().has_value())
+    // 変換中かは ui と同じ述語 is_composing の 1 本で見る。
+    if (is_composing())
     {
         return;
     }
@@ -4031,6 +4032,7 @@ EditorDelivery EditorController::delivery() const
                           state_.mode(),
                           state_.vim().mode,
                           ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input()),
+                          state_.command_input().transform(input_line_prompt_of),
                           composed(),
                           command_composed(),
                           active_document_view(),

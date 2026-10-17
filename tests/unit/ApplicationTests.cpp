@@ -42,6 +42,7 @@
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "ImeStance.hpp"
+#include "InputLinePrompt.hpp"
 #include "InsertText.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
@@ -1680,6 +1681,24 @@ void verify_ime_stance_frame()
                ImeStance::closed_once,
            "the search line closes the IME once (D57)");
     static_cast<void>(controller.apply_frame(nenenib::application::CancelCommand{}));
+    // Ex の確定で面が開く（`:tabs`）と、構えは closed_once のまま入力行の種類が Ex → 面に変わる。
+    // ui はこの変わり目で IME を 1 度閉じ直す（D32・#635 の差し戻し 1）。delivery と frame の
+    // 両方で種類を区別できる。
+    using nenenib::core::InputLinePrompt;
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U':'}}}));
+    const auto typed = controller.apply(nenenib::application::CommandText{"tabs"});
+    expect(typed.ime == ImeStance::closed_once &&
+               typed.input_line == std::optional{InputLinePrompt::ex},
+           "the Ex line is delivered as its own kind");
+    const auto listed = controller.apply(nenenib::application::SubmitCommand{});
+    const auto listed_frame = controller.frame();
+    expect(listed.ime == ImeStance::closed_once &&
+               listed.input_line == std::optional{InputLinePrompt::palette} &&
+               listed_frame.command_line.has_value() &&
+               listed_frame.command_line.value().prompt == InputLinePrompt::palette,
+           "`:tabs` turns the Ex line into the palette, a different kind");
+    expect(controller.apply(nenenib::application::CancelCommand{}).input_line == std::nullopt,
+           "closing the palette delivers no input line");
     expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U'i'}}}).ime ==
                ImeStance::as_left,
            "Vim INSERT leaves the IME as it was");
