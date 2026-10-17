@@ -145,9 +145,10 @@ void verify_wrapped_composition()
     prepare_view(controller, "abcd", 2);
     static_cast<void>(controller.apply(
         PlaceCaret{TextPosition{LineNumber{1}, Column{4}}, SelectionAnchoring::collapse}));
+    // 4 升の幅に「abc日本語d」の 11 升（行末の 1 升に入らない「日」は次の画面行へ）で 3 画面行。
     const auto composing = controller.apply_frame(ComposeText{composed_of("日本語", {}, 9)});
     const auto &inserted = composing.lines.front().composed;
-    expect(composing.lines.front().text == "abcd" && composing.lines.front().screen_rows == 2 &&
+    expect(composing.lines.front().text == "abcd" && composing.lines.front().screen_rows == 3 &&
                inserted.has_value() && inserted.value().text == "abc日本語d" &&
                inserted.value().cursor == Column{7},
            "composition owns a shared wrapped display while leaving source text untouched");
