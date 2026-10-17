@@ -395,7 +395,8 @@ middle_of(const VimEditorView &view, LineNumber first, std::size_t occupied)
     std::unreachable();
 }
 
-// 画面行の単位の半画面と 1 画面（ADR 0144 の決定 5）。1 画面は visible_lines 行で、回数は画面の数。
+// 画面行の単位の半画面と 1 画面（ADR 0144 の決定 5 とその追補）。1 画面は visible_lines
+// 行で、回数は 画面の数。半画面は画面が送れない端でもキャレットが動く（Vim の CTRL-D）。
 // 回数のある半画面は、動いたときだけ 'scroll' を置き換える（論理行の道と同じ）。
 [[nodiscard]] std::expected<VimDisplayNavigation, VimLayoutNeed>
 row_target(const VimState &state, const VimEditorView &view, VimScrollDirection direction,
@@ -407,7 +408,8 @@ row_target(const VimState &state, const VimEditorView &view, VimScrollDirection 
                            ? std::numeric_limits<std::size_t>::max()
                            : pages * height;
     const auto amount = half ? half_amount(state, view) : whole;
-    auto target = vim_row_navigation(state, view, direction, amount);
+    auto target = half ? vim_row_half_navigation(state, view, direction, amount)
+                       : vim_row_navigation(state, view, direction, amount);
     if (!target)
     {
         return target;

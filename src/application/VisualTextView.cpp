@@ -6,6 +6,7 @@
 #include "GridPoint.hpp"
 #include "ScrollBounds.hpp"
 #include "Utf8.hpp"
+#include "VirtualColumn.hpp"
 
 #include <algorithm>
 #include <array>
@@ -422,7 +423,10 @@ VisualTextView::row_span(const core::VimRowRequest &request)
     {
         return std::unexpected(!start ? start.error() : end.error());
     }
-    return core::VimRowSpan{number, row.value(), start.value(), end.value(), count.value()};
+    // 画面行の始まりの仮想桁は索引から引く（O(塊)・ADR 0144 の決定 3 の追補）。
+    return core::VimRowSpan{number,        row.value(),
+                            start.value(), end.value(),
+                            count.value(), core::virtual_column(text, start.value()).value - 1};
 }
 
 // 画面行の頭は x の最小で叩いた位置（格子は升 0）。行の最初の画面行は行頭。
