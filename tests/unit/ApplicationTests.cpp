@@ -26,6 +26,7 @@
 #include "CompositionClause.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
+#include "DisplayForm.hpp"
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditHistory.hpp"
@@ -76,6 +77,7 @@
 #include "ScrollState.hpp"
 #include "SearchLine.hpp"
 #include "SelectAll.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
 #include "SelectionAnchoring.hpp"
@@ -1043,8 +1045,7 @@ void verify_clamp_dropped_on_leaving_question()
 {
     Editing resized;
     Editing kept;
-    expect(switched_back_after_question(resized, true) ==
-               switched_back_after_question(kept, false),
+    expect(switched_back_after_question(resized, true) == switched_back_after_question(kept, false),
            "leaving the question drops the pending clamp with the pending follow");
 }
 
@@ -1145,6 +1146,122 @@ void verify_font_size_lays_out_once()
            "the new font size shows both lines");
     expect(editing.text_layouts().made() - before == frame.lines.size(),
            "each visible line is laid out once, with the new font and the new line height");
+}
+
+// 格子の画面移動（ADR 0144 の決定 5・6・9・#595）。1 升 10 画素（ScriptedTextLayouts）で 8 升の幅、
+// 見えている画面行は 3。200 字の 1 行は 25 画面行で、キャレットは 0 行目の升 2（3
+// 桁目）から始まる。
+constexpr nenenib::core::TextViewGeometry page_grid_geometry{85, 20, 96};
+
+void open_grid_line(Editing &editing, EditMode mode)
+{
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, page_grid_geometry});
+    applied(controller, InsertText{std::string(200, 'a')});
+    applied(controller,
+            PlaceCaret{TextPosition{LineNumber{1}, Column{3}}, SelectionAnchoring::collapse});
+    applied(controller, nenenib::application::SelectDisplay{nenenib::core::DisplayForm::grid});
+    applied(controller, SelectEditMode{mode});
+}
+
+void press_vim(EditorController &controller, std::string_view keys)
+{
+    for (const auto &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply(VimKeyPress{key}));
+    }
+}
+
+// 最上段の画面行（first_row）とキャレットの桁。
+[[nodiscard]] std::pair<std::size_t, std::size_t> grid_top_and_column(EditorController &controller)
+{
+    const auto frame = controller.frame();
+    const std::size_t top = frame.grid.empty() ? 999 : frame.grid.front().row;
+    return {top, frame.caret.position.column.value};
+}
+
+void verify_grid_vim_pages()
+{
+    Editing editing;
+    open_grid_line(editing, EditMode::vim);
+    EditorController &controller = editing.controller();
+    press_vim(controller, "<PageDown>");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{3, 27},
+           "grid PgDn moves the top 3 screen rows and the caret 3 rows down on the same cell");
+    press_vim(controller, "<C-d>");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{4, 35},
+           "grid Ctrl-d moves the top and the caret half a screen (1 row)");
+    press_vim(controller, "<C-u>");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{3, 27},
+           "grid Ctrl-u moves back half a screen");
+    press_vim(controller, "<C-b>");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{0, 3},
+           "grid Ctrl-b moves back a screen");
+    press_vim(controller, "<PageUp>");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{0, 3},
+           "grid PgUp at the first screen row changes nothing");
+    press_vim(controller, "99<C-f>");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{24, 195},
+           "grid Ctrl-f stops when the last screen row is the top");
+    press_vim(controller, "<PageDown>x");
+    expect(grid_top_and_column(controller).first == 24 && controller.text().size_bytes() == 199,
+           "grid PgDn at the end changes nothing and does not fail the next key");
+}
+
+void verify_grid_vim_page_visual_and_dot()
+{
+    Editing editing;
+    open_grid_line(editing, EditMode::vim);
+    EditorController &controller = editing.controller();
+    press_vim(controller, "v<PageDown>");
+    expect(grid_top_and_column(controller) == std::pair<std::size_t, std::size_t>{3, 27},
+           "grid PgDn in VISUAL moves the caret 3 rows");
+    press_vim(controller, "d");
+    expect(controller.text().size_bytes() == 175,
+           "the VISUAL range of grid PgDn keeps the anchor (columns 3 to 27 are removed)");
+    press_vim(controller, "x<PageDown>.");
+    expect(controller.text().size_bytes() == 173 && grid_top_and_column(controller).first == 3,
+           "a grid PgDn between x and . is not a change; . repeats x");
+    Editing inserting;
+    open_grid_line(inserting, EditMode::vim);
+    press_vim(inserting.controller(), "i<PageDown>");
+    expect(grid_top_and_column(inserting.controller()) ==
+               std::pair<std::size_t, std::size_t>{3, 27},
+           "grid PgDn in INSERT moves by screen rows too");
+}
+
+// 通常モードの PgDn は画面の先頭も 1 画面ぶん送る（ADR 0144 の決定 7・D55）。普通の文書と格子。
+void verify_ordinary_pages()
+{
+    Editing plain;
+    EditorController &controller = plain.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{400, 20, 96}});
+    for (std::size_t line = 0; line < 9; ++line)
+    {
+        applied(controller, InsertText{"x"});
+        applied(controller, NewLine{});
+    }
+    applied(controller, MoveCaret{CaretMotion::document_start, SelectionAnchoring::collapse});
+    applied(controller, MoveCaret{CaretMotion::page_down, SelectionAnchoring::collapse});
+    const auto down = controller.frame();
+    expect(down.first_visible == LineNumber{4} && down.caret.position.line == LineNumber{4},
+           "the first ordinary PgDn moves the top and the caret a whole screen");
+    applied(controller, MoveCaret{CaretMotion::page_up, SelectionAnchoring::collapse});
+    const auto up = controller.frame();
+    expect(up.first_visible == LineNumber{1} && up.caret.position.line == LineNumber{1},
+           "ordinary PgUp moves back a whole screen");
+    Editing grid;
+    open_grid_line(grid, EditMode::ordinary);
+    applied(grid.controller(), MoveCaret{CaretMotion::page_down, SelectionAnchoring::collapse});
+    expect(grid_top_and_column(grid.controller()) == std::pair<std::size_t, std::size_t>{3, 27},
+           "ordinary PgDn in the grid moves the top and the caret 3 screen rows");
+}
+
+void verify_screen_row_pages()
+{
+    verify_grid_vim_pages();
+    verify_grid_vim_page_visual_and_dot();
+    verify_ordinary_pages();
 }
 
 void verify_controller_frame()
@@ -1811,6 +1928,7 @@ void verify_controller_intents()
     verify_vim_insert_follow_settles_at_frame();
     verify_vim_viewport_settles_before_screen_keys();
     verify_font_size_lays_out_once();
+    verify_screen_row_pages();
     verify_document_read_contracts();
     verify_document_failure_clearing();
     verify_vim_engine();
