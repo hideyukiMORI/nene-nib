@@ -1,6 +1,6 @@
 # ADR 0143 — マージ直前の CI は main の workflow 定義で起動し、PR の head は入力で checkout する
 
-- 状態: 提案（設計席 2026-10-17。#599 の PR で道具を直し、最初の run が通った時点で受理）
+- 状態: 受理（設計席 2026-10-17。#629 で道具を直し、新しい `merge-pr.py` が起動した最初の非文書の merge #636 の run [39028503021](https://github.com/hideyukiMORI/nene-nib/actions/runs/39028503021) が `workflow_dispatch` / `head_branch=main` で `check` 33 秒・`build-and-test` 11 分 38 秒の 2 job を通した・gate-proofs 1-f）
 - 日付: 2026-10-17
 - Issue: #599（ADR 0136 の穴・2026-10-16 夜の merge で発見）
 - 規則: ARC-001 / QLT-012、ADR 0118 / 0136

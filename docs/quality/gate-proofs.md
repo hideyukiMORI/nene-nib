@@ -145,6 +145,8 @@ P29〜P32 を足し、どの反例も `results.json` の `negative.exitCode` が
 
 実機（i9-10850K・20 論理 core）の同じ 3 命令: configure 3.6 秒・`cmake --build build-release` 203.1 秒（230 段・警告 0）・ctest 16.6 秒（9/9）。反例（落ちる側）は、ctest が落ちる PR を merge しようとしたときに統合道具が `Merge refused` で止まることで、2026-10-16 時点では未発生（発生したら run を引用する）。
 
+2026-10-17（ADR 0143・Issue #599）。`merge-pr.py` が `ref=main` で dispatch し、run を `display_title`（`Merge PR #N at <head>`）と `head_branch=main` で見分ける形にした後の最初の非文書の merge #636: run [39028503021](https://github.com/hideyukiMORI/nene-nib/actions/runs/39028503021)（`workflow_dispatch`・`head_branch` main）で `check` 33 秒・`build-and-test` 11 分 38 秒の 2 job が success。古い `check.yml` の branch で `build-and-test` が走らなかった穴（#477 / #505 の run は `check` だけ）はこれで閉じた。続く #638 / #630 / #631 / #637 の run も 2 job。
+
 ## 2. 出力の抜粋（実行結果からの引用）
 
 ```
