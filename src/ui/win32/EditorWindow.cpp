@@ -1306,8 +1306,8 @@ void EditorWindow::place_candidate_window()
 // モードや入力行の有無から IME を決めない（ADR 0061 の決定 2）。
 void EditorWindow::follow_ime(const application::EditorDelivery &delivery)
 {
-    const auto previous = ime_stance_;
-    ime_stance_ = delivery.ime;
+    const auto previous = input_line_;
+    input_line_ = delivery.input_line;
     switch (delivery.ime)
     {
     case application::ImeStance::as_left:
@@ -1317,8 +1317,9 @@ void EditorWindow::follow_ime(const application::EditorDelivery &delivery)
         close_ime();
         return;
     case application::ImeStance::closed_once:
-        // 入るときに 1 度だけ閉じる。続く意図では、使う人が開いた IME を閉じ直さない。
-        if (previous != application::ImeStance::closed_once)
+        // 入力行の種類が変わったとき（無し → Ex・Ex → 面・無し → 面・無し → 検索）に
+        // 1 度だけ閉じる。同じ入力行の続く意図では、使う人が開いた IME を閉じ直さない。
+        if (previous != delivery.input_line)
         {
             close_ime();
         }
@@ -1349,7 +1350,7 @@ void EditorWindow::close_ime()
     ImmReleaseContext(window_, context);
 }
 
-// 面が閉じて入力行の変換が消えたとき、IME の側に変換を残さない（ADR 0061 の決定 3）。
+// 入力行が閉じて変換が消えたとき、IME の側に変換を残さない（ADR 0061 の決定 3）。
 void EditorWindow::cancel_ime_composition()
 {
     const HIMC context = ImmGetContext(window_);
@@ -1458,7 +1459,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     {
         return;
     }
-    // 面が閉じて入力行の変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
+    // 入力行が閉じて変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
     // の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
     // 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。
     const bool command_composed = command_composing_;

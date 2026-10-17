@@ -55,8 +55,8 @@ struct EditorFrame
     std::optional<char> recording;
     // 本文の変換中の文字列。キャレットの位置に差し込んで描く（ADR 0014 の決定 2）。
     std::optional<CompositionView> composition;
-    // 面の入力行の変換中の文字列（ADR 0061 の決定 4）。面が開いていればこちらに載り、composition
-    // は空。両方が同時に値を持つことは無い。
+    // 入力行（面・Ex の行・検索の行）の変換中の文字列（ADR 0061 の決定 4）。入力行が開いていれば
+    // こちらに載り、composition は空。両方が同時に値を持つことは無い。
     std::optional<CompositionView> command_composition;
     DocumentView document;
     std::array<core::DisplayText, core::status_item_count> status_items;
@@ -108,7 +108,7 @@ struct EditorFrame
     std::size_t grid_searched = 0;
 };
 
-// 変換中か（本文と面の入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは
+// 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは
 // この 1 本。
 [[nodiscard]] inline bool composing(const EditorFrame &frame) noexcept
 {

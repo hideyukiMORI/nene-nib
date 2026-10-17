@@ -864,7 +864,7 @@ constexpr std::string_view clipped_mark = "…";
            std::holds_alternative<AutosaveTick>(intent);
 }
 
-// 状態の変換の表示値。本文と面の入力行のどちらに載せるかは呼び手が決める（ADR 0061 の決定 4）。
+// 状態の変換の表示値。本文と入力行のどちらに載せるかは呼び手が決める（ADR 0061 の決定 4）。
 [[nodiscard]] std::optional<CompositionView>
 composition_view_of(const std::optional<core::Composition> &composition)
 {
@@ -1921,6 +1921,12 @@ void EditorController::accept(const StoreVimRegister &intent)
 
 void EditorController::accept(const SearchHop &intent)
 {
+    // 変換中の鍵は IME のもの。検索の行の変換中は当たりを動かさない（ADR 0061 の #635 の追記）。
+    // 変換中かは ui と同じ述語 is_composing の 1 本で見る。
+    if (is_composing())
+    {
+        return;
+    }
     const core::SearchLine *line = previewed_line(state_);
     const auto preview = state_.search_preview();
     if (line == nullptr || !preview.has_value() || !preview.value().match.has_value())
@@ -3641,15 +3647,11 @@ void EditorController::accept(const PointTitleBar &intent)
 
 bool EditorController::composition_ignored() const noexcept
 {
-    // 面の入力は変換を受け、下のモード（Vim の NORMAL など）の決まりは見ない（ADR 0061 決定 3）。
-    if (command_palette_active())
-    {
-        return false;
-    }
-    // Ex の行と検索の行は今までどおり捨てる。
+    // 入力行（面・Ex の行・検索の行）は変換を受け、下のモード（Vim の NORMAL など）の決まりは
+    // 見ない（ADR 0061 決定 3・#635 の追記）。
     if (command_line_active())
     {
-        return true;
+        return false;
     }
     switch (state_.mode())
     {
@@ -3704,9 +3706,9 @@ void EditorController::accept(const CommitText &intent)
     {
         return;
     }
-    // 面の確定は打った文字と同じ道で面の入力に入る。本文にも engine にも行かない（ADR 0061 の
-    // 決定 3）。上限を越えたときの知らせも同じ道が出す。
-    if (command_palette_active())
+    // 入力行の確定は打った文字と同じ道で入力行に入る。本文にも engine にも行かない（ADR 0061 の
+    // 決定 3・#635 の追記）。上限を越えたときの知らせも、検索の preview も同じ道が出す。
+    if (command_line_active())
     {
         accept(CommandText{intent.utf8});
         return;
@@ -3734,9 +3736,10 @@ void EditorController::accept(const CancelComposition &)
 
 void EditorController::close_command_input()
 {
-    const bool palette = command_palette_active();
+    // 入力行の変換は入力行と一緒に消える（ADR 0061 の決定 3・#635 の追記）。
+    const bool opened = command_line_active();
     state_ = state_.with_command_input(std::nullopt);
-    if (palette)
+    if (opened)
     {
         state_ = state_.with_composition(std::nullopt);
     }
@@ -3744,7 +3747,7 @@ void EditorController::close_command_input()
 
 std::optional<CompositionView> EditorController::composed() const
 {
-    if (command_palette_active())
+    if (command_line_active())
     {
         return std::nullopt;
     }
@@ -3753,7 +3756,7 @@ std::optional<CompositionView> EditorController::composed() const
 
 std::optional<CompositionView> EditorController::command_composed() const
 {
-    if (!command_palette_active())
+    if (!command_line_active())
     {
         return std::nullopt;
     }
@@ -4029,6 +4032,7 @@ EditorDelivery EditorController::delivery() const
                           state_.mode(),
                           state_.vim().mode,
                           ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input()),
+                          state_.command_input().transform(input_line_prompt_of),
                           composed(),
                           command_composed(),
                           active_document_view(),

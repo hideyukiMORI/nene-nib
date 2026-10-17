@@ -408,17 +408,17 @@ class EditorController final
     [[nodiscard]] GridLineMarks grid_marks(core::LineNumber line, const core::OffsetRange &visible,
                                            const core::OffsetRange &selection,
                                            const core::VimPattern *pattern) const;
-    // 本文の変換（面が開いていれば空）と面の入力行の変換（面が開いているときだけ）。どちらか
-    // 一方にだけ載る（ADR 0061 の決定 4）。
+    // 本文の変換（入力行が開いていれば空）と入力行の変換（入力行が開いているときだけ）。どちらか
+    // 一方にだけ載る（ADR 0061 の決定 4・#635 で面から入力行すべてへ）。
     [[nodiscard]] std::optional<CompositionView> composed() const;
     [[nodiscard]] std::optional<CompositionView> command_composed() const;
     // 録画中のマクロの名前。通常モードでは録画が止まっているので出さない（ADR 0046 の決定 8）。
     [[nodiscard]] std::optional<char> recording_name() const;
     [[nodiscard]] core::GuideContext guide_context() const noexcept;
     // Vim の NORMAL では IME を切ってあるので変換は来ないはずだが、来たら捨てる（決定 4）。
-    // Ex の行と検索の行でも捨て、面が開いていれば受ける（ADR 0061 の決定 3）。
+    // 入力行（面・Ex の行・検索の行）が開いていれば受ける（ADR 0061 の決定 3・#635）。
     [[nodiscard]] bool composition_ignored() const noexcept;
-    // 入力行を閉じる 1 本。面を閉じるときに残っている変換は消す（ADR 0061 の決定 3）。
+    // 入力行を閉じる 1 本。閉じるときに残っている変換は消す（ADR 0061 の決定 3）。
     void close_command_input();
     // 確定した文字列を Vim の打鍵として流す。`.` の再生とマクロが後で自然に載る（決定 4）。
     void type_as_vim_keys(std::string_view utf8);

@@ -16,6 +16,7 @@
 #include "HistoryDirection.hpp"
 #include "ImeOpenState.hpp"
 #include "ImeStance.hpp"
+#include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "PresentedMilestones.hpp"
 #include "RenderFailure.hpp"
@@ -184,7 +185,8 @@ class EditorWindow final
     void send_composition(const core::Composition &composition);
     void end_composition();
     void place_candidate_window();
-    // frame の構え（ImeStance）を実行する。決めるのは application（ADR 0061 の決定 2）。
+    // frame の構え（ImeStance）と入力行の種類の変わり目を実行する。決めるのは application
+    // （ADR 0061 の決定 2）。
     void follow_ime(const application::EditorDelivery &frame);
     void close_ime();
     void restore_ime();
@@ -257,9 +259,10 @@ class EditorWindow final
     core::VimMode vim_mode_ = core::VimMode::normal;
     // Vim の NORMAL に入る前の IME の開閉。控えが在ることが「いま切ってある」でもある（決定 5）。
     ImeOpenState ime_open_ = ImeOpenState::unrecorded;
-    // 前に実行した構え。closed_once を入るときの 1 回にするために覚える（ADR 0061 の決定 2）。
-    std::optional<application::ImeStance> ime_stance_;
-    // 前の frame で面の入力行が変換中だったか。面が閉じて変換が消えた瞬間を知る（決定 3）。
+    // 前の delivery の入力行の種類。closed_once を入力行の種類が変わったときの 1 回にするために
+    // 覚える（無し → Ex・Ex → 面など・ADR 0061 の決定 2・#635 の差し戻し 1）。
+    std::optional<core::InputLinePrompt> input_line_;
+    // 前の frame で入力行が変換中だったか。入力行が閉じて変換が消えた瞬間を知る（決定 3）。
     bool command_composing_ = false;
     // いま入れ子になっている send の数と、send の途中で届いた合図（何回届いても 1 つ）。
     std::size_t sending_depth_ = 0;

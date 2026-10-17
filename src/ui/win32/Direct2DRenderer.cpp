@@ -1068,7 +1068,7 @@ void Direct2DRenderer::draw_other_clause(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_clauses(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                     const core::LayoutRect &area, UINT32 base)
 {
-    // 本文の変換と面の入力行の変換は同時に値を持たない（ADR 0061 の決定 4）ので、在る方を引く。
+    // 本文の変換と入力行の変換は同時に値を持たない（ADR 0061 の決定 4）ので、在る方を引く。
     const auto &shown =
         frame.command_composition.has_value() ? frame.command_composition : frame.composition;
     if (!shown.has_value())

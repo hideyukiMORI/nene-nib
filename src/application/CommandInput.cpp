@@ -10,19 +10,14 @@ namespace nenenib::application
 {
 namespace
 {
-// 検索は補完も候補も持たないので、見え方の列は空になる（ADR 0032 の決定 1）。
-[[nodiscard]] core::InputLineView view_of(const core::SearchLine &line)
+// プロンプトの文字はこの表だけが決める。写し先が足りなければコンパイルが落ちる（CPP-002）。
+[[nodiscard]] core::InputLinePrompt prompt_of(const core::SearchLine &line)
 {
-    return core::InputLineView{line.direction() == core::VimSearchDirection::forward
-                                   ? core::InputLinePrompt::search_forward
-                                   : core::InputLinePrompt::search_backward,
-                               std::string(line.text()),
-                               line.caret(),
-                               {},
-                               std::nullopt};
+    return line.direction() == core::VimSearchDirection::forward
+               ? core::InputLinePrompt::search_forward
+               : core::InputLinePrompt::search_backward;
 }
 
-// プロンプトの文字はこの表だけが決める。写し先が足りなければコンパイルが落ちる（CPP-002）。
 [[nodiscard]] core::InputLinePrompt prompt_of(const core::CommandLine &)
 {
     return core::InputLinePrompt::ex;
@@ -31,6 +26,13 @@ namespace
 [[nodiscard]] core::InputLinePrompt prompt_of(const core::CommandPalette &)
 {
     return core::InputLinePrompt::palette;
+}
+
+// 検索は補完も候補も持たないので、見え方の列は空になる（ADR 0032 の決定 1）。
+[[nodiscard]] core::InputLineView view_of(const core::SearchLine &line)
+{
+    return core::InputLineView{
+        prompt_of(line), std::string(line.text()), line.caret(), {}, std::nullopt};
 }
 
 // 補完を持つ入力行の見え方。写し先が足りなければコンパイルが落ちる（CPP-002）。
@@ -70,6 +72,11 @@ namespace
 core::InputLineView input_line_of(const CommandInput &input)
 {
     return std::visit([](const auto &value) { return view_of(value); }, input);
+}
+
+core::InputLinePrompt input_line_prompt_of(const CommandInput &input)
+{
+    return std::visit([](const auto &value) { return prompt_of(value); }, input);
 }
 
 std::expected<CommandInput, core::ExFailure> inserted_command(const CommandInput &input,
