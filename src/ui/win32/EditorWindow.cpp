@@ -2447,9 +2447,22 @@ bool EditorWindow::recover()
 
 bool EditorWindow::survives_layout(const application::EditorDelivery &delivery)
 {
+    if (!delivery.layout_failure.has_value())
+    {
+        return true;
+    }
+    switch (delivery.layout_failure.value())
+    {
+    case application::TextLayoutFailure::inconsistent:
+        // 問いの往復の契約の破れは作り直しでは直らない。鍵は拒否済みで知らせは application が
+        // 立てたので、作り直さずに残りを写す（ADR 0133 の追補 2026-10-18）。
+        return true;
+    case application::TextLayoutFailure::unavailable:
+        break;
+    }
     // 文字組みの失敗も 1 回だけ作り直し、作り直せたら意図の残りを写す（ADR 0133）。描画を失った後の
     // 終わりの途中（保存）では作り直さず、保存の失敗の理由を見せるために残りを写す。
-    if (!delivery.layout_failure.has_value() || rendering_failed_ || recover())
+    if (rendering_failed_ || recover())
     {
         return true;
     }

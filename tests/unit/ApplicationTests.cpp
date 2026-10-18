@@ -87,15 +87,20 @@
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
+#include "TextLayoutFailure.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimLineRows.hpp"
 #include "VimMode.hpp"
+#include "VimRoundTrip.hpp"
+#include "VimRowSpan.hpp"
 #include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
+#include "VimViewport.hpp"
 #include "VisibleLines.hpp"
 
 #include <algorithm>
@@ -1122,6 +1127,76 @@ void verify_vim_viewport_settles_before_screen_keys()
                settled.first_visible == framed.first_visible &&
                settled.caret.position.line == framed.caret.position.line,
            "H lands on the settled top line, not the one before the follow");
+}
+
+// Vim の問いの往復の破れの判定（ADR 0133 の追補 2026-10-18・#665）。viewport の二重要求は本物の
+// core の engine には無い形なので、判定の純関数だけで確かめる。
+void verify_vim_round_trip_judgements()
+{
+    using nenenib::application::TextLayoutFailure;
+    const nenenib::core::VimViewport viewport{LineNumber{1}, 3, 0, 0, 0};
+    expect(nenenib::application::vim_viewport_unasked(std::nullopt).has_value(),
+           "#665 the first viewport request is answered");
+    expect(nenenib::application::vim_viewport_unasked(viewport).error() ==
+               TextLayoutFailure::inconsistent,
+           "#665 (a) a viewport requested again is a broken round trip, not a layout failure");
+    const std::vector<nenenib::core::VimLineRows> rows{{LineNumber{2}, 3}};
+    expect(nenenib::application::vim_rows_unasked(rows, LineNumber{1}).has_value(),
+           "#665 rows of a new line are answered");
+    expect(nenenib::application::vim_rows_unasked(rows, LineNumber{2}).error() ==
+               TextLayoutFailure::inconsistent,
+           "#665 (b) rows of the same line asked again are a broken round trip");
+    const std::vector<nenenib::core::VimRowSpan> spans{
+        {LineNumber{1}, 0, Offset{0}, Offset{8}, 3, 0}};
+    expect(nenenib::application::vim_span_unanswered(
+               spans, {LineNumber{1}, 1, Offset{8}, Offset{16}, 3, 8})
+               .has_value(),
+           "#665 a new screen row is answered");
+    expect(nenenib::application::vim_span_unanswered(spans,
+                                                     {LineNumber{1}, 0, Offset{0}, Offset{8}, 3, 0})
+                   .error() == TextLayoutFailure::inconsistent,
+           "#665 (b) the same screen row answered again is a broken round trip");
+    expect(nenenib::application::blocks_drawing(TextLayoutFailure::unavailable) &&
+               !nenenib::application::blocks_drawing(TextLayoutFailure::inconsistent),
+           "#665 only a layout that cannot be made blocks drawing");
+}
+
+// 番号の問いに違う段を答える文字組みでは、engine が同じ画面行を問い直し、controller は鍵を拒否して
+// 1 行知らせる。破れは配達に 1 回だけ載り、frame と次の配達には載らない（作り直しを頼まない）。
+void verify_vim_inconsistent_round_trip()
+{
+    using nenenib::application::TextLayoutFailure;
+    Editing editing;
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{3, nenenib::core::TextViewGeometry{80, 20, 96}});
+    static_cast<void>(controller.apply(InsertText{"abcdefghijklmnopqrstuvwxyz"}));
+    applied(controller, SelectEditMode{EditMode::vim});
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimCharacter{U'0'}}}));
+    const auto before = controller.frame().caret.position;
+    editing.text_layouts().misnumber_rows();
+    static_cast<void>(controller.apply(VimKeyPress{VimKey{VimCharacter{U'g'}}}));
+    const auto refused = controller.apply(VimKeyPress{VimKey{VimCharacter{U'j'}}});
+    expect(refused.layout_failure == std::optional{TextLayoutFailure::inconsistent},
+           "#665 a screen row asked again is delivered as inconsistent");
+    expect(refused.command_message.has_value() &&
+               refused.command_message.value().text() == "内部の不整合: 画面行の問い（鍵は無効）",
+           "#665 a broken round trip raises the one-line notice");
+    expect(!controller.delivery().layout_failure.has_value(),
+           "#665 inconsistent is delivered once and not in the next delivery");
+    const auto frame = controller.frame();
+    expect(!frame.layout_failure.has_value() && frame.caret.position == before,
+           "#665 inconsistent is not in the frame and the key is not applied");
+    // layout を作れない失敗は今どおり frame に載る（ui は作り直す）。
+    Editing failing;
+    EditorController &rejected = failing.controller();
+    applied(rejected, VisibleLines{3, nenenib::core::TextViewGeometry{80, 20, 96}});
+    static_cast<void>(rejected.apply(InsertText{"abcdefghijklmnopqrstuvwxyz"}));
+    applied(rejected, SelectEditMode{EditMode::vim});
+    failing.text_layouts().reject();
+    const auto unavailable = rejected.apply(VimKeyPress{VimKey{VimCharacter{U'M'}}});
+    expect(unavailable.layout_failure == std::optional{TextLayoutFailure::unavailable} &&
+               rejected.frame().layout_failure == std::optional{TextLayoutFailure::unavailable},
+           "#665 a layout that cannot be made stays in the delivery and the frame");
 }
 
 // 字の大きさを変えた設定の clamp と追従は、窓が送る新しい行高の幾何を待って 1 回だけ解決する。
@@ -2476,6 +2551,8 @@ void verify_controller_intents()
     verify_clamp_dropped_on_leaving_question();
     verify_vim_insert_follow_settles_at_frame();
     verify_vim_viewport_settles_before_screen_keys();
+    verify_vim_round_trip_judgements();
+    verify_vim_inconsistent_round_trip();
     verify_font_size_lays_out_once();
     verify_screen_row_pages();
     verify_document_read_contracts();

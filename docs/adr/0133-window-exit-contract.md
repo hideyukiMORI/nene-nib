@@ -48,3 +48,24 @@
 ## 限界
 
 描画を失った後の確認は、作り直しに失敗する環境（ドライバが戻らない）で出るので、使う人はその場で保存先を選ぶ。保存先が選べない（ダイアログも出ない）環境では守れない。プロセスが殺される経路は守れない（P0-3・施主判断）。`ShutdownBlockReasonCreate` は Vista 以降の API で、OS が理由を見せるかは OS の設定による。
+
+## 追補 2026-10-18（#665）: Vim の問いの往復の破れは作り直さない
+
+### 文脈
+
+`survives_layout` は配達の `layout_failure` を一律に「文字組みの失敗」とみなし `recover()` を 1 回呼んでいた。Vim の問いの往復（ADR 0129 / 0144）で返る失敗のうち「viewport を既に渡したのに `viewport_request` が立った」「同じ行の画面行数・同じ (行, 段) の画面行をもう一度問われた（答えが問いに当たらない）」は device や layout の失敗ではなく engine と controller の契約の破れで、renderer を作り直しても直らない。#664 の実測でこの経路が「処理落ち」（作り直しの一瞬のちらつき）に見えた。
+
+### 決定
+
+1. **`TextLayoutFailure` を 2 値にする。** `unavailable`（layout を作れない・device や保持の都合。今どおり `recover()` を 1 回）と `inconsistent`（往復の契約の破れ）。分岐はどちらも `switch` で全列挙し、`default` を書かない（CPP-002）。frame に載せるかは `blocks_drawing` の 1 本が決める。
+2. **`inconsistent` を返すのは往復の判定の純関数 `VimRoundTrip.hpp` の 3 つだけ。** `vim_viewport_unasked`（viewport の二重要求）・`vim_rows_unasked`（同じ行の画面行数の問い直し）・`vim_span_unanswered`（同じ (行, 段) の画面行の答え直し）。`row_span` 自身が返す失敗（#664 の番兵が外れた等）は `unavailable` のまま（layout の側の問題として作り直す）。往復の回数の上限は持たない（ADR 0129 の決定 2 の追補）。
+3. **ui の `survives_layout` は `inconsistent` では `recover()` を呼ばず、配達の残りを写す。** 鍵は application が拒否済み（`VimRepeatFailure::refused`）で、知らせは `step_vim` が 1 行の知らせの口（`with_command_message`・「開けませんでした」と同じ道）に「内部の不整合: 画面行の問い（鍵は無効）」を置く。文言は application の `EditorController.cpp` の知らせの constexpr 群に 1 行。
+4. **`layout_failure` の消え方を 2 つに分けて固定する。** `unavailable` は frame にも載り、ui の作り直し（`recover()` → `start_rendering` の `apply`）の先頭の消去で消える。`inconsistent` は frame に載せず（`draw_frame` が描画の失敗 `RenderFailure::directwrite` に読み替えて窓を閉じる道へ流さない）、`apply` が配達を作った時点で消す（配達に 1 回だけ載る・次の `apply` の消去に頼らない）。
+
+### 理由
+
+契約の破れは作り直しでは直らないので、作り直しても同じ鍵でまた破れ、使う人にはちらつきだけが見える。鍵を拒否して知らせれば、本文も画面も変わらず、使う人は次の鍵を打てる。破れを見つけるのは Debug の契約（`--application`）で、製品では知らせの 1 行が手がかりになる。
+
+### 検証
+
+`--application` の `verify_vim_round_trip_judgements`（3 つの判定と `blocks_drawing`。viewport の二重要求は本物の core の engine には無い形なので純関数だけで確かめる）と `verify_vim_inconsistent_round_trip`（替え玉 `ScriptedTextLayouts::misnumber_rows` で番号の問いにだけ違う段を答え、`gj` が配達に `inconsistent` を 1 回だけ載せ・次の配達と frame には載らず・鍵は効かず・知らせが立つこと。`reject` の `unavailable` は今どおり配達と frame に載ること）。

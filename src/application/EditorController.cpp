@@ -728,6 +728,19 @@ constexpr std::string_view autosave_failed_message = "自動退避できませ�
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
 // クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
 constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
+// 描けない失敗だけを残す（frame の欄・ADR 0133 の追補 2026-10-18）。
+[[nodiscard]] std::optional<TextLayoutFailure>
+drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
+{
+    if (failure.has_value() && blocks_drawing(failure.value()))
+    {
+        return failure;
+    }
+    return std::nullopt;
+}
+
+// Vim の問いの往復の契約の破れの知らせ（ADR 0133 の追補 2026-10-18・#665）。鍵は効かない。
+constexpr std::string_view inconsistent_layout_notice = "内部の不整合: 画面行の問い（鍵は無効）";
 // 自動退避の残骸を読めなかった知らせ（ADR 0137 の決定 6）。
 constexpr std::string_view unrestored_prefix = "戻せませんでした: ";
 constexpr std::string_view clipped_mark = "…";
@@ -1123,7 +1136,11 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     ask_display();
-    return delivery();
+    auto delivered = delivery();
+    // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
+    // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
+    layout_failure_ = drawing_failure(layout_failure_);
+    return delivered;
 }
 
 EditorFrame EditorController::apply_frame(const EditorIntent &intent)
@@ -1798,6 +1815,17 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     if (!measured)
     {
         layout_failure_ = measured.error();
+        // 契約の破れは描画の作り直しでは直らないので、鍵を拒否して 1 行知らせる（ADR 0133 の
+        // 追補 2026-10-18）。layout を作れない失敗は ui が作り直す（知らせは出さない）。
+        switch (measured.error())
+        {
+        case TextLayoutFailure::inconsistent:
+            state_ = state_.with_command_message(
+                core::DisplayText::parse(inconsistent_layout_notice).value());
+            break;
+        case TextLayoutFailure::unavailable:
+            break;
+        }
         return core::VimRepeatFailure::refused;
     }
     const auto &step = measured.value();
@@ -4112,7 +4140,8 @@ EditorFrame EditorController::frame()
         !pending && state_.display() == core::DisplayForm::grid && view_geometry_.width > 0;
     auto lines = pending || gridded ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
                                     : visible_lines();
-    const auto failure = lines ? layout_failure_ : std::optional{lines.error()};
+    // frame の失敗は描けないものだけ（契約の破れは配達だけに載る・ADR 0133 の追補 2026-10-18）。
+    const auto failure = lines ? drawing_failure(layout_failure_) : std::optional{lines.error()};
     EditorFrame result{std::move(lines).value_or(std::vector<LineView>{}),
                        CaretView{caret, caret_shape_for(delivered.mode, delivered.vim_mode),
                                  state_.caret_affinity()},
