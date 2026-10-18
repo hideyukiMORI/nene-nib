@@ -19,6 +19,7 @@
 #include "VimSelect.hpp"
 #include "VimSwitchTab.hpp"
 #include "VimUndo.hpp"
+#include "VimWindowCommand.hpp"
 
 #include <variant>
 
@@ -31,5 +32,5 @@ using VimEffect =
     std::variant<VimNoEffect, VimMoveTo, VimNavigate, VimSelect, VimRemoveRange, VimRemoveLines,
                  VimInsertString, VimNewLine, VimInsertAt, VimReplaceRange, VimRemoveBlock,
                  VimReplaceBlock, VimInsertBlock, VimUndo, VimRedo, VimOpenCommandLine,
-                 VimOpenSearch, VimReplay, VimSwitchTab>;
+                 VimOpenSearch, VimReplay, VimSwitchTab, VimWindowCommand>;
 } // namespace nenenib::core

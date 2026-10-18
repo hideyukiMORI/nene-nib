@@ -64,7 +64,8 @@ namespace
 } // namespace
 
 // どの鍵がどのモードで効くかは割り当ての表 operation_bindings の行が決める（ADR 0078 の決定 4）。
-// Vim の Ctrl+W は表に行が無いので値なし。
+// Vim の Ctrl+W は表に行が無いので値なしで、窓が Vim の engine の `Ctrl-w` へ流す（ADR 0148 の
+// 決定 7）。
 std::optional<TabCommand> tab_command_for(TabKey key, EditMode mode) noexcept
 {
     return operation_for(chord_of(key), mode).and_then(tab_command_of);
