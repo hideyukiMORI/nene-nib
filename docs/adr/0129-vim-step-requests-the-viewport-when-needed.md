@@ -14,7 +14,7 @@ engine が viewport を読むのは画面行に関わる鍵（`H M L`・Ctrl-d/u
 ## 決定
 
 1. **viewport は要求で渡す。** `VimEditorView.viewport` を `std::optional<VimViewport>` にし、`VimLayoutView.first_row` も同じ optional の中に畳む（先頭行・見えている行数・先頭行の画面行の 3 つを 1 つの値で）。engine が viewport を読む所は `view.viewport` が無ければ `VimStep.viewport_request = true` を立てて、効果を出さずに返す（`layout_request` と同じ形）。読む所は `VimStep.hpp` の公開関数 `vim_viewport_of(view)` の 1 本に畳み（`VimScreenGeometry.cpp` も同じ口）、散らばった `view.viewport.` の直読みを無くす（ARC-012）。viewport を読む鍵の表は `vim_reads_viewport` の 1 つで、`H M L`・Ctrl-d/u/f/b に横送り（ADR 0145）と縦の位置合わせ `screen_alignment`（`zt zz zb z<CR> z. z-`・ADR 0146）が加わる。
-2. **controller は要求に応えて同じ鍵をもう一度流す。** `measured_vim_step` は最初は viewport 無しで step し、`viewport_request` が立ったら `settled_scroll()` を読んで viewport を渡し、同じ鍵をもう一度 step する。`layout_request` の往復と同じループに統合し、往復の上限はこれまでの `layout_request` と同じ扱い（無限に回らない）。
+2. **controller は要求に応えて同じ鍵をもう一度流す。** `measured_vim_step` は最初は viewport 無しで step し、`viewport_request` が立ったら `settled_scroll()` を読んで viewport を渡し、同じ鍵をもう一度 step する。`layout_request` の往復と同じループに統合し、往復の上限はこれまでの `layout_request` と同じ扱い（無限に回らない）。（追補 2026-10-18・#665: 回数の上限は持たない。往復は毎回「新しい行の画面行数」「新しい (行, 段) の画面行」「viewport 1 回」のどれかを足し、同じ問いの立て直しと viewport の二重要求は即 `inconsistent` で止まる（ADR 0133 の追補）ので、新しい答えは「行数 + 画面行の総数 + 1」で尽きる。固定の上限は `100gj` や大きな窓の Ctrl-f の正しい往復を拒否する。）
 3. **観測できる結果は変えない。** viewport を読む鍵は要求の往復の後に今日と同じ値で動くので、fixture 1853 件と Vim の scope は不変のまま通る。viewport を読まない鍵は追従を解決しないので、INSERT の連打は通常モードの連打と同じ水準になる。
 4. **ADR 0128 の決定 5 は本 ADR で置き換える。**
 5. **Vim の連打の bench は足さない（今回）。** 正式ゲートの 8 本に悪化が無いことを示し、Vim INSERT の連打の前後は実験ブランチの節目（`experiment/460-burst-breakdown` の形）で測って品質記録に残す。bench を足すかは hide に確かめてから。
