@@ -40,6 +40,9 @@ enum class VimMotion : std::uint8_t
     // `gj` `gk`。画面行で上下する文字単位の exclusive な移動（ADR 0144 の決定 4）。文字組みが
     // 無効なら engine が down / up に読み替える。
     display_down,
-    display_up
+    display_up,
+    // `{N}|`。行頭からの仮想桁 N（既定 1）の文字へ動く exclusive な移動（Issue #660・ADR 0034）。
+    // 欲しい列は着地の桁ではなく N を置く（Vim の nv_pipe の curswant = N − 1）。
+    column
 };
 } // namespace nenenib::core

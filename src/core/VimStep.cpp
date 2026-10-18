@@ -578,6 +578,22 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return VimMotionLanding{rested_in(view.text, landing.offset, mode), landing.failure};
 }
 
+// j k の着地。今の欲しい列でその行へ（$ の「行末」はその行の最後の文字）。
+[[nodiscard]] Offset wanted_caret_on(const TextBuffer &text, const VimState &state, Offset caret,
+                                     LineNumber line)
+{
+    return caret_on_line(text, wanted_column_of(text, state, caret), line, state.mode);
+}
+
+// `{N}|` の着地。行頭からの仮想桁 N（Tab の中なら Tab・全角の 2 桁目ならその字）で、行より右なら
+// NORMAL は最後の文字・VISUAL は行の内容の終わり（$ と同じ側）。空行は行頭（Issue #660・Vim の
+// coladvance）。オペレータの範囲は NORMAL の寄せの着地で作る（d40| は最後の文字を残す）。
+[[nodiscard]] Offset column_landing(const TextBuffer &text, LineNumber line, std::size_t count,
+                                    VimMode mode)
+{
+    return rested_in(text, offset_at_virtual_column(text, line, VirtualColumn{count}), mode);
+}
+
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion)
 {
     const std::size_t count = resolved_motion_count(state, view.text, motion);
@@ -592,11 +608,9 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::right:
         return rested_in(text, forward_characters(text, caret, count), state.mode);
     case VimMotion::up:
-        return caret_on_line(text, wanted_column_of(text, state, caret), line_above(line, count),
-                             state.mode);
+        return wanted_caret_on(text, state, caret, line_above(line, count));
     case VimMotion::down:
-        return caret_on_line(text, wanted_column_of(text, state, caret),
-                             line_below(text, line, count), state.mode);
+        return wanted_caret_on(text, state, caret, line_below(text, line, count));
     case VimMotion::line_start:
         return text.line_start(line);
     case VimMotion::first_non_blank:
@@ -637,6 +651,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::display_down:
     case VimMotion::display_up:
         return row_landing_in(view, state.mode).offset;
+    case VimMotion::column:
+        return column_landing(text, line, count, state.mode);
     }
     std::unreachable();
 }
@@ -684,13 +700,15 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::previous_line:
     case VimMotion::wrap_right:
     case VimMotion::wrap_left:
+    case VimMotion::column:
         return VimMotionLanding{moved_by(view, state, motion)};
     }
     std::unreachable();
 }
 
 // 移動のあとの欲しい列。j / k は前の値を引き継ぎ、$ は「行末」を貼り、ほかは動いた先の桁。
-// gj gk は着地と一緒に解いた値（wanted_for）を引き継ぐ（ADR 0144 の決定 3）。
+// gj gk と `{N}|` は wanted_for が motion と回数から決めた値を引き継ぐ（ADR 0144 の決定 3・
+// Issue #660）。
 [[nodiscard]] VimWantedColumn wanted_after(const TextBuffer &text, const VimWantedColumn &wanted,
                                            Offset moved, VimMotion motion)
 {
@@ -700,6 +718,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::down:
     case VimMotion::display_down:
     case VimMotion::display_up:
+    case VimMotion::column:
         return wanted;
     case VimMotion::line_end:
         return VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
@@ -731,7 +750,9 @@ character_search_position(const VimEditorView &view, const VimState &state,
     std::unreachable();
 }
 
-// 移動に渡す欲しい列。gj gk は画面行の問いで着地と一緒に解いた後の値で、ほかは今の値。
+// 移動に渡す欲しい列。gj gk は画面行の問いで着地と一緒に解いた後の値、`{N}|` は着地の桁ではなく
+// 回数の桁 N（Vim の nv_pipe の curswant = N − 1・空行でも行より右でも同じ・Issue #660）で、
+// ほかは今の値。
 [[nodiscard]] VimWantedColumn wanted_for(const VimEditorView &view, const VimState &state,
                                          VimMotion motion)
 {
@@ -739,6 +760,11 @@ character_search_position(const VimEditorView &view, const VimState &state,
     if (by_rows && view.row_landing.has_value())
     {
         return view.row_landing.value().wanted;
+    }
+    if (motion == VimMotion::column)
+    {
+        return VimWantedColumn{VimColumnWish::at_column,
+                               VirtualColumn{resolved_motion_count(state, view.text, motion)}};
     }
     return wanted_column_of(view.text, state, view.selection.caret);
 }
@@ -790,6 +816,7 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::screen_bottom:
     case VimMotion::document_first:
     case VimMotion::document_last:
+    case VimMotion::column:
         return false;
     }
     std::unreachable();
@@ -967,6 +994,15 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return characters_between(view.selection.caret, landing.offset);
 }
 
+// gg G の範囲（行単位）。キャレットの行と回数の行の間（どちらが上でも）。
+[[nodiscard]] VimMotionRange document_range(const TextBuffer &text, LineNumber line,
+                                            std::size_t count)
+{
+    const LineNumber target = document_line(text, count);
+    return lines_between(text, LineNumber{std::min(line.value, target.value)},
+                         LineNumber{std::max(line.value, target.value)});
+}
+
 [[nodiscard]] std::optional<VimMotionRange>
 motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, VimOperator operation)
 {
@@ -1013,11 +1049,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
         return screen_range(view, VimScreenPosition::bottom, count, line);
     case VimMotion::document_first:
     case VimMotion::document_last:
-    {
-        const LineNumber target = document_line(text, count);
-        return lines_between(text, LineNumber{std::min(line.value, target.value)},
-                             LineNumber{std::max(line.value, target.value)});
-    }
+        return document_range(text, line, count);
     case VimMotion::wrap_right:
         return characters_between(caret,
                                   wrapped_forward(text, caret, count, VimLineEndStop::rests));
@@ -1027,6 +1059,8 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::display_down:
     case VimMotion::display_up:
         return display_range(view);
+    case VimMotion::column:
+        return characters_between(caret, column_landing(text, line, count, VimMode::normal));
     }
     std::unreachable();
 }

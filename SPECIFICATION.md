@@ -117,7 +117,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 
 - **T1（最優先）**: ヴァニラの Vim 既定動作。`.vimrc` の取り込みは初版では不要。「VSCodeVim で困らない水準」を T2 の到達目標の物差しにする（VSCodeVim の対応表を比較材料に使う）。設定ファイル（`map` や `set` 程度）は後から足せる形にだけしておく
 - **T2**: 一般的な Vim ユーザーがよく使うところ
-  - 移動 `hjkl w b e 0 ^ $ gg G f t ; , % { } H M L Ctrl-d/u`・縦の位置合わせ `zt zz zb z<CR> z. z- z+ z^`（ADR 0146）・ジャンプ `Ctrl-o/i`・マーク
+  - 移動 `hjkl w b e 0 ^ $ {N}| gg G f t ; , % { } H M L Ctrl-d/u`・縦の位置合わせ `zt zz zb z<CR> z. z- z+ z^`（ADR 0146）・ジャンプ `Ctrl-o/i`・マーク
   - オペレータ `d c y > < gu gU J r x p P` ＋回数＋移動
   - テキストオブジェクト `iw aw i" a" i( a( i{ it`
   - ビジュアル `v V Ctrl-v`（矩形の挿入・追記含む）
