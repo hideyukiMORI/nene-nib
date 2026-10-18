@@ -429,4 +429,18 @@ std::expected<VisualPosition, VimLayoutNeed> vim_row_aligned_top(const VimEditor
     }
     return walk.value().first;
 }
+
+std::expected<LineNumber, VimLayoutNeed> vim_row_below_window(const VimEditorView &view)
+{
+    const auto viewport = vim_viewport_of(view);
+    const LineNumber first{
+        std::clamp<std::size_t>(viewport.first_visible.value, 1, view.text.line_count())};
+    const auto height = std::max<std::size_t>(viewport.visible_lines, 1);
+    const auto below = forward(view, VisualPosition{first, viewport.first_row}, height);
+    if (!below)
+    {
+        return std::unexpected(below.error());
+    }
+    return below.value().first.line;
+}
 } // namespace nenenib::core

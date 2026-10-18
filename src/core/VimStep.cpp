@@ -12,6 +12,7 @@
 #include "TabJumpDirection.hpp"
 #include "Utf8.hpp"
 #include "VimActionGroup.hpp"
+#include "VimAlignedLine.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockExtent.hpp"
 #include "VimBlockLine.hpp"
@@ -3522,8 +3523,52 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return rested_in(text, vim_line_and_column(text, line, column), state.mode);
 }
 
-// 縦の位置合わせ zt zz zb z<CR> z. z-（ADR 0146 の決定 1〜6）。回数で行を選び、z<CR> z. z- は
-// 行の最初の非空白へ動いて（欲しい列もそこ）から、engine が先頭行を決めて VimNavigate で返す。
+// z^ の回数つきの行（ADR 0146 の決定 9・Vim の nv_zet）。回数の行を下端に置いたときの先頭の行。
+[[nodiscard]] std::expected<LineNumber, VimLayoutNeed> counted_above_line(const VimState &state,
+                                                                          const VimEditorView &view)
+{
+    const auto top = vim_aligned_top(view, counted_line_caret(state, view), VimScreenPlace::bottom);
+    if (!top)
+    {
+        return std::unexpected(top.error());
+    }
+    return top.value().line;
+}
+
+// 合わせる行のキャレット（ADR 0146 の決定 3・9）。caret と回数つきの z+ は回数の行か今の行
+// （counted_line_caret）。z+ z^ の回数なしは窓の 1 つ下・上の行、回数つきの z^ は回数の行を下端に
+// 置いたときの先頭の行で、どちらも行頭（呼び手が最初の非空白へ動かす）。
+[[nodiscard]] std::expected<Offset, VimLayoutNeed>
+aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedLine choice)
+{
+    const bool counted = state.count.has_value();
+    auto line = std::expected<LineNumber, VimLayoutNeed>{LineNumber{1}};
+    switch (choice)
+    {
+    case VimAlignedLine::caret:
+        return counted_line_caret(state, view);
+    case VimAlignedLine::below_window:
+        if (counted)
+        {
+            return counted_line_caret(state, view);
+        }
+        line = vim_line_below_window(view);
+        break;
+    case VimAlignedLine::above_window:
+        line = counted ? counted_above_line(state, view)
+                       : std::expected<LineNumber, VimLayoutNeed>{vim_line_above_window(view)};
+        break;
+    }
+    if (!line)
+    {
+        return std::unexpected(line.error());
+    }
+    return view.text.line_start(line.value());
+}
+
+// 縦の位置合わせ zt zz zb z<CR> z. z- z+ z^（ADR 0146 の決定 1〜6・9）。回数か窓の外の行で行を
+// 選び、z<CR> z. z- z+ z^ は行の最初の非空白へ動いて（欲しい列もそこ）から、engine が先頭行を
+// 決めて VimNavigate で返す。
 // zt zz zb は欲しい列を保つ。横位置は保つ（first_column は無し）。行が画面より高いときの先頭は
 // 決定 5 の規則。NORMAL と VISUAL は同じ 1 本を通り、VISUAL は錨を保つ。
 [[nodiscard]] VimStep aligned_screen(const VimState &state, const VimEditorView &view,
@@ -3535,8 +3580,13 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
     const bool first_non_blank = alignment.value().first_non_blank;
-    const Offset chosen = counted_line_caret(state, view);
-    const Offset caret = first_non_blank ? vim_first_non_blank(view.text, chosen) : chosen;
+    const auto chosen = aligned_line_caret(state, view, alignment.value().line);
+    if (!chosen)
+    {
+        return requested_layout(state, chosen.error());
+    }
+    const Offset caret =
+        first_non_blank ? vim_first_non_blank(view.text, chosen.value()) : chosen.value();
     const auto top = vim_aligned_top(view, caret, alignment.value().place);
     if (!top)
     {

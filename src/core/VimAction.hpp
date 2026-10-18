@@ -107,11 +107,15 @@ enum class VimAction : std::uint8_t
     align_bottom,
     align_top_first_non_blank,
     align_center_first_non_blank,
-    align_bottom_first_non_blank
+    align_bottom_first_non_blank,
+    // `z+`（窓の 1 つ下の行を上へ）と `z^`（窓の 1 つ上の行を下へ）。どちらも行の最初の非空白へ
+    // 動く。行の選び方は表の VimAlignedLine（ADR 0146 の決定 9）。
+    align_below_window_top_first_non_blank,
+    align_above_window_bottom_first_non_blank
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
 constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::align_bottom_first_non_blank) + 1;
+    static_cast<std::size_t>(VimAction::align_above_window_bottom_first_non_blank) + 1;
 } // namespace nenenib::core

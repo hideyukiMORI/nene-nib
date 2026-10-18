@@ -179,7 +179,9 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::align_bottom, VimActionGroup::screen_alignment},
      {VimAction::align_top_first_non_blank, VimActionGroup::screen_alignment},
      {VimAction::align_center_first_non_blank, VimActionGroup::screen_alignment},
-     {VimAction::align_bottom_first_non_blank, VimActionGroup::screen_alignment}}};
+     {VimAction::align_bottom_first_non_blank, VimActionGroup::screen_alignment},
+     {VimAction::align_below_window_top_first_non_blank, VimActionGroup::screen_alignment},
+     {VimAction::align_above_window_bottom_first_non_blank, VimActionGroup::screen_alignment}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 26> motion_bindings{
@@ -220,9 +222,9 @@ constexpr std::array<VimBinding, 7> g_bindings{{{U'g', VimAction::move_document_
                                                 {U'j', VimAction::move_display_down},
                                                 {U'k', VimAction::move_display_up}}};
 
-// z の後ろの鍵 → 動作（ADR 0145 の決定 5・ADR 0146 の決定 2）。横送りの 6 鍵と、縦の位置合わせの
-// 6 鍵（zt zz zb z<CR> z. z-）。ここに無い鍵（z+ z^ を含む）は Vim と同じく失敗して後ろを打ち切る。
-constexpr std::array<VimBinding, 12> z_bindings{
+// z の後ろの鍵 → 動作（ADR 0145 の決定 5・ADR 0146 の決定 2・9）。横送りの 6 鍵と、縦の位置合わせの
+// 8 鍵（zt zz zb z<CR> z. z- z+ z^）。ここに無い鍵は Vim と同じく失敗して後ろを打ち切る。
+constexpr std::array<VimBinding, 14> z_bindings{
     {{U'l', VimAction::scroll_column_right},
      {U'h', VimAction::scroll_column_left},
      {U'L', VimAction::scroll_half_width_right},
@@ -234,16 +236,25 @@ constexpr std::array<VimBinding, 12> z_bindings{
      {U'b', VimAction::align_bottom},
      {carriage_return_character, VimAction::align_top_first_non_blank},
      {U'.', VimAction::align_center_first_non_blank},
-     {U'-', VimAction::align_bottom_first_non_blank}}};
+     {U'-', VimAction::align_bottom_first_non_blank},
+     {U'+', VimAction::align_below_window_top_first_non_blank},
+     {U'^', VimAction::align_above_window_bottom_first_non_blank}}};
 
-// 縦の位置合わせの動作 → 置く所と最初の非空白へ動かすか（ADR 0146 の決定 2・CPP-012）。
-constexpr std::array<VimScreenAlignmentBinding, 6> screen_alignment_bindings{
-    {{VimAction::align_top, {VimScreenPlace::top, false}},
-     {VimAction::align_center, {VimScreenPlace::center, false}},
-     {VimAction::align_bottom, {VimScreenPlace::bottom, false}},
-     {VimAction::align_top_first_non_blank, {VimScreenPlace::top, true}},
-     {VimAction::align_center_first_non_blank, {VimScreenPlace::center, true}},
-     {VimAction::align_bottom_first_non_blank, {VimScreenPlace::bottom, true}}}};
+// 縦の位置合わせの動作 → 置く所・最初の非空白へ動かすか・行の選び方（ADR 0146 の決定 2・9・
+// CPP-012）。
+constexpr std::array<VimScreenAlignmentBinding, 8> screen_alignment_bindings{
+    {{VimAction::align_top, {VimScreenPlace::top, false, VimAlignedLine::caret}},
+     {VimAction::align_center, {VimScreenPlace::center, false, VimAlignedLine::caret}},
+     {VimAction::align_bottom, {VimScreenPlace::bottom, false, VimAlignedLine::caret}},
+     {VimAction::align_top_first_non_blank, {VimScreenPlace::top, true, VimAlignedLine::caret}},
+     {VimAction::align_center_first_non_blank,
+      {VimScreenPlace::center, true, VimAlignedLine::caret}},
+     {VimAction::align_bottom_first_non_blank,
+      {VimScreenPlace::bottom, true, VimAlignedLine::caret}},
+     {VimAction::align_below_window_top_first_non_blank,
+      {VimScreenPlace::top, true, VimAlignedLine::below_window}},
+     {VimAction::align_above_window_bottom_first_non_blank,
+      {VimScreenPlace::bottom, true, VimAlignedLine::above_window}}}};
 
 // 空白だけで切る（Vim の WORD の）移動。ほかの語の移動は文字の種類の表で切る（Issue #222）。
 constexpr std::array<VimMotion, 5> big_word_motions{
