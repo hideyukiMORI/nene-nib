@@ -157,4 +157,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0143](0143-merge-ci-dispatches-main-definition.md) | マージ直前の CI は main の workflow 定義で起動し、PR の head は入力で checkout する | 提案・#599 |
 | [0144](0144-grid-page-moves-and-gj-gk-by-screen-rows.md) | 格子の画面移動と `gj` `gk` は画面行の単位で、engine が行の画面行を問いで引いて決める | 提案・#595 #596・D54 |
 | [0145](0145-horizontal-scroll-keys-decided-by-engine.md) | 窓と wrap off の横送り `zl` `zh` `zL` `zH` `zs` `ze` は engine が決め、application は幅と横位置を問いで答える | 提案・#634・D56 |
-| [0146](0146-vertical-alignment-keys-decided-by-engine.md) | 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-` は engine が先頭行を決め、格子では画面行の単位で合わせる | 提案・#639・D54 |
+| [0146](0146-vertical-alignment-keys-decided-by-engine.md) | 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-` は engine が先頭行を決め、格子では画面行の単位で合わせる | 受理・#639・D54・独立レビュー R 1 → 差し戻し 1・hide の試用 OK・PR #646（2026-10-18） |
