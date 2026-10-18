@@ -22,7 +22,7 @@ through eng/window_driver.py, and reads the file back.
                             Japanese lines (#291's fixture, checked by SHA-256) is open; only its
                             single keystroke becomes a value (#298 / ADR 0075 decision 7)
 
-Two optional benches run only when --bench names them (OPTIONAL_BENCHES, ADR 0138); the eight
+Two optional giant benches run only when --bench names them (OPTIONAL_BENCHES, ADR 0138); the eight
 above stay the default set and the only ones compare() judges:
 
   open-giant-line-16mib     process creation -> the first frame that draws the body (body_presented,
@@ -35,6 +35,22 @@ above stay the default set and the only ones compare() judges:
                             keystrokes: the warmup character and one more, each sent only after the
                             window thread went quiet, so the single is measured after the warmup's
                             frame; a single that is not answered within LARGE_SECONDS is missing
+
+Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
+never compared with the reference: split-single-key-100 (S, one pane) and
+split-pane-key-100-{same,other}-{vertical,horizontal} (P, two panes made with Ctrl+backslash or
+Ctrl+Shift+backslash (VK_OEM_5) before the warmup; "other" puts an empty tab in the other pane with F6, Ctrl+T, F6).
+A trial sends the warmup and then 100 characters, each after the window thread went quiet, and
+keeps every keystroke's input_received -> next frame_presented; a trial short of 100 such values is
+missing, and so is one whose split keys were not delivered or whose input count is not the split
+keys' WM_KEYDOWN / WM_CHAR plus 101. --repetitions is the number of trials (1 by default for these), each summarised on its own
+(median of the 50th/51st, nearest-rank p95, maximum, count over 16.7 ms). --split-document picks
+the existing fixture (empty, large-16mib, long-line). --split-verdict S.json P.json reads two
+records and prints one JSON verdict: unmeasurable when every trial of either record is missing
+(with the reasons), incomparable unless body, exe SHA-256 and window size match, unmeasurable with
+a missing trial, judged on the unrounded median and p95: pass when P - S <= max(1.0, 0.25 * S) and p95(P) <= 16.7,
+fail otherwise; it exits 0 for pass only. Whether the panes really split is not observable from
+the trial: the record keeps panesRequested, panesDelivered and the keys sent.
 
 Both giant benches answer the grid question (ADR 0140 decision 2) that the editor puts up before it
 lays out the body: --grid-answer yes (the default, ADR 0140 decision 8) opens the document as the grid,
@@ -98,9 +114,9 @@ import time
 import winreg
 
 from window_driver import (answer_question, api, become_dpi_aware, capture_png, close, covered_by,
-                           dismiss_dialog, IDNO, kernel, post_together, press_chord, raise_window, start, stop,
-                           take_foreground, user, VK_CONTROL, WindowCovered, WindowUnavailable,
-                           write_text)
+                           dismiss_dialog, IDNO, kernel, post_together, press_chord, press_combination,
+                           raise_window, rectangle, start, stop, take_foreground, user, VK_CONTROL,
+                           VK_SHIFT, VK_T, WindowCovered, WindowUnavailable, write_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "eng/perf-reference.json"
@@ -152,7 +168,29 @@ BENCHES = ("startup-first-frame", "startup-window-shown", "key-to-frame-single",
 # --bench で名指ししたときだけ測る 2 本（ADR 0138 決定 4）。compare() は BENCHES だけを見る。
 GIANT_OPEN_BENCH = "open-giant-line-16mib"
 GIANT_SINGLE_BENCH = "key-to-frame-single-giant-line-16mib"
-OPTIONAL_BENCHES = (GIANT_OPEN_BENCH, GIANT_SINGLE_BENCH)
+# split の S / P（ADR 0120 決定 2〜7・ADR 0148 決定 14）。1 打鍵ずつ次の提示を待つ 100 打鍵で、
+# 基準値とは比べず --split-verdict が S と P の記録の対を判定する。compare() は見ない。
+SPLIT_SINGLE_BENCH = "split-single-key-100"
+SPLIT_PANE_BENCHES = {"split-pane-key-100-same-vertical": ("vertical", False),
+                      "split-pane-key-100-same-horizontal": ("horizontal", False),
+                      "split-pane-key-100-other-vertical": ("vertical", True),
+                      "split-pane-key-100-other-horizontal": ("horizontal", True)}
+SPLIT_BENCHES = (SPLIT_SINGLE_BENCH, *SPLIT_PANE_BENCHES)
+GIANT_BENCHES = (GIANT_OPEN_BENCH, GIANT_SINGLE_BENCH)
+OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES)
+PACED_KEYS = 100
+PACED_CHARACTER = "a"
+PACED_BUDGET_MS = 16.7
+SPLIT_MEDIAN_FLOOR_MS = 1.0
+SPLIT_MEDIAN_RATIO = 0.25
+# 本文の選び方は既存の fixture の 3 つだけ（新しい fixture は作らない）。
+SPLIT_DOCUMENTS = ("empty", "large-16mib", "long-line")
+VK_F6 = 0x75
+# JIS の ¥ / US の \ の鍵。Ctrl+\ が左右、Ctrl+Shift+\ が上下（ADR 0148 決定 14）。
+VK_OEM_5 = 0xDC
+# ToUnicodeEx の flag: 鍵盤の状態（dead key）を変えずに問う（Windows 10 1607 以降）。
+TO_UNICODE_KEEP_STATE = 0x4
+SPLIT_KEYS_NOT_DELIVERED = "split keys not delivered"
 PALETTE_BENCH = "key-to-frame-palette-5000"
 # 長い行の 1 打鍵は key-to-frame-single と同じ試行（keys_trial）で、違うのは開く文書だけ（#298）。
 LONG_LINE_BENCH = "key-to-frame-single-long-line"
@@ -294,7 +332,7 @@ def giant_line_document(folder: Path) -> Path:
     digest = file_sha256(path)
     if digest != GIANT_LINE_SHA256:
         raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {GIANT_LINE_SHA256};"
-                         f" {', '.join(OPTIONAL_BENCHES)} are not measured")
+                         f" {', '.join(GIANT_BENCHES)} are not measured")
     return path
 
 
@@ -720,6 +758,300 @@ def bench_giant_single(executable: Path, environment: dict, folder: Path,
     return {GIANT_SINGLE_BENCH: single}, {}
 
 
+def split_keys(layout: str, other: bool) -> list[tuple[str, list[int], int]]:
+    """The keystrokes that put the window into two panes before the warmup (ADR 0148 decisions 4/6/14).
+
+    vertical is Ctrl+\\ and horizontal is Ctrl+Shift+\\ (VK_OEM_5, the JIS yen key). A pane that
+    shows another document is made after the split, when both panes still show the same one:
+    F6 to the other pane, Ctrl+T for an empty tab there, F6 back to the original document.
+    Each step is (name, modifiers, key) and goes through press_combination, which needs the
+    foreground. Whether the editor really split cannot be seen from inside the trial (there is no
+    port that reads the frame's shape), so the record keeps panesRequested and these names and the
+    design seat confirms the panes with eng/verify-window.py separately.
+    """
+    steps = [("Ctrl+\\", [VK_CONTROL], VK_OEM_5) if layout == "vertical"
+             else ("Ctrl+Shift+\\", [VK_CONTROL, VK_SHIFT], VK_OEM_5)]
+    if other:
+        steps += [("F6", [], VK_F6), ("Ctrl+T", [VK_CONTROL], VK_T), ("F6", [], VK_F6)]
+    return steps
+
+
+api(user, "GetKeyboardLayout", c.c_ssize_t, w.DWORD)
+api(user, "MapVirtualKeyExW", w.UINT, w.UINT, w.UINT, c.c_ssize_t)
+api(user, "ToUnicodeEx", c.c_int, w.UINT, w.UINT, c.POINTER(c.c_ubyte), w.LPWSTR, c.c_int, w.UINT,
+    c.c_ssize_t)
+
+
+def characters_made(window, modifiers: list[int], key: int) -> int:
+    """How many WM_CHAR TranslateMessage makes of the key with the modifiers held, in the window's layout.
+
+    Ctrl+backslash and Ctrl+T make a control character in the common layouts and F6 none, but the
+    layout decides, so it is asked (without changing the keyboard state) rather than tabled.
+    """
+    layout = user.GetKeyboardLayout(user.GetWindowThreadProcessId(window, None))
+    state = (c.c_ubyte * 256)()
+    for modifier in modifiers:
+        state[modifier] = 0x80
+    buffer = c.create_unicode_buffer(8)
+    made = user.ToUnicodeEx(key, user.MapVirtualKeyExW(key, 0, layout), state, buffer, len(buffer),
+                            TO_UNICODE_KEEP_STATE, layout)
+    return max(made, 0)
+
+
+def step_inputs(modifiers: list[int], characters: int) -> int:
+    """input_received marks of one split step: a WM_KEYDOWN per modifier and the key, then WM_CHAR."""
+    return len(modifiers) + 1 + characters
+
+
+def paced_outcome(marks: list, expected: int) -> list[float]:
+    """The PACED_KEYS values of a finished trial, or TrialNotObserved with the reason it is missing.
+
+    expected is the split steps' inputs plus the warmup and PACED_KEYS: a lost or extra input would
+    shift the last 101 onto a split keystroke, so any other count is missing (ADR 0120 decision 7).
+    """
+    observed = len(input_indexes(marks))
+    if observed != expected:
+        raise TrialNotObserved(f"input count mismatch: expected {expected}, observed {observed}")
+    values = paced_values(marks)
+    if values is None:
+        raise TrialNotObserved(f"not every one of the {PACED_KEYS} keystrokes was answered in order")
+    return values
+
+
+def paced_values(marks: list, count: int = PACED_KEYS) -> list[float] | None:
+    """input_received -> the next frame_presented of the last count keystrokes, or None (missing).
+
+    The trial posts the warmup and then count characters, each after the window thread went quiet,
+    and nothing after them, so they are the last count + 1 inputs: the split keystrokes before them
+    leave input marks of their own (WM_KEYDOWN / WM_CHAR) whose number is not fixed. A keystroke is
+    a value only when the frame of the keystroke before it was presented before it was read and a
+    frame answered it; any keystroke that breaks either makes the whole trial missing, never a
+    partial or substituted sample (ADR 0120 decision 7).
+    """
+    inputs = input_indexes(marks)
+    if len(inputs) < count + 1:
+        return None
+    measured = inputs[-(count + 1):]
+    values = []
+    for previous, index in zip(measured, measured[1:]):
+        read = int(marks[index]["qpcMicroseconds"])
+        before = frame_after(marks, previous)
+        answered = frame_after(marks, index)
+        if before is None or before > read or answered is None:
+            return None
+        values.append((answered - read) / MICROSECONDS_PER_MILLISECOND)
+    return values
+
+
+def paced_keys_trial(executable: Path, environment: dict, folder: Path, document: Path | None,
+                     steps: list, info: dict) -> list[float]:
+    """One trial: the split steps, the warmup, then PACED_KEYS characters, each after a quiet window.
+
+    "The next presentation" is observed the way quiet_single_trial observes it (await_quiet): the
+    measurement file is written only at exit, and no shorter port exists, so each keystroke costs
+    at least QUIET_SECONDS and a trial takes about a minute; its seconds are recorded. The values
+    come from paced_outcome afterwards; a missing trial leaves as TrialNotObserved (ADR 0120
+    decision 7), and a split key press_combination could not send is one: info is filled as the
+    trial goes, so panesDelivered survives the exception.
+    """
+    report = report_path(folder, "paced")
+    arguments = ["--measure", str(report)] + ([] if document is None else [str(document)])
+    began = time.monotonic()
+    process, window, _ = start(executable, environment, arguments, seconds=LARGE_SECONDS)
+    info["panesDelivered"] = bool(steps)
+    expected = PACED_KEYS + 1
+    try:
+        raise_window(window)
+        if not take_foreground(window):
+            print("Speed: the bench window did not take the foreground")
+        covering = covered_by(window)
+        if covering is not None:
+            print(f"Speed: another window covers the bench window ({covering})")
+        time.sleep(SETTLE_SECONDS)
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after opening the document")
+        for name, modifiers, key in steps:
+            expected += step_inputs(modifiers, characters_made(window, modifiers, key))
+            if not press_combination(window, modifiers, key):
+                info["panesDelivered"] = False
+                print(f"Speed: {name} could not be sent (no foreground)")
+                raise TrialNotObserved(SPLIT_KEYS_NOT_DELIVERED)
+            if not await_quiet(window):
+                print(f"Speed: the window thread did not go quiet after {name}")
+        _, _, width, height = rectangle(window, user.GetClientRect)
+        info["window"] = [width, height]
+        for _ in range(PACED_KEYS + 1):
+            write_text(window, PACED_CHARACTER)
+            if not await_quiet(window):
+                print("Speed: the window thread did not go quiet after a paced keystroke")
+        close(window)
+        if not dismiss_dialog(process, IDNO, seconds=LARGE_SECONDS):
+            raise TrialNotObserved("the unsaved confirmation never came up")
+        process.wait(timeout=LARGE_SECONDS)
+    finally:
+        stop(process)
+    info["seconds"] = round(time.monotonic() - began, 1)
+    marks = observed_marks(report)
+    info["inputs"], info["inputsExpected"] = len(input_indexes(marks)), expected
+    return paced_outcome(marks, expected)
+
+
+def summarise_paced(values: list[float] | None) -> dict | None:
+    """ADR 0120 decision 3 over one trial of exactly PACED_KEYS values; anything else is missing.
+
+    The median is the mean of the 50th and 51st values in ascending order, the p95 is the 95th
+    (nearest rank); the maximum and the count over PACED_BUDGET_MS are kept beside them. The
+    verdict reads medianRawMs and p95RawMs, which are not rounded; medianMs and p95Ms are the same
+    values rounded to 4 places, as summarise rounds, for the reader only.
+    """
+    if values is None or len(values) != PACED_KEYS:
+        return None
+    ordered = sorted(values)
+    median, p95 = (ordered[49] + ordered[50]) / 2.0, ordered[94]
+    return {"count": len(ordered),
+            "medianMs": round(median, 4), "p95Ms": round(p95, 4),
+            "medianRawMs": median, "p95RawMs": p95,
+            "maximumMs": round(ordered[-1], 4),
+            "minimumMs": round(ordered[0], 4),
+            "over_16_7": sum(1 for value in ordered if value > PACED_BUDGET_MS),
+            "samples": [round(value, 4) for value in values]}
+
+
+def split_document(folder: Path, choice: str) -> Path | None:
+    """One of the existing fixtures: no document, #179's 16 MiB file, or #291's long lines."""
+    if choice == "large-16mib":
+        return large_document(folder)
+    if choice == "long-line":
+        return long_line_document(folder)
+    return None
+
+
+def split_document_identity(choice: str, document: Path | None) -> dict:
+    """What --split-verdict compares as "the same body": the choice, the name, size and SHA-256."""
+    if document is None:
+        return {"choice": choice, "path": None, "bytes": 0, "sha256": None}
+    return {"choice": choice, "path": document.name, "bytes": document.stat().st_size,
+            "sha256": file_sha256(document)}
+
+
+def measure_split(build: Path, repetitions: int, bench: str, choice: str) -> dict:
+    """repetitions trials of one split bench; each trial is kept and judged on its own.
+
+    A trial that is not observed or not complete is missing and is not repeated (ADR 0120
+    decision 7: no repeating until success).
+    """
+    become_dpi_aware()
+    executable, environment, folder = prepare(build)
+    document = split_document(folder, choice)
+    layout, other = SPLIT_PANE_BENCHES.get(bench, ("none", False))
+    steps = [] if bench == SPLIT_SINGLE_BENCH else split_keys(layout, other)
+    trials, windows, seconds, reasons, delivered = [], [], [], [], []
+    for _ in range(repetitions):
+        info: dict = {}
+        try:
+            values = paced_keys_trial(executable, environment, folder, document, steps, info)
+        except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
+            print(f"Speed: {unobserved}; this trial of {bench} is missing")
+            trials.append(None)
+            reasons.append(str(unobserved))
+            delivered.append(info.get("panesDelivered", False))
+            continue
+        trials.append(summarise_paced(values))
+        windows.append(info.get("window"))
+        seconds.append(info.get("seconds"))
+        delivered.append(info["panesDelivered"])
+    same_window = bool(windows) and all(size == windows[0] for size in windows)
+    return {"recordedAt": stamp(), "repetitions": repetitions, "machine": machine(),
+            "bench": bench, "executableSha256": file_sha256(build),
+            "document": split_document_identity(choice, document),
+            "window": windows[0] if same_window else None,
+            "layout": layout, "otherDocument": other,
+            "panesRequested": bool(steps), "panesDelivered": bool(delivered) and all(delivered),
+            "splitKeys": [name for name, _, _ in steps],
+            "trialSeconds": seconds, "trials": trials,
+            "missing": sum(1 for trial in trials if trial is None), "missingReasons": reasons,
+            "values": {}, "breakdown": {}}
+
+
+def describe_split(record: dict) -> str:
+    lines = [f"Speed: {record['bench']} x {record['repetitions']} on"
+             f" {record['machine']['fingerprint']} (document {record['document']['choice']},"
+             f" window {record['window']}, keys {record['splitKeys']})"]
+    for index, trial in enumerate(record["trials"]):
+        if trial is None:
+            lines.append(f"  trial {index + 1}: missing")
+            continue
+        lines.append(f"  trial {index + 1}: median {trial['medianMs']:.3f} ms,"
+                     f" p95 {trial['p95Ms']:.3f} ms, max {trial['maximumMs']:.3f} ms,"
+                     f" over {PACED_BUDGET_MS} ms: {trial['over_16_7']}")
+    return "\n".join(lines)
+
+
+def split_incomparable(single: dict, pane: dict) -> str | None:
+    """Why the two records cannot be judged as one S/P pair, or None when they can."""
+    if single.get("bench") != SPLIT_SINGLE_BENCH:
+        return f"the first record is not {SPLIT_SINGLE_BENCH}"
+    if pane.get("bench") not in SPLIT_PANE_BENCHES:
+        return "the second record is not a split-pane bench"
+    for key in ("document", "executableSha256", "window"):
+        if single.get(key) is None or single.get(key) != pane.get(key):
+            return f"{key} differs or is unknown"
+    if len(single.get("trials", [])) != len(pane.get("trials", [])):
+        return "the two records hold different numbers of trials"
+    return None
+
+
+def split_trial_verdict(single: dict | None, pane: dict | None) -> dict:
+    """ADR 0120 decisions 2 and 3 over one S trial and the P trial in the same place."""
+    if single is None or pane is None:
+        return {"verdict": "unmeasurable"}
+    # 丸める前の値で比べ、丸めるのは書くときだけ（境界の 0.0001 ms の内で向きを変えない）。
+    difference = pane["medianRawMs"] - single["medianRawMs"]
+    allowed = max(SPLIT_MEDIAN_FLOOR_MS, SPLIT_MEDIAN_RATIO * single["medianRawMs"])
+    passed = difference <= allowed and pane["p95RawMs"] <= PACED_BUDGET_MS
+    return {"verdict": "pass" if passed else "fail",
+            "singleMedianMs": single["medianMs"], "paneMedianMs": pane["medianMs"],
+            "singleP95Ms": single["p95Ms"], "paneP95Ms": pane["p95Ms"],
+            "differenceMs": round(difference, 4), "allowedMs": round(allowed, 4),
+            "singleOver16_7": single["over_16_7"], "paneOver16_7": pane["over_16_7"]}
+
+
+def split_verdict(single: dict, pane: dict) -> dict:
+    """The verdict of one S/P pair: incomparable, unmeasurable, fail or pass, trial by trial.
+
+    perf-reference.json is never read or written here (ADR 0148 decision 14 / ADR 0138's form).
+    """
+    result = {"single": single.get("bench"), "pane": pane.get("bench"),
+              "executableSha256": {"single": single.get("executableSha256"),
+                                   "pane": pane.get("executableSha256")},
+              "document": {"single": single.get("document"), "pane": pane.get("document")},
+              "layout": pane.get("layout"), "otherDocument": pane.get("otherDocument"),
+              "panesRequested": pane.get("panesRequested"),
+              "panesDelivered": pane.get("panesDelivered"), "splitKeys": pane.get("splitKeys")}
+    # 全試行が欠測の記録は窓の寸法も無いので、incomparable より先に欠測の理由を出す（Q-2）。
+    if any(record.get("trials") and all(trial is None for trial in record["trials"])
+           for record in (single, pane)):
+        reasons = [*single.get("missingReasons", []), *pane.get("missingReasons", [])]
+        return dict(result, verdict="unmeasurable", reasons=reasons)
+    reason = split_incomparable(single, pane)
+    if reason is not None:
+        return dict(result, verdict="incomparable", reason=reason)
+    trials = [split_trial_verdict(s, p) for s, p in zip(single["trials"], pane["trials"])]
+    verdicts = {trial["verdict"] for trial in trials}
+    verdict = ("unmeasurable" if not trials or "unmeasurable" in verdicts
+               else "fail" if "fail" in verdicts else "pass")
+    return dict(result, verdict=verdict, trials=trials)
+
+
+def split_verdict_command(single_path: Path, pane_path: Path) -> int:
+    """Print the verdict as one JSON object; 0 only for pass."""
+    single = json.loads(Path(single_path).read_text(encoding="utf-8"))
+    pane = json.loads(Path(pane_path).read_text(encoding="utf-8"))
+    result = split_verdict(single, pane)
+    print(json.dumps(result, indent=2))
+    return 0 if result["verdict"] == "pass" else 1
+
+
 def bench_giant_open(executable: Path, environment: dict, folder: Path,
                      document: Path, grid: bool) -> tuple[dict, dict]:
     """Process creation to the first frame that draws the body (body_presented, #546).
@@ -849,7 +1181,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     # 文書の SHA-256 が #291 と違えば、どの試行も始める前に落ちる（#298）。
     long_line = long_line_document(folder) if LONG_LINE_BENCH in names else None
     # 1 行 16 MiB の文書も SHA-256 が違えば測らない（ADR 0138 決定 1）。
-    giant = giant_line_document(folder) if any(name in names for name in OPTIONAL_BENCHES) else None
+    giant = giant_line_document(folder) if any(name in names for name in GIANT_BENCHES) else None
     samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in names}
@@ -1001,6 +1333,12 @@ def gather(arguments) -> dict:
     if arguments.values:
         record = json.loads(Path(arguments.values).read_text(encoding="utf-8"))
         return selected_record(record, arguments.bench)
+    if arguments.bench in SPLIT_BENCHES:
+        record = measure_split(arguments.executable, arguments.repetitions, arguments.bench,
+                               arguments.split_document)
+        print(describe_split(record))
+        print(f"Speed: recorded {write_record(record)}")
+        return record
     record = measure(arguments.executable, arguments.repetitions, arguments.bench,
                      arguments.grid_answer == "yes")
     print(describe(record))
@@ -1077,10 +1415,22 @@ def main() -> int:
     parser.add_argument("--executable", type=Path, default=ROOT / RELEASE_EXECUTABLE)
     parser.add_argument("--reference", type=Path, help="a reference file other than the canonical one")
     parser.add_argument("--values", type=Path, help="judge an earlier record instead of measuring")
-    parser.add_argument("--repetitions", type=int, default=REPETITIONS)
+    parser.add_argument("--repetitions", type=int,
+                        help=f"trials per bench ({REPETITIONS}; 1 for the split benches)")
     parser.add_argument("--grid-answer", choices=("yes", "no"), default="yes",
                         help="the answer the giant benches give to the grid question (ADR 0140)")
+    parser.add_argument("--split-document", choices=SPLIT_DOCUMENTS, default="empty",
+                        help="the existing fixture the split benches type into")
+    parser.add_argument("--split-verdict", nargs=2, type=Path, metavar=("S_RECORD", "P_RECORD"),
+                        help="judge an S and a P record of the split benches (ADR 0120)")
     arguments = parser.parse_args()
+    if arguments.split_verdict is not None:
+        return split_verdict_command(*arguments.split_verdict)
+    split = arguments.bench in SPLIT_BENCHES
+    if arguments.repetitions is None:
+        arguments.repetitions = 1 if split else REPETITIONS
+    if split and (arguments.adopt or arguments.check or arguments.values):
+        parser.error("the split benches are recorded with --record and judged with --split-verdict")
     if not (arguments.record or arguments.adopt or arguments.check):
         parser.error("one of --record, --adopt or --check is required")
     if arguments.check:
