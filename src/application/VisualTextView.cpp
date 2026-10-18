@@ -446,6 +446,25 @@ std::size_t VisualTextView::horizontal_columns() const
     {
         return 0;
     }
+    return window_columns();
+}
+
+std::size_t VisualTextView::row_columns() const
+{
+    if (gridded())
+    {
+        return grid_columns_;
+    }
+    if (state_.settings().wrapping != core::LineWrapping::wrap || geometry_.width <= 0 ||
+        giant_line_index(state_.text(), caret_.line) != nullptr)
+    {
+        return 0;
+    }
+    return window_columns();
+}
+
+std::size_t VisualTextView::window_columns() const
+{
     return std::max<std::size_t>(
         static_cast<std::size_t>(static_cast<float>(geometry_.width) / advance_), 1);
 }

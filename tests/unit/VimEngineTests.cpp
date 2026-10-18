@@ -30,6 +30,7 @@
 #include "Utf8.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
+#include "VimColumnWish.hpp"
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
@@ -64,6 +65,7 @@
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 #include "VimVisualRange.hpp"
+#include "VimWantedColumn.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
@@ -148,6 +150,7 @@ using nenenib::core::VimSelect;
 using nenenib::core::VimState;
 using nenenib::core::VimTabs;
 using nenenib::core::VimViewport;
+using nenenib::core::VimWantedColumn;
 using nenenib::core::VimWordClass;
 using nenenib::core::VimWordEndStop;
 using nenenib::core::VimWordStop;
@@ -1672,6 +1675,103 @@ void verify_vim_counted_alignment_round_trip()
     }
 }
 
+// gj gk の最初の欲しい列の切り詰め（ADR 0144 の決定 10）。格子の替え玉（grid_width 字ごと）で
+// caret に立ち、欲しい列 wanted から keys（最後の鍵は往復させて解く）を打つ。
+// 立つ所と打つ鍵の対。
+using ScreenMove = std::pair<Offset, std::string_view>;
+
+[[nodiscard]] nenenib::core::VimStep cut_screen_move(const TextBuffer &text, ScreenMove move,
+                                                     std::size_t row_columns,
+                                                     VimWantedColumn wanted)
+{
+    const auto [caret, keys] = move;
+    std::vector<VimLineRows> rows;
+    std::vector<nenenib::core::VimRowSpan> spans;
+    VimEditorView view{
+        text,
+        collapsed_at(caret),
+        VimViewport{LineNumber{1}, 5, 2},
+        VimKeySource::typed,
+        VimTabs{0, 1},
+        VimLayoutView{true, rows, nenenib::core::VimScrollUnit::row, spans, row_columns}};
+    VimState state =
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
+    state.wanted_column = wanted;
+    const auto parsed = vim_keys_of(keys);
+    for (std::size_t index = 0; index + 1 < parsed.size(); ++index)
+    {
+        state = vim_step(state, view, parsed.at(index)).next;
+    }
+    auto step = vim_step(state, view, parsed.back());
+    for (std::size_t round = 0; round < 64 && answer_aligned_request(step, view, rows, spans);
+         ++round)
+    {
+        step = vim_step(state, view, parsed.back());
+    }
+    return step;
+}
+
+[[nodiscard]] VimWantedColumn wanted_at(std::size_t column)
+{
+    return VimWantedColumn{nenenib::core::VimColumnWish::at_column,
+                           nenenib::core::VirtualColumn{column}};
+}
+
+// 1 行目（12 字・2 画面行・n = 2 × 8 = 16）の 2 画面行目の 10 桁に立ち、31 桁を欲しい gj は
+// 切った 15 桁 − 画面行の始まり 8 = 7 を 2 行目（4 字・最後の画面行）で保つ（Vim 9.1 の
+// nv_screengo）。升の数 0 は切らずに 30 − 8 = 22 を保ち、$ の後は行末の印のまま。
+void verify_vim_display_down_cut()
+{
+    const auto parsed = TextBuffer::from_utf8("aaaaaaaaaaaa\nbbbb\n" + std::string(40, 'c'));
+    expect(parsed.has_value(), "the gj cut sample parses");
+    const auto &text = parsed.value();
+    expect(cut_screen_move(text, ScreenMove{Offset{10}, "gj"}, grid_width, wanted_at(31))
+                   .next.wanted_column == std::optional{wanted_at(8)},
+           "gj cuts the wanted column to the filled screen rows of the line minus one");
+    expect(
+        cut_screen_move(text, ScreenMove{Offset{10}, "gj"}, 0, wanted_at(31)).next.wanted_column ==
+            std::optional{wanted_at(23)},
+        "gj keeps the wanted column when the screen row has no cell count");
+    const VimWantedColumn end{nenenib::core::VimColumnWish::at_line_end,
+                              nenenib::core::VirtualColumn{1}};
+    expect(
+        cut_screen_move(text, ScreenMove{Offset{10}, "gj"}, grid_width, end).next.wanted_column ==
+            std::optional{end},
+        "gj does not cut the wanted column after $");
+}
+
+// 切るのは最初の行だけ（Vim 9.1 の nv_screengo は回数の周に入る前に 1 回）。1 行目（12 字・
+// n = 16）から 2gj で短い 2 行目（2 字・n = 8）を通っても 15 − 8 = 7 を保ち、3 行目の 7 桁に着く
+// （通った行で切り直すと 7 − 8 → 0 桁になる）。gk は 1 画面行の 2 行目（6 字・n = 8）から 31 桁を
+// 7 に切り、1 行目（40 字）の最後の画面行の始まり 32 ＋ 7 = 39 桁に着く（切らなければ 62）。最後の
+// 行（12 字）の 2 画面行目で歩き切れない gj も切った 15 桁を残す（Vim は失敗の後も curswant を
+// 切ったまま・証跡 653-fix1-q1）。
+void verify_vim_display_cut_first_line_only()
+{
+    const auto passed = TextBuffer::from_utf8("aaaaaaaaaaaa\nbb\n" + std::string(40, 'c'));
+    expect(passed.has_value(), "the 2gj cut sample parses");
+    const auto through =
+        cut_screen_move(passed.value(), ScreenMove{Offset{10}, "2gj"}, grid_width, wanted_at(31));
+    expect(through.next.wanted_column == std::optional{wanted_at(8)} &&
+               std::holds_alternative<VimMoveTo>(through.effect) &&
+               std::get<VimMoveTo>(through.effect).caret == Offset{16 + 7},
+           "2gj cuts on the first line only and keeps the cut through a short line");
+    const auto above = TextBuffer::from_utf8(std::string(40, 'c') + "\naaaaaa");
+    expect(above.has_value(), "the gk cut sample parses");
+    const auto up =
+        cut_screen_move(above.value(), ScreenMove{Offset{41 + 5}, "gk"}, grid_width, wanted_at(31));
+    expect(up.next.wanted_column == std::optional{wanted_at(40)} &&
+               std::holds_alternative<VimMoveTo>(up.effect) &&
+               std::get<VimMoveTo>(up.effect).caret == Offset{39},
+           "gk cuts the wanted column to the filled screen rows of the line minus one");
+    const auto last = TextBuffer::from_utf8(std::string(40, 'c') + "\naaaaaaaaaaaa");
+    expect(last.has_value(), "the stuck gj sample parses");
+    const auto stuck =
+        cut_screen_move(last.value(), ScreenMove{Offset{41 + 10}, "gj"}, grid_width, wanted_at(31));
+    expect(stuck.failure.has_value() && stuck.next.wanted_column == std::optional{wanted_at(16)},
+           "a gj that cannot move keeps the cut wanted column");
+}
+
 void verify_vim_viewport_request()
 {
     const auto text = TextBuffer::from_utf8(vim_lines(30));
@@ -1686,6 +1786,8 @@ void verify_vim_viewport_request()
     verify_vim_row_unit_pages();
     verify_vim_grid_alignment_rows();
     verify_vim_grid_alignment_lines();
+    verify_vim_display_down_cut();
+    verify_vim_display_cut_first_line_only();
     verify_vim_counted_alignment_round_trip();
     verify_indexed_virtual_columns();
     verify_indexed_columns_across_chunks();
