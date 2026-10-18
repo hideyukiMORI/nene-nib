@@ -1,6 +1,6 @@
 # beta.4 の公開（#678）
 
-公開の前の記録。公開元は clean な main `f6916d72d14e6e51480af94ecbe04450c4c6b554`（`f6916d7`・origin/main と一致）。規則: ADR 0115 / 0118、QLT-001 / 011 / 012 / 013、GIT-001〜004、CNF-005。Waivers: none。
+公開の記録。前半は公開の前に書いた根拠（当時の main `f6916d72d14e6e51480af94ecbe04450c4c6b554`・`f6916d7`）、末尾の節が公開の結果。公開元は `f6916d7` の上に PR #679（この記録と同梱 README）を squash した main `5987ebde4ae730462813d6e0cf28f0a144c4a047`（`5987ebd`・clean・origin/main と一致・製品の src は `f6916d7` と同一）。規則: ADR 0115 / 0118、QLT-001 / 011 / 012 / 013、GIT-001〜004、CNF-005。Waivers: none。
 
 ## 根拠（再利用する検証）
 
@@ -34,4 +34,20 @@ beta.3（`00ff3f6`）から公開元までの製品・梱包入力の commit は
 3. 同じ commit に annotated tag `v0.1.0-beta.4` と GitHub pre-release（zip と SHA256SUMS）。
 4. `gh release download` で再取得し、tag の commit・bytes・digest を照合。
 
-公開の結果（zip の bytes・SHA-256・公開時刻・照合）は公開後の PR でこの記録に足す。
+公開の結果（zip の bytes・SHA-256・公開時刻・照合）は末尾の節。
+
+## 公開の結果（2026-10-19）
+
+2026-10-19 07:50:59 JST（`published_at` 2026-10-18T22:50:59Z・release id 416757262）、[v0.1.0-beta.4](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.4) を GitHub pre-release として公開した。
+公開元は main `5987ebde4ae730462813d6e0cf28f0a144c4a047`（PR #679 の squash）。annotated tag `v0.1.0-beta.4` は同じ commit。
+
+- 出典・依存・同梱漏れ: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 4 -OutputDirectory D:/NeNeNib/releases/v0.1.0-beta.4 -Verification docs/quality/beta4-release-2026-10-19.md` が `D:\NeNeNib\worktrees\beta4`（detached・origin/main）で成功（ビルド込み）。x64・版・宣言済み DLL・4 項目（exe・README.txt・LICENSE・THIRD_PARTY_NOTICES.txt）・展開 bytes を道具が照合。
+- 起動・描画: `python D:/NeNeNib/evidence/beta4-release-678/release-smoke.py` が成功。隔離 profile の日本語本文を 900×640・DPI 120 で表示し、正常終了 0・本文不変。`release-smoke-01/launch.png` を設計席が目視。
+- 速さ: 梱包した exe で `python eng/measure-speed.py --check --repetitions 5 --executable D:/NeNeNib/releases/v0.1.0-beta.4/extracted/NeNeNib.exe` → 8 benches checked, 0 regression(s), 0 unmeasurable（負荷 4%・ほかの席とビルド無し）。中央値 ms: 起動 39.3・窓 30.6・単打 0.629・連打 2.17・16 MiB open 48.4・16 MiB 連打 2.36・面 1.72・長い行 1.91。記録 `D:/NeNeNib/evidence/beta4-release-678/gate-beta4-2026-10-18T22-50-36Z.json`・ログ `gate-beta4.log`。
+  - 長い行の 1.91 ms は基準値 1.57 ms に対し +22%。許容 25% と下限 2 ms の内だが、次の計測で見る。
+- 公開物の取違え: `gh release download v0.1.0-beta.4 --repo hideyukiMORI/nene-nib --dir D:/NeNeNib/releases/v0.1.0-beta.4/downloaded` と `python D:/NeNeNib/evidence/beta4-release-678/verify-publication.py` が成功。公開状態、annotated tag の commit、ZIP / SHA256SUMS の再取得 bytes と GitHub digest、ZIP の全項目が一致。記録 `D:/NeNeNib/releases/v0.1.0-beta.4/publication-verification.json`。
+- ZIP: `NeNeNib-0.1.0-beta.4-windows-x64.zip`、754,705 bytes。SHA-256: `0cfa77b429a85b55365678b5f8427969991d69b4d5a1ed336472c79b098de8b6`。
+- `SHA256SUMS`: 104 bytes。SHA-256: `b56b952c5d90511db5d4978b49c982944d842e572f9eed94dfc4d650ba0db794`。
+- exe の SHA-256: `1c50b59079933e9632573103355d6afe6de34a6075cf73840a075f278aae7195`。
+- hide の試用（D41）: 公開の時点では無し（hide 不在・指示「一旦この状態でリリースをして」）。hide の試用は公開後。
+- 配布物・package.json・build.log・publication-verification.json は `D:/NeNeNib/releases/v0.1.0-beta.4/` に保持する。
