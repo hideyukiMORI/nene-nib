@@ -11,7 +11,7 @@ CI の中身は Git 規約・検証記録・差分空白の確認だけで（ADR
 
 ## 決定
 
-1. **`check.yml` に job `build-and-test` を足す。** 既存の `check` job と並列に、同じ `inputs.expected_head` を checkout する。起動の契機は今日どおり `eng/merge-pr.py --execute` の `workflow_dispatch` だけで、文書のみの PR では起動しない（ADR 0118）。`check` job は規約と記録に加えて、その前の step で `python eng/test-conformance.py`（conformance の自己テスト・約 12 秒）も回す。#554 のような契約の遅れを merge 前に止めるため（#568）。
+1. **`check.yml` に job `build-and-test` を足す。** 既存の `check` job と並列に、同じ `inputs.expected_head` を checkout する。起動の契機は今日どおり `eng/merge-pr.py --execute` の `workflow_dispatch` だけで、文書のみの PR では起動しない（ADR 0118）。`check` job は規約と記録に加えて、その前の step で `python eng/test-conformance.py`（conformance の自己テスト・約 12 秒）も回す。#554 のような契約の遅れを merge 前に止めるため（#568）。自己テストの直後の step「Conformance (tree)」で `python eng/conformance.py`（build dir 無しの字句と名前の検査・数秒）も回し、木の違反で job を落とす（#648。PR #645 は自己テストが通ったまま CNF-005 の違反を main へ入れた）。
 2. **構成は Release 1 つ。** `check.ps1` の Release の段と同じ `cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release` で configure し、`cmake --build build-release`（全 target・製品と試験の実行ファイル）→ `ctest --test-dir build-release --output-on-failure --no-tests=error`。警告集合と clang-tidy は Release にも同じものが掛かる（`CMAKE_CXX_CLANG_TIDY` は構成を問わない）ので、迂回路にならない。
 3. **Debug（ASan / UBSan）の全件と速さは CI に載せない。** Debug は実機の `check.ps1` の範囲のまま、速さは QLT-014 のとおり実機で測る。CI の `build-and-test` は「PR の最終 HEAD が製品としてビルドでき、単体テストが通る」ことの機械の裏付けであって、検証記録（QLT-012）の代わりではない。
 4. **`merge-pr.py` は変えない。** run の conclusion は全 job を含むので、どちらかの job が落ちれば統合は止まる。失敗を自動で再試行しない（ADR 0118）。timeout は job ごと（`check` 5 分のまま・`build-and-test` 45 分）。

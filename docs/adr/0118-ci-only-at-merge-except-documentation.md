@@ -15,11 +15,12 @@ PR作成・Ready・push・本文編集・merge後のイベントでは起動し�
 完全なPR変更一覧をページ分割して読み、renameは変更前のパスも判定する。取得漏れ・不正な一覧は拒否し、それ以外のパスはCI対象。
 文書だけなら差分と必要な目視で確認し、CIの代わりの検証スクリプトや長い記録を作らない。
 既存の軽いGitフックとPRの件名・Issue・検証記録の確認は維持する。
+文書のみの merge は CI を起動しないが、PR 本文に `eng/conformance.py` の 0 violation の記録を要る（#648）。`merge-pr.py` は `conformance\.py` と `0 violation` が同じ行にあるかだけを見て、無ければ `--execute` を拒否する。plan は `conformanceRecorded` で事前に示す。
 
 非文書変更では`check.yml`を`workflow_dispatch`で起動する。PR番号と期待headを渡し、workflow自身も取得したPRとcheckoutの一致を確認する。
 統合道具は返されたrun ID、repository、workflow、イベント、PR番号、head、成功を照合し、実行前後のPRとrulesも比較する。
 planは読み取りのみ。失敗・成否不明を自動再試行しない。待機が切れたら表示済みの`--ci-run`で同じrunを確認し、新しいCIを起動しない。
-CIの中身は既存のGit規約・検証記録・差分空白の確認だけ。製品テストの成功結果を工程のために測り直さない。
+CIの中身は既存のGit規約・検証記録・差分空白の確認と木の conformance（`python eng/conformance.py`・#648）だけ。製品テストの成功結果を工程のために測り直さない。
 
 ## 強制と制限
 

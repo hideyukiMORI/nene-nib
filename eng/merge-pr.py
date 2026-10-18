@@ -16,6 +16,8 @@ API_ROOT = f"repos/{REPO_NAME}"
 # 600 秒だと毎回切れて --ci-run での再開が要った（#522 / #524 / #526・Issue #533）。
 WATCH_SECONDS = 2700
 PR_FIELDS = "number,title,body,headRefOid,headRefName,state,isDraft,baseRefName,baseRefOid,changedFiles,isCrossRepository"
+# #648: documentation-only merges skip CI, so the PR body must carry the tree conformance result.
+CONFORMANCE_RECORD = re.compile(r"(?m)^.*conformance\.py.*(?<![0-9])0 violation")
 SPEC = importlib.util.spec_from_file_location("git_conventions", ROOT / "eng/git-conventions.py")
 CONVENTIONS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONVENTIONS)
@@ -93,6 +95,10 @@ def documentation_only(pages: object, expected_count: int) -> bool:
                path in ("LICENSE", "THIRD_PARTY_NOTICES.txt") for path in paths)
 
 
+def conformance_recorded(body: object) -> bool:
+    return isinstance(body, str) and CONFORMANCE_RECORD.search(body) is not None
+
+
 def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> dict:
     if record.get("isCrossRepository") is not False or not record.get("headRefName"):
         raise MergeRefused("Merge CI requires a branch in the canonical repository")
@@ -153,13 +159,17 @@ def main(argv=None, runner=run_gh) -> int:
         docs_only = documentation_only(pages, record.get("changedFiles"))
         if docs_only and any(rule["type"] == "required_status_checks" for rule in rules):
             raise MergeRefused("Documentation-only merge is still blocked by required status checks in the ruleset")
+        recorded = conformance_recorded(record.get("body"))
         print(json.dumps({"execute": options.execute, "repository": REPOSITORY, "number": options.number,
                           "head": options.expected_head, "subject": record["title"],
                           "ci": "skip (documentation only)" if docs_only else "run before merge",
+                          "conformanceRecorded": recorded,
                           "branchRules": rules, "command": ["gh", *command]},
                          ensure_ascii=False), flush=True)
         if not options.execute:
             return 0
+        if docs_only and not recorded:
+            raise MergeRefused("Documentation-only merge requires a recorded eng/conformance.py result with 0 violation(s)")
         if not docs_only:
             print(json.dumps({"verifiedCI": run_ci(options.number, options.expected_head, record,
                                                   runner, options.ci_run)}), flush=True)
