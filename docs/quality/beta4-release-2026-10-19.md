@@ -1,6 +1,6 @@
 # beta.4 の公開（#678）
 
-公開の前の記録。公開元は clean な main `f6916d72d14e6e51480af94ecbe04450c4c6b554`（`f6916d7`・origin/main と一致）。規則: ADR 0115 / 0118、QLT-001 / 011 / 012 / 013、GIT-001〜004、CNF-005。Waivers: none。
+公開の記録。前半は公開の前に書いた根拠（当時の main `f6916d72d14e6e51480af94ecbe04450c4c6b554`・`f6916d7`）、末尾の節が公開の結果。公開元は `f6916d7` の上に PR #679（この記録と同梱 README）を squash した main `5987ebde4ae730462813d6e0cf28f0a144c4a047`（`5987ebd`・clean・origin/main と一致・製品の src は `f6916d7` と同一）。規則: ADR 0115 / 0118、QLT-001 / 011 / 012 / 013、GIT-001〜004、CNF-005。Waivers: none。
 
 ## 根拠（再利用する検証）
 
@@ -34,7 +34,7 @@ beta.3（`00ff3f6`）から公開元までの製品・梱包入力の commit は
 3. 同じ commit に annotated tag `v0.1.0-beta.4` と GitHub pre-release（zip と SHA256SUMS）。
 4. `gh release download` で再取得し、tag の commit・bytes・digest を照合。
 
-公開の結果（zip の bytes・SHA-256・公開時刻・照合）は公開後の PR でこの記録に足す。
+公開の結果（zip の bytes・SHA-256・公開時刻・照合）は末尾の節。
 
 ## 公開の結果（2026-10-19）
 
