@@ -5,6 +5,7 @@
 #include "VimMotion.hpp"
 #include "VimOperator.hpp"
 #include "VimScreenAlignment.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimTextObject.hpp"
 #include "VimWindowCommand.hpp"
 #include "VimWordClass.hpp"
@@ -32,6 +33,13 @@ namespace nenenib::core
 // `Ctrl-w` の後ろの鍵 → 窓の命令（ADR 0148 の決定 7）。Ctrl-v と Ctrl-w は 0x16 と 0x17 で引く。
 // 表に無い鍵は nullopt（失敗して後ろを打ち切る）。
 [[nodiscard]] std::optional<VimWindowCommand> vim_window_command_for(char32_t key) noexcept;
+
+// `Ctrl-w` の後ろの特別な鍵 → 窓の命令。Ctrl-v と Ctrl-w は上の表の 0x16 と 0x17 の行を引き、
+// ほかの特別な鍵は nullopt。
+[[nodiscard]] std::optional<VimWindowCommand> vim_window_command_for(VimSpecialKey key) noexcept;
+
+// Ctrl-v と Ctrl-w の文字（0x16 と 0x17・表の鍵と同じ値）。ほかの特別な鍵は nullopt。
+[[nodiscard]] std::optional<char32_t> vim_window_control_character(VimSpecialKey key) noexcept;
 
 // 縦の位置合わせの動作 → 置く所と最初の非空白へ動かすか（ADR 0146 の決定 2）。ほかの動作は
 // nullopt。

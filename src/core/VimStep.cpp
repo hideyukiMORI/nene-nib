@@ -119,8 +119,6 @@ constexpr char32_t control_b_character = 0x02;
 constexpr char32_t control_d_character = 0x04;
 constexpr char32_t control_f_character = 0x06;
 constexpr char32_t control_u_character = 0x15;
-constexpr char32_t control_v_character = 0x16;
-constexpr char32_t control_w_character = 0x17;
 constexpr char32_t carriage_return_character = 0x0D;
 
 [[nodiscard]] std::size_t count_of(const std::optional<VimCount> &count) noexcept
@@ -4851,7 +4849,7 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     case VimSpecialKey::control_b:
         return control_b_character;
     case VimSpecialKey::control_w:
-        return control_w_character;
+        return vim_window_control_character(key);
     case VimSpecialKey::escape:
     case VimSpecialKey::backspace:
     case VimSpecialKey::arrow_left:
@@ -5044,24 +5042,16 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused);
 }
 
-// `Ctrl-w` の後ろの鍵を表の文字へ。Ctrl-v と Ctrl-w は 0x16 と 0x17。ほかの特別な鍵と検索の
-// 文字列は表に無い 0。
-[[nodiscard]] char32_t window_key_code(const VimKey &key) noexcept
+// `Ctrl-w` の後ろの鍵 → 窓の命令。文字と特別な鍵は VimKeyTable の表の口を引き、検索の文字列は
+// 表に無い。
+[[nodiscard]] std::optional<VimWindowCommand> window_command_of(const VimKey &key) noexcept
 {
     if (const auto *const character = std::get_if<VimCharacter>(&key); character != nullptr)
     {
-        return character->code;
+        return vim_window_command_for(character->code);
     }
     const auto *const special = std::get_if<VimSpecialKey>(&key);
-    if (special == nullptr)
-    {
-        return char32_t{0};
-    }
-    if (*special == VimSpecialKey::control_v)
-    {
-        return control_v_character;
-    }
-    return *special == VimSpecialKey::control_w ? control_w_character : char32_t{0};
+    return special != nullptr ? vim_window_command_for(*special) : std::nullopt;
 }
 
 // `Ctrl-w` の後ろの鍵（ADR 0148 の決定 7）。窓の命令を効果として返すだけで、モードと選択は
@@ -5074,7 +5064,7 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     {
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
-    const std::optional<VimWindowCommand> command = vim_window_command_for(window_key_code(key));
+    const std::optional<VimWindowCommand> command = window_command_of(key);
     if (!command.has_value())
     {
         return failed(VimStep{finished_input_wait(state), VimNoEffect{}},

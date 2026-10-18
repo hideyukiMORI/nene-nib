@@ -14,6 +14,7 @@
 #include "VimKey.hpp"
 #include "VimKeySource.hpp"
 #include "VimMode.hpp"
+#include "VimMoveTo.hpp"
 #include "VimNoEffect.hpp"
 #include "VimPrefix.hpp"
 #include "VimRegister.hpp"
@@ -74,11 +75,12 @@ constexpr char32_t control_w_mark = U'|';
 
 // 鍵を順に engine へ流し、最後の 1 鍵の結果を返す。本文と選択は鍵のあいだで変えない（engine は
 // 効果を返すだけで、窓の命令は本文にも選択にも触れない）。
-[[nodiscard]] VimStep window_step_of(const VimState &start, std::string_view keys)
+[[nodiscard]] VimStep window_step_in(std::string_view body, Offset caret, const VimState &start,
+                                     std::string_view keys)
 {
-    const auto text = TextBuffer::from_utf8("abc def\nghi");
+    const auto text = TextBuffer::from_utf8(body);
     const auto &buffer = text.value();
-    const Selection selection = collapsed_at(Offset{4});
+    const Selection selection = collapsed_at(caret);
     const VimEditorView view{buffer, selection, VimViewport{LineNumber{1}, vim_visible_lines, 0},
                              nenenib::core::VimKeySource::typed, nenenib::core::VimTabs{0, 1}};
     VimStep last{start, VimNoEffect{}};
@@ -87,6 +89,11 @@ constexpr char32_t control_w_mark = U'|';
         last = vim_step(last.next, view, key);
     }
     return last;
+}
+
+[[nodiscard]] VimStep window_step_of(const VimState &start, std::string_view keys)
+{
+    return window_step_in("abc def\nghi", Offset{4}, start, keys);
 }
 
 [[nodiscard]] VimStep window_step_of(std::string_view keys)
@@ -159,6 +166,35 @@ void verify_window_refusals()
     const VimStep operated = window_step_of("d|");
     expect(refused(operated, VimMode::normal) && !operated.next.pending.has_value(),
            "control-w after an operator fails and cancels the operator");
+    const VimStep counted = window_step_of("2d|");
+    expect(refused(counted, VimMode::normal) && !counted.next.pending.has_value(),
+           "and so does a counted operator, dropping the count");
+    const VimStep visual_escaped = window_step_of("v|<Esc>");
+    expect(std::holds_alternative<VimNoEffect>(visual_escaped.effect) &&
+               !visual_escaped.failure.has_value() && visual_escaped.next.mode == VimMode::visual &&
+               !visual_escaped.next.input_wait.has_value(),
+           "escape after control-w in VISUAL clears only the wait and keeps VISUAL");
+}
+
+// ほかの待ちの後ろの Ctrl-w（Issue #684 のレビュー I2）。`f` は 0x17 を文字として探し、`z` は
+// 表に無いので失敗し、`g` は待ちを静かに打ち消す。
+void verify_window_after_other_waits()
+{
+    const VimStep found = window_step_in("a\x17"
+                                         "b",
+                                         Offset{0}, empty_vim_state(), "f|");
+    const auto *const moved = std::get_if<nenenib::core::VimMoveTo>(&found.effect);
+    expect(moved != nullptr && moved->caret == Offset{1} && !found.failure.has_value() &&
+               !found.next.input_wait.has_value(),
+           "f then control-w finds the control-w character");
+    expect(refused(window_step_of("f|"), VimMode::normal),
+           "and fails when the line has no control-w character");
+    expect(refused(window_step_of("z|"), VimMode::normal), "z then control-w fails");
+    const VimStep cancelled = window_step_of("g|");
+    expect(std::holds_alternative<VimNoEffect>(cancelled.effect) &&
+               !cancelled.failure.has_value() && !cancelled.next.input_wait.has_value() &&
+               cancelled.next.mode == VimMode::normal,
+           "g then control-w cancels the wait quietly");
 }
 
 // VISUAL でも効き、VISUAL は解除しない（枠を移るときに畳むのは controller）。INSERT
@@ -211,6 +247,18 @@ void verify_window_macro()
            "and the replayed keys give the window command");
 }
 
+// `"ap` はマクロの鍵列を文字として貼るので、Ctrl-w は 0x17 の 1 文字になる（Ctrl-r の 0x12
+// と同じ）。
+void verify_window_register_put()
+{
+    Editing editing;
+    open_vim_document(editing, "abc");
+    EditorController &controller = editing.controller();
+    static_cast<void>(controller.press_vim_keys(window_keys("qa|wq\"ap")));
+    expect(whole_vim_body(controller) == "a\x17wbc",
+           "\"ap puts control-w as one control character");
+}
+
 // controller の写しは #682 の意図が入るまで何もしない。鍵は本文もキャレットも動かさず、失敗した
 // 2 打鍵目は鍵の列の後ろを打ち切る（Issue #230 と同じ）。
 void verify_window_controller()
@@ -236,9 +284,11 @@ void verify_vim_window_contracts()
 {
     verify_window_table();
     verify_window_refusals();
+    verify_window_after_other_waits();
     verify_window_modes();
     verify_window_not_repeated();
     verify_window_macro();
+    verify_window_register_put();
     verify_window_controller();
 }
 
