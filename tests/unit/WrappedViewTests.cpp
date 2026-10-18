@@ -275,6 +275,37 @@ void verify_line_view_made_once()
     static_cast<void>(view.rows(LineNumber{1}));
     expect(layouts.row_texts() == 2, "another line is made once and the first one is kept");
 }
+// #664: row_span の位置の問いの答えはその位置を含む（段の境目は次の段・最後の段は行末も）。
+// 文字組みが位置の問いに隣の段を答えても、隣の段を番号で引き直して含む段を返す。
+[[nodiscard]] bool rows_hold_positions(const EditorState &state, ScriptedTextLayouts &layouts)
+{
+    VisualTextView view{state, layouts, TextViewGeometry{100, 20, 96}};
+    bool held = true;
+    for (std::size_t at = 0; at <= 25; ++at)
+    {
+        const auto span = view.row_span(VimRowRequest{LineNumber{1}, Offset{at}});
+        held = held && span && span.value().rows == 3 &&
+               span.value().row == std::min(at / 10, std::size_t{2}) &&
+               span.value().start.value <= at &&
+               (at < span.value().end.value || span.value().row == 2);
+    }
+    return held;
+}
+
+void verify_row_span_contains_request()
+{
+    const auto state =
+        EditorState::create(Appearance::dark, EditMode::ordinary)
+            .with_edit(buffer_of("abcdefghijklmnopqrstuvwxy\n"), Selection{Offset{0}, Offset{0}},
+                       EditHistory::empty(), Document{std::nullopt, TextEncoding::utf8, 0});
+    ScriptedTextLayouts layouts;
+    expect(rows_hold_positions(state, layouts),
+           "#664 a screen row answered for a position contains that position");
+    ScriptedTextLayouts misplaced;
+    misplaced.misplace_rows();
+    expect(rows_hold_positions(state, misplaced),
+           "#664 a neighbouring row answered for a position is retried by number");
+}
 } // namespace
 
 void verify_wrapped_view_scope()
@@ -289,5 +320,6 @@ void verify_wrapped_view_scope()
     verify_wrap_settings();
     verify_unwrapped_drag();
     verify_line_view_made_once();
+    verify_row_span_contains_request();
 }
 } // namespace nenenib::tests

@@ -5,7 +5,10 @@
 #include "WindowChecks.hpp"
 
 #include "EditorSettings.hpp"
+#include "EditorState.hpp"
+#include "TextBuffer.hpp"
 #include "Utf8.hpp"
+#include "VisualTextView.hpp"
 
 #include <algorithm>
 #include <array>
@@ -137,6 +140,154 @@ void check_input_retention(BodyTextLayouts &layouts, const core::EditorSettings 
     const auto expired = layouts.get(request);
     expect(empty && expired && shown && expired.value() != shown.value(),
            "a line absent from the next frame is released from the cache");
+}
+
+// #664: 段の末尾に空白がぶら下がる 222 文字の行（Issue の実測の文書の 110 行目と同じ形）。
+[[nodiscard]] std::string hanging_line()
+{
+    std::string line = "    110 indented line ";
+    for (int word = 0; word < 40; ++word)
+    {
+        line += "word ";
+    }
+    return line;
+}
+
+[[nodiscard]] app::EditorState hanging_state(const std::string &line)
+{
+    auto buffer = core::TextBuffer::from_utf8("first\n" + line + "\nlast\n");
+    expect(buffer.has_value(), "#664 the wrapped line is valid UTF-8");
+    return app::EditorState::create(core::Appearance::dark, core::EditMode::ordinary)
+        .with_edit(std::move(buffer).value(), core::Selection{core::Offset{0}, core::Offset{0}},
+                   core::EditHistory::empty(),
+                   app::Document{std::nullopt, core::TextEncoding::utf8, 0});
+}
+
+// 番号の問いの段が行の頭から末尾までを隙間なく覆う。
+[[nodiscard]] std::vector<core::VimRowSpan>
+numbered_rows(app::VisualTextView &view, const core::TextBuffer &text, core::LineNumber number)
+{
+    std::vector<core::VimRowSpan> spans;
+    const auto count = view.rows(number);
+    auto next = text.line_start(number);
+    bool tiled = count.has_value();
+    for (std::size_t row = 0; tiled && row < count.value(); ++row)
+    {
+        const auto span = view.row_span(core::VimRowRequest{number, row});
+        tiled = span && span.value().row == row && span.value().rows == count.value() &&
+                span.value().start == next;
+        if (tiled)
+        {
+            spans.push_back(span.value());
+            next = span.value().end;
+        }
+    }
+    expect(tiled && next == text.line_end(number),
+           "#664 the numbered screen rows cover the whole line without gaps");
+    return spans;
+}
+
+// 位置 at を含む段（[start, end)・最後の段は行末も）。
+[[nodiscard]] const core::VimRowSpan &row_holding(const std::vector<core::VimRowSpan> &spans,
+                                                  std::size_t at)
+{
+    const auto found = std::ranges::find_if(spans, [at](const core::VimRowSpan &span)
+                                            { return at < span.end.value; });
+    return found == spans.end() ? spans.back() : *found;
+}
+
+// 行の全部の位置（段の始まり・末尾・境目ちょうど・ぶら下がる空白・行末）で、位置の問いの答えが
+// その位置を含み、番号の問いの同じ段と一致する。
+void check_positions_held(app::VisualTextView &view, const core::TextBuffer &text,
+                          core::LineNumber number, const std::vector<core::VimRowSpan> &spans)
+{
+    bool held = !spans.empty();
+    for (auto at = text.line_start(number).value; held && at <= text.line_end(number).value; ++at)
+    {
+        const auto span = view.row_span(core::VimRowRequest{number, core::Offset{at}});
+        const auto &expected = row_holding(spans, at);
+        held = span && span.value().row == expected.row && span.value().start == expected.start &&
+               span.value().end == expected.end && span.value().start.value <= at;
+    }
+    expect(held, "#664 every position's screen row contains it and matches the numbered row");
+}
+
+// 段 row の始まりの前の 1 文字が空白（段の末尾にぶら下がる空白）か。
+[[nodiscard]] bool hangs(const std::string &line, core::Offset line_start,
+                         const core::VimRowSpan &span)
+{
+    return span.row > 0 && line.at(span.start.value - line_start.value - 1) == ' ';
+}
+
+// 3 段に折り返し、どれかの段の末尾に空白がぶら下がる幅（折り返しは文字単位なので幅で決まる）。
+[[nodiscard]] int hanging_width(BodyTextLayouts &layouts, const app::EditorState &state,
+                                const std::string &line)
+{
+    const core::LineNumber number{2};
+    for (int width = 880; width <= 1000; ++width)
+    {
+        app::VisualTextView view{state, layouts, core::TextViewGeometry{width, 29, 96}};
+        const auto spans = numbered_rows(view, state.text(), number);
+        const auto start = state.text().line_start(number);
+        if (spans.size() == 3 && std::ranges::any_of(spans, [&line, start](const auto &span)
+                                                     { return hangs(line, start, span); }))
+        {
+            return width;
+        }
+    }
+    return 0;
+}
+
+// 段の境目: 次の段の最初の文字は次の段、その前の 1 文字（ぶら下がる空白も）は前の段。2 段目の
+// 真ん中（gM の着地）は 2 段目。
+void check_row_boundaries(app::VisualTextView &view, const std::vector<core::VimRowSpan> &spans)
+{
+    bool bounded = spans.size() >= 2;
+    for (std::size_t row = 1; bounded && row < spans.size(); ++row)
+    {
+        const auto start = spans[row].start;
+        const auto before =
+            view.row_span(core::VimRowRequest{spans[row].line, core::Offset{start.value - 1}});
+        const auto first = view.row_span(core::VimRowRequest{spans[row].line, start});
+        bounded = before && first && before.value().row == row - 1 && before.value().end == start &&
+                  first.value().row == row;
+    }
+    expect(bounded, "#664 the last character (a hanging space too) ends its row and the next "
+                    "character starts the next");
+    const auto middle = core::Offset{(spans.at(1).start.value + spans.at(1).end.value) / 2};
+    const auto landed = view.row_span(core::VimRowRequest{spans.at(1).line, middle});
+    expect(landed && landed.value().row == 1 && landed.value().start == spans.at(1).start,
+           "#664 the middle of the second screen row is answered by the second row");
+}
+
+void check_row_spans(BodyTextLayouts &layouts)
+{
+    const auto line = hanging_line();
+    const auto state = hanging_state(line);
+    const core::LineNumber number{2};
+    const auto found = hanging_width(layouts, state, line);
+    if (found == 0)
+    {
+        unmeasured("#664 no width from 880 to 1000 pixels wraps the line with a hanging space");
+    }
+    const auto width = found == 0 ? 900 : found;
+    app::VisualTextView view{state, layouts, core::TextViewGeometry{width, 29, 96}};
+    const auto spans = numbered_rows(view, state.text(), number);
+    expect(spans.size() >= 2, "#664 the hanging line wraps into several screen rows");
+    check_positions_held(view, state.text(), number, spans);
+    if (spans.size() >= 2)
+    {
+        check_row_boundaries(view, spans);
+    }
+    // 描いた frame の保持（今の幅）と違う幅で、すぐに問う。
+    layouts.begin_frame();
+    static_cast<void>(view.rows(number));
+    layouts.end_frame();
+    app::VisualTextView narrower{state, layouts, core::TextViewGeometry{700, 29, 96}};
+    const auto narrowed = numbered_rows(narrower, state.text(), number);
+    expect(narrowed.size() > spans.size(),
+           "#664 a narrower width right after a drawn frame wraps into more rows");
+    check_positions_held(narrower, state.text(), number, narrowed);
 }
 
 void check_wrapped_pixel_case(BodyTextLayouts &layouts, const app::TextLayoutRequest &request,
@@ -440,6 +591,7 @@ void verify_body_text_layouts()
     check_cell(layouts, settings);
     check_giant_window(layouts, settings);
     check_families(layouts, settings);
+    check_row_spans(layouts);
     const auto invalid =
         layouts.get(app::TextLayoutRequest{std::string_view{"\xff", 1}, settings, narrow});
     expect(!invalid.has_value(), "invalid display text is an explicit layout failure");

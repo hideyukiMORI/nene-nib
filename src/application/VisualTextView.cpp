@@ -65,6 +65,13 @@ namespace
     }
     return giant_window_at(*index, text, caret.line, state.selection().caret).first.column;
 }
+// 段の答えが位置 at を含むか（ADR 0144 の決定 2・#664）。[start, end)、最後の段は行末も含む。
+[[nodiscard]] bool holds(const core::VimRowSpan &span, core::Offset at) noexcept
+{
+    return span.start.value <= at.value &&
+           (at.value < span.end.value || (span.row + 1 >= span.rows && at.value <= span.end.value));
+}
+
 // 見えている行数に足す保持の余り（画面の上下に半分かかる行と、キャレットの行）。
 constexpr std::size_t shown_margin = 4;
 } // namespace
@@ -361,14 +368,16 @@ std::expected<core::TextCaret, TextLayoutFailure> VisualTextView::caret_at(core:
     {
         return std::unexpected(hit.error());
     }
-    const auto column = shown_line.composed.has_value()
-                            ? uncomposed_column(shown_line.composed.value(), hit.value().column)
-                            : hit.value().column;
-    return core::TextCaret{
-        core::TextPosition{shown_line.number,
-                           core::Column{core::source_column(shown_line.display, column.value - 1) +
-                                        1 + shown_line.window.code_point}},
-        hit.value().affinity};
+    return core::TextCaret{source_position(shown_line, hit.value().column), hit.value().affinity};
+}
+
+core::TextPosition VisualTextView::source_position(const LineView &line, core::Column column) const
+{
+    const auto shown =
+        line.composed.has_value() ? uncomposed_column(line.composed.value(), column) : column;
+    return core::TextPosition{line.number,
+                              core::Column{core::source_column(line.display, shown.value - 1) + 1 +
+                                           line.window.code_point}};
 }
 
 // 見積もった仮想桁が窓の両端の外なら、索引の逆引きで本文の位置にする（ADR 0139 の決定 4）。
@@ -404,40 +413,114 @@ VisualTextView::row_span(const core::VimRowRequest &request)
     const auto &text = state_.text();
     const core::LineNumber number{
         std::clamp<std::size_t>(request.line.value, 1, text.line_count())};
-    const auto count = rows(number);
-    if (!count)
-    {
-        return std::unexpected(count.error());
-    }
     const auto *const at = std::get_if<core::Offset>(&request.target);
-    const auto row = at != nullptr ? row_of(number, *at)
-                                   : std::expected<std::size_t, TextLayoutFailure>{std::min(
-                                         std::get<std::size_t>(request.target), count.value() - 1)};
-    if (!row)
+    auto found = row_bounds(number, request.target);
+    if (found && at != nullptr)
     {
-        return std::unexpected(row.error());
+        found = containing(number, found.value(), *at);
     }
-    const auto start = row_start(number, row.value());
-    const auto end = row.value() + 1 < count.value()
-                         ? row_start(number, row.value() + 1)
-                         : std::expected<core::Offset, TextLayoutFailure>{text.line_end(number)};
-    if (!start || !end)
+    if (!found)
     {
-        return std::unexpected(!start ? start.error() : end.error());
+        return std::unexpected(found.error());
     }
     // 画面行の始まりと終わりと問いの位置の仮想桁は索引から引く（O(塊)・ADR 0144 の決定 3 の追補・
     // ADR 0145 の決定 3）。行を写さない。
-    const auto start_column = core::virtual_column(text, start.value()).value - 1;
-    const auto end_column = core::virtual_column(text, end.value()).value - 1;
-    const auto column = at != nullptr ? core::virtual_column(text, *at).value - 1 : start_column;
-    return core::VimRowSpan{number,
-                            row.value(),
-                            start.value(),
-                            end.value(),
-                            count.value(),
-                            start_column,
-                            end_column - std::min(end_column, start_column),
-                            column};
+    auto span = found.value();
+    span.start_column = core::virtual_column(text, span.start).value - 1;
+    const auto end_column = core::virtual_column(text, span.end).value - 1;
+    span.width = end_column - std::min(end_column, span.start_column);
+    span.column = at != nullptr ? core::virtual_column(text, *at).value - 1 : span.start_column;
+    return span;
+}
+
+std::expected<core::VimRowSpan, TextLayoutFailure>
+VisualTextView::row_bounds(core::LineNumber number,
+                           const std::variant<core::Offset, std::size_t> &target)
+{
+    if (gridded())
+    {
+        return grid_row_bounds(number, target);
+    }
+    const auto &text = state_.text();
+    if (geometry_.width <= 0 || giant_line_index(text, number) != nullptr)
+    {
+        return core::VimRowSpan{number, 0, text.line_start(number), text.line_end(number), 1, 0};
+    }
+    return text_row_bounds(number, target);
+}
+
+std::expected<core::VimRowSpan, TextLayoutFailure>
+VisualTextView::grid_row_bounds(core::LineNumber number,
+                                const std::variant<core::Offset, std::size_t> &target) const
+{
+    auto cells = grid_cells();
+    if (!cells)
+    {
+        return std::unexpected(cells.error());
+    }
+    const auto &text = state_.text();
+    const auto rows = cells.value().rows(number);
+    const auto *const at = std::get_if<core::Offset>(&target);
+    const auto row = std::min(at != nullptr ? cells.value().point_of(number, *at).row
+                                            : std::get<std::size_t>(target),
+                              rows - 1);
+    const auto start =
+        row == 0 ? text.line_start(number) : cells.value().byte_of(number, core::GridPoint{row, 0});
+    const auto end = row + 1 < rows ? cells.value().byte_of(number, core::GridPoint{row + 1, 0})
+                                    : text.line_end(number);
+    return core::VimRowSpan{number, row, start, end, rows, 0};
+}
+
+// 段の番号と範囲を文字組みの row の 1 回の答え（同じ 1 つの layout の行の metrics）から作る
+// （#664）。位置の問いは表示の桁の先頭側で問う。最初の段は行頭、最後の段は行末で閉じる。
+std::expected<core::VimRowSpan, TextLayoutFailure>
+VisualTextView::text_row_bounds(core::LineNumber number,
+                                const std::variant<core::Offset, std::size_t> &target)
+{
+    const auto &text = state_.text();
+    const auto made = shown(number);
+    const auto &shown_line = *made;
+    std::variant<core::Column, std::size_t> asked{std::in_place_type<std::size_t>, 0};
+    if (const auto *const at = std::get_if<core::Offset>(&target); at != nullptr)
+    {
+        asked = shown_caret(shown_line, core::TextCaret{text.position_of(*at)}, caret_).column;
+    }
+    else
+    {
+        asked = std::get<std::size_t>(target);
+    }
+    const auto answered = layouts_.row(request(shown_line), asked);
+    if (!answered)
+    {
+        return std::unexpected(answered.error());
+    }
+    const auto &row = answered.value();
+    const auto start = row.row == 0 ? text.line_start(number)
+                                    : text.offset_of(source_position(shown_line, row.start));
+    const auto end = row.row + 1 < row.rows ? text.offset_of(source_position(shown_line, row.end))
+                                            : text.line_end(number);
+    return core::VimRowSpan{number, row.row, start, end, std::max<std::size_t>(row.rows, 1), 0};
+}
+
+std::expected<core::VimRowSpan, TextLayoutFailure>
+VisualTextView::containing(core::LineNumber number, const core::VimRowSpan &found, core::Offset at)
+{
+    if (holds(found, at))
+    {
+        return found;
+    }
+    // 段 0 の前は符号なしの折り返しで rows 以上になり、引かない。
+    for (const auto row : {found.row - 1, found.row + 1})
+    {
+        const auto again = row < found.rows ? row_bounds(number, row)
+                                            : std::expected<core::VimRowSpan, TextLayoutFailure>{
+                                                  std::unexpected(TextLayoutFailure::unavailable)};
+        if (again && holds(again.value(), at))
+        {
+            return again.value();
+        }
+    }
+    return std::unexpected(TextLayoutFailure::unavailable);
 }
 
 std::size_t VisualTextView::horizontal_columns() const
@@ -549,54 +632,6 @@ bool VisualTextView::scrolls_horizontally(core::LineNumber number) const
     const bool giant = giant_line_index(state_.text(), number) != nullptr;
     return !(state_.settings().wrapping == core::LineWrapping::wrap && !giant) &&
            geometry_.width > 0 && !gridded();
-}
-
-// 画面行の頭は x の最小で叩いた位置（格子は升 0）。行の最初の画面行は行頭。
-std::expected<core::Offset, TextLayoutFailure> VisualTextView::row_start(core::LineNumber number,
-                                                                         std::size_t row)
-{
-    const auto &text = state_.text();
-    if (row == 0)
-    {
-        return text.line_start(number);
-    }
-    if (gridded())
-    {
-        auto cells = grid_cells();
-        if (!cells)
-        {
-            return std::unexpected(cells.error());
-        }
-        return cells.value().byte_of(number, core::GridPoint{row, 0});
-    }
-    const auto caret =
-        caret_at(core::VisualPosition{number, row}, std::numeric_limits<float>::lowest());
-    if (!caret)
-    {
-        return std::unexpected(caret.error());
-    }
-    return text.offset_of(caret.value().position);
-}
-
-std::expected<std::size_t, TextLayoutFailure> VisualTextView::row_of(core::LineNumber number,
-                                                                     core::Offset at)
-{
-    const auto &text = state_.text();
-    if (gridded())
-    {
-        auto cells = grid_cells();
-        if (!cells)
-        {
-            return std::unexpected(cells.error());
-        }
-        return cells.value().point_of(number, at).row;
-    }
-    const auto located = location(core::TextCaret{text.position_of(at)});
-    if (!located)
-    {
-        return std::unexpected(located.error());
-    }
-    return located.value().row;
 }
 
 std::expected<core::VisualPosition, TextLayoutFailure> VisualTextView::last()

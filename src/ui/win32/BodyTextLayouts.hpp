@@ -10,6 +10,7 @@
 #include <expected>
 #include <limits>
 #include <optional>
+#include <variant>
 #include <vector>
 #include <wrl/client.h>
 
@@ -27,6 +28,9 @@ class BodyTextLayouts final : public application::TextLayoutPort
     locate(const application::TextLayoutRequest &request, core::DisplayCaret caret) override;
     [[nodiscard]] std::expected<core::DisplayCaret, application::TextLayoutFailure>
     hit(const application::TextLayoutRequest &request, core::TextLocation point) override;
+    [[nodiscard]] std::expected<application::TextRow, application::TextLayoutFailure>
+    row(const application::TextLayoutRequest &request,
+        std::variant<core::Column, std::size_t> target) override;
     // request.form の書式の `0` の幅と行高。格子は等幅の書式（設定の字体が等幅ならそれ、
     // でなければ候補の列 grid_fonts の定数・grid_family）の 1 升（ADR 0140 の決定 4〜6・
     // D58）。text は本文の書式の字幅で、巨大な行の窓の x の見積もりに使う（ADR 0139）。

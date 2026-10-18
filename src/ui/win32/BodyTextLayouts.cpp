@@ -12,6 +12,8 @@
 #include <cmath>
 #include <string>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -36,6 +38,49 @@ constexpr wchar_t low_surrogate_last = 0xDFFF;
         count += value >= low_surrogate_first && value <= low_surrogate_last ? 0U : 1U;
     }
     return count;
+}
+
+// layout の画面行の metrics（長さはぶら下がる空白を含む UTF-16 の単位・ADR 0144 の決定 2・#664）。
+[[nodiscard]] std::expected<std::vector<DWRITE_LINE_METRICS>, application::TextLayoutFailure>
+line_metrics(IDWriteTextLayout &layout)
+{
+    UINT32 count = 0;
+    static_cast<void>(layout.GetLineMetrics(nullptr, 0, &count));
+    std::vector<DWRITE_LINE_METRICS> lines(std::max<UINT32>(count, 1));
+    if (FAILED(layout.GetLineMetrics(lines.data(), static_cast<UINT32>(lines.size()), &count)) ||
+        count == 0)
+    {
+        return std::unexpected(unavailable);
+    }
+    lines.resize(count);
+    return lines;
+}
+
+// UTF-16 の位置 units の先頭側を含む画面行。次の段の最初の単位は次の段、末尾は最後の段。
+[[nodiscard]] std::size_t row_containing(const std::vector<DWRITE_LINE_METRICS> &lines,
+                                         UINT32 units) noexcept
+{
+    UINT32 end = 0;
+    for (std::size_t row = 0; row + 1 < lines.size(); ++row)
+    {
+        end += lines[row].length;
+        if (units < end)
+        {
+            return row;
+        }
+    }
+    return lines.size() - 1;
+}
+
+[[nodiscard]] UINT32 units_before(const std::vector<DWRITE_LINE_METRICS> &lines,
+                                  std::size_t row) noexcept
+{
+    UINT32 start = 0;
+    for (std::size_t before = 0; before < row; ++before)
+    {
+        start += lines[before].length;
+    }
+    return start;
 }
 
 [[nodiscard]] DWRITE_WORD_WRAPPING wrapping(core::LineWrapping value) noexcept
@@ -488,6 +533,33 @@ BodyTextLayouts::hit(const application::TextLayoutRequest &request, core::TextLo
     return core::DisplayCaret{positions.column_of(units), after != FALSE
                                                               ? core::CaretAffinity::trailing
                                                               : core::CaretAffinity::leading};
+}
+
+// 段の番号と範囲を同じ layout の行の metrics から作る。x の最小で叩くと、ぶら下がる空白のある段では
+// 段の頭でなく末尾の空白に当たる（#664 の実測）ので、HitTestPoint を使わない。
+std::expected<application::TextRow, application::TextLayoutFailure>
+BodyTextLayouts::row(const application::TextLayoutRequest &request,
+                     std::variant<core::Column, std::size_t> target)
+{
+    const auto layout = get(request);
+    if (!layout)
+    {
+        return std::unexpected(layout.error());
+    }
+    const auto lines = line_metrics(*layout.value().Get());
+    if (!lines)
+    {
+        return std::unexpected(lines.error());
+    }
+    LineUtf16Evaluation positions(request.text);
+    const auto *const column = std::get_if<core::Column>(&target);
+    const auto row = column != nullptr
+                         ? row_containing(lines.value(), positions.units_of(*column))
+                         : std::min(std::get<std::size_t>(target), lines.value().size() - 1);
+    const auto start = units_before(lines.value(), row);
+    const auto first = positions.column_of(start);
+    return application::TextRow{row, first, positions.column_of(start + lines.value()[row].length),
+                                lines.value().size()};
 }
 
 std::expected<application::TextCell, application::TextLayoutFailure>
