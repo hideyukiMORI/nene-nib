@@ -1,5 +1,6 @@
 #pragma once
 
+#include "VimDisplayLineEdge.hpp"
 #include "VimDisplayNavigation.hpp"
 #include "VimEditorView.hpp"
 #include "VimLayoutNeed.hpp"
@@ -8,10 +9,12 @@
 #include "VimRowSpan.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimState.hpp"
+#include "VimWantedColumn.hpp"
 #include "VisualPosition.hpp"
 
 #include <cstddef>
 #include <expected>
+#include <optional>
 
 namespace nenenib::core
 {
@@ -45,10 +48,20 @@ vim_row_half_navigation(const VimState &state, const VimEditorView &view,
 // 着く。欲しい列の決め方は画面移動と同じ 1 本（決定 3 の追補・今の画面行の始まりからの桁）。
 // 歩く前に欲しい列を「今の行の画面行数 × view.layout.row_columns − 1」に切り、着いた後もその値を
 // 持ち越す（決定 10）。歩き切れなければ行ける所まで動いて失敗の印を付ける。`$` の後は画面行の
-// 末尾。足りない文字組みの値は VimLayoutNeed。
+// 末尾。足りない文字組みの値は VimLayoutNeed。wanted は歩く欲しい列で、`gj` `gk` は状態の値
+// （無ければ今のキャレットの桁）、`{N}g$` は行末の印（MAXCOL・ADR 0147 の決定 4）を渡す。
 [[nodiscard]] std::expected<VimRowLanding, VimLayoutNeed>
-vim_row_landing(const VimState &state, const VimEditorView &view, VimScrollDirection direction,
-                std::size_t amount);
+vim_row_landing(const VimEditorView &view, VimScrollDirection direction, std::size_t amount,
+                const std::optional<VimWantedColumn> &wanted);
+
+// `g0` `gm` `g$` の着地（ADR 0147 の決定 2〜4）。横に送る文書（VimViewport.columns > 0）は見えて
+// いる升から、折り返す文書（layout.enabled）は今の画面行の範囲から、どちらでもなければ行頭と行の
+// 内容の終わりから解く。着地はモードの寄せの前で、欲しい列は着地の桁。count は `g$` だけが読み、
+// 折り返す文書の `{N}g$` は vim_row_landing で N − 1 画面行下へ行末の印で歩く（歩き切れなければ
+// 失敗の印・欲しい列は行末の印）。ほかの文書の `{N}g$` は N − 1 行下で失敗しない。足りない
+// 文字組みの値は VimLayoutNeed。
+[[nodiscard]] std::expected<VimRowLanding, VimLayoutNeed>
+vim_display_line_landing(const VimEditorView &view, VimDisplayLineEdge edge, std::size_t count);
 
 // 格子の縦の位置合わせの画面の先頭（ADR 0146 の決定 5）。caret の画面行から上へ above 画面行だけ
 // 歩いた（行・画面行）で、文書の最初の画面行で止める（上限は収めない）。足りない文字組みの値は

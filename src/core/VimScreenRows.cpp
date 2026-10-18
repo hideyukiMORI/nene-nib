@@ -2,9 +2,11 @@
 
 #include "Utf8.hpp"
 #include "VimColumnWish.hpp"
+#include "VimHorizontalScroll.hpp"
 #include "VimMotionLanding.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimStep.hpp"
+#include "VimViewport.hpp"
 #include "VirtualColumn.hpp"
 #include "VisualPosition.hpp"
 
@@ -156,26 +158,26 @@ using Walk = std::pair<VisualPosition, std::size_t>;
 }
 
 // 欲しい列（curswant・行頭からの仮想桁・0 始まり）。無ければ今のキャレットの桁、$ の後は無し。
-[[nodiscard]] std::optional<std::size_t> wanted_of(const VimState &state, const VimEditorView &view)
+[[nodiscard]] std::optional<std::size_t> wanted_of(const std::optional<VimWantedColumn> &column,
+                                                   const VimEditorView &view)
 {
-    if (state.wanted_column.has_value() &&
-        state.wanted_column.value().wish == VimColumnWish::at_line_end)
+    if (column.has_value() && column.value().wish == VimColumnWish::at_line_end)
     {
         return std::nullopt;
     }
-    const auto wanted = state.wanted_column.has_value()
-                            ? state.wanted_column.value().column
-                            : caret_virtual_column(view.text, view.selection.caret);
+    const auto wanted = column.has_value() ? column.value().column
+                                           : caret_virtual_column(view.text, view.selection.caret);
     return std::max<std::size_t>(wanted.value, 1) - 1;
 }
 
 // gj gk の最初の欲しい列（ADR 0144 の決定 10・Vim 9.1 の nv_screengo）。今の行を画面行で埋めた
 // 長さ n = 画面行数 × 1 画面行の升の数を越える欲しい列を n − 1 に切る。升の数が 0 なら切らない。
 // $ の後（無し）は切らない。
-[[nodiscard]] std::optional<std::size_t>
-screen_wanted(const VimState &state, const VimEditorView &view, const VimRowSpan &from)
+[[nodiscard]] std::optional<std::size_t> screen_wanted(const std::optional<VimWantedColumn> &column,
+                                                       const VimEditorView &view,
+                                                       const VimRowSpan &from)
 {
-    const auto wanted = wanted_of(state, view);
+    const auto wanted = wanted_of(column, view);
     const auto filled = from.rows * view.layout.row_columns;
     if (!wanted.has_value() || filled == 0)
     {
@@ -272,7 +274,7 @@ using Moves = std::pair<Walk, Walk>;
         std::nullopt,
         top.first.row,
         landed(view.text, row.value(),
-               wanted_in(wanted_of(state, view), origin.second, row.value()))};
+               wanted_in(wanted_of(state.wanted_column, view), origin.second, row.value()))};
 }
 
 // 半画面の先頭の歩き（決定 5 の追補・Vim の CTRL-D）。下へは最後の画面行が画面に見えたら止め、
@@ -324,6 +326,67 @@ using Moves = std::pair<Walk, Walk>;
     }
     const auto end = end_column(text, row);
     return end > row.start_column && target >= end ? end - 1 : target;
+}
+
+// g0 gm g$ の着地（ADR 0147 の決定 2・4）。欲しい列は着地の桁で、失敗は無い。
+[[nodiscard]] VimRowLanding edge_landing(const TextBuffer &text, Offset at)
+{
+    return VimRowLanding{VimMotionLanding{at},
+                         VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, at)}};
+}
+
+// 横に送る文書（columns > 0）の g0 gm g$。見えている升 [left, left + columns) の左端の升・中の升を
+// 含む文字と、右端の升に収まる最後の文字。行が見えている升より短ければ行の内容の終わり（モードの
+// 寄せは呼び手・NORMAL は最後の文字）。左端で割れた全角はその字に着き、横位置は application の
+// 最小追従が戻す（決定 6）。
+[[nodiscard]] Offset scrolled_edge(const TextBuffer &text, const VimViewport &viewport,
+                                   LineNumber line, VimDisplayLineEdge edge)
+{
+    const std::size_t left = viewport.left_column;
+    switch (edge)
+    {
+    case VimDisplayLineEdge::start:
+        return character_at_cell(text, line, left);
+    case VimDisplayLineEdge::middle:
+        return character_at_cell(text, line, left + (viewport.columns / 2));
+    case VimDisplayLineEdge::end:
+        break;
+    }
+    const std::size_t right = left + viewport.columns - 1;
+    const std::pair<Offset, Offset> bounds{text.line_start(line), text.line_end(line)};
+    const Offset at = character_at_cell(text, line, right);
+    return at == bounds.second ? at : right_edge_character(text, bounds, right);
+}
+
+// 折り返す文書（layout.enabled）の g0 gm と回数 1 の g$。今の画面行の始まり・始まり + 1 画面行の
+// 升の半分（短い段では最後の文字）・終わり（最後の段は行の内容の終わり）。
+[[nodiscard]] Offset wrapped_edge(const VimEditorView &view, const VimRowSpan &span,
+                                  VimDisplayLineEdge edge)
+{
+    switch (edge)
+    {
+    case VimDisplayLineEdge::start:
+        return landed(view.text, span, span.start_column);
+    case VimDisplayLineEdge::middle:
+        return landed(view.text, span, span.start_column + (view.layout.row_columns / 2));
+    case VimDisplayLineEdge::end:
+        break;
+    }
+    return landed(view.text, span, std::nullopt);
+}
+
+// 幅も文字組みも無い文書の g0 gm g$（決定 2）。g0 gm は 0、g$ は回数 − 1 行下の $。
+[[nodiscard]] Offset unlaid_edge(const TextBuffer &text, LineNumber line, VimDisplayLineEdge edge)
+{
+    switch (edge)
+    {
+    case VimDisplayLineEdge::start:
+    case VimDisplayLineEdge::middle:
+        return text.line_start(line);
+    case VimDisplayLineEdge::end:
+        break;
+    }
+    return text.line_end(line);
 }
 } // namespace
 
@@ -378,10 +441,9 @@ vim_row_half_navigation(const VimState &state, const VimEditorView &view,
     return settled(state, view, origin.value(), Moves{top.value(), caret.value()});
 }
 
-std::expected<VimRowLanding, VimLayoutNeed> vim_row_landing(const VimState &state,
-                                                            const VimEditorView &view,
-                                                            VimScrollDirection direction,
-                                                            std::size_t amount)
+std::expected<VimRowLanding, VimLayoutNeed>
+vim_row_landing(const VimEditorView &view, VimScrollDirection direction, std::size_t amount,
+                const std::optional<VimWantedColumn> &wanted)
 {
     const Offset caret = view.selection.caret;
     const auto caret_row =
@@ -401,7 +463,7 @@ std::expected<VimRowLanding, VimLayoutNeed> vim_row_landing(const VimState &stat
     }
     const auto failure =
         moved.value().second < amount ? std::optional{VimRepeatFailure::not_moved} : std::nullopt;
-    const auto target = wanted_in(screen_wanted(state, view, from), from, row.value());
+    const auto target = wanted_in(screen_wanted(wanted, view, from), from, row.value());
     const auto landing = VimMotionLanding{landed(view.text, row.value(), target), failure};
     if (!target.has_value())
     {
@@ -411,6 +473,39 @@ std::expected<VimRowLanding, VimLayoutNeed> vim_row_landing(const VimState &stat
     const auto kept = kept_column(view.text, row.value(), target.value());
     return VimRowLanding{landing,
                          VimWantedColumn{VimColumnWish::at_column, VirtualColumn{kept + 1}}};
+}
+
+std::expected<VimRowLanding, VimLayoutNeed>
+vim_display_line_landing(const VimEditorView &view, VimDisplayLineEdge edge, std::size_t count)
+{
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    const LineNumber line = text.position_of(caret).line;
+    const VimViewport viewport = vim_viewport_of(view);
+    // {N}g$ は回数 − 1 だけ下へ。横に送る文書と文字組みの無い文書は N − 1 行下（本文の末尾で止まり
+    // 失敗しない）、折り返す文書は N − 1 画面行下へ MAXCOL で歩く（決定 3・4）。
+    const std::size_t below =
+        edge == VimDisplayLineEdge::end ? std::max<std::size_t>(count, 1) - 1 : 0;
+    const LineNumber target{line.value + std::min(below, text.line_count() - line.value)};
+    if (viewport.columns > 0)
+    {
+        return edge_landing(text, scrolled_edge(text, viewport, target, edge));
+    }
+    if (!view.layout.enabled)
+    {
+        return edge_landing(text, unlaid_edge(text, target, edge));
+    }
+    if (below > 0)
+    {
+        return vim_row_landing(view, VimScrollDirection::down, below,
+                               VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}});
+    }
+    const auto span = vim_row_span_of(view, VimRowRequest{line, caret});
+    if (!span)
+    {
+        return std::unexpected(span.error());
+    }
+    return edge_landing(text, wrapped_edge(view, span.value(), edge));
 }
 
 std::expected<VisualPosition, VimLayoutNeed> vim_row_aligned_top(const VimEditorView &view,

@@ -27,6 +27,7 @@
 #include "VimCharacterSearchRequest.hpp"
 #include "VimCharacterSearchScan.hpp"
 #include "VimColumnWish.hpp"
+#include "VimDisplayLineEdge.hpp"
 #include "VimHorizontalScroll.hpp"
 #include "VimInputWait.hpp"
 #include "VimInsertBlock.hpp"
@@ -594,13 +595,17 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return rested_in(text, offset_at_virtual_column(text, line, VirtualColumn{count}), mode);
 }
 
+[[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
+                                          VimMotion motion);
+
+// 移動の着地。語の移動と、鍵を写す前に解いた着地（gj gk g0 g$ gm gM）は失敗の印といっしょに
+// landing_of が決め、ここはその位置だけを読む。
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion)
 {
     const std::size_t count = resolved_motion_count(state, view.text, motion);
     const TextBuffer &text = view.text;
     const Offset caret = view.selection.caret;
     const LineNumber line = line_of(text, caret);
-    const VimWordWalk walk{count, vim_motion_word_class(motion)};
     switch (motion)
     {
     case VimMotion::left:
@@ -624,13 +629,17 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::word_end_for_change:
     case VimMotion::big_word_end:
     case VimMotion::big_word_end_for_change:
-        return forward_word_landing(view, state, motion).offset;
     case VimMotion::previous_word:
     case VimMotion::previous_big_word:
-        return vim_previous_word(text, caret, walk).offset;
     case VimMotion::previous_word_end:
     case VimMotion::previous_big_word_end:
-        return vim_previous_word_end(text, caret, walk).offset;
+    case VimMotion::display_down:
+    case VimMotion::display_up:
+    case VimMotion::display_line_start:
+    case VimMotion::display_line_end:
+    case VimMotion::display_line_middle:
+    case VimMotion::line_middle:
+        return landing_of(view, state, motion).offset;
     case VimMotion::screen_top:
         return screen_first_non_blank(view, VimScreenPosition::top, count);
     case VimMotion::screen_middle:
@@ -648,9 +657,6 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return wrapped_forward(text, caret, count, line_end_stop_in(state.mode));
     case VimMotion::wrap_left:
         return wrapped_backward(text, caret, count, line_end_stop_in(state.mode));
-    case VimMotion::display_down:
-    case VimMotion::display_up:
-        return row_landing_in(view, state.mode).offset;
     case VimMotion::column:
         return column_landing(text, line, count, state.mode);
     }
@@ -683,6 +689,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return forward_word_landing(view, state, motion);
     case VimMotion::display_down:
     case VimMotion::display_up:
+    case VimMotion::display_line_start:
+    case VimMotion::display_line_end:
+    case VimMotion::display_line_middle:
+    case VimMotion::line_middle:
         return row_landing_in(view, state.mode);
     case VimMotion::left:
     case VimMotion::right:
@@ -722,6 +732,11 @@ character_search_position(const VimEditorView &view, const VimState &state,
         return wanted;
     case VimMotion::line_end:
         return VimWantedColumn{VimColumnWish::at_line_end, VirtualColumn{1}};
+    case VimMotion::display_line_end:
+        // 回数 1 は着地の桁、折り返す文書の {N}g$ だけが行末の印（ADR 0147 の決定 4）。
+        return wanted.wish == VimColumnWish::at_line_end
+                   ? wanted
+                   : VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     case VimMotion::left:
     case VimMotion::right:
     case VimMotion::line_start:
@@ -745,18 +760,22 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::big_word_end_for_change:
     case VimMotion::previous_word_end:
     case VimMotion::previous_big_word_end:
+    case VimMotion::display_line_start:
+    case VimMotion::display_line_middle:
+    case VimMotion::line_middle:
         return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     }
     std::unreachable();
 }
 
 // 移動に渡す欲しい列。gj gk は画面行の問いで着地と一緒に解いた後の値、`{N}|` は着地の桁ではなく
-// 回数の桁 N（Vim の nv_pipe の curswant = N − 1・空行でも行より右でも同じ・Issue #660）で、
-// ほかは今の値。
+// 回数の桁 N（持つのは 1 始まりの N・Vim の nv_pipe の curswant は N − 1・空行でも行より右でも
+// 同じ・Issue #660）で、ほかは今の値。
 [[nodiscard]] VimWantedColumn wanted_for(const VimEditorView &view, const VimState &state,
                                          VimMotion motion)
 {
-    const bool by_rows = motion == VimMotion::display_down || motion == VimMotion::display_up;
+    const bool by_rows = motion == VimMotion::display_down || motion == VimMotion::display_up ||
+                         motion == VimMotion::display_line_end;
     if (by_rows && view.row_landing.has_value())
     {
         return view.row_landing.value().wanted;
@@ -817,6 +836,10 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::document_first:
     case VimMotion::document_last:
     case VimMotion::column:
+    case VimMotion::display_line_start:
+    case VimMotion::display_line_end:
+    case VimMotion::display_line_middle:
+    case VimMotion::line_middle:
         return false;
     }
     std::unreachable();
@@ -981,17 +1004,38 @@ character_search_position(const VimEditorView &view, const VimState &state,
         inclusive_end(text, vim_word_end(text, caret, walk, word_end_stop_for(motion)).offset));
 }
 
-// gj gk の範囲（文字単位・exclusive）。回数の途中で本文の端の画面行に当たったら Vim はオペレータを
-// 打ち消す（nv_gomove の clearopbeep）ので範囲が無い（ADR 0144 の決定 4）。着地はオペレータ待ちの
-// NORMAL の寄せ（行の内容の終わりには載らない）。
-[[nodiscard]] std::optional<VimMotionRange> display_range(const VimEditorView &view)
+// gj gk g0 gm gM の範囲（文字単位・exclusive）と g$ の範囲（inclusive・着いた文字まで含み、最後の
+// 段では行の内容の終わりまでで改行を含まない・ADR 0147 の決定 5）。回数の途中で本文の端の画面行に
+// 当たったら Vim はオペレータを打ち消す（nv_gomove・nv_g_dollar_cmd の clearopbeep）ので範囲が
+// 無い（ADR 0144 の決定 4）。着地はオペレータ待ちの NORMAL の寄せ（行の内容の終わりには載らない）。
+[[nodiscard]] std::optional<VimMotionRange> display_range(const VimEditorView &view,
+                                                          VimMotion motion)
 {
     const VimMotionLanding landing = row_landing_in(view, VimMode::normal);
     if (landing.failure.has_value())
     {
         return std::nullopt;
     }
-    return characters_between(view.selection.caret, landing.offset);
+    const bool inclusive = motion == VimMotion::display_line_end;
+    return characters_between(view.selection.caret, inclusive
+                                                        ? inclusive_end(view.text, landing.offset)
+                                                        : landing.offset);
+}
+
+// `<Space>` `<BS>` の範囲（ADR 0049）。`<Space>` はどのオペレータでも行末の位置に止まり、`<BS>` の
+// 止まり方はオペレータで変わる（backspace_stop_for）。
+[[nodiscard]] VimMotionRange wrapped_range(const VimEditorView &view, VimMotion motion,
+                                           std::size_t count, VimOperator operation)
+{
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    if (motion == VimMotion::wrap_right)
+    {
+        return characters_between(caret,
+                                  wrapped_forward(text, caret, count, VimLineEndStop::rests));
+    }
+    return characters_between(wrapped_backward(text, caret, count, backspace_stop_for(operation)),
+                              caret);
 }
 
 // gg G の範囲（行単位）。キャレットの行と回数の行の間（どちらが上でも）。
@@ -1051,14 +1095,15 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::document_last:
         return document_range(text, line, count);
     case VimMotion::wrap_right:
-        return characters_between(caret,
-                                  wrapped_forward(text, caret, count, VimLineEndStop::rests));
     case VimMotion::wrap_left:
-        return characters_between(
-            wrapped_backward(text, caret, count, backspace_stop_for(operation)), caret);
+        return wrapped_range(view, motion, count, operation);
     case VimMotion::display_down:
     case VimMotion::display_up:
-        return display_range(view);
+    case VimMotion::display_line_start:
+    case VimMotion::display_line_end:
+    case VimMotion::display_line_middle:
+    case VimMotion::line_middle:
+        return display_range(view, motion);
     case VimMotion::column:
         return characters_between(caret, column_landing(text, line, count, VimMode::normal));
     }
@@ -3739,8 +3784,63 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
                                                 : std::nullopt;
 }
 
+// g0 gm g$ の所。ほかの動作は無し（ADR 0147 の決定 1）。
+[[nodiscard]] std::optional<VimDisplayLineEdge> display_line_edge(VimAction action) noexcept
+{
+    if (action == VimAction::move_display_line_start)
+    {
+        return VimDisplayLineEdge::start;
+    }
+    if (action == VimAction::move_display_line_middle)
+    {
+        return VimDisplayLineEdge::middle;
+    }
+    return action == VimAction::move_display_line_end ? std::optional{VimDisplayLineEdge::end}
+                                                      : std::nullopt;
+}
+
+// `gM` の着地（ADR 0147 の決定 2・3）。行の本文の幅（行頭からの仮想桁の全体・索引があれば O(塊)）
+// の半分の升を含む文字。回数 1〜100 は幅 × N / 100 の升（100gM は最後の文字）、100 超は無視して
+// 半分。行より右なら行の内容の終わり（モードの寄せは呼び手・Vim の coladvance）。欲しい列は
+// 着地の桁。
+[[nodiscard]] VimRowLanding line_middle_landing(const VimState &state, const VimEditorView &view)
+{
+    constexpr std::size_t percent = 100;
+    const TextBuffer &text = view.text;
+    const LineNumber line = line_of(text, view.selection.caret);
+    const std::size_t width = virtual_column(text, text.line_end(line)).value - 1;
+    const auto count = combined_count(state);
+    const bool scaled = count.has_value() && count.value().value <= percent;
+    const std::size_t cell = scaled ? width * count.value().value / percent : width / 2;
+    const Offset at = offset_at_virtual_column(text, line, VirtualColumn{cell + 1});
+    return VimRowLanding{VimMotionLanding{at},
+                         VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, at)}};
+}
+
+// g0 gm g$ gM の着地（ADR 0147 の決定 2）。表示領域と画面行の範囲から解き、ほかの動作は無し。
+[[nodiscard]] std::expected<std::optional<VimRowLanding>, VimLayoutNeed>
+display_line_view(const VimState &state, const VimEditorView &view, VimAction action)
+{
+    if (action == VimAction::move_line_middle)
+    {
+        return std::optional{line_middle_landing(state, view)};
+    }
+    const auto edge = display_line_edge(action);
+    if (!edge.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto landing = vim_display_line_landing(view, edge.value(), resolved_count(state));
+    if (!landing)
+    {
+        return std::unexpected(landing.error());
+    }
+    return std::optional{landing.value()};
+}
+
 // 文字組みの値で解く動作を、鍵を写す前に解いて view に置く。画面移動（ADR 0019）と、文字組みが
-// 有効なときの gj gk の着地（ADR 0144 の決定 4・回数はオペレータ側と移動側の積）。
+// 有効なときの gj gk の着地（ADR 0144 の決定 4・回数はオペレータ側と移動側の積）と、g0 g$ gm gM の
+// 着地（ADR 0147 の決定 2）。
 [[nodiscard]] std::expected<VimEditorView, VimLayoutNeed>
 display_view(const VimState &state, const VimEditorView &view, VimAction action)
 {
@@ -3749,14 +3849,24 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     {
         return std::unexpected(navigation.error());
     }
+    auto line_landing = display_line_view(state, view, action);
+    if (!line_landing)
+    {
+        return std::unexpected(line_landing.error());
+    }
     auto result = view;
     result.navigation = std::move(navigation).value();
+    if (line_landing.value().has_value())
+    {
+        result.row_landing = std::move(line_landing).value();
+    }
     const auto direction = row_direction(action);
     if (!direction.has_value() || !view.layout.enabled)
     {
         return result;
     }
-    auto landing = vim_row_landing(state, view, direction.value(), resolved_count(state));
+    auto landing =
+        vim_row_landing(view, direction.value(), resolved_count(state), state.wanted_column);
     if (!landing)
     {
         return std::unexpected(landing.error());

@@ -614,12 +614,22 @@ lined_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
 {
     return vim_group_for(action) == VimActionGroup::horizontal_scroll;
 }
+
+// g0 g$ gm（ADR 0147 の決定 2）。横に送る文書の見えている升を表示領域から読む。gM は行の本文の幅
+// だけを読むので表示領域を求めない。
+[[nodiscard]] bool moves_in_display_line(VimAction action) noexcept
+{
+    return action == VimAction::move_display_line_start ||
+           action == VimAction::move_display_line_end ||
+           action == VimAction::move_display_line_middle;
+}
 } // namespace
 
 bool vim_reads_viewport(VimAction action) noexcept
 {
     return screen_kind(action).has_value() || scrolls_horizontally(action) ||
-           vim_group_for(action) == VimActionGroup::screen_alignment;
+           vim_group_for(action) == VimActionGroup::screen_alignment ||
+           moves_in_display_line(action);
 }
 
 std::expected<std::optional<VimDisplayNavigation>, VimLayoutNeed>
@@ -678,7 +688,8 @@ std::expected<LineNumber, VimLayoutNeed> vim_line_below_window(const VimEditorVi
     {
         return std::unexpected(VimLayoutNeed{window.error()});
     }
-    // below は「窓に入らなくなった最初の行」で、文書の末尾まで入ると行数 + 1 になる。そのときは最終行。
+    // below は「窓に入らなくなった最初の行」で、文書の末尾まで入ると行数 + 1 になる。
+    // そのときは最終行。
     return LineNumber{std::min(window.value().below.value, count)};
 }
 
