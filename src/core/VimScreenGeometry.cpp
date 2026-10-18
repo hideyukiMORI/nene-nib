@@ -678,6 +678,7 @@ std::expected<LineNumber, VimLayoutNeed> vim_line_below_window(const VimEditorVi
     {
         return std::unexpected(VimLayoutNeed{window.error()});
     }
+    // below は「窓に入らなくなった最初の行」で、文書の末尾まで入ると行数 + 1 になる。そのときは最終行。
     return LineNumber{std::min(window.value().below.value, count)};
 }
 

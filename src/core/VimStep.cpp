@@ -3535,35 +3535,37 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     return top.value().line;
 }
 
-// 合わせる行のキャレット（ADR 0146 の決定 3・9）。caret と回数つきの z+ は回数の行か今の行
-// （counted_line_caret）。z+ z^ の回数なしは窓の 1 つ下・上の行、回数つきの z^ は回数の行を下端に
-// 置いたときの先頭の行で、どちらも行頭（呼び手が最初の非空白へ動かす）。
+// 選んだ行の行頭（呼び手が最初の非空白へ動かす）。行が決まらなければ要る配置を返す。
 [[nodiscard]] std::expected<Offset, VimLayoutNeed>
-aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedLine choice)
+line_start_of(const VimEditorView &view, const std::expected<LineNumber, VimLayoutNeed> &line)
 {
-    const bool counted = state.count.has_value();
-    auto line = std::expected<LineNumber, VimLayoutNeed>{LineNumber{1}};
-    switch (choice)
-    {
-    case VimAlignedLine::caret:
-        return counted_line_caret(state, view);
-    case VimAlignedLine::below_window:
-        if (counted)
-        {
-            return counted_line_caret(state, view);
-        }
-        line = vim_line_below_window(view);
-        break;
-    case VimAlignedLine::above_window:
-        line = counted ? counted_above_line(state, view)
-                       : std::expected<LineNumber, VimLayoutNeed>{vim_line_above_window(view)};
-        break;
-    }
     if (!line)
     {
         return std::unexpected(line.error());
     }
     return view.text.line_start(line.value());
+}
+
+// 合わせる行のキャレット（ADR 0146 の決定 3・9）。caret と回数つきの z+ は回数の行か今の行
+// （counted_line_caret）。z+ z^ の回数なしは窓の 1 つ下・上の行、回数つきの z^ は回数の行を下端に
+// 置いたときの先頭の行で、どちらも行頭（line_start_of）。
+[[nodiscard]] std::expected<Offset, VimLayoutNeed>
+aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedLine choice)
+{
+    const bool counted = state.count.has_value();
+    switch (choice)
+    {
+    case VimAlignedLine::caret:
+        return counted_line_caret(state, view);
+    case VimAlignedLine::below_window:
+        return counted ? std::expected<Offset, VimLayoutNeed>{counted_line_caret(state, view)}
+                       : line_start_of(view, vim_line_below_window(view));
+    case VimAlignedLine::above_window:
+        return counted ? line_start_of(view, counted_above_line(state, view))
+                       : std::expected<Offset, VimLayoutNeed>{
+                             view.text.line_start(vim_line_above_window(view))};
+    }
+    std::unreachable();
 }
 
 // 縦の位置合わせ zt zz zb z<CR> z. z- z+ z^（ADR 0146 の決定 1〜6・9）。回数か窓の外の行で行を
