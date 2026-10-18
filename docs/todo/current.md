@@ -66,7 +66,7 @@ Issue の無いものは「未起票」。着手は hide の指示で。番号�
 | 大きな文書 | 2 GiB / 512 MiB / 100 ms（ADR 0127 の製品移行・資源の台帳）・split（行の分割の layout・ADR 0075 の保留） | #450 / #468・split は未起票 |
 | I/O の停止 | 16 MiB の保存 840 ms（D の HDD）。hide の SSD では止まらず、worker 化はしない（施主判断 2026-10-18） | #584 閉じた |
 | 速さ | 基準値は 2026-10-18 に採用（#644・8 本と巨大 1 行の「はい」2 本）・#460 は同じ計測で閉じた・長い行の残り（#593 は hold）。#584 は閉じた。次の計測は差分が 1 打鍵・起動・開くの経路に関わるときだけ（許容の絶対幅が狭い・静かな機械で） | #644・#593 |
-| 道具・CI | `merge-pr.py` の dispatch の ref → main に固定（ADR 0143・**受理** 2026-10-17・#636 の run 39028503021 に 2 job）・check job に木の conformance と文書のみの merge の 0 violation の記録（#648・main・run 39096548878 で step が初めて成功）・`gh run watch` の非 0 で止まる件は #667（未着手・`--ci-run` で待ち直す） | #599・#648 |
+| 道具・CI | `merge-pr.py` の dispatch の ref → main に固定（ADR 0143・**受理** 2026-10-17・#636 の run 39028503021 に 2 job）・check job に木の conformance と文書のみの merge の 0 violation の記録（#648・main・run 39096548878 で step が初めて成功）・`gh run watch` の非 0 は `gh run view` で同じ run の状態を読み、動いていれば同じ run を最大 3 回待ち直す（#667・draft PR・ADR 0118 に 1 句） | #599・#648 |
 | 調査の残り | ASan の診断 #469（閉じる候補）・D 側 profile #424（未確認）・#411 / #365 / #373 | 未着手 |
 
 ## いまの数字・動かないもの・段階

@@ -19,7 +19,7 @@ PR作成・Ready・push・本文編集・merge後のイベントでは起動し�
 
 非文書変更では`check.yml`を`workflow_dispatch`で起動する。PR番号と期待headを渡し、workflow自身も取得したPRとcheckoutの一致を確認する。
 統合道具は返されたrun ID、repository、workflow、イベント、PR番号、head、成功を照合し、実行前後のPRとrulesも比較する。
-planは読み取りのみ。失敗・成否不明を自動再試行しない。待機が切れたら表示済みの`--ci-run`で同じrunを確認し、新しいCIを起動しない。
+planは読み取りのみ。失敗・成否不明を自動再試行しない（`gh run watch`の中断は同じrunの待ち直し（最大3回）で、新しいrunは起こさない（#667））。待機が切れたら表示済みの`--ci-run`で同じrunを確認し、新しいCIを起動しない。
 CIの中身は既存のGit規約・検証記録・差分空白の確認と木の conformance（`python eng/conformance.py`・#648）だけ。製品テストの成功結果を工程のために測り直さない。
 
 ## 強制と制限

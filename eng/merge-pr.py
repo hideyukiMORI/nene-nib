@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY = "github.com/hideyukiMORI/nene-nib"
@@ -15,6 +16,8 @@ API_ROOT = f"repos/{REPO_NAME}"
 # ADR 0136: CI の build-and-test は Release の全 target と ctest で 7〜11 分かかる（check.yml の上限は 45 分）。
 # 600 秒だと毎回切れて --ci-run での再開が要った（#522 / #524 / #526・Issue #533）。
 WATCH_SECONDS = 2700
+# #667: `gh run watch` can exit non-zero while the same run is still going; wait on that run again.
+WATCH_RETRIES = 3
 PR_FIELDS = "number,title,body,headRefOid,headRefName,state,isDraft,baseRefName,baseRefOid,changedFiles,isCrossRepository"
 # #648: documentation-only merges skip CI, so the PR body must carry the tree conformance result.
 CONFORMANCE_RECORD = re.compile(r"(?m)^.*conformance\.py.*(?<![0-9])0 violation")
@@ -27,11 +30,11 @@ class MergeRefused(ValueError):
     """The requested PR has not satisfied the normal merge boundary."""
 
 
-def run_gh(arguments: list[str]) -> subprocess.CompletedProcess:
+def run_gh(arguments: list[str], timeout: float | None = None) -> subprocess.CompletedProcess:
+    if timeout is None:
+        timeout = WATCH_SECONDS if arguments[:2] == ["run", "watch"] else 60
     return subprocess.run(["gh", *arguments], cwd=ROOT, shell=False, capture_output=True,
-                          text=True, encoding="utf-8",
-                          timeout=WATCH_SECONDS if arguments[:2] == ["run", "watch"] else 60,
-                          check=False)
+                          text=True, encoding="utf-8", timeout=timeout, check=False)
 
 
 def read_json(arguments: list[str], runner) -> object:
@@ -99,6 +102,28 @@ def conformance_recorded(body: object) -> bool:
     return isinstance(body, str) and CONFORMANCE_RECORD.search(body) is not None
 
 
+def watch_run(run_id: int, runner) -> None:
+    """Wait on one run; an interrupted watch waits on the same run again, never a new one (#667)."""
+    deadline = time.monotonic() + WATCH_SECONDS
+    retried = 0
+    while True:
+        result = runner(["run", "watch", str(run_id), "--repo", REPOSITORY, "--exit-status", "--interval", "5"],
+                        timeout=WATCH_SECONDS if retried == 0 else max(deadline - time.monotonic(), 0))
+        if not result.returncode:
+            break
+        failure = f"CI did not succeed: {result.stderr.strip()} {result.stdout.strip()}"
+        state = read_json(["run", "view", str(run_id), "--repo", REPOSITORY, "--json", "status,conclusion"], runner)
+        if not isinstance(state, dict):
+            raise MergeRefused(failure)
+        if state.get("status") == "completed" and state.get("conclusion") == "success":
+            break
+        if state.get("status") not in ("in_progress", "queued") or retried == WATCH_RETRIES or                 deadline - time.monotonic() <= 0:
+            raise MergeRefused(f"{failure} (status={state.get('status')}, conclusion={state.get('conclusion')})")
+        retried += 1
+    if retried:
+        print(json.dumps({"ciWatchRetried": retried}), flush=True)
+
+
 def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> dict:
     if record.get("isCrossRepository") is not False or not record.get("headRefName"):
         raise MergeRefused("Merge CI requires a branch in the canonical repository")
@@ -120,9 +145,7 @@ def run_ci(number: int, head: str, record: dict, runner, run_id: int | None) -> 
     # Dispatch can return before GitHub resolves the input-based run name.
     # Observe completion before validating the final run identity.
     if run.get("status") != "completed":
-        result = runner(["run", "watch", str(run_id), "--repo", REPOSITORY, "--exit-status", "--interval", "5"])
-        if result.returncode:
-            raise MergeRefused(f"CI did not succeed: {result.stderr.strip()} {result.stdout.strip()}")
+        watch_run(run_id, runner)
         run = read_json(api_command(f"actions/runs/{run_id}"), runner)
     if not isinstance(run, dict) or run.get("status") != "completed" or run.get("conclusion") != "success" or \
             any(run.get(key) != value for key, value in expected.items()) or \
