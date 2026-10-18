@@ -30,7 +30,7 @@ constexpr char32_t carriage_return_character = 0x0D;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 61> normal_bindings{
+constexpr std::array<VimBinding, 62> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -45,6 +45,7 @@ constexpr std::array<VimBinding, 61> normal_bindings{
      {U'B', VimAction::move_previous_big_word},
      {U'E', VimAction::move_big_word_end},
      {U'^', VimAction::move_first_non_blank},
+     {U'|', VimAction::move_to_column},
      {U'+', VimAction::move_next_line},
      {U'-', VimAction::move_previous_line},
      {U'H', VimAction::move_screen_top},
@@ -181,10 +182,11 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::align_center_first_non_blank, VimActionGroup::screen_alignment},
      {VimAction::align_bottom_first_non_blank, VimActionGroup::screen_alignment},
      {VimAction::align_below_window_top_first_non_blank, VimActionGroup::screen_alignment},
-     {VimAction::align_above_window_bottom_first_non_blank, VimActionGroup::screen_alignment}}};
+     {VimAction::align_above_window_bottom_first_non_blank, VimActionGroup::screen_alignment},
+     {VimAction::move_to_column, VimActionGroup::motion}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
-constexpr std::array<VimMotionBinding, 26> motion_bindings{
+constexpr std::array<VimMotionBinding, 27> motion_bindings{
     {{VimAction::move_left, VimMotion::left},
      {VimAction::move_down, VimMotion::down},
      {VimAction::move_up, VimMotion::up},
@@ -210,7 +212,8 @@ constexpr std::array<VimMotionBinding, 26> motion_bindings{
      {VimAction::move_previous_word_end, VimMotion::previous_word_end},
      {VimAction::move_previous_big_word_end, VimMotion::previous_big_word_end},
      {VimAction::move_display_down, VimMotion::display_down},
-     {VimAction::move_display_up, VimMotion::display_up}}};
+     {VimAction::move_display_up, VimMotion::display_up},
+     {VimAction::move_to_column, VimMotion::column}}};
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4）。ここに
 // 無い鍵は g を打ち消す。
@@ -282,11 +285,11 @@ constexpr std::array<VimTextObjectBinding, 15> text_object_bindings{
 
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e E ge gE は入れる（inclusive）。
 // 行単位の j k はどちらでもないので、この表には無い。gj gk は文字単位の exclusive（ADR 0144）。
-constexpr std::array<VimMotion, 12> exclusive_motions{
+constexpr std::array<VimMotion, 13> exclusive_motions{
     {VimMotion::left, VimMotion::right, VimMotion::line_start, VimMotion::first_non_blank,
      VimMotion::next_word, VimMotion::previous_word, VimMotion::wrap_right, VimMotion::wrap_left,
      VimMotion::next_big_word, VimMotion::previous_big_word, VimMotion::display_down,
-     VimMotion::display_up}};
+     VimMotion::display_up, VimMotion::column}};
 
 // 表の中でその動作を指す行の数。ちょうど 1 でなければ表が動作の一覧とずれている。
 [[nodiscard]] constexpr std::size_t rows_for(VimAction action) noexcept
