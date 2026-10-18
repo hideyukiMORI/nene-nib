@@ -23,12 +23,12 @@ Vim 9.1 の実測（要点・全表は probe）:
 
 1. **4 つは motion。`VimMotion` に `display_line_start`（`g0`）・`display_line_end`（`g$`）・`display_line_middle`（`gm`）・`line_middle`（`gM`）を足し、`g` の接頭辞の表に 4 行（ADR 0042 決定 6）。** `g$` は inclusive、ほかは exclusive。`default` / `else` を書かない（CPP-002）。画面の操作として motion の外で解く案は、オペレータと VISUAL の範囲を別に組むことになるので採らない。
 2. **範囲は 2 つの源で、どちらを使うかは `columns` で決める（ADR 0145 決定 4 の区別と同じ）。**
-   - **横に送る文書（`VimViewport.columns > 0`・nowrap の text 形と巨大な行の窓）**: 見えている升 `[left_column, left_column + columns)`。`g0` = その升以上で始まる最初の文字（左端で割れた全角はその字・ADR 0145 の `left_edge_character`）、`g$` = `left_column + columns − 1` までに収まる最後の文字（`right_edge_character`）、`gm` = 升 `left_column + columns / 2` を含む文字（`character_at_cell`・行の長さを越えれば最後の文字）。ADR 0145 の 3 つの道具を公開して共用し、2 本目を書かない。4 つは `vim_reads_viewport` の表に足して viewport を受ける（ADR 0129 決定 1）。
+   - **横に送る文書（`VimViewport.columns > 0`・nowrap の text 形と巨大な行の窓）**: 見えている升 `[left_column, left_column + columns)`。`g0` = 升 `left_column` を含む文字（左端で割れた全角はその字に着き、application の追従が leftcol を 1 戻す・ADR 0145 の `character_at_cell`。実装の oracle で確かめた・2026-10-18 追記）、`g$` = `left_column + columns − 1` までに収まる最後の文字（`right_edge_character`）、`gm` = 升 `left_column + columns / 2` を含む文字（`character_at_cell`・行の長さを越えれば最後の文字）。ADR 0145 の道具（`character_at_cell`・`right_edge_character`）を公開して共用し、2 本目を書かない。`g0` `g$` `gm` の 3 つは `vim_reads_viewport` の表に足して viewport を受ける（ADR 0129 決定 1）。`gM` は行の本文の幅だけを読むので足さない（#663 のレビュー Q-1・2026-10-18 追記）。
    - **折り返す文書（`columns == 0` で `layout.enabled`・wrap on の text 形と格子）**: 今の画面行の `VimRowSpan`（`row_request`・ADR 0144 決定 2）。`g0` = `landed(span, start_column)`、`gm` = `landed(span, start_column + row_columns / 2)`（短い段では最後の文字）、`g$`（回数 1）= `landed(span, nullopt)`（段の最後の文字・最後の段は `span.end` をモードで寄せる: NORMAL は最後の文字・VISUAL と INSERT は行の端）。`display_view` で `gj` `gk` と同じ所で先に解く。
    - **どちらでもない（幅 0・文字組みが無い）**: `g0` は `0`、`g$` は `$`（欲しい列は着地の桁）、`gm` は `g0` と同じ（幅が無いので半分も 0）。`gM` は源に依らず行の本文の幅（行頭からの仮想桁の全体・`VirtualColumnIndex` があれば O(塊)）の半分。
 3. **回数。** `g0` `gm` は回数を無視する。`gM` は 1〜100 を行の幅の %（`幅 × N / 100` の升を含む文字・`100gM` は最後の文字）、100 超は無視（半分）。`{N}g$` は N > 1 のとき、折り返す文書では `vim_row_landing`（ADR 0144 決定 3 の歩き）で N − 1 画面行下へ欲しい列 MAXCOL で歩き（行をまたぐ）、動き切れなければ失敗（オペレータは打ち消し・後ろの鍵は打ち切り・Vim の `nv_screengo`）、横に送る文書では N − 1 行下の `g$`（失敗しない・欲しい列は着地の桁・Vim の実測）。
 4. **欲しい列。** `g0` `gm` `gM` と回数 1 の `g$` は着地の仮想桁（`navigated_state` の置き換えでよい）。`{N}g$`（N > 1・折り返す文書）だけ MAXCOL。`vim_row_landing` に欲しい列を渡す口を 1 つ足す（`gj` `gk` の持ち越し `wanted_in` は使わない）。
-5. **オペレータと VISUAL。** `dg$` は inclusive で行末まで（改行を含まない）、`dg0` `dgm` `dgM` は exclusive（決定 1 の表）。最後の段での VISUAL の `g$` `gm` は行の端（NUL）に載り、yank は改行を含む（`$` の VISUAL と同じ側）。`.` は motion なので無関係。
+5. **オペレータと VISUAL。** `dg$` は inclusive で行末まで（改行を含まない）、`dg0` `dgm` `dgM` は exclusive（決定 1 の表）。最後の段での VISUAL の `g$` `gm` は行の端（NUL）に載り、yank は改行を含む（`$` の VISUAL と同じ側・**文書の最終行では改行が無いので含まない**・oracle で確かめた・2026-10-18 追記）。`.` は motion なので無関係。
 6. **横位置は engine が置かない。** `first_column` は `std::nullopt`（ADR 0145 決定 7）で、左端で割れた全角に `g0` で着いたときは application の最小追従が leftcol を 1 戻す（Vim の実測と同じ結果）。
 7. **検証。** `eng/vim-wrap-oracle.py` の fixture: wrap（80 字の行の 2 段目で 4 鍵・後の `j`・`2g$` `9g$`（行をまたぐ）・`99g$x`（失敗）・`d99g$`（不変）・`3g0` `3gm`（無視）・`25gM` `50gM` `100gM` `150gM`・最後の短い段と短い行・Tab の行・`dg$` `dg0` `dgm` `dgM` `d2g$`・`vg$y` `vg0y` `vgmy`・最後の段の `vg$y`）と nowrap（leftcol 30 で 4 鍵・`g$j`・`2g$`・`99g$x`（失敗しない）・leftcol 0・左端で割れた全角の `g0` `g$`・`dg$` `dg0`）。送られた全角の段に当たる件は Nib と合わない見込みなので、oracle の答えを証跡に残して json から外し、限界に記録する。格子は契約（`--vim`・替え玉の `row_request`・`columns` を W にして `gm` が段の頭 + W/2・巨大な 1 行の `g0` `g$` が段の端・`{N}g$` が画面行をまたぐ）。既存 fixture（Vim 1,914 件 + #660 の分・wrap 209 件）は不変。
 
@@ -48,4 +48,6 @@ Vim 9.1 の実測（要点・全表は probe）:
 
 - 送られた全角の段では Vim の virtcol が 1 多く、`g0` の欲しい列と 1 段目の `g$` の欲しい列が 1 ずれ得る（ADR 0144 の限界と同じ穴・#656 と同じ根）。
 - text 形の `row_columns` と `columns` は平均の字幅の近似（ADR 0144 / 0145 の限界と同じ）。`gm` は proportional な字体では Vim と升がずれ得る。
+- 送られた全角の段では着地は一致するが、その後の `j` の桁が 1 ずれる 2 件（`wrap-wide-row2-g0-j` `wrap-wide-row1-gdollar-j`）を json から外した（証跡 `D:/NeNeNib/evidence/661-wrap-oracle/excluded/`）。
+- 横に送る文書の `{N}g$` は、下の行にもキャレットの行の `left_column` を使う（Vim の実測と一致）。巨大な行の窓で窓の外の行に当たる場合は未検査（#663 のレビュー Q-2）。
 - `g^`（画面行の最初の非空白）・`g_`・INSERT の `<C-o>g$`・矩形 VISUAL の `g$`（`$` の「行末まで」の特例）は入れない（後続）。
