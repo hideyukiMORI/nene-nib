@@ -2121,5 +2121,223 @@
       "line": 1,
       "column": 1
     }
+  },
+  {
+    "name": "wrap-z-align-zt-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zt",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-zz-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zz",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-zb-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zb",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-cr-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "z<CR>",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-dot-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "z.",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-minus-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "z-",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-zz-caret-on-the-second-row",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zz",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 50,
+      "column": 25
+    }
+  },
+  {
+    "name": "wrap-z-align-zz-below-a-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zz",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 52,
+      "column": 2
+    }
+  },
+  {
+    "name": "wrap-z-align-zb-below-a-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zb",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 52,
+      "column": 2
+    }
+  },
+  {
+    "name": "wrap-z-align-zz-below-a-three-row-line-h11",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zz",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 11,
+      "first_visible": 45,
+      "line": 52,
+      "column": 2
+    }
+  },
+  {
+    "name": "wrap-z-align-zz-below-a-three-row-line-h4",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zz",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 4,
+      "first_visible": 51,
+      "line": 52,
+      "column": 2
+    }
+  },
+  {
+    "name": "wrap-z-align-zb-below-a-three-row-line-h4",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zb",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 4,
+      "first_visible": 51,
+      "line": 52,
+      "column": 2
+    }
+  },
+  {
+    "name": "wrap-z-align-count-50zz-onto-the-three-row-line",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "50zz",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 51,
+      "column": 2
+    }
+  },
+  {
+    "name": "wrap-z-align-zt-line-taller-than-the-screen",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zt",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 2,
+      "first_visible": 50,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-zz-line-taller-than-the-screen",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zz",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 2,
+      "first_visible": 50,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-z-align-zb-line-taller-than-the-screen",
+    "text": "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl016\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\nl032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl047\nl048\nl049\n  abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl057\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+    "keys": "zb",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 2,
+      "first_visible": 50,
+      "line": 50,
+      "column": 5
+    }
+  },
+  {
+    "name": "nowrap-z-align-zt-keeps-leftcol",
+    "text": "line001 word word\nline002 word word\nline003 word word\nline004 word word\nline005 word word\nline006 word word\nline007 word word\nline008 word word\nline009 word word\n    abc010 def\nline011 word word\nline012 word word\nline013 word word\nline014 word word\nline015 word word\nline016 word word\nline017 word word\nline018 word word\nline019 word word\n    abc020 def\nline021 word word\nline022 word word\nline023 word word\nline024 word word\nline025 word word\nline026 word word\nline027 word word\nline028 word word\nline029 word word\n    abc030 def\nline031 word word\nline032 word word\nline033 word word\nline034 word word\nline035 word word\nline036 word word\nline037 word word\nline038 word word\nline039 word word\n    abc040 def\nline041 word word\nline042 word word\nline043 word word\nline044 word word\nline045 word word\nline046 word word\nline047 word word\nline048 word word\nline049 word word\n    abc050 def\nline051 word word\nline052 word word\nline053 word word\nline054 word word\nline055 word word\nline056 word word\nline057 word word\nline058 word word\nline059 word word\n    abc060 def\nline061 word word\nline062 word word\nline063 word word\nline064 word word\nline065 word word\nline066 word word\nline067 word word\nline068 word word\nline069 word word\n    abc070 def\nline071 word word\nline072 word word\nline073 word word\nline074 word word\nline075 word word\nline076 word word\nline077 word word\nline078 word word\nline079 word word\n    abc080 def\nline081 word word\nline082 word word\nline083 word word\nline084 word word\nline085 word word\nline086 word word\nline087 word word\nline088 word word\nline089 word word\n    abc090 def\nline091 word word\nline092 word word\nline093 word word\nline094 word word\nline095 word word\nline096 word word\nline097 word word\nline098 word word\nline099 word word\n    abc100 def",
+    "keys": "zt",
+    "viewport": {
+      "columns": 12,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 51,
+      "column": 15,
+      "leftcol": 8
+    }
+  },
+  {
+    "name": "nowrap-z-align-cr-follows-to-leftcol-0",
+    "text": "line001 word word\nline002 word word\nline003 word word\nline004 word word\nline005 word word\nline006 word word\nline007 word word\nline008 word word\nline009 word word\n    abc010 def\nline011 word word\nline012 word word\nline013 word word\nline014 word word\nline015 word word\nline016 word word\nline017 word word\nline018 word word\nline019 word word\n    abc020 def\nline021 word word\nline022 word word\nline023 word word\nline024 word word\nline025 word word\nline026 word word\nline027 word word\nline028 word word\nline029 word word\n    abc030 def\nline031 word word\nline032 word word\nline033 word word\nline034 word word\nline035 word word\nline036 word word\nline037 word word\nline038 word word\nline039 word word\n    abc040 def\nline041 word word\nline042 word word\nline043 word word\nline044 word word\nline045 word word\nline046 word word\nline047 word word\nline048 word word\nline049 word word\n    abc050 def\nline051 word word\nline052 word word\nline053 word word\nline054 word word\nline055 word word\nline056 word word\nline057 word word\nline058 word word\nline059 word word\n    abc060 def\nline061 word word\nline062 word word\nline063 word word\nline064 word word\nline065 word word\nline066 word word\nline067 word word\nline068 word word\nline069 word word\n    abc070 def\nline071 word word\nline072 word word\nline073 word word\nline074 word word\nline075 word word\nline076 word word\nline077 word word\nline078 word word\nline079 word word\n    abc080 def\nline081 word word\nline082 word word\nline083 word word\nline084 word word\nline085 word word\nline086 word word\nline087 word word\nline088 word word\nline089 word word\n    abc090 def\nline091 word word\nline092 word word\nline093 word word\nline094 word word\nline095 word word\nline096 word word\nline097 word word\nline098 word word\nline099 word word\n    abc100 def",
+    "keys": "z<CR>",
+    "viewport": {
+      "columns": 12,
+      "visible_lines": 10,
+      "first_visible": 45,
+      "line": 51,
+      "column": 15,
+      "leftcol": 8
+    }
   }
 ]

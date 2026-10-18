@@ -4,7 +4,9 @@
 #include "VimDisplayNavigation.hpp"
 #include "VimEditorView.hpp"
 #include "VimLayoutNeed.hpp"
+#include "VimScreenPlace.hpp"
 #include "VimState.hpp"
+#include "VisualPosition.hpp"
 
 #include <expected>
 #include <optional>
@@ -12,11 +14,20 @@
 namespace nenenib::core
 {
 // 表示領域（VimViewport）を読む鍵か（ADR 0129 の決定 1）。画面の行に関わる H M L と
-// Ctrl-d/u/f/b（PgUp/PgDn も同じ動作）で、表は画面移動の解決と同じ 1 つ。
+// Ctrl-d/u/f/b（PgUp/PgDn も同じ動作）・横送り・縦の位置合わせ（ADR 0146 の決定 2）。
 [[nodiscard]] bool vim_reads_viewport(VimAction action) noexcept;
 
 // 純粋な画面移動の解決。行数か行の中の画面行が足りなければ、その問いを返し、状態は変えない。
 // 格子（VimScrollUnit::row）の半画面と 1 画面は画面行の単位で解く（ADR 0144 の決定 5）。
 [[nodiscard]] std::expected<std::optional<VimDisplayNavigation>, VimLayoutNeed>
 vim_display_navigation(const VimState &state, const VimEditorView &view, VimAction action);
+
+// 縦の位置合わせ（zt zz zb z<CR> z. z-）の新しい画面の先頭（ADR 0146 の決定 5）。caret は
+// 回数で選んで最初の非空白へ動いた後のキャレット。文字組みが無効なら 1 論理行 = 1 画面行の
+// 算術、wrap on の text 形は論理行の単位で行の画面行数を問い（Vim の scroll_cursor_bot と
+// scroll_cursor_halfway）、格子は画面行の単位。先頭は文書の先頭で止め、上限は収めない。
+// wrap on でキャレットの行が画面より高ければ nullopt（何も変えない）。足りない文字組みの値は
+// VimLayoutNeed。
+[[nodiscard]] std::expected<std::optional<VisualPosition>, VimLayoutNeed>
+vim_aligned_top(const VimEditorView &view, Offset caret, VimScreenPlace place);
 } // namespace nenenib::core

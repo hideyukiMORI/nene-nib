@@ -8,6 +8,7 @@
 #include "VimRowSpan.hpp"
 #include "VimScrollDirection.hpp"
 #include "VimState.hpp"
+#include "VisualPosition.hpp"
 
 #include <cstddef>
 #include <expected>
@@ -47,4 +48,10 @@ vim_row_half_navigation(const VimState &state, const VimEditorView &view,
 [[nodiscard]] std::expected<VimRowLanding, VimLayoutNeed>
 vim_row_landing(const VimState &state, const VimEditorView &view, VimScrollDirection direction,
                 std::size_t amount);
+
+// 格子の縦の位置合わせの画面の先頭（ADR 0146 の決定 5）。caret の画面行から上へ above 画面行だけ
+// 歩いた（行・画面行）で、文書の最初の画面行で止める（上限は収めない）。足りない文字組みの値は
+// VimLayoutNeed。
+[[nodiscard]] std::expected<VisualPosition, VimLayoutNeed>
+vim_row_aligned_top(const VimEditorView &view, Offset caret, std::size_t above);
 } // namespace nenenib::core

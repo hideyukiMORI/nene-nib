@@ -472,6 +472,118 @@ unit_resolved(const VimState &state, const VimEditorView &view, VimScreenKind ki
     }
     std::unreachable();
 }
+// キャレットの行（格子では画面行）の上に置く画面行の数（ADR 0146 の決定 5）。
+[[nodiscard]] std::size_t rows_above(VimScreenPlace place, std::size_t height) noexcept
+{
+    switch (place)
+    {
+    case VimScreenPlace::top:
+        return 0;
+    case VimScreenPlace::center:
+        return (height - 1) / 2;
+    case VimScreenPlace::bottom:
+        return height - 1;
+    }
+    std::unreachable();
+}
+
+// 交互の足し方で足す行の画面行数。文書の末尾を越えた行は `~` の 1 画面行。
+[[nodiscard]] std::expected<std::size_t, LineNumber> filler_rows(const VimEditorView &view,
+                                                                 LineNumber line)
+{
+    if (line.value > view.text.line_count())
+    {
+        return 1;
+    }
+    return rows_of(view, line);
+}
+
+// 下端に置く（Vim の scroll_cursor_bot）。キャレットの行から上へ、画面に入る間だけ行を足す。
+[[nodiscard]] std::expected<LineNumber, LineNumber> bottom_top(const VimEditorView &view,
+                                                               LineNumber line, std::size_t used)
+{
+    const std::size_t height = height_of(view);
+    LineNumber top = line;
+    while (top.value > 1)
+    {
+        const auto rows = rows_of(view, LineNumber{top.value - 1});
+        if (!rows)
+        {
+            return std::unexpected(rows.error());
+        }
+        if (rows.value() > height - used)
+        {
+            break;
+        }
+        used += rows.value();
+        --top.value;
+    }
+    return top;
+}
+
+// 中央に置く（Vim の scroll_cursor_halfway）。下に足した画面行が上以下なら下の行を、上より多ければ
+// 上の行を 1 つずつ足し、画面を越える行か文書の先頭で止める。added の 0 が上・1 が下の画面行数。
+[[nodiscard]] std::expected<LineNumber, LineNumber> halfway_top(const VimEditorView &view,
+                                                                LineNumber line, std::size_t used)
+{
+    const std::size_t height = height_of(view);
+    LineNumber top = line;
+    LineNumber next{line.value + 1};
+    std::array<std::size_t, 2> added{};
+    while (top.value > 1)
+    {
+        const bool down = added[1] <= added[0];
+        const LineNumber adding = down ? next : LineNumber{top.value - 1};
+        const auto rows = filler_rows(view, adding);
+        if (!rows)
+        {
+            return std::unexpected(rows.error());
+        }
+        if (rows.value() > height - used)
+        {
+            break;
+        }
+        used += rows.value();
+        added.at(static_cast<std::size_t>(down)) += rows.value();
+        next.value += static_cast<std::size_t>(down);
+        top = down ? top : adding;
+    }
+    return top;
+}
+
+// wrap on の text 形（論理行の単位・first_row は 0）。キャレットの行が画面より高ければ何も
+// 変えない。
+[[nodiscard]] std::expected<std::optional<VisualPosition>, VimLayoutNeed>
+lined_top(const VimEditorView &view, LineNumber line, VimScreenPlace place)
+{
+    const auto rows = rows_of(view, line);
+    if (!rows)
+    {
+        return std::unexpected(VimLayoutNeed{rows.error()});
+    }
+    if (rows.value() > height_of(view))
+    {
+        return std::nullopt;
+    }
+    auto top = std::expected<LineNumber, LineNumber>{line};
+    switch (place)
+    {
+    case VimScreenPlace::top:
+        break;
+    case VimScreenPlace::center:
+        top = halfway_top(view, line, rows.value());
+        break;
+    case VimScreenPlace::bottom:
+        top = bottom_top(view, line, rows.value());
+        break;
+    }
+    if (!top)
+    {
+        return std::unexpected(VimLayoutNeed{top.error()});
+    }
+    return std::optional{VisualPosition{top.value(), 0}};
+}
+
 // 横送りの鍵（ADR 0145 の決定 2）。画面の幅と今の横位置を表示領域から読む。
 [[nodiscard]] bool scrolls_horizontally(VimAction action) noexcept
 {
@@ -481,7 +593,8 @@ unit_resolved(const VimState &state, const VimEditorView &view, VimScreenKind ki
 
 bool vim_reads_viewport(VimAction action) noexcept
 {
-    return screen_kind(action).has_value() || scrolls_horizontally(action);
+    return screen_kind(action).has_value() || scrolls_horizontally(action) ||
+           vim_group_for(action) == VimActionGroup::screen_alignment;
 }
 
 std::expected<std::optional<VimDisplayNavigation>, VimLayoutNeed>
@@ -498,5 +611,30 @@ vim_display_navigation(const VimState &state, const VimEditorView &view, VimActi
         return std::unexpected(result.error());
     }
     return std::optional{result.value()};
+}
+
+std::expected<std::optional<VisualPosition>, VimLayoutNeed>
+vim_aligned_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
+{
+    const LineNumber line = view.text.position_of(caret).line;
+    const std::size_t above = rows_above(place, height_of(view));
+    if (!view.layout.enabled)
+    {
+        return std::optional{
+            VisualPosition{LineNumber{line.value - std::min(line.value - 1, above)}, 0}};
+    }
+    switch (view.layout.unit)
+    {
+    case VimScrollUnit::line:
+        return lined_top(view, line, place);
+    case VimScrollUnit::row:
+        break;
+    }
+    const auto top = vim_row_aligned_top(view, caret, above);
+    if (!top)
+    {
+        return std::unexpected(top.error());
+    }
+    return std::optional{top.value()};
 }
 } // namespace nenenib::core
