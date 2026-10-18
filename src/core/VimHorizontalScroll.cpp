@@ -66,12 +66,6 @@ using LineBounds = std::pair<Offset, Offset>;
     return std::max<std::size_t>(column_advance(value, column), 1);
 }
 
-// 行 line の 0 始まりの升 column を含む文字の先頭（行より右なら行の内容の終わり）。
-[[nodiscard]] Offset character_at_cell(const TextBuffer &text, LineNumber line, std::size_t column)
-{
-    return offset_at_virtual_column(text, line, VirtualColumn{column + 1});
-}
-
 // at から始まる Vim の 1 文字の次の文字の先頭（ADR 0053）。at の後ろの窓だけを読み、文字の終わりが
 // 窓の終わりに触れていれば窓を倍にして読み直す。
 [[nodiscard]] Offset character_after(const TextBuffer &text, Offset at, Offset line_end)
@@ -154,17 +148,6 @@ using CaretCells = std::tuple<std::size_t, std::size_t, std::size_t>;
     return left - std::min(left, amount);
 }
 
-// 右端の升 right を含む文字。そこで終わらなければ前の文字（ADR 0053 の 1 文字）。
-[[nodiscard]] Offset right_edge_character(const TextBuffer &text, LineBounds line,
-                                          std::size_t right)
-{
-    const LineNumber number = text.position_of(line.first).line;
-    const Offset at = character_at_cell(text, number, right);
-    const bool ends = character_at_cell(text, number, right + 1) != at;
-    return ends || at == line.first ? vim_resting_caret(text, at)
-                                    : vim_resting_caret(text, Offset{at.value - 1});
-}
-
 // 左端の升 left を含む文字。そこで始まらなければ次の文字。
 [[nodiscard]] Offset left_edge_character(const TextBuffer &text, LineBounds line, std::size_t left)
 {
@@ -194,6 +177,22 @@ using CaretCells = std::tuple<std::size_t, std::size_t, std::size_t>;
     return std::nullopt;
 }
 } // namespace
+
+// 公開の 2 本（ADR 0147 の決定 2・g0 gm g$ と共用）。宣言は VimHorizontalScroll.hpp。
+Offset character_at_cell(const TextBuffer &text, LineNumber line, std::size_t column)
+{
+    return offset_at_virtual_column(text, line, VirtualColumn{column + 1});
+}
+
+Offset right_edge_character(const TextBuffer &text, std::pair<Offset, Offset> line,
+                            std::size_t right)
+{
+    const LineNumber number = text.position_of(line.first).line;
+    const Offset at = character_at_cell(text, number, right);
+    const bool ends = character_at_cell(text, number, right + 1) != at;
+    return ends || at == line.first ? vim_resting_caret(text, at)
+                                    : vim_resting_caret(text, Offset{at.value - 1});
+}
 
 std::expected<std::optional<VimHorizontalScroll>, VimLayoutNeed>
 vim_horizontal_scroll(const VimState &state, const VimEditorView &view, VimAction action)

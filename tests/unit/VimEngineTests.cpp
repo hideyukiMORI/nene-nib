@@ -1209,14 +1209,15 @@ template <typename Value, typename Same>
 // 渡したのと同じ結果になる（ADR 0129 の決定 1・3）。録画・レジスタ・`.` の記録も消費しない。
 void verify_vim_viewport_reading_keys(const VimEditorView &shown, const VimEditorView &hidden)
 {
-    constexpr std::array<std::pair<std::string_view, std::string_view>, 26> reading{{
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 32> reading{{
         {"", "H"},          {"", "M"},        {"", "L"},           {"3", "H"},
         {"2", "L"},         {"d", "L"},       {"y2", "H"},         {"v", "H"},
         {"", "<C-d>"},      {"5", "<C-u>"},   {"", "<C-f>"},       {"", "<C-b>"},
         {"", "<PageDown>"}, {"", "<PageUp>"}, {"i", "<PageDown>"}, {"i", "<PageUp>"},
         {"v", "<C-d>"},     {"V", "H"},       {"V", "M"},          {"V", "L"},
         {"<C-v>", "H"},     {"<C-v>", "M"},   {"<C-v>", "L"},      {"xqa", "H"},
-        {"\"ayyqb", "M"},   {"\"b", "L"},
+        {"\"ayyqb", "M"},   {"\"b", "L"},     {"g", "0"},          {"g", "$"},
+        {"g", "m"},         {"3g", "M"},      {"dg", "$"},         {"vg", "0"},
     }};
     for (const auto &[before, key] : reading)
     {
@@ -1803,6 +1804,89 @@ void verify_vim_display_cut_first_line_only()
            "a gj that cannot move keeps the cut wanted column");
 }
 
+// 鍵の後の着地（VimMoveTo）。効果が VimMoveTo でなければ無し。
+[[nodiscard]] std::optional<Offset> moved_to(const nenenib::core::VimStep &step)
+{
+    const auto *const moved = std::get_if<VimMoveTo>(&step.effect);
+    return moved != nullptr ? std::optional{moved->caret} : std::nullopt;
+}
+
+// 格子の g0 gm g$（ADR 0147 の決定 2・3）。替え玉は grid_width 字ごとに折り返す。1 行目（20 字・
+// 3 画面行）の 2 画面行目の 10 桁に立つと、g0 は段の頭 8、gm は段の頭 + row_columns / 2（W を 8 に
+// すれば 12、6 にすれば 11）、g$ は段の最後の文字 15 で欲しい列はその桁（MAXCOL でない）。短い
+// 最後の段（4 字）の gm は最後の文字。3g$ は 2 画面行下（行をまたいで 2 行目の 1 画面行目の末尾）へ
+// 行末の印で歩く。
+void verify_vim_grid_display_line_edges()
+{
+    const auto parsed = TextBuffer::from_utf8(std::string(20, 'a') + "\n" + std::string(40, 'b'));
+    expect(parsed.has_value(), "the grid g0 g$ gm sample parses");
+    const auto &text = parsed.value();
+    const auto at = [&text](ScreenMove move, std::size_t row_columns)
+    { return moved_to(cut_screen_move(text, move, row_columns, wanted_at(1))); };
+    expect(at(ScreenMove{Offset{10}, "g0"}, grid_width) == std::optional{Offset{8}},
+           "grid g0 lands on the first character of the caret screen row");
+    expect(at(ScreenMove{Offset{10}, "gm"}, grid_width) == std::optional{Offset{12}} &&
+               at(ScreenMove{Offset{10}, "gm"}, 6) == std::optional{Offset{11}},
+           "grid gm lands half of the row cells after the screen row start");
+    expect(at(ScreenMove{Offset{18}, "gm"}, grid_width) == std::optional{Offset{19}},
+           "grid gm on a short last screen row lands on the last character");
+    const auto end = cut_screen_move(text, ScreenMove{Offset{10}, "g$"}, grid_width, wanted_at(1));
+    expect(moved_to(end) == std::optional{Offset{15}} &&
+               end.next.wanted_column == std::optional{wanted_at(16)},
+           "grid g$ lands on the last character of the screen row and wants its column");
+    const auto crossed =
+        cut_screen_move(text, ScreenMove{Offset{10}, "3g$"}, grid_width, wanted_at(1));
+    const VimWantedColumn line_end{nenenib::core::VimColumnWish::at_line_end,
+                                   nenenib::core::VirtualColumn{1}};
+    expect(moved_to(crossed) == std::optional{Offset{21 + 7}} && !crossed.failure.has_value() &&
+               crossed.next.wanted_column == std::optional{line_end},
+           "grid 3g$ walks two screen rows down across the line and wants the line end");
+}
+
+// 本文の末尾の画面行で歩き切れない {N}g$ は失敗し、行ける所（最後の画面行の末尾）まで動く。
+// オペレータは打ち消して本文を変えない（Vim の nv_g_dollar_cmd・ADR 0147 の決定 3）。巨大な 1 行の
+// 格子でも g0 g$ は段の端に着く。
+void verify_vim_grid_display_line_failure()
+{
+    const auto parsed = TextBuffer::from_utf8(std::string(20, 'a') + "\n" + std::string(12, 'b'));
+    expect(parsed.has_value(), "the grid 9g$ sample parses");
+    const auto &text = parsed.value();
+    const auto stuck =
+        cut_screen_move(text, ScreenMove{Offset{22}, "9g$"}, grid_width, wanted_at(1));
+    expect(stuck.failure.has_value() && moved_to(stuck) == std::optional{Offset{21 + 11}},
+           "grid 9g$ past the document end fails after moving to the last screen row end");
+    const auto removed =
+        cut_screen_move(text, ScreenMove{Offset{22}, "d9g$"}, grid_width, wanted_at(1));
+    expect(removed.failure.has_value() && moved_to(removed) == std::optional{Offset{21 + 11}},
+           "grid d9g$ past the document end cancels the operator and moves the caret");
+    const auto giant = TextBuffer::from_utf8(std::string(20'000, 'x'));
+    expect(giant.has_value(), "the giant grid line parses");
+    expect(moved_to(cut_screen_move(giant.value(), ScreenMove{Offset{16'390}, "g0"}, grid_width,
+                                    wanted_at(1))) == std::optional{Offset{16'384}} &&
+               moved_to(cut_screen_move(giant.value(), ScreenMove{Offset{16'390}, "g$"}, grid_width,
+                                        wanted_at(1))) == std::optional{Offset{16'391}},
+           "grid g0 g$ on a giant line land on the caret screen row edges");
+}
+
+// 横に送る文書（巨大な行の窓の text 形・columns > 0）の g0 gm g$ は見えている升の左端・中・右端
+// （ADR 0147 の決定 2）。文字組みの問いを立てない。
+void verify_vim_scrolled_display_line_edges()
+{
+    const auto giant = TextBuffer::from_utf8(std::string(20'000, 'x'));
+    expect(giant.has_value(), "the giant window line parses");
+    const Selection caret = collapsed_at(Offset{16'390});
+    const VimEditorView view{giant.value(), caret, VimViewport{LineNumber{1}, 5, 0, 40, 16'380}};
+    const VimState state = vim_state_after("g", view);
+    for (const auto &[key, landing] : std::array<std::pair<std::string_view, std::size_t>, 3>{
+             {{"0", 16'380}, {"m", 16'400}, {"$", 16'419}}})
+    {
+        const auto step = vim_step(state, view, vim_keys_of(key).front());
+        expect(!step.row_request.has_value() && !step.layout_request.has_value() &&
+                   moved_to(step) == std::optional{Offset{landing}},
+               "a scrolled window g0 gm g$ land in the visible cells without a layout question");
+    }
+}
+
 void verify_vim_viewport_request()
 {
     const auto text = TextBuffer::from_utf8(vim_lines(30));
@@ -1820,6 +1904,9 @@ void verify_vim_viewport_request()
     verify_vim_grid_window_edge_alignment();
     verify_vim_display_down_cut();
     verify_vim_display_cut_first_line_only();
+    verify_vim_grid_display_line_edges();
+    verify_vim_grid_display_line_failure();
+    verify_vim_scrolled_display_line_edges();
     verify_vim_counted_alignment_round_trip();
     verify_indexed_virtual_columns();
     verify_indexed_columns_across_chunks();

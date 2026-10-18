@@ -1,6 +1,8 @@
 #pragma once
 
+#include "LineNumber.hpp"
 #include "Offset.hpp"
+#include "TextBuffer.hpp"
 #include "VimAction.hpp"
 #include "VimEditorView.hpp"
 #include "VimLayoutNeed.hpp"
@@ -9,6 +11,7 @@
 #include <cstddef>
 #include <expected>
 #include <optional>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -32,4 +35,14 @@ struct VimHorizontalScroll
 // 否かと独立・決定 4）。行を写さない（offset_at_virtual_column と 1 文字の読みだけ）。
 [[nodiscard]] std::expected<std::optional<VimHorizontalScroll>, VimLayoutNeed>
 vim_horizontal_scroll(const VimState &state, const VimEditorView &view, VimAction action);
+
+// 行 line の 0 始まりの升 column を含む文字の先頭（行より右なら行の内容の終わり）。横送りの押しと
+// `g0` `gm` が共用する（ADR 0145 の決定 6・ADR 0147 の決定 2）。左端で割れた全角はその字。
+[[nodiscard]] Offset character_at_cell(const TextBuffer &text, LineNumber line, std::size_t column);
+
+// 行の内容の範囲 line = [start, end) の中で、右端の升 right を含む文字。そこで終わらなければ前の
+// 文字（ADR 0053 の 1 文字）で、NORMAL の寄せ（最後の文字）を済ませた位置。横送りの押しと `g$`
+// が共用する（ADR 0145 の決定 6・ADR 0147 の決定 2）。
+[[nodiscard]] Offset right_edge_character(const TextBuffer &text, std::pair<Offset, Offset> line,
+                                          std::size_t right);
 } // namespace nenenib::core

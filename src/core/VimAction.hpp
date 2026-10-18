@@ -113,10 +113,15 @@ enum class VimAction : std::uint8_t
     align_below_window_top_first_non_blank,
     align_above_window_bottom_first_non_blank,
     // `{N}|`。行頭からの仮想桁 N の文字へ（Issue #660）。
-    move_to_column
+    move_to_column,
+    // `g0` `g$` `gm` `gM`。画面行の端と中・行の中（ADR 0147 の決定 1）。
+    move_display_line_start,
+    move_display_line_end,
+    move_display_line_middle,
+    move_line_middle
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::move_to_column) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::move_line_middle) + 1;
 } // namespace nenenib::core
