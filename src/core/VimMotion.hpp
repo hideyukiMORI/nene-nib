@@ -42,7 +42,8 @@ enum class VimMotion : std::uint8_t
     display_down,
     display_up,
     // `{N}|`。行頭からの仮想桁 N（既定 1）の文字へ動く exclusive な移動（Issue #660・ADR 0034）。
-    // 欲しい列は着地の桁ではなく N を置く（Vim の nv_pipe の curswant = N − 1）。
+    // 欲しい列は着地の桁ではなく N を置く（持つのは 1 始まりの N・Vim の nv_pipe の curswant は
+    // 0 始まりの N − 1）。
     column,
     // `g0` `g$` `gm`。画面行の端と中（ADR 0147 の決定 1・2）。着地は engine が鍵を写す前に、横に
     // 送る文書では見えている升から、折り返す文書では今の画面行の範囲から解く。`g$` は inclusive。

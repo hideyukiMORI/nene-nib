@@ -769,8 +769,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
 }
 
 // 移動に渡す欲しい列。gj gk は画面行の問いで着地と一緒に解いた後の値、`{N}|` は着地の桁ではなく
-// 回数の桁 N（Vim の nv_pipe の curswant = N − 1・空行でも行より右でも同じ・Issue #660）で、
-// ほかは今の値。
+// 回数の桁 N（持つのは 1 始まりの N・Vim の nv_pipe の curswant は N − 1・空行でも行より右でも
+// 同じ・Issue #660）で、ほかは今の値。
 [[nodiscard]] VimWantedColumn wanted_for(const VimEditorView &view, const VimState &state,
                                          VimMotion motion)
 {
@@ -3845,11 +3845,14 @@ display_line_view(const VimState &state, const VimEditorView &view, VimAction ac
 display_view(const VimState &state, const VimEditorView &view, VimAction action)
 {
     auto navigation = vim_display_navigation(state, view, action);
-    auto line_landing = navigation ? display_line_view(state, view, action)
-                                   : std::expected<std::optional<VimRowLanding>, VimLayoutNeed>{};
-    if (!navigation || !line_landing)
+    if (!navigation)
     {
-        return std::unexpected(!navigation ? navigation.error() : line_landing.error());
+        return std::unexpected(navigation.error());
+    }
+    auto line_landing = display_line_view(state, view, action);
+    if (!line_landing)
+    {
+        return std::unexpected(line_landing.error());
     }
     auto result = view;
     result.navigation = std::move(navigation).value();

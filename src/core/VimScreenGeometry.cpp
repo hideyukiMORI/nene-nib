@@ -615,12 +615,13 @@ lined_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
     return vim_group_for(action) == VimActionGroup::horizontal_scroll;
 }
 
-// g0 g$ gm gM（ADR 0147 の決定 2）。横に送る文書の見えている升を表示領域から読む。
+// g0 g$ gm（ADR 0147 の決定 2）。横に送る文書の見えている升を表示領域から読む。gM は行の本文の幅
+// だけを読むので表示領域を求めない。
 [[nodiscard]] bool moves_in_display_line(VimAction action) noexcept
 {
     return action == VimAction::move_display_line_start ||
            action == VimAction::move_display_line_end ||
-           action == VimAction::move_display_line_middle || action == VimAction::move_line_middle;
+           action == VimAction::move_display_line_middle;
 }
 } // namespace
 

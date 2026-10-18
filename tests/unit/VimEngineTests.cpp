@@ -1217,7 +1217,7 @@ void verify_vim_viewport_reading_keys(const VimEditorView &shown, const VimEdito
         {"v", "<C-d>"},     {"V", "H"},       {"V", "M"},          {"V", "L"},
         {"<C-v>", "H"},     {"<C-v>", "M"},   {"<C-v>", "L"},      {"xqa", "H"},
         {"\"ayyqb", "M"},   {"\"b", "L"},     {"g", "0"},          {"g", "$"},
-        {"g", "m"},         {"3g", "M"},      {"dg", "$"},         {"vg", "0"},
+        {"g", "m"},         {"yg", "m"},      {"dg", "$"},         {"vg", "0"},
     }};
     for (const auto &[before, key] : reading)
     {
@@ -1234,10 +1234,10 @@ void verify_vim_viewport_reading_keys(const VimEditorView &shown, const VimEdito
     }
 }
 
-// 読まない鍵は要求しない（ADR 0129 の決定 1）。
+// 読まない鍵は要求しない（ADR 0129 の決定 1）。gM は行の本文の幅だけを読む（ADR 0147 の決定 2）。
 void verify_vim_viewport_blind_keys(const VimEditorView &shown, const VimEditorView &hidden)
 {
-    constexpr std::array<std::pair<std::string_view, std::string_view>, 11> blind{{
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 14> blind{{
         {"", "h"},
         {"", "j"},
         {"", "k"},
@@ -1249,6 +1249,9 @@ void verify_vim_viewport_blind_keys(const VimEditorView &shown, const VimEditorV
         {"i", "a"},
         {"i", "<Esc>"},
         {"d", "j"},
+        {"g", "M"},
+        {"3g", "M"},
+        {"dg", "M"},
     }};
     for (const auto &[before, key] : blind)
     {
@@ -1869,21 +1872,27 @@ void verify_vim_grid_display_line_failure()
 }
 
 // 横に送る文書（巨大な行の窓の text 形・columns > 0）の g0 gm g$ は見えている升の左端・中・右端
-// （ADR 0147 の決定 2）。文字組みの問いを立てない。
+// （ADR 0147 の決定 2）。文字組みの問いを立てない。wrap の文書の巨大な行の窓（文字組みが有効で
+// row_columns を持つ）でも columns > 0 が先に見られ、画面行の範囲を問わない（#663 のレビュー I-1）。
 void verify_vim_scrolled_display_line_edges()
 {
     const auto giant = TextBuffer::from_utf8(std::string(20'000, 'x'));
     expect(giant.has_value(), "the giant window line parses");
     const Selection caret = collapsed_at(Offset{16'390});
     const VimEditorView view{giant.value(), caret, VimViewport{LineNumber{1}, 5, 0, 40, 16'380}};
-    const VimState state = vim_state_after("g", view);
-    for (const auto &[key, landing] : std::array<std::pair<std::string_view, std::size_t>, 3>{
-             {{"0", 16'380}, {"m", 16'400}, {"$", 16'419}}})
+    auto wrapped = view;
+    wrapped.layout = VimLayoutView{true, {}, nenenib::core::VimScrollUnit::row, {}, grid_width};
+    for (const auto &shown : std::array<const VimEditorView *, 2>{&view, &wrapped})
     {
-        const auto step = vim_step(state, view, vim_keys_of(key).front());
-        expect(!step.row_request.has_value() && !step.layout_request.has_value() &&
-                   moved_to(step) == std::optional{Offset{landing}},
-               "a scrolled window g0 gm g$ land in the visible cells without a layout question");
+        const VimState state = vim_state_after("g", *shown);
+        for (const auto &[key, landing] : std::array<std::pair<std::string_view, std::size_t>, 3>{
+                 {{"0", 16'380}, {"m", 16'400}, {"$", 16'419}}})
+        {
+            const auto step = vim_step(state, *shown, vim_keys_of(key).front());
+            expect(!step.row_request.has_value() && !step.layout_request.has_value() &&
+                       moved_to(step) == std::optional{Offset{landing}},
+                   "a scrolled window g0 gm g$ land in the visible cells without a layout question");
+        }
     }
 }
 
