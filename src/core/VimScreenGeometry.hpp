@@ -26,8 +26,8 @@ vim_display_navigation(const VimState &state, const VimEditorView &view, VimActi
 // 回数で選んで最初の非空白へ動いた後のキャレット。文字組みが無効なら 1 論理行 = 1 画面行の
 // 算術、wrap on の text 形は論理行の単位で行の画面行数を問い（Vim の scroll_cursor_bot と
 // scroll_cursor_halfway）、格子は画面行の単位。先頭は文書の先頭で止め、上限は収めない。
-// wrap on でキャレットの行が画面より高ければ nullopt（何も変えない）。足りない文字組みの値は
-// VimLayoutNeed。
-[[nodiscard]] std::expected<std::optional<VisualPosition>, VimLayoutNeed>
+// wrap on でキャレットの行が画面より高ければ、先頭はその行で、今の first_row をキャレットの画面行が
+// 見える範囲に収める。足りない文字組みの値は VimLayoutNeed。
+[[nodiscard]] std::expected<VisualPosition, VimLayoutNeed>
 vim_aligned_top(const VimEditorView &view, Offset caret, VimScreenPlace place);
 } // namespace nenenib::core

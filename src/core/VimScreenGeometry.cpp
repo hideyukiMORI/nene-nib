@@ -2,6 +2,7 @@
 
 #include "VimActionGroup.hpp"
 #include "VimKeyTable.hpp"
+#include "VimRowRequest.hpp"
 #include "VimScreenKind.hpp"
 #include "VimScreenRows.hpp"
 #include "VimScreenWindow.hpp"
@@ -522,18 +523,20 @@ unit_resolved(const VimState &state, const VimEditorView &view, VimScreenKind ki
 }
 
 // 中央に置く（Vim の scroll_cursor_halfway）。下に足した画面行が上以下なら下の行を、上より多ければ
-// 上の行を 1 つずつ足し、画面を越える行か文書の先頭で止める。added の 0 が上・1 が下の画面行数。
+// 上の行を 1 つずつ足し、画面を越える行か文書の先頭で止める。above と below は Vim の同じ名前の数。
 [[nodiscard]] std::expected<LineNumber, LineNumber> halfway_top(const VimEditorView &view,
                                                                 LineNumber line, std::size_t used)
 {
     const std::size_t height = height_of(view);
     LineNumber top = line;
     LineNumber next{line.value + 1};
-    std::array<std::size_t, 2> added{};
+    std::size_t above = 0;
+    std::size_t below = 0;
     while (top.value > 1)
     {
-        const bool down = added[1] <= added[0];
+        const bool down = below <= above;
         const LineNumber adding = down ? next : LineNumber{top.value - 1};
+        // 文書の末尾の `~` を Vim は無条件に足すが、ここで止めても結果は同じ（次の上側で止まる）。
         const auto rows = filler_rows(view, adding);
         if (!rows)
         {
@@ -544,18 +547,40 @@ unit_resolved(const VimState &state, const VimEditorView &view, VimScreenKind ki
             break;
         }
         used += rows.value();
-        added.at(static_cast<std::size_t>(down)) += rows.value();
-        next.value += static_cast<std::size_t>(down);
-        top = down ? top : adding;
+        if (down)
+        {
+            below += rows.value();
+            ++next.value;
+        }
+        else
+        {
+            above += rows.value();
+            top = adding;
+        }
     }
     return top;
 }
 
-// wrap on の text 形（論理行の単位・first_row は 0）。キャレットの行が画面より高ければ何も
-// 変えない。
-[[nodiscard]] std::expected<std::optional<VisualPosition>, VimLayoutNeed>
-lined_top(const VimEditorView &view, LineNumber line, VimScreenPlace place)
+// 行が画面より高いときの先頭（ADR 0146 の決定 5）。先頭はその行で、今の first_row をキャレットの
+// 画面行が見える範囲 [画面行 − (h − 1), 画面行] に収める。
+[[nodiscard]] std::expected<VisualPosition, VimLayoutNeed> tall_top(const VimEditorView &view,
+                                                                    LineNumber line, Offset caret)
 {
+    const auto span = vim_row_span_of(view, VimRowRequest{line, caret});
+    if (!span)
+    {
+        return std::unexpected(span.error());
+    }
+    const std::size_t row = span.value().row;
+    const std::size_t lowest = row - std::min(row, height_of(view) - 1);
+    return VisualPosition{line, std::clamp(vim_viewport_of(view).first_row, lowest, row)};
+}
+
+// wrap on の text 形（論理行の単位・first_row は 0）。キャレットの行が画面より高いときは tall_top。
+[[nodiscard]] std::expected<VisualPosition, VimLayoutNeed>
+lined_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
+{
+    const LineNumber line = view.text.position_of(caret).line;
     const auto rows = rows_of(view, line);
     if (!rows)
     {
@@ -563,7 +588,7 @@ lined_top(const VimEditorView &view, LineNumber line, VimScreenPlace place)
     }
     if (rows.value() > height_of(view))
     {
-        return std::nullopt;
+        return tall_top(view, line, caret);
     }
     auto top = std::expected<LineNumber, LineNumber>{line};
     switch (place)
@@ -581,7 +606,7 @@ lined_top(const VimEditorView &view, LineNumber line, VimScreenPlace place)
     {
         return std::unexpected(VimLayoutNeed{top.error()});
     }
-    return std::optional{VisualPosition{top.value(), 0}};
+    return VisualPosition{top.value(), 0};
 }
 
 // 横送りの鍵（ADR 0145 の決定 2）。画面の幅と今の横位置を表示領域から読む。
@@ -613,28 +638,22 @@ vim_display_navigation(const VimState &state, const VimEditorView &view, VimActi
     return std::optional{result.value()};
 }
 
-std::expected<std::optional<VisualPosition>, VimLayoutNeed>
-vim_aligned_top(const VimEditorView &view, Offset caret, VimScreenPlace place)
+std::expected<VisualPosition, VimLayoutNeed> vim_aligned_top(const VimEditorView &view,
+                                                             Offset caret, VimScreenPlace place)
 {
     const LineNumber line = view.text.position_of(caret).line;
     const std::size_t above = rows_above(place, height_of(view));
     if (!view.layout.enabled)
     {
-        return std::optional{
-            VisualPosition{LineNumber{line.value - std::min(line.value - 1, above)}, 0}};
+        return VisualPosition{LineNumber{line.value - std::min(line.value - 1, above)}, 0};
     }
     switch (view.layout.unit)
     {
     case VimScrollUnit::line:
-        return lined_top(view, line, place);
+        return lined_top(view, caret, place);
     case VimScrollUnit::row:
         break;
     }
-    const auto top = vim_row_aligned_top(view, caret, above);
-    if (!top)
-    {
-        return std::unexpected(top.error());
-    }
-    return std::optional{top.value()};
+    return vim_row_aligned_top(view, caret, above);
 }
 } // namespace nenenib::core

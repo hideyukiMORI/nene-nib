@@ -1621,6 +1621,57 @@ void verify_vim_grid_alignment_lines()
     }
 }
 
+// `t` を往復させて解き、問いが立つたびに状態を消費せず効果も無いことを確かめる。解いた一歩と、
+// 答えた問いの種類（0 が行の画面行数・1 が画面行）を返す。
+[[nodiscard]] std::pair<nenenib::core::VimStep, std::array<bool, 2>>
+asked_while_aligning(const VimState &state, VimEditorView &view, std::vector<VimLineRows> &rows,
+                     std::vector<nenenib::core::VimRowSpan> &spans)
+{
+    const VimKey last = vim_keys_of("t").front();
+    auto step = vim_step(state, view, last);
+    std::array<bool, 2> asked{};
+    for (std::size_t round = 0; round < 64; ++round)
+    {
+        asked.at(0) = asked.at(0) || step.layout_request.has_value();
+        asked.at(1) = asked.at(1) || step.row_request.has_value();
+        const bool quiet =
+            same_vim_memory(step.next, state) && std::holds_alternative<VimNoEffect>(step.effect);
+        if (!answer_aligned_request(step, view, rows, spans))
+        {
+            break;
+        }
+        expect(quiet, "a counted alignment question consumes no count and has no effect");
+        step = vim_step(state, view, last);
+    }
+    return {step, asked};
+}
+
+// `4zt` は回数で行を選んでから画面の先頭を決めるので、行の画面行数と画面行の問いが 1 打鍵の往復に
+// 混ざる（ADR 0129 / 0146 の決定 5）。どの問いも状態を消費せず、格子と、行が画面より高い wrap on
+// の text 形（今の first_row をキャレットの画面行が見える範囲に収める）が同じ先頭に着く。
+void verify_vim_counted_alignment_round_trip()
+{
+    const auto text =
+        TextBuffer::from_utf8("a\nb\nc\n" + std::string(40, 'x') + "\n" + std::string(40, 'y'));
+    expect(text.has_value(), "the counted alignment sample parses");
+    const Offset fifth{text.value().line_start(LineNumber{5}).value + 20};
+    const Offset fourth{text.value().line_start(LineNumber{4}).value + 20};
+    for (const auto unit : {nenenib::core::VimScrollUnit::row, nenenib::core::VimScrollUnit::line})
+    {
+        std::vector<VimLineRows> rows;
+        std::vector<nenenib::core::VimRowSpan> spans;
+        VimEditorView view{
+            text.value(),        collapsed_at(fifth), VimViewport{LineNumber{5}, 2, 2},
+            VimKeySource::typed, VimTabs{0, 1},       VimLayoutView{true, rows, unit, spans}};
+        const VimState state = vim_state_after("4z", view);
+        const auto [step, asked] = asked_while_aligning(state, view, rows, spans);
+        expect(asked.at(0) && asked.at(1),
+               "a counted alignment asks for both line rows and a screen row");
+        expect(navigated_to(step, LineNumber{4}, 2, fourth),
+               "4zt onto a line taller than the screen keeps the caret screen row visible");
+    }
+}
+
 void verify_vim_viewport_request()
 {
     const auto text = TextBuffer::from_utf8(vim_lines(30));
@@ -1635,6 +1686,7 @@ void verify_vim_viewport_request()
     verify_vim_row_unit_pages();
     verify_vim_grid_alignment_rows();
     verify_vim_grid_alignment_lines();
+    verify_vim_counted_alignment_round_trip();
     verify_indexed_virtual_columns();
     verify_indexed_columns_across_chunks();
 }

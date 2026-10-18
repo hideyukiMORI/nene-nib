@@ -3524,9 +3524,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 
 // 縦の位置合わせ zt zz zb z<CR> z. z-（ADR 0146 の決定 1〜6）。回数で行を選び、z<CR> z. z- は
 // 行の最初の非空白へ動いて（欲しい列もそこ）から、engine が先頭行を決めて VimNavigate で返す。
-// zt zz zb は欲しい列を保つ。横位置は保つ（first_column は無し）。wrap on
-// でキャレットの行が画面より 高ければ先頭は今のまま。NORMAL と VISUAL は同じ 1 本を通り、VISUAL
-// は錨を保つ。
+// zt zz zb は欲しい列を保つ。横位置は保つ（first_column は無し）。行が画面より高いときの先頭は
+// 決定 5 の規則。NORMAL と VISUAL は同じ 1 本を通り、VISUAL は錨を保つ。
 [[nodiscard]] VimStep aligned_screen(const VimState &state, const VimEditorView &view,
                                      VimAction action)
 {
@@ -3543,9 +3542,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return requested_layout(state, top.error());
     }
-    const VimViewport viewport = vim_viewport_of(view);
-    const VisualPosition first =
-        top.value().value_or(VisualPosition{viewport.first_visible, viewport.first_row});
+    const VisualPosition first = top.value();
     VimState next = navigated_state(finished_input_wait(state), view.text, caret);
     if (!first_non_blank)
     {

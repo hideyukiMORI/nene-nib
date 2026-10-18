@@ -2,9 +2,9 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 ccc3ea1c1b3ea6e43f0b0b7b1c37ab1c051ca710edde507b79ead2acc74922ca
+// wrap-fixtures.json: sha256 deb7658e91bcec7ea8aefa385e7cbb55d8d8f340a13ca73c61d765e356a2c396
 
-// measurement: sha256 91ff83fc1c58cd242d91b4b133fa117be2a16ed63d9c34a2c3420b6e6d622346
+// measurement: sha256 b4bf3d1d1d97bdf6570cecc45ccb4d73f6b16c7d1678ea52a7c7136ed68b9c6d
 
 // shared oracle: sha256 9b5d3b0acc19b544d310970fe7cdb2b01ce91f1eda31f434762855517870e829
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 191> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 199> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -1829,6 +1829,118 @@ constexpr std::array<VimFixture, 191> vim_wrap_fixtures{{
      "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
      "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
      50, 5, "", "", VimViewportFixture{2, 50, 50, 5, 50, 1, 20, 0}},
+    {"wrap-z-align-cr-taller-line-from-a-hidden-row",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     "z<CR>",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     50, 3, "", "", VimViewportFixture{2, 50, 50, 45, 50, 1, 20, 0, 0, 0, 0, 1}},
+    {"wrap-z-align-dot-taller-line-from-a-hidden-row",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     "z.",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     50, 3, "", "", VimViewportFixture{2, 50, 50, 45, 50, 1, 20, 0, 0, 0, 0, 1}},
+    {"wrap-z-align-minus-taller-line-from-a-hidden-row",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     "z-",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     50, 3, "", "", VimViewportFixture{2, 50, 50, 45, 50, 1, 20, 0, 0, 0, 0, 1}},
+    {"wrap-z-align-zz-taller-line-from-a-hidden-row",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     "zz",
+     "l001\nl002\nl003\nl004\nl005\nl006\nl007\nl008\nl009\nl010\nl011\nl012\nl013\nl014\nl015\nl01"
+     "6\nl017\nl018\nl019\nl020\nl021\nl022\nl023\nl024\nl025\nl026\nl027\nl028\nl029\nl030\nl031\n"
+     "l032\nl033\nl034\nl035\nl036\nl037\nl038\nl039\nl040\nl041\nl042\nl043\nl044\nl045\nl046\nl04"
+     "7\nl048\nl049\n  "
+     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyza\nl051\nl052\nl053\nl054\nl055\nl056\nl0"
+     "57\nl058\nl059\nl060\nl061\nl062\nl063\nl064\nl065\nl066\nl067\nl068\nl069\nl070\nl071\nl072"
+     "\nl073\nl074\nl075\nl076\nl077\nl078\nl079\nl080\nl081\nl082\nl083\nl084\nl085\nl086\nl087\nl"
+     "088\nl089\nl090\nl091\nl092\nl093\nl094\nl095\nl096\nl097\nl098\nl099\nl100",
+     50, 45, "", "", VimViewportFixture{2, 50, 50, 45, 50, 1, 20, 1, 0, 0, 0, 1}},
+    {"wrap-z-align-count-4zt-onto-a-taller-line",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     "4zt",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     4, 45, "", "", VimViewportFixture{2, 5, 5, 45, 4, 1, 20, 1, 0, 0, 0, 1}},
+    {"wrap-z-align-count-4zz-onto-a-taller-line",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     "4zz",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     4, 45, "", "", VimViewportFixture{2, 5, 5, 45, 4, 1, 20, 1, 0, 0, 0, 1}},
+    {"wrap-z-align-count-4zb-onto-a-taller-line",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     "4zb",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     4, 45, "", "", VimViewportFixture{2, 5, 5, 45, 4, 1, 20, 1, 0, 0, 0, 1}},
+    {"wrap-z-align-count-4cr-onto-a-taller-line",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     "4z<CR>",
+     "l1\nl2\nl3\n    "
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ncccccccccccccccccccccccccccccccccccccccc"
+     "cccccccccc",
+     4, 5, "", "", VimViewportFixture{2, 5, 5, 45, 4, 1, 20, 0, 0, 0, 0, 1}},
     {"nowrap-z-align-zt-keeps-leftcol",
      "line001 word word\nline002 word word\nline003 word word\nline004 word word\nline005 word "
      "word\nline006 word word\nline007 word word\nline008 word word\nline009 word word\n    abc010 "

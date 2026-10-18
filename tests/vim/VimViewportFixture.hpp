@@ -20,5 +20,8 @@ struct VimViewportFixture
     std::uint32_t nowrap_columns = 0;
     std::uint32_t left_column = 0;
     std::uint32_t expected_left_column = 0;
+    // 折り返す窓で、鍵の前に first_visible の行の上から隠れている画面行の数（skipcol / 幅・
+    // ADR 0146 の決定 5）。
+    std::uint32_t first_row = 0;
 };
 } // namespace nenenib::tests

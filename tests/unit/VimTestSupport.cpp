@@ -205,7 +205,7 @@ void arrange_wrapped_viewport(EditorController &controller, const VimFixture &fi
     {
         const auto frame = controller.frame();
         if (frame.first_visible.value == viewport.first_visible &&
-            frame.lines.front().screen_row == 0)
+            frame.lines.front().screen_row == -static_cast<std::int64_t>(viewport.first_row))
         {
             return;
         }
