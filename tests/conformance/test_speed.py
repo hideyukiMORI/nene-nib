@@ -12,6 +12,8 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import random
+import shutil
 import sys
 import unittest
 from unittest import mock
@@ -304,10 +306,12 @@ class BenchTableTests(unittest.TestCase):
     def test_the_reference_describes_every_bench_of_the_table(self):
         """eng/prove-gates.py builds its QLT-014 proof from these descriptions (ADR 0044 decision 6)."""
         reference = json.loads((ROOT / "eng/perf-reference.json").read_text(encoding="utf-8"))
-        self.assertEqual([*speed.BENCHES, *speed.OPTIONAL_BENCHES], list(reference["benches"]))
+        # split の 5 本は基準値に載せない（ADR 0148 決定 14）。判定は --split-verdict の対だけ。
+        self.assertEqual([*speed.BENCHES, *speed.GIANT_BENCHES], list(reference["benches"]))
+        self.assertFalse(set(speed.SPLIT_BENCHES) & set(reference["benches"]))
         self.assertIn("ADR 0044", reference["benches"]["key-to-frame-burst-200-16mib"])
         self.assertIn("ADR 0075", reference["benches"][speed.LONG_LINE_BENCH])
-        for name in speed.OPTIONAL_BENCHES:
+        for name in speed.GIANT_BENCHES:
             self.assertIn("ADR 0138", reference["benches"][name])
 
     def test_the_real_machine_judges_the_long_line_bench_by_the_floor(self):
@@ -723,7 +727,8 @@ class GiantLineTests(unittest.TestCase):
 
     def test_the_optional_benches_are_not_in_the_default_set(self):
         self.assertEqual(("open-giant-line-16mib", "key-to-frame-single-giant-line-16mib"),
-                         speed.OPTIONAL_BENCHES)
+                         speed.GIANT_BENCHES)
+        self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES), speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
 
@@ -751,7 +756,7 @@ class GiantLineTests(unittest.TestCase):
         return written, boundaries
 
     def test_each_optional_bench_runs_only_its_own_trial_over_the_one_line_document(self):
-        for name, group in zip(speed.OPTIONAL_BENCHES, ("bench_giant_open", "bench_giant_single")):
+        for name, group in zip(speed.GIANT_BENCHES, ("bench_giant_open", "bench_giant_single")):
             with self.subTest(bench=name):
                 written, calls = self.scripted_measurement(name)
                 self.assertEqual({name}, set(written["values"]))
@@ -873,6 +878,181 @@ class MilestoneOrderTests(unittest.TestCase):
                    if name != "input_received"]
         self.assertEqual(tuple(startup), speed.STARTUP_MILESTONES)
         self.assertEqual("body_presented", speed.STARTUP_MILESTONES[-1])
+
+
+SPLIT_WORK = ROOT / "out/conformance/split-verdict"
+
+
+def paced_mark(milestone: str, microseconds: int) -> dict:
+    return {"milestone": milestone, "qpcMicroseconds": microseconds}
+
+
+def paced_marks(latencies_ms: list[float], setup_inputs: int = 0) -> list:
+    """Setup inputs, the warmup and one keystroke per latency, each answered before the next."""
+    marks, now = [], 1_000
+    for _ in range(setup_inputs):
+        marks.append(paced_mark("input_received", now))
+        now += 100_000
+    for latency in [5.0, *latencies_ms]:
+        marks.append(paced_mark("input_received", now))
+        now += int(latency * 1000)
+        marks.append(paced_mark("frame_presented", now))
+        now += 500_000
+    return marks
+
+
+def split_trial(median: float, p95: float, over: int = 0) -> dict:
+    return {"count": 100, "medianMs": median, "p95Ms": p95, "maximumMs": p95,
+            "minimumMs": 0.5, "over_16_7": over, "samples": []}
+
+
+def split_record(bench: str, trials: list, sha: str = "e" * 64, window=(1280, 720),
+           document: str = "empty") -> dict:
+    return {"bench": bench, "executableSha256": sha, "window": list(window),
+            "document": {"choice": document, "path": None, "bytes": 0, "sha256": None},
+            "panesRequested": bench != speed.SPLIT_SINGLE_BENCH, "splitKeys": [],
+            "trials": trials}
+
+
+PANE = "split-pane-key-100-same-vertical"
+
+
+class PacedSummaryTests(unittest.TestCase):
+    def test_median_is_the_mean_of_the_50th_and_51st_and_p95_the_95th(self):
+        values = [float(value) for value in range(1, 101)]
+        random.Random(681).shuffle(values)
+        summary = speed.summarise_paced(values)
+        self.assertEqual(summary["count"], 100)
+        self.assertEqual(summary["medianMs"], 50.5)
+        self.assertEqual(summary["p95Ms"], 95.0)
+        self.assertEqual(summary["maximumMs"], 100.0)
+        self.assertEqual(summary["minimumMs"], 1.0)
+        self.assertEqual(summary["over_16_7"], 84)
+        self.assertEqual(summary["samples"], values)
+
+    def test_over_budget_counts_strictly_above_16_7(self):
+        values = [16.7] * 50 + [16.71] * 50
+        self.assertEqual(speed.summarise_paced(values)["over_16_7"], 50)
+
+    def test_anything_but_100_values_is_missing(self):
+        for values in (None, [], [1.0] * 99, [1.0] * 101):
+            with self.subTest(count=None if values is None else len(values)):
+                self.assertIsNone(speed.summarise_paced(values))
+
+
+class PacedValuesTests(unittest.TestCase):
+    def test_the_last_101_inputs_are_the_warmup_and_the_100_keystrokes(self):
+        latencies = [float(index % 7 + 1) for index in range(100)]
+        for setup in (0, 6):
+            with self.subTest(setup=setup):
+                values = speed.paced_values(paced_marks(latencies, setup))
+                self.assertEqual(values, latencies)
+
+    def test_99_keystrokes_are_missing(self):
+        self.assertIsNone(speed.paced_values(paced_marks([2.0] * 99)[2:]))
+
+    def test_a_keystroke_read_before_the_previous_frame_makes_the_trial_missing(self):
+        marks = paced_marks([2.0] * 100)
+        # 50 番目の打鍵を、その前の打鍵の frame より前に読んだことにする。
+        # 印の並びは時刻の順のままにする（打鍵 49 → 打鍵 50 → 打鍵 49 の frame）。
+        frame, key = marks[2 * 50 - 1], marks[2 * 50]
+        marks[2 * 50 - 1] = paced_mark("input_received", frame["qpcMicroseconds"])
+        marks[2 * 50] = paced_mark("frame_presented", key["qpcMicroseconds"])
+        self.assertIsNone(speed.paced_values(marks))
+
+    def test_an_unanswered_last_keystroke_makes_the_trial_missing(self):
+        self.assertIsNone(speed.paced_values(paced_marks([2.0] * 100)[:-1]))
+
+
+class SplitKeysTests(unittest.TestCase):
+    def test_vertical_and_horizontal_and_the_other_document(self):
+        self.assertEqual(speed.split_keys("vertical", False),
+                         [("Ctrl+\\", [speed.VK_CONTROL], 0xDC)])
+        self.assertEqual(speed.split_keys("horizontal", True),
+                         [("Ctrl+Shift+\\", [speed.VK_CONTROL, speed.VK_SHIFT], 0xDC),
+                          ("F6", [], 0x75), ("Ctrl+T", [speed.VK_CONTROL], 0x54),
+                          ("F6", [], 0x75)])
+
+    def test_the_five_benches_are_optional_and_never_compared(self):
+        self.assertEqual(len(speed.SPLIT_BENCHES), 5)
+        for name in speed.SPLIT_BENCHES:
+            with self.subTest(name=name):
+                self.assertIn(name, speed.OPTIONAL_BENCHES)
+                self.assertNotIn(name, speed.BENCHES)
+        self.assertEqual(speed.GIANT_BENCHES, (speed.GIANT_OPEN_BENCH, speed.GIANT_SINGLE_BENCH))
+
+
+class SplitVerdictTests(unittest.TestCase):
+    def verdict(self, single: dict, pane: dict) -> str:
+        return speed.split_verdict(single, pane)["verdict"]
+
+    def pair(self, single_median: float, pane_median: float, pane_p95: float) -> str:
+        return self.verdict(split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(single_median, 9.0)]),
+                            split_record(PANE, [split_trial(pane_median, pane_p95)]))
+
+    def test_25_percent_of_s_both_sides(self):
+        self.assertEqual(self.pair(8.0, 10.0, 12.0), "pass")
+        self.assertEqual(self.pair(8.0, 10.01, 12.0), "fail")
+
+    def test_the_1_ms_floor_both_sides(self):
+        self.assertEqual(self.pair(2.0, 3.0, 12.0), "pass")
+        self.assertEqual(self.pair(2.0, 3.01, 12.0), "fail")
+
+    def test_p95_at_16_7_both_sides(self):
+        self.assertEqual(self.pair(8.0, 8.5, 16.7), "pass")
+        self.assertEqual(self.pair(8.0, 8.5, 16.71), "fail")
+
+    def test_the_verdict_carries_both_medians_p95_difference_and_allowance(self):
+        single = split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0, 1)])
+        result = speed.split_verdict(single, split_record(PANE, [split_trial(9.5, 15.0, 3)]))
+        self.assertEqual(result["trials"], [{
+            "verdict": "pass", "singleMedianMs": 8.0, "paneMedianMs": 9.5, "singleP95Ms": 9.0,
+            "paneP95Ms": 15.0, "differenceMs": 1.5, "allowedMs": 2.0, "singleOver16_7": 1,
+            "paneOver16_7": 3}])
+        self.assertEqual(result["executableSha256"], {"single": "e" * 64, "pane": "e" * 64})
+
+    def test_each_trial_is_judged_on_its_own(self):
+        single = split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0)] * 3)
+        pane = split_record(PANE, [split_trial(9.0, 12.0), split_trial(11.0, 12.0), split_trial(9.0, 12.0)])
+        result = speed.split_verdict(single, pane)
+        self.assertEqual([entry["verdict"] for entry in result["trials"]], ["pass", "fail", "pass"])
+        self.assertEqual(result["verdict"], "fail")
+
+    def test_a_missing_trial_is_unmeasurable(self):
+        single = split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0), split_trial(8.0, 9.0)])
+        pane = split_record(PANE, [split_trial(20.0, 30.0), None])
+        self.assertEqual(self.verdict(single, pane), "unmeasurable")
+
+    def test_incomparable_records(self):
+        single = split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0)])
+        cases = {"exe": split_record(PANE, [split_trial(8.0, 9.0)], sha="f" * 64),
+                 "window": split_record(PANE, [split_trial(8.0, 9.0)], window=(1280, 721)),
+                 "document": split_record(PANE, [split_trial(8.0, 9.0)], document="long-line"),
+                 "trials": split_record(PANE, [split_trial(8.0, 9.0)] * 2),
+                 "single as pane": split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0)])}
+        for name, pane in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(self.verdict(single, pane), "incomparable")
+        self.assertEqual(self.verdict(split_record(PANE, [split_trial(8.0, 9.0)]), single), "incomparable")
+        unknown = dict(single, window=None)
+        self.assertEqual(self.verdict(unknown, dict(split_record(PANE, [split_trial(8.0, 9.0)]), window=None)),
+                         "incomparable")
+
+    def test_the_command_prints_one_json_and_exits_0_for_pass_only(self):
+        SPLIT_WORK.mkdir(parents=True, exist_ok=True)
+        try:
+            single, pane = SPLIT_WORK / "s.json", SPLIT_WORK / "p.json"
+            single.write_text(json.dumps(split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0)])),
+                              encoding="utf-8")
+            for pane_median, code in ((9.0, 0), (11.0, 1)):
+                pane.write_text(json.dumps(split_record(PANE, [split_trial(pane_median, 12.0)])),
+                                encoding="utf-8")
+                printed = io.StringIO()
+                with self.subTest(pane=pane_median), contextlib.redirect_stdout(printed):
+                    self.assertEqual(speed.split_verdict_command(single, pane), code)
+                self.assertIn(json.loads(printed.getvalue())["verdict"], ("pass", "fail"))
+        finally:
+            shutil.rmtree(SPLIT_WORK, ignore_errors=True)
 
 
 if __name__ == "__main__":
