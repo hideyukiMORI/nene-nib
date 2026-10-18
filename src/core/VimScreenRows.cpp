@@ -155,11 +155,8 @@ using Walk = std::pair<VisualPosition, std::size_t>;
     return Offset{span.start.value + last.value_or(0)};
 }
 
-// 行き先の画面行 to の中の欲しい列（決定 3 の追補・Vim の nv_screengo の curswant）。欲しい列
-// （無ければ今のキャレットの桁）から今のキャレットの画面行 from の始まりの桁を引き、0 未満は 0、
-// to の始まりの桁に足す。画面行の幅を越える分は landed が画面行の最後の文字へ寄せる。$ の後は無し。
-[[nodiscard]] std::optional<std::size_t> wanted_in(const VimState &state, const VimEditorView &view,
-                                                   const VimRowSpan &from, const VimRowSpan &to)
+// 欲しい列（curswant・行頭からの仮想桁・0 始まり）。無ければ今のキャレットの桁、$ の後は無し。
+[[nodiscard]] std::optional<std::size_t> wanted_of(const VimState &state, const VimEditorView &view)
 {
     if (state.wanted_column.has_value() &&
         state.wanted_column.value().wish == VimColumnWish::at_line_end)
@@ -169,8 +166,36 @@ using Walk = std::pair<VisualPosition, std::size_t>;
     const auto wanted = state.wanted_column.has_value()
                             ? state.wanted_column.value().column
                             : caret_virtual_column(view.text, view.selection.caret);
-    const std::size_t column = std::max<std::size_t>(wanted.value, 1) - 1;
-    return to.start_column + (column > from.start_column ? column - from.start_column : 0);
+    return std::max<std::size_t>(wanted.value, 1) - 1;
+}
+
+// gj gk の最初の欲しい列（ADR 0144 の決定 10・Vim 9.1 の nv_screengo）。今の行を画面行で埋めた
+// 長さ n = 画面行数 × 1 画面行の升の数を越える欲しい列を n − 1 に切る。升の数が 0 なら切らない。
+// $ の後（無し）は切らない。
+[[nodiscard]] std::optional<std::size_t>
+screen_wanted(const VimState &state, const VimEditorView &view, const VimRowSpan &from)
+{
+    const auto wanted = wanted_of(state, view);
+    const auto filled = from.rows * view.layout.row_columns;
+    if (!wanted.has_value() || filled == 0)
+    {
+        return wanted;
+    }
+    return std::min(wanted.value(), filled - 1);
+}
+
+// 行き先の画面行 to の中の欲しい列（決定 3 の追補・Vim の nv_screengo の curswant）。欲しい列
+// column から今のキャレットの画面行 from の始まりの桁を引き、0 未満は 0、to の始まりの桁に足す。
+// 画面行の幅を越える分は landed が画面行の最後の文字へ寄せる。$ の後（無し）は無し。
+[[nodiscard]] std::optional<std::size_t> wanted_in(std::optional<std::size_t> column,
+                                                   const VimRowSpan &from, const VimRowSpan &to)
+{
+    if (!column.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto value = column.value();
+    return to.start_column + (value > from.start_column ? value - from.start_column : 0);
 }
 
 [[nodiscard]] VisualPosition clamped(VisualPosition value, VisualPosition low,
@@ -246,7 +271,8 @@ using Moves = std::pair<Walk, Walk>;
         false,
         std::nullopt,
         top.first.row,
-        landed(view.text, row.value(), wanted_in(state, view, origin.second, row.value()))};
+        landed(view.text, row.value(),
+               wanted_in(wanted_of(state, view), origin.second, row.value()))};
 }
 
 // 半画面の先頭の歩き（決定 5 の追補・Vim の CTRL-D）。下へは最後の画面行が画面に見えたら止め、
@@ -375,7 +401,7 @@ std::expected<VimRowLanding, VimLayoutNeed> vim_row_landing(const VimState &stat
     }
     const auto failure =
         moved.value().second < amount ? std::optional{VimRepeatFailure::not_moved} : std::nullopt;
-    const auto target = wanted_in(state, view, from, row.value());
+    const auto target = wanted_in(screen_wanted(state, view, from), from, row.value());
     const auto landing = VimMotionLanding{landed(view.text, row.value(), target), failure};
     if (!target.has_value())
     {

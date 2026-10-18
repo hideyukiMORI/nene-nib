@@ -187,6 +187,7 @@ EditorController::measured_vim_step(const core::VimKey &key)
         // 格子は常に折り返す（ADR 0140 の決定 7）。wrap off の text 形は無効のまま（gj gk は j k・
         // ADR 0145 の決定 4）。横送りの row_request は有効か否かに関わらず答える。
         // 格子の画面移動は画面行の単位（ADR 0144 の決定 5）。text の形は wrap でも論理行のまま。
+        // 1 画面行の升の数は文字組みの問いに答えるときに一緒に置く（決定 10）。
         core::VimLayoutView{view_geometry_.width > 0 &&
                                 (state_.settings().wrapping == core::LineWrapping::wrap ||
                                  state_.display() == core::DisplayForm::grid),
@@ -218,6 +219,7 @@ EditorController::answered_vim_request(const core::VimStep &step, core::VimEdito
         auto text = visual_view();
         const auto measured = measured_rows(rows, step.layout_request.value(), text);
         view.layout.lines = rows;
+        view.layout.row_columns = text.row_columns();
         return measured;
     }
     if (step.row_request.has_value())
@@ -225,6 +227,7 @@ EditorController::answered_vim_request(const core::VimStep &step, core::VimEdito
         auto text = visual_view();
         const auto measured = measured_span(spans, step.row_request.value(), text);
         view.layout.spans = spans;
+        view.layout.row_columns = text.row_columns();
         return measured;
     }
     if (view.viewport.has_value())

@@ -67,6 +67,10 @@ class VisualTextView final
     // 1 対で、互いに逆。巨大な行は origin からの見積もりの x、折り返さない普通の行は
     // 同じ文字組みの locate / hit。
     [[nodiscard]] std::size_t horizontal_columns() const;
+    // 1 画面行の升の数（ADR 0144 の決定 10）。格子は GridCells の columns、text の形は
+    // horizontal_columns と同じ式（横に送るかの条件を除く）。折り返さないとき・幅 0・キャレットが
+    // text の形の巨大な行の窓（1 画面行・ADR 0144 の決定 8）にあるときは 0。
+    [[nodiscard]] std::size_t row_columns() const;
     [[nodiscard]] std::expected<float, TextLayoutFailure>
     horizontal_of_column(core::LineNumber number, std::size_t column);
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
@@ -104,6 +108,8 @@ class VisualTextView final
     [[nodiscard]] float horizontal_for(core::TextCaret caret, float located) const;
     // 行 number を横に送るか（折り返さない設定か巨大な行で、格子でも幅 0 でもない）。
     [[nodiscard]] bool scrolls_horizontally(core::LineNumber number) const;
+    // 本文の欄の幅 ÷ 平均の字幅（1 以上・ADR 0145 の決定 2）。
+    [[nodiscard]] std::size_t window_columns() const;
     [[nodiscard]] bool gridded() const noexcept;
     [[nodiscard]] std::expected<core::GridPoint, TextLayoutFailure>
     grid_point(core::TextCaret caret) const;

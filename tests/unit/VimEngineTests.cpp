@@ -30,6 +30,7 @@
 #include "Utf8.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
+#include "VimColumnWish.hpp"
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
@@ -64,6 +65,7 @@
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 #include "VimVisualRange.hpp"
+#include "VimWantedColumn.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
@@ -148,6 +150,7 @@ using nenenib::core::VimSelect;
 using nenenib::core::VimState;
 using nenenib::core::VimTabs;
 using nenenib::core::VimViewport;
+using nenenib::core::VimWantedColumn;
 using nenenib::core::VimWordClass;
 using nenenib::core::VimWordEndStop;
 using nenenib::core::VimWordStop;
@@ -1672,6 +1675,56 @@ void verify_vim_counted_alignment_round_trip()
     }
 }
 
+// gj の最初の欲しい列の切り詰め（ADR 0144 の決定 10）。格子の替え玉（grid_width 字ごと）で
+// 1 行目（12 字・2 画面行）の 2 画面行目に立ち、欲しい列 wanted から gj を往復させて解く。
+[[nodiscard]] nenenib::core::VimStep
+cut_display_down(const TextBuffer &text, std::size_t row_columns, VimWantedColumn wanted)
+{
+    std::vector<VimLineRows> rows;
+    std::vector<nenenib::core::VimRowSpan> spans;
+    VimEditorView view{
+        text,
+        collapsed_at(Offset{10}),
+        VimViewport{LineNumber{1}, 5, 2},
+        VimKeySource::typed,
+        VimTabs{0, 1},
+        VimLayoutView{true, rows, nenenib::core::VimScrollUnit::row, spans, row_columns}};
+    VimState state =
+        nenenib::core::vim_resting_state(VimRegister{std::string{}, VimRegisterKind::characters});
+    state.wanted_column = wanted;
+    const auto keys = vim_keys_of("gj");
+    state = vim_step(state, view, keys.front()).next;
+    auto step = vim_step(state, view, keys.back());
+    for (std::size_t round = 0; round < 64 && answer_aligned_request(step, view, rows, spans);
+         ++round)
+    {
+        step = vim_step(state, view, keys.back());
+    }
+    return step;
+}
+
+// 31 桁を欲しい 1 行目（n = 2 × 8 = 16）から gj で 2 行目（4 字・最後の画面行）へ移ると、
+// 切った 15 桁 − 画面行の始まり 8 = 7 を保つ（Vim 9.1 の nv_screengo）。升の数 0 は切らずに
+// 30 − 8 = 22 を保ち、$ の後は行末の印のまま。
+void verify_vim_display_down_cut()
+{
+    const auto parsed = TextBuffer::from_utf8("aaaaaaaaaaaa\nbbbb\n" + std::string(40, 'c'));
+    expect(parsed.has_value(), "the gj cut sample parses");
+    const auto &text = parsed.value();
+    constexpr auto column = nenenib::core::VimColumnWish::at_column;
+    const VimWantedColumn far{column, nenenib::core::VirtualColumn{31}};
+    expect(cut_display_down(text, grid_width, far).next.wanted_column ==
+               std::optional{VimWantedColumn{column, nenenib::core::VirtualColumn{8}}},
+           "gj cuts the wanted column to the filled screen rows of the line minus one");
+    expect(cut_display_down(text, 0, far).next.wanted_column ==
+               std::optional{VimWantedColumn{column, nenenib::core::VirtualColumn{23}}},
+           "gj keeps the wanted column when the screen row has no cell count");
+    const VimWantedColumn end{nenenib::core::VimColumnWish::at_line_end,
+                              nenenib::core::VirtualColumn{1}};
+    expect(cut_display_down(text, grid_width, end).next.wanted_column == std::optional{end},
+           "gj does not cut the wanted column after $");
+}
+
 void verify_vim_viewport_request()
 {
     const auto text = TextBuffer::from_utf8(vim_lines(30));
@@ -1686,6 +1739,7 @@ void verify_vim_viewport_request()
     verify_vim_row_unit_pages();
     verify_vim_grid_alignment_rows();
     verify_vim_grid_alignment_lines();
+    verify_vim_display_down_cut();
     verify_vim_counted_alignment_round_trip();
     verify_indexed_virtual_columns();
     verify_indexed_columns_across_chunks();

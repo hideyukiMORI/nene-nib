@@ -196,8 +196,8 @@ void arrange_wrapped_viewport(EditorController &controller, const VimFixture &fi
                               const VimViewportFixture &viewport)
 {
     const auto width = static_cast<std::int32_t>(viewport.wrap_columns * 10);
-    static_cast<void>(controller.apply(
-        VisibleLines{viewport.visible_lines, nenenib::core::TextViewGeometry{width, 20, 96}}));
+    static_cast<void>(controller.apply(VisibleLines{
+        viewport.visible_lines, nenenib::core::TextViewGeometry{width, 20, 96, 10.0F}}));
     static_cast<void>(
         controller.apply(PlaceCaret{vim_fixture_position(fixture), SelectionAnchoring::collapse}));
     static_cast<void>(controller.apply(ScrollLines{std::numeric_limits<std::int32_t>::min()}));
