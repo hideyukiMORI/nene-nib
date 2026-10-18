@@ -84,11 +84,11 @@ Issue の無いものは「未起票」。着手は hide の指示で。番号�
 
 ## いまの数字・動かないもの・段階
 
-- 公開版は [v0.1.0-beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)。本文余白/断片保存/改行索引/読込完了は main のみ。
+- 公開版は [v0.1.0-beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)。本文余白/断片保存/改行索引/読込完了・起動 40 ms・自動退避・格子表示・`gj` `gk` `g0` `g$` `{N}|` `z` 系は main のみ。beta.4 の zip 公開は hide の意向で近日（手順は [2026-10-18 の引き継ぎ](../handoffs/2026-10-18.md) の「beta.4 の zip 公開」の節・#676）。
 - main `b3e6f01` の実機の速さ（2026-10-18・静かな機械・基準値として採用 #644）: 起動 41.9 ms・窓 32.4 ms・単打 0.64 ms・連打 2.16 ms・16 MiB open 49.8 ms・16 MiB 連打 2.34 ms・面 1.73 ms・長行単打 1.57 ms・**1 行 16 MiB は「はい」open 129.6 ms・1 打鍵 1.23 ms**（「いいえ」161.7 / 2.12・記録だけ）。目標 D51 の 6 本は全部の内。
 - CI の merge 直前の check は `check`（19 秒）と `build-and-test`（Release 全 target ＋ ctest・7〜11 分）の 2 job（ADR 0136）。`merge-pr.py` は 2,700 秒まで待つ。
 - `verify-window.py` は 2026-09-23 以来初めて全節が通る（#486 / #539）。
 - `tests/conformance` は 336 件通る（#555 で CI の契約を ADR 0136 に合わせた）。
 - planned → active: CPP-003/004/005/009/016・ARC-005/010・CNF-001〜005・GIT-003・QLT-012（反例の証明つき・D49）。prove-gates は 32 本・205 秒。
 - 組み込み125テーマ、Vim oracle 1853件。settings.v3/session.v2、64MiB上限、同期FilePortを維持。保存schema変更なし（自動退避の `autosave.v1` は #530 で足す）。
-- 2GiB/512MiB/100ms、split、Markdown、構文解析、設定モーダル/日英切替、手動横スクロール/スクロールバー、Vim gj/gk/g0/g$・ドラッグは未対応/未受理。Waivers none。
+- 2GiB/512MiB/100ms、split、Markdown、構文解析、設定モーダル/日英切替、手動横スクロール/スクロールバー、Vim のドラッグは未対応/未受理（`gj` `gk` `g0` `g$` は 2026-10-18 に main）。Waivers none。
