@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <variant>
 #include <vector>
 
 namespace nenenib::tests
@@ -88,6 +89,42 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
                             : nenenib::core::CaretAffinity::leading};
     }
 
+    // 画面行の問い（#664）。段は幅の升ごとで、桁の先頭側の升の段・本文の末尾は最後の段。範囲は
+    // その段と次の段の最初の code point の桁から作る。
+    [[nodiscard]] std::expected<nenenib::application::TextRow,
+                                nenenib::application::TextLayoutFailure>
+    row(const nenenib::application::TextLayoutRequest &request,
+        std::variant<nenenib::core::Column, std::size_t> target) override
+    {
+        ++requests_;
+        longest_ = std::max(longest_, request.text.size());
+        note(request);
+        if (rejected_)
+        {
+            return std::unexpected(nenenib::application::TextLayoutFailure::unavailable);
+        }
+        const auto width = columns(request);
+        const auto starts = cell_starts(request.text, width);
+        const auto count = starts.size() - 1;
+        const auto rows = starts.back() == 0 ? 1 : ((starts.back() - 1) / width) + 1;
+        const auto *const column = std::get_if<nenenib::core::Column>(&target);
+        const auto at = column != nullptr ? std::min(column->value - 1, count) : 0;
+        const auto row = std::min(column != nullptr ? (starts[at] / width) + misplaced_
+                                                    : std::get<std::size_t>(target),
+                                  rows - 1);
+        const auto first = [&starts, width](std::size_t value)
+        {
+            return nenenib::core::Column{
+                static_cast<std::size_t>(
+                    std::lower_bound(starts.begin(), std::prev(starts.end()), value * width) -
+                    starts.begin()) +
+                1};
+        };
+        return nenenib::application::TextRow{
+            row, first(row), row + 1 < rows ? first(row + 1) : nenenib::core::Column{count + 1},
+            rows};
+    }
+
     // 格子の 1 升（ADR 0140）。幅は 1 code point と同じ 10 画素、高さは 20 画素。rows / locate /
     // hit の回数（requests）には数えず、別に数える。
     [[nodiscard]] std::expected<nenenib::application::TextCell,
@@ -110,6 +147,11 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     void reject() noexcept
     {
         rejected_ = true;
+    }
+    // 位置の問いに 1 つ後ろの段を答える（#664 の番兵の契約）。番号の問いは正しく答える。
+    void misplace_rows() noexcept
+    {
+        misplaced_ = 1;
     }
     [[nodiscard]] std::size_t requests() const noexcept
     {
@@ -203,5 +245,6 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     LayoutStyle style_{};
     std::vector<std::string> made_texts_;
     bool rejected_ = false;
+    std::size_t misplaced_ = 0;
 };
 } // namespace nenenib::tests

@@ -18,6 +18,7 @@
 #include <expected>
 #include <memory>
 #include <optional>
+#include <variant>
 #include <vector>
 
 namespace nenenib::application
@@ -58,7 +59,9 @@ class VisualTextView final
     followed(core::TextCaret caret, core::ScrollFollow follow, core::ScrollExtent extent);
     // engine の問い（ADR 0144 の決定 2）の答え手。位置の問いはその位置の画面行、番号の問いは
     // その画面行（行の画面行数へ丸める）の本文の範囲と行の画面行数。格子は GridCells、text の形は
-    // 同じ文字組みの locate / hit、巨大な行の窓は 1 画面行で、行の全体を写さない。
+    // 文字組みの row（段の番号と範囲を同じ 1 つの layout から・#664）、巨大な行の窓は 1 画面行で、
+    // 行の全体を写さない。位置の問いの答えは必ずその位置を含む（最後の段は行末も）。含まなければ
+    // 隣の段で引き直し、それでも含まなければ失敗。
     [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
     row_span(const core::VimRowRequest &request);
     // 横送りの答え手（ADR 0145 の決定 2・8・9）。horizontal_columns は本文の欄に入る升の数（平均の
@@ -119,11 +122,20 @@ class VisualTextView final
     grid_location(core::TextCaret caret) const;
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure>
     grid_caret_at(core::VisualPosition at, float x) const;
-    // 行 number の画面行 row の始まり（行の中の位置）と、位置 at が立つ画面行。
-    [[nodiscard]] std::expected<core::Offset, TextLayoutFailure> row_start(core::LineNumber number,
-                                                                           std::size_t row);
-    [[nodiscard]] std::expected<std::size_t, TextLayoutFailure> row_of(core::LineNumber number,
-                                                                       core::Offset at);
+    // 表示の桁 column（変換中の文字列を差し込んだ桁）が指す本文の位置。
+    [[nodiscard]] core::TextPosition source_position(const LineView &line,
+                                                     core::Column column) const;
+    // 行 number の問い target の画面行の [start, end) と画面行数（仮想桁はまだ埋めない）。
+    [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
+    row_bounds(core::LineNumber number, const std::variant<core::Offset, std::size_t> &target);
+    [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
+    grid_row_bounds(core::LineNumber number,
+                    const std::variant<core::Offset, std::size_t> &target) const;
+    [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
+    text_row_bounds(core::LineNumber number, const std::variant<core::Offset, std::size_t> &target);
+    // 番兵（#664）。found が at を含まなければ隣の段（前・後）で引き直す。
+    [[nodiscard]] std::expected<core::VimRowSpan, TextLayoutFailure>
+    containing(core::LineNumber number, const core::VimRowSpan &found, core::Offset at);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
     forward(core::VisualPosition from, std::size_t amount);
     [[nodiscard]] std::expected<core::VisualPosition, TextLayoutFailure>
