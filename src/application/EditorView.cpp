@@ -2,6 +2,7 @@
 
 #include "DisplayInquiry.hpp"
 #include "ScreenMotion.hpp"
+#include "VimRoundTrip.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -40,16 +41,18 @@ namespace
     std::unreachable();
 }
 
-// engine が求めた行の画面行数を、行の順の列へ足す。同じ行を 2 度求めたら往復が止まらないので失敗。
+// engine が求めた行の画面行数を、行の順の列へ足す。同じ行を 2 度求めたら往復の契約の破れ
+// （inconsistent・ADR 0133 の追補 2026-10-18）。
 [[nodiscard]] std::expected<void, TextLayoutFailure>
 measured_rows(std::vector<core::VimLineRows> &rows, core::LineNumber line, VisualTextView &text)
 {
+    const auto unasked = vim_rows_unasked(rows, line);
+    if (!unasked)
+    {
+        return unasked;
+    }
     const auto found = std::ranges::lower_bound(
         rows, line.value, {}, [](const core::VimLineRows &value) { return value.line.value; });
-    if (found != rows.end() && found->line == line)
-    {
-        return std::unexpected(TextLayoutFailure::unavailable);
-    }
     const auto count = text.rows(line);
     if (!count)
     {
@@ -60,7 +63,7 @@ measured_rows(std::vector<core::VimLineRows> &rows, core::LineNumber line, Visua
 }
 
 // engine が求めた行の中の画面行を、答えの列へ足す（ADR 0144 の決定 2）。同じ答えを 2 度足したら
-// 往復が止まらないので失敗。
+// 答えが問いに当たっていない往復の契約の破れ（inconsistent）。row_span 自身の失敗はそのまま。
 [[nodiscard]] std::expected<void, TextLayoutFailure>
 measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &request,
               VisualTextView &text)
@@ -70,12 +73,10 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     {
         return std::unexpected(span.error());
     }
-    const auto known = std::ranges::any_of(
-        spans, [&span](const core::VimRowSpan &value)
-        { return value.line == span.value().line && value.row == span.value().row; });
-    if (known)
+    const auto unanswered = vim_span_unanswered(spans, span.value());
+    if (!unanswered)
     {
-        return std::unexpected(TextLayoutFailure::unavailable);
+        return unanswered;
     }
     spans.push_back(span.value());
     return {};
@@ -197,6 +198,8 @@ EditorController::measured_vim_step(const core::VimKey &key)
                             spans}};
     auto step = core::vim_step(state_.vim(), view, key);
     // どの要求も同じ鍵をもう一度流す。viewport は 1 度渡したら以後の往復でも渡したまま。
+    // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、
+    // 新しい答えは行数 + 画面行の総数 + 1 で尽きる（ADR 0129・ADR 0133 の追補 2026-10-18）。
     while (step.viewport_request || step.layout_request.has_value() || step.row_request.has_value())
     {
         const auto answered = answered_vim_request(step, view, rows, spans);
@@ -229,9 +232,10 @@ EditorController::answered_vim_request(const core::VimStep &step, core::VimEdito
         view.layout.spans = spans;
         return measured;
     }
-    if (view.viewport.has_value())
+    const auto unasked = vim_viewport_unasked(view.viewport);
+    if (!unasked)
     {
-        return std::unexpected(TextLayoutFailure::unavailable);
+        return unasked;
     }
     const auto scroll = settled_scroll();
     // 画面の幅（升）と今の横位置（leftcol）も同じ往復で答える（ADR 0145 の決定 2）。横に送らない

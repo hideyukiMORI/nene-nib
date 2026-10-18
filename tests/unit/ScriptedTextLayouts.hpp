@@ -110,7 +110,7 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         const auto *const column = std::get_if<nenenib::core::Column>(&target);
         const auto at = column != nullptr ? std::min(column->value - 1, count) : 0;
         const auto row = std::min(column != nullptr ? (starts[at] / width) + misplaced_
-                                                    : std::get<std::size_t>(target),
+                                                    : numbered(std::get<std::size_t>(target)),
                                   rows - 1);
         const auto first = [&starts, width](std::size_t value)
         {
@@ -152,6 +152,12 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     void misplace_rows() noexcept
     {
         misplaced_ = 1;
+    }
+    // 番号の問いにだけ違う段を答える（#665 の往復の契約の破れ）。段 0 を問えば段 1、ほかは段 0。
+    // 位置の問いは正しく答えるので #664 の番兵は通り、engine が同じ問いを立て直す。
+    void misnumber_rows() noexcept
+    {
+        misnumbered_ = true;
     }
     [[nodiscard]] std::size_t requests() const noexcept
     {
@@ -226,6 +232,15 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
         return starts;
     }
 
+    [[nodiscard]] std::size_t numbered(std::size_t asked) const noexcept
+    {
+        if (!misnumbered_)
+        {
+            return asked;
+        }
+        return asked == 0 ? 1 : 0;
+    }
+
     [[nodiscard]] static std::size_t columns(const nenenib::application::TextLayoutRequest &request)
     {
         // 巨大な行の窓は折り返さない（ADR 0139 の決定 2）。折り返さない幅は全体の升より広い。
@@ -246,5 +261,6 @@ class ScriptedTextLayouts final : public nenenib::application::TextLayoutPort
     std::vector<std::string> made_texts_;
     bool rejected_ = false;
     std::size_t misplaced_ = 0;
+    bool misnumbered_ = false;
 };
 } // namespace nenenib::tests
