@@ -19,7 +19,7 @@ namespace nenenib::core
 // （Shift なし）は Vim INSERT の Ctrl-@ に残すので行を置かない。
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // 最初の行なので、一覧に見える鍵は Shift なしのまま。
-inline constexpr std::array<OperationBinding, 25> operation_bindings{{
+inline constexpr std::array<OperationBinding, 29> operation_bindings{{
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, false, OperationKey::o}},
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -57,6 +57,11 @@ inline constexpr std::array<OperationBinding, 25> operation_bindings{{
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::font_reset, OperationModes::both, KeyChord{true, true, OperationKey::zero}},
     {EditorOperation::toggle_mode, OperationModes::both, KeyChord{true, true, OperationKey::space}},
+    // 枠の操作（ADR 0148 の決定 6）。鍵の行は ui と一緒に #683 で足す。
+    {EditorOperation::split_vertical, OperationModes::both, std::nullopt},
+    {EditorOperation::split_horizontal, OperationModes::both, std::nullopt},
+    {EditorOperation::next_pane, OperationModes::both, std::nullopt},
+    {EditorOperation::close_pane, OperationModes::both, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

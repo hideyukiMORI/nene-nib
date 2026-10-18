@@ -8,6 +8,7 @@
 #include "ExFailure.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExTabRequest.hpp"
+#include "ExWindowCommand.hpp"
 #include "FontFamilies.hpp"
 #include "ThemeCatalog.hpp"
 #include "VimSearchHighlight.hpp"
@@ -41,6 +42,7 @@ struct ExResult
     std::optional<ExPaletteRequest> palette = std::nullopt;
     std::optional<ExDocumentRequest> document = std::nullopt;
     std::optional<DisplayForm> display = std::nullopt;
+    std::optional<ExWindowCommand> window = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>

@@ -29,6 +29,10 @@ namespace
     case EditorOperation::font_smaller:
     case EditorOperation::font_reset:
     case EditorOperation::toggle_mode:
+    case EditorOperation::split_vertical:
+    case EditorOperation::split_horizontal:
+    case EditorOperation::next_pane:
+    case EditorOperation::close_pane:
         return true;
     }
     return false;

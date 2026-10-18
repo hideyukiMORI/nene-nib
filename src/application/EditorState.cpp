@@ -1,10 +1,12 @@
 #include "EditorState.hpp"
 
+#include "EditAdjust.hpp"
 #include "SaveState.hpp"
 #include "SearchLine.hpp"
 #include "TabTitle.hpp"
 #include "VimStep.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <iterator>
 #include <memory>
@@ -75,6 +77,18 @@ unloaded_of(const std::shared_ptr<const UnloadedDocument> &tab)
 {
     return *tab;
 }
+// 退避番号 id のタブの帯の位置。帯に無ければ値なし。
+[[nodiscard]] std::optional<std::size_t> position_of(const std::vector<AutosaveId> &ids,
+                                                     AutosaveId id)
+{
+    const auto found = std::ranges::find(ids, id);
+    if (found == ids.end())
+    {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(std::distance(ids.begin(), found));
+}
+
 // まだ動かしていない帯の位置のうち、順位がいちばん大きいもの。同じ順位なら帯の右のもの（帯の順で
 // 左ほど最近になる）。まだ動かしていない位置が 1 つは残っているときだけ呼ぶ。
 [[nodiscard]] std::size_t oldest_untouched(std::span<const std::size_t> ranks,
@@ -779,6 +793,7 @@ EditorState EditorState::with_closed(std::size_t position) const
         next.parked_.erase(std::next(next.parked_.begin(), distance_of(parked_index_of(position))));
         next.active_ = position < active_ ? active_ - 1 : active_;
         next.touch_active();
+        next.redirect_closed_other(autosave_ids_.at(position));
         return next;
     }
     // 右隣は脇の束の添字 active_、左隣は active_ - 1。どちらも閉じた後の帯の位置と一致する。
@@ -793,6 +808,152 @@ EditorState EditorState::with_closed(std::size_t position) const
     next.active_ = neighbour;
     next.spread(*target.value());
     next.touch_active();
+    next.redirect_closed_other(autosave_ids_.at(position));
     return next;
+}
+
+// ---------------------------------------------------------------- 枠（ADR 0148）
+
+const SplitState &EditorState::split() const noexcept
+{
+    return split_;
+}
+
+PaneView EditorState::active_pane() const
+{
+    return PaneView{autosave_ids_.at(active_), selection_.caret,  caret_affinity_,
+                    scroll_.first_visible,     scroll_.first_row, scroll_.horizontal,
+                    vim_.wanted_column};
+}
+
+void EditorState::spread_pane(const PaneView &view)
+{
+    selection_ = core::collapsed_at(core::Offset{std::min(view.caret.value, text_.size_bytes())});
+    caret_affinity_ = view.affinity;
+    scroll_ =
+        ScrollState{view.first_visible, scroll_.visible_lines, view.first_row, view.horizontal};
+    vim_ = core::vim_switched_document(vim_, view.wanted_column, vim_.scroll_lines);
+}
+
+void EditorState::redirect_closed_other(AutosaveId closed)
+{
+    if (!split_.other.has_value() || !(split_.other.value().tab == closed))
+    {
+        return;
+    }
+    split_.other = PaneView{autosave_ids_.at(active_),
+                            core::Offset{0},
+                            core::CaretAffinity::leading,
+                            core::LineNumber{first_line},
+                            0,
+                            0,
+                            std::nullopt};
+}
+
+EditorState EditorState::with_split(core::SplitLayout layout) const
+{
+    if (layout == core::SplitLayout::none || split_.other.has_value())
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    next.split_ = SplitState{layout, active_pane()};
+    return next;
+}
+
+EditorState EditorState::with_pane_swapped() const
+{
+    if (!split_.other.has_value())
+    {
+        return *this;
+    }
+    const PaneView other = split_.other.value();
+    const PaneView leaving = active_pane();
+    if (other.tab == leaving.tab)
+    {
+        // 同じ文書は動かさない。枠を移ると INSERT の単位も閉じる（タブの切り替えと同じ）。
+        EditorState next(*this);
+        next.history_ = history_.sealed();
+        next.spread_pane(other);
+        next.split_.other = leaving;
+        return next;
+    }
+    const auto position = position_of(autosave_ids_, other.tab);
+    const auto target = position.and_then([this](std::size_t at) { return loaded_at(at); });
+    // まだ読んでいない文書へは移らない（読むのは controller の reach_tab・決定 2）。
+    if (!position.has_value() || position.value() == active_ || !target.has_value())
+    {
+        return *this;
+    }
+    EditorState next = switched_to(position.value(), *target.value());
+    next.touch_active();
+    next.spread_pane(other);
+    next.split_.other = leaving;
+    return next;
+}
+
+EditorState EditorState::without_split() const
+{
+    EditorState next(*this);
+    next.split_ = SplitState{};
+    return next;
+}
+
+EditorState EditorState::with_other_adjusted(const core::Edit &edit) const
+{
+    if (!split_.other.has_value() || !(split_.other.value().tab == autosave_ids_.at(active_)))
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    PaneView &other = next.split_.other.value();
+    const core::LineNumber edit_line = text_.position_of(edit.at).line;
+    const core::LineNumber first = core::line_after_edit(other.first_visible, edit_line, edit);
+    // 先頭行が消えた行の中にあって編集の行へ畳まれたら、画面行も行の先頭へ戻す。
+    if (first.value != other.first_visible.value && first.value == edit_line.value)
+    {
+        other.first_row = 0;
+    }
+    other.first_visible = first;
+    other.caret = core::offset_after_edit(other.caret, edit);
+    return next;
+}
+
+EditorState EditorState::with_other_scrolled(core::LineNumber first_visible,
+                                             std::size_t first_row) const
+{
+    if (!split_.other.has_value())
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    next.split_.other.value().first_visible = first_visible;
+    next.split_.other.value().first_row = first_row;
+    return next;
+}
+
+std::optional<EditorState> EditorState::other_pane_state() const
+{
+    if (!split_.other.has_value())
+    {
+        return std::nullopt;
+    }
+    const PaneView &other = split_.other.value();
+    EditorState pane(*this);
+    if (!(other.tab == autosave_ids_.at(active_)))
+    {
+        const auto position = position_of(autosave_ids_, other.tab);
+        const auto target = position.and_then([this](std::size_t at) { return loaded_at(at); });
+        if (!target.has_value())
+        {
+            return std::nullopt;
+        }
+        pane.spread(*target.value());
+    }
+    pane.spread_pane(other);
+    pane.composition_.reset();
+    pane.command_input_.reset();
+    pane.search_preview_.reset();
+    return pane;
 }
 } // namespace nenenib::application

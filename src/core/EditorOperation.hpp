@@ -24,6 +24,10 @@ enum class EditorOperation : std::uint8_t
     font_larger,
     font_smaller,
     font_reset,
-    toggle_mode
+    toggle_mode,
+    split_vertical,
+    split_horizontal,
+    next_pane,
+    close_pane
 };
 } // namespace nenenib::core

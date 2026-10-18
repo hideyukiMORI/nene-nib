@@ -48,7 +48,7 @@ nenenib_third_party_target(nenenib_md4c third_party_md4c third_party/md4c/md4c.c
 nenenib_target(nenenib_core core STATIC
     src/core/ThemeName.cpp src/core/ThemeDocument.cpp src/core/ThemeChoice.cpp
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
-    src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
+    src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/PaneLayouts.cpp src/core/EditAdjust.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExResult.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
@@ -124,6 +124,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/OrdinaryCharacterTests.cpp
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
+    tests/unit/SplitTests.cpp
     tests/unit/SessionTests.cpp
     tests/unit/BookmarkTests.cpp
     tests/unit/HistoryTests.cpp

@@ -29,6 +29,7 @@
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "ExWindowCommand.hpp"
 #include "FileBookmarkEdit.hpp"
 #include "FileFolder.hpp"
 #include "FileHistory.hpp"
@@ -46,6 +47,8 @@
 #include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
+#include "PaneFrame.hpp"
+#include "PaneView.hpp"
 #include "ParkedTab.hpp"
 #include "SaveState.hpp"
 #include "ScrollBounds.hpp"
@@ -56,6 +59,7 @@
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
+#include "SplitLayout.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusItems.hpp"
 #include "TabDestination.hpp"
@@ -917,11 +921,15 @@ constexpr std::string_view clipped_mark = "…";
 }
 
 // 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、30 秒ごとに必ず来る自動退避の
-// 合図（使う人の操作ではない・ADR 0137 の決定 1）。これ以外の意図は写す前に狙いを捨てる。
+// 合図（使う人の操作ではない・ADR 0137 の決定 1）。もう 1 つの枠だけを送るホイールも操作中の枠の
+// キャレットに触れないので保つ（ADR 0148 の決定 11）。これ以外の意図は写す前に狙いを捨てる。
+// 枠の意図（SplitPane / SwitchPane / ClosePane / ScrollPane）は使う人の操作なので、
+// keeps_tab_walk と begin_intent の表には載せない（歩きを終え、告知を消す）。
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) ||
-           std::holds_alternative<AutosaveTick>(intent);
+           std::holds_alternative<AutosaveTick>(intent) ||
+           std::holds_alternative<ScrollPane>(intent);
 }
 
 // 面と `:` の補完の面の見えている行数を決める窓の寸法（ADR 0150 の決定 1）。幅か高さが 0 なら
@@ -1400,7 +1408,17 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     auto document = after_edit_at(state_.document(), before);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
                               std::move(document));
+    adjust_other(edit);
     follow_caret();
+}
+
+void EditorController::adjust_other(const core::Edit &edit)
+{
+    // 1 枠では状態を写さない（1 打鍵の道に写しを足さない）。
+    if (state_.split().other.has_value())
+    {
+        state_ = state_.with_other_adjusted(edit);
+    }
 }
 
 void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
@@ -1697,6 +1715,8 @@ void EditorController::undo_edit()
     const core::Offset caret{at.value + edit.value().removed.size()};
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
                               state_.document());
+    // undo は編集の逆向き（inserted を removed に戻す）。
+    adjust_other(core::Edit{at, edit.value().inserted, edit.value().removed, at});
     follow_caret();
 }
 
@@ -1713,6 +1733,7 @@ void EditorController::redo_edit()
     const core::Offset caret{at.value + edit.value().inserted.size()};
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
                               state_.document());
+    adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at});
     follow_caret();
 }
 
@@ -2640,6 +2661,12 @@ void EditorController::evaluate_command(std::string_view text)
         run_tab_request(tab.value());
         return;
     }
+    const auto &window = result.value().window;
+    if (window.has_value())
+    {
+        run_window_command(window.value());
+        return;
+    }
     const auto &palette = result.value().palette;
     if (palette.has_value())
     {
@@ -2786,11 +2813,31 @@ void EditorController::run_document_request(const core::ExDocumentRequest &reque
         }
         break;
     }
+    // 2 枠では操作中の枠を閉じる（もう 1 つの枠の表示を持ってきてから 1 枠へ）。文書は残るので
+    // 未保存でも拒否しない（ADR 0148 の決定 5・hide の決定を待つ仮置き）。
+    if (state_.split().layout != core::SplitLayout::none)
+    {
+        accept(SwitchPane{});
+        state_ = state_.without_split();
+        return;
+    }
     if (request.verb != core::ExDocumentVerb::quit_force && refuse_modified_quit())
     {
         return;
     }
     accept(CloseTab{state_.active_tab()});
+}
+
+// `:only` はもう 1 つの枠を閉じる（ADR 0148 の決定 5）。
+void EditorController::run_window_command(core::ExWindowCommand command)
+{
+    switch (command)
+    {
+    case core::ExWindowCommand::only:
+        accept(ClosePane{});
+        return;
+    }
+    std::unreachable();
 }
 
 // 行き先は gt / gT と同じ tab_destination の 1 本。範囲の外の数は Vim の実測の文言（決定 4・5）。
@@ -3836,6 +3883,77 @@ void EditorController::close_active_tab()
     enter_document();
 }
 
+// ---------------------------------------------------------------- 枠（ADR 0148）
+
+// 分けるのは同じ文書の 2 表示なので、読むものは無い（決定 2）。もう 1 つの枠は解決済みの
+// スクロールを写す。
+void EditorController::accept(const SplitPane &intent)
+{
+    if (state_.split().layout != core::SplitLayout::none)
+    {
+        state_ =
+            state_.with_command_message(core::DisplayText::parse("もう分かれています").value());
+        return;
+    }
+    settle_follow();
+    state_ = state_.with_split(intent.layout);
+}
+
+// 枠を移る（決定 3・10）。違う文書ならタブの切り替えと同じく先に読む（読み込み済みのはず・
+// 決定 2）。同じ文書でも入力行・変換・追従は移る前に閉じ、着いた枠のスクロールを収める
+// （leave_document / enter_document の 1 対をそのまま通す）。
+void EditorController::accept(const SwitchPane &)
+{
+    const auto &other = state_.split().other;
+    if (!other.has_value())
+    {
+        return;
+    }
+    const auto &ids = state_.autosave_ids();
+    const auto found = std::ranges::find(ids, other.value().tab);
+    if (found == ids.end() ||
+        !reach_tab(static_cast<std::size_t>(std::distance(ids.begin(), found))))
+    {
+        // 読めなかった文書は reach_tab が帯から外して知らせる。もう 1 つの枠も外す。
+        state_ = state_.without_split();
+        return;
+    }
+    leave_document();
+    state_ = state_.with_pane_swapped();
+    enter_document();
+}
+
+void EditorController::accept(const ClosePane &)
+{
+    state_ = state_.without_split();
+}
+
+// もう 1 つの枠だけを送る（決定 11）。送り方と収め方は ScrollLines と同じ 2 本（shifted と
+// constrained）を、もう 1 つの枠を操作中の枠の形で読む写しに通す。
+void EditorController::accept(const ScrollPane &intent)
+{
+    const auto pane = state_.other_pane_state();
+    if (!pane.has_value())
+    {
+        return;
+    }
+    const EditorState &state = pane.value();
+    VisualTextView view(state, ports_.text_layouts,
+                        display_pending(state.display_inquiry()) ? core::TextViewGeometry{}
+                                                                 : view_geometry_);
+    const ScrollState &scroll = state.scroll();
+    const auto moved =
+        view.shifted(core::VisualPosition{scroll.first_visible, scroll.first_row}, intent.lines)
+            .and_then([&view, this](core::VisualPosition at)
+                      { return view.constrained(at, scroll_extent_for(state_.mode())); });
+    if (!moved)
+    {
+        layout_failure_ = moved.error();
+        return;
+    }
+    state_ = state_.with_other_scrolled(moved.value().line, moved.value().row);
+}
+
 core::TitleBarInput EditorController::title_bar_input(std::int32_t width, std::uint32_t dpi) const
 {
     return core::TitleBarInput{
@@ -4060,6 +4178,13 @@ const core::VimPattern &EditorController::frame_pattern(const core::VimPattern &
     return pattern;
 }
 
+const core::VimPattern *EditorController::pattern_of(const std::optional<SearchPattern> &pattern)
+{
+    return pattern.has_value() ? std::visit([](const auto &value) { return &frame_pattern(value); },
+                                            pattern.value())
+                               : nullptr;
+}
+
 const core::VimPattern &
 EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> pattern)
 {
@@ -4069,10 +4194,11 @@ EditorController::frame_pattern(std::reference_wrapper<const core::VimPattern> p
 // 見えている 1 行ぶんの表示値。選択と検索は所有済み本文の同じ LineSpanEvaluation で投影する
 // （ADR 0037 / 0095）。塗る面を持たない長さ 0 の一致は span が absent を返すので落ちる。
 // 描画用の行は core の display_line 1 本で作る（ADR 0040 の決定 2）。桁は本文の桁のまま渡す。
-LineView EditorController::line_view(LineView view, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern, core::Offset caret) const
+LineView EditorController::line_view(const PaneSource &source, LineView view,
+                                     const core::OffsetRange &range, core::Offset caret) const
 {
-    const core::TextBuffer &text = state_.text();
+    const core::TextBuffer &text = source.state.text();
+    const core::VimPattern *pattern = source.pattern;
     const auto line = view.number;
     // 巨大な行は窓の中の本文だけを持つ。選択と当たりは窓の始まりから投影し、窓が行末に届かなければ
     // 窓の終わりを行末とみなす（ADR 0139 の限界）。
@@ -4109,36 +4235,34 @@ LineView EditorController::line_view(LineView view, const core::OffsetRange &ran
     return view;
 }
 
-std::expected<std::vector<LineView>, TextLayoutFailure> EditorController::visible_lines()
+// 枠の見えている行（ADR 0148 の決定 8）。操作中の枠ももう 1 つの枠もこの 1 本を通る。スクロールは
+// 呼び手（frame）が解決済み。
+std::expected<std::vector<LineView>, TextLayoutFailure>
+EditorController::visible_lines(const PaneSource &source) const
 {
-    const ScrollState scroll = settled_scroll();
-    const std::size_t total = state_.text().line_count();
+    const EditorState &state = source.state;
+    const ScrollState &scroll = state.scroll();
+    const std::size_t total = state.text().line_count();
     const std::size_t first = std::min(scroll.first_visible.value, total);
     const std::size_t last =
         std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
-    const core::OffsetRange range = highlighted_range();
-    const auto block = block_selection();
-    const auto pattern = search_pattern();
-    const core::VimPattern *selected =
-        pattern.has_value()
-            ? std::visit([](const auto &value) { return &frame_pattern(value); }, pattern.value())
-            : nullptr;
-    const core::Offset caret = selected != nullptr && first <= last
-                                   ? previewed_offset(state_).value_or(state_.selection().caret)
-                                   : state_.selection().caret;
+    const core::Offset caret = source.pattern != nullptr && first <= last
+                                   ? previewed_offset(state).value_or(state.selection().caret)
+                                   : state.selection().caret;
     std::vector<LineView> lines;
     if (first <= last)
     {
         lines.reserve(last - first + 1);
     }
     // text の表示の frame なので、構築は 1 升を port から読まない（格子でない）。
-    const VisualTextView visual(state_, ports_.text_layouts, view_geometry_);
+    const VisualTextView visual(state, ports_.text_layouts, view_geometry_);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
     for (std::size_t number = first;
          number <= last && row < static_cast<std::int64_t>(scroll.visible_lines); ++number)
     {
         const core::LineNumber line{number};
-        auto shown = line_view(visual.line(line), block_row(block, line, range), selected, caret);
+        auto shown = line_view(source, visual.line(line),
+                               block_row(source.block, line, source.range), caret);
         const auto count = screen_rows_of(shown);
         if (!count)
         {
@@ -4164,10 +4288,11 @@ EditorController::screen_rows_of(const LineView &shown) const
         TextLayoutRequest{presented_text(shown), state_.settings(), view_geometry_});
 }
 
-GridLineMarks EditorController::grid_marks(core::LineNumber line, const core::OffsetRange &visible,
-                                           const core::OffsetRange &selection,
-                                           const core::VimPattern *pattern) const
+GridLineMarks EditorController::grid_marks(const PaneSource &source, core::LineNumber line,
+                                           const core::OffsetRange &visible,
+                                           const core::OffsetRange &selection) const
 {
+    const core::VimPattern *pattern = source.pattern;
     GridLineMarks marks{selection, {}, std::nullopt, 0};
     if (pattern == nullptr)
     {
@@ -4177,14 +4302,15 @@ GridLineMarks EditorController::grid_marks(core::LineNumber line, const core::Of
     // 全体を写さない（#556）。余裕の中で始まる一致は見えている範囲に届かないので、窓の端の文脈で
     // 偽って当たっても塗られない。窓の始まりの前と終わりの後ろの 1 code point を文脈に読み、
     // `^` `$` は行の端でだけ当たる。塗るのは見えている画面行の升へ写した分だけ（GridLineRows）。
-    const core::TextBuffer &text = state_.text();
+    const core::TextBuffer &text = source.state.text();
     const core::OffsetRange content{text.line_start(line), text.line_end(line)};
     const auto window = grid_search_window(
         content, visible, pattern->longest_bytes().value_or(grid_unbounded_margin));
     const auto read = grid_search_window(content, window, grid_context_bytes);
     const auto bytes = text.text_range(read.begin, read.end);
     marks.searched = bytes.size();
-    const core::Offset caret = previewed_offset(state_).value_or(state_.selection().caret);
+    const core::Offset caret =
+        previewed_offset(source.state).value_or(source.state.selection().caret);
     for (const auto &found :
          grid_window_matches(bytes,
                              core::OffsetRange{core::Offset{window.begin.value - read.begin.value},
@@ -4208,31 +4334,28 @@ GridLineMarks EditorController::grid_marks(core::LineNumber line, const core::Of
     return marks;
 }
 
-std::optional<TextLayoutFailure> EditorController::grid_visible_rows(EditorFrame &frame) const
+std::optional<TextLayoutFailure> EditorController::grid_visible_rows(const PaneSource &source,
+                                                                     std::vector<GridRowView> &grid,
+                                                                     std::size_t &scanned,
+                                                                     std::size_t &searched) const
 {
-    const VisualTextView view(state_, ports_.text_layouts, view_geometry_);
+    const EditorState &state = source.state;
+    const VisualTextView view(state, ports_.text_layouts, view_geometry_);
     auto cells = view.grid_cells();
     if (!cells)
     {
         return cells.error();
     }
     const auto caret = view.grid_point(
-        cells.value(), core::TextCaret{state_.text().position_of(state_.selection().caret),
-                                       state_.caret_affinity()});
-    const ScrollState scroll = state_.scroll();
-    const core::OffsetRange range = highlighted_range();
-    const auto block = block_selection();
-    const auto pattern = search_pattern();
-    const core::VimPattern *selected =
-        pattern.has_value()
-            ? std::visit([](const auto &value) { return &frame_pattern(value); }, pattern.value())
-            : nullptr;
+        cells.value(),
+        core::TextCaret{state.text().position_of(state.selection().caret), state.caret_affinity()});
+    const ScrollState scroll = state.scroll();
     // 画面の下に半分かかる画面行も描く（text と同じ）。
     const auto limit = scroll.visible_lines + 1;
     std::size_t screen = 0;
     auto first_row = scroll.first_row;
     for (core::LineNumber line{std::max<std::size_t>(scroll.first_visible.value, 1)};
-         line.value <= state_.text().line_count() && screen < limit; ++line.value)
+         line.value <= state.text().line_count() && screen < limit; ++line.value)
     {
         const auto count = cells.value().rows(line);
         const auto from = std::min(first_row, count - 1);
@@ -4240,16 +4363,16 @@ std::optional<TextLayoutFailure> EditorController::grid_visible_rows(EditorFrame
         const core::OffsetRange visible{
             cells.value().byte_of(line, core::GridPoint{from, 0}),
             cells.value().byte_of(line, core::GridPoint{from + take, 0})};
-        auto marks = grid_marks(line, visible, block_row(block, line, range), selected);
-        frame.grid_searched += marks.searched;
-        GridLineRows(GridLineSource{state_, cells.value(), line, from, from + take,
+        auto marks = grid_marks(source, line, visible, block_row(source.block, line, source.range));
+        searched += marks.searched;
+        GridLineRows(GridLineSource{state, cells.value(), line, from, from + take,
                                     static_cast<std::int64_t>(screen), visible, std::move(marks),
                                     caret})
-            .append_to(frame.grid);
+            .append_to(grid);
         screen += take;
         first_row = 0;
     }
-    frame.grid_scanned = cells.value().scanned();
+    scanned = cells.value().scanned();
     return std::nullopt;
 }
 
@@ -4334,14 +4457,15 @@ EditorFrame EditorController::frame()
     const auto &theme = core::selected_theme(delivered.settings, delivered.appearance);
     auto tabs = tab_views(state_, delivered.document);
     const auto encoding = delivered.document.encoding;
-    // 問いの答えを待つ間は本文の行を読まず文字組みもしない（ADR 0140 の決定 2）。renderer は
-    // display_pending を見て本文を描かない。格子では本文の行を文字組みせず、画面行は grid に載る
-    // （決定 5）。
+    // 問いの答えを待つ間は本文の行を読まず文字組みもしない（ADR 0140 の決定 2・renderer は
+    // display_pending を見て本文を描かない）。格子では画面行が grid に載る（決定 5）。
     const bool pending = display_pending(state_.display_inquiry());
     const bool gridded =
         !pending && state_.display() == core::DisplayForm::grid && view_geometry_.width > 0;
+    const auto pattern = search_pattern();
+    const PaneSource source{state_, highlighted_range(), block_selection(), pattern_of(pattern)};
     auto lines = pending || gridded ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
-                                    : visible_lines();
+                                    : visible_lines(source);
     // frame の失敗は描けないものだけ（契約の破れは配達だけに載る・ADR 0133 の追補 2026-10-18）。
     const auto failure = lines ? drawing_failure(layout_failure_) : std::optional{lines.error()};
     EditorFrame result{std::move(lines).value_or(std::vector<LineView>{}),
@@ -4380,9 +4504,56 @@ EditorFrame EditorController::frame()
                        pending};
     if (gridded)
     {
-        const auto grid_failure = grid_visible_rows(result);
+        const auto grid_failure =
+            grid_visible_rows(source, result.grid, result.grid_scanned, result.grid_searched);
         result.layout_failure = grid_failure.has_value() ? grid_failure : result.layout_failure;
     }
+    add_other_pane(result, source.pattern);
     return result;
+}
+
+// もう 1 つの枠の表示値（ADR 0148 の決定 8）。行は操作中の枠と同じ visible_lines /
+// grid_visible_rows を、もう 1 つの枠を操作中の枠の形で読む写しから作る。幅は両枠で等しいので
+// 同じ寸法を渡す（決定 1）。選択は無く、検索の面は両枠に塗る（限界）。
+void EditorController::add_other_pane(EditorFrame &result, const core::VimPattern *pattern) const
+{
+    result.layout = state_.split().layout;
+    const auto &view = state_.split().other;
+    const auto pane = state_.other_pane_state();
+    if (!view.has_value() || !pane.has_value())
+    {
+        return;
+    }
+    const EditorState &state = pane.value();
+    const PaneSource source{state, core::selection_range(state.selection()), std::nullopt, pattern};
+    const auto &ids = state_.autosave_ids();
+    const auto position = static_cast<std::size_t>(
+        std::distance(ids.begin(), std::ranges::find(ids, view.value().tab)));
+    PaneFrame other{{},
+                    CaretView{state.text().position_of(state.selection().caret), result.caret.shape,
+                              state.caret_affinity()},
+                    state.scroll().first_visible,
+                    state.text().line_count(),
+                    state.scroll().horizontal,
+                    state.display(),
+                    {},
+                    result.tabs.at(position)};
+    // 問いの答えを待つ文書は本文を読まない（操作中の枠と同じ・ADR 0140 の決定 2）。
+    const bool pending = display_pending(state.display_inquiry());
+    std::optional<TextLayoutFailure> failure;
+    if (!pending && state.display() == core::DisplayForm::grid && view_geometry_.width > 0)
+    {
+        std::size_t scanned = 0;
+        std::size_t searched = 0;
+        failure = grid_visible_rows(source, other.grid, scanned, searched);
+    }
+    else if (!pending)
+    {
+        auto lines = visible_lines(source);
+        failure = lines ? std::nullopt : std::optional{lines.error()};
+        other.lines = std::move(lines).value_or(std::vector<LineView>{});
+    }
+    result.layout_failure = result.layout_failure.has_value() ? result.layout_failure : failure;
+    result.other = std::move(other);
 }
 } // namespace nenenib::application

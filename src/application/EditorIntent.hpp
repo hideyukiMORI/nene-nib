@@ -7,6 +7,7 @@
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "ClipboardAction.hpp"
+#include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
@@ -33,14 +34,17 @@
 #include "SaveDocument.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPaletteList.hpp"
+#include "ScrollPane.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SettleRecentTab.hpp"
+#include "SplitPane.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
+#include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
 #include "TitleBarWidth.hpp"
 #include "ToggleBookmark.hpp"
@@ -64,5 +68,6 @@ using EditorIntent = std::variant<
     OpenCommandPalette, ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
     WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth, OpenTabList,
     EndSession, WorkCompleted, AutosaveTick, RestoreAutosave, DiscardAutosave, ToggleBookmark,
-    OpenOperationList, PointText, SelectDisplay, ScrollPaletteList>;
+    OpenOperationList, PointText, SelectDisplay, ScrollPaletteList, SplitPane, SwitchPane,
+    ClosePane, ScrollPane>;
 } // namespace nenenib::application
