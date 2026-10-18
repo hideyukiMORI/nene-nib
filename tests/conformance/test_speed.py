@@ -902,16 +902,20 @@ def paced_marks(latencies_ms: list[float], setup_inputs: int = 0) -> list:
 
 
 def split_trial(median: float, p95: float, over: int = 0) -> dict:
-    return {"count": 100, "medianMs": median, "p95Ms": p95, "maximumMs": p95,
-            "minimumMs": 0.5, "over_16_7": over, "samples": []}
+    return {"count": 100, "medianMs": median, "p95Ms": p95, "medianRawMs": median, "p95RawMs": p95,
+            "maximumMs": p95, "minimumMs": 0.5, "over_16_7": over, "samples": []}
 
 
 def split_record(bench: str, trials: list, sha: str = "e" * 64, window=(1280, 720),
            document: str = "empty") -> dict:
     return {"bench": bench, "executableSha256": sha, "window": list(window),
             "document": {"choice": document, "path": None, "bytes": 0, "sha256": None},
-            "panesRequested": bench != speed.SPLIT_SINGLE_BENCH, "splitKeys": [],
-            "trials": trials}
+            "layout": speed.SPLIT_PANE_BENCHES.get(bench, ("none", False))[0],
+            "otherDocument": speed.SPLIT_PANE_BENCHES.get(bench, ("none", False))[1],
+            "panesRequested": bench != speed.SPLIT_SINGLE_BENCH,
+            "panesDelivered": bench != speed.SPLIT_SINGLE_BENCH, "splitKeys": [],
+            "trials": trials,
+            "missingReasons": ["not observed"] * sum(1 for trial in trials if trial is None)}
 
 
 PANE = "split-pane-key-100-same-vertical"
@@ -963,6 +967,24 @@ class PacedValuesTests(unittest.TestCase):
     def test_an_unanswered_last_keystroke_makes_the_trial_missing(self):
         self.assertIsNone(speed.paced_values(paced_marks([2.0] * 100)[:-1]))
 
+    def test_the_input_count_must_be_the_split_inputs_and_101(self):
+        latencies = [2.0] * 100
+        self.assertEqual(speed.paced_outcome(paced_marks(latencies, 3), 104), latencies)
+        for setup, expected in ((2, 104), (4, 104), (0, 104)):
+            with self.subTest(setup=setup), self.assertRaises(speed.TrialNotObserved) as caught:
+                speed.paced_outcome(paced_marks(latencies, setup), expected)
+            self.assertEqual(str(caught.exception),
+                             f"input count mismatch: expected {expected}, observed {setup + 101}")
+
+    def test_a_count_that_matches_but_answers_out_of_order_is_missing(self):
+        with self.assertRaises(speed.TrialNotObserved):
+            speed.paced_outcome(paced_marks([2.0] * 100)[:-1], 101)
+
+    def test_a_split_step_counts_its_key_downs_and_characters(self):
+        self.assertEqual(speed.step_inputs([speed.VK_CONTROL], 1), 3)
+        self.assertEqual(speed.step_inputs([speed.VK_CONTROL, speed.VK_SHIFT], 0), 3)
+        self.assertEqual(speed.step_inputs([], 0), 1)
+
 
 class SplitKeysTests(unittest.TestCase):
     def test_vertical_and_horizontal_and_the_other_document(self):
@@ -998,6 +1020,16 @@ class SplitVerdictTests(unittest.TestCase):
         self.assertEqual(self.pair(2.0, 3.0, 12.0), "pass")
         self.assertEqual(self.pair(2.0, 3.01, 12.0), "fail")
 
+    def test_the_verdict_reads_the_unrounded_values_at_the_rounding_boundary(self):
+        # 差が allowed（2.0）± 0.00005。4 桁に丸めた中央値はどちらも 10.0 で、生の値だけが向きを決める。
+        single = speed.summarise_paced([8.0] * 100)
+        for pane_value, verdict in ((10.00005, "fail"), (9.99995, "pass")):
+            pane = speed.summarise_paced([pane_value] * 100)
+            with self.subTest(pane=pane_value):
+                self.assertEqual(pane["medianMs"], 10.0)
+                self.assertEqual(self.verdict(split_record(speed.SPLIT_SINGLE_BENCH, [single]),
+                                              split_record(PANE, [pane])), verdict)
+
     def test_p95_at_16_7_both_sides(self):
         self.assertEqual(self.pair(8.0, 8.5, 16.7), "pass")
         self.assertEqual(self.pair(8.0, 8.5, 16.71), "fail")
@@ -1017,6 +1049,22 @@ class SplitVerdictTests(unittest.TestCase):
         result = speed.split_verdict(single, pane)
         self.assertEqual([entry["verdict"] for entry in result["trials"]], ["pass", "fail", "pass"])
         self.assertEqual(result["verdict"], "fail")
+
+    def test_the_verdict_names_layout_other_document_and_both_documents(self):
+        other = "split-pane-key-100-other-horizontal"
+        result = speed.split_verdict(split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0)]),
+                                     split_record(other, [split_trial(8.5, 9.0)]))
+        self.assertEqual((result["layout"], result["otherDocument"]), ("horizontal", True))
+        self.assertEqual(result["document"]["single"], result["document"]["pane"])
+        self.assertTrue(result["panesDelivered"])
+
+    def test_every_trial_missing_is_unmeasurable_before_incomparable(self):
+        single = split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0)])
+        pane = dict(split_record(PANE, [None]), window=None,
+                    missingReasons=[speed.SPLIT_KEYS_NOT_DELIVERED])
+        result = speed.split_verdict(single, pane)
+        self.assertEqual(result["verdict"], "unmeasurable")
+        self.assertEqual(result["reasons"], [speed.SPLIT_KEYS_NOT_DELIVERED])
 
     def test_a_missing_trial_is_unmeasurable(self):
         single = split_record(speed.SPLIT_SINGLE_BENCH, [split_trial(8.0, 9.0), split_trial(8.0, 9.0)])
