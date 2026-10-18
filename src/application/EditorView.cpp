@@ -214,20 +214,19 @@ EditorController::answered_vim_request(const core::VimStep &step, core::VimEdito
                                        std::vector<core::VimLineRows> &rows,
                                        std::vector<core::VimRowSpan> &spans)
 {
-    if (step.layout_request.has_value())
+    if (step.layout_request.has_value() || step.row_request.has_value())
     {
+        // 1 画面行の升の数は文字組みの問いに答える所で 1 回だけ置く（ADR 0144 の決定 10）。
         auto text = visual_view();
-        const auto measured = measured_rows(rows, step.layout_request.value(), text);
-        view.layout.lines = rows;
         view.layout.row_columns = text.row_columns();
-        return measured;
-    }
-    if (step.row_request.has_value())
-    {
-        auto text = visual_view();
+        if (step.layout_request.has_value())
+        {
+            const auto measured = measured_rows(rows, step.layout_request.value(), text);
+            view.layout.lines = rows;
+            return measured;
+        }
         const auto measured = measured_span(spans, step.row_request.value(), text);
         view.layout.spans = spans;
-        view.layout.row_columns = text.row_columns();
         return measured;
     }
     if (view.viewport.has_value())
