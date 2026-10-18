@@ -19,7 +19,19 @@ ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイム
   Ctrl+Pで「:set nowrap」を選ぶと解除、「:set wrap」で有効にします。
   Vim NORMALでは「:set nowrap」「:set wrap」も使えます。
   通常の上下・Home/End・ページ移動は画面行に従います。
-  Vimのj/kと0/$は論理行、H/M/Lとページ移動は折り返した表示を参照します。
+  Vimのj/kと0/$は論理行です。gj/gk/g0/g$/gm/gM、H/M/L、ページ移動、
+  zt/zz/zb/z<CR>/z./z-/z+/z^の縦の位置合わせ、zl/zh/zL/zH/zs/zeの横送りは
+  折り返した表示（画面行）を参照します。{N}|でN桁目へ移動できます。
+
+巨大な行
+  1行が16,384文字を超えるファイルを開くと「格子で表示しますか」と聞きます。
+  「はい」は等幅の格子で折り返して表示し、「いいえ」は折り返さずに表示します。
+  「:set display=grid」「:set display=text」でいつでも切り替えられます。
+
+自動退避
+  未保存の編集は30秒ごとに %LOCALAPPDATA%\NeNeNib\autosave\ へ退避します。
+  正常に閉じると消えます。強制終了や電源断の後に起動すると
+  「前回の未保存を戻しますか」と1回だけ聞きます。
 
 表示とIME
   Ctrl+Pの「:」で配色・字体・文字サイズ・操作ヒントを変更できます。
@@ -28,27 +40,33 @@ ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイム
   言語別の構文ハイライトは今後対応予定です。
   配色の出典・許諾文はTHIRD_PARTY_NOTICES.txtを参照してください。
   Ctrlと+/-/0、Ctrl+ホイールで文字サイズを変更できます。
-  日本語IMEは通常モードとVim INSERTで使えます。NORMALではオフになります。
+  日本語IMEは通常モードとVim INSERT、Vimの「:」「/」「?」の入力行で使えます。
+  Vim NORMALではオフになります。
   UTF-8、UTF-8 BOM、Shift_JISと、読み込んだCRLF/LFを扱います。
 
 保存先
   設定: %LOCALAPPDATA%\NeNeNib\settings.v3
   タブと表示位置: 同フォルダのsession.v2。保存済みファイルだけ復元します。
-  ブックマーク: bookmarks.v1、利用者の配色: themes\<name>.v1.theme
+  ブックマーク: bookmarks.v1、閉じたファイルの履歴: history.v1
+  利用者の配色: themes\<name>.v1.theme、自動退避: autosave\<プロセスID>\
   新形式が無い場合だけ旧settings.v2/v1、session.v1を読みます。
   読み込むだけでは旧ファイルを変更せず、新形式の保存後も旧版を残します。
   引数なしの起動で前回のタブを復元します。窓位置・サイズの復元は未対応です。
 
 このベータの制限
   64 MiBを超えるファイル、split表示、Markdownプレビューは未対応です。
+  UTF-16のファイルは開けません（Issue #497）。260文字を超えるパスは開けません（#498）。
+  マウスホイールは1通知につき3行で固定です（#499）。
+  Vim NORMALではIMEが閉じるため、f/tで日本語の文字を指定しにくいです（#500）。
   Vimは一部の操作に対応する独自実装で、完全互換ではありません。
-  gj/gk/g0/g$、Vimモードのドラッグ選択、:s/:gなどは未対応です。
+  :nohl と :wq! は通りません（#501）。:s/:gなどの一般Exコマンド、
+  Vimモードのドラッグ選択は未対応です。
   H/Mによるyankと一部ページ付きchangeの既存の桁ずれはIssue #411に記録しています。
   複雑な絵文字列・言語固有の全ての文字境界規則には対応していません。
   ファイルを開く前に、重要な文書のバックアップを保存してください。
 
 詳しい対応操作・既知の問題・ソース
   https://github.com/hideyukiMORI/nene-nib
-  https://github.com/hideyukiMORI/nene-nib/issues/411
+  https://github.com/hideyukiMORI/nene-nib/issues
 
 MIT License。ライセンス全文は同梱LICENSEを参照してください。
