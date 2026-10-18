@@ -203,6 +203,7 @@ Direct2DRenderer::started(Direct2DRenderer renderer, HWND window, application::T
 std::expected<void, RenderFailure>
 Direct2DRenderer::initialize(HWND window, application::TimingPort &timing, DeviceWarmup &warmup)
 {
+    timing_ = &timing;
     auto device = create_device(warmup);
     if (!device)
     {
@@ -1801,6 +1802,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     }
     gutter_layouts_.end();
     const auto ended = context_->EndDraw();
+    mark(core::Milestone::draw_ended);
     context_->SetTarget(nullptr);
     if (text_failure_.has_value())
     {
@@ -1811,6 +1813,14 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
         return std::unexpected(classify(ended));
     }
     return {};
+}
+
+void Direct2DRenderer::mark(core::Milestone milestone) noexcept
+{
+    if (timing_ != nullptr)
+    {
+        timing_->mark(milestone);
+    }
 }
 
 std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()
@@ -1862,7 +1872,9 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     {
         return std::unexpected(RenderFailure::swap_chain);
     }
+    mark(core::Milestone::latency_waited);
     const auto presented = swap_chain_->Present(1, 0);
+    mark(core::Milestone::presented);
     if (FAILED(presented))
     {
         return std::unexpected(classify(presented));

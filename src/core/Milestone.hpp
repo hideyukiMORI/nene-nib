@@ -32,7 +32,15 @@ enum class Milestone : std::uint8_t
     body_presented,
     device_adopted,
     probe_started,
-    probe_finished
+    probe_finished,
+    // 診断の節目（experiment/bimodal-marks・製品に入れない）。打鍵の道を割る。
+    key_delivered,
+    paint_entered,
+    frame_built,
+    draw_ended,
+    latency_waited,
+    presented,
+    layout_created
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -70,6 +78,20 @@ enum class Milestone : std::uint8_t
         return "probe_started";
     case Milestone::probe_finished:
         return "probe_finished";
+    case Milestone::key_delivered:
+        return "key_delivered";
+    case Milestone::paint_entered:
+        return "paint_entered";
+    case Milestone::frame_built:
+        return "frame_built";
+    case Milestone::draw_ended:
+        return "draw_ended";
+    case Milestone::latency_waited:
+        return "latency_waited";
+    case Milestone::presented:
+        return "presented";
+    case Milestone::layout_created:
+        return "layout_created";
     }
     std::unreachable();
 }

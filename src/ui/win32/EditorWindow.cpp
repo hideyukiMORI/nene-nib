@@ -463,6 +463,7 @@ EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &co
     : instance_(instance), controller_(controller), timing_(timing),
       text_layouts_(sources.text_layouts), warmup_(sources.warmup)
 {
+    text_layouts_.observe(timing_);
 }
 
 EditorWindow::~EditorWindow()
@@ -1559,6 +1560,7 @@ void EditorWindow::invalidate() noexcept
 
 void EditorWindow::paint()
 {
+    timing_.mark(core::Milestone::paint_entered);
     // 無効領域を先に消してから描く。描いている間に来た変更は次の WM_PAINT が拾う。
     ValidateRect(window_, nullptr);
     // 描画中の再要求を落とさないよう、present より前に次の無効化を受け付ける。
@@ -1853,6 +1855,7 @@ void EditorWindow::type_character(WPARAM word)
     // 合成した 1 文字を UTF-8 の意図へ（CPP-014 / ADR 0009 の決定 2）。変換は core::to_utf8
     // ただ 1 本で、対にならないサロゲートはここまでに捨ててあるので空にはならない（Issue #13）。
     type_text(core::to_utf8(wide).value_or(std::string{}));
+    timing_.mark(core::Milestone::key_delivered);
 }
 
 void EditorWindow::type_text(std::string utf8)
@@ -2361,6 +2364,7 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
 {
     text_layouts_.begin_frame();
     const auto frame = controller_.frame();
+    timing_.mark(core::Milestone::frame_built);
     const auto drawn =
         frame.layout_failure.has_value()
             ? std::expected<void, RenderFailure>{std::unexpected(RenderFailure::directwrite)}

@@ -336,6 +336,10 @@ BodyTextLayouts::make_layout(const application::TextLayoutRequest &request)
     {
         return std::unexpected(unavailable);
     }
+    if (timing_ != nullptr)
+    {
+        timing_->mark(core::Milestone::layout_created);
+    }
     // 巨大な行の窓は設定の折り返しにかかわらず折り返さない（ADR 0139 の決定 2）。
     if (request.window.active && FAILED(made->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)))
     {

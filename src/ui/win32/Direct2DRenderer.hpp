@@ -274,6 +274,9 @@ class Direct2DRenderer final
     TextFormat guide_status_format_;
     // 現在と直前の描画の本文資源だけ。前の列の残りは描画終了時に捨てる（ADR 0069）。
     BodyTextLayouts &body_text_;
+    // 診断の節目の口（experiment/bimodal-marks）。initialize が控える。
+    application::TimingPort *timing_ = nullptr;
+    void mark(core::Milestone milestone) noexcept;
     std::optional<RenderFailure> text_failure_;
     GutterTextLayouts gutter_layouts_;
     // 通常6枠と案内4枠。録画時は案内が無く7枠（ADR 0079）。
