@@ -35,11 +35,14 @@ MERGED = {"number": 900, "headRefOid": HEAD, "state": "MERGED",
 class MergeBoundary(unittest.TestCase):
     def invoke(self, record=None, execute=False, read_exit=0, merge_exit=0,
                merge_timeout=False, rules=None, merged=None, rules_exit=0, files=None, run=None,
-               latest=None, ci_run=None, dispatch_exit=0, watch_exit=0):
+               latest=None, ci_run=None, dispatch_exit=0, watch_exit=0, run_view=None):
         calls = []
+        self.watch_timeouts = []
         run_responses = copy.deepcopy(run) if isinstance(run, list) else None
+        watch_exits = list(watch_exit) if isinstance(watch_exit, list) else None
+        view_responses = copy.deepcopy(run_view) if isinstance(run_view, list) else None
 
-        def runner(arguments):
+        def runner(arguments, timeout=None):
             calls.append(arguments)
             if arguments[0] == "api":
                 path = arguments[3]
@@ -55,7 +58,14 @@ class MergeBoundary(unittest.TestCase):
                     self.fail(f"Unexpected API: {arguments}")
                 return subprocess.CompletedProcess(arguments, code, json.dumps(value), "rules error" if code else "")
             if arguments[:2] == ["run", "watch"]:
-                return subprocess.CompletedProcess(arguments, watch_exit, "", "CI failed" if watch_exit else "")
+                self.watch_timeouts.append(timeout)
+                code = watch_exits.pop(0) if watch_exits is not None else watch_exit
+                return subprocess.CompletedProcess(arguments, code, "", "CI failed" if code else "")
+            if arguments[:2] == ["run", "view"]:
+                self.assertEqual(arguments[2:], ["101", "--repo", REPOSITORY, "--json", "status,conclusion"])
+                value = (view_responses.pop(0) if view_responses is not None else
+                         {"status": "completed", "conclusion": "failure"})
+                return subprocess.CompletedProcess(arguments, 0, json.dumps(value), "")
             if arguments[1] == "view":
                 if any(call[1] == "merge" for call in calls):
                     return subprocess.CompletedProcess(arguments, 0, json.dumps(MERGED if merged is None else merged), "")
@@ -227,6 +237,53 @@ class MergeBoundary(unittest.TestCase):
             self.assertEqual(result, 2)
             self.assertEqual(sum("POST" in call for call in calls), 1)
             self.assertNotIn("merge", [call[1] for call in calls])
+
+    def test_interrupted_watch_waits_on_the_same_run_again(self):
+        # #667 (a): watch exits non-zero while the run is still in progress; the second watch succeeds.
+        result, calls, output, error = self.invoke(run=[{"status": "in_progress"}, RUN], execute=True,
+                                                  watch_exit=[1, 0], run_view=[{"status": "in_progress"}])
+        self.assertEqual(result, 0, error)
+        self.assertEqual(sum(call[:2] == ["run", "watch"] for call in calls), 2)
+        self.assertEqual(sum(call[:2] == ["run", "view"] for call in calls), 1)
+        self.assertEqual(sum("POST" in call for call in calls), 1)
+        self.assertIn({"ciWatchRetried": 1}, [json.loads(line) for line in output.splitlines()])
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
+        self.assertEqual(self.watch_timeouts[0], MERGE.WATCH_SECONDS)
+        self.assertLessEqual(self.watch_timeouts[1], MERGE.WATCH_SECONDS)
+
+    def test_interrupted_watch_of_a_failed_run_is_refused_without_retry(self):
+        # #667 (b): the run itself completed with a failure.
+        for conclusion in ("failure", "cancelled", "timed_out"):
+            with self.subTest(conclusion=conclusion):
+                result, calls, output, error = self.invoke(
+                    run={"status": "in_progress"}, execute=True, watch_exit=1,
+                    run_view=[{"status": "completed", "conclusion": conclusion}])
+                self.assertEqual(result, 2)
+                self.assertEqual(sum(call[:2] == ["run", "watch"] for call in calls), 1)
+                self.assertNotIn("merge", [call[1] for call in calls])
+                self.assertNotIn("ciWatchRetried", output)
+                self.assertIn("CI did not succeed", error)
+
+    def test_watch_retries_stop_after_three(self):
+        # #667 (c): four interrupted watches in a row while the run stays in progress.
+        result, calls, output, error = self.invoke(run={"status": "in_progress"}, execute=True,
+                                                  watch_exit=[1, 1, 1, 1],
+                                                  run_view=[{"status": "in_progress"}] * 4)
+        self.assertEqual(result, 2)
+        self.assertEqual(sum(call[:2] == ["run", "watch"] for call in calls), 4)
+        self.assertEqual(sum("POST" in call for call in calls), 1)
+        self.assertNotIn("merge", [call[1] for call in calls])
+        self.assertIn("status=in_progress", error)
+
+    def test_watch_cut_just_before_success_continues(self):
+        # #667 (d): watch exits non-zero but the run already completed successfully.
+        result, calls, output, error = self.invoke(run=[{"status": "in_progress"}, RUN], execute=True,
+                                                  watch_exit=1, run_view=[{"status": "completed",
+                                                                           "conclusion": "success"}])
+        self.assertEqual(result, 0, error)
+        self.assertEqual(sum(call[:2] == ["run", "watch"] for call in calls), 1)
+        self.assertNotIn("ciWatchRetried", output)
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
 
     def test_pr_changes_during_ci_stop_merge(self):
         for key, value in (("headRefOid", "b" * 40), ("title", TITLE + "x"), ("body", BODY + "x"),
