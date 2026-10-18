@@ -7,11 +7,13 @@
 #include "EditorSettings.hpp"
 #include "EditorState.hpp"
 #include "TextBuffer.hpp"
+#include "TextRow.hpp"
 #include "Utf8.hpp"
 #include "VisualTextView.hpp"
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -213,29 +215,145 @@ void check_positions_held(app::VisualTextView &view, const core::TextBuffer &tex
 }
 
 // 段 row の始まりの前の 1 文字が空白（段の末尾にぶら下がる空白）か。
-[[nodiscard]] bool hangs(const std::string &line, core::Offset line_start,
+[[nodiscard]] bool hangs(std::string_view line, core::Offset line_start,
                          const core::VimRowSpan &span)
 {
     return span.row > 0 && line.at(span.start.value - line_start.value - 1) == ' ';
 }
 
-// 3 段に折り返し、どれかの段の末尾に空白がぶら下がる幅（折り返しは文字単位なので幅で決まる）。
+// 空白 at の左端の x の 1 画素右を幅にして 3 段に折り返し、どれかの段の末尾に空白がぶら下がれば
+// その幅、でなければ 0（折り返しは文字単位なので、空白の手前は収まり、幅を越える空白は段の末尾に
+// ぶら下がる）。flat は同じ行の折り返さない layout の問い（text が行）。
+[[nodiscard]] int hanging_at(BodyTextLayouts &layouts, const app::EditorState &state,
+                             const app::TextLayoutRequest &flat, std::size_t at)
+{
+    const auto left = layouts.locate(flat, core::DisplayCaret{core::Column{at + 1}});
+    const auto right = layouts.locate(flat, core::DisplayCaret{core::Column{at + 2}});
+    if (!left || !right)
+    {
+        return 0;
+    }
+    const auto width = static_cast<int>(std::floor(left.value().x)) + 1;
+    if (static_cast<float>(width) >= right.value().x)
+    {
+        return 0;
+    }
+    const core::LineNumber number{2};
+    const auto start = state.text().line_start(number);
+    app::VisualTextView view{state, layouts, core::TextViewGeometry{width, 29, 96}};
+    const auto spans = numbered_rows(view, state.text(), number);
+    const auto line = flat.text;
+    const bool hung = std::ranges::any_of(spans, [line, start](const auto &span)
+                                          { return hangs(line, start, span); });
+    return spans.size() == 3 && hung ? width : 0;
+}
+
+// 3 段に折り返し、どれかの段の末尾に空白がぶら下がる幅。折り返さない layout で空白の左端の x を
+// 測って決める（固定の幅の範囲を走査しない）。見つからなければ 0。
 [[nodiscard]] int hanging_width(BodyTextLayouts &layouts, const app::EditorState &state,
                                 const std::string &line)
 {
-    const core::LineNumber number{2};
-    for (int width = 880; width <= 1000; ++width)
+    auto flat_settings = state.settings();
+    flat_settings.wrapping = core::LineWrapping::no_wrap;
+    const app::TextLayoutRequest flat{line, flat_settings, core::TextViewGeometry{4000, 29, 96}};
+    for (std::size_t at = 0; at + 1 < line.size(); ++at)
     {
-        app::VisualTextView view{state, layouts, core::TextViewGeometry{width, 29, 96}};
-        const auto spans = numbered_rows(view, state.text(), number);
-        const auto start = state.text().line_start(number);
-        if (spans.size() == 3 && std::ranges::any_of(spans, [&line, start](const auto &span)
-                                                     { return hangs(line, start, span); }))
+        const auto width = line.at(at) == ' ' ? hanging_at(layouts, state, flat, at) : 0;
+        if (width != 0)
         {
             return width;
         }
     }
     return 0;
+}
+
+// 文字組みの row の桁ごとの答え（桁 1 から行末の次の桁まで）。どれかが失敗なら空。
+[[nodiscard]] std::vector<app::TextRow> rows_by_column(BodyTextLayouts &layouts,
+                                                       const app::TextLayoutRequest &request)
+{
+    std::vector<app::TextRow> rows;
+    for (std::size_t column = 1; column <= request.text.size() + 1; ++column)
+    {
+        const auto answer = layouts.row(request, core::Column{column});
+        if (!answer)
+        {
+            return {};
+        }
+        rows.push_back(answer.value());
+    }
+    return rows;
+}
+
+// 段 [start, end) が桁を含む（最後の段は end も）。
+[[nodiscard]] bool contains_column(const app::TextRow &row, std::size_t column) noexcept
+{
+    const bool last = row.row + 1 == row.rows;
+    return row.start.value <= column &&
+           (column < row.end.value || (last && column == row.end.value));
+}
+
+[[nodiscard]] bool same_row(const app::TextRow &left, const app::TextRow &right) noexcept
+{
+    return left.row == right.row && left.start.value == right.start.value &&
+           left.end.value == right.end.value && left.rows == right.rows;
+}
+
+// 段の末尾（最後の段を除く）の 1 文字が空白（ぶら下がる空白）か。
+[[nodiscard]] bool ends_with_space(std::string_view text, const app::TextRow &row)
+{
+    return row.row + 1 < row.rows && row.end.value >= 2 && text.at(row.end.value - 2) == ' ';
+}
+
+// 番号の問いの段が桁 1 から隙間なく行末の次の桁まで覆い、その段の始まりの桁の問いと一致する。
+void check_direct_tiles(BodyTextLayouts &layouts, const app::TextLayoutRequest &request,
+                        const std::vector<app::TextRow> &by_column)
+{
+    std::size_t next = 1;
+    bool numbered = true;
+    bool hanging = false;
+    for (std::size_t row = 0; numbered && row < by_column.back().rows; ++row)
+    {
+        const auto answer = layouts.row(request, row);
+        numbered = answer && answer.value().row == row && answer.value().start.value == next &&
+                   next <= by_column.size() && same_row(answer.value(), by_column.at(next - 1));
+        if (numbered)
+        {
+            hanging = hanging || ends_with_space(request.text, answer.value());
+            next = answer.value().end.value;
+        }
+    }
+    expect(numbered && next == request.text.size() + 1,
+           "#664 the layout's numbered rows cover the whole line without gaps and match the row "
+           "asked by their first column");
+    expect(hanging, "#664 the direct check passes a row that ends with a hanging space");
+}
+
+// 文字組みの row を番兵（VisualTextView::containing）を通さず全桁で直接問う（#664 の I-1）。
+// 答えの段は問いの桁を含み、段の番号は GetLineMetrics の順で 0 から 1 ずつ進んで最後の段に着き、
+// 段の [start, end) は隙間なく行の全体を覆う。ぶら下がる空白の段と最後の段を通る。
+void check_rows_direct(BodyTextLayouts &layouts, const app::TextLayoutRequest &request)
+{
+    const auto count = layouts.rows(request);
+    const auto by_column = rows_by_column(layouts, request);
+    const bool answered = count.has_value() && by_column.size() == request.text.size() + 1;
+    expect(answered, "#664 the layout answers the row of every column");
+    if (!answered)
+    {
+        return;
+    }
+    bool contained = true;
+    bool ordered = by_column.front().row == 0 && by_column.back().row + 1 == count.value();
+    for (std::size_t at = 0; at < by_column.size(); ++at)
+    {
+        const auto &row = by_column.at(at);
+        contained = contained && row.rows == count.value() && contains_column(row, at + 1);
+        const auto before = at == 0 ? 0 : by_column.at(at - 1).row;
+        ordered = ordered && (row.row == before || row.row == before + 1);
+    }
+    expect(contained, "#664 the layout's row for every column contains that column");
+    expect(ordered, "#664 the layout's rows advance one by one in the line metrics order to the "
+                    "last row");
+    check_direct_tiles(layouts, request, by_column);
 }
 
 // 段の境目: 次の段の最初の文字は次の段、その前の 1 文字（ぶら下がる空白も）は前の段。2 段目の
@@ -265,12 +383,14 @@ void check_row_spans(BodyTextLayouts &layouts)
     const auto line = hanging_line();
     const auto state = hanging_state(line);
     const core::LineNumber number{2};
-    const auto found = hanging_width(layouts, state, line);
-    if (found == 0)
+    const auto width = hanging_width(layouts, state, line);
+    expect(width != 0, "#664 a measured width wraps the line into three rows with a hanging space");
+    if (width == 0)
     {
-        unmeasured("#664 no width from 880 to 1000 pixels wraps the line with a hanging space");
+        return;
     }
-    const auto width = found == 0 ? 900 : found;
+    check_rows_direct(layouts, app::TextLayoutRequest{line, state.settings(),
+                                                      core::TextViewGeometry{width, 29, 96}});
     app::VisualTextView view{state, layouts, core::TextViewGeometry{width, 29, 96}};
     const auto spans = numbered_rows(view, state.text(), number);
     expect(spans.size() >= 2, "#664 the hanging line wraps into several screen rows");

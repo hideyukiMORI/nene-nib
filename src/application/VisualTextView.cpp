@@ -15,6 +15,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -459,16 +460,16 @@ VisualTextView::grid_row_bounds(core::LineNumber number,
         return std::unexpected(cells.error());
     }
     const auto &text = state_.text();
-    const auto rows = cells.value().rows(number);
+    const auto count = cells.value().rows(number);
     const auto *const at = std::get_if<core::Offset>(&target);
     const auto row = std::min(at != nullptr ? cells.value().point_of(number, *at).row
                                             : std::get<std::size_t>(target),
-                              rows - 1);
+                              count - 1);
     const auto start =
         row == 0 ? text.line_start(number) : cells.value().byte_of(number, core::GridPoint{row, 0});
-    const auto end = row + 1 < rows ? cells.value().byte_of(number, core::GridPoint{row + 1, 0})
-                                    : text.line_end(number);
-    return core::VimRowSpan{number, row, start, end, rows, 0};
+    const auto end = row + 1 < count ? cells.value().byte_of(number, core::GridPoint{row + 1, 0})
+                                     : text.line_end(number);
+    return core::VimRowSpan{number, row, start, end, count, 0};
 }
 
 // 段の番号と範囲を文字組みの row の 1 回の答え（同じ 1 つの layout の行の metrics）から作る
@@ -509,12 +510,19 @@ VisualTextView::containing(core::LineNumber number, const core::VimRowSpan &foun
     {
         return found;
     }
-    // 段 0 の前は符号なしの折り返しで rows 以上になり、引かない。
-    for (const auto row : {found.row - 1, found.row + 1})
+    // 前の段（段 0 には無い）と次の段（最後の段には無い）を 1 回ずつ引く。
+    std::vector<std::size_t> beside;
+    if (found.row > 0)
     {
-        const auto again = row < found.rows ? row_bounds(number, row)
-                                            : std::expected<core::VimRowSpan, TextLayoutFailure>{
-                                                  std::unexpected(TextLayoutFailure::unavailable)};
+        beside.push_back(found.row - 1);
+    }
+    if (found.row + 1 < found.rows)
+    {
+        beside.push_back(found.row + 1);
+    }
+    for (const auto row : beside)
+    {
+        const auto again = row_bounds(number, row);
         if (again && holds(again.value(), at))
         {
             return again.value();
