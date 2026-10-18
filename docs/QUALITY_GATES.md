@@ -180,7 +180,7 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 名指しの `-Wno-<診断名>`（`-Wno-switch-default` / `-Wno-language-extension-token`）は無力化ではなく規則の選択なので対象外。任意のスクリプトによる迂回を網羅したとは扱わない。
 
 - 対応する規則: QLT-003
-- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` にある。2026-10-16・Issue #516）
+- 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` にある。2026-10-16・Issue #516）。CI の check job でも木を検査（#648）。文書のみの merge は CI を起動しないので、`merge-pr.py` が PR 本文の 0 violation の記録を求める
 
 ### CNF-006 — 文書整合
 
@@ -307,7 +307,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | GIT-004 | planned | PR テンプレート＋ruleset（squash-only） |
 | QLT-001 | planned | check.ps1 の全件明示指定。検証選択の妥当性はレビュー |
 | QLT-002 | active | clang-cl・clang-tidy・clang-format と実ツール反例（eng/prove-gates.py） |
-| QLT-003 | active | CNF-005（`tests/conformance` の `test_cnf005_*` 4 件・#571）。任意のスクリプトによる迂回は網羅しない |
+| QLT-003 | active | CNF-005（`tests/conformance` の `test_cnf005_*` 4 件・#571）。CI の check job でも木を検査（#648）。任意のスクリプトによる迂回は網羅しない |
 | QLT-004 | active | clang-format --dry-run --Werror |
 | QLT-005 | planned | |
 | QLT-006 | planned | |
@@ -323,7 +323,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-002 | active | eng/conformance.py / tests/conformance |
 | CNF-003 | active | eng/conformance.py / tests/conformance |
 | CNF-004 | active | eng/conformance.py / tests/conformance |
-| CNF-005 | active | eng/conformance.py / tests/conformance |
+| CNF-005 | active | eng/conformance.py / tests/conformance。CI の check job でも木を検査（#648） |
 | CNF-006 | active | eng/conformance.py / tests/conformance |
 | CNF-007 | active | eng/conformance.py / tests/conformance |
 | CNF-008 | active | eng/conformance.py / tests/conformance |

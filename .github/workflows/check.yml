@@ -47,6 +47,15 @@ jobs:
         run: |
           python eng/test-conformance.py
           exit $LASTEXITCODE
+      # #648: 木そのものの検査（CNF-001〜012・build dir 無しの字句と名前）。自己テストだけでは木の違反を止めない。
+      # 違反の文言は日本語を含み得る。windows-2022 の stdout は cp1252 なので UTF-8 に固定する（#94）。
+      - name: Conformance (tree)
+        env:
+          PYTHONUTF8: '1'
+        shell: pwsh
+        run: |
+          python eng/conformance.py
+          exit $LASTEXITCODE
       # 実装の検証結果は PR に記録し、入力が不変なら再利用する（ADR 0021）。
       # 正典の merge-pr.py が非文書変更のマージ直前だけ起動する（ADR 0118）。
       - name: Git conventions and verification record

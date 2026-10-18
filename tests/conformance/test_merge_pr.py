@@ -18,6 +18,7 @@ HEAD = "a" * 40
 TITLE = "fix(git): 件名「'$()' と `」を保持する (#42)"
 BODY = ("Closes #42\n確認する退行: 件名の転記\n対象・依存: 統合入口\n"
         "検証結果: 限定した道具試験\n再利用: 初回検証\n")
+RECORDED_BODY = BODY + "検証（実行したコマンドと結果）: python eng/conformance.py → 0 violation(s)\n"
 RECORD = {"number": 900, "headRefOid": HEAD, "state": "OPEN", "isDraft": False,
           "baseRefName": "main", "baseRefOid": "c" * 40, "title": TITLE, "body": BODY,
           "changedFiles": 1, "headRefName": "fix/42-subject", "isCrossRepository": False}
@@ -151,11 +152,43 @@ class MergeBoundary(unittest.TestCase):
 
     def test_documents_skip_ci_including_at_merge(self):
         files = [[{"filename": path} for path in ("README.md", "docs/images/theme.svg", "docs/design/gallery.html")]]
-        record = dict(RECORD, changedFiles=3)
+        record = dict(RECORD, changedFiles=3, body=RECORDED_BODY)
         result, calls, output, error = self.invoke(record=record, files=files, execute=True)
         self.assertEqual(result, 0, error)
         self.assertEqual(json.loads(output.splitlines()[0])["ci"], "skip (documentation only)")
+        self.assertTrue(json.loads(output.splitlines()[0])["conformanceRecorded"])
         self.assertFalse(any("actions/" in " ".join(call) or call[0] == "run" for call in calls))
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
+
+    def test_documents_with_conformance_record_plan_and_merge(self):
+        files = [[{"filename": "docs/quality/x.md"}]]
+        record = dict(RECORD, body=RECORDED_BODY)
+        result, calls, output, error = self.invoke(record=record, files=files)
+        self.assertEqual(result, 0, error)
+        self.assertTrue(json.loads(output)["conformanceRecorded"])
+        result, calls, output, error = self.invoke(record=record, files=files, execute=True)
+        self.assertEqual(result, 0, error)
+        self.assertEqual([call[1] for call in calls].count("merge"), 1)
+
+    def test_documents_without_conformance_record_are_refused_before_merge(self):
+        files = [[{"filename": "docs/quality/x.md"}]]
+        for body in (BODY, BODY + "検証（実行したコマンドと結果）: python eng/conformance.py → 10 violation(s)\n",
+                     BODY + "検証（実行したコマンドと結果）: python eng/conformance.py\n0 violation(s)\n"):
+            with self.subTest(body=body):
+                record = dict(RECORD, body=body)
+                result, calls, output, error = self.invoke(record=record, files=files)
+                self.assertEqual(result, 0, error)
+                self.assertFalse(json.loads(output)["conformanceRecorded"])
+                result, calls, output, error = self.invoke(record=record, files=files, execute=True)
+                self.assertEqual(result, 2)
+                self.assertNotIn("merge", [call[1] for call in calls])
+                self.assertIn("requires a recorded eng/conformance.py result with 0 violation(s)", error)
+
+    def test_non_documents_without_conformance_record_still_run_ci_and_merge(self):
+        result, calls, output, error = self.invoke(execute=True)
+        self.assertEqual(result, 0, error)
+        self.assertFalse(json.loads(output.splitlines()[0])["conformanceRecorded"])
+        self.assertEqual(sum("POST" in call for call in calls), 1)
         self.assertEqual([call[1] for call in calls].count("merge"), 1)
 
     def test_full_file_list_and_previous_rename_path_control_scope(self):
