@@ -40,7 +40,10 @@ enum class Milestone : std::uint8_t
     draw_ended,
     latency_waited,
     presented,
-    layout_created
+    layout_created,
+    // 診断の節目 2 回目: 格子の問い（ADR 0140 決定 2）の MessageBoxW の直前と返った直後。
+    question_shown,
+    question_answered
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -92,6 +95,10 @@ enum class Milestone : std::uint8_t
         return "presented";
     case Milestone::layout_created:
         return "layout_created";
+    case Milestone::question_shown:
+        return "question_shown";
+    case Milestone::question_answered:
+        return "question_answered";
     }
     std::unreachable();
 }

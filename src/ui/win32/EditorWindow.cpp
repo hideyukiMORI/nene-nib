@@ -1517,8 +1517,10 @@ void EditorWindow::finish_display_question(bool question)
 // 止めている。その中の send は印が立たないので再入は 1 段で止まる。
 void EditorWindow::ask_display()
 {
+    timing_.mark(core::Milestone::question_shown);
     const int answer =
         MessageBoxW(window_, display_question, product_name, MB_YESNO | MB_ICONQUESTION);
+    timing_.mark(core::Milestone::question_answered);
     send(application::SelectDisplay{answer == IDYES ? core::DisplayForm::grid
                                                     : core::DisplayForm::text});
 }
