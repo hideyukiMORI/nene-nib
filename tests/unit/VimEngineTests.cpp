@@ -1624,6 +1624,37 @@ void verify_vim_grid_alignment_lines()
     }
 }
 
+// 格子の z+ z^（ADR 0146 の決定 9）。巨大な 1 行の途中が先頭の画面では、窓の 1 つ下・上の画面行は
+// 同じ行にあるので、z+ も z^ も同じ行の最初の非空白へ動いてその画面行（0）を上・下に置く。短い行
+// だけの文書では、格子の z+ z^ は wrap on の text 形と同じ先頭と同じキャレットに着く。
+void verify_vim_grid_window_edge_alignment()
+{
+    const auto giant = TextBuffer::from_utf8(std::string(400, 'a'));
+    expect(giant.has_value(), "the grid window edge sample parses");
+    const VimEditorView view{giant.value(), collapsed_at(Offset{200}), std::nullopt};
+    const VimViewport viewport{LineNumber{1}, 5, 20};
+    constexpr auto row = nenenib::core::VimScrollUnit::row;
+    expect(navigated_to(aligned_answered(view, viewport, row, "z+"), LineNumber{1}, 0, Offset{0}),
+           "grid z+ on a giant line puts the same line on top at its first non-blank");
+    expect(navigated_to(aligned_answered(view, viewport, row, "z^"), LineNumber{1}, 0, Offset{0}),
+           "grid z^ on a giant line puts the same line at the bottom at its first non-blank");
+    const auto lines = TextBuffer::from_utf8(vim_lines(30));
+    expect(lines.has_value(), "the short line window edge sample parses");
+    const VimEditorView short_lines{
+        lines.value(), collapsed_at(lines.value().line_start(LineNumber{15})), std::nullopt};
+    const VimViewport window{LineNumber{10}, 10, 0};
+    for (const std::string_view keys : {"z+", "z^", "5z+", "25z^"})
+    {
+        const auto grid = aligned_answered(short_lines, window, row, keys);
+        const auto wrapped =
+            aligned_answered(short_lines, window, nenenib::core::VimScrollUnit::line, keys);
+        const auto *const lined = std::get_if<VimNavigate>(&wrapped.effect);
+        expect(lined != nullptr &&
+                   navigated_to(grid, lined->first_visible, 0, lined->selection.caret),
+               "grid z+ z^ of short lines land where the wrapped text form does");
+    }
+}
+
 // `t` を往復させて解き、問いが立つたびに状態を消費せず効果も無いことを確かめる。解いた一歩と、
 // 答えた問いの種類（0 が行の画面行数・1 が画面行）を返す。
 [[nodiscard]] std::pair<nenenib::core::VimStep, std::array<bool, 2>>
@@ -1786,6 +1817,7 @@ void verify_vim_viewport_request()
     verify_vim_row_unit_pages();
     verify_vim_grid_alignment_rows();
     verify_vim_grid_alignment_lines();
+    verify_vim_grid_window_edge_alignment();
     verify_vim_display_down_cut();
     verify_vim_display_cut_first_line_only();
     verify_vim_counted_alignment_round_trip();

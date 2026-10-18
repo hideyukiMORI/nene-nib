@@ -656,4 +656,39 @@ std::expected<VisualPosition, VimLayoutNeed> vim_aligned_top(const VimEditorView
     }
     return vim_row_aligned_top(view, caret, above);
 }
+
+std::expected<LineNumber, VimLayoutNeed> vim_line_below_window(const VimEditorView &view)
+{
+    const std::size_t count = view.text.line_count();
+    const LineNumber first{
+        std::clamp<std::size_t>(vim_viewport_of(view).first_visible.value, 1, count)};
+    if (!view.layout.enabled)
+    {
+        return LineNumber{std::min(first.value + height_of(view), count)};
+    }
+    switch (view.layout.unit)
+    {
+    case VimScrollUnit::line:
+        break;
+    case VimScrollUnit::row:
+        return vim_row_below_window(view);
+    }
+    const auto window = window_of(view, first);
+    if (!window)
+    {
+        return std::unexpected(VimLayoutNeed{window.error()});
+    }
+    // below は「窓に入らなくなった最初の行」で、文書の末尾まで入ると行数 + 1 になる。そのときは最終行。
+    return LineNumber{std::min(window.value().below.value, count)};
+}
+
+LineNumber vim_line_above_window(const VimEditorView &view) noexcept
+{
+    const VimViewport viewport = vim_viewport_of(view);
+    const std::size_t first =
+        std::clamp<std::size_t>(viewport.first_visible.value, 1, view.text.line_count());
+    const bool inside_line =
+        view.layout.enabled && view.layout.unit == VimScrollUnit::row && viewport.first_row > 0;
+    return LineNumber{inside_line || first == 1 ? first : first - 1};
+}
 } // namespace nenenib::core

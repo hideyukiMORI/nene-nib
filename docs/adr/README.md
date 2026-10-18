@@ -155,6 +155,6 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0141](0141-file-read-arrives-as-sealed-bytes.md) | ファイルの読みは core が予約した封印済みの列で届き、判定と本文へ複写なしで移る | 提案・#581、正式ゲートと独立レビューで受理 |
 | [0142](0142-preassign-fallback-fonts-to-missing-runs.md) | 主字体に無い文字の連続区間には、OS の MapCharacters が選ぶ字体を layout の範囲に先に当てる | 提案・#586（採用は決定 6 の一致） |
 | [0143](0143-merge-ci-dispatches-main-definition.md) | マージ直前の CI は main の workflow 定義で起動し、PR の head は入力で checkout する | 提案・#599 |
-| [0144](0144-grid-page-moves-and-gj-gk-by-screen-rows.md) | 格子の画面移動と `gj` `gk` は画面行の単位で、engine が行の画面行を問いで引いて決める | 提案・#595 #596・D54 |
+| [0144](0144-grid-page-moves-and-gj-gk-by-screen-rows.md) | 格子の画面移動と `gj` `gk` は画面行の単位で、engine が行の画面行を問いで引いて決める | 提案・#595 #596・D54・追補 決定 10・#653 |
 | [0145](0145-horizontal-scroll-keys-decided-by-engine.md) | 窓と wrap off の横送り `zl` `zh` `zL` `zH` `zs` `ze` は engine が決め、application は幅と横位置を問いで答える | 提案・#634・D56 |
-| [0146](0146-vertical-alignment-keys-decided-by-engine.md) | 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-` は engine が先頭行を決め、格子では画面行の単位で合わせる | 受理・#639・D54・独立レビュー R 1 → 差し戻し 1・hide の試用 OK・PR #646（2026-10-18） |
+| [0146](0146-vertical-alignment-keys-decided-by-engine.md) | 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-` は engine が先頭行を決め、格子では画面行の単位で合わせる | 受理・#639・D54・独立レビュー R 1 → 差し戻し 1・hide の試用 OK・PR #646（2026-10-18）・追補 決定 9・#654 |

@@ -30,4 +30,15 @@ vim_display_navigation(const VimState &state, const VimEditorView &view, VimActi
 // 見える範囲に収める。足りない文字組みの値は VimLayoutNeed。
 [[nodiscard]] std::expected<VisualPosition, VimLayoutNeed>
 vim_aligned_top(const VimEditorView &view, Offset caret, VimScreenPlace place);
+
+// z+ の回数なしの行（ADR 0146 の決定 9）。窓の 1 つ下の行（Vim の botline・画面に全部入っている
+// 最後の行の次）で、文書の末尾を越えれば最終行。文字組みが無効なら first_visible + visible_lines、
+// wrap on の text 形は window_of の入らなくなった最初の行、格子は画面の最後の画面行の次の画面行の
+// 行（同じ行の続きなら同じ行）。足りない文字組みの値は VimLayoutNeed。
+[[nodiscard]] std::expected<LineNumber, VimLayoutNeed>
+vim_line_below_window(const VimEditorView &view);
+
+// z^ の回数なしの行（決定 9）。窓の 1 つ上の行で、1 行目が先頭なら 1 行目。格子で先頭の画面行が
+// 行の途中（first_row > 0）なら、1 つ上の画面行は同じ行にある。
+[[nodiscard]] LineNumber vim_line_above_window(const VimEditorView &view) noexcept;
 } // namespace nenenib::core

@@ -55,4 +55,10 @@ vim_row_landing(const VimState &state, const VimEditorView &view, VimScrollDirec
 // VimLayoutNeed。
 [[nodiscard]] std::expected<VisualPosition, VimLayoutNeed>
 vim_row_aligned_top(const VimEditorView &view, Offset caret, std::size_t above);
+
+// 格子の z+ の行（ADR 0146 の決定 9）。画面の先頭から画面の高さぶん前へ歩いた画面行（画面の最後の
+// 画面行の次）の行で、文書の最後の画面行で止める（文書の末尾を越えれば最終行）。足りない文字組みの
+// 値は VimLayoutNeed。
+[[nodiscard]] std::expected<LineNumber, VimLayoutNeed>
+vim_row_below_window(const VimEditorView &view);
 } // namespace nenenib::core
