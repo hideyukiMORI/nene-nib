@@ -56,6 +56,8 @@
 #include "VimReplaceBlock.hpp"
 #include "VimReplay.hpp"
 #include "VimRowRequest.hpp"
+#include "VimScreenAlignment.hpp"
+#include "VimScreenPlace.hpp"
 #include "VimScreenPosition.hpp"
 #include "VimScreenRows.hpp"
 #include "VimScrollDirection.hpp"
@@ -84,6 +86,7 @@
 #include "VimWordStop.hpp"
 #include "VimWordWalk.hpp"
 #include "VirtualColumn.hpp"
+#include "VisualPosition.hpp"
 
 #include <algorithm>
 #include <array>
@@ -3503,11 +3506,50 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
                                viewport.first_visible, viewport.first_row, result.left_column}};
 }
 
-// 縦の位置合わせ（zt zz zb z<CR> z. z-）。今は何もせず失敗にもしない（ADR 0145 の限界）。回数と
-// 待ちだけを消費し、NORMAL と VISUAL は同じ 1 本を通る。
-[[nodiscard]] VimStep aligned_screen(const VimState &state)
+// 縦の位置合わせの行の選択（ADR 0146 の決定 3）。回数があれば min(回数, 行数) 行目の同じバイトの桁
+// （行の最後の文字の先頭に収める・Vim の check_cursor_col）、無ければ今のキャレット。
+[[nodiscard]] Offset counted_line_caret(const VimState &state, const VimEditorView &view)
 {
-    return VimStep{finished_input_wait(state), VimNoEffect{}};
+    const Offset caret = view.selection.caret;
+    if (!state.count.has_value())
+    {
+        return caret;
+    }
+    const TextBuffer &text = view.text;
+    const LineNumber current = text.position_of(caret).line;
+    const LineNumber line{std::clamp<std::size_t>(state.count.value().value, 1, text.line_count())};
+    const std::size_t column = caret.value - text.line_start(current).value;
+    return rested_in(text, vim_line_and_column(text, line, column), state.mode);
+}
+
+// 縦の位置合わせ zt zz zb z<CR> z. z-（ADR 0146 の決定 1〜6）。回数で行を選び、z<CR> z. z- は
+// 行の最初の非空白へ動いて（欲しい列もそこ）から、engine が先頭行を決めて VimNavigate で返す。
+// zt zz zb は欲しい列を保つ。横位置は保つ（first_column は無し）。行が画面より高いときの先頭は
+// 決定 5 の規則。NORMAL と VISUAL は同じ 1 本を通り、VISUAL は錨を保つ。
+[[nodiscard]] VimStep aligned_screen(const VimState &state, const VimEditorView &view,
+                                     VimAction action)
+{
+    const auto alignment = vim_screen_alignment_for(action);
+    if (!alignment.has_value())
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    const bool first_non_blank = alignment.value().first_non_blank;
+    const Offset chosen = counted_line_caret(state, view);
+    const Offset caret = first_non_blank ? vim_first_non_blank(view.text, chosen) : chosen;
+    const auto top = vim_aligned_top(view, caret, alignment.value().place);
+    if (!top)
+    {
+        return requested_layout(state, top.error());
+    }
+    const VisualPosition first = top.value();
+    VimState next = navigated_state(finished_input_wait(state), view.text, caret);
+    if (!first_non_blank)
+    {
+        next.wanted_column = state.wanted_column;
+    }
+    return VimStep{std::move(next), VimNavigate{navigated_selection(state, view.selection, caret),
+                                                first.line, first.row}};
 }
 
 // 鍵から引いた動作を、分類ごとの写し先へ（CPP-012 / ADR 0006）。分類が増えたらここで落ちる。
@@ -3544,7 +3586,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     case VimActionGroup::horizontal_scroll:
         return horizontal_action(state, view, action);
     case VimActionGroup::screen_alignment:
-        return aligned_screen(state);
+        return aligned_screen(state, view, action);
     }
     std::unreachable();
 }
@@ -3926,7 +3968,7 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     case VimActionGroup::horizontal_scroll:
         return horizontal_action(state, view, action);
     case VimActionGroup::screen_alignment:
-        return aligned_screen(state);
+        return aligned_screen(state, view, action);
     case VimActionGroup::edit_line:
     case VimActionGroup::insert_line:
     case VimActionGroup::history:
@@ -4333,7 +4375,7 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
                                                                   : char32_t{0};
 }
 
-// z の後ろの鍵（zl zh zL zH zs ze・ADR 0145 の決定 5。zt zz zb z<CR> z. z- は何もしない）。Esc は
+// z の後ろの鍵（zl zh zL zH zs ze・ADR 0145 の決定 5。zt zz zb z<CR> z. z-・ADR 0146）。Esc は
 // z を打ち消すだけ。表に無い鍵は Vim の nv_zet と同じく失敗して後ろを打ち切る。
 [[nodiscard]] VimStep z_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
 {

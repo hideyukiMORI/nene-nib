@@ -6,6 +6,8 @@
 #include "VimBinding.hpp"
 #include "VimMotion.hpp"
 #include "VimMotionBinding.hpp"
+#include "VimScreenAlignmentBinding.hpp"
+#include "VimScreenPlace.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectBinding.hpp"
 #include "VimWordClass.hpp"
@@ -172,7 +174,12 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::scroll_half_width_left, VimActionGroup::horizontal_scroll},
      {VimAction::scroll_caret_to_left, VimActionGroup::horizontal_scroll},
      {VimAction::scroll_caret_to_right, VimActionGroup::horizontal_scroll},
-     {VimAction::align_screen_vertically, VimActionGroup::screen_alignment}}};
+     {VimAction::align_top, VimActionGroup::screen_alignment},
+     {VimAction::align_center, VimActionGroup::screen_alignment},
+     {VimAction::align_bottom, VimActionGroup::screen_alignment},
+     {VimAction::align_top_first_non_blank, VimActionGroup::screen_alignment},
+     {VimAction::align_center_first_non_blank, VimActionGroup::screen_alignment},
+     {VimAction::align_bottom_first_non_blank, VimActionGroup::screen_alignment}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 26> motion_bindings{
@@ -213,8 +220,8 @@ constexpr std::array<VimBinding, 7> g_bindings{{{U'g', VimAction::move_document_
                                                 {U'j', VimAction::move_display_down},
                                                 {U'k', VimAction::move_display_up}}};
 
-// z の後ろの鍵 → 動作（ADR 0145 の決定 5）。横送りの 6 鍵と、何もしない縦の位置合わせの 6 鍵
-// （zt zz zb z<CR> z. z-・縦は後続）。ここに無い鍵は Vim と同じく失敗して後ろを打ち切る。
+// z の後ろの鍵 → 動作（ADR 0145 の決定 5・ADR 0146 の決定 2）。横送りの 6 鍵と、縦の位置合わせの
+// 6 鍵（zt zz zb z<CR> z. z-）。ここに無い鍵（z+ z^ を含む）は Vim と同じく失敗して後ろを打ち切る。
 constexpr std::array<VimBinding, 12> z_bindings{
     {{U'l', VimAction::scroll_column_right},
      {U'h', VimAction::scroll_column_left},
@@ -222,12 +229,21 @@ constexpr std::array<VimBinding, 12> z_bindings{
      {U'H', VimAction::scroll_half_width_left},
      {U's', VimAction::scroll_caret_to_left},
      {U'e', VimAction::scroll_caret_to_right},
-     {U't', VimAction::align_screen_vertically},
-     {U'z', VimAction::align_screen_vertically},
-     {U'b', VimAction::align_screen_vertically},
-     {carriage_return_character, VimAction::align_screen_vertically},
-     {U'.', VimAction::align_screen_vertically},
-     {U'-', VimAction::align_screen_vertically}}};
+     {U't', VimAction::align_top},
+     {U'z', VimAction::align_center},
+     {U'b', VimAction::align_bottom},
+     {carriage_return_character, VimAction::align_top_first_non_blank},
+     {U'.', VimAction::align_center_first_non_blank},
+     {U'-', VimAction::align_bottom_first_non_blank}}};
+
+// 縦の位置合わせの動作 → 置く所と最初の非空白へ動かすか（ADR 0146 の決定 2・CPP-012）。
+constexpr std::array<VimScreenAlignmentBinding, 6> screen_alignment_bindings{
+    {{VimAction::align_top, {VimScreenPlace::top, false}},
+     {VimAction::align_center, {VimScreenPlace::center, false}},
+     {VimAction::align_bottom, {VimScreenPlace::bottom, false}},
+     {VimAction::align_top_first_non_blank, {VimScreenPlace::top, true}},
+     {VimAction::align_center_first_non_blank, {VimScreenPlace::center, true}},
+     {VimAction::align_bottom_first_non_blank, {VimScreenPlace::bottom, true}}}};
 
 // 空白だけで切る（Vim の WORD の）移動。ほかの語の移動は文字の種類の表で切る（Issue #222）。
 constexpr std::array<VimMotion, 5> big_word_motions{
@@ -291,6 +307,27 @@ static_assert(action_groups.size() == vim_action_count,
               "動作 → 大分類の表は動作と同じ数の行を持つ（CPP-012）");
 static_assert(every_action_has_one_row(),
               "どの動作も表にちょうど 1 行。欠落と重複はここでコンパイルが落ちる（CPP-002）");
+
+// 縦の位置合わせの大分類の動作は、意味の表にちょうど 1 行（ADR 0146 の決定 2）。
+[[nodiscard]] constexpr bool every_alignment_has_one_row() noexcept
+{
+    for (const VimActionBinding binding : action_groups)
+    {
+        std::size_t rows = 0;
+        for (const VimScreenAlignmentBinding row : screen_alignment_bindings)
+        {
+            rows += static_cast<std::size_t>(row.action == binding.action);
+        }
+        if (rows != static_cast<std::size_t>(binding.group == VimActionGroup::screen_alignment))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static_assert(every_alignment_has_one_row(),
+              "縦の位置合わせの動作だけが意味の表にちょうど 1 行（CPP-012）");
 } // namespace
 
 [[nodiscard]] std::optional<VimAction> vim_action_for(char32_t key) noexcept
@@ -348,6 +385,18 @@ static_assert(every_action_has_one_row(),
         if (binding.action == action)
         {
             return binding.group;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimScreenAlignment> vim_screen_alignment_for(VimAction action) noexcept
+{
+    for (const VimScreenAlignmentBinding binding : screen_alignment_bindings)
+    {
+        if (binding.action == action)
+        {
+            return binding.alignment;
         }
     }
     return std::nullopt;

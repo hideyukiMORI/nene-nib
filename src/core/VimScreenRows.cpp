@@ -386,4 +386,21 @@ std::expected<VimRowLanding, VimLayoutNeed> vim_row_landing(const VimState &stat
     return VimRowLanding{landing,
                          VimWantedColumn{VimColumnWish::at_column, VirtualColumn{kept + 1}}};
 }
+
+std::expected<VisualPosition, VimLayoutNeed> vim_row_aligned_top(const VimEditorView &view,
+                                                                 Offset caret, std::size_t above)
+{
+    const auto span =
+        vim_row_span_of(view, VimRowRequest{view.text.position_of(caret).line, caret});
+    if (!span)
+    {
+        return std::unexpected(span.error());
+    }
+    const auto walk = backward(view, VisualPosition{span.value().line, span.value().row}, above);
+    if (!walk)
+    {
+        return std::unexpected(walk.error());
+    }
+    return walk.value().first;
+}
 } // namespace nenenib::core

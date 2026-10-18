@@ -5,6 +5,8 @@ the additional display inputs (width, wrapped rows) that its nowrap fixtures do 
 Existing fixtures and their measurement code remain unchanged (ADR 0114 / QLT-001).
 A viewport with "leftcol" is the nowrap form (ADR 0145): the window is "columns" cells wide,
 starts scrolled to "leftcol", and the snapshot records winsaveview().leftcol.
+A wrapped viewport with "first_row" starts with that many screen rows of "first_visible" hidden
+(winsaveview().skipcol = first_row * columns; ADR 0146 decision 5).
 """
 
 from __future__ import annotations
@@ -52,9 +54,10 @@ def script(fixture: dict, keys: str) -> str:
                 "set noshowcmd noruler scrolloff=0 scrolljump=1",
                 f"resize {view['visible_lines']}",
                 f"call cursor({view['line']}, {view['column']})",
-                "call winrestview({'lnum': %d, 'col': %d, 'topline': %d, 'leftcol': %d})"
+                "call winrestview({'lnum': %d, 'col': %d, 'topline': %d, 'leftcol': %d, "
+                "'skipcol': %d})"
                 % (view['line'], view['column'] - 1, view['first_visible'],
-                   view.get('leftcol', 0)),
+                   view.get('leftcol', 0), view.get('first_row', 0) * view['columns']),
                 "redraw!", f"let before = {snapshot}",
                 'execute "normal! " . "%s"' % oracle.vim_keys(oracle.normal_keys(keys)),
                 "redraw!", f"let after = {snapshot}",
@@ -86,8 +89,8 @@ def run(work: Path, fixture: dict, keys: str) -> dict:
                                   ("first", "first_visible")):
         if before[result_key] != view[input_key]:
             raise RuntimeError(f"{fixture['name']}: invalid initial {input_key}: {before}")
-    if before["skipcol"] != 0:
-        raise RuntimeError(f"{fixture['name']}: initial line is partly hidden")
+    if before["skipcol"] != view.get("first_row", 0) * view["columns"]:
+        raise RuntimeError(f"{fixture['name']}: invalid initial skipcol: {before}")
     if before["leftcol"] != view.get("leftcol", 0):
         raise RuntimeError(f"{fixture['name']}: invalid initial leftcol: {before}")
     return result["after"]
@@ -112,10 +115,12 @@ def row(record: dict) -> str:
                      result['first'], result['scroll'], view['columns'], view['leftcol'],
                      result['leftcol']))
     else:
-        viewport = ("VimViewportFixture{%d, %d, %d, %d, %d, %d, %d, %d}" %
+        viewport = ("VimViewportFixture{%d, %d, %d, %d, %d, %d, %d, %d" %
                     (view['visible_lines'], view['first_visible'], view['line'], view['column'],
                      result['first'], result['scroll'], view['columns'],
                      result['skipcol'] // view['columns']))
+        # 鍵の前に隠れている画面行は、ある fixture だけ書く（無い行は前の形のまま）。
+        viewport += (", 0, 0, 0, %d}" % view['first_row']) if view.get('first_row') else "}"
     values = [oracle.literal(fixture[key]) for key in ('name', 'text', 'keys')]
     values += [oracle.literal(result['text']), str(result['line']), str(result['column']),
                oracle.literal(result['register']), oracle.literal(result['register_kind']), viewport]

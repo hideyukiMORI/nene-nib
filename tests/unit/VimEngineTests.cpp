@@ -1485,6 +1485,193 @@ void verify_vim_row_unit_pages()
            "the line unit PgDn of a one-line text stays put as before");
 }
 
+// 縦の位置合わせの替え玉（ADR 0146 の決定 5・8）。どの行も grid_width 字ごとに折り返し、
+// controller と同じ順で行の画面行数と画面行の問いに答える。
+constexpr std::size_t grid_width = 8;
+
+[[nodiscard]] nenenib::core::VimRowSpan grid_span_of(const TextBuffer &text,
+                                                     const nenenib::core::VimRowRequest &request)
+{
+    const std::size_t start = text.line_start(request.line).value;
+    const std::size_t length = text.line_end(request.line).value - start;
+    const std::size_t rows = std::max<std::size_t>((length + grid_width - 1) / grid_width, 1);
+    const auto *const at = std::get_if<Offset>(&request.target);
+    const std::size_t row = at != nullptr ? std::min((at->value - start) / grid_width, rows - 1)
+                                          : std::get<std::size_t>(request.target);
+    return nenenib::core::VimRowSpan{request.line,
+                                     row,
+                                     Offset{start + (row * grid_width)},
+                                     Offset{start + std::min((row + 1) * grid_width, length)},
+                                     rows,
+                                     row * grid_width};
+}
+
+[[nodiscard]] std::size_t grid_rows_of(const TextBuffer &text, LineNumber line)
+{
+    const std::size_t length = text.line_end(line).value - text.line_start(line).value;
+    return std::max<std::size_t>((length + grid_width - 1) / grid_width, 1);
+}
+
+// 行の画面行数か画面行の問いに 1 つ答える。答えたら真（問いが無ければ偽）。表示領域は先に渡す。
+[[nodiscard]] bool answer_aligned_request(const nenenib::core::VimStep &step, VimEditorView &view,
+                                          std::vector<VimLineRows> &rows,
+                                          std::vector<nenenib::core::VimRowSpan> &spans)
+{
+    if (step.layout_request.has_value())
+    {
+        const LineNumber line = step.layout_request.value();
+        rows.push_back(VimLineRows{line, grid_rows_of(view.text, line)});
+        std::ranges::sort(rows, {}, [](const VimLineRows &value) { return value.line.value; });
+        view.layout.lines = rows;
+        return true;
+    }
+    if (!step.row_request.has_value())
+    {
+        return false;
+    }
+    spans.push_back(grid_span_of(view.text, step.row_request.value()));
+    view.layout.spans = spans;
+    return true;
+}
+
+// keys の最後の鍵を、前の鍵を流した状態から往復させて解く。
+[[nodiscard]] nenenib::core::VimStep aligned_answered(const VimEditorView &start,
+                                                      VimViewport viewport,
+                                                      nenenib::core::VimScrollUnit unit,
+                                                      std::string_view keys)
+{
+    std::vector<VimLineRows> rows;
+    std::vector<nenenib::core::VimRowSpan> spans;
+    VimEditorView view{start.text,    start.selection,
+                       viewport,      VimKeySource::typed,
+                       VimTabs{0, 1}, VimLayoutView{true, rows, unit, spans}};
+    const auto all = vim_keys_of(keys);
+    const VimState state = vim_state_after(keys.substr(0, keys.size() - 1), view);
+    auto step = vim_step(state, view, all.back());
+    for (std::size_t round = 0; round < 64 && answer_aligned_request(step, view, rows, spans);
+         ++round)
+    {
+        step = vim_step(state, view, all.back());
+    }
+    return step;
+}
+
+[[nodiscard]] bool navigated_to(const nenenib::core::VimStep &step, LineNumber first,
+                                std::size_t first_row, Offset caret)
+{
+    const auto *const navigate = std::get_if<VimNavigate>(&step.effect);
+    return navigate != nullptr && navigate->first_visible == first &&
+           navigate->first_row == first_row && navigate->selection.caret == caret &&
+           !navigate->first_column.has_value();
+}
+
+// 格子の巨大な 1 行（400 字・50 画面行）では、zt zz zb
+// がキャレットの画面行（25）を画面の上・中・下へ
+// 置き、文書の先頭の画面行で止まる。キャレットは動かない。
+void verify_vim_grid_alignment_rows()
+{
+    const auto text = TextBuffer::from_utf8(std::string(400, 'a'));
+    expect(text.has_value(), "the grid alignment sample parses");
+    const VimEditorView view{text.value(), collapsed_at(Offset{200}), std::nullopt};
+    const VimViewport viewport{LineNumber{1}, 5, 20};
+    constexpr auto row = nenenib::core::VimScrollUnit::row;
+    expect(
+        navigated_to(aligned_answered(view, viewport, row, "zt"), LineNumber{1}, 25, Offset{200}),
+        "grid zt puts the caret screen row at the top of the screen");
+    expect(
+        navigated_to(aligned_answered(view, viewport, row, "zz"), LineNumber{1}, 23, Offset{200}),
+        "grid zz puts the caret screen row in the middle of the screen");
+    expect(
+        navigated_to(aligned_answered(view, viewport, row, "zb"), LineNumber{1}, 21, Offset{200}),
+        "grid zb puts the caret screen row at the bottom of the screen");
+    const VimEditorView near_top{text.value(), collapsed_at(Offset{17}), std::nullopt};
+    expect(
+        navigated_to(aligned_answered(near_top, viewport, row, "zb"), LineNumber{1}, 0, Offset{17}),
+        "grid zb stops at the first screen row of the document");
+}
+
+// 格子の z.
+// は行の最初の非空白へ動き、その画面行を中央に置く（前の行をまたいで上へ歩く）。短い行だけの
+// 文書では、格子の 3 鍵は wrap on の text 形と同じ先頭に着く（first_row は 0）。
+void verify_vim_grid_alignment_lines()
+{
+    const auto indented = TextBuffer::from_utf8("a\nb\nc\nd\n   " + std::string(397, 'a'));
+    expect(indented.has_value(), "the grid first non-blank sample parses");
+    const Offset giant = indented.value().line_start(LineNumber{5});
+    const VimEditorView view{indented.value(), collapsed_at(Offset{giant.value + 200}),
+                             std::nullopt};
+    constexpr auto row = nenenib::core::VimScrollUnit::row;
+    expect(navigated_to(aligned_answered(view, VimViewport{LineNumber{5}, 5, 20}, row, "z."),
+                        LineNumber{3}, 0, Offset{giant.value + 3}),
+           "grid z. moves to the first non-blank and centres its screen row");
+    const auto lines = TextBuffer::from_utf8(vim_lines(30));
+    expect(lines.has_value(), "the short line sample parses");
+    const VimEditorView short_lines{
+        lines.value(), collapsed_at(lines.value().line_start(LineNumber{15})), std::nullopt};
+    const VimViewport viewport{LineNumber{10}, 10, 0};
+    for (const std::string_view keys : {"zt", "zz", "zb"})
+    {
+        const auto grid = aligned_answered(short_lines, viewport, row, keys);
+        const auto wrapped =
+            aligned_answered(short_lines, viewport, nenenib::core::VimScrollUnit::line, keys);
+        const auto *const lined = std::get_if<VimNavigate>(&wrapped.effect);
+        expect(lined != nullptr &&
+                   navigated_to(grid, lined->first_visible, 0, short_lines.selection.caret),
+               "grid alignment of short lines lands where the wrapped text form does");
+    }
+}
+
+// `t` を往復させて解き、問いが立つたびに状態を消費せず効果も無いことを確かめる。解いた一歩と、
+// 答えた問いの種類（0 が行の画面行数・1 が画面行）を返す。
+[[nodiscard]] std::pair<nenenib::core::VimStep, std::array<bool, 2>>
+asked_while_aligning(const VimState &state, VimEditorView &view, std::vector<VimLineRows> &rows,
+                     std::vector<nenenib::core::VimRowSpan> &spans)
+{
+    const VimKey last = vim_keys_of("t").front();
+    auto step = vim_step(state, view, last);
+    std::array<bool, 2> asked{};
+    for (std::size_t round = 0; round < 64; ++round)
+    {
+        asked.at(0) = asked.at(0) || step.layout_request.has_value();
+        asked.at(1) = asked.at(1) || step.row_request.has_value();
+        const bool quiet =
+            same_vim_memory(step.next, state) && std::holds_alternative<VimNoEffect>(step.effect);
+        if (!answer_aligned_request(step, view, rows, spans))
+        {
+            break;
+        }
+        expect(quiet, "a counted alignment question consumes no count and has no effect");
+        step = vim_step(state, view, last);
+    }
+    return {step, asked};
+}
+
+// `4zt` は回数で行を選んでから画面の先頭を決めるので、行の画面行数と画面行の問いが 1 打鍵の往復に
+// 混ざる（ADR 0129 / 0146 の決定 5）。どの問いも状態を消費せず、格子と、行が画面より高い wrap on
+// の text 形（今の first_row をキャレットの画面行が見える範囲に収める）が同じ先頭に着く。
+void verify_vim_counted_alignment_round_trip()
+{
+    const auto text =
+        TextBuffer::from_utf8("a\nb\nc\n" + std::string(40, 'x') + "\n" + std::string(40, 'y'));
+    expect(text.has_value(), "the counted alignment sample parses");
+    const Offset fifth{text.value().line_start(LineNumber{5}).value + 20};
+    const Offset fourth{text.value().line_start(LineNumber{4}).value + 20};
+    for (const auto unit : {nenenib::core::VimScrollUnit::row, nenenib::core::VimScrollUnit::line})
+    {
+        std::vector<VimLineRows> rows;
+        std::vector<nenenib::core::VimRowSpan> spans;
+        VimEditorView view{
+            text.value(),        collapsed_at(fifth), VimViewport{LineNumber{5}, 2, 2},
+            VimKeySource::typed, VimTabs{0, 1},       VimLayoutView{true, rows, unit, spans}};
+        const VimState state = vim_state_after("4z", view);
+        const auto [step, asked] = asked_while_aligning(state, view, rows, spans);
+        expect(asked.at(0) && asked.at(1),
+               "a counted alignment asks for both line rows and a screen row");
+        expect(navigated_to(step, LineNumber{4}, 2, fourth),
+               "4zt onto a line taller than the screen keeps the caret screen row visible");
+    }
+}
+
 void verify_vim_viewport_request()
 {
     const auto text = TextBuffer::from_utf8(vim_lines(30));
@@ -1497,6 +1684,9 @@ void verify_vim_viewport_request()
     verify_vim_viewport_blind_keys(shown, hidden);
     verify_vim_wrapped_viewport_request();
     verify_vim_row_unit_pages();
+    verify_vim_grid_alignment_rows();
+    verify_vim_grid_alignment_lines();
+    verify_vim_counted_alignment_round_trip();
     verify_indexed_virtual_columns();
     verify_indexed_columns_across_chunks();
 }
