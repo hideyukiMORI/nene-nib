@@ -84,7 +84,7 @@ Issue の無いものは「未起票」。着手は hide の指示で。番号�
 
 ## いまの数字・動かないもの・段階
 
-- 公開版は [v0.1.0-beta.3](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.3)。本文余白/断片保存/改行索引/読込完了・起動 40 ms・自動退避・格子表示・`gj` `gk` `g0` `g$` `{N}|` `z` 系は main のみ。beta.4 の zip 公開は 2026-10-19 に着手（#678・記録は [beta4-release-2026-10-19.md](../quality/beta4-release-2026-10-19.md)）。
+- 公開版は [v0.1.0-beta.4](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.4)（2026-10-19・main `5987ebd`・#678・記録は [beta4-release-2026-10-19.md](../quality/beta4-release-2026-10-19.md)）。split は #680〜#684 で着手（ADR 0148・hide の試用待ち）。
 - main `b3e6f01` の実機の速さ（2026-10-18・静かな機械・基準値として採用 #644）: 起動 41.9 ms・窓 32.4 ms・単打 0.64 ms・連打 2.16 ms・16 MiB open 49.8 ms・16 MiB 連打 2.34 ms・面 1.73 ms・長行単打 1.57 ms・**1 行 16 MiB は「はい」open 129.6 ms・1 打鍵 1.23 ms**（「いいえ」161.7 / 2.12・記録だけ）。目標 D51 の 6 本は全部の内。
 - CI の merge 直前の check は `check`（19 秒）と `build-and-test`（Release 全 target ＋ ctest・7〜11 分）の 2 job（ADR 0136）。`merge-pr.py` は 2,700 秒まで待つ。
 - `verify-window.py` は 2026-09-23 以来初めて全節が通る（#486 / #539）。
