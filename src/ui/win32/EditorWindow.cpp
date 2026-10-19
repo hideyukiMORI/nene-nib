@@ -1514,10 +1514,13 @@ void EditorWindow::finish_display_question(bool question)
 // 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。答えは必ず意図で返す: 「はい」は grid、
 // 「いいえ」と問いを出せなかったとき（0）は text。答えが届くまで controller は本文の文字組みを
 // 止めている。その中の send は印が立たないので再入は 1 段で止まる。
+// 前後の節目は答えを待つ時間を計測器が開くの値から引くため（#689）。
 void EditorWindow::ask_display()
 {
+    timing_.mark(core::Milestone::question_shown);
     const int answer =
         MessageBoxW(window_, display_question, product_name, MB_YESNO | MB_ICONQUESTION);
+    timing_.mark(core::Milestone::question_answered);
     send(application::SelectDisplay{answer == IDYES ? core::DisplayForm::grid
                                                     : core::DisplayForm::text});
 }
