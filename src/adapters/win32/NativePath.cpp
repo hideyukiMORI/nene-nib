@@ -38,14 +38,19 @@ constexpr std::wstring_view unc = L"\\\\";
 
 std::wstring native_path(const std::wstring &path)
 {
-    if (path.size() < prefixed_from || path.starts_with(verbatim) || path.starts_with(device))
+    if (path.starts_with(verbatim) || path.starts_with(device))
     {
         return path;
     }
+    // 長さは絶対にした後で比べる。短い相対の経路も、絶対にすると上限を超えることがある。
     const std::wstring full = full_path(path);
     if (full.empty())
     {
         return path;
+    }
+    if (full.size() < prefixed_from)
+    {
+        return full;
     }
     if (full.starts_with(unc))
     {

@@ -47,6 +47,7 @@ constexpr std::wstring_view segment = L"long-path-segment-0123456789abcdef";
 constexpr std::size_t depth = 10;
 constexpr std::size_t long_length = 300;
 constexpr std::size_t read_limit = 64;
+constexpr std::size_t prefixed_length = MAX_PATH - 12;
 
 std::size_t &failures()
 {
@@ -162,6 +163,46 @@ void verify_native_form(const std::wstring &deep)
     expect(adapters::native_path(slashed) == native, "forward slashes are normalized first");
     const std::wstring dotted = deep + L"\\..\\" + std::wstring(segment);
     expect(adapters::native_path(dotted) == native, "dot segments are resolved first");
+}
+
+// base の後ろを 'a' で埋めて length 文字にする（ファイルは作らない）。
+[[nodiscard]] std::wstring padded(const std::wstring &base, std::size_t length)
+{
+    return base + std::wstring(length - base.size(), L'a');
+}
+
+// 境界は絶対にした長さの MAX_PATH − 12。相対の経路は絶対にした後の長さで決まる。
+void verify_prefix_boundary()
+{
+    const std::wstring base = absolute(root_name) + L"\\";
+    const std::wstring below = padded(base, prefixed_length - 1);
+    expect(adapters::native_path(below) == below, "an absolute path of 247 is not prefixed");
+    const std::wstring at = padded(base, prefixed_length);
+    expect(adapters::native_path(at) == L"\\\\?\\" + at, "an absolute path of 248 is prefixed");
+    const std::wstring stem = std::wstring(root_name) + L"\\";
+    const std::wstring relative = padded(stem, stem.size() + prefixed_length + 2 - base.size());
+    const std::wstring full = absolute(relative.c_str());
+    expect(relative.size() < prefixed_length && full.size() > prefixed_length,
+           "the relative fixture is short but its absolute form is long");
+    expect(adapters::native_path(relative) == L"\\\\?\\" + full,
+           "a short relative path that becomes long is prefixed");
+}
+
+// UNC は `\\server\share\...` → `\\?\UNC\server\share\...`。文字列の形だけで共有には触れない。
+void verify_unc_form()
+{
+    const std::wstring tail = L"server\\share\\";
+    const std::wstring shared = padded(L"\\\\" + tail, long_length);
+    expect(adapters::native_path(shared) == L"\\\\?\\UNC\\" + shared.substr(2),
+           "a long UNC path gets the verbatim UNC prefix");
+}
+
+// 長い経路のフォルダを読むと、短い経路と同じく unreadable（directory() が長い経路を見る）。
+void verify_folder_read(adapters::Win32FileAdapter &files, const std::wstring &deep)
+{
+    const auto folder = files.read(path_of(deep), read_limit);
+    expect(!folder && folder.error() == FileFailure::unreadable,
+           "reading a long folder is unreadable");
 }
 
 // 反例: `\\?\` を付けない長い経路は、longPathAware でない exe では作れない。
@@ -286,6 +327,9 @@ int main()
     const std::wstring deep = deep_folder(root);
     adapters::Win32FileAdapter files;
     verify_native_form(deep);
+    verify_prefix_boundary();
+    verify_unc_form();
+    verify_folder_read(files, deep);
     verify_unprefixed_fails(deep);
     verify_round_trip(files, deep);
     verify_reclaim(files, deep);
