@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 6f2d7ddc5f399e57d66c9d5b26d03b45a1368f00e2588d8242bd811d4764fa83 / 1944 fixtures
+// fixtures.json: sha256 0ecc21b5115521a0778650a41edd13b5597c3cc8f6ef872db94fae6e5a63501d / 1953 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1944> vim_fixtures{{
+constexpr std::array<VimFixture, 1953> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -328,6 +328,15 @@ constexpr std::array<VimFixture, 1944> vim_fixtures{{
     {"viewport-h2-half-up", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", "<C-u>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", 5, 1, "", "", VimViewportFixture{2, 6, 6, 1, 5, 1}},
     {"viewport-H-large-count", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", "999H", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", 12, 1, "", "", VimViewportFixture{10, 3, 7, 1, 3, 5}},
     {"viewport-L-large-count", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", "999L", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", 3, 1, "", "", VimViewportFixture{10, 3, 7, 1, 3, 5}},
+    {"viewport-H-count-3", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "3H", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 8, 1, "", "", VimViewportFixture{10, 6, 10, 1, 6, 5}},
+    {"viewport-L-count-3", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "3L", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 13, 1, "", "", VimViewportFixture{10, 6, 10, 1, 6, 5}},
+    {"viewport-M-count-2-is-ignored", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "2M", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 10, 1, "", "", VimViewportFixture{10, 6, 10, 1, 6, 5}},
+    {"viewport-H-count-100-clamps", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "100H", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 15, 1, "", "", VimViewportFixture{10, 6, 10, 1, 6, 5}},
+    {"viewport-zero-is-not-a-count-for-H", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "$0H", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 6, 1, "", "", VimViewportFixture{10, 6, 10, 1, 6, 5}},
+    {"viewport-d3H-is-linewise", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "d3H", "01\n02\n03\n04\n05\n06\n07\n13\n14\n15\n16\n17\n18\n19\n20", 8, 1, "08\n09\n10\n11\n12\n", "V", VimViewportFixture{10, 6, 12, 1, 6, 5}},
+    {"viewport-y2L-is-linewise", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "y2L", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 7, 1, "07\n08\n09\n10\n11\n12\n13\n14\n", "V", VimViewportFixture{10, 6, 7, 1, 6, 5}},
+    {"viewport-v3H-is-characterwise", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "v3Hy", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 8, 1, "08\n09\n10\n11\n1", "v", VimViewportFixture{10, 6, 12, 1, 6, 5}},
+    {"viewport-L-count-3-short-text-first-nonblank", "  l1\n  l2\n  l3\n  l4\n  l5", "3L", "  l1\n  l2\n  l3\n  l4\n  l5", 3, 3, "", "", VimViewportFixture{10, 1, 1, 1, 1, 5}},
     {"viewport-visual-page-down-yanks", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "v<C-f>y<Esc>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 10, 1, "10\n11\n12\n13\n1", "v", VimViewportFixture{10, 6, 10, 1, 6, 5}},
     {"viewport-visual-page-up-yanks", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", "v<C-b>y<Esc>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20", 7, 1, "07\n08\n09\n1", "v", VimViewportFixture{10, 6, 10, 1, 1, 5}},
     {"viewport-count-down-at-eof-keeps-the-column", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", "999<C-d>", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12", 12, 2, "", "", VimViewportFixture{10, 3, 12, 2, 3, 5}},
