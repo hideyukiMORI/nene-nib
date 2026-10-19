@@ -10,13 +10,14 @@
 
 namespace nenenib::core
 {
-// 本文の枠の矩形（ADR 0148 の決定 1・8）。active は操作中の枠（左か上）、other はもう 1 つの枠
-// （右か下）、divider は 2 つの枠の境界。1 枠では other と divider は値なしで、active は
-// body_layout と同じ値。どの欄も単独で妥当な値なので公開 aggregate（CPP-003）。
+// 本文の枠の矩形（ADR 0148 の決定 1・8）。位置の順で、first は左か上の枠、second は右か下の枠、
+// divider は 2 つの枠の境界。どちらが操作中かは SplitState::active_side（frame の active_side）で
+// 引く。1 枠では second と divider は値なしで、first は body_layout と同じ値。どの欄も単独で
+// 妥当な値なので公開 aggregate（CPP-003）。
 struct PaneLayouts
 {
-    BodyLayout active;
-    std::optional<BodyLayout> other;
+    BodyLayout first;
+    std::optional<BodyLayout> second;
     std::optional<LayoutRect> divider;
 };
 

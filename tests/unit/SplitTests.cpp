@@ -19,6 +19,7 @@
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
 #include "FontSize.hpp"
+#include "GiantLine.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
@@ -30,6 +31,7 @@
 #include "OpenDocument.hpp"
 #include "PaneFrame.hpp"
 #include "PaneLayouts.hpp"
+#include "PaneSide.hpp"
 #include "PlaceCaret.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -72,6 +74,7 @@ namespace
 namespace app = nenenib::application;
 namespace core = nenenib::core;
 using app::EditorFrame;
+using core::PaneSide;
 using core::SplitLayout;
 
 constexpr std::string_view six_lines = "l1\nl2\nl3\nl4\nl5\nl6";
@@ -190,9 +193,9 @@ void verify_pane_layouts_none()
         const auto whole = core::body_layout(800, 600, dpi, core::default_font_size());
         const auto panes = core::pane_layouts(core::LayoutRect{0, 0, 800, 600}, dpi,
                                               core::default_font_size(), SplitLayout::none);
-        expect(panes.active.band == whole.band && panes.active.content == whole.content &&
-                   panes.active.gutter == whole.gutter &&
-                   panes.active.visible_lines == whole.visible_lines && !panes.other.has_value() &&
+        expect(panes.first.band == whole.band && panes.first.content == whole.content &&
+                   panes.first.gutter == whole.gutter &&
+                   panes.first.visible_lines == whole.visible_lines && !panes.second.has_value() &&
                    !panes.divider.has_value(),
                "one pane is the body layout itself");
     }
@@ -203,19 +206,21 @@ void check_vertical(std::int32_t width, std::uint32_t dpi)
     const auto whole = core::body_layout(width, 600, dpi, core::default_font_size());
     const auto panes = core::pane_layouts(core::LayoutRect{0, 0, width, 600}, dpi,
                                           core::default_font_size(), SplitLayout::vertical);
-    expect(panes.other.has_value() && panes.divider.has_value(),
+    expect(panes.second.has_value() && panes.divider.has_value(),
            "a vertical split has two panes and a divider");
-    if (!panes.other.has_value() || !panes.divider.has_value())
+    if (!panes.second.has_value() || !panes.divider.has_value())
     {
         return;
     }
-    const auto &left = panes.active;
-    const auto &right = panes.other.value();
+    const auto &left = panes.first;
+    const auto &right = panes.second.value();
     const auto &divider = panes.divider.value();
     const auto line = std::max(core::to_pixels(1, dpi), 1);
     expect(core::width_of(left.content) == core::width_of(right.content) &&
+               core::height_of(left.content) == core::height_of(right.content) &&
                core::width_of(left.band) == core::width_of(right.band),
-           "both panes of a vertical split have the same content width");
+           "the first and the second pane of a vertical split have the same content size");
+    expect(left.band.right <= right.band.left, "the first pane is on the left of the second");
     expect(left.band.left == 0 && right.band.right == width && divider.left == left.band.right &&
                divider.right == right.band.left,
            "the panes and the divider cover the band from edge to edge");
@@ -245,20 +250,23 @@ void check_horizontal(std::int32_t height, std::uint32_t dpi)
     const auto whole = core::body_layout(900, height, dpi, core::default_font_size());
     const auto panes = core::pane_layouts(core::LayoutRect{0, 0, 900, height}, dpi,
                                           core::default_font_size(), SplitLayout::horizontal);
-    expect(panes.other.has_value() && panes.divider.has_value(),
+    expect(panes.second.has_value() && panes.divider.has_value(),
            "a horizontal split has two panes and a divider");
-    if (!panes.other.has_value() || !panes.divider.has_value())
+    if (!panes.second.has_value() || !panes.divider.has_value())
     {
         return;
     }
-    const auto &top = panes.active;
-    const auto &bottom = panes.other.value();
+    const auto &top = panes.first;
+    const auto &bottom = panes.second.value();
     const auto &divider = panes.divider.value();
     const auto line = std::max(core::to_pixels(1, dpi), 1);
     expect(core::height_of(top.band) == core::height_of(bottom.band) &&
                core::width_of(top.content) == core::width_of(bottom.content) &&
+               core::height_of(top.content) == core::height_of(bottom.content) &&
                core::width_of(top.content) == core::width_of(whole.content),
-           "both panes of a horizontal split have the same height and the full width");
+           "the first and the second pane of a horizontal split have the same content size and "
+           "the full width");
+    expect(top.band.bottom <= bottom.band.top, "the first pane is above the second");
     expect(top.band.top == whole.band.top && bottom.band.bottom == whole.band.bottom &&
                divider.top == top.band.bottom && divider.bottom == bottom.band.top &&
                (core::height_of(divider) == line || core::height_of(divider) == line + 1),
@@ -305,30 +313,6 @@ void verify_offset_after_edit()
     }
 }
 
-void verify_line_after_edit()
-{
-    using Row = std::pair<std::size_t, std::size_t>;
-    const core::LineNumber edit_line{3};
-    const core::Edit opened{core::Offset{0}, "", "a\nb\n", core::Offset{0}};
-    for (const auto &[before, after] : std::array<Row, 3>{{{2, 2}, {3, 3}, {4, 6}}})
-    {
-        expect(core::line_after_edit(core::LineNumber{before}, edit_line, opened).value == after,
-               "inserted line feeds push only the lines after the edit line");
-        const core::Edit undone{opened.at, opened.inserted, opened.removed, opened.at};
-        expect(core::line_after_edit(core::LineNumber{after}, edit_line, undone).value == before,
-               "undoing the inserted lines brings the line back");
-    }
-    const core::Edit joined{core::Offset{0}, "x\ny\nz", "", core::Offset{0}};
-    for (const auto &[before, after] : std::array<Row, 4>{{{3, 3}, {4, 3}, {5, 3}, {6, 4}}})
-    {
-        expect(core::line_after_edit(core::LineNumber{before}, edit_line, joined).value == after,
-               "removed line feeds fold lines inside them to the edit line");
-    }
-    const core::Edit crlf{core::Offset{0}, "", "a\r\nb\r\n", core::Offset{0}};
-    expect(core::line_after_edit(core::LineNumber{4}, edit_line, crlf).value == 6,
-           "CRLF counts one line feed per line");
-}
-
 // ---------------------------------------------------------------- 状態と意図と frame
 
 // 1. 分けると、もう 1 つの枠は同じ文書を同じキャレットとスクロールで出す（決定 1・2）。
@@ -362,6 +346,34 @@ void verify_split_shows_same_document()
         other.controller().apply_frame(app::SplitPane{SplitLayout::horizontal});
     expect(horizontal.layout == SplitLayout::horizontal && other_caret_at(horizontal, 6, 3),
            "SplitPane horizontal shows two panes the same way");
+}
+
+// 操作中の枠の側（決定 2・8）。分けると first、移るたびに反転、1 枠に戻すと first。
+void verify_active_side()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    type_six_lines(editing);
+    expect(controller.frame().active_side == PaneSide::first, "one pane is on the first side");
+    const EditorFrame split = controller.apply_frame(app::SplitPane{SplitLayout::vertical});
+    expect(split.active_side == PaneSide::first, "splitting operates the first (left) pane");
+    expect(controller.apply_frame(app::SwitchPane{}).active_side == PaneSide::second,
+           "switching panes operates the second (right) pane");
+    expect(controller.apply_frame(app::SwitchPane{}).active_side == PaneSide::first,
+           "switching again comes back to the first pane");
+    applied(controller, app::SwitchPane{});
+    const EditorFrame closed = controller.apply_frame(app::ClosePane{});
+    expect(closed.layout == SplitLayout::none && closed.active_side == PaneSide::first,
+           "closing the pane from the second side goes back to the first side");
+    applied(controller, app::NewTab{});
+    applied(controller, app::SplitPane{SplitLayout::horizontal});
+    applied(controller, app::SwitchTab{0});
+    const EditorFrame other = controller.apply_frame(app::SwitchPane{});
+    expect(other.active_side == PaneSide::second && other.active_tab == 1,
+           "switching to the other document flips the side too");
+    const EditorFrame quit = run_ex(controller, "q");
+    expect(quit.layout == SplitLayout::none && quit.active_side == PaneSide::first,
+           ":q goes back to the first side");
 }
 
 // 2. 同じ文書の枠を移ると、選択はキャレットに畳まれ、表示の欄が入れ替わる（決定 3）。
@@ -533,6 +545,52 @@ void verify_edit_adjusts_other_scroll()
     expect(other_caret_at(redone, 7, 3) && other_first(redone) == 5, "redo shifts them again");
 }
 
+// 先頭行は「行頭の offset を offset_after_edit で写して行番号に戻す」の 1 つの規則（決定 9）。
+void verify_edit_adjusts_other_first_line()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    type_six_lines(editing);
+    applied(controller, app::SplitPane{SplitLayout::horizontal});
+    applied(controller, place(4, 1));
+    const EditorFrame opened = controller.apply_frame(app::InsertText{"\n"});
+    expect(other_first(opened) == 5 && other_lines(opened) == "l4|l5|l6",
+           "a line feed at the start of the other pane's first line moves the first line with "
+           "its text");
+    applied(controller, place(5, 2));
+    const EditorFrame typed = controller.apply_frame(app::InsertText{"z"});
+    expect(other_first(typed) == 5 && other_lines(typed) == "lz4|l5|l6",
+           "typing inside the first line keeps it");
+    applied(controller, place(1, 1));
+    applied(controller, place(2, 1, core::SelectionAnchoring::extend));
+    const EditorFrame removed =
+        controller.apply_frame(app::DeleteText{core::DeleteDirection::backward});
+    expect(other_first(removed) == 4 && other_lines(removed) == "lz4|l5|l6",
+           "removing a line above the first line pulls it up by one");
+}
+
+// 矩形の編集は 1 つの置換なので、矩形の中にあったもう 1 つの枠のキャレットは先頭へ畳まれる。
+void verify_block_edit_folds_other_caret()
+{
+    Editing editing;
+    open_vim_document(editing, "abcd\nefgh\nijkl");
+    auto &controller = editing.controller();
+    vim_replay(controller, "jl");
+    applied(controller, app::SplitPane{SplitLayout::vertical});
+    vim_replay(controller, "gg<C-v>jld");
+    const EditorFrame removed = controller.frame();
+    expect(joined_lines(removed.lines) == "cd|gh|ijkl" && other_caret_at(removed, 1, 1),
+           "a block removal folds the other caret inside the block to its start");
+    Editing after;
+    open_vim_document(after, "abcd\nefgh\nijkl");
+    auto &behind = after.controller();
+    vim_replay(behind, "jj");
+    applied(behind, app::SplitPane{SplitLayout::vertical});
+    vim_replay(behind, "gg<C-v>jld");
+    expect(other_caret_at(behind.frame(), 3, 1),
+           "a block removal pulls an other caret behind the block");
+}
+
 // 6. 違う文書を出しているもう 1 つの枠は、操作中の枠の編集で動かない。
 void verify_edit_leaves_other_document()
 {
@@ -646,6 +704,33 @@ void verify_ex_quit_closes_pane()
            ":on is the shortest form and a bang is not accepted");
 }
 
+void verify_ex_quit_force_and_exit()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    vim_replay(controller, "x");
+    applied(controller, app::SplitPane{SplitLayout::vertical});
+    const EditorFrame forced = run_ex(controller, "q!");
+    expect(forced.layout == SplitLayout::none && !forced.closing && forced.tabs.size() == 1 &&
+               forced.document.save_state == core::SaveState::modified &&
+               !message_of(forced).starts_with("E37"),
+           ":q! on two panes closes the pane and keeps the unsaved document");
+    applied(controller, app::SplitPane{SplitLayout::horizontal});
+    const EditorFrame exited = run_ex(controller, "x");
+    expect(exited.layout == SplitLayout::none && !exited.closing && exited.tabs.size() == 1 &&
+               editing.files().written_path() == "C:\\work\\note.txt" &&
+               exited.document.save_state == core::SaveState::saved,
+           ":x on two panes writes the unsaved document and then closes the pane");
+    vim_replay(controller, "x");
+    applied(controller, app::SplitPane{SplitLayout::vertical});
+    applied(controller, app::ClosePane{});
+    const EditorFrame refused = run_ex(controller, "q");
+    expect(refused.layout == SplitLayout::none && message_of(refused).starts_with("E37") &&
+               !refused.closing,
+           ":q after going back to one pane takes the E37 path again");
+}
+
 void verify_ex_quit_brings_other_document()
 {
     Editing editing;
@@ -705,6 +790,43 @@ void verify_frame_other_pane()
                cells.other.value().grid.size() == cells.grid.size() &&
                cells.other.value().lines.empty(),
            "a grid document fills the other pane's grid rows");
+}
+
+// 問いの答えを待つ文書は、もう 1 つの枠でも本文を読まない（ADR 0140 の決定 2）。
+void verify_other_pane_waits_for_display_answer()
+{
+    Editing editing;
+    editing.files().hold_at(
+        "C:\\work\\giant.txt",
+        Bytes{"head\n" + std::string(core::giant_line_threshold + 1, 'x') + "\ntail"});
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10, core::TextViewGeometry{85, 20, 96}});
+    applied(controller, app::OpenDocument{work_path("giant")});
+    const EditorFrame split = controller.apply_frame(app::SplitPane{SplitLayout::vertical});
+    expect(split.display_pending && split.other.has_value() && split.other.value().lines.empty() &&
+               split.other.value().grid.empty(),
+           "the other pane of a document waiting for the display answer has no lines nor grid");
+}
+
+// 無題の未変更タブへ開くと本文が丸ごと替わるので、同じタブを見るもう 1 つの枠は先頭に戻る（決定
+// 5）。
+void verify_open_into_blank_restarts_other()
+{
+    Editing editing;
+    hold_work(editing.files());
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{3});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_replay(controller, "$");
+    expect(controller.vim_state().wanted_column.has_value(), "$ sets the wanted column");
+    applied(controller, app::SplitPane{SplitLayout::vertical});
+    const EditorFrame opened = controller.apply_frame(app::OpenDocument{work_path("a")});
+    expect(opened.tabs.size() == 1 && other_lines(opened) == "a" && other_caret_at(opened, 1, 1) &&
+               other_first(opened) == 1,
+           "opening into the blank tab shows the new text from its top in the other pane too");
+    applied(controller, app::SwitchPane{});
+    expect(!controller.vim_state().wanted_column.has_value(),
+           "the other pane starts without a wanted column");
 }
 
 // 11. もう 1 つの枠はまだ読んでいない文書を指さない（決定 2・5）。
@@ -800,8 +922,8 @@ void verify_split_contracts()
     verify_pane_layouts_vertical();
     verify_pane_layouts_horizontal();
     verify_offset_after_edit();
-    verify_line_after_edit();
     verify_split_shows_same_document();
+    verify_active_side();
     verify_switch_same_document();
     verify_switch_swaps_wanted_column();
     verify_tabs_leave_other_pane();
@@ -809,14 +931,19 @@ void verify_split_contracts()
     verify_switch_other_document_touches_recency();
     verify_edit_adjusts_other_caret();
     verify_edit_adjusts_other_scroll();
+    verify_edit_adjusts_other_first_line();
+    verify_block_edit_folds_other_caret();
     verify_edit_leaves_other_document();
     verify_close_tab_redirects_other();
     verify_close_pane();
     verify_ex_quit_closes_pane();
+    verify_ex_quit_force_and_exit();
     verify_ex_quit_brings_other_document();
     verify_scroll_pane();
     verify_frame_other_pane();
     verify_other_never_unloaded();
+    verify_other_pane_waits_for_display_answer();
+    verify_open_into_blank_restarts_other();
     verify_split_quiet_paths();
     verify_pane_intents_in_tables();
 }

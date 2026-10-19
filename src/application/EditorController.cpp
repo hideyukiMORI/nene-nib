@@ -1406,18 +1406,19 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     const std::size_t before = state_.history().position();
     auto history = state_.history().pushed(edit, boundary);
     auto document = after_edit_at(state_.document(), before);
+    adjust_other(edit, next);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
                               std::move(document));
-    adjust_other(edit);
     follow_caret();
 }
 
-void EditorController::adjust_other(const core::Edit &edit)
+void EditorController::adjust_other(const core::Edit &edit, const core::TextBuffer &after)
 {
-    // 1 枠では状態を写さない（1 打鍵の道に写しを足さない）。
+    // 1 枠では状態を写さない（1 打鍵の道に写しを足さない）。本文を置く前に呼ぶ（先頭行の行頭は
+    // 編集の前の本文で引く）。
     if (state_.split().other.has_value())
     {
-        state_ = state_.with_other_adjusted(edit);
+        state_ = state_.with_other_adjusted(edit, after);
     }
 }
 
@@ -1713,10 +1714,10 @@ void EditorController::undo_edit()
     const core::Offset end{at.value + edit.value().inserted.size()};
     auto next = state_.text().replaced(at, end, edit.value().removed);
     const core::Offset caret{at.value + edit.value().removed.size()};
+    // undo は編集の逆向き（inserted を removed に戻す）。
+    adjust_other(core::Edit{at, edit.value().inserted, edit.value().removed, at}, next);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
                               state_.document());
-    // undo は編集の逆向き（inserted を removed に戻す）。
-    adjust_other(core::Edit{at, edit.value().inserted, edit.value().removed, at});
     follow_caret();
 }
 
@@ -1731,9 +1732,9 @@ void EditorController::redo_edit()
     const core::Offset end{at.value + edit.value().removed.size()};
     auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
+    adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
                               state_.document());
-    adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at});
     follow_caret();
 }
 
@@ -4518,17 +4519,22 @@ EditorFrame EditorController::frame()
 void EditorController::add_other_pane(EditorFrame &result, const core::VimPattern *pattern) const
 {
     result.layout = state_.split().layout;
+    result.active_side = state_.split().active_side;
     const auto &view = state_.split().other;
     const auto pane = state_.other_pane_state();
     if (!view.has_value() || !pane.has_value())
     {
         return;
     }
+    const auto &ids = state_.autosave_ids();
+    const auto found = std::ranges::find(ids, view.value().tab);
+    if (found == ids.end())
+    {
+        return;
+    }
+    const auto position = static_cast<std::size_t>(std::distance(ids.begin(), found));
     const EditorState &state = pane.value();
     const PaneSource source{state, core::selection_range(state.selection()), std::nullopt, pattern};
-    const auto &ids = state_.autosave_ids();
-    const auto position = static_cast<std::size_t>(
-        std::distance(ids.begin(), std::ranges::find(ids, view.value().tab)));
     PaneFrame other{{},
                     CaretView{state.text().position_of(state.selection().caret), result.caret.shape,
                               state.caret_affinity()},

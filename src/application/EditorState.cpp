@@ -104,6 +104,19 @@ unloaded_of(const std::shared_ptr<const UnloadedDocument> &tab)
     }
     return oldest;
 }
+
+// 2 枠の向かいの側（枠を移ると操作中の枠の側が反転する・ADR 0148 の決定 2）。
+[[nodiscard]] core::PaneSide opposite_side(core::PaneSide side) noexcept
+{
+    switch (side)
+    {
+    case core::PaneSide::first:
+        return core::PaneSide::second;
+    case core::PaneSide::second:
+        return core::PaneSide::first;
+    }
+    std::unreachable();
+}
 } // namespace
 
 EditorState::EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled)
@@ -418,6 +431,8 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.document_ = std::move(document);
     next.display_ = core::DisplayForm::text;
     next.display_inquiry_ = DisplayInquiry::unjudged;
+    // 本文が丸ごと替わるので、同じ文書を見るもう 1 つの枠は先頭に戻す（ADR 0148 の決定 5）。
+    next.restart_other_showing(autosave_ids_.at(active_));
     return next;
 }
 
@@ -793,7 +808,7 @@ EditorState EditorState::with_closed(std::size_t position) const
         next.parked_.erase(std::next(next.parked_.begin(), distance_of(parked_index_of(position))));
         next.active_ = position < active_ ? active_ - 1 : active_;
         next.touch_active();
-        next.redirect_closed_other(autosave_ids_.at(position));
+        next.restart_other_showing(autosave_ids_.at(position));
         return next;
     }
     // 右隣は脇の束の添字 active_、左隣は active_ - 1。どちらも閉じた後の帯の位置と一致する。
@@ -808,7 +823,7 @@ EditorState EditorState::with_closed(std::size_t position) const
     next.active_ = neighbour;
     next.spread(*target.value());
     next.touch_active();
-    next.redirect_closed_other(autosave_ids_.at(position));
+    next.restart_other_showing(autosave_ids_.at(position));
     return next;
 }
 
@@ -835,9 +850,9 @@ void EditorState::spread_pane(const PaneView &view)
     vim_ = core::vim_switched_document(vim_, view.wanted_column, vim_.scroll_lines);
 }
 
-void EditorState::redirect_closed_other(AutosaveId closed)
+void EditorState::restart_other_showing(AutosaveId tab)
 {
-    if (!split_.other.has_value() || !(split_.other.value().tab == closed))
+    if (!split_.other.has_value() || !(split_.other.value().tab == tab))
     {
         return;
     }
@@ -857,7 +872,7 @@ EditorState EditorState::with_split(core::SplitLayout layout) const
         return *this;
     }
     EditorState next(*this);
-    next.split_ = SplitState{layout, active_pane()};
+    next.split_ = SplitState{layout, core::PaneSide::first, active_pane()};
     return next;
 }
 
@@ -876,6 +891,7 @@ EditorState EditorState::with_pane_swapped() const
         next.history_ = history_.sealed();
         next.spread_pane(other);
         next.split_.other = leaving;
+        next.split_.active_side = opposite_side(split_.active_side);
         return next;
     }
     const auto position = position_of(autosave_ids_, other.tab);
@@ -889,6 +905,7 @@ EditorState EditorState::with_pane_swapped() const
     next.touch_active();
     next.spread_pane(other);
     next.split_.other = leaving;
+    next.split_.active_side = opposite_side(split_.active_side);
     return next;
 }
 
@@ -899,7 +916,8 @@ EditorState EditorState::without_split() const
     return next;
 }
 
-EditorState EditorState::with_other_adjusted(const core::Edit &edit) const
+EditorState EditorState::with_other_adjusted(const core::Edit &edit,
+                                             const core::TextBuffer &after) const
 {
     if (!split_.other.has_value() || !(split_.other.value().tab == autosave_ids_.at(active_)))
     {
@@ -907,14 +925,14 @@ EditorState EditorState::with_other_adjusted(const core::Edit &edit) const
     }
     EditorState next(*this);
     PaneView &other = next.split_.other.value();
-    const core::LineNumber edit_line = text_.position_of(edit.at).line;
-    const core::LineNumber first = core::line_after_edit(other.first_visible, edit_line, edit);
-    // 先頭行が消えた行の中にあって編集の行へ畳まれたら、画面行も行の先頭へ戻す。
-    if (first.value != other.first_visible.value && first.value == edit_line.value)
+    const core::Offset start = core::offset_after_edit(text_.line_start(other.first_visible), edit);
+    const core::TextPosition top = after.position_of(start);
+    // 先頭行の行頭が削除の中に畳まれて別の行の途中へ来たら、画面行も行の先頭へ戻す。
+    if (top.column.value != 0)
     {
         other.first_row = 0;
     }
-    other.first_visible = first;
+    other.first_visible = top.line;
     other.caret = core::offset_after_edit(other.caret, edit);
     return next;
 }
