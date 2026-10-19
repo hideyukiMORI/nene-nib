@@ -1,6 +1,7 @@
 #include "TemporaryFiles.hpp"
 
 #include "FindHandle.hpp"
+#include "NativePath.hpp"
 #include "Utf16.hpp"
 
 #include <windows.h>
@@ -114,7 +115,7 @@ void reclaim_matching(const std::wstring &folder, std::wstring_view prefix,
                       const std::wstring &pattern)
 {
     WIN32_FIND_DATAW data{};
-    const FindHandle search(FindFirstFileExW(pattern.c_str(), FindExInfoBasic, &data,
+    const FindHandle search(FindFirstFileExW(native_path(pattern).c_str(), FindExInfoBasic, &data,
                                              FindExSearchNameMatch, nullptr, 0));
     if (!search.valid())
     {
@@ -126,7 +127,7 @@ void reclaim_matching(const std::wstring &folder, std::wstring_view prefix,
         if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
             reclaimable_name(name, prefix))
         {
-            static_cast<void>(DeleteFileW((folder + std::wstring(name)).c_str()));
+            static_cast<void>(DeleteFileW(native_path(folder + std::wstring(name)).c_str()));
         }
     } while (FindNextFileW(search.get(), &data) != 0);
 }

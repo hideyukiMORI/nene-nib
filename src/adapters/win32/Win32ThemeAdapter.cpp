@@ -3,6 +3,7 @@
 #include "BuiltinThemes.hpp"
 #include "FindHandle.hpp"
 #include "LocalSettingsPath.hpp"
+#include "NativePath.hpp"
 #include "ThemeCodec.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -26,7 +27,7 @@ theme_files(const core::FilePath &directory)
 {
     const auto pattern = core::to_utf16(std::string(directory.text()) + "/*.v1.theme").value();
     WIN32_FIND_DATAW data{};
-    const FindHandle search(FindFirstFileW(pattern.c_str(), &data));
+    const FindHandle search(FindFirstFileW(native_path(pattern).c_str(), &data));
     std::vector<std::wstring> names;
     if (!search.valid())
     {
