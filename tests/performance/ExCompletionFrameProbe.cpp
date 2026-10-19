@@ -10,12 +10,16 @@
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include <algorithm>
+#include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 namespace nenenib::tests::performance
 {
 namespace
 {
+constexpr std::string_view probe_title = "probe.txt";
 [[nodiscard]] application::EditorIntent opening_of(ExCompletionWorkload workload)
 {
     switch (workload)
@@ -77,7 +81,7 @@ namespace
 }
 [[nodiscard]] bool document_equal(const application::DocumentView &document)
 {
-    return document.title.text() == "probe.txt" && document.title.code_point_count() == 9U &&
+    return document.title.text() == probe_title && document.title.code_point_count() == 9U &&
            document.path.has_value() &&
            document.path.value().text() == "C:\\nib-probe\\probe.txt" &&
            document.save_state == core::SaveState::saved &&
@@ -111,7 +115,8 @@ namespace
            choice.label.text() == "set fontsize=";
 }
 [[nodiscard]] bool frame_equal(const application::EditorFrame &frame,
-                               const ExCompletionSample &sample, core::InputLinePrompt prompt)
+                               const ExCompletionSample &sample,
+                               std::span<const std::string> expected, core::InputLinePrompt prompt)
 {
     if (!frame.command_line.has_value())
     {
@@ -122,7 +127,7 @@ namespace
            document_equal(frame.tabs.at(0U)) && frame.active_tab == 0U &&
            line.text == sample.prefix && line.caret.value == sample.prefix.size() &&
            line.prompt == prompt && !line.completion_index.has_value() &&
-           completions_equal(line.completions, sample) && palette_equal(frame, prompt) &&
+           completions_equal(line.completions, expected) && palette_equal(frame, prompt) &&
            !frame.composition.has_value() && !frame.command_composition.has_value() &&
            !frame.command_message.has_value() && !frame.settings_failure.has_value() &&
            core::same_settings(frame.settings, core::default_editor_settings()) &&
@@ -145,11 +150,12 @@ void prepare(Editing &editing, ExCompletionWorkload workload, const ExCompletion
     }
 }
 [[nodiscard]] bool controller_equal(Editing &editing, const ExCompletionSample &sample,
+                                    std::span<const std::string> expected,
                                     core::InputLinePrompt prompt)
 {
     auto &controller = editing.controller();
     const auto documents = controller.documents();
-    return frame_equal(controller.frame(), sample, prompt) && documents.size() == 1U &&
+    return frame_equal(controller.frame(), sample, expected, prompt) && documents.size() == 1U &&
            document_equal(documents.at(0U)) && document_equal(controller.delivery().document) &&
            editing.settings().writes() == 0U && editing.files().written().empty() &&
            editing.bookmarks().read().value().files.empty() &&
@@ -182,9 +188,10 @@ probed_ex_completion_frame(ExCompletionWorkload workload, const ExCompletionSamp
 {
     Editing editing;
     const auto prompt = prompt_of(workload);
+    const auto expected = expected_completions(workload);
     prepare(editing, workload, sample);
     const auto held = editing.controller().frame();
-    if (!held.command_line.has_value() || !controller_equal(editing, sample, prompt))
+    if (!held.command_line.has_value() || !controller_equal(editing, sample, expected, prompt))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
@@ -198,9 +205,12 @@ probed_ex_completion_frame(ExCompletionWorkload workload, const ExCompletionSamp
     }
     const auto requests = editing.folders().requests().size();
     const auto checksum = generated_frames(editing.controller(), timing);
-    if (checksum != sample.checksum || !controller_equal(editing, sample, prompt) ||
-        !frame_equal(held, sample, prompt) || held_input != sample.prefix || held_body != "a x a" ||
-        !std::ranges::equal(views, sample.expected) ||
+    // 64 枚の frame それぞれが候補・題名・入力の長さを足す（generated_frames）。
+    const std::uint64_t per_frame =
+        completion_checksum(expected) + probe_title.size() + sample.prefix.size();
+    if (checksum != 64U * per_frame || !controller_equal(editing, sample, expected, prompt) ||
+        !frame_equal(held, sample, expected, prompt) || held_input != sample.prefix ||
+        held_body != "a x a" || !std::ranges::equal(views, expected) ||
         editing.folders().requests().size() != requests)
     {
         return std::unexpected(ProbeFailure::wrong_result);

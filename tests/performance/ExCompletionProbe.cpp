@@ -1,4 +1,5 @@
 #include "ExCompletionProbe.hpp"
+#include "BuiltinThemes.hpp"
 #include "ExCompletionFrameProbe.hpp"
 #include "ExResult.hpp"
 #include "Milestone.hpp"
@@ -11,9 +12,6 @@ namespace nenenib::tests::performance
 {
 namespace
 {
-constexpr std::array<std::string_view, 9> builtin_names{
-    "ubuntu-aubergine", "neutral-light", "solarized-dark", "solarized-light", "monokai",
-    "dracula",          "one-dark",      "night-owl",      "night-owl-light"};
 constexpr std::array<std::string_view, 256> custom_names{
     "user-0000", "user-0001", "user-0002", "user-0003", "user-0004", "user-0005", "user-0006",
     "user-0007", "user-0008", "user-0009", "user-0010", "user-0011", "user-0012", "user-0013",
@@ -52,646 +50,161 @@ constexpr std::array<std::string_view, 256> custom_names{
     "user-0238", "user-0239", "user-0240", "user-0241", "user-0242", "user-0243", "user-0244",
     "user-0245", "user-0246", "user-0247", "user-0248", "user-0249", "user-0250", "user-0251",
     "user-0252", "user-0253", "user-0254", "user-0255"};
-constexpr std::array<std::string_view, 1> expected_0{"set fontsize="};
-constexpr std::array<std::string_view, 0> expected_1{
-
-};
-constexpr std::array<std::string_view, 1> expected_2{"colorscheme user-0123"};
-constexpr std::array<std::string_view, 28> expected_3{"colorscheme",
-                                                      "set fontsize=",
-                                                      "set guifont=",
-                                                      "set incsearch",
-                                                      "set noincsearch",
-                                                      "set hlsearch",
-                                                      "set nohlsearch",
-                                                      "set guide",
-                                                      "set noguide",
-                                                      "tabs",
-                                                      "tabnew",
-                                                      "tabnext",
-                                                      "tabprevious",
-                                                      "tabclose",
-                                                      "set wrap",
-                                                      "set nowrap",
-                                                      "edit",
-                                                      "buffer",
-                                                      "ls",
-                                                      "files",
-                                                      "buffers",
-                                                      "write",
-                                                      "quit",
-                                                      "quit!",
-                                                      "wq",
-                                                      "xit",
-                                                      "exit",
-                                                      "saveas"};
-constexpr std::array<std::string_view, 10> expected_4{
-    "set fontsize=",  "set guifont=", "set incsearch", "set noincsearch", "set hlsearch",
-    "set nohlsearch", "set guide",    "set noguide",   "set wrap",        "set nowrap"};
-constexpr std::array<std::string_view, 10> expected_5{
-    "colorscheme ubuntu-aubergine", "colorscheme neutral-light",
-    "colorscheme solarized-dark",   "colorscheme solarized-light",
-    "colorscheme monokai",          "colorscheme dracula",
-    "colorscheme one-dark",         "colorscheme night-owl",
-    "colorscheme night-owl-light",  "colorscheme system"};
-constexpr std::array<std::string_view, 38> expected_6{"colorscheme",
-                                                      "set fontsize=",
-                                                      "set guifont=",
-                                                      "set incsearch",
-                                                      "set noincsearch",
-                                                      "set hlsearch",
-                                                      "set nohlsearch",
-                                                      "set guide",
-                                                      "set noguide",
-                                                      "tabs",
-                                                      "tabnew",
-                                                      "tabnext",
-                                                      "tabprevious",
-                                                      "tabclose",
-                                                      "set wrap",
-                                                      "set nowrap",
-                                                      "edit",
-                                                      "buffer",
-                                                      "ls",
-                                                      "files",
-                                                      "buffers",
-                                                      "write",
-                                                      "quit",
-                                                      "quit!",
-                                                      "wq",
-                                                      "xit",
-                                                      "exit",
-                                                      "saveas",
-                                                      "colorscheme ubuntu-aubergine",
-                                                      "colorscheme neutral-light",
-                                                      "colorscheme solarized-dark",
-                                                      "colorscheme solarized-light",
-                                                      "colorscheme monokai",
-                                                      "colorscheme dracula",
-                                                      "colorscheme one-dark",
-                                                      "colorscheme night-owl",
-                                                      "colorscheme night-owl-light",
-                                                      "colorscheme system"};
-constexpr std::array<std::string_view, 266> expected_7{
-    "colorscheme ubuntu-aubergine", "colorscheme neutral-light", "colorscheme solarized-dark",
-    "colorscheme solarized-light",  "colorscheme monokai",       "colorscheme dracula",
-    "colorscheme one-dark",         "colorscheme night-owl",     "colorscheme night-owl-light",
-    "colorscheme user-0000",        "colorscheme user-0001",     "colorscheme user-0002",
-    "colorscheme user-0003",        "colorscheme user-0004",     "colorscheme user-0005",
-    "colorscheme user-0006",        "colorscheme user-0007",     "colorscheme user-0008",
-    "colorscheme user-0009",        "colorscheme user-0010",     "colorscheme user-0011",
-    "colorscheme user-0012",        "colorscheme user-0013",     "colorscheme user-0014",
-    "colorscheme user-0015",        "colorscheme user-0016",     "colorscheme user-0017",
-    "colorscheme user-0018",        "colorscheme user-0019",     "colorscheme user-0020",
-    "colorscheme user-0021",        "colorscheme user-0022",     "colorscheme user-0023",
-    "colorscheme user-0024",        "colorscheme user-0025",     "colorscheme user-0026",
-    "colorscheme user-0027",        "colorscheme user-0028",     "colorscheme user-0029",
-    "colorscheme user-0030",        "colorscheme user-0031",     "colorscheme user-0032",
-    "colorscheme user-0033",        "colorscheme user-0034",     "colorscheme user-0035",
-    "colorscheme user-0036",        "colorscheme user-0037",     "colorscheme user-0038",
-    "colorscheme user-0039",        "colorscheme user-0040",     "colorscheme user-0041",
-    "colorscheme user-0042",        "colorscheme user-0043",     "colorscheme user-0044",
-    "colorscheme user-0045",        "colorscheme user-0046",     "colorscheme user-0047",
-    "colorscheme user-0048",        "colorscheme user-0049",     "colorscheme user-0050",
-    "colorscheme user-0051",        "colorscheme user-0052",     "colorscheme user-0053",
-    "colorscheme user-0054",        "colorscheme user-0055",     "colorscheme user-0056",
-    "colorscheme user-0057",        "colorscheme user-0058",     "colorscheme user-0059",
-    "colorscheme user-0060",        "colorscheme user-0061",     "colorscheme user-0062",
-    "colorscheme user-0063",        "colorscheme user-0064",     "colorscheme user-0065",
-    "colorscheme user-0066",        "colorscheme user-0067",     "colorscheme user-0068",
-    "colorscheme user-0069",        "colorscheme user-0070",     "colorscheme user-0071",
-    "colorscheme user-0072",        "colorscheme user-0073",     "colorscheme user-0074",
-    "colorscheme user-0075",        "colorscheme user-0076",     "colorscheme user-0077",
-    "colorscheme user-0078",        "colorscheme user-0079",     "colorscheme user-0080",
-    "colorscheme user-0081",        "colorscheme user-0082",     "colorscheme user-0083",
-    "colorscheme user-0084",        "colorscheme user-0085",     "colorscheme user-0086",
-    "colorscheme user-0087",        "colorscheme user-0088",     "colorscheme user-0089",
-    "colorscheme user-0090",        "colorscheme user-0091",     "colorscheme user-0092",
-    "colorscheme user-0093",        "colorscheme user-0094",     "colorscheme user-0095",
-    "colorscheme user-0096",        "colorscheme user-0097",     "colorscheme user-0098",
-    "colorscheme user-0099",        "colorscheme user-0100",     "colorscheme user-0101",
-    "colorscheme user-0102",        "colorscheme user-0103",     "colorscheme user-0104",
-    "colorscheme user-0105",        "colorscheme user-0106",     "colorscheme user-0107",
-    "colorscheme user-0108",        "colorscheme user-0109",     "colorscheme user-0110",
-    "colorscheme user-0111",        "colorscheme user-0112",     "colorscheme user-0113",
-    "colorscheme user-0114",        "colorscheme user-0115",     "colorscheme user-0116",
-    "colorscheme user-0117",        "colorscheme user-0118",     "colorscheme user-0119",
-    "colorscheme user-0120",        "colorscheme user-0121",     "colorscheme user-0122",
-    "colorscheme user-0123",        "colorscheme user-0124",     "colorscheme user-0125",
-    "colorscheme user-0126",        "colorscheme user-0127",     "colorscheme user-0128",
-    "colorscheme user-0129",        "colorscheme user-0130",     "colorscheme user-0131",
-    "colorscheme user-0132",        "colorscheme user-0133",     "colorscheme user-0134",
-    "colorscheme user-0135",        "colorscheme user-0136",     "colorscheme user-0137",
-    "colorscheme user-0138",        "colorscheme user-0139",     "colorscheme user-0140",
-    "colorscheme user-0141",        "colorscheme user-0142",     "colorscheme user-0143",
-    "colorscheme user-0144",        "colorscheme user-0145",     "colorscheme user-0146",
-    "colorscheme user-0147",        "colorscheme user-0148",     "colorscheme user-0149",
-    "colorscheme user-0150",        "colorscheme user-0151",     "colorscheme user-0152",
-    "colorscheme user-0153",        "colorscheme user-0154",     "colorscheme user-0155",
-    "colorscheme user-0156",        "colorscheme user-0157",     "colorscheme user-0158",
-    "colorscheme user-0159",        "colorscheme user-0160",     "colorscheme user-0161",
-    "colorscheme user-0162",        "colorscheme user-0163",     "colorscheme user-0164",
-    "colorscheme user-0165",        "colorscheme user-0166",     "colorscheme user-0167",
-    "colorscheme user-0168",        "colorscheme user-0169",     "colorscheme user-0170",
-    "colorscheme user-0171",        "colorscheme user-0172",     "colorscheme user-0173",
-    "colorscheme user-0174",        "colorscheme user-0175",     "colorscheme user-0176",
-    "colorscheme user-0177",        "colorscheme user-0178",     "colorscheme user-0179",
-    "colorscheme user-0180",        "colorscheme user-0181",     "colorscheme user-0182",
-    "colorscheme user-0183",        "colorscheme user-0184",     "colorscheme user-0185",
-    "colorscheme user-0186",        "colorscheme user-0187",     "colorscheme user-0188",
-    "colorscheme user-0189",        "colorscheme user-0190",     "colorscheme user-0191",
-    "colorscheme user-0192",        "colorscheme user-0193",     "colorscheme user-0194",
-    "colorscheme user-0195",        "colorscheme user-0196",     "colorscheme user-0197",
-    "colorscheme user-0198",        "colorscheme user-0199",     "colorscheme user-0200",
-    "colorscheme user-0201",        "colorscheme user-0202",     "colorscheme user-0203",
-    "colorscheme user-0204",        "colorscheme user-0205",     "colorscheme user-0206",
-    "colorscheme user-0207",        "colorscheme user-0208",     "colorscheme user-0209",
-    "colorscheme user-0210",        "colorscheme user-0211",     "colorscheme user-0212",
-    "colorscheme user-0213",        "colorscheme user-0214",     "colorscheme user-0215",
-    "colorscheme user-0216",        "colorscheme user-0217",     "colorscheme user-0218",
-    "colorscheme user-0219",        "colorscheme user-0220",     "colorscheme user-0221",
-    "colorscheme user-0222",        "colorscheme user-0223",     "colorscheme user-0224",
-    "colorscheme user-0225",        "colorscheme user-0226",     "colorscheme user-0227",
-    "colorscheme user-0228",        "colorscheme user-0229",     "colorscheme user-0230",
-    "colorscheme user-0231",        "colorscheme user-0232",     "colorscheme user-0233",
-    "colorscheme user-0234",        "colorscheme user-0235",     "colorscheme user-0236",
-    "colorscheme user-0237",        "colorscheme user-0238",     "colorscheme user-0239",
-    "colorscheme user-0240",        "colorscheme user-0241",     "colorscheme user-0242",
-    "colorscheme user-0243",        "colorscheme user-0244",     "colorscheme user-0245",
-    "colorscheme user-0246",        "colorscheme user-0247",     "colorscheme user-0248",
-    "colorscheme user-0249",        "colorscheme user-0250",     "colorscheme user-0251",
-    "colorscheme user-0252",        "colorscheme user-0253",     "colorscheme user-0254",
-    "colorscheme user-0255",        "colorscheme system"};
-constexpr std::array<std::string_view, 294> expected_8{"colorscheme",
-                                                       "set fontsize=",
-                                                       "set guifont=",
-                                                       "set incsearch",
-                                                       "set noincsearch",
-                                                       "set hlsearch",
-                                                       "set nohlsearch",
-                                                       "set guide",
-                                                       "set noguide",
-                                                       "tabs",
-                                                       "tabnew",
-                                                       "tabnext",
-                                                       "tabprevious",
-                                                       "tabclose",
-                                                       "set wrap",
-                                                       "set nowrap",
-                                                       "edit",
-                                                       "buffer",
-                                                       "ls",
-                                                       "files",
-                                                       "buffers",
-                                                       "write",
-                                                       "quit",
-                                                       "quit!",
-                                                       "wq",
-                                                       "xit",
-                                                       "exit",
-                                                       "saveas",
-                                                       "colorscheme ubuntu-aubergine",
-                                                       "colorscheme neutral-light",
-                                                       "colorscheme solarized-dark",
-                                                       "colorscheme solarized-light",
-                                                       "colorscheme monokai",
-                                                       "colorscheme dracula",
-                                                       "colorscheme one-dark",
-                                                       "colorscheme night-owl",
-                                                       "colorscheme night-owl-light",
-                                                       "colorscheme user-0000",
-                                                       "colorscheme user-0001",
-                                                       "colorscheme user-0002",
-                                                       "colorscheme user-0003",
-                                                       "colorscheme user-0004",
-                                                       "colorscheme user-0005",
-                                                       "colorscheme user-0006",
-                                                       "colorscheme user-0007",
-                                                       "colorscheme user-0008",
-                                                       "colorscheme user-0009",
-                                                       "colorscheme user-0010",
-                                                       "colorscheme user-0011",
-                                                       "colorscheme user-0012",
-                                                       "colorscheme user-0013",
-                                                       "colorscheme user-0014",
-                                                       "colorscheme user-0015",
-                                                       "colorscheme user-0016",
-                                                       "colorscheme user-0017",
-                                                       "colorscheme user-0018",
-                                                       "colorscheme user-0019",
-                                                       "colorscheme user-0020",
-                                                       "colorscheme user-0021",
-                                                       "colorscheme user-0022",
-                                                       "colorscheme user-0023",
-                                                       "colorscheme user-0024",
-                                                       "colorscheme user-0025",
-                                                       "colorscheme user-0026",
-                                                       "colorscheme user-0027",
-                                                       "colorscheme user-0028",
-                                                       "colorscheme user-0029",
-                                                       "colorscheme user-0030",
-                                                       "colorscheme user-0031",
-                                                       "colorscheme user-0032",
-                                                       "colorscheme user-0033",
-                                                       "colorscheme user-0034",
-                                                       "colorscheme user-0035",
-                                                       "colorscheme user-0036",
-                                                       "colorscheme user-0037",
-                                                       "colorscheme user-0038",
-                                                       "colorscheme user-0039",
-                                                       "colorscheme user-0040",
-                                                       "colorscheme user-0041",
-                                                       "colorscheme user-0042",
-                                                       "colorscheme user-0043",
-                                                       "colorscheme user-0044",
-                                                       "colorscheme user-0045",
-                                                       "colorscheme user-0046",
-                                                       "colorscheme user-0047",
-                                                       "colorscheme user-0048",
-                                                       "colorscheme user-0049",
-                                                       "colorscheme user-0050",
-                                                       "colorscheme user-0051",
-                                                       "colorscheme user-0052",
-                                                       "colorscheme user-0053",
-                                                       "colorscheme user-0054",
-                                                       "colorscheme user-0055",
-                                                       "colorscheme user-0056",
-                                                       "colorscheme user-0057",
-                                                       "colorscheme user-0058",
-                                                       "colorscheme user-0059",
-                                                       "colorscheme user-0060",
-                                                       "colorscheme user-0061",
-                                                       "colorscheme user-0062",
-                                                       "colorscheme user-0063",
-                                                       "colorscheme user-0064",
-                                                       "colorscheme user-0065",
-                                                       "colorscheme user-0066",
-                                                       "colorscheme user-0067",
-                                                       "colorscheme user-0068",
-                                                       "colorscheme user-0069",
-                                                       "colorscheme user-0070",
-                                                       "colorscheme user-0071",
-                                                       "colorscheme user-0072",
-                                                       "colorscheme user-0073",
-                                                       "colorscheme user-0074",
-                                                       "colorscheme user-0075",
-                                                       "colorscheme user-0076",
-                                                       "colorscheme user-0077",
-                                                       "colorscheme user-0078",
-                                                       "colorscheme user-0079",
-                                                       "colorscheme user-0080",
-                                                       "colorscheme user-0081",
-                                                       "colorscheme user-0082",
-                                                       "colorscheme user-0083",
-                                                       "colorscheme user-0084",
-                                                       "colorscheme user-0085",
-                                                       "colorscheme user-0086",
-                                                       "colorscheme user-0087",
-                                                       "colorscheme user-0088",
-                                                       "colorscheme user-0089",
-                                                       "colorscheme user-0090",
-                                                       "colorscheme user-0091",
-                                                       "colorscheme user-0092",
-                                                       "colorscheme user-0093",
-                                                       "colorscheme user-0094",
-                                                       "colorscheme user-0095",
-                                                       "colorscheme user-0096",
-                                                       "colorscheme user-0097",
-                                                       "colorscheme user-0098",
-                                                       "colorscheme user-0099",
-                                                       "colorscheme user-0100",
-                                                       "colorscheme user-0101",
-                                                       "colorscheme user-0102",
-                                                       "colorscheme user-0103",
-                                                       "colorscheme user-0104",
-                                                       "colorscheme user-0105",
-                                                       "colorscheme user-0106",
-                                                       "colorscheme user-0107",
-                                                       "colorscheme user-0108",
-                                                       "colorscheme user-0109",
-                                                       "colorscheme user-0110",
-                                                       "colorscheme user-0111",
-                                                       "colorscheme user-0112",
-                                                       "colorscheme user-0113",
-                                                       "colorscheme user-0114",
-                                                       "colorscheme user-0115",
-                                                       "colorscheme user-0116",
-                                                       "colorscheme user-0117",
-                                                       "colorscheme user-0118",
-                                                       "colorscheme user-0119",
-                                                       "colorscheme user-0120",
-                                                       "colorscheme user-0121",
-                                                       "colorscheme user-0122",
-                                                       "colorscheme user-0123",
-                                                       "colorscheme user-0124",
-                                                       "colorscheme user-0125",
-                                                       "colorscheme user-0126",
-                                                       "colorscheme user-0127",
-                                                       "colorscheme user-0128",
-                                                       "colorscheme user-0129",
-                                                       "colorscheme user-0130",
-                                                       "colorscheme user-0131",
-                                                       "colorscheme user-0132",
-                                                       "colorscheme user-0133",
-                                                       "colorscheme user-0134",
-                                                       "colorscheme user-0135",
-                                                       "colorscheme user-0136",
-                                                       "colorscheme user-0137",
-                                                       "colorscheme user-0138",
-                                                       "colorscheme user-0139",
-                                                       "colorscheme user-0140",
-                                                       "colorscheme user-0141",
-                                                       "colorscheme user-0142",
-                                                       "colorscheme user-0143",
-                                                       "colorscheme user-0144",
-                                                       "colorscheme user-0145",
-                                                       "colorscheme user-0146",
-                                                       "colorscheme user-0147",
-                                                       "colorscheme user-0148",
-                                                       "colorscheme user-0149",
-                                                       "colorscheme user-0150",
-                                                       "colorscheme user-0151",
-                                                       "colorscheme user-0152",
-                                                       "colorscheme user-0153",
-                                                       "colorscheme user-0154",
-                                                       "colorscheme user-0155",
-                                                       "colorscheme user-0156",
-                                                       "colorscheme user-0157",
-                                                       "colorscheme user-0158",
-                                                       "colorscheme user-0159",
-                                                       "colorscheme user-0160",
-                                                       "colorscheme user-0161",
-                                                       "colorscheme user-0162",
-                                                       "colorscheme user-0163",
-                                                       "colorscheme user-0164",
-                                                       "colorscheme user-0165",
-                                                       "colorscheme user-0166",
-                                                       "colorscheme user-0167",
-                                                       "colorscheme user-0168",
-                                                       "colorscheme user-0169",
-                                                       "colorscheme user-0170",
-                                                       "colorscheme user-0171",
-                                                       "colorscheme user-0172",
-                                                       "colorscheme user-0173",
-                                                       "colorscheme user-0174",
-                                                       "colorscheme user-0175",
-                                                       "colorscheme user-0176",
-                                                       "colorscheme user-0177",
-                                                       "colorscheme user-0178",
-                                                       "colorscheme user-0179",
-                                                       "colorscheme user-0180",
-                                                       "colorscheme user-0181",
-                                                       "colorscheme user-0182",
-                                                       "colorscheme user-0183",
-                                                       "colorscheme user-0184",
-                                                       "colorscheme user-0185",
-                                                       "colorscheme user-0186",
-                                                       "colorscheme user-0187",
-                                                       "colorscheme user-0188",
-                                                       "colorscheme user-0189",
-                                                       "colorscheme user-0190",
-                                                       "colorscheme user-0191",
-                                                       "colorscheme user-0192",
-                                                       "colorscheme user-0193",
-                                                       "colorscheme user-0194",
-                                                       "colorscheme user-0195",
-                                                       "colorscheme user-0196",
-                                                       "colorscheme user-0197",
-                                                       "colorscheme user-0198",
-                                                       "colorscheme user-0199",
-                                                       "colorscheme user-0200",
-                                                       "colorscheme user-0201",
-                                                       "colorscheme user-0202",
-                                                       "colorscheme user-0203",
-                                                       "colorscheme user-0204",
-                                                       "colorscheme user-0205",
-                                                       "colorscheme user-0206",
-                                                       "colorscheme user-0207",
-                                                       "colorscheme user-0208",
-                                                       "colorscheme user-0209",
-                                                       "colorscheme user-0210",
-                                                       "colorscheme user-0211",
-                                                       "colorscheme user-0212",
-                                                       "colorscheme user-0213",
-                                                       "colorscheme user-0214",
-                                                       "colorscheme user-0215",
-                                                       "colorscheme user-0216",
-                                                       "colorscheme user-0217",
-                                                       "colorscheme user-0218",
-                                                       "colorscheme user-0219",
-                                                       "colorscheme user-0220",
-                                                       "colorscheme user-0221",
-                                                       "colorscheme user-0222",
-                                                       "colorscheme user-0223",
-                                                       "colorscheme user-0224",
-                                                       "colorscheme user-0225",
-                                                       "colorscheme user-0226",
-                                                       "colorscheme user-0227",
-                                                       "colorscheme user-0228",
-                                                       "colorscheme user-0229",
-                                                       "colorscheme user-0230",
-                                                       "colorscheme user-0231",
-                                                       "colorscheme user-0232",
-                                                       "colorscheme user-0233",
-                                                       "colorscheme user-0234",
-                                                       "colorscheme user-0235",
-                                                       "colorscheme user-0236",
-                                                       "colorscheme user-0237",
-                                                       "colorscheme user-0238",
-                                                       "colorscheme user-0239",
-                                                       "colorscheme user-0240",
-                                                       "colorscheme user-0241",
-                                                       "colorscheme user-0242",
-                                                       "colorscheme user-0243",
-                                                       "colorscheme user-0244",
-                                                       "colorscheme user-0245",
-                                                       "colorscheme user-0246",
-                                                       "colorscheme user-0247",
-                                                       "colorscheme user-0248",
-                                                       "colorscheme user-0249",
-                                                       "colorscheme user-0250",
-                                                       "colorscheme user-0251",
-                                                       "colorscheme user-0252",
-                                                       "colorscheme user-0253",
-                                                       "colorscheme user-0254",
-                                                       "colorscheme user-0255",
-                                                       "colorscheme system"};
-constexpr std::array<std::string_view, 1> expected_9{"set fontsize="};
-constexpr std::array<std::string_view, 28> expected_10{"colorscheme",
-                                                       "set fontsize=",
-                                                       "set guifont=",
-                                                       "set incsearch",
-                                                       "set noincsearch",
-                                                       "set hlsearch",
-                                                       "set nohlsearch",
-                                                       "set guide",
-                                                       "set noguide",
-                                                       "tabs",
-                                                       "tabnew",
-                                                       "tabnext",
-                                                       "tabprevious",
-                                                       "tabclose",
-                                                       "set wrap",
-                                                       "set nowrap",
-                                                       "edit",
-                                                       "buffer",
-                                                       "ls",
-                                                       "files",
-                                                       "buffers",
-                                                       "write",
-                                                       "quit",
-                                                       "quit!",
-                                                       "wq",
-                                                       "xit",
-                                                       "exit",
-                                                       "saveas"};
-constexpr std::array<std::string_view, 0> expected_11{
-
-};
+// Ex の固定の候補（正本: src/core/ExResult.cpp の fixed_candidates・palette_names・
+// document_names の並び。quit! は document_names の quit から作られる）。組み込みテーマの名前は
+// core::builtin_themes から引き、ここには書かない。製品の表が変わったら、この並びを製品に合わせる。
+constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme",
+                                                                   "set fontsize=",
+                                                                   "set guifont=",
+                                                                   "set incsearch",
+                                                                   "set noincsearch",
+                                                                   "set hlsearch",
+                                                                   "set nohlsearch",
+                                                                   "set guide",
+                                                                   "set noguide",
+                                                                   "tabs",
+                                                                   "tabnew",
+                                                                   "tabnext",
+                                                                   "tabprevious",
+                                                                   "tabclose",
+                                                                   "set wrap",
+                                                                   "set nowrap",
+                                                                   "set display=grid",
+                                                                   "set display=text",
+                                                                   "edit",
+                                                                   "buffer",
+                                                                   "ls",
+                                                                   "files",
+                                                                   "buffers",
+                                                                   "write",
+                                                                   "quit",
+                                                                   "quit!",
+                                                                   "wq",
+                                                                   "xit",
+                                                                   "exit",
+                                                                   "saveas"});
+constexpr std::string_view theme_command = "colorscheme ";
 const std::array<ExCompletionSample, 12> samples{
-    {{"set f", 1024U, 15360U, expected_0,
-      "mode=prefix\nprefix=set "
-      "f\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
-      "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"unknown", 1024U, 1024U, expected_1,
-      "mode=prefix\nprefix=unknown\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
-      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"colorscheme user-0123", 128U, 2944U, expected_2,
+    {{"set f", 1024U, "mode=prefix\nprefix=set f\ncatalog=builtins\n"},
+     {"unknown", 1024U, "mode=prefix\nprefix=unknown\ncatalog=builtins\n"},
+     {"colorscheme user-0123", 128U,
       "mode=prefix\nprefix=colorscheme "
-      "user-0123\ncatalog=custom-256-invalid-color\nubuntu-aubergine\nneutral-light\nsolarized-"
-      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\nuser-"
-      "0000\nuser-0001\nuser-0002\nuser-0003\nuser-0004\nuser-0005\nuser-0006\nuser-0007\nuser-"
-      "0008\nuser-0009\nuser-0010\nuser-0011\nuser-0012\nuser-0013\nuser-0014\nuser-0015\nuser-"
-      "0016\nuser-0017\nuser-0018\nuser-0019\nuser-0020\nuser-0021\nuser-0022\nuser-0023\nuser-"
-      "0024\nuser-0025\nuser-0026\nuser-0027\nuser-0028\nuser-0029\nuser-0030\nuser-0031\nuser-"
-      "0032\nuser-0033\nuser-0034\nuser-0035\nuser-0036\nuser-0037\nuser-0038\nuser-0039\nuser-"
-      "0040\nuser-0041\nuser-0042\nuser-0043\nuser-0044\nuser-0045\nuser-0046\nuser-0047\nuser-"
-      "0048\nuser-0049\nuser-0050\nuser-0051\nuser-0052\nuser-0053\nuser-0054\nuser-0055\nuser-"
-      "0056\nuser-0057\nuser-0058\nuser-0059\nuser-0060\nuser-0061\nuser-0062\nuser-0063\nuser-"
-      "0064\nuser-0065\nuser-0066\nuser-0067\nuser-0068\nuser-0069\nuser-0070\nuser-0071\nuser-"
-      "0072\nuser-0073\nuser-0074\nuser-0075\nuser-0076\nuser-0077\nuser-0078\nuser-0079\nuser-"
-      "0080\nuser-0081\nuser-0082\nuser-0083\nuser-0084\nuser-0085\nuser-0086\nuser-0087\nuser-"
-      "0088\nuser-0089\nuser-0090\nuser-0091\nuser-0092\nuser-0093\nuser-0094\nuser-0095\nuser-"
-      "0096\nuser-0097\nuser-0098\nuser-0099\nuser-0100\nuser-0101\nuser-0102\nuser-0103\nuser-"
-      "0104\nuser-0105\nuser-0106\nuser-0107\nuser-0108\nuser-0109\nuser-0110\nuser-0111\nuser-"
-      "0112\nuser-0113\nuser-0114\nuser-0115\nuser-0116\nuser-0117\nuser-0118\nuser-0119\nuser-"
-      "0120\nuser-0121\nuser-0122\nuser-0123\nuser-0124\nuser-0125\nuser-0126\nuser-0127\nuser-"
-      "0128\nuser-0129\nuser-0130\nuser-0131\nuser-0132\nuser-0133\nuser-0134\nuser-0135\nuser-"
-      "0136\nuser-0137\nuser-0138\nuser-0139\nuser-0140\nuser-0141\nuser-0142\nuser-0143\nuser-"
-      "0144\nuser-0145\nuser-0146\nuser-0147\nuser-0148\nuser-0149\nuser-0150\nuser-0151\nuser-"
-      "0152\nuser-0153\nuser-0154\nuser-0155\nuser-0156\nuser-0157\nuser-0158\nuser-0159\nuser-"
-      "0160\nuser-0161\nuser-0162\nuser-0163\nuser-0164\nuser-0165\nuser-0166\nuser-0167\nuser-"
-      "0168\nuser-0169\nuser-0170\nuser-0171\nuser-0172\nuser-0173\nuser-0174\nuser-0175\nuser-"
-      "0176\nuser-0177\nuser-0178\nuser-0179\nuser-0180\nuser-0181\nuser-0182\nuser-0183\nuser-"
-      "0184\nuser-0185\nuser-0186\nuser-0187\nuser-0188\nuser-0189\nuser-0190\nuser-0191\nuser-"
-      "0192\nuser-0193\nuser-0194\nuser-0195\nuser-0196\nuser-0197\nuser-0198\nuser-0199\nuser-"
-      "0200\nuser-0201\nuser-0202\nuser-0203\nuser-0204\nuser-0205\nuser-0206\nuser-0207\nuser-"
-      "0208\nuser-0209\nuser-0210\nuser-0211\nuser-0212\nuser-0213\nuser-0214\nuser-0215\nuser-"
-      "0216\nuser-0217\nuser-0218\nuser-0219\nuser-0220\nuser-0221\nuser-0222\nuser-0223\nuser-"
-      "0224\nuser-0225\nuser-0226\nuser-0227\nuser-0228\nuser-0229\nuser-0230\nuser-0231\nuser-"
-      "0232\nuser-0233\nuser-0234\nuser-0235\nuser-0236\nuser-0237\nuser-0238\nuser-0239\nuser-"
-      "0240\nuser-0241\nuser-0242\nuser-0243\nuser-0244\nuser-0245\nuser-0246\nuser-0247\nuser-"
-      "0248\nuser-0249\nuser-0250\nuser-0251\nuser-0252\nuser-0253\nuser-0254\nuser-0255\n"},
-     {"", 1024U, 251904U, expected_3,
-      "mode=prefix\nprefix=\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
-      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"set ", 1024U, 131072U, expected_4,
-      "mode=prefix\nprefix=set "
-      "\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
-      "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"colorscheme ", 1024U, 246784U, expected_5,
+      "user-0123\ncatalog=custom-256-invalid-color\nuser-0000\nuser-0001\nuser-0002\nuser-"
+      "0003\nuser-0004\nuser-0005\nuser-0006\nuser-0007\nuser-0008\nuser-0009\nuser-0010\nuser-"
+      "0011\nuser-0012\nuser-0013\nuser-0014\nuser-0015\nuser-0016\nuser-0017\nuser-0018\nuser-"
+      "0019\nuser-0020\nuser-0021\nuser-0022\nuser-0023\nuser-0024\nuser-0025\nuser-0026\nuser-"
+      "0027\nuser-0028\nuser-0029\nuser-0030\nuser-0031\nuser-0032\nuser-0033\nuser-0034\nuser-"
+      "0035\nuser-0036\nuser-0037\nuser-0038\nuser-0039\nuser-0040\nuser-0041\nuser-0042\nuser-"
+      "0043\nuser-0044\nuser-0045\nuser-0046\nuser-0047\nuser-0048\nuser-0049\nuser-0050\nuser-"
+      "0051\nuser-0052\nuser-0053\nuser-0054\nuser-0055\nuser-0056\nuser-0057\nuser-0058\nuser-"
+      "0059\nuser-0060\nuser-0061\nuser-0062\nuser-0063\nuser-0064\nuser-0065\nuser-0066\nuser-"
+      "0067\nuser-0068\nuser-0069\nuser-0070\nuser-0071\nuser-0072\nuser-0073\nuser-0074\nuser-"
+      "0075\nuser-0076\nuser-0077\nuser-0078\nuser-0079\nuser-0080\nuser-0081\nuser-0082\nuser-"
+      "0083\nuser-0084\nuser-0085\nuser-0086\nuser-0087\nuser-0088\nuser-0089\nuser-0090\nuser-"
+      "0091\nuser-0092\nuser-0093\nuser-0094\nuser-0095\nuser-0096\nuser-0097\nuser-0098\nuser-"
+      "0099\nuser-0100\nuser-0101\nuser-0102\nuser-0103\nuser-0104\nuser-0105\nuser-0106\nuser-"
+      "0107\nuser-0108\nuser-0109\nuser-0110\nuser-0111\nuser-0112\nuser-0113\nuser-0114\nuser-"
+      "0115\nuser-0116\nuser-0117\nuser-0118\nuser-0119\nuser-0120\nuser-0121\nuser-0122\nuser-"
+      "0123\nuser-0124\nuser-0125\nuser-0126\nuser-0127\nuser-0128\nuser-0129\nuser-0130\nuser-"
+      "0131\nuser-0132\nuser-0133\nuser-0134\nuser-0135\nuser-0136\nuser-0137\nuser-0138\nuser-"
+      "0139\nuser-0140\nuser-0141\nuser-0142\nuser-0143\nuser-0144\nuser-0145\nuser-0146\nuser-"
+      "0147\nuser-0148\nuser-0149\nuser-0150\nuser-0151\nuser-0152\nuser-0153\nuser-0154\nuser-"
+      "0155\nuser-0156\nuser-0157\nuser-0158\nuser-0159\nuser-0160\nuser-0161\nuser-0162\nuser-"
+      "0163\nuser-0164\nuser-0165\nuser-0166\nuser-0167\nuser-0168\nuser-0169\nuser-0170\nuser-"
+      "0171\nuser-0172\nuser-0173\nuser-0174\nuser-0175\nuser-0176\nuser-0177\nuser-0178\nuser-"
+      "0179\nuser-0180\nuser-0181\nuser-0182\nuser-0183\nuser-0184\nuser-0185\nuser-0186\nuser-"
+      "0187\nuser-0188\nuser-0189\nuser-0190\nuser-0191\nuser-0192\nuser-0193\nuser-0194\nuser-"
+      "0195\nuser-0196\nuser-0197\nuser-0198\nuser-0199\nuser-0200\nuser-0201\nuser-0202\nuser-"
+      "0203\nuser-0204\nuser-0205\nuser-0206\nuser-0207\nuser-0208\nuser-0209\nuser-0210\nuser-"
+      "0211\nuser-0212\nuser-0213\nuser-0214\nuser-0215\nuser-0216\nuser-0217\nuser-0218\nuser-"
+      "0219\nuser-0220\nuser-0221\nuser-0222\nuser-0223\nuser-0224\nuser-0225\nuser-0226\nuser-"
+      "0227\nuser-0228\nuser-0229\nuser-0230\nuser-0231\nuser-0232\nuser-0233\nuser-0234\nuser-"
+      "0235\nuser-0236\nuser-0237\nuser-0238\nuser-0239\nuser-0240\nuser-0241\nuser-0242\nuser-"
+      "0243\nuser-0244\nuser-0245\nuser-0246\nuser-0247\nuser-0248\nuser-0249\nuser-0250\nuser-"
+      "0251\nuser-0252\nuser-0253\nuser-0254\nuser-0255\n"},
+     {"", 1024U, "mode=prefix\nprefix=\ncatalog=builtins\n"},
+     {"set ", 1024U, "mode=prefix\nprefix=set \ncatalog=builtins\n"},
+     {"colorscheme ", 1024U, "mode=prefix\nprefix=colorscheme \ncatalog=builtins\n"},
+     {"", 1024U, "mode=all\nprefix=\ncatalog=builtins\n"},
+     {"colorscheme ", 128U,
       "mode=prefix\nprefix=colorscheme "
-      "\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
-      "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"", 1024U, 497664U, expected_6,
-      "mode=all\nprefix=\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
-      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n"},
-     {"colorscheme ", 128U, 751744U, expected_7,
-      "mode=prefix\nprefix=colorscheme "
-      "\ncatalog=custom-256-invalid-color\nubuntu-aubergine\nneutral-light\nsolarized-"
-      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\nuser-"
-      "0000\nuser-0001\nuser-0002\nuser-0003\nuser-0004\nuser-0005\nuser-0006\nuser-0007\nuser-"
-      "0008\nuser-0009\nuser-0010\nuser-0011\nuser-0012\nuser-0013\nuser-0014\nuser-0015\nuser-"
-      "0016\nuser-0017\nuser-0018\nuser-0019\nuser-0020\nuser-0021\nuser-0022\nuser-0023\nuser-"
-      "0024\nuser-0025\nuser-0026\nuser-0027\nuser-0028\nuser-0029\nuser-0030\nuser-0031\nuser-"
-      "0032\nuser-0033\nuser-0034\nuser-0035\nuser-0036\nuser-0037\nuser-0038\nuser-0039\nuser-"
-      "0040\nuser-0041\nuser-0042\nuser-0043\nuser-0044\nuser-0045\nuser-0046\nuser-0047\nuser-"
-      "0048\nuser-0049\nuser-0050\nuser-0051\nuser-0052\nuser-0053\nuser-0054\nuser-0055\nuser-"
-      "0056\nuser-0057\nuser-0058\nuser-0059\nuser-0060\nuser-0061\nuser-0062\nuser-0063\nuser-"
-      "0064\nuser-0065\nuser-0066\nuser-0067\nuser-0068\nuser-0069\nuser-0070\nuser-0071\nuser-"
-      "0072\nuser-0073\nuser-0074\nuser-0075\nuser-0076\nuser-0077\nuser-0078\nuser-0079\nuser-"
-      "0080\nuser-0081\nuser-0082\nuser-0083\nuser-0084\nuser-0085\nuser-0086\nuser-0087\nuser-"
-      "0088\nuser-0089\nuser-0090\nuser-0091\nuser-0092\nuser-0093\nuser-0094\nuser-0095\nuser-"
-      "0096\nuser-0097\nuser-0098\nuser-0099\nuser-0100\nuser-0101\nuser-0102\nuser-0103\nuser-"
-      "0104\nuser-0105\nuser-0106\nuser-0107\nuser-0108\nuser-0109\nuser-0110\nuser-0111\nuser-"
-      "0112\nuser-0113\nuser-0114\nuser-0115\nuser-0116\nuser-0117\nuser-0118\nuser-0119\nuser-"
-      "0120\nuser-0121\nuser-0122\nuser-0123\nuser-0124\nuser-0125\nuser-0126\nuser-0127\nuser-"
-      "0128\nuser-0129\nuser-0130\nuser-0131\nuser-0132\nuser-0133\nuser-0134\nuser-0135\nuser-"
-      "0136\nuser-0137\nuser-0138\nuser-0139\nuser-0140\nuser-0141\nuser-0142\nuser-0143\nuser-"
-      "0144\nuser-0145\nuser-0146\nuser-0147\nuser-0148\nuser-0149\nuser-0150\nuser-0151\nuser-"
-      "0152\nuser-0153\nuser-0154\nuser-0155\nuser-0156\nuser-0157\nuser-0158\nuser-0159\nuser-"
-      "0160\nuser-0161\nuser-0162\nuser-0163\nuser-0164\nuser-0165\nuser-0166\nuser-0167\nuser-"
-      "0168\nuser-0169\nuser-0170\nuser-0171\nuser-0172\nuser-0173\nuser-0174\nuser-0175\nuser-"
-      "0176\nuser-0177\nuser-0178\nuser-0179\nuser-0180\nuser-0181\nuser-0182\nuser-0183\nuser-"
-      "0184\nuser-0185\nuser-0186\nuser-0187\nuser-0188\nuser-0189\nuser-0190\nuser-0191\nuser-"
-      "0192\nuser-0193\nuser-0194\nuser-0195\nuser-0196\nuser-0197\nuser-0198\nuser-0199\nuser-"
-      "0200\nuser-0201\nuser-0202\nuser-0203\nuser-0204\nuser-0205\nuser-0206\nuser-0207\nuser-"
-      "0208\nuser-0209\nuser-0210\nuser-0211\nuser-0212\nuser-0213\nuser-0214\nuser-0215\nuser-"
-      "0216\nuser-0217\nuser-0218\nuser-0219\nuser-0220\nuser-0221\nuser-0222\nuser-0223\nuser-"
-      "0224\nuser-0225\nuser-0226\nuser-0227\nuser-0228\nuser-0229\nuser-0230\nuser-0231\nuser-"
-      "0232\nuser-0233\nuser-0234\nuser-0235\nuser-0236\nuser-0237\nuser-0238\nuser-0239\nuser-"
-      "0240\nuser-0241\nuser-0242\nuser-0243\nuser-0244\nuser-0245\nuser-0246\nuser-0247\nuser-"
-      "0248\nuser-0249\nuser-0250\nuser-0251\nuser-0252\nuser-0253\nuser-0254\nuser-0255\n"},
-     {"", 128U, 783104U, expected_8,
-      "mode=all\nprefix=\ncatalog=custom-256-invalid-color\nubuntu-aubergine\nneutral-"
-      "light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-"
-      "light\nuser-0000\nuser-0001\nuser-0002\nuser-0003\nuser-0004\nuser-0005\nuser-0006\nuser-"
-      "0007\nuser-0008\nuser-0009\nuser-0010\nuser-0011\nuser-0012\nuser-0013\nuser-0014\nuser-"
-      "0015\nuser-0016\nuser-0017\nuser-0018\nuser-0019\nuser-0020\nuser-0021\nuser-0022\nuser-"
-      "0023\nuser-0024\nuser-0025\nuser-0026\nuser-0027\nuser-0028\nuser-0029\nuser-0030\nuser-"
-      "0031\nuser-0032\nuser-0033\nuser-0034\nuser-0035\nuser-0036\nuser-0037\nuser-0038\nuser-"
-      "0039\nuser-0040\nuser-0041\nuser-0042\nuser-0043\nuser-0044\nuser-0045\nuser-0046\nuser-"
-      "0047\nuser-0048\nuser-0049\nuser-0050\nuser-0051\nuser-0052\nuser-0053\nuser-0054\nuser-"
-      "0055\nuser-0056\nuser-0057\nuser-0058\nuser-0059\nuser-0060\nuser-0061\nuser-0062\nuser-"
-      "0063\nuser-0064\nuser-0065\nuser-0066\nuser-0067\nuser-0068\nuser-0069\nuser-0070\nuser-"
-      "0071\nuser-0072\nuser-0073\nuser-0074\nuser-0075\nuser-0076\nuser-0077\nuser-0078\nuser-"
-      "0079\nuser-0080\nuser-0081\nuser-0082\nuser-0083\nuser-0084\nuser-0085\nuser-0086\nuser-"
-      "0087\nuser-0088\nuser-0089\nuser-0090\nuser-0091\nuser-0092\nuser-0093\nuser-0094\nuser-"
-      "0095\nuser-0096\nuser-0097\nuser-0098\nuser-0099\nuser-0100\nuser-0101\nuser-0102\nuser-"
-      "0103\nuser-0104\nuser-0105\nuser-0106\nuser-0107\nuser-0108\nuser-0109\nuser-0110\nuser-"
-      "0111\nuser-0112\nuser-0113\nuser-0114\nuser-0115\nuser-0116\nuser-0117\nuser-0118\nuser-"
-      "0119\nuser-0120\nuser-0121\nuser-0122\nuser-0123\nuser-0124\nuser-0125\nuser-0126\nuser-"
-      "0127\nuser-0128\nuser-0129\nuser-0130\nuser-0131\nuser-0132\nuser-0133\nuser-0134\nuser-"
-      "0135\nuser-0136\nuser-0137\nuser-0138\nuser-0139\nuser-0140\nuser-0141\nuser-0142\nuser-"
-      "0143\nuser-0144\nuser-0145\nuser-0146\nuser-0147\nuser-0148\nuser-0149\nuser-0150\nuser-"
-      "0151\nuser-0152\nuser-0153\nuser-0154\nuser-0155\nuser-0156\nuser-0157\nuser-0158\nuser-"
-      "0159\nuser-0160\nuser-0161\nuser-0162\nuser-0163\nuser-0164\nuser-0165\nuser-0166\nuser-"
-      "0167\nuser-0168\nuser-0169\nuser-0170\nuser-0171\nuser-0172\nuser-0173\nuser-0174\nuser-"
-      "0175\nuser-0176\nuser-0177\nuser-0178\nuser-0179\nuser-0180\nuser-0181\nuser-0182\nuser-"
-      "0183\nuser-0184\nuser-0185\nuser-0186\nuser-0187\nuser-0188\nuser-0189\nuser-0190\nuser-"
-      "0191\nuser-0192\nuser-0193\nuser-0194\nuser-0195\nuser-0196\nuser-0197\nuser-0198\nuser-"
-      "0199\nuser-0200\nuser-0201\nuser-0202\nuser-0203\nuser-0204\nuser-0205\nuser-0206\nuser-"
-      "0207\nuser-0208\nuser-0209\nuser-0210\nuser-0211\nuser-0212\nuser-0213\nuser-0214\nuser-"
-      "0215\nuser-0216\nuser-0217\nuser-0218\nuser-0219\nuser-0220\nuser-0221\nuser-0222\nuser-"
-      "0223\nuser-0224\nuser-0225\nuser-0226\nuser-0227\nuser-0228\nuser-0229\nuser-0230\nuser-"
-      "0231\nuser-0232\nuser-0233\nuser-0234\nuser-0235\nuser-0236\nuser-0237\nuser-0238\nuser-"
-      "0239\nuser-0240\nuser-0241\nuser-0242\nuser-0243\nuser-0244\nuser-0245\nuser-0246\nuser-"
-      "0247\nuser-0248\nuser-0249\nuser-0250\nuser-0251\nuser-0252\nuser-0253\nuser-0254\nuser-"
-      "0255\n"},
-     {"set f", 64U, 1856U, expected_9,
-      "mode=frame-ex\nprefix=set "
-      "f\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
-      "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\nbody=a x "
+      "\ncatalog=custom-256-invalid-color\nuser-0000\nuser-0001\nuser-0002\nuser-0003\nuser-"
+      "0004\nuser-0005\nuser-0006\nuser-0007\nuser-0008\nuser-0009\nuser-0010\nuser-0011\nuser-"
+      "0012\nuser-0013\nuser-0014\nuser-0015\nuser-0016\nuser-0017\nuser-0018\nuser-0019\nuser-"
+      "0020\nuser-0021\nuser-0022\nuser-0023\nuser-0024\nuser-0025\nuser-0026\nuser-0027\nuser-"
+      "0028\nuser-0029\nuser-0030\nuser-0031\nuser-0032\nuser-0033\nuser-0034\nuser-0035\nuser-"
+      "0036\nuser-0037\nuser-0038\nuser-0039\nuser-0040\nuser-0041\nuser-0042\nuser-0043\nuser-"
+      "0044\nuser-0045\nuser-0046\nuser-0047\nuser-0048\nuser-0049\nuser-0050\nuser-0051\nuser-"
+      "0052\nuser-0053\nuser-0054\nuser-0055\nuser-0056\nuser-0057\nuser-0058\nuser-0059\nuser-"
+      "0060\nuser-0061\nuser-0062\nuser-0063\nuser-0064\nuser-0065\nuser-0066\nuser-0067\nuser-"
+      "0068\nuser-0069\nuser-0070\nuser-0071\nuser-0072\nuser-0073\nuser-0074\nuser-0075\nuser-"
+      "0076\nuser-0077\nuser-0078\nuser-0079\nuser-0080\nuser-0081\nuser-0082\nuser-0083\nuser-"
+      "0084\nuser-0085\nuser-0086\nuser-0087\nuser-0088\nuser-0089\nuser-0090\nuser-0091\nuser-"
+      "0092\nuser-0093\nuser-0094\nuser-0095\nuser-0096\nuser-0097\nuser-0098\nuser-0099\nuser-"
+      "0100\nuser-0101\nuser-0102\nuser-0103\nuser-0104\nuser-0105\nuser-0106\nuser-0107\nuser-"
+      "0108\nuser-0109\nuser-0110\nuser-0111\nuser-0112\nuser-0113\nuser-0114\nuser-0115\nuser-"
+      "0116\nuser-0117\nuser-0118\nuser-0119\nuser-0120\nuser-0121\nuser-0122\nuser-0123\nuser-"
+      "0124\nuser-0125\nuser-0126\nuser-0127\nuser-0128\nuser-0129\nuser-0130\nuser-0131\nuser-"
+      "0132\nuser-0133\nuser-0134\nuser-0135\nuser-0136\nuser-0137\nuser-0138\nuser-0139\nuser-"
+      "0140\nuser-0141\nuser-0142\nuser-0143\nuser-0144\nuser-0145\nuser-0146\nuser-0147\nuser-"
+      "0148\nuser-0149\nuser-0150\nuser-0151\nuser-0152\nuser-0153\nuser-0154\nuser-0155\nuser-"
+      "0156\nuser-0157\nuser-0158\nuser-0159\nuser-0160\nuser-0161\nuser-0162\nuser-0163\nuser-"
+      "0164\nuser-0165\nuser-0166\nuser-0167\nuser-0168\nuser-0169\nuser-0170\nuser-0171\nuser-"
+      "0172\nuser-0173\nuser-0174\nuser-0175\nuser-0176\nuser-0177\nuser-0178\nuser-0179\nuser-"
+      "0180\nuser-0181\nuser-0182\nuser-0183\nuser-0184\nuser-0185\nuser-0186\nuser-0187\nuser-"
+      "0188\nuser-0189\nuser-0190\nuser-0191\nuser-0192\nuser-0193\nuser-0194\nuser-0195\nuser-"
+      "0196\nuser-0197\nuser-0198\nuser-0199\nuser-0200\nuser-0201\nuser-0202\nuser-0203\nuser-"
+      "0204\nuser-0205\nuser-0206\nuser-0207\nuser-0208\nuser-0209\nuser-0210\nuser-0211\nuser-"
+      "0212\nuser-0213\nuser-0214\nuser-0215\nuser-0216\nuser-0217\nuser-0218\nuser-0219\nuser-"
+      "0220\nuser-0221\nuser-0222\nuser-0223\nuser-0224\nuser-0225\nuser-0226\nuser-0227\nuser-"
+      "0228\nuser-0229\nuser-0230\nuser-0231\nuser-0232\nuser-0233\nuser-0234\nuser-0235\nuser-"
+      "0236\nuser-0237\nuser-0238\nuser-0239\nuser-0240\nuser-0241\nuser-0242\nuser-0243\nuser-"
+      "0244\nuser-0245\nuser-0246\nuser-0247\nuser-0248\nuser-0249\nuser-0250\nuser-0251\nuser-"
+      "0252\nuser-0253\nuser-0254\nuser-0255\n"},
+     {"", 128U,
+      "mode=all\nprefix=\ncatalog=custom-256-invalid-color\nuser-0000\nuser-0001\nuser-0002\nuser-"
+      "0003\nuser-0004\nuser-0005\nuser-0006\nuser-0007\nuser-0008\nuser-0009\nuser-0010\nuser-"
+      "0011\nuser-0012\nuser-0013\nuser-0014\nuser-0015\nuser-0016\nuser-0017\nuser-0018\nuser-"
+      "0019\nuser-0020\nuser-0021\nuser-0022\nuser-0023\nuser-0024\nuser-0025\nuser-0026\nuser-"
+      "0027\nuser-0028\nuser-0029\nuser-0030\nuser-0031\nuser-0032\nuser-0033\nuser-0034\nuser-"
+      "0035\nuser-0036\nuser-0037\nuser-0038\nuser-0039\nuser-0040\nuser-0041\nuser-0042\nuser-"
+      "0043\nuser-0044\nuser-0045\nuser-0046\nuser-0047\nuser-0048\nuser-0049\nuser-0050\nuser-"
+      "0051\nuser-0052\nuser-0053\nuser-0054\nuser-0055\nuser-0056\nuser-0057\nuser-0058\nuser-"
+      "0059\nuser-0060\nuser-0061\nuser-0062\nuser-0063\nuser-0064\nuser-0065\nuser-0066\nuser-"
+      "0067\nuser-0068\nuser-0069\nuser-0070\nuser-0071\nuser-0072\nuser-0073\nuser-0074\nuser-"
+      "0075\nuser-0076\nuser-0077\nuser-0078\nuser-0079\nuser-0080\nuser-0081\nuser-0082\nuser-"
+      "0083\nuser-0084\nuser-0085\nuser-0086\nuser-0087\nuser-0088\nuser-0089\nuser-0090\nuser-"
+      "0091\nuser-0092\nuser-0093\nuser-0094\nuser-0095\nuser-0096\nuser-0097\nuser-0098\nuser-"
+      "0099\nuser-0100\nuser-0101\nuser-0102\nuser-0103\nuser-0104\nuser-0105\nuser-0106\nuser-"
+      "0107\nuser-0108\nuser-0109\nuser-0110\nuser-0111\nuser-0112\nuser-0113\nuser-0114\nuser-"
+      "0115\nuser-0116\nuser-0117\nuser-0118\nuser-0119\nuser-0120\nuser-0121\nuser-0122\nuser-"
+      "0123\nuser-0124\nuser-0125\nuser-0126\nuser-0127\nuser-0128\nuser-0129\nuser-0130\nuser-"
+      "0131\nuser-0132\nuser-0133\nuser-0134\nuser-0135\nuser-0136\nuser-0137\nuser-0138\nuser-"
+      "0139\nuser-0140\nuser-0141\nuser-0142\nuser-0143\nuser-0144\nuser-0145\nuser-0146\nuser-"
+      "0147\nuser-0148\nuser-0149\nuser-0150\nuser-0151\nuser-0152\nuser-0153\nuser-0154\nuser-"
+      "0155\nuser-0156\nuser-0157\nuser-0158\nuser-0159\nuser-0160\nuser-0161\nuser-0162\nuser-"
+      "0163\nuser-0164\nuser-0165\nuser-0166\nuser-0167\nuser-0168\nuser-0169\nuser-0170\nuser-"
+      "0171\nuser-0172\nuser-0173\nuser-0174\nuser-0175\nuser-0176\nuser-0177\nuser-0178\nuser-"
+      "0179\nuser-0180\nuser-0181\nuser-0182\nuser-0183\nuser-0184\nuser-0185\nuser-0186\nuser-"
+      "0187\nuser-0188\nuser-0189\nuser-0190\nuser-0191\nuser-0192\nuser-0193\nuser-0194\nuser-"
+      "0195\nuser-0196\nuser-0197\nuser-0198\nuser-0199\nuser-0200\nuser-0201\nuser-0202\nuser-"
+      "0203\nuser-0204\nuser-0205\nuser-0206\nuser-0207\nuser-0208\nuser-0209\nuser-0210\nuser-"
+      "0211\nuser-0212\nuser-0213\nuser-0214\nuser-0215\nuser-0216\nuser-0217\nuser-0218\nuser-"
+      "0219\nuser-0220\nuser-0221\nuser-0222\nuser-0223\nuser-0224\nuser-0225\nuser-0226\nuser-"
+      "0227\nuser-0228\nuser-0229\nuser-0230\nuser-0231\nuser-0232\nuser-0233\nuser-0234\nuser-"
+      "0235\nuser-0236\nuser-0237\nuser-0238\nuser-0239\nuser-0240\nuser-0241\nuser-0242\nuser-"
+      "0243\nuser-0244\nuser-0245\nuser-0246\nuser-0247\nuser-0248\nuser-0249\nuser-0250\nuser-"
+      "0251\nuser-0252\nuser-0253\nuser-0254\nuser-0255\n"},
+     {"set f", 64U,
+      "mode=frame-ex\nprefix=set f\ncatalog=builtins\nbody=a x "
       "a\npath=C:\\nib-probe\\probe.txt\nvisible=1\neditor-mode=vim\n"},
-     {"", 64U, 16320U, expected_10,
-      "mode=frame-ex\nprefix=\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
-      "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\nbody=a x "
+     {"", 64U,
+      "mode=frame-ex\nprefix=\ncatalog=builtins\nbody=a x "
       "a\npath=C:\\nib-probe\\probe.txt\nvisible=1\neditor-mode=vim\n"},
-     {":fz", 64U, 832U, expected_11,
-      "mode=frame-palette\nprefix=:fz\ncatalog=builtins\nubuntu-aubergine\nneutral-"
-      "light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-"
-      "light\nbody=a x a\npath=C:\\nib-probe\\probe.txt\nvisible=1\neditor-mode=vim\n"}}};
-[[nodiscard]] core::ThemeCatalog catalog_of(ExCompletionWorkload workload)
+     {":fz", 64U,
+      "mode=frame-palette\nprefix=:fz\ncatalog=builtins\nbody=a x "
+      "a\npath=C:\\nib-probe\\probe.txt\nvisible=1\neditor-mode=vim\n"}}};
+[[nodiscard]] bool uses_custom_catalog(ExCompletionWorkload workload)
 {
     switch (workload)
     {
@@ -704,11 +217,40 @@ const std::array<ExCompletionSample, 12> samples{
     case ExCompletionWorkload::frame_ex_option:
     case ExCompletionWorkload::frame_ex_empty:
     case ExCompletionWorkload::frame_palette:
-        return core::ThemeCatalog::builtins();
+        return false;
     case ExCompletionWorkload::custom_narrow:
     case ExCompletionWorkload::custom_wide:
     case ExCompletionWorkload::all_custom:
-        break;
+        return true;
+    }
+    std::unreachable();
+}
+[[nodiscard]] bool lists_all(ExCompletionWorkload workload)
+{
+    switch (workload)
+    {
+    case ExCompletionWorkload::all_builtins:
+    case ExCompletionWorkload::all_custom:
+        return true;
+    case ExCompletionWorkload::option:
+    case ExCompletionWorkload::miss:
+    case ExCompletionWorkload::custom_narrow:
+    case ExCompletionWorkload::empty:
+    case ExCompletionWorkload::set_wide:
+    case ExCompletionWorkload::theme_wide:
+    case ExCompletionWorkload::custom_wide:
+    case ExCompletionWorkload::frame_ex_option:
+    case ExCompletionWorkload::frame_ex_empty:
+    case ExCompletionWorkload::frame_palette:
+        return false;
+    }
+    std::unreachable();
+}
+[[nodiscard]] core::ThemeCatalog catalog_of(ExCompletionWorkload workload)
+{
+    if (!uses_custom_catalog(workload))
+    {
+        return core::ThemeCatalog::builtins();
     }
     std::vector<core::ThemeRecord> records;
     for (const auto name : custom_names)
@@ -718,20 +260,24 @@ const std::array<ExCompletionSample, 12> samples{
     }
     return core::ThemeCatalog::from(std::move(records)).value();
 }
+[[nodiscard]] std::vector<std::string> catalog_names(ExCompletionWorkload workload)
+{
+    auto names = builtin_theme_names();
+    if (uses_custom_catalog(workload))
+    {
+        names.insert(names.end(), custom_names.begin(), custom_names.end());
+    }
+    return names;
+}
 [[nodiscard]] bool catalog_equal(const core::ThemeCatalog &catalog)
 {
     const auto names = catalog.names();
     const auto records = catalog.records();
-    if (names.size() != builtin_names.size() + records.size())
+    const auto builtins = builtin_theme_names();
+    if (names.size() != builtins.size() + records.size() ||
+        !std::ranges::equal(std::span{names}.first(builtins.size()), builtins))
     {
         return false;
-    }
-    for (std::size_t index = 0; index < builtin_names.size(); ++index)
-    {
-        if (names.at(index) != builtin_names.at(index))
-        {
-            return false;
-        }
     }
     if (!records.empty() && records.size() != custom_names.size())
     {
@@ -742,7 +288,7 @@ const std::array<ExCompletionSample, 12> samples{
         const auto &record = records[index];
         if (record.name.text() != custom_names.at(index) || record.value.has_value() ||
             record.value.error() != core::ThemeFailure::invalid_color ||
-            names.at(builtin_names.size() + index) != custom_names.at(index))
+            names.at(builtins.size() + index) != custom_names.at(index))
         {
             return false;
         }
@@ -774,9 +320,9 @@ const std::array<ExCompletionSample, 12> samples{
     std::unreachable();
 }
 [[nodiscard]] bool held_equal(std::span<const std::string_view> views,
-                              const ExCompletionSample &sample)
+                              std::span<const std::string> expected)
 {
-    return std::ranges::equal(views, sample.expected);
+    return std::ranges::equal(views, expected);
 }
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 pure_probe(ExCompletionWorkload workload, const ExCompletionSample &sample,
@@ -785,13 +331,15 @@ pure_probe(ExCompletionWorkload workload, const ExCompletionSample &sample,
     const auto catalog = catalog_of(workload);
     const auto names = catalog.names();
     const std::string prefix(sample.prefix);
+    const auto expected = expected_completions(workload);
     const auto held = generated(workload, sample, catalog);
     std::vector<std::string_view> views;
     for (const auto &candidate : held)
     {
         views.emplace_back(candidate);
     }
-    if (!catalog_equal(catalog) || !completions_equal(held, sample) || !held_equal(views, sample))
+    if (!catalog_equal(catalog) || !completions_equal(held, expected) ||
+        !held_equal(views, expected))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
@@ -803,9 +351,9 @@ pure_probe(ExCompletionWorkload workload, const ExCompletionSample &sample,
         checksum += completion_checksum(result);
     }
     timing.mark(core::Milestone::probe_finished);
-    if (checksum != sample.checksum ||
-        !completions_equal(generated(workload, sample, catalog), sample) ||
-        !completions_equal(held, sample) || !held_equal(views, sample) ||
+    if (checksum != sample.rounds * completion_checksum(expected) ||
+        !completions_equal(generated(workload, sample, catalog), expected) ||
+        !completions_equal(held, expected) || !held_equal(views, expected) ||
         names != catalog.names() || !catalog_equal(catalog) || prefix != sample.prefix)
     {
         return std::unexpected(ProbeFailure::wrong_result);
@@ -813,9 +361,63 @@ pure_probe(ExCompletionWorkload workload, const ExCompletionSample &sample,
     return checksum;
 }
 } // namespace
+std::vector<std::string> builtin_theme_names()
+{
+    std::vector<std::string> names;
+    names.reserve(core::builtin_themes.size());
+    for (const auto &theme : core::builtin_themes)
+    {
+        names.emplace_back(theme.name);
+    }
+    return names;
+}
+std::vector<std::string> expected_ex_completions(std::optional<std::string_view> prefix,
+                                                 std::span<const std::string> theme_names)
+{
+    const auto matches = [prefix](std::string_view candidate)
+    { return !prefix.has_value() || candidate.starts_with(prefix.value()); };
+    std::vector<std::string> expected;
+    for (const auto candidate : fixed_candidates)
+    {
+        if (matches(candidate))
+        {
+            expected.emplace_back(candidate);
+        }
+    }
+    // テーマの候補は全件の一覧か「colorscheme 」で始まる入力のときだけ（ExResult.cpp の
+    // append_theme_candidates）。並びはカタログの並びで、最後に system。
+    if (prefix.has_value() && !prefix.value().starts_with(theme_command))
+    {
+        return expected;
+    }
+    for (const auto &name : theme_names)
+    {
+        auto candidate = std::string(theme_command) + name;
+        if (matches(candidate))
+        {
+            expected.push_back(std::move(candidate));
+        }
+    }
+    auto system = std::string(theme_command) + "system";
+    if (matches(system))
+    {
+        expected.push_back(std::move(system));
+    }
+    return expected;
+}
 const ExCompletionSample &ex_completion_sample(ExCompletionWorkload workload)
 {
     return samples.at(static_cast<std::size_t>(workload));
+}
+std::vector<std::string> expected_completions(ExCompletionWorkload workload)
+{
+    const auto &sample = ex_completion_sample(workload);
+    const auto names = catalog_names(workload);
+    if (lists_all(workload))
+    {
+        return expected_ex_completions(std::nullopt, names);
+    }
+    return expected_ex_completions(sample.prefix, names);
 }
 std::string ex_completion_input(ExCompletionWorkload workload)
 {
@@ -830,9 +432,10 @@ std::uint64_t completion_checksum(std::span<const std::string> candidates)
     }
     return checksum;
 }
-bool completions_equal(std::span<const std::string> candidates, const ExCompletionSample &sample)
+bool completions_equal(std::span<const std::string> candidates,
+                       std::span<const std::string> expected)
 {
-    return std::ranges::equal(candidates, sample.expected);
+    return std::ranges::equal(candidates, expected);
 }
 std::expected<std::uint64_t, ProbeFailure> probed_ex_completion(ExCompletionWorkload workload,
                                                                 const std::string &input,
@@ -861,5 +464,9 @@ std::expected<std::uint64_t, ProbeFailure> probed_ex_completion(ExCompletionWork
         return probed_ex_completion_frame(workload, sample, timing);
     }
     std::unreachable();
+}
+std::span<const std::string_view> custom_theme_names()
+{
+    return custom_names;
 }
 } // namespace nenenib::tests::performance

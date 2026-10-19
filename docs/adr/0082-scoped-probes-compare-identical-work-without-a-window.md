@@ -184,3 +184,7 @@ ASCII displayは原本文と同じ、startsは0..32768。混合displayは`日a\t
 checksumはuint64の剰余和でFNV(input)+FNV(display)+全startsの和+全match(begin+end)の和+present選択/現在面の両端の和+4（line.number/first_visible/total_lines/lines.size）+caret.line+caret.column+matches.size+選択presence(0/1)+current有無(0/1)。上から`4762729787238942292`、`18084650234477590103`、`13493547337114145917`、`4762729786970564179`、`4762729787239048792`。独立Pythonの入力/期待算術をDの事前計画へ保存。完全照合が正本でchecksumだけを正しさの根拠にしない。
 
 旧48workloadとregistry/input/factory/runnerの意味を保持し、5本だけ追加する。新5のDebug/通常Release各1iteration+warmup1の短い完全照合を行う。通常flags/TimingPort/metadata/checker不変。全初回失敗/未観測を保持し、正式速度やGUIの利益へ直接転用しない。規則ARC-001/007/011、CPP-002/005/012/016、QLT-001/012/014。
+
+## 追補（2026-10-19・#690）
+
+CTest に登録しない代わりに、`eng/check.ps1 -Full` が `eng/probe-smoke.ps1` で表 `ProbeDispatchRow` の全 workload を warmup 1 + sample 1 で 1 回ずつ流して非 0 の終了を落とし（時間は判定しない・CI の必須 check には足さない）、製品の表から導ける期待値（組み込みテーマの名前と数・Ex の固定の候補・frame の 1 行の長さ＝巨大な行のしきい値）は probe の側に literal で写さず正本から引く。

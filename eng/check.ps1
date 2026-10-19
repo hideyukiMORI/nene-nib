@@ -37,6 +37,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'ARC-003 / ARC-007 / CPP-013: undefined symbols outside the allowlist.' }
     & ctest --test-dir build --output-on-failure --no-tests=error
     if ($LASTEXITCODE -ne 0) { throw 'C++ verification failed.' }
+    # ADR 0082 の追補（#690）: 窓なしの probe は CTest に登録しないので、全 workload を warmup 1 +
+    # sample 1 で 1 回ずつ流して期待値のずれを落とす。時間は判定しない（CI の必須 check には足さない）。
+    & pwsh -NoProfile -File eng/probe-smoke.ps1 -BuildDir build
+    if ($LASTEXITCODE -ne 0) { throw 'Probe smoke failed: a nib_perf_probes workload no longer matches its expected result.' }
     # 速さは製品の速さで測る。Debug の exe は ASan / UBSan が掛かっているので、サニタイザを
     # 当てていない Release 構成の NeNeNib だけをここで作る（ADR 0006 / 0011）。警告集合と
     # clang-tidy は同じものが掛かる（迂回路は作らない）。差分ビルドなので --fresh は当てない。

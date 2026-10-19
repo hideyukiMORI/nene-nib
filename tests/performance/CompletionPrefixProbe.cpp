@@ -11,70 +11,7 @@ namespace nenenib::tests::performance
 {
 namespace
 {
-constexpr std::array<std::string_view, 9> builtin_names{
-    "ubuntu-aubergine", "neutral-light", "solarized-dark", "solarized-light", "monokai",
-    "dracula",          "one-dark",      "night-owl",      "night-owl-light"};
-constexpr std::array<std::string_view, 0> expected_0{};
-constexpr std::array<std::string_view, 1> expected_1{"colorscheme dracula"};
-constexpr std::array<std::string_view, 1> expected_2{"colorscheme dracula"};
-constexpr std::array<std::string_view, 1> expected_3{"set fontsize="};
-constexpr std::array<std::string_view, 1> expected_4{"set fontsize="};
-constexpr std::array<std::string_view, 28> expected_5{"colorscheme",
-                                                      "set fontsize=",
-                                                      "set guifont=",
-                                                      "set incsearch",
-                                                      "set noincsearch",
-                                                      "set hlsearch",
-                                                      "set nohlsearch",
-                                                      "set guide",
-                                                      "set noguide",
-                                                      "tabs",
-                                                      "tabnew",
-                                                      "tabnext",
-                                                      "tabprevious",
-                                                      "tabclose",
-                                                      "set wrap",
-                                                      "set nowrap",
-                                                      "edit",
-                                                      "buffer",
-                                                      "ls",
-                                                      "files",
-                                                      "buffers",
-                                                      "write",
-                                                      "quit",
-                                                      "quit!",
-                                                      "wq",
-                                                      "xit",
-                                                      "exit",
-                                                      "saveas"};
-constexpr std::array<std::string_view, 28> expected_6{"colorscheme",
-                                                      "set fontsize=",
-                                                      "set guifont=",
-                                                      "set incsearch",
-                                                      "set noincsearch",
-                                                      "set hlsearch",
-                                                      "set nohlsearch",
-                                                      "set guide",
-                                                      "set noguide",
-                                                      "tabs",
-                                                      "tabnew",
-                                                      "tabnext",
-                                                      "tabprevious",
-                                                      "tabclose",
-                                                      "set wrap",
-                                                      "set nowrap",
-                                                      "edit",
-                                                      "buffer",
-                                                      "ls",
-                                                      "files",
-                                                      "buffers",
-                                                      "write",
-                                                      "quit",
-                                                      "quit!",
-                                                      "wq",
-                                                      "xit",
-                                                      "exit",
-                                                      "saveas"};
+constexpr std::size_t rounds = 4096U;
 constexpr std::array<CompletionPrefixSample, 7> samples{{
     {"edit "
      "C:\\nib-"
@@ -84,47 +21,25 @@ constexpr std::array<CompletionPrefixSample, 7> samples{{
      "C:\\nib-"
      "probe\\日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
      "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日Z",
-     256U, std::nullopt, expected_0,
+     256U, std::nullopt,
      "mode=raw\ninput=edit "
      "C:\\nib-"
      "probe\\日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
      "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日Z\nrounds="
-     "4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
-     "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n",
-     4096U},
-    {"colorscheme drac", "colorscheme drac", 16U, std::nullopt, expected_1,
-     "mode=raw\ninput=colorscheme "
-     "drac\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
-     "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n",
-     86016U},
-    {"colorscheme drac", "colorscheme dracula", 19U, 0U, expected_2,
-     "mode=tab-next\ninput=colorscheme "
-     "drac\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
-     "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n",
-     86016U},
-    {"set f", "set f", 5U, std::nullopt, expected_3,
-     "mode=raw\ninput=set "
-     "f\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
-     "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n",
-     61440U},
-    {"set f", "set fontsize=", 13U, 0U, expected_4,
-     "mode=tab-next\ninput=set "
-     "f\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-dark\nsolarized-"
-     "light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n",
-     61440U},
-    {"", "", 0U, std::nullopt, expected_5,
-     "mode=raw\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-light\nsolarized-"
-     "dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-light\n",
-     1007616U},
-    {"", "colorscheme", 11U, 0U, expected_6,
-     "mode=tab-next\ninput=\nrounds=4096\ncatalog=builtins\nubuntu-aubergine\nneutral-"
-     "light\nsolarized-dark\nsolarized-light\nmonokai\ndracula\none-dark\nnight-owl\nnight-owl-"
-     "light\n",
-     1007616U},
+     "4096\ncatalog=builtins\n"},
+    {"colorscheme drac", "colorscheme drac", 16U, std::nullopt,
+     "mode=raw\ninput=colorscheme drac\nrounds=4096\ncatalog=builtins\n"},
+    {"colorscheme drac", "colorscheme dracula", 19U, 0U,
+     "mode=tab-next\ninput=colorscheme drac\nrounds=4096\ncatalog=builtins\n"},
+    {"set f", "set f", 5U, std::nullopt, "mode=raw\ninput=set f\nrounds=4096\ncatalog=builtins\n"},
+    {"set f", "set fontsize=", 13U, 0U,
+     "mode=tab-next\ninput=set f\nrounds=4096\ncatalog=builtins\n"},
+    {"", "", 0U, std::nullopt, "mode=raw\ninput=\nrounds=4096\ncatalog=builtins\n"},
+    {"", "colorscheme", 11U, 0U, "mode=tab-next\ninput=\nrounds=4096\ncatalog=builtins\n"},
 }};
 [[nodiscard]] bool catalog_equal(const core::ThemeCatalog &catalog)
 {
-    return catalog.records().empty() && std::ranges::equal(catalog.names(), builtin_names);
+    return catalog.records().empty() && catalog.names() == builtin_theme_names();
 }
 [[nodiscard]] core::CommandLine prepared_line(CompletionPrefixWorkload workload,
                                               const core::CommandLine &raw)
@@ -155,9 +70,9 @@ constexpr std::array<CompletionPrefixSample, 7> samples{{
            line.completion_index() == sample.completion_index && catalog_equal(line.catalog());
 }
 [[nodiscard]] bool result_equal(std::span<const std::string> result,
-                                const CompletionPrefixSample &sample)
+                                std::span<const std::string> expected)
 {
-    return std::ranges::equal(result, sample.expected);
+    return std::ranges::equal(result, expected);
 }
 [[nodiscard]] std::expected<std::uint64_t, ProbeFailure>
 pure_probe(CompletionPrefixWorkload workload, const CompletionPrefixSample &sample,
@@ -165,6 +80,8 @@ pure_probe(CompletionPrefixWorkload workload, const CompletionPrefixSample &samp
 {
     const auto catalog = core::ThemeCatalog::builtins();
     const auto names = catalog.names();
+    // 補完は打った文字列そのものを prefix とする（Ex の補完と同じ正本から期待を作る）。
+    const auto expected = expected_ex_completions(sample.input, builtin_theme_names());
     const auto inserted = core::CommandLine::empty(catalog).inserted(sample.input);
     if (!inserted.has_value())
     {
@@ -181,22 +98,23 @@ pure_probe(CompletionPrefixWorkload workload, const CompletionPrefixSample &samp
         views.emplace_back(candidate);
     }
     if (!raw_equal(raw, sample) || !prepared_equal(line, sample) || !catalog_equal(catalog) ||
-        !result_equal(held, sample) || !std::ranges::equal(views, sample.expected))
+        !result_equal(held, expected) || !std::ranges::equal(views, expected))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
     std::uint64_t checksum = 0;
     timing.mark(core::Milestone::probe_started);
-    for (std::size_t index = 0; index < 4096U; ++index)
+    for (std::size_t index = 0; index < rounds; ++index)
     {
         const auto result = line.completions();
         checksum += completion_checksum(result);
     }
     timing.mark(core::Milestone::probe_finished);
-    if (checksum != sample.checksum || !result_equal(line.completions(), sample) ||
-        !result_equal(held, sample) || !std::ranges::equal(views, sample.expected) ||
-        !raw_equal(raw, sample) || !prepared_equal(line, sample) || raw_text != sample.input ||
-        prepared_text != sample.text || names != catalog.names() || !catalog_equal(catalog))
+    if (checksum != rounds * completion_checksum(expected) ||
+        !result_equal(line.completions(), expected) || !result_equal(held, expected) ||
+        !std::ranges::equal(views, expected) || !raw_equal(raw, sample) ||
+        !prepared_equal(line, sample) || raw_text != sample.input || prepared_text != sample.text ||
+        names != catalog.names() || !catalog_equal(catalog))
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
