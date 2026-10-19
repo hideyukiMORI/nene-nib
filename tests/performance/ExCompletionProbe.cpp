@@ -1,4 +1,5 @@
 #include "ExCompletionProbe.hpp"
+#include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
 #include "ExCompletionFrameProbe.hpp"
 #include "ExResult.hpp"
@@ -264,20 +265,17 @@ const std::array<ExCompletionSample, 12> samples{
 }
 [[nodiscard]] std::vector<std::string> catalog_names(ExCompletionWorkload workload)
 {
-    auto names = builtin_theme_names();
     if (uses_custom_catalog(workload))
     {
-        names.insert(names.end(), custom_names.begin(), custom_names.end());
+        return theme_names_with(custom_names);
     }
-    return names;
+    return builtin_theme_names();
 }
 [[nodiscard]] bool catalog_equal(const core::ThemeCatalog &catalog)
 {
     const auto names = catalog.names();
     const auto records = catalog.records();
-    const auto builtins = builtin_theme_names();
-    if (names.size() != builtins.size() + records.size() ||
-        !std::ranges::equal(std::span{names}.first(builtins.size()), builtins))
+    if (names != (records.empty() ? builtin_theme_names() : theme_names_with(custom_names)))
     {
         return false;
     }
@@ -289,8 +287,7 @@ const std::array<ExCompletionSample, 12> samples{
     {
         const auto &record = records[index];
         if (record.name.text() != custom_names.at(index) || record.value.has_value() ||
-            record.value.error() != core::ThemeFailure::invalid_color ||
-            names.at(builtins.size() + index) != custom_names.at(index))
+            record.value.error() != core::ThemeFailure::invalid_color)
         {
             return false;
         }
@@ -362,15 +359,44 @@ pure_probe(ExCompletionWorkload workload, const ExCompletionSample &sample,
     }
     return checksum;
 }
+// テーマの候補（ExResult.cpp の append_theme_candidates）。命令名（colorscheme ）は区別し、引数は
+// ASCII の大文字小文字を無視して比べる（#696）。並びはカタログの並びで、最後に system。
+void append_expected_themes(std::vector<std::string> &expected,
+                            std::optional<std::string_view> prefix,
+                            std::span<const std::string> theme_names)
+{
+    const auto argument_matches = [prefix](std::string_view argument)
+    {
+        return !prefix.has_value() || core::ascii_prefix_ignoring_case(
+                                          argument, prefix.value().substr(theme_command.size()));
+    };
+    for (const auto &name : theme_names)
+    {
+        if (argument_matches(name))
+        {
+            expected.push_back(std::string(theme_command) + name);
+        }
+    }
+    if (argument_matches("system"))
+    {
+        expected.push_back(std::string(theme_command) + "system");
+    }
+}
 } // namespace
 std::vector<std::string> builtin_theme_names()
 {
+    return theme_names_with({});
+}
+std::vector<std::string> theme_names_with(std::span<const std::string_view> custom)
+{
     std::vector<std::string> names;
-    names.reserve(core::builtin_themes.size());
+    names.reserve(core::builtin_themes.size() + custom.size());
     for (const auto &theme : core::builtin_themes)
     {
         names.emplace_back(theme.name);
     }
+    names.insert(names.end(), custom.begin(), custom.end());
+    std::ranges::sort(names, core::ascii_folded_before);
     return names;
 }
 std::vector<std::string> expected_ex_completions(std::optional<std::string_view> prefix,
@@ -392,19 +418,7 @@ std::vector<std::string> expected_ex_completions(std::optional<std::string_view>
     {
         return expected;
     }
-    for (const auto &name : theme_names)
-    {
-        auto candidate = std::string(theme_command) + name;
-        if (matches(candidate))
-        {
-            expected.push_back(std::move(candidate));
-        }
-    }
-    auto system = std::string(theme_command) + "system";
-    if (matches(system))
-    {
-        expected.push_back(std::move(system));
-    }
+    append_expected_themes(expected, prefix, theme_names);
     return expected;
 }
 const ExCompletionSample &ex_completion_sample(ExCompletionWorkload workload)

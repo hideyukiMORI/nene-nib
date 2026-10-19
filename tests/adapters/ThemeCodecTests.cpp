@@ -13,6 +13,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -425,7 +426,9 @@ void verify_catalog_files(adapters::Win32FileAdapter &files, adapters::Win32Them
     put_theme(files, "dracula.v1.theme", "broken");
     put_theme(files, "ignored.txt", "ignored");
     const auto inventory = adapter.read();
-    expect(inventory.catalog.records().size() == 3 && inventory.catalog.names().back() == "z-theme",
+    expect(inventory.catalog.records().size() == 3 &&
+               inventory.catalog.records().back().name.text() == "z-theme" &&
+               std::ranges::count(inventory.catalog.names(), "z-theme") == 1,
            "sorted catalog keeps valid and failed themes, skips noncanonical and reserved names");
     expect(inventory.notice.has_value() &&
                inventory.notice.value().text().starts_with("dracula.v1.theme:"),

@@ -18,6 +18,7 @@
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
+#include "Win32FontCollationAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32TimingAdapter.hpp"
 
@@ -42,6 +43,7 @@ namespace
 {
 using nenenib::adapters::win32::absolute_file_path;
 using nenenib::adapters::win32::ClipboardCalls;
+using nenenib::adapters::win32::collated_font_names;
 using nenenib::adapters::win32::decode_settings;
 using nenenib::adapters::win32::encode_settings;
 using nenenib::adapters::win32::FileHandle;
@@ -1557,14 +1559,37 @@ void verify_clipboard()
     verify_clipboard_unbound();
 }
 
+// #696: 字体の名前は OS の照合順（大文字小文字と空白の扱いはロケールの照合）。ASCII の名前は
+// どのロケールでも同じ並びになる例だけを見る。照合が同じ名前どうしはバイト順で決まる。
+void verify_font_collation()
+{
+    using Names = std::vector<std::string>;
+    expect(collated_font_names(Names{"MS Gothic", "Meiryo", "consolas", "Arial"}) ==
+               Names{"Arial", "consolas", "Meiryo", "MS Gothic"},
+           "font names follow the OS collation, not the byte order");
+    const auto repeated = collated_font_names(Names{"Consolas", "Arial", "Consolas"});
+    expect(repeated == Names{"Arial", "Consolas", "Consolas"},
+           "equal names stay next to each other for the core to fold");
+    expect(collated_font_names(Names{"b", "B", "a"}) == collated_font_names(Names{"B", "a", "b"}),
+           "the order does not depend on the given order");
+    expect(collated_font_names(Names{}).empty(), "no names stay empty");
+}
+
 bool known_scope(std::string_view scope)
 {
     return scope == "--settings-codec" || scope == "--settings" || scope == "--files" ||
-           scope == "--code-pages" || scope == "--clipboard";
+           scope == "--code-pages" || scope == "--clipboard" || scope == "--fonts";
 }
 
 int run_memory_tests(std::string_view scope)
 {
+    if (scope == "--fonts")
+    {
+        verify_font_collation();
+        std::printf("Font collation adapter: %zu checks, %zu failures\n", check_count(),
+                    failure_count());
+        return test_result();
+    }
     if (scope == "--code-pages")
     {
         Win32CodePageAdapter code_pages;
@@ -1590,7 +1615,7 @@ int main(int argc, char **argv)
         std::fprintf(stderr, "Unknown adapter test scope\n");
         return 1;
     }
-    if (scope == "--code-pages" || scope == "--settings-codec")
+    if (scope == "--code-pages" || scope == "--settings-codec" || scope == "--fonts")
     {
         return run_memory_tests(scope);
     }
@@ -1630,6 +1655,7 @@ int main(int argc, char **argv)
     verify_settings_failures(files);
     verify_settings_migration(files);
     verify_clipboard();
+    verify_font_collation();
     if (failure_count() != 0)
     {
         std::fprintf(stderr, "Nib adapter tests: %zu of %zu checks failed\n", failure_count(),

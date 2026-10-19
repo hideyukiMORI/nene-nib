@@ -1,6 +1,7 @@
 #include "ExResult.hpp"
 #include "ExDocumentName.hpp"
 
+#include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
 #include "ExPaletteName.hpp"
 #include "ExTabName.hpp"
@@ -538,6 +539,23 @@ constexpr std::array<std::string_view, 19> fixed_candidates{
     return text.starts_with(stem) && suffix.starts_with(text.substr(stem.size()));
 }
 
+// 引数の候補（テーマ名・字体名）の照合。命令名（stem）は区別し、引数は ASCII の大文字小文字を
+// 無視する（#696・Vim 9.1 の colorscheme の補完と同じ）。
+[[nodiscard]] bool argument_matches(std::optional<std::string_view> prefix, std::string_view stem,
+                                    std::string_view argument)
+{
+    if (!prefix.has_value())
+    {
+        return true;
+    }
+    const auto text = prefix.value();
+    if (text.size() <= stem.size())
+    {
+        return stem.starts_with(text);
+    }
+    return text.starts_with(stem) && ascii_prefix_ignoring_case(argument, text.substr(stem.size()));
+}
+
 void append_document_candidates(std::vector<std::string> &candidates,
                                 std::optional<std::string_view> prefix)
 {
@@ -565,12 +583,12 @@ void append_theme_candidates(std::vector<std::string> &candidates, const ThemeCa
     }
     for (const auto &name : themes.names())
     {
-        if (prefix_matches(prefix, "colorscheme ", name))
+        if (argument_matches(prefix, "colorscheme ", name))
         {
             candidates.push_back("colorscheme " + name);
         }
     }
-    if (prefix_matches(prefix, "colorscheme ", "system"))
+    if (argument_matches(prefix, "colorscheme ", "system"))
     {
         candidates.emplace_back("colorscheme system");
     }
@@ -586,7 +604,7 @@ void append_font_candidates(std::vector<std::string> &candidates, const FontFami
     }
     for (const auto &name : fonts.names())
     {
-        if (prefix_matches(prefix, guifont_command, name))
+        if (argument_matches(prefix, guifont_command, name))
         {
             candidates.push_back(std::string(guifont_command) + name);
         }

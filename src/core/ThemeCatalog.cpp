@@ -1,14 +1,26 @@
 #include "ThemeCatalog.hpp"
 
+#include "AsciiCase.hpp"
 #include "BuiltinThemes.hpp"
 
 #include <algorithm>
+#include <array>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::core
 {
 namespace
 {
+// 組み込みの名前の名前順（#696）。表の順は表示に使わない。並べるのはコンパイル時の 1 回だけ。
+constexpr auto sorted_builtin_names = []
+{
+    std::array<std::string_view, builtin_themes.size()> names{};
+    std::ranges::transform(builtin_themes, names.begin(), &Theme::name);
+    std::ranges::sort(names, ascii_folded_before);
+    return names;
+}();
+
 [[nodiscard]] std::expected<void, ThemeCatalogFailure> checked_record(const ThemeRecord &record)
 {
     if (record.name.text() == "system" || theme_named(record.name.text()).has_value())
@@ -37,7 +49,7 @@ std::expected<ThemeCatalog, ThemeCatalogFailure>
 ThemeCatalog::from(std::vector<ThemeRecord> records)
 {
     std::sort(records.begin(), records.end(), [](const auto &left, const auto &right)
-              { return left.name.text() < right.name.text(); });
+              { return ascii_folded_before(left.name.text(), right.name.text()); });
     for (std::size_t index = 0; index < records.size(); ++index)
     {
         const auto checked = checked_record(records.at(index));
@@ -88,16 +100,27 @@ std::expected<ThemeChoice, ThemeLookupFailure> ThemeCatalog::find(const ThemeNam
     return std::unexpected(ThemeLookupFailure{name, ThemeFailure::not_found});
 }
 
+// 組み込みと利用者のテーマを 1 つの名前順に混ぜる（#696・Vim 9.1 の colorscheme の補完と同じ）。
+// 利用者のテーマは from が同じ順に並べてある。
 std::vector<std::string> ThemeCatalog::names() const
 {
+    const auto user = records();
     std::vector<std::string> names;
-    for (const auto &theme : builtin_themes)
+    names.reserve(sorted_builtin_names.size() + user.size());
+    auto builtin = sorted_builtin_names.begin();
+    for (const auto &record : user)
     {
-        names.emplace_back(theme.name);
+        const auto name = record.name.text();
+        for (; builtin != sorted_builtin_names.end() && ascii_folded_before(*builtin, name);
+             ++builtin)
+        {
+            names.emplace_back(*builtin);
+        }
+        names.emplace_back(name);
     }
-    for (const auto &record : records())
+    for (; builtin != sorted_builtin_names.end(); ++builtin)
     {
-        names.emplace_back(record.name.text());
+        names.emplace_back(*builtin);
     }
     return names;
 }

@@ -1,4 +1,5 @@
 #include "PaletteChoiceProbe.hpp"
+#include "AsciiCase.hpp"
 #include "CommandChoice.hpp"
 #include "ExCompletionProbe.hpp"
 #include "Milestone.hpp"
@@ -134,7 +135,8 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
     }
     return core::ThemeCatalog::from(std::move(records)).value();
 }
-// 空の問い合わせの並び（CommandChoice.cpp の before）: 点は実行文字列のバイト数、同点は文字列の順。
+// 空の問い合わせの並び（CommandChoice.cpp の before）: 点は実行文字列のバイト数、同点は名前順
+// （core::ascii_folded_before・#696）。
 [[nodiscard]] std::vector<std::string> listed_order(std::vector<std::string> commands)
 {
     std::ranges::sort(commands,
@@ -144,19 +146,18 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
                           {
                               return left.size() < right.size();
                           }
-                          return left < right;
+                          return core::ascii_folded_before(left, right);
                       });
     return commands;
 }
+[[nodiscard]] std::vector<std::string> catalog_names(PaletteChoiceWorkload workload)
+{
+    return uses_custom_catalog(workload) ? theme_names_with(custom_theme_names())
+                                         : builtin_theme_names();
+}
 [[nodiscard]] std::vector<std::string> listed_all(PaletteChoiceWorkload workload)
 {
-    auto names = builtin_theme_names();
-    if (uses_custom_catalog(workload))
-    {
-        const auto custom = custom_theme_names();
-        names.insert(names.end(), custom.begin(), custom.end());
-    }
-    return listed_order(expected_ex_completions(std::nullopt, names));
+    return listed_order(expected_ex_completions(std::nullopt, catalog_names(workload)));
 }
 // 期待の実行文字列。全件の 2 本は Ex の補完と同じ正本から作る。絞り込みの候補は、2026-10-19 の
 // 製品（組み込み 125 テーマ・src/core/BuiltinThemes.hpp）で palette_choices が返す値（部分列の
@@ -203,11 +204,9 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
 {
     const auto names = catalog.names();
     const auto records = catalog.records();
-    const auto builtins = builtin_theme_names();
     const auto custom = custom_theme_names();
     if (records.size() != sample.catalog_records ||
-        names.size() != builtins.size() + sample.catalog_records ||
-        !std::ranges::equal(std::span{names}.first(builtins.size()), builtins))
+        names != (records.empty() ? builtin_theme_names() : theme_names_with(custom)))
     {
         return false;
     }
@@ -219,8 +218,7 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
     {
         const auto &record = records[index];
         if (record.name.text() != custom[index] || record.value.has_value() ||
-            record.value.error() != core::ThemeFailure::invalid_color ||
-            names.at(builtins.size() + index) != custom[index])
+            record.value.error() != core::ThemeFailure::invalid_color)
         {
             return false;
         }

@@ -17,6 +17,7 @@
 #include "Win32CodePageAdapter.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32FolderAdapter.hpp"
+#include "Win32FontCollationAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
@@ -225,7 +226,9 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
-    nenenib::ui::win32::SystemFontFamilies fonts;
+    // 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
+    nenenib::ui::win32::SystemFontFamilies system_fonts;
+    nenenib::adapters::win32::Win32FontCollationAdapter fonts(system_fonts);
     nenenib::adapters::win32::Win32AutosaveAdapter autosave(
         worker, files, nenenib::adapters::win32::local_autosave_root());
     nenenib::application::EditorController controller(

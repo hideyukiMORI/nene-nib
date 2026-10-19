@@ -597,7 +597,7 @@ const auto completion_all = expected_all_commands();
 void verify_completion_candidate_boundaries()
 {
     expect(core::ex_command_candidates() == completion_all,
-           "all candidates retain the full builtin order");
+           "all candidates list builtin themes in name order");
     expect(core::command_completions("") == completion_ordinary,
            "empty prefix retains only ordinary names");
     expect(core::command_completions("col") == std::vector<std::string>{"colorscheme"},
@@ -607,11 +607,25 @@ void verify_completion_candidate_boundaries()
     expect(core::command_completions("colorscheme ") == completion_themes,
            "raw prefix boundary colorscheme ");
     expect(core::command_completions("colorscheme d") ==
-               std::vector<std::string>{"colorscheme dracula", "colorscheme darkblue",
+               std::vector<std::string>{"colorscheme darcula", "colorscheme darkblue",
                                         "colorscheme default", "colorscheme delek",
-                                        "colorscheme desert", "colorscheme darcula",
-                                        "colorscheme desert-oracle"},
+                                        "colorscheme desert", "colorscheme desert-oracle",
+                                        "colorscheme dracula"},
            "raw prefix boundary colorscheme d");
+    // 引数は ASCII の大文字小文字を無視し、候補の綴りが勝つ（#696・Vim 9.1 と同じ）。
+    expect(core::command_completions("colorscheme DRAC") ==
+               std::vector<std::string>{"colorscheme dracula"},
+           "theme argument ignores ASCII case");
+    expect(core::command_completions("colorscheme De") ==
+               std::vector<std::string>{"colorscheme default", "colorscheme delek",
+                                        "colorscheme desert", "colorscheme desert-oracle"},
+           "mixed-case theme argument keeps name order");
+    expect(core::command_completions("colorscheme SYS") ==
+               std::vector<std::string>{"colorscheme system"},
+           "system argument ignores ASCII case");
+    expect(core::command_completions("COLORSCHEME d").empty() &&
+               core::command_completions("Colorscheme d").empty(),
+           "command names stay case sensitive");
     expect(core::command_completions("colorscheme dracula") ==
                std::vector<std::string>{"colorscheme dracula"},
            "raw prefix boundary colorscheme dracula");

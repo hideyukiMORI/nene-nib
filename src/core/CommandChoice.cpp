@@ -1,5 +1,6 @@
 #include "CommandChoice.hpp"
 
+#include "AsciiCase.hpp"
 #include "CommandMatch.hpp"
 #include "ExResult.hpp"
 #include "KeyChord.hpp"
@@ -297,7 +298,8 @@ operation_score(std::string_view query, const OperationText &text, std::string_v
     {
         return left.score < right.score;
     }
-    return left.choice.command < right.choice.command;
+    // 同点は Ex の補完と同じ名前順（#696）。
+    return ascii_folded_before(left.choice.command, right.choice.command);
 }
 } // namespace
 

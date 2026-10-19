@@ -1,6 +1,7 @@
 #include "ScriptedTextLayouts.hpp"
 // scope `--user-theme-selection` の単体テスト（ADR 0042 決定 2）。
 #include "Appearance.hpp"
+#include "AsciiCase.hpp"
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
 #include "CancelCommand.hpp"
@@ -49,6 +50,7 @@
 #include "ThemeName.hpp"
 #include "VisibleLines.hpp"
 
+#include <algorithm>
 #include <expected>
 #include <optional>
 #include <string>
@@ -102,10 +104,11 @@ void verify_theme_catalog()
     auto catalog = user_catalog();
     const auto names = catalog.names();
     expect(names.size() == core::builtin_themes.size() + 3 &&
-               names.at(core::builtin_themes.size()) == "broken" &&
-               names.at(core::builtin_themes.size() + 1) == "my-theme" &&
-               names.at(core::builtin_themes.size() + 2) == "z-theme",
-           "user names follow builtins in sorted order");
+               std::ranges::is_sorted(names, core::ascii_folded_before) &&
+               std::ranges::count(names, "broken") == 1 &&
+               std::ranges::count(names, "my-theme") == 1 &&
+               std::ranges::count(names, "z-theme") == 1,
+           "user names merge with builtins in name order");
     const auto choice = catalog.find(user_name("my_theme")).value();
     const auto copy = catalog;
     catalog = core::ThemeCatalog::builtins();
@@ -290,20 +293,12 @@ void verify_blocked_theme_noop()
 void verify_user_completion_order()
 {
     const auto catalog = user_catalog();
-    auto themes = expected_theme_commands();
-    themes.pop_back();
-    for (const auto name : {"broken", "my-theme", "z-theme", "system"})
-    {
-        themes.push_back("colorscheme " + std::string{name});
-    }
+    const auto themes = expected_theme_commands({"broken", "my-theme", "z-theme"});
     expect(core::command_completions("colorscheme ", catalog) == themes,
-           "theme prefix retains all builtins and sorted custom names");
+           "theme prefix merges builtins and custom names in name order");
     auto all = core::ex_command_candidates();
-    all.pop_back();
-    for (const auto name : {"broken", "my-theme", "z-theme", "system"})
-    {
-        all.push_back("colorscheme " + std::string{name});
-    }
+    all.resize(all.size() - core::builtin_themes.size() - 1);
+    all.insert(all.end(), themes.begin(), themes.end());
     expect(core::ex_command_candidates(catalog) == all,
            "custom catalog extends the verified built-in catalog in exact order");
     expect(core::command_completions("colorscheme broken", catalog) ==
