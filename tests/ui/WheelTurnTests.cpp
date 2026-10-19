@@ -7,8 +7,30 @@
 
 namespace nenenib::tests::ui
 {
+namespace
+{
+// 正の余り → 負の delta の反転と、1 刻みの行数の上限の境界（#499 の差し戻し）。
+void verify_wheel_edges()
+{
+    using nenenib::ui::win32::wheel_lines_limit;
+    using nenenib::ui::win32::wheel_lines_per_notch;
+    using nenenib::ui::win32::wheel_turned;
+    const auto forward = wheel_turned(10, -10, 1);
+    expect(forward.lines == 0 && forward.remainder == -10,
+           "a positive remainder is discarded by a negative delta");
+
+    constexpr std::int32_t largest_delta = 32'767;
+    expect(wheel_lines_per_notch(10'000, 40) == wheel_lines_limit &&
+               wheel_lines_per_notch(10'001, 40) == wheel_lines_limit,
+           "the limit itself is kept and one more is held at the limit");
+    const auto widest = wheel_turned(0, largest_delta, wheel_lines_limit);
+    expect(widest.lines == -2'730'583 && widest.remainder == 40,
+           "the largest delta at the limit stays inside std::int32_t");
+}
+} // namespace
+
 // 本文のホイールの余りと 1 刻みの行数（#499）。WM_MOUSEWHEEL の delta は奥が正で、ScrollLines の
-// 正は下。窓は作らない（実機のホイールは eng/verify-window.py が WHEEL_DELTA 単位で送る）。
+// 正は下。窓は作らない（実機のホイールの手触りは hide の試用で確かめる）。
 void verify_wheel_turns()
 {
     using nenenib::ui::win32::wheel_lines_per_notch;
@@ -41,5 +63,6 @@ void verify_wheel_turns()
     expect(single.lines == -1 && single.remainder == 0, "a 1-line setting turns 120 into 1 line");
     const auto still = wheel_turned(0, WHEEL_DELTA, 0);
     expect(still.lines == 0 && still.remainder == 0, "a zero setting carries nothing");
+    verify_wheel_edges();
 }
 } // namespace nenenib::tests::ui

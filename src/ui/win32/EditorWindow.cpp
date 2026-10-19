@@ -2425,15 +2425,18 @@ void EditorWindow::scroll_body(std::int32_t delta)
 
 void EditorWindow::read_wheel_setting()
 {
-    // 起動と WM_SETTINGCHANGE で読む 1 か所。読めなければ Windows の既定の 3 行。単位が変わるので
-    // 前の余りは捨てる。
+    // 起動と WM_SETTINGCHANGE で読む 1 か所。読めなければ Windows の既定の 3 行。値が変わったとき
+    // だけ単位が変わるので前の余りを捨てる（ほかの設定の変更でも WM_SETTINGCHANGE は来る）。
     UINT lines = default_wheel_scroll_lines;
     if (SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0) == FALSE)
     {
         lines = default_wheel_scroll_lines;
     }
+    if (lines != wheel_setting_)
+    {
+        body_wheel_remainder_ = 0;
+    }
     wheel_setting_ = lines;
-    body_wheel_remainder_ = 0;
 }
 
 bool EditorWindow::over_title_bar(LPARAM data) const
