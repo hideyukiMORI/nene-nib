@@ -44,7 +44,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 30> chord_rows{{
+constexpr std::array<ChordRow, 37> chord_rows{{
     {ctrl(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
     {ctrl_shift(OperationKey::s), EditorOperation::save_as, EditorOperation::save_as},
@@ -79,6 +79,18 @@ constexpr std::array<ChordRow, 30> chord_rows{{
     {ctrl(OperationKey::f1), std::nullopt, std::nullopt},
     {ctrl_shift(OperationKey::w), std::nullopt, std::nullopt},
     {ctrl_shift(OperationKey::t), std::nullopt, std::nullopt},
+    // 枠の操作（ADR 0148 の決定 6）。Ctrl+Shift+F4 は枠を閉じ、Ctrl+F4 はタブを閉じたまま。
+    {ctrl(OperationKey::backslash), EditorOperation::split_vertical,
+     EditorOperation::split_vertical},
+    {ctrl_shift(OperationKey::backslash), EditorOperation::split_horizontal,
+     EditorOperation::split_horizontal},
+    {KeyChord{false, false, OperationKey::f6}, EditorOperation::next_pane,
+     EditorOperation::next_pane},
+    {KeyChord{false, true, OperationKey::f6}, EditorOperation::next_pane,
+     EditorOperation::next_pane},
+    {ctrl_shift(OperationKey::f4), EditorOperation::close_pane, EditorOperation::close_pane},
+    {ctrl(OperationKey::f6), std::nullopt, std::nullopt},
+    {KeyChord{false, false, OperationKey::backslash}, std::nullopt, std::nullopt},
 }};
 
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
@@ -101,15 +113,15 @@ constexpr std::array<ShownRow, 20> shown_rows{{
     {EditorOperation::font_smaller, "Ctrl+-", "Ctrl+-", true, true},
     {EditorOperation::font_reset, "Ctrl+0", "Ctrl+0", true, true},
     {EditorOperation::toggle_mode, "Ctrl+Shift+Space", "Ctrl+Shift+Space", true, true},
-    {EditorOperation::split_vertical, "", "", true, true},
-    {EditorOperation::split_horizontal, "", "", true, true},
-    {EditorOperation::next_pane, "", "", true, true},
-    {EditorOperation::close_pane, "", "", true, true},
+    {EditorOperation::split_vertical, "Ctrl+\\", "Ctrl+\\", true, true},
+    {EditorOperation::split_horizontal, "Ctrl+Shift+\\", "Ctrl+Shift+\\", true, true},
+    {EditorOperation::next_pane, "F6", "F6", true, true},
+    {EditorOperation::close_pane, "Ctrl+Shift+F4", "Ctrl+Shift+F4", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 19> label_rows{{
+constexpr std::array<LabelRow, 23> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -129,6 +141,10 @@ constexpr std::array<LabelRow, 19> label_rows{{
     {ctrl(OperationKey::space), "Ctrl+Space"},
     {ctrl_shift(OperationKey::space), "Ctrl+Shift+Space"},
     {KeyChord{false, true, OperationKey::f1}, "Shift+F1"},
+    {KeyChord{false, false, OperationKey::f6}, "F6"},
+    {ctrl(OperationKey::backslash), "Ctrl+\\"},
+    {ctrl_shift(OperationKey::backslash), "Ctrl+Shift+\\"},
+    {ctrl_shift(OperationKey::f4), "Ctrl+Shift+F4"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)

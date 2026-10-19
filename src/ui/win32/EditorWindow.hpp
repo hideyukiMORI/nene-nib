@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "BodyLayout.hpp"
 #include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "CoverWindow.hpp"
@@ -14,16 +15,19 @@
 #include "EndSession.hpp"
 #include "ExitCause.hpp"
 #include "FilePath.hpp"
+#include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "HistoryDirection.hpp"
 #include "ImeOpenState.hpp"
 #include "ImeStance.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
+#include "PaneLayouts.hpp"
 #include "PresentedMilestones.hpp"
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "SessionEnd.hpp"
+#include "SplitLayout.hpp"
 #include "StatusBarHit.hpp"
 #include "TabCommand.hpp"
 #include "TimingPort.hpp"
@@ -127,6 +131,7 @@ class EditorWindow final
     void click_client(LPARAM data);
     void click_palette(LPARAM data);
     void place_caret(LPARAM data);
+    void click_body(LPARAM data);
     void point_text(POINT point, core::SelectionAnchoring anchoring);
     void begin_selection_drag();
     void end_selection_drag();
@@ -236,12 +241,17 @@ class EditorWindow final
     void offer_utf8(const core::FilePath &path);
     void turn_wheel(WPARAM word, LPARAM data);
     [[nodiscard]] bool over_title_bar(LPARAM data) const;
+    [[nodiscard]] bool over_other_pane(LPARAM data) const;
+    void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
+    void run_pane_operation(core::EditorOperation operation);
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);
     void scroll_palette(std::int32_t delta);
-    void scroll_body(std::int32_t delta);
+    void scroll_body(std::int32_t delta, LPARAM data);
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
+    [[nodiscard]] core::PaneLayouts body_panes(core::FontSize font_size) const;
+    [[nodiscard]] core::BodyLayout active_body(core::FontSize font_size) const;
 
     HINSTANCE instance_;
     application::EditorController &controller_;

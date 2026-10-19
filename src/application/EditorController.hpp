@@ -40,6 +40,7 @@
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "Session.hpp"
+#include "SplitState.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
@@ -113,6 +114,9 @@ class EditorController final
     // Ctrl+Tab で歩いている間だけ真（ADR 0058 の決定 4）。窓が Ctrl を離したとき・フォーカスを
     // 失ったときに SettleRecentTab を送るかを決めるための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] bool tab_walking() const noexcept;
+    // 枠の配置と操作中の枠の側（ADR 0148 の決定 8）。窓がマウスの点の下の枠と、本文の行数を
+    // 数える枠（pane_layouts の片側）を引くための口で、状態の 1 欄を読むだけ。
+    [[nodiscard]] const SplitState &split() const noexcept;
     // アクティブな文書の本文を読むだけの口。試験が仮想桁の索引の持ち方（ADR 0140 の決定 4）を
     // 確かめるために読む。状態を変える口はここには無い。
     [[nodiscard]] const core::TextBuffer &text() const noexcept;

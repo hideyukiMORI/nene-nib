@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BodyLayout.hpp"
+#include "BodyPane.hpp"
 #include "BodyTextLayout.hpp"
 #include "BodyTextLayouts.hpp"
 #include "BodyTextPainter.hpp"
@@ -19,6 +20,7 @@
 #include "LineView.hpp"
 #include "OperationGuideLayout.hpp"
 #include "PaletteLayout.hpp"
+#include "PaneLayouts.hpp"
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
@@ -176,13 +178,27 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
+    // 縦棒の矩形（area の中の UTF-16 の position・幅は caret_width_）。位置を引けなければ値なし。
+    [[nodiscard]] std::optional<core::LayoutRect> bar_of(IDWriteTextLayout *text,
+                                                         const core::LayoutRect &area,
+                                                         UINT32 position,
+                                                         core::CaretAffinity affinity);
     void draw_bar_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                         const core::LayoutRect &area, UINT32 position);
-    // ブロックは本文の桁の描画上の範囲（`^M` なら 2 文字・全角なら字幅）を覆う（#151）。
+    // ブロックが覆う run（本文の桁の描画上の範囲・`^M` なら 2 文字・全角なら字幅・#151）。操作中の
+    // 枠のブロックともう 1 つの枠の中空のブロックが同じ幅を使う。位置を引けなければ値なし。
+    [[nodiscard]] std::optional<std::vector<DWRITE_HIT_TEST_METRICS>>
+    block_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
+               const application::LineView &shown, const application::CaretView &caret);
     void draw_block_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                           const core::LayoutRect &area, const application::LineView &shown);
     void draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                     const core::LayoutRect &area, const application::LineView &shown);
+    void draw_passive_caret(IDWriteTextLayout *text, const core::LayoutRect &area,
+                            const application::LineView &shown,
+                            const application::CaretView &caret);
+    // ブロックの run を 1 DIP の枠線で囲む（中は塗らない）。色は呼び手が置く。
+    void outline_block(const std::optional<std::vector<DWRITE_HIT_TEST_METRICS>> &runs);
     // 置き換えた文字（`^M`・`<200b>`）は muted の字色で描き直す。面は塗らない（ADR 0040 の決定
     // 4）。
     // ranges は描いた layout の UTF-16 の範囲（IME の変換中の行ではずらした後・#152）。
@@ -200,16 +216,19 @@ class Direct2DRenderer final
     // 変換中の文字列をキャレットの位置に差し込んだ 1 行。TextBuffer は触らない（ARC-004）。
     void draw_composed_line(const application::EditorFrame &frame, const core::BodyLayout &body,
                             const core::LayoutRect &area, const application::LineView &line);
-    void draw_plain_line(const application::EditorFrame &frame, const core::BodyLayout &body,
+    void draw_plain_line(const application::EditorFrame &frame, const BodyPane &pane,
                          const core::LayoutRect &area, const application::LineView &line);
-    void draw_line(const application::EditorFrame &frame, const core::BodyLayout &body,
-                   std::size_t index);
+    void draw_line(const application::EditorFrame &frame, const BodyPane &pane,
+                   const application::LineView &line);
+    // 操作中の枠（body は pane_layouts の active_side の側）。
     void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
-    // 格子の画面行（ADR 0140 の決定 5）。本文の行（draw_line）とは別の 1 本で、frame.grid を描く。
+    void draw_other_body(const application::EditorFrame &frame, const core::PaneLayouts &panes);
+    void draw_pane(const application::EditorFrame &frame, const BodyPane &pane);
+    // 格子の画面行（ADR 0140 の決定 5）。本文の行（draw_line）とは別の 1 本で、枠の grid を描く。
     using GridPainter = GridRowPainter<ID2D1DeviceContext6, BodyTextLayouts>;
-    void draw_grid_rows(const application::EditorFrame &frame, const core::BodyLayout &body);
+    void draw_grid_rows(const application::EditorFrame &frame, const BodyPane &pane);
     void draw_grid_row(GridPainter &painter, const application::EditorFrame &frame,
-                       const core::BodyLayout &body, const application::GridRowView &row);
+                       const BodyPane &pane, const application::GridRowView &row);
     [[nodiscard]] std::int32_t gutter_padding(const core::EditorSettings &settings) const;
     void draw_body_guide(const application::EditorFrame &frame,
                          const core::OperationGuideLayout &guide);

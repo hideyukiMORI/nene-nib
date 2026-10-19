@@ -105,6 +105,19 @@ selection three rows up without scrolling the window (paletteUpThree.png); Esc c
 and the body ground is the saved scheme again (paletteCancelled.png). Opened again, Ctrl+P on the
 first row is the previous choice and keeps the palette open (paletteControlP.png). The selected row
 is read from the selection face at the left of each row (core::palette_layout in DIPs).
+Issue #683 adds the split (ADR 0148 decisions 6, 8 and 11), which `--split` also runs alone: three
+lines are typed, Ctrl+backslash (sent as VK_OEM_5, the ¥ key) splits left and right (splitVertical.png: the
+divider is panel_border and the rows away from the caret are the same picture in both panes), `a`
+is typed (splitTyped.png: the right pane changes too), F6 moves the accent caret to the right pane
+(splitSwitched.png), a click in the left pane brings it back (splitClicked.png), Ctrl+Shift+F4
+closes the pane (splitClosed.png: no divider) and Ctrl+Shift+backslash (sent as VK_OEM_102, the ろ key)
+splits top and bottom (splitHorizontal.png); the Vim toggle shows the block in the top pane and the
+hollow mark in the bottom one (splitVim.png). The virtual keys the JIS ¥ and ろ scan codes give in
+the current keyboard layout are recorded beside. body_points splits the band like
+core::pane_layouts, and --capture writes split-vertical-frames.json and
+split-horizontal-frames.json whose regions (title, body0, body1, divider, status)
+eng/compare-frames.py --regions reads. The chords need SendInput; a session that
+refuses the foreground is recorded, not failed.
 Python standard library and ctypes only.
 """
 
@@ -814,19 +827,44 @@ def verify_documents(executable: Path, environment: dict, appearance: str, outpu
     return {"utf8": utf8, "shiftJis": shift_jis, "missing": missing, "tabs": tabs}
 
 
-def body_points(width: int, height: int, dpi: int, points: float = BODY_DEFAULT_POINTS) -> dict:
-    """The body band, mirroring core::body_layout (src/core/BodyLayout.cpp)."""
+def pane_bands(width: int, height: int, dpi: int, split: str = "none") -> tuple[list, tuple | None]:
+    """The body band split like core::pane_layouts (src/core/PaneLayouts.cpp): the bands in
+    position order (left or top first) and the divider, each (left, top, right, bottom).
+
+    Both panes get (band - divider) // 2 and the remainder goes to the divider (1 DIP at least).
+    """
     title = to_pixels(TITLE_BAR_DIPS, dpi)
-    band_bottom = max(height - to_pixels(STATUS_BAR_DIPS, dpi), title)
-    first = title + to_pixels(BODY_TOP_DIPS, dpi)
+    bottom = max(height - to_pixels(STATUS_BAR_DIPS, dpi), title)
+    divider = max(to_pixels(DIVIDER_DIPS, dpi), 1)
+    if split == "vertical":
+        each = max(width - divider, 0) // 2
+        return ([(0, title, each, bottom), (width - each, title, width, bottom)],
+                (each, title, width - each, bottom))
+    if split == "horizontal":
+        each = max(bottom - title - divider, 0) // 2
+        return ([(0, title, width, title + each), (0, bottom - each, width, bottom)],
+                (0, title + each, width, bottom - each))
+    return [(0, title, width, bottom)], None
+
+
+def body_points(width: int, height: int, dpi: int, points: float = BODY_DEFAULT_POINTS,
+                split: str = "none", pane: int = 0) -> dict:
+    """One pane's body, mirroring core::body_layout_in (src/core/BodyLayout.cpp) on the band of
+    pane_bands. With one pane it is core::body_layout. gutter and contentLeft are client x."""
+    left, top, right, band_bottom = pane_bands(width, height, dpi, split)[0][pane]
+    first = top + to_pixels(BODY_TOP_DIPS, dpi)
     line_height = max(to_pixels(int(points * 96 / 72 * 1.6 + 0.5), dpi), 1)
+    gutter = min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi),
+                 right - left)
+    padding = to_pixels(int(BODY_LEFT_PADDING_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi)
     return {
+        "bandLeft": left,
+        "bandTop": top,
+        "bandRight": right,
         "firstRowTop": first,
         "lineHeight": line_height,
-        "gutter": min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi), width),
-        "contentLeft": min(to_pixels(int(BODY_GUTTER_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi)
-                           + to_pixels(int(BODY_LEFT_PADDING_DIPS * points / BODY_DEFAULT_POINTS + 0.5), dpi),
-                           width),
+        "gutter": left + gutter,
+        "contentLeft": min(left + gutter + padding, right),
         "bandBottom": band_bottom,
         "visibleLines": max((band_bottom - first) // line_height, 0),
     }
@@ -1623,6 +1661,10 @@ def drive_tab_keys(window, process, appearance: str, frames: Path | None) -> dic
     tab_chord(window, [VK_CONTROL], VK_W)
     steps["vimControlW"] = expect_band(window, appearance, 1, 0, "Ctrl+W in the Vim mode")
     assert user.IsWindow(window) and process.poll() is None, "Ctrl+W in Vim closed the window"
+    # Vim の Ctrl+W は engine の `Ctrl-w` で 2 打鍵目を待つ（ADR 0148 の決定 7・#684）。Esc で
+    # 待ちを解いてから `/` を打つ（でないと `/` は表に無い 2 打鍵目として捨てられる）。
+    press(window, VK_ESCAPE)
+    time.sleep(TAB_SETTLE_SECONDS)
     write_text(window, "/")
     time.sleep(TAB_SETTLE_SECONDS)
     tab_chord(window, [VK_CONTROL], VK_T)
@@ -1901,6 +1943,183 @@ def grid_moves(window, opened: bytes, size: tuple, frames: Path | None) -> dict:
     click(window, body["gutter"] + to_pixels(80, dpi), row_middle(body, 2))
     clicked, record["clickChanged"] = grid_step(window, moved, size, frames, "gridClick")
     record["last"] = clicked
+    return record
+
+
+# split（Issue #683・ADR 0148）。境界の幅は src/core/PaneLayouts.cpp の divider_dips、色は core の
+# 既定のテーマの panel_border（src/core/BuiltinTheme.hpp・採用案の境界の案 A）。
+DIVIDER_DIPS = 1
+PANEL_BORDER = {"light": (0xD5, 0xD9, 0xE0), "dark": (0x5A, 0x2A, 0x4C)}
+VK_F6 = 0x75
+VK_OEM_5 = 0xDC
+VK_OEM_102 = 0xE2
+# JIS 配列の ¥ と ろ、US 配列の \ の走査コード（調査 §8）。今の配列の鍵盤の表でどの仮想キーに
+# 写るかを記録する（判定はしない）。
+YEN_SCAN = 0x7D
+RO_SCAN = 0x73
+US_BACKSLASH_SCAN = 0x2B
+MAPVK_VSC_TO_VK_EX = 3
+
+
+def backslash_keys() -> dict:
+    """The virtual keys the JIS ¥ and ろ and the US backslash scan codes give in this thread's
+    keyboard layout (0x00 when the layout's keyboard table has no such key)."""
+    user.GetKeyboardLayout.restype = c.c_void_p
+    user.MapVirtualKeyExW.argtypes = [w.UINT, w.UINT, c.c_void_p]
+    user.MapVirtualKeyExW.restype = w.UINT
+    layout = user.GetKeyboardLayout(0)
+    return {"layout": f"{(layout or 0) & 0xFFFFFFFF:08X}",
+            "yen": f"0x{user.MapVirtualKeyExW(YEN_SCAN, MAPVK_VSC_TO_VK_EX, layout):02X}",
+            "ro": f"0x{user.MapVirtualKeyExW(RO_SCAN, MAPVK_VSC_TO_VK_EX, layout):02X}",
+            "usBackslash":
+                f"0x{user.MapVirtualKeyExW(US_BACKSLASH_SCAN, MAPVK_VSC_TO_VK_EX, layout):02X}",
+            "mapped": {"VK_OEM_5": "0xDC", "VK_OEM_102": "0xE2"}}
+
+
+def same_box(pixels: bytes, width: int, box: tuple, shift: tuple) -> bool:
+    """Whether box and box moved by shift (dx, dy) hold the same pixels."""
+    left, top, right, bottom = box
+    dx, dy = shift
+    return all(pixels[(y * width + left) * 4:(y * width + right) * 4]
+               == pixels[((y + dy) * width + left + dx) * 4:((y + dy) * width + right + dx) * 4]
+               for y in range(top, bottom))
+
+
+def box_changed(before: bytes, after: bytes, width: int, box: tuple) -> bool:
+    left, top, right, bottom = box
+    return any(before[(y * width + left) * 4:(y * width + right) * 4]
+               != after[(y * width + left) * 4:(y * width + right) * 4] for y in range(top, bottom))
+
+
+def divider_colours(pixels: bytes, width: int, divider: tuple) -> list:
+    """The colours along the middle of the divider (a vertical one at its middle row, a
+    horizontal one at its middle column), each listed once."""
+    left, top, right, bottom = divider
+    points = ([(x, (top + bottom) // 2) for x in range(left, right)] if right - left < bottom - top
+              else [((left + right) // 2, y) for y in range(top, bottom)])
+    return sorted({tuple(pixel(pixels, width, x, y)) for x, y in points})
+
+
+def pane_body_box(body: dict, rows: int) -> tuple:
+    return (body["bandLeft"], body["firstRowTop"], body["bandRight"],
+            body["firstRowTop"] + body["lineHeight"] * rows)
+
+
+def split_regions(width: int, height: int, dpi: int, split: str) -> dict:
+    """The regions of split-<layout>-frames.json (compare-frames.py --regions): title, body0, body1,
+    divider, status. Physical pixels in client coordinates, never overlapping."""
+    bands, divider = pane_bands(width, height, dpi, split)
+    status = max(height - to_pixels(STATUS_BAR_DIPS, dpi), 0)
+
+    def box(rect: tuple) -> dict:
+        return {"x": rect[0], "y": rect[1], "w": rect[2] - rect[0], "h": rect[3] - rect[1]}
+
+    regions = {"title": {"x": 0, "y": 0, "w": width, "h": bands[0][1]},
+               "status": {"x": 0, "y": status, "w": width, "h": height - status}}
+    regions.update({f"body{index}": box(band) for index, band in enumerate(bands)})
+    if divider is not None:
+        regions["divider"] = box(divider)
+    return regions
+
+
+def split_chord(window, before: bytes, size: tuple, frames: Path | None, name: str,
+                chord: tuple) -> bytes:
+    """Send one chord through SendInput, wait for the settled frame and save <name>.png."""
+    tab_chord(window, *chord)
+    after = await_new_frame(window, before, size)
+    snapshot(frames, window, name)
+    return after
+
+
+def split_posted(window, before: bytes, size: tuple, frames: Path | None, name: str) -> bytes:
+    after = await_new_frame(window, before, size)
+    snapshot(frames, window, name)
+    return after
+
+
+def drive_split(window, appearance: str, frames: Path | None) -> dict:
+    """The steps of verify_split on one window, in the ordinary mode."""
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    size = (width, height)
+    record: dict = {"backslashKeys": backslash_keys()}
+    start_frame = capture(window, width, height)
+    write_text(window, "one")
+    press(window, VK_RETURN)
+    write_text(window, "two")
+    press(window, VK_RETURN)
+    write_text(window, "three")
+    typed = split_posted(window, start_frame, size, frames, "splitStart")
+    vertical = split_chord(window, typed, size, frames, "splitVertical",
+                           ([VK_CONTROL], VK_OEM_5))
+    left, right = (body_points(width, height, dpi, split="vertical", pane=index) for index in (0, 1))
+    _, divider = pane_bands(width, height, dpi, "vertical")
+    record["verticalDivider"] = divider_colours(vertical, width, divider)
+    assert record["verticalDivider"] == [PANEL_BORDER[appearance]], record["verticalDivider"]
+    rows = (left["contentLeft"], left["firstRowTop"], left["bandRight"],
+            left["firstRowTop"] + left["lineHeight"] * 2)
+    record["rowsAlike"] = same_box(vertical, width, rows, (right["contentLeft"] - left["contentLeft"], 0))
+    assert record["rowsAlike"], "the rows away from the caret differ between the panes"
+    write_text(window, "a")
+    typed_split = split_posted(window, vertical, size, frames, "splitTyped")
+    caret_row = (right["contentLeft"], left["firstRowTop"] + left["lineHeight"] * 2,
+                 right["bandRight"], left["firstRowTop"] + left["lineHeight"] * 3)
+    record["otherPaneFollowed"] = box_changed(vertical, typed_split, width, caret_row)
+    assert record["otherPaneFollowed"], "typing in the left pane left the right pane unchanged"
+    press(window, VK_F6)
+    switched = split_posted(window, typed_split, size, frames, "splitSwitched")
+    record["switchedAccent"] = [accent_count(switched, width, pane_body_box(pane, 3))
+                                for pane in (left, right)]
+    assert record["switchedAccent"][0] == 0 and record["switchedAccent"][1] > 0, record
+    click(window, left["contentLeft"] + to_pixels(4, dpi), row_middle(left, 0))
+    clicked = split_posted(window, switched, size, frames, "splitClicked")
+    record["clickedAccent"] = [accent_count(clicked, width, pane_body_box(pane, 3))
+                               for pane in (left, right)]
+    assert record["clickedAccent"][0] > 0 and record["clickedAccent"][1] == 0, record
+    closed = split_chord(window, clicked, size, frames, "splitClosed",
+                         ([VK_CONTROL, VK_SHIFT], VK_F4))
+    record["closedDivider"] = divider_colours(closed, width, divider)
+    assert PANEL_BORDER[appearance] not in record["closedDivider"], record["closedDivider"]
+    horizontal = split_chord(window, closed, size, frames, "splitHorizontal",
+                             ([VK_CONTROL, VK_SHIFT], VK_OEM_102))
+    _, across = pane_bands(width, height, dpi, "horizontal")
+    record["horizontalDivider"] = divider_colours(horizontal, width, across)
+    assert record["horizontalDivider"] == [PANEL_BORDER[appearance]], record["horizontalDivider"]
+    # Vim では操作中の枠がブロック、もう 1 つの枠が中空のブロック（採用案の案 A）。画は設計席が見る。
+    toggle = toggle_points(width, height, dpi)
+    click(window, toggle["vim"][0], toggle["vim"][1])
+    vim = split_posted(window, horizontal, size, frames, "splitVim")
+    top, bottom = (body_points(width, height, dpi, split="horizontal", pane=index)
+                   for index in (0, 1))
+    record["vimAccent"] = [accent_count(vim, width, pane_body_box(pane, 3)) for pane in (top, bottom)]
+    assert record["vimAccent"][0] > 0 and record["vimAccent"][1] == 0, record["vimAccent"]
+    for split in ("vertical", "horizontal") if frames is not None else ():
+        (frames / f"split-{split}-frames.json").write_text(json.dumps(
+            {"dpi": dpi, "size": {"w": width, "h": height},
+             "regions": split_regions(width, height, dpi, split)}, indent=2) + "\n",
+            encoding="utf-8")
+    return record
+
+
+def verify_split(executable: Path, environment: dict, appearance: str, frames: Path | None) -> dict:
+    """Issue #683: the split keys, the two panes' drawing and a click into the other pane."""
+    process, window, _ = start(executable, environment)
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        try:
+            record = {"driven": True, **drive_split(window, appearance, frames)}
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the split keys stay in the unit tests"}
+        close(window)
+        record["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
     return record
 
 
@@ -2437,6 +2656,8 @@ def main() -> None:
                         help="with --keys: switch to Vim NORMAL before before.png")
     parser.add_argument("--tabs", action="store_true",
                         help="run the tab key section alone (Issue #239); it sends real keys")
+    parser.add_argument("--split", action="store_true",
+                        help="run the split section alone (Issue #683); it sends real keys")
     parser.add_argument("--restore", action="store_true",
                         help="run the restore section alone (Issue #253); posted messages only")
     parser.add_argument("--grid", action="store_true",
@@ -2456,6 +2677,9 @@ def main() -> None:
         parser.error("--vim needs --keys")
     if arguments.tabs and (arguments.keys is not None or arguments.open is not None):
         parser.error("--tabs runs alone")
+    if arguments.split and (arguments.tabs or arguments.keys is not None
+                            or arguments.open is not None):
+        parser.error("--split runs alone")
     if arguments.restore and (arguments.tabs or arguments.keys is not None
                               or arguments.open is not None):
         parser.error("--restore runs alone")
@@ -2486,6 +2710,14 @@ def main() -> None:
     if arguments.tabs:
         try:
             record = verify_tabs(executable, environment, expected_appearance(), output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.split:
+        try:
+            record = verify_split(executable, environment, expected_appearance(), frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)
@@ -2578,6 +2810,8 @@ def main() -> None:
         result["firstPaint"] = verify_first_paint(executable, environment, appearance, output)
         # Issue #239: タブの鍵と閉じる順は、本物の鍵が要るので別の 2 回の起動で測る。
         result["tabs"] = verify_tabs(executable, environment, appearance, output, frames)
+        # Issue #683: 枠の鍵は本物の鍵が要るので別の 1 回の起動で測る。
+        result["split"] = verify_split(executable, environment, appearance, frames)
         # Issue #253: 前回のタブを戻す。一覧を残して起動し直すので、別の 4 回の起動で測る。
         result["restore"] = verify_restore(executable, environment, appearance, output, frames)
         # Issue #546: 1 行 16 MiB を格子で開く。問いに答えるので別の 1 回の起動で測る。

@@ -3191,14 +3191,49 @@ void EditorController::perform(const core::VimSwitchTab &effect)
     accept(SwitchTab{effect.index});
 }
 
-void EditorController::perform(const core::VimWindowCommand &)
+// Vim の `Ctrl-w` は枠の鍵と同じ意図へ（ADR 0148 の決定 6・7）。2 枠なので隣は 1 つで、
+// `h j k l` も `w` と同じく隣へ移る。`c` `q` は操作中の枠を閉じる（移ってからもう 1 つの枠を
+// 閉じる）。1 枠では移る・閉じるは何もしない（Vim は最後の窓の `Ctrl-w c` を失敗にするが、Nib は
+// 何もしない）。`o` はもう 1 つの枠を閉じる。
+void EditorController::perform(const core::VimWindowCommand &command)
 {
-    // #682 の SplitPane / SwitchPane / ClosePane に写す（#684 の後続）
+    switch (command)
+    {
+    case core::VimWindowCommand::split_horizontal:
+        accept(SplitPane{core::SplitLayout::horizontal});
+        return;
+    case core::VimWindowCommand::split_vertical:
+        accept(SplitPane{core::SplitLayout::vertical});
+        return;
+    case core::VimWindowCommand::next:
+    case core::VimWindowCommand::left:
+    case core::VimWindowCommand::down:
+    case core::VimWindowCommand::up:
+    case core::VimWindowCommand::right:
+        accept(SwitchPane{});
+        return;
+    case core::VimWindowCommand::close:
+        if (state_.split().other.has_value())
+        {
+            accept(SwitchPane{});
+            accept(ClosePane{});
+        }
+        return;
+    case core::VimWindowCommand::only:
+        accept(ClosePane{});
+        return;
+    }
+    std::unreachable();
 }
 
 const core::VimState &EditorController::vim_state() const noexcept
 {
     return state_.vim();
+}
+
+const SplitState &EditorController::split() const noexcept
+{
+    return state_.split();
 }
 
 void EditorController::accept(const RefreshAppearance &)
