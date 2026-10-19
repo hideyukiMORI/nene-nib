@@ -89,6 +89,23 @@ SPECIFICATION の FR-008（D8: UTF-8 既定・Shift_JIS 自動判別・改行は
 | 読み込みをワーカーで（ADR 0004） | 64 MiB までは同期で人が待てる。ワーカーの最初の利用はメモリマップの縦切りで版番号と一緒に入れる |
 | `GetOpenFileNameW`（旧ダイアログ） | Win11 の見た目と Mica の窓に合わない。`IFileOpenDialog` が現行 |
 
+## 追補 2026-10-20（#498）: MAX_PATH を超える経路
+
+### 文脈
+
+経路を Win32 へそのまま渡していたので、260 文字（フォルダは 248 文字）を超える場所のファイルは開けず保存できなかった。manifest に `longPathAware` も無かった。Microsoft Learn の "Maximum Path Length Limitation" によれば、接頭辞なしで上限が外れるのは manifest の `longPathAware` とレジストリ `LongPathsEnabled=1` の**両方**があるときだけで、`\\?\`（UNC は `\\?\UNC\`）を付けた Unicode の経路は設定に依らず約 32,767 文字まで通る。ただし `\\?\` の経路は `/`・`.`・`..` を読み替えない。
+
+### 決定
+
+1. Win32 のファイルの関数（`CreateFileW` `GetFileAttributesW` `MoveFileExW` `ReplaceFileW` `FindFirstFile(Ex)W` `DeleteFileW` `CreateDirectoryW` `RemoveDirectoryW`）へ渡す経路は、`src/adapters/win32/NativePath` の `native_path` の 1 本を通す。長さが `MAX_PATH − 12` 以上なら `GetFullPathNameW` で絶対にしてから `\\?\` を付ける。短い経路・既に `\\?\` か `\\.\` で始まる経路・絶対にできない経路はそのまま返す（短い経路の振る舞いは変えない）。
+2. 正規化は Win32 に渡す直前だけ。`core::FilePath`・表示・`session.v2`・履歴・一時ファイルの名前の比較（ADR 0135 の `owned_temporary`）は `\\?\` の無い元の形のまま。core と application は変えない。
+3. manifest の雛形 `src/app/NeNeNib.manifest.in` に `longPathAware`（`http://schemas.microsoft.com/SMI/2016/WindowsSettings`）を足す。レジストリが有効な機械では、`native_path` を通らない OS 側の経路（ダイアログなど）も長い経路を受けられる。版は CNF-007 のまま `project(VERSION)` から。
+4. 試験は `tests/adapters/LongPathAdapterTests.cpp`（CTest `nib_adapters_long_paths`）。300 文字を超える 10 段のフォルダで、書く → 読む → 一時ファイル経由の置き換え → 残骸の回収 → 列挙 → 消す。試験の exe は `longPathAware` を持たないので、接頭辞の無い長い経路が落ちることを反例として確かめる。読み取り専用・無い親フォルダの失敗は短い経路と同じ値。
+
+### 強制
+
+`native_path` を通らない Win32 のファイルの呼び出しを機械で拒む検査はまだ無い（planned）。今は `grep` で確かめた（`src/adapters/win32` の該当の呼び出しは全部 `native_path(...)` を引数に取る）。
+
 ## 関連
 
 - [ADR 0004](0004-ui-thread-plus-one-worker.md)・[ADR 0009](0009-editing-slice-piece-table-and-editing-states.md)

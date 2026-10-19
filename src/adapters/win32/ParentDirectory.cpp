@@ -1,4 +1,5 @@
 #include "ParentDirectory.hpp"
+#include "NativePath.hpp"
 
 #include <windows.h>
 
@@ -12,6 +13,7 @@ bool ensure_parent_directory(const std::wstring &path)
         return false;
     }
     const auto parent = path.substr(0, separator);
-    return CreateDirectoryW(parent.c_str(), nullptr) != 0 || GetLastError() == ERROR_ALREADY_EXISTS;
+    return CreateDirectoryW(native_path(parent).c_str(), nullptr) != 0 ||
+           GetLastError() == ERROR_ALREADY_EXISTS;
 }
 } // namespace nenenib::adapters::win32

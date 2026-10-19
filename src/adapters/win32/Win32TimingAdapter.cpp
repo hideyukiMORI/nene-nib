@@ -1,6 +1,7 @@
 #include "Win32TimingAdapter.hpp"
 
 #include "FileHandle.hpp"
+#include "NativePath.hpp"
 
 #include <cstddef>
 #include <string>
@@ -147,7 +148,7 @@ void Win32TimingAdapter::flush() const
         return;
     }
     const std::string text = report();
-    const FileHandle file(CreateFileW(output_path_.c_str(), GENERIC_WRITE, 0, nullptr,
+    const FileHandle file(CreateFileW(native_path(output_path_).c_str(), GENERIC_WRITE, 0, nullptr,
                                       CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!file.valid())
     {

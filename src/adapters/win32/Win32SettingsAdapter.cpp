@@ -1,6 +1,7 @@
 #include "Win32SettingsAdapter.hpp"
 
 #include "FileHandle.hpp"
+#include "NativePath.hpp"
 #include "ParentDirectory.hpp"
 #include "SettingsCodec.hpp"
 #include "Utf16.hpp"
@@ -150,8 +151,8 @@ Win32SettingsAdapter::write_through(const core::EditorSettings &settings, std::s
     {
         return std::unexpected(name.error());
     }
-    const FileHandle lock(CreateFileW(name.value().c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
-                                      FILE_ATTRIBUTE_NORMAL, nullptr));
+    const FileHandle lock(CreateFileW(native_path(name.value()).c_str(), GENERIC_WRITE, 0, nullptr,
+                                      OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!lock.valid())
     {
         return std::unexpected(Failure::unwritable);

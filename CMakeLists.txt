@@ -133,7 +133,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32ThemeAdapter.cpp
     src/adapters/win32/AbsolutePath.cpp src/adapters/win32/LocalSettingsPath.cpp
     src/adapters/win32/SettingsCodec.cpp src/adapters/win32/SettingsPaths.cpp src/adapters/win32/Win32SettingsAdapter.cpp
-    src/adapters/win32/ParentDirectory.cpp src/adapters/win32/SessionCodec.cpp
+    src/adapters/win32/NativePath.cpp src/adapters/win32/ParentDirectory.cpp
+    src/adapters/win32/SessionCodec.cpp
     src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp
     src/adapters/win32/BookmarkCodec.cpp src/adapters/win32/Win32BookmarkAdapter.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
@@ -203,6 +204,15 @@ nenenib_link(nib_autosave_tests nenenib_application)
 nenenib_link(nib_autosave_tests nenenib_adapters)
 add_test(NAME nib_autosave COMMAND nib_autosave_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_autosave PROPERTIES TIMEOUT 60)
+
+# Issue #498: MAX_PATH を超える経路の書く・読む・置き換え・列挙・消すを本物のフォルダで測る。
+# 名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。列挙はワーカー 1 本の合図だけを待つ。
+nenenib_target(nib_long_path_tests adapter_tests EXECUTABLE tests/adapters/LongPathAdapterTests.cpp)
+nenenib_link(nib_long_path_tests nenenib_core)
+nenenib_link(nib_long_path_tests nenenib_application)
+nenenib_link(nib_long_path_tests nenenib_adapters)
+add_test(NAME nib_adapters_long_paths COMMAND nib_long_path_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_long_paths PROPERTIES TIMEOUT 60)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp

@@ -3,6 +3,7 @@
 #include "AbsolutePath.hpp"
 #include "CompleteFileRead.hpp"
 #include "FileHandle.hpp"
+#include "NativePath.hpp"
 #include "TemporaryFiles.hpp"
 #include "Utf16.hpp"
 
@@ -44,9 +45,9 @@ constexpr std::uint32_t temporary_attempts = 8;
     return fallback;
 }
 
-[[nodiscard]] bool directory(const std::wstring &path) noexcept
+[[nodiscard]] bool directory(const std::wstring &path)
 {
-    const DWORD attributes = GetFileAttributesW(path.c_str());
+    const DWORD attributes = GetFileAttributesW(native_path(path).c_str());
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
@@ -133,8 +134,8 @@ written_temporary(const std::wstring &temporary, std::span<const std::string_vie
 {
     std::expected<void, Failure> written;
     {
-        const FileHandle file(CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                          FILE_ATTRIBUTE_NORMAL, nullptr));
+        const FileHandle file(CreateFileW(native_path(temporary).c_str(), GENERIC_WRITE, 0, nullptr,
+                                          CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (!file.valid())
         {
             return refused_creation(GetLastError());
@@ -143,32 +144,34 @@ written_temporary(const std::wstring &temporary, std::span<const std::string_vie
     }
     if (!written)
     {
-        DeleteFileW(temporary.c_str());
+        DeleteFileW(native_path(temporary).c_str());
         return std::unexpected(written.error());
     }
     return true;
 }
 
 // 既存なら ReplaceFileW が属性と ACL を保ったまま入れ替え、無ければ MoveFileExW で置く（決定 6）。
-[[nodiscard]] bool replaced(const std::wstring &target, const std::wstring &temporary) noexcept
+[[nodiscard]] bool replaced(const std::wstring &target, const std::wstring &temporary)
 {
-    if (GetFileAttributesW(target.c_str()) != INVALID_FILE_ATTRIBUTES)
+    const std::wstring native_target = native_path(target);
+    const std::wstring native_temporary = native_path(temporary);
+    if (GetFileAttributesW(native_target.c_str()) != INVALID_FILE_ATTRIBUTES)
     {
-        return ReplaceFileW(target.c_str(), temporary.c_str(), nullptr,
+        return ReplaceFileW(native_target.c_str(), native_temporary.c_str(), nullptr,
                             REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) != 0;
     }
-    return MoveFileExW(temporary.c_str(), target.c_str(),
+    return MoveFileExW(native_temporary.c_str(), native_target.c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
 }
-[[nodiscard]] bool placed(const std::wstring &target, const std::wstring &temporary,
-                          Mode mode) noexcept
+[[nodiscard]] bool placed(const std::wstring &target, const std::wstring &temporary, Mode mode)
 {
     switch (mode)
     {
     case Mode::replace:
         return replaced(target, temporary);
     case Mode::create_new:
-        return MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH) != 0;
+        return MoveFileExW(native_path(temporary).c_str(), native_path(target).c_str(),
+                           MOVEFILE_WRITE_THROUGH) != 0;
     }
     std::unreachable();
 }
@@ -194,7 +197,7 @@ written_temporary(const std::wstring &temporary, std::span<const std::string_vie
     if (!placed(target, temporary, mode))
     {
         const auto failure = placement_failure(GetLastError(), mode);
-        DeleteFileW(temporary.c_str());
+        DeleteFileW(native_path(temporary).c_str());
         return std::unexpected(failure);
     }
     return {};
@@ -214,8 +217,8 @@ std::expected<core::SealedBytes, Failure> Win32FileAdapter::read(const core::Fil
     {
         return std::unexpected(Failure::unreadable);
     }
-    const FileHandle file(CreateFileW(wide.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    const FileHandle file(CreateFileW(native_path(wide).c_str(), GENERIC_READ, FILE_SHARE_READ,
+                                      nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!file.valid())
     {
         return std::unexpected(failure_of(GetLastError(), Failure::unreadable));
@@ -232,7 +235,8 @@ std::expected<void, Failure> Win32FileAdapter::write(const core::FilePath &path,
     {
         return std::unexpected(Failure::unwritable);
     }
-    if (mode == Mode::create_new && GetFileAttributesW(target.c_str()) != INVALID_FILE_ATTRIBUTES)
+    if (mode == Mode::create_new &&
+        GetFileAttributesW(native_path(target).c_str()) != INVALID_FILE_ATTRIBUTES)
     {
         return std::unexpected(Failure::already_exists);
     }
