@@ -94,7 +94,6 @@ constexpr wchar_t untitled_file[] = L"無題.txt";
 constexpr std::int32_t design_width_dips = 640;
 constexpr std::int32_t design_height_dips = 360;
 constexpr std::int32_t resize_border_dips = 8;
-constexpr std::int32_t wheel_lines = 3;
 constexpr SHORT key_down_mask = static_cast<SHORT>(0x8000);
 constexpr wchar_t first_high_surrogate = 0xD800;
 constexpr wchar_t first_low_surrogate = 0xDC00;
@@ -521,6 +520,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     SetWindowLongPtrW(window_, GWLP_USERDATA, std::bit_cast<LONG_PTR>(this));
     timing_.mark(core::Milestone::window_created);
     dpi_ = GetDpiForWindow(window_);
+    read_wheel_setting();
     place_at_screen_centre();
     // 起動引数の結果を先に控える。最初の描画が出す VisibleLines の意図で last_failure は消える
     // （ADR 0010 の決定 9）。
@@ -793,6 +793,7 @@ LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
         limit_size(data);
         return 0;
     case WM_SETTINGCHANGE:
+        read_wheel_setting();
         refresh_appearance();
         return 0;
     case WM_SIZE:
@@ -2398,7 +2399,41 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         return;
     }
     zoom_wheel_remainder_ = 0;
-    send(application::ScrollLines{delta > 0 ? -wheel_lines : wheel_lines});
+    scroll_body(delta);
+}
+
+void EditorWindow::scroll_body(std::int32_t delta)
+{
+    // 1 刻みの行数は OS の設定から。1 画面の設定なら見えている行数（#499）。
+    std::size_t visible = 0;
+    if (wheel_setting_ == WHEEL_PAGESCROLL)
+    {
+        RECT client{};
+        GetClientRect(window_, &client);
+        visible = core::body_layout(client.right, client.bottom, dpi_,
+                                    controller_.delivery().settings.font_size)
+                      .visible_lines;
+    }
+    const auto turn =
+        wheel_turned(body_wheel_remainder_, delta, wheel_lines_per_notch(wheel_setting_, visible));
+    body_wheel_remainder_ = turn.remainder;
+    if (turn.lines != 0)
+    {
+        send(application::ScrollLines{turn.lines});
+    }
+}
+
+void EditorWindow::read_wheel_setting()
+{
+    // 起動と WM_SETTINGCHANGE で読む 1 か所。読めなければ Windows の既定の 3 行。単位が変わるので
+    // 前の余りは捨てる。
+    UINT lines = default_wheel_scroll_lines;
+    if (SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0) == FALSE)
+    {
+        lines = default_wheel_scroll_lines;
+    }
+    wheel_setting_ = lines;
+    body_wheel_remainder_ = 0;
 }
 
 bool EditorWindow::over_title_bar(LPARAM data) const

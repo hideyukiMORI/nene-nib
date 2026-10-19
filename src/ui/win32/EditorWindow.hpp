@@ -31,6 +31,7 @@
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
 #include "VimMode.hpp"
+#include "WheelTurn.hpp"
 #include "WindowFailure.hpp"
 #include "WindowTimer.hpp"
 
@@ -237,6 +238,8 @@ class EditorWindow final
     [[nodiscard]] bool over_title_bar(LPARAM data) const;
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);
+    void scroll_body(std::int32_t delta);
+    void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
 
     HINSTANCE instance_;
@@ -256,6 +259,10 @@ class EditorWindow final
     core::Appearance shown_appearance_ = core::Appearance::light;
     std::int32_t zoom_wheel_remainder_ = 0;
     std::int32_t tab_wheel_remainder_ = 0;
+    // 本文のホイールの余り（「delta × 1 刻みの行数」の単位・WheelTurn）と、OS の
+    // SPI_GETWHEELSCROLLLINES の値（起動と WM_SETTINGCHANGE で読む・#499）。
+    std::int32_t body_wheel_remainder_ = 0;
+    UINT wheel_setting_ = default_wheel_scroll_lines;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;
