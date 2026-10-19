@@ -2024,11 +2024,46 @@ void verify_encoding_labels()
     expect(encoding_label(TextEncoding::utf8) == "UTF-8", "the plain label");
     expect(encoding_label(TextEncoding::utf8_bom) == "UTF-8 BOM", "the BOM label");
     expect(encoding_label(TextEncoding::shift_jis) == "Shift_JIS", "the Japanese label");
+    expect(encoding_label(TextEncoding::utf16_le) == "UTF-16 LE", "the UTF-16 LE label");
+    expect(encoding_label(TextEncoding::utf16_be) == "UTF-16 BE", "the UTF-16 BE label");
+    expect(nenenib::core::utf16_le_byte_order_mark() == "\xFF\xFE" &&
+               nenenib::core::utf16_be_byte_order_mark() == "\xFE\xFF",
+           "the UTF-16 BOMs are two bytes in either order");
     expect(byte_order_mark() == "\xEF\xBB\xBF", "the BOM is three bytes");
     expect(without_byte_order_mark("abc") == "abc", "text without a BOM is unchanged");
     expect(without_byte_order_mark(std::string(byte_order_mark()) + "abc") == "abc",
            "the BOM is dropped from the front");
     expect(without_byte_order_mark("\xEF\xBB").size() == 2, "half a BOM is not a BOM");
+}
+
+// UTF-16 の BOM は UTF-8 の判定より先に見て、後ろが UTF-16 として正しくなければ断る（ADR 0149）。
+void verify_utf16_detection()
+{
+    expect(detect_encoding(std::string("\xFF\xFE\x00\x41", 4)).value() == TextEncoding::utf16_le,
+           "FF FE labels UTF-16 LE");
+    expect(detect_encoding(std::string("\xFE\xFF\x41\x00", 4)).value() == TextEncoding::utf16_be,
+           "FE FF labels UTF-16 BE");
+    expect(detect_encoding("\xFF\xFE").value() == TextEncoding::utf16_le &&
+               detect_encoding("\xFE\xFF").value() == TextEncoding::utf16_be,
+           "a UTF-16 BOM on its own is an empty UTF-16 document");
+    expect(detect_encoding(std::string("\xFF\xFE\x41", 3)).error() ==
+               EncodingFailure::odd_utf16_length,
+           "an odd body behind FF FE is its own failure");
+    expect(detect_encoding(std::string("\xFE\xFF\x00\x41\x00", 5)).error() ==
+               EncodingFailure::odd_utf16_length,
+           "an odd body behind FE FF is its own failure");
+    expect(detect_encoding(std::string("\xFF\xFE\x3D\xD8", 4)).error() ==
+               EncodingFailure::undecodable,
+           "a high surrogate at the end is undecodable");
+    expect(detect_encoding(std::string("\xFF\xFE\x00\xDE\x41\x00", 6)).error() ==
+               EncodingFailure::undecodable,
+           "a lone low surrogate is undecodable");
+    expect(detect_encoding(std::string("\xFE\xFF\xD8\x3D\x00\x41", 6)).error() ==
+               EncodingFailure::undecodable,
+           "a high surrogate followed by a plain unit is undecodable");
+    expect(detect_encoding(std::string("\xFF\xFE\x3D\xD8\x00\xDE", 6)).value() ==
+               TextEncoding::utf16_le,
+           "a surrogate pair is accepted");
 }
 
 void verify_encoding_detection()
@@ -2059,7 +2094,8 @@ void verify_encoding_detection()
     expect(!detect_encoding("\x81\x20").has_value(), "a trail byte below the range");
     expect(!detect_encoding("\x81\x7F").has_value(), "a trail byte in the gap");
     expect(!detect_encoding("\xA0").has_value(), "0xA0 is neither a single byte nor a lead byte");
-    expect(!detect_encoding("\xFF\xFE\x00\x41").has_value(), "UTF-16 is neither");
+    expect(!detect_encoding("\xFF\x41").has_value(), "0xFF without the second BOM byte is neither");
+    verify_utf16_detection();
 }
 
 void verify_line_ending_detection()

@@ -168,15 +168,18 @@ void verify_sealed_fill()
 
 void verify_sealed_detection()
 {
-    const std::array<std::string, 9> samples{"",
-                                             "ASCII",
-                                             "日本語\r\n続き",
-                                             std::string("a\0b\n", 4),
-                                             std::string(byte_order_mark()) + "x",
-                                             "\x93\xFA",
-                                             "\x93",
-                                             "\xFF",
-                                             std::string(byte_order_mark()) + "\x93\xFA"};
+    const std::array<std::string, 12> samples{"",
+                                              std::string("\xFF\xFE\x42\x30\x0D\x00\x0A\x00", 8),
+                                              std::string("\xFE\xFF\x30\x42", 4),
+                                              std::string("\xFF\xFE\x41", 3),
+                                              "ASCII",
+                                              "日本語\r\n続き",
+                                              std::string("a\0b\n", 4),
+                                              std::string(byte_order_mark()) + "x",
+                                              "\x93\xFA",
+                                              "\x93",
+                                              "\xFF",
+                                              std::string(byte_order_mark()) + "\x93\xFA"};
     for (const auto &sample : samples)
     {
         const auto borrowed = DetectedText::from_bytes(sample);
@@ -220,10 +223,38 @@ void verify_detected_boundaries()
                std::string(byte_order_mark()) + "x",
            "a second BOM remains body text");
 }
+// UTF-16 は BOM を外して UTF-8 へ写した列を持ち、本文はその UTF-8 から作る（ADR 0149 の決定 2）。
+void verify_detected_utf16()
+{
+    auto little = DetectedText::from_bytes(
+                      std::string("\xFF\xFE\x42\x30\x0D\x00\x0A\x00\x3D\xD8\x00\xDE", 12))
+                      .value();
+    expect(little.encoding() == TextEncoding::utf16_le && little.bytes() == "あ\r\n😀",
+           "UTF-16 LE is held as UTF-8 without its BOM");
+    const auto text = TextBuffer::from_utf8(std::move(little)).value();
+    expect(text.text() == "あ\r\n😀" && text.line_ending() == LineEnding::crlf &&
+               text.line_count() == 2,
+           "the newline form is decided on the UTF-8 body");
+    auto big = DetectedText::from_bytes(std::string("\xFE\xFF\x00\x61\x00\x0A\x65\xE5", 8)).value();
+    expect(big.encoding() == TextEncoding::utf16_be && big.bytes() == "a\n日",
+           "UTF-16 BE is swapped before it becomes UTF-8");
+    expect(TextBuffer::from_utf8(std::move(big)).value().line_ending() == LineEnding::lf,
+           "an LF UTF-16 file keeps LF");
+    auto empty = DetectedText::from_bytes("\xFF\xFE").value();
+    expect(empty.bytes().empty() && TextBuffer::from_utf8(std::move(empty)).value().text().empty(),
+           "a BOM-only UTF-16 file is an empty body");
+    expect(DetectedText::from_bytes(std::string("\xFE\xFF\x00", 3)).error() ==
+               EncodingFailure::odd_utf16_length,
+           "an odd UTF-16 body is refused before conversion");
+    expect(DetectedText::from_sealed(sealed_of(std::string("\xFF\xFE\x00\xDE", 4))).error() ==
+               EncodingFailure::undecodable,
+           "an unpaired surrogate in sealed bytes is undecodable");
+}
 } // namespace
 
 void verify_detected_text_contracts()
 {
+    verify_detected_utf16();
     verify_detected_rejections();
     verify_detected_boundaries();
     verify_owned_and_borrowed();

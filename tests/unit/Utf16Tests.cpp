@@ -1,5 +1,7 @@
+#include "ByteOrder.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
+#include "TextFailure.hpp"
 #include "Utf16.hpp"
 
 #include <array>
@@ -92,10 +94,51 @@ void verify_long_utf8_output()
     expect(converted_supplementary && converted_supplementary.value() == supplementary_bytes,
            "long surrogate pairs convert to known four-byte scalars");
 }
+// UTF-16 のバイト列（BOM を除く）と UTF-8 の往復（ADR 0149 の決定 2・3）。値は手で書いた固定値。
+void verify_utf16_bytes()
+{
+    const std::string utf8 = "a日\r\n😀";
+    const std::string little("a\x00\xE5\x65\x0D\x00\x0A\x00\x3D\xD8\x00\xDE", 12);
+    const std::string big("\x00"
+                          "a\x65\xE5\x00\x0D\x00\x0A\xD8\x3D\xDE\x00",
+                          12);
+    expect(core::utf16_bytes_of_utf8(utf8, core::ByteOrder::little).value() == little,
+           "UTF-8 becomes UTF-16 LE bytes with the low byte first");
+    expect(core::utf16_bytes_of_utf8(utf8, core::ByteOrder::big).value() == big,
+           "UTF-8 becomes UTF-16 BE bytes with the high byte first");
+    expect(core::utf8_of_utf16_bytes(little, core::ByteOrder::little).value() == utf8,
+           "UTF-16 LE bytes come back as the same UTF-8");
+    expect(core::utf8_of_utf16_bytes(big, core::ByteOrder::big).value() == utf8,
+           "UTF-16 BE bytes come back as the same UTF-8");
+    expect(core::valid_utf16_bytes(little, core::ByteOrder::little) &&
+               core::valid_utf16_bytes(big, core::ByteOrder::big),
+           "the validator accepts both orders with a surrogate pair");
+    const std::string high("\x00\xD8", 2);
+    expect(!core::valid_utf16_bytes(high, core::ByteOrder::little) &&
+               core::valid_utf16_bytes(high, core::ByteOrder::big),
+           "the same two bytes are a lone surrogate in one order and a letter in the other");
+    expect(core::utf8_of_utf16_bytes("", core::ByteOrder::little).value().empty() &&
+               core::utf16_bytes_of_utf8("", core::ByteOrder::big).value().empty(),
+           "empty is empty both ways");
+    constexpr std::array<std::string_view, 4> broken{
+        std::string_view("a", 1), std::string_view("\x3D\xD8", 2), std::string_view("\x00\xDE", 2),
+        std::string_view("\x3D\xD8\x41\x00", 4)};
+    for (const auto bytes : broken)
+    {
+        const auto converted = core::utf8_of_utf16_bytes(bytes, core::ByteOrder::little);
+        expect(!converted && converted.error() == core::TextFailure::invalid_utf16 &&
+                   !core::valid_utf16_bytes(bytes, core::ByteOrder::little),
+               "odd bytes and unpaired surrogates are invalid UTF-16 both ways");
+    }
+    const auto rejected = core::utf16_bytes_of_utf8("\xFF", core::ByteOrder::little);
+    expect(!rejected && rejected.error() == core::TextFailure::invalid_utf8,
+           "broken UTF-8 is not written as UTF-16");
+}
 } // namespace
 
 void verify_utf16_scope()
 {
+    verify_utf16_bytes();
     verify_utf16_conversions();
     verify_lengths();
     verify_failures_and_long_text();
