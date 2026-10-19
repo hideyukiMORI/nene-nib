@@ -29,7 +29,10 @@ above stay the default set and the only ones compare() judges:
                             after the grid question is answered) over a document that is one
                             16,800,000 byte ASCII line (minified JSON, no newline, checked by
                             SHA-256), with the startup breakdown; a run that presents no body
-                            within LARGE_SECONDS is missing, not a traceback (#546)
+                            within LARGE_SECONDS is missing, not a traceback (#546). The time the
+                            question waits for its answer (question_shown -> question_answered)
+                            is taken out of the value and kept per trial as questionWaitMs; an exe
+                            without those two marks keeps body_presented as is with a null (#689)
   key-to-frame-single-giant-line-16mib
                             the key-to-frame-single trial over that document without the 200
                             keystrokes: the warmup character and one more, each sent only after the
@@ -210,6 +213,11 @@ STARTUP_MILESTONES = ("document_opened", "window_created", "backdrop_applied", "
                       "device_created", "swap_chain_created", "composition_bound",
                       "context_created", "text_formats_created", "frame_presented",
                       BODY_MILESTONE)
+# 表示形式の問いの MessageBoxW の前後（#689）。この間は計測器が答えるまでの待ちで、製品の速さ
+# ではないので開くの値から引き、内訳には QUESTION_WAIT_SEGMENT として別に載せる。
+QUESTION_SHOWN = "question_shown"
+QUESTION_ANSWERED = "question_answered"
+QUESTION_WAIT_SEGMENT = "questionWait"
 # 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
 STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
@@ -391,6 +399,15 @@ def breakdown(report: dict) -> dict:
         segments[milestone] = (reading - previous) / MICROSECONDS_PER_MILLISECOND
         previous = reading
     return segments
+
+
+def question_wait(marks: list) -> float | None:
+    """question_shown -> question_answered in ms, or None for an exe without both marks (#689)."""
+    names = {entry["milestone"] for entry in marks}
+    if QUESTION_SHOWN not in names or QUESTION_ANSWERED not in names:
+        return None
+    return ((first_reading(marks, QUESTION_ANSWERED) - first_reading(marks, QUESTION_SHOWN))
+            / MICROSECONDS_PER_MILLISECOND)
 
 
 def frame_after(marks: list, index: int) -> int | None:
@@ -1063,7 +1080,10 @@ def bench_giant_open(executable: Path, environment: dict, folder: Path,
     WM_PAINT of the body. The process gets LARGE_SECONDS for each; one that does not exit is
     killed by stop() and the trial is missing (ADR 0138 decision 4), as is a finished file
     without body_presented. The value is processCreationToOriginMs plus the body_presented
-    reading, as startup-window-shown adds window_shown's.
+    reading, as startup-window-shown adds window_shown's, minus the question's wait for its answer
+    (question_shown -> question_answered, #689), which is the tool's reply and not the editor; the
+    wait goes to the breakdown as QUESTION_WAIT_SEGMENT. An exe without those marks keeps the
+    body_presented reading as is and no wait segment. --grid-answer no is treated the same way.
     """
     report = report_path(folder, "giant")
     process, window, _ = start(executable, environment,
@@ -1090,7 +1110,12 @@ def bench_giant_open(executable: Path, environment: dict, folder: Path,
     measured = json.loads(text)
     body = (float(measured["processCreationToOriginMs"])
             + first_reading(marks, BODY_MILESTONE) / MICROSECONDS_PER_MILLISECOND)
-    return {GIANT_OPEN_BENCH: body}, {GIANT_OPEN_BENCH: breakdown(measured)}
+    parts = breakdown(measured)
+    wait = question_wait(marks)
+    if wait is not None:
+        body -= wait
+        parts[QUESTION_WAIT_SEGMENT] = wait
+    return {GIANT_OPEN_BENCH: body}, {GIANT_OPEN_BENCH: parts}
 
 
 def bench_large_file(executable: Path, environment: dict, folder: Path,
@@ -1188,6 +1213,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     # 起動の内訳は区間ごとに 5 回ぶん貯めて、値と同じように中央値を出す（Issue #19）。
     # 16 MiB の 200 打鍵の到着の幅も同じ形で残す（#179）。
     segments: dict = {name: {} for name in BREAKDOWN_BENCHES if name in names}
+    # 問いの待ちは値になった試行ごとに 1 つ（節目の無い古い exe は None・#689）。
+    waits: list = []
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
                                          long_line, giant, grid):
@@ -1198,6 +1225,8 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
                     missing[name] += 1
                 else:
                     samples[name].append(value)
+                    if name == GIANT_OPEN_BENCH:
+                        waits.append(parts.get(name, {}).get(QUESTION_WAIT_SEGMENT))
             for name, run in parts.items():
                 if name not in segments:
                     continue
@@ -1206,6 +1235,9 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     record = {"recordedAt": stamp(), "repetitions": repetitions, "machine": machine(),
               "values": summarise(samples, missing),
               "breakdown": {name: spread(values) for name, values in segments.items()}}
+    if GIANT_OPEN_BENCH in names:
+        record["values"][GIANT_OPEN_BENCH]["questionWaitMs"] = [
+            None if wait is None else round(wait, 4) for wait in waits]
     if document is not None:
         record["document"] = {"path": document.name, "bytes": document.stat().st_size,
                               "lines": LARGE_LINES}
@@ -1247,6 +1279,10 @@ def describe(record: dict) -> str:
                              for segment in (ORIGIN_SEGMENT, *STARTUP_MILESTONES)
                              if segment in parts)
         lines.append(f"  {name} breakdown (median ms): {written}")
+        wait = parts.get(QUESTION_WAIT_SEGMENT)
+        if wait is not None:
+            lines.append(f"  {name} question wait (median ms, not in the value):"
+                         f" {wait['medianMs']:.1f}")
     return "\n".join(lines)
 
 

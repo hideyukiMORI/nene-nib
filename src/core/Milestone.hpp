@@ -16,6 +16,8 @@ namespace nenenib::core
 // （ADR 0138 の決定 2）。
 // device_adopted は最初の frame を WARP で子窓に出した後、本窓に本物の device で同じ frame を
 // 出し終えた所（ADR 0132 の決定 3）。input_received と同じく起動の正典順の外。
+// question_shown と question_answered は表示形式の問い（ADR 0140 の決定 2）の MessageBoxW の
+// 直前と返った直後。計測器は開くの値からこの間（答えを待つ時間）を引く（#689）。
 enum class Milestone : std::uint8_t
 {
     document_opened,
@@ -31,6 +33,8 @@ enum class Milestone : std::uint8_t
     frame_presented,
     body_presented,
     device_adopted,
+    question_shown,
+    question_answered,
     probe_started,
     probe_finished
 };
@@ -66,6 +70,10 @@ enum class Milestone : std::uint8_t
         return "body_presented";
     case Milestone::device_adopted:
         return "device_adopted";
+    case Milestone::question_shown:
+        return "question_shown";
+    case Milestone::question_answered:
+        return "question_answered";
     case Milestone::probe_started:
         return "probe_started";
     case Milestone::probe_finished:

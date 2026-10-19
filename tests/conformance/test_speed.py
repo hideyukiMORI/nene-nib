@@ -816,12 +816,19 @@ class GiantLineTests(unittest.TestCase):
         self.assertEqual((None, None, 0.0, 2), self.quiet_trial(entries))
 
 
-def giant_report(body: bool) -> str:
-    """A measurement file of the giant line: the startup marks, a frame per answer, the body last."""
+def giant_report(body: bool, wait_ms: int | None = None) -> str:
+    """A measurement file of the giant line: the startup marks, a frame per answer, the body last.
+
+    With wait_ms the question's two marks (#689) surround that wait after the first frame.
+    """
     entries = [{"milestone": name, "qpcMicroseconds": 1000 * (index + 1)}
                for index, name in enumerate(speed.STARTUP_MILESTONES)
                if name != "body_presented"]
     entries.append({"milestone": "frame_presented", "qpcMicroseconds": 150000})
+    if wait_ms is not None:
+        entries.append({"milestone": "question_shown", "qpcMicroseconds": 150500})
+        entries.append({"milestone": "question_answered",
+                        "qpcMicroseconds": 150500 + 1000 * wait_ms})
     if body:
         entries.append({"milestone": "body_presented", "qpcMicroseconds": 200000})
     return json.dumps({"processCreationToFirstFrameMs": 30.0, "processCreationToOriginMs": 10.0,
@@ -865,6 +872,62 @@ class GiantOpenTrialTests(unittest.TestCase):
         value, parts = self.trial(giant_report(body=False))
         self.assertIsNone(value)
         self.assertEqual({}, parts)
+
+    def test_the_wait_for_the_answer_is_taken_out_of_the_value(self):
+        """#689: body_presented minus question_shown -> question_answered (the "no" answer too)."""
+        value, parts = self.trial(giant_report(body=True, wait_ms=60))
+        self.assertEqual(150.0, value)
+        segments = parts[speed.GIANT_OPEN_BENCH]
+        self.assertEqual(60.0, segments[speed.QUESTION_WAIT_SEGMENT])
+        self.assertEqual(190.0, segments["body_presented"])  # 内訳の区間は節目のまま
+
+    def test_an_exe_without_the_question_marks_keeps_body_presented(self):
+        """#689: an exe built before the two marks is not missing; nothing is taken out."""
+        value, parts = self.trial(giant_report(body=True))
+        self.assertEqual(210.0, value)
+        self.assertNotIn(speed.QUESTION_WAIT_SEGMENT, parts[speed.GIANT_OPEN_BENCH])
+
+    def test_one_mark_alone_takes_nothing_out(self):
+        report = json.loads(giant_report(body=True, wait_ms=60))
+        report["marks"] = [entry for entry in report["marks"]
+                           if entry["milestone"] != "question_answered"]
+        value, parts = self.trial(json.dumps(report))
+        self.assertEqual(210.0, value)
+        self.assertNotIn(speed.QUESTION_WAIT_SEGMENT, parts[speed.GIANT_OPEN_BENCH])
+
+
+class GiantOpenRecordTests(unittest.TestCase):
+    """#689: the record keeps each valid trial's wait, null for an exe without the marks."""
+
+    def test_the_record_keeps_the_wait_per_trial_and_describes_its_median(self):
+        startup = {speed.ORIGIN_SEGMENT: 10.0, **{name: 1.0 for name in speed.STARTUP_MILESTONES}}
+        trials = iter([
+            ({speed.GIANT_OPEN_BENCH: 150.0},
+             {speed.GIANT_OPEN_BENCH: {**startup, speed.QUESTION_WAIT_SEGMENT: 60.0}}),
+            ({speed.GIANT_OPEN_BENCH: None}, {}),
+            ({speed.GIANT_OPEN_BENCH: 210.0}, {speed.GIANT_OPEN_BENCH: dict(startup)}),
+            ({speed.GIANT_OPEN_BENCH: 140.0},
+             {speed.GIANT_OPEN_BENCH: {**startup, speed.QUESTION_WAIT_SEGMENT: 40.0}})])
+        boundaries = {name: mock.Mock() for name in
+                      ("become_dpi_aware", "prepare", "giant_line_document", "stamp", "machine")}
+        boundaries["prepare"].return_value = Path("exe"), {}, Path("folder")
+        giant = mock.Mock()
+        giant.name = "giant-line.txt"
+        giant.stat.return_value.st_size = 16_800_000
+        boundaries["giant_line_document"].return_value = giant
+        boundaries["stamp"].return_value = "test"
+        boundaries["machine"].return_value = record({})["machine"]
+        boundaries["run_benches"] = mock.Mock(side_effect=lambda *args: [next(trials)])
+        with mock.patch.multiple(speed, **boundaries):
+            written = speed.measure(Path("build"), 4, speed.GIANT_OPEN_BENCH)
+        value = written["values"][speed.GIANT_OPEN_BENCH]
+        self.assertEqual([150.0, 210.0, 140.0], value["samples"])
+        self.assertEqual(1, value["missing"])
+        self.assertEqual([60.0, None, 40.0], value["questionWaitMs"])
+        wait = written["breakdown"][speed.GIANT_OPEN_BENCH][speed.QUESTION_WAIT_SEGMENT]
+        self.assertEqual(50.0, wait["medianMs"])
+        self.assertIn(f"{speed.GIANT_OPEN_BENCH} question wait (median ms, not in the value): 50.0",
+                      speed.describe(written))
 
 
 class MilestoneOrderTests(unittest.TestCase):
