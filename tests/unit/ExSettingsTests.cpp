@@ -228,7 +228,7 @@ void verify_ex_rejections()
 {
     const auto settings = core::default_editor_settings();
     for (const auto text :
-         {"", "w!", "2colorscheme dracula", "1,2set fontsize=12", ":colorscheme", "set",
+         {"", "w!!", "2colorscheme dracula", "1,2set fontsize=12", ":colorscheme", "set",
           "set number", "set fontsize=41", "set fontsize=12|q", "colorscheme DRACULA",
           "colorscheme missing", "set guifont=:h12", "set guifont=Consolas",
           "set guifont=Consolas:h12x", "set guifont=Consolas:hNaN", "colorscheme\n"})
@@ -571,6 +571,7 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set nowrap",
                                                           "set display=grid",
                                                           "set display=text",
+                                                          "nohlsearch",
                                                           "edit",
                                                           "buffer",
                                                           "ls",

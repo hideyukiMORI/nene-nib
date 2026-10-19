@@ -72,6 +72,7 @@ constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme"
                                                                    "set nowrap",
                                                                    "set display=grid",
                                                                    "set display=text",
+                                                                   "nohlsearch",
                                                                    "edit",
                                                                    "buffer",
                                                                    "ls",

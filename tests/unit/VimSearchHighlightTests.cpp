@@ -1,9 +1,12 @@
 // scope `--vim-search-highlight` の単体テスト（ADR 0042 決定 2）。
 #include "Appearance.hpp"
+#include "CommandChoice.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorSettings.hpp"
+#include "ExEvaluationFailure.hpp"
+#include "ExFailure.hpp"
 #include "ExResult.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -168,7 +171,8 @@ void verify_vim_search_highlight_state()
            ":noh is the same command in short");
     vim_replay(controller, "N");
     expect(highlight_is(controller, VimSearchHighlight::on), "N brings it back");
-    static_cast<void>(run_ex(controller, "noh"));
+    static_cast<void>(run_ex(controller, "nohl"));
+    expect(highlight_is(controller, VimSearchHighlight::suspended), ":nohl suspends it too");
     vim_replay(controller, "*");
     expect(highlight_is(controller, VimSearchHighlight::on), "* brings it back");
     static_cast<void>(run_ex(controller, "noh"));
@@ -244,7 +248,8 @@ void verify_ex_highlight_commands()
     expect(off.highlight == std::optional<VimSearchHighlight>{VimSearchHighlight::off} &&
                off.message.text() == "hlsearch=off",
            ":set nohlsearch turns it off");
-    for (const auto text : {"nohlsearch", "noh", " noh "})
+    for (const auto text : {"nohlsearch", "noh", " noh ", "nohl", "nohls", "nohlse", "nohlsea",
+                            "nohlsear", "nohlsearc"})
     {
         const auto cleared = core::evaluate_ex(text, settings, Appearance::dark).value();
         expect(cleared.highlight ==
@@ -260,6 +265,17 @@ void verify_ex_highlight_commands()
         expect(!core::evaluate_ex(text, settings, Appearance::dark),
                "only the four measured spellings are accepted");
     }
+    // Issue #501: every prefix from noh to nohlsearch, nothing shorter or longer.
+    for (const auto text : {"no", "nohx", "nohlsearchx", "noh!", "nohl!", "Noh"})
+    {
+        const auto refused = core::evaluate_ex(text, settings, Appearance::dark);
+        expect(!refused &&
+                   refused.error() == core::ExEvaluationFailure{core::ExFailure::unknown_command},
+               "other spellings stay unknown commands");
+    }
+    expect(core::command_completions("noh") == std::vector<std::string>{"nohlsearch"} &&
+               core::command_completions("nohl") == std::vector<std::string>{"nohlsearch"},
+           "the command is offered once by its full name, never by its short forms");
     const auto completions = core::command_completions("set ");
     expect(std::ranges::find(completions, "set hlsearch") != completions.end() &&
                std::ranges::find(completions, "set nohlsearch") != completions.end(),
@@ -267,8 +283,16 @@ void verify_ex_highlight_commands()
     expect(core::command_completions("set noh").size() == 1 &&
                core::command_completions("set noh").front() == "set nohlsearch",
            "a prefix narrows to the one that matches");
-    expect(choices_for("hls").front().command == "set hlsearch",
+    // Issue #501: `nohlsearch` joined the catalog and also matches "hls", so the check is that the
+    // option is reached, not which of the two the fuzzy order puts first.
+    const auto reached = [](std::string_view query, std::string_view command)
+    {
+        return std::ranges::any_of(choices_for(query), [command](const core::CommandChoice &choice)
+                                   { return choice.command == command; });
+    };
+    expect(reached("hls", "set hlsearch"),
            "the palette reaches the option through the shared catalog");
+    expect(reached("nohl", "nohlsearch"), "the palette reaches :nohlsearch by its full name");
 }
 
 // 見えている行ごとの当たりと現在の当たり（決定 3・4）。桁は選択と同じ span_of で作る。

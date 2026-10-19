@@ -72,7 +72,8 @@ void verify_names()
     for (const std::string_view name : {"q", "qu", "qui", "quit"})
     {
         expect(request_is(name, Verb::quit), "quit accepts Vim's prefixes");
-        expect(request_is(std::string(name) + "!", Verb::quit_force), "only quit accepts a bang");
+        expect(request_is(std::string(name) + "!", Verb::quit_force),
+               "a bang turns quit into forced quit");
     }
     expect(request_is("wq", Verb::write_quit), "wq always writes before quitting");
     for (const std::string_view name : {"x", "xi", "xit", "exi", "exit"})
@@ -80,17 +81,32 @@ void verify_names()
         expect(request_is(name, Verb::update_quit), "xit and exit only write modified documents");
     }
     expect(request_is("  write  ", Verb::write), "outer spaces use the common trimming");
+    // Issue #501: Nib has no read-only refusal, so a bang keeps the same condition.
+    for (const std::string_view name : {"w!", "write!", "w! "})
+    {
+        expect(request_is(name, Verb::write), "a forced write is the same write");
+    }
+    expect(request_is("wq!", Verb::write_quit), "a forced wq is the same write and quit");
+    for (const std::string_view name : {"x!", "xit!", "exi!", "exit!"})
+    {
+        expect(request_is(name, Verb::update_quit), "a forced xit is the same update and quit");
+    }
     expect(core::command_completions("q") == std::vector<std::string>{"quit", "quit!"},
            "quit and forced quit share the command catalog");
     expect(core::command_completions("w") == std::vector<std::string>{"write", "wq"},
            "the same table produces save completion");
+    expect(core::command_completions("wq!").empty() && core::command_completions("write!").empty(),
+           "a bang that keeps the same condition is not listed as a separate command");
 }
 
 void verify_rejections()
 {
-    for (const std::string_view input : {"w!",
-                                         "wq!",
-                                         "x!",
+    for (const std::string_view input : {"w!!",
+                                         "w! other",
+                                         "w!other",
+                                         "wq!!",
+                                         "sav! other",
+                                         "saveas!",
                                          "q!!",
                                          "q !",
                                          "w ++enc=utf8 other.txt",
@@ -199,7 +215,7 @@ void verify_clean_and_untitled()
 
 void verify_write_quit()
 {
-    for (const std::string_view command : {"wq", "x"})
+    for (const std::string_view command : {"wq", "x", "wq!", "x!", "exit!"})
     {
         Editing editing;
         open_named(editing);
@@ -213,6 +229,14 @@ void verify_write_quit()
     open_named(unchanged);
     expect(run_ex(unchanged.controller(), "wq").closing && unchanged.files().written() == "alpha",
            "wq writes even when the document is unchanged");
+    Editing forced;
+    open_named(forced);
+    vim_replay(forced.controller(), "A!<Esc>");
+    const auto written = run_ex(forced.controller(), "w!");
+    expect(!written.closing && forced.files().written() == "alpha!" &&
+               written.document.save_state == core::SaveState::saved &&
+               message(written) == "Written",
+           "a forced write saves and stays open like write");
 }
 
 void verify_write_failures()
@@ -222,7 +246,7 @@ void verify_write_failures()
           FileFailure::unwritable, FileFailure::too_large, FileFailure::undecodable,
           FileFailure::unencodable})
     {
-        for (const std::string_view command : {"w", "wq", "x"})
+        for (const std::string_view command : {"w", "wq", "x", "wq!", "x!"})
         {
             Editing editing;
             open_named(editing);

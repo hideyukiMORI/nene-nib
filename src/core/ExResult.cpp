@@ -246,6 +246,18 @@ set_option(std::string_view option, const EditorSettings &settings)
     }
     return unsaved_option(option);
 }
+// 命令の名前の省略は Vim 9.1 のとおり「最短の形から完全な形までの前方一致」の 1 つ。タブ・一覧・
+// 保存と終了の表と `:nohlsearch` が同じ判定を使う（Issue #501）。
+[[nodiscard]] bool abbreviates(std::string_view input, std::string_view name,
+                               std::size_t shortest) noexcept
+{
+    return input.size() >= shortest && name.starts_with(input);
+}
+
+// `:noh[lsearch]`（最短は `noh`・`:no` は Vim では noremap）。
+constexpr std::string_view nohlsearch_name = "nohlsearch";
+constexpr std::size_t nohlsearch_shortest = 3;
+
 // タブの命令の名前の表（ADR 0057 の決定 4・CPP-012）。省略は Vim 9.1 の実測のとおり「最短の形
 // から完全な形までの前方一致」で、`tabne` は tabnext（tabnew は完全一致だけ）。`tab` `tabe`
 // `tabm` `tabf` はどの行にも当たらず、今までどおり unknown_command になる。
@@ -260,7 +272,7 @@ constexpr std::array<ExTabName, 6> tab_names{{{"tabnext", 4, ExTabVerb::next},
 {
     for (const ExTabName &row : tab_names)
     {
-        if (name.size() >= row.shortest && row.name.starts_with(name))
+        if (abbreviates(name, row.name, row.shortest))
         {
             return row;
         }
@@ -358,9 +370,9 @@ palette_command(std::string_view text)
     const std::size_t range = leading(text, is_digit);
     const std::size_t letters = leading(text.substr(range), is_letter);
     const auto name = text.substr(range, letters);
-    const auto row = std::ranges::find_if(
-        palette_names, [name](const ExPaletteName &entry)
-        { return name.size() >= entry.shortest && entry.name.starts_with(name); });
+    const auto row =
+        std::ranges::find_if(palette_names, [name](const ExPaletteName &entry)
+                             { return abbreviates(name, entry.name, entry.shortest); });
     if (row == palette_names.end())
     {
         return std::nullopt;
@@ -378,12 +390,12 @@ palette_command(std::string_view text)
 }
 
 constexpr std::array<ExDocumentName, 6> document_names{{
-    {"write", 1, ExDocumentVerb::write},
-    {"quit", 1, ExDocumentVerb::quit},
-    {"wq", 2, ExDocumentVerb::write_quit},
-    {"xit", 1, ExDocumentVerb::update_quit},
-    {"exit", 3, ExDocumentVerb::update_quit},
-    {"saveas", 3, ExDocumentVerb::save_as},
+    {"write", 1, ExDocumentVerb::write, ExDocumentVerb::write},
+    {"quit", 1, ExDocumentVerb::quit, ExDocumentVerb::quit_force},
+    {"wq", 2, ExDocumentVerb::write_quit, ExDocumentVerb::write_quit},
+    {"xit", 1, ExDocumentVerb::update_quit, ExDocumentVerb::update_quit},
+    {"exit", 3, ExDocumentVerb::update_quit, ExDocumentVerb::update_quit},
+    {"saveas", 3, ExDocumentVerb::save_as, std::nullopt},
 }};
 
 [[nodiscard]] bool unsupported_filename_character(char value) noexcept
@@ -417,8 +429,10 @@ constexpr std::array<ExDocumentName, 6> document_names{{
     return std::move(parsed).value();
 }
 
-[[nodiscard]] std::expected<ExDocumentRequest, ExFailure> document_request(ExDocumentVerb verb,
-                                                                           std::string_view suffix)
+// `!` の付いた形は引数を取らない。`:w! file` の上書きは Nib の書き込みの条件に無いので、黙って
+// `!` を捨てず unsupported_argument にする（Issue #501）。
+[[nodiscard]] std::expected<ExDocumentRequest, ExFailure>
+document_request(ExDocumentVerb verb, std::string_view suffix, bool forced)
 {
     const auto argument = trimmed(suffix);
     if (argument.empty())
@@ -429,11 +443,7 @@ constexpr std::array<ExDocumentName, 6> document_names{{
         }
         return ExDocumentRequest{verb, std::nullopt};
     }
-    if (verb == ExDocumentVerb::quit && suffix == "!")
-    {
-        return ExDocumentRequest{ExDocumentVerb::quit_force, std::nullopt};
-    }
-    if (!suffix.starts_with(' ') || verb == ExDocumentVerb::quit)
+    if (forced || !suffix.starts_with(' ') || verb == ExDocumentVerb::quit)
     {
         return std::unexpected(ExFailure::unsupported_argument);
     }
@@ -451,18 +461,21 @@ document_command(std::string_view text)
     const std::size_t range = leading(text, is_digit);
     const std::size_t letters = leading(text.substr(range), is_letter);
     const auto name = text.substr(range, letters);
-    const auto row = std::ranges::find_if(
-        document_names, [name](const ExDocumentName &entry)
-        { return name.size() >= entry.shortest && entry.name.starts_with(name); });
+    const auto row =
+        std::ranges::find_if(document_names, [name](const ExDocumentName &entry)
+                             { return abbreviates(name, entry.name, entry.shortest); });
     if (row == document_names.end())
     {
         return std::nullopt;
     }
-    if (range > 0)
+    auto suffix = text.substr(range + letters);
+    const bool forced = suffix.starts_with('!');
+    if (range > 0 || (forced && !row->forced.has_value()))
     {
         return std::unexpected(ExFailure::unsupported_argument);
     }
-    auto request = document_request(row->verb, text.substr(letters));
+    const auto verb = forced ? row->forced.value_or(row->verb) : row->verb;
+    auto request = document_request(verb, forced ? suffix.substr(1) : suffix, forced);
     if (!request)
     {
         return std::unexpected(request.error());
@@ -481,8 +494,8 @@ document_command(std::string_view text)
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 remaining_command(std::string_view text, std::string_view name, std::string_view argument)
 {
-    // `:nohlsearch` と短縮形の `:noh` は次の検索まで強調を止めるだけで、設定は変えない。
-    if ((name == "nohlsearch" || name == "noh") && argument.empty())
+    // `:nohlsearch` と短縮形の `:noh` `:nohl` … は次の検索まで強調を止めるだけで、設定は変えない。
+    if (abbreviates(name, nohlsearch_name, nohlsearch_shortest) && argument.empty())
     {
         return highlight_result(VimSearchHighlight::suspended);
     }
@@ -503,11 +516,12 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     }
     return std::unexpected(ExFailure::unknown_command);
 }
-constexpr std::array<std::string_view, 18> fixed_candidates{
-    "colorscheme",  "set fontsize=",    guifont_command,   "set incsearch", "set noincsearch",
-    "set hlsearch", "set nohlsearch",   "set guide",       "set noguide",   "tabs",
-    "tabnew",       "tabnext",          "tabprevious",     "tabclose",      "set wrap",
-    "set nowrap",   "set display=grid", "set display=text"};
+// 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
+constexpr std::array<std::string_view, 19> fixed_candidates{
+    "colorscheme",  "set fontsize=",    guifont_command,    "set incsearch", "set noincsearch",
+    "set hlsearch", "set nohlsearch",   "set guide",        "set noguide",   "tabs",
+    "tabnew",       "tabnext",          "tabprevious",      "tabclose",      "set wrap",
+    "set nowrap",   "set display=grid", "set display=text", nohlsearch_name};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})
@@ -533,7 +547,9 @@ void append_document_candidates(std::vector<std::string> &candidates,
         {
             candidates.emplace_back(name.name);
         }
-        if (name.verb == ExDocumentVerb::quit && prefix_matches(prefix, name.name, "!"))
+        // `!` で条件が変わる行（`quit!`）だけを候補にする。同じ条件の `write!` は並べない。
+        if (name.forced.has_value() && name.forced.value() != name.verb &&
+            prefix_matches(prefix, name.name, "!"))
         {
             candidates.emplace_back(std::string(name.name) + "!");
         }
