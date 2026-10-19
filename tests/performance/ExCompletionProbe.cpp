@@ -52,7 +52,8 @@ constexpr std::array<std::string_view, 256> custom_names{
     "user-0252", "user-0253", "user-0254", "user-0255"};
 // Ex の固定の候補（正本: src/core/ExResult.cpp の fixed_candidates・palette_names・
 // document_names の並び。quit! は document_names の quit から作られる）。組み込みテーマの名前は
-// core::builtin_themes から引き、ここには書かない。製品の表が変わったら、この並びを製品に合わせる。
+// core::builtin_themes から引き、ここには書かない。製品の表が変わったら、この並びを製品に合わせる
+// （ずれると eng/probe-smoke.ps1 で ex-completion-* が wrong_result で落ちる）。
 constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme",
                                                                    "set fontsize=",
                                                                    "set guifont=",

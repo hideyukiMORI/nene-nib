@@ -171,11 +171,11 @@ main163c314の照合器を前後で共通に使い、`EditorController::frame()`
 
 | 固定名 | UTF8本文 | 一致と選択（1始まり原文桁） |
 | --- | --- | --- |
-| frame-search-dense-ascii-8192 | `a x `を8192回、32768bytes | aの8192面、i番目[4i+1,4i+2)、caret1、current[1,2)、選択absent |
-| frame-search-dense-mixed-4096 | `日a\t🖋\x01 `を4096回、45056bytes | aの4096面、[6i+2,6i+3)、caret2、current[2,3)、選択absent |
-| frame-search-sparse-tail-32768 | xを32767回+a、32768bytes | 末尾の1面[32768,32769)、caret32768、current同じ、選択absent |
-| frame-selection-ascii-32768 | 1本目と同じ | 通常mode、PlaceCaret8193 collapse→24577 extend、選択[8193,24577)、caret24577、matches/currentなし |
-| frame-search-visual-ascii-8192 | 1本目と同じ | aの8192面、検索確定後caret8193、v→16384l、VISUAL選択[8193,24578)、caret24577、current[24577,24578) |
+| frame-search-dense-ascii-4096 | `a x `を8192回、32768bytes | aの8192面、i番目[4i+1,4i+2)、caret1、current[1,2)、選択absent |
+| frame-search-dense-mixed-2340 | `日a\t🖋\x01 `を4096回、45056bytes | aの4096面、[6i+2,6i+3)、caret2、current[2,3)、選択absent |
+| frame-search-sparse-tail-16384 | xを32767回+a、32768bytes | 末尾の1面[32768,32769)、caret32768、current同じ、選択absent |
+| frame-selection-ascii-16384 | 1本目と同じ | 通常mode、PlaceCaret8193 collapse→24577 extend、選択[8193,24577)、caret24577、matches/currentなし |
+| frame-search-visual-ascii-4096 | 1本目と同じ | aの8192面、検索確定後caret8193、v→16384l、VISUAL選択[8193,24578)、caret24577、current[24577,24578) |
 
 検索はSelectEditMode(vim)→VimKeyPress(VimSearchPattern{"a",forward,nullopt})で確定し、PlaceCaret collapseで指定caretへ置く。VISUALだけはその後にvと数字16384とlを通常のVimKeyPressで送り、inclusive終端を確認する。windowやfixture入力行parserは使わない。全条件line.number/first_visible/total_lines/lines.sizeは1、command_line/compositionはなし。mode/visualとcaret位置、原本文、全SelectionSpan、matchesの順と全端点、currentの有無/全端点を完全照合する。
 
@@ -188,3 +188,5 @@ checksumはuint64の剰余和でFNV(input)+FNV(display)+全startsの和+全match
 ## 追補（2026-10-19・#690）
 
 CTest に登録しない代わりに、`eng/check.ps1 -Full` が `eng/probe-smoke.ps1` で表 `ProbeDispatchRow` の全 workload を warmup 1 + sample 1 で 1 回ずつ流して非 0 の終了を落とし（時間は判定しない・CI の必須 check には足さない）、製品の表から導ける期待値（組み込みテーマの名前と数・Ex の固定の候補・frame の 1 行の長さ＝巨大な行のしきい値）は probe の側に literal で写さず正本から引く。
+
+frame の 5 本は 1 行を巨大な行のしきい値（16,384 コードポイント）以下にするため 2026-10-19 に改名した（上の表の名前は新しい名前に直し、回数・バイト数・checksum は改名前の固定のまま残す）。ASCII の 4 本は 1 行 16,384 バイト（dense・selection・visual の `a x ` は 4,096 単位）、混合の 1 行は 2,340 単位（表示 16,380 コードポイント）。同じ日に metadata から組み込みテーマの名前の行を外したので、2026-10-19 より前の probe の記録とは入力ハッシュで突き合わせられない。

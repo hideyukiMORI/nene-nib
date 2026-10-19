@@ -13,6 +13,9 @@ if (-not (Test-Path -LiteralPath $exe)) { throw "Probe smoke: $exe is missing. B
 $table = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $repoRoot 'tests/performance/ProbeWorkload.cpp')
 $names = @([regex]::Matches($table, 'ProbeDispatchRow\{\s*[A-Za-z0-9_:]+\s*,\s*"([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
 if ($names.Count -eq 0) { throw 'Probe smoke: no probe workload was found in tests/performance/ProbeWorkload.cpp.' }
+# 名前の正規表現が行の書き方の変化で取りこぼすと検査が黙って縮むので、表の行数を別に数えて突き合わせる。
+$rows = [regex]::Matches($table, 'ProbeDispatchRow\{').Count
+if ($names.Count -ne $rows) { throw "Probe smoke: collected $($names.Count) workload names but tests/performance/ProbeWorkload.cpp has $rows ProbeDispatchRow rows." }
 $outDir = Join-Path $repoRoot 'out/probe-smoke'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $failed = @()
