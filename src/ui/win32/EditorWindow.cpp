@@ -2380,6 +2380,8 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
         send(application::SwitchPane{});
         return;
     case core::EditorOperation::close_pane:
+        // 操作中の枠を閉じる（`:q` と `Ctrl-w c` と同じ向き・決定 5）。1 枠ではどちらも何もしない。
+        send(application::SwitchPane{});
         send(application::ClosePane{});
         return;
     case core::EditorOperation::open_file:

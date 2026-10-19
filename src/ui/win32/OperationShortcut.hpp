@@ -27,8 +27,11 @@ namespace nenenib::ui::win32
     {
         return core::KeyChord{false, shift, core::OperationKey::f6};
     }
-    return shift ? std::nullopt
-                 : std::optional{core::KeyChord{false, false, core::OperationKey::f1}};
+    if (key == VK_F1 && !shift)
+    {
+        return core::KeyChord{false, false, core::OperationKey::f1};
+    }
+    return std::nullopt;
 }
 
 [[nodiscard]] inline std::optional<core::KeyChord> operation_chord(WPARAM key, bool control,

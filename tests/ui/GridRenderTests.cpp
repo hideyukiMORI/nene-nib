@@ -89,7 +89,8 @@ std::optional<RECT> painted(Painter &painter, const app::GridRowView &row, float
                                       1.0F,
                                       2,
                                       1,
-                                      1.0F};
+                                      1.0F,
+                                      win32::PaneRole::active};
     return painter.draw(row, canvas);
 }
 

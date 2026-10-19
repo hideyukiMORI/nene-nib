@@ -110,7 +110,8 @@ lines are typed, Ctrl+backslash (sent as VK_OEM_5, the ¥ key) splits left and r
 divider is panel_border and the rows away from the caret are the same picture in both panes), `a`
 is typed (splitTyped.png: the right pane changes too), F6 moves the accent caret to the right pane
 (splitSwitched.png), a click in the left pane brings it back (splitClicked.png), Ctrl+Shift+F4
-closes the pane (splitClosed.png: no divider) and Ctrl+Shift+backslash (sent as VK_OEM_102, the ろ key)
+closes the operated left pane (splitClosed.png: no divider, the caret left in the right pane on the
+third row remains) and Ctrl+Shift+backslash (sent as VK_OEM_102, the ろ key)
 splits top and bottom (splitHorizontal.png); the Vim toggle shows the block in the top pane and the
 hollow mark in the bottom one (splitVim.png). The virtual keys the JIS ¥ and ろ scan codes give in
 the current keyboard layout are recorded beside. body_points splits the band like
@@ -2005,6 +2006,11 @@ def pane_body_box(body: dict, rows: int) -> tuple:
             body["firstRowTop"] + body["lineHeight"] * rows)
 
 
+def pane_row_box(body: dict, row: int) -> tuple:
+    top = body["firstRowTop"] + body["lineHeight"] * row
+    return (body["bandLeft"], top, body["bandRight"], top + body["lineHeight"])
+
+
 def split_regions(width: int, height: int, dpi: int, split: str) -> dict:
     """The regions of split-<layout>-frames.json (compare-frames.py --regions): title, body0, body1,
     divider, status. Physical pixels in client coordinates, never overlapping."""
@@ -2081,6 +2087,12 @@ def drive_split(window, appearance: str, frames: Path | None) -> dict:
                          ([VK_CONTROL, VK_SHIFT], VK_F4))
     record["closedDivider"] = divider_colours(closed, width, divider)
     assert PANEL_BORDER[appearance] not in record["closedDivider"], record["closedDivider"]
+    # Ctrl+Shift+F4 は操作中の枠（左・キャレットは 1 行目）を閉じ、右の枠の表示（キャレットは
+    # 3 行目の末尾）が残る（ADR 0148 の決定 5）。
+    whole = body_points(width, height, dpi)
+    record["closedCaretRows"] = [accent_count(closed, width, pane_row_box(whole, row))
+                                 for row in (0, 2)]
+    assert record["closedCaretRows"][0] == 0 and record["closedCaretRows"][1] > 0, record
     horizontal = split_chord(window, closed, size, frames, "splitHorizontal",
                              ([VK_CONTROL, VK_SHIFT], VK_OEM_102))
     _, across = pane_bands(width, height, dpi, "horizontal")
