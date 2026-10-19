@@ -15,7 +15,10 @@ enum class TextEncoding : std::uint8_t
 {
     utf8,
     utf8_bom,
-    shift_jis
+    shift_jis,
+    // BOM つきの UTF-16 だけ（ADR 0149 の決定 1）。本文は読むときに UTF-8 へ写し、保存で戻す。
+    utf16_le,
+    utf16_be
 };
 
 // ステータスバーに出す名前（ADR 0010 の決定 14）。
@@ -29,6 +32,10 @@ enum class TextEncoding : std::uint8_t
         return "UTF-8 BOM";
     case TextEncoding::shift_jis:
         return "Shift_JIS";
+    case TextEncoding::utf16_le:
+        return "UTF-16 LE";
+    case TextEncoding::utf16_be:
+        return "UTF-16 BE";
     }
     std::unreachable();
 }
@@ -37,6 +44,17 @@ enum class TextEncoding : std::uint8_t
 [[nodiscard]] constexpr std::string_view byte_order_mark() noexcept
 {
     return "\xEF\xBB\xBF";
+}
+
+// UTF-16 の BOM（ADR 0149 の決定 1）。LE は FF FE、BE は FE FF。
+[[nodiscard]] constexpr std::string_view utf16_le_byte_order_mark() noexcept
+{
+    return "\xFF\xFE";
+}
+
+[[nodiscard]] constexpr std::string_view utf16_be_byte_order_mark() noexcept
+{
+    return "\xFE\xFF";
 }
 
 [[nodiscard]] constexpr std::string_view without_byte_order_mark(std::string_view bytes) noexcept
@@ -48,7 +66,8 @@ enum class TextEncoding : std::uint8_t
     return bytes;
 }
 
-// BOM → 正しい UTF-8 → CP932 として正しい、の順に見る。UTF-8 が常に勝つ（決定 3）。
+// UTF-16 の BOM → UTF-8 の BOM → 正しい UTF-8 → CP932 として正しい、の順に見る。BOM の無い
+// 列では UTF-8 が常に勝つ（決定 3・ADR 0149 の決定 1）。
 [[nodiscard]] std::expected<TextEncoding, EncodingFailure>
 detect_encoding(std::string_view bytes) noexcept;
 } // namespace nenenib::core

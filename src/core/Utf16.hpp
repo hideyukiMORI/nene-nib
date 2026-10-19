@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ByteOrder.hpp"
 #include "TextFailure.hpp"
 
 #include <cstddef>
@@ -21,4 +22,17 @@ namespace nenenib::core
 
 // 正しい UTF-16 を UTF-8 へ。対になっていないサロゲートは invalid_utf16 で返す（空は空）。
 [[nodiscard]] std::expected<std::string, TextFailure> to_utf8(std::wstring_view utf16);
+
+// UTF-16 のファイルの本文（BOM を除いたバイト列）が偶数バイトで、サロゲートが対になっているか。
+// 確保しない（detect_encoding が使う・ADR 0149 の決定 1）。
+[[nodiscard]] bool valid_utf16_bytes(std::string_view bytes, ByteOrder order) noexcept;
+
+// UTF-16 のバイト列（BOM を除く）を UTF-8 へ（決定 2）。奇数バイトと対になっていないサロゲートは
+// invalid_utf16。並びを直してから to_utf8 と同じ規則で写す。
+[[nodiscard]] std::expected<std::string, TextFailure> utf8_of_utf16_bytes(std::string_view bytes,
+                                                                          ByteOrder order);
+
+// 正しい UTF-8 を UTF-16 のバイト列へ（BOM は付けない・決定 3）。to_utf16 の結果を並びに写す。
+[[nodiscard]] std::expected<std::string, TextFailure> utf16_bytes_of_utf8(std::string_view utf8,
+                                                                          ByteOrder order);
 } // namespace nenenib::core

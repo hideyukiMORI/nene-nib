@@ -1,5 +1,6 @@
 #include "TextEncoding.hpp"
 
+#include "Utf16.hpp"
 #include "Utf8.hpp"
 
 #include <cstddef>
@@ -45,10 +46,36 @@ namespace
     }
     return true;
 }
+
+// BOM は明示的なラベルである。後ろが UTF-16 として正しくなければ、ほかの判定へは落ちずに断る。
+[[nodiscard]] std::expected<TextEncoding, EncodingFailure>
+labelled_utf16(std::string_view body, ByteOrder order, TextEncoding encoding) noexcept
+{
+    if (body.size() % 2 != 0)
+    {
+        return std::unexpected(EncodingFailure::odd_utf16_length);
+    }
+    if (!valid_utf16_bytes(body, order))
+    {
+        return std::unexpected(EncodingFailure::undecodable);
+    }
+    return encoding;
+}
 } // namespace
 
 std::expected<TextEncoding, EncodingFailure> detect_encoding(std::string_view bytes) noexcept
 {
+    // UTF-16 の BOM は UTF-8 としても CP932 としても不正なバイトなので、先に見る（ADR 0149）。
+    if (bytes.starts_with(utf16_le_byte_order_mark()))
+    {
+        return labelled_utf16(bytes.substr(utf16_le_byte_order_mark().size()), ByteOrder::little,
+                              TextEncoding::utf16_le);
+    }
+    if (bytes.starts_with(utf16_be_byte_order_mark()))
+    {
+        return labelled_utf16(bytes.substr(utf16_be_byte_order_mark().size()), ByteOrder::big,
+                              TextEncoding::utf16_be);
+    }
     // BOM は明示的なラベルである。後ろが正しい UTF-8 でなければ、CP932 へは落ちずに断る（決定 3）。
     if (bytes.starts_with(byte_order_mark()))
     {

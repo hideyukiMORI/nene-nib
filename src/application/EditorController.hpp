@@ -432,8 +432,8 @@ class EditorController final
     // 判定済みの列を本文へ渡す。CP932 の変換だけはポートの向こう（ADR 0080）。
     [[nodiscard]] std::expected<core::TextBuffer, FileFailure> decoded(core::DetectedText text);
     [[nodiscard]] std::expected<void, FileFailure> write_document(const SaveDocument &intent);
-    // 本文を保存の符号化の断片にする 1 本（ADR 0010・ADR 0137 の決定
-    // 4）。保存と自動退避が共用する。 Shift_JIS は変換した本文を held に持ち、断片はそれを指す。
+    // 本文を保存の符号化の断片にする 1 本（ADR 0010・ADR 0137 の決定 4・ADR 0149）。保存と
+    // 自動退避が共用する。Shift_JIS と UTF-16 は変換した本文を held に持ち、断片はそれを指す。
     [[nodiscard]] std::expected<std::vector<std::string_view>, FileFailure>
     encoded_parts(const core::TextBuffer &text, core::TextEncoding encoding, std::string &held);
 

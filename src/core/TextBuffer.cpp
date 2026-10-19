@@ -167,6 +167,10 @@ std::expected<TextBuffer, TextFailure> TextBuffer::from_utf8(DetectedText text)
     case TextEncoding::utf8_bom:
         text.bytes_.erase(0, byte_order_mark().size());
         break;
+    case TextEncoding::utf16_le:
+    case TextEncoding::utf16_be:
+        // DetectedText が判定のときに UTF-8 へ写して BOM を外してある（ADR 0149 の決定 2）。
+        break;
     case TextEncoding::shift_jis:
         return std::unexpected(TextFailure::invalid_utf8);
     }

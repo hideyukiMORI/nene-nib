@@ -6,6 +6,7 @@
 #include "AutosavePlan.hpp"
 #include "AutosaveSnapshot.hpp"
 #include "AutosaveStep.hpp"
+#include "ByteOrder.hpp"
 #include "CaretMove.hpp"
 #include "CaretShape.hpp"
 #include "ClipboardText.hpp"
@@ -65,6 +66,7 @@
 #include "TitleBarLayout.hpp"
 #include "UnlistedExtensions.hpp"
 #include "UnloadedDocument.hpp"
+#include "Utf16.hpp"
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimBlockRange.hpp"
@@ -702,6 +704,21 @@ autosave_bundle(const std::shared_ptr<const UnloadedDocument> &)
         parts.insert(parts.begin(), core::byte_order_mark());
     }
     return parts;
+}
+
+// UTF-16 の本文の断片。BOM と、held に写した UTF-16 のバイト列（ADR 0149 の決定 3）。本文は
+// 正しい UTF-8 なので写しは失敗しないが、失敗は開けない列と同じに返す。
+[[nodiscard]] std::expected<std::vector<std::string_view>, FileFailure>
+utf16_parts(const core::TextBuffer &text, std::string_view mark, core::ByteOrder order,
+            std::string &held)
+{
+    auto converted = core::utf16_bytes_of_utf8(text.text(), order);
+    if (!converted)
+    {
+        return std::unexpected(FileFailure::unencodable);
+    }
+    held = std::move(converted).value();
+    return std::vector<std::string_view>{mark, held};
 }
 
 // 断片を 1 本のバイト列に写す（自動退避の写し・決定 4）。
@@ -2956,6 +2973,8 @@ std::expected<core::TextBuffer, FileFailure> EditorController::decoded(core::Det
     {
     case core::TextEncoding::utf8:
     case core::TextEncoding::utf8_bom:
+    case core::TextEncoding::utf16_le:
+    case core::TextEncoding::utf16_be:
         return core::TextBuffer::from_utf8(std::move(text))
             .transform_error([](core::TextFailure) { return FileFailure::undecodable; });
     case core::TextEncoding::shift_jis:
@@ -2979,6 +2998,10 @@ EditorController::encoded_parts(const core::TextBuffer &text, core::TextEncoding
     case core::TextEncoding::utf8:
     case core::TextEncoding::utf8_bom:
         return utf8_parts(text, encoding);
+    case core::TextEncoding::utf16_le:
+        return utf16_parts(text, core::utf16_le_byte_order_mark(), core::ByteOrder::little, held);
+    case core::TextEncoding::utf16_be:
+        return utf16_parts(text, core::utf16_be_byte_order_mark(), core::ByteOrder::big, held);
     case core::TextEncoding::shift_jis:
         break;
     }

@@ -43,7 +43,7 @@ ZIPを展開し、NeNeNib.exeを起動してください。追加ランタイム
   Ctrlと+/-/0、Ctrl+ホイールで文字サイズを変更できます。
   日本語IMEは通常モードとVim INSERT、Vimの「:」「/」「?」の入力行で使えます。
   Vim NORMALではオフになります。
-  UTF-8、UTF-8 BOM、Shift_JISと、読み込んだCRLF/LFを扱います。
+  UTF-8、UTF-8 BOM、Shift_JIS、UTF-16 LE / BE（BOMつき）と、読み込んだCRLF/LFを扱います。
 
 保存先
   設定: %LOCALAPPDATA%\NeNeNib\settings.v3

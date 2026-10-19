@@ -1994,8 +1994,12 @@ void verify_document_open_failures()
                         "the port may also report unwritable");
     expect_open_failure(std::unexpected(FileFailure::too_large), FileFailure::too_large,
                         "a file past the limit is refused by the port before it is read");
-    expect_open_failure(std::string("\xFF\xFE\x00\x41", 4), FileFailure::undecodable,
+    expect_open_failure(std::string("\xFF\x41", 2), FileFailure::undecodable,
                         "bytes that are neither UTF-8 nor CP932 are undecodable");
+    expect_open_failure(std::string("\xFF\xFE\x41", 3), FileFailure::undecodable,
+                        "an odd UTF-16 body is undecodable");
+    expect_open_failure(std::string("\xFE\xFF\xD8\x3D\x00\x41", 6), FileFailure::undecodable,
+                        "an unpaired surrogate in UTF-16 is undecodable");
     Editing refused;
     refused.files().hold(std::string("\x93\xFA"));
     refused.code_pages().decode_to(std::unexpected(CodePageFailure::unencodable));
@@ -2102,6 +2106,49 @@ void verify_document_save_encodings()
     expect(japanese.code_pages().encoded_from() == "日", "the body went through the code page");
     expect(japanese.files().written() == "\x93\xFA", "the CP932 bytes are what is written");
     expect(frame.document.save_state == SaveState::saved, "the save took");
+}
+
+// UTF-16 のファイルを開き、1 文字足して保存すると、BOM と並びと改行の形がそのまま戻る（ADR 0149）。
+void expect_utf16_round_trip(TextEncoding encoding, const std::string &bytes,
+                             const std::string &expected, std::string_view label)
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold(bytes);
+    const auto opened = controller.apply_frame(OpenDocument{sample_path()});
+    expect(opened.document.encoding == encoding && opened.lines.at(0).text == "あ",
+           "a UTF-16 file opens as its own encoding with a UTF-8 body");
+    expect(opened.status_items.at(1).text() == label && opened.status_items.at(2).text() == "CRLF",
+           "the status bar shows the UTF-16 order and the newline that was read");
+    applied(controller, InsertText{"b"});
+    const auto saved =
+        controller.apply_frame(SaveDocument{sample_path(), controller.frame().document.encoding});
+    expect(saved.document.save_state == SaveState::saved && saved.document.encoding == encoding,
+           "the UTF-16 save took and kept the encoding");
+    expect(editing.files().written() == expected,
+           "the written bytes keep the BOM, the byte order and CRLF");
+    Editing again;
+    again.files().hold(editing.files().written());
+    const auto reread = again.controller().apply_frame(OpenDocument{sample_path()});
+    expect(reread.document.encoding == encoding && reread.lines.at(0).text == "bあ" &&
+               reread.total_lines == 2,
+           "the written UTF-16 file reads back as the edited body");
+}
+
+void verify_document_utf16_round_trip()
+{
+    expect_utf16_round_trip(
+        TextEncoding::utf16_le, std::string("\xFF\xFE\x42\x30\x0D\x00\x0A\x00\x3D\xD8\x00\xDE", 12),
+        std::string("\xFF\xFE\x62\x00\x42\x30\x0D\x00\x0A\x00\x3D\xD8\x00\xDE", 14), "UTF-16 LE");
+    expect_utf16_round_trip(
+        TextEncoding::utf16_be, std::string("\xFE\xFF\x30\x42\x00\x0D\x00\x0A\xD8\x3D\xDE\x00", 12),
+        std::string("\xFE\xFF\x00\x62\x30\x42\x00\x0D\x00\x0A\xD8\x3D\xDE\x00", 14), "UTF-16 BE");
+    Editing written;
+    applied(written.controller(), InsertText{"日"});
+    applied(written.controller(), SaveDocument{sample_path(), TextEncoding::utf16_be});
+    expect(written.files().written() == "\xFE\xFF\x65\xE5" &&
+               written.files().written_segments() == std::vector<std::size_t>{2, 2},
+           "UTF-16 saving hands the BOM and the converted body to the port as two parts");
 }
 
 void verify_document_save_failures()
@@ -2506,6 +2553,7 @@ void verify_document_save_contracts()
     verify_document_save_empty();
     verify_document_save();
     verify_document_save_encodings();
+    verify_document_utf16_round_trip();
     verify_document_save_failures();
     verify_save_state_transitions();
     verify_unreachable_save_point();
