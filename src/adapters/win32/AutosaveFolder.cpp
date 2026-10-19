@@ -3,6 +3,7 @@
 #include "AutosaveCodec.hpp"
 #include "AutosaveEntry.hpp"
 #include "FindHandle.hpp"
+#include "NativePath.hpp"
 #include "ParentDirectory.hpp"
 #include "TemporaryFiles.hpp"
 #include "Utf16.hpp"
@@ -74,8 +75,8 @@ entries_written(application::FilePort &files, const std::string &folder, const E
     }
     if (entries.empty())
     {
-        static_cast<void>(DeleteFileW(widen(list.value().text()).c_str()));
-        static_cast<void>(RemoveDirectoryW(widen(folder).c_str()));
+        static_cast<void>(DeleteFileW(native_path(widen(list.value().text())).c_str()));
+        static_cast<void>(RemoveDirectoryW(native_path(widen(folder)).c_str()));
         return {};
     }
     const auto bytes = encode_autosave_entries(entries);
@@ -166,15 +167,15 @@ void delete_file_entry(const std::wstring &folder, const WIN32_FIND_DATAW &data)
     if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
     {
         const std::wstring name(static_cast<const wchar_t *>(data.cFileName));
-        static_cast<void>(DeleteFileW((folder + L"\\" + name).c_str()));
+        static_cast<void>(DeleteFileW(native_path(folder + L"\\" + name).c_str()));
     }
 }
 // フォルダの直下のファイルを消す（一覧・本文・保存の一時ファイルの残り）。消せないものは残す。
 void delete_files_in(const std::wstring &folder)
 {
     WIN32_FIND_DATAW data{};
-    const FindHandle search(FindFirstFileExW((folder + L"\\*").c_str(), FindExInfoBasic, &data,
-                                             FindExSearchNameMatch, nullptr, 0));
+    const FindHandle search(FindFirstFileExW(native_path(folder + L"\\*").c_str(), FindExInfoBasic,
+                                             &data, FindExSearchNameMatch, nullptr, 0));
     if (!search.valid())
     {
         return;
@@ -224,7 +225,7 @@ std::expected<void, Failure> autosave_dropped(application::FilePort &files,
     {
         return std::unexpected(Failure::unwritable);
     }
-    static_cast<void>(DeleteFileW(widen(body.value().text()).c_str()));
+    static_cast<void>(DeleteFileW(native_path(widen(body.value().text())).c_str()));
     const auto removed =
         std::erase_if(entries.value(), [id](const AutosaveEntry &entry) { return entry.id == id; });
     if (removed == 0)
@@ -242,7 +243,7 @@ void remove_autosave_folder(const std::string &folder)
         return;
     }
     delete_files_in(wide);
-    static_cast<void>(RemoveDirectoryW(wide.c_str()));
+    static_cast<void>(RemoveDirectoryW(native_path(wide).c_str()));
 }
 
 Remnants autosave_remnants_in(application::FilePort &files, const core::FilePath &root,
@@ -255,8 +256,8 @@ Remnants autosave_remnants_in(application::FilePort &files, const core::FilePath
         return remnants;
     }
     WIN32_FIND_DATAW data{};
-    const FindHandle search(FindFirstFileExW((wide + L"\\*").c_str(), FindExInfoBasic, &data,
-                                             FindExSearchNameMatch, nullptr, 0));
+    const FindHandle search(FindFirstFileExW(native_path(wide + L"\\*").c_str(), FindExInfoBasic,
+                                             &data, FindExSearchNameMatch, nullptr, 0));
     if (!search.valid())
     {
         return remnants;

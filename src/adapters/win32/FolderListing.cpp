@@ -2,6 +2,7 @@
 
 #include "FindHandle.hpp"
 #include "FolderBatch.hpp"
+#include "NativePath.hpp"
 #include "Utf16.hpp"
 
 #include <windows.h>
@@ -91,8 +92,8 @@ void FolderListing::run(const std::stop_token &stop)
         return;
     }
     WIN32_FIND_DATAW data{};
-    const FindHandle search(FindFirstFileExW(pattern.value().c_str(), FindExInfoBasic, &data,
-                                             FindExSearchNameMatch, nullptr,
+    const FindHandle search(FindFirstFileExW(native_path(pattern.value()).c_str(), FindExInfoBasic,
+                                             &data, FindExSearchNameMatch, nullptr,
                                              FIND_FIRST_EX_LARGE_FETCH));
     if (!search.valid())
     {
