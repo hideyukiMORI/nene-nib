@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <string>
 #include <string_view>
@@ -136,12 +137,17 @@ inline constexpr std::array<std::string_view, 125> expected_theme_names{{
     "lagoon-whisper",
 }};
 
-inline std::vector<std::string> expected_theme_commands()
+// 補完の候補の名前順（#696・Vim 9.1 の colorscheme と同じ）。組み込みの名前は全部 ASCII の小文字
+// なので、名前順はバイト順と同じ。extra は利用者テーマの名前（同じ規則で混ざる）。最後に system。
+inline std::vector<std::string> expected_theme_commands(std::vector<std::string> extra = {})
 {
+    std::vector<std::string> names(expected_theme_names.begin(), expected_theme_names.end());
+    names.insert(names.end(), extra.begin(), extra.end());
+    std::ranges::sort(names);
     std::vector<std::string> result;
-    for (const auto name : expected_theme_names)
+    for (const auto &name : names)
     {
-        result.push_back("colorscheme " + std::string{name});
+        result.push_back("colorscheme " + name);
     }
     result.emplace_back("colorscheme system");
     return result;

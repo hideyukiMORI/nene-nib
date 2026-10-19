@@ -1,5 +1,6 @@
 // scope `--command-palette` の単体テスト（ADR 0042 決定 2）。
 #include "ActivateCommandChoice.hpp"
+#include "AsciiCase.hpp"
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
 #include "CancelCommand.hpp"
@@ -108,6 +109,15 @@ void verify_palette_choices()
     // 設定候補の点数は長さ、同点は文字列の順。ls、wq、xit の順になる（ADR 0066）。
     expect(all.front().command == "ls" && all.at(1).command == "wq" && all.at(2).command == "xit",
            "empty query has deterministic ranking");
+    // 同点（空の入力では長さ）の並びは Ex の補完と同じ名前順（#696）。
+    for (std::size_t index = 1; index < all.size(); ++index)
+    {
+        const auto &left = all.at(index - 1).command;
+        const auto &right = all.at(index).command;
+        expect(left.size() < right.size() ||
+                   (left.size() == right.size() && core::ascii_folded_before(left, right)),
+               "tied palette choices follow the name order");
+    }
     for (const auto &theme : core::builtin_themes)
     {
         const auto matched = choices_for(theme.name);
@@ -1666,8 +1676,9 @@ void verify_font_family_choices()
 {
     const auto fonts =
         core::FontFamilies::from({"Consolas", "Arial", "Consolas", "", std::string{"Bad"}});
-    expect(std::ranges::equal(fonts.names(), std::vector<std::string>{"Arial", "Consolas"}),
-           "font families are sorted, unique and displayable");
+    // 並びは受け取った順（製品は adapters が OS の照合順に並べる・#696）。重複は最初の 1 つ。
+    expect(std::ranges::equal(fonts.names(), std::vector<std::string>{"Consolas", "Arial"}),
+           "font families keep the given order, unique and displayable");
     expect(core::completes_font_family("set guifont=") &&
                core::completes_font_family(":set guifont=Co") &&
                !core::completes_font_family("set guif") &&
@@ -1676,11 +1687,24 @@ void verify_font_family_choices()
     const auto themes = core::ThemeCatalog::builtins();
     expect(
         core::command_completions("set guifont=", themes, fonts) ==
-            std::vector<std::string>{"set guifont=", "set guifont=Arial", "set guifont=Consolas"},
+            std::vector<std::string>{"set guifont=", "set guifont=Consolas", "set guifont=Arial"},
         "the guifont completion lists the families after the command");
     expect(core::command_completions("set guifont=C", themes, fonts) ==
                std::vector<std::string>{"set guifont=Consolas"},
            "the guifont completion narrows by prefix");
+    // 引数は ASCII の大文字小文字を無視し、命令名は区別する（#696）。
+    expect(core::command_completions("set guifont=consolas", themes, fonts) ==
+                   std::vector<std::string>{"set guifont=Consolas"} &&
+               core::command_completions("set guifont=a", themes, fonts) ==
+                   std::vector<std::string>{"set guifont=Arial"},
+           "the guifont argument ignores ASCII case");
+    expect(core::command_completions("Set guifont=C", themes, fonts).empty() &&
+               core::command_completions("set GUIFONT=C", themes, fonts).empty(),
+           "the guifont command name stays case sensitive");
+    const auto ordered = core::FontFamilies::from({"MS Gothic", "Meiryo", "consolas", "Arial"});
+    expect(core::command_completions("set guifont=m", themes, ordered) ==
+               std::vector<std::string>{"set guifont=MS Gothic", "set guifont=Meiryo"},
+           "core keeps the order the port gave");
     expect(core::command_completions("set guifont=") == std::vector<std::string>{"set guifont="},
            "without families the completion is the command alone");
     expect(core::command_completions("set g", themes, fonts) ==
@@ -1692,6 +1716,11 @@ void verify_font_family_choices()
                choices.at(1).command == "set guifont=Consolas" &&
                choices.at(1).kind == core::CommandChoiceKind::execute,
            "the palette keeps the typed value first and adds the families");
+    const auto lower = core::CommandLine::empty().with_fonts(fonts).inserted(":set guifont=co");
+    const auto lowered = core::palette_choices(lower.value());
+    expect(lowered.size() == 2 && lowered.front().command == "set guifont=co" &&
+               lowered.at(1).command == "set guifont=Consolas",
+           "the palette keeps the typed value first and matches families ignoring case");
     expect(choices_for(":set guifont=Co").size() == 1,
            "without families the palette offers the typed value alone");
 }
@@ -1702,6 +1731,7 @@ void verify_font_family_choices()
 }
 
 // #597・D58: 字体の一覧を読むのは補完が求めた最初の 1 回だけ。Ctrl+P を開いただけでは読まない。
+// 替え玉は与えた順のまま返し、core は並びを変えない（#696）。
 void verify_font_family_reading()
 {
     Editing editor;
@@ -1713,8 +1743,8 @@ void verify_font_family_reading()
                           ? commands_of(frame.command_palette.value().rows)
                           : std::vector<std::string>{};
     expect(editor.fonts().lists() == 1 &&
-               rows == std::vector<std::string>{"set guifont=", "set guifont=Cascadia Mono",
-                                                "set guifont=Consolas"},
+               rows == std::vector<std::string>{"set guifont=", "set guifont=Consolas",
+                                                "set guifont=Cascadia Mono"},
            "typing the guifont command lists the fonts once and completes them");
     static_cast<void>(controller.apply_frame(app::CommandText{"C"}));
     static_cast<void>(controller.apply_frame(app::CancelCommand{}));
@@ -1723,8 +1753,8 @@ void verify_font_family_reading()
     frame = controller.apply_frame(app::CommandText{"set guifont="});
     expect(editor.fonts().lists() == 1 &&
                shown_completions(frame) ==
-                   std::vector<std::string>{"set guifont=", "set guifont=Cascadia Mono",
-                                            "set guifont=Consolas"},
+                   std::vector<std::string>{"set guifont=", "set guifont=Consolas",
+                                            "set guifont=Cascadia Mono"},
            "the Ex line reuses the listed fonts without reading again");
 
     Editing failing;
