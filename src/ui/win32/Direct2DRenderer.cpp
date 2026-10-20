@@ -1405,7 +1405,9 @@ void Direct2DRenderer::draw_pane(const application::EditorFrame &frame, const Bo
 {
     const auto &body = pane.body;
     fill(body.band, frame.palette.background);
-    fill(body.gutter, frame.palette.gutter_background);
+    // 行番号の列の地は帯の上端から下端まで塗る（本文の上の余白も gutter の色・#794）。
+    fill(core::LayoutRect{body.gutter.left, body.band.top, body.gutter.right, body.band.bottom},
+         frame.palette.gutter_background);
     caret_width_ = body.caret_width;
     body_line_height_ = body.line_height;
     // 問いの答えを待つ間は本文を描かない（ADR 0140 の決定 2・判定はここの 1 か所）。
