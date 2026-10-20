@@ -9,7 +9,7 @@ namespace nenenib::core
 {
 // 操作の名前・読み・短い説明の表（ADR 0078 の決定 5）。EditorOperation の順に全値を 1 回ずつ持つ
 // （OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で作る。
-inline constexpr std::array<OperationText, 16> operation_texts{{
+inline constexpr std::array<OperationText, 20> operation_texts{{
     {EditorOperation::open_file, "ファイルを開く", "ふぁいるをひらく",
      "保存してあるファイルを選んで開きます"},
     {EditorOperation::save, "保存", "ほぞん", "いまのファイルに上書きします"},
@@ -37,6 +37,13 @@ inline constexpr std::array<OperationText, 16> operation_texts{{
      "本文の文字を既定の大きさに戻します"},
     {EditorOperation::toggle_mode, "通常 / Vim を切り替える", "つうじょうびむをきりかえる",
      "編集のしかたを通常と Vim で切り替えます"},
+    {EditorOperation::split_vertical, "左右に分ける", "さゆうにわける",
+     "本文を左右 2 つの枠に分けて同じ文書を出します"},
+    {EditorOperation::split_horizontal, "上下に分ける", "じょうげにわける",
+     "本文を上下 2 つの枠に分けて同じ文書を出します"},
+    {EditorOperation::next_pane, "隣の枠へ", "となりのわくへ", "もう 1 つの枠へ移ります"},
+    {EditorOperation::close_pane, "枠を閉じる", "わくをとじる",
+     "もう 1 つの枠を閉じて 1 つに戻します"},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

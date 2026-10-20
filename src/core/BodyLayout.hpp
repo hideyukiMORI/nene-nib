@@ -23,5 +23,10 @@ struct BodyLayout
 [[nodiscard]] BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
                                      FontSize font_size) noexcept;
 
+// 帯 band の中に行番号の欄・本文・見えている行数を置く。body_layout と枠の配置（pane_layouts・
+// ADR 0148 の決定 1）が共用する 1 本で、帯の左端と幅は band のものを使う。
+[[nodiscard]] BodyLayout body_layout_in(LayoutRect band, std::uint32_t dpi,
+                                        FontSize font_size) noexcept;
+
 [[nodiscard]] LayoutRect body_line_rect(const BodyLayout &layout, std::size_t index) noexcept;
 } // namespace nenenib::core

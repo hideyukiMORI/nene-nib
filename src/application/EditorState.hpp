@@ -8,6 +8,7 @@
 #include "DisplayInquiry.hpp"
 #include "Document.hpp"
 #include "DocumentState.hpp"
+#include "Edit.hpp"
 #include "EditHistory.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
@@ -20,6 +21,8 @@
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
 #include "SettingsIssue.hpp"
+#include "SplitLayout.hpp"
+#include "SplitState.hpp"
 #include "TabRecency.hpp"
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
@@ -193,6 +196,38 @@ class EditorState final
     [[nodiscard]] EditorState with_tab_scroll(std::int32_t dip) const;
     [[nodiscard]] EditorState with_hovered(std::optional<core::TitleBarTarget> hovered) const;
 
+    // 枠（ADR 0148 の決定 2・3・5・9）。操作中の枠は上の欄そのもので、もう 1 つの枠は受け身の
+    // 表示 PaneView として脇に 1 つだけ置く。layout == none ⇔ other が値なしで、1 枠の active_side
+    // は first。
+    [[nodiscard]] const SplitState &split() const noexcept;
+    // 2 つの枠に分ける。もう 1 つの枠は今の文書を同じキャレット・スクロール・欲しい列で出し、
+    // 操作中の枠は first の側（左か上）。none と既に 2 枠なら何も変えない。
+    [[nodiscard]] EditorState with_split(core::SplitLayout layout) const;
+    // もう 1 つの枠へ移る（決定 3）。同じ文書なら表示の欄（選択はキャレットに畳む・affinity・
+    // スクロール・欲しい列）だけを入れ替える。違う文書なら with_switched と同じ置く・広げるの後に
+    // 表示の欄を PaneView の値で置き替える。元の表示は新しいもう 1 つの枠になり、操作中の枠の側
+    // （active_side）は反転する。使った順は文書が
+    // 変わるときだけ直す。1 枠と、もう 1 つの枠がまだ読んでいない文書を指すとき（呼び手の誤り・
+    // 読むのは controller の reach_tab）は何も変えない。
+    [[nodiscard]] EditorState with_pane_swapped() const;
+    // 1 枠に戻す（側は first）。文書には触れない。
+    [[nodiscard]] EditorState without_split() const;
+    // 操作中の枠の文書に当てる編集 edit（本文はまだ edit の前・after が edit の後の本文）を、同じ
+    // 文書を出しているもう 1 つの枠のキャレットと先頭行に写す（決定 9）。キャレットは
+    // offset_after_edit、先頭行は「その行の行頭の offset を offset_after_edit で写し、after で
+    // 行番号に戻す」の 1 つの規則。違う文書を出しているとき・1 枠では何も変えない。undo は
+    // inserted と removed を入れ替えた編集を渡す。
+    [[nodiscard]] EditorState with_other_adjusted(const core::Edit &edit,
+                                                  const core::TextBuffer &after) const;
+    // もう 1 つの枠の先頭行と画面行を置く（ScrollPane）。1 枠では何も変えない。
+    [[nodiscard]] EditorState with_other_scrolled(core::LineNumber first_visible,
+                                                  std::size_t first_row) const;
+    // もう 1 つの枠を操作中の枠の形で読む写し（決定 8）。本文・選択（キャレットに畳む）・
+    // スクロール・表示形式がもう 1 つの枠のもので、変換・入力行・検索の preview は無い。frame と
+    // ScrollPane が操作中の枠と同じ関数を通すための読み取りの口で、状態には戻さない。1 枠と、
+    // まだ読んでいない文書を指すときは値なし。
+    [[nodiscard]] std::optional<EditorState> other_pane_state() const;
+
   private:
     EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled);
     // 置く・広げるの 1 対（決定 2）。脇の束と欄の両方を知るのはこの 2 つと、上の with_switched /
@@ -209,6 +244,13 @@ class EditorState final
     [[nodiscard]] EditorState switched_to(std::size_t position, const DocumentState &target) const;
     // アクティブを使った順の先頭へ動かし、歩きを終える。使った順を直す 3 か所の締め。
     void touch_active();
+    // アクティブの今の表示を PaneView にする（with_split と with_pane_swapped の共通）。
+    [[nodiscard]] PaneView active_pane() const;
+    // view の表示の欄（キャレット・affinity・スクロール・欲しい列）を欄に広げる。
+    void spread_pane(const PaneView &view);
+    // もう 1 つの枠が tab を出していれば、アクティブの文書の先頭へ向け直す（決定
+    // 5）。閉じたタブと、 本文が丸ごと替わるアクティブ（with_opened）の 2 か所。
+    void restart_other_showing(AutosaveId tab);
 
     core::TextBuffer text_;
     core::Selection selection_;
@@ -244,5 +286,6 @@ class EditorState final
     std::int32_t title_bar_width_ = 0;
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;
+    SplitState split_;
 };
 } // namespace nenenib::application

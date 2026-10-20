@@ -7,6 +7,7 @@
 #include "ExTabName.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
+#include "ExWindowName.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -356,6 +357,34 @@ tab_command(std::string_view text)
     }
     return tab_result(row.value(), argument);
 }
+// 窓の命令の名前の表（ADR 0148 の決定 5）。`:on[ly]` は Vim と同じ最短の形。
+constexpr std::array<ExWindowName, 1> window_names{{{"only", 2, ExWindowCommand::only}}};
+
+// 窓の命令。名前が表に当たらなければ値なし（ほかの命令として扱う）。範囲の形（`:2only`）と
+// 引数（`!` を含む）は unsupported_argument。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+window_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    const std::size_t letters = leading(text.substr(range), is_letter);
+    const auto name = text.substr(range, letters);
+    const auto row = std::ranges::find_if(
+        window_names, [name](const ExWindowName &entry)
+        { return name.size() >= entry.shortest && entry.name.starts_with(name); });
+    if (row == window_names.end())
+    {
+        return std::nullopt;
+    }
+    if (range > 0 || !trimmed(text.substr(range + letters)).empty())
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt,
+                    DisplayText::parse(row->name).value()};
+    result.window = row->command;
+    return result;
+}
+
 constexpr std::array<ExPaletteName, 5> palette_names{{
     {"edit", 1, PaletteScope::files},
     {"buffer", 1, PaletteScope::tabs},
@@ -522,6 +551,11 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     {
         return std::move(tab).value();
     }
+    auto window = window_command(text);
+    if (window.has_value())
+    {
+        return std::move(window).value();
+    }
     auto palette = palette_command(text);
     if (palette.has_value())
     {
@@ -535,11 +569,11 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     return std::unexpected(ExFailure::unknown_command);
 }
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
-constexpr std::array<std::string_view, 19> fixed_candidates{
+constexpr std::array<std::string_view, 20> fixed_candidates{
     "colorscheme",  "set fontsize=",    guifont_command,    "set incsearch", "set noincsearch",
     "set hlsearch", "set nohlsearch",   "set guide",        "set noguide",   "tabs",
     "tabnew",       "tabnext",          "tabprevious",      "tabclose",      "set wrap",
-    "set nowrap",   "set display=grid", "set display=text", nohlsearch_name};
+    "set nowrap",   "set display=grid", "set display=text", nohlsearch_name, "only"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

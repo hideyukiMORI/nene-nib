@@ -23,7 +23,12 @@ BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dp
     const auto title = title_bar_layout(TitleBarInput{width, dpi, single_tab, 0, 0, std::nullopt});
     const auto status = status_bar_layout(width, height, dpi);
     const std::int32_t top = std::min(title.band.bottom, status.band.top);
-    const LayoutRect band{0, top, width, status.band.top};
+    return body_layout_in(LayoutRect{0, top, width, status.band.top}, dpi, font_size);
+}
+
+BodyLayout body_layout_in(LayoutRect band, std::uint32_t dpi, FontSize font_size) noexcept
+{
+    const std::int32_t width = width_of(band);
     const std::int32_t first = band.top + to_pixels(body_top_dips, dpi);
     const auto line_dips = static_cast<std::int32_t>(font_size_dips(font_size) * 1.6F + 0.5F);
     const auto gutter_dips = static_cast<std::int32_t>(
@@ -32,7 +37,8 @@ BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dp
     const std::int32_t gutter = std::clamp(to_pixels(gutter_dips, dpi), 0, std::max(width, 0));
     const auto padding_dips = static_cast<std::int32_t>(
         static_cast<float>(body_left_padding_dips) * font_size_ratio(font_size) + 0.5F);
-    const auto content_left = std::min(gutter + to_pixels(padding_dips, dpi), band.right);
+    const auto content_left =
+        std::min(band.left + gutter + to_pixels(padding_dips, dpi), band.right);
     const std::int32_t rows = std::max((band.bottom - first) / line_height, 0);
     return BodyLayout{.band = band,
                       .gutter = LayoutRect{band.left, first, band.left + gutter, band.bottom},

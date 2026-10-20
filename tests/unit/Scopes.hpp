@@ -42,6 +42,9 @@ void verify_delivery_contracts();
 // TabsTests.cpp
 void verify_tabs_contracts();
 void verify_tabs_scope();
+// SplitTests.cpp
+void verify_split_contracts();
+void verify_split_scope();
 
 // SessionTests.cpp
 void verify_session_contracts();

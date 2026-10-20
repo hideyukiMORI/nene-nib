@@ -12,6 +12,7 @@
 #include "Document.hpp"
 #include "DocumentState.hpp"
 #include "DocumentView.hpp"
+#include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
@@ -22,6 +23,7 @@
 #include "ExPaletteRequest.hpp"
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
+#include "ExWindowCommand.hpp"
 #include "FileBookmarks.hpp"
 #include "FileFailure.hpp"
 #include "FilePath.hpp"
@@ -34,6 +36,7 @@
 #include "OffsetRange.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
+#include "PaneSource.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "Session.hpp"
@@ -239,6 +242,13 @@ class EditorController final
     void accept(const WorkCompleted &);
     // 表示形式（ADR 0140 の決定 2・3）。窓の問いの「はい」と Ex の `:set display=` が通る 1 本。
     void accept(const SelectDisplay &intent);
+    // 枠（ADR 0148）。分ける・移る・閉じる・もう 1 つの枠を送る。
+    void accept(const SplitPane &intent);
+    void accept(const SwitchPane &);
+    void accept(const ClosePane &);
+    void accept(const ScrollPane &intent);
+    // 操作中の枠の編集を、同じ文書を出しているもう 1 つの枠に写す（決定 9）。
+    void adjust_other(const core::Edit &edit, const core::TextBuffer &after);
     // 開いた文書に格子表示を聞くかを、アクティブな文書ごとに 1 回だけ判定する（決定 2）。文書が
     // アクティブになった直後（開く・enter_document）と apply の終わりと起動の終わりから呼ぶ。
     // Ctrl+Tab で歩いている間は判定だけして聞かない（確定で聞く）。
@@ -310,6 +320,7 @@ class EditorController final
     void apply_unsaved_ex(const core::ExResult &result);
     // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
     void run_tab_request(const core::ExTabRequest &request);
+    void run_window_command(core::ExWindowCommand command);
     // Ex のファイル命令も Ctrl+P と同じ面へ渡す（ADR 0064）。
     void run_palette_request(const core::ExPaletteRequest &request);
     // GUI と Ex の保存は同じ処理で、失敗の表示だけが入口ごとに違う（ADR 0066）。
@@ -409,21 +420,29 @@ class EditorController final
     [[nodiscard]] static const core::VimPattern &frame_pattern(const core::VimPattern &pattern);
     [[nodiscard]] static const core::VimPattern &
     frame_pattern(std::reference_wrapper<const core::VimPattern> pattern);
-    [[nodiscard]] LineView line_view(LineView view, const core::OffsetRange &range,
-                                     const core::VimPattern *pattern, core::Offset caret) const;
-    [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure> visible_lines();
+    [[nodiscard]] static const core::VimPattern *
+    pattern_of(const std::optional<SearchPattern> &pattern);
+    [[nodiscard]] LineView line_view(const PaneSource &source, LineView view,
+                                     const core::OffsetRange &range, core::Offset caret) const;
+    [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure>
+    visible_lines(const PaneSource &source) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
     screen_rows_of(const LineView &shown) const;
     // 格子の見えている画面行（ADR 0140 の決定 5）を frame の grid と grid_scanned に書く。
     // 位置解決と同じ GridCells（本文の索引を借りる）を 1 frame に 1 つ作って切り出す。
     // 失敗は升を読めないとき。
-    [[nodiscard]] std::optional<TextLayoutFailure> grid_visible_rows(EditorFrame &frame) const;
+    [[nodiscard]] std::optional<TextLayoutFailure> grid_visible_rows(const PaneSource &source,
+                                                                     std::vector<GridRowView> &grid,
+                                                                     std::size_t &scanned,
+                                                                     std::size_t &searched) const;
+    // もう 1 つの枠の表示値を frame に載せる（ADR 0148 の決定 8）。
+    void add_other_pane(EditorFrame &result, const core::VimPattern *pattern) const;
     // 1 行の塗る範囲。検索の当たりは見えている画面行の本文の範囲 visible に、
     // 一致の長さの上限ぶんの余裕を前後に足した窓だけを読んで照合する（#556）。
     // 今の当たりはキャレット（incsearch の入力中は preview の当たり）を含む当たり。
-    [[nodiscard]] GridLineMarks grid_marks(core::LineNumber line, const core::OffsetRange &visible,
-                                           const core::OffsetRange &selection,
-                                           const core::VimPattern *pattern) const;
+    [[nodiscard]] GridLineMarks grid_marks(const PaneSource &source, core::LineNumber line,
+                                           const core::OffsetRange &visible,
+                                           const core::OffsetRange &selection) const;
     // 本文の変換（入力行が開いていれば空）と入力行の変換（入力行が開いているときだけ）。どちらか
     // 一方にだけ載る（ADR 0061 の決定 4・#635 で面から入力行すべてへ）。
     [[nodiscard]] std::optional<CompositionView> composed() const;

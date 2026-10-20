@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 16> expected_2{
+constexpr std::array<OperationChoiceExpected, 20> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -54,8 +54,19 @@ constexpr std::array<OperationChoiceExpected, 16> expected_2{
       std::nullopt},
      {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
       "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 14> expected_3{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::split_vertical, 16U, "左右に分ける", 6U,
+      "本文を左右 2 つの枠に分けて同じ文書を出します", 24U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::split_horizontal, 17U, "上下に分ける", 6U,
+      "本文を上下 2 つの枠に分けて同じ文書を出します", 24U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_pane, 19U, "枠を閉じる", 5U,
+      "もう 1 つの枠を閉じて 1 つに戻します", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 18> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -89,9 +100,31 @@ constexpr std::array<OperationChoiceExpected, 14> expected_3{
       std::nullopt},
      {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
       "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 16> expected_4{
-    {{core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::split_vertical, 16U, "左右に分ける", 6U,
+      "本文を左右 2 つの枠に分けて同じ文書を出します", 24U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::split_horizontal, 17U, "上下に分ける", 6U,
+      "本文を上下 2 つの枠に分けて同じ文書を出します", 24U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_pane, 19U, "枠を閉じる", 5U,
+      "もう 1 つの枠を閉じて 1 つに戻します", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 20> expected_4{
+    {{core::EditorOperation::split_vertical, 16U, "左右に分ける", 6U,
+      "本文を左右 2 つの枠に分けて同じ文書を出します", 24U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::split_horizontal, 17U, "上下に分ける", 6U,
+      "本文を上下 2 つの枠に分けて同じ文書を出します", 24U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_pane, 19U, "枠を閉じる", 5U,
+      "もう 1 つの枠を閉じて 1 つに戻します", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
@@ -174,14 +207,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 445184U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 562944U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 400640U, expected_3,
+     {"", core::EditMode::vim, 256U, 518400U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 445184U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 562944U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 647168U, expected_5,

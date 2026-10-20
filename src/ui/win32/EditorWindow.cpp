@@ -2307,6 +2307,13 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_mode:
         toggle_mode();
         return;
+    // #683: 枠の操作は ui の鍵と一緒に意図へ写す（ADR 0148 の決定 6）。表には鍵の無い行があり
+    // F1 の一覧に出るので、選ぶとここへ来るが、#683 で鍵と実行が入るまでは何もしない。
+    case core::EditorOperation::split_vertical:
+    case core::EditorOperation::split_horizontal:
+    case core::EditorOperation::next_pane:
+    case core::EditorOperation::close_pane:
+        return;
     }
     std::unreachable();
 }

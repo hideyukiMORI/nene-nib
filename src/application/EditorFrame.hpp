@@ -17,7 +17,10 @@
 #include "LineView.hpp"
 #include "OperationGuide.hpp"
 #include "Palette.hpp"
+#include "PaneFrame.hpp"
+#include "PaneSide.hpp"
 #include "SettingsIssue.hpp"
+#include "SplitLayout.hpp"
 #include "StatusItems.hpp"
 #include "TextLayoutFailure.hpp"
 #include "TitleBarInput.hpp"
@@ -106,6 +109,11 @@ struct EditorFrame
     // 見えている画面行の範囲に、一致の長さの上限ぶんの余裕と文脈の 1 文字を
     // 前後に足した分だけで、行の全体ではない。
     std::size_t grid_searched = 0;
+    // 枠の配置・操作中の枠の側ともう 1 つの枠（ADR 0148 の決定 8）。1 枠では none・first・値なし。
+    // 描く所は pane_layouts の first / second のうち active_side の側に操作中の枠を置く。
+    core::SplitLayout layout = core::SplitLayout::none;
+    core::PaneSide active_side = core::PaneSide::first;
+    std::optional<PaneFrame> other{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

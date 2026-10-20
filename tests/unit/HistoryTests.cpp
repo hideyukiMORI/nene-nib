@@ -2,6 +2,7 @@
 // scope `--history` の単体テスト（ADR 0042 決定 2・ADR 0060 の決定 8）。閉じたファイルの履歴を
 // 書き換える純関数 history_recorded / history_forgotten と、履歴の替え玉の往復。
 #include "Appearance.hpp"
+#include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
 #include "Editing.hpp"
@@ -34,6 +35,9 @@
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
+#include "SplitLayout.hpp"
+#include "SplitPane.hpp"
+#include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
@@ -400,6 +404,10 @@ void verify_quiet_paths()
     applied(controller,
             SaveDocument{path_of("C:\\work\\new.txt"), nenenib::core::TextEncoding::utf8});
     applied(controller, InsertText{"more"});
+    // 枠を分ける・同じ文書の枠を移る・閉じるの道も同じ（ADR 0148）。
+    applied(controller, nenenib::application::SplitPane{nenenib::core::SplitLayout::vertical});
+    applied(controller, nenenib::application::SwitchPane{});
+    applied(controller, nenenib::application::ClosePane{});
     expect(
         editing.history().reads() == 0 && editing.history().writes() == 0 &&
             editing.folders().requests().empty() && editing.folders().collects() == 0 &&
