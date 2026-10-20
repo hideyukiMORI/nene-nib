@@ -1,5 +1,7 @@
 # いまのタスク — NeNe Nib
 
+2026-10-21 の区切り（文書だけ: 実装計画 3 本（Markdown・巨大ファイル・構文の色分けと LSP）と md4c の probe・ADR 0122 / 0141 の状態行・作業木の片付け 27 本。製品は前日のまま。最新は [日報](../reports/2026-10-21.md) / [引き継ぎ](../handoffs/2026-10-21.md)）
+
 2026-10-20 の区切り（面と補完の操作感と配色のプレビュー・UTF-16・長いパス・`:noh`・補完の並び・1 行 16 MiB の基準値の採り直し・`g_` `g^`・#411・`:` と検索の行の履歴が main・split の 3 本と #701 は試用待ち）。Issue が正本。経緯は[日報 2026-10-20](../reports/2026-10-20.md)、入口は[引き継ぎ 2026-10-20](../handoffs/2026-10-20.md)、検証は [gate-proofs](../quality/gate-proofs.md)（経緯は `docs/quality/history/`）と各品質記録を参照する。
 
 ## 運用
@@ -27,7 +29,7 @@
 - split の試用（D41）: `D:\NeNeNib\evidence\split-trial\README.md`。OK なら #688 → #687 → #692 の順に rebase して merge（#688 の本文は `検証（実行したコマンドと結果）:` の値を同じ行に直してから Ready）
 - #701（ホイール）: `NeNeNib-wheel-fef8900.exe` の手触り。OK なら merge（本文の同じ直しが要る）
 - `fontsize` / `guifont` のプレビュー: ADR 0150 の次の段。試用で「欲しい」なら着手
-- 3 本の実装計画（[Markdown](../plans/2026-10-21-markdown-preview.md)・[巨大ファイル](../plans/2026-10-21-large-file.md)・[構文の色分けと LSP](../plans/2026-10-21-syntax-and-lsp.md)）は hide の判断待ち（各計画の「施主に確かめる点」の表・M-1〜6・L-1〜5・S-1〜4・LSP の L-1〜5）。順番の推しは構文の計画の §3
+- 3 本の実装計画（[Markdown](../plans/2026-10-21-markdown-preview.md)・[巨大ファイル](../plans/2026-10-21-large-file.md)・[構文の色分けと LSP](../plans/2026-10-21-syntax-and-lsp.md)）は hide の判断待ち（各計画の「施主に確かめる点」の表・M-1〜6・L-1〜5・S-1〜4・LSP の L-1〜5）。順番の推しは構文の計画の §3（[引き継ぎの「2. 3 本の計画の判断」](../handoffs/2026-10-21.md#2-3-本の計画の判断平易な言い方)）
 - #469 / #424: 持ち越し（推しは #469 を閉じる）
 
 以下は 2026-10-19 までの記録。
