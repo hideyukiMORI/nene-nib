@@ -1011,6 +1011,11 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimOperator::change:
         return VimLineEndStop::rests;
     case VimOperator::yank:
+    case VimOperator::toggle_case:
+    case VimOperator::lower_case:
+    case VimOperator::upper_case:
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
         return VimLineEndStop::passes;
     }
     std::unreachable();
@@ -1363,6 +1368,12 @@ named_written(VimState state, const VimRegisterSnapshot &value, VimOperator oper
             return state;
         case VimOperator::remove:
         case VimOperator::change:
+        // 大小文字と字下げはレジスタを書かない（ADR 0015 の決定 10・11）。ここへは来ない。
+        case VimOperator::toggle_case:
+        case VimOperator::lower_case:
+        case VimOperator::upper_case:
+        case VimOperator::shift_right:
+        case VimOperator::shift_left:
             return state;
         }
         std::unreachable();
@@ -1669,6 +1680,270 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
         std::move(clipboard));
 }
 
+// ------------------------------------------- 大小文字と字下げと行の結合（決定 9〜11）
+
+// 範囲が覆う最後の行。文字単位の範囲が次の行の行頭で終わるとき（`v$` が改行まで選んだとき）は、
+// その行に文字が無いので前の行まで（Vim の oap->end の行）。
+[[nodiscard]] LineNumber last_covered_line(const TextBuffer &text, const VimMotionRange &range)
+{
+    const LineNumber first = line_of(text, range.range.begin);
+    const LineNumber last = line_of(text, range.range.end);
+    const bool at_next_line_start = range.kind == VimRegisterKind::characters &&
+                                    last.value > first.value &&
+                                    range.range.end == text.line_start(last);
+    return at_next_line_start ? LineNumber{last.value - single_step} : last;
+}
+
+// 1 バイトの大小の写し（決定 10）。変えるのは ASCII の英字だけで、UTF-8 の多バイト列のバイトは
+// どれも 0x80 以上なので触れない（結合文字つきの a は A ＋結合文字になる・Vim と同じ）。
+[[nodiscard]] char lowered(char value) noexcept
+{
+    return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
+}
+
+[[nodiscard]] char uppered(char value) noexcept
+{
+    return value >= 'a' && value <= 'z' ? static_cast<char>(value - 'a' + 'A') : value;
+}
+
+[[nodiscard]] char cased(char value, VimOperator operation) noexcept
+{
+    switch (operation)
+    {
+    case VimOperator::toggle_case:
+        return value >= 'a' && value <= 'z' ? uppered(value) : lowered(value);
+    case VimOperator::lower_case:
+        return lowered(value);
+    case VimOperator::upper_case:
+        return uppered(value);
+    case VimOperator::remove:
+    case VimOperator::change:
+    case VimOperator::yank:
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
+        return value;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::string cased_text(std::string text, VimOperator operation)
+{
+    for (char &value : text)
+    {
+        value = cased(value, operation);
+    }
+    return text;
+}
+
+// 大小文字の置き換え（決定 10）。行単位は覆う行の内容の全体、文字単位は範囲そのもの。本文は LF
+// 換算で、controller が文書の改行へ直して 1 Edit にする。キャレットは範囲の戻り先（行単位は
+// キャレットと着地の小さい方・ないときは範囲の先頭・Vim の oap->start）で、u の戻り先も同じ。
+[[nodiscard]] VimStep case_changed(const VimState &state, const TextBuffer &text,
+                                   const VimMotionRange &range, VimOperator operation)
+{
+    const OffsetRange span = range.kind == VimRegisterKind::lines
+                                 ? OffsetRange{text.line_start(line_of(text, range.range.begin)),
+                                               text.line_end(last_covered_line(text, range))}
+                                 : range.range;
+    const Offset caret = range.restore.value_or(range.range.begin);
+    if (is_empty(span))
+    {
+        return cancelled(state);
+    }
+    std::string body = cased_text(
+        without_newline_carriage_returns(text.text_range(span.begin, span.end), text.line_ending()),
+        operation);
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceRange{span, std::move(body), caret}},
+                       caret);
+}
+
+// 行の字下げの桁（Tab と空白の表示の桁・Vim の get_indent）と、字下げのバイト数。
+[[nodiscard]] std::pair<std::size_t, std::size_t> indent_of(std::string_view line) noexcept
+{
+    std::size_t columns = 0;
+    std::size_t bytes = 0;
+    while (bytes < line.size() && (line[bytes] == ' ' || line[bytes] == '\t'))
+    {
+        columns += column_advance(static_cast<char32_t>(line[bytes]), columns);
+        ++bytes;
+    }
+    return {columns, bytes};
+}
+
+// 1 行の字下げを shiftwidth × amount だけ動かして作り直す（決定 11・Vim の shift_line と
+// set_indent。noshiftround・noexpandtab）。空行は動かさない（Vim の op_shift）。左は 0 で止まる。
+// 作り直す字下げは vim_tab_stop ごとの Tab と残りの空白。大きすぎる字下げは書かない。
+[[nodiscard]] std::optional<std::string> shifted_line(std::string_view line, VimOperator operation,
+                                                      std::size_t amount)
+{
+    if (line.empty())
+    {
+        return std::string{};
+    }
+    const auto [columns, bytes] = indent_of(line);
+    const std::size_t largest = std::numeric_limits<std::size_t>::max();
+    if (amount > (largest - columns) / vim_shift_width)
+    {
+        return std::nullopt;
+    }
+    const std::size_t width = vim_shift_width * amount;
+    const bool left = operation == VimOperator::shift_left;
+    const std::size_t indent = left ? (columns < width ? 0 : columns - width) : columns + width;
+    std::string result;
+    if (indent / vim_tab_stop + indent % vim_tab_stop > result.max_size() - line.size())
+    {
+        return std::nullopt;
+    }
+    result.append(indent / vim_tab_stop, '\t');
+    result.append(indent % vim_tab_stop, ' ');
+    result.append(line.substr(bytes));
+    return result;
+}
+
+// 置き換えた本文の最初の行の最初の非空白（Vim の beginline(BL_SOL | BL_FIX)）。空白だけの行は
+// 最後の文字・空行は行頭。
+[[nodiscard]] std::size_t first_line_first_non_blank(std::string_view body)
+{
+    const std::string_view line = body.substr(0, std::min(body.find('\n'), body.size()));
+    std::size_t index = 0;
+    while (index < line.size() && (line[index] == ' ' || line[index] == '\t'))
+    {
+        ++index;
+    }
+    return index == line.size() && index > 0 ? previous_code_point(line, Offset{index}).value
+                                             : index;
+}
+
+// 字下げを動かす向き（shift_right / shift_left）と回数。回数は VISUAL の回数で、NORMAL は 1
+// （Vim の op_shift の amount）。
+using ShiftBy = std::pair<VimOperator, std::size_t>;
+
+// > < の置き換え（決定 11）。範囲が覆う行を 1 行ずつ作り直し、最初の行から最後の行の内容の終わり
+// までを 1 つの置き換えにする（undo 1 単位）。キャレットは最初の行の最初の非空白、u の戻り先は
+// 範囲の戻り先。
+[[nodiscard]] VimStep shifted(const VimState &state, const TextBuffer &text,
+                              const VimMotionRange &range, ShiftBy shift)
+{
+    const auto [operation, amount] = shift;
+    const LineNumber first = line_of(text, range.range.begin);
+    const LineNumber last = last_covered_line(text, range);
+    std::string body;
+    for (std::size_t line = first.value; line <= last.value; ++line)
+    {
+        const auto moved = shifted_line(text.line_text(LineNumber{line}), operation, amount);
+        if (!moved.has_value())
+        {
+            return failed(cancelled(state), VimRepeatFailure::too_large);
+        }
+        if (line != first.value)
+        {
+            body.push_back('\n');
+        }
+        body += moved.value();
+    }
+    const OffsetRange span{text.line_start(first), text.line_end(last)};
+    const Offset caret{span.begin.value + first_line_first_non_blank(body)};
+    return restored_at(VimStep{vim_resting_from(state, state.unnamed_register),
+                               VimReplaceRange{span, std::move(body), caret}},
+                       range.restore.value_or(range.range.begin));
+}
+
+// 行の最後から数えたバイト（無ければ 0）。J の空白の規則が見るのは ASCII の空白・Tab・`.` `?` `!`
+// だけで、多バイト文字のバイトは 0x80 以上なのでどれにも当たらない（Vim の endcurr1 / endcurr2）。
+[[nodiscard]] char byte_from_end(std::string_view part, std::size_t back) noexcept
+{
+    return part.size() > back ? part.at(part.size() - back - single_step) : '\0';
+}
+
+// J がつなぐ所に入れる空白の数（決定 9・Vim の do_join）。次の行の内容（先頭の空白を落とした後）が
+// 空か `)` で始まるか、ここまでの本文が空か、前の行が Tab で終わるときは入れない。前の行が空白で
+// 終わるときは足さない。joinspaces（Vim 9.1 の既定はオン）で前の行が `.` `?` `!` で終わる（空白の
+// 手前を見る）なら 1 つ足す。
+[[nodiscard]] std::size_t join_spaces(std::string_view body, std::string_view previous,
+                                      std::string_view next) noexcept
+{
+    char last = byte_from_end(previous, 0);
+    if (next.empty() || next.front() == ')' || body.empty() || last == '\t')
+    {
+        return 0;
+    }
+    std::size_t spaces = 0;
+    if (last == ' ')
+    {
+        last = byte_from_end(previous, single_step);
+    }
+    else
+    {
+        ++spaces;
+    }
+    return last == '.' || last == '?' || last == '!' ? spaces + single_step : spaces;
+}
+
+// J と gJ（決定 9）。キャレットの行から回数の行（最小 2）をつなぐ。回数が本文の末尾を越えるとき、
+// 2 行なら失敗し、3 行以上なら最後の行まで（Vim の nv_join）。J は次の行の先頭の空白を落として
+// join_spaces の空白を入れ、gJ は何も落とさず入れない。キャレットは最後につないだ所（入れた空白の
+// 始まり・行の外なら最後の文字・Vim の do_join）。レジスタは書かない。u の戻り先は押したときの
+// キャレット（controller の既定）。
+[[nodiscard]] VimStep joined(const VimState &state, const VimEditorView &view, bool inserts_space)
+{
+    const TextBuffer &text = view.text;
+    const LineNumber first = line_of(text, view.selection.caret);
+    std::size_t count = std::max<std::size_t>(count_of(state.count), 2);
+    const std::size_t remaining = text.line_count() - first.value + single_step;
+    if (count > remaining)
+    {
+        if (count <= 2)
+        {
+            return failed(cancelled(state), VimRepeatFailure::not_moved);
+        }
+        count = remaining;
+    }
+    const LineNumber last{first.value + count - single_step};
+    std::string previous = text.line_text(first);
+    std::string body = previous;
+    std::size_t joint = 0;
+    for (std::size_t line = first.value + single_step; line <= last.value; ++line)
+    {
+        std::string part = text.line_text(LineNumber{line});
+        std::size_t spaces = 0;
+        if (inserts_space)
+        {
+            part.erase(0, std::min(part.find_first_not_of(" \t"), part.size()));
+            spaces = join_spaces(body, previous, part);
+        }
+        joint = body.size();
+        body.append(spaces, ' ');
+        body += part;
+        previous = std::move(part);
+    }
+    if (joint == body.size() && joint > 0)
+    {
+        joint = previous_code_point(body, Offset{joint}).value;
+    }
+    const OffsetRange span{text.line_start(first), text.line_end(last)};
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplaceRange{span, std::move(body), Offset{span.begin.value + joint}}};
+}
+
+// `~`（決定 10・tildeop off）。キャレットから回数の文字（結合文字ごと）を反転し、行末で止まる。
+// キャレットは反転した次の文字（行の外なら最後の文字・Vim の n_swapchar）。空行は失敗。
+[[nodiscard]] VimStep swapped_characters(const VimState &state, const TextBuffer &text,
+                                         Offset caret)
+{
+    const LineNumber line = line_of(text, caret);
+    if (text.line_start(line) == text.line_end(line))
+    {
+        return failed(cancelled(state), VimRepeatFailure::not_moved);
+    }
+    const Offset end = forward_characters(text, caret, count_of(state.count));
+    std::string body = cased_text(text.text_range(caret, end), VimOperator::toggle_case);
+    const Offset landing =
+        end == text.line_end(line) ? backward_characters(text, end, single_step) : end;
+    return VimStep{vim_resting_from(state, state.unnamed_register),
+                   VimReplaceRange{OffsetRange{caret, end}, std::move(body), landing}};
+}
+
 // いま効かせるオペレータ。保留が無ければ「消す」＝ x が通る道（x は保留を立てずにここへ来る）。
 [[nodiscard]] VimOperator operation_of(const VimState &state) noexcept
 {
@@ -1686,6 +1961,13 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
         return changed(state, text, range);
     case VimOperator::yank:
         return yanked(state, text, caret, range);
+    case VimOperator::toggle_case:
+    case VimOperator::lower_case:
+    case VimOperator::upper_case:
+        return case_changed(state, text, range, operation_of(state));
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
+        return shifted(state, text, range, ShiftBy{operation_of(state), single_step});
     }
     std::unreachable();
 }
@@ -2078,7 +2360,13 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
         return with_clipboard(VimStep{std::move(next), VimMoveTo{block_caret(block, 0)}},
                               std::move(clipboard));
     case VimOperator::change:
-        // `c` は範囲外（決定 5）。visual_selection_action が先に取り消す。
+    // `c` は範囲外（決定 5）。大小文字と字下げの矩形は #770（ADR 0015 の決定 10・11）。
+    // visual_selection_action が先に取り消す。
+    case VimOperator::toggle_case:
+    case VimOperator::lower_case:
+    case VimOperator::upper_case:
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
         break;
     }
     std::unreachable();
@@ -2933,10 +3221,12 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 
 [[nodiscard]] VimStep pending_action(const VimState &state, VimAction action)
 {
-    const VimOperator operation = action == VimAction::remove_operator   ? VimOperator::remove
-                                  : action == VimAction::change_operator ? VimOperator::change
-                                                                         : VimOperator::yank;
-    return pending_operator(state, operation);
+    const auto operation = vim_operator_for(action);
+    if (!operation.has_value())
+    {
+        std::unreachable();
+    }
+    return pending_operator(state, operation.value());
 }
 
 [[nodiscard]] VimStep normal_visual_action(const VimState &state, const VimEditorView &view,
@@ -3320,24 +3610,40 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return VimStep{vim_resting_from(state, state.unnamed_register), VimRedo{}};
     }
+    if (action == VimAction::undo_line)
+    {
+        // NORMAL の `U`（行の undo）は未実装。表に無い鍵と同じに打ち消す（ADR 0015 の決定 10）。
+        return cancelled(state);
+    }
     return repeated_change(state);
 }
 
-[[nodiscard]] VimStep normal_edit_action(const VimState &state, const VimEditorView &view,
-                                         VimAction action)
+// 範囲に効く本文の変更（x ~ と保留を立てるオペレータの鍵）。
+[[nodiscard]] VimStep normal_range_action(const VimState &state, const VimEditorView &view,
+                                          VimAction action)
 {
     if (action == VimAction::remove_character)
     {
         return removed_character(state, view.text, view.selection.caret);
     }
+    if (action == VimAction::toggle_case_character)
+    {
+        return swapped_characters(state, view.text, view.selection.caret);
+    }
+    return pending_action(state, action);
+}
+
+// 行に効く本文の変更（X p P D C Y J gJ）。
+[[nodiscard]] VimStep normal_line_action(const VimState &state, const VimEditorView &view,
+                                         VimAction action)
+{
     if (action == VimAction::remove_character_before)
     {
         return removed_character_before(state, view);
     }
-    if (action == VimAction::remove_operator || action == VimAction::change_operator ||
-        action == VimAction::yank_operator)
+    if (action == VimAction::join_lines || action == VimAction::join_lines_raw)
     {
-        return pending_action(state, action);
+        return joined(state, view, action == VimAction::join_lines);
     }
     if (action == VimAction::put_after || action == VimAction::put_before)
     {
@@ -3785,8 +4091,9 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
     case VimActionGroup::enter_visual:
         return normal_visual_action(state, view, action);
     case VimActionGroup::edit_range:
+        return normal_range_action(state, view, action);
     case VimActionGroup::edit_line:
-        return normal_edit_action(state, view, action);
+        return normal_line_action(state, view, action);
     case VimActionGroup::insert_object:
     case VimActionGroup::insert_line:
         return insert_action(state, view, action);
@@ -3807,21 +4114,6 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
     std::unreachable();
 }
 
-// 同じオペレータの鍵をもう一度押したときの動作（dd cc yy）。ほかの鍵は打ち消しになる。
-[[nodiscard]] VimAction doubled_action_of(VimOperator operation) noexcept
-{
-    switch (operation)
-    {
-    case VimOperator::remove:
-        return VimAction::remove_operator;
-    case VimOperator::change:
-        return VimAction::change_operator;
-    case VimOperator::yank:
-        return VimAction::yank_operator;
-    }
-    std::unreachable();
-}
-
 // 保留中のオペレータの後ろ。同じ鍵なら行単位、移動なら範囲、ほかの鍵なら打ち消し（Vim と同じ）。
 [[nodiscard]] VimStep pending_step(const VimState &state, const VimEditorView &view,
                                    VimAction action)
@@ -3836,7 +4128,8 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
     {
         return text_object_action(state, action);
     }
-    if (action == doubled_action_of(operation))
+    // 同じオペレータの鍵をもう一度押すと行単位（dd cc yy g~~ guu gUU >> <<・表は VimKeyTable）。
+    if (vim_operator_doubles(operation, action))
     {
         return operated_on_lines(state, view.text, view.selection.caret, operation);
     }
@@ -4140,6 +4433,16 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         motion.value(), view.selection.caret, landing);
 }
 
+// VISUAL の大小文字（決定 10）。キャレットは行単位なら最初の行の行頭、文字単位なら選択の先頭
+// （Vim の oap->start）。u の戻り先は d と同じ visual_restore。
+[[nodiscard]] VimStep visual_case_changed(const VimState &state, const TextBuffer &text,
+                                          VimMotionRange range, VimOperator operation)
+{
+    const Offset restore = range.restore.value_or(range.range.begin);
+    range.restore = range.range.begin;
+    return restored_at(case_changed(state, text, range, operation), restore);
+}
+
 // `d x y c`。選択を範囲に変えて #43 と同じ経路へ流す（決定 5）。オペレータは VISUAL を終わらせる。
 [[nodiscard]] VimStep visual_operated(const VimState &state, const VimEditorView &view,
                                       VimOperator operation)
@@ -4158,8 +4461,28 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return changed(state, view.text, range);
     case VimOperator::yank:
         return yanked(state, view.text, view.selection.caret, range);
+    case VimOperator::toggle_case:
+    case VimOperator::lower_case:
+    case VimOperator::upper_case:
+        return visual_case_changed(state, view.text, range, operation);
+    case VimOperator::shift_right:
+    case VimOperator::shift_left:
+        // VISUAL の回数は字下げを動かす回数（Vim の op_shift の amount）。
+        return shifted(state, view.text, range, ShiftBy{operation, count_of(state.count)});
     }
     std::unreachable();
+}
+
+// VISUAL の `~` `u` `U` `>` `<` と `g~` `gu` `gU`（決定 10・11）。矩形は #770 の範囲で、いまは
+// 鍵を拒んで矩形のまま残る（Vim は矩形の行ごとに効く）。
+[[nodiscard]] VimStep visual_rewritten(const VimState &state, const VimEditorView &view,
+                                       VimOperator operation)
+{
+    if (state.mode == VimMode::visual_block)
+    {
+        return failed(visual_unchanged(state), VimRepeatFailure::refused);
+    }
+    return visual_operated(state, view, operation);
 }
 
 // VISUAL の `c`。矩形は範囲外なので鍵を捨てて矩形のまま残る（ADR 0035 の決定 5）。
@@ -4197,6 +4520,14 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     {
         return visual_operated(state, view, VimOperator::yank);
     }
+    if (action == VimAction::toggle_case_character)
+    {
+        return visual_rewritten(state, view, VimOperator::toggle_case);
+    }
+    if (const auto operation = vim_operator_for(action); operation.has_value())
+    {
+        return visual_rewritten(state, view, operation.value());
+    }
     if (action == VimAction::open_line_below || action == VimAction::open_line_above)
     {
         return visual_swapped(state, view, action);
@@ -4212,7 +4543,23 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     std::unreachable();
 }
 
-// VISUAL の写し先（決定 7・決定 8）。行に効く命令・挿入・履歴・Ex は VISUAL では効かない。
+// VISUAL の `u` `U` は undo ではなく選択の小文字化・大文字化（ADR 0015 の決定 10・Vim の
+// nv_undo / nv_Undo）。ほかの履歴の鍵（Ctrl-r `.`）は VISUAL では効かない。
+[[nodiscard]] VimStep visual_history(const VimState &state, const VimEditorView &view,
+                                     VimAction action)
+{
+    if (action == VimAction::undo)
+    {
+        return visual_rewritten(state, view, VimOperator::lower_case);
+    }
+    if (action == VimAction::undo_line)
+    {
+        return visual_rewritten(state, view, VimOperator::upper_case);
+    }
+    return visual_unchanged(state);
+}
+
+// VISUAL の写し先（決定 7・決定 8）。行に効く命令・挿入・Ex は VISUAL では効かない。
 [[nodiscard]] VimStep visual_acted(const VimState &state, const VimEditorView &input,
                                    VimAction action)
 {
@@ -4254,9 +4601,10 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return horizontal_action(state, view, action);
     case VimActionGroup::screen_alignment:
         return aligned_screen(state, view, action);
+    case VimActionGroup::history:
+        return visual_history(state, view, action);
     case VimActionGroup::edit_line:
     case VimActionGroup::insert_line:
-    case VimActionGroup::history:
     case VimActionGroup::ex_line:
         return visual_unchanged(state);
     }
@@ -5047,8 +5395,13 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     {
         return step;
     }
-    VimRepeatRecord record = before.recording.value_or(
-        VimRepeatRecord{std::nullopt, VimRecordedKeys::from({}), visual_extent_of(before, view)});
+    // 記録を始める鍵の前に打った回数（`Vj2>` の 2）は鍵の頭に残す。再生は選び直した VISUAL へ
+    // 同じ回数を流す（`>` `<` の回数は字下げの回数・Vim の redo も回数を持つ・ADR 0015 の決定
+    // 11）。 回数を使わない VISUAL の鍵（d x c y r ~ u U）は流しても同じ。
+    const std::vector<VimKey> counted =
+        before.count.has_value() ? count_keys(before.count.value()) : std::vector<VimKey>{};
+    VimRepeatRecord record = before.recording.value_or(VimRepeatRecord{
+        std::nullopt, VimRecordedKeys::from(counted), visual_extent_of(before, view)});
     record = appended(std::move(record), key);
     if (waiting || step.next.mode == VimMode::insert)
     {

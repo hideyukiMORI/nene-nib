@@ -42,6 +42,7 @@
 #include <array>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -66,6 +67,7 @@ using nenenib::core::TextPosition;
 using nenenib::core::vim_step;
 using nenenib::core::VimCharacter;
 using nenenib::core::VimColumnWish;
+using nenenib::core::VimCount;
 using nenenib::core::VimEditorView;
 using nenenib::core::VimKey;
 using nenenib::core::VimMode;
@@ -205,6 +207,101 @@ void verify_vim_replace_visual_undo()
     applied(controller, SelectEditMode{EditMode::vim});
     expect(!controller.vim_state().input_wait.has_value(), "mode switching discards the r wait");
 }
+
+// `J` `gJ` は CRLF の文書の改行を落としてつなぎ、つないだ全体が undo 1 単位（ADR 0015 の決定 9）。
+// `.` の記録は回数つきの `J` で、レジスタは書かない。
+void verify_vim_join_document_newlines()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    const std::string original = "ab\r\n  cd\r\nef\r\nx";
+    editing.files().hold(Bytes{original});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "3J");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "ab cd ef\r\nx", "3J joins three CRLF lines into one");
+    expect(caret_at(controller.frame(), 1, 6), "J rests on the space before the last joined line");
+    expect(dot_record_is(controller.vim_state(), VimCount{3}, "J"), "`.` records the counted J");
+    const VimState joined = controller.vim_state();
+    expect(joined.unnamed_register.value().kind == VimRegisterKind::uninitialized,
+           "J writes no register");
+    vim_replay(controller, "u");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == original, "one undo restores every joined line");
+    expect(caret_at(controller.frame(), 1, 1), "undo returns to where J was pressed");
+    vim_replay(controller, "gJ");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "ab  cd\r\nef\r\nx",
+           "gJ keeps the blanks of the next line");
+}
+
+// 大小文字のオペレータは CRLF の改行を保ち、1 回の変更が undo 1 単位（ADR 0015 の決定 10）。
+// 矩形 VISUAL の `~` `u` `U` `>` `<` は鍵を拒んで矩形のまま残る（#770）。
+void verify_vim_case_document_newlines()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    const std::string original = "aB\r\ncD\r\nx";
+    editing.files().hold(Bytes{original});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, "g~j");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "Ab\r\nCd\r\nx", "g~j toggles two CRLF lines");
+    expect(dot_record_is(controller.vim_state(), std::nullopt, "g~j"), "`.` records g~j");
+    vim_replay(controller, "jgUU");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "Ab\r\nCD\r\nx", "gUU uppers one line");
+    vim_replay(controller, "u");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "Ab\r\nCd\r\nx", "each case change is its own undo unit");
+    vim_replay(controller, "u");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == original, "the second undo restores the original case");
+    for (const std::string_view keys : {"~", "u", "U", ">", "<"})
+    {
+        vim_replay(controller, "gg<C-v>j");
+        vim_replay(controller, keys);
+        expect(controller.vim_state().mode == VimMode::visual_block,
+               "a blockwise case or shift key is refused and the block stays");
+        vim_replay(controller, "<Esc>");
+        applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+        expect(editing.files().written() == original, "a refused blockwise key changes nothing");
+    }
+}
+
+// `>` `<` は CRLF の改行を保ち、`.` の 2 回目は別の undo 単位（ADR 0015 の決定 11）。VISUAL
+// の回数は 記録の頭に残り、大きすぎる回数は書かずに失敗する。
+void verify_vim_shift_document_newlines()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    const std::string original = "a\r\nb\r\nc";
+    editing.files().hold(Bytes{original});
+    applied(controller, OpenDocument{sample_path()});
+    applied(controller, SelectEditMode{EditMode::vim});
+    vim_replay(controller, ">j");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "\ta\r\n\tb\r\nc", ">j indents two CRLF lines");
+    vim_replay(controller, "j.");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "\ta\r\n\t\tb\r\n\tc", "`.` repeats >j from the caret");
+    vim_replay(controller, "u");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == "\ta\r\n\tb\r\nc", "the repeat is its own undo unit");
+    vim_replay(controller, "u");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == original, "the second undo restores the original indent");
+    vim_replay(controller, "Vj2>");
+    const VimState shifted = controller.vim_state();
+    expect(dot_record_is(shifted, std::nullopt, "2>") && shifted.last_change.has_value() &&
+               shifted.last_change.value().visual.has_value(),
+           "a VISUAL shift records its count ahead of the key with the selection size");
+    vim_replay(controller, "uV18446744073709551615>");
+    applied(controller, SaveDocument{sample_path(), TextEncoding::utf8});
+    expect(editing.files().written() == original, "an indent too wide to write changes nothing");
+}
 } // namespace
 
 void verify_vim_replace_contracts()
@@ -214,6 +311,9 @@ void verify_vim_replace_contracts()
     verify_vim_replace_history();
     verify_vim_replace_newline();
     verify_vim_replace_visual_undo();
+    verify_vim_join_document_newlines();
+    verify_vim_case_document_newlines();
+    verify_vim_shift_document_newlines();
 }
 
 void verify_vim_replace_scope()

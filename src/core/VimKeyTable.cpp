@@ -6,6 +6,8 @@
 #include "VimBinding.hpp"
 #include "VimMotion.hpp"
 #include "VimMotionBinding.hpp"
+#include "VimOperator.hpp"
+#include "VimOperatorBinding.hpp"
 #include "VimScreenAlignmentBinding.hpp"
 #include "VimScreenPlace.hpp"
 #include "VimTextObject.hpp"
@@ -30,7 +32,7 @@ constexpr char32_t carriage_return_character = 0x0D;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 62> normal_bindings{
+constexpr std::array<VimBinding, 67> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -92,7 +94,12 @@ constexpr std::array<VimBinding, 62> normal_bindings{
      {U'q', VimAction::record_macro},
      {U'@', VimAction::replay_macro},
      {U'"', VimAction::select_register},
-     {U' ', VimAction::space_right}}};
+     {U' ', VimAction::space_right},
+     {U'J', VimAction::join_lines},
+     {U'~', VimAction::toggle_case_character},
+     {U'U', VimAction::undo_line},
+     {U'>', VimAction::shift_right_operator},
+     {U'<', VimAction::shift_left_operator}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -189,7 +196,16 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_display_line_middle, VimActionGroup::motion},
      {VimAction::move_line_middle, VimActionGroup::motion},
      {VimAction::move_display_line_first_non_blank, VimActionGroup::motion},
-     {VimAction::move_last_non_blank, VimActionGroup::motion}}};
+     {VimAction::move_last_non_blank, VimActionGroup::motion},
+     {VimAction::join_lines, VimActionGroup::edit_line},
+     {VimAction::join_lines_raw, VimActionGroup::edit_line},
+     {VimAction::toggle_case_character, VimActionGroup::edit_range},
+     {VimAction::toggle_case_operator, VimActionGroup::edit_range},
+     {VimAction::lower_case_operator, VimActionGroup::edit_range},
+     {VimAction::upper_case_operator, VimActionGroup::edit_range},
+     {VimAction::shift_right_operator, VimActionGroup::edit_range},
+     {VimAction::shift_left_operator, VimActionGroup::edit_range},
+     {VimAction::undo_line, VimActionGroup::history}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 33> motion_bindings{
@@ -228,8 +244,8 @@ constexpr std::array<VimMotionBinding, 33> motion_bindings{
      {VimAction::move_last_non_blank, VimMotion::last_non_blank}}};
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
-// ADR 0147 の決定 1・8）。ここに無い鍵は g を打ち消す。
-constexpr std::array<VimBinding, 13> g_bindings{
+// ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10）。ここに無い鍵は g を打ち消す。
+constexpr std::array<VimBinding, 17> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -242,7 +258,30 @@ constexpr std::array<VimBinding, 13> g_bindings{
      {U'm', VimAction::move_display_line_middle},
      {U'M', VimAction::move_line_middle},
      {U'^', VimAction::move_display_line_first_non_blank},
-     {U'_', VimAction::move_last_non_blank}}};
+     {U'_', VimAction::move_last_non_blank},
+     {U'J', VimAction::join_lines_raw},
+     {U'~', VimAction::toggle_case_operator},
+     {U'u', VimAction::lower_case_operator},
+     {U'U', VimAction::upper_case_operator}}};
+
+// 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
+// 行単位（dd g~g~ >>）。
+constexpr std::array<VimOperatorBinding, 8> operator_bindings{
+    {{VimAction::remove_operator, VimOperator::remove},
+     {VimAction::change_operator, VimOperator::change},
+     {VimAction::yank_operator, VimOperator::yank},
+     {VimAction::toggle_case_operator, VimOperator::toggle_case},
+     {VimAction::lower_case_operator, VimOperator::lower_case},
+     {VimAction::upper_case_operator, VimOperator::upper_case},
+     {VimAction::shift_right_operator, VimOperator::shift_right},
+     {VimAction::shift_left_operator, VimOperator::shift_left}}};
+
+// 保留の後ろで行単位になる、オペレータの鍵とは別の鍵（g~~ の ~・guu の u・gUU の U。Vim の
+// nv_tilde・nv_undo・nv_Undo がオペレータに読み替える・ADR 0015 の決定 10）。
+constexpr std::array<VimOperatorBinding, 3> doubled_bindings{
+    {{VimAction::toggle_case_character, VimOperator::toggle_case},
+     {VimAction::undo, VimOperator::lower_case},
+     {VimAction::undo_line, VimOperator::upper_case}}};
 
 // z の後ろの鍵 → 動作（ADR 0145 の決定 5・ADR 0146 の決定 2・9）。横送りの 6 鍵と、縦の位置合わせの
 // 8 鍵（zt zz zb z<CR> z. z- z+ z^）。ここに無い鍵は Vim と同じく失敗して後ろを打ち切る。
@@ -451,6 +490,34 @@ static_assert(every_alignment_has_one_row(),
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimOperator> vim_operator_for(VimAction action) noexcept
+{
+    for (const VimOperatorBinding binding : operator_bindings)
+    {
+        if (binding.action == action)
+        {
+            return binding.operation;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] bool vim_operator_doubles(VimOperator operation, VimAction action) noexcept
+{
+    if (vim_operator_for(action) == operation)
+    {
+        return true;
+    }
+    for (const VimOperatorBinding binding : doubled_bindings)
+    {
+        if (binding.action == action && binding.operation == operation)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 [[nodiscard]] std::optional<VimTextObject> vim_text_object_for(char32_t key) noexcept

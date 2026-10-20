@@ -969,10 +969,10 @@ void verify_vim_visual_step_edges()
     visual.mode = VimMode::visual;
     const Selection selection{Offset{1}, Offset{2}};
     // VISUAL で効かない鍵は選択もモードも動かさない（決定 7）。`<CR>` は ADR 0048 の決定 9 で
-    // `+` と同じ移動に、`<BS>` は ADR 0049 で行をまたぐ h になったので、ここには効かない文字
-    // `Z` `Q` を置く。
+    // `+` と同じ移動に、`<BS>` は ADR 0049 で行をまたぐ h に、`u` は ADR 0015 の決定 10
+    // で小文字化に なったので、ここには効かない文字 `Z` `Q` と `.` を置く。
     for (const VimKey &key :
-         {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'u'}}, VimKey{VimCharacter{U'D'}},
+         {VimKey{VimCharacter{U'p'}}, VimKey{VimCharacter{U'.'}}, VimKey{VimCharacter{U'D'}},
           VimKey{VimCharacter{U'A'}}, VimKey{VimCharacter{U'Z'}}, VimKey{VimCharacter{U'Q'}},
           VimKey{VimSpecialKey::control_r}, VimKey{VimCharacter{U'z'}}})
     {
@@ -1873,7 +1873,8 @@ void verify_vim_grid_display_line_failure()
 
 // 横に送る文書（巨大な行の窓の text 形・columns > 0）の g0 gm g$ は見えている升の左端・中・右端
 // （ADR 0147 の決定 2）。文字組みの問いを立てない。wrap の文書の巨大な行の窓（文字組みが有効で
-// row_columns を持つ）でも columns > 0 が先に見られ、画面行の範囲を問わない（#663 のレビュー I-1）。
+// row_columns を持つ）でも columns > 0 が先に見られ、画面行の範囲を問わない（#663 のレビュー
+// I-1）。
 void verify_vim_scrolled_display_line_edges()
 {
     const auto giant = TextBuffer::from_utf8(std::string(20'000, 'x'));
@@ -1889,9 +1890,10 @@ void verify_vim_scrolled_display_line_edges()
                  {{"0", 16'380}, {"m", 16'400}, {"$", 16'419}}})
         {
             const auto step = vim_step(state, *shown, vim_keys_of(key).front());
-            expect(!step.row_request.has_value() && !step.layout_request.has_value() &&
-                       moved_to(step) == std::optional{Offset{landing}},
-                   "a scrolled window g0 gm g$ land in the visible cells without a layout question");
+            expect(
+                !step.row_request.has_value() && !step.layout_request.has_value() &&
+                    moved_to(step) == std::optional{Offset{landing}},
+                "a scrolled window g0 gm g$ land in the visible cells without a layout question");
         }
     }
 }

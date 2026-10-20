@@ -3,6 +3,7 @@
 #include "VimAction.hpp"
 #include "VimActionGroup.hpp"
 #include "VimMotion.hpp"
+#include "VimOperator.hpp"
 #include "VimScreenAlignment.hpp"
 #include "VimTextObject.hpp"
 #include "VimWordClass.hpp"
@@ -40,6 +41,13 @@ namespace nenenib::core
 
 // オペレータの後ろで範囲になる動作。範囲にならない動作は nullopt。
 [[nodiscard]] std::optional<VimMotion> vim_motion_for(VimAction action) noexcept;
+
+// 保留を立てる動作 → オペレータ（d c y g~ gu gU > <）。ほかの動作は nullopt。
+[[nodiscard]] std::optional<VimOperator> vim_operator_for(VimAction action) noexcept;
+
+// 保留中のオペレータの後ろでその動作が行単位を意味するか（dd g~~ g~g~ guu gugu gUU gUgU >>
+// <<・ADR 0015 の決定 10）。
+[[nodiscard]] bool vim_operator_doubles(VimOperator operation, VimAction action) noexcept;
 
 // i / a の後ろの鍵 → テキストオブジェクト（ADR 0031 の決定 1）。表に無い鍵は nullopt（取消）。
 [[nodiscard]] std::optional<VimTextObject> vim_text_object_for(char32_t key) noexcept;
