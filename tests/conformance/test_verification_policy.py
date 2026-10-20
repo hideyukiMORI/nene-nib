@@ -14,10 +14,18 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("git_conventions", ROOT / "eng/git-conventions.py")
 CONVENTIONS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONVENTIONS)
-RECORD = ("確認する退行: 全件の誤起動と検証記録の欠落\n"
+RECORD = ("目的: 差分に必要な検証を選ぶ\n"
+          "使った正典経路: eng/check.ps1 と eng/validate-git.ps1\n"
+          "規則 ID: QLT-001 / QLT-012 / GIT-004\n"
+          "振る舞い・スキーマの変更: なし\n"
+          "検証（実行したコマンドと結果）: python eng/test-conformance.py → OK\n"
+          "確認する退行: 全件の誤起動と検証記録の欠落\n"
           "対象・依存: check.ps1、validate-git.ps1、git-conventions.py、CI\n"
           "検証結果: 対象を指定した unittest / 終了 0 / PR にログ\n"
-          "再利用: 初回検証\n")
+          "再利用: 初回検証\n"
+          "Waivers: none\n"
+          "残るリスク: なし\n")
+BODY = "Closes #61\n" + RECORD
 
 
 def run_tool(command, **environment):
@@ -35,18 +43,41 @@ def run_tool(command, **environment):
 
 class VerificationPolicy(unittest.TestCase):
     def test_record_and_reuse_are_accepted(self):
-        self.assertEqual(CONVENTIONS.validate_pr(RECORD), [])
-        reused = RECORD.replace("初回検証", "PR #61 の成功結果。実装と直接依存は不変、文書だけ変更")
+        self.assertEqual(CONVENTIONS.validate_pr(BODY), [])
+        reused = BODY.replace("初回検証", "PR #61 の成功結果。実装と直接依存は不変、文書だけ変更")
         self.assertEqual(CONVENTIONS.validate_pr(reused.replace("\n", "\r\n")), [])
 
-    def test_missing_or_blank_fields_are_rejected(self):
+    def test_the_record_lists_every_field_of_the_one_table(self):
+        # #710: CI と local は git-conventions.py の PR_FIELDS の 1 つを読む。validate-git.ps1 に欄を書かない。
+        self.assertEqual([line.split(":", 1)[0] for line in RECORD.splitlines()], list(CONVENTIONS.PR_FIELDS))
+        validator = (ROOT / "eng/validate-git.ps1").read_text(encoding="utf-8")
+        for field in CONVENTIONS.PR_FIELDS:
+            self.assertNotIn(f"'{field}:'", validator)
+
+    def test_missing_or_blank_fields_are_rejected_by_name(self):
         for line in RECORD.splitlines():
             field = line.split(":", 1)[0]
-            for replacement in ("", field + ":", field + ": \t"):
+            for replacement in ("", field + ":", field + ": \t", "  " + line, "- " + line):
                 with self.subTest(field=field, replacement=replacement):
-                    errors = CONVENTIONS.validate_pr(RECORD.replace(line, replacement))
+                    errors = CONVENTIONS.validate_pr(BODY.replace(line, replacement))
                     self.assertEqual(len(errors), 1)
+                    self.assertIn("GIT-004", errors[0])
                     self.assertIn(field, errors[0])
+
+    def test_heading_form_is_rejected_by_name(self):
+        # #709: 見出しの形（## 目的）は CI で落ちた。local の --pr-body も同じに落とす。
+        headed = "Closes #61\n" + "".join(f"## {field}\n{line.split(': ', 1)[1]}\n"
+                                         for field, line in zip(CONVENTIONS.PR_FIELDS, RECORD.splitlines()))
+        errors = CONVENTIONS.validate_pr(headed)
+        self.assertEqual(len(errors), len(CONVENTIONS.PR_FIELDS))
+        for field, error in zip(CONVENTIONS.PR_FIELDS, errors):
+            self.assertIn(field, error)
+
+    def test_closing_issue_must_start_a_line(self):
+        for body in (RECORD, RECORD + "これは Closes #61 を含む\n"):
+            with self.subTest(body=body):
+                self.assertEqual(CONVENTIONS.validate_pr(body),
+                                 ["GIT-001: PR body must close an Issue on a line starting with Closes #N"])
 
     def test_record_cli_returns_failure(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -106,13 +137,14 @@ class VerificationPolicy(unittest.TestCase):
 
     def test_merge_dispatch_uses_the_record_validator_and_expected_head(self):
         title = "ci(verification): 差分に必要な検証を選ぶ (#61)"
-        body = "Closes #61\n目的:\n使った正典経路:\n規則 ID:\nWaivers: none\n残るリスク:\n" + RECORD
+        body = BODY
         with tempfile.TemporaryDirectory() as directory:
             event = Path(directory) / "event.json"
             head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
             command = ("function global:gh { Get-Content -LiteralPath $env:NIB_TEST_PR_RESPONSE -Raw; $global:LASTEXITCODE=0 }; "
                        "& $env:NIB_TEST_VALIDATOR -PullRequest 61 -ExpectedHead $env:NIB_TEST_HEAD")
             for text, pr_head, success in ((body, head, True), (body.replace("再利用: 初回検証", "再利用:"), head, False),
+                                           (body.replace("目的:", "## 目的\n"), head, False),
                                            (body, "0" * 40, False)):
                 event.write_text(json.dumps({"number": 61, "state": "open",
                     "head": {"ref": "ci/61-diff-driven-verification", "sha": pr_head,
