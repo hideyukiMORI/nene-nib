@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 68db45639de9019c1f99901e41898a0aa77616881805b85032543801049e6b3d / 1974 fixtures
+// fixtures.json: sha256 8f00d9e07f7436f816a76b5bd2c4ebb34df3107f67b4cd4f400b26ae4863cdf6 / 1982 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1974> vim_fixtures{{
+constexpr std::array<VimFixture, 1982> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -361,6 +361,14 @@ constexpr std::array<VimFixture, 1974> vim_fixtures{{
     {"viewport-follow-down-h11-center", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80", "7j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59\n60\n61\n62\n63\n64\n65\n66\n67\n68\n69\n70\n71\n72\n73\n74\n75\n76\n77\n78\n79\n80", 27, 1, "", "", VimViewportFixture{11, 10, 20, 1, 22, 5}},
     {"viewport-follow-down-clamps-at-eof", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "99j", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 30, 1, "", "", VimViewportFixture{10, 6, 15, 1, 21, 5}},
     {"viewport-page-follow-up-from-eof", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", "<C-f>k", "01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30", 29, 1, "", "", VimViewportFixture{10, 21, 30, 1, 29, 5}},
+    {"viewport-yank-H-lands-on-the-first-nonblank", "a01bc\na02bc\na03bc\na04bc\na05bc\na06bc\na07bc\na08bc\na09bc\na10bc\na11bc\na12bc", "yH", "a01bc\na02bc\na03bc\na04bc\na05bc\na06bc\na07bc\na08bc\na09bc\na10bc\na11bc\na12bc", 7, 1, "a07bc\na08bc\na09bc\na10bc\na11bc\n", "V", VimViewportFixture{6, 7, 11, 2, 7, 3}},
+    {"viewport-yank-M-lands-on-the-first-nonblank", "a01bc\na02bc\na03bc\na04bc\na05bc\na06bc\na07bc\na08bc\na09bc\na10bc\na11bc\na12bc", "yM", "a01bc\na02bc\na03bc\na04bc\na05bc\na06bc\na07bc\na08bc\na09bc\na10bc\na11bc\na12bc", 9, 1, "a09bc\na10bc\na11bc\n", "V", VimViewportFixture{6, 7, 11, 2, 7, 3}},
+    {"viewport-counted-page-forward-past-eof-keeps-the-column", "a01bc\na02bc\na03bc\na04bc\na05bc\na06bc\na07bc\na08bc\na09bc\na10bc\na11bc\na12bc", "2<C-f>", "a01bc\na02bc\na03bc\na04bc\na05bc\na06bc\na07bc\na08bc\na09bc\na10bc\na11bc\na12bc", 12, 2, "", "", VimViewportFixture{6, 7, 11, 2, 12, 3}},
+    {"viewport-yank-H-indented-lands-on-the-first-nonblank", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "yH", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 7, 3, "  x07\n  x08\n  x09\n  x10\n  x11\n", "V", VimViewportFixture{6, 7, 11, 5, 7, 3}},
+    {"viewport-page-forward-to-eof-indented-lands-on-the-first-nonblank", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "<C-f>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 12, 3, "", "", VimViewportFixture{6, 7, 11, 5, 12, 3}},
+    {"viewport-delete-L-indented-lands-on-the-first-nonblank", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "dL", "  x01\n  x02\n  x03\n  x09\n  x10\n  x11\n  x12", 4, 3, "  x04\n  x05\n  x06\n  x07\n  x08\n", "V", VimViewportFixture{6, 3, 4, 5, 3, 3}},
+    {"viewport-counted-page-forward-past-eof-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "2<C-f>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 12, 5, "", "", VimViewportFixture{6, 7, 11, 5, 12, 3}},
+    {"viewport-counted-page-back-past-bof-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "3<C-b>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 4, 5, "", "", VimViewportFixture{6, 3, 4, 5, 1, 3}},
     {"char-search-f-first", "axbxcxd", "fx", "axbxcxd", 1, 2, "", "", std::nullopt},
     {"char-search-f-count", "axbxcxd", "2fx", "axbxcxd", 1, 4, "", "", std::nullopt},
     {"char-search-F-first", "axbxcxd", "$Fx", "axbxcxd", 1, 6, "", "", std::nullopt},
