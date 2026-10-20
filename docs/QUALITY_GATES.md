@@ -368,6 +368,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | 検査自身のテスト | 規約検査・シンボル検査・カバレッジ判定・実ツールの正例・反例 | unittest / eng/prove-gates.py |
 | 単体テスト | C++23 基盤のスモークと中核の振る舞い | CTest / tests/build・tests/unit（ASan / UBSan 付き・`-fno-sanitize-recover=all`。OS 資源と表示は使わない） |
 | 描画の保持の契約 | 字体選択の保持（鍵・上限・OS の失敗）と字形の保持（棄却・画面外・画素の一致）を窓を作らずに | CTest `nib_window` / tests/ui（DirectWrite の factory と WIC のソフトウェアの描画先まで。フォントに依る検査は環境依存で、測れないときは 1 行言って数えない・ADR 0077） |
+| プレビューの見た目の確かめ | Markdown プレビューの描画（案 B・D62）を設計席が画で見る。合否は判定しない | `nib_preview_capture`（tests/preview・WIC の bitmap に製品と同じ `PreviewPainter` で描いて PNG に落とす・CTest に登録しない・ADR 0151 の決定 18・#784） |
 | probe の正しさ | 窓なしの固定 workload（`nib_perf_probes`・CTest に登録しない）の期待値のずれ | `eng/probe-smoke.ps1`（全 workload を warmup 1 + sample 1 で流し非 0 を落とす・時間は判定しない・`-Full` だけが回し CI の必須 check は回さない・ADR 0082 の追補・#690） |
 | カバレッジ | 中核の検証密度 | `eng/coverage.py` / `eng/coverage-policy.json`。測定ビルドで LLVM の実分岐を 90% 以上要求 |
 | 速さ | 4 本のベンチ（基準値の鍵 5 つ）の退行 | `eng/measure-speed.py --check`（一致する指紋の基準値で比較。必要な変更で選んで実行・QLT-014） |
