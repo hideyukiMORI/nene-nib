@@ -196,6 +196,8 @@ EditorController::measured_vim_step(const core::VimKey &key)
                             state_.display() == core::DisplayForm::grid ? core::VimScrollUnit::row
                                                                         : core::VimScrollUnit::line,
                             spans}};
+    // 文書のマークを貸す（ADR 0152 の決定 2）。この関数の中では状態を変えないので参照は保たれる。
+    view.marks = &state_.vim_marks();
     auto step = core::vim_step(state_.vim(), view, key);
     // どの要求も同じ鍵をもう一度流す。viewport は 1 度渡したら以後の往復でも渡したまま。
     // 回数の上限は持たない。同じ問いの立て直しと viewport の二重要求は inconsistent で止まり、

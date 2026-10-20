@@ -50,6 +50,7 @@
 #include "VimCharacter.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
+#include "VimMarks.hpp"
 #include "VimPattern.hpp"
 #include "VimRegister.hpp"
 #include "VimRepeatFailure.hpp"
@@ -402,6 +403,8 @@ class EditorController final
     // incsearch の preview（ADR 0041 の決定 3・5）。
     void update_search_preview();
     void restore_search_origin(const ScrollState &origin);
+    void undone_marks(const core::Edit &edit);
+    void adopt_vim_marks(const std::optional<core::VimMarks> &marks);
     void undo_edit();
     void redo_edit();
     // クリップボードへ書く唯一の口。書けなければ 1 行で知らせて false（ADR 0134 の決定 3）。

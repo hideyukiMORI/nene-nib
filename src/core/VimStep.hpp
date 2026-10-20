@@ -5,6 +5,7 @@
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
+#include "VimMarks.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimRowRequest.hpp"
 #include "VimSearchNotice.hpp"
@@ -43,6 +44,9 @@ struct VimStep
     // 表示領域を値で要求する（ADR 0129 の決定 1）。立てた step は効果なし・状態そのままで、
     // controller が viewport を渡して同じ鍵を流し直す。layout_request と同時には立てない。
     bool viewport_request = false;
+    // マークの新しい値（ADR 0152 の決定 2）。`m` と飛ぶ鍵（前の位置）が置く。controller は効果を
+    // 写す前に文書へ置き、写した編集が行をずらしたら marks_adjusted で直す（決定 6）。
+    std::optional<VimMarks> marks = std::nullopt;
 };
 
 // 入力行の取消のあとの状態（ADR 0032 の決定 1）。保留中のオペレータと回数と組み立て中の

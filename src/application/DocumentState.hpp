@@ -10,6 +10,7 @@
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimCount.hpp"
+#include "VimMarks.hpp"
 #include "VimWantedColumn.hpp"
 
 #include <optional>
@@ -37,5 +38,7 @@ struct DocumentState
     core::DisplayForm display = core::DisplayForm::text;
     // 開いたときの問いの段階（決定 2）。文書ごとに 1 回だけ判定する。
     DisplayInquiry inquiry = DisplayInquiry::unjudged;
+    // Vim のマーク（ADR 0152 の決定 2）。文書の値で、まだ読んでいない文書・新しいタブは空。
+    core::VimMarks marks{};
 };
 } // namespace nenenib::application

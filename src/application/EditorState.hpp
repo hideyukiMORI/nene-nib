@@ -27,6 +27,7 @@
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
 #include "UnloadedDocument.hpp"
+#include "VimMarks.hpp"
 #include "VimState.hpp"
 
 #include <cstddef>
@@ -113,6 +114,10 @@ class EditorState final
     // 開いたときの問いの段階（決定 2）。アクティブな文書のもの。進めるのは controller の
     // ask_display と accept(SelectDisplay) の 2 か所。
     [[nodiscard]] DisplayInquiry display_inquiry() const noexcept;
+    // Vim のマーク（ADR 0152 の決定 2）。アクティブな文書のもので、置くのは controller の step_vim
+    // （engine の値）と編集の 3 か所（replace・undo・redo）だけ。開いた文書は空。
+    [[nodiscard]] const core::VimMarks &vim_marks() const noexcept;
+    [[nodiscard]] EditorState with_vim_marks(core::VimMarks marks) const;
     [[nodiscard]] EditorState with_display_inquiry(DisplayInquiry inquiry) const;
     // 本文を仮想桁の索引を持つ写しに置き換える（ADR 0140 の決定 4）。本文の中身・履歴・選択は
     // 変えない。持たせるのは巨大な行の文書を開いたときと、格子にするときだけ。
@@ -264,6 +269,7 @@ class EditorState final
     core::EditMode mode_;
     core::VimState vim_;
     Document document_;
+    core::VimMarks vim_marks_{};
     std::optional<core::Composition> composition_;
     std::optional<FileFailure> last_failure_;
     core::EditorSettings settings_;

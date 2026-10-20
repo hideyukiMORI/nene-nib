@@ -125,7 +125,8 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode, Docum
       scroll_(ScrollState{untitled.first_visible, initial_visible_lines}), appearance_(appearance),
       mode_(mode), vim_(core::vim_resting_state(
                        core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized})),
-      document_(std::move(untitled.document)), settings_(core::default_editor_settings())
+      document_(std::move(untitled.document)), vim_marks_(untitled.marks),
+      settings_(core::default_editor_settings())
 {
 }
 
@@ -433,6 +434,7 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.display_inquiry_ = DisplayInquiry::unjudged;
     // 本文が丸ごと替わるので、同じ文書を見るもう 1 つの枠は先頭に戻す（ADR 0148 の決定 5）。
     next.restart_other_showing(autosave_ids_.at(active_));
+    next.vim_marks_ = core::VimMarks{};
     return next;
 }
 
@@ -445,6 +447,18 @@ EditorState EditorState::with_display(core::DisplayForm display) const
 {
     EditorState next(*this);
     next.display_ = display;
+    return next;
+}
+
+const core::VimMarks &EditorState::vim_marks() const noexcept
+{
+    return vim_marks_;
+}
+
+EditorState EditorState::with_vim_marks(core::VimMarks marks) const
+{
+    EditorState next(*this);
+    next.vim_marks_ = std::move(marks);
     return next;
 }
 
@@ -673,10 +687,11 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
     const auto save_state = save_state_of(document_, history.position());
     DocumentView view{core::tab_title_for(document_.path, save_state), document_.path,
                       document_.encoding, save_state, std::nullopt};
-    return std::make_shared<const DocumentState>(DocumentState{
-        text_, core::collapsed_at(selection_.caret), std::move(history), document_,
-        scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
-        scroll_.first_row, scroll_.horizontal, caret_affinity_, display_, display_inquiry_});
+    return std::make_shared<const DocumentState>(
+        DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
+                      scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
+                      scroll_.first_row, scroll_.horizontal, caret_affinity_, display_,
+                      display_inquiry_, vim_marks_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -691,6 +706,7 @@ void EditorState::spread(const DocumentState &tab)
     caret_affinity_ = tab.affinity;
     display_ = tab.display;
     display_inquiry_ = tab.inquiry;
+    vim_marks_ = tab.marks;
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 

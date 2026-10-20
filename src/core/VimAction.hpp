@@ -137,10 +137,20 @@ enum class VimAction : std::uint8_t
     shift_left_operator,
     // `U`。NORMAL の行の undo は未実装で、今までの表に無い鍵と同じに打ち消す。gU の後ろでは
     // 行単位（gUU）、VISUAL では選択の大文字化（ADR 0015 の決定 10）。
-    undo_line
+    undo_line,
+    // `%`。対応する括弧、回数つきは本文の回数 % の行（Issue #767）。
+    move_matching_pair,
+    // `m`。次の鍵がマークの名前（ADR 0152 の決定 3）。
+    set_mark,
+    // `'` と `` ` ``。次の鍵がマークの名前で、着地は move_mark_line / move_mark_exact（決定 3）。
+    prefix_mark_line,
+    prefix_mark_exact,
+    // マークへの移動。鍵からは引かず、`'` `` ` `` の次の鍵が名前を解いてから写す（決定 3）。
+    move_mark_line,
+    move_mark_exact
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::undo_line) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::move_mark_exact) + 1;
 } // namespace nenenib::core

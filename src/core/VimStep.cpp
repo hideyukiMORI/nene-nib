@@ -37,7 +37,10 @@
 #include "VimLineEndStop.hpp"
 #include "VimLineExtent.hpp"
 #include "VimMacroRecording.hpp"
+#include "VimMarkEdits.hpp"
+#include "VimMarks.hpp"
 #include "VimMatchRequest.hpp"
+#include "VimMatchingPair.hpp"
 #include "VimMotionLanding.hpp"
 #include "VimMotionRange.hpp"
 #include "VimNamedRegisters.hpp"
@@ -120,6 +123,9 @@ constexpr char32_t control_d_character = 0x04;
 constexpr char32_t control_f_character = 0x06;
 constexpr char32_t control_u_character = 0x15;
 constexpr char32_t carriage_return_character = 0x0D;
+// `{N}%` が受ける回数の上限と、本文の割合から行を求める分母（Vim の nv_percent・Issue #767）。
+constexpr std::size_t whole_percent = 100;
+constexpr std::size_t percent_round_up = 99;
 
 [[nodiscard]] std::size_t count_of(const std::optional<VimCount> &count) noexcept
 {
@@ -153,6 +159,11 @@ constexpr char32_t carriage_return_character = 0x0D;
     if (specified.has_value())
     {
         return specified.value().value;
+    }
+    // `%` の回数なしは 0（回数つきの `{N}%` と分ける・回数 0 は回数なしと同じ）。
+    if (motion == VimMotion::matching_pair)
+    {
+        return 0;
     }
     return motion == VimMotion::document_last ? text.line_count() : single_step;
 }
@@ -621,8 +632,99 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return VimMotionLanding{vim_last_non_blank(text, line_below(text, line, count - single_step))};
 }
 
+// `{N}%` の行（Vim の nv_percent）。本文の N % の行（切り上げ）で、1〜100 の外は無い。
+[[nodiscard]] std::optional<LineNumber> percent_line(const TextBuffer &text, std::size_t count)
+{
+    if (count == 0 || count > whole_percent)
+    {
+        return std::nullopt;
+    }
+    const std::size_t line = (count * text.line_count() + percent_round_up) / whole_percent;
+    return LineNumber{std::clamp<std::size_t>(line, single_step, text.line_count())};
+}
+
+// `%` の着地（Issue #767）。回数なしは対応する括弧、回数つきは本文の割合の行の最初の非空白。
+// 見つからない・回数が 100 を越えるときは動かずに失敗する（Vim の clearopbeep）。
+[[nodiscard]] VimMotionLanding matching_landing(const TextBuffer &text, Offset caret,
+                                                std::size_t count)
+{
+    if (count == 0)
+    {
+        const auto matched = vim_matching_pair(text, caret);
+        return matched.has_value() ? VimMotionLanding{matched.value()}
+                                   : VimMotionLanding{caret, VimRepeatFailure::not_found};
+    }
+    const auto line = percent_line(text, count);
+    if (!line.has_value())
+    {
+        return VimMotionLanding{caret, VimRepeatFailure::not_found};
+    }
+    return VimMotionLanding{vim_first_non_blank(text, text.line_start(line.value()))};
+}
+
+// マークへの移動の着地（ADR 0152 の決定 3）。`'` は行の最初の非空白、`` ` `` はマークの位置で、
+// NORMAL では文字の上へ寄せる（Vim の check_cursor）。名前は鍵を写す前に engine が解いて置く。
+[[nodiscard]] Offset mark_landing_of(const VimEditorView &view, VimMotion motion, VimMode mode)
+{
+    const Offset landing = view.mark_landing.value_or(view.selection.caret);
+    if (motion == VimMotion::mark_line)
+    {
+        return vim_first_non_blank(view.text, view.text.line_start(line_of(view.text, landing)));
+    }
+    return rested_in(view.text, landing, mode);
+}
+
 [[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
                                           VimMotion motion);
+
+// j k の着地（欲しい列の上の行・下の行）。
+[[nodiscard]] Offset vertical_caret(const VimEditorView &view, const VimState &state,
+                                    VimMotion motion, std::size_t count)
+{
+    const Offset caret = view.selection.caret;
+    const LineNumber line = line_of(view.text, caret);
+    return wanted_caret_on(view.text, state, caret,
+                           motion == VimMotion::up ? line_above(line, count)
+                                                   : line_below(view.text, line, count));
+}
+
+// `$` の着地（回数 − 1 行下の行の内容の終わり）。寄せは呼び手。
+[[nodiscard]] Offset line_end_of(const TextBuffer &text, LineNumber line, std::size_t count)
+{
+    return text.line_end(line_below(text, line, count - single_step));
+}
+
+// H M L gg G の着地（行の最初の非空白）。
+[[nodiscard]] Offset line_jump_landing(const VimEditorView &view, VimMotion motion,
+                                       std::size_t count)
+{
+    if (motion == VimMotion::document_first || motion == VimMotion::document_last)
+    {
+        return vim_first_non_blank(view.text,
+                                   view.text.line_start(document_line(view.text, count)));
+    }
+    return screen_first_non_blank(view, screen_position_of(motion), count);
+}
+
+// `<Space>` `<BS>` の着地（行をまたぐ l h・ADR 0049）。
+[[nodiscard]] Offset wrapped_landing(const VimEditorView &view, const VimState &state,
+                                     VimMotion motion)
+{
+    const std::size_t count = resolved_motion_count(state, view.text, motion);
+    const VimLineEndStop stop = line_end_stop_in(state.mode);
+    return motion == VimMotion::wrap_right
+               ? wrapped_forward(view.text, view.selection.caret, count, stop)
+               : wrapped_backward(view.text, view.selection.caret, count, stop);
+}
+
+// `+` `<CR>` と `-` の着地（下・上の行の最初の非空白）。
+[[nodiscard]] Offset other_line_landing(const TextBuffer &text, Offset caret, bool below,
+                                        std::size_t count)
+{
+    const LineNumber line = line_of(text, caret);
+    return first_non_blank_of_other_line(
+        text, caret, line, below ? line_below(text, line, count) : line_above(line, count));
+}
 
 // 移動の着地。語の移動と g_ と、鍵を写す前に解いた着地（gj gk g0 g$ gm gM
 // g^）は失敗の印といっしょに landing_of が決め、ここはその位置だけを読む。
@@ -639,16 +741,14 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::right:
         return rested_in(text, forward_characters(text, caret, count), state.mode);
     case VimMotion::up:
-        return wanted_caret_on(text, state, caret, line_above(line, count));
     case VimMotion::down:
-        return wanted_caret_on(text, state, caret, line_below(text, line, count));
+        return vertical_caret(view, state, motion, count);
     case VimMotion::line_start:
         return text.line_start(line);
     case VimMotion::first_non_blank:
         return vim_first_non_blank(text, caret);
     case VimMotion::line_end:
-        return rested_in(text, text.line_end(line_below(text, line, count - single_step)),
-                         state.mode);
+        return rested_in(text, line_end_of(text, line, count), state.mode);
     case VimMotion::next_word:
     case VimMotion::next_big_word:
     case VimMotion::word_end:
@@ -667,22 +767,22 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
     case VimMotion::last_non_blank:
+    case VimMotion::matching_pair:
+    case VimMotion::mark_line:
+    case VimMotion::mark_exact:
         return landing_of(view, state, motion).offset;
     case VimMotion::screen_top:
     case VimMotion::screen_middle:
     case VimMotion::screen_bottom:
-        return screen_first_non_blank(view, screen_position_of(motion), count);
     case VimMotion::document_first:
     case VimMotion::document_last:
-        return vim_first_non_blank(text, text.line_start(document_line(text, count)));
+        return line_jump_landing(view, motion, count);
     case VimMotion::next_line:
-        return first_non_blank_of_other_line(text, caret, line, line_below(text, line, count));
     case VimMotion::previous_line:
-        return first_non_blank_of_other_line(text, caret, line, line_above(line, count));
+        return other_line_landing(text, caret, motion == VimMotion::next_line, count);
     case VimMotion::wrap_right:
-        return wrapped_forward(text, caret, count, line_end_stop_in(state.mode));
     case VimMotion::wrap_left:
-        return wrapped_backward(text, caret, count, line_end_stop_in(state.mode));
+        return wrapped_landing(view, state, motion);
     case VimMotion::column:
         return column_landing(text, line, count, state.mode);
     }
@@ -745,6 +845,12 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::up:
     case VimMotion::down:
         return vertical_landing(view, state, motion);
+    case VimMotion::matching_pair:
+        return matching_landing(view.text, view.selection.caret,
+                                resolved_motion_count(state, view.text, motion));
+    case VimMotion::mark_line:
+    case VimMotion::mark_exact:
+        return VimMotionLanding{mark_landing_of(view, motion, state.mode)};
     case VimMotion::left:
     case VimMotion::right:
     case VimMotion::line_start:
@@ -814,6 +920,9 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
     case VimMotion::last_non_blank:
+    case VimMotion::matching_pair:
+    case VimMotion::mark_line:
+    case VimMotion::mark_exact:
         return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     }
     std::unreachable();
@@ -893,6 +1002,9 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::line_middle:
     case VimMotion::display_line_first_non_blank:
     case VimMotion::last_non_blank:
+    case VimMotion::matching_pair:
+    case VimMotion::mark_line:
+    case VimMotion::mark_exact:
         return false;
     }
     std::unreachable();
@@ -913,6 +1025,26 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return step;
 }
 
+// 飛ぶ鍵の前の位置（キャレット）を `''` に置いた値を添える（ADR 0152 の決定 4・Vim の setpcmark）。
+// 動かなかったときに戻すのは鍵の終わりの vim_marks_checked（決定 5）。
+[[nodiscard]] VimStep context_marked(VimStep step, const VimEditorView &view)
+{
+    step.marks =
+        vim_marks_jumped(*view.marks, vim_mark_position_of(view.text, view.selection.caret));
+    return step;
+}
+
+// 飛ぶ移動なら前の位置を添える。失敗した移動は置かない（Vim は見つからない `%` で setpcmark
+// しない）。
+[[nodiscard]] VimStep jumped_by(VimStep step, const VimEditorView &view, VimMotion motion)
+{
+    if (!vim_motion_is_jump(motion) || step.failure.has_value())
+    {
+        return step;
+    }
+    return context_marked(std::move(step), view);
+}
+
 [[nodiscard]] VimStep motion_step(const VimState &state, const VimEditorView &view,
                                   VimMotion motion)
 {
@@ -921,8 +1053,9 @@ character_search_position(const VimEditorView &view, const VimState &state,
     const Offset moved = landing.offset;
     VimState next = vim_resting_from(state, state.unnamed_register);
     next.wanted_column = wanted_after(view.text, wanted, moved, motion);
-    return moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion, view.selection.caret,
-                           landing);
+    return jumped_by(moved_or_failed(VimStep{std::move(next), VimMoveTo{moved}}, motion,
+                                     view.selection.caret, landing),
+                     view, motion);
 }
 
 // ---------------------------------------------------------------- 範囲（ADR 0015 の決定 2）
@@ -1115,6 +1248,100 @@ character_search_position(const VimEditorView &view, const VimState &state,
                          LineNumber{std::max(line.value, target.value)});
 }
 
+// `%` の範囲（Issue #767）。対応する括弧は両端を含む文字単位で、1 行の中でも `"1` へ行く（Vim の
+// nv_percent の use_reg_one）。`{N}%` はキャレットの行と割合の行の間の行単位。
+[[nodiscard]] std::optional<VimMotionRange> matching_range(const TextBuffer &text, Offset caret,
+                                                           std::size_t count)
+{
+    if (count > 0)
+    {
+        const auto target = percent_line(text, count);
+        if (!target.has_value())
+        {
+            return std::nullopt;
+        }
+        const LineNumber line = line_of(text, caret);
+        return lines_between(text, LineNumber{std::min(line.value, target.value().value)},
+                             LineNumber{std::max(line.value, target.value().value)});
+    }
+    const auto matched = vim_matching_pair(text, caret);
+    if (!matched.has_value())
+    {
+        return std::nullopt;
+    }
+    VimMotionRange range = characters_between(caret, matched.value());
+    range.range.end = inclusive_end(text, range.range.end);
+    range.numbered = VimNumberedRule::always;
+    return range;
+}
+
+// マークへの範囲（ADR 0152 の決定 3）。`'a` は行単位、`` `a `` は exclusive の文字単位で 1
+// 行の中でも
+// `"1` へ行く（Vim の nv_gomark の use_reg_one）。着地は NORMAL の寄せ（Vim の check_cursor）。
+[[nodiscard]] VimMotionRange mark_range(const VimEditorView &view, VimMotion motion)
+{
+    const TextBuffer &text = view.text;
+    const Offset caret = view.selection.caret;
+    const Offset landing = mark_landing_of(view, motion, VimMode::normal);
+    if (motion == VimMotion::mark_line)
+    {
+        const LineNumber line = line_of(text, caret);
+        const LineNumber target = line_of(text, landing);
+        return lines_between(text, LineNumber{std::min(line.value, target.value)},
+                             LineNumber{std::max(line.value, target.value)});
+    }
+    VimMotionRange range = characters_between(caret, landing);
+    range.numbered = VimNumberedRule::always;
+    return range;
+}
+
+// h l 0 ^ の範囲（行の中の文字単位）。
+[[nodiscard]] VimMotionRange sideways_range(const TextBuffer &text, Offset caret, VimMotion motion,
+                                            std::size_t count)
+{
+    if (motion == VimMotion::line_start)
+    {
+        return characters_between(text.line_start(line_of(text, caret)), caret);
+    }
+    if (motion == VimMotion::first_non_blank)
+    {
+        return characters_between(vim_first_non_blank(text, caret), caret);
+    }
+    return motion == VimMotion::left
+               ? characters_between(backward_characters(text, caret, count), caret)
+               : characters_between(caret, forward_characters(text, caret, count));
+}
+
+// b B ge gE の範囲。
+[[nodiscard]] std::optional<VimMotionRange>
+backward_word_range(const TextBuffer &text, Offset caret, const VimWordWalk &walk, VimMotion motion)
+{
+    const bool word_end =
+        motion == VimMotion::previous_word_end || motion == VimMotion::previous_big_word_end;
+    return word_end ? previous_word_end_range(text, caret, walk)
+                    : previous_word_range(text, caret, walk);
+}
+
+// 飛ぶ移動の範囲（H M L gg G % 'a `a）。
+[[nodiscard]] std::optional<VimMotionRange> jump_range(const VimEditorView &view, VimMotion motion,
+                                                       std::size_t count)
+{
+    if (motion == VimMotion::matching_pair)
+    {
+        return matching_range(view.text, view.selection.caret, count);
+    }
+    if (motion == VimMotion::mark_line || motion == VimMotion::mark_exact)
+    {
+        return mark_range(view, motion);
+    }
+    const LineNumber line = line_of(view.text, view.selection.caret);
+    if (motion == VimMotion::document_first || motion == VimMotion::document_last)
+    {
+        return document_range(view.text, line, count);
+    }
+    return screen_range(view, screen_position_of(motion), count, line);
+}
+
 [[nodiscard]] std::optional<VimMotionRange>
 motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, VimOperator operation)
 {
@@ -1131,13 +1358,10 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::previous_line:
         return lines_above(text, line, count);
     case VimMotion::left:
-        return characters_between(backward_characters(text, caret, count), caret);
     case VimMotion::right:
-        return characters_between(caret, forward_characters(text, caret, count));
     case VimMotion::line_start:
-        return characters_between(text.line_start(line), caret);
     case VimMotion::first_non_blank:
-        return characters_between(vim_first_non_blank(text, caret), caret);
+        return sideways_range(text, caret, motion, count);
     case VimMotion::line_end:
     case VimMotion::last_non_blank:
         return to_line_end(text, caret, count, motion);
@@ -1150,17 +1374,18 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
         return forward_word_range(text, caret, walk, motion);
     case VimMotion::previous_word:
     case VimMotion::previous_big_word:
-        return previous_word_range(text, caret, walk);
     case VimMotion::previous_word_end:
     case VimMotion::previous_big_word_end:
-        return previous_word_end_range(text, caret, walk);
+        return backward_word_range(text, caret, walk, motion);
     case VimMotion::screen_top:
     case VimMotion::screen_middle:
     case VimMotion::screen_bottom:
-        return screen_range(view, screen_position_of(motion), count, line);
     case VimMotion::document_first:
     case VimMotion::document_last:
-        return document_range(text, line, count);
+    case VimMotion::matching_pair:
+    case VimMotion::mark_line:
+    case VimMotion::mark_exact:
+        return jump_range(view, motion, count);
     case VimMotion::wrap_right:
     case VimMotion::wrap_left:
         return wrapped_range(view, motion, count, operation);
@@ -2142,7 +2367,7 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
         operation == VimOperator::yank &&
         (wanted == VimMotion::document_first || wanted == VimMotion::document_last ||
          wanted == VimMotion::screen_top || wanted == VimMotion::screen_middle ||
-         wanted == VimMotion::screen_bottom);
+         wanted == VimMotion::screen_bottom || wanted == VimMotion::mark_line);
     if (landing_yank)
     {
         const Offset destination = moved_by(view, state, wanted);
@@ -2152,11 +2377,14 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
                 VimColumnWish::at_column, caret_virtual_column(view.text, destination)};
         }
     }
-    return performed(performed_from, view.text, view.selection.caret,
-                     keeps_the_line_break(view.text, range.value(), wanted, operation)
-                         ? range.value()
-                         : adjusted_for_exclusive(
-                               view.text, landed(view, state, wanted, range.value()), wanted));
+    // 飛ぶ移動はオペレータの後ろでも前の位置を置く（Vim の setpcmark・ADR 0152 の決定 4）。
+    return jumped_by(
+        performed(performed_from, view.text, view.selection.caret,
+                  keeps_the_line_break(view.text, range.value(), wanted, operation)
+                      ? range.value()
+                      : adjusted_for_exclusive(view.text,
+                                               landed(view, state, wanted, range.value()), wanted)),
+        view, wanted);
 }
 
 // オペレータを自分の回数といっしょに保留する（決定 1）。積んだ回数はここで移る。
@@ -3657,6 +3885,27 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     std::unreachable();
 }
 
+// 次の 1 鍵を待つ接頭辞の動作 → 接頭辞（g z @ " と m ' `・ADR 0152 の決定 3）。ほかは nullopt。
+[[nodiscard]] std::optional<VimPrefix> prefix_of(VimAction action) noexcept
+{
+    constexpr std::array<std::pair<VimAction, VimPrefix>, 7> prefixes{
+        {{VimAction::prefix_g, VimPrefix::g},
+         {VimAction::prefix_z, VimPrefix::z},
+         {VimAction::replay_macro, VimPrefix::at},
+         {VimAction::select_register, VimPrefix::quote},
+         {VimAction::set_mark, VimPrefix::mark},
+         {VimAction::prefix_mark_line, VimPrefix::mark_line},
+         {VimAction::prefix_mark_exact, VimPrefix::mark_exact}}};
+    for (const auto &[from, prefix] : prefixes)
+    {
+        if (from == action)
+        {
+            return prefix;
+        }
+    }
+    return std::nullopt;
+}
+
 [[nodiscard]] VimStep input_action(const VimState &state, const VimEditorView &view,
                                    VimAction action)
 {
@@ -3670,13 +3919,9 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     {
         return opened_command_line(state);
     }
-    if (action == VimAction::prefix_g)
+    if (const auto prefix = prefix_of(action))
     {
-        return started_prefix(state, VimPrefix::g);
-    }
-    if (action == VimAction::prefix_z)
-    {
-        return started_prefix(state, VimPrefix::z);
+        return started_prefix(state, prefix.value());
     }
     if (action == VimAction::replace_character)
     {
@@ -3685,14 +3930,6 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     if (action == VimAction::record_macro)
     {
         return macro_record_action(state, view);
-    }
-    if (action == VimAction::replay_macro)
-    {
-        return started_prefix(state, VimPrefix::at);
-    }
-    if (action == VimAction::select_register)
-    {
-        return started_prefix(state, VimPrefix::quote);
     }
     return required_character_search_action(state, view, action);
 }
@@ -3823,7 +4060,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
     VimStep step = state.pending.has_value() ? search_operated(state, view, request, destination)
                                              : search_moved(state, view, destination);
     step.notice = wrap_notice(hit.value(), request.direction);
-    return step;
+    // 見つかった検索は飛ぶ鍵（Vim の jump-motions・ADR 0152 の決定 4）。
+    return context_marked(std::move(step), view);
 }
 
 // 入力行の Enter（決定 3）。空のパターンは直前を使い直し、無ければ E35。
@@ -4117,9 +4355,12 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
 {
     const VimOperator operation = operation_of(state);
     // z も次の 1 鍵まで読み、横送りの鍵ならオペレータを打ち消す（Vim の nv_zet の checkclearop）。
-    if (action == VimAction::prefix_g || action == VimAction::prefix_z)
+    // `'` `` ` `` も次の鍵（マークの名前）まで読む（ADR 0152 の決定 3）。`m` は Vim の nv_mark
+    // と同じに オペレータを打ち消す（下の移動にならない鍵の道）。
+    if (action == VimAction::prefix_g || action == VimAction::prefix_z ||
+        action == VimAction::prefix_mark_line || action == VimAction::prefix_mark_exact)
     {
-        return started_prefix(state, action == VimAction::prefix_g ? VimPrefix::g : VimPrefix::z);
+        return started_prefix(state, prefix_of(action).value_or(VimPrefix::g));
     }
     if (action == VimAction::insert_before || action == VimAction::insert_after)
     {
@@ -4438,9 +4679,10 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     const Offset moved = landing.offset;
     VimState next = visual_resting(state, state.mode);
     next.wanted_column = wanted_after(view.text, wanted, moved, motion.value());
-    return moved_or_failed(
-        VimStep{std::move(next), VimSelect{Selection{view.selection.anchor, moved}}},
-        motion.value(), view.selection.caret, landing);
+    return jumped_by(moved_or_failed(VimStep{std::move(next),
+                                             VimSelect{Selection{view.selection.anchor, moved}}},
+                                     motion.value(), view.selection.caret, landing),
+                     view, motion.value());
 }
 
 // VISUAL の大小文字（決定 10）。キャレットは行単位なら最初の行の行頭、文字単位なら選択の先頭
@@ -5073,6 +5315,69 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return VimStep{finished_input_wait(state), command.value()};
 }
 
+[[nodiscard]] bool is_escape(const VimKey &key) noexcept
+{
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr && *special == VimSpecialKey::escape;
+}
+
+// 名前の鍵にならなかったとき。Esc は何もせずに打ち消し、ほかは受けない（Vim の `m<Esc>`
+// `'<Esc>`）。
+[[nodiscard]] VimStep unnamed_mark(const VimState &state, const VimKey &key)
+{
+    VimStep step{finished_input_wait(state), VimNoEffect{}};
+    return is_escape(key) ? step : failed(std::move(step), VimRepeatFailure::refused);
+}
+
+// `m{name}`（ADR 0152 の決定 3）。今のキャレットを置いた新しい値を添え、本文も選択も動かさない
+// （VISUAL のまま）。オペレータの後ろへは来ない（pending_step が打ち消す）。
+[[nodiscard]] VimStep mark_set_step(const VimState &state, const VimEditorView &view,
+                                    const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr)
+    {
+        return unnamed_mark(state, key);
+    }
+    VimStep step{finished_input_wait(state), VimNoEffect{}};
+    const auto marks = vim_mark_set(*view.marks, character->code,
+                                    vim_mark_position_of(view.text, view.selection.caret));
+    if (!marks)
+    {
+        return failed(std::move(step), marks.error());
+    }
+    step.marks = marks.value();
+    return step;
+}
+
+// `'{name}` `` `{name} ``（決定 3）。名前を解いて着地を view に置き、移動の表の 1 本
+// （mark_line / mark_exact）へ写す。置いていないマークは E20、本文の外の行は E19 の失敗。
+[[nodiscard]] VimStep mark_jump_step(const VimState &state, const VimEditorView &view,
+                                     VimPrefix prefix, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr)
+    {
+        return unnamed_mark(state, key);
+    }
+    VimStep unmoved{finished_input_wait(state), VimNoEffect{}};
+    const auto mark = vim_mark_named(*view.marks, character->code);
+    if (!mark)
+    {
+        return failed(std::move(unmoved), mark.error());
+    }
+    const auto landing = vim_mark_offset(view.text, mark.value());
+    if (!landing.has_value())
+    {
+        return failed(std::move(unmoved), VimRepeatFailure::not_found);
+    }
+    VimEditorView marked = view;
+    marked.mark_landing = landing.value();
+    return completed_prefix(state, marked,
+                            prefix == VimPrefix::mark_line ? VimAction::move_mark_line
+                                                           : VimAction::move_mark_exact);
+}
+
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimPrefix prefix, VimKey key)
 {
@@ -5092,6 +5397,11 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return z_prefix_step(state, view, key);
     case VimPrefix::window_command:
         return window_step(state, key);
+    case VimPrefix::mark:
+        return mark_set_step(state, view, key);
+    case VimPrefix::mark_line:
+    case VimPrefix::mark_exact:
+        return mark_jump_step(state, view, prefix, key);
     }
     std::unreachable();
 }
