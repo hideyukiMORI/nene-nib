@@ -328,6 +328,9 @@ class EditorController final
     void run_tab_request(const core::ExTabRequest &request);
     void run_window_command(core::ExWindowCommand command);
     // Ex のファイル命令も Ctrl+P と同じ面へ渡す（ADR 0064）。
+    // 断りの知らせを立てて OS の警告音を 1 回鳴らす。鳴らすかを決める唯一の口で、呼ぶのは入力行の
+    // 確定とファイル操作の失敗だけ。鍵の失敗と情報の知らせは with_command_message（ADR 0153）。
+    void reject(core::DisplayText message);
     void run_palette_request(const core::ExPaletteRequest &request);
     // GUI と Ex の保存は同じ処理で、失敗の表示だけが入口ごとに違う（ADR 0066）。
     [[nodiscard]] std::expected<void, FileFailure> save_document(const SaveDocument &intent);

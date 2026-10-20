@@ -22,6 +22,7 @@
 #include "Scopes.hpp"
 #include "ScriptedAppearance.hpp"
 #include "ScriptedAutosave.hpp"
+#include "ScriptedBell.hpp"
 #include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
@@ -371,23 +372,25 @@ void verify_quiet_paths()
         ScriptedFolders folders;
         ScriptedAutosave autosave;
         ScriptedFonts fonts;
+        ScriptedBell bell;
         ScriptedBookmarks bookmarks;
         ScriptedTextLayouts text_layouts;
         EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                                 themes, session, history, folders, bookmarks,
-                                                text_layouts, autosave, fonts},
+                                                text_layouts, autosave, fonts, bell},
                                     {work_open('a'), work_open('b')});
         expect(controller.frame().tabs.size() == 2 && history.reads() == 0 &&
                    history.writes() == 0 && folders.requests().empty() && folders.collects() == 0 &&
-                   autosave.touches() == 0 && fonts.lists() == 0,
-               "starting with file arguments never touches the history, the folder nor autosave");
+                   autosave.touches() == 0 && fonts.lists() == 0 && bell.rings() == 0,
+               "starting with file arguments never touches the history, the folder, autosave nor "
+               "the bell");
     }
     Editing restored(three_listed(), hold_work);
     expect(restored.controller().frame().tabs.size() == 3 && restored.history().reads() == 0 &&
                restored.history().writes() == 0 && restored.folders().requests().empty() &&
                restored.folders().collects() == 0 && restored.autosave().touches() == 0 &&
-               restored.fonts().lists() == 0,
-           "restoring the last tabs never touches the history, the folder nor autosave");
+               restored.fonts().lists() == 0 && restored.bell().rings() == 0,
+           "restoring the last tabs never touches the history, the folder, autosave nor the bell");
     Editing editing;
     hold_work(editing.files());
     auto &controller = editing.controller();
@@ -408,13 +411,12 @@ void verify_quiet_paths()
     applied(controller, nenenib::application::SplitPane{nenenib::core::SplitLayout::vertical});
     applied(controller, nenenib::application::SwitchPane{});
     applied(controller, nenenib::application::ClosePane{});
-    expect(
-        editing.history().reads() == 0 && editing.history().writes() == 0 &&
-            editing.folders().requests().empty() && editing.folders().collects() == 0 &&
-            editing.autosave().touches() == 1 && editing.autosave().collects() == 0 &&
-            editing.fonts().lists() == 0,
-        "opening, switching, new tabs, saving and typing never touch the history, the folder nor "
-        "autosave");
+    expect(editing.history().reads() == 0 && editing.history().writes() == 0 &&
+               editing.folders().requests().empty() && editing.folders().collects() == 0 &&
+               editing.autosave().touches() == 1 && editing.autosave().collects() == 0 &&
+               editing.fonts().lists() == 0 && editing.bell().rings() == 0,
+           "opening, switching, new tabs, saving and typing never touch the history, the folder, "
+           "autosave nor the bell");
 }
 } // namespace
 
