@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 7cafe2a2c62f77235e85153cd4d8f089538c6883add65c2ef0f5310337871f47 / 1984 fixtures
+// fixtures.json: sha256 4a973928e121921f77bf41f7d8f2b4eedd5e1df74cd5a5feb7eb482d5b00ec2b / 2025 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1984> vim_fixtures{{
+constexpr std::array<VimFixture, 2025> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1215,6 +1215,47 @@ constexpr std::array<VimFixture, 1984> vim_fixtures{{
     {"text-object-quote-back-head-quote", "\"ab\" cd \"ef\"", "lvhi\"y", "\"ab\" cd \"ef\"", 1, 2, "a", "v", std::nullopt},
     {"text-object-quote-back-head-quote-around", "\"ab\" cd \"ef\"", "lvha\"y", "\"ab\" cd \"ef\"", 1, 1, "\"a", "v", std::nullopt},
     {"text-object-quote-back-head-quote-two", "\"ab\" cd \"ef\"", "2lvhhi\"y", "\"ab\" cd \"ef\"", 1, 2, "ab", "v", std::nullopt},
+    {"text-object-paragraph-dip", "a\nb\n\nc\nd\n\ne", "dip", "\nc\nd\n\ne", 1, 1, "a\nb\n", "V", std::nullopt},
+    {"text-object-paragraph-dap", "a\nb\n\nc\nd\n\ne", "dap", "c\nd\n\ne", 1, 1, "a\nb\n\n", "V", std::nullopt},
+    {"text-object-paragraph-yip-middle", "a\nb\n\nc\nd\n\ne", "jjjyip", "a\nb\n\nc\nd\n\ne", 4, 1, "c\nd\n", "V", std::nullopt},
+    {"text-object-paragraph-cap", "a\nb\n\nc\nd\n\ne", "jjjcapX<Esc>", "a\nb\n\nX\ne", 4, 1, "c\nd\n\n", "V", std::nullopt},
+    {"text-object-paragraph-d2ap", "a\nb\n\nc\nd\n\ne", "d2ap", "e", 1, 1, "a\nb\n\nc\nd\n\n", "V", std::nullopt},
+    {"text-object-paragraph-d2ip", "a\nb\n\nc\nd\n\ne", "d2ip", "c\nd\n\ne", 1, 1, "a\nb\n\n", "V", std::nullopt},
+    {"text-object-paragraph-vipd", "a\nb\n\nc\nd\n\ne", "jvipd", "\nc\nd\n\ne", 1, 1, "a\nb\n", "V", std::nullopt},
+    {"text-object-paragraph-vapd", "a\nb\n\nc\nd\n\ne", "vapd", "c\nd\n\ne", 1, 1, "a\nb\n\n", "V", std::nullopt},
+    {"text-object-paragraph-vipip-grows", "a\nb\n\nc\nd\n\ne", "vipipd", "c\nd\n\ne", 1, 1, "a\nb\n\n", "V", std::nullopt},
+    {"text-object-paragraph-vapap-grows", "a\nb\n\nc\nd\n\ne", "vapapd", "e", 1, 1, "a\nb\n\nc\nd\n\n", "V", std::nullopt},
+    {"text-object-paragraph-last-dap-leading-blank", "a\nb\n\nc\nd\n\ne", "Gdap", "a\nb\n\nc\nd", 5, 1, "\ne\n", "V", std::nullopt},
+    {"text-object-paragraph-last-d2ap-cancels", "a\nb\n\nc\nd\n\ne", "Gd2ap", "a\nb\n\nc\nd\n\ne", 7, 1, "", "", std::nullopt},
+    {"text-object-paragraph-blank-dip", "a\nb\n\nc\nd\n\ne", "jjdip", "a\nb\nc\nd\n\ne", 3, 1, "\n", "V", std::nullopt},
+    {"text-object-paragraph-blank-dap", "a\nb\n\nc\nd\n\ne", "jjdap", "a\nb\n\ne", 3, 1, "\nc\nd\n", "V", std::nullopt},
+    {"text-object-paragraph-white-line-dap", "one\ntwo\n  \n\nthree", "dap", "three", 1, 1, "one\ntwo\n  \n\n", "V", std::nullopt},
+    {"text-object-paragraph-white-line-dip", "one\ntwo\n  \n\nthree", "jjdip", "one\ntwo\nthree", 3, 1, "  \n\n", "V", std::nullopt},
+    {"text-object-paragraph-linewise-single-grows", "a\n\nb\n\nc", "jjVipd", "a\n\nc", 3, 1, "b\n\n", "V", std::nullopt},
+    {"text-object-paragraph-charwise-grows", "a\nb\n\nc\nd\n\ne", "vjipd", "c\nd\n\ne", 1, 1, "a\nb\n\n", "v", std::nullopt},
+    {"text-object-paragraph-backward-grows", "a\nb\n\nc\nd\n\ne", "jjjjvkapd", "\n\ne", 1, 1, "a\nb\n\nc\nd", "v", std::nullopt},
+    {"text-object-paragraph-anchor-column", "ab\ncd\n\nef", "lvipo<Esc>x", "a\ncd\n\nef", 1, 1, "b", "v", std::nullopt},
+    {"text-object-paragraph-dot", "a\nb\n\nc\nd\n\ne", "dap.", "e", 1, 1, "c\nd\n\n", "V", std::nullopt},
+    {"text-object-sentence-dis", "One. Two. Three.", "dis", " Two. Three.", 1, 1, "One.", "v", std::nullopt},
+    {"text-object-sentence-das", "One. Two. Three.", "das", "Two. Three.", 1, 1, "One. ", "v", std::nullopt},
+    {"text-object-sentence-das-middle", "One. Two. Three.", "5ldas", "One. Three.", 1, 6, "Two. ", "v", std::nullopt},
+    {"text-object-sentence-cis", "One. Two. Three.", "5lcisX<Esc>", "One. X Three.", 1, 6, "Two.", "v", std::nullopt},
+    {"text-object-sentence-vasd", "One. Two. Three.", "5lvasd", "One. Three.", 1, 6, "Two. ", "v", std::nullopt},
+    {"text-object-sentence-d2as", "One. Two. Three.", "d2as", "Three.", 1, 1, "One. Two. ", "v", std::nullopt},
+    {"text-object-sentence-d2is", "One. Two. Three.", "d2is", "Two. Three.", 1, 1, "One. ", "v", std::nullopt},
+    {"text-object-sentence-blank-dis", "One. Two. Three.", "4ldis", "One.Two. Three.", 1, 5, " ", "v", std::nullopt},
+    {"text-object-sentence-paren-closer", "He said (hi.) Then left.", "das", "Then left.", 1, 1, "He said (hi.) ", "v", std::nullopt},
+    {"text-object-sentence-quote-closer-last", "He said \"hi.\" Then left.", "$das", "He said \"hi.\"", 1, 13, " Then left.", "v", std::nullopt},
+    {"text-object-sentence-bang-question", "Wow! Really? Yes.", "5ldas", "Wow! Yes.", 1, 6, "Really? ", "v", std::nullopt},
+    {"text-object-sentence-across-lines", "para one\ncontinues. Next.", "jdas", "Next.", 1, 1, "para one\ncontinues. ", "v", std::nullopt},
+    {"text-object-sentence-line-end-linewise", "Hello world.\nNext one.", "dis", "Next one.", 1, 1, "Hello world.\n", "V", std::nullopt},
+    {"text-object-sentence-indented-linewise", "  Hello world.\nNext one.", "wyis", "  Hello world.\nNext one.", 1, 1, "  Hello world.\n", "V", std::nullopt},
+    {"text-object-sentence-paragraph-end", "first line\ncontinues here. Next one.\n\nNew para.", "j$das", "first line\ncontinues here.\n\nNew para.", 2, 15, " Next one.", "v", std::nullopt},
+    {"text-object-sentence-empty-line", "para one.\n\npara two.", "jdis", "para one.\npara two.", 2, 1, "\n", "V", std::nullopt},
+    {"text-object-sentence-visis-grows", "a b.\nc d. e.", "jvisisd", "a b.\ne.", 2, 1, "c d. ", "v", std::nullopt},
+    {"text-object-sentence-backward-first-blank", "One.  Two. Three.", "5lvhisd", "Two. Three.", 1, 1, "One.  ", "v", std::nullopt},
+    {"text-object-sentence-combining", "Café is open. Née said so.", "$das", "Café is open.", 1, 15, " Née said so.", "v", std::nullopt},
+    {"text-object-sentence-dot", "One. Two. Three.", "das.", "Three.", 1, 1, "Two. ", "v", std::nullopt},
     {"block-enter-esc", "abcdef\nghijkl\nmnopqr", "<C-v><Esc>x", "bcdef\nghijkl\nmnopqr", 1, 1, "a", "v", std::nullopt},
     {"block-enter-twice", "abcdef\nghijkl\nmnopqr", "<C-v><C-v>x", "bcdef\nghijkl\nmnopqr", 1, 1, "a", "v", std::nullopt},
     {"block-enter-from-v", "abcdef\nghijkl\nmnopqr", "vl<C-v>y", "abcdef\nghijkl\nmnopqr", 1, 1, "ab", "\0262", std::nullopt},

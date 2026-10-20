@@ -53,7 +53,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimKeyTable.cpp src/core/VimPattern.cpp src/core/VimPatternEvaluation.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchWalk.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
     src/core/VimStep.cpp src/core/VimScreenGeometry.cpp src/core/VimScreenRows.cpp src/core/VimHorizontalScroll.cpp
-    src/core/VimTextObjectRange.cpp
+    src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimSentenceObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp)

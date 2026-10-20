@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -15,4 +16,20 @@ enum class VimMode : std::uint8_t
     visual_line,
     visual_block
 };
+
+// VISUAL のどれかか（段落と文のテキストオブジェクトが広げ方を決めるのに読む・Issue #729）。
+[[nodiscard]] constexpr bool is_visual_mode(VimMode mode) noexcept
+{
+    switch (mode)
+    {
+    case VimMode::normal:
+    case VimMode::insert:
+        return false;
+    case VimMode::visual:
+    case VimMode::visual_line:
+    case VimMode::visual_block:
+        return true;
+    }
+    std::unreachable();
+}
 } // namespace nenenib::core

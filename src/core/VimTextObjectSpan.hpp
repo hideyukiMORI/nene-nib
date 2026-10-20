@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Selection.hpp"
+#include "VimMode.hpp"
 #include "VimMotionRange.hpp"
 
 namespace nenenib::core
@@ -10,9 +11,13 @@ namespace nenenib::core
 // 両端の置き方は種類ごとに違う（括弧は必ず前向き・引用符は今の選択の向きのまま・語は
 // 後ろ向きの選択では anchor を動かさない。どれも Vim 9.1 で実測）ので、1 本の範囲関数が
 // そこまで決める（ARC-001）。位置も範囲も単独で妥当なので公開 aggregate（ADR 0007）。
+//
+// mode は VISUAL がその後に居るモード。段落は行単位 VISUAL へ、文は文字単位 VISUAL へ移り、
+// 選択を広げる形ではモードを変えない。ほかの種類は常に文字単位（決定 4・Issue #729 で実測）。
 struct VimTextObjectSpan
 {
     VimMotionRange range;
     Selection selection;
+    VimMode mode;
 };
 } // namespace nenenib::core

@@ -4523,13 +4523,14 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return performed(from, view.text, range.range.begin, range);
 }
 
-// VISUAL。両端は範囲関数が決めた値をそのまま置く（決定 4 と Issue #99 の補足）。行単位になる
-// 範囲でも VISUAL は文字単位のままで、caret が最後の行の内容の終わりに載ると選択が改行まで
-// 届く（実測）。
+// VISUAL。両端とモードは範囲関数が決めた値をそのまま置く（決定 4 と Issue #99 の補足）。行単位に
+// なる範囲でも語・引用符・括弧の VISUAL は文字単位のままで、caret が最後の行の内容の終わりに
+// 載ると選択が改行まで届く（実測）。段落は行単位 VISUAL へ移る（Issue #729）。
 [[nodiscard]] VimStep selected_object(const VimState &state, const VimEditorView &view,
-                                      const Selection &selected)
+                                      const VimTextObjectSpan &span)
 {
-    VimState next = visual_resting(state, VimMode::visual);
+    const Selection &selected = span.selection;
+    VimState next = visual_resting(state, span.mode);
     next.wanted_column =
         VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(view.text, selected.caret)};
     return VimStep{std::move(next), VimSelect{selected}};
@@ -4542,7 +4543,7 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     {
         return operated_on_object(state, view, span.range);
     }
-    return selected_object(state, view, span.selection);
+    return selected_object(state, view, span);
 }
 
 // 範囲にならなかったとき（ADR 0031 の補足）。保留中のオペレータは捨て、キャレット（VISUAL では
@@ -4585,9 +4586,9 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
                       VimRepeatFailure::refused);
     }
-    const VimTextObjectOutcome outcome =
-        vim_text_object_range(view.text, view.selection,
-                              VimTextObjectRequest{scope, object.value()}, resolved_count(state));
+    const VimTextObjectOutcome outcome = vim_text_object_range(
+        view.text, view.selection, VimTextObjectRequest{scope, object.value(), state.mode},
+        resolved_count(state));
     // 答えの種類が増えたら写し先が足りずコンパイルが落ちる（CPP-002）。範囲にならなかったときは
     // キャレットが動いても Vim はビープする（ADR 0046 の決定 3）。
     VimStep step = std::visit([&](const auto &value)

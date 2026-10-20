@@ -285,7 +285,7 @@ constexpr std::array<VimMotion, 5> big_word_motions{
 
 // i / a の後ろの鍵 → テキストオブジェクトの表（ADR 0031 の決定 1 / CPP-012）。b は paren、
 // B は brace、閉じ括弧の鍵は開き括弧と同じ行（Vim 9.1 で実測）。ここに無い鍵は取消。
-constexpr std::array<VimTextObjectBinding, 15> text_object_bindings{
+constexpr std::array<VimTextObjectBinding, 17> text_object_bindings{
     {{U'w', VimTextObject::word},
      {U'W', VimTextObject::big_word},
      {U'\"', VimTextObject::double_quote},
@@ -300,7 +300,9 @@ constexpr std::array<VimTextObjectBinding, 15> text_object_bindings{
      {U'[', VimTextObject::bracket},
      {U']', VimTextObject::bracket},
      {U'<', VimTextObject::angle},
-     {U'>', VimTextObject::angle}}};
+     {U'>', VimTextObject::angle},
+     {U'p', VimTextObject::paragraph},
+     {U's', VimTextObject::sentence}}};
 
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）。$ と e E ge gE g$ g_ は入れる
 // （inclusive）。行単位の j k はどちらでもないので、この表には無い。gj gk は文字単位の
