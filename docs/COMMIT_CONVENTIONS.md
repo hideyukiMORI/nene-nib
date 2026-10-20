@@ -51,6 +51,7 @@ PR には目的・変更の要約・使った正典経路・規則 ID・検証�
 
 実装中とレビュー中は draft。必要な差分検証と結果・再利用の根拠がそろったら Ready にする（QLT-001 / QLT-012）。
 push・レビュー・merge・担当変更・文書追記・SHA 変更だけでは成功済み検証を繰り返さない。
+外部コード（`third_party/md4c/**`）は `.gitattributes` の `-whitespace` で差分の空白の検査の対象外（上流のバイト列は CNF-013 が守る・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md) の決定 13）。
 CIは非文書変更のマージ直前だけ起動し、Git規約・検証記録の存在・差分の空白を確認する。文書のみならCIを起動せず、差分と必要な目視で確認する（QLT-012・ADR 0118）。その代わり PR 本文の `検証（実行したコマンドと結果）:` の行に `eng/conformance.py` の `0 violation` を記録し、無ければ `merge-pr.py` が拒否する（#648）。記録の妥当性はレビューし、CI成功を製品テストの実行証拠とは扱わない。
 
 統合操作は `eng/merge-pr.py <PR番号> --expected-head <40桁SHA>` のplanを確認してから、同じ指定に `--execute` を付ける（#384）。

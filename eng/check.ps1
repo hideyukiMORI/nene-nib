@@ -16,7 +16,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'QLT-007: conformance self-tests failed.' }
     & pwsh -NoProfile -File eng/validate-git.ps1
     if ($LASTEXITCODE -ne 0) { throw 'Git conventions failed.' }
-    $files = @(& git ls-files --cached --others --exclude-standard -- '*.cpp' '*.hpp' '*.h' '*.cc' '*.cxx' '*.hxx') | Sort-Object -Unique
+    # 外部コード（third_party/）は書き換えないので整形の対象外。バイト列は CNF-013 が守る（ADR 0151 の決定 15）。
+    $files = @(& git ls-files --cached --others --exclude-standard -- '*.cpp' '*.hpp' '*.h' '*.cc' '*.cxx' '*.hxx' ':(exclude)third_party/**') | Sort-Object -Unique
     if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate C++ files.' }
     foreach ($file in $files) {
         if (-not (Test-Path -LiteralPath $file)) { continue }

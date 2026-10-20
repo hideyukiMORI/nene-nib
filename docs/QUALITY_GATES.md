@@ -43,6 +43,7 @@ lint・静的解析・アーキテクチャ・依存・テスト・**速さの�
 整形は設定から決定的に決まる。CI がソースを書き換えて成功させることはしない。整形の正本は 1 つ（設定ファイルは置かないか 1 つだけ）。
 
 - 機械強制: **active**（eng/check.ps1 の clang-format --dry-run --Werror。反例と復帰は `eng/prove-gates.py`）
+- 外部コード（`third_party/`）は書き換えないので整形の対象外（check.ps1 の列挙から外す・バイト列は CNF-013 が守る・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md) の決定 15）
 
 ### QLT-005 — ローカルと CI は同一
 
@@ -258,6 +259,20 @@ C++ のソースの `// SDK-ABI:` を含む行ごとに次を確かめ、1 つ�
 - 対応する規則: CPP-019 / CPP-015
 - 機械強制: **active**（`eng/conformance.py` の `sdk_abi_checks`。正例・反例は `tests/conformance` の `SdkAbiChecks` がゲートで回る。2026-10-06・Issue #299）
 
+### CNF-013 — 取り込んだ外部コードの SHA-256
+
+`third_party/` の下のファイルは上流のバイト列のまま置く（ADR 0003・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md)・Issue #764）。
+どのバイト列を取り込んだかの記録は `eng/conformance-rules.json` の `thirdPartyDigests`（path → SHA-256）の 1 つで、`eng/conformance.py` の `third_party_digest_checks` が次を確かめる。1 つでも外れたら CNF-013。
+
+- 表の各 path の **git の index の blob**（`git cat-file blob :<path>`）の SHA-256 が表の値と一致する。作業ツリーは読まない（改行の変換は checkout の設定で変わり、blob は変わらない。`.gitattributes` の `third_party/md4c/** -text` で両者を揃える）
+- 表の path が index に無い
+- `third_party/` の下に表に無いファイルがある（追跡外を含む）
+
+値は LF の blob の値（ADR 0003 にある CRLF の作業ツリーの値ではない）。検査はファイルも表も直さない。上流を更新するときは ADR で版を改め、表を書き換える。
+
+- 対応する規則: CNF-005 / ARC-002
+- 機械強制: **active**（`eng/conformance.py` の `third_party_digest_checks`。正例・反例は `tests/conformance` の `ThirdPartyDigestChecks` がゲートで回る。2026-10-21・Issue #764）
+
 🔴 **検出語は検査器のソースに直書きしない**（検査器が自分自身を違反として報告する。前例: xi-tools 初版で 7 件の自己検出）。
 🔴 **テストソースは検査対象から外す**（テストは意図的な違反を書く場所）。
 
@@ -331,6 +346,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `tests/vim/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054） |
 | CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
 | CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
+| CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |
 
 ---
 

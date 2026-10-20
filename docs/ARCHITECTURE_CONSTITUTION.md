@@ -73,7 +73,7 @@
 依存は [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md) のグラフに従う。禁じた依存は「レビューで気をつけること」ではなく
 **import できないこと**でなければならない。循環は許さない。
 
-- 機械強制: **active** → `eng/targets.cmake`（configure で宣言外の依存と OS ライブラリを拒否）＋ `eng/conformance.py --build-dir`（File API の実グラフ・相対 include）。2026-09-15・Issue #3 で実ターゲット 6 つに対して結線。全ての include / マクロ迂回を塞ぐ証明は未完了
+- 機械強制: **active** → `eng/targets.cmake`（configure で宣言外の依存と OS ライブラリを拒否）＋ `eng/conformance.py --build-dir`（File API の実グラフ・相対 include）。2026-09-15・Issue #3 で実ターゲット 6 つに対して結線。全ての include / マクロ迂回を塞ぐ証明は未完了。外部の C のコードは `third_party/<name>` のモジュールにだけ置き、`eng/targets.cmake` の `nenenib_third_party_target` だけが作る（モジュールの検査は `nenenib_target` と共有）。File API の実グラフは推移的な依存を含むので、宣言した依存の閉包と比べる（ADR 0151 の決定 14）。いまは `third_party_md4c`（依存なし・core だけが結ぶ・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md)）の 1 つ
 
 ### ARC-003 — 中核はプラットフォームから独立している
 

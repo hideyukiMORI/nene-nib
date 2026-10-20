@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.png binary
 *.ico binary
+# md4c は上流の blob のバイト列のまま置き、CNF-013 が LF の SHA-256 を照合する。行末空白の検査も外す（ADR 0151 の決定 1・13）。
+third_party/md4c/** -text -whitespace

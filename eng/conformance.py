@@ -468,6 +468,52 @@ def fixture_format_checks(root: Path) -> list[Finding]:
     return findings
 
 
+def staged_blob(root: Path, name: str) -> bytes | None:
+    """The bytes of `name` as the git index holds them, or None when the index has no such file."""
+    result = subprocess.run(["git", "cat-file", "blob", f":{name}"], cwd=root, capture_output=True)
+    return result.stdout if result.returncode == 0 else None
+
+
+def third_party_digest_checks(root: Path, paths: list[Path], rules: dict) -> list[Finding]:
+    """CNF-013: every file under third_party/ is the upstream bytes whose SHA-256 the table names.
+
+    External code is vendored unchanged (ADR 0003 / ADR 0151), and the one record of which bytes
+    were taken is `thirdPartyDigests` in eng/conformance-rules.json. The bytes compared are the git
+    index blob, not the working tree: the line ending a checkout writes depends on the machine's
+    settings, the blob does not (`.gitattributes` keeps `-text` on these files so the two agree).
+    A table entry with no blob, a blob with another digest, and a file under third_party/ that the
+    table does not name are all findings; nothing here rewrites a file or the table.
+    """
+    table = rules["thirdPartyDigests"]
+    findings = []
+    for name, expected in sorted(table.items()):
+        content = staged_blob(root, name)
+        if content is None:
+            findings.append(Finding("CNF-013", name, "listed in thirdPartyDigests but not in the git index"))
+            continue
+        digest = hashlib.sha256(content).hexdigest()
+        if digest != expected:
+            findings.append(Finding("CNF-013", name, f"SHA-256 {digest} is not the recorded {expected}; "
+                                    "third-party sources are vendored unchanged"))
+    for path in paths:
+        name = path.as_posix()
+        if name.startswith("third_party/") and name not in table:
+            findings.append(Finding("CNF-013", name, "not in thirdPartyDigests of eng/conformance-rules.json"))
+    return findings
+
+
+def declared_closure(module: str, modules: dict) -> set[str]:
+    """Modules reachable through declared dependencies (the meaning eng/symbols.py's dependency_closure has)."""
+    closure, pending = set(), list(modules[module]["dependencies"])
+    while pending:
+        current = pending.pop()
+        if current in closure or current not in modules:
+            continue
+        closure.add(current)
+        pending.extend(modules[current]["dependencies"])
+    return closure
+
+
 def architecture_checks(root: Path, paths: list[Path], build_dir: Path | None) -> list[Finding]:
     findings = []
     graph = json.loads((root / "eng/architecture.json").read_text(encoding="utf-8"))
@@ -523,12 +569,15 @@ def architecture_checks(root: Path, paths: list[Path], build_dir: Path | None) -
                 findings.append(Finding("ARC-002", entry["name"], "target has unowned or mixed-module sources"))
             targets[entry["id"]] = (target, next(iter(owners)) if len(owners) == 1 else None)
             compiled.update(s for s in sources if Path(s).suffix in {".cpp", ".cc", ".cxx"})
+        # File API の依存は推移的（静的ライブラリの LINK_ONLY が下流に乗る）なので、宣言の閉包と比べる。
+        # 直の link は eng/targets.cmake の nenenib_link が configure で守る（ADR 0151 の決定 14）。
         for target, module in targets.values():
             if module is None:
                 continue
+            allowed = declared_closure(module, modules)
             for dependency in target.get("dependencies", []):
                 destination = targets.get(dependency["id"], ({}, None))[1]
-                if destination not in modules[module]["dependencies"]:
+                if destination not in allowed:
                     findings.append(Finding("ARC-002", target["name"], f"forbidden target dependency {destination}"))
     for source in source_paths:
         if source.startswith(("src/", "tests/build/", "tests/unit/")) and Path(source).suffix in {".cpp", ".cc", ".cxx"} and source not in compiled:
@@ -546,6 +595,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(fixture_digest_checks(root, rules))
     findings.extend(key_names_checks(root))
     findings.extend(fixture_format_checks(root))
+    findings.extend(third_party_digest_checks(root, paths, rules))
     findings.extend(architecture_checks(root, paths, build_dir))
     signatures = sdk_abi_signatures(root)
     for path in paths:

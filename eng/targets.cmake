@@ -32,7 +32,9 @@ set(NENENIB_SANITIZE_LIBRARIES
     "${NENENIB_SANITIZE_RUNTIME}/clang_rt.ubsan_standalone-x86_64.lib"
     "${NENENIB_SANITIZE_RUNTIME}/clang_rt.ubsan_standalone_cxx-x86_64.lib")
 
-function(nenenib_target target module kind)
+# モジュールの検査（architecture.json に無いモジュール・空のモジュール・外のソースは FATAL）は
+# nenenib_target と nenenib_third_party_target が共有する 1 本（ARC-002）。
+function(nenenib_module_path module output)
     string(JSON module_path ERROR_VARIABLE module_error GET "${NENE_ARCHITECTURE}" modules "${module}" path)
     if(module_error)
         message(FATAL_ERROR "ARC-002: unapproved module ${module}")
@@ -48,6 +50,11 @@ function(nenenib_target target module kind)
             message(FATAL_ERROR "ARC-002: ${source} does not belong to ${module}")
         endif()
     endforeach()
+    set(${output} "${module_path}" PARENT_SCOPE)
+endfunction()
+
+function(nenenib_target target module kind)
+    nenenib_module_path(${module} module_path ${ARGN})
     if(kind STREQUAL "EXECUTABLE")
         add_executable(${target} ${ARGN})
         target_link_options(${target} PRIVATE
@@ -106,4 +113,18 @@ function(nenenib_link target dependency)
         message(FATAL_ERROR "ARC-002: forbidden dependency ${module} -> ${destination}")
     endif()
     target_link_libraries(${target} PRIVATE ${dependency})
+endfunction()
+
+# 外部の C のコード（ADR 0003 / ADR 0151）。上流のソースを書き換えないので、厳格集合 NENENIB_CXX_OPTIONS は
+# 当てず、警告の flag は `/W4 /WX /utf-8` だけ。Debug のサニタイザは製品のコードと同じく当てる
+# （信用できない入力を読むパーサこそ検査の対象・ソースの変更なしに当てられる）。静的ライブラリだけ。
+# clang-tidy は CMAKE_CXX_CLANG_TIDY だけなので C の target には掛からない（CMAKE_C_CLANG_TIDY は置かない）。
+function(nenenib_third_party_target target module)
+    nenenib_module_path(${module} module_path ${ARGN})
+    add_library(${target} STATIC ${ARGN})
+    set_property(TARGET ${target} PROPERTY NENE_MODULE "${module}")
+    set_target_properties(${target} PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    target_compile_options(${target} PRIVATE /W4 /WX /utf-8
+                           "$<$<CONFIG:Debug>:${NENENIB_SANITIZE_OPTIONS}>")
+    target_include_directories(${target} SYSTEM PUBLIC "${CMAKE_SOURCE_DIR}/${module_path}")
 endfunction()

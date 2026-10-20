@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -590,6 +591,93 @@ class RepositoryChecks(unittest.TestCase):
         self.seed_build_graph(False)
         findings = cnf.architecture_checks(self.root, self.paths(), self.root / "build")
         self.assertTrue(any(f.rule == "ARC-002" and "absent from the build" in f.detail for f in findings))
+
+    # ADR 0151 の決定 14: File API の依存は推移的なので、宣言した依存の閉包と比べる。
+    def seed_closure_graph(self, dependencies_of_top):
+        modules = {"base": {"path": "src/base", "dependencies": []},
+                   "middle": {"path": "src/middle", "dependencies": ["base"]},
+                   "top": {"path": "src/top", "dependencies": ["middle"]},
+                   "aside": {"path": "src/aside", "dependencies": []}}
+        self.write("eng/architecture.json", json.dumps({"modules": modules, "runtimeDependencies": []}))
+        reply = "build/.cmake/api/v1/reply/"
+        self.write(reply + "index-1.json", json.dumps({"reply": {"codemodel-v2": {"jsonFile": "model.json"}}}))
+        names = ["base", "middle", "top", "aside"]
+        self.write(reply + "model.json", json.dumps({"configurations": [{"targets": [
+            {"id": name, "name": name, "jsonFile": name + ".json"} for name in names]}]}))
+        links = {"base": [], "middle": ["base"], "top": dependencies_of_top, "aside": []}
+        for name in names:
+            self.write(f"src/{name}/{name.capitalize()}.cpp", "int main() { return 0; }")
+            self.write(reply + name + ".json", json.dumps({"name": name,
+                       "sources": [{"path": f"src/{name}/{name.capitalize()}.cpp"}],
+                       "dependencies": [{"id": d} for d in links[name]]}))
+
+    def test_arc002_transitive_dependency_inside_closure_passes(self):
+        self.seed_closure_graph(["middle", "base"])
+        self.assertFalse(cnf.architecture_checks(self.root, self.paths(), self.root / "build"))
+
+    def test_arc002_dependency_outside_closure_fails(self):
+        self.seed_closure_graph(["middle", "base", "aside"])
+        findings = cnf.architecture_checks(self.root, self.paths(), self.root / "build")
+        self.assertEqual(["ARC-002: top: forbidden target dependency aside"], [str(f) for f in findings])
+
+
+class ThirdPartyDigestChecks(unittest.TestCase):
+    """CNF-013 — third_party/ の各ファイルは表の SHA-256 の上流のバイト列（ADR 0151）。
+
+    照合するのは git の index の blob なので、試験は一時の git リポジトリに add してから読ませる。
+    """
+
+    BYTES = b"int md(void);\n"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=self.root, check=True)
+
+    def stage(self, path, content):
+        file = self.root / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(content)
+        subprocess.run(["git", "add", "--", path], cwd=self.root, check=True)
+
+    def details(self, table, paths=None):
+        rules = dict(RULES, thirdPartyDigests=table)
+        listed = [p.relative_to(self.root) for p in self.root.rglob("*") if p.is_file() and ".git" not in p.parts]
+        return [f"{f.rule}: {f.path}: {f.detail}"
+                for f in cnf.third_party_digest_checks(self.root, listed if paths is None else paths, rules)]
+
+    def test_cnf013_positive(self):
+        self.stage("third_party/md/md.h", self.BYTES)
+        self.assertEqual([], self.details({"third_party/md/md.h": hashlib.sha256(self.BYTES).hexdigest()}))
+
+    def test_cnf013_digest_mismatch(self):
+        self.stage("third_party/md/md.h", self.BYTES.replace(b"\n", b"\r\n"))
+        details = self.details({"third_party/md/md.h": hashlib.sha256(self.BYTES).hexdigest()})
+        self.assertTrue(any(d.startswith("CNF-013: third_party/md/md.h: SHA-256") for d in details))
+
+    def test_cnf013_reads_the_index_not_the_working_tree(self):
+        self.stage("third_party/md/md.h", self.BYTES)
+        (self.root / "third_party/md/md.h").write_bytes(b"edited\n")
+        self.assertEqual([], self.details({"third_party/md/md.h": hashlib.sha256(self.BYTES).hexdigest()}))
+
+    def test_cnf013_listed_file_missing_from_index(self):
+        details = self.details({"third_party/md/md.h": hashlib.sha256(self.BYTES).hexdigest()})
+        self.assertTrue(any("not in the git index" in d for d in details))
+
+    def test_cnf013_unlisted_file_under_third_party(self):
+        self.stage("third_party/md/md.h", self.BYTES)
+        self.stage("third_party/md/extra.c", self.BYTES)
+        details = self.details({"third_party/md/md.h": hashlib.sha256(self.BYTES).hexdigest()})
+        self.assertEqual(["CNF-013: third_party/md/extra.c: not in thirdPartyDigests of eng/conformance-rules.json"], details)
+
+    def test_cnf013_files_outside_third_party_are_not_listed(self):
+        self.stage("src/core/Color.hpp", b"class Color {};\n")
+        self.assertEqual([], self.details({}))
+
+    def test_cnf013_repository_table_matches_the_vendored_md4c(self):
+        self.assertEqual([], [str(f) for f in cnf.third_party_digest_checks(ROOT, cnf.inventory(ROOT), RULES)])
 
 
 class GitChecks(unittest.TestCase):
