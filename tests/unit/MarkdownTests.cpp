@@ -46,6 +46,13 @@ constexpr PreviewStyle inline_code = PreviewStyle::code;
 constexpr PreviewStyle link = PreviewStyle::link;
 constexpr std::string_view bullet = "•";
 
+// 述語は借りるだけなので、一時の値は受けない（#782 のレビュー R2）。
+constexpr auto never_stop = [] { return false; };
+template <typename Ask>
+concept LendsStop = requires(Ask &&ask) { MarkdownStop::asking(std::forward<Ask>(ask)); };
+static_assert(LendsStop<const decltype(never_stop) &>);
+static_assert(!LendsStop<decltype(never_stop)>);
+
 [[nodiscard]] PreviewBlock leaf(PreviewBlockKind kind, std::string text, std::size_t begin)
 {
     return PreviewBlock{.kind = kind,
@@ -257,6 +264,24 @@ void verify_ordered_lists()
         "a bullet list nested in an ordered item");
 }
 
+void verify_nested_items()
+{
+    expect_blocks("- > a", {quoted(listed(leaf(list_item, "a", 4U), 1U, bullet), 1U)},
+                  "a quote as the first child of an item takes the marker");
+    expect_blocks(
+        "1. a\n\n2. b",
+        {listed(leaf(list_item, "a", 3U), 1U, "1."), listed(leaf(list_item, "b", 9U), 1U, "2.")},
+        "a loose ordered list folds each first paragraph into the item");
+    expect_blocks("- ```\n  x\n  ```", {listed(leaf(code, "x\n", 8U), 1U, bullet)},
+                  "a code block as the first child of an item keeps its kind and the marker");
+    expect_blocks("- <div>\n  x\n  </div>",
+                  {listed(leaf(html, "<div>\nx\n</div>\n", 2U), 1U, bullet)},
+                  "an HTML block as the first child of an item keeps its kind and the marker");
+    const std::string deep = std::string(300U, '>') + " a";
+    expect_blocks(deep, {quoted(leaf(paragraph, "a", 301U), 255U)},
+                  "a quote depth past 255 saturates");
+}
+
 void verify_quotes()
 {
     expect_blocks("> # Foo\n> bar\n> baz",
@@ -285,8 +310,8 @@ void verify_code_blocks()
     expect_blocks("~~~\naaa\n```\n~~~", {leaf(code, "aaa\n```\n", 4U)},
                   "a tilde fence is not closed by backticks");
     expect_blocks("```\n```", {leaf(code, "", 0U)}, "an empty code block at the start begins at 0");
-    expect_blocks("a\n\n```\n```", {leaf(paragraph, "a", 0U), leaf(code, "", 2U)},
-                  "an empty code block begins on the line after the previous text");
+    expect_blocks("a\n\n```\n```", {leaf(paragraph, "a", 0U), leaf(code, "", 3U)},
+                  "an empty code block begins on its fence line after the blank line");
 }
 
 void verify_rules()
@@ -297,6 +322,12 @@ void verify_rules()
                   {leaf(paragraph, "Foo", 0U), leaf(rule, "", 4U), leaf(paragraph, "bar", 8U)},
                   "a thematic break begins on the line after the previous text");
     expect_blocks("+++", {leaf(paragraph, "+++", 0U)}, "plus signs are not a thematic break");
+    expect_blocks("para\n\n---", {leaf(paragraph, "para", 0U), leaf(rule, "", 6U)},
+                  "a thematic break after a blank line begins on its own line");
+    expect_blocks("a\n\n  \t\r\n***", {leaf(paragraph, "a", 0U), leaf(rule, "", 8U)},
+                  "lines of only spaces, tabs and CR are skipped as blank");
+    expect_blocks("\n\n---", {leaf(rule, "", 2U)},
+                  "a thematic break after leading blank lines skips them");
 }
 
 void verify_entities()
@@ -363,6 +394,27 @@ void verify_stop_and_size()
     expect(!inner.has_value() && inner.error() == MarkdownFailure::stopped && texts == 3U,
            "a stop on a text callback ends the parse");
 
+    std::size_t spans = 0;
+    const auto at_span = [&spans]
+    {
+        ++spans;
+        return spans == 3U;
+    };
+    const auto span_stop = core::parse_markdown("*a*", MarkdownStop::asking(at_span));
+    expect(!span_stop.has_value() && span_stop.error() == MarkdownFailure::stopped && spans == 3U,
+           "a stop on enter_span (DOC, P, EM) ends the parse");
+
+    std::size_t leaves = 0;
+    const auto at_leave = [&leaves]
+    {
+        ++leaves;
+        return leaves == 4U;
+    };
+    const auto leave_stop = core::parse_markdown("# a", MarkdownStop::asking(at_leave));
+    expect(!leave_stop.has_value() && leave_stop.error() == MarkdownFailure::stopped &&
+               leaves == 4U,
+           "a stop on leave_block (DOC, H, a, /H) ends the parse");
+
     std::size_t counted = 0;
     const auto never = [&counted]
     {
@@ -388,6 +440,7 @@ void verify_markdown_scope()
     verify_inline_code_and_links();
     verify_bullet_lists();
     verify_ordered_lists();
+    verify_nested_items();
     verify_quotes();
     verify_code_blocks();
     verify_rules();

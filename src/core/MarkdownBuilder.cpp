@@ -22,6 +22,24 @@ constexpr std::size_t depth_limit = 255U;
 {
     return static_cast<std::uint8_t>(depth < depth_limit ? depth : depth_limit);
 }
+
+// line から始めて、空白（空白・Tab・CR）だけの行を飛ばした最初の行の行頭。
+[[nodiscard]] std::size_t first_filled_line(std::string_view input, std::size_t line) noexcept
+{
+    while (line < input.size())
+    {
+        const auto end = input.find('\n', line);
+        const auto content =
+            input.substr(line, end == std::string_view::npos ? std::string_view::npos : end - line);
+        if (end == std::string_view::npos ||
+            content.find_first_not_of(" \t\r") != std::string_view::npos)
+        {
+            return line;
+        }
+        line = end + 1U;
+    }
+    return line;
+}
 } // namespace
 
 MarkdownBuilder::MarkdownBuilder(std::string_view input, const MarkdownStop &stop) noexcept
@@ -109,7 +127,15 @@ void MarkdownBuilder::close_leaf()
     }
     auto block = std::move(leaf_).value();
     leaf_.reset();
-    block.source_begin = Offset{leaf_begin_.value_or(unlocated_begin())};
+    // 行の探索は位置を持たない要素のときだけ走らせる（value_or は先に評価してしまう）。
+    if (leaf_begin_.has_value())
+    {
+        block.source_begin = Offset{leaf_begin_.value()};
+    }
+    else
+    {
+        block.source_begin = Offset{unlocated_begin()};
+    }
     blocks_.push_back(std::move(block));
     leaf_begin_.reset();
     implicit_leaf_ = false;
@@ -181,15 +207,17 @@ std::optional<std::size_t> MarkdownBuilder::located(std::string_view source) con
 }
 
 // 文字の位置を持たない要素（水平線・空の項目・空のコードブロック）は、直前の要素の終わりの
-// 次の行頭（ADR 0151 の決定 8）。前に位置が無ければ本文の先頭。
+// 次の行から空行を飛ばした最初の行の行頭（ADR 0151 の決定 8 の追記）。前に位置が無ければ
+// 本文の先頭から空行を飛ばす。
 std::size_t MarkdownBuilder::unlocated_begin() const noexcept
 {
-    if (!last_end_.has_value())
+    std::size_t line = 0U;
+    if (last_end_.has_value())
     {
-        return 0U;
+        const auto newline = input_.find('\n', last_end_.value());
+        line = newline == std::string_view::npos ? input_.size() : newline + 1U;
     }
-    const auto newline = input_.find('\n', last_end_.value());
-    return newline == std::string_view::npos ? input_.size() : newline + 1U;
+    return first_filled_line(input_, line);
 }
 
 PreviewBlock MarkdownBuilder::started(PreviewBlockKind kind, std::uint8_t level)

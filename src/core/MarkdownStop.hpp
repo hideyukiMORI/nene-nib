@@ -14,6 +14,8 @@ class MarkdownStop final
         return MarkdownStop(&ask, [](const void *context)
                             { return static_cast<bool>((*static_cast<const Ask *>(context))()); });
     }
+    // 一時の値は parse の間に消えるので受けない。
+    template <class Ask> static MarkdownStop asking(const Ask &&ask) = delete;
     // 打ち切らない述語。
     [[nodiscard]] static MarkdownStop never() noexcept
     {
