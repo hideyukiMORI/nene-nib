@@ -3,6 +3,7 @@
 #include "BodyLayout.hpp"
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
+#include "PaneSide.hpp"
 #include "SplitLayout.hpp"
 
 #include <cstdint>
@@ -28,4 +29,12 @@ struct PaneLayouts
 // font_size) と同じ。
 [[nodiscard]] PaneLayouts pane_layouts(LayoutRect client, std::uint32_t dpi, FontSize font_size,
                                        SplitLayout layout) noexcept;
+
+// 操作中の枠の配置（ADR 0148 の決定 8）。active はその枠の側（frame の active_side）。1 枠
+// （second が値なし）では側を問わず first。描画・窓の行数・マウスが同じ 1 本で引く（ARC-001）。
+[[nodiscard]] BodyLayout active_pane_layout(const PaneLayouts &layouts, PaneSide active) noexcept;
+
+// もう 1 つの枠の配置。active の反対の側で、1 枠なら値なし。
+[[nodiscard]] std::optional<BodyLayout> other_pane_layout(const PaneLayouts &layouts,
+                                                          PaneSide active) noexcept;
 } // namespace nenenib::core

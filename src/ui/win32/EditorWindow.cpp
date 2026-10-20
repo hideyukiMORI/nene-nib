@@ -7,6 +7,7 @@
 #include "CancelComposition.hpp"
 #include "CaretMotion.hpp"
 #include "ClauseEmphasis.hpp"
+#include "ClosePane.hpp"
 #include "CloseTab.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
@@ -34,17 +35,22 @@
 #include "OpenOperationList.hpp"
 #include "OperationBindings.hpp"
 #include "OperationShortcut.hpp"
+#include "PaneLayouts.hpp"
 #include "PointTitleBar.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "ScrollPaletteList.hpp"
+#include "ScrollPane.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SettingsNotice.hpp"
 #include "SettleRecentTab.hpp"
+#include "SplitLayout.hpp"
+#include "SplitPane.hpp"
 #include "StatusBarLayout.hpp"
+#include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
 #include "TabCommand.hpp"
 #include "TabKeyTable.hpp"
@@ -1126,9 +1132,21 @@ void EditorWindow::click_client(LPARAM data)
     case core::StatusBarHit::none:
         break;
     }
-    const auto body = core::body_layout(client.right, client.bottom, dpi_,
-                                        controller_.delivery().settings.font_size);
-    if (core::contains(body.band, low_word_of(data), high_word_of(data)))
+    click_body(data);
+}
+
+// もう 1 つの枠を押したら先にその枠へ移り、移った後の配置で同じ点を解く（ADR 0148 の決定 11）。
+void EditorWindow::click_body(LPARAM data)
+{
+    const auto font_size = controller_.delivery().settings.font_size;
+    const auto other =
+        core::other_pane_layout(body_panes(font_size), controller_.split().active_side);
+    if (other.has_value() &&
+        core::contains(other.value().band, low_word_of(data), high_word_of(data)))
+    {
+        send(application::SwitchPane{});
+    }
+    if (core::contains(active_body(font_size).band, low_word_of(data), high_word_of(data)))
     {
         place_caret(data);
         begin_selection_drag();
@@ -1204,13 +1222,25 @@ std::int32_t EditorWindow::title_bar_width() const
     return core::to_dips(client.right, dpi_);
 }
 
-application::VisibleLines EditorWindow::body_view() const
+// 本文の枠の配置（ADR 0148 の決定 8）。窓の行数・マウス・描画が同じ pane_layouts の 1 本を引く。
+core::PaneLayouts EditorWindow::body_panes(core::FontSize font_size) const
 {
     RECT client{};
     GetClientRect(window_, &client);
+    return core::pane_layouts(core::LayoutRect{0, 0, client.right, client.bottom}, dpi_, font_size,
+                              controller_.split().layout);
+}
+
+core::BodyLayout EditorWindow::active_body(core::FontSize font_size) const
+{
+    return core::active_pane_layout(body_panes(font_size), controller_.split().active_side);
+}
+
+// 寸法は操作中の枠の本文（両枠の幅と高さは等しいので、もう 1 つの枠も同じ寸法・決定 1）。
+application::VisibleLines EditorWindow::body_view() const
+{
     const auto delivered = controller_.delivery();
-    const auto body =
-        core::body_layout(client.right, client.bottom, dpi_, delivered.settings.font_size);
+    const auto body = active_body(delivered.settings.font_size);
     core::TextViewGeometry geometry{std::max(core::width_of(body.content), 1), body.line_height,
                                     dpi_};
     // 本文の書式の字幅は格子の 1 升と同じ所（BodyTextLayouts::cell）で測る。巨大な行の窓の x の
@@ -1218,6 +1248,9 @@ application::VisibleLines EditorWindow::body_view() const
     const auto advance = text_layouts_.cell(
         application::TextLayoutRequest{{}, delivered.settings, geometry, core::DisplayForm::text});
     geometry.average_advance = advance.has_value() ? advance.value().width : 0.0F;
+    // 面と補完の行数は窓全体の寸法から決める（ADR 0150 の決定 1・枠の寸法ではない）。
+    RECT client{};
+    GetClientRect(window_, &client);
     return application::VisibleLines{body.visible_lines, geometry, client.right, client.bottom};
 }
 
@@ -1475,6 +1508,7 @@ application::EditorDelivery EditorWindow::follow_look(application::EditorDeliver
 
 void EditorWindow::deliver(const application::EditorIntent &intent)
 {
+    const auto previous_layout = controller_.split().layout;
     auto delivery = controller_.apply(intent);
     if (!survives_layout(delivery))
     {
@@ -1504,6 +1538,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
         announce_settings(delivery);
     }
     delivery = follow_look(std::move(delivery));
+    follow_split(previous_layout, delivery);
     follow_ime(delivery);
     mode_ = delivery.mode;
     vim_mode_ = delivery.vim_mode;
@@ -1515,6 +1550,16 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     finish_display_question(display_asked);
     finish_tab_action(close_request, closing);
     release_session_block();
+}
+
+// 枠を分けた・閉じた（鍵・一覧・Vim の `Ctrl-w`・Ex の `:q`）ら、操作中の枠の行数と幅を
+// 送り直す（ADR 0148 の決定 8）。
+void EditorWindow::follow_split(core::SplitLayout previous, application::EditorDelivery &delivery)
+{
+    if (controller_.split().layout != previous)
+    {
+        delivery = controller_.apply(body_view());
+    }
 }
 
 void EditorWindow::finish_display_question(bool question)
@@ -2312,12 +2357,52 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     case core::EditorOperation::toggle_mode:
         toggle_mode();
         return;
-    // #683: 枠の操作は ui の鍵と一緒に意図へ写す（ADR 0148 の決定 6）。表には鍵の無い行があり
-    // F1 の一覧に出るので、選ぶとここへ来るが、#683 で鍵と実行が入るまでは何もしない。
     case core::EditorOperation::split_vertical:
     case core::EditorOperation::split_horizontal:
     case core::EditorOperation::next_pane:
     case core::EditorOperation::close_pane:
+        run_pane_operation(operation);
+        return;
+    }
+    std::unreachable();
+}
+
+// 枠の操作（ADR 0148 の決定 6）。本文の行数と幅は deliver が配置の変わり目で送り直す
+// （follow_split）。枠の操作でない値は run_operation が先に扱うので、ここへは来ない。
+void EditorWindow::run_pane_operation(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::split_vertical:
+        send(application::SplitPane{core::SplitLayout::vertical});
+        return;
+    case core::EditorOperation::split_horizontal:
+        send(application::SplitPane{core::SplitLayout::horizontal});
+        return;
+    case core::EditorOperation::next_pane:
+        send(application::SwitchPane{});
+        return;
+    case core::EditorOperation::close_pane:
+        // 操作中の枠を閉じる（`:q` と `Ctrl-w c` と同じ向き・決定 5）。1 枠ではどちらも何もしない。
+        send(application::SwitchPane{});
+        send(application::ClosePane{});
+        return;
+    case core::EditorOperation::open_file:
+    case core::EditorOperation::save:
+    case core::EditorOperation::save_as:
+    case core::EditorOperation::new_tab:
+    case core::EditorOperation::close_tab:
+    case core::EditorOperation::recent_tab:
+    case core::EditorOperation::recent_tab_back:
+    case core::EditorOperation::list_files:
+    case core::EditorOperation::list_operations:
+    case core::EditorOperation::toggle_bookmark:
+    case core::EditorOperation::undo:
+    case core::EditorOperation::redo:
+    case core::EditorOperation::font_larger:
+    case core::EditorOperation::font_smaller:
+    case core::EditorOperation::font_reset:
+    case core::EditorOperation::toggle_mode:
         return;
     }
     std::unreachable();
@@ -2408,7 +2493,7 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         return;
     }
     zoom_wheel_remainder_ = 0;
-    scroll_body(delta);
+    scroll_body(delta, data);
 }
 
 void EditorWindow::scroll_palette(std::int32_t delta)
@@ -2430,7 +2515,7 @@ void EditorWindow::scroll_palette(std::int32_t delta)
     send(application::ScrollPaletteList{delta > 0 ? -lines : lines});
 }
 
-void EditorWindow::scroll_body(std::int32_t delta)
+void EditorWindow::scroll_body(std::int32_t delta, LPARAM data)
 {
     // 1 刻みの行数は OS の設定から。1 画面の設定なら見えている行数（#499）。
     std::size_t visible = 0;
@@ -2445,10 +2530,17 @@ void EditorWindow::scroll_body(std::int32_t delta)
     const auto turn =
         wheel_turned(body_wheel_remainder_, delta, wheel_lines_per_notch(wheel_setting_, visible));
     body_wheel_remainder_ = turn.remainder;
-    if (turn.lines != 0)
+    if (turn.lines == 0)
     {
-        send(application::ScrollLines{turn.lines});
+        return;
     }
+    // 点の下の枠を送る。もう 1 つの枠なら枠を移らずに送る（ADR 0148 の決定 11）。
+    if (over_other_pane(data))
+    {
+        send(application::ScrollPane{turn.lines});
+        return;
+    }
+    send(application::ScrollLines{turn.lines});
 }
 
 void EditorWindow::read_wheel_setting()
@@ -2465,6 +2557,16 @@ void EditorWindow::read_wheel_setting()
         body_wheel_remainder_ = 0;
     }
     wheel_setting_ = lines;
+}
+
+bool EditorWindow::over_other_pane(LPARAM data) const
+{
+    // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
+    POINT point{low_word_of(data), high_word_of(data)};
+    ScreenToClient(window_, &point);
+    const auto other = core::other_pane_layout(
+        body_panes(controller_.delivery().settings.font_size), controller_.split().active_side);
+    return other.has_value() && core::contains(other.value().band, point.x, point.y);
 }
 
 bool EditorWindow::over_title_bar(LPARAM data) const

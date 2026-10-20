@@ -31,6 +31,8 @@ namespace
         return "F1";
     case OperationKey::f4:
         return "F4";
+    case OperationKey::f6:
+        return "F6";
     case OperationKey::tab:
         return "Tab";
     case OperationKey::plus:
@@ -41,6 +43,8 @@ namespace
         return "0";
     case OperationKey::space:
         return "Space";
+    case OperationKey::backslash:
+        return "\\";
     }
     std::unreachable();
 }

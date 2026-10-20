@@ -42,8 +42,7 @@ inline constexpr std::array<OperationText, 20> operation_texts{{
     {EditorOperation::split_horizontal, "上下に分ける", "じょうげにわける",
      "本文を上下 2 つの枠に分けて同じ文書を出します"},
     {EditorOperation::next_pane, "隣の枠へ", "となりのわくへ", "もう 1 つの枠へ移ります"},
-    {EditorOperation::close_pane, "枠を閉じる", "わくをとじる",
-     "もう 1 つの枠を閉じて 1 つに戻します"},
+    {EditorOperation::close_pane, "枠を閉じる", "わくをとじる", "いまの枠を閉じて 1 つに戻します"},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

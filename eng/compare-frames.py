@@ -3,8 +3,9 @@
 Prints one JSON object: the size, the number of pixels that differ, and their bounding rectangle
 {"x","y","w","h"} (null when nothing differs). With --inside x,y,w,h it also says whether that
 rectangle lies inside the given one. With --regions <frames.json> (the "regions" that
-verify-window.py --keys writes: title, body, status) it counts the differing pixels per region
-and those in no region ("outside"), and "inside" is true exactly when "outside" is 0; --regions
+verify-window.py --keys writes: title, body, status; or split-vertical-frames.json and
+split-horizontal-frames.json that verify-window.py --split writes: title, body0, body1, divider,
+status) it counts the differing pixels per region and those in no region ("outside"), and "inside" is true exactly when "outside" is 0; --regions
 wins over --inside when both are given. With --expect <region>[,<region>...] (only with --regions)
 it also says, per named region, whether it changed ("expected"), and fails when one did not: a
 compare of an unchanged picture must not pass as the change it was meant to show. Without

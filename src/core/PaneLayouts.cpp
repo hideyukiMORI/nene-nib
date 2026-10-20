@@ -43,4 +43,32 @@ PaneLayouts pane_layouts(LayoutRect client, std::uint32_t dpi, FontSize font_siz
     }
     std::unreachable();
 }
+
+BodyLayout active_pane_layout(const PaneLayouts &layouts, PaneSide active) noexcept
+{
+    switch (active)
+    {
+    case PaneSide::first:
+        return layouts.first;
+    case PaneSide::second:
+        return layouts.second.value_or(layouts.first);
+    }
+    std::unreachable();
+}
+
+std::optional<BodyLayout> other_pane_layout(const PaneLayouts &layouts, PaneSide active) noexcept
+{
+    if (!layouts.second.has_value())
+    {
+        return std::nullopt;
+    }
+    switch (active)
+    {
+    case PaneSide::first:
+        return layouts.second;
+    case PaneSide::second:
+        return layouts.first;
+    }
+    std::unreachable();
+}
 } // namespace nenenib::core

@@ -4,10 +4,13 @@
 #include "DevicePixels.hpp"
 #include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
+#include "EditMode.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
+#include "PaneLayouts.hpp"
+#include "PaneRole.hpp"
 #include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
 #include "Utf16.hpp"
@@ -124,11 +127,25 @@ constexpr float full_channel = 255.0F;
 
 // 選択・検索の当たりの両端を描画用の行へ写す。変換は上の 1 本だけ（ADR 0040 の決定 3）。
 // 巨大な行の窓では、本文の桁を窓の中の桁に写す（ADR 0139）。窓の前は窓の始まりに畳む。
-[[nodiscard]] core::Column windowed_column(const application::EditorFrame &frame,
+[[nodiscard]] core::Column windowed_column(const application::CaretView &caret,
                                            const application::LineView &shown) noexcept
 {
-    const auto source = frame.caret.position.column.value;
+    const auto source = caret.position.column.value;
     return core::Column{source - std::min(shown.window.code_point, source - 1)};
+}
+
+// もう 1 つの枠のキャレットの印の形（採用案の案 A）。通常モードは縦棒、Vim はモードを問わず
+// 中空のブロック。操作中の枠の形（CaretView::shape）は Vim のモードで変わるので使わない。
+[[nodiscard]] core::CaretShape passive_shape(core::EditMode mode) noexcept
+{
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return core::CaretShape::bar;
+    case core::EditMode::vim:
+        return core::CaretShape::block;
+    }
+    std::unreachable();
 }
 
 [[nodiscard]] core::SelectionSpan displayed(const core::DisplayLine &line,
@@ -950,41 +967,55 @@ void Direct2DRenderer::draw_line_selection(const application::EditorFrame &frame
         D2D1::RectF(x, top, x + mark, top + static_cast<float>(body_line_height_)), brush_.Get());
 }
 
+std::optional<core::LayoutRect> Direct2DRenderer::bar_of(IDWriteTextLayout *text,
+                                                         const core::LayoutRect &area,
+                                                         UINT32 position,
+                                                         core::CaretAffinity affinity)
+{
+    const auto point = text_layout_point(text, position, affinity);
+    if (!point)
+    {
+        text_failure_ = RenderFailure::directwrite;
+        return std::nullopt;
+    }
+    const auto inset = core::to_pixels(caret_inset_dips, dpi_);
+    const auto left = area.left + static_cast<std::int32_t>(point.value().x);
+    const auto top = area.top + static_cast<std::int32_t>(point.value().y);
+    return core::LayoutRect{left, top + inset, left + caret_width_,
+                            top + body_line_height_ - inset};
+}
+
 void Direct2DRenderer::draw_bar_caret(const application::EditorFrame &frame,
                                       IDWriteTextLayout *text, const core::LayoutRect &area,
                                       UINT32 position)
 {
     const auto affinity =
         frame.composition.has_value() ? core::CaretAffinity::leading : frame.caret.affinity;
-    const auto point = text_layout_point(text, position, affinity);
-    if (!point)
+    const auto bar = bar_of(text, area, position, affinity);
+    if (!bar.has_value())
     {
-        text_failure_ = RenderFailure::directwrite;
         return;
     }
-    const auto inset = core::to_pixels(caret_inset_dips, dpi_);
-    const auto left = area.left + static_cast<std::int32_t>(point.value().x);
-    const auto top = area.top + static_cast<std::int32_t>(point.value().y);
-    const core::LayoutRect bar{left, top + inset, left + caret_width_,
-                               top + body_line_height_ - inset};
-    fill(bar, frame.palette.accent);
-    caret_rectangle_ = RECT{bar.left, bar.top, bar.right, bar.bottom};
+    const auto &shown = bar.value();
+    fill(shown, frame.palette.accent);
+    caret_rectangle_ = RECT{shown.left, shown.top, shown.right, shown.bottom};
 }
 
-void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
-                                        IDWriteTextLayout *text, const core::LayoutRect &area,
-                                        const application::LineView &shown)
+std::optional<std::vector<DWRITE_HIT_TEST_METRICS>>
+Direct2DRenderer::block_runs(IDWriteTextLayout *text, const core::LayoutRect &area,
+                             const application::LineView &shown,
+                             const application::CaretView &caret)
 {
     const auto &line = shown.display;
-    const auto column = windowed_column(frame, shown);
+    const auto column = windowed_column(caret, shown);
     LineUtf16Evaluation positions(line.text);
     const auto begin = positions.units_of(displayed(line, column));
     const auto end = positions.units_of(displayed(line, core::Column{column.value + 1}));
-    const auto point = text_layout_point(text, begin, frame.caret.affinity);
+    const auto point = text_layout_point(text, begin, caret.affinity);
     if (!point)
     {
         text_failure_ = RenderFailure::directwrite;
-        return;
+        return std::nullopt;
     }
     auto runs = runs_of(text, area, DWRITE_TEXT_RANGE{begin, end - begin});
     if (runs.empty())
@@ -996,6 +1027,19 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
         empty.height = static_cast<float>(body_line_height_);
         runs.push_back(empty);
     }
+    return runs;
+}
+
+void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
+                                        IDWriteTextLayout *text, const core::LayoutRect &area,
+                                        const application::LineView &shown)
+{
+    const auto made = block_runs(text, area, shown, frame.caret);
+    if (!made.has_value())
+    {
+        return;
+    }
+    const auto &runs = made.value();
     const auto &first = runs.front();
     caret_rectangle_ = RECT{static_cast<LONG>(first.left), static_cast<LONG>(first.top),
                             static_cast<LONG>(first.left + first.width),
@@ -1023,13 +1067,52 @@ void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWrite
     {
     case core::CaretShape::bar:
         draw_bar_caret(frame, text, area,
-                       positions.units_of(displayed(line, windowed_column(frame, shown))));
+                       positions.units_of(displayed(line, windowed_column(frame.caret, shown))));
         return;
     case core::CaretShape::block:
         draw_block_caret(frame, text, area, shown);
         return;
     }
     std::unreachable();
+}
+
+// もう 1 つの枠の印（採用案の案 A）。色は呼び手が muted に置く。縦棒は操作中と同じ寸法、ブロックは
+// 操作中と同じ範囲（block_runs）を 1 DIP の枠線で囲み、中は塗らない。IME の候補窓の位置
+// （caret_rectangle_）は書かない（ADR 0148 の決定 10）。
+void Direct2DRenderer::draw_passive_caret(IDWriteTextLayout *text, const core::LayoutRect &area,
+                                          const application::LineView &shown,
+                                          const application::CaretView &caret)
+{
+    switch (caret.shape)
+    {
+    case core::CaretShape::bar:
+    {
+        // 位置を引けなければ空の矩形（何も塗らない）。
+        LineUtf16Evaluation positions(shown.display.text);
+        const auto column = displayed(shown.display, windowed_column(caret, shown));
+        const auto bar = bar_of(text, area, positions.units_of(column), caret.affinity);
+        context_->FillRectangle(to_rect(bar.value_or(core::LayoutRect{})), brush_.Get());
+        return;
+    }
+    case core::CaretShape::block:
+        outline_block(block_runs(text, area, shown, caret));
+        return;
+    }
+    std::unreachable();
+}
+
+void Direct2DRenderer::outline_block(
+    const std::optional<std::vector<DWRITE_HIT_TEST_METRICS>> &runs)
+{
+    const float stroke = scaled(1.0F);
+    const float inset = stroke / 2.0F;
+    for (const auto &run : runs.value_or(std::vector<DWRITE_HIT_TEST_METRICS>{}))
+    {
+        context_->DrawRectangle(D2D1::RectF(run.left + inset, run.top + inset,
+                                            run.left + run.width - inset,
+                                            run.top + run.height - inset),
+                                brush_.Get(), stroke);
+    }
 }
 
 // 置き換えの描き直しは BodyTextPainter の 1 本（保持した字形 run から切り抜きと描く run
@@ -1120,11 +1203,11 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     draw_bar_caret(frame, text.Get(), area, positions.units_of(shown.cursor));
 }
 
-void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
-                                       const core::BodyLayout &body, const core::LayoutRect &area,
+void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, const BodyPane &pane,
+                                       const core::LayoutRect &area,
                                        const application::LineView &line)
 {
-    const auto text = layout_of(line.display.text, body, frame.settings, line.window);
+    const auto text = layout_of(line.display.text, pane.body, frame.settings, line.window);
     if (!text)
     {
         return;
@@ -1139,21 +1222,38 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame,
     draw_body_text(text.Get(), area);
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_current_match(frame, text.Get(), area, line);
-    if (line.number == frame.caret.position.line && !frame.command_line.has_value())
+    if (line.number != pane.caret.position.line)
     {
-        draw_caret(frame, text.Get(), area, line);
+        return;
     }
+    switch (pane.role)
+    {
+    case PaneRole::active:
+        if (!frame.command_line.has_value())
+        {
+            draw_caret(frame, text.Get(), area, line);
+        }
+        return;
+    case PaneRole::passive:
+        brush_->SetColor(to_color(frame.palette.muted));
+        draw_passive_caret(text.Get(), area, line, pane.caret);
+        return;
+    }
+    std::unreachable();
 }
 
-void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
-                                 const core::BodyLayout &body, std::size_t index)
+// 現在行の面と行番号の強調は操作中の枠だけ（採用案の案 A）。もう 1 つの枠は同じ関数を通り、
+// キャレットの印だけを受け身で描く（ADR 0148 の決定 8）。
+void Direct2DRenderer::draw_line(const application::EditorFrame &frame, const BodyPane &pane,
+                                 const application::LineView &line)
 {
-    const auto &line = frame.lines.at(index);
+    const auto &body = pane.body;
     const auto top = row_pixel(body, line.screen_row);
     const auto bottom =
         row_pixel(body, line.screen_row + static_cast<std::int64_t>(line.screen_rows));
     const core::LayoutRect row{body.gutter.right, top, body.content.right, bottom};
-    if (line.number == frame.caret.position.line)
+    const bool current = pane.role == PaneRole::active && line.number == pane.caret.position.line;
+    if (current)
     {
         fill(row, frame.palette.current_line);
     }
@@ -1161,8 +1261,7 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
     write_gutter(std::to_string(line.number.value),
                  core::LayoutRect{body.gutter.left, top, body.gutter.right - padding,
                                   top + body.line_height},
-                 line.number == frame.caret.position.line ? frame.palette.text
-                                                          : frame.palette.gutter);
+                 current ? frame.palette.text : frame.palette.gutter);
     // 巨大な行の印は行番号の隣の 1 文字（ADR 0139 の決定 2）。行番号の右の余白に置く。
     if (line.window.active)
     {
@@ -1183,7 +1282,7 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame,
     }
     if (!line.composed.has_value())
     {
-        draw_plain_line(frame, body, area, line);
+        draw_plain_line(frame, pane, area, line);
     }
     context_->PopAxisAlignedClip();
 }
@@ -1196,13 +1295,13 @@ std::int32_t Direct2DRenderer::gutter_padding(const core::EditorSettings &settin
                            dpi_);
 }
 
-void Direct2DRenderer::draw_grid_rows(const application::EditorFrame &frame,
-                                      const core::BodyLayout &body)
+void Direct2DRenderer::draw_grid_rows(const application::EditorFrame &frame, const BodyPane &pane)
 {
-    if (frame.grid.empty())
+    if (pane.grid.empty())
     {
         return;
     }
+    const auto &body = pane.body;
     const core::TextViewGeometry geometry{std::max(core::width_of(body.content), 1),
                                           body.line_height, dpi_};
     const auto cell = body_text_.cell(
@@ -1214,20 +1313,23 @@ void Direct2DRenderer::draw_grid_rows(const application::EditorFrame &frame,
     }
     grid_cell_ = cell.value().width;
     GridPainter painter(*context_.Get(), brush_.Get(), body_text_, text_failure_);
-    for (const auto &row : frame.grid)
+    for (const auto &row : pane.grid)
     {
-        draw_grid_row(painter, frame, body, row);
+        draw_grid_row(painter, frame, pane, row);
     }
 }
 
-// 行番号は行の最初の画面行だけ。キャレットの行は画面行ごとに current_line で塗る。
+// 行番号は行の最初の画面行だけ。キャレットの行は画面行ごとに current_line で塗る（操作中の枠
+// だけ）。もう 1 つの枠は変換を差し込まず、入力行が開いていても受け身の印を描く。
 void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::EditorFrame &frame,
-                                     const core::BodyLayout &body,
-                                     const application::GridRowView &row)
+                                     const BodyPane &pane, const application::GridRowView &row)
 {
+    const auto &body = pane.body;
     const auto top = row_pixel(body, row.screen_row);
     const auto bottom = top + body.line_height;
-    const bool current = row.number == frame.caret.position.line;
+    const bool active = pane.role == PaneRole::active;
+    const bool current = active && row.number == pane.caret.position.line;
+    const std::optional<application::CompositionView> no_composition;
     if (current)
     {
         fill(core::LayoutRect{body.gutter.right, top, body.content.right, bottom},
@@ -1246,20 +1348,21 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
         frame.settings,
         core::TextViewGeometry{std::max(core::width_of(body.content), 1), body.line_height, dpi_},
         frame.palette,
-        frame.caret.shape,
-        !frame.command_line.has_value(),
-        frame.composition,
+        pane.caret.shape,
+        !active || !frame.command_line.has_value(),
+        active ? frame.composition : no_composition,
         caret_width_,
         core::to_pixels(caret_inset_dips, dpi_),
         core::to_pixels(newline_mark_dips, dpi_),
         static_cast<float>(core::to_pixels(block_radius_dips, dpi_)),
         core::to_pixels(target_underline_dips, dpi_),
         core::to_pixels(other_underline_dips, dpi_),
-        scaled(1.0F)};
+        scaled(1.0F),
+        pane.role};
     context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
     const auto caret = painter.draw(row, canvas);
     context_->PopAxisAlignedClip();
-    if (caret.has_value())
+    if (caret.has_value() && active)
     {
         caret_rectangle_ = caret.value();
     }
@@ -1268,8 +1371,43 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
 void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
                                  const core::BodyLayout &body)
 {
+    draw_pane(frame, BodyPane{body, frame.lines, frame.grid, frame.caret, PaneRole::active});
+}
+
+// もう 1 つの枠と境界（ADR 0148 の決定 8・採用案の案 A）。境界は panel_border の 1 本。frame に
+// もう 1 つの枠が載らない間（見つからない文書）も、その側の帯は背景で塗る。
+void Direct2DRenderer::draw_other_body(const application::EditorFrame &frame,
+                                       const core::PaneLayouts &panes)
+{
+    if (panes.divider.has_value())
+    {
+        fill(panes.divider.value(), frame.palette.panel_border);
+    }
+    const auto layout = core::other_pane_layout(panes, frame.active_side);
+    if (!layout.has_value())
+    {
+        return;
+    }
+    if (!frame.other.has_value())
+    {
+        draw_pane(frame, BodyPane{layout.value(), {}, {}, frame.caret, PaneRole::passive});
+        return;
+    }
+    const auto &other = frame.other.value();
+    const application::CaretView caret{other.caret.position, passive_shape(frame.mode),
+                                       other.caret.affinity};
+    draw_pane(frame, BodyPane{layout.value(), other.lines, other.grid, caret, PaneRole::passive});
+}
+
+// 1 つの枠の本文。body_top_ / body_bottom_ は描いている枠の本文の上下（字形 run の間引き）で、
+// 描き終えたら戻す。
+void Direct2DRenderer::draw_pane(const application::EditorFrame &frame, const BodyPane &pane)
+{
+    const auto &body = pane.body;
     fill(body.band, frame.palette.background);
-    fill(body.gutter, frame.palette.gutter_background);
+    // 行番号の列の地は帯の上端から下端まで塗る（本文の上の余白も gutter の色・#794）。
+    fill(core::LayoutRect{body.gutter.left, body.band.top, body.gutter.right, body.band.bottom},
+         frame.palette.gutter_background);
     caret_width_ = body.caret_width;
     body_line_height_ = body.line_height;
     // 問いの答えを待つ間は本文を描かない（ADR 0140 の決定 2・判定はここの 1 か所）。
@@ -1282,11 +1420,11 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
     body_top_ = body.content.top;
     body_bottom_ = body.content.bottom;
     context_->PushAxisAlignedClip(to_rect(visible), D2D1_ANTIALIAS_MODE_ALIASED);
-    for (std::size_t index = 0; index < frame.lines.size(); ++index)
+    for (const auto &line : pane.lines)
     {
-        draw_line(frame, body, index);
+        draw_line(frame, pane, line);
     }
-    draw_grid_rows(frame, body);
+    draw_grid_rows(frame, pane);
     context_->PopAxisAlignedClip();
     body_top_ = std::numeric_limits<std::int32_t>::min();
     body_bottom_ = std::numeric_limits<std::int32_t>::max();
@@ -1787,10 +1925,13 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto height = static_cast<std::int32_t>(size.height);
     const auto title = core::title_bar_layout(application::title_bar_input(frame, width, dpi_));
     const auto status = core::status_bar_layout(width, height, dpi_);
-    const auto body = core::body_layout(width, height, dpi_, frame.settings.font_size);
+    const auto panes = core::pane_layouts(core::LayoutRect{0, 0, width, height}, dpi_,
+                                          frame.settings.font_size, frame.layout);
+    const auto body = core::active_pane_layout(panes, frame.active_side);
     const auto guide = core::operation_guide_layout(frame.guide.context, body, status, dpi_);
     draw_title_bar(frame, title);
     draw_body(frame, body);
+    draw_other_body(frame, panes);
     draw_body_guide(frame, guide);
     draw_status_bar(frame, status);
     draw_status_guide(frame, guide);

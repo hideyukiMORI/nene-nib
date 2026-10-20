@@ -1,8 +1,10 @@
 #pragma once
 
 #include "BodyTextPainter.hpp"
+#include "CaretShape.hpp"
 #include "GridRowCanvas.hpp"
 #include "GridRowView.hpp"
+#include "PaneRole.hpp"
 #include "RenderFailure.hpp"
 #include "RgbaColor.hpp"
 #include "TextLayoutRequest.hpp"
@@ -64,7 +66,15 @@ template <typename Target, typename Layouts> class GridRowPainter final
         {
             return std::nullopt;
         }
-        return draw_caret(layout, caret.value(), row.composed_at.has_value(), canvas);
+        switch (canvas.role)
+        {
+        case PaneRole::active:
+            return draw_caret(layout, caret.value(), row.composed_at.has_value(), canvas);
+        case PaneRole::passive:
+            draw_passive_caret(caret.value(), canvas);
+            return std::nullopt;
+        }
+        std::unreachable();
     }
 
     // 升の範囲の矩形（物理画素）。行の上端から行の高さ。
@@ -134,6 +144,12 @@ template <typename Target, typename Layouts> class GridRowPainter final
     void outline(const GridRowCanvas &canvas, application::GridCellSpan span)
     {
         color(canvas.palette.accent);
+        frame(canvas, span);
+    }
+
+    // 升の範囲を stroke の枠線で囲む。色は呼び手が置く。
+    void frame(const GridRowCanvas &canvas, application::GridCellSpan span)
+    {
         const float inset = canvas.stroke / 2.0F;
         auto box = rectangle(canvas, span);
         box = D2D1::RectF(box.left + inset, box.top + inset, box.right - inset, box.bottom - inset);
@@ -211,6 +227,30 @@ template <typename Target, typename Layouts> class GridRowPainter final
         color(canvas.palette.on_accent);
         draw_text(layout, canvas, box);
         return rect_of(box);
+    }
+
+    // もう 1 つの枠の印（ADR 0148 の決定 8・採用案の案 A）。muted の縦棒か、升の範囲の中空の枠。
+    // 字は描き直さない。IME の候補窓の位置にはしない（呼び手へ返さない）。
+    void draw_passive_caret(application::GridCellSpan caret, const GridRowCanvas &canvas)
+    {
+        color(canvas.palette.muted);
+        switch (canvas.shape)
+        {
+        case core::CaretShape::bar:
+        {
+            const auto box = rectangle(canvas, caret);
+            target_.FillRectangle(D2D1::RectF(box.left,
+                                              box.top + static_cast<float>(canvas.caret_inset),
+                                              box.left + static_cast<float>(canvas.caret_width),
+                                              box.bottom - static_cast<float>(canvas.caret_inset)),
+                                  brush_);
+            return;
+        }
+        case core::CaretShape::block:
+            frame(canvas, caret);
+            return;
+        }
+        std::unreachable();
     }
 
     [[nodiscard]] static RECT rect_of(D2D1_RECT_F box) noexcept

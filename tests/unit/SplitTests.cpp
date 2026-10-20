@@ -54,6 +54,8 @@
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
+#include "VimKey.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
@@ -243,6 +245,28 @@ void verify_pane_layouts_vertical()
             check_vertical(width, dpi);
         }
     }
+}
+
+// 操作中の枠ともう 1 つの枠の配置は側で引く（#683・描画と窓とマウスが同じ 1 本）。1 枠では
+// どちらの側でも first で、もう 1 つの枠は無い。
+void verify_pane_layout_sides()
+{
+    const core::LayoutRect client{0, 0, 1000, 700};
+    const auto font = core::default_font_size();
+    const auto one = core::pane_layouts(client, 96U, font, SplitLayout::none);
+    expect(core::active_pane_layout(one, PaneSide::second).band == one.first.band &&
+               !core::other_pane_layout(one, PaneSide::first).has_value(),
+           "one pane: the operated pane is first on either side and there is no other pane");
+    const auto two = core::pane_layouts(client, 96U, font, SplitLayout::vertical);
+    const auto other_of_first = core::other_pane_layout(two, PaneSide::first);
+    const auto other_of_second = core::other_pane_layout(two, PaneSide::second);
+    expect(
+        two.second.has_value() &&
+            core::active_pane_layout(two, PaneSide::first).band == two.first.band &&
+            core::active_pane_layout(two, PaneSide::second).band == two.second.value().band &&
+            other_of_first.has_value() && other_of_first.value().band == two.second.value().band &&
+            other_of_second.has_value() && other_of_second.value().band == two.first.band,
+        "two panes: the operated pane is on its side and the other pane is on the opposite side");
 }
 
 void check_horizontal(std::int32_t height, std::uint32_t dpi)
@@ -914,6 +938,45 @@ void verify_pane_intents_in_tables()
         app::MoveCaret{core::CaretMotion::previous_line, core::SelectionAnchoring::collapse});
     expect(caret_at(kept, 1, 7), "ScrollPane keeps the wanted horizontal position");
 }
+// 14. Vim の `Ctrl-w` は枠の鍵と同じ意図（ADR 0148 の決定 6・7・#683）。2 打鍵目は 1 文字。
+EditorFrame window_command(app::EditorController &controller, std::string_view second)
+{
+    static_cast<void>(controller.press_vim_key(core::VimKey{core::VimSpecialKey::control_w}));
+    return controller.press_vim_keys(vim_keys_of(second));
+}
+
+void verify_vim_window_commands()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    const EditorFrame lone = window_command(controller, "w");
+    expect(lone.layout == SplitLayout::none && !lone.other.has_value(),
+           "Ctrl-w w on one pane does nothing");
+    const EditorFrame kept = window_command(controller, "c");
+    expect(kept.layout == SplitLayout::none && !kept.closing && kept.tabs.size() == 1,
+           "Ctrl-w c on one pane does nothing (the window stays)");
+    const EditorFrame vertical = window_command(controller, "v");
+    expect(vertical.layout == SplitLayout::vertical && vertical.active_side == PaneSide::first &&
+               vertical.other.has_value(),
+           "Ctrl-w v splits left and right");
+    expect(window_command(controller, "l").active_side == PaneSide::second &&
+               window_command(controller, "k").active_side == PaneSide::first,
+           "Ctrl-w l and Ctrl-w k both move to the only neighbour");
+    const EditorFrame again = window_command(controller, "s");
+    expect(again.layout == SplitLayout::vertical && message_of(again) == "もう分かれています",
+           "Ctrl-w s on two panes keeps the panes and says so");
+    applied(controller, place(2, 1));
+    const EditorFrame closed = window_command(controller, "c");
+    expect(closed.layout == SplitLayout::none && caret_at(closed, 1, 1) && !closed.closing,
+           "Ctrl-w c closes the operated pane and leaves the other pane operated");
+    const EditorFrame horizontal = window_command(controller, "s");
+    applied(controller, place(2, 2));
+    const EditorFrame only = window_command(controller, "o");
+    expect(horizontal.layout == SplitLayout::horizontal && only.layout == SplitLayout::none &&
+               caret_at(only, 2, 2),
+           "Ctrl-w s splits top and bottom and Ctrl-w o closes the other pane");
+}
 } // namespace
 
 void verify_split_contracts()
@@ -921,6 +984,7 @@ void verify_split_contracts()
     verify_pane_layouts_none();
     verify_pane_layouts_vertical();
     verify_pane_layouts_horizontal();
+    verify_pane_layout_sides();
     verify_offset_after_edit();
     verify_split_shows_same_document();
     verify_active_side();
@@ -946,6 +1010,7 @@ void verify_split_contracts()
     verify_open_into_blank_restarts_other();
     verify_split_quiet_paths();
     verify_pane_intents_in_tables();
+    verify_vim_window_commands();
 }
 
 void verify_split_scope()

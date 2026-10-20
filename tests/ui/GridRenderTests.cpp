@@ -11,6 +11,7 @@
 
 #include "EditorSettings.hpp"
 #include "GridRowView.hpp"
+#include "PaneRole.hpp"
 #include "RenderFailure.hpp"
 
 #include <algorithm>
@@ -88,7 +89,34 @@ std::optional<RECT> painted(Painter &painter, const app::GridRowView &row, float
                                       1.0F,
                                       2,
                                       1,
-                                      1.0F};
+                                      1.0F,
+                                      win32::PaneRole::active};
+    return painter.draw(row, canvas);
+}
+
+// もう 1 つの枠の 1 行（ADR 0148 の決定 8）。shape は受け身の印の形（通常は縦棒・Vim はブロック）。
+std::optional<RECT> painted_passive(Painter &painter, const app::GridRowView &row, float cell,
+                                    core::CaretShape shape)
+{
+    const auto settings = core::default_editor_settings();
+    const auto theme = core::selected_theme(settings, core::Appearance::dark);
+    const std::optional<app::CompositionView> composition;
+    const win32::GridRowCanvas canvas{core::LayoutRect{0, 0, geometry.width, row_height},
+                                      cell,
+                                      settings,
+                                      geometry,
+                                      theme.ui,
+                                      shape,
+                                      true,
+                                      composition,
+                                      2,
+                                      2,
+                                      6,
+                                      1.0F,
+                                      2,
+                                      1,
+                                      1.0F,
+                                      win32::PaneRole::passive};
     return painter.draw(row, canvas);
 }
 
@@ -230,6 +258,37 @@ void verify_block_caret(win32::BodyTextLayouts &layouts, float cell,
                close_to(target.fills().front().right, 3 * cell),
            "the block caret on a wide character covers its two cells");
 }
+
+// もう 1 つの枠の印（採用案の案 A）。Vim は升の範囲の中空の枠で面を塗らず、通常は縦棒。どちらも
+// IME の候補窓の位置にする矩形を返さない（ADR 0148 の決定 10）。
+void verify_passive_caret(win32::BodyTextLayouts &layouts, float cell)
+{
+    auto row = row_of(0,
+                      "aæ¥"
+                      "b",
+                      {0, 1, 3, 4});
+    row.caret = app::GridCellSpan{1, 3};
+    {
+        CountingTarget target;
+        GridCountingLayouts counting(layouts);
+        std::optional<win32::RenderFailure> failure;
+        Painter painter(target, nullptr, counting, failure);
+        const auto caret = painted_passive(painter, row, cell, core::CaretShape::block);
+        expect(!caret.has_value() && target.fills().empty() && target.outlines().size() == 1 &&
+                   target.outlines().front().left < 2 * cell &&
+                   target.outlines().front().right > 2 * cell,
+               "the passive block caret outlines its cells without filling them");
+    }
+    CountingTarget target;
+    GridCountingLayouts counting(layouts);
+    std::optional<win32::RenderFailure> failure;
+    Painter painter(target, nullptr, counting, failure);
+    const auto caret = painted_passive(painter, row, cell, core::CaretShape::bar);
+    expect(!caret.has_value() && target.fills().size() == 1 && target.outlines().empty() &&
+               close_to(target.fills().front().left, cell) &&
+               close_to(target.fills().front().right, cell + 2),
+           "the passive bar caret is a thin bar at the left edge of its cell");
+}
 } // namespace
 
 void verify_grid_render()
@@ -249,5 +308,6 @@ void verify_grid_render()
     verify_cell_positions(layouts, width);
     verify_crossing_match(layouts, width, settings);
     verify_block_caret(layouts, width, settings);
+    verify_passive_caret(layouts, width);
 }
 } // namespace nenenib::tests::ui

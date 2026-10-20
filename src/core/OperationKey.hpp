@@ -18,10 +18,13 @@ enum class OperationKey : std::uint8_t
     y,
     f1,
     f4,
+    f6,
     tab,
     plus,
     minus,
     zero,
-    space
+    space,
+    // `\`（JIS の ¥ と ろ の 2 つの物理キーを ui が同じ値に写す・ADR 0148 の決定 6）。
+    backslash
 };
 } // namespace nenenib::core

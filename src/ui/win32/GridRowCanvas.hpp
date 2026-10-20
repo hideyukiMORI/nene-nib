@@ -5,6 +5,7 @@
 #include "EditorSettings.hpp"
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
+#include "PaneRole.hpp"
 #include "TextViewGeometry.hpp"
 
 #include <cstdint>
@@ -33,5 +34,9 @@ struct GridRowCanvas
     std::int32_t target_underline;
     std::int32_t other_underline;
     float stroke;
+    // 描く枠が操作中か（ADR 0148 の決定 8）。passive ならキャレットは shape
+    // の受け身の印（muted）で、 描いた矩形を返さない。既定値は置かない（書き忘れを
+    // 「操作中」に落とさない）。
+    PaneRole role;
 };
 } // namespace nenenib::ui::win32
