@@ -38,7 +38,7 @@
 | --- | --- | --- | --- |
 | M-1 | 置き場は split の other の枠でよいか | はい（§0） | 段 4 の形。いいえなら (b) 別窓 か (c) `DisplayForm` を比較し直す |
 | M-2 | 初版の構文は範囲案の 8 つで止め、表・打ち消し・タスクリストは後続でよいか | はい | 段 2 の型（`PreviewBlockKind` の値）と段 3 の描画 |
-| M-3 | プレビューの上限の大きさと、超えたときの扱い | **段 2 の probe で測ってから決める**。仮の値は 8 MiB で、超えたら「プレビューは 8 MiB までです」と 1 行知らせて枠は空のまま | 段 5 の知らせ・契約 |
+| M-3 | プレビューの上限の大きさと、超えたときの扱い | **仮の値は 16 MiB**（probe: 16 MiB の普通の Markdown の `md_parse` は中央値 63.8 ms・約 251 MB/s。`PreviewBlock` の組み立てを足しても 2〜3 倍と推測）。超えたら「プレビューは 16 MiB までです」と 1 行知らせて枠は空のまま。段 2 の probe（組み立て込み）で確定する | 段 5 の知らせ・契約 |
 | M-4 | 更新の待ち（打鍵が止まってから何 ms で parse を出すか） | **200 ms**（ui のタイマー・`AutosaveTick` と同じ合図の形の意図 `PreviewTick`） | 段 5 のタイマー。短いほど worker を占める |
 | M-5 | リンクは下線と色だけで開かないでよいか | はい（開くのは後続・`ShellExecute` は adapters・確認の UI が要る） | 段 3 の描画 |
 | M-6 | 見出し・コード・リンク・引用の色を `SyntaxPalette` の役割に当てる採用案 | 段 3 で `/design` の案を 3 つ出して選んでもらう（仮: 見出し = keyword・コード = string・リンク = function・引用 = comment・水平線 = `panel_border`） | 段 3 の採用案 `docs/design/` |
@@ -53,7 +53,8 @@
 - clang-tidy は `CMAKE_CXX_CLANG_TIDY` だけなので C の target に掛からない。`md4c.h` を include するのは core の 1 ファイル（`MarkdownParse.cpp`）だけで、`SYSTEM` の include で受けて `HeaderFilterRegex '.*'` から外す（段 1 で実測して確かめる）。
 - SHA-256 の照合は CNF の新規則（`eng/conformance-rules.json` に 3 ファイルの値）と `tests/conformance` の正例・反例。`eng/symbol-allowlist.json` に `third_party/md4c` のモジュールの欄（`malloc` `realloc` `free` `qsort` `memcpy` など md4c の未定義は md4c の lib のもので、core の許可は崩さない）。
 - `THIRD_PARTY_NOTICES.txt`（リポジトリ直下・`eng/package-release.py` で ZIP に入る）に md4c の節（名前・tag・commit・URL・MIT 全文）。`eng/test-package-release.py` が中身を照合しているかを段 1 で確かめる。
-- 今の LLVM（`eng/tool-versions.json`）で `/W4 /WX` 0 件を再測する（ADR 0003 の 0 件は Phase 0 の実測）。
+- 今の LLVM（`eng/tool-versions.json`）で `/W4 /WX` 0 件を再測する（ADR 0003 の 0 件は Phase 0 の実測）→ **0 件**（clang-cl 19.1.5・probe §2。厳格集合のうち C に通るものを当てると 64 件: sign-conversion 44・cast-qual 11・implicit-int-conversion 5・switch-enum 4）。
+- SHA-256 の照合は**改行の形を先に固定する**。ADR 0003 の値（`CFB0B3D7…2DE72` ほか）は `core.autocrlf=true` の作業ツリー（CRLF）の値で、git の blob（LF）の値は別（`52e39843…c4590` / `4efd19bf…859f18` / `d3093736…9d5d0fc`・[probe](../quality/md4c-probe-2026-10-21.md) §1）。段 1 の ADR で `.gitattributes` に `third_party/md4c/** -text` を置き（上流のバイト列そのまま）、照合は LF の値にして ADR 0003 の値を追記で改める（設計席の推し。`eol=crlf` で ADR 0003 の値を保つ案は、上流と一致しないバイト列を正本にするので採らない）
 
 ### 3.2 core の parse（段 2）
 
@@ -111,15 +112,15 @@ Issue は段ごとに 1 本（親 Issue 1 本の下に 6 本）。段 1 は「md
 | 対象 | 方法 |
 | --- | --- |
 | 取り込み | `/W4 /WX` 0 件・CNF の SHA 照合の正例・反例・symbols の allowlist・`check.ps1 -Full`（外部コードを足すので全件の理由がある） |
-| parse | 単体テスト（CommonMark の例・`source_begin`・打ち切り）・16 MiB の probe の値を記録 |
+| parse | 単体テスト（CommonMark の例・`source_begin`・打ち切り）・16 MiB の probe の値を記録（2026-10-21 の probe: `/W4 /WX /utf-8 /std:c17` で 0 件・16 MiB 63.8 ms・[記録](../quality/md4c-probe-2026-10-21.md)） |
 | 描画 | `verify-window.py --capture` の PNG（見出し・強調・コード・引用・リスト・リンク・水平線の 1 文書）・DPI 2 段 |
 | 置き場 | 契約 `--preview`（開く・閉じる・F6 の飛ばし・同期・古い券の破棄）・`--background-work`（`WorkCompleted` が歩きを切らない） |
 | 速さ | 既存 8 本に退行なし（単打・長い行・16 MiB 連打は Markdown の文書でも測る）・プレビュー更新までの時間を別に記録（ロードマップの表）。採用は D41 |
 
 ## 6. 残る不確かさ
 
-- md4c の `MD_TEXT_NORMAL` の pointer が入力を指すか（段 2 で確かめる）。
-- 16 MiB の parse の実時間（公称なし）。M-3 の上限はこの値で決める。
+- ~~md4c の `MD_TEXT_NORMAL` の pointer が入力を指すか~~ → **指す**（probe §4: NORMAL と ENTITY は 3 文書すべてで入力の中・外は 0 件。BR・SOFTBR・NULLCHAR と CODE / HTML の行末の `"\n"` と字下げは md4c の固定の文字列）。`source_begin` は NORMAL / ENTITY の最初の pointer から引き、固定の文字列の種類は除く。
+- ~~16 MiB の parse の実時間~~ → **63.8 ms**（普通の Markdown・段落だけは 19.7 ms・1 MiB は 3.8 ms・コールバックは数えるだけ・/O2）。M-3 の仮の値 16 MiB の根拠。組み立て込みの値は段 2 で測る
 - DirectWrite で range ごとに字の大きさを変えたときの行高（段 3 で実測）。
 - worker 1 本を数百 ms 占める間、自動退避とフォルダの列挙が待つ。打ち切りで短くするが、上限（M-3）が効く。
 - `AddChunk` は末尾の chunk を伸ばすので、worker が piece を直接読むのは危ない → 連続の写しを UI スレッドで作る（段 2 の形で閉じる）。
