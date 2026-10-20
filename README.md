@@ -45,13 +45,14 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
 - **FR-002 ordinary editing** — piece table, multi-line, scrolling, selection, Ctrl+C/X/V, Ctrl+Z/Y, click to place the caret and drag to select (including reverse selection and scrolling outside the body). Arrow keys and Delete group combining accents, Japanese voicing marks and common variation selectors; Backspace removes accents individually and a selector with its preceding code point. Complex emoji and language-specific grapheme rules remain outside this first stage ([ADR 0065](docs/adr/0065-ordinary-combining-character-boundaries.md)).
 - **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 1853 oracle-generated
   fixtures in `tests/vim/` are checked by CTest, with another 78 fixtures for wrapped viewport movement. Implemented: `h j k l 0 $ ^ w b e W B E ge gE gg G` (a character includes its combining marks), Home / End,
-  `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x X r`, `d c y` + motion, `dd cc yy`,
+  `f F t T ; ,`, `H M L`, Ctrl-d/u/f/b, PgUp / PgDn, counts (operator × motion), `x X r`, `d c y` + motion, `dd cc yy`, `J gJ`, `~ g~ gu gU` (ASCII letters; also
+  VISUAL `~ u U`), `> <` (shiftwidth 8, noexpandtab; VISUAL counts),
   `D C Y`, `p P` with typed registers (unnamed, named `"a`-`"z` / `"A`-`"Z`, numbered `"0`-`"9`, small delete `"-`,
   black hole `"_`, clipboard `"+` `"*`), macros `q @ @@`, `i a I A o O` with counts, `.` (also in VISUAL), text objects
   `iw aw iW aW i" a" i' a' i( a( i{ a{ i[ a[ i< a<` and the backtick pair (`b` / `B` aliases), search `/ ? n N * #`
   with `hlsearch` and `incsearch` on by default (`:noh`, `:set (no)hlsearch`, `:set (no)incsearch`, Ctrl-G / Ctrl-T), virtual columns (Tab = 8, wide = 2), `u` / Ctrl-r,
   `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, block `p P`, `.`), literal CR in LF files, Esc everywhere.
-  Not yet: `it ip is`, `:s :g`, read-only registers, `J s S R`, `> < gu gU`, autoindent,
+  Not yet: `:s :g`, read-only registers, `s S R`, blockwise `~ u U > <`, Unicode case mapping, autoindent,
   Vim drag-to-select, `gj gk g0 g$`, block `I A c C`, further Ex commands (ranges, pipes, history, forced overwrite).
   Basic Ex `:w`, `:q`, `:q!`, `:wq` and `:x` work on the current tab. `:q` refuses unsaved changes;
   `:wq` always writes, while `:x` writes only changes. These saves accept filenames: `:w name` names an
