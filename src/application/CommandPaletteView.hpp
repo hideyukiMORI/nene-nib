@@ -11,8 +11,9 @@ namespace nenenib::application
 {
 struct CommandPaletteView
 {
-    // 絞り込みの結果の窓（ADR 0062 の決定 2・3）。rows の i 番目は結果の全体の first + i 番目で、
-    // 件数は core::palette_row_limit を越えない。ui が描く行は必ずこの窓に入る。
+    // 絞り込みの結果の窓（ADR 0062 の決定 2・3・ADR 0150 の決定 1）。rows の i 番目は結果の全体の
+    // first + i 番目で、件数は面の見えている行数（core::palette_row_limit を越えない）。first は
+    // 面の状態で、ui の描画とクリックはこの first を読み、計算し直さない。
     std::vector<core::CommandChoice> rows;
     // 窓の先頭・選択の位置・件数は、どれも結果の全体の中の数。
     std::size_t first;

@@ -35,6 +35,7 @@ Ctrl+P の 3 本目の出どころ「同じフォルダ」は、今見ている�
 
 1. **絞り込みの結果を持つ（core）**: `CommandPalette` は、絞り込みの結果を作るのを「入力が変わったとき」と「候補の列が変わったとき」の 1 回だけにし、共有の参照で持つ。`choices()` `selected()` `moved` `selected_at` と frame は、持っている結果を読む（作り直さない）。ファイルの候補の結果は**候補の列の中の位置の列**で持ち、候補の写しを作らない。設定のコマンド（`:`）の結果は今の `palette_choices` の値を同じ形で持つ（件数が小さい）。値は不変で、遅延の計算や書き換えられる欄を持たない。
 2. **frame には見えている行だけ（application）**: `CommandPaletteView` は、全件の代わりに「行の窓（最大 8 行）・窓の先頭の位置・選択の位置（全体の中）・全体の件数・案内」を持つ。8 は core の 1 つの定数で、面の配置（`palette_layout` の上限）と同じ値を読む。窓の先頭は `palette_first_visible` と同じ式を 8 行で計算する（低い窓で見える行が 8 より少ないときも、ui が描く行は必ずこの窓の中にある）。
+   - 追補（2026-10-20・ADR 0150 の決定 1・#707）: 窓の先頭は面の状態 `CommandPalette::first`（規則は core の `list_window_first`）に置き換え、`palette_first_visible` と `palette_window_first` は消した。窓の行数は面の見えている行数（上限 8）。契約 `verify_palette_window_covers_rows` は `list_window_first` の規則の全組の試験に、`verify_palette_view_window` の `first` は「下へ動かすだけなら選択を最下段に置く」値に替わった。
 3. **ui**: 描画は窓の行を読み、hit test と件数の表示（`M / N`）は件数と選択の位置だけを読む（今と同じ見た目・同じ動き）。
 4. ADR 0060 の決定 10 の「必要なたびに作り直す」は、本決定で置き換える。
 

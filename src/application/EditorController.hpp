@@ -181,6 +181,10 @@ class EditorController final
     void accept(const AdjustFontSize &intent);
     void accept(const CommandText &intent);
     void accept(const EditCommand &intent);
+    void accept(const ScrollPaletteList &intent);
+    // 面と `:` の補完の面の見えている行数を窓の寸法に合わせる 1 か所（ADR 0150 の決定 1）。
+    // 意図と鍵を写した後に呼ぶ。行数が同じなら何もしない。
+    void fit_command_rows();
     void accept(const SubmitCommand &);
     void accept(const CancelCommand &);
     void accept(const PasteCommand &);
@@ -314,6 +318,10 @@ class EditorController final
     // アクティブな文書の表示値。frame と一覧の候補が同じ 1 本を使う。
     [[nodiscard]] DocumentView active_document_view() const;
     [[nodiscard]] std::optional<core::InputLineView> command_line_view() const;
+    // 見えている設定（ADR 0150 の決定 4）。焦点の候補の命令を evaluate_ex で評価した配色を保存した
+    // 設定に重ねた値で、保存はしない。焦点が無い・評価できなければ保存した設定。delivery と frame
+    // はこれを読み、保存と Ex の評価の比較元は state_.settings() のまま。
+    [[nodiscard]] core::EditorSettings shown_settings() const;
     // frame の知らせ（ADR 0062 の決定 17）。状態の知らせが先で、無ければ面が開いていて今の券が
     // 打ち切られたときの 1 行。判断はここだけ（ARC-001）。
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
@@ -440,6 +448,9 @@ class EditorController final
     EditorPorts ports_;
     EditorState state_;
     core::TextViewGeometry view_geometry_{};
+    // 窓の client の物理画素（ADR 0150 の決定 1）。0 は寸法が届く前。
+    std::int32_t window_width_ = 0;
+    std::int32_t window_height_ = 0;
     std::optional<TextLayoutFailure> layout_failure_;
     // 頼まれてまだ解決していない追従の位置。後の頼みが前の頼みを置き換える（ADR 0128 の決定 1）。
     std::optional<core::TextPosition> pending_follow_;

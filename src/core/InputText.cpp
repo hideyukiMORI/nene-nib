@@ -50,7 +50,11 @@ InputText edited_input(const InputText &input, CommandEdit edit)
         return next;
     case CommandEdit::complete_next:
     case CommandEdit::complete_previous:
-        // 補完は候補を持つ型だけの動作。文字列とキャレットの規則としては何もしない。
+    case CommandEdit::page_previous:
+    case CommandEdit::page_next:
+    case CommandEdit::list_first:
+    case CommandEdit::list_last:
+        // 補完と一覧の送りは候補を持つ型だけの動作。文字列とキャレットの規則としては何もしない。
         return next;
     }
     std::unreachable();

@@ -14,6 +14,7 @@
 #include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
 #include "CommandInput.hpp"
+#include "CommandLayout.hpp"
 #include "CommandPalette.hpp"
 #include "Composition.hpp"
 #include "DeleteDirection.hpp"
@@ -55,6 +56,7 @@
 #include "Session.hpp"
 #include "SessionEnd.hpp"
 #include "SessionTab.hpp"
+#include "StatusBarLayout.hpp"
 #include "StatusItems.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
@@ -107,6 +109,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -896,6 +899,51 @@ constexpr std::string_view clipped_mark = "…";
            std::holds_alternative<AutosaveTick>(intent);
 }
 
+// 面と `:` の補完の面の見えている行数を決める窓の寸法（ADR 0150 の決定 1）。幅か高さが 0 なら
+// 寸法が届く前で、行数は上限のまま。
+using CommandWindow = std::tuple<std::int32_t, std::int32_t, std::uint32_t>;
+
+[[nodiscard]] bool measured(CommandWindow window) noexcept
+{
+    return std::get<0>(window) > 0 && std::get<1>(window) > 0;
+}
+
+// 行数が変わるときだけ替えた入力（同じなら無し・写しを作らない）。
+[[nodiscard]] std::optional<CommandInput> fitted_rows(const core::CommandPalette &palette,
+                                                      CommandWindow window)
+{
+    const auto [width, height, dpi] = window;
+    const auto rows =
+        measured(window) ? core::palette_window_rows(width, height, dpi) : core::palette_row_limit;
+    if (std::max(rows, std::size_t{1}) == palette.visible())
+    {
+        return std::nullopt;
+    }
+    return CommandInput{palette.with_visible(rows)};
+}
+
+[[nodiscard]] std::optional<CommandInput> fitted_rows(const core::CommandLine &line,
+                                                      CommandWindow window)
+{
+    const auto [width, height, dpi] = window;
+    const auto rows = measured(window)
+                          ? core::command_layout(core::status_bar_layout(width, height, dpi), dpi,
+                                                 core::command_completion_row_limit)
+                                .visible_rows
+                          : core::command_completion_row_limit;
+    if (std::max(rows, std::size_t{1}) == line.completion_rows())
+    {
+        return std::nullopt;
+    }
+    return CommandInput{line.with_completion_rows(rows)};
+}
+
+[[nodiscard]] std::optional<CommandInput> fitted_rows(const core::SearchLine & /*line*/,
+                                                      CommandWindow /*window*/)
+{
+    return std::nullopt;
+}
+
 // 状態の変換の表示値。本文と入力行のどちらに載せるかは呼び手が決める（ADR 0061 の決定 4）。
 [[nodiscard]] std::optional<CompositionView>
 composition_view_of(const std::optional<core::Composition> &composition)
@@ -1151,7 +1199,9 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<AutosaveTick>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
+    // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
+    fit_command_rows();
     ask_display();
     auto delivered = delivery();
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
@@ -1183,6 +1233,7 @@ EditorFrame EditorController::press_vim_key(const core::VimKey &key)
     settle_tab_walk_before(false);
     begin_intent(false);
     static_cast<void>(deliver_vim_key(key));
+    fit_command_rows();
     return frame();
 }
 
@@ -1195,7 +1246,9 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
     {
         settle_tab_walk_before(false);
         begin_intent(false);
-        if (deliver_vim_key(key).has_value())
+        const bool failed = deliver_vim_key(key).has_value();
+        fit_command_rows();
+        if (failed)
         {
             break;
         }
@@ -1268,11 +1321,11 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
         auto hint = palette->input().text().empty() && !command_composed().has_value()
                         ? std::optional<core::DisplayText>{core::palette_mark_hint()}
                         : std::nullopt;
-        // 載せるのは見えている行の窓だけ（ADR 0062 の決定 2）。全件は写さない。
-        const auto selected = palette->selected();
-        const auto first = core::palette_window_first(selected);
-        return CommandPaletteView{palette->rows(first, core::palette_row_limit), first, selected,
-                                  palette->count(), std::move(hint)};
+        // 載せるのは見えている行の窓だけ（ADR 0062 の決定 2）。全件は写さない。窓の先頭は面の
+        // 状態（ADR 0150 の決定 1）。
+        const auto first = palette->first();
+        return CommandPaletteView{palette->rows(first, palette->visible()), first,
+                                  palette->selected(), palette->count(), std::move(hint)};
     }
     return std::nullopt;
 }
@@ -1683,6 +1736,8 @@ void EditorController::accept(const VisibleLines &intent)
     const std::size_t previous =
         pending_clamp_ ? state_.scroll().visible_lines : settled_scroll().visible_lines;
     view_geometry_ = intent.geometry;
+    window_width_ = intent.window_width;
+    window_height_ = intent.window_height;
     state_ = state_.with_vim(core::vim_after_resize(state_.vim(), previous, lines));
     auto scroll = state_.scroll();
     scroll.visible_lines = lines;
@@ -2050,6 +2105,35 @@ void EditorController::accept(const EditCommand &intent)
     state_ = state_.with_command_input(edited_command(input.value(), intent.edit));
     reach_font_families();
     update_search_preview();
+}
+
+void EditorController::accept(const ScrollPaletteList &intent)
+{
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return;
+    }
+    if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
+    {
+        state_ = state_.with_command_input(palette->scrolled(intent.lines));
+    }
+}
+
+void EditorController::fit_command_rows()
+{
+    const auto &input = state_.command_input();
+    if (!input.has_value())
+    {
+        return;
+    }
+    const CommandWindow window{window_width_, window_height_, view_geometry_.dpi};
+    auto fitted = std::visit([window](const auto &value) { return fitted_rows(value, window); },
+                             input.value());
+    if (fitted.has_value())
+    {
+        state_ = state_.with_command_input(std::move(fitted).value());
+    }
 }
 
 void EditorController::accept(const CancelCommand &)
@@ -4125,9 +4209,36 @@ core::GuideContext EditorController::guide_context() const noexcept
     return core::GuideContext::other;
 }
 
+core::EditorSettings EditorController::shown_settings() const
+{
+    const auto &input = state_.command_input();
+    const auto focused =
+        input.has_value() ? focused_command_of(input.value()) : std::optional<std::string>{};
+    if (!focused.has_value())
+    {
+        return state_.settings();
+    }
+    const auto evaluated =
+        core::evaluate_ex(focused.value(), state_.settings(), state_.appearance(), state_.themes());
+    if (!evaluated)
+    {
+        return state_.settings();
+    }
+    const auto &changed = evaluated.value().settings;
+    if (!changed.has_value())
+    {
+        return state_.settings();
+    }
+    // 最初の段は配色だけを重ねる（ADR 0150 の決定 4）。字体と字の大きさは保存した値のまま。
+    auto shown = state_.settings();
+    shown.theme = changed.value().theme;
+    return shown;
+}
+
 EditorDelivery EditorController::delivery() const
 {
-    const auto &theme = core::selected_theme(state_.settings(), state_.appearance());
+    auto settings = shown_settings();
+    const auto &theme = core::selected_theme(settings, state_.appearance());
     return EditorDelivery{theme.appearance,
                           state_.mode(),
                           state_.vim().mode,
@@ -4136,7 +4247,7 @@ EditorDelivery EditorController::delivery() const
                           composed(),
                           command_composed(),
                           active_document_view(),
-                          state_.settings(),
+                          std::move(settings),
                           state_.settings_failure(),
                           command_message(),
                           state_.closing(),

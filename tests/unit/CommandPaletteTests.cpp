@@ -37,6 +37,7 @@
 #include "InputLineView.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
+#include "ListWindow.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
@@ -51,6 +52,7 @@
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScrollPaletteList.hpp"
 #include "SelectAll.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
@@ -59,6 +61,7 @@
 #include "TabStep.hpp"
 #include "TabTitle.hpp"
 #include "TestSupport.hpp"
+#include "TextViewGeometry.hpp"
 #include "ThemeCatalog.hpp"
 #include "ThemeChoice.hpp"
 #include "ToggleBookmark.hpp"
@@ -192,7 +195,10 @@ void verify_palette_geometry()
                "panel uses approved DIP width");
         expect(layout.visible_rows == 8 && layout.row_height == core::to_pixels(40, dpi),
                "row height and count bounded");
-        expect(core::palette_first_visible(layout, 12) == 5, "selected last row stays visible");
+        expect(core::palette_window_rows(1600, 1200, dpi) == 8 &&
+                   core::palette_window_rows(1600, core::to_pixels(300, dpi), dpi) <
+                       core::palette_row_limit,
+               "the window rows are bounded by the limit and the window height");
         for (std::size_t row = 0; row < layout.visible_rows; ++row)
         {
             const auto box = core::palette_row(layout, row);
@@ -1503,52 +1509,133 @@ void verify_palette_extended_edges()
            "the added choice is listed once the colon is erased");
 }
 
-// ui が描く行は frame の窓に入る（ADR 0062 の決定 2・3）。見えている行数 1〜上限・件数 0〜20・
-// 選択のすべての組で、ui が読む [見えている先頭, +min(行数, 件数 - 先頭)) が窓
-// [窓の先頭, +min(上限, 件数 - 窓の先頭)) に入り、選択はその中にある。行数が上限なら先頭は同じ式。
-[[nodiscard]] bool window_covers_rows(std::size_t visible, std::size_t total)
+// 窓の規則（ADR 0150 の決定 1）。見えている行数 1〜上限・件数 1〜20・先頭・選択のすべての組で、
+// 選択は窓 [先頭, 先頭 + 行数) に入り、窓は件数の末尾を越えず、選択が窓の中なら先頭は動かない。
+[[nodiscard]] bool window_rule_holds_at(std::size_t first, std::size_t visible, std::size_t total)
 {
-    const core::PaletteLayout layout{{}, {}, {}, {}, 1, visible};
-    bool covered = true;
-    for (std::size_t selected = 0; covered && selected < total; ++selected)
+    bool holds = true;
+    const auto last_first = total > visible ? total - visible : 0;
+    for (std::size_t selected = 0; holds && selected < total; ++selected)
     {
-        const auto start = core::palette_first_visible(layout, selected);
-        const auto end = start + std::min(visible, total - start);
-        const auto first = core::palette_window_first(selected);
-        const auto last = first + std::min(core::palette_row_limit, total - first);
-        covered = first <= start && end <= last && start <= selected && selected < end;
+        const auto next = core::list_window_first(first, selected, visible, total);
+        const bool inside = first <= last_first && first <= selected && selected < first + visible;
+        holds = next <= selected && selected < next + visible && next <= last_first &&
+                (!inside || next == first);
     }
-    return covered;
+    return holds;
+}
+
+[[nodiscard]] bool window_rule_holds(std::size_t visible, std::size_t total)
+{
+    bool holds = true;
+    for (std::size_t first = 0; holds && first < total; ++first)
+    {
+        holds = window_rule_holds_at(first, visible, total);
+    }
+    return holds;
 }
 
 void verify_palette_window_covers_rows()
 {
-    bool covered = true;
+    bool holds = true;
     for (std::size_t visible = 1; visible <= core::palette_row_limit; ++visible)
     {
-        for (std::size_t total = 0; total <= 20; ++total)
+        for (std::size_t total = 1; total <= 20; ++total)
         {
-            covered = covered && window_covers_rows(visible, total);
+            holds = holds && window_rule_holds(visible, total);
         }
     }
-    expect(covered, "every drawn row lies inside the window carried by the frame");
-    const core::PaletteLayout full{{}, {}, {}, {}, 1, core::palette_row_limit};
-    bool shared = true;
-    for (std::size_t selected = 0; selected <= 20; ++selected)
+    expect(holds, "the selection stays inside the window and the window moves only at its edges");
+    expect(core::list_window_first(0, 12, 8, 20) == 5 &&
+               core::list_window_first(5, 3, 8, 20) == 3 &&
+               core::list_window_first(15, 19, 8, 20) == 12 &&
+               core::list_window_first(3, 4, 0, 20) == 4,
+           "the window reveals the selection by the smallest move");
+}
+
+// 送りの表（ADR 0150 の決定 6）。`:` の候補（9 件より多い）・見えている行数 8。
+void verify_palette_scrolling_wraps()
+{
+    using core::CommandEdit;
+    auto palette = core::CommandPalette::opened({}, ":", core::EditMode::ordinary);
+    const auto total = palette.count();
+    expect(total > 9 && palette.first() == 0 && palette.visible() == core::palette_row_limit,
+           "the palette opens at the top with eight visible rows");
+    palette = palette.edited(CommandEdit::complete_previous);
+    expect(palette.selected() == total - 1 && palette.first() == total - 8,
+           "wrapping up puts the last choice on the bottom row");
+    for (int step = 0; step < 3; ++step)
     {
-        shared = shared && core::palette_first_visible(full, selected) ==
-                               core::palette_window_first(selected);
+        palette = palette.edited(CommandEdit::complete_previous);
     }
-    expect(shared && core::palette_row_limit == 8 && core::palette_window_first(7) == 0 &&
-               core::palette_window_first(8) == 1 && core::palette_window_first(12) == 5,
-           "the window starts where eight visible rows start");
+    expect(palette.selected() == total - 4 && palette.first() == total - 8,
+           "moving up inside the window keeps the window still");
+    palette = palette.edited(CommandEdit::list_first);
+    expect(palette.selected() == 0 && palette.first() == 0, "Ctrl+Home goes to the first choice");
+    for (int step = 0; step < 8; ++step)
+    {
+        palette = palette.edited(CommandEdit::complete_next);
+    }
+    expect(palette.selected() == 8 && palette.first() == 1,
+           "crossing the bottom edge scrolls by one row");
+    palette = palette.edited(CommandEdit::list_last).edited(CommandEdit::complete_next);
+    expect(palette.selected() == 0 && palette.first() == 0,
+           "wrapping down puts the first choice on the top row");
+}
+
+void verify_palette_paging()
+{
+    using core::CommandEdit;
+    auto palette = core::CommandPalette::opened({}, ":", core::EditMode::ordinary);
+    const auto total = palette.count();
+    palette = palette.edited(CommandEdit::page_next);
+    expect(palette.selected() == 8 && palette.first() == 1, "PgDn moves one window down");
+    palette = palette.edited(CommandEdit::page_previous);
+    expect(palette.selected() == 0 && palette.first() == 0, "PgUp moves one window up");
+    expect(palette.edited(CommandEdit::page_previous).selected() == 0,
+           "PgUp stops at the first choice");
+    palette = palette.edited(CommandEdit::list_last);
+    expect(palette.selected() == total - 1 && palette.first() == total - 8 &&
+               palette.edited(CommandEdit::page_next).selected() == total - 1,
+           "Ctrl+End goes to the last choice and PgDn stops there");
+    palette = palette.with_visible(3);
+    expect(palette.visible() == 3 && palette.first() == total - 3,
+           "fewer visible rows keep the selection on the bottom row");
+    palette = palette.with_visible(0);
+    expect(palette.visible() == 1 && palette.first() == total - 1, "zero rows count as one");
+    const auto typed = palette.inserted("tab").value();
+    expect(typed.selected() == 0 && typed.first() == 0 && typed.visible() == 1,
+           "typing filters again from the top and keeps the visible rows");
+}
+
+void verify_palette_wheel()
+{
+    auto palette = core::CommandPalette::opened({}, ":", core::EditMode::ordinary);
+    const auto total = palette.count();
+    palette = palette.scrolled(2);
+    expect(palette.first() == 2 && palette.selected() == 2,
+           "the wheel scrolls the list and pulls a hidden selection to the top row");
+    palette = palette.selected_at(5).scrolled(-1);
+    expect(palette.first() == 1 && palette.selected() == 5,
+           "a visible selection stays where it is");
+    palette = palette.scrolled(1000);
+    expect(palette.first() == total - 8 && palette.selected() == total - 8,
+           "the wheel stops when the last choice reaches the bottom row");
+    palette = palette.scrolled(-1000);
+    expect(palette.first() == 0 && palette.selected() == 7,
+           "the wheel stops at the top and pulls the selection to the bottom row");
+    const auto empty = core::CommandPalette::opened({}, ":zzzz", core::EditMode::ordinary);
+    expect(empty.scrolled(3).first() == 0 && empty.scrolled(3).selected() == 0,
+           "an empty result does not scroll");
 }
 
 // frame に載るのは窓だけ。候補が上限を越えても rows は上限まで、rows の i 番目は結果の first + i
 // 番目、選択と件数は結果の全体の数（ADR 0062 の決定 2）。
 [[nodiscard]] bool window_follows_tabs(const app::CommandPaletteView &view, std::size_t selected)
 {
-    const auto first = core::palette_window_first(selected);
+    // 先頭から下へ動かすだけなので、窓は選択を最下段に置いて送られる（ADR 0150 の決定 1）。
+    const auto first =
+        selected < core::palette_row_limit ? 0 : selected + 1 - core::palette_row_limit;
     bool same = view.first == first && view.selected == selected && view.total == 12 &&
                 view.rows.size() == std::min(core::palette_row_limit, view.total - first);
     for (std::size_t index = 0; same && index < view.rows.size(); ++index)
@@ -1579,6 +1666,41 @@ void verify_palette_view_window()
     expect(palette_of(controller.frame()).rows.size() == core::palette_row_limit &&
                palette_of(controller.frame()).first == 4,
            "the last selection keeps the eight rows before it");
+    for (int step = 0; step < 3; ++step)
+    {
+        applied(controller, app::EditCommand{core::CommandEdit::complete_previous});
+    }
+    expect(palette_of(controller.frame()).first == 4 &&
+               palette_of(controller.frame()).selected == 8,
+           "moving up inside the window keeps the frame window still");
+    const auto wheeled = palette_of(controller.apply_frame(app::ScrollPaletteList{-2}));
+    expect(wheeled.first == 2 && wheeled.selected == 8 && wheeled.rows.size() == 8 &&
+               wheeled.rows.front().command == "tabnext 3",
+           "the wheel scrolls the frame window without moving the selection");
+}
+
+// 面の見えている行数は窓の寸法から application が決める（ADR 0150 の決定 1）。
+void verify_palette_visible_rows()
+{
+    Editing editor;
+    auto &controller = editor.controller();
+    for (std::size_t made = 1; made < 12; ++made)
+    {
+        applied(controller, app::NewTab{});
+    }
+    applied(controller, app::SwitchTab{0});
+    applied(controller, app::OpenCommandPalette{});
+    applied(controller, app::EditCommand{core::CommandEdit::list_last});
+    const auto rows = core::palette_window_rows(800, 400, 96);
+    const auto low = palette_of(controller.apply_frame(
+        app::VisibleLines{3, core::TextViewGeometry{600, 20, 96, 0}, 800, 400}));
+    expect(rows < core::palette_row_limit && low.rows.size() == rows && low.first == 12 - rows &&
+               low.selected == 11,
+           "a low window carries fewer rows and keeps the selection visible");
+    const auto paged =
+        palette_of(controller.apply_frame(app::EditCommand{core::CommandEdit::page_previous}));
+    expect(paged.selected == 11 - rows && paged.first == 11 - rows,
+           "PgUp moves by the visible rows of the window");
 }
 } // namespace
 
@@ -1818,7 +1940,11 @@ void verify_command_palette()
     verify_palette_composition();
     verify_tab_folders();
     verify_palette_window_covers_rows();
+    verify_palette_scrolling_wraps();
+    verify_palette_paging();
+    verify_palette_wheel();
     verify_palette_view_window();
+    verify_palette_visible_rows();
     verify_palette_folder_scope();
     verify_unlisted_table();
     verify_unlisted_names();

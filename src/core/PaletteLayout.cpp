@@ -53,28 +53,9 @@ std::optional<std::size_t> palette_hit(const PaletteLayout &layout, std::int32_t
     return static_cast<std::size_t>((y - layout.rows.top) / layout.row_height);
 }
 
-namespace
+std::size_t palette_window_rows(std::int32_t width, std::int32_t height, std::uint32_t dpi) noexcept
 {
-// 見えている行数 visible で選択 selected を最後の行に収める先頭。描く行と frame の窓が共有する
-// 1 つの式（ARC-001）。
-std::size_t first_row_of(std::size_t visible, std::size_t selected) noexcept
-{
-    if (visible == 0)
-    {
-        return 0;
-    }
-    return std::max(selected + 1, visible) - visible;
-}
-} // namespace
-
-std::size_t palette_first_visible(const PaletteLayout &layout, std::size_t selected) noexcept
-{
-    return first_row_of(layout.visible_rows, selected);
-}
-
-std::size_t palette_window_first(std::size_t selected) noexcept
-{
-    return first_row_of(palette_row_limit, selected);
+    return palette_layout(width, height, dpi, palette_row_limit).visible_rows;
 }
 
 namespace

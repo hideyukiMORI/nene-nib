@@ -7,6 +7,7 @@
 #include "PaletteScope.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -40,6 +41,17 @@ class CommandPalette final
     // 出さない）。
     [[nodiscard]] bool shares_result_with(const CommandPalette &other) const noexcept;
     [[nodiscard]] std::size_t selected() const noexcept;
+    // 見えている窓の先頭と行数（ADR 0150 の決定 1）。先頭は面の状態で、選択が窓を出るときだけ
+    // list_window_first の規則で動く。絞り直すと 0 に戻る。renderer とクリックはこの値を frame で
+    // 読み、計算し直さない。
+    [[nodiscard]] std::size_t first() const noexcept;
+    [[nodiscard]] std::size_t visible() const noexcept;
+    // 見えている行数を替えた面。application が窓の寸法から決めて渡す（palette_row_limit と窓の
+    // 高さの小さい方）。選択が見えるように先頭を寄せ直す。0 は 1 行とみなす。
+    [[nodiscard]] CommandPalette with_visible(std::size_t rows) const;
+    // 一覧だけを lines 行送った面（ホイール・ADR 0150 の決定 2）。正は下（後ろの候補）へ。先頭は
+    // 0 から「末尾の候補が最下段」までに止まり、選択が窓の外へ出たら窓の近い端の行へ寄せる。
+    [[nodiscard]] CommandPalette scrolled(std::int32_t lines) const;
     [[nodiscard]] std::expected<CommandPalette, ExFailure> inserted(std::string_view text) const;
     [[nodiscard]] CommandPalette edited(CommandEdit edit) const;
     [[nodiscard]] CommandPalette selected_at(std::size_t index) const;
@@ -58,10 +70,11 @@ class CommandPalette final
     // 中の位置の列で、候補の写しを作らない。設定のコマンド（commands）は palette_choices の値の列、
     // 操作の一覧（operations）は operation_choices の値の列。
     using Result = std::variant<std::vector<std::size_t>, std::vector<CommandChoice>>;
-    CommandPalette(CommandLine input, std::size_t selected, EditMode mode, Entries entries,
-                   std::shared_ptr<const Result> result);
-    // 新しい候補列は全件を一度照合する。選択は先頭。
-    [[nodiscard]] static CommandPalette filtered(CommandLine input, EditMode mode, Entries entries);
+    CommandPalette(CommandLine input, std::size_t selected, std::size_t first, std::size_t visible,
+                   EditMode mode, Entries entries, std::shared_ptr<const Result> result);
+    // 新しい候補列は全件を一度照合する。選択と窓の先頭は先頭。
+    [[nodiscard]] static CommandPalette filtered(CommandLine input, std::size_t visible,
+                                                 EditMode mode, Entries entries);
     [[nodiscard]] static Result result_of(const CommandLine &input, EditMode mode,
                                           const std::vector<CommandChoice> &entries);
     // 同じ候補列での入力更新は一つの道。本文不変なら共有し、末尾延長なら前の位置だけを再採点する。
@@ -70,13 +83,19 @@ class CommandPalette final
                                         const std::vector<std::size_t> &positions) const;
     [[nodiscard]] Result updated_result(const CommandLine &input,
                                         const std::vector<CommandChoice> &choices) const;
-    // 選択だけを動かす道（moved・selected_at）はこの 1 本で、前の結果をそのまま共有する。
+    // 選択だけを動かす道（moved・paged・selected_at・with_visible）はこの 1 本で、前の結果を
+    // そのまま共有し、窓の先頭を list_window_first で寄せる。
     [[nodiscard]] CommandPalette reselected(std::size_t selected) const;
+    // 前・次は両端で回り込む。
     [[nodiscard]] CommandPalette moved(CommandEdit direction) const;
+    // 1 画面ぶん（visible 行）・先頭・末尾は端で止まる。
+    [[nodiscard]] CommandPalette paged(CommandEdit direction) const;
     // 結果の index 番目（範囲の中であること）。
     [[nodiscard]] const CommandChoice &row(std::size_t index) const;
     CommandLine input_;
     std::size_t selected_;
+    std::size_t first_;
+    std::size_t visible_;
     // 開いたときの編集モード（面を開いている間は変わらない）。
     EditMode mode_;
     // 開くときに受け取った候補の列（ADR 0060 の決定 1）。入力が変わっても同じ列を指し、変わるのは

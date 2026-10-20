@@ -24,5 +24,7 @@ struct InputLineView
     std::vector<std::string> completions;
     // 選ばれている候補。補完していないときは空。
     std::optional<std::size_t> completion_index;
+    // 補完の面の見えている窓の先頭（ADR 0150 の決定 1）。ui は計算し直さずにここから描く。
+    std::size_t completion_first = 0;
 };
 } // namespace nenenib::core

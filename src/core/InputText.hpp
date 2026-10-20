@@ -22,6 +22,6 @@ struct InputText
 // キャレットの位置に 1 行を差し込む。長すぎる・制御文字・不正な UTF-8 は閉じた失敗（CPP-005）。
 [[nodiscard]] std::expected<InputText, ExFailure> inserted_input(const InputText &input,
                                                                  std::string_view text);
-// 左右・Home / End・Backspace / Delete。補完の 2 つはここでは動かない（持つ型が決める）。
+// 左右・Home / End・Backspace / Delete。補完と一覧の送りはここでは動かない（持つ型が決める）。
 [[nodiscard]] InputText edited_input(const InputText &input, CommandEdit edit);
 } // namespace nenenib::core

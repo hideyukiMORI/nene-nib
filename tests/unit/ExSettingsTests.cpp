@@ -311,18 +311,91 @@ void verify_command_editing()
            "rejected input does not alter the line");
 }
 
+// `:` の Tab の共通の接頭辞（ADR 0150 の決定 3）。
+void verify_completion_common_prefix()
+{
+    using core::CommandEdit;
+    const auto single =
+        core::CommandLine::empty().inserted("set f").value().edited(CommandEdit::complete_next);
+    expect(single.text() == "set fontsize=" && !single.completion_index().has_value(),
+           "one candidate fills its whole text without cycling");
+    auto line =
+        core::CommandLine::empty().inserted("set n").value().edited(CommandEdit::complete_next);
+    expect(line.text() == "set no" && line.caret().value == 6 &&
+               !line.completion_index().has_value(),
+           "the first Tab fills the common prefix");
+    line = line.edited(CommandEdit::complete_next);
+    expect(line.text() == line.completions().front() && line.completion_index() == 0,
+           "a full common prefix starts the cycle");
+    auto themed = core::CommandLine::empty()
+                      .inserted("colorscheme SOL")
+                      .value()
+                      .edited(CommandEdit::complete_next);
+    expect(themed.text() == "colorscheme solarized-" && !themed.completion_index().has_value(),
+           "the common prefix folds ASCII case and shows the candidate case");
+    themed = themed.edited(CommandEdit::complete_next).edited(CommandEdit::complete_next);
+    expect(themed.text() == "colorscheme solarized-light" && themed.completion_index() == 1,
+           "the cycle walks the candidates of the filled prefix");
+    themed = themed.edited(CommandEdit::complete_next);
+    expect(themed.text() == "colorscheme solarized-" && !themed.completion_index().has_value(),
+           "the cycle returns to the filled prefix");
+    const auto same = core::CommandLine::empty()
+                          .inserted("colorscheme DRACULA")
+                          .value()
+                          .edited(CommandEdit::complete_next);
+    expect(same.text() == "colorscheme dracula" && same.completion_index() == 0,
+           "a prefix that differs only in case cycles to the candidate");
+    expect(core::CommandLine::empty()
+                   .inserted("tab")
+                   .value()
+                   .edited(CommandEdit::page_next)
+                   .edited(CommandEdit::list_last)
+                   .text() == "tab",
+           "the colon line ignores the list keys");
+}
+
+// `:` の補完の面の窓（ADR 0150 の決定 1）。上限 6 行で、巡回の選択が窓の端を越えるときだけ送る。
+void verify_completion_window()
+{
+    using core::CommandEdit;
+    auto line = core::CommandLine::empty().inserted("colorscheme ").value();
+    const auto total = line.completions().size();
+    expect(line.completion_rows() == core::command_completion_row_limit &&
+               line.completion_first() == 0,
+           "the completion window starts at the top with six rows");
+    line = line.edited(CommandEdit::complete_previous);
+    expect(line.completion_index() == total - 1 && line.completion_first() == total - 6,
+           "Shift Tab puts the last candidate on the bottom row");
+    line = line.edited(CommandEdit::complete_previous).edited(CommandEdit::complete_previous);
+    expect(line.completion_index() == total - 3 && line.completion_first() == total - 6,
+           "moving back inside the window keeps it still");
+    line = line.with_completion_rows(2);
+    expect(line.completion_rows() == 2 && line.completion_first() == total - 4,
+           "fewer rows keep the candidate visible");
+    expect(line.inserted("x").value().completion_first() == 0 &&
+               line.inserted("x").value().completion_rows() == 2,
+           "typing starts the window again and keeps its rows");
+}
+
 void verify_command_completions()
 {
     using core::CommandEdit;
     auto line = core::CommandLine::empty().inserted("colorscheme ").value();
     const auto choices = line.completions();
     expect(choices.size() == core::builtin_themes.size() + 1, "theme candidates include system");
-    for (std::size_t index = 0; index < choices.size() + 1; ++index)
+    for (std::size_t index = 0; index < choices.size(); ++index)
     {
         line = line.edited(CommandEdit::complete_next);
-        expect(line.text() == choices[index % choices.size()],
+        expect(line.text() == choices[index] && line.completion_index() == index,
                "Tab cycles using the original prefix");
     }
+    line = line.edited(CommandEdit::complete_next);
+    expect(line.text() == "colorscheme " && !line.completion_index().has_value() &&
+               line.completions() == choices,
+           "Tab after the last candidate returns to the typed text");
+    line = line.edited(CommandEdit::complete_next).edited(CommandEdit::complete_previous);
+    expect(line.text() == "colorscheme " && !line.completion_index().has_value(),
+           "Shift Tab before the first candidate returns to the typed text");
     line = line.edited(CommandEdit::complete_previous);
     expect(line.text() == "colorscheme system", "Shift Tab wraps backwards");
     line = line.edited(CommandEdit::home);
@@ -662,6 +735,8 @@ void verify_ex_settings()
     verify_ex_long_set_arguments();
     verify_command_editing();
     verify_command_completions();
+    verify_completion_common_prefix();
+    verify_completion_window();
     verify_completion_candidate_boundaries();
     verify_ex_controller();
     verify_guide_settings();
