@@ -75,6 +75,10 @@ Phase 0 の V2 で、Vim 9.1 を `-u NONE -i NONE -N -n -es -S probe.vim` で走
 | 鍵を `std::string` の Vim 記法で受け取る | 開いた集合になり網羅性が守れない（CPP-002）。fixture の記法は oracle の道具と test の中だけで使い、製品の型は閉じた和型 |
 | VISUAL まで最初の縦切りに含める | 選択の描き方は在るが、`v` の範囲の規則（inclusive）と `Ctrl-v` の全角・タブが難所。エンジンの形が固まってから fixture を足す |
 
+## 追記（2026-10-21・Issue #767）
+
+- 移動の表に `%`（`VimMotion::matching_pair`）を 1 行足した。回数なしは対応する括弧（inclusive の文字単位・'matchpairs' の既定 `(:),{:},[:]` を固定・引用符の内側を飛ばす Vim の既定）、`{N}%` は本文の N % の行（行単位・100 超は失敗）。マーク `'x` `` `x `` は `VimMotion::mark_line`（行単位）と `mark_exact`（exclusive）の 2 行で、名前は鍵を写す前に engine が解く。マークの所有と編集のずれの直し方は [ADR 0152](0152-vim-marks-are-document-values-adjusted-by-edits.md)。
+
 ## 関連
 
 ADR 0005（自前 Vim・oracle）・ADR 0006（表駆動）・ADR 0009（piece table・意図の和型・undo の区切り）・採用案 `docs/design/2026-09-15-editing-look.md`（D15）。

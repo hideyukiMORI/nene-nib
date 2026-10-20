@@ -51,8 +51,11 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   black hole `"_`, clipboard `"+` `"*`), macros `q @ @@`, `i a I A o O` with counts, `.` (also in VISUAL), text objects
   `iw aw iW aW i" a" i' a' i( a( i{ a{ i[ a[ i< a<` and the backtick pair (`b` / `B` aliases), search `/ ? n N * #`
   with `hlsearch` and `incsearch` on by default (`:noh`, `:set (no)hlsearch`, `:set (no)incsearch`, Ctrl-G / Ctrl-T), virtual columns (Tab = 8, wide = 2), `u` / Ctrl-r,
-  `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, block `p P`, `.`), literal CR in LF files, Esc everywhere.
-  Not yet: `:s :g`, read-only registers, `s S R`, blockwise `~ u U > <`, Unicode case mapping, autoindent,
+  `v V` and blockwise `Ctrl-v` (`o O $`, `d x y r`, block `p P`, `.`), literal CR in LF files, Esc everywhere,
+  `%` (matching `( ) [ ] { }` skipping quoted brackets; `{N}%` goes to N percent of the file), marks
+  `m{a-z}` with `'{a-z}` `` `{a-z} ``, the previous context `''` `` `` `` and the last change `'.` `` `. ``
+  (marks belong to the document and follow line insertions and deletions, [ADR 0152](docs/adr/0152-vim-marks-are-document-values-adjusted-by-edits.md)).
+  Not yet: uppercase marks `'A`-`'Z`, `:marks`, the jump list `Ctrl-o Ctrl-i`, `:s :g`, read-only registers, `s S R`, blockwise `~ u U > <`, Unicode case mapping, autoindent,
   Vim drag-to-select, `gj gk g0 g$`, block `I A c C`, further Ex commands (ranges, pipes, history, forced overwrite).
   Basic Ex `:w`, `:q`, `:q!`, `:wq` and `:x` work on the current tab. `:q` refuses unsaved changes;
   `:wq` always writes, while `:x` writes only changes. These saves accept filenames: `:w name` names an
