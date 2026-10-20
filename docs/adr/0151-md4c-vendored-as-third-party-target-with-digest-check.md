@@ -64,6 +64,7 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 
 - ブロックの元の位置は md4c が渡さないので、`source_begin` は最初の text の位置（ブロックの記号の位置ではない）。スクロールの同期は段落の単位で足りる。
 - 実体参照の表は CommonMark の例の範囲。表の外は綴りのまま。
+- builder の確保の失敗（`bad_alloc`）は捕まえない。md4c の C のフレームを抜けて落ちる（Nib の他の場所と同じ）。プレビューの入力は上限（計画 M-3・16 MiB）で抑える。
 - 表・脚注・数式・画像・HTML の解釈はしない（初版の範囲案）。
 - `eng/symbols.py` は core の未定義を閉包の定義で解決するので、Debug の `nenenib_md4c.lib` が定義する UCRT の inline の `sprintf` 系を core が呼んでも ARC-003 にならない。名指しの API（`md_parse`）だけに限るのは #772。
 
