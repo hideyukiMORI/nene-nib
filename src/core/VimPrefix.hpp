@@ -16,6 +16,10 @@ enum class VimPrefix : std::uint8_t
     at,
     quote,
     z,
-    window_command
+    window_command,
+    // `m` `'` `` ` ``。次の鍵がマークの名前（ADR 0152 の決定 3）。
+    mark,
+    mark_line,
+    mark_exact
 };
 } // namespace nenenib::core

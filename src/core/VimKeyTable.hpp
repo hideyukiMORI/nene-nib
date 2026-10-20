@@ -65,6 +65,9 @@ namespace nenenib::core
 // i / a の後ろの鍵 → テキストオブジェクト（ADR 0031 の決定 1）。表に無い鍵は nullopt（取消）。
 [[nodiscard]] std::optional<VimTextObject> vim_text_object_for(char32_t key) noexcept;
 
+// 前の位置を `''` に置く移動（Vim の jump-motions・ADR 0152 の決定 4）か。
+[[nodiscard]] bool vim_motion_is_jump(VimMotion motion) noexcept;
+
 // 終わりの位置を範囲に入れない移動（Vim の exclusive）か。
 [[nodiscard]] bool vim_motion_is_exclusive(VimMotion motion) noexcept;
 } // namespace nenenib::core

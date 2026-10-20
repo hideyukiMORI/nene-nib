@@ -1,10 +1,12 @@
 #pragma once
 
+#include "Offset.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimDisplayNavigation.hpp"
 #include "VimKeySource.hpp"
 #include "VimLayoutView.hpp"
+#include "VimMarks.hpp"
 #include "VimRowLanding.hpp"
 #include "VimTabs.hpp"
 #include "VimViewport.hpp"
@@ -29,5 +31,10 @@ struct VimEditorView
     std::optional<VimDisplayNavigation> navigation = std::nullopt;
     // `gj` `gk` の着地（ADR 0144 の決定 4）。engine が鍵を写す前に画面行の問いで解いて置く。
     std::optional<VimRowLanding> row_landing = std::nullopt;
+    // 文書のマーク（ADR 0152 の決定 2）。controller が今の文書の値を貸し、engine は読むだけで、
+    // 変えるときは VimStep.marks に新しい値を添える。null にはしない（既定は何も置いていない値）。
+    const VimMarks *marks = &no_vim_marks;
+    // マークへの移動の着地（決定 3）。`'` `` ` `` の次の鍵で engine が名前を解いて置く。
+    std::optional<Offset> mark_landing = std::nullopt;
 };
 } // namespace nenenib::core

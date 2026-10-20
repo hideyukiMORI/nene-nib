@@ -82,6 +82,8 @@
 #include "VimInsertBlock.hpp"
 #include "VimKey.hpp"
 #include "VimKeySource.hpp"
+#include "VimMarkEdits.hpp"
+#include "VimMarkPosition.hpp"
 #include "VimMatchRequest.hpp"
 #include "VimMode.hpp"
 #include "VimNavigate.hpp"
@@ -1403,6 +1405,10 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     }
     auto next = state_.text().replaced(range.begin, range.end, text);
     const core::Edit edit{range.begin, std::move(removed), std::string(text), restore};
+    // 行がずれたマークを直し、最後の変更の位置を置く（ADR 0152 の決定 6・7）。
+    auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
+    marks.last_change = core::vim_last_change_of(state_.text(), edit);
+    state_ = state_.with_vim_marks(std::move(marks));
     const core::Offset caret{range.begin.value + text.size()};
     const std::size_t before = state_.history().position();
     auto history = state_.history().pushed(edit, boundary);
@@ -1704,6 +1710,15 @@ void EditorController::accept(const HistoryAction &intent)
     std::unreachable();
 }
 
+// undo と Ctrl-r の編集でマークを直す（ADR 0152 の決定 6）。最後の変更は編集の行の行頭（Vim の
+// u_undoredo の changed_lines）。edit は今の本文に効く向きの編集。
+void EditorController::undone_marks(const core::Edit &edit)
+{
+    auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
+    marks.last_change = core::VimMarkPosition{state_.text().position_of(edit.at).line, 0};
+    state_ = state_.with_vim_marks(std::move(marks));
+}
+
 void EditorController::undo_edit()
 {
     const auto edit = state_.history().undo();
@@ -1717,6 +1732,7 @@ void EditorController::undo_edit()
     const core::Offset caret{at.value + edit.value().removed.size()};
     // undo は編集の逆向き（inserted を removed に戻す）。
     adjust_other(core::Edit{at, edit.value().inserted, edit.value().removed, at}, next);
+    undone_marks(core::Edit{at, edit.value().inserted, edit.value().removed, at});
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
                               state_.document());
     follow_caret();
@@ -1734,6 +1750,7 @@ void EditorController::redo_edit()
     auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
     adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
+    undone_marks(edit.value());
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
                               state_.document());
     follow_caret();
@@ -1962,6 +1979,9 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     {
         state_ = state_.with_selection(core::collapsed_at(step.restore.value()));
     }
+    // マークは効果を写す前に置く。飛ぶ鍵が置いた前の位置もオペレータの編集で直る（ADR 0152 の
+    // 決定 2・6・Vim の setpcmark の後の mark_adjust）。
+    adopt_vim_marks(step.marks);
     // 写し先が足りなければここでコンパイルが落ちる＝効果が増えたことに機械が気づく（CPP-002）。
     std::visit([this](const auto &value) { this->perform(value); }, step.effect);
     // 検索の報せは Ex の結果と同じ 1 本に出し、次の入力で消える（ADR 0032 の決定 5）。
@@ -1979,7 +1999,28 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
     {
         settle_vim_caret();
     }
+    // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
+    check_vim_marks();
     return step.failure;
+}
+
+// 飛ぶ鍵の後だけ前の位置を確かめる（決定 5）。飛ばなかった鍵は位置を引かない。
+void EditorController::check_vim_marks()
+{
+    if (!state_.vim_marks().prior_context.has_value())
+    {
+        return;
+    }
+    state_ = state_.with_vim_marks(core::vim_marks_checked(
+        state_.vim_marks(), core::vim_mark_position_of(state_.text(), state_.selection().caret)));
+}
+
+void EditorController::adopt_vim_marks(const std::optional<core::VimMarks> &marks)
+{
+    if (marks.has_value())
+    {
+        state_ = state_.with_vim_marks(marks.value());
+    }
 }
 
 void EditorController::settle_vim_caret()

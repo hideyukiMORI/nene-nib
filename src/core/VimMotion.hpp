@@ -57,6 +57,14 @@ enum class VimMotion : std::uint8_t
     display_line_first_non_blank,
     // `g_`。回数 − 1 行下の行の最後の非空白（空白だけの行と空行は行頭）。inclusive（Issue #721・
     // ADR 0147 の決定 8）。
-    last_non_blank
+    last_non_blank,
+    // `%`。対応する括弧（inclusive の文字単位）、回数つきは本文の回数 % の行（行単位・Issue
+    // #767）。
+    matching_pair,
+    // `'{a-z}` `''` `'.` と `` `{a-z} `` `` `` `` `` `. ``。マークの行の最初の非空白（行単位）と、
+    // マークの位置（exclusive の文字単位）。着地は engine が鍵を写す前に VimEditorView.mark_landing
+    // に置く（ADR 0152 の決定 3）。
+    mark_line,
+    mark_exact
 };
 } // namespace nenenib::core

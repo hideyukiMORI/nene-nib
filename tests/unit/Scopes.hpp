@@ -118,6 +118,10 @@ void verify_vim_search_incremental_scope();
 void verify_vim_text_object_contracts();
 void verify_vim_text_object_scope();
 
+// VimMarkTests.cpp
+void verify_vim_mark_contracts();
+void verify_vim_mark_scope();
+
 // VimReplaceTests.cpp
 void verify_vim_replace_contracts();
 void verify_vim_replace_scope();
