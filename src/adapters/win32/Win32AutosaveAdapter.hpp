@@ -46,6 +46,9 @@ class Win32AutosaveAdapter final : public application::AutosavePort
     void discard(application::AutosaveId id) override;
     [[nodiscard]] std::vector<application::AutosaveOutcome> collect() override;
     void clear() override;
+    // 頼んだ store と discard（順番待ちと走っているもの）が片付くのを上限つきで待つ（ADR 0137 の
+    // 決定 9）。ワーカーの前に載ったほかの仕事（フォルダの列挙）も待つことになる。
+    void flush() override;
     [[nodiscard]] std::expected<std::vector<application::AutosaveRemnant>,
                                 application::AutosaveFailure>
     remnants() override;

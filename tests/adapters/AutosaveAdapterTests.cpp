@@ -1,7 +1,8 @@
 // Issue #515: 自動退避の置き場（Win32AutosaveAdapter）を、本物のフォルダとワーカー 1 本で測る
 // （ADR 0137 の決定 4〜6・8）。置き場はビルドディレクトリの直下の固定の名前のフォルダで、冒頭で
 // 前回の残りを消して終わりに消す。時刻は読まない（Sleep・時計・タイムアウトの待ちを書かない）。
-// 待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest の制限時間で落ちる。
+// 待つのは合図の受け皿（セマフォ）だけで、止まらないときは CTest の制限時間で落ちる。上限の
+// ある待ちは adapter の flush の中にだけあり、塞がったワーカーで 1 回（約 3 秒）使う（#735）。
 #include "AutosaveCodec.hpp"
 #include "AutosaveEntry.hpp"
 #include "AutosaveFailure.hpp"
@@ -317,6 +318,43 @@ void verify_failure(adapters::Win32Worker &worker, adapters::Win32FileAdapter &f
            "without a root a store fails as location_unavailable");
 }
 
+// (e) flush は頼んだ store と discard（順番待ちと走っているもの）が片付いてから戻る。閉じないので
+// 以後の仕事も受ける（ADR 0137 の決定 9）。待ちの後に drain しないで本文を読む。
+void verify_flush(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files,
+                  adapters::Win32AutosaveAdapter &autosave)
+{
+    autosave.store(snapshot(7, std::nullopt, "無題", "seven"));
+    autosave.store(snapshot(8, std::nullopt, "無題", "eight"));
+    autosave.discard(AutosaveId{3});
+    autosave.flush();
+    expect(own_body(files, 7) == "seven" && own_body(files, 8) == "eight" &&
+               !exists(own_folder() + L"/3.body"),
+           "flush returns after the queued stores and discards are done");
+    expect(printed(autosave.collect()) == "7ok 8ok 3ok",
+           "every job finished before flush returned left its outcome");
+    autosave.flush();
+    autosave.store(snapshot(9, std::nullopt, "無題", "nine"));
+    drain(worker);
+    expect(own_body(files, 9) == "nine" && printed(autosave.collect()) == "9ok",
+           "flush does not close: a later store is still written");
+}
+
+// (e) flush の待ちには上限がある。ワーカーが別の仕事で塞がっていても、上限で戻って止まらない
+// （止まれば CTest の制限時間で落ちる）。塞いだ仕事はセマフォで放す。
+void verify_flush_limit(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files,
+                        adapters::Win32AutosaveAdapter &autosave)
+{
+    Signals gate{0};
+    worker.post([&gate](const std::stop_token &) { gate.acquire(); });
+    autosave.store(snapshot(10, std::nullopt, "無題", "blocked"));
+    autosave.flush();
+    expect(own_body(files, 10).empty(), "flush returns at its limit while the worker is blocked");
+    gate.release();
+    drain(worker);
+    expect(own_body(files, 10) == "blocked" && printed(autosave.collect()) == "10ok",
+           "the blocked store is written once the worker is released");
+}
+
 // (d) clear は走っている store を待ってから自分のフォルダを消す。以後の仕事は受けない。
 void verify_clear(adapters::Win32Worker &worker, adapters::Win32AutosaveAdapter &autosave)
 {
@@ -467,6 +505,8 @@ void verify_autosave()
         adapters::Win32AutosaveAdapter autosave(worker, files, root_path(root_text));
         verify_store(worker, files, autosave);
         verify_discard(worker, files, autosave);
+        verify_flush(worker, files, autosave);
+        verify_flush_limit(worker, files, autosave);
         verify_clear(worker, autosave);
     }
     verify_signals(worker, files);

@@ -4,8 +4,12 @@
 
 namespace nenenib::adapters::win32
 {
-// 手で戻す event を、仕事が無い（立っている）状態で作る。
-AutosaveShelf::AutosaveShelf() : idle_(CreateEventW(nullptr, TRUE, TRUE, nullptr)) {}
+// 手で戻す event を 2 つ、仕事が無い（立っている）状態で作る。
+AutosaveShelf::AutosaveShelf()
+    : idle_(CreateEventW(nullptr, TRUE, TRUE, nullptr)),
+      drained_(CreateEventW(nullptr, TRUE, TRUE, nullptr))
+{
+}
 
 void AutosaveShelf::bind(std::function<void()> finished)
 {
@@ -13,10 +17,27 @@ void AutosaveShelf::bind(std::function<void()> finished)
     finished_ = std::move(finished);
 }
 
-bool AutosaveShelf::open() const
+bool AutosaveShelf::request()
 {
     const std::scoped_lock lock(mutex_);
-    return !closed_;
+    if (closed_)
+    {
+        return false;
+    }
+    if (requested_++ == 0 && drained_.valid())
+    {
+        static_cast<void>(ResetEvent(drained_.get()));
+    }
+    return true;
+}
+
+void AutosaveShelf::settle()
+{
+    const std::scoped_lock lock(mutex_);
+    if (--requested_ == 0 && drained_.valid())
+    {
+        static_cast<void>(SetEvent(drained_.get()));
+    }
 }
 
 bool AutosaveShelf::begin()
@@ -77,5 +98,16 @@ bool AutosaveShelf::close(DWORD limit)
         return running_ == 0;
     }
     return WaitForSingleObject(idle_.get(), limit) == WAIT_OBJECT_0;
+}
+
+bool AutosaveShelf::drain(DWORD limit)
+{
+    // event を作れなかったときは待てないので、片付いていない仕事が無いかだけを答える。
+    if (!drained_.valid())
+    {
+        const std::scoped_lock lock(mutex_);
+        return requested_ == 0;
+    }
+    return WaitForSingleObject(drained_.get(), limit) == WAIT_OBJECT_0;
 }
 } // namespace nenenib::adapters::win32
