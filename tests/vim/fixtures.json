@@ -356,6 +356,8 @@
   {"name":"viewport-delete-L-indented-lands-on-the-first-nonblank","text":"  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12","keys":"dL","settings":["set scrolloff=0"],"viewport":{"visible_lines":6,"first_visible":3,"line":4,"column":5}},
   {"name":"viewport-counted-page-forward-past-eof-indented","text":"  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12","keys":"2<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":6,"first_visible":7,"line":11,"column":5}},
   {"name":"viewport-counted-page-back-past-bof-indented","text":"  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12","keys":"3<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":6,"first_visible":3,"line":4,"column":5}},
+  {"name":"viewport-counted-page-forward-reaches-eof-mid-count-indented","text":"  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12","keys":"3<C-f>","settings":["set scrolloff=0"],"viewport":{"visible_lines":6,"first_visible":1,"line":1,"column":5}},
+  {"name":"viewport-counted-page-back-reaches-bof-mid-count-indented","text":"  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12","keys":"3<C-b>","settings":["set scrolloff=0"],"viewport":{"visible_lines":6,"first_visible":7,"line":12,"column":5}},
   {"name":"char-search-f-first","text":"axbxcxd","keys":"fx"},
   {"name":"char-search-f-count","text":"axbxcxd","keys":"2fx"},
   {"name":"char-search-F-first","text":"axbxcxd","keys":"$Fx"},

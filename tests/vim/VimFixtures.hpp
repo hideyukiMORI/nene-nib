@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 8f00d9e07f7436f816a76b5bd2c4ebb34df3107f67b4cd4f400b26ae4863cdf6 / 1982 fixtures
+// fixtures.json: sha256 7cafe2a2c62f77235e85153cd4d8f089538c6883add65c2ef0f5310337871f47 / 1984 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1982> vim_fixtures{{
+constexpr std::array<VimFixture, 1984> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -369,6 +369,8 @@ constexpr std::array<VimFixture, 1982> vim_fixtures{{
     {"viewport-delete-L-indented-lands-on-the-first-nonblank", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "dL", "  x01\n  x02\n  x03\n  x09\n  x10\n  x11\n  x12", 4, 3, "  x04\n  x05\n  x06\n  x07\n  x08\n", "V", VimViewportFixture{6, 3, 4, 5, 3, 3}},
     {"viewport-counted-page-forward-past-eof-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "2<C-f>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 12, 5, "", "", VimViewportFixture{6, 7, 11, 5, 12, 3}},
     {"viewport-counted-page-back-past-bof-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "3<C-b>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 4, 5, "", "", VimViewportFixture{6, 3, 4, 5, 1, 3}},
+    {"viewport-counted-page-forward-reaches-eof-mid-count-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "3<C-f>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 12, 3, "", "", VimViewportFixture{6, 1, 1, 5, 12, 3}},
+    {"viewport-counted-page-back-reaches-bof-mid-count-indented", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", "3<C-b>", "  x01\n  x02\n  x03\n  x04\n  x05\n  x06\n  x07\n  x08\n  x09\n  x10\n  x11\n  x12", 4, 5, "", "", VimViewportFixture{6, 7, 12, 5, 1, 3}},
     {"char-search-f-first", "axbxcxd", "fx", "axbxcxd", 1, 2, "", "", std::nullopt},
     {"char-search-f-count", "axbxcxd", "2fx", "axbxcxd", 1, 4, "", "", std::nullopt},
     {"char-search-F-first", "axbxcxd", "$Fx", "axbxcxd", 1, 6, "", "", std::nullopt},

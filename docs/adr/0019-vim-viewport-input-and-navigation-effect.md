@@ -78,4 +78,5 @@ ADR 0005（Vim を oracle にする）・ADR 0009（選択とスクロールの�
 
 ## 追補（2026-10-20・#411）: `yH` `yM` のキャレットと回数つきの 1 画面の端
 
-上へ動いた行単位の `y` は `gg` `G` と同じく `H` `M` `L` でも着地（最初の非空白）へキャレットを置き（Vim の `op_yank` は範囲の始まりへ置く）、回数つきの Ctrl-f / Ctrl-b が途中の周で端に当たったときは Vim の `onepage` が FAIL を返して `beginline` を飛ばすので、キャレットは画面へ入る行の同じバイトの桁を保つ（回数を 1 つ減らしても先頭の行が同じなら端に当たった・`page_count_reached_the_end`。fixture `viewport-yank-H-*` `viewport-counted-page-*-past-*` ほか 8 件）。
+上へ動いた行単位の `y` は `gg` `G` と同じく `H` `M` `L` でも着地（最初の非空白）へキャレットを置き（Vim の `op_yank` は範囲の始まりへ置く）、回数つきの Ctrl-f / Ctrl-b が途中の周で端に当たったときは Vim の `onepage` が FAIL を返して `beginline` を飛ばすので、キャレットは画面へ入る行の同じバイトの桁を保つ（回数を 1 つ減らしても先頭の行が同じなら端に当たった・`page_count_reached_the_end`。fixture `viewport-yank-H-*` `viewport-counted-page-*-past-*` ほか 8 件）。開始が端でなく回数の途中の周で初めて端に届く場合も、前向きは最後の周も画面の先頭を動かして端に当たらず最初の非空白へ、後ろ向きは最後の周が FAIL で同じバイトの桁を保つことを oracle で確かめた（fixture `viewport-counted-page-*-reaches-*-mid-count-indented`）。
+この列の保持は折り返さない画面の経路だけに効く。折り返し・格子の画面行の単位は `page_step` の先頭で `view.navigation` から `displayed_navigation` へ戻るので不変で、そこでの回数つきの端は未検証。
