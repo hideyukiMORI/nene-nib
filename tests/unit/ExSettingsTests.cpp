@@ -786,6 +786,33 @@ void verify_input_history_walk()
            "no entry with the prefix leaves the input");
 }
 
+// Tab と履歴の歩き（#725 のレビュー I-3・Q-3）。候補が無い Tab も歩きを終え、巡回の途中の Up は
+// 巡回を終えてその内容を接頭辞に歩く。
+void verify_command_line_history_and_completion()
+{
+    using core::CommandEdit;
+    const auto unmatched = core::InputHistory::empty().remembered("zz one").remembered("zz two");
+    auto line = core::CommandLine::empty()
+                    .inserted("zz")
+                    .value()
+                    .recalled(unmatched, CommandEdit::history_previous)
+                    .edited(CommandEdit::complete_next);
+    expect(line.text() == "zz two" &&
+               line.recalled(unmatched, CommandEdit::history_previous).text() == "zz two",
+           "Tab without candidates ends the walk and its text is the next prefix");
+    const auto cycling = core::CommandLine::empty()
+                             .inserted("colorscheme ")
+                             .value()
+                             .edited(CommandEdit::complete_next);
+    const std::string shown(cycling.text());
+    expect(cycling.completion_index().has_value(), "the first Tab after a full prefix cycles");
+    const auto history =
+        core::InputHistory::empty().remembered("colorscheme zz").remembered(shown + " x");
+    line = cycling.recalled(history, CommandEdit::history_previous);
+    expect(line.text() == shown + " x" && !line.completion_index().has_value(),
+           "Up in a completion cycle ends the cycle and walks with the cycled text as the prefix");
+}
+
 // `:` の行の歩き（CommandLine::recalled）。文字を打つ・Backspace・Tab は歩きを終える。
 void verify_command_line_history()
 {
@@ -824,6 +851,7 @@ void verify_command_line_history()
            "Up after a completion walks from the completed text");
     expect(core::CommandLine::empty().edited(CommandEdit::history_previous).text().empty(),
            "edited alone does not walk history");
+    verify_command_line_history_and_completion();
 }
 
 // application: Enter で足す・Esc と面の確定は足さない・`:` と検索は別の履歴。

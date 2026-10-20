@@ -148,7 +148,10 @@ CommandLine CommandLine::completed(CommandEdit direction) const
     const auto candidates = completions();
     if (candidates.empty())
     {
-        return *this;
+        // 候補が無くても Tab は履歴の歩きを終える（その内容が次の接頭辞・#725）。
+        CommandLine next = *this;
+        next.history_walk_.reset();
+        return next;
     }
     if (completion_seed_.has_value())
     {

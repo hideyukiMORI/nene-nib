@@ -33,6 +33,31 @@ namespace
     }
     return std::nullopt;
 }
+
+// Up の 1 歩。前が無ければ空（動かない・回り込まない）。
+[[nodiscard]] std::optional<HistoryWalk> walked_back(const std::vector<std::string> &entries,
+                                                     HistoryWalk walk)
+{
+    const auto found = previous_match(entries, walk.origin.text, walk.at.value_or(entries.size()));
+    if (!found.has_value())
+    {
+        return std::nullopt;
+    }
+    walk.at = found;
+    return walk;
+}
+
+// Down の 1 歩。歩いていなければ空。次が無ければ位置を空にする（歩きを始めたときの入力に戻る）。
+[[nodiscard]] std::optional<HistoryWalk> walked_forward(const std::vector<std::string> &entries,
+                                                        HistoryWalk walk)
+{
+    if (!walk.at.has_value())
+    {
+        return std::nullopt;
+    }
+    walk.at = next_match(entries, walk.origin.text, walk.at.value() + 1);
+    return walk;
+}
 } // namespace
 
 InputHistory::InputHistory(std::shared_ptr<const std::vector<std::string>> entries)
@@ -74,24 +99,27 @@ std::optional<HistoryWalk> InputHistory::stepped(const InputText &typed,
                                                  CommandEdit direction) const
 {
     HistoryWalk next = walk.value_or(HistoryWalk{typed, std::nullopt});
-    if (direction == CommandEdit::history_previous)
+    switch (direction)
     {
-        const auto found =
-            previous_match(*entries_, next.origin.text, next.at.value_or(entries_->size()));
-        if (!found.has_value())
-        {
-            return std::nullopt;
-        }
-        next.at = found;
-        return next;
-    }
-    if (direction != CommandEdit::history_next || !next.at.has_value())
-    {
+    case CommandEdit::history_previous:
+        return walked_back(*entries_, std::move(next));
+    case CommandEdit::history_next:
+        return walked_forward(*entries_, std::move(next));
+    case CommandEdit::left:
+    case CommandEdit::right:
+    case CommandEdit::home:
+    case CommandEdit::end:
+    case CommandEdit::backspace:
+    case CommandEdit::erase:
+    case CommandEdit::complete_next:
+    case CommandEdit::complete_previous:
+    case CommandEdit::page_previous:
+    case CommandEdit::page_next:
+    case CommandEdit::list_first:
+    case CommandEdit::list_last:
         return std::nullopt;
     }
-    // 次が無ければ空（歩きを始めたときの入力に戻る・回り込まない）。
-    next.at = next_match(*entries_, next.origin.text, next.at.value() + 1);
-    return next;
+    std::unreachable();
 }
 
 InputText InputHistory::shown(const HistoryWalk &walk) const
