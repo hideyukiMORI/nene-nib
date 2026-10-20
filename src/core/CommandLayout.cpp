@@ -20,4 +20,16 @@ CommandLayout command_layout(const StatusBarLayout &status, std::uint32_t dpi,
                                     right, status.band.top},
                          row, rows};
 }
+
+LayoutRect command_row_label(const LayoutRect &row, std::uint32_t dpi) noexcept
+{
+    const auto inset = to_pixels(command_text_inset_dip, dpi);
+    const auto left = row.left + inset;
+    return LayoutRect{left, row.top, std::max(left, row.right - inset), row.bottom};
+}
+
+LayoutRect command_input_label(const CommandLayout &layout, std::uint32_t dpi) noexcept
+{
+    return command_row_label(layout.input, dpi);
+}
 } // namespace nenenib::core
