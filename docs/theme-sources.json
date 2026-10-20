@@ -1552,27 +1552,27 @@
   },
   {
     "name": "vscode-high-contrast-light",
-    "appearance": "dark",
+    "appearance": "light",
     "body": {
-      "foreground": "#D4D4D4",
-      "background": "#1E1E1E",
-      "cursor": "#D4D4D4",
-      "selection": "#31224D",
-      "current_line": "#2A2A2A",
-      "line_number": "#8C8C8C",
-      "comment": "#858585",
-      "keyword": "#F24444",
-      "string": "#6389AF",
-      "number": "#4B9479",
-      "type": "#5D8E9D",
-      "function": "#9675D3",
-      "constant": "#6389AF",
-      "operators": "#F24444",
-      "error": "#CD695C",
-      "warning": "#4B9479"
+      "foreground": "#292929",
+      "background": "#FFFFFF",
+      "cursor": "#292929",
+      "selection": "#292929",
+      "current_line": "#EEEEEE",
+      "line_number": "#666666",
+      "comment": "#515151",
+      "keyword": "#EE0000",
+      "string": "#0F4A85",
+      "number": "#096D48",
+      "type": "#185E73",
+      "function": "#5E2CBC",
+      "constant": "#0F4A85",
+      "operators": "#EE0000",
+      "error": "#B5200D",
+      "warning": "#096D48"
     },
     "accent": "#5E2CBC",
-    "gutter_background": "#181818",
+    "gutter_background": "#EEEEEE",
     "source": {
       "author": "Microsoft and theme contributors",
       "license": "MIT",
@@ -1581,44 +1581,7 @@
       "commit": "6133b425600558c15ca5238ce483a2f5bdb8db9c"
     },
     "group": "IDE",
-    "adjustments": {
-      "comment": {
-        "source": "#515151",
-        "adapted": "#858585"
-      },
-      "keyword": {
-        "source": "#EE0000",
-        "adapted": "#F24444"
-      },
-      "string": {
-        "source": "#0F4A85",
-        "adapted": "#6389AF"
-      },
-      "number": {
-        "source": "#096d48",
-        "adapted": "#4B9479"
-      },
-      "type": {
-        "source": "#185E73",
-        "adapted": "#5D8E9D"
-      },
-      "function": {
-        "source": "#5e2cbc",
-        "adapted": "#9675D3"
-      },
-      "constant": {
-        "source": "#0F4A85",
-        "adapted": "#6389AF"
-      },
-      "operators": {
-        "source": "#EE0000",
-        "adapted": "#F24444"
-      },
-      "error": {
-        "source": "#B5200D",
-        "adapted": "#CD695C"
-      }
-    },
+    "adjustments": {},
     "notes": [
       "TextMate roles mapped to the existing 16 SyntaxPalette roles"
     ]

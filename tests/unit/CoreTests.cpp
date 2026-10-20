@@ -1525,6 +1525,21 @@ void verify_theme_contrast()
     }
 }
 
+// #713: 明暗の印と本文の地の明るさが食い違わない（相対輝度 0.5 で切る）。取り込みの誤りで
+// light の名前の表が暗い既定値を持った（vscode-high-contrast-light）のを機械で止める。
+void verify_theme_appearance_matches_background()
+{
+    for (const Theme &theme : builtin_themes)
+    {
+        const bool bright = relative_luminance(theme.body.background) >= 0.5;
+        expect(bright == (theme.appearance == Appearance::light),
+               (std::string{theme.name} + ": the appearance matches the background luminance")
+                   .c_str());
+    }
+    expect(theme_of(BuiltinTheme::vscode_high_contrast_light).appearance == Appearance::light,
+           "vscode-high-contrast-light is a light theme");
+}
+
 void verify_added_syntax_contrast()
 {
     // 既存9件の本文色は保持する。ADR 0117で足した色の10役割だけを対象にする。
@@ -2535,6 +2550,7 @@ void verify_theme_scope()
     verify_light_palette_tokens();
     verify_tab_hover_tokens();
     verify_theme_contrast();
+    verify_theme_appearance_matches_background();
     verify_added_syntax_contrast();
     verify_theme_tokens_filled();
     verify_theme_names();
