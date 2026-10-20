@@ -251,7 +251,25 @@ class MergeBoundary(unittest.TestCase):
         self.assertIn({"ciWatchRetried": 1}, [json.loads(line) for line in output.splitlines()])
         self.assertEqual([call[1] for call in calls].count("merge"), 1)
         self.assertEqual(self.watch_timeouts[0], MERGE.WATCH_SECONDS)
+        self.assertIsInstance(self.watch_timeouts[1], int)
         self.assertLessEqual(self.watch_timeouts[1], MERGE.WATCH_SECONDS)
+
+    def test_remaining_watch_time_is_whole_seconds_within_the_limit(self):
+        # #716: deadline - now on this clock is 2700.000000000058 in floating point; the watch gets 2700.
+        timeouts = []
+        responses = {"watch": [1, 0]}
+
+        def runner(arguments, timeout=None):
+            if arguments[:2] == ["run", "watch"]:
+                timeouts.append(timeout)
+                return subprocess.CompletedProcess(arguments, responses["watch"].pop(0), "", "")
+            return subprocess.CompletedProcess(arguments, 0, json.dumps({"status": "in_progress"}), "")
+
+        with (patch.object(MERGE.time, "monotonic", return_value=522054.3407681393),
+              contextlib.redirect_stdout(io.StringIO())):
+            MERGE.watch_run(101, runner)
+        self.assertEqual(timeouts, [MERGE.WATCH_SECONDS, MERGE.WATCH_SECONDS])
+        self.assertIsInstance(timeouts[1], int)
 
     def test_interrupted_watch_of_a_failed_run_is_refused_without_retry(self):
         # #667 (b): the run itself completed with a failure.

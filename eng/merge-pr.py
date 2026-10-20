@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import json
+import math
 from pathlib import Path
 import re
 import subprocess
@@ -104,11 +105,12 @@ def conformance_recorded(body: object) -> bool:
 
 def watch_run(run_id: int, runner) -> None:
     """Wait on one run; an interrupted watch waits on the same run again, never a new one (#667)."""
+    # #716: the remaining time is whole seconds (floor), so float drift never exceeds WATCH_SECONDS.
     deadline = time.monotonic() + WATCH_SECONDS
     retried = 0
     while True:
         result = runner(["run", "watch", str(run_id), "--repo", REPOSITORY, "--exit-status", "--interval", "5"],
-                        timeout=WATCH_SECONDS if retried == 0 else max(deadline - time.monotonic(), 0))
+                        timeout=WATCH_SECONDS if retried == 0 else max(math.floor(deadline - time.monotonic()), 0))
         if not result.returncode:
             break
         failure = f"CI did not succeed: {result.stderr.strip()} {result.stdout.strip()}"
