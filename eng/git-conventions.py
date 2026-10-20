@@ -18,12 +18,18 @@ def validate(message: str, title_only: bool = False) -> list[str]:
     return errors
 
 
+# GIT-004 の PR 本文の欄の正本（#710）。CI の validate-git.ps1 も --pr-body でこの表だけを使う。
+PR_FIELDS = ("目的", "使った正典経路", "規則 ID", "振る舞い・スキーマの変更", "検証（実行したコマンドと結果）",
+             "確認する退行", "対象・依存", "検証結果", "再利用", "Waivers", "残るリスク")
+
+
 def validate_pr(body: str) -> list[str]:
     """Check record presence, not the truth or sufficiency of the reported verification."""
-    fields = ("確認する退行", "対象・依存", "検証結果", "再利用")
-    return [f"GIT-004: missing non-empty verification field {field}:"
-            for field in fields
-            if not re.search(rf"^{re.escape(field)}:[ \t]*\S[^\r\n]*\r?$", body, re.M)]
+    errors = [] if re.search(r"^Closes #[1-9]\d*\b", body, re.M) else [
+        "GIT-001: PR body must close an Issue on a line starting with Closes #N"]
+    return errors + [f"GIT-004: missing non-empty PR field {field}: at the start of a line"
+                     for field in PR_FIELDS
+                     if not re.search(rf"^{re.escape(field)}:[ \t]*\S[^\r\n]*\r?$", body, re.M)]
 
 
 def validate_merge_title(title: str, body: str) -> list[str]:

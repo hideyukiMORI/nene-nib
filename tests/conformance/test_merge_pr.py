@@ -16,8 +16,10 @@ MERGE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MERGE)
 HEAD = "a" * 40
 TITLE = "fix(git): 件名「'$()' と `」を保持する (#42)"
-BODY = ("Closes #42\n確認する退行: 件名の転記\n対象・依存: 統合入口\n"
-        "検証結果: 限定した道具試験\n再利用: 初回検証\n")
+BODY = ("Closes #42\n目的: 件名を保つ\n使った正典経路: eng/merge-pr.py\n規則 ID: GIT-004\n"
+        "振る舞い・スキーマの変更: なし\n検証（実行したコマンドと結果）: 道具の試験\n"
+        "確認する退行: 件名の転記\n対象・依存: 統合入口\n"
+        "検証結果: 限定した道具試験\n再利用: 初回検証\nWaivers: none\n残るリスク: なし\n")
 RECORDED_BODY = BODY + "検証（実行したコマンドと結果）: python eng/conformance.py → 0 violation(s)\n"
 RECORD = {"number": 900, "headRefOid": HEAD, "state": "OPEN", "isDraft": False,
           "baseRefName": "main", "baseRefOid": "c" * 40, "title": TITLE, "body": BODY,
