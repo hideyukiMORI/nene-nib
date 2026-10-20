@@ -240,6 +240,8 @@ using FontKey = std::pair<float, std::string>;
         return L"64 MiB を超えるファイルはまだ開けません。";
     case application::FileFailure::undecodable:
         return L"文字コードを判別できませんでした。";
+    case application::FileFailure::unsupported_utf32:
+        return L"UTF-32 のファイルは扱えません。UTF-8 か UTF-16 で保存し直してください。";
     case application::FileFailure::unencodable:
         return L"この文字コードでは保存できない文字があります。";
     }

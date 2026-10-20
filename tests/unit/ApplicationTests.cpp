@@ -2000,6 +2000,12 @@ void verify_document_open_failures()
                         "an odd UTF-16 body is undecodable");
     expect_open_failure(std::string("\xFE\xFF\xD8\x3D\x00\x41", 6), FileFailure::undecodable,
                         "an unpaired surrogate in UTF-16 is undecodable");
+    expect_open_failure(std::string("\xFF\xFE\x00\x00\x41\x00\x00\x00", 8),
+                        FileFailure::unsupported_utf32,
+                        "a UTF-32 LE BOM is refused by name, not as undecodable (#787)");
+    expect_open_failure(std::string("\x00\x00\xFE\xFF\x00\x00\x00\x41", 8),
+                        FileFailure::unsupported_utf32,
+                        "a UTF-32 BE BOM is refused by name, not as undecodable (#787)");
     Editing refused;
     refused.files().hold(std::string("\x93\xFA"));
     refused.code_pages().decode_to(std::unexpected(CodePageFailure::unencodable));
