@@ -2405,7 +2405,8 @@ void EditorWindow::scroll_palette(std::int32_t delta)
     {
         return;
     }
-    // 1 通知 = 1 刻み。行数は本文と同じく OS の設定から（1 画面の設定なら面の見えている行数・#499）。
+    // 1 通知 = 1 刻み。行数は本文と同じく OS の設定から
+    // （1 画面の設定なら面の見えている行数・#499）。
     std::size_t visible = 0;
     if (wheel_setting_ == WHEEL_PAGESCROLL)
     {
