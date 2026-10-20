@@ -302,6 +302,42 @@ void verify_vim_text_object_quote_pairs()
            "a selection whose ends are on two lines cancels (quotes are read within one line)");
 }
 
+// 段落と文の VISUAL（Issue #729）。段落は行単位 VISUAL へ移り、選択を広げる形と文の広げ方は
+// モードを変えない。本文の端で広げられない段落はビープが後続の鍵を捨てて 1 回の `:normal!` に
+// 乗らないので（Issue #87）、固定 Vim を区切って測った値をここで固定する。
+void verify_vim_text_object_paragraphs_and_sentences()
+{
+    Editing editing;
+    open_vim_document(editing, "ab\ncd\n\nef");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "lvip");
+    expect(controller.vim_state().mode == VimMode::visual_line,
+           "vip turns VISUAL linewise (measured against Vim 9.1)");
+    vim_replay(controller, "<Esc>gglvj");
+    vim_replay(controller, "ip");
+    vim_replay(controller, "y");
+    expect(controller.vim_state().unnamed_register.value().text == "b\ncd\n\n" &&
+               controller.vim_state().unnamed_register.value().kind == VimRegisterKind::characters,
+           "a multi-line characterwise selection grows by paragraphs and stays characterwise");
+    Editing edge;
+    open_vim_document(edge, "ab\ncd");
+    EditorController &bottom = edge.controller();
+    vim_replay(bottom, "lvjip");
+    expect(bottom.vim_state().mode == VimMode::visual,
+           "a paragraph that cannot grow past the end keeps VISUAL as it was");
+    vim_replay(bottom, "y");
+    expect(bottom.vim_state().unnamed_register.value().text == "b\nc",
+           "the caret still moves to the start of the last line when the paragraph cannot grow");
+    Editing sentences;
+    open_vim_document(sentences, "One. Two. Three.");
+    EditorController &other = sentences.controller();
+    vim_replay(other, "4lVlis");
+    expect(other.vim_state().mode == VimMode::visual_line,
+           "is grows a linewise selection without leaving linewise VISUAL");
+    vim_replay(other, "<Esc>0vis");
+    expect(other.vim_state().mode == VimMode::visual, "vis selects the sentence characterwise");
+}
+
 void verify_vim_text_object_fixtures()
 {
     constexpr std::array<std::string_view, 6> boundaries{
@@ -317,8 +353,8 @@ void verify_vim_text_object_fixtures()
             ++selected;
         }
     }
-    expect(selected == 272,
-           "the scope replays 266 text-object fixtures and 6 shared next-key boundaries");
+    expect(selected == 313,
+           "the scope replays 307 text-object fixtures and 6 shared next-key boundaries");
 }
 } // namespace
 
@@ -331,6 +367,7 @@ void verify_vim_text_object_contracts()
     verify_vim_text_object_dot();
     verify_vim_text_object_residuals();
     verify_vim_text_object_quote_pairs();
+    verify_vim_text_object_paragraphs_and_sentences();
 }
 
 void verify_vim_text_object_scope()

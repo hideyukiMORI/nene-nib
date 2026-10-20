@@ -8,8 +8,11 @@
 #include "Utf8.hpp"
 #include "VimBracketPair.hpp"
 #include "VimCharacterBoundary.hpp"
+#include "VimMode.hpp"
 #include "VimMotionRange.hpp"
+#include "VimParagraphObject.hpp"
 #include "VimRegisterKind.hpp"
+#include "VimSentenceObject.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectCancel.hpp"
 #include "VimTextObjectScope.hpp"
@@ -189,6 +192,8 @@ constexpr char32_t escape_character = U'\\';
     case VimTextObject::brace:
     case VimTextObject::bracket:
     case VimTextObject::angle:
+    case VimTextObject::paragraph:
+    case VimTextObject::sentence:
         return VimWordClass::word;
     }
     std::unreachable();
@@ -344,7 +349,7 @@ constexpr char32_t escape_character = U'\\';
     }
     const VimMotionRange range = grows ? characters_through(text, begin, end.value())
                                        : word_motion_range(text, begin, end.value(), request);
-    return VimTextObjectSpan{range, forward_selection(text, range)};
+    return VimTextObjectSpan{range, forward_selection(text, range), VimMode::visual};
 }
 
 // 後ろ向きの選択（caret が anchor より小さい）。Vim は anchor を動かさず、caret だけを
@@ -372,7 +377,7 @@ constexpr char32_t escape_character = U'\\';
     }
     const Selection grown{selection.anchor, caret};
     return VimTextObjectSpan{VimMotionRange{selection_range(grown), VimRegisterKind::characters},
-                             grown};
+                             grown, VimMode::visual};
 }
 
 [[nodiscard]] VimTextObjectOutcome word_outcome(const TextBuffer &text, const Selection &selection,
@@ -402,6 +407,8 @@ constexpr char32_t escape_character = U'\\';
     case VimTextObject::brace:
     case VimTextObject::bracket:
     case VimTextObject::angle:
+    case VimTextObject::paragraph:
+    case VimTextObject::sentence:
         return U'"';
     }
     std::unreachable();
@@ -739,7 +746,8 @@ constexpr char32_t escape_character = U'\\';
     const bool with_quotes =
         count > 1 || (has_selection(selection) && inside_quotes(text, selection, quote));
     const VimMotionRange range = quote_motion(text, pair.value(), request, with_quotes);
-    return VimTextObjectSpan{range, quote_selection(text, selection, range, quote)};
+    return VimTextObjectSpan{range, quote_selection(text, selection, range, quote),
+                             VimMode::visual};
 }
 
 // ------------------------------------------------------------------ 括弧（決定 7）
@@ -760,6 +768,8 @@ constexpr char32_t escape_character = U'\\';
     case VimTextObject::single_quote:
     case VimTextObject::backtick:
     case VimTextObject::paren:
+    case VimTextObject::paragraph:
+    case VimTextObject::sentence:
         return VimBracketPair{U'(', U')'};
     }
     std::unreachable();
@@ -1037,7 +1047,8 @@ constexpr char32_t escape_character = U'\\';
     {
         return VimTextObjectCancel{selection};
     }
-    return VimTextObjectSpan{range.value(), forward_selection(text, range.value())};
+    return VimTextObjectSpan{range.value(), forward_selection(text, range.value()),
+                             VimMode::visual};
 }
 } // namespace
 
@@ -1058,6 +1069,10 @@ VimTextObjectOutcome vim_text_object_range(const TextBuffer &text, const Selecti
     case VimTextObject::bracket:
     case VimTextObject::angle:
         return paired_outcome(text, selection, request, count);
+    case VimTextObject::paragraph:
+        return vim_paragraph_object_range(text, selection, request, count);
+    case VimTextObject::sentence:
+        return vim_sentence_object_range(text, selection, request, count);
     }
     std::unreachable();
 }
