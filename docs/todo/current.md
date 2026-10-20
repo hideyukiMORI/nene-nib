@@ -27,6 +27,7 @@
 - split の試用（D41）: `D:\NeNeNib\evidence\split-trial\README.md`。OK なら #688 → #687 → #692 の順に rebase して merge（#688 の本文は `検証（実行したコマンドと結果）:` の値を同じ行に直してから Ready）
 - #701（ホイール）: `NeNeNib-wheel-fef8900.exe` の手触り。OK なら merge（本文の同じ直しが要る）
 - `fontsize` / `guifont` のプレビュー: ADR 0150 の次の段。試用で「欲しい」なら着手
+- 3 本の実装計画（[Markdown](../plans/2026-10-21-markdown-preview.md)・[巨大ファイル](../plans/2026-10-21-large-file.md)・[構文の色分けと LSP](../plans/2026-10-21-syntax-and-lsp.md)）は hide の判断待ち（各計画の「施主に確かめる点」の表・M-1〜6・L-1〜5・S-1〜4・LSP の L-1〜5）。順番の推しは構文の計画の §3
 - #469 / #424: 持ち越し（推しは #469 を閉じる）
 
 以下は 2026-10-19 までの記録。
