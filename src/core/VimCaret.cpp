@@ -85,20 +85,62 @@ Offset vim_resting_caret(const TextBuffer &text, Offset caret)
 
 Offset vim_first_non_blank(const TextBuffer &text, Offset at)
 {
-    const LineNumber line = text.position_of(at).line;
+    return vim_non_blank_from(text, text.line_start(text.position_of(at).line));
+}
+
+Offset vim_non_blank_from(const TextBuffer &text, Offset at)
+{
+    const Offset end = text.line_end(text.position_of(at).line);
+    if (at == end)
+    {
+        return at;
+    }
+    // 空白は 1 バイトなので、at の後ろを窓ごとに読んでバイトで歩く（行の全体は写さない）。
+    Offset begin = at;
+    std::size_t window = caret_window_bytes;
+    while (begin.value < end.value)
+    {
+        const Offset stop{begin.value + std::min(window, end.value - begin.value)};
+        const std::string content = text.text_range(begin, stop);
+        std::size_t index = 0;
+        while (index < content.size() && blank_byte(content[index]))
+        {
+            ++index;
+        }
+        if (index < content.size())
+        {
+            return Offset{begin.value + index};
+        }
+        begin = stop;
+        window *= 2;
+    }
+    // 空白しか無ければ Vim の ^ と同じく最後の文字の上に載る。
+    return vim_resting_caret(text, end);
+}
+
+Offset vim_last_non_blank(const TextBuffer &text, LineNumber line)
+{
     const Offset start = text.line_start(line);
-    const std::string content = text.text_range(start, text.line_end(line));
-    std::size_t index = 0;
-    while (index < content.size() && blank_byte(content[index]))
+    // 行の終わりから窓ごとに手前へ読み、空白（1 バイト）を越えた最後のバイトを含む文字に載る。
+    Offset stop = text.line_end(line);
+    std::size_t window = caret_window_bytes;
+    while (stop.value > start.value)
     {
-        ++index;
+        const Offset begin{stop.value - std::min(window, stop.value - start.value)};
+        const std::string content = text.text_range(begin, stop);
+        std::size_t index = content.size();
+        while (index > 0 && blank_byte(content[index - 1]))
+        {
+            --index;
+        }
+        if (index > 0)
+        {
+            return vim_resting_caret(text, Offset{begin.value + index - 1});
+        }
+        stop = begin;
+        window *= 2;
     }
-    if (index >= content.size())
-    {
-        // 空白しか無い行では Vim の ^ と同じく最後の文字の上に載る（空行なら行頭）。
-        return vim_resting_caret(text, text.line_end(line));
-    }
-    return Offset{start.value + index};
+    return start;
 }
 
 Offset vim_line_and_column(const TextBuffer &text, LineNumber line, std::size_t column)

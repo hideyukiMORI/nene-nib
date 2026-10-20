@@ -51,6 +51,12 @@ enum class VimMotion : std::uint8_t
     display_line_end,
     display_line_middle,
     // `gM`。行の本文の幅の半分（回数 1〜100 は %）の升を含む文字（ADR 0147 の決定 2・3）。
-    line_middle
+    line_middle,
+    // `g^`。`g0` の着地から空白（空白と Tab）を右へ越えた最初の文字。行の最後の文字で止まる
+    // （Issue #721・ADR 0147 の決定 8・Vim の nv_g_cmd）。exclusive。
+    display_line_first_non_blank,
+    // `g_`。回数 − 1 行下の行の最後の非空白（空白だけの行と空行は行頭）。inclusive（Issue #721・
+    // ADR 0147 の決定 8）。
+    last_non_blank
 };
 } // namespace nenenib::core

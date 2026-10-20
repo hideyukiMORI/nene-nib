@@ -32,6 +32,11 @@ Vim 9.1 の実測（要点・全表は probe）:
 6. **横位置は engine が置かない。** `first_column` は `std::nullopt`（ADR 0145 決定 7）で、左端で割れた全角に `g0` で着いたときは application の最小追従が leftcol を 1 戻す（Vim の実測と同じ結果）。
 7. **検証。** `eng/vim-wrap-oracle.py` の fixture: wrap（80 字の行の 2 段目で 4 鍵・後の `j`・`2g$` `9g$`（行をまたぐ）・`99g$x`（失敗）・`d99g$`（不変）・`3g0` `3gm`（無視）・`25gM` `50gM` `100gM` `150gM`・最後の短い段と短い行・Tab の行・`dg$` `dg0` `dgm` `dgM` `d2g$`・`vg$y` `vg0y` `vgmy`・最後の段の `vg$y`）と nowrap（leftcol 30 で 4 鍵・`g$j`・`2g$`・`99g$x`（失敗しない）・leftcol 0・左端で割れた全角の `g0` `g$`・`dg$` `dg0`）。送られた全角の段に当たる件は Nib と合わない見込みなので、oracle の答えを証跡に残して json から外し、限界に記録する。格子は契約（`--vim`・替え玉の `row_request`・`columns` を W にして `gm` が段の頭 + W/2・巨大な 1 行の `g0` `g$` が段の端・`{N}g$` が画面行をまたぐ）。既存 fixture（Vim 1,914 件 + #660 の分・wrap 209 件）は不変。
 
+8. **`g^` と `g_`（Issue #721・2026-10-20 追記）。** `VimMotion` に `display_line_first_non_blank`（`g^`・exclusive）と `last_non_blank`（`g_`・inclusive）を足し、`g` の接頭辞の表に 2 行。
+   - `g^` は `g0` と同じ源（決定 2 の 3 つ・`VimDisplayLineEdge::first_non_blank` は `start` と同じ所）で着いた所から、空白と Tab を右へ越えた最初の文字へ進む（Vim の `nv_g_cmd` の `g^`: `coladvance` の後に `VIM_ISWHITE` の間 `oneright`）。**歩きは段の中で止まらない**: 段が空白だけなら次の段の最初の非空白へ、行の残りが空白だけなら行の最後の文字に載る（設計の下書きの「段の中に非空白が無ければ `g0` の位置」は oracle で否定された・`wrap-g-caret-blank-row` は 51 桁目から 64 桁目へ）。回数は無視。欲しい列は着地の桁。歩きは `vim_non_blank_from`（`VimCaret`・窓ごとに読む）の 1 本で、`^` の `vim_first_non_blank` も行頭からこれを呼ぶ。
+   - `g_` は源に依らず、回数 − 1 行下（本文の末尾で止まる）の行の最後の非空白（`vim_last_non_blank`・空白だけの行と空行は行頭）。最終行で回数が 2 以上なら Vim の `cursor_down` が失敗し、動かず後ろの鍵を打ち切り、オペレータを打ち消す。欲しい列は着地の桁（`g_j`）。VISUAL でも行の内容の終わりには載らず、`vg_y` は改行を含まない。オペレータの範囲は `$` と同じ `to_line_end` で解き、後ろへ動いた `g_`（末尾の空白の上から）はキャレットの文字まで含む。`fails_unmoved` は偽（動かなくても鳴らない）。
+   - 検証: `tests/vim/fixtures.json` に 21 件（`g_` 20 件と文字組みの無い `g^` 1 件・字下げと末尾の空白・Tab・全角・結合文字・`2g_` `3g_` `5g_`（止まる・最終行は失敗）・`dg_` `yg_` `d3g_` `.`・後ろへの `dg_`・`vg_y` `v2g_y`）、`tests/vim/wrap-fixtures.json` に `g^` 17 件（段の頭が空白・空白だけの段・末尾が空白だけの段・Tab の段・最初の段の字下げ・`3g^`・`dg^` `yg^` `vg^y`・`j`・nowrap の leftcol 20 / 0）。
+
 ## 却下した選択肢
 
 - **画面の操作（motion の外）として解く**: オペレータと VISUAL の範囲を別に組むことになり、`dg$` `vg0` の経路が 2 本になる。
@@ -50,4 +55,6 @@ Vim 9.1 の実測（要点・全表は probe）:
 - text 形の `row_columns` と `columns` は平均の字幅の近似（ADR 0144 / 0145 の限界と同じ）。`gm` は proportional な字体では Vim と升がずれ得る。
 - 送られた全角の段では着地は一致するが、その後の `j` の桁が 1 ずれる 2 件（`wrap-wide-row2-g0-j` `wrap-wide-row1-gdollar-j`）を json から外した（証跡 `D:/NeNeNib/evidence/661-wrap-oracle/excluded/`）。
 - 横に送る文書の `{N}g$` は、下の行にもキャレットの行の `left_column` を使う（Vim の実測と一致）。巨大な行の窓で窓の外の行に当たる場合は未検査（#663 のレビュー Q-2）。
-- `g^`（画面行の最初の非空白）・`g_`・INSERT の `<C-o>g$`・矩形 VISUAL の `g$`（`$` の「行末まで」の特例）は入れない（後続）。
+- INSERT の `<C-o>g$`・矩形 VISUAL の `g$`（`$` の「行末まで」の特例）は入れない（後続）。`g^` `g_` は決定 8（#721）。
+- 後ろへの `dg_` が多バイトの文字を越えるとき、Vim 9.1 はバイトで 1 つずつ戻るので文字を割って消す（`あいう  ` の `$dg_` は `う` の 3 バイト目以降を消し、本文が UTF-8 でなくなる）。oracle は記録できず Nib は文字を割らないので json から外した（証跡 `D:/NeNeNib/evidence/721-g-underscore/excluded-dg-underscore-multibyte.txt`・裸の `g_` は文字の先頭に着き一致する）。
+- 横に送る文書で `g^` の歩きが見えている升の右へ出る件（`nowrap-g-caret-blank-view`）は、着地は一致するが application の最小追従（`followed_horizontal` の幅 − 3 px）が Vim の leftcol 44 と合わない見込みなので json から外した（証跡 `D:/NeNeNib/evidence/721-g-underscore/excluded/`）。`g^` に固有の穴ではなく、右へ見えなくなる移動の追従の既存の差。

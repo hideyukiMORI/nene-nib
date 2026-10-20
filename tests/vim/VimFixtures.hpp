@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 0ecc21b5115521a0778650a41edd13b5597c3cc8f6ef872db94fae6e5a63501d / 1953 fixtures
+// fixtures.json: sha256 68db45639de9019c1f99901e41898a0aa77616881805b85032543801049e6b3d / 1974 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 1953> vim_fixtures{{
+constexpr std::array<VimFixture, 1974> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1965,6 +1965,27 @@ constexpr std::array<VimFixture, 1953> vim_fixtures{{
     {"bar-visual-is-inclusive", "abcdefghijklmnopqrst", "9lv5|y", "abcdefghijklmnopqrst", 1, 5, "efghij", "v", std::nullopt},
     {"bar-visual-past-the-line-end-takes-the-line-break", "abcdefghijklmnopqrst\nABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx", "4lv40|y", "abcdefghijklmnopqrst\nABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx", 1, 5, "efghijklmnopqrst\n", "v", std::nullopt},
     {"bar-is-not-the-change-that-dot-repeats", "abcdefghijklmnopqrst", "x5|.", "bcdeghijklmnopqrst", 1, 5, "f", "v", std::nullopt},
+    {"g-underscore-skips-trailing-blanks", "  abc  \t", "g_", "  abc  \t", 1, 5, "", "", std::nullopt},
+    {"g-underscore-count-goes-down", "  ab  \n  cd ef   \nxyz", "2g_", "  ab  \n  cd ef   \nxyz", 2, 7, "", "", std::nullopt},
+    {"g-underscore-count-three", "  ab  \n  cd ef   \nxyz \nlast", "3g_", "  ab  \n  cd ef   \nxyz \nlast", 3, 3, "", "", std::nullopt},
+    {"g-underscore-count-clamps-to-the-last-line", "ab \ncd  ", "5g_", "ab \ncd  ", 2, 2, "", "", std::nullopt},
+    {"g-underscore-count-on-the-last-line-fails", "ab \ncd  ", "j5g_x", "ab \ncd  ", 2, 1, "", "", std::nullopt},
+    {"g-underscore-on-a-blank-line-goes-to-the-line-start", "abc\n    \nd", "j$g_", "abc\n    \nd", 2, 1, "", "", std::nullopt},
+    {"g-underscore-on-an-empty-line", "abc\n\nd", "jg_", "abc\n\nd", 2, 1, "", "", std::nullopt},
+    {"g-underscore-moves-back-from-trailing-blanks", "abc   ", "$g_", "abc   ", 1, 3, "", "", std::nullopt},
+    {"g-underscore-wanted-column-is-the-landing", "abc def  \nabcdefghijkl", "g_j", "abc def  \nabcdefghijkl", 2, 7, "", "", std::nullopt},
+    {"g-underscore-japanese-trailing-blanks", "あいう  ", "g_", "あいう  ", 1, 7, "", "", std::nullopt},
+    {"g-underscore-tab-before-the-end", "a\tb\t", "g_", "a\tb\t", 1, 3, "", "", std::nullopt},
+    {"g-underscore-combining-last-character", "aé  ", "g_", "aé  ", 1, 2, "", "", std::nullopt},
+    {"d-g-underscore-keeps-trailing-blanks", "  abc def   ", "wdg_", "     ", 1, 3, "abc def", "v", std::nullopt},
+    {"y-g-underscore-yanks-to-the-last-non-blank", "  abc def   ", "wyg_", "  abc def   ", 1, 3, "abc def", "v", std::nullopt},
+    {"d-g-underscore-backward-takes-the-caret", "abc   ", "$dg_", "ab", 1, 2, "c   ", "v", std::nullopt},
+    {"d-3g-underscore-crosses-lines", "ab  \ncd  \nef  \ngh", "ld3g_", "a  \ngh", 1, 2, "b  \ncd  \nef", "v", std::nullopt},
+    {"d-g-underscore-count-on-the-last-line-does-nothing", "ab \ncd  ", "jd5g_", "ab \ncd  ", 2, 1, "", "", std::nullopt},
+    {"d-g-underscore-dot-repeats", "ab  \ncd  ", "ldg_j.", "a  \nc  ", 2, 2, "d", "v", std::nullopt},
+    {"visual-g-underscore-leaves-the-line-break", "abc  \ndef", "vg_y", "abc  \ndef", 1, 1, "abc", "v", std::nullopt},
+    {"visual-2g-underscore", "abc  \ndef  ", "v2g_y", "abc  \ndef  ", 1, 1, "abc  \ndef", "v", std::nullopt},
+    {"g-caret-without-layout-is-the-first-non-blank", "   abc", "$g^", "   abc", 1, 4, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

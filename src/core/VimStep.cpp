@@ -544,6 +544,17 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return vim_first_non_blank(text, text.line_start(target));
 }
 
+// H M L の画面の位置。ほかの移動は呼ばない。
+[[nodiscard]] VimScreenPosition screen_position_of(VimMotion motion) noexcept
+{
+    if (motion == VimMotion::screen_top)
+    {
+        return VimScreenPosition::top;
+    }
+    return motion == VimMotion::screen_middle ? VimScreenPosition::middle
+                                              : VimScreenPosition::bottom;
+}
+
 // H M L の着地（画面の行の最初の非空白）。
 [[nodiscard]] Offset screen_first_non_blank(const VimEditorView &view, VimScreenPosition position,
                                             std::size_t count)
@@ -595,11 +606,25 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return rested_in(text, offset_at_virtual_column(text, line, VirtualColumn{count}), mode);
 }
 
+// g_ の着地（Issue #721・ADR 0147 の決定 8）。回数 − 1 行下（本文の末尾で止まる）の最後の非空白。
+// 最終行で回数が 2 以上なら Vim の cursor_down が失敗し、動かずにオペレータを打ち消す。VISUAL でも
+// 行の内容の終わりには載らない（Vim の nv_g_cmd が NUL から 1 つ戻す）。
+[[nodiscard]] VimMotionLanding last_non_blank_landing(const TextBuffer &text, Offset caret,
+                                                      std::size_t count)
+{
+    const LineNumber line = line_of(text, caret);
+    if (count > single_step && line.value >= text.line_count())
+    {
+        return VimMotionLanding{caret, VimRepeatFailure::not_moved};
+    }
+    return VimMotionLanding{vim_last_non_blank(text, line_below(text, line, count - single_step))};
+}
+
 [[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
                                           VimMotion motion);
 
-// 移動の着地。語の移動と、鍵を写す前に解いた着地（gj gk g0 g$ gm gM）は失敗の印といっしょに
-// landing_of が決め、ここはその位置だけを読む。
+// 移動の着地。語の移動と g_ と、鍵を写す前に解いた着地（gj gk g0 g$ gm gM
+// g^）は失敗の印といっしょに landing_of が決め、ここはその位置だけを読む。
 [[nodiscard]] Offset moved_by(const VimEditorView &view, const VimState &state, VimMotion motion)
 {
     const std::size_t count = resolved_motion_count(state, view.text, motion);
@@ -639,13 +664,13 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::display_line_end:
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
+    case VimMotion::display_line_first_non_blank:
+    case VimMotion::last_non_blank:
         return landing_of(view, state, motion).offset;
     case VimMotion::screen_top:
-        return screen_first_non_blank(view, VimScreenPosition::top, count);
     case VimMotion::screen_middle:
-        return screen_first_non_blank(view, VimScreenPosition::middle, count);
     case VimMotion::screen_bottom:
-        return screen_first_non_blank(view, VimScreenPosition::bottom, count);
+        return screen_first_non_blank(view, screen_position_of(motion), count);
     case VimMotion::document_first:
     case VimMotion::document_last:
         return vim_first_non_blank(text, text.line_start(document_line(text, count)));
@@ -693,7 +718,11 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::display_line_end:
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
+    case VimMotion::display_line_first_non_blank:
         return row_landing_in(view, state.mode);
+    case VimMotion::last_non_blank:
+        return last_non_blank_landing(view.text, view.selection.caret,
+                                      resolved_motion_count(state, view.text, motion));
     case VimMotion::left:
     case VimMotion::right:
     case VimMotion::up:
@@ -763,6 +792,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::display_line_start:
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
+    case VimMotion::display_line_first_non_blank:
+    case VimMotion::last_non_blank:
         return VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, moved)};
     }
     std::unreachable();
@@ -840,6 +871,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::display_line_end:
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
+    case VimMotion::display_line_first_non_blank:
+    case VimMotion::last_non_blank:
         return false;
     }
     std::unreachable();
@@ -912,22 +945,31 @@ character_search_position(const VimEditorView &view, const VimState &state,
     return lines_between(text, line_above(line, steps), line);
 }
 
-// $ は inclusive で、回数があると count-1 行下の行末まで（Vim の nv_dollar の cursor_down）。
+// inclusive な移動の範囲の終わり。止まった文字を範囲に入れる（行の内容の終わりは越えない）。
+[[nodiscard]] Offset inclusive_end(const TextBuffer &text, Offset at)
+{
+    return forward_characters(text, at, single_step);
+}
+
+// $ と g_ は inclusive で、回数があると count-1 行下の行末・最後の非空白まで（Vim の nv_dollar と
+// nv_g_cmd の cursor_down・最終行で回数が 2 以上なら範囲が無い）。後ろへ動いた g_ はキャレットの
+// 文字まで含む（inclusive な後ろ向きの移動・ge と同じ・Issue #721）。
 [[nodiscard]] std::optional<VimMotionRange> to_line_end(const TextBuffer &text, Offset caret,
-                                                        std::size_t count)
+                                                        std::size_t count, VimMotion motion)
 {
     const LineNumber line = line_of(text, caret);
     if (count > single_step && line.value >= text.line_count())
     {
         return std::nullopt;
     }
-    return characters_between(caret, text.line_end(line_below(text, line, count - single_step)));
-}
-
-// inclusive な移動の範囲の終わり。止まった文字を範囲に入れる（行の内容の終わりは越えない）。
-[[nodiscard]] Offset inclusive_end(const TextBuffer &text, Offset at)
-{
-    return forward_characters(text, at, single_step);
+    const LineNumber target = line_below(text, line, count - single_step);
+    if (motion == VimMotion::line_end)
+    {
+        return characters_between(caret, text.line_end(target));
+    }
+    const Offset landed = vim_last_non_blank(text, target);
+    return landed.value < caret.value ? characters_between(landed, inclusive_end(text, caret))
+                                      : characters_between(caret, inclusive_end(text, landed));
 }
 
 [[nodiscard]] VimMotionRange screen_range(const VimEditorView &view, VimScreenPosition position,
@@ -1004,10 +1046,11 @@ character_search_position(const VimEditorView &view, const VimState &state,
         inclusive_end(text, vim_word_end(text, caret, walk, word_end_stop_for(motion)).offset));
 }
 
-// gj gk g0 gm gM の範囲（文字単位・exclusive）と g$ の範囲（inclusive・着いた文字まで含み、最後の
-// 段では行の内容の終わりまでで改行を含まない・ADR 0147 の決定 5）。回数の途中で本文の端の画面行に
-// 当たったら Vim はオペレータを打ち消す（nv_gomove・nv_g_dollar_cmd の clearopbeep）ので範囲が
-// 無い（ADR 0144 の決定 4）。着地はオペレータ待ちの NORMAL の寄せ（行の内容の終わりには載らない）。
+// gj gk g0 gm gM g^ の範囲（文字単位・exclusive）と g$ の範囲（inclusive・着いた文字まで含み、
+// 最後の段では行の内容の終わりまでで改行を含まない・ADR 0147 の決定 5）。回数の途中で本文の端の
+// 画面行に当たったら Vim はオペレータを打ち消す（nv_gomove・nv_g_dollar_cmd の clearopbeep）ので
+// 範囲が無い（ADR 0144 の決定 4）。着地はオペレータ待ちの NORMAL の寄せ（行の内容の終わりには
+// 載らない）。
 [[nodiscard]] std::optional<VimMotionRange> display_range(const VimEditorView &view,
                                                           VimMotion motion)
 {
@@ -1071,7 +1114,8 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::first_non_blank:
         return characters_between(vim_first_non_blank(text, caret), caret);
     case VimMotion::line_end:
-        return to_line_end(text, caret, count);
+    case VimMotion::last_non_blank:
+        return to_line_end(text, caret, count, motion);
     case VimMotion::next_word:
     case VimMotion::next_big_word:
     case VimMotion::word_end:
@@ -1086,11 +1130,9 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::previous_big_word_end:
         return previous_word_end_range(text, caret, walk);
     case VimMotion::screen_top:
-        return screen_range(view, VimScreenPosition::top, count, line);
     case VimMotion::screen_middle:
-        return screen_range(view, VimScreenPosition::middle, count, line);
     case VimMotion::screen_bottom:
-        return screen_range(view, VimScreenPosition::bottom, count, line);
+        return screen_range(view, screen_position_of(motion), count, line);
     case VimMotion::document_first:
     case VimMotion::document_last:
         return document_range(text, line, count);
@@ -1103,6 +1145,7 @@ motion_range(const VimEditorView &view, VimMotion motion, std::size_t count, Vim
     case VimMotion::display_line_end:
     case VimMotion::display_line_middle:
     case VimMotion::line_middle:
+    case VimMotion::display_line_first_non_blank:
         return display_range(view, motion);
     case VimMotion::column:
         return characters_between(caret, column_landing(text, line, count, VimMode::normal));
@@ -1848,7 +1891,7 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 {
     VimState with = state;
     with.pending = VimPendingOperator{operation, std::nullopt};
-    const auto range = to_line_end(text, caret, resolved_count(with));
+    const auto range = to_line_end(text, caret, resolved_count(with), VimMotion::line_end);
     if (!range.has_value())
     {
         return failed(cancelled(state), VimRepeatFailure::not_moved);
@@ -3784,7 +3827,7 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
                                                 : std::nullopt;
 }
 
-// g0 gm g$ の所。ほかの動作は無し（ADR 0147 の決定 1）。
+// g0 gm g$ g^ の所。ほかの動作は無し（ADR 0147 の決定 1・8）。
 [[nodiscard]] std::optional<VimDisplayLineEdge> display_line_edge(VimAction action) noexcept
 {
     if (action == VimAction::move_display_line_start)
@@ -3794,6 +3837,10 @@ aligned_line_caret(const VimState &state, const VimEditorView &view, VimAlignedL
     if (action == VimAction::move_display_line_middle)
     {
         return VimDisplayLineEdge::middle;
+    }
+    if (action == VimAction::move_display_line_first_non_blank)
+    {
+        return VimDisplayLineEdge::first_non_blank;
     }
     return action == VimAction::move_display_line_end ? std::optional{VimDisplayLineEdge::end}
                                                       : std::nullopt;
