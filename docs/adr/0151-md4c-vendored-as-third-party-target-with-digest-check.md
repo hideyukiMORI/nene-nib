@@ -47,7 +47,7 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - md4c の enter / leave を畳む型は `MarkdownBuilder`（md4c の型を知らない・1 ファイル 1 型）。実体参照の表は `MarkdownEntity`（名前つきは CommonMark の例の 15 個・数値は 0・サロゲート・U+10FFFF 超を U+FFFD）。`marker` は決定 7 のまま `std::string`（番号つきは区切りが `)` でも `"N."`・箇条書きは `"•"`）。記号だけの項目（`- - a` の外側・`-` だけの行）は空の `list_item` を 1 つ出す。
 - `source_begin` は NORMAL / ENTITY と、本文の中を指す CODE / HTML の text から引く（コードブロックの本体の行は本文の中・行末と字下げは外）。中かどうかは `std::less_equal` の全順序で比べる。文字の無い要素の補いは「直前の位置つきの text の終わりの次の行頭」・前に何も無ければ 0。
 - `eng/symbols.py` は core の未定義 `md_parse` を閉包の `nenenib_md4c.lib` の定義で解決し、`eng/symbol-allowlist.json` は変えずに 0 violation（#772 の名指しの import は不要だった）。
-- 16 MiB の parse（組み立て込み）の probe は `markdown-parse-mixed-16mib`（入力は probe の (i) と同じ 16,777,183 バイト・209,263 要素）。値は PR #765 の記録。
+- 16 MiB の parse（組み立て込み）の probe は `markdown-parse-mixed-16mib`（入力は probe の (i) と同じ 16,777,183 バイト・209,263 要素）。Release（`77f391d`・負荷 1〜5%）の 10 回で中央値 143.2 ms・最小 141.4 ms（md4c だけの 63.8 ms に、組み立てが約 80 ms 足される）。正式な速さのゲートではない。
 
 ## 却下した選択肢
 
