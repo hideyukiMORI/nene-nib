@@ -18,20 +18,24 @@ using Failure = application::AutosaveFailure;
 
 // 窓が閉じていくときに走っている仕事を待つ上限（ADR 0137 の決定 5）。超えたら消せるものだけ消す。
 constexpr DWORD clear_wait_milliseconds = 5000;
+// 確かめずに未保存が残る終わり方で、頼んだ退避が片付くのを待つ上限（ADR 0137 の決定 9）。
+// OS の WM_ENDSESSION の猶予の内。超えたら待たずに終わる（前回の退避が残る）。
+constexpr DWORD flush_wait_milliseconds = 3000;
 
 // 仕事の外枠。閉じた後と止める合図の後は何もしない。終われば成否を id つきで棚に積む。
+// 走っても走らなくても、最後に頼まれた数を 1 減らす（flush の待ち）。
 template <typename Work>
 void run_job(AutosaveShelf &shelf, application::AutosaveId id, const std::stop_token &stop,
              Work work)
 {
-    if (stop.stop_requested() || !shelf.begin())
+    if (!stop.stop_requested() && shelf.begin())
     {
-        return;
+        const std::expected<void, Failure> done = work();
+        shelf.finish(application::AutosaveOutcome{
+            id, done.has_value() ? std::nullopt : std::optional<Failure>{done.error()}});
+        shelf.end();
     }
-    const std::expected<void, Failure> done = work();
-    shelf.finish(application::AutosaveOutcome{
-        id, done.has_value() ? std::nullopt : std::optional<Failure>{done.error()}});
-    shelf.end();
+    shelf.settle();
 }
 } // namespace
 
@@ -61,7 +65,7 @@ void Win32AutosaveAdapter::bind(std::function<void()> finished)
 
 void Win32AutosaveAdapter::store(application::AutosaveSnapshot snapshot)
 {
-    if (!shelf_->open())
+    if (!shelf_->request())
     {
         return;
     }
@@ -76,7 +80,7 @@ void Win32AutosaveAdapter::store(application::AutosaveSnapshot snapshot)
 
 void Win32AutosaveAdapter::discard(application::AutosaveId id)
 {
-    if (!root_.has_value() || !shelf_->open())
+    if (!root_.has_value() || !shelf_->request())
     {
         return;
     }
@@ -99,6 +103,12 @@ void Win32AutosaveAdapter::clear()
     {
         remove_autosave_folder(autosave_folder(root_.value(), GetCurrentProcessId()));
     }
+}
+
+// 閉じない。合図と結果は今までどおりで、置き場は消さない。
+void Win32AutosaveAdapter::flush()
+{
+    static_cast<void>(shelf_->drain(flush_wait_milliseconds));
 }
 
 std::expected<std::vector<application::AutosaveRemnant>, Failure> Win32AutosaveAdapter::remnants()

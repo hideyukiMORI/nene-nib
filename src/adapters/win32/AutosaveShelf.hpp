@@ -13,8 +13,10 @@
 namespace nenenib::adapters::win32
 {
 // 自動退避の仕事と UI スレッドが共有する棚（ADR 0137 の決定 4・5）。結果のたまり・「終わった」の
-// 合図・受け付けの印・走っている仕事の数を 1 つのロックで守る。仕事が shared_ptr
-// で持つので、adapter が先に壊れても残る。仕事が 0 になると event を立て、clear はそれを待つ。
+// 合図・受け付けの印・走っている仕事の数・頼まれてまだ片付いていない仕事の数を 1 つのロックで
+// 守る。仕事が shared_ptr で持つので、adapter が先に壊れても残る。走っている仕事が 0 になると
+// event を立て、clear はそれを待つ。頼まれた仕事（順番待ちと走っているもの）が 0 になると別の
+// event を立て、flush はそれを待つ（ADR 0137 の決定 9）。
 // 合図は仕事の結果を 1 件積むたびに 1 回、ロックの外で呼ぶ（成功でも失敗でも・独立レビュー F3）。
 class AutosaveShelf final
 {
@@ -22,8 +24,11 @@ class AutosaveShelf final
     AutosaveShelf();
 
     void bind(std::function<void()> finished);
-    // 閉じる前なら true（store と discard が仕事を載せる前に見る）。
-    [[nodiscard]] bool open() const;
+    // 閉じる前なら頼まれた数を 1 増やして true（store と discard が仕事を載せる前に呼ぶ）。
+    // true だった仕事は、走っても走らなくても最後に settle を 1 回呼ぶ。
+    [[nodiscard]] bool request();
+    // request が true だった仕事の片付け。頼まれた数が 0 になれば flush の event を立てる。
+    void settle();
     // 仕事の始め。閉じる前なら走っている数を 1 増やして true。閉じた後に順番が来た仕事は false で、
     // 何もしない（clear は順番待ちの仕事を待たない）。
     [[nodiscard]] bool begin();
@@ -35,13 +40,18 @@ class AutosaveShelf final
     // 以後の仕事を受けず、合図も呼ばない。走っている仕事の終わりを limit ミリ秒まで待ち、
     // 終わったなら true。時計は読まない（OS の待ちの上限だけ）。
     [[nodiscard]] bool close(DWORD limit);
+    // 閉じずに、頼まれた仕事が全部片付くのを limit ミリ秒まで待ち、片付いたなら true。
+    // 時計は読まない（OS の待ちの上限だけ）。
+    [[nodiscard]] bool drain(DWORD limit);
 
   private:
     mutable std::mutex mutex_;
     std::vector<application::AutosaveOutcome> outcomes_;
     std::function<void()> finished_;
     std::size_t running_ = 0;
+    std::size_t requested_ = 0;
     bool closed_ = false;
     EventHandle idle_;
+    EventHandle drained_;
 };
 } // namespace nenenib::adapters::win32

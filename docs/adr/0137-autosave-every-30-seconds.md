@@ -2,7 +2,7 @@
 
 - 状態: 提案（設計席 2026-10-16。実装は #515 で 3 工程: application → adapters → ui）
 - 日付: 2026-10-16
-- Issue: #515（施主決定 D47・外部講評 P0-3）
+- Issue: #515（施主決定 D47・外部講評 P0-3）・#735（決定 9・外部講評 2026-10-20）
 - 規則: ARC-003 / ARC-004 / ARC-007 / ARC-010、CPP-002 / CPP-005 / CPP-013、QLT-012、ADR 0004 / 0010 / 0059 / 0060（決定 8）/ 0062 / 0133 / 0135
 
 ## 文脈
@@ -21,6 +21,7 @@ P0-1（#492・ADR 0133）と P0-2（#493）で「閉じる経路」は未保存�
 6. **起動で残っていれば 1 回聞く。** 残骸は `autosave\` の下の「pid が自分でなく、そのプロセスが生きていない」フォルダ（生きているかは ADR 0135 / #507 と同じ 1 本の判定・`OpenProcess`）。ui は窓を作って見せた後、`controller.autosave_remnants()`（フォルダの一覧 1 回・本文は読まない）が空でなければ `MessageBoxW`（はい / いいえ）で「前回の未保存を戻しますか」を 1 回だけ聞く。**はい**: 意図 `RestoreAutosave` → controller が残骸の本文を開くのと同じ復号で読み（`open_document` の経路・符号化と改行は自動判別）、パスがあればそのパスのタブとして・無ければ無題として帯の末尾に足し、`saved_position` は無し（未保存の印）、最初に戻したタブをアクティブにする。読めなかった残骸は「戻せませんでした: <題名>」の 1 行で知らせて飛ばす。戻したタブは次の合図を待たずにその場で `autosave_plan` を回して `store` を頼み、その後に残骸を消す（独立レビュー F2）。**いいえ**: 意図 `DiscardAutosave`。どちらも終わったら残骸のフォルダを消す。引数ありの起動でも聞く（D47）。
 7. **起動・開く・切り替え・保存・打鍵の道でファイルに触れない契約は、起動のフォルダの一覧 1 回だけ広げる。** `verify_quiet_paths` に `AutosavePort` の呼ばれた回数を足し、起動で `remnants()` 1 回、ほかは 0 を数える。`AutosaveTick` の道は別の契約（`--autosave`）で、変わっていなければ `store` を呼ばないことを数える。
 8. **試験は替え玉だけ。** application の契約は `ScriptedAutosave`（呼び出しの記録・失敗の注入）。adapters の試験は隔離した一時フォルダで、待つのはセマフォ、時計を読まない（CTest の `TIMEOUT` が止まりを落とす）。ui の確認は `eng/verify-window.py --autosave`（未保存を作る → 35 秒待つ代わりに `WM_TIMER` を直接送る → プロセスを殺す → 起動して問いが出る → はい で本文が戻る・未保存を作って閉じ「いいえ」と答える → 次の起動で問いが出ない）。
+9. **確かめずに未保存が残る終わり方では、一覧より先に 1 回退避して書き終えるのを待つ（#735・外部講評 2026-10-20）。** OS の `WM_ENDSESSION` の強行と、描画を失った `rendering_lost` で捨てた印が立たない終わりでは、`clears_autosave(state, intent)` が偽になる。controller は `accept(EndSession)` で `settle_follow` の後、一覧を書く前に `autosave_now()` を 1 回回し（変わったタブだけを `store`・帳面の改訂番号で比べる・決定 2）、`AutosavePort::flush()` で worker の待ち行列と進行中の `store` / `discard` が片付くまで待ってから、一覧を書き履歴に記録する（順はそのまま）。`flush` は置き場を消さず、以後の仕事も受ける（`clear` と違い閉じない）。adapter は頼まれてまだ片付いていない仕事の数を棚で数え、0 になると立つ event を `WaitForSingleObject` の上限 3,000 ms（`WM_ENDSESSION` の猶予の内）で待つ。時計は読まない。ワーカーの前に載ったほかの仕事（フォルダの列挙）も待ちに含まれる。上限を越えたか書けなかったら、そのまま終わる（残骸は前回の退避のまま・次の起動で問う）。`clears_autosave` が真なら今までどおり `clear()` だけで、`autosave_now` も `flush` も呼ばない。
 
 ## 却下した選択肢
 
@@ -37,13 +38,13 @@ P0-1（#492・ADR 0133）と P0-2（#493）で「閉じる経路」は未保存�
 
 ## 検証
 
-- application: `--autosave`（plan の表: 未保存で変わった → store、変わっていない → keep、保存済み → discard、閉じた → discard、UnloadedDocument → keep・確かめずに未保存の残る `EndSession` は `clear` しない・残らないか `unsaved_discarded` なら 1 回・復元の直後に `store` してから `forget`）・`--application`・`--background-work`（`AutosaveTick` は歩きを切らない）・`verify_quiet_paths` の拡張。
-- adapters: 一覧と本文の往復、進行中の store の後の clear、生きていない pid のフォルダだけが残骸、生きている pid は飛ばす。
+- application: `--autosave`（plan の表: 未保存で変わった → store、変わっていない → keep、保存済み → discard、閉じた → discard、UnloadedDocument → keep・確かめずに未保存の残る `EndSession` は `clear` しない・残らないか `unsaved_discarded` なら 1 回・復元の直後に `store` してから `forget`・決定 9: 強行の `EndSession` と `rendering_lost` は store → flush → 一覧の書きの順・変わっていないタブは store しない・捨てた終わり方と未保存の無い終わり方は `clear` だけで flush しない）・`--application`・`--background-work`（`AutosaveTick` は歩きを切らない）・`verify_quiet_paths` の拡張。
+- adapters: 一覧と本文の往復、進行中の store の後の clear、flush が順番待ちと進行中の仕事の後に戻り閉じないこと・塞がったワーカーでは上限で戻ること、生きていない pid のフォルダだけが残骸、生きている pid は飛ばす。
 - ui: `verify-window.py --autosave`。速さ: `startup-first-frame` と `key-to-frame-single` の退行なし（起動は一覧 1 回・打鍵の道は触らない）。
 
 ## 限界
 
-- 退避は 30 秒の粒度で、最後の 30 秒の編集は守れない。
+- 退避は 30 秒の粒度で、最後の 30 秒の編集は守れない（OS の終了の強行と描画を失った終わりは決定 9 で終わる前に 1 回退避する。プロセスが殺される経路は守れない）。決定 9 の待ちは 3 秒が上限で、16 MiB を超える本文やワーカーの前の長い仕事があると書き終わらずに終わり得る。
 - 本文の置き場が別ボリューム（`%LOCALAPPDATA%` が無い）なら退避できず、1 行の知らせだけ。
 - 64 MiB の上限は保存と同じ。退避のフォルダの容量は見張らない。
 - 2 つの Nib が同じファイルを編集していて片方が殺されたとき、残骸は次の起動で問われ、戻すと同じパスのタブが 2 つになり得る（今日の「同じファイルを 2 つの窓で開く」と同じ）。

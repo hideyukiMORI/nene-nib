@@ -532,6 +532,72 @@ void verify_end_session_keeps_unsaved()
            "closing the last tab after answering no clears the autosave once");
 }
 
+// 強行の終わり（ADR 0137 の決定 9）を 1 つ走らせ、flush の瞬間の一覧の書きの回数を返す
+// （flush が無ければ書きの後の回数のまま）。
+[[nodiscard]] std::size_t session_writes_at_flush(Editing &editing, const app::EndSession &intent)
+{
+    std::size_t at_flush = 0;
+    editing.autosave().when_flushed([&] { at_flush = editing.session().writes(); });
+    applied(editing.controller(), intent);
+    return at_flush;
+}
+
+// 確かめずに未保存が残る終わり方は、一覧より先に変わったタブだけを頼み、flush で待ってから一覧を
+// 書く。消さない。未保存が残らないか「いいえ」で捨てた終わり方は clear だけで flush しない（決定
+// 9・5）。
+void verify_end_session_flushes_unsaved()
+{
+    Editing forced;
+    applied(forced.controller(), app::VisibleLines{10});
+    applied(forced.controller(), app::InsertText{"ab"});
+    applied(forced.controller(), app::AutosaveTick{});
+    applied(forced.controller(), app::InsertText{"c"});
+    const std::size_t before = forced.session().writes();
+    const std::size_t at_flush =
+        session_writes_at_flush(forced, app::EndSession{app::SessionEnd::window_closed});
+    expect(forced.autosave().calls() == std::vector<std::string>{"store 0", "store 0", "flush"} &&
+               bytes_of(forced.autosave().stored().back()) == "abc",
+           "a forced ending stores the changed tab once more and then flushes");
+    expect(at_flush == before && forced.session().writes() == before + 1,
+           "the forced ending flushes before it writes the session list");
+    expect(forced.autosave().clears() == 0, "the forced ending keeps the autosave");
+
+    Editing unchanged;
+    applied(unchanged.controller(), app::VisibleLines{10});
+    applied(unchanged.controller(), app::InsertText{"ab"});
+    applied(unchanged.controller(), app::AutosaveTick{});
+    static_cast<void>(
+        session_writes_at_flush(unchanged, app::EndSession{app::SessionEnd::window_closed}));
+    expect(unchanged.autosave().calls() == std::vector<std::string>{"store 0", "flush"},
+           "a tab unchanged since its store is not stored again before the flush");
+
+    Editing lost;
+    applied(lost.controller(), app::VisibleLines{10});
+    applied(lost.controller(), app::InsertText{"ab"});
+    const std::size_t lost_before = lost.session().writes();
+    const std::size_t lost_at_flush =
+        session_writes_at_flush(lost, app::EndSession{app::SessionEnd::rendering_lost});
+    expect(lost.autosave().calls() == std::vector<std::string>{"store 0", "flush"} &&
+               lost_at_flush == lost_before && lost.autosave().clears() == 0,
+           "losing the rendering with an unsaved tab stores, flushes and then writes the list");
+
+    Editing clean;
+    applied(clean.controller(), app::VisibleLines{10});
+    applied(clean.controller(), app::EndSession{app::SessionEnd::window_closed});
+    expect(clean.autosave().flushes() == 0 && clean.autosave().stored().empty() &&
+               clean.autosave().clears() == 1,
+           "an ending without any unsaved tab only clears");
+
+    Editing declined;
+    applied(declined.controller(), app::VisibleLines{10});
+    applied(declined.controller(), app::InsertText{"ab"});
+    applied(declined.controller(),
+            app::EndSession{.reason = app::SessionEnd::rendering_lost, .unsaved_discarded = true});
+    expect(declined.autosave().flushes() == 0 && declined.autosave().stored().empty() &&
+               declined.autosave().clears() == 1,
+           "an ending after answering no only clears without storing or flushing");
+}
+
 // 戻したタブは次の合図を待たずにこのプロセスの退避として頼み、その後に残骸を forget する
 // （決定 6・F2）。
 void verify_restore_stores_before_forget()
@@ -567,6 +633,7 @@ void verify_autosave_contracts()
     verify_restore_unreadable();
     verify_discard_remnants();
     verify_end_session_keeps_unsaved();
+    verify_end_session_flushes_unsaved();
     verify_restore_stores_before_forget();
 }
 
