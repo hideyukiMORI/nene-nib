@@ -2382,10 +2382,7 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
     // 面の上のホイールは一覧だけを送り、選択は動かさない（ADR 0150 の決定 2）。
     if (controller_.command_palette_active())
     {
-        if (delta != 0)
-        {
-            send(application::ScrollPaletteList{delta > 0 ? -wheel_lines : wheel_lines});
-        }
+        scroll_palette(delta);
         return;
     }
     if (over_title_bar(data))
@@ -2400,6 +2397,24 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
     }
     zoom_wheel_remainder_ = 0;
     scroll_body(delta);
+}
+
+void EditorWindow::scroll_palette(std::int32_t delta)
+{
+    if (delta == 0)
+    {
+        return;
+    }
+    // 1 通知 = 1 刻み。行数は本文と同じく OS の設定から（1 画面の設定なら面の見えている行数・#499）。
+    std::size_t visible = 0;
+    if (wheel_setting_ == WHEEL_PAGESCROLL)
+    {
+        RECT client{};
+        GetClientRect(window_, &client);
+        visible = core::palette_window_rows(client.right, client.bottom, dpi_);
+    }
+    const auto lines = wheel_lines_per_notch(wheel_setting_, visible);
+    send(application::ScrollPaletteList{delta > 0 ? -lines : lines});
 }
 
 void EditorWindow::scroll_body(std::int32_t delta)

@@ -238,6 +238,7 @@ class EditorWindow final
     [[nodiscard]] bool over_title_bar(LPARAM data) const;
     void scroll_tabs(std::int32_t delta);
     void zoom_wheel(std::int32_t delta);
+    void scroll_palette(std::int32_t delta);
     void scroll_body(std::int32_t delta);
     void read_wheel_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
