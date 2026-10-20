@@ -25,6 +25,7 @@
 #include "DisplayText.hpp"
 #include "DocumentState.hpp"
 #include "Edit.hpp"
+#include "EncodingFailure.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
@@ -192,7 +193,22 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     case FileFailure::unwritable:
     case FileFailure::too_large:
     case FileFailure::undecodable:
+    case FileFailure::unsupported_utf32:
         return "Could not write file";
+    }
+    std::unreachable();
+}
+
+// 判定の失敗のうち UTF-32 だけは名指しで断る。ほかは判別できなかった、のまま（#787）。
+[[nodiscard]] FileFailure file_failure_of(core::EncodingFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case core::EncodingFailure::unsupported_utf32:
+        return FileFailure::unsupported_utf32;
+    case core::EncodingFailure::undecodable:
+    case core::EncodingFailure::odd_utf16_length:
+        return FileFailure::undecodable;
     }
     std::unreachable();
 }
@@ -3313,7 +3329,7 @@ EditorController::read_document(const core::FilePath &path)
     auto detected = core::DetectedText::from_sealed(std::move(bytes).value());
     if (!detected)
     {
-        return std::unexpected(FileFailure::undecodable);
+        return std::unexpected(file_failure_of(detected.error()));
     }
     const core::TextEncoding encoding = detected.value().encoding();
     auto text = decoded(std::move(detected).value());
