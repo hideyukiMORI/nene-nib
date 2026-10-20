@@ -3554,5 +3554,213 @@
       "column": 50,
       "leftcol": 30
     }
+  },
+  {
+    "name": "wrap-g-caret-row-blank-head",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 31
+    }
+  },
+  {
+    "name": "wrap-g-caret-row-blank-head-j",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^j",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 31
+    }
+  },
+  {
+    "name": "wrap-3g-caret",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "3g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 31
+    }
+  },
+  {
+    "name": "wrap-dg-caret",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "dg^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 31
+    }
+  },
+  {
+    "name": "wrap-yg-caret",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "yg^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 36
+    }
+  },
+  {
+    "name": "wrap-vg-caret-y",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "vg^y",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 36
+    }
+  },
+  {
+    "name": "wrap-g-caret-first-row",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 5
+    }
+  },
+  {
+    "name": "wrap-g-caret-blank-row",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 51
+    }
+  },
+  {
+    "name": "wrap-g-caret-blank-row-j",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^j",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 51
+    }
+  },
+  {
+    "name": "wrap-g-caret-first-row-indent",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 3,
+      "column": 12
+    }
+  },
+  {
+    "name": "wrap-g-caret-trailing-blank-row",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 4,
+      "column": 23
+    }
+  },
+  {
+    "name": "wrap-g-caret-tab-row-head",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 5,
+      "column": 24
+    }
+  },
+  {
+    "name": "wrap-g-caret-last-row",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 66
+    }
+  },
+  {
+    "name": "nowrap-g-caret",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 31,
+      "leftcol": 20
+    }
+  },
+  {
+    "name": "nowrap-g-caret-j",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^j",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 31,
+      "leftcol": 20
+    }
+  },
+  {
+    "name": "nowrap-dg-caret",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "dg^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 2,
+      "column": 36,
+      "leftcol": 20
+    }
+  },
+  {
+    "name": "nowrap-g-caret-leftcol-0",
+    "text": "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+    "keys": "g^",
+    "viewport": {
+      "columns": 20,
+      "visible_lines": 12,
+      "first_visible": 1,
+      "line": 3,
+      "column": 12,
+      "leftcol": 0
+    }
   }
 ]

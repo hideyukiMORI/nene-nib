@@ -118,10 +118,15 @@ enum class VimAction : std::uint8_t
     move_display_line_start,
     move_display_line_end,
     move_display_line_middle,
-    move_line_middle
+    move_line_middle,
+    // `g^` は画面行の始まり（`g0` と同じ源）から最初の非空白へ、`g_` は行の最後の非空白へ
+    // （Issue #721・ADR 0147 の決定 8）。
+    move_display_line_first_non_blank,
+    move_last_non_blank
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::move_line_middle) + 1;
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::move_last_non_blank) + 1;
 } // namespace nenenib::core

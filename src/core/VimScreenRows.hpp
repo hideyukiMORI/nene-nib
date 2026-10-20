@@ -54,7 +54,8 @@ vim_row_half_navigation(const VimState &state, const VimEditorView &view,
 vim_row_landing(const VimEditorView &view, VimScrollDirection direction, std::size_t amount,
                 const std::optional<VimWantedColumn> &wanted);
 
-// `g0` `gm` `g$` の着地（ADR 0147 の決定 2〜4）。横に送る文書（VimViewport.columns > 0）は見えて
+// `g0` `gm` `g$` `g^` の着地（ADR 0147 の決定 2〜4・8・g^ は g0
+// の所から最初の非空白へ）。横に送る文書（VimViewport.columns > 0）は見えて
 // いる升から、折り返す文書（layout.enabled）は今の画面行の範囲から、どちらでもなければ行頭と行の
 // 内容の終わりから解く。着地はモードの寄せの前で、欲しい列は着地の桁。count は `g$` だけが読み、
 // 折り返す文書の `{N}g$` は vim_row_landing で N − 1 画面行下へ行末の印で歩く（歩き切れなければ

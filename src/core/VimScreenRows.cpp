@@ -1,6 +1,7 @@
 #include "VimScreenRows.hpp"
 
 #include "Utf8.hpp"
+#include "VimCaret.hpp"
 #include "VimColumnWish.hpp"
 #include "VimHorizontalScroll.hpp"
 #include "VimMotionLanding.hpp"
@@ -328,11 +329,15 @@ using Moves = std::pair<Walk, Walk>;
     return end > row.start_column && target >= end ? end - 1 : target;
 }
 
-// g0 gm g$ の着地（ADR 0147 の決定 2・4）。欲しい列は着地の桁で、失敗は無い。
-[[nodiscard]] VimRowLanding edge_landing(const TextBuffer &text, Offset at)
+// g0 gm g$ g^ の着地（ADR 0147 の決定 2・4・8）。g^ は g0 の所 at から最初の非空白へ進む。欲しい
+// 列は着地の桁で、失敗は無い。
+[[nodiscard]] VimRowLanding edge_landing(const TextBuffer &text, Offset at, VimDisplayLineEdge edge)
 {
-    return VimRowLanding{VimMotionLanding{at},
-                         VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, at)}};
+    const Offset landed =
+        edge == VimDisplayLineEdge::first_non_blank ? vim_non_blank_from(text, at) : at;
+    return VimRowLanding{
+        VimMotionLanding{landed},
+        VimWantedColumn{VimColumnWish::at_column, caret_virtual_column(text, landed)}};
 }
 
 // 横に送る文書（columns > 0）の g0 gm g$。見えている升 [left, left + columns) の左端の升・中の升を
@@ -346,6 +351,7 @@ using Moves = std::pair<Walk, Walk>;
     switch (edge)
     {
     case VimDisplayLineEdge::start:
+    case VimDisplayLineEdge::first_non_blank:
         return character_at_cell(text, line, left);
     case VimDisplayLineEdge::middle:
         return character_at_cell(text, line, left + (viewport.columns / 2));
@@ -366,6 +372,7 @@ using Moves = std::pair<Walk, Walk>;
     switch (edge)
     {
     case VimDisplayLineEdge::start:
+    case VimDisplayLineEdge::first_non_blank:
         return landed(view.text, span, span.start_column);
     case VimDisplayLineEdge::middle:
         return landed(view.text, span, span.start_column + (view.layout.row_columns / 2));
@@ -382,6 +389,7 @@ using Moves = std::pair<Walk, Walk>;
     {
     case VimDisplayLineEdge::start:
     case VimDisplayLineEdge::middle:
+    case VimDisplayLineEdge::first_non_blank:
         return text.line_start(line);
     case VimDisplayLineEdge::end:
         break;
@@ -489,11 +497,11 @@ vim_display_line_landing(const VimEditorView &view, VimDisplayLineEdge edge, std
     const LineNumber target{line.value + std::min(below, text.line_count() - line.value)};
     if (viewport.columns > 0)
     {
-        return edge_landing(text, scrolled_edge(text, viewport, target, edge));
+        return edge_landing(text, scrolled_edge(text, viewport, target, edge), edge);
     }
     if (!view.layout.enabled)
     {
-        return edge_landing(text, unlaid_edge(text, target, edge));
+        return edge_landing(text, unlaid_edge(text, target, edge), edge);
     }
     if (below > 0)
     {
@@ -505,7 +513,7 @@ vim_display_line_landing(const VimEditorView &view, VimDisplayLineEdge edge, std
     {
         return std::unexpected(span.error());
     }
-    return edge_landing(text, wrapped_edge(view, span.value(), edge));
+    return edge_landing(text, wrapped_edge(view, span.value(), edge), edge);
 }
 
 std::expected<VisualPosition, VimLayoutNeed> vim_row_aligned_top(const VimEditorView &view,

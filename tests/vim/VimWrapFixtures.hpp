@@ -2,7 +2,7 @@
 // oracle: C:\Program Files\Vim\vim91\vim.exe - VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3
 // 2024 23:53:58)
 
-// wrap-fixtures.json: sha256 b777a2942172224dedf80be8c3f34c722b6187b2505d611418fd403c316670e4
+// wrap-fixtures.json: sha256 ea983b38467dc1eaee227907abe1607effc707079785d6843f8fc0cb59b84b6b
 
 // measurement: sha256 b4bf3d1d1d97bdf6570cecc45ccb4d73f6b16c7d1678ea52a7c7136ed68b9c6d
 
@@ -16,7 +16,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 290> vim_wrap_fixtures{{
+constexpr std::array<VimFixture, 307> vim_wrap_fixtures{{
     {"wrap-top-00",
      "1aaaa\n2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n3ccccccccc\n4dddddddddddddddddddddddd\n"
      "5eeee\n6ffff\n7gggg\n8hhhh\n9iiii\n10jjj\n11kkk\n12lll",
@@ -2922,5 +2922,124 @@ constexpr std::array<VimFixture, 290> vim_wrap_fixtures{{
      "pqrstuvwxyzabcdefghijklmnopqrstuvwx\naあああああああああああああああああああああああああああ"
      "あああ\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab",
      6, 48, "", "", VimViewportFixture{10, 1, 5, 50, 1, 5, 0, 0, 20, 30, 30}},
+    {"wrap-g-caret-row-blank-head",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 25, "", "", VimViewportFixture{12, 1, 2, 31, 1, 6, 20, 0}},
+    {"wrap-g-caret-row-blank-head-j",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^j",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     3, 23, "", "", VimViewportFixture{12, 1, 2, 31, 1, 6, 20, 0}},
+    {"wrap-3g-caret",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "3g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 25, "", "", VimViewportFixture{12, 1, 2, 31, 1, 6, 20, 0}},
+    {"wrap-dg-caret",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "dg^",
+     "short\nabcdefghijklmnopqrst    klmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 25, "efghij", "v", VimViewportFixture{12, 1, 2, 31, 1, 6, 20, 0}},
+    {"wrap-yg-caret",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "yg^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 25, "efghijklmno", "v", VimViewportFixture{12, 1, 2, 36, 1, 6, 20, 0}},
+    {"wrap-vg-caret-y",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "vg^y",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 25, "efghijklmnop", "v", VimViewportFixture{12, 1, 2, 36, 1, 6, 20, 0}},
+    {"wrap-g-caret-first-row",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 1, "", "", VimViewportFixture{12, 1, 2, 5, 1, 6, 20, 0}},
+    {"wrap-g-caret-blank-row",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 64, "", "", VimViewportFixture{12, 1, 2, 51, 1, 6, 20, 0}},
+    {"wrap-g-caret-blank-row-j",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^j",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     3, 23, "", "", VimViewportFixture{12, 1, 2, 51, 1, 6, 20, 0}},
+    {"wrap-g-caret-first-row-indent",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     3, 4, "", "", VimViewportFixture{12, 1, 3, 12, 1, 6, 20, 0}},
+    {"wrap-g-caret-trailing-blank-row",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     4, 25, "", "", VimViewportFixture{12, 1, 4, 23, 1, 6, 20, 0}},
+    {"wrap-g-caret-tab-row-head",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     5, 22, "", "", VimViewportFixture{12, 1, 5, 24, 1, 6, 20, 0}},
+    {"wrap-g-caret-last-row",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 64, "", "", VimViewportFixture{12, 1, 2, 66, 1, 6, 20, 0}},
+    {"nowrap-g-caret",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 25, "", "", VimViewportFixture{12, 1, 2, 31, 1, 6, 0, 0, 20, 20, 20}},
+    {"nowrap-g-caret-j",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^j",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     3, 23, "", "", VimViewportFixture{12, 1, 2, 31, 1, 6, 0, 0, 20, 20, 20}},
+    {"nowrap-dg-caret",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "dg^",
+     "short\nabcdefghijklmnopqrst    pqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     2, 25, "efghijklmno", "v", VimViewportFixture{12, 1, 2, 36, 1, 6, 0, 0, 20, 20, 20}},
+    {"nowrap-g-caret-leftcol-0",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     "g^",
+     "short\nabcdefghijklmnopqrst    efghijklmnopqrst                       defg\n   "
+     "abcdefghijklmnopqrst\nabcdefghijklmnopqrst     \nabcdefghijklmnopqrst\tabcdef\nend",
+     3, 4, "", "", VimViewportFixture{12, 1, 3, 12, 1, 6, 0, 0, 20, 0, 0}},
 }};
 } // namespace nenenib::tests
