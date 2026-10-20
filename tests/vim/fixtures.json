@@ -2195,5 +2195,11 @@
   {"name":"gU-visual-line-upward-then-u","text":"abc\ndef","keys":"jlVkUu"},
   {"name":"gu-visual-then-u","text":"ABCDEF","keys":"$vhhuu"},
   {"name":"shift-right-up-then-u","text":"ab\ncd","keys":"j$>ku"},
-  {"name":"shift-left-visual-then-u","text":"\ta\n\tb","keys":"jlVk<u"}
+  {"name":"shift-left-visual-then-u","text":"\ta\n\tb","keys":"jlVk<u"},
+  {"name":"J-after-an-exclamation-mark-adds-two-spaces","text":"abc!\ndef","keys":"J"},
+  {"name":"J-after-a-question-mark-and-a-space","text":"abc? \ndef","keys":"J"},
+  {"name":"J-after-a-period-and-a-tab","text":"abc.\t\ndef","keys":"J"},
+  {"name":"J-with-a-count-over-an-empty-line","text":"a\n\nb","keys":"3J"},
+  {"name":"J-with-a-count-over-two-empty-lines","text":"a\n\n\nb","keys":"4J"},
+  {"name":"shift-right-then-dot-with-a-count","text":"a\nb\nc","keys":">>2."}
 ]

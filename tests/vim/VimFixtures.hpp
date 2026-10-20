@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4e7549886274625f9fd5c19aaa96bcbdb60fce2bf4fee73df3170f823faa5f0c / 2197 fixtures
+// fixtures.json: sha256 b567034afd55e33fb70e76350ea1fa2bd72fab9aa822c70a36b10dfff5aaebd4 / 2203 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2197> vim_fixtures{{
+constexpr std::array<VimFixture, 2203> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2209,6 +2209,12 @@ constexpr std::array<VimFixture, 2197> vim_fixtures{{
     {"gu-visual-then-u", "ABCDEF", "$vhhuu", "ABCDEF", 1, 4, "", "", std::nullopt},
     {"shift-right-up-then-u", "ab\ncd", "j$>ku", "ab\ncd", 1, 2, "", "", std::nullopt},
     {"shift-left-visual-then-u", "\ta\n\tb", "jlVk<u", "\ta\n\tb", 1, 2, "", "", std::nullopt},
+    {"J-after-an-exclamation-mark-adds-two-spaces", "abc!\ndef", "J", "abc!  def", 1, 5, "", "", std::nullopt},
+    {"J-after-a-question-mark-and-a-space", "abc? \ndef", "J", "abc?  def", 1, 6, "", "", std::nullopt},
+    {"J-after-a-period-and-a-tab", "abc.\t\ndef", "J", "abc.\tdef", 1, 6, "", "", std::nullopt},
+    {"J-with-a-count-over-an-empty-line", "a\n\nb", "3J", "a b", 1, 2, "", "", std::nullopt},
+    {"J-with-a-count-over-two-empty-lines", "a\n\n\nb", "4J", "a b", 1, 2, "", "", std::nullopt},
+    {"shift-right-then-dot-with-a-count", "a\nb\nc", ">>2.", "\t\ta\n\tb\nc", 1, 3, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
