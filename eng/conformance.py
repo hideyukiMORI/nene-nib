@@ -77,7 +77,8 @@ def includes_of(text: str) -> list[str]:
 
 
 def concurrency_and_simd(path: str, text: str, rules: dict) -> list[Finding]:
-    """CNF-009: threads live only in the worker adapter; SIMD lives only in the SIMD module.
+    """CNF-009: threads live only in the worker adapter; SIMD lives only in the SIMD module;
+    the md4c declarations are read only by the one core file that maps them (ADR 0151 decision 5).
 
     tests/ is deliberately out of scope: that is where intentional violations are written.
     """
@@ -90,6 +91,8 @@ def concurrency_and_simd(path: str, text: str, rules: dict) -> list[Finding]:
             findings.append(Finding("CPP-013", path, f"concurrency header {include} outside {rules['concurrencyAllowedPath']}"))
         if name in rules["simdHeaders"] and not path.startswith(rules["simdModulePath"]):
             findings.append(Finding("CPP-018", path, f"SIMD header {include} outside {rules['simdModulePath']}"))
+        if name == rules["markdownParserHeader"] and path != rules["markdownParserAllowedPath"]:
+            findings.append(Finding("ARC-002", path, f"parser header {include} outside {rules['markdownParserAllowedPath']}"))
     return findings
 
 

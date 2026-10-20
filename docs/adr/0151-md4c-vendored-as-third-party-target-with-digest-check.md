@@ -19,14 +19,14 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 5. **core が `md4c.h` を読むのは 1 ファイル。** `src/core/MarkdownParse.cpp` だけが `md4c.h` を include し、`target_include_directories(... SYSTEM ...)` で受けて `HeaderFilterRegex '.*'` の tidy から外す。公開ヘッダ `MarkdownParse.hpp` は md4c の型を出さない。
 6. **`parse_markdown` は純関数で値を返す。** `[[nodiscard]] std::expected<MarkdownDocument, MarkdownFailure> parse_markdown(std::string_view text, const MarkdownStop& stop)`。`MarkdownFailure` は閉じた enum `{parser_rejected, too_large, stopped}`（`MD_SIZE` は `unsigned`・4 GiB 未満）。`stop` は「止めるか」を問う型のある述語（core は時計も印も持たない。adapters の worker が自分の印を読む lambda を渡し、md4c のコールバックが非 0 を返して止める）。flags は `MD_DIALECT_COMMONMARK`（0）。表・打ち消し・タスクリストの flag は立てない（M-2）。
 7. **出力は平らな列。** `MarkdownDocument{std::vector<PreviewBlock> blocks}`。`PreviewBlock{PreviewBlockKind kind; std::uint8_t level; std::uint8_t quote_depth; std::uint8_t list_depth; std::string marker; Offset source_begin; std::string text; std::vector<PreviewSpan> spans}`。`PreviewBlockKind` は閉じた enum `{paragraph, heading, code, html, rule, list_item}`、`PreviewSpan{Offset begin; Offset end; PreviewStyle style}`（`text` の中のバイト位置）、`PreviewStyle` は閉じた enum `{emphasis, strong, code, link}`（リンクの URL は `PreviewSpan` に持たない・開かないので・M-5）。enter / leave の積み（深さ・リストの番号）は parse の中だけに持ち、leaf ブロック（P・H・CODE・HTML・HR と LI の直下の文字）ごとに 1 要素を出す。実体参照（`MD_TEXT_ENTITY`）は core の表で解決して `text` に書く（名前つき実体は HTML5 の表のうち CommonMark の例に出る範囲・解決できないものは綴りのまま）。
-8. **`source_begin` は最初の text の pointer から引く。** NORMAL / ENTITY の最初の pointer − 入力の先頭（probe で入力を指すことを確認済み）。BR・SOFTBR・NULLCHAR と CODE / HTML の行末・字下げは md4c の固定の文字列なので位置に使わない。文字の無い水平線は直前のブロックの `source_begin` 以降で `---` 等を探さず、直前のブロックの終わりの次の行頭を補う。
+8. **`source_begin` は最初の text の pointer から引く。** NORMAL / ENTITY の最初の pointer − 入力の先頭（probe で入力を指すことを確認済み）。BR・SOFTBR・NULLCHAR と CODE / HTML の行末・字下げは md4c の固定の文字列なので位置に使わない。文字の無い水平線は直前のブロックの `source_begin` 以降で `---` 等を探さず、直前のブロックの終わりの次の行頭を補う。 追記（#782 のレビュー Q1）: 補う位置は「直前の要素の終わりの次の行から**空行を飛ばした最初の行の行頭**」に改める（`para\n\n---` で `---` の行頭）。前に位置が無ければ本文の先頭から空行を飛ばす。
 9. **入力は連続 1 本。** 呼び出し側（application）が `TextBuffer::segments()` から連続の `std::string` を 1 回作って `std::shared_ptr<const std::string>` で渡す。worker が piece を直接読まない（`AddChunk` は末尾の chunk を伸ばす）。
 10. **型は 1 ファイル 1 型。** `MarkdownDocument` `PreviewBlock` `PreviewSpan` `PreviewBlockKind` `PreviewStyle` `MarkdownFailure` `MarkdownStop` の 7 ファイル（CPP-011）。比較は非メンバー（CPP-003）。
 11. **`THIRD_PARTY_NOTICES.txt`** に md4c の節（名前・tag・commit・URL・MIT の全文・Copyright Martin Mitáš）。`eng/package-release.py` の `ENTRIES` で ZIP に入る。`eng/test-package-release.py` が中身を照合していれば期待値を足す。
+12. **検証**: 単体テスト（CommonMark の例を 8 構文の範囲で数十・`source_begin`・実体参照・打ち切り・`too_large` は境界だけ）・`tests/performance` に 16 MiB の parse の probe（組み立て込み・値を記録）・CNF-013 の正例・反例・`/W4 /WX` 0 件（CI の check job）・`check.ps1 -Full`（外部コードと C の有効化は限定した検証で覆えない: 理由を書いて 1 回）。
 13. **外部コードは whitespace の検査の対象外。** `.gitattributes` を `third_party/md4c/** -text -whitespace` にし、`git diff --check`（pre-commit フックと `eng/validate-git.ps1` の GIT-004）が上流の行末空白（`md4c.h:167`）で落ちないようにする。バイト列は CNF-013 が守る（設計席 2026-10-21・#764 の実装で発見）。
 14. **File API の target の依存は「宣言した依存の閉包」と比べる。** CMake の File API の `dependencies` は推移的（静的ライブラリの PRIVATE link が `LINK_ONLY` で下流に乗る）なので、core が `third_party_md4c` を結ぶと core を使う全 target に `forbidden target dependency third_party_md4c` が出た（15 件）。`eng/conformance.py --build-dir` の照合は `eng/symbols.py` の `dependency_closure` と同じ意味の閉包と比べる。直の link は `eng/targets.cmake` の `nenenib_link` が configure で守り、相対 include の検査は直の依存のまま。下流のモジュールの依存には `third_party_md4c` を足さない。`tests/conformance` に正例（閉包の中の推移的な依存は通る）と反例（閉包の外の target に結ぶと落ちる）（設計席 2026-10-21）。
 15. **外部コードは clang-format の対象外（書き換えないため）。** `eng/check.ps1` の QLT-004 の列挙から `:(exclude)third_party/**` で外す。Nib のソースの整形の検査は変えない（設計席 2026-10-21）。
-12. **検証**: 単体テスト（CommonMark の例を 8 構文の範囲で数十・`source_begin`・実体参照・打ち切り・`too_large` は境界だけ）・`tests/performance` に 16 MiB の parse の probe（組み立て込み・値を記録）・CNF-013 の正例・反例・`/W4 /WX` 0 件（CI の check job）・`check.ps1 -Full`（外部コードと C の有効化は限定した検証で覆えない: 理由を書いて 1 回）。
 
 ## 段 1 の実装で分かった事実（#764・2026-10-21）
 
@@ -37,6 +37,17 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - clang-cl 19.1.5 の Debug（`/std:c17 /W4 /WX /utf-8` ＋ ASan / UBSan）で md4c.c の警告は 0 件。CMake は C の target に `-imsvc`（SYSTEM の include）と `/std:c17` を渡し、`NENENIB_CXX_OPTIONS` は渡らない。
 - `eng/symbols.py` は `symbol-allowlist.json` の `modules` に無いモジュールを見ないので、`third_party_md4c` の欄を足して照合の対象にした。Debug の `nenenib_md4c.lib` が外へ要求するのは `malloc` `realloc` `free` `qsort` `bsearch` `memcpy` `memmove` `memset` `memcmp` `strchr` `strlen` と、`__chkstk` `__security_*` と ASan / UBSan の runtime と `__stdio_common_vsprintf`。最後のものは UCRT の `<stdio.h>` が inline で定義する `sprintf` 系の包みが `/Od` で obj に残った参照で、md4c が `sprintf` を呼ぶのは `#if 0` の中だけ。時刻・OS・スレッドに触れるものは無い。
 - `md4c.h` は ARC-007 の字句検査（`src/adapters/win32/` 以外の `.h`）と CNF-003 / CNF-008 で指摘 0（`.c` は `cppExtensions` に無いので字句検査の対象外）。
+
+## 段 2 の実装で分かった事実（#765・2026-10-21）
+
+決定は変えず、実装で確かめた値と名前だけを書く。
+
+- 打ち切りの値は **負**（`-2`）。md4c の内側の関数は `MD_CHECK` で負の値だけを上へ返し、正の値は捨てて読み続ける（text のコールバックの非 0 が `md_parse` まで届かなかった・単体テストで実測）。md4c 自身の負の値は `-1` だけ。打ち切りは builder が覚え（一度 true を聞いたら以後は問わない）、`md_parse` の戻り値でなく覚えた値で `stopped` を返す。
+- 止める述語 `MarkdownStop` は関数ポインタと借りた文脈の対（core は `<functional>` の `std::function` を使っていない）。`MarkdownStop::asking(呼び出し可能な値)` と `MarkdownStop::never()`。
+- md4c の enter / leave を畳む型は `MarkdownBuilder`（md4c の型を知らない・1 ファイル 1 型）。実体参照の表は `MarkdownEntity`（名前つきは CommonMark の例の 15 個・数値は 0・サロゲート・U+10FFFF 超を U+FFFD）。`marker` は決定 7 のまま `std::string`（番号つきは区切りが `)` でも `"N."`・箇条書きは `"•"`）。記号だけの項目（`- - a` の外側・`-` だけの行）は空の `list_item` を 1 つ出す。
+- `source_begin` は NORMAL / ENTITY と、本文の中を指す CODE / HTML の text から引く（コードブロックの本体の行は本文の中・行末と字下げは外）。中かどうかは `std::less_equal` の全順序で比べる。文字の無い要素の補いは「直前の位置つきの text の終わりの次の行から空行を飛ばした最初の行の行頭」・前に何も無ければ本文の先頭から空行を飛ばす（決定 8 の追記）。行の探索は位置を持たない要素のときだけ走る。
+- `eng/symbols.py` は core の未定義 `md_parse` を閉包の `nenenib_md4c.lib` の定義で解決し、`eng/symbol-allowlist.json` は変えずに 0 violation（#772 の名指しの import は不要だった）。
+- 16 MiB の parse（組み立て込み）の probe は `markdown-parse-mixed-16mib`（入力は probe の (i) と同じ 16,777,183 バイト・209,263 要素）。Release（`77f391d`・負荷 1〜5%）の 10 回で中央値 143.2 ms・最小 141.4 ms（md4c だけの 63.8 ms に、組み立てが約 80 ms 足される）。正式な速さのゲートではない。
 
 ## 却下した選択肢
 
@@ -53,6 +64,7 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 
 - ブロックの元の位置は md4c が渡さないので、`source_begin` は最初の text の位置（ブロックの記号の位置ではない）。スクロールの同期は段落の単位で足りる。
 - 実体参照の表は CommonMark の例の範囲。表の外は綴りのまま。
+- builder の確保の失敗（`bad_alloc`）は捕まえない。md4c の C のフレームを抜けて落ちる（Nib の他の場所と同じ）。プレビューの入力は上限（計画 M-3・16 MiB）で抑える。
 - 表・脚注・数式・画像・HTML の解釈はしない（初版の範囲案）。
 - `eng/symbols.py` は core の未定義を閉包の定義で解決するので、Debug の `nenenib_md4c.lib` が定義する UCRT の inline の `sprintf` 系を core が呼んでも ARC-003 にならない。名指しの API（`md_parse`）だけに限るのは #772。
 
@@ -60,4 +72,4 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 
 - CNF-013（`thirdPartyDigests` の照合・planned → 正例・反例を足して active）。
 - `eng/targets.cmake` の `nenenib_third_party_target` 以外に C の target を作れない（モジュールの検査）。
-- `md4c.h` の include は `src/core/MarkdownParse.cpp` の 1 か所（CNF-009 と同じ字句検査に 1 行足すか、ARC-002 の表で守るかは実装の段で決める）。
+- `md4c.h` の include は `src/core/MarkdownParse.cpp` の 1 か所。CNF-009 と同じ字句検査（`eng/conformance.py` の `concurrency_and_simd`）が `src/` の中のほかのファイルの include を ARC-002 で拒否する。ヘッダ名と許す path は `eng/conformance-rules.json` の `markdownParserHeader` / `markdownParserAllowedPath`、正例・反例は `tests/conformance/test_conformance.py`（#765）。

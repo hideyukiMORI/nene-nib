@@ -210,8 +210,9 @@ CI の共有ランナーは host の CPU 世代が混ざり、世代差は許容
 include したら CPP-013。`src/core/simd/` 以外の `src/` で SIMD ヘッダ（`immintrin.h` `intrin.h` `xmmintrin.h` 等）を include したら CPP-018。
 リンカに見えない `std::atomic`（TH2）と、コンパイラの target feature 検査（S1）の置き場の側を字句で補う。ヘッダ名だけを見るので、
 Interlocked 系の組み込みや `volatile` は見ない。tests/ は対象外。
+同じ字句検査で、`src/` の中で `md4c.h` を include してよいのは `src/core/MarkdownParse.cpp` の 1 ファイルだけ（ほかは ARC-002・ヘッダ名と許す path は `eng/conformance-rules.json` の `markdownParserHeader` / `markdownParserAllowedPath`・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md) の決定 5）。
 
-- 対応する規則: CPP-013 / CPP-018
+- 対応する規則: CPP-013 / CPP-018 / ARC-002
 - 機械強制: **active**（`eng/conformance.py`。正例・反例は `tests/conformance` がゲートで回る。ヘッダ名の字句だけを見る）
 
 ### CNF-010 — 生成した fixture と `fixtures.json` の一致

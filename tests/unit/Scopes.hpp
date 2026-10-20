@@ -73,6 +73,9 @@ void verify_operations_scope();
 // GuideTests.cpp
 void verify_guide_scope();
 
+// MarkdownTests.cpp（ADR 0151 の決定 5〜8・parse_markdown）
+void verify_markdown_scope();
+
 // ExitPlanTests.cpp（ADR 0133）
 void verify_exit_plan_scope();
 
