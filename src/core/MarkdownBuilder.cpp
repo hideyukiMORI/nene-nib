@@ -17,10 +17,42 @@ namespace
 {
 constexpr std::string_view bullet_marker = "•";
 constexpr std::size_t depth_limit = 255U;
+// 画像の代わりの文字の枠（#784）。alt はこの間に入る。
+constexpr std::string_view image_opening = "[画像: ";
+constexpr std::string_view image_closing = "]";
 
 [[nodiscard]] std::uint8_t saturated_depth(std::size_t depth) noexcept
 {
     return static_cast<std::uint8_t>(depth < depth_limit ? depth : depth_limit);
+}
+
+// from から次の改行の位置（無ければ input.size()）。1 バイトずつ歩く（STL の検索は Debug で
+// memchr を core の外へ出す・ARC-003・#784）。
+[[nodiscard]] std::size_t line_end(std::string_view input, std::size_t from) noexcept
+{
+    while (from < input.size() && input[from] != '\n')
+    {
+        ++from;
+    }
+    return from;
+}
+
+[[nodiscard]] bool blank(char value) noexcept
+{
+    return value == ' ' || value == '\t' || value == '\r';
+}
+
+// [from, to) が空白（空白・Tab・CR）だけか。
+[[nodiscard]] bool blank_between(std::string_view input, std::size_t from, std::size_t to) noexcept
+{
+    for (; from < to; ++from)
+    {
+        if (!blank(input[from]))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 // line から始めて、空白（空白・Tab・CR）だけの行を飛ばした最初の行の行頭。
@@ -28,11 +60,8 @@ constexpr std::size_t depth_limit = 255U;
 {
     while (line < input.size())
     {
-        const auto end = input.find('\n', line);
-        const auto content =
-            input.substr(line, end == std::string_view::npos ? std::string_view::npos : end - line);
-        if (end == std::string_view::npos ||
-            content.find_first_not_of(" \t\r") != std::string_view::npos)
+        const auto end = line_end(input, line);
+        if (end == input.size() || !blank_between(input, line, end))
         {
             return line;
         }
@@ -153,6 +182,10 @@ void MarkdownBuilder::enter_span(std::optional<PreviewStyle> style)
     const Offset at{block.text.size()};
     spans_.emplace_back(block.spans.size());
     block.spans.push_back(PreviewSpan{at, at, style.value()});
+    if (style.value() == PreviewStyle::image)
+    {
+        block.text.append(image_opening);
+    }
 }
 
 void MarkdownBuilder::leave_span()
@@ -166,7 +199,12 @@ void MarkdownBuilder::leave_span()
     if (index.has_value() && leaf_.has_value())
     {
         auto &block = leaf_.value();
-        block.spans.at(index.value()).end = Offset{block.text.size()};
+        auto &span = block.spans.at(index.value());
+        if (span.style == PreviewStyle::image)
+        {
+            block.text.append(image_closing);
+        }
+        span.end = Offset{block.text.size()};
     }
 }
 
@@ -214,8 +252,8 @@ std::size_t MarkdownBuilder::unlocated_begin() const noexcept
     std::size_t line = 0U;
     if (last_end_.has_value())
     {
-        const auto newline = input_.find('\n', last_end_.value());
-        line = newline == std::string_view::npos ? input_.size() : newline + 1U;
+        const auto newline = line_end(input_, last_end_.value());
+        line = newline == input_.size() ? input_.size() : newline + 1U;
     }
     return first_filled_line(input_, line);
 }

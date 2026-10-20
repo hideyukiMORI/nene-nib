@@ -26,4 +26,5 @@ void verify_presented_milestones();
 void verify_device_warmup();
 void verify_window_timers();
 void verify_wheel_turns();
+void verify_preview_layouts();
 } // namespace nenenib::tests::ui
