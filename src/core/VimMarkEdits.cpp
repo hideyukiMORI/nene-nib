@@ -318,7 +318,17 @@ namespace
 // 動かす（i<CR> は分けた行のマークを動かさない）。
 VimMarks marks_adjusted(const VimMarks &marks, const TextBuffer &before, const Edit &given)
 {
-    const Edit edit = narrowed(given);
+    // 改行の無い編集（打鍵の大半）は行をずらさない。本文を写す前に返す（1
+    // 打鍵の道に複写を足さない）。
+    if (newlines_in(given.removed) == 0 && newlines_in(given.inserted) == 0)
+    {
+        return marks;
+    }
+    // 頭と尾を除くのは消した本文と入れた本文の両方があるとき（J gJ の置換）だけで、貼り付けと
+    // 削除は写さずにそのまま読む。
+    std::optional<Edit> store;
+    const Edit &edit =
+        given.removed.empty() || given.inserted.empty() ? given : store.emplace(narrowed(given));
     if (newlines_in(edit.removed) == 0 && newlines_in(edit.inserted) == 0)
     {
         return marks;
@@ -347,7 +357,11 @@ VimMarkPosition vim_last_change_of(const TextBuffer &before, const Edit &edit)
     const bool appended_below =
         at_line_end && edit.removed.empty() && starts_with_newline(edit.inserted);
     // J gJ は Vim の do_join が消した次の行の行頭（del_lines の changed_lines）。
-    if (removed_below || appended_below || joins(before, narrowed(edit)))
+    const bool joined =
+        newlines_in(edit.removed) > 0 &&
+        (edit.removed.empty() || edit.inserted.empty() ? joins(before, edit)
+                                                       : joins(before, narrowed(edit)));
+    if (removed_below || appended_below || joined)
     {
         return VimMarkPosition{line_after(first, one_line), 0};
     }

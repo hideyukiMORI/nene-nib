@@ -2000,9 +2000,19 @@ std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::Vim
         settle_vim_caret();
     }
     // 鍵の終わりに、動かなかった・消えた前の位置を戻す（決定 5・Vim の checkpcmark）。
+    check_vim_marks();
+    return step.failure;
+}
+
+// 飛ぶ鍵の後だけ前の位置を確かめる（決定 5）。飛ばなかった鍵は位置を引かない。
+void EditorController::check_vim_marks()
+{
+    if (!state_.vim_marks().prior_context.has_value())
+    {
+        return;
+    }
     state_ = state_.with_vim_marks(core::vim_marks_checked(
         state_.vim_marks(), core::vim_mark_position_of(state_.text(), state_.selection().caret)));
-    return step.failure;
 }
 
 void EditorController::adopt_vim_marks(const std::optional<core::VimMarks> &marks)

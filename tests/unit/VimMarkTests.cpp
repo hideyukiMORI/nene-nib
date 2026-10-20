@@ -23,6 +23,7 @@
 #include "VimMarkPosition.hpp"
 #include "VimMarks.hpp"
 #include "VimMatchingPair.hpp"
+#include "VimRegisterKind.hpp"
 #include "VimRepeatFailure.hpp"
 #include "VimTestSupport.hpp"
 
@@ -32,6 +33,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::tests
 {
@@ -169,6 +171,55 @@ void verify_mark_failures()
     expect(body_after("abc\ndef", "m.x") == "abc\ndef", "m. is refused");
     expect(body_after("a\r\nb\r\nc\r\nd", "jjmaggdd'ax") == "b\n\nd", "a CRLF dd lifts the mark");
     expect(body_after("a (b\r\nc) d", "d%") == " d", "d% crosses a CRLF line break");
+    // undo は消えたマークを戻さない（Vim は戻す・ADR 0152 の限界）。今の挙動を固定する（#790 R4）。
+    expect(body_after("a\nb\nc", "jmaddu'ax") == "a\nb\nc",
+           "a mark removed by dd stays removed after u (Vim restores it)");
+}
+
+// オペレータの後ろで失敗した移動は本文もレジスタも変えずにオペレータを打ち消す（#790 R3）。
+void verify_operator_cancels()
+{
+    const auto cancelled = [](std::string text, std::string_view keys)
+    {
+        Editing editing;
+        open_vim_document(editing, std::move(text));
+        vim_replay(editing.controller(), keys);
+        const bool untouched = editing.controller().vim_state().unnamed_register.value().kind ==
+                               nenenib::core::VimRegisterKind::uninitialized;
+        return std::pair{whole_vim_body(editing.controller()), untouched};
+    };
+    // 打った鍵の意味で流すので、打ち消された後の x は普通の x として効く。
+    expect(cancelled("a b c", "d%x") == std::pair{std::string{" b c"}, false},
+           "d% without a bracket cancels the operator");
+    const auto unmatched = cancelled("a (b c", "d%");
+    expect(unmatched.first == "a (b c" && unmatched.second,
+           "d% without a match changes neither the text nor the register");
+    const auto unset = cancelled("abc\ndef", "d'a");
+    expect(unset.first == "abc\ndef" && unset.second,
+           "d'a with an unset mark changes neither the text nor the register (E20)");
+    expect(cancelled("abc\ndef", "d'ax").first == "bc\ndef",
+           "the key after a cancelled d'a is a plain key");
+}
+
+// 編集の形から操作を当てる近似で Vim と違う例の今の値（ADR 0152 の限界・#790 R2・Q2）。直す席が
+// 変えたことに気づけるように固定する。Vim の値は括弧の中。
+void verify_mark_approximations()
+{
+    const auto body_after = [](std::string text, std::string_view keys)
+    {
+        Editing editing;
+        open_vim_document(editing, std::move(text));
+        vim_normal(editing.controller(), keys);
+        return whole_vim_body(editing.controller());
+    };
+    expect(body_after("a\n\nc", "jmao<Esc>'aix<Esc>") == "a\n\nx\nc",
+           "o on an empty line pushes its mark down (Vim keeps it: a/x//c)");
+    expect(body_after("abc", "lmadd`aix<Esc>") == "x",
+           "dd of the only line keeps its mark (Vim removes it: E20)");
+    expect(body_after("a\nbb\ncc\nd", "jjlmagg3J`aix<Esc>") == "a xbb cc\nd",
+           "3J reads as a charwise delete (Vim: a bb cxc/d)");
+    expect(body_after("abc\ndef", "Glmaggv G$d`aix<Esc>").empty(),
+           "a charwise delete of the whole text removes the marks (Vim keeps them: x)");
 }
 
 // マークは文書の値で、タブを切り替えると文書に付いていく（決定 2）。まだ読んでいない文書と
@@ -208,6 +259,8 @@ void verify_vim_mark_contracts()
     verify_mark_values();
     verify_matching_pair_crlf();
     verify_mark_failures();
+    verify_operator_cancels();
+    verify_mark_approximations();
     verify_marks_follow_documents();
 }
 
@@ -224,7 +277,7 @@ void verify_vim_mark_scope()
             ++selected;
         }
     }
-    expect(selected == 110, "the scope replays the 110 oracle fixtures of % and the marks");
+    expect(selected == 112, "the scope replays the 112 oracle fixtures of % and the marks");
     verify_vim_mark_contracts();
 }
 } // namespace nenenib::tests

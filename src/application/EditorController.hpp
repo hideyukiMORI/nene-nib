@@ -404,6 +404,7 @@ class EditorController final
     void update_search_preview();
     void restore_search_origin(const ScrollState &origin);
     void undone_marks(const core::Edit &edit);
+    void check_vim_marks();
     void adopt_vim_marks(const std::optional<core::VimMarks> &marks);
     void undo_edit();
     void redo_edit();

@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 38404d66edd46264aff0f5b2a2d84bdaff7123cf697bbdeda4786f24b5a06007 / 2313 fixtures
+// fixtures.json: sha256 8736fca7f89e728094749d286282ec989d0f3a278a3478c3d5ed7387a4b15f50 / 2315 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2313> vim_fixtures{{
+constexpr std::array<VimFixture, 2315> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2325,6 +2325,8 @@ constexpr std::array<VimFixture, 2313> vim_fixtures{{
     {"change-mark-redo", "abc\ndef\nghi", "jjxggu<C-r>gg`.x", "abc\ndef\ni", 3, 1, "h", "v", std::nullopt},
     {"change-mark-operator", "abc\ndef\nghi", "jlxggd'.", "ghi", 1, 1, "abc\ndf\n", "V", std::nullopt},
     {"change-mark-visual-lines", "ab\ncd\nef", "Vjdgg`.x", "f", 1, 1, "e", "v", std::nullopt},
+    {"mark-adjust-visual-delete-lines", "abc\ndef", "lmavG$d`aix<Esc>", "xa", 1, 1, "bc\ndef", "v", std::nullopt},
+    {"mark-adjust-visual-delete-across", "abc\ndef\nghi", "lmavjd`aix<Esc>", "axf\nghi", 1, 2, "bc\nde", "v", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

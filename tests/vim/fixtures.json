@@ -2311,5 +2311,7 @@
   {"name":"change-mark-undo","text":"abc\ndef\nghi","keys":"jjlxu`.x"},
   {"name":"change-mark-redo","text":"abc\ndef\nghi","keys":"jjxggu<C-r>gg`.x"},
   {"name":"change-mark-operator","text":"abc\ndef\nghi","keys":"jlxggd'."},
-  {"name":"change-mark-visual-lines","text":"ab\ncd\nef","keys":"Vjdgg`.x"}
+  {"name":"change-mark-visual-lines","text":"ab\ncd\nef","keys":"Vjdgg`.x"},
+  {"name":"mark-adjust-visual-delete-lines","text":"abc\ndef","keys":"lmavG$d`aix<Esc>"},
+  {"name":"mark-adjust-visual-delete-across","text":"abc\ndef\nghi","keys":"lmavjd`aix<Esc>"}
 ]
