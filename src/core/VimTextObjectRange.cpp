@@ -13,6 +13,7 @@
 #include "VimParagraphObject.hpp"
 #include "VimRegisterKind.hpp"
 #include "VimSentenceObject.hpp"
+#include "VimTagObject.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectCancel.hpp"
 #include "VimTextObjectScope.hpp"
@@ -194,6 +195,7 @@ constexpr char32_t escape_character = U'\\';
     case VimTextObject::angle:
     case VimTextObject::paragraph:
     case VimTextObject::sentence:
+    case VimTextObject::tag:
         return VimWordClass::word;
     }
     std::unreachable();
@@ -409,6 +411,7 @@ constexpr char32_t escape_character = U'\\';
     case VimTextObject::angle:
     case VimTextObject::paragraph:
     case VimTextObject::sentence:
+    case VimTextObject::tag:
         return U'"';
     }
     std::unreachable();
@@ -770,6 +773,7 @@ constexpr char32_t escape_character = U'\\';
     case VimTextObject::paren:
     case VimTextObject::paragraph:
     case VimTextObject::sentence:
+    case VimTextObject::tag:
         return VimBracketPair{U'(', U')'};
     }
     std::unreachable();
@@ -1073,6 +1077,8 @@ VimTextObjectOutcome vim_text_object_range(const TextBuffer &text, const Selecti
         return vim_paragraph_object_range(text, selection, request, count);
     case VimTextObject::sentence:
         return vim_sentence_object_range(text, selection, request, count);
+    case VimTextObject::tag:
+        return vim_tag_object_range(text, selection, request, count);
     }
     std::unreachable();
 }

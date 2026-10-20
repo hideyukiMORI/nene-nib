@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 e69d26ace4b464c97dc9892c7073bb43462cb51d14bcd0c6403fbf2382fa75e6 / 2038 fixtures
+// fixtures.json: sha256 545921aa475dd4ac71439a58406d2800e510b8db67b53c55c498c1ec23e29697 / 2077 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2038> vim_fixtures{{
+constexpr std::array<VimFixture, 2077> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -1256,6 +1256,45 @@ constexpr std::array<VimFixture, 2038> vim_fixtures{{
     {"text-object-sentence-backward-first-blank", "One.  Two. Three.", "5lvhisd", "Two. Three.", 1, 1, "One.  ", "v", std::nullopt},
     {"text-object-sentence-combining", "Café is open. Née said so.", "$das", "Café is open.", 1, 15, " Née said so.", "v", std::nullopt},
     {"text-object-sentence-dot", "One. Two. Three.", "das.", "Three.", 1, 1, "Two. ", "v", std::nullopt},
+    {"text-object-tag-dit", "<a><b>xy</b></a>", "6ldit", "<a><b></b></a>", 1, 7, "xy", "v", std::nullopt},
+    {"text-object-tag-dat", "<a><b>xy</b></a>", "6ldat", "<a></a>", 1, 4, "<b>xy</b>", "v", std::nullopt},
+    {"text-object-tag-cit", "<a><b>xy</b></a>", "6lcitZ<Esc>", "<a><b>Z</b></a>", 1, 7, "xy", "v", std::nullopt},
+    {"text-object-tag-yat", "<a><b>xy</b></a>", "6lyat", "<a><b>xy</b></a>", 1, 4, "<b>xy</b>", "v", std::nullopt},
+    {"text-object-tag-vitd", "<a><b>xy</b></a>", "6lvitd", "<a><b></b></a>", 1, 7, "xy", "v", std::nullopt},
+    {"text-object-tag-vatd", "<a><b>xy</b></a>", "6lvatd", "<a></a>", 1, 4, "<b>xy</b>", "v", std::nullopt},
+    {"text-object-tag-d2it", "<a><b>xy</b></a>", "6ld2it", "<a></a>", 1, 4, "<b>xy</b>", "v", std::nullopt},
+    {"text-object-tag-d2at", "<a><b>xy</b></a>", "6ld2at", "", 1, 1, "<a><b>xy</b></a>", "v", std::nullopt},
+    {"text-object-tag-vitit", "<a><b>xy</b></a>", "6lvititd", "<a></a>", 1, 4, "<b>xy</b>", "v", std::nullopt},
+    {"text-object-tag-vatat", "<a><b>xy</b></a>", "6lvatatd", "", 1, 1, "<a><b>xy</b></a>", "v", std::nullopt},
+    {"text-object-tag-vititit", "<a><b>xy</b></a>", "6lvitititd", "", 1, 1, "<a><b>xy</b></a>", "v", std::nullopt},
+    {"text-object-tag-backward-selection", "<a><b>xy</b></a>", "7lvhitd", "<a></a>", 1, 4, "<b>xy</b>", "v", std::nullopt},
+    {"text-object-tag-linewise-visual", "<a><b>xy</b></a>", "6lVitd", "<a><b></b></a>", 1, 7, "xy", "v", std::nullopt},
+    {"text-object-tag-on-end-tag", "<a><b>xy</b></a>", "8ldit", "<a><b></b></a>", 1, 7, "xy", "v", std::nullopt},
+    {"text-object-tag-on-start-tag", "<a><b>xy</b></a>", "4ldat", "<a></a>", 1, 4, "<b>xy</b>", "v", std::nullopt},
+    {"text-object-tag-nested-same-name-outer", "<a>1<a>2</a>3</a>", "12ldit", "<a></a>", 1, 4, "1<a>2</a>3", "v", std::nullopt},
+    {"text-object-tag-nested-same-name-inner", "<a>1<a>2</a>3</a>", "7ldat", "<a>13</a>", 1, 5, "<a>2</a>", "v", std::nullopt},
+    {"text-object-tag-self-closing-skipped", "<a>x<br/>y</a>", "9ldit", "<a></a>", 1, 4, "x<br/>y", "v", std::nullopt},
+    {"text-object-tag-on-self-closing", "<a>x<br/>y</a>", "5ldit", "<a></a>", 1, 4, "x<br/>y", "v", std::nullopt},
+    {"text-object-tag-ignores-case", "<DIV>x</div>", "5ldit", "<DIV></div>", 1, 6, "x", "v", std::nullopt},
+    {"text-object-tag-attributes", "<p class=\"c\" id=\"i\">text</p>", "3ldit", "<p class=\"c\" id=\"i\"></p>", 1, 21, "text", "v", std::nullopt},
+    {"text-object-tag-attribute-across-lines", "<a\nhref=\"x\">t</a>", "jf>ldit", "<a\nhref=\"x\"></a>", 2, 10, "t", "v", std::nullopt},
+    {"text-object-tag-name-is-a-word", "<a>x<ab>y</ab></a>", "8ld2it", "<a></a>", 1, 4, "x<ab>y</ab>", "v", std::nullopt},
+    {"text-object-tag-lines-dit", "<div>\n  text\n</div>", "jdit", "<div></div>", 1, 6, "\n  text\n", "v", std::nullopt},
+    {"text-object-tag-lines-dat", "<div>\n  text\n</div>", "jdat", "", 1, 1, "<div>\n  text\n</div>\n", "V", std::nullopt},
+    {"text-object-tag-lines-yit", "<div>\n  text\n</div>", "jyit", "<div>\n  text\n</div>", 1, 5, "\n  text\n", "v", std::nullopt},
+    {"text-object-tag-lines-vitd", "<div>\n  text\n</div>", "jvitd", "<div></div>", 1, 6, "\n  text\n", "v", std::nullopt},
+    {"text-object-tag-indent-skipped", "<ul>\n  <li>one</li>\n  <li>two</li>\n</ul>", "jdit", "<ul>\n  <li></li>\n  <li>two</li>\n</ul>", 2, 7, "one", "v", std::nullopt},
+    {"text-object-tag-end-tag-at-line-end", "<ul>\n  <li>one</li>\n  <li>two</li>\n</ul>", "jj$dit", "<ul>\n  <li>one</li>\n  <li></li>\n</ul>", 3, 7, "two", "v", std::nullopt},
+    {"text-object-tag-lines-d2it", "<ul>\n  <li>one</li>\n  <li>two</li>\n</ul>", "jfod2it", "<ul></ul>", 1, 5, "\n  <li>one</li>\n  <li>two</li>\n", "v", std::nullopt},
+    {"text-object-tag-unclosed-inner-tag", "<a><b>x</a>", "6ldit", "<a></a>", 1, 4, "<b>x", "v", std::nullopt},
+    {"text-object-tag-stray-close-tag", "<a>x</b>y</a>", "3ldit", "<a></a>", 1, 4, "x</b>y", "v", std::nullopt},
+    {"text-object-tag-empty-cit", "<a></a>", "citZ<Esc>", "<a>Z</a>", 1, 4, "", "", std::nullopt},
+    {"text-object-tag-empty-dit", "<a></a>", "ditx", "<a>/a>", 1, 4, "<", "v", std::nullopt},
+    {"text-object-tag-empty-vitd", "<a></a>", "vitd", "<a>/a>", 1, 4, "<", "v", std::nullopt},
+    {"text-object-tag-none-stops-keys", "plain text", "ditx", "plain text", 1, 1, "", "", std::nullopt},
+    {"text-object-tag-after-the-block-stops-keys", "<a>x</a> y", "$ditx", "<a>x</a> y", 1, 10, "", "", std::nullopt},
+    {"text-object-tag-count-too-far-stops-keys", "<a>x</a>", "3ld2itx", "<a>x</a>", 1, 4, "", "", std::nullopt},
+    {"text-object-tag-dot", "<a>x</a><b>y</b>", "ldat.", "", 1, 1, "<b>y</b>", "v", std::nullopt},
     {"block-enter-esc", "abcdef\nghijkl\nmnopqr", "<C-v><Esc>x", "bcdef\nghijkl\nmnopqr", 1, 1, "a", "v", std::nullopt},
     {"block-enter-twice", "abcdef\nghijkl\nmnopqr", "<C-v><C-v>x", "bcdef\nghijkl\nmnopqr", 1, 1, "a", "v", std::nullopt},
     {"block-enter-from-v", "abcdef\nghijkl\nmnopqr", "vl<C-v>y", "abcdef\nghijkl\nmnopqr", 1, 1, "ab", "\0262", std::nullopt},

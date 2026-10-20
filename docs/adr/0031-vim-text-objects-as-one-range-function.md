@@ -2,7 +2,7 @@
 
 - 状態: 受理（実測 364 ケースで決定 1〜8 を確かめ、食い違った 4 点を実測に合わせて直した。2026-09-22 に Issue #99 が残る 3 点を 208 ケース測って閉じ、決定 2・4 を直した。同日 Issue #111 が引用符の対の選び方を 645 ケース測って閉じ、決定 4・6 を直した＝下の 2 つの「補足」）
 - 日付: 2026-09-22
-- Issue: #93 / #99 / #111 / #729（段落と文・決定 9・10）
+- Issue: #93 / #99 / #111 / #729（段落と文・決定 9・10）/ #745（タグ・決定 11）
 - 影響する規則: ARC-001 / ARC-004 / ARC-007 / ARC-009 / CPP-002 / CPP-004 / CPP-006 / CPP-011 / CPP-012 / QLT-001 / QLT-008 / QLT-012 / QLT-013 / CNF-010
 
 ## 文脈
@@ -24,7 +24,7 @@ FR-003 の T2「テキストオブジェクト `iw aw i" a" i( a( i{ it`」を�
 
 **テキストオブジェクトの範囲は純関数 1 本が決め、オペレータの後ろでも VISUAL でも同じ範囲を使う。`i` / `a` は保留中と VISUAL だけの排他的な次キー待ちとして持つ。**
 
-1. `VimInputWait` に `VimTextObjectScope`（`inner` / `around`）を足す。オペレータ保留中と VISUAL / 行単位 VISUAL の `i` / `a` でこの待ちに入り、次の鍵を閉じた `VimTextObject`（`word` / `big_word` / `double_quote` / `single_quote` / `backtick` / `paren` / `brace` / `bracket` / `angle`）に表で写す。`b` は `paren`、`B` は `brace`、閉じ括弧の鍵 `)` `}` `]` `>` もそれぞれ同じ表の行（`di)` が `di(` と同じであることは実測）。表に無い鍵と Esc は取消で、既存の待ちと同じくモード・選択・希望列・検索記憶を保つ。`it` / `at` はこの縦切りに入れない（`ip` / `ap`・`is` / `as` は Issue #729 が `p` `s` の 2 行で足した・決定 9・10）。
+1. `VimInputWait` に `VimTextObjectScope`（`inner` / `around`）を足す。オペレータ保留中と VISUAL / 行単位 VISUAL の `i` / `a` でこの待ちに入り、次の鍵を閉じた `VimTextObject`（`word` / `big_word` / `double_quote` / `single_quote` / `backtick` / `paren` / `brace` / `bracket` / `angle`）に表で写す。`b` は `paren`、`B` は `brace`、閉じ括弧の鍵 `)` `}` `]` `>` もそれぞれ同じ表の行（`di)` が `di(` と同じであることは実測）。表に無い鍵と Esc は取消で、既存の待ちと同じくモード・選択・希望列・検索記憶を保つ。`it` / `at`・`ip` / `ap`・`is` / `as` はこの縦切りに入れなかった（`ip` / `ap`・`is` / `as` は Issue #729 が `p` `s` の 2 行で、`it` / `at` は Issue #745 が `t` の 1 行で足した・決定 9〜11）。
 2. 範囲は新しい純関数 `vim_text_object_range(text, selection, request, count)` が閉じた和型 `VimTextObjectOutcome`（`VimTextObjectSpan` | `VimTextObjectCancel`・Issue #99 で `std::optional<VimMotionRange>` から変えた）で返す（`src/core/VimTextObjectRange.cpp`・1 ファイル 1 型・CPP-011）。`selection` は NORMAL では畳んだ位置、VISUAL では今の選択で、決定 4 の「広げる」意味を 1 本の関数の中に閉じる（引数 4 つの上限のため `scope` と種類は `VimTextObjectRequest` に畳む）。語の種類は既存の `VimCharacterRange` の表（ADR 0012 の決定 5）を `vim_character_class` として VimWordMotion から公開して使い、`iW` はその畳み方の違いだけにする。通常モードの `moved_caret` には触れない。範囲にならなければ `VimTextObjectCancel` で、そこに残る選択（＝取消のあとのキャレット）まで返す。
 3. オペレータの後ろでは既存の `performed` に渡す。`adjusted_for_exclusive` は通さない（テキストオブジェクトは exclusive / inclusive の motion ではない）。`whole_lines_for_delete` の Vi 互換規則は d にだけ既存どおり通す（空行の `daw` と末尾の無い `da(` が行単位になるのは実測で確認）。`cw` の特例（`word_end_for_change`）は `ciw` に適用しない。`y` はキャレットを範囲の先頭へ戻す。**行単位の範囲でも桁を保たず範囲の先頭へ載る**ので、`performed` には希望列を空にした状態と範囲の先頭を渡す（既存の `yanked_caret` の行単位の枝は `yy` のための桁保持なので、そこは通さない）。
 4. VISUAL では選択を範囲に置き換える（anchor = 範囲の先頭、caret = 末尾の文字）。**VISUAL は常に文字単位**で、行単位になる範囲（決定 7）でも caret を最後の行の内容の終わり（NUL の桁）に置いて選択を改行まで届かせる。行単位 VISUAL で使うと文字単位へ切り替わる。選択が 1 文字より大きいときは Vim と同じく「今の選択をもう 1 つぶん広げる」意味になり、語は caret 側へ 1 単位（`viwiw` は語と空白を交互）、引用符と括弧は「新しい範囲が今の選択より広くなければ回数を 1 つ増やす」で 1 段外側（`vi(i(` / `vi"i"`）にする。caret が選択の小さいほう（後ろ向きの選択）のときは、**種類ごとに両端の置き方が違う**（Issue #99 の補足 3）。引用符は**対の選び方まで選択の向きで変わり**、置き換えた範囲の端へ anchor が動くとは限らない（Issue #111 の補足）。両端まで範囲関数が決め、engine はそれを置くだけにする。
@@ -34,17 +34,18 @@ FR-003 の T2「テキストオブジェクト `iw aw i" a" i( a( i{ it`」を�
 8. 記録・再生（ADR 0030）・UI・IME・描画・保存形式は変えない。VISUAL でのテキストオブジェクトも鍵として記録されるが、VISUAL の変更の `.` は #91 の範囲。
 9. **段落 `ip` `ap`**（Issue #729）。範囲関数の段落の枝 `vim_paragraph_object_range`（`src/core/VimParagraphObject.cpp`）が決める。段落は**空白行**で区切り、空白行は「空か、space と tab だけの行」（Vim の `linewhite`・実測。空白だけの行も境になる）。`ip` は段落か空白行の並び 1 つ、`ap` は段落と後ろの空白行の並びで、後ろに空白行が無ければ前の空白行の並びを含む（空白行から始めた `ap` は空白行と次の段落）。回数は並びの数で、途中で本文が尽きたら取消（`d2ap` が最後の段落で何もせず、キャレットも動かない）。範囲は常に**行単位**で、VISUAL は行単位 VISUAL へ移る（決定 4 の「常に文字単位」の例外）。anchor は行が変わるときだけ行頭へ動き、同じ行なら桁を保つ。選択が 2 行以上のときと、行単位 VISUAL で範囲が caret の行から始まるとき（`Vip` の 1 行の段落）は、**今の選択を caret の向きへ並びの数だけ広げ**（`i` は並び 1 つ、`a` は 2 つ）、モードは変えない（文字単位 VISUAL のまま広がる）。広げる途中で本文の端に着いたら取消だが、caret はそこまで動いて行頭に載る。空白行の判定は行頭からの窓だけを読み、行を写さない。
 10. **文 `is` `as`**（Issue #729）。範囲関数の文の枝 `vim_sentence_object_range`（`src/core/VimSentenceObject.cpp`）が決める。文は `.` `!` `?` の後に閉じ括弧類 `)` `]` `"` `'` が 0 個以上続き、その後が空白か行末の所で終わり、**空の行**（段落の境）でも終わる（空白だけの行は文の境にならない。決定 9 との違いは Vim と同じ）。`is` は文か文の間の空白の並び 1 つ、`as` は文と後ろの空白で、後ろに空白が無ければ前の空白を含む（空白から始めた `as` は前の空白と文で、後ろの空白は落とす）。回数は並びの数（`as` は 2 つずつ数える）。範囲は文字単位で、文の後ろが改行なら範囲は次の行の先頭まで届き、Vim の exclusive の規則（`:help exclusive`）で前の行の終わりへ戻る。そのとき始まりの前が空白だけなら**行単位**になる（`dis` が行ごと消え、`yis` は行単位のレジスタ・実測）。`d` の Vi 互換規則は決定 3 のまま通る。VISUAL は文字単位 VISUAL へ移り、選択が 1 文字より大きければ caret の向きへ広げてモードを変えない（行単位 VISUAL のまま）。後ろ向きに広げるときは、**caret の 1 つ手前**から次の文の先頭までに空白でない文字があれば文の中と見る（caret が空白の並びの最初の空白にあると、その並びは選んだ済みとして手前の文の先頭へ進む・実測）。文の前の 1 つの空白に `is` を使って同じ所に留まるときは広げる形へ移る。取消は無い。走査は 1 文字ずつキャレットの周りの窓（64 バイトから倍）だけを読み、1 文字は `vim_character_end` / `vim_character_start`（ADR 0053）で歩く。
+11. **タグ `it` `at`**（Issue #745）。範囲関数のタグの枝 `vim_tag_object_range`（`src/core/VimTagObject.cpp`）が決め、定義は Vim の `current_tagblock` のまま。開きタグは `<[^ \t>/!]\+\%(\_s\_[^>]\{-}[^/]>\|$\|\_s\=>\)`（名前の後ろが空白・行末・`>`。`/>` で閉じる自己閉じ `<x/>` と `<!` は開きにならない）、閉じタグは `</[^>]*>` で、キャレットから後ろへ**名前を問わず入れ子を数えて**未対応の開きを探し、回数はこの探索を外側へ繰り返す数。開きの名前（`<` の次から空白・`>`・行末の手前まで）で `<name\>…>` と `</name>` を前へ探し（名前は ASCII の大文字小文字を畳む `ascii_folded`・同じ名前の開きを数える）、閉じが無いか閉じの `<` が元の終わりより前なら、その開きから 1 つ外の開きで探し直す（閉じの無いタグを飛ばす）。見つからなければ取消でキャレットも選択も動かない（`dit` の後ろの鍵は打ち切られる）。照合の並びは Vim の `searchit` が `'cpoptions'` の `c` の下で数える並び（行頭から、前の照合の終わりの後ろを探し、行をまたいだ照合の後ろはその行で数えない）で、本文の端で折り返さない。走査の始まりは、NORMAL と 1 文字の選択では行頭の空白の上なら最初の空白でない文字へ動き、開きタグの上ならその `>` へ、閉じタグの上ならその `<` の 1 つ手前へ動いてそこが元の終わりになる（それ以外の元の終わりは NORMAL ではキャレットの 1 つ手前・Vim の `decl`）。広げる VISUAL は選択の小さいほうの端から探し、大きいほうの端が元の終わり。`at` は開きの `<` から閉じの `>` まで、`it` は開きの後ろの最初の `>` の次から閉じの `<` の手前までで、どちらも文字単位。`it` の始まりが行の内容の終わり（NUL の桁）なら範囲は改行から始まり、閉じが行頭にあっても Vim は exclusive の規則を当てない（`nv_object` の `CA_NO_ADJ_OP_END`）ので、複数行の `dit` は `<div></div>` を残す（実測）。`d` の Vi 互換規則は決定 3 のまま通る（複数行の `dat` は行単位）。中が空（`<a></a>`）なら空の範囲で、`dit` は何もせず、`cit` は間に入力し、VISUAL は閉じの `<` の 1 文字を選ぶ。VISUAL は文字単位 VISUAL へ移り（行単位 VISUAL からも）、anchor は範囲の先頭・caret は最後の文字。`it` の答えが今の選択と同じなら（中が 1 文字の `vit` も）`at` で選び直すので、`vitit` は同じ塊の `at`、`vititit` は 1 つ外の `at` になる（実測）。走査は読む位置を中心にした 4 KiB の窓だけを読み、行を写さない。1 文字の歩き（`>` の次・`<` の手前）は `vim_character_end` / `vim_character_start`（ADR 0053）。
 
 ## 強制
 
 - 網羅性: **active**（`VimTextObject` の switch・`VimInputWait` の visit・`VimTextObjectScope` の switch。選択肢が増えたらコンパイルが落ちる）
-- 範囲の正しさ・取消・VISUAL の置換・再生: **active**（oracle fixture と `--vim-text-objects` の対象 unit・CNF-010 で生成物の一致。段落と文は fixture 41 件と契約 `verify_vim_text_object_paragraphs_and_sentences`）
+- 範囲の正しさ・取消・VISUAL の置換・再生: **active**（oracle fixture と `--vim-text-objects` の対象 unit・CNF-010 で生成物の一致。段落と文は fixture 41 件と契約 `verify_vim_text_object_paragraphs_and_sentences`。タグは fixture 39 件）
 - 期待値が本物の Vim の答えであること: **不能**（CI に Vim は無い。ADR 0012 のとおり）
 
 ## 結果
 
 得られるもの: `diw` `ciw` `di"` `ci(` など T2 で最も使う編集が d/c/y と VISUAL と `.` の全部で使える。範囲の規則が 1 か所なので、`> < gu gU` を足すときも範囲は再利用できる。語の種類の表は `vim_character_class` 1 つに寄り、`iW` の「空白だけで切る」もその表の畳み方として同じ場所にある。
-失うもの・残る穴: タグ（`it` `at`）は後続。段落と文の境になる `'paragraphs'` `'sections'` の nroff マクロ（`.PP` などで始まる行）と改ページ文字、`'cpoptions'` の `J`（文の後ろに空白 2 つ）は扱わない（Issue #729）。Vim の `iw` は `iskeyword` に従うが、いまの語の種類表は ADR 0012 の範囲（ハングル・絵文字は未測）。`quoteescape` と `matchpairs` の設定は既定固定。
+失うもの・残る穴: タグの名前は Vim では正規表現へそのまま埋め込まれる（`.` `*` などが記号として効く）が、Nib は文字どおりに比べ、大文字小文字は ASCII だけを畳み、`\>` の語の文字は `vim_character_class` の表で決める。HTML の空要素（`<br>` `<img>`）とコメント `<!-- -->` は特別に扱わない（Vim と同じ・Issue #745）。タグの探索は 4 KiB の窓で読むが走査の長さに上限は無く、閉じの無い開きが N 個ある巨大な本文では時間と候補の記憶が本文に比例して増える（最悪 O(N × 本文)・#746 のレビュー I-1・費用は Issue #732 で文と一緒に測る）。段落と文の境になる `'paragraphs'` `'sections'` の nroff マクロ（`.PP` などで始まる行）と改ページ文字、`'cpoptions'` の `J`（文の後ろに空白 2 つ）は扱わない（Issue #729）。Vim の `iw` は `iskeyword` に従うが、いまの語の種類表は ADR 0012 の範囲（ハングル・絵文字は未測）。`quoteescape` と `matchpairs` の設定は既定固定。
 
 ## 却下した選択肢
 
@@ -133,3 +134,10 @@ caret は #99 の補足 3 のとおり向きを保つ（後ろ向きなら範囲
 `j` `k` が本文の端で失敗しない・回数つき挿入を Esc なしで終える）。fixture は 41 件を
 `text-object-paragraph-` `text-object-sentence-` の接頭辞で採り、初回の再生ですべて一致した。広げられない
 段落の取消はビープが後続の鍵を捨てて 1 回の `:normal!` に乗らないので、契約で固定した。
+
+## 補足（2026-10-20・Issue #745）
+
+タグを足すにあたり、決定 11 を固定 Vim 9.1 の `current_tagblock` / `in_html_tag` / `do_searchpair` の読みと実測で決めた。
+**実測**: fixture 39 件（`text-object-tag-` の接頭辞・`dit` `dat` `cit` `yat` `vitd` `vatd` `d2it` `d2at` `vitit` `vatat` `vititit`・入れ子・同じ名前の入れ子・自己閉じ・大文字小文字・属性・
+行をまたぐ属性・名前の語の境・複数行・行頭の空白・閉じの無いタグ・対にならない閉じタグ・中が空・見つからない取消・`.`）は初回の再生ですべて一致した。加えて候補 3,120 件（本文 10 本 × すべてのキャレット位置 × 15 の操作）を
+oracle の fixture として測り、実装の再生と比べてすべて一致した（候補と台本は `D:\NeNeNib\evidence\745-tagobj\`）。
