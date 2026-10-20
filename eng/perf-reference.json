@@ -70,9 +70,9 @@
           "maximumMs": 96.3726
         },
         "key-to-frame-single-giant-line-16mib": {
-          "medianMs": 1.351,
-          "minimumMs": 1.035,
-          "maximumMs": 1.585
+          "medianMs": 1.232,
+          "minimumMs": 0.974,
+          "maximumMs": 1.352
         }
       }
     },
