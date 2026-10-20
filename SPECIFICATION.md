@@ -79,6 +79,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D60 | 言語サーバー（LSP）は設定で切り替える（既定はオフ）。オフのときは今の 8 本のベンチと基準値をそのまま守る。オンのときの速さは別のベンチ（`lsp-` の接頭辞・サーバーを起こした状態での 1 打鍵・連打・診断が出るまで）と別の基準値・別の目標で評価し、オフの基準と混ぜない（施主決定 2026-10-21） | [構文の色分けと LSP の計画](docs/plans/2026-10-21-syntax-and-lsp.md) §2.7・QLT-014 |
 | D61 | 通常 ↔ Vim の切り替えの鍵は Ctrl+Shift+Space（窓全体・通常と Vim のどのモードでも効く・IME の変換中は効かない・ステータスバーのトグルと同じ 1 本の道）。md プレビューの枠を開く / 閉じるは Ctrl+Shift+M（FR-007 の段 4）。モードは枠ごとに持たず窓に 1 つのまま（ADR 0056）（施主決定 2026-10-21） | [#771](https://github.com/hideyukiMORI/nene-nib/issues/771)・ADR 0078・FR-004 |
 | D62 | Markdown プレビューの見た目は案 B（構文の色）: 見出しは `keyword`・コードは `string`（面は `panel`）・リンクは `function` に下線・引用は `comment` と左の線・箇条書きの記号は `operators`・水平線は `comment`。見出しの倍率は h1 1.6・h2 1.35・h3 1.15・h4〜h6 は本文と同じで太字（施主決定 2026-10-21） | [採用案](docs/design/2026-10-21-markdown-preview-look.md) |
+| D63 | 巨大ファイル（FR-013）の製品の目標は 1 GB のまま（2 GiB は試作の目安）。512 MiB の private bytes の増分は必須にしない（最初の製品段は piece table のまま開く道を worker に移す形）（施主決定 2026-10-21） | [計画](docs/plans/2026-10-21-large-file.md) §2・#791 |
 | D12 | 見た目は `/design` で起こした案（[採用案](docs/design/2026-09-15-look.md)・[ADR 0008](docs/adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md)）を採用。アクセントは Ubuntu 橙 #E95420（施主承認 2026-09-15） | 見た目の判断は実装の前に `/design` で画を作って施主が選ぶ（施主指示 2026-09-15） |
 
 ## 3. 技術の土台（ADR で確定したもの）
