@@ -11,6 +11,7 @@
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -44,6 +45,23 @@ std::string message(const app::EditorFrame &frame)
                                              : "";
 }
 
+// overwrite の印が立つか（Issue #738）。評価に失敗したら nullopt。
+std::optional<bool> overwrite_of(std::string_view command)
+{
+    const auto result =
+        core::evaluate_ex(command, core::default_editor_settings(), core::Appearance::dark);
+    if (!result)
+    {
+        return std::nullopt;
+    }
+    const auto &document = result.value().document;
+    if (!document.has_value())
+    {
+        return std::nullopt;
+    }
+    return document.value().overwrite;
+}
+
 bool path_is(std::string_view command, std::string_view wanted)
 {
     const auto result =
@@ -75,11 +93,23 @@ void verify_syntax()
         expect(path_is("w " + std::string(path), path),
                "parsing preserves Windows separators and relative names");
     }
+    for (const std::string_view command :
+         {"w! file.txt", "write! file.txt", "sav! file.txt", "saveas!  file.txt"})
+    {
+        expect(path_is(command, "file.txt") && overwrite_of(command).value_or(false),
+               "Issue #738: a bang with a filename marks the write as an overwrite");
+    }
+    for (const std::string_view command : {"w file.txt", "sav file.txt", "w!", "wq file.txt"})
+    {
+        expect(!overwrite_of(command).value_or(true),
+               "without a bang and a filename the write never overwrites another file");
+    }
     expect(path_is("w escaped\\ space.txt", "escaped space.txt"),
            "a backslash before a space escapes only that space");
     for (const std::string_view text :
-         {"sav", "saveas", "sa file", "saveas! file", "q file", "q! file", "1w file", "%w file",
-          "w ++enc=utf8 file", "w >>file", "w !cmd", "w *.txt", "w %", "w #", "w $HOME/file",
+         {"sav",      "saveas",  "sa file",    "saveas!file", "w!file",  "wq! file",
+          "x! file",  "q file",  "q! file",    "1w file",     "%w file", "w ++enc=utf8 file",
+          "w >>file", "w !cmd",  "w *.txt",    "w %",         "w #",     "w $HOME/file",
           "w ~/file", "w `cmd`", "w \"file\"", "w foo|q"})
     {
         expect(!core::evaluate_ex(text, core::default_editor_settings(), core::Appearance::dark),
@@ -140,6 +170,50 @@ void verify_adopt()
         expect(controller.frame().document.save_state == core::SaveState::saved,
                "redo reaches the new save point");
     }
+}
+
+// Issue #738: `:w! <file>` と `:saveas! <file>` は保存と同じ置き換えの道（replace）で既存を
+// 上書きする。`:w <file>` は既存があれば E13
+// のまま。読み取り専用などで書けなければ失敗の値で、状態は変えない。
+void verify_overwrite()
+{
+    Editing copy;
+    prepare(copy, true);
+    vim_replay(copy.controller(), "A!<Esc>");
+    const auto before = copy.controller().frame();
+    auto frame = run_ex(copy.controller(), "w! copy.txt");
+    expect(copy.files().written_path() == target_path().text() &&
+               copy.files().written() == "alpha!\n" &&
+               copy.files().write_mode() == app::FileWriteMode::replace &&
+               message(frame) == "Written",
+           "w! with a filename writes through the replacing save path");
+    expect(frame.document.path == before.document.path &&
+               frame.document.save_state == core::SaveState::modified,
+           "w! with a filename keeps the current identity like w with a filename");
+    frame = run_ex(copy.controller(), "w copy.txt");
+    expect(copy.files().write_mode() == app::FileWriteMode::create_new,
+           "w without a bang still asks for a new file only");
+
+    Editing renamed;
+    prepare(renamed, true);
+    vim_replay(renamed.controller(), "A!<Esc>");
+    frame = run_ex(renamed.controller(), "saveas! next.txt");
+    expect(renamed.files().write_mode() == app::FileWriteMode::replace &&
+               frame.document.path == target_path() &&
+               frame.document.save_state == core::SaveState::saved,
+           "saveas! replaces an existing file and adopts the filename");
+
+    Editing refused;
+    prepare(refused, true);
+    vim_replay(refused.controller(), "A!<Esc>");
+    const auto kept = refused.controller().frame();
+    refused.files().refuse_writes(FileFailure::access_denied);
+    frame = run_ex(refused.controller(), "sav! next.txt");
+    expect(refused.files().write_mode() == app::FileWriteMode::replace &&
+               frame.document.path == kept.document.path &&
+               frame.document.save_state == core::SaveState::modified &&
+               message(frame) == "Could not write file",
+           "a read-only target is a failure value; the bang does not force past it");
 }
 
 void verify_failed_save(bool named, FileFailure failure)
@@ -266,6 +340,7 @@ void verify_ex_write_path_contracts()
     verify_syntax();
     verify_copy_and_same_file();
     verify_adopt();
+    verify_overwrite();
     verify_failures();
     verify_exit_conditions();
     verify_resolution_and_other_tab();

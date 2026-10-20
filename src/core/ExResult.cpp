@@ -396,7 +396,7 @@ constexpr std::array<ExDocumentName, 6> document_names{{
     {"wq", 2, ExDocumentVerb::write_quit, ExDocumentVerb::write_quit},
     {"xit", 1, ExDocumentVerb::update_quit, ExDocumentVerb::update_quit},
     {"exit", 3, ExDocumentVerb::update_quit, ExDocumentVerb::update_quit},
-    {"saveas", 3, ExDocumentVerb::save_as, std::nullopt},
+    {"saveas", 3, ExDocumentVerb::save_as, ExDocumentVerb::save_as},
 }};
 
 [[nodiscard]] bool unsupported_filename_character(char value) noexcept
@@ -430,8 +430,25 @@ constexpr std::array<ExDocumentName, 6> document_names{{
     return std::move(parsed).value();
 }
 
-// `!` の付いた形は引数を取らない。`:w! file` の上書きは Nib の書き込みの条件に無いので、黙って
-// `!` を捨てず unsupported_argument にする（Issue #501）。
+// `!` と引数の両方を受けるのは `:w! <file>` と `:saveas! <file>` だけで、既存のファイルを置き換える
+// 印 overwrite を立てる（Issue #738）。`:wq! file` `:x! file` は黙って `!` を捨てず
+// unsupported_argument のまま（Issue #501）。
+[[nodiscard]] bool overwrites(ExDocumentVerb verb) noexcept
+{
+    switch (verb)
+    {
+    case ExDocumentVerb::write:
+    case ExDocumentVerb::save_as:
+        return true;
+    case ExDocumentVerb::quit:
+    case ExDocumentVerb::quit_force:
+    case ExDocumentVerb::write_quit:
+    case ExDocumentVerb::update_quit:
+        return false;
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] std::expected<ExDocumentRequest, ExFailure>
 document_request(ExDocumentVerb verb, std::string_view suffix, bool forced)
 {
@@ -442,9 +459,9 @@ document_request(ExDocumentVerb verb, std::string_view suffix, bool forced)
         {
             return std::unexpected(ExFailure::unsupported_argument);
         }
-        return ExDocumentRequest{verb, std::nullopt};
+        return ExDocumentRequest{verb, std::nullopt, false};
     }
-    if (forced || !suffix.starts_with(' ') || verb == ExDocumentVerb::quit)
+    if ((forced && !overwrites(verb)) || !suffix.starts_with(' ') || verb == ExDocumentVerb::quit)
     {
         return std::unexpected(ExFailure::unsupported_argument);
     }
@@ -453,7 +470,7 @@ document_request(ExDocumentVerb verb, std::string_view suffix, bool forced)
     {
         return std::unexpected(path.error());
     }
-    return ExDocumentRequest{verb, std::move(path).value()};
+    return ExDocumentRequest{verb, std::move(path).value(), forced};
 }
 
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>

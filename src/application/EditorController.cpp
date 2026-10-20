@@ -2729,8 +2729,10 @@ bool EditorController::write_ex_path(const core::FilePath &path,
     }
     const auto &current = state_.document().path;
     const bool same = current.has_value() && ports_.files.same_file(current.value(), path);
-    const auto mode =
-        request.path.has_value() && !same ? FileWriteMode::create_new : FileWriteMode::replace;
+    // `:w! <file>` `:saveas! <file>` は保存と同じ置き換えの道で既存を上書きする（Issue #738）。
+    const auto mode = request.path.has_value() && !same && !request.overwrite
+                          ? FileWriteMode::create_new
+                          : FileWriteMode::replace;
     const auto identity =
         current.has_value() && !same && request.verb != core::ExDocumentVerb::save_as
             ? SaveIdentity::retain_document

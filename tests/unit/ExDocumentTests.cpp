@@ -102,11 +102,10 @@ void verify_names()
 void verify_rejections()
 {
     for (const std::string_view input : {"w!!",
-                                         "w! other",
                                          "w!other",
                                          "wq!!",
-                                         "sav! other",
                                          "saveas!",
+                                         "saveas! ",
                                          "q!!",
                                          "q !",
                                          "w ++enc=utf8 other.txt",

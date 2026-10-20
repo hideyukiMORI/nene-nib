@@ -382,6 +382,18 @@ void verify_create_only(Win32FileAdapter &files)
            "create_new refuses a file that already exists");
     expect(read_text(files, path, read_limit).value_or(std::string{}) == "new content",
            "a rejected create preserves all existing bytes");
+    // Issue #738: `:w! <file>` は既存の別のファイルを保存と同じ置き換えの道で上書きする。
+    expect(files.write(path, "overwritten", FileWriteMode::replace).has_value() &&
+               read_text(files, path, read_limit).value_or(std::string{}) == "overwritten",
+           "replace overwrites an existing file that create_new refused");
+    expect(SetFileAttributesW(L"nib-adapter-files/replaced.txt", FILE_ATTRIBUTE_READONLY) != 0,
+           "mark our fixture read-only");
+    expect(!files.write(path, "must not appear", FileWriteMode::replace),
+           "replace does not force past a read-only target");
+    expect(SetFileAttributesW(L"nib-adapter-files/replaced.txt", FILE_ATTRIBUTE_NORMAL) != 0,
+           "clear the read-only mark on our fixture");
+    expect(read_text(files, path, read_limit).value_or(std::string{}) == "overwritten",
+           "a refused overwrite preserves all existing bytes");
     expect(no_temporaries_of(L"nib-adapter-files/replaced.txt"),
            "successful and rejected creation leave no temporary file");
     expect(DeleteFileW(L"nib-adapter-files/replaced.txt") != 0, "remove only our created file");

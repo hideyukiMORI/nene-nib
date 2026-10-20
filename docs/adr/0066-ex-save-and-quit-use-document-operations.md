@@ -42,3 +42,9 @@ Vimの基本的な保存・終了が使え、保存失敗で文書を失わな�
 `!` の付いた形は引数を取らない。`:w! file` の上書きは書き込みの条件（同じでないパスは `create_new`）に無いので、`!` を黙って捨てず「Not supported」にする。`:saveas!` も同じ。`:tabs!` など表の外の `!` は今までどおり拒否する。
 補完は `!` で条件が変わる `quit!` だけを並べ、`write!` `wq!` は並べない。
 `:nohlsearch` は Vim 9.1 のとおり `noh` から完全な形までの前方一致を受け（`:nohl` `:nohls` …）、`:nohx` `:nohlsearchx` は unknown_command。タブ・一覧・保存の表と同じ省略の判定 `abbreviates` の 1 つを使う。補完の候補は完全な形の `nohlsearch` 1 つで、省略の形を並べない。
+
+## 追補（2026-10-20・#738）: `:w! <file>` と `:saveas! <file>` の上書き
+
+#501 で「Not supported」にした `:w! <file>` と `:saveas! <file>`（`:sav! <file>` などの省略を含む）を受ける。`ExDocumentRequest` に `overwrite` の印を足し、`!` と引数の両方があるときだけ立てる。controller の `write_ex_path` は、別のパスへの書きでも `overwrite` なら `FileWriteMode::create_new` でなく保存と同じ `FileWriteMode::replace` を選ぶ（一時ファイル → 既存なら `ReplaceFileW`・無ければ `MoveFileExW`・ADR 0010 の決定 6 / ADR 0135）。`replace` が既に「既存を置き換える」書きの道なので、`FileWriteMode` に同じ意味の第 2 の値（`overwrite`）は足さない（ARC-001）。
+文書のパスの規則は `!` の無い形と同じで、`:w! <file>` は今のパスと保存位置を保ち（写しを書く）、`:saveas! <file>` は成功したらそのパスを文書のものにする。`!` の無い `:w <file>` `:saveas <file>` は今までどおり既存があれば `E13: File exists` で拒否する。
+Vim の `!` は読み取り専用も越えるが、Nib は越えない。読み取り専用・ロック中など置き換えられないときは今までどおり失敗の値（`Could not write file`）で、文書の状態を変えない。`:wq! <file>` `:x! <file>` は本件に含めず「Not supported」のまま。`:saveas!` を引数なしで打ったときも今までどおり拒否する。補完は変えない（`saveas!` は条件を変えないので並べない）。
