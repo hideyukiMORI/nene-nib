@@ -63,8 +63,9 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
-    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp)
-# core は md4c を結ぶがまだ呼ばない（parse_markdown は段 2・#765）。静的ライブラリなので未参照の code は exe に入らない。
+    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp
+    src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp)
+# core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
 
 nenenib_target(nenenib_application application STATIC
@@ -131,7 +132,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/OperationsTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
-    tests/unit/DisplayTests.cpp)
+    tests/unit/DisplayTests.cpp
+    tests/unit/MarkdownTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
@@ -289,7 +291,8 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/CompletionPrefixProbe.cpp
     tests/performance/PaletteChoiceProbe.cpp
     tests/performance/OperationChoiceProbe.cpp
-    tests/performance/SearchSpanProbe.cpp tests/performance/TextObjectProbe.cpp)
+    tests/performance/SearchSpanProbe.cpp tests/performance/TextObjectProbe.cpp
+    tests/performance/MarkdownProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

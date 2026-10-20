@@ -8,6 +8,7 @@
 #include "FrameDocumentProbe.hpp"
 #include "FrameProbe.hpp"
 #include "FrameRowsProbe.hpp"
+#include "MarkdownProbe.hpp"
 #include "OperationChoiceProbe.hpp"
 #include "PaletteChoiceProbe.hpp"
 #include "PatternProbe.hpp"
@@ -835,6 +836,16 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(MarkdownWorkload workload)
+{
+    switch (workload)
+    {
+    case MarkdownWorkload::mixed_16mib:
+        return 154U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -850,7 +861,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 154> dispatches{{
+constexpr std::array<ProbeDispatch, 155> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1167,6 +1178,8 @@ constexpr std::array<ProbeDispatch, 154> dispatches{{
                      text_object_input, text_object_ranges},
     ProbeDispatchRow{TextObjectWorkload::tag_unclosed, "text-object-tag-unclosed-4096",
                      text_object_input, text_object_ranges},
+    ProbeDispatchRow{MarkdownWorkload::mixed_16mib, "markdown-parse-mixed-16mib", markdown_input,
+                     parsed_markdown},
 }};
 
 constexpr auto dispatch_names = []
@@ -1209,7 +1222,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 154U);
+static_assert(dispatches.size() == 155U);
 static_assert(dispatch_is_complete());
 
 } // namespace

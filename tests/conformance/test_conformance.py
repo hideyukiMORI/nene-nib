@@ -141,6 +141,28 @@ class SourceChecks(unittest.TestCase):
     def test_cnf009_simd_in_tests_passes(self):
         self.assertNotIn("CPP-018", self.ids("#include <immintrin.h>", "tests/unit/BlendTests.cpp"))
 
+    # CNF-009 — md4c.h を読むのは src/core/MarkdownParse.cpp だけ（ADR 0151 の決定 5・#765）。
+    def test_cnf009_md4c_in_markdown_parse_passes(self):
+        for include in ["#include <md4c.h>", '#include "md4c.h"']:
+            with self.subTest(include=include):
+                self.assertNotIn("ARC-002", self.ids(include, "src/core/MarkdownParse.cpp"))
+
+    def test_cnf009_md4c_elsewhere_is_arc002(self):
+        for path in ["src/core/MarkdownBuilder.cpp", "src/core/MarkdownParse.hpp", "src/application/Preview.cpp",
+                     "src/adapters/win32/MarkdownWorker.cpp", "src/ui/win32/PreviewRenderer.cpp"]:
+            with self.subTest(path=path):
+                self.assertIn("ARC-002", self.ids("#include <md4c.h>", path))
+
+    def test_cnf009_md4c_through_a_directory_is_arc002(self):
+        self.assertIn("ARC-002", self.ids('#include "../../third_party/md4c/md4c.h"', "src/core/Text.cpp"))
+
+    def test_cnf009_md4c_in_tests_passes(self):
+        self.assertNotIn("ARC-002", self.ids("#include <md4c.h>", "tests/unit/MarkdownTests.cpp"))
+
+    def test_cnf009_names_the_parser_header(self):
+        self.assertIn("ARC-002: parser header md4c.h outside src/core/MarkdownParse.cpp",
+                      self.details("#include <md4c.h>", "src/core/Text.cpp"))
+
     def test_cnf009_names_the_header(self):
         self.assertIn("CPP-013: concurrency header thread outside src/adapters/win32/",
                       self.details("#include <thread>", "src/core/Worker.hpp"))

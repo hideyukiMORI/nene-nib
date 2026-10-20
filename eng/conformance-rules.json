@@ -20,6 +20,8 @@
   "concurrencyAllowedPath": "src/adapters/win32/",
   "simdHeaders": ["immintrin.h", "intrin.h", "xmmintrin.h", "emmintrin.h", "pmmintrin.h", "tmmintrin.h", "smmintrin.h", "nmmintrin.h", "wmmintrin.h", "ammintrin.h", "arm_neon.h"],
   "simdModulePath": "src/core/simd/",
+  "markdownParserHeader": "md4c.h",
+  "markdownParserAllowedPath": "src/core/MarkdownParse.cpp",
   "cppExtensions": [".cpp", ".hpp", ".h", ".cc", ".cxx", ".hxx"],
   "configurationExtensions": [".ps1", ".cmake", ".yml", ".yaml"],
   "normativeFiles": ["docs/ARCHITECTURE_CONSTITUTION.md", "docs/CODING_RULES.md", "docs/COMMIT_CONVENTIONS.md", "docs/QUALITY_GATES.md"]
