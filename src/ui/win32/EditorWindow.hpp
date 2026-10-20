@@ -168,6 +168,8 @@ class EditorWindow final
     [[nodiscard]] bool press_bookmark_key(WPARAM word, LPARAM data);
     // F1（操作の一覧・ADR 0078 の決定 9）。扱ったら true。
     [[nodiscard]] bool press_help_key(WPARAM word, LPARAM data);
+    // 通常 / Vim の切り替え（Ctrl+Shift+Space・D61）。反復では切り替えない。扱ったら true。
+    [[nodiscard]] bool press_mode_key(WPARAM word, LPARAM data);
     // 鍵と一覧が実行する唯一の口（ADR 0078 の決定 7）。
     void run_operation(core::EditorOperation operation);
     void walk_recent_tab(core::TabCommand command);

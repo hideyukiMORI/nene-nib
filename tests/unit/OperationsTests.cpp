@@ -44,7 +44,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 28> chord_rows{{
+constexpr std::array<ChordRow, 30> chord_rows{{
     {ctrl(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
     {ctrl_shift(OperationKey::s), EditorOperation::save_as, EditorOperation::save_as},
@@ -64,6 +64,9 @@ constexpr std::array<ChordRow, 28> chord_rows{{
     {ctrl(OperationKey::plus), EditorOperation::font_larger, EditorOperation::font_larger},
     {ctrl(OperationKey::minus), EditorOperation::font_smaller, EditorOperation::font_smaller},
     {ctrl(OperationKey::zero), EditorOperation::font_reset, EditorOperation::font_reset},
+    {ctrl_shift(OperationKey::space), EditorOperation::toggle_mode, EditorOperation::toggle_mode},
+    // Ctrl+Space（Shift なし）は Vim INSERT の Ctrl-@ に残すので割り当てない（D61）。
+    {ctrl(OperationKey::space), std::nullopt, std::nullopt},
     // Shift を見ていなかった今の振る舞いを保つ行（Vim の Ctrl+Shift+Z / Y は値なし）。
     {ctrl_shift(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
     {ctrl_shift(OperationKey::p), EditorOperation::list_files, EditorOperation::list_files},
@@ -97,12 +100,12 @@ constexpr std::array<ShownRow, 16> shown_rows{{
     {EditorOperation::font_larger, "Ctrl++", "Ctrl++", true, true},
     {EditorOperation::font_smaller, "Ctrl+-", "Ctrl+-", true, true},
     {EditorOperation::font_reset, "Ctrl+0", "Ctrl+0", true, true},
-    {EditorOperation::toggle_mode, "", "", true, true},
+    {EditorOperation::toggle_mode, "Ctrl+Shift+Space", "Ctrl+Shift+Space", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 17> label_rows{{
+constexpr std::array<LabelRow, 19> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -119,6 +122,8 @@ constexpr std::array<LabelRow, 17> label_rows{{
     {ctrl(OperationKey::zero), "Ctrl+0"},
     {ctrl_shift(OperationKey::s), "Ctrl+Shift+S"},
     {ctrl_shift(OperationKey::tab), "Ctrl+Shift+Tab"},
+    {ctrl(OperationKey::space), "Ctrl+Space"},
+    {ctrl_shift(OperationKey::space), "Ctrl+Shift+Space"},
     {KeyChord{false, true, OperationKey::f1}, "Shift+F1"},
 }};
 
@@ -297,8 +302,9 @@ void verify_operation_choices()
     expect(key_for(EditorOperation::close_tab, EditMode::ordinary) == "Ctrl+W" &&
                key_for(EditorOperation::close_tab, EditMode::vim) == "Ctrl+F4",
            "close tab shows Ctrl+W in the ordinary mode and Ctrl+F4 in vim");
-    expect(key_for(EditorOperation::toggle_mode, EditMode::ordinary).empty(),
-           "an operation without a key shows no key");
+    expect(key_for(EditorOperation::toggle_mode, EditMode::ordinary) == "Ctrl+Shift+Space" &&
+               key_for(EditorOperation::toggle_mode, EditMode::vim) == "Ctrl+Shift+Space",
+           "the mode toggle shows Ctrl+Shift+Space in both modes");
     expect(key_for(EditorOperation::font_larger, EditMode::ordinary) == "Ctrl++",
            "a key kept with Shift is not the shown key");
 }

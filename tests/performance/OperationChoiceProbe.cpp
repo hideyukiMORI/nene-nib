@@ -53,8 +53,8 @@ constexpr std::array<OperationChoiceExpected, 16> expected_2{
       "本文の文字を既定の大きさに戻します", 17U, "Ctrl+0", "", core::CommandChoiceKind::operate,
       std::nullopt},
      {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
-      "編集のしかたを通常と Vim で切り替えます", 22U, "", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
+      "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
 constexpr std::array<OperationChoiceExpected, 14> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
@@ -88,13 +88,10 @@ constexpr std::array<OperationChoiceExpected, 14> expected_3{
       "本文の文字を既定の大きさに戻します", 17U, "Ctrl+0", "", core::CommandChoiceKind::operate,
       std::nullopt},
      {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
-      "編集のしかたを通常と Vim で切り替えます", 22U, "", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
+      "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
 constexpr std::array<OperationChoiceExpected, 16> expected_4{
-    {{core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
-      "編集のしかたを通常と Vim で切り替えます", 22U, "", "", core::CommandChoiceKind::operate,
-      std::nullopt},
-     {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
+    {{core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
@@ -128,8 +125,11 @@ constexpr std::array<OperationChoiceExpected, 16> expected_4{
       15U, "Ctrl+Shift+S", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
       "最近使った順を逆にたどります", 14U, "Ctrl+Shift+Tab", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 4> expected_5{
+      std::nullopt},
+     {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
+      "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 5> expected_5{
     {{core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
@@ -139,7 +139,10 @@ constexpr std::array<OperationChoiceExpected, 4> expected_5{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
       "最近使った順を逆にたどります", 14U, "Ctrl+Shift+Tab", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
+      std::nullopt},
+     {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
+      "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
 constexpr std::array<OperationChoiceExpected, 5> expected_6{
     {{core::EditorOperation::close_tab, 4U, "タブを閉じる", 6U, "いまのタブを閉じます", 10U,
       "Ctrl+W", "", core::CommandChoiceKind::operate, std::nullopt},
@@ -171,17 +174,17 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 441088U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 445184U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 396544U, expected_3,
+     {"", core::EditMode::vim, 256U, 400640U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 441088U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 445184U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {"cTrL+s", core::EditMode::vim, 1024U, 486400U, expected_5,
+     {"cTrL+s", core::EditMode::vim, 1024U, 647168U, expected_5,
       "operation-choice-v1\nkey-vim\nvim\ncTrL+"
       "s\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"タブ", core::EditMode::ordinary, 1024U, 569344U, expected_6,

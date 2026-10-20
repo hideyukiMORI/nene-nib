@@ -15,7 +15,8 @@ namespace nenenib::core
 // 操作の割り当ての表（ADR 0078 の決定 3）。鍵 → 操作と、一覧に見せる鍵の正本はこの 1 つ。
 // 上から見て最初に当たる行が勝つ。Ctrl+W は通常モードでだけ閉じる（ADR 0056 の決定 10）。
 // ブックマークは通常 Ctrl+D / Vim Ctrl+Shift+D（ADR 0063）。元に戻す・やり直すは通常モードだけ
-// （Vim は u と Ctrl-r）。通常 / Vim の切り替えの鍵は未定（D10）で、一覧からだけ実行する。
+// （Vim は u と Ctrl-r）。通常 / Vim の切り替えは Ctrl+Shift+Space で両モード（D61）。Ctrl+Space
+// （Shift なし）は Vim INSERT の Ctrl-@ に残すので行を置かない。
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // 最初の行なので、一覧に見える鍵は Shift なしのまま。
 inline constexpr std::array<OperationBinding, 25> operation_bindings{{
@@ -55,7 +56,7 @@ inline constexpr std::array<OperationBinding, 25> operation_bindings{{
     {EditorOperation::font_reset, OperationModes::both, KeyChord{true, false, OperationKey::zero}},
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::font_reset, OperationModes::both, KeyChord{true, true, OperationKey::zero}},
-    {EditorOperation::toggle_mode, OperationModes::both, std::nullopt},
+    {EditorOperation::toggle_mode, OperationModes::both, KeyChord{true, true, OperationKey::space}},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

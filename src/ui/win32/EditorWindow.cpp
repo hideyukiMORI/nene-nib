@@ -816,7 +816,8 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     case WM_KEYDOWN:
         end_selection_drag();
         timing_.mark(core::Milestone::input_received);
-        if (!press_bookmark_key(word, data) && !press_help_key(word, data))
+        if (!press_bookmark_key(word, data) && !press_help_key(word, data) &&
+            !press_mode_key(word, data))
         {
             press_key(word);
         }
@@ -1929,6 +1930,29 @@ bool EditorWindow::press_help_key(WPARAM word, LPARAM data)
     return true;
 }
 
+// 通常 / Vim の切り替えの鍵（Ctrl+Shift+Space・D61）は押した最初の 1 回だけ。長押しの反復では
+// 切り替えない（ブックマークの鍵と同じ守り）。入力行が開いていれば入力行の鍵のまま（press_key）。
+bool EditorWindow::press_mode_key(WPARAM word, LPARAM data)
+{
+    if (controller_.command_line_active())
+    {
+        return false;
+    }
+    const auto chord = held_chord(word);
+    const auto operation =
+        chord.has_value() ? core::operation_for(chord.value(), mode_) : std::nullopt;
+    if (operation != core::EditorOperation::toggle_mode)
+    {
+        return false;
+    }
+    constexpr LPARAM repeated_key_bit = LPARAM{1} << 30;
+    if ((data & repeated_key_bit) == 0)
+    {
+        run_operation(core::EditorOperation::toggle_mode);
+    }
+    return true;
+}
+
 void EditorWindow::press_key(WPARAM word)
 {
     if (controller_.command_line_active())
@@ -2306,9 +2330,14 @@ void EditorWindow::adjust_font(core::FontSizeAdjustment adjustment)
     }
 }
 
-// ステータスバーのトグルのクリックと同じ意図で、いまの反対を選ぶ。
+// ステータスバーのトグルのクリックと同じ意図で、いまの反対を選ぶ。鍵（Ctrl+Shift+Space・D61）も
+// 一覧もここを通る。変換中は送らない（IME の変換中は効かない・文字の大きさの鍵と同じ守り）。
 void EditorWindow::toggle_mode()
 {
+    if (controller_.is_composing())
+    {
+        return;
+    }
     switch (mode_)
     {
     case core::EditMode::ordinary:
