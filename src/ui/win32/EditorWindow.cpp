@@ -37,6 +37,7 @@
 #include "PointTitleBar.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
+#include "ScrollPaletteList.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectEditMode.hpp"
@@ -525,6 +526,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     // （ADR 0010 の決定 9）。
     const auto opened = controller_.delivery();
     apply_backdrop(opened);
+    shown_font_ = font_of(opened.settings);
     timing_.mark(core::Milestone::backdrop_applied);
     // 配置してから見せる。生成時に (0,0) で見せない（ADR 0008 の決定 7）。device の生成は
     // ドライバの初期化で 160 ms 掛かるので、その前に Mica の面だけの窓を見せる（ADR 0013）。
@@ -556,6 +558,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
 void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
 {
     // Mica の明暗は DWM が持つので、表示値の外観をそのまま伝える。色は渡さない（ADR 0008）。
+    shown_appearance_ = delivery.appearance;
     const BOOL dark = delivery.appearance == core::Appearance::dark ? TRUE : FALSE;
     DwmSetWindowAttribute(window_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
                           static_cast<DWORD>(sizeof(dark)));
@@ -1447,12 +1450,26 @@ std::function<void()> EditorWindow::work_signal() const
     return [window] { static_cast<void>(PostMessageW(window, work_message, 0, 0)); };
 }
 
+// 字体・字の大きさ・明暗は前の配達で当てた値と比べ、変わったときだけ当てる。どの意図で変わったか
+// （保存・確定・配色の候補のプレビュー）は見ない（ADR 0150 の決定 5）。字が変われば行の幾何も
+// 変わるので、寸法を送り直した delivery を返す。
+application::EditorDelivery EditorWindow::follow_look(application::EditorDelivery delivery)
+{
+    if (delivery.appearance != shown_appearance_)
+    {
+        apply_backdrop(delivery);
+    }
+    auto font = font_of(delivery.settings);
+    if (font == shown_font_)
+    {
+        return delivery;
+    }
+    shown_font_ = std::move(font);
+    return controller_.apply(body_view());
+}
+
 void EditorWindow::deliver(const application::EditorIntent &intent)
 {
-    const bool font_change = std::holds_alternative<application::AdjustFontSize>(intent) ||
-                             std::holds_alternative<application::SubmitCommand>(intent) ||
-                             std::holds_alternative<application::ActivateCommandChoice>(intent);
-    const auto previous_font = font_change ? font_of(controller_.delivery().settings) : FontKey{};
     auto delivery = controller_.apply(intent);
     if (!survives_layout(delivery))
     {
@@ -1477,18 +1494,11 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const auto operation_request = delivery.operation_request;
     // 格子表示の問いも同じ（ADR 0140 の決定 2）。
     const bool display_asked = delivery.display_question;
-    if (font_change)
+    if (std::holds_alternative<application::AdjustFontSize>(intent))
     {
-        if (std::holds_alternative<application::AdjustFontSize>(intent))
-        {
-            announce_settings(delivery);
-        }
-        apply_backdrop(delivery);
-        if (font_of(delivery.settings) != previous_font)
-        {
-            delivery = controller_.apply(body_view());
-        }
+        announce_settings(delivery);
     }
+    delivery = follow_look(std::move(delivery));
     follow_ime(delivery);
     mode_ = delivery.mode;
     vim_mode_ = delivery.vim_mode;
@@ -2011,8 +2021,18 @@ void EditorWindow::press_command_control_key(WPARAM word)
     case 'C':
         send(application::CancelCommand{});
         return;
+    // 面が開いていれば Ctrl+P は前の候補（ADR 0150 の決定 2）。`:` と検索の行では面を開く。
     case 'P':
-        send(application::OpenCommandPalette{});
+        send_palette_or(core::CommandEdit::complete_previous, application::OpenCommandPalette{});
+        return;
+    case 'N':
+        send_palette_or(core::CommandEdit::complete_next, std::nullopt);
+        return;
+    case VK_HOME:
+        send_palette_or(core::CommandEdit::list_first, std::nullopt);
+        return;
+    case VK_END:
+        send_palette_or(core::CommandEdit::list_last, std::nullopt);
         return;
     // incsearch の次・前の当たり（ADR 0043 の決定 4）。検索の入力行でなければ controller が
     // 何もしない（Ex と設定一覧は今までどおり素通り）。
@@ -2027,6 +2047,47 @@ void EditorWindow::press_command_control_key(WPARAM word)
     }
 }
 
+void EditorWindow::send_palette_or(core::CommandEdit edit,
+                                   const std::optional<application::EditorIntent> &otherwise)
+{
+    if (controller_.command_palette_active())
+    {
+        send(application::EditCommand{edit});
+        return;
+    }
+    if (otherwise.has_value())
+    {
+        send(otherwise.value());
+    }
+}
+
+// 面だけの鍵（ADR 0150 の決定 2）。上下は前・次（回り込む）、PgUp / PgDn は 1 画面（端で止まる）。
+// `:` と検索の行では素通りして下の表へ（PgUp / PgDn は何もしない）。
+bool EditorWindow::press_palette_key(WPARAM word)
+{
+    if (!controller_.command_palette_active())
+    {
+        return false;
+    }
+    switch (word)
+    {
+    case VK_UP:
+        send(application::EditCommand{core::CommandEdit::complete_previous});
+        return true;
+    case VK_DOWN:
+        send(application::EditCommand{core::CommandEdit::complete_next});
+        return true;
+    case VK_PRIOR:
+        send(application::EditCommand{core::CommandEdit::page_previous});
+        return true;
+    case VK_NEXT:
+        send(application::EditCommand{core::CommandEdit::page_next});
+        return true;
+    default:
+        return false;
+    }
+}
+
 void EditorWindow::press_command_key(WPARAM word)
 {
     if (held(VK_CONTROL) && !held(VK_MENU))
@@ -2034,10 +2095,8 @@ void EditorWindow::press_command_key(WPARAM word)
         press_command_control_key(word);
         return;
     }
-    if (controller_.command_palette_active() && (word == VK_UP || word == VK_DOWN))
+    if (press_palette_key(word))
     {
-        send(application::EditCommand{word == VK_UP ? core::CommandEdit::complete_previous
-                                                    : core::CommandEdit::complete_next});
         return;
     }
     switch (word)
@@ -2283,12 +2342,12 @@ void EditorWindow::send_vim_redo()
 void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
 {
     const auto delta = static_cast<std::int16_t>(HIWORD(word));
+    // 面の上のホイールは一覧だけを送り、選択は動かさない（ADR 0150 の決定 2）。
     if (controller_.command_palette_active())
     {
         if (delta != 0)
         {
-            send(application::EditCommand{delta > 0 ? core::CommandEdit::complete_previous
-                                                    : core::CommandEdit::complete_next});
+            send(application::ScrollPaletteList{delta > 0 ? -wheel_lines : wheel_lines});
         }
         return;
     }

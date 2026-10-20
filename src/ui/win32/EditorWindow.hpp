@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Appearance.hpp"
+#include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "CoverWindow.hpp"
 #include "Direct2DRenderer.hpp"
@@ -86,6 +88,7 @@ class EditorWindow final
     [[nodiscard]] std::expected<Direct2DRenderer, RenderFailure> create_renderer();
     [[nodiscard]] std::expected<Direct2DRenderer, RenderFailure> create_provisional_renderer();
     void apply_backdrop(const application::EditorDelivery &frame);
+    [[nodiscard]] application::EditorDelivery follow_look(application::EditorDelivery delivery);
     void place_at_screen_centre();
     static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM word, LPARAM data) noexcept;
     LRESULT dispatch(UINT message, WPARAM word, LPARAM data) noexcept;
@@ -175,6 +178,9 @@ class EditorWindow final
     void run_tab_command(core::TabCommand command);
     void press_command_key(WPARAM word);
     void press_command_control_key(WPARAM word);
+    [[nodiscard]] bool press_palette_key(WPARAM word);
+    void send_palette_or(core::CommandEdit edit,
+                         const std::optional<application::EditorIntent> &otherwise);
     void press_plain_key(WPARAM word);
     void press_vim_key(WPARAM word);
     void press_control_key(WPARAM word);
@@ -242,6 +248,10 @@ class EditorWindow final
     std::wstring window_title_;
     // WM_CHAR は UTF-16 の 1 単位ずつ来るので、サロゲートの上位を次の下位まで預かる（ADR 0009）。
     wchar_t pending_high_surrogate_ = 0;
+    // 前の配達で窓が当てた字（大きさと字体）と明暗。配達のたびに比べ、変わったときだけ当てる
+    // （ADR 0150 の決定 5）。
+    std::pair<float, std::string> shown_font_;
+    core::Appearance shown_appearance_ = core::Appearance::light;
     std::int32_t zoom_wheel_remainder_ = 0;
     std::int32_t tab_wheel_remainder_ = 0;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら

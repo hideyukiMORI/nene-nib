@@ -2462,8 +2462,8 @@ void verify_ime_stance_frame()
     expect(controller.frame().ime == ImeStance::closed, "Vim NORMAL keeps the IME closed");
     expect(controller.apply_frame(OpenCommandPalette{}).ime == ImeStance::closed_once,
            "Ctrl+P closes the IME once in Vim NORMAL");
-    expect(controller.apply_frame(OpenCommandPalette{}).ime == ImeStance::closed,
-           "Ctrl+P again returns to closed");
+    expect(controller.apply_frame(nenenib::application::CancelCommand{}).ime == ImeStance::closed,
+           "closing the palette returns to closed");
     expect(controller.apply_frame(VimKeyPress{VimKey{VimCharacter{U':'}}}).ime ==
                ImeStance::closed_once,
            "the Ex line closes the IME once (D57)");

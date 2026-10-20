@@ -89,6 +89,16 @@ brings back the opened picture (giantHome.png), 30 right arrows and three typed 
 change the row (giantRight / giantTyped.png), then the Vim toggle, `$`, `0` and `w` follow
 (giantVimDollar / giantVimZero / giantVimW.png) with the block caret on the row each time. The
 window is closed and the unsaved question answered no. Posted messages only.
+
+Issue #706 adds the palette list (ADR 0150 decisions 2, 5 and 6), which `--palette` also runs alone:
+Ctrl+P (real input) opens the palette and `:colorscheme ` lists the built-in schemes after the bare
+command, which keeps the saved scheme (paletteOpen.png); Up on the first row wraps to the last row at
+the bottom of the window and the focused scheme is previewed on the body ground right of the panel
+(paletteWrapped.png), and three more Ups move the
+selection three rows up without scrolling the window (paletteUpThree.png); Esc closes the palette
+and the body ground is the saved scheme again (paletteCancelled.png). Opened again, Ctrl+P on the
+first row is the previous choice and keeps the palette open (paletteControlP.png). The selected row
+is read from the selection face at the left of each row (core::palette_layout in DIPs).
 Python standard library and ctypes only.
 """
 
@@ -2275,6 +2285,123 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
         stop(process)
 
 
+# src/core/PaletteLayout.cpp の DIP と行の上限（core::palette_row_limit）。選択の面は行の内側 8 DIP から
+# 描かれ、名前は 16 DIP から始まるので、行の左 12 DIP の点は選択の面か面の地だけを読む。
+PALETTE_ROW_LIMIT = 8
+PALETTE_SELECTION_PROBE_DIPS = 12
+PALETTE_SETTLE_SECONDS = 0.6
+# 組み込みの配色の数（ADR 0117）。面の行数の計算では上限 8 を超えていればよい。
+PALETTE_SCHEMES = 125
+VK_UP = 0x26
+VK_P = 0x50
+# 8 行の面が入る窓（上 96 + 見出し 52 + 8 行 × 40 + 足 34 + 下 44 DIP より高い）。
+PALETTE_WINDOW_DIPS = (800, 600)
+SWP_NOMOVE_NOZORDER = 0x0002 | 0x0004
+
+
+def palette_rows(height: int, dpi: int, choices: int) -> list[int]:
+    """The vertical middles of the visible rows, the same integer arithmetic as core::palette_layout."""
+    margin = to_pixels(16, dpi)
+    body_top = min(to_pixels(52, dpi), height)
+    bottom = max(body_top, height - to_pixels(28, dpi) - margin)
+    top = min(to_pixels(96, dpi), max(body_top, bottom - to_pixels(86, dpi)))
+    header = min(to_pixels(52, dpi), bottom - top)
+    footer = min(to_pixels(34, dpi), bottom - top - header)
+    row = max(to_pixels(40, dpi), 1)
+    count = min(max(choices, 1), (bottom - top - header - footer) // row, PALETTE_ROW_LIMIT)
+    return [top + header + index * row + row // 2 for index in range(count)]
+
+
+def palette_probe_x(width: int, dpi: int) -> int:
+    margin = to_pixels(16, dpi)
+    panel = max(min(to_pixels(640, dpi), width - margin * 2), 0)
+    return max((width - panel) // 2, 0) + to_pixels(PALETTE_SELECTION_PROBE_DIPS, dpi)
+
+
+def palette_look(window, frames: Path | None, name: str) -> dict:
+    """The row that wears the selection face, and the body ground right of the panel."""
+    time.sleep(PALETTE_SETTLE_SECONDS)
+    assert_uncovered(window)
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    pixels = capture(window, width, height)
+    snapshot(frames, window, name)
+    x = palette_probe_x(width, dpi)
+    faces = [tuple(pixel(pixels, width, x, y)) for y in palette_rows(height, dpi, PALETTE_SCHEMES)]
+    odd = [index for index, face in enumerate(faces) if faces.count(face) == 1]
+    ground_x, ground_y = body_ground_point(width, height, dpi)
+    return {"rows": len(faces), "selected": odd[0] if len(odd) == 1 else None,
+            "faces": [list(face) for face in faces],
+            "ground": pixel(pixels, width, ground_x, ground_y)}
+
+
+def open_schemes(window) -> None:
+    # 投げた WM_CHAR は入力の列（SendInput の鍵）より先に読まれるので、面が開いてから打つ。
+    if not press_chord(window, VK_CONTROL, VK_P):
+        raise ForegroundRefused("the window could not take the foreground")
+    time.sleep(PALETTE_SETTLE_SECONDS)
+    write_text(window, ":colorscheme ")
+
+
+def enlarge_for_palette(window) -> None:
+    """Give the palette its eight rows: the default window holds fewer (core::palette_layout)."""
+    dpi = user.GetDpiForWindow(window)
+    assert user.SetWindowPos(window, None, 0, 0, to_pixels(PALETTE_WINDOW_DIPS[0], dpi),
+                             to_pixels(PALETTE_WINDOW_DIPS[1], dpi), SWP_NOMOVE_NOZORDER)
+
+
+def drive_palette(window, appearance: str, frames: Path | None) -> dict:
+    """Ctrl+P, `:colorscheme `, Up (wraps), Up x3, Esc, then Ctrl+P twice (ADR 0150 decision 2)."""
+    saved = list(PALETTE[appearance])
+    open_schemes(window)
+    steps = {"open": palette_look(window, frames, "paletteOpen")}
+    rows = steps["open"]["rows"]
+    assert rows == PALETTE_ROW_LIMIT and steps["open"]["selected"] == 0, steps["open"]
+    # 最初の行は名前の無い `colorscheme` なので、まだ保存した配色のまま。
+    assert steps["open"]["ground"] == saved, "the bare command changed the body ground"
+    press(window, VK_UP)
+    steps["wrapped"] = palette_look(window, frames, "paletteWrapped")
+    assert steps["wrapped"]["selected"] == rows - 1, f"Up on the first row: {steps['wrapped']}"
+    assert steps["wrapped"]["ground"] != saved, "the focused scheme is not previewed on the body"
+    press(window, VK_UP, 3)
+    steps["upThree"] = palette_look(window, frames, "paletteUpThree")
+    assert steps["upThree"]["selected"] == rows - 4, f"three more Ups: {steps['upThree']}"
+    press(window, VK_ESCAPE)
+    steps["cancelled"] = palette_look(window, frames, "paletteCancelled")
+    assert steps["cancelled"]["ground"] == saved, f"Esc left the preview: {steps['cancelled']}"
+    open_schemes(window)
+    time.sleep(PALETTE_SETTLE_SECONDS)
+    if not press_chord(window, VK_CONTROL, VK_P):
+        raise ForegroundRefused("the window could not take the foreground")
+    steps["controlP"] = palette_look(window, frames, "paletteControlP")
+    assert steps["controlP"]["selected"] == rows - 1, f"Ctrl+P in the palette: {steps['controlP']}"
+    press(window, VK_ESCAPE)
+    steps["closed"] = palette_look(window, frames, "paletteClosed")
+    assert steps["closed"]["ground"] == saved, f"Esc left the preview: {steps['closed']}"
+    return steps
+
+
+def verify_palette(executable: Path, environment: dict, appearance: str,
+                   frames: Path | None) -> dict:
+    """Issue #706: the palette keys, the scroll window and the colorscheme preview (ADR 0150)."""
+    process, window, _ = start(executable, environment)
+    try:
+        raise_window(window)
+        enlarge_for_palette(window)
+        time.sleep(0.6)
+        try:
+            result = {"driven": True, "steps": drive_palette(window, appearance, frames)}
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the palette keys stay in the unit tests"}
+        close(window)
+        result["exitCode"] = process.wait(timeout=5)
+        assert result["exitCode"] == 0, result["exitCode"]
+    finally:
+        stop(process)
+    return result
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -2300,6 +2427,8 @@ def main() -> None:
                         help="run the giant line text section alone (Issue #547); posted messages only")
     parser.add_argument("--autosave", action="store_true",
                         help="run the autosave section alone (Issue #515); posted messages only")
+    parser.add_argument("--palette", action="store_true",
+                        help="run the palette section alone (Issue #706); it sends real keys")
     arguments = parser.parse_args()
     if arguments.keys is not None and arguments.capture is None:
         parser.error("--keys needs --capture <dir>")
@@ -2321,6 +2450,10 @@ def main() -> None:
     if arguments.autosave and (arguments.tabs or arguments.restore or arguments.keys is not None
                                or arguments.open is not None):
         parser.error("--autosave runs alone")
+    if arguments.palette and (arguments.tabs or arguments.restore or arguments.grid
+                              or arguments.giant_text or arguments.autosave
+                              or arguments.keys is not None or arguments.open is not None):
+        parser.error("--palette runs alone")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -2360,6 +2493,14 @@ def main() -> None:
     if arguments.restore:
         try:
             record = verify_restore(executable, environment, expected_appearance(), output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.palette:
+        try:
+            record = verify_palette(executable, environment, expected_appearance(), frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)
@@ -2428,6 +2569,8 @@ def main() -> None:
                                                 frames)
         # Issue #515: 自動退避と起動の問い。殺して起動し直すので、別の 2 回の起動で測る。
         result["autosave"] = verify_autosave(executable, environment, appearance, frames)
+        # Issue #706: 面の鍵・送り・配色のプレビュー。本物の鍵が要るので別の 1 回の起動で測る。
+        result["palette"] = verify_palette(executable, environment, appearance, frames)
         (output / "look-slice-results.json").write_text(json.dumps(result, indent=2) + "\n",
                                                         encoding="utf-8")
         print(json.dumps(result, indent=2))
