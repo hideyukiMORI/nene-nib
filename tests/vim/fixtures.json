@@ -2023,5 +2023,18 @@
   {"name":"d-g-underscore-dot-repeats","text":"ab  \ncd  ","keys":"ldg_j."},
   {"name":"visual-g-underscore-leaves-the-line-break","text":"abc  \ndef","keys":"vg_y"},
   {"name":"visual-2g-underscore","text":"abc  \ndef  ","keys":"v2g_y"},
-  {"name":"g-caret-without-layout-is-the-first-non-blank","text":"   abc","keys":"$g^"}
+  {"name":"g-caret-without-layout-is-the-first-non-blank","text":"   abc","keys":"$g^"},
+  {"name":"visual-edge-dollar-vjd-on-the-last-line","text":"One. Two.","keys":"$vjd"},
+  {"name":"visual-edge-dollar-vjd-on-the-last-of-two-lines","text":"abc\ndef","keys":"j$vjd"},
+  {"name":"visual-edge-vjd-on-the-last-line-without-dollar","text":"abc\ndef","keys":"jlvjd"},
+  {"name":"visual-edge-dollar-vkd-on-the-first-line","text":"abc\ndef","keys":"$vkd"},
+  {"name":"visual-edge-dollar-vjjd-stops-at-the-second-j","text":"abc\ndef","keys":"$vjjd"},
+  {"name":"visual-edge-dollar-vjd-in-the-middle","text":"abcd\nef\ngh","keys":"$vjd"},
+  {"name":"visual-edge-dollar-vkd-in-the-middle","text":"ab\ncdef","keys":"j$vkd"},
+  {"name":"visual-edge-dollar-v3jd-stops-at-the-end","text":"abc\ndef\nghi","keys":"$v3jd"},
+  {"name":"visual-edge-dollar-v3jd-from-the-last-line","text":"abc\ndef","keys":"j$v3jd"},
+  {"name":"visual-edge-dollar-Vjd-on-the-last-line","text":"abc\ndef","keys":"j$Vjd"},
+  {"name":"visual-edge-dollar-ctrl-v-jd-on-the-last-line","text":"abc\ndef","keys":"j$<C-v>jd"},
+  {"name":"visual-edge-dollar-ctrl-v-kd-on-the-first-line","text":"abc\ndef","keys":"$<C-v>kd"},
+  {"name":"visual-edge-contrast-normal-dollar-jx-on-the-last-line","text":"abc\ndef","keys":"j$jx"}
 ]

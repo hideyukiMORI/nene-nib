@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 4a973928e121921f77bf41f7d8f2b4eedd5e1df74cd5a5feb7eb482d5b00ec2b / 2025 fixtures
+// fixtures.json: sha256 e69d26ace4b464c97dc9892c7073bb43462cb51d14bcd0c6403fbf2382fa75e6 / 2038 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 2025> vim_fixtures{{
+constexpr std::array<VimFixture, 2038> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -2037,6 +2037,19 @@ constexpr std::array<VimFixture, 2025> vim_fixtures{{
     {"visual-g-underscore-leaves-the-line-break", "abc  \ndef", "vg_y", "abc  \ndef", 1, 1, "abc", "v", std::nullopt},
     {"visual-2g-underscore", "abc  \ndef  ", "v2g_y", "abc  \ndef  ", 1, 1, "abc  \ndef", "v", std::nullopt},
     {"g-caret-without-layout-is-the-first-non-blank", "   abc", "$g^", "   abc", 1, 4, "", "", std::nullopt},
+    {"visual-edge-dollar-vjd-on-the-last-line", "One. Two.", "$vjd", "One. Two.", 1, 9, "", "", std::nullopt},
+    {"visual-edge-dollar-vjd-on-the-last-of-two-lines", "abc\ndef", "j$vjd", "abc\ndef", 2, 3, "", "", std::nullopt},
+    {"visual-edge-vjd-on-the-last-line-without-dollar", "abc\ndef", "jlvjd", "abc\ndef", 2, 2, "", "", std::nullopt},
+    {"visual-edge-dollar-vkd-on-the-first-line", "abc\ndef", "$vkd", "abc\ndef", 1, 3, "", "", std::nullopt},
+    {"visual-edge-dollar-vjjd-stops-at-the-second-j", "abc\ndef", "$vjjd", "abc\ndef", 2, 4, "", "", std::nullopt},
+    {"visual-edge-dollar-vjd-in-the-middle", "abcd\nef\ngh", "$vjd", "abcgh", 1, 4, "d\nef\n", "v", std::nullopt},
+    {"visual-edge-dollar-vkd-in-the-middle", "ab\ncdef", "j$vkd", "ab", 1, 2, "\ncdef", "v", std::nullopt},
+    {"visual-edge-dollar-v3jd-stops-at-the-end", "abc\ndef\nghi", "$v3jd", "ab", 1, 2, "c\ndef\nghi", "v", std::nullopt},
+    {"visual-edge-dollar-v3jd-from-the-last-line", "abc\ndef", "j$v3jd", "abc\ndef", 2, 3, "", "", std::nullopt},
+    {"visual-edge-dollar-Vjd-on-the-last-line", "abc\ndef", "j$Vjd", "abc\ndef", 2, 3, "", "", std::nullopt},
+    {"visual-edge-dollar-ctrl-v-jd-on-the-last-line", "abc\ndef", "j$<C-v>jd", "abc\ndef", 2, 3, "", "", std::nullopt},
+    {"visual-edge-dollar-ctrl-v-kd-on-the-first-line", "abc\ndef", "$<C-v>kd", "abc\ndef", 1, 3, "", "", std::nullopt},
+    {"visual-edge-contrast-normal-dollar-jx-on-the-last-line", "abc\ndef", "j$jx", "abc\ndef", 2, 3, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on
