@@ -5,6 +5,7 @@
 #include "AutosaveTick.hpp"
 #include "CommandText.hpp"
 #include "Editing.hpp"
+#include "FileBookmarksFailure.hpp"
 #include "FileFailure.hpp"
 #include "FileHistory.hpp"
 #include "FilePath.hpp"
@@ -13,13 +14,17 @@
 #include "OpenDocument.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
+#include "SettingsFailure.hpp"
+#include "SettingsIssue.hpp"
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
+#include "ToggleBookmark.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
+#include <expected>
 #include <string>
 
 namespace nenenib::tests
@@ -115,10 +120,37 @@ void verify_file_refusals()
                saving.bell().rings() == 1,
            "a failed autosave rings once");
 }
+
+// 設計席の答え（#789）: 使う人の操作の後の保存の失敗（ブックマーク・設定）は鳴り、ブックマークの
+// 読みの失敗は鳴らない。
+void verify_save_refusals()
+{
+    Editing reading;
+    prepare_vim(reading);
+    reading.bookmarks().serve(std::unexpected(app::FileBookmarksFailure::malformed));
+    auto frame = reading.controller().apply_frame(app::ToggleBookmark{});
+    expect(notice(frame) == "ブックマークを読めませんでした" && reading.bell().rings() == 0,
+           "an unreadable bookmark list does not ring");
+
+    Editing writing;
+    prepare_vim(writing);
+    writing.bookmarks().fail(app::FileBookmarksFailure::unwritable);
+    frame = writing.controller().apply_frame(app::ToggleBookmark{});
+    expect(notice(frame) == "ブックマークを保存できませんでした" && writing.bell().rings() == 1,
+           "a bookmark that cannot be saved rings once");
+
+    Editing settings;
+    prepare_vim(settings);
+    settings.settings().fail(app::SettingsIssue{app::SettingsFailure::unwritable});
+    frame = run_ex(settings.controller(), "set fontsize=20");
+    expect(notice(frame) == "Settings could not be saved" && settings.bell().rings() == 1,
+           "settings that cannot be saved after :set ring once");
+}
 } // namespace
 
 void verify_bell_contracts()
 {
+    verify_save_refusals();
     verify_input_line_refusals();
     verify_write_refusals();
     verify_file_refusals();

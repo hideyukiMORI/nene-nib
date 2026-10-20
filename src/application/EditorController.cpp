@@ -2557,8 +2557,7 @@ void EditorController::accept(const ToggleBookmark &)
     }
     if (!ports_.bookmarks.write(after.value()))
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("ブックマークを保存できませんでした").value());
+        reject(core::DisplayText::parse("ブックマークを保存できませんでした").value());
         return;
     }
     close_command_input();
@@ -2774,8 +2773,7 @@ void EditorController::evaluate_command(std::string_view text)
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("Settings could not be saved").value());
+        reject(core::DisplayText::parse("Settings could not be saved").value());
         return;
     }
     apply_unsaved_ex(result.value());
