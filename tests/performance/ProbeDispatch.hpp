@@ -15,6 +15,7 @@
 #include "SearchSpanWorkload.hpp"
 #include "StatusItemsWorkload.hpp"
 #include "TabDisplayWorkload.hpp"
+#include "TextObjectWorkload.hpp"
 
 #include <variant>
 
@@ -28,5 +29,5 @@ using ProbeDispatch =
                  ProbeDispatchRow<CommandInputWorkload>, ProbeDispatchRow<ExCompletionWorkload>,
                  ProbeDispatchRow<CompletionPrefixWorkload>,
                  ProbeDispatchRow<PaletteChoiceWorkload>, ProbeDispatchRow<OperationChoiceWorkload>,
-                 ProbeDispatchRow<SearchSpanWorkload>>;
+                 ProbeDispatchRow<SearchSpanWorkload>, ProbeDispatchRow<TextObjectWorkload>>;
 } // namespace nenenib::tests::performance
