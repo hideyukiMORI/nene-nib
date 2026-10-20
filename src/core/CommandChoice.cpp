@@ -9,6 +9,7 @@
 #include "OperationBindings.hpp"
 #include "OperationText.hpp"
 #include "OperationTexts.hpp"
+#include "ThemeCatalog.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -104,18 +105,26 @@ match_score(std::string_view query, std::span<const std::string_view, Count> com
     return match_score(query, std::span{parts});
 }
 
+[[nodiscard]] bool same_letter(char left, char right)
+{
+    return lower_code_point(static_cast<unsigned char>(left)) ==
+           lower_code_point(static_cast<unsigned char>(right));
+}
+
 // 短い名前も別テーマの部分列に負けない。利用者テーマも同じ候補で扱う（ADR 0117）。
+// 入力が候補の先頭と一致する（ASCII の大文字小文字を無視・空白も字）候補も点 0 で、
+// 表の順（Ex の Tab 補完と同じ・テーマは名前順）に並ぶ（#712）。空の入力は長さの点のまま。
 [[nodiscard]] std::optional<std::size_t> command_score(std::string_view query,
                                                        std::string_view command)
 {
     constexpr std::string_view prefix = "colorscheme ";
     if (command.starts_with(prefix) &&
-        std::ranges::equal(query, command.substr(prefix.size()),
-                           [](char left, char right)
-                           {
-                               return lower_code_point(static_cast<unsigned char>(left)) ==
-                                      lower_code_point(static_cast<unsigned char>(right));
-                           }))
+        std::ranges::equal(query, command.substr(prefix.size()), same_letter))
+    {
+        return 0;
+    }
+    if (!query.empty() && query.size() <= command.size() &&
+        std::ranges::equal(query, command.substr(0, query.size()), same_letter))
     {
         return 0;
     }
@@ -301,6 +310,32 @@ operation_score(std::string_view query, const OperationText &text, std::string_v
     // 同点は Ex の補完と同じ名前順（#696）。
     return ascii_folded_before(left.choice.command, right.choice.command);
 }
+
+// 点 0 の候補は表の順のまま先に並べ、ほかの候補だけを点と名前で並べる（#712）。
+[[nodiscard]] std::vector<CommandChoice> ranked_choices(std::string_view query,
+                                                        const ThemeCatalog &themes)
+{
+    std::vector<CommandChoice> choices;
+    std::vector<CommandMatch> matches;
+    for (auto &command : ex_command_candidates(themes))
+    {
+        const auto score = command_score(query, command);
+        if (score.has_value() && score.value() == 0)
+        {
+            choices.push_back(choice_of(std::move(command)));
+        }
+        else if (score.has_value())
+        {
+            matches.push_back(CommandMatch{choice_of(std::move(command)), score.value()});
+        }
+    }
+    std::sort(matches.begin(), matches.end(), before);
+    for (auto &match : matches)
+    {
+        choices.push_back(std::move(match.choice));
+    }
+    return choices;
+}
 } // namespace
 
 bool completes_font_family(std::string_view input)
@@ -328,21 +363,7 @@ std::vector<CommandChoice> palette_choices(const CommandLine &input)
     {
         return font_choices(query, input);
     }
-    std::vector<CommandMatch> matches;
-    for (auto &command : ex_command_candidates(input.catalog()))
-    {
-        const auto score = command_score(query, command);
-        if (score.has_value())
-        {
-            matches.push_back(CommandMatch{choice_of(std::move(command)), score.value()});
-        }
-    }
-    std::sort(matches.begin(), matches.end(), before);
-    std::vector<CommandChoice> choices;
-    for (auto &match : matches)
-    {
-        choices.push_back(std::move(match.choice));
-    }
+    auto choices = ranked_choices(query, input.catalog());
     if (choices.empty() && query.starts_with("colorscheme "))
     {
         return {choice_of(std::string(query))};
