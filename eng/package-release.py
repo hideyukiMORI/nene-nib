@@ -28,7 +28,7 @@ def digest(data: bytes) -> str:
 
 
 def version_of(cmake: str) -> str:
-    matches = re.findall(r"^project\(NeNeNib VERSION (\d+\.\d+\.\d+) LANGUAGES CXX\)$",
+    matches = re.findall(r"^project\(NeNeNib VERSION (\d+\.\d+\.\d+) LANGUAGES C CXX\)$",
                          cmake, re.MULTILINE)
     if len(matches) != 1:
         raise ValueError("CMake must contain one canonical product VERSION")

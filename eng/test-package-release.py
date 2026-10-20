@@ -16,9 +16,10 @@ WORK = None
 
 class PackageTests(unittest.TestCase):
     def test_version_has_one_source(self):
-        self.assertEqual(PACKAGE.version_of("project(NeNeNib VERSION 2.3.4 LANGUAGES CXX)"), "2.3.4")
-        for text in ("", "project(NeNeNib VERSION 2.3 LANGUAGES CXX)",
-                     "project(NeNeNib VERSION 1.2.3 LANGUAGES CXX)\n" * 2):
+        self.assertEqual(PACKAGE.version_of("project(NeNeNib VERSION 2.3.4 LANGUAGES C CXX)"), "2.3.4")
+        for text in ("", "project(NeNeNib VERSION 2.3 LANGUAGES C CXX)",
+                     "project(NeNeNib VERSION 1.2.3 LANGUAGES CXX)",
+                     "project(NeNeNib VERSION 1.2.3 LANGUAGES C CXX)\n" * 2):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 PACKAGE.version_of(text)
 
@@ -102,7 +103,7 @@ class PackageTests(unittest.TestCase):
     def test_complete_package_after_build_boundary(self):
         root = WORK / "fixture-source"
         (root / "eng/release").mkdir(parents=True)
-        (root / "CMakeLists.txt").write_text("project(NeNeNib VERSION 1.2.3 LANGUAGES CXX)")
+        (root / "CMakeLists.txt").write_text("project(NeNeNib VERSION 1.2.3 LANGUAGES C CXX)")
         (root / "LICENSE").write_bytes(b"fixture license")
         (root / "THIRD_PARTY_NOTICES.txt").write_bytes(b"fixture palette notices")
         (root / "eng/release/README.txt.in").write_text("fixture @VERSION@")
