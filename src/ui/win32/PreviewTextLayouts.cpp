@@ -31,6 +31,7 @@ constexpr float unbounded_height = 1.0e7F;
     switch (style)
     {
     case core::PreviewStyle::emphasis:
+    case core::PreviewStyle::image:
         return layout.SetFontStyle(DWRITE_FONT_STYLE_ITALIC, range);
     case core::PreviewStyle::strong:
         return layout.SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, range);

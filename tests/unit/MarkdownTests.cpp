@@ -44,6 +44,7 @@ constexpr PreviewStyle emphasis = PreviewStyle::emphasis;
 constexpr PreviewStyle strong = PreviewStyle::strong;
 constexpr PreviewStyle inline_code = PreviewStyle::code;
 constexpr PreviewStyle link = PreviewStyle::link;
+constexpr PreviewStyle image = PreviewStyle::image;
 constexpr std::string_view bullet = "•";
 
 // 述語は借りるだけなので、一時の値は受けない（#782 のレビュー R2）。
@@ -206,8 +207,11 @@ void verify_inline_code_and_links()
     expect_blocks("[*a*](u)",
                   {styled(leaf(paragraph, "a", 2U), {span(0U, 1U, link), span(0U, 1U, emphasis)})},
                   "emphasis inside a link");
-    expect_blocks("![foo](/url)", {leaf(paragraph, "foo", 2U)},
-                  "an image keeps its alt text without a style");
+    // "[画像: " は 9 バイト（[ 1・画像 6・: 1・空白 1）。
+    expect_blocks(
+        "![foo](/url)",
+        {styled(leaf(paragraph, "[\xE7\x94\xBB\xE5\x83\x8F: foo]", 2U), {span(0U, 13U, image)})},
+        "an image is shown as its alt text in the image frame");
 }
 
 void verify_bullet_lists()

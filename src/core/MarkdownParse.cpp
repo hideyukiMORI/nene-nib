@@ -120,8 +120,8 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     }
 }
 
-// 装飾の種類。画像・打ち消し・数式・wiki リンク・下線は装飾を持たない（後の 4 つは flag を
-// 立てないので来ない・画像の alt は文字として残る）。
+// 装飾の種類。画像は代わりの文字の装飾（builder が「[画像: alt]」の枠を足す）。打ち消し・数式・
+// wiki リンク・下線は装飾を持たない（flag を立てないので来ない）。
 [[nodiscard]] std::optional<PreviewStyle> span_style(MD_SPANTYPE type) noexcept
 {
     switch (type)
@@ -135,6 +135,7 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     case MD_SPAN_A:
         return PreviewStyle::link;
     case MD_SPAN_IMG:
+        return PreviewStyle::image;
     case MD_SPAN_DEL:
     case MD_SPAN_LATEXMATH:
     case MD_SPAN_LATEXMATH_DISPLAY:

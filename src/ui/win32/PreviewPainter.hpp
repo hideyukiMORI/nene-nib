@@ -6,6 +6,7 @@
 #include "PreviewInk.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewScene.hpp"
+#include "PreviewStyle.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "RenderFailure.hpp"
 
@@ -205,8 +206,27 @@ template <typename Target> class PreviewPainter final
                                D2D1_DRAW_TEXT_OPTIONS_NONE);
     }
 
-    // 行の中の装飾の色（行内コードは string と panel の面・リンクは function）。layout の
-    // drawing effect は描くたびに置き直す（保持の鍵にテーマを入れない）。
+    // 装飾の文字の色（行内コードは string・リンクは function・画像の代わりの文字は comment・
+    // 強調と太字は周りの色のまま）。
+    [[nodiscard]] static std::optional<PreviewInk> span_ink(core::PreviewStyle style) noexcept
+    {
+        switch (style)
+        {
+        case core::PreviewStyle::code:
+            return PreviewInk::string;
+        case core::PreviewStyle::link:
+            return PreviewInk::function;
+        case core::PreviewStyle::image:
+            return PreviewInk::comment;
+        case core::PreviewStyle::emphasis:
+        case core::PreviewStyle::strong:
+            return std::nullopt;
+        }
+        std::unreachable();
+    }
+
+    // 行の中の装飾の色（行内コードは string と panel の面・リンクは function・画像は
+    // comment）。layout の drawing effect は描くたびに置き直す（保持の鍵にテーマを入れない）。
     void paint_spans(const PreviewScene &scene, const core::PreviewBlock &block,
                      IDWriteTextLayout &layout, D2D1_POINT_2F origin)
     {
@@ -219,12 +239,11 @@ template <typename Target> class PreviewPainter final
             if (span.style == core::PreviewStyle::code)
             {
                 fill_inline_code(scene, layout, range, origin);
-                static_cast<void>(layout.SetDrawingEffect(brushes_.of(PreviewInk::string), range));
             }
-            if (span.style == core::PreviewStyle::link)
+            const auto ink = span_ink(span.style);
+            if (ink.has_value())
             {
-                static_cast<void>(
-                    layout.SetDrawingEffect(brushes_.of(PreviewInk::function), range));
+                static_cast<void>(layout.SetDrawingEffect(brushes_.of(ink.value()), range));
             }
         }
     }
