@@ -20,6 +20,7 @@
 #include "SearchSpanProbe.hpp"
 #include "StatusItemsProbe.hpp"
 #include "TabDisplayProbe.hpp"
+#include "TextObjectProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -821,6 +822,19 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(TextObjectWorkload workload)
+{
+    switch (workload)
+    {
+    case TextObjectWorkload::sentence_giant:
+    case TextObjectWorkload::sentence_dense:
+    case TextObjectWorkload::tag_nested:
+    case TextObjectWorkload::tag_unclosed:
+        return 150U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -836,7 +850,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 150> dispatches{{
+constexpr std::array<ProbeDispatch, 154> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1145,6 +1159,14 @@ constexpr std::array<ProbeDispatch, 150> dispatches{{
                      searched_spans},
     ProbeDispatchRow{SearchSpanWorkload::next_16mib, "search-next-16mib", search_span_input,
                      searched_spans},
+    ProbeDispatchRow{TextObjectWorkload::sentence_giant, "text-object-sentence-giant-1line-16384",
+                     text_object_input, text_object_ranges},
+    ProbeDispatchRow{TextObjectWorkload::sentence_dense, "text-object-sentence-dense-4096",
+                     text_object_input, text_object_ranges},
+    ProbeDispatchRow{TextObjectWorkload::tag_nested, "text-object-tag-nested-4096",
+                     text_object_input, text_object_ranges},
+    ProbeDispatchRow{TextObjectWorkload::tag_unclosed, "text-object-tag-unclosed-4096",
+                     text_object_input, text_object_ranges},
 }};
 
 constexpr auto dispatch_names = []
@@ -1187,7 +1209,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 150U);
+static_assert(dispatches.size() == 154U);
 static_assert(dispatch_is_complete());
 
 } // namespace

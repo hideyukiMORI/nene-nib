@@ -151,7 +151,11 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'operation-choice-name-ordinary-1024',
              'operation-choice-close-key-vim-1024',
              'operation-choice-description-miss-1024',
-             'operation-choice-short-name-miss-1024')
+             'operation-choice-short-name-miss-1024',
+             'text-object-sentence-giant-1line-16384',
+             'text-object-sentence-dense-4096',
+             'text-object-tag-nested-4096',
+             'text-object-tag-unclosed-4096')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -183,7 +187,25 @@ def load_json(text: str):
     return json.loads(text, object_pairs_hook=unique_object, parse_constant=reject_constant)
 
 
+def cycled_words(length: int) -> str:
+    words = "lorem ipsum dolor sit amet "
+    return (words * (length // len(words) + 1))[:length]
+
+
+def text_object_input(workload: str) -> bytes:
+    """文とタグのテキストオブジェクトの 4 本（#732）。巨大な行の長さは正本のしきい値から引く。"""
+    if workload == "text-object-sentence-giant-1line-16384":
+        return (cycled_words(giant_line_threshold())[:-1] + "z").encode("utf-8")
+    if workload == "text-object-sentence-dense-4096":
+        return ((cycled_words(48) + ". ") * 82)[:4096].encode("utf-8")
+    if workload == "text-object-tag-nested-4096":
+        return ("<a>y" * 200 + "x" * 2496 + "</a>" * 200).encode("utf-8")
+    return ("<a>" * 500 + "x" * 2596).encode("utf-8")
+
+
 def fixed_input(workload: str) -> bytes:
+    if workload in WORKLOADS[148:152]:
+        return text_object_input(workload)
     if workload in WORKLOADS[138:148]:
         return (
             b'operation-choice-v1\nreading-ordinary\nordinary\n\xe3\x81\xbb\xe3\x81\x9e\xe3\x82\x93\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n',

@@ -280,7 +280,7 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/CompletionPrefixProbe.cpp
     tests/performance/PaletteChoiceProbe.cpp
     tests/performance/OperationChoiceProbe.cpp
-    tests/performance/SearchSpanProbe.cpp)
+    tests/performance/SearchSpanProbe.cpp tests/performance/TextObjectProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

@@ -190,3 +190,16 @@ checksumはuint64の剰余和でFNV(input)+FNV(display)+全startsの和+全match
 CTest に登録しない代わりに、`eng/check.ps1 -Full` が `eng/probe-smoke.ps1` で表 `ProbeDispatchRow` の全 workload を warmup 1 + sample 1 で 1 回ずつ流して非 0 の終了を落とし（時間は判定しない・CI の必須 check には足さない）、製品の表から導ける期待値（組み込みテーマの名前と数・Ex の固定の候補・frame の 1 行の長さ＝巨大な行のしきい値）は probe の側に literal で写さず正本から引く。
 
 frame の 5 本は 1 行を巨大な行のしきい値（16,384 コードポイント）以下にするため 2026-10-19 に改名した（上の表の名前は新しい名前に直し、回数・バイト数・checksum は改名前の固定のまま残す）。ASCII の 4 本は 1 行 16,384 バイト（dense・selection・visual の `a x ` は 4,096 単位）、混合の 1 行は 2,340 単位（表示 16,380 コードポイント）。同じ日に metadata から組み込みテーマの名前の行を外したので、2026-10-19 より前の probe の記録とは入力ハッシュで突き合わせられない。
+
+## 追補（2026-10-20・#732）— 文とタグのテキストオブジェクトの 4 本
+
+#731 と #746 のレビュー I-1 の費用を測るため、範囲関数 `vim_text_object_range`（ADR 0031）を NORMAL の畳んだキャレット・回数 1 で引く 4 本を `TextObjectWorkload` として足す（`tests/performance/TextObjectProbe.cpp`）。本文の生成と `TextBuffer` の準備・全戻り値の照合・checksum は区間外で、区間は呼び出しと結果の保持だけ。期待の範囲は同じ本文に Vim 9.1 で `y{オブジェクト}` を打って測った値（`'[` と無名レジスタの長さ）で、製品の関数から作らない。巨大な行の長さは正本 `giant_line_threshold` から引く（#690 の追補）。
+
+| 固定名 | UTF-8 本文（1 行・1 piece） | キャレット・鍵 | 区間の回数 | 期待 |
+| --- | --- | --- | --- | --- |
+| text-object-sentence-giant-1line-16384 | `lorem ipsum dolor sit amet ` の繰り返しを `giant_line_threshold`（16,384）字で切り最後を `z`（`.` `!` `?` 無し） | 8192・`is` | 1 | 文字単位 [0, 16384) |
+| text-object-sentence-dense-4096 | 同じ語の並びの 48 字と `. ` の 50 字を繰り返し 4,096 字で切る | 2048（`.`）・`as` | 16 | 文字単位 [2000, 2050) |
+| text-object-tag-nested-4096 | `<a>y` を 200 回・`x` を 2,496 字・`</a>` を 200 回 | 3（一番外の段の `y`）・`it` | 16 | 文字単位 [3, 4092) |
+| text-object-tag-unclosed-4096 | `<a>` を 500 回・`x` を 2,596 字（閉じ無し） | 4095・`at` | 1 | 取消・選択はキャレット 4095 に畳んだまま |
+
+checksum は `checksum_of(input)` に、範囲なら各結果の 1 + begin + end、取消なら残るキャレットを足す。重い 2 本（巨大な行の `is`・閉じの無い `at`）の区間は 1 回にした。初回の Debug（ASan 付き）で 16 回の区間が `is` 265.8 秒・`at` 9.3 秒になり、`eng/probe-smoke.ps1` が 1 本で数分かかるため。回数は本測定より前に固定し、測った値に合わせて変えない。`eng/compare-probes.py` の名前の表（148〜151）と固定入力も同じ生成式で足した。本測定（warmup 1 + sample 5）と最適化の要否は設計席が決める。
