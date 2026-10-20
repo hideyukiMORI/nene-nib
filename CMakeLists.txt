@@ -137,7 +137,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
     tests/unit/MarkdownTests.cpp
-    tests/unit/LanguageTests.cpp)
+    tests/unit/LanguageTests.cpp
+    tests/unit/PreviewTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
@@ -160,6 +161,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
+    src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp)

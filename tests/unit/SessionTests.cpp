@@ -40,6 +40,7 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScriptedMarkdown.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -525,11 +526,12 @@ void verify_recency_ranked()
     ScriptedAutosave autosave;
     ScriptedFonts fonts;
     ScriptedBell bell;
+    ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
-                                            text_layouts, autosave, fonts, bell},
+                                            text_layouts, autosave, fonts, bell, markdown},
                                 initial);
     return controller.frame();
 }

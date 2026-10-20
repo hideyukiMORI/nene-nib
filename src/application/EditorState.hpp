@@ -238,6 +238,16 @@ class EditorState final
     // ScrollPane が操作中の枠と同じ関数を通すための読み取りの口で、状態には戻さない。1 枠と、
     // まだ読んでいない文書を指すときは値なし。
     [[nodiscard]] std::optional<EditorState> other_pane_state() const;
+    // もう 1 つの枠が受け身の本文の枠なら、その表示（ADR 0155 の決定 1）。無い・プレビューなら
+    // nullptr。指す先は次に状態を写すまで。
+    [[nodiscard]] const PaneView *other_pane() const noexcept;
+    // もう 1 つの枠が Markdown のプレビューなら、その値（ADR 0155 の決定 1・2）。無い・本文の枠なら
+    // nullptr。指す先は次に状態を写すまで。
+    [[nodiscard]] const PreviewView *preview() const noexcept;
+    // もう 1 つの枠にプレビュー view を置く（決定 3）。1 枠なら左右に分け（操作中の枠は first）、
+    // 本文の枠なら置き換え（枠は 2 つまで・ADR 0148 の決定 1）、プレビューなら値を差し替える。
+    // 配置と側は 2 枠のまま保つ。閉じるのは without_split。
+    [[nodiscard]] EditorState with_preview(PreviewView view) const;
 
   private:
     EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled);

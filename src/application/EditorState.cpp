@@ -117,6 +117,48 @@ unloaded_of(const std::shared_ptr<const UnloadedDocument> &tab)
     }
     std::unreachable();
 }
+
+// もう 1 つの枠の和型を読む 1 対（ADR 0155 の決定 1）。選択肢が増えたら std::visit が落ちる。
+[[nodiscard]] const PaneView *pane_in(const PaneView &view) noexcept
+{
+    return &view;
+}
+
+[[nodiscard]] const PaneView *pane_in(const PreviewView &) noexcept
+{
+    return nullptr;
+}
+
+[[nodiscard]] const PreviewView *preview_in(const PaneView &) noexcept
+{
+    return nullptr;
+}
+
+[[nodiscard]] const PreviewView *preview_in(const PreviewView &view) noexcept
+{
+    return &view;
+}
+
+// 受け身の本文の枠なら、その表示。無い・プレビューなら nullptr。
+[[nodiscard]] const PaneView *pane_of(const std::optional<OtherView> &other) noexcept
+{
+    if (!other.has_value())
+    {
+        return nullptr;
+    }
+    return std::visit([](const auto &view) { return pane_in(view); }, other.value());
+}
+
+// プレビューの枠なら、その値。無い・本文の枠なら nullptr。
+[[nodiscard]] const PreviewView *preview_of(const std::optional<OtherView> &other) noexcept
+{
+    if (!other.has_value())
+    {
+        return nullptr;
+    }
+    return std::visit([](const auto &view) { return preview_in(view); }, other.value());
+}
+
 } // namespace
 
 EditorState::EditorState(core::Appearance appearance, core::EditMode mode, DocumentState untitled)
@@ -888,7 +930,8 @@ void EditorState::spread_pane(const PaneView &view)
 
 void EditorState::restart_other_showing(AutosaveId tab)
 {
-    if (!split_.other.has_value() || !(split_.other.value().tab == tab))
+    const PaneView *other = pane_of(split_.other);
+    if (other == nullptr || !(other->tab == tab))
     {
         return;
     }
@@ -914,11 +957,13 @@ EditorState EditorState::with_split(core::SplitLayout layout) const
 
 EditorState EditorState::with_pane_swapped() const
 {
-    if (!split_.other.has_value())
+    const PaneView *shown = pane_of(split_.other);
+    // プレビューの枠へは移らない（ADR 0155 の決定 4・知らせは controller）。
+    if (shown == nullptr)
     {
         return *this;
     }
-    const PaneView other = split_.other.value();
+    const PaneView other = *shown;
     const PaneView leaving = active_pane();
     if (other.tab == leaving.tab)
     {
@@ -955,12 +1000,14 @@ EditorState EditorState::without_split() const
 EditorState EditorState::with_other_adjusted(const core::Edit &edit,
                                              const core::TextBuffer &after) const
 {
-    if (!split_.other.has_value() || !(split_.other.value().tab == autosave_ids_.at(active_)))
+    // プレビューは編集でずらさない（錨は次の frame で追従し直す・ADR 0155 の決定 12）。
+    const PaneView *shown = pane_of(split_.other);
+    if (shown == nullptr || !(shown->tab == autosave_ids_.at(active_)))
     {
         return *this;
     }
     EditorState next(*this);
-    PaneView &other = next.split_.other.value();
+    PaneView other = *shown;
     const core::Offset start = core::offset_after_edit(text_.line_start(other.first_visible), edit);
     const core::TextPosition top = after.position_of(start);
     // 先頭行の行頭が削除の中に畳まれて別の行の途中へ来たら、画面行も行の先頭へ戻す。
@@ -970,29 +1017,56 @@ EditorState EditorState::with_other_adjusted(const core::Edit &edit,
     }
     other.first_visible = top.line;
     other.caret = core::offset_after_edit(other.caret, edit);
+    next.split_.other = other;
     return next;
 }
 
 EditorState EditorState::with_other_scrolled(core::LineNumber first_visible,
                                              std::size_t first_row) const
 {
-    if (!split_.other.has_value())
+    const PaneView *shown = pane_of(split_.other);
+    if (shown == nullptr)
     {
         return *this;
     }
+    PaneView other = *shown;
+    other.first_visible = first_visible;
+    other.first_row = first_row;
     EditorState next(*this);
-    next.split_.other.value().first_visible = first_visible;
-    next.split_.other.value().first_row = first_row;
+    next.split_.other = other;
+    return next;
+}
+
+const PaneView *EditorState::other_pane() const noexcept
+{
+    return pane_of(split_.other);
+}
+
+const PreviewView *EditorState::preview() const noexcept
+{
+    return preview_of(split_.other);
+}
+
+EditorState EditorState::with_preview(PreviewView view) const
+{
+    EditorState next(*this);
+    if (split_.layout == core::SplitLayout::none)
+    {
+        next.split_.layout = core::SplitLayout::vertical;
+        next.split_.active_side = core::PaneSide::first;
+    }
+    next.split_.other = std::move(view);
     return next;
 }
 
 std::optional<EditorState> EditorState::other_pane_state() const
 {
-    if (!split_.other.has_value())
+    const PaneView *shown = pane_of(split_.other);
+    if (shown == nullptr)
     {
         return std::nullopt;
     }
-    const PaneView &other = split_.other.value();
+    const PaneView &other = *shown;
     EditorState pane(*this);
     if (!(other.tab == autosave_ids_.at(active_)))
     {

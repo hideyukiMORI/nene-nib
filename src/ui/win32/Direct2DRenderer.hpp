@@ -224,6 +224,12 @@ class Direct2DRenderer final
     // 操作中の枠（body は pane_layouts の active_side の側）。
     void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
     void draw_other_body(const application::EditorFrame &frame, const core::PaneLayouts &panes);
+    // draw_other_body が std::visit で選ぶ 1 対（ADR 0155 の決定 11）。プレビューの枠は地だけを
+    // 塗る（中身は #801 が描く）。
+    void draw_other(const application::EditorFrame &frame, const core::BodyLayout &body,
+                    const application::PaneFrame &other);
+    void draw_other(const application::EditorFrame &frame, const core::BodyLayout &body,
+                    const application::PreviewFrame &other);
     void draw_pane(const application::EditorFrame &frame, const BodyPane &pane);
     // 格子の画面行（ADR 0140 の決定 5）。本文の行（draw_line）とは別の 1 本で、枠の grid を描く。
     using GridPainter = GridRowPainter<ID2D1DeviceContext6, BodyTextLayouts>;

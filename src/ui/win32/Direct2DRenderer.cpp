@@ -25,6 +25,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::ui::win32
@@ -1393,10 +1394,22 @@ void Direct2DRenderer::draw_other_body(const application::EditorFrame &frame,
         draw_pane(frame, BodyPane{layout.value(), {}, {}, frame.caret, PaneRole::passive});
         return;
     }
-    const auto &other = frame.other.value();
+    std::visit([this, &frame, &layout](const auto &other)
+               { this->draw_other(frame, layout.value(), other); }, frame.other.value());
+}
+
+void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
+                                  const core::BodyLayout &body, const application::PaneFrame &other)
+{
     const application::CaretView caret{other.caret.position, passive_shape(frame.mode),
                                        other.caret.affinity};
-    draw_pane(frame, BodyPane{layout.value(), other.lines, other.grid, caret, PaneRole::passive});
+    draw_pane(frame, BodyPane{body, other.lines, other.grid, caret, PaneRole::passive});
+}
+
+void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
+                                  const core::BodyLayout &body, const application::PreviewFrame &)
+{
+    fill(body.band, frame.palette.background);
 }
 
 // 1 つの枠の本文。body_top_ / body_bottom_ は描いている枠の本文の上下（字形 run の間引き）で、

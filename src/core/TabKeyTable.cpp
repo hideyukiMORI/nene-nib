@@ -57,6 +57,7 @@ namespace
     case EditorOperation::split_horizontal:
     case EditorOperation::next_pane:
     case EditorOperation::close_pane:
+    case EditorOperation::toggle_preview:
         return std::nullopt;
     }
     std::unreachable();

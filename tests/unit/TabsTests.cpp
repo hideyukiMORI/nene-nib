@@ -43,6 +43,7 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScriptedMarkdown.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -538,11 +539,12 @@ void verify_open_failure_adds_no_tab()
     ScriptedAutosave autosave;
     ScriptedFonts fonts;
     ScriptedBell bell;
+    ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
                                             themes, session, history, folders, bookmarks,
-                                            text_layouts, autosave, fonts, bell},
+                                            text_layouts, autosave, fonts, bell, markdown},
                                 initial);
     return controller.frame();
 }
@@ -1159,11 +1161,12 @@ void verify_recent_after_startup()
     ScriptedAutosave autosave;
     ScriptedFonts fonts;
     ScriptedBell bell;
+    ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     EditorController controller(
         EditorPorts{appearance, clipboard, files, code_pages, settings, themes, session, history,
-                    folders, bookmarks, text_layouts, autosave, fonts, bell},
+                    folders, bookmarks, text_layouts, autosave, fonts, bell, markdown},
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});
     expect(recent_bodies(controller) == "cba", "three arguments leave the last one most recent");

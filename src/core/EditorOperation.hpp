@@ -28,6 +28,7 @@ enum class EditorOperation : std::uint8_t
     split_vertical,
     split_horizontal,
     next_pane,
-    close_pane
+    close_pane,
+    toggle_preview
 };
 } // namespace nenenib::core

@@ -34,6 +34,7 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScriptedMarkdown.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -241,12 +242,13 @@ void verify_theme_startup_notice()
     ScriptedAutosave autosave;
     ScriptedFonts fonts;
     ScriptedBell bell;
+    ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
     EditorController controller{app::EditorPorts{appearance, clipboard, files, pages, settings,
                                                  themes, session, history, folders, bookmarks,
-                                                 text_layouts, autosave, fonts, bell},
+                                                 text_layouts, autosave, fonts, bell, markdown},
                                 initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
@@ -261,7 +263,7 @@ void verify_theme_startup_notice()
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
     EditorController unreadable{app::EditorPorts{appearance, clipboard, files, pages, broken,
                                                  themes, session, history, folders, bookmarks,
-                                                 text_layouts, autosave, fonts, bell},
+                                                 text_layouts, autosave, fonts, bell, markdown},
                                 initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,

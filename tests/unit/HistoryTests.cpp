@@ -30,6 +30,7 @@
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
+#include "ScriptedMarkdown.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedThemes.hpp"
@@ -356,40 +357,47 @@ void verify_record_failures()
            "an unreadable history is rewritten from the closed file");
 }
 
+// 起動引数のファイルで起動する道は、履歴・同じフォルダ・自動退避・ベル・Markdown の口に触れない。
+void verify_quiet_start_with_files()
+{
+    ScriptedAppearance appearance{Reading{Appearance::dark}};
+    ScriptedClipboard clipboard;
+    ScriptedFiles files;
+    hold_work(files);
+    ScriptedCodePages code_pages;
+    ScriptedSettings settings;
+    ScriptedThemes themes;
+    ScriptedSession session;
+    ScriptedHistory history;
+    ScriptedFolders folders;
+    ScriptedAutosave autosave;
+    ScriptedFonts fonts;
+    ScriptedBell bell;
+    ScriptedMarkdown markdown;
+    ScriptedBookmarks bookmarks;
+    ScriptedTextLayouts text_layouts;
+    EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
+                                            themes, session, history, folders, bookmarks,
+                                            text_layouts, autosave, fonts, bell, markdown},
+                                {work_open('a'), work_open('b')});
+    expect(controller.frame().tabs.size() == 2 && history.reads() == 0 && history.writes() == 0 &&
+               folders.requests().empty() && folders.collects() == 0 && autosave.touches() == 0 &&
+               fonts.lists() == 0 && bell.rings() == 0 && markdown.requests().empty() &&
+               markdown.collects() == 0,
+           "starting with file arguments never touches the history, the folder, autosave nor "
+           "the bell");
+}
+
 // 起動・開く・切り替え・新しいタブ・保存・打鍵の道では、履歴を読まない・書かない（D24・決定 8）。
 void verify_quiet_paths()
 {
-    {
-        ScriptedAppearance appearance{Reading{Appearance::dark}};
-        ScriptedClipboard clipboard;
-        ScriptedFiles files;
-        hold_work(files);
-        ScriptedCodePages code_pages;
-        ScriptedSettings settings;
-        ScriptedThemes themes;
-        ScriptedSession session;
-        ScriptedHistory history;
-        ScriptedFolders folders;
-        ScriptedAutosave autosave;
-        ScriptedFonts fonts;
-        ScriptedBell bell;
-        ScriptedBookmarks bookmarks;
-        ScriptedTextLayouts text_layouts;
-        EditorController controller(EditorPorts{appearance, clipboard, files, code_pages, settings,
-                                                themes, session, history, folders, bookmarks,
-                                                text_layouts, autosave, fonts, bell},
-                                    {work_open('a'), work_open('b')});
-        expect(controller.frame().tabs.size() == 2 && history.reads() == 0 &&
-                   history.writes() == 0 && folders.requests().empty() && folders.collects() == 0 &&
-                   autosave.touches() == 0 && fonts.lists() == 0 && bell.rings() == 0,
-               "starting with file arguments never touches the history, the folder, autosave nor "
-               "the bell");
-    }
+    verify_quiet_start_with_files();
     Editing restored(three_listed(), hold_work);
     expect(restored.controller().frame().tabs.size() == 3 && restored.history().reads() == 0 &&
                restored.history().writes() == 0 && restored.folders().requests().empty() &&
                restored.folders().collects() == 0 && restored.autosave().touches() == 0 &&
-               restored.fonts().lists() == 0 && restored.bell().rings() == 0,
+               restored.fonts().lists() == 0 && restored.bell().rings() == 0 &&
+               restored.markdown().requests().empty() && restored.markdown().collects() == 0,
            "restoring the last tabs never touches the history, the folder, autosave nor the bell");
     Editing editing;
     hold_work(editing.files());
@@ -414,7 +422,8 @@ void verify_quiet_paths()
     expect(editing.history().reads() == 0 && editing.history().writes() == 0 &&
                editing.folders().requests().empty() && editing.folders().collects() == 0 &&
                editing.autosave().touches() == 1 && editing.autosave().collects() == 0 &&
-               editing.fonts().lists() == 0 && editing.bell().rings() == 0,
+               editing.fonts().lists() == 0 && editing.bell().rings() == 0 &&
+               editing.markdown().requests().empty() && editing.markdown().collects() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
            "autosave nor the bell");
 }

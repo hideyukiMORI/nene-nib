@@ -45,6 +45,8 @@ namespace
         return "Space";
     case OperationKey::backslash:
         return "\\";
+    case OperationKey::m:
+        return "M";
     }
     std::unreachable();
 }

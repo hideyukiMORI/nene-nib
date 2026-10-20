@@ -67,6 +67,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::tests
@@ -93,15 +94,21 @@ place(std::size_t line, std::size_t column,
     return app::PlaceCaret{at(line, column), anchoring};
 }
 
+// もう 1 つの枠が本文の枠なら、その表示値（ADR 0155 の決定 1）。
+[[nodiscard]] const app::PaneFrame *pane_of(const EditorFrame &frame)
+{
+    return frame.other.has_value() ? std::get_if<app::PaneFrame>(&frame.other.value()) : nullptr;
+}
+
 [[nodiscard]] bool other_caret_at(const EditorFrame &frame, std::size_t line, std::size_t column)
 {
-    return frame.other.has_value() && frame.other.value().caret.position.line.value == line &&
-           frame.other.value().caret.position.column.value == column;
+    return frame.other.has_value() && pane_of(frame)->caret.position.line.value == line &&
+           pane_of(frame)->caret.position.column.value == column;
 }
 
 [[nodiscard]] std::size_t other_first(const EditorFrame &frame)
 {
-    return frame.other.has_value() ? frame.other.value().first_visible.value : 0;
+    return frame.other.has_value() ? pane_of(frame)->first_visible.value : 0;
 }
 
 [[nodiscard]] std::string joined_lines(const std::vector<app::LineView> &lines)
@@ -116,28 +123,27 @@ place(std::size_t line, std::size_t column,
 
 [[nodiscard]] std::string other_lines(const EditorFrame &frame)
 {
-    return frame.other.has_value() ? joined_lines(frame.other.value().lines) : "<none>";
+    return frame.other.has_value() ? joined_lines(pane_of(frame)->lines) : "<none>";
 }
 
 [[nodiscard]] std::string other_title(const EditorFrame &frame)
 {
-    return frame.other.has_value() ? std::string(frame.other.value().document.title.text())
-                                   : "<none>";
+    return frame.other.has_value() ? std::string(pane_of(frame)->document.title.text()) : "<none>";
 }
 
 [[nodiscard]] std::size_t other_total(const EditorFrame &frame)
 {
-    return frame.other.has_value() ? frame.other.value().total_lines : 0;
+    return frame.other.has_value() ? pane_of(frame)->total_lines : 0;
 }
 
 // もう 1 つの枠が表示形式 display で、どの行にも選択が無いか。
 [[nodiscard]] bool other_plain(const EditorFrame &frame, core::DisplayForm display)
 {
-    if (!frame.other.has_value() || frame.other.value().display != display)
+    if (!frame.other.has_value() || pane_of(frame)->display != display)
     {
         return false;
     }
-    for (const auto &line : frame.other.value().lines)
+    for (const auto &line : pane_of(frame)->lines)
     {
         if (line.selection.presence == core::SelectionPresence::present)
         {
@@ -809,10 +815,9 @@ void verify_frame_other_pane()
     applied(gridded, app::InsertText{"abc\ndef"});
     applied(gridded, app::SelectDisplay{core::DisplayForm::grid});
     const EditorFrame cells = gridded.apply_frame(app::SplitPane{SplitLayout::horizontal});
-    expect(cells.other.has_value() && cells.other.value().display == core::DisplayForm::grid &&
-               !cells.other.value().grid.empty() &&
-               cells.other.value().grid.size() == cells.grid.size() &&
-               cells.other.value().lines.empty(),
+    expect(cells.other.has_value() && pane_of(cells)->display == core::DisplayForm::grid &&
+               !pane_of(cells)->grid.empty() && pane_of(cells)->grid.size() == cells.grid.size() &&
+               pane_of(cells)->lines.empty(),
            "a grid document fills the other pane's grid rows");
 }
 
@@ -827,8 +832,8 @@ void verify_other_pane_waits_for_display_answer()
     applied(controller, app::VisibleLines{10, core::TextViewGeometry{85, 20, 96}});
     applied(controller, app::OpenDocument{work_path("giant")});
     const EditorFrame split = controller.apply_frame(app::SplitPane{SplitLayout::vertical});
-    expect(split.display_pending && split.other.has_value() && split.other.value().lines.empty() &&
-               split.other.value().grid.empty(),
+    expect(split.display_pending && split.other.has_value() && pane_of(split)->lines.empty() &&
+               pane_of(split)->grid.empty(),
            "the other pane of a document waiting for the display answer has no lines nor grid");
 }
 

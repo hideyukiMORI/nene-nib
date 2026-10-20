@@ -2363,6 +2363,7 @@ void EditorWindow::run_operation(core::EditorOperation operation)
     case core::EditorOperation::split_horizontal:
     case core::EditorOperation::next_pane:
     case core::EditorOperation::close_pane:
+    case core::EditorOperation::toggle_preview:
         run_pane_operation(operation);
         return;
     }
@@ -2388,6 +2389,10 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
         // 操作中の枠を閉じる（`:q` と `Ctrl-w c` と同じ向き・決定 5）。1 枠ではどちらも何もしない。
         send(application::SwitchPane{});
         send(application::ClosePane{});
+        return;
+    case core::EditorOperation::toggle_preview:
+        // Markdown のプレビューは枠に置くので、枠の操作の 1 本に並べる（ADR 0155 の決定 3）。
+        send(application::TogglePreview{});
         return;
     case core::EditorOperation::open_file:
     case core::EditorOperation::save:

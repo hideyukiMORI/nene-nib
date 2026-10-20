@@ -32,6 +32,7 @@
 #include "FontFamilies.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
+#include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -65,6 +66,7 @@
 #include "VisualTextView.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <expected>
 #include <functional>
@@ -256,6 +258,22 @@ class EditorController final
     void accept(const SwitchPane &);
     void accept(const ClosePane &);
     void accept(const ScrollPane &intent);
+    // Markdown のプレビュー（ADR 0155）。開く・閉じるは使う人の操作（決定 3）、tick は間引きの
+    // 合図で使う人の操作ではない（決定 8）。
+    void accept(const TogglePreview &);
+    void accept(const PreviewTick &);
+    // プレビューが開いていれば、今の本文の解析を頼む（決定 3・6・9）。fresh は操作中の文書が
+    // 替わったときで、前の結果と知らせを捨てて追従に戻す。16 MiB を超える本文は頼まず知らせる。
+    void request_preview(bool fresh);
+    // プレビューが開いていれば今の券の結果を引く（決定 6・10）。WorkCompleted の道だけが呼ぶ。
+    void collect_preview();
+    // 本文が送られたら（前の frame と先頭行が違えば）プレビューを追従に戻す（決定 7）。frame の 1
+    // か所。
+    void follow_preview_on_scroll(core::LineNumber first_visible);
+    // frame の入口のスクロールの読み（settled_scroll の後に follow_preview_on_scroll）。
+    [[nodiscard]] ScrollState framed_scroll();
+    // 2 枠で操作中の枠を閉じる（`:q` 系と `Ctrl-w c`・ADR 0148 の決定 5・ADR 0155 の決定 4）。
+    void close_operated_pane();
     // 操作中の枠の編集を、同じ文書を出しているもう 1 つの枠に写す（決定 9）。
     void adjust_other(const core::Edit &edit, const core::TextBuffer &after);
     // 開いた文書に格子表示を聞くかを、アクティブな文書ごとに 1 回だけ判定する（決定 2）。文書が
@@ -459,6 +477,11 @@ class EditorController final
                                                                      std::size_t &searched) const;
     // もう 1 つの枠の表示値を frame に載せる（ADR 0148 の決定 8）。
     void add_other_pane(EditorFrame &result, const core::VimPattern *pattern) const;
+    // add_other_pane が std::visit で選ぶ 1 対（ADR 0155 の決定 11）。
+    void add_other_view(EditorFrame &result, const core::VimPattern *pattern,
+                        const PaneView &view) const;
+    void add_other_view(EditorFrame &result, const core::VimPattern *pattern,
+                        const PreviewView &view) const;
     // 1 行の塗る範囲。検索の当たりは見えている画面行の本文の範囲 visible に、
     // 一致の長さの上限ぶんの余裕を前後に足した窓だけを読んで照合する（#556）。
     // 今の当たりはキャレット（incsearch の入力中は preview の当たり）を含む当たり。
@@ -522,6 +545,11 @@ class EditorController final
     PaletteFolder palette_folder_;
     // 字体の一覧（#597・D58）。補完が求めた最初の 1 回だけ読み、読めなくても再読しない。
     std::optional<core::FontFamilies> font_families_;
+    // プレビューの券（ADR 0155 の決定 6）。要求ごとに 1 つ進み、閉じて開き直しても戻さない
+    // （閉じる前の要求の結果を開き直した後の券と取り違えない）。
+    std::uint64_t preview_tickets_ = 0;
+    // 前の frame の本文の先頭行（決定 7）。frame だけが読み書きする。
+    std::optional<core::LineNumber> preview_body_top_;
     // 自動退避の帳面（ADR 0137 の決定 2）。AutosaveTick の道だけが読み書きする。
     AutosaveLedger autosave_ledger_;
     // 「自動退避できませんでした」を出したか。次に成功するまで 2 回目を出さない（決定 4）。

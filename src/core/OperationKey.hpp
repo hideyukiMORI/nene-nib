@@ -25,6 +25,7 @@ enum class OperationKey : std::uint8_t
     zero,
     space,
     // `\`（JIS の ¥ と ろ の 2 つの物理キーを ui が同じ値に写す・ADR 0148 の決定 6）。
-    backslash
+    backslash,
+    m
 };
 } // namespace nenenib::core

@@ -82,6 +82,10 @@ void verify_markdown_scope();
 // LanguageTests.cpp（ADR 0154・文書の言語）
 void verify_language_scope();
 
+// PreviewTests.cpp（ADR 0155・Markdown のプレビューの application の側）
+void verify_preview_contracts();
+void verify_preview_scope();
+
 // ExitPlanTests.cpp（ADR 0133）
 void verify_exit_plan_scope();
 
