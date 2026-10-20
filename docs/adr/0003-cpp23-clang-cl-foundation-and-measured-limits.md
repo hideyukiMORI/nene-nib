@@ -78,6 +78,7 @@ Phase 0 の実測（MSVC 19.44.35228 / LLVM 19.1.5 / Windows SDK 10.0.26100 / 11
   Nib の厳格集合とサニタイザ以外は当てず、ソースを書き換えない。固定は tag `release-0.5.2` / commit `729e6b8b320caa96328968ab27d7db2235e4fb47` と
   3 ファイルの SHA-256（`src/md4c.c` `CFB0B3D7…2DE72`・`src/md4c.h` `346C3A1D…0300F`・`LICENSE.md` `99C75206…37102`）を
   規約検査が照合する形で行う。導入は Markdown プレビュー（FR-007）の Issue で、ADR・許可リスト・規約の表の 3 点をそろえる
+  （2026-10-21 追記: SHA-256 の上の値は CRLF の作業ツリーの値。正本は LF の blob の値で CNF-013 が照合する（[ADR 0151](0151-md4c-vendored-as-third-party-target-with-digest-check.md)））
 
 ## 強制
 

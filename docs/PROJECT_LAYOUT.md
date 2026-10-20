@@ -33,8 +33,10 @@ src/core
     標準ライブラリ以外に依存しない純関数層。src/core/simd だけが SIMD の組み込み関数を書ける（CPP-018）
 ```
 
-将来の取り込み依存（ソースを取り込む C のライブラリ）は `third_party/<name>` を独立したモジュールにし、そこにだけ緩い警告集合を当てる（ADR 0003）。
-現在は無い。
+取り込み依存（ソースを取り込む C のライブラリ）は `third_party/<name>` を独立したモジュールにし、そこにだけ緩い警告集合を当てる（ADR 0003）。
+いまあるのは `third_party/md4c`（モジュール `third_party_md4c`・target `nenenib_md4c`・Markdown の parser・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md)）の 1 つ。
+上流のバイト列のまま置き（`.gitattributes` の `-text`）、作るのは `eng/targets.cmake` の `nenenib_third_party_target`（C17・`/W4 /WX /utf-8`・Debug のサニタイザ）だけ。
+`third_party/` の下のファイルは全部 `eng/conformance-rules.json` の `thirdPartyDigests` に SHA-256 があり、CNF-013 が git の index の blob と照合する。
 
 ---
 
@@ -42,7 +44,10 @@ src/core
 
 ```text
 src/core
-    -> 標準ライブラリのみ（許可シンボルは eng/symbol-allowlist.json）
+    -> 標準ライブラリと third_party/md4c（許可シンボルは eng/symbol-allowlist.json）
+
+third_party/md4c
+    -> C の標準ライブラリのみ（許可シンボルは eng/symbol-allowlist.json の third_party_md4c）
 
 src/application
     -> src/core

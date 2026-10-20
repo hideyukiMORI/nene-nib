@@ -253,9 +253,10 @@ controller に操作ごとの実行を書かない。一覧で選ぶと controll
 席は `D:\NeNeNib\worktrees\<名前>` を自分で切り、ファイルを書く道具とコマンドに絶対パスを渡す。相対パスで本体の checkout に書いた事故があった（#303）。席が権限で止められた操作を、設計席が黙って代わりに行わない。
 席が設計の穴で止まって報告するのは正しい動きで、同じ工程の続きは同じ席に答えを送って再開する。
 
-### md4c はまだ入っていない
+### md4c は `third_party/md4c` の別 target。`parse_markdown` は段 2（#765）
 
-Markdown プレビュー（FR-007）の Issue で、別 target に `/W4 /WX` だけを当てて tag と SHA-256 で固定して入れる（ADR 0003）。厳格集合を当てると 20 件超で落ちる。
+md4c（`release-0.5.2`）は上流のバイト列のまま `third_party/md4c` に置き、`nenenib_third_party_target` が C17・`/W4 /WX /utf-8`・Debug のサニタイザだけで作る（ADR 0003 / 0151）。厳格集合を当てると 64 件で落ちる。ソースを 1 バイトも変えない。
+`third_party/` の下のファイルは全部 `eng/conformance-rules.json` の `thirdPartyDigests` に LF の SHA-256 があり、CNF-013 が git の index の blob と照合する。core が結ぶが、`md4c.h` を読むのは段 2 の `src/core/MarkdownParse.cpp` の 1 か所だけ。
 
 ---
 
