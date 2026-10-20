@@ -15,7 +15,9 @@
 | 描画 | **プレビュー専用の保持 `PreviewTextLayouts`**（ui/win32・1 ブロック 1 layout・`DrawTextLayout`） | `BodyTextLayouts` は行高が一定（ADR 0114 決定 4）で見出しに合わない。range の書式つき layout は ADR 0073 の字形の収集に載らない |
 | 置き場 | **split の other の枠**（受け身の表示の 2 つ目の種類 `PreviewView`） | ロードマップが「編集＋プレビュー」の 2 枠を名指し。ADR 0148 決定 2 / 8 / 11 の受け身の表示に種類を足すだけ。`DisplayForm` 案は打ちながら見られず、別窓案は窓の契約（ADR 0131〜0133）を 2 倍にする |
 | 更新 | **worker で全文を parse・券で古い結果を捨てる**（ADR 0062 の形・`MarkdownPort{parse, collect}`） | 見えている範囲だけの parse は参照リンクの定義・フェンス・リストの遅延継続で意味が壊れる |
-| 工程 | **6 段・ADR 2 本・約 8〜9.5 席日（推測）** | §4 |
+| 工程 | **7 段・ADR 3 本・約 9.5〜11.5 席日（推測）** | §4・段 7 は 2026-10-21 の追加 |
+
+2026-10-21 夜: M-1〜M-6 は hide がすべて「はい」。段 7（リッチ貼り付け）は同日の追加の指示。
 
 ## 1. 既存の決定との境界
 
@@ -42,6 +44,9 @@
 | M-4 | 更新の待ち（打鍵が止まってから何 ms で parse を出すか） | **200 ms**（ui のタイマー・`AutosaveTick` と同じ合図の形の意図 `PreviewTick`） | 段 5 のタイマー。短いほど worker を占める |
 | M-5 | リンクは下線と色だけで開かないでよいか | はい（開くのは後続・`ShellExecute` は adapters・確認の UI が要る） | 段 3 の描画 |
 | M-6 | 見出し・コード・リンク・引用の色を `SyntaxPalette` の役割に当てる採用案 | 段 3 で `/design` の案を 3 つ出して選んでもらう（仮: 見出し = keyword・コード = string・リンク = function・引用 = comment・水平線 = `panel_border`） | 段 3 の採用案 `docs/design/` |
+| M-7 | Ctrl+V の HTML → Markdown の変換は Markdown の文書だけでよいか（`.txt` などは今のまま文字だけ） | はい（Markdown だけ） | 段 7 の判定 |
+| M-8 | Nib から他のアプリへ HTML として渡す「リッチコピー」は範囲外でよいか | はい（後続） | 段 7 の範囲 |
+| M-9 | 「HTML のまま貼り付け」の鍵は Ctrl+Alt+V でよいか（JIS でも押せる・Nib で未使用）。鍵なしで F1 の一覧からだけでもよい | Ctrl+Alt+V | 段 7 の鍵 |
 
 ## 3. 形（各段の ADR で確定する）
 
@@ -91,6 +96,23 @@
 - 検索: hlsearch の面はプレビューに塗らない（プレビューの文字列は本文と違う）。プレビュー内の検索は後続。
 - IME: プレビューの枠は入力を受けない（窓の入力は 1 つ・ADR 0148 決定 10）。
 
+### 3.5 クリップボードのリッチ貼り付けとプレーン貼り付け（段 7・hide の指示 2026-10-21）
+
+| 鍵 | 動き |
+| --- | --- |
+| Ctrl+V | Markdown の文書（言語の判定が Markdown）で、クリップボードに HTML（`CF_HTML`・"HTML Format"）があれば **HTML を Markdown の記法に変換して貼る**。無ければ、または Markdown 以外の文書なら、今までどおり `CF_UNICODETEXT` の文字だけ貼る |
+| Ctrl+Shift+V | **常に文字だけ貼る**（書式なし・今の Ctrl+V と同じ道） |
+| Ctrl+V（HTML の文書） | 言語の判定が HTML の文書では、クリップボードの HTML の fragment を**そのまま**貼る（変換しない） |
+| 操作「HTML のまま貼り付け」（`paste_html`・鍵は仮に Ctrl+Alt+V・F1 の一覧と Ctrl+P の `?` から） | どの文書でも、クリップボードの HTML の fragment をそのまま貼る。HTML が無ければ文字だけ貼って 1 行知らせる |
+| Vim の `"+p` `"*p` `p` | 今までどおり文字だけ（ADR 0051 のまま。Vim の貼り付けは変換しない） |
+
+- 読み取り: `ClipboardPort` に `html()`（`CF_HTML` の本文・無ければ値なし）を 1 つ足す。adapters が "HTML Format" の見出し（`StartFragment` / `EndFragment`・UTF-8）を読んで fragment だけを core に渡す。`OpenClipboard` の失敗は今の読みと同じ知らせ（ADR 0134）。
+- 変換: core の純関数 `[[nodiscard]] std::expected<std::string, HtmlFailure> markdown_from_html(std::string_view fragment)`。**自前の最小の字句器**（タグ・属性・実体参照・空白の畳み込み）で、外部ライブラリは入れない（ARC-003・md4c は parse の向きが逆）。対応するタグ: `h1`〜`h6`・`p`・`br`・`strong` / `b`・`em` / `i`・`a href`・`ul` / `ol` / `li`（入れ子は字下げ）・`blockquote`・`code`・`pre`・`hr`・`img`（画像の記法 `![alt]` と `(src)` を続けた文字だけ）。`table` は後続（セルの文字を空白で区切って出す）。`script` / `style` の中身は捨てる。知らないタグは中身の文字だけ。
+- 貼る: 変換した本文は Ctrl+V の今の道（文書の改行の形に揃える `clipboard_line_feeds`・undo 1 単位）に流す。変換に失敗したら（壊れた HTML）文字だけ貼って 1 行知らせる。
+- 鍵: `EditorOperation` に `paste_plain`（Ctrl+Shift+V）と `paste_html`（仮 Ctrl+Alt+V）の 2 値（通常モードと Vim INSERT）。Ctrl+V は今の経路のまま、文書の言語が Markdown なら HTML → Markdown に変換、HTML なら fragment のまま、ほかは文字だけ。F1 の一覧に載る。
+- 言語の判定は独立の Issue #776（文書の言語 `Language`・拡張子の表・`:set filetype=`・ステータスバー）。段 7 は #776 の後。
+- 限界: `table` の記法・入れ子のリストの番号・RTF（`CF_RTF`）は読まない。リッチコピー（HTML で出す）は後続（M-8）。HTML の fragment は `StartFragment`〜`EndFragment` の範囲だけ（`<html>` `<body>` の外側は貼らない）。
+
 ## 4. 工程
 
 | 段 | 中身 | 主な所 | 席日（推測） | ADR | 前提 |
@@ -101,8 +123,9 @@
 | 4 | other に `PreviewView`・`TogglePreview`・F6 / `Ctrl-w` の飛ばし・片方向の同期・契約 `--preview` | application・ui | 1.5〜2 | B | **split の 3 PR（#688 → #687 → #692）の main 統合**・M-1 |
 | 5 | `MarkdownPort` と worker・券・`PreviewTick`・打ち切り・上限の知らせ・`verify_quiet_paths`・速さ（既存 8 本＋プレビュー更新までの時間を別に記録） | application・adapters | 1.5 | B | 段 4・M-3・M-4 |
 | 6 | 受理（D41: 独立レビュー・速さのゲート・CI・hide の試用） | — | 0.5 | — | 段 5 |
+| 7 | リッチ貼り付けとプレーン貼り付け（§3.5）: `ClipboardPort::html()`・`markdown_from_html`・`paste_plain` / `paste_html`・契約 `--rich-paste`（替え玉のクリップボード・実機のクリップボードは触らない） | core・application・adapters・ui | 1.5〜2 | ADR 1 本（HTML → Markdown の変換と鍵） | #776・M-7・M-8・M-9 |
 
-計 6 段・ADR 2 本・約 8〜9.5 席日（推測）。ADR の番号は main の次の空き（0148 は split の branch が使う）。
+計 7 段・ADR 3 本・約 9.5〜11.5 席日（推測）。ADR の番号は main の次の空き（0148 は split の branch が使う）。
 **段 1〜3 は split を待たずに進められる**。段 4 以降は split の main 統合が前提。
 
 Issue は段ごとに 1 本（親 Issue 1 本の下に 6 本）。段 1 は「md4c の導入」の Issue として ADR 0003 が予約している別 Issue に当たる。
@@ -116,6 +139,7 @@ Issue は段ごとに 1 本（親 Issue 1 本の下に 6 本）。段 1 は「md
 | 描画 | `verify-window.py --capture` の PNG（見出し・強調・コード・引用・リスト・リンク・水平線の 1 文書）・DPI 2 段 |
 | 置き場 | 契約 `--preview`（開く・閉じる・F6 の飛ばし・同期・古い券の破棄）・`--background-work`（`WorkCompleted` が歩きを切らない） |
 | 速さ | 既存 8 本に退行なし（単打・長い行・16 MiB 連打は Markdown の文書でも測る）・プレビュー更新までの時間を別に記録（ロードマップの表）。採用は D41 |
+| 貼り付け | 単体テスト（HTML の fragment → Markdown・実体参照・入れ子のリスト・壊れた HTML）・契約 `--rich-paste`（替え玉 `ScriptedClipboard` に HTML を置いて Ctrl+V / Ctrl+Shift+V・Markdown 以外の文書では変換しない） |
 
 ## 6. 残る不確かさ
 
