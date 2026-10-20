@@ -52,7 +52,8 @@ two rows (and of the last two) must fall on the same pixel, because a Tab stops 
 Issue #771 adds `<C-S-Space>` to the --keys notation (D61): Ctrl+Shift+Space switches 通常 and Vim
 in either mode, and --keys records in frames.json which toggle half wears the accent before and
 after the keys (`toggle`), so `--keys "<C-S-Space>"` and `--vim --keys "<C-S-Space>"` show the
-switch both ways.
+switch both ways. `<C-S-Space-held>` puts Space down twice under Ctrl+Shift (the second down is a
+repeat): the toggle switches once, not back.
 
 Issue #180 adds the macro recording indicator (ADR 0046 decision 8): in Vim NORMAL `qa` writes
 `recording @a` beside the mode label and the stopping `q` takes it away (vimRecording.png).

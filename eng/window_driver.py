@@ -147,7 +147,9 @@ PNG_RGB = 2
 KEY_NAMES = {"<CR>": ("key", VK_RETURN), "<Esc>": ("key", VK_ESCAPE), "<BS>": ("key", VK_BACK),
              "<Tab>": ("key", VK_TAB), "<C-v>": ("chord", VK_V),
              # 通常 / Vim の切り替えの鍵（D61・Issue #771）。Ctrl と Shift を両方押す。
-             "<C-S-Space>": ("shiftChord", VK_SPACE)}
+             "<C-S-Space>": ("shiftChord", VK_SPACE),
+             # 同じ鍵を Ctrl+Shift を押したまま 2 回下ろす（2 回目は反復・bit 30）。切り替えは 1 回だけ。
+             "<C-S-Space-held>": ("shiftChordHeld", VK_SPACE)}
 HTCAPTION = 2
 HTCLOSE = 20
 HWND_TOPMOST = c.c_void_p(-1)
@@ -526,6 +528,21 @@ def press_combination(window, modifiers: list[int], key: int) -> bool:
     return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
 
 
+def press_held_down(window, modifiers: list[int], key: int, downs: int) -> bool:
+    """Hold the modifiers and put the key down `downs` times before one key up (Issue #771).
+
+    The second and later downs arrive with the previous-state bit (bit 30) set, as an auto-repeat
+    of a long press does.
+    """
+    if not take_foreground(window):
+        return False
+    records = (INPUT * (2 * len(modifiers) + downs + 1))(
+        *[key_input(modifier, 0) for modifier in modifiers],
+        *[key_input(key, 0) for _ in range(downs)], key_input(key, KEYEVENTF_KEYUP),
+        *[key_input(modifier, KEYEVENTF_KEYUP) for modifier in reversed(modifiers)])
+    return user.SendInput(len(records), c.byref(records), c.sizeof(INPUT)) == len(records)
+
+
 def press_held_repeat(window, modifiers: list[int], key: int, times: int) -> bool:
     """Hold the modifiers, press the key `times` times, then release the modifiers (Issue #248).
 
@@ -673,3 +690,5 @@ def send_key_sequence(window, text: str) -> None:
             assert press_chord(window, VK_CONTROL, int(value)), "the foreground was refused for Ctrl"
         if kind == "shiftChord":
             assert press_combination(window, [VK_CONTROL, VK_SHIFT], int(value)),                 "the foreground was refused for Ctrl+Shift"
+        if kind == "shiftChordHeld":
+            assert press_held_down(window, [VK_CONTROL, VK_SHIFT], int(value), 2),                 "the foreground was refused for Ctrl+Shift"
