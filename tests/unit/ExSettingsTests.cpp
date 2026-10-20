@@ -7,6 +7,7 @@
 #include "CommandEdit.hpp"
 #include "CommandLayout.hpp"
 #include "CommandLine.hpp"
+#include "CommandText.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -20,9 +21,13 @@
 #include "FontSizeAdjustment.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
+#include "InputHistory.hpp"
 #include "InputLineView.hpp"
+#include "InputText.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
+#include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
 #include "PasteCommand.hpp"
 #include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
@@ -32,6 +37,7 @@
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
 #include "StatusBarLayout.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "ThemeChoice.hpp"
 #include "ThemeExpectations.hpp"
@@ -722,6 +728,142 @@ void verify_completion_candidate_boundaries()
     expect(core::command_completions("colorscheme systemx") == std::vector<std::string>{},
            "raw prefix boundary colorscheme systemx");
 }
+// 入力の履歴の表（#725・ADR 0022 決定 2 の追補）。足す・重複・上限。
+void verify_input_history_entries()
+{
+    auto history = core::InputHistory::empty().remembered("set fontsize=12");
+    history = history.remembered("").remembered("set fontsize=12").remembered("colorscheme");
+    expect(history.size() == 2 && history.at(0) == "set fontsize=12" &&
+               history.at(1) == "colorscheme",
+           "history skips empty input and the same input as the last one");
+    history = history.remembered("set fontsize=12");
+    expect(history.size() == 3, "a repeated input that is not the last one is kept again");
+    auto full = core::InputHistory::empty();
+    for (std::size_t index = 0; index < core::InputHistory::limit + 5; ++index)
+    {
+        full = full.remembered("e" + std::to_string(index));
+    }
+    expect(full.size() == core::InputHistory::limit && full.at(0) == "e5" &&
+               full.at(core::InputHistory::limit - 1) == "e104",
+           "history keeps the newest 100 inputs and drops the oldest");
+    const auto grown = full.remembered("more");
+    expect(full.size() == core::InputHistory::limit && full.at(0) == "e5" && grown.at(0) == "e6",
+           "history values are immutable");
+}
+
+// 接頭辞の歩き・端で止まる・末尾の次は歩きを始めたときの入力。
+void verify_input_history_walk()
+{
+    using core::CommandEdit;
+    const auto history = core::InputHistory::empty()
+                             .remembered("set fontsize=12")
+                             .remembered("colorscheme desert")
+                             .remembered("set guifont=Consolas:h11");
+    const core::InputText typed{"set", core::Offset{3}};
+    expect(!history.stepped(typed, std::nullopt, CommandEdit::history_next).has_value(),
+           "Down before walking does nothing");
+    auto walk = history.stepped(typed, std::nullopt, CommandEdit::history_previous);
+    expect(walk.has_value() && history.shown(walk.value()).text == "set guifont=Consolas:h11" &&
+               history.shown(walk.value()).caret.value == 24,
+           "Up recalls the newest entry with the typed prefix and puts the caret at its end");
+    walk = history.stepped(typed, walk, CommandEdit::history_previous);
+    expect(walk.has_value() && history.shown(walk.value()).text == "set fontsize=12",
+           "Up skips entries without the prefix");
+    expect(!history.stepped(typed, walk, CommandEdit::history_previous).has_value(),
+           "Up at the oldest match does not move and does not wrap");
+    walk = history.stepped(typed, walk, CommandEdit::history_next);
+    expect(walk.has_value() && history.shown(walk.value()).text == "set guifont=Consolas:h11",
+           "Down goes to the next match");
+    walk = history.stepped(typed, walk, CommandEdit::history_next);
+    expect(walk.has_value() && !walk.value().at.has_value() &&
+               history.shown(walk.value()).text == "set" &&
+               history.shown(walk.value()).caret.value == 3,
+           "Down past the newest returns to the input typed before the walk");
+    expect(!history.stepped(typed, std::nullopt, CommandEdit::complete_next).has_value(),
+           "other edits are not history steps");
+    const core::InputText none{"zz", core::Offset{2}};
+    expect(!history.stepped(none, std::nullopt, CommandEdit::history_previous).has_value(),
+           "no entry with the prefix leaves the input");
+}
+
+// `:` の行の歩き（CommandLine::recalled）。文字を打つ・Backspace・Tab は歩きを終える。
+void verify_command_line_history()
+{
+    using core::CommandEdit;
+    const auto history = core::InputHistory::empty()
+                             .remembered("colorscheme desert")
+                             .remembered("set fontsize=12")
+                             .remembered("colorscheme blue");
+    auto line = core::CommandLine::empty().inserted("color").value();
+    line = line.recalled(history, CommandEdit::history_previous);
+    expect(line.text() == "colorscheme blue" && line.caret().value == 16,
+           "Up on the Ex line recalls the newest matching entry");
+    line = line.recalled(history, CommandEdit::history_previous);
+    expect(line.text() == "colorscheme desert", "the walk keeps the first typed prefix");
+    line = line.recalled(history, CommandEdit::history_next)
+               .recalled(history, CommandEdit::history_next);
+    expect(line.text() == "color", "Down past the newest restores the typed input");
+    line = line.recalled(history, CommandEdit::history_previous).inserted("x").value();
+    expect(line.text() == "colorscheme bluex", "typing keeps the recalled text");
+    expect(line.recalled(history, CommandEdit::history_previous).text() == "colorscheme bluex",
+           "typing ends the walk and the new text is the next prefix");
+    line = core::CommandLine::empty()
+               .inserted("set")
+               .value()
+               .recalled(history, CommandEdit::history_previous)
+               .edited(CommandEdit::backspace);
+    expect(line.text() == "set fontsize=1" &&
+               line.recalled(history, CommandEdit::history_next).text() == "set fontsize=1",
+           "Backspace ends the walk");
+    line = core::CommandLine::empty()
+               .inserted("colorscheme deser")
+               .value()
+               .edited(CommandEdit::complete_next)
+               .recalled(history, CommandEdit::history_previous);
+    expect(line.text() == "colorscheme desert",
+           "Up after a completion walks from the completed text");
+    expect(core::CommandLine::empty().edited(CommandEdit::history_previous).text().empty(),
+           "edited alone does not walk history");
+}
+
+// application: Enter で足す・Esc と面の確定は足さない・`:` と検索は別の履歴。
+void verify_command_history_controller()
+{
+    using core::CommandEdit;
+    Editing editor;
+    auto &controller = editor.controller();
+    static_cast<void>(controller.apply_frame(app::SelectEditMode{EditMode::vim}));
+    static_cast<void>(run_ex(controller, "colorscheme"));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimCharacter{U':'}}));
+    static_cast<void>(controller.apply_frame(app::CommandText{"set fontsize=13"}));
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimCharacter{U':'}}));
+    auto frame = controller.apply_frame(app::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "colorscheme",
+           "Enter remembers the Ex input and Esc does not");
+    frame = controller.apply_frame(app::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "colorscheme",
+           "Up at the oldest entry stays");
+    frame = controller.apply_frame(app::EditCommand{CommandEdit::history_next});
+    expect(frame.command_line.has_value() &&
+               frame.command_line.value_or(core::InputLineView{}).text.empty(),
+           "Down returns to the empty input");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimCharacter{U'/'}}));
+    frame = controller.apply_frame(app::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.has_value() &&
+               frame.command_line.value_or(core::InputLineView{}).text.empty(),
+           "the search line does not see the Ex history");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+    static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply_frame(app::CommandText{":colorscheme desert"}));
+    static_cast<void>(controller.apply_frame(app::SubmitCommand{}));
+    static_cast<void>(controller.apply_frame(VimKeyPress{VimCharacter{U':'}}));
+    frame = controller.apply_frame(app::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "colorscheme",
+           "a command run from the palette is not remembered");
+    static_cast<void>(controller.apply_frame(app::CancelCommand{}));
+}
 } // namespace
 
 void verify_ex_settings()
@@ -738,6 +880,10 @@ void verify_ex_settings()
     verify_completion_common_prefix();
     verify_completion_window();
     verify_completion_candidate_boundaries();
+    verify_input_history_entries();
+    verify_input_history_walk();
+    verify_command_line_history();
+    verify_command_history_controller();
     verify_ex_controller();
     verify_guide_settings();
     verify_ex_input_isolation();

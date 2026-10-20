@@ -2129,6 +2129,13 @@ void EditorWindow::press_command_key(WPARAM word)
         send(application::EditCommand{held(VK_SHIFT) ? core::CommandEdit::complete_previous
                                                      : core::CommandEdit::complete_next});
         return;
+    // `:` と検索の行の上下は履歴（#725）。面の上下は上の press_palette_key が先に受ける。
+    case VK_UP:
+        send(application::EditCommand{core::CommandEdit::history_previous});
+        return;
+    case VK_DOWN:
+        send(application::EditCommand{core::CommandEdit::history_next});
+        return;
     default:
         break;
     }

@@ -2102,7 +2102,12 @@ void EditorController::accept(const EditCommand &intent)
         accept(CancelCommand{});
         return;
     }
-    state_ = state_.with_command_input(edited_command(input.value(), intent.edit));
+    const bool recalling = intent.edit == core::CommandEdit::history_previous ||
+                           intent.edit == core::CommandEdit::history_next;
+    state_ =
+        state_.with_command_input(recalling ? recalled_command(input.value(), state_.ex_history(),
+                                                               state_.search_history(), intent.edit)
+                                            : edited_command(input.value(), intent.edit));
     reach_font_families();
     update_search_preview();
 }
@@ -2518,6 +2523,8 @@ void EditorController::accept(const PasteCommand &)
 
 std::optional<core::VimRepeatFailure> EditorController::submit(const core::CommandLine &line)
 {
+    // 確定した `:` の入力だけを履歴に足す（面の確定・取消は足さない・#725）。
+    state_ = state_.with_ex_history(state_.ex_history().remembered(line.text()));
     evaluate_command(std::string(line.text()));
     return std::nullopt;
 }
@@ -2538,6 +2545,7 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     const std::optional<core::TextPosition> from =
         preview.has_value() ? std::optional{preview.value().from} : std::nullopt;
     const core::VimSearchPattern pattern{std::string(line.text()), line.direction(), from};
+    state_ = state_.with_search_history(state_.search_history().remembered(line.text()));
     close_command_input();
     if (preview.has_value())
     {

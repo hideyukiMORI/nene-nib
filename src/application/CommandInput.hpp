@@ -3,6 +3,7 @@
 #include "CommandLine.hpp"
 #include "CommandPalette.hpp"
 #include "FontFamilies.hpp"
+#include "InputHistory.hpp"
 #include "InputLinePrompt.hpp"
 #include "InputLineView.hpp"
 #include "SearchLine.hpp"
@@ -23,6 +24,11 @@ using CommandInput = std::variant<core::CommandLine, core::CommandPalette, core:
 [[nodiscard]] std::expected<CommandInput, core::ExFailure>
 inserted_command(const CommandInput &input, std::string_view text);
 [[nodiscard]] CommandInput edited_command(const CommandInput &input, core::CommandEdit edit);
+// 履歴の上下（#725・ADR 0022 決定 2 の追補）。`:` の行は ex、検索の行は search の履歴を歩き、
+// 面は変えない（面の上下は候補の選択・ADR 0150 の決定 2）。
+[[nodiscard]] CommandInput recalled_command(const CommandInput &input, const core::InputHistory &ex,
+                                            const core::InputHistory &search,
+                                            core::CommandEdit direction);
 // 入力が字体の名前の補完を求めているか（Ex の行と Ctrl+P の面だけ・検索は求めない・#597）。
 [[nodiscard]] bool wants_font_families(const CommandInput &input);
 // 焦点の候補の命令（ADR 0150 の決定 4）。面では選択した候補が実行の候補ならその命令、`:` の行

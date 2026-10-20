@@ -1,6 +1,8 @@
 // scope `--vim-search` の単体テスト（ADR 0042 決定 2）。
 #include "Appearance.hpp"
 #include "Column.hpp"
+#include "CommandEdit.hpp"
+#include "EditCommand.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
@@ -954,6 +956,41 @@ void verify_ex_incsearch_commands()
         state, VimRegister{std::string{}, VimRegisterKind::characters});
     expect(!rested.incsearch, "a finished key keeps incsearch as it was");
 }
+// 検索の行の履歴（#725・ADR 0022 決定 2 の追補）。Enter で足し、Esc は足さない。`/` と `?` で
+// 1 本、`:` とは別。接頭辞で歩き、末尾の次は歩きを始めたときの入力に戻る。
+void verify_vim_search_history()
+{
+    using nenenib::core::CommandEdit;
+    Editing editing;
+    open_vim_document(editing, "alpha beta gamma beta");
+    EditorController &controller = editing.controller();
+    vim_replay(controller, "/beta<CR>?gam<CR>/alp<Esc>");
+    vim_replay(controller, "/b");
+    auto frame =
+        controller.apply_frame(nenenib::application::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.value_or(nenenib::core::InputLineView{}).text == "beta",
+           "Up on the search line recalls the newest pattern with the typed prefix");
+    frame = controller.apply_frame(nenenib::application::EditCommand{CommandEdit::history_next});
+    expect(frame.command_line.value_or(nenenib::core::InputLineView{}).text == "b",
+           "Down past the newest returns to the typed pattern");
+    vim_replay(controller, "<Esc>?");
+    frame =
+        controller.apply_frame(nenenib::application::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.value_or(nenenib::core::InputLineView{}).text == "gam",
+           "the backward search shares the history and a cancelled pattern is not in it");
+    frame =
+        controller.apply_frame(nenenib::application::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.value_or(nenenib::core::InputLineView{}).text == "beta",
+           "Up walks to older patterns");
+    vim_replay(controller, "<Esc>:");
+    frame =
+        controller.apply_frame(nenenib::application::EditCommand{CommandEdit::history_previous});
+    expect(frame.command_line.has_value() &&
+               frame.command_line.value_or(nenenib::core::InputLineView{}).text.empty(),
+           "the Ex line does not see the search history");
+    vim_replay(controller, "<Esc>");
+}
+
 } // namespace
 
 void verify_vim_search_contracts()
@@ -979,6 +1016,7 @@ void verify_vim_search_contracts()
     verify_vim_search_word_keys();
     verify_vim_search_messages();
     verify_vim_search_input();
+    verify_vim_search_history();
     verify_vim_search_dot();
 }
 

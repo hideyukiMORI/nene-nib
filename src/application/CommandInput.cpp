@@ -106,6 +106,30 @@ namespace
         completions_of(palette), line.completion_index(),  line.completion_first()};
 }
 
+// 履歴の上下の写し。写し先が足りなければコンパイルが落ちる（CPP-002）。
+[[nodiscard]] CommandInput recalled_of(const core::CommandLine &line, const core::InputHistory &ex,
+                                       const core::InputHistory & /*search*/,
+                                       core::CommandEdit direction)
+{
+    return line.recalled(ex, direction);
+}
+
+[[nodiscard]] CommandInput recalled_of(const core::SearchLine &line,
+                                       const core::InputHistory & /*ex*/,
+                                       const core::InputHistory &search,
+                                       core::CommandEdit direction)
+{
+    return line.recalled(search, direction);
+}
+
+[[nodiscard]] CommandInput recalled_of(const core::CommandPalette &palette,
+                                       const core::InputHistory & /*ex*/,
+                                       const core::InputHistory & /*search*/,
+                                       core::CommandEdit /*direction*/)
+{
+    return palette;
+}
+
 [[nodiscard]] std::optional<std::string> focused_of(const core::SearchLine & /*line*/)
 {
     return std::nullopt;
@@ -170,6 +194,13 @@ CommandInput edited_command(const CommandInput &input, core::CommandEdit edit)
 {
     return std::visit([edit](const auto &value) -> CommandInput { return value.edited(edit); },
                       input);
+}
+
+CommandInput recalled_command(const CommandInput &input, const core::InputHistory &ex,
+                              const core::InputHistory &search, core::CommandEdit direction)
+{
+    return std::visit([&ex, &search, direction](const auto &value)
+                      { return recalled_of(value, ex, search, direction); }, input);
 }
 
 std::optional<std::string> focused_command_of(const CommandInput &input)

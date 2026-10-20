@@ -3,6 +3,8 @@
 #include "CommandEdit.hpp"
 #include "ExFailure.hpp"
 #include "FontFamilies.hpp"
+#include "HistoryWalk.hpp"
+#include "InputHistory.hpp"
 #include "Offset.hpp"
 #include "ThemeCatalog.hpp"
 
@@ -39,6 +41,9 @@ class CommandLine final
     [[nodiscard]] CommandLine with_completion_rows(std::size_t rows) const;
     [[nodiscard]] std::expected<CommandLine, ExFailure> inserted(std::string_view text) const;
     [[nodiscard]] CommandLine edited(CommandEdit edit) const;
+    // 履歴の上下（#725・ADR 0022 決定 2 の追補）。歩きを始めたときの入力の接頭辞で history を
+    // 歩き、補完の巡回は終える。動かなければ同じ行。ほかの編集（inserted / edited）は歩きを終える。
+    [[nodiscard]] CommandLine recalled(const InputHistory &history, CommandEdit direction) const;
 
   private:
     CommandLine(std::string text, Offset caret, ThemeCatalog themes, FontFamilies fonts);
@@ -55,6 +60,8 @@ class CommandLine final
     std::optional<std::size_t> completion_index_;
     std::size_t completion_first_ = 0;
     std::size_t completion_rows_;
+    // 履歴の歩き（値があれば歩いている）。
+    std::optional<HistoryWalk> history_walk_;
     ThemeCatalog themes_;
     FontFamilies fonts_;
 };
