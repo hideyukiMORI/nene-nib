@@ -39,6 +39,8 @@ namespace
         return "-";
     case OperationKey::zero:
         return "0";
+    case OperationKey::space:
+        return "Space";
     }
     std::unreachable();
 }

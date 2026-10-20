@@ -59,7 +59,7 @@ Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); t
   changes its name after successful saving. Existing other files are protected. Japanese names, spaces
   and relative paths (from the process working folder) work; filename expansion is planned. Failed writes
   keep the old name and tab open (D39). See [ADR 0067](docs/adr/0067-ex-filenames-share-atomic-save-policy.md).
-- **FR-004 one toggle** — the status bar switches "通常 | Vim". Done.
+- **FR-004 one toggle** — the status bar switches "通常 | Vim", and so does `Ctrl+Shift+Space` in either mode (D61). Done.
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT` and `:tabnext` `:tabnew` `:tabclose`. Done; reordering by drag is planned.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, fuzzy-matched by name and then by folder.
   A leading mark narrows the list: `#` shows the tabs only, `:` shows the settings commands (themes,

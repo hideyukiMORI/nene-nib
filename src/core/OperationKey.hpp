@@ -21,6 +21,7 @@ enum class OperationKey : std::uint8_t
     tab,
     plus,
     minus,
-    zero
+    zero,
+    space
 };
 } // namespace nenenib::core

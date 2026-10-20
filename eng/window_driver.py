@@ -145,7 +145,9 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_RGB = 2
 # 鍵の列の記法は tests/vim の fixture と同じ（<…> 以外の字は WM_CHAR）。読めない <…> は ValueError。
 KEY_NAMES = {"<CR>": ("key", VK_RETURN), "<Esc>": ("key", VK_ESCAPE), "<BS>": ("key", VK_BACK),
-             "<Tab>": ("key", VK_TAB), "<C-v>": ("chord", VK_V)}
+             "<Tab>": ("key", VK_TAB), "<C-v>": ("chord", VK_V),
+             # 通常 / Vim の切り替えの鍵（D61・Issue #771）。Ctrl と Shift を両方押す。
+             "<C-S-Space>": ("shiftChord", VK_SPACE)}
 HTCAPTION = 2
 HTCLOSE = 20
 HWND_TOPMOST = c.c_void_p(-1)
@@ -661,7 +663,7 @@ def parse_keys(text: str) -> list[tuple[str, object]]:
 
 
 def send_key_sequence(window, text: str) -> None:
-    """Post the parsed steps; only <C-v> needs the foreground, because it carries Ctrl."""
+    """Post the parsed steps; only <C-v> and <C-S-Space> need the foreground (they carry Ctrl)."""
     for kind, value in parse_keys(text):
         if kind == "text":
             write_text(window, str(value))
@@ -669,3 +671,5 @@ def send_key_sequence(window, text: str) -> None:
             press(window, int(value))
         if kind == "chord":
             assert press_chord(window, VK_CONTROL, int(value)), "the foreground was refused for Ctrl"
+        if kind == "shiftChord":
+            assert press_combination(window, [VK_CONTROL, VK_SHIFT], int(value)),                 "the foreground was refused for Ctrl+Shift"

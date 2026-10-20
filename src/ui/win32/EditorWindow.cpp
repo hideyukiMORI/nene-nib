@@ -2306,9 +2306,14 @@ void EditorWindow::adjust_font(core::FontSizeAdjustment adjustment)
     }
 }
 
-// ステータスバーのトグルのクリックと同じ意図で、いまの反対を選ぶ。
+// ステータスバーのトグルのクリックと同じ意図で、いまの反対を選ぶ。鍵（Ctrl+Shift+Space・D61）も
+// 一覧もここを通る。変換中は送らない（IME の変換中は効かない・文字の大きさの鍵と同じ守り）。
 void EditorWindow::toggle_mode()
 {
+    if (controller_.is_composing())
+    {
+        return;
+    }
     switch (mode_)
     {
     case core::EditMode::ordinary:

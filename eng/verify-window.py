@@ -49,6 +49,11 @@ Issue #175 adds the tab stops (ADR 0045): a CRLF file with `a<Tab>b`, eight spac
 two rows (and of the last two) must fall on the same pixel, because a Tab stops at eight spaces.
 `--open <file> --capture <dir>` without `--keys` opens any file and saves opened.png alone.
 
+Issue #771 adds `<C-S-Space>` to the --keys notation (D61): Ctrl+Shift+Space switches 通常 and Vim
+in either mode, and --keys records in frames.json which toggle half wears the accent before and
+after the keys (`toggle`), so `--keys "<C-S-Space>"` and `--vim --keys "<C-S-Space>"` show the
+switch both ways.
+
 Issue #180 adds the macro recording indicator (ADR 0046 decision 8): in Vim NORMAL `qa` writes
 `recording @a` beside the mode label and the stopping `q` takes it away (vimRecording.png).
 
@@ -284,6 +289,14 @@ def toggle_points(width: int, height: int, dpi: int) -> dict:
         "vimGround": [vim_left + to_pixels(5, dpi), middle],
         "ordinaryGround": [ordinary_left + to_pixels(5, dpi), middle],
     }
+
+
+def accented_half(pixels: bytes, width: int, toggle: dict) -> str | None:
+    """Which half of the 通常 | Vim toggle wears the accent (Issue #771), or None for neither."""
+    halves = {"ordinary": toggle["ordinaryGround"], "vim": toggle["vimGround"]}
+    accented = [name for name, point in halves.items()
+                if pixel(pixels, width, point[0], point[1]) == list(ACCENT)]
+    return accented[0] if len(accented) == 1 else None
 
 
 def active_tab_point(dpi: int) -> list:
@@ -2269,8 +2282,12 @@ def drive_keys(executable: Path, environment: dict, frames: Path, keys: str,
                    "status": {"x": 0, "y": band_top, "w": width, "h": height - band_top}}
         # 鍵が届かず 8 秒の期限で同じ画が返った回を「期待どおり」に見せない（訂正 2）。
         changed = compare_frames.frames_changed(before, after)
+        # 「通常 | Vim」のどちらの側がアクセントの面か。<C-S-Space> で入れ替わる（D61・Issue #771）。
+        toggle_points_now = toggle_points(width, height, dpi)
         record = {"before": "before.png", "after": "after.png", "keys": keys, "steps": len(steps),
                   "changed": changed, "covered": False, "body": body_box, "regions": regions,
+                  "toggle": {"before": accented_half(before, width, toggle_points_now),
+                             "after": accented_half(after, width, toggle_points_now)},
                   "coverGoneBeforeKeys": cover_gone, "dpi": dpi,
                   "size": {"w": width, "h": height}}
         close(window)

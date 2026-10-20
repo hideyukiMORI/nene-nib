@@ -10,7 +10,8 @@
 namespace nenenib::ui::win32
 {
 // 仮想キー → 操作の鍵の写し（ADR 0078 の決定 2・13）。何が起きるかは core::operation_for が決める。
-// 写すのは Ctrl つきの O S P Z Y + - 0 と、修飾なしの F1 だけ。主キーとテンキーの + - 0 は同じ値。
+// 写すのは Ctrl つきの O S P Z Y + - 0 Space と、修飾なしの F1 だけ。主キーとテンキーの + - 0 は
+// 同じ値。
 // Shift は押されているままを入れる（表に Shift つきの行がある）。Alt のときは呼ばない。
 // T W D Tab F4 は写さない（タブとブックマークの鍵は TabShortcut と BookmarkKey の経路のまま）。
 [[nodiscard]] inline std::optional<core::KeyChord> operation_chord(WPARAM key, bool control,
@@ -50,6 +51,8 @@ namespace nenenib::ui::win32
     case '0':
     case VK_NUMPAD0:
         return chord(core::OperationKey::zero);
+    case VK_SPACE:
+        return chord(core::OperationKey::space);
     default:
         return std::nullopt;
     }
