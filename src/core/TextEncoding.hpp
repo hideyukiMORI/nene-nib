@@ -57,6 +57,18 @@ enum class TextEncoding : std::uint8_t
     return "\xFE\xFF";
 }
 
+// UTF-32 の BOM（ADR 0149 の決定 1・#734）。読まずに断るための印で、LE は UTF-16 LE の BOM
+// で始まる。
+[[nodiscard]] constexpr std::string_view utf32_le_byte_order_mark() noexcept
+{
+    return std::string_view{"\xFF\xFE\x00\x00", 4};
+}
+
+[[nodiscard]] constexpr std::string_view utf32_be_byte_order_mark() noexcept
+{
+    return std::string_view{"\x00\x00\xFE\xFF", 4};
+}
+
 [[nodiscard]] constexpr std::string_view without_byte_order_mark(std::string_view bytes) noexcept
 {
     if (bytes.starts_with(byte_order_mark()))

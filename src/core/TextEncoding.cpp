@@ -65,6 +65,12 @@ labelled_utf16(std::string_view body, ByteOrder order, TextEncoding encoding) no
 
 std::expected<TextEncoding, EncodingFailure> detect_encoding(std::string_view bytes) noexcept
 {
+    // UTF-32 LE の BOM は UTF-16 LE の BOM で始まるので、UTF-16 より先に見て断る（#734）。
+    if (bytes.starts_with(utf32_le_byte_order_mark()) ||
+        bytes.starts_with(utf32_be_byte_order_mark()))
+    {
+        return std::unexpected(EncodingFailure::unsupported_utf32);
+    }
     // UTF-16 の BOM は UTF-8 としても CP932 としても不正なバイトなので、先に見る（ADR 0149）。
     if (bytes.starts_with(utf16_le_byte_order_mark()))
     {
