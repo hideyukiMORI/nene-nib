@@ -77,6 +77,7 @@
 #include <cstddef>
 #include <expected>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -459,6 +460,32 @@ listed_choices_of(const std::vector<core::CommandChoice> &entries, core::Palette
 {
     const auto split = core::palette_query_of(input);
     return split.scope == scope && split.query == query;
+}
+
+// 命令を打ち終えて引数を絞る入力は、先頭一致の候補が Ex の Tab 補完と同じ表の順で先に並ぶ（#712）。
+void verify_palette_prefix_order()
+{
+    const auto themes = core::ThemeCatalog::builtins();
+    const auto fonts = core::FontFamilies::from(std::vector<std::string>{});
+    std::vector<std::string> named;
+    for (const auto &name : themes.names())
+    {
+        named.push_back("colorscheme " + name);
+    }
+    named.emplace_back("colorscheme system");
+    const auto themed = commands_of(choices_for(":colorscheme "));
+    expect(themed.size() > named.size() &&
+               std::ranges::equal(std::span{themed}.first(named.size()), named),
+           "colorscheme arguments follow the theme catalog order");
+    for (const std::string_view query :
+         {"colorscheme ", "colorscheme v", "colorscheme V", "set ", "set no", "tab"})
+    {
+        const auto completions = core::command_completions(query, themes, fonts);
+        const auto listed = commands_of(choices_for(":" + std::string(query)));
+        expect(!completions.empty() && listed.size() >= completions.size() &&
+                   std::ranges::equal(std::span{listed}.first(completions.size()), completions),
+               (std::string{query} + ": prefix matches follow the Ex completion order").c_str());
+    }
 }
 
 // 出どころの記号の表（ADR 0060 の決定 2）。先頭の 1 文字が表にあればその出どころと残り、無ければ
@@ -1919,6 +1946,7 @@ void verify_font_family_locales()
 void verify_command_palette()
 {
     verify_palette_choices();
+    verify_palette_prefix_order();
     verify_palette_editing();
     verify_palette_geometry();
     verify_palette_controller();
