@@ -1248,6 +1248,9 @@ application::VisibleLines EditorWindow::body_view() const
     const auto advance = text_layouts_.cell(
         application::TextLayoutRequest{{}, delivered.settings, geometry, core::DisplayForm::text});
     geometry.average_advance = advance.has_value() ? advance.value().width : 0.0F;
+    // 面と補完の行数は窓全体の寸法から決める（ADR 0150 の決定 1・枠の寸法ではない）。
+    RECT client{};
+    GetClientRect(window_, &client);
     return application::VisibleLines{body.visible_lines, geometry, client.right, client.bottom};
 }
 
