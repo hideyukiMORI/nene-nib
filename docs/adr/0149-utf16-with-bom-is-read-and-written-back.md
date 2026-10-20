@@ -11,7 +11,7 @@
 
 ## 決定
 
-1. **`TextEncoding` に `utf16_le` と `utf16_be` を足す（BOM つきだけ）。** `detect_encoding` は先頭の `FF FE` を `utf16_le`、`FE FF` を `utf16_be` と見分け、UTF-8 BOM・UTF-8・Shift_JIS の判定より**先**に置く。BOM の無い UTF-16 は見分けない（NUL の並びの推測は誤検出の元・限界に書く）。`switch` が落ちる所（ステータスバーの表示名・保存の符号化・ `with_opened` の判定）を全部直す（CPP-002）。
+1. **`TextEncoding` に `utf16_le` と `utf16_be` を足す（BOM つきだけ）。** `detect_encoding` は先頭の `FF FE` を `utf16_le`、`FE FF` を `utf16_be` と見分け、UTF-8 BOM・UTF-8・Shift_JIS の判定より**先**に置く。BOM の無い UTF-16 は見分けない（NUL の並びの推測は誤検出の元・限界に書く）。UTF-32 の BOM（`FF FE 00 00` / `00 00 FE FF`）は UTF-16 より先に見て `EncodingFailure::unsupported_utf32` で断る（LE の BOM は UTF-16 LE の BOM で始まるので、後に置くと NUL を含む UTF-16 LE として開いてしまう・#734）。開く側は `FileFailure::undecodable`（開けませんでした）。`switch` が落ちる所（ステータスバーの表示名・保存の符号化・ `with_opened` の判定）を全部直す（CPP-002）。
 2. **読みは core の 1 本。** `DetectedText::from_bytes` が BOM を外し、奇数バイトなら `EncodingFailure`（閉じた enum に `odd_utf16_length` を 1 値）、BE は 2 バイトずつ入れ替えてから `to_utf8`（`Utf16.hpp`）で UTF-8 に。対になっていないサロゲートは `detect_encoding` が `EncodingFailure::undecodable` で断り（`Utf16.hpp` の `invalid_utf16` を写す）、開く側は `FileFailure::undecodable`（開けなかったダイアログ・今の UTF-8 の不正と同じ道・#703 のレビュー I1 で文を実装に揃えた）。改行の形（LF / CRLF）は UTF-8 にした後に既存の `TextBuffer` の判定で決める（ADR 0036）。
 3. **書きは `encoded_parts` の 1 本で同じ形に戻す。** 保存と自動退避（ADR 0137）は `encoded_parts(text, encoding)` が BOM（LE は `FF FE`・BE は `FE FF`）＋ `to_utf16` の結果（BE は入れ替え）を返す。本文が UTF-16 で表せない列（対になっていないサロゲートは UTF-8 の正しい本文には無いので起きない）は考えない。`Ctrl+Shift+S`（別名）でも符号化は文書の値のまま（今の UTF-8 BOM / Shift_JIS と同じ規則）。
 4. **ステータスバーの表示は `UTF-16 LE` / `UTF-16 BE`**（`UTF-8` `UTF-8 BOM` `Shift_JIS` の隣・`encoding_label` の表に 2 行）。README の「扱う符号化」に足す。
@@ -28,5 +28,5 @@
 
 ## 限界
 
-- BOM の無い UTF-16・UTF-32・UTF-7 は読まない（Shift_JIS か UTF-8 として判定される・今までどおり）。
+- BOM の無い UTF-16・UTF-32・UTF-7 は読まない（Shift_JIS か UTF-8 として判定される・今までどおり）。BOM つきの UTF-32 は読まずに断る（決定 1・#734）。
 - 符号化の切り替えの命令は無い。

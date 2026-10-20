@@ -2081,6 +2081,23 @@ void verify_utf16_detection()
            "a surrogate pair is accepted");
 }
 
+// UTF-32 の BOM は UTF-16 より先に見て断る。FF FE 00 で切れる列と FF FE 00 41 は UTF-16
+// のまま（#734）。
+void verify_utf32_rejection()
+{
+    expect(detect_encoding(std::string("\xFF\xFE\x00\x00", 4)).error() ==
+               EncodingFailure::unsupported_utf32,
+           "FF FE 00 00 is the UTF-32 LE BOM and is rejected");
+    expect(detect_encoding(std::string("\x00\x00\xFE\xFF", 4)).error() ==
+               EncodingFailure::unsupported_utf32,
+           "00 00 FE FF is the UTF-32 BE BOM and is rejected");
+    expect(detect_encoding(std::string("\xFF\xFE\x00", 3)).error() ==
+               EncodingFailure::odd_utf16_length,
+           "FF FE 00 is still an odd UTF-16 body");
+    expect(detect_encoding(std::string("\xFF\xFE\x00\x41", 4)).value() == TextEncoding::utf16_le,
+           "FF FE 00 41 is still UTF-16 LE (NUL and A)");
+}
+
 void verify_encoding_detection()
 {
     expect(detect_encoding("").value() == TextEncoding::utf8, "an empty file is UTF-8");
@@ -2111,6 +2128,7 @@ void verify_encoding_detection()
     expect(!detect_encoding("\xA0").has_value(), "0xA0 is neither a single byte nor a lead byte");
     expect(!detect_encoding("\xFF\x41").has_value(), "0xFF without the second BOM byte is neither");
     verify_utf16_detection();
+    verify_utf32_rejection();
 }
 
 void verify_line_ending_detection()
