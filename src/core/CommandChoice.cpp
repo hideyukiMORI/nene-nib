@@ -105,12 +105,6 @@ match_score(std::string_view query, std::span<const std::string_view, Count> com
     return match_score(query, std::span{parts});
 }
 
-[[nodiscard]] bool same_letter(char left, char right)
-{
-    return lower_code_point(static_cast<unsigned char>(left)) ==
-           lower_code_point(static_cast<unsigned char>(right));
-}
-
 // 短い名前も別テーマの部分列に負けない。利用者テーマも同じ候補で扱う（ADR 0117）。
 // 入力が候補の先頭と一致する（ASCII の大文字小文字を無視・空白も字）候補も点 0 で、
 // 表の順（Ex の Tab 補完と同じ・テーマは名前順）に並ぶ（#712）。空の入力は長さの点のまま。
@@ -118,13 +112,12 @@ match_score(std::string_view query, std::span<const std::string_view, Count> com
                                                        std::string_view command)
 {
     constexpr std::string_view prefix = "colorscheme ";
-    if (command.starts_with(prefix) &&
-        std::ranges::equal(query, command.substr(prefix.size()), same_letter))
+    if (command.starts_with(prefix) && command.size() - prefix.size() == query.size() &&
+        ascii_prefix_ignoring_case(command.substr(prefix.size()), query))
     {
         return 0;
     }
-    if (!query.empty() && query.size() <= command.size() &&
-        std::ranges::equal(query, command.substr(0, query.size()), same_letter))
+    if (!query.empty() && ascii_prefix_ignoring_case(command, query))
     {
         return 0;
     }
