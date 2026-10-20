@@ -681,11 +681,11 @@ inline constexpr std::array<Theme, 125> builtin_themes{{
               "https://github.com/microsoft/vscode/blob/6133b425600558c15ca5238ce483a2f5bdb8db9c/"
               "extensions/theme-defaults/themes/hc_black.json"}},
     {.name = "vscode-high-contrast-light",
-     .appearance = Appearance::dark,
+     .appearance = Appearance::light,
      .ui = with_gutter(derive_ui(vscode_high_contrast_light_body.background,
                                  vscode_high_contrast_light_body.foreground,
-                                 RgbColor{0x5E, 0x2C, 0xBC}, Appearance::dark),
-                       RgbColor{0x18, 0x18, 0x18}, vscode_high_contrast_light_body.line_number),
+                                 RgbColor{0x5E, 0x2C, 0xBC}, Appearance::light),
+                       RgbColor{0xEE, 0xEE, 0xEE}, vscode_high_contrast_light_body.line_number),
      .body = vscode_high_contrast_light_body,
      .source =
          {.author = "Microsoft and theme contributors",
