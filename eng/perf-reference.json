@@ -65,14 +65,14 @@
           "maximumMs": 1.999
         },
         "open-giant-line-16mib": {
-          "medianMs": 129.6408,
-          "minimumMs": 120.8196,
-          "maximumMs": 161.9707
+          "medianMs": 82.3687,
+          "minimumMs": 66.5712,
+          "maximumMs": 96.3726
         },
         "key-to-frame-single-giant-line-16mib": {
-          "medianMs": 1.232,
-          "minimumMs": 0.974,
-          "maximumMs": 1.352
+          "medianMs": 1.351,
+          "minimumMs": 1.035,
+          "maximumMs": 1.585
         }
       }
     },
