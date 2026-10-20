@@ -16,6 +16,7 @@
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
+#include "EditorSettings.hpp"
 #include "EndSession.hpp"
 #include "ExitCause.hpp"
 #include "ExitPlan.hpp"
@@ -39,6 +40,7 @@
 #include "PointTitleBar.hpp"
 #include "PreviewTick.hpp"
 #include "PreviewView.hpp"
+#include "RgbColor.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "ScrollPaletteList.hpp"
@@ -97,6 +99,16 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr wchar_t class_name[] = L"NeNeNib.Editor";
+
+// DWM の COLORREF は 0x00BBGGRR（#795・ADR 0008 の決定 9 の追記）。
+[[nodiscard]] constexpr COLORREF colorref_of(core::RgbColor color) noexcept
+{
+    constexpr unsigned green_shift = 8U;
+    constexpr unsigned blue_shift = 16U;
+    return static_cast<COLORREF>(color.red) |
+           (static_cast<COLORREF>(color.green) << green_shift) |
+           (static_cast<COLORREF>(color.blue) << blue_shift);
+}
 constexpr wchar_t product_name[] = L"NeNe Nib";
 constexpr wchar_t title_suffix[] = L" - NeNe Nib";
 constexpr wchar_t untitled_file[] = L"無題.txt";
@@ -576,6 +588,12 @@ void EditorWindow::apply_backdrop(const application::EditorDelivery &delivery)
     const BOOL dark = delivery.appearance == core::Appearance::dark ? TRUE : FALSE;
     DwmSetWindowAttribute(window_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
                           static_cast<DWORD>(sizeof(dark)));
+    // 窓の縁（角の 1 px）は帯の地 title_bar で塗る（#795）。最大化では OS が縁を描かない。
+    // Windows 10 には属性が無く失敗を返すだけなので、Mica と同じく戻り値は見ない。
+    shown_border_ = core::selected_theme(delivery.settings, delivery.appearance).ui.title_bar;
+    const COLORREF border = colorref_of(shown_border_);
+    DwmSetWindowAttribute(window_, DWMWA_BORDER_COLOR, &border,
+                          static_cast<DWORD>(sizeof(border)));
     // Mica は Windows 11 22H2 以降。掛からない環境でも帯は不透明の title_bar で塗るので（D16）、
     // 掛かったかどうかは誰も読まない。2 属性は最初のフレームまでの面（ADR 0013）と
     // 非クライアントの明暗（ADR 0008 の決定 9）のために掛け続ける。
@@ -1503,12 +1521,13 @@ std::function<void()> EditorWindow::work_signal() const
     return [window] { static_cast<void>(PostMessageW(window, work_message, 0, 0)); };
 }
 
-// 字体・字の大きさ・明暗は前の配達で当てた値と比べ、変わったときだけ当てる。どの意図で変わったか
-// （保存・確定・配色の候補のプレビュー）は見ない（ADR 0150 の決定 5）。字が変われば行の幾何も
-// 変わるので、寸法を送り直した delivery を返す。
+// 字体・字の大きさ・明暗・窓の縁の色は前の配達で当てた値と比べ、変わったときだけ当てる。
+// どの意図で変わったか（保存・確定・配色の候補のプレビュー）は見ない（ADR 0150 の決定 5）。
+// 字が変われば行の幾何も変わるので、寸法を送り直した delivery を返す。
 application::EditorDelivery EditorWindow::follow_look(application::EditorDelivery delivery)
 {
-    if (delivery.appearance != shown_appearance_)
+    if (delivery.appearance != shown_appearance_ ||
+        core::selected_theme(delivery.settings, delivery.appearance).ui.title_bar != shown_border_)
     {
         apply_backdrop(delivery);
     }

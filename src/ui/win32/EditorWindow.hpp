@@ -26,6 +26,7 @@
 #include "PresentedMilestones.hpp"
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
+#include "RgbColor.hpp"
 #include "SessionEnd.hpp"
 #include "SplitLayout.hpp"
 #include "StatusBarHit.hpp"
@@ -273,6 +274,8 @@ class EditorWindow final
     // （ADR 0150 の決定 5）。
     std::pair<float, std::string> shown_font_;
     core::Appearance shown_appearance_ = core::Appearance::light;
+    // 前の配達で窓の縁に当てた帯の地（#795）。配色が変われば明暗が同じでも当て直す。
+    core::RgbColor shown_border_{};
     std::int32_t zoom_wheel_remainder_ = 0;
     std::int32_t tab_wheel_remainder_ = 0;
     // 本文のホイールの余り（「delta × 1 刻みの行数」の単位・WheelTurn）と、OS の
