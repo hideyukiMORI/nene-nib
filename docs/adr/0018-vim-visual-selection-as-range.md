@@ -87,6 +87,10 @@ NORMALの行単位yankと文字単位yankは既存動作を維持する。レジ
 文字/行単位VISUALの範囲は引き続きvim_visual_rangeが正で、文字だけを置換して改行を残す。
 通常のUnicode文字とTabが対象。VISUAL r<Enter>のliteral CRはIssue #85で扱う。
 
+### 端の行の j k（Issue #730・2026-10-20）
+
+VISUALの `j` `k` は、Vimの cursor_down / cursor_up と同じく最終行・最初の行にいるときだけ失敗し（`landing_of` の `vertical_landing`）、動いたかどうかの位置では決めない。欲しい列が `$` の「行末」だと、最終行の `j` も決定6の行の内容の終わりへ動いてしまい、`$vjd` が失敗せずに後ろの `d` を流していたため。
+
 ## 関連
 
 ADR 0009（選択と undo）・ADR 0012（engine の形）・ADR 0014（IME と Vim のモード）・ADR 0015（範囲 → 効果・レジスタの種類）・採用案 `docs/design/2026-09-15-editing-look.md`（D15・選択の描き方）。

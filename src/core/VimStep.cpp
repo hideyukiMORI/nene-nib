@@ -688,10 +688,28 @@ character_search_position(const VimEditorView &view, const VimState &state,
     std::unreachable();
 }
 
-// 移動の着地と失敗の印（Issue #224 / #226）。語の移動だけが Vim の歩き（bck_word bckend_word
-// fwd_word end_word）の FAIL を持ち、ほかの移動は失敗を持たない（動かなかったときのビープは
-// moved_or_failed が決める）。前向きの失敗は裸の移動と VISUAL だけが見て、オペレータの範囲は
-// motion_range が着地だけで作る（Vim の nv_wordcmd は FAIL を OP_NOP のときだけ見る）。
+// j k の着地と失敗の印（Issue #730）。Vim の cursor_down / cursor_up は最終行・最初の行にいるとき
+// だけ失敗し、ほかは本文の端で止まる。動いたかどうかの位置では決めない: VISUAL で欲しい列が `$` の
+// 「行末」なら、最終行の `j` も最後の文字から行の内容の終わりへ動いてしまうから（`$vjd`）。
+[[nodiscard]] VimMotionLanding vertical_landing(const VimEditorView &view, const VimState &state,
+                                                VimMotion motion)
+{
+    const Offset caret = view.selection.caret;
+    const LineNumber line = line_of(view.text, caret);
+    const bool at_edge =
+        motion == VimMotion::up ? line.value <= 1 : line.value >= view.text.line_count();
+    if (at_edge)
+    {
+        return VimMotionLanding{caret, VimRepeatFailure::not_moved};
+    }
+    return VimMotionLanding{moved_by(view, state, motion)};
+}
+
+// 移動の着地と失敗の印（Issue #224 / #226 / #730）。語の移動は Vim の歩き（bck_word
+// bckend_word fwd_word end_word）の FAIL を、j k は端の行の FAIL を持ち、ほかの移動は
+// 失敗を持たない（動かなかったときのビープは moved_or_failed が決める）。前向きの失敗は
+// 裸の移動と VISUAL だけが見て、オペレータの範囲は motion_range が着地だけで作る（Vim の
+// nv_wordcmd は FAIL を OP_NOP のときだけ見る）。
 [[nodiscard]] VimMotionLanding landing_of(const VimEditorView &view, const VimState &state,
                                           VimMotion motion)
 {
@@ -723,10 +741,11 @@ character_search_position(const VimEditorView &view, const VimState &state,
     case VimMotion::last_non_blank:
         return last_non_blank_landing(view.text, view.selection.caret,
                                       resolved_motion_count(state, view.text, motion));
-    case VimMotion::left:
-    case VimMotion::right:
     case VimMotion::up:
     case VimMotion::down:
+        return vertical_landing(view, state, motion);
+    case VimMotion::left:
+    case VimMotion::right:
     case VimMotion::line_start:
     case VimMotion::first_non_blank:
     case VimMotion::line_end:
