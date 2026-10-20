@@ -33,6 +33,10 @@ struct VirtualColumn
 // 仮想桁の部分和（ADR 0140）も同じ値を読む。
 inline constexpr std::size_t vim_tab_stop = 8;
 
+// Vim の shiftwidth（既定の 8・noexpandtab・noshiftround）。`>` `<` が 1 回で動かす桁で、設定には
+// しない（ADR 0015 の決定 11）。作り直す字下げは vim_tab_stop ごとの Tab と残りの空白。
+inline constexpr std::size_t vim_shift_width = 8;
+
 // 1 つの code point の表示幅（表は DisplayWidthRange.hpp・Tab はここに来ない）。
 [[nodiscard]] DisplayWidth display_width(char32_t value) noexcept;
 

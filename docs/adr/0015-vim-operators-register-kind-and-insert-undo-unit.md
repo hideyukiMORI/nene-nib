@@ -36,12 +36,33 @@ INSERT にいる間の編集は `EditBoundary::absorb` で直前の `Edit` に�
 7. **undo の単位の検査は手書きの単体テスト**。oracle は `:normal!` 1 回がまるごと 1 単位なので、単位の境界を見分けられない（ADR 0012「正直に」）。fixture は本文・キャレット・レジスタ（種類つき）だけを突き合わせる
 8. **やらないこと（3 本目以降）**: VISUAL（`v V Ctrl-v`）、画面の高さが要る移動（PgUp / PgDn・`Ctrl-d/u`・`H M L`。engine に見えている行数を渡す形を決めてから）、テキストオブジェクト、`.`、名前つきレジスタ、`> <`、`J r s S X`
 
+### 決定 9〜11（2026-10-21 追記・#766）
+
+9. **`J` `gJ` は動作で、オペレータではない**（Vim も `J` は operator でない）。`VimAction` の `join_lines` `join_lines_raw`（`g` の後ろの `J`）で、キャレットの行から回数の行（最小 2）をつなぐ。
+   回数が本文の末尾を越えるとき、2 行なら失敗し、3 行以上なら最後の行まで（Vim の `nv_join`）。`J` は次の行の先頭の空白と Tab を落とし、つなぐ所に空白を 1 つ入れる。
+   入れないのは、次の行（落とした後）が空か `)` で始まるとき・ここまでの本文が空のとき・前の行が Tab で終わるとき。前の行が空白で終わるときは足さない。
+   **`joinspaces` は Vim 9.1 の既定どおりオン**で、前の行が `.` `?` `!` で終わる（空白の手前を見る）なら 1 つ足す（oracle で実測: `abc.` + `def` → `abc.  def`）。`gJ` は何も落とさず入れない。
+   キャレットは最後につないだ所（入れた空白の始まり・行の外なら最後の文字・Vim の `do_join`）。レジスタは書かない。効果は `VimReplaceRange`（覆う行の内容の全体を 1 つの本文に置き換える）で、undo 1 単位・`.` で再生。
+10. **大小文字は `~` と、オペレータ `g~` `gu` `gU`**（`VimOperator` に `toggle_case` `lower_case` `upper_case`）。範囲の規則は `d` `c` `y` と同じ 1 本（移動・テキストオブジェクト・回数の掛け算）で、
+    「効果にする」が `VimReplaceRange` を返す（`r` と共用の 1 つの効果。controller は `replace` の 1 本で写す）。保留の後ろで行単位になる鍵は `g~~` `g~g~` `guu` `gugu` `gUU` `gUgU`（表 `operator_bindings` と
+    `doubled_bindings`・`vim_operator_doubles`）。NORMAL の `U`（行の undo）は未実装で、表に無い鍵と同じに打ち消す（`gUU` と VISUAL の `U` のための値 `undo_line`）。
+    `~` は `tildeop` off の 1 文字の反転で、回数ぶん右へ進み行末で止まり、空行は失敗。VISUAL（`v` `V`）の `~` `u` `U` は選択の反転・小文字化・大文字化（VISUAL の `u` は undo ではない）。
+    キャレットは範囲の戻り先（行単位はキャレットと着地の小さい方・文字単位は範囲の先頭・VISUAL の行単位は最初の行の行頭・Vim の `oap->start`）。**変換は ASCII の英字だけ**で、非 ASCII は変えない（結合文字つきの `a` は `A`＋結合文字）。
+11. **字下げは `>` `<`**（`VimOperator` に `shift_right` `shift_left`）。範囲が覆う行（`>w` も行単位）の字下げを `shiftwidth` だけ動かす。`>>` `<<` は回数の行、VISUAL の `[count]>` は回数ぶん動かす（Vim の `op_shift` の `amount`）。
+    Vim の既定 `shiftwidth=8` `tabstop=8` `noexpandtab` `noshiftround` を固定する（定数は `VirtualColumn.hpp` の `vim_shift_width` と `vim_tab_stop`・設定にはしない）。今の字下げを表示の桁（`column_advance`）に直して足し引きし（左は 0 で止まる）、
+    `桁 / 8` 個の Tab と `桁 % 8` 個の空白で作り直す（Vim の `set_indent`）。空行は動かさない（空白だけの行は動かす）。キャレットは最初の行の最初の非空白。覆う行を 1 つの `VimReplaceRange` にするので undo 1 単位。
+    VISUAL の `.` は回数ごと再生する（記録を始める鍵の前の回数を鍵の頭に残す・`Vj2>j.` は 2 段・実測）。
+
+決定 9〜11 の共通: `J` と大小文字と字下げは**レジスタを書かない**（ADR 0050 の書き手 `registers_written` を通らない・`"a` を前に付けても無名もそのまま）。`.` の記録は既存の鍵の列で足りる。
+矩形 VISUAL（`Ctrl-v`）の `~` `u` `U` `>` `<` は #770 で、いまは鍵を拒んで矩形のまま残る（Vim は行ごとに効く）。VISUAL の `J`・Unicode の大小の写し・`:set shiftwidth=` `expandtab`・`gq` `=` は後続。
+
 ## 強制
 
 - fixture の再生（ADR 0005 / 0012）— **active**（`nib_unit` が `VimFixtures.hpp` の全項目を再生し、レジスタの種類も突き合わせる）
 - 生成物と `fixtures.json` の一致（ADR 0012 の planned）— Issue #44（SHA-256 の規約検査）で別に active にする
 - CPP-002: `VimOperator` / `VimRegisterKind` / `EditBoundary` の `switch` に `default` を書かない・`std::visit` の写し先を欠かさない — **active**（コンパイルと clang-tidy）
 - ARC-007 / CPP-013: core から時刻・OS のシンボルが出ない — **active**（`eng/symbols.py`）
+- `J` `gJ`・`~` `g~` `gu` `gU`・`>` `<`（決定 9〜11）— **active**（fixture `J-` `gJ-` `tilde-` `gtilde-` `gu-` `gU-` `shift-right-` `shift-left-` を `nib_unit` が再生・CRLF の文書と undo の単位と `.` の記録は `--vim-replace` の手書きの契約）
 - undo の単位（決定 5）— 単体テスト（CTest）。`ia<BS>b<Esc>u`・`cwfoo<Esc>u` は 1 単位、`ia<Left>b<Esc>u` は 2 単位
 
 ## 結果
