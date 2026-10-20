@@ -353,8 +353,8 @@ void verify_vim_text_object_fixtures()
             ++selected;
         }
     }
-    expect(selected == 313,
-           "the scope replays 307 text-object fixtures and 6 shared next-key boundaries");
+    expect(selected == 352,
+           "the scope replays 346 text-object fixtures and 6 shared next-key boundaries");
 }
 } // namespace
 
