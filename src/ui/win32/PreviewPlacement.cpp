@@ -1,0 +1,200 @@
+#include "PreviewPlacement.hpp"
+
+#include "DevicePixels.hpp"
+#include "Utf16.hpp"
+
+#include <algorithm>
+#include <utility>
+
+namespace nenenib::ui::win32
+{
+namespace
+{
+constexpr float side_margin_dips = 16.0F;
+constexpr float top_margin_dips = 12.0F;
+constexpr float quote_indent_dips = 12.0F;
+constexpr float list_indent_dips = 24.0F;
+constexpr float code_padding_dips = 12.0F;
+constexpr float rule_dips = 1.0F;
+constexpr float line_ratio = 1.6F;
+constexpr float points_per_inch = 72.0F;
+constexpr float first_heading_scale = 1.6F;
+constexpr float second_heading_scale = 1.35F;
+constexpr float third_heading_scale = 1.15F;
+constexpr std::string_view bullet = "•";
+constexpr std::string_view second_bullet = "◦";
+constexpr std::string_view deeper_bullet = "▪";
+
+// 要素の前の間（見出しと水平線は行高・ほかは 0）。
+[[nodiscard]] float before(core::PreviewBlockKind kind, float line) noexcept
+{
+    switch (kind)
+    {
+    case core::PreviewBlockKind::heading:
+    case core::PreviewBlockKind::rule:
+        return line;
+    case core::PreviewBlockKind::paragraph:
+    case core::PreviewBlockKind::code:
+    case core::PreviewBlockKind::html:
+    case core::PreviewBlockKind::list_item:
+        return 0.0F;
+    }
+    std::unreachable();
+}
+
+// 要素の後の間（水平線は行高・ほかは行高の半分）。
+[[nodiscard]] float after(core::PreviewBlockKind kind, float line) noexcept
+{
+    switch (kind)
+    {
+    case core::PreviewBlockKind::rule:
+        return line;
+    case core::PreviewBlockKind::paragraph:
+    case core::PreviewBlockKind::heading:
+    case core::PreviewBlockKind::code:
+    case core::PreviewBlockKind::html:
+    case core::PreviewBlockKind::list_item:
+        return line / 2.0F;
+    }
+    std::unreachable();
+}
+} // namespace
+
+float preview_pixels(float dips, std::uint32_t dpi) noexcept
+{
+    return dips * static_cast<float>(dpi) / static_cast<float>(core::reference_dpi);
+}
+
+float preview_font_pixels(const PreviewTextStyle &style) noexcept
+{
+    return style.points * static_cast<float>(style.dpi) / points_per_inch;
+}
+
+float preview_line_pixels(const PreviewTextStyle &style) noexcept
+{
+    const auto dips = style.points * static_cast<float>(core::reference_dpi) / points_per_inch;
+    const auto line_dips = static_cast<std::int32_t>(dips * line_ratio + 0.5F);
+    return static_cast<float>(std::max(core::to_pixels(line_dips, style.dpi), 1));
+}
+
+float preview_heading_scale(std::uint8_t level) noexcept
+{
+    switch (level)
+    {
+    case 1:
+        return first_heading_scale;
+    case 2:
+        return second_heading_scale;
+    case 3:
+        return third_heading_scale;
+    default:
+        return 1.0F;
+    }
+}
+
+bool preview_monospaced(core::PreviewBlockKind kind) noexcept
+{
+    return kind == core::PreviewBlockKind::code || kind == core::PreviewBlockKind::html;
+}
+
+float preview_indent(const core::PreviewBlock &block, std::uint32_t dpi) noexcept
+{
+    return preview_pixels(side_margin_dips +
+                              quote_indent_dips * static_cast<float>(block.quote_depth) +
+                              list_indent_dips * static_cast<float>(block.list_depth),
+                          dpi);
+}
+
+float preview_text_width(const core::PreviewBlock &block, float frame_width,
+                         std::uint32_t dpi) noexcept
+{
+    const auto padding =
+        block.kind == core::PreviewBlockKind::code ? 2.0F * preview_code_padding(dpi) : 0.0F;
+    const auto width =
+        frame_width - preview_indent(block, dpi) - preview_pixels(side_margin_dips, dpi) - padding;
+    return std::max(width, 1.0F);
+}
+
+float preview_side_margin(std::uint32_t dpi) noexcept
+{
+    return preview_pixels(side_margin_dips, dpi);
+}
+
+float preview_quote_left(std::uint8_t depth, std::uint32_t dpi) noexcept
+{
+    return preview_pixels(side_margin_dips + quote_indent_dips * static_cast<float>(depth), dpi);
+}
+
+float preview_list_indent(std::uint32_t dpi) noexcept
+{
+    return preview_pixels(list_indent_dips, dpi);
+}
+
+float preview_code_padding(std::uint32_t dpi) noexcept
+{
+    return preview_pixels(code_padding_dips, dpi);
+}
+
+float preview_top_margin(std::uint32_t dpi) noexcept
+{
+    return preview_pixels(top_margin_dips, dpi);
+}
+
+float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &next,
+                  const PreviewTextStyle &style) noexcept
+{
+    if (previous.kind == core::PreviewBlockKind::list_item &&
+        next.kind == core::PreviewBlockKind::list_item)
+    {
+        return 0.0F;
+    }
+    const auto line = preview_line_pixels(style);
+    return std::max(after(previous.kind, line), before(next.kind, line));
+}
+
+float preview_extent(core::PreviewBlockKind kind, float text_height, std::uint32_t dpi) noexcept
+{
+    switch (kind)
+    {
+    case core::PreviewBlockKind::rule:
+        return std::max(preview_pixels(rule_dips, dpi), 1.0F);
+    case core::PreviewBlockKind::code:
+        return text_height + 2.0F * preview_code_padding(dpi);
+    case core::PreviewBlockKind::paragraph:
+    case core::PreviewBlockKind::heading:
+    case core::PreviewBlockKind::html:
+    case core::PreviewBlockKind::list_item:
+        return text_height;
+    }
+    std::unreachable();
+}
+
+std::string_view preview_shown_text(const core::PreviewBlock &block) noexcept
+{
+    std::string_view text = block.text;
+    if (preview_monospaced(block.kind) && text.ends_with('\n'))
+    {
+        text.remove_suffix(1);
+    }
+    return text;
+}
+
+std::uint32_t preview_units(std::string_view shown, std::size_t byte)
+{
+    return static_cast<std::uint32_t>(
+        core::utf16_length(shown.substr(0, std::min(byte, shown.size()))).value_or(0));
+}
+
+std::string_view preview_marker(const core::PreviewBlock &block) noexcept
+{
+    if (block.marker != bullet)
+    {
+        return block.marker;
+    }
+    if (block.list_depth <= 1)
+    {
+        return bullet;
+    }
+    return block.list_depth == 2 ? second_bullet : deeper_bullet;
+}
+} // namespace nenenib::ui::win32

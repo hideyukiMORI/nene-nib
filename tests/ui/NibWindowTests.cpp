@@ -32,6 +32,7 @@ bool verify_selected(std::string_view selector)
         {"--device-warmup", ui::verify_device_warmup},
         {"--timers", ui::verify_window_timers},
         {"--wheel", ui::verify_wheel_turns},
+        {"--preview", ui::verify_preview_layouts},
     }};
     bool known = false;
     for (const auto &[name, verify] : groups)

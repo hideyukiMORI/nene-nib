@@ -28,7 +28,7 @@ def copy_repository_files(root: Path) -> None:
              "eng/symbols.py", "eng/tool-versions.json", ".clang-tidy", ".clang-format",
              "tests/build/ToolchainSmoke.cpp"]
     # CMakeLists.txt が configure で読むもの（#329 の nib_perf_probes は tests/performance と道具の版の SHA）。
-    for folder in ["src", "tests/unit", "tests/adapters", "tests/ui", "tests/performance"]:
+    for folder in ["src", "tests/unit", "tests/adapters", "tests/ui", "tests/preview", "tests/performance"]:
         if (ROOT / folder).is_dir():
             files += [p.relative_to(ROOT).as_posix() for p in (ROOT / folder).rglob("*") if p.is_file()]
     for path in files:
