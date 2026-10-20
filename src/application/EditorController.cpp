@@ -1845,9 +1845,26 @@ void EditorController::accept(const SelectEditMode &intent)
     case core::EditMode::vim:
         break;
     }
-    // NORMAL のキャレットは文字の上にあるので、行末を越えていたら 1 つ左へ寄せる。
-    move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
-                  core::SelectionAnchoring::collapse);
+    // NORMAL のキャレットは文字の上にあるので、行末を越えていたら 1 つ左へ寄せる。寸法が届く前と
+    // 表示形式の問いの間は今までどおりキャレットを追う。
+    if (view_geometry_.width <= 0 || display_pending(state_.display_inquiry()))
+    {
+        move_caret_to(core::vim_resting_caret(state_.text(), state_.selection().caret),
+                      core::SelectionAnchoring::collapse);
+        return;
+    }
+    // 届いた後は画面を動かさず、外れたキャレットを見えている端の行へ入れてから寄せる。追従は
+    // 頼まない（#785・ADR 0012 の決定 10 の追補）。
+    const auto entered = caret_in_view();
+    if (!entered)
+    {
+        layout_failure_ = entered.error();
+    }
+    const core::Offset caret =
+        entered ? state_.text().offset_of(entered.value().position) : state_.selection().caret;
+    const core::Offset resting = core::vim_resting_caret(state_.text(), caret);
+    state_ = state_.with_selection(core::Selection{resting, resting})
+                 .with_caret_affinity(core::CaretAffinity::leading);
 }
 
 // 窓は入力行の鍵を VimKeyPress ではなく CommandText / EditCommand / SubmitCommand /
