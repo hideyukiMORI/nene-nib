@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -321,6 +322,74 @@ using Units = std::pair<std::size_t, bool>;
     return after_sentence_end(text, at);
 }
 
+// 文が止まり得る文字のバイト（`.` `!` `?` と行の内容の終わりと同じに読まれる NUL）。どれも ASCII
+// で UTF-8 の多バイトの中に現れず、幅 0 でもないので、見つけた所は必ず Vim の 1 文字の先頭。
+[[nodiscard]] bool stop_byte(char byte)
+{
+    return byte == '.' || byte == '!' || byte == '?' || byte == '\0';
+}
+
+// 本文の塊 segment（本文の base から）のうち span と重なる所で、向きの最初の止まり得るバイト。
+// 重ならなければ nullopt。
+[[nodiscard]] std::optional<std::size_t> stop_in_segment(std::string_view segment, std::size_t base,
+                                                         OffsetRange span, bool forward)
+{
+    const std::size_t begin = std::max(span.begin.value, base);
+    const std::size_t end = std::min(span.end.value, base + segment.size());
+    for (std::size_t step = 0; begin + step < end; ++step)
+    {
+        const std::size_t at = forward ? begin + step : end - 1 - step;
+        if (stop_byte(segment.at(at - base)))
+        {
+            return at;
+        }
+    }
+    return std::nullopt;
+}
+
+// span の中で向きの最初の止まり得るバイトの位置。本文の塊を写さずにバイトで走査する（#751）。
+[[nodiscard]] std::optional<Offset> stop_between(const TextBuffer &text, OffsetRange span,
+                                                 bool forward)
+{
+    std::optional<std::size_t> found;
+    std::size_t base = 0;
+    for (const std::string_view segment : text.segments())
+    {
+        const auto in_segment = stop_in_segment(segment, base, span, forward);
+        found = in_segment.has_value() ? in_segment : found;
+        if ((forward && found.has_value()) || span.end.value <= base + segment.size())
+        {
+            break;
+        }
+        base += segment.size();
+    }
+    return found.has_value() ? std::optional<Offset>{Offset{found.value()}} : std::nullopt;
+}
+
+// 1 文字ずつ歩いても文が止まらない所を飛ばした位置。行の中の次の止まり得る文字へ、無ければ
+// 前向きは行の最後の文字・後ろ向きは行頭へ。行をまたぐ歩き（空の行の判定）は 1 文字ずつのまま。
+[[nodiscard]] Offset skipped_to_stop(const TextBuffer &text, Offset here, bool forward)
+{
+    const LineNumber line = line_of(text, here);
+    if (!forward)
+    {
+        const Offset start = text.line_start(line);
+        return stop_between(text, OffsetRange{start, here}, false).value_or(start);
+    }
+    const Offset end = text.line_end(line);
+    if (!(here < end))
+    {
+        return here;
+    }
+    const auto stop = stop_between(text, OffsetRange{Offset{here.value + 1}, end}, true);
+    if (stop.has_value())
+    {
+        return stop.value();
+    }
+    const Offset last = previous_in_line(text, end);
+    return here < last ? last : here;
+}
+
 // Vim の incl / decl を向きで選ぶ。2 つめは本文の端で止められなかったか。
 [[nodiscard]] Advance stepped_toward(const TextBuffer &text, Offset at, bool forward)
 {
@@ -342,6 +411,13 @@ using Units = std::pair<std::size_t, bool>;
         if (stop.has_value())
         {
             return Advance{stop.value(), true};
+        }
+        // 止まらない文字の並びは塊の走査で飛ばす（結果は 1 文字ずつ歩いたのと同じ・#751）。
+        const Offset skipped = skipped_to_stop(text, here, forward);
+        if (!(skipped == here))
+        {
+            here = skipped;
+            continue;
         }
         const Advance next = stepped_toward(text, here, forward);
         if (!next.second)
