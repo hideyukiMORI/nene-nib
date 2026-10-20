@@ -2,6 +2,7 @@
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -32,7 +33,11 @@
 #include "VimState.hpp"
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
+#include "VimTextObject.hpp"
+#include "VimTextObjectRange.hpp"
+#include "VimTextObjectRequest.hpp"
 #include "VimTextObjectScope.hpp"
+#include "VimTextObjectSpan.hpp"
 #include "VimViewport.hpp"
 #include "VimWantedColumn.hpp"
 #include "VirtualColumn.hpp"
@@ -56,6 +61,7 @@ using nenenib::application::SaveDocument;
 using nenenib::application::SelectEditMode;
 using nenenib::core::collapsed_at;
 using nenenib::core::EditMode;
+using nenenib::core::LineEnding;
 using nenenib::core::LineNumber;
 using nenenib::core::Offset;
 using nenenib::core::OffsetRange;
@@ -73,6 +79,10 @@ using nenenib::core::VimMode;
 using nenenib::core::VimNoEffect;
 using nenenib::core::VimRegisterKind;
 using nenenib::core::VimState;
+using nenenib::core::VimTextObject;
+using nenenib::core::VimTextObjectRequest;
+using nenenib::core::VimTextObjectScope;
+using nenenib::core::VimTextObjectSpan;
 using nenenib::core::VimViewport;
 using nenenib::core::VirtualColumn;
 
@@ -338,6 +348,86 @@ void verify_vim_text_object_paragraphs_and_sentences()
     expect(other.vim_state().mode == VimMode::visual, "vis selects the sentence characterwise");
 }
 
+// 文の走査は止まらない並びを本文の塊の走査で飛ばす（Issue #751）。塊の境が候補（`.`）の手前・上・
+// 直後に来る本文でも、1 つの塊の本文と同じ答え（＝1 文字ずつ歩いた答え）になることを固定する。
+// fixture の本文は 1 つの塊なので、塊をまたぐ分岐はここでだけ通る。
+[[nodiscard]] std::optional<OffsetRange> sentence_range(const TextBuffer &text, std::size_t caret,
+                                                        VimTextObjectScope scope, std::size_t count)
+{
+    const auto outcome = nenenib::core::vim_text_object_range(
+        text, collapsed_at(Offset{caret}),
+        VimTextObjectRequest{scope, VimTextObject::sentence, VimMode::normal}, count);
+    return std::holds_alternative<VimTextObjectSpan>(outcome)
+               ? std::optional<OffsetRange>{std::get<VimTextObjectSpan>(outcome).range.range}
+               : std::nullopt;
+}
+
+[[nodiscard]] bool is_range(const std::optional<OffsetRange> &range, std::size_t begin,
+                            std::size_t end)
+{
+    return range.has_value() && range.value().begin.value == begin &&
+           range.value().end.value == end;
+}
+
+// 同じ文字を書き直して、[begin, end) の両端を塊の境にする。
+[[nodiscard]] TextBuffer split_at(const TextBuffer &text, std::size_t begin, std::size_t end)
+{
+    return text.replaced(Offset{begin}, Offset{end}, text.text_range(Offset{begin}, Offset{end}));
+}
+
+// 全キャレット・is / as・回数 1〜3 で、塊を割った本文の答えが 1 つの塊の本文と同じか。
+[[nodiscard]] bool sentences_match(const TextBuffer &whole, const TextBuffer &split)
+{
+    bool same = true;
+    for (std::size_t trial = 0; trial < whole.size_bytes() * 6; ++trial)
+    {
+        const std::size_t caret = trial / 6;
+        const VimTextObjectScope scope =
+            trial % 2 == 0 ? VimTextObjectScope::inner : VimTextObjectScope::around;
+        const std::size_t count = (trial % 6) / 2 + 1;
+        same = same && sentence_range(whole, caret, scope, count) ==
+                           sentence_range(split, caret, scope, count);
+    }
+    return same;
+}
+
+void verify_vim_sentence_across_pieces()
+{
+    // `.` は 7 と 19。前向きは 2 つめ、後ろ向きは 1 つめの `.` の周りの塊の境を越える。
+    const auto whole = TextBuffer::from_utf8("One two. Three four.  Five six.").value();
+    const TextBuffer before = split_at(split_at(whole, 4, 7), 16, 19);
+    const TextBuffer on = split_at(split_at(whole, 7, 8), 19, 20);
+    const TextBuffer after = split_at(split_at(whole, 8, 12), 20, 22);
+    expect(before.piece_count() > 1 && on.piece_count() > 1 && after.piece_count() > 1,
+           "rewriting the same characters splits the text into pieces");
+    expect(is_range(sentence_range(before, 10, VimTextObjectScope::inner, 1), 9, 20) &&
+               is_range(sentence_range(before, 10, VimTextObjectScope::around, 1), 9, 22) &&
+               sentences_match(whole, before),
+           "is and as find a candidate that starts a piece (Issue #751)");
+    expect(is_range(sentence_range(on, 10, VimTextObjectScope::inner, 1), 9, 20) &&
+               is_range(sentence_range(on, 10, VimTextObjectScope::around, 1), 9, 22) &&
+               sentences_match(whole, on),
+           "is and as find a candidate that is a piece of its own (Issue #751)");
+    expect(is_range(sentence_range(after, 10, VimTextObjectScope::inner, 1), 9, 20) &&
+               is_range(sentence_range(after, 10, VimTextObjectScope::around, 1), 9, 22) &&
+               sentences_match(whole, after),
+           "is and as find a candidate that ends a piece (Issue #751)");
+}
+
+void verify_vim_sentence_before_crlf()
+{
+    // CRLF の行の内容の終わりは `\r` の手前なので、`.` の次は行末として読まれ、`as` は LF の本文と
+    // 同じく後ろの空白を持たない（範囲は `\r` の手前まで）。
+    const auto whole = TextBuffer::from_utf8("One two.\r\nThree four.\r\n").value();
+    const TextBuffer split = split_at(whole, 6, 8);
+    expect(whole.line_ending() == LineEnding::crlf, "the text is CRLF");
+    expect(is_range(sentence_range(split, 3, VimTextObjectScope::around, 1), 0, 8) &&
+               is_range(sentence_range(split, 10, VimTextObjectScope::around, 1), 10, 21) &&
+               sentences_match(whole, split),
+           "as on a sentence that ends before a CRLF stops before the CR as LF text does (Issue "
+           "#751)");
+}
+
 void verify_vim_text_object_fixtures()
 {
     constexpr std::array<std::string_view, 6> boundaries{
@@ -368,6 +458,8 @@ void verify_vim_text_object_contracts()
     verify_vim_text_object_residuals();
     verify_vim_text_object_quote_pairs();
     verify_vim_text_object_paragraphs_and_sentences();
+    verify_vim_sentence_across_pieces();
+    verify_vim_sentence_before_crlf();
 }
 
 void verify_vim_text_object_scope()
