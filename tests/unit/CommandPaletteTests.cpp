@@ -341,8 +341,10 @@ void verify_palette_input_isolation()
     expect(frame.command_message.has_value(),
            "invalid paste reports inline without replacing input");
     frame = controller.apply_frame(app::OpenCommandPalette{});
-    expect(!frame.command_palette.has_value() && editor.settings().writes() == 0,
-           "Ctrl+P again cancels");
+    expect(frame.command_palette.has_value() && editor.settings().writes() == 0,
+           "Ctrl+P in the open palette keeps it open (ADR 0150 decision 2)");
+    frame = controller.apply_frame(app::CancelCommand{});
+    expect(!frame.command_palette.has_value() && editor.settings().writes() == 0, "Esc cancels");
     static_cast<void>(controller.apply_frame(app::OpenCommandPalette{}));
     static_cast<void>(controller.apply_frame(app::EditCommand{core::CommandEdit::backspace}));
     frame = controller.apply_frame(app::EditCommand{core::CommandEdit::backspace});
@@ -1677,6 +1679,9 @@ void verify_palette_view_window()
     expect(wheeled.first == 2 && wheeled.selected == 8 && wheeled.rows.size() == 8 &&
                wheeled.rows.front().command == "tabnext 3",
            "the wheel scrolls the frame window without moving the selection");
+    const auto previous = palette_of(controller.apply_frame(app::OpenCommandPalette{}));
+    expect(previous.selected == 7 && previous.first == 2,
+           "Ctrl+P in the open palette moves to the previous row (ADR 0150 decision 2)");
 }
 
 // 面の見えている行数は窓の寸法から application が決める（ADR 0150 の決定 1）。

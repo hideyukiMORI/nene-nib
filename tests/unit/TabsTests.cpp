@@ -7,6 +7,7 @@
 #include "CloseTab.hpp"
 #include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
+#include "CommandPaletteView.hpp"
 #include "CommandText.hpp"
 #include "ComposeText.hpp"
 #include "DevicePixels.hpp"
@@ -1553,9 +1554,18 @@ void verify_tab_list_entries()
            "OpenTabList opens the list");
     expect(!controller.apply_frame(OpenTabList{}).command_palette.has_value(),
            "OpenTabList closes the open list");
-    expect(listed_commands(run_ex(controller, "tabs")) == all, ":tabs opens the same list");
-    expect(!controller.apply_frame(OpenCommandPalette{}).command_palette.has_value(),
-           "Ctrl+P closes the open list");
+    const auto listed = run_ex(controller, "tabs");
+    expect(listed_commands(listed) == all, ":tabs opens the same list");
+    const auto above =
+        (listed.command_palette.value_or(nenenib::application::CommandPaletteView{}).selected + 2) %
+        3;
+    const auto previous = controller.apply_frame(OpenCommandPalette{});
+    expect(previous.command_palette.has_value() &&
+               previous.command_palette.value().selected == above,
+           "Ctrl+P in the open list moves to the previous row (ADR 0150 decision 2)");
+    expect(
+        !controller.apply_frame(nenenib::application::CancelCommand{}).command_palette.has_value(),
+        "Esc closes the open list");
     expect(listed_commands(controller.apply_frame(OpenCommandPalette{})) == all,
            "Ctrl+P opens the same entries with an empty input");
     applied(controller, CommandText{":tabs"});

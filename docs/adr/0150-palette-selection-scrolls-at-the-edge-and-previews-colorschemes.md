@@ -6,7 +6,7 @@
 - 施主決定: **D59**（hide 2026-10-20: 「`:` と Ctrl+P の補完の操作感を VS Code / Cursor / Neovim / zsh に寄せる」「colorscheme を選ぶとき、焦点の色に一時的になってプレビューで分かるように」「上で末尾に回り込んだ後に最下段に張り付いて一覧が送られるのを、よくある形に」）。SPECIFICATION.md の表に記入する。
 - 規則: FR-010 / D28〜D32、ARC-001 / ARC-011 / CPP-002 / CPP-012、ADR 0020（設定の保存）/ 0022（`:` の補完）/ 0023（面の鍵）/ 0060〜0062（面の候補と frame）/ 0078（操作の表）
 - 調査: `D:/NeNeNib/outputs/20261020/survey-palette-ux.md`（鍵の表・張り付きの原因 `PaletteLayout.cpp:66`・プレビューの置き場 `delivery()`・参考の動き）
-- 実装: 決定 1〜4・6 の core と application は #707（ui の鍵の表・ホイールの写し・決定 5 は #706 の 2 本目）。#707 の時点の実装の範囲は各決定の「#707 の注」に書く。
+- 実装: 決定 1〜4・6 の core と application は #707、ui の鍵の表・ホイールの写し・決定 5・`verify-window.py --palette` は #706。#707 の時点の実装の範囲は各決定の「#707 の注」に書く。
 
 ## 文脈
 
@@ -36,6 +36,6 @@
 
 - `guifont=` のプレビューは次の段（速さを測ってから）。
 - `fontsize` のプレビューは #707 では入れていない（決定 4 の #707 の注）。
-- 面で Ctrl+P を押したときに閉じる動き（application の `OpenCommandPalette` の切り替え）は、ui の鍵の表が Ctrl+P を「前」に写すまで残る（#706 の 2 本目）。
+- #706 の注: 面で Ctrl+P を押したときに閉じる動きはやめた（ui の鍵の表が「前」に写し、application の `OpenCommandPalette` も開いている面では前の候補）。`:` と検索の行の Ctrl+P は今までどおり面を開く。
 - `:` の行の履歴（Up / Down）は無いまま。
 - 面の一覧の `scrolloff`（端の手前で送る余白）は置かない（VS Code / Neovim と同じ 0）。

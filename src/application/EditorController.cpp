@@ -2162,15 +2162,16 @@ void EditorController::accept(const OpenCommandPalette &)
     {
         return;
     }
+    // 開いている面の Ctrl+P は前の候補（zsh / Vim と同じ）。閉じるのは Esc（ADR 0150 の決定 2）。
     if (command_palette_active())
     {
-        accept(CancelCommand{});
+        accept(EditCommand{core::CommandEdit::complete_previous});
         return;
     }
     open_palette("", 0);
 }
 
-// 開いている間の OpenTabList は Ctrl+P と同じく閉じる（ADR 0057 の決定 7）。
+// 開いている間の OpenTabList は閉じる（ADR 0057 の決定 7）。
 void EditorController::accept(const OpenTabList &)
 {
     if (state_.composition().has_value())
