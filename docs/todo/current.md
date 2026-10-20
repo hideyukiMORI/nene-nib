@@ -1,6 +1,6 @@
 # いまのタスク — NeNe Nib
 
-2026-10-21 の区切り（文書だけ: 実装計画 3 本（Markdown・巨大ファイル・構文の色分けと LSP）と md4c の probe・ADR 0122 / 0141 の状態行・作業木の片付け 27 本。製品は前日のまま。最新は [日報](../reports/2026-10-21.md) / [引き継ぎ](../handoffs/2026-10-21.md)）
+2026-10-21 の区切り（昼: 計画 3 本・夜: split の 3 本・Markdown 段 1〜3・Ctrl+Shift+Space・Vim の J / 大小文字 / 字下げ / % / マーク・ホイール・D60〜D63・試用 19 手順 OK・beta.5 の準備。最新は [日報](../reports/2026-10-21.md) / [引き継ぎ](../handoffs/2026-10-21.md)）
 
 2026-10-20 の区切り（面と補完の操作感と配色のプレビュー・UTF-16・長いパス・`:noh`・補完の並び・1 行 16 MiB の基準値の採り直し・`g_` `g^`・#411・`:` と検索の行の履歴が main・split の 3 本と #701 は試用待ち）。Issue が正本。経緯は[日報 2026-10-20](../reports/2026-10-20.md)、入口は[引き継ぎ 2026-10-20](../handoffs/2026-10-20.md)、検証は [gate-proofs](../quality/gate-proofs.md)（経緯は `docs/quality/history/`）と各品質記録を参照する。
 
@@ -26,10 +26,10 @@
 （2026-10-20・[引き継ぎ 2026-10-20](../handoffs/2026-10-20.md)の表）
 
 - 今日 main に入ったものの試用: `D:\NeNeNib\evidence\20261020-trial\README.md`（exe `NeNeNib-main-7d293dc.exe`・夜の分も同じ表で）。違和感があれば Issue に。ADR 0150 の仮置き（面の Ctrl+P は前の候補・ホイールは一覧だけ）を D59 の文として仕様に確定
-- split の試用（D41）: `D:\NeNeNib\evidence\split-trial\README.md`。OK なら #688 → #687 → #692 の順に rebase して merge（#688 の本文は `検証（実行したコマンドと結果）:` の値を同じ行に直してから Ready）
-- #701（ホイール）: `NeNeNib-wheel-fef8900.exe` の手触り。OK なら merge（本文の同じ直しが要る）
+- split の試用（D41）: **済み**（2026-10-21・試用 OK・#688 #687 は main・#692 は本測定 12 対 pass の後、翌朝 merge・main `e383fe0`）
+- #701（ホイール）: **済み**（2026-10-21・試用 OK・main）
 - `fontsize` / `guifont` のプレビュー: ADR 0150 の次の段。試用で「欲しい」なら着手
-- 3 本の実装計画（[Markdown](../plans/2026-10-21-markdown-preview.md)・[巨大ファイル](../plans/2026-10-21-large-file.md)・[構文の色分けと LSP](../plans/2026-10-21-syntax-and-lsp.md)）は hide の判断待ち（各計画の「施主に確かめる点」の表・M-1〜6・L-1〜5・S-1〜4・LSP の L-1〜5）。順番の推しは構文の計画の §3（[引き継ぎの「2. 3 本の計画の判断」](../handoffs/2026-10-21.md#2-3-本の計画の判断平易な言い方)）。LSP の L-3 は D60 で決定（設定で切り替え・既定オフ・オンの速さは別の基準）
+- 3 本の実装計画（[Markdown](../plans/2026-10-21-markdown-preview.md)・[巨大ファイル](../plans/2026-10-21-large-file.md)・[構文の色分けと LSP](../plans/2026-10-21-syntax-and-lsp.md)）: **済み**（2026-10-21・Markdown は M-1〜M-6 はい・段 7 追加、巨大ファイルは D63、LSP は D60）
 - #469 / #424: 持ち越し（推しは #469 を閉じる）
 
 以下は 2026-10-19 までの記録。
@@ -55,6 +55,7 @@
 2. 済み: ADR 0148（操作中の枠は今の経路・もう 1 つの枠は受け身の `PaneView`・PR #688 に入る）。
 3. 済み: 見た目の案（`docs/design/2026-10-19-split-look.md`・PR #688 に入る）。
 4. 済み: 試作 #688（#682 状態）/ #687（#684 Vim の `Ctrl-w`）/ #692（#683 描画と鍵）は draft で **hide の試用待ち**。本測定は 12 対すべて pass（[split-speed-2026-10-19.md](../quality/split-speed-2026-10-19.md)）。
+5. 2026-10-21: #688 #687 は main・#692 は本測定 12 対 pass（[split-speed-2026-10-21.md](../quality/split-speed-2026-10-21.md)）の後、翌朝 07:30 に merge（main `e383fe0`）。
 
 ## 残る Issue
 
