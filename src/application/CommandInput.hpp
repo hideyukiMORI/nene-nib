@@ -7,6 +7,8 @@
 #include "InputLineView.hpp"
 #include "SearchLine.hpp"
 
+#include <optional>
+#include <string>
 #include <variant>
 
 namespace nenenib::application
@@ -23,6 +25,10 @@ inserted_command(const CommandInput &input, std::string_view text);
 [[nodiscard]] CommandInput edited_command(const CommandInput &input, core::CommandEdit edit);
 // 入力が字体の名前の補完を求めているか（Ex の行と Ctrl+P の面だけ・検索は求めない・#597）。
 [[nodiscard]] bool wants_font_families(const CommandInput &input);
+// 焦点の候補の命令（ADR 0150 の決定 4）。面では選択した候補が実行の候補ならその命令、`:` の行
+// では巡回で選ばれている候補（入力欄の全文）。検索の行・巡回していない `:` の行・ファイルや
+// 操作の候補は無し。
+[[nodiscard]] std::optional<std::string> focused_command_of(const CommandInput &input);
 // 同じ入力に字体の一覧を入れた値（検索の行はそのまま）。
 [[nodiscard]] CommandInput with_font_families(const CommandInput &input,
                                               const core::FontFamilies &fonts);

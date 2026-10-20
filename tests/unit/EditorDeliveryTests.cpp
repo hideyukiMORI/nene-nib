@@ -3,23 +3,30 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CloseTab.hpp"
+#include "CommandEdit.hpp"
 #include "CommandText.hpp"
 #include "ComposeText.hpp"
+#include "EditCommand.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorDelivery.hpp"
+#include "EditorSettings.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "InsertText.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OpenOperationList.hpp"
+#include "Palette.hpp"
 #include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
+#include "ScrollPaletteList.hpp"
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
 #include "SubmitCommand.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "ThemeChoice.hpp"
 #include "VimCharacter.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
@@ -197,6 +204,46 @@ void verify_delivery_settings_and_worker()
     const auto wrapped = controller.apply_frame(app::VisibleLines{4});
     expect_common(controller.delivery(), wrapped);
 }
+[[nodiscard]] std::string shown_theme(const app::EditorDelivery &delivered)
+{
+    return delivered.settings.theme.has_value()
+               ? std::string(delivered.settings.theme.value().name())
+               : std::string("system");
+}
+
+// 焦点の候補の配色を保存せずに見せる（ADR 0150 の決定 4）。面と `:` の行のどちらでも、候補を
+// 動かす・取り消すで SettingsPort を呼ばず、確定のときだけ 1 回書く。
+void verify_delivery_preview()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(checked_apply(controller, app::OpenCommandPalette{}));
+    const auto focused = checked_apply(controller, app::CommandText{":colorscheme solarized"});
+    expect(shown_theme(focused) == "solarized-dark", "the focused palette choice is previewed");
+    const auto moved =
+        checked_apply(controller, app::EditCommand{core::CommandEdit::complete_next});
+    expect(shown_theme(moved) == "solarized-light" &&
+               controller.frame().palette.background ==
+                   core::selected_theme(moved.settings, moved.appearance).ui.background,
+           "moving the focus previews the next scheme in the frame palette");
+    static_cast<void>(checked_apply(controller, app::ScrollPaletteList{1}));
+    const auto cancelled = checked_apply(controller, app::CancelCommand{});
+    expect(shown_theme(cancelled) == "system" && editing.settings().writes() == 0,
+           "moving and cancelling never write the settings");
+    static_cast<void>(checked_apply(controller, app::SelectEditMode{core::EditMode::vim}));
+    static_cast<void>(checked_apply(controller, app::VimKeyPress{core::VimCharacter{U':'}}));
+    static_cast<void>(checked_apply(controller, app::CommandText{"colorscheme sol"}));
+    const auto filled =
+        checked_apply(controller, app::EditCommand{core::CommandEdit::complete_next});
+    expect(shown_theme(filled) == "system", "a filled prefix is not a candidate to preview");
+    const auto cycled =
+        checked_apply(controller, app::EditCommand{core::CommandEdit::complete_next});
+    expect(shown_theme(cycled) == "solarized-dark" && editing.settings().writes() == 0,
+           "the cycled colon candidate is previewed without writing");
+    const auto chosen = checked_apply(controller, app::SubmitCommand{});
+    expect(shown_theme(chosen) == "solarized-dark" && editing.settings().writes() == 1,
+           "submitting writes the previewed scheme once");
+}
 } // namespace
 
 void verify_delivery_contracts()
@@ -204,5 +251,6 @@ void verify_delivery_contracts()
     verify_delivery_composition();
     verify_delivery_requests();
     verify_delivery_settings_and_worker();
+    verify_delivery_preview();
 }
 } // namespace nenenib::tests

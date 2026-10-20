@@ -1,6 +1,7 @@
 #include "CommandInput.hpp"
 
 #include "CommandChoice.hpp"
+#include "CommandChoiceKind.hpp"
 #include "FontFamilies.hpp"
 #include "PaletteScope.hpp"
 
@@ -40,8 +41,9 @@ namespace
 // 補完を持つ入力行の見え方。写し先が足りなければコンパイルが落ちる（CPP-002）。
 [[nodiscard]] core::InputLineView view_of(const core::CommandLine &line)
 {
-    return core::InputLineView{prompt_of(line), std::string(line.text()), line.caret(),
-                               line.completions(), line.completion_index()};
+    return core::InputLineView{
+        prompt_of(line),    std::string(line.text()), line.caret(),
+        line.completions(), line.completion_index(),  line.completion_first()};
 }
 
 // Ex の補完を持つのは `:` の出どころだけ。ほかの出どころの入力は候補の絞り込み（ADR 0060 の
@@ -99,8 +101,42 @@ namespace
 [[nodiscard]] core::InputLineView view_of(const core::CommandPalette &palette)
 {
     const core::CommandLine &line = palette.input();
-    return core::InputLineView{prompt_of(palette), std::string(line.text()), line.caret(),
-                               completions_of(palette), line.completion_index()};
+    return core::InputLineView{
+        prompt_of(palette),      std::string(line.text()), line.caret(),
+        completions_of(palette), line.completion_index(),  line.completion_first()};
+}
+
+[[nodiscard]] std::optional<std::string> focused_of(const core::SearchLine & /*line*/)
+{
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::string> focused_of(const core::CommandLine &line)
+{
+    if (!line.completion_index().has_value())
+    {
+        return std::nullopt;
+    }
+    return std::string(line.text());
+}
+
+[[nodiscard]] std::optional<std::string> focused_of(const core::CommandPalette &palette)
+{
+    const auto chosen = palette.choice_at(palette.selected());
+    if (!chosen.has_value())
+    {
+        return std::nullopt;
+    }
+    switch (chosen.value().kind)
+    {
+    case core::CommandChoiceKind::execute:
+        return chosen.value().command;
+    case core::CommandChoiceKind::open:
+    case core::CommandChoiceKind::operate:
+    case core::CommandChoiceKind::fill:
+        return std::nullopt;
+    }
+    std::unreachable();
 }
 } // namespace
 
@@ -134,6 +170,11 @@ CommandInput edited_command(const CommandInput &input, core::CommandEdit edit)
 {
     return std::visit([edit](const auto &value) -> CommandInput { return value.edited(edit); },
                       input);
+}
+
+std::optional<std::string> focused_command_of(const CommandInput &input)
+{
+    return std::visit([](const auto &value) { return focused_of(value); }, input);
 }
 
 bool wants_font_families(const CommandInput &input)

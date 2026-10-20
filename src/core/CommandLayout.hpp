@@ -8,6 +8,9 @@
 
 namespace nenenib::core
 {
+// `:` の補完の面に並ぶ行の数の上限（ADR 0022・ADR 0150 の決定 1）。配置と CommandLine の窓が読む。
+inline constexpr std::size_t command_completion_row_limit = 6;
+
 struct CommandLayout
 {
     LayoutRect input;

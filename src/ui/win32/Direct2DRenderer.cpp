@@ -1532,8 +1532,8 @@ void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,
     fill(layout.panel, frame.palette.panel);
     const auto selected =
         frame.command_message.has_value() ? std::optional<std::size_t>{} : command.completion_index;
-    const auto start =
-        std::max(selected.value_or(0) + 1, layout.visible_rows) - layout.visible_rows;
+    // 窓の先頭は frame の値（ADR 0150 の決定 1）。知らせの 1 行に替えたときは候補の数で切り詰める。
+    const auto start = std::min(command.completion_first, candidates.size() - layout.visible_rows);
     context_->PushAxisAlignedClip(to_rect(layout.panel), D2D1_ANTIALIAS_MODE_ALIASED);
     for (std::size_t index = 0; index < layout.visible_rows; ++index)
     {
@@ -1711,7 +1711,7 @@ void Direct2DRenderer::draw_palette_choices(const application::EditorFrame &fram
               frame.palette.muted);
         return;
     }
-    const auto start = core::palette_first_visible(layout, palette.selected);
+    const auto start = palette.first;
     const auto count = std::min(layout.visible_rows, palette.total - start);
     for (std::size_t index = 0; index < count; ++index)
     {

@@ -54,7 +54,13 @@ constexpr std::array<CompletionPrefixSample, 7> samples{{
     case CompletionPrefixWorkload::theme_seeded:
     case CompletionPrefixWorkload::short_seeded:
     case CompletionPrefixWorkload::empty_seeded:
-        return raw.edited(core::CommandEdit::complete_next);
+    {
+        // 最初の Tab が共通の接頭辞を埋めて巡回に入らなければ、もう 1 回で巡回に入る
+        // （ADR 0150 の決定 3）。測るのは巡回の元の入力（seed）から候補を作る道。
+        const auto once = raw.edited(core::CommandEdit::complete_next);
+        return once.completion_index().has_value() ? once
+                                                   : once.edited(core::CommandEdit::complete_next);
+    }
     }
     std::unreachable();
 }

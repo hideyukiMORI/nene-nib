@@ -1,9 +1,12 @@
 #include "CommandPalette.hpp"
 
+#include "ListWindow.hpp"
+#include "PaletteLayout.hpp"
 #include "PaletteMarks.hpp"
 #include "PaletteQuery.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -68,9 +71,11 @@ entry_position(const std::vector<CommandChoice> & /*choices*/, std::size_t /*sel
 }
 } // namespace
 
-CommandPalette::CommandPalette(CommandLine input, std::size_t selected, EditMode mode,
-                               Entries entries, std::shared_ptr<const Result> result)
-    : input_(std::move(input)), selected_(selected), mode_(mode), entries_(std::move(entries)),
+CommandPalette::CommandPalette(CommandLine input, std::size_t selected, std::size_t first,
+                               std::size_t visible, EditMode mode, Entries entries,
+                               std::shared_ptr<const Result> result)
+    : input_(std::move(input)), selected_(selected), first_(first),
+      visible_(std::max(visible, std::size_t{1})), mode_(mode), entries_(std::move(entries)),
       result_(std::move(result))
 {
 }
@@ -78,14 +83,16 @@ CommandPalette::CommandPalette(CommandLine input, std::size_t selected, EditMode
 CommandPalette CommandPalette::opened(const std::vector<CommandChoice> &entries,
                                       std::string_view input, EditMode mode, CommandLine empty)
 {
-    return filtered(empty.inserted(input).value_or(empty), mode,
+    return filtered(empty.inserted(input).value_or(empty), palette_row_limit, mode,
                     std::make_shared<const std::vector<CommandChoice>>(entries));
 }
 
-CommandPalette CommandPalette::filtered(CommandLine input, EditMode mode, Entries entries)
+CommandPalette CommandPalette::filtered(CommandLine input, std::size_t visible, EditMode mode,
+                                        Entries entries)
 {
     auto result = std::make_shared<const Result>(result_of(input, mode, *entries));
-    return CommandPalette(std::move(input), 0, mode, std::move(entries), std::move(result));
+    return CommandPalette(std::move(input), 0, 0, visible, mode, std::move(entries),
+                          std::move(result));
 }
 
 CommandPalette::Result CommandPalette::result_of(const CommandLine &input, EditMode mode,
@@ -112,19 +119,20 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input, EditM
 
 CommandPalette CommandPalette::reselected(std::size_t selected) const
 {
-    return CommandPalette(input_, selected, mode_, entries_, result_);
+    return CommandPalette(input_, selected, list_window_first(first_, selected, visible_, count()),
+                          visible_, mode_, entries_, result_);
 }
 
 CommandPalette CommandPalette::refiltered(CommandLine input) const
 {
     if (input.text() == input_.text())
     {
-        return CommandPalette(std::move(input), 0, mode_, entries_, result_);
+        return CommandPalette(std::move(input), 0, 0, visible_, mode_, entries_, result_);
     }
     auto result = std::make_shared<const Result>(
         std::visit([this, &input](const auto &previous) { return updated_result(input, previous); },
                    *result_));
-    return CommandPalette(std::move(input), 0, mode_, entries_, std::move(result));
+    return CommandPalette(std::move(input), 0, 0, visible_, mode_, entries_, std::move(result));
 }
 
 CommandPalette::Result
@@ -204,6 +212,37 @@ std::size_t CommandPalette::selected() const noexcept
     return selected_;
 }
 
+std::size_t CommandPalette::first() const noexcept
+{
+    return first_;
+}
+
+std::size_t CommandPalette::visible() const noexcept
+{
+    return visible_;
+}
+
+CommandPalette CommandPalette::with_visible(std::size_t rows) const
+{
+    return CommandPalette(input_, selected_, first_, rows, mode_, entries_, result_)
+        .reselected(selected_);
+}
+
+CommandPalette CommandPalette::scrolled(std::int32_t lines) const
+{
+    const auto total = count();
+    if (total == 0)
+    {
+        return *this;
+    }
+    const auto last_first = total > visible_ ? total - visible_ : 0;
+    const auto distance = static_cast<std::size_t>(std::abs(static_cast<std::int64_t>(lines)));
+    const auto first = lines < 0 ? first_ - std::min(first_, distance)
+                                 : std::min(first_ + std::min(distance, last_first), last_first);
+    const auto selected = std::clamp(selected_, first, std::min(first + visible_, total) - 1);
+    return CommandPalette(input_, selected, first, visible_, mode_, entries_, result_);
+}
+
 std::expected<CommandPalette, ExFailure> CommandPalette::inserted(std::string_view text) const
 {
     auto next = input_.inserted(text);
@@ -225,6 +264,37 @@ CommandPalette CommandPalette::moved(CommandEdit direction) const
     return reselected((selected_ + step) % total);
 }
 
+CommandPalette CommandPalette::paged(CommandEdit direction) const
+{
+    const auto total = count();
+    if (total == 0)
+    {
+        return *this;
+    }
+    const auto last = total - 1;
+    switch (direction)
+    {
+    case CommandEdit::page_previous:
+        return reselected(selected_ - std::min(selected_, visible_));
+    case CommandEdit::page_next:
+        return reselected(std::min(selected_ + visible_, last));
+    case CommandEdit::list_first:
+        return reselected(0);
+    case CommandEdit::list_last:
+        return reselected(last);
+    case CommandEdit::left:
+    case CommandEdit::right:
+    case CommandEdit::home:
+    case CommandEdit::end:
+    case CommandEdit::backspace:
+    case CommandEdit::erase:
+    case CommandEdit::complete_next:
+    case CommandEdit::complete_previous:
+        return *this;
+    }
+    std::unreachable();
+}
+
 CommandPalette CommandPalette::edited(CommandEdit edit) const
 {
     switch (edit)
@@ -232,6 +302,11 @@ CommandPalette CommandPalette::edited(CommandEdit edit) const
     case CommandEdit::complete_next:
     case CommandEdit::complete_previous:
         return moved(edit);
+    case CommandEdit::page_previous:
+    case CommandEdit::page_next:
+    case CommandEdit::list_first:
+    case CommandEdit::list_last:
+        return paged(edit);
     case CommandEdit::left:
     case CommandEdit::right:
     case CommandEdit::home:
@@ -267,7 +342,7 @@ std::expected<CommandPalette, ExFailure> CommandPalette::filled(std::string_view
 
 CommandPalette CommandPalette::with_fonts(FontFamilies fonts) const
 {
-    return filtered(input_.with_fonts(std::move(fonts)), mode_, entries_);
+    return filtered(input_.with_fonts(std::move(fonts)), visible_, mode_, entries_);
 }
 
 CommandPalette CommandPalette::extended(const std::vector<CommandChoice> &more) const
@@ -282,7 +357,7 @@ CommandPalette CommandPalette::extended(const std::vector<CommandChoice> &more) 
     grown->insert(grown->end(), more.begin(), more.end());
     const auto kept = std::visit([this](const auto &result)
                                  { return entry_position(result, selected_); }, *result_);
-    const CommandPalette next = filtered(input_, mode_, std::move(grown));
+    const CommandPalette next = filtered(input_, visible_, mode_, std::move(grown));
     const auto index =
         std::visit([this, kept](const auto &result)
                    { return carried_index(result, kept, selected_); }, *next.result_);

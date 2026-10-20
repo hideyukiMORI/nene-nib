@@ -1141,8 +1141,7 @@ void EditorWindow::click_palette(LPARAM data)
     const auto hit = core::palette_hit(layout, low_word_of(data), high_word_of(data));
     if (hit.has_value())
     {
-        send(application::ActivateCommandChoice{
-            core::palette_first_visible(layout, palette.selected) + hit.value()});
+        send(application::ActivateCommandChoice{palette.first + hit.value()});
         return;
     }
     if (!core::contains(layout.panel, low_word_of(data), high_word_of(data)))
@@ -1211,7 +1210,7 @@ application::VisibleLines EditorWindow::body_view() const
     const auto advance = text_layouts_.cell(
         application::TextLayoutRequest{{}, delivered.settings, geometry, core::DisplayForm::text});
     geometry.average_advance = advance.has_value() ? advance.value().width : 0.0F;
-    return application::VisibleLines{body.visible_lines, geometry};
+    return application::VisibleLines{body.visible_lines, geometry, client.right, client.bottom};
 }
 
 // ---------------------------------------------------------------- IMM32（ADR 0014）

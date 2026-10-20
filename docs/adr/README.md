@@ -160,3 +160,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0146](0146-vertical-alignment-keys-decided-by-engine.md) | 縦の位置合わせ `zt` `zz` `zb` `z<CR>` `z.` `z-` は engine が先頭行を決め、格子では画面行の単位で合わせる | 受理・#639・D54・独立レビュー R 1 → 差し戻し 1・hide の試用 OK・PR #646（2026-10-18）・追補 決定 9・#654 |
 | [0147](0147-display-line-ends-decided-by-engine.md) | 画面行の端と中の motion `g0` `g$` `gm` `gM` は engine が画面行の範囲と見えている升から決める | 提案・#661 |
 | [0149](0149-utf16-with-bom-is-read-and-written-back.md) | UTF-16（LE / BE・BOM つき）のファイルは BOM で見分けて読み、同じ形で書き戻す | 提案・#497 |
+| [0150](0150-palette-selection-scrolls-at-the-edge-and-previews-colorschemes.md) | 面と補完の一覧は選択が見えている範囲の中を動き端を越えるときだけ送る、配色の候補は保存せずに仮に当てて見せる | 提案・#706 #707・D59 |
