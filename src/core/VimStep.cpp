@@ -1805,14 +1805,9 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
 // 最後の文字・空行は行頭。
 [[nodiscard]] std::size_t first_line_first_non_blank(std::string_view body)
 {
-    const std::string_view line = body.substr(0, std::min(body.find('\n'), body.size()));
-    std::size_t index = 0;
-    while (index < line.size() && (line[index] == ' ' || line[index] == '\t'))
-    {
-        ++index;
-    }
-    return index == line.size() && index > 0 ? previous_code_point(line, Offset{index}).value
-                                             : index;
+    const std::size_t index = indent_of(body).second;
+    const bool at_line_end = index == body.size() || body.at(index) == '\n';
+    return at_line_end && index > 0 ? previous_code_point(body, Offset{index}).value : index;
 }
 
 // 字下げを動かす向き（shift_right / shift_left）と回数。回数は VISUAL の回数で、NORMAL は 1
@@ -1909,7 +1904,7 @@ using ShiftBy = std::pair<VimOperator, std::size_t>;
         std::size_t spaces = 0;
         if (inserts_space)
         {
-            part.erase(0, std::min(part.find_first_not_of(" \t"), part.size()));
+            part.erase(0, indent_of(part).second);
             spaces = join_spaces(body, previous, part);
         }
         joint = body.size();
