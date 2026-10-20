@@ -1839,10 +1839,14 @@ registers_written(const VimState &state, const std::optional<VimRegister> &value
         return cancelled_at_landing(state, view, wanted);
     }
     VimState performed_from = state;
-    const bool document_yank =
+    // gg G と H M L は着地が最初の非空白（Vim の beginline）。上へ動いた行単位の y はそこへ着く
+    // （Vim の op_yank は範囲の始まり＝着地へキャレットを置く・Issue #411）。
+    const bool landing_yank =
         operation == VimOperator::yank &&
-        (wanted == VimMotion::document_first || wanted == VimMotion::document_last);
-    if (document_yank)
+        (wanted == VimMotion::document_first || wanted == VimMotion::document_last ||
+         wanted == VimMotion::screen_top || wanted == VimMotion::screen_middle ||
+         wanted == VimMotion::screen_bottom);
+    if (landing_yank)
     {
         const Offset destination = moved_by(view, state, wanted);
         if (line_of(view.text, destination).value < line_of(view.text, view.selection.caret).value)
@@ -2586,6 +2590,15 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
                         direction);
 }
 
+// 回数つきの Ctrl-f / Ctrl-b が途中の周で端に当たったか（Vim の onepage の FAIL）。端に当たった周は
+// 画面の先頭の行を動かさないので、回数を 1 つ減らしても同じ先頭の行になる。
+[[nodiscard]] bool page_count_reached_the_end(const VimEditorView &view, std::size_t pages,
+                                              VimScrollDirection direction)
+{
+    return pages > single_step &&
+           page_top(view, pages, direction) == page_top(view, pages - single_step, direction);
+}
+
 [[nodiscard]] LineNumber previous_page_top(const VimEditorView &view, std::size_t pages)
 {
     const std::size_t height =
@@ -2745,7 +2758,17 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
             std::min(last, previous_page_top(view, count_of(state.count)).value + single_step)};
         break;
     }
-    return navigated(state, view, first, caret_line);
+    if (!page_count_reached_the_end(view, count_of(state.count), direction))
+    {
+        return navigated(state, view, first, caret_line);
+    }
+    // 回数の途中で端に当たった周は Vim の onepage が FAIL を返し、beginline を飛ばす。キャレットは
+    // 行だけ画面へ入り、同じバイトの桁を保つ（check_cursor_col・Issue #411）。
+    const Offset caret = view.selection.caret;
+    const std::size_t column = caret.value - view.text.line_start(line_of(view.text, caret)).value;
+    return navigated_at(
+        state, view, first,
+        rested_in(view.text, vim_line_and_column(view.text, caret_line, column), state.mode));
 }
 
 // v / V で VISUAL に入る。回数があると入った直後にその広さぶんを選ぶ（Vim の nv_visual は
