@@ -23,23 +23,24 @@ namespace nenenib::ui::win32
 [[nodiscard]] float preview_heading_scale(std::uint8_t level) noexcept;
 // 等幅で描く要素（コードブロックと HTML ブロック）か。
 [[nodiscard]] bool preview_monospaced(core::PreviewBlockKind kind) noexcept;
-// 要素の左端の枠からの字下げ（左の余白 16・引用 12 × 深さ・箇条書き 24 × 深さ）。
-[[nodiscard]] float preview_indent(const core::PreviewBlock &block, std::uint32_t dpi) noexcept;
-// 要素の layout の幅。枠の幅から字下げと右の余白、コードブロックは面の内側の余白を引く。
+// 要素の layout の幅。枠の幅から字下げ indent（PreviewBlockTops が決める）と右の余白、
+// コードブロックは面の内側の余白を引く。
 [[nodiscard]] float preview_text_width(const core::PreviewBlock &block, float frame_width,
-                                       std::uint32_t dpi) noexcept;
-// 左右の余白（16 DIP）・引用の深さ depth（0 から）の左の線の左端・箇条書きの 1 段の字下げ。
+                                       float indent, std::uint32_t dpi) noexcept;
+// 左右の余白（16 DIP）・引用の深さ depth（0 から）の左の線の左端・箇条書きの 1 段の字下げの
+// 最小（記号の列はこれと「最大の記号の幅＋記号と文字の間」の大きい方）・記号と文字の間（8 DIP）。
 [[nodiscard]] float preview_side_margin(std::uint32_t dpi) noexcept;
 [[nodiscard]] float preview_quote_left(std::uint8_t depth, std::uint32_t dpi) noexcept;
 [[nodiscard]] float preview_list_indent(std::uint32_t dpi) noexcept;
+[[nodiscard]] float preview_marker_gap(std::uint32_t dpi) noexcept;
 // コードブロックの面の内側の余白。
 [[nodiscard]] float preview_code_padding(std::uint32_t dpi) noexcept;
 // 枠の上の余白。
 [[nodiscard]] float preview_top_margin(std::uint32_t dpi) noexcept;
-// 前の要素と次の要素の間（段落の後は行高の半分・見出しの上は行高・水平線の上下は行高・
-// 続く項目の間は 0）。
+// 前の要素と次の要素の間（段落の後は行高の半分・見出しの上は行高・水平線の上下は行高）。
+// same_list は同じリストの続く項目（間は 0）で、種類の違うリストの境は段落と同じ半行。
 [[nodiscard]] float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &next,
-                                const PreviewTextStyle &style) noexcept;
+                                const PreviewTextStyle &style, bool same_list) noexcept;
 // 要素の縦の大きさ。text_height は layout の GetMetrics().height（水平線は使わない）。
 [[nodiscard]] float preview_extent(core::PreviewBlockKind kind, float text_height,
                                    std::uint32_t dpi) noexcept;
@@ -50,4 +51,8 @@ namespace nenenib::ui::win32
 [[nodiscard]] std::uint32_t preview_units(std::string_view shown, std::size_t byte);
 // 箇条書きの記号（深さ 1 は •・2 は ◦・3 以上は ▪）。番号はそのまま。
 [[nodiscard]] std::string_view preview_marker(const core::PreviewBlock &block) noexcept;
+// 記号を描く layout の要素（本文の字体の段落）と、その layout の幅（折り返さないだけ広い）。
+// 記号の layout も PreviewTextLayouts の保持に入る。
+[[nodiscard]] core::PreviewBlock preview_marker_block(const core::PreviewBlock &item);
+[[nodiscard]] float preview_marker_layout_width() noexcept;
 } // namespace nenenib::ui::win32

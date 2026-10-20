@@ -277,6 +277,19 @@ std::expected<float, RenderFailure> PreviewTextLayouts::measure(const core::Prev
     return made.value().height;
 }
 
+std::expected<float, RenderFailure> PreviewTextLayouts::advance(const core::PreviewBlock &block,
+                                                                float width,
+                                                                const PreviewTextStyle &style)
+{
+    const auto layout = get(block, width, style);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!layout || FAILED(layout.value()->GetMetrics(&metrics)))
+    {
+        return std::unexpected(directwrite);
+    }
+    return metrics.widthIncludingTrailingWhitespace;
+}
+
 std::size_t PreviewTextLayouts::held() const noexcept
 {
     return held_.size();

@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <d2d1.h>
 #include <dwrite.h>
 #include <optional>
@@ -56,7 +57,6 @@ template <typename Target> class PreviewPainter final
     static constexpr float inline_radius_dips = 3.0F;
     static constexpr float code_radius_dips = 5.0F;
     static constexpr float quote_rule_dips = 2.0F;
-    static constexpr float marker_gap_dips = 8.0F;
     // 行内コードの面は行高（本文の 1.6 倍）の上下を 1 割ずつ空ける。
     static constexpr float inline_inset_ratio = 0.1F;
 
@@ -89,9 +89,8 @@ template <typename Target> class PreviewPainter final
     void draw_block(const PreviewScene &scene, std::size_t index)
     {
         const auto &block = scene.document.blocks.at(index);
-        const auto dpi = scene.style.dpi;
         const auto origin = D2D1::Point2F(
-            static_cast<float>(scene.frame.left) + preview_indent(block, dpi),
+            static_cast<float>(scene.frame.left) + scene.tops.indent(index),
             static_cast<float>(scene.frame.top) + scene.tops.top(index) - scene.scroll);
         draw_quote_rules(scene, index);
         switch (block.kind)
@@ -100,16 +99,16 @@ template <typename Target> class PreviewPainter final
             draw_rule(scene, origin.y, scene.tops.bottom(index) - scene.tops.top(index));
             return;
         case core::PreviewBlockKind::code:
-            draw_code(scene, block, origin, scene.tops.bottom(index) - scene.tops.top(index));
+            draw_code(scene, index, origin);
             return;
         case core::PreviewBlockKind::list_item:
             draw_marker(scene, block, origin);
-            draw_text(scene, block, origin);
+            draw_text(scene, index, origin);
             return;
         case core::PreviewBlockKind::paragraph:
         case core::PreviewBlockKind::heading:
         case core::PreviewBlockKind::html:
-            draw_text(scene, block, origin);
+            draw_text(scene, index, origin);
             return;
         }
     }
@@ -144,10 +143,10 @@ template <typename Target> class PreviewPainter final
     }
 
     // コードブロック: panel の面（角丸 5）の内側の余白 12 に折らずに描き、面の外は切る。
-    void draw_code(const PreviewScene &scene, const core::PreviewBlock &block, D2D1_POINT_2F origin,
-                   float extent)
+    void draw_code(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
     {
         const auto dpi = scene.style.dpi;
+        const auto extent = scene.tops.bottom(index) - scene.tops.top(index);
         const auto radius = preview_pixels(code_radius_dips, dpi);
         const auto panel = D2D1::RectF(
             origin.x, origin.y, static_cast<float>(scene.frame.right) - preview_side_margin(dpi),
@@ -156,11 +155,12 @@ template <typename Target> class PreviewPainter final
                                      brushes_.of(PreviewInk::panel));
         target_.PushAxisAlignedClip(panel, D2D1_ANTIALIAS_MODE_ALIASED);
         const auto padding = preview_code_padding(dpi);
-        draw_text(scene, block, D2D1::Point2F(origin.x + padding, origin.y + padding));
+        draw_text(scene, index, D2D1::Point2F(origin.x + padding, origin.y + padding));
         target_.PopAxisAlignedClip();
     }
 
-    // 項目の記号と番号（operators）。文字の左端から 8 DIP 空けて右に揃える。
+    // 項目の記号と番号（operators）。文字の左端から 8 DIP 空けて右に揃える。記号の layout は
+    // 折り返さない幅で作り、記号の列の幅は PreviewBlockTops が同じリストの最大の記号で決める。
     void draw_marker(const PreviewScene &scene, const core::PreviewBlock &block,
                      D2D1_POINT_2F origin)
     {
@@ -169,32 +169,26 @@ template <typename Target> class PreviewPainter final
         {
             return;
         }
-        const auto dpi = scene.style.dpi;
-        const core::PreviewBlock shown{core::PreviewBlockKind::paragraph,
-                                       0,
-                                       0,
-                                       0,
-                                       {},
-                                       block.source_begin,
-                                       std::string(marker),
-                                       {}};
-        const auto layout = layouts_.get(shown, preview_list_indent(dpi), scene.style);
+        const auto layout =
+            layouts_.get(preview_marker_block(block), preview_marker_layout_width(), scene.style);
         DWRITE_TEXT_METRICS metrics{};
         if (!layout || FAILED(layout.value()->GetMetrics(&metrics)))
         {
             failure_ = RenderFailure::directwrite;
             return;
         }
-        const auto left = origin.x - preview_pixels(marker_gap_dips, dpi) -
+        const auto left = origin.x - preview_marker_gap(scene.style.dpi) -
                           metrics.widthIncludingTrailingWhitespace;
         target_.DrawTextLayout(D2D1::Point2F(left, origin.y), layout.value().Get(),
                                brushes_.of(PreviewInk::operators), D2D1_DRAW_TEXT_OPTIONS_NONE);
     }
 
-    void draw_text(const PreviewScene &scene, const core::PreviewBlock &block, D2D1_POINT_2F origin)
+    void draw_text(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
     {
-        const auto width = preview_text_width(
-            block, static_cast<float>(core::width_of(scene.frame)), scene.style.dpi);
+        const auto &block = scene.document.blocks.at(index);
+        const auto width =
+            preview_text_width(block, static_cast<float>(core::width_of(scene.frame)),
+                               scene.tops.indent(index), scene.style.dpi);
         const auto layout = layouts_.get(block, width, scene.style);
         if (!layout)
         {
@@ -241,9 +235,10 @@ template <typename Target> class PreviewPainter final
                 fill_inline_code(scene, layout, range, origin);
             }
             const auto ink = span_ink(span.style);
-            if (ink.has_value())
+            if (ink.has_value() && FAILED(layout.SetDrawingEffect(brushes_.of(ink.value()), range)))
             {
-                static_cast<void>(layout.SetDrawingEffect(brushes_.of(ink.value()), range));
+                failure_ = RenderFailure::directwrite;
+                return;
             }
         }
     }

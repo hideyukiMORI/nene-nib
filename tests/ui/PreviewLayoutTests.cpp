@@ -1,9 +1,11 @@
-// Markdown プレビューの 1 要素 1 layout の保持（ADR 0151 の決定 16・#784）の契約。本物の
-// DirectWrite で、同じ鍵は作り直さないこと・幅が変われば別の
-// layout・高さが正で見出しは倍率ぶん高いこと・ 装飾の範囲が UTF-8 のバイト位置から UTF-16
-// の位置へ写ること・高さを測るだけでは保持しないこと・ 保持は 256
-// 件まで・見えている要素だけを作って描くこと（替え玉の描画先 CountingTarget）を数える。 字体は
-// Segoe UI（Windows の既定で入っている）で、無い機械では測らない（QLT-013）。
+// Markdown プレビューの 1 要素 1 layout の保持（ADR 0151 の決定 16・#784）の契約。
+// 本物の DirectWrite で、同じ鍵は作り直さないこと・幅が変われば別の layout・高さが正で
+// 見出しは倍率ぶん高いこと・装飾の範囲が UTF-8 のバイト位置から UTF-16 の位置へ写ること・
+// 高さを測るだけでは保持しないこと・保持は 256 件まで・見えている要素だけを作って描くこと
+// （替え玉の描画先 CountingTarget）を数える。#788 のレビュー R4 で、画像の枠の斜体と comment の
+// 効果・HTML の等幅と折らないこと・字体の設定の変更で保持を捨てること・番号の記号の列と
+// 1 行・種類の違うリストの境の間も数える。
+// 字体は Segoe UI（Windows の既定で入っている）で、無い機械では測らない（QLT-013）。
 #include "CountingTarget.hpp"
 #include "DirectWriteFactory.hpp"
 #include "WindowChecks.hpp"
@@ -12,18 +14,27 @@
 #include "PreviewBlock.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
+#include "PreviewInk.hpp"
 #include "PreviewPainter.hpp"
+#include "PreviewPlacement.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
 #include "RenderFailure.hpp"
+#include "ThemeCatalog.hpp"
+#include "ThemeName.hpp"
 
+#include <array>
+#include <combaseapi.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+#include <wincodec.h>
+#include <wrl/client.h>
 
 namespace nenenib::tests::ui
 {
@@ -166,6 +177,132 @@ void check_visible_only()
     expect(layouts.held() > 0 && layouts.held() < 10 && target.text_layouts() == layouts.held(),
            "only the visible preview blocks are created and drawn");
 }
+// メモリの bitmap のソフトウェアの描画先（brush を本物で作るため・SoftwareTarget と同じ作り方）。
+[[nodiscard]] Microsoft::WRL::ComPtr<ID2D1RenderTarget>
+wic_target(Microsoft::WRL::ComPtr<IWICBitmap> &bitmap)
+{
+    Microsoft::WRL::ComPtr<ID2D1Factory> factory;
+    Microsoft::WRL::ComPtr<IWICImagingFactory> imaging;
+    Microsoft::WRL::ComPtr<ID2D1RenderTarget> target;
+    const auto properties = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory.GetAddressOf())) ||
+        FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&imaging))) ||
+        FAILED(imaging->CreateBitmap(400, 200, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad,
+                                     &bitmap)) ||
+        FAILED(factory->CreateWicBitmapRenderTarget(bitmap.Get(), properties, &target)))
+    {
+        return nullptr;
+    }
+    return target;
+}
+
+[[nodiscard]] bool effect_is(IDWriteTextLayout &layout, UINT32 position, ID2D1Brush *brush)
+{
+    Microsoft::WRL::ComPtr<IUnknown> effect;
+    Microsoft::WRL::ComPtr<IUnknown> expected;
+    return brush != nullptr && SUCCEEDED(layout.GetDrawingEffect(position, &effect)) &&
+           SUCCEEDED(brush->QueryInterface(IID_PPV_ARGS(&expected))) &&
+           effect.Get() == expected.Get();
+}
+
+// "x [画像: cat]": 画像の枠は 2 バイト目から 15 バイト目まで（UTF-16 では 2 から 12）。
+void check_image_span()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    win32::PreviewBrushes brushes;
+    expect(target != nullptr && theme.has_value() &&
+               SUCCEEDED(brushes.prepare(*target.Get(), theme.value().view())),
+           "the preview brushes are made on a software target");
+    if (target == nullptr || !theme)
+    {
+        return;
+    }
+    core::MarkdownDocument document;
+    document.blocks.push_back(
+        block_of(core::PreviewBlockKind::paragraph, "x [\xE7\x94\xBB\xE5\x83\x8F: cat]",
+                 {{core::Offset{2}, core::Offset{15}, core::PreviewStyle::image}}));
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, width);
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    target->BeginDraw();
+    painter.paint(
+        win32::PreviewScene{document, tops.value(), style, core::LayoutRect{0, 0, 400, 200}, 0.0F});
+    expect(SUCCEEDED(target->EndDraw()) && !failure.has_value(), "the image span is painted");
+    const auto layout = layouts.get(document.blocks.front(), width - 32.0F, style);
+    DWRITE_FONT_STYLE slanted = DWRITE_FONT_STYLE_NORMAL;
+    expect(layout.has_value() && layouts.created() == 2 &&
+               SUCCEEDED(layout.value()->GetFontStyle(3, &slanted)) &&
+               slanted == DWRITE_FONT_STYLE_ITALIC,
+           "the image frame is italic");
+    expect(layout.has_value() &&
+               effect_is(*layout.value().Get(), 3, brushes.of(win32::PreviewInk::comment)) &&
+               !effect_is(*layout.value().Get(), 0, brushes.of(win32::PreviewInk::comment)),
+           "the image frame is drawn in the comment ink");
+}
+
+void check_html_and_style()
+{
+    PreviewTextLayouts layouts;
+    const auto block = block_of(core::PreviewBlockKind::html, "<div>\n</div>\n");
+    const auto html = layouts.get(block, width, style_of());
+    std::array<wchar_t, 64> family{};
+    expect(html.has_value() && html.value()->GetWordWrapping() == DWRITE_WORD_WRAPPING_NO_WRAP &&
+               SUCCEEDED(html.value()->GetFontFamilyName(0, family.data(),
+                                                         static_cast<UINT32>(family.size()))) &&
+               std::wstring_view(family.data()) != L"Segoe UI",
+           "an HTML block is monospaced and does not wrap");
+    auto larger = style_of();
+    larger.points = 20.0F;
+    const auto changed = layouts.get(block, width, larger);
+    expect(changed.has_value() && layouts.held() == 1 && layouts.created() == 2,
+           "a font size change drops the held preview layouts");
+    const auto again = layouts.get(block, width, style_of());
+    expect(again.has_value() && layouts.created() == 3,
+           "the earlier font size is made again after a change");
+}
+
+[[nodiscard]] core::PreviewBlock item_of(std::string marker, std::string text)
+{
+    auto block = block_of(core::PreviewBlockKind::list_item, std::move(text));
+    block.list_depth = 1;
+    block.marker = std::move(marker);
+    return block;
+}
+
+void check_markers()
+{
+    core::MarkdownDocument document;
+    for (std::size_t number = 1; number <= 12; ++number)
+    {
+        document.blocks.push_back(item_of(std::to_string(number) + ".", "item"));
+    }
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, width);
+    expect(tops.has_value() && tops.value().indent(0) == tops.value().indent(11) &&
+               tops.value().indent(0) > 40.0F,
+           "a numbered list widens its marker column to its widest number");
+    const auto marker = layouts.get(win32::preview_marker_block(document.blocks.at(9)),
+                                    win32::preview_marker_layout_width(), style);
+    DWRITE_TEXT_METRICS metrics{};
+    expect(marker.has_value() && SUCCEEDED(marker.value()->GetMetrics(&metrics)) &&
+               metrics.lineCount == 1,
+           "the marker 10. stays on one line");
+    core::MarkdownDocument lists;
+    lists.blocks = {item_of("\xE2\x80\xA2", "a"), item_of("\xE2\x80\xA2", "b"), item_of("1.", "c")};
+    const auto mixed = win32::PreviewBlockTops::measure(lists, layouts, style, width);
+    expect(mixed.has_value() && mixed.value().top(1) == mixed.value().bottom(0) &&
+               mixed.value().top(2) > mixed.value().bottom(1),
+           "items of one list touch and a different list starts after half a line");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -181,5 +318,8 @@ void verify_preview_layouts()
     check_span_ranges();
     check_capacity();
     check_visible_only();
+    check_image_span();
+    check_html_and_style();
+    check_markers();
 }
 } // namespace nenenib::tests::ui

@@ -4,6 +4,7 @@
 #include "Utf16.hpp"
 
 #include <algorithm>
+#include <string>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -15,6 +16,9 @@ constexpr float top_margin_dips = 12.0F;
 constexpr float quote_indent_dips = 12.0F;
 constexpr float list_indent_dips = 24.0F;
 constexpr float code_padding_dips = 12.0F;
+constexpr float marker_gap_dips = 8.0F;
+// 記号の layout の幅。記号は数文字なので折り返さない。
+constexpr float marker_layout_width = 100000.0F;
 constexpr float rule_dips = 1.0F;
 constexpr float line_ratio = 1.6F;
 constexpr float points_per_inch = 72.0F;
@@ -97,21 +101,12 @@ bool preview_monospaced(core::PreviewBlockKind kind) noexcept
     return kind == core::PreviewBlockKind::code || kind == core::PreviewBlockKind::html;
 }
 
-float preview_indent(const core::PreviewBlock &block, std::uint32_t dpi) noexcept
-{
-    return preview_pixels(side_margin_dips +
-                              quote_indent_dips * static_cast<float>(block.quote_depth) +
-                              list_indent_dips * static_cast<float>(block.list_depth),
-                          dpi);
-}
-
-float preview_text_width(const core::PreviewBlock &block, float frame_width,
+float preview_text_width(const core::PreviewBlock &block, float frame_width, float indent,
                          std::uint32_t dpi) noexcept
 {
     const auto padding =
         block.kind == core::PreviewBlockKind::code ? 2.0F * preview_code_padding(dpi) : 0.0F;
-    const auto width =
-        frame_width - preview_indent(block, dpi) - preview_pixels(side_margin_dips, dpi) - padding;
+    const auto width = frame_width - indent - preview_pixels(side_margin_dips, dpi) - padding;
     return std::max(width, 1.0F);
 }
 
@@ -130,6 +125,11 @@ float preview_list_indent(std::uint32_t dpi) noexcept
     return preview_pixels(list_indent_dips, dpi);
 }
 
+float preview_marker_gap(std::uint32_t dpi) noexcept
+{
+    return preview_pixels(marker_gap_dips, dpi);
+}
+
 float preview_code_padding(std::uint32_t dpi) noexcept
 {
     return preview_pixels(code_padding_dips, dpi);
@@ -141,9 +141,9 @@ float preview_top_margin(std::uint32_t dpi) noexcept
 }
 
 float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &next,
-                  const PreviewTextStyle &style) noexcept
+                  const PreviewTextStyle &style, bool same_list) noexcept
 {
-    if (previous.kind == core::PreviewBlockKind::list_item &&
+    if (same_list && previous.kind == core::PreviewBlockKind::list_item &&
         next.kind == core::PreviewBlockKind::list_item)
     {
         return 0.0F;
@@ -196,5 +196,15 @@ std::string_view preview_marker(const core::PreviewBlock &block) noexcept
         return bullet;
     }
     return block.list_depth == 2 ? second_bullet : deeper_bullet;
+}
+core::PreviewBlock preview_marker_block(const core::PreviewBlock &item)
+{
+    return core::PreviewBlock{core::PreviewBlockKind::paragraph, 0, 0, 0, {}, item.source_begin,
+                              std::string(preview_marker(item)), {}};
+}
+
+float preview_marker_layout_width() noexcept
+{
+    return marker_layout_width;
 }
 } // namespace nenenib::ui::win32

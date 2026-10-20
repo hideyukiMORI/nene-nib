@@ -34,6 +34,9 @@ class PreviewTextLayouts final
     // 高さ（GetMetrics().height・物理画素）だけを測る。保持に無ければ作って保持しない。
     [[nodiscard]] std::expected<float, RenderFailure>
     measure(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);
+    // get の layout の送りの幅（widthIncludingTrailingWhitespace・物理画素）。記号の列の幅に使う。
+    [[nodiscard]] std::expected<float, RenderFailure>
+    advance(const core::PreviewBlock &block, float width, const PreviewTextStyle &style);
     [[nodiscard]] std::size_t held() const noexcept;
     // 作った layout の数（get と measure の両方・試験が再利用を確かめる）。
     [[nodiscard]] std::size_t created() const noexcept;
