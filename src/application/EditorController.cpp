@@ -100,6 +100,7 @@
 #include "VimTabs.hpp"
 #include "VimVisualRange.hpp"
 #include "VimVisualReselect.hpp"
+#include "VimWindowCommand.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -1887,6 +1888,7 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     case core::VimSpecialKey::control_f:
     case core::VimSpecialKey::control_b:
     case core::VimSpecialKey::control_v:
+    case core::VimSpecialKey::control_w:
         return std::nullopt;
     }
     std::unreachable();
@@ -3146,6 +3148,11 @@ void EditorController::perform(const core::VimRedo &)
 void EditorController::perform(const core::VimSwitchTab &effect)
 {
     accept(SwitchTab{effect.index});
+}
+
+void EditorController::perform(const core::VimWindowCommand &)
+{
+    // #682 の SplitPane / SwitchPane / ClosePane に写す（#684 の後続）
 }
 
 const core::VimState &EditorController::vim_state() const noexcept

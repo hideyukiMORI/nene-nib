@@ -91,6 +91,10 @@ void verify_vim_register_snapshot_contracts();
 void verify_vim_macro_contracts();
 void verify_vim_macro_scope();
 
+// VimWindowTests.cpp（ADR 0148 の決定 7）
+void verify_vim_window_contracts();
+void verify_vim_window_scope();
+
 // VimClipboardTests.cpp
 void verify_vim_clipboard_contracts();
 void verify_vim_clipboard_scope();

@@ -375,6 +375,8 @@ class EditorController final
     void perform(const core::VimRedo &);
     // `gt` `gT`（ADR 0057 の決定 3）。窓の SwitchTab と同じ accept の 1 本へ写す。
     void perform(const core::VimSwitchTab &effect);
+    // `Ctrl-w` の窓の命令（ADR 0148 の決定 7）。2 枠の意図が入るまで何もしない。
+    void perform(const core::VimWindowCommand &command);
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
     [[nodiscard]] core::EditBoundary vim_boundary() const noexcept;
 

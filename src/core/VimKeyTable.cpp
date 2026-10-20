@@ -10,13 +10,17 @@
 #include "VimOperatorBinding.hpp"
 #include "VimScreenAlignmentBinding.hpp"
 #include "VimScreenPlace.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimTextObject.hpp"
 #include "VimTextObjectBinding.hpp"
+#include "VimWindowBinding.hpp"
+#include "VimWindowCommand.hpp"
 #include "VimWordClass.hpp"
 
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -28,6 +32,10 @@ constexpr char32_t line_feed = U'\n';
 constexpr char32_t control_r_character = 0x12;
 // z<CR> の <CR>（z の後ろの特別な鍵は VimStep.cpp が文字に写してから表を引く）。
 constexpr char32_t carriage_return_character = 0x0D;
+// `Ctrl-w` の後ろの Ctrl-v と Ctrl-w（特別な鍵の口 vim_window_command_for(VimSpecialKey) と
+// vim_window_control_character もこの値を引く・VimStep.cpp に写しを置かない）。
+constexpr char32_t control_v_character = 0x16;
+constexpr char32_t control_w_character = 0x17;
 
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
@@ -301,6 +309,24 @@ constexpr std::array<VimBinding, 14> z_bindings{
      {U'+', VimAction::align_below_window_top_first_non_blank},
      {U'^', VimAction::align_above_window_bottom_first_non_blank}}};
 
+// `Ctrl-w` の後ろの鍵 → 窓の命令（ADR 0148 の決定 7）。Ctrl-s は窓が写さないので載せない。
+constexpr std::array<VimWindowBinding, 15> window_bindings{
+    {{U's', VimWindowCommand::split_horizontal},
+     {U'S', VimWindowCommand::split_horizontal},
+     {U'v', VimWindowCommand::split_vertical},
+     {control_v_character, VimWindowCommand::split_vertical},
+     {U'w', VimWindowCommand::next},
+     {U'W', VimWindowCommand::next},
+     {U'p', VimWindowCommand::next},
+     {control_w_character, VimWindowCommand::next},
+     {U'h', VimWindowCommand::left},
+     {U'j', VimWindowCommand::down},
+     {U'k', VimWindowCommand::up},
+     {U'l', VimWindowCommand::right},
+     {U'c', VimWindowCommand::close},
+     {U'q', VimWindowCommand::close},
+     {U'o', VimWindowCommand::only}}};
+
 // 縦の位置合わせの動作 → 置く所・最初の非空白へ動かすか・行の選び方（ADR 0146 の決定 2・9・
 // CPP-012）。
 constexpr std::array<VimScreenAlignmentBinding, 8> screen_alignment_bindings{
@@ -442,6 +468,53 @@ static_assert(every_alignment_has_one_row(),
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimWindowCommand> vim_window_command_for(char32_t key) noexcept
+{
+    for (const VimWindowBinding binding : window_bindings)
+    {
+        if (binding.key == key)
+        {
+            return binding.command;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<char32_t> vim_window_control_character(VimSpecialKey key) noexcept
+{
+    switch (key)
+    {
+    case VimSpecialKey::control_v:
+        return control_v_character;
+    case VimSpecialKey::control_w:
+        return control_w_character;
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] std::optional<VimWindowCommand> vim_window_command_for(VimSpecialKey key) noexcept
+{
+    return vim_window_control_character(key).and_then(
+        [](char32_t character) { return vim_window_command_for(character); });
 }
 
 [[nodiscard]] VimWordClass vim_motion_word_class(VimMotion motion) noexcept

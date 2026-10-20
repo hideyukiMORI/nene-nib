@@ -21,12 +21,13 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 36> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 37> contracts{{
         {"--vim-wrapped", verify_vim_wrapped_contracts},
         {"--wrapped-view", verify_wrapped_view_scope},
         {"--vim-dot", verify_vim_dot_contracts},
         {"--vim-register-snapshot", verify_vim_register_snapshot_contracts},
         {"--vim-macro", verify_vim_macro_contracts},
+        {"--vim-window", verify_vim_window_contracts},
         {"--vim-clipboard", verify_vim_clipboard_contracts},
         {"--vim-search", verify_vim_search_contracts},
         {"--vim-search-highlight", verify_vim_search_highlight_contracts},
@@ -72,7 +73,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 59> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 60> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -92,6 +93,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 59> scopes{{
     {"--vim-dot", verify_vim_dot_scope},
     {"--vim-register-snapshot", verify_vim_register_snapshot_contracts},
     {"--vim-macro", verify_vim_macro_scope},
+    {"--vim-window", verify_vim_window_scope},
     {"--vim-clipboard", verify_vim_clipboard_scope},
     {"--vim-search", verify_vim_search_scope},
     {"--vim-search-highlight", verify_vim_search_highlight_scope},

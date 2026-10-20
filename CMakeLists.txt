@@ -97,6 +97,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimDotTests.cpp
     tests/unit/VimRegisterSnapshotTests.cpp
     tests/unit/VimMacroTests.cpp
+    tests/unit/VimWindowTests.cpp
     tests/unit/VimClipboardTests.cpp
     tests/unit/VimSearchTests.cpp
     tests/unit/VimSearchSnapshotTests.cpp

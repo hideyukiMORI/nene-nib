@@ -83,6 +83,7 @@
 #include "VimTextObjectSpan.hpp"
 #include "VimVisualExtent.hpp"
 #include "VimVisualRange.hpp"
+#include "VimWindowCommand.hpp"
 #include "VimWordEndStop.hpp"
 #include "VimWordMotion.hpp"
 #include "VimWordStop.hpp"
@@ -2755,6 +2756,7 @@ replaced_block_edits(const TextBuffer &text, const VimBlockRange &block, char32_
     case VimSpecialKey::control_f:
     case VimSpecialKey::control_b:
     case VimSpecialKey::control_v:
+    case VimSpecialKey::control_w:
         return VimStep{finished_input_wait(state), VimNoEffect{}};
     }
     std::unreachable();
@@ -4321,6 +4323,17 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return acted(state, view, action.value());
 }
 
+// `Ctrl-w`（ADR 0148 の決定 7）。NORMAL と VISUAL で次の 1 鍵を窓の命令として待つ。オペレータの
+// 後ろでは Vim と同じく失敗してオペレータを打ち消す。回数は待ちのあいだ持ち、2 打鍵目で捨てる。
+[[nodiscard]] VimStep window_started(const VimState &state)
+{
+    if (state.pending.has_value())
+    {
+        return failed(cancelled(state), VimRepeatFailure::refused);
+    }
+    return started_prefix(state, VimPrefix::window_command);
+}
+
 // NORMAL の特別な鍵。矢印は h j k l と同じ動作で、Home / End は 0 と $（ADR 0015 の決定 6）。
 // Esc は保留を捨てるだけ（ADR 0012 の決定 5）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。
 [[nodiscard]] VimStep normal_special(const VimState &state, const VimEditorView &view,
@@ -4360,6 +4373,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return acted(state, view, VimAction::scroll_half_up);
     case VimSpecialKey::control_v:
         return entered_visual(state, view.text, view.selection.caret, VimMode::visual_block);
+    case VimSpecialKey::control_w:
+        return window_started(state);
     }
     std::unreachable();
 }
@@ -4660,6 +4675,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return visual_acted(state, view, VimAction::scroll_half_up);
     case VimSpecialKey::control_v:
         return visual_switched(state, view.selection, VimMode::visual_block);
+    case VimSpecialKey::control_w:
+        return window_started(state);
     }
     std::unreachable();
 }
@@ -4793,6 +4810,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     case VimSpecialKey::control_b:
     // INSERT の Ctrl+V は窓が OS の貼付のまま扱うのでここへ来ない（ADR 0035 の決定 9）。
     case VimSpecialKey::control_v:
+    // INSERT の Ctrl-w（Vim では語の削除）は未対応で、失敗にせず何もしない（ADR 0148 の決定 7）。
+    case VimSpecialKey::control_w:
         return VimStep{state, VimNoEffect{}};
     case VimSpecialKey::page_up:
         return insert_page_moved(state, view, VimScrollDirection::up);
@@ -4829,6 +4848,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return control_f_character;
     case VimSpecialKey::control_b:
         return control_b_character;
+    case VimSpecialKey::control_w:
+        return vim_window_control_character(key);
     case VimSpecialKey::escape:
     case VimSpecialKey::backspace:
     case VimSpecialKey::arrow_left:
@@ -5021,6 +5042,37 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     return failed(VimStep{finished_input_wait(state), VimNoEffect{}}, VimRepeatFailure::refused);
 }
 
+// `Ctrl-w` の後ろの鍵 → 窓の命令。文字と特別な鍵は VimKeyTable の表の口を引き、検索の文字列は
+// 表に無い。
+[[nodiscard]] std::optional<VimWindowCommand> window_command_of(const VimKey &key) noexcept
+{
+    if (const auto *const character = std::get_if<VimCharacter>(&key); character != nullptr)
+    {
+        return vim_window_command_for(character->code);
+    }
+    const auto *const special = std::get_if<VimSpecialKey>(&key);
+    return special != nullptr ? vim_window_command_for(*special) : std::nullopt;
+}
+
+// `Ctrl-w` の後ろの鍵（ADR 0148 の決定 7）。窓の命令を効果として返すだけで、モードと選択は
+// 変えない（VISUAL のままで、枠を移るときに畳むのは controller）。回数は捨てる。Esc は待ちを
+// 消すだけ。表に無い鍵は失敗して後ろを打ち切る。
+[[nodiscard]] VimStep window_step(const VimState &state, VimKey key)
+{
+    if (const auto *const special = std::get_if<VimSpecialKey>(&key);
+        special != nullptr && *special == VimSpecialKey::escape)
+    {
+        return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    const std::optional<VimWindowCommand> command = window_command_of(key);
+    if (!command.has_value())
+    {
+        return failed(VimStep{finished_input_wait(state), VimNoEffect{}},
+                      VimRepeatFailure::refused);
+    }
+    return VimStep{finished_input_wait(state), command.value()};
+}
+
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimPrefix prefix, VimKey key)
 {
@@ -5038,6 +5090,8 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
         return selected_register(state, key);
     case VimPrefix::z:
         return z_prefix_step(state, view, key);
+    case VimPrefix::window_command:
+        return window_step(state, key);
     }
     std::unreachable();
 }
@@ -5156,6 +5210,11 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
 {
     return false;
 }
+// `Ctrl-w` の窓の命令も本文を変えない（ADR 0148 の決定 7）。
+[[nodiscard]] bool changes_text(const VimWindowCommand &) noexcept
+{
+    return false;
+}
 [[nodiscard]] bool changes_text(const VimRemoveRange &) noexcept
 {
     return true;
@@ -5226,6 +5285,7 @@ display_view(const VimState &state, const VimEditorView &view, VimAction action)
     case VimSpecialKey::control_f:
     case VimSpecialKey::control_b:
     case VimSpecialKey::control_v:
+    case VimSpecialKey::control_w:
         return false;
     }
     std::unreachable();

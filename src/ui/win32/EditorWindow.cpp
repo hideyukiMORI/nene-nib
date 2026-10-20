@@ -133,11 +133,14 @@ constexpr std::array<KeyVimSpecial, 11> vim_specials{{{VK_ESCAPE, core::VimSpeci
                                                       {VK_END, core::VimSpecialKey::end},
                                                       {VK_PRIOR, core::VimSpecialKey::page_up},
                                                       {VK_NEXT, core::VimSpecialKey::page_down}}};
-constexpr std::array<KeyVimSpecial, 4> vim_control_specials{
+// Ctrl+W は Vim の窓の命令の入口（ADR 0148 の決定 7）。INSERT でも engine へ流し、engine
+// が無視する。
+constexpr std::array<KeyVimSpecial, 5> vim_control_specials{
     {{'D', core::VimSpecialKey::control_d},
      {'U', core::VimSpecialKey::control_u},
      {'F', core::VimSpecialKey::control_f},
-     {'B', core::VimSpecialKey::control_b}}};
+     {'B', core::VimSpecialKey::control_b},
+     {'W', core::VimSpecialKey::control_w}}};
 constexpr char32_t tab_character = U'\t';
 
 // 本文の行数と字幅（巨大な行の窓の見積もり・ADR 0139）を決める字の大きさと字体。
@@ -1990,8 +1993,9 @@ void EditorWindow::press_key(WPARAM word)
     press_plain_key(word);
 }
 
-// タブの鍵は Vim の Ctrl の表より先に引く。扱ったら true（値なしの Vim の Ctrl+W も true で、
-// どの表へも流さない）。IME の変換中も効く（切り替えが変換中を捨てる・ADR 0056 の決定 4・10）。
+// タブの鍵は Vim の Ctrl の表より先に引く。扱ったら true。値なしの鍵（Vim の Ctrl+W）は false で
+// 後ろの表へ流し、Vim の Ctrl の表が engine の `Ctrl-w` に写す（ADR 0148 の決定 7）。IME の変換中も
+// 効く（切り替えが変換中を捨てる・ADR 0056 の決定 4・10）。
 bool EditorWindow::press_tab_key(WPARAM word)
 {
     if (!held(VK_CONTROL) || held(VK_MENU))
@@ -2004,10 +2008,11 @@ bool EditorWindow::press_tab_key(WPARAM word)
         return false;
     }
     const auto command = core::tab_command_for(key.value(), mode_);
-    if (command.has_value())
+    if (!command.has_value())
     {
-        run_tab_command(command.value());
+        return false;
     }
+    run_tab_command(command.value());
     return true;
 }
 
