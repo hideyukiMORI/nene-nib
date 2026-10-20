@@ -80,6 +80,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
 | D61 | 通常 ↔ Vim の切り替えの鍵は Ctrl+Shift+Space（窓全体・通常と Vim のどのモードでも効く・IME の変換中は効かない・ステータスバーのトグルと同じ 1 本の道）。md プレビューの枠を開く / 閉じるは Ctrl+Shift+M（FR-007 の段 4）。モードは枠ごとに持たず窓に 1 つのまま（ADR 0056）（施主決定 2026-10-21） | [#771](https://github.com/hideyukiMORI/nene-nib/issues/771)・ADR 0078・FR-004 |
 | D62 | Markdown プレビューの見た目は案 B（構文の色）: 見出しは `keyword`・コードは `string`（面は `panel`）・リンクは `function` に下線・引用は `comment` と左の線・箇条書きの記号は `operators`・水平線は `comment`。見出しの倍率は h1 1.6・h2 1.35・h3 1.15・h4〜h6 は本文と同じで太字（施主決定 2026-10-21） | [採用案](docs/design/2026-10-21-markdown-preview-look.md) |
 | D63 | 巨大ファイル（FR-013）の製品の目標は 1 GB のまま（2 GiB は試作の目安）。512 MiB の private bytes の増分は必須にしない（最初の製品段は piece table のまま開く道を worker に移す形）（施主決定 2026-10-21） | [計画](docs/plans/2026-10-21-large-file.md) §2・#791 |
+| D64 | split（分割ウィンドウ）を製品に採用する。枠は最大 2 つで左右（Ctrl+\）と上下（Ctrl+Shift+\）の等分、境界は動かせない。文書の選択（NewTab・開く・タブの切り替え・Ctrl+P・`gt`）は操作中の枠へ。「枠を閉じる」（Ctrl+Shift+F4・`Ctrl-w c` `Ctrl-w o`・2 枠の `:q` `:q!` `:wq` `:x` は枠だけ）と「文書を閉じる」は別の意図。隣へは F6・Vim は `Ctrl-w {s v w W p h j k l c q o}`。配置は session に保存しない（起動は常に 1 枠）（施主決定 2026-10-21・試用の後の承認 2026-10-22） | [ADR 0148](docs/adr/0148-split-keeps-the-active-pane-path-and-parks-the-other.md) 決定 1・4・5・6・[ADR 0120](docs/adr/0120-split-acceptance-is-relative-and-tail-bounded.md)・[本測定](docs/quality/split-speed-2026-10-21.md)・#680 |
 | D12 | 見た目は `/design` で起こした案（[採用案](docs/design/2026-09-15-look.md)・[ADR 0008](docs/adr/0008-adopted-look-tabs-titlebar-statusbar-mica.md)）を採用。アクセントは Ubuntu 橙 #E95420（施主承認 2026-09-15） | 見た目の判断は実装の前に `/design` で画を作って施主が選ぶ（施主指示 2026-09-15） |
 
 ## 3. 技術の土台（ADR で確定したもの）
@@ -132,7 +133,7 @@ Windows 11 で考えうる限り速い、**単体 exe のテキストエディ�
   - 難所: Vim 正規表現の方言 / `.` の挿入再生 / undo の区切り / 全角・タブ混在の矩形
 - **T3（やらない）**: Vim script・プラグイン・折り畳み・`:terminal`・分割ウィンドウ（初版）
 
-分割ウィンドウはD40で下準備と限定試作を開始した。初版の必須範囲へ追加したわけではなく、製品採用は未決。2分割・文書タブ維持の案、速度の判定条件と試作の限界は[準備資料](docs/design/2026-10-03-split-preparation.md)を参照する。
+分割ウィンドウはD40で下準備と限定試作を開始し、D45の採用条件（本測定 12 対 pass）と hide の試用を経て D64 で製品に採用した（2 枠・文書タブ維持・ADR 0148）。境界のドラッグ・配置の保存（session.v3）・other の文書名の表示は後続。2分割・文書タブ維持の案、速度の判定条件と試作の限界は[準備資料](docs/design/2026-10-03-split-preparation.md)を参照する。
 
 基本Exの実装段階（ADR 0066 / 0067・#284 / #286）: `:w` / `:q` / `:q!` / `:wq` / `:x` は現在の文書タブを対象とする。`:q` は未保存なら拒否し、`:q!` は明示的に破棄する。`:wq` は常に保存し、`:x` は変更があるときだけ保存する。保存失敗や保存後も元文書が未保存のときは閉じない。最後のタブを閉じると窓を終了する（D22）。
 
