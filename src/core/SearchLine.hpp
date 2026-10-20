@@ -2,11 +2,14 @@
 
 #include "CommandEdit.hpp"
 #include "ExFailure.hpp"
+#include "HistoryWalk.hpp"
+#include "InputHistory.hpp"
 #include "InputText.hpp"
 #include "Offset.hpp"
 #include "VimSearchDirection.hpp"
 
 #include <expected>
+#include <optional>
 #include <string_view>
 
 namespace nenenib::core
@@ -23,11 +26,15 @@ class SearchLine final
     [[nodiscard]] VimSearchDirection direction() const noexcept;
     [[nodiscard]] std::expected<SearchLine, ExFailure> inserted(std::string_view text) const;
     [[nodiscard]] SearchLine edited(CommandEdit edit) const;
+    // 履歴の上下（#725・CommandLine::recalled と同じ規則・履歴は検索の 1 本）。
+    [[nodiscard]] SearchLine recalled(const InputHistory &history, CommandEdit direction) const;
 
   private:
     SearchLine(InputText input, VimSearchDirection direction);
 
     InputText input_;
     VimSearchDirection direction_;
+    // 履歴の歩き（値があれば歩いている）。ほかの編集は作り直して歩きを終える。
+    std::optional<HistoryWalk> history_walk_;
 };
 } // namespace nenenib::core

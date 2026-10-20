@@ -134,6 +134,31 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
     std::unreachable();
 }
 
+// 入力行の編集のうち履歴を歩く 2 つ（#725）。写し先が足りなければコンパイルが落ちる（CPP-002）。
+[[nodiscard]] constexpr bool recalls_history(core::CommandEdit edit) noexcept
+{
+    switch (edit)
+    {
+    case core::CommandEdit::history_previous:
+    case core::CommandEdit::history_next:
+        return true;
+    case core::CommandEdit::left:
+    case core::CommandEdit::right:
+    case core::CommandEdit::home:
+    case core::CommandEdit::end:
+    case core::CommandEdit::backspace:
+    case core::CommandEdit::erase:
+    case core::CommandEdit::complete_next:
+    case core::CommandEdit::complete_previous:
+    case core::CommandEdit::page_previous:
+    case core::CommandEdit::page_next:
+    case core::CommandEdit::list_first:
+    case core::CommandEdit::list_last:
+        return false;
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] core::ScrollFollow scroll_follow_for(core::EditMode mode) noexcept
 {
     switch (mode)
@@ -1807,7 +1832,7 @@ std::optional<core::VimRepeatFailure> EditorController::command_key(core::VimSpe
     switch (key)
     {
     case core::VimSpecialKey::enter:
-        return submitted_command();
+        return confirmed_command();
     case core::VimSpecialKey::escape:
         if (replay_depth_.has_value())
         {
@@ -2102,7 +2127,10 @@ void EditorController::accept(const EditCommand &intent)
         accept(CancelCommand{});
         return;
     }
-    state_ = state_.with_command_input(edited_command(input.value(), intent.edit));
+    state_ = state_.with_command_input(recalls_history(intent.edit)
+                                           ? recalled_command(input.value(), state_.ex_history(),
+                                                              state_.search_history(), intent.edit)
+                                           : edited_command(input.value(), intent.edit));
     reach_font_families();
     update_search_preview();
 }
@@ -2548,7 +2576,35 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
 
 void EditorController::accept(const SubmitCommand &)
 {
-    static_cast<void>(submitted_command());
+    static_cast<void>(confirmed_command());
+}
+
+// 確定の意図（Enter）だけが入力を履歴に足す。Esc は取消で、再生の中の <Esc> の確定
+// （submitted_command を直接呼ぶ）も足さない（#725・ADR 0022 決定 2 の追補）。
+std::optional<core::VimRepeatFailure> EditorController::confirmed_command()
+{
+    const auto &open = state_.command_input();
+    if (open.has_value())
+    {
+        const CommandInput input = open.value();
+        std::visit([this](const auto &value) { this->remember(value); }, input);
+    }
+    return submitted_command();
+}
+
+void EditorController::remember(const core::CommandLine &line)
+{
+    state_ = state_.with_ex_history(state_.ex_history().remembered(line.text()));
+}
+
+void EditorController::remember(const core::SearchLine &line)
+{
+    state_ = state_.with_search_history(state_.search_history().remembered(line.text()));
+}
+
+void EditorController::remember(const core::CommandPalette & /*palette*/)
+{
+    // 面の確定は履歴に足さない（#725）。
 }
 
 // 確定の失敗（検索の当たりが無い等）は再生を打ち切るので理由を返す（ADR 0048 の決定 8）。

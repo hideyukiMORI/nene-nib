@@ -263,6 +263,30 @@ EditorState EditorState::with_search_preview(std::optional<SearchPreview> previe
     return next;
 }
 
+const core::InputHistory &EditorState::ex_history() const noexcept
+{
+    return ex_history_;
+}
+
+const core::InputHistory &EditorState::search_history() const noexcept
+{
+    return search_history_;
+}
+
+EditorState EditorState::with_ex_history(core::InputHistory history) const
+{
+    EditorState next(*this);
+    next.ex_history_ = std::move(history);
+    return next;
+}
+
+EditorState EditorState::with_search_history(core::InputHistory history) const
+{
+    EditorState next(*this);
+    next.search_history_ = std::move(history);
+    return next;
+}
+
 EditorState EditorState::with_command_message(std::optional<core::DisplayText> message) const
 {
     EditorState next(*this);

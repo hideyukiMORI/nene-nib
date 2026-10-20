@@ -301,6 +301,10 @@ class EditorController final
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::CommandPalette &palette);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submit(const core::SearchLine &line);
     [[nodiscard]] std::optional<core::VimRepeatFailure> submitted_command();
+    [[nodiscard]] std::optional<core::VimRepeatFailure> confirmed_command();
+    void remember(const core::CommandLine &line);
+    void remember(const core::SearchLine &line);
+    void remember(const core::CommandPalette &palette);
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
     void apply_unsaved_ex(const core::ExResult &result);

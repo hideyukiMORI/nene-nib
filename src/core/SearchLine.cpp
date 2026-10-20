@@ -44,4 +44,16 @@ SearchLine SearchLine::edited(CommandEdit edit) const
     // 補完は無い（却下した選択肢の 4 行目）。Tab の 2 つは文字列もキャレットも変えない。
     return SearchLine(edited_input(input_, edit), direction_);
 }
+
+SearchLine SearchLine::recalled(const InputHistory &history, CommandEdit direction) const
+{
+    const auto walk = history.stepped(input_, history_walk_, direction);
+    if (!walk.has_value())
+    {
+        return *this;
+    }
+    SearchLine line(history.shown(walk.value()), direction_);
+    line.history_walk_ = walk;
+    return line;
+}
 } // namespace nenenib::core

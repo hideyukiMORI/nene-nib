@@ -148,7 +148,10 @@ CommandLine CommandLine::completed(CommandEdit direction) const
     const auto candidates = completions();
     if (candidates.empty())
     {
-        return *this;
+        // 候補が無くても Tab は履歴の歩きを終える（その内容が次の接頭辞・#725）。
+        CommandLine next = *this;
+        next.history_walk_.reset();
+        return next;
     }
     if (completion_seed_.has_value())
     {
@@ -195,7 +198,10 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     case CommandEdit::page_next:
     case CommandEdit::list_first:
     case CommandEdit::list_last:
-        // `:` の行の一覧の送りは無い（ADR 0150 の決定 3・上下と同じく何もしない）。
+        // `:` の行の一覧の送りは無い（ADR 0150 の決定 3）。
+    case CommandEdit::history_previous:
+    case CommandEdit::history_next:
+        // 履歴は recalled が歩く（履歴を持つのは application の状態・#725）。
         return *this;
     case CommandEdit::left:
     case CommandEdit::right:
@@ -209,6 +215,21 @@ CommandLine CommandLine::edited(CommandEdit edit) const
     const auto caret = next.caret;
     CommandLine line(std::move(next.text), caret, themes_, fonts_);
     line.completion_rows_ = completion_rows_;
+    return line;
+}
+
+CommandLine CommandLine::recalled(const InputHistory &history, CommandEdit direction) const
+{
+    const auto walk = history.stepped(InputText{text_, caret_}, history_walk_, direction);
+    if (!walk.has_value())
+    {
+        return *this;
+    }
+    InputText shown = history.shown(walk.value());
+    const auto caret = shown.caret;
+    CommandLine line(std::move(shown.text), caret, themes_, fonts_);
+    line.completion_rows_ = completion_rows_;
+    line.history_walk_ = walk;
     return line;
 }
 } // namespace nenenib::core

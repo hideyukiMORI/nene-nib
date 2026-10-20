@@ -290,6 +290,8 @@ CommandPalette CommandPalette::paged(CommandEdit direction) const
     case CommandEdit::erase:
     case CommandEdit::complete_next:
     case CommandEdit::complete_previous:
+    case CommandEdit::history_previous:
+    case CommandEdit::history_next:
         return *this;
     }
     std::unreachable();
@@ -307,6 +309,10 @@ CommandPalette CommandPalette::edited(CommandEdit edit) const
     case CommandEdit::list_first:
     case CommandEdit::list_last:
         return paged(edit);
+    case CommandEdit::history_previous:
+    case CommandEdit::history_next:
+        // 面の上下は候補の選択（ADR 0150 の決定 2）。入力の履歴は持たない（#725）。
+        return *this;
     case CommandEdit::left:
     case CommandEdit::right:
     case CommandEdit::home:

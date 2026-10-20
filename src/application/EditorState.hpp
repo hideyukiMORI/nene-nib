@@ -13,6 +13,7 @@
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "FileFailure.hpp"
+#include "InputHistory.hpp"
 #include "LineEnding.hpp"
 #include "ParkedTab.hpp"
 #include "ScrollState.hpp"
@@ -64,6 +65,12 @@ class EditorState final
     [[nodiscard]] std::optional<SettingsIssue> settings_failure() const noexcept;
     [[nodiscard]] const std::optional<CommandInput> &command_input() const noexcept;
     [[nodiscard]] const std::optional<core::DisplayText> &command_message() const noexcept;
+    // `:` と検索の入力行の履歴（#725・ADR 0022 決定 2 の追補）。窓に 1 つずつで、タブの切り替え
+    // では変わらない。足すのは controller の確定（submit）だけ。
+    [[nodiscard]] const core::InputHistory &ex_history() const noexcept;
+    [[nodiscard]] const core::InputHistory &search_history() const noexcept;
+    [[nodiscard]] EditorState with_ex_history(core::InputHistory history) const;
+    [[nodiscard]] EditorState with_search_history(core::InputHistory history) const;
     // 検索の入力行が開いているあいだだけ値を持つ（ADR 0041 の決定 2）。
     [[nodiscard]] const std::optional<SearchPreview> &search_preview() const noexcept;
 
@@ -223,6 +230,8 @@ class EditorState final
     std::optional<CommandInput> command_input_;
     std::optional<core::DisplayText> command_message_;
     std::optional<SearchPreview> search_preview_;
+    core::InputHistory ex_history_ = core::InputHistory::empty();
+    core::InputHistory search_history_ = core::InputHistory::empty();
     std::vector<ParkedTab> parked_;
     std::size_t active_ = 0;
     std::vector<AutosaveId> autosave_ids_{AutosaveId{0}};
