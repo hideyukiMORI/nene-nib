@@ -122,7 +122,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/ExSettingsTests.cpp
     tests/unit/ExFileTests.cpp
     tests/unit/ExDocumentTests.cpp
-    tests/unit/ExWritePathTests.cpp
+    tests/unit/ExWritePathTests.cpp tests/unit/BellTests.cpp
     tests/unit/OrdinaryCharacterTests.cpp
     tests/unit/VimVisualBlockTests.cpp
     tests/unit/TabsTests.cpp
@@ -152,7 +152,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32SessionAdapter.cpp src/adapters/win32/TextLines.cpp
     src/adapters/win32/BookmarkCodec.cpp src/adapters/win32/Win32BookmarkAdapter.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
-    src/adapters/win32/Win32AppearanceAdapter.cpp
+    src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp
     src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp
@@ -166,7 +166,7 @@ nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）だけ。ここが advapi32 を結ぶ唯一のモジュール。
 nenenib_system_link(nenenib_adapters advapi32)
-# クリップボード（OpenClipboard / SetClipboardData）は user32。Issue #7 で足した唯一の OS 依存。
+# クリップボード（OpenClipboard / SetClipboardData）と断りの音（MessageBeep・ADR 0153）は user32。
 nenenib_system_link(nenenib_adapters user32)
 
 # QLT-013: adapters/win32 のファイル読み書きは、ビルドディレクトリ配下の一時ファイルで往復させる

@@ -2,6 +2,7 @@
 
 #include "AppearancePort.hpp"
 #include "AutosavePort.hpp"
+#include "BellPort.hpp"
 #include "BookmarkPort.hpp"
 #include "ClipboardPort.hpp"
 #include "CodePagePort.hpp"
@@ -35,5 +36,7 @@ struct EditorPorts
     AutosavePort &autosave;
     // `:set guifont=` の補完の字体の一覧（#597・D58）。
     FontFamilyPort &fonts;
+    // 入力行の確定とファイル操作の断りで鳴らす（ADR 0153 の決定 4）。
+    BellPort &bell;
 };
 } // namespace nenenib::application

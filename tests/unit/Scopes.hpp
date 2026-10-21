@@ -231,6 +231,9 @@ void verify_ex_document_scope();
 // ExWritePathTests.cpp
 void verify_ex_write_path_contracts();
 
+// BellTests.cpp
+void verify_bell_contracts();
+
 // VimEngineTests.cpp
 void verify_vim_fixture(const VimFixture &fixture);
 void verify_vim_insert_undo_unit();

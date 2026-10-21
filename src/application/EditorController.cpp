@@ -2557,8 +2557,7 @@ void EditorController::accept(const ToggleBookmark &)
     }
     if (!ports_.bookmarks.write(after.value()))
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("ブックマークを保存できませんでした").value());
+        reject(core::DisplayText::parse("ブックマークを保存できませんでした").value());
         return;
     }
     close_command_input();
@@ -2669,7 +2668,16 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     {
         restore_search_origin(preview.value().origin);
     }
-    return step_vim(core::VimKey{pattern});
+    const auto failure = step_vim(core::VimKey{pattern});
+    // 検索の失敗（E486 E35 未対応の構文）は engine が not_found で返し、入力行の確定なので鳴らす。
+    // 同じ報せでも後の `n` は鍵なので鳴らさない。layout の契約の破れ（refused）は使う人の断りでは
+    // ないので鳴らさない（ADR 0153 の決定 1・2）。
+    const auto &message = state_.command_message();
+    if (failure == core::VimRepeatFailure::not_found && message.has_value())
+    {
+        reject(message.value());
+    }
+    return failure;
 }
 
 void EditorController::accept(const SubmitCommand &)
@@ -2718,6 +2726,13 @@ std::optional<core::VimRepeatFailure> EditorController::submitted_command()
     return std::visit([this](const auto &value) { return this->submit(value); }, input);
 }
 
+// 鳴らすかは呼んだ道で決め、文字列（E で始まるか）では決めない（ADR 0153 の決定 3）。
+void EditorController::reject(core::DisplayText message)
+{
+    state_ = state_.with_command_message(std::move(message));
+    ports_.bell.ring();
+}
+
 void EditorController::evaluate_command(std::string_view text)
 {
     close_command_input();
@@ -2729,7 +2744,7 @@ void EditorController::evaluate_command(std::string_view text)
         core::evaluate_ex(text, state_.settings(), state_.appearance(), state_.themes());
     if (!result)
     {
-        state_ = state_.with_command_message(core::ex_failure_message(result.error(), text));
+        reject(core::ex_failure_message(result.error(), text));
         return;
     }
     const auto &tab = result.value().tab;
@@ -2759,8 +2774,7 @@ void EditorController::evaluate_command(std::string_view text)
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("Settings could not be saved").value());
+        reject(core::DisplayText::parse("Settings could not be saved").value());
         return;
     }
     apply_unsaved_ex(result.value());
@@ -2806,7 +2820,7 @@ bool EditorController::write_ex_document(const core::ExDocumentRequest &request)
     const auto path = request.path.has_value() ? request.path : state_.document().path;
     if (!path.has_value())
     {
-        state_ = state_.with_command_message(core::DisplayText::parse("E32: No file name").value());
+        reject(core::DisplayText::parse("E32: No file name").value());
         return false;
     }
     const auto target = request.path.has_value()
@@ -2814,8 +2828,7 @@ bool EditorController::write_ex_document(const core::ExDocumentRequest &request)
                             : std::expected<core::FilePath, FileFailure>{path.value()};
     if (!target)
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse(ex_write_failure(target.error())).value());
+        reject(core::DisplayText::parse(ex_write_failure(target.error())).value());
         return false;
     }
     return write_ex_path(target.value(), request);
@@ -2827,8 +2840,7 @@ bool EditorController::write_ex_path(const core::FilePath &path,
     const auto other = open_tab_of(path);
     if (other.has_value() && other.value() != state_.active_tab())
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("E139: File is open in another tab").value());
+        reject(core::DisplayText::parse("E139: File is open in another tab").value());
         return false;
     }
     const auto &current = state_.document().path;
@@ -2845,8 +2857,7 @@ bool EditorController::write_ex_path(const core::FilePath &path,
         save_document(SaveDocument{path, state_.document().encoding, mode, identity});
     if (!written)
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse(ex_write_failure(written.error())).value());
+        reject(core::DisplayText::parse(ex_write_failure(written.error())).value());
         return false;
     }
     state_ = state_.with_command_message(core::DisplayText::parse("Written").value());
@@ -2859,8 +2870,7 @@ bool EditorController::refuse_modified_quit()
     {
         return false;
     }
-    state_ = state_.with_command_message(
-        core::DisplayText::parse("E37: No write since last change (add ! to override)").value());
+    reject(core::DisplayText::parse("E37: No write since last change (add ! to override)").value());
     return true;
 }
 
@@ -2942,10 +2952,9 @@ void EditorController::run_tab_request(const core::ExTabRequest &request)
                                                    state_.active_tab(), state_.tab_count());
     if (!destination.has_value())
     {
-        state_ = state_.with_command_message(
-            core::DisplayText::parse("E475: Invalid argument: " +
-                                     std::to_string(request.number.value_or(0)))
-                .value());
+        reject(core::DisplayText::parse("E475: Invalid argument: " +
+                                        std::to_string(request.number.value_or(0)))
+                   .value());
         return;
     }
     accept(SwitchTab{destination.value()});
@@ -3442,7 +3451,7 @@ void EditorController::open_listed(const core::FilePath &path,
     {
         return;
     }
-    state_ = state_.with_command_message(unreached_message(path, 0));
+    reject(unreached_message(path, 0));
     if (opened.error() == FileFailure::not_found && origin == core::PaletteOrigin::history)
     {
         forget(path);
@@ -3829,7 +3838,7 @@ void EditorController::notify_autosave_failure()
     }
     autosave_notified_ = true;
     // 材料は固定の文字だけなので parse は必ず成功する（不変条件・ARC-010）。
-    state_ = state_.with_command_message(core::DisplayText::parse(autosave_failed_message).value());
+    reject(core::DisplayText::parse(autosave_failed_message).value());
 }
 
 // 裏の仕事の合図（ADR 0062 の決定 7・15・17）。入口は歩きも知らせも残す。collect は面が開いて

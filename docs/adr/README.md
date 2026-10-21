@@ -164,3 +164,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0150](0150-palette-selection-scrolls-at-the-edge-and-previews-colorschemes.md) | 面と補完の一覧は選択が見えている範囲の中を動き端を越えるときだけ送る、配色の候補は保存せずに仮に当てて見せる | 提案・#706 #707・D59 |
 | [0151](0151-md4c-vendored-as-third-party-target-with-digest-check.md) | md4c を `third_party/md4c` の別 target として取り込み（上流のバイト列・LF の SHA-256 を CNF-013 が照合）、core の `parse_markdown` が平らなブロックの列に写す | 提案・#764（段 1）・#765（段 2）・D7 |
 | [0152](0152-vim-marks-are-document-values-adjusted-by-edits.md) | Vim のマークは文書の値で、engine は借りて読み、変更を `VimStep` に添えて返す。編集で行がずれたら純関数で直す（`%` は移動の表の 1 行） | 提案・#767 |
+| [0153](0153-refusal-bell-through-typed-bell-port.md) | 断りの音は型のある `BellPort` で鳴らし、鳴らすかは application の 1 か所（`reject`）が決める（入力行の確定とファイル操作の失敗だけ・鍵の失敗は鳴らさない） | 提案・#789 |

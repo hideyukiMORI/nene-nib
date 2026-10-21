@@ -5,6 +5,7 @@
 #include "EditorPorts.hpp"
 #include "ScriptedAppearance.hpp"
 #include "ScriptedAutosave.hpp"
+#include "ScriptedBell.hpp"
 #include "ScriptedBookmarks.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedCodePages.hpp"
@@ -35,7 +36,7 @@ class Editing final
         : settings_(std::move(reading)), themes_(std::move(themes)),
           controller_(nenenib::application::EditorPorts{
               appearance_, clipboard_, files_, code_pages_, settings_, themes_, session_, history_,
-              folders_, bookmarks_, text_layouts_, autosave_, fonts_})
+              folders_, bookmarks_, text_layouts_, autosave_, fonts_, bell_})
     {
     }
 
@@ -111,6 +112,11 @@ class Editing final
         return fonts_;
     }
 
+    [[nodiscard]] ScriptedBell &bell() noexcept
+    {
+        return bell_;
+    }
+
   private:
     // controller より先に宣言したポートは、この時点でもう出来ている。
     [[nodiscard]] nenenib::application::EditorPorts
@@ -119,7 +125,7 @@ class Editing final
         prepare(files_);
         return nenenib::application::EditorPorts{
             appearance_, clipboard_, files_,     code_pages_,   settings_, themes_, session_,
-            history_,    folders_,   bookmarks_, text_layouts_, autosave_, fonts_};
+            history_,    folders_,   bookmarks_, text_layouts_, autosave_, fonts_,  bell_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -135,6 +141,7 @@ class Editing final
     ScriptedTextLayouts text_layouts_;
     ScriptedAutosave autosave_;
     ScriptedFonts fonts_;
+    ScriptedBell bell_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

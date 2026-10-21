@@ -359,6 +359,20 @@ void verify_folder_quiet_paths()
     expect(counted(folders, 2, 3), "the submit, a composition and closing the window stay quiet");
     applied(controller, WorkCompleted{});
     expect(counted(folders, 2, 4), "each signal collects once and never lists");
+    // 裏の列挙の完了も読みの失敗も断りではないので鳴らさない（ADR 0153 の決定 1・6）。
+    for (const auto progress : {app::FolderProgress::complete, app::FolderProgress::failed})
+    {
+        Editing listing;
+        listing.files().hold_at("C:\\work\\a.txt", Bytes{"a"});
+        applied(listing.controller(), app::VisibleLines{10});
+        applied(listing.controller(), app::OpenDocument{path_of("C:\\work\\a.txt")});
+        applied(listing.controller(), app::OpenCommandPalette{});
+        listing.folders().serve(
+            app::FolderBatch{listing.folders().requests().back().ticket, {}, progress});
+        applied(listing.controller(), WorkCompleted{});
+        expect(listing.bell().rings() == 0, "a finished or failed folder listing never rings");
+    }
+    expect(editing.bell().rings() == 0, "the folder paths never ring");
 }
 
 // C:\work\a.txt を開いた窓。履歴は先に仕込む（面を開くときに読む）。
