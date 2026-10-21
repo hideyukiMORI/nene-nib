@@ -534,7 +534,7 @@ constexpr std::array<LexCase, 89> markdown_cases{{
 // JavaScript と TypeScript（#833・Vim の javascript.vim / typescript.vim）で同じ答えになる行。
 // コメントの行またぎ・文字列とテンプレートの行またぎ・正規表現と除算の見分け（`a++ / 2` は直前が
 // 演算子なので正規表現に読む限界）・数字の形・予約語と定数と型・関数・演算子の連なり・UTF-8・境。
-constexpr std::array<LexCase, 80> javascript_cases{{
+constexpr std::array<LexCase, 81> javascript_cases{{
     {"// comment", plain, "cccccccccc", plain},
     {"x = 1; // c", plain, "  o no cccc", plain},
     {"/* block */", plain, "ccccccccccc", plain},
@@ -577,6 +577,7 @@ constexpr std::array<LexCase, 80> javascript_cases{{
     {"*/ / 2", block, "cc o n", plain},
     {"</div>", plain, "oO   o", plain},
     {"]/2", plain, "oOn", plain},
+    {"/[/x/", plain, "oOsss", plain},
     {"x.return / 2", plain, " o       o n", plain},
     {"x = /[\\]/]+/;", plain, "  o sssssssso", plain},
     {"0xFF", plain, "nnnn", plain},
@@ -743,6 +744,31 @@ void verify_markdown_worst_lines()
            "the first opener reaches the far close of a long markdown line");
 }
 
+// 閉じない文字クラスの後ろに `[/` を 10,000 回並べた 1 行（#836 の追いの指摘）。どの `/` も
+// 閉じず 1 字の除算に読み直され、`[` と `/` が 1 字ずつの operators になる。閉じの探しは前に
+// 閉じなかった `/` の後ろでは最初の `[` `]` で打ち切るので O(n)。
+void verify_script_worst_line()
+{
+    std::string line;
+    for (std::size_t index = 0; index < 10'000U; ++index)
+    {
+        line += "[/";
+    }
+    for (const Language language : {Language::javascript, Language::typescript})
+    {
+        const LexLine lexed = core::lex_line(language, plain, line);
+        const bool operators =
+            std::ranges::all_of(lexed.spans,
+                                [](const ColorSpan &span)
+                                {
+                                    return span.role == SyntaxRole::operators &&
+                                           span.end.value == span.begin.value + 1U;
+                                });
+        expect(lexed.spans.size() == line.size() && operators && lexed.out == plain,
+               "a long line of unclosed regex openers reads every slash as division");
+    }
+}
+
 // フェンスとテンプレートとブロックコメントも、状態を値で次の行へ渡す（#833）。
 void verify_threading_of(Language language, std::span<const std::string_view> lines,
                          std::span<const LexKind> expected)
@@ -796,5 +822,6 @@ void verify_lexer_scope()
     verify_state_threading();
     verify_markdown_and_script_threading();
     verify_markdown_worst_lines();
+    verify_script_worst_line();
 }
 } // namespace nenenib::tests

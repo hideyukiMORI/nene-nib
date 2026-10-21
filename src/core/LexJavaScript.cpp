@@ -17,8 +17,12 @@ namespace nenenib::core
 {
 namespace
 {
+// 1 行の中で最初に閉じなかった正規表現の `/` の位置（無ければ lex_unclosed）。#836 の追いの
+// 指摘: その後ろの `/` の閉じ探しを、最初の `[` `]` までに限って二乗を消す（regex_close）。
+using RegexHorizon = std::size_t;
+
 // 字句の関数。読み始めの位置を受けて、読み終えた次の位置を返す（必ず進む）。
-using LexHandler = std::size_t (*)(LexCursor &, std::size_t);
+using LexHandler = std::size_t (*)(LexCursor &, std::size_t, RegexHorizon &);
 
 // 表は ASCII の順に並べ、binary_search で引く（ADR 0156 の決定 6）。定数・予約語・型の順に勝つ
 // （`void` は予約語）。
@@ -111,7 +115,7 @@ std::size_t mark_block_comment(LexCursor &cursor, std::size_t begin, std::size_t
 // ---- 文字列・テンプレート・正規表現 ----
 
 // `'…'` `"…"` は行をまたがず、閉じていなければ行末まで error。
-std::size_t lex_string(LexCursor &cursor, std::size_t at)
+std::size_t lex_string(LexCursor &cursor, std::size_t at, RegexHorizon & /*horizon*/)
 {
     const std::string_view line = cursor.line();
     const std::size_t end = lex_closing_quote(line, at);
@@ -142,14 +146,24 @@ std::size_t mark_template(LexCursor &cursor, std::size_t begin, std::size_t from
     return end;
 }
 
-std::size_t lex_template(LexCursor &cursor, std::size_t at)
+std::size_t lex_template(LexCursor &cursor, std::size_t at, RegexHorizon & /*horizon*/)
 {
     return mark_template(cursor, at, at + 1U);
 }
 
+// bounded の閉じ探しを打ち切る文字（`[` `]`）か。
+[[nodiscard]] constexpr bool stops_scan(char value, bool bounded) noexcept
+{
+    return bounded && (value == '[' || value == ']');
+}
+
 // at の `/` の後ろから正規表現の閉じの `/` を探し、その直後を返す。`\` は次の 1 バイトを飛ばし、
-// 文字クラス `[…]` の中の `/` では閉じない。
-[[nodiscard]] constexpr std::size_t regex_close(std::string_view line, std::size_t at) noexcept
+// 文字クラス `[…]` の中の `/` では閉じない。bounded は前に閉じなかった `/` より後ろの探しで、
+// 最初の `[` `]` で打ち切る: 前の探しはこの `/` を文字クラスの中か `\` の後で通り、ここから先の
+// `[` `]` を同じ桁で読むので、そこで文字クラスの状態がそろい、以後に閉じは無い（同じ答えのまま
+// 1 行の走査を O(n) にする）。
+[[nodiscard]] constexpr std::size_t regex_close(std::string_view line, std::size_t at,
+                                                bool bounded) noexcept
 {
     bool in_class = false;
     for (std::size_t index = at + 1U; index < line.size(); ++index)
@@ -158,6 +172,10 @@ std::size_t lex_template(LexCursor &cursor, std::size_t at)
         if (value == '/' && !in_class)
         {
             return index + 1U;
+        }
+        if (stops_scan(value, bounded))
+        {
+            return lex_unclosed;
         }
         in_class = value == '[' || (in_class && value != ']');
         index += value == '\\' ? 1U : 0U;
@@ -168,12 +186,13 @@ std::size_t lex_template(LexCursor &cursor, std::size_t at)
 // 正規表現リテラル `/…/flags` は string。閉じが行末まで無ければ正規表現でなく、`/` を 1 字の
 // 除算の演算子として読み直して続ける（#836 のレビュー R2・行頭のコメントの後や継続行の `/ 2`・
 // JSX の `</div>` を error にしない）。
-std::size_t mark_regex(LexCursor &cursor, std::size_t at)
+std::size_t mark_regex(LexCursor &cursor, std::size_t at, RegexHorizon &horizon)
 {
     const std::string_view line = cursor.line();
-    const std::size_t close = regex_close(line, at);
+    const std::size_t close = regex_close(line, at, horizon < at);
     if (close == lex_unclosed)
     {
+        horizon = std::min(horizon, at);
         cursor.mark(at, at + 1U, SyntaxRole::operators);
         cursor.follow(LexPrecedent::expression_start);
         return at + 1U;
@@ -185,7 +204,7 @@ std::size_t mark_regex(LexCursor &cursor, std::size_t at)
 }
 
 // `/` はコメント・正規表現・除算（`/` か `/=`）のどれか。正規表現か除算かは直前の字句で決める。
-std::size_t lex_slash(LexCursor &cursor, std::size_t at)
+std::size_t lex_slash(LexCursor &cursor, std::size_t at, RegexHorizon &horizon)
 {
     const std::string_view line = cursor.line();
     const char next = lex_next_of(line, at);
@@ -199,7 +218,7 @@ std::size_t lex_slash(LexCursor &cursor, std::size_t at)
     }
     if (cursor.precedent() == LexPrecedent::expression_start)
     {
-        return mark_regex(cursor, at);
+        return mark_regex(cursor, at, horizon);
     }
     const std::size_t end = at + (next == '=' ? 2U : 1U);
     cursor.mark(at, end, SyntaxRole::operators);
@@ -228,7 +247,7 @@ std::size_t lex_slash(LexCursor &cursor, std::size_t at)
     return !hex && (value == '+' || value == '-') && exponent == 'e';
 }
 
-std::size_t lex_number(LexCursor &cursor, std::size_t at)
+std::size_t lex_number(LexCursor &cursor, std::size_t at, RegexHorizon & /*horizon*/)
 {
     const std::string_view line = cursor.line();
     const bool hex = line[at] == '0' && (lex_next_of(line, at) | '\x20') == 'x';
@@ -249,12 +268,12 @@ std::size_t lex_number(LexCursor &cursor, std::size_t at)
 
 // 演算子の連なりは 1 区間（`.5` で切る）。最後の文字が `)` `]` なら次の `/` は除算、ほかは
 // 正規表現。
-std::size_t lex_operators(LexCursor &cursor, std::size_t at)
+std::size_t lex_operators(LexCursor &cursor, std::size_t at, RegexHorizon &horizon)
 {
     const std::string_view line = cursor.line();
     if (starts_number(line, at))
     {
-        return lex_number(cursor, at);
+        return lex_number(cursor, at, horizon);
     }
     std::size_t end = at + 1U;
     while (end < line.size() && continues_operator(line, end))
@@ -297,7 +316,8 @@ std::size_t lex_operators(LexCursor &cursor, std::size_t at)
     return called ? std::optional{SyntaxRole::function} : std::nullopt;
 }
 
-template <bool typescript> std::size_t lex_word(LexCursor &cursor, std::size_t at)
+template <bool typescript>
+std::size_t lex_word(LexCursor &cursor, std::size_t at, RegexHorizon & /*horizon*/)
 {
     const std::string_view line = cursor.line();
     const std::size_t end = identifier_end(line, at);
@@ -316,7 +336,7 @@ template <bool typescript> std::size_t lex_word(LexCursor &cursor, std::size_t a
     return end;
 }
 
-std::size_t skip_character(LexCursor & /*cursor*/, std::size_t at)
+std::size_t skip_character(LexCursor & /*cursor*/, std::size_t at, RegexHorizon & /*horizon*/)
 {
     return at + 1U;
 }
@@ -378,9 +398,10 @@ std::size_t resumed(LexCursor &cursor, const LexState &in)
 template <bool typescript> void lex_with(LexCursor &cursor, const LexState &in)
 {
     const std::string_view line = cursor.line();
+    RegexHorizon horizon = lex_unclosed;
     for (std::size_t at = resumed(cursor, in); at < line.size();)
     {
-        at = handlers<typescript>.at(static_cast<unsigned char>(line[at]))(cursor, at);
+        at = handlers<typescript>.at(static_cast<unsigned char>(line[at]))(cursor, at, horizon);
     }
 }
 } // namespace
