@@ -42,5 +42,9 @@ struct EditorDelivery
     // 立つ。ui は意図を送った結果を受ける 1 か所でこれを見て問いを出す。
     bool display_question = false;
     std::optional<TextLayoutFailure> layout_failure{};
+    // 描き直しが要るか。合図（AutosaveTick / PreviewTick）が退避もプレビューの要求も出さず何も
+    // 変えなかったときだけ false で、ui はそのとき無効化を積まない（ADR 0155 の追補・#813）。
+    // ほかの意図は true。
+    bool repaint = true;
 };
 } // namespace nenenib::application

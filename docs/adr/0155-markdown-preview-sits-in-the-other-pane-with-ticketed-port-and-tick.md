@@ -65,3 +65,9 @@
 - ui と adapters（#801）: `nib_window_tests --preview`（`PreviewPane` が同じ文書を 2 回描いても layout を作り直さない・錨の上の送り）・`--timers`（`preview` の番号と 200 ms）・`eng/verify-window.py --preview --scheme dark|light|grid`。
 - 静かな道: `verify_quiet_paths`（`--history`）と `verify_folder_quiet_paths`（`--background-work`）。
 - 既存: `--split` `--operations` `--autosave`、`nib_window_tests`（renderer の `std::visit`）。
+
+## 追補 2026-10-22（#813）
+
+- tick は変わったときだけ描く: `EditorDelivery.repaint` は `PreviewTick` が要求を出さなかったとき（見た改訂番号を進めただけを含む）と `AutosaveTick` が退避を頼まなかったときだけ false で、ui の `deliver` はそのとき `invalidate()` しない。結果を採るのは `WorkCompleted`（true）。契約は `--preview` の静かな tick 10 回と `--autosave`。
+- リストの区切りは測る範囲だけ: `PreviewBlockTops::measure` はリストの区切りを錨の 1 つ前から前へ決め（錨より前の項目は読まない）、記号の列は測る範囲に入ったリストを範囲の中の最初の項目からリストの終わりまで（上限 10,000 項目・超えたら番号を 5 桁として）測って決める。番号は前へ増えるので最大の番号の桁数が入り、送っても字下げは動かない。読む要素は測る範囲＋1＋リストの残り（上限）以内で、文書の長さに依らない（`nib_window_tests --preview` の 10 万項目）。後の項目で列が広がれば錨から置き直す。
+- tick は狙いの横位置を捨てない: `PreviewTick` は `keeps_wanted_x` に載り、プレビューが開いている間も `j` `k` と下向きの移動の狙いの横位置が残る（契約 `--preview`）。

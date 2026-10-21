@@ -161,7 +161,8 @@ template <typename Target> class PreviewPainter final
     }
 
     // 項目の記号と番号（operators）。文字の左端から 8 DIP 空けて右に揃える。記号の layout は
-    // 折り返さない幅で作り、記号の列の幅は PreviewBlockTops が同じリストの最大の記号で決める。
+    // 折り返さない幅で作り、記号の列の幅は PreviewBlockTops が測る範囲の同じリストの最大の記号で
+    // 決める。
     void draw_marker(const PreviewScene &scene, const core::PreviewBlock &block,
                      D2D1_POINT_2F origin)
     {

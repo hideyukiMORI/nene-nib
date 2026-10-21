@@ -205,16 +205,16 @@ void verify_clears_autosave()
     return text;
 }
 
-// 合図で頼み、変わっていなければ頼まない（決定 2・7）。
+// 合図で頼み、変わっていなければ頼まない（決定 2・7）。頼まなかった合図は描き直さない（#813）。
 void verify_tick_stores_changes()
 {
     Editing editing;
     auto &controller = editing.controller();
     applied(controller, app::VisibleLines{10});
-    applied(controller, app::AutosaveTick{});
-    expect(editing.autosave().touches() == 0, "a tick over an untouched tab asks nothing");
+    expect(!controller.apply(app::AutosaveTick{}).repaint && editing.autosave().touches() == 0,
+           "a tick over an untouched tab asks nothing and asks for no repaint");
     applied(controller, app::InsertText{"ab"});
-    applied(controller, app::AutosaveTick{});
+    expect(controller.apply(app::AutosaveTick{}).repaint, "a tick that stores asks for a repaint");
     const auto &stored = editing.autosave().stored();
     expect(stored.size() == 1 && bytes_of(stored.back()) == "ab" &&
                !stored.back().path.has_value() && stored.back().id == AutosaveId{0},
@@ -224,8 +224,9 @@ void verify_tick_stores_changes()
     expect(stored.back().title.text() ==
                core::tab_title_for(std::nullopt, core::SaveState::modified).text(),
            "the stored title carries the unsaved mark");
-    applied(controller, app::AutosaveTick{});
-    expect(editing.autosave().stored().size() == 1, "a tick without a change stores nothing");
+    expect(!controller.apply(app::AutosaveTick{}).repaint &&
+               editing.autosave().stored().size() == 1,
+           "a tick without a change stores nothing and asks for no repaint");
     applied(controller, app::InsertText{"c"});
     applied(controller, app::AutosaveTick{});
     expect(editing.autosave().stored().size() == 2 &&

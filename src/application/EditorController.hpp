@@ -543,6 +543,9 @@ class EditorController final
     std::int32_t window_width_ = 0;
     std::int32_t window_height_ = 0;
     std::optional<TextLayoutFailure> layout_failure_;
+    // 今の意図が描き直しを要るか（EditorDelivery.repaint）。apply の入口で true に戻し、合図
+    // （AutosaveTick / PreviewTick）が何も変えなかったときだけ false にする（#813）。
+    bool repaint_ = true;
     // 頼まれてまだ解決していない追従の位置。後の頼みが前の頼みを置き換える（ADR 0128 の決定 1）。
     std::optional<core::TextPosition> pending_follow_;
     // 行高を変えた設定が頼んだ clamp。新しい幾何が届いた後のスクロールの読みで、追従より先に
