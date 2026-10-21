@@ -66,7 +66,8 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/LanguageTable.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp
-    src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp)
+    src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp
+    src/core/HtmlAttribute.cpp src/core/HtmlMarkdownWriter.cpp src/core/HtmlToMarkdown.cpp)
 # core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
 
@@ -75,7 +76,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorView.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
-    src/application/AutosavePlan.cpp)
+    src/application/AutosavePlan.cpp src/application/PasteKind.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
 nenenib_target(nib_tests unit_tests EXECUTABLE
@@ -141,7 +142,9 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/MarkdownTests.cpp
     tests/unit/LanguageTests.cpp
     tests/unit/LexerTests.cpp
-    tests/unit/PreviewTests.cpp)
+    tests/unit/PreviewTests.cpp
+    tests/unit/HtmlToMarkdownTests.cpp
+    tests/unit/RichPasteTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
@@ -158,7 +161,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/BookmarkCodec.cpp src/adapters/win32/Win32BookmarkAdapter.cpp
     src/adapters/win32/HistoryCodec.cpp src/adapters/win32/Win32HistoryAdapter.cpp
     src/adapters/win32/Win32AppearanceAdapter.cpp src/adapters/win32/Win32Bell.cpp
-    src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
+    src/adapters/win32/ClipboardCalls.cpp src/adapters/win32/HtmlClipboardFormat.cpp src/adapters/win32/Win32ClipboardAdapter.cpp
     src/adapters/win32/Win32CodePageAdapter.cpp src/adapters/win32/Win32FontCollationAdapter.cpp
     src/adapters/win32/Win32FileAdapter.cpp src/adapters/win32/TemporaryFiles.cpp
     src/adapters/win32/Win32TimingAdapter.cpp

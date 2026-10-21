@@ -42,6 +42,7 @@
 #include "FolderRequest.hpp"
 #include "FontFamilies.hpp"
 #include "GiantLine.hpp"
+#include "HtmlToMarkdown.hpp"
 #include "ImeStance.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
@@ -59,6 +60,7 @@
 #include "PaneFrame.hpp"
 #include "PaneView.hpp"
 #include "ParkedTab.hpp"
+#include "PasteKind.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewView.hpp"
 #include "SaveState.hpp"
@@ -823,6 +825,9 @@ constexpr std::string_view preview_memory_message = "メモリが足りずプレ
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
 // クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
 constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
+// 貼り付けの知らせ（ADR 0157 の決定 3・7）。鳴らさない情報の 1 行。
+constexpr std::string_view html_missing_notice = "HTML が無いので文字だけを貼りました";
+constexpr std::string_view html_unconverted_notice = "HTML を変換できないので文字だけを貼りました";
 // 描けない失敗だけを残す（frame の欄・ADR 0133 の追補 2026-10-18）。
 [[nodiscard]] std::optional<TextLayoutFailure>
 drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
@@ -1632,6 +1637,18 @@ void EditorController::accept(const ClipboardAction &intent)
     case ClipboardOperation::paste:
         paste_clipboard();
         return;
+    case ClipboardOperation::paste_plain:
+        if (pastes_from_os())
+        {
+            paste_text();
+        }
+        return;
+    case ClipboardOperation::paste_html:
+        if (pastes_from_os())
+        {
+            paste_html_fragment();
+        }
+        return;
     }
     std::unreachable();
 }
@@ -1734,16 +1751,114 @@ void EditorController::cut_selection()
     replace(range, std::string_view{}, core::EditBoundary::separate);
 }
 
+// 一覧から選ぶ貼り付けの操作が効くか（ADR 0157 の決定 2・3）。Vim の NORMAL / VISUAL では OS の
+// 貼り付けをしない（Ctrl+V は矩形の鍵・ADR 0035 の決定 9）。INSERT と通常モードだけ。
+bool EditorController::pastes_from_os() const noexcept
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return true;
+    case core::EditMode::vim:
+        break;
+    }
+    return state_.vim().mode == core::VimMode::insert;
+}
+
+// Ctrl+V（ADR 0157 の決定 1）。HTML を読むのは、HTML があれば貼り方が変わる言語の文書だけ
+// （決定 9）。HTML が無ければ今までどおり文字を読む。
 void EditorController::paste_clipboard()
+{
+    const core::Language language = state_.language();
+    const auto fragment =
+        paste_kind_of(language, true) == PasteKind::text ? std::nullopt : clipboard_html();
+    switch (paste_kind_of(language, fragment.has_value()))
+    {
+    case PasteKind::text:
+        paste_text();
+        return;
+    case PasteKind::markdown_from_html:
+        paste_markdown(fragment.value_or(std::string{}));
+        return;
+    case PasteKind::html_as_is:
+        paste_fragment(fragment.value_or(std::string{}));
+        return;
+    }
+    std::unreachable();
+}
+
+// 「HTML のまま貼り付け」（決定 3）。HTML が無ければ文字だけ貼って 1 行知らせる（鳴らさない）。
+void EditorController::paste_html_fragment()
+{
+    const auto fragment = clipboard_html();
+    if (fragment.has_value())
+    {
+        paste_fragment(fragment.value());
+        return;
+    }
+    paste_text();
+    state_ = state_.with_command_message(core::DisplayText::parse(html_missing_notice).value());
+}
+
+// 変換できなければ文字だけ貼って 1 行知らせる（決定 7・鳴らさない）。
+void EditorController::paste_markdown(std::string_view fragment)
+{
+    const auto markdown = core::markdown_from_html(fragment);
+    if (!markdown.has_value())
+    {
+        paste_text();
+        state_ =
+            state_.with_command_message(core::DisplayText::parse(html_unconverted_notice).value());
+        return;
+    }
+    // 変換の結果が空（script だけ・src の無い img だけなど）なら、黙って文字の貼り付けに戻す。
+    // 空を貼って選択を消さない（レビュー R3）。
+    if (markdown.value().empty())
+    {
+        paste_text();
+        return;
+    }
+    insert_pasted(markdown.value());
+}
+
+// fragment のまま貼る。空の fragment は黙って文字の貼り付けに戻す（空を貼って選択を消さない）。
+void EditorController::paste_fragment(std::string_view fragment)
+{
+    if (fragment.empty())
+    {
+        paste_text();
+        return;
+    }
+    insert_pasted(fragment);
+}
+
+// 読めない HTML は「HTML が無い」と同じに扱う。開けない失敗は文字の読みでも同じく黙る（ADR 0134）。
+std::optional<std::string> EditorController::clipboard_html()
+{
+    auto fragment = ports_.clipboard.html();
+    if (!fragment.has_value())
+    {
+        return std::nullopt;
+    }
+    return std::move(fragment.value());
+}
+
+void EditorController::paste_text()
 {
     const auto pasted = ports_.clipboard.read();
     if (!pasted)
     {
         return;
     }
-    // 改行は `"+p` と同じ 2 段で文書の形に揃える（ADR 0055 の決定 2）。単独の `\r` は文字のまま。
+    insert_pasted(pasted.value());
+}
+
+// 貼る道は 1 本（決定 8）。改行は `"+p` と同じ 2 段で文書の形に揃える（ADR 0055 の決定 2）。単独の
+// `\r` は文字のまま。undo は 1 単位。
+void EditorController::insert_pasted(std::string_view pasted)
+{
     replace(core::selection_range(state_.selection()),
-            with_document_newlines(core::clipboard_line_feeds(pasted.value()),
+            with_document_newlines(core::clipboard_line_feeds(pasted),
                                    core::newline_of(state_.line_ending())),
             core::EditBoundary::separate);
 }

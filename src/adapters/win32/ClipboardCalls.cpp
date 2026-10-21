@@ -12,6 +12,7 @@ ClipboardCalls system_clipboard_calls() noexcept
         .get = &GetClipboardData,
         .available = &IsClipboardFormatAvailable,
         .wait = &Sleep,
+        .register_format = &RegisterClipboardFormatW,
     };
 }
 } // namespace nenenib::adapters::win32

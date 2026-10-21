@@ -34,6 +34,8 @@ namespace
     case EditorOperation::next_pane:
     case EditorOperation::close_pane:
     case EditorOperation::toggle_preview:
+    case EditorOperation::paste_plain:
+    case EditorOperation::paste_html:
         return true;
     }
     return false;

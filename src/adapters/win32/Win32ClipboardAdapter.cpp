@@ -1,6 +1,8 @@
 #include "Win32ClipboardAdapter.hpp"
 
+#include "HtmlClipboardFormat.hpp"
 #include "Utf16.hpp"
+#include "Utf8.hpp"
 
 #include <cstring>
 
@@ -33,6 +35,24 @@ constexpr DWORD open_retry_milliseconds = 10;
     std::memcpy(memory, wide.c_str(), bytes);
     GlobalUnlock(handle);
     return handle;
+}
+
+constexpr const wchar_t *html_format_name = L"HTML Format";
+
+// CF_HTML の中身（UTF-8 のバイト列・NUL で終わることがある）から fragment を写す。見出しが読めない
+// 中身は HTML が無いのと同じ（値なし）。
+[[nodiscard]] std::optional<std::string> fragment_in(HANDLE handle)
+{
+    const auto *memory = static_cast<const char *>(GlobalLock(handle));
+    if (memory == nullptr)
+    {
+        return std::nullopt;
+    }
+    const std::string_view held(memory, GlobalSize(handle));
+    auto fragment = html_fragment_of(held.substr(0, held.find('\0')))
+                        .transform([](std::string_view view) { return std::string(view); });
+    GlobalUnlock(handle);
+    return fragment;
 }
 
 // CF_UNICODETEXT は NUL で終わる。長さは終端までを数える。
@@ -119,6 +139,34 @@ std::expected<void, Failure> Win32ClipboardAdapter::write(std::string_view utf8)
         GlobalFree(handle);
     }
     return stored;
+}
+
+// 貼り付けの道だけが呼ぶ（決定 9）。開けない失敗は文字の読みと同じ値（ADR 0134）。fragment が正しい
+// UTF-8 でなければ unsupported_format（呼び手は文字の読みへ戻る）。
+std::expected<std::optional<std::string>, Failure> Win32ClipboardAdapter::html()
+{
+    if (owner_ == nullptr)
+    {
+        return std::unexpected(Failure::unavailable);
+    }
+    const UINT format = calls_.register_format(html_format_name);
+    if (format == 0 || calls_.available(format) == 0)
+    {
+        return std::nullopt;
+    }
+    const auto opened = opened_clipboard();
+    if (!opened)
+    {
+        return std::unexpected(opened.error());
+    }
+    HANDLE handle = calls_.get(format);
+    auto fragment = handle == nullptr ? std::nullopt : fragment_in(handle);
+    calls_.close();
+    if (fragment.has_value() && !core::validate_utf8(fragment.value()).has_value())
+    {
+        return std::unexpected(Failure::unsupported_format);
+    }
+    return fragment;
 }
 
 std::expected<std::string, Failure> Win32ClipboardAdapter::read()

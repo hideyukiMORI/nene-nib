@@ -29,6 +29,9 @@ enum class EditorOperation : std::uint8_t
     split_horizontal,
     next_pane,
     close_pane,
-    toggle_preview
+    toggle_preview,
+    // 貼り付けの 2 つ（ADR 0157 の決定 2・3）。
+    paste_plain,
+    paste_html
 };
 } // namespace nenenib::core

@@ -26,6 +26,9 @@ enum class OperationKey : std::uint8_t
     space,
     // `\`（JIS の ¥ と ろ の 2 つの物理キーを ui が同じ値に写す・ADR 0148 の決定 6）。
     backslash,
-    m
+    m,
+    // Ctrl+Shift+V の文字だけの貼り付け（ADR 0157 の決定 2）。
+    // Shift なしの Ctrl+V は表に行を置かない（ui の今の貼り付けの道のまま）。
+    v
 };
 } // namespace nenenib::core

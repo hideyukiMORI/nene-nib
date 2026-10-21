@@ -12,6 +12,7 @@
 #include "FileHandle.hpp"
 #include "FilePath.hpp"
 #include "FindHandle.hpp"
+#include "HtmlClipboardFormat.hpp"
 #include "Milestone.hpp"
 #include "SettingsCodec.hpp"
 #include "TemporaryFiles.hpp"
@@ -34,6 +35,7 @@
 #include <format>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -1444,6 +1446,13 @@ BOOL WINAPI fake_available(UINT)
     return TRUE;
 }
 
+// "HTML Format" の番号の替え玉。OS に登録しない。
+UINT WINAPI fake_register(LPCWSTR)
+{
+    constexpr UINT html_format = 0xC0DEU;
+    return html_format;
+}
+
 void WINAPI fake_wait(DWORD milliseconds)
 {
     ++wait_calls();
@@ -1471,6 +1480,7 @@ void reset_fake_clipboard(std::size_t refusals, bool refuse_set)
         .get = &fake_get,
         .available = &fake_available,
         .wait = &fake_wait,
+        .register_format = &fake_register,
     });
     adapter.bind(GetDesktopWindow());
     return adapter;
@@ -1561,6 +1571,84 @@ void verify_clipboard_unbound()
     const auto written = unbound.write("abc");
     expect(!written && written.error() == ClipboardFailure::unavailable,
            "an adapter without a window is unavailable");
+    const auto html = unbound.html();
+    expect(!html && html.error() == ClipboardFailure::unavailable,
+           "an adapter without a window cannot read HTML");
+}
+
+// CF_HTML の形（見出しの位置は 10 桁のゼロ埋め・CRLF）。位置は UTF-8 のバイト位置で数える。
+[[nodiscard]] std::string cf_html(std::string_view fragment)
+{
+    constexpr std::string_view before = "<html><body>\r\n<!--StartFragment-->";
+    constexpr std::string_view after = "<!--EndFragment-->\r\n</body></html>";
+    const std::size_t header =
+        std::format("Version:0.9\r\nStartHTML:{:010}\r\nEndHTML:{:010}\r\nStartFragment:{:010}\r\n"
+                    "EndFragment:{:010}\r\n",
+                    0, 0, 0, 0)
+            .size();
+    const std::size_t start = header + before.size();
+    const std::size_t end = start + fragment.size();
+    return std::format("Version:0.9\r\nStartHTML:{:010}\r\nEndHTML:{:010}\r\nStartFragment:{:010}"
+                       "\r\nEndFragment:{:010}\r\n{}{}{}",
+                       header, end + after.size(), start, end, before, fragment, after);
+}
+
+// 見出しの切り出し（ADR 0157 の決定 4）。実機のクリップボードを触らない純関数の単体。
+void verify_html_fragment_header()
+{
+    using nenenib::adapters::win32::html_fragment_of;
+    expect(html_fragment_of(cf_html("<b>x</b>")) == std::optional<std::string_view>{"<b>x</b>"},
+           "the fragment is cut between StartFragment and EndFragment");
+    const std::string japanese = cf_html("<p>日本語</p>");
+    expect(html_fragment_of(japanese) == std::optional<std::string_view>{"<p>日本語</p>"},
+           "the positions count UTF-8 bytes, not characters");
+    expect(html_fragment_of(cf_html("")) == std::optional<std::string_view>{""},
+           "an empty fragment is empty");
+    expect(!html_fragment_of("<html>no header</html>").has_value(),
+           "bytes without the header have no fragment");
+    expect(!html_fragment_of("Version:0.9\r\nStartFragment:0000000005\r\nEndFragment:00000000"
+                             "99\r\n<b>x</b>")
+                .has_value(),
+           "an end past the bytes has no fragment");
+    expect(
+        !html_fragment_of("StartFragment:0000000009\r\nEndFragment:0000000005\r\n<b>").has_value(),
+        "a start after the end has no fragment");
+    expect(!html_fragment_of("StartFragment:x\r\nEndFragment:0000000005\r\n<b>").has_value(),
+           "a position that is not a number has no fragment");
+    expect(!html_fragment_of("Version:0.9\r\n<p>StartFragment:1 EndFragment:2</p>").has_value(),
+           "the keys are read only before the first <");
+}
+
+void hold_global_bytes(std::string_view bytes)
+{
+    held_global() = GlobalAlloc(GMEM_MOVEABLE, bytes.size() + 1U);
+    auto *memory = static_cast<char *>(GlobalLock(held_global()));
+    if (memory != nullptr)
+    {
+        std::memcpy(memory, std::string(bytes).c_str(), bytes.size() + 1U);
+    }
+    GlobalUnlock(held_global());
+}
+
+// 替え玉の束で html() の道を通す（決定 4）。OS のクリップボードは開かない。
+void verify_clipboard_html()
+{
+    reset_fake_clipboard(0, false);
+    hold_global_bytes(cf_html("<i>y</i>"));
+    const auto html = faked_clipboard().html();
+    expect(html.has_value() && html.value() == std::optional<std::string>{"<i>y</i>"},
+           "html() returns the fragment of the HTML Format");
+    release_global_text();
+    hold_global_bytes("no header");
+    const auto broken = faked_clipboard().html();
+    expect(broken.has_value() && !broken.value().has_value(),
+           "an HTML Format without the header is no HTML");
+    release_global_text();
+    hold_global_bytes(cf_html("a\xFF"));
+    const auto invalid = faked_clipboard().html();
+    expect(!invalid && invalid.error() == ClipboardFailure::unsupported_format,
+           "a fragment that is not UTF-8 is refused");
+    release_global_text();
 }
 
 void verify_clipboard()
@@ -1570,6 +1658,8 @@ void verify_clipboard()
     verify_clipboard_set_refused();
     verify_clipboard_unrepresentable();
     verify_clipboard_unbound();
+    verify_html_fragment_header();
+    verify_clipboard_html();
 }
 
 // #696: 字体の名前は OS の照合順（大文字小文字と空白の扱いはロケールの照合）。ASCII の名前は

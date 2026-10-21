@@ -446,7 +446,17 @@ class EditorController final
     [[nodiscard]] bool clipboard_written(std::string_view text);
     void copy_selection();
     void cut_selection();
+    // 貼り付け（ADR 0157）。Ctrl+V は文書の言語で貼り方が決まり（paste_kind_of）、
+    // Ctrl+Shift+V は文字だけ、「HTML のまま貼り付け」は fragment のまま。
+    // どれも insert_pasted の 1 本で本文に入る。
     void paste_clipboard();
+    void paste_html_fragment();
+    void paste_markdown(std::string_view fragment);
+    void paste_fragment(std::string_view fragment);
+    void paste_text();
+    void insert_pasted(std::string_view pasted);
+    [[nodiscard]] std::optional<std::string> clipboard_html();
+    [[nodiscard]] bool pastes_from_os() const noexcept;
     // 描く選択と Ctrl+C / Ctrl+X が覆う本文は同じ 1 本（ADR 0018 の決定 5）。
     [[nodiscard]] core::OffsetRange highlighted_range() const;
     // 矩形 VISUAL のあいだだけ値を持つ（ADR 0035 の決定 2・8）。描く選択も Ctrl+C / Ctrl+X も

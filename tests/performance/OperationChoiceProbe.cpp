@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 21> expected_2{
+constexpr std::array<OperationChoiceExpected, 23> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -67,8 +67,14 @@ constexpr std::array<OperationChoiceExpected, 21> expected_2{
       17U, "Ctrl+Shift+F4", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::toggle_preview, 20U, "Markdown プレビュー", 14U,
       "Markdown のプレビューを右（下）の枠に出す・もう一度で閉じる", 34U, "Ctrl+Shift+M", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 19> expected_3{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::paste_plain, 21U, "文字だけを貼り付け", 9U,
+      "クリップボードの文字だけを貼ります（HTML を変換しない）", 30U, "Ctrl+Shift+V", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
+      "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 21> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -115,9 +121,18 @@ constexpr std::array<OperationChoiceExpected, 19> expected_3{
       17U, "Ctrl+Shift+F4", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::toggle_preview, 20U, "Markdown プレビュー", 14U,
       "Markdown のプレビューを右（下）の枠に出す・もう一度で閉じる", 34U, "Ctrl+Shift+M", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 21> expected_4{
-    {{core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::paste_plain, 21U, "文字だけを貼り付け", 9U,
+      "クリップボードの文字だけを貼ります（HTML を変換しない）", 30U, "Ctrl+Shift+V", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
+      "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 23> expected_4{
+    {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
+      "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
       "", core::CommandChoiceKind::operate, std::nullopt},
@@ -160,6 +175,9 @@ constexpr std::array<OperationChoiceExpected, 21> expected_4{
      {core::EditorOperation::toggle_preview, 20U, "Markdown プレビュー", 14U,
       "Markdown のプレビューを右（下）の枠に出す・もう一度で閉じる", 34U, "Ctrl+Shift+M", "",
       core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::paste_plain, 21U, "文字だけを貼り付け", 9U,
+      "クリップボードの文字だけを貼ります（HTML を変換しない）", 30U, "Ctrl+Shift+V", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::close_pane, 19U, "枠を閉じる", 5U, "いまの枠を閉じて 1 つに戻します",
       17U, "Ctrl+Shift+F4", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::recent_tab_back, 6U, "前に使ったタブへ（逆向き）", 13U,
@@ -168,7 +186,7 @@ constexpr std::array<OperationChoiceExpected, 21> expected_4{
      {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
       "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
       core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 8> expected_5{
+constexpr std::array<OperationChoiceExpected, 9> expected_5{
     {{core::EditorOperation::save, 1U, "保存", 2U, "いまのファイルに上書きします", 14U, "Ctrl+S",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
@@ -181,6 +199,9 @@ constexpr std::array<OperationChoiceExpected, 8> expected_5{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::toggle_preview, 20U, "Markdown プレビュー", 14U,
       "Markdown のプレビューを右（下）の枠に出す・もう一度で閉じる", 34U, "Ctrl+Shift+M", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::paste_plain, 21U, "文字だけを貼り付け", 9U,
+      "クリップボードの文字だけを貼ります（HTML を変換しない）", 30U, "Ctrl+Shift+V", "",
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::close_pane, 19U, "枠を閉じる", 5U, "いまの枠を閉じて 1 つに戻します",
       17U, "Ctrl+Shift+F4", "", core::CommandChoiceKind::operate, std::nullopt},
@@ -223,17 +244,17 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 617472U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 700160U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 572928U, expected_3,
+     {"", core::EditMode::vim, 256U, 655616U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 617472U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 700160U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {"cTrL+s", core::EditMode::vim, 1024U, 1108992U, expected_5,
+     {"cTrL+s", core::EditMode::vim, 1024U, 1294336U, expected_5,
       "operation-choice-v1\nkey-vim\nvim\ncTrL+"
       "s\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"タブ", core::EditMode::ordinary, 1024U, 569344U, expected_6,
