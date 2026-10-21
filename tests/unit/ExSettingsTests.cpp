@@ -439,6 +439,8 @@ void verify_command_completions()
         const auto layout = core::command_layout(status, dpi, 3);
         expect(core::command_input_label(layout, dpi) == core::command_row_label(layout.input, dpi),
                "the input line uses the same inset as the completion rows");
+        expect(core::command_input_label(layout, dpi).left == layout.input.left + inset,
+               "the message line after Enter is written at the same inset as the input");
     }
 }
 

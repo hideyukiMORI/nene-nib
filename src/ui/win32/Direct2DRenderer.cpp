@@ -1522,8 +1522,10 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
     }
     if (frame.command_message.has_value() && !frame.command_palette.has_value())
     {
-        context_->PushAxisAlignedClip(to_rect(command.input), D2D1_ANTIALIAS_MODE_ALIASED);
-        write_status(frame.command_message.value().text(), command_format_.Get(), command.input,
+        // 知らせの 1 行も入力行の文字と同じ内側（#786）。
+        const auto label = core::command_input_label(command, dpi_);
+        context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
+        write_status(frame.command_message.value().text(), command_format_.Get(), label,
                      frame.palette.text);
         context_->PopAxisAlignedClip();
         return;
