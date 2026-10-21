@@ -8,8 +8,14 @@ ADR 0138 の任意のベンチの形を使う。**数字は設計席が静かな
 
 | 道具 | 何を測るか | 使い方 |
 |---|---|---|
-| probe `nib_preview_probe`（`tests/preview/`・CTest 外） | 決定的に作った Markdown の `parse_markdown` と、`PreviewTextLayouts` ＋ `PreviewBlockTops::measure` の時間（製品の `PreviewPane` を通さない） | （#818 の probe の節で決める） |
+| probe `nib_preview_probe`（`tests/preview/`・CTest 外） | 決定的に作った Markdown の `parse_markdown` と、`PreviewTextLayouts` ＋ `PreviewBlockTops::measure` の時間（製品の `PreviewPane` を通さない） | `build/nib_preview_probe.exe <bytes> <head\|middle\|tail> <json>`（1 回の実行で 1 点・反復は設計席の台本）。JSON は schema・bytes・sha256・blocks・anchor・first・measured・parseMs・measureMs・layoutsCreated・viewport・commit・dirty・configuration。節目は `<json>.timing.json` |
 | 任意のベンチ `key-to-frame-single-preview-open`（`eng/measure-speed.py`） | `preview-1000.md` を開いて Ctrl+Shift+M でプレビューを出した後の 1 打鍵 → 次の提示 | `python eng/measure-speed.py --bench key-to-frame-single-preview-open --record [--repetitions N]`（`--check` / `--adopt` / `--values` は断る） |
+
+probe の入力は `tests/performance/MarkdownProbe.cpp` の `markdown_input` と同じ規則で `<bytes>` まで作る（16 MiB = 16,777,216 を渡すと同じバイト列）。
+preview_tests は performance_tests に依存できないので、生成は `tests/preview/PreviewProbe.cpp` に写してある。
+時刻は `Win32TimingAdapter` の節目だけで取る（ARC-007）。parse と measure をそれぞれ `probe_started` / `probe_finished` の 1 対で挟む。
+そのため `eng/architecture.json` の `preview_tests` の依存に `adapters_win32` を足した（試験の target だけ・製品の依存は不変）。
+viewport は錨・900 DIP 幅・640 DIP 高さ・DPI 120 で、錨は head = 0・middle = ブロックの数の半分・tail = 最後の 10 個前。
 
 ベンチの文書 `preview-1000.md`: 1000 行・CRLF・BOM なし・5,944,334 bytes・SHA-256
 `5878ba0b9dff061ce45b27cc92d8775277cc2fde4316cf981b11668232bbf3cf`。行は「印（`# ` / なし / `- ` を行ごとに回す）・
