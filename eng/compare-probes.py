@@ -155,7 +155,9 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'text-object-sentence-giant-1line-16384',
              'text-object-sentence-dense-4096',
              'text-object-tag-nested-4096',
-             'text-object-tag-unclosed-4096')
+             'text-object-tag-unclosed-4096',
+             'lexer-cpp-visible-60',
+             'lexer-cpp-backfill-200')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -203,7 +205,25 @@ def text_object_input(workload: str) -> bytes:
     return ("<a>" * 500 + "x" * 2596).encode("utf-8")
 
 
+LEXER_TEMPLATES = (
+    "#include <vector> // container",
+    "static constexpr std::uint32_t mask = 0xFF'FFu; /* block comment begins",
+    "   continues the block comment */ int value = compute(12.5e-3f, 'x');",
+    'auto text = R"raw(raw string with ) inside)raw"; if (text.size() >= 10) { return; }',
+    "for (int i = 0; i < count; ++i) { total += values[i] * 2; } // loop",
+    'const char *name = "string with \\" escape"; bool ok = name != nullptr && true;')
+
+
+def lexer_input(workload: str) -> bytes:
+    """C++ の行の字句器の 2 本（#815）。tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
+    count = 60 if workload == "lexer-cpp-visible-60" else 200
+    lines = (LEXER_TEMPLATES[index % 6] + " //" for index in range(count))
+    return "".join(line + "-" * (100 - len(line)) + "\n" for line in lines).encode("utf-8")
+
+
 def fixed_input(workload: str) -> bytes:
+    if workload in WORKLOADS[152:154]:
+        return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)
     if workload in WORKLOADS[138:148]:

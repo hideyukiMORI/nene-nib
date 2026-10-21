@@ -76,6 +76,9 @@ void verify_operations_scope();
 // GuideTests.cpp
 void verify_guide_scope();
 
+// LexerTests.cpp（#815・段 2 の ADR 0156 の決定 1〜6・lex_line）
+void verify_lexer_scope();
+
 // MarkdownTests.cpp（ADR 0151 の決定 5〜8・parse_markdown）
 void verify_markdown_scope();
 
