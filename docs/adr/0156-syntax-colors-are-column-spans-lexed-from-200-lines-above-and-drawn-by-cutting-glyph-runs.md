@@ -32,7 +32,7 @@
 
 ## 1 打鍵の道の費用
 
-字句器を持たない言語では、`visible_lines` に足したのは `has_lexer` の `switch` 1 回と、行ごとの `std::optional` の空の判定だけ。C / C++ では、覚えが続く限り frame ごとに見えている行の `lex_line`（#815 の probe の Release で 60 行 6,060 byte が中央値 30 µs・約 5 ns/byte）と、スクロールで進んだ行数の `lex_state`。作り直し（編集・タブの切り替え・上へ戻る・4,096 行を超える飛び）は 200 行の遡りが 1 回足される（同じ probe で 200 行 20,200 byte が中央値 99 µs）。描画は区間ごとに部分 run を描くので `DrawGlyphRun` の回数が区間の数に比例して増える。
+字句器を持たない言語では、`visible_lines` に足したのは `has_lexer` の `switch` 1 回と、行ごとの `std::optional` の空の判定だけ。C / C++ では、覚えが続く限り frame ごとに見えている行の `lex_line`（#815 の probe の Release で 60 行 6,060 byte が中央値 30 µs・約 5 ns/byte）と、スクロールで進んだ行数の `lex_state`。作り直し（編集・タブの切り替え・上へ戻る・4,096 行を超える飛び）は 200 行の遡りが 1 回足される（同じ probe で 200 行 20,200 byte が中央値 99 µs）。描画は区間ごとに部分 run を描くので `DrawGlyphRun` の回数が区間の数に比例して増える。任意のベンチ `key-to-frame-single-cpp` の 1 回（2026-10-21・Release・施主の実機 i9-10850K / RTX 3090 / 120 dpi・`--record --repetitions 1`・記録だけで判定しない）は 1.020 ms。
 
 ## 限界（分かっていて今回は採らない）
 
