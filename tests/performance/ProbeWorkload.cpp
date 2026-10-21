@@ -867,6 +867,10 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     {
     case LexerWorkload::cpp_visible_60:
     case LexerWorkload::cpp_backfill_200:
+    case LexerWorkload::json_visible_60:
+    case LexerWorkload::json_backfill_200:
+    case LexerWorkload::python_visible_60:
+    case LexerWorkload::python_backfill_200:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -887,7 +891,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 161> dispatches{{
+constexpr std::array<ProbeDispatch, 165> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1218,6 +1222,14 @@ constexpr std::array<ProbeDispatch, 161> dispatches{{
                      lexed_lines},
     ProbeDispatchRow{LexerWorkload::cpp_backfill_200, "lexer-cpp-backfill-200", lexer_input,
                      lexed_lines},
+    ProbeDispatchRow{LexerWorkload::json_visible_60, "lexer-json-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::json_backfill_200, "lexer-json-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::python_visible_60, "lexer-python-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::python_backfill_200, "lexer-python-backfill-200", lexer_input,
+                     lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1260,7 +1272,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 161U);
+static_assert(dispatches.size() == 165U);
 static_assert(dispatch_is_complete());
 
 } // namespace

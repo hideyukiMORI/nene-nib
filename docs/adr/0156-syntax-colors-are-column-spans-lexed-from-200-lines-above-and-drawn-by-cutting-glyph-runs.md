@@ -29,6 +29,7 @@
 13. **見えている x の範囲だけ。** 部分窓は run の描く窓 `[run.first, run.last)` の中に収める（窓は収集器の `trim` が画面の横の範囲に狭めてある）ので、画面の左右の外の字形は描かない。
 14. **plain の道の費用は 0。** 字句器を持たない言語では `syntax_begin` が `has_lexer` の `switch` 1 回で nullopt を返し、行ごとの `colored_line` は空の optional を見て返るだけで `colors` は空のまま（`lex_line` / `lex_state` の呼び出しと覚えの参照・書き込みは無い）。`.txt` の既存 8 本のベンチの文書は今までどおり。
 15. **色つきの速さは任意のベンチで記録だけ。** `eng/measure-speed.py` の `key-to-frame-single-cpp`（`OPTIONAL_BENCHES`・`--bench` で名指ししたときだけ・`--record` だけで基準値に載せない）。文書 `single-cpp-1000.cpp` は長い行のベンチと同じく決定的に作り SHA-256 で守る（5 つの C++ らしい行を番号つきで回す・1 行 100〜120 code points・CRLF・1000 行）。
+16. **追補（#830）: JSON と Python も同じ `LexState` と表の字句器。** `lex_language` と `has_lexer` の `switch` に `LexJson.cpp`（`lex_json`）と `LexPython.cpp`（`lex_python`）を足す。JSON（Vim の `json.vim`）は行をまたがず常に plain で出て、文字列はキーも値も string（閉じない行は error）・数字・`true false null` は constant・`{ } [ ] : ,` は operators・裸の識別子は区間なし。Python（Vim の `python.vim`）は `#` のコメント・接頭辞 `r b f u` の組の文字列（閉じない行は error）・3 連引用符は `raw_string` で `delimiter` にその 3 文字を持って行をまたぐ・数字（`0x` `0o` `0b` `_` `j` 指数）・予約語（`match` `case` を含む）より定数（`True False None Ellipsis NotImplemented`）が勝つ・組み込みの型・関数（直後の `(` と `def` / `class` の次の名前）・行頭の `@name` は keyword（行の途中の `@` は演算子）・演算子の連続。f-string の式・インデント・JSON5 は後続。probe は `lexer-{json,python}-{visible-60,backfill-200}`（Release で JSON 5.8 / 2.9 ns/byte・Python 6.4 / 3.5 ns/byte）。
 
 ## 1 打鍵の道の費用
 
@@ -40,7 +41,7 @@
 - 巨大な行は状態を plain に戻す（行の中で開いたコメントは次の行へ渡らない）。
 - 同じ退避番号で改訂番号を変えずに本文を丸ごと替える道は、空の無題のタブへ開く `open_document` の `with_opened` だけで、そこで覚えを両方捨てる（controller の 1 か所・契約 `verify_opened_into_untitled`）。覚えの鍵に文書の世代は足さない。ほかに本文を丸ごと替える道（`:e!` など）を足すときは、同じく覚えを捨てる。
 - 編集が見えている最初の行より後ろでも覚えを作り直す（後続 Issue で保つ案）。遡りの 200 行は言語によらない（言語ごとの値は後続 Issue）。
-- `:syntax on|off` は段 3（#829・下の追補）。`:syntax off` の値は session に載せないので、起動で前回のタブを戻すと on に戻る。格子の行（`GridLineRows`）と IME の差し込み行の色は後続。C / C++ 以外の言語は後続。
+- `:syntax on|off` は段 3（#829・下の追補）。`:syntax off` の値は session に載せないので、起動で前回のタブを戻すと on に戻る。格子の行（`GridLineRows`）と IME の差し込み行の色は後続。C / C++・JSON・Python 以外の言語は後続。
 - cluster の表が無い run と右から左の run は切らず、run 全体を最初に重なる区間の色で描く。合字の途中に区間の境があると、合字の字形は後ろの区間の色になる。
 - 保持できない行（決定 12）は区間の数だけ layout を描き直すので遅い。
 - `SetDrawingEffect` を使わない（共有の layout と収集器の棄却・ADR 0114 / 0073）。色を `BodyTextLayouts` の鍵に入れない。

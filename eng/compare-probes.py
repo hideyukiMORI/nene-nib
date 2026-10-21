@@ -157,7 +157,11 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'text-object-tag-nested-4096',
              'text-object-tag-unclosed-4096',
              'lexer-cpp-visible-60',
-             'lexer-cpp-backfill-200')
+             'lexer-cpp-backfill-200',
+             'lexer-json-visible-60',
+             'lexer-json-backfill-200',
+             'lexer-python-visible-60',
+             'lexer-python-backfill-200')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -205,24 +209,45 @@ def text_object_input(workload: str) -> bytes:
     return ("<a>" * 500 + "x" * 2596).encode("utf-8")
 
 
-LEXER_TEMPLATES = (
-    "#include <vector> // container",
-    "static constexpr std::uint32_t mask = 0xFF'FFu; /* block comment begins",
-    "   continues the block comment */ int value = compute(12.5e-3f, 'x');",
-    'auto text = R"raw(raw string with ) inside)raw"; if (text.size() >= 10) { return; }',
-    "for (int i = 0; i < count; ++i) { total += values[i] * 2; } // loop",
-    'const char *name = "string with \\" escape"; bool ok = name != nullptr && true;')
+LEXER_TEMPLATES = {
+    "cpp": (
+        "#include <vector> // container",
+        "static constexpr std::uint32_t mask = 0xFF'FFu; /* block comment begins",
+        "   continues the block comment */ int value = compute(12.5e-3f, 'x');",
+        'auto text = R"raw(raw string with ) inside)raw"; if (text.size() >= 10) { return; }',
+        "for (int i = 0; i < count; ++i) { total += values[i] * 2; } // loop",
+        'const char *name = "string with \\" escape"; bool ok = name != nullptr && true;'),
+    "json": (
+        '{"name": "nene-nib", "version": "0.1.0", "private": true, "count": 12,',
+        '  "values": [1, -2.5, 3e10, 4.0E-3, null, false], "nested": {"a": {"b": [ ]}},',
+        '  "escaped": "quote \\" and backslash \\\\ and \\u00e9", "unicode": "\\u65e5\\u672c",',
+        '  bareKey: "not strict json", "list": [{"x": 1}, {"y": 2}, {"z": 3}],',
+        '  "path": "C:\\\\work\\\\nib", "empty": "", "zero": 0, "neg": -0.125,',
+        '  "last": [true, false, null], "end": {} },'),
+    "python": (
+        "def compute(value: int, *, scale: float = 1.5e3) -> list[int]:  # compute",
+        "    doc = r\"\"\"raw triple string opens here with 'quotes' and \\d escapes",
+        "    still inside\"\"\" + f\"{value!r}\" + b'bytes' + 'it\\'s'; n = 0x_FF_FF + 1_000j",
+        "@functools.lru_cache(maxsize=None)",
+        "    if value is not None and isinstance(value, dict): return [len(v) for v in value]",
+        "class Widget(object): pass  # trailing comment with \"quotes\" and 'apostrophes'"),
+}
+# 行末の印（JSON はコメントが無いので空白）。続けて `-` で 100 バイトにそろえる。
+LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #"}
 
 
 def lexer_input(workload: str) -> bytes:
-    """C++ の行の字句器の 2 本（#815）。tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
-    count = 60 if workload == "lexer-cpp-visible-60" else 200
-    lines = (LEXER_TEMPLATES[index % 6] + " //" for index in range(count))
+    """行の字句器の 6 本（#815 の C++・#830 の JSON と Python）。tests/performance/LexerProbe.cpp と
+    同じ 100 バイトの行。"""
+    language = workload.split("-")[1]
+    count = 60 if workload.endswith("visible-60") else 200
+    templates = LEXER_TEMPLATES[language]
+    lines = (templates[index % 6] + LEXER_SUFFIXES[language] for index in range(count))
     return "".join(line + "-" * (100 - len(line)) + "\n" for line in lines).encode("utf-8")
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:154]:
+    if workload in WORKLOADS[152:158]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

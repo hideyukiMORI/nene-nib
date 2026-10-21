@@ -2,7 +2,9 @@
 
 #include "LexCpp.hpp"
 #include "LexCursor.hpp"
+#include "LexJson.hpp"
 #include "LexOutput.hpp"
+#include "LexPython.hpp"
 
 #include <utility>
 
@@ -20,11 +22,15 @@ void lex_language(Language language, LexCursor &cursor, const LexState &in)
     case Language::cpp:
         lex_cpp(cursor, in);
         return;
+    case Language::json:
+        lex_json(cursor, in);
+        return;
+    case Language::python:
+        lex_python(cursor, in);
+        return;
     case Language::plain:
     case Language::markdown:
     case Language::html:
-    case Language::python:
-    case Language::json:
     case Language::javascript:
     case Language::typescript:
     case Language::yaml:
@@ -61,12 +67,12 @@ bool has_lexer(Language language) noexcept
     {
     case Language::c:
     case Language::cpp:
+    case Language::python:
+    case Language::json:
         return true;
     case Language::plain:
     case Language::markdown:
     case Language::html:
-    case Language::python:
-    case Language::json:
     case Language::javascript:
     case Language::typescript:
     case Language::yaml:
