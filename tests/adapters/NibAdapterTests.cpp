@@ -6,6 +6,7 @@
 #include "ClipboardFailure.hpp"
 #include "CodePageFailure.hpp"
 #include "CompleteFileRead.hpp"
+#include "DocumentByteLimit.hpp"
 #include "EncodingFailure.hpp"
 #include "FileFailure.hpp"
 #include "FileHandle.hpp"
@@ -71,8 +72,8 @@ using nenenib::core::FilePath;
 using nenenib::core::Milestone;
 using nenenib::core::TextEncoding;
 
-// application が渡す上限と同じ値（ADR 0010 の決定 12）。正本は EditorController にある。
-constexpr std::size_t read_limit = 64U * 1024U * 1024U;
+// application が渡す上限と同じ値（ADR 0010 の決定 12）。正本は core の 1 か所（#792）。
+constexpr std::size_t read_limit = nenenib::core::maximum_document_bytes;
 constexpr wchar_t folder[] = L"nib-adapter-files";
 constexpr wchar_t recorded_marks[] = L"nib-adapter-files/timing.json";
 constexpr wchar_t unrecorded_marks[] = L"nib-adapter-files/silent.json";

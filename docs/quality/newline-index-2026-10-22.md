@@ -24,7 +24,7 @@ probe `nib_perf_probes` の `newline-index-payload-*-16mib`。`NewlineIndex::fro
 
 | 対象 | 起こり得る退行 | 結果 |
 |---|---|---|
-| 索引の契約 `--newline-index` | rank / select の境・疎と密の隣り合い・4,095 / 4,096 / 4,097 個・64 KiB の境の LF・200 KiB の 1 行・NUL / CRLF・窓の要約・打鍵で疎から密へ変わる add の chunk と変わる前の値 | 965,762 checks 成功（変更前の同じ scope は 28,134 checks・実行時間は前後とも約 44 s） |
+| 索引の契約 `--newline-index` | rank / select の境・疎と密の隣り合い・4,095 / 4,096 / 4,097 個・64 KiB の境の LF・200 KiB の 1 行・NUL / CRLF・窓の要約・打鍵で疎から密へ変わる add の chunk と変わる前の値 | 1,123,807 checks 成功（変更前の同じ scope は 28,134 checks・実行時間は前後とも約 45 s）。レビュー #810 の I-1 で、密の書きかけの塊の最後の LF の後ろに 512 byte 以上の非 LF・2 回目以降の追記で密の塊を 64 KiB まで埋め切る道・疎 / 密 / 疎の 3 塊の窓の総当たりを足した |
 | 本文・表示・Vim の直接の利用側 | piece の切断と行位置・折り返し・行の移動・格子・仮想桁 | `--buffer-range` 289・`--wrapped-view` 42・`--vim-line-jumps` 999・`--virtual-columns` 85・`--grid-line` 113 checks 成功 |
 | 上限の契約 | 開く上限の値・64 MiB + 1 は `too_large`・退避の読み戻しの上限 | `--application` 22,741・`--file-text` 402・`--autosave` 86 checks 成功・`nib_autosave_tests` 58 checks 0 failures |
 | probe | 表の行と期待値のずれ | 追加 4 本と `ProbeWorkload` の 40 本を Debug で 1 回ずつ流して成功 |
