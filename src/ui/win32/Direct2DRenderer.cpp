@@ -2086,7 +2086,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::acquire_surface()
     return {};
 }
 
-std::expected<void, RenderFailure> Direct2DRenderer::render(const application::EditorFrame &frame)
+std::expected<void, RenderFailure> Direct2DRenderer::render(const application::EditorFrame &frame,
+                                                            application::TimingPort &timing)
 {
     const auto formatted = set_font(frame.settings);
     if (!formatted)
@@ -2103,6 +2104,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::render(const application::E
     {
         return drawn;
     }
+    // draw は EndDraw で終わる。ここが EndDraw の直後（#844）。
+    timing.mark(core::Milestone::frame_drawn);
     // flip model の待機可能オブジェクトで 1 フレーム分だけ待ってから提示する（Phase 0 D1）。
     if (WaitForSingleObjectEx(latency_.get(), latency_timeout_milliseconds, TRUE) != WAIT_OBJECT_0)
     {

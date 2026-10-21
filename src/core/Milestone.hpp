@@ -18,6 +18,10 @@ namespace nenenib::core
 // 出し終えた所（ADR 0132 の決定 3）。input_received と同じく起動の正典順の外。
 // question_shown と question_answered は表示形式の問い（ADR 0140 の決定 2）の MessageBoxW の
 // 直前と返った直後。計測器は開くの値からこの間（答えを待つ時間）を引く（#689）。
+// frame_built と frame_drawn は打鍵の道の input_received -> frame_presented の間の段（#844）。
+// frame_built は窓が controller の frame を作り終えた直後（描く前）、frame_drawn は
+// renderer の EndDraw が返った直後（latency の待ちと Present の前）。どちらも frame ごとに
+// 打ち、起動の正典順の外。
 enum class Milestone : std::uint8_t
 {
     document_opened,
@@ -36,7 +40,9 @@ enum class Milestone : std::uint8_t
     question_shown,
     question_answered,
     probe_started,
-    probe_finished
+    probe_finished,
+    frame_built,
+    frame_drawn
 };
 
 // 計測 JSON に出る名前。閉じた選択肢なので既定分岐は書かない（CPP-002）。
@@ -78,6 +84,10 @@ enum class Milestone : std::uint8_t
         return "probe_started";
     case Milestone::probe_finished:
         return "probe_finished";
+    case Milestone::frame_built:
+        return "frame_built";
+    case Milestone::frame_drawn:
+        return "frame_drawn";
     }
     std::unreachable();
 }
