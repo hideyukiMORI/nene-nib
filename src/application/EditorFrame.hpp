@@ -22,6 +22,7 @@
 #include "SettingsIssue.hpp"
 #include "SplitLayout.hpp"
 #include "StatusItems.hpp"
+#include "SyntaxPalette.hpp"
 #include "TextLayoutFailure.hpp"
 #include "TitleBarInput.hpp"
 #include "TitleBarTarget.hpp"
@@ -46,6 +47,9 @@ struct EditorFrame
     std::size_t total_lines;
     core::Appearance appearance;
     core::Palette palette;
+    // 本文の構文の色（テーマの body・ADR 0156 の決定 10）。renderer は LineView の colors の役割を
+    // core::syntax_color でここから引く。
+    core::SyntaxPalette body;
     core::EditMode mode;
     // Vim のモード。窓は NORMAL のあいだ IME を切るのにこれを読む（ADR 0014 の決定 5）。
     // 通常モードのときは意味を持たない（mode_label にも出ない）。
@@ -109,6 +113,9 @@ struct EditorFrame
     // 見えている画面行の範囲に、一致の長さの上限ぶんの余裕と文脈の 1 文字を
     // 前後に足した分だけで、行の全体ではない。
     std::size_t grid_searched = 0;
+    // 操作中の枠の lines を作るのに字句器へ通した行の数（遡りと見えている行・数える口・ADR 0156 の
+    // 決定 8・9）。字句器を持たない言語・格子・問いの間は 0。
+    std::size_t syntax_lexed = 0;
     // 枠の配置・操作中の枠の側ともう 1 つの枠（ADR 0148 の決定 8）。1 枠では none・first・値なし。
     // 描く所は pane_layouts の first / second のうち active_side の側に操作中の枠を置く。
     core::SplitLayout layout = core::SplitLayout::none;

@@ -103,6 +103,7 @@ Ex の保存・終了は core の `ExDocumentName` の表から `ExDocumentVerb`
 断りの音は型のある `BellPort`（`ring` の 1 本）で、鳴らすかは controller の `reject` の 1 か所が決め、実装は adapters の `Win32Bell`（`MessageBeep`）（ADR 0153）。
 クリップボードは `ClipboardPort`（`write` / `read` / `html`）。`html` は "HTML Format" の fragment だけを返し、呼ぶのは貼り付けの道だけ。貼り方は application の `paste_kind_of`（文書の言語 × HTML の有無）の 1 か所が決め、HTML → Markdown は core の純関数 `markdown_from_html`、見出しの切り出しは adapters の `html_fragment_of`（ADR 0157）。
 ワーカーへの要求値と完了の受け取り（版番号）もここ（ADR 0004）。Win32・永続化・ファイル・スレッドを知らない。
+構文の色は frame を作るときに枠ごとに 1 回、見えている行の `LineView.colors` に置く。始めの行の状態は controller の枠の側ごとの覚え `SyntaxStateCache` か 200 行の遡りから `SyntaxLines`（`syntax_begin` / `colored_line`）が求め、字句器は core の `lex_line` / `lex_state`、色は core の `syntax_color` の 1 本（ADR 0156）。
 裏の仕事の port は仕事の種類ごとに 1 つ: `FolderPort`（同じフォルダの列挙・ADR 0062）・`AutosavePort`（自動退避・ADR 0137）・`MarkdownPort`（プレビューの解析・券つき・ADR 0155）。どれも頼んですぐ戻り、結果は `WorkCompleted` の合図で `collect()` が引く。
 
 ### `src/adapters/win32`
@@ -116,6 +117,8 @@ Ex の保存・終了は core の `ExDocumentName` の表から `ExDocumentVerb`
 application が作った表示値を Direct2D / DirectWrite で描き、キー・マウス・IME の操作を意図として渡す（ARC-011・CPP-017）。可変性の隔離区画（ARC-005）。
 
 本文の文字組み資源はDirect2DRendererの`layout_of`が所有し、現在/直前の描画で使う全文と幾何が一致するときだけ再利用する。フォント・DPI変更で破棄し、画面を離れた資源は次の描画で手放す。本文の正本や編集状態は持たない（ADR 0069）。
+
+構文の色は `Direct2DRenderer::draw_line_text` が区間を `ColoredRun` の列にし、`BodyTextPainter::draw_colored_body_text` が保持した字形 run を `GlyphPieces` で cluster の境に切って描く（保持できない行は `tint_runs` の切り抜き）。色を layout や保持の鍵に入れない（ADR 0156）。
 
 起動の最初の frame だけは、本窓の client を覆う子窓 `CoverWindow` に WARP の device で描き、本物の device が出来たら本窓へ差し替えて子窓を壊す（ADR 0132）。本窓の HWND には本物の device だけを結ぶ。
 

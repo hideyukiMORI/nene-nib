@@ -1,6 +1,8 @@
 #include "Direct2DRenderer.hpp"
 #include "TextLayoutPoint.hpp"
 
+#include "BodyColors.hpp"
+#include "ColoredRun.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
@@ -16,6 +18,7 @@
 #include "PreviewTextStyle.hpp"
 #include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
+#include "SyntaxColor.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
 
@@ -1105,6 +1108,37 @@ void Direct2DRenderer::draw_passive_caret(IDWriteTextLayout *text, const core::L
     std::unreachable();
 }
 
+void Direct2DRenderer::draw_line_text(const application::EditorFrame &frame,
+                                      IDWriteTextLayout *text, const core::LayoutRect &area,
+                                      const application::LineView &line)
+{
+    if (line.colors.empty())
+    {
+        brush_->SetColor(to_color(frame.palette.text));
+        draw_body_text(text, area);
+        return;
+    }
+    // 区間の桁は本文の桁なので、選択と同じ range_of で描画用の行の UTF-16 へ写す（`^M` の展開も）。
+    LineUtf16Evaluation positions(line.display.text);
+    std::vector<ColoredRun> colored;
+    colored.reserve(line.colors.size());
+    for (const auto &span : line.colors)
+    {
+        const auto range = range_of(
+            line, core::SelectionSpan{core::SelectionPresence::present, span.begin, span.end},
+            positions);
+        if (range.length > 0)
+        {
+            colored.push_back(
+                ColoredRun{range, to_color(core::syntax_color(frame.body, span.role))});
+        }
+    }
+    body_painter().draw_colored_body_text(text, area,
+                                          BodyColors{colored, to_color(frame.palette.text)},
+                                          [this](const D2D1_COLOR_F &color)
+                                          { brush_->SetColor(color); });
+}
+
 void Direct2DRenderer::outline_block(
     const std::optional<std::vector<DWRITE_HIT_TEST_METRICS>> &runs)
 {
@@ -1222,8 +1256,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     {
         draw_line_selection(frame, text.Get(), area, line);
     }
-    brush_->SetColor(to_color(frame.palette.text));
-    draw_body_text(text.Get(), area);
+    draw_line_text(frame, text.Get(), area, line);
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_current_match(frame, text.Get(), area, line);
     if (line.number != pane.caret.position.line)

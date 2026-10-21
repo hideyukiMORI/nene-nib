@@ -28,4 +28,5 @@ void verify_window_timers();
 void verify_wheel_turns();
 void verify_preview_layouts();
 void verify_status_demand();
+void verify_syntax_render();
 } // namespace nenenib::tests::ui

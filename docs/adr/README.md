@@ -168,3 +168,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0154](0154-document-language-is-a-document-value-with-one-core-table.md) | 文書の言語は文書の値で、表は core に 1 つ。設定とセッションには入れない | 提案（hide の試用の後に受理）・#776 |
 | [0155](0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md) | Markdown プレビューは split の other の枠に置き、更新は券つきの `MarkdownPort` と 200 ms の tick の間引きで行う | 提案（段 5 の ui と hide の試用の後に受理）・#800 #801 |
 | [0157](0157-clipboard-html-pastes-by-document-language-through-one-core-converter.md) | クリップボードの HTML は文書の言語で貼り方が決まり、変換は core の純関数 1 本 | 提案（hide の試用の後に受理）・#774 |
+| [0156](0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md) | 構文の色は本文の桁の区間で、見えている行の 200 行前から走らせ、保持した字形 run を cluster で切って描く | 提案（hide の試用の後に受理）・#815 #816 |

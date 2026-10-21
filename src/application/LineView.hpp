@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ColorSpan.hpp"
 #include "ComposedLine.hpp"
 #include "DisplayLine.hpp"
 #include "LineNumber.hpp"
@@ -37,6 +38,9 @@ struct LineView
     // この行の文字組みの原点の、本文の欄の左端からのずれ（物理画素・横の送りを引いた値）。
     // 折り返す設定の普通の行は 0、それ以外は窓の x と横の送りから決まる（ADR 0139 の決定 5）。
     float left = 0;
+    // 構文の色の区間（ADR 0156 の決定 7）。桁は matches と同じ本文の桁で、昇順で重ならない。
+    // 字句器を持たない言語・巨大な行の窓・IME の差し込み行・格子の行では空。
+    std::vector<core::ColorSpan> colors{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

@@ -46,6 +46,7 @@
 #include "ImeStance.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
+#include "Lexer.hpp"
 #include "LineSpanEvaluation.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownOutcome.hpp"
@@ -75,6 +76,7 @@
 #include "SplitLayout.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusItems.hpp"
+#include "SyntaxLines.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
 #include "TabJumpDirection.hpp"
@@ -4720,7 +4722,8 @@ LineView EditorController::line_view(const PaneSource &source, LineView view,
 // 枠の見えている行（ADR 0148 の決定 8）。操作中の枠ももう 1 つの枠もこの 1 本を通る。スクロールは
 // 呼び手（frame）が解決済み。
 std::expected<std::vector<LineView>, TextLayoutFailure>
-EditorController::visible_lines(const PaneSource &source) const
+EditorController::visible_lines(const PaneSource &source, AutosaveId tab,
+                                std::optional<SyntaxStateCache> &cache, std::size_t &lexed) const
 {
     const EditorState &state = source.state;
     const ScrollState &scroll = state.scroll();
@@ -4736,6 +4739,11 @@ EditorController::visible_lines(const PaneSource &source) const
     {
         lines.reserve(last - first + 1);
     }
+    // 字句器を持つ言語だけ、見えている最初の行の行頭の状態を覚えか遡りから求める（ADR 0156 の
+    // 決定 8・9・14）。持たない言語は字句器も覚えも触らない。
+    const SyntaxStateCache key{tab, state.history().revision(), state.language(),
+                               core::LineNumber{first}, core::LexState{}};
+    auto lex = first <= last ? syntax_begin(state.text(), key, cache, lexed) : std::nullopt;
     // text の表示の frame なので、構築は 1 升を port から読まない（格子でない）。
     const VisualTextView visual(state, ports_.text_layouts, view_geometry_);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
@@ -4745,6 +4753,7 @@ EditorController::visible_lines(const PaneSource &source) const
         const core::LineNumber line{number};
         auto shown = line_view(source, visual.line(line),
                                block_row(source.block, line, source.range), caret);
+        lex = colored_line(key.language, lex, shown, lexed);
         const auto count = screen_rows_of(shown);
         if (!count)
         {
@@ -4946,8 +4955,11 @@ EditorFrame EditorController::frame()
         !pending && state_.display() == core::DisplayForm::grid && view_geometry_.width > 0;
     const auto pattern = search_pattern();
     const PaneSource source{state_, highlighted_range(), block_selection(), pattern_of(pattern)};
-    auto lines = pending || gridded ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
-                                    : visible_lines(source);
+    std::size_t lexed = 0;
+    auto lines = pending || gridded
+                     ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
+                     : visible_lines(source, state_.autosave_ids().at(state_.active_tab()),
+                                     syntax_cache(state_.split().active_side), lexed);
     // frame の失敗は描けないものだけ（契約の破れは配達だけに載る・ADR 0133 の追補 2026-10-18）。
     const auto failure = lines ? drawing_failure(layout_failure_) : std::optional{lines.error()};
     EditorFrame result{std::move(lines).value_or(std::vector<LineView>{}),
@@ -4957,6 +4969,7 @@ EditorFrame EditorController::frame()
                        state_.text().line_count(),
                        delivered.appearance,
                        theme.ui,
+                       theme.body,
                        delivered.mode,
                        delivered.vim_mode,
                        delivered.ime,
@@ -4984,20 +4997,52 @@ EditorFrame EditorController::frame()
                        scroll.horizontal,
                        state_.display(),
                        pending};
+    finish_frame(result, source, gridded, lexed);
+    return result;
+}
+
+// frame の後半。格子の画面行・字句器の数・もう 1 つの枠を載せる。
+void EditorController::finish_frame(EditorFrame &result, const PaneSource &source, bool gridded,
+                                    std::size_t lexed)
+{
     if (gridded)
     {
         const auto grid_failure =
             grid_visible_rows(source, result.grid, result.grid_scanned, result.grid_searched);
         result.layout_failure = grid_failure.has_value() ? grid_failure : result.layout_failure;
     }
+    result.syntax_lexed = lexed;
     add_other_pane(result, source.pattern);
-    return result;
+}
+
+std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept
+{
+    switch (side)
+    {
+    case core::PaneSide::first:
+        return first_syntax_;
+    case core::PaneSide::second:
+        return second_syntax_;
+    }
+    std::unreachable();
+}
+
+std::optional<SyntaxStateCache> &EditorController::passive_syntax_cache() noexcept
+{
+    switch (state_.split().active_side)
+    {
+    case core::PaneSide::first:
+        return second_syntax_;
+    case core::PaneSide::second:
+        return first_syntax_;
+    }
+    std::unreachable();
 }
 
 // もう 1 つの枠の表示値（ADR 0148 の決定 8）。行は操作中の枠と同じ visible_lines /
 // grid_visible_rows を、もう 1 つの枠を操作中の枠の形で読む写しから作る。幅は両枠で等しいので
 // 同じ寸法を渡す（決定 1）。選択は無く、検索の面は両枠に塗る（限界）。
-void EditorController::add_other_pane(EditorFrame &result, const core::VimPattern *pattern) const
+void EditorController::add_other_pane(EditorFrame &result, const core::VimPattern *pattern)
 {
     result.layout = state_.split().layout;
     result.active_side = state_.split().active_side;
@@ -5021,7 +5066,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 }
 
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,
-                                      const PaneView &view) const
+                                      const PaneView &view)
 {
     const auto pane = state_.other_pane_state();
     if (!pane.has_value())
@@ -5057,7 +5102,9 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
     }
     else if (!pending)
     {
-        auto lines = visible_lines(source);
+        // もう 1 つの枠は操作中の枠と別の側の覚えを使う（ADR 0156 の決定 9）。
+        std::size_t lexed = 0;
+        auto lines = visible_lines(source, view.tab, passive_syntax_cache(), lexed);
         failure = lines ? std::nullopt : std::optional{lines.error()};
         other.lines = std::move(lines).value_or(std::vector<LineView>{});
     }

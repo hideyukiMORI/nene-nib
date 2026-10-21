@@ -32,6 +32,19 @@ class SoftwareTarget final
     // Direct2DRenderer::draw_body_text と同じく、保持した字形を領域の clip の中で描く経路。
     [[nodiscard]] Pixels glyph_runs(const std::vector<nenenib::ui::win32::BodyGlyphRun> &runs,
                                     D2D1_POINT_2F origin, D2D1_RECT_F clip);
+    // 呼び手の描画（draw(描画先, brush)）を黒の上に通す（#816・BodyTextPainter の色つきの道）。
+    // brush は白で始まる。
+    template <typename Draw> [[nodiscard]] Pixels painted(Draw &&draw)
+    {
+        target_->BeginDraw();
+        target_->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+        brush_->SetColor(D2D1::ColorF(D2D1::ColorF::White));
+        draw(*target_.Get(), brush_.Get());
+        return finish();
+    }
+    // 画素の並び（BGRA・行の幅 width）。
+    static constexpr UINT width = 1300;
+    static constexpr UINT height = 80;
 
   private:
     [[nodiscard]] Pixels finish();
