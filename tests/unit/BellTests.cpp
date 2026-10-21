@@ -16,9 +16,14 @@
 #include "SelectEditMode.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsIssue.hpp"
+#include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
+#include "TextViewGeometry.hpp"
 #include "ToggleBookmark.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterKind.hpp"
+#include "VimRegisterText.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
@@ -75,6 +80,46 @@ void verify_input_line_refusals()
     expect(editing.bell().rings() == 2, "l at the end of the line does not ring");
     vim_replay(controller, "u");
     expect(editing.bell().rings() == 2, "u at the oldest change does not ring");
+
+    frame = run_ex(controller, "tabnext 9");
+    expect(notice(frame).starts_with("E475") && editing.bell().rings() == 3,
+           ":tabnext beyond the tabs (E475) rings once");
+
+    vim_replay(controller, "A!<Esc>");
+    frame = run_ex(controller, "q");
+    expect(notice(frame).starts_with("E37") && editing.bell().rings() == 4,
+           ":q with unsaved changes (E37) rings once");
+}
+
+// マクロの中の `:` の確定も同じ確定の道なので鳴る（ADR 0153 の結果）。`:` の入力は録られないので、
+// `:let @a = ":nosuch<CR>"` に当たる意図でレジスタに置いてから再生する。
+void verify_replayed_refusals()
+{
+    Editing editing;
+    prepare_vim(editing);
+    auto &controller = editing.controller();
+    applied(controller,
+            app::StoreVimRegister{
+                'a', core::VimRegister{core::vim_register_text(vim_keys_of(":nosuch<CR>")),
+                                       core::VimRegisterKind::characters}});
+    vim_replay(controller, "@a");
+    expect(notice(controller.frame()) == "Unknown command" && editing.bell().rings() == 1,
+           "the refused : replayed from a macro rings once");
+}
+
+// layout の契約の破れの知らせ（鍵を拒否する 1 行）は使う人の断りではないので鳴らさない。
+void verify_inconsistent_layout_is_quiet()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{3, core::TextViewGeometry{80, 20, 96}});
+    applied(controller, app::InsertText{"abcdefghijklmnopqrstuvwxyz"});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    vim_replay(controller, "0");
+    editing.text_layouts().misnumber_rows();
+    vim_replay(controller, "gj");
+    expect(notice(controller.frame()).starts_with("内部の不整合") && editing.bell().rings() == 0,
+           "a broken layout round trip shows its notice without ringing");
 }
 
 // 決定 1 (b): `:w` の失敗（E13）は 1 回鳴る。成功の「Written」は鳴らない。
@@ -151,6 +196,8 @@ void verify_save_refusals()
 void verify_bell_contracts()
 {
     verify_save_refusals();
+    verify_replayed_refusals();
+    verify_inconsistent_layout_is_quiet();
     verify_input_line_refusals();
     verify_write_refusals();
     verify_file_refusals();

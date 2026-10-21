@@ -15,7 +15,7 @@ OS の音は OS の呼び出しなので、中核（core / application）から�
 
 1. **鳴らす場面は 2 つだけ。** (a) 入力行の確定（`:` の Ex コマンドと `/` `?` の検索の確定）から出た断り（`E492` `E474` `E32` `E13` `E139` `E37` `E475` `E486` `E35` など、1 行の知らせになるもの）。(b) ファイル操作の失敗の知らせ（`:w` `:saveas` の失敗・`open_listed` の「開けませんでした」・自動退避の失敗の 1 行・使う人の操作の後のブックマークの書き込みの失敗「ブックマークを保存できませんでした」・`:set` `:colorscheme` の後の設定の保存の失敗「Settings could not be saved」）。ブックマークの読みの失敗（起動・面を開くとき）・面の候補の埋めの失敗・まだ読んでいないタブを読めない・退避の残骸を戻せない・「もう分かれています」（情報）・入力行への挿入の失敗は鳴らさない。
 2. **鍵の失敗では鳴らさない。** 行末の `l`・一致なしの `n`・`u` の端・オペレータの打ち消し・マクロの入れ子の上限など engine の鍵の失敗は、同じ E 番号の文でも鳴らさない。検索の確定（`/zzz<CR>`）は (a) で鳴り、その後の `n` の E486 は鍵なので鳴らさない。同じ報せでも道で分ける。
-3. **鳴らすかは application の 1 か所が決める。** `EditorController::reject(core::DisplayText)`（`with_command_message` と `ports_.bell.ring()` の 2 つ）を 1 本だけ置き、場面 (a)(b) の呼び出し元はこれを呼ぶ。情報の知らせは今までどおり `with_command_message`（鳴らない）。文字列（`E` で始まるか）では判定しない。検索の確定は engine の 1 鍵なので、`submit(SearchLine)` が鍵の結果の失敗と知らせを見て `reject` へ写す。
+3. **鳴らすかは application の 1 か所が決める。** `EditorController::reject(core::DisplayText)`（`with_command_message` と `ports_.bell.ring()` の 2 つ）を 1 本だけ置き、場面 (a)(b) の呼び出し元はこれを呼ぶ。情報の知らせは今までどおり `with_command_message`（鳴らない）。文字列（`E` で始まるか）では判定しない。検索の確定は engine の 1 鍵なので、`submit(SearchLine)` が鍵の結果が検索の失敗（`VimRepeatFailure::not_found`・E486 E35 未対応の構文）のときだけ、その知らせを `reject` へ写す。layout の契約の破れ（`refused` と「内部の不整合」の知らせ）は使う人の断りではないので鳴らさない。
 4. **port は型のある 1 本。** `application::BellPort`（`ring() noexcept` の 1 本・結果は返さない・`ClipboardPort` と同じく複写と移動を消した抽象）。`EditorPorts` に借用の 1 欄 `bell`。
 5. **adapters が OS を呼ぶ。** `adapters::win32::Win32Bell` が `MessageBeep(MB_ICONEXCLAMATION)` を呼ぶ（非同期・戻り値は見ない・user32 は adapters_win32 の許可の内）。ui と core は OS の音に触れない（ARC-007）。合成ルート（`src/app/Main.cpp`）が 1 個を所有して渡す。
 6. **静かな道の契約。** `verify_quiet_paths`（scope `--history`）に「起動・開く・切り替え・新しいタブ・保存・打鍵・枠の道で `ring` は 0 回」を足す。替え玉 `ScriptedBell` は回数を数えるだけ。鳴る場面と鳴らない場面は scope `--bell` の契約が固定する。
@@ -29,7 +29,8 @@ OS の音は OS の呼び出しなので、中核（core / application）から�
 
 ## 検証
 
-- scope `--bell`: `:nosuchcommand`（E492）→ 1 回・`:noh` → 0・`/zzz<CR>`（E486）→ 1 回・その後の `n` → 増えない・行末の `l` と端の `u` → 0・`:w next.txt` の E13 → 1 回・成功の `:w` → 0・一覧から開けない → 1 回・自動退避の失敗 → 1 回・ブックマークの書き込みの失敗 → 1 回・読みの失敗 → 0・`:set` の後の設定の保存の失敗 → 1 回。
+- scope `--bell`: `:nosuchcommand`（E492）→ 1 回・`:noh` → 0・`/zzz<CR>`（E486）→ 1 回・その後の `n` → 増えない・行末の `l` と端の `u` → 0・`:w next.txt` の E13 → 1 回・成功の `:w` → 0・一覧から開けない → 1 回・自動退避の失敗 → 1 回・ブックマークの書き込みの失敗 → 1 回・読みの失敗 → 0・`:set` の後の設定の保存の失敗 → 1 回・`:tabnext 9` の E475 → 1 回・未保存の `:q` の E37 → 1 回・マクロの中の `:` の断り → 1 回・layout の契約の破れ（`gj`）→ 0。
+- scope `--background-work` の `verify_folder_quiet_paths`: 裏の列挙の完了と読みの失敗で 0 回。
 - scope `--history` の `verify_quiet_paths`: 静かな道で 0 回。
 - `eng/symbols.py`: `MessageBeep` は adapters_win32 にだけ出る。
 
@@ -39,6 +40,6 @@ OS の音は OS の呼び出しなので、中核（core / application）から�
 
 正直に（限界・後続）:
 
-- マクロや `.` の再生の中の `:` と `/` の確定も同じ確定の道を通るので鳴る（Vim も鳴る）。
+- マクロや `.` の再生の中の `:` と `/` の確定も同じ確定の道を通るので鳴る（Vim も鳴る・契約 `--bell` がレジスタに置いた `:nosuch<CR>` の `@a` で固定）。
 - まだ読んでいないタブを読めない（「開けませんでした: <名前>」）は、Ctrl+P から開けないときと同じ文でも鳴らさない。起動の復元でも通る道で、静かな道の契約（決定 6）を守るため。
-- 検索の確定の失敗は「鍵の失敗かつ知らせがある」で拾う。描画の layout を作れない失敗（知らせ無し）は鳴らない。
+- 検索の確定で鳴らすのは engine が `not_found` で返す検索の失敗だけ。layout を作れない失敗と契約の破れは鳴らない。

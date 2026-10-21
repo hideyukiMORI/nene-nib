@@ -2669,10 +2669,11 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
         restore_search_origin(preview.value().origin);
     }
     const auto failure = step_vim(core::VimKey{pattern});
-    // 確定の断り（E486 E35 など）は入力行の確定なので鳴らす。同じ報せでも後の `n` は鍵なので
-    // 鳴らさない（ADR 0153 の決定 1・2）。知らせの無い失敗（layout を作れない）は鳴らさない。
+    // 検索の失敗（E486 E35 未対応の構文）は engine が not_found で返し、入力行の確定なので鳴らす。
+    // 同じ報せでも後の `n` は鍵なので鳴らさない。layout の契約の破れ（refused）は使う人の断りでは
+    // ないので鳴らさない（ADR 0153 の決定 1・2）。
     const auto &message = state_.command_message();
-    if (failure.has_value() && message.has_value())
+    if (failure == core::VimRepeatFailure::not_found && message.has_value())
     {
         reject(message.value());
     }
