@@ -175,7 +175,8 @@ std::wstring BodyTextLayouts::family(std::string_view requested) const
     return exists(wide) ? wide : std::wstring{L"Consolas"};
 }
 
-// 格子は設定の字体が等幅ならそれで描き、無いか等幅でなければ固定の等幅字体に落とす（ADR 0140 決定 6・D58）。
+// 格子は設定の字体が等幅ならそれで描き、無いか等幅でなければ固定の等幅字体に落とす
+// （ADR 0140 決定 6・D58）。
 std::wstring BodyTextLayouts::grid_family(std::string_view requested) const
 {
     auto wide = core::to_utf16(requested).value();
