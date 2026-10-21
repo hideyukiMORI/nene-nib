@@ -45,5 +45,8 @@ struct DocumentState
     // 入れない。束を作る所がパスから引き（language_of）、`:set filetype=` の上書きは束に乗って
     // タブの切り替えに付いていく。
     core::Language language = core::Language::plain;
+    // 構文の色の入れ切り（ADR 0156 の追補・#829）。言語と同じく文書ごとの値で、設定にもタブの一覧
+    // にも入れない。開いた文書・まだ読んでいない文書を読んだ束・新しいタブは true。
+    bool syntax_enabled = true;
 };
 } // namespace nenenib::application

@@ -2,13 +2,18 @@
 // 持つ言語の文書で見えている行に色の区間が付くこと、持たない言語では区間が空で字句器も覚えも
 // 触らないこと、見えている最初の行の 200 行前からの遡りと覚えから続ける道、改訂・タブ・枠で
 // 作り直すこと、巨大な行の窓・IME の差し込み行・格子が色を持たないこと、役割から色への写しが
-// core の 1 本であること。
+// core の 1 本であること。`:syntax on|off|?` が文書の値で、off の文書は字句器を呼ばないこと
+// （#829・ADR 0156 の追補）。
+#include "Appearance.hpp"
 #include "ColorSpan.hpp"
 #include "ComposeText.hpp"
 #include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorSettings.hpp"
+#include "ExEvaluationFailure.hpp"
+#include "ExFailure.hpp"
+#include "ExResult.hpp"
 #include "FilePath.hpp"
 #include "GiantLine.hpp"
 #include "InsertText.hpp"
@@ -22,6 +27,7 @@
 #include "ScrollLines.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectSyntax.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
 #include "SwitchTab.hpp"
@@ -37,10 +43,12 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -302,6 +310,113 @@ void verify_opened_into_untitled()
            "the first frame after opening into the untitled tab does not reuse its cache");
 }
 
+[[nodiscard]] std::string message_of(const app::EditorFrame &frame)
+{
+    return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                             : std::string();
+}
+
+[[nodiscard]] std::string asked_syntax(app::EditorController &controller)
+{
+    return message_of(run_ex(controller, "syntax?"));
+}
+
+// 追補: Ex の評価。`:sy[ntax] on|off|?` と引数なしは設定に載らない要求で、ほかの引数は E474、
+// 範囲の形は Not supported。補完の候補は `syntax on` と `syntax off`。
+void verify_syntax_evaluation()
+{
+    const auto settings = core::default_editor_settings();
+    const auto system = core::Appearance::light;
+    for (const auto &[text, enabled] :
+         std::array<std::pair<std::string_view, std::optional<bool>>, 6>{{{"syntax on", true},
+                                                                          {"syntax off", false},
+                                                                          {"sy off", false},
+                                                                          {"syntax?", std::nullopt},
+                                                                          {"syntax", std::nullopt},
+                                                                          {"syn ?", std::nullopt}}})
+    {
+        const auto result = core::evaluate_ex(text, settings, system);
+        const auto request = result.has_value() ? result.value().syntax : std::nullopt;
+        expect(request.has_value() && request.value().enabled == enabled &&
+                   !result.value().settings.has_value(),
+               "syntax on|off|? is a document request outside the settings");
+    }
+    for (const std::string_view text : {"syntax bogus", "syntax enable", "syntax on off"})
+    {
+        const auto result = core::evaluate_ex(text, settings, system);
+        expect(!result.has_value() &&
+                   result.error() == core::ExEvaluationFailure{core::ExFailure::invalid_argument},
+               "an unknown syntax argument is E474");
+    }
+    const auto ranged = core::evaluate_ex("2syntax on", settings, system);
+    expect(!ranged.has_value() &&
+               ranged.error() == core::ExEvaluationFailure{core::ExFailure::unsupported_argument},
+           "a range before syntax is not supported");
+    const auto completions = core::command_completions("synt");
+    expect(completions == std::vector<std::string>{"syntax on", "syntax off"},
+           "syntax completes to syntax on and syntax off");
+}
+
+// 追補: `.cpp` の色が `:syntax off` で消えて字句器を 1 行も通さず、`:syntax on` で 200 行の遡りから
+// 戻る。`:syntax?` は今の値の 1 行。未知の引数は E474 で値を変えない。
+void verify_syntax_toggle()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    open(editing, code_path, nearby_comment());
+    scrolled(controller, 299);
+    expect(all_comment(controller.frame().lines.front()), "the cpp document is colored");
+    expect(asked_syntax(controller) == "syntax=on", "a document starts with syntax on");
+    const auto off = run_ex(controller, "syntax off");
+    expect(message_of(off) == "syntax=off" && no_colors(off) && off.syntax_lexed == 0,
+           ":syntax off drops the colors and lexes nothing");
+    expect(controller.frame().syntax_lexed == 0, "later frames of an off document lex nothing");
+    expect(asked_syntax(controller) == "syntax=off" &&
+               message_of(run_ex(controller, "syntax")) == "syntax=off",
+           ":syntax? and a bare :syntax tell the value");
+    expect(message_of(run_ex(controller, "syntax bogus")) == "E474: Invalid argument" &&
+               asked_syntax(controller) == "syntax=off",
+           "E474 leaves the value as it was");
+    const auto on = run_ex(controller, "syntax on");
+    expect(message_of(on) == "syntax=on" && on.syntax_lexed == 200 + shown_lines &&
+               all_comment(on.lines.front()),
+           ":syntax on backfills again and the colors come back");
+    expect(controller.frame().syntax_lexed == shown_lines, "the rebuilt cache is kept");
+    static_cast<void>(controller.apply(app::SelectSyntax{true}));
+    expect(controller.frame().syntax_lexed == shown_lines,
+           "selecting the same value keeps the cache");
+}
+
+// 追補: 値は文書ごとで、タブの切り替えに付いていく。新しいタブと開いた文書は on。
+void verify_syntax_per_document()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    open(editing, code_path, std::string(sample));
+    static_cast<void>(run_ex(controller, "syntax off"));
+    open(editing, other_code_path, std::string(sample));
+    const auto other = controller.frame();
+    expect(asked_syntax(controller) == "syntax=on" && !no_colors(other),
+           "an opened document is on even when another tab is off");
+    const auto first = controller.apply_frame(app::SwitchTab{0});
+    expect(no_colors(first) && first.syntax_lexed == 0 && asked_syntax(controller) == "syntax=off",
+           "the off value follows its tab");
+    const auto second = controller.apply_frame(app::SwitchTab{1});
+    expect(!no_colors(second) && asked_syntax(controller) == "syntax=on",
+           "the on value follows its tab");
+    static_cast<void>(controller.apply(app::NewTab{}));
+    expect(asked_syntax(controller) == "syntax=on", "a new tab is on");
+    static_cast<void>(controller.apply(app::SwitchTab{0}));
+    open(editing, text_path, std::string(sample));
+    static_cast<void>(controller.apply(app::SwitchTab{0}));
+    expect(asked_syntax(controller) == "syntax=off",
+           "opening a document in another tab leaves the off tab alone");
+}
+
 // 決定 7: 巨大な行の窓・IME の差し込み行・格子は色を持たない。
 void verify_uncolored_rows()
 {
@@ -377,5 +492,8 @@ void verify_syntax_scope()
     verify_opened_into_untitled();
     verify_uncolored_rows();
     verify_syntax_color();
+    verify_syntax_evaluation();
+    verify_syntax_toggle();
+    verify_syntax_per_document();
 }
 } // namespace nenenib::tests

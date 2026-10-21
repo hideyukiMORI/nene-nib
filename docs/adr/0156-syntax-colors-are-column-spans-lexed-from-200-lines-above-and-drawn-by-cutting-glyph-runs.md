@@ -40,12 +40,14 @@
 - 巨大な行は状態を plain に戻す（行の中で開いたコメントは次の行へ渡らない）。
 - 同じ退避番号で改訂番号を変えずに本文を丸ごと替える道は、空の無題のタブへ開く `open_document` の `with_opened` だけで、そこで覚えを両方捨てる（controller の 1 か所・契約 `verify_opened_into_untitled`）。覚えの鍵に文書の世代は足さない。ほかに本文を丸ごと替える道（`:e!` など）を足すときは、同じく覚えを捨てる。
 - 編集が見えている最初の行より後ろでも覚えを作り直す（後続 Issue で保つ案）。遡りの 200 行は言語によらない（言語ごとの値は後続 Issue）。
-- `:syntax on|off` は段 3。格子の行（`GridLineRows`）と IME の差し込み行の色は後続。C / C++ 以外の言語は後続。
+- `:syntax on|off` は段 3（#829・下の追補）。`:syntax off` の値は session に載せないので、起動で前回のタブを戻すと on に戻る。格子の行（`GridLineRows`）と IME の差し込み行の色は後続。C / C++ 以外の言語は後続。
 - cluster の表が無い run と右から左の run は切らず、run 全体を最初に重なる区間の色で描く。合字の途中に区間の境があると、合字の字形は後ろの区間の色になる。
 - 保持できない行（決定 12）は区間の数だけ layout を描き直すので遅い。
 - `SetDrawingEffect` を使わない（共有の layout と収集器の棄却・ADR 0114 / 0073）。色を `BodyTextLayouts` の鍵に入れない。
 
-## 却下した案
+## 追補（2026-10-22・#829）
+
+- `:syntax off` は文書の値 `syntax_enabled`（`DocumentState` と `EditorState`・既定 true・`language` と同じ所有でタブの切り替えに付いていく）。設定（`settings.v3`）と session に入れない。開いた文書・まだ読んでいない文書を読んだ束・新しいタブは true。Ex は `:sy[ntax] on` / `:sy[ntax] off` / `:syntax?` と引数なし（`syntax=on` / `syntax=off` の 1 行）、ほかの引数は E474、補完は `syntax on` `syntax off`。意図 `SelectSyntax{enabled}` は使う人の操作の側（`SelectLanguage` と同じ）。off の文書は controller の `visible_lines` が `syntax_begin` を呼ばず（字句器を呼ばず `colors` は空・`syntax_lexed` 0）、値が変わったときは両方の枠の覚えを捨てる（契約 `--syntax` の `verify_syntax_toggle` と `verify_syntax_per_document`）。
 
 - **layout に `SetDrawingEffect` で色を載せる**: 描画と位置解決で共有する layout（ADR 0114）が色ごとに割れ、収集器は effect つきの run を棄却するので保持した字形の道（ADR 0073）を失う。
 - **区間ごとに `HitTestTextRange` の切り抜きで描き直す（置き換えと同じ道）を常に使う**: 区間の数 × 行の大きさになり、1 行に区間が数十ある C++ の行で 1 打鍵ごとに重い。保持できない行だけに残す（決定 12）。

@@ -42,6 +42,7 @@
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectLanguage.hpp"
+#include "SelectSyntax.hpp"
 #include "SettleRecentTab.hpp"
 #include "SplitPane.hpp"
 #include "StoreVimRegister.hpp"
@@ -71,6 +72,6 @@ using EditorIntent = std::variant<
     OpenCommandPalette, ActivateCommandChoice, SearchHop, StoreVimRegister, NewTab, SwitchTab,
     WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth, OpenTabList,
     EndSession, WorkCompleted, AutosaveTick, RestoreAutosave, DiscardAutosave, ToggleBookmark,
-    OpenOperationList, PointText, SelectDisplay, SelectLanguage, ScrollPaletteList, SplitPane,
-    SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick>;
+    OpenOperationList, PointText, SelectDisplay, SelectLanguage, SelectSyntax, ScrollPaletteList,
+    SplitPane, SwitchPane, ClosePane, ScrollPane, TogglePreview, PreviewTick>;
 } // namespace nenenib::application

@@ -30,6 +30,7 @@
 #include "ExEvaluationFailure.hpp"
 #include "ExLanguageRequest.hpp"
 #include "ExResult.hpp"
+#include "ExSyntaxRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
 #include "ExWindowCommand.hpp"
@@ -1294,7 +1295,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<PreviewTick>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
-    // SelectLanguage も同じ（ADR 0154 の決定 4）。
+    // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
     // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     fit_command_rows();
@@ -2931,6 +2932,12 @@ void EditorController::evaluate_command(std::string_view text)
         answer_language(language.value());
         return;
     }
+    const auto &syntax = result.value().syntax;
+    if (syntax.has_value())
+    {
+        answer_syntax(syntax.value());
+        return;
+    }
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {
@@ -2977,6 +2984,17 @@ void EditorController::answer_language(const core::ExLanguageRequest &request)
     state_ = state_.with_command_message(
         core::DisplayText::parse("filetype=" + std::string(core::language_name(state_.language())))
             .value());
+}
+
+// `:syntax on|off` は意図 SelectSyntax で置き、どの形も今の値を 1 行で知らせる（ADR 0156 の追補）。
+void EditorController::answer_syntax(const core::ExSyntaxRequest &request)
+{
+    if (request.enabled.has_value())
+    {
+        accept(SelectSyntax{request.enabled.value()});
+    }
+    state_ = state_.with_command_message(
+        core::DisplayText::parse(state_.syntax_enabled() ? "syntax=on" : "syntax=off").value());
 }
 
 void EditorController::run_palette_request(const core::ExPaletteRequest &request)
@@ -4108,6 +4126,19 @@ void EditorController::accept(const SelectLanguage &intent)
     state_ = state_.with_language(intent.language);
 }
 
+// 構文の色の入れ切りも文書の値で、設定にもセッションにも書かない（ADR 0156 の追補）。値が変わった
+// ときは両方の枠の覚えを捨て、on に戻したときに古い状態から続けない。
+void EditorController::accept(const SelectSyntax &intent)
+{
+    if (state_.syntax_enabled() == intent.enabled)
+    {
+        return;
+    }
+    state_ = state_.with_syntax_enabled(intent.enabled);
+    first_syntax_.reset();
+    second_syntax_.reset();
+}
+
 // 判定は文書ごとに 1 回で、改行の索引と巨大な行の数えだけ（文字組みに触れない）。巨大な行の
 // 文書は答えに依らず索引を持つ（いいえの窓の文字組みも使う・決定 4）。問いを出すのは歩きの途中
 // でも起動の途中でもないときだけで、出したら答えが来るまで本文の文字組みを止める。
@@ -4744,10 +4775,12 @@ EditorController::visible_lines(const PaneSource &source, AutosaveId tab,
         lines.reserve(last - first + 1);
     }
     // 字句器を持つ言語だけ、見えている最初の行の行頭の状態を覚えか遡りから求める（ADR 0156 の
-    // 決定 8・9・14）。持たない言語は字句器も覚えも触らない。
+    // 決定 8・9・14）。持たない言語と `:syntax off` の文書（追補）は字句器も覚えも触らない。
     const SyntaxStateCache key{tab, state.history().revision(), state.language(),
                                core::LineNumber{first}, core::LexState{}};
-    auto lex = first <= last ? syntax_begin(state.text(), key, cache, lexed) : std::nullopt;
+    auto lex = first <= last && state.syntax_enabled()
+                   ? syntax_begin(state.text(), key, cache, lexed)
+                   : std::nullopt;
     // text の表示の frame なので、構築は 1 升を port から読まない（格子でない）。
     const VisualTextView visual(state, ports_.text_layouts, view_geometry_);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
