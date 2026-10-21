@@ -1,6 +1,6 @@
 // 構文の色分けの見本（#816・ADR 0156）。eng/verify-window.py --syntax が開いて撮る。
-#include <cstdint>
 #include "Lexer.hpp"
+#include <cstdint>
 
 #define NIB_LIMIT 16
 

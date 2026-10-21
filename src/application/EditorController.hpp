@@ -479,8 +479,8 @@ class EditorController final
     // 枠の見えている行。字句器を持つ言語なら色の区間も付け、cache をその枠の覚えで置き換え、
     // 字句器へ通した行の数を lexed に足す（ADR 0156 の決定 8・9）。tab はその枠の文書の退避番号。
     [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure>
-    visible_lines(const PaneSource &source, AutosaveId tab,
-                  std::optional<SyntaxStateCache> &cache, std::size_t &lexed) const;
+    visible_lines(const PaneSource &source, AutosaveId tab, std::optional<SyntaxStateCache> &cache,
+                  std::size_t &lexed) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
     screen_rows_of(const LineView &shown) const;
     // 格子の見えている画面行（ADR 0140 の決定 5）を frame の grid と grid_scanned に書く。
@@ -493,8 +493,7 @@ class EditorController final
     // もう 1 つの枠の表示値を frame に載せる（ADR 0148 の決定 8）。
     void add_other_pane(EditorFrame &result, const core::VimPattern *pattern);
     // add_other_pane が std::visit で選ぶ 1 対（ADR 0155 の決定 11）。
-    void add_other_view(EditorFrame &result, const core::VimPattern *pattern,
-                        const PaneView &view);
+    void add_other_view(EditorFrame &result, const core::VimPattern *pattern, const PaneView &view);
     void add_other_view(EditorFrame &result, const core::VimPattern *pattern,
                         const PreviewView &view) const;
     void finish_frame(EditorFrame &result, const PaneSource &source, bool gridded,

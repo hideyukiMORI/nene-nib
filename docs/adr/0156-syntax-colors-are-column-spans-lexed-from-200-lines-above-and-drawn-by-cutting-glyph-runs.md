@@ -27,18 +27,19 @@
 11. **描画は保持した字形 run を cluster で切る。** renderer の `draw_line_text` は、`colors` が空なら今までどおり `text` の色で `draw_body_text` を 1 回、空でなければ区間を選択と同じ `range_of`（`displayed` が `^M` の展開を含めて描画用の行へ写し、`LineUtf16Evaluation` が UTF-16 にする）で `ColoredRun{DWRITE_TEXT_RANGE, D2D1_COLOR_F}` の列にして `BodyTextPainter::draw_colored_body_text(text, area, BodyColors{runs, plain}, paint)` を呼ぶ。字形が保持されている行は、run ごとに `glyph_pieces`（`GlyphPieces.hpp`）が区間の境の UTF-16 の位置を `clusters` / `text_position` で字形の添字に写して部分窓 `GlyphPiece{first, last, color}` に切り、`drawn_glyphs(run, first, last)` / `drawn_origin(run, origin, first)`（原点は前の送りを float で前から積む）で `DrawGlyphRun` する。区間の外は `text` の色。区間が run の境をまたぐと run ごとに切れる。色は呼び手の 1 本の brush の `SetColor` を替えるだけ（`paint`）。描く順は 検索の面 → 選択 → 構文の色の本文 → `draw_replaced`（muted）→ 今の当たりの枠 → キャレットで、置き換えの字は構文より上（replaced > 構文 > text）。
 12. **保持できない行は切り抜きの道。** `glyphs_ready` でない行（収集の棄却）は、`text` の色で `DrawTextLayout` を 1 回描き、区間ごとに `tint_runs`（`HitTestTextRange` の矩形で切り抜いて layout を描き直す・置き換えと同じ道）を通す。区間の数 × 行の大きさに比例して遅いが正しい。
 13. **見えている x の範囲だけ。** 部分窓は run の描く窓 `[run.first, run.last)` の中に収める（窓は収集器の `trim` が画面の横の範囲に狭めてある）ので、画面の左右の外の字形は描かない。
-14. **plain の道の費用は 0。** 字句器を持たない言語では `syntax_begin` が nullopt を返し、`lex_line` / `lex_state` を呼ばず覚えにも触れず、`colors` は空のまま。`.txt` の既存 8 本のベンチの文書は今までどおり。
+14. **plain の道の費用は 0。** 字句器を持たない言語では `syntax_begin` が `has_lexer` の `switch` 1 回で nullopt を返し、行ごとの `colored_line` は空の optional を見て返るだけで `colors` は空のまま（`lex_line` / `lex_state` の呼び出しと覚えの参照・書き込みは無い）。`.txt` の既存 8 本のベンチの文書は今までどおり。
 15. **色つきの速さは任意のベンチで記録だけ。** `eng/measure-speed.py` の `key-to-frame-single-cpp`（`OPTIONAL_BENCHES`・`--bench` で名指ししたときだけ・`--record` だけで基準値に載せない）。文書 `single-cpp-1000.cpp` は長い行のベンチと同じく決定的に作り SHA-256 で守る（5 つの C++ らしい行を番号つきで回す・1 行 100〜120 code points・CRLF・1000 行）。
 
 ## 1 打鍵の道の費用
 
-字句器を持たない言語では、`visible_lines` に足したのは `has_lexer` の `switch` 1 回と、行ごとの `std::optional` の空の判定だけ。C / C++ では、覚えが続く限り frame ごとに見えている行の `lex_line`（#815 の probe の Release で 60 行 6,060 byte が中央値 30 µs・約 5 ns/byte）と、スクロールで進んだ行数の `lex_state`。作り直し（編集・タブの切り替え・上へ戻る・4,096 行を超える飛び）は 200 行の遡りが 1 回足される（同じ probe で 200 行 20,200 byte が中央値 99 µs）。描画は区間ごとに部分 run を描くので `DrawGlyphRun` の回数が区間の数に比例して増える。任意のベンチ `key-to-frame-single-cpp` の 1 回（2026-10-21・Release・施主の実機 i9-10850K / RTX 3090 / 120 dpi・`--record --repetitions 1`・記録だけで判定しない）は 1.020 ms。
+字句器を持たない言語では、`visible_lines` に足したのは `syntax_begin` の `has_lexer` の `switch` 1 回と、見えている行ごとの `colored_line` の空の optional の判定だけ（字句器・覚えには触れない）。C / C++ では、覚えが続く限り frame ごとに見えている行の `lex_line`（#815 の probe の Release で 60 行 6,060 byte が中央値 30 µs・約 5 ns/byte）と、スクロールで進んだ行数の `lex_state`。作り直し（編集・タブの切り替え・上へ戻る・4,096 行を超える飛び）は 200 行の遡りが 1 回足される（同じ probe で 200 行 20,200 byte が中央値 99 µs）。描画は区間ごとに部分 run を描くので `DrawGlyphRun` の回数が区間の数に比例して増える。任意のベンチ `key-to-frame-single-cpp` の 1 回（2026-10-21・Release・施主の実機 i9-10850K / RTX 3090 / 120 dpi・`--record --repetitions 1`・記録だけで判定しない）は 1.020 ms。
 
 ## 限界（分かっていて今回は採らない）
 
 - 見えている最初の行より 201 行以上前で開いたブロックコメント・raw string は、覚えが無いと見えない（上へ戻ったとき・編集の後・開いた直後の深い位置）。覚えから続く間（下へのスクロール）は届く。
 - 巨大な行は状態を plain に戻す（行の中で開いたコメントは次の行へ渡らない）。
-- 同じ退避番号で改訂番号を変えずに本文を丸ごと替える道は、空の無題のタブへ開く `with_opened` だけで、そのときの覚えは 1 行目（状態は常に plain）なので正しい。
+- 同じ退避番号で改訂番号を変えずに本文を丸ごと替える道は、空の無題のタブへ開く `open_document` の `with_opened` だけで、そこで覚えを両方捨てる（controller の 1 か所・契約 `verify_opened_into_untitled`）。覚えの鍵に文書の世代は足さない。ほかに本文を丸ごと替える道（`:e!` など）を足すときは、同じく覚えを捨てる。
+- 編集が見えている最初の行より後ろでも覚えを作り直す（後続 Issue で保つ案）。遡りの 200 行は言語によらない（言語ごとの値は後続 Issue）。
 - `:syntax on|off` は段 3。格子の行（`GridLineRows`）と IME の差し込み行の色は後続。C / C++ 以外の言語は後続。
 - cluster の表が無い run と右から左の run は切らず、run 全体を最初に重なる区間の色で描く。合字の途中に区間の境があると、合字の字形は後ろの区間の色になる。
 - 保持できない行（決定 12）は区間の数だけ layout を描き直すので遅い。

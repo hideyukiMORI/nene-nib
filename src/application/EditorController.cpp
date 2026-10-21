@@ -3600,6 +3600,10 @@ std::expected<void, FileFailure> EditorController::open_document(const core::Fil
         drop_pending_follow();
         settle_follow();
         state_ = state_.with_opened(std::move(text), std::move(opened));
+        // 同じ退避番号で改訂番号 0 のまま本文が丸ごと替わるので、構文の覚えを両方捨てる
+        // （ADR 0156 の決定 9）。
+        first_syntax_.reset();
+        second_syntax_.reset();
         ask_display();
         // 本文が丸ごと替わるので、プレビューも頼み直す（ADR 0155 の決定 9）。
         request_preview(true);

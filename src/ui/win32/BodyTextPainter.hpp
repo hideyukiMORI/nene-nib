@@ -1,7 +1,7 @@
 #pragma once
+#include "BodyColors.hpp"
 #include "BodyGlyphRun.hpp"
 #include "BodyTextLayout.hpp"
-#include "BodyColors.hpp"
 #include "BodyTextLayouts.hpp"
 #include "GlyphPieces.hpp"
 #include "LayoutRect.hpp"
@@ -84,10 +84,11 @@ template <typename Target, typename Layouts = BodyTextLayouts> class BodyTextPai
         }
     }
     // 構文の色つきの本文（ADR 0156 の決定 11・12）。区間の切り抜きは draw_body_text の既定と同じく
-    // 行の領域（D2D1_DRAW_TEXT_OPTIONS_CLIP）。保持した字形がある行は run を区間の境で切って部分 run
-    // ごとに色を置いて描き、区間の外は colors.plain。保持できない行は plain で layout を 1 回描き、区間ごとに HitTestTextRange の矩形で
-    // 切り抜いて layout を描き直す（tint_runs と同じ道・遅いが正しい）。paint(D2D1_COLOR_F) は
-    // 呼び手の brush の色を置き換える（brush を作らない）。描いた後の brush の色は決めない。
+    // 行の領域（D2D1_DRAW_TEXT_OPTIONS_CLIP）。保持した字形がある行は run を区間の境で切って部分
+    // run ごとに色を置いて描き、区間の外は colors.plain。保持できない行は plain で layout を 1
+    // 回描き、区間ごとに HitTestTextRange の矩形で 切り抜いて layout を描き直す（tint_runs
+    // と同じ道・遅いが正しい）。paint(D2D1_COLOR_F) は 呼び手の brush の色を置き換える（brush
+    // を作らない）。描いた後の brush の色は決めない。
     template <typename Paint>
     void draw_colored_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
                                 const BodyColors &colors, Paint &&paint)

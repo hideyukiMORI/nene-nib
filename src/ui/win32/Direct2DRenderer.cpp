@@ -1133,10 +1133,9 @@ void Direct2DRenderer::draw_line_text(const application::EditorFrame &frame,
                 ColoredRun{range, to_color(core::syntax_color(frame.body, span.role))});
         }
     }
-    body_painter().draw_colored_body_text(text, area,
-                                          BodyColors{colored, to_color(frame.palette.text)},
-                                          [this](const D2D1_COLOR_F &color)
-                                          { brush_->SetColor(color); });
+    body_painter().draw_colored_body_text(
+        text, area, BodyColors{colored, to_color(frame.palette.text)},
+        [this](const D2D1_COLOR_F &color) { brush_->SetColor(color); });
 }
 
 void Direct2DRenderer::outline_block(

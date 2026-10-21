@@ -12,6 +12,7 @@
 #include "SoftwareTarget.hpp"
 #include "WindowChecks.hpp"
 
+#include "DisplayLine.hpp"
 #include "EditorSettings.hpp"
 #include "RenderFailure.hpp"
 
@@ -90,10 +91,10 @@ void verify_pieces()
     const auto pieces = win32::glyph_pieces(run, ranges, white);
     expect(pieces.size() == 5 && pieces.at(0).first == 0 && pieces.at(0).last == 2 &&
                same(pieces.at(0).color, white) && pieces.at(1).first == 2 &&
-               pieces.at(1).last == 4 && same(pieces.at(1).color, red) &&
-               pieces.at(2).last == 6 && same(pieces.at(2).color, white) &&
-               pieces.at(3).last == 8 && same(pieces.at(3).color, green) &&
-               pieces.at(4).last == 10 && same(pieces.at(4).color, white),
+               pieces.at(1).last == 4 && same(pieces.at(1).color, red) && pieces.at(2).last == 6 &&
+               same(pieces.at(2).color, white) && pieces.at(3).last == 8 &&
+               same(pieces.at(3).color, green) && pieces.at(4).last == 10 &&
+               same(pieces.at(4).color, white),
            "a run is cut at the span borders and the gaps take the plain color");
     expect(advances_of(run, pieces) == run.advance,
            "the pieces' advances add up to the whole run's advance");
@@ -126,8 +127,7 @@ void verify_crossing_runs()
            "a span over two runs becomes one piece in each run");
     auto bare = run_at(10, 3, 8);
     bare.clusters.clear();
-    const auto whole =
-        win32::glyph_pieces(bare, Ranges{{DWRITE_TEXT_RANGE{9, 2}, red}}, white);
+    const auto whole = win32::glyph_pieces(bare, Ranges{{DWRITE_TEXT_RANGE{9, 2}, red}}, white);
     expect(whole.size() == 1 && whole.front().first == 0 && whole.front().last == 3 &&
                same(whole.front().color, red),
            "a run without a cluster map is drawn whole in the first overlapping color");
@@ -208,6 +208,38 @@ void check_pixels(SoftwareTarget &target, win32::BodyTextLayouts &layouts,
                static_cast<float>(rest_left) >= border - 1,
            "a line without kept glyphs paints the span only inside its hit-test clip");
 }
+// 置き換え（`^M`）の展開のある行（ADR 0040）。区間の境が展開した字の前後にあっても、部分の送りの
+// 和は run の窓の送りと等しく、text の色で切った画素は切らない画素と同じ。
+void check_replaced_line(SoftwareTarget &target, win32::BodyTextLayouts &layouts,
+                         const nenenib::application::TextLayoutRequest &request)
+{
+    const auto layout = layouts.get(request);
+    if (!layout.has_value())
+    {
+        unmeasured("the replaced line needs a DirectWrite layout");
+        return;
+    }
+    const Pixels plain = drawn(target, layouts, layout.value().Get(), {});
+    const auto *entry = layouts.glyphs_of(layout.value().Get());
+    // 「x^My = "^M";」: x と ^M・y・"^M" の区間。
+    const Ranges spans{{DWRITE_TEXT_RANGE{0, 3}, white},
+                       {DWRITE_TEXT_RANGE{3, 1}, white},
+                       {DWRITE_TEXT_RANGE{7, 4}, white}};
+    bool summed = entry != nullptr && entry->glyphs_ready;
+    for (const auto &run :
+         entry != nullptr ? std::span(entry->glyphs) : std::span<const win32::BodyGlyphRun>{})
+    {
+        float window = 0;
+        for (const auto advance : std::span(run.advances).subspan(run.first, run.last - run.first))
+        {
+            window += advance;
+        }
+        summed = summed && advances_of(run, win32::glyph_pieces(run, spans, white)) == window;
+    }
+    expect(summed, "pieces cut around an expanded ^M add up to each run's advance");
+    expect(!plain.empty() && drawn(target, layouts, layout.value().Get(), spans) == plain,
+           "a line with ^M cut into pieces of the text color draws the same pixels");
+}
 } // namespace
 
 void verify_syntax_render()
@@ -232,5 +264,9 @@ void verify_syntax_render()
         return;
     }
     check_pixels(target, layouts, layout.value().Get(), x);
+    const auto replaced = nenenib::core::display_line("x\ry = \"\r\";").text;
+    check_replaced_line(
+        target, layouts,
+        nenenib::application::TextLayoutRequest{replaced, settings, request.geometry});
 }
 } // namespace nenenib::tests::ui

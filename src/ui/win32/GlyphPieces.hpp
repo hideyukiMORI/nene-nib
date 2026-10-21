@@ -46,9 +46,9 @@ namespace nenenib::ui::win32
 }
 
 // 窓の部分を色ごとに前から並べる。区間の外は plain の色。空の部分は並べない。
-[[nodiscard]] inline std::vector<GlyphPiece>
-glyph_pieces(const BodyGlyphRun &run, std::span<const ColoredRun> colored,
-             const D2D1_COLOR_F &plain)
+[[nodiscard]] inline std::vector<GlyphPiece> glyph_pieces(const BodyGlyphRun &run,
+                                                          std::span<const ColoredRun> colored,
+                                                          const D2D1_COLOR_F &plain)
 {
     std::vector<GlyphPiece> pieces;
     if (run.first >= run.last)

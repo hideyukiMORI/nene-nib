@@ -6,6 +6,7 @@
 #include "ColorSpan.hpp"
 #include "ComposeText.hpp"
 #include "DisplayForm.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorSettings.hpp"
 #include "FilePath.hpp"
@@ -20,6 +21,7 @@
 #include "Scopes.hpp"
 #include "ScrollLines.hpp"
 #include "SelectDisplay.hpp"
+#include "SelectEditMode.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
 #include "SwitchTab.hpp"
@@ -220,8 +222,9 @@ void verify_cache_follows()
     const auto up = controller.frame();
     expect(up.first_visible.value == 305 && up.syntax_lexed == 200 + shown_lines,
            "scrolling up above the cached line backfills again");
-    static_cast<void>(controller.apply(app::PlaceCaret{
-        core::TextPosition{core::LineNumber{306}, core::Column{1}}, core::SelectionAnchoring::collapse}));
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{306}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
     expect(controller.frame().syntax_lexed == shown_lines,
            "moving the caret without an edit keeps the cache");
     static_cast<void>(controller.apply(app::InsertText{"x"}));
@@ -263,14 +266,49 @@ void verify_tabs_and_panes()
            "a .txt pane has no spans next to a colored .cpp pane");
 }
 
+// 決定 9: `:set filetype=` で言語が変わると覚えを作り直し、字句器の無い言語では色が消える。
+void verify_language_switch()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    open(editing, code_path, nearby_comment());
+    scrolled(controller, 299);
+    static_cast<void>(controller.frame());
+    expect(controller.frame().syntax_lexed == shown_lines, "the cpp frame keeps its cache");
+    const auto plain = run_ex(controller, "set ft=text");
+    expect(no_colors(plain) && plain.syntax_lexed == 0,
+           "setting filetype=text drops the colors and lexes nothing");
+    const auto back = run_ex(controller, "set ft=c");
+    expect(back.syntax_lexed == 200 + shown_lines && all_comment(back.lines.front()),
+           "setting filetype=c rebuilds since the cache was made for cpp");
+}
+
+// 決定 9: 無題の空のタブへ開くと、同じ退避番号で改訂番号 0 のまま本文が替わるので覚えを捨てる。
+void verify_opened_into_untitled()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    static_cast<void>(run_ex(controller, "set ft=cpp"));
+    expect(controller.frame().syntax_lexed == 1, "the untitled cpp tab lexes its one line");
+    open(editing, code_path, nearby_comment());
+    scrolled(controller, 299);
+    const auto opened = controller.frame();
+    expect(opened.first_visible.value == 300 && opened.syntax_lexed == 200 + shown_lines &&
+               all_comment(opened.lines.front()),
+           "the first frame after opening into the untitled tab does not reuse its cache");
+}
+
 // 決定 7: 巨大な行の窓・IME の差し込み行・格子は色を持たない。
 void verify_uncolored_rows()
 {
     Editing giant;
     auto &controller = giant.controller();
     static_cast<void>(controller.apply(app::VisibleLines{shown_lines, text_geometry}));
-    open(giant, code_path,
-         "int a;\n" + repeated("x", core::giant_line_threshold + 1) + "\nint b;");
+    open(giant, code_path, "int a;\n" + repeated("x", core::giant_line_threshold + 1) + "\nint b;");
     static_cast<void>(controller.apply(app::SelectDisplay{core::DisplayForm::text}));
     const auto windowed = controller.frame();
     expect(windowed.lines.size() == 3 && windowed.lines.at(1).window.active &&
@@ -281,8 +319,8 @@ void verify_uncolored_rows()
     Editing composing;
     static_cast<void>(composing.controller().apply(app::VisibleLines{shown_lines}));
     open(composing, code_path, std::string(sample));
-    const auto composed = composing.controller().apply_frame(
-        app::ComposeText{composed_of("にほん", {}, 9)});
+    const auto composed =
+        composing.controller().apply_frame(app::ComposeText{composed_of("にほん", {}, 9)});
     expect(composed.lines.at(0).composed.has_value() && composed.lines.at(0).colors.empty() &&
                has_span(composed.lines.at(1), 5, 9, SyntaxRole::comment),
            "the composed line has no spans and the others keep theirs");
@@ -290,8 +328,7 @@ void verify_uncolored_rows()
     Editing grid;
     static_cast<void>(grid.controller().apply(app::VisibleLines{shown_lines, grid_geometry}));
     open(grid, code_path, std::string(sample));
-    const auto gridded =
-        grid.controller().apply_frame(app::SelectDisplay{core::DisplayForm::grid});
+    const auto gridded = grid.controller().apply_frame(app::SelectDisplay{core::DisplayForm::grid});
     expect(gridded.lines.empty() && !gridded.grid.empty() && gridded.syntax_lexed == 0,
            "the grid frame lexes nothing");
 }
@@ -300,10 +337,9 @@ void verify_uncolored_rows()
 void verify_syntax_color()
 {
     const auto shade = [](std::uint8_t value) { return core::RgbColor{value, value, value}; };
-    const core::SyntaxPalette palette{shade(1),  shade(2),  shade(3),  shade(4),
-                                      shade(5),  shade(6),  shade(7),  shade(8),
-                                      shade(9),  shade(10), shade(11), shade(12),
-                                      shade(13), shade(14), shade(15), shade(16)};
+    const core::SyntaxPalette palette{
+        shade(1), shade(2),  shade(3),  shade(4),  shade(5),  shade(6),  shade(7),  shade(8),
+        shade(9), shade(10), shade(11), shade(12), shade(13), shade(14), shade(15), shade(16)};
     constexpr std::array<std::pair<SyntaxRole, std::uint8_t>, 10> rows{{
         {SyntaxRole::comment, 7},
         {SyntaxRole::keyword, 8},
@@ -337,6 +373,8 @@ void verify_syntax_scope()
     verify_backfill_reach();
     verify_cache_follows();
     verify_tabs_and_panes();
+    verify_language_switch();
+    verify_opened_into_untitled();
     verify_uncolored_rows();
     verify_syntax_color();
 }
