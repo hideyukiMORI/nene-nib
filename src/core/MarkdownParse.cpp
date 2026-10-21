@@ -177,7 +177,8 @@ void received_text(MarkdownBuilder &builder, MD_TEXTTYPE type, std::string_view 
 
 // 述語に問い、続けるなら step を行う。コールバックか述語が投げた bad_alloc はここで受けて印を立て、
 // 打ち切りの値を返す。例外は md4c の C のフレームを通らず、md4c は自分の確保を解放して戻る（#817・
-// ARC-010）。/EHsc は extern "C" の md_parse を投げないものとして扱うので、md_parse の外では受けない。
+// ARC-010）。/EHsc は extern "C" の md_parse を投げないものとして扱うので、
+// md_parse の外では受けない。
 template <class Step> [[nodiscard]] int guarded(MarkdownBuilder &builder, const Step &step) noexcept
 {
     try

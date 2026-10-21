@@ -151,7 +151,8 @@ void verify_ticket_results()
     markdown.serve(failed(1, core::MarkdownFailure::insufficient_memory));
     const EditorFrame short_of_memory = controller.apply_frame(app::WorkCompleted{});
     expect(shown_text(*preview_of(short_of_memory)) == "fresh" &&
-               notice_of(*preview_of(short_of_memory)) == "メモリが足りずプレビューできませんでした",
+               notice_of(*preview_of(short_of_memory)) ==
+                   "メモリが足りずプレビューできませんでした",
            "a parse out of memory keeps the previous result and adds one line");
     markdown.serve(failed(1, core::MarkdownFailure::too_large));
     expect(notice_of(*preview_of(controller.apply_frame(app::WorkCompleted{}))) ==
