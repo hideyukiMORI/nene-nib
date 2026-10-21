@@ -248,6 +248,8 @@ class Direct2DRenderer final
                                                    UINT32 base);
     void draw_completions(const application::EditorFrame &frame,
                           const core::StatusBarLayout &status);
+    void draw_completion(const application::EditorFrame &frame, const core::LayoutRect &row,
+                         std::string_view candidate, bool active);
     void draw_palette(const application::EditorFrame &frame, const core::PaletteLayout &layout);
     void draw_palette_choices(const application::EditorFrame &frame,
                               const core::PaletteLayout &layout);

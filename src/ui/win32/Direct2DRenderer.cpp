@@ -1516,14 +1516,16 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
     const auto command = core::command_layout(layout, dpi_, 0);
     if (frame.command_line.has_value() && !frame.command_palette.has_value())
     {
-        draw_command(frame, command.input);
+        draw_command(frame, core::command_input_label(command, dpi_));
         draw_completions(frame, layout);
         return;
     }
     if (frame.command_message.has_value() && !frame.command_palette.has_value())
     {
-        context_->PushAxisAlignedClip(to_rect(command.input), D2D1_ANTIALIAS_MODE_ALIASED);
-        write_status(frame.command_message.value().text(), command_format_.Get(), command.input,
+        // 知らせの 1 行も入力行の文字と同じ内側（#786）。
+        const auto label = core::command_input_label(command, dpi_);
+        context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
+        write_status(frame.command_message.value().text(), command_format_.Get(), label,
                      frame.palette.text);
         context_->PopAxisAlignedClip();
         return;
@@ -1678,17 +1680,32 @@ void Direct2DRenderer::draw_completions(const application::EditorFrame &frame,
         const auto top = layout.panel.top + static_cast<std::int32_t>(index) * layout.row_height;
         const core::LayoutRect row{layout.panel.left, top, layout.panel.right,
                                    top + layout.row_height};
-        const bool active = selected == start + index;
-        if (active)
-        {
-            fill(row, frame.palette.accent);
-        }
-        write(candidates.at(start + index), command_format_.Get(), row,
-              active ? frame.palette.on_accent : frame.palette.text);
+        draw_completion(frame, row, candidates.at(start + index), selected == start + index);
     }
     context_->PopAxisAlignedClip();
     brush_->SetColor(to_color(frame.palette.panel_border));
     context_->DrawRectangle(to_rect(layout.panel), brush_.Get(), scaled(1.0F));
+}
+
+// 補完の 1 行。選択の面は行いっぱい、文字は左右 12 DIP 内側（#786）。長い候補は文字の矩形の右で
+// 切れる。
+void Direct2DRenderer::draw_completion(const application::EditorFrame &frame,
+                                       const core::LayoutRect &row, std::string_view candidate,
+                                       bool active)
+{
+    if (active)
+    {
+        fill(row, frame.palette.accent);
+    }
+    const auto label = core::command_row_label(row, dpi_);
+    if (core::width_of(label) <= 0)
+    {
+        return;
+    }
+    context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
+    write(candidate, command_format_.Get(), label,
+          active ? frame.palette.on_accent : frame.palette.text);
+    context_->PopAxisAlignedClip();
 }
 
 void Direct2DRenderer::draw_palette_choice(const application::EditorFrame &frame,

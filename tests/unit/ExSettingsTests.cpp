@@ -424,6 +424,24 @@ void verify_command_completions()
         expect(core::width_of(tiny.input) == 0 && tiny.visible_rows == 0,
                "small windows do not invert rectangles");
     }
+    // 候補と入力行の文字は矩形の左右から 12 DIP 内側（#786）。足りなければ幅 0。
+    constexpr std::array insets{std::pair{96U, 12}, std::pair{120U, 15}};
+    for (const auto &[dpi, inset] : insets)
+    {
+        const core::LayoutRect row{100, 40, 400, 64};
+        expect(core::command_row_label(row, dpi) ==
+                   core::LayoutRect{100 + inset, 40, 400 - inset, 64},
+               "a completion label sits 12 DIP inside both sides of its row");
+        const core::LayoutRect narrow{100, 40, 100 + (2 * inset) - 1, 64};
+        expect(core::width_of(core::command_row_label(narrow, dpi)) == 0,
+               "a row narrower than 24 DIP leaves an empty label");
+        const auto status = core::status_bar_layout(800, 450, dpi);
+        const auto layout = core::command_layout(status, dpi, 3);
+        expect(core::command_input_label(layout, dpi) == core::command_row_label(layout.input, dpi),
+               "the input line uses the same inset as the completion rows");
+        expect(core::command_input_label(layout, dpi).left == layout.input.left + inset,
+               "the message line after Enter is written at the same inset as the input");
+    }
 }
 
 void verify_ex_controller()
