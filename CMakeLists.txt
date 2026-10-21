@@ -327,3 +327,18 @@ target_compile_definitions(nib_perf_probes PRIVATE
     NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
     NIB_PROBE_COMPILER="${CMAKE_CXX_COMPILER_VERSION}" NIB_PROBE_CONFIGURATION="$<CONFIG>"
     NIB_PROBE_TOOLCHAIN_HASH="${NIB_PROBE_TOOLCHAIN_HASH}")
+
+# #818: Markdown プレビューの差し替えの費用の probe（ADR 0155 の決定 7）。nib_preview_capture と同じ
+# 土台で、時刻は adapters の Win32TimingAdapter の節目だけで取る（ARC-007）。CTest に登録しない。
+nenenib_target(nib_preview_probe preview_tests EXECUTABLE
+    tests/preview/PreviewProbe.cpp tests/preview/Sha256.cpp)
+nenenib_link(nib_preview_probe nenenib_core)
+nenenib_link(nib_preview_probe nenenib_application)
+nenenib_link(nib_preview_probe nenenib_adapters)
+nenenib_link(nib_preview_probe nenenib_window)
+foreach(library IN ITEMS ole32 d2d1 dwrite)
+    nenenib_system_link(nib_preview_probe ${library})
+endforeach()
+target_compile_definitions(nib_preview_probe PRIVATE
+    NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
+    NIB_PROBE_CONFIGURATION="$<CONFIG>")

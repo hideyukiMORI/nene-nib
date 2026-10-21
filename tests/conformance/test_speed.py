@@ -728,7 +728,7 @@ class GiantLineTests(unittest.TestCase):
     def test_the_optional_benches_are_not_in_the_default_set(self):
         self.assertEqual(("open-giant-line-16mib", "key-to-frame-single-giant-line-16mib"),
                          speed.GIANT_BENCHES)
-        self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES), speed.OPTIONAL_BENCHES)
+        self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH), speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
 

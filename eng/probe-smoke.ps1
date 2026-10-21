@@ -26,5 +26,14 @@ foreach ($name in $names) {
         Write-Host "Probe smoke failed: $name (exit $LASTEXITCODE) $($output -join ' ')"
     }
 }
+# #818: nib_preview_probe は表の外の exe。小さい bytes で exit 0 を見るだけ（ビルドしてあるときだけ）。
+$previewProbe = Join-Path $buildPath 'nib_preview_probe.exe'
+if (Test-Path -LiteralPath $previewProbe) {
+    $output = & $previewProbe 65536 tail (Join-Path $outDir 'nib_preview_probe.json') 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $failed += 'nib_preview_probe'
+        Write-Host "Probe smoke failed: nib_preview_probe (exit $LASTEXITCODE) $($output -join ' ')"
+    }
+}
 Write-Host "Probe smoke: $($names.Count - $failed.Count) / $($names.Count) workloads passed."
 if ($failed.Count -ne 0) { throw "Probe smoke: $($failed.Count) probe workloads failed: $($failed -join ', ')" }
