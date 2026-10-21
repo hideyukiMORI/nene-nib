@@ -876,6 +876,14 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case LexerWorkload::javascript_visible_60:
     case LexerWorkload::javascript_backfill_200:
     case LexerWorkload::markdown_worst_line:
+    case LexerWorkload::html_visible_60:
+    case LexerWorkload::html_backfill_200:
+    case LexerWorkload::xml_visible_60:
+    case LexerWorkload::css_visible_60:
+    case LexerWorkload::yaml_visible_60:
+    case LexerWorkload::yaml_backfill_200:
+    case LexerWorkload::toml_visible_60:
+    case LexerWorkload::toml_backfill_200:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -896,7 +904,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 170> dispatches{{
+constexpr std::array<ProbeDispatch, 178> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1245,6 +1253,22 @@ constexpr std::array<ProbeDispatch, 170> dispatches{{
                      lexer_input, lexed_lines},
     ProbeDispatchRow{LexerWorkload::markdown_worst_line, "lexer-markdown-worst-line", lexer_input,
                      lexed_lines},
+    ProbeDispatchRow{LexerWorkload::html_visible_60, "lexer-html-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::html_backfill_200, "lexer-html-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::xml_visible_60, "lexer-xml-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::css_visible_60, "lexer-css-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::yaml_visible_60, "lexer-yaml-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::yaml_backfill_200, "lexer-yaml-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::toml_visible_60, "lexer-toml-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::toml_backfill_200, "lexer-toml-backfill-200", lexer_input,
+                     lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1287,7 +1311,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 170U);
+static_assert(dispatches.size() == 178U);
 static_assert(dispatch_is_complete());
 
 } // namespace

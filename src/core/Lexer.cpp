@@ -1,12 +1,16 @@
 #include "Lexer.hpp"
 
 #include "LexCpp.hpp"
+#include "LexCss.hpp"
 #include "LexCursor.hpp"
+#include "LexHtml.hpp"
 #include "LexJavaScript.hpp"
 #include "LexJson.hpp"
 #include "LexMarkdown.hpp"
 #include "LexOutput.hpp"
 #include "LexPython.hpp"
+#include "LexToml.hpp"
+#include "LexYaml.hpp"
 
 #include <utility>
 
@@ -37,12 +41,20 @@ void lex_language(Language language, LexCursor &cursor, const LexState &in)
     case Language::typescript:
         lex_javascript(cursor, in, language);
         return;
-    case Language::plain:
     case Language::html:
-    case Language::yaml:
-    case Language::toml:
     case Language::xml:
+        lex_html(cursor, in, language);
+        return;
     case Language::css:
+        lex_css(cursor, in);
+        return;
+    case Language::yaml:
+        lex_yaml(cursor, in);
+        return;
+    case Language::toml:
+        lex_toml(cursor, in);
+        return;
+    case Language::plain:
     case Language::powershell:
     case Language::shell:
     case Language::cmake:
@@ -78,13 +90,13 @@ bool has_lexer(Language language) noexcept
     case Language::markdown:
     case Language::javascript:
     case Language::typescript:
-        return true;
-    case Language::plain:
     case Language::html:
     case Language::yaml:
     case Language::toml:
     case Language::xml:
     case Language::css:
+        return true;
+    case Language::plain:
     case Language::powershell:
     case Language::shell:
     case Language::cmake:
@@ -104,15 +116,16 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     case Language::python:
     case Language::javascript:
     case Language::typescript:
+    case Language::html:
+    case Language::xml:
+    case Language::css:
+    case Language::toml:
         return 200;
+    case Language::yaml:
+        return 100;
     case Language::markdown:
         return 500;
     case Language::plain:
-    case Language::html:
-    case Language::yaml:
-    case Language::toml:
-    case Language::xml:
-    case Language::css:
     case Language::powershell:
     case Language::shell:
     case Language::cmake:

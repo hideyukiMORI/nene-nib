@@ -166,7 +166,15 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-markdown-backfill-200',
              'lexer-javascript-visible-60',
              'lexer-javascript-backfill-200',
-             'lexer-markdown-worst-line')
+             'lexer-markdown-worst-line',
+             'lexer-html-visible-60',
+             'lexer-html-backfill-200',
+             'lexer-xml-visible-60',
+             'lexer-css-visible-60',
+             'lexer-yaml-visible-60',
+             'lexer-yaml-backfill-200',
+             'lexer-toml-visible-60',
+             'lexer-toml-backfill-200')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -250,17 +258,54 @@ LEXER_TEMPLATES = {
         "const text = `template ${value} literal` + \"double \\\" quote\" + 'single';",
         "if (count >= 10 && ready !== null) { items?.push(...rest); } else { x ??= undefined; }",
         "return typeof value === 'string' ? value.split(/\\s+/) : [true, false, NaN];"),
+    "html": (
+        '<!DOCTYPE html> <html lang="ja"><head><meta charset="utf-8"><title>Nib &amp; co</title>',
+        "<body class=\"page\" data-id='42'> <!-- comment block opens here and continues",
+        "   still in the comment --> <div id=main><p>text &lt; more &#169;</p></div>",
+        "<a href=\"https://example.com/a>b\" title='link'>anchor</a> <img src=x.png alt=\"pic\" />",
+        '<ul><li class="item">one</li><li class="item">two</li><li>three &nbsp;</li></ul>',
+        '<input type="checkbox" checked disabled> <br/> <span>plain text body</span>'),
+    "xml": (
+        '<?xml version="1.0" encoding="UTF-8"?> <root xmlns:x="urn:example:ns">',
+        "<x:item id=\"1\" kind='a'><![CDATA[ raw <data> & text opens here and continues",
+        '   more raw text ]]></x:item> <!-- note --> <x:empty attr="v"/>',
+        '<entry key="name" value="nene-nib" enabled="true">text &amp; &#x41;</entry>',
+        '<!DOCTYPE note SYSTEM "note.dtd"> <list><e>1</e><e>2</e><e>3</e></list>',
+        "<?pi target?> <a:b.c-d e=\"f\" g='h'>mixed content here</a:b.c-d> </root>"),
+    "css": (
+        '@import url("theme.css"); @media screen and (max-width: 600px) { body { margin: 0 } }',
+        '.item > a:hover, #main-nav { color: #a0b0c0; /* block comment opens here and continues',
+        '   still comment */ padding: 12px 1.5em 50% .5rem; border: 1px solid #fff !important; }',
+        'h1 { font-family: "Noto Sans JP", sans-serif; font-size: 2em; line-height: 1.5; }',
+        'div::before { content: "x"; --main-color: #333; -webkit-transition: all 0.3s; }',
+        'p{color:red;width:calc(100% - 2px);transform:rotate(45deg);z-index:10}'),
+    "yaml": (
+        'name: "nene-nib" # the project name with a quoted string value and comment',
+        'description: >- # a folded block scalar opens here',
+        '    folded text continues with deeper indentation: not a key, 42, true',
+        'list: [1, two, "3", true, null, ~, 0xFF, .inf, -1.5e+3] # flow sequence',
+        "- key: &anchor {a: 1, b: x, c: 'it''s'} # list item with anchor and flow",
+        '  ref: *anchor # alias reference and a trailing comment for good measure'),
+    "toml": (
+        '[package] # table header with a trailing comment',
+        'description = """multi-line basic string opens here with "quotes" and \\t escapes',
+        '   still inside the string""" # closes the multi-line string',
+        'inline = { x = 1, y.z = "w", flag = true } # inline table with dotted key',
+        'numbers = [ 1_000, 0xDEAD_BEEF, 6.626e-34, -inf, nan, +99 ] # array of numbers',
+        "when = 1979-05-27T07:32:00-08:00 # offset date-time and 'literal' text"),
 }
-# 行末の印（JSON と Markdown は空白）。続けて詰め物で 100 バイトにそろえる。詰め物は `-` で、
-# Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
-LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //"}
+# 行末の印（JSON・Markdown・HTML・XML・CSS は空白）。続けて詰め物で 100 バイトにそろえる。
+# 詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
+LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //",
+                  "html": " ", "xml": " ", "css": " ", "yaml": " #", "toml": " #"}
 LEXER_PADDING = {"markdown": " "}
 # 閉じの無い `[` を並べた 1 行（#836 のレビュー R1）。LexerProbe.cpp の worst_line_bytes と同じ。
 LEXER_WORST_LINE_BYTES = 16384
 
 
 def lexer_input(workload: str) -> bytes:
-    """行の字句器の 10 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript）。
+    """行の字句器の 18 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
+    #838 の HTML / XML・CSS・YAML・TOML）。
     tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
     if workload == "lexer-markdown-worst-line":
         return b"[" * LEXER_WORST_LINE_BYTES + b"\n"
@@ -273,7 +318,7 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:163]:
+    if workload in WORKLOADS[152:171]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

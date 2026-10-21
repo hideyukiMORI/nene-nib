@@ -73,6 +73,9 @@ hide の指定（範囲案）: Python・JavaScript・TypeScript・JSON・Markdow
 | 3 | 言語の判定（拡張子の表・`:set filetype=`・`:syntax`・ステータス） | 1 | **1**（判定と文書の値） | 段 2・S-1 |
 | 4 | 残りの 6 言語（1 言語 0.5〜1 日）・Markdown のフェンスの埋め込み・塊ごとの状態の索引（要れば） | 5〜7 | 0〜1 | 段 3 |
 
+
+段 4 の「フェンスの埋め込み」は HTML の `<script>` `<style>` の中身（#838 で区間なしの `raw_string`・`delimiter` は閉じタグの頭）を JavaScript / CSS の字句器へつなぐ所も同じ道で決める（`delimiter` のほかに中の言語を持てるか・#842 のレビュー Q）。
+
 計 4 段・ADR 2〜3 本・10〜12 席日。各段の受理は D41（独立レビュー・速さのゲート・CI・試用）。
 
 ## 2. 言語サーバー（LSP）
