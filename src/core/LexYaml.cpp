@@ -293,8 +293,9 @@ std::size_t lex_flow(LexCursor &cursor, std::size_t at, std::size_t &depth)
 }
 
 // ブロックスカラーの印 `|` `>`（後ろの `+ -` と数字も）は operators で、次の行からその中に入る。
-// 印の後ろが空白か行末でなければ裸のスカラー。
-std::size_t lex_block_header(LexCursor &cursor, std::size_t at)
+// 中の深さ scope はキーの桁（`- ` を飛ばした後）か、キーが無ければ最後のリストの記号の桁（#842 の
+// レビュー I-1）。印の後ろが空白か行末でなければ裸のスカラー。
+std::size_t lex_block_header(LexCursor &cursor, std::size_t at, std::size_t scope)
 {
     const std::string_view line = cursor.line();
     std::size_t end = at + 1U;
@@ -307,7 +308,7 @@ std::size_t lex_block_header(LexCursor &cursor, std::size_t at)
         return lex_scalar(cursor, at, 0U);
     }
     cursor.mark(at, end, SyntaxRole::operators);
-    cursor.leave(block_state(indent_of(line)));
+    cursor.leave(block_state(scope));
     return end;
 }
 
@@ -318,8 +319,9 @@ std::size_t lex_comment(LexCursor &cursor, std::size_t at)
     return end;
 }
 
-// 値の 1 字句。first は行の頭（区切り・リストの記号・キー）の後の最初の字句か。
-std::size_t lex_value(LexCursor &cursor, std::size_t at, std::size_t &depth, bool first)
+// 値の 1 字句。scope は行の頭（区切り・リストの記号・キー）の後の最初の字句（タグとアンカーの後ろ
+// も）ならブロックスカラーの深さ、そうでなければ lex_unclosed。
+std::size_t lex_value(LexCursor &cursor, std::size_t at, std::size_t &depth, std::size_t scope)
 {
     const std::string_view line = cursor.line();
     const char value = line[at];
@@ -327,9 +329,9 @@ std::size_t lex_value(LexCursor &cursor, std::size_t at, std::size_t &depth, boo
     {
         return lex_comment(cursor, at);
     }
-    if (first && depth == 0U && (value == '|' || value == '>'))
+    if (scope != lex_unclosed && depth == 0U && (value == '|' || value == '>'))
     {
-        return lex_block_header(cursor, at);
+        return lex_block_header(cursor, at, scope);
     }
     return flow_indicators.contains(value) ? lex_flow(cursor, at, depth)
                                            : lex_token(cursor, at, depth);
@@ -383,8 +385,9 @@ std::size_t lex_key(LexCursor &cursor, std::size_t at)
     return colon + 1U;
 }
 
-// 行の頭: 文書の区切り、または字下げの後のリストの記号 `- ` の連なりとキー。値の始まりを返す。
-std::size_t lex_head(LexCursor &cursor)
+// 行の頭: 文書の区切り、または字下げの後のリストの記号 `- ` の連なりとキー。値の始まりを返し、
+// scope にブロックスカラーの深さ（キーの桁・無ければ最後のリストの記号の桁か字下げ）を置く。
+std::size_t lex_head(LexCursor &cursor, std::size_t &scope)
 {
     const std::string_view line = cursor.line();
     if (is_document_marker(line))
@@ -393,13 +396,17 @@ std::size_t lex_head(LexCursor &cursor)
         return 3U;
     }
     std::size_t at = skip_spaces(line, 0U);
+    scope = at;
     while (at < line.size() && line[at] == '-' &&
            (at + 1U == line.size() || lex_is_space(line[at + 1U])))
     {
         cursor.mark(at, at + 1U, SyntaxRole::operators);
+        scope = at;
         at = skip_spaces(line, at + 1U);
     }
-    return lex_key(cursor, at);
+    const std::size_t value = lex_key(cursor, at);
+    scope = value == at ? scope : at;
+    return value;
 }
 } // namespace
 
@@ -411,16 +418,18 @@ void lex_yaml(LexCursor &cursor, const LexState &in)
     }
     const std::string_view line = cursor.line();
     std::size_t depth = 0U;
-    bool first = true;
-    for (std::size_t at = lex_head(cursor); at < line.size();)
+    std::size_t scope = 0U;
+    for (std::size_t at = lex_head(cursor, scope); at < line.size();)
     {
         if (lex_is_space(line[at]))
         {
             ++at;
             continue;
         }
-        at = lex_value(cursor, at, depth, first);
-        first = false;
+        // タグ `!!str` とアンカー `&a` の後ろの `|` `>` もブロックスカラーの印。
+        const bool prefix = line[at] == '!' || line[at] == '&';
+        at = lex_value(cursor, at, depth, scope);
+        scope = prefix ? scope : lex_unclosed;
     }
 }
 } // namespace nenenib::core

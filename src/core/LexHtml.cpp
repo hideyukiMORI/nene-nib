@@ -36,15 +36,21 @@ constexpr std::string_view attribute_stops = "=>/?\"'<";
     return lex_is_word(value) && value != '_';
 }
 
+// 0x80 以上（UTF-8 の多バイト）はタグ名の文字に数える（XML の `<日本>`・#842 のレビュー 6）。
+[[nodiscard]] constexpr bool is_wide(char value) noexcept
+{
+    return static_cast<unsigned char>(value) >= 0x80U;
+}
+
 [[nodiscard]] constexpr bool starts_name(char value) noexcept
 {
-    return lex_is_word(value) && !lex_is_digit(value);
+    return (lex_is_word(value) && !lex_is_digit(value)) || is_wide(value);
 }
 
 // タグ名の文字（名前空間の `a:b` と `-` `.` を含む）。
 [[nodiscard]] constexpr bool is_name(char value) noexcept
 {
-    return lex_is_word(value) || value == '-' || value == ':' || value == '.';
+    return lex_is_word(value) || value == '-' || value == ':' || value == '.' || is_wide(value);
 }
 
 // text を ASCII の小文字に畳むと name（小文字）に等しいか。
@@ -152,8 +158,14 @@ std::size_t lex_quoted(LexCursor &cursor, std::size_t at)
     return end;
 }
 
-[[nodiscard]] constexpr bool ends_unquoted(char value) noexcept
+// 引用符の無い値を終わらせるか（空白・`>` `<` 引用符・自己閉じの `/>` の `/`）。
+[[nodiscard]] constexpr bool ends_unquoted(std::string_view line, std::size_t at) noexcept
 {
+    const char value = line[at];
+    if (value == '/')
+    {
+        return lex_next_of(line, at) == '>';
+    }
     return lex_is_space(value) || value == '>' || value == '<' || value == '"' || value == '\'';
 }
 
@@ -168,7 +180,7 @@ std::size_t lex_equals(LexCursor &cursor, std::size_t at)
         ++begin;
     }
     std::size_t end = begin;
-    while (end < line.size() && !ends_unquoted(line[end]))
+    while (end < line.size() && !ends_unquoted(line, end))
     {
         ++end;
     }
@@ -203,8 +215,10 @@ std::size_t lex_inside_tag(LexCursor &cursor, std::size_t at)
     return value == '=' ? lex_equals(cursor, at) : lex_attribute(cursor, at);
 }
 
-// タグの頭の後ろの属性を、閉じの印の直後まで読む。行末か次の `<` で止まれば、そこを返す。
-std::size_t lex_attributes(LexCursor &cursor, std::size_t at)
+// タグの頭の後ろの属性を、閉じの印の直後まで読み、その位置と「`>` 1 字で閉じたか」を返す。行末
+// か次の `<` で止まれば、そこと偽（閉じない引用符で行が `>` で終わっても閉じていない・#842 の
+// レビュー I-2）。
+std::pair<std::size_t, bool> lex_attributes(LexCursor &cursor, std::size_t at)
 {
     const std::string_view line = cursor.line();
     while (at < line.size() && line[at] != '<')
@@ -213,11 +227,11 @@ std::size_t lex_attributes(LexCursor &cursor, std::size_t at)
         if (closer != 0U)
         {
             cursor.mark(at, at + closer, SyntaxRole::keyword);
-            return at + closer;
+            return {at + closer, closer == 1U};
         }
         at = lex_is_space(line[at]) ? at + 1U : lex_inside_tag(cursor, at);
     }
-    return at;
+    return {at, false};
 }
 
 // at の `<` の後ろ（`</` と xml の `<?` は 2 字の後ろ）に名前が続けばタグ。頭は keyword。html の
@@ -236,11 +250,10 @@ std::size_t lex_tag(LexCursor &cursor, std::size_t at, bool xml)
         ++name_end;
     }
     cursor.mark(at, name_end, SyntaxRole::keyword);
-    const std::size_t end = lex_attributes(cursor, name_end);
+    const auto [end, closed] = lex_attributes(cursor, name_end);
     const std::string_view close =
         xml ? std::string_view{} : raw_close(line.substr(at, name_end - at));
-    const bool opened = !close.empty() && line[end - 1U] == '>' && line[end - 2U] != '/';
-    return opened ? skip_raw(cursor, end, close) : end;
+    return closed && !close.empty() ? skip_raw(cursor, end, close) : end;
 }
 
 // ---- テキスト ----
@@ -260,7 +273,8 @@ std::size_t lex_angle(LexCursor &cursor, std::size_t at, bool xml)
     const std::string_view rest = cursor.line().substr(at);
     if (rest.starts_with(comment_open))
     {
-        return mark_region(cursor, at, at + comment_open.size(), LexKind::block_comment);
+        // 閉じは `<!` の後ろから探す（`<!-->` `<!--->` は空のコメント・#842 のレビュー 6）。
+        return mark_region(cursor, at, at + 2U, LexKind::block_comment);
     }
     if (xml && rest.starts_with(cdata_open))
     {

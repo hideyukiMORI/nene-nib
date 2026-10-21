@@ -74,12 +74,13 @@ constexpr LexState tilde3 = raw("~~~");
 constexpr LexState tilde4 = raw("~~~~");
 constexpr LexState tpl = raw("`");
 // #838: HTML の script / style の中（delimiter は閉じタグの頭）・XML の CDATA の中・YAML の
-// ブロックスカラーの中（delimiter は印の行の字下げの深さの 2 桁）。
+// ブロックスカラーの中（delimiter はキーの桁の 2 桁）。
 constexpr LexState in_script = raw("</script");
 constexpr LexState in_style = raw("</style");
 constexpr LexState in_cdata = raw("]]>");
 constexpr LexState block00 = raw("00");
 constexpr LexState block02 = raw("02");
+constexpr LexState block04 = raw("04");
 constexpr LexState block99 = raw("99");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
@@ -655,7 +656,7 @@ constexpr std::array<LexCase, 10> typescript_only_cases{{
 // #838: HTML と XML で同じ答えの行（タグ・属性・コメントの行またぎ・実体参照・宣言・UTF-8 の
 // 本文・閉じない引用符は行末まで string・行をまたぐタグの属性は区間なし（後続）・ほかの言語の
 // 状態は行頭から）。
-constexpr std::array<LexCase, 38> html_common_cases{{
+constexpr std::array<LexCase, 40> html_common_cases{{
     {"<html>", plain, "kkkkkK", plain},
     {"</html>", plain, "kkkkkkK", plain},
     {"<div class=\"box\" id='main'>", plain, "kkkk ttttt sssss tt ssssssk", plain},
@@ -693,12 +694,14 @@ constexpr std::array<LexCase, 38> html_common_cases{{
     {"<x =y>", plain, "kk  sk", plain},
     {"<a\tb\t=\t\"c\">", plain, "kk t   sssk", plain},
     {"<p>1 &lt; 2</p> <!-- note -->", plain, "kkK  vvvv  kkkK ccccccccccccc", plain},
+    {"<!-->x <!--->y", plain, "ccccc  cccccc", plain},
+    {"<日本 属性=\"値\">テキスト</日本>", plain, "kkk tt sssk    kkkkK", plain},
     {"int x; /* c", raw_xyz, "", plain},
 }};
 
 // HTML だけ: script / style の中は区間なしで閉じタグまで（大小を問わない）・CDATA と `<?` は
 // XML だけの字句。
-constexpr std::array<LexCase, 20> html_only_cases{{
+constexpr std::array<LexCase, 22> html_only_cases{{
     {"<input type=\"checkbox\" checked>", plain, "kkkkkk tttt ssssssssss tttttttk", plain},
     {"<!doctype html PUBLIC \"-//W3C//DTD\">", plain, "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
      plain},
@@ -715,6 +718,8 @@ constexpr std::array<LexCase, 20> html_only_cases{{
     {"<STYLE media=\"all\">a{}</Style>", plain, "kkkkkk ttttt sssssk   kkkkkkkK", plain},
     {"<script src=\"a.js\"/>", plain, "kkkkkkk ttt sssssskk", plain},
     {"<scripts>x</scripts>", plain, "kkkkkkkkK kkkkkkkkkK", plain},
+    {"<script a=\">", plain, "kkkkkkk t ss", plain},
+    {"<script src=x/>", plain, "kkkkkkk ttt skk", plain},
     {"<script", plain, "kkkkkkk", plain},
     {"<![CDATA[ x ]]>", plain, "kkkkkkkkkkkkkkk", plain},
     {"<?xml version=\"1.0\"?>", plain, "", plain},
@@ -794,8 +799,8 @@ constexpr std::array<LexCase, 42> css_cases{{
 }};
 
 // YAML: キー・リスト・文字列・定数・数・アンカー・区切り・flow・ブロックスカラーの開く / 中 /
-// 空行 / 戻る（delimiter は印の行の字下げの深さ）。
-constexpr std::array<LexCase, 50> yaml_cases{{
+// 空行 / 戻る（delimiter はキーの桁・`- run: |` の兄弟キーで戻る・タグとアンカーの後ろの印）。
+constexpr std::array<LexCase, 56> yaml_cases{{
     {"key: value", plain, "ttt", plain},
     {"name: \"nene-nib\"", plain, "tttt  ssssssssss", plain},
     {"single: 'it''s'", plain, "tttttt  sssssss", plain},
@@ -841,6 +846,12 @@ constexpr std::array<LexCase, 50> yaml_cases{{
     {"    deeper text", block02, "sssssssssssssss", block02},
     {"  sibling: 2", block02, "  ttttttt  n", plain},
     {"- |", plain, "o o", block00},
+    {"- run: |", plain, "o ttt  o", block02},
+    {"    echo hi", block02, "sssssssssss", block02},
+    {"  env: x", block02, "  ttt", plain},
+    {"- - k: |", plain, "o o t  o", block04},
+    {"key: !!str |", plain, "ttt        o", block00},
+    {"key: &a |", plain, "ttt  kk o", block00},
     {"key: |2 # c", plain, "ttt  oo ccc", block00},
     {"key: |x", plain, "ttt", plain},
     {"a: b: c", plain, "t", plain},
@@ -849,7 +860,8 @@ constexpr std::array<LexCase, 50> yaml_cases{{
 }};
 
 // TOML: テーブル・キー・文字列 4 種・3 連の行またぎ・数と日時・配列・インラインテーブル。
-constexpr std::array<LexCase, 46> toml_cases{{
+// 複数行の配列の中の `[a]` だけの行は見出しに塗る（限界）。`+infx` は数でない。
+constexpr std::array<LexCase, 49> toml_cases{{
     {"[package]", plain, "kkkkkkkkk", plain},
     {"[[bin]]", plain, "kkkkkkk", plain},
     {"[dependencies.serde]", plain, "kkkkkkkkkkkkkkkkkkkk", plain},
@@ -894,6 +906,9 @@ constexpr std::array<LexCase, 46> toml_cases{{
     {"", plain, "", plain},
     {"  1,", plain, "  no", plain},
     {"]", plain, "o", plain},
+    {"  [a]", plain, "  kkk", plain},
+    {"x = +inf", plain, "t o nnnn", plain},
+    {"x = +infx", plain, "t o", plain},
     {"word", plain, "", plain},
     {"int x; /* c", raw_xyz, "", plain},
 }};
