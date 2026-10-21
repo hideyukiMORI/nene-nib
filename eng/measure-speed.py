@@ -39,6 +39,18 @@ above stay the default set and the only ones compare() judges:
                             window thread went quiet, so the single is measured after the warmup's
                             frame; a single that is not answered within LARGE_SECONDS is missing
 
+One more optional bench measures the Markdown preview (#818, ADR 0155) the same way: it runs only
+when --bench names it, is never compared with the reference and is never adopted into it:
+
+  key-to-frame-single-preview-open
+                            the key-to-frame-single trial (warmup and one keystroke, each after the
+                            window thread went quiet, without the 200) over preview-1000.md, 1000
+                            Markdown lines that rotate a heading, a paragraph and a list item
+                            (checked by SHA-256), after Ctrl+Shift+M opened the preview in the
+                            other pane; the product marks no milestone for the preview, so the
+                            trial waits for the window thread to go quiet after the chord and
+                            again after the preview's tick before the warmup
+
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
 split-pane-key-100-{same,other}-{vertical,horizontal} (P, two panes made with Ctrl+backslash or
@@ -155,6 +167,18 @@ LONG_LINE_SHA256 = "ef2d1511a696984dcd4184498a852d944a8ca366bf847f440d1e46b73b32
 GIANT_LINE_BYTES = 16_800_000
 GIANT_LINE_VALUE = "nenenib giant line sample value"
 GIANT_LINE_SHA256 = "7888e16561252aa844dff7e65d9b9a6bfa6f64cd1324cdba255499144b0d211a"
+# プレビューを開いた 1 打鍵の文書（#818）。long_line_document と同じ規則で、行は「印・6 桁の番号と
+# 空白・同じ短文の 86 回の連結」・CRLF・1000 行・BOM なし。印は見出し / 段落 / リスト項目を行ごとに
+# 回し（`# ` / なし / `- `）、どれも巨大な行のしきい値 16,384 の下（1 行 2,000 code points 前後）。
+# 番号を印の後に置くのは、行頭が番号だと見出しとリストにならないため。
+PREVIEW_MARKS = ("# ", "", "- ")
+PREVIEW_REPEATS = 86
+PREVIEW_LINES = 1000
+PREVIEW_SHA256 = "5878ba0b9dff061ce45b27cc92d8775277cc2fde4316cf981b11668232bbf3cf"
+# プレビューの解析は worker が裏で行い、ui の tick が結果を引く（ADR 0155）。鍵の後に窓のスレッドが
+# 静かになってからさらにこれだけ待ち、もう一度静かになるのを待つ。
+PREVIEW_TICK_SECONDS = 0.5
+VK_M = 0x4D
 # 巨大な行の 1 打鍵は秒の桁になり得るので、固定の待ちではなく窓のスレッドが静かになるのを待つ。
 # 窓のスレッドの CPU 時間が QUIET_SECONDS の間に QUIET_CPU_MS しか進まなければ、描き終えたとみなす。
 QUIET_SECONDS = 0.5
@@ -180,7 +204,9 @@ SPLIT_PANE_BENCHES = {"split-pane-key-100-same-vertical": ("vertical", False),
                       "split-pane-key-100-other-horizontal": ("horizontal", True)}
 SPLIT_BENCHES = (SPLIT_SINGLE_BENCH, *SPLIT_PANE_BENCHES)
 GIANT_BENCHES = (GIANT_OPEN_BENCH, GIANT_SINGLE_BENCH)
-OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES)
+# プレビューを開いた 1 打鍵（#818）。--bench で名指ししたときだけ測り、基準値に載せない。
+PREVIEW_BENCH = "key-to-frame-single-preview-open"
+OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH)
 PACED_KEYS = 100
 PACED_CHARACTER = "a"
 PACED_BUDGET_MS = 16.7
@@ -341,6 +367,22 @@ def giant_line_document(folder: Path) -> Path:
     if digest != GIANT_LINE_SHA256:
         raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {GIANT_LINE_SHA256};"
                          f" {', '.join(GIANT_BENCHES)} are not measured")
+    return path
+
+
+def preview_document(folder: Path) -> Path:
+    """#818's 1000-line Markdown byte for byte; any other digest stops before a trial."""
+    path = folder / "preview-1000.md"
+    if path.is_file() and file_sha256(path) == PREVIEW_SHA256:
+        return path
+    sentence = LONG_LINE_SENTENCE * PREVIEW_REPEATS
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        for index in range(PREVIEW_LINES):
+            handle.write(f"{PREVIEW_MARKS[index % len(PREVIEW_MARKS)]}{index:06d} {sentence}\r\n")
+    digest = file_sha256(path)
+    if digest != PREVIEW_SHA256:
+        raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {PREVIEW_SHA256};"
+                         f" {PREVIEW_BENCH} is not measured")
     return path
 
 
@@ -775,6 +817,72 @@ def bench_giant_single(executable: Path, environment: dict, folder: Path,
     return {GIANT_SINGLE_BENCH: single}, {}
 
 
+def preview_single_trial(executable: Path, environment: dict, folder: Path,
+                         document: Path) -> float | None:
+    """quiet_single_trial over preview-1000.md after Ctrl+Shift+M opened the preview (#818).
+
+    The chord goes through SendInput (the window thread reads the modifiers), so its WM_KEYDOWN
+    marks come first; the warmup and the measured keystroke are the last two inputs of the run.
+    """
+    report = report_path(folder, "keys-preview")
+    process, window, _ = start(executable, environment,
+                               ["--measure", str(report), str(document)], seconds=LARGE_SECONDS)
+    try:
+        raise_window(window)
+        if not take_foreground(window):
+            print("Speed: the bench window did not take the foreground")
+        covering = covered_by(window)
+        if covering is not None:
+            print(f"Speed: another window covers the bench window ({covering})")
+        time.sleep(SETTLE_SECONDS)
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after opening the document")
+        if not press_combination(window, [VK_CONTROL, VK_SHIFT], VK_M):
+            raise TrialNotObserved("Ctrl+Shift+M could not be sent")
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after Ctrl+Shift+M")
+        time.sleep(PREVIEW_TICK_SECONDS)
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the preview's tick")
+        write_text(window, "w")
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the warmup keystroke")
+        write_text(window, "a")
+        if not await_quiet(window):
+            print("Speed: the window thread did not go quiet after the measured keystroke")
+        close(window)
+        if not dismiss_dialog(process, IDNO, seconds=LARGE_SECONDS):
+            raise TrialNotObserved("the unsaved confirmation never came up")
+        process.wait(timeout=LARGE_SECONDS)
+    finally:
+        stop(process)
+    marks = observed_marks(report)
+    inputs = input_indexes(marks)
+    if len(inputs) < 3:
+        print(f"Speed: {len(inputs)} inputs were read; the chord, the warmup and one more are needed")
+        return None
+    warmed = frame_after(marks, inputs[-2])
+    if warmed is None or warmed > int(marks[inputs[-1]]["qpcMicroseconds"]):
+        print("Speed: the measured keystroke was read before the warmup's frame was presented")
+        return None
+    return measured_single(marks, inputs[-2:])
+
+
+def bench_preview_single(executable: Path, environment: dict, folder: Path,
+                         document: Path) -> tuple[dict, dict]:
+    """One keystroke with the preview open; a trial not observed is repeated as bench_keys does."""
+    for attempt in range(BURST_ATTEMPTS):
+        try:
+            single = preview_single_trial(executable, environment, folder, document)
+        except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
+            print(f"Speed: {unobserved}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
+            continue
+        return {PREVIEW_BENCH: single}, {}
+    print(f"Speed: no trial was observed in {BURST_ATTEMPTS} attempts;"
+          f" this trial of {PREVIEW_BENCH} is missing")
+    return {PREVIEW_BENCH: None}, {}
+
+
 def split_keys(layout: str, other: bool) -> list[tuple[str, list[int], int]]:
     """The keystrokes that put the window into two panes before the warmup (ADR 0148 decisions 4/6/14).
 
@@ -1175,7 +1283,7 @@ def judged_samples(measured: dict) -> int | None:
 
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
                 document: Path | None, palette: Path | None, long_line: Path | None = None,
-                giant: Path | None = None, grid: bool = True):
+                giant: Path | None = None, grid: bool = True, preview: Path | None = None):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -1193,6 +1301,8 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_giant_open(executable, environment, folder, giant, grid)
     if GIANT_SINGLE_BENCH in names:
         yield bench_giant_single(executable, environment, folder, giant, grid)
+    if PREVIEW_BENCH in names:
+        yield bench_preview_single(executable, environment, folder, preview)
 
 
 def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool = True) -> dict:
@@ -1207,6 +1317,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     long_line = long_line_document(folder) if LONG_LINE_BENCH in names else None
     # 1 行 16 MiB の文書も SHA-256 が違えば測らない（ADR 0138 決定 1）。
     giant = giant_line_document(folder) if any(name in names for name in GIANT_BENCHES) else None
+    preview = preview_document(folder) if PREVIEW_BENCH in names else None
     samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in names}
@@ -1217,7 +1328,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     waits: list = []
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
-                                         long_line, giant, grid):
+                                         long_line, giant, grid, preview):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -1244,6 +1355,9 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     elif giant is not None:
         record["document"] = {"path": giant.name, "bytes": giant.stat().st_size, "lines": 1}
         record["gridAnswer"] = "yes" if grid else "no"
+    elif preview is not None:
+        record["document"] = {"path": preview.name, "bytes": preview.stat().st_size,
+                              "lines": PREVIEW_LINES, "sha256": PREVIEW_SHA256}
     return record
 
 
@@ -1467,6 +1581,8 @@ def main() -> int:
         arguments.repetitions = 1 if split else REPETITIONS
     if split and (arguments.adopt or arguments.check or arguments.values):
         parser.error("the split benches are recorded with --record and judged with --split-verdict")
+    if arguments.bench == PREVIEW_BENCH and (arguments.adopt or arguments.check or arguments.values):
+        parser.error(f"{PREVIEW_BENCH} is recorded with --record only; it has no reference (#818)")
     if not (arguments.record or arguments.adopt or arguments.check):
         parser.error("one of --record, --adopt or --check is required")
     if arguments.check:
