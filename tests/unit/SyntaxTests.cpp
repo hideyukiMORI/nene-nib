@@ -7,6 +7,8 @@
 #include "Appearance.hpp"
 #include "ColorSpan.hpp"
 #include "ComposeText.hpp"
+#include "DeleteDirection.hpp"
+#include "DeleteText.hpp"
 #include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -279,6 +281,41 @@ void verify_edit_above_forgets()
     const auto undone = controller.frame();
     expect(undone.first_visible.value == 300 && undone.syntax_lexed == 200 + shown_lines,
            "undoing an edit above the cached line forgets the cache too");
+}
+
+// 追補 #827 の境界: 覚えの行 L の行頭ちょうどで改行を含めて挿入する編集は保ち、L − 1 の行末の改行を
+// 消して結合する削除（編集の始まりは L − 1）は捨てる。
+void verify_edit_boundary()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    open(editing, code_path, nearby_comment());
+    scrolled(controller, 304);
+    static_cast<void>(controller.frame());
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{305}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(app::InsertText{"*/\n"}));
+    const auto inserted = controller.frame();
+    expect(inserted.first_visible.value == 305 && inserted.syntax_lexed == shown_lines &&
+               has_span(inserted.lines.front(), 1, 3, SyntaxRole::comment) &&
+               inserted.lines.at(1).colors.empty(),
+           "an edit at the very start of the cached line keeps the cache and closes the comment");
+    Editing joined_editing;
+    auto &joining = joined_editing.controller();
+    static_cast<void>(joining.apply(app::VisibleLines{shown_lines}));
+    open(joined_editing, code_path, nearby_comment());
+    scrolled(joining, 304);
+    static_cast<void>(joining.frame());
+    static_cast<void>(
+        joining.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{305}, core::Column{1}},
+                                      core::SelectionAnchoring::collapse}));
+    static_cast<void>(joining.apply(app::DeleteText{core::DeleteDirection::backward}));
+    scrolled(joining, 1);
+    const auto joined = joining.frame();
+    expect(joined.first_visible.value == 305 && joined.syntax_lexed == 200 + shown_lines,
+           "deleting the line break at the end of the line above the cached line forgets it");
 }
 
 // 追補 #827: 2 枠で同じ文書を見ているとき、覚えの行より前の編集は両方の覚えを捨て（もう 1 つの
@@ -596,6 +633,7 @@ void verify_syntax_scope()
     verify_backfill_reach();
     verify_cache_follows();
     verify_edit_above_forgets();
+    verify_edit_boundary();
     verify_split_forgets_both();
     verify_backfill_per_language();
     verify_tabs_and_panes();
