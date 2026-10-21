@@ -117,6 +117,11 @@ class EditorState final
     // with_language は `:set filetype=` の 1 か所（controller の accept(SelectLanguage)）。
     [[nodiscard]] core::Language language() const noexcept;
     [[nodiscard]] EditorState with_language(core::Language language) const;
+    // 構文の色の入れ切り（ADR 0156 の追補・#829）。アクティブな文書のもので、開いた文書・新しい
+    // タブは true。with_syntax_enabled は `:syntax on|off` の 1 か所（controller の
+    // accept(SelectSyntax)）。
+    [[nodiscard]] bool syntax_enabled() const noexcept;
+    [[nodiscard]] EditorState with_syntax_enabled(bool enabled) const;
     // 開いたときの問いの段階（決定 2）。アクティブな文書のもの。進めるのは controller の
     // ask_display と accept(SelectDisplay) の 2 か所。
     [[nodiscard]] DisplayInquiry display_inquiry() const noexcept;
@@ -280,6 +285,7 @@ class EditorState final
     core::CaretAffinity caret_affinity_ = core::CaretAffinity::leading;
     core::DisplayForm display_ = core::DisplayForm::text;
     core::Language language_ = core::Language::plain;
+    bool syntax_enabled_ = true;
     DisplayInquiry display_inquiry_ = DisplayInquiry::unjudged;
     bool display_question_ = false;
     core::Appearance appearance_;

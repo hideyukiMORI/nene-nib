@@ -77,6 +77,8 @@ constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme"
                                                                    "only",
                                                                    "set filetype=",
                                                                    "set ft=",
+                                                                   "syntax on",
+                                                                   "syntax off",
                                                                    "edit",
                                                                    "buffer",
                                                                    "ls",
