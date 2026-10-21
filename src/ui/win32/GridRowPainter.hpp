@@ -1,12 +1,15 @@
 #pragma once
 
+#include "BodyColors.hpp"
 #include "BodyTextPainter.hpp"
 #include "CaretShape.hpp"
+#include "ColoredRun.hpp"
 #include "GridRowCanvas.hpp"
 #include "GridRowView.hpp"
 #include "PaneRole.hpp"
 #include "RenderFailure.hpp"
 #include "RgbaColor.hpp"
+#include "SyntaxColor.hpp"
 #include "TextLayoutRequest.hpp"
 #include "Utf8.hpp"
 
@@ -15,8 +18,11 @@
 #include <cstdint>
 #include <d2d1.h>
 #include <dwrite.h>
+#include <iterator>
 #include <optional>
+#include <span>
 #include <utility>
+#include <vector>
 #include <windows.h>
 
 namespace nenenib::ui::win32
@@ -49,8 +55,7 @@ template <typename Target, typename Layouts> class GridRowPainter final
         }
         auto *layout = made.value().Get();
         draw_marks(row, canvas);
-        color(canvas.palette.text);
-        draw_text(layout, canvas, std::nullopt);
+        draw_row_text(layout, row, canvas);
         color(canvas.palette.muted);
         for (const auto &span : row.replaced)
         {
@@ -88,21 +93,94 @@ template <typename Target, typename Layouts> class GridRowPainter final
                            static_cast<float>(canvas.area.bottom));
     }
 
+    // 構文の色の升の範囲を画面行の文字列の UTF-16 の範囲へ写す（#839）。升の境の code point は、
+    // その升で始まり升を持つ最初の code point（幅 0 の結合文字は前の文字の側・ADR 0053）。
+    [[nodiscard]] static std::vector<ColoredRun> colored_runs(const application::GridRowView &row,
+                                                              const core::SyntaxPalette &body)
+    {
+        std::vector<UINT32> units{0};
+        for (std::size_t byte = 0; byte < row.text.size();)
+        {
+            const auto value = core::code_point_at(row.text, core::Offset{byte});
+            units.push_back(units.back() + (value > utf16_single ? 2U : 1U));
+            byte = core::next_code_point(row.text, core::Offset{byte}).value;
+        }
+        std::vector<ColoredRun> colored;
+        colored.reserve(row.colors.size());
+        for (const auto &span : row.colors)
+        {
+            const auto from =
+                units.at(std::min(code_point_of(row.starts, span.cells.begin), units.size() - 1));
+            const auto stop =
+                units.at(std::min(code_point_of(row.starts, span.cells.end), units.size() - 1));
+            if (stop > from)
+            {
+                colored.push_back(ColoredRun{
+                    DWRITE_TEXT_RANGE{from, stop - from},
+                    to_color(core::RgbaColor{core::syntax_color(body, span.role), opaque})});
+            }
+        }
+        return colored;
+    }
+
   private:
-    void color(core::RgbaColor value)
+    [[nodiscard]] static D2D1_COLOR_F to_color(core::RgbaColor value) noexcept
+    {
+        return D2D1::ColorF(static_cast<float>(value.color.red) / full_channel,
+                            static_cast<float>(value.color.green) / full_channel,
+                            static_cast<float>(value.color.blue) / full_channel,
+                            static_cast<float>(value.alpha) / full_channel);
+    }
+
+    void color(D2D1_COLOR_F value)
     {
         if (brush_ != nullptr)
         {
-            brush_->SetColor(D2D1::ColorF(static_cast<float>(value.color.red) / full_channel,
-                                          static_cast<float>(value.color.green) / full_channel,
-                                          static_cast<float>(value.color.blue) / full_channel,
-                                          static_cast<float>(value.alpha) / full_channel));
+            brush_->SetColor(value);
         }
+    }
+
+    void color(core::RgbaColor value)
+    {
+        color(to_color(value));
     }
 
     void color(core::RgbColor value)
     {
         color(core::RgbaColor{value, opaque});
+    }
+
+    // 升 cell で始まり升を持つ最初の code point の添字（starts の末尾は升の和）。
+    [[nodiscard]] static std::size_t code_point_of(const std::vector<std::size_t> &starts,
+                                                   std::size_t cell)
+    {
+        const auto last = starts.size() - 1;
+        const std::span<const std::size_t> heads(starts.data(), last);
+        auto index = static_cast<std::size_t>(
+            std::distance(heads.begin(), std::ranges::lower_bound(heads, cell)));
+        while (index < last && starts.at(index) == cell && starts.at(index + 1) == cell)
+        {
+            ++index;
+        }
+        return index;
+    }
+
+    // 画面行の字（#839）。色の区間が無ければ text の色で 1 回、あれば本文と同じ色つきの道
+    // （BodyTextPainter::draw_colored_body_text）で区間ごとの構文の色と区間の外の text の色。
+    void draw_row_text(IDWriteTextLayout *layout, const application::GridRowView &row,
+                       const GridRowCanvas &canvas)
+    {
+        if (row.colors.empty())
+        {
+            color(canvas.palette.text);
+            draw_text(layout, canvas, std::nullopt);
+            return;
+        }
+        const auto colored = colored_runs(row, canvas.body);
+        body_.draw_colored_body_text(
+            layout, canvas.area,
+            BodyColors{colored, to_color(core::RgbaColor{canvas.palette.text, opaque})},
+            [this](const D2D1_COLOR_F &value) { color(value); });
     }
 
     // 検索の当たり → 選択（ADR 0037 の決定 5 と同じ順）。改行を越える選択は行末の後ろに印。
@@ -261,6 +339,8 @@ template <typename Target, typename Layouts> class GridRowPainter final
 
     static constexpr float full_channel = 255.0F;
     static constexpr std::uint8_t opaque = 255;
+    // UTF-16 の 1 単位に収まる最大の code point。
+    static constexpr char32_t utf16_single = 0xFFFF;
 
     Target &target_;
     ID2D1SolidColorBrush *brush_;

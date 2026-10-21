@@ -42,7 +42,7 @@
 - 巨大な行は状態を plain に戻す（行の中で開いたコメントは次の行へ渡らない）。
 - 同じ退避番号で改訂番号を変えずに本文を丸ごと替える道は、空の無題のタブへ開く `open_document` の `with_opened` だけで、そこで覚えを両方捨てる（controller の 1 か所・契約 `verify_opened_into_untitled`）。覚えの鍵に文書の世代は足さない。ほかに本文を丸ごと替える道（`:e!` など）を足すときは、同じく覚えを捨てる。
 - ~~編集が見えている最初の行より後ろでも覚えを作り直す。遡りの 200 行は言語によらない。~~ → 追補 #827 で解消（覚えの行以降の編集は覚えを保ち、遡りは言語ごとの表）。
-- `:syntax on|off` は段 3（#829・下の追補）。`:syntax off` の値は session に載せないので、起動で前回のタブを戻すと on に戻る。格子の行（`GridLineRows`）と IME の差し込み行の色は後続。C / C++・JSON・Python 以外の言語は後続。
+- `:syntax on|off` は段 3（#829・下の追補）。`:syntax off` の値は session に載せないので、起動で前回のタブを戻すと on に戻る。~~格子の行（`GridLineRows`）と IME の差し込み行の色は後続。~~ → 追補 #839 で解消。C / C++・JSON・Python 以外の言語は後続。
 - cluster の表が無い run と右から左の run は切らず、run 全体を最初に重なる区間の色で描く。合字の途中に区間の境があると、合字の字形は後ろの区間の色になる。
 - 保持できない行（決定 12）は区間の数だけ layout を描き直すので遅い。
 - `SetDrawingEffect` を使わない（共有の layout と収集器の棄却・ADR 0114 / 0073）。色を `BodyTextLayouts` の鍵に入れない。
@@ -61,3 +61,10 @@
 - **決定 9 の鍵から改訂番号を外し、編集の位置で捨てる。** `SyntaxStateCache{ AutosaveId tab; Language language; LineNumber line; LexState state; }`。覚えは `line` の行頭の状態で、それは `line` より前の行だけで決まる。本文を変える編集の 3 か所（`EditorController::replace`・`undo_edit`・`redo_edit`）が本文を置く前に `forget_syntax_before(edit)` を呼び、編集の始まり（`Edit.at` の編集の前の本文での行・改行の索引で引く）が `cache.line` より前（`<`）なら、その文書（退避番号）の覚えを捨てる。`cache.line` 以降の編集は `cache.line` より前の行を動かさないので保ち、次の frame は `cache.line` から見えている行まで字句器を通し直す。同じ文書を 2 枠で見ているときは両方の覚えに同じ判断をし、別の文書の枠の覚えには触れない。タブ・言語・`:syntax`・空の無題のタブへ開く（`with_opened`）で捨てるのは今までどおり。本文を丸ごと替える道や、この 3 か所を通らずに本文を変える道を足すときは、同じく覚えを捨てる。
 - **決定 8 の遡りの 200 行は言語ごとの表 1 つ。** core の `syntax_backfill_lines(Language)`（`switch`・`default` なし）: plain と、字句器も先取りの値も無い言語は 0、JSON は 1（行をまたぐ状態が無い）、C / C++・Python・JavaScript / TypeScript は 200、Markdown は 500（フェンスが長い）。JavaScript / TypeScript / Markdown の値は字句器より先に表に置いた先取りで、`has_lexer` が偽のうちは `syntax_begin` が先に返るので使われない（字句器を足す日に値を見直す）。`syntax_cache_reach` の 4,096 行は変えない。
 - 契約（`--syntax`）: 見えている行の中の編集とその undo の後の frame は見えている行だけを字句器へ通す（`verify_cache_follows`）。見えている最初の行より前の編集とその undo は遡る（`verify_edit_above_forgets`）。2 枠で同じ文書の前を編集すると両方を捨て、後ろなら両方を保つ（`verify_split_forgets_both`）。JSON の文書の遡りは 1 行（`verify_backfill_per_language`）。Markdown の字句器はまだ無いので、500 行は表の値だけを確かめる。
+
+## 追補（2026-10-22・#839）
+
+- **格子の行も text と同じ字句解析の道。** controller の `grid_visible_rows` が `visible_lines` と同じ `syntax_begin`（覚え・言語ごとの遡り・`:syntax off` と字句器の無い言語では呼ばない）を見えている最初の行で 1 回呼び、行ごとに `grid_colored_line` が行の全体を `lex_line` に通して区間（本文の桁）を本文の位置へ写し、`GridLineMarks.colors`（`GridColorRange`）に置く。`GridLineRows::mark_row` が検索の当たりと同じ写し（`span_of`）で画面行ごとの升の範囲 `GridRowView.colors`（`GridColorSpan`）に切る。巨大な行（`giant_line_index`）は区間を付けず plain に戻す（text の窓と同じ限界）。`syntax_lexed` は格子の frame でも字句器へ通した行を数える。覚えの鍵の退避番号は `PaneSource.tab` に移した（`visible_lines` と `grid_visible_rows` が同じ値を読む）。
+- **IME の差し込み行。** `colored_line` は差し込み行も `lex_line` に通し、差し込みの手前の区間はそのまま、後ろの区間は差し込んだ code point の数だけずらし、差し込みをまたぐ区間は手前と後ろの 2 つに割る（差し込みの範囲は色なし）。差し込んだ位置の本文の桁は `composed_source_column` の 1 本で引く。renderer の `draw_composed_line` は本文と同じ `draw_line_text` を通り、`colored_runs` が後ろの区間を本文の桁へ戻して写してから差し込んだ UTF-16 の数だけずらす。差し込んだ文字列は区間の外なので `text` の色で、下線・文節の面は今のまま。格子の差し込みは `shift_spans` が同じ理屈で升を割ってずらす。
+- **描画は同じ painter。** `GridRowPainter` は区間があれば `BodyTextPainter::draw_colored_body_text` を格子の行の layout で呼ぶ（升の範囲 → 画面行の文字列の code point → UTF-16。幅 0 の結合文字は前の字の側）。区間が無ければ今までどおり `text` の色で 1 回。`SetDrawingEffect` は使わず brush は 1 本。色は `GridRowCanvas.body`（frame の `SyntaxPalette`）。
+- 契約: `--syntax` の `verify_composed_colors`（差し込み行の区間のずれと割れ）・`verify_grid_colors`（格子の画面行の升・折り返した行の 2 行目・格子の差し込みの 6 升）。`nib_window_tests --syntax` の `verify_grid_color_ranges`（升 → UTF-16）と `verify_grid_colored_row`（WIC の描画先で text の色で切った画素が切らない画素と同じ・区間の境の升で色が替わる）。`eng/verify-window.py --syntax` は同じ実行の中で `:set display=grid` の格子を撮る（`syntax-grid-<scheme>.png`）。

@@ -1,20 +1,29 @@
 // 構文の色つきの本文の描画（#816・ADR 0156 の決定 11〜13）。保持した字形 run を色の区間の境で
 // cluster から切った部分 run の送りの和が元の run と等しく、同じ色で描けば切らずに描いた画素と
 // 1 画素も違わないこと、区間の境で色が替わること、保持できない行の切り抜きの道も区間の中だけを
-// 塗ることを、替え玉の run とソフトウェアの描画先で確かめる。本物の DirectWrite の結果はフォントに
-// 依るので環境依存（QLT-013）。
+// 塗ることを、替え玉の run とソフトウェアの描画先で確かめる。格子の画面行（#839）も同じ道で、升の
+// 範囲から UTF-16 の範囲への写し（幅 2・結合文字）と、区間の境の升で色が替わることを確かめる。
+// 本物の DirectWrite の結果はフォントに依るので環境依存（QLT-013）。
 #include "BodyColors.hpp"
 #include "BodyTextLayouts.hpp"
 #include "BodyTextPainter.hpp"
 #include "ColoredRun.hpp"
 #include "GlyphPieces.hpp"
+#include "GridRowCanvas.hpp"
+#include "GridRowPainter.hpp"
 #include "RefusingGlyphLayouts.hpp"
 #include "SoftwareTarget.hpp"
 #include "WindowChecks.hpp"
 
 #include "DisplayLine.hpp"
 #include "EditorSettings.hpp"
+#include "GridRowView.hpp"
+#include "PaneRole.hpp"
 #include "RenderFailure.hpp"
+#include "RgbColor.hpp"
+#include "SyntaxPalette.hpp"
+#include "SyntaxRole.hpp"
+#include "Theme.hpp"
 
 #include <array>
 #include <cstddef>
@@ -240,12 +249,151 @@ void check_replaced_line(SoftwareTarget &target, win32::BodyTextLayouts &layouts
     expect(!plain.empty() && drawn(target, layouts, layout.value().Get(), spans) == plain,
            "a line with ^M cut into pieces of the text color draws the same pixels");
 }
+namespace app = nenenib::application;
+namespace core = nenenib::core;
+using GridPainter = win32::GridRowPainter<ID2D1RenderTarget, win32::BodyTextLayouts>;
+
+[[nodiscard]] app::GridRowView grid_row_of(std::string text, std::vector<std::size_t> starts,
+                                           std::vector<app::GridColorSpan> colors)
+{
+    app::GridRowView row{core::LineNumber{1}, 0,           0,  std::move(text), std::move(starts),
+                         std::nullopt,        false,       {}, std::nullopt,    {},
+                         std::nullopt,        std::nullopt};
+    row.colors = std::move(colors);
+    return row;
+}
+
+[[nodiscard]] core::SyntaxPalette syntax_palette_of(core::RgbColor others, core::RgbColor type)
+{
+    auto palette =
+        core::SyntaxPalette{others, others, others, others, others, others, others, others,
+                            others, others, others, others, others, others, others, others};
+    palette.type = type;
+    return palette;
+}
+
+// 升の範囲 → 画面行の文字列の UTF-16 の範囲。幅 2 の字は 2 升で 1 単位、サロゲート対は 2 単位、
+// 結合文字は前の字の升の側に入る。
+void verify_grid_color_ranges()
+{
+    const auto body = syntax_palette_of(core::RgbColor{255, 255, 255}, core::RgbColor{0, 255, 0});
+    const auto wide = GridPainter::colored_runs(
+        grid_row_of("a\xE6\x97\xA5"
+                    "b",
+                    {0, 1, 3, 4},
+                    {app::GridColorSpan{app::GridCellSpan{1, 3}, core::SyntaxRole::type}}),
+        body);
+    expect(wide.size() == 1 && wide.front().range.startPosition == 1 &&
+               wide.front().range.length == 1,
+           "a wide character's two cells are its one UTF-16 unit");
+    const auto pair = GridPainter::colored_runs(
+        grid_row_of("a\xF0\xA0\xAE\x9F"
+                    "b",
+                    {0, 1, 3, 4},
+                    {app::GridColorSpan{app::GridCellSpan{3, 4}, core::SyntaxRole::type}}),
+        body);
+    expect(pair.size() == 1 && pair.front().range.startPosition == 3 &&
+               pair.front().range.length == 1,
+           "a span after a surrogate pair starts after its two UTF-16 units");
+    const auto combining = GridPainter::colored_runs(
+        grid_row_of("e\xCC\x81x", {0, 1, 1, 2},
+                    {app::GridColorSpan{app::GridCellSpan{0, 1}, core::SyntaxRole::type},
+                     app::GridColorSpan{app::GridCellSpan{1, 2}, core::SyntaxRole::keyword}}),
+        body);
+    expect(combining.size() == 2 && combining.at(0).range.length == 2 &&
+               combining.at(1).range.startPosition == 2 && combining.at(1).range.length == 1,
+           "a combining mark goes with the span of its base cell");
+}
+
+// 格子の 1 画面行を製品の GridRowPainter で描く。升の幅は本物の格子の升（測れなければ空）。
+[[nodiscard]] Pixels grid_drawn(SoftwareTarget &target, win32::BodyTextLayouts &layouts,
+                                const app::GridRowView &row, const core::SyntaxPalette &body)
+{
+    auto settings = core::default_editor_settings();
+    const auto theme = core::selected_theme(settings, core::Appearance::dark);
+    auto palette = theme.ui;
+    palette.text = core::RgbColor{255, 255, 255};
+    const std::optional<app::CompositionView> composition;
+    std::optional<win32::RenderFailure> failure;
+    const core::TextViewGeometry geometry{layout_width, static_cast<std::int32_t>(line_height), 96};
+    const auto measured =
+        layouts.cell(app::TextLayoutRequest{{}, settings, geometry, core::DisplayForm::grid});
+    if (!measured)
+    {
+        return {};
+    }
+    const auto cell = measured.value().width;
+    return target.painted(
+        [&](ID2D1RenderTarget &context, ID2D1SolidColorBrush *brush)
+        {
+            GridPainter painter(context, brush, layouts, failure);
+            const win32::GridRowCanvas canvas{area,
+                                              cell,
+                                              settings,
+                                              geometry,
+                                              palette,
+                                              body,
+                                              core::CaretShape::bar,
+                                              false,
+                                              composition,
+                                              2,
+                                              2,
+                                              6,
+                                              1.0F,
+                                              2,
+                                              1,
+                                              1.0F,
+                                              win32::PaneRole::active};
+            static_cast<void>(painter.draw(row, canvas));
+        });
+}
+
+// 格子の画面行（#839）: text の色で塗る区間は区間の無い描画と 1 画素も違わず（部分 run の送りの和が
+// 元の run と同じ）、緑の区間は 3 升目の境で白に替わる。
+void verify_grid_colored_row(SoftwareTarget &target, win32::BodyTextLayouts &layouts)
+{
+    const auto cell = layouts.cell(app::TextLayoutRequest{
+        {},
+        core::default_editor_settings(),
+        core::TextViewGeometry{layout_width, static_cast<std::int32_t>(line_height), 96},
+        core::DisplayForm::grid});
+    if (!cell)
+    {
+        unmeasured("the colored grid row needs the DirectWrite grid cell");
+        return;
+    }
+    const auto width = cell.value().width;
+    std::vector<std::size_t> starts(10);
+    for (std::size_t index = 0; index < starts.size(); ++index)
+    {
+        starts.at(index) = index;
+    }
+    const std::vector<app::GridColorSpan> spans{
+        app::GridColorSpan{app::GridCellSpan{0, 3}, core::SyntaxRole::type},
+        app::GridColorSpan{app::GridCellSpan{4, 9}, core::SyntaxRole::keyword}};
+    const auto white_body =
+        syntax_palette_of(core::RgbColor{255, 255, 255}, core::RgbColor{255, 255, 255});
+    const Pixels plain =
+        grid_drawn(target, layouts, grid_row_of("int value", starts, {}), white_body);
+    expect(!plain.empty() && grid_drawn(target, layouts, grid_row_of("int value", starts, spans),
+                                        white_body) == plain,
+           "a grid row cut into pieces of the text color draws the same pixels as one run");
+    const auto green_body =
+        syntax_palette_of(core::RgbColor{255, 255, 255}, core::RgbColor{0, 255, 0});
+    const auto [green_right, white_left] =
+        extents(grid_drawn(target, layouts, grid_row_of("int value", starts, spans), green_body));
+    const auto border = 3 * width;
+    expect(green_right > 0 && static_cast<float>(green_right) <= border + 2 &&
+               static_cast<float>(white_left) >= border - 1,
+           "the grid row's color changes at the cell border of its span");
+}
 } // namespace
 
 void verify_syntax_render()
 {
     verify_pieces();
     verify_crossing_runs();
+    verify_grid_color_ranges();
     SoftwareTarget target;
     win32::BodyTextLayouts layouts;
     auto settings = nenenib::core::default_editor_settings();
@@ -268,5 +416,6 @@ void verify_syntax_render()
     check_replaced_line(
         target, layouts,
         nenenib::application::TextLayoutRequest{replaced, settings, request.geometry});
+    verify_grid_colored_row(target, layouts);
 }
 } // namespace nenenib::tests::ui

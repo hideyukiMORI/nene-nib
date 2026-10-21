@@ -2669,14 +2669,19 @@ PREVIEW_GRID_LENGTH = 20_000
 PREVIEW_DOCUMENT_SECONDS = 3.0
 
 
-def preview_scheme(window, scheme: str) -> None:
+def palette_command(window, command: str) -> None:
+    """Run a settings command (`:...`) through Ctrl+P, in the ordinary mode."""
     if not press_chord(window, VK_CONTROL, VK_P):
         raise ForegroundRefused("the window could not take the foreground")
     time.sleep(PALETTE_SETTLE_SECONDS)
-    write_text(window, f":colorscheme {PREVIEW_SCHEMES[scheme]}")
+    write_text(window, command)
     time.sleep(PALETTE_SETTLE_SECONDS)
     press(window, VK_RETURN)
     time.sleep(TAB_SETTLE_SECONDS)
+
+
+def preview_scheme(window, scheme: str) -> None:
+    palette_command(window, f":colorscheme {PREVIEW_SCHEMES[scheme]}")
 
 
 def band_inked(pixels: bytes, width: int, band: tuple) -> bool:
@@ -2803,7 +2808,9 @@ def syntax_inks(pixels: bytes, width: int, body: dict, rows: int) -> list:
 def verify_syntax(executable: Path, environment: dict, scheme: str, frames: Path | None) -> dict:
     """Issue #816: tests/syntax/sample.cpp drawn in the C++ colours of the scheme (ADR 0156).
 
-    The scheme is chosen with Ctrl+P and :colorscheme, so it takes the foreground once."""
+    The scheme is chosen with Ctrl+P and :colorscheme, so it takes the foreground once. Issue #839:
+    in the same run, `:set display=grid` (Ctrl+P again, still in the foreground) draws the sample as
+    the grid, which shows the same ink colours (syntax-grid-<scheme>.png)."""
     root = Path(__file__).resolve().parents[1]
     opened = root / "tests/syntax/sample.cpp"
     process, window, _ = start(executable, environment, [str(opened)])
@@ -2832,6 +2839,15 @@ def verify_syntax(executable: Path, environment: dict, scheme: str, frames: Path
                   "inkColours": len(inks), "inks": inks[:12]}
         # 本文の色（text）と、コメント・キーワード・型・文字列・数字の少なくとも 4 色が字の芯に出る。
         assert len(inks) >= 5, f"the C++ sample shows too few ink colours {inks[:12]}"
+        # #839: 格子の画面行も同じ字句器の区間で塗る（行の高さと上端は text と同じ）。
+        palette_command(window, ":set display=grid")
+        gridded = capture(window, width, height)
+        snapshot(frames, window, f"syntax-grid-{scheme}")
+        grid_inks = syntax_inks(gridded, width, body, rows)
+        record.update({"gridChanged": gridded != pixels, "gridInkColours": len(grid_inks),
+                       "gridInks": grid_inks[:12]})
+        assert gridded != pixels, "`:set display=grid` left the body as it was"
+        assert len(grid_inks) >= 5, f"the grid sample shows too few ink colours {grid_inks[:12]}"
         close(window)
         record["exitCode"] = process.wait(timeout=5)
         assert record["exitCode"] == 0, record["exitCode"]

@@ -33,6 +33,7 @@
 #include "FontFamilies.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
+#include "GridTally.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "Offset.hpp"
@@ -483,19 +484,18 @@ class EditorController final
     [[nodiscard]] LineView line_view(const PaneSource &source, LineView view,
                                      const core::OffsetRange &range, core::Offset caret) const;
     // 枠の見えている行。字句器を持つ言語なら色の区間も付け、cache をその枠の覚えで置き換え、
-    // 字句器へ通した行の数を lexed に足す（ADR 0156 の決定 8・9）。tab はその枠の文書の退避番号。
+    // 字句器へ通した行の数を lexed に足す（ADR 0156 の決定 8・9）。覚えの鍵は source.tab。
     [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure>
-    visible_lines(const PaneSource &source, AutosaveId tab, std::optional<SyntaxStateCache> &cache,
+    visible_lines(const PaneSource &source, std::optional<SyntaxStateCache> &cache,
                   std::size_t &lexed) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
     screen_rows_of(const LineView &shown) const;
     // 格子の見えている画面行（ADR 0140 の決定 5）を frame の grid と grid_scanned に書く。
     // 位置解決と同じ GridCells（本文の索引を借りる）を 1 frame に 1 つ作って切り出す。
-    // 失敗は升を読めないとき。
-    [[nodiscard]] std::optional<TextLayoutFailure> grid_visible_rows(const PaneSource &source,
-                                                                     std::vector<GridRowView> &grid,
-                                                                     std::size_t &scanned,
-                                                                     std::size_t &searched) const;
+    // 失敗は升を読めないとき。構文の色は visible_lines と同じ遡りと覚えで付ける（#839）。
+    [[nodiscard]] std::optional<TextLayoutFailure>
+    grid_visible_rows(const PaneSource &source, std::optional<SyntaxStateCache> &cache,
+                      std::vector<GridRowView> &grid, GridTally &tally) const;
     // もう 1 つの枠の表示値を frame に載せる（ADR 0148 の決定 8）。
     void add_other_pane(EditorFrame &result, const core::VimPattern *pattern);
     // add_other_pane が std::visit で選ぶ 1 対（ADR 0155 の決定 11）。

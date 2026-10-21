@@ -35,4 +35,12 @@ core::Column uncomposed_column(const ComposedLine &line, core::Column shown) noe
     return core::Column{line.insertion_column.value + beyond -
                         std::min(beyond, line.inserted_columns)};
 }
+
+core::Column composed_source_column(const core::DisplayLine &line,
+                                    const ComposedLine &composed) noexcept
+{
+    const auto position =
+        composed.insertion_column.value > 0 ? composed.insertion_column.value - 1 : 0;
+    return core::Column{core::source_column(line, position) + 1};
+}
 } // namespace nenenib::application

@@ -1,9 +1,10 @@
 // scope `--syntax` の単体テスト（ADR 0042 決定 2・#816・ADR 0156 の決定 7〜10・14）。字句器を
 // 持つ言語の文書で見えている行に色の区間が付くこと、持たない言語では区間が空で字句器も覚えも
 // 触らないこと、見えている最初の行の 200 行前からの遡りと覚えから続ける道、改訂・タブ・枠で
-// 作り直すこと、巨大な行の窓・IME の差し込み行・格子が色を持たないこと、役割から色への写しが
-// core の 1 本であること。`:syntax on|off|?` が文書の値で、off の文書は字句器を呼ばないこと
-// （#829・ADR 0156 の追補）。
+// 作り直すこと、巨大な行の窓が色を持たないこと、役割から色への写しが core の 1 本であること。
+// 格子の画面行と IME の差し込み行も同じ遡りと覚えで色を持ち、差し込みの範囲は色なしで後ろの区間が
+// ずれること（#839・ADR 0156 の追補）。`:syntax on|off|?` が文書の値で、off
+// の文書は字句器を呼ばないこと （#829・ADR 0156 の追補）。
 #include "Appearance.hpp"
 #include "ColorSpan.hpp"
 #include "ComposeText.hpp"
@@ -18,6 +19,8 @@
 #include "ExResult.hpp"
 #include "FilePath.hpp"
 #include "GiantLine.hpp"
+#include "GridColorSpan.hpp"
+#include "GridRowView.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
@@ -106,6 +109,23 @@ constexpr core::TextViewGeometry text_geometry{200, 20, 96, 10.0F};
 {
     const core::ColorSpan wanted{core::Column{begin}, core::Column{end}, role};
     return std::ranges::find(line.colors, wanted) != line.colors.end();
+}
+
+[[nodiscard]] bool has_cells(const app::GridRowView &row, std::size_t begin, std::size_t end,
+                             SyntaxRole role)
+{
+    const app::GridColorSpan wanted{app::GridCellSpan{begin, end}, role};
+    return std::ranges::find(row.colors, wanted) != row.colors.end();
+}
+
+// 格子の frame の行 line の画面行 row（無ければ nullptr）。
+[[nodiscard]] const app::GridRowView *grid_row(const app::EditorFrame &frame, std::size_t line,
+                                               std::size_t row)
+{
+    const auto found =
+        std::ranges::find_if(frame.grid, [line, row](const app::GridRowView &shown)
+                             { return shown.number.value == line && shown.row == row; });
+    return found == frame.grid.end() ? nullptr : &*found;
 }
 
 [[nodiscard]] bool all_comment(const app::LineView &line)
@@ -562,7 +582,7 @@ void verify_syntax_per_document()
            "opening a document in another tab leaves the off tab alone");
 }
 
-// 決定 7: 巨大な行の窓・IME の差し込み行・格子は色を持たない。
+// 決定 7: 巨大な行の窓は色を持たない。
 void verify_uncolored_rows()
 {
     Editing giant;
@@ -575,22 +595,73 @@ void verify_uncolored_rows()
                windowed.lines.at(1).colors.empty() &&
                has_span(windowed.lines.at(2), 1, 4, SyntaxRole::type),
            "a giant line's window has no spans and the next line is lexed from plain");
+}
 
+// 本文の 1 行目「int f(void) {」の 3 桁目（int の中）にキャレットを置いて「にほん」を変換中にする。
+[[nodiscard]] app::EditorFrame composed_in_int(app::EditorController &controller)
+{
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{3}},
+                                         core::SelectionAnchoring::collapse}));
+    return controller.apply_frame(app::ComposeText{composed_of("にほん", {}, 9)});
+}
+
+// #839: IME の差し込み行は、差し込みの手前の区間はそのまま、後ろは差し込んだ code point の数（3）
+// だけずれ、差し込みをまたぐ int は 2 つに割れて差し込みの範囲は色なし。
+void verify_composed_colors()
+{
     Editing composing;
     static_cast<void>(composing.controller().apply(app::VisibleLines{shown_lines}));
     open(composing, code_path, std::string(sample));
-    const auto composed =
-        composing.controller().apply_frame(app::ComposeText{composed_of("にほん", {}, 9)});
-    expect(composed.lines.at(0).composed.has_value() && composed.lines.at(0).colors.empty() &&
-               has_span(composed.lines.at(1), 5, 9, SyntaxRole::comment),
-           "the composed line has no spans and the others keep theirs");
+    const auto composed = composed_in_int(composing.controller());
+    const auto &line = composed.lines.at(0);
+    const bool clear = std::ranges::none_of(line.colors, [](const core::ColorSpan &span)
+                                            { return span.begin.value < 6 && span.end.value > 3; });
+    expect(line.composed.has_value() && clear && has_span(line, 1, 3, SyntaxRole::type) &&
+               has_span(line, 6, 7, SyntaxRole::type) &&
+               has_span(line, 8, 9, SyntaxRole::function) &&
+               has_span(line, 10, 14, SyntaxRole::type),
+           "the composed line shifts the spans after the insertion and leaves it uncolored");
+    expect(has_span(composed.lines.at(1), 5, 9, SyntaxRole::comment),
+           "the other lines keep their spans");
+}
 
+// #839: 格子の文書（幅 8 升）も text と同じ字句器を通り、画面行ごとに升の区間が付く。折り返した行の
+// 2 行目の区間は 2 行目の升で、変換中の文字列（6 升）を差し込んだ升は色なしで後ろがずれる。
+void verify_grid_colors()
+{
     Editing grid;
-    static_cast<void>(grid.controller().apply(app::VisibleLines{shown_lines, grid_geometry}));
+    auto &controller = grid.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines, grid_geometry}));
     open(grid, code_path, std::string(sample));
-    const auto gridded = grid.controller().apply_frame(app::SelectDisplay{core::DisplayForm::grid});
-    expect(gridded.lines.empty() && !gridded.grid.empty() && gridded.syntax_lexed == 0,
-           "the grid frame lexes nothing");
+    const auto gridded = controller.apply_frame(app::SelectDisplay{core::DisplayForm::grid});
+    const auto *first = grid_row(gridded, 1, 0);
+    const auto *folded = grid_row(gridded, 1, 1);
+    const auto *returned = grid_row(gridded, 3, 1);
+    expect(gridded.lines.empty() && first != nullptr && folded != nullptr && returned != nullptr,
+           "the grid frame shows the folded rows of the sample");
+    expect(first != nullptr && has_cells(*first, 0, 3, SyntaxRole::type) &&
+               has_cells(*first, 4, 5, SyntaxRole::function) &&
+               has_cells(*first, 6, 8, SyntaxRole::type),
+           "the first screen row of int f(vo takes the cells of its spans");
+    expect(folded != nullptr && has_cells(*folded, 0, 2, SyntaxRole::type),
+           "the folded row continues void from its own first cell");
+    expect(returned != nullptr && has_cells(*returned, 0, 2, SyntaxRole::keyword) &&
+               has_cells(*returned, 3, 6, SyntaxRole::string),
+           "the second row of the return line has the rest of return and the string");
+    expect(gridded.syntax_lexed == 5, "the grid frame lexes the five lines once each");
+
+    const auto composed = composed_in_int(controller);
+    const auto *inserted = grid_row(composed, 1, 0);
+    const bool clear = inserted != nullptr &&
+                       std::ranges::none_of(inserted->colors, [](const app::GridColorSpan &span)
+                                            { return span.cells.begin < 8 && span.cells.end > 2; });
+    expect(inserted != nullptr && inserted->composed_at.has_value() && clear &&
+               has_cells(*inserted, 0, 2, SyntaxRole::type) &&
+               has_cells(*inserted, 8, 9, SyntaxRole::type) &&
+               has_cells(*inserted, 10, 11, SyntaxRole::function) &&
+               has_cells(*inserted, 12, 14, SyntaxRole::type),
+           "the grid row with the composition splits int and shifts the later cells by six");
 }
 
 // 決定 10: 役割から色への写しは core の syntax_color の 1 本で、各役割は同じ名前の欄。
@@ -640,6 +711,8 @@ void verify_syntax_scope()
     verify_language_switch();
     verify_opened_into_untitled();
     verify_uncolored_rows();
+    verify_composed_colors();
+    verify_grid_colors();
     verify_syntax_color();
     verify_syntax_evaluation();
     verify_syntax_toggle();
