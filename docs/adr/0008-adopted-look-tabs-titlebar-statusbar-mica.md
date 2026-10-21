@@ -36,6 +36,7 @@ DWM が扱う top-level 窓の背景なので、枠を自分で消した `WS_OVE
    `DWMWA_USE_IMMERSIVE_DARK_MODE` を外観に合わせて渡さないと、ダークの本文に対して Mica が明るいまま（タイトルバー画素 (244,244,244)）になる。渡すと (42,42,42)。
    そのため `EditorFrame` は `appearance` を持ち、窓は外観が変わるたびに DWM へ伝える。
    帯が不透明になった後（D16）も 2 属性は要る（`DWMWA_USE_IMMERSIVE_DARK_MODE` は非クライアントの明暗・`WS_EX_NOREDIRECTIONBITMAP` は窓が見えてから最初のフレームまでの面・ADR 0013）
+   **2026-10-22 追記（#795）**: 窓の縁（角の 1 px）は `DWMWA_BORDER_COLOR` で帯の地 `title_bar` を渡し、`DWMWA_USE_IMMERSIVE_DARK_MODE` と同じ `apply_backdrop` の 1 か所で明暗か配色が変わるたびに当て直す（Windows 10 は属性が無く失敗を返すだけ・戻り値は見ない・角の丸めは OS のまま）
 8. **テーマは拡張できる形にしておく（施主の問い 2026-09-15）。** `Palette` は「テーマ 1 つ分のトークンの値型」で、組み込みテーマ（`ubuntu_aubergine` / `neutral_light`）は
    `constexpr` の表から `Palette` を返す。ui/win32 は `Palette` 以外の色の定数を持たない。利用者のテーマファイルは**まだ作らない**（設定の保存形式と版を決める
    縦切りで、adapters が版付きのファイルを読んで同じ `Palette` を作る・ARC-009）。今の段階でファイル形式を決めないのは、設定全体（テーマ・フォント・鍵）の形を 1 回で決めるため
