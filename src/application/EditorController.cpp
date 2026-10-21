@@ -818,6 +818,7 @@ constexpr std::string_view autosave_failed_message = "自動退避できませ�
 // プレビューの 1 行（ADR 0155 の決定 3・6）。
 constexpr std::string_view preview_too_large_message = "プレビューは 16 MiB までです";
 constexpr std::string_view preview_rejected_message = "Markdown を解析できませんでした";
+constexpr std::string_view preview_memory_message = "メモリが足りずプレビューできませんでした";
 
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
 // クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
@@ -4286,6 +4287,9 @@ void EditorController::collect_preview()
             break;
         case core::MarkdownFailure::parser_rejected:
             view.notice = core::DisplayText::parse(preview_rejected_message).value();
+            break;
+        case core::MarkdownFailure::insufficient_memory:
+            view.notice = core::DisplayText::parse(preview_memory_message).value();
             break;
         }
         changed = true;
