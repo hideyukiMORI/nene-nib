@@ -41,6 +41,8 @@ using core::Language;
 constexpr std::string_view markdown_path = "C:\\work\\note.md";
 constexpr std::string_view html_path = "C:\\work\\page.html";
 constexpr std::string_view text_path = "C:\\work\\note.txt";
+constexpr std::string_view script_path = "C:\\work\\app.js";
+constexpr std::string_view typed_path = "C:\\work\\app.ts";
 constexpr std::string_view held_text = "plain words";
 constexpr std::string_view held_html = "<p>a <b>bold</b> word</p><ul><li>x</li><li>y</li></ul>";
 // held_html を Markdown にした本文の行（frame の行を `|` でつないだ形）。
@@ -51,11 +53,14 @@ constexpr std::string_view unconverted_notice = "HTML を変換できないの�
 // 言語・HTML の有無 → 貼り方（決定 1）。
 using KindCase = std::tuple<Language, bool, PasteKind>;
 
-constexpr std::array<KindCase, 8> kind_cases{{
+constexpr std::array<KindCase, 11> kind_cases{{
     {Language::markdown, true, PasteKind::markdown_from_html},
     {Language::markdown, false, PasteKind::text},
     {Language::html, true, PasteKind::html_as_is},
     {Language::html, false, PasteKind::text},
+    {Language::javascript, true, PasteKind::html_as_is},
+    {Language::typescript, true, PasteKind::html_as_is},
+    {Language::typescript, false, PasteKind::text},
     {Language::plain, true, PasteKind::text},
     {Language::cpp, true, PasteKind::text},
     {Language::xml, true, PasteKind::text},
@@ -135,6 +140,34 @@ void verify_language_paste()
            "an unreadable HTML falls back to the text");
 }
 
+// HTML を書くことの多い JavaScript / TypeScript の文書も Ctrl+V は fragment のまま（決定 1 の追補・#840）。
+void verify_script_paste()
+{
+    for (const auto path : {script_path, typed_path})
+    {
+        Editing editing;
+        open_empty(editing, path, std::string("<b>x</b>"));
+        expect(pasted(editing, ClipboardOperation::paste) == "<b>x</b>",
+               "Ctrl+V in a JavaScript or TypeScript document pastes the fragment as it is");
+        expect(editing.clipboard().html_reads() == 1 && editing.clipboard().reads() == 0,
+               "the fragment paste reads the HTML once and not the text");
+    }
+}
+
+// .js / .ts の文書でも Ctrl+Shift+V は文字だけ（決定 2・#840）。
+void verify_script_plain_paste()
+{
+    for (const auto path : {script_path, typed_path})
+    {
+        Editing editing;
+        open_empty(editing, path, std::string("<b>x</b>"));
+        expect(pasted(editing, ClipboardOperation::paste_plain) == held_text,
+               "Ctrl+Shift+V in a JavaScript or TypeScript document pastes only the text");
+        expect(editing.clipboard().html_reads() == 0,
+               "Ctrl+Shift+V in a script document never reads the HTML");
+    }
+}
+
 // Ctrl+Shift+V はいつも文字だけ、「HTML のまま貼り付け」はどの文書でも fragment（決定 2・3）。
 void verify_plain_and_html_operations()
 {
@@ -207,6 +240,8 @@ void verify_rich_paste_contracts()
     verify_kind_table();
     verify_markdown_paste();
     verify_language_paste();
+    verify_script_paste();
+    verify_script_plain_paste();
     verify_plain_and_html_operations();
     verify_malformed_html();
     verify_vim_paste();
