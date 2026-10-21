@@ -8,6 +8,7 @@
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
 #include "ExWindowName.hpp"
+#include "LanguageTable.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
@@ -15,6 +16,7 @@
 #include <charconv>
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -189,7 +191,54 @@ namespace
     std::unreachable();
 }
 
-// 設定に載せない名前の option（検索の強調・incsearch・表示形式）。
+// 言語の option の名前（ADR 0154 の決定 4）。完全な形と Vim の短い形の 2 つで、補完の候補も同じ表。
+constexpr std::array<std::string_view, 2> language_options{"filetype", "ft"};
+
+// 言語は文書ごとの値で設定に載せないので settings は空のまま返す（ADR 0154 の決定 1・4）。
+// 問いの文言は今の値を知る controller が `filetype=<名前>` に書き換えるので、ここでは名前だけ。
+[[nodiscard]] ExResult language_result(std::optional<Language> language)
+{
+    const auto message = language.has_value()
+                             ? "filetype=" + std::string(language_name(language.value()))
+                             : std::string("filetype");
+    return ExResult{.settings = std::nullopt,
+                    .highlight = std::nullopt,
+                    .incsearch = std::nullopt,
+                    .message = DisplayText::parse(message).value(),
+                    .language = ExLanguageRequest{language}};
+}
+
+// `filetype=<名前>` `ft=<名前>` と `filetype?` `ft?`。名前が言語の表に無ければ E474（Vim は任意の
+// 文字列を受けるが、Nib の言語は閉じている・決定 4 と 8）。言語の option でなければ空。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+language_option(std::string_view option)
+{
+    for (const auto name : language_options)
+    {
+        if (!option.starts_with(name))
+        {
+            continue;
+        }
+        const auto rest = option.substr(name.size());
+        if (rest == "?")
+        {
+            return language_result(std::nullopt);
+        }
+        if (!rest.starts_with('='))
+        {
+            continue;
+        }
+        const auto language = language_of_name(rest.substr(1));
+        if (!language.has_value())
+        {
+            return std::unexpected(ExFailure::invalid_argument);
+        }
+        return language_result(language);
+    }
+    return std::nullopt;
+}
+
+// 設定に載せない名前の option（検索の強調・incsearch・表示形式・言語）。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> unsaved_option(std::string_view option)
 {
     if (option == "hlsearch")
@@ -215,6 +264,11 @@ namespace
     if (option == "display=grid")
     {
         return display_result(DisplayForm::grid);
+    }
+    auto language = language_option(option);
+    if (language.has_value())
+    {
+        return std::move(language).value();
     }
     return std::unexpected(ExFailure::unknown_option);
 }
@@ -569,11 +623,12 @@ remaining_command(std::string_view text, std::string_view name, std::string_view
     return std::unexpected(ExFailure::unknown_command);
 }
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
-constexpr std::array<std::string_view, 20> fixed_candidates{
-    "colorscheme",  "set fontsize=",    guifont_command,    "set incsearch", "set noincsearch",
-    "set hlsearch", "set nohlsearch",   "set guide",        "set noguide",   "tabs",
-    "tabnew",       "tabnext",          "tabprevious",      "tabclose",      "set wrap",
-    "set nowrap",   "set display=grid", "set display=text", nohlsearch_name, "only"};
+constexpr std::array<std::string_view, 22> fixed_candidates{
+    "colorscheme",   "set fontsize=",    guifont_command,    "set incsearch", "set noincsearch",
+    "set hlsearch",  "set nohlsearch",   "set guide",        "set noguide",   "tabs",
+    "tabnew",        "tabnext",          "tabprevious",      "tabclose",      "set wrap",
+    "set nowrap",    "set display=grid", "set display=text", nohlsearch_name, "only",
+    "set filetype=", "set ft="};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})
@@ -662,6 +717,32 @@ void append_font_candidates(std::vector<std::string> &candidates, const FontFami
     }
 }
 
+// 言語の名前の候補は言語の命令の `=` まで打ったときだけ（全件の一覧には出さない・ADR 0154 の
+// 決定 4・字体の候補と同じ形）。名前は language_name の表の順。
+void append_language_names(std::vector<std::string> &candidates, std::string_view prefix,
+                           const std::string &command)
+{
+    if (!prefix.starts_with(command))
+    {
+        return;
+    }
+    for (const auto name : all_language_names())
+    {
+        if (prefix_matches(prefix, command, name))
+        {
+            candidates.push_back(command + std::string(name));
+        }
+    }
+}
+
+void append_language_candidates(std::vector<std::string> &candidates, std::string_view prefix)
+{
+    for (const auto option : language_options)
+    {
+        append_language_names(candidates, prefix, "set " + std::string(option) + "=");
+    }
+}
+
 [[nodiscard]] std::vector<std::string> matching_candidates(const ThemeCatalog &themes,
                                                            std::optional<std::string_view> prefix)
 {
@@ -730,6 +811,7 @@ std::vector<std::string> command_completions(std::string_view prefix, const Them
 {
     auto candidates = matching_candidates(themes, prefix);
     append_font_candidates(candidates, fonts, prefix);
+    append_language_candidates(candidates, prefix);
     return candidates;
 }
 
@@ -755,6 +837,8 @@ DisplayText ex_failure_message(ExFailure failure)
         return DisplayText::parse("Command is limited to 256 bytes").value();
     case ExFailure::unsupported_argument:
         return DisplayText::parse("Not supported").value();
+    case ExFailure::invalid_argument:
+        return DisplayText::parse("E474: Invalid argument").value();
     }
     std::unreachable();
 }

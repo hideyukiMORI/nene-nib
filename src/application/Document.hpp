@@ -1,6 +1,8 @@
 #pragma once
 
 #include "FilePath.hpp"
+#include "Language.hpp"
+#include "LanguageTable.hpp"
 #include "SaveState.hpp"
 #include "TextEncoding.hpp"
 
@@ -27,6 +29,14 @@ struct Document
         return core::SaveState::saved;
     }
     return core::SaveState::modified;
+}
+
+// 文書のパスから決まる言語（ADR 0154 の決定 5）。名前の無い文書は plain。開く・名前が変わる保存・
+// まだ読んでいない文書を読むときの束はどれもここを通り、拡張子は core の表だけが見る（決定 2）。
+[[nodiscard]] inline core::Language language_of(const Document &document) noexcept
+{
+    return document.path.has_value() ? core::language_of_path(document.path.value().text())
+                                     : core::Language::plain;
 }
 
 // 新しい編集は redo の列を切る。保存時点がその先にあったら、もう戻れないので空にする（決定 7）。

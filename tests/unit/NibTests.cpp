@@ -61,6 +61,7 @@ void verify_vim_scope_contracts()
         {"--grid-line", verify_grid_line_scope},
         {"--display", verify_display_contracts},
         {"--markdown", verify_markdown_scope},
+        {"--language", verify_language_scope},
     }};
     for (const auto &scope : contracts)
     {
@@ -138,6 +139,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 62> scopes{{
     {"--grid-line", verify_grid_line_scope},
     {"--display", verify_display_scope},
     {"--markdown", verify_markdown_scope},
+    {"--language", verify_language_scope},
 }};
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)

@@ -18,6 +18,7 @@
 | 本文（piece table） | 開いているバッファの正本。original と add の 2 バッファと piece の列。不変で、編集は次の本文を返す | `TextBuffer`（core・ADR 0009） |
 | 位置 | バイトの `Offset`（0 始まり）・行の `LineNumber`（1 始まり）・code point の `Column`（1 始まり） | core |
 | 選択 | anchor と caret の 2 つの位置。Shift+移動が anchor を固定する | `Selection`（core） |
+| 言語 | 文書の値で、パスの拡張子から core の 1 つの表で決まり `:set filetype=` で選び直せる。名前は Vim の filetype 名（`plain` は `text`）。設定とセッションには入れない | `Language` / `LanguageTable`（core・ADR 0154） |
 | 編集履歴 | undo / redo の列。連続した文字入力は 1 単位 | `EditHistory`（core） |
 | 編集モード | 通常 / Vim の 2 つ。トグルで入れ替わるのはキー割り当てとマウス規則だけ | `EditMode`（core・閉じた集合） |
 | Vim エンジン | Vim の振る舞い（モード・カーソル・レジスタ・オペレータ・テキストオブジェクト・`.`・マクロ）を純関数で持つ自前実装 | `Vim*`（core） |

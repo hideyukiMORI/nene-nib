@@ -392,6 +392,12 @@ EditorState EditorState::with_document(Document document) const &
 
 EditorState EditorState::with_document(Document document) &&
 {
+    // 名前が変わる保存は言語をパスから引き直す。同じパスのままなら `:set filetype=` の上書きを
+    // 保つ（ADR 0154 の決定 5）。
+    if (document.path != document_.path)
+    {
+        language_ = language_of(document);
+    }
     document_ = std::move(document);
     return std::move(*this);
 }
@@ -431,6 +437,7 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.scroll_ = ScrollState{core::LineNumber{first_line}, scroll_.visible_lines};
     next.document_ = std::move(document);
     next.display_ = core::DisplayForm::text;
+    next.language_ = language_of(next.document_);
     next.display_inquiry_ = DisplayInquiry::unjudged;
     // 本文が丸ごと替わるので、同じ文書を見るもう 1 つの枠は先頭に戻す（ADR 0148 の決定 5）。
     next.restart_other_showing(autosave_ids_.at(active_));
@@ -447,6 +454,18 @@ EditorState EditorState::with_display(core::DisplayForm display) const
 {
     EditorState next(*this);
     next.display_ = display;
+    return next;
+}
+
+core::Language EditorState::language() const noexcept
+{
+    return language_;
+}
+
+EditorState EditorState::with_language(core::Language language) const
+{
+    EditorState next(*this);
+    next.language_ = language;
     return next;
 }
 
@@ -691,7 +710,7 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
         DocumentState{text_, core::collapsed_at(selection_.caret), std::move(history), document_,
                       scroll_.first_visible, vim_.wanted_column, vim_.scroll_lines, std::move(view),
                       scroll_.first_row, scroll_.horizontal, caret_affinity_, display_,
-                      display_inquiry_, vim_marks_});
+                      display_inquiry_, vim_marks_, language_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -707,6 +726,7 @@ void EditorState::spread(const DocumentState &tab)
     display_ = tab.display;
     display_inquiry_ = tab.inquiry;
     vim_marks_ = tab.marks;
+    language_ = tab.language;
     vim_ = core::vim_switched_document(vim_, tab.wanted_column, tab.scroll_lines);
 }
 

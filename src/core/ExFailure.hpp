@@ -17,7 +17,10 @@ enum class ExFailure : std::uint8_t
     too_long,
     // Vim が受ける形のうち Nib がまだ受けない引数（ADR 0057 の決定 4・`:tabnext +1` など）。
     // 文言は Vim の E 番号ではなく Nib の言葉で、入力を添えるのは ex_failure_message の 2 引数版。
-    unsupported_argument
+    unsupported_argument,
+    // option の値が閉じた選択肢に無い（`:set filetype=<名前>` の名前が Nib の言語に無い・
+    // ADR 0154 の決定 4）。文言は Vim の E474: Invalid argument。
+    invalid_argument
 };
 
 [[nodiscard]] DisplayText ex_failure_message(ExFailure failure);

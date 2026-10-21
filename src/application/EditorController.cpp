@@ -27,6 +27,7 @@
 #include "Edit.hpp"
 #include "EncodingFailure.hpp"
 #include "ExEvaluationFailure.hpp"
+#include "ExLanguageRequest.hpp"
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
@@ -41,6 +42,8 @@
 #include "FontFamilies.hpp"
 #include "GiantLine.hpp"
 #include "ImeStance.hpp"
+#include "Language.hpp"
+#include "LanguageTable.hpp"
 #include "LineSpanEvaluation.hpp"
 #include "ModeLabel.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
@@ -718,7 +721,9 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
     const core::LineNumber first_visible = line_within(text, tab.first_visible);
     DocumentView view{tab.view.title, document.path, document.encoding, core::SaveState::saved,
                       std::nullopt};
-    return DocumentState{std::move(text),
+    // 言語は読んだこのときにパスから決める（ADR 0154 の決定 5・一覧には言語を書かない）。
+    const core::Language language = language_of(document);
+    DocumentState bundle{std::move(text),
                          core::collapsed_at(caret),
                          core::EditHistory::empty(),
                          std::move(document),
@@ -729,6 +734,8 @@ parked_path(const std::shared_ptr<const UnloadedDocument> &tab)
                          tab.first_row,
                          tab.horizontal,
                          tab.affinity};
+    bundle.language = language;
+    return bundle;
 }
 
 // 自動退避する本文の出どころ（ADR 0137 の決定 2）。まだ読んでいない文書は退避しない。写し先が
@@ -861,7 +868,9 @@ constexpr std::string_view clipped_mark = "…";
         text.offset_of(core::TextPosition{line_within(text, caret.line), caret.column});
     DocumentView view{core::tab_title_for(document.path, core::SaveState::modified), document.path,
                       document.encoding, core::SaveState::modified, std::nullopt};
-    return DocumentState{std::move(text),
+    // 戻した文書の言語もパスから引く（ADR 0154 の決定 5）。
+    const core::Language language = language_of(document);
+    DocumentState bundle{std::move(text),
                          core::collapsed_at(placed),
                          core::EditHistory::empty(),
                          std::move(document),
@@ -869,6 +878,8 @@ constexpr std::string_view clipped_mark = "…";
                          std::nullopt,
                          std::nullopt,
                          std::move(view)};
+    bundle.language = language;
+    return bundle;
 }
 
 // 帯の位置 position のタブのパス（無題なら無し）。脇の束は帯の位置からアクティブを抜いた順。
@@ -1251,6 +1262,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<AutosaveTick>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
+    // SelectLanguage も同じ（ADR 0154 の決定 4）。
     // 面のホイール ScrollPaletteList も使う人の操作の側なので載せない（ADR 0150 の決定 2）。
     std::visit([this](const auto &value) { this->accept(value); }, intent);
     fit_command_rows();
@@ -2771,6 +2783,12 @@ void EditorController::evaluate_command(std::string_view text)
         run_document_request(document.value());
         return;
     }
+    const auto &language = result.value().language;
+    if (language.has_value())
+    {
+        answer_language(language.value());
+        return;
+    }
     const auto &settings = result.value().settings;
     if (settings.has_value() && !persist_settings(settings.value()))
     {
@@ -2806,6 +2824,17 @@ void EditorController::apply_unsaved_ex(const core::ExResult &result)
         vim.incsearch = incsearch.value();
         state_ = state_.with_vim(std::move(vim));
     }
+}
+
+void EditorController::answer_language(const core::ExLanguageRequest &request)
+{
+    if (request.language.has_value())
+    {
+        accept(SelectLanguage{request.language.value()});
+    }
+    state_ = state_.with_command_message(
+        core::DisplayText::parse("filetype=" + std::string(core::language_name(state_.language())))
+            .value());
 }
 
 void EditorController::run_palette_request(const core::ExPaletteRequest &request)
@@ -3909,6 +3938,13 @@ void EditorController::accept(const SelectDisplay &intent)
         clamp_scroll();
         follow_caret();
     }
+}
+
+// 言語は文書の値で、設定にもセッションにも書かない（ADR 0154 の決定 1）。読むのは貼り付け・
+// プレビュー・構文の色の側で、ここは置くだけ（決定 7）。
+void EditorController::accept(const SelectLanguage &intent)
+{
+    state_ = state_.with_language(intent.language);
 }
 
 // 判定は文書ごとに 1 回で、改行の索引と巨大な行の数えだけ（文字組みに触れない）。巨大な行の

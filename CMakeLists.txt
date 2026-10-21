@@ -63,7 +63,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
-    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp
+    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/LanguageTable.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp)
 # core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
@@ -136,7 +136,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
-    tests/unit/MarkdownTests.cpp)
+    tests/unit/MarkdownTests.cpp
+    tests/unit/LanguageTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)

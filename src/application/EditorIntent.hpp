@@ -40,6 +40,7 @@
 #include "SelectAll.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectLanguage.hpp"
 #include "SettleRecentTab.hpp"
 #include "SplitPane.hpp"
 #include "StoreVimRegister.hpp"
@@ -70,5 +71,5 @@ using EditorIntent =
                  WalkRecentTab, SettleRecentTab, CloseTab, PointTitleBar, ScrollTabs, TitleBarWidth,
                  OpenTabList, EndSession, WorkCompleted, AutosaveTick, RestoreAutosave,
                  DiscardAutosave, ToggleBookmark, OpenOperationList, PointText, SelectDisplay,
-                 ScrollPaletteList, SplitPane, SwitchPane, ClosePane, ScrollPane>;
+                 SelectLanguage, ScrollPaletteList, SplitPane, SwitchPane, ClosePane, ScrollPane>;
 } // namespace nenenib::application
