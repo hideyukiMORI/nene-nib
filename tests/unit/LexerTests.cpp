@@ -61,6 +61,9 @@ constexpr LexState block{.kind = LexKind::block_comment, .delimiter = {}, .delim
 constexpr LexState raw_xyz = raw("xyz");
 constexpr LexState raw_empty = raw("");
 constexpr LexState raw_sixteen = raw("abcdefghijklmnop");
+// Python の 3 連引用符の中（#830・delimiter はその 3 文字）。
+constexpr LexState triple_dq = raw("\"\"\"");
+constexpr LexState triple_sq = raw("'''");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -147,27 +150,36 @@ constexpr LexState raw_sixteen = raw("abcdefghijklmnop");
     return paint;
 }
 
-// 表の 1 行を C++ と C で読み、区間・出る状態・形を確かめる。
-void verify_case(const LexCase &sample)
+// 表の 1 行を language で読み、区間・出る状態・形を確かめる。lex_state も同じ状態を返す。
+LexLine verify_lexed(Language language, const LexCase &sample)
 {
-    const LexLine cpp = core::lex_line(Language::cpp, sample.in, sample.line);
-    const LexLine c = core::lex_line(Language::c, sample.in, sample.line);
-    const bool spans_match = cpp.spans == painted(sample.paint);
-    const bool out_matches = cpp.out == sample.out;
+    LexLine lexed = core::lex_line(language, sample.in, sample.line);
+    const bool spans_match = lexed.spans == painted(sample.paint);
+    const bool out_matches = lexed.out == sample.out;
     if (!spans_match || !out_matches)
     {
-        const std::string actual = paint_of(cpp.spans);
-        std::fprintf(stderr, "lexer case: \"%.*s\"\n  painted: \"%s\"\n",
-                     static_cast<int>(sample.line.size()), sample.line.data(), actual.c_str());
+        const std::string actual = paint_of(lexed.spans);
+        std::fprintf(stderr, "lexer case: \"%.*s\"\n  painted: \"%s\" (kind %d)\n",
+                     static_cast<int>(sample.line.size()), sample.line.data(), actual.c_str(),
+                     static_cast<int>(lexed.out.kind));
     }
     expect(spans_match, "lex_line paints the expected spans");
     expect(out_matches, "lex_line leaves the expected state");
-    expect(c.spans == cpp.spans && c.out == cpp.out, "C and C++ share one lexer");
-    expect(core::lex_state(Language::cpp, sample.in, sample.line) == cpp.out &&
-               core::lex_state(Language::c, sample.in, sample.line) == cpp.out,
+    expect(core::lex_state(language, sample.in, sample.line) == lexed.out,
            "lex_state leaves the same state as lex_line");
-    expect(well_formed(cpp.spans, sample.line),
+    expect(well_formed(lexed.spans, sample.line),
            "spans are ascending, disjoint and inside the line");
+    return lexed;
+}
+
+// 表の 1 行を C++ と C で読む。C と C++ は同じ字句器。
+void verify_case(const LexCase &sample)
+{
+    const LexLine cpp = verify_lexed(Language::cpp, sample);
+    const LexLine c = core::lex_line(Language::c, sample.in, sample.line);
+    expect(c.spans == cpp.spans && c.out == cpp.out, "C and C++ share one lexer");
+    expect(core::lex_state(Language::c, sample.in, sample.line) == cpp.out,
+           "lex_state leaves the same state for C");
 }
 
 // コメント 10・文字列と raw string と行またぎ 18。
@@ -288,6 +300,134 @@ constexpr std::array<LexCase, 11> review_cases{{
     {"int x;\r", plain, "ttt  o", plain},
 }};
 
+// JSON（#830・Vim の json.vim）。入れ子・エスケープ・数字の形・裸のキー・閉じない文字列・UTF-8 の
+// キー・`\r` の末尾・どの状態で入っても行頭から読んで plain で出る。
+constexpr std::array<LexCase, 44> json_cases{{
+    {"{", plain, "o", plain},
+    {"}", plain, "o", plain},
+    {"{}", plain, "oo", plain},
+    {"[ ]", plain, "o o", plain},
+    {"{\"a\": 1}", plain, "ossso no", plain},
+    {"\"key\": \"value\",", plain, "ssssso ssssssso", plain},
+    {"\"a\"\"b\"", plain, "sssSss", plain},
+    {"\"a\", \"b\"", plain, "ssso sss", plain},
+    {"\"esc \\\" quote\"", plain, "ssssssssssssss", plain},
+    {"\"back\\\\\"", plain, "ssssssss", plain},
+    {"\"\\u00e9\"", plain, "ssssssss", plain},
+    {"\"open", plain, "eeeee", plain},
+    {"\"ends with \\\"", plain, "eeeeeeeeeeeee", plain},
+    {"{\"a\": \"open", plain, "ossso eeeee", plain},
+    {"12", plain, "nn", plain},
+    {"-12.5e+3", plain, "nnnnnnnn", plain},
+    {"0.001", plain, "nnnnn", plain},
+    {"1E-10", plain, "nnnnn", plain},
+    {"[1, -2, 3.5]", plain, "ono nno nnno", plain},
+    {"- 1", plain, "  n", plain},
+    {"1.5.5", plain, "nnnnn", plain},
+    {"12abc", plain, "nn", plain},
+    {"true", plain, "vvvv", plain},
+    {"false", plain, "vvvvv", plain},
+    {"null", plain, "vvvv", plain},
+    {"[true,false,null]", plain, "ovvvvovvvvvovvvvo", plain},
+    {"True", plain, "", plain},
+    {"nullable", plain, "", plain},
+    {"bareKey: 1", plain, "       o n", plain},
+    {"{key: \"v\"}", plain, "o   o ssso", plain},
+    {"{\"a\": {\"b\": [1, 2]}}", plain, "ossso ossso ono nooo", plain},
+    {"],", plain, "oo", plain},
+    {"}, {", plain, "oo o", plain},
+    {"\"名前\": \"値\"", plain, "sssso sss", plain},
+    {"\"emoji 🖋\": 1", plain, "ssssssssso n", plain},
+    {"\"a\"\r", plain, "sss", plain},
+    {"{\"a\": 1}\r", plain, "ossso no", plain},
+    {"", plain, "", plain},
+    {"   ", plain, "", plain},
+    {"/* c */", plain, "", plain},
+    {"// x", plain, "", plain},
+    {"\"a\" */", block, "sss", plain},
+    {"1", raw_xyz, "n", plain},
+    {"\"\"\"", triple_dq, "ssE", plain},
+}};
+
+// Python の文字列とコメントと数字（#830・Vim の python.vim）。接頭辞・3 連引用符の行またぎ（開く・
+// 中・閉じる・同じ行で開閉）・閉じない文字列・UTF-8・`\r` の末尾。
+constexpr std::array<LexCase, 42> python_string_cases{{
+    {"# comment", plain, "ccccccccc", plain},
+    {"x = 1  # note", plain, "  o n  cccccc", plain},
+    {"\"# not comment\"", plain, "sssssssssssssss", plain},
+    {"'single'", plain, "ssssssss", plain},
+    {"\"double\"", plain, "ssssssss", plain},
+    {"'it\\'s'", plain, "sssssss", plain},
+    {"\"open", plain, "eeeee", plain},
+    {"'open \\'", plain, "eeeeeeee", plain},
+    {"r\"raw\\d\"", plain, "ssssssss", plain},
+    {"b'bytes'", plain, "ssssssss", plain},
+    {"f\"{x}\"", plain, "ssssss", plain},
+    {"rb\"x\"", plain, "sssss", plain},
+    {"Rb'x'", plain, "sssss", plain},
+    {"BR\"x\"", plain, "sssss", plain},
+    {"u\"x\"", plain, "ssss", plain},
+    {"ub\"x\"", plain, "  sss", plain},
+    {"x\"y\"", plain, " sss", plain},
+    {"''", plain, "ss", plain},
+    {"\"\" + \"\"", plain, "ss o ss", plain},
+    {"\"\"\"doc\"\"\"", plain, "sssssssss", plain},
+    {"\"\"\"opens", plain, "ssssssss", triple_dq},
+    {"inside", triple_dq, "ssssss", triple_dq},
+    {"", triple_dq, "", triple_dq},
+    {"ends\"\"\" + 1", triple_dq, "sssssss o n", plain},
+    {"x = '''opens", plain, "  o ssssssss", triple_sq},
+    {"still \"\"\" inside", triple_sq, "ssssssssssssssss", triple_sq},
+    {"'''", triple_sq, "sss", plain},
+    {"r\"\"\"raw", plain, "sssssss", triple_dq},
+    {"a\\\"\"\" b", triple_dq, "sssssss", triple_dq},
+    {"\"\"\"a\"\"\" \"\"\"b\"\"\"", plain, "sssssss sssssss", plain},
+    {"f'''{x}''' # c", plain, "ssssssssss ccc", plain},
+    {"0x_FF_FF", plain, "nnnnnnnn", plain},
+    {"0o17 0b1010", plain, "nnnn nnnnnn", plain},
+    {"1_000_000", plain, "nnnnnnnnn", plain},
+    {"1.5e3 1.5e-3", plain, "nnnnn nnnnnn", plain},
+    {"1j + .5", plain, "nn o nn", plain},
+    {"3.14j", plain, "nnnnn", plain},
+    {"0xFFe+1", plain, "nnnnnon", plain},
+    {"s = \"日本語\"", plain, "  o sssss", plain},
+    {"# コメント", plain, "cccccc", plain},
+    {"x = 1\r", plain, "  o n", plain},
+    {"x = 1", block, "  o n", plain},
+}};
+
+// Python の識別子と演算子（#830）。予約語と定数の境（None は constant）・型・関数（`(` の前と
+// def / class の名前）・デコレータ・`lambda`・演算子の連なり。
+constexpr std::array<LexCase, 27> python_word_cases{{
+    {"if x is None:", plain, "kk   kk vvvvo", plain},
+    {"True and False or not NotImplemented", plain, "vvvv kkk vvvvv kk kkk vvvvvvvvvvvvvv", plain},
+    {"Ellipsis ...", plain, "vvvvvvvv ooo", plain},
+    {"def f(x):", plain, "kkk fo oo", plain},
+    {"class Widget(Base):", plain, "kkkkk ffffffo    oo", plain},
+    {"class Point:", plain, "kkkkk fffffo", plain},
+    {"async def run():", plain, "kkkkk kkk fffooo", plain},
+    {"print(len(xs))", plain, "fffffofffo  oo", plain},
+    {"int(x) + str(y)", plain, "ttto o o ttto o", plain},
+    {"x: list[int] = []", plain, " o ttttottto o oo", plain},
+    {"@decorator", plain, "kkkkkkkkkk", plain},
+    {"@functools.lru_cache(maxsize=None)", plain, "kkkkkkkkkkkkkkkkkkkko       ovvvvo", plain},
+    {"    @property", plain, "    kkkkkkkkk", plain},
+    {"a @ b", plain, "  o", plain},
+    {"a @= b", plain, "  oo", plain},
+    {"lambda x: x", plain, "kkkkkk  o", plain},
+    {"def f() -> int:", plain, "kkk foo oo ttto", plain},
+    {"a //= b ** 2 != c", plain, "  ooo   oo n oo", plain},
+    {"x := y[1:2]", plain, "  oo  onono", plain},
+    {"obj.attr.method()", plain, "   o    offffffoo", plain},
+    {"match x:", plain, "kkkkk  o", plain},
+    {"case _:", plain, "kkkk  o", plain},
+    {"yield from gen()", plain, "kkkkk kkkk fffoo", plain},
+    {"x = \\", plain, "  o", plain},
+    {"value = 0  # type: int", plain, "      o n  ccccccccccc", plain},
+    {"$x ?", plain, "", plain},
+    {"9abc", plain, "nnnn", plain},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -296,16 +436,28 @@ void verify_table(std::span<const LexCase> cases)
     }
 }
 
+void verify_language_table(Language language, std::span<const LexCase> cases)
+{
+    for (const LexCase &sample : cases)
+    {
+        static_cast<void>(verify_lexed(language, sample));
+    }
+}
+
 // 字句器を持たない言語は、どの状態で入っても区間なしで状態をそのまま返す（決定 4）。
 void verify_other_languages()
 {
-    constexpr std::array<Language, 14> others{
-        Language::plain, Language::markdown,   Language::html,       Language::python,
-        Language::json,  Language::javascript, Language::typescript, Language::yaml,
-        Language::toml,  Language::xml,        Language::css,        Language::powershell,
-        Language::shell, Language::cmake};
+    constexpr std::array<Language, 12> others{
+        Language::plain,      Language::markdown,   Language::html,  Language::javascript,
+        Language::typescript, Language::yaml,       Language::toml,  Language::xml,
+        Language::css,        Language::powershell, Language::shell, Language::cmake};
+    for (const Language language : {Language::c, Language::cpp, Language::json, Language::python})
+    {
+        expect(core::has_lexer(language), "C, C++, JSON and Python have a lexer");
+    }
     for (const Language language : others)
     {
+        expect(!core::has_lexer(language), "the other languages have no lexer");
         for (const LexState &in : {plain, block, raw_xyz})
         {
             const LexLine lexed = core::lex_line(language, in, "int x = \"s\"; /* c");
@@ -362,6 +514,9 @@ void verify_lexer_scope()
     verify_table(type_and_operator_cases);
     verify_table(mixed_cases);
     verify_table(review_cases);
+    verify_language_table(Language::json, json_cases);
+    verify_language_table(Language::python, python_string_cases);
+    verify_language_table(Language::python, python_word_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();
