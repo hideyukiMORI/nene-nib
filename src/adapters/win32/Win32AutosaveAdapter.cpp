@@ -2,6 +2,7 @@
 
 #include "AutosaveCodec.hpp"
 #include "AutosaveFolder.hpp"
+#include "DocumentByteLimit.hpp"
 #include "LocalSettingsPath.hpp"
 
 #include <windows.h>
@@ -134,7 +135,7 @@ Win32AutosaveAdapter::read(const application::AutosaveRemnant &remnant)
     {
         return std::unexpected(Failure::unreadable);
     }
-    const auto bytes = files_.read(body.value(), maximum_autosave_body_bytes);
+    const auto bytes = files_.read(body.value(), core::maximum_document_bytes);
     if (!bytes)
     {
         return std::unexpected(Failure::unreadable);

@@ -23,6 +23,7 @@
 #include "DisplayLine.hpp"
 #include "DisplayQuestion.hpp"
 #include "DisplayText.hpp"
+#include "DocumentByteLimit.hpp"
 #include "DocumentState.hpp"
 #include "Edit.hpp"
 #include "EncodingFailure.hpp"
@@ -136,8 +137,9 @@ namespace nenenib::application
 namespace
 {
 constexpr std::size_t single_page_line = 1;
-// 同期で読むのはここまで（ADR 0010 の決定 12）。1 GB はメモリマップの縦切りで別に決める。
-constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
+// 同期で読むのはここまで（ADR 0010 の決定 12）。値の正本は core の 1 か所で、退避の読み戻しも同じ
+// 値を読む（#792・ADR 0121 の追補の決定 8）。
+constexpr std::size_t maximum_file_bytes = core::maximum_document_bytes;
 
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept
 {
