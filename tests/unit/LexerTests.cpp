@@ -1,6 +1,7 @@
 // scope `--lexer` の単体テスト（#815・段 2 の ADR 0156 の決定 1〜6・#830 の JSON と Python・
-// #833 の Markdown と JS / TS）。core の lex_line が 1 行を役割の区間に分け、行をまたぐ状態
-// （ブロックコメント・raw string・フェンス・テンプレート）を値で次の行へ渡すこと。
+// #833 の Markdown と JS / TS・#838 の HTML / XML・CSS・YAML・TOML）。core の lex_line が 1 行を
+// 役割の区間に分け、行をまたぐ状態（ブロックコメント・raw string・フェンス・テンプレート・script
+// の中・CDATA・ブロックスカラー）を値で次の行へ渡すこと。
 // 期待の区間は「塗り」の文字列で書く: 行の code point 1 つに 1 文字で、c comment・k keyword・
 // s string・n number・t type・f function・v constant・o operators・e error・空白は区間なし。
 // 大文字は同じ役割の区間をそこで新しく始める（隣り合う 2 つの文字列など）。塗りが行より短ければ
@@ -72,6 +73,14 @@ constexpr LexState fence16 = raw("````````````````");
 constexpr LexState tilde3 = raw("~~~");
 constexpr LexState tilde4 = raw("~~~~");
 constexpr LexState tpl = raw("`");
+// #838: HTML の script / style の中（delimiter は閉じタグの頭）・XML の CDATA の中・YAML の
+// ブロックスカラーの中（delimiter は印の行の字下げの深さの 2 桁）。
+constexpr LexState in_script = raw("</script");
+constexpr LexState in_style = raw("</style");
+constexpr LexState in_cdata = raw("]]>");
+constexpr LexState block00 = raw("00");
+constexpr LexState block02 = raw("02");
+constexpr LexState block99 = raw("99");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -643,6 +652,252 @@ constexpr std::array<LexCase, 10> typescript_only_cases{{
     {"x satisfies Y; a is B", plain, "  kkkkkkkkk  o   kk", plain},
 }};
 
+// #838: HTML と XML で同じ答えの行（タグ・属性・コメントの行またぎ・実体参照・宣言・UTF-8 の
+// 本文・閉じない引用符は行末まで string・行をまたぐタグの属性は区間なし（後続）・ほかの言語の
+// 状態は行頭から）。
+constexpr std::array<LexCase, 38> html_common_cases{{
+    {"<html>", plain, "kkkkkK", plain},
+    {"</html>", plain, "kkkkkkK", plain},
+    {"<div class=\"box\" id='main'>", plain, "kkkk ttttt sssss tt ssssssk", plain},
+    {"<br/>", plain, "kkkKk", plain},
+    {"<p>a</p><p>b</p>", plain, "kkK kkkKKkK kkkK", plain},
+    {"<td colspan = \"2\" >", plain, "kkk ttttttt   sss k", plain},
+    {"<ns:tag a:b=\"c\">", plain, "kkkkkkk ttt sssk", plain},
+    {"<a href=\"a>b\">link</a>", plain, "kk tttt sssssk    kkkK", plain},
+    {"<a title=\"open", plain, "kk ttttt sssss", plain},
+    {"<a title='x' data-x=1>", plain, "kk ttttt sss tttttt sk", plain},
+    {"<option selected value=x>", plain, "kkkkkkk tttttttt ttttt sk", plain},
+    {"<div", plain, "kkkk", plain},
+    {"  class=\"x\">", plain, "", plain},
+    {"a < b and c > d", plain, "", plain},
+    {"<1abc> <-x>", plain, "", plain},
+    {"<!DOCTYPE html>", plain, "kkkkkkkkkkkkkkk", plain},
+    {"<!-- comment -->", plain, "cccccccccccccccc", plain},
+    {"<!---->x", plain, "ccccccc", plain},
+    {"text <!-- open", plain, "     ccccccccc", block},
+    {"still comment <b>", block, "ccccccccccccccccc", block},
+    {"end --> <b>bold</b>", block, "ccccccc kkK    kkkK", plain},
+    {"-->", block, "ccc", plain},
+    {"a <!-- one --> b <!-- two", plain, "  cccccccccccc   cccccccc", block},
+    {"&amp; &lt; &#123; &#x1F; &nbsp;", plain, "vvvvv vvvv vvvvvv vvvvvv vvvvvv", plain},
+    {"& alone &; &toolongname1;", plain, "", plain},
+    {"Tom &amp Jerry", plain, "", plain},
+    {"<p>こんにちは &amp; 世界</p>", plain, "kkK      vvvvv   kkkK", plain},
+    {"<img alt=\"ロゴ\" src=logo.png />", plain, "kkkk ttt ssss ttt ssssssss kk", plain},
+    {"", plain, "", plain},
+    {"", block, "", block},
+    {"plain text only", plain, "", plain},
+    {"\t<li>\tx</li>", plain, " kkkK  kkkkK", plain},
+    {"<e attr='single'/>", plain, "kk tttt sssssssskk", plain},
+    {"<a b=\"1\"c='2'>", plain, "kk t ssst sssk", plain},
+    {"<x =y>", plain, "kk  sk", plain},
+    {"<a\tb\t=\t\"c\">", plain, "kk t   sssk", plain},
+    {"<p>1 &lt; 2</p> <!-- note -->", plain, "kkK  vvvv  kkkK ccccccccccccc", plain},
+    {"int x; /* c", raw_xyz, "", plain},
+}};
+
+// HTML だけ: script / style の中は区間なしで閉じタグまで（大小を問わない）・CDATA と `<?` は
+// XML だけの字句。
+constexpr std::array<LexCase, 20> html_only_cases{{
+    {"<input type=\"checkbox\" checked>", plain, "kkkkkk tttt ssssssssss tttttttk", plain},
+    {"<!doctype html PUBLIC \"-//W3C//DTD\">", plain, "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+     plain},
+    {"<script>var a = \"<b>\";</script>", plain, "kkkkkkkK              kkkkkkkkK", plain},
+    {"<script type=\"module\">", plain, "kkkkkkk tttt ssssssssk", in_script},
+    {"if (a < b && c > d) { x(); }", in_script, "", in_script},
+    {"  const s = \"<div class='x'>\";", in_script, "", in_script},
+    {"</script>", in_script, "kkkkkkkkK", plain},
+    {"x(); </SCRIPT> <p>", in_script, "     kkkkkkkkK kkK", plain},
+    {"y </scripts> z", in_script, "", in_script},
+    {"<style>", plain, "kkkkkkK", in_style},
+    {"p { color: red; }", in_style, "", in_style},
+    {"</style> <p>", in_style, "kkkkkkkK kkK", plain},
+    {"<STYLE media=\"all\">a{}</Style>", plain, "kkkkkk ttttt sssssk   kkkkkkkK", plain},
+    {"<script src=\"a.js\"/>", plain, "kkkkkkk ttt sssssskk", plain},
+    {"<scripts>x</scripts>", plain, "kkkkkkkkK kkkkkkkkkK", plain},
+    {"<script", plain, "kkkkkkk", plain},
+    {"<![CDATA[ x ]]>", plain, "kkkkkkkkkkkkkkk", plain},
+    {"<?xml version=\"1.0\"?>", plain, "", plain},
+    {"end ]]> <b/>", in_cdata, "        kkKk", plain},
+    {"<script>", plain, "kkkkkkkK", in_script},
+}};
+
+// XML だけ: `<?xml … ?>`・CDATA の行またぎ・名前空間・script の中も普通に読む。
+constexpr std::array<LexCase, 17> xml_only_cases{{
+    {"<?xml version=\"1.0\" encoding=\"UTF-8\"?>", plain, "kkkkk ttttttt sssss tttttttt ssssssskk",
+     plain},
+    {"<?xml-stylesheet href=\"a.xsl\"?>", plain, "kkkkkkkkkkkkkkkk tttt ssssssskk", plain},
+    {"<root xmlns:x=\"urn:x\">", plain, "kkkkk ttttttt sssssssk", plain},
+    {"<x:item id=\"1\"/>", plain, "kkkkkkk tt ssskk", plain},
+    {"<![CDATA[ a < b ]]>", plain, "sssssssssssssssssss", plain},
+    {"<data><![CDATA[ open", plain, "kkkkkKssssssssssssss", in_cdata},
+    {"inside <not> a &amp; tag", in_cdata, "ssssssssssssssssssssssss", in_cdata},
+    {"end ]]> <b/>", in_cdata, "sssssss kkKk", plain},
+    {"]]>", in_cdata, "sss", plain},
+    {"", in_cdata, "", in_cdata},
+    {"<script>if (a < b)</script>", plain, "kkkkkkkK          kkkkkkkkK", plain},
+    {"<a:b.c-d e=\"f\">", plain, "kkkkkkkk t sssk", plain},
+    {"<!DOCTYPE note SYSTEM \"Note.dtd\">", plain, "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk", plain},
+    {"<note>日本語のテキスト</note>", plain, "kkkkkK        kkkkkkK", plain},
+    {"x </script> y", in_script, "  kkkkkkkkK", plain},
+    {"<![CDATA[]]><![CDATA[x", plain, "ssssssssssssSsssssssss", in_cdata},
+    {"<?pi?>", plain, "kkkkKk", plain},
+}};
+
+// CSS: セレクタ・プロパティと値・単位・色・at-rule・`!important`・コメントの行またぎ・文字列。
+constexpr std::array<LexCase, 42> css_cases{{
+    {"body {", plain, "     o", plain},
+    {"}", plain, "o", plain},
+    {"  color: red;", plain, "  ttttto    o", plain},
+    {"  margin: 0 auto;", plain, "  tttttto n     o", plain},
+    {"  padding: 12px 1.5em 50% .5rem;", plain, "  ttttttto nnnn nnnnn nnn nnnnno", plain},
+    {"  width: -10px;", plain, "  ttttto nnnnno", plain},
+    {"  background: #fff;", plain, "  tttttttttto vvvvo", plain},
+    {"  border-color: #a0b0c0 #A0B0C0FF #abcd;", plain, "  tttttttttttto vvvvvvv vvvvvvvvv vvvvvo",
+     plain},
+    {"  color: #12345;", plain, "  ttttto       o", plain},
+    {"#main-nav, .item > a:hover {", plain, "         o          o      o", plain},
+    {"a:hover {", plain, " o      o", plain},
+    {"a { color: blue; font-size: 2em }", plain, "  o ttttto     o ttttttttto nnn o", plain},
+    {"@media screen and (max-width: 600px) {", plain, "kkkkkk                      o nnnnn  o",
+     plain},
+    {"@import url(\"theme.css\");", plain, "kkkkkkk     sssssssssss o", plain},
+    {"@charset 'utf-8';", plain, "kkkkkkkk ssssssso", plain},
+    {"  color: red !important;", plain, "  ttttto     kkkkkkkkkko", plain},
+    {"  color: red ! IMPORTANT;", plain, "  ttttto     kkkkkkkkkkko", plain},
+    {"  color: red !default;", plain, "  ttttto             o", plain},
+    {"/* comment */", plain, "ccccccccccccc", plain},
+    {"p { /* open", plain, "  o ccccccc", block},
+    {"still inside", block, "cccccccccccc", block},
+    {"end */ color: red;", block, "cccccc      o    o", plain},
+    {"*/", block, "cc", plain},
+    {"  content: \"a \\\" b\";", plain, "  ttttttto sssssssso", plain},
+    {"  content: 'open", plain, "  ttttttto eeeee", plain},
+    {"  font-family: \"Noto Sans JP\", sans-serif;", plain,
+     "  ttttttttttto sssssssssssssso           o", plain},
+    {"  --main-color: #333;", plain, "  tttttttttttto vvvvo", plain},
+    {"  -webkit-transition: all 0.3s;", plain, "  tttttttttttttttttto     nnnno", plain},
+    {"  z-index: 10;", plain, "  ttttttto nno", plain},
+    {"h1, h2 { margin: 0 }", plain, "  o    o tttttto n o", plain},
+    {"div::before { content: \"→\" }", plain, "   oo       o ttttttto sss o", plain},
+    {"  line-height: 1.5;", plain, "  ttttttttttto nnno", plain},
+    {"  transform: rotate(45deg);", plain, "  ttttttttto        nnnnn o", plain},
+    {"  width: calc(100% - 2px);", plain, "  ttttto      nnnn   nnn o", plain},
+    {"", plain, "", plain},
+    {"", block, "", block},
+    {"p{color:red}", plain, " ottttto   o", plain},
+    {"  content: \"見出し\";", plain, "  ttttttto ssssso", plain},
+    {"x /* a */ y /* b", plain, "  ccccccc   cccc", block},
+    {"int x; /* c", raw_xyz, "     o cccc", block},
+    {"  margin: +1px -.5em;", plain, "  tttttto nnnn nnnnno", plain},
+    {"  grid-template: 1fr / 2fr;", plain, "  ttttttttttttto nnn   nnno", plain},
+}};
+
+// YAML: キー・リスト・文字列・定数・数・アンカー・区切り・flow・ブロックスカラーの開く / 中 /
+// 空行 / 戻る（delimiter は印の行の字下げの深さ）。
+constexpr std::array<LexCase, 50> yaml_cases{{
+    {"key: value", plain, "ttt", plain},
+    {"name: \"nene-nib\"", plain, "tttt  ssssssssss", plain},
+    {"single: 'it''s'", plain, "tttttt  sssssss", plain},
+    {"open: \"never closed", plain, "tttt  sssssssssssss", plain},
+    {"  nested: 12", plain, "  tttttt  nn", plain},
+    {"ratio: -1.5e+3", plain, "ttttt  nnnnnnn", plain},
+    {"hex: 0xFF", plain, "ttt  nnnn", plain},
+    {"octal: 0o17", plain, "ttttt  nnnn", plain},
+    {"inf: .inf", plain, "ttt  nnnn", plain},
+    {"version: 1.2.3", plain, "ttttttt", plain},
+    {"date: 2001-12-14", plain, "tttt", plain},
+    {"flag: true", plain, "tttt  vvvv", plain},
+    {"off: False", plain, "ttt  vvvvv", plain},
+    {"none: ~", plain, "tttt  v", plain},
+    {"nothing: null", plain, "ttttttt  vvvv", plain},
+    {"yes: YES", plain, "ttt  vvv", plain},
+    {"text: true story", plain, "tttt", plain},
+    {"- item", plain, "o", plain},
+    {"- 42", plain, "o nn", plain},
+    {"  - - nested", plain, "  o o", plain},
+    {"- name: x", plain, "o tttt", plain},
+    {"-not-a-list: 1", plain, "ttttttttttt  n", plain},
+    {"# comment", plain, "ccccccccc", plain},
+    {"key: value # trailing", plain, "ttt        cccccccccc", plain},
+    {"url: http://example.com/#anchor", plain, "ttt", plain},
+    {"base: &base", plain, "tttt  kkkkk", plain},
+    {"ref: *base", plain, "ttt  kkkkk", plain},
+    {"<<: *base", plain, "tt  kkkkk", plain},
+    {"---", plain, "kkk", plain},
+    {"--- # doc", plain, "kkk ccccc", plain},
+    {"...", plain, "kkk", plain},
+    {"list: [1, two, \"3\", true]", plain, "tttt  ono    o ssso vvvvo", plain},
+    {"map: {a: 1, b: x}", plain, "ttt  ot  no t   o", plain},
+    {"tag: !!str 123", plain, "ttt        nnn", plain},
+    {"日本語: テキスト", plain, "ttt", plain},
+    {"note: 日本語の値", plain, "tttt", plain},
+    {"script: |", plain, "tttttt  o", block00},
+    {"  line one # not comment", block00, "ssssssssssssssssssssssss", block00},
+    {"", block00, "", block00},
+    {"  ", block00, "ss", block00},
+    {"next: 1", block00, "tttt  n", plain},
+    {"  folded: >-", plain, "  tttttt  oo", block02},
+    {"    deeper text", block02, "sssssssssssssss", block02},
+    {"  sibling: 2", block02, "  ttttttt  n", plain},
+    {"- |", plain, "o o", block00},
+    {"key: |2 # c", plain, "ttt  oo ccc", block00},
+    {"key: |x", plain, "ttt", plain},
+    {"a: b: c", plain, "t", plain},
+    {"int x; /* c", raw_xyz, "", plain},
+    {"    still block", block99, "", plain},
+}};
+
+// TOML: テーブル・キー・文字列 4 種・3 連の行またぎ・数と日時・配列・インラインテーブル。
+constexpr std::array<LexCase, 46> toml_cases{{
+    {"[package]", plain, "kkkkkkkkk", plain},
+    {"[[bin]]", plain, "kkkkkkk", plain},
+    {"[dependencies.serde]", plain, "kkkkkkkkkkkkkkkkkkkk", plain},
+    {"[ \"quoted key\" . sub ]  # c", plain, "kkkkkkkkkkkkkkkkkkkkkk  ccc", plain},
+    {"[1, 2],", plain, "ono noo", plain},
+    {"name = \"nene-nib\"", plain, "tttt o ssssssssss", plain},
+    {"version = '0.1.0'", plain, "ttttttt o sssssss", plain},
+    {"bare_key-2 = 1", plain, "tttttttttt o n", plain},
+    {"\"quoted\" = true", plain, "tttttttt o vvvv", plain},
+    {"a.b.c = false", plain, "totot o vvvvv", plain},
+    {"site.\"google.com\" = 1", plain, "ttttotttttttttttt o n", plain},
+    {"1234 = \"x\"", plain, "tttt o sss", plain},
+    {"-key = 1", plain, "tttt o n", plain},
+    {"int = +99", plain, "ttt o nnn", plain},
+    {"neg = -17", plain, "ttt o nnn", plain},
+    {"under = 1_000", plain, "ttttt o nnnnn", plain},
+    {"hex = 0xDEAD_BEEF", plain, "ttt o nnnnnnnnnnn", plain},
+    {"flt = 6.626e-34", plain, "ttt o nnnnnnnnn", plain},
+    {"inf = -inf", plain, "ttt o nnnn", plain},
+    {"nan = nan", plain, "ttt o nnn", plain},
+    {"odt = 1979-05-27T07:32:00-08:00", plain, "ttt o nnnnnnnnnnnnnnnnnnnnnnnnn", plain},
+    {"ldt = 1979-05-27 07:32:00", plain, "ttt o nnnnnnnnnnnnnnnnnnn", plain},
+    {"ld = 1979-05-27", plain, "tt o nnnnnnnnnn", plain},
+    {"lt = 07:32:00", plain, "tt o nnnnnnnn", plain},
+    {"arr = [ 1, 2, 3 ]", plain, "ttt o o no no n o", plain},
+    {"nested = [[1, 2], [\"a\"]]", plain, "tttttt o oono noo osssoo", plain},
+    {"inline = { x = 1, y.z = \"w\" }", plain, "tttttt o o t o no tot o sss o", plain},
+    {"str = \"esc \\\" quote\"", plain, "ttt o ssssssssssssss", plain},
+    {"lit = 'C:\\path'", plain, "ttt o sssssssss", plain},
+    {"bad = \"open", plain, "ttt o eeeee", plain},
+    {"# comment", plain, "ccccccccc", plain},
+    {"key = \"value\" # trailing", plain, "ttt o sssssss cccccccccc", plain},
+    {"ml = \"\"\"", plain, "tt o sss", triple_dq},
+    {"inside \\\"\"\" still", triple_dq, "sssssssssssssssss", triple_dq},
+    {"end\"\"\" # c", triple_dq, "ssssss ccc", plain},
+    {"lit = '''", plain, "ttt o sss", triple_sq},
+    {"raw \\ text", triple_sq, "ssssssssss", triple_sq},
+    {"x'''''", triple_sq, "ssssss", plain},
+    {"one = \"\"\"a\"\"\"", plain, "ttt o sssssss", plain},
+    {"日本 = \"値\"", plain, "   o sss", plain},
+    {"\"キー\" = '値'", plain, "tttt o sss", plain},
+    {"", plain, "", plain},
+    {"  1,", plain, "  no", plain},
+    {"]", plain, "o", plain},
+    {"word", plain, "", plain},
+    {"int x; /* c", raw_xyz, "", plain},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -662,14 +917,14 @@ void verify_language_table(Language language, std::span<const LexCase> cases)
 // 字句器を持たない言語は、どの状態で入っても区間なしで状態をそのまま返す（決定 4）。
 void verify_other_languages()
 {
-    constexpr std::array<Language, 9> others{
-        Language::plain, Language::html,       Language::yaml,  Language::toml, Language::xml,
-        Language::css,   Language::powershell, Language::shell, Language::cmake};
-    for (const Language language : {Language::c, Language::cpp, Language::json, Language::python,
-                                    Language::markdown, Language::javascript, Language::typescript})
+    constexpr std::array<Language, 4> others{Language::plain, Language::powershell, Language::shell,
+                                             Language::cmake};
+    for (const Language language :
+         {Language::c, Language::cpp, Language::json, Language::python, Language::markdown,
+          Language::javascript, Language::typescript, Language::html, Language::xml, Language::css,
+          Language::yaml, Language::toml})
     {
-        expect(core::has_lexer(language),
-               "C, C++, JSON, Python, Markdown, JavaScript and TypeScript have a lexer");
+        expect(core::has_lexer(language), "the twelve languages with a lexer report one");
     }
     for (const Language language : others)
     {
@@ -800,6 +1055,60 @@ void verify_markdown_and_script_threading()
     verify_threading_of(Language::javascript, script, script_kinds);
     verify_threading_of(Language::typescript, script, script_kinds);
 }
+
+// #838: 行をまたぐ状態（コメント・script の中・ブロックスカラー・3 連引用符）も値で次の行へ渡し、
+// lex_state は lex_line と同じ状態を返す。
+void verify_batch2_threading()
+{
+    constexpr std::array<std::string_view, 5> html{"<p>a <!-- c", "d --> <script>", "if (a < b)",
+                                                   "</script> <b>", "x"};
+    constexpr std::array<LexKind, 5> html_kinds{LexKind::block_comment, LexKind::raw_string,
+                                                LexKind::raw_string, LexKind::plain,
+                                                LexKind::plain};
+    verify_threading_of(Language::html, html, html_kinds);
+    constexpr std::array<std::string_view, 6> yaml{"a:", "  b: >",   "    text",
+                                                   "",   "    more", "  c: 1"};
+    constexpr std::array<LexKind, 6> yaml_kinds{LexKind::plain,      LexKind::raw_string,
+                                                LexKind::raw_string, LexKind::raw_string,
+                                                LexKind::raw_string, LexKind::plain};
+    verify_threading_of(Language::yaml, yaml, yaml_kinds);
+    constexpr std::array<std::string_view, 4> toml{"a = '''", "b", "c''' # d", "[t]"};
+    constexpr std::array<LexKind, 4> toml_kinds{LexKind::raw_string, LexKind::raw_string,
+                                                LexKind::plain, LexKind::plain};
+    verify_threading_of(Language::toml, toml, toml_kinds);
+}
+
+[[nodiscard]] std::string repeated_text(std::string_view piece, std::size_t count)
+{
+    std::string text;
+    text.reserve(piece.size() * count);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        text += piece;
+    }
+    return text;
+}
+
+// #838: 閉じの無い字句を並べた長い 1 行（決定 3）。どれも 1 回の走査で読み（二乗なら Debug で目に
+// 見えて遅くなる）、区間は昇順のまま。
+void verify_batch2_worst_lines()
+{
+    const LexLine tags = core::lex_line(Language::html, plain, repeated_text("<a", 10'000U));
+    expect(tags.spans.size() == 10'000U && tags.out == plain,
+           "a long line of unclosed tags paints each tag head");
+    const LexLine raw =
+        core::lex_line(Language::html, plain, "<script>" + repeated_text("</scrip", 3'000U));
+    expect(raw.spans.size() == 2U && raw.out == in_script,
+           "a long script line without its closing tag stays inside the script");
+    const std::string css = repeated_text("{a:", 10'000U);
+    expect(well_formed(core::lex_line(Language::css, plain, css).spans, css),
+           "a long css line of selectors reads in one pass");
+    const LexLine yaml = core::lex_line(Language::yaml, plain, repeated_text("- ", 10'000U));
+    expect(yaml.spans.size() == 10'000U, "a long yaml line of list markers paints each marker");
+    const std::string toml = repeated_text("{a.a,", 5'000U);
+    expect(core::lex_line(Language::toml, plain, toml).out == plain,
+           "a long toml line of unfinished keys reads in one pass");
+}
 } // namespace
 
 void verify_lexer_scope()
@@ -817,10 +1126,19 @@ void verify_lexer_scope()
     verify_language_table(Language::typescript, javascript_cases);
     verify_language_table(Language::javascript, javascript_only_cases);
     verify_language_table(Language::typescript, typescript_only_cases);
+    verify_language_table(Language::html, html_common_cases);
+    verify_language_table(Language::html, html_only_cases);
+    verify_language_table(Language::xml, html_common_cases);
+    verify_language_table(Language::xml, xml_only_cases);
+    verify_language_table(Language::css, css_cases);
+    verify_language_table(Language::yaml, yaml_cases);
+    verify_language_table(Language::toml, toml_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();
     verify_markdown_and_script_threading();
+    verify_batch2_threading();
+    verify_batch2_worst_lines();
     verify_markdown_worst_lines();
     verify_script_worst_line();
 }

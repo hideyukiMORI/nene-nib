@@ -8,6 +8,7 @@
 #include "Milestone.hpp"
 #include "ProbeWorkload.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <iostream>
@@ -72,6 +73,52 @@ constexpr std::array<std::string_view, template_count> javascript_templates{
     "if (count >= 10 && ready !== null) { items?.push(...rest); } else { x ?\?= undefined; }",
     "return typeof value === 'string' ? value.split(/\\s+/) : [true, false, NaN];"};
 
+// HTML（#838）: 宣言・タグ・属性（引用符の中の `>`・引用符の無い値）・実体参照。2 行目がコメント
+// を開き 3 行目が閉じる。
+constexpr std::array<std::string_view, template_count> html_templates{
+    "<!DOCTYPE html> <html lang=\"ja\"><head><meta charset=\"utf-8\"><title>Nib &amp; "
+    "co</title>",
+    "<body class=\"page\" data-id='42'> <!-- comment block opens here and continues",
+    "   still in the comment --> <div id=main><p>text &lt; more &#169;</p></div>",
+    "<a href=\"https://example.com/a>b\" title='link'>anchor</a> <img src=x.png alt=\"pic\" />",
+    "<ul><li class=\"item\">one</li><li class=\"item\">two</li><li>three &nbsp;</li></ul>",
+    "<input type=\"checkbox\" checked disabled> <br/> <span>plain text body</span>"};
+// XML（#838）: `<?xml ?>`・名前空間・CDATA（2 行目が開き 3 行目が閉じる）・宣言・実体参照。
+constexpr std::array<std::string_view, template_count> xml_templates{
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <root xmlns:x=\"urn:example:ns\">",
+    "<x:item id=\"1\" kind='a'><![CDATA[ raw <data> & text opens here and continues",
+    "   more raw text ]]></x:item> <!-- note --> <x:empty attr=\"v\"/>",
+    "<entry key=\"name\" value=\"nene-nib\" enabled=\"true\">text &amp; &#x41;</entry>",
+    "<!DOCTYPE note SYSTEM \"note.dtd\"> <list><e>1</e><e>2</e><e>3</e></list>",
+    "<?pi target?> <a:b.c-d e=\"f\" g='h'>mixed content here</a:b.c-d> </root>"};
+// CSS（#838）: at-rule・セレクタ・プロパティと値・単位・色・`!important`・文字列。2 行目がコメント
+// を開き 3 行目が閉じる。
+constexpr std::array<std::string_view, template_count> css_templates{
+    "@import url(\"theme.css\"); @media screen and (max-width: 600px) { body { margin: 0 } }",
+    ".item > a:hover, #main-nav { color: #a0b0c0; /* block comment opens here and continues",
+    "   still comment */ padding: 12px 1.5em 50% .5rem; border: 1px solid #fff !important; }",
+    "h1 { font-family: \"Noto Sans JP\", sans-serif; font-size: 2em; line-height: 1.5; }",
+    "div::before { content: \"x\"; --main-color: #333; -webkit-transition: all 0.3s; }",
+    "p{color:red;width:calc(100% - 2px);transform:rotate(45deg);z-index:10}"};
+// YAML（#838）: キー・文字列・flow・定数・数・アンカー。2 行目がブロックスカラーを開き、3 行目は
+// その中（深い字下げ）、4 行目が字下げで戻る。
+constexpr std::array<std::string_view, template_count> yaml_templates{
+    "name: \"nene-nib\" # the project name with a quoted string value and comment",
+    "description: >- # a folded block scalar opens here",
+    "    folded text continues with deeper indentation: not a key, 42, true",
+    "list: [1, two, \"3\", true, null, ~, 0xFF, .inf, -1.5e+3] # flow sequence",
+    "- key: &anchor {a: 1, b: x, c: 'it''s'} # list item with anchor and flow",
+    "  ref: *anchor # alias reference and a trailing comment for good measure"};
+// TOML（#838）: 見出し・キー・3 連引用符（2 行目が開き 3 行目が閉じる）・インラインテーブル・数と
+// 日時。
+constexpr std::array<std::string_view, template_count> toml_templates{
+    "[package] # table header with a trailing comment",
+    "description = \"\"\"multi-line basic string opens here with \"quotes\" and \\t escapes",
+    "   still inside the string\"\"\" # closes the multi-line string",
+    "inline = { x = 1, y.z = \"w\", flag = true } # inline table with dotted key",
+    "numbers = [ 1_000, 0xDEAD_BEEF, 6.626e-34, -inf, nan, +99 ] # array of numbers",
+    "when = 1979-05-27T07:32:00-08:00 # offset date-time and 'literal' text"};
+
 [[nodiscard]] constexpr core::Language language_of(LexerWorkload workload)
 {
     switch (workload)
@@ -92,18 +139,33 @@ constexpr std::array<std::string_view, template_count> javascript_templates{
     case LexerWorkload::javascript_visible_60:
     case LexerWorkload::javascript_backfill_200:
         return core::Language::javascript;
+    case LexerWorkload::html_visible_60:
+    case LexerWorkload::html_backfill_200:
+        return core::Language::html;
+    case LexerWorkload::xml_visible_60:
+        return core::Language::xml;
+    case LexerWorkload::css_visible_60:
+        return core::Language::css;
+    case LexerWorkload::yaml_visible_60:
+    case LexerWorkload::yaml_backfill_200:
+        return core::Language::yaml;
+    case LexerWorkload::toml_visible_60:
+    case LexerWorkload::toml_backfill_200:
+        return core::Language::toml;
     }
     std::unreachable();
 }
 
 [[nodiscard]] constexpr bool is_visible(LexerWorkload workload)
 {
-    return workload == LexerWorkload::cpp_visible_60 ||
-           workload == LexerWorkload::json_visible_60 ||
-           workload == LexerWorkload::python_visible_60 ||
-           workload == LexerWorkload::markdown_visible_60 ||
-           workload == LexerWorkload::markdown_worst_line ||
-           workload == LexerWorkload::javascript_visible_60;
+    constexpr std::array<LexerWorkload, 11> visible{
+        LexerWorkload::cpp_visible_60,      LexerWorkload::json_visible_60,
+        LexerWorkload::python_visible_60,   LexerWorkload::markdown_visible_60,
+        LexerWorkload::markdown_worst_line, LexerWorkload::javascript_visible_60,
+        LexerWorkload::html_visible_60,     LexerWorkload::xml_visible_60,
+        LexerWorkload::css_visible_60,      LexerWorkload::yaml_visible_60,
+        LexerWorkload::toml_visible_60};
+    return std::ranges::find(visible, workload) != visible.end();
 }
 
 [[nodiscard]] constexpr std::size_t line_count(LexerWorkload workload)
@@ -113,33 +175,40 @@ constexpr std::array<std::string_view, template_count> javascript_templates{
 
 [[nodiscard]] constexpr std::span<const std::string_view> templates_of(LexerWorkload workload)
 {
+    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 9> tables{
+        {{core::Language::json, json_templates},
+         {core::Language::markdown, markdown_templates},
+         {core::Language::javascript, javascript_templates},
+         {core::Language::python, python_templates},
+         {core::Language::html, html_templates},
+         {core::Language::xml, xml_templates},
+         {core::Language::css, css_templates},
+         {core::Language::yaml, yaml_templates},
+         {core::Language::toml, toml_templates}}};
     const core::Language language = language_of(workload);
-    if (language == core::Language::json)
+    for (const auto &[table_language, templates] : tables)
     {
-        return json_templates;
+        if (table_language == language)
+        {
+            return templates;
+        }
     }
-    if (language == core::Language::markdown)
-    {
-        return markdown_templates;
-    }
-    if (language == core::Language::javascript)
-    {
-        return javascript_templates;
-    }
-    return language == core::Language::python ? std::span{python_templates}
-                                              : std::span{cpp_templates};
+    return cpp_templates;
 }
 
-// 各行は「型の行 + 言語の行末コメントの印（JSON と Markdown は空白）+ 詰め物」で 100 バイトに
-// そろえる。詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ）。
+// 各行は「型の行 + 言語の行末コメントの印（JSON・Markdown・HTML・XML・CSS は空白）+ 詰め物」で
+// 100 バイトにそろえる。詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ）。
 [[nodiscard]] constexpr std::string_view suffix_of(LexerWorkload workload)
 {
     const core::Language language = language_of(workload);
-    if (language == core::Language::json || language == core::Language::markdown)
+    const bool hashed = language == core::Language::python || language == core::Language::yaml ||
+                        language == core::Language::toml;
+    const bool slashed = language == core::Language::cpp || language == core::Language::javascript;
+    if (hashed)
     {
-        return " ";
+        return " #";
     }
-    return language == core::Language::python ? " #" : " //";
+    return slashed ? " //" : " ";
 }
 
 [[nodiscard]] constexpr char padding_of(LexerWorkload workload)
@@ -147,11 +216,15 @@ constexpr std::array<std::string_view, template_count> javascript_templates{
     return language_of(workload) == core::Language::markdown ? ' ' : '-';
 }
 
-// 2 行目の型の後ろで行をまたぐ状態に入るか（C++ と JavaScript のブロックコメント・Python の 3 連
-// 引用符・Markdown のフェンス）。
+// 2 行目の型の後ろで行をまたぐ状態に入るか（C++ と JavaScript と CSS のブロックコメント・Python と
+// TOML の 3 連引用符・Markdown のフェンス・HTML のコメント・XML の CDATA・YAML
+// のブロックスカラー）。 YAML だけは 3 行目（深い字下げの中身）でもまだ中にいて、4 行目で戻る。
 [[nodiscard]] constexpr bool opened_after(LexerWorkload workload, std::size_t index)
 {
-    return language_of(workload) != core::Language::json && index % template_count == 1U;
+    const core::Language language = language_of(workload);
+    const std::size_t row = index % template_count;
+    return language != core::Language::json &&
+           (row == 1U || (language == core::Language::yaml && row == 2U));
 }
 
 [[nodiscard]] std::string padded(std::string_view line, std::string_view suffix, char padding)

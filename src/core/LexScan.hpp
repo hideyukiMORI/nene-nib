@@ -1,11 +1,17 @@
 #pragma once
 
+#include "LexKind.hpp"
+#include "LexState.hpp"
+
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 namespace nenenib::core
 {
-// JSON と Python の行の字句器が共有するバイトの判定と走査（#830・ADR 0156 の追補）。どれも 1 行の
+// JSON と Python の行の字句器が共有するバイトの判定と走査（#830・ADR 0156 の追補・#838 で
+// HTML / XML・CSS・YAML・TOML も使う）。どれも 1 行の
 // 本文のバイト列だけを見る純関数で、0x80 以上（UTF-8 の多バイト）は識別子にも空白にも数えない。
 inline constexpr std::size_t lex_unclosed = std::string_view::npos;
 
@@ -66,5 +72,31 @@ inline constexpr std::size_t lex_unclosed = std::string_view::npos;
         at += line[at] == '\\' ? 1U : 0U;
     }
     return lex_unclosed;
+}
+
+// from から needle の最初の出現の位置。無ければ lex_unclosed。先頭の 1 バイトで探してから比べる
+// （needle は数バイトの区切りで、1 行の中の探しは O(n × needle の長さ)）。
+[[nodiscard]] constexpr std::size_t lex_find(std::string_view line, std::size_t from,
+                                             std::string_view needle) noexcept
+{
+    for (std::size_t at = line.find(needle.front(), from); at != std::string_view::npos;
+         at = line.find(needle.front(), at + 1U))
+    {
+        if (line.substr(at).starts_with(needle))
+        {
+            return at;
+        }
+    }
+    return lex_unclosed;
+}
+
+// kind に入って次の行へ渡す状態（delimiter は raw_delimiter_limit 文字まで）。
+[[nodiscard]] constexpr LexState lex_entered(LexKind kind, std::string_view delimiter) noexcept
+{
+    LexState state{.kind = kind,
+                   .delimiter = {},
+                   .delimiter_length = static_cast<std::uint8_t>(delimiter.size())};
+    std::ranges::copy(delimiter, state.delimiter.begin());
+    return state;
 }
 } // namespace nenenib::core

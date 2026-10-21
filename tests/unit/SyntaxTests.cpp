@@ -383,7 +383,8 @@ void verify_split_forgets_both()
            "an edit below the cached line keeps the active pane's cache");
 }
 
-// 追補 #827: 遡りの行数は言語ごとの表 1 つ。JSON は 1 行、C / C++ は 200 行。
+// 追補 #827: 遡りの行数は言語ごとの表 1 つ。JSON は 1 行、C / C++ は 200 行、YAML は 100 行
+// （#838）。
 void verify_backfill_per_language()
 {
     using core::Language;
@@ -395,6 +396,11 @@ void verify_backfill_per_language()
                core::syntax_backfill_lines(Language::javascript) == 200 &&
                core::syntax_backfill_lines(Language::typescript) == 200 &&
                core::syntax_backfill_lines(Language::markdown) == 500 &&
+               core::syntax_backfill_lines(Language::html) == 200 &&
+               core::syntax_backfill_lines(Language::xml) == 200 &&
+               core::syntax_backfill_lines(Language::css) == 200 &&
+               core::syntax_backfill_lines(Language::toml) == 200 &&
+               core::syntax_backfill_lines(Language::yaml) == 100 &&
                core::syntax_backfill_lines(Language::cmake) == 0,
            "the backfill table has one value per language");
     Editing editing;
