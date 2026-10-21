@@ -86,4 +86,32 @@ bool has_lexer(Language language) noexcept
     }
     std::unreachable();
 }
+
+std::size_t syntax_backfill_lines(Language language) noexcept
+{
+    switch (language)
+    {
+    case Language::json:
+        return 1;
+    case Language::c:
+    case Language::cpp:
+    case Language::python:
+    case Language::javascript:
+    case Language::typescript:
+        return 200;
+    case Language::markdown:
+        return 500;
+    case Language::plain:
+    case Language::html:
+    case Language::yaml:
+    case Language::toml:
+    case Language::xml:
+    case Language::css:
+    case Language::powershell:
+    case Language::shell:
+    case Language::cmake:
+        return 0;
+    }
+    std::unreachable();
+}
 } // namespace nenenib::core

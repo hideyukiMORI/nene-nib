@@ -1478,6 +1478,7 @@ void EditorController::replace(const core::OffsetRange &range, std::string_view 
     const std::size_t before = state_.history().position();
     auto history = state_.history().pushed(edit, boundary);
     auto document = after_edit_at(state_.document(), before);
+    forget_syntax_before(edit);
     adjust_other(edit, next);
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
                               std::move(document));
@@ -1492,6 +1493,28 @@ void EditorController::adjust_other(const core::Edit &edit, const core::TextBuff
     {
         state_ = state_.with_other_adjusted(edit, after);
     }
+}
+
+// 覚えは line の行頭の状態で、それは line より前の行だけで決まる。編集の始まり（編集の前の本文の
+// 行）が line 以降なら line より前の行は動かないので保ち、前なら捨てる（ADR 0156 の追補 #827）。
+// 覚えは文書の退避番号で名指しするので、同じ文書を 2 枠で見ているときは両方に同じ判断をする。
+void EditorController::forget_syntax_before(const core::Edit &edit)
+{
+    if (!first_syntax_.has_value() && !second_syntax_.has_value())
+    {
+        return;
+    }
+    const AutosaveId tab = state_.autosave_ids().at(state_.active_tab());
+    const std::size_t line = state_.text().position_of(edit.at).line.value;
+    const auto forget = [tab, line](std::optional<SyntaxStateCache> &cache)
+    {
+        if (cache.has_value() && cache.value().tab == tab && line < cache.value().line.value)
+        {
+            cache.reset();
+        }
+    };
+    forget(first_syntax_);
+    forget(second_syntax_);
 }
 
 void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchoring anchoring,
@@ -1906,6 +1929,7 @@ void EditorController::undo_edit()
     auto next = state_.text().replaced(at, end, edit.value().removed);
     const core::Offset caret{at.value + edit.value().removed.size()};
     // undo は編集の逆向き（inserted を removed に戻す）。
+    forget_syntax_before(edit.value());
     adjust_other(core::Edit{at, edit.value().inserted, edit.value().removed, at}, next);
     undone_marks(core::Edit{at, edit.value().inserted, edit.value().removed, at});
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
@@ -1924,6 +1948,7 @@ void EditorController::redo_edit()
     const core::Offset end{at.value + edit.value().removed.size()};
     auto next = state_.text().replaced(at, end, edit.value().inserted);
     const core::Offset caret{at.value + edit.value().inserted.size()};
+    forget_syntax_before(edit.value());
     adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
     undone_marks(edit.value());
     state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
@@ -4786,8 +4811,7 @@ EditorController::visible_lines(const PaneSource &source, AutosaveId tab,
     }
     // 字句器を持つ言語だけ、見えている最初の行の行頭の状態を覚えか遡りから求める（ADR 0156 の
     // 決定 8・9・14）。持たない言語と `:syntax off` の文書（追補）は字句器も覚えも触らない。
-    const SyntaxStateCache key{tab, state.history().revision(), state.language(),
-                               core::LineNumber{first}, core::LexState{}};
+    const SyntaxStateCache key{tab, state.language(), core::LineNumber{first}, core::LexState{}};
     auto lex = first <= last && state.syntax_enabled()
                    ? syntax_begin(state.text(), key, cache, lexed)
                    : std::nullopt;
