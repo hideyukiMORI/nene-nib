@@ -1558,7 +1558,11 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     mode_ = delivery.mode;
     vim_mode_ = delivery.vim_mode;
     // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
-    invalidate();
+    // 何も変えなかった合図は積まない（ADR 0155 の追補・#813）。
+    if (delivery.repaint)
+    {
+        invalidate();
+    }
     update_title(delivery);
     announce(delivery);
     finish_operation(operation_request);

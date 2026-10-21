@@ -382,6 +382,35 @@ void check_measured_from_anchor()
     expect(layouts.created() > 0 && layouts.created() <= bound,
            "only the blocks within the frame height are measured");
 }
+
+// リストの区切りと記号の列は測る範囲の中だけで決める（#813・ADR 0155 の追補）。10 万項目の 1 つの
+// 番号つきリストで錨が末尾の近くでも、読む要素は測る範囲＋錨の 1 つ前だけで、測った項目の
+// 字下げは揃う（範囲の中で最も長い番号の列）。
+void check_list_scanned_in_range()
+{
+    constexpr std::size_t huge = 100'000;
+    constexpr float height = 200.0F;
+    core::MarkdownDocument document;
+    document.blocks.reserve(huge);
+    for (std::size_t index = 0; index < huge; ++index)
+    {
+        document.blocks.push_back(item_of(std::to_string(index + 1) + ".", "item"));
+    }
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    // 2 つ目の錨は 9998. から 10000. へ桁が増え、広がった列で錨から置き直す。
+    for (const std::size_t first : {huge - 1'000, std::size_t{9'997}})
+    {
+        const auto tops = win32::PreviewBlockTops::measure(
+            document, layouts, style, win32::PreviewViewport{first, width, height});
+        expect(tops.has_value() && tops.value().size() > first + 3 &&
+                   tops.value().scanned() <= tops.value().size() - first + 1,
+               "a list is read only within the measured range and the block before the anchor");
+        expect(tops.has_value() && tops.value().size() > first + 3 &&
+                   tops.value().indent(first) == tops.value().indent(tops.value().size() - 1),
+               "the measured items of one list share one marker column");
+    }
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -402,5 +431,6 @@ void verify_preview_layouts()
     check_markers();
     check_pane_reuse();
     check_measured_from_anchor();
+    check_list_scanned_in_range();
 }
 } // namespace nenenib::tests::ui

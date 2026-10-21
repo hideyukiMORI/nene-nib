@@ -2664,8 +2664,9 @@ def verify_palette(executable: Path, environment: dict, appearance: str,
 # 1 行 20,000 文字の文書（巨大な行のしきい値 16,384 より長い）を「はい」で開く。
 VK_M = 0x4D
 PREVIEW_SCHEMES = {"dark": "ubuntu-aubergine", "light": "neutral-light"}
-PREVIEW_TICK_SECONDS = 0.5
 PREVIEW_GRID_LENGTH = 20_000
+# 文書の差し替えを待つ上限（Issue #813: 固定の sleep ではなく描かれた絵の値で待つ）。
+PREVIEW_DOCUMENT_SECONDS = 3.0
 
 
 def preview_scheme(window, scheme: str) -> None:
@@ -2678,18 +2679,33 @@ def preview_scheme(window, scheme: str) -> None:
     time.sleep(TAB_SETTLE_SECONDS)
 
 
-def await_band_change(window, before: bytes, size: tuple, band: tuple,
-                      seconds: float = 3.0) -> tuple[bytes, float | None]:
-    """Capture until band differs from before; the seconds it took (None at the deadline)."""
+def band_inked(pixels: bytes, width: int, band: tuple) -> bool:
+    """Whether band holds more than its ground (the colour of its top-left pixel): text is drawn."""
+    left, top, right, bottom = band
+    ground = pixels[(top * width + left) * 4:(top * width + left + 1) * 4] * (right - left)
+    return any(pixels[(y * width + left) * 4:(y * width + right) * 4] != ground
+               for y in range(top, bottom))
+
+
+def await_preview_document(window, before: bytes, size: tuple,
+                           band: tuple) -> tuple[bytes, float | None]:
+    """Capture until the preview band differs from before, holds text, and repeats in the next
+    capture: the frame after the preview's document was replaced (documentReplaced, Issue #813).
+
+    The seconds it took, or None at PREVIEW_DOCUMENT_SECONDS. A quiet preview tick does not draw
+    (ADR 0155), so the band repeats once the parse result is painted."""
     width, height = size
     began = time.monotonic()
+    previous = before
     while True:
         time.sleep(0.05)
         pixels = capture(window, width, height)
-        if box_changed(before, pixels, width, band):
+        if (box_changed(before, pixels, width, band) and band_inked(pixels, width, band)
+                and not box_changed(previous, pixels, width, band)):
             return pixels, round(time.monotonic() - began, 2)
-        if time.monotonic() - began > seconds:
+        if time.monotonic() - began > PREVIEW_DOCUMENT_SECONDS:
             return pixels, None
+        previous = pixels
 
 
 def drive_preview(window, scheme: str, frames: Path | None) -> dict:
@@ -2703,10 +2719,10 @@ def drive_preview(window, scheme: str, frames: Path | None) -> dict:
         preview_scheme(window, scheme)
     start_frame = capture(window, width, height)
     bands, divider = pane_bands(width, height, dpi, "vertical")
-    opened = split_chord(window, start_frame, size, None, "previewOpened",
-                         ([VK_CONTROL, VK_SHIFT], VK_M))
-    time.sleep(PREVIEW_TICK_SECONDS)
-    opened = capture(window, width, height)
+    tab_chord(window, [VK_CONTROL, VK_SHIFT], VK_M)
+    opened, seconds = await_preview_document(window, start_frame, size, bands[1])
+    record["documentShownSeconds"] = seconds
+    assert seconds is not None, "the preview never drew its document"
     snapshot(frames, window, f"previewOpened-{scheme}" if scheme in PREVIEW_SCHEMES else "previewGrid")
     record["openedDivider"] = divider_colours(opened, width, divider)
     record["openedRightChanged"] = box_changed(start_frame, opened, width, bands[1])
@@ -2714,11 +2730,9 @@ def drive_preview(window, scheme: str, frames: Path | None) -> dict:
     if scheme not in PREVIEW_SCHEMES:
         return record
     write_text(window, "hello")
-    typed, seconds = await_band_change(window, opened, size, bands[1])
+    typed, seconds = await_preview_document(window, opened, size, bands[1])
     record["documentReplacedSeconds"] = seconds
     assert seconds is not None, "typing never changed the preview"
-    time.sleep(PREVIEW_TICK_SECONDS)
-    typed = capture(window, width, height)
     snapshot(frames, window, f"previewUpdated-{scheme}")
     left = body_points(width, height, dpi, split="vertical", pane=0)
     record["caretBeforeClick"] = accent_count(typed, width, pane_body_box(left, 3))

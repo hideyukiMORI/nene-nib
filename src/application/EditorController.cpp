@@ -1271,6 +1271,7 @@ bool EditorController::persist_settings(core::EditorSettings settings)
 EditorDelivery EditorController::apply(const EditorIntent &intent)
 {
     layout_failure_.reset();
+    repaint_ = true;
     if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
@@ -1301,6 +1302,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     fit_command_rows();
     ask_display();
     auto delivered = delivery();
+    delivered.repaint = repaint_;
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
     // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
     layout_failure_ = drawing_failure(layout_failure_);
@@ -3861,9 +3863,11 @@ void EditorController::accept(const EndSession &intent)
     }
 }
 
-// 自動退避の合図（ADR 0137 の決定 1・2）。入口は歩きも知らせも残す。
+// 自動退避の合図（ADR 0137 の決定 1・2）。入口は歩きも知らせも残す。退避を頼まなかった合図は
+// 何も変えないので描き直さない（ADR 0155 の追補・#813）。
 void EditorController::accept(const AutosaveTick &)
 {
+    repaint_ = false;
     autosave_now();
 }
 
@@ -3876,6 +3880,7 @@ void EditorController::autosave_now()
         switch (step)
         {
         case AutosaveStep::store:
+            repaint_ = true;
             store_planned(id);
             break;
         case AutosaveStep::discard:
@@ -4354,9 +4359,11 @@ void EditorController::accept(const TogglePreview &)
 }
 
 // 打つのを止めてから 1 tick 以上たった本文だけを頼む（決定 8）。比べるのは履歴の位置ではなく
-// 改訂番号。
+// 改訂番号。頼まなかった合図は見えるものを変えない（見た改訂番号は描かない）ので描き直さない
+// （ADR 0155 の追補・#813）。結果を採るのは WorkCompleted の道。
 void EditorController::accept(const PreviewTick &)
 {
+    repaint_ = false;
     const PreviewView *preview = state_.preview();
     if (preview == nullptr)
     {
@@ -4365,6 +4372,7 @@ void EditorController::accept(const PreviewTick &)
     const std::size_t revision = state_.history().revision();
     if (revision == preview->seen_revision && revision != preview->requested_revision)
     {
+        repaint_ = true;
         request_preview(false);
         return;
     }
@@ -4973,7 +4981,8 @@ EditorDelivery EditorController::delivery() const
                           state_.close_request(),
                           state_.operation_request(),
                           state_.display_question(),
-                          layout_failure_};
+                          layout_failure_,
+                          true};
 }
 
 // 頼まれた追従を解決してから作る（ADR 0128 の決定 3）。解決の失敗は failure に載る。

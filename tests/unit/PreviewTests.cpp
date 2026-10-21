@@ -190,6 +190,35 @@ void verify_tick_thinning()
     expect(markdown.requests().size() == 2, "typing between ticks keeps thinning the requests");
 }
 
+// 3b. 静かな tick は描き直さない（ADR 0155 の追補・#813）。開いて結果を採った後の 10 回の tick は
+// どれも repaint が false で、打鍵の後は改訂番号を見るだけの tick も false・頼む tick は true。
+// 閉じた後の tick も false。ほかの意図は true のまま。
+void verify_quiet_ticks_do_not_repaint()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    expect(controller.apply(app::TogglePreview{}).repaint, "opening the preview repaints");
+    editing.markdown().serve(parsed(1, ""));
+    expect(controller.apply(app::WorkCompleted{}).repaint, "taking the parse result repaints");
+    bool quiet = true;
+    for (int tick = 0; tick < 10; ++tick)
+    {
+        quiet = quiet && !controller.apply(app::PreviewTick{}).repaint;
+    }
+    expect(quiet && editing.markdown().requests().size() == 1,
+           "ten quiet ticks over an open preview never ask for a repaint");
+    expect(controller.apply(app::InsertText{"a"}).repaint, "typing repaints");
+    expect(!controller.apply(app::PreviewTick{}).repaint,
+           "the tick that only sees the new revision asks for no repaint");
+    expect(controller.apply(app::PreviewTick{}).repaint &&
+               editing.markdown().requests().size() == 2,
+           "the tick that requests the typed body asks for a repaint");
+    applied(controller, app::TogglePreview{});
+    expect(!controller.apply(app::PreviewTick{}).repaint,
+           "a tick after the preview closed asks for no repaint");
+}
+
 // 4. 操作中の文書が替わると tick を待たずに頼み、前の結果を捨てる（決定 2・9）。
 void verify_switch_requests_now()
 {
@@ -502,6 +531,7 @@ void verify_preview_contracts()
     verify_open_requests();
     verify_ticket_results();
     verify_tick_thinning();
+    verify_quiet_ticks_do_not_repaint();
     verify_switch_requests_now();
     verify_pane_intents();
     verify_size_limit();

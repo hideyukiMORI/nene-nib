@@ -65,3 +65,8 @@
 - ui と adapters（#801）: `nib_window_tests --preview`（`PreviewPane` が同じ文書を 2 回描いても layout を作り直さない・錨の上の送り）・`--timers`（`preview` の番号と 200 ms）・`eng/verify-window.py --preview --scheme dark|light|grid`。
 - 静かな道: `verify_quiet_paths`（`--history`）と `verify_folder_quiet_paths`（`--background-work`）。
 - 既存: `--split` `--operations` `--autosave`、`nib_window_tests`（renderer の `std::visit`）。
+
+## 追補 2026-10-22（#813）
+
+- tick は変わったときだけ描く: `EditorDelivery.repaint` は `PreviewTick` が要求を出さなかったとき（見た改訂番号を進めただけを含む）と `AutosaveTick` が退避を頼まなかったときだけ false で、ui の `deliver` はそのとき `invalidate()` しない。結果を採るのは `WorkCompleted`（true）。契約は `--preview` の静かな tick 10 回と `--autosave`。
+- リストの区切りは測る範囲だけ: `PreviewBlockTops::measure` はリストの区切りと記号の列を錨の 1 つ前と測る範囲の要素だけで決め（錨より前の同じリストの項目と枠の下の項目は記号の列に効かない）、後の項目で列が広がれば錨から置き直す。読む要素は測る範囲＋1 以内（`nib_window_tests --preview` の 10 万項目）。番号の桁が見えている範囲で変わると、送りに連れて字下げが 1 桁ぶん動くことがある。
