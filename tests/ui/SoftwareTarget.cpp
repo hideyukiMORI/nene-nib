@@ -8,8 +8,8 @@ namespace nenenib::tests::ui
 {
 namespace
 {
-constexpr UINT bitmap_width = 1300;
-constexpr UINT bitmap_height = 80;
+constexpr UINT bitmap_width = SoftwareTarget::width;
+constexpr UINT bitmap_height = SoftwareTarget::height;
 constexpr UINT bytes_per_pixel = 4;
 } // namespace
 

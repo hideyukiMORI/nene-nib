@@ -31,30 +31,45 @@ struct BodyGlyphRun
     std::size_t last;
 };
 
-// 窓の字形を DrawGlyphRun へ渡す形。offsets も同じ位置から渡す。
-[[nodiscard]] inline DWRITE_GLYPH_RUN drawn_glyphs(const BodyGlyphRun &run)
+// 字形の部分窓 [first, last) を DrawGlyphRun へ渡す形。offsets も同じ位置から渡す。構文の色の
+// 区間で run を切るときに使う（ADR 0156 の決定 11）。first <= last <= 字形の数。
+[[nodiscard]] inline DWRITE_GLYPH_RUN drawn_glyphs(const BodyGlyphRun &run, std::size_t first,
+                                                   std::size_t last)
 {
-    const auto count = run.last - run.first;
+    const auto count = last - first;
     return DWRITE_GLYPH_RUN{
         run.face.Get(),
         run.em,
         static_cast<UINT32>(count),
-        std::span(run.indices).subspan(run.first, count).data(),
-        std::span(run.advances).subspan(run.first, count).data(),
-        run.offsets.empty() ? nullptr : std::span(run.offsets).subspan(run.first, count).data(),
+        std::span(run.indices).subspan(first, count).data(),
+        std::span(run.advances).subspan(first, count).data(),
+        run.offsets.empty() ? nullptr : std::span(run.offsets).subspan(first, count).data(),
         run.sideways,
         run.bidi};
 }
 
-// 窓の先頭の字形の原点。描画の原点（origin + run.origin）から窓の前の送りを左から float で積む。
+// 窓の字形を DrawGlyphRun へ渡す形。
+[[nodiscard]] inline DWRITE_GLYPH_RUN drawn_glyphs(const BodyGlyphRun &run)
+{
+    return drawn_glyphs(run, run.first, run.last);
+}
+
+// 字形 first の原点。描画の原点（origin + run.origin）から first の前の送りを左から float で積む。
 // Direct2D が run の中で積むのと同じ順なので、全体を描いたときと同じ位置になる（画素は同じ）。
-[[nodiscard]] inline D2D1_POINT_2F drawn_origin(const BodyGlyphRun &run, D2D1_POINT_2F origin)
+[[nodiscard]] inline D2D1_POINT_2F drawn_origin(const BodyGlyphRun &run, D2D1_POINT_2F origin,
+                                                std::size_t first)
 {
     float x = origin.x + run.origin.x;
-    for (const auto advance : std::span(run.advances).first(run.first))
+    for (const auto advance : std::span(run.advances).first(first))
     {
         x += advance;
     }
     return D2D1::Point2F(x, origin.y + run.origin.y);
+}
+
+// 窓の先頭の字形の原点。
+[[nodiscard]] inline D2D1_POINT_2F drawn_origin(const BodyGlyphRun &run, D2D1_POINT_2F origin)
+{
+    return drawn_origin(run, origin, run.first);
 }
 } // namespace nenenib::ui::win32

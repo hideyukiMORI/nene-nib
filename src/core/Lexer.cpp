@@ -54,4 +54,30 @@ LexState lex_state(Language language, const LexState &in, std::string_view line)
     lex_language(language, cursor, in);
     return cursor.state();
 }
+
+bool has_lexer(Language language) noexcept
+{
+    switch (language)
+    {
+    case Language::c:
+    case Language::cpp:
+        return true;
+    case Language::plain:
+    case Language::markdown:
+    case Language::html:
+    case Language::python:
+    case Language::json:
+    case Language::javascript:
+    case Language::typescript:
+    case Language::yaml:
+    case Language::toml:
+    case Language::xml:
+    case Language::css:
+    case Language::powershell:
+    case Language::shell:
+    case Language::cmake:
+        return false;
+    }
+    std::unreachable();
+}
 } // namespace nenenib::core

@@ -18,4 +18,8 @@ namespace nenenib::core
 // 前を遡って状態を求める道（段 2）が使う。lex_line(language, in, line).out と常に等しい。
 [[nodiscard]] LexState lex_state(Language language, const LexState &in,
                                  std::string_view line) noexcept;
+
+// 字句器を持つ言語か（段 2・ADR 0156 の決定 14）。持たない言語の frame は lex_line も lex_state も
+// 呼ばず、色の区間の状態の cache にも触れない。
+[[nodiscard]] bool has_lexer(Language language) noexcept;
 } // namespace nenenib::core

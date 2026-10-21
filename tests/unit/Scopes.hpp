@@ -79,6 +79,9 @@ void verify_guide_scope();
 // LexerTests.cpp（#815・段 2 の ADR 0156 の決定 1〜6・lex_line）
 void verify_lexer_scope();
 
+// SyntaxTests.cpp（#816・ADR 0156 の決定 7〜10・14・見えている行の色の区間）
+void verify_syntax_scope();
+
 // MarkdownTests.cpp（ADR 0151 の決定 5〜8・parse_markdown）
 void verify_markdown_scope();
 

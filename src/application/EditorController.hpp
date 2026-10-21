@@ -38,11 +38,13 @@
 #include "OffsetRange.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
+#include "PaneSide.hpp"
 #include "PaneSource.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "Session.hpp"
 #include "SplitState.hpp"
+#include "SyntaxStateCache.hpp"
 #include "TextBuffer.hpp"
 #include "TextCaret.hpp"
 #include "TextEncoding.hpp"
@@ -474,8 +476,11 @@ class EditorController final
     pattern_of(const std::optional<SearchPattern> &pattern);
     [[nodiscard]] LineView line_view(const PaneSource &source, LineView view,
                                      const core::OffsetRange &range, core::Offset caret) const;
+    // 枠の見えている行。字句器を持つ言語なら色の区間も付け、cache をその枠の覚えで置き換え、
+    // 字句器へ通した行の数を lexed に足す（ADR 0156 の決定 8・9）。tab はその枠の文書の退避番号。
     [[nodiscard]] std::expected<std::vector<LineView>, TextLayoutFailure>
-    visible_lines(const PaneSource &source) const;
+    visible_lines(const PaneSource &source, AutosaveId tab, std::optional<SyntaxStateCache> &cache,
+                  std::size_t &lexed) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
     screen_rows_of(const LineView &shown) const;
     // 格子の見えている画面行（ADR 0140 の決定 5）を frame の grid と grid_scanned に書く。
@@ -486,12 +491,17 @@ class EditorController final
                                                                      std::size_t &scanned,
                                                                      std::size_t &searched) const;
     // もう 1 つの枠の表示値を frame に載せる（ADR 0148 の決定 8）。
-    void add_other_pane(EditorFrame &result, const core::VimPattern *pattern) const;
+    void add_other_pane(EditorFrame &result, const core::VimPattern *pattern);
     // add_other_pane が std::visit で選ぶ 1 対（ADR 0155 の決定 11）。
-    void add_other_view(EditorFrame &result, const core::VimPattern *pattern,
-                        const PaneView &view) const;
+    void add_other_view(EditorFrame &result, const core::VimPattern *pattern, const PaneView &view);
     void add_other_view(EditorFrame &result, const core::VimPattern *pattern,
                         const PreviewView &view) const;
+    void finish_frame(EditorFrame &result, const PaneSource &source, bool gridded,
+                      std::size_t lexed);
+    // 枠の側の構文の覚え（ADR 0156 の決定 9）。操作中の枠ともう 1 つの枠は別の覚えを持つ。
+    [[nodiscard]] std::optional<SyntaxStateCache> &syntax_cache(core::PaneSide side) noexcept;
+    // 操作中でない側の覚え。
+    [[nodiscard]] std::optional<SyntaxStateCache> &passive_syntax_cache() noexcept;
     // 1 行の塗る範囲。検索の当たりは見えている画面行の本文の範囲 visible に、
     // 一致の長さの上限ぶんの余裕を前後に足した窓だけを読んで照合する（#556）。
     // 今の当たりはキャレット（incsearch の入力中は preview の当たり）を含む当たり。
@@ -566,5 +576,9 @@ class EditorController final
     bool autosave_notified_ = false;
     // 起動の問いの間だけ持つ残骸の列（決定 6）。autosave_remnants() が置き、答えの意図が空にする。
     std::vector<AutosaveRemnant> autosave_remnants_;
+    // 枠の側ごとの構文の状態の覚え（ADR 0156 の決定 9・first と second の 2 つ）。frame だけが
+    // 読み書きする。
+    std::optional<SyntaxStateCache> first_syntax_;
+    std::optional<SyntaxStateCache> second_syntax_;
 };
 } // namespace nenenib::application

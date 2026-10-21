@@ -51,6 +51,14 @@ when --bench names it, is never compared with the reference and is never adopted
                             trial waits for the window thread to go quiet after the chord and
                             again after the preview's tick before the warmup
 
+One more optional bench records the C++ colouring (#816, ADR 0156 decision 15) the same way: it
+runs only when --bench names it and is never compared with the reference or adopted into it:
+
+  key-to-frame-single-cpp   the key-to-frame-single-long-line trial over single-cpp-1000.cpp,
+                            1000 C++ lines of 100-120 code points that rotate five shapes (comment,
+                            type, function, string, number, operators; checked by SHA-256), so
+                            every frame lexes its visible lines and the 200 lines above them
+
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
 split-pane-key-100-{same,other}-{vertical,horizontal} (P, two panes made with Ctrl+backslash or
@@ -175,6 +183,18 @@ PREVIEW_MARKS = ("# ", "", "- ")
 PREVIEW_REPEATS = 86
 PREVIEW_LINES = 1000
 PREVIEW_SHA256 = "5878ba0b9dff061ce45b27cc92d8775277cc2fde4316cf981b11668232bbf3cf"
+# 構文の色分けの 1 打鍵の文書（#816）。long_line_document と同じく決定的に作り、SHA-256 で守る。
+# 5 つの C++ らしい行（コメント・型・関数・文字列・数字・演算子）を番号つきで回す。1 行は 100〜120
+# code points・CRLF・1000 行・BOM なし。拡張子が .cpp なので文書の言語は cpp（ADR 0154）。
+CPP_TEMPLATES = (
+    r"    constexpr std::size_t limit_{n} = 0x{h}U; // 構文の色分けのベンチの行で、定数の初期化と日本語の注記を同じ一行に並べて字句器の費用を測る。",
+    r"    [[nodiscard]] bool inside_{n}(const Point &point, unsigned count) noexcept {{ return count > 0; }}",
+    r'    const char *name_{n} = "nib sample {n} with an \"escaped\" quote, a tab \t and a new line \n";',
+    r"    /* ブロック {n} */ if (point.x < 0 || point.y >= limit_{n}) {{ return false; }} // 範囲の外は偽を返し、内は次の行へ進む",
+    r"    for (int index = 0; index < {d}; ++index /* 回数 */) {{ total_{n} += static_cast<double>(index) * 1.5e-3; }}",
+)
+CPP_LINES = 1000
+CPP_SHA256 = "4e8e2597f1f9c351ac4ace227fe3fb346ba1f6bd1c4b8d072a057c258032367d"
 # プレビューの解析は worker が裏で行い、ui の tick が結果を引く（ADR 0155）。鍵の後に窓のスレッドが
 # 静かになってからさらにこれだけ待ち、もう一度静かになるのを待つ。
 PREVIEW_TICK_SECONDS = 0.5
@@ -206,7 +226,9 @@ SPLIT_BENCHES = (SPLIT_SINGLE_BENCH, *SPLIT_PANE_BENCHES)
 GIANT_BENCHES = (GIANT_OPEN_BENCH, GIANT_SINGLE_BENCH)
 # プレビューを開いた 1 打鍵（#818）。--bench で名指ししたときだけ測り、基準値に載せない。
 PREVIEW_BENCH = "key-to-frame-single-preview-open"
-OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH)
+# C++ の文書の 1 打鍵（#816・ADR 0156 の決定 15）。--bench で名指ししたときだけ測り、基準値に載せない。
+CPP_BENCH = "key-to-frame-single-cpp"
+OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH)
 PACED_KEYS = 100
 PACED_CHARACTER = "a"
 PACED_BUDGET_MS = 16.7
@@ -383,6 +405,23 @@ def preview_document(folder: Path) -> Path:
     if digest != PREVIEW_SHA256:
         raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {PREVIEW_SHA256};"
                          f" {PREVIEW_BENCH} is not measured")
+    return path
+
+
+def cpp_document(folder: Path) -> Path:
+    """#816's 1000-line C++ document byte for byte; any other digest stops before a trial."""
+    path = folder / "single-cpp-1000.cpp"
+    if path.is_file() and file_sha256(path) == CPP_SHA256:
+        return path
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        for index in range(CPP_LINES):
+            template = CPP_TEMPLATES[index % len(CPP_TEMPLATES)]
+            line = template.format(n=f"{index:06d}", h=f"{index:05X}", d=index % 97 + 3)
+            handle.write(f"{line}\r\n")
+    digest = file_sha256(path)
+    if digest != CPP_SHA256:
+        raise SystemExit(f"Speed: {path} has SHA-256 {digest}, not {CPP_SHA256};"
+                         f" {CPP_BENCH} is not measured")
     return path
 
 
@@ -629,7 +668,7 @@ def bench_palette(executable: Path, environment: dict, folder: Path,
 
 
 def bench_long_line(executable: Path, environment: dict, folder: Path,
-                    document: Path) -> tuple[dict, dict]:
+                    document: Path, name: str = LONG_LINE_BENCH) -> tuple[dict, dict]:
     """key-to-frame-single over the long Japanese document: the same trial, another document.
 
     keys_trial posts the same warmup, single keystroke and 200 keystrokes as key-to-frame-single;
@@ -643,10 +682,19 @@ def bench_long_line(executable: Path, environment: dict, folder: Path,
         except TrialNotObserved as unobserved:
             print(f"Speed: {unobserved}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
             continue
-        return {LONG_LINE_BENCH: single}, {}
+        return {name: single}, {}
     print(f"Speed: no trial was observed in {BURST_ATTEMPTS} attempts;"
-          f" this trial of {LONG_LINE_BENCH} is missing")
-    return {LONG_LINE_BENCH: None}, {}
+          f" this trial of {name} is missing")
+    return {name: None}, {}
+
+
+def bench_cpp(executable: Path, environment: dict, folder: Path,
+              document: Path) -> tuple[dict, dict]:
+    """key-to-frame-single over the C++ document: the same trial as the long line, another document.
+
+    Every frame lexes the visible lines (ADR 0156), so the single keystroke carries the colouring.
+    """
+    return bench_long_line(executable, environment, folder, document, CPP_BENCH)
 
 
 api(kernel, "GetThreadTimes", w.BOOL, w.HANDLE, c.POINTER(c.c_ulonglong),
@@ -1283,7 +1331,8 @@ def judged_samples(measured: dict) -> int | None:
 
 def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
                 document: Path | None, palette: Path | None, long_line: Path | None = None,
-                giant: Path | None = None, grid: bool = True, preview: Path | None = None):
+                giant: Path | None = None, grid: bool = True, preview: Path | None = None,
+                cpp: Path | None = None):
     """Only the required stimulus groups; a shared trial keeps its original stimulus (#272)."""
     if any(name in names for name in ("startup-first-frame", "startup-window-shown")):
         yield bench_startup(executable, environment, folder)
@@ -1303,6 +1352,8 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_giant_single(executable, environment, folder, giant, grid)
     if PREVIEW_BENCH in names:
         yield bench_preview_single(executable, environment, folder, preview)
+    if CPP_BENCH in names:
+        yield bench_cpp(executable, environment, folder, cpp)
 
 
 def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool = True) -> dict:
@@ -1318,6 +1369,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     # 1 行 16 MiB の文書も SHA-256 が違えば測らない（ADR 0138 決定 1）。
     giant = giant_line_document(folder) if any(name in names for name in GIANT_BENCHES) else None
     preview = preview_document(folder) if PREVIEW_BENCH in names else None
+    cpp = cpp_document(folder) if CPP_BENCH in names else None
     samples: dict = {name: [] for name in names}
     # 刺激が届かなかった試行は値にせず数える（Issue #30）。中央値は残った試行から出す。
     missing: dict = {name: 0 for name in names}
@@ -1328,7 +1380,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     waits: list = []
     for _ in range(repetitions):
         for values, parts in run_benches(executable, environment, folder, names, document, palette,
-                                         long_line, giant, grid, preview):
+                                         long_line, giant, grid, preview, cpp):
             for name, value in values.items():
                 if name not in samples:
                     continue
@@ -1358,6 +1410,9 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     elif preview is not None:
         record["document"] = {"path": preview.name, "bytes": preview.stat().st_size,
                               "lines": PREVIEW_LINES, "sha256": PREVIEW_SHA256}
+    elif cpp is not None:
+        record["document"] = {"path": cpp.name, "bytes": cpp.stat().st_size,
+                              "lines": CPP_LINES, "sha256": CPP_SHA256}
     return record
 
 
@@ -1583,6 +1638,8 @@ def main() -> int:
         parser.error("the split benches are recorded with --record and judged with --split-verdict")
     if arguments.bench == PREVIEW_BENCH and (arguments.adopt or arguments.check or arguments.values):
         parser.error(f"{PREVIEW_BENCH} is recorded with --record only; it has no reference (#818)")
+    if arguments.bench == CPP_BENCH and (arguments.adopt or arguments.check or arguments.values):
+        parser.error(f"{CPP_BENCH} is recorded with --record only; it has no reference (#816)")
     if not (arguments.record or arguments.adopt or arguments.check):
         parser.error("one of --record, --adopt or --check is required")
     if arguments.check:

@@ -1,7 +1,9 @@
 #pragma once
+#include "BodyColors.hpp"
 #include "BodyGlyphRun.hpp"
 #include "BodyTextLayout.hpp"
 #include "BodyTextLayouts.hpp"
+#include "GlyphPieces.hpp"
 #include "LayoutRect.hpp"
 #include "RenderFailure.hpp"
 #include "ReplacedTint.hpp"
@@ -80,6 +82,37 @@ template <typename Target, typename Layouts = BodyTextLayouts> class BodyTextPai
         {
             target_.PopAxisAlignedClip();
         }
+    }
+    // 構文の色つきの本文（ADR 0156 の決定 11・12）。区間の切り抜きは draw_body_text の既定と同じく
+    // 行の領域（D2D1_DRAW_TEXT_OPTIONS_CLIP）。保持した字形がある行は run を区間の境で切って部分
+    // run ごとに色を置いて描き、区間の外は colors.plain。保持できない行は plain で layout を 1
+    // 回描き、区間ごとに HitTestTextRange の矩形で 切り抜いて layout を描き直す（tint_runs
+    // と同じ道・遅いが正しい）。paint(D2D1_COLOR_F) は 呼び手の brush の色を置き換える（brush
+    // を作らない）。描いた後の brush の色は決めない。
+    template <typename Paint>
+    void draw_colored_body_text(IDWriteTextLayout *text, const core::LayoutRect &area,
+                                const BodyColors &colors, Paint &&paint)
+    {
+        const auto *entry = glyph_entry(text, area);
+        if (entry == nullptr || !entry->glyphs_ready)
+        {
+            paint(colors.plain);
+            draw_body_text(text, area, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            for (const auto &span : colors.runs)
+            {
+                paint(span.color);
+                tint_runs(text, area, span.range);
+            }
+            return;
+        }
+        const auto origin =
+            D2D1::Point2F(static_cast<float>(area.left), static_cast<float>(area.top));
+        target_.PushAxisAlignedClip(to_clip(area), D2D1_ANTIALIAS_MODE_ALIASED);
+        for (const auto &stored : entry->glyphs)
+        {
+            draw_pieces(stored, origin, glyph_pieces(stored, colors.runs, colors.plain), paint);
+        }
+        target_.PopAxisAlignedClip();
     }
     // 折り返し・双方向の全矩形。固定数の上限で選択やIMEの下線を切らない。
     [[nodiscard]] std::vector<DWRITE_HIT_TEST_METRICS>
@@ -170,6 +203,19 @@ template <typename Target, typename Layouts = BodyTextLayouts> class BodyTextPai
             return {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max()};
         }
         return {from, to};
+    }
+    // 1 つの run の部分窓を色ごとに描く。部分の原点は run の原点から前の送りを積んだ値。
+    template <typename Paint>
+    void draw_pieces(const BodyGlyphRun &stored, D2D1_POINT_2F origin,
+                     std::span<const GlyphPiece> pieces, Paint &paint)
+    {
+        for (const auto &piece : pieces)
+        {
+            paint(piece.color);
+            const DWRITE_GLYPH_RUN run = drawn_glyphs(stored, piece.first, piece.last);
+            target_.DrawGlyphRun(drawn_origin(stored, origin, piece.first), &run, brush_,
+                                 stored.measuring);
+        }
     }
     void draw_glyph_runs(std::span<const BodyGlyphRun> runs, D2D1_POINT_2F origin)
     {

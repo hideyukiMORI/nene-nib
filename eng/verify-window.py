@@ -2766,6 +2766,66 @@ def verify_preview(executable: Path, environment: dict, scheme: str, output: Pat
     return record
 
 
+SYNTAX_INK_PIXELS = 12
+SYNTAX_WINDOW_DIPS = (960, 860)
+
+
+def syntax_inks(pixels: bytes, width: int, body: dict, rows: int) -> list:
+    """The exact colours that fill at least SYNTAX_INK_PIXELS pixels of the body text, apart from
+    each row's ground. Glyph stems are drawn in the pure ink, so one colour per syntax role shows."""
+    counts: dict = {}
+    for index in range(rows):
+        top = body["firstRowTop"] + body["lineHeight"] * index
+        ground = row_ground(pixels, width, body, index)
+        for y in range(top, top + body["lineHeight"]):
+            for x in range(body["contentLeft"], width - 4):
+                value = tuple(pixel(pixels, width, x, y))
+                if list(value) != ground:
+                    counts[value] = counts.get(value, 0) + 1
+    return sorted(([list(colour), count] for colour, count in counts.items()
+                   if count >= SYNTAX_INK_PIXELS), key=lambda item: -item[1])
+
+
+def verify_syntax(executable: Path, environment: dict, scheme: str, frames: Path | None) -> dict:
+    """Issue #816: tests/syntax/sample.cpp drawn in the C++ colours of the scheme (ADR 0156).
+
+    The scheme is chosen with Ctrl+P and :colorscheme, so it takes the foreground once."""
+    root = Path(__file__).resolve().parents[1]
+    opened = root / "tests/syntax/sample.cpp"
+    process, window, _ = start(executable, environment, [str(opened)])
+    try:
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        try:
+            preview_scheme(window, scheme)
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the colours stay in the unit tests"}
+        dpi = user.GetDpiForWindow(window)
+        # 見本の 30 行が入る大きさにする（posted ではない SetWindowPos・前面は取らない）。
+        assert user.SetWindowPos(window, None, 0, 0, to_pixels(SYNTAX_WINDOW_DIPS[0], dpi),
+                                 to_pixels(SYNTAX_WINDOW_DIPS[1], dpi), SWP_NOMOVE_NOZORDER)
+        time.sleep(TAB_SETTLE_SECONDS)
+        client = rectangle(window, user.GetClientRect)
+        width, height = client[2] - client[0], client[3] - client[1]
+        pixels = capture(window, width, height)
+        snapshot(frames, window, f"syntax-{scheme}")
+        body = body_points(width, height, dpi)
+        rows = min(body["visibleLines"], 30)
+        inks = syntax_inks(pixels, width, body, rows)
+        record = {"driven": True, "dpi": dpi, "scheme": scheme, "rows": rows,
+                  "inkColours": len(inks), "inks": inks[:12]}
+        # 本文の色（text）と、コメント・キーワード・型・文字列・数字の少なくとも 4 色が字の芯に出る。
+        assert len(inks) >= 5, f"the C++ sample shows too few ink colours {inks[:12]}"
+        close(window)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -2788,7 +2848,10 @@ def main() -> None:
     parser.add_argument("--preview", action="store_true",
                         help="run the Markdown preview section alone (Issue #801); it sends real keys")
     parser.add_argument("--scheme", choices=["dark", "light", "grid"], default="dark",
-                        help="with --preview: the colour scheme, or the grid document")
+                        help="with --preview: the colour scheme, or the grid document; "
+                             "with --syntax: dark or light")
+    parser.add_argument("--syntax", action="store_true",
+                        help="run the C++ colouring section alone (Issue #816); it sends real keys")
     parser.add_argument("--restore", action="store_true",
                         help="run the restore section alone (Issue #253); posted messages only")
     parser.add_argument("--grid", action="store_true",
@@ -2830,6 +2893,12 @@ def main() -> None:
                               or arguments.giant_text or arguments.autosave
                               or arguments.keys is not None or arguments.open is not None):
         parser.error("--palette runs alone")
+    if arguments.syntax and (arguments.tabs or arguments.split or arguments.preview
+                             or arguments.restore or arguments.grid or arguments.giant_text
+                             or arguments.autosave or arguments.palette
+                             or arguments.keys is not None or arguments.open is not None
+                             or arguments.scheme == "grid"):
+        parser.error("--syntax runs alone with --scheme dark or light")
     frames = arguments.capture.resolve() if arguments.capture is not None else None
     if frames is not None:
         frames.mkdir(parents=True, exist_ok=True)
@@ -2860,6 +2929,14 @@ def main() -> None:
     if arguments.preview:
         try:
             record = verify_preview(executable, environment, arguments.scheme, output, frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.syntax:
+        try:
+            record = verify_syntax(executable, environment, arguments.scheme, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

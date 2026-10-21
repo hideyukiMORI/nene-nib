@@ -180,6 +180,10 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
+    // 本文の字（ADR 0156 の決定 11）。色の区間が無ければ text の色で 1 回、あれば区間ごとの
+    // 構文の色（core::syntax_color）と区間の外の text の色で描く。brush は 1 本のまま色を替える。
+    void draw_line_text(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                        const core::LayoutRect &area, const application::LineView &line);
     // 縦棒の矩形（area の中の UTF-16 の position・幅は caret_width_）。位置を引けなければ値なし。
     [[nodiscard]] std::optional<core::LayoutRect> bar_of(IDWriteTextLayout *text,
                                                          const core::LayoutRect &area,
