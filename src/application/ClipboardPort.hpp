@@ -3,6 +3,7 @@
 #include "ClipboardFailure.hpp"
 
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -22,5 +23,8 @@ class ClipboardPort
 
     [[nodiscard]] virtual std::expected<void, ClipboardFailure> write(std::string_view utf8) = 0;
     [[nodiscard]] virtual std::expected<std::string, ClipboardFailure> read() = 0;
+    // HTML（CF_HTML）の fragment だけを UTF-8 で返す。HTML が無ければ値なし（ADR 0157 の決定 4）。
+    // 呼ぶのは貼り付けの道だけ（決定 9）。
+    [[nodiscard]] virtual std::expected<std::optional<std::string>, ClipboardFailure> html() = 0;
 };
 } // namespace nenenib::application

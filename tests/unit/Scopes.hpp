@@ -82,6 +82,12 @@ void verify_lexer_scope();
 // MarkdownTests.cpp（ADR 0151 の決定 5〜8・parse_markdown）
 void verify_markdown_scope();
 
+// HtmlToMarkdownTests.cpp（ADR 0157 の決定 5〜7・markdown_from_html）
+void verify_html_markdown_scope();
+
+// RichPasteTests.cpp（ADR 0157・貼り方は文書の言語とクリップボードの HTML で決まる）
+void verify_rich_paste_contracts();
+
 // LanguageTests.cpp（ADR 0154・文書の言語）
 void verify_language_scope();
 

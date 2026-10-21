@@ -2068,7 +2068,7 @@ void EditorWindow::press_key(WPARAM word)
     const auto chord = held_chord(word);
     const auto operation =
         chord.has_value() ? core::operation_for(chord.value(), mode_) : std::nullopt;
-    if (operation.has_value())
+    if (operation.has_value() && !keeps_block_key(operation.value()))
     {
         run_operation(operation.value());
         return;
@@ -2087,6 +2087,14 @@ void EditorWindow::press_key(WPARAM word)
         break;
     }
     press_plain_key(word);
+}
+
+// Vim の NORMAL / VISUAL の Ctrl+Shift+V は今までどおり矩形の入口（ADR 0035 の決定 9）。表の
+// paste_plain（ADR 0157 の決定 2）より先に、Vim の Ctrl の表へ流す。
+bool EditorWindow::keeps_block_key(core::EditorOperation operation) const noexcept
+{
+    return operation == core::EditorOperation::paste_plain && mode_ == core::EditMode::vim &&
+           vim_block_key(vim_mode_);
 }
 
 // タブの鍵は Vim の Ctrl の表より先に引く。扱ったら true。値なしの鍵（Vim の Ctrl+W）は false で
@@ -2391,10 +2399,10 @@ void EditorWindow::run_operation(core::EditorOperation operation)
         send(application::ToggleBookmark{});
         return;
     case core::EditorOperation::undo:
-        send_history(core::HistoryDirection::undo);
-        return;
     case core::EditorOperation::redo:
-        send_history(core::HistoryDirection::redo);
+    case core::EditorOperation::paste_plain:
+    case core::EditorOperation::paste_html:
+        run_edit_operation(operation);
         return;
     case core::EditorOperation::font_larger:
         adjust_font(core::FontSizeAdjustment::increase);
@@ -2463,6 +2471,51 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
     case core::EditorOperation::font_smaller:
     case core::EditorOperation::font_reset:
     case core::EditorOperation::toggle_mode:
+    case core::EditorOperation::paste_plain:
+    case core::EditorOperation::paste_html:
+        return;
+    }
+    std::unreachable();
+}
+
+// 元に戻す・やり直すと貼り付けの 2 つ（ADR 0157 の決定 2・3）。貼り付けは Ctrl+V と同じ意図
+// ClipboardAction の値を変えるだけで、Vim の NORMAL / VISUAL で何もしないのは controller が決める。
+// 編集の操作でない値は run_operation が先に扱うので、ここへは来ない。
+void EditorWindow::run_edit_operation(core::EditorOperation operation)
+{
+    switch (operation)
+    {
+    case core::EditorOperation::undo:
+        send_history(core::HistoryDirection::undo);
+        return;
+    case core::EditorOperation::redo:
+        send_history(core::HistoryDirection::redo);
+        return;
+    case core::EditorOperation::paste_plain:
+        send(application::ClipboardAction{application::ClipboardOperation::paste_plain});
+        return;
+    case core::EditorOperation::paste_html:
+        send(application::ClipboardAction{application::ClipboardOperation::paste_html});
+        return;
+    case core::EditorOperation::open_file:
+    case core::EditorOperation::save:
+    case core::EditorOperation::save_as:
+    case core::EditorOperation::new_tab:
+    case core::EditorOperation::close_tab:
+    case core::EditorOperation::recent_tab:
+    case core::EditorOperation::recent_tab_back:
+    case core::EditorOperation::list_files:
+    case core::EditorOperation::list_operations:
+    case core::EditorOperation::toggle_bookmark:
+    case core::EditorOperation::font_larger:
+    case core::EditorOperation::font_smaller:
+    case core::EditorOperation::font_reset:
+    case core::EditorOperation::toggle_mode:
+    case core::EditorOperation::split_vertical:
+    case core::EditorOperation::split_horizontal:
+    case core::EditorOperation::next_pane:
+    case core::EditorOperation::close_pane:
+    case core::EditorOperation::toggle_preview:
         return;
     }
     std::unreachable();

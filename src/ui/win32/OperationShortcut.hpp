@@ -16,6 +16,7 @@ namespace nenenib::ui::win32
 // Shift つきの行がある）。Alt のときは呼ばない。T W D Tab と Shift なしの F4 は写さない（タブと
 // ブックマークの鍵は TabShortcut と BookmarkKey の経路のまま）。
 // F1 は修飾なしだけ、F6 は Ctrl なし（Shift はそのまま入れる）。
+// Ctrl つきの M（プレビュー・ADR 0155）と V（文字だけの貼り付け・ADR 0157）も写す。
 [[nodiscard]] inline std::optional<core::KeyChord> function_chord(WPARAM key, bool control,
                                                                   bool shift)
 {
@@ -62,6 +63,8 @@ namespace nenenib::ui::win32
         return chord(core::OperationKey::y);
     case 'M':
         return chord(core::OperationKey::m);
+    case 'V':
+        return chord(core::OperationKey::v);
     case VK_OEM_PLUS:
     case VK_ADD:
         return chord(core::OperationKey::plus);

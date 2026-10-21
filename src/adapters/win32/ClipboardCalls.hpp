@@ -16,6 +16,8 @@ struct ClipboardCalls
     decltype(&GetClipboardData) get;
     decltype(&IsClipboardFormatAvailable) available;
     decltype(&Sleep) wait;
+    // "HTML Format"（CF_HTML）の番号を引く（ADR 0157 の決定 4）。
+    decltype(&RegisterClipboardFormatW) register_format;
 };
 
 [[nodiscard]] ClipboardCalls system_clipboard_calls() noexcept;

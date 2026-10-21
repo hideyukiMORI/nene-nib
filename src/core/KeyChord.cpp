@@ -47,6 +47,8 @@ namespace
         return "\\";
     case OperationKey::m:
         return "M";
+    case OperationKey::v:
+        return "V";
     }
     std::unreachable();
 }

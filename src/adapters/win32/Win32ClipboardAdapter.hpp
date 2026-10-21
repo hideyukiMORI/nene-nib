@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -25,6 +26,9 @@ class Win32ClipboardAdapter final : public application::ClipboardPort
     [[nodiscard]] std::expected<void, application::ClipboardFailure>
     write(std::string_view utf8) override;
     [[nodiscard]] std::expected<std::string, application::ClipboardFailure> read() override;
+    // "HTML Format" の fragment（ADR 0157 の決定 4）。見出しの解釈は html_fragment_of の 1 本。
+    [[nodiscard]] std::expected<std::optional<std::string>, application::ClipboardFailure>
+    html() override;
 
   private:
     [[nodiscard]] std::expected<void, application::ClipboardFailure> opened_clipboard();

@@ -423,9 +423,10 @@ void verify_quiet_paths()
                editing.folders().requests().empty() && editing.folders().collects() == 0 &&
                editing.autosave().touches() == 1 && editing.autosave().collects() == 0 &&
                editing.fonts().lists() == 0 && editing.bell().rings() == 0 &&
-               editing.markdown().requests().empty() && editing.markdown().collects() == 0,
+               editing.markdown().requests().empty() && editing.markdown().collects() == 0 &&
+               editing.clipboard().html_reads() == 0 && editing.clipboard().reads() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
-           "autosave nor the bell");
+           "autosave, the bell nor the clipboard");
 }
 } // namespace
 
