@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <expected>
 #include <limits>
+#include <new>
 #include <optional>
 #include <string_view>
 #include <type_traits>
@@ -174,61 +175,58 @@ void received_text(MarkdownBuilder &builder, MD_TEXTTYPE type, std::string_view 
     }
 }
 
+// 述語に問い、続けるなら step を行う。コールバックか述語が投げた bad_alloc はここで受けて印を立て、
+// 打ち切りの値を返す。例外は md4c の C のフレームを通らず、md4c は自分の確保を解放して戻る（#817・
+// ARC-010）。/EHsc は extern "C" の md_parse を投げないものとして扱うので、
+// md_parse の外では受けない。
+template <class Step> [[nodiscard]] int guarded(MarkdownBuilder &builder, const Step &step) noexcept
+{
+    try
+    {
+        if (builder.should_stop())
+        {
+            return stop_code;
+        }
+        step();
+        return 0;
+    }
+    catch (const std::bad_alloc &)
+    {
+        builder.exhaust();
+        return stop_code;
+    }
+}
+
 // md4c は C の呼び出し規約で関数ポインタを呼ぶ。clang-cl の既定と一致するので
 // extern "C" は要らない。打ち切りの述語はコールバックのたびに問う（決定 6）。
 int on_enter_block(MD_BLOCKTYPE type, void *detail, void *userdata)
 {
     auto &builder = builder_of(userdata);
-    if (builder.should_stop())
-    {
-        return stop_code;
-    }
-    entered_block(builder, type, detail);
-    return 0;
+    return guarded(builder, [&] { entered_block(builder, type, detail); });
 }
 
 int on_leave_block(MD_BLOCKTYPE type, void * /*detail*/, void *userdata)
 {
     auto &builder = builder_of(userdata);
-    if (builder.should_stop())
-    {
-        return stop_code;
-    }
-    left_block(builder, type);
-    return 0;
+    return guarded(builder, [&] { left_block(builder, type); });
 }
 
 int on_enter_span(MD_SPANTYPE type, void * /*detail*/, void *userdata)
 {
     auto &builder = builder_of(userdata);
-    if (builder.should_stop())
-    {
-        return stop_code;
-    }
-    builder.enter_span(span_style(type));
-    return 0;
+    return guarded(builder, [&] { builder.enter_span(span_style(type)); });
 }
 
 int on_leave_span(MD_SPANTYPE /*type*/, void * /*detail*/, void *userdata)
 {
     auto &builder = builder_of(userdata);
-    if (builder.should_stop())
-    {
-        return stop_code;
-    }
-    builder.leave_span();
-    return 0;
+    return guarded(builder, [&] { builder.leave_span(); });
 }
 
 int on_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
 {
     auto &builder = builder_of(userdata);
-    if (builder.should_stop())
-    {
-        return stop_code;
-    }
-    received_text(builder, type, std::string_view(text, size));
-    return 0;
+    return guarded(builder, [&] { received_text(builder, type, std::string_view(text, size)); });
 }
 } // namespace
 
@@ -260,15 +258,18 @@ std::expected<MarkdownDocument, MarkdownFailure> parse_markdown(std::string_view
         .debug_log = nullptr,
         .syntax = nullptr,
     };
-    const int result = md_parse(text.data(), static_cast<MD_SIZE>(text.size()), &parser, &builder);
+    if (md_parse(text.data(), static_cast<MD_SIZE>(text.size()), &parser, &builder) == 0)
+    {
+        return std::move(builder).finished();
+    }
+    if (builder.exhausted())
+    {
+        return std::unexpected(MarkdownFailure::insufficient_memory);
+    }
     if (builder.stopped())
     {
         return std::unexpected(MarkdownFailure::stopped);
     }
-    if (result != 0)
-    {
-        return std::unexpected(MarkdownFailure::parser_rejected);
-    }
-    return std::move(builder).finished();
+    return std::unexpected(MarkdownFailure::parser_rejected);
 }
 } // namespace nenenib::core

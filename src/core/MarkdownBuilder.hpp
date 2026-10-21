@@ -30,6 +30,9 @@ class MarkdownBuilder final
     // 述語に問う。一度 true を聞いたら以後は問わずに true を返し続ける（打ち切りを取り消さない）。
     [[nodiscard]] bool should_stop();
     [[nodiscard]] bool stopped() const noexcept;
+    // コールバックか述語が std::bad_alloc を投げたことを覚える（#817）。
+    void exhaust() noexcept;
+    [[nodiscard]] bool exhausted() const noexcept;
 
     void enter_quote();
     void leave_quote();
@@ -70,5 +73,6 @@ class MarkdownBuilder final
     std::vector<std::optional<std::size_t>> spans_;
     std::optional<std::size_t> last_end_;
     bool stopped_ = false;
+    bool exhausted_ = false;
 };
 } // namespace nenenib::core

@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <new>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -434,6 +435,23 @@ void verify_stop_and_size()
            "the size limit is the md4c size type");
     expect(core::markdown_size_fits(std::size_t{16U} << 20U), "16 MiB fits the md4c size type");
 }
+
+// 述語やコールバックが投げた bad_alloc は insufficient_memory で、stopped とは別（#817）。
+void verify_insufficient_memory()
+{
+    const auto exhausted = []() -> bool { throw std::bad_alloc{}; };
+    const auto short_of_memory = core::parse_markdown("# a\n\nb", MarkdownStop::asking(exhausted));
+    expect(!short_of_memory.has_value() &&
+               short_of_memory.error() == MarkdownFailure::insufficient_memory,
+           "a bad_alloc thrown inside the parse is insufficient_memory");
+    const auto after = core::parse_markdown("# a\n\nb", MarkdownStop::never());
+    expect(after.has_value() && after.value().blocks.size() == 2U,
+           "a parse after insufficient_memory parses as usual");
+    const auto at_once = [] { return true; };
+    const auto still_stopped = core::parse_markdown("# a", MarkdownStop::asking(at_once));
+    expect(!still_stopped.has_value() && still_stopped.error() == MarkdownFailure::stopped,
+           "a predicate that answers true is still stopped, not insufficient_memory");
+}
 } // namespace
 
 void verify_markdown_scope()
@@ -451,5 +469,6 @@ void verify_markdown_scope()
     verify_entities();
     verify_html_and_line_endings();
     verify_stop_and_size();
+    verify_insufficient_memory();
 }
 } // namespace nenenib::tests

@@ -31,11 +31,12 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32.lib")
 
 include(eng/targets.cmake)
-# clang-tidy の cl ドライバは compile line の /clang: を落とすので、言語標準は extra-arg で同じ変数から渡す
-# （NeNe Folio ADR 0003 の穴）。tests/build/ToolchainSmoke.cpp は C++23 専用構文だけで書いてあるので、
-# tidy が C++17 で動いたらそこで落ちる。設定が在ることではなく、落ちることが検査である。
+# clang-tidy の cl ドライバは compile line の /clang: と /EHsc を落とすので、言語標準と例外の設定は extra-arg で
+# 製品と同じものを渡す（NeNe Folio ADR 0003 の穴・/EHsc は #817）。tests/build/ToolchainSmoke.cpp は
+# C++23 専用構文だけで書いてあるので、tidy が C++17 で動いたらそこで落ちる。設定が在ることではなく、
+# 落ちることが検査である。
 find_program(NENETIDY clang-tidy REQUIRED)
-set(CMAKE_CXX_CLANG_TIDY "${NENETIDY};--config-file=${CMAKE_SOURCE_DIR}/.clang-tidy;--extra-arg=/clang:-std=c++${CMAKE_CXX_STANDARD}")
+set(CMAKE_CXX_CLANG_TIDY "${NENETIDY};--config-file=${CMAKE_SOURCE_DIR}/.clang-tidy;--extra-arg=/clang:-std=c++${CMAKE_CXX_STANDARD};--extra-arg=/EHsc")
 
 enable_testing()
 nenenib_target(toolchain_smoke verification EXECUTABLE tests/build/ToolchainSmoke.cpp)

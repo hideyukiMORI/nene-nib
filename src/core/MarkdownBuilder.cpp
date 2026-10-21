@@ -87,6 +87,16 @@ bool MarkdownBuilder::stopped() const noexcept
     return stopped_;
 }
 
+void MarkdownBuilder::exhaust() noexcept
+{
+    exhausted_ = true;
+}
+
+bool MarkdownBuilder::exhausted() const noexcept
+{
+    return exhausted_;
+}
+
 void MarkdownBuilder::enter_quote()
 {
     close_implicit();
