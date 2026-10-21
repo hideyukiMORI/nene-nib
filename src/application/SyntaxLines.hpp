@@ -15,16 +15,14 @@ namespace nenenib::application
 // 見えている行の色の区間を、見えている最初の行の手前から字句器を走らせて作る。 frame が枠ごとに 1
 // 回だけ呼ぶ。字句器を持たない言語（core::has_lexer）では呼ばない（決定 14）。
 
-// 覚えが無いときに遡る行数（Vim の c_minlines の型）。これより前で開いたブロックコメントは
-// 見えている行に届かない（限界）。
-inline constexpr std::size_t syntax_backfill_lines = 200;
 // 覚えから続けてよい距離。これより先へ飛んだら遡りで作り直す。
 inline constexpr std::size_t syntax_cache_reach = 4096;
 
 // 見えている最初の行 key.line の行頭の状態。字句器を持たない言語（core::has_lexer）なら nullopt
-// で、cache にも触れない。cache が key と同じ文書・改訂・言語で、手前の syntax_cache_reach 行
-// 以内にあればそこから、無ければ syntax_backfill_lines 行前の plain から状態だけを進め（区間を
-// 作らない）、cache を (key.line の行頭の状態) で置き換える。lexed に字句器へ通した行の数を足す。
+// で、cache にも触れない。cache が key と同じ文書・言語で、手前の syntax_cache_reach 行以内に
+// あればそこから、無ければ core::syntax_backfill_lines(言語) 行前の plain から状態だけを進め（区間
+// を作らない。これより前で開いたブロックコメントは見えている行に届かない・限界）、cache を
+// (key.line の行頭の状態) で置き換える。lexed に字句器へ通した行の数を足す。
 [[nodiscard]] std::optional<core::LexState> syntax_begin(const core::TextBuffer &text,
                                                          const SyntaxStateCache &key,
                                                          std::optional<SyntaxStateCache> &cache,

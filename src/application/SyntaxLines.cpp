@@ -11,11 +11,12 @@ namespace nenenib::application
 {
 namespace
 {
-// 覚えから続けてよいか（決定 9）。同じ文書の同じ改訂を同じ言語で、見えている行の手前から。
+// 覚えから続けてよいか（決定 9・追補 #827）。同じ文書を同じ言語で、見えている行の手前から。覚えの
+// 行より前の編集は controller が覚えを捨てているので、改訂番号は比べない。
 [[nodiscard]] bool continues(const SyntaxStateCache &key, const SyntaxStateCache &cache) noexcept
 {
-    return cache.tab == key.tab && cache.revision == key.revision &&
-           cache.language == key.language && cache.line.value <= key.line.value &&
+    return cache.tab == key.tab && cache.language == key.language &&
+           cache.line.value <= key.line.value &&
            key.line.value - cache.line.value <= syntax_cache_reach;
 }
 
@@ -43,14 +44,15 @@ std::optional<core::LexState> syntax_begin(const core::TextBuffer &text,
     }
     const bool kept = cache.has_value() && continues(key, cache.value());
     std::size_t line = kept ? cache.value().line.value
-                            : key.line.value - std::min(key.line.value - 1, syntax_backfill_lines);
+                            : key.line.value - std::min(key.line.value - 1,
+                                                        core::syntax_backfill_lines(key.language));
     core::LexState state = kept ? cache.value().state : core::LexState{};
     for (; line < key.line.value; ++line)
     {
         state = passed(text, key.language, state, core::LineNumber{line});
         ++lexed;
     }
-    cache = SyntaxStateCache{key.tab, key.revision, key.language, key.line, state};
+    cache = SyntaxStateCache{key.tab, key.language, key.line, state};
     return state;
 }
 

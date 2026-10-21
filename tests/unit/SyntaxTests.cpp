@@ -16,7 +16,11 @@
 #include "ExResult.hpp"
 #include "FilePath.hpp"
 #include "GiantLine.hpp"
+#include "HistoryAction.hpp"
+#include "HistoryDirection.hpp"
 #include "InsertText.hpp"
+#include "Language.hpp"
+#include "Lexer.hpp"
 #include "LineView.hpp"
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
@@ -30,6 +34,7 @@
 #include "SelectSyntax.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
+#include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
 #include "SyntaxColor.hpp"
 #include "SyntaxLines.hpp"
@@ -62,6 +67,7 @@ constexpr std::size_t shown_lines = 10;
 constexpr std::string_view code_path = "C:\\work\\a.cpp";
 constexpr std::string_view other_code_path = "C:\\work\\b.cpp";
 constexpr std::string_view text_path = "C:\\work\\a.txt";
+constexpr std::string_view json_path = "C:\\work\\a.json";
 constexpr std::string_view sample = "int f(void) {\n    // c\n    return \"s\";\n}\n";
 constexpr core::TextViewGeometry grid_geometry{85, 20, 96};
 constexpr core::TextViewGeometry text_geometry{200, 20, 96, 10.0F};
@@ -211,7 +217,8 @@ void verify_backfill_reach()
            "a cache within 4,096 lines carries the comment past the 200 line reach");
 }
 
-// 決定 9: スクロールで覚えから続け、上へ戻ると作り直し、編集（改訂）で作り直す。
+// 決定 9: スクロールで覚えから続け、上へ戻ると作り直す。見えている行の中の編集は覚えを保つ（追補
+// #827）。
 void verify_cache_follows()
 {
     Editing editing;
@@ -235,11 +242,112 @@ void verify_cache_follows()
                                          core::SelectionAnchoring::collapse}));
     expect(controller.frame().syntax_lexed == shown_lines,
            "moving the caret without an edit keeps the cache");
-    static_cast<void>(controller.apply(app::InsertText{"x"}));
+    static_cast<void>(controller.apply(app::InsertText{"*/"}));
     const auto edited = controller.frame();
-    expect(edited.first_visible.value == 305 && edited.syntax_lexed == 200 + shown_lines &&
-               all_comment(edited.lines.front()),
-           "an edit changes the revision and backfills again");
+    expect(edited.first_visible.value == 305 && edited.syntax_lexed == shown_lines,
+           "an edit inside the visible lines keeps the cache and lexes only the visible lines");
+    expect(all_comment(edited.lines.front()) &&
+               has_span(edited.lines.at(1), 1, 3, SyntaxRole::comment) &&
+               edited.lines.at(2).colors.empty(),
+           "the visible lines are lexed again from the kept state and the comment closes");
+    const auto undone = controller.apply_frame(app::HistoryAction{core::HistoryDirection::undo});
+    expect(undone.first_visible.value == 305 && undone.syntax_lexed == shown_lines &&
+               all_comment(undone.lines.at(2)),
+           "undoing an edit inside the visible lines keeps the cache");
+}
+
+// 追補 #827: 見えている最初の行より前の編集（先頭へ行って打つ・その undo）は覚えを捨てる。
+void verify_edit_above_forgets()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    open(editing, code_path, nearby_comment());
+    scrolled(controller, 299);
+    static_cast<void>(controller.frame());
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(app::InsertText{"x"}));
+    scrolled(controller, 299);
+    const auto typed = controller.frame();
+    expect(typed.first_visible.value == 300 && typed.syntax_lexed == 200 + shown_lines &&
+               all_comment(typed.lines.front()),
+           "typing above the cached line forgets the cache and backfills");
+    static_cast<void>(controller.apply(app::HistoryAction{core::HistoryDirection::undo}));
+    scrolled(controller, 299);
+    const auto undone = controller.frame();
+    expect(undone.first_visible.value == 300 && undone.syntax_lexed == 200 + shown_lines,
+           "undoing an edit above the cached line forgets the cache too");
+}
+
+// 追補 #827: 2 枠で同じ文書を見ているとき、覚えの行より前の編集は両方の覚えを捨て（もう 1 つの
+// 枠も 200 行前のコメントの閉じを見る）、覚えの行より後ろの編集は両方とも保つ。
+void verify_split_forgets_both()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    open(editing, code_path, nearby_comment());
+    scrolled(controller, 299);
+    static_cast<void>(controller.apply(app::SplitPane{core::SplitLayout::vertical}));
+    static_cast<void>(controller.frame());
+    static_cast<void>(controller.apply(app::SwitchPane{}));
+    scrolled(controller, 299);
+    static_cast<void>(controller.frame());
+    const auto both = controller.frame();
+    const auto *kept = pane_of(both);
+    expect(both.syntax_lexed == shown_lines && kept != nullptr && !kept->lines.empty() &&
+               all_comment(kept->lines.front()) && all_comment(both.lines.front()),
+           "both panes on the same document keep their caches inside the comment");
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{200}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(app::InsertText{"*/"}));
+    scrolled(controller, 100);
+    const auto closed = controller.frame();
+    const auto *other = pane_of(closed);
+    expect(closed.first_visible.value == 300 && closed.syntax_lexed == 200 + shown_lines &&
+               closed.lines.front().colors.empty(),
+           "the edited pane forgets its cache and sees the comment closed above");
+    expect(other != nullptr && !other->lines.empty() && other->lines.front().colors.empty(),
+           "the other pane on the same document forgets its cache and sees the comment closed");
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{305}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(app::InsertText{"x"}));
+    expect(controller.apply_frame(app::SwitchPane{}).syntax_lexed == shown_lines,
+           "an edit below the cached line keeps the other pane's cache");
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{305}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
+    static_cast<void>(controller.apply(app::InsertText{"x"}));
+    expect(controller.frame().syntax_lexed == shown_lines,
+           "an edit below the cached line keeps the active pane's cache");
+}
+
+// 追補 #827: 遡りの行数は言語ごとの表 1 つ。JSON は 1 行、C / C++ は 200 行。
+void verify_backfill_per_language()
+{
+    using core::Language;
+    expect(core::syntax_backfill_lines(Language::plain) == 0 &&
+               core::syntax_backfill_lines(Language::json) == 1 &&
+               core::syntax_backfill_lines(Language::c) == 200 &&
+               core::syntax_backfill_lines(Language::cpp) == 200 &&
+               core::syntax_backfill_lines(Language::python) == 200 &&
+               core::syntax_backfill_lines(Language::javascript) == 200 &&
+               core::syntax_backfill_lines(Language::typescript) == 200 &&
+               core::syntax_backfill_lines(Language::markdown) == 500 &&
+               core::syntax_backfill_lines(Language::cmake) == 0,
+           "the backfill table has one value per language");
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+    open(editing, json_path, repeated("1,\n", 600));
+    scrolled(controller, 299);
+    const auto json = controller.frame();
+    expect(json.first_visible.value == 300 && json.syntax_lexed == 1 + shown_lines,
+           "a JSON document backfills one line");
 }
 
 // 決定 9: タブの切り替えで作り直し、もう 1 つの枠は別の覚えで別の文書の色を持つ。
@@ -487,6 +595,9 @@ void verify_syntax_scope()
     verify_plain_untouched();
     verify_backfill_reach();
     verify_cache_follows();
+    verify_edit_above_forgets();
+    verify_split_forgets_both();
+    verify_backfill_per_language();
     verify_tabs_and_panes();
     verify_language_switch();
     verify_opened_into_untitled();

@@ -280,6 +280,9 @@ class EditorController final
     void close_operated_pane();
     // 操作中の枠の編集を、同じ文書を出しているもう 1 つの枠に写す（決定 9）。
     void adjust_other(const core::Edit &edit, const core::TextBuffer &after);
+    // 編集の始まりの行が覚えの行より前なら、その文書の構文の覚えを捨てる（ADR 0156 の追補 #827）。
+    // 編集の 1 か所（replace・undo・redo）が本文を置く前に呼ぶ。
+    void forget_syntax_before(const core::Edit &edit);
     // 開いた文書に格子表示を聞くかを、アクティブな文書ごとに 1 回だけ判定する（決定 2）。文書が
     // アクティブになった直後（開く・enter_document）と apply の終わりと起動の終わりから呼ぶ。
     // Ctrl+Tab で歩いている間は判定だけして聞かない（確定で聞く）。
