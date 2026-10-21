@@ -1,4 +1,5 @@
 #include "Column.hpp"
+#include "LineLengths.hpp"
 #include "LineNumber.hpp"
 #include "NewlineIndex.hpp"
 #include "Offset.hpp"
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -24,6 +26,7 @@ namespace nenenib::tests
 namespace
 {
 using nenenib::core::Column;
+using nenenib::core::LineLengths;
 using nenenib::core::LineNumber;
 using nenenib::core::NewlineIndex;
 using nenenib::core::Offset;
@@ -616,6 +619,252 @@ void verify_longest_line_edits()
         expect_longest(edited, "a sequence of edits keeps the counted longest line");
     }
 }
+
+// 64 KiB の塊の疎 / 密の表現（ADR 0121 の追補）。n 個の LF を 64 KiB に等間隔で置いた塊。
+constexpr std::size_t index_chunk = 64UL * 1024UL;
+
+[[nodiscard]] std::string chunk_with_newlines(std::size_t newlines, char filler)
+{
+    std::string chunk(index_chunk, filler);
+    const std::size_t step = index_chunk / std::max<std::size_t>(newlines, 1);
+    for (std::size_t ordinal = 0; ordinal < newlines; ++ordinal)
+    {
+        chunk.at((ordinal * step) + (step - 1)) = '\n';
+    }
+    return chunk;
+}
+
+// 一から数えた [begin, end) の行の長さの要約（LineLengths の定義どおり）。
+[[nodiscard]] LineLengths counted_lengths(std::string_view text)
+{
+    LineLengths result{};
+    std::size_t line_begin = 0;
+    for (std::size_t at = text.find('\n'); at != std::string_view::npos;
+         at = text.find('\n', at + 1))
+    {
+        const std::size_t length = at - line_begin;
+        result.head = result.closed ? result.head : length;
+        result.longest = result.closed ? std::max(result.longest, length) : 0;
+        result.closed = true;
+        line_begin = at + 1;
+    }
+    result.tail = text.size() - line_begin;
+    result.head = result.closed ? result.head : result.tail;
+    return result;
+}
+
+[[nodiscard]] bool same_lengths(const LineLengths &left, const LineLengths &right)
+{
+    return left.head == right.head && left.longest == right.longest && left.tail == right.tail &&
+           left.closed == right.closed;
+}
+
+void expect_window(const NewlineIndex &index, std::string_view text, std::size_t begin,
+                   std::size_t end)
+{
+    if (begin <= end && end <= text.size())
+    {
+        expect(same_lengths(index.lengths(begin, end),
+                            counted_lengths(text.substr(begin, end - begin))),
+               "the window summary equals the counted one at chunk edges");
+    }
+}
+
+// 塊の境目の前後と塊の途中を両端にした窓の要約が、一から数えた要約と一致する。
+void verify_index_lengths(std::string_view text)
+{
+    const auto index = NewlineIndex::from_text(text);
+    const std::size_t size = text.size();
+    const std::array<std::size_t, 5> edges{0, 1, std::min(index_chunk + 1, size), size / 2, size};
+    for (const auto begin : edges)
+    {
+        for (const auto end : edges)
+        {
+            expect_window(index, text, begin, end);
+        }
+    }
+    for (std::size_t boundary = index_chunk; boundary <= size; boundary += index_chunk)
+    {
+        expect_window(index, text, boundary - 1, std::min(boundary + 1, size));
+        expect_window(index, text, boundary, size);
+        expect_window(index, text, 1, boundary - 1);
+    }
+}
+
+// 疎と密の塊が隣り合う本文・ちょうど 4,095 / 4,096 / 4,097 個の塊・64 KiB の境の LF・
+// 200 KiB の 1 行・NUL と CRLF。rank / select を全位置で単純な走査と比べる。
+void verify_sparse_dense_chunks()
+{
+    const std::string mixed = chunk_with_newlines(4095, 'a') + chunk_with_newlines(4096, '\0') +
+                              chunk_with_newlines(4097, 'b') + chunk_with_newlines(3, 'c') +
+                              std::string(index_chunk, '\n') + "tail";
+    verify_index_text(mixed);
+    verify_index_lengths(mixed);
+    std::string edges(3 * index_chunk, 'x');
+    for (const auto at : {index_chunk - 1, index_chunk, (2 * index_chunk) - 1, 2 * index_chunk})
+    {
+        edges.at(at) = '\n';
+    }
+    verify_index_text(edges);
+    verify_index_lengths(edges);
+    const std::string giant = "a\n" + std::string(200U * 1024U, 'g') + "\n" + "z";
+    verify_index_text(giant);
+    verify_index_lengths(giant);
+    std::string crlf;
+    for (std::size_t line = 0; line < 9000; ++line)
+    {
+        crlf += line % 3 == 0 ? std::string("\r\n") : std::string("ab\0\r\n", 5);
+    }
+    verify_index_text(crlf);
+    verify_index_lengths(crlf);
+}
+
+// 全オフセットの行番号が、一から数えた「前の LF の数 + 1」と一致する（LF でない位置も見る）。
+void verify_buffer_lines(const TextBuffer &buffer, std::string_view text)
+{
+    expect(buffer.text() == text, "the appended buffer holds the expected bytes");
+    std::size_t line = 1;
+    for (std::size_t at = 0; at <= text.size(); ++at)
+    {
+        expect(buffer.position_of(Offset{at}).line.value == line,
+               "every offset belongs to the line counted from the LF before it");
+        line += at < text.size() && text.at(at) == '\n' ? 1 : 0;
+    }
+}
+
+// 密の書きかけの塊で、最後の LF の後ろに 512 byte 以上の LF でないバイトが続く（区切りの累積を
+// 書いた所より後ろの区切りを問う）。2 回目以降の追記で密の塊をちょうど 64 KiB まで埋め切り、
+// その次の挿入は新しい add の chunk へ行く（I-1 の (1) (2)・レビュー #810）。
+void verify_dense_partial_appends()
+{
+    const std::string lines(5000, '\n');
+    const std::string gap(2000, 'x');
+    const auto dense = TextBuffer::empty().insert(Offset{0}, lines);
+    const auto gapped = dense.insert(Offset{dense.size_bytes()}, gap);
+    verify_buffer_lines(gapped, lines + gap);
+    const auto resumed = gapped.insert(Offset{gapped.size_bytes()}, "\n" + gap + "\n");
+    verify_buffer_lines(resumed, lines + gap + "\n" + gap + "\n");
+    const std::string rest(index_chunk - resumed.size_bytes(), 'y');
+    const auto filled = resumed.insert(Offset{resumed.size_bytes()}, rest);
+    expect(filled.size_bytes() == index_chunk, "the add chunk is filled to exactly 64 KiB");
+    const auto next = filled.insert(Offset{filled.size_bytes()}, "z\nz");
+    const std::string all = lines + gap + "\n" + gap + "\n" + rest;
+    verify_buffer_index(filled, all);
+    verify_buffer_index(next, all + "z\nz");
+    expect(next.position_of(Offset{all.size() - 1}).line.value == 5003 &&
+               next.position_of(Offset{all.size() + 2}).line.value == 5004,
+           "the filled dense chunk and the next add chunk keep the line numbers");
+    verify_buffer_lines(gapped, lines + gap);
+    const std::string opened = lines + gap;
+    verify_index_text(opened);
+    verify_index_text(chunk_with_newlines(5000, 'q') + opened);
+}
+
+// 一から数える要約に 1 byte を足す。current は最後の LF の後ろの byte 数。
+void counted_byte(LineLengths &running, std::size_t &current, char byte)
+{
+    if (byte != '\n')
+    {
+        ++current;
+        return;
+    }
+    if (running.closed)
+    {
+        running.longest = std::max(running.longest, current);
+    }
+    else
+    {
+        running.head = current;
+        running.closed = true;
+    }
+    current = 0;
+}
+
+[[nodiscard]] LineLengths summary_of(const LineLengths &running, std::size_t current)
+{
+    if (!running.closed)
+    {
+        return LineLengths{current, 0, current, false};
+    }
+    return LineLengths{running.head, running.longest, current, true};
+}
+
+// 一から数えた窓の要約を、始まり begin から終わりへ 1 byte ずつ伸ばしながら作り、ends の各点で
+// 索引の答えと比べる（各始まりで本文を 1 回だけ走査する）。
+void expect_windows_from(const NewlineIndex &index, std::string_view text, std::size_t begin,
+                         std::span<const std::size_t> ends)
+{
+    LineLengths running{};
+    std::size_t current = 0;
+    std::size_t at = begin;
+    for (const auto end : ends)
+    {
+        for (; at < end; ++at)
+        {
+            counted_byte(running, current, text.at(at));
+        }
+        if (end >= begin)
+        {
+            expect(same_lengths(index.lengths(begin, end), summary_of(running, current)),
+                   "every window over the chosen points equals the counted summary");
+        }
+    }
+}
+
+// 疎・密・疎の 3 塊（最後は短い）の本文で、塊の境・512 byte の区切り・LF の前後の点の組を総当たりで
+// 比べる（I-1 の (3)・レビュー #810）。
+void verify_lengths_exhaustive()
+{
+    const std::string text =
+        chunk_with_newlines(40, 'a') + chunk_with_newlines(4100, 'b') + "c\nccc\n\ncc";
+    const auto index = NewlineIndex::from_text(text);
+    std::vector<std::size_t> points{0, 1, 2, 14, 15, 16, text.size() - 1, text.size()};
+    for (const std::size_t base : {index_chunk, 2 * index_chunk})
+    {
+        for (std::size_t delta = 0; delta < 5; ++delta)
+        {
+            points.push_back(base + delta - 2);
+        }
+    }
+    for (const std::size_t block : {1U, 2U, 63U, 127U})
+    {
+        points.insert(points.end(),
+                      {index_chunk + (block * 512U) - 1U, index_chunk + (block * 512U),
+                       index_chunk + (block * 512U) + 1U});
+    }
+    std::ranges::sort(points);
+    const auto unique = std::ranges::unique(points);
+    points.erase(unique.begin(), unique.end());
+    for (const auto begin : points)
+    {
+        expect_windows_from(index, text, begin, points);
+    }
+}
+
+// add の 1 本の chunk を打鍵で伸ばすと、索引の塊は疎のまま伸び、4,096 個目で密に変わり、その後は
+// bit を立てるだけ。変わる前の値の行位置は変わった後も同じ（決定 6）。
+void verify_typed_densify()
+{
+    auto typed = TextBuffer::empty().insert(Offset{0}, "x");
+    std::string expected = "x";
+    std::vector<std::pair<TextBuffer, std::string>> snapshots;
+    for (std::size_t step = 0; step < 6000; ++step)
+    {
+        const std::string piece = step % 5 == 4 ? "ab\n" : "\n";
+        typed = typed.insert(Offset{typed.size_bytes()}, piece);
+        expected += piece;
+        if (step == 3000 || step == 4094 || step == 4095 || step == 4200)
+        {
+            snapshots.emplace_back(typed, expected);
+        }
+    }
+    verify_buffer_index(typed, expected);
+    for (const auto &[snapshot, text] : snapshots)
+    {
+        verify_buffer_index(snapshot, text);
+    }
+    expect_longest(typed, "the typed chunk keeps the counted longest line after densifying");
+}
 } // namespace
 
 void verify_newline_index_scope()
@@ -636,5 +885,9 @@ void verify_newline_index_scope()
     verify_held_positions_match_walk();
     verify_longest_line_texts();
     verify_longest_line_edits();
+    verify_sparse_dense_chunks();
+    verify_typed_densify();
+    verify_dense_partial_appends();
+    verify_lengths_exhaustive();
 }
 } // namespace nenenib::tests

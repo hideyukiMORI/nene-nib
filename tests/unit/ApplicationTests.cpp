@@ -27,6 +27,7 @@
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
 #include "DisplayForm.hpp"
+#include "DocumentByteLimit.hpp"
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditHistory.hpp"
@@ -2024,7 +2025,9 @@ void verify_document_open()
     editing.files().hold(std::string("一行目\r\n二行目"));
     const auto frame = controller.apply_frame(OpenDocument{sample_path()});
     expect(editing.files().read_path() == "C:\\work\\note.txt", "the path went through the port");
-    expect(editing.files().read_limit() == 64U * 1024U * 1024U,
+    static_assert(nenenib::core::maximum_document_bytes == 64U * 1024U * 1024U,
+                  "#792 makes the limit one constant and keeps its 64 MiB value");
+    expect(editing.files().read_limit() == nenenib::core::maximum_document_bytes,
            "the 64 MiB limit is handed to the port, not measured after the read");
     expect(frame.document.title.text() == "note.txt", "the tab takes the file name");
     expect(frame.document.encoding == TextEncoding::utf8, "plain UTF-8 is detected");
@@ -2087,6 +2090,8 @@ void verify_document_open_failures()
                         "the port may also report unwritable");
     expect_open_failure(std::unexpected(FileFailure::too_large), FileFailure::too_large,
                         "a file past the limit is refused by the port before it is read");
+    expect_open_failure(std::string(nenenib::core::maximum_document_bytes + 1U, 'a'),
+                        FileFailure::too_large, "one byte past 64 MiB is too_large (#792)");
     expect_open_failure(std::string("\xFF\x41", 2), FileFailure::undecodable,
                         "bytes that are neither UTF-8 nor CP932 are undecodable");
     expect_open_failure(std::string("\xFF\xFE\x41", 3), FileFailure::undecodable,

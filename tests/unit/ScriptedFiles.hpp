@@ -121,6 +121,11 @@ class ScriptedFiles final : public FilePort
             return std::unexpected(held.error());
         }
         const std::string_view source = held.value();
+        // 本物の port と同じく、渡された上限を超える中身は読む前に断る（#792）。
+        if (source.size() > maximum_bytes)
+        {
+            return std::unexpected(FileFailure::too_large);
+        }
         return SealedBytes::filled(source.size(),
                                    [source](std::span<char> target) noexcept
                                    {

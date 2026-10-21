@@ -9,6 +9,7 @@
 #include "FrameProbe.hpp"
 #include "FrameRowsProbe.hpp"
 #include "MarkdownProbe.hpp"
+#include "NewlineIndexProbe.hpp"
 #include "OperationChoiceProbe.hpp"
 #include "PaletteChoiceProbe.hpp"
 #include "PatternProbe.hpp"
@@ -846,6 +847,19 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(NewlineIndexWorkload workload)
+{
+    switch (workload)
+    {
+    case NewlineIndexWorkload::payload_all_lf:
+    case NewlineIndexWorkload::payload_prose:
+    case NewlineIndexWorkload::payload_one_line:
+    case NewlineIndexWorkload::lengths_all_lf:
+        return 155U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -861,7 +875,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 155> dispatches{{
+constexpr std::array<ProbeDispatch, 159> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1180,6 +1194,14 @@ constexpr std::array<ProbeDispatch, 155> dispatches{{
                      text_object_input, text_object_ranges},
     ProbeDispatchRow{MarkdownWorkload::mixed_16mib, "markdown-parse-mixed-16mib", markdown_input,
                      parsed_markdown},
+    ProbeDispatchRow{NewlineIndexWorkload::payload_all_lf, "newline-index-payload-all-lf-16mib",
+                     newline_index_input, indexed_payload},
+    ProbeDispatchRow{NewlineIndexWorkload::payload_prose, "newline-index-payload-prose-16mib",
+                     newline_index_input, indexed_payload},
+    ProbeDispatchRow{NewlineIndexWorkload::payload_one_line, "newline-index-payload-one-line-16mib",
+                     newline_index_input, indexed_payload},
+    ProbeDispatchRow{NewlineIndexWorkload::lengths_all_lf, "newline-index-lengths-all-lf-16mib",
+                     newline_index_input, indexed_lengths},
 }};
 
 constexpr auto dispatch_names = []
@@ -1222,7 +1244,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 155U);
+static_assert(dispatches.size() == 159U);
 static_assert(dispatch_is_complete());
 
 } // namespace

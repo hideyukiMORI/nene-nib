@@ -11,8 +11,13 @@
 #include "AutosaveRemnant.hpp"
 #include "AutosaveSnapshot.hpp"
 #include "DisplayText.hpp"
+#include "DocumentByteLimit.hpp"
+#include "FileFailure.hpp"
 #include "FilePath.hpp"
+#include "FilePort.hpp"
+#include "FileWriteMode.hpp"
 #include "FindHandle.hpp"
+#include "SealedBytes.hpp"
 #include "TextPosition.hpp"
 #include "Win32AutosaveAdapter.hpp"
 #include "Win32FileAdapter.hpp"
@@ -23,6 +28,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <expected>
 #include <format>
 #include <optional>
 #include <semaphore>
@@ -495,6 +501,61 @@ void verify_read_and_forget(adapters::Win32FileAdapter &files,
            "the folder of a live process is left alone");
 }
 
+// 本物のファイルの port へ渡し、read に渡された上限を覚える（#792 の上限の正本の契約）。
+class LimitRecordingFiles final : public nenenib::application::FilePort
+{
+  public:
+    explicit LimitRecordingFiles(adapters::Win32FileAdapter &files) : files_(files) {}
+
+    [[nodiscard]] std::size_t limit() const noexcept
+    {
+        return limit_;
+    }
+
+    [[nodiscard]] std::expected<core::SealedBytes, nenenib::application::FileFailure>
+    read(const core::FilePath &path, std::size_t maximum_bytes) override
+    {
+        limit_ = maximum_bytes;
+        return files_.read(path, maximum_bytes);
+    }
+
+    [[nodiscard]] std::expected<void, nenenib::application::FileFailure>
+    write(const core::FilePath &path, std::span<const std::string_view> parts,
+          nenenib::application::FileWriteMode mode) override
+    {
+        return files_.write(path, parts, mode);
+    }
+
+    [[nodiscard]] std::expected<core::FilePath, nenenib::application::FileFailure>
+    resolve(const core::FilePath &path) override
+    {
+        return files_.resolve(path);
+    }
+
+    [[nodiscard]] bool same_file(const core::FilePath &left,
+                                 const core::FilePath &right) const override
+    {
+        return files_.same_file(left, right);
+    }
+
+  private:
+    adapters::Win32FileAdapter &files_;
+    std::size_t limit_ = 0;
+};
+
+// (g) 退避の読み戻しの上限は開く上限と同じ core の 1 つの値（#792・ADR 0121 の追補の決定 8）。
+void verify_read_limit(adapters::Win32Worker &worker, adapters::Win32FileAdapter &files)
+{
+    LimitRecordingFiles recording(files);
+    adapters::Win32AutosaveAdapter limited(worker, recording, root_path(root_text));
+    const auto listed = limited.remnants().value_or(std::vector<AutosaveRemnant>{});
+    const auto seven = remnant_with(listed, 7);
+    expect(seven.has_value() && limited.read(seven.value()).has_value(),
+           "the remnant is read through the recording port");
+    expect(recording.limit() == core::maximum_document_bytes,
+           "reading a remnant back uses the same limit as opening a file");
+}
+
 void verify_autosave()
 {
     remove_tree(base);
@@ -514,6 +575,7 @@ void verify_autosave()
     {
         adapters::Win32AutosaveAdapter autosave(worker, files, root_path(root_text));
         verify_remnants(worker, files, autosave);
+        verify_read_limit(worker, files);
         verify_read_and_forget(files, autosave);
         autosave.clear();
         expect(!exists(own_folder()), "clear removes the own folder again");
