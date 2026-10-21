@@ -39,7 +39,7 @@ Phase 0 の V2 で、Vim 9.1 を `-u NONE -i NONE -N -n -es -S probe.vim` で走
    利用者が触る「既定の Vim」と違う。`defaults.vim` そのものは読まない（`syntax on` や `filetype` は本文の結果に関係なく、読み込む範囲が版で変わる）。
    `set encoding=utf-8` は足していない: この Vim 9.1（Windows 版）は `-u NONE` でも `&encoding` が `utf-8` だと実測した（gate-proofs 5-g）。oracle は `probe.vim` の先頭で `call cursor(1, 1)` する（Ex モードの開始位置は先頭ではない）
 9. **fixture の本文は LF だけ**。Vim は CRLF を `fileformat=dos` と判別して CR を落とすので oracle に流せない。CRLF の本文（`$` `x` `dd` が CR を残さない）は手書きの単体テスト 1 本で守る
-10. **見た目は採用案のまま**（D15）: `mode_label(EditMode, VimMode)` が NORMAL / INSERT、`CaretView::shape` が NORMAL でブロック・INSERT でバー。トグルで Vim に入ると NORMAL（回数・オペレータは空）で選択を畳み、通常に戻ると保留は捨てる。（追補 2026-10-22・#785: 窓の寸法が届いた後のトグルは画面を動かさない。キャレットが見えている範囲の外なら、外れた側の端の画面行へ今の横の位置のまま入れてから行末を寄せ、追従は頼まない（`EditorController::caret_in_view`・位置は上下の移動と同じ `location` `shifted` `caret_at`）。通常に戻るときは `clamp_scroll` だけで、Vim の送りで最後の行を先頭まで上げていれば通常の「画面を埋める」端まで戻る。）
+10. **見た目は採用案のまま**（D15）: `mode_label(EditMode, VimMode)` が NORMAL / INSERT、`CaretView::shape` が NORMAL でブロック・INSERT でバー。トグルで Vim に入ると NORMAL（回数・オペレータは空）で選択を畳み、通常に戻ると保留は捨てる。（追補 2026-10-22・#785: 窓の寸法が届いた後のトグルは画面を動かさない。キャレットが見えている範囲の外なら、外れた側の端の画面行へ今の横の位置のまま入れてから行末を寄せ、追従は頼まない（`EditorController::caret_in_view`・位置は上下の移動と同じ `location` `shifted` `caret_at`）。通常に戻るときは `clamp_scroll` だけ。Vim で最後の行を先頭まで上げてから通常へ戻ると、通常の送れる端（`filled_viewport`）まで `clamp_scroll` が戻す（通常モードの規則・直さない）。）
 11. **Vim モードの窓の鍵**: `WM_CHAR` は `VimCharacter`、Esc / Enter / Backspace / 矢印は `VimSpecialKey` の表、Tab は INSERT の `	` として文字の鍵、Ctrl+R は `control_r`。Ctrl+Z / Ctrl+Y は Vim では送らず `u` / Ctrl-r に譲る。Ctrl+S / Ctrl+O / Ctrl+Shift+S・Ctrl+A/C/X/V・マウス・ホイールは両モード共通。Home / End / PgUp / PgDn は Vim モードではまだ効かない（次の縦切り）
 
 ## 強制
