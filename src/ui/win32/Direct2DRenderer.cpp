@@ -1499,6 +1499,11 @@ void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
     draw_status_left(frame, layout);
     for (std::size_t index = 0; index < core::status_item_count; ++index)
     {
+        // 狭い窓で畳んだ言語の欄（幅 0・ADR 0154 の決定 6）は書かず、枠も使わない。
+        if (core::width_of(layout.items.at(index)) <= 0)
+        {
+            continue;
+        }
         write_status(frame.status_items.at(index).text(), status_format_.Get(),
                      layout.items.at(index), frame.palette.muted);
     }

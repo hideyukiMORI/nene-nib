@@ -1,5 +1,6 @@
 #include "StatusBarLayout.hpp"
 
+#include "CommandLayout.hpp"
 #include "DevicePixels.hpp"
 
 #include <algorithm>
@@ -38,19 +39,39 @@ constexpr std::int32_t display_width_dips = 24;
     return LayoutRect{left, top, left + width, top + height};
 }
 
+// 言語の欄（右端・ADR 0154 の決定 6）の添字。
+constexpr std::size_t language_item = status_item_count - 1;
+
+// 右から並べる。folded なら言語の欄は右端の幅 0 の矩形で、ほかの 3 項目は言語が無いときの位置。
 [[nodiscard]] std::array<LayoutRect, status_item_count>
-item_rects(std::int32_t width, const LayoutRect &band, std::uint32_t dpi) noexcept
+item_rects(std::int32_t width, const LayoutRect &band, std::uint32_t dpi, bool folded) noexcept
 {
     std::array<LayoutRect, status_item_count> rectangles{};
     std::int32_t right = width - to_pixels(side_padding_dips, dpi);
     for (std::size_t step = 0; step < status_item_count; ++step)
     {
         const std::size_t index = status_item_count - 1 - step;
+        if (folded && index == language_item)
+        {
+            rectangles.at(index) = LayoutRect{right, band.top, right, band.bottom};
+            continue;
+        }
         const std::int32_t item = to_pixels(item_width_dips.at(index), dpi);
         rectangles.at(index) = LayoutRect{right - item, band.top, right, band.bottom};
         right -= item + to_pixels(item_gap_dips, dpi);
     }
     return rectangles;
+}
+
+// 右の 4 項目で `:` の入力欄の右端が command_input_minimum_dip に届かなければ言語の欄を畳む
+// （ADR 0154 の決定 6・案内を消す ADR 0079 の決定 9 より先）。判断はこの 1 か所。
+[[nodiscard]] std::array<LayoutRect, status_item_count>
+fitted_item_rects(std::int32_t width, const LayoutRect &band, std::uint32_t dpi) noexcept
+{
+    const auto items = item_rects(width, band, dpi, false);
+    const bool fits = items.front().left - to_pixels(item_gap_dips, dpi) >=
+                      to_pixels(command_input_minimum_dip, dpi);
+    return fits ? items : item_rects(width, band, dpi, true);
 }
 } // namespace
 
@@ -67,7 +88,7 @@ StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
                               toggle.left + padding + segment, toggle.bottom - padding};
     const std::int32_t vim_left = ordinary.right + padding;
     const std::int32_t mode_left = toggle.right + to_pixels(item_gap_dips, dpi);
-    const auto items = item_rects(width, band, dpi);
+    const auto items = fitted_item_rects(width, band, dpi);
     return StatusBarLayout{
         .band = band,
         .toggle = toggle,

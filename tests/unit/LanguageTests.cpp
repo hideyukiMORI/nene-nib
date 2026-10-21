@@ -3,6 +3,10 @@
 // `?`・閉じた名前の外の E474・補完の候補、言語が文書の値として開く・名前が変わる保存・新しい
 // タブ・タブの切り替え・まだ読んでいない文書を読むときに付いていき、設定にもセッションにも
 // 書かれないこと。
+#include "AutosaveId.hpp"
+#include "AutosaveRemnant.hpp"
+#include "CloseTab.hpp"
+#include "CommandLayout.hpp"
 #include "DevicePixels.hpp"
 #include "Editing.hpp"
 #include "EndSession.hpp"
@@ -14,6 +18,8 @@
 #include "LanguageTable.hpp"
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
+#include "RestoreAutosave.hpp"
+#include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectLanguage.hpp"
@@ -21,6 +27,7 @@
 #include "StatusBarLayout.hpp"
 #include "StatusItems.hpp"
 #include "SwitchTab.hpp"
+#include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "VimTestSupport.hpp"
@@ -321,6 +328,75 @@ void verify_status_item()
     }
 }
 
+// 狭い窓では言語の欄を畳む（決定 6）。`:` の入力欄の右端が 96 DIP に届かない 4 項目の配置なら
+// 言語の欄は幅 0 で、ほかの 3 項目は言語が無いときの位置。96 DIP では 448 DIP が境目。
+void verify_status_fold()
+{
+    for (const std::uint32_t dpi : {96U, 120U, 144U})
+    {
+        const auto narrow =
+            core::status_bar_layout(core::to_pixels(360, dpi), core::to_pixels(200, dpi), dpi);
+        const auto input = core::command_layout(narrow, dpi, 0).input;
+        expect(core::width_of(narrow.items.at(3)) == 0 &&
+                   narrow.items.at(3).left == narrow.items.at(2).right &&
+                   narrow.items.at(2).right == core::to_pixels(360, dpi) - core::to_pixels(12, dpi),
+               "the minimum window folds the language item at the right end");
+        expect(input.right >= core::to_pixels(core::command_input_minimum_dip, dpi),
+               "the minimum window keeps the : input up to 96 DIP");
+        const auto wide =
+            core::status_bar_layout(core::to_pixels(800, dpi), core::to_pixels(450, dpi), dpi);
+        expect(core::width_of(wide.items.at(3)) == core::to_pixels(72, dpi) &&
+                   core::command_layout(wide, dpi, 0).input.right >=
+                       core::to_pixels(core::command_input_minimum_dip, dpi),
+               "an 800 DIP window shows the four items");
+    }
+    expect(core::width_of(core::status_bar_layout(448, 200, 96).items.at(3)) == 72 &&
+               core::width_of(core::status_bar_layout(447, 200, 96).items.at(3)) == 0,
+           "the fold starts where the input would end before 96 DIP");
+}
+
+// 閉じて隣のタブへ移る（決定 1）。隣の束の言語（`:set ft=` の上書きも）が付いてくる。
+void verify_close_tab()
+{
+    Editing editing;
+    hold_documents(editing.files());
+    auto &controller = editing.controller();
+    applied(controller, app::OpenDocument{path_of(markdown_path)});
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(run_ex(controller, "set ft=json"));
+    applied(controller, app::OpenDocument{path_of(python_path)});
+    expect(asked_language(controller) == "filetype=python", "the second tab reads its path");
+    applied(controller, app::CloseTab{1});
+    expect(asked_language(controller) == "filetype=json" &&
+               controller.frame().status_items.at(3).text() == "json",
+           "closing moves to the neighbour with its own language");
+}
+
+// 自動退避から戻した束（決定 5）。言語はパスから引き、名前の無い束は plain。
+void verify_restored_autosave()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    const std::optional<core::FilePath> named{path_of("C:\\work\\data.json")};
+    editing.autosave().remain(
+        app::AutosaveRemnant{"1f/0", app::AutosaveId{0}, named,
+                             core::tab_title_for(named, core::SaveState::modified),
+                             core::TextPosition{core::LineNumber{1}, core::Column{1}}},
+        "{}");
+    editing.autosave().remain(
+        app::AutosaveRemnant{"1f/1", app::AutosaveId{0}, std::nullopt,
+                             core::tab_title_for(std::nullopt, core::SaveState::modified),
+                             core::TextPosition{core::LineNumber{1}, core::Column{1}}},
+        "gamma");
+    static_cast<void>(controller.autosave_remnants());
+    const auto restored = controller.apply_frame(app::RestoreAutosave{});
+    expect(restored.status_items.at(3).text() == "json",
+           "the first restored tab takes its language from the path");
+    expect(controller.apply_frame(app::SwitchTab{2}).status_items.at(3).text() == "text",
+           "the untitled restored tab is plain");
+}
+
 // まだ読んでいない文書（決定 5）。一覧に言語は無く、読んだときにパスから決める。
 void verify_unloaded_document()
 {
@@ -353,6 +429,9 @@ void verify_language_scope()
     verify_completion();
     verify_document_value();
     verify_status_item();
+    verify_status_fold();
+    verify_close_tab();
+    verify_restored_autosave();
     verify_unloaded_document();
 }
 } // namespace nenenib::tests
