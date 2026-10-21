@@ -597,13 +597,14 @@ void verify_uncolored_rows()
            "a giant line's window has no spans and the next line is lexed from plain");
 }
 
-// 本文の 1 行目「int f(void) {」の 3 桁目（int の中）にキャレットを置いて「にほん」を変換中にする。
-[[nodiscard]] app::EditorFrame composed_in_int(app::EditorController &controller)
+// 本文の 1 行目「int f(void) {」の 3 桁目（int の中）にキャレットを置いて utf8 を変換中にする。
+[[nodiscard]] app::EditorFrame composed_in_int(app::EditorController &controller, std::string utf8)
 {
     static_cast<void>(
         controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{3}},
                                          core::SelectionAnchoring::collapse}));
-    return controller.apply_frame(app::ComposeText{composed_of("にほん", {}, 9)});
+    const auto cursor = utf8.size();
+    return controller.apply_frame(app::ComposeText{composed_of(std::move(utf8), {}, cursor)});
 }
 
 // #839: IME の差し込み行は、差し込みの手前の区間はそのまま、後ろは差し込んだ code point の数（3）
@@ -613,7 +614,7 @@ void verify_composed_colors()
     Editing composing;
     static_cast<void>(composing.controller().apply(app::VisibleLines{shown_lines}));
     open(composing, code_path, std::string(sample));
-    const auto composed = composed_in_int(composing.controller());
+    const auto composed = composed_in_int(composing.controller(), "にほん");
     const auto &line = composed.lines.at(0);
     const bool clear = std::ranges::none_of(line.colors, [](const core::ColorSpan &span)
                                             { return span.begin.value < 6 && span.end.value > 3; });
@@ -624,6 +625,65 @@ void verify_composed_colors()
            "the composed line shifts the spans after the insertion and leaves it uncolored");
     expect(has_span(composed.lines.at(1), 5, 9, SyntaxRole::comment),
            "the other lines keep their spans");
+}
+
+// #839（レビュー I-2）: サロゲート対 1 つ（U+20B9F・UTF-16 で 2 単位）を変換中にしても、区間は
+// code point の数（1）だけずれ、差し込みの範囲（4 桁目）は色なし。
+void verify_composed_surrogate_colors()
+{
+    Editing composing;
+    static_cast<void>(composing.controller().apply(app::VisibleLines{shown_lines}));
+    open(composing, code_path, std::string(sample));
+    const auto composed = composed_in_int(composing.controller(), "\xF0\xA0\xAE\x9F");
+    const auto &line = composed.lines.at(0);
+    const bool clear = std::ranges::none_of(line.colors, [](const core::ColorSpan &span)
+                                            { return span.begin.value < 4 && span.end.value > 3; });
+    expect(line.composed.has_value() && line.composed.value().inserted_columns == 1 && clear &&
+               has_span(line, 1, 3, SyntaxRole::type) && has_span(line, 4, 5, SyntaxRole::type) &&
+               has_span(line, 6, 7, SyntaxRole::function) &&
+               has_span(line, 8, 12, SyntaxRole::type),
+           "a composed surrogate pair shifts the later spans by one code point");
+}
+
+// #839（レビュー I-1）: Tab（8 升）と全角を含む行を幅 8 升の格子で折り返す。「\tx "日本語";」は
+// 1 行目が Tab、2 行目が「x "日本」（語は升 7 に収まらず次の画面行へ送る）、3 行目が「語";」。
+// 文字列の区間は 2 行目の升 [2, 7) と 3 行目の升 [0, 3) に切れ、送りの空き（2 行目の升
+// 7）は含まない。
+void verify_grid_wide_tab_colors()
+{
+    Editing grid;
+    auto &controller = grid.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines, grid_geometry}));
+    open(grid, code_path, "\tx \"\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E\";\n");
+    const auto gridded = controller.apply_frame(app::SelectDisplay{core::DisplayForm::grid});
+    const auto *tab = grid_row(gridded, 1, 0);
+    const auto *second = grid_row(gridded, 1, 1);
+    const auto *third = grid_row(gridded, 1, 2);
+    expect(tab != nullptr && tab->colors.empty() && second != nullptr && third != nullptr,
+           "the Tab takes the first screen row and the line folds twice");
+    expect(second != nullptr && has_cells(*second, 2, 7, SyntaxRole::string),
+           "the string's second-row cells start after x and stop before the pushed gap");
+    expect(third != nullptr && has_cells(*third, 0, 3, SyntaxRole::string),
+           "the pushed wide character and the closing quote color the third row from cell 0");
+}
+
+// #839（レビュー I-1）: 格子でも巨大な行は色を持たず、手前の行は色を持つ。
+void verify_grid_giant_uncolored()
+{
+    Editing grid;
+    auto &controller = grid.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{shown_lines, grid_geometry}));
+    open(grid, code_path, "int a;\n" + repeated("x", core::giant_line_threshold + 1) + "\nint b;");
+    const auto gridded = controller.apply_frame(app::SelectDisplay{core::DisplayForm::grid});
+    const auto *first = grid_row(gridded, 1, 0);
+    const bool giant_rows = std::ranges::any_of(gridded.grid, [](const app::GridRowView &row)
+                                                { return row.number.value == 2; });
+    const bool giant_plain =
+        std::ranges::all_of(gridded.grid, [](const app::GridRowView &row)
+                            { return row.number.value != 2 || row.colors.empty(); });
+    expect(first != nullptr && has_cells(*first, 0, 3, SyntaxRole::type) && giant_rows &&
+               giant_plain,
+           "the giant line's grid rows have no spans while the line above keeps its spans");
 }
 
 // #839: 格子の文書（幅 8 升）も text と同じ字句器を通り、画面行ごとに升の区間が付く。折り返した行の
@@ -651,7 +711,7 @@ void verify_grid_colors()
            "the second row of the return line has the rest of return and the string");
     expect(gridded.syntax_lexed == 5, "the grid frame lexes the five lines once each");
 
-    const auto composed = composed_in_int(controller);
+    const auto composed = composed_in_int(controller, "にほん");
     const auto *inserted = grid_row(composed, 1, 0);
     const bool clear = inserted != nullptr &&
                        std::ranges::none_of(inserted->colors, [](const app::GridColorSpan &span)
@@ -713,6 +773,9 @@ void verify_syntax_scope()
     verify_uncolored_rows();
     verify_composed_colors();
     verify_grid_colors();
+    verify_composed_surrogate_colors();
+    verify_grid_wide_tab_colors();
+    verify_grid_giant_uncolored();
     verify_syntax_color();
     verify_syntax_evaluation();
     verify_syntax_toggle();
