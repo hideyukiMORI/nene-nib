@@ -5,12 +5,15 @@
 #include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
 #include "EditMode.hpp"
+#include "EditorSettings.hpp"
 #include "InputLinePrompt.hpp"
 #include "Milestone.hpp"
 #include "PaletteLayout.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaneLayouts.hpp"
 #include "PaneRole.hpp"
+#include "PreviewPlacement.hpp"
+#include "PreviewTextStyle.hpp"
 #include "ReplacedTints.hpp"
 #include "RgbaColor.hpp"
 #include "Utf16.hpp"
@@ -1406,10 +1409,34 @@ void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
     draw_pane(frame, BodyPane{body, other.lines, other.grid, caret, PaneRole::passive});
 }
 
+// プレビューの枠（ADR 0155 の決定 7・11）。地は受け身の本文の枠と同じく枠の帯の全体を塗り、
+// 知らせがあれば枠の上の 1 行に本文の色で左から書いて、要素はその下から描く。
 void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
-                                  const core::BodyLayout &body, const application::PreviewFrame &)
+                                  const core::BodyLayout &body,
+                                  const application::PreviewFrame &other)
 {
     fill(body.band, frame.palette.background);
+    const PreviewTextStyle style{std::string(frame.settings.font_family.text()),
+                                 frame.settings.font_size.points(), dpi_};
+    auto area = body.band;
+    if (other.notice.has_value())
+    {
+        const auto row = static_cast<std::int32_t>(preview_line_pixels(style));
+        const core::LayoutRect notice{area.left +
+                                          static_cast<std::int32_t>(preview_side_margin(dpi_)),
+                                      area.top, area.right, std::min(area.top + row, area.bottom)};
+        context_->PushAxisAlignedClip(to_rect(notice), D2D1_ANTIALIAS_MODE_ALIASED);
+        write(other.notice.value().text(), command_format_.Get(), notice, frame.palette.text);
+        context_->PopAxisAlignedClip();
+        area.top = notice.bottom;
+    }
+    const auto prepared =
+        preview_.prepare(*context_.Get(), core::selected_theme(frame.settings, frame.appearance));
+    const auto painted = prepared ? preview_.paint(*context_.Get(), other, style, area) : prepared;
+    if (!painted && !text_failure_.has_value())
+    {
+        text_failure_ = painted.error();
+    }
 }
 
 // 1 つの枠の本文。body_top_ / body_bottom_ は描いている枠の本文の上下（字形 run の間引き）で、

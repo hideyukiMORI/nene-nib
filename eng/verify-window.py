@@ -119,6 +119,15 @@ core::pane_layouts, and --capture writes split-vertical-frames.json and
 split-horizontal-frames.json whose regions (title, body0, body1, divider, status)
 eng/compare-frames.py --regions reads. The chords need SendInput; a session that
 refuses the foreground is recorded, not failed.
+Issue #801 adds the Markdown preview (ADR 0155), which `--preview` runs alone with `--scheme dark`
+or `--scheme light` (`:colorscheme ubuntu-aubergine` or `neutral-light` through Ctrl+P first):
+tests/preview/sample.md is opened, Ctrl+Shift+M (sent with SendInput) opens the preview in the
+right pane (previewOpened-<scheme>.png: the divider is drawn and the right band is painted),
+`hello` is typed at the start of the text and the right band changes once the 200 ms tick has
+asked for a new parse (previewUpdated-<scheme>.png), a click in the preview leaves the caret
+where it was, and Ctrl+Shift+M closes it again (previewClosed-<scheme>.png: no divider).
+`--preview --scheme grid` opens one Markdown line of 20,000 characters, answers the grid question
+with yes and opens the preview (previewGrid.png) for the anchor to be checked by eye.
 Python standard library and ctypes only.
 """
 
@@ -2651,6 +2660,112 @@ def verify_palette(executable: Path, environment: dict, appearance: str,
     return result
 
 
+# Markdown のプレビュー（Issue #801・ADR 0155）。配色は Ctrl+P の `:colorscheme` で選び、格子は
+# 1 行 20,000 文字の文書（巨大な行のしきい値 16,384 より長い）を「はい」で開く。
+VK_M = 0x4D
+PREVIEW_SCHEMES = {"dark": "ubuntu-aubergine", "light": "neutral-light"}
+PREVIEW_TICK_SECONDS = 0.5
+PREVIEW_GRID_LENGTH = 20_000
+
+
+def preview_scheme(window, scheme: str) -> None:
+    if not press_chord(window, VK_CONTROL, VK_P):
+        raise ForegroundRefused("the window could not take the foreground")
+    time.sleep(PALETTE_SETTLE_SECONDS)
+    write_text(window, f":colorscheme {PREVIEW_SCHEMES[scheme]}")
+    time.sleep(PALETTE_SETTLE_SECONDS)
+    press(window, VK_RETURN)
+    time.sleep(TAB_SETTLE_SECONDS)
+
+
+def await_band_change(window, before: bytes, size: tuple, band: tuple,
+                      seconds: float = 3.0) -> tuple[bytes, float | None]:
+    """Capture until band differs from before; the seconds it took (None at the deadline)."""
+    width, height = size
+    began = time.monotonic()
+    while True:
+        time.sleep(0.05)
+        pixels = capture(window, width, height)
+        if box_changed(before, pixels, width, band):
+            return pixels, round(time.monotonic() - began, 2)
+        if time.monotonic() - began > seconds:
+            return pixels, None
+
+
+def drive_preview(window, scheme: str, frames: Path | None) -> dict:
+    """The steps of verify_preview on one window, in the ordinary mode."""
+    client = rectangle(window, user.GetClientRect)
+    width, height = client[2] - client[0], client[3] - client[1]
+    dpi = user.GetDpiForWindow(window)
+    size = (width, height)
+    record: dict = {"dpi": dpi, "scheme": scheme}
+    if scheme in PREVIEW_SCHEMES:
+        preview_scheme(window, scheme)
+    start_frame = capture(window, width, height)
+    bands, divider = pane_bands(width, height, dpi, "vertical")
+    opened = split_chord(window, start_frame, size, None, "previewOpened",
+                         ([VK_CONTROL, VK_SHIFT], VK_M))
+    time.sleep(PREVIEW_TICK_SECONDS)
+    opened = capture(window, width, height)
+    snapshot(frames, window, f"previewOpened-{scheme}" if scheme in PREVIEW_SCHEMES else "previewGrid")
+    record["openedDivider"] = divider_colours(opened, width, divider)
+    record["openedRightChanged"] = box_changed(start_frame, opened, width, bands[1])
+    assert record["openedRightChanged"], "Ctrl+Shift+M left the right band unchanged"
+    if scheme not in PREVIEW_SCHEMES:
+        return record
+    write_text(window, "hello")
+    typed, seconds = await_band_change(window, opened, size, bands[1])
+    record["documentReplacedSeconds"] = seconds
+    assert seconds is not None, "typing never changed the preview"
+    time.sleep(PREVIEW_TICK_SECONDS)
+    typed = capture(window, width, height)
+    snapshot(frames, window, f"previewUpdated-{scheme}")
+    left = body_points(width, height, dpi, split="vertical", pane=0)
+    record["caretBeforeClick"] = accent_count(typed, width, pane_body_box(left, 3))
+    click(window, (bands[1][0] + bands[1][2]) // 2, (bands[1][1] + bands[1][3]) // 2)
+    clicked = await_new_frame(window, typed, size, seconds=1.0)
+    record["clickKeptLeftPane"] = (
+        accent_count(clicked, width, pane_body_box(left, 3)) == record["caretBeforeClick"]
+        and not box_changed(typed, clicked, width, bands[0]))
+    assert record["clickKeptLeftPane"], "a click in the preview moved the caret or the pane"
+    closed = split_chord(window, clicked, size, frames, f"previewClosed-{scheme}",
+                         ([VK_CONTROL, VK_SHIFT], VK_M))
+    record["closedDivider"] = divider_colours(closed, width, divider)
+    record["closedChanged"] = box_changed(clicked, closed, width, bands[1])
+    assert record["closedChanged"], "Ctrl+Shift+M did not close the preview"
+    return record
+
+
+def verify_preview(executable: Path, environment: dict, scheme: str, output: Path,
+                   frames: Path | None) -> dict:
+    """Issue #801: Ctrl+Shift+M, the preview pane drawn, updated after typing, and closed."""
+    root = Path(__file__).resolve().parents[1]
+    if scheme in PREVIEW_SCHEMES:
+        opened = root / "tests/preview/sample.md"
+    else:
+        opened = output / "preview-grid.md"
+        opened.write_text(("word " * (PREVIEW_GRID_LENGTH // 5)).rstrip() + "\n", encoding="utf-8")
+    process, window, _ = start(executable, environment, [str(opened)])
+    try:
+        if scheme not in PREVIEW_SCHEMES:
+            assert answer_question(process, True), "the grid question did not come up"
+        raise_window(window)
+        time.sleep(0.6)
+        assert await_cover_gone(window), "the WARP cover child is still over the window"
+        assert_uncovered(window)
+        try:
+            record = {"driven": True, **drive_preview(window, scheme, frames)}
+        except ForegroundRefused as refused:
+            return {"driven": False, "note": f"{refused}; the preview stays in the unit tests"}
+        close(window)
+        record["closeConfirmationDismissed"] = dismiss_dialog(process, IDNO)
+        record["exitCode"] = process.wait(timeout=5)
+        assert record["exitCode"] == 0, record["exitCode"]
+    finally:
+        stop(process)
+    return record
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -2670,6 +2785,10 @@ def main() -> None:
                         help="run the tab key section alone (Issue #239); it sends real keys")
     parser.add_argument("--split", action="store_true",
                         help="run the split section alone (Issue #683); it sends real keys")
+    parser.add_argument("--preview", action="store_true",
+                        help="run the Markdown preview section alone (Issue #801); it sends real keys")
+    parser.add_argument("--scheme", choices=["dark", "light", "grid"], default="dark",
+                        help="with --preview: the colour scheme, or the grid document")
     parser.add_argument("--restore", action="store_true",
                         help="run the restore section alone (Issue #253); posted messages only")
     parser.add_argument("--grid", action="store_true",
@@ -2692,6 +2811,9 @@ def main() -> None:
     if arguments.split and (arguments.tabs or arguments.keys is not None
                             or arguments.open is not None):
         parser.error("--split runs alone")
+    if arguments.preview and (arguments.tabs or arguments.split or arguments.keys is not None
+                              or arguments.open is not None):
+        parser.error("--preview runs alone")
     if arguments.restore and (arguments.tabs or arguments.keys is not None
                               or arguments.open is not None):
         parser.error("--restore runs alone")
@@ -2730,6 +2852,14 @@ def main() -> None:
     if arguments.split:
         try:
             record = verify_split(executable, environment, expected_appearance(), frames)
+        except WindowCovered as cover:
+            print(cover)
+            sys.exit(1)
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+        return
+    if arguments.preview:
+        try:
+            record = verify_preview(executable, environment, arguments.scheme, output, frames)
         except WindowCovered as cover:
             print(cover)
             sys.exit(1)

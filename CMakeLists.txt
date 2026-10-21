@@ -161,7 +161,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/Win32TimingAdapter.cpp
     src/adapters/win32/Win32Worker.cpp src/adapters/win32/FolderShelf.cpp
     src/adapters/win32/FolderListing.cpp src/adapters/win32/Win32FolderAdapter.cpp
-    src/adapters/win32/Win32MarkdownAdapter.cpp
+    src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp)
@@ -236,7 +236,8 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/LineUtf16Evaluation.cpp
     src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp
-    src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewPlacement.cpp)
+    src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewPlacement.cpp
+    src/ui/win32/PreviewPane.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
 # ole32: IFileOpenDialog / IFileSaveDialog（ADR 0010 の決定 10）。ダイアログは窓の一部である。

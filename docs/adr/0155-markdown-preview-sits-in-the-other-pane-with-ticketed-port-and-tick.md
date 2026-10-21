@@ -39,7 +39,13 @@
 - `WalkRecentTab` は 1 歩ごとに文書が替わるので、歩くたびに頼む（確定まで待たない）。古い券の結果は捨てる。
 - 錨は追従をやめた後の編集で動かない（決定 12）。
 - 記憶の不足は `parser_rejected` と同じ 1 行になる（決定 6）。
-- 製品は今は骨の `Win32MarkdownAdapter`（`parse` は券を覚えるだけ・`collect` は空）で、Ctrl+Shift+M の ui の鍵（`OperationShortcut` の VK）もまだ無い。実機ではまだ開かず、開いても中身は空（#801）。
+
+## 実装の所在（#801）
+
+- 解析: `src/adapters/win32/Win32MarkdownAdapter` が `Win32Worker` に `parse_markdown` を載せ、打ち切りの問いは「worker の止める合図か、券が今の券でない」。結果は `MarkdownShelf`（`FolderShelf` の形・1 ファイル 1 型）に置き、棚は最新の結果 1 つだけを持つ（新しい結果が来たら古いものを置き換える・上限 1）。棚が空から 1 つになったときだけ合図する。今の券と閉じた印は棚の不可分な値（`std::atomic`・adapters/win32 だけ）。棚は仕事が `shared_ptr` で持ち、本文の `shared_ptr<const std::string>` も仕事が終わりまで持つ。壊す順は 窓 → controller → adapter（棚を閉じて走っている解析を打ち切る）→ worker。
+- tick: `src/ui/win32/WindowTimer.hpp` の `WindowTimer::preview = 3` と `preview_interval_milliseconds = 200`。`EditorWindow::deliver` の終わりの `follow_preview_timer` が、other がプレビューの間だけ `SetTimer` を張り（張っていれば張り直さない）、外れたら `KillTimer`。`WM_TIMER` で `PreviewTick` を送る。
+- 鍵と窓: `OperationShortcut.hpp` の `'M'` → `OperationKey::m`。プレビューの枠のクリックは何もしない（`SwitchPane` を送らず本文のキャレットも動かさない）・ホイールは `ScrollPane`。Ctrl+Shift+F4（`close_pane`）は other がプレビューなら `ClosePane` だけを送る。
+- 描画: `Direct2DRenderer` が `PreviewPane`（`src/ui/win32/PreviewPane`）を 1 つ所有し、その中に `PreviewTextLayouts`・`PreviewBrushes`・縦の位置 `PreviewBlockTops` を frame をまたいで持つ。縦の位置は文書（指す先の同一性）・字体（書式・DPI）・枠の幅が変わったときだけ測り直す。`BodyTextLayouts` と違い位置解決に使わないので application の `TextLayoutPort` に載せない（ADR 0114 の範囲外）。`draw_other_body` の `std::visit` の `PreviewFrame` の側が、地を受け身の枠と同じく塗り、`notice` があれば枠の上の 1 行に本文の色で左から書き、その下に `PreviewScene` を描く。上の送りは `anchor` を含む要素（`source_begin` の `upper_bound` − 1）の上端で、最初の要素なら 0（上の余白ごと見せる）。文書が空（最初の解析の前）なら地だけ。配色は `core::selected_theme(settings, appearance)`、字体は `guifont` と pt と窓の DPI。
 
 ## 却下した選択肢
 

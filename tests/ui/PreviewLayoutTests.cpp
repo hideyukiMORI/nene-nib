@@ -14,8 +14,10 @@
 #include "PreviewBlock.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
+#include "PreviewFrame.hpp"
 #include "PreviewInk.hpp"
 #include "PreviewPainter.hpp"
+#include "PreviewPane.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -28,6 +30,7 @@
 #include <combaseapi.h>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -303,6 +306,56 @@ void check_markers()
                mixed.value().top(2) > mixed.value().bottom(1),
            "items of one list touch and a different list starts after half a line");
 }
+
+// renderer が所有する other の枠のプレビュー（#801・ADR 0155）。PreviewFrame を持つ frame を
+// 描いて落ちず、同じ文書を 2 回描いても layout を作り直さない（縦の位置も保持して測り直さない）。
+// 最初の parse の前（文書が空）は地だけ。錨を含む要素の上端が上の送りで、最初の要素は 0。
+void check_pane_reuse()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    win32::PreviewPane pane;
+    expect(target != nullptr && theme.has_value() &&
+               pane.prepare(*target.Get(), theme.value().view()).has_value(),
+           "the preview pane prepares its brushes on a software target");
+    if (target == nullptr || !theme)
+    {
+        return;
+    }
+    auto document = std::make_shared<core::MarkdownDocument>();
+    for (std::size_t index = 0; index < many; ++index)
+    {
+        auto block =
+            block_of(core::PreviewBlockKind::paragraph, "paragraph " + std::to_string(index));
+        block.source_begin = core::Offset{index * 16};
+        document->blocks.push_back(std::move(block));
+    }
+    const std::shared_ptr<const core::MarkdownDocument> shown = document;
+    const auto style = style_of();
+    const core::LayoutRect area{0, 0, 400, 200};
+    target->BeginDraw();
+    const auto empty =
+        pane.paint(*target.Get(), application::PreviewFrame{nullptr, {}, {}}, style, area);
+    const auto first = pane.paint(
+        *target.Get(), application::PreviewFrame{shown, core::Offset{40 * 16}, {}}, style, area);
+    const auto made = pane.created();
+    const auto second = pane.paint(
+        *target.Get(), application::PreviewFrame{shown, core::Offset{40 * 16}, {}}, style, area);
+    expect(SUCCEEDED(target->EndDraw()) && empty.has_value() && first.has_value() &&
+               second.has_value(),
+           "a frame with a preview paints without failure");
+    expect(made > 0 && pane.created() == made,
+           "the preview layouts are reused across frames for the same document");
+    auto layouts = win32::PreviewTextLayouts{};
+    const auto tops = win32::PreviewBlockTops::measure(*shown, layouts, style, 400.0F);
+    expect(tops.has_value() &&
+               win32::preview_scroll_of(*shown, tops.value(), core::Offset{40 * 16 + 3}) ==
+                   tops.value().top(40) &&
+               win32::preview_scroll_of(*shown, tops.value(), core::Offset{5}) == 0.0F,
+           "the anchor scrolls to the top of the block that holds it");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -321,5 +374,6 @@ void verify_preview_layouts()
     check_image_span();
     check_html_and_style();
     check_markers();
+    check_pane_reuse();
 }
 } // namespace nenenib::tests::ui

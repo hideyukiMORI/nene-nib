@@ -165,6 +165,9 @@ class EditorWindow final
     // WM_TIMER を窓のタイマーへ写す。自動退避の合図は AutosaveTick を 1 回送る（ADR 0137
     // の決定 1）。
     void receive_timer(WPARAM word);
+    void follow_preview_timer();
+    void stop_preview_timer();
+    [[nodiscard]] bool previewing() const;
     // 起動の問い（ADR 0137 の決定 6）。最初の frame の後に自分へ post した合図で 1 回だけ呼ばれる。
     // 前回の退避が残っていれば「はい / いいえ」を聞いて、答えの意図を送る。
     void offer_autosave();
@@ -283,6 +286,9 @@ class EditorWindow final
     POINT selection_point_{};
     static constexpr UINT_PTR selection_timer = std::to_underlying(WindowTimer::selection);
     static constexpr UINT_PTR autosave_timer = std::to_underlying(WindowTimer::autosave);
+    static constexpr UINT_PTR preview_timer = std::to_underlying(WindowTimer::preview);
+    // プレビューの合図のタイマーを張っているか。開いているかの正本は application の枠の状態。
+    bool preview_ticking_ = false;
     // いまの編集モード。鍵をどちらの表で引くかを決めるだけで、正本は EditorState（ARC-004）。
     core::EditMode mode_ = core::EditMode::ordinary;
     // Ctrl+V を矩形の鍵に写すかどうかを決めるのに要る（ADR 0035 の決定 9）。

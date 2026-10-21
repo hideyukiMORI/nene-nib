@@ -37,6 +37,8 @@
 #include "OperationShortcut.hpp"
 #include "PaneLayouts.hpp"
 #include "PointTitleBar.hpp"
+#include "PreviewTick.hpp"
+#include "PreviewView.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "ScrollPaletteList.hpp"
@@ -87,6 +89,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nenenib::ui::win32
@@ -758,6 +761,7 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
     case WM_DESTROY:
         end_selection_drag();
         KillTimer(window_, autosave_timer);
+        stop_preview_timer();
         PostQuitMessage(0);
         return 0;
     case WM_TIMER:
@@ -1138,6 +1142,8 @@ void EditorWindow::click_client(LPARAM data)
 }
 
 // もう 1 つの枠を押したら先にその枠へ移り、移った後の配置で同じ点を解く（ADR 0148 の決定 11）。
+// プレビューの枠は移る先ではないので、押しても何もしない（本文のキャレットも動かさない・ADR
+// 0155）。
 void EditorWindow::click_body(LPARAM data)
 {
     const auto font_size = controller_.delivery().settings.font_size;
@@ -1146,6 +1152,10 @@ void EditorWindow::click_body(LPARAM data)
     if (other.has_value() &&
         core::contains(other.value().band, low_word_of(data), high_word_of(data)))
     {
+        if (previewing())
+        {
+            return;
+        }
         send(application::SwitchPane{});
     }
     if (core::contains(active_body(font_size).band, low_word_of(data), high_word_of(data)))
@@ -1459,6 +1469,9 @@ void EditorWindow::receive_timer(WPARAM word)
     case WindowTimer::autosave:
         send(application::AutosaveTick{});
         return;
+    case WindowTimer::preview:
+        send(application::PreviewTick{});
+        return;
     }
 }
 
@@ -1552,6 +1565,42 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     finish_display_question(display_asked);
     finish_tab_action(close_request, closing);
     release_session_block();
+    follow_preview_timer();
+}
+
+// プレビューの合図は other の枠にプレビューがある間だけ打つ（ADR 0155 の決定 8）。開いているかは
+// application の枠の状態が正本で、ui は張ったかどうかだけを覚える（既に張っていれば張り直さない。
+// 張り直すと打鍵のたびに数え直しになり、止めてからの tick が遅れる）。
+void EditorWindow::follow_preview_timer()
+{
+    const bool shown = previewing();
+    if (shown == preview_ticking_)
+    {
+        return;
+    }
+    if (shown)
+    {
+        preview_ticking_ =
+            SetTimer(window_, preview_timer, preview_interval_milliseconds, nullptr) != 0;
+        return;
+    }
+    stop_preview_timer();
+}
+
+// other の枠がプレビューか（正本は application の枠の状態）。
+bool EditorWindow::previewing() const
+{
+    const auto &other = controller_.split().other;
+    return other.has_value() && std::holds_alternative<application::PreviewView>(other.value());
+}
+
+void EditorWindow::stop_preview_timer()
+{
+    if (preview_ticking_)
+    {
+        KillTimer(window_, preview_timer);
+        preview_ticking_ = false;
+    }
 }
 
 // 枠を分けた・閉じた（鍵・一覧・Vim の `Ctrl-w`・Ex の `:q`）ら、操作中の枠の行数と幅を
@@ -2387,7 +2436,11 @@ void EditorWindow::run_pane_operation(core::EditorOperation operation)
         return;
     case core::EditorOperation::close_pane:
         // 操作中の枠を閉じる（`:q` と `Ctrl-w c` と同じ向き・決定 5）。1 枠ではどちらも何もしない。
-        send(application::SwitchPane{});
+        // プレビューの枠へは移れないので、プレビューだけを閉じる（ADR 0155）。
+        if (!previewing())
+        {
+            send(application::SwitchPane{});
+        }
         send(application::ClosePane{});
         return;
     case core::EditorOperation::toggle_preview:
