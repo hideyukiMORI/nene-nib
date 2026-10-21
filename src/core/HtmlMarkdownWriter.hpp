@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,16 +19,23 @@ namespace nenenib::core
 class HtmlMarkdownWriter final
 {
   public:
-    // attributes は開きタグの名前の後ろ（`href="…"` など・解く前の綴り）。
-    void open(HtmlTag tag, std::string_view attributes);
+    // attributes は開きタグの名前の後ろ（`href="…"` など・解く前の綴り）。入れ子が深さの上限
+    // （html_depth_limit）を超えるなら何もせず false（呼び手は malformed にする）。
+    [[nodiscard]] bool open(HtmlTag tag, std::string_view attributes);
     // 開いた要素の内でいちばん内側の同じ値まで閉じる。開いていない値は何もしない。
     void close(HtmlTag tag);
     // 実体参照を解いた後の文字。pre の外では空白の並びを 1 つに畳む。
     void text(std::string_view decoded);
 
+    // ここまでに書いた Markdown のバイト数（出力の上限の見張り）。
+    [[nodiscard]] std::size_t size() const noexcept;
+
     [[nodiscard]] std::string finished() &&;
 
   private:
+    void write_void(HtmlTag tag, std::string_view attributes);
+    void close_implied(HtmlTag tag);
+    void close_inner(HtmlTag target, std::span<const HtmlTag> boundaries);
     void open_block(HtmlTag tag);
     void open_inline(HtmlTag tag, std::string_view attributes);
     void open_list(HtmlTag tag);

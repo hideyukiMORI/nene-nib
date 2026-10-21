@@ -1781,7 +1781,7 @@ void EditorController::paste_clipboard()
         paste_markdown(fragment.value_or(std::string{}));
         return;
     case PasteKind::html_as_is:
-        insert_pasted(fragment.value_or(std::string{}));
+        paste_fragment(fragment.value_or(std::string{}));
         return;
     }
     std::unreachable();
@@ -1793,7 +1793,7 @@ void EditorController::paste_html_fragment()
     const auto fragment = clipboard_html();
     if (fragment.has_value())
     {
-        insert_pasted(fragment.value());
+        paste_fragment(fragment.value());
         return;
     }
     paste_text();
@@ -1811,7 +1811,25 @@ void EditorController::paste_markdown(std::string_view fragment)
             state_.with_command_message(core::DisplayText::parse(html_unconverted_notice).value());
         return;
     }
+    // 変換の結果が空（script だけ・src の無い img だけなど）なら、黙って文字の貼り付けに戻す。
+    // 空を貼って選択を消さない（レビュー R3）。
+    if (markdown.value().empty())
+    {
+        paste_text();
+        return;
+    }
     insert_pasted(markdown.value());
+}
+
+// fragment のまま貼る。空の fragment は黙って文字の貼り付けに戻す（空を貼って選択を消さない）。
+void EditorController::paste_fragment(std::string_view fragment)
+{
+    if (fragment.empty())
+    {
+        paste_text();
+        return;
+    }
+    insert_pasted(fragment);
 }
 
 // 読めない HTML は「HTML が無い」と同じに扱う。開けない失敗は文字の読みでも同じく黙る（ADR 0134）。

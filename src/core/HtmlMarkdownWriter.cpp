@@ -1,9 +1,12 @@
 #include "HtmlMarkdownWriter.hpp"
 
 #include "HtmlAttribute.hpp"
+#include "HtmlToMarkdown.hpp"
 
 #include <algorithm>
+#include <array>
 #include <iterator>
+#include <span>
 #include <utility>
 
 namespace nenenib::core
@@ -83,14 +86,100 @@ constexpr std::size_t new_line = 1;
     return marks;
 }
 
-[[nodiscard]] bool is_list_boundary(HtmlTag tag) noexcept
+// 暗黙に閉じる要素を探すのをやめる要素（HTML の li / td / tr / p の暗黙の終わり）。
+constexpr std::array<HtmlTag, 2> list_containers{{HtmlTag::unordered_list, HtmlTag::ordered_list}};
+constexpr std::array<HtmlTag, 2> row_containers{{HtmlTag::table_row, HtmlTag::table}};
+constexpr std::array<HtmlTag, 1> table_containers{{HtmlTag::table}};
+constexpr std::array<HtmlTag, 4> paragraph_containers{
+    {HtmlTag::list_item, HtmlTag::quote, HtmlTag::table_cell, HtmlTag::division}};
+
+[[nodiscard]] bool is_heading(HtmlTag tag) noexcept
 {
-    return tag == HtmlTag::list_item || tag == HtmlTag::unordered_list ||
-           tag == HtmlTag::ordered_list;
+    return std::to_underlying(tag) <= std::to_underlying(HtmlTag::heading_6);
+}
+
+// 逃がす文字の前に `\` を置く。
+[[nodiscard]] std::string escaped(std::string_view text, std::string_view specials)
+{
+    std::string out;
+    out.reserve(text.size());
+    for (const char character : text)
+    {
+        if (specials.find(character) != std::string_view::npos)
+        {
+            out += '\\';
+        }
+        out += character;
+    }
+    return out;
+}
+
+// リンクと画像の行き先（決定 6・レビュー R4）。改行は落とす。空白・括弧・`<` `>` を含むなら
+// CommonMark の `<…>` で包み、中の `\` `<` `>` を逃がす。ほかは `\` だけを逃がす。
+[[nodiscard]] std::string link_destination(std::string_view target)
+{
+    std::string kept;
+    for (const char character : target)
+    {
+        if (character != '\n' && character != '\r')
+        {
+            kept += character;
+        }
+    }
+    constexpr std::string_view enclosed = " \t()<>";
+    if (std::ranges::none_of(kept, [enclosed](char character)
+                             { return enclosed.find(character) != std::string_view::npos; }))
+    {
+        return escaped(kept, "\\");
+    }
+    return "<" + escaped(kept, "\\<>") + ">";
+}
+
+// 中身を持たず、開いた要素の列に積まない要素。
+[[nodiscard]] bool is_void(HtmlTag tag) noexcept
+{
+    return tag == HtmlTag::line_break || tag == HtmlTag::rule || tag == HtmlTag::image ||
+           tag == HtmlTag::void_other;
+}
+
+[[nodiscard]] bool is_inline(HtmlTag tag) noexcept
+{
+    return tag == HtmlTag::strong || tag == HtmlTag::emphasis || tag == HtmlTag::anchor ||
+           tag == HtmlTag::code;
 }
 } // namespace
 
-void HtmlMarkdownWriter::open(HtmlTag tag, std::string_view attributes)
+std::size_t HtmlMarkdownWriter::size() const noexcept
+{
+    return out_.size();
+}
+
+bool HtmlMarkdownWriter::open(HtmlTag tag, std::string_view attributes)
+{
+    if (is_void(tag))
+    {
+        write_void(tag, attributes);
+        return true;
+    }
+    close_implied(tag);
+    // 入れ子の深さの上限（レビュー R1・R2）。閉じる探索と行頭の印の長さをこの上限で抑える。
+    if (open_.size() >= html_depth_limit)
+    {
+        return false;
+    }
+    if (is_inline(tag))
+    {
+        open_inline(tag, attributes);
+    }
+    else
+    {
+        open_block(tag);
+    }
+    open_.push_back(tag);
+    return true;
+}
+
+void HtmlMarkdownWriter::write_void(HtmlTag tag, std::string_view attributes)
 {
     switch (tag)
     {
@@ -104,13 +193,10 @@ void HtmlMarkdownWriter::open(HtmlTag tag, std::string_view attributes)
         write_image(attributes);
         return;
     case HtmlTag::void_other:
-        return;
     case HtmlTag::strong:
     case HtmlTag::emphasis:
     case HtmlTag::anchor:
     case HtmlTag::code:
-        open_inline(tag, attributes);
-        break;
     case HtmlTag::heading_1:
     case HtmlTag::heading_2:
     case HtmlTag::heading_3:
@@ -128,10 +214,63 @@ void HtmlMarkdownWriter::open(HtmlTag tag, std::string_view attributes)
     case HtmlTag::table_cell:
     case HtmlTag::division:
     case HtmlTag::other:
-        open_block(tag);
-        break;
+        return;
     }
-    open_.push_back(tag);
+}
+
+// HTML の暗黙の終わり。前の li / td / tr が閉じないまま次が来たら、前を閉じる。塊の要素が来たら
+// 開いたままの p を閉じる。閉じないままだと入れ子の深さが上限に届く。
+void HtmlMarkdownWriter::close_implied(HtmlTag tag)
+{
+    switch (tag)
+    {
+    case HtmlTag::list_item:
+        close_inner(HtmlTag::list_item, list_containers);
+        return;
+    case HtmlTag::table_cell:
+        close_inner(HtmlTag::table_cell, row_containers);
+        return;
+    case HtmlTag::table_row:
+        close_inner(HtmlTag::table_row, table_containers);
+        return;
+    case HtmlTag::heading_1:
+    case HtmlTag::heading_2:
+    case HtmlTag::heading_3:
+    case HtmlTag::heading_4:
+    case HtmlTag::heading_5:
+    case HtmlTag::heading_6:
+    case HtmlTag::paragraph:
+    case HtmlTag::unordered_list:
+    case HtmlTag::ordered_list:
+    case HtmlTag::quote:
+    case HtmlTag::preformatted:
+    case HtmlTag::table:
+    case HtmlTag::division:
+        close_inner(HtmlTag::paragraph, paragraph_containers);
+        return;
+    case HtmlTag::line_break:
+    case HtmlTag::rule:
+    case HtmlTag::image:
+    case HtmlTag::void_other:
+    case HtmlTag::strong:
+    case HtmlTag::emphasis:
+    case HtmlTag::anchor:
+    case HtmlTag::code:
+    case HtmlTag::other:
+        return;
+    }
+}
+
+// 開いた要素を内側から見て、boundaries の要素より先に target があれば target まで閉じる。
+void HtmlMarkdownWriter::close_inner(HtmlTag target, std::span<const HtmlTag> boundaries)
+{
+    const auto inner = std::find_if(
+        open_.rbegin(), open_.rend(), [target, boundaries](HtmlTag opened)
+        { return opened == target || std::ranges::find(boundaries, opened) != boundaries.end(); });
+    if (inner != open_.rend() && *inner == target)
+    {
+        close(target);
+    }
 }
 
 void HtmlMarkdownWriter::open_block(HtmlTag tag)
@@ -225,12 +364,7 @@ void HtmlMarkdownWriter::open_list(HtmlTag tag)
 
 void HtmlMarkdownWriter::open_item()
 {
-    // 前の項目が閉じていなければ閉じる（HTML の li の暗黙の終わり）。
-    const auto inner = std::find_if(open_.rbegin(), open_.rend(), is_list_boundary);
-    if (inner != open_.rend() && *inner == HtmlTag::list_item)
-    {
-        close(HtmlTag::list_item);
-    }
+    // 前の項目が閉じていなければ open の close_implied が先に閉じている。
     request_breaks(new_line);
     const auto number = lists_.empty() ? std::nullopt : lists_.back();
     if (!number.has_value())
@@ -265,7 +399,7 @@ void HtmlMarkdownWriter::write_image(std::string_view attributes)
     }
     const std::string alternative = html_attribute(attributes, "alt").value_or(std::string{});
     begin_content();
-    out_ += "![" + alternative + "](" + source.value() + ")";
+    out_ += "![" + escaped(alternative, "\\]") + "](" + link_destination(source.value()) + ")";
 }
 
 void HtmlMarkdownWriter::write_rule()
@@ -290,6 +424,12 @@ void HtmlMarkdownWriter::write_line_break()
     // 先頭の br は何も残さない。
     if (out_.empty())
     {
+        return;
+    }
+    // 見出しの中の br は空白 1 つ（見出しを 2 行に割らない）。
+    if (std::ranges::any_of(open_, is_heading))
+    {
+        pending_space_ = true;
         return;
     }
     emit_breaks();
@@ -380,7 +520,7 @@ void HtmlMarkdownWriter::end_inline(HtmlTag tag)
         links_.pop_back();
         if (target.has_value())
         {
-            close_mark("[", "](" + target.value() + ")");
+            close_mark("[", "](" + link_destination(target.value()) + ")");
         }
         return;
     }

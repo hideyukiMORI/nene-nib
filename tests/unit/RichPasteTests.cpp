@@ -165,6 +165,11 @@ void verify_malformed_html()
            "malformed HTML pastes the text instead");
     expect(notice(editing) == unconverted_notice && editing.bell().rings() == 0,
            "malformed HTML says so in one line without the bell");
+    // 変換の結果が空なら黙って文字に戻す（レビュー R3）。
+    Editing empty;
+    open_empty(empty, markdown_path, std::string("<script>x</script>"));
+    expect(pasted(empty, ClipboardOperation::paste) == held_text && notice(empty).empty(),
+           "HTML that converts to nothing pastes the text without a notice");
 }
 
 // Vim INSERT の OS の貼り付けも同じ判定。NORMAL の `"+p` は文字だけ（ADR 0051 のまま）で、

@@ -452,6 +452,7 @@ class EditorController final
     void paste_clipboard();
     void paste_html_fragment();
     void paste_markdown(std::string_view fragment);
+    void paste_fragment(std::string_view fragment);
     void paste_text();
     void insert_pasted(std::string_view pasted);
     [[nodiscard]] std::optional<std::string> clipboard_html();

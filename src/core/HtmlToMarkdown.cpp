@@ -238,6 +238,23 @@ constexpr std::array<std::string_view, 2> discarded_elements{{"script", "style"}
     return close.value() + 1U;
 }
 
+// `<br/>` `<img src="x" />` の終わりの `/`。引用符の無い値の最後の `/`（`href=http://x/`）は値の
+// 一部で、自閉じにしない。
+[[nodiscard]] bool self_closed(std::string_view attributes) noexcept
+{
+    if (!attributes.ends_with('/'))
+    {
+        return false;
+    }
+    if (attributes.size() == 1U)
+    {
+        return true;
+    }
+    const char before = attributes[attributes.size() - 2U];
+    return before == ' ' || before == '"' || before == '\'' || before == '\t' || before == '\n' ||
+           before == '\r';
+}
+
 [[nodiscard]] std::optional<std::size_t> read_start_tag(std::string_view html, std::size_t at,
                                                         HtmlMarkdownWriter &writer)
 {
@@ -253,10 +270,13 @@ constexpr std::array<std::string_view, 2> discarded_elements{{"script", "style"}
         return discarded_end(html, close.value() + 1U, lower);
     }
     std::string_view attributes = html.substr(end, close.value() - end);
-    const bool self_closing = attributes.ends_with('/');
+    const bool self_closing = self_closed(attributes);
     attributes.remove_suffix(self_closing ? 1U : 0U);
     const HtmlTag tag = tag_of(lower);
-    writer.open(tag, attributes);
+    if (!writer.open(tag, attributes))
+    {
+        return std::nullopt;
+    }
     if (self_closing)
     {
         writer.close(tag);
@@ -299,6 +319,10 @@ std::expected<std::string, HtmlFailure> markdown_from_html(std::string_view frag
     std::size_t at = 0;
     while (at < fragment.size())
     {
+        if (writer.size() > html_markdown_limit)
+        {
+            return std::unexpected(HtmlFailure::too_large);
+        }
         const std::size_t markup = next_markup(fragment, at);
         writer.text(html_decoded(fragment.substr(at, markup - at)));
         if (markup == fragment.size())
@@ -311,6 +335,10 @@ std::expected<std::string, HtmlFailure> markdown_from_html(std::string_view frag
             return std::unexpected(HtmlFailure::malformed);
         }
         at = next.value();
+    }
+    if (writer.size() > html_markdown_limit)
+    {
+        return std::unexpected(HtmlFailure::too_large);
     }
     return std::move(writer).finished();
 }

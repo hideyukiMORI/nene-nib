@@ -8,7 +8,9 @@
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -24,7 +26,7 @@ using core::markdown_from_html;
 // fragment → 出る Markdown（LF）。
 using Conversion = std::array<std::string_view, 3>;
 
-constexpr std::array<Conversion, 76> conversions{{
+constexpr std::array<Conversion, 88> conversions{{
     // 見出し
     {"<h1>Title</h1>", "# Title", "h1 is one hash"},
     {"<h3>Sub</h3>", "### Sub", "h3 is three hashes"},
@@ -50,7 +52,8 @@ constexpr std::array<Conversion, 76> conversions{{
     {"<a href='x?a=1&amp;b=2'>q</a>", "[q](x?a=1&b=2)", "href entities are decoded"},
     {"<a name=\"n\">plain</a>", "plain", "an anchor without href is its text"},
     {"x<a href=u></a>y", "xy", "an empty link leaves nothing"},
-    {"<a href=\"x>y\">t</a>", "[t](x>y)", "a quoted > does not end the tag"},
+    {"<a href=\"x>y\">t</a>", "[t](<x\\>y>)",
+     "a quoted > does not end the tag and is escaped in the destination"},
     // リスト
     {"<ul><li>a</li><li>b</li></ul>", "- a\n- b", "ul items are dashes"},
     {"<ol><li>a</li><li>b</li><li>c</li></ol>", "1. a\n2. b\n3. c", "ol items are numbered"},
@@ -129,6 +132,22 @@ constexpr std::array<Conversion, 76> conversions{{
     {"<!--StartFragment--><b>x</b><!--EndFragment-->", "**x**",
      "the fragment comments of CF_HTML are dropped"},
     {"<P>A</P><STRONG>B</STRONG>", "A\n\n**B**", "tag names are case-insensitive"},
+    // リンクと画像の行き先の逃がし（レビュー R4）
+    {"<a href=\"http://x/a b)c\">t</a>", "[t](<http://x/a b)c>)",
+     "a destination with a space or ) is wrapped in <>"},
+    {"<a href=\"\">t</a>", "[t]()", "an empty href is an empty destination"},
+    {"<img src=\"a b.png\" alt=\"x]y\">", "![x\\]y](<a b.png>)",
+     "] in alt is escaped and a spaced src is wrapped"},
+    {"<a href=\"a\\b\">t</a>", "[t](a\\\\b)", "a backslash in href is escaped"},
+    {"<a href=http://x/>t</a>", "[t](http://x/)", "an unquoted href keeps its last /"},
+    // 実体参照の端・捨てる要素の閉じ・入れ子の pre・閉じ忘れ・見出しの中の br（レビュー I）
+    {"&#0;", "\xEF\xBF\xBD", "&#0; is the replacement character"},
+    {"&#x110000;", "\xEF\xBF\xBD", "a code point past U+10FFFF is the replacement character"},
+    {"a<script>x</script >b", "ab", "an end tag of script with a space still ends it"},
+    {"<pre>a<pre>b</pre>c</pre>", "```\nabc\n```", "a nested pre writes one fence"},
+    {"<table><tr><td>1<td>2<tr><td>3</table>", "1 2\n3", "unclosed td and tr end at the next"},
+    {"<p>a<p>b", "a\n\nb", "an unclosed p ends at the next block"},
+    {"<h1>a<br>b</h1>", "# a b", "br in a heading is a space"},
 }};
 
 void verify_conversions()
@@ -182,6 +201,54 @@ void verify_limit()
     expect(fails_with(over_limit, HtmlFailure::too_large), "a fragment over the limit is refused");
 }
 
+[[nodiscard]] std::string repeated(std::string_view text, std::size_t count)
+{
+    std::string out;
+    out.reserve(text.size() * count);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        out += text;
+    }
+    return out;
+}
+
+// 入れ子の深さの上限（レビュー R1・R2）。64 までは通り、65 は malformed。
+void verify_depth()
+{
+    const std::size_t limit = core::html_depth_limit;
+    expect(markdown_from_html(repeated("<span>", limit) + "x") == "x",
+           "nesting at the depth limit is converted");
+    expect(fails_with(repeated("<span>", limit + 1U) + "x", HtmlFailure::malformed),
+           "nesting past the depth limit is malformed");
+    expect(fails_with(repeated("<blockquote>", limit + 1U) + "x", HtmlFailure::malformed),
+           "quotes past the depth limit are malformed");
+    // 対応しない閉じタグの列は、深さの上限の中で探すので線形に終わる。
+    expect(markdown_from_html(repeated("<span>", limit) + repeated("</i>", 10000U) + "x") == "x",
+           "10,000 unmatched end tags finish");
+    // 深い引用の中の br の繰り返しは、行ごとに上限の深さの印だけを書く。
+    const std::string quoted = repeated("<blockquote>", limit - 1U) + repeated("a<br>", 100U);
+    const auto lines = markdown_from_html(quoted);
+    const std::string first = repeated("> ", limit - 1U) + "a  \n";
+    expect(lines.has_value() && lines.value().starts_with(first) &&
+               std::ranges::count(lines.value(), '\n') == 99,
+           "br inside deep quotes writes one prefix per line");
+    // 閉じない li と p は次の li と塊で閉じ、深さに数えない。
+    const auto items = markdown_from_html("<ul>" + repeated("<li>a", 10000U));
+    expect(items.has_value() && std::ranges::count(items.value(), '\n') == 9999,
+           "10,000 unclosed li stay within the depth");
+    const auto paragraphs = markdown_from_html(repeated("<p>a", 1000U));
+    expect(paragraphs.has_value(), "1,000 unclosed p stay within the depth");
+}
+
+// 出す Markdown の上限。深い引用の中の br で出力が膨らむと too_large。
+void verify_output_limit()
+{
+    const std::string swelling = repeated("<blockquote>", core::html_depth_limit - 1U) +
+                                 repeated("<br>a", (core::html_markdown_limit / 120U) + 1U);
+    expect(fails_with(swelling, HtmlFailure::too_large),
+           "Markdown that swells past the output limit is refused");
+}
+
 void verify_attributes()
 {
     using core::html_attribute;
@@ -207,6 +274,8 @@ void verify_html_markdown_scope()
     verify_japanese_and_empty();
     verify_failures();
     verify_limit();
+    verify_depth();
+    verify_output_limit();
     verify_attributes();
 }
 } // namespace nenenib::tests
