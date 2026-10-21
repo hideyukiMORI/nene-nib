@@ -122,7 +122,7 @@ Issue の無いものは「未起票」。着手は hide の指示で。番号�
 
 ## いまの数字・動かないもの・段階
 
-- 公開版は [v0.1.0-beta.5](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.5)（2026-10-21 朝・main `4329e78`・#796・記録は [beta5-release-2026-10-21.md](../quality/beta5-release-2026-10-21.md)・8 本のゲート 0 regression）。beta.5 の後に main に入ったもの（2026-10-22）は日報の表。前は [v0.1.0-beta.4](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.4)（2026-10-19・`5987ebd`・[記録](../quality/beta4-release-2026-10-19.md)）。split は #680〜#684 で着手（ADR 0148・hide の試用待ち）。
+- 公開版は [v0.1.0-beta.6](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.6)（2026-10-22 夜・main `f7f0bf2`・#850・記録は [beta6-release-2026-10-22.md](../quality/beta6-release-2026-10-22.md)・8 本のゲート 0 regression）。前は [v0.1.0-beta.5](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.5)（2026-10-21 朝・main `4329e78`・#796・記録は [beta5-release-2026-10-21.md](../quality/beta5-release-2026-10-21.md)・8 本のゲート 0 regression）。beta.5 の後に main に入ったもの（2026-10-22）は日報の表。前は [v0.1.0-beta.4](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.4)（2026-10-19・`5987ebd`・[記録](../quality/beta4-release-2026-10-19.md)）。split は #680〜#684 で着手（ADR 0148・hide の試用待ち）。
 - main `b3e6f01` の実機の速さ（2026-10-18・静かな機械・基準値として採用 #644）: 起動 41.9 ms・窓 32.4 ms・単打 0.64 ms・連打 2.16 ms・16 MiB open 49.8 ms・16 MiB 連打 2.34 ms・面 1.73 ms・長行単打 1.57 ms・**1 行 16 MiB は「はい」open 129.6 ms・1 打鍵 1.23 ms**（「いいえ」161.7 / 2.12・記録だけ）。目標 D51 の 6 本は全部の内。
 - 1 行 16 MiB の基準値は問いの待ちを除いた定義で採り直した（2026-10-20・#704 / PR #708）: 「はい」open 82.4 ms・1 打鍵 1.351 ms。
 - split の本測定（2026-10-19・`1d1c882` の Release・ADR 0120）: 3 本文 × 4 群の 12 対すべて pass（P − S は最大 0.099 ms・p95 は最大 2.01 ms・[記録](../quality/split-speed-2026-10-19.md)）。

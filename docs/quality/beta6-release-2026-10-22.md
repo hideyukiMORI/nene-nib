@@ -31,6 +31,16 @@
 3. 同じ commit に annotated tag `v0.1.0-beta.6` と GitHub pre-release（zip と SHA256SUMS・本文は上の「主な変更」）。
 4. `gh release download` で再取得し、tag の commit・bytes・digest を照合（`verify-publication.py`）。
 
-## 公開の結果
+## 公開の結果（2026-10-22 夜・hide 在席）
 
-（公開の後に埋める）
+2026-10-21 20:16:42 JST（`published_at` 2026-10-21T11:16:42Z・release id 419465676・記録の通し番号は 2026-10-22）、[v0.1.0-beta.6](https://github.com/hideyukiMORI/nene-nib/releases/tag/v0.1.0-beta.6) を GitHub pre-release として公開した。
+公開元は main `f7f0bf243d5675fb975e7a07820298562826cef5`（#806 の merge `1812e6b` → 記録の文書 PR #851 の squash）。annotated tag `v0.1.0-beta.6` は同じ commit。
+
+- 出典・依存・同梱漏れ: `pwsh -NoProfile -File eng/package-release.ps1 -Beta 6 -OutputDirectory D:/NeNeNib/releases/v0.1.0-beta.6 -Verification docs/quality/beta6-release-2026-10-22.md` が `D:/NeNeNib/worktrees/beta6`（detached・origin/main `f7f0bf2`）で成功（ビルド込み）。4 項目・宣言済み DLL・展開 bytes を道具が照合。記録 `D:/NeNeNib/releases/v0.1.0-beta.6/package.json`。
+- 起動・描画: `python D:/NeNeNib/evidence/beta6-release/release-smoke.py` が成功（隔離 profile・DPI 120・正常終了 0・本文不変）。
+- 速さ: 梱包した exe で `python eng/measure-speed.py --check --repetitions 5 --executable D:/NeNeNib/releases/v0.1.0-beta.6/extracted/NeNeNib.exe` → **8 benches checked, 0 regression(s), 0 unmeasurable**（負荷 3〜5%・hide は打鍵を控えた）。中央値 ms: 起動 43.68・窓 33.24・単打 0.648・連打 2.530・16 MiB open 52.21・16 MiB 連打 2.759・面 1.733・長い行 1.932（標本に 1.548・2 山は調査中）。記録 `D:/NeNeNib/evidence/beta6-release/gate-beta6-2026-10-21T11-16-16Z.json`。
+- 公開物の取違え: `gh release download` と `python D:/NeNeNib/evidence/beta6-release/verify-publication.py` が成功。公開状態（prerelease・非 draft）・annotated tag の commit・ZIP / SHA256SUMS の再取得 bytes と GitHub digest・ZIP の全項目が一致。記録 `D:/NeNeNib/releases/v0.1.0-beta.6/publication-verification.json`。
+- ZIP: `NeNeNib-0.1.0-beta.6-windows-x64.zip`、933,857 bytes。SHA-256: `34c8f7b3d5b6c19675db8a8986aeb08a36b0bc27ea0eeee5e08c828a6980aeb7`。
+- `SHA256SUMS`: 104 bytes。SHA-256: `07a6a2afe36df124de7084af089a0b87e240c3926ab3bc287fa7b046fb709047`。
+- exe の SHA-256: `1356b83f42b76dfcb21c2e4df2316e8b125dc6369928c8484ef311cd82ca56f6`（2,226,688 bytes）。
+- hide の試用（D41）: 公開の前に 14 項目（根拠 (d)）。
