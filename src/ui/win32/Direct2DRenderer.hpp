@@ -297,8 +297,8 @@ class Direct2DRenderer final
     BodyTextLayouts &body_text_;
     std::optional<RenderFailure> text_failure_;
     GutterTextLayouts gutter_layouts_;
-    // 通常6枠と案内4枠。録画時は案内が無く7枠（ADR 0079）。
-    static constexpr std::size_t status_layout_count = 10;
+    // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。
+    static constexpr std::size_t status_layout_count = 11;
     std::array<StatusTextLayout, status_layout_count> status_layouts_{};
     std::size_t status_layout_cursor_ = 0;
     WaitableHandle latency_{nullptr, &::CloseHandle};

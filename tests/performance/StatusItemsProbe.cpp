@@ -1,5 +1,6 @@
 #include "StatusItemsProbe.hpp"
 
+#include "Language.hpp"
 #include "Milestone.hpp"
 #include "StatusItems.hpp"
 
@@ -17,8 +18,8 @@ struct StatusCase
     core::TextEncoding encoding;
     core::LineEnding ending;
     std::string_view input;
-    std::array<std::string_view, 3> labels;
-    std::array<std::size_t, 3> code_points;
+    std::array<std::string_view, core::status_item_count> labels;
+    std::array<std::size_t, core::status_item_count> code_points;
     std::uint64_t checksum;
 };
 
@@ -29,44 +30,44 @@ constexpr std::array<StatusCase, 6> cases{{
      core::TextEncoding::utf8,
      core::LineEnding::crlf,
      "UTF-8|CRLF|1|1",
-     {"行 1, 桁 1", "UTF-8", "CRLF"},
-     {8U, 5U, 4U},
-     38912U},
+     {"行 1, 桁 1", "UTF-8", "CRLF", "text"},
+     {8U, 5U, 4U, 4U},
+     47104U},
     {{core::LineNumber{9U}, core::Column{24U}},
      core::TextEncoding::utf8_bom,
      core::LineEnding::lf,
      "UTF-8 BOM|LF|9|24",
-     {"行 9, 桁 24", "UTF-8 BOM", "LF"},
-     {9U, 9U, 2U},
-     45056U},
+     {"行 9, 桁 24", "UTF-8 BOM", "LF", "text"},
+     {9U, 9U, 2U, 4U},
+     53248U},
     {{core::LineNumber{123U}, core::Column{456U}},
      core::TextEncoding::shift_jis,
      core::LineEnding::crlf,
      "Shift_JIS|CRLF|123|456",
-     {"行 123, 桁 456", "Shift_JIS", "CRLF"},
-     {12U, 9U, 4U},
-     55296U},
+     {"行 123, 桁 456", "Shift_JIS", "CRLF", "text"},
+     {12U, 9U, 4U, 4U},
+     63488U},
     {{core::LineNumber{maximum_position}, core::Column{maximum_position}},
      core::TextEncoding::utf8,
      core::LineEnding::lf,
      "UTF-8|LF|18446744073709551615|18446744073709551615",
-     {"行 18446744073709551615, 桁 18446744073709551615", "UTF-8", "LF"},
-     {46U, 5U, 2U},
-     112640U},
+     {"行 18446744073709551615, 桁 18446744073709551615", "UTF-8", "LF", "text"},
+     {46U, 5U, 2U, 4U},
+     120832U},
     {{core::LineNumber{123456U}, core::Column{654321U}},
      core::TextEncoding::utf8_bom,
      core::LineEnding::crlf,
      "UTF-8 BOM|CRLF|123456|654321",
-     {"行 123456, 桁 654321", "UTF-8 BOM", "CRLF"},
-     {18U, 9U, 4U},
-     67584U},
+     {"行 123456, 桁 654321", "UTF-8 BOM", "CRLF", "text"},
+     {18U, 9U, 4U, 4U},
+     75776U},
     {{core::LineNumber{1U}, core::Column{1U}},
      core::TextEncoding::shift_jis,
      core::LineEnding::lf,
      "Shift_JIS|LF|1|1",
-     {"行 1, 桁 1", "Shift_JIS", "LF"},
-     {8U, 9U, 2U},
-     43008U},
+     {"行 1, 桁 1", "Shift_JIS", "LF", "text"},
+     {8U, 9U, 2U, 4U},
+     51200U},
 }};
 
 [[nodiscard]] const StatusCase &status_case(StatusItemsWorkload workload)
@@ -115,7 +116,8 @@ std::expected<std::uint64_t, ProbeFailure> fixed_status_items(StatusItemsWorkloa
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
-    const auto initial = core::status_items_for(sample.caret, sample.encoding, sample.ending);
+    const auto initial =
+        core::status_items_for(sample.caret, sample.encoding, sample.ending, core::Language::plain);
     if (!status_matches(initial, sample))
     {
         return std::unexpected(ProbeFailure::wrong_result);
@@ -124,12 +126,14 @@ std::expected<std::uint64_t, ProbeFailure> fixed_status_items(StatusItemsWorkloa
     timing.mark(core::Milestone::probe_started);
     for (std::size_t iteration = 0; iteration < 1024U; ++iteration)
     {
-        const auto items = core::status_items_for(sample.caret, sample.encoding, sample.ending);
+        const auto items = core::status_items_for(sample.caret, sample.encoding, sample.ending,
+                                                  core::Language::plain);
         checksum += status_checksum(items);
     }
     timing.mark(core::Milestone::probe_finished);
     if (checksum != sample.checksum || !status_matches(initial, sample) ||
-        !status_matches(core::status_items_for(sample.caret, sample.encoding, sample.ending),
+        !status_matches(core::status_items_for(sample.caret, sample.encoding, sample.ending,
+                                               core::Language::plain),
                         sample))
     {
         return std::unexpected(ProbeFailure::wrong_result);

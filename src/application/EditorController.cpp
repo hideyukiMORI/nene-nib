@@ -541,6 +541,13 @@ constexpr std::size_t maximum_file_bytes = 64U * 1024U * 1024U;
 
 // 帯の順のタブの表示値（ADR 0056 の決定 7）。脇の束は置いたときの値を並べるだけで、
 // 題名を作り直さない。アクティブの分は document と同じ値を差し込む。
+// ステータスバーの右の 4 項目（ADR 0154 の決定 6・言語は右端）。
+[[nodiscard]] std::array<core::DisplayText, core::status_item_count>
+status_items_of(const EditorState &state, core::TextPosition caret, core::TextEncoding encoding)
+{
+    return core::status_items_for(caret, encoding, state.line_ending(), state.language());
+}
+
 [[nodiscard]] std::vector<DocumentView> tab_views(const EditorState &state,
                                                   const DocumentView &active)
 {
@@ -4645,7 +4652,7 @@ EditorFrame EditorController::frame()
                        std::move(delivered.composition),
                        std::move(delivered.command_composition),
                        std::move(delivered.document),
-                       core::status_items_for(caret, encoding, state_.line_ending()),
+                       status_items_of(state_, caret, encoding),
                        std::move(delivered.settings),
                        std::move(delivered.settings_failure),
                        command_line_view(),

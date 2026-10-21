@@ -18,9 +18,10 @@ constexpr std::int32_t segment_height_dips = 20;
 constexpr std::int32_t mode_width_dips = 72;
 constexpr std::int32_t corner_radius_dips = 6;
 constexpr std::int32_t segment_radius_dips = 4;
-// 右の 3 項目の幅（行と桁・文字コード・改行）。左から右へ並べた順に対応する。
+// 右の 4 項目の幅（行と桁・文字コード・改行・言語）。左から右へ並べた順に対応する。
 // 文字コードは「UTF-8 BOM」「Shift_JIS」まで入る幅が要る（ADR 0010 の決定 14 で 44 → 72）。
-constexpr std::array<std::int32_t, status_item_count> item_width_dips{96, 72, 36};
+// 言語は最も長い名前「javascript」「typescript」まで入る幅（ADR 0154 の決定 6）。
+constexpr std::array<std::int32_t, status_item_count> item_width_dips{96, 72, 36, 72};
 // 表示形式の印（ADR 0140 の決定 3）。最初の項目の左 2 DIP から 24 DIP。案内は最初の項目の左
 // 28 DIP で終わるので重ならない。
 constexpr std::int32_t display_gap_dips = 2;

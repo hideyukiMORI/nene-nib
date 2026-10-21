@@ -18,6 +18,7 @@
 #include "FilePath.hpp"
 #include "FontSize.hpp"
 #include "HistoryFailure.hpp"
+#include "Language.hpp"
 #include "LayoutRect.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
@@ -1704,10 +1705,12 @@ void verify_milestone()
 void verify_status_position_boundary(const TextPosition &caret, std::string_view expected,
                                      std::size_t bytes, std::size_t code_points)
 {
-    const auto held = status_items_for(caret, TextEncoding::utf8, LineEnding::crlf);
+    const auto held = status_items_for(caret, TextEncoding::utf8, LineEnding::crlf,
+                                       nenenib::core::Language::plain);
     const auto view = held.at(0).text();
     static_cast<void>(status_items_for(TextPosition{LineNumber{123456}, Column{654321}},
-                                       TextEncoding::utf8_bom, LineEnding::lf));
+                                       TextEncoding::utf8_bom, LineEnding::lf,
+                                       nenenib::core::Language::plain));
     expect(held.at(0).text() == expected, "a later call preserves the owned caret label");
     expect(view == expected, "a later call preserves the borrowed caret label view");
     expect(view.size() == bytes, "the caret label contains exactly the expected bytes");
@@ -1729,18 +1732,20 @@ void verify_status_position_boundaries()
 void verify_status_items()
 {
     const auto items = status_items_for(TextPosition{LineNumber{1}, Column{1}}, TextEncoding::utf8,
-                                        LineEnding::crlf);
+                                        LineEnding::crlf, nenenib::core::Language::plain);
     expect(items.at(0).text() == "行 1, 桁 1", "the caret position is the first item");
     expect(items.at(1).text() == "UTF-8", "the encoding follows the document");
     expect(items.at(2).text() == "CRLF", "the line ending follows the buffer");
-    const auto moved = status_items_for(TextPosition{LineNumber{9}, Column{24}},
-                                        TextEncoding::utf8_bom, LineEnding::lf);
+    const auto moved =
+        status_items_for(TextPosition{LineNumber{9}, Column{24}}, TextEncoding::utf8_bom,
+                         LineEnding::lf, nenenib::core::Language::plain);
     expect(moved.at(0).text() == "行 9, 桁 24", "the caret position is formatted from the numbers");
     expect(moved.at(0).code_point_count() == 9, "the formatted position counts code points");
     expect(moved.at(1).text() == "UTF-8 BOM", "a file with a BOM says so");
     expect(moved.at(2).text() == "LF", "an LF buffer says LF");
-    const auto japanese = status_items_for(TextPosition{LineNumber{1}, Column{1}},
-                                           TextEncoding::shift_jis, LineEnding::crlf);
+    const auto japanese =
+        status_items_for(TextPosition{LineNumber{1}, Column{1}}, TextEncoding::shift_jis,
+                         LineEnding::crlf, nenenib::core::Language::plain);
     expect(japanese.at(1).text() == "Shift_JIS", "an old Japanese file says Shift_JIS");
 }
 
@@ -2004,9 +2009,11 @@ void verify_status_bar_rectangles()
     expect(layout.toggle_ordinary == LayoutRect{14, 336, 58, 356}, "the ordinary half");
     expect(layout.toggle_vim == LayoutRect{60, 336, 104, 356}, "the Vim half");
     expect(layout.mode == LayoutRect{122, 332, 194, 360}, "the mode label follows the toggle");
-    expect(layout.items.at(0) == LayoutRect{392, 332, 488, 360}, "the caret position item");
-    expect(layout.items.at(1) == LayoutRect{504, 332, 576, 360}, "the encoding item is 72 DIP");
-    expect(layout.items.at(2) == LayoutRect{592, 332, 628, 360}, "the line ending item");
+    expect(layout.items.at(0) == LayoutRect{304, 332, 400, 360}, "the caret position item");
+    expect(layout.items.at(1) == LayoutRect{416, 332, 488, 360}, "the encoding item is 72 DIP");
+    expect(layout.items.at(2) == LayoutRect{504, 332, 540, 360}, "the line ending item");
+    expect(layout.items.at(3) == LayoutRect{556, 332, 628, 360},
+           "the language item is 72 DIP at the right end (ADR 0154)");
     expect(layout.corner_radius == 6 && layout.segment_radius == 4, "the toggle radii");
 }
 

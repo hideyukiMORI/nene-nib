@@ -3,6 +3,7 @@
 // `?`・閉じた名前の外の E474・補完の候補、言語が文書の値として開く・名前が変わる保存・新しい
 // タブ・タブの切り替え・まだ読んでいない文書を読むときに付いていき、設定にもセッションにも
 // 書かれないこと。
+#include "DevicePixels.hpp"
 #include "Editing.hpp"
 #include "EndSession.hpp"
 #include "ExFailure.hpp"
@@ -17,13 +18,17 @@
 #include "SelectEditMode.hpp"
 #include "SelectLanguage.hpp"
 #include "SessionEnd.hpp"
+#include "StatusBarLayout.hpp"
+#include "StatusItems.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -277,6 +282,45 @@ void verify_document_value()
     expect(asked_language(controller) == "filetype=c", "saving under the same name keeps it");
 }
 
+// ステータスバーの右端の 4 項目目（決定 6）。並びは左から位置・文字コード・改行・言語で、言語の
+// 名前は language_name の表。
+void verify_status_item()
+{
+    Editing editing;
+    hold_documents(editing.files());
+    auto &controller = editing.controller();
+    expect(core::status_item_count == 4 && controller.frame().status_items.at(3).text() == "text",
+           "the untitled document shows text at the right end");
+    applied(controller, app::OpenDocument{path_of(markdown_path)});
+    const auto opened = controller.frame();
+    expect(opened.status_items.at(3).text() == "markdown" &&
+               opened.status_items.at(0).text() == "行 1, 桁 1" &&
+               opened.status_items.at(1).text() == "UTF-8",
+           "the language follows the three existing items");
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(run_ex(controller, "set ft=ps1"));
+    expect(controller.frame().status_items.at(3).text() == "ps1",
+           ":set ft= changes the status item");
+    expect(core::status_items_for(core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                                  core::TextEncoding::utf8, core::LineEnding::lf,
+                                  Language::typescript)
+                   .at(3)
+                   .text() == "typescript",
+           "status_items_for writes the language name last");
+    for (const std::uint32_t dpi : {96U, 120U, 144U})
+    {
+        const auto status =
+            core::status_bar_layout(core::to_pixels(800, dpi), core::to_pixels(450, dpi), dpi);
+        expect(status.items.at(0).right <= status.items.at(1).left &&
+                   status.items.at(1).right <= status.items.at(2).left &&
+                   status.items.at(2).right <= status.items.at(3).left &&
+                   status.items.at(3).right ==
+                       core::to_pixels(800, dpi) - core::to_pixels(12, dpi) &&
+                   core::width_of(status.items.at(3)) == core::to_pixels(72, dpi),
+               "the language item is the right end of the four items");
+    }
+}
+
 // まだ読んでいない文書（決定 5）。一覧に言語は無く、読んだときにパスから決める。
 void verify_unloaded_document()
 {
@@ -308,6 +352,7 @@ void verify_language_scope()
     verify_ex_evaluation();
     verify_completion();
     verify_document_value();
+    verify_status_item();
     verify_unloaded_document();
 }
 } // namespace nenenib::tests

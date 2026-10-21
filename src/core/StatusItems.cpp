@@ -1,5 +1,7 @@
 #include "StatusItems.hpp"
 
+#include "LanguageTable.hpp"
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -50,10 +52,11 @@ decimal_end(std::span<char, decimal_digits> destination, std::size_t value)
 }
 } // namespace
 
-std::array<DisplayText, status_item_count>
-status_items_for(const TextPosition &caret, TextEncoding encoding, LineEnding ending)
+std::array<DisplayText, status_item_count> status_items_for(const TextPosition &caret,
+                                                            TextEncoding encoding,
+                                                            LineEnding ending, Language language)
 {
     return {caret_position(caret), fixed(encoding_label(encoding)),
-            fixed(line_ending_label(ending))};
+            fixed(line_ending_label(ending)), fixed(language_name(language))};
 }
 } // namespace nenenib::core
