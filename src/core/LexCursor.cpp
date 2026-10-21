@@ -43,6 +43,16 @@ const LexState &LexCursor::state() const noexcept
     return out_;
 }
 
+void LexCursor::follow(LexPrecedent precedent) noexcept
+{
+    precedent_ = precedent;
+}
+
+LexPrecedent LexCursor::precedent() const noexcept
+{
+    return precedent_;
+}
+
 LexLine LexCursor::finish() &&
 {
     return LexLine{std::move(spans_), out_};
