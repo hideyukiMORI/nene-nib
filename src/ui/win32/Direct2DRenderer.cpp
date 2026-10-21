@@ -1499,6 +1499,11 @@ void Direct2DRenderer::draw_status_bar(const application::EditorFrame &frame,
     draw_status_left(frame, layout);
     for (std::size_t index = 0; index < core::status_item_count; ++index)
     {
+        // 狭い窓で畳んだ言語の欄（幅 0・ADR 0154 の決定 6）は書かず、枠も使わない。
+        if (core::width_of(layout.items.at(index)) <= 0)
+        {
+            continue;
+        }
         write_status(frame.status_items.at(index).text(), status_format_.Get(),
                      layout.items.at(index), frame.palette.muted);
     }
@@ -1514,26 +1519,37 @@ void Direct2DRenderer::draw_status_left(const application::EditorFrame &frame,
                                         const core::StatusBarLayout &layout)
 {
     const auto command = core::command_layout(layout, dpi_, 0);
-    if (frame.command_line.has_value() && !frame.command_palette.has_value())
+    // 分かれ目は status_left_state の 1 か所で、枠の数は status_layout_demand が同じ値から数える。
+    switch (status_left_state(frame))
     {
+    case StatusLeftState::command_input:
         draw_command(frame, core::command_input_label(command, dpi_));
         draw_completions(frame, layout);
         return;
-    }
-    if (frame.command_message.has_value() && !frame.command_palette.has_value())
-    {
-        // 知らせの 1 行も入力行の文字と同じ内側（#786）。
-        const auto label = core::command_input_label(command, dpi_);
-        context_->PushAxisAlignedClip(to_rect(label), D2D1_ANTIALIAS_MODE_ALIASED);
-        write_status(frame.command_message.value().text(), command_format_.Get(), label,
-                     frame.palette.text);
-        context_->PopAxisAlignedClip();
+    case StatusLeftState::message:
+        draw_status_message(frame, core::command_input_label(command, dpi_));
         return;
+    case StatusLeftState::mode:
+    case StatusLeftState::recording:
+        break;
     }
     draw_toggle(frame, layout);
     const auto &mode = status_text_layout(frame.mode_label, mode_format_.Get(), layout.mode);
     draw_status_text(mode, layout.mode, frame.palette.text);
     draw_recording(frame, layout, mode);
+}
+
+void Direct2DRenderer::draw_status_message(const application::EditorFrame &frame,
+                                           const core::LayoutRect &area)
+{
+    if (!frame.command_message.has_value())
+    {
+        return;
+    }
+    context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
+    write_status(frame.command_message.value().text(), command_format_.Get(), area,
+                 frame.palette.text);
+    context_->PopAxisAlignedClip();
 }
 
 // 録画中のマクロ（ADR 0046 の決定 8）。モード表示の文字の直後から右の項目の手前までに、

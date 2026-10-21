@@ -63,7 +63,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
     src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
-    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp
+    src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/LanguageTable.cpp
     src/core/MarkdownParse.cpp src/core/MarkdownBuilder.cpp src/core/MarkdownEntity.cpp)
 # core の parse_markdown（#765）だけが md4c を呼ぶ。md4c.h を include するのは src/core/MarkdownParse.cpp の 1 か所（CNF-009）。
 nenenib_link(nenenib_core nenenib_md4c)
@@ -136,7 +136,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
-    tests/unit/MarkdownTests.cpp)
+    tests/unit/MarkdownTests.cpp
+    tests/unit/LanguageTests.cpp)
 nenenib_link(nib_tests nenenib_core)
 nenenib_link(nib_tests nenenib_application)
 add_test(NAME nib_unit COMMAND nib_tests)
@@ -232,7 +233,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/LineUtf16Evaluation.cpp
-    src/ui/win32/PresentedMilestones.cpp
+    src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewPlacement.cpp)
 nenenib_link(nenenib_window nenenib_core)
 nenenib_link(nenenib_window nenenib_application)
@@ -253,7 +254,8 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/WheelTurnTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp tests/ui/BodyTextLayoutTests.cpp
     tests/ui/GridRenderTests.cpp tests/ui/PresentedMilestoneTests.cpp
-    tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp)
+    tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp
+    tests/ui/StatusDemandTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

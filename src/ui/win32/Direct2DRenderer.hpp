@@ -25,6 +25,7 @@
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
 #include "StatusBarLayout.hpp"
+#include "StatusLayoutDemand.hpp"
 #include "StatusTextLayout.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarLayout.hpp"
@@ -237,6 +238,7 @@ class Direct2DRenderer final
     void draw_status_bar(const application::EditorFrame &frame,
                          const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
+    void draw_status_message(const application::EditorFrame &frame, const core::LayoutRect &area);
     void draw_recording(const application::EditorFrame &frame, const core::StatusBarLayout &layout,
                         const StatusTextLayout &mode);
     void draw_status_left(const application::EditorFrame &frame,
@@ -297,9 +299,9 @@ class Direct2DRenderer final
     BodyTextLayouts &body_text_;
     std::optional<RenderFailure> text_failure_;
     GutterTextLayouts gutter_layouts_;
-    // 通常6枠と案内4枠。録画時は案内が無く7枠（ADR 0079）。
-    static constexpr std::size_t status_layout_count = 10;
-    std::array<StatusTextLayout, status_layout_count> status_layouts_{};
+    // 通常7枠と案内4枠。録画時は案内が無く8枠（ADR 0079・言語の項目で 11・ADR 0154 の決定 6）。
+    // 長さは StatusLayoutDemand.hpp の 1 つで、frame ごとの数は status_layout_demand が数える。
+    std::array<StatusTextLayout, status_layout_capacity> status_layouts_{};
     std::size_t status_layout_cursor_ = 0;
     WaitableHandle latency_{nullptr, &::CloseHandle};
     RECT caret_rectangle_{};

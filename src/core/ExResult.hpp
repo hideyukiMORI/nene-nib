@@ -6,6 +6,7 @@
 #include "ExDocumentRequest.hpp"
 #include "ExEvaluationFailure.hpp"
 #include "ExFailure.hpp"
+#include "ExLanguageRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExTabRequest.hpp"
 #include "ExWindowCommand.hpp"
@@ -31,7 +32,8 @@ inline constexpr std::string_view guifont_command = "set guifont=";
 // （ARC-004）。タブの命令の message は命令の完全な名前で、controller は画面に出さない（Vim も
 // 成功した切り替えでは何も出さない）。palette は共通の一覧を開く要求（ADR 0064）。
 // document は現在の文書への保存・終了（ADR 0066）。display は現在の文書の表示形式（ADR 0140 の
-// 決定 3・設定に保存しない）。
+// 決定 3・設定に保存しない）。language は現在の文書の言語の選択か問い（ADR 0154 の決定 4・設定にも
+// セッションにも保存しない）。
 struct ExResult
 {
     std::optional<EditorSettings> settings;
@@ -43,13 +45,15 @@ struct ExResult
     std::optional<ExDocumentRequest> document = std::nullopt;
     std::optional<DisplayForm> display = std::nullopt;
     std::optional<ExWindowCommand> window = std::nullopt;
+    std::optional<ExLanguageRequest> language = std::nullopt;
 };
 
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure>
 evaluate_ex(std::string_view text, const EditorSettings &settings, Appearance system_appearance,
             const ThemeCatalog &themes = ThemeCatalog::builtins());
 // prefix が `set guifont=` で始まるときだけ、fonts の名前を `set guifont=<名前>`
-// の候補として後ろに足す （施主決定 D58）。
+// の候補として後ろに足す （施主決定 D58）。`set filetype=` `set ft=` で始まるときは言語の名前を
+// 同じ形で足す（ADR 0154 の決定 4）。
 [[nodiscard]] std::vector<std::string>
 command_completions(std::string_view prefix, const ThemeCatalog &themes = ThemeCatalog::builtins(),
                     const FontFamilies &fonts = FontFamilies::none());

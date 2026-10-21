@@ -6,6 +6,7 @@
 #include "Document.hpp"
 #include "DocumentView.hpp"
 #include "EditHistory.hpp"
+#include "Language.hpp"
 #include "LineNumber.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
@@ -40,5 +41,9 @@ struct DocumentState
     DisplayInquiry inquiry = DisplayInquiry::unjudged;
     // Vim のマーク（ADR 0152 の決定 2）。文書の値で、まだ読んでいない文書・新しいタブは空。
     core::VimMarks marks{};
+    // 文書の言語（ADR 0154 の決定 1）。表示形式と同じく文書ごとの値で、設定にもタブの一覧にも
+    // 入れない。束を作る所がパスから引き（language_of）、`:set filetype=` の上書きは束に乗って
+    // タブの切り替えに付いていく。
+    core::Language language = core::Language::plain;
 };
 } // namespace nenenib::application

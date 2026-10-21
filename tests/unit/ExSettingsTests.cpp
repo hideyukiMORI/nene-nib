@@ -322,7 +322,7 @@ void verify_completion_common_prefix()
 {
     using core::CommandEdit;
     const auto single =
-        core::CommandLine::empty().inserted("set f").value().edited(CommandEdit::complete_next);
+        core::CommandLine::empty().inserted("set fo").value().edited(CommandEdit::complete_next);
     expect(single.text() == "set fontsize=" && !single.completion_index().has_value(),
            "one candidate fills its whole text without cycling");
     auto line =
@@ -409,7 +409,8 @@ void verify_command_completions()
     const auto first = core::CommandLine::empty().edited(CommandEdit::complete_previous);
     // 名前だけの候補の末尾は文書の命令の最後の `saveas`（ADR 0067）。
     expect(first.text() == "saveas", "backwards completion starts at the last command");
-    expect(core::command_completions("set f") == std::vector<std::string>{"set fontsize="},
+    expect(core::command_completions("set f") ==
+               std::vector<std::string>{"set fontsize=", "set filetype=", "set ft="},
            "option prefix");
     const auto unknown = core::CommandLine::empty().inserted("unknown").value();
     expect(unknown.edited(CommandEdit::complete_next).text() == "unknown",
@@ -670,6 +671,8 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set display=text",
                                                           "nohlsearch",
                                                           "only",
+                                                          "set filetype=",
+                                                          "set ft=",
                                                           "edit",
                                                           "buffer",
                                                           "ls",

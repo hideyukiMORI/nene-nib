@@ -79,6 +79,9 @@ void verify_guide_scope();
 // MarkdownTests.cpp（ADR 0151 の決定 5〜8・parse_markdown）
 void verify_markdown_scope();
 
+// LanguageTests.cpp（ADR 0154・文書の言語）
+void verify_language_scope();
+
 // ExitPlanTests.cpp（ADR 0133）
 void verify_exit_plan_scope();
 

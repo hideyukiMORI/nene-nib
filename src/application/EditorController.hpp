@@ -20,6 +20,7 @@
 #include "EditorPorts.hpp"
 #include "EditorState.hpp"
 #include "ExDocumentRequest.hpp"
+#include "ExLanguageRequest.hpp"
 #include "ExPaletteRequest.hpp"
 #include "ExResult.hpp"
 #include "ExTabRequest.hpp"
@@ -248,6 +249,8 @@ class EditorController final
     void accept(const WorkCompleted &);
     // 表示形式（ADR 0140 の決定 2・3）。窓の問いの「はい」と Ex の `:set display=` が通る 1 本。
     void accept(const SelectDisplay &intent);
+    // 言語（ADR 0154 の決定 4・5）。Ex の `:set filetype=` `:set ft=` が通る 1 本。
+    void accept(const SelectLanguage &intent);
     // 枠（ADR 0148）。分ける・移る・閉じる・もう 1 つの枠を送る。
     void accept(const SplitPane &intent);
     void accept(const SwitchPane &);
@@ -324,6 +327,9 @@ class EditorController final
     void submit_palette(const core::CommandPalette &palette);
     void evaluate_command(std::string_view text);
     void apply_unsaved_ex(const core::ExResult &result);
+    // `:set filetype=` と `:set filetype?` の写し先（ADR 0154 の決定 4）。どちらも今の言語を
+    // `filetype=<名前>` の 1 行で知らせる。
+    void answer_language(const core::ExLanguageRequest &request);
     // Ex のタブの命令の写し先（ADR 0057 の決定 5・6）。命令が増えたら switch が落ちる（CPP-002）。
     void run_tab_request(const core::ExTabRequest &request);
     void run_window_command(core::ExWindowCommand command);

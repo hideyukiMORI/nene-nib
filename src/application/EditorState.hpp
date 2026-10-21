@@ -15,6 +15,7 @@
 #include "EditorSettings.hpp"
 #include "FileFailure.hpp"
 #include "InputHistory.hpp"
+#include "Language.hpp"
 #include "LineEnding.hpp"
 #include "ParkedTab.hpp"
 #include "ScrollState.hpp"
@@ -111,6 +112,11 @@ class EditorState final
     // 表示形式（ADR 0140 の決定 2・3）。アクティブな文書のもので、開いた文書・新しいタブは text。
     [[nodiscard]] core::DisplayForm display() const noexcept;
     [[nodiscard]] EditorState with_display(core::DisplayForm display) const;
+    // 文書の言語（ADR 0154 の決定 1・5）。アクティブな文書のもの。開いた文書はパスから引き、
+    // with_document でパスが変わったときも引き直す（`:set filetype=` の上書きは捨てる）。
+    // with_language は `:set filetype=` の 1 か所（controller の accept(SelectLanguage)）。
+    [[nodiscard]] core::Language language() const noexcept;
+    [[nodiscard]] EditorState with_language(core::Language language) const;
     // 開いたときの問いの段階（決定 2）。アクティブな文書のもの。進めるのは controller の
     // ask_display と accept(SelectDisplay) の 2 か所。
     [[nodiscard]] DisplayInquiry display_inquiry() const noexcept;
@@ -263,6 +269,7 @@ class EditorState final
     ScrollState scroll_;
     core::CaretAffinity caret_affinity_ = core::CaretAffinity::leading;
     core::DisplayForm display_ = core::DisplayForm::text;
+    core::Language language_ = core::Language::plain;
     DisplayInquiry display_inquiry_ = DisplayInquiry::unjudged;
     bool display_question_ = false;
     core::Appearance appearance_;

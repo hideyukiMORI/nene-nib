@@ -13,6 +13,10 @@ inline constexpr std::size_t command_completion_row_limit = 6;
 // 入力行と補完の候補の文字を矩形の左右から内側へ寄せる幅（DIP・#786）。両方がこの 1 つを読む。
 // Ctrl+P の面の行（PaletteLayout の 8 DIP）とは別の正本で、揃えない。
 inline constexpr std::int32_t command_text_inset_dip = 12;
+// `:` の入力欄の右端（ステータスの右の項目の最初の左から 16 DIP）が窓の左から少なくともこの幅に
+// あること。右の 4 項目で届かない窓では StatusBarLayout が言語の欄を畳む（ADR 0154 の決定 6・
+// ステータスの案内を消す規則より先）。
+inline constexpr std::int32_t command_input_minimum_dip = 96;
 
 struct CommandLayout
 {
