@@ -6,6 +6,7 @@
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
 #include "PaneRole.hpp"
+#include "SyntaxPalette.hpp"
 #include "TextViewGeometry.hpp"
 
 #include <cstdint>
@@ -23,6 +24,8 @@ struct GridRowCanvas
     const core::EditorSettings &settings;
     core::TextViewGeometry geometry;
     const core::Palette &palette;
+    // 構文の色の区間の色（core::syntax_color・#839）。
+    const core::SyntaxPalette &body;
     core::CaretShape shape;
     // コマンドの入力行が開いているあいだは本文のキャレットを描かない。
     bool caret_shown;

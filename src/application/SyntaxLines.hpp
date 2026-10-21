@@ -1,5 +1,7 @@
 #pragma once
 
+#include "EditorState.hpp"
+#include "GridColorRange.hpp"
 #include "Language.hpp"
 #include "LexState.hpp"
 #include "LineView.hpp"
@@ -8,6 +10,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -30,8 +33,17 @@ inline constexpr std::size_t syntax_cache_reach = 4096;
 
 // 見えている 1 行の区間を view.colors に置き、次の行へ渡す状態を返す（in が nullopt なら何もせず
 // nullopt）。巨大な行の窓は区間を付けず、行の全体を読まずに plain へ戻す（限界）。IME の差し込み
-// 行は区間を付けず状態だけ進める。lexed に 1 を足す。
+// 行は本文の区間を差し込みの位置で割り、後ろを差し込んだ code point の数だけずらす（差し込みの
+// 範囲は色なし・#839）。lexed に 1 を足す。
 [[nodiscard]] std::optional<core::LexState> colored_line(core::Language language,
                                                          const std::optional<core::LexState> &in,
                                                          LineView &view, std::size_t &lexed);
+
+// 格子の 1 行（#839・ADR 0156 の追補）。行の区間を本文の位置へ写して colors に置き、次の行へ渡す
+// 状態を返す（in が nullopt なら何もせず nullopt・呼び手は in があるとき字句器へ通した行を 1
+// 数える）。 言語は state の文書の言語。巨大な行は colored_line の窓と同じく区間を付けず plain
+// へ戻す。
+[[nodiscard]] std::optional<core::LexState>
+grid_colored_line(const EditorState &state, const std::optional<core::LexState> &in,
+                  core::LineNumber line, std::vector<GridColorRange> &colors);
 } // namespace nenenib::application

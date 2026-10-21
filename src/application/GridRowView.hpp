@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GridCellSpan.hpp"
+#include "GridColorSpan.hpp"
 #include "LineNumber.hpp"
 
 #include <cstddef>
@@ -38,5 +39,8 @@ struct GridRowView
     std::optional<GridCellSpan> caret;
     // 変換中の文字列を差し込んだ text の code point の位置（ADR 0014 の決定 2）。差し込んだ行だけ。
     std::optional<std::size_t> composed_at;
+    // 構文の色の升（#839・ADR 0156 の追補）。当たりと同じ写しで本文の位置から切り、変換中の文字列
+    // を差し込んだ升は区間を割って色を付けない。
+    std::vector<GridColorSpan> colors{};
 };
 } // namespace nenenib::application

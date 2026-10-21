@@ -4792,8 +4792,8 @@ LineView EditorController::line_view(const PaneSource &source, LineView view,
 // 枠の見えている行（ADR 0148 の決定 8）。操作中の枠ももう 1 つの枠もこの 1 本を通る。スクロールは
 // 呼び手（frame）が解決済み。
 std::expected<std::vector<LineView>, TextLayoutFailure>
-EditorController::visible_lines(const PaneSource &source, AutosaveId tab,
-                                std::optional<SyntaxStateCache> &cache, std::size_t &lexed) const
+EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxStateCache> &cache,
+                                std::size_t &lexed) const
 {
     const EditorState &state = source.state;
     const ScrollState &scroll = state.scroll();
@@ -4811,7 +4811,8 @@ EditorController::visible_lines(const PaneSource &source, AutosaveId tab,
     }
     // 字句器を持つ言語だけ、見えている最初の行の行頭の状態を覚えか遡りから求める（ADR 0156 の
     // 決定 8・9・14）。持たない言語と `:syntax off` の文書（追補）は字句器も覚えも触らない。
-    const SyntaxStateCache key{tab, state.language(), core::LineNumber{first}, core::LexState{}};
+    const SyntaxStateCache key{source.tab, state.language(), core::LineNumber{first},
+                               core::LexState{}};
     auto lex = first <= last && state.syntax_enabled()
                    ? syntax_begin(state.text(), key, cache, lexed)
                    : std::nullopt;
@@ -4896,10 +4897,10 @@ GridLineMarks EditorController::grid_marks(const PaneSource &source, core::LineN
     return marks;
 }
 
-std::optional<TextLayoutFailure> EditorController::grid_visible_rows(const PaneSource &source,
-                                                                     std::vector<GridRowView> &grid,
-                                                                     std::size_t &scanned,
-                                                                     std::size_t &searched) const
+std::optional<TextLayoutFailure>
+EditorController::grid_visible_rows(const PaneSource &source,
+                                    std::optional<SyntaxStateCache> &cache,
+                                    std::vector<GridRowView> &grid, GridTally &tally) const
 {
     const EditorState &state = source.state;
     const VisualTextView view(state, ports_.text_layouts, view_geometry_);
@@ -4916,8 +4917,16 @@ std::optional<TextLayoutFailure> EditorController::grid_visible_rows(const PaneS
     const auto limit = scroll.visible_lines + 1;
     std::size_t screen = 0;
     auto first_row = scroll.first_row;
-    for (core::LineNumber line{std::max<std::size_t>(scroll.first_visible.value, 1)};
-         line.value <= state.text().line_count() && screen < limit; ++line.value)
+    const core::LineNumber first{std::max<std::size_t>(scroll.first_visible.value, 1)};
+    // 字句器は text の表示と同じ遡りと覚えから（#839・ADR 0156 の決定 8・9・14）。
+    auto lex =
+        first.value <= state.text().line_count() && state.syntax_enabled()
+            ? syntax_begin(state.text(),
+                           SyntaxStateCache{source.tab, state.language(), first, core::LexState{}},
+                           cache, tally.lexed)
+            : std::nullopt;
+    for (core::LineNumber line = first; line.value <= state.text().line_count() && screen < limit;
+         ++line.value)
     {
         const auto count = cells.value().rows(line);
         const auto from = std::min(first_row, count - 1);
@@ -4926,7 +4935,9 @@ std::optional<TextLayoutFailure> EditorController::grid_visible_rows(const PaneS
             cells.value().byte_of(line, core::GridPoint{from, 0}),
             cells.value().byte_of(line, core::GridPoint{from + take, 0})};
         auto marks = grid_marks(source, line, visible, block_row(source.block, line, source.range));
-        searched += marks.searched;
+        tally.searched += marks.searched;
+        tally.lexed += lex.has_value() ? 1 : 0;
+        lex = grid_colored_line(state, lex, line, marks.colors);
         GridLineRows(GridLineSource{state, cells.value(), line, from, from + take,
                                     static_cast<std::int64_t>(screen), visible, std::move(marks),
                                     caret})
@@ -4934,7 +4945,7 @@ std::optional<TextLayoutFailure> EditorController::grid_visible_rows(const PaneS
         screen += take;
         first_row = 0;
     }
-    scanned = cells.value().scanned();
+    tally.scanned = cells.value().scanned();
     return std::nullopt;
 }
 
@@ -5026,12 +5037,12 @@ EditorFrame EditorController::frame()
     const bool gridded =
         !pending && state_.display() == core::DisplayForm::grid && view_geometry_.width > 0;
     const auto pattern = search_pattern();
-    const PaneSource source{state_, highlighted_range(), block_selection(), pattern_of(pattern)};
+    const PaneSource source{state_, highlighted_range(), block_selection(), pattern_of(pattern),
+                            state_.autosave_ids().at(state_.active_tab())};
     std::size_t lexed = 0;
     auto lines = pending || gridded
                      ? std::expected<std::vector<LineView>, TextLayoutFailure>{}
-                     : visible_lines(source, state_.autosave_ids().at(state_.active_tab()),
-                                     syntax_cache(state_.split().active_side), lexed);
+                     : visible_lines(source, syntax_cache(state_.split().active_side), lexed);
     // frame の失敗は描けないものだけ（契約の破れは配達だけに載る・ADR 0133 の追補 2026-10-18）。
     const auto failure = lines ? drawing_failure(layout_failure_) : std::optional{lines.error()};
     EditorFrame result{std::move(lines).value_or(std::vector<LineView>{}),
@@ -5079,9 +5090,13 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
 {
     if (gridded)
     {
+        GridTally tally{0, 0, lexed};
         const auto grid_failure =
-            grid_visible_rows(source, result.grid, result.grid_scanned, result.grid_searched);
+            grid_visible_rows(source, syntax_cache(state_.split().active_side), result.grid, tally);
         result.layout_failure = grid_failure.has_value() ? grid_failure : result.layout_failure;
+        result.grid_scanned = tally.scanned;
+        result.grid_searched = tally.searched;
+        lexed = tally.lexed;
     }
     result.syntax_lexed = lexed;
     add_other_pane(result, source.pattern);
@@ -5153,7 +5168,8 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
     }
     const auto position = static_cast<std::size_t>(std::distance(ids.begin(), found));
     const EditorState &state = pane.value();
-    const PaneSource source{state, core::selection_range(state.selection()), std::nullopt, pattern};
+    const PaneSource source{state, core::selection_range(state.selection()), std::nullopt, pattern,
+                            view.tab};
     PaneFrame other{{},
                     CaretView{state.text().position_of(state.selection().caret), result.caret.shape,
                               state.caret_affinity()},
@@ -5168,15 +5184,14 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
     std::optional<TextLayoutFailure> failure;
     if (!pending && state.display() == core::DisplayForm::grid && view_geometry_.width > 0)
     {
-        std::size_t scanned = 0;
-        std::size_t searched = 0;
-        failure = grid_visible_rows(source, other.grid, scanned, searched);
+        GridTally tally;
+        failure = grid_visible_rows(source, passive_syntax_cache(), other.grid, tally);
     }
     else if (!pending)
     {
         // もう 1 つの枠は操作中の枠と別の側の覚えを使う（ADR 0156 の決定 9）。
         std::size_t lexed = 0;
-        auto lines = visible_lines(source, view.tab, passive_syntax_cache(), lexed);
+        auto lines = visible_lines(source, passive_syntax_cache(), lexed);
         failure = lines ? std::nullopt : std::optional{lines.error()};
         other.lines = std::move(lines).value_or(std::vector<LineView>{});
     }

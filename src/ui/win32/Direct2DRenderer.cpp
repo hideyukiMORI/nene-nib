@@ -3,6 +3,7 @@
 
 #include "BodyColors.hpp"
 #include "ColoredRun.hpp"
+#include "ComposedLine.hpp"
 #include "DevicePixels.hpp"
 #include "DisplayFormLabel.hpp"
 #include "DisplayLine.hpp"
@@ -1108,6 +1109,45 @@ void Direct2DRenderer::draw_passive_caret(IDWriteTextLayout *text, const core::L
     std::unreachable();
 }
 
+// 区間の桁は本文の桁なので、選択と同じ range_of で描画用の行の UTF-16 へ写す（`^M` の展開も）。
+// IME の差し込み行（#839）の区間は、差し込みの後ろが差し込んだ code point の数だけずれている。
+// 本文の桁へ戻して差し込む前の行で写し、差し込んだ UTF-16 の数だけ後ろへずらす。差し込みを
+// またぐ区間は application が割ってある。
+std::vector<ColoredRun> Direct2DRenderer::colored_runs(const application::EditorFrame &frame,
+                                                       const application::LineView &line)
+{
+    LineUtf16Evaluation positions(line.display.text);
+    const auto at = line.composed.has_value()
+                        ? application::composed_source_column(line.display, line.composed.value())
+                        : core::Column{std::numeric_limits<std::size_t>::max()};
+    const std::size_t count =
+        line.composed.has_value() ? line.composed.value().inserted_columns : 0;
+    const UINT32 inserted =
+        line.composed.has_value()
+            ? utf16_at(line.composed.value().text, line.composed.value().insertion.end.value) -
+                  utf16_at(line.composed.value().text, line.composed.value().insertion.begin.value)
+            : 0;
+    std::vector<ColoredRun> colored;
+    colored.reserve(line.colors.size());
+    for (const auto &span : line.colors)
+    {
+        const bool after = span.begin.value >= at.value + count;
+        const std::size_t back = after ? count : 0;
+        auto range = range_of(line,
+                              core::SelectionSpan{core::SelectionPresence::present,
+                                                  core::Column{span.begin.value - back},
+                                                  core::Column{span.end.value - back}},
+                              positions);
+        range.startPosition += after ? inserted : 0;
+        if (range.length > 0)
+        {
+            colored.push_back(
+                ColoredRun{range, to_color(core::syntax_color(frame.body, span.role))});
+        }
+    }
+    return colored;
+}
+
 void Direct2DRenderer::draw_line_text(const application::EditorFrame &frame,
                                       IDWriteTextLayout *text, const core::LayoutRect &area,
                                       const application::LineView &line)
@@ -1118,21 +1158,7 @@ void Direct2DRenderer::draw_line_text(const application::EditorFrame &frame,
         draw_body_text(text, area);
         return;
     }
-    // 区間の桁は本文の桁なので、選択と同じ range_of で描画用の行の UTF-16 へ写す（`^M` の展開も）。
-    LineUtf16Evaluation positions(line.display.text);
-    std::vector<ColoredRun> colored;
-    colored.reserve(line.colors.size());
-    for (const auto &span : line.colors)
-    {
-        const auto range = range_of(
-            line, core::SelectionSpan{core::SelectionPresence::present, span.begin, span.end},
-            positions);
-        if (range.length > 0)
-        {
-            colored.push_back(
-                ColoredRun{range, to_color(core::syntax_color(frame.body, span.role))});
-        }
-    }
+    const auto colored = colored_runs(frame, line);
     body_painter().draw_colored_body_text(
         text, area, BodyColors{colored, to_color(frame.palette.text)},
         [this](const D2D1_COLOR_F &color) { brush_->SetColor(color); });
@@ -1231,8 +1257,7 @@ void Direct2DRenderer::draw_composed_line(const application::EditorFrame &frame,
     {
         return;
     }
-    brush_->SetColor(to_color(frame.palette.text));
-    draw_body_text(text.Get(), area);
+    draw_line_text(frame, text.Get(), area, line);
     const UINT32 stop = utf16_at(shown.text, shown.insertion.end.value);
     draw_replaced(frame, text.Get(), area,
                   replaced_ranges(line.display, DWRITE_TEXT_RANGE{base, stop - base}));
@@ -1384,6 +1409,7 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
         frame.settings,
         core::TextViewGeometry{std::max(core::width_of(body.content), 1), body.line_height, dpi_},
         frame.palette,
+        frame.body,
         pane.caret.shape,
         !active || !frame.command_line.has_value(),
         active ? frame.composition : no_composition,

@@ -2,6 +2,7 @@
 
 #include "GiantLineWindow.hpp"
 #include "Lexer.hpp"
+#include "Utf8.hpp"
 
 #include <algorithm>
 #include <string>
@@ -30,6 +31,32 @@ namespace
     }
     const std::string body = text.text_range(text.line_start(line), text.line_end(line));
     return core::lex_state(language, in, body);
+}
+
+// IME の差し込み行の区間（#839）。差し込みの手前は本文の桁のまま、後ろは差し込んだ code point の
+// 数だけずらし、差し込みをまたぐ区間は 2 つに割る（格子の split_colors と同じ理屈）。
+[[nodiscard]] std::vector<core::ColorSpan>
+composed_colors(const std::vector<core::ColorSpan> &spans, core::Column at, std::size_t count)
+{
+    std::vector<core::ColorSpan> result;
+    result.reserve(spans.size() + 1);
+    const auto moved = [count](core::Column column) { return core::Column{column.value + count}; };
+    for (const auto &span : spans)
+    {
+        if (span.end.value <= at.value)
+        {
+            result.push_back(span);
+            continue;
+        }
+        if (span.begin.value < at.value)
+        {
+            result.push_back(core::ColorSpan{span.begin, at, span.role});
+            result.push_back(core::ColorSpan{moved(at), moved(span.end), span.role});
+            continue;
+        }
+        result.push_back(core::ColorSpan{moved(span.begin), moved(span.end), span.role});
+    }
+    return result;
 }
 } // namespace
 
@@ -69,12 +96,48 @@ std::optional<core::LexState> colored_line(core::Language language,
     {
         return core::LexState{};
     }
-    if (view.composed.has_value())
-    {
-        return core::lex_state(language, in.value(), view.text);
-    }
     auto result = core::lex_line(language, in.value(), view.text);
-    view.colors = std::move(result.spans);
+    view.colors = view.composed.has_value()
+                      ? composed_colors(result.spans,
+                                        composed_source_column(view.display, view.composed.value()),
+                                        view.composed.value().inserted_columns)
+                      : std::move(result.spans);
+    return result.out;
+}
+
+std::optional<core::LexState> grid_colored_line(const EditorState &state,
+                                                const std::optional<core::LexState> &in,
+                                                core::LineNumber line,
+                                                std::vector<GridColorRange> &colors)
+{
+    if (!in.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &text = state.text();
+    if (giant_line_index(text, line) != nullptr)
+    {
+        return core::LexState{};
+    }
+    const auto start = text.line_start(line);
+    const std::string body = text.text_range(start, text.line_end(line));
+    auto result = core::lex_line(state.language(), in.value(), body);
+    // 区間は昇順なので、桁と位置を 1 回だけ前へ歩いて写す。
+    std::size_t byte = 0;
+    std::size_t column = 1;
+    const auto offset_of = [&byte, &column, &body, start](core::Column wanted)
+    {
+        for (; column < wanted.value && byte < body.size(); ++column)
+        {
+            byte = core::next_code_point(body, core::Offset{byte}).value;
+        }
+        return core::Offset{start.value + byte};
+    };
+    for (const auto &span : result.spans)
+    {
+        const auto begin = offset_of(span.begin);
+        colors.push_back(GridColorRange{core::OffsetRange{begin, offset_of(span.end)}, span.role});
+    }
     return result.out;
 }
 } // namespace nenenib::application
