@@ -439,7 +439,7 @@ constexpr std::array<LexCase, 27> python_word_cases{{
 // Markdown（#833・Vim の markdown.vim）。見出し 6 段・強調の組み合わせ・行内コード・フェンスの
 // 開く / 中 / 閉じる / `~~~` / 長さの違い・リンクと画像・引用・箇条書きと番号・水平線・
 // HTML のタグ・UTF-8・`\r`・ほかの言語の状態で入っても行頭から読む。
-constexpr std::array<LexCase, 85> markdown_cases{{
+constexpr std::array<LexCase, 89> markdown_cases{{
     {"# Title", plain, "kkkkkkk", plain},
     {"## Section", plain, "kkkkkkkkkk", plain},
     {"### Third", plain, "kkkkkkkkk", plain},
@@ -458,6 +458,10 @@ constexpr std::array<LexCase, 85> markdown_cases{{
     {"snake_case_name", plain, "", plain},
     {"** not bold**", plain, "", plain},
     {"*unclosed", plain, "", plain},
+    {"**", plain, "", plain},
+    {"[a](", plain, "", plain},
+    {"![", plain, "", plain},
+    {"a \\", plain, "", plain},
     {"**a*b**", plain, "vvvvvvv", plain},
     {"_a_b_", plain, "vvv", plain},
     {"2*3*4", plain, " vvv", plain},
@@ -530,7 +534,7 @@ constexpr std::array<LexCase, 85> markdown_cases{{
 // JavaScript と TypeScript（#833・Vim の javascript.vim / typescript.vim）で同じ答えになる行。
 // コメントの行またぎ・文字列とテンプレートの行またぎ・正規表現と除算の見分け（`a++ / 2` は直前が
 // 演算子なので正規表現に読む限界）・数字の形・予約語と定数と型・関数・演算子の連なり・UTF-8・境。
-constexpr std::array<LexCase, 68> javascript_cases{{
+constexpr std::array<LexCase, 80> javascript_cases{{
     {"// comment", plain, "cccccccccc", plain},
     {"x = 1; // c", plain, "  o no cccc", plain},
     {"/* block */", plain, "ccccccccccc", plain},
@@ -564,21 +568,30 @@ constexpr std::array<LexCase, 68> javascript_cases{{
     {"} /x/", plain, "o sss", plain},
     {"arr[0] / 2", plain, "   ono o n", plain},
     {"'s' / 2", plain, "sss o n", plain},
-    {"x = /unclosed", plain, "  o eeeeeeeee", plain},
-    {"a++ / 2", plain, " oo eee", plain},
-    {"/", plain, "e", plain},
+    {"x = /unclosed", plain, "  o o", plain},
+    {"a++ / 2", plain, " oo o n", plain},
+    {"/", plain, "o", plain},
+    {"/ 2", plain, "o n", plain},
+    {"/* */ / 2", plain, "ccccc o n", plain},
+    {"a /* c */ / 2", plain, "  ccccccc o n", plain},
+    {"*/ / 2", block, "cc o n", plain},
+    {"</div>", plain, "oO   o", plain},
+    {"]/2", plain, "oOn", plain},
+    {"x.return / 2", plain, " o       o n", plain},
+    {"x = /[\\]/]+/;", plain, "  o sssssssso", plain},
     {"0xFF", plain, "nnnn", plain},
     {"0b1010", plain, "nnnnnn", plain},
     {"0o17", plain, "nnnn", plain},
     {"1_000_000", plain, "nnnnnnnnn", plain},
     {"10n", plain, "nnn", plain},
     {"1e3 + 1.5e-3", plain, "nnn o nnnnnn", plain},
+    {"0x1e+2", plain, "nnnnon", plain},
     {".5", plain, "nn", plain},
     {"x.y", plain, " o", plain},
     {"const x = null;", plain, "kkkkk   o vvvvo", plain},
     {"let a = undefined", plain, "kkk   o vvvvvvvvv", plain},
     {"if (NaN || Infinity) return true;", plain, "kk ovvv oo vvvvvvvvo kkkkkk vvvvo", plain},
-    {"let n: number = 1;", plain, "kkk  o tttttt o no", plain},
+    {"let n = 1;", plain, "kkk   o no", plain},
     {"void 0", plain, "kkkk n", plain},
     {"this.get(x)", plain, "kkkkofffo o", plain},
     {"obj.default", plain, "   o", plain},
@@ -596,23 +609,30 @@ constexpr std::array<LexCase, 68> javascript_cases{{
     {"`テンプレート`", plain, "ssssssss", plain},
     {"x = /日本/u", plain, "  o sssss", plain},
     {"#count = 1", plain, "       o n", plain},
+    {"${", plain, " o", plain},
+    {"${", tpl, "ss", tpl},
+    {"x = \\", plain, "  o", plain},
     {"x = 1;\r", plain, "  o no", plain},
     {"a", raw_xyz, "", plain},
     {"x", triple_dq, "", plain},
 }};
 
-// TS の予約語は JavaScript では区間なし（`static` は JS の予約語）。
-constexpr std::array<LexCase, 5> javascript_only_cases{{
-    {"type T = string;", plain, "       o tttttto", plain},
+// TS の予約語と型は JavaScript では区間なし（`static` は JS の予約語・型は TS だけで引く）。
+constexpr std::array<LexCase, 7> javascript_only_cases{{
+    {"type T = string;", plain, "       o       o", plain},
+    {"let n: number = 1;", plain, "kkk  o        o no", plain},
+    {"const string = 1;", plain, "kkkkk        o no", plain},
     {"interface A {}", plain, "            oo", plain},
-    {"x as unknown", plain, "     ttttttt", plain},
+    {"x as unknown", plain, "", plain},
     {"enum E { A }", plain, "       o   o", plain},
     {"public static override m() {}", plain, "       kkkkkk          foo oo", plain},
 }};
 
-// TypeScript だけで keyword になる予約語。
-constexpr std::array<LexCase, 8> typescript_only_cases{{
+// TypeScript だけで keyword になる予約語と type になる型。
+constexpr std::array<LexCase, 10> typescript_only_cases{{
     {"type T = string;", plain, "kkkk   o tttttto", plain},
+    {"let n: number = 1;", plain, "kkk  o tttttt o no", plain},
+    {"const string = 1;", plain, "kkkkk tttttt o no", plain},
     {"interface A {}", plain, "kkkkkkkkk   oo", plain},
     {"x as unknown", plain, "  kk ttttttt", plain},
     {"enum E { A }", plain, "kkkk   o   o", plain},
@@ -700,6 +720,29 @@ void verify_state_threading()
            "raw states compare by their delimiter");
     expect(LexState{} == plain, "the default state is plain");
 }
+// 閉じの無い `[` と `<a` を 20,000 文字並べた 1 行（#836 のレビュー R1）。区間は無く、走査は
+// 閉じの控えで O(n)（二乗なら Debug で目に見えて遅くなる）。
+void verify_markdown_worst_lines()
+{
+    std::string brackets(20'000U, '[');
+    std::string tags;
+    for (std::size_t index = 0; index < 10'000U; ++index)
+    {
+        tags += "<a";
+    }
+    for (const std::string &line : {brackets, tags})
+    {
+        const LexLine lexed = core::lex_line(Language::markdown, plain, line);
+        expect(lexed.spans.empty() && lexed.out == plain,
+               "a long markdown line of unclosed openers paints nothing");
+    }
+    brackets += "](x)";
+    const LexLine closed = core::lex_line(Language::markdown, plain, brackets);
+    expect(closed.spans ==
+               std::vector{ColorSpan{Column{1U}, Column{20'005U}, SyntaxRole::function}},
+           "the first opener reaches the far close of a long markdown line");
+}
+
 // フェンスとテンプレートとブロックコメントも、状態を値で次の行へ渡す（#833）。
 void verify_threading_of(Language language, std::span<const std::string_view> lines,
                          std::span<const LexKind> expected)
@@ -752,5 +795,6 @@ void verify_lexer_scope()
     verify_columns();
     verify_state_threading();
     verify_markdown_and_script_threading();
+    verify_markdown_worst_lines();
 }
 } // namespace nenenib::tests

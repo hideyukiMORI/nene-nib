@@ -23,6 +23,8 @@ namespace
 {
 constexpr std::size_t line_bytes = 100U;
 constexpr std::size_t template_count = 6U;
+// 最悪形の 1 行の長さ（#836 の R1・eng/compare-probes.py の LEXER_WORST_LINE_BYTES と同じ）。
+constexpr std::size_t worst_line_bytes = 16'384U;
 // 入力は eng/compare-probes.py の lexer_input と同じ生成の形。C++ と Python は 2 行目が行を
 // またぐ字句（ブロックコメント・3 連引用符の文字列）を開き 3 行目が閉じる。JSON は行をまたがない。
 // C++: raw string・文字列・数字・演算子・前処理を含む。
@@ -85,6 +87,7 @@ constexpr std::array<std::string_view, template_count> javascript_templates{
         return core::Language::python;
     case LexerWorkload::markdown_visible_60:
     case LexerWorkload::markdown_backfill_200:
+    case LexerWorkload::markdown_worst_line:
         return core::Language::markdown;
     case LexerWorkload::javascript_visible_60:
     case LexerWorkload::javascript_backfill_200:
@@ -99,6 +102,7 @@ constexpr std::array<std::string_view, template_count> javascript_templates{
            workload == LexerWorkload::json_visible_60 ||
            workload == LexerWorkload::python_visible_60 ||
            workload == LexerWorkload::markdown_visible_60 ||
+           workload == LexerWorkload::markdown_worst_line ||
            workload == LexerWorkload::javascript_visible_60;
 }
 
@@ -186,6 +190,10 @@ constexpr std::array<std::string_view, template_count> javascript_templates{
 
 std::string lexer_input(LexerWorkload workload)
 {
+    if (workload == LexerWorkload::markdown_worst_line)
+    {
+        return std::string(worst_line_bytes, '[') + '\n';
+    }
     const std::span<const std::string_view> templates = templates_of(workload);
     std::string text;
     text.reserve(line_count(workload) * (line_bytes + 1U));

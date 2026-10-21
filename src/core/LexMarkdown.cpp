@@ -16,8 +16,14 @@ namespace nenenib::core
 {
 namespace
 {
+// 1 行の中で引いた「次の閉じの文字」の控え（#836 のレビュー R1）。閉じの文字（`]` `)` `>`）ごとに
+// 「引いた位置・答え」の 2 つを持つ。引いた位置から答えまでにその文字は無いので、その間から引き直す
+// ときは探さない。答えが lex_unclosed なら、引いた位置より後ろに閉じは無い。閉じの無い `[` `<` が
+// 並んでも、1 行の走査は O(n)。
+using CloseMemo = std::array<std::size_t, 6>;
+
 // 行の中の字句の関数。読み始めの位置を受けて、読み終えた次の位置を返す（必ず進む）。
-using LexHandler = std::size_t (*)(LexCursor &, std::size_t);
+using LexHandler = std::size_t (*)(LexCursor &, std::size_t, CloseMemo &);
 
 constexpr std::size_t fence_minimum = 3U;
 constexpr std::size_t fence_indent_limit = 3U;
@@ -114,14 +120,39 @@ void lex_fenced(LexCursor &cursor, const LexState &in)
 
 // ---- 行内 ----
 
+// 閉じの文字の控えの位置（`]` `)` `>` の順に 2 つずつ）。
+[[nodiscard]] constexpr std::size_t memo_slot(char mark) noexcept
+{
+    if (mark == ']')
+    {
+        return 0U;
+    }
+    return mark == ')' ? 2U : 4U;
+}
+
+// from から閉じの文字 mark の次の位置。控えの範囲の中から引けば探さない。
+[[nodiscard]] std::size_t next_close(std::string_view line, std::size_t from, char mark,
+                                     CloseMemo &memo) noexcept
+{
+    const std::size_t slot = memo_slot(mark);
+    if (from >= memo.at(slot) && from <= memo.at(slot + 1U))
+    {
+        return memo.at(slot + 1U);
+    }
+    const std::size_t found = line.find(mark, from);
+    memo.at(slot) = from;
+    memo.at(slot + 1U) = found;
+    return found;
+}
+
 // `\` は次の 1 バイトを文字として飛ばす。
-std::size_t lex_escape(LexCursor & /*cursor*/, std::size_t at)
+std::size_t lex_escape(LexCursor & /*cursor*/, std::size_t at, CloseMemo & /*memo*/)
 {
     return at + 2U;
 }
 
 // at の ` の連なりと同じ長さの連なりまでが行内コードで string。閉じなければ連なりを飛ばす。
-std::size_t lex_code_span(LexCursor &cursor, std::size_t at)
+std::size_t lex_code_span(LexCursor &cursor, std::size_t at, CloseMemo & /*memo*/)
 {
     const std::string_view line = cursor.line();
     const std::size_t open = run_end(line, at, '`');
@@ -156,7 +187,7 @@ std::size_t lex_code_span(LexCursor &cursor, std::size_t at)
 
 // `*` `_`（2 つ続けば `**` `__`）から同じ印の次の出現までが強調で constant（決定 4・入れ子を
 // 数えない）。印の直後が空白か、`_` の直前が識別子の文字なら強調にしない。閉じなければ印を飛ばす。
-std::size_t lex_emphasis(LexCursor &cursor, std::size_t at)
+std::size_t lex_emphasis(LexCursor &cursor, std::size_t at, CloseMemo & /*memo*/)
 {
     const std::string_view line = cursor.line();
     const char mark = line[at];
@@ -176,21 +207,22 @@ std::size_t lex_emphasis(LexCursor &cursor, std::size_t at)
 
 // open の `[` から `](` をはさんで最初の `)` まで（入れ子の `[]` は数えない）。無ければ
 // lex_unclosed。
-[[nodiscard]] constexpr std::size_t link_end(std::string_view line, std::size_t open) noexcept
+[[nodiscard]] std::size_t link_end(std::string_view line, std::size_t open,
+                                   CloseMemo &memo) noexcept
 {
-    const std::size_t label = line.find(']', open + 1U);
-    if (label == std::string_view::npos || lex_next_of(line, label) != '(')
+    const std::size_t label = next_close(line, open + 1U, ']', memo);
+    if (label == lex_unclosed || lex_next_of(line, label) != '(')
     {
         return lex_unclosed;
     }
-    const std::size_t close = line.find(')', label + 2U);
-    return close == std::string_view::npos ? lex_unclosed : close + 1U;
+    const std::size_t close = next_close(line, label + 2U, ')', memo);
+    return close == lex_unclosed ? lex_unclosed : close + 1U;
 }
 
 // リンク `[文字](url)` は function。形にならなければ `[` を飛ばす。
-std::size_t lex_link(LexCursor &cursor, std::size_t at)
+std::size_t lex_link(LexCursor &cursor, std::size_t at, CloseMemo &memo)
 {
-    const std::size_t end = link_end(cursor.line(), at);
+    const std::size_t end = link_end(cursor.line(), at, memo);
     if (end == lex_unclosed)
     {
         return at + 1U;
@@ -200,10 +232,11 @@ std::size_t lex_link(LexCursor &cursor, std::size_t at)
 }
 
 // 画像 `![alt](src)` は `!` から function。
-std::size_t lex_bang(LexCursor &cursor, std::size_t at)
+std::size_t lex_bang(LexCursor &cursor, std::size_t at, CloseMemo &memo)
 {
     const std::string_view line = cursor.line();
-    const std::size_t end = lex_next_of(line, at) == '[' ? link_end(line, at + 1U) : lex_unclosed;
+    const std::size_t end =
+        lex_next_of(line, at) == '[' ? link_end(line, at + 1U, memo) : lex_unclosed;
     if (end == lex_unclosed)
     {
         return at + 1U;
@@ -213,13 +246,13 @@ std::size_t lex_bang(LexCursor &cursor, std::size_t at)
 }
 
 // HTML のタグ `<…>`（`<` の直後が英字か `/` か `!`）は keyword。閉じなければ `<` を飛ばす。
-std::size_t lex_tag(LexCursor &cursor, std::size_t at)
+std::size_t lex_tag(LexCursor &cursor, std::size_t at, CloseMemo &memo)
 {
     const std::string_view line = cursor.line();
     const char next = static_cast<char>(lex_next_of(line, at) | '\x20');
     const bool named = (next >= 'a' && next <= 'z') || next == '/' || next == '!';
-    const std::size_t close = named ? line.find('>', at + 1U) : std::string_view::npos;
-    if (close == std::string_view::npos)
+    const std::size_t close = named ? next_close(line, at + 1U, '>', memo) : lex_unclosed;
+    if (close == lex_unclosed)
     {
         return at + 1U;
     }
@@ -227,7 +260,7 @@ std::size_t lex_tag(LexCursor &cursor, std::size_t at)
     return close + 1U;
 }
 
-std::size_t skip_character(LexCursor & /*cursor*/, std::size_t at)
+std::size_t skip_character(LexCursor & /*cursor*/, std::size_t at, CloseMemo & /*memo*/)
 {
     return at + 1U;
 }
@@ -265,9 +298,11 @@ constexpr auto handlers = []
 void lex_inline(LexCursor &cursor, std::size_t from)
 {
     const std::string_view line = cursor.line();
+    CloseMemo memo{};
+    std::ranges::fill(memo, lex_unclosed);
     for (std::size_t at = from; at < line.size();)
     {
-        at = handlers.at(static_cast<unsigned char>(line[at]))(cursor, at);
+        at = handlers.at(static_cast<unsigned char>(line[at]))(cursor, at, memo);
     }
 }
 

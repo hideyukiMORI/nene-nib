@@ -875,6 +875,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case LexerWorkload::markdown_backfill_200:
     case LexerWorkload::javascript_visible_60:
     case LexerWorkload::javascript_backfill_200:
+    case LexerWorkload::markdown_worst_line:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -895,7 +896,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 169> dispatches{{
+constexpr std::array<ProbeDispatch, 170> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1242,6 +1243,8 @@ constexpr std::array<ProbeDispatch, 169> dispatches{{
                      lexer_input, lexed_lines},
     ProbeDispatchRow{LexerWorkload::javascript_backfill_200, "lexer-javascript-backfill-200",
                      lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::markdown_worst_line, "lexer-markdown-worst-line", lexer_input,
+                     lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1284,7 +1287,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 169U);
+static_assert(dispatches.size() == 170U);
 static_assert(dispatch_is_complete());
 
 } // namespace

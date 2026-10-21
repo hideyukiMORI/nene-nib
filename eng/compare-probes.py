@@ -165,7 +165,8 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-markdown-visible-60',
              'lexer-markdown-backfill-200',
              'lexer-javascript-visible-60',
-             'lexer-javascript-backfill-200')
+             'lexer-javascript-backfill-200',
+             'lexer-markdown-worst-line')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -254,11 +255,15 @@ LEXER_TEMPLATES = {
 # Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
 LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //"}
 LEXER_PADDING = {"markdown": " "}
+# 閉じの無い `[` を並べた 1 行（#836 のレビュー R1）。LexerProbe.cpp の worst_line_bytes と同じ。
+LEXER_WORST_LINE_BYTES = 16384
 
 
 def lexer_input(workload: str) -> bytes:
     """行の字句器の 10 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript）。
     tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
+    if workload == "lexer-markdown-worst-line":
+        return b"[" * LEXER_WORST_LINE_BYTES + b"\n"
     language = workload.split("-")[1]
     count = 60 if workload.endswith("visible-60") else 200
     templates = LEXER_TEMPLATES[language]
@@ -268,7 +273,7 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:162]:
+    if workload in WORKLOADS[152:163]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

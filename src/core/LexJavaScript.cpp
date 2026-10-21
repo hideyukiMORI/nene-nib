@@ -35,7 +35,7 @@ constexpr std::array<std::string_view, 18> typescript_keywords{
     "private",   "protected", "public",  "readonly", "satisfies",  "type"};
 constexpr std::array<std::string_view, 6> javascript_constants{"Infinity", "NaN",  "false",
                                                                "null",     "true", "undefined"};
-constexpr std::array<std::string_view, 9> javascript_types{
+constexpr std::array<std::string_view, 9> typescript_types{
     "any", "bigint", "boolean", "never", "number", "object", "string", "symbol", "unknown"};
 // 次の `/` を正規表現にする予約語（#833 の決定 2）。
 constexpr std::array<std::string_view, 7> expression_keywords{"case", "do",     "else",  "in",
@@ -43,7 +43,7 @@ constexpr std::array<std::string_view, 7> expression_keywords{"case", "do",     
 static_assert(std::ranges::is_sorted(javascript_keywords));
 static_assert(std::ranges::is_sorted(typescript_keywords));
 static_assert(std::ranges::is_sorted(javascript_constants));
-static_assert(std::ranges::is_sorted(javascript_types));
+static_assert(std::ranges::is_sorted(typescript_types));
 static_assert(std::ranges::is_sorted(expression_keywords));
 
 // `/` は自分の関数で読む（正規表現・コメント・除算）ので、演算子の連なりは `/` で切る。
@@ -165,17 +165,20 @@ std::size_t lex_template(LexCursor &cursor, std::size_t at)
     return lex_unclosed;
 }
 
-// 正規表現リテラル `/…/flags` は string。閉じなければ行末まで error。
+// 正規表現リテラル `/…/flags` は string。閉じが行末まで無ければ正規表現でなく、`/` を 1 字の
+// 除算の演算子として読み直して続ける（#836 のレビュー R2・行頭のコメントの後や継続行の `/ 2`・
+// JSX の `</div>` を error にしない）。
 std::size_t mark_regex(LexCursor &cursor, std::size_t at)
 {
     const std::string_view line = cursor.line();
     const std::size_t close = regex_close(line, at);
-    cursor.follow(LexPrecedent::operand);
     if (close == lex_unclosed)
     {
-        cursor.mark(at, line.size(), SyntaxRole::error);
-        return line.size();
+        cursor.mark(at, at + 1U, SyntaxRole::operators);
+        cursor.follow(LexPrecedent::expression_start);
+        return at + 1U;
     }
+    cursor.follow(LexPrecedent::operand);
     const std::size_t end = lex_word_end(line, close);
     cursor.mark(at, end, SyntaxRole::string);
     return end;
@@ -273,7 +276,8 @@ std::size_t lex_operators(LexCursor &cursor, std::size_t at)
     return at > 0U && line[at - 1U] == '.' && (at < 2U || line[at - 2U] != '.');
 }
 
-// 定数・予約語（TS では TS の予約語も）・型の表の順に引き、どれでもなく直後が `(` なら関数。
+// 定数・予約語（TS では TS の予約語も）・型（TS だけ・JS に型の注釈は無い）の表の順に引き、
+// どれでもなく直後が `(` なら関数。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool typescript,
                                                   bool called) noexcept
 {
@@ -286,7 +290,7 @@ std::size_t lex_operators(LexCursor &cursor, std::size_t at)
     {
         return SyntaxRole::keyword;
     }
-    if (std::ranges::binary_search(javascript_types, word))
+    if (typescript && std::ranges::binary_search(typescript_types, word))
     {
         return SyntaxRole::type;
     }
