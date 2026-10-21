@@ -6,6 +6,7 @@
 #include "FileNameWorkload.hpp"
 #include "FrameDocumentWorkload.hpp"
 #include "FrameRowsWorkload.hpp"
+#include "LexerWorkload.hpp"
 #include "MarkdownWorkload.hpp"
 #include "NewlineIndexWorkload.hpp"
 #include "OperationChoiceWorkload.hpp"
@@ -27,7 +28,7 @@ using ProbeSelection =
                  FrameDocumentWorkload, StatusItemsWorkload, FileNameWorkload, TabDisplayWorkload,
                  CommandInputWorkload, ExCompletionWorkload, CompletionPrefixWorkload,
                  PaletteChoiceWorkload, OperationChoiceWorkload, SearchSpanWorkload,
-                 TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload>;
+                 TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload, LexerWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 [[nodiscard]] std::string input_of(ProbeSelection workload);

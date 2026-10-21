@@ -21,7 +21,7 @@ namespace
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 void verify_vim_scope_contracts()
 {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 41> contracts{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 42> contracts{{
         {"--vim-wrapped", verify_vim_wrapped_contracts},
         {"--wrapped-view", verify_wrapped_view_scope},
         {"--vim-dot", verify_vim_dot_contracts},
@@ -63,6 +63,7 @@ void verify_vim_scope_contracts()
         {"--markdown", verify_markdown_scope},
         {"--language", verify_language_scope},
         {"--preview", verify_preview_contracts},
+        {"--lexer", verify_lexer_scope},
     }};
     for (const auto &scope : contracts)
     {
@@ -77,7 +78,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 64> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 65> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -142,6 +143,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 64> scopes{{
     {"--markdown", verify_markdown_scope},
     {"--language", verify_language_scope},
     {"--preview", verify_preview_scope},
+    {"--lexer", verify_lexer_scope},
 }};
 
 [[nodiscard]] bool verify_selected_scope(std::string_view command)
