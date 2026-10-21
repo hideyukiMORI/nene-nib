@@ -1,10 +1,12 @@
 // Markdown のプレビューの application の契約（ADR 0155）。枠に置く・券・間引き・即時の要求・
 // 操作中にならない枠・閉じる・置き換える・16 MiB・錨と片方向の追従・静かな道。
 #include "ClosePane.hpp"
+#include "CloseTab.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "FilePath.hpp"
 #include "InsertText.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
@@ -12,12 +14,15 @@
 #include "MarkdownParse.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenDocument.hpp"
 #include "PaneFrame.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewTick.hpp"
+#include "SaveState.hpp"
 #include "Scopes.hpp"
+#include "ScriptedFiles.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
@@ -67,6 +72,13 @@ using core::SplitLayout;
 [[nodiscard]] std::string notice_of(const app::PreviewFrame &frame)
 {
     return frame.notice.has_value() ? std::string(frame.notice.value().text()) : std::string{};
+}
+
+// Vim の `Ctrl-w` に続けて 1 鍵。
+void window_command(app::EditorController &controller, std::string_view key)
+{
+    static_cast<void>(controller.press_vim_key(core::VimKey{core::VimSpecialKey::control_w}));
+    vim_replay(controller, key);
 }
 
 // 段落 1 つの結果（中身は券の見分けにだけ使う）。
@@ -346,6 +358,137 @@ void verify_closed_is_quiet()
     expect(editing.markdown().requests().size() == 1 && editing.markdown().collects() == 1,
            "after closing the preview the signal and the tick stay quiet");
 }
+
+// 10. 閉じて開き直しても券は戻らない。閉じる前の券の結果は開き直した後に捨てる（決定 6・R1）。
+void verify_reopen_drops_old_ticket()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"body"});
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::TogglePreview{});
+    auto &markdown = editing.markdown();
+    expect(markdown.requests().size() == 2 && markdown.requests().back().ticket == 2,
+           "opening again requests with the next ticket, not the first one");
+    markdown.serve(parsed(1, "before closing"));
+    const EditorFrame stale = controller.apply_frame(app::WorkCompleted{});
+    expect(preview_of(stale) != nullptr && preview_of(stale)->document == nullptr,
+           "the result of the ticket before closing is dropped after opening again");
+    markdown.serve(parsed(2, "after opening"));
+    const EditorFrame fresh = controller.apply_frame(app::WorkCompleted{});
+    expect(shown_text(*preview_of(fresh)) == "after opening",
+           "only the result of the ticket after opening again is shown");
+}
+
+// 11. 閉じる道は全部プレビューだけを閉じ、本文と窓は残す（決定 4・R2）。`:wq` と `:x` は
+// 保存が走ってもプレビューだけを閉じる。
+void verify_close_paths()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    applied(controller, app::TogglePreview{});
+    window_command(controller, "q");
+    const EditorFrame quit = controller.frame();
+    expect(quit.layout == SplitLayout::none && !quit.closing && quit.tabs.size() == 1,
+           "Ctrl-w q with the preview closes only the preview");
+    applied(controller, app::TogglePreview{});
+    window_command(controller, "o");
+    expect(!controller.frame().other.has_value() && controller.frame().tabs.size() == 1,
+           "Ctrl-w o with the preview closes only the preview");
+    applied(controller, app::TogglePreview{});
+    const EditorFrame only = run_ex(controller, "only");
+    expect(only.layout == SplitLayout::none && !only.other.has_value() && only.tabs.size() == 1,
+           ":only with the preview closes only the preview");
+    vim_replay(controller, "x");
+    applied(controller, app::TogglePreview{});
+    const EditorFrame forced = run_ex(controller, "q!");
+    expect(forced.layout == SplitLayout::none && !forced.closing && forced.tabs.size() == 1 &&
+               forced.document.save_state == core::SaveState::modified,
+           ":q! with the preview closes only the preview and keeps the unsaved body");
+    applied(controller, app::TogglePreview{});
+    const EditorFrame written = run_ex(controller, "wq");
+    expect(written.layout == SplitLayout::none && !written.closing && written.tabs.size() == 1 &&
+               editing.files().written() == "ne\ntwo" &&
+               written.document.save_state == core::SaveState::saved,
+           ":wq with the preview writes and then closes only the preview");
+    vim_replay(controller, "x");
+    applied(controller, app::TogglePreview{});
+    const EditorFrame exited = run_ex(controller, "x");
+    expect(exited.layout == SplitLayout::none && !exited.closing && exited.tabs.size() == 1 &&
+               editing.files().written() == "e\ntwo" &&
+               exited.document.save_state == core::SaveState::saved,
+           ":x with the preview writes and then closes only the preview");
+}
+
+// 12. 開いたまま文書を開く・閉じたタブの隣へ移ると、tick を待たずに頼む（決定 9・I9）。
+void verify_open_and_close_request_now()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at("C:\\work\\a.md", Bytes{"alpha"});
+    editing.files().hold_at("C:\\work\\b.md", Bytes{"beta"});
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::OpenDocument{core::FilePath::parse("C:\\work\\a.md").value()});
+    applied(controller, app::TogglePreview{});
+    auto &markdown = editing.markdown();
+    const EditorFrame opened =
+        controller.apply_frame(app::OpenDocument{core::FilePath::parse("C:\\work\\b.md").value()});
+    expect(opened.tabs.size() == 2 && markdown.requests().size() == 2 &&
+               markdown.requests().back().ticket == 2 && *markdown.requests().back().text == "beta",
+           "opening a file with the preview requests the new document at once");
+    const EditorFrame closed = controller.apply_frame(app::CloseTab{1});
+    expect(closed.tabs.size() == 1 && preview_of(closed) != nullptr &&
+               markdown.requests().size() == 3 && markdown.requests().back().ticket == 3 &&
+               *markdown.requests().back().text == "alpha",
+           "closing the tab requests its neighbour at once");
+}
+
+// 13. プレビューが開いているときの合図 WorkCompleted も、歩き・`.`・undo を動かさない
+// （--background-work の same_with_work と同じ形・I9）。
+void verify_work_keeps_state()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::InsertText{"a"});
+    applied(controller, app::NewTab{});
+    applied(controller, app::InsertText{"b"});
+    applied(controller, app::NewTab{});
+    applied(controller, app::InsertText{"c"});
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    const auto ticket = editing.markdown().requests().back().ticket;
+    editing.markdown().serve(parsed(ticket, "b"));
+    applied(controller, app::WorkCompleted{});
+    expect(controller.tab_walking(), "a work signal with the preview does not settle the walk");
+    const EditorFrame third = controller.apply_frame(app::WalkRecentTab{core::TabStep::next});
+    expect(!third.lines.empty() && third.lines.front().text == "a",
+           "the next walk after the signal reaches the third tab in the order");
+    applied(controller, app::SettleRecentTab{});
+
+    Editing plain;
+    open_vim_document(plain, "abc\nabc");
+    applied(plain.controller(), app::TogglePreview{});
+    vim_replay(plain.controller(), "x.uu");
+    Editing worked;
+    open_vim_document(worked, "abc\nabc");
+    applied(worked.controller(), app::TogglePreview{});
+    vim_replay(worked.controller(), "x");
+    worked.markdown().serve(parsed(1, "abc"));
+    applied(worked.controller(), app::WorkCompleted{});
+    vim_replay(worked.controller(), ".");
+    applied(worked.controller(), app::WorkCompleted{});
+    vim_replay(worked.controller(), "u");
+    applied(worked.controller(), app::WorkCompleted{});
+    vim_replay(worked.controller(), "u");
+    expect(whole_vim_body(plain.controller()) == whole_vim_body(worked.controller()) &&
+               whole_vim_body(worked.controller()) == "abc\nabc" &&
+               shown_text(*preview_of(worked.controller().frame())) == "abc",
+           "work signals between x, . and u never move the dot record nor the undo units");
+}
 } // namespace
 
 void verify_preview_contracts()
@@ -359,6 +502,10 @@ void verify_preview_contracts()
     verify_anchor();
     verify_tick_keeps_state();
     verify_closed_is_quiet();
+    verify_reopen_drops_old_ticket();
+    verify_close_paths();
+    verify_open_and_close_request_now();
+    verify_work_keeps_state();
 }
 
 void verify_preview_scope()

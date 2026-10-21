@@ -60,6 +60,7 @@
 
 ## 検証
 
-- 契約 `--preview`（`tests/unit/PreviewTests.cpp`）: 開く → `PreviewView`・券 1・本文の写しが要求に載る／`WorkCompleted` で今の券の結果が `document` に・古い券は捨てる・`stopped` は捨てる・`parser_rejected` と `too_large` は 1 行／tick の間引き（打鍵 → tick（要求なし）→ tick（券 2）→ tick（要求なし））／タブの切り替えと新しいタブで即時に頼み前の結果を捨てる／`SwitchPane` は変えず 1 行・`ClosePane` と `:q` と `Ctrl-w c` はプレビューだけを閉じる・`SplitPane` で本文の枠に・`TogglePreview` で本文の枠を置き換え・もう一度で閉じる／16 MiB + 1 バイトで要求 0 と 1 行／`ScrollPane` で錨が行で動き端で止まり、本文を送ると追従に戻る／tick は歩き・`.`・undo を動かさない／閉じている間と閉じた後は口を呼ばない。
+- 契約 `--preview`（`tests/unit/PreviewTests.cpp`）: 開く → `PreviewView`・券 1・本文の写しが要求に載る／`WorkCompleted` で今の券の結果が `document` に・古い券は捨てる・`stopped` は捨てる・`parser_rejected` と `too_large` は 1 行／tick の間引き（打鍵 → tick（要求なし）→ tick（券 2）→ tick（要求なし））／タブの切り替えと新しいタブで即時に頼み前の結果を捨てる／`SwitchPane` は変えず 1 行・`ClosePane` と `:q` と `Ctrl-w c` はプレビューだけを閉じる・`SplitPane` で本文の枠に・`TogglePreview` で本文の枠を置き換え・もう一度で閉じる／16 MiB + 1 バイトで要求 0 と 1 行／`ScrollPane` で錨が行で動き端で止まり、本文を送ると追従に戻る／tick は歩き・`.`・undo を動かさない／閉じている間と閉じた後は口を呼ばない／閉じて開き直すと券 2 で頼み券 1 の結果は捨てる／`Ctrl-w q` `Ctrl-w o` `:only` `:q!` `:wq` `:x` もプレビューだけを閉じ（`:wq` `:x` は保存してから）／開いたまま開く・閉じたタブの隣で即時に頼む／プレビューが開いているときの `WorkCompleted` は歩き・`.`・undo を動かさない。
+- ui と adapters（#801）: `nib_window_tests --preview`（`PreviewPane` が同じ文書を 2 回描いても layout を作り直さない・錨の上の送り）・`--timers`（`preview` の番号と 200 ms）・`eng/verify-window.py --preview --scheme dark|light|grid`。
 - 静かな道: `verify_quiet_paths`（`--history`）と `verify_folder_quiet_paths`（`--background-work`）。
 - 既存: `--split` `--operations` `--autosave`、`nib_window_tests`（renderer の `std::visit`）。
