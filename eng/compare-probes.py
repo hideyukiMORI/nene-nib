@@ -161,7 +161,11 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-json-visible-60',
              'lexer-json-backfill-200',
              'lexer-python-visible-60',
-             'lexer-python-backfill-200')
+             'lexer-python-backfill-200',
+             'lexer-markdown-visible-60',
+             'lexer-markdown-backfill-200',
+             'lexer-javascript-visible-60',
+             'lexer-javascript-backfill-200')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -231,23 +235,40 @@ LEXER_TEMPLATES = {
         "@functools.lru_cache(maxsize=None)",
         "    if value is not None and isinstance(value, dict): return [len(v) for v in value]",
         "class Widget(object): pass  # trailing comment with \"quotes\" and 'apostrophes'"),
+    "markdown": (
+        "# Heading with **bold** and `code` and [link](https://example.com/path)",
+        "```cpp fenced code block opens here with an info string",
+        "```",
+        "- list item with *emphasis* and __strong__ and ![image](img.png) and <span>tag</span>",
+        "> quoted text with `inline code` and a [reference link](#anchor) and more words",
+        "1. ordered item with _italic_ text, an escaped \\* star, and plain prose to the end"),
+    "javascript": (
+        "import { readFile } from 'node:fs'; const pattern = /ab+c\\/[a-z/]+/gi; // regex",
+        "export async function compute(value, scale = 1.5e3) { /* block comment opens",
+        "   closes here */ let total = (value / 2) ** 3 + 0xFF + 1_000n; return total;",
+        "const text = `template ${value} literal` + \"double \\\" quote\" + 'single';",
+        "if (count >= 10 && ready !== null) { items?.push(...rest); } else { x ??= undefined; }",
+        "return typeof value === 'string' ? value.split(/\\s+/) : [true, false, NaN];"),
 }
-# 行末の印（JSON はコメントが無いので空白）。続けて `-` で 100 バイトにそろえる。
-LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #"}
+# 行末の印（JSON と Markdown は空白）。続けて詰め物で 100 バイトにそろえる。詰め物は `-` で、
+# Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
+LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //"}
+LEXER_PADDING = {"markdown": " "}
 
 
 def lexer_input(workload: str) -> bytes:
-    """行の字句器の 6 本（#815 の C++・#830 の JSON と Python）。tests/performance/LexerProbe.cpp と
-    同じ 100 バイトの行。"""
+    """行の字句器の 10 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript）。
+    tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
     language = workload.split("-")[1]
     count = 60 if workload.endswith("visible-60") else 200
     templates = LEXER_TEMPLATES[language]
     lines = (templates[index % 6] + LEXER_SUFFIXES[language] for index in range(count))
-    return "".join(line + "-" * (100 - len(line)) + "\n" for line in lines).encode("utf-8")
+    padding = LEXER_PADDING.get(language, "-")
+    return "".join(line + padding * (100 - len(line)) + "\n" for line in lines).encode("utf-8")
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:158]:
+    if workload in WORKLOADS[152:162]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

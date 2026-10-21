@@ -3,6 +3,7 @@
 #include "ColorSpan.hpp"
 #include "LexLine.hpp"
 #include "LexOutput.hpp"
+#include "LexPrecedent.hpp"
 #include "LexState.hpp"
 #include "SyntaxRole.hpp"
 
@@ -26,6 +27,10 @@ class LexCursor
     // 行の終わりで次の行へ渡す状態。呼ばなければ plain。
     void leave(const LexState &state) noexcept;
     [[nodiscard]] const LexState &state() const noexcept;
+    // 直前の字句の種類（#833・JavaScript の `/` の見分け）。行頭は expression_start。区間を捨てる
+    // state_only でも同じに覚え、lex_line と lex_state が同じ状態機械を通る。
+    void follow(LexPrecedent precedent) noexcept;
+    [[nodiscard]] LexPrecedent precedent() const noexcept;
     [[nodiscard]] LexLine finish() &&;
 
   private:
@@ -37,5 +42,6 @@ class LexCursor
     std::size_t counted_ = 0U;
     Column column_{1U};
     LexState out_{};
+    LexPrecedent precedent_ = LexPrecedent::expression_start;
 };
 } // namespace nenenib::core

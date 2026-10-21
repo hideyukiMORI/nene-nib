@@ -1,5 +1,6 @@
-// scope `--lexer` の単体テスト（#815・段 2 の ADR 0156 の決定 1〜6）。core の lex_line が C / C++
-// の 1 行を役割の区間に分け、行をまたぐ状態（ブロックコメント・raw string）を値で次の行へ渡すこと。
+// scope `--lexer` の単体テスト（#815・段 2 の ADR 0156 の決定 1〜6・#830 の JSON と Python・
+// #833 の Markdown と JS / TS）。core の lex_line が 1 行を役割の区間に分け、行をまたぐ状態
+// （ブロックコメント・raw string・フェンス・テンプレート）を値で次の行へ渡すこと。
 // 期待の区間は「塗り」の文字列で書く: 行の code point 1 つに 1 文字で、c comment・k keyword・
 // s string・n number・t type・f function・v constant・o operators・e error・空白は区間なし。
 // 大文字は同じ役割の区間をそこで新しく始める（隣り合う 2 つの文字列など）。塗りが行より短ければ
@@ -64,6 +65,13 @@ constexpr LexState raw_sixteen = raw("abcdefghijklmnop");
 // Python の 3 連引用符の中（#830・delimiter はその 3 文字）。
 constexpr LexState triple_dq = raw("\"\"\"");
 constexpr LexState triple_sq = raw("'''");
+// Markdown のフェンスの中（#833・delimiter はフェンスの文字列）と JS のテンプレートの中。
+constexpr LexState fence3 = raw("```");
+constexpr LexState fence4 = raw("````");
+constexpr LexState fence16 = raw("````````````````");
+constexpr LexState tilde3 = raw("~~~");
+constexpr LexState tilde4 = raw("~~~~");
+constexpr LexState tpl = raw("`");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -428,6 +436,192 @@ constexpr std::array<LexCase, 27> python_word_cases{{
     {"9abc", plain, "nnnn", plain},
 }};
 
+// Markdown（#833・Vim の markdown.vim）。見出し 6 段・強調の組み合わせ・行内コード・フェンスの
+// 開く / 中 / 閉じる / `~~~` / 長さの違い・リンクと画像・引用・箇条書きと番号・水平線・
+// HTML のタグ・UTF-8・`\r`・ほかの言語の状態で入っても行頭から読む。
+constexpr std::array<LexCase, 85> markdown_cases{{
+    {"# Title", plain, "kkkkkkk", plain},
+    {"## Section", plain, "kkkkkkkkkk", plain},
+    {"### Third", plain, "kkkkkkkkk", plain},
+    {"#### Fourth", plain, "kkkkkkkkkkk", plain},
+    {"##### Fifth", plain, "kkkkkkkkkkk", plain},
+    {"###### Sixth", plain, "kkkkkkkkkkkk", plain},
+    {"####### seven", plain, "", plain},
+    {"#hashtag", plain, "", plain},
+    {"#", plain, "k", plain},
+    {"  ## indented", plain, "  kkkkkkkkkkk", plain},
+    {"**bold**", plain, "vvvvvvvv", plain},
+    {"__bold__", plain, "vvvvvvvv", plain},
+    {"*it*", plain, "vvvv", plain},
+    {"_it_", plain, "vvvv", plain},
+    {"a **b** c *d* e", plain, "  vvvvv   vvv", plain},
+    {"snake_case_name", plain, "", plain},
+    {"** not bold**", plain, "", plain},
+    {"*unclosed", plain, "", plain},
+    {"**a*b**", plain, "vvvvvvv", plain},
+    {"_a_b_", plain, "vvv", plain},
+    {"2*3*4", plain, " vvv", plain},
+    {"`code`", plain, "ssssss", plain},
+    {"``a ` b``", plain, "sssssssss", plain},
+    {"text `open", plain, "", plain},
+    {"a `x` and `y`", plain, "  sss     sss", plain},
+    {"``x``", plain, "sssss", plain},
+    {"[link](http://x)", plain, "ffffffffffffffff", plain},
+    {"![alt](a.png)", plain, "fffffffffffff", plain},
+    {"see [a](b) and [c](d)", plain, "    ffffff     ffffff", plain},
+    {"[not a link] here", plain, "", plain},
+    {"[a] (b)", plain, "", plain},
+    {"> quote", plain, "ccccccc", plain},
+    {">", plain, "c", plain},
+    {"  > nested quote **b**", plain, "  cccccccccccccccccccc", plain},
+    {"- item", plain, "o", plain},
+    {"* item", plain, "o", plain},
+    {"+ item", plain, "o", plain},
+    {"1. first", plain, "oo", plain},
+    {"10) tenth", plain, "ooo", plain},
+    {"  - nested *em*", plain, "  o        vvvv", plain},
+    {"-item", plain, "", plain},
+    {"1.5 apples", plain, "", plain},
+    {"---", plain, "ccc", plain},
+    {"***", plain, "ccc", plain},
+    {"___", plain, "ccc", plain},
+    {"- - -", plain, "ccccc", plain},
+    {"--", plain, "", plain},
+    {"<div>", plain, "kkkkk", plain},
+    {"a <span>x</span> b", plain, "  kkkkkk kkkkkkk", plain},
+    {"<!-- c -->", plain, "kkkkkkkkkk", plain},
+    {"a < b > c", plain, "", plain},
+    {"\\*not em\\*", plain, "", plain},
+    {"", plain, "", plain},
+    {"   ", plain, "", plain},
+    {"```", plain, "sss", fence3},
+    {"```cpp", plain, "ssssss", fence3},
+    {"  ~~~~ info", plain, "sssssssssss", tilde4},
+    {"~~~ `x`", plain, "sssssss", tilde3},
+    {"    ```", plain, "", plain},
+    {"``` a ` b", plain, "", plain},
+    {"````````````````", plain, "ssssssssssssssss", fence16},
+    {"`````````````````", plain, "", plain},
+    {"int x = 1;", fence3, "ssssssssss", fence3},
+    {"", fence3, "", fence3},
+    {"# not heading", fence3, "sssssssssssss", fence3},
+    {"**not em**", fence3, "ssssssssss", fence3},
+    {"``` x", fence3, "sssss", fence3},
+    {"~~~", fence3, "sss", fence3},
+    {"```", fence4, "sss", fence4},
+    {"```", fence3, "sss", plain},
+    {"````", fence3, "ssss", plain},
+    {"   ```", fence3, "ssssss", plain},
+    {"```\r", fence3, "ssss", plain},
+    {"~~~~  ", tilde3, "ssssss", plain},
+    {"~~~", tilde4, "sss", tilde4},
+    {"# 見出し", plain, "kkkkk", plain},
+    {"**日本語**", plain, "vvvvvvv", plain},
+    {"[リンク](url)", plain, "ffffffffff", plain},
+    {"本文 `コード` 本文", plain, "   sssss", plain},
+    {"> 引用", plain, "cccc", plain},
+    {"text\r", plain, "", plain},
+    {"- item\r", plain, "o", plain},
+    {"---\r", plain, "cccc", plain},
+    {"# x", block, "kkk", plain},
+    {"**b**", raw_xyz, "vvvvv", plain},
+}};
+
+// JavaScript と TypeScript（#833・Vim の javascript.vim / typescript.vim）で同じ答えになる行。
+// コメントの行またぎ・文字列とテンプレートの行またぎ・正規表現と除算の見分け（`a++ / 2` は直前が
+// 演算子なので正規表現に読む限界）・数字の形・予約語と定数と型・関数・演算子の連なり・UTF-8・境。
+constexpr std::array<LexCase, 68> javascript_cases{{
+    {"// comment", plain, "cccccccccc", plain},
+    {"x = 1; // c", plain, "  o no cccc", plain},
+    {"/* block */", plain, "ccccccccccc", plain},
+    {"/* opens", plain, "cccccccc", block},
+    {"still", block, "ccccc", block},
+    {"ends */ x", block, "ccccccc", plain},
+    {"", block, "", block},
+    {"a /* b */ c", plain, "  ccccccc", plain},
+    {"'single'", plain, "ssssssss", plain},
+    {"\"double\"", plain, "ssssssss", plain},
+    {"'it\\'s'", plain, "sssssss", plain},
+    {"'open", plain, "eeeee", plain},
+    {"\"a\" + 'b'", plain, "sss o sss", plain},
+    {"`tpl ${x} end`", plain, "ssssssssssssss", plain},
+    {"`opens", plain, "ssssss", tpl},
+    {"middle ${y}", tpl, "sssssssssss", tpl},
+    {"ends` + 1", tpl, "sssss o n", plain},
+    {"", tpl, "", tpl},
+    {"`a\\`b`", plain, "ssssss", plain},
+    {"x = /ab+c/gi;", plain, "  o sssssssso", plain},
+    {"a / b / c", plain, "  o   o", plain},
+    {"(a) / 2", plain, "o o o n", plain},
+    {"f(/x/)", plain, "fossso", plain},
+    {"return /re/.test(s);", plain, "kkkkkk ssssoffffo oo", plain},
+    {"x = a / b;", plain, "  o   o  o", plain},
+    {"x /= 2;", plain, "  oo no", plain},
+    {"if (/^a/.test(s)) {}", plain, "kk ossssoffffo oo oo", plain},
+    {"const r = [/a/, /b[/]c/];", plain, "kkkkk   o ossso sssssssoo", plain},
+    {"typeof /x/", plain, "kkkkkk sss", plain},
+    {"case /x/:", plain, "kkkk ssso", plain},
+    {"} /x/", plain, "o sss", plain},
+    {"arr[0] / 2", plain, "   ono o n", plain},
+    {"'s' / 2", plain, "sss o n", plain},
+    {"x = /unclosed", plain, "  o eeeeeeeee", plain},
+    {"a++ / 2", plain, " oo eee", plain},
+    {"/", plain, "e", plain},
+    {"0xFF", plain, "nnnn", plain},
+    {"0b1010", plain, "nnnnnn", plain},
+    {"0o17", plain, "nnnn", plain},
+    {"1_000_000", plain, "nnnnnnnnn", plain},
+    {"10n", plain, "nnn", plain},
+    {"1e3 + 1.5e-3", plain, "nnn o nnnnnn", plain},
+    {".5", plain, "nn", plain},
+    {"x.y", plain, " o", plain},
+    {"const x = null;", plain, "kkkkk   o vvvvo", plain},
+    {"let a = undefined", plain, "kkk   o vvvvvvvvv", plain},
+    {"if (NaN || Infinity) return true;", plain, "kk ovvv oo vvvvvvvvo kkkkkk vvvvo", plain},
+    {"let n: number = 1;", plain, "kkk  o tttttt o no", plain},
+    {"void 0", plain, "kkkk n", plain},
+    {"this.get(x)", plain, "kkkkofffo o", plain},
+    {"obj.default", plain, "   o", plain},
+    {"$el.on('x', fn)", plain, "   offossso   o", plain},
+    {"async function run() {}", plain, "kkkkk kkkkkkkk fffoo oo", plain},
+    {"function(x) {}", plain, "kkkkkkkko o oo", plain},
+    {"a === b", plain, "  ooo", plain},
+    {"a?.b ?? c", plain, " oo  oo", plain},
+    {"x => x ** 2", plain, "  oo   oo n", plain},
+    {"y ?\?= z >>>= 1", plain, "  ooo   oooo n", plain},
+    {"f(...args)", plain, "foooo    o", plain},
+    {"a &&= b || !c", plain, "  ooo   oo o", plain},
+    {"const s = '日本語'; // コメント", plain, "kkkkk   o ssssso ccccccc", plain},
+    {"/* 説明 */ x", plain, "cccccccc", plain},
+    {"`テンプレート`", plain, "ssssssss", plain},
+    {"x = /日本/u", plain, "  o sssss", plain},
+    {"#count = 1", plain, "       o n", plain},
+    {"x = 1;\r", plain, "  o no", plain},
+    {"a", raw_xyz, "", plain},
+    {"x", triple_dq, "", plain},
+}};
+
+// TS の予約語は JavaScript では区間なし（`static` は JS の予約語）。
+constexpr std::array<LexCase, 5> javascript_only_cases{{
+    {"type T = string;", plain, "       o tttttto", plain},
+    {"interface A {}", plain, "            oo", plain},
+    {"x as unknown", plain, "     ttttttt", plain},
+    {"enum E { A }", plain, "       o   o", plain},
+    {"public static override m() {}", plain, "       kkkkkk          foo oo", plain},
+}};
+
+// TypeScript だけで keyword になる予約語。
+constexpr std::array<LexCase, 8> typescript_only_cases{{
+    {"type T = string;", plain, "kkkk   o tttttto", plain},
+    {"interface A {}", plain, "kkkkkkkkk   oo", plain},
+    {"x as unknown", plain, "  kk ttttttt", plain},
+    {"enum E { A }", plain, "kkkk   o   o", plain},
+    {"public static override m() {}", plain, "kkkkkk kkkkkk kkkkkkkk foo oo", plain},
+    {"readonly a: keyof T;", plain, "kkkkkkkk  o kkkkk  o", plain},
+    {"declare module 'x' {}", plain, "kkkkkkk kkkkkk sss oo", plain},
+    {"x satisfies Y; a is B", plain, "  kkkkkkkkk  o   kk", plain},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -447,13 +641,14 @@ void verify_language_table(Language language, std::span<const LexCase> cases)
 // 字句器を持たない言語は、どの状態で入っても区間なしで状態をそのまま返す（決定 4）。
 void verify_other_languages()
 {
-    constexpr std::array<Language, 12> others{
-        Language::plain,      Language::markdown,   Language::html,  Language::javascript,
-        Language::typescript, Language::yaml,       Language::toml,  Language::xml,
-        Language::css,        Language::powershell, Language::shell, Language::cmake};
-    for (const Language language : {Language::c, Language::cpp, Language::json, Language::python})
+    constexpr std::array<Language, 9> others{
+        Language::plain, Language::html,       Language::yaml,  Language::toml, Language::xml,
+        Language::css,   Language::powershell, Language::shell, Language::cmake};
+    for (const Language language : {Language::c, Language::cpp, Language::json, Language::python,
+                                    Language::markdown, Language::javascript, Language::typescript})
     {
-        expect(core::has_lexer(language), "C, C++, JSON and Python have a lexer");
+        expect(core::has_lexer(language),
+               "C, C++, JSON, Python, Markdown, JavaScript and TypeScript have a lexer");
     }
     for (const Language language : others)
     {
@@ -505,6 +700,37 @@ void verify_state_threading()
            "raw states compare by their delimiter");
     expect(LexState{} == plain, "the default state is plain");
 }
+// フェンスとテンプレートとブロックコメントも、状態を値で次の行へ渡す（#833）。
+void verify_threading_of(Language language, std::span<const std::string_view> lines,
+                         std::span<const LexKind> expected)
+{
+    LexState state{};
+    std::vector<LexKind> kinds;
+    for (const std::string_view line : lines)
+    {
+        const LexState spans_state = core::lex_line(language, state, line).out;
+        expect(core::lex_state(language, state, line) == spans_state,
+               "lex_state threads the same state as lex_line");
+        state = spans_state;
+        kinds.push_back(state.kind);
+    }
+    expect(std::ranges::equal(kinds, expected), "states thread through markdown and script lines");
+}
+
+void verify_markdown_and_script_threading()
+{
+    constexpr std::array<std::string_view, 5> markdown{"text", "~~~~js", "let x = 1;", "~~~~",
+                                                       "# h"};
+    constexpr std::array<LexKind, 5> markdown_kinds{
+        LexKind::plain, LexKind::raw_string, LexKind::raw_string, LexKind::plain, LexKind::plain};
+    verify_threading_of(Language::markdown, markdown, markdown_kinds);
+    constexpr std::array<std::string_view, 4> script{"const a = `x", "${y}", "z` / 2 /* c",
+                                                     "d */ x"};
+    constexpr std::array<LexKind, 4> script_kinds{LexKind::raw_string, LexKind::raw_string,
+                                                  LexKind::block_comment, LexKind::plain};
+    verify_threading_of(Language::javascript, script, script_kinds);
+    verify_threading_of(Language::typescript, script, script_kinds);
+}
 } // namespace
 
 void verify_lexer_scope()
@@ -517,8 +743,14 @@ void verify_lexer_scope()
     verify_language_table(Language::json, json_cases);
     verify_language_table(Language::python, python_string_cases);
     verify_language_table(Language::python, python_word_cases);
+    verify_language_table(Language::markdown, markdown_cases);
+    verify_language_table(Language::javascript, javascript_cases);
+    verify_language_table(Language::typescript, javascript_cases);
+    verify_language_table(Language::javascript, javascript_only_cases);
+    verify_language_table(Language::typescript, typescript_only_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();
+    verify_markdown_and_script_threading();
 }
 } // namespace nenenib::tests

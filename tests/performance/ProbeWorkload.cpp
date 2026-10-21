@@ -871,6 +871,10 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case LexerWorkload::json_backfill_200:
     case LexerWorkload::python_visible_60:
     case LexerWorkload::python_backfill_200:
+    case LexerWorkload::markdown_visible_60:
+    case LexerWorkload::markdown_backfill_200:
+    case LexerWorkload::javascript_visible_60:
+    case LexerWorkload::javascript_backfill_200:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -891,7 +895,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 165> dispatches{{
+constexpr std::array<ProbeDispatch, 169> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1230,6 +1234,14 @@ constexpr std::array<ProbeDispatch, 165> dispatches{{
                      lexed_lines},
     ProbeDispatchRow{LexerWorkload::python_backfill_200, "lexer-python-backfill-200", lexer_input,
                      lexed_lines},
+    ProbeDispatchRow{LexerWorkload::markdown_visible_60, "lexer-markdown-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::markdown_backfill_200, "lexer-markdown-backfill-200",
+                     lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::javascript_visible_60, "lexer-javascript-visible-60",
+                     lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::javascript_backfill_200, "lexer-javascript-backfill-200",
+                     lexer_input, lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1272,7 +1284,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 165U);
+static_assert(dispatches.size() == 169U);
 static_assert(dispatch_is_complete());
 
 } // namespace

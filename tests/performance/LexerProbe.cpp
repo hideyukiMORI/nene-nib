@@ -51,6 +51,24 @@ constexpr std::array<std::string_view, template_count> python_templates{
     "@functools.lru_cache(maxsize=None)",
     "    if value is not None and isinstance(value, dict): return [len(v) for v in value]",
     "class Widget(object): pass  # trailing comment with \"quotes\" and 'apostrophes'"};
+// Markdown（#833）: 見出し・強調・行内コード・リンクと画像・タグ・引用・箇条書き。
+// 2 行目がフェンスを開き 3 行目が閉じる（閉じの行は後ろが空白だけなので、詰め物は空白）。
+constexpr std::array<std::string_view, template_count> markdown_templates{
+    "# Heading with **bold** and `code` and [link](https://example.com/path)",
+    "```cpp fenced code block opens here with an info string",
+    "```",
+    "- list item with *emphasis* and __strong__ and ![image](img.png) and <span>tag</span>",
+    "> quoted text with `inline code` and a [reference link](#anchor) and more words",
+    "1. ordered item with _italic_ text, an escaped \\* star, and plain prose to the end"};
+// JavaScript（#833）: 正規表現と除算・ブロックコメント・テンプレート・数字の形・予約語・
+// 定数・演算子。
+constexpr std::array<std::string_view, template_count> javascript_templates{
+    "import { readFile } from 'node:fs'; const pattern = /ab+c\\/[a-z/]+/gi; // regex",
+    "export async function compute(value, scale = 1.5e3) { /* block comment opens",
+    "   closes here */ let total = (value / 2) ** 3 + 0xFF + 1_000n; return total;",
+    "const text = `template ${value} literal` + \"double \\\" quote\" + 'single';",
+    "if (count >= 10 && ready !== null) { items?.push(...rest); } else { x ?\?= undefined; }",
+    "return typeof value === 'string' ? value.split(/\\s+/) : [true, false, NaN];"};
 
 [[nodiscard]] constexpr core::Language language_of(LexerWorkload workload)
 {
@@ -65,6 +83,12 @@ constexpr std::array<std::string_view, template_count> python_templates{
     case LexerWorkload::python_visible_60:
     case LexerWorkload::python_backfill_200:
         return core::Language::python;
+    case LexerWorkload::markdown_visible_60:
+    case LexerWorkload::markdown_backfill_200:
+        return core::Language::markdown;
+    case LexerWorkload::javascript_visible_60:
+    case LexerWorkload::javascript_backfill_200:
+        return core::Language::javascript;
     }
     std::unreachable();
 }
@@ -73,7 +97,9 @@ constexpr std::array<std::string_view, template_count> python_templates{
 {
     return workload == LexerWorkload::cpp_visible_60 ||
            workload == LexerWorkload::json_visible_60 ||
-           workload == LexerWorkload::python_visible_60;
+           workload == LexerWorkload::python_visible_60 ||
+           workload == LexerWorkload::markdown_visible_60 ||
+           workload == LexerWorkload::javascript_visible_60;
 }
 
 [[nodiscard]] constexpr std::size_t line_count(LexerWorkload workload)
@@ -88,32 +114,47 @@ constexpr std::array<std::string_view, template_count> python_templates{
     {
         return json_templates;
     }
+    if (language == core::Language::markdown)
+    {
+        return markdown_templates;
+    }
+    if (language == core::Language::javascript)
+    {
+        return javascript_templates;
+    }
     return language == core::Language::python ? std::span{python_templates}
                                               : std::span{cpp_templates};
 }
 
-// 各行は「型の行 + 言語の行末コメントの印（JSON は空白）+ `-` の詰め物」で 100 バイトにそろえる。
+// 各行は「型の行 + 言語の行末コメントの印（JSON と Markdown は空白）+ 詰め物」で 100 バイトに
+// そろえる。詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ）。
 [[nodiscard]] constexpr std::string_view suffix_of(LexerWorkload workload)
 {
     const core::Language language = language_of(workload);
-    if (language == core::Language::json)
+    if (language == core::Language::json || language == core::Language::markdown)
     {
         return " ";
     }
     return language == core::Language::python ? " #" : " //";
 }
 
-// 2 行目の型の後ろで行をまたぐ状態に入るか（C++ のブロックコメント・Python の 3 連引用符）。
+[[nodiscard]] constexpr char padding_of(LexerWorkload workload)
+{
+    return language_of(workload) == core::Language::markdown ? ' ' : '-';
+}
+
+// 2 行目の型の後ろで行をまたぐ状態に入るか（C++ と JavaScript のブロックコメント・Python の 3 連
+// 引用符・Markdown のフェンス）。
 [[nodiscard]] constexpr bool opened_after(LexerWorkload workload, std::size_t index)
 {
     return language_of(workload) != core::Language::json && index % template_count == 1U;
 }
 
-[[nodiscard]] std::string padded(std::string_view line, std::string_view suffix)
+[[nodiscard]] std::string padded(std::string_view line, std::string_view suffix, char padding)
 {
     std::string text{line};
     text += suffix;
-    text.append(line_bytes - text.size(), '-');
+    text.append(line_bytes - text.size(), padding);
     return text;
 }
 
@@ -150,7 +191,8 @@ std::string lexer_input(LexerWorkload workload)
     text.reserve(line_count(workload) * (line_bytes + 1U));
     for (std::size_t index = 0; index < line_count(workload); ++index)
     {
-        text += padded(templates[index % templates.size()], suffix_of(workload));
+        text +=
+            padded(templates[index % templates.size()], suffix_of(workload), padding_of(workload));
         text += '\n';
     }
     return text;
