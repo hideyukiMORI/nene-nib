@@ -1,19 +1,25 @@
 #include "Lexer.hpp"
 
 #include "LexCpp.hpp"
+#include "LexCursor.hpp"
+#include "LexOutput.hpp"
 
 #include <utility>
 
 namespace nenenib::core
 {
-// 言語を足すと switch が落ちる（CPP-002）。字句器を持たない言語は区間なしで状態をそのまま返す。
-LexLine lex_line(Language language, const LexState &in, std::string_view line) noexcept
+namespace
+{
+// 言語を足すと switch が落ちる（CPP-002）。字句器を持たない言語は区間なしで状態をそのまま残す。
+// lex_line と lex_state はここを共有し、違うのは cursor が区間を残すかだけ。
+void lex_language(Language language, LexCursor &cursor, const LexState &in)
 {
     switch (language)
     {
     case Language::c:
     case Language::cpp:
-        return lex_cpp_line(in, line);
+        lex_cpp(cursor, in);
+        return;
     case Language::plain:
     case Language::markdown:
     case Language::html:
@@ -28,8 +34,24 @@ LexLine lex_line(Language language, const LexState &in, std::string_view line) n
     case Language::powershell:
     case Language::shell:
     case Language::cmake:
-        return LexLine{{}, in};
+        cursor.leave(in);
+        return;
     }
     std::unreachable();
+}
+} // namespace
+
+LexLine lex_line(Language language, const LexState &in, std::string_view line) noexcept
+{
+    LexCursor cursor(line, LexOutput::spans);
+    lex_language(language, cursor, in);
+    return std::move(cursor).finish();
+}
+
+LexState lex_state(Language language, const LexState &in, std::string_view line) noexcept
+{
+    LexCursor cursor(line, LexOutput::state_only);
+    lex_language(language, cursor, in);
+    return cursor.state();
 }
 } // namespace nenenib::core

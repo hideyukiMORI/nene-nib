@@ -83,7 +83,8 @@ std::string lexer_input(LexerWorkload workload)
     return text;
 }
 
-// visible は区間ごと足し、backfill は状態だけを次の行へ渡して区間を読まない（どちらも lex_line）。
+// visible は lex_line で区間ごと足し、backfill は lex_state で状態だけを次の行へ渡す（段 2
+// の遡り）。
 std::expected<std::uint64_t, ProbeFailure>
 lexed_lines(LexerWorkload workload, const std::string &input, application::TimingPort &timing)
 {
@@ -98,11 +99,16 @@ lexed_lines(LexerWorkload workload, const std::string &input, application::Timin
     std::uint64_t checksum = checksum_of(input);
     bool valid = true;
     timing.mark(core::Milestone::probe_started);
-    for (std::size_t index = 0; index < lines.size(); ++index)
+    for (std::size_t index = 0; visible && index < lines.size(); ++index)
     {
         const core::LexLine lexed = core::lex_line(core::Language::cpp, state, lines[index]);
-        checksum += visible ? lexed_sum(lexed, index, valid) : lexed.spans.size();
+        checksum += lexed_sum(lexed, index, valid);
         state = lexed.out;
+    }
+    for (std::size_t index = 0; !visible && index < lines.size(); ++index)
+    {
+        state = core::lex_state(core::Language::cpp, state, lines[index]);
+        checksum += static_cast<std::uint64_t>(state.kind);
     }
     timing.mark(core::Milestone::probe_finished);
     // 最後の行が 2 行目の型ならブロックコメントの中で終わる（200 行は 199 % 6 == 1）。

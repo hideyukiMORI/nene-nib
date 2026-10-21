@@ -163,6 +163,9 @@ void verify_case(const LexCase &sample)
     expect(spans_match, "lex_line paints the expected spans");
     expect(out_matches, "lex_line leaves the expected state");
     expect(c.spans == cpp.spans && c.out == cpp.out, "C and C++ share one lexer");
+    expect(core::lex_state(Language::cpp, sample.in, sample.line) == cpp.out &&
+               core::lex_state(Language::c, sample.in, sample.line) == cpp.out,
+           "lex_state leaves the same state as lex_line");
     expect(well_formed(cpp.spans, sample.line),
            "spans are ascending, disjoint and inside the line");
 }
@@ -270,6 +273,21 @@ constexpr std::array<LexCase, 17> mixed_cases{{
     {"#", plain, "k", plain},
 }};
 
+// #820 のレビューの追補 11（R1 の閉じない `'`・I9 の抜け・Q3 の末尾の `\r`）。
+constexpr std::array<LexCase, 11> review_cases{{
+    {"#error can't", plain, "kkkkkkkkkkkk", plain},
+    {"#if 'a' == 97", plain, "kkk sss kkkkk", plain},
+    {"0x1'000ull", plain, "nnnnnnnnnn", plain},
+    {"1.e5", plain, "nnnn", plain},
+    {"x->y(", plain, " oofo", plain},
+    {"operator()(", plain, "kkkkkkkkooo", plain},
+    {"u8R\"x(a)x\" b", plain, "ssssssssss", plain},
+    {"*/ x", plain, "oo", plain},
+    {"a//b", plain, " ccc", plain},
+    {"#  define X", plain, "kkkkkkkkkkk", plain},
+    {"int x;\r", plain, "ttt  o", plain},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -293,6 +311,8 @@ void verify_other_languages()
             const LexLine lexed = core::lex_line(language, in, "int x = \"s\"; /* c");
             expect(lexed.spans.empty(), "a language without a lexer paints nothing");
             expect(lexed.out == in, "a language without a lexer keeps the state");
+            expect(core::lex_state(language, in, "/* c") == in,
+                   "lex_state keeps the state for a language without a lexer");
         }
     }
 }
@@ -341,6 +361,7 @@ void verify_lexer_scope()
     verify_table(number_and_keyword_cases);
     verify_table(type_and_operator_cases);
     verify_table(mixed_cases);
+    verify_table(review_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();

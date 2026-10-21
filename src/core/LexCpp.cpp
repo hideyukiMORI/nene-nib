@@ -466,11 +466,18 @@ void mark_directive(LexCursor &cursor, std::size_t begin, std::size_t end)
     return include && line[at] == '<' && line.find('>', at + 1U) != unclosed;
 }
 
+// 指令の行の `'` は閉じるときだけ文字リテラル。閉じない `'`（`#error can't build`）は keyword の
+// まま（Vim の c.vim も完結した形にしか当たらない・#820 のレビュー R1）。
+[[nodiscard]] bool starts_character(std::string_view line, std::size_t at) noexcept
+{
+    return line[at] == '\'' && closing_quote(line, at) != unclosed;
+}
+
 // プリプロセッサの行の中で keyword にしない字句（文字列・コメント・`#include` の
 // `<…>`）が始まるか。
 [[nodiscard]] bool starts_piece(std::string_view line, std::size_t at, bool include) noexcept
 {
-    return line[at] == '"' || line[at] == '\'' || starts_comment(line, at) ||
+    return line[at] == '"' || starts_character(line, at) || starts_comment(line, at) ||
            starts_header(line, at, include);
 }
 
@@ -558,18 +565,17 @@ std::size_t resumed(LexCursor &cursor, const LexState &in)
 }
 } // namespace
 
-LexLine lex_cpp_line(const LexState &in, std::string_view line)
+void lex_cpp(LexCursor &cursor, const LexState &in)
 {
-    LexCursor cursor(line);
+    const std::string_view line = cursor.line();
     if (starts_directive(in, line))
     {
         lex_directive(cursor, first_visible(line));
-        return std::move(cursor).finish();
+        return;
     }
     for (std::size_t at = resumed(cursor, in); at < line.size();)
     {
         at = handlers.at(static_cast<std::size_t>(character_at(line, at)))(cursor, at);
     }
-    return std::move(cursor).finish();
 }
 } // namespace nenenib::core

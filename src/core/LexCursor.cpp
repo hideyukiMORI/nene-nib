@@ -8,10 +8,13 @@
 namespace nenenib::core
 {
 // 区間の伸びのたびに割り当て直さないよう、行の長さから見積もって 1 回で取る（区間は 4 バイトに
-// 1 つ程度・上限 64）。空の行は取らない。
-LexCursor::LexCursor(std::string_view line) : line_(line)
+// 1 つ程度・上限 64）。空の行と state_only は取らない。
+LexCursor::LexCursor(std::string_view line, LexOutput output) : line_(line), output_(output)
 {
-    spans_.reserve(std::min<std::size_t>(line.size() / 4U, 64U));
+    if (output_ == LexOutput::spans)
+    {
+        spans_.reserve(std::min<std::size_t>(line.size() / 4U, 64U));
+    }
 }
 
 std::string_view LexCursor::line() const noexcept
@@ -21,7 +24,7 @@ std::string_view LexCursor::line() const noexcept
 
 void LexCursor::mark(std::size_t begin, std::size_t end, SyntaxRole role)
 {
-    if (begin >= end)
+    if (begin >= end || output_ == LexOutput::state_only)
     {
         return;
     }
@@ -33,6 +36,11 @@ void LexCursor::mark(std::size_t begin, std::size_t end, SyntaxRole role)
 void LexCursor::leave(const LexState &state) noexcept
 {
     out_ = state;
+}
+
+const LexState &LexCursor::state() const noexcept
+{
+    return out_;
 }
 
 LexLine LexCursor::finish() &&
