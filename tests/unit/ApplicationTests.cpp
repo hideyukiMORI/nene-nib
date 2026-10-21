@@ -1924,6 +1924,91 @@ void verify_controller_mode_selection()
            "the palette survives the mode change");
 }
 
+// 100 行の本文を幅の決まった窓（5 行・折り返さない）で開き、キャレットを行 caret_line の 4 桁目に
+// 置く（#785 の足場）。
+void open_hundred_lines(Editing &editing, std::size_t caret_line)
+{
+    std::string lines;
+    for (std::size_t line = 0; line < 100; ++line)
+    {
+        lines += "abcdefgh\n";
+    }
+    editing.files().hold(Bytes{std::move(lines)});
+    EditorController &controller = editing.controller();
+    applied(controller, VisibleLines{5, nenenib::core::TextViewGeometry{400, 20, 96}});
+    applied(controller, OpenDocument{sample_path()});
+    for (std::size_t line = 1; line < caret_line; ++line)
+    {
+        applied(controller, MoveCaret{CaretMotion::next_line, SelectionAnchoring::collapse});
+    }
+    for (std::size_t step = 0; step < 3; ++step)
+    {
+        applied(controller, MoveCaret{CaretMotion::next_character, SelectionAnchoring::collapse});
+    }
+}
+
+[[nodiscard]] bool nothing_selected(const EditorFrame &frame)
+{
+    return std::ranges::all_of(frame.lines, [](const auto &line)
+                               { return line.selection.presence == SelectionPresence::absent; });
+}
+
+// 通常 → Vim は画面を動かさず、外れたキャレットを見えている範囲の端の行へ入れる（#785）。
+void verify_mode_switch_keeps_view_below()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_hundred_lines(editing, 1);
+    applied(controller, MoveCaret{CaretMotion::next_character, SelectionAnchoring::extend});
+    applied(controller, ScrollLines{200});
+    const LineNumber top = controller.frame().first_visible;
+    expect(top.value > 1, "the wheel left the caret above the window");
+    const auto vim = controller.apply_frame(SelectEditMode{EditMode::vim});
+    expect(vim.first_visible == top, "entering Vim keeps the window where the wheel left it");
+    expect(vim.caret.position == TextPosition{top, Column{5}},
+           "the caret comes into the first visible line at its column");
+    expect(nothing_selected(vim), "entering Vim still collapses the selection");
+}
+
+// Vim → 通常は画面もキャレットも動かさない（#785）。
+void verify_mode_switch_back_keeps_view()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_hundred_lines(editing, 1);
+    applied(controller, ScrollLines{200});
+    const auto vim = controller.apply_frame(SelectEditMode{EditMode::vim});
+    const auto back = controller.apply_frame(SelectEditMode{EditMode::ordinary});
+    expect(back.first_visible == vim.first_visible && back.caret.position == vim.caret.position,
+           "returning to ordinary moves neither the window nor the caret");
+}
+
+void verify_mode_switch_keeps_view_above()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_hundred_lines(editing, 100);
+    applied(controller, ScrollLines{-200});
+    const auto before = controller.frame();
+    expect(before.first_visible == LineNumber{1}, "the wheel left the caret below the window");
+    const auto vim = controller.apply_frame(SelectEditMode{EditMode::vim});
+    expect(vim.first_visible == LineNumber{1}, "entering Vim keeps the window at the top");
+    expect(vim.caret.position == TextPosition{LineNumber{5}, Column{4}},
+           "the caret comes into the last visible line at its column");
+}
+
+void verify_mode_switch_keeps_visible_caret()
+{
+    Editing editing;
+    EditorController &controller = editing.controller();
+    open_hundred_lines(editing, 3);
+    applied(controller, MoveCaret{CaretMotion::line_end, SelectionAnchoring::collapse});
+    const auto vim = controller.apply_frame(SelectEditMode{EditMode::vim});
+    expect(vim.first_visible == LineNumber{1}, "a visible caret leaves the window alone");
+    expect(vim.caret.position == TextPosition{LineNumber{3}, Column{8}},
+           "a visible caret only rests on the last character");
+}
+
 void verify_document_open()
 {
     Editing editing;
@@ -2578,6 +2663,10 @@ void verify_frame_selection_scope()
     verify_controller_cancel_selection();
     verify_controller_frame();
     verify_controller_mode_selection();
+    verify_mode_switch_keeps_view_below();
+    verify_mode_switch_keeps_view_above();
+    verify_mode_switch_keeps_visible_caret();
+    verify_mode_switch_back_keeps_view();
     verify_frame_selection_line_ends();
     verify_frame_selection_mixed_columns();
 }

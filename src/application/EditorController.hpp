@@ -42,6 +42,7 @@
 #include "Session.hpp"
 #include "SplitState.hpp"
 #include "TextBuffer.hpp"
+#include "TextCaret.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "TitleBarInput.hpp"
@@ -391,6 +392,8 @@ class EditorController final
                        core::CaretAffinity affinity = core::CaretAffinity::leading);
     void accept(const PointText &intent);
     [[nodiscard]] bool move_visual(const MoveCaret &intent);
+    // 画面を動かさずにキャレットを見えている範囲へ入れた位置（#785）。
+    [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();
     [[nodiscard]] VisualTextView visual_view();
     void clamp_scroll();
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、

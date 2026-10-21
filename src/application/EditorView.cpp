@@ -2,9 +2,14 @@
 
 #include "DisplayInquiry.hpp"
 #include "ScreenMotion.hpp"
+#include "TextCaret.hpp"
 #include "VimRoundTrip.hpp"
+#include "VisualPosition.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <limits>
 
 namespace nenenib::application
@@ -148,6 +153,35 @@ bool EditorController::move_visual(const MoveCaret &intent)
     move_caret_to(state_.text().offset_of(caret.value().position), intent.anchoring,
                   caret.value().affinity);
     return true;
+}
+
+// 見えている範囲は先頭の (行, 画面行) から見えている行数ぶんの画面行。キャレットが外れていれば、
+// 外れた側の端の画面行へ今の横の位置のまま入れる（#785）。位置の解決は上下の移動（move_visual）と
+// 同じ location・shifted・caret_at で、格子と折り返しは view が答える。
+std::expected<core::TextCaret, TextLayoutFailure> EditorController::caret_in_view()
+{
+    const ScrollState scroll = settled_scroll();
+    auto view = visual_view();
+    const core::TextCaret caret{state_.text().position_of(state_.selection().caret),
+                                state_.caret_affinity()};
+    const auto point = view.location(caret);
+    if (!point)
+    {
+        return std::unexpected(point.error());
+    }
+    const core::VisualPosition at{caret.position.line, point.value().row};
+    const core::VisualPosition first{scroll.first_visible, scroll.first_row};
+    const auto rows = std::max<std::size_t>(scroll.visible_lines, 1) - 1;
+    const auto last = view.shifted(first, static_cast<std::int64_t>(rows));
+    if (!last)
+    {
+        return std::unexpected(last.error());
+    }
+    if (!(at < first) && !(last.value() < at))
+    {
+        return caret;
+    }
+    return view.caret_at(at < first ? first : last.value(), point.value().x);
 }
 
 void EditorController::accept(const PointText &intent)
