@@ -22,6 +22,7 @@
 #include "PreviewScene.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
+#include "PreviewViewport.hpp"
 #include "RenderFailure.hpp"
 #include "ThemeCatalog.hpp"
 #include "ThemeName.hpp"
@@ -30,6 +31,7 @@
 #include <combaseapi.h>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -49,6 +51,8 @@ using win32::PreviewTextLayouts;
 
 constexpr float width = 400.0F;
 constexpr std::size_t many = 300;
+// 文書の全体を測る範囲（最初の要素から高さの上限なし）。
+constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max()};
 
 [[nodiscard]] win32::PreviewTextStyle style_of()
 {
@@ -159,7 +163,7 @@ void check_visible_only()
     }
     PreviewTextLayouts layouts;
     const auto style = style_of();
-    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, width);
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, whole);
     expect(tops.has_value() && tops.value().size() == many && layouts.held() == 0,
            "the preview block tops are measured without holding layouts");
     if (!tops)
@@ -232,7 +236,7 @@ void check_image_span()
                  {{core::Offset{2}, core::Offset{15}, core::PreviewStyle::image}}));
     PreviewTextLayouts layouts;
     const auto style = style_of();
-    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, width);
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, whole);
     std::optional<win32::RenderFailure> failure;
     win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
     target->BeginDraw();
@@ -289,7 +293,7 @@ void check_markers()
     }
     PreviewTextLayouts layouts;
     const auto style = style_of();
-    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, width);
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style, whole);
     expect(tops.has_value() && tops.value().indent(0) == tops.value().indent(11) &&
                tops.value().indent(0) > 40.0F,
            "a numbered list widens its marker column to its widest number");
@@ -301,7 +305,7 @@ void check_markers()
            "the marker 10. stays on one line");
     core::MarkdownDocument lists;
     lists.blocks = {item_of("\xE2\x80\xA2", "a"), item_of("\xE2\x80\xA2", "b"), item_of("1.", "c")};
-    const auto mixed = win32::PreviewBlockTops::measure(lists, layouts, style, width);
+    const auto mixed = win32::PreviewBlockTops::measure(lists, layouts, style, whole);
     expect(mixed.has_value() && mixed.value().top(1) == mixed.value().bottom(0) &&
                mixed.value().top(2) > mixed.value().bottom(1),
            "items of one list touch and a different list starts after half a line");
@@ -348,13 +352,35 @@ void check_pane_reuse()
            "a frame with a preview paints without failure");
     expect(made > 0 && pane.created() == made,
            "the preview layouts are reused across frames for the same document");
-    auto layouts = win32::PreviewTextLayouts{};
-    const auto tops = win32::PreviewBlockTops::measure(*shown, layouts, style, 400.0F);
-    expect(tops.has_value() &&
-               win32::preview_scroll_of(*shown, tops.value(), core::Offset{40 * 16 + 3}) ==
-                   tops.value().top(40) &&
-               win32::preview_scroll_of(*shown, tops.value(), core::Offset{5}) == 0.0F,
-           "the anchor scrolls to the top of the block that holds it");
+    expect(win32::preview_anchor_block(*shown, core::Offset{40 * 16 + 3}) == 40 &&
+               win32::preview_anchor_block(*shown, core::Offset{5}) == 0,
+           "the anchor picks the block that holds it");
+}
+
+// 測るのは錨の要素から枠の高さまでだけ（#811 のレビュー R1）。10 万要素の文書で錨が末尾の近くでも、
+// 作る layout は枠の高さ ÷ 最小の行高 + 1 以下で、錨の要素の上端が枠の上端。
+void check_measured_from_anchor()
+{
+    constexpr std::size_t huge = 100'000;
+    constexpr float height = 200.0F;
+    core::MarkdownDocument document;
+    document.blocks.reserve(huge);
+    for (std::size_t index = 0; index < huge; ++index)
+    {
+        document.blocks.push_back(
+            block_of(core::PreviewBlockKind::paragraph, "paragraph " + std::to_string(index)));
+    }
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto first = huge - 10;
+    const auto tops = win32::PreviewBlockTops::measure(
+        document, layouts, style, win32::PreviewViewport{first, width, height});
+    const auto bound = static_cast<std::size_t>(height / win32::preview_line_pixels(style)) + 1;
+    expect(tops.has_value() && tops.value().first() == first && tops.value().top(first) == 0.0F &&
+               tops.value().size() > first && tops.value().size() <= huge,
+           "the tops start at the anchor block at the top of the frame");
+    expect(layouts.created() > 0 && layouts.created() <= bound,
+           "only the blocks within the frame height are measured");
 }
 } // namespace
 
@@ -375,5 +401,6 @@ void verify_preview_layouts()
     check_html_and_style();
     check_markers();
     check_pane_reuse();
+    check_measured_from_anchor();
 }
 } // namespace nenenib::tests::ui

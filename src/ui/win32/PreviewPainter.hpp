@@ -23,8 +23,8 @@
 namespace nenenib::ui::win32
 {
 // Markdown プレビューを描く経路（ADR 0151 の決定 17・採用案 D62 の案 B）。上から高さを足した
-// 部分和（PreviewBlockTops）で見えている要素だけを DrawTextLayout で描き、面と線は
-// FillRectangle / FillRoundedRectangle。Target は製品では Direct2D の描画先
+// 部分和（PreviewBlockTops・錨の要素から枠の高さまで）で見えている要素だけを DrawTextLayout
+// で描き、面と線は FillRectangle / FillRoundedRectangle。Target は製品では Direct2D の描画先
 // （ID2D1RenderTarget）で、tests/ui は呼び出しを数える替え玉、tests/preview は WIC の bitmap
 // の描画先を渡す。色は役割（PreviewInk）→ PreviewBrushes の brush だけで、色の値を書かない。
 template <typename Target> class PreviewPainter final
@@ -121,8 +121,9 @@ template <typename Target> class PreviewPainter final
         const auto offset = static_cast<float>(scene.frame.top) - scene.scroll;
         for (std::uint8_t depth = 0; depth < block.quote_depth; ++depth)
         {
-            const bool joined =
-                index > 0 && scene.document.blocks.at(index - 1).quote_depth > depth;
+            // 測った範囲の最初の要素（錨）は枠の上端から塗るので、前の要素とはつながない。
+            const bool joined = index > scene.tops.first() &&
+                                scene.document.blocks.at(index - 1).quote_depth > depth;
             const auto left = static_cast<float>(scene.frame.left) + preview_quote_left(depth, dpi);
             const auto top =
                 offset + (joined ? scene.tops.bottom(index - 1) : scene.tops.top(index));

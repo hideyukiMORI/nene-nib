@@ -17,6 +17,7 @@
 #include "PreviewScene.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
+#include "PreviewViewport.hpp"
 #include "ThemeCatalog.hpp"
 #include "ThemeName.hpp"
 #include "Utf16.hpp"
@@ -205,8 +206,11 @@ constexpr float default_height = 900.0F;
                                  pixels_of(options.height, style.dpi)};
     win32::PreviewTextLayouts layouts;
     win32::PreviewBrushes brushes;
-    const auto tops =
-        win32::PreviewBlockTops::measure(document, layouts, style, static_cast<float>(frame.right));
+    const auto tops = win32::PreviewBlockTops::measure(
+        document, layouts, style,
+        win32::PreviewViewport{0, static_cast<float>(frame.right),
+                               static_cast<float>(frame.bottom) +
+                                   win32::preview_pixels(options.scroll, style.dpi)});
     if (!tops || FAILED(brushes.prepare(target, theme)))
     {
         std::fputs("preview: measuring or brushes failed\n", stderr);
@@ -218,9 +222,8 @@ constexpr float default_height = 900.0F;
     painter.paint(win32::PreviewScene{document, tops.value(), style, frame,
                                       win32::preview_pixels(options.scroll, style.dpi)});
     const bool drawn = SUCCEEDED(target.EndDraw()) && !failure.has_value();
-    std::printf("preview: %zu blocks, total %.1f px, %zu layouts held, %zu created\n",
-                document.blocks.size(), static_cast<double>(tops.value().total()), layouts.held(),
-                layouts.created());
+    std::printf("preview: %zu blocks, %zu measured, %zu layouts held, %zu created\n",
+                document.blocks.size(), tops.value().size(), layouts.held(), layouts.created());
     return drawn;
 }
 

@@ -9,39 +9,42 @@
 
 namespace nenenib::ui::win32
 {
-float preview_scroll_of(const core::MarkdownDocument &document, const PreviewBlockTops &tops,
-                        core::Offset anchor)
+namespace
+{
+[[nodiscard]] bool same_viewport(const PreviewViewport &left, const PreviewViewport &right) noexcept
+{
+    return left.first == right.first && left.width == right.width && left.height == right.height;
+}
+} // namespace
+
+std::size_t preview_anchor_block(const core::MarkdownDocument &document, core::Offset anchor)
 {
     const auto after = std::upper_bound(document.blocks.begin(), document.blocks.end(), anchor,
                                         [](core::Offset offset, const core::PreviewBlock &block)
                                         { return offset < block.source_begin; });
     const auto count = static_cast<std::size_t>(std::distance(document.blocks.begin(), after));
-    if (count <= 1 || count - 1 >= tops.size())
-    {
-        return 0.0F;
-    }
-    return tops.top(count - 1);
+    return count == 0 ? 0 : count - 1;
 }
 
 std::expected<const PreviewBlockTops *, RenderFailure>
 PreviewPane::remeasure(const std::shared_ptr<const core::MarkdownDocument> &document,
-                       const PreviewTextStyle &style, float width)
+                       const PreviewTextStyle &style, const PreviewViewport &viewport)
 {
     if (tops_.has_value() && measured_ == document && measured_style_.has_value() &&
-        measured_style_.value() == style && measured_width_ == width)
+        measured_style_.value() == style && same_viewport(measured_viewport_, viewport))
     {
         return &tops_.value();
     }
     tops_.reset();
     measured_ = nullptr;
-    auto tops = PreviewBlockTops::measure(*document, layouts_, style, width);
+    auto tops = PreviewBlockTops::measure(*document, layouts_, style, viewport);
     if (!tops)
     {
         return std::unexpected(tops.error());
     }
     measured_ = document;
     measured_style_ = style;
-    measured_width_ = width;
+    measured_viewport_ = viewport;
     return &tops_.emplace(std::move(tops).value());
 }
 
@@ -69,7 +72,10 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
             brushes_.of(PreviewInk::background));
         return {};
     }
-    const auto measured = remeasure(document, style, static_cast<float>(core::width_of(area)));
+    const PreviewViewport viewport{preview_anchor_block(*document, frame.anchor),
+                                   static_cast<float>(core::width_of(area)),
+                                   static_cast<float>(core::height_of(area))};
+    const auto measured = remeasure(document, style, viewport);
     if (!measured)
     {
         return std::unexpected(measured.error());
@@ -77,8 +83,7 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     const PreviewBlockTops &tops = *measured.value();
     std::optional<RenderFailure> failure;
     PreviewPainter<ID2D1RenderTarget> painter(target, layouts_, brushes_, failure);
-    painter.paint(PreviewScene{*document, tops, style, area,
-                               preview_scroll_of(*document, tops, frame.anchor)});
+    painter.paint(PreviewScene{*document, tops, style, area, 0.0F});
     if (failure.has_value())
     {
         return std::unexpected(failure.value());
