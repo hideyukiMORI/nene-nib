@@ -187,6 +187,81 @@ class TrialTests(unittest.TestCase):
         self.assertIsNone(speed.measured_single(entries, speed.input_indexes(entries)))
 
 
+def staged_marks(inputs: int) -> list:
+    """marks(inputs) of an exe after #844: each frame is built and drawn before it is presented."""
+    entries = []
+    for index in range(inputs):
+        read = 1000 * (index + 1)
+        entries += [{"milestone": "input_received", "qpcMicroseconds": read},
+                    {"milestone": "frame_built", "qpcMicroseconds": read + 100},
+                    {"milestone": "frame_drawn", "qpcMicroseconds": read + 400},
+                    {"milestone": "frame_presented", "qpcMicroseconds": read + 500}]
+    return entries
+
+
+class KeySegmentTests(unittest.TestCase):
+    """input_received -> frame_built -> frame_drawn -> frame_presented of the single (#844)."""
+
+    def test_the_measured_keystroke_has_its_three_segments(self):
+        entries = staged_marks(3)
+        segments = speed.single_segments(entries, speed.input_indexes(entries))
+        self.assertEqual(list(speed.KEY_MILESTONES), list(segments))
+        self.assertEqual({"frame_built": 0.1, "frame_drawn": 0.3, "frame_presented": 0.1},
+                         {name: round(value, 4) for name, value in segments.items()})
+        self.assertAlmostEqual(speed.measured_single(entries, speed.input_indexes(entries)),
+                               sum(segments.values()))
+
+    def test_an_exe_before_the_milestones_has_no_segments(self):
+        entries = marks(3)
+        self.assertEqual({}, speed.single_segments(entries, speed.input_indexes(entries)))
+
+    def test_no_keystroke_after_the_warmup_has_no_segments(self):
+        entries = staged_marks(1)
+        self.assertEqual({}, speed.single_segments(entries, speed.input_indexes(entries)))
+
+    def test_a_frame_that_failed_and_was_built_again_counts_from_the_last_build(self):
+        entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                   {"milestone": "frame_built", "qpcMicroseconds": 1100},
+                   {"milestone": "frame_built", "qpcMicroseconds": 1600},
+                   {"milestone": "frame_drawn", "qpcMicroseconds": 1800},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 2000}]
+        segments = speed.key_segments(entries, 0)
+        self.assertEqual({"frame_built": 0.6, "frame_drawn": 0.2, "frame_presented": 0.2},
+                         {name: round(value, 4) for name, value in segments.items()})
+
+    def test_a_frame_presented_without_its_drawing_mark_has_no_segments(self):
+        entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
+                   {"milestone": "frame_built", "qpcMicroseconds": 1100},
+                   {"milestone": "frame_presented", "qpcMicroseconds": 2000}]
+        self.assertEqual({}, speed.key_segments(entries, 0))
+
+    def test_the_single_benches_have_a_breakdown_and_describe_prints_it(self):
+        self.assertEqual(("key-to-frame-single", speed.LONG_LINE_BENCH, speed.CPP_BENCH,
+                          speed.PREVIEW_BENCH, speed.GIANT_SINGLE_BENCH), speed.SINGLE_BENCHES)
+        self.assertTrue(set(speed.SINGLE_BENCHES) <= set(speed.BREAKDOWN_BENCHES))
+        written = record({})
+        written["breakdown"] = {speed.LONG_LINE_BENCH: speed.spread(
+            {"frame_built": [0.2, 0.3, 0.4], "frame_drawn": [1.0, 1.1, 1.5],
+             "frame_presented": [0.2, 0.2, 0.3]})}
+        self.assertIn(f"  {speed.LONG_LINE_BENCH} breakdown (median ms): input_received ->"
+                      " frame_built 0.300 | frame_drawn 1.100 | frame_presented 0.200",
+                      speed.describe(written))
+
+    def test_the_long_line_bench_keeps_the_segments_of_its_single(self):
+        steps = {"frame_built": 0.2, "frame_drawn": 1.0, "frame_presented": 0.3}
+        with mock.patch.object(speed, "keys_trial", return_value=(1.5, None, 0.0, 7, steps)):
+            values, parts = speed.bench_long_line(Path("exe"), {}, Path("folder"), Path("l"))
+        self.assertEqual({speed.LONG_LINE_BENCH: 1.5}, values)
+        self.assertEqual({speed.LONG_LINE_BENCH: steps}, parts)
+
+    def test_the_empty_document_keeps_the_segments_of_its_single(self):
+        steps = {"frame_built": 0.1, "frame_drawn": 0.3, "frame_presented": 0.2}
+        trial = (0.6, 2.0, 1.0, speed.BURST_KEYS + 2, steps)
+        with mock.patch.object(speed, "keys_trial", return_value=trial):
+            _, parts = speed.bench_keys(Path("exe"), {}, Path("folder"))
+        self.assertEqual({"key-to-frame-single": steps}, parts)
+
+
 class MeasurementFileTests(unittest.TestCase):
     """A trial's own reading of its measurement file: absent or unfinished is not a machine (#36)."""
 
@@ -232,7 +307,7 @@ class RepeatedTrialTests(unittest.TestCase):
         return values, written.getvalue()
 
     def delivered(self, single: float, burst: float) -> tuple:
-        return (single, burst, 1.0, speed.BURST_KEYS + 2)
+        return (single, burst, 1.0, speed.BURST_KEYS + 2, {})
 
     def test_three_unobserved_trials_leave_both_keystroke_benches_missing(self):
         unobserved = speed.TrialNotObserved("the unsaved confirmation never came up")
@@ -253,13 +328,13 @@ class RepeatedTrialTests(unittest.TestCase):
         self.assertNotIn("missing", written)
 
     def test_an_unobserved_last_trial_does_not_keep_an_earlier_single(self):
-        values, _ = self.bench([(0.9, None, 0.0, 7), (0.8, None, 0.0, 7),
+        values, _ = self.bench([(0.9, None, 0.0, 7, {}), (0.8, None, 0.0, 7, {}),
                                 speed.TrialNotObserved("the unsaved confirmation never came up")])
         self.assertIsNone(values["key-to-frame-single"])
         self.assertIsNone(values["key-to-frame-burst-200"])
 
     def test_a_single_keystroke_of_a_failed_burst_is_still_a_value(self):
-        values, _ = self.bench([(0.9, None, 0.0, 7)] * speed.BURST_ATTEMPTS)
+        values, _ = self.bench([(0.9, None, 0.0, 7, {})] * speed.BURST_ATTEMPTS)
         self.assertEqual(0.9, values["key-to-frame-single"])
         self.assertIsNone(values["key-to-frame-burst-200"])
 
@@ -271,7 +346,7 @@ class RepeatedTrialTests(unittest.TestCase):
 
     def test_a_missing_burst_over_the_large_document_names_its_bench(self):
         document = Path("large.txt")
-        values, written = self.bench([(0.9, None, 0.0, 7)] * speed.BURST_ATTEMPTS, document)
+        values, written = self.bench([(0.9, None, 0.0, 7, {})] * speed.BURST_ATTEMPTS, document)
         self.assertEqual({"key-to-frame-burst-200-16mib": None}, values)
         self.assertIn("this trial of key-to-frame-burst-200-16mib is missing", written)
 
@@ -279,7 +354,7 @@ class RepeatedTrialTests(unittest.TestCase):
         """#179: over 16 MiB the span is the reading time being measured, so it is recorded."""
         document = Path("large.txt")
         span = speed.BURST_SPAN_LIMIT_MS + 30.0
-        values, written = self.bench([(0.9, 90.0, span, speed.BURST_KEYS + 2)], document)
+        values, written = self.bench([(0.9, 90.0, span, speed.BURST_KEYS + 2, {})], document)
         self.assertEqual({"key-to-frame-burst-200-16mib": 90.0}, values)
         self.assertEqual({"key-to-frame-burst-200-16mib": {speed.ARRIVAL_SEGMENT: span}},
                          self.parts)
@@ -287,7 +362,7 @@ class RepeatedTrialTests(unittest.TestCase):
 
     def test_a_slow_arrival_over_the_empty_document_is_still_missing(self):
         span = speed.BURST_SPAN_LIMIT_MS + 30.0
-        values, written = self.bench([(0.9, 90.0, span, speed.BURST_KEYS + 2)]
+        values, written = self.bench([(0.9, 90.0, span, speed.BURST_KEYS + 2, {})]
                                      * speed.BURST_ATTEMPTS)
         self.assertIsNone(values["key-to-frame-burst-200"])
         self.assertEqual({}, self.parts)
@@ -661,19 +736,19 @@ class LongLineTrialTests(unittest.TestCase):
         return values, parts, written.getvalue(), opened
 
     def test_only_the_single_keystroke_of_the_shared_trial_is_the_value(self):
-        values, parts, _, opened = self.bench([(7.3, 900.0, 300.0, speed.BURST_KEYS + 2)])
+        values, parts, _, opened = self.bench([(7.3, 900.0, 300.0, speed.BURST_KEYS + 2, {})])
         self.assertEqual({speed.LONG_LINE_BENCH: 7.3}, values)
         self.assertEqual({}, parts)
         self.assertEqual([Path("long-japanese.txt")], opened)
 
     def test_a_failed_burst_does_not_repeat_or_drop_the_single(self):
-        values, _, written, opened = self.bench([(7.3, None, 0.0, 7)])
+        values, _, written, opened = self.bench([(7.3, None, 0.0, 7, {})])
         self.assertEqual({speed.LONG_LINE_BENCH: 7.3}, values)
         self.assertEqual(1, len(opened))
         self.assertNotIn("repeating", written)
 
     def test_an_unanswered_single_is_missing(self):
-        values, _, _, _ = self.bench([(None, None, 0.0, 1)])
+        values, _, _, _ = self.bench([(None, None, 0.0, 1, {})])
         self.assertEqual({speed.LONG_LINE_BENCH: None}, values)
 
     def test_an_unobserved_trial_is_repeated_and_then_missing(self):
@@ -686,7 +761,7 @@ class LongLineTrialTests(unittest.TestCase):
 
     def test_a_trial_after_an_unobserved_one_is_the_value(self):
         values, _, _, _ = self.bench([speed.TrialNotObserved("no finished measurement file"),
-                                      (7.1, None, 0.0, 7)])
+                                      (7.1, None, 0.0, 7, {})])
         self.assertEqual({speed.LONG_LINE_BENCH: 7.1}, values)
 
     def test_check_records_a_valid_long_line_without_a_reference_and_passes(self):
@@ -807,13 +882,13 @@ class GiantLineTests(unittest.TestCase):
         return result
 
     def test_the_trial_without_the_200_measures_the_single_after_the_warmup_frame(self):
-        self.assertEqual((0.5, None, 0.0, 2), self.quiet_trial(marks(2)))
+        self.assertEqual((0.5, None, 0.0, 2, {}), self.quiet_trial(marks(2)))
 
     def test_a_single_read_before_the_warmup_frame_is_missing(self):
         entries = [{"milestone": "input_received", "qpcMicroseconds": 1000},
                    {"milestone": "input_received", "qpcMicroseconds": 1200},
                    {"milestone": "frame_presented", "qpcMicroseconds": 9000}]
-        self.assertEqual((None, None, 0.0, 2), self.quiet_trial(entries))
+        self.assertEqual((None, None, 0.0, 2, {}), self.quiet_trial(entries))
 
 
 def giant_report(body: bool, wait_ms: int | None = None) -> str:
@@ -941,6 +1016,14 @@ class MilestoneOrderTests(unittest.TestCase):
                    if name != "input_received"]
         self.assertEqual(tuple(startup), speed.STARTUP_MILESTONES)
         self.assertEqual("body_presented", speed.STARTUP_MILESTONES[-1])
+
+    def test_the_keystroke_milestones_are_core_milestones(self):
+        """KEY_MILESTONES are spelled as core::Milestone spells them (#844)."""
+        text = (ROOT / "src/core/Milestone.hpp").read_text(encoding="utf-8")
+        body = text[text.index("enum class Milestone"):]
+        body = body[body.index("{") + 1:body.index("}")]
+        names = {line.strip().rstrip(",") for line in body.splitlines() if line.strip()}
+        self.assertTrue(set(speed.KEY_MILESTONES) <= names)
 
 
 SPLIT_WORK = ROOT / "out/conformance/split-verdict"

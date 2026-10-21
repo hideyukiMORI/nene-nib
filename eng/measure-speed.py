@@ -91,7 +91,11 @@ new bench joins a machine that already has references (ADR 0013 decision 3).
 --record also writes and prints the startup breakdown of the two startup benches: the segment that
 ends at each startup milestone, plus the "origin" segment (process creation -> the timing adapter's
 bind, which the loader, the CRT, CoInitializeEx and the arguments live in). The breakdown is
-recorded and shown only; BENCHES and the reference values are untouched (Issue #19).
+recorded and shown only; BENCHES and the reference values are untouched (Issue #19). The single
+keystroke benches (key-to-frame-single and its -long-line / -cpp / -preview-open / -giant-line-16mib
+variants) get a breakdown of the same form: the measured keystroke's input_received -> frame_built
+(the frame was built) -> frame_drawn (EndDraw returned) -> frame_presented (Present returned), each
+segment named after the milestone it ends at. An exe built before #844 leaves that breakdown empty.
 
 The exe under measurement is the Release one (build-release/NeNeNib.exe). The Debug exe carries
 ASan and UBSan (eng/targets.cmake instruments the Debug configuration only), and an instrumented
@@ -268,8 +272,13 @@ QUESTION_ANSWERED = "question_answered"
 QUESTION_WAIT_SEGMENT = "questionWait"
 # 内訳を出すのは起動のベンチだけ。打鍵のベンチは起動の節目を測る刺激ではない。
 STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BENCH)
+# 単打の段（#844）。input_received -> frame_built（frame を作り終えた）-> frame_drawn（EndDraw が
+# 返った）-> frame_presented（Present が返った）。区間名は起動の内訳と同じく「到達する節目の名前」。
+KEY_MILESTONES = ("frame_built", "frame_drawn", "frame_presented")
+SINGLE_BENCHES = ("key-to-frame-single", LONG_LINE_BENCH, CPP_BENCH, PREVIEW_BENCH,
+                  GIANT_SINGLE_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
-BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH)
+BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES)
 
 
 class TrialNotObserved(RuntimeError):
@@ -503,6 +512,43 @@ def input_indexes(marks: list) -> list[int]:
     return [index for index, entry in enumerate(marks) if entry["milestone"] == "input_received"]
 
 
+def key_segments(marks: list, index: int) -> dict:
+    """That input's segments to the frame that answered it, in ms, or {} when they were not marked.
+
+    The frame is the first frame_presented after the input; its frame_built and frame_drawn are the
+    last ones between the two (a frame that failed and was built again starts over). An exe built
+    before #844 marks neither, and its breakdown stays empty rather than invented (#844).
+    """
+    built, drawn, presented = KEY_MILESTONES
+    readings: dict = {}
+    for entry in marks[index + 1:]:
+        milestone = entry["milestone"]
+        if milestone == built:
+            readings = {built: int(entry["qpcMicroseconds"])}
+        elif milestone == drawn and built in readings:
+            readings[drawn] = int(entry["qpcMicroseconds"])
+        elif milestone == presented:
+            if drawn not in readings:
+                return {}
+            readings[presented] = int(entry["qpcMicroseconds"])
+            break
+    if presented not in readings:
+        return {}
+    segments = {}
+    previous = int(marks[index]["qpcMicroseconds"])
+    for milestone in KEY_MILESTONES:
+        segments[milestone] = (readings[milestone] - previous) / MICROSECONDS_PER_MILLISECOND
+        previous = readings[milestone]
+    return segments
+
+
+def single_segments(marks: list, inputs: list) -> dict:
+    """key_segments of inputs[1], the keystroke measured_single measures; {} without one."""
+    if len(inputs) < 2:
+        return {}
+    return key_segments(marks, inputs[1])
+
+
 def bench_startup(executable: Path, environment: dict, folder: Path) -> tuple[dict, dict]:
     report = report_path(folder, "startup")
     process, window, _ = start(executable, environment, ["--measure", str(report)])
@@ -547,13 +593,14 @@ def bench_keys(executable: Path, environment: dict, folder: Path,
     single = None
     for attempt in range(BURST_ATTEMPTS):
         try:
-            single, burst, span, delivered = keys_trial(executable, environment, folder, document)
+            single, burst, span, delivered, steps = keys_trial(executable, environment, folder,
+                                                               document)
         except TrialNotObserved as unobserved:
             single, reason = None, str(unobserved)
         else:
             reason = burst_failure(burst, span, delivered, name)
             if reason is None:
-                return keys_values(name, single, burst), keys_parts(name, span)
+                return keys_values(name, single, burst), keys_parts(name, span, steps)
         print(f"Speed: {reason}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
     print(f"Speed: no trial delivered the stimulus as specified in {BURST_ATTEMPTS} attempts;"
           f" this trial of {name} is missing")
@@ -567,11 +614,16 @@ def keys_values(name: str, single: float | None, burst: float | None) -> dict:
     return {"key-to-frame-single": single, EMPTY_BURST_BENCH: burst}
 
 
-def keys_parts(name: str, span: float) -> dict:
-    """How long the 200 keystrokes of the 16 MiB trial took to arrive; nothing for the empty one."""
+def keys_parts(name: str, span: float, steps: dict | None = None) -> dict:
+    """How long the 200 keystrokes of the 16 MiB trial took to arrive; the empty one's single steps."""
     if name == LARGE_BURST_BENCH:
         return {LARGE_BURST_BENCH: {ARRIVAL_SEGMENT: span}}
-    return {}
+    return single_parts("key-to-frame-single", steps or {})
+
+
+def single_parts(name: str, steps: dict) -> dict:
+    """The breakdown of one single keystroke bench: nothing when its segments were not marked."""
+    return {name: steps} if steps else {}
 
 
 def burst_failure(burst: float | None, span: float, delivered: int,
@@ -678,11 +730,11 @@ def bench_long_line(executable: Path, environment: dict, folder: Path,
     """
     for attempt in range(BURST_ATTEMPTS):
         try:
-            single, _, _, _ = keys_trial(executable, environment, folder, document)
+            single, _, _, _, steps = keys_trial(executable, environment, folder, document)
         except TrialNotObserved as unobserved:
             print(f"Speed: {unobserved}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
             continue
-        return {name: single}, {}
+        return {name: single}, single_parts(name, steps if single is not None else {})
     print(f"Speed: no trial was observed in {BURST_ATTEMPTS} attempts;"
           f" this trial of {name} is missing")
     return {name: None}, {}
@@ -742,8 +794,10 @@ def await_quiet(window, seconds: float = LARGE_SECONDS) -> bool:
 
 def keys_trial(executable: Path, environment: dict, folder: Path,
                document: Path | None = None,
-               burst: bool = True, grid: bool = True) -> tuple[float | None, float | None, float, int]:
-    """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured.
+               burst: bool = True,
+               grid: bool = True) -> tuple[float | None, float | None, float, int, dict]:
+    """One trial: single ms, 200 keystroke ms, how long the 200 took to arrive, keystrokes measured,
+    and the single's segments (key_segments; {} when they were not marked).
 
     Either value is None when its own stimulus did not reach the window, and the caller repeats or
     records the trial as missing (Issue #30); the count is what the caller says in that line.
@@ -793,8 +847,9 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
     marks = observed_marks(report)
     inputs = input_indexes(marks)
     single = measured_single(marks, inputs)
+    steps = single_segments(marks, inputs)
     if len(inputs) < BURST_KEYS + 2:
-        return single, None, 0.0, len(inputs)
+        return single, None, 0.0, len(inputs), steps
     # inputs[0] は捨てる暖機の 1 打鍵。測るのは inputs[1] の 1 打鍵と、そのあとの 200 打鍵ちょうど
     # （実キーが紛れ込んでも数え間違えないように、後ろからではなく先頭から 200 を取る）。
     keys = inputs[2:2 + BURST_KEYS]
@@ -802,12 +857,12 @@ def keys_trial(executable: Path, environment: dict, folder: Path,
     finished = frame_after(marks, keys[-1])
     span = (int(marks[keys[-1]]["qpcMicroseconds"]) - started) / MICROSECONDS_PER_MILLISECOND
     if finished is None:
-        return single, None, span, len(inputs)
-    return single, (finished - started) / MICROSECONDS_PER_MILLISECOND, span, len(inputs)
+        return single, None, span, len(inputs), steps
+    return single, (finished - started) / MICROSECONDS_PER_MILLISECOND, span, len(inputs), steps
 
 
 def quiet_single_trial(executable: Path, environment: dict, folder: Path,
-                       document: Path, grid: bool) -> tuple[float | None, None, float, int]:
+                       document: Path, grid: bool) -> tuple[float | None, None, float, int, dict]:
     """keys_trial without the 200: warmup, then one keystroke, each after the window went quiet.
 
     The grid question is answered (grid is "yes") before anything else is sent to the window.
@@ -845,8 +900,9 @@ def quiet_single_trial(executable: Path, environment: dict, folder: Path,
         warmed = frame_after(marks, inputs[0])
         if warmed is None or warmed > int(marks[inputs[1]]["qpcMicroseconds"]):
             print("Speed: the measured keystroke was read before the warmup's frame was presented")
-            return None, None, 0.0, len(inputs)
-    return measured_single(marks, inputs), None, 0.0, len(inputs)
+            return None, None, 0.0, len(inputs), {}
+    return (measured_single(marks, inputs), None, 0.0, len(inputs),
+            single_segments(marks, inputs))
 
 
 def bench_giant_single(executable: Path, environment: dict, folder: Path,
@@ -857,17 +913,20 @@ def bench_giant_single(executable: Path, environment: dict, folder: Path,
     timed out is missing at once instead of being repeated BURST_ATTEMPTS times.
     """
     try:
-        single, _, _, _ = keys_trial(executable, environment, folder, document, burst=False,
-                                     grid=grid)
+        single, _, _, _, steps = keys_trial(executable, environment, folder, document,
+                                            burst=False, grid=grid)
     except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
         print(f"Speed: {unobserved}; this trial of {GIANT_SINGLE_BENCH} is missing")
-        single = None
-    return {GIANT_SINGLE_BENCH: single}, {}
+        single, steps = None, {}
+    return ({GIANT_SINGLE_BENCH: single},
+            single_parts(GIANT_SINGLE_BENCH, steps if single is not None else {}))
 
 
 def preview_single_trial(executable: Path, environment: dict, folder: Path,
-                         document: Path) -> float | None:
+                         document: Path) -> tuple[float | None, dict]:
     """quiet_single_trial over preview-1000.md after Ctrl+Shift+M opened the preview (#818).
+
+    Returns the single in ms and its segments (key_segments), or (None, {}) when it is missing.
 
     The chord goes through SendInput (the window thread reads the modifiers), so its WM_KEYDOWN
     marks come first; the warmup and the measured keystroke are the last two inputs of the run.
@@ -908,12 +967,13 @@ def preview_single_trial(executable: Path, environment: dict, folder: Path,
     inputs = input_indexes(marks)
     if len(inputs) < 3:
         print(f"Speed: {len(inputs)} inputs were read; the chord, the warmup and one more are needed")
-        return None
+        return None, {}
     warmed = frame_after(marks, inputs[-2])
     if warmed is None or warmed > int(marks[inputs[-1]]["qpcMicroseconds"]):
         print("Speed: the measured keystroke was read before the warmup's frame was presented")
-        return None
-    return measured_single(marks, inputs[-2:])
+        return None, {}
+    single = measured_single(marks, inputs[-2:])
+    return single, (key_segments(marks, inputs[-1]) if single is not None else {})
 
 
 def bench_preview_single(executable: Path, environment: dict, folder: Path,
@@ -921,11 +981,11 @@ def bench_preview_single(executable: Path, environment: dict, folder: Path,
     """One keystroke with the preview open; a trial not observed is repeated as bench_keys does."""
     for attempt in range(BURST_ATTEMPTS):
         try:
-            single = preview_single_trial(executable, environment, folder, document)
+            single, steps = preview_single_trial(executable, environment, folder, document)
         except (TrialNotObserved, subprocess.TimeoutExpired) as unobserved:
             print(f"Speed: {unobserved}; repeating the trial ({attempt + 1}/{BURST_ATTEMPTS})")
             continue
-        return {PREVIEW_BENCH: single}, {}
+        return {PREVIEW_BENCH: single}, single_parts(PREVIEW_BENCH, steps)
     print(f"Speed: no trial was observed in {BURST_ATTEMPTS} attempts;"
           f" this trial of {PREVIEW_BENCH} is missing")
     return {PREVIEW_BENCH: None}, {}
@@ -1452,6 +1512,14 @@ def describe(record: dict) -> str:
         if wait is not None:
             lines.append(f"  {name} question wait (median ms, not in the value):"
                          f" {wait['medianMs']:.1f}")
+    # 単打の段（#844）。1 ms 前後の値なので 3 桁で出す。
+    for name in SINGLE_BENCHES:
+        parts = record.get("breakdown", {}).get(name)
+        if not parts:
+            continue
+        written = " | ".join(f"{segment} {parts[segment]['medianMs']:.3f}"
+                             for segment in KEY_MILESTONES if segment in parts)
+        lines.append(f"  {name} breakdown (median ms): input_received -> {written}")
     return "\n".join(lines)
 
 
