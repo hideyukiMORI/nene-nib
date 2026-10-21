@@ -20,6 +20,7 @@
 #include "Win32FolderAdapter.hpp"
 #include "Win32FontCollationAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
+#include "Win32MarkdownAdapter.hpp"
 #include "Win32SessionAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
 #include "Win32ThemeAdapter.hpp"
@@ -194,6 +195,18 @@ void bind_measure(nenenib::adapters::win32::Win32TimingAdapter &timing,
     }
 }
 
+// 「届いた」の合図は窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（ADR 0062
+// の決定 7）。Markdown のプレビューの adapter も同じワーカーを借りる（ADR 0155 の決定 5）。
+void bind_work_signal(const nenenib::ui::win32::EditorWindow &window,
+                      nenenib::adapters::win32::Win32FolderAdapter &folders,
+                      nenenib::adapters::win32::Win32AutosaveAdapter &autosave,
+                      nenenib::adapters::win32::Win32MarkdownAdapter &markdown)
+{
+    folders.bind(window.work_signal());
+    autosave.bind(window.work_signal());
+    markdown.bind(window.work_signal());
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -224,6 +237,9 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32Worker worker;
     worker.post([&warmup](const std::stop_token &stop) { warmup.make(stop.stop_requested()); });
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
+    // Markdown のプレビューの解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders
+    // と同じ）。
+    nenenib::adapters::win32::Win32MarkdownAdapter markdown(worker);
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
@@ -236,7 +252,7 @@ int run(HINSTANCE instance)
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{appearance, clipboard, files, code_pages, settings,
                                           themes, session, history, folders, bookmarks,
-                                          text_layouts, autosave, fonts, bell},
+                                          text_layouts, autosave, fonts, bell, markdown},
         initial_documents(given));
     // 起動の最初の節目。ここまでに引数の解析・adapters の構築・起動引数のファイルの読み込みと
     // 復号が済んでいる（Issue #19）。
@@ -249,10 +265,7 @@ int run(HINSTANCE instance)
     }
     // OpenClipboard に要る HWND は窓ができてから渡す（ADR 0009 の決定 5）。
     clipboard.bind(window.value()->handle());
-    // 「届いた」の合図も窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（決定
-    // 7）。
-    folders.bind(window.value()->work_signal());
-    autosave.bind(window.value()->work_signal());
+    bind_work_signal(*window.value(), folders, autosave, markdown);
     pump_messages(*window.value(), warmup);
     return window.value()->rendering_failed() ? 1 : 0;
 }

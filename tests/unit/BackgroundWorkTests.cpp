@@ -373,6 +373,9 @@ void verify_folder_quiet_paths()
         expect(listing.bell().rings() == 0, "a finished or failed folder listing never rings");
     }
     expect(editing.bell().rings() == 0, "the folder paths never ring");
+    // プレビューが閉じている間は Markdown の口を 1 回も呼ばない（ADR 0155 の決定 10）。
+    expect(editing.markdown().requests().empty() && editing.markdown().collects() == 0,
+           "without a preview no path touches the markdown port");
 }
 
 // C:\work\a.txt を開いた窓。履歴は先に仕込む（面を開くときに読む）。

@@ -16,8 +16,8 @@
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "OperationGuide.hpp"
+#include "OtherFrame.hpp"
 #include "Palette.hpp"
-#include "PaneFrame.hpp"
 #include "PaneSide.hpp"
 #include "SettingsIssue.hpp"
 #include "SplitLayout.hpp"
@@ -113,7 +113,8 @@ struct EditorFrame
     // 描く所は pane_layouts の first / second のうち active_side の側に操作中の枠を置く。
     core::SplitLayout layout = core::SplitLayout::none;
     core::PaneSide active_side = core::PaneSide::first;
-    std::optional<PaneFrame> other{};
+    // 本文の枠かプレビューの枠（ADR 0155 の決定 1・11）。
+    std::optional<OtherFrame> other{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

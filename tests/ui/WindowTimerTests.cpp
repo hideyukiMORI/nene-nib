@@ -19,8 +19,14 @@ void verify_window_timers()
            "WM_TIMER with the autosave number is the autosave tick");
     expect(window_timer_of(selection) == WindowTimer::selection,
            "WM_TIMER with the selection number keeps scrolling the selection");
-    expect(!window_timer_of(0).has_value() && !window_timer_of(3).has_value(),
+    constexpr WPARAM preview = std::to_underlying(WindowTimer::preview);
+    expect(preview != autosave && preview != selection, "the preview timer has its own number");
+    expect(window_timer_of(preview) == WindowTimer::preview,
+           "WM_TIMER with the preview number is the preview tick");
+    expect(!window_timer_of(0).has_value() && !window_timer_of(4).has_value(),
            "a number the window never set is ignored");
+    expect(nenenib::ui::win32::preview_interval_milliseconds == 200,
+           "the preview tick comes every 200 ms (ADR 0155)");
     expect(nenenib::ui::win32::autosave_interval_milliseconds == 30'000,
            "the autosave tick comes every 30 seconds (D47)");
 }

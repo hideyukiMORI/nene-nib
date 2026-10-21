@@ -19,7 +19,7 @@ namespace nenenib::core
 // （Shift なし）は Vim INSERT の Ctrl-@ に残すので行を置かない。
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // 最初の行なので、一覧に見える鍵は Shift なしのまま。
-inline constexpr std::array<OperationBinding, 30> operation_bindings{{
+inline constexpr std::array<OperationBinding, 31> operation_bindings{{
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, false, OperationKey::o}},
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -37,6 +37,8 @@ inline constexpr std::array<OperationBinding, 30> operation_bindings{{
     // Shift を見ていなかった今の振る舞いを保つ行。
     {EditorOperation::next_pane, OperationModes::both, KeyChord{false, true, OperationKey::f6}},
     {EditorOperation::close_pane, OperationModes::both, KeyChord{true, true, OperationKey::f4}},
+    // Markdown のプレビュー（ADR 0155 の決定 3）。
+    {EditorOperation::toggle_preview, OperationModes::both, KeyChord{true, true, OperationKey::m}},
     {EditorOperation::close_tab, OperationModes::ordinary, KeyChord{true, false, OperationKey::w}},
     {EditorOperation::close_tab, OperationModes::both, KeyChord{true, false, OperationKey::f4}},
     {EditorOperation::recent_tab, OperationModes::both, KeyChord{true, false, OperationKey::tab}},

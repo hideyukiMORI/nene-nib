@@ -10,6 +10,7 @@
 #include "FolderPort.hpp"
 #include "FontFamilyPort.hpp"
 #include "HistoryPort.hpp"
+#include "MarkdownPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
 #include "TextLayoutPort.hpp"
@@ -38,5 +39,7 @@ struct EditorPorts
     FontFamilyPort &fonts;
     // 入力行の確定とファイル操作の断りで鳴らす（ADR 0153 の決定 4）。
     BellPort &bell;
+    // Markdown のプレビューを裏で解析する（ADR 0155 の決定 5）。
+    MarkdownPort &markdown;
 };
 } // namespace nenenib::application

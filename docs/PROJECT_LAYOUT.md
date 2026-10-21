@@ -102,6 +102,7 @@ Ex の保存・終了は core の `ExDocumentName` の表から `ExDocumentVerb`
 通常モードの結合文字は core の `ordinary_character_boundary` が移動・着地・方向ごとの削除境界を返す。`CaretMoveRequest` の単位で通常と Vim INSERT の code point 移動を区別する。controller は結果を既存の選択と `replace` に渡し、本文・undo の道を増やさない（ADR 0065）。
 断りの音は型のある `BellPort`（`ring` の 1 本）で、鳴らすかは controller の `reject` の 1 か所が決め、実装は adapters の `Win32Bell`（`MessageBeep`）（ADR 0153）。
 ワーカーへの要求値と完了の受け取り（版番号）もここ（ADR 0004）。Win32・永続化・ファイル・スレッドを知らない。
+裏の仕事の port は仕事の種類ごとに 1 つ: `FolderPort`（同じフォルダの列挙・ADR 0062）・`AutosavePort`（自動退避・ADR 0137）・`MarkdownPort`（プレビューの解析・券つき・ADR 0155）。どれも頼んですぐ戻り、結果は `WorkCompleted` の合図で `collect()` が引く。
 
 ### `src/adapters/win32`
 

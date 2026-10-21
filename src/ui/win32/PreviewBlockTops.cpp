@@ -66,21 +66,25 @@ constexpr std::string_view bullet = "•";
     return starts;
 }
 
-// [first, second) のリストの深さごとの記号の列の幅。
+// [first, second) のリストの深さごとの記号の列の幅。記号の幅は深さと文字の長さごとに 1 つだけ
+// 測る（番号の数字は等幅なので、同じ桁数の記号は同じ幅・長いリストでも layout は桁数ぶん）。
 [[nodiscard]] std::expected<Columns, RenderFailure>
 columns_of(const core::MarkdownDocument &document, std::pair<std::size_t, std::size_t> range,
            PreviewTextLayouts &layouts, const PreviewTextStyle &style)
 {
     const auto least = preview_list_indent(style.dpi);
     Columns columns;
+    std::vector<std::pair<std::size_t, std::size_t>> measured;
     for (auto index = range.first; index < range.second; ++index)
     {
         const auto &block = document.blocks.at(index);
         columns.resize(std::max<std::size_t>(columns.size(), block.list_depth), least);
-        if (block.marker.empty() || block.list_depth == 0)
+        const std::pair<std::size_t, std::size_t> key{block.list_depth, block.marker.size()};
+        if (block.marker.empty() || block.list_depth == 0 || std::ranges::contains(measured, key))
         {
             continue;
         }
+        measured.push_back(key);
         const auto width =
             layouts.advance(preview_marker_block(block), preview_marker_layout_width(), style);
         if (!width)
@@ -104,29 +108,30 @@ columns_of(const core::MarkdownDocument &document, std::pair<std::size_t, std::s
     return indent;
 }
 
-// 要素ごとの字下げ。リストは最初の要素で記号の列を測り、同じリストの要素で揃える。
-[[nodiscard]] std::expected<std::vector<float>, RenderFailure>
-indents_of(const core::MarkdownDocument &document, const std::vector<std::size_t> &starts,
-           PreviewTextLayouts &layouts, const PreviewTextStyle &style)
+// begin から始まるリストの終わり（starts は減らないので、starts が begin
+// より大きくなる最初の位置）。
+[[nodiscard]] std::size_t list_end(const std::vector<std::size_t> &starts, std::size_t begin)
 {
-    std::vector<float> indents(starts.size());
-    for (std::size_t begin = 0; begin < starts.size();)
+    return static_cast<std::size_t>(
+        std::distance(starts.begin(), std::ranges::upper_bound(starts, begin)));
+}
+
+// cached が begin から始まるリストの記号の列でなければ、measure で測り直して置き換える。
+template <class Measure>
+[[nodiscard]] std::expected<void, RenderFailure>
+refresh_columns(std::pair<std::size_t, Columns> &cached, std::size_t begin, const Measure &measure)
+{
+    if (cached.first == begin && !cached.second.empty())
     {
-        // starts は減らないので、次のリストは begin より大きい最初の値から。
-        const auto end = static_cast<std::size_t>(
-            std::distance(starts.begin(), std::ranges::upper_bound(starts, begin)));
-        const auto columns = columns_of(document, {begin, end}, layouts, style);
-        if (!columns)
-        {
-            return std::unexpected(columns.error());
-        }
-        for (auto index = begin; index < end; ++index)
-        {
-            indents.at(index) = indent_of(document.blocks.at(index), columns.value(), style.dpi);
-        }
-        begin = end;
+        return {};
     }
-    return indents;
+    auto columns = measure(begin);
+    if (!columns)
+    {
+        return std::unexpected(columns.error());
+    }
+    cached = {begin, std::move(columns).value()};
+    return {};
 }
 
 // 要素の layout の高さ（水平線は文字を持たないので 0）。
@@ -145,67 +150,70 @@ indents_of(const core::MarkdownDocument &document, const std::vector<std::size_t
 
 std::expected<PreviewBlockTops, RenderFailure>
 PreviewBlockTops::measure(const core::MarkdownDocument &document, PreviewTextLayouts &layouts,
-                          const PreviewTextStyle &style, float frame_width)
+                          const PreviewTextStyle &style, const PreviewViewport &viewport)
 {
     const auto starts = list_starts(document);
-    auto indents = indents_of(document, starts, layouts, style);
-    if (!indents)
-    {
-        return std::unexpected(indents.error());
-    }
     PreviewBlockTops tops;
-    tops.indents_ = std::move(indents.value());
-    const auto margin = preview_top_margin(style.dpi);
-    float y = margin;
-    for (std::size_t index = 0; index < starts.size(); ++index)
+    tops.first_ = std::min(viewport.first, starts.size());
+    // 今の要素が属するリストの最初の位置と、そのリスト全体で測った記号の列。
+    std::pair<std::size_t, Columns> cached{0, {}};
+    const auto columns_from = [&document, &starts, &layouts, &style](std::size_t begin)
+    { return columns_of(document, {begin, list_end(starts, begin)}, layouts, style); };
+    float y = tops.first_ == 0 ? preview_top_margin(style.dpi) : 0.0F;
+    for (auto index = tops.first_; index < starts.size() && y < viewport.height; ++index)
     {
         const auto &block = document.blocks.at(index);
-        y += index == 0 ? 0.0F
-                        : preview_gap(document.blocks.at(index - 1), block, style,
-                                      starts.at(index) == starts.at(index - 1));
+        y += index == tops.first_ ? 0.0F
+                                  : preview_gap(document.blocks.at(index - 1), block, style,
+                                                starts.at(index) == starts.at(index - 1));
+        const auto refreshed = refresh_columns(cached, starts.at(index), columns_from);
+        if (!refreshed)
+        {
+            return std::unexpected(refreshed.error());
+        }
+        const auto indent = indent_of(block, cached.second, style.dpi);
         const auto height = text_height_of(
-            block, layouts, style,
-            preview_text_width(block, frame_width, tops.indents_.at(index), style.dpi));
+            block, layouts, style, preview_text_width(block, viewport.width, indent, style.dpi));
         if (!height)
         {
             return std::unexpected(height.error());
         }
+        tops.indents_.push_back(indent);
         tops.tops_.push_back(y);
         y += preview_extent(block.kind, height.value(), style.dpi);
         tops.bottoms_.push_back(y);
     }
-    tops.total_ = y + margin;
     return tops;
+}
+
+std::size_t PreviewBlockTops::first() const noexcept
+{
+    return first_;
 }
 
 std::size_t PreviewBlockTops::first_visible(float scroll) const
 {
-    return static_cast<std::size_t>(
-        std::distance(bottoms_.begin(), std::ranges::upper_bound(bottoms_, scroll)));
+    return first_ + static_cast<std::size_t>(std::distance(
+                        bottoms_.begin(), std::ranges::upper_bound(bottoms_, scroll)));
 }
 
 float PreviewBlockTops::top(std::size_t index) const
 {
-    return tops_.at(index);
+    return tops_.at(index - first_);
 }
 
 float PreviewBlockTops::bottom(std::size_t index) const
 {
-    return bottoms_.at(index);
+    return bottoms_.at(index - first_);
 }
 
 float PreviewBlockTops::indent(std::size_t index) const
 {
-    return indents_.at(index);
+    return indents_.at(index - first_);
 }
 
 std::size_t PreviewBlockTops::size() const noexcept
 {
-    return tops_.size();
-}
-
-float PreviewBlockTops::total() const noexcept
-{
-    return total_;
+    return first_ + tops_.size();
 }
 } // namespace nenenib::ui::win32

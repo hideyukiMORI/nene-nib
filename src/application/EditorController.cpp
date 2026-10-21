@@ -45,6 +45,10 @@
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "LineSpanEvaluation.hpp"
+#include "MarkdownFailure.hpp"
+#include "MarkdownOutcome.hpp"
+#include "MarkdownParse.hpp"
+#include "MarkdownRequest.hpp"
 #include "ModeLabel.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
 #include "Palette.hpp"
@@ -54,6 +58,8 @@
 #include "PaneFrame.hpp"
 #include "PaneView.hpp"
 #include "ParkedTab.hpp"
+#include "PreviewFrame.hpp"
+#include "PreviewView.hpp"
 #include "SaveState.hpp"
 #include "ScrollBounds.hpp"
 #include "SearchLine.hpp"
@@ -807,6 +813,10 @@ utf16_parts(const core::TextBuffer &text, std::string_view mark, core::ByteOrder
 // 自動退避の失敗の 1 行（ADR 0137 の決定 4）。
 constexpr std::string_view autosave_failed_message = "自動退避できませんでした";
 
+// プレビューの 1 行（ADR 0155 の決定 3・6）。
+constexpr std::string_view preview_too_large_message = "プレビューは 16 MiB までです";
+constexpr std::string_view preview_rejected_message = "Markdown を解析できませんでした";
+
 constexpr std::string_view unreached_prefix = "開けませんでした: ";
 // クリップボードに書けなかった知らせ（ADR 0134 の決定 3）。
 constexpr std::string_view clipboard_unwritten_notice = "クリップボードに書けませんでした";
@@ -944,12 +954,15 @@ constexpr std::string_view clipped_mark = "…";
 // 裏の仕事の合図（WorkCompleted）も使う人の操作ではないので歩きを続ける（ADR 0062 の決定 7）。
 // 自動退避の合図（AutosaveTick）も同じ理由で歩きを続ける（ADR 0137 の決定 1）。起動の問いの答え
 // （RestoreAutosave / DiscardAutosave）は使う人の操作なので、ここに書かず歩きを確定する（決定 6）。
+// プレビューの間引きの合図（PreviewTick）も使う人の操作ではないので歩きを続ける（ADR 0155 の
+// 決定 8）。開く・閉じる（TogglePreview）は使う人の操作なので、ここにも begin_intent にも書かない。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WalkRecentTab>(intent) ||
            std::holds_alternative<SettleRecentTab>(intent) ||
            std::holds_alternative<WorkCompleted>(intent) ||
            std::holds_alternative<AutosaveTick>(intent) ||
+           std::holds_alternative<PreviewTick>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<ScrollTabs>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
@@ -1255,7 +1268,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     // 窓の寸法と帯の上のマウスは文書に触れないので、Vim の告知を消さない（ADR 0056 の決定 3）。
     // Ctrl を離したときの使った順の確定も同じ（ADR 0058 の決定 3）。窓が閉じていくときの一覧の
     // 書き出しも同じ（ADR 0059 の決定 3）。裏の仕事の合図も同じ（ADR 0062 の決定 7）。
-    // 自動退避の合図も使う人の操作ではないので同じ（ADR 0137 の決定 1）。起動の問いの答えは使う人の
+    // 自動退避の合図とプレビューの間引きの合図も使う人の操作ではないので同じ（ADR 0137 の決定 1・
+    // ADR 0155 の決定 8）。起動の問いの答えは使う人の
     // 操作なので、ほかの意図と同じに 1 意図の知らせを消してから写す（決定 6）。
     begin_intent(std::holds_alternative<VisibleLines>(intent) ||
                  std::holds_alternative<RefreshAppearance>(intent) ||
@@ -1266,7 +1280,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<SettleRecentTab>(intent) ||
                  std::holds_alternative<EndSession>(intent) ||
                  std::holds_alternative<WorkCompleted>(intent) ||
-                 std::holds_alternative<AutosaveTick>(intent));
+                 std::holds_alternative<AutosaveTick>(intent) ||
+                 std::holds_alternative<PreviewTick>(intent));
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。
@@ -2940,8 +2955,7 @@ void EditorController::run_document_request(const core::ExDocumentRequest &reque
     // 未保存でも拒否しない（ADR 0148 の決定 5・hide の決定を待つ仮置き）。
     if (state_.split().layout != core::SplitLayout::none)
     {
-        accept(SwitchPane{});
-        state_ = state_.without_split();
+        close_operated_pane();
         return;
     }
     if (request.verb != core::ExDocumentVerb::quit_force && refuse_modified_quit())
@@ -2949,6 +2963,17 @@ void EditorController::run_document_request(const core::ExDocumentRequest &reque
         return;
     }
     accept(CloseTab{state_.active_tab()});
+}
+
+// 2 枠で操作中の枠を閉じる（ADR 0148 の決定 5）。もう 1 つの枠の表示を持ってきてから 1 枠へ。
+// プレビューの枠へは移らないので、プレビューだけを閉じる（本文は閉じない・ADR 0155 の決定 4）。
+void EditorController::close_operated_pane()
+{
+    if (state_.preview() == nullptr)
+    {
+        accept(SwitchPane{});
+    }
+    state_ = state_.without_split();
 }
 
 // `:only` はもう 1 つの枠を閉じる（ADR 0148 の決定 5）。
@@ -3293,8 +3318,7 @@ void EditorController::perform(const core::VimWindowCommand &command)
     case core::VimWindowCommand::close:
         if (state_.split().other.has_value())
         {
-            accept(SwitchPane{});
-            accept(ClosePane{});
+            close_operated_pane();
         }
         return;
     case core::VimWindowCommand::only:
@@ -3457,6 +3481,8 @@ std::expected<void, FileFailure> EditorController::open_document(const core::Fil
         settle_follow();
         state_ = state_.with_opened(std::move(text), std::move(opened));
         ask_display();
+        // 本文が丸ごと替わるので、プレビューも頼み直す（ADR 0155 の決定 9）。
+        request_preview(true);
         return {};
     }
     leave_document();
@@ -3579,6 +3605,8 @@ void EditorController::enter_document()
     settle_vim_caret();
     reveal_active_tab();
     reopen_replayed_unit();
+    // プレビューは操作中の文書に追従する（ADR 0155 の決定 2・9）。
+    request_preview(true);
 }
 
 bool EditorController::reach_tab(std::size_t position)
@@ -3886,6 +3914,8 @@ void EditorController::accept(const WorkCompleted &)
 {
     collect_autosave();
     const auto batches = ports_.folders.collect();
+    // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
+    collect_preview();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
@@ -4058,6 +4088,11 @@ void EditorController::close_active_tab()
 // スクロールを写す。
 void EditorController::accept(const SplitPane &intent)
 {
+    // プレビューを捨てて本文の枠を置く（ADR 0155 の決定 4）。
+    if (state_.preview() != nullptr)
+    {
+        state_ = state_.without_split();
+    }
     if (state_.split().layout != core::SplitLayout::none)
     {
         state_ =
@@ -4073,13 +4108,20 @@ void EditorController::accept(const SplitPane &intent)
 // （leave_document / enter_document の 1 対をそのまま通す）。
 void EditorController::accept(const SwitchPane &)
 {
-    const auto &other = state_.split().other;
-    if (!other.has_value())
+    // プレビューの枠は操作中にならない（ADR 0155 の決定 4）。鳴らさず 1 行だけ知らせる。
+    if (state_.preview() != nullptr)
+    {
+        state_ = state_.with_command_message(
+            core::DisplayText::parse("プレビューの枠には入れません").value());
+        return;
+    }
+    const PaneView *other = state_.other_pane();
+    if (other == nullptr)
     {
         return;
     }
     const auto &ids = state_.autosave_ids();
-    const auto found = std::ranges::find(ids, other.value().tab);
+    const auto found = std::ranges::find(ids, other->tab);
     if (found == ids.end() ||
         !reach_tab(static_cast<std::size_t>(std::distance(ids.begin(), found))))
     {
@@ -4101,6 +4143,22 @@ void EditorController::accept(const ClosePane &)
 // constrained）を、もう 1 つの枠を操作中の枠の形で読む写しに通す。
 void EditorController::accept(const ScrollPane &intent)
 {
+    // プレビューは錨を本文の行で動かし、追従をやめる（ADR 0155 の決定 7）。
+    if (const PreviewView *preview = state_.preview(); preview != nullptr)
+    {
+        PreviewView view = *preview;
+        const core::TextBuffer &text = state_.text();
+        const core::LineNumber top = settled_scroll().first_visible;
+        const core::Offset base = view.follows ? text.line_start(top) : view.anchor;
+        const auto line = static_cast<std::int64_t>(text.position_of(base).line.value);
+        const auto last = static_cast<std::int64_t>(text.line_count());
+        const auto moved = std::clamp(line + std::int64_t{intent.lines}, std::int64_t{1}, last);
+        view.anchor = text.line_start(core::LineNumber{static_cast<std::size_t>(moved)});
+        view.follows = false;
+        state_ = state_.with_preview(std::move(view));
+        preview_body_top_ = top;
+        return;
+    }
     const auto pane = state_.other_pane_state();
     if (!pane.has_value())
     {
@@ -4121,6 +4179,140 @@ void EditorController::accept(const ScrollPane &intent)
         return;
     }
     state_ = state_.with_other_scrolled(moved.value().line, moved.value().row);
+}
+
+// ---------------------------------------------------------------- プレビュー（ADR 0155）
+
+// 開く・閉じるの 1 本（決定 3）。開く前に、前に開いていたときの残りを捨てる（たまりが空でないと
+// 次の合図が来ない・ADR 0062 の決定 15 と同じ）。
+void EditorController::accept(const TogglePreview &)
+{
+    if (state_.preview() != nullptr)
+    {
+        state_ = state_.without_split();
+        return;
+    }
+    static_cast<void>(ports_.markdown.collect());
+    settle_follow();
+    state_ = state_.with_preview(PreviewView{});
+    request_preview(true);
+}
+
+// 打つのを止めてから 1 tick 以上たった本文だけを頼む（決定 8）。比べるのは履歴の位置ではなく
+// 改訂番号。
+void EditorController::accept(const PreviewTick &)
+{
+    const PreviewView *preview = state_.preview();
+    if (preview == nullptr)
+    {
+        return;
+    }
+    const std::size_t revision = state_.history().revision();
+    if (revision == preview->seen_revision && revision != preview->requested_revision)
+    {
+        request_preview(false);
+        return;
+    }
+    if (revision != preview->seen_revision)
+    {
+        PreviewView view = *preview;
+        view.seen_revision = revision;
+        state_ = state_.with_preview(std::move(view));
+    }
+}
+
+void EditorController::request_preview(bool fresh)
+{
+    const PreviewView *preview = state_.preview();
+    if (preview == nullptr)
+    {
+        return;
+    }
+    PreviewView view = *preview;
+    const std::size_t revision = state_.history().revision();
+    view.requested_revision = revision;
+    view.seen_revision = revision;
+    if (fresh)
+    {
+        view.document.reset();
+        view.notice.reset();
+        view.follows = true;
+    }
+    // 券は頼まなくても進め、前の要求の結果を捨てる（決定 6）。
+    view.ticket = ++preview_tickets_;
+    if (state_.text().size_bytes() > core::preview_byte_limit)
+    {
+        view.notice = core::DisplayText::parse(preview_too_large_message).value();
+        state_ = state_.with_preview(std::move(view));
+        return;
+    }
+    auto text = std::make_shared<const std::string>(state_.text().text());
+    ports_.markdown.parse(MarkdownRequest{view.ticket, std::move(text)});
+    state_ = state_.with_preview(std::move(view));
+}
+
+void EditorController::collect_preview()
+{
+    const PreviewView *preview = state_.preview();
+    if (preview == nullptr)
+    {
+        return;
+    }
+    PreviewView view = *preview;
+    bool changed = false;
+    for (MarkdownOutcome &outcome : ports_.markdown.collect())
+    {
+        if (outcome.ticket != view.ticket)
+        {
+            continue;
+        }
+        if (outcome.result)
+        {
+            view.document =
+                std::make_shared<const core::MarkdownDocument>(std::move(outcome.result).value());
+            view.notice.reset();
+            changed = true;
+            continue;
+        }
+        // 差し替わるまで前の結果を出したまま、1 行だけ添える（決定 6）。
+        switch (outcome.result.error())
+        {
+        case core::MarkdownFailure::stopped:
+            continue;
+        case core::MarkdownFailure::too_large:
+            view.notice = core::DisplayText::parse(preview_too_large_message).value();
+            break;
+        case core::MarkdownFailure::parser_rejected:
+            view.notice = core::DisplayText::parse(preview_rejected_message).value();
+            break;
+        }
+        changed = true;
+    }
+    if (changed)
+    {
+        state_ = state_.with_preview(std::move(view));
+    }
+}
+
+ScrollState EditorController::framed_scroll()
+{
+    const ScrollState scroll = settled_scroll();
+    follow_preview_on_scroll(scroll.first_visible);
+    return scroll;
+}
+
+void EditorController::follow_preview_on_scroll(core::LineNumber first_visible)
+{
+    const auto previous = std::exchange(preview_body_top_, first_visible);
+    const PreviewView *preview = state_.preview();
+    if (preview == nullptr || preview->follows || !previous.has_value() ||
+        previous.value() == first_visible)
+    {
+        return;
+    }
+    PreviewView view = *preview;
+    view.follows = true;
+    state_ = state_.with_preview(std::move(view));
 }
 
 core::TitleBarInput EditorController::title_bar_input(std::int32_t width, std::uint32_t dpi) const
@@ -4620,7 +4812,7 @@ EditorDelivery EditorController::delivery() const
 // 頼まれた追従を解決してから作る（ADR 0128 の決定 3）。解決の失敗は failure に載る。
 EditorFrame EditorController::frame()
 {
-    const ScrollState scroll = settled_scroll();
+    const ScrollState scroll = framed_scroll();
     auto delivered = delivery();
     const auto caret = state_.text().position_of(state_.selection().caret);
     const auto &theme = core::selected_theme(delivered.settings, delivered.appearance);
@@ -4688,14 +4880,35 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
 {
     result.layout = state_.split().layout;
     result.active_side = state_.split().active_side;
-    const auto &view = state_.split().other;
+    const auto &other = state_.split().other;
+    if (!other.has_value())
+    {
+        return;
+    }
+    std::visit([this, &result, pattern](const auto &view)
+               { this->add_other_view(result, pattern, view); }, other.value());
+}
+
+// プレビューの枠は値の写しだけで、本文を歩かない（ADR 0155 の決定 11）。追従の間の錨は本文の
+// 先頭行の行頭（決定 7）。
+void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *,
+                                      const PreviewView &view) const
+{
+    const core::Offset anchor =
+        view.follows ? state_.text().line_start(result.first_visible) : view.anchor;
+    result.other = PreviewFrame{view.document, anchor, view.notice};
+}
+
+void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,
+                                      const PaneView &view) const
+{
     const auto pane = state_.other_pane_state();
-    if (!view.has_value() || !pane.has_value())
+    if (!pane.has_value())
     {
         return;
     }
     const auto &ids = state_.autosave_ids();
-    const auto found = std::ranges::find(ids, view.value().tab);
+    const auto found = std::ranges::find(ids, view.tab);
     if (found == ids.end())
     {
         return;

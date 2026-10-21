@@ -18,4 +18,8 @@ parse_markdown(std::string_view text, const MarkdownStop &stop);
 
 // md4c の大きさの型（unsigned）に入るか。入らない本文は parse_markdown が too_large で断る。
 [[nodiscard]] bool markdown_size_fits(std::size_t size) noexcept;
+
+// プレビューが解析を頼む本文の上限（ADR 0155 の決定 3）。これを超える本文は要求せず、枠に
+// 「プレビューは 16 MiB までです」を出す。parse_markdown 自身の上限は markdown_size_fits。
+inline constexpr std::size_t preview_byte_limit = std::size_t{16} * 1024 * 1024;
 } // namespace nenenib::core
