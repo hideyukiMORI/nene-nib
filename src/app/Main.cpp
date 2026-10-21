@@ -196,7 +196,7 @@ void bind_measure(nenenib::adapters::win32::Win32TimingAdapter &timing,
 }
 
 // 「届いた」の合図は窓ができてから渡す。番号と HWND は ui が持ち、adapters は知らない（ADR 0062
-// の決定 7）。Markdown のプレビューの adapter はいまは骨で、本物は #801（ADR 0155 の決定 5）。
+// の決定 7）。Markdown のプレビューの adapter も同じワーカーを借りる（ADR 0155 の決定 5）。
 void bind_work_signal(const nenenib::ui::win32::EditorWindow &window,
                       nenenib::adapters::win32::Win32FolderAdapter &folders,
                       nenenib::adapters::win32::Win32AutosaveAdapter &autosave,
@@ -237,7 +237,9 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32Worker worker;
     worker.post([&warmup](const std::stop_token &stop) { warmup.make(stop.stop_requested()); });
     nenenib::adapters::win32::Win32FolderAdapter folders(worker);
-    nenenib::adapters::win32::Win32MarkdownAdapter markdown;
+    // Markdown のプレビューの解析も同じワーカーを借りる（ADR 0155 の決定 5・壊れる順は folders
+    // と同じ）。
+    nenenib::adapters::win32::Win32MarkdownAdapter markdown(worker);
     nenenib::adapters::win32::Win32BookmarkAdapter bookmarks(
         files, nenenib::adapters::win32::local_bookmark_path());
     nenenib::ui::win32::BodyTextLayouts text_layouts;
