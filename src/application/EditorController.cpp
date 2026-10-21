@@ -982,7 +982,8 @@ constexpr std::string_view clipped_mark = "…";
 }
 
 // 上下に動くときに狙う横位置を保つ意図。上下の移動そのものと、30 秒ごとに必ず来る自動退避の
-// 合図（使う人の操作ではない・ADR 0137 の決定 1）。もう 1 つの枠だけを送るホイールも操作中の枠の
+// 合図（使う人の操作ではない・ADR 0137 の決定 1）とプレビューの間引きの合図（ADR 0155 の追補・
+// #813）。もう 1 つの枠だけを送るホイールも操作中の枠の
 // キャレットに触れないので保つ（ADR 0148 の決定 11）。これ以外の意図は写す前に狙いを捨てる。
 // 枠の意図（SplitPane / SwitchPane / ClosePane / ScrollPane）は使う人の操作なので、
 // keeps_tab_walk と begin_intent の表には載せない（歩きを終え、告知を消す）。
@@ -990,6 +991,7 @@ constexpr std::string_view clipped_mark = "…";
 {
     return std::holds_alternative<MoveCaret>(intent) ||
            std::holds_alternative<AutosaveTick>(intent) ||
+           std::holds_alternative<PreviewTick>(intent) ||
            std::holds_alternative<ScrollPane>(intent);
 }
 

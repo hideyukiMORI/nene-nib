@@ -1,21 +1,26 @@
 // Markdown のプレビューの application の契約（ADR 0155）。枠に置く・券・間引き・即時の要求・
 // 操作中にならない枠・閉じる・置き換える・16 MiB・錨と片方向の追従・静かな道。
+#include "CaretMotion.hpp"
 #include "ClosePane.hpp"
 #include "CloseTab.hpp"
+#include "Column.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "FilePath.hpp"
 #include "InsertText.hpp"
+#include "LineNumber.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownOutcome.hpp"
 #include "MarkdownParse.hpp"
+#include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
 #include "PaneFrame.hpp"
+#include "PlaceCaret.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewFrame.hpp"
@@ -26,6 +31,7 @@
 #include "ScriptedMarkdown.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "SelectionAnchoring.hpp"
 #include "SettleRecentTab.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
@@ -33,6 +39,8 @@
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
 #include "TogglePreview.hpp"
 #include "VimKey.hpp"
 #include "VimSpecialKey.hpp"
@@ -217,6 +225,41 @@ void verify_quiet_ticks_do_not_repaint()
     applied(controller, app::TogglePreview{});
     expect(!controller.apply(app::PreviewTick{}).repaint,
            "a tick after the preview closed asks for no repaint");
+}
+
+// 3c. プレビューが開いている間の tick は上下に動くときの狙いの横位置を捨てない（ADR 0155 の
+// 追補・#813）。通常モードの下向きと Vim の `j`。
+void verify_tick_keeps_wanted_column()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::InsertText{"abcdef\nx\nabcdef"});
+    applied(controller, app::VisibleLines{10, core::TextViewGeometry{400, 20, 96}});
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{5}},
+                                        core::SelectionAnchoring::collapse});
+    const auto down =
+        app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse};
+    applied(controller, down);
+    applied(controller, app::PreviewTick{});
+    applied(controller, app::PreviewTick{});
+    expect(controller.apply_frame(down).caret.position ==
+               core::TextPosition{core::LineNumber{3}, core::Column{5}},
+           "preview ticks between two downward moves keep the wanted x");
+}
+
+// 3d. Vim の `j` も同じ。
+void verify_tick_keeps_vim_wanted_column()
+{
+    Editing vim;
+    open_vim_document(vim, "abcdef\nx\nabcdef");
+    applied(vim.controller(), app::TogglePreview{});
+    vim_replay(vim.controller(), "4lj");
+    applied(vim.controller(), app::PreviewTick{});
+    applied(vim.controller(), app::PreviewTick{});
+    vim_replay(vim.controller(), "j");
+    expect(caret_at(vim.controller().frame(), 3, 5),
+           "preview ticks between two j keep the Vim wanted column");
 }
 
 // 4. 操作中の文書が替わると tick を待たずに頼み、前の結果を捨てる（決定 2・9）。
@@ -532,6 +575,8 @@ void verify_preview_contracts()
     verify_ticket_results();
     verify_tick_thinning();
     verify_quiet_ticks_do_not_repaint();
+    verify_tick_keeps_wanted_column();
+    verify_tick_keeps_vim_wanted_column();
     verify_switch_requests_now();
     verify_pane_intents();
     verify_size_limit();

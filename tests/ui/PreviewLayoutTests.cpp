@@ -383,9 +383,10 @@ void check_measured_from_anchor()
            "only the blocks within the frame height are measured");
 }
 
-// リストの区切りと記号の列は測る範囲の中だけで決める（#813・ADR 0155 の追補）。10 万項目の 1 つの
-// 番号つきリストで錨が末尾の近くでも、読む要素は測る範囲＋錨の 1 つ前だけで、測った項目の
-// 字下げは揃う（範囲の中で最も長い番号の列）。
+// リストの区切りは錨の 1 つ前から前へ決め、記号の列はリストの残り（上限 10,000 項目）で決める
+// （#813・ADR 0155 の追補）。10 万項目の 1 つの番号つきリストで、読む要素は測る範囲＋錨の 1 つ前
+// ＋リストの残り（上限）以内で、測った項目の字下げは揃う。12 項目のリストは錨を 2. に送っても
+// 字下げが 10. の桁のまま動かない。
 void check_list_scanned_in_range()
 {
     constexpr std::size_t huge = 100'000;
@@ -404,12 +405,28 @@ void check_list_scanned_in_range()
         const auto tops = win32::PreviewBlockTops::measure(
             document, layouts, style, win32::PreviewViewport{first, width, height});
         expect(tops.has_value() && tops.value().size() > first + 3 &&
-                   tops.value().scanned() <= tops.value().size() - first + 1,
-               "a list is read only within the measured range and the block before the anchor");
+                   tops.value().scanned() <=
+                       tops.value().size() - first + 1 + win32::PreviewBlockTops::list_scan_limit &&
+                   tops.value().scanned() <= huge - first + 1,
+               "a list is read from the block before the anchor to its rest up to the limit");
         expect(tops.has_value() && tops.value().size() > first + 3 &&
                    tops.value().indent(first) == tops.value().indent(tops.value().size() - 1),
                "the measured items of one list share one marker column");
     }
+    core::MarkdownDocument twelve;
+    for (std::size_t number = 1; number <= 12; ++number)
+    {
+        twelve.blocks.push_back(item_of(std::to_string(number) + ".", "item"));
+    }
+    constexpr float short_frame = 80.0F;
+    const auto top = win32::PreviewBlockTops::measure(
+        twelve, layouts, style, win32::PreviewViewport{0, width, short_frame});
+    const auto scrolled = win32::PreviewBlockTops::measure(
+        twelve, layouts, style, win32::PreviewViewport{1, width, short_frame});
+    expect(top.has_value() && scrolled.has_value() && top.value().size() < 10 &&
+               scrolled.value().size() < 10 &&
+               top.value().indent(1) == scrolled.value().indent(1) && top.value().indent(1) > 40.0F,
+           "scrolling a list whose 10. is below the frame keeps its marker column");
 }
 } // namespace
 

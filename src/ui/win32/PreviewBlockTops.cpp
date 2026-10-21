@@ -3,8 +3,11 @@
 #include "PreviewPlacement.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -18,6 +21,8 @@ constexpr MarkerKind no_marker = 0;
 constexpr MarkerKind bullet_marker = 1;
 constexpr MarkerKind number_marker = 2;
 constexpr std::string_view bullet = "•";
+// 上限で読みを止めたリストの番号の記号（5 桁）。
+constexpr std::string_view capped_number = "99999.";
 
 [[nodiscard]] MarkerKind marker_kind(const core::PreviewBlock &block) noexcept
 {
@@ -136,19 +141,16 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
     {
         const auto &block = document.blocks.at(index);
         y += gap_before(document, index, style);
-        const auto start = start_of(document, index);
-        auto &list = list_at(start);
-        const auto widened = widen(list, block, layouts, style);
-        if (!widened)
+        const auto columns = columns_at(document, index, layouts, style);
+        if (!columns)
         {
-            return std::unexpected(widened.error());
+            return std::unexpected(columns.error());
         }
-        // 同じリストの前の要素はもう狭い列で置いたので、錨から置き直す。
-        if (widened.value() && start < index)
+        if (columns.value().second)
         {
             return false;
         }
-        const auto indent = indent_of(block, list.first, style.dpi);
+        const auto indent = indent_of(block, *columns.value().first, style.dpi);
         const auto height = text_height_of(
             block, layouts, style, preview_text_width(block, viewport.width, indent, style.dpi));
         if (!height)
@@ -186,15 +188,109 @@ float PreviewBlockTops::gap_before(const core::MarkdownDocument &document, std::
     return preview_gap(document.blocks.at(index - 1), document.blocks.at(index), style, same);
 }
 
-PreviewBlockTops::ListColumns &PreviewBlockTops::list_at(std::size_t start)
+std::expected<std::pair<const PreviewBlockTops::Columns *, bool>, RenderFailure>
+PreviewBlockTops::columns_at(const core::MarkdownDocument &document, std::size_t index,
+                             PreviewTextLayouts &layouts, const PreviewTextStyle &style)
+{
+    const auto start = start_of(document, index);
+    const auto columns = columns_for(document, start, layouts, style);
+    if (!columns)
+    {
+        return std::unexpected(columns.error());
+    }
+    auto &list = *columns.value();
+    const auto widened = widen(list, document.blocks.at(index), layouts, style);
+    if (!widened)
+    {
+        return std::unexpected(widened.error());
+    }
+    // 同じリストの前の要素はもう狭い列で置いたので、錨から置き直す。
+    return std::pair<const Columns *, bool>{&list.first, widened.value() && start < index};
+}
+
+std::expected<PreviewBlockTops::ListColumns *, RenderFailure>
+PreviewBlockTops::columns_for(const core::MarkdownDocument &document, std::size_t start,
+                              PreviewTextLayouts &layouts, const PreviewTextStyle &style)
 {
     const auto found =
         std::ranges::find(lists_, start, &std::pair<std::size_t, ListColumns>::first);
     if (found != lists_.end())
     {
-        return found->second;
+        return &found->second;
     }
-    return lists_.emplace_back(start, ListColumns{}).second;
+    const auto end = list_end(document, start);
+    const auto items =
+        std::span<const core::PreviewBlock>{document.blocks}.subspan(start, end - start);
+    auto &list = lists_.emplace_back(start, ListColumns{}).second;
+    const auto widened = widen_all(list, items, layouts, style);
+    if (!widened)
+    {
+        return std::unexpected(widened.error());
+    }
+    // 上限で止めてもリストが続くなら、番号の列は 5 桁ぶん。
+    if (end - start == list_scan_limit && end < document.blocks.size() &&
+        start_of(document, end) == start)
+    {
+        const auto capped = widen_capped(list, items, layouts, style);
+        if (!capped)
+        {
+            return std::unexpected(capped.error());
+        }
+    }
+    return &list;
+}
+
+std::size_t PreviewBlockTops::list_end(const core::MarkdownDocument &document, std::size_t start)
+{
+    auto end = start + 1;
+    // リストの外の要素は次を読まない（枠の下の要素を読まない・#811 のレビュー R1）。
+    if (document.blocks.at(start).list_depth == 0)
+    {
+        return end;
+    }
+    while (end < document.blocks.size() && end - start < list_scan_limit &&
+           start_of(document, end) == start)
+    {
+        ++end;
+    }
+    return end;
+}
+
+std::expected<void, RenderFailure>
+PreviewBlockTops::widen_all(ListColumns &list, std::span<const core::PreviewBlock> items,
+                            PreviewTextLayouts &layouts, const PreviewTextStyle &style)
+{
+    for (const auto &item : items)
+    {
+        const auto widened = widen(list, item, layouts, style);
+        if (!widened)
+        {
+            return std::unexpected(widened.error());
+        }
+    }
+    return {};
+}
+
+std::expected<void, RenderFailure>
+PreviewBlockTops::widen_capped(ListColumns &list, std::span<const core::PreviewBlock> items,
+                               PreviewTextLayouts &layouts, const PreviewTextStyle &style)
+{
+    for (const auto &item : items)
+    {
+        const MarkerKey key{item.list_depth, capped_number.size()};
+        if (marker_kind(item) != number_marker || std::ranges::contains(list.second, key))
+        {
+            continue;
+        }
+        auto widest = item;
+        widest.marker = std::string(capped_number);
+        const auto widened = widen(list, widest, layouts, style);
+        if (!widened)
+        {
+            return std::unexpected(widened.error());
+        }
+    }
+    return {};
 }
 
 // 記号の幅は深さと文字の長さごとに 1 つだけ測る（番号の数字は等幅なので、同じ桁数の記号は同じ
