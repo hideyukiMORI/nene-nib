@@ -1,6 +1,6 @@
 // scope `--lexer` の単体テスト（#815・段 2 の ADR 0156 の決定 1〜6・#830 の JSON と Python・
 // #833 の Markdown と JS / TS・#838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript と Ini と
-// gdresource）。core の lex_line が 1 行を
+// gdresource・#857 の C#・Rust・Go）。core の lex_line が 1 行を
 // 役割の区間に分け、行をまたぐ状態（ブロックコメント・raw string・フェンス・テンプレート・script
 // の中・CDATA・ブロックスカラー）を値で次の行へ渡すこと。
 // 期待の区間は「塗り」の文字列で書く: 行の code point 1 つに 1 文字で、c comment・k keyword・
@@ -88,6 +88,25 @@ constexpr LexState in_quote = raw("\"");
 // #856: GDScript の行をまたぐ `'…'` とノードのパス `$"…"` の中（delimiter は閉じの前に `$`）。
 constexpr LexState in_squote = raw("'");
 constexpr LexState in_node = raw("$\"");
+// #857: C# の逐語的文字列の中（delimiter は `@`・補間は `$@`）と、開きが引用符 4
+// つの生の文字列の中。
+constexpr LexState cs_verbatim = raw("@");
+constexpr LexState cs_interp_verbatim = raw("$@");
+constexpr LexState quad_dq = raw("\"\"\"\"");
+
+// #857: Rust の入れ子のコメントの中（delimiter は深さの 10 進）。
+[[nodiscard]] constexpr LexState nested(std::string_view depth)
+{
+    LexState state = raw(depth);
+    state.kind = LexKind::block_comment;
+    return state;
+}
+
+constexpr LexState nest1 = nested("1");
+constexpr LexState nest2 = nested("2");
+// #857: Rust の生の文字列の中（delimiter は `r` と `#` の列）。
+constexpr LexState raw_r1 = raw("r#");
+constexpr LexState raw_r2 = raw("r##");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -1137,6 +1156,241 @@ constexpr std::array<LexCase, 60> gdresource_cases{{
     {"int x; /* c", raw_xyz, "     cccccc", plain},
 }};
 
+// C#（#857）: 宣言・`///`・逐語的文字列の行またぎと `""`・生の文字列（引用符 3 つと 4
+// つ）・補間（`{…}` の中 は分類しない）・前処理の行・文字・数の形・閉じない字句。
+constexpr std::array<LexCase, 65> csharp_cases{{
+    {"using System.Collections.Generic;", plain, "Kkkkk       O           O       O", plain},
+    {"namespace Demo.App;", plain, "Kkkkkkkkk     O   O", plain},
+    {"public sealed class Player : IDisposable {", plain,
+     "Kkkkkk Kkkkkk Kkkkk        O             O", plain},
+    {"public record Point(int X, int Y);", plain, "Kkkkkk Kkkkkk FffffOTtt  O Ttt  Oo", plain},
+    {"/// <summary>Moves the player.</summary>", plain, "Cccccccccccccccccccccccccccccccccccccccc",
+     plain},
+    {"    // line comment", plain, "    Ccccccccccccccc", plain},
+    {"    private static readonly string Name = \"nib\";", plain,
+     "    Kkkkkkk Kkkkkk Kkkkkkkk Tttttt      O SssssO", plain},
+    {"    var path = @\"C:\\temp\\\";", plain, "    Ttt      O SssssssssssO", plain},
+    {"    var multi = @\"first line", plain, "    Ttt       O Ssssssssssss", cs_verbatim},
+    {"second \"\"quoted\"\" line", cs_verbatim, "Ssssssssssssssssssssss", cs_verbatim},
+    {"end\"; int after = 1;", cs_verbatim, "SsssO Ttt       O NO", plain},
+    {"    var raw = \"\"\"", plain, "    Ttt     O Sss", triple_dq},
+    {"    He said \"hi\" and \"\"twice\"\"", triple_dq, "Ssssssssssssssssssssssssssssss",
+     triple_dq},
+    {"    \"\"\";", triple_dq, "SssssssO", plain},
+    {"var four = \"\"\"\"", plain, "Ttt      O Ssss", quad_dq},
+    {"contains \"\"\" three", quad_dq, "Ssssssssssssssssss", quad_dq},
+    {"\"\"\"\";", quad_dq, "SsssO", plain},
+    {"var one = \"\"\"inline \"quoted\" text\"\"\";", plain,
+     "Ttt     O SsssssssssssssssssssssssssO", plain},
+    {"var s = $\"{x} and {y:N2}\";", plain, "Ttt   O SssssssssssssssssO", plain},
+    {"var t = $\"{dict[\"key\"]} done\";", plain, "Ttt   O SssssssssssssssssssssO", plain},
+    {"var e = $\"{{literal}}\" + 1;", plain, "Ttt   O Ssssssssssssss O NO", plain},
+    {"var v = $@\"C:\\{dir}", plain, "Ttt   O Sssssssssss", cs_interp_verbatim},
+    {"\\file\"; x = 2;", cs_interp_verbatim, "SsssssO   O NO", plain},
+    {"var w = @$\"{a}\"\"b\"\"\";", plain, "Ttt   O SsssssssssssO", plain},
+    {"var r = $\"\"\"{a} \"quoted\" \"\"\";", plain, "Ttt   O SsssssssssssssssssssO", plain},
+    {"var rr = $$\"\"\"", plain, "Ttt    O Sssss", triple_dq},
+    {"#region Helpers // keep", plain, "Kkkkkkkkkkkkkkkkkkkkkkk", plain},
+    {"#if DEBUG // only debug", plain, "Kkkkkkkkk Ccccccccccccc", plain},
+    {"#endregion", plain, "Kkkkkkkkkk", plain},
+    {"    #nullable enable", plain, "    Kkkkkkkkkkkkkkkk", plain},
+    {"#error can't build", plain, "Kkkkkkkkkkkkkkkkkk", plain},
+    {"[Serializable]", plain, "O            O", plain},
+    {"char c = 'a', n = '\\n', q = '\\'';", plain, "Tttt   O SssO   O SsssO   O SsssO", plain},
+    {"int hex = 0x_FF + 0b1010_0101;", plain, "Ttt     O Nnnnn O NnnnnnnnnnnO", plain},
+    {"decimal m = 1.5m; double d = 1e-3; float f = .5f;", plain,
+     "Ttttttt   O NnnnO Tttttt   O NnnnO Ttttt   O NnnO", plain},
+    {"long big = 1_000_000UL; var r = 1..2;", plain, "Tttt     O NnnnnnnnnnnO Ttt   O NONnO",
+     plain},
+    {"public async Task<int> RunAsync() { await Task.Delay(10); }", plain,
+     "Kkkkkk Kkkkk     OTttO FfffffffOo O Kkkkk     OFffffONnOo O", plain},
+    {"var list = new List<string>();", plain, "Ttt      O Kkk     OTtttttOooo", plain},
+    {"if (x is null || y == true) return;", plain, "Kk O  Kk Vvvv Oo   Oo VvvvO KkkkkkO", plain},
+    {"foreach (var item in items) yield return item;", plain,
+     "Kkkkkkk OTtt      Kk      O Kkkkk Kkkkkk     O", plain},
+    {"string bad = \"open", plain, "Tttttt     O Eeeee", plain},
+    {"char bad = 'x", plain, "Tttt     O Ee", plain},
+    {"/* block", plain, "Cccccccc", block},
+    {"still */ int z;", block, "Cccccccc Ttt  O", plain},
+    {"var u8s = \"abc\"u8;", plain, "Ttt     O SssssssO", plain},
+    {"var @class = 1;", plain, "Ttt        O NO", plain},
+    {"x = a ? b : c ?? d; f = x => x * 2;", plain, "  O   O   O   Oo  O   O   Oo   O NO", plain},
+    {"\"", plain, "E", plain},
+    {"@\"", plain, "Ss", cs_verbatim},
+    {"\"\"\"", plain, "Sss", triple_dq},
+    {"'", plain, "E", plain},
+    {"/*", plain, "Cc", block},
+    {"$", plain, "O", plain},
+    {"// 日本語のコメント", plain, "Ccccccccccc", plain},
+    {"var j = \"日本\";", plain, "Ttt   O SsssO", plain},
+    // #858 のレビュー: 逐語的の `""` は閉じない・`\\` と `\"`・閉じない補間は行末まで error・
+    // 引用符 17 個の生の文字列（16 個の列で閉じる限界）・`u8` の付いた生の文字列・補間の書式の中の
+    // `'`・文字・`/*/`。
+    {"var a = @\"a\"\"\";", plain, "Ttt   O SsssssO", plain},
+    {"var b = \"\\\\\"; var c = \"\\\"\";", plain, "Ttt   O SsssO Ttt   O SsssO", plain},
+    {"var d = $\"{x}", plain, "Ttt   O Eeeee", plain},
+    {"var k = \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"a\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\";", plain,
+     "Ttt   O SsssssssssssssssssssssssssssssssssEe", plain},
+    {"var f = \"\"\"raw\"\"\"u8;", plain, "Ttt   O SssssssssssO", plain},
+    {"var g = $\"{d:yyyy'-'MM}\";", plain, "Ttt   O SsssssssssssssssO", plain},
+    {"char h = 'A';", plain, "Tttt   O SssO", plain},
+    {"/*/", plain, "Ccc", block},
+    {"", plain, "", plain},
+    {"int x; xyz", raw_xyz, "Ttt  O", plain},
+}};
+
+// Rust（#857）: 宣言・属性・入れ子のコメントの行またぎ（delimiter は深さ）・生の文字列 `r#"…"#`
+// `r##"…"##` の行またぎ・文字とライフタイム・バイト文字列・数の形・マクロ・閉じない字句。
+constexpr std::array<LexCase, 65> rust_cases{{
+    {"use std::collections::HashMap;", plain, "Kkk    Oo           Oo       O", plain},
+    {"pub fn main() {", plain, "Kkk Kk FfffOo O", plain},
+    {"fn add<'a>(x: &'a str) -> &'a str { x }", plain, "Kk FffOTtOo O OTt TttO Oo OTt Ttt O   O",
+     plain},
+    {"impl<T: Clone> Shape for Wrapper<T> {}", plain, "KkkkO O TttttO       Kkk        O O Oo",
+     plain},
+    {"pub trait Shape { fn area(&self) -> f64; }", plain,
+     "Kkk Kkkkk       O Kk FfffOoKkkkO Oo TttO O", plain},
+    {"#[derive(Debug, Clone)]", plain, "Kkkkkkkkkkkkkkkkkkkkkkk", plain},
+    {"#![allow(dead_code)]", plain, "Kkkkkkkkkkkkkkkkkkkk", plain},
+    {"#[doc = \"a ] b\"] struct S;", plain, "KkkkkkkkSssssssK Kkkkkk  O", plain},
+    {"#[cfg(test)] mod tests {", plain, "Kkkkkkkkkkkk Kkk       O", plain},
+    {"/* outer /* inner */ still outer */ let x = 1;", plain,
+     "Ccccccccccccccccccccccccccccccccccc Kkk   O NO", plain},
+    {"/* open /* nested", plain, "Ccccccccccccccccc", nest2},
+    {"middle */ still one", nest2, "Ccccccccccccccccccc", nest1},
+    {"done */ let y = 2;", nest1, "Ccccccc Kkk   O NO", plain},
+    {"still /* x", block, "Cccccccccc", nest2},
+    {"let s = r#\"raw \"quoted\" text\"#;", plain, "Kkk   O SsssssssssssssssssssssO", plain},
+    {"let t = r##\"opens", plain, "Kkk   O Sssssssss", raw_r2},
+    {"has \"# inside", raw_r2, "Sssssssssssss", raw_r2},
+    {"ends\"##; let z = 3;", raw_r2, "SssssssO Kkk   O NO", plain},
+    {"let w = r#\"opens", plain, "Kkk   O Ssssssss", raw_r1},
+    {"body \"quoted\" and \"## more", raw_r1, "SsssssssssssssssssssO", plain},
+    {"let u = r##\"a \"# b\"##;", plain, "Kkk   O SssssssssssssO", plain},
+    {"let c = 'a'; let n = '\\n'; let q = '\\'';", plain,
+     "Kkk   O SssO Kkk   O SsssO Kkk   O SsssO", plain},
+    {"let lt: &'static str = \"s\";", plain, "Kkk   O OTtttttt Ttt O SssO", plain},
+    {"'outer: loop { break 'outer; }", plain, "TtttttO Kkkk O Kkkkk TtttttO O", plain},
+    {"let b = b'a'; let bs = b\"bytes\";", plain, "Kkk   O SsssO Kkk    O SsssssssO", plain},
+    {"let n = 1_000u32 + 0b1010 + 0x_FF + 0o77 + 1.5e-3f64;", plain,
+     "Kkk   O Nnnnnnnn O Nnnnnn O Nnnnn O Nnnn O NnnnnnnnnO", plain},
+    {"println!(\"{}\", x);", plain, "FfffffffOSsssO  Oo", plain},
+    {"let v = vec![1, 2, 3];", plain, "Kkk   O FfffONO NO NOo", plain},
+    {"if a != b { return Self::new(); }", plain, "Kk   Oo   O Kkkkkk TtttOoFffOoo O", plain},
+    {"let me = self.value;", plain, "Kkk    O KkkkO     O", plain},
+    {"let o: Option<i32> = Some(1); let e = Err(e); None", plain,
+     "Kkk  O TtttttOTttO O VvvvONOo Kkk   O VvvO Oo Vvvv", plain},
+    {"let multi = \"first", plain, "Kkk       O Ssssss", in_quote},
+    {"second line \\\"esc\\\"", in_quote, "Sssssssssssssssssss", in_quote},
+    {"end\" + 1;", in_quote, "Ssss O NO", plain},
+    {"let cont = \"line \\", plain, "Kkk      O Sssssss", in_quote},
+    {"match x { None => 0, _ => 1 }", plain, "Kkkkk   O Vvvv Oo NO   Oo N O", plain},
+    {"let r#match = 1;", plain, "Kkk         O NO", plain},
+    {"let br = br\"raw bytes\"; let cs = c\"c str\";", plain,
+     "Kkk    O SssssssssssssO Kkk    O SsssssssO", plain},
+    {"async fn fetch() -> u8 { fut.await }", plain, "Kkkkk Kk FffffOo Oo Tt O    OKkkkk O", plain},
+    {"x.iter().map(|v| v * 2).collect::<Vec<_>>();", plain,
+     " OFfffOooFffOo O   O NOoFffffffOooTttO Ooooo", plain},
+    {"let range = 1..10; let t = (1, 2).0;", plain, "Kkk       O NOoNnO Kkk   O ONO NOoNO", plain},
+    {"unsafe impl Send for P {}", plain, "Kkkkkk Kkkk Tttt Kkk   Oo", plain},
+    {"macro_rules! square { ($x:expr) => { $x * $x }; }", plain,
+     "Ffffffffffff        O Oo O    O Oo O O  O O  Oo O", plain},
+    {"// line comment", plain, "Ccccccccccccccc", plain},
+    {"/// doc comment", plain, "Ccccccccccccccc", plain},
+    {"//! inner doc", plain, "Ccccccccccccc", plain},
+    {"'", plain, "E", plain},
+    {"r#\"", plain, "Sss", raw_r1},
+    {"/*", plain, "Cc", nest1},
+    {"\"", plain, "S", in_quote},
+    {"b'", plain, " E", plain},
+    // #858 のレビュー: 生の文字列は `\` を飛ばさない・文字の `\'` と `\u{…}`・ライフタイムの列・
+    // 閉じの無い属性・属性の中の文字の `]`（属性はそこで閉じる限界）・`/*/`・
+    // 16 進は符号を続けない・予約語は `(` の前でも予約語・`!=` はマクロでない・タプルの添字・
+    // 孤立した `'` は 1 文字だけ error。
+    {"let s = r\"a\\\";", plain, "Kkk   O SssssO", plain},
+    {"let q = b'\\''; let e = '\\u{1F600}';", plain, "Kkk   O SssssO Kkk   O SssssssssssO", plain},
+    {"struct P<'a, 'b> { x: &'a str }", plain, "Kkkkkk  OTtO TtO O  O OTt Ttt O", plain},
+    {"#[cfg(feature = \"x\"", plain, "KkkkkkkkkkkkkkkkSss", plain},
+    {"#[a(']')] fn f() {}", plain, "KkkkkkEOo Kk FOo Oo", plain},
+    {"/*/", plain, "Ccc", nest1},
+    {"let h = 0xE+1;", plain, "Kkk   O NnnONO", plain},
+    {"if(a) {} while (b) {}", plain, "KkO O Oo Kkkkk O O Oo", plain},
+    {"if foo!=bar {}", plain, "Kk    Oo    Oo", plain},
+    {"let v = a.0.1;", plain, "Kkk   O  ONnnO", plain},
+    {"let a = ' x;", plain, "Kkk   O E  O", plain},
+    {"let k = '日';", plain, "Kkk   O SssO", plain},
+    {"", plain, "", plain},
+    {"int x; xyz", raw_xyz, "     O", plain},
+}};
+
+// Go（#857）: `package`・`import (…)`・メソッドの受け手の後ろの名前・生の文字列の行またぎ・rune・
+// 組み込みの関数・`nil` `iota`・数の形（`0x1p-2`）・`:=`・閉じない字句。
+constexpr std::array<LexCase, 53> go_cases{{
+    {"package main", plain, "Kkkkkkk", plain},
+    {"import (", plain, "Kkkkkk O", plain},
+    {"    \"fmt\"", plain, "    Sssss", plain},
+    {"    str \"strings\"", plain, "        Sssssssss", plain},
+    {")", plain, "O", plain},
+    {"import \"os\"", plain, "Kkkkkk Ssss", plain},
+    {"type Point struct { X, Y int }", plain, "Kkkk       Kkkkkk O  O   Ttt O", plain},
+    {"type Shape interface { Area() float64 }", plain, "Kkkk       Kkkkkkkkk O     Oo Ttttttt O",
+     plain},
+    {"func main() {", plain, "Kkkk FfffOo O", plain},
+    {"func (p *Point) Move(dx int) error {", plain, "Kkkk O  O     O FfffO   TttO Ttttt O", plain},
+    {"func (Point) Name() string { return \"p\" }", plain,
+     "Kkkk O     O FfffOo Tttttt O Kkkkkk Sss O", plain},
+    {"func Map[T any](xs []T) []T { return xs }", plain,
+     "Kkkk FffO  TttOo   Oo O Oo  O Kkkkkk    O", plain},
+    {"    x := 10", plain, "      Oo Nn", plain},
+    {"    var r rune = 'a'", plain, "    Kkk   Tttt O Sss", plain},
+    {"    esc := '\\n'", plain, "        Oo Ssss", plain},
+    {"    s := \"hello\\n\"", plain, "      Oo Sssssssss", plain},
+    {"    raw := `raw text", plain, "        Oo Sssssssss", tpl},
+    {"still raw \\n \"quoted\"", tpl, "Sssssssssssssssssssss", tpl},
+    {"done` + x", tpl, "Sssss O", plain},
+    {"    f := 0x1p-2 + 1e3 + .5 + 0b1010 + 0o17 + 1_000 + 2i", plain,
+     "      Oo Nnnnnn O Nnn O Nn O Nnnnnn O Nnnn O Nnnnn O Nn", plain},
+    {"    var g float64 = 0x1.8p1", plain, "    Kkk   Ttttttt O Nnnnnnn", plain},
+    {"    n := len(xs) + cap(xs)", plain, "      Oo FffO  O O FffO  O", plain},
+    {"    m := make(map[string]int)", plain, "      Oo FfffOTttOTtttttOTttO", plain},
+    {"    xs = append(xs, 1)", plain, "       O FfffffO  O NO", plain},
+    {"    if err != nil { panic(err) }", plain, "    Kk     Oo Vvv O FffffO   O O", plain},
+    {"    const ( A = iota; B )", plain, "    Kkkkk O   O VvvvO   O", plain},
+    {"    for i := range 10 { defer close(ch) }", plain,
+     "    Kkk   Oo Kkkkk Nn O Kkkkk FffffO  O O", plain},
+    {"    go func() { ch <- true }()", plain, "    Kk KkkkOo O    Oo Vvvv Ooo", plain},
+    {"    select { case v := <-ch: _ = v; default: }", plain,
+     "    Kkkkkk O Kkkk   Oo Oo  O   O  O KkkkkkkO O", plain},
+    {"    var c chan bool = nil", plain, "    Kkk   Tttt Tttt O Vvv", plain},
+    {"/* block", plain, "Cccccccc", block},
+    {"still */ x := 1", block, "Cccccccc   Oo N", plain},
+    {"// comment", plain, "Cccccccccc", plain},
+    {"    bad := \"open", plain, "        Oo Eeeee", plain},
+    {"    r := 'x", plain, "      Oo Ee", plain},
+    {"\"", plain, "E", plain},
+    {"`", plain, "S", tpl},
+    {"'", plain, "E", plain},
+    {"/*", plain, "Cc", block},
+    {"    fallthrough", plain, "    Kkkkkkkkkkk", plain},
+    {"    goto end", plain, "    Kkkk", plain},
+    {"    s := string(b) + fmt.Sprintf(\"%d\", 3)", plain,
+     "      Oo TtttttO O O    O       OSsssO NO", plain},
+    {"func init() { println(\"x\") }", plain, "Kkkk FfffOo O FffffffOSssO O", plain},
+    {"    t := `one line` + `two`", plain, "      Oo Ssssssssss O Sssss", plain},
+    {"var 日本 = \"語\"", plain, "Kkk    O Sss", plain},
+    // #858 のレビュー: 16 進は `p` の後だけ符号を続ける・rune の `\'`・`/*/`・受け手に `)` を含む
+    // メソッドの名前は塗らない（限界）・生の文字列は `\` を飛ばさない・
+    // コメントの続きの行頭の `*/`。
+    {"x := 0xe+1", plain, "  Oo NnnON", plain},
+    {"r := '\\''", plain, "  Oo Ssss", plain},
+    {"/*/", plain, "Ccc", block},
+    {"func (f func(int)) N() {}", plain, "Kkkk O  KkkkOTttOo  Oo Oo", plain},
+    {"x := `a\\` + `\\n`", plain, "  Oo Ssss O Ssss", plain},
+    {"*/ x := 1", block, "Cc   Oo N", plain},
+    {"", plain, "", plain},
+    {"int x; xyz", raw_xyz, "Ttt  O", plain},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -1162,9 +1416,9 @@ void verify_other_languages()
          {Language::c, Language::cpp, Language::json, Language::python, Language::markdown,
           Language::javascript, Language::typescript, Language::html, Language::xml, Language::css,
           Language::yaml, Language::toml, Language::gdscript, Language::dosini,
-          Language::gdresource})
+          Language::gdresource, Language::cs, Language::rust, Language::go})
     {
-        expect(core::has_lexer(language), "the fifteen languages with a lexer report one");
+        expect(core::has_lexer(language), "the eighteen languages with a lexer report one");
     }
     for (const Language language : others)
     {
@@ -1389,6 +1643,51 @@ void verify_godot_worst_lines()
     expect(well_formed(core::lex_line(Language::dosini, plain, ini).spans, ini),
            "a long ini line of quoted values reads in one pass");
 }
+
+// #857: C# の逐語的文字列と生の文字列、Rust の入れ子のコメントと生の文字列、Go の生の文字列も値で
+// 次の行へ渡し、lex_state は lex_line と同じ状態を返す。
+void verify_c_family_threading()
+{
+    constexpr std::array<std::string_view, 6> csharp{"var s = @\"a",        "b \"\" c", "d\"; /* e",
+                                                     "f */ var r = \"\"\"", "g",        "\"\"\";"};
+    constexpr std::array<LexKind, 6> csharp_kinds{LexKind::raw_string,    LexKind::raw_string,
+                                                  LexKind::block_comment, LexKind::raw_string,
+                                                  LexKind::raw_string,    LexKind::plain};
+    verify_threading_of(Language::cs, csharp, csharp_kinds);
+    constexpr std::array<std::string_view, 5> rust{"/* a /* b", "c */", "d */ let s = r#\"x",
+                                                   "y\"#; let t = \"z", "w\";"};
+    constexpr std::array<LexKind, 5> rust_kinds{LexKind::block_comment, LexKind::block_comment,
+                                                LexKind::raw_string, LexKind::raw_string,
+                                                LexKind::plain};
+    verify_threading_of(Language::rust, rust, rust_kinds);
+    constexpr std::array<std::string_view, 4> go{"x := `a", "b", "c` /* d", "e */ y"};
+    constexpr std::array<LexKind, 4> go_kinds{LexKind::raw_string, LexKind::raw_string,
+                                              LexKind::block_comment, LexKind::plain};
+    verify_threading_of(Language::go, go, go_kinds);
+}
+
+// #857: 入れ子のコメントの開き・ライフタイム・閉じない属性・閉じない補間・受け手の `(` を並べた長い
+// 1 行（決定 4）。どれも 1 回の走査で読み（二乗なら Debug
+// で目に見えて遅くなる）、区間は昇順のまま。
+void verify_c_family_worst_lines()
+{
+    const LexLine nests = core::lex_line(Language::rust, plain, repeated_text("/* ", 10'000U));
+    expect(nests.spans.size() == 1U && nests.out == nested("10000"),
+           "a long rust line of comment openers counts the depth in one pass");
+    const LexLine lifetimes = core::lex_line(Language::rust, plain, repeated_text("'a ", 10'000U));
+    expect(lifetimes.spans.size() == 10'000U && lifetimes.out == plain,
+           "a long rust line of lifetimes paints each lifetime");
+    const std::string attributes = repeated_text("#[a", 5'000U);
+    const LexLine attribute = core::lex_line(Language::rust, plain, attributes);
+    expect(attribute.spans.size() == 1U && attribute.out == plain,
+           "a long rust line of unclosed attributes is one attribute");
+    const std::string holes = repeated_text("$\"{\"", 5'000U);
+    expect(well_formed(core::lex_line(Language::cs, plain, holes).spans, holes),
+           "a long csharp line of unclosed interpolation holes reads in one pass");
+    const std::string receivers = repeated_text("func (", 5'000U);
+    expect(well_formed(core::lex_line(Language::go, plain, receivers).spans, receivers),
+           "a long go line of unclosed receivers reads in one pass");
+}
 } // namespace
 
 void verify_lexer_scope()
@@ -1416,6 +1715,9 @@ void verify_lexer_scope()
     verify_language_table(Language::gdscript, gdscript_cases);
     verify_language_table(Language::dosini, dosini_cases);
     verify_language_table(Language::gdresource, gdresource_cases);
+    verify_language_table(Language::cs, csharp_cases);
+    verify_language_table(Language::rust, rust_cases);
+    verify_language_table(Language::go, go_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();
@@ -1424,6 +1726,8 @@ void verify_lexer_scope()
     verify_batch2_worst_lines();
     verify_godot_threading();
     verify_godot_worst_lines();
+    verify_c_family_threading();
+    verify_c_family_worst_lines();
     verify_markdown_worst_lines();
     verify_script_worst_line();
 }

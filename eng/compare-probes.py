@@ -179,7 +179,13 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-gdscript-backfill-200',
              'lexer-dosini-visible-60',
              'lexer-gdresource-visible-60',
-             'lexer-gdresource-backfill-200')
+             'lexer-gdresource-backfill-200',
+             'lexer-cs-visible-60',
+             'lexer-cs-backfill-200',
+             'lexer-rust-visible-60',
+             'lexer-rust-backfill-200',
+             'lexer-go-visible-60',
+             'lexer-go-backfill-200')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -319,20 +325,42 @@ LEXER_TEMPLATES = {
         '[node name="Player" type="CharacterBody2D" parent="." groups=["solid", "wall"]]',
         'points = PackedVector2Array(-8, -8, 8, -8, 1e+06, .25) ; polygon points',
         'config/features=PackedStringArray("4.3", "GL Compatibility"), &"jump", ^"../Player", true'),
+    "cs": (
+        "using System.Text; namespace Demo.App { public sealed class Player : IDisposable {",
+        '    var doc = @"verbatim string opens here with ""doubled"" quotes and C:\\path',
+        '    continues the verbatim"; var raw = """raw "quoted" text"""; int n = 0x_FF;',
+        "    public async Task<int> RunAsync(string name) { await Task.Delay(1500); return 1; }",
+        '    var s = $"{name} has {count:N2} items"; char c = \'\\n\'; decimal m = 1.5m;',
+        "#region Helpers for the player class"),
+    "rust": (
+        "use std::collections::HashMap; #[derive(Debug, Clone)] pub struct Point { x: f64 }",
+        "fn area<'a>(s: &'a str) -> usize { /* outer /* nested */ still inside the outer",
+        '   ends here */ let r = r#"raw "quoted" text"#; let n = 1_000u32 + 0b1010; 0 }',
+        'impl Shape for Point { fn name(&self) -> String { println!("{}", self.x); todo!() } }',
+        'let c = \'a\'; let b = b\'z\'; let lt: &\'static str = "text"; let o = Some(Self::new());',
+        "match value { None => 0, Some(v) if v != 0 => v * 2, _ => -1 }"),
+    "go": (
+        'package main; import ("fmt"; str "strings"); type Point struct { X, Y int }',
+        'func (p *Point) Move(dx int) error { raw := `raw string opens with "quotes" and \\n',
+        '  still raw` + "done"; x := 0x1p-2 + 1e3 + .5; return nil',
+        "func main() { xs := make([]int, 0, 10); xs = append(xs, len(xs), cap(xs)); fmt.Println(xs) }",
+        "    var r rune = 'a'; const ( A = iota; B ); if err != nil { panic(err) }",
+        "    for i := range 10 { go func() { ch <- true }(); defer close(ch) }"),
 }
-# 行末の印（JSON・Markdown・HTML・XML・CSS・Ini は空白・gdresource は ` ;`）。続けて詰め物で
+# 行末の印（JSON・Markdown・HTML・XML・CSS・Ini は空白・gdresource は ` ;`・C#・Rust・Go は ` //`）。続けて詰め物で
 # 100 バイトにそろえる。詰め物は `-` で、Markdown だけ空白（フェンスの閉じの行を閉じのまま保つ・#833）。
 LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //",
                   "html": " ", "xml": " ", "css": " ", "yaml": " #", "toml": " #",
-                  "gdscript": " #", "dosini": " ", "gdresource": " ;"}
+                  "gdscript": " #", "dosini": " ", "gdresource": " ;",
+                  "cs": " //", "rust": " //", "go": " //"}
 LEXER_PADDING = {"markdown": " "}
 # 閉じの無い `[` を並べた 1 行（#836 のレビュー R1）。LexerProbe.cpp の worst_line_bytes と同じ。
 LEXER_WORST_LINE_BYTES = 16384
 
 
 def lexer_input(workload: str) -> bytes:
-    """行の字句器の 23 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
-    #838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript・Ini・gdresource）。
+    """行の字句器の 29 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
+    #838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript・Ini・gdresource・#857 の C#・Rust・Go）。
     tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
     if workload == "lexer-markdown-worst-line":
         return b"[" * LEXER_WORST_LINE_BYTES + b"\n"
@@ -345,7 +373,7 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:176]:
+    if workload in WORKLOADS[152:182]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

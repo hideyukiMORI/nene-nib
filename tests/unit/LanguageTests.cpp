@@ -183,10 +183,29 @@ void verify_godot_extensions()
     }
 }
 
-// 名前の表と逆引き（決定 3）。19 本の往復と、小文字だけを受けること。
+// #857: C#・Rust・Go の拡張子（Vim の filetype.vim に寄せる・`.csx` `.cake` も cs）。
+void verify_c_family_extensions()
+{
+    using Row = std::pair<std::string_view, Language>;
+    constexpr std::array<Row, 6> rows{{
+        {"Program.cs", Language::cs},
+        {"script.CSX", Language::cs},
+        {"build.cake", Language::cs},
+        {"src\\main.rs", Language::rust},
+        {"main.go", Language::go},
+        {"go.mod", Language::plain},
+    }};
+    for (const auto &[path, language] : rows)
+    {
+        expect(core::language_of_path(path) == language,
+               "language_of_path maps the C#, Rust and Go extensions");
+    }
+}
+
+// 名前の表と逆引き（決定 3）。22 本の往復と、小文字だけを受けること。
 void verify_names()
 {
-    constexpr std::array<std::pair<Language, std::string_view>, 19> names{{
+    constexpr std::array<std::pair<Language, std::string_view>, 22> names{{
         {Language::plain, "text"},
         {Language::markdown, "markdown"},
         {Language::html, "html"},
@@ -206,6 +225,9 @@ void verify_names()
         {Language::gdscript, "gdscript"},
         {Language::dosini, "dosini"},
         {Language::gdresource, "gdresource"},
+        {Language::cs, "cs"},
+        {Language::rust, "rust"},
+        {Language::go, "go"},
     }};
     for (const auto &[language, name] : names)
     {
@@ -219,7 +241,7 @@ void verify_names()
     expect(!core::language_of_name("Markdown").has_value() &&
                !core::language_of_name("plain").has_value() &&
                !core::language_of_name("").has_value() &&
-               !core::language_of_name("rust").has_value(),
+               !core::language_of_name("zig").has_value(),
            "language_of_name accepts only the lower-case names of the closed list");
 }
 
@@ -244,7 +266,7 @@ void verify_ex_evaluation()
                    !request.value_or(core::ExLanguageRequest{Language::c}).language.has_value(),
                ":set filetype? asks for the current language");
     }
-    for (const std::string_view command : {"set filetype=rust", "set ft=Markdown", "set ft="})
+    for (const std::string_view command : {"set filetype=zig", "set ft=Markdown", "set ft="})
     {
         expect(fails_with(command, core::ExFailure::invalid_argument),
                "a name outside the closed list is E474");
@@ -268,7 +290,8 @@ void verify_completion()
                std::vector<std::string>{"set filetype=python"},
            "set filetype= completes language names");
     expect(core::command_completions("set ft=c") ==
-               std::vector<std::string>{"set ft=c", "set ft=cpp", "set ft=css", "set ft=cmake"},
+               std::vector<std::string>{"set ft=c", "set ft=cpp", "set ft=css", "set ft=cmake",
+                                        "set ft=cs"},
            "set ft= completes in the order of the name table");
     const auto every = core::command_completions("set ft=");
     expect(every.size() == 1 + core::all_language_names().size() && every.front() == "set ft=",
@@ -289,7 +312,7 @@ void verify_document_value()
     expect(message(run_ex(controller, "set ft=python")) == "filetype=python",
            ":set ft= answers the chosen language");
     expect(asked_language(controller) == "filetype=python", ":set ft= changes the document value");
-    expect(message(run_ex(controller, "set ft=rust")) == "E474: Invalid argument" &&
+    expect(message(run_ex(controller, "set ft=zig")) == "E474: Invalid argument" &&
                asked_language(controller) == "filetype=python",
            "E474 leaves the language as it was");
     applied(controller, app::NewTab{});
@@ -449,6 +472,7 @@ void verify_language_scope()
 {
     verify_extension_table();
     verify_godot_extensions();
+    verify_c_family_extensions();
     verify_names();
     verify_ex_evaluation();
     verify_completion();

@@ -145,6 +145,33 @@ constexpr std::array<std::string_view, template_count> gdresource_templates{
     "points = PackedVector2Array(-8, -8, 8, -8, 1e+06, .25) ; polygon points",
     "config/features=PackedStringArray(\"4.3\", \"GL Compatibility\"), &\"jump\", ^\"../Player\", "
     "true"};
+// C#（#857）: 宣言・逐語的文字列（2 行目が開き 3 行目が閉じる）・生の文字列・数・補間・文字・
+// `#region` の行。
+constexpr std::array<std::string_view, template_count> cs_templates{
+    "using System.Text; namespace Demo.App { public sealed class Player : IDisposable {",
+    "    var doc = @\"verbatim string opens here with \"\"doubled\"\" quotes and C:\\path",
+    "    continues the verbatim\"; var raw = \"\"\"raw \"quoted\" text\"\"\"; int n = 0x_FF;",
+    "    public async Task<int> RunAsync(string name) { await Task.Delay(1500); return 1; }",
+    "    var s = $\"{name} has {count:N2} items\"; char c = '\\n'; decimal m = 1.5m;",
+    "#region Helpers for the player class"};
+// Rust（#857）: 属性・ライフタイム・入れ子のコメント（2 行目が開き 3 行目が閉じる）・生の文字列・
+// 数・マクロ・文字とバイト文字・`match`。
+constexpr std::array<std::string_view, template_count> rust_templates{
+    "use std::collections::HashMap; #[derive(Debug, Clone)] pub struct Point { x: f64 }",
+    "fn area<'a>(s: &'a str) -> usize { /* outer /* nested */ still inside the outer",
+    "   ends here */ let r = r#\"raw \"quoted\" text\"#; let n = 1_000u32 + 0b1010; 0 }",
+    "impl Shape for Point { fn name(&self) -> String { println!(\"{}\", self.x); todo!() } }",
+    "let c = 'a'; let b = b'z'; let lt: &'static str = \"text\"; let o = Some(Self::new());",
+    "match value { None => 0, Some(v) if v != 0 => v * 2, _ => -1 }"};
+// Go（#857）: `package` `import`・メソッドの受け手・生の文字列（2 行目が開き 3 行目が閉じる）・
+// 数の形・組み込みの関数・rune・`iota` `nil`。
+constexpr std::array<std::string_view, template_count> go_templates{
+    "package main; import (\"fmt\"; str \"strings\"); type Point struct { X, Y int }",
+    "func (p *Point) Move(dx int) error { raw := `raw string opens with \"quotes\" and \\n",
+    "  still raw` + \"done\"; x := 0x1p-2 + 1e3 + .5; return nil",
+    "func main() { xs := make([]int, 0, 10); xs = append(xs, len(xs), cap(xs)); fmt.Println(xs) }",
+    "    var r rune = 'a'; const ( A = iota; B ); if err != nil { panic(err) }",
+    "    for i := range 10 { go func() { ch <- true }(); defer close(ch) }"};
 
 [[nodiscard]] constexpr core::Language language_of(LexerWorkload workload)
 {
@@ -187,20 +214,31 @@ constexpr std::array<std::string_view, template_count> gdresource_templates{
     case LexerWorkload::gdresource_visible_60:
     case LexerWorkload::gdresource_backfill_200:
         return core::Language::gdresource;
+    case LexerWorkload::cs_visible_60:
+    case LexerWorkload::cs_backfill_200:
+        return core::Language::cs;
+    case LexerWorkload::rust_visible_60:
+    case LexerWorkload::rust_backfill_200:
+        return core::Language::rust;
+    case LexerWorkload::go_visible_60:
+    case LexerWorkload::go_backfill_200:
+        return core::Language::go;
     }
     std::unreachable();
 }
 
 [[nodiscard]] constexpr bool is_visible(LexerWorkload workload)
 {
-    constexpr std::array<LexerWorkload, 14> visible{
+    constexpr std::array<LexerWorkload, 17> visible{
         LexerWorkload::cpp_visible_60,      LexerWorkload::json_visible_60,
         LexerWorkload::python_visible_60,   LexerWorkload::markdown_visible_60,
         LexerWorkload::markdown_worst_line, LexerWorkload::javascript_visible_60,
         LexerWorkload::html_visible_60,     LexerWorkload::xml_visible_60,
         LexerWorkload::css_visible_60,      LexerWorkload::yaml_visible_60,
         LexerWorkload::toml_visible_60,     LexerWorkload::gdscript_visible_60,
-        LexerWorkload::dosini_visible_60,   LexerWorkload::gdresource_visible_60};
+        LexerWorkload::dosini_visible_60,   LexerWorkload::gdresource_visible_60,
+        LexerWorkload::cs_visible_60,       LexerWorkload::rust_visible_60,
+        LexerWorkload::go_visible_60};
     return std::ranges::find(visible, workload) != visible.end();
 }
 
@@ -211,7 +249,7 @@ constexpr std::array<std::string_view, template_count> gdresource_templates{
 
 [[nodiscard]] constexpr std::span<const std::string_view> templates_of(LexerWorkload workload)
 {
-    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 12> tables{
+    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 15> tables{
         {{core::Language::json, json_templates},
          {core::Language::markdown, markdown_templates},
          {core::Language::javascript, javascript_templates},
@@ -223,7 +261,10 @@ constexpr std::array<std::string_view, template_count> gdresource_templates{
          {core::Language::toml, toml_templates},
          {core::Language::gdscript, gdscript_templates},
          {core::Language::dosini, dosini_templates},
-         {core::Language::gdresource, gdresource_templates}}};
+         {core::Language::gdresource, gdresource_templates},
+         {core::Language::cs, cs_templates},
+         {core::Language::rust, rust_templates},
+         {core::Language::go, go_templates}}};
     const core::Language language = language_of(workload);
     for (const auto &[table_language, templates] : tables)
     {
@@ -236,14 +277,16 @@ constexpr std::array<std::string_view, template_count> gdresource_templates{
 }
 
 // 各行は「型の行 + 言語の行末コメントの印（JSON・Markdown・HTML・XML・CSS・Ini は空白・
-// gdresource は ` ;`）+ 詰め物」で 100 バイトにそろえる。詰め物は `-` で、Markdown だけ空白
-// （フェンスの閉じの行を閉じのまま保つ）。
+// gdresource は ` ;`・C++・JavaScript・C#・Rust・Go は ` //`）+ 詰め物」で 100
+// バイトにそろえる。詰め物は `-` で、Markdown だけ空白 （フェンスの閉じの行を閉じのまま保つ）。
 [[nodiscard]] constexpr std::string_view suffix_of(LexerWorkload workload)
 {
     const core::Language language = language_of(workload);
     const bool hashed = language == core::Language::python || language == core::Language::yaml ||
                         language == core::Language::toml || language == core::Language::gdscript;
-    const bool slashed = language == core::Language::cpp || language == core::Language::javascript;
+    const bool slashed = language == core::Language::cpp ||
+                         language == core::Language::javascript || language == core::Language::cs ||
+                         language == core::Language::rust || language == core::Language::go;
     if (language == core::Language::gdresource)
     {
         return " ;";

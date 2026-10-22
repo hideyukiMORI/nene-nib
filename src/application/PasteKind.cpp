@@ -33,6 +33,9 @@ PasteKind paste_kind_of(core::Language language, bool has_html) noexcept
     case core::Language::gdscript:
     case core::Language::dosini:
     case core::Language::gdresource:
+    case core::Language::cs:
+    case core::Language::rust:
+    case core::Language::go:
         return PasteKind::text;
     }
     std::unreachable();
