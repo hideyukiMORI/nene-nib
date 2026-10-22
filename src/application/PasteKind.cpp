@@ -36,6 +36,10 @@ PasteKind paste_kind_of(core::Language language, bool has_html) noexcept
     case core::Language::cs:
     case core::Language::rust:
     case core::Language::go:
+    case core::Language::php:
+    case core::Language::sql:
+    case core::Language::lua:
+    case core::Language::dockerfile:
         return PasteKind::text;
     }
     std::unreachable();

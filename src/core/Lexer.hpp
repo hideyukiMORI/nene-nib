@@ -24,10 +24,16 @@ namespace nenenib::core
 // 呼ばず、色の区間の状態の cache にも触れない。
 [[nodiscard]] bool has_lexer(Language language) noexcept;
 
+// 覚えが無いときの遡りの始まりの状態（#861・ADR 0156 の決定 21）。from_first_line は遡りを
+// 文書の 1 行目から読むか。PHP だけが違い、1 行目からなら `?>` の外、途中からなら PHP の中
+// （HTML から始まる文書で遡りの届かない下へ跳ぶと、最初の `?>` まで PHP として塗る・限界）。
+// ほかの言語はどちらも LexState{}。
+[[nodiscard]] LexState lex_start_state(Language language, bool from_first_line) noexcept;
+
 // 覚えが無いときに見えている最初の行の手前へ遡る行数（Vim の c_minlines の型・ADR 0156 の決定 8
 // と追補 #827）。言語ごとの表はこの 1 つ。行をまたぐ状態の無い JSON と Ini（dosini・#855）は 1、
 // フェンスの長い Markdown は 500、C / C++・Python・JavaScript / TypeScript・HTML / XML・CSS・TOML・
-// GDScript・gdresource・C#・Rust・Go は 200、ブロックスカラーの字下げで戻る YAML は
-// 100（#838）、ほかは 0。
+// GDScript・gdresource・C#・Rust・Go・PHP・SQL・Lua は 200、ブロックスカラーの字下げで戻る YAML は
+// 100（#838）、行の続きとヒアドキュメントだけの Dockerfile は 50（#860）、ほかは 0。
 [[nodiscard]] std::size_t syntax_backfill_lines(Language language) noexcept;
 } // namespace nenenib::core

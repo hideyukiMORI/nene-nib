@@ -407,6 +407,10 @@ void verify_backfill_per_language()
                core::syntax_backfill_lines(Language::cs) == 200 &&
                core::syntax_backfill_lines(Language::rust) == 200 &&
                core::syntax_backfill_lines(Language::go) == 200 &&
+               core::syntax_backfill_lines(Language::php) == 200 &&
+               core::syntax_backfill_lines(Language::sql) == 200 &&
+               core::syntax_backfill_lines(Language::lua) == 200 &&
+               core::syntax_backfill_lines(Language::dockerfile) == 50 &&
                core::syntax_backfill_lines(Language::cmake) == 0,
            "the backfill table has one value per language");
     Editing editing;
@@ -736,6 +740,32 @@ void verify_grid_colors()
            "the grid row with the composition splits int and shifts the later cells by six");
 }
 
+// 決定 21（#861）: 覚えの無い PHP の文書は、遡りが 1 行目から始まれば `?>` の外（HTML・区間
+// なし）から、途中から始まれば PHP の中から読む。`echo` は中でだけ keyword。
+void verify_php_start_state()
+{
+    for (const auto &[scroll, inside] :
+         std::array<std::pair<std::int32_t, bool>, 3>{{{0, false}, {100, false}, {250, true}}})
+    {
+        Editing editing;
+        auto &controller = editing.controller();
+        static_cast<void>(controller.apply(app::VisibleLines{shown_lines}));
+        open(editing, "C:\\work\\a.php", repeated("echo 1;\n", 300));
+        scrolled(controller, scroll);
+        const auto frame = controller.frame();
+        const auto &first = frame.lines.front();
+        expect(frame.first_visible.value == static_cast<std::size_t>(scroll) + 1,
+               "the PHP document shows the scrolled line first");
+        expect(inside ? has_span(first, 1, 5, SyntaxRole::keyword) : first.colors.empty(),
+               inside ? "a backfill starting in the middle reads the lines inside PHP"
+                      : "a backfill starting at the first line reads the lines outside PHP");
+    }
+    expect(core::lex_start_state(core::Language::php, true) == core::LexState{} &&
+               core::lex_start_state(core::Language::php, false) != core::LexState{} &&
+               core::lex_start_state(core::Language::cpp, false) == core::LexState{},
+           "only PHP starts inside when the backfill begins in the middle");
+}
+
 // 決定 10: 役割から色への写しは core の syntax_color の 1 本で、各役割は同じ名前の欄。
 void verify_syntax_color()
 {
@@ -779,6 +809,7 @@ void verify_syntax_scope()
     verify_edit_boundary();
     verify_split_forgets_both();
     verify_backfill_per_language();
+    verify_php_start_state();
     verify_tabs_and_panes();
     verify_language_switch();
     verify_opened_into_untitled();

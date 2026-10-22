@@ -73,7 +73,9 @@ std::optional<core::LexState> syntax_begin(const core::TextBuffer &text,
     std::size_t line = kept ? cache.value().line.value
                             : key.line.value - std::min(key.line.value - 1,
                                                         core::syntax_backfill_lines(key.language));
-    core::LexState state = kept ? cache.value().state : core::LexState{};
+    // 覚えが無ければ、遡りが文書の 1 行目から始まるかで言語の始まりの状態を決める（#861）。
+    core::LexState state =
+        kept ? cache.value().state : core::lex_start_state(key.language, line == 1);
     for (; line < key.line.value; ++line)
     {
         state = passed(text, key.language, state, core::LineNumber{line});

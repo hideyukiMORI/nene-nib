@@ -1,9 +1,11 @@
 #pragma once
 
+#include "AsciiCase.hpp"
 #include "LexKind.hpp"
 #include "LexState.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -88,6 +90,22 @@ inline constexpr std::size_t lex_unclosed = std::string_view::npos;
         }
     }
     return lex_unclosed;
+}
+
+// 大小を問わないキーワードの照合（#860・PHP・SQL・Dockerfile）。ASCII の A〜Z だけを畳んで
+// 比べる順で、小文字だけの表はこの順でもソート済み（表の static_assert は
+// std::ranges::is_sorted）。
+[[nodiscard]] constexpr bool lex_folded_less(std::string_view left, std::string_view right) noexcept
+{
+    return std::ranges::lexicographical_compare(left, right, {}, ascii_folded, ascii_folded);
+}
+
+// 小文字の表に word が大小を問わずにあるか。
+template <std::size_t count>
+[[nodiscard]] constexpr bool lex_folded_in(const std::array<std::string_view, count> &table,
+                                           std::string_view word) noexcept
+{
+    return std::ranges::binary_search(table, word, lex_folded_less);
 }
 
 // kind に入って次の行へ渡す状態（delimiter は raw_delimiter_limit 文字まで）。

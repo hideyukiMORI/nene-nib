@@ -1,6 +1,7 @@
 // scope `--lexer` の単体テスト（#815・段 2 の ADR 0156 の決定 1〜6・#830 の JSON と Python・
 // #833 の Markdown と JS / TS・#838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript と Ini と
-// gdresource・#857 の C#・Rust・Go）。core の lex_line が 1 行を
+// gdresource・#857 の C#・Rust・Go・#860 の PHP・SQL・Lua・Dockerfile）。core の lex_line
+// が 1 行を
 // 役割の区間に分け、行をまたぐ状態（ブロックコメント・raw string・フェンス・テンプレート・script
 // の中・CDATA・ブロックスカラー）を値で次の行へ渡すこと。
 // 期待の区間は「塗り」の文字列で書く: 行の code point 1 つに 1 文字で、c comment・k keyword・
@@ -107,6 +108,29 @@ constexpr LexState nest2 = nested("2");
 // #857: Rust の生の文字列の中（delimiter は `r` と `#` の列）。
 constexpr LexState raw_r1 = raw("r#");
 constexpr LexState raw_r2 = raw("r##");
+
+// #860: plain の delimiter を持つ状態（PHP の中 `php`・Dockerfile の行の続き `\`）と、PHP の
+// ヒアドキュメント（閉じの識別子）・Lua の長い括弧（`=` の列）・Dockerfile のヒアドキュメント
+// （閉じの語・`<<-` は頭に `-`）。PHP の引用符の文字列は in_quote と in_squote。
+[[nodiscard]] constexpr LexState plain_with(std::string_view delimiter)
+{
+    LexState state = raw(delimiter);
+    state.kind = LexKind::plain;
+    return state;
+}
+
+constexpr LexState php_code = plain_with("php");
+constexpr LexState here_eot = raw("EOT");
+constexpr LexState here_now = raw("NOW");
+constexpr LexState here_sql = raw("SQL");
+constexpr LexState lua_c2 = nested("==");
+constexpr LexState lua_s1 = raw("=");
+constexpr LexState continued = plain_with("\\");
+// #861: `RUN` `COPY` `ADD` の続き（ヒアドキュメントを開ける）。
+constexpr LexState run_continued = plain_with("\\<");
+constexpr LexState here_eof = raw("EOF");
+constexpr LexState here_dash = raw("-SCRIPT");
+constexpr LexState here_a = raw("A");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -1391,6 +1415,308 @@ constexpr std::array<LexCase, 53> go_cases{{
     {"int x; xyz", raw_xyz, "Ttt  O", plain},
 }};
 
+// PHP（#860）: `<?php` で始まるファイル・`namespace` `use` `class` `function` `fn`・`$this->x`
+// （`->` の後ろの名前は予約語にしない）・属性 `#[…]`・`'…'` `"…"` の行またぎ・ヒアドキュメントと
+// ナウドキュメント（字下げした閉じ・閉じない形・識別子が行末でない形と 16 バイトを越える形）・
+// `?>` の後の HTML と `<?=`・大小を問わない `TRUE` `Null` `ECHO`・行コメントは `?>` で終わる。
+constexpr std::array<LexCase, 73> php_cases{{
+    {"<?php", plain, "Kkkkk", php_code},
+    {"", php_code, "", php_code},
+    {"namespace App\\Models;", php_code, "Kkkkkkkkk           O", php_code},
+    {"use App\\Contracts\\Shape;", php_code, "Kkk                    O", php_code},
+    {"final class Circle extends Base implements Shape", php_code,
+     "Kkkkk Kkkkk        Kkkkkkk      Kkkkkkkkkk", php_code},
+    {"{", php_code, "O", php_code},
+    {"    private readonly float $radius;", php_code, "    Kkkkkkk Kkkkkkkk Ttttt        O",
+     php_code},
+    {"    public function __construct(float $r = 1.5) { $this->radius = $r; }", php_code,
+     "    Kkkkkk Kkkkkkkk FffffffffffOTtttt    O NnnO O      Oo       O   O O", php_code},
+    {"    public function area(): float { return 3.14 * $this->radius ** 2; }", php_code,
+     "    Kkkkkk Kkkkkkkk FfffOoo Ttttt O Kkkkkk Nnnn O      Oo       Oo NO O", php_code},
+    {"    public static function make(): static { return new static(); }", php_code,
+     "    Kkkkkk Kkkkkk Kkkkkkkk FfffOoo Kkkkkk O Kkkkkk Kkk KkkkkkOoo O", php_code},
+    {"#[Attribute(Attribute::TARGET_CLASS)]", php_code, "Kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+     php_code},
+    {"#[Route(\"/users\", methods: ['GET'])] final class C {}", php_code,
+     "KkkkkkkkSsssssssKkkkkkkkkkkkSssssKkk Kkkkk Kkkkk   Oo", php_code},
+    {"$x = fn($y) => $y + 1;", php_code, "   O KkO  O Oo    O NO", php_code},
+    {"$a = TRUE || Null ?? false;", php_code, "   O Vvvv Oo Vvvv Oo VvvvvO", php_code},
+    {"echo __LINE__ . __DIR__;", php_code, "Kkkk Vvvvvvvv O VvvvvvvO", php_code},
+    {"if (isset($list[0])) { ECHO 'it\\'s'; }", php_code, "Kk OKkkkkO     ONOoo O Kkkk SssssssO O",
+     php_code},
+    {"$s = \"tab\\t and \\\"quote\\\" {$x}\";", php_code, "   O SsssssssssssssssssssssssssO",
+     php_code},
+    {"$t = 'first line", php_code, "   O Sssssssssss", in_squote},
+    {"second \\' line", in_squote, "Ssssssssssssss", in_squote},
+    {"ends here'; return $t;", in_squote, "SsssssssssO Kkkkkk   O", php_code},
+    {"$u = \"double", php_code, "   O Sssssss", in_quote},
+    {"closes\";", in_quote, "SssssssO", php_code},
+    {"$h = <<<EOT", php_code, "   O Ssssss", here_eot},
+    {"  Hello {$name}", here_eot, "Sssssssssssssss", here_eot},
+    {"EOTX is not the end", here_eot, "Sssssssssssssssssss", here_eot},
+    {"  EOT;", here_eot, "SssssO", php_code},
+    {"$n = <<<'NOW'", php_code, "   O Ssssssss", here_now},
+    {"raw $x {$y}", here_now, "Sssssssssss", here_now},
+    {"NOW, 'next');", here_now, "SssO SsssssOo", php_code},
+    {"$q = <<< \"SQL\"", php_code, "   O Sssssssss", here_sql},
+    {"SQL", here_sql, "Sss", php_code},
+    {"$z = <<<ABCDEFGHIJKLMNOPQ", php_code, "   O Ooo", php_code},
+    {"$w = <<<EOT x;", php_code, "   O Ooo     O", php_code},
+    {"/* start", php_code, "Cccccccc", block},
+    {"still */ echo 1;", block, "Cccccccc Kkkk NO", php_code},
+    {"// comment ?> after", php_code, "CccccccccccKk", plain},
+    {"# hash comment", php_code, "Cccccccccccccc", php_code},
+    {"?>", php_code, "Kk", plain},
+    {"<p>Hello <?= $name ?></p>", plain, "         Kkk       Kk", plain},
+    {"<div><?php if ($ok): ?><b>yes</b><?php endif; ?></div>", plain,
+     "     Kkkkk Kk O   Oo Kk          Kkkkk KkkkkO Kk", plain},
+    {"<html> function echo 'x' /* y", plain, "", plain},
+    {"<?PHP echo 0x1F + 0b101 + 1_000 + 1.5e-3 + .5;", plain,
+     "Kkkkk Kkkk Nnnn O Nnnnn O Nnnnn O Nnnnnn O NnO", php_code},
+    {"<?phpx <?xml", plain, "", plain},
+    {"$this->class = $obj?->list;", php_code, "     Oo      O     Ooo    O", php_code},
+    {"Foo::class;", php_code, "   OoKkkkkO", php_code},
+    {"function &getRef() {}", php_code, "Kkkkkkkk OFfffffOo Oo", php_code},
+    {"$cmd = `ls -la`;", php_code, "     O SsssssssO", php_code},
+    {"echo \"日本語\"; // コメント", php_code, "Kkkk SssssO Ccccccc", php_code},
+    {"\"", php_code, "S", in_quote},
+    {"/*", php_code, "Cc", block},
+    {"", block, "", block},
+    {"enum Suit: string { case Hearts = 'H'; }", php_code,
+     "Kkkk     O Tttttt O Kkkk        O SssO O", php_code},
+    {"match($x) { 1 => 'a', default => 'b' };", php_code, "KkkkkO  O O N Oo SssO Kkkkkkk Oo Sss Oo",
+     php_code},
+    {"\"?>\"; Function Run() {}", php_code, "SsssO Kkkkkkkk FffOo Oo", php_code},
+    {"<?php echo 1;", php_code, "Kkkkk Kkkk NO", php_code},
+    {"#[A('x]')] #[B]", php_code, "KkkkSsssKk Kkkk", php_code},
+    {"#[Open('a',", php_code, "KkkkkkkSssK", php_code},
+    // #861: 中の開きのタグは keyword（状態は中のまま）・`::` と `->` の後ろの名前は区間なし
+    // （`::class` だけ keyword）・行頭の `#!` は行末までコメント・閉じの後ろの `)` `,`。
+    {"<?= $x ?>", php_code, "Kkk    Kk", plain},
+    {"<?php ?>", plain, "Kkkkk Kk", plain},
+    {"echo 1; <?php echo 2;", php_code, "Kkkk NO Kkkkk Kkkk NO", php_code},
+    {"Foo::list();", php_code, "   Oo    Ooo", php_code},
+    {"static::new;", php_code, "KkkkkkOo   O", php_code},
+    {"Status::default;", php_code, "      Oo       O", php_code},
+    {"Foo::CLASS;", php_code, "   OoKkkkkO", php_code},
+    {"#!/usr/bin/env php", plain, "Cccccccccccccccccc", plain},
+    {"#!/usr/bin/php -q", php_code, "Ccccccccccccccccc", php_code},
+    {"#!x ?> y", php_code, "Cccccccc", php_code},
+    {"__halt_compiler();", php_code, "KkkkkkkkkkkkkkkOoo", php_code},
+    {"$$var = 1;", php_code, "      O NO", php_code},
+    {"#[", php_code, "Kk", php_code},
+    {"EOT);", here_eot, "SssOo", php_code},
+    {"EOT, 1);", here_eot, "SssO NOo", php_code},
+    // I4: lex_line に来る行は `\r` を含まない（CRLF の `\r` は TextBuffer::line_end が除く）。
+    {"EOT", here_eot, "Sss", php_code},
+}};
+
+// SQL（#860）: 文と句・`CREATE TABLE` と型・`--` と `/* */` の行またぎ・`'it''s'` と行をまたぐ
+// `'…'`・`"col"` と `` `col` `` は区間なし・小文字と混ざった大小のキーワード・`COUNT(*)`。
+constexpr std::array<LexCase, 55> sql_cases{{
+    {"SELECT id, name FROM users WHERE active = TRUE;", plain,
+     "Kkkkkk   O      Kkkk       Kkkkk        O VvvvO", plain},
+    {"select count(*) as n from t where x is not null", plain,
+     "Kkkkkk FffffOoo Kk   Kkkk   Kkkkk   Kk Kkk Vvvv", plain},
+    {"CREATE TABLE users (", plain, "Kkkkkk Kkkkk       O", plain},
+    {"    id INTEGER PRIMARY KEY,", plain, "       Ttttttt Kkkkkkk KkkO", plain},
+    {"    name VARCHAR(255) NOT NULL DEFAULT '',", plain,
+     "         TttttttONnnO Kkk Vvvv Kkkkkkk SsO", plain},
+    {"    price DECIMAL(10,2),", plain, "          TttttttONnONOo", plain},
+    {"    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP", plain,
+     "            Ttttttttt Kkkkkkk Fffffffffffffffff", plain},
+    {");", plain, "Oo", plain},
+    {"-- a line comment", plain, "Ccccccccccccccccc", plain},
+    {"SELECT 1 -- trailing", plain, "Kkkkkk N Ccccccccccc", plain},
+    {"/* block", plain, "Cccccccc", block},
+    {"still block", block, "Ccccccccccc", block},
+    {"end */ SELECT 2;", block, "Cccccc Kkkkkk NO", plain},
+    {"INSERT INTO t VALUES ('it''s', 3.5e-2, .5);", plain,
+     "Kkkkkk Kkkk   Kkkkkk OSssssssO NnnnnnO NnOo", plain},
+    {"UPDATE t SET \"select\" = 1, `from` = 2", plain, "Kkkkkk   Kkk          O NO        O N",
+     plain},
+    {"SELECT 'first", plain, "Kkkkkk Ssssss", in_squote},
+    {"middle '' still", in_squote, "Sssssssssssssss", in_squote},
+    {"last', 1", in_squote, "SssssO N", plain},
+    {"SELECT a.b FROM t1 LEFT JOIN t2 ON t1.id = t2.id", plain,
+     "Kkkkkk  O  Kkkk    Kkkk Kkkk    Kk   O   O   O", plain},
+    {"GROUP BY a HAVING SUM(b) > 10 ORDER BY a DESC LIMIT 5", plain,
+     "Kkkkk Kk   Kkkkkk FffO O O Nn Kkkkk Kk   Kkkk Kkkkk N", plain},
+    {"WITH RECURSIVE r AS (SELECT 1) SELECT * FROM r", plain,
+     "Kkkk Kkkkkkkkk   Kk OKkkkkk NO Kkkkkk O Kkkk", plain},
+    {"CASE WHEN x <> 0 THEN 'y' ELSE 'n' END", plain, "Kkkk Kkkk   Oo N Kkkk Sss Kkkk Sss Kkk",
+     plain},
+    {"BETWEEN 1 AND 2 OR FALSE", plain, "Kkkkkkk N Kkk N Kk Vvvvv", plain},
+    {"COALESCE(a, 0) || 'x'", plain, "FfffffffO O NO Oo Sss", plain},
+    {"DROP TABLE IF EXISTS old_users;", plain, "Kkkk Kkkkk Kk Kkkkkk          O", plain},
+    {"ALTER TABLE t ADD COLUMN flag BOOLEAN;", plain, "Kkkkk Kkkkk   Kkk Kkkkkk      TttttttO",
+     plain},
+    {"GRANT SELECT ON t TO reader;", plain, "Kkkkk Kkkkkk Kk   Kk       O", plain},
+    {"BEGIN; COMMIT; ROLLBACK;", plain, "KkkkkO KkkkkkO KkkkkkkkO", plain},
+    {"x -1 - 2", plain, "  ON O N", plain},
+    {"a/b*c%d", plain, " O O O", plain},
+    {"x = --", plain, "  O Cc", plain},
+    {"/*", plain, "Cc", block},
+    {"/**/ x", plain, "Cccc", plain},
+    {"'", plain, "S", in_squote},
+    {"''''", plain, "Ssss", plain},
+    {"'''", plain, "Sss", in_squote},
+    {"SELECT 日本 FROM '語'", plain, "Kkkkkk    Kkkk Sss", plain},
+    {"0x1F 1e10 12 1E+5", plain, "Nnnn Nnnn Nn Nnnn", plain},
+    {"Select Max(price) From items", plain, "Kkkkkk FffO     O Kkkk", plain},
+    {"WHERE id = :id AND @var = 1", plain, "Kkkkk    O O   Kkk      O N", plain},
+    {"CREATE INDEX idx ON t (a);", plain, "Kkkkkk Kkkkk     Kk   O Oo", plain},
+    {"\"unclosed select from", plain, "", plain},
+    {"CAST(x AS INT)", plain, "KkkkO  Kk TttO", plain},
+    {"*/", block, "Cc", plain},
+    {"it''s'", in_squote, "Ssssss", plain},
+    {"SELECT 'a\\' 1", plain, "Kkkkkk Ssss N", plain},
+    // #861: `--` の直後に空白なし・`.` の後ろの型の名前（限界・型に塗る）・`"` は行をまたがない・
+    // 足した予約語と型。
+    {"--x", plain, "Ccc", plain},
+    {"SELECT t.date FROM t", plain, "Kkkkkk  OTttt Kkkk", plain},
+    {"SELECT \"a", plain, "Kkkkkk", plain},
+    {"b\" FROM t", plain, "", plain},
+    {"SELECT * FROM t FOR UPDATE", plain, "Kkkkkk O Kkkk   Kkk Kkkkkk", plain},
+    {"a ILIKE 'x' COLLATE c", plain, "  Kkkkk Sss Kkkkkkk", plain},
+    {"EXPLAIN SELECT 1", plain, "Kkkkkkk Kkkkkk N", plain},
+    {"id BIGSERIAL, b BYTEA, t LONGTEXT, n NUMBER", plain,
+     "   TttttttttO   TttttO   TtttttttO   Tttttt", plain},
+    {"x INT UNSIGNED AUTO_INCREMENT", plain, "  Ttt Kkkkkkkk Kkkkkkkkkkkkkk", plain},
+}};
+
+// Lua（#860）: `local function`・`function a.b:c` の名前・`--[[ ]]` と `--[==[ ]==]` の行またぎ・
+// 長い文字列 `[[ ]]` `[=[ ]=]`・`nil` `true` `false`・16 進の浮動小数 `0x1p4`・`..`・閉じない
+// 引用符は行末まで error・`=` が 16 個を越える開きは長い括弧にしない。
+constexpr std::array<LexCase, 49> lua_cases{{
+    {"local function greet(name)", plain, "Kkkkk Kkkkkkkk FffffO    O", plain},
+    {"  return \"Hello, \" .. name .. '!'", plain, "  Kkkkkk Sssssssss Oo      Oo Sss", plain},
+    {"end", plain, "Kkk", plain},
+    {"function M.helper(x, y) return x end", plain, "Kkkkkkkk  OFfffffO O  O Kkkkkk   Kkk", plain},
+    {"function obj:method() end", plain, "Kkkkkkkk    OFfffffOo Kkk", plain},
+    {"local f = function(a) return a end", plain, "Kkkkk   O KkkkkkkkO O Kkkkkk   Kkk", plain},
+    {"local t = { 1, 2.5, 0x1p4, 0xA.8p-1, 3e10, .5 }", plain,
+     "Kkkkk   O O NO NnnO NnnnnO NnnnnnnnO NnnnO Nn O", plain},
+    {"if x == nil then x = true elseif x ~= false then end", plain,
+     "Kk   Oo Vvv Kkkk   O Vvvv Kkkkkk   Oo Vvvvv Kkkk Kkk", plain},
+    {"-- line comment", plain, "Ccccccccccccccc", plain},
+    {"x = 1 -- trailing", plain, "  O N Ccccccccccc", plain},
+    {"--[[ long comment", plain, "Ccccccccccccccccc", block},
+    {"inside ]=] still", block, "Cccccccccccccccc", block},
+    {"]] x = 1", block, "Cc   O N", plain},
+    {"--[==[ level two", plain, "Cccccccccccccccc", lua_c2},
+    {"]] not yet ]=]", lua_c2, "Cccccccccccccc", lua_c2},
+    {"]==] return", lua_c2, "Cccc Kkkkkk", plain},
+    {"s = [[long string", plain, "  O Sssssssssssss", raw_empty},
+    {"still]=] in", raw_empty, "Sssssssssss", raw_empty},
+    {"end]] .. \"x\"", raw_empty, "Sssss Oo Sss", plain},
+    {"s = [==[a]]b]==]", plain, "  O Ssssssssssss", plain},
+    {"s = [=[open", plain, "  O Sssssss", lua_s1},
+    {"]=]", lua_s1, "Sss", plain},
+    {"for i = 1, 10 do break end", plain, "Kkk   O NO Nn Kk Kkkkk Kkk", plain},
+    {"while not done and ok or fail do end", plain, "Kkkkk Kkk      Kkk    Kk      Kk Kkk", plain},
+    {"repeat n = n - 1 until n <= 0", plain, "Kkkkkk   O   O N Kkkkk   Oo N", plain},
+    {"goto skip ::skip::", plain, "Kkkk      Oo    Oo", plain},
+    {"t[1] = #t", plain, " ONO O O", plain},
+    {"x = a // b % c ^ 2 ~ d << 1", plain, "  O   Oo   O   O N O   Oo N", plain},
+    {"\"esc \\\" quote\"", plain, "Ssssssssssssss", plain},
+    {"x = \"unclosed", plain, "  O Eeeeeeeee", plain},
+    {"'", plain, "E", plain},
+    {"x = 1..2", plain, "  O NOoN", plain},
+    {"function f(...) end", plain, "Kkkkkkkk FOoooo Kkk", plain},
+    {"local x <const> = 5", plain, "Kkkkk   O     O O N", plain},
+    {"a[[x]]", plain, " Sssss", plain},
+    {"--[[]] x", plain, "Cccccc", plain},
+    {"--[==] not long", plain, "Ccccccccccccccc", plain},
+    {"return 日本 -- 語", plain, "Kkkkkk    Cccc", plain},
+    {"", block, "", block},
+    {"--[=================[ seventeen", plain, "Ccccccccccccccccccccccccccccccc", plain},
+    {"local a, b = nil, nil", plain, "Kkkkk  O   O VvvO Vvv", plain},
+    {"[[", plain, "Ss", raw_empty},
+    {"x = -1", plain, "  O ON", plain},
+    {"]][[", raw_empty, "SsSs", raw_empty},
+    {"]]--[[", block, "CcCccc", block},
+    // #861: 行頭の `#!` は行末までコメント・`#` の長さの演算子・`\z`・3 段の名前の `function`。
+    {"#!/usr/bin/env lua", plain, "Cccccccccccccccccc", plain},
+    {"x = #t", plain, "  O O", plain},
+    {"s = \"a\\z b\"", plain, "  O Sssssss", plain},
+    {"function a.b.c() end", plain, "Kkkkkkkk  O OFOo Kkk", plain},
+}};
+
+// Dockerfile（#860）: `FROM x AS y`・`RUN a \` の続きの行（行頭の語を命令にしない・続きの中の
+// コメントと空行）・`ENV A=1`・`$VAR` `${VAR}`・`# syntax=`・`<<EOF` `<<-EOF` `<<"EOT"`
+// の行またぎ・ 小文字の命令・`ONBUILD` の後ろの命令。
+constexpr std::array<LexCase, 63> dockerfile_cases{{
+    {"# syntax=docker/dockerfile:1", plain, "Cccccccccccccccccccccccccccc", plain},
+    {"FROM golang:1.22 AS build", plain, "Kkkk             Kk", plain},
+    {"from alpine as runtime", plain, "Kkkk        Kk", plain},
+    {"WORKDIR /src", plain, "Kkkkkkk", plain},
+    {"COPY go.mod go.sum ./", plain, "Kkkk", plain},
+    {"RUN go mod download \\", plain, "Kkk", run_continued},
+    {"    # comment inside continuation", run_continued, "    Ccccccccccccccccccccccccccccc",
+     run_continued},
+    {"    && go build -o /out/app . \\", run_continued, "", run_continued},
+    {"    && echo done", run_continued, "", plain},
+    {"ENV A=1 B=\"two words\"", plain, "Kkk       Sssssssssss", plain},
+    {"ARG VERSION=latest", plain, "Kkk", plain},
+    {"RUN echo $VERSION ${HOME:-/root} \"$HOME\"", plain,
+     "Kkk      Vvvvvvvv Vvvvvvvvvvvvvv Sssssss", plain},
+    {"LABEL maintainer=\"nene \\\"nib\\\"\"", plain, "Kkkkk            Ssssssssssssss", plain},
+    {"CMD [\"./app\", \"--port\", \"8080\"]", plain, "Kkk  Sssssss  Ssssssss  Ssssss", plain},
+    {"ENTRYPOINT [\"/bin/sh\", \"-c\"]", plain, "Kkkkkkkkkk  Sssssssss  Ssss", plain},
+    {"EXPOSE 8080/tcp", plain, "Kkkkkk", plain},
+    {"run apk add --no-cache git", plain, "Kkk", plain},
+    {"ONBUILD RUN make", plain, "Kkkkkkk Kkk", plain},
+    {"HEALTHCHECK --interval=30s CMD curl -f http://localhost/", plain, "Kkkkkkkkkkk", plain},
+    {"RUN <<EOF", plain, "Kkk Sssss", here_eof},
+    {"apk add curl", here_eof, "Ssssssssssss", here_eof},
+    {"  EOF", here_eof, "Sssss", here_eof},
+    {"EOF", here_eof, "Sss", plain},
+    {"COPY <<-SCRIPT /run.sh", plain, "Kkkk Sssssssss", here_dash},
+    {"\techo hi", here_dash, "Ssssssss", here_dash},
+    {"\t\tSCRIPT", here_dash, "Ssssssss", plain},
+    {"RUN <<\"EOT\" bash", plain, "Kkk Sssssss", here_eot},
+    {"EOT", here_eot, "Sss", plain},
+    {"RUN cat <<'A' <<B", plain, "Kkk     Sssss", here_a},
+    {"RUN echo a << b", plain, "Kkk", plain},
+    {"USER nobody", plain, "Kkkk", plain},
+    {"VOLUME [\"/data\"]", plain, "Kkkkkk  Sssssss", plain},
+    {"STOPSIGNAL SIGTERM", plain, "Kkkkkkkkkk", plain},
+    {"SHELL [\"pwsh\", \"-Command\"]", plain, "Kkkkk  Ssssss  Ssssssssss", plain},
+    {"MAINTAINER someone", plain, "Kkkkkkkkkk", plain},
+    {"ADD --chown=app:app https://example.com/a.tar.gz /a/", plain, "Kkk", plain},
+    {"FROM ${BASE} AS base", plain, "Kkkk Vvvvvvv Kk", plain},
+    {"NOTANINSTRUCTION foo as bar", plain, "", plain},
+    {"ENV PATH=$PATH:/opt/bin", plain, "Kkk      Vvvvv", plain},
+    {"RUN echo \"unclosed", plain, "Kkk      Sssssssss", plain},
+    {"   RUN indented", plain, "   Kkk", plain},
+    {"", continued, "", continued},
+    {"RUN not an instruction", continued, "", plain},
+    {"RUN a \\  ", plain, "Kkk", run_continued},
+    {"RUN echo ${unclosed", plain, "Kkk      Vvvvvvvvvv", plain},
+    {"#", plain, "C", plain},
+    {"FROM x AS y # not a comment", plain, "Kkkk   Kk", plain},
+    {"RUN echo \\$HOME $ 1", plain, "Kkk", plain},
+    {"COPY <<EOFTOOLONGWORDXYZ /x", plain, "Kkkk", plain},
+    {"RUN <<EOF \\", plain, "Kkk Sssss", here_eof},
+    {"EOF ", here_eof, "Ssss", here_eof},
+    {"", plain, "", plain},
+    // #861: ヒアドキュメントは `RUN` `COPY` `ADD` の行（と続き）で `<<`
+    // の直前が空白か行頭のときだけ。
+    {"RUN echo $((1<<4))", plain, "Kkk", plain},
+    {"RUN a<<b", plain, "Kkk", plain},
+    {"RUN cat <<<word", plain, "Kkk", plain},
+    {"ENV X <<EOF", plain, "Kkk", plain},
+    {"# escape=`", plain, "Cccccccccc", plain},
+    {"RUN apt-get update && \\", plain, "Kkk", run_continued},
+    {"  cat <<EOF > /x", run_continued, "      Sssss", here_eof},
+    {"ENV A=1 \\", plain, "Kkk", continued},
+    {"  B= <<x", continued, "", plain},
+    {"ONBUILD RUN <<EOF", plain, "Kkkkkkk Kkk Sssss", here_eof},
+    // I4: lex_line に来る行は `\r` を含まない（CRLF の `\r` は TextBuffer::line_end が除く）。
+    {"EOF", here_eof, "Sss", plain},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -1413,12 +1739,14 @@ void verify_other_languages()
     constexpr std::array<Language, 4> others{Language::plain, Language::powershell, Language::shell,
                                              Language::cmake};
     for (const Language language :
-         {Language::c, Language::cpp, Language::json, Language::python, Language::markdown,
-          Language::javascript, Language::typescript, Language::html, Language::xml, Language::css,
-          Language::yaml, Language::toml, Language::gdscript, Language::dosini,
-          Language::gdresource, Language::cs, Language::rust, Language::go})
+         {Language::c,        Language::cpp,        Language::json,       Language::python,
+          Language::markdown, Language::javascript, Language::typescript, Language::html,
+          Language::xml,      Language::css,        Language::yaml,       Language::toml,
+          Language::gdscript, Language::dosini,     Language::gdresource, Language::cs,
+          Language::rust,     Language::go,         Language::php,        Language::sql,
+          Language::lua,      Language::dockerfile})
     {
-        expect(core::has_lexer(language), "the eighteen languages with a lexer report one");
+        expect(core::has_lexer(language), "the twenty-two languages with a lexer report one");
     }
     for (const Language language : others)
     {
@@ -1688,6 +2016,65 @@ void verify_c_family_worst_lines()
     expect(well_formed(core::lex_line(Language::go, plain, receivers).spans, receivers),
            "a long go line of unclosed receivers reads in one pass");
 }
+// #860: PHP の文字列・コメント・ヒアドキュメントと `?>`、SQL のコメントと文字列、Lua の長い括弧、
+// Dockerfile の行の続きとヒアドキュメントも値で次の行へ渡し、lex_state は lex_line と同じ状態を
+// 返す。PHP の中と行の続きは plain の種類のまま。
+void verify_batch4_threading()
+{
+    constexpr std::array<std::string_view, 8> php{
+        "<?php", "$s = 'a", "b';", "/* c", "d */ $h = <<<EOT", "x", "EOT; ?>", "<p>"};
+    constexpr std::array<LexKind, 8> php_kinds{
+        LexKind::plain,      LexKind::raw_string, LexKind::plain, LexKind::block_comment,
+        LexKind::raw_string, LexKind::raw_string, LexKind::plain, LexKind::plain};
+    verify_threading_of(Language::php, php, php_kinds);
+    constexpr std::array<std::string_view, 3> sql{"/* a", "b */ x = 'c", "d'"};
+    constexpr std::array<LexKind, 3> sql_kinds{LexKind::block_comment, LexKind::raw_string,
+                                               LexKind::plain};
+    verify_threading_of(Language::sql, sql, sql_kinds);
+    constexpr std::array<std::string_view, 5> lua{"--[[ a", "b ]]", "s = [==[", "x", "]==]"};
+    constexpr std::array<LexKind, 5> lua_kinds{LexKind::block_comment, LexKind::plain,
+                                               LexKind::raw_string, LexKind::raw_string,
+                                               LexKind::plain};
+    verify_threading_of(Language::lua, lua, lua_kinds);
+    constexpr std::array<std::string_view, 5> docker{"RUN a \\", "b", "RUN <<EOF", "x", "EOF"};
+    constexpr std::array<LexKind, 5> docker_kinds{
+        LexKind::plain, LexKind::plain, LexKind::raw_string, LexKind::raw_string, LexKind::plain};
+    verify_threading_of(Language::dockerfile, docker, docker_kinds);
+    LexState state{};
+    for (const std::string_view line : {"<?php", "$s = 'a", "b';"})
+    {
+        state = core::lex_line(Language::php, state, line).out;
+    }
+    expect(state == php_code, "a closed string goes back inside php");
+}
+
+// #860: 開きのタグの頭・閉じない属性・ヒアドキュメントの開きに見える `<<<`・長い括弧の中の `]`・
+// `''` の続く文字列・閉じの語の無い `<<` と閉じない `${` を並べた長い 1 行（決定 4）。どれも
+// 1 回の走査で読み（二乗なら Debug で目に見えて遅くなる）、区間は昇順のまま。
+void verify_batch4_worst_lines()
+{
+    const LexLine tags = core::lex_line(Language::php, plain, repeated_text("<?", 10'000U));
+    expect(tags.spans.empty() && tags.out == plain,
+           "a long html line of tag heads without php stays outside");
+    const LexLine attribute =
+        core::lex_line(Language::php, php_code, repeated_text("#['a", 5'000U));
+    expect(well_formed(attribute.spans, repeated_text("#['a", 5'000U)) && attribute.out == php_code,
+           "a long php line of unclosed attributes reads in one pass");
+    const std::string heredocs = repeated_text("<<<a ", 5'000U);
+    expect(well_formed(core::lex_line(Language::php, php_code, heredocs).spans, heredocs),
+           "a long php line of heredoc look-alikes reads in one pass");
+    const LexLine brackets = core::lex_line(
+        Language::lua, plain, "[================[" + repeated_text("]===============]", 2'000U));
+    expect(brackets.spans.size() == 1U && brackets.out.kind == LexKind::raw_string,
+           "a long lua string of near closings stays open");
+    const LexLine quotes = core::lex_line(Language::sql, plain, "'" + repeated_text("''", 10'000U));
+    expect(quotes.spans.size() == 1U && quotes.out == in_squote,
+           "a long sql string of doubled quotes stays open");
+    const LexLine markers =
+        core::lex_line(Language::dockerfile, plain, "RUN " + repeated_text("<<${", 5'000U));
+    expect(markers.spans.size() == 2U && markers.out == plain,
+           "a long dockerfile line of heredoc heads and open variables reads in one pass");
+}
 } // namespace
 
 void verify_lexer_scope()
@@ -1718,6 +2105,10 @@ void verify_lexer_scope()
     verify_language_table(Language::cs, csharp_cases);
     verify_language_table(Language::rust, rust_cases);
     verify_language_table(Language::go, go_cases);
+    verify_language_table(Language::php, php_cases);
+    verify_language_table(Language::sql, sql_cases);
+    verify_language_table(Language::lua, lua_cases);
+    verify_language_table(Language::dockerfile, dockerfile_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();
@@ -1728,6 +2119,8 @@ void verify_lexer_scope()
     verify_godot_worst_lines();
     verify_c_family_threading();
     verify_c_family_worst_lines();
+    verify_batch4_threading();
+    verify_batch4_worst_lines();
     verify_markdown_worst_lines();
     verify_script_worst_line();
 }
