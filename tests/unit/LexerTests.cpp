@@ -1,6 +1,7 @@
 // scope `--lexer` の単体テスト（#815・段 2 の ADR 0156 の決定 1〜6・#830 の JSON と Python・
 // #833 の Markdown と JS / TS・#838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript と Ini と
-// gdresource・#857 の C#・Rust・Go・#860 の PHP・SQL・Lua・Dockerfile）。core の lex_line
+// gdresource・#857 の C#・Rust・Go・#860 の PHP・SQL・Lua・Dockerfile・#862 の PowerShell・shell・
+// CMake）。core の lex_line
 // が 1 行を
 // 役割の区間に分け、行をまたぐ状態（ブロックコメント・raw string・フェンス・テンプレート・script
 // の中・CDATA・ブロックスカラー）を値で次の行へ渡すこと。
@@ -131,6 +132,17 @@ constexpr LexState run_continued = plain_with("\\<");
 constexpr LexState here_eof = raw("EOF");
 constexpr LexState here_dash = raw("-SCRIPT");
 constexpr LexState here_a = raw("A");
+
+// #862: PowerShell のヒア文字列の中（delimiter は開きの `@"` `@'`・引用符の文字列は in_quote と
+// in_squote）、shell の `$'…'` の中とヒアドキュメント（delimiter は頭の印 `<`・`<<-` は `-` と
+// 閉じの語）。CMake の括弧のコメントと括弧の引数は block・lua_c2・raw_empty、`"…"` は in_quote。
+constexpr LexState ps_here_dq = raw("@\"");
+constexpr LexState ps_here_sq = raw("@'");
+constexpr LexState sh_ansi = raw("$'");
+constexpr LexState here_eof_sh = raw("<EOF");
+constexpr LexState here_dash_sh = raw("-EOF");
+constexpr LexState here_end_sh = raw("<END");
+constexpr LexState here_x_sh = raw("<X");
 
 [[nodiscard]] std::optional<SyntaxRole> role_of(char letter)
 {
@@ -1717,6 +1729,189 @@ constexpr std::array<LexCase, 63> dockerfile_cases{{
     {"EOF", here_eof, "Sss", plain},
 }};
 
+// PowerShell（#862）: `param(...)`・`function Get-Thing`・`-Path $env:TEMP`・`<# #>` と `@"` `"@`
+// の行またぎ（行頭でない `"@` は閉じない）・`'it''s'`・`` "a`"b" ``・`[string]$x`・`-eq`
+// `-NotLike`・
+// `$true`・`0x1F` `1kb`・大小の混ざったキーワード・閉じない形。
+constexpr std::array<LexCase, 50> powershell_cases{{
+    {"param(", plain, "KkkkkO", plain},
+    {"    [Parameter(Mandatory = $true)]", plain, "    OTttttttttO          O VvvvvOo", plain},
+    {"    [string]$Path,", plain, "    OTtttttOVvvvvO", plain},
+    {"    [int]$Count = 0x1F", plain, "    OTttOVvvvvv O Nnnn", plain},
+    {")", plain, "O", plain},
+    {"function Get-Thing {", plain, "Kkkkkkkk Fffffffff O", plain},
+    {"    Get-ChildItem -Path $env:TEMP -Filter *.log", plain,
+     "    Fffffffffffff       Vvvvvvvvv         Oo", plain},
+    {"    if ($x -eq 1kb -and $y -NotLike 'a*') { return $true }", plain,
+     "    Kk OVv Ooo Nnn Oooo Vv Oooooooo SsssO O Kkkkkk Vvvvv O", plain},
+    {"    ElseIf ($null -ne $z) { $false }", plain, "    Kkkkkk OVvvvv Ooo VvO O Vvvvvv O", plain},
+    {"}", plain, "O", plain},
+    {"<# block comment", plain, "Cccccccccccccccc", block},
+    {"still inside #> $a = 1", block, "Ccccccccccccccc Vv O N", plain},
+    {"<# one #> Write-Host \"hi\"", plain, "Ccccccccc Ffffffffff Ssss", plain},
+    {"$s = @\"", plain, "Vv O Ss", ps_here_dq},
+    {"  not \"@ closed", ps_here_dq, "Sssssssssssssss", ps_here_dq},
+    {"\"@ + 'x'", ps_here_dq, "Ss O Sss", plain},
+    {"$t = @'  ", plain, "Vv O Ssss", ps_here_sq},
+    {"'@", ps_here_sq, "Ss", plain},
+    {"\"@", ps_here_sq, "Ss", ps_here_sq},
+    {"'it''s'", plain, "Sssssss", plain},
+    {"\"a`\"b\" + \"c\"\"d\"", plain, "Ssssss O Ssssss", plain},
+    {"$o = 'open", plain, "Vv O Sssss", in_squote},
+    {"still'' in", in_squote, "Ssssssssss", in_squote},
+    {"end' -replace 'a', 'b'", in_squote, "Ssss Oooooooo SssO Sss", plain},
+    {"$d = \"open `\"", plain, "Vv O Ssssssss", in_quote},
+    {"end\" | Out-Null", in_quote, "Ssss O Ffffffff", plain},
+    {"# line comment", plain, "Cccccccccccccc", plain},
+    {"Write-Output a#b", plain, "Ffffffffffff", plain},
+    {"FOREACH ($i in 1..10) { $i++ }", plain, "Kkkkkkk OVv Kk NOoNnO O VvOo O", plain},
+    {"$h = @{ Name = 'x' }; Invoke-It @args", plain, "Vv O OO      O Sss Oo Fffffffff Vvvvv",
+     plain},
+    {"[System.IO.File]::ReadAllText($p)", plain, "OTtttttttttttttOoo           OVvO", plain},
+    {"try { throw } catch [Exception] { } finally { }", plain,
+     "Kkk O Kkkkk O Kkkkk OTttttttttO O O Kkkkkkk O O", plain},
+    {"class Point { [int]$X }", plain, "Kkkkk Ttttt O OTttOVv O", plain},
+    {"enum Color { Red }", plain, "Kkkk Ttttt O     O", plain},
+    {"$r = 1.5e3 + .5 - 10d", plain, "Vv O Nnnnn O Nn O Nnn", plain},
+    {"Switch -Regex ($s) { default { break } }", plain, "Kkkkkk        OVvO O Kkkkkkk O Kkkkk O O",
+     plain},
+    {"$x.Count -gt 2 -or $x.end", plain, "VvO      Ooo N Ooo VvO", plain},
+    {"$a = `$b", plain, "Vv O", plain},
+    {"${my var} = $_", plain, "Vvvvvvvvv O Vv", plain},
+    {"\"$(Get-Date)\"", plain, "Sssssssssssss", plain},
+    {"$? -and $$", plain, "Vv Oooo Vv", plain},
+    {"while ($true) { continue }", plain, "Kkkkk OVvvvvO O Kkkkkkkk O", plain},
+    {"filter Out-Foo { $_ }", plain, "Kkkkkk Fffffff O Vv O", plain},
+    {"<#", plain, "Cc", block},
+    {"#>", block, "Cc", plain},
+    {"\"é\" -join ','", plain, "Sss Ooooo Sss", plain},
+    {"$x = 1", raw_xyz, "Vv O N", plain},
+    {"-split $s", plain, "Oooooo Vv", plain},
+    {"$y = [ordered]@{}", plain, "Vv O OTttttttOOOo", plain},
+    {"", ps_here_dq, "", ps_here_dq},
+}};
+
+// shell（#862）: `#!`・`a#b`・`if [[ ]]; then … fi`・`case … esac`・`f() {`・`$(cmd)` と `` `cmd`
+// ``・
+// `${x:-y}`・`"$@"`・`'…'` `"…"` `$'…'` の行またぎ・`<<EOF` `<<-EOF` `<<'END'` `<< "X"`
+// の行またぎ・
+// `<<<`・算術の `<<`・1 行の 2 つ目のヒアドキュメント・16 バイトの語・閉じない形。
+constexpr std::array<LexCase, 54> shell_cases{{
+    {"#!/bin/bash", plain, "Ccccccccccc", plain},
+    {"set -euo pipefail", plain, "Fff", plain},
+    {"echo a#b # comment", plain, "Ffff     Ccccccccc", plain},
+    {"if [[ -f \"$file\" ]]; then", plain, "Kk Kk    Sssssss KkO Kkkk", plain},
+    {"  echo \"found $file\"", plain, "  Ffff Sssssssssssss", plain},
+    {"elif [ -d x ]; then", plain, "Kkkk O      OO Kkkk", plain},
+    {"else", plain, "Kkkk", plain},
+    {"fi", plain, "Kk", plain},
+    {"case \"$1\" in", plain, "Kkkk Ssss Kk", plain},
+    {"  start|stop) run \"$1\" ;;", plain, "       O    O     Ssss Oo", plain},
+    {"  *) exit 1 ;;", plain, "   O Ffff N Oo", plain},
+    {"esac", plain, "Kkkk", plain},
+    {"f() {", plain, "FOO O", plain},
+    {"  local x=${1:-default}", plain, "  Fffff   Vvvvvvvvvvvvv", plain},
+    {"  return 0", plain, "  Ffffff N", plain},
+    {"}", plain, "O", plain},
+    {"function greet {", plain, "Kkkkkkkk Fffff O", plain},
+    {"out=$(ls -la | grep foo)", plain, "    OO       O         O", plain},
+    {"old=`date`", plain, "    O    O", plain},
+    {"for i in 1 2 3; do echo $i; done", plain, "Kkk   Kk N N NO Kk Ffff VvO Kkkk", plain},
+    {"while read -r line; do :; done < file", plain, "Kkkkk Ffff        O Kk  O Kkkk O", plain},
+    {"printf '%s\\n' \"$@\"", plain, "Ffffff Ssssss Ssss", plain},
+    {"echo 'open \\", plain, "Ffff Sssssss", in_squote},
+    {"still' done", in_squote, "Ssssss Kkkk", plain},
+    {"echo \"open", plain, "Ffff Sssss", in_quote},
+    {"end \\\" still\"", in_quote, "Sssssssssssss", plain},
+    {"cat <<EOF", plain, "    Sssss", here_eof_sh},
+    {"  $HOME is 'here", here_eof_sh, "Ssssssssssssssss", here_eof_sh},
+    {"EOF", here_eof_sh, "Sss", plain},
+    {"cat <<-EOF > out", plain, "    Ssssss O", here_dash_sh},
+    {"\t\tbody", here_dash_sh, "Ssssss", here_dash_sh},
+    {"\tEOF", here_dash_sh, "Ssss", plain},
+    {"cat <<'END'", plain, "    Sssssss", here_end_sh},
+    {"END", here_end_sh, "Sss", plain},
+    {"cat << \"X\" | sort", plain, "    Ssssss O", here_x_sh},
+    {"\tX", here_x_sh, "Ss", here_x_sh},
+    {"grep x <<< \"$v\"", plain, "       Ooo Ssss", plain},
+    {"echo $((1<<4))", plain, "Ffff OOoNOoNOo", plain},
+    {"echo $'a\\'b'", plain, "Ffff Sssssss", plain},
+    {"echo $'open", plain, "Ffff Ssssss", sh_ansi},
+    {"x' y", sh_ansi, "Ss", plain},
+    {"[ $# -gt 0 ] && echo $? $$ $!", plain, "O Vv     N O Oo Ffff Vv Vv Vv", plain},
+    {"export PATH=\"$PATH:/bin\"", plain, "Ffffff      Ssssssssssss", plain},
+    {"time sleep 1", plain, "Kkkk       N", plain},
+    {"x=1 # trailing", plain, "    Cccccccccc", plain},
+    {"cat <<EOF <<EOT", plain, "    Sssss Sssss", here_eof_sh},
+    {"cat <<ABCDEFGHIJKLMNOP", plain, "    Oo", plain},
+    {"cat <<EOF \"open", plain, "    Sssss Sssss", here_eof_sh},
+    {"select opt in a b; do break; done", plain, "Kkkkkk     Kk    O Kk FffffO Kkkk", plain},
+    {"! true", plain, "O Ffff", plain},
+    {"EOF ", here_eof_sh, "Ssss", here_eof_sh},
+    {"echo ${x}#not", plain, "Ffff Vvvv", plain},
+    {"x=1", raw_xyz, "", plain},
+    {"", in_quote, "", in_quote},
+}};
+
+// CMake（#862）: `cmake_minimum_required(VERSION 3.28)`・`if(WIN32) … endif()`・`${VAR}` `$ENV{X}`
+// `$CACHE{X}` `$<TARGET_FILE:x>`・`#[[ ]]` `#[==[ ]==]` の行またぎ・括弧の引数・`"…"` の行またぎ・
+// `ON` `off`・`*-NOTFOUND`・大文字の引数の語は区間なし・大小を問わないコマンド。
+constexpr std::array<LexCase, 51> cmake_cases{{
+    {"cmake_minimum_required(VERSION 3.28)", plain, "Ffffffffffffffffffffff         Nnnn", plain},
+    {"project(nenenib LANGUAGES CXX)", plain, "Fffffff", plain},
+    {"add_executable(nib src/main.cpp)", plain, "Ffffffffffffff", plain},
+    {"if(WIN32)", plain, "Kk", plain},
+    {"  target_compile_options(nib PRIVATE /W4)", plain, "  Ffffffffffffffffffffff", plain},
+    {"elseif(UNIX AND NOT APPLE)", plain, "Kkkkkk", plain},
+    {"else()", plain, "Kkkk", plain},
+    {"endif()", plain, "Kkkkk", plain},
+    {"set(FLAG ON)", plain, "Fff      Vv", plain},
+    {"option(USE_X \"Use x\" off)", plain, "Ffffff       Sssssss Vvv", plain},
+    {"message(STATUS \"dir: ${CMAKE_SOURCE_DIR}\")", plain,
+     "Fffffff        Ssssssssssssssssssssssssss", plain},
+    {"set(P $ENV{PATH} $CACHE{X})", plain, "Fff   Vvvvvvvvvv Vvvvvvvvv", plain},
+    {"target_link_libraries(nib $<TARGET_FILE:x>)", plain,
+     "Fffffffffffffffffffff     Vvvvvvvvvvvvvvvv", plain},
+    {"  $<$<CONFIG:Debug>:-g>", plain, "  Vvvvvvvvvvvvvvvvvvvvv", plain},
+    {"#[[ bracket comment", plain, "Ccccccccccccccccccc", block},
+    {"still ]=] inside", block, "Cccccccccccccccc", block},
+    {"]] set(a b)", block, "Cc", plain},
+    {"#[==[ level two", plain, "Ccccccccccccccc", lua_c2},
+    {"]==]", lua_c2, "Cccc", plain},
+    {"set(S [[raw", plain, "Fff   Sssss", raw_empty},
+    {"text]])", raw_empty, "Ssssss", plain},
+    {"set(T [=[a]]b]=])", plain, "Fff   Ssssssssss", plain},
+    {"set(Q \"open", plain, "Fff   Sssss", in_quote},
+    {"still \\\" here\")", in_quote, "Ssssssssssssss", plain},
+    {"# line comment", plain, "Cccccccccccccc", plain},
+    {"foreach(item IN LISTS items)", plain, "Kkkkkkk", plain},
+    {"endforeach()", plain, "Kkkkkkkkkk", plain},
+    {"function(my_func arg)", plain, "Kkkkkkkk", plain},
+    {"endfunction()", plain, "Kkkkkkkkkkk", plain},
+    {"macro(m)", plain, "Kkkkk", plain},
+    {"endmacro()", plain, "Kkkkkkkk", plain},
+    {"while(x)", plain, "Kkkkk", plain},
+    {"endwhile()", plain, "Kkkkkkkk", plain},
+    {"IF(A)", plain, "Kk", plain},
+    {"Add_Library(lib STATIC a.c)", plain, "Fffffffffff", plain},
+    {"if(X-NOTFOUND OR FOO_NOTFOUND)", plain, "Kk Vvvvvvvvvv", plain},
+    {"set(V 1.2.3 3rdparty)", plain, "Fff   Nnnnn", plain},
+    {"set(X ${a_${b}})", plain, "Fff   Vvvvvvvvv", plain},
+    {"return()", plain, "Kkkkkk", plain},
+    {"block()", plain, "Kkkkk", plain},
+    {"endblock()", plain, "Kkkkkkkk", plain},
+    {"  VERSION 1.0", plain, "          Nnn", plain},
+    {"set(a b) # trailing", plain, "Fff      Cccccccccc", plain},
+    {"set(E \"a\\\\\" b)", plain, "Fff   Sssss", plain},
+    {"#[=================[ seventeen", plain, "Cccccccccccccccccccccccccccccc", plain},
+    {"include (GNUInstallDirs)", plain, "Fffffff", plain},
+    {"set(Y y yes TRUE)", plain, "Fff V V Vvv Vvvv", plain},
+    {"\"", plain, "S", in_quote},
+    {"add_test(NAME t COMMAND nib --lexer)", plain, "Ffffffff", plain},
+    {"set(x 1)", raw_xyz, "Fff   N", plain},
+    {"", block, "", block},
+}};
+
 void verify_table(std::span<const LexCase> cases)
 {
     for (const LexCase &sample : cases)
@@ -1736,29 +1931,26 @@ void verify_language_table(Language language, std::span<const LexCase> cases)
 // 字句器を持たない言語は、どの状態で入っても区間なしで状態をそのまま返す（決定 4）。
 void verify_other_languages()
 {
-    constexpr std::array<Language, 4> others{Language::plain, Language::powershell, Language::shell,
-                                             Language::cmake};
     for (const Language language :
          {Language::c,        Language::cpp,        Language::json,       Language::python,
           Language::markdown, Language::javascript, Language::typescript, Language::html,
           Language::xml,      Language::css,        Language::yaml,       Language::toml,
           Language::gdscript, Language::dosini,     Language::gdresource, Language::cs,
           Language::rust,     Language::go,         Language::php,        Language::sql,
-          Language::lua,      Language::dockerfile})
+          Language::lua,      Language::dockerfile, Language::powershell, Language::shell,
+          Language::cmake})
     {
-        expect(core::has_lexer(language), "the twenty-two languages with a lexer report one");
+        expect(core::has_lexer(language), "the twenty-five languages with a lexer report one");
     }
-    for (const Language language : others)
+    // #862 で plain の外の言語はすべて字句器を持つ。plain は区間なしで状態をそのまま返す。
+    expect(!core::has_lexer(Language::plain), "plain has no lexer");
+    for (const LexState &in : {plain, block, raw_xyz})
     {
-        expect(!core::has_lexer(language), "the other languages have no lexer");
-        for (const LexState &in : {plain, block, raw_xyz})
-        {
-            const LexLine lexed = core::lex_line(language, in, "int x = \"s\"; /* c");
-            expect(lexed.spans.empty(), "a language without a lexer paints nothing");
-            expect(lexed.out == in, "a language without a lexer keeps the state");
-            expect(core::lex_state(language, in, "/* c") == in,
-                   "lex_state keeps the state for a language without a lexer");
-        }
+        const LexLine lexed = core::lex_line(Language::plain, in, "int x = \"s\"; /* c");
+        expect(lexed.spans.empty(), "a language without a lexer paints nothing");
+        expect(lexed.out == in, "a language without a lexer keeps the state");
+        expect(core::lex_state(Language::plain, in, "/* c") == in,
+               "lex_state keeps the state for a language without a lexer");
     }
 }
 
@@ -2075,6 +2267,58 @@ void verify_batch4_worst_lines()
     expect(markers.spans.size() == 2U && markers.out == plain,
            "a long dockerfile line of heredoc heads and open variables reads in one pass");
 }
+
+// #862: PowerShell のブロックコメント・ヒア文字列・引用符、shell のヒアドキュメントと引用符、CMake
+// の 括弧のコメント・括弧の引数・引用符も値で次の行へ渡し、lex_state は lex_line と同じ状態を返す。
+void verify_batch5_threading()
+{
+    constexpr std::array<std::string_view, 7> powershell{"<# a", "b #>",     "$s = @'", "x",
+                                                         "'@",   "$t = \"a", "b\""};
+    constexpr std::array<LexKind, 7> powershell_kinds{
+        LexKind::block_comment, LexKind::plain,      LexKind::raw_string, LexKind::raw_string,
+        LexKind::plain,         LexKind::raw_string, LexKind::plain};
+    verify_threading_of(Language::powershell, powershell, powershell_kinds);
+    constexpr std::array<std::string_view, 6> shell{"cat <<-EOF", "\tx", "\tEOF",
+                                                    "echo 'a",    "b'",  "x"};
+    constexpr std::array<LexKind, 6> shell_kinds{LexKind::raw_string, LexKind::raw_string,
+                                                 LexKind::plain,      LexKind::raw_string,
+                                                 LexKind::plain,      LexKind::plain};
+    verify_threading_of(Language::shell, shell, shell_kinds);
+    constexpr std::array<std::string_view, 7> cmake{"#[[ a", "]]",        "set(x [==[", "y",
+                                                    "]==])", "set(q \"a", "b\")"};
+    constexpr std::array<LexKind, 7> cmake_kinds{
+        LexKind::block_comment, LexKind::plain,      LexKind::raw_string, LexKind::raw_string,
+        LexKind::plain,         LexKind::raw_string, LexKind::plain};
+    verify_threading_of(Language::cmake, cmake, cmake_kinds);
+}
+
+// #862: 閉じない引用符の続き・閉じの無い算術の頭・長すぎる閉じの語・閉じの無い括弧とジェネレータ
+// 式を並べた長い 1 行（決定 5）。どれも 1 回の走査で読み、区間は昇順のまま。
+void verify_batch5_worst_lines()
+{
+    const LexLine quotes =
+        core::lex_line(Language::powershell, plain, "'" + repeated_text("''", 10'000U));
+    expect(quotes.spans.size() == 1U && quotes.out == in_squote,
+           "a long powershell string of doubled quotes stays open");
+    const std::string types = repeated_text("[a.b -x ", 5'000U);
+    expect(well_formed(core::lex_line(Language::powershell, plain, types).spans, types),
+           "a long powershell line of types and parameters reads in one pass");
+    const std::string arithmetic = "echo " + repeated_text("$((1<<", 5'000U);
+    const LexLine counted = core::lex_line(Language::shell, plain, arithmetic);
+    expect(well_formed(counted.spans, arithmetic) && counted.out == plain,
+           "a long shell line of unclosed arithmetic opens no heredoc");
+    const std::string markers = "cat " + repeated_text("<<ABCDEFGHIJKLMNOPQ ", 2'000U);
+    expect(core::lex_line(Language::shell, plain, markers).out == plain,
+           "a long shell line of too long heredoc words opens none");
+    const LexLine brackets =
+        core::lex_line(Language::cmake, plain, "#[==[" + repeated_text("]=]", 3'000U));
+    expect(brackets.spans.size() == 1U && brackets.out == lua_c2,
+           "a long cmake bracket comment of near closings stays open");
+    const LexLine genexes =
+        core::lex_line(Language::cmake, plain, "set(x " + repeated_text("$<${", 5'000U));
+    expect(genexes.spans.size() == 2U && genexes.out == plain,
+           "a long cmake line of unclosed references reads in one pass");
+}
 } // namespace
 
 void verify_lexer_scope()
@@ -2109,6 +2353,9 @@ void verify_lexer_scope()
     verify_language_table(Language::sql, sql_cases);
     verify_language_table(Language::lua, lua_cases);
     verify_language_table(Language::dockerfile, dockerfile_cases);
+    verify_language_table(Language::powershell, powershell_cases);
+    verify_language_table(Language::shell, shell_cases);
+    verify_language_table(Language::cmake, cmake_cases);
     verify_other_languages();
     verify_columns();
     verify_state_threading();
@@ -2121,6 +2368,8 @@ void verify_lexer_scope()
     verify_c_family_worst_lines();
     verify_batch4_threading();
     verify_batch4_worst_lines();
+    verify_batch5_threading();
+    verify_batch5_worst_lines();
     verify_markdown_worst_lines();
     verify_script_worst_line();
 }

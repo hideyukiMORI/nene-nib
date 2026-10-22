@@ -191,7 +191,13 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'lexer-sql-visible-60',
              'lexer-lua-visible-60',
              'lexer-lua-backfill-200',
-             'lexer-dockerfile-visible-60')
+             'lexer-dockerfile-visible-60',
+             'lexer-powershell-visible-60',
+             'lexer-powershell-backfill-200',
+             'lexer-shell-visible-60',
+             'lexer-shell-backfill-200',
+             'lexer-cmake-visible-60',
+             'lexer-cmake-backfill-200')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -380,24 +386,46 @@ LEXER_TEMPLATES = {
         '    go build -o /out/app ./cmd/app && echo "built $VERSION"',
         'ENV PATH=$PATH:/opt/bin HOME=${HOME:-/root} LABEL="nene \\"nib\\""',
         'CMD ["./app", "--port", "8080"]'),
+    "powershell": (
+        'function Get-Thing { param([string]$Path = $env:TEMP, [int]$Count = 0x1F) Get-ChildItem $Path',
+        "    if ($Count -eq 1kb -and $Path -NotLike 'a*') { return $true } <# block comment begins",
+        '   ends here #> foreach ($i in 1..10) { $s = "item `"$i`""; Write-Output $s }',
+        "    $h = @{ Name = 'it''s'; Size = 1.5e3 }; [System.IO.File]::ReadAllText($h.Name) | Out-Null",
+        "    try { throw 'x' } catch [Exception] { $null = $_ } finally { $x = -not $false -or $?",
+        '} class Point { [int]$X } enum Color { Red }; Switch -Regex ($s) { default { break } }'),
+    "shell": (
+        'set -euo pipefail; f() { local x=${1:-default}; echo "$x" | grep -v a#b; return 0; }',
+        'if [[ -f "$file" ]]; then echo \'single\' $(ls -la | wc -l) `date` "multi line begins',
+        '   continues here"; elif [ -d x ]; then exit 1; else printf \'%s\\n\' "$@"; fi',
+        'case "$1" in start|stop) run "$1" ;; *) exit 2 ;; esac; for i in 1 2 3; do :; done',
+        'while read -r line; do echo $((i<<2)) $? $$ $!; done < file; grep x <<< "$v"',
+        'export PATH="$PATH:/bin"; time sleep 1; echo $\'a\\\'b\' ${HOME}/x; function greet { true; }'),
+    "cmake": (
+        'cmake_minimum_required(VERSION 3.28) # project(nenenib LANGUAGES CXX) is set below',
+        'add_executable(nib src/main.cpp ${SOURCES} $<TARGET_FILE:x>) #[==[ bracket comment begins',
+        '  continues here ]==] set(FLAG ON) option(USE_X "Use x ${Y}" off) set(Q [[raw]])',
+        'if(WIN32 AND NOT X-NOTFOUND) target_compile_options(nib PRIVATE /W4 $ENV{CFLAGS} 1.2.3)',
+        'foreach(item IN LISTS items) message(STATUS "item: ${item} \\"q\\"") endforeach()',
+        'target_link_libraries(nib PRIVATE $<$<CONFIG:Debug>:-g> $CACHE{LIB}) set(Y yes TRUE)'),
 }
 # 行末の印（JSON・Markdown・HTML・XML・CSS・Ini・Dockerfile は空白・gdresource は ` ;`・C#・Rust・Go・PHP は
-# ` //`・SQL・Lua は ` --`）。続けて詰め物で 100 バイトにそろえる。詰め物は `-` で、Markdown（フェンスの閉じの
+# ` //`・SQL・Lua は ` --`・PowerShell・shell・CMake は ` #`）。続けて詰め物で 100 バイトにそろえる。詰め物は `-` で、Markdown（フェンスの閉じの
 # 行を閉じのまま保つ・#833）と Dockerfile（行末の `\` の続きを保つ・#860）だけ空白。
 LEXER_SUFFIXES = {"cpp": " //", "json": " ", "python": " #", "markdown": " ", "javascript": " //",
                   "html": " ", "xml": " ", "css": " ", "yaml": " #", "toml": " #",
                   "gdscript": " #", "dosini": " ", "gdresource": " ;",
                   "cs": " //", "rust": " //", "go": " //",
-                  "php": " //", "sql": " --", "lua": " --", "dockerfile": " "}
+                  "php": " //", "sql": " --", "lua": " --", "dockerfile": " ",
+                  "powershell": " #", "shell": " #", "cmake": " #"}
 LEXER_PADDING = {"markdown": " ", "dockerfile": " "}
 # 閉じの無い `[` を並べた 1 行（#836 のレビュー R1）。LexerProbe.cpp の worst_line_bytes と同じ。
 LEXER_WORST_LINE_BYTES = 16384
 
 
 def lexer_input(workload: str) -> bytes:
-    """行の字句器の 35 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
+    """行の字句器の 41 本（#815 の C++・#830 の JSON と Python・#833 の Markdown と JavaScript・
     #838 の HTML / XML・CSS・YAML・TOML・#855 の GDScript・Ini・gdresource・#857 の C#・Rust・Go・
-    #860 の PHP・SQL・Lua・Dockerfile）。
+    #860 の PHP・SQL・Lua・Dockerfile・#862 の PowerShell・shell・CMake）。
     tests/performance/LexerProbe.cpp と同じ 100 バイトの行。"""
     if workload == "lexer-markdown-worst-line":
         return b"[" * LEXER_WORST_LINE_BYTES + b"\n"
@@ -410,7 +438,7 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
-    if workload in WORKLOADS[152:188]:
+    if workload in WORKLOADS[152:194]:
         return lexer_input(workload)
     if workload in WORKLOADS[148:152]:
         return text_object_input(workload)

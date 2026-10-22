@@ -210,6 +210,34 @@ constexpr std::array<std::string_view, template_count> dockerfile_templates{
     "    go build -o /out/app ./cmd/app && echo \"built $VERSION\"",
     "ENV PATH=$PATH:/opt/bin HOME=${HOME:-/root} LABEL=\"nene \\\"nib\\\"\"",
     "CMD [\"./app\", \"--port\", \"8080\"]"};
+// PowerShell（#862）: `function Get-Thing` と `param` の型・`<# #>`（2 行目が開き 3
+// 行目が閉じる）・
+// `-eq` `-NotLike`・`1kb` `0x1F`・`` `" `` の続く文字列・`@{}` と `[System.IO.File]::`・`try`。
+constexpr std::array<std::string_view, template_count> powershell_templates{
+    "function Get-Thing { param([string]$Path = $env:TEMP, [int]$Count = 0x1F) Get-ChildItem $Path",
+    "    if ($Count -eq 1kb -and $Path -NotLike 'a*') { return $true } <# block comment begins",
+    "   ends here #> foreach ($i in 1..10) { $s = \"item `\"$i`\"\"; Write-Output $s }",
+    "    $h = @{ Name = 'it''s'; Size = 1.5e3 }; [System.IO.File]::ReadAllText($h.Name) | Out-Null",
+    "    try { throw 'x' } catch [Exception] { $null = $_ } finally { $x = -not $false -or $?",
+    "} class Point { [int]$X } enum Color { Red }; Switch -Regex ($s) { default { break } }"};
+// shell（#862）: `f() {`・`${1:-default}`・`a#b`・`"…"` の行またぎ（2 行目が開き 3 行目が
+// 閉じる）・`$(…)` と `` `…` ``・`case … esac`・算術の `<<`・`<<<`・`$'…'`。
+constexpr std::array<std::string_view, template_count> shell_templates{
+    "set -euo pipefail; f() { local x=${1:-default}; echo \"$x\" | grep -v a#b; return 0; }",
+    "if [[ -f \"$file\" ]]; then echo 'single' $(ls -la | wc -l) `date` \"multi line begins",
+    "   continues here\"; elif [ -d x ]; then exit 1; else printf '%s\\n' \"$@\"; fi",
+    "case \"$1\" in start|stop) run \"$1\" ;; *) exit 2 ;; esac; for i in 1 2 3; do :; done",
+    "while read -r line; do echo $((i<<2)) $? $$ $!; done < file; grep x <<< \"$v\"",
+    "export PATH=\"$PATH:/bin\"; time sleep 1; echo $'a\\'b' ${HOME}/x; function greet { true; }"};
+// CMake（#862）: コマンドと制御のコマンド・`#[==[ ]==]`（2 行目が開き 3 行目が閉じる）・
+// `${…}` `$ENV{…}` `$CACHE{…}` `$<…>`・`ON` `off` `*-NOTFOUND`・括弧の引数・数。
+constexpr std::array<std::string_view, template_count> cmake_templates{
+    "cmake_minimum_required(VERSION 3.28) # project(nenenib LANGUAGES CXX) is set below",
+    "add_executable(nib src/main.cpp ${SOURCES} $<TARGET_FILE:x>) #[==[ bracket comment begins",
+    "  continues here ]==] set(FLAG ON) option(USE_X \"Use x ${Y}\" off) set(Q [[raw]])",
+    "if(WIN32 AND NOT X-NOTFOUND) target_compile_options(nib PRIVATE /W4 $ENV{CFLAGS} 1.2.3)",
+    "foreach(item IN LISTS items) message(STATUS \"item: ${item} \\\"q\\\"\") endforeach()",
+    "target_link_libraries(nib PRIVATE $<$<CONFIG:Debug>:-g> $CACHE{LIB}) set(Y yes TRUE)"};
 
 // LexerWorkload の値か。値を足すとこの switch がコンパイルで落ち（CPP-002）、足した後は下の
 // 数え上げが 1 つ増えて、言語の表に行が無ければ static_assert が落ちる（LanguageTable.cpp と同じ
@@ -254,6 +282,12 @@ constexpr std::array<std::string_view, template_count> dockerfile_templates{
     case LexerWorkload::lua_visible_60:
     case LexerWorkload::lua_backfill_200:
     case LexerWorkload::dockerfile_visible_60:
+    case LexerWorkload::powershell_visible_60:
+    case LexerWorkload::powershell_backfill_200:
+    case LexerWorkload::shell_visible_60:
+    case LexerWorkload::shell_backfill_200:
+    case LexerWorkload::cmake_visible_60:
+    case LexerWorkload::cmake_backfill_200:
         return true;
     }
     return false;
@@ -271,7 +305,7 @@ constexpr std::array<std::string_view, template_count> dockerfile_templates{
 }
 
 // i 行目が i 番目の LexerWorkload の言語。
-constexpr std::array<core::Language, 36> workload_languages{
+constexpr std::array<core::Language, 42> workload_languages{
     core::Language::cpp,        core::Language::cpp,        core::Language::json,
     core::Language::json,       core::Language::python,     core::Language::python,
     core::Language::markdown,   core::Language::markdown,   core::Language::javascript,
@@ -283,7 +317,9 @@ constexpr std::array<core::Language, 36> workload_languages{
     core::Language::cs,         core::Language::cs,         core::Language::rust,
     core::Language::rust,       core::Language::go,         core::Language::go,
     core::Language::php,        core::Language::php,        core::Language::sql,
-    core::Language::lua,        core::Language::lua,        core::Language::dockerfile};
+    core::Language::lua,        core::Language::lua,        core::Language::dockerfile,
+    core::Language::powershell, core::Language::powershell, core::Language::shell,
+    core::Language::shell,      core::Language::cmake,      core::Language::cmake};
 static_assert(workload_languages.size() == workload_count(),
               "workload_languages has one row for every LexerWorkload");
 
@@ -294,18 +330,19 @@ static_assert(workload_languages.size() == workload_count(),
 
 [[nodiscard]] constexpr bool is_visible(LexerWorkload workload)
 {
-    constexpr std::array<LexerWorkload, 21> visible{
-        LexerWorkload::cpp_visible_60,       LexerWorkload::json_visible_60,
-        LexerWorkload::python_visible_60,    LexerWorkload::markdown_visible_60,
-        LexerWorkload::markdown_worst_line,  LexerWorkload::javascript_visible_60,
-        LexerWorkload::html_visible_60,      LexerWorkload::xml_visible_60,
-        LexerWorkload::css_visible_60,       LexerWorkload::yaml_visible_60,
-        LexerWorkload::toml_visible_60,      LexerWorkload::gdscript_visible_60,
-        LexerWorkload::dosini_visible_60,    LexerWorkload::gdresource_visible_60,
-        LexerWorkload::cs_visible_60,        LexerWorkload::rust_visible_60,
-        LexerWorkload::go_visible_60,        LexerWorkload::php_visible_60,
-        LexerWorkload::sql_visible_60,       LexerWorkload::lua_visible_60,
-        LexerWorkload::dockerfile_visible_60};
+    constexpr std::array<LexerWorkload, 24> visible{
+        LexerWorkload::cpp_visible_60,        LexerWorkload::json_visible_60,
+        LexerWorkload::python_visible_60,     LexerWorkload::markdown_visible_60,
+        LexerWorkload::markdown_worst_line,   LexerWorkload::javascript_visible_60,
+        LexerWorkload::html_visible_60,       LexerWorkload::xml_visible_60,
+        LexerWorkload::css_visible_60,        LexerWorkload::yaml_visible_60,
+        LexerWorkload::toml_visible_60,       LexerWorkload::gdscript_visible_60,
+        LexerWorkload::dosini_visible_60,     LexerWorkload::gdresource_visible_60,
+        LexerWorkload::cs_visible_60,         LexerWorkload::rust_visible_60,
+        LexerWorkload::go_visible_60,         LexerWorkload::php_visible_60,
+        LexerWorkload::sql_visible_60,        LexerWorkload::lua_visible_60,
+        LexerWorkload::dockerfile_visible_60, LexerWorkload::powershell_visible_60,
+        LexerWorkload::shell_visible_60,      LexerWorkload::cmake_visible_60};
     return std::ranges::find(visible, workload) != visible.end();
 }
 
@@ -316,7 +353,7 @@ static_assert(workload_languages.size() == workload_count(),
 
 [[nodiscard]] constexpr std::span<const std::string_view> templates_of(LexerWorkload workload)
 {
-    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 19> tables{
+    constexpr std::array<std::pair<core::Language, std::span<const std::string_view>>, 22> tables{
         {{core::Language::json, json_templates},
          {core::Language::markdown, markdown_templates},
          {core::Language::javascript, javascript_templates},
@@ -335,7 +372,10 @@ static_assert(workload_languages.size() == workload_count(),
          {core::Language::php, php_templates},
          {core::Language::sql, sql_templates},
          {core::Language::lua, lua_templates},
-         {core::Language::dockerfile, dockerfile_templates}}};
+         {core::Language::dockerfile, dockerfile_templates},
+         {core::Language::powershell, powershell_templates},
+         {core::Language::shell, shell_templates},
+         {core::Language::cmake, cmake_templates}}};
     const core::Language language = language_of(workload);
     for (const auto &[table_language, templates] : tables)
     {
@@ -348,14 +388,17 @@ static_assert(workload_languages.size() == workload_count(),
 }
 
 // 各行は「型の行 + 言語の行末コメントの印（JSON・Markdown・HTML・XML・CSS・Ini・Dockerfile は
-// 空白・gdresource は ` ;`・C++・JavaScript・C#・Rust・Go・PHP は ` //`・SQL・Lua は ` --`）+
+// 空白・gdresource は ` ;`・C++・JavaScript・C#・Rust・Go・PHP は ` //`・SQL・Lua は ` --`・
+// Python・YAML・TOML・GDScript・PowerShell・shell・CMake は ` #`）+
 // 詰め物」で 100 バイトにそろえる。詰め物は `-` で、Markdown（フェンスの閉じの行を閉じのまま
 // 保つ）と Dockerfile（行末の `\` の続きを保つ・#860）だけ空白。
 [[nodiscard]] constexpr std::string_view suffix_of(LexerWorkload workload)
 {
     const core::Language language = language_of(workload);
     const bool hashed = language == core::Language::python || language == core::Language::yaml ||
-                        language == core::Language::toml || language == core::Language::gdscript;
+                        language == core::Language::toml || language == core::Language::gdscript ||
+                        language == core::Language::powershell ||
+                        language == core::Language::shell || language == core::Language::cmake;
     const bool slashed = language == core::Language::cpp ||
                          language == core::Language::javascript || language == core::Language::cs ||
                          language == core::Language::rust || language == core::Language::go ||

@@ -234,6 +234,31 @@ class ProbeComparisonTests(unittest.TestCase):
                 self.assertEqual(PROBES.fnv1a64(data), fnv)
                 self.assertEqual(hashlib.sha256(data).hexdigest(), sha)
 
+    def test_lexer_batch5_fixed_inputs(self):
+        """#862 の 6 本（PowerShell・shell・CMake）。fnv は probe の metadata の inputHash と同じ値（Debug の probe で確かめた）。"""
+        cases = (
+            ('lexer-powershell-visible-60', 6060, '3767202512927238061',
+             'c69fe40dab7164d3e4d0086e5e70f014dc33a2eabc10f55fb6a12b1f743c862c'),
+            ('lexer-powershell-backfill-200', 20200, '8706640463068729395',
+             '7ad04d7928db859443860048bf0f93eb340cd706b1ccf7e9062a38490bd3e873'),
+            ('lexer-shell-visible-60', 6060, '13168097806600327909',
+             '0a255dcfc95f6d8709499f2c02ef7afe3133ef650215bcf886adba5db1686955'),
+            ('lexer-shell-backfill-200', 20200, '10026814413945037205',
+             '4a47039e335457350c84c09e357fd1889329c59b7bd1436d9ac1c27b64908bdb'),
+            ('lexer-cmake-visible-60', 6060, '4472746266561196557',
+             '9160bb893f77fb9133c72f42156733d9b332b8d802d8a89c4084432955caa145'),
+            ('lexer-cmake-backfill-200', 20200, '10163078274378628178',
+             '70d6853ae6bb1e34c40cef70a7d41c3e753cdbb6c83f2208adf3db385b7fbf36'),
+        )
+        self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[188:194])
+        for name, size, fnv, sha in cases:
+            with self.subTest(workload=name):
+                data = PROBES.fixed_input(name)
+                self.assertEqual(len(data), size)
+                self.assertTrue(all(len(line) == 100 for line in data.split(b"\n")[:-1]))
+                self.assertEqual(PROBES.fnv1a64(data), fnv)
+                self.assertEqual(hashlib.sha256(data).hexdigest(), sha)
+
     def test_operation_choice_bad_name(self):
         for name in ("operation-choice-missing-1024", "Operation-choice-all-vim-256"):
             with self.assertRaises(PROBES.ProbeNotObserved):
@@ -242,8 +267,8 @@ class ProbeComparisonTests(unittest.TestCase):
     def test_operation_choice_preserves_old_registry(self):
         old = ('controller-open-utf8-16mib', 'buffer-from-utf8-16mib', 'controller-insert-200', 'display-line-long', 'controller-insert-200-after-delete-1mib', 'controller-insert-200-after-delete-16mib', 'utf8-validate-ascii-16mib', 'utf8-validate-japanese-6mib', 'controller-vim-insert-200-register-1mib', 'controller-vim-insert-200-register-16mib', 'controller-vim-record-insert-200', 'controller-vim-record-insert-2000', 'buffer-line-text-scattered-crlf-4096', 'buffer-line-text-scattered-lf-4096', 'buffer-position-long-utf8-57344', 'buffer-position-scattered-utf8-57344', 'palette-listed-name-5000', 'palette-listed-location-5000', 'palette-append-narrow-5000-to-50', 'palette-caret-left-5000', 'codepage-to-utf8-cp932-japanese-16mib', 'utf16-to-utf8-japanese-8m-units', 'utf16-to-utf8-ascii-8m-units', 'utf16-to-utf8-supplementary-8m-units', 'controller-save-utf8-16mib', 'controller-save-utf8-bom-16mib', 'buffer-erase-scattered-head-4096', 'buffer-erase-scattered-middle-4096', 'buffer-erase-scattered-tail-4096', 'buffer-erase-scattered-all-4096', 'buffer-erase-single-middle-4096', 'buffer-offset-long-head-57344', 'buffer-offset-long-middle-57344', 'buffer-offset-long-end-57344', 'buffer-offset-scattered-middle-57344', 'search-forward-head-many-4096', 'search-forward-middle-many-4096', 'search-forward-tail-many-4096', 'search-backward-head-many-4096', 'search-backward-middle-many-4096', 'search-backward-tail-many-4096', 'pattern-star-miss-1024', 'pattern-star-miss-2048', 'pattern-star-miss-4096', 'pattern-multistar-miss-32', 'pattern-greedy-hit-4096', 'pattern-literal-tail-4102', 'pattern-literal-long-4096', 'frame-search-dense-ascii-4096', 'frame-search-dense-mixed-2340', 'frame-search-sparse-tail-16384', 'frame-selection-ascii-16384', 'frame-search-visual-ascii-4096', 'frame-rows-empty-64', 'frame-rows-short-64', 'frame-rows-30-64', 'frame-rows-120-64', 'search-snapshot-frame-short-64', 'search-snapshot-frame-long-64', 'search-snapshot-repeat-long-64', 'search-snapshot-retained-long-200', 'search-snapshot-retained-short-200', 'search-snapshot-unsearched-200', 'search-snapshot-commit-short-64', 'search-snapshot-typing-frame-short-64', 'preview-caret-long-30-64', 'preview-caret-long-120-64', 'preview-caret-short-30-64', 'preview-caret-confirmed-30-64', 'preview-caret-unsearched-30-64', 'preview-caret-absent-30-64', 'preview-caret-disabled-30-64', 'frame-document-short-saved-256', 'frame-document-long-saved-256', 'frame-document-long-failed-256', 'frame-document-untitled-256', 'status-items-utf8-crlf-1024', 'status-items-bom-lf-1024', 'status-items-sjis-crlf-1024', 'status-items-max-utf8-lf-1024', 'status-items-large-bom-crlf-1024', 'status-items-sjis-lf-1024', 'file-name-windows-4096', 'file-name-deep-ascii-4096', 'file-name-mixed-utf8-4096', 'file-name-bare-short-4096', 'file-name-bare-long-4096', 'file-name-trailing-4096', 'file-name-root-4096', 'tab-display-ordinary-saved-1024', 'tab-display-deep-saved-1024', 'tab-display-wide-saved-1024', 'tab-display-short-saved-1024', 'tab-display-exact-saved-1024', 'tab-display-modified-boundary-1024', 'tab-display-folder-wide-1024', 'tab-display-root-saved-1024', 'tab-display-untitled-modified-1024', 'command-input-search-long-1024', 'command-input-ex-long-1024', 'command-input-palette-long-1024', 'command-input-search-short-1024', 'command-input-ex-short-1024', 'command-input-palette-short-1024', 'command-input-ex-left-long-1024', 'command-input-palette-fill-long-1024', 'command-input-controller-search-64', 'command-input-controller-ex-64', 'command-input-controller-palette-64', 'command-input-controller-fill-64', 'ex-completion-option-1024', 'ex-completion-miss-1024', 'ex-completion-custom-narrow-128', 'ex-completion-empty-1024', 'ex-completion-set-wide-1024', 'ex-completion-theme-wide-1024', 'ex-completion-all-builtins-1024', 'ex-completion-custom-wide-128', 'ex-completion-all-custom-128', 'ex-completion-frame-ex-option-64', 'ex-completion-frame-ex-empty-64', 'ex-completion-frame-palette-64', 'completion-prefix-long-miss-4096', 'completion-prefix-theme-raw-4096', 'completion-prefix-theme-seeded-4096', 'completion-prefix-short-raw-4096', 'completion-prefix-short-seeded-4096', 'completion-prefix-empty-raw-4096', 'completion-prefix-empty-seeded-4096', 'palette-choice-builtin-all-512', 'palette-choice-custom-all-128', 'palette-choice-miss-1024', 'palette-choice-short-1024', 'palette-choice-theme-512', 'palette-choice-direct-fill-1024', 'palette-choice-direct-long-1024', 'palette-choice-fallback-long-512', 'palette-choice-custom-narrow-128')
         self.assertEqual(PROBES.WORKLOADS[:138], old)
-        self.assertEqual(len(PROBES.WORKLOADS), 188)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 188)
+        self.assertEqual(len(PROBES.WORKLOADS), 194)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 194)
 
     def test_palette_choice_fixed_inputs(self) -> None:
         cases = (
@@ -493,8 +518,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('command-input-controller-fill-64', b':fz', 3, '11941784898562763057', 'd58613416642baf2b9a49d9ee7107e85ac886af97e0086632f0892ef85fc331b'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[98:110])
-        self.assertEqual(len(PROBES.WORKLOADS), 188)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 188)
+        self.assertEqual(len(PROBES.WORKLOADS), 194)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 194)
         for name, expected, size, fnv, sha in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
@@ -521,8 +546,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('tab-display-untitled-modified-1024', b'', 0, '14695981039346656037'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[89:98])
-        self.assertEqual(len(PROBES.WORKLOADS), 188)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 188)
+        self.assertEqual(len(PROBES.WORKLOADS), 194)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 194)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)
@@ -545,8 +570,8 @@ class ProbeComparisonTests(unittest.TestCase):
             ('file-name-root-4096', b'/', 1, '12638123428881205758'),
         )
         self.assertEqual(tuple(row[0] for row in cases), PROBES.WORKLOADS[82:89])
-        self.assertEqual(len(PROBES.WORKLOADS), 188)
-        self.assertEqual(len(set(PROBES.WORKLOADS)), 188)
+        self.assertEqual(len(PROBES.WORKLOADS), 194)
+        self.assertEqual(len(set(PROBES.WORKLOADS)), 194)
         for name, expected, size, fnv in cases:
             with self.subTest(workload=name):
                 self.assertEqual(PROBES.fixed_input(name), expected)

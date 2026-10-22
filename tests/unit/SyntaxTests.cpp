@@ -411,7 +411,9 @@ void verify_backfill_per_language()
                core::syntax_backfill_lines(Language::sql) == 200 &&
                core::syntax_backfill_lines(Language::lua) == 200 &&
                core::syntax_backfill_lines(Language::dockerfile) == 50 &&
-               core::syntax_backfill_lines(Language::cmake) == 0,
+               core::syntax_backfill_lines(Language::powershell) == 200 &&
+               core::syntax_backfill_lines(Language::shell) == 200 &&
+               core::syntax_backfill_lines(Language::cmake) == 200,
            "the backfill table has one value per language");
     Editing editing;
     auto &controller = editing.controller();

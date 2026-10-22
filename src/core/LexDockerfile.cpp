@@ -1,6 +1,5 @@
 #include "LexDockerfile.hpp"
 
-#include "AsciiCase.hpp"
 #include "LexCursor.hpp"
 #include "LexKind.hpp"
 #include "LexScan.hpp"
@@ -56,12 +55,6 @@ using ArgumentRules = std::pair<bool, bool>;
         --end;
     }
     return end > 0U && line[end - 1U] == '\\';
-}
-
-// word が name（小文字）と大小を問わずに同じか。
-[[nodiscard]] constexpr bool is_named(std::string_view word, std::string_view name) noexcept
-{
-    return word.size() == name.size() && ascii_prefix_ignoring_case(word, name);
 }
 
 // ---- ヒアドキュメント ----
@@ -162,8 +155,8 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
 // BuildKit のヒアドキュメントを開ける命令か（`RUN` `COPY` `ADD`・#861）。
 [[nodiscard]] constexpr bool opens_heredocs(std::string_view instruction) noexcept
 {
-    return is_named(instruction, "run") || is_named(instruction, "copy") ||
-           is_named(instruction, "add");
+    return lex_folded_equal(instruction, "run") || lex_folded_equal(instruction, "copy") ||
+           lex_folded_equal(instruction, "add");
 }
 
 // 命令の頭の語（`ONBUILD` の後ろの語も命令）。命令の表にあれば keyword。読み終えた位置と、
@@ -179,7 +172,7 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
         return {end, ArgumentRules{false, false}};
     }
     cursor.mark(at, end, SyntaxRole::keyword);
-    if (is_named(word, "onbuild"))
+    if (lex_folded_equal(word, "onbuild"))
     {
         const std::size_t next = skip_spaces(line, end);
         const std::size_t after = lex_word_end(line, next);
@@ -190,7 +183,7 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
             end = after;
         }
     }
-    return {end, ArgumentRules{is_named(word, "from"), opens_heredocs(word)}};
+    return {end, ArgumentRules{lex_folded_equal(word, "from"), opens_heredocs(word)}};
 }
 
 // `<`。ヒアドキュメントを開ける命令で、直前が空白か行頭の行の最初の印なら string に塗り、本文へ
@@ -217,7 +210,7 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
 {
     const std::string_view line = cursor.line();
     const std::size_t end = lex_word_end(line, at);
-    if (from && is_named(line.substr(at, end - at), "as"))
+    if (from && lex_folded_equal(line.substr(at, end - at), "as"))
     {
         cursor.mark(at, end, SyntaxRole::keyword);
     }

@@ -901,6 +901,12 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     case LexerWorkload::lua_visible_60:
     case LexerWorkload::lua_backfill_200:
     case LexerWorkload::dockerfile_visible_60:
+    case LexerWorkload::powershell_visible_60:
+    case LexerWorkload::powershell_backfill_200:
+    case LexerWorkload::shell_visible_60:
+    case LexerWorkload::shell_backfill_200:
+    case LexerWorkload::cmake_visible_60:
+    case LexerWorkload::cmake_backfill_200:
         return 159U + static_cast<std::size_t>(workload);
     }
     std::unreachable();
@@ -921,7 +927,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 195> dispatches{{
+constexpr std::array<ProbeDispatch, 201> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1318,6 +1324,18 @@ constexpr std::array<ProbeDispatch, 195> dispatches{{
                      lexed_lines},
     ProbeDispatchRow{LexerWorkload::dockerfile_visible_60, "lexer-dockerfile-visible-60",
                      lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::powershell_visible_60, "lexer-powershell-visible-60",
+                     lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::powershell_backfill_200, "lexer-powershell-backfill-200",
+                     lexer_input, lexed_lines},
+    ProbeDispatchRow{LexerWorkload::shell_visible_60, "lexer-shell-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::shell_backfill_200, "lexer-shell-backfill-200", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::cmake_visible_60, "lexer-cmake-visible-60", lexer_input,
+                     lexed_lines},
+    ProbeDispatchRow{LexerWorkload::cmake_backfill_200, "lexer-cmake-backfill-200", lexer_input,
+                     lexed_lines},
 }};
 
 constexpr auto dispatch_names = []
@@ -1360,7 +1378,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 195U);
+static_assert(dispatches.size() == 201U);
 static_assert(dispatch_is_complete());
 
 } // namespace
