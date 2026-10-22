@@ -1158,7 +1158,7 @@ constexpr std::array<LexCase, 60> gdresource_cases{{
 
 // C#（#857）: 宣言・`///`・逐語的文字列の行またぎと `""`・生の文字列（引用符 3 つと 4
 // つ）・補間（`{…}` の中 は分類しない）・前処理の行・文字・数の形・閉じない字句。
-constexpr std::array<LexCase, 57> csharp_cases{{
+constexpr std::array<LexCase, 65> csharp_cases{{
     {"using System.Collections.Generic;", plain, "Kkkkk       O           O       O", plain},
     {"namespace Demo.App;", plain, "Kkkkkkkkk     O   O", plain},
     {"public sealed class Player : IDisposable {", plain,
@@ -1223,13 +1223,25 @@ constexpr std::array<LexCase, 57> csharp_cases{{
     {"$", plain, "O", plain},
     {"// 日本語のコメント", plain, "Ccccccccccc", plain},
     {"var j = \"日本\";", plain, "Ttt   O SsssO", plain},
+    // #858 のレビュー: 逐語的の `""` は閉じない・`\\` と `\"`・閉じない補間は行末まで error・
+    // 引用符 17 個の生の文字列（16 個の列で閉じる限界）・`u8` の付いた生の文字列・補間の書式の中の
+    // `'`・文字・`/*/`。
+    {"var a = @\"a\"\"\";", plain, "Ttt   O SsssssO", plain},
+    {"var b = \"\\\\\"; var c = \"\\\"\";", plain, "Ttt   O SsssO Ttt   O SsssO", plain},
+    {"var d = $\"{x}", plain, "Ttt   O Eeeee", plain},
+    {"var k = \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"a\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\";", plain,
+     "Ttt   O SsssssssssssssssssssssssssssssssssEe", plain},
+    {"var f = \"\"\"raw\"\"\"u8;", plain, "Ttt   O SssssssssssO", plain},
+    {"var g = $\"{d:yyyy'-'MM}\";", plain, "Ttt   O SsssssssssssssssO", plain},
+    {"char h = 'A';", plain, "Tttt   O SssO", plain},
+    {"/*/", plain, "Ccc", block},
     {"", plain, "", plain},
     {"int x; xyz", raw_xyz, "Ttt  O", plain},
 }};
 
 // Rust（#857）: 宣言・属性・入れ子のコメントの行またぎ（delimiter は深さ）・生の文字列 `r#"…"#`
 // `r##"…"##` の行またぎ・文字とライフタイム・バイト文字列・数の形・マクロ・閉じない字句。
-constexpr std::array<LexCase, 54> rust_cases{{
+constexpr std::array<LexCase, 65> rust_cases{{
     {"use std::collections::HashMap;", plain, "Kkk    Oo           Oo       O", plain},
     {"pub fn main() {", plain, "Kkk Kk FfffOo O", plain},
     {"fn add<'a>(x: &'a str) -> &'a str { x }", plain, "Kk FffOTtOo O OTt TttO Oo OTt Ttt O   O",
@@ -1290,7 +1302,22 @@ constexpr std::array<LexCase, 54> rust_cases{{
     {"r#\"", plain, "Sss", raw_r1},
     {"/*", plain, "Cc", nest1},
     {"\"", plain, "S", in_quote},
-    {"b'", plain, "Ee", plain},
+    {"b'", plain, " E", plain},
+    // #858 のレビュー: 生の文字列は `\` を飛ばさない・文字の `\'` と `\u{…}`・ライフタイムの列・
+    // 閉じの無い属性・属性の中の文字の `]`（属性はそこで閉じる限界）・`/*/`・
+    // 16 進は符号を続けない・予約語は `(` の前でも予約語・`!=` はマクロでない・タプルの添字・
+    // 孤立した `'` は 1 文字だけ error。
+    {"let s = r\"a\\\";", plain, "Kkk   O SssssO", plain},
+    {"let q = b'\\''; let e = '\\u{1F600}';", plain, "Kkk   O SssssO Kkk   O SssssssssssO", plain},
+    {"struct P<'a, 'b> { x: &'a str }", plain, "Kkkkkk  OTtO TtO O  O OTt Ttt O", plain},
+    {"#[cfg(feature = \"x\"", plain, "KkkkkkkkkkkkkkkkSss", plain},
+    {"#[a(']')] fn f() {}", plain, "KkkkkkEOo Kk FOo Oo", plain},
+    {"/*/", plain, "Ccc", nest1},
+    {"let h = 0xE+1;", plain, "Kkk   O NnnONO", plain},
+    {"if(a) {} while (b) {}", plain, "KkO O Oo Kkkkk O O Oo", plain},
+    {"if foo!=bar {}", plain, "Kk    Oo    Oo", plain},
+    {"let v = a.0.1;", plain, "Kkk   O  ONnnO", plain},
+    {"let a = ' x;", plain, "Kkk   O E  O", plain},
     {"let k = '日';", plain, "Kkk   O SssO", plain},
     {"", plain, "", plain},
     {"int x; xyz", raw_xyz, "     O", plain},
@@ -1298,7 +1325,7 @@ constexpr std::array<LexCase, 54> rust_cases{{
 
 // Go（#857）: `package`・`import (…)`・メソッドの受け手の後ろの名前・生の文字列の行またぎ・rune・
 // 組み込みの関数・`nil` `iota`・数の形（`0x1p-2`）・`:=`・閉じない字句。
-constexpr std::array<LexCase, 47> go_cases{{
+constexpr std::array<LexCase, 53> go_cases{{
     {"package main", plain, "Kkkkkkk", plain},
     {"import (", plain, "Kkkkkk O", plain},
     {"    \"fmt\"", plain, "    Sssss", plain},
@@ -1351,6 +1378,15 @@ constexpr std::array<LexCase, 47> go_cases{{
     {"func init() { println(\"x\") }", plain, "Kkkk FfffOo O FffffffOSssO O", plain},
     {"    t := `one line` + `two`", plain, "      Oo Ssssssssss O Sssss", plain},
     {"var 日本 = \"語\"", plain, "Kkk    O Sss", plain},
+    // #858 のレビュー: 16 進は `p` の後だけ符号を続ける・rune の `\'`・`/*/`・受け手に `)` を含む
+    // メソッドの名前は塗らない（限界）・生の文字列は `\` を飛ばさない・
+    // コメントの続きの行頭の `*/`。
+    {"x := 0xe+1", plain, "  Oo NnnON", plain},
+    {"r := '\\''", plain, "  Oo Ssss", plain},
+    {"/*/", plain, "Ccc", block},
+    {"func (f func(int)) N() {}", plain, "Kkkk O  KkkkOTttOo  Oo Oo", plain},
+    {"x := `a\\` + `\\n`", plain, "  Oo Ssss O Ssss", plain},
+    {"*/ x := 1", block, "Cc   Oo N", plain},
     {"", plain, "", plain},
     {"int x; xyz", raw_xyz, "Ttt  O", plain},
 }};

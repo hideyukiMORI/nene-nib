@@ -95,6 +95,8 @@ static_assert(std::ranges::is_sorted(raw_prefixes));
 constexpr std::string_view operator_characters = "+-*%=<>!&|^~?:.,;()[]{}@$";
 // 通常の文字列の中（`\` は次の 1 バイトを飛ばす）の delimiter と、生の文字列の delimiter の頭。
 constexpr std::string_view quote_mark = "\"";
+// 接頭辞の後ろで字句を始める文字（`"` `'` `#`）。
+constexpr std::string_view literal_openers = "\"'#";
 constexpr char raw_mark = 'r';
 // 文字の `'\u{10FFFF}'` の `\` から閉じの `'` までの最大のバイト数。
 constexpr std::size_t escape_reach = 12U;
@@ -330,7 +332,8 @@ std::size_t mark_raw(LexCursor &cursor, std::size_t begin, std::size_t hash)
 }
 
 // begin（`b` の接頭辞の先頭）から open の `'`。文字なら string、`'name` はライフタイムかラベルで
-// type、どちらでもなければ行末まで error。
+// type、どちらでもなければその `'` の 1 バイトだけを error にして次の文字から読む（Vim の
+// rustCharacterInvalid と同じく、マクロの断片で行末まで塗らない）。
 std::size_t mark_apostrophe(LexCursor &cursor, std::size_t begin, std::size_t open)
 {
     const std::string_view line = cursor.line();
@@ -346,8 +349,8 @@ std::size_t mark_apostrophe(LexCursor &cursor, std::size_t begin, std::size_t op
         cursor.mark(open, name, SyntaxRole::type);
         return name;
     }
-    cursor.mark(begin, line.size(), SyntaxRole::error);
-    return line.size();
+    cursor.mark(open, open + 1U, SyntaxRole::error);
+    return open + 1U;
 }
 
 std::size_t lex_apostrophe(LexCursor &cursor, std::size_t at)
@@ -424,8 +427,8 @@ std::size_t lex_hash(LexCursor &cursor, std::size_t at)
 }
 
 // 数字の途中の 1 バイトが数字を続けるか。`_` と接尾辞（`u32` `f64`）は識別子の文字に含まれ、
-// `.` は直後が桁のときだけ（`1..2` の範囲と `x.0.1` の手前で切る）、符号は 16 進でない数の指数の
-// 直後だけ。
+// `.` は直後が桁のときだけ（`1..2` の範囲で切る。タプルの添字 `t.0.1` の `0.1` は 1 つの数になるが
+// 色は同じ）、符号は 16 進でない数の指数の直後だけ。
 [[nodiscard]] constexpr bool continues_number(std::string_view line, std::size_t at,
                                               bool hex) noexcept
 {
@@ -515,15 +518,15 @@ std::size_t lex_slash(LexCursor &cursor, std::size_t at)
 }
 
 // 識別子の後ろに引用符が続く接頭辞（`b'` `b"` `r#"` `br"`）なら字句を読み、そうでなければ
-// lex_unclosed。
+// lex_unclosed。直後が `"` `'` `#` でなければ表を引かない（C / C++ と同じ順）。
 std::size_t prefixed_literal(LexCursor &cursor, std::size_t at, std::size_t end)
 {
     const std::string_view line = cursor.line();
-    const std::string_view word = line.substr(at, end - at);
-    if (end >= line.size())
+    if (end >= line.size() || !literal_openers.contains(line[end]))
     {
         return lex_unclosed;
     }
+    const std::string_view word = line.substr(at, end - at);
     if (std::ranges::binary_search(raw_prefixes, word) && opens_raw(line, end))
     {
         return mark_raw(cursor, at, end);
@@ -536,8 +539,8 @@ std::size_t prefixed_literal(LexCursor &cursor, std::size_t at, std::size_t end)
     return quoted ? mark_quoted(cursor, at, end) : lex_unclosed;
 }
 
-// 予約語・型・定数の表の順に引き、どれでもなく `fn` の名前か呼び出しなら関数。
-[[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word, bool named) noexcept
+// 予約語・型・定数の表の順に引く。どれでもなければ nullopt。
+[[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view word) noexcept
 {
     if (std::ranges::binary_search(rust_keywords, word))
     {
@@ -551,7 +554,7 @@ std::size_t prefixed_literal(LexCursor &cursor, std::size_t at, std::size_t end)
     {
         return SyntaxRole::constant;
     }
-    return named ? std::optional{SyntaxRole::function} : std::nullopt;
+    return std::nullopt;
 }
 
 std::size_t lex_word(LexCursor &cursor, std::size_t at)
@@ -567,17 +570,20 @@ std::size_t lex_word(LexCursor &cursor, std::size_t at)
     {
         return lex_word_end(line, end + 1U); // 生の識別子 `r#match`（区間なし）
     }
+    const std::optional<SyntaxRole> role = word_role(line.substr(at, end - at));
+    if (role.has_value())
+    {
+        cursor.mark(at, end, role.value());
+        return end;
+    }
+    // 表に無い名前だけ、`fn` の名前か呼び出しなら function。マクロ `name!` は `!` まで。
     const std::size_t called = called_end(line, end);
-    const std::optional<SyntaxRole> role =
-        word_role(line.substr(at, end - at), called != lex_unclosed || follows_fn(line, at));
-    if (!role.has_value())
+    if (called == lex_unclosed && !follows_fn(line, at))
     {
         return end;
     }
-    // マクロの呼び出し `name!` は `!` までを function にする。
-    const bool macro = role.value() == SyntaxRole::function && called == end + 1U;
-    const std::size_t last = macro ? called : end;
-    cursor.mark(at, last, role.value());
+    const std::size_t last = called == lex_unclosed ? end : called;
+    cursor.mark(at, last, SyntaxRole::function);
     return last;
 }
 
