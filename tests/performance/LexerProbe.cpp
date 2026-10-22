@@ -462,7 +462,8 @@ lexed_lines(LexerWorkload workload, const std::string &input, application::Timin
     const bool visible = is_visible(workload);
     const core::Language language = language_of(workload);
     std::cerr << "preparedBytes=" << input.size() << " lines=" << lines.size() << '\n';
-    core::LexState state{};
+    // 入力は文書の 1 行目から読む（遡りの始まりの状態は core の 1 本・#861）。
+    core::LexState state = core::lex_start_state(language, true);
     std::uint64_t checksum = checksum_of(input);
     bool valid = true;
     timing.mark(core::Milestone::probe_started);

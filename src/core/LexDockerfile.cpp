@@ -29,11 +29,14 @@ constexpr std::array<std::string_view, 18> dockerfile_instructions{
 static_assert(std::ranges::is_sorted(dockerfile_instructions));
 
 // 行末の `\` の続きの中（plain の delimiter `\`）。既定の plain は命令の頭から始まる行。
-constexpr std::string_view continuation_mark = "\\";
-constexpr LexState continued = lex_entered(LexKind::plain, continuation_mark);
+// ヒアドキュメントを開ける命令（`RUN` `COPY` `ADD`）の続きは delimiter `\<`（#861）。
+constexpr LexState continued = lex_entered(LexKind::plain, "\\");
+constexpr LexState heredoc_continued = lex_entered(LexKind::plain, "\\<");
 
 // ヒアドキュメントの印の終わりと、本文の行へ渡す状態。
 using Heredoc = std::pair<std::size_t, LexState>;
+// 命令の頭の後ろの読み方。`FROM` の行か（`AS` を keyword にする）と、ヒアドキュメントを開けるか。
+using ArgumentRules = std::pair<bool, bool>;
 
 [[nodiscard]] constexpr std::size_t skip_spaces(std::string_view line, std::size_t at) noexcept
 {
@@ -156,16 +159,24 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
     return end;
 }
 
+// BuildKit のヒアドキュメントを開ける命令か（`RUN` `COPY` `ADD`・#861）。
+[[nodiscard]] constexpr bool opens_heredocs(std::string_view instruction) noexcept
+{
+    return is_named(instruction, "run") || is_named(instruction, "copy") ||
+           is_named(instruction, "add");
+}
+
 // 命令の頭の語（`ONBUILD` の後ろの語も命令）。命令の表にあれば keyword。読み終えた位置と、
-// `FROM` の行か（`AS` を keyword にする）を返す。
-[[nodiscard]] std::pair<std::size_t, bool> lex_instruction(LexCursor &cursor, std::size_t at)
+// 後ろを読む決まりを返す。
+[[nodiscard]] std::pair<std::size_t, ArgumentRules> lex_instruction(LexCursor &cursor,
+                                                                    std::size_t at)
 {
     const std::string_view line = cursor.line();
     std::size_t end = lex_word_end(line, at);
     std::string_view word = line.substr(at, end - at);
     if (!lex_folded_in(dockerfile_instructions, word))
     {
-        return {end, false};
+        return {end, ArgumentRules{false, false}};
     }
     cursor.mark(at, end, SyntaxRole::keyword);
     if (is_named(word, "onbuild"))
@@ -179,16 +190,19 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
             end = after;
         }
     }
-    return {end, is_named(word, "from")};
+    return {end, ArgumentRules{is_named(word, "from"), opens_heredocs(word)}};
 }
 
-// `<`。行の最初のヒアドキュメントの印なら string に塗り、本文へ渡す状態を heredoc に覚える
-// （2 つ目からは読まない・限界）。
-[[nodiscard]] std::size_t lex_less(LexCursor &cursor, std::size_t at,
+// `<`。ヒアドキュメントを開ける命令で、直前が空白か行頭の行の最初の印なら string に塗り、本文へ
+// 渡す状態を heredoc に覚える（2 つ目からは読まない・限界）。`$((1<<4))` `a<<b`
+// は開かない（#861）。
+[[nodiscard]] std::size_t lex_less(LexCursor &cursor, std::size_t at, bool heredocs,
                                    std::optional<LexState> &heredoc)
 {
+    const std::string_view line = cursor.line();
+    const bool spaced = at == 0U || lex_is_space(line[at - 1U]);
     const std::optional<Heredoc> marker =
-        heredoc.has_value() ? std::nullopt : heredoc_marker(cursor.line(), at);
+        heredocs && spaced && !heredoc.has_value() ? heredoc_marker(line, at) : std::nullopt;
     if (!marker.has_value())
     {
         return at + 1U;
@@ -211,13 +225,13 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
 }
 
 // 命令の頭の後ろの 1 字句。`\` は次の 1 バイトを飛ばす（行末の続きは呼び手が見る）。
-[[nodiscard]] std::size_t lex_argument(LexCursor &cursor, std::size_t at, bool from,
+[[nodiscard]] std::size_t lex_argument(LexCursor &cursor, std::size_t at, ArgumentRules rules,
                                        std::optional<LexState> &heredoc)
 {
     const char value = cursor.line()[at];
     if (value == '<')
     {
-        return lex_less(cursor, at, heredoc);
+        return lex_less(cursor, at, rules.second, heredoc);
     }
     if (value == '"')
     {
@@ -229,19 +243,20 @@ void lex_heredoc_body(LexCursor &cursor, const LexState &in)
     }
     if (lex_is_word(value))
     {
-        return lex_argument_word(cursor, at, from);
+        return lex_argument_word(cursor, at, rules.first);
     }
     return at + (value == '\\' ? 2U : 1U);
 }
 
 // 命令の頭の後ろ（続きの行は行頭から）を読む。ヒアドキュメントの印があれば、その本文へ渡す
 // 状態を返す。
-[[nodiscard]] std::optional<LexState> lex_arguments(LexCursor &cursor, std::size_t at, bool from)
+[[nodiscard]] std::optional<LexState> lex_arguments(LexCursor &cursor, std::size_t at,
+                                                    ArgumentRules rules)
 {
     std::optional<LexState> heredoc;
     while (at < cursor.line().size())
     {
-        at = lex_argument(cursor, at, from, heredoc);
+        at = lex_argument(cursor, at, rules, heredoc);
     }
     return heredoc;
 }
@@ -255,8 +270,8 @@ void lex_dockerfile(LexCursor &cursor, const LexState &in)
         return;
     }
     const std::string_view line = cursor.line();
-    const bool continuation = in == continued;
-    const LexState kept = continuation ? continued : LexState{};
+    const bool continuation = in == continued || in == heredoc_continued;
+    const LexState kept = continuation ? in : LexState{};
     const std::size_t first = lex_first_visible(line);
     if (first == line.size() || line[first] == '#')
     {
@@ -264,13 +279,16 @@ void lex_dockerfile(LexCursor &cursor, const LexState &in)
         cursor.leave(kept);
         return;
     }
-    const auto [at, from] = continuation ? std::pair{first, false} : lex_instruction(cursor, first);
-    const std::optional<LexState> heredoc = lex_arguments(cursor, at, from);
+    const auto [at, rules] = continuation
+                                 ? std::pair{first, ArgumentRules{false, in == heredoc_continued}}
+                                 : lex_instruction(cursor, first);
+    const std::optional<LexState> heredoc = lex_arguments(cursor, at, rules);
     if (heredoc.has_value())
     {
         cursor.leave(heredoc.value());
         return;
     }
-    cursor.leave(ends_continued(line) ? continued : LexState{});
+    const LexState next = rules.second ? heredoc_continued : continued;
+    cursor.leave(ends_continued(line) ? next : LexState{});
 }
 } // namespace nenenib::core

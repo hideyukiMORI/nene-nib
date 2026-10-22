@@ -126,6 +126,8 @@ constexpr LexState here_sql = raw("SQL");
 constexpr LexState lua_c2 = nested("==");
 constexpr LexState lua_s1 = raw("=");
 constexpr LexState continued = plain_with("\\");
+// #861: `RUN` `COPY` `ADD` の続き（ヒアドキュメントを開ける）。
+constexpr LexState run_continued = plain_with("\\<");
 constexpr LexState here_eof = raw("EOF");
 constexpr LexState here_dash = raw("-SCRIPT");
 constexpr LexState here_a = raw("A");
@@ -1417,7 +1419,7 @@ constexpr std::array<LexCase, 53> go_cases{{
 // （`->` の後ろの名前は予約語にしない）・属性 `#[…]`・`'…'` `"…"` の行またぎ・ヒアドキュメントと
 // ナウドキュメント（字下げした閉じ・閉じない形・識別子が行末でない形と 16 バイトを越える形）・
 // `?>` の後の HTML と `<?=`・大小を問わない `TRUE` `Null` `ECHO`・行コメントは `?>` で終わる。
-constexpr std::array<LexCase, 57> php_cases{{
+constexpr std::array<LexCase, 73> php_cases{{
     {"<?php", plain, "Kkkkk", php_code},
     {"", php_code, "", php_code},
     {"namespace App\\Models;", php_code, "Kkkkkkkkk           O", php_code},
@@ -1485,14 +1487,33 @@ constexpr std::array<LexCase, 57> php_cases{{
     {"match($x) { 1 => 'a', default => 'b' };", php_code, "KkkkkO  O O N Oo SssO Kkkkkkk Oo Sss Oo",
      php_code},
     {"\"?>\"; Function Run() {}", php_code, "SsssO Kkkkkkkk FffOo Oo", php_code},
-    {"<?php echo 1;", php_code, "Oo    Kkkk NO", php_code},
+    {"<?php echo 1;", php_code, "Kkkkk Kkkk NO", php_code},
     {"#[A('x]')] #[B]", php_code, "KkkkSsssKk Kkkk", php_code},
     {"#[Open('a',", php_code, "KkkkkkkSssK", php_code},
+    // #861: 中の開きのタグは keyword（状態は中のまま）・`::` と `->` の後ろの名前は区間なし
+    // （`::class` だけ keyword）・行頭の `#!` は行末までコメント・閉じの後ろの `)` `,`。
+    {"<?= $x ?>", php_code, "Kkk    Kk", plain},
+    {"<?php ?>", plain, "Kkkkk Kk", plain},
+    {"echo 1; <?php echo 2;", php_code, "Kkkk NO Kkkkk Kkkk NO", php_code},
+    {"Foo::list();", php_code, "   Oo    Ooo", php_code},
+    {"static::new;", php_code, "KkkkkkOo   O", php_code},
+    {"Status::default;", php_code, "      Oo       O", php_code},
+    {"Foo::CLASS;", php_code, "   OoKkkkkO", php_code},
+    {"#!/usr/bin/env php", plain, "Cccccccccccccccccc", plain},
+    {"#!/usr/bin/php -q", php_code, "Ccccccccccccccccc", php_code},
+    {"#!x ?> y", php_code, "Cccccccc", php_code},
+    {"__halt_compiler();", php_code, "KkkkkkkkkkkkkkkOoo", php_code},
+    {"$$var = 1;", php_code, "      O NO", php_code},
+    {"#[", php_code, "Kk", php_code},
+    {"EOT);", here_eot, "SssOo", php_code},
+    {"EOT, 1);", here_eot, "SssO NOo", php_code},
+    // I4: lex_line に来る行は `\r` を含まない（CRLF の `\r` は TextBuffer::line_end が除く）。
+    {"EOT", here_eot, "Sss", php_code},
 }};
 
 // SQL（#860）: 文と句・`CREATE TABLE` と型・`--` と `/* */` の行またぎ・`'it''s'` と行をまたぐ
 // `'…'`・`"col"` と `` `col` `` は区間なし・小文字と混ざった大小のキーワード・`COUNT(*)`。
-constexpr std::array<LexCase, 46> sql_cases{{
+constexpr std::array<LexCase, 55> sql_cases{{
     {"SELECT id, name FROM users WHERE active = TRUE;", plain,
      "Kkkkkk   O      Kkkk       Kkkkk        O VvvvO", plain},
     {"select count(*) as n from t where x is not null", plain,
@@ -1550,12 +1571,24 @@ constexpr std::array<LexCase, 46> sql_cases{{
     {"*/", block, "Cc", plain},
     {"it''s'", in_squote, "Ssssss", plain},
     {"SELECT 'a\\' 1", plain, "Kkkkkk Ssss N", plain},
+    // #861: `--` の直後に空白なし・`.` の後ろの型の名前（限界・型に塗る）・`"` は行をまたがない・
+    // 足した予約語と型。
+    {"--x", plain, "Ccc", plain},
+    {"SELECT t.date FROM t", plain, "Kkkkkk  OTttt Kkkk", plain},
+    {"SELECT \"a", plain, "Kkkkkk", plain},
+    {"b\" FROM t", plain, "", plain},
+    {"SELECT * FROM t FOR UPDATE", plain, "Kkkkkk O Kkkk   Kkk Kkkkkk", plain},
+    {"a ILIKE 'x' COLLATE c", plain, "  Kkkkk Sss Kkkkkkk", plain},
+    {"EXPLAIN SELECT 1", plain, "Kkkkkkk Kkkkkk N", plain},
+    {"id BIGSERIAL, b BYTEA, t LONGTEXT, n NUMBER", plain,
+     "   TttttttttO   TttttO   TtttttttO   Tttttt", plain},
+    {"x INT UNSIGNED AUTO_INCREMENT", plain, "  Ttt Kkkkkkkk Kkkkkkkkkkkkkk", plain},
 }};
 
 // Lua（#860）: `local function`・`function a.b:c` の名前・`--[[ ]]` と `--[==[ ]==]` の行またぎ・
 // 長い文字列 `[[ ]]` `[=[ ]=]`・`nil` `true` `false`・16 進の浮動小数 `0x1p4`・`..`・閉じない
 // 引用符は行末まで error・`=` が 16 個を越える開きは長い括弧にしない。
-constexpr std::array<LexCase, 45> lua_cases{{
+constexpr std::array<LexCase, 49> lua_cases{{
     {"local function greet(name)", plain, "Kkkkk Kkkkkkkk FffffO    O", plain},
     {"  return \"Hello, \" .. name .. '!'", plain, "  Kkkkkk Sssssssss Oo      Oo Sss", plain},
     {"end", plain, "Kkk", plain},
@@ -1603,22 +1636,27 @@ constexpr std::array<LexCase, 45> lua_cases{{
     {"x = -1", plain, "  O ON", plain},
     {"]][[", raw_empty, "SsSs", raw_empty},
     {"]]--[[", block, "CcCccc", block},
+    // #861: 行頭の `#!` は行末までコメント・`#` の長さの演算子・`\z`・3 段の名前の `function`。
+    {"#!/usr/bin/env lua", plain, "Cccccccccccccccccc", plain},
+    {"x = #t", plain, "  O O", plain},
+    {"s = \"a\\z b\"", plain, "  O Sssssss", plain},
+    {"function a.b.c() end", plain, "Kkkkkkkk  O OFOo Kkk", plain},
 }};
 
 // Dockerfile（#860）: `FROM x AS y`・`RUN a \` の続きの行（行頭の語を命令にしない・続きの中の
 // コメントと空行）・`ENV A=1`・`$VAR` `${VAR}`・`# syntax=`・`<<EOF` `<<-EOF` `<<"EOT"`
 // の行またぎ・ 小文字の命令・`ONBUILD` の後ろの命令。
-constexpr std::array<LexCase, 52> dockerfile_cases{{
+constexpr std::array<LexCase, 63> dockerfile_cases{{
     {"# syntax=docker/dockerfile:1", plain, "Cccccccccccccccccccccccccccc", plain},
     {"FROM golang:1.22 AS build", plain, "Kkkk             Kk", plain},
     {"from alpine as runtime", plain, "Kkkk        Kk", plain},
     {"WORKDIR /src", plain, "Kkkkkkk", plain},
     {"COPY go.mod go.sum ./", plain, "Kkkk", plain},
-    {"RUN go mod download \\", plain, "Kkk", continued},
-    {"    # comment inside continuation", continued, "    Ccccccccccccccccccccccccccccc",
-     continued},
-    {"    && go build -o /out/app . \\", continued, "", continued},
-    {"    && echo done", continued, "", plain},
+    {"RUN go mod download \\", plain, "Kkk", run_continued},
+    {"    # comment inside continuation", run_continued, "    Ccccccccccccccccccccccccccccc",
+     run_continued},
+    {"    && go build -o /out/app . \\", run_continued, "", run_continued},
+    {"    && echo done", run_continued, "", plain},
     {"ENV A=1 B=\"two words\"", plain, "Kkk       Sssssssssss", plain},
     {"ARG VERSION=latest", plain, "Kkk", plain},
     {"RUN echo $VERSION ${HOME:-/root} \"$HOME\"", plain,
@@ -1654,7 +1692,7 @@ constexpr std::array<LexCase, 52> dockerfile_cases{{
     {"   RUN indented", plain, "   Kkk", plain},
     {"", continued, "", continued},
     {"RUN not an instruction", continued, "", plain},
-    {"RUN a \\  ", plain, "Kkk", continued},
+    {"RUN a \\  ", plain, "Kkk", run_continued},
     {"RUN echo ${unclosed", plain, "Kkk      Vvvvvvvvvv", plain},
     {"#", plain, "C", plain},
     {"FROM x AS y # not a comment", plain, "Kkkk   Kk", plain},
@@ -1663,6 +1701,20 @@ constexpr std::array<LexCase, 52> dockerfile_cases{{
     {"RUN <<EOF \\", plain, "Kkk Sssss", here_eof},
     {"EOF ", here_eof, "Ssss", here_eof},
     {"", plain, "", plain},
+    // #861: ヒアドキュメントは `RUN` `COPY` `ADD` の行（と続き）で `<<`
+    // の直前が空白か行頭のときだけ。
+    {"RUN echo $((1<<4))", plain, "Kkk", plain},
+    {"RUN a<<b", plain, "Kkk", plain},
+    {"RUN cat <<<word", plain, "Kkk", plain},
+    {"ENV X <<EOF", plain, "Kkk", plain},
+    {"# escape=`", plain, "Cccccccccc", plain},
+    {"RUN apt-get update && \\", plain, "Kkk", run_continued},
+    {"  cat <<EOF > /x", run_continued, "      Sssss", here_eof},
+    {"ENV A=1 \\", plain, "Kkk", continued},
+    {"  B= <<x", continued, "", plain},
+    {"ONBUILD RUN <<EOF", plain, "Kkkkkkk Kkk Sssss", here_eof},
+    // I4: lex_line に来る行は `\r` を含まない（CRLF の `\r` は TextBuffer::line_end が除く）。
+    {"EOF", here_eof, "Sss", plain},
 }};
 
 void verify_table(std::span<const LexCase> cases)

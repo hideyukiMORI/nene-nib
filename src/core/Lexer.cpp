@@ -135,6 +135,42 @@ bool has_lexer(Language language) noexcept
     std::unreachable();
 }
 
+LexState lex_start_state(Language language, bool from_first_line) noexcept
+{
+    switch (language)
+    {
+    case Language::php:
+        return php_start_state(from_first_line);
+    case Language::c:
+    case Language::cpp:
+    case Language::python:
+    case Language::json:
+    case Language::markdown:
+    case Language::javascript:
+    case Language::typescript:
+    case Language::html:
+    case Language::yaml:
+    case Language::toml:
+    case Language::xml:
+    case Language::css:
+    case Language::gdscript:
+    case Language::dosini:
+    case Language::gdresource:
+    case Language::cs:
+    case Language::rust:
+    case Language::go:
+    case Language::sql:
+    case Language::lua:
+    case Language::dockerfile:
+    case Language::plain:
+    case Language::powershell:
+    case Language::shell:
+    case Language::cmake:
+        return LexState{};
+    }
+    std::unreachable();
+}
+
 std::size_t syntax_backfill_lines(Language language) noexcept
 {
     switch (language)

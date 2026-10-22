@@ -133,26 +133,43 @@ constexpr LexState in_block_comment{
     return line[at] == '?' && lex_next_of(line, at) == '>';
 }
 
-// from から開きのタグ `<?php`（大小を問わず・後ろは空白か行末）か `<?=` を探し、その始まりと
-// 終わりを返す。無ければ両方 lex_unclosed。
+// at が開きのタグ `<?php`（大小を問わず・後ろは空白か行末）か `<?=` の始まりなら、その終わり。
+// そうでなければ lex_unclosed。
+[[nodiscard]] constexpr std::size_t tag_end(std::string_view line, std::size_t at) noexcept
+{
+    if (!line.substr(at).starts_with("<?"))
+    {
+        return lex_unclosed;
+    }
+    if (lex_next_of(line, at + 1U) == '=')
+    {
+        return at + 3U;
+    }
+    const std::size_t end = at + 5U;
+    const bool php = is_named(line.substr(at + 2U, 3U), inside_mark);
+    return php && (end == line.size() || lex_is_space(line[end])) ? end : lex_unclosed;
+}
+
+// from から開きのタグを探し、その始まりと終わりを返す。無ければ両方 lex_unclosed。
 [[nodiscard]] constexpr std::pair<std::size_t, std::size_t> open_tag(std::string_view line,
                                                                      std::size_t from) noexcept
 {
     for (std::size_t at = lex_find(line, from, "<?"); at != lex_unclosed;
          at = lex_find(line, at + 1U, "<?"))
     {
-        if (lex_next_of(line, at + 1U) == '=')
-        {
-            return {at, at + 3U};
-        }
-        const std::size_t end = at + 5U;
-        const bool php = is_named(line.substr(at + 2U, 3U), inside_mark);
-        if (php && (end == line.size() || lex_is_space(line[end])))
+        const std::size_t end = tag_end(line, at);
+        if (end != lex_unclosed)
         {
             return {at, end};
         }
     }
     return {lex_unclosed, lex_unclosed};
+}
+
+// 行頭の `#!`（shebang）。PHP の中でも外でも行末までのコメント（#861）。
+[[nodiscard]] constexpr bool is_shebang(std::string_view line) noexcept
+{
+    return line.starts_with("#!");
 }
 
 // ---- 文字列 ----
@@ -324,11 +341,12 @@ std::size_t lex_hash(LexCursor &cursor, std::size_t at)
     return line[at] == '/' && (next == '/' || next == '*');
 }
 
-// 演算子の連なりを続けるか。`?>`・コメントの始まり・`.5`・`<<<` で切る。
+// 演算子の連なりを続けるか。`?>`・開きのタグ・コメントの始まり・`.5`・`<<<` で切る。
 [[nodiscard]] constexpr bool continues_operator(std::string_view line, std::size_t at) noexcept
 {
-    const bool breaks = closes_tag(line, at) || starts_comment(line, at) ||
-                        starts_number(line, at) || line.substr(at).starts_with("<<<");
+    const bool breaks = closes_tag(line, at) || tag_end(line, at) != lex_unclosed ||
+                        starts_comment(line, at) || starts_number(line, at) ||
+                        line.substr(at).starts_with("<<<");
     return operator_characters.contains(line[at]) && !breaks;
 }
 
@@ -393,11 +411,17 @@ std::size_t lex_slash(LexCursor &cursor, std::size_t at)
     return next == '*' ? mark_block_comment(cursor, at, at + 2U) : lex_operators(cursor, at);
 }
 
-// `<<<` はヒアドキュメントの開き（行末まで string で、閉じの識別子を delimiter に次の行へ）、
-// そうでなければ演算子。
+// 中の開きのタグ `<?php` `<?=` は keyword（状態は中のまま・#861）。`<<<` はヒアドキュメントの
+// 開き（行末まで string で、閉じの識別子を delimiter に次の行へ）、そうでなければ演算子。
 std::size_t lex_less(LexCursor &cursor, std::size_t at)
 {
     const std::string_view line = cursor.line();
+    const std::size_t tag = tag_end(line, at);
+    if (tag != lex_unclosed)
+    {
+        cursor.mark(at, tag, SyntaxRole::keyword);
+        return tag;
+    }
     const std::optional<std::string_view> label = heredoc_label(line, at);
     if (!label.has_value())
     {
@@ -434,13 +458,22 @@ std::size_t skip_variable(LexCursor &cursor, std::size_t at)
     return end < at && (is_named(word, "function") || is_named(word, "fn"));
 }
 
-// 定数・予約語・型の表の順に大小を畳んで引き、どれでもなく `function` の名前なら関数。`->` の
-// 直後の名前はプロパティとメソッドで区間なし。
+// `->` か `::` の直後の名前か（プロパティ・メソッド・クラスの定数と静的メンバー）。`::class`
+// の `class` だけはクラス名の解決の予約語なので除く（#861）。
+[[nodiscard]] constexpr bool follows_member(std::string_view line, std::size_t at,
+                                            std::string_view word) noexcept
+{
+    const std::string_view before = at >= 2U ? line.substr(at - 2U, 2U) : std::string_view{};
+    return before == "->" || (before == "::" && !is_named(word, "class"));
+}
+
+// 定数・予約語・型の表の順に大小を畳んで引き、どれでもなく `function` の名前なら関数。`->` と
+// `::` の直後の名前は区間なし。
 [[nodiscard]] std::optional<SyntaxRole> word_role(std::string_view line, std::size_t at,
                                                   std::size_t end) noexcept
 {
     const std::string_view word = line.substr(at, end - at);
-    if (at >= 2U && line.substr(at - 2U, 2U) == "->")
+    if (follows_member(line, at, word))
     {
         return std::nullopt;
     }
@@ -611,8 +644,19 @@ std::optional<std::size_t> left_code(LexCursor &cursor, std::size_t at)
 }
 } // namespace
 
+LexState php_start_state(bool from_first_line) noexcept
+{
+    return from_first_line ? LexState{} : inside_code;
+}
+
 void lex_php(LexCursor &cursor, const LexState &in)
 {
+    if (in.kind == LexKind::plain && is_shebang(cursor.line()))
+    {
+        cursor.mark(0U, cursor.line().size(), SyntaxRole::comment);
+        cursor.leave(in);
+        return;
+    }
     const auto [at, inside] = resumed(cursor, in);
     std::optional<std::size_t> code = inside ? std::optional{at} : entered(cursor, at);
     while (code.has_value())

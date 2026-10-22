@@ -13,4 +13,8 @@ namespace nenenib::core
 // （raw_string の delimiter は引用符）、ヒアドキュメントとナウドキュメント
 // （raw_string の delimiter は閉じの識別子）。
 void lex_php(LexCursor &cursor, const LexState &in);
+
+// 遡りの覚えが無いときの始まりの状態（#861・ADR 0156 の決定 21）。文書の 1 行目から読むなら
+// `?>` の外（LexState{}）、途中の行から読むなら PHP の中。入口は lex_start_state。
+[[nodiscard]] LexState php_start_state(bool from_first_line) noexcept;
 } // namespace nenenib::core

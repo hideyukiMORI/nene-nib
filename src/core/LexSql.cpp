@@ -24,29 +24,41 @@ using LexHandler = std::size_t (*)(LexCursor &, std::size_t);
 // 文と句と、PostgreSQL・MySQL・SQLite に共通の句（`limit` `offset` `returning` など）。型は
 // type、集約と主な関数は呼び出しでなくても function（Vim の sqlFunction と同じ）。表どうしは
 // 重ならない（`left` `right` `replace` は予約語）。
-constexpr std::array<std::string_view, 106> sql_keywords{
-    "add",       "all",         "alter",      "and",      "any",       "as",         "asc",
-    "begin",     "between",     "by",         "cascade",  "case",      "cast",       "check",
-    "column",    "commit",      "constraint", "create",   "cross",     "current",    "database",
-    "declare",   "default",     "delete",     "desc",     "distinct",  "drop",       "else",
-    "end",       "except",      "exists",     "fetch",    "first",     "following",  "foreign",
-    "from",      "full",        "function",   "grant",    "group",     "having",     "if",
-    "in",        "index",       "inner",      "insert",   "intersect", "interval",   "into",
-    "is",        "join",        "key",        "lateral",  "left",      "like",       "limit",
-    "merge",     "natural",     "next",       "not",      "nulls",     "of",         "offset",
-    "on",        "only",        "or",         "order",    "outer",     "over",       "partition",
-    "preceding", "primary",     "procedure",  "range",    "recursive", "references", "rename",
-    "replace",   "returning",   "revoke",     "right",    "rollback",  "row",        "rows",
-    "schema",    "select",      "sequence",   "set",      "table",     "temporary",  "then",
-    "to",        "transaction", "trigger",    "truncate", "unbounded", "union",      "unique",
-    "update",    "using",       "values",     "view",     "when",      "where",      "window",
-    "with"};
-constexpr std::array<std::string_view, 33> sql_types{
-    "bigint",    "binary", "bit",       "blob",     "bool",   "boolean", "char",
-    "character", "clob",   "date",      "datetime", "dec",    "decimal", "double",
-    "float",     "int",    "integer",   "json",     "nchar",  "numeric", "nvarchar",
-    "precision", "real",   "serial",    "smallint", "text",   "time",    "timestamp",
-    "tinyint",   "uuid",   "varbinary", "varchar",  "varying"};
+constexpr std::array<std::string_view, 112> sql_keywords{
+    "add",        "all",         "alter",      "and",
+    "any",        "as",          "asc",        "auto_increment",
+    "begin",      "between",     "by",         "cascade",
+    "case",       "cast",        "check",      "collate",
+    "column",     "commit",      "constraint", "create",
+    "cross",      "current",     "database",   "declare",
+    "default",    "delete",      "desc",       "distinct",
+    "drop",       "else",        "end",        "except",
+    "exists",     "explain",     "fetch",      "first",
+    "following",  "for",         "foreign",    "from",
+    "full",       "function",    "grant",      "group",
+    "having",     "if",          "ilike",      "in",
+    "index",      "inner",       "insert",     "intersect",
+    "interval",   "into",        "is",         "join",
+    "key",        "lateral",     "left",       "like",
+    "limit",      "merge",       "natural",    "next",
+    "not",        "nulls",       "of",         "offset",
+    "on",         "only",        "or",         "order",
+    "outer",      "over",        "partition",  "preceding",
+    "primary",    "procedure",   "range",      "recursive",
+    "references", "rename",      "replace",    "returning",
+    "revoke",     "right",       "rollback",   "row",
+    "rows",       "schema",      "select",     "sequence",
+    "set",        "table",       "temporary",  "then",
+    "to",         "transaction", "trigger",    "truncate",
+    "unbounded",  "union",       "unique",     "unsigned",
+    "update",     "using",       "values",     "view",
+    "when",       "where",       "window",     "with"};
+constexpr std::array<std::string_view, 37> sql_types{
+    "bigint",   "bigserial", "binary",    "bit",     "blob",     "bool",  "boolean", "bytea",
+    "char",     "character", "clob",      "date",    "datetime", "dec",   "decimal", "double",
+    "float",    "int",       "integer",   "json",    "longtext", "nchar", "number",  "numeric",
+    "nvarchar", "precision", "real",      "serial",  "smallint", "text",  "time",    "timestamp",
+    "tinyint",  "uuid",      "varbinary", "varchar", "varying"};
 constexpr std::array<std::string_view, 29> sql_functions{
     "abs",        "avg",     "ceil",         "ceiling",      "coalesce",
     "concat",     "count",   "current_date", "current_time", "current_timestamp",

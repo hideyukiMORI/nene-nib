@@ -305,12 +305,25 @@ std::size_t resume_long(LexCursor &cursor, const LexState &in)
     return mark_long(cursor, 0U, 0U, in);
 }
 
+// plain で始まる行。行頭の `#!`（shebang・Lua は先頭行の `#` を読み飛ばす）は行末までのコメント
+// （#861）。
+std::size_t resume_plain(LexCursor &cursor)
+{
+    const std::string_view line = cursor.line();
+    if (!line.starts_with("#!"))
+    {
+        return 0U;
+    }
+    cursor.mark(0U, line.size(), SyntaxRole::comment);
+    return line.size();
+}
+
 std::size_t resumed(LexCursor &cursor, const LexState &in)
 {
     switch (in.kind)
     {
     case LexKind::plain:
-        return 0U;
+        return resume_plain(cursor);
     case LexKind::block_comment:
     case LexKind::raw_string:
         return resume_long(cursor, in);
